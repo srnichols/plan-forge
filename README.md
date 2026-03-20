@@ -98,6 +98,21 @@ chmod +x setup.sh
 | `go` | Go / Chi / Gin / Standard Library | `go build ./...` | `go test ./...` |
 | `custom` | Any stack | (you configure) | (you configure) |
 
+### Instruction Files Per Preset
+
+Each preset includes **8 instruction files** that auto-load based on the file being edited:
+
+| Instruction File | Purpose |
+|------------------|---------|
+| `database.instructions.md` | ORM/query patterns, migrations, connection management |
+| `testing.instructions.md` | Unit tests, integration tests, test containers |
+| `security.instructions.md` | Auth, input validation, secret management, CORS |
+| `deploy.instructions.md` | Dockerfiles, health checks, container optimization |
+| `caching.instructions.md` | Redis, in-memory cache, TTL strategies, cache-aside pattern |
+| `messaging.instructions.md` | Pub/sub, job queues, event-driven patterns, retry/DLQ |
+| `observability.instructions.md` | OpenTelemetry, structured logging, metrics, health checks |
+| `api-patterns.instructions.md` | REST conventions, pagination, error responses (RFC 9457) |
+
 ### 4. Start Planning
 
 ```

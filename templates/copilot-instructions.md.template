@@ -90,7 +90,57 @@ This project uses the **AI Plan Hardening Pipeline** for feature development.
 |------|--------|
 | `architecture-principles.instructions.md` | Core architecture rules |
 | `git-workflow.instructions.md` | Commit conventions |
-| (add your domain files here) | |
+| `database.instructions.md` | ORM/query patterns, migrations, connection management |
+| `testing.instructions.md` | Unit tests, integration tests, test containers |
+| `security.instructions.md` | Auth, input validation, secret management, CORS |
+| `deploy.instructions.md` | Dockerfiles, health checks, container optimization |
+| `caching.instructions.md` | Redis, in-memory cache, TTL strategies |
+| `messaging.instructions.md` | Pub/sub, job queues, event-driven patterns |
+| `observability.instructions.md` | OpenTelemetry, structured logging, metrics |
+| `api-patterns.instructions.md` | REST conventions, pagination, error responses |
+| `errorhandling.instructions.md` | Exception hierarchy, ProblemDetails, error boundaries |
+| `performance.instructions.md` | Hot/cold path analysis, allocation reduction |
+| `multi-environment.instructions.md` | Dev/staging/prod config, environment detection |
+| `version.instructions.md` | Semantic versioning, commit-driven bumps |
+
+> **Note**: Instruction files auto-load via their `applyTo` frontmatter when you edit matching files.
+
+### Prompt Templates
+
+Scaffolding recipes in `.github/prompts/` — use with `#file:` references or the prompt picker:
+
+| Template | Purpose |
+|----------|---------|
+| `new-entity.prompt.md` | Scaffold end-to-end: migration, model, repository, service, tests |
+| `new-service.prompt.md` | Service class with interface, DI, logging, validation |
+| `new-controller.prompt.md` | REST controller with auth, error mapping, OpenAPI docs |
+| `new-repository.prompt.md` | Data access layer with parameterized queries |
+| `new-test.prompt.md` | Unit/integration test with naming conventions |
+| `bug-fix-tdd.prompt.md` | Red-Green-Refactor bug fix with regression test |
+| `new-worker.prompt.md` | Background worker/job with retry, graceful shutdown |
+
+### Agent Definitions
+
+Specialized reviewer/executor roles in `.github/agents/`:
+
+| Agent | Purpose |
+|-------|---------|
+| `architecture-reviewer.agent.md` | Audit layer separation, pattern violations, coupling |
+| `security-reviewer.agent.md` | OWASP Top 10, injection, auth gaps, secret exposure |
+| `database-reviewer.agent.md` | SQL safety, N+1 queries, naming, indexing |
+| `performance-analyzer.agent.md` | Hot paths, allocations, async anti-patterns |
+| `test-runner.agent.md` | Run tests, analyze failures, diagnose root causes |
+| `deploy-helper.agent.md` | Build, push, migrate, deploy, verify health checks |
+
+### Skills
+
+Multi-step executable procedures in `.github/skills/`:
+
+| Skill | Purpose |
+|-------|---------|
+| `database-migration/` | Generate → validate → deploy schema migrations |
+| `staging-deploy/` | Build images → run migrations → apply manifests → verify |
+| `test-sweep/` | Run all test suites with aggregated pass/fail reporting |
 
 ---
 

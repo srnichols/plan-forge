@@ -16,6 +16,7 @@
 6. [Using Memory to Bridge Sessions](#using-memory-to-bridge-sessions)
 7. [Referencing Files in Prompts](#referencing-files-in-prompts)
 8. [Tips for Better Agent Execution](#tips-for-better-agent-execution)
+   - [Prompt Templates, Agent Definitions & Skills](#0-use-prompt-templates-agent-definitions--skills)
 9. [Troubleshooting](#troubleshooting)
 
 ---
@@ -301,6 +302,79 @@ You can also click the **paperclip icon** in the chat input to attach files manu
 
 ## Tips for Better Agent Execution
 
+### 0. Use Prompt Templates, Agent Definitions & Skills
+
+This framework ships three categories of agentic files beyond instruction files. Each serves a distinct role in AI-assisted development:
+
+#### Prompt Templates (`.github/prompts/`)
+
+Pre-built scaffolding recipes that agents use to generate consistent code. Each prompt defines the full checklist an agent follows when creating a new entity, service, controller, test, or worker.
+
+**How to use in Copilot Chat**:
+```
+#file:.github/prompts/new-entity.prompt.md
+Create a Product entity with name, price, and category fields.
+```
+
+Or use the VS Code **prompt picker** — open the Command Palette (`Ctrl+Shift+P`) → "GitHub Copilot: Use Prompt" → select a prompt template.
+
+**Available prompts** (7 per preset):
+| Template | When to Use |
+|----------|-------------|
+| `new-entity.prompt.md` | Adding a new database-backed entity end-to-end |
+| `new-service.prompt.md` | Creating a business logic service with DI |
+| `new-controller.prompt.md` | Adding a REST API endpoint |
+| `new-repository.prompt.md` | Creating a data access layer |
+| `new-test.prompt.md` | Writing unit or integration tests |
+| `bug-fix-tdd.prompt.md` | Fixing a bug using Red-Green-Refactor |
+| `new-worker.prompt.md` | Adding a background job or scheduled task |
+
+#### Agent Definitions (`.github/agents/`)
+
+Specialized reviewer and executor roles that agents can adopt. Each agent definition includes a persona, checklist, tool access rules, and output format. They're designed for focused audits and automated tasks.
+
+**How to use in Copilot Chat**:
+```
+#file:.github/agents/security-reviewer.agent.md
+Review the authentication flow in src/auth/ for OWASP Top 10 vulnerabilities.
+```
+
+**Available agents** (6 per preset):
+| Agent | When to Use |
+|-------|-------------|
+| `architecture-reviewer.agent.md` | Before merging — audit layer separation and patterns |
+| `security-reviewer.agent.md` | Before deploy — check for injection, auth gaps, secrets |
+| `database-reviewer.agent.md` | After schema changes — verify SQL safety, N+1, naming |
+| `performance-analyzer.agent.md` | After features — find hot paths, allocation issues |
+| `test-runner.agent.md` | After changes — run tests and diagnose failures |
+| `deploy-helper.agent.md` | Release time — build, push, migrate, verify |
+
+#### Skills (`.github/skills/{name}/SKILL.md`)
+
+Multi-step executable procedures that chain together tool calls. Each skill file defines a step-by-step workflow with validation gates between steps.
+
+**How to use in Copilot Chat**:
+```
+#file:.github/skills/database-migration/SKILL.md
+Create a migration to add an "orders" table with the columns described in the plan.
+```
+
+**Available skills** (3 per preset):
+| Skill | When to Use |
+|-------|-------------|
+| `database-migration/` | Creating, validating, and deploying schema changes |
+| `staging-deploy/` | Full deployment pipeline from build to verification |
+| `test-sweep/` | Running all test suites with aggregated reporting |
+
+#### AI Agent Discoverability
+
+All three file types follow consistent naming conventions for discoverability:
+- **Prompts**: `*.prompt.md` in `.github/prompts/`
+- **Agents**: `*.agent.md` in `.github/agents/`
+- **Skills**: `SKILL.md` in `.github/skills/{name}/`
+
+AI agents can discover available capabilities by listing these directories. The `copilot-instructions.md` file at the repo root catalogs all available prompts, agents, and skills with descriptions.
+
 ### 1. Front-Load Context
 
 Put the most important information first in your prompt. The agent pays more attention to the beginning:
@@ -407,6 +481,11 @@ only what Slice 3 requires.
 │  File Ref:      #file:path/to/file.md                           │
 │  Workspace:     @workspace <search query>                       │
 │                                                                 │
+│  AGENTIC FILES                                                  │
+│    Prompts:  .github/prompts/*.prompt.md  (7 scaffolding recipes)│
+│    Agents:   .github/agents/*.agent.md    (6 reviewer/executor) │
+│    Skills:   .github/skills/*/SKILL.md    (3 procedures)        │
+│                                                                 │
 │  SESSION 1 — Harden                                             │
 │    Mode: Agent                                                  │
 │    Paste: Pre-flight Prompt → Hardening Prompt                  │
@@ -415,12 +494,14 @@ only what Slice 3 requires.
 │  SESSION 2 — Execute                                            │
 │    Mode: Agent                                                  │
 │    Paste: Execution Prompt (one slice at a time)                │
+│    Use: Prompt templates for scaffolding new entities           │
 │    After all: Completeness Sweep Prompt                         │
 │    Commit after each passed slice                               │
 │                                                                 │
 │  SESSION 3 — Review                                             │
 │    Mode: Ask (prevents accidental edits)                        │
 │    Paste: Reviewer Gate Prompt + Drift Detection Prompt         │
+│    Use: Agent definitions for focused audits                    │
 │    Read-only audit — report only                                │
 │                                                                 │
 │  MEMORY BRIDGE                                                  │

@@ -10,10 +10,19 @@
     "github.copilot.chat.codeGeneration.instructions": [
         { "file": ".github/instructions/architecture-principles.instructions.md" },
         { "file": ".github/instructions/git-workflow.instructions.md" }
-        // Add your domain-specific instruction files here:
+        // Add your domain-specific instruction files here (12 available per preset):
         // { "file": ".github/instructions/database.instructions.md" },
         // { "file": ".github/instructions/testing.instructions.md" },
-        // { "file": ".github/instructions/security.instructions.md" }
+        // { "file": ".github/instructions/security.instructions.md" },
+        // { "file": ".github/instructions/deploy.instructions.md" },
+        // { "file": ".github/instructions/caching.instructions.md" },
+        // { "file": ".github/instructions/messaging.instructions.md" },
+        // { "file": ".github/instructions/observability.instructions.md" },
+        // { "file": ".github/instructions/api-patterns.instructions.md" },
+        // { "file": ".github/instructions/errorhandling.instructions.md" },
+        // { "file": ".github/instructions/performance.instructions.md" },
+        // { "file": ".github/instructions/multi-environment.instructions.md" },
+        // { "file": ".github/instructions/version.instructions.md" }
     ],
 
     // Point Copilot to your test generation conventions
@@ -34,7 +43,10 @@
 
     // Ensure instruction files are treated as markdown
     "files.associations": {
-        "*.instructions.md": "markdown"
+        "*.instructions.md": "markdown",
+        "*.prompt.md": "markdown",
+        "*.agent.md": "markdown",
+        "SKILL.md": "markdown"
     },
 
     // ─── Search Exclusions ─────────────────────────────────────────────

@@ -93,6 +93,9 @@ DEPLOYMENT-ROADMAP.md (master tracker — all phases)
 | `*-PLAN.md` | Detailed plan for one phase — goals, architecture, tasks | AI agent (plan mode) |
 | **This Runbook** | Process for hardening a `*-PLAN.md` into an execution contract | Reference doc (you run it) |
 | `*.instructions.md` | Guardrails — coding standards, architecture rules, patterns | You + AI (maintained over time) |
+| `*.prompt.md` | Scaffolding recipes — templates for generating entities, services, tests | Preset (customizable) |
+| `*.agent.md` | Agent definitions — specialized reviewer/executor roles | Preset (customizable) |
+| `SKILL.md` | Multi-step skills — chained procedures for migrations, deploys, sweeps | Preset (customizable) |
 | `AGENTS.md` | Agent architecture, worker patterns, automation docs | You + AI |
 
 ---
@@ -106,6 +109,9 @@ DEPLOYMENT-ROADMAP.md (master tracker — all phases)
 | `DEPLOYMENT-ROADMAP.md` | The master roadmap — confirms the phase exists and what it should deliver |
 | Draft `*-PLAN.md` | The rough phase plan from your plan-mode conversation |
 | Guardrail files | `.github/copilot-instructions.md`, `.github/instructions/*.instructions.md`, `AGENTS.md` |
+| Prompt templates | `.github/prompts/*.prompt.md` — scaffolding recipes for consistent code generation |
+| Agent definitions | `.github/agents/*.agent.md` — specialized reviewer/executor roles for audits |
+| Skills | `.github/skills/*/SKILL.md` — multi-step procedures for migrations, deploys, sweeps |
 
 ### Outputs
 
@@ -135,6 +141,10 @@ A **hardened** `*-PLAN.md` that an agent can execute without guessing. It will c
   - [ ] `.github/copilot-instructions.md` — repo-wide standards
   - [ ] `.github/instructions/*.instructions.md` — path-scoped rules for relevant areas
   - [ ] `AGENTS.md` — agent patterns include "stop on ambiguity" and "slice-by-slice execution"
+- [ ] Agentic files are present (if preset was applied):
+  - [ ] `.github/prompts/` — prompt templates for scaffolding
+  - [ ] `.github/agents/` — agent definitions for reviews
+  - [ ] `.github/skills/` — multi-step procedures
 
 > **If any box is unchecked**: Fix it before proceeding. Stale guardrails cause agent drift.
 
@@ -237,6 +247,9 @@ After completing a phase, update your guardrail files to capture any new pattern
 - [ ] Update `.github/instructions/*.instructions.md` if new coding patterns emerged
 - [ ] Update `AGENTS.md` if new workers/agents were created
 - [ ] Update `.github/copilot-instructions.md` if project-wide conventions changed
+- [ ] Update `.github/prompts/` if new scaffolding patterns emerged
+- [ ] Update `.github/agents/` if new reviewer checklists are needed
+- [ ] Update `.github/skills/` if new multi-step procedures were discovered
 - [ ] Update `DEPLOYMENT-ROADMAP.md` with phase completion status
 - [ ] Complete the [Post-Mortem Template](#template-6--post-mortem) for this phase
 

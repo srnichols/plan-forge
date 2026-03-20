@@ -75,6 +75,12 @@ Run these checks and report results. STOP if any check fails.
    - AGENTS.md
    Report: ✅ all present / ❌ missing (list which).
 
+4b. AGENTIC FILES — Check if prompt templates, agent definitions, and skills exist:
+   - .github/prompts/ — list *.prompt.md files found (0 is OK for non-preset repos)
+   - .github/agents/ — list *.agent.md files found
+   - .github/skills/ — list */SKILL.md files found
+   Report: ✅ N prompts, N agents, N skills found / ⚠️ none found (optional — won't block)
+
 5. DOMAIN GUARDRAILS — Scan <YOUR-PLAN>.md for keywords to identify relevant domains.
    For each domain detected, confirm the matching guardrail file exists:
    - UI/Component/Frontend/Razor/React/Vue → .github/instructions/frontend.instructions.md (or blazor/react specific)
@@ -93,6 +99,7 @@ Output a summary table:
 | Roadmap link | ✅/❌ | ... |
 | Plan file | ✅/❌ | ... |
 | Core guardrails | ✅/❌ | ... |
+| Agentic files | ✅/⚠️ | ... |
 | Domain guardrails | ✅/❌ | ... |
 
 If ALL pass: "Pre-flight complete ✅ — proceed to Step 2 (Harden the Plan)"
@@ -167,6 +174,7 @@ Now act as an EXECUTION AGENT (see the Execution Agent Prompt in the runbook).
 
 Execute the hardened plan one slice at a time, starting with Slice 1.
 Before each slice, load its Context Files (including .github/instructions/*.instructions.md guardrails).
+When scaffolding new entities/services/tests, use the matching prompt template from .github/prompts/.
 Follow the validation loop exactly. Commit after each passed slice.
 STOP if any gate fails or any ambiguity arises.
 

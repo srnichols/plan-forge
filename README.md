@@ -6,6 +6,12 @@
 
 ---
 
+### AI Agents: Autonomous Setup
+
+> **If you are an AI coding agent** tasked with incorporating this framework into a project, read **[AGENT-SETUP.md](AGENT-SETUP.md)** — it has auto-detection rules, greenfield vs brownfield decision trees, exact non-interactive commands, merge strategies for existing guardrails, and a post-setup validator.
+
+---
+
 ## The Problem
 
 AI coding agents (Copilot, Cursor, Claude, etc.) are powerful but drift-prone. Without guardrails, they:
@@ -104,9 +110,12 @@ chmod +x setup.sh
 ```
 ai-plan-hardening-template/
 ├── README.md                          ← You are here
+├── AGENT-SETUP.md                     ← AI agent entry point (autonomous setup)
 ├── LICENSE
-├── setup.ps1                          ← Interactive setup wizard (PowerShell)
-├── setup.sh                           ← Interactive setup wizard (Bash)
+├── setup.ps1                          ← Setup wizard (PowerShell, supports -AutoDetect)
+├── setup.sh                           ← Setup wizard (Bash, supports --auto-detect)
+├── validate-setup.ps1                 ← Post-setup validator (PowerShell)
+├── validate-setup.sh                  ← Post-setup validator (Bash)
 ├── CUSTOMIZATION.md                   ← How to adapt for your stack
 │
 ├── docs/
@@ -152,6 +161,8 @@ Running `setup.ps1` (PowerShell) or `setup.sh` (Bash) with a preset:
 4. **Copies shared instruction files** (git-workflow, architecture principles)
 5. **Copies the core plan docs** to `docs/plans/`
 6. **Creates `.plan-hardening.json`** with your build/test commands for reference
+
+**Agent mode**: Pass `-AutoDetect` (PowerShell) or `--auto-detect` (Bash) to auto-detect the tech stack from project marker files (`.csproj`, `package.json`, `pyproject.toml`, etc.).
 
 After running the wizard, you can **delete the `presets/` and `templates/` directories** — they're only needed during setup.
 

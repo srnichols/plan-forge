@@ -18,6 +18,7 @@ PRESET=""
 PROJECT_PATH=""
 PROJECT_NAME=""
 FORCE=false
+AUTO_DETECT=false
 
 # ─── Color helpers ─────────────────────────────────────────────────────
 cyan()   { printf '\033[0;36m%s\033[0m\n' "$*"; }
@@ -32,8 +33,9 @@ while [[ $# -gt 0 ]]; do
         --path)       PROJECT_PATH="$2"; shift 2 ;;
         --name|-n)    PROJECT_NAME="$2"; shift 2 ;;
         --force|-f)   FORCE=true; shift ;;
+        --auto-detect|-a) AUTO_DETECT=true; shift ;;
         --help|-h)
-            echo "Usage: ./setup.sh [--preset dotnet|typescript|python|custom] [--path DIR] [--name NAME] [--force]"
+            echo "Usage: ./setup.sh [--preset dotnet|typescript|python|custom] [--path DIR] [--name NAME] [--force] [--auto-detect]"
             exit 0 ;;
         *) red "Unknown option: $1"; exit 1 ;;
     esac
@@ -95,6 +97,34 @@ replace_placeholders() {
     fi
 }
 
+detect_preset() {
+    local target="$1"
+
+    # .NET markers
+    if find "$target" -maxdepth 3 -name "*.csproj" -o -name "*.sln" -o -name "*.fsproj" 2>/dev/null | head -1 | grep -q .; then
+        yellow "  AUTO-DETECT  Found .NET project markers"
+        echo "dotnet"
+        return
+    fi
+
+    # Python markers
+    if [[ -f "$target/pyproject.toml" ]] || [[ -f "$target/requirements.txt" ]] || [[ -f "$target/setup.py" ]] || [[ -f "$target/Pipfile" ]]; then
+        yellow "  AUTO-DETECT  Found Python project markers"
+        echo "python"
+        return
+    fi
+
+    # TypeScript/Node markers
+    if [[ -f "$target/package.json" ]] || [[ -f "$target/tsconfig.json" ]]; then
+        yellow "  AUTO-DETECT  Found TypeScript/Node project markers"
+        echo "typescript"
+        return
+    fi
+
+    yellow "  AUTO-DETECT  No known markers found — using 'custom'"
+    echo "custom"
+}
+
 # ─── Banner ────────────────────────────────────────────────────────────
 echo ""
 cyan "╔══════════════════════════════════════════════════════════════╗"
@@ -122,21 +152,27 @@ if [[ -z "$PROJECT_NAME" ]]; then
 fi
 
 if [[ -z "$PRESET" ]]; then
-    echo ""
-    cyan "Available presets:"
-    echo "  1) dotnet      — .NET / C# / ASP.NET Core"
-    echo "  2) typescript  — TypeScript / React / Node.js / Express"
-    echo "  3) python      — Python / FastAPI / SQLAlchemy"
-    echo "  4) custom      — Shared files only (add your own instructions)"
-    echo ""
-    choice="$(prompt_value "Select preset (1-4 or name)" "1")"
-    case "$choice" in
-        1|dotnet)     PRESET="dotnet" ;;
-        2|typescript) PRESET="typescript" ;;
-        3|python)     PRESET="python" ;;
-        4|custom)     PRESET="custom" ;;
-        *)            PRESET="$choice" ;;
-    esac
+    if [[ "$AUTO_DETECT" == true ]]; then
+        echo ""
+        cyan "Auto-detecting tech stack..."
+        PRESET="$(detect_preset "$PROJECT_PATH")"
+    else
+        echo ""
+        cyan "Available presets:"
+        echo "  1) dotnet      — .NET / C# / ASP.NET Core"
+        echo "  2) typescript  — TypeScript / React / Node.js / Express"
+        echo "  3) python      — Python / FastAPI / SQLAlchemy"
+        echo "  4) custom      — Shared files only (add your own instructions)"
+        echo ""
+        choice="$(prompt_value "Select preset (1-4 or name)" "1")"
+        case "$choice" in
+            1|dotnet)     PRESET="dotnet" ;;
+            2|typescript) PRESET="typescript" ;;
+            3|python)     PRESET="python" ;;
+            4|custom)     PRESET="custom" ;;
+            *)            PRESET="$choice" ;;
+        esac
+    fi
 fi
 
 case "$PRESET" in

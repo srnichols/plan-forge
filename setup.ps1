@@ -33,7 +33,9 @@ param(
 
     [string]$ProjectName,
 
-    [switch]$Force
+    [switch]$Force,
+
+    [switch]$AutoDetect
 )
 
 $ErrorActionPreference = 'Stop'
@@ -86,6 +88,39 @@ function Replace-Placeholders([string]$FilePath, [string]$Name, [string]$Stack) 
     Set-Content -Path $FilePath -Value $content -NoNewline
 }
 
+function Detect-Preset([string]$TargetPath) {
+    # .NET markers
+    $hasCsproj = (Get-ChildItem -Path $TargetPath -Filter "*.csproj" -Recurse -Depth 2 -ErrorAction SilentlyContinue | Select-Object -First 1) -ne $null
+    $hasSln    = (Get-ChildItem -Path $TargetPath -Filter "*.sln" -Recurse -Depth 1 -ErrorAction SilentlyContinue | Select-Object -First 1) -ne $null
+    $hasFsproj = (Get-ChildItem -Path $TargetPath -Filter "*.fsproj" -Recurse -Depth 2 -ErrorAction SilentlyContinue | Select-Object -First 1) -ne $null
+
+    # Python markers
+    $hasPyproject    = Test-Path (Join-Path $TargetPath "pyproject.toml")
+    $hasRequirements = Test-Path (Join-Path $TargetPath "requirements.txt")
+    $hasSetupPy      = Test-Path (Join-Path $TargetPath "setup.py")
+    $hasPipfile      = Test-Path (Join-Path $TargetPath "Pipfile")
+
+    # Node/TypeScript markers
+    $hasPackageJson = Test-Path (Join-Path $TargetPath "package.json")
+    $hasTsConfig    = Test-Path (Join-Path $TargetPath "tsconfig.json")
+
+    if ($hasCsproj -or $hasSln -or $hasFsproj) {
+        Write-Host "  AUTO-DETECT  Found .NET project markers" -ForegroundColor Magenta
+        return 'dotnet'
+    }
+    if ($hasPyproject -or $hasRequirements -or $hasSetupPy -or $hasPipfile) {
+        Write-Host "  AUTO-DETECT  Found Python project markers" -ForegroundColor Magenta
+        return 'python'
+    }
+    if ($hasPackageJson -or $hasTsConfig) {
+        Write-Host "  AUTO-DETECT  Found TypeScript/Node project markers" -ForegroundColor Magenta
+        return 'typescript'
+    }
+
+    Write-Host "  AUTO-DETECT  No known markers found — using 'custom'" -ForegroundColor Yellow
+    return 'custom'
+}
+
 # ─── Interactive Prompts ───────────────────────────────────────────────
 Write-Banner
 
@@ -105,20 +140,27 @@ if (-not $ProjectName) {
 }
 
 if (-not $Preset) {
-    Write-Host ""
-    Write-Host "Available presets:" -ForegroundColor Cyan
-    Write-Host "  1) dotnet      — .NET / C# / ASP.NET Core"
-    Write-Host "  2) typescript  — TypeScript / React / Node.js / Express"
-    Write-Host "  3) python      — Python / FastAPI / SQLAlchemy"
-    Write-Host "  4) custom      — Shared files only (add your own instructions)"
-    Write-Host ""
-    $choice = Prompt-Value "Select preset (1-4 or name)" "1"
-    $Preset = switch ($choice) {
-        '1' { 'dotnet' }
-        '2' { 'typescript' }
-        '3' { 'python' }
-        '4' { 'custom' }
-        default { $choice }
+    if ($AutoDetect) {
+        Write-Host ""
+        Write-Host "Auto-detecting tech stack..." -ForegroundColor Cyan
+        $Preset = Detect-Preset $ProjectPath
+    }
+    else {
+        Write-Host ""
+        Write-Host "Available presets:" -ForegroundColor Cyan
+        Write-Host "  1) dotnet      — .NET / C# / ASP.NET Core"
+        Write-Host "  2) typescript  — TypeScript / React / Node.js / Express"
+        Write-Host "  3) python      — Python / FastAPI / SQLAlchemy"
+        Write-Host "  4) custom      — Shared files only (add your own instructions)"
+        Write-Host ""
+        $choice = Prompt-Value "Select preset (1-4 or name)" "1"
+        $Preset = switch ($choice) {
+            '1' { 'dotnet' }
+            '2' { 'typescript' }
+            '3' { 'python' }
+            '4' { 'custom' }
+            default { $choice }
+        }
     }
 }
 

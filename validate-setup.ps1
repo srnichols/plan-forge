@@ -1,0 +1,145 @@
+<#
+.SYNOPSIS
+    Validates that AI Plan Hardening setup completed correctly.
+
+.DESCRIPTION
+    Checks that all required files exist, are non-empty, and contain no
+    unresolved placeholders. Returns exit code 0 on success, 1 on failure.
+
+.PARAMETER ProjectPath
+    Target project directory to validate. Defaults to current directory.
+
+.EXAMPLE
+    .\validate-setup.ps1 -ProjectPath "C:\Projects\MyApp"
+
+.EXAMPLE
+    .\validate-setup.ps1  # Validates current directory
+#>
+
+param(
+    [string]$ProjectPath = (Get-Location).Path
+)
+
+$ErrorActionPreference = 'Stop'
+
+$pass = 0
+$fail = 0
+$warn = 0
+
+function Check-FileExists([string]$RelPath, [bool]$Required = $true) {
+    $fullPath = Join-Path $ProjectPath $RelPath
+    if (Test-Path $fullPath) {
+        $size = (Get-Item $fullPath).Length
+        if ($size -eq 0) {
+            Write-Host "  FAIL  $RelPath (empty file)" -ForegroundColor Red
+            if ($Required) { $script:fail++ } else { $script:warn++ }
+            return $false
+        }
+        Write-Host "  PASS  $RelPath ($size bytes)" -ForegroundColor Green
+        $script:pass++
+        return $true
+    }
+    else {
+        if ($Required) {
+            Write-Host "  FAIL  $RelPath (missing)" -ForegroundColor Red
+            $script:fail++
+        }
+        else {
+            Write-Host "  WARN  $RelPath (missing — optional)" -ForegroundColor Yellow
+            $script:warn++
+        }
+        return $false
+    }
+}
+
+function Check-NoPlaceholders([string]$RelPath) {
+    $fullPath = Join-Path $ProjectPath $RelPath
+    if (-not (Test-Path $fullPath)) { return }
+    $content = Get-Content $fullPath -Raw
+    $placeholders = @('<YOUR PROJECT NAME>', '<YOUR TECH STACK>', '<YOUR BUILD COMMAND>', '<YOUR TEST COMMAND>', '<YOUR LINT COMMAND>')
+    foreach ($ph in $placeholders) {
+        if ($content -match [regex]::Escape($ph)) {
+            Write-Host "  WARN  $RelPath contains unresolved placeholder: $ph" -ForegroundColor Yellow
+            $script:warn++
+        }
+    }
+}
+
+# ─── Banner ────────────────────────────────────────────────────────────
+Write-Host ""
+Write-Host "╔══════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+Write-Host "║       AI Plan Hardening — Setup Validator                   ║" -ForegroundColor Cyan
+Write-Host "╚══════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "Validating: $ProjectPath" -ForegroundColor Cyan
+Write-Host ""
+
+# ─── Required Files ────────────────────────────────────────────────────
+Write-Host "Required files:" -ForegroundColor Cyan
+
+Check-FileExists ".github/copilot-instructions.md"
+Check-FileExists ".github/instructions/architecture-principles.instructions.md"
+Check-FileExists ".github/instructions/git-workflow.instructions.md"
+Check-FileExists ".github/instructions/ai-plan-hardening-runbook.instructions.md"
+Check-FileExists "docs/plans/AI-Plan-Hardening-Runbook.md"
+Check-FileExists "docs/plans/AI-Plan-Hardening-Runbook-Instructions.md"
+Check-FileExists "docs/plans/DEPLOYMENT-ROADMAP.md"
+
+# ─── Preset-Dependent Files ───────────────────────────────────────────
+Write-Host ""
+Write-Host "Preset-dependent files:" -ForegroundColor Cyan
+
+$configPath = Join-Path $ProjectPath ".plan-hardening.json"
+if (Test-Path $configPath) {
+    $config = Get-Content $configPath -Raw | ConvertFrom-Json
+    $preset = $config.preset
+    Write-Host "  INFO  Detected preset: $preset" -ForegroundColor Cyan
+
+    if ($preset -ne 'custom') {
+        Check-FileExists "AGENTS.md"
+        Check-FileExists ".github/instructions/database.instructions.md"
+        Check-FileExists ".github/instructions/testing.instructions.md"
+        Check-FileExists ".github/instructions/security.instructions.md"
+    }
+}
+else {
+    Write-Host "  WARN  .plan-hardening.json not found — skipping preset checks" -ForegroundColor Yellow
+    $warn++
+}
+
+# ─── Optional Files ───────────────────────────────────────────────────
+Write-Host ""
+Write-Host "Optional files:" -ForegroundColor Cyan
+
+Check-FileExists ".vscode/settings.json" $false
+Check-FileExists "docs/COPILOT-VSCODE-GUIDE.md" $false
+Check-FileExists ".plan-hardening.json" $false
+
+# ─── Placeholder Scan ─────────────────────────────────────────────────
+Write-Host ""
+Write-Host "Placeholder scan:" -ForegroundColor Cyan
+
+Check-NoPlaceholders ".github/copilot-instructions.md"
+Check-NoPlaceholders "AGENTS.md"
+Check-NoPlaceholders "docs/plans/DEPLOYMENT-ROADMAP.md"
+
+# ─── Summary ──────────────────────────────────────────────────────────
+Write-Host ""
+Write-Host "────────────────────────────────────────────────────" -ForegroundColor Gray
+Write-Host "  Results:  $pass passed  |  $fail failed  |  $warn warnings" -ForegroundColor $(if ($fail -gt 0) { 'Red' } else { 'Green' })
+Write-Host "────────────────────────────────────────────────────" -ForegroundColor Gray
+
+if ($fail -gt 0) {
+    Write-Host ""
+    Write-Host "VALIDATION FAILED" -ForegroundColor Red
+    Write-Host "Fix the $fail failed check(s) above before proceeding." -ForegroundColor Red
+    exit 1
+}
+else {
+    Write-Host ""
+    Write-Host "VALIDATION PASSED" -ForegroundColor Green
+    if ($warn -gt 0) {
+        Write-Host "$warn warning(s) — review optional items above." -ForegroundColor Yellow
+    }
+    exit 0
+}

@@ -1,0 +1,436 @@
+# Using This Framework with GitHub Copilot in VS Code
+
+> **Purpose**: Practical guide for running the AI Plan Hardening Pipeline using GitHub Copilot's Agent Mode in VS Code  
+> **Audience**: Developers using GitHub Copilot (free, Pro, or Enterprise) in VS Code  
+> **Last Updated**: 2026-03-20
+
+---
+
+## Table of Contents
+
+1. [Prerequisites](#prerequisites)
+2. [How Copilot Reads Your Guardrails](#how-copilot-reads-your-guardrails)
+3. [The 3-Session Workflow in Practice](#the-3-session-workflow-in-practice)
+4. [Agent Mode vs Ask Mode vs Edit Mode](#agent-mode-vs-ask-mode-vs-edit-mode)
+5. [Managing Context Budget](#managing-context-budget)
+6. [Using Memory to Bridge Sessions](#using-memory-to-bridge-sessions)
+7. [Referencing Files in Prompts](#referencing-files-in-prompts)
+8. [Tips for Better Agent Execution](#tips-for-better-agent-execution)
+9. [Troubleshooting](#troubleshooting)
+
+---
+
+## Prerequisites
+
+| Requirement | Minimum |
+|-------------|---------|
+| **VS Code** | 1.96+ (January 2026 or later) |
+| **GitHub Copilot** | Free, Pro, or Enterprise plan |
+| **Copilot Chat extension** | Latest version (auto-updates) |
+| **Agent Mode** | Enabled (Settings → `github.copilot.chat.agent.enabled`) |
+
+### Verify Setup
+
+1. Open VS Code
+2. Press `Ctrl+Shift+I` (Windows/Linux) or `Cmd+Shift+I` (macOS) to open Copilot Chat
+3. At the bottom of the chat panel, confirm you can switch between **Ask**, **Edit**, and **Agent** modes
+4. Select **Agent** mode — you should see the tools indicator (terminal, file edit, search)
+
+---
+
+## How Copilot Reads Your Guardrails
+
+### Automatic Instruction Loading
+
+GitHub Copilot reads instruction files **automatically** based on two mechanisms:
+
+#### 1. `.github/copilot-instructions.md` (Always Loaded)
+
+This file is loaded into **every** Copilot Chat session in your workspace. It's your global context — project overview, tech stack, coding standards.
+
+```
+.github/copilot-instructions.md  ← Copilot reads this EVERY time
+```
+
+#### 2. `.github/instructions/*.instructions.md` (Conditionally Loaded)
+
+These files load **only when you're editing a matching file**, based on the `applyTo` glob pattern in their YAML frontmatter:
+
+```yaml
+---
+description: Database patterns and conventions
+applyTo: '**/*.sql'           # ← Only loads when editing .sql files
+priority: HIGH
+---
+```
+
+**Common `applyTo` patterns:**
+
+| Pattern | When It Loads |
+|---------|---------------|
+| `'**'` | Every file (use sparingly — eats context budget) |
+| `'**/*.cs'` | Any C# file |
+| `'**/*.ts'` | Any TypeScript file |
+| `'**/*.py'` | Any Python file |
+| `'**/*.razor'` | Any Blazor Razor file |
+| `'docs/plans/**'` | Any file under docs/plans/ |
+| `'**/Controllers/**'` | Files in any Controllers directory |
+| `'docker-compose*.yml'` | Docker Compose files |
+
+#### What This Means for Plan Hardening
+
+The `ai-plan-hardening-runbook.instructions.md` file has `applyTo: 'docs/plans/**'`, so Copilot automatically loads the runbook quick-reference whenever you're editing plan files. The `architecture-principles.instructions.md` has `applyTo: '**'`, so it's always active.
+
+### Load Order
+
+```
+1. .github/copilot-instructions.md       ← Always loaded first
+2. .github/instructions/*.instructions.md ← Loaded if applyTo matches current file
+3. Your prompt                            ← Your message in chat
+4. Attached files                         ← Files you explicitly reference
+```
+
+> **Tip**: Keep `copilot-instructions.md` concise. Long files consume your context window and leave less room for code.
+
+---
+
+## The 3-Session Workflow in Practice
+
+The pipeline uses 3 **separate** Copilot Chat sessions to prevent context bleed. Here's exactly how to do that in VS Code:
+
+### Session 1: Plan Hardening
+
+1. **Open a new chat**: `Ctrl+Shift+I` → click the `+` (new conversation) button
+2. **Select Agent mode** (bottom of chat panel)
+3. **Paste the Pre-flight Prompt** from `docs/plans/AI-Plan-Hardening-Runbook-Instructions.md` Step 1
+4. Wait for results
+5. **Paste the Hardening Prompt** (Step 2) in the same session
+6. Review the hardened plan output
+7. **Save context to memory** (see [Using Memory](#using-memory-to-bridge-sessions) below)
+
+### Session 2: Execution
+
+1. **Start a NEW chat session**: Click `+` again (critical — don't reuse Session 1)
+2. **Select Agent mode**
+3. **Paste the Execution Prompt** (Step 3)
+4. Let the agent work slice-by-slice
+5. After all slices pass, **paste the Completeness Sweep Prompt** (Step 4)
+6. Review and commit
+
+### Session 3: Review & Audit
+
+1. **Start a NEW chat session**: Click `+` again
+2. **Select Agent mode**
+3. **Paste the Reviewer Gate Prompt** (Step 5)
+4. The reviewer audits without modifying files
+5. If critical findings: start a new Session 2 to fix
+
+### Why Separate Sessions Matter
+
+| Problem | Single Session | Separate Sessions |
+|---------|---------------|-------------------|
+| **Context bleed** | Agent remembers its own shortcuts | Fresh perspective |
+| **Self-audit bias** | "I wrote it, looks right" | Independent judgment |
+| **Context exhaustion** | Runs out of context budget | Full budget per session |
+| **Drift accumulation** | Small drifts compound unseen | Each session re-grounds |
+
+---
+
+## Agent Mode vs Ask Mode vs Edit Mode
+
+Use the right mode for each step:
+
+| Mode | What It Does | When to Use |
+|------|-------------|-------------|
+| **Agent** | Reads files, runs terminal commands, edits files, searches codebase | **Execution** (Step 3), **Sweep** (Step 4) |
+| **Ask** | Answers questions, analyzes code (read-only) | **Review** (Step 5), **Pre-flight** (Step 1) |
+| **Edit** | Modifies a specific file inline | Quick fixes flagged by reviewer |
+
+### Mode Selection by Pipeline Step
+
+| Step | Recommended Mode | Why |
+|------|-----------------|-----|
+| Step 1: Pre-flight | **Agent** | Needs to run git commands and check files |
+| Step 2: Harden | **Agent** | Needs to read plan + guardrails, write output |
+| Step 3: Execute | **Agent** | Needs full tool access (edit, terminal, search) |
+| Step 4: Sweep | **Agent** | Needs to search and edit files |
+| Step 5: Review | **Ask** or **Agent** | Read-only audit (Ask prevents accidental edits) |
+
+> **Pro Tip**: For the Reviewer Gate (Step 5), using **Ask mode** physically prevents the agent from modifying files, enforcing the read-only audit requirement.
+
+---
+
+## Managing Context Budget
+
+Copilot has a finite context window. Large projects can exhaust it quickly. Strategies:
+
+### Keep Instruction Files Focused
+
+```yaml
+# ❌ BAD: One huge file that loads everywhere
+---
+applyTo: '**'
+---
+# 500 lines of everything...
+
+# ✅ GOOD: Targeted files that load only when needed
+---
+applyTo: '**/*.sql'
+---
+# 80 lines of database-specific rules
+```
+
+### Use `@workspace` Sparingly
+
+The `@workspace` reference indexes your entire workspace. Use it when you need broad search:
+
+```
+@workspace where is the user authentication handled?
+```
+
+But for execution slices, reference specific files instead:
+
+```
+Read docs/plans/Phase-5-NOTIFICATIONS-PLAN.md and .github/instructions/testing.instructions.md
+then execute Slice 3.
+```
+
+### Split Large Phases
+
+If a phase has 10+ slices, the agent may run out of context before finishing. Plan for session breaks:
+
+```
+Slice 1-5:  Execute in Session 2a
+Slice 6-10: Execute in Session 2b (new chat, resume from Slice 6)
+```
+
+When resuming, tell the agent:
+```
+Slices 1-5 are complete and committed. Resume from Slice 6 of
+docs/plans/Phase-5-NOTIFICATIONS-PLAN.md.
+Load the Scope Contract and Stop Conditions before starting.
+```
+
+---
+
+## Using Memory to Bridge Sessions
+
+Copilot's memory system lets you persist context between sessions. This is valuable for the 3-session pipeline.
+
+### Memory Scopes
+
+| Scope | Path | Persists | Use For |
+|-------|------|----------|---------|
+| **User** | `/memories/` | Across all workspaces | Personal patterns, general insights |
+| **Session** | `/memories/session/` | Current conversation only | Slice progress, in-flight notes |
+| **Repository** | `/memories/repo/` | This workspace | Phase outcomes, codebase conventions |
+
+### Bridging Session 1 → Session 2
+
+After hardening (Session 1), save key context to repo memory:
+
+```
+Save to /memories/repo/current-phase.md:
+- Phase name and plan file path
+- Key decisions resolved during hardening
+- Any warnings or risks identified
+- Which slices are parallel-safe vs sequential
+```
+
+Then in Session 2, the agent can read this memory to orient itself without re-processing.
+
+### Bridging Session 2 → Session 3
+
+After execution (Session 2), update the memory:
+
+```
+Update /memories/repo/current-phase.md with:
+- Which slices completed successfully
+- Any amendments made during execution
+- Files created or modified (summary)
+- Completeness sweep results
+```
+
+The Session 3 reviewer can then read this for context on what was done.
+
+### Post-Phase Cleanup
+
+After the phase is fully complete and committed, clean up:
+
+```
+Delete /memories/repo/current-phase.md — phase is done.
+Update /memories/repo/lessons-learned.md with any new patterns discovered.
+```
+
+---
+
+## Referencing Files in Prompts
+
+### Explicit File References
+
+When pasting prompts, reference files explicitly so the agent loads them:
+
+```
+Read these files first:
+1. docs/plans/AI-Plan-Hardening-Runbook.md
+2. docs/plans/Phase-5-NOTIFICATIONS-PLAN.md
+3. .github/copilot-instructions.md
+4. .github/instructions/testing.instructions.md
+```
+
+### Using `#file` References
+
+In Copilot Chat, you can reference files directly with `#file`:
+
+```
+#file:docs/plans/Phase-5-NOTIFICATIONS-PLAN.md
+Execute Slice 3 from this plan.
+```
+
+### Using `@workspace` for Discovery
+
+```
+@workspace find all files related to user notifications
+```
+
+### Attaching Files via UI
+
+You can also click the **paperclip icon** in the chat input to attach files manually. This is useful for plans that aren't in the standard location.
+
+---
+
+## Tips for Better Agent Execution
+
+### 1. Front-Load Context
+
+Put the most important information first in your prompt. The agent pays more attention to the beginning:
+
+```
+# GOOD — context first, then action
+Read the Scope Contract in Phase-5-PLAN.md. The forbidden actions are:
+- Do not modify auth/ directory
+- Do not add new npm packages
+
+Now execute Slice 3.
+```
+
+### 2. One Slice at a Time
+
+Don't ask the agent to "execute all slices." Walk it through one at a time:
+
+```
+Execute Slice 1 from Phase-5-PLAN.md.
+After validation passes, I'll tell you to proceed to Slice 2.
+```
+
+### 3. Validate Before Proceeding
+
+After each slice, explicitly check:
+
+```
+Before moving to the next slice:
+1. Run the build command
+2. Run the tests
+3. Confirm no forbidden files were touched
+4. Show me the re-anchor checklist
+```
+
+### 4. Use Terminal Verification
+
+Agent Mode can run terminal commands. Leverage this for validation gates:
+
+```
+Run `npm test` and show me the results.
+If all pass, commit with: git commit -m "phase-5/slice-3: notification service"
+```
+
+### 5. Interrupt on Drift
+
+If you see the agent expanding scope, stop it immediately:
+
+```
+STOP. You're adding error retry logic that isn't in the Scope Contract.
+Re-read the Scope Contract and Forbidden Actions, then continue with
+only what Slice 3 requires.
+```
+
+---
+
+## Troubleshooting
+
+### "Copilot isn't reading my instruction files"
+
+1. Verify the file is in `.github/instructions/` (exact path)
+2. Check the `applyTo` pattern matches the file you're editing
+3. Confirm the file has valid YAML frontmatter (the `---` delimiters)
+4. Restart VS Code if you just created the file
+
+### "Agent runs out of context mid-execution"
+
+1. Commit the completed work
+2. Open a new chat session
+3. Tell it which slices are done and which to resume from
+4. Reference only the files needed for the current slice
+
+### "Agent keeps expanding scope"
+
+1. Stop the agent immediately
+2. Re-paste the Scope Contract and Forbidden Actions
+3. Ask it to re-read the Stop Conditions
+4. Resume from the current slice
+
+### "Review session is modifying files"
+
+1. Switch to **Ask mode** instead of Agent mode for reviews
+2. Ask mode physically cannot edit files
+3. Or explicitly state: "You are a REVIEWER. Do NOT modify any files."
+
+### "Instruction files are too large for context"
+
+1. Split large instruction files by domain
+2. Use specific `applyTo` patterns (not `'**'`)
+3. Keep each file under ~150 lines
+4. Move examples to a separate reference doc if needed
+
+---
+
+## Quick Reference Card
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  COPILOT PLAN HARDENING — QUICK REFERENCE                       │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  Open Chat:     Ctrl+Shift+I (Win) / Cmd+Shift+I (Mac)         │
+│  New Session:   Click + in chat panel                           │
+│  Agent Mode:    Select at bottom of chat panel                  │
+│  File Ref:      #file:path/to/file.md                           │
+│  Workspace:     @workspace <search query>                       │
+│                                                                 │
+│  SESSION 1 — Harden                                             │
+│    Mode: Agent                                                  │
+│    Paste: Pre-flight Prompt → Hardening Prompt                  │
+│    Save: Key context to /memories/repo/                         │
+│                                                                 │
+│  SESSION 2 — Execute                                            │
+│    Mode: Agent                                                  │
+│    Paste: Execution Prompt (one slice at a time)                │
+│    After all: Completeness Sweep Prompt                         │
+│    Commit after each passed slice                               │
+│                                                                 │
+│  SESSION 3 — Review                                             │
+│    Mode: Ask (prevents accidental edits)                        │
+│    Paste: Reviewer Gate Prompt + Drift Detection Prompt         │
+│    Read-only audit — report only                                │
+│                                                                 │
+│  MEMORY BRIDGE                                                  │
+│    /memories/repo/current-phase.md — phase progress             │
+│    /memories/repo/lessons-learned.md — patterns discovered      │
+│                                                                 │
+│  INTERRUPT                                                      │
+│    Type "STOP" if agent drifts                                  │
+│    Re-paste Scope Contract                                      │
+│    Re-read Stop Conditions                                      │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```

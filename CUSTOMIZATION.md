@@ -1,6 +1,7 @@
 # Customizing the AI Plan Hardening Framework
 
-> **Purpose**: Guide for adapting this template to your specific project, tech stack, and team workflow.
+> **Purpose**: Guide for adapting this template to your specific project, tech stack, and team workflow.  
+> **Also see**: [docs/COPILOT-VSCODE-GUIDE.md](docs/COPILOT-VSCODE-GUIDE.md) — How to run the pipeline in VS Code with Copilot
 
 ---
 
@@ -44,6 +45,45 @@ applyTo: 'path/glob/pattern/**/*.ext'
 priority: HIGH
 ---
 ```
+
+### How `applyTo` Works (Copilot Automatic Loading)
+
+GitHub Copilot reads instruction files **automatically** based on the `applyTo` glob pattern in the YAML frontmatter. When you open a file matching the pattern, Copilot loads that instruction file into context.
+
+**Key rules:**
+- `applyTo: '**'` loads for ALL files (use sparingly — consumes context budget)
+- `applyTo: '**/*.cs'` loads only when editing C# files
+- `applyTo: 'docs/plans/**'` loads only when editing plan documents
+- Multiple patterns: not currently supported — use one glob per file
+- The `.github/copilot-instructions.md` file (no frontmatter) is loaded **every** session
+
+**Common patterns by stack:**
+
+| Stack | Pattern | Loads When |
+|-------|---------|------------|
+| .NET | `'**/*.cs'` | Any C# file |
+| TypeScript | `'**/*.ts'` | Any TypeScript file |
+| Python | `'**/*.py'` | Any Python file |
+| SQL | `'**/*.sql'` | Any SQL migration |
+| Docker | `'**/Dockerfile'`, `'docker-compose*.yml'` | Docker files |
+| Plans | `'docs/plans/**'` | Plan documents |
+
+**Context budget tip:** Each loaded instruction file consumes part of Copilot's context window. Keep instruction files under ~150 lines and use specific `applyTo` patterns instead of `'**'`.
+
+### VS Code Settings (Optional)
+
+Copy `templates/vscode-settings.json.template` to `.vscode/settings.json` in your project to get recommended Copilot settings:
+
+```powershell
+# Copy the template
+cp templates/vscode-settings.json.template .vscode/settings.json
+```
+
+The template configures:
+- Copilot agent mode enabled
+- Code generation instruction file references
+- Markdown word wrap for plan files
+- File associations for `.instructions.md` files
 
 ### 3. Configure `AGENTS.md`
 

@@ -1,0 +1,48 @@
+{
+    // ─── GitHub Copilot Settings ───────────────────────────────────────
+    // Recommended VS Code settings for the AI Plan Hardening Pipeline.
+    // Copy this file to .vscode/settings.json in your project root.
+
+    // Enable Copilot Chat agent mode (required for execution pipeline)
+    "github.copilot.chat.agent.enabled": true,
+
+    // Point Copilot to your instruction files for inline suggestions
+    "github.copilot.chat.codeGeneration.instructions": [
+        { "file": ".github/instructions/architecture-principles.instructions.md" },
+        { "file": ".github/instructions/git-workflow.instructions.md" }
+        // Add your domain-specific instruction files here:
+        // { "file": ".github/instructions/database.instructions.md" },
+        // { "file": ".github/instructions/testing.instructions.md" },
+        // { "file": ".github/instructions/security.instructions.md" }
+    ],
+
+    // Point Copilot to your test generation conventions
+    "github.copilot.chat.testGeneration.instructions": [
+        // { "file": ".github/instructions/testing.instructions.md" }
+    ],
+
+    // ─── Editor Settings for Plan Files ────────────────────────────────
+
+    // Wrap markdown at 100 characters for readability
+    "[markdown]": {
+        "editor.wordWrap": "wordWrapColumn",
+        "editor.wordWrapColumn": 100,
+        "editor.rulers": [100]
+    },
+
+    // ─── File Associations ─────────────────────────────────────────────
+
+    // Ensure instruction files are treated as markdown
+    "files.associations": {
+        "*.instructions.md": "markdown"
+    },
+
+    // ─── Search Exclusions ─────────────────────────────────────────────
+    // Hide template scaffolding from search after setup is complete
+    // Uncomment these after running setup.ps1/setup.sh:
+    //
+    // "search.exclude": {
+    //     "presets/": true,
+    //     "templates/": true
+    // }
+}

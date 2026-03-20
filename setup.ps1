@@ -255,6 +255,23 @@ $config = @{
 Set-Content -Path $configPath -Value $config
 Write-Host "  CREATED  .plan-hardening.json" -ForegroundColor Green
 
+# ─── Step 6: Copy VS Code Settings Template ────────────────────────────
+Write-Host ""
+Write-Host "Step 6: VS Code settings template" -ForegroundColor Cyan
+
+$vscodeSrc = Join-Path $templateRoot "templates/vscode-settings.json.template"
+$vscodeDst = Join-Path $ProjectPath ".vscode/settings.json"
+if (Test-Path $vscodeSrc) {
+    Copy-WithCreate $vscodeSrc $vscodeDst $Force.IsPresent
+}
+
+# ─── Step 7: Copy Copilot VS Code Guide ────────────────────────────────
+$guideSrc = Join-Path $templateRoot "docs/COPILOT-VSCODE-GUIDE.md"
+$guideDst = Join-Path $ProjectPath "docs/COPILOT-VSCODE-GUIDE.md"
+if (Test-Path $guideSrc) {
+    Copy-WithCreate $guideSrc $guideDst $Force.IsPresent
+}
+
 # ─── Done ──────────────────────────────────────────────────────────────
 Write-Host ""
 Write-Host "╔══════════════════════════════════════════════════════════════╗" -ForegroundColor Green
@@ -266,7 +283,8 @@ Write-Host ""
 Write-Host "Next steps:" -ForegroundColor Yellow
 Write-Host "  1. Review .github/copilot-instructions.md — fill in project-specific details"
 Write-Host "  2. Review AGENTS.md — customize worker patterns for your app"
-Write-Host "  3. Review docs/plans/DEPLOYMENT-ROADMAP.md — add your phases"
-Write-Host "  4. Read CUSTOMIZATION.md in the template for advanced config"
-Write-Host "  5. Start planning: open docs/plans/AI-Plan-Hardening-Runbook-Instructions.md"
+Write-Host "  3. Review .vscode/settings.json — uncomment instruction file references"
+Write-Host "  4. Review docs/plans/DEPLOYMENT-ROADMAP.md — add your phases"
+Write-Host "  5. Read docs/COPILOT-VSCODE-GUIDE.md for Copilot Agent Mode workflow"
+Write-Host "  6. Start planning: open docs/plans/AI-Plan-Hardening-Runbook-Instructions.md"
 Write-Host ""

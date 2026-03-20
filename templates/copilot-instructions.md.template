@@ -1,0 +1,106 @@
+# Instructions for Copilot — Template
+
+> **Project**: <YOUR PROJECT NAME>  
+> **Stack**: <YOUR TECH STACK>  
+> **Last Updated**: <DATE>
+
+---
+
+## Architecture Principles
+
+**BEFORE making ANY code changes, read:** `.github/instructions/architecture-principles.instructions.md`
+
+### Core Principles (Non-Negotiable)
+1. **Architecture-First** — Ask 5 questions before coding
+2. **Separation of Concerns** — Controller → Service → Repository
+3. **Best Practices Over Speed** — Enterprise-grade, not hacky
+4. **TDD for Business Logic** — Red-Green-Refactor
+5. **Type Safety** — Explicit types everywhere
+
+---
+
+## Project Overview
+
+<!-- Fill in your project details -->
+
+**Description**: (What your app does)
+
+**Tech Stack**:
+- Frontend: (React / Blazor / Vue / etc.)
+- Backend: (Node.js / .NET / Python / etc.)
+- Database: (PostgreSQL / MongoDB / etc.)
+- Testing: (Vitest / xUnit / pytest / etc.)
+
+**Architecture**:
+- (Key patterns your project uses)
+- (How layers are organized)
+- (How services communicate)
+
+---
+
+## Quick Commands
+
+```bash
+# Build
+<YOUR BUILD COMMAND>
+
+# Test
+<YOUR TEST COMMAND>
+
+# Lint
+<YOUR LINT COMMAND>
+
+# Start dev
+<YOUR DEV COMMAND>
+```
+
+---
+
+## Coding Standards
+
+<!-- Add your project-specific standards here -->
+
+### Style
+- (naming conventions)
+- (file organization)
+- (import ordering)
+
+### Database
+- (ORM/query patterns)
+- (migration strategy)
+
+### Testing
+- (test framework and patterns)
+- (coverage requirements)
+
+---
+
+## Planning & Execution
+
+This project uses the **AI Plan Hardening Pipeline** for feature development.
+
+- **Runbook**: `docs/plans/AI-Plan-Hardening-Runbook.md`
+- **Instructions**: `docs/plans/AI-Plan-Hardening-Runbook-Instructions.md`
+- **Roadmap**: `docs/plans/DEPLOYMENT-ROADMAP.md`
+- **VS Code Guide**: `docs/COPILOT-VSCODE-GUIDE.md`
+
+### Instruction Files
+
+| File | Domain |
+|------|--------|
+| `architecture-principles.instructions.md` | Core architecture rules |
+| `git-workflow.instructions.md` | Commit conventions |
+| (add your domain files here) | |
+
+---
+
+## Git Workflow
+
+After completing changes:
+```bash
+git add -A
+git commit -m "<type>(<scope>): <description>"
+git push origin main
+```
+
+See `.github/instructions/git-workflow.instructions.md` for commit conventions.

@@ -273,6 +273,23 @@ EOF
 
 green "  CREATED  .plan-hardening.json"
 
+# ─── Step 6: Copy VS Code Settings Template ────────────────────────────
+echo ""
+cyan "Step 6: VS Code settings template"
+
+vscode_src="$TEMPLATE_ROOT/templates/vscode-settings.json.template"
+vscode_dst="$PROJECT_PATH/.vscode/settings.json"
+if [[ -f "$vscode_src" ]]; then
+    copy_with_create "$vscode_src" "$vscode_dst" || true
+fi
+
+# ─── Step 7: Copy Copilot VS Code Guide ────────────────────────────────
+guide_src="$TEMPLATE_ROOT/docs/COPILOT-VSCODE-GUIDE.md"
+guide_dst="$PROJECT_PATH/docs/COPILOT-VSCODE-GUIDE.md"
+if [[ -f "$guide_src" ]]; then
+    copy_with_create "$guide_src" "$guide_dst" || true
+fi
+
 # ─── Done ──────────────────────────────────────────────────────────────
 echo ""
 green "╔══════════════════════════════════════════════════════════════╗"
@@ -284,7 +301,8 @@ echo ""
 yellow "Next steps:"
 echo "  1. Review .github/copilot-instructions.md — fill in project-specific details"
 echo "  2. Review AGENTS.md — customize worker patterns for your app"
-echo "  3. Review docs/plans/DEPLOYMENT-ROADMAP.md — add your phases"
-echo "  4. Read CUSTOMIZATION.md in the template for advanced config"
-echo "  5. Start planning: open docs/plans/AI-Plan-Hardening-Runbook-Instructions.md"
+echo "  3. Review .vscode/settings.json — uncomment instruction file references"
+echo "  4. Review docs/plans/DEPLOYMENT-ROADMAP.md — add your phases"
+echo "  5. Read docs/COPILOT-VSCODE-GUIDE.md for Copilot Agent Mode workflow"
+echo "  6. Start planning: open docs/plans/AI-Plan-Hardening-Runbook-Instructions.md"
 echo ""

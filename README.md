@@ -35,6 +35,10 @@ SESSION 3 — Review & Audit
 
 The executor shouldn't self-audit. Fresh context eliminates blind spots from implementation decisions. Each session loads the same guardrails but brings independent judgment.
 
+### Using with GitHub Copilot in VS Code?
+
+See **[docs/COPILOT-VSCODE-GUIDE.md](docs/COPILOT-VSCODE-GUIDE.md)** for a complete walkthrough — how Agent Mode works, how instruction files auto-load, managing context budget, using memory to bridge sessions, and troubleshooting tips.
+
 ---
 
 ## Quick Start
@@ -105,7 +109,9 @@ ai-plan-hardening-template/
 ├── setup.sh                           ← Interactive setup wizard (Bash)
 ├── CUSTOMIZATION.md                   ← How to adapt for your stack
 │
-├── docs/plans/                        ← Core pipeline documents
+├── docs/
+│   ├── COPILOT-VSCODE-GUIDE.md        ← How to use with Copilot in VS Code
+│   └── plans/                         ← Core pipeline documents
 │   ├── README.md                      ← "How We Plan & Build"
 │   ├── AI-Plan-Hardening-Runbook.md   ← Full runbook (prompts + templates)
 │   ├── AI-Plan-Hardening-Runbook-Instructions.md  ← Step-by-step guide
@@ -130,7 +136,8 @@ ai-plan-hardening-template/
 │
 └── templates/                         ← Raw templates for manual setup
     ├── AGENTS.md.template
-    └── copilot-instructions.md.template
+    ├── copilot-instructions.md.template
+    └── vscode-settings.json.template   ← VS Code / Copilot settings
 ```
 
 ---

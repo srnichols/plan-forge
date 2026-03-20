@@ -1,0 +1,69 @@
+# Agents & Automation — Template
+
+> **Purpose**: Document background workers, event processors, scheduled tasks, and agent patterns for your project.  
+> **Instructions**: Fill in each section with your project's specific agents and automation.
+
+---
+
+## Agent Architecture
+
+<!-- Describe your service communication patterns: pub/sub, queues, cron, etc. -->
+
+### Communication Patterns
+
+| Pattern | Technology | Use Case |
+|---------|-----------|----------|
+| Pub/Sub | (Redis / NATS / Kafka / RabbitMQ) | Event-driven processing |
+| Request/Response | (HTTP / gRPC) | Synchronous service calls |
+| Scheduled | (Cron / Timer / Celery Beat) | Periodic tasks |
+
+---
+
+## Background Services
+
+### Worker 1: <Name>
+
+**Location**: `path/to/worker`  
+**Purpose**: (What it does)  
+**Technology**: (BackgroundService / Celery / Bull / etc.)
+
+**Key Features**:
+- (feature 1)
+- (feature 2)
+
+**Configuration**:
+```
+# Add your worker's config here
+```
+
+---
+
+## Event Processing
+
+### Topic/Queue: <name>
+
+**Publisher**: (which service publishes)  
+**Subscriber**: (which service consumes)  
+**Schema**: (event structure)
+
+---
+
+## Monitoring
+
+### Health Checks
+- (list health check endpoints)
+
+### Metrics
+- (list key metrics to monitor)
+
+---
+
+## Development & Debugging
+
+```bash
+# How to run workers locally
+<YOUR WORKER START COMMAND>
+
+# How to view worker logs
+<YOUR LOG COMMAND>
+```

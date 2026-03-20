@@ -116,6 +116,43 @@ if [[ -f "$CONFIG_PATH" ]]; then
         check_file ".github/instructions/testing.instructions.md" || true
         check_file ".github/instructions/security.instructions.md" || true
     fi
+
+    # Check for agentic files (prompt templates, agent definitions, skills)
+    echo ""
+    cyan "Agentic files (prompts, agents, skills):"
+
+    if [[ "$PRESET" != "custom" ]]; then
+        PROMPTS_DIR="$PROJECT_PATH/.github/prompts"
+        AGENTS_DIR="$PROJECT_PATH/.github/agents"
+        SKILLS_DIR="$PROJECT_PATH/.github/skills"
+
+        if [[ -d "$PROMPTS_DIR" ]]; then
+            PROMPT_COUNT=$(find "$PROMPTS_DIR" -name "*.prompt.md" -type f 2>/dev/null | wc -l | tr -d ' ')
+            green "  PASS  .github/prompts/ ($PROMPT_COUNT prompt templates)"
+            ((PASS++))
+        else
+            yellow "  WARN  .github/prompts/ (missing — optional)"
+            ((WARN++))
+        fi
+
+        if [[ -d "$AGENTS_DIR" ]]; then
+            AGENT_COUNT=$(find "$AGENTS_DIR" -name "*.agent.md" -type f 2>/dev/null | wc -l | tr -d ' ')
+            green "  PASS  .github/agents/ ($AGENT_COUNT agent definitions)"
+            ((PASS++))
+        else
+            yellow "  WARN  .github/agents/ (missing — optional)"
+            ((WARN++))
+        fi
+
+        if [[ -d "$SKILLS_DIR" ]]; then
+            SKILL_COUNT=$(find "$SKILLS_DIR" -name "SKILL.md" -type f 2>/dev/null | wc -l | tr -d ' ')
+            green "  PASS  .github/skills/ ($SKILL_COUNT skills)"
+            ((PASS++))
+        else
+            yellow "  WARN  .github/skills/ (missing — optional)"
+            ((WARN++))
+        fi
+    fi
 else
     yellow "  WARN  .plan-hardening.json not found — skipping preset checks"
     ((WARN++))

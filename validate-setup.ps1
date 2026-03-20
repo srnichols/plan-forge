@@ -101,6 +101,46 @@ if (Test-Path $configPath) {
         Check-FileExists ".github/instructions/testing.instructions.md"
         Check-FileExists ".github/instructions/security.instructions.md"
     }
+
+    # Check for agentic files (prompt templates, agent definitions, skills)
+    Write-Host ""
+    Write-Host "Agentic files (prompts, agents, skills):" -ForegroundColor Cyan
+
+    if ($preset -ne 'custom') {
+        $promptsDir = Join-Path $ProjectPath ".github/prompts"
+        $agentsDir  = Join-Path $ProjectPath ".github/agents"
+        $skillsDir  = Join-Path $ProjectPath ".github/skills"
+
+        if (Test-Path $promptsDir) {
+            $promptCount = (Get-ChildItem -Path $promptsDir -Filter "*.prompt.md" -File).Count
+            Write-Host "  PASS  .github/prompts/ ($promptCount prompt templates)" -ForegroundColor Green
+            $pass++
+        }
+        else {
+            Write-Host "  WARN  .github/prompts/ (missing — optional)" -ForegroundColor Yellow
+            $warn++
+        }
+
+        if (Test-Path $agentsDir) {
+            $agentCount = (Get-ChildItem -Path $agentsDir -Filter "*.agent.md" -File).Count
+            Write-Host "  PASS  .github/agents/ ($agentCount agent definitions)" -ForegroundColor Green
+            $pass++
+        }
+        else {
+            Write-Host "  WARN  .github/agents/ (missing — optional)" -ForegroundColor Yellow
+            $warn++
+        }
+
+        if (Test-Path $skillsDir) {
+            $skillCount = (Get-ChildItem -Path $skillsDir -Recurse -Filter "SKILL.md" -File).Count
+            Write-Host "  PASS  .github/skills/ ($skillCount skills)" -ForegroundColor Green
+            $pass++
+        }
+        else {
+            Write-Host "  WARN  .github/skills/ (missing — optional)" -ForegroundColor Yellow
+            $warn++
+        }
+    }
 }
 else {
     Write-Host "  WARN  .plan-hardening.json not found — skipping preset checks" -ForegroundColor Yellow

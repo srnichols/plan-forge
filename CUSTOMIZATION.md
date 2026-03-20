@@ -21,7 +21,7 @@ The wizard generates a starter file. Customize it with:
 
 ### 2. Add Domain-Specific Instruction Files
 
-The presets include common instruction files (database, testing, security). Add your own for project-specific domains:
+The presets include 12 instruction files (database, testing, security, deploy, caching, messaging, observability, api-patterns, errorhandling, performance, multi-environment, version). Add your own for project-specific domains:
 
 ```
 .github/instructions/
@@ -29,6 +29,15 @@ The presets include common instruction files (database, testing, security). Add 
 ├── database.instructions.md                 ← From preset
 ├── testing.instructions.md                  ← From preset
 ├── security.instructions.md                 ← From preset
+├── deploy.instructions.md                   ← From preset
+├── caching.instructions.md                  ← From preset
+├── messaging.instructions.md                ← From preset
+├── observability.instructions.md            ← From preset
+├── api-patterns.instructions.md             ← From preset
+├── errorhandling.instructions.md            ← From preset
+├── performance.instructions.md              ← From preset
+├── multi-environment.instructions.md        ← From preset
+├── version.instructions.md                  ← From preset
 ├── git-workflow.instructions.md             ← From shared
 │
 ├── your-domain.instructions.md              ← ADD: Your domain rules
@@ -85,7 +94,26 @@ The template configures:
 - Markdown word wrap for plan files
 - File associations for `.instructions.md` files
 
-### 3. Configure `AGENTS.md`
+### 3. Customize Prompt Templates, Agent Definitions & Skills
+
+The presets include scaffolding recipes, reviewer roles, and multi-step procedures. Customize them for your project:
+
+**Prompt templates** (`.github/prompts/`):
+- Edit code examples to match your project's naming conventions, patterns, and frameworks
+- Add project-specific validation rules, required fields, or domain constraints
+- Reference your actual service interfaces and repository patterns
+
+**Agent definitions** (`.github/agents/`):
+- Add project-specific checklist items (e.g., "Verify tenant isolation in all queries")
+- Reference your instruction files in the agent's Context Files list
+- Customize anti-pattern examples to match your codebase
+
+**Skills** (`.github/skills/`):
+- Update build/test/deploy commands to match your CI/CD pipeline
+- Add project-specific validation steps (e.g., "Run RLS tests after migration")
+- Customize verification queries for your database schema
+
+### 5. Configure `AGENTS.md`
 
 The wizard generates a starter `AGENTS.md`. Add:
 
@@ -94,7 +122,7 @@ The wizard generates a starter `AGENTS.md`. Add:
 - **Scheduled tasks**: Cron patterns, what runs when
 - **Agent communication**: How services talk to each other
 
-### 4. Set Up Your Roadmap
+### 6. Set Up Your Roadmap
 
 Edit `docs/plans/DEPLOYMENT-ROADMAP.md`:
 
@@ -194,22 +222,51 @@ Review checklist:
 To contribute a preset for a new tech stack:
 
 1. Create `presets/your-stack/` directory
-2. Add these files:
-   - `.github/copilot-instructions.md` — Stack-specific conventions
-   - `.github/instructions/architecture-principles.instructions.md` — Adapted principles
-   - `.github/instructions/database.instructions.md` — ORM/query patterns
-   - `.github/instructions/testing.instructions.md` — Test framework patterns  
-   - `.github/instructions/security.instructions.md` — Security patterns
-   - `.github/instructions/deploy.instructions.md` — Deployment patterns
-   - `AGENTS.md` — Agent/worker patterns for this stack
-3. Add an example plan in `docs/plans/examples/Phase-YOUR-STACK-EXAMPLE.md`
-4. Update `setup.ps1` to support the new preset name
-5. Update `README.md` preset table
+2. Add **instruction files** (`.github/instructions/` — 12 files):
+   - `database.instructions.md` — ORM/query patterns
+   - `testing.instructions.md` — Test framework patterns  
+   - `security.instructions.md` — Security patterns
+   - `deploy.instructions.md` — Deployment patterns
+   - `caching.instructions.md` — Cache strategies
+   - `messaging.instructions.md` — Pub/sub, queues, event-driven patterns
+   - `observability.instructions.md` — Logging, metrics, tracing
+   - `api-patterns.instructions.md` — REST conventions, error responses
+   - `errorhandling.instructions.md` — Exception hierarchy, error boundaries
+   - `performance.instructions.md` — Hot/cold path, allocation reduction
+   - `multi-environment.instructions.md` — Dev/staging/prod config
+   - `version.instructions.md` — Semantic versioning, release tagging
+3. Add **prompt templates** (`.github/prompts/` — 7 files):
+   - `new-entity.prompt.md` — End-to-end entity scaffolding
+   - `new-service.prompt.md` — Service class with DI, logging
+   - `new-controller.prompt.md` — REST controller with auth, error mapping
+   - `new-repository.prompt.md` — Data access layer
+   - `new-test.prompt.md` — Unit/integration test
+   - `bug-fix-tdd.prompt.md` — Red-Green-Refactor bug fix
+   - `new-worker.prompt.md` — Background worker/job
+4. Add **agent definitions** (`.github/agents/` — 6 files):
+   - `architecture-reviewer.agent.md` — Layer separation audit
+   - `security-reviewer.agent.md` — OWASP Top 10 audit
+   - `database-reviewer.agent.md` — SQL safety, N+1, naming
+   - `performance-analyzer.agent.md` — Hot paths, allocations
+   - `test-runner.agent.md` — Run tests, diagnose failures
+   - `deploy-helper.agent.md` — Build, deploy, verify
+5. Add **skills** (`.github/skills/` — 3 directories):
+   - `database-migration/SKILL.md` — Generate → validate → deploy migrations
+   - `staging-deploy/SKILL.md` — Build → push → migrate → verify
+   - `test-sweep/SKILL.md` — Run all test suites, aggregate results
+6. Add `AGENTS.md` — Agent/worker patterns for this stack
+7. Add `.github/copilot-instructions.md` — Stack-specific conventions
+8. Add an example plan in `docs/plans/examples/Phase-YOUR-STACK-EXAMPLE.md`
+9. Update `setup.ps1` and `setup.sh` to support the new preset name
+10. Update `README.md` preset table
 
 ### Preset File Conventions
 
 - Use the same file names across presets (consistency)
-- Include frontmatter with `applyTo` globs matching the stack's file extensions
+- **Instruction files**: Include frontmatter with `applyTo` globs matching the stack's file extensions
+- **Prompt templates**: Include stack-specific code examples and tool references
+- **Agent definitions**: Include stack-specific checklists, anti-patterns, and tool access rules
+- **Skills**: Include stack-specific build/test/deploy commands
 - Include at least 3 "do this" / "don't do this" examples per instruction file
 - Reference the stack's actual tooling (test runners, linters, build tools)
 
@@ -230,7 +287,10 @@ The essential files for ongoing use are:
 
 ```
 docs/plans/                    ← Runbook + your plans
-.github/instructions/          ← Guardrail files
+.github/instructions/          ← Guardrail files (12 per preset)
+.github/prompts/               ← Scaffolding recipes (7 prompt templates)
+.github/agents/                ← Reviewer/executor roles (6 agent definitions)
+.github/skills/                ← Multi-step procedures (3 skills)
 .github/copilot-instructions.md
 AGENTS.md
 ```

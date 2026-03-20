@@ -139,6 +139,16 @@ If exists:
 
 Always safe to copy — these are new planning documents that shouldn't conflict with existing project docs.
 
+#### `.github/prompts/`, `.github/agents/`, `.github/skills/` directories
+
+If these directories don't exist in the target project:
+1. **Copy them** from the preset — no conflict possible
+
+If the target already has files in these directories:
+1. **Copy new files** that don't exist in the target
+2. **Skip files** that already exist (they've been customized)
+3. **Do NOT overwrite** existing prompt, agent, or skill files
+
 ### Step 4: Validate
 
 Run validation (same as Greenfield Step 4). The validator checks for the minimum required files regardless of how they got there.
@@ -169,6 +179,14 @@ The validation script checks for these files. All must be present and non-empty:
 | `.github/instructions/database.instructions.md` | Database patterns |
 | `.github/instructions/testing.instructions.md` | Test conventions |
 | `.github/instructions/security.instructions.md` | Security rules |
+
+### Required (Non-Custom Presets — Agentic Files)
+
+| Directory / Files | Purpose |
+|-------------------|---------|
+| `.github/prompts/*.prompt.md` (7 files) | Scaffolding recipes for entities, services, tests, workers |
+| `.github/agents/*.agent.md` (6 files) | Specialized reviewer/executor roles (security, architecture, etc.) |
+| `.github/skills/*/SKILL.md` (3 skills) | Multi-step procedures for migrations, deploys, test sweeps |
 
 ### Optional but Recommended
 
@@ -204,5 +222,8 @@ Once setup and validation pass, the agent can run the 5-step planning pipeline:
 1. **Read** `docs/plans/AI-Plan-Hardening-Runbook-Instructions.md`
 2. **Follow** the copy-paste prompts for each step
 3. **Use 3 separate sessions** (plan → execute → review) to avoid context bleed
+4. **Use prompt templates** (`.github/prompts/`) during execution for consistent scaffolding
+5. **Use agent definitions** (`.github/agents/`) for focused reviews (security, architecture, performance)
+6. **Use skills** (`.github/skills/`) for multi-step procedures (migrations, deploys, test sweeps)
 
 For VS Code Copilot-specific workflow details, see `docs/COPILOT-VSCODE-GUIDE.md`.

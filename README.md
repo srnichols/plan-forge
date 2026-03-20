@@ -62,6 +62,17 @@ The wizard bootstraps your `.github/instructions/`, `AGENTS.md`, and `copilot-in
 .\setup.ps1 -Preset python
 ```
 
+```bash
+# Bash (macOS/Linux)
+chmod +x setup.sh
+./setup.sh
+
+# Or specify a preset directly
+./setup.sh --preset dotnet
+./setup.sh --preset typescript
+./setup.sh --preset python
+```
+
 ### 3. Available Presets
 
 | Preset | Stack | Build Cmd | Test Cmd |
@@ -90,7 +101,8 @@ The wizard bootstraps your `.github/instructions/`, `AGENTS.md`, and `copilot-in
 ai-plan-hardening-template/
 ├── README.md                          ← You are here
 ├── LICENSE
-├── setup.ps1                          ← Interactive setup wizard
+├── setup.ps1                          ← Interactive setup wizard (PowerShell)
+├── setup.sh                           ← Interactive setup wizard (Bash)
 ├── CUSTOMIZATION.md                   ← How to adapt for your stack
 │
 ├── docs/plans/                        ← Core pipeline documents
@@ -125,7 +137,7 @@ ai-plan-hardening-template/
 
 ## What the Setup Wizard Does
 
-Running `setup.ps1` with a preset:
+Running `setup.ps1` (PowerShell) or `setup.sh` (Bash) with a preset:
 
 1. **Copies preset instruction files** from `presets/{stack}/` to your project root
 2. **Generates `AGENTS.md`** with patterns for your tech stack
@@ -189,7 +201,7 @@ Execution halts immediately if:
 1. Fork the repo
 2. Create a feature branch (`git checkout -b preset/rust`)
 3. Add your preset in `presets/your-stack/`
-4. Update `setup.ps1` to support the new preset
+4. Update `setup.ps1` and `setup.sh` to support the new preset
 5. Add a worked example in `docs/plans/examples/`
 6. Submit a PR
 

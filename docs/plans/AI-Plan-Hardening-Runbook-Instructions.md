@@ -344,3 +344,40 @@ Do NOT modify any files. Report only.
 | `.github/copilot-instructions.md` | Project-wide coding standards |
 | `.github/instructions/*.instructions.md` | Domain-specific guardrail files |
 | `AGENTS.md` | Background worker and agent patterns |
+
+---
+
+## Alternative: Using Pipeline Agents
+
+Instead of copy-pasting prompts for each session, you can use the **pipeline agents** — pre-built `.agent.md` files that chain the 3-session workflow with clickable handoff buttons.
+
+### Pipeline Agent Chain
+
+```
+Plan Hardener → Executor → Reviewer Gate
+     │                │              │
+     │  "Start        │  "Run        │  (terminal —
+     │  Execution →"  │  Review      │   no handoff)
+     │                │  Gate →"     │
+```
+
+### How to Use
+
+1. **Open a chat** with the `Plan Hardener` agent (`.github/agents/plan-hardener.agent.md`)
+2. **Provide your plan**: "Harden `docs/plans/Phase-YOUR-FEATURE-PLAN.md`"
+3. The agent runs pre-flight checks, adds the 6 mandatory template blocks, and resolves TBDs
+4. When done, click **"Start Execution →"** to hand off to the Executor agent
+5. The **Executor** runs slices one-by-one with validation gates, then runs the completeness sweep
+6. When done, click **"Run Review Gate →"** to hand off to the Reviewer Gate agent
+7. The **Reviewer Gate** audits all changes read-only and reports a PASS/FAIL verdict
+
+### Pipeline Agents vs Copy-Paste Prompts
+
+| Aspect | Pipeline Agents | Copy-Paste Prompts |
+|--------|----------------|-------------------|
+| Session transitions | Clickable handoff buttons | Manual copy-paste into new session |
+| Context carry-over | Automatic via handoff prompt | Manual (reference plan file) |
+| Customization | Edit the `.agent.md` files | Edit the prompt text |
+| Functionality | Identical | Identical |
+
+> **Both approaches produce the same result.** Pipeline agents just make session transitions smoother. Use whichever you prefer.

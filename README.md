@@ -144,6 +144,20 @@ Each preset includes **6 agent definitions** (`.github/agents/`) — specialized
 | `test-runner.agent.md` | Run tests, analyze failures, diagnose root causes |
 | `deploy-helper.agent.md` | Build, push, migrate, deploy, verify health checks |
 
+### Pipeline Agents (Shared)
+
+In addition to the preset reviewer agents, the template includes **3 pipeline agents** that automate the Plan → Execute → Review workflow with handoff buttons:
+
+| Agent | Purpose | Hands Off To |
+|-------|---------|--------------|
+| `plan-hardener.agent.md` | Harden draft plans into execution contracts | Executor |
+| `executor.agent.md` | Execute slices with validation gates | Reviewer Gate |
+| `reviewer-gate.agent.md` | Read-only audit for drift and violations | (terminal) |
+
+These are stack-independent and use `handoffs:` frontmatter to chain sessions with clickable buttons.
+
+> **Tip**: Use `/create-agent` in VS Code Copilot to create additional project-specific agents interactively. See [CUSTOMIZATION.md](CUSTOMIZATION.md) for details.
+
 ### Skills Per Preset
 
 Each preset includes **3 skills** (`.github/skills/`) — multi-step executable procedures:

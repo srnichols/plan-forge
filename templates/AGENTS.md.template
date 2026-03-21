@@ -58,6 +58,22 @@
 
 ---
 
+## Pipeline Agents
+
+The following agents automate the Plan → Execute → Review workflow with handoff buttons:
+
+| Agent | File | Purpose | Tools |
+|-------|------|---------|-------|
+| Plan Hardener | `.github/agents/plan-hardener.agent.md` | Hardens draft plans into execution contracts | read, search, editFiles |
+| Executor | `.github/agents/executor.agent.md` | Executes slices with validation gates | read, search, editFiles, runCommands |
+| Reviewer Gate | `.github/agents/reviewer-gate.agent.md` | Read-only audit for drift and violations | read, search |
+
+**Handoff chain**: Plan Hardener → *"Start Execution →"* → Executor → *"Run Review Gate →"* → Reviewer Gate
+
+> These are functionally identical to the copy-paste prompts in the [Runbook Instructions](docs/plans/AI-Plan-Hardening-Runbook-Instructions.md). Use `/create-agent` to add project-specific agents.
+
+---
+
 ## Development & Debugging
 
 ```bash

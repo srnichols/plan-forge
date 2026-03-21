@@ -113,6 +113,55 @@ The presets include scaffolding recipes, reviewer roles, and multi-step procedur
 - Add project-specific validation steps (e.g., "Run RLS tests after migration")
 - Customize verification queries for your database schema
 
+### 4. Create Agents with `/create-agent` and Use Handoffs
+
+#### `/create-agent` — Interactive Agent Scaffolding
+
+VS Code Copilot's `/create-agent` slash command scaffolds `.agent.md` files interactively. Describe a persona in natural language, and the AI generates a complete agent definition with frontmatter, tools, and instructions.
+
+**When to use it:**
+- Creating domain-specific reviewers beyond the 6 presets (e.g., "billing domain expert", "accessibility auditor")
+- Extracting a useful agent persona from a conversation into a reusable `.agent.md` file
+- Quickly prototyping a new agent role before refining it manually
+
+**Example:**
+```
+/create-agent A billing domain expert that reviews invoice calculations,
+tax logic, and payment gateway integrations for correctness.
+```
+
+This complements the preset agents — use `/create-agent` for project-specific roles, keep the presets for universal concerns (architecture, security, performance).
+
+#### Pipeline Agents with Handoffs
+
+The template includes **3 pipeline agents** that automate the Plan → Execute → Review workflow using `handoffs:` — a frontmatter property that wires agent-to-agent transitions with clickable buttons:
+
+| Agent | Role | Hands Off To |
+|-------|------|-------------|
+| `plan-hardener.agent.md` | Hardens draft plans into execution contracts | Executor |
+| `executor.agent.md` | Executes slices with validation gates | Reviewer Gate |
+| `reviewer-gate.agent.md` | Read-only audit for drift and violations | (terminal) |
+
+**How handoffs work:**
+1. Start a chat with the Plan Hardener agent
+2. When hardening is complete, a **"Start Execution →"** button appears
+3. Click it to switch to the Executor agent with context carried over
+4. When execution completes, a **"Run Review Gate →"** button appears
+5. Click it to switch to the read-only Reviewer Gate
+
+The `handoffs:` frontmatter looks like:
+```yaml
+handoffs:
+  - agent: "executor"
+    reason: "Plan is hardened — ready for execution."
+    send: false  # User reviews the prompt before submitting
+    prompt: "Execute the hardened plan slice-by-slice."
+```
+
+> **Note**: `send: false` means the user always reviews the handoff prompt before it's sent — no automatic execution.
+
+These pipeline agents are functionally identical to the copy-paste prompts in the Runbook Instructions. Use whichever approach you prefer.
+
 ### 5. Configure `AGENTS.md`
 
 The wizard generates a starter `AGENTS.md`. Add:

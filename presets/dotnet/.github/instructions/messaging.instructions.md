@@ -162,6 +162,7 @@ Idempotency store options: database table with unique constraint on `event_id`, 
 
 ## See Also
 
+- `dapr.instructions.md` — Dapr building blocks, sidecar config, state, workflows, secrets
 - `observability.instructions.md` — Distributed tracing, event logging
 - `errorhandling.instructions.md` — Dead letter queues, retry logic
 - `database.instructions.md` — Idempotency stores, transactional outbox

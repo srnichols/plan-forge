@@ -162,6 +162,7 @@ Alternatives: database table with `UNIQUE(task_id)`, or Celery's `task_reject_on
 
 ## See Also
 
+- `dapr.instructions.md` — Dapr building blocks, sidecar config, state, workflows, secrets
 - `observability.instructions.md` — Distributed tracing, event logging
 - `errorhandling.instructions.md` — Dead letter queues, retry logic
 - `database.instructions.md` — Idempotency stores, transactional outbox

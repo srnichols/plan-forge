@@ -113,6 +113,7 @@ ENTRYPOINT ["java", \
 
 ## See Also
 
+- `dapr.instructions.md` — Dapr sidecar deployment, component configuration
 - `multi-environment.instructions.md` — Per-environment configuration
 - `observability.instructions.md` — Health checks, readiness probes
 - `security.instructions.md` — Secrets management, TLS

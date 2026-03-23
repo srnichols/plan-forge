@@ -122,6 +122,7 @@ app.Use(async (context, next) =>
 
 ## See Also
 
+- `dapr.instructions.md` — Dapr sidecar tracing, health checks, workflow observability
 - `errorhandling.instructions.md` — Exception handling, correlation IDs
 - `performance.instructions.md` — Profiling, metrics collection
 - `deploy.instructions.md` — Health probes, Kubernetes integration

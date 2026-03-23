@@ -145,6 +145,7 @@ func RateLimit(requestsPerSecond int) func(http.Handler) http.Handler {
 ## See Also
 
 - `graphql.instructions.md` — GraphQL authorization, directive-based @hasRole
+- `dapr.instructions.md` — Dapr secrets management, component scoping, mTLS
 - `database.instructions.md` — SQL injection prevention, parameterized queries
 - `api-patterns.instructions.md` — Auth middleware, request validation
 - `deploy.instructions.md` — Secrets management, TLS configuration

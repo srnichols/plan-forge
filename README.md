@@ -153,16 +153,28 @@ Each preset includes **7 prompt templates** (`.github/prompts/`) that agents use
 
 ### Agent Definitions Per Preset
 
-Each preset includes **6 agent definitions** (`.github/agents/`) — specialized reviewer/executor roles:
+Each preset includes **6 stack-specific agent definitions** (`.github/agents/`) — specialized reviewer/executor roles:
 
 | Agent | Purpose |
-|-------|---------|
+|-------|--------|
 | `architecture-reviewer.agent.md` | Audit layer separation, pattern violations, coupling |
 | `security-reviewer.agent.md` | OWASP Top 10, injection, auth gaps, secret exposure |
 | `database-reviewer.agent.md` | SQL safety, N+1 queries, naming, indexing, migrations |
 | `performance-analyzer.agent.md` | Hot paths, allocations, async anti-patterns, caching gaps |
 | `test-runner.agent.md` | Run tests, analyze failures, diagnose root causes |
 | `deploy-helper.agent.md` | Build, push, migrate, deploy, verify health checks |
+
+### SaaS & Cross-Stack Agents (Shared)
+
+In addition, the setup wizard installs **5 cross-stack agents** for SaaS-critical concerns:
+
+| Agent | Purpose |
+|-------|--------|
+| `api-contract-reviewer.agent.md` | API versioning, backward compatibility, OpenAPI compliance, pagination, rate limiting |
+| `accessibility-reviewer.agent.md` | WCAG 2.2 compliance, semantic HTML, ARIA, keyboard nav, color contrast |
+| `multi-tenancy-reviewer.agent.md` | Tenant isolation, data leakage prevention, RLS, cache separation |
+| `cicd-reviewer.agent.md` | Pipeline safety, environment promotion, secrets, rollback strategies |
+| `observability-reviewer.agent.md` | Structured logging, distributed tracing, metrics, health checks, alerting |
 
 ### Pipeline Agents (Shared)
 
@@ -301,7 +313,7 @@ ai-plan-hardening-template/
 │   │   └── .github/
 │   │       ├── instructions/          ← 12 instruction files
 │   │       ├── prompts/               ← 7 prompt templates
-│   │       ├── agents/                ← 6 agent definitions
+│   │       ├── agents/                ← 6 stack-specific agent definitions
 │   │       └── skills/                ← 3 multi-step skills
 │   ├── typescript/                    ← TypeScript / React / Node / Express
 │   ├── python/                        ← Python / FastAPI / Django
@@ -323,7 +335,7 @@ Running `setup.ps1` (PowerShell) or `setup.sh` (Bash) with a preset:
 
 1. **Copies preset instruction files** from `presets/{stack}/` to your project root (12 instruction files)
 2. **Copies prompt templates** for scaffolding new entities, services, tests (7 prompts)
-3. **Copies agent definitions** for architecture review, security audit, testing (6 agents)
+3. **Copies agent definitions** for architecture review, security audit, testing (6 stack-specific + 5 shared agents)
 4. **Copies skill workflows** for migrations, deployments, test sweeps (3 skills)
 5. **Generates `AGENTS.md`** with patterns for your tech stack
 6. **Generates `.github/copilot-instructions.md`** with stack-specific conventions

@@ -338,7 +338,7 @@ The essential files for ongoing use are:
 docs/plans/                    ← Runbook + your plans
 .github/instructions/          ← Guardrail files (12 per preset)
 .github/prompts/               ← Scaffolding recipes (7 prompt templates)
-.github/agents/                ← Reviewer/executor roles (6 agent definitions)
+.github/agents/                ← Reviewer/executor roles (11 agent definitions)
 .github/skills/                ← Multi-step procedures (3 skills)
 .github/copilot-instructions.md
 AGENTS.md

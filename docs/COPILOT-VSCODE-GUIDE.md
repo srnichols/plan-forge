@@ -339,7 +339,7 @@ Specialized reviewer and executor roles that agents can adopt. Each agent defini
 Review the authentication flow in src/auth/ for OWASP Top 10 vulnerabilities.
 ```
 
-**Available agents** (6 per preset):
+**Available agents** (6 stack-specific + 5 cross-stack):
 | Agent | When to Use |
 |-------|-------------|
 | `architecture-reviewer.agent.md` | Before merging — audit layer separation and patterns |
@@ -348,6 +348,11 @@ Review the authentication flow in src/auth/ for OWASP Top 10 vulnerabilities.
 | `performance-analyzer.agent.md` | After features — find hot paths, allocation issues |
 | `test-runner.agent.md` | After changes — run tests and diagnose failures |
 | `deploy-helper.agent.md` | Release time — build, push, migrate, verify |
+| `api-contract-reviewer.agent.md` | API changes — versioning, backward compatibility, OpenAPI |
+| `accessibility-reviewer.agent.md` | UI changes — WCAG 2.2, ARIA, keyboard nav, contrast |
+| `multi-tenancy-reviewer.agent.md` | Data access — tenant isolation, RLS, cache separation |
+| `cicd-reviewer.agent.md` | Pipeline changes — promotion, secrets, rollback safety |
+| `observability-reviewer.agent.md` | After features — logging, tracing, metrics, health checks |
 
 #### Skills (`.github/skills/{name}/SKILL.md`)
 

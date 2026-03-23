@@ -302,6 +302,32 @@ else
     fi
 fi
 
+# ─── Step 3b: Copy Shared Agents ───────────────────────────────────────
+if [[ "$PRESET" != "custom" ]]; then
+    echo ""
+    cyan "Step 3b: Shared agents (cross-stack reviewers + pipeline agents)"
+
+    # Shared agents (api-contract, accessibility, multi-tenancy, cicd, observability)
+    SHARED_AGENTS_DIR="$TEMPLATE_ROOT/presets/shared/.github/agents"
+    if [[ -d "$SHARED_AGENTS_DIR" ]]; then
+        while IFS= read -r -d '' file; do
+            filename="$(basename "$file")"
+            dst="$PROJECT_PATH/.github/agents/$filename"
+            copy_with_create "$file" "$dst" || true
+        done < <(find "$SHARED_AGENTS_DIR" -name "*.agent.md" -type f -print0)
+    fi
+
+    # Pipeline agents (plan-hardener, executor, reviewer-gate)
+    PIPELINE_AGENTS_DIR="$TEMPLATE_ROOT/templates/.github/agents"
+    if [[ -d "$PIPELINE_AGENTS_DIR" ]]; then
+        while IFS= read -r -d '' file; do
+            filename="$(basename "$file")"
+            dst="$PROJECT_PATH/.github/agents/$filename"
+            copy_with_create "$file" "$dst" || true
+        done < <(find "$PIPELINE_AGENTS_DIR" -name "*.agent.md" -type f -print0)
+    fi
+fi
+
 # ─── Step 4: Replace Placeholders ─────────────────────────────────────
 echo ""
 cyan "Step 4: Replacing placeholders"

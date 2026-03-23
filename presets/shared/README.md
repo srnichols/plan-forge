@@ -3,7 +3,7 @@
 Files in this directory are common to **all** tech presets and are copied
 by the setup wizard regardless of which preset is selected.
 
-## Contents
+## Shared Instruction Files
 
 | File | Destination | Purpose |
 |------|-------------|---------|
@@ -12,4 +12,15 @@ by the setup wizard regardless of which preset is selected.
 | `ai-plan-hardening-runbook.instructions.md` | `.github/instructions/` | Quick-reference for plan editing |
 
 > **Note**: The setup wizard copies these from `.github/instructions/` in the template root.
-> This directory serves as documentation of which files are shared across all presets.
+
+## Shared Agent Definitions
+
+Cross-stack agents for SaaS-critical concerns. Copied from `.github/agents/` in this directory:
+
+| Agent | Destination | Purpose |
+|-------|-------------|---------|
+| `api-contract-reviewer.agent.md` | `.github/agents/` | API versioning, backward compatibility, OpenAPI compliance |
+| `accessibility-reviewer.agent.md` | `.github/agents/` | WCAG 2.2 compliance, semantic HTML, ARIA, keyboard nav |
+| `multi-tenancy-reviewer.agent.md` | `.github/agents/` | Tenant isolation, data leakage prevention, RLS, cache separation |
+| `cicd-reviewer.agent.md` | `.github/agents/` | Pipeline safety, environment promotion, secrets, rollback strategies |
+| `observability-reviewer.agent.md` | `.github/agents/` | Structured logging, distributed tracing, metrics, health checks |

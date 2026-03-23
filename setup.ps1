@@ -293,6 +293,30 @@ else {
     }
 }
 
+# ─── Step 3b: Copy Shared Agents ───────────────────────────────────────
+if ($Preset -ne 'custom') {
+    Write-Host ""
+    Write-Host "Step 3b: Shared agents (cross-stack reviewers + pipeline agents)" -ForegroundColor Cyan
+
+    # Shared agents (api-contract, accessibility, multi-tenancy, cicd, observability)
+    $sharedAgentsDir = Join-Path $templateRoot "presets/shared/.github/agents"
+    if (Test-Path $sharedAgentsDir) {
+        Get-ChildItem -Path $sharedAgentsDir -Filter "*.agent.md" -File | ForEach-Object {
+            $dst = Join-Path $ProjectPath ".github/agents/$($_.Name)"
+            Copy-WithCreate $_.FullName $dst $Force.IsPresent
+        }
+    }
+
+    # Pipeline agents (plan-hardener, executor, reviewer-gate)
+    $pipelineAgentsDir = Join-Path $templateRoot "templates/.github/agents"
+    if (Test-Path $pipelineAgentsDir) {
+        Get-ChildItem -Path $pipelineAgentsDir -Filter "*.agent.md" -File | ForEach-Object {
+            $dst = Join-Path $ProjectPath ".github/agents/$($_.Name)"
+            Copy-WithCreate $_.FullName $dst $Force.IsPresent
+        }
+    }
+}
+
 # ─── Step 4: Replace Placeholders ─────────────────────────────────────
 Write-Host ""
 Write-Host "Step 4: Replacing placeholders" -ForegroundColor Cyan

@@ -35,7 +35,7 @@ Draft Plan → Harden → Execute (slice-by-slice) → Sweep → Review → Done
 | Resource | Location | Purpose |
 |----------|----------|---------|
 | **Prompt Templates** (7) | `.github/prompts/*.prompt.md` | Scaffolding recipes for entities, services, tests, workers |
-| **Agent Definitions** (6) | `.github/agents/*.agent.md` | Specialized reviewers (security, architecture, performance) |
+| **Agent Definitions** (11) | `.github/agents/*.agent.md` | Specialized reviewers (security, architecture, API contracts, multi-tenancy, etc.) |
 | **Skills** (3) | `.github/skills/*/SKILL.md` | Multi-step procedures (migrations, deploys, test sweeps) |
 
 > **AI Agent Discoverability**: Agents can list `.github/prompts/`, `.github/agents/`, and `.github/skills/` to discover all available capabilities. The `copilot-instructions.md` file catalogs everything.

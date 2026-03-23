@@ -206,6 +206,7 @@ public class SecurityHeadersFilter extends OncePerRequestFilter {
 
 ## See Also
 
+- `auth.instructions.md` — Spring Security, JWT/OIDC, method security, multi-tenant, API keys
 - `graphql.instructions.md` — GraphQL authorization, @PreAuthorize on resolvers
 - `dapr.instructions.md` — Dapr secrets management, component scoping, mTLS
 - `database.instructions.md` — SQL injection prevention, parameterized queries

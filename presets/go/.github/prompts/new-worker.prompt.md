@@ -58,7 +58,10 @@ func (w *{EntityName}Worker) process(ctx context.Context) error {
 
 ```go
 func main() {
-    g, ctx := errgroup.WithContext(context.Background())
+    ctx, cancel := context.WithCancel(context.Background())
+    defer cancel()
+
+    g, ctx := errgroup.WithContext(ctx)
 
     // HTTP server
     g.Go(func() error { return server.ListenAndServe() })
@@ -66,15 +69,37 @@ func main() {
     // Background worker
     g.Go(func() error { return worker.Run(ctx) })
 
-    // Graceful shutdown
+    // Signal handler — graceful shutdown
     g.Go(func() error {
-        <-ctx.Done()
+        sigCh := make(chan os.Signal, 1)
+        signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+        select {
+        case sig := <-sigCh:
+            slog.Info("received signal", "signal", sig)
+            cancel()
+        case <-ctx.Done():
+        }
         return server.Shutdown(context.Background())
     })
 
-    if err := g.Wait(); err != nil {
+    if err := g.Wait(); err != nil && !errors.Is(err, context.Canceled) {
         slog.Error("exit", "error", err)
+        os.Exit(1)
     }
+}
+```
+
+## Panic Recovery
+
+```go
+func (w *{EntityName}Worker) process(ctx context.Context) (err error) {
+    defer func() {
+        if r := recover(); r != nil {
+            err = fmt.Errorf("panic recovered in {entityName} worker: %v\n%s", r, debug.Stack())
+            w.log.Error("worker panic", "error", err)
+        }
+    }()
+    return w.service.ProcessAll(ctx)
 }
 ```
 

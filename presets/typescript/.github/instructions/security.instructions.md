@@ -175,6 +175,7 @@ app.use(helmet({
 
 ## See Also
 
+- `auth.instructions.md` — JWT/JWKS, middleware guards, multi-tenant isolation, API keys
 - `graphql.instructions.md` — GraphQL authorization, resolver-level auth context
 - `dapr.instructions.md` — Dapr secrets management, component scoping, mTLS
 - `database.instructions.md` — SQL injection prevention, parameterized queries

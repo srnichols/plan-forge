@@ -9,28 +9,55 @@ Scaffold a complete entity from database to API following Go layered architectur
 
 ## Required Steps
 
-1. **Create migration** at `migrations/YYYYMMDD_add_{entity_name}.up.sql`:
+1. **Create up migration** at `migrations/YYYYMMDD_add_{entity_name}.up.sql`:
    ```sql
    CREATE TABLE IF NOT EXISTS {entity_name}s (
        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
        name VARCHAR(255) NOT NULL,
-       created_at TIMESTAMPTZ DEFAULT NOW(),
-       updated_at TIMESTAMPTZ DEFAULT NOW()
+       description TEXT,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
    );
    CREATE INDEX IF NOT EXISTS idx_{entity_name}s_name ON {entity_name}s(name);
+
+   -- Trigger to auto-update updated_at
+   CREATE OR REPLACE FUNCTION update_updated_at_column()
+   RETURNS TRIGGER AS $$
+   BEGIN
+       NEW.updated_at = NOW();
+       RETURN NEW;
+   END;
+   $$ language 'plpgsql';
+
+   CREATE TRIGGER update_{entity_name}s_updated_at
+       BEFORE UPDATE ON {entity_name}s
+       FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
    ```
 
-2. **Create model** at `internal/model/{entity_name}.go`:
+2. **Create down migration** at `migrations/YYYYMMDD_add_{entity_name}.down.sql`:
+   ```sql
+   DROP TRIGGER IF EXISTS update_{entity_name}s_updated_at ON {entity_name}s;
+   DROP TABLE IF EXISTS {entity_name}s;
+   ```
+
+3. **Create model** at `internal/model/{entity_name}.go`:
    ```go
    type {EntityName} struct {
-       ID        uuid.UUID `json:"id" db:"id"`
-       Name      string    `json:"name" db:"name"`
-       CreatedAt time.Time `json:"createdAt" db:"created_at"`
-       UpdatedAt time.Time `json:"updatedAt" db:"updated_at"`
+       ID          uuid.UUID `json:"id"          db:"id"`
+       Name        string    `json:"name"        db:"name"`
+       Description string    `json:"description" db:"description"`
+       CreatedAt   time.Time `json:"created_at"  db:"created_at"`
+       UpdatedAt   time.Time `json:"updated_at"  db:"updated_at"`
    }
 
    type Create{EntityName}Request struct {
-       Name string `json:"name" validate:"required,min=1,max=255"`
+       Name        string `json:"name"        validate:"required,min=1,max=255"`
+       Description string `json:"description" validate:"max=2000"`
+   }
+
+   type Update{EntityName}Request struct {
+       Name        string `json:"name"        validate:"required,min=1,max=255"`
+       Description string `json:"description" validate:"max=2000"`
    }
    ```
 
@@ -43,7 +70,7 @@ Scaffold a complete entity from database to API following Go layered architectur
 ## Example — Contoso Product
 
 ```go
-// Repository
+// Repository — full CRUD
 type ProductRepository struct {
     db *pgxpool.Pool
 }
@@ -51,12 +78,46 @@ type ProductRepository struct {
 func (r *ProductRepository) FindByID(ctx context.Context, id uuid.UUID) (*model.Product, error) {
     var p model.Product
     err := r.db.QueryRow(ctx,
-        "SELECT id, name, created_at, updated_at FROM products WHERE id = $1", id,
-    ).Scan(&p.ID, &p.Name, &p.CreatedAt, &p.UpdatedAt)
+        "SELECT id, name, description, created_at, updated_at FROM products WHERE id = $1", id,
+    ).Scan(&p.ID, &p.Name, &p.Description, &p.CreatedAt, &p.UpdatedAt)
     if errors.Is(err, pgx.ErrNoRows) {
         return nil, ErrNotFound
     }
     return &p, err
+}
+
+func (r *ProductRepository) Create(ctx context.Context, req model.CreateProductRequest) (*model.Product, error) {
+    var p model.Product
+    err := r.db.QueryRow(ctx,
+        `INSERT INTO products (name, description) VALUES ($1, $2)
+         RETURNING id, name, description, created_at, updated_at`,
+        req.Name, req.Description,
+    ).Scan(&p.ID, &p.Name, &p.Description, &p.CreatedAt, &p.UpdatedAt)
+    return &p, err
+}
+
+func (r *ProductRepository) Update(ctx context.Context, id uuid.UUID, req model.UpdateProductRequest) (*model.Product, error) {
+    var p model.Product
+    err := r.db.QueryRow(ctx,
+        `UPDATE products SET name = $1, description = $2 WHERE id = $3
+         RETURNING id, name, description, created_at, updated_at`,
+        req.Name, req.Description, id,
+    ).Scan(&p.ID, &p.Name, &p.Description, &p.CreatedAt, &p.UpdatedAt)
+    if errors.Is(err, pgx.ErrNoRows) {
+        return nil, ErrNotFound
+    }
+    return &p, err
+}
+
+func (r *ProductRepository) Delete(ctx context.Context, id uuid.UUID) error {
+    tag, err := r.db.Exec(ctx, "DELETE FROM products WHERE id = $1", id)
+    if err != nil {
+        return err
+    }
+    if tag.RowsAffected() == 0 {
+        return ErrNotFound
+    }
+    return nil
 }
 
 // Service
@@ -88,6 +149,15 @@ func (h *ProductHandler) GetByID(w http.ResponseWriter, r *http.Request) {
     writeJSON(w, http.StatusOK, product)
 }
 ```
+
+## Rules
+
+- ALWAYS create both up and down migrations
+- ALWAYS use `NOT NULL` with `DEFAULT` for timestamp columns
+- Use `validate` struct tags on all request types
+- Use `RETURNING` clause for INSERT/UPDATE to avoid a second query
+- Use `json:"snake_case"` tags on model structs for API responses
+- Keep each layer in its own package: `model/`, `repository/`, `service/`, `handler/`
 
 ## Reference Files
 

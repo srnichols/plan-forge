@@ -158,6 +158,7 @@ app.Use(async (context, next) =>
 
 ## See Also
 
+- `auth.instructions.md` — JWT/OIDC, policy-based authorization, multi-tenant isolation, API keys
 - `graphql.instructions.md` — GraphQL authorization, multi-tenant resolvers
 - `dapr.instructions.md` — Dapr secrets management, component scoping, mTLS
 - `database.instructions.md` — SQL injection prevention, parameterized queries

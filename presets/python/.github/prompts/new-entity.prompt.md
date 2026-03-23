@@ -15,37 +15,91 @@ Scaffold a complete entity from database to API following the layered architectu
    ```
    Or manual migration at `alembic/versions/YYYYMMDD_add_{entity_name}.py`:
    ```python
-   def upgrade():
+   """add {entity_name} table
+
+   Revision ID: xxxxxxxxxxxx
+   """
+   from alembic import op
+   import sqlalchemy as sa
+
+   def upgrade() -> None:
        op.create_table(
            '{entity_name}s',
            sa.Column('id', sa.UUID(), primary_key=True, server_default=sa.text('gen_random_uuid()')),
            sa.Column('name', sa.String(255), nullable=False),
-           sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('NOW()')),
-           sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('NOW()')),
+           sa.Column('description', sa.Text(), nullable=True),
+           sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('NOW()'), nullable=False),
+           sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('NOW()'), nullable=False),
        )
        op.create_index('ix_{entity_name}s_name', '{entity_name}s', ['name'])
+
+   def downgrade() -> None:
+       op.drop_index('ix_{entity_name}s_name')
+       op.drop_table('{entity_name}s')
    ```
 
-2. **Create model** at `src/models/{entity_name}.py`:
+2. **Create SQLAlchemy model** (if using ORM) at `src/models/{entity_name}_orm.py`:
+   ```python
+   from sqlalchemy import String, Text
+   from sqlalchemy.orm import Mapped, mapped_column
+   from src.models.base import Base, TimestampMixin, UUIDMixin
+
+   class {EntityName}(UUIDMixin, TimestampMixin, Base):
+       __tablename__ = "{entity_name}s"
+
+       name: Mapped[str] = mapped_column(String(255), nullable=False)
+       description: Mapped[str | None] = mapped_column(Text, nullable=True)
+   ```
+
+3. **Create Pydantic model** at `src/models/{entity_name}.py`:
    ```python
    from pydantic import BaseModel, Field
    from uuid import UUID
    from datetime import datetime
 
-   class {EntityName}(BaseModel):
+   class {EntityName}Response(BaseModel):
        id: UUID
        name: str
+       description: str | None
        created_at: datetime
        updated_at: datetime
 
+       model_config = {"from_attributes": True}
+
    class Create{EntityName}Request(BaseModel):
        name: str = Field(..., min_length=1, max_length=255)
+       description: str | None = Field(None, max_length=2000)
+
+   class Update{EntityName}Request(BaseModel):
+       name: str = Field(..., min_length=1, max_length=255)
+       description: str | None = Field(None, max_length=2000)
    ```
 
 3. **Create repository** at `src/repositories/{entity_name}_repository.py`
 4. **Create service** at `src/services/{entity_name}_service.py`
 5. **Create router** at `src/routes/{entity_name}_routes.py`
 6. **Create tests** at `tests/test_{entity_name}.py`
+
+## Alembic Configuration Tips
+
+```ini
+# alembic.ini — use env var for connection string
+sqlalchemy.url = %(DB_URL)s
+```
+
+```python
+# alembic/env.py — configure target_metadata for autogenerate
+from src.models.base import Base
+target_metadata = Base.metadata
+```
+
+```bash
+# Common Alembic commands
+alembic upgrade head          # Apply all migrations
+alembic downgrade -1          # Roll back one migration
+alembic history               # Show migration history
+alembic current               # Show current revision
+```
 
 ## Example — Contoso Product
 

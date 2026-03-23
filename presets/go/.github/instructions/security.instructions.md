@@ -178,6 +178,7 @@ func RateLimit(requestsPerSecond int) func(http.Handler) http.Handler {
 
 ## See Also
 
+- `auth.instructions.md` — JWT/JWKS middleware, RBAC guards, multi-tenant, API keys
 - `graphql.instructions.md` — GraphQL authorization, directive-based @hasRole
 - `dapr.instructions.md` — Dapr secrets management, component scoping, mTLS
 - `database.instructions.md` — SQL injection prevention, parameterized queries

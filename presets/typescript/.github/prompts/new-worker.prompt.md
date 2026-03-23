@@ -89,6 +89,41 @@ process.on('SIGTERM', async () => {
   await worker.close();
   process.exit(0);
 });
+
+process.on('SIGINT', async () => {
+  logger.info('SIGINT received — closing worker');
+  await worker.close();
+  process.exit(0);
+});
+```
+
+## Health Check Endpoint
+
+```typescript
+import express from 'express';
+
+const healthApp = express();
+let lastProcessedAt: Date | null = null;
+const HEALTH_PORT = parseInt(process.env.HEALTH_PORT ?? '9090', 10);
+
+healthApp.get('/health', (_req, res) => {
+  const healthy = lastProcessedAt !== null &&
+    Date.now() - lastProcessedAt.getTime() < intervalMs * 3;
+
+  res.status(healthy ? 200 : 503).json({
+    status: healthy ? 'healthy' : 'unhealthy',
+    lastProcessedAt: lastProcessedAt?.toISOString() ?? null,
+    uptime: process.uptime(),
+  });
+});
+
+healthApp.get('/ready', (_req, res) => {
+  res.status(200).json({ status: 'ready' });
+});
+
+healthApp.listen(HEALTH_PORT, () => {
+  logger.info({ port: HEALTH_PORT }, 'Health check server started');
+});
 ```
 
 ## Rules

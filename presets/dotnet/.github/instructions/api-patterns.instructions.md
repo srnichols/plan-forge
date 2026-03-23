@@ -105,6 +105,8 @@ public record CreateProducerRequest(
 ```
 
 ## API Versioning
+
+### URL-based Versioning (Recommended)
 ```csharp
 builder.Services.AddApiVersioning(options =>
 {
@@ -118,6 +120,47 @@ builder.Services.AddApiVersioning(options =>
 [Route("api/v{version:apiVersion}/[controller]")]
 public class ProducersController : ControllerBase { }
 ```
+
+### Header-based Versioning (Alternative)
+```csharp
+// Read version from custom header instead of URL
+options.ApiVersionReader = ApiVersionReader.Combine(
+    new UrlSegmentApiVersionReader(),
+    new HeaderApiVersionReader("API-Version"));
+```
+
+### Version Discovery Endpoint
+```csharp
+app.MapGet("/api/versions", () => new
+{
+    Supported = new[] { "v1", "v2" },
+    Current = "v2",
+    Deprecated = new[] { "v1" },
+    Sunset = new Dictionary<string, string> { ["v1"] = "2026-01-01" }
+});
+```
+
+### Deprecation Headers Middleware
+```csharp
+app.Use(async (context, next) =>
+{
+    await next();
+    if (context.Request.Path.StartsWithSegments("/api/v1"))
+    {
+        context.Response.Headers.Append("Sunset", "Sat, 01 Jan 2026 00:00:00 GMT");
+        context.Response.Headers.Append("Deprecation", "true");
+        context.Response.Headers.Append("Link",
+            "</api/v2/docs>; rel=\"successor-version\"");
+    }
+});
+```
+
+### Non-Negotiable Rules
+- **ALWAYS** version APIs from day one — `/api/v1/`
+- **NEVER** break existing consumers — add a new version instead
+- Deprecation requires minimum 6-month sunset window
+- Return `410 Gone` after sunset date, not `404`
+- Document version differences in OpenAPI specs (Swashbuckle/NSwag)
 
 ## HTTP Status Code Guide
 
@@ -147,6 +190,7 @@ public class ProducersController : ControllerBase { }
 
 ## See Also
 
+- `version.instructions.md` — Semantic versioning, pre-release, deprecation timelines
 - `graphql.instructions.md` — GraphQL schema, resolvers, DataLoaders (for GraphQL APIs)
 - `security.instructions.md` — Auth middleware, input validation, CORS
 - `errorhandling.instructions.md` — Error response format, ProblemDetails

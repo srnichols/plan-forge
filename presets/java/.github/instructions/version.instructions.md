@@ -109,8 +109,112 @@ git tag -a v3.7.0 -m "Release 3.7.0: feature description"
 git push origin v3.7.0
 ```
 
+## Changelog Generation
+
+Auto-generate changelogs from conventional commits:
+
+```yaml
+# .jreleaser.yml — JReleaser generates changelog from Git history
+release:
+  github:
+    changelog:
+      formatted: ALWAYS
+      preset: conventional-commits
+      contributors:
+        enabled: true
+```
+
+```bash
+# Generate changelog
+jreleaser changelog
+# Or use git-changelog-maven-plugin
+mvn git-changelog-maven-plugin:git-changelog
+```
+
+### Changelog Format
+
+```markdown
+## [3.7.0] - 2025-01-15
+### Features
+- Producer bulk import endpoint (#142)
+- Tenant-scoped caching for catalog queries (#138)
+### Bug Fixes
+- Race condition in order processing (#145)
+### Dependencies
+- Upgraded Spring Boot to 3.4 (#140)
+```
+
+### Rules
+- **ALWAYS** generate changelog before tagging a release
+- One changelog entry per conventional commit (squash merge = one entry)
+- Link PR numbers in entries for traceability
+
+## Pre-release Versioning
+
+Use SemVer pre-release identifiers:
+
+```
+3.7.0-alpha.1    → Early development, breaking changes expected
+3.7.0-beta.1     → Feature-complete, testing in progress
+3.7.0-RC1        → Release candidate, final validation
+3.7.0            → Production release
+```
+
+```xml
+<!-- Maven: pom.xml -->
+<version>3.7.0-RC1</version>
+```
+
+```kotlin
+// Gradle: build.gradle.kts
+version = "3.7.0-RC1"
+```
+
+```bash
+# Publish snapshot/pre-release to Maven repo
+mvn deploy -DaltDeploymentRepository=snapshots::https://repo.contoso.com/snapshots
+# Consumers: <version>3.7.0-RC1</version>
+```
+
+### Rules
+- Maven treats `-SNAPSHOT` as a special mutable version — use for dev only
+- Pre-release tags (`-alpha.1`, `-beta.1`, `-RC1`) are immutable releases
+- **NEVER** deploy pre-release versions to production
+- Beta/RC builds go to staging environment only
+
+## API Version Deprecation Timeline
+
+Coordinate API deprecation with `api-patterns.instructions.md` versioning:
+
+| Phase | Timeline | Action |
+|-------|----------|--------|
+| **Announce** | v(N+1) release | Add `Sunset` header to v(N), update docs |
+| **Warn** | +3 months | Log warnings for v(N) consumers, notify via email |
+| **Deprecate** | +6 months | Return `Deprecation` header, reduce rate limits |
+| **Remove** | +12 months | Return `410 Gone` for v(N) endpoints |
+
+### Deprecation Headers (Spring)
+```java
+@Component
+public class DeprecationHeaderFilter extends OncePerRequestFilter {
+    @Override
+    protected void doFilterInternal(HttpServletRequest request,
+            HttpServletResponse response, FilterChain chain)
+            throws ServletException, IOException {
+        chain.doFilter(request, response);
+        if (request.getRequestURI().startsWith("/api/v1")) {
+            response.setHeader("Sunset", "Sat, 01 Jan 2026 00:00:00 GMT");
+            response.setHeader("Deprecation", "true");
+            response.setHeader("Link",
+                "</api/v2/docs>; rel=\"successor-version\"");
+        }
+    }
+}
+```
+
 ## See Also
 
+- `api-patterns.instructions.md` — API versioning strategy, URL/header versioning
 - `deploy.instructions.md` — Release to production, container config
 - `testing.instructions.md` — Pre-release validation checklist
 ```

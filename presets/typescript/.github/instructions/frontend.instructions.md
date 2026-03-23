@@ -151,9 +151,89 @@ export function UserCard({ user }: UserCardProps) {
 - **Never use inline styles** for anything other than dynamic values (e.g., `style={{ width }}`)
 - **Avoid `!important`** — fix specificity instead
 
+## Version Display
+
+### Build-time Version Injection
+```typescript
+// vite.config.ts — inject version from package.json
+import { defineConfig } from 'vite';
+import pkg from './package.json';
+
+export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+    __BUILD_DATE__: JSON.stringify(new Date().toISOString()),
+    __GIT_COMMIT__: JSON.stringify(process.env.GIT_COMMIT_SHA ?? 'dev'),
+  },
+});
+
+// global.d.ts — type declarations
+declare const __APP_VERSION__: string;
+declare const __BUILD_DATE__: string;
+declare const __GIT_COMMIT__: string;
+```
+
+### Version Display Component
+```tsx
+interface AppVersionProps {
+  showCommit?: boolean;
+}
+
+export function AppVersion({ showCommit = false }: AppVersionProps) {
+  return (
+    <span className="app-version" data-testid="app-version">
+      v{__APP_VERSION__}
+      {showCommit && (
+        <span className="commit-hash"> ({__GIT_COMMIT__.slice(0, 7)})</span>
+      )}
+    </span>
+  );
+}
+
+// Usage in footer
+export function Footer() {
+  return (
+    <footer>
+      <AppVersion showCommit={import.meta.env.DEV} />
+    </footer>
+  );
+}
+```
+
+### Environment Badge
+```tsx
+export function EnvironmentBadge() {
+  const env = import.meta.env.MODE;  // 'development' | 'staging' | 'production'
+  if (env === 'production') return null;
+
+  const colors: Record<string, string> = {
+    development: '#f59e0b',
+    staging: '#3b82f6',
+  };
+
+  return (
+    <div
+      style={{ backgroundColor: colors[env] ?? '#6b7280' }}
+      className="env-badge"
+      role="status"
+      aria-label={`Environment: ${env}`}
+    >
+      {env.toUpperCase()} — v{__APP_VERSION__}
+    </div>
+  );
+}
+```
+
+### Non-Negotiable Rules
+- **NEVER** hardcode version strings in components — inject at build time
+- **ALWAYS** show environment badge in non-production environments
+- Hide commit hash in production builds (use `import.meta.env.DEV` guard)
+- Version info must match backend `/api/version` endpoint schema
+
 ## See Also
 
-- `api-patterns.instructions.md` — API client patterns, route structure
+- `version.instructions.md` — Semantic versioning, changelog, pre-release patterns
+- `api-patterns.instructions.md` — API client patterns, route structure, API versioning
 - `testing.instructions.md` — Component testing, mocking strategies
 - `security.instructions.md` — Input validation, XSS prevention
 - `performance.instructions.md` — Bundle optimization, lazy loading

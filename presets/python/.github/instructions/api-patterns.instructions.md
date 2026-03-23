@@ -134,6 +134,79 @@ class PagedResult(BaseModel, Generic[T]):
 | 422 Unprocessable | Pydantic validation error (FastAPI default) |
 | 500 Internal Server | Unhandled exception (never expose details) |
 
+## API Versioning
+
+### URL-based Versioning (Recommended)
+```python
+from fastapi import APIRouter, FastAPI
+
+v1_router = APIRouter(prefix="/api/v1")
+v2_router = APIRouter(prefix="/api/v2")
+
+# v1 routes
+@v1_router.get("/producers", response_model=list[ProducerResponseV1])
+async def list_producers_v1():
+    return await producer_service.get_all_v1()
+
+# v2 routes (expanded fields)
+@v2_router.get("/producers", response_model=list[ProducerResponseV2])
+async def list_producers_v2():
+    return await producer_service.get_all_v2()
+
+app = FastAPI()
+app.include_router(v1_router)
+app.include_router(v2_router)
+```
+
+### Header-based Versioning
+```python
+from fastapi import Header, Depends
+
+async def get_api_version(api_version: str = Header(default="1")) -> int:
+    return int(api_version)
+
+@router.get("/producers")
+async def list_producers(version: int = Depends(get_api_version)):
+    if version >= 2:
+        return await producer_service.get_all_v2()
+    return await producer_service.get_all_v1()
+```
+
+### Version Discovery Endpoint
+```python
+@app.get("/api/versions")
+async def api_versions():
+    return {
+        "supported": ["v1", "v2"],
+        "current": "v2",
+        "deprecated": ["v1"],
+        "sunset": {"v1": "2026-01-01"},
+    }
+```
+
+### Deprecation Headers Middleware
+```python
+from starlette.middleware.base import BaseHTTPMiddleware
+
+class DeprecationMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        if request.url.path.startswith("/api/v1"):
+            response.headers["Sunset"] = "Sat, 01 Jan 2026 00:00:00 GMT"
+            response.headers["Deprecation"] = "true"
+            response.headers["Link"] = '</api/v2/docs>; rel="successor-version"'
+        return response
+
+app.add_middleware(DeprecationMiddleware)
+```
+
+### Non-Negotiable Rules
+- **ALWAYS** version APIs from day one — `/api/v1/`
+- **NEVER** break existing consumers — add a new version instead
+- Deprecation requires minimum 6-month sunset window
+- Return `410 Gone` after sunset date, not `404`
+- Document version differences in OpenAPI schema (`/docs`)
+
 ## Anti-Patterns
 
 ```
@@ -147,6 +220,7 @@ class PagedResult(BaseModel, Generic[T]):
 
 ## See Also
 
+- `version.instructions.md` — Semantic versioning, pre-release, deprecation timelines
 - `graphql.instructions.md` — Strawberry schema, resolvers, DataLoaders (for GraphQL APIs)
 - `security.instructions.md` — Auth middleware, input validation, CORS
 - `errorhandling.instructions.md` — Error response format, exception handlers

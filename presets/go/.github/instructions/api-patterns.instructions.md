@@ -162,6 +162,78 @@ func NewPagedResult[T any](items []T, page, pageSize, totalCount int) PagedResul
 | 422 Unprocessable | Valid syntax but business rule violation |
 | 500 Internal Server | Unhandled error (never expose internals) |
 
+## API Versioning
+
+### URL-based Versioning (Recommended)
+```go
+func SetupRoutes(r chi.Router) {
+    // Mount versioned sub-routers
+    r.Route("/api/v1", func(r chi.Router) {
+        r.Mount("/producers", producerV1Handler.Routes())
+    })
+    r.Route("/api/v2", func(r chi.Router) {
+        r.Mount("/producers", producerV2Handler.Routes())
+    })
+}
+```
+
+### Header-based Versioning
+```go
+func (h *ProducerHandler) List(w http.ResponseWriter, r *http.Request) {
+    version := r.Header.Get("API-Version")
+    if version == "" {
+        version = "1"
+    }
+    switch version {
+    case "2":
+        result, err := h.service.GetAllV2(r.Context())
+        // ...
+    default:
+        result, err := h.service.GetAllV1(r.Context())
+        // ...
+    }
+}
+```
+
+### Version Discovery Endpoint
+```go
+func VersionsHandler(w http.ResponseWriter, r *http.Request) {
+    writeJSON(w, http.StatusOK, map[string]any{
+        "supported":  []string{"v1", "v2"},
+        "current":    "v2",
+        "deprecated": []string{"v1"},
+        "sunset":     map[string]string{"v1": "2026-01-01"},
+    })
+}
+```
+
+### Deprecation Headers Middleware
+```go
+func DeprecationMiddleware(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        next.ServeHTTP(w, r)
+        if strings.HasPrefix(r.URL.Path, "/api/v1") {
+            w.Header().Set("Sunset", "Sat, 01 Jan 2026 00:00:00 GMT")
+            w.Header().Set("Deprecation", "true")
+            w.Header().Set("Link", `</api/v2/docs>; rel="successor-version"`)
+        }
+    })
+}
+
+// Apply to v1 routes
+r.Route("/api/v1", func(r chi.Router) {
+    r.Use(DeprecationMiddleware)
+    r.Mount("/producers", producerV1Handler.Routes())
+})
+```
+
+### Non-Negotiable Rules
+- **ALWAYS** version APIs from day one — `/api/v1/`
+- **NEVER** break existing consumers — add a new version instead
+- Deprecation requires minimum 6-month sunset window
+- Return `410 Gone` after sunset date, not `404`
+- Document version differences in OpenAPI specs (swag/swaggo)
+
 ## Anti-Patterns
 
 ```
@@ -175,6 +247,7 @@ func NewPagedResult[T any](items []T, page, pageSize, totalCount int) PagedResul
 
 ## See Also
 
+- `version.instructions.md` — Semantic versioning, pre-release, deprecation timelines
 - `graphql.instructions.md` — gqlgen schema, resolvers, DataLoaders (for GraphQL APIs)
 - `security.instructions.md` — JWT middleware, input validation
 - `errorhandling.instructions.md` — Error response format, ProblemDetail

@@ -80,8 +80,101 @@ git tag -a v3.7.0 -m "Release 3.7.0: feature description"
 git push origin v3.7.0
 ```
 
+## Changelog Generation
+
+Auto-generate changelogs from conventional commits:
+
+```bash
+# standard-version generates CHANGELOG.md automatically
+npx standard-version           # Auto-detect bump + changelog
+npx standard-version --dry-run # Preview without writing
+
+# Or with semantic-release (fully automated in CI)
+# .releaserc.json:
+{
+  "plugins": [
+    "@semantic-release/commit-analyzer",
+    "@semantic-release/release-notes-generator",
+    "@semantic-release/changelog",
+    "@semantic-release/npm",
+    "@semantic-release/git"
+  ]
+}
+```
+
+### Changelog Format
+
+```markdown
+## [3.7.0] - 2025-01-15
+### Features
+- Producer bulk import endpoint (#142)
+- Tenant-scoped caching for catalog queries (#138)
+### Bug Fixes
+- Race condition in order processing (#145)
+### Dependencies
+- Upgraded express to v5 (#140)
+```
+
+### Rules
+- **ALWAYS** generate changelog before tagging a release
+- One changelog entry per conventional commit (squash merge = one entry)
+- Link PR numbers in entries for traceability
+
+## Pre-release Versioning
+
+Use SemVer pre-release identifiers for non-production builds:
+
+```
+3.7.0-alpha.1    → Early development, breaking changes expected
+3.7.0-beta.1     → Feature-complete, testing in progress
+3.7.0-rc.1       → Release candidate, final validation
+3.7.0            → Production release
+```
+
+```bash
+# Bump to pre-release
+npm version 3.7.0-alpha.1
+npx standard-version --prerelease alpha
+
+# Publish pre-release to npm
+npm publish --tag next   # Consumers: npm install @contoso/api@next
+```
+
+### Rules
+- Pre-release tags sort correctly: `alpha.1 < beta.1 < rc.1 < release`
+- **NEVER** deploy pre-release versions to production
+- Use `--tag next` for npm to avoid making pre-release the `latest` tag
+- Beta/RC builds go to staging environment only
+
+## API Version Deprecation Timeline
+
+Coordinate API deprecation with `api-patterns.instructions.md` versioning:
+
+| Phase | Timeline | Action |
+|-------|----------|--------|
+| **Announce** | v(N+1) release | Add `Sunset` header to v(N), update docs |
+| **Warn** | +3 months | Log warnings for v(N) consumers, notify via email |
+| **Deprecate** | +6 months | Return `Deprecation` header, reduce rate limits |
+| **Remove** | +12 months | Return `410 Gone` for v(N) endpoints |
+
+### Deprecation Headers (Express)
+```typescript
+// Middleware for deprecated API versions
+function deprecationHeaders(req: Request, res: Response, next: NextFunction) {
+  if (req.path.startsWith('/api/v1')) {
+    res.set('Sunset', 'Sat, 01 Jan 2026 00:00:00 GMT');
+    res.set('Deprecation', 'true');
+    res.set('Link', '</api/v2/docs>; rel="successor-version"');
+  }
+  next();
+}
+app.use(deprecationHeaders);
+```
+
 ## See Also
 
+- `api-patterns.instructions.md` — API versioning strategy, URL/header versioning
+- `frontend.instructions.md` — UI version display, build-time version injection
 - `deploy.instructions.md` — Release to production, container config
 - `testing.instructions.md` — Pre-release validation checklist
 ```

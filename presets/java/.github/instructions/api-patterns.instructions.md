@@ -131,6 +131,88 @@ Page<Producer> page = producerRepository.findAll(PageRequest.of(pageNum - 1, pag
 | 422 Unprocessable | Valid syntax but business rule violation |
 | 500 Internal Server | Unhandled exception (never expose details) |
 
+## API Versioning
+
+### URL-based Versioning (Recommended)
+```java
+// v1 controller
+@RestController
+@RequestMapping("/api/v1/producers")
+public class ProducerV1Controller {
+    @GetMapping
+    public List<ProducerResponseV1> getAll() {
+        return service.getAllV1();
+    }
+}
+
+// v2 controller (expanded fields, new behavior)
+@RestController
+@RequestMapping("/api/v2/producers")
+public class ProducerV2Controller {
+    @GetMapping
+    public List<ProducerResponseV2> getAll() {
+        return service.getAllV2();
+    }
+}
+```
+
+### Header-based Versioning
+```java
+@RestController
+@RequestMapping("/api/producers")
+public class ProducerController {
+    @GetMapping
+    public ResponseEntity<?> getAll(
+            @RequestHeader(value = "API-Version", defaultValue = "1") int version) {
+        return version >= 2
+            ? ResponseEntity.ok(service.getAllV2())
+            : ResponseEntity.ok(service.getAllV1());
+    }
+}
+```
+
+### Version Discovery Endpoint
+```java
+@RestController
+public class ApiVersionController {
+    @GetMapping("/api/versions")
+    public Map<String, Object> versions() {
+        return Map.of(
+            "supported", List.of("v1", "v2"),
+            "current", "v2",
+            "deprecated", List.of("v1"),
+            "sunset", Map.of("v1", "2026-01-01")
+        );
+    }
+}
+```
+
+### Deprecation Headers Filter
+```java
+@Component
+public class DeprecationHeaderFilter extends OncePerRequestFilter {
+    @Override
+    protected void doFilterInternal(HttpServletRequest request,
+            HttpServletResponse response, FilterChain chain)
+            throws ServletException, IOException {
+        chain.doFilter(request, response);
+        if (request.getRequestURI().startsWith("/api/v1")) {
+            response.setHeader("Sunset", "Sat, 01 Jan 2026 00:00:00 GMT");
+            response.setHeader("Deprecation", "true");
+            response.setHeader("Link",
+                "</api/v2/docs>; rel=\"successor-version\"");
+        }
+    }
+}
+```
+
+### Non-Negotiable Rules
+- **ALWAYS** version APIs from day one — `/api/v1/`
+- **NEVER** break existing consumers — add a new version instead
+- Deprecation requires minimum 6-month sunset window
+- Return `410 Gone` after sunset date, not `404`
+- Document version differences in OpenAPI specs (springdoc-openapi)
+
 ## Anti-Patterns
 
 ```
@@ -144,6 +226,7 @@ Page<Producer> page = producerRepository.findAll(PageRequest.of(pageNum - 1, pag
 
 ## See Also
 
+- `version.instructions.md` — Semantic versioning, pre-release, deprecation timelines
 - `graphql.instructions.md` — Spring GraphQL controllers, DataLoaders (for GraphQL APIs)
 - `security.instructions.md` — Spring Security, input validation, CORS
 - `errorhandling.instructions.md` — Error response format, @ControllerAdvice

@@ -160,6 +160,68 @@ function paginate<T>(items: T[], total: number, page: number, pageSize: number):
 | 422 Unprocessable | Valid syntax but business rule violation |
 | 500 Internal Server | Unhandled exception (never expose details) |
 
+## API Versioning
+
+### URL-based Versioning (Recommended)
+```typescript
+// Mount versioned routers
+import v1Router from './routes/v1';
+import v2Router from './routes/v2';
+
+app.use('/api/v1', v1Router);
+app.use('/api/v2', v2Router);
+```
+
+### Header-based Versioning
+```typescript
+// Middleware to read API version from header
+function apiVersion(req: Request, _res: Response, next: NextFunction) {
+  const version = req.headers['api-version'] ?? '1';
+  req.apiVersion = Number(version);
+  next();
+}
+
+// Route handler branches on version
+router.get('/producers', apiVersion, async (req, res, next) => {
+  try {
+    const result = req.apiVersion >= 2
+      ? await producerService.getPagedV2(/* expanded fields */)
+      : await producerService.getPaged(/* v1 fields */);
+    res.json(result);
+  } catch (err) { next(err); }
+});
+```
+
+### Version Discovery Endpoint
+```typescript
+app.get('/api/versions', (_req, res) => res.json({
+  supported: ['v1', 'v2'],
+  current: 'v2',
+  deprecated: ['v1'],
+  sunset: { v1: '2026-01-01' },
+}));
+```
+
+### Deprecation Headers Middleware
+```typescript
+function deprecationHeaders(req: Request, res: Response, next: NextFunction) {
+  if (req.path.startsWith('/api/v1')) {
+    res.set('Sunset', 'Sat, 01 Jan 2026 00:00:00 GMT');
+    res.set('Deprecation', 'true');
+    res.set('Link', '</api/v2/docs>; rel="successor-version"');
+  }
+  next();
+}
+app.use(deprecationHeaders);
+```
+
+### Non-Negotiable Rules
+- **ALWAYS** version APIs from day one — `/api/v1/`
+- **NEVER** break existing consumers — add a new version instead
+- Deprecation requires minimum 6-month sunset window
+- Return `410 Gone` after sunset date, not `404`
+- Document version differences in OpenAPI specs
+
 ## Anti-Patterns
 
 ```
@@ -173,6 +235,7 @@ function paginate<T>(items: T[], total: number, page: number, pageSize: number):
 
 ## See Also
 
+- `version.instructions.md` — Semantic versioning, pre-release, deprecation timelines
 - `graphql.instructions.md` — Apollo Server schema, resolvers, DataLoaders (for GraphQL APIs)
 - `security.instructions.md` — Auth middleware, input validation, CORS
 - `errorhandling.instructions.md` — Error response format, Express middleware

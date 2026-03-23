@@ -110,3 +110,10 @@ ENTRYPOINT ["java", \
     "-XX:+UseContainerSupport", \
     "-jar", "app.jar"]
 ```
+
+## See Also
+
+- `multi-environment.instructions.md` — Per-environment configuration
+- `observability.instructions.md` — Health checks, readiness probes
+- `security.instructions.md` — Secrets management, TLS
+```

@@ -117,3 +117,9 @@ func (s *ProducerService) Update(ctx context.Context, p *Producer) error {
 ❌ Cache user-specific data without tenant prefix in key
 ❌ Unbounded in-process cache (set MaxCost or maxsize)
 ```
+
+## See Also
+
+- `database.instructions.md` — Query optimization, connection pooling
+- `performance.instructions.md` — sync.Pool, pre-built maps, allocation reduction
+- `multi-environment.instructions.md` — Cache config per environment

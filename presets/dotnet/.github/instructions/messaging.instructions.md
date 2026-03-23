@@ -128,6 +128,43 @@ cfg.UseMessageRetry(r => r.Exponential(3, TimeSpan.FromSeconds(1), TimeSpan.From
 ❌ Fire-and-forget without error handling (lost messages)
 ❌ Synchronous processing in event handlers (blocks the pipeline)
 ❌ Missing tenant_id in event payloads (breaks multi-tenant isolation)
+❌ No idempotency check (duplicate event processing)
+```
+
+## Idempotency
+
+Always guard consumers against duplicate delivery. Use a persistent idempotency store:
+
+```csharp
+public class IdempotentEventHandler<TEvent>(IIdempotencyStore store) where TEvent : class
+{
+    public async Task HandleAsync(string eventId, TEvent evt, Func<TEvent, CancellationToken, Task> handler, CancellationToken ct)
+    {
+        if (await store.ExistsAsync(eventId, ct))
+            return; // Already processed
+
+        await handler(evt, ct);
+        await store.MarkProcessedAsync(eventId, ct);
+    }
+}
+
+// Usage in a MassTransit consumer
+public class OrderPlacedConsumer(IdempotentEventHandler<OrderPlacedEvent> guard) : IConsumer<OrderPlacedEvent>
+{
+    public Task Consume(ConsumeContext<OrderPlacedEvent> context) =>
+        guard.HandleAsync(context.MessageId?.ToString() ?? "", context.Message, ProcessAsync, context.CancellationToken);
+
+    private Task ProcessAsync(OrderPlacedEvent evt, CancellationToken ct) { /* ... */ }
+}
+```
+
+Idempotency store options: database table with unique constraint on `event_id`, or Redis `SET NX` with TTL.
+
+## See Also
+
+- `observability.instructions.md` — Distributed tracing, event logging
+- `errorhandling.instructions.md` — Dead letter queues, retry logic
+- `database.instructions.md` — Idempotency stores, transactional outbox
 ❌ No idempotency check (duplicate events cause duplicate processing)
 ❌ Tight coupling to transport (use abstractions like Dapr/MassTransit)
 ❌ Large payloads in events (pass IDs, not full objects)

@@ -107,3 +107,10 @@ class ErrorBoundary extends React.Component<Props, { error?: Error }> {
   }
 }
 ```
+
+## See Also
+
+- `observability.instructions.md` — Structured logging, error tracking
+- `api-patterns.instructions.md` — Error response format, status codes
+- `messaging.instructions.md` — Dead letter queues, retry strategies
+```

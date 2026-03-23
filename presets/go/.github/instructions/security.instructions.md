@@ -128,6 +128,25 @@ func RateLimit(requestsPerSecond int) func(http.Handler) http.Handler {
 | Vulnerability | Prevention |
 |--------------|------------|
 | SQL Injection | Parameterized queries only |
+| XSS | `html/template` auto-escaping, CSP headers |
+| SSRF | Validate/allowlist outbound URLs |
+
+## OWASP Top 10 (2021) Alignment
+
+| OWASP Category | How This File Addresses It |
+|----------------|----------------------------|
+| A01: Broken Access Control | JWT middleware, `RequireRole()` guard |
+| A02: Cryptographic Failures | `os.Getenv` secrets, no hardcoded credentials |
+| A03: Injection | Parameterized SQL (`$1` placeholders), never `fmt.Sprintf` |
+| A04: Insecure Design | Struct validation methods, explicit error returns |
+| A05: Security Misconfiguration | Rate limiting middleware |
+| A07: Identification & Auth Failures | Bearer token parsing, claim extraction via context |
+
+## See Also
+
+- `database.instructions.md` — SQL injection prevention, parameterized queries
+- `api-patterns.instructions.md` — Auth middleware, request validation
+- `deploy.instructions.md` — Secrets management, TLS configuration
 | Path Traversal | `filepath.Clean`, validate paths |
 | XSS | `html/template` auto-escaping |
 | SSRF | Validate URLs, restrict outbound |

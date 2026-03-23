@@ -108,3 +108,9 @@ public class VersionController {
 git tag -a v3.7.0 -m "Release 3.7.0: feature description"
 git push origin v3.7.0
 ```
+
+## See Also
+
+- `deploy.instructions.md` — Release to production, container config
+- `testing.instructions.md` — Pre-release validation checklist
+```

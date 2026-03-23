@@ -104,3 +104,10 @@ Wrap page content in error boundaries to prevent full-page crashes:
     </ErrorContent>
 </ErrorBoundary>
 ```
+
+## See Also
+
+- `observability.instructions.md` — Structured logging, error tracking
+- `api-patterns.instructions.md` — Error response format, status codes
+- `messaging.instructions.md` — Dead letter queues, retry strategies
+```

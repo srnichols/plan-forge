@@ -141,3 +141,9 @@ Page<Producer> page = producerRepository.findAll(PageRequest.of(pageNum - 1, pag
 ❌ Return JPA entities directly (use response records/DTOs)
 ❌ Missing @Valid on @RequestBody (validation silently skipped)
 ```
+
+## See Also
+
+- `security.instructions.md` — Spring Security, input validation, CORS
+- `errorhandling.instructions.md` — Error response format, @ControllerAdvice
+- `performance.instructions.md` — Hot-path optimization, async patterns

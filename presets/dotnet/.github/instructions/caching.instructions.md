@@ -93,3 +93,9 @@ public async Task UpdateAsync(Producer producer, CancellationToken ct = default)
 // ALWAYS include tenant_id in cache keys
 string cacheKey = $"{tenantId}:producer:{producerId}";
 ```
+
+## See Also
+
+- `database.instructions.md` — Query optimization, connection pooling
+- `performance.instructions.md` — Frozen collections, hot-path lookups
+- `multi-environment.instructions.md` — Cache config per environment

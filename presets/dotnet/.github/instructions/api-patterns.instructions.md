@@ -144,3 +144,9 @@ public class ProducersController : ControllerBase { }
 ❌ Missing CancellationToken on async actions
 ❌ Return full entity from Create (return DTO only)
 ```
+
+## See Also
+
+- `security.instructions.md` — Auth middleware, input validation, CORS
+- `errorhandling.instructions.md` — Error response format, ProblemDetails
+- `performance.instructions.md` — Hot-path optimization, async patterns

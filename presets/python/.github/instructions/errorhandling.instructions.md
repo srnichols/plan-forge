@@ -90,3 +90,9 @@ def register_exception_handlers(app: FastAPI) -> None:
 | `NotFoundError` | 404 | Entity not found |
 | `ConflictError` | 409 | Duplicate/constraint violation |
 | `Exception` (unhandled) | 500 | Unexpected error |
+
+## See Also
+
+- `observability.instructions.md` — Structured logging, error tracking
+- `api-patterns.instructions.md` — Error response format, status codes
+- `messaging.instructions.md` — Dead letter queues, retry strategies

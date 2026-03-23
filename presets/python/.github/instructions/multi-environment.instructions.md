@@ -104,3 +104,10 @@ async def readiness():
         content={"status": status, "db": db_ok},
     )
 ```
+
+## See Also
+
+- `deploy.instructions.md` — Container config, health checks
+- `observability.instructions.md` — Per-environment logging and metrics
+- `messaging.instructions.md` — Broker config per environment
+```

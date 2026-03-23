@@ -80,3 +80,42 @@ const items = await db.query('SELECT id, name FROM items WHERE status = $1', ['a
 | Streaming responses | Large payloads (>1MB) |
 | Connection pooling | All database access |
 | `AbortSignal` | Cancellable async operations |
+
+## Memory Management
+
+### WeakRef / WeakMap Caching
+```typescript
+// ✅ Cache that doesn't prevent garbage collection
+const tenantCache = new WeakMap<object, TenantConfig>();
+
+// ✅ WeakRef for expensive objects with manual expiry
+const cache = new Map<string, WeakRef<ExpensiveResult>>();
+function getCached(key: string): ExpensiveResult | undefined {
+  const ref = cache.get(key);
+  const val = ref?.deref();
+  if (!val) cache.delete(key);
+  return val;
+}
+```
+
+### Streaming & Buffer Limits
+```typescript
+// ✅ Stream large responses instead of buffering
+app.get('/export', (req, res) => {
+  const stream = db.query('SELECT * FROM large_table').stream();
+  stream.pipe(JSONStream.stringify()).pipe(res);
+});
+
+// ✅ Limit body parser to prevent OOM
+app.use(express.json({ limit: '1mb' }));
+```
+
+- Avoid large closures that retain references to request objects
+- Use `setImmediate()` to break up CPU-intensive synchronous work
+- Monitor heap with `process.memoryUsage()` and `--max-old-space-size` flag
+
+## See Also
+
+- `database.instructions.md` — Query optimization, connection tuning
+- `caching.instructions.md` — Cache strategies, frozen lookups
+- `observability.instructions.md` — Profiling, metrics collection

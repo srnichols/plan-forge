@@ -79,3 +79,20 @@ builder.Services.AddCors(options =>
     });
 });
 ```
+
+## OWASP Top 10 (2021) Alignment
+
+| OWASP Category | How This File Addresses It |
+|----------------|----------------------------|
+| A01: Broken Access Control | `[Authorize]` attributes, role-based policies |
+| A02: Cryptographic Failures | `DefaultAzureCredential`, no hardcoded secrets |
+| A03: Injection | Parameterized queries, never string-interpolated SQL |
+| A04: Insecure Design | Input validation at system boundaries |
+| A05: Security Misconfiguration | CORS policy, HTTPS metadata enforcement |
+| A07: Identification & Auth Failures | JWT validation with Authority + Audience |
+
+## See Also
+
+- `database.instructions.md` — SQL injection prevention, parameterized queries
+- `api-patterns.instructions.md` — Auth middleware, request validation
+- `deploy.instructions.md` — Secrets management, TLS configuration

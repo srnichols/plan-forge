@@ -84,3 +84,10 @@ DEBUG=false
 async def health_check():
     return {"status": "healthy", "version": settings.app_version}
 ```
+
+## See Also
+
+- `multi-environment.instructions.md` — Per-environment configuration
+- `observability.instructions.md` — Health checks, readiness probes
+- `security.instructions.md` — Secrets management, TLS
+```

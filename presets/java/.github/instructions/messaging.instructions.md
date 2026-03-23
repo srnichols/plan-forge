@@ -157,3 +157,40 @@ public SimpleRabbitListenerContainerFactory rabbitListenerContainerFactory(
 ❌ No dead letter queue (failed messages lost forever)
 ❌ No idempotency check (duplicate messages cause duplicate processing)
 ```
+
+## Idempotency
+
+Guard consumers against duplicate message delivery using a persistent store:
+
+```java
+@Component
+public class IdempotentConsumer {
+    private final JdbcTemplate jdbc;
+
+    /** Returns true if this is the first time processing this event. */
+    public boolean tryAcquire(String eventId) {
+        try {
+            jdbc.update("INSERT INTO processed_events (event_id, processed_at) VALUES (?, now())", eventId);
+            return true;
+        } catch (DuplicateKeyException e) {
+            return false; // Already processed
+        }
+    }
+}
+
+// Usage in a RabbitMQ listener
+@RabbitListener(queues = "order-processing")
+public void handleOrderPlaced(OrderPlacedEvent event, Message message) {
+    String eventId = message.getMessageProperties().getMessageId();
+    if (!idempotentConsumer.tryAcquire(eventId)) return;
+    orderService.process(event);
+}
+```
+
+Alternatives: Redis `SETNX` with TTL, or Spring Integration's `IdempotentReceiverInterceptor`.
+
+## See Also
+
+- `observability.instructions.md` — Distributed tracing, event logging
+- `errorhandling.instructions.md` — Dead letter queues, retry logic
+- `database.instructions.md` — Idempotency stores, transactional outbox

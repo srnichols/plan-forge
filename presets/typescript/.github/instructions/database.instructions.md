@@ -73,3 +73,9 @@ npx prisma generate
 | Database columns | snake_case | `user_name`, `created_at` |
 | TypeScript properties | camelCase | `userName`, `createdAt` |
 | Prisma model fields | camelCase | Auto-mapped from snake_case |
+
+## See Also
+
+- `security.instructions.md` — SQL injection prevention, parameterized queries
+- `caching.instructions.md` — Query result caching, invalidation strategies
+- `performance.instructions.md` — Query optimization, connection pooling

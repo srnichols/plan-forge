@@ -109,3 +109,9 @@ public class GlobalExceptionHandler {
 | `NotFoundException` | 404 | Entity not found |
 | `ConflictException` | 409 | Duplicate/constraint violation |
 | `Exception` (unhandled) | 500 | Unexpected error |
+
+## See Also
+
+- `observability.instructions.md` — Structured logging, error tracking
+- `api-patterns.instructions.md` — Error response format, status codes
+- `messaging.instructions.md` — Dead letter queues, retry strategies

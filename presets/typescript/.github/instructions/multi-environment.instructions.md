@@ -92,3 +92,10 @@ app.get('/readyz', async (_, res) => {
   res.status(dbOk ? 200 : 503).json({ status: dbOk ? 'ok' : 'degraded', db: dbOk });
 });
 ```
+
+## See Also
+
+- `deploy.instructions.md` — Container config, health checks
+- `observability.instructions.md` — Per-environment logging and metrics
+- `messaging.instructions.md` — Broker config per environment
+```

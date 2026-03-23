@@ -93,3 +93,67 @@ const [data, setData] = useState<User | null>(null);
   <TrashIcon />
 </button>
 ```
+
+## CSS & Styling
+
+### CSS Modules (Recommended)
+```tsx
+// ✅ Scoped styles — no class name collisions
+import styles from './UserCard.module.css';
+
+export function UserCard({ user }: UserCardProps) {
+  return <div className={styles.card}>{user.name}</div>;
+}
+```
+
+```css
+/* UserCard.module.css */
+.card {
+  padding: 1rem;
+  border-radius: 8px;
+  background: var(--surface-color);
+}
+```
+
+### Theming with CSS Custom Properties
+```css
+/* globals.css — define tokens, not raw values */
+:root {
+  --color-primary: #0066cc;
+  --color-surface: #ffffff;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --radius-md: 8px;
+}
+
+/* Dark mode */
+[data-theme="dark"] {
+  --color-primary: #4da6ff;
+  --color-surface: #1a1a1a;
+}
+```
+
+### Responsive Patterns
+```css
+/* ✅ Mobile-first: base styles, then layer up */
+.container {
+  padding: var(--spacing-sm);
+}
+
+@media (min-width: 768px) {
+  .container { padding: var(--spacing-md); }
+}
+```
+
+### Naming & Organization
+- **One CSS Module per component** — co-locate `Button.module.css` with `Button.tsx`
+- **Use camelCase** for multi-word class names: `.userCard` (CSS Modules auto-convert)
+- **Never use inline styles** for anything other than dynamic values (e.g., `style={{ width }}`)
+- **Avoid `!important`** — fix specificity instead
+
+## See Also
+
+- `api-patterns.instructions.md` — API client patterns, route structure
+- `testing.instructions.md` — Component testing, mocking strategies
+- `security.instructions.md` — Input validation, XSS prevention
+- `performance.instructions.md` — Bundle optimization, lazy loading

@@ -106,3 +106,10 @@ router.Get("/readyz", func(w http.ResponseWriter, r *http.Request) {
     render.JSON(w, r, map[string]any{"status": "ok", "db": true})
 })
 ```
+
+## See Also
+
+- `deploy.instructions.md` — Container config, health checks
+- `observability.instructions.md` — Per-environment logging and metrics
+- `messaging.instructions.md` — Broker config per environment
+```

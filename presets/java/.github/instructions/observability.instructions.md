@@ -164,3 +164,10 @@ public class ExternalApiHealthIndicator extends AbstractHealthIndicator {
 ❌ High-cardinality metric tags (user IDs, full URLs)
 ❌ System.out.println instead of SLF4J logger
 ```
+
+## See Also
+
+- `errorhandling.instructions.md` — Exception handling, correlation IDs
+- `performance.instructions.md` — Profiling, metrics collection
+- `deploy.instructions.md` — Health probes, Kubernetes integration
+```

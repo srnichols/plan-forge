@@ -79,3 +79,10 @@ REDIS_URL=redis://localhost:6379
 JWT_SECRET=change-me-in-production
 NODE_ENV=development
 ```
+
+## See Also
+
+- `multi-environment.instructions.md` — Per-environment configuration
+- `observability.instructions.md` — Health checks, readiness probes
+- `security.instructions.md` — Secrets management, TLS
+```

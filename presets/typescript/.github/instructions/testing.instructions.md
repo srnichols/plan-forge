@@ -76,4 +76,10 @@ describe('GET /api/users', () => {
 - [ ] `pnpm test -- --run` — all pass
 - [ ] `pnpm lint` — no violations
 - [ ] Anti-pattern grep: `grep -rn "as any\|@ts-ignore\|@ts-expect-error" --include="*.ts"` returns zero hits in new files
+
+## See Also
+
+- `api-patterns.instructions.md` — Integration test patterns, route testing
+- `database.instructions.md` — Repository testing, test databases
+- `errorhandling.instructions.md` — Exception testing patterns
 ```

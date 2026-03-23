@@ -169,3 +169,10 @@ func RequestLogger(next http.Handler) http.Handler {
 ❌ High-cardinality metric labels (user IDs, full paths)
 ❌ Ignoring span.End() (defer it immediately after Start)
 ```
+
+## See Also
+
+- `errorhandling.instructions.md` — Exception handling, correlation IDs
+- `performance.instructions.md` — Profiling, metrics collection
+- `deploy.instructions.md` — Health probes, Kubernetes integration
+```

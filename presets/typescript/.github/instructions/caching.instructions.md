@@ -109,3 +109,9 @@ export function cacheMiddleware(ttl: number) {
 ❌ Cache user-specific data without user/tenant key prefix
 ❌ Use cache as primary data store (always treat as ephemeral)
 ```
+
+## See Also
+
+- `database.instructions.md` — Query optimization, connection pooling
+- `performance.instructions.md` — Frozen objects, hot-path lookups
+- `multi-environment.instructions.md` — Cache config per environment

@@ -92,3 +92,10 @@ app.MapHealthChecks("/readyz", new()    // Readiness (checks dependencies)
     Predicate = check => check.Tags.Contains("ready")
 });
 ```
+
+## See Also
+
+- `deploy.instructions.md` — Container config, health checks
+- `observability.instructions.md` — Per-environment logging and metrics
+- `messaging.instructions.md` — Broker config per environment
+```

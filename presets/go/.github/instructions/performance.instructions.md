@@ -99,3 +99,44 @@ rows, _ := db.QueryContext(ctx, "SELECT id, name FROM items WHERE status = $1", 
 | `context.Context` | All functions with I/O or cancellation |
 | `pgx` prepared stmts | Hot database queries |
 | `pprof` profiling | Before any optimization work |
+
+## Memory Management
+
+### sync.Pool for Hot-Path Allocations
+```go
+// ✅ Pool buffers to reduce GC pressure on hot paths
+var bufPool = sync.Pool{
+	New: func() any { return new(bytes.Buffer) },
+}
+
+func handleRequest(w http.ResponseWriter, r *http.Request) {
+	buf := bufPool.Get().(*bytes.Buffer)
+	defer func() { buf.Reset(); bufPool.Put(buf) }()
+
+	// use buf for response assembly...
+	w.Write(buf.Bytes())
+}
+```
+
+### Escape Analysis & Stack Allocation
+```go
+// Check what escapes to the heap:
+// go build -gcflags '-m' ./...
+
+// ❌ Pointer causes escape to heap
+func newUser(name string) *User { return &User{Name: name} }
+
+// ✅ Return by value when struct is small and short-lived
+func newUser(name string) User { return User{Name: name} }
+```
+
+- Use `runtime.MemStats` or `pprof` heap profiles to find leaks
+- Prefer `[]byte` + `sync.Pool` over `string` concatenation on hot paths
+- Use `arena` (experimental, Go 1.20+) for batch allocations with known lifetimes
+- Set `GOMEMLIMIT` to prevent OOM kills in containerized deployments
+
+## See Also
+
+- `database.instructions.md` — Query optimization, connection tuning
+- `caching.instructions.md` — Cache strategies, sync.Pool patterns
+- `observability.instructions.md` — Profiling, metrics collection

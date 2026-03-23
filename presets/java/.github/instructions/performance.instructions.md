@@ -89,3 +89,38 @@ List<Item> active = repository.findByStatus("active");
 | HikariCP tuning | Match pool size to load |
 | DTO projections | Read-only query paths |
 | `record` types | Immutable DTOs (less GC pressure) |
+
+## Memory Management
+
+### Record Types for GC Reduction
+```java
+// ✅ Records are compact, immutable, and ideal for short-lived DTOs
+public record UserSummary(UUID id, String name, String email) {}
+
+// ✅ Return records from queries instead of full entities
+@Query("SELECT new com.example.dto.UserSummary(u.id, u.name, u.email) FROM User u WHERE u.tenantId = :tenantId")
+List<UserSummary> findSummariesByTenant(@Param("tenantId") String tenantId);
+```
+
+### JVM & GC Tuning Hints
+```
+# G1GC (default Java 17+) — good for most workloads
+-XX:+UseG1GC -XX:MaxGCPauseMillis=200
+
+# ZGC — sub-millisecond pauses (Java 21+, large heaps)
+-XX:+UseZGC -XX:+ZGenerational
+
+# Escape Analysis — keep short-lived objects on stack (enabled by default)
+# Verify with: -XX:+PrintEscapeAnalysis (debug builds)
+```
+
+- Use `jcmd <pid> GC.heap_info` to monitor heap usage
+- Prefer `List.of()` / `Map.of()` for small immutable collections (no backing array resize)
+- Use `byte[]` / `ByteBuffer` pooling for I/O-heavy services
+- Profile with JFR: `java -XX:StartFlightRecording=filename=recording.jfr`
+
+## See Also
+
+- `database.instructions.md` — Query optimization, connection tuning
+- `caching.instructions.md` — Cache strategies, @Cacheable patterns
+- `observability.instructions.md` — Profiling, metrics collection

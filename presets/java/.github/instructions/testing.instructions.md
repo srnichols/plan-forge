@@ -124,4 +124,10 @@ class UserControllerTest {
 - [ ] `./gradlew test` — all pass
 - [ ] Integration tests with Testcontainers — all pass
 - [ ] Anti-pattern grep: `grep -rn "DriverManager\|\.getConnection(" --include="*.java" src/` returns zero hits
+
+## See Also
+
+- `api-patterns.instructions.md` — Integration test patterns, route testing
+- `database.instructions.md` — Repository testing, test databases
+- `errorhandling.instructions.md` — Exception testing patterns
 ```

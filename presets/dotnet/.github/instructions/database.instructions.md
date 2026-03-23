@@ -53,6 +53,39 @@ var result = connection.Query<User>(sql);
 var result = await connection.QueryAsync<User>(sql, cancellationToken: cancellationToken);
 ```
 
+## Migration Strategy
+
+### EF Core Migrations
+```bash
+# Create a migration
+dotnet ef migrations add AddUserProfile --project src/MyApp.Data
+
+# Apply migrations
+dotnet ef database update
+
+# Generate SQL script for production (idempotent)
+dotnet ef migrations script --idempotent -o migrations.sql
+```
+
+### Dapper + Flyway/DbUp
+```
+migrations/
+├── V001__create_users_table.sql
+├── V002__add_tenant_id_column.sql
+└── V003__create_orders_table.sql
+```
+
+```csharp
+// DbUp (C#-native migration runner)
+var upgrader = DeployChanges.To
+    .PostgresqlDatabase(connectionString)
+    .WithScriptsEmbeddedInAssembly(Assembly.GetExecutingAssembly())
+    .LogToConsole()
+    .Build();
+
+var result = upgrader.PerformUpgrade();
+```
+
 ## Naming Conventions
 
 | Context | Convention | Example |
@@ -60,3 +93,9 @@ var result = await connection.QueryAsync<User>(sql, cancellationToken: cancellat
 | Database columns | snake_case | `user_name`, `created_at` |
 | C# properties | PascalCase | `UserName`, `CreatedAt` |
 | SQL aliases (Dapper) | PascalCase | `SELECT user_name AS UserName` |
+
+## See Also
+
+- `security.instructions.md` — SQL injection prevention, parameterized queries
+- `caching.instructions.md` — Query result caching, invalidation strategies
+- `performance.instructions.md` — Query optimization, connection pooling

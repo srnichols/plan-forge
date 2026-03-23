@@ -121,3 +121,9 @@ func (h *ItemHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 - Service layer returns `*AppError`; handlers write ProblemDetail responses
 - Use `slog` for structured error logging
 - Reserve `panic` for truly unrecoverable situations; recover in middleware
+
+## See Also
+
+- `observability.instructions.md` — Structured logging, error tracking
+- `api-patterns.instructions.md` — Error response format, status codes
+- `messaging.instructions.md` — Dead letter queues, retry strategies

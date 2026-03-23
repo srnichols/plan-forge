@@ -103,3 +103,20 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
 }));
 ```
+
+## OWASP Top 10 (2021) Alignment
+
+| OWASP Category | How This File Addresses It |
+|----------------|----------------------------|
+| A01: Broken Access Control | JWT middleware, role-based route guards |
+| A02: Cryptographic Failures | JWKS-based key resolution, env-based secrets |
+| A03: Injection | Zod schema validation, parameterized SQL |
+| A04: Insecure Design | Explicit types over `any`, runtime validation |
+| A05: Security Misconfiguration | CORS allowlist from env, validated config schema |
+| A07: Identification & Auth Failures | RS256 JWT, audience + issuer validation |
+
+## See Also
+
+- `database.instructions.md` — SQL injection prevention, parameterized queries
+- `api-patterns.instructions.md` — Auth middleware, request validation
+- `deploy.instructions.md` — Secrets management, TLS configuration

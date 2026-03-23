@@ -62,4 +62,10 @@ builder.Services.AddHealthChecks()
     .AddRedis(redisConnectionString);
 
 app.MapHealthChecks("/health");
+
+## See Also
+
+- `multi-environment.instructions.md` — Per-environment configuration
+- `observability.instructions.md` — Health checks, readiness probes
+- `security.instructions.md` — Secrets management, TLS
 ```

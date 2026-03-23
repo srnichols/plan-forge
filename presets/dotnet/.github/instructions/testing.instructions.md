@@ -75,4 +75,10 @@ public class UsersApiTests(WebApplicationFactory<Program> factory)
 - [ ] `dotnet test --filter "Category=Unit"` — all pass
 - [ ] `dotnet test --filter "Category=Integration"` — all pass
 - [ ] Anti-pattern grep: `grep -rn "\.Result\b\|\.Wait()\|\.GetAwaiter().GetResult()" --include="*.cs"` returns zero hits
+
+## See Also
+
+- `api-patterns.instructions.md` — Integration test patterns, route testing
+- `database.instructions.md` — Repository testing, test databases
+- `errorhandling.instructions.md` — Exception testing patterns
 ```

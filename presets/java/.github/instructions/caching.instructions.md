@@ -111,3 +111,9 @@ public void delete(String id) { ... }
 ❌ Cache without TTL (stale data forever)
 ❌ Store non-serializable objects in Redis cache
 ```
+
+## See Also
+
+- `database.instructions.md` — Query optimization, connection pooling
+- `performance.instructions.md` — @Cacheable, Caffeine, immutable lookups
+- `multi-environment.instructions.md` — Cache config per environment

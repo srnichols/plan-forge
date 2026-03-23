@@ -145,3 +145,10 @@ export function requestLogger(req: Request, res: Response, next: NextFunction) {
 ❌ High-cardinality metric labels (user IDs, request paths with params)
 ❌ Synchronous file logging (blocks event loop)
 ```
+
+## See Also
+
+- `errorhandling.instructions.md` — Exception handling, correlation IDs
+- `performance.instructions.md` — Profiling, metrics collection
+- `deploy.instructions.md` — Health probes, Kubernetes integration
+```

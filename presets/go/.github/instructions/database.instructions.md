@@ -100,3 +100,9 @@ migrate -path migrations -database "$DATABASE_URL" down 1
 | Database columns | snake_case | `user_name`, `created_at` |
 | Go fields | PascalCase | `UserName`, `CreatedAt` |
 | Struct tags | `db:"column_name"` | `db:"user_name"` |
+
+## See Also
+
+- `security.instructions.md` — SQL injection prevention, parameterized queries
+- `caching.instructions.md` — Query result caching, invalidation strategies
+- `performance.instructions.md` — Query optimization, connection pooling

@@ -128,5 +128,38 @@ const worker = new Worker('main', handler, {
 ❌ Blocking the event loop in workers (use async, offload CPU work)
 ❌ No idempotency check (duplicate job execution)
 ❌ Publishing without tenantId (breaks multi-tenant isolation)
+```
+
+## Idempotency
+
+Guard consumers against duplicate delivery using a persistent idempotency key:
+
+```typescript
+async function processWithIdempotency(
+  jobId: string,
+  handler: () => Promise<void>,
+): Promise<void> {
+  // Redis SET NX returns true only if key didn't exist
+  const isNew = await redis.set(`idem:${jobId}`, '1', 'EX', 86400, 'NX');
+  if (!isNew) return; // Already processed
+
+  await handler();
+}
+
+// BullMQ worker with idempotency
+const worker = new Worker('order-processing', async (job: Job) => {
+  await processWithIdempotency(job.id!, async () => {
+    await processOrder(job.data.orderId, job.data.tenantId);
+  });
+}, { connection: redis });
+```
+
+Alternatives: database table with `UNIQUE(event_id)`, or BullMQ's built-in `jobId` deduplication.
+
+## See Also
+
+- `observability.instructions.md` — Distributed tracing, event logging
+- `errorhandling.instructions.md` — Dead letter queues, retry logic
+- `database.instructions.md` — Idempotency stores, transactional outbox
 ❌ Large payloads in jobs (pass IDs, fetch data in consumer)
 ```

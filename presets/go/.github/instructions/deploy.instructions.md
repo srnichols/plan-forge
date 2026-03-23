@@ -104,3 +104,10 @@ containers:
       initialDelaySeconds: 5
       periodSeconds: 5
 ```
+
+## See Also
+
+- `multi-environment.instructions.md` — Per-environment configuration
+- `observability.instructions.md` — Health checks, readiness probes
+- `security.instructions.md` — Secrets management, TLS
+```

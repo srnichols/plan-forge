@@ -131,4 +131,10 @@ func TestGetUserHandler(t *testing.T) {
 - [ ] `go test ./...` — all pass
 - [ ] `go test -race ./...` — no race conditions
 - [ ] Anti-pattern grep: `grep -rn 'fmt.Sprintf.*SELECT\|fmt.Sprintf.*INSERT\|fmt.Sprintf.*UPDATE' --include="*.go"` returns zero hits
+
+## See Also
+
+- `api-patterns.instructions.md` — Integration test patterns, handler testing
+- `database.instructions.md` — Repository testing, test databases
+- `errorhandling.instructions.md` — Error assertion patterns
 ```

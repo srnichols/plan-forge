@@ -118,3 +118,10 @@ management:
       probes:
         enabled: true  # /actuator/health/liveness, /actuator/health/readiness
 ```
+
+## See Also
+
+- `deploy.instructions.md` — Container config, health checks
+- `observability.instructions.md` — Per-environment logging and metrics
+- `messaging.instructions.md` — Broker config per environment
+```

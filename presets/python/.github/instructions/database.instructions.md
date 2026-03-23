@@ -87,3 +87,9 @@ async def get_db():
 | Database columns | snake_case | `user_name`, `created_at` |
 | Python model fields | snake_case | `user_name`, `created_at` |
 | Pydantic response fields | snake_case (or camelCase alias) | Configurable |
+
+## See Also
+
+- `security.instructions.md` — SQL injection prevention, parameterized queries
+- `caching.instructions.md` — Query result caching, invalidation strategies
+- `performance.instructions.md` — Query optimization, connection pooling

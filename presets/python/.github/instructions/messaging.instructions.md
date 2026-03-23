@@ -129,3 +129,40 @@ def process_event(self, event_data: dict) -> None:
 ❌ Untyped event payloads (use Pydantic models for validation)
 ❌ Catching bare Exception without logging (silent failures)
 ```
+
+## Idempotency
+
+Guard task handlers against duplicate execution:
+
+```python
+import redis
+
+_redis = redis.Redis.from_url(settings.REDIS_URL)
+
+def idempotent(ttl: int = 86400):
+    """Decorator that skips duplicate task executions using Redis SET NX."""
+    def decorator(func):
+        @wraps(func)
+        def wrapper(self, *args, **kwargs):
+            key = f"idem:{self.request.id}"
+            if not _redis.set(key, "1", ex=ttl, nx=True):
+                return  # Already processed
+            return func(self, *args, **kwargs)
+        return wrapper
+    return decorator
+
+@app.task(bind=True, max_retries=3)
+@idempotent()
+def process_order(self, order_id: str, tenant_id: str) -> None:
+    order = order_repo.get_by_id(order_id, tenant_id)
+    # ... process
+```
+
+Alternatives: database table with `UNIQUE(task_id)`, or Celery's `task_reject_on_worker_lost=True`.
+
+## See Also
+
+- `observability.instructions.md` — Distributed tracing, event logging
+- `errorhandling.instructions.md` — Dead letter queues, retry logic
+- `database.instructions.md` — Idempotency stores, transactional outbox
+```

@@ -170,3 +170,9 @@ function paginate<T>(items: T[], total: number, page: number, pageSize: number):
 ❌ Swallow errors with empty catch (always call next(err))
 ❌ Return full database entities (return DTOs, strip internal fields)
 ```
+
+## See Also
+
+- `security.instructions.md` — Auth middleware, input validation, CORS
+- `errorhandling.instructions.md` — Error response format, Express middleware
+- `performance.instructions.md` — Hot-path optimization, async patterns

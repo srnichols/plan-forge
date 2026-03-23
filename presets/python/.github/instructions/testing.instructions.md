@@ -94,4 +94,10 @@ async def db_session(postgres):
 - [ ] `mypy .` — zero type errors
 - [ ] `ruff check .` — no violations
 - [ ] Anti-pattern grep: `grep -rn "type: ignore\|# noqa\|Any" --include="*.py"` — minimal hits in new files
+
+## See Also
+
+- `api-patterns.instructions.md` — Integration test patterns, route testing
+- `database.instructions.md` — Repository testing, test databases
+- `errorhandling.instructions.md` — Exception testing patterns
 ```

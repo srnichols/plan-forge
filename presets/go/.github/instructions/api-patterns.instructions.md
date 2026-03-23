@@ -172,3 +172,9 @@ func NewPagedResult[T any](items []T, page, pageSize, totalCount int) PagedResul
 ❌ Ignore Decode errors (always validate and return 400)
 ❌ Missing Content-Type header on responses
 ```
+
+## See Also
+
+- `security.instructions.md` — JWT middleware, input validation
+- `errorhandling.instructions.md` — Error response format, ProblemDetail
+- `performance.instructions.md` — Hot-path optimization, concurrency patterns

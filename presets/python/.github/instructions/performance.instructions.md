@@ -90,3 +90,43 @@ rows = await db.fetch_all("SELECT id, name FROM items WHERE status = :status", {
 | `asyncio.to_thread()` | CPU-bound in async context |
 | Connection pooling | All database access |
 | `__slots__` on hot classes | Reduce memory per instance |
+
+## Memory Management
+
+### `__slots__` for Hot-Path Objects
+```python
+# ❌ Default: each instance gets a __dict__ (~200+ bytes overhead)
+class SensorReading:
+    def __init__(self, value: float, ts: float):
+        self.value = value
+        self.ts = ts
+
+# ✅ __slots__: eliminates __dict__, saves ~60% memory per instance
+class SensorReading:
+    __slots__ = ("value", "ts")
+    def __init__(self, value: float, ts: float):
+        self.value = value
+        self.ts = ts
+```
+
+### Generators Over Lists
+```python
+# ❌ Materialises entire list in memory
+def get_all_ids(items: list[Item]) -> list[str]:
+    return [item.id for item in items]
+
+# ✅ Yields one at a time — constant memory
+def get_all_ids(items: Iterable[Item]) -> Iterator[str]:
+    return (item.id for item in items)
+```
+
+- Use `tracemalloc` or `memray` to profile memory usage
+- Prefer `tuple` over `list` for immutable sequences
+- Use `weakref.WeakValueDictionary` for caches that shouldn't prevent GC
+- Set `expire_on_commit=False` on async sessions to avoid lazy-load traps
+
+## See Also
+
+- `database.instructions.md` — Query optimization, connection tuning
+- `caching.instructions.md` — Cache strategies, frozen lookups
+- `observability.instructions.md` — Profiling, metrics collection

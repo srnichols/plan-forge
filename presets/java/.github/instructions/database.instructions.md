@@ -108,3 +108,9 @@ CREATE INDEX idx_users_tenant ON users(tenant_id);
 | Database columns | snake_case | `user_name`, `created_at` |
 | Java fields | camelCase | `userName`, `createdAt` |
 | JPA mapping | `@Column(name = "user_name")` | Explicit mapping |
+
+## See Also
+
+- `security.instructions.md` — SQL injection prevention, parameterized queries
+- `caching.instructions.md` — Query result caching, invalidation strategies
+- `performance.instructions.md` — Query optimization, connection pooling

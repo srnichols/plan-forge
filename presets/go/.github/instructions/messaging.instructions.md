@@ -164,4 +164,48 @@ func main() {
 ❌ Goroutine leak (always use context cancellation)
 ❌ json.Unmarshal into interface{} (use typed structs)
 ❌ No graceful shutdown (messages lost on SIGTERM)
+❌ No idempotency check (duplicate messages cause duplicate processing)
 ```
+
+## Idempotency
+
+Guard consumers against duplicate delivery using a persistent idempotency store:
+
+```go
+// Redis-based idempotency guard
+func processOnce(ctx context.Context, rdb *redis.Client, eventID string, handler func() error) error {
+	ok, err := rdb.SetNX(ctx, "idem:"+eventID, "1", 24*time.Hour).Result()
+	if err != nil {
+		return fmt.Errorf("idempotency check: %w", err)
+	}
+	if !ok {
+		return nil // Already processed
+	}
+	return handler()
+}
+
+// Usage in a NATS subscriber
+sub, _ := js.Subscribe("orders.placed", func(msg *nats.Msg) {
+	var evt OrderPlacedEvent
+	if err := json.Unmarshal(msg.Data, &evt); err != nil {
+		msg.Term()
+		return
+	}
+	err := processOnce(ctx, rdb, msg.Header.Get("Nats-Msg-Id"), func() error {
+		return processOrder(evt)
+	})
+	if err != nil {
+		msg.Nak()
+		return
+	}
+	msg.Ack()
+})
+```
+
+Alternatives: database table with `UNIQUE(event_id)`, or NATS JetStream's built-in `Nats-Msg-Id` deduplication.
+
+## See Also
+
+- `observability.instructions.md` — Distributed tracing, event logging
+- `errorhandling.instructions.md` — Dead letter queues, retry logic
+- `database.instructions.md` — Idempotency stores, transactional outbox

@@ -110,3 +110,9 @@ async def update_producer(producer: ProducerUpdate) -> None:
 ❌ Cache user-specific data without tenant/user key prefix
 ❌ Use global mutable dict as cache (no TTL, no size limit, memory leak)
 ```
+
+## See Also
+
+- `database.instructions.md` — Query optimization, connection pooling
+- `performance.instructions.md` — lru_cache, TTLCache, frozen data
+- `multi-environment.instructions.md` — Cache config per environment

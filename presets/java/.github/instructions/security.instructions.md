@@ -128,6 +128,23 @@ public class CorsConfig {
 |--------------|------------|
 | SQL Injection | Parameterized queries only |
 | XSS | Response encoding, CSP headers |
+
+## OWASP Top 10 (2021) Alignment
+
+| OWASP Category | How This File Addresses It |
+|----------------|----------------------------|
+| A01: Broken Access Control | Spring Security filter chain, `@PreAuthorize` |
+| A02: Cryptographic Failures | Externalized secrets via `${ENV_VAR}`, no hardcoded passwords |
+| A03: Injection | `@Valid` + Bean Validation, parameterized `@Query` |
+| A04: Insecure Design | Custom validators, record DTOs with constraints |
+| A05: Security Misconfiguration | CORS allowlist, CSRF protection, OAuth2 resource server |
+| A07: Identification & Auth Failures | JWT with `oauth2ResourceServer()`, method-level security |
+
+## See Also
+
+- `database.instructions.md` — SQL injection prevention, parameterized queries
+- `api-patterns.instructions.md` — Auth middleware, request validation
+- `deploy.instructions.md` — Secrets management, TLS configuration
 | CSRF | Spring Security CSRF tokens |
 | Mass Assignment | Use DTOs, never bind directly to entities |
 | Insecure Deserialization | Validate input types, use records |

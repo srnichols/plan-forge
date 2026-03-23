@@ -110,3 +110,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 ```
+
+## OWASP Top 10 (2021) Alignment
+
+| OWASP Category | How This File Addresses It |
+|----------------|----------------------------|
+| A01: Broken Access Control | OAuth2 dependency injection, `Depends(get_current_user)` |
+| A02: Cryptographic Failures | `pydantic_settings` with `min_length` on secrets |
+| A03: Injection | Pydantic validation, ORM/parameterized queries |
+| A04: Insecure Design | Explicit types, no `Any`, specific exception handling |
+| A05: Security Misconfiguration | CORS from settings, no hardcoded origins |
+| A07: Identification & Auth Failures | RS256 JWT decode, `HTTPException(401)` on failure |
+
+## See Also
+
+- `database.instructions.md` — SQL injection prevention, parameterized queries
+- `api-patterns.instructions.md` — Auth middleware, request validation
+- `deploy.instructions.md` — Secrets management, TLS configuration

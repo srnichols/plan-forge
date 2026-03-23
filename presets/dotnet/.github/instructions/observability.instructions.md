@@ -119,3 +119,10 @@ app.Use(async (context, next) =>
 ❌ High-cardinality metric labels (e.g., user IDs as tags)
 ❌ Logging every request body (performance + storage cost)
 ```
+
+## See Also
+
+- `errorhandling.instructions.md` — Exception handling, correlation IDs
+- `performance.instructions.md` — Profiling, metrics collection
+- `deploy.instructions.md` — Health probes, Kubernetes integration
+```

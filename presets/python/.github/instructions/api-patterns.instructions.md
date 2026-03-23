@@ -144,3 +144,9 @@ class PagedResult(BaseModel, Generic[T]):
 ❌ Return ORM models directly (return Pydantic response models)
 ❌ Bare except without logging (always log, then re-raise or handle)
 ```
+
+## See Also
+
+- `security.instructions.md` — Auth middleware, input validation, CORS
+- `errorhandling.instructions.md` — Error response format, exception handlers
+- `performance.instructions.md` — Hot-path optimization, async patterns

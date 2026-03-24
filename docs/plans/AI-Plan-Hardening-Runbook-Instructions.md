@@ -130,6 +130,15 @@ Run these checks and report results. STOP if any check fails.
    - Test/spec/coverage → .github/instructions/testing.instructions.md
    Report: domains detected + guardrail status for each.
 
+6. PROJECT PRINCIPLES — Check if docs/plans/PROJECT-PRINCIPLES.md exists.
+   If exists: read it and confirm plan doesn't violate any Core Principle.
+   Report: ✅ Project Principles found (N principles) / ⚠️ no Project Principles file (optional)
+
+7. BRANCH CHECK — Does the plan declare a Branch Strategy?
+   If yes: confirm current branch matches the plan's declared branch.
+   If no: recommend a strategy based on estimated effort.
+   Report: ✅ on correct branch / ❌ wrong branch / ⚠️ no strategy declared
+
 Output a summary table:
 
 | Check | Result | Details |
@@ -140,6 +149,8 @@ Output a summary table:
 | Core guardrails | ✅/❌ | ... |
 | Agentic files | ✅/⚠️ | ... |
 | Domain guardrails | ✅/❌ | ... |
+| Project Principles | ✅/⚠️ | ... |
+| Branch check | ✅/⚠️/❌ | ... |
 
 If ALL pass: "Pre-flight complete ✅ — proceed to Step 2 (Harden the Plan)"
 If ANY fail: "Pre-flight FAILED ❌" + list exactly what to fix.
@@ -161,6 +172,7 @@ Read these files first:
 2. docs/plans/<YOUR-PLAN>.md
 3. docs/plans/DEPLOYMENT-ROADMAP.md
 4. .github/copilot-instructions.md
+5. docs/plans/PROJECT-PRINCIPLES.md (if exists)
 
 Now act as a PLAN HARDENING AGENT (see the Plan Hardening Prompt in the runbook).
 
@@ -178,6 +190,17 @@ For each Execution Slice:
 - Add a Parallel Merge Checkpoint after each parallel group
 
 Do NOT add features or expand scope. Only structure what already exists.
+
+If a Specification Source is referenced in the Scope Contract, ensure each
+slice includes a "Traces to" field mapping to requirements in that spec.
+
+If Project Principles exist, validate that no execution slice violates a
+Core Principle or introduces a Forbidden Pattern. Flag violations as
+REQUIRED DECISIONS that must be resolved before execution.
+
+If a Requirements Register is present, ensure each Execution Slice includes
+a "Traces to" field (e.g., "Traces to: REQ-001, REQ-003"). Flag any
+requirement with no corresponding slice as a gap.
 
 After hardening, run a TBD RESOLUTION SWEEP:
 1. Scan Required Decisions for TBD entries.
@@ -302,6 +325,7 @@ Read these files first:
 3. .github/copilot-instructions.md
 4. .github/instructions/ (relevant guardrail files for this phase)
 5. docs/plans/DEPLOYMENT-ROADMAP.md
+6. docs/plans/PROJECT-PRINCIPLES.md (if exists)
 
 Now act as a REVIEWER GATE + DRIFT DETECTION AGENT.
 
@@ -318,6 +342,7 @@ Review checklist:
 6. PATTERNS — Follows existing patterns from .github/instructions/?
 7. TESTING — New features covered by tests?
 8. SECURITY — Input validation? No secrets in code?
+9. PROJECT PRINCIPLES — Core Principles respected? Forbidden Patterns absent? (if Project Principles file exists)
 
 For each finding, assign: 🔴 Critical / 🟡 Warning / 🔵 Info
 
@@ -337,6 +362,22 @@ Compare Scope Contract against actual changes:
 Output Part B:
 | File | Issue | Violated Section |
 |------|-------|------------------|
+
+--- PART C: TRACEABILITY CHECK (if Specification Source exists) ---
+
+If the plan references an external specification or Requirements Register:
+1. Verify every requirement in the spec has at least one slice that addresses it
+2. Verify no slice implements functionality NOT in the spec
+3. Flag any spec requirements with no corresponding validation gate
+
+Output Part C:
+| Requirement | Traced to Slice(s) | Status |
+|-------------|-------------------|--------|
+
+If no specification is referenced, skip Part C entirely.
+
+For Part C: Use the Requirements Register (if present) OR the external
+Specification Source (if referenced) as the source of truth.
 
 --- COMBINED SUMMARY ---
 

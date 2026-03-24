@@ -166,6 +166,46 @@ check_file ".vscode/settings.json" "false" || true
 check_file "docs/COPILOT-VSCODE-GUIDE.md" "false" || true
 check_file ".plan-hardening.json" "false" || true
 
+# ─── New Capabilities (Optional) ──────────────────────────────────────
+echo ""
+cyan "Optional capabilities:"
+
+# Project Principles
+PP_PATH="$PROJECT_PATH/docs/plans/PROJECT-PRINCIPLES.md"
+if [[ -f "$PP_PATH" ]]; then
+    PP_COUNT=$(grep -cE '^\|\s*[0-9]+\s*\|' "$PP_PATH" 2>/dev/null || echo "0")
+    green "  PASS  Project Principles: found ($PP_COUNT principles)"
+    ((PASS++))
+else
+    yellow "  WARN  Project Principles: not created (optional — run project-principles.prompt.md)"
+    ((WARN++))
+fi
+
+# Extensions
+EXT_JSON="$PROJECT_PATH/.plan-hardening/extensions/extensions.json"
+if [[ -f "$EXT_JSON" ]]; then
+    EXT_COUNT=$(python3 -c "import json; print(len(json.load(open('$EXT_JSON')).get('extensions',[])))" 2>/dev/null || echo "0")
+    if [[ "$EXT_COUNT" -gt 0 ]]; then
+        green "  PASS  Extensions: $EXT_COUNT installed"
+        ((PASS++))
+    else
+        yellow "  WARN  Extensions: none installed (optional)"
+        ((WARN++))
+    fi
+else
+    yellow "  WARN  Extensions: not configured (optional)"
+    ((WARN++))
+fi
+
+# CLI
+if [[ -f "$PROJECT_PATH/pharden.sh" ]] || [[ -f "$PROJECT_PATH/pharden.ps1" ]]; then
+    green "  PASS  CLI: pharden script found"
+    ((PASS++))
+else
+    yellow "  WARN  CLI: pharden not installed (optional)"
+    ((WARN++))
+fi
+
 # ─── Placeholder Scan ─────────────────────────────────────────────────
 echo ""
 cyan "Placeholder scan:"

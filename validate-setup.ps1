@@ -155,6 +155,52 @@ Check-FileExists ".vscode/settings.json" $false
 Check-FileExists "docs/COPILOT-VSCODE-GUIDE.md" $false
 Check-FileExists ".plan-hardening.json" $false
 
+# ─── New Capabilities (Optional) ──────────────────────────────────────
+Write-Host ""
+Write-Host "Optional capabilities:" -ForegroundColor Cyan
+
+# Project Principles
+$ppPath = Join-Path $ProjectPath "docs/plans/PROJECT-PRINCIPLES.md"
+if (Test-Path $ppPath) {
+    $principleCount = (Select-String -Path $ppPath -Pattern '^\|\s*\d+\s*\|' -AllMatches).Count
+    Write-Host "  PASS  Project Principles: found ($principleCount principles)" -ForegroundColor Green
+    $pass++
+}
+else {
+    Write-Host "  WARN  Project Principles: not created (optional — run project-principles.prompt.md)" -ForegroundColor Yellow
+    $warn++
+}
+
+# Extensions
+$extJsonPath = Join-Path $ProjectPath ".plan-hardening/extensions/extensions.json"
+if (Test-Path $extJsonPath) {
+    $extData = Get-Content $extJsonPath -Raw | ConvertFrom-Json
+    $extCount = if ($extData.extensions) { $extData.extensions.Count } else { 0 }
+    if ($extCount -gt 0) {
+        Write-Host "  PASS  Extensions: $extCount installed" -ForegroundColor Green
+        $pass++
+    }
+    else {
+        Write-Host "  WARN  Extensions: none installed (optional)" -ForegroundColor Yellow
+        $warn++
+    }
+}
+else {
+    Write-Host "  WARN  Extensions: not configured (optional)" -ForegroundColor Yellow
+    $warn++
+}
+
+# CLI
+$cliPath = Join-Path $ProjectPath "pharden.ps1"
+if (Test-Path $cliPath) {
+    Write-Host "  PASS  CLI: pharden.ps1 found" -ForegroundColor Green
+    $pass++
+}
+else {
+    Write-Host "  WARN  CLI: pharden.ps1 not installed (optional)" -ForegroundColor Yellow
+    $warn++
+}
+
 # ─── Placeholder Scan ─────────────────────────────────────────────────
 Write-Host ""
 Write-Host "Placeholder scan:" -ForegroundColor Cyan

@@ -149,8 +149,15 @@ A **hardened** `*-PLAN.md` that an agent can execute without guessing. It will c
   - [ ] `.github/prompts/` — prompt templates for scaffolding
   - [ ] `.github/agents/` — agent definitions for reviews
   - [ ] `.github/skills/` — multi-step procedures
+- [ ] Project Principles exist (optional but recommended):
+  - [ ] `docs/plans/PROJECT-PRINCIPLES.md` — project principles and commitments
 
 > **If any box is unchecked**: Fix it before proceeding. Stale guardrails cause agent drift.
+
+> **Tip — External Specifications**: If you use a spec-driven workflow, you can
+> reference your existing specification files as inputs to Step 0/Step 2. The hardening
+> pipeline will treat them as authoritative sources, ensuring every slice traces back to
+> a documented requirement. See the optional "Specification Source" field in Template 1.
 
 ### Step 1 — Draft the Phase Plan
 
@@ -236,6 +243,8 @@ For each slice:
   5. RE-ANCHOR — re-read the Scope Contract, confirm no drift
   6. SUMMARIZE changes in ≤ 5 bullets
   7. COMMIT — git add -A && git commit (if validation passed)
+  7b. BRANCH — If Branch Strategy is feature-branch or branch-per-slice,
+      confirm you are on the correct branch before the next slice.
   8. MOVE to the next slice (or STOP if a gate fails)
 
   If a gate FAILS → see ROLLBACK PROTOCOL (Section 10)
@@ -587,6 +596,29 @@ Every hardened `*-PLAN.md` must contain these six sections.
 - Do not modify: (list specific folders/files that are off-limits)
 - Do not introduce: (new dependencies, new databases, new frameworks, etc.)
 - Do not refactor: (unrelated code outside the scope of this phase)
+
+### Specification Source (Optional)
+- Spec file: (path to specification, e.g., docs/specs/feature-name/spec.md)
+- Requirements doc: (path to requirements, if separate from spec)
+- Project Principles: (path to docs/plans/PROJECT-PRINCIPLES.md, if exists)
+
+> When populated, the hardening process treats these as authoritative inputs.
+> All scope contracts and validation gates must trace back to requirements
+> in the referenced specification.
+
+### Branch Strategy (Optional)
+
+Declare the branching approach for this phase. If omitted, defaults to
+trunk-based (work on current branch).
+
+| Strategy | When to Use | Convention |
+|----------|-------------|------------|
+| **Trunk** | Micro/Small changes (<2 hrs) | Work on `main`, commit directly |
+| **Feature branch** | Medium changes (2–8 hrs) | `feature/phase-N-description` |
+| **Branch-per-slice** | Large/risky changes (1+ days) | `phase-N/slice-K-description` |
+
+**Branch**: (e.g., `feature/phase-12-user-profiles` or "trunk")
+**Created from**: (e.g., `main` at commit `abc1234`)
 ```
 
 ### Template 2 — Required Decisions
@@ -602,6 +634,23 @@ Every hardened `*-PLAN.md` must contain these six sections.
 > **Rule**: If ANY decision is marked TBD, execution MUST NOT begin.
 ```
 
+### Template 2b — Requirements Register (Optional)
+
+```markdown
+## Requirements Register
+
+> **Optional**: Populate this when traceability from requirements to
+> slices matters (regulated, spec-driven, or multi-team projects).
+> When populated, Step 5 will verify bidirectional traceability.
+> When empty, traceability checks are skipped entirely.
+
+| ID | Requirement | Priority | Source |
+|----|-------------|----------|--------|
+| REQ-001 | (e.g., Users can reset passwords via email) | P1 | (spec.md or stakeholder) |
+| REQ-002 | (e.g., Password reset tokens expire after 1 hour) | P1 | (spec.md §3.2) |
+| REQ-003 | (e.g., Audit log records all password resets) | P2 | (compliance) |
+```
+
 ### Template 3 — Execution Slices
 
 ```markdown
@@ -610,6 +659,7 @@ Every hardened `*-PLAN.md` must contain these six sections.
 ### Slice 1: <descriptive name>
 **Goal**: (one sentence)
 **Estimated Time**: (30-120 min)
+**Traces to**: (optional — REQ-001, REQ-003 or User Story 2)
 **Parallelism**: `[parallel-safe]` Group A | `[sequential]`
 **Depends On**: Slice N | None
 **Inputs**: (files, data, or prior slice outputs)
@@ -678,6 +728,9 @@ This phase is COMPLETE when ALL of the following are true:
 - [ ] Drift Detection audit passed (run in fresh agent session)
 - [ ] All Required Decisions are resolved (no TBD rows remain)
 - [ ] No Forbidden Actions were violated
+- [ ] Requirements traceability verified (if Requirements Register populated):
+  - [ ] Every REQ-xxx traced to at least one slice
+  - [ ] Every slice traces to at least one REQ-xxx
 
 ### Documentation & Guardrails
 - [ ] Documentation updated (if applicable)
@@ -758,20 +811,26 @@ git checkout -- .
 git clean -fd
 ```
 
-### Option 3: Branch-Per-Slice (Safest)
+### Option 3: Branch-Per-Slice (Safest — Recommended for Large Phases)
+
+**Naming convention**: `phase-N/slice-K-short-description`
 
 ```bash
 # Before each slice
-git checkout -b phase-N/slice-K
+git checkout -b phase-12/slice-1-db-migration
 
 # After validation passes
-git checkout main
-git merge phase-N/slice-K --no-ff -m "phase-N/slice-K: <goal>"
+git checkout feature/phase-12-user-profiles
+git merge phase-12/slice-1-db-migration --no-ff -m "phase-12/slice-1: database migration"
 
 # If validation fails
-git checkout main
-git branch -D phase-N/slice-K
+git checkout feature/phase-12-user-profiles
+git branch -D phase-12/slice-1-db-migration
 ```
+
+**Parallel slice branches**: When slices in the same Parallel Group use
+branch-per-slice, create all branches from the same base commit. Merge
+them sequentially after the Parallel Merge Checkpoint passes.
 
 ### After Any Rollback
 

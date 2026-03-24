@@ -397,6 +397,68 @@ To contribute a preset for a new tech stack:
 
 ---
 
+## Setting Up Project Principles (Optional)
+
+Define your project's non-negotiable principles, technology commitments, and forbidden patterns:
+
+1. Open VS Code → Copilot Chat → Agent Mode
+2. Use the prompt: `.github/prompts/project-principles.prompt.md`
+3. Walk through the guided workshop — answer questions about identity, principles, tech, quality, forbidden patterns, and governance
+4. The prompt generates `docs/plans/PROJECT-PRINCIPLES.md`
+
+**Project Principles vs Project Profile**:
+- **Project Principles** = what the project *believes* (human-authored declarations)
+- **Project Profile** = how Copilot should *write code* (generated guardrails)
+- Both are optional. Both auto-load. They complement each other.
+
+---
+
+## Using External Specifications (Optional)
+
+If you already have specification files (from any spec-driven workflow), you can reference them as authoritative inputs:
+
+1. In your hardened plan's Scope Contract, fill in the **Specification Source** section:
+   ```markdown
+   ### Specification Source (Optional)
+   - Spec file: docs/specs/my-feature/spec.md
+   - Requirements doc: docs/specs/my-feature/requirements.md
+   ```
+2. Step 2 (Harden) will map each execution slice to requirements via `Traces to:` fields
+3. Step 5 (Review) will verify bidirectional traceability — every requirement has a slice, every slice has a requirement
+
+Alternatively, use the **Requirements Register** directly in your plan for standalone traceability without external spec files.
+
+---
+
+## Installing Extensions (Optional)
+
+Extensions let teams share custom guardrail files as portable packages.
+
+See [docs/EXTENSIONS.md](docs/EXTENSIONS.md) for the full guide covering:
+- Extension structure and manifest format
+- Three installation methods (manual, setup script, CLI)
+- How to create and distribute your own extensions
+
+---
+
+## CLI Quick Reference (Optional)
+
+The `pharden` CLI is a convenience wrapper — every command shows the equivalent manual steps.
+
+```
+pharden init              Bootstrap project (delegates to setup.ps1/sh)
+pharden check             Validate setup (delegates to validate-setup.ps1/sh)
+pharden status            Show phase status from DEPLOYMENT-ROADMAP.md
+pharden new-phase <name>  Create plan file + add to roadmap
+pharden branch <plan>     Create branch from plan's Branch Strategy
+pharden ext install <p>   Install an extension
+pharden ext list          List installed extensions
+pharden ext remove <name> Remove an extension
+pharden help              Show all commands
+```
+
+---
+
 ## Removing Template Scaffolding
 
 After setup, you can safely delete these directories:

@@ -82,6 +82,8 @@ This project uses the **AI Plan Hardening Pipeline** for feature development.
 - **Runbook**: `docs/plans/AI-Plan-Hardening-Runbook.md`
 - **Instructions**: `docs/plans/AI-Plan-Hardening-Runbook-Instructions.md`
 - **Roadmap**: `docs/plans/DEPLOYMENT-ROADMAP.md`
+- **Project Principles**: `docs/plans/PROJECT-PRINCIPLES.md` (if created)
+- **Extensions**: `docs/EXTENSIONS.md`
 - **VS Code Guide**: `docs/COPILOT-VSCODE-GUIDE.md`
 
 ### Pipeline Prompts
@@ -95,6 +97,7 @@ This project uses the **AI Plan Hardening Pipeline** for feature development.
 | `step4-completeness-sweep.prompt.md` | Eliminate TODOs, stubs, mocks |
 | `step5-review-gate.prompt.md` | Independent review & drift detection |
 | `project-profile.prompt.md` | Generate project-specific guardrails |
+| `project-principles.prompt.md` | Define project principles, commitments, and boundaries |
 
 ### Instruction Files
 

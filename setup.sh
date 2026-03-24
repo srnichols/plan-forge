@@ -229,6 +229,7 @@ declare -A CORE_FILES=(
     ["docs/plans/AI-Plan-Hardening-Runbook-Instructions.md"]="docs/plans/AI-Plan-Hardening-Runbook-Instructions.md"
     ["docs/plans/README.md"]="docs/plans/README.md"
     ["docs/plans/DEPLOYMENT-ROADMAP-TEMPLATE.md"]="docs/plans/DEPLOYMENT-ROADMAP.md"
+    ["docs/plans/PROJECT-PRINCIPLES-TEMPLATE.md"]="docs/plans/PROJECT-PRINCIPLES-TEMPLATE.md"
 )
 
 for src_rel in "${!CORE_FILES[@]}"; do
@@ -250,11 +251,17 @@ SHARED_FILES=(
     ".github/instructions/ai-plan-hardening-runbook.instructions.md"
     ".github/instructions/architecture-principles.instructions.md"
     ".github/instructions/git-workflow.instructions.md"
+    "templates/.github/instructions/project-principles.instructions.md:.github/instructions/project-principles.instructions.md"
 )
 
 for rel in "${SHARED_FILES[@]}"; do
-    src="$TEMPLATE_ROOT/$rel"
-    dst="$PROJECT_PATH/$rel"
+    if [[ "$rel" == *":"* ]]; then
+        src="$TEMPLATE_ROOT/${rel%%:*}"
+        dst="$PROJECT_PATH/${rel##*:}"
+    else
+        src="$TEMPLATE_ROOT/$rel"
+        dst="$PROJECT_PATH/$rel"
+    fi
     if [[ -f "$src" ]]; then
         copy_with_create "$src" "$dst" || true
     fi
@@ -328,6 +335,29 @@ if [[ "$PRESET" != "custom" ]]; then
     fi
 fi
 
+# ─── Step 3c: Copy Project Principles Prompt + Extension Templates ─────
+if [[ "$PRESET" != "custom" ]]; then
+    echo ""
+    cyan "Step 3c: Project Principles prompt + extension templates"
+
+    # Project Principles prompt
+    pp_prompt_src="$TEMPLATE_ROOT/templates/.github/prompts/project-principles.prompt.md"
+    pp_prompt_dst="$PROJECT_PATH/.github/prompts/project-principles.prompt.md"
+    if [[ -f "$pp_prompt_src" ]]; then
+        copy_with_create "$pp_prompt_src" "$pp_prompt_dst" || true
+    fi
+
+    # Extension template directory
+    ext_template_src="$TEMPLATE_ROOT/templates/.plan-hardening"
+    if [[ -d "$ext_template_src" ]]; then
+        while IFS= read -r -d '' file; do
+            rel_path="${file#"$ext_template_src/"}"
+            dst="$PROJECT_PATH/.plan-hardening/$rel_path"
+            copy_with_create "$file" "$dst" || true
+        done < <(find "$ext_template_src" -type f -print0)
+    fi
+fi
+
 # ─── Step 4: Replace Placeholders ─────────────────────────────────────
 echo ""
 cyan "Step 4: Replacing placeholders"
@@ -393,5 +423,6 @@ echo "  9. Start planning: open docs/plans/AI-Plan-Hardening-Runbook-Instruction
 echo ""
 yellow "Optional (recommended):"
 echo "  - Run .github/prompts/project-profile.prompt.md to generate project-specific guardrails"
+echo "  - Run .github/prompts/project-principles.prompt.md to define project principles"
 echo "  - Use .github/prompts/step0-specify-feature.prompt.md to define your first feature"
 echo ""

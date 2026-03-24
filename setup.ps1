@@ -35,7 +35,9 @@ param(
 
     [switch]$Force,
 
-    [switch]$AutoDetect
+    [switch]$AutoDetect,
+
+    [switch]$InstallExtensions
 )
 
 $ErrorActionPreference = 'Stop'
@@ -219,6 +221,7 @@ $coreFiles = @(
     @{ Src = "docs/plans/AI-Plan-Hardening-Runbook-Instructions.md"; Dst = "docs/plans/AI-Plan-Hardening-Runbook-Instructions.md" }
     @{ Src = "docs/plans/README.md";                                 Dst = "docs/plans/README.md" }
     @{ Src = "docs/plans/DEPLOYMENT-ROADMAP-TEMPLATE.md";            Dst = "docs/plans/DEPLOYMENT-ROADMAP.md" }
+    @{ Src = "docs/plans/PROJECT-PRINCIPLES-TEMPLATE.md";            Dst = "docs/plans/PROJECT-PRINCIPLES-TEMPLATE.md" }
 )
 
 foreach ($f in $coreFiles) {
@@ -240,6 +243,7 @@ $sharedFiles = @(
     @{ Src = ".github/instructions/ai-plan-hardening-runbook.instructions.md"; Dst = ".github/instructions/ai-plan-hardening-runbook.instructions.md" }
     @{ Src = ".github/instructions/architecture-principles.instructions.md";   Dst = ".github/instructions/architecture-principles.instructions.md" }
     @{ Src = ".github/instructions/git-workflow.instructions.md";              Dst = ".github/instructions/git-workflow.instructions.md" }
+    @{ Src = "templates/.github/instructions/project-principles.instructions.md"; Dst = ".github/instructions/project-principles.instructions.md" }
 )
 
 foreach ($f in $sharedFiles) {
@@ -317,6 +321,56 @@ if ($Preset -ne 'custom') {
     }
 }
 
+# ─── Step 3c: Copy Project Principles Prompt + Extension Templates ─────
+if ($Preset -ne 'custom') {
+    Write-Host ""
+    Write-Host "Step 3c: Project Principles prompt + extension templates" -ForegroundColor Cyan
+
+    # Project Principles prompt
+    $ppPromptSrc = Join-Path $templateRoot "templates/.github/prompts/project-principles.prompt.md"
+    $ppPromptDst = Join-Path $ProjectPath ".github/prompts/project-principles.prompt.md"
+    if (Test-Path $ppPromptSrc) {
+        Copy-WithCreate $ppPromptSrc $ppPromptDst $Force.IsPresent
+    }
+
+    # Extension template directory
+    $extTemplateSrc = Join-Path $templateRoot "templates/.plan-hardening"
+    if (Test-Path $extTemplateSrc) {
+        Get-ChildItem -Path $extTemplateSrc -Recurse -File | ForEach-Object {
+            $relativePath = $_.FullName.Substring($extTemplateSrc.Length + 1)
+            $dst = Join-Path $ProjectPath ".plan-hardening/$relativePath"
+            Copy-WithCreate $_.FullName $dst $Force.IsPresent
+        }
+    }
+}
+
+# ─── Step 3d: Install Extensions (if requested) ─────────────────────
+if ($InstallExtensions) {
+    $extDir = Join-Path $ProjectPath ".plan-hardening/extensions"
+    if (Test-Path $extDir) {
+        Write-Host ""
+        Write-Host "Step 3d: Installing extensions" -ForegroundColor Cyan
+
+        Get-ChildItem -Path $extDir -Directory | Where-Object {
+            Test-Path (Join-Path $_.FullName "extension.json")
+        } | ForEach-Object {
+            $manifest = Get-Content (Join-Path $_.FullName "extension.json") -Raw | ConvertFrom-Json
+            Write-Host "  Installing: $($manifest.name) v$($manifest.version)" -ForegroundColor Magenta
+
+            @('instructions', 'agents', 'prompts') | ForEach-Object {
+                $srcSubDir = Join-Path $_.FullName $_
+                if (Test-Path $srcSubDir) {
+                    $destBase = Join-Path $ProjectPath ".github/$_"
+                    Get-ChildItem -Path $srcSubDir -File | ForEach-Object {
+                        $dst = Join-Path $destBase $_.Name
+                        Copy-WithCreate $_.FullName $dst $Force.IsPresent
+                    }
+                }
+            }
+        }
+    }
+}
+
 # ─── Step 4: Replace Placeholders ─────────────────────────────────────
 Write-Host ""
 Write-Host "Step 4: Replacing placeholders" -ForegroundColor Cyan
@@ -381,5 +435,6 @@ Write-Host "  9. Start planning: open docs/plans/AI-Plan-Hardening-Runbook-Instr
 Write-Host ""
 Write-Host "Optional (recommended):" -ForegroundColor Yellow
 Write-Host "  - Run .github/prompts/project-profile.prompt.md to generate project-specific guardrails"
+Write-Host "  - Run .github/prompts/project-principles.prompt.md to define project principles"
 Write-Host "  - Use .github/prompts/step0-specify-feature.prompt.md to define your first feature"
 Write-Host ""

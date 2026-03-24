@@ -467,6 +467,21 @@ After running the wizard, you can **delete the `presets/` and `templates/` direc
 
 ---
 
+## Optional Capabilities
+
+These features are all **opt-in** — skip any that don't apply. Existing workflows work identically without them.
+
+| Capability | What It Adds | How to Enable |
+|-----------|-------------|---------------|
+| **Project Principles** | Declare non-negotiable principles, tech commitments, and forbidden patterns. Checked in Steps 1, 2, and 5. | Run `.github/prompts/project-principles.prompt.md` |
+| **External Specification Support** | Reference existing specification files as authoritative inputs. Slices trace back to requirements. | Add a "Specification Source" to your Scope Contract |
+| **Requirements Traceability** | Map requirements (REQ-001, REQ-002) to execution slices. Step 5 verifies bidirectional coverage. | Add a Requirements Register to your hardened plan |
+| **Branch Strategy** | Declare trunk / feature-branch / branch-per-slice. Preflight checks you're on the right branch. | Add a Branch Strategy to your Scope Contract |
+| **Extensions** | Share custom reviewers, prompts, and instruction files as installable packages. | See [docs/EXTENSIONS.md](docs/EXTENSIONS.md) |
+| **CLI Wrapper** | `pharden` commands for init, status, new-phase, branch, and extension management. | Run `.\pharden.ps1 help` or `./pharden.sh help` |
+
+---
+
 ## Key Concepts
 
 ### What Is a "Hardened Plan"?

@@ -1,0 +1,12 @@
+{
+  "name": "example-extension",
+  "version": "1.0.0",
+  "description": "Example extension — copy this as a starting point",
+  "author": "your-name",
+  "minTemplateVersion": "1.0.0",
+  "files": {
+    "instructions": [],
+    "agents": [],
+    "prompts": []
+  }
+}

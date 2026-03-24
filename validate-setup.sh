@@ -104,7 +104,7 @@ check_file "docs/plans/DEPLOYMENT-ROADMAP.md" || true
 echo ""
 cyan "Preset-dependent files:"
 
-CONFIG_PATH="$PROJECT_PATH/.plan-hardening.json"
+CONFIG_PATH="$PROJECT_PATH/.forge.json"
 if [[ -f "$CONFIG_PATH" ]]; then
     # Simple JSON parse — extract preset value
     PRESET="$(grep '"preset"' "$CONFIG_PATH" | sed 's/.*: *"\([^"]*\)".*/\1/')"
@@ -154,7 +154,7 @@ if [[ -f "$CONFIG_PATH" ]]; then
         fi
     fi
 else
-    yellow "  WARN  .plan-hardening.json not found — skipping preset checks"
+    yellow "  WARN  .forge.json not found — skipping preset checks"
     ((WARN++))
 fi
 
@@ -164,7 +164,7 @@ cyan "Optional files:"
 
 check_file ".vscode/settings.json" "false" || true
 check_file "docs/COPILOT-VSCODE-GUIDE.md" "false" || true
-check_file ".plan-hardening.json" "false" || true
+check_file ".forge.json" "false" || true
 
 # ─── New Capabilities (Optional) ──────────────────────────────────────
 echo ""
@@ -182,7 +182,7 @@ else
 fi
 
 # Extensions
-EXT_JSON="$PROJECT_PATH/.plan-hardening/extensions/extensions.json"
+EXT_JSON="$PROJECT_PATH/.forge/extensions/extensions.json"
 if [[ -f "$EXT_JSON" ]]; then
     EXT_COUNT=$(python3 -c "import json; print(len(json.load(open('$EXT_JSON')).get('extensions',[])))" 2>/dev/null || echo "0")
     if [[ "$EXT_COUNT" -gt 0 ]]; then

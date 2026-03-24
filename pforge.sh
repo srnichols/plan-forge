@@ -310,12 +310,12 @@ cmd_ext_install() {
                grep -oP '"name"\s*:\s*"\K[^"]+' "$ext_path/extension.json" | head -1)"
 
     print_manual_steps "ext install" \
-        "Copy extension folder to .plan-hardening/extensions/$ext_name/" \
+        "Copy extension folder to .forge/extensions/$ext_name/" \
         "Copy files from instructions/ → .github/instructions/" \
         "Copy files from agents/ → .github/agents/" \
         "Copy files from prompts/ → .github/prompts/"
 
-    local dest_dir="$REPO_ROOT/.plan-hardening/extensions/$ext_name"
+    local dest_dir="$REPO_ROOT/.forge/extensions/$ext_name"
     mkdir -p "$dest_dir"
     cp -r "$ext_path/"* "$dest_dir/"
     echo "COPIED   extension to $dest_dir"
@@ -345,10 +345,10 @@ cmd_ext_install() {
 
 cmd_ext_list() {
     print_manual_steps "ext list" \
-        "Open .plan-hardening/extensions/extensions.json" \
+        "Open .forge/extensions/extensions.json" \
         "Review the extensions array"
 
-    local ext_json="$REPO_ROOT/.plan-hardening/extensions/extensions.json"
+    local ext_json="$REPO_ROOT/.forge/extensions/extensions.json"
     if [ ! -f "$ext_json" ]; then
         echo "No extensions installed."
         return 0
@@ -389,7 +389,7 @@ cmd_ext_remove() {
         [ "$arg" = "--force" ] && force=true
     done
 
-    local ext_dir="$REPO_ROOT/.plan-hardening/extensions/$ext_name"
+    local ext_dir="$REPO_ROOT/.forge/extensions/$ext_name"
     if [ ! -f "$ext_dir/extension.json" ]; then
         echo "ERROR: Extension '$ext_name' not found." >&2
         exit 1
@@ -402,8 +402,8 @@ cmd_ext_remove() {
 
     print_manual_steps "ext remove" \
         "Remove extension files from .github/instructions/, .github/agents/, .github/prompts/" \
-        "Delete .plan-hardening/extensions/$ext_name/" \
-        "Update .plan-hardening/extensions/extensions.json"
+        "Delete .forge/extensions/$ext_name/" \
+        "Update .forge/extensions/extensions.json"
 
     # Remove installed files listed in manifest
     for ft in instructions agents prompts; do
@@ -423,7 +423,7 @@ cmd_ext_remove() {
     done
 
     rm -rf "$ext_dir"
-    echo "  REMOVE  .plan-hardening/extensions/$ext_name/"
+    echo "  REMOVE  .forge/extensions/$ext_name/"
 
     echo ""
     echo "Extension '$ext_name' removed."

@@ -20,10 +20,10 @@
 
 ```bash
 # Manual
-cp -r .plan-hardening/extensions/example-extension .plan-hardening/extensions/my-extension
+cp -r .forge/extensions/example-extension .forge/extensions/my-extension
 
 # Or via CLI
-pforge ext install .plan-hardening/extensions/my-extension
+pforge ext install .forge/extensions/my-extension
 ```
 
 ## File Structure

@@ -348,11 +348,11 @@ if [[ "$PRESET" != "custom" ]]; then
     fi
 
     # Extension template directory
-    ext_template_src="$TEMPLATE_ROOT/templates/.plan-hardening"
+    ext_template_src="$TEMPLATE_ROOT/templates/.forge"
     if [[ -d "$ext_template_src" ]]; then
         while IFS= read -r -d '' file; do
             rel_path="${file#"$ext_template_src/"}"
-            dst="$PROJECT_PATH/.plan-hardening/$rel_path"
+            dst="$PROJECT_PATH/.forge/$rel_path"
             copy_with_create "$file" "$dst" || true
         done < <(find "$ext_template_src" -type f -print0)
     fi
@@ -368,11 +368,11 @@ done < <(find "$PROJECT_PATH" -name "*.md" -type f -print0)
 
 green "  DONE  Placeholders replaced"
 
-# ─── Step 5: Generate .plan-hardening.json ─────────────────────────────
+# ─── Step 5: Generate .forge.json ─────────────────────────────
 echo ""
-cyan "Step 5: Generating .plan-hardening.json"
+cyan "Step 5: Generating .forge.json"
 
-CONFIG_PATH="$PROJECT_PATH/.plan-hardening.json"
+CONFIG_PATH="$PROJECT_PATH/.forge.json"
 cat > "$CONFIG_PATH" <<EOF
 {
   "projectName": "$PROJECT_NAME",
@@ -383,7 +383,7 @@ cat > "$CONFIG_PATH" <<EOF
 }
 EOF
 
-green "  CREATED  .plan-hardening.json"
+green "  CREATED  .forge.json"
 
 # ─── Step 6: Copy VS Code Settings Template ────────────────────────────
 echo ""

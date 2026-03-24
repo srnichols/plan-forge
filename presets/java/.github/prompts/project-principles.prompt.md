@@ -65,7 +65,7 @@ Walk through each section one at a time. For each section:
 
 ## Path B: Starter Principles
 
-First, detect the tech stack from `.plan-hardening.json` (if it exists) or by
+First, detect the tech stack from `.forge.json` (if it exists) or by
 scanning project files (package.json, *.csproj, go.mod, pyproject.toml, etc.).
 
 Then present a starter set organized by section. For each item, ask the user
@@ -140,7 +140,7 @@ Technology Commitments, Governance) via brief questions.
 
 Scan the project to infer principles from what already exists:
 
-1. **Read `.plan-hardening.json`** — get preset and stack info
+1. **Read `.forge.json`** — get preset and stack info
 2. **Read `.github/copilot-instructions.md`** — extract any stated conventions
 3. **Read `.github/instructions/*.instructions.md`** — extract rules already codified
 4. **Scan project structure** — detect patterns:

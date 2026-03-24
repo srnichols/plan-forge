@@ -334,11 +334,11 @@ if ($Preset -ne 'custom') {
     }
 
     # Extension template directory
-    $extTemplateSrc = Join-Path $templateRoot "templates/.plan-hardening"
+    $extTemplateSrc = Join-Path $templateRoot "templates/.forge"
     if (Test-Path $extTemplateSrc) {
         Get-ChildItem -Path $extTemplateSrc -Recurse -File | ForEach-Object {
             $relativePath = $_.FullName.Substring($extTemplateSrc.Length + 1)
-            $dst = Join-Path $ProjectPath ".plan-hardening/$relativePath"
+            $dst = Join-Path $ProjectPath ".forge/$relativePath"
             Copy-WithCreate $_.FullName $dst $Force.IsPresent
         }
     }
@@ -346,7 +346,7 @@ if ($Preset -ne 'custom') {
 
 # ─── Step 3d: Install Extensions (if requested) ─────────────────────
 if ($InstallExtensions) {
-    $extDir = Join-Path $ProjectPath ".plan-hardening/extensions"
+    $extDir = Join-Path $ProjectPath ".forge/extensions"
     if (Test-Path $extDir) {
         Write-Host ""
         Write-Host "Step 3d: Installing extensions" -ForegroundColor Cyan
@@ -381,11 +381,11 @@ Get-ChildItem -Path $ProjectPath -Recurse -Include "*.md" -File | ForEach-Object
 
 Write-Host "  DONE  Placeholders replaced" -ForegroundColor Green
 
-# ─── Step 5: Generate .plan-hardening.json ─────────────────────────────
+# ─── Step 5: Generate .forge.json ─────────────────────────────
 Write-Host ""
-Write-Host "Step 5: Generating .plan-hardening.json" -ForegroundColor Cyan
+Write-Host "Step 5: Generating .forge.json" -ForegroundColor Cyan
 
-$configPath = Join-Path $ProjectPath ".plan-hardening.json"
+$configPath = Join-Path $ProjectPath ".forge.json"
 $config = @{
     projectName  = $ProjectName
     preset       = $Preset
@@ -395,7 +395,7 @@ $config = @{
 } | ConvertTo-Json -Depth 3
 
 Set-Content -Path $configPath -Value $config
-Write-Host "  CREATED  .plan-hardening.json" -ForegroundColor Green
+Write-Host "  CREATED  .forge.json" -ForegroundColor Green
 
 # ─── Step 6: Copy VS Code Settings Template ────────────────────────────
 Write-Host ""

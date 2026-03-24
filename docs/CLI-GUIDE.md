@@ -168,22 +168,22 @@ Install an extension from a local path.
 
 ```powershell
 # PowerShell
-.\pforge.ps1 ext install .plan-hardening/extensions/healthcare-compliance
+.\pforge.ps1 ext install .forge/extensions/healthcare-compliance
 ```
 
 ```bash
 # Bash
-./pforge.sh ext install .plan-hardening/extensions/healthcare-compliance
+./pforge.sh ext install .forge/extensions/healthcare-compliance
 ```
 
 **What it does:**
 1. Validates `extension.json` exists in the source path
-2. Copies the extension folder to `.plan-hardening/extensions/`
+2. Copies the extension folder to `.forge/extensions/`
 3. Copies instruction/agent/prompt files to `.github/` directories
 4. Updates `extensions.json` manifest
 
 **Equivalent manual steps:**
-1. Copy the extension folder to `.plan-hardening/extensions/<name>/`
+1. Copy the extension folder to `.forge/extensions/<name>/`
 2. Copy files from `instructions/` → `.github/instructions/`
 3. Copy files from `agents/` → `.github/agents/`
 4. Copy files from `prompts/` → `.github/prompts/`
@@ -232,7 +232,7 @@ Remove an installed extension. Prompts for confirmation unless `--force` is used
 **What it does:**
 1. Reads the extension manifest to find installed files
 2. Removes those files from `.github/` directories
-3. Deletes the extension folder from `.plan-hardening/extensions/`
+3. Deletes the extension folder from `.forge/extensions/`
 4. Updates `extensions.json` manifest
 
 ---
@@ -364,7 +364,7 @@ CLI output is human-readable, not structured. To check results programmatically:
 | Did the command succeed? | Check exit code (`$LASTEXITCODE` in PowerShell, `$?` in Bash) |
 | What files were created? | Run `git status --short` after the command |
 | What phases exist? | Read `docs/plans/DEPLOYMENT-ROADMAP.md` directly |
-| What extensions are installed? | Read `.plan-hardening/extensions/extensions.json` |
+| What extensions are installed? | Read `.forge/extensions/extensions.json` |
 
 ### Error Handling
 
@@ -381,8 +381,8 @@ IF command not found → CLI not installed. Fall back to manual steps.
 |------|---------|------------|
 | `docs/plans/DEPLOYMENT-ROADMAP.md` | `status`, `new-phase` | `new-phase` |
 | `docs/plans/Phase-N-*-PLAN.md` | `branch` | `new-phase` |
-| `.plan-hardening/extensions/extensions.json` | `ext list` | `ext install`, `ext remove` |
-| `.plan-hardening/extensions/*/extension.json` | `ext install`, `ext remove` | — |
+| `.forge/extensions/extensions.json` | `ext list` | `ext install`, `ext remove` |
+| `.forge/extensions/*/extension.json` | `ext install`, `ext remove` | — |
 | `.github/instructions/*.instructions.md` | — | `ext install`, `ext remove` |
 | `.github/agents/*.agent.md` | — | `ext install`, `ext remove` |
 | `.github/prompts/*.prompt.md` | — | `ext install`, `ext remove` |

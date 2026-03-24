@@ -350,14 +350,14 @@ function Invoke-ExtInstall([string[]]$args_) {
     $extName = $manifest.name
 
     Write-ManualSteps "ext install" @(
-        "Copy extension folder to .plan-hardening/extensions/$extName/"
+        "Copy extension folder to .forge/extensions/$extName/"
         "Copy files from instructions/ → .github/instructions/"
         "Copy files from agents/ → .github/agents/"
         "Copy files from prompts/ → .github/prompts/"
     )
 
-    # Copy extension to .plan-hardening/extensions/
-    $destDir = Join-Path $RepoRoot ".plan-hardening/extensions/$extName"
+    # Copy extension to .forge/extensions/
+    $destDir = Join-Path $RepoRoot ".forge/extensions/$extName"
     if (-not (Test-Path $destDir)) {
         New-Item -ItemType Directory -Path $destDir -Force | Out-Null
     }
@@ -392,13 +392,13 @@ function Invoke-ExtInstall([string[]]$args_) {
     }
 
     # Update extensions.json
-    $extJsonPath = Join-Path $RepoRoot ".plan-hardening/extensions/extensions.json"
+    $extJsonPath = Join-Path $RepoRoot ".forge/extensions/extensions.json"
     if (Test-Path $extJsonPath) {
         $extJson = Get-Content $extJsonPath -Raw | ConvertFrom-Json
     }
     else {
         $extJson = [PSCustomObject]@{
-            description = "Installed Plan Hardening extensions"
+            description = "Installed Plan Forge extensions"
             version     = "1.0.0"
             extensions  = @()
         }
@@ -421,11 +421,11 @@ function Invoke-ExtInstall([string[]]$args_) {
 
 function Invoke-ExtList {
     Write-ManualSteps "ext list" @(
-        "Open .plan-hardening/extensions/extensions.json"
+        "Open .forge/extensions/extensions.json"
         "Review the extensions array"
     )
 
-    $extJsonPath = Join-Path $RepoRoot ".plan-hardening/extensions/extensions.json"
+    $extJsonPath = Join-Path $RepoRoot ".forge/extensions/extensions.json"
     if (-not (Test-Path $extJsonPath)) {
         Write-Host "No extensions installed." -ForegroundColor Yellow
         return
@@ -458,12 +458,12 @@ function Invoke-ExtRemove([string[]]$args_) {
 
     Write-ManualSteps "ext remove" @(
         "Remove extension files from .github/instructions/, .github/agents/, .github/prompts/"
-        "Delete .plan-hardening/extensions/$extName/"
-        "Update .plan-hardening/extensions/extensions.json"
+        "Delete .forge/extensions/$extName/"
+        "Update .forge/extensions/extensions.json"
     )
 
     # Read manifest to know which files to remove
-    $extDir = Join-Path $RepoRoot ".plan-hardening/extensions/$extName"
+    $extDir = Join-Path $RepoRoot ".forge/extensions/$extName"
     $manifestPath = Join-Path $extDir "extension.json"
     if (-not (Test-Path $manifestPath)) {
         Write-Host "ERROR: Extension '$extName' not found." -ForegroundColor Red
@@ -501,10 +501,10 @@ function Invoke-ExtRemove([string[]]$args_) {
 
     # Remove extension directory
     Remove-Item $extDir -Recurse -Force
-    Write-Host "  REMOVE  .plan-hardening/extensions/$extName/" -ForegroundColor Red
+    Write-Host "  REMOVE  .forge/extensions/$extName/" -ForegroundColor Red
 
     # Update extensions.json
-    $extJsonPath = Join-Path $RepoRoot ".plan-hardening/extensions/extensions.json"
+    $extJsonPath = Join-Path $RepoRoot ".forge/extensions/extensions.json"
     if (Test-Path $extJsonPath) {
         $extJson = Get-Content $extJsonPath -Raw | ConvertFrom-Json
         $extJson.extensions = @($extJson.extensions | Where-Object { $_.name -ne $extName })

@@ -12,7 +12,7 @@ No runtime, no dependencies, no build step — just folders you copy.
 ## Structure
 
 ```
-.plan-hardening/
+.forge/
 └── extensions/
     ├── extensions.json              ← manifest of installed extensions
     └── <extension-name>/
@@ -44,7 +44,7 @@ No runtime, no dependencies, no build step — just folders you copy.
 
 ### Manual (works everywhere)
 
-1. Copy the extension folder to `.plan-hardening/extensions/<name>/`
+1. Copy the extension folder to `.forge/extensions/<name>/`
 2. Copy files from `instructions/` → `.github/instructions/`
 3. Copy files from `agents/` → `.github/agents/`
 4. Copy files from `prompts/` → `.github/prompts/`
@@ -58,7 +58,7 @@ No runtime, no dependencies, no build step — just folders you copy.
 ### Using CLI (if installed)
 
 ```bash
-pforge ext install .plan-hardening/extensions/healthcare-compliance
+pforge ext install .forge/extensions/healthcare-compliance
 ```
 
 ## Creating an Extension
@@ -69,25 +69,25 @@ pforge ext install .plan-hardening/extensions/healthcare-compliance
 4. Add a `README.md` explaining what the extension provides
 5. Distribute via GitHub repo, zip file, or any file-sharing method
 
-See `templates/.plan-hardening/extensions/example-extension/` for a starter template.
+See `templates/.forge/extensions/example-extension/` for a starter template.
 
 ## Distribution Channels
 
 | Channel | How | Best For |
 |---------|-----|----------|
 | **GitHub repo** | Clone or download | Open source extensions |
-| **Git submodule** | `git submodule add <url> .plan-hardening/extensions/<name>` | Team-shared |
+| **Git submodule** | `git submodule add <url> .forge/extensions/<name>` | Team-shared |
 | **Manual copy** | Download and paste | Air-gapped / enterprise |
 
 ## Installed Extensions Manifest (extensions.json)
 
-The `extensions.json` file in `.plan-hardening/extensions/` tracks which
+The `extensions.json` file in `.forge/extensions/` tracks which
 extensions are installed. It is updated automatically by the setup script
 or CLI, or you can edit it manually.
 
 ```json
 {
-  "description": "Installed Plan Hardening extensions",
+  "description": "Installed Plan Forge extensions",
   "version": "1.0.0",
   "extensions": [
     {

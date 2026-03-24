@@ -89,7 +89,7 @@ Check-FileExists "docs/plans/DEPLOYMENT-ROADMAP.md"
 Write-Host ""
 Write-Host "Preset-dependent files:" -ForegroundColor Cyan
 
-$configPath = Join-Path $ProjectPath ".plan-hardening.json"
+$configPath = Join-Path $ProjectPath ".forge.json"
 if (Test-Path $configPath) {
     $config = Get-Content $configPath -Raw | ConvertFrom-Json
     $preset = $config.preset
@@ -143,7 +143,7 @@ if (Test-Path $configPath) {
     }
 }
 else {
-    Write-Host "  WARN  .plan-hardening.json not found — skipping preset checks" -ForegroundColor Yellow
+    Write-Host "  WARN  .forge.json not found — skipping preset checks" -ForegroundColor Yellow
     $warn++
 }
 
@@ -153,7 +153,7 @@ Write-Host "Optional files:" -ForegroundColor Cyan
 
 Check-FileExists ".vscode/settings.json" $false
 Check-FileExists "docs/COPILOT-VSCODE-GUIDE.md" $false
-Check-FileExists ".plan-hardening.json" $false
+Check-FileExists ".forge.json" $false
 
 # ─── New Capabilities (Optional) ──────────────────────────────────────
 Write-Host ""
@@ -172,7 +172,7 @@ else {
 }
 
 # Extensions
-$extJsonPath = Join-Path $ProjectPath ".plan-hardening/extensions/extensions.json"
+$extJsonPath = Join-Path $ProjectPath ".forge/extensions/extensions.json"
 if (Test-Path $extJsonPath) {
     $extData = Get-Content $extJsonPath -Raw | ConvertFrom-Json
     $extCount = if ($extData.extensions) { $extData.extensions.Count } else { 0 }

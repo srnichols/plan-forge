@@ -446,7 +446,7 @@ Running `setup.ps1` (PowerShell) or `setup.sh` (Bash) with a preset:
 6. **Generates `.github/copilot-instructions.md`** with stack-specific conventions
 7. **Copies shared instruction files** (git-workflow, architecture principles)
 8. **Copies the core plan docs** to `docs/plans/`
-9. **Creates `.plan-hardening.json`** with your build/test commands for reference
+9. **Creates `.forge.json`** with your build/test commands for reference
 
 **Agent mode**: Pass `-AutoDetect` (PowerShell) or `--auto-detect` (Bash) to auto-detect the tech stack from project marker files (`.csproj`, `package.json`, `pyproject.toml`, etc.).
 

@@ -194,7 +194,7 @@ The validation script checks for these files. All must be present and non-empty:
 |------|---------|
 | `.vscode/settings.json` | Copilot IDE settings |
 | `docs/COPILOT-VSCODE-GUIDE.md` | VS Code usage guide |
-| `.plan-hardening.json` | Setup metadata |
+| `.forge.json` | Setup metadata |
 
 ---
 

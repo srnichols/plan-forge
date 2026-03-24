@@ -126,6 +126,8 @@ This project uses the **Plan Forge Pipeline** for feature development.
 
 ### Skill Slash Commands
 
+Skills are multi-step procedures invoked by typing `/` in chat. They also auto-load when Copilot detects a relevant task from your prompt.
+
 | Command | What It Does |
 |---------|-------------|
 | `/database-migration` | Generate, review, test, and deploy schema migrations |
@@ -136,6 +138,14 @@ This project uses the **Plan Forge Pipeline** for feature development.
 | `/release-notes` | Generate release notes from git history and CHANGELOG |
 | `/api-doc-gen` | Generate or update OpenAPI spec, validate spec-to-code consistency |
 | `/onboarding` | Walk a new developer through project setup, architecture, and first task |
+
+### Agent Definitions (`.github/agents/`)
+
+Agents are specialized reviewer personas invoked via the agent picker dropdown or `#file:` reference. They audit code read-only — they cannot edit files.
+
+- **Stack-specific** (6): architecture, database, deploy, performance, security, test-runner
+- **Cross-stack** (7): API contracts, accessibility, multi-tenancy, CI/CD, observability, dependency, compliance
+- **Pipeline** (3): plan-hardener → executor → reviewer-gate (with handoff buttons)
 
 ### Lifecycle Hooks (`.github/hooks/`)
 

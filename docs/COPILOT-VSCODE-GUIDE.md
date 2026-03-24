@@ -338,15 +338,21 @@ Or use the VS Code **prompt picker** — open the Command Palette (`Ctrl+Shift+P
 
 #### Agent Definitions (`.github/agents/`)
 
-Specialized reviewer and executor roles that agents can adopt. Each agent definition includes a persona, checklist, tool access rules, and output format. They're designed for focused audits and automated tasks.
+Specialized reviewer and executor roles that agents can adopt. Each agent definition includes a persona, checklist, tool access rules, and output format. They're designed for focused audits — agents can **read and search** but not edit files.
 
-**How to use in Copilot Chat**:
-```
-#file:.github/agents/security-reviewer.agent.md
-Review the authentication flow in src/auth/ for OWASP Top 10 vulnerabilities.
-```
+**How to invoke an agent** — three ways:
 
-**Available agents** (6 stack-specific + 5 cross-stack):
+1. **Agent picker** (recommended for beginners): Click the agent dropdown at the top of the Chat view → select an agent by name (e.g., "Security Reviewer"). The agent's instructions and tool restrictions load automatically.
+
+2. **File reference**: Reference the agent file in your prompt:
+   ```
+   #file:.github/agents/security-reviewer.agent.md
+   Review the authentication flow in src/auth/ for OWASP Top 10 vulnerabilities.
+   ```
+
+3. **Pipeline handoff**: When using pipeline agents (Plan Hardener → Executor → Reviewer Gate), click the handoff button that appears after each agent completes. Context carries over automatically.
+
+**Available agents** (6 stack-specific + 7 cross-stack + 3 pipeline):
 | Agent | When to Use |
 |-------|-------------|
 | `architecture-reviewer.agent.md` | Before merging — audit layer separation and patterns |
@@ -360,6 +366,11 @@ Review the authentication flow in src/auth/ for OWASP Top 10 vulnerabilities.
 | `multi-tenancy-reviewer.agent.md` | Data access — tenant isolation, RLS, cache separation |
 | `cicd-reviewer.agent.md` | Pipeline changes — promotion, secrets, rollback safety |
 | `observability-reviewer.agent.md` | After features — logging, tracing, metrics, health checks |
+| `dependency-reviewer.agent.md` | Before merge/release — CVEs, outdated packages, license conflicts |
+| `compliance-reviewer.agent.md` | Data features — GDPR, CCPA, SOC2, PII handling, audit logging |
+| `plan-hardener.agent.md` | Step 2 — hardens plans into execution contracts (pipeline) |
+| `executor.agent.md` | Step 3 — executes slices with validation gates (pipeline) |
+| `reviewer-gate.agent.md` | Step 5 — read-only audit for drift and violations (pipeline) |
 
 #### Skills (`.github/skills/{name}/SKILL.md`)
 
@@ -391,6 +402,8 @@ Multi-step executable procedures that chain together tool calls. Each skill file
 | `release-notes/` | `/release-notes` | Generate release notes from git history and CHANGELOG |
 | `api-doc-gen/` | `/api-doc-gen` | Generate or update OpenAPI spec, validate consistency |
 | `onboarding/` | `/onboarding` | Walk a new developer through setup, architecture, and first task |
+
+**Auto-invocation**: Skills can also load automatically without typing `/`. When you ask "help me test the login page", Copilot reads each skill's `description` field and loads the best match (e.g., `test-sweep`). You don't need to know the slash command name — just describe what you want.
 
 #### AI Agent Discoverability
 

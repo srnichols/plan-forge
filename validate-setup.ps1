@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Validates that AI Plan Hardening setup completed correctly.
+    Validates that Plan Forge setup completed correctly.
 
 .DESCRIPTION
     Checks that all required files exist, are non-empty, and contain no

@@ -3,7 +3,7 @@
     Plan Forge — Project Setup Wizard
 
 .DESCRIPTION
-    Interactive script that bootstraps a project with the AI Plan Hardening
+    Interactive script that bootstraps a project with the Plan Forge
     Pipeline files, instruction files, and AGENTS.md from a chosen preset.
 
 .PARAMETER Preset

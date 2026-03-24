@@ -1,7 +1,7 @@
 # Project Principles
 
 > **Purpose**: Declares the non-negotiable principles, commitments,
-> and boundaries for this project. Referenced by the AI Plan Hardening
+> and boundaries for this project. Referenced by the Plan Forge
 > Pipeline to validate plans and detect drift against project intent.
 >
 > **How created**: Run `.github/prompts/project-principles.prompt.md` for a

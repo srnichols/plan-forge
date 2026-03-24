@@ -1,6 +1,6 @@
 # AI Agent Setup Guide
 
-> **Audience**: You are an AI coding agent (Copilot, Claude, Cursor, Aider, etc.) tasked with incorporating the AI Plan Hardening framework into a target project.
+> **Audience**: You are an AI coding agent (Copilot, Claude, Cursor, Aider, etc.) tasked with incorporating the Plan Forge framework into a target project.
 >
 > **This file is your entry point.** Read it top-to-bottom, then execute the appropriate path.
 

@@ -1,0 +1,22 @@
+{
+  "name": "plan-forge-memory",
+  "version": "1.0.0",
+  "description": "Persistent semantic memory for Plan Forge via OpenBrain MCP server. Captures decisions across sessions, searches project history, and bridges the 3-session model with long-term context.",
+  "author": "srnichols",
+  "minTemplateVersion": "1.2.0",
+  "requires": {
+    "mcp": "openbrain"
+  },
+  "files": {
+    "instructions": [
+      "persistent-memory.instructions.md"
+    ],
+    "agents": [
+      "memory-reviewer.agent.md"
+    ],
+    "prompts": [
+      "search-project-history.prompt.md",
+      "capture-decision.prompt.md"
+    ]
+  }
+}

@@ -505,6 +505,52 @@ Type `/` in the chat input to see these alongside your prompt templates. Add `us
 
 ---
 
+## Persistent Memory with OpenBrain (Optional)
+
+Plan Forge's 3-session model is powerful, but each session starts fresh. [OpenBrain](https://github.com/srnichols/OpenBrain) adds **persistent semantic memory** — decisions, patterns, and lessons captured in one session are searchable in every future session, across any AI tool.
+
+### When This Matters
+
+- **Long-running projects** — "Why did we decide X three months ago?"
+- **Team rotation** — New member gets full decision history via search
+- **Multi-tool workflows** — Same memory works across Copilot, Claude, Cursor
+- **Post-mortem insights** — Lessons feed back into future planning automatically
+
+### Setup
+
+1. **Deploy OpenBrain** — [Docker Compose](https://github.com/srnichols/OpenBrain) (local), Supabase (cloud), or Kubernetes (production)
+2. **Configure MCP** — Add to `.vscode/mcp.json`:
+   ```json
+   {
+     "servers": {
+       "openbrain": {
+         "type": "sse",
+         "url": "http://localhost:8080/sse",
+         "headers": { "x-brain-key": "${env:OPENBRAIN_KEY}" }
+       }
+     }
+   }
+   ```
+3. **Install the extension**:
+   ```bash
+   pforge ext install docs/plans/examples/extensions/plan-forge-memory
+   ```
+
+### What It Adds
+
+| File | Purpose |
+|------|---------|
+| `persistent-memory.instructions.md` | Rules for when to search and capture decisions |
+| `memory-reviewer.agent.md` | Audits whether key decisions were captured |
+| `/search-project-history` | Search OpenBrain for prior decisions |
+| `/capture-decision` | Structured decision capture with rationale |
+
+### What It Does NOT Replace
+
+OpenBrain supplements — it doesn't replace — hardened plans, instruction files, Project Principles, or Git history. Those remain the source of truth for scope and code. OpenBrain captures the *reasoning and context* behind decisions — the "why" that doesn't live anywhere else.
+
+---
+
 ## Installing as a VS Code Plugin (Alternative to setup.ps1)
 
 Instead of running `setup.ps1`, you can install Plan Forge as a **VS Code agent plugin**:

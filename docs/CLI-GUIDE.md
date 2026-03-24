@@ -432,6 +432,8 @@ The `ext install` command requires a valid `extension.json` in the source path. 
 ## AI Agent Usage
 
 > **Audience**: You are an AI coding agent using the Plan Forge CLI programmatically.
+>
+> **Persistent memory**: If the OpenBrain MCP server is available, search for prior decisions at session start (`search_thoughts`) and capture key decisions after slices (`capture_thought`). See the `plan-forge-memory` extension in `docs/plans/examples/extensions/`. This bridges the 3-session model with long-term context.
 
 ### Platform Detection
 

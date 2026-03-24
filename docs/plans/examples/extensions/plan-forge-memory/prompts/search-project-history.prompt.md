@@ -19,6 +19,9 @@ that stores decisions, patterns, and lessons from all prior sessions.
 
 2. **Search OpenBrain** using the `search_thoughts` tool with their query.
    Use natural language — the search is semantic, not keyword-based.
+   - Always include `project` to scope results to the current project
+   - Use `type` to narrow results (e.g., `"decision"`, `"architecture"`, `"postmortem"`, `"pattern"`, `"convention"`)
+   - Use `topic` to filter by tag when the user mentions a specific area
 
 3. **Present findings** organized by relevance:
    - Most relevant decisions first
@@ -33,12 +36,12 @@ that stores decisions, patterns, and lessons from all prior sessions.
 ## Example Searches
 
 ```
-"error handling patterns for API endpoints"
-"database migration decisions from Phase 2"
-"why we rejected Entity Framework"
-"authentication architecture decisions"
-"post-mortem lessons about performance"
-"what did we decide about caching strategy"
+search_thoughts("error handling patterns for API endpoints", project: "my-api", type: "pattern")
+search_thoughts("database migration decisions from Phase 2", project: "my-api", type: "decision")
+search_thoughts("why we rejected Entity Framework", project: "my-api", type: "architecture")
+search_thoughts("authentication architecture decisions", project: "my-api", type: "architecture")
+search_thoughts("performance lessons", project: "my-api", type: "postmortem")
+search_thoughts("caching strategy", project: "my-api", type: "decision")
 ```
 
 ## Output Format

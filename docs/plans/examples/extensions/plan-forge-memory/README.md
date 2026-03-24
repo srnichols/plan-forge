@@ -25,8 +25,9 @@ OpenBrain solves this by giving every AI session access to a **shared, searchabl
 
 ## Prerequisites
 
-1. **OpenBrain running** — Local Docker, Supabase, or Kubernetes deployment
+1. **OpenBrain running** — Local Docker or Kubernetes deployment
    - See [OpenBrain setup guide](https://github.com/srnichols/OpenBrain)
+   - Requires the **dev-ready upgrade** (v1.1+) for project scoping, batch capture, and thought mutation
 2. **MCP configured** — OpenBrain MCP server accessible from your AI client
 3. **Plan Forge installed** — This extension adds to an existing Plan Forge project
 
@@ -39,10 +40,7 @@ Add OpenBrain to your VS Code MCP settings (`.vscode/mcp.json`):
   "servers": {
     "openbrain": {
       "type": "sse",
-      "url": "http://localhost:8080/sse",
-      "headers": {
-        "x-brain-key": "${env:OPENBRAIN_KEY}"
-      }
+      "url": "http://<host>:8080/sse?key=${env:OPENBRAIN_KEY}"
     }
   }
 }
@@ -72,32 +70,47 @@ pforge ext install docs/plans/examples/extensions/plan-forge-memory
 ### Session 1 (Plan Hardening)
 ```
 Agent starts → SessionStart searches OpenBrain:
-  "Prior decisions for this project?"
+  search_thoughts("Prior decisions for this project?", project: "my-api")
   → Found: 5 architectural decisions from Phase 2
   → Found: 2 post-mortem lessons from Phase 3
   → Context loaded automatically
 
 Agent hardens plan → Captures new decisions:
-  "Decision: Use branch-per-slice for Phase 4 (high risk)"
+  capture_thought(
+    "Decision: Use branch-per-slice for Phase 4 (high risk)",
+    project: "my-api",
+    source: "plan-forge-phase-4-hardening"
+  )
   → Stored in OpenBrain with topics, rationale, alternatives
 ```
 
 ### Session 2 (Execution)
 ```
 Fresh session → Searches OpenBrain:
-  "What was decided during Phase 4 hardening?"
+  search_thoughts("Phase 4 hardening decisions", project: "my-api", type: "decision")
   → Retrieves exact decisions from Session 1
   → No context lost despite session boundary
 
 After each slice → Auto-captures:
-  "Slice 3 complete: Added UserProfileRepository with Dapper"
+  capture_thought(
+    "Slice 3 complete: Added UserProfileRepository with Dapper",
+    project: "my-api",
+    source: "plan-forge-phase-4-slice-3"
+  )
   → Stored with slice number, phase, outcome
+
+After all slices → Batch capture post-mortem:
+  capture_thoughts([
+    "Lesson: Dapper query timeout defaults are too low for batch inserts",
+    "Pattern: Always set CommandTimeout = 60 for multi-row operations",
+    "Convention: Repository methods return domain objects, never DataReader"
+  ], project: "my-api", source: "phase-4-postmortem")
 ```
 
 ### Session 3 (Review)
 ```
 Independent reviewer → Searches OpenBrain:
-  "What decisions were made during execution?"
+  search_thoughts("execution decisions", project: "my-api", type: "decision")
   → Full decision trail available for audit
   → Can verify intent was preserved across sessions
 ```
@@ -105,8 +118,8 @@ Independent reviewer → Searches OpenBrain:
 ### 3 Months Later
 ```
 New team member joins → Asks:
-  "What patterns does this project use for error handling?"
-  → OpenBrain returns all error-handling decisions semantically
+  search_thoughts("error handling patterns", project: "my-api", type: "pattern")
+  → OpenBrain returns all error-handling decisions and patterns
   → No need to dig through old PRs or chat logs
 ```
 

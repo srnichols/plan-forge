@@ -32,12 +32,25 @@ Search for prior decisions and context in these situations:
    - Similar features built before for pattern reuse
 
 ### Search Examples
+
+Always scope searches to the current project when working in a multi-project environment:
+
 ```
-search_thoughts("error handling patterns for this project")
-search_thoughts("database migration decisions")
-search_thoughts("Phase 3 post-mortem lessons")
-search_thoughts("why did we choose Dapper over EF Core")
+search_thoughts("error handling patterns for this project", project: "my-api")
+search_thoughts("database migration decisions", project: "my-api", type: "decision")
+search_thoughts("Phase 3 post-mortem lessons", project: "my-api", type: "postmortem")
+search_thoughts("why did we choose Dapper over EF Core", project: "my-api", type: "architecture")
+search_thoughts("naming conventions", project: "my-api", type: "convention")
 ```
+
+Use `type` filters to narrow results:
+- `decision` — Technology and design choices
+- `architecture` — System design, layer choices, technology selection
+- `pattern` — Reusable code patterns and approaches
+- `postmortem` — Lessons learned, what went wrong
+- `requirement` — Functional or non-functional requirements
+- `bug` — Bug discoveries, root causes, fixes
+- `convention` — Naming, formatting, workflow conventions
 
 ## When to CAPTURE to OpenBrain
 
@@ -66,10 +79,58 @@ Capture decisions and context in these situations:
    - When NOT to use it
 
 ### Capture Format
+
+Always include `project` and `source` for traceability:
+
 ```
-capture_thought("Decision: [WHAT] — [WHY]. Alternatives: [WHAT ELSE]. Context: [PHASE/SLICE]")
-capture_thought("Pattern: [NAME] — [DESCRIPTION]. Use when: [CONDITION]. Avoid when: [CONDITION]")
-capture_thought("Lesson: [WHAT HAPPENED] — [WHAT WE LEARNED]. Applies to: [FUTURE PHASES]")
+capture_thought(
+  "Decision: [WHAT] — [WHY]. Alternatives: [WHAT ELSE]. Context: [PHASE/SLICE]",
+  project: "<current-project>",
+  source: "plan-forge-phase-N-slice-K"
+)
+capture_thought(
+  "Pattern: [NAME] — [DESCRIPTION]. Use when: [CONDITION]. Avoid when: [CONDITION]",
+  project: "<current-project>",
+  source: "plan-forge-phase-N"
+)
+capture_thought(
+  "Lesson: [WHAT HAPPENED] — [WHAT WE LEARNED]. Applies to: [FUTURE PHASES]",
+  project: "<current-project>",
+  source: "plan-forge-phase-N-postmortem"
+)
+```
+
+After a post-mortem, use batch capture for multiple lessons:
+
+```
+capture_thoughts([
+  "Lesson: [FIRST LESSON]",
+  "Lesson: [SECOND LESSON]",
+  "Pattern: [PATTERN DISCOVERED]"
+], project: "<current-project>", source: "plan-forge-phase-N-postmortem")
+```
+
+To supersede a prior decision, link to the old one:
+
+```
+capture_thought(
+  "Decision: Switched from Redis to Memcached for caching. Reason: simpler ops.",
+  project: "<current-project>",
+  source: "plan-forge-phase-N-slice-K",
+  supersedes: "<uuid-of-old-decision>"
+)
+```
+
+Or update the old decision in place:
+
+```
+update_thought(id: "<uuid>", content: "Decision: [UPDATED CONTENT]")
+```
+
+Or delete a stale thought entirely:
+
+```
+delete_thought(id: "<uuid>")
 ```
 
 ## What NOT to Store in OpenBrain

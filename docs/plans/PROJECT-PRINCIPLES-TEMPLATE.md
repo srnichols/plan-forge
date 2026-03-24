@@ -9,6 +9,8 @@
 >
 > **How used**: Auto-loaded by Project Principles instruction file. Referenced
 > in Step 1 (Preflight), Step 2 (Harden), and Step 5 (Review).
+>
+> **Example**: See [examples/PROJECT-PRINCIPLES-EXAMPLE.md](./examples/PROJECT-PRINCIPLES-EXAMPLE.md) for a completed example from a real-world multi-tenant SaaS platform.
 
 ---
 

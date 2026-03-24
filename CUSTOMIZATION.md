@@ -21,6 +21,8 @@ Run the **Project Principles** prompt to declare your project's non-negotiable p
 This creates binding declarations — what the project believes, what tech is locked in, what patterns are forbidden. Checked automatically in Steps 1, 2, and 5.
 
 > **Not sure what your principles should be?** Pick Path B — it offers stack-specific starter principles you can accept, modify, or reject.
+>
+> **Want to see a real example?** See [docs/plans/examples/PROJECT-PRINCIPLES-EXAMPLE.md](docs/plans/examples/PROJECT-PRINCIPLES-EXAMPLE.md) (anonymized multi-tenant SaaS platform).
 
 ### 2. Generate a Project Profile (Recommended)
 
@@ -32,6 +34,8 @@ Run the **Project Profile** prompt to customize guardrails for your project:
 4. The prompt generates `.github/instructions/project-profile.instructions.md`
 
 **Project Principles vs Project Profile**: Principles = what the project *believes* (human declarations). Profile = how Copilot should *write code* (generated guardrails). Both optional, both complementary.
+
+> **Want to see a real example?** See [docs/plans/examples/PROJECT-PROFILE-EXAMPLE.md](docs/plans/examples/PROJECT-PROFILE-EXAMPLE.md) (anonymized multi-tenant SaaS platform).
 
 | | Project Principles | Project Profile |
 |---|---|---|

@@ -1,6 +1,10 @@
 # Plan Forge
 
-> **A repeatable framework for converting rough ideas into drift-proof execution contracts that AI coding agents follow without scope creep.**
+> **A blacksmith doesn't hand raw iron to a customer. They heat it, hammer it, and temper it until it holds its edge.**
+>
+> Plan Forge does the same for AI-driven development. Your rough ideas go in as raw metal — and come out as **hardened execution contracts** that AI coding agents follow without scope creep, skipped tests, or silent rewrites.
+>
+> *Forge the plan. Harden the scope. Ship with confidence.*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 

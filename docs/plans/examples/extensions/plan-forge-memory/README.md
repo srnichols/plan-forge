@@ -118,3 +118,39 @@ New team member joins → Asks:
 - **Git history** — Still the record of what actually changed
 
 OpenBrain **supplements** these by capturing the *context and reasoning* behind decisions — the "why" that doesn't live in code or Markdown.
+
+## Expected Impact
+
+### Where Persistent Memory Reduces Rework
+
+| Problem | Without OpenBrain | With OpenBrain |
+|---------|------------------|----------------|
+| **Agent picks wrong pattern** (e.g., tries EF Core when project uses Dapper) | Agent reads instruction files, but doesn't know *why* Dapper was chosen or what was tried before | Searches "data access decisions" → gets rationale + failed alternatives |
+| **Re-discovers the same solution** (e.g., figures out JSONB merge syntax again) | Every session re-solves solved problems | Searches "JSONB update pattern" → gets the exact approach used last time |
+| **Contradicts a previous decision** (e.g., cache key without tenant prefix) | Caught at Step 5 (Review) — after code is written | Searches "caching conventions" → finds tenant-prefix rule before writing code |
+| **Post-mortem lessons ignored** (e.g., repeats N+1 query mistake from Phase 3) | Lessons sit in a Markdown file nobody re-reads | Searches "performance lessons" → gets specific warnings from prior phases |
+| **Session 2 doesn't know Session 1's reasoning** | Agent reads the hardened plan but not *why* decisions were made | Searches "Phase 4 hardening decisions" → gets full context with rationale |
+
+### Where It Doesn't Help
+
+- **Syntax errors / typos** — Not a memory problem
+- **Context window overflow** — OpenBrain adds context; overuse could make this worse
+- **Wrong business logic** — If the spec is wrong, remembering it perfectly doesn't help
+- **Brand new problems** — No prior memory to search
+
+### Realistic Estimates
+
+For a **long-running project** (months, multiple phases) with consistent patterns:
+
+| Metric | Estimated Improvement |
+|--------|----------------------|
+| Architectural rework (wrong patterns) | ~40–60% reduction |
+| Review gate failures (drift violations) | ~20–30% reduction |
+| Time per session (searching/re-discovering) | ~10–15% reduction |
+| Errors on repeat patterns | Significant reduction |
+
+For a **new project** in its first few phases: minimal benefit — there's no memory to search yet. The value **compounds over time**, which is exactly how real institutional knowledge works.
+
+### The Real Win
+
+The biggest value isn't speed — it's **consistency**. When every session across every team member across every AI tool shares the same decision memory, the codebase stays architecturally coherent. That's what reduces errors long-term.

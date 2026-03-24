@@ -25,6 +25,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - **`pforge commit`** — auto-generates conventional commit messages from slice goals
 - **`pforge phase-status`** — updates roadmap status icons without manual editing
 - **Setup wizard asks for build/test/lint commands** — eliminates placeholder editing step
+- **Stop hook** — warns when agent session ends with code changes but no test run detected
+- **`pforge sweep`** — scan code files for TODO/FIXME/stub/placeholder markers from terminal
+- **`pforge diff`** — compare changed files against plan's Scope Contract for drift detection
+- **Monorepo FAQ** — documents `chat.useCustomizationsInParentRepositories` setting
 - **Agent Plugin Packaging** — `plugin.json` at repo root for `Chat: Install Plugin From Source` installation
 - **VS Code Checkpoints** — added as Option 0 in Rollback Protocol for beginners
 - **CHANGELOG** — version history

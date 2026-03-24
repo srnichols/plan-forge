@@ -64,6 +64,8 @@ function Show-Help {
     Write-Host "  branch <plan>     Create branch matching plan's declared Branch Strategy"
     Write-Host "  commit <plan> <N> Commit with conventional message from slice N's goal"
     Write-Host "  phase-status <plan> <status>  Update phase status in roadmap (planned|in-progress|complete|paused)"
+    Write-Host "  sweep             Scan for TODO/FIXME/stub/placeholder markers in code files"
+    Write-Host "  diff <plan>       Compare changed files against plan's Scope Contract"
     Write-Host "  ext install <p>   Install extension from path"
     Write-Host "  ext list          List installed extensions"
     Write-Host "  ext remove <name> Remove an installed extension"
@@ -629,6 +631,149 @@ function Invoke-ExtRemove([string[]]$args_) {
     Write-Host "Extension '$extName' removed." -ForegroundColor Green
 }
 
+# ─── Command: sweep ────────────────────────────────────────────────────
+function Invoke-Sweep {
+    Write-ManualSteps "sweep" @(
+        "Search code files for: TODO, FIXME, HACK, stub, placeholder, mock data, will be replaced"
+        "Review each finding and resolve or document"
+    )
+
+    Write-Host ""
+    Write-Host "Completeness Sweep — scanning for deferred-work markers:" -ForegroundColor Cyan
+    Write-Host "─────────────────────────────────────────────────────────" -ForegroundColor DarkGray
+
+    $patterns = @('TODO', 'FIXME', 'HACK', 'will be replaced', 'placeholder', 'stub', 'mock data', 'Simulate', 'Seed with sample')
+    $patternRegex = ($patterns | ForEach-Object { [regex]::Escape($_) }) -join '|'
+
+    $codeExtensions = @('*.cs', '*.ts', '*.tsx', '*.js', '*.jsx', '*.py', '*.go', '*.java', '*.kt', '*.rb', '*.rs', '*.sql', '*.sh', '*.ps1')
+    $total = 0
+
+    foreach ($ext in $codeExtensions) {
+        Get-ChildItem -Path $RepoRoot -Filter $ext -Recurse -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -notmatch '(node_modules|bin|obj|dist|\.git|vendor|__pycache__)' } |
+            ForEach-Object {
+                $matches = Select-String -Path $_.FullName -Pattern $patternRegex -CaseSensitive:$false
+                foreach ($m in $matches) {
+                    $relPath = $m.Path.Substring($RepoRoot.Length + 1)
+                    Write-Host "  $relPath`:$($m.LineNumber): $($m.Line.Trim())" -ForegroundColor Yellow
+                    $total++
+                }
+            }
+    }
+
+    Write-Host ""
+    if ($total -eq 0) {
+        Write-Host "SWEEP CLEAN — zero deferred-work markers found." -ForegroundColor Green
+    }
+    else {
+        Write-Host "FOUND $total deferred-work marker(s). Resolve before Step 5 (Review Gate)." -ForegroundColor Red
+    }
+}
+
+# ─── Command: diff ─────────────────────────────────────────────────────
+function Invoke-Diff {
+    if (-not $Arguments -or $Arguments.Count -eq 0) {
+        Write-Host "ERROR: Plan file required." -ForegroundColor Red
+        Write-Host "  Usage: pforge diff <plan-file>" -ForegroundColor Yellow
+        exit 1
+    }
+
+    $planFile = $Arguments[0]
+    if (-not (Test-Path $planFile)) {
+        $planFile = Join-Path $RepoRoot $planFile
+    }
+    if (-not (Test-Path $planFile)) {
+        Write-Host "ERROR: Plan file not found: $($Arguments[0])" -ForegroundColor Red
+        exit 1
+    }
+
+    Write-ManualSteps "diff" @(
+        "Run: git diff --name-only"
+        "Compare changed files against plan's In Scope and Forbidden Actions sections"
+    )
+
+    # Get changed files
+    $changedFiles = @()
+    $changedFiles += git diff --name-only 2>$null
+    $changedFiles += git diff --cached --name-only 2>$null
+    $changedFiles = $changedFiles | Sort-Object -Unique | Where-Object { $_ }
+
+    if ($changedFiles.Count -eq 0) {
+        Write-Host "No changed files detected." -ForegroundColor Yellow
+        return
+    }
+
+    $planContent = Get-Content $planFile -Raw
+
+    # Extract In Scope paths
+    $inScopeSection = ""
+    if ($planContent -match '### In Scope(.*?)(?=^###?\s|\z)') {
+        $inScopeSection = $Matches[1]
+    }
+    $inScopePaths = [regex]::Matches($inScopeSection, '`([^`]+)`') | ForEach-Object { $_.Groups[1].Value }
+
+    # Extract Forbidden Actions paths
+    $forbiddenSection = ""
+    if ($planContent -match '### Forbidden Actions(.*?)(?=^###?\s|\z)') {
+        $forbiddenSection = $Matches[1]
+    }
+    $forbiddenPaths = [regex]::Matches($forbiddenSection, '`([^`]+)`') | ForEach-Object { $_.Groups[1].Value }
+
+    Write-Host ""
+    Write-Host "Scope Drift Check — $($changedFiles.Count) changed file(s) vs plan:" -ForegroundColor Cyan
+    Write-Host "───────────────────────────────────────────────────────────" -ForegroundColor DarkGray
+
+    $violations = 0
+    $outOfScope = 0
+
+    foreach ($file in $changedFiles) {
+        # Check forbidden
+        $isForbidden = $false
+        foreach ($fp in $forbiddenPaths) {
+            if ($file -like "*$fp*") {
+                Write-Host "  🔴 FORBIDDEN  $file  (matches: $fp)" -ForegroundColor Red
+                $violations++
+                $isForbidden = $true
+                break
+            }
+        }
+        if ($isForbidden) { continue }
+
+        # Check in-scope
+        $isInScope = $false
+        if ($inScopePaths.Count -eq 0) {
+            $isInScope = $true  # No scope defined — everything allowed
+        }
+        else {
+            foreach ($sp in $inScopePaths) {
+                if ($file -like "*$sp*") {
+                    $isInScope = $true
+                    break
+                }
+            }
+        }
+
+        if ($isInScope) {
+            Write-Host "  ✅ IN SCOPE   $file" -ForegroundColor Green
+        }
+        else {
+            Write-Host "  🟡 UNPLANNED  $file  (not in Scope Contract)" -ForegroundColor Yellow
+            $outOfScope++
+        }
+    }
+
+    Write-Host ""
+    if ($violations -gt 0) {
+        Write-Host "DRIFT DETECTED — $violations forbidden file(s) touched." -ForegroundColor Red
+    }
+    elseif ($outOfScope -gt 0) {
+        Write-Host "POTENTIAL DRIFT — $outOfScope file(s) not in Scope Contract. May need amendment." -ForegroundColor Yellow
+    }
+    else {
+        Write-Host "ALL CHANGES IN SCOPE — no drift detected." -ForegroundColor Green
+    }
+}
+
 # ─── Command Router ────────────────────────────────────────────────────
 switch ($Command) {
     'init'         { Invoke-Init }
@@ -638,6 +783,8 @@ switch ($Command) {
     'branch'       { Invoke-Branch }
     'commit'       { Invoke-Commit }
     'phase-status' { Invoke-PhaseStatus }
+    'sweep'        { Invoke-Sweep }
+    'diff'         { Invoke-Diff }
     'ext'          { Invoke-Ext }
     'help'         { Show-Help }
     ''             { Show-Help }

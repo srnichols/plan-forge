@@ -422,7 +422,8 @@ Plan Forge includes lifecycle hooks that run automatically during agent sessions
 |------|--------|
 | **SessionStart** | Auto-injects Project Principles, current phase, and Plan Forge version into every session's context |
 | **PreToolUse** | Reads the active plan's Forbidden Actions and blocks file edits to forbidden paths before they happen |
-| **PostToolUse** | Scans edited files for TODO/FIXME/stub/placeholder markers and warns in the chat immediately |
+| **PostToolUse** | Auto-formats edited files with the project's formatter, then warns on TODO/FIXME/stub markers |
+| **Stop** | Warns when session ends if code was modified but no test run was detected — reminds to use `/test-sweep` |
 
 **Customizing hooks**: Edit `.github/hooks/plan-forge.json` or `.github/hooks/scripts/` to change behavior. Use `/create-hook` in chat to generate new hooks with AI assistance.
 

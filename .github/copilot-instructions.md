@@ -155,7 +155,8 @@ Hooks run automatically during agent sessions — no manual activation needed:
 |------|--------|
 | **SessionStart** | Injects Project Principles, current phase, and forbidden patterns into context |
 | **PreToolUse** | Blocks file edits to paths listed in the active plan's Forbidden Actions |
-| **PostToolUse** | Warns on TODO/FIXME/stub markers found in edited files |
+| **PostToolUse** | Auto-formats edited files, then warns on TODO/FIXME/stub markers |
+| **Stop** | Warns if code was modified but no test run was detected in the session |
 
 ---
 

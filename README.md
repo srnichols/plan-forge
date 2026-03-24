@@ -601,6 +601,16 @@ This can happen if the context window is full (too many files loaded). Tips:
 
 See [docs/COPILOT-VSCODE-GUIDE.md](docs/COPILOT-VSCODE-GUIDE.md) for more troubleshooting tips.
 
+### "I work in a monorepo — will Copilot find the Plan Forge files?"
+
+If you open a subfolder of a monorepo (not the repo root), Copilot won't find `.github/` by default. Enable this VS Code setting:
+
+```json
+"chat.useCustomizationsInParentRepositories": true
+```
+
+This tells Copilot to walk up to the `.git` root and discover all instruction files, prompts, agents, skills, and hooks from parent directories.
+
 ---
 
 ## Troubleshooting

@@ -48,6 +48,8 @@ COMMANDS:
   branch <plan>     Create branch matching plan's declared Branch Strategy
   commit <plan> <N> Commit with conventional message from slice N's goal
   phase-status <plan> <status>  Update phase status in roadmap (planned|in-progress|complete|paused)
+  sweep             Scan for TODO/FIXME/stub/placeholder markers in code files
+  diff <plan>       Compare changed files against plan's Scope Contract
   ext install <p>   Install extension from path
   ext list          List installed extensions
   ext remove <name> Remove an installed extension
@@ -385,6 +387,142 @@ cmd_phase_status() {
     fi
 }
 
+# ─── Command: sweep ────────────────────────────────────────────────────
+cmd_sweep() {
+    print_manual_steps "sweep" \
+        "Search code files for: TODO, FIXME, HACK, stub, placeholder, mock data, will be replaced" \
+        "Review each finding and resolve or document"
+
+    echo ""
+    echo "Completeness Sweep — scanning for deferred-work markers:"
+    echo "─────────────────────────────────────────────────────────"
+
+    local total=0
+    local pattern='TODO|FIXME|HACK|will be replaced|placeholder|stub|mock data|Simulate|Seed with sample'
+
+    while IFS= read -r -d '' file; do
+        local results
+        results="$(grep -niE "$pattern" "$file" 2>/dev/null || true)"
+        if [ -n "$results" ]; then
+            local rel_path="${file#"$REPO_ROOT/"}"
+            while IFS= read -r line; do
+                echo "  $rel_path:$line"
+                total=$((total + 1))
+            done <<< "$results"
+        fi
+    done < <(find "$REPO_ROOT" -type f \( -name "*.cs" -o -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.py" -o -name "*.go" -o -name "*.java" -o -name "*.kt" -o -name "*.rs" -o -name "*.sql" -o -name "*.sh" -o -name "*.ps1" \) \
+        ! -path "*/node_modules/*" ! -path "*/.git/*" ! -path "*/bin/*" ! -path "*/obj/*" ! -path "*/dist/*" ! -path "*/vendor/*" ! -path "*/__pycache__/*" \
+        -print0)
+
+    echo ""
+    if [ "$total" -eq 0 ]; then
+        echo "SWEEP CLEAN — zero deferred-work markers found."
+    else
+        echo "FOUND $total deferred-work marker(s). Resolve before Step 5 (Review Gate)."
+    fi
+}
+
+# ─── Command: diff ─────────────────────────────────────────────────────
+cmd_diff() {
+    if [ $# -eq 0 ]; then
+        echo "ERROR: Plan file required." >&2
+        echo "  Usage: pforge diff <plan-file>" >&2
+        exit 1
+    fi
+
+    local plan_file="$1"
+    [ ! -f "$plan_file" ] && plan_file="$REPO_ROOT/$plan_file"
+    if [ ! -f "$plan_file" ]; then
+        echo "ERROR: Plan file not found: $1" >&2
+        exit 1
+    fi
+
+    print_manual_steps "diff" \
+        "Run: git diff --name-only" \
+        "Compare changed files against plan's In Scope and Forbidden Actions sections"
+
+    # Get changed files
+    local changed
+    changed="$(git diff --name-only 2>/dev/null; git diff --cached --name-only 2>/dev/null)"
+    changed="$(echo "$changed" | sort -u | grep -v '^$')"
+
+    if [ -z "$changed" ]; then
+        echo "No changed files detected."
+        return 0
+    fi
+
+    local plan_content
+    plan_content="$(cat "$plan_file")"
+
+    # Extract forbidden paths (backtick-wrapped in Forbidden Actions section)
+    local forbidden_section
+    forbidden_section="$(echo "$plan_content" | awk '/### Forbidden Actions/,/^###? /' || true)"
+    local forbidden_paths
+    forbidden_paths="$(echo "$forbidden_section" | grep -oE '`[^`]+`' | tr -d '`' || true)"
+
+    # Extract in-scope paths
+    local inscope_section
+    inscope_section="$(echo "$plan_content" | awk '/### In Scope/,/^###? /' || true)"
+    local inscope_paths
+    inscope_paths="$(echo "$inscope_section" | grep -oE '`[^`]+`' | tr -d '`' || true)"
+
+    echo ""
+    local file_count
+    file_count="$(echo "$changed" | wc -l | tr -d ' ')"
+    echo "Scope Drift Check — $file_count changed file(s) vs plan:"
+    echo "───────────────────────────────────────────────────────────"
+
+    local violations=0
+    local out_of_scope=0
+
+    while IFS= read -r file; do
+        [ -z "$file" ] && continue
+
+        # Check forbidden
+        local is_forbidden=false
+        while IFS= read -r fp; do
+            [ -z "$fp" ] && continue
+            if [[ "$file" == *"$fp"* ]]; then
+                echo "  🔴 FORBIDDEN  $file  (matches: $fp)"
+                violations=$((violations + 1))
+                is_forbidden=true
+                break
+            fi
+        done <<< "$forbidden_paths"
+        $is_forbidden && continue
+
+        # Check in-scope
+        local is_in_scope=false
+        if [ -z "$inscope_paths" ]; then
+            is_in_scope=true
+        else
+            while IFS= read -r sp; do
+                [ -z "$sp" ] && continue
+                if [[ "$file" == *"$sp"* ]]; then
+                    is_in_scope=true
+                    break
+                fi
+            done <<< "$inscope_paths"
+        fi
+
+        if $is_in_scope; then
+            echo "  ✅ IN SCOPE   $file"
+        else
+            echo "  🟡 UNPLANNED  $file  (not in Scope Contract)"
+            out_of_scope=$((out_of_scope + 1))
+        fi
+    done <<< "$changed"
+
+    echo ""
+    if [ "$violations" -gt 0 ]; then
+        echo "DRIFT DETECTED — $violations forbidden file(s) touched."
+    elif [ "$out_of_scope" -gt 0 ]; then
+        echo "POTENTIAL DRIFT — $out_of_scope file(s) not in Scope Contract. May need amendment."
+    else
+        echo "ALL CHANGES IN SCOPE — no drift detected."
+    fi
+}
+
 # ─── Command: ext ──────────────────────────────────────────────────────
 cmd_ext() {
     if [ $# -eq 0 ]; then
@@ -559,6 +697,8 @@ case "$COMMAND" in
     branch)       cmd_branch "$@" ;;
     commit)       cmd_commit "$@" ;;
     phase-status) cmd_phase_status "$@" ;;
+    sweep)        cmd_sweep ;;
+    diff)         cmd_diff "$@" ;;
     ext)          cmd_ext "$@" ;;
     help|--help)  show_help ;;
     *)

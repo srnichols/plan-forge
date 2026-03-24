@@ -29,6 +29,14 @@
         "windows": "powershell -ExecutionPolicy Bypass -File .github/hooks/scripts/post-edit-validate.ps1",
         "timeout": 15
       }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": ".github/hooks/scripts/stop-check-tests.sh",
+        "windows": "powershell -ExecutionPolicy Bypass -File .github/hooks/scripts/stop-check-tests.ps1",
+        "timeout": 10
+      }
     ]
   }
 }

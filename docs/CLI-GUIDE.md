@@ -221,6 +221,68 @@ Update a phase's status in the deployment roadmap.
 
 ---
 
+### `pforge sweep`
+
+Scan all code files for deferred-work markers (TODO, FIXME, HACK, stub, placeholder, mock data). This is the CLI equivalent of the Completeness Sweep (Step 4).
+
+```powershell
+# PowerShell
+.\pforge.ps1 sweep
+```
+
+```bash
+# Bash
+./pforge.sh sweep
+```
+
+**Output:**
+```
+Completeness Sweep — scanning for deferred-work markers:
+─────────────────────────────────────────────────────────
+  src/Services/UserService.cs:42: // TODO: Wire to real email service
+  src/Controllers/AuthController.cs:18: // FIXME: Add rate limiting
+
+FOUND 2 deferred-work marker(s). Resolve before Step 5 (Review Gate).
+```
+
+**Equivalent manual steps:**
+1. Search code files for: TODO, FIXME, HACK, stub, placeholder, mock data
+2. Review each finding and resolve or document
+
+---
+
+### `pforge diff <plan-file>`
+
+Compare changed files (uncommitted) against the plan's Scope Contract. Flags forbidden files, unplanned files, and confirms in-scope changes.
+
+```powershell
+# PowerShell
+.\pforge.ps1 diff docs/plans/Phase-3-USER-AUTH-PLAN.md
+```
+
+```bash
+# Bash
+./pforge.sh diff docs/plans/Phase-3-USER-AUTH-PLAN.md
+```
+
+**Output:**
+```
+Scope Drift Check — 4 changed file(s) vs plan:
+───────────────────────────────────────────────────────────
+  ✅ IN SCOPE   src/Services/UserService.cs
+  ✅ IN SCOPE   src/Repositories/UserRepository.cs
+  🟡 UNPLANNED  src/Config/AppSettings.cs  (not in Scope Contract)
+  🔴 FORBIDDEN  tests/Legacy/OldTests.cs  (matches: tests/Legacy/)
+
+DRIFT DETECTED — 1 forbidden file(s) touched.
+```
+
+**Equivalent manual steps:**
+1. Run `git diff --name-only`
+2. Compare each changed file against the plan's In Scope and Forbidden Actions sections
+
+---
+
 ### `pforge ext install <path>`
 
 Install an extension from a local path.
@@ -323,6 +385,8 @@ Show all available commands.
 | Create branch | `pforge branch <plan>` | Read plan, run `git checkout -b` |
 | Commit a slice | `pforge commit <plan> <N>` | Read slice goal, run `git add -A && git commit -m "..."` |
 | Update phase status | `pforge phase-status <plan> <status>` | Edit DEPLOYMENT-ROADMAP.md manually |
+| Completeness sweep | `pforge sweep` | grep for TODO/FIXME/stub across codebase |
+| Scope drift check | `pforge diff <plan>` | git diff + manual comparison to Scope Contract |
 | Install extension | `pforge ext install <path>` | Copy files to 3 directories |
 | Harden a plan | *(use prompt)* | Paste Step 2 prompt into Copilot |
 | Execute slices | *(use prompt)* | Paste Step 3 prompt into Copilot |

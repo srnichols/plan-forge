@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# pharden — CLI wrapper for the Plan Forge Pipeline
+# pforge — CLI wrapper for the Plan Forge Pipeline
 # Convenience commands for common pipeline operations.
 # Every command shows the equivalent manual steps.
 
@@ -38,7 +38,7 @@ print_manual_steps() {
 show_help() {
     cat <<'EOF'
 
-pharden — Plan Forge Pipeline CLI
+pforge — Plan Forge Pipeline CLI
 
 COMMANDS:
   init              Bootstrap project with setup wizard (delegates to setup.sh)
@@ -57,12 +57,12 @@ OPTIONS:
   --help            Show help for a specific command
 
 EXAMPLES:
-  ./pharden.sh init --preset dotnet
-  ./pharden.sh status
-  ./pharden.sh new-phase user-auth
-  ./pharden.sh new-phase user-auth --dry-run
-  ./pharden.sh branch docs/plans/Phase-1-USER-AUTH-PLAN.md
-  ./pharden.sh ext list
+  ./pforge.sh init --preset dotnet
+  ./pforge.sh status
+  ./pforge.sh new-phase user-auth
+  ./pforge.sh new-phase user-auth --dry-run
+  ./pforge.sh branch docs/plans/Phase-1-USER-AUTH-PLAN.md
+  ./pforge.sh ext list
 
 EOF
 }
@@ -130,7 +130,7 @@ cmd_status() {
 cmd_new_phase() {
     if [ $# -eq 0 ]; then
         echo "ERROR: Phase name required." >&2
-        echo "  Usage: pharden new-phase <name>" >&2
+        echo "  Usage: pforge new-phase <name>" >&2
         exit 1
     fi
 
@@ -227,7 +227,7 @@ ENTRY
 cmd_branch() {
     if [ $# -eq 0 ]; then
         echo "ERROR: Plan file path required." >&2
-        echo "  Usage: pharden branch <plan-file>" >&2
+        echo "  Usage: pforge branch <plan-file>" >&2
         exit 1
     fi
 
@@ -293,7 +293,7 @@ cmd_ext() {
 cmd_ext_install() {
     if [ $# -eq 0 ]; then
         echo "ERROR: Extension path required." >&2
-        echo "  Usage: pharden ext install <path>" >&2
+        echo "  Usage: pforge ext install <path>" >&2
         exit 1
     fi
 
@@ -379,7 +379,7 @@ for e in d.get('extensions', []):
 cmd_ext_remove() {
     if [ $# -eq 0 ]; then
         echo "ERROR: Extension name required." >&2
-        echo "  Usage: pharden ext remove <name>" >&2
+        echo "  Usage: pforge ext remove <name>" >&2
         exit 1
     fi
 

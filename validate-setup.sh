@@ -198,11 +198,11 @@ else
 fi
 
 # CLI
-if [[ -f "$PROJECT_PATH/pharden.sh" ]] || [[ -f "$PROJECT_PATH/pharden.ps1" ]]; then
-    green "  PASS  CLI: pharden script found"
+if [[ -f "$PROJECT_PATH/pforge.sh" ]] || [[ -f "$PROJECT_PATH/pforge.ps1" ]]; then
+    green "  PASS  CLI: pforge script found"
     ((PASS++))
 else
-    yellow "  WARN  CLI: pharden not installed (optional)"
+    yellow "  WARN  CLI: pforge not installed (optional)"
     ((WARN++))
 fi
 

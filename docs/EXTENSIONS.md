@@ -58,7 +58,7 @@ No runtime, no dependencies, no build step — just folders you copy.
 ### Using CLI (if installed)
 
 ```bash
-pharden ext install .plan-hardening/extensions/healthcare-compliance
+pforge ext install .plan-hardening/extensions/healthcare-compliance
 ```
 
 ## Creating an Extension

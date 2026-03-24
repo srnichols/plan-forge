@@ -443,18 +443,18 @@ See [docs/EXTENSIONS.md](docs/EXTENSIONS.md) for the full guide covering:
 
 ## CLI Quick Reference (Optional)
 
-The `pharden` CLI is a convenience wrapper — every command shows the equivalent manual steps.
+The `pforge` CLI is a convenience wrapper — every command shows the equivalent manual steps.
 
 ```
-pharden init              Bootstrap project (delegates to setup.ps1/sh)
-pharden check             Validate setup (delegates to validate-setup.ps1/sh)
-pharden status            Show phase status from DEPLOYMENT-ROADMAP.md
-pharden new-phase <name>  Create plan file + add to roadmap
-pharden branch <plan>     Create branch from plan's Branch Strategy
-pharden ext install <p>   Install an extension
-pharden ext list          List installed extensions
-pharden ext remove <name> Remove an extension
-pharden help              Show all commands
+pforge init              Bootstrap project (delegates to setup.ps1/sh)
+pforge check             Validate setup (delegates to validate-setup.ps1/sh)
+pforge status            Show phase status from DEPLOYMENT-ROADMAP.md
+pforge new-phase <name>  Create plan file + add to roadmap
+pforge branch <plan>     Create branch from plan's Branch Strategy
+pforge ext install <p>   Install an extension
+pforge ext list          List installed extensions
+pforge ext remove <name> Remove an extension
+pforge help              Show all commands
 ```
 
 ---

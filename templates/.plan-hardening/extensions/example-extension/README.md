@@ -23,7 +23,7 @@
 cp -r .plan-hardening/extensions/example-extension .plan-hardening/extensions/my-extension
 
 # Or via CLI
-pharden ext install .plan-hardening/extensions/my-extension
+pforge ext install .plan-hardening/extensions/my-extension
 ```
 
 ## File Structure

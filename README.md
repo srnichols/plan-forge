@@ -478,7 +478,7 @@ These features are all **opt-in** — skip any that don't apply. Existing workfl
 | **Requirements Traceability** | Map requirements (REQ-001, REQ-002) to execution slices. Step 5 verifies bidirectional coverage. | Add a Requirements Register to your hardened plan |
 | **Branch Strategy** | Declare trunk / feature-branch / branch-per-slice. Preflight checks you're on the right branch. | Add a Branch Strategy to your Scope Contract |
 | **Extensions** | Share custom reviewers, prompts, and instruction files as installable packages. | See [docs/EXTENSIONS.md](docs/EXTENSIONS.md) |
-| **CLI Wrapper** | `pharden` commands for init, status, new-phase, branch, and extension management. | Run `.\pharden.ps1 help` or `./pharden.sh help` |
+| **CLI Wrapper** | `pforge` commands for init, status, new-phase, branch, and extension management. | See [docs/CLI-GUIDE.md](docs/CLI-GUIDE.md) |
 
 ---
 

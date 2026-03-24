@@ -1,0 +1,388 @@
+# Plan Forge CLI Guide
+
+> **Optional**: The `pforge` CLI is a convenience wrapper for common pipeline operations. Every command shows the equivalent manual steps, so non-CLI users can follow along. The manual workflow (copy-paste prompts, edit files, run git commands) works identically without the CLI.
+>
+> **For AI Agents**: See [AI Agent Usage](#ai-agent-usage) at the bottom for platform detection, decision rules, and programmatic integration.
+
+---
+
+## Installation
+
+The CLI is two scripts — no dependencies beyond Git and your shell:
+
+| Platform | File | Usage |
+|----------|------|-------|
+| **Windows / PowerShell** | `pforge.ps1` | `.\pforge.ps1 <command>` |
+| **macOS / Linux / Bash** | `pforge.sh` | `./pforge.sh <command>` |
+
+Both scripts are copied to your project root during setup. If you ran `setup.ps1` / `setup.sh`, they're already there.
+
+**Not there?** Copy them manually from the Plan Forge template repo:
+```bash
+cp /path/to/plan-forge/pforge.ps1 .
+cp /path/to/plan-forge/pforge.sh .
+chmod +x pforge.sh
+```
+
+---
+
+## Commands
+
+Each command shows **PowerShell** and **Bash** syntax. Both are functionally identical.
+
+### `pforge init`
+
+Bootstrap a project with the Plan Forge Pipeline. Delegates to `setup.ps1` / `setup.sh`.
+
+```powershell
+# PowerShell
+.\pforge.ps1 init -Preset dotnet
+.\pforge.ps1 init -Preset typescript -ProjectPath ./my-app
+```
+
+```bash
+# Bash
+./pforge.sh init --preset dotnet
+./pforge.sh init --preset typescript --path ./my-app
+```
+
+**Equivalent manual steps:**
+1. Run `.\setup.ps1` / `./setup.sh` with your preferred parameters
+2. Follow the interactive wizard
+
+---
+
+### `pforge check`
+
+Validate that setup completed correctly. Delegates to `validate-setup.ps1` / `validate-setup.sh`.
+
+```powershell
+# PowerShell
+.\pforge.ps1 check
+```
+
+```bash
+# Bash
+./pforge.sh check
+```
+
+**Equivalent manual steps:**
+1. Run `.\validate-setup.ps1`
+2. Review the output for any missing files
+
+---
+
+### `pforge status`
+
+Show all phases from `DEPLOYMENT-ROADMAP.md` with their current status.
+
+```powershell
+# PowerShell
+.\pforge.ps1 status
+```
+
+```bash
+# Bash
+./pforge.sh status
+```
+
+**Output:**
+```
+Phase Status (from DEPLOYMENT-ROADMAP.md):
+─────────────────────────────────────────────
+  Phase 1: User Authentication  📋 Planned
+    Add OAuth2 login and role-based access
+  Phase 2: Dashboard Widgets  🚧 In Progress
+    Personalized metrics and activity feed
+```
+
+**Equivalent manual steps:**
+1. Open `docs/plans/DEPLOYMENT-ROADMAP.md`
+2. Review the Phases section for status icons
+
+---
+
+### `pforge new-phase <name>`
+
+Create a new phase plan file and add an entry to the deployment roadmap.
+
+```powershell
+# PowerShell — preview what would be created
+.\pforge.ps1 new-phase user-auth --dry-run
+
+# Create the phase
+.\pforge.ps1 new-phase user-auth
+```
+
+```bash
+# Bash
+./pforge.sh new-phase user-auth --dry-run
+./pforge.sh new-phase user-auth
+```
+
+**What it does:**
+1. Finds the next phase number (e.g., Phase 3)
+2. Creates `docs/plans/Phase-3-USER-AUTH-PLAN.md` from template
+3. Adds a Phase 3 entry to `DEPLOYMENT-ROADMAP.md`
+
+**Equivalent manual steps:**
+1. Create file `docs/plans/Phase-N-NAME-PLAN.md`
+2. Add phase entry to `docs/plans/DEPLOYMENT-ROADMAP.md`
+3. Fill in the plan using Step 1 (Draft) from the runbook
+
+---
+
+### `pforge branch <plan-file>`
+
+Create a Git branch matching the plan's declared Branch Strategy.
+
+```powershell
+# PowerShell — preview
+.\pforge.ps1 branch docs/plans/Phase-3-USER-AUTH-PLAN.md --dry-run
+
+# Create
+.\pforge.ps1 branch docs/plans/Phase-3-USER-AUTH-PLAN.md
+```
+
+```bash
+# Bash
+./pforge.sh branch docs/plans/Phase-3-USER-AUTH-PLAN.md --dry-run
+./pforge.sh branch docs/plans/Phase-3-USER-AUTH-PLAN.md
+```
+
+**What it does:**
+1. Reads the `**Branch**:` field from the plan's Branch Strategy section
+2. Creates the branch (e.g., `feature/phase-3-user-auth`)
+
+If no branch strategy is declared or the plan uses "trunk," no branch is created.
+
+**Equivalent manual steps:**
+1. Read the Branch Strategy section in your plan
+2. Run `git checkout -b <branch-name>`
+
+---
+
+### `pforge ext install <path>`
+
+Install an extension from a local path.
+
+```powershell
+# PowerShell
+.\pforge.ps1 ext install .plan-hardening/extensions/healthcare-compliance
+```
+
+```bash
+# Bash
+./pforge.sh ext install .plan-hardening/extensions/healthcare-compliance
+```
+
+**What it does:**
+1. Validates `extension.json` exists in the source path
+2. Copies the extension folder to `.plan-hardening/extensions/`
+3. Copies instruction/agent/prompt files to `.github/` directories
+4. Updates `extensions.json` manifest
+
+**Equivalent manual steps:**
+1. Copy the extension folder to `.plan-hardening/extensions/<name>/`
+2. Copy files from `instructions/` → `.github/instructions/`
+3. Copy files from `agents/` → `.github/agents/`
+4. Copy files from `prompts/` → `.github/prompts/`
+
+---
+
+### `pforge ext list`
+
+List all installed extensions.
+
+```powershell
+# PowerShell
+.\pforge.ps1 ext list
+```
+
+```bash
+# Bash
+./pforge.sh ext list
+```
+
+**Output:**
+```
+Installed Extensions:
+─────────────────────
+  healthcare-compliance v1.0.0  (installed 2026-03-23)
+```
+
+---
+
+### `pforge ext remove <name>`
+
+Remove an installed extension. Prompts for confirmation unless `--force` is used.
+
+```powershell
+# PowerShell
+.\pforge.ps1 ext remove healthcare-compliance
+.\pforge.ps1 ext remove healthcare-compliance --force
+```
+
+```bash
+# Bash
+./pforge.sh ext remove healthcare-compliance
+./pforge.sh ext remove healthcare-compliance --force
+```
+
+**What it does:**
+1. Reads the extension manifest to find installed files
+2. Removes those files from `.github/` directories
+3. Deletes the extension folder from `.plan-hardening/extensions/`
+4. Updates `extensions.json` manifest
+
+---
+
+### `pforge help`
+
+Show all available commands.
+
+```powershell
+# PowerShell
+.\pforge.ps1 help
+```
+
+```bash
+# Bash
+./pforge.sh help
+```
+
+---
+
+## CLI vs Manual Workflow
+
+| Task | CLI | Manual |
+|------|-----|--------|
+| Bootstrap project | `pforge init -Preset dotnet` | Run `setup.ps1`, follow wizard |
+| Check setup | `pforge check` | Run `validate-setup.ps1` |
+| See phase status | `pforge status` | Open `DEPLOYMENT-ROADMAP.md` |
+| Start new phase | `pforge new-phase <name>` | Create plan file, edit roadmap |
+| Create branch | `pforge branch <plan>` | Read plan, run `git checkout -b` |
+| Install extension | `pforge ext install <path>` | Copy files to 3 directories |
+| Harden a plan | *(use prompt)* | Paste Step 2 prompt into Copilot |
+| Execute slices | *(use prompt)* | Paste Step 3 prompt into Copilot |
+| Review & audit | *(use prompt)* | Paste Step 5 prompt into Copilot |
+
+The CLI handles **project management tasks** (setup, status, phases, branches, extensions). The **core pipeline** (hardening, execution, review) still runs through Copilot Agent Mode — those are AI-driven workflows, not shell commands.
+
+---
+
+## Options
+
+| Flag | Applies To | Effect |
+|------|-----------|--------|
+| `--dry-run` | `new-phase`, `branch` | Show what would happen without making changes |
+| `--force` | `ext remove` | Skip confirmation prompt |
+| `--help` | All commands | Show help for the command |
+
+---
+
+## Troubleshooting
+
+**"Not inside a git repository"**
+The CLI needs to find your repo root via `.git`. Run from inside your project directory.
+
+**"setup.ps1 not found"**
+The `init` command delegates to `setup.ps1` / `setup.sh` in the repo root. Make sure the setup scripts exist.
+
+**"extension.json not found"**
+The `ext install` command requires a valid `extension.json` in the source path. See [docs/EXTENSIONS.md](EXTENSIONS.md) for the extension manifest format.
+
+---
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Success |
+| `1` | Error (command failed, file not found, invalid input) |
+| `2` | Missing prerequisite (not in a git repo, required tool missing) |
+
+---
+
+## AI Agent Usage
+
+> **Audience**: You are an AI coding agent using the Plan Forge CLI programmatically.
+
+### Platform Detection
+
+Detect the correct script before running commands:
+
+```
+IF operating system is Windows
+   AND shell is PowerShell
+   → Use .\pforge.ps1 <command>
+
+IF operating system is macOS or Linux
+   → Use ./pforge.sh <command>
+
+IF pforge.ps1 does NOT exist in repo root
+   AND pforge.sh does NOT exist in repo root
+   → CLI not installed — use manual steps instead (each command section documents them)
+```
+
+### When to Use the CLI vs Manual Operations
+
+```
+Use CLI when:
+  • Creating a new phase         → pforge new-phase <name>
+  • Checking setup validity       → pforge check
+  • Reading roadmap status        → pforge status
+  • Creating a branch from a plan → pforge branch <plan>
+  • Installing an extension       → pforge ext install <path>
+
+Do NOT use CLI when:
+  • Hardening a plan (Step 2)     → Use the Step 2 prompt in Agent Mode
+  • Executing slices (Step 3)     → Use the Step 3 prompt in Agent Mode
+  • Running review gate (Step 5)  → Use the Step 5 prompt in Agent Mode
+  • Editing plan content          → Edit the Markdown file directly
+```
+
+### Recommended Agent Workflow
+
+When setting up a new feature for a user:
+
+```
+1. pforge check                          # Verify setup is valid
+2. pforge new-phase <feature-name>       # Create plan file + roadmap entry
+3. pforge branch <plan-file> --dry-run   # Show what branch would be created
+4. (ask user to confirm branch name)
+5. pforge branch <plan-file>             # Create the branch
+6. (proceed with Step 1-5 pipeline prompts in Agent Mode)
+```
+
+### Parsing Output
+
+CLI output is human-readable, not structured. To check results programmatically:
+
+| Need | Approach |
+|------|----------|
+| Did the command succeed? | Check exit code (`$LASTEXITCODE` in PowerShell, `$?` in Bash) |
+| What files were created? | Run `git status --short` after the command |
+| What phases exist? | Read `docs/plans/DEPLOYMENT-ROADMAP.md` directly |
+| What extensions are installed? | Read `.plan-hardening/extensions/extensions.json` |
+
+### Error Handling
+
+```
+IF exit code = 1 → Command failed. Read stderr for details. Fix and retry.
+IF exit code = 2 → Missing prerequisite. Check: Are you in a git repo?
+                    Does the required file exist (setup.ps1, plan file, extension.json)?
+IF command not found → CLI not installed. Fall back to manual steps.
+```
+
+### Key Files the CLI Reads/Writes
+
+| File | Read By | Written By |
+|------|---------|------------|
+| `docs/plans/DEPLOYMENT-ROADMAP.md` | `status`, `new-phase` | `new-phase` |
+| `docs/plans/Phase-N-*-PLAN.md` | `branch` | `new-phase` |
+| `.plan-hardening/extensions/extensions.json` | `ext list` | `ext install`, `ext remove` |
+| `.plan-hardening/extensions/*/extension.json` | `ext install`, `ext remove` | — |
+| `.github/instructions/*.instructions.md` | — | `ext install`, `ext remove` |
+| `.github/agents/*.agent.md` | — | `ext install`, `ext remove` |
+| `.github/prompts/*.prompt.md` | — | `ext install`, `ext remove` |

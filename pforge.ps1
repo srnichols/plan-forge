@@ -1,18 +1,18 @@
 <#
 .SYNOPSIS
-    pharden — CLI wrapper for the Plan Forge Pipeline
+    pforge — CLI wrapper for the Plan Forge Pipeline
 
 .DESCRIPTION
     Convenience commands for common pipeline operations. Every command
     shows the equivalent manual steps so non-CLI users can learn.
 
 .EXAMPLE
-    .\pharden.ps1 help
-    .\pharden.ps1 init -Preset dotnet -ProjectPath .
-    .\pharden.ps1 check
-    .\pharden.ps1 status
-    .\pharden.ps1 new-phase user-auth
-    .\pharden.ps1 branch docs/plans/Phase-1-USER-AUTH-PLAN.md
+    .\pforge.ps1 help
+    .\pforge.ps1 init -Preset dotnet -ProjectPath .
+    .\pforge.ps1 check
+    .\pforge.ps1 status
+    .\pforge.ps1 new-phase user-auth
+    .\pforge.ps1 branch docs/plans/Phase-1-USER-AUTH-PLAN.md
 #>
 
 param(
@@ -54,7 +54,7 @@ function Write-ManualSteps([string]$Title, [string[]]$Steps) {
 
 function Show-Help {
     Write-Host ""
-    Write-Host "pharden — Plan Forge Pipeline CLI" -ForegroundColor Cyan
+    Write-Host "pforge — Plan Forge Pipeline CLI" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "COMMANDS:" -ForegroundColor Yellow
     Write-Host "  init              Bootstrap project with setup wizard (delegates to setup.ps1)"
@@ -73,12 +73,12 @@ function Show-Help {
     Write-Host "  --help            Show help for a specific command"
     Write-Host ""
     Write-Host "EXAMPLES:" -ForegroundColor Yellow
-    Write-Host "  .\pharden.ps1 init -Preset dotnet"
-    Write-Host "  .\pharden.ps1 status"
-    Write-Host "  .\pharden.ps1 new-phase user-auth"
-    Write-Host "  .\pharden.ps1 new-phase user-auth --dry-run"
-    Write-Host "  .\pharden.ps1 branch docs/plans/Phase-1-USER-AUTH-PLAN.md"
-    Write-Host "  .\pharden.ps1 ext list"
+    Write-Host "  .\pforge.ps1 init -Preset dotnet"
+    Write-Host "  .\pforge.ps1 status"
+    Write-Host "  .\pforge.ps1 new-phase user-auth"
+    Write-Host "  .\pforge.ps1 new-phase user-auth --dry-run"
+    Write-Host "  .\pforge.ps1 branch docs/plans/Phase-1-USER-AUTH-PLAN.md"
+    Write-Host "  .\pforge.ps1 ext list"
     Write-Host ""
 }
 
@@ -163,7 +163,7 @@ function Invoke-Status {
 function Invoke-NewPhase {
     if (-not $Arguments -or $Arguments.Count -eq 0) {
         Write-Host "ERROR: Phase name required." -ForegroundColor Red
-        Write-Host "  Usage: pharden new-phase <name>" -ForegroundColor Yellow
+        Write-Host "  Usage: pforge new-phase <name>" -ForegroundColor Yellow
         exit 1
     }
 
@@ -259,7 +259,7 @@ function Invoke-NewPhase {
 function Invoke-Branch {
     if (-not $Arguments -or $Arguments.Count -eq 0) {
         Write-Host "ERROR: Plan file path required." -ForegroundColor Red
-        Write-Host "  Usage: pharden branch <plan-file>" -ForegroundColor Yellow
+        Write-Host "  Usage: pforge branch <plan-file>" -ForegroundColor Yellow
         exit 1
     }
 
@@ -331,7 +331,7 @@ function Invoke-Ext {
 function Invoke-ExtInstall([string[]]$args_) {
     if (-not $args_ -or $args_.Count -eq 0) {
         Write-Host "ERROR: Extension path required." -ForegroundColor Red
-        Write-Host "  Usage: pharden ext install <path-to-extension>" -ForegroundColor Yellow
+        Write-Host "  Usage: pforge ext install <path-to-extension>" -ForegroundColor Yellow
         exit 1
     }
 
@@ -449,7 +449,7 @@ function Invoke-ExtList {
 function Invoke-ExtRemove([string[]]$args_) {
     if (-not $args_ -or $args_.Count -eq 0) {
         Write-Host "ERROR: Extension name required." -ForegroundColor Red
-        Write-Host "  Usage: pharden ext remove <name>" -ForegroundColor Yellow
+        Write-Host "  Usage: pforge ext remove <name>" -ForegroundColor Yellow
         exit 1
     }
 

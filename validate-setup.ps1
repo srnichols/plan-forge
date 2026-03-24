@@ -191,13 +191,13 @@ else {
 }
 
 # CLI
-$cliPath = Join-Path $ProjectPath "pharden.ps1"
+$cliPath = Join-Path $ProjectPath "pforge.ps1"
 if (Test-Path $cliPath) {
-    Write-Host "  PASS  CLI: pharden.ps1 found" -ForegroundColor Green
+    Write-Host "  PASS  CLI: pforge.ps1 found" -ForegroundColor Green
     $pass++
 }
 else {
-    Write-Host "  WARN  CLI: pharden.ps1 not installed (optional)" -ForegroundColor Yellow
+    Write-Host "  WARN  CLI: pforge.ps1 not installed (optional)" -ForegroundColor Yellow
     $warn++
 }
 

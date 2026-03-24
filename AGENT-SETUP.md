@@ -99,55 +99,33 @@ Without `-Force`, the script will **SKIP** any file that already exists. This is
 
 ### Step 3: Merge What Was Skipped
 
-For each file that was SKIPPED, the agent must merge the template content into the existing file:
+For each file that was SKIPPED, apply the appropriate merge strategy:
 
-#### `.github/copilot-instructions.md` (most common conflict)
+```
+DECISION TREE — For each skipped file:
 
-The existing file has project-specific conventions. The template adds architecture principles and planning pipeline references. Merge strategy:
+IF file is .github/copilot-instructions.md:
+  → Read BOTH existing + template (presets/<preset>/.github/copilot-instructions.md)
+  → ADD missing sections: "Architecture Principles", "Planning Pipeline", "Red Flags"
+  → DO NOT duplicate or remove existing content
 
-1. **Read the existing file** completely
-2. **Read the template file** from `presets/<preset>/.github/copilot-instructions.md`
-3. **Add these sections** if missing from the existing file:
-   - "Architecture Principles" section (link to `architecture-principles.instructions.md`)
-   - "Planning Pipeline" section (link to `docs/plans/AI-Plan-Hardening-Runbook-Instructions.md`)
-   - "Red Flags" block (the ❌ stop markers)
-4. **Do NOT duplicate** sections that already exist
-5. **Do NOT remove** any existing project-specific content
+IF file is .github/instructions/*.instructions.md:
+  → Same filename exists? Keep existing as base, append missing sections from template
+  → Different filenames? Copy template files directly (no conflict)
+  → Always preserve existing `applyTo` frontmatter
 
-#### `.github/instructions/*.instructions.md` files
+IF file is AGENTS.md:
+  → Keep existing file, add "AI Agent Development Standards" section if missing
 
-If the target already has instruction files with the same name:
+IF file is in docs/plans/:
+  → Always safe to copy — no conflicts with existing docs
 
-1. **Read both the existing and template versions**
-2. **Keep the existing file as the base** (it has project-specific patterns)
-3. **Append any sections** from the template that don't exist in the current file
-4. **Preserve all `applyTo` frontmatter** from the existing file
+IF file is in .github/prompts/, .github/agents/, or .github/skills/:
+  → Copy files that DON'T exist in target
+  → SKIP files that already exist (they've been customized)
+```
 
-If the target has instruction files with DIFFERENT names (e.g., `blazor.instructions.md` vs `frontend.instructions.md`):
-
-1. **Copy the template files** — they don't conflict
-2. No merging needed
-
-#### `AGENTS.md`
-
-If exists:
-1. **Keep the existing file** — it documents actual project agents
-2. **Add the "AI Agent Development Standards"** section from the template if not present
-3. **Do NOT replace** existing worker documentation
-
-#### `docs/plans/` directory
-
-Always safe to copy — these are new planning documents that shouldn't conflict with existing project docs.
-
-#### `.github/prompts/`, `.github/agents/`, `.github/skills/` directories
-
-If these directories don't exist in the target project:
-1. **Copy them** from the preset — no conflict possible
-
-If the target already has files in these directories:
-1. **Copy new files** that don't exist in the target
-2. **Skip files** that already exist (they've been customized)
-3. **Do NOT overwrite** existing prompt, agent, or skill files
+**Key rule**: Never delete or overwrite existing project-specific content. Only add what's missing.
 
 ### Step 4: Validate
 

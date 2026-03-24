@@ -162,6 +162,30 @@ if (-not $Preset) {
         Write-Host ""
         Write-Host "Auto-detecting tech stack..." -ForegroundColor Cyan
         $Preset = Find-Preset $ProjectPath
+        if (-not $Force) {
+            $confirmPreset = Read-Host "Detected preset: $Preset. Is this correct? (Y/n)"
+            if ($confirmPreset -and $confirmPreset -notin @('y', 'Y', 'yes', 'Yes', '')) {
+                Write-Host ""
+                Write-Host "Available presets:" -ForegroundColor Cyan
+                Write-Host "  1) dotnet      — .NET / C# / ASP.NET Core"
+                Write-Host "  2) typescript  — TypeScript / React / Node.js / Express"
+                Write-Host "  3) python      — Python / FastAPI / SQLAlchemy"
+                Write-Host "  4) java        — Java / Spring Boot / Gradle / Maven"
+                Write-Host "  5) go          — Go / Chi / Gin / Standard Library"
+                Write-Host "  6) custom      — Shared files only (add your own instructions)"
+                Write-Host ""
+                $choice = Get-PromptValue "Select preset (1-6 or name)" "1"
+                $Preset = switch ($choice) {
+                    '1' { 'dotnet' }
+                    '2' { 'typescript' }
+                    '3' { 'python' }
+                    '4' { 'java' }
+                    '5' { 'go' }
+                    '6' { 'custom' }
+                    default { $choice }
+                }
+            }
+        }
     }
     else {
         Write-Host ""
@@ -386,12 +410,14 @@ Write-Host ""
 Write-Host "Step 5: Generating .forge.json" -ForegroundColor Cyan
 
 $configPath = Join-Path $ProjectPath ".forge.json"
+$versionFile = Join-Path $templateRoot "VERSION"
+$templateVersion = if (Test-Path $versionFile) { (Get-Content $versionFile -Raw).Trim() } else { "1.0.0" }
 $config = @{
     projectName  = $ProjectName
     preset       = $Preset
     stack        = $stackLabel
     setupDate    = (Get-Date -Format 'yyyy-MM-dd')
-    templateVersion = "1.0.0"
+    templateVersion = $templateVersion
 } | ConvertTo-Json -Depth 3
 
 Set-Content -Path $configPath -Value $config
@@ -438,3 +464,10 @@ Write-Host "  - Run .github/prompts/project-profile.prompt.md to generate projec
 Write-Host "  - Run .github/prompts/project-principles.prompt.md to define project principles"
 Write-Host "  - Use .github/prompts/step0-specify-feature.prompt.md to define your first feature"
 Write-Host ""
+
+# ─── Step 8: Auto-validate ─────────────────────────────────────────────
+Write-Host "Running validation..." -ForegroundColor Cyan
+$validateScript = Join-Path $templateRoot "validate-setup.ps1"
+if (Test-Path $validateScript) {
+    & $validateScript -ProjectPath $ProjectPath
+}

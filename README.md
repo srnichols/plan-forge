@@ -10,6 +10,17 @@
 
 ---
 
+## Start Here
+
+| You are... | Start with |
+|------------|-----------|
+| **A developer using VS Code + Copilot** | Run [`setup.ps1`](#2-run-the-setup-wizard) → Read [CUSTOMIZATION.md](CUSTOMIZATION.md) → Read [docs/COPILOT-VSCODE-GUIDE.md](docs/COPILOT-VSCODE-GUIDE.md) |
+| **An AI agent setting up a project** | Read [AGENT-SETUP.md](AGENT-SETUP.md) (your entry point) |
+| **A CLI-first developer** | Run [`setup.ps1`](#2-run-the-setup-wizard) → Read [docs/CLI-GUIDE.md](docs/CLI-GUIDE.md) |
+| **Just browsing / evaluating** | Keep reading — [What Is This?](#what-is-this-plain-english) below |
+
+---
+
 ## What Is This? (Plain English)
 
 When you use AI coding tools (like GitHub Copilot, Cursor, or Claude) to build software, they're great at writing code — but they tend to go off-script. They'll add features you didn't ask for, skip tests, make architecture decisions without telling you, and forget what they were doing halfway through.
@@ -50,6 +61,8 @@ graph TD
 | **Agent Definitions** | Specialized AI reviewer personas (security, architecture, etc.) | Expert reviewers — each focuses on one thing and checks it deeply |
 
 > **You don't need to understand all of this upfront.** Run the setup wizard, follow the numbered step prompts, and the framework guides you through.
+
+> **A note on "agent"**: This word appears in three contexts — **Agent Mode** (VS Code Copilot's code-editing mode), **Agent Definitions** (`.github/agents/*.agent.md` — reviewer/executor personas), and **Background Agents** (`AGENTS.md` — workers, scheduled tasks). They're different things. When in doubt, context clues: `.agent.md` files = reviewer personas, `AGENTS.md` = background workers.
 
 > **AI Agents**: If you're an AI coding agent installing this framework, skip to [AGENT-SETUP.md](AGENT-SETUP.md).
 
@@ -108,32 +121,13 @@ The executor shouldn't self-audit — that's like grading your own exam. Fresh c
 
 ### Two-Layer Guardrails
 
-Every project gets two layers of protection:
+Every project gets two layers of automatic protection:
 
-```mermaid
-graph TB
-    subgraph "Layer 1 — Universal Baseline"
-        L1["Ships with every preset<br/>Architecture principles · Security · Testing<br/>Error handling · Type safety · Async patterns<br/><b>You get these whether you ask or not</b>"]
-    end
-    subgraph "Layer 2 — Project Profile"
-        L2["Generated per-project via interview<br/>Coverage targets · Latency SLAs · Compliance<br/>Domain rules · Architecture overrides<br/><b>You customize these to match YOUR needs</b>"]
-    end
-    subgraph "Domain Instructions"
-        L3["Auto-load by file type<br/>database.instructions.md when editing SQL<br/>security.instructions.md when editing auth code<br/><b>Loaded automatically — no action needed</b>"]
-    end
+- **Layer 1 — Universal Baseline**: Ships with every preset. Architecture principles, security, testing, error handling, type safety, async patterns. You get these whether you ask or not.
+- **Layer 2 — Project Profile**: Generated per-project via an interview prompt. Coverage targets, latency SLAs, compliance requirements, domain-specific rules. You customize these to match your needs.
+- **Domain Instructions**: Auto-load by file type — `database.instructions.md` loads when editing SQL, `security.instructions.md` loads when editing auth code. No action needed.
 
-    L1 --> L2 --> L3
-
-    style L1 fill:#4A90D9,stroke:#2C5F8A,color:#fff
-    style L2 fill:#7B68EE,stroke:#5A4CB5,color:#fff
-    style L3 fill:#50C878,stroke:#3A9A5C,color:#fff
-```
-
-**Layer 1** is your safety net — even teams who don't know industry best practices get type safety, error handling, security basics, and proper architecture patterns out of the box.
-
-**Layer 2** is your customization layer — experienced teams can add project-specific rules like "SOC2 compliance required" or "all monetary values must use Decimal, never float."
-
-See [CUSTOMIZATION.md](CUSTOMIZATION.md) for details on generating a project profile.
+See [CUSTOMIZATION.md](CUSTOMIZATION.md) for details on generating a project profile, the full guardrail model diagram, and the layer conflict resolution rules.
 
 ### Using with GitHub Copilot in VS Code?
 
@@ -486,6 +480,21 @@ These features are all **opt-in** — skip any that don't apply. Existing workfl
 
 ---
 
+## Documentation Map
+
+After setup, read these in order:
+
+| Order | Document | Time | Purpose |
+|-------|----------|------|---------|
+| 1 | [CUSTOMIZATION.md](CUSTOMIZATION.md) | 10 min | Define Project Principles + generate Project Profile |
+| 2 | [docs/COPILOT-VSCODE-GUIDE.md](docs/COPILOT-VSCODE-GUIDE.md) | 15 min | How Agent Mode, sessions, and context budgeting work |
+| 3 | [docs/plans/AI-Plan-Hardening-Runbook-Instructions.md](docs/plans/AI-Plan-Hardening-Runbook-Instructions.md) | Reference | Copy-paste prompts for the 6-step pipeline |
+| — | [docs/CLI-GUIDE.md](docs/CLI-GUIDE.md) | Optional | CLI commands for project management |
+| — | [docs/EXTENSIONS.md](docs/EXTENSIONS.md) | Optional | Share custom guardrails as installable packages |
+| — | [docs/plans/AI-Plan-Hardening-Runbook.md](docs/plans/AI-Plan-Hardening-Runbook.md) | Reference | Deep-dive: templates, protocols, worked examples |
+
+---
+
 ## Key Concepts
 
 ### What Is a "Hardened Plan"?
@@ -565,6 +574,23 @@ This can happen if the context window is full (too many files loaded). Tips:
 - Explicitly reference the relevant instruction file in your prompt: `#file:.github/instructions/security.instructions.md`
 
 See [docs/COPILOT-VSCODE-GUIDE.md](docs/COPILOT-VSCODE-GUIDE.md) for more troubleshooting tips.
+
+---
+
+## Troubleshooting
+
+| Problem | Cause | Fix |
+|---------|-------|-----|
+| `validate-setup` shows **TODO** placeholders | Fresh install — expected | Edit `.github/copilot-instructions.md` and replace `<YOUR PROJECT NAME>`, `<YOUR BUILD COMMAND>`, etc. |
+| `.github/agents/` directory not found | Setup hasn't run yet, or `custom` preset was used | Run `setup.ps1` with a stack preset (dotnet, typescript, etc.) |
+| AI ignores instruction files | Context window full — too many files loaded | Keep instruction files under ~150 lines; use specific `applyTo` patterns instead of `'**'` |
+| Copilot doesn't load instruction files | `applyTo` glob doesn't match the file you're editing | Check the frontmatter pattern; test with `'**'` temporarily |
+| `pforge` command not found | CLI scripts not in repo root | Copy `pforge.ps1`/`pforge.sh` from the template, or use manual steps |
+| "Not inside a git repository" from CLI | Running `pforge` outside a git-initialized directory | `cd` into your project root, or run `git init` first |
+| Setup overwrites existing files | Used `-Force` flag on a brownfield project | Re-run without `-Force`; see AGENT-SETUP.md Section 2 for merge guidance |
+| Plan hardening agent drifts | Missing or stale instruction files | Run `pforge check` to verify all guardrail files exist |
+
+For CLI-specific issues, see [docs/CLI-GUIDE.md → Troubleshooting](docs/CLI-GUIDE.md#troubleshooting).
 
 ---
 

@@ -74,7 +74,7 @@ check_no_placeholders() {
     local placeholders=("<YOUR PROJECT NAME>" "<YOUR TECH STACK>" "<YOUR BUILD COMMAND>" "<YOUR TEST COMMAND>" "<YOUR LINT COMMAND>")
     for ph in "${placeholders[@]}"; do
         if grep -qF "$ph" "$full_path"; then
-            yellow "  WARN  $rel_path contains unresolved placeholder: $ph"
+            printf '\033[0;35m  TODO  %s contains placeholder to fill in: %s\033[0m\n' "$rel_path" "$ph"
             ((WARN++))
         fi
     done

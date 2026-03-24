@@ -170,6 +170,30 @@ if [[ -z "$PRESET" ]]; then
         echo ""
         cyan "Auto-detecting tech stack..."
         PRESET="$(detect_preset "$PROJECT_PATH")"
+        if [[ "$FORCE" != true ]]; then
+            read -rp "Detected preset: $PRESET. Is this correct? (Y/n) " confirm_preset
+            if [[ -n "$confirm_preset" ]] && [[ "$confirm_preset" != [yY]* ]]; then
+                echo ""
+                cyan "Available presets:"
+                echo "  1) dotnet      — .NET / C# / ASP.NET Core"
+                echo "  2) typescript  — TypeScript / React / Node.js / Express"
+                echo "  3) python      — Python / FastAPI / SQLAlchemy"
+                echo "  4) java        — Java / Spring Boot / Gradle / Maven"
+                echo "  5) go          — Go / Chi / Gin / Standard Library"
+                echo "  6) custom      — Shared files only (add your own instructions)"
+                echo ""
+                choice="$(prompt_value "Select preset (1-6 or name)" "1")"
+                case "$choice" in
+                    1|dotnet)     PRESET="dotnet" ;;
+                    2|typescript) PRESET="typescript" ;;
+                    3|python)     PRESET="python" ;;
+                    4|java)       PRESET="java" ;;
+                    5|go)         PRESET="go" ;;
+                    6|custom)     PRESET="custom" ;;
+                    *)            PRESET="$choice" ;;
+                esac
+            fi
+        fi
     else
         echo ""
         cyan "Available presets:"
@@ -373,13 +397,18 @@ echo ""
 cyan "Step 5: Generating .forge.json"
 
 CONFIG_PATH="$PROJECT_PATH/.forge.json"
+VERSION_FILE="$TEMPLATE_ROOT/VERSION"
+TEMPLATE_VERSION="1.0.0"
+if [[ -f "$VERSION_FILE" ]]; then
+    TEMPLATE_VERSION="$(tr -d '\n' < "$VERSION_FILE")"
+fi
 cat > "$CONFIG_PATH" <<EOF
 {
   "projectName": "$PROJECT_NAME",
   "preset": "$PRESET",
   "stack": "$STACK_LABEL",
   "setupDate": "$(date +%Y-%m-%d)",
-  "templateVersion": "1.0.0"
+  "templateVersion": "$TEMPLATE_VERSION"
 }
 EOF
 
@@ -426,3 +455,10 @@ echo "  - Run .github/prompts/project-profile.prompt.md to generate project-spec
 echo "  - Run .github/prompts/project-principles.prompt.md to define project principles"
 echo "  - Use .github/prompts/step0-specify-feature.prompt.md to define your first feature"
 echo ""
+
+# ─── Step 8: Auto-validate ─────────────────────────────────────────────
+cyan "Running validation..."
+validate_script="$TEMPLATE_ROOT/validate-setup.sh"
+if [[ -f "$validate_script" ]]; then
+    bash "$validate_script" --path "$PROJECT_PATH"
+fi

@@ -59,7 +59,7 @@ function Check-NoPlaceholders([string]$RelPath) {
     $placeholders = @('<YOUR PROJECT NAME>', '<YOUR TECH STACK>', '<YOUR BUILD COMMAND>', '<YOUR TEST COMMAND>', '<YOUR LINT COMMAND>')
     foreach ($ph in $placeholders) {
         if ($content -match [regex]::Escape($ph)) {
-            Write-Host "  WARN  $RelPath contains unresolved placeholder: $ph" -ForegroundColor Yellow
+            Write-Host "  TODO  $RelPath contains placeholder to fill in: $ph" -ForegroundColor Magenta
             $script:warn++
         }
     }

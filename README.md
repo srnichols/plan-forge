@@ -518,6 +518,7 @@ These features are all **opt-in** — skip any that don't apply. Existing workfl
 | **Agent Plugin** | Install Plan Forge as a VS Code agent plugin from a Git URL — no setup scripts needed. | `Chat: Install Plugin From Source` → repo URL |
 | **Skill Slash Commands** | Invoke skills directly: `/database-migration`, `/staging-deploy`, `/test-sweep`, `/dependency-audit`, `/code-review`, `/release-notes`, `/api-doc-gen`, `/onboarding`. | Type `/` in Copilot Chat to see available skills |
 | **Persistent Memory (OpenBrain)** | Capture decisions across sessions, search project history semantically, bridge the 3-session model with long-term context. | Install `plan-forge-memory` extension + [OpenBrain](https://github.com/srnichols/OpenBrain) MCP server |
+| **Unified System (Plan Forge + OpenBrain + OpenClaw)** | Full automated development system — OpenClaw orchestrates Plan Forge pipelines via Copilot CLI ACP, OpenBrain provides shared memory, you control everything from WhatsApp/Slack/Telegram. | See [docs/UNIFIED-SYSTEM-ARCHITECTURE.md](docs/UNIFIED-SYSTEM-ARCHITECTURE.md) |
 
 ---
 
@@ -532,6 +533,7 @@ After setup, read these in order:
 | 3 | [docs/plans/AI-Plan-Hardening-Runbook-Instructions.md](docs/plans/AI-Plan-Hardening-Runbook-Instructions.md) | Reference | Copy-paste prompts for the 6-step pipeline |
 | — | [docs/CLI-GUIDE.md](docs/CLI-GUIDE.md) | Optional | CLI commands for project management |
 | — | [docs/EXTENSIONS.md](docs/EXTENSIONS.md) | Optional | Share custom guardrails as installable packages |
+| — | [docs/UNIFIED-SYSTEM-ARCHITECTURE.md](docs/UNIFIED-SYSTEM-ARCHITECTURE.md) | Optional | Integrate Plan Forge + [OpenBrain](https://github.com/srnichols/OpenBrain) + [OpenClaw](https://github.com/openclaw/openclaw) into a unified automated development system — orchestration, persistent memory, and multi-channel control via Copilot CLI ACP |
 | — | [docs/plans/AI-Plan-Hardening-Runbook.md](docs/plans/AI-Plan-Hardening-Runbook.md) | Reference | Deep-dive: templates, protocols, worked examples |
 
 ---

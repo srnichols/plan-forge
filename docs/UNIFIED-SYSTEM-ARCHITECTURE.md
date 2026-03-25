@@ -530,6 +530,123 @@ graph TD
                                     └────────────────────┘
 ```
 
+### Azure Cloud Deployment
+
+For teams that don't want to maintain on-prem infrastructure, OpenBrain can run entirely on Azure. Ollama is replaced by **Azure OpenAI** (no GPU VM needed), PostgreSQL runs on the managed **Flexible Server** with pgvector, and the OpenBrain Node.js server runs on **Azure Container Apps** (scales to zero when idle).
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  Azure Resource Group: rg-openbrain                               │
+│                                                                   │
+│  ┌──────────────────────────────────────────────────────────┐    │
+│  │  Azure Container Apps Environment                         │    │
+│  │                                                           │    │
+│  │  ┌─────────────────────────────────┐                      │    │
+│  │  │  openbrain-api                  │                      │    │
+│  │  │  (Container App — Consumption)  │                      │    │
+│  │  │                                 │                      │    │
+│  │  │  REST API  :8000 (internal)     │                      │    │
+│  │  │  MCP SSE   :8080 (external)     │                      │    │
+│  │  │  Image: ghcr.io/srnichols/      │                      │    │
+│  │  │         openbrain:latest        │                      │    │
+│  │  └──────────┬──────────────────────┘                      │    │
+│  └─────────────┼─────────────────────────────────────────────┘    │
+│                │                                                   │
+│       ┌────────┴────────┐      ┌──────────────────────────┐      │
+│       │                 │      │                          │      │
+│  ┌────▼─────────────┐  │  ┌───▼────────────────────────┐ │      │
+│  │ Azure Database    │  │  │ Azure OpenAI               │ │      │
+│  │ for PostgreSQL    │  │  │                            │ │      │
+│  │ (Flexible Server) │  │  │ text-embedding-3-small     │ │      │
+│  │                   │  │  │ gpt-4o-mini                │ │      │
+│  │ SKU: B1ms         │  │  │                            │ │      │
+│  │ 1 vCore / 2 GiB   │  │  │ (pay-per-token)           │ │      │
+│  │ pgvector enabled  │  │  └────────────────────────────┘ │      │
+│  │ 32 GiB storage    │  │                                 │      │
+│  └───────────────────┘  │  ┌────────────────────────────┐ │      │
+│                         │  │ Azure Key Vault            │ │      │
+│                         │  │                            │ │      │
+│                         │  │ MCP_ACCESS_KEY             │ │      │
+│                         │  │ DB_PASSWORD                │ │      │
+│                         │  │ AZURE_OPENAI_KEY           │ │      │
+│                         │  └────────────────────────────┘ │      │
+│                         │                                 │      │
+└─────────────────────────┴─────────────────────────────────┴──────┘
+                │
+                │ HTTPS (Container Apps ingress)
+                │
+    ┌───────────▼────────────────┐
+    │  Your Workstation          │
+    │                            │
+    │  VS Code + Copilot ────────┼──► MCP: https://openbrain-api.<region>.azurecontainerapps.io/sse
+    │  Copilot CLI ──────────────┼──► MCP: same URL
+    │  OpenClaw Gateway ─────────┼──► REST: https://openbrain-api.<region>.azurecontainerapps.io
+    │                            │
+    └────────────────────────────┘
+```
+
+#### Azure Service Map
+
+| On-Prem Component | Azure Service | SKU | Est. Cost/mo |
+|-------------------|--------------|-----|-------------|
+| PostgreSQL 17 + pgvector | Azure Database for PostgreSQL Flexible Server | **B1ms** (1 vCore, 2 GiB) | ~$12.41 |
+| PostgreSQL storage (32 GiB) | (included — Flex Server storage) | 32 GiB @ $0.115/GiB | ~$3.68 |
+| Ollama embeddings | Azure OpenAI — `text-embedding-3-small` | Pay-per-token (1536-dim) | ~$0.02-0.50 |
+| Ollama metadata LLM | Azure OpenAI — `gpt-4o-mini` | Pay-per-token | ~$0.10-0.50 |
+| OpenBrain Node.js server | Azure Container Apps | **Consumption** (scales to zero) | ~$0-5 |
+| Secrets management | Azure Key Vault | Standard | ~$0.03 |
+| **Total** | | | **~$17-22/mo** |
+
+> **Note**: Container Apps Consumption plan includes 180k vCPU-seconds, 360k GiB-seconds, and 2M requests/month **free** per subscription. For personal use, the OpenBrain container will likely stay within or near this free tier.
+
+#### Deploy to Azure
+
+**One-click deploy** (from the [OpenBrain repo](https://github.com/srnichols/OpenBrain)):
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsrnichols%2FOpenBrain%2Fmaster%2Finfra%2Fazuredeploy.json)
+
+**Or via Azure Developer CLI:**
+```bash
+cd OpenBrain
+azd up
+```
+
+**Or via Azure CLI directly:**
+```bash
+az deployment group create \
+  --resource-group rg-openbrain \
+  --template-file infra/main.bicep \
+  --parameters location=eastus2
+```
+
+The Bicep template provisions all resources, runs the database init script, deploys the container, and outputs the MCP endpoint URL. You then configure it in your MCP clients:
+
+```json
+{
+  "servers": {
+    "openbrain": {
+      "type": "sse",
+      "url": "https://openbrain-api.<region>.azurecontainerapps.io/sse?key=<YOUR_MCP_KEY>"
+    }
+  }
+}
+```
+
+#### Azure OpenAI Embedder
+
+When deploying to Azure, OpenBrain uses `EMBEDDER_PROVIDER=azure-openai` instead of `ollama`:
+
+| Environment Variable | Value | Purpose |
+|---------------------|-------|---------|
+| `EMBEDDER_PROVIDER` | `azure-openai` | Select the Azure OpenAI provider |
+| `EMBEDDING_DIMENSIONS` | `1536` | Azure text-embedding-3-small outputs 1536-dim vectors |
+| `AZURE_OPENAI_ENDPOINT` | `https://<name>.openai.azure.com` | Your Azure OpenAI resource endpoint |
+| `AZURE_OPENAI_KEY` | (from Key Vault) | API key for the resource |
+| `AZURE_OPENAI_EMBED_DEPLOYMENT` | `text-embedding-3-small` | Deployment name for embeddings |
+| `AZURE_OPENAI_LLM_DEPLOYMENT` | `gpt-4o-mini` | Deployment name for metadata extraction |
+
+> **Important**: Azure uses 1536-dim embeddings (vs. 768-dim for Ollama). The `db/init.sql` accepts a `VECTOR()` dimension parameter, and the Bicep template configures the database accordingly. Existing Ollama-based thoughts **cannot** be mixed with Azure OpenAI thoughts in the same table — choose one embedder per deployment.
+
 ---
 
 ## Workspace Layout
@@ -1501,6 +1618,8 @@ OpenClaw:
 
 ## Cost Summary
 
+### Option A: On-Premises / Home Lab ($0 incremental)
+
 | Component | Cost | Notes |
 |-----------|------|-------|
 | **Plan Forge** | $0 | MIT licensed template |
@@ -1511,6 +1630,19 @@ OpenClaw:
 | **PostgreSQL** | $0 | Self-hosted |
 | **Ollama** | $0 | Local GPU/CPU |
 | **Total incremental** | **$0** | Everything uses your existing Copilot subscription |
+
+### Option B: Azure Cloud (~$17-22/mo)
+
+| Component | Cost | Notes |
+|-----------|------|-------|
+| **Plan Forge** | $0 | MIT licensed template |
+| **OpenClaw** | $0 | Self-hosted on your workstation |
+| **Copilot CLI / VS Code** | Copilot subscription | Unlimited in your plan |
+| **Azure PostgreSQL Flex** (B1ms) | ~$12.41/mo | 1 vCore, 2 GiB RAM, 32 GiB storage (+$3.68) |
+| **Azure Container Apps** | ~$0-5/mo | Consumption plan — scales to zero, generous free tier |
+| **Azure OpenAI** (embeddings + LLM) | ~$0.12-1.00/mo | text-embedding-3-small + gpt-4o-mini, pay-per-token |
+| **Azure Key Vault** | ~$0.03/mo | 3 secrets |
+| **Total** | **~$17-22/mo** | Deploy with one click or `azd up` |
 
 ---
 

@@ -49,3 +49,11 @@ Follow the Rollback Protocol (Runbook Section 10):
 1. Commit completed work
 2. Open new session with this same prompt
 3. Tell it: "Slices 1–N are complete. Resume from Slice N+1."
+
+---
+
+## Persistent Memory (if OpenBrain is configured)
+
+- **Before each slice**: `search_thoughts("<slice topic>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode")` — load prior decisions and patterns relevant to the current slice
+- **After each slice**: `capture_thought("Slice N: <key decision or outcome>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "plan-forge-step-3-slice-N")` — persist decisions made during execution
+- **After completeness sweep**: `capture_thoughts([...lessons], project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "plan-forge-step-4-sweep")` — batch capture patterns, conventions, and lessons discovered

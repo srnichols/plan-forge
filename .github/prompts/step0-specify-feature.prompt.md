@@ -144,3 +144,10 @@ If there are ZERO `[NEEDS CLARIFICATION]` markers, say:
 
 If there ARE markers, say:
 "Specification has N open questions ⚠️ — resolve all [NEEDS CLARIFICATION] items before proceeding to Step 1."
+
+---
+
+## Persistent Memory (if OpenBrain is configured)
+
+- **Before interviewing**: `search_thoughts("<feature topic>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode")` — check if this feature or similar has been specified before, load prior decisions and lessons
+- **After specification is complete**: `capture_thought("Feature spec: <summary of what and why>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "plan-forge-step-0")` — persist the specification for downstream sessions

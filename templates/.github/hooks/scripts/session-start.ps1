@@ -54,6 +54,20 @@ if (Test-Path $forgeJson) {
     }
 }
 
+# Inject OpenBrain reminder if MCP is configured
+$mcpJson = Join-Path $repoRoot ".vscode/mcp.json"
+if (Test-Path $mcpJson) {
+    $mcpContent = Get-Content $mcpJson -Raw
+    if ($mcpContent -match 'openbrain') {
+        $obReminder = "OPENBRAIN MEMORY: OpenBrain MCP is configured. BEFORE starting work, search for prior decisions and lessons: search_thoughts('<current task topic>', project: '<project-name>'). AFTER completing work, capture key decisions."
+        if ($contextParts.Count -gt 0 -and $contextParts[-1] -match 'CURRENT PHASE:\s*### Phase \d+') {
+            $phaseTopic = $contextParts[-1] -replace 'CURRENT PHASE:\s*### Phase \d+[:\s]*', ''
+            $obReminder = "OPENBRAIN MEMORY: OpenBrain MCP is configured. BEFORE starting work, run: search_thoughts('$phaseTopic', project: '<project-name>') to load prior decisions, patterns, and lessons. AFTER completing work, capture key decisions with capture_thought()."
+        }
+        $contextParts += $obReminder
+    }
+}
+
 # Output
 if ($contextParts.Count -gt 0) {
     $joined = $contextParts -join "`n"

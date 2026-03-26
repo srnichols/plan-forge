@@ -80,3 +80,10 @@ Pushed: Yes/No
 ```
 
 If phase is complete: "Phase shipped ✅ — ready for the next feature."
+
+---
+
+## Persistent Memory (if OpenBrain is configured)
+
+- **After postmortem**: `capture_thoughts([...lessons], project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "phase-N-postmortem")` — batch capture all lessons, patterns, architecture decisions, bugs, and conventions from this phase
+- **Include**: architecture decisions, patterns discovered, bugs encountered, conventions established, and anything flagged for future phases

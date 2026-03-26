@@ -52,3 +52,8 @@ psql -h staging-db -d contoso_staging -f Database/migrations/NNNN_description.sq
 - ALWAYS add `IF NOT EXISTS` / `IF EXISTS` guards
 - ALWAYS include rollback SQL
 - Test migration on a copy of production data when possible
+
+## Persistent Memory (if OpenBrain is configured)
+
+- **Before generating migration**: `search_thoughts("database migration", project: "<project>", created_by: "copilot-vscode", type: "pattern")` — load prior migration patterns, naming conventions, and lessons from failed migrations
+- **After migration succeeds**: `capture_thought("Migration: <summary of schema change>", project: "<project>", created_by: "copilot-vscode", source: "skill-database-migration")` — persist the migration decision for future reference

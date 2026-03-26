@@ -39,3 +39,10 @@ Output:
 5) Tests: pass/fail
 
 If ANY finding cannot be resolved without scope expansion: STOP and report.
+
+---
+
+## Persistent Memory (if OpenBrain is configured)
+
+- **Before sweeping**: `search_thoughts("common stubs", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "bug")` — check if prior sweeps found recurring stub patterns so you can look for them proactively
+- **After sweep**: `capture_thoughts([...findings], project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "plan-forge-step-4-sweep")` — batch capture patterns and conventions discovered during cleanup

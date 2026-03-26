@@ -52,3 +52,8 @@ npm run test:smoke -- --env staging
 - ALWAYS verify health endpoint after deploy
 - NEVER deploy to production using this skill
 - Rollback: `kubectl rollout undo deployment/api --context staging`
+
+## Persistent Memory (if OpenBrain is configured)
+
+- **Before deploying**: `search_thoughts("deploy failure", project: "<project>", created_by: "copilot-vscode", type: "postmortem")` — load prior deployment failures and environment-specific gotchas
+- **After deploy succeeds/fails**: `capture_thought("Deploy: <outcome — success or failure details>", project: "<project>", created_by: "copilot-vscode", source: "skill-staging-deploy")` — persist environment issues and config changes for next deployment

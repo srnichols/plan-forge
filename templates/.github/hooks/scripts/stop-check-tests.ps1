@@ -43,4 +43,17 @@ if ($testsRan) {
 }
 
 # Warn
-Write-Output "{`"systemMessage`":`"WARNING: Code files were modified but no test run was detected in this session. Consider running /test-sweep before ending to catch regressions.`"}"
+$warnings = @()
+$warnings += "WARNING: Code files were modified but no test run was detected in this session. Consider running /test-sweep before ending to catch regressions."
+
+# Remind to capture decisions to OpenBrain if configured
+$mcpJson = Join-Path $repoRoot ".vscode/mcp.json"
+if (Test-Path $mcpJson) {
+    $mcpContent = Get-Content $mcpJson -Raw
+    if ($mcpContent -match 'openbrain') {
+        $warnings += "OPENBRAIN REMINDER: Code was modified in this session. Before ending, capture key decisions and outcomes with capture_thought() so the next session has full context."
+    }
+}
+
+$joined = $warnings -join ' '
+Write-Output "{`"systemMessage`":`"$joined`"}"

@@ -54,3 +54,11 @@ Output a TBD summary:
 
 If ALL TBDs resolved: "Plan hardened ✅ — proceed to Step 3 (Execute Slices)"
 If ANY need input: list them and WAIT.
+
+---
+
+## Persistent Memory (if OpenBrain is configured)
+
+- **Before hardening**: `search_thoughts("<phase topic>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode")` — load prior decisions, patterns, and post-mortem lessons that inform scope and slicing
+- **During TBD resolution**: `search_thoughts("<ambiguous topic>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "decision")` — check if prior decisions already resolve the ambiguity
+- **After hardening**: `capture_thought("Plan hardened: <phase name> — N slices, key decisions: ...", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "plan-forge-step-2-hardening")` — persist hardening decisions for the execution session

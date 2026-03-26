@@ -56,3 +56,8 @@ npx knex migrate:latest --env staging
 - ALWAYS include `down()` migration for rollback
 - ALWAYS add `IF NOT EXISTS` / `IF EXISTS` guards in raw SQL
 - Test migration on a copy of production data when possible
+
+## Persistent Memory (if OpenBrain is configured)
+
+- **Before generating migration**: `search_thoughts("database migration", project: "<project>", created_by: "copilot-vscode", type: "pattern")` — load prior migration patterns, naming conventions, and lessons from failed migrations
+- **After migration succeeds**: `capture_thought("Migration: <summary of schema change>", project: "<project>", created_by: "copilot-vscode", source: "skill-database-migration")` — persist the migration decision for future reference

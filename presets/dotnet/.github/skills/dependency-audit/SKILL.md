@@ -77,3 +77,8 @@ License Issues: N
 - ALWAYS check if the upgrade has breaking changes
 - Run full test suite after any dependency change
 - Document any accepted vulnerabilities with justification
+
+## Persistent Memory (if OpenBrain is configured)
+
+- **Before auditing**: `search_thoughts("dependency vulnerability", project: "<project>", created_by: "copilot-vscode", type: "bug")` — load previously accepted vulnerabilities and known upgrade blockers
+- **After audit**: `capture_thought("Dep audit: <N vulnerabilities, N outdated — key findings>", project: "<project>", created_by: "copilot-vscode", source: "skill-dependency-audit")` — persist accepted risks and upgrade decisions

@@ -63,3 +63,10 @@ Output a summary table:
 
 If ALL pass: "Pre-flight complete ✅ — proceed to Step 2 (Harden the Plan)"
 If ANY fail: "Pre-flight FAILED ❌" + list exactly what to fix.
+
+---
+
+## Persistent Memory (if OpenBrain is configured)
+
+- **Before checking**: `search_thoughts("preflight blockers", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "bug")` — check if prior preflights failed for known reasons
+- **If preflight fails**: `capture_thought("Preflight blocker: <what failed and why>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "plan-forge-step-1")` — persist the blocker so it's caught earlier next time

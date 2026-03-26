@@ -41,4 +41,12 @@ if [[ "$TESTS_RAN" == true ]]; then
 fi
 
 # Code changed but tests not detected — warn
-echo "{\"systemMessage\":\"WARNING: Code files were modified but no test run was detected in this session. Consider running /test-sweep before ending to catch regressions.\"}"
+WARNINGS="WARNING: Code files were modified but no test run was detected in this session. Consider running /test-sweep before ending to catch regressions."
+
+# Remind to capture decisions to OpenBrain if configured
+MCP_JSON="$REPO_ROOT/.vscode/mcp.json"
+if [[ -f "$MCP_JSON" ]] && grep -q 'openbrain' "$MCP_JSON" 2>/dev/null; then
+    WARNINGS="$WARNINGS OPENBRAIN REMINDER: Code was modified in this session. Before ending, capture key decisions and outcomes with capture_thought() so the next session has full context."
+fi
+
+echo "{\"systemMessage\":\"$WARNINGS\"}"

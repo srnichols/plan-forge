@@ -60,7 +60,7 @@ Compile a brief postmortem from the execution:
 
 If the OpenBrain MCP server is available:
 
-- `capture_thoughts([...lessons], project: "<project>", source: "phase-N-postmortem")` — batch capture all lessons, patterns, and decisions from this phase
+- `capture_thoughts([...lessons], project: "<project>", created_by: "copilot-vscode", source: "phase-N-postmortem")` — batch capture all lessons, patterns, and decisions from this phase
 - Include: architecture decisions, patterns discovered, bugs encountered, conventions established
 
 ### Phase 6: Push & PR (with confirmation)

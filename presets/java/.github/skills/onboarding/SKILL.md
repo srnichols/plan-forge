@@ -93,3 +93,8 @@ Key files to bookmark:
 - Explain concepts at the audience's level — ask their experience first
 - Highlight gotchas and common mistakes specific to this codebase
 - Point to documentation rather than explaining everything from memory
+
+## Persistent Memory (if OpenBrain is configured)
+
+- **During onboarding**: `search_thoughts("architecture", project: "<project>", created_by: "copilot-vscode")` — surface architecture decisions, conventions, and lessons learned to give the new developer full project context
+- **After onboarding**: `capture_thought("Onboarding: <questions asked, gaps found in docs>", project: "<project>", created_by: "copilot-vscode", source: "skill-onboarding")` — persist common onboarding questions to improve docs

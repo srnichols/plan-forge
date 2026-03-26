@@ -48,6 +48,17 @@ if [[ -f "$FORGE_JSON" ]]; then
     fi
 fi
 
+# Inject OpenBrain reminder if MCP is configured
+MCP_JSON="$REPO_ROOT/.vscode/mcp.json"
+if [[ -f "$MCP_JSON" ]] && grep -q 'openbrain' "$MCP_JSON" 2>/dev/null; then
+    OB_REMINDER="OPENBRAIN MEMORY: OpenBrain MCP is configured. BEFORE starting work, search for prior decisions and lessons: search_thoughts('<current task topic>', project: '<project-name>'). AFTER completing work, capture key decisions."
+    if [[ -n "$IN_PROGRESS" ]]; then
+        PHASE_TOPIC=$(echo "$IN_PROGRESS" | sed 's/### Phase [0-9]*[: ]*//')
+        OB_REMINDER="OPENBRAIN MEMORY: OpenBrain MCP is configured. BEFORE starting work, run: search_thoughts('$PHASE_TOPIC', project: '<project-name>') to load prior decisions, patterns, and lessons. AFTER completing work, capture key decisions with capture_thought()."
+    fi
+    CONTEXT_PARTS+=("$OB_REMINDER")
+fi
+
 # Build output
 if [[ ${#CONTEXT_PARTS[@]} -gt 0 ]]; then
     JOINED=$(printf '%s\n' "${CONTEXT_PARTS[@]}")

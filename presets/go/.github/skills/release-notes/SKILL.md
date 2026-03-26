@@ -72,3 +72,8 @@ Format for **GitHub Release**:
 - ALWAYS flag breaking changes prominently
 - Include migration steps for any breaking change
 - Ask for human review before publishing
+
+## Persistent Memory (if OpenBrain is configured)
+
+- **Before generating notes**: `search_thoughts("release", project: "<project>", created_by: "copilot-vscode", type: "decision")` — load prior release decisions, breaking change precedents, and versioning conventions
+- **After release notes are finalized**: `capture_thought("Release: v<version> — <key changes summary>", project: "<project>", created_by: "copilot-vscode", source: "skill-release-notes")` — persist release history for future changelog continuity

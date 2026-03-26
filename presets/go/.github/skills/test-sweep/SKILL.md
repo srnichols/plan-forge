@@ -54,3 +54,8 @@ Total:          X passed, Y failed
 - Read the failing test source to diagnose
 - Check for race conditions with `-race` flag
 - Suggest fixes (ask before applying)
+
+## Persistent Memory (if OpenBrain is configured)
+
+- **Before running tests**: `search_thoughts("test failures", project: "<project>", created_by: "copilot-vscode", type: "bug")` — load known flaky tests, recurring failures, and environment-specific issues
+- **After test sweep**: `capture_thought("Test sweep: <N passed, N failed — key failure patterns>", project: "<project>", created_by: "copilot-vscode", source: "skill-test-sweep")` — persist failure patterns and flaky test discoveries

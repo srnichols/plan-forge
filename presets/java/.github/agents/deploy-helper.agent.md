@@ -1,7 +1,7 @@
 ---
 description: "Guide deployments: build JARs/containers, run migrations, verify health."
 name: "Deploy Helper"
-tools: [read, search, execute]
+tools: [read, search, runCommands]
 ---
 You are the **Deploy Helper**. Guide safe Java/Spring deployments.
 

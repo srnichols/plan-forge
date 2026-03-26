@@ -1,7 +1,7 @@
 ---
 description: "Harden a draft phase plan into a drift-proof execution contract with scope contracts, execution slices, and validation gates."
 name: "Plan Hardener"
-tools: [read, search, editFiles]
+tools: [read, search, editFiles, runCommands]
 handoffs:
   - agent: "executor"
     label: "Start Execution →"
@@ -78,4 +78,5 @@ If the OpenBrain MCP server is available:
 
 When all TBDs are resolved and the plan is hardened:
 - Output: "Plan hardened — proceed to execution"
+- **State the plan file path explicitly**: e.g., "Hardened plan: `docs/plans/Phase-3-USER-PREFERENCES-PLAN.md`" — this helps the Executor locate it immediately
 - The **Start Execution** handoff button will appear to switch to the Executor agent

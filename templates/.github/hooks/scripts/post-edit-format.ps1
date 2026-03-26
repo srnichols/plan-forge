@@ -65,4 +65,12 @@ if (-not $formatRan -and (Test-Path (Join-Path $repoRoot "go.mod")) -and $filePa
     if ($LASTEXITCODE -eq 0) { $formatRan = $true }
 }
 
+# Java — google-java-format (if available)
+if (-not $formatRan -and ((Test-Path (Join-Path $repoRoot "pom.xml")) -or (Test-Path (Join-Path $repoRoot "build.gradle")))) {
+    if (Get-Command google-java-format -ErrorAction SilentlyContinue) {
+        $null = google-java-format --replace $filePath 2>$null
+        if ($LASTEXITCODE -eq 0) { $formatRan = $true }
+    }
+}
+
 Write-Output "{}"

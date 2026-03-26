@@ -51,6 +51,17 @@ Run the **Completeness Sweep** (Runbook Section 6.1):
 - Wire each finding to the real service/API/method
 - Verify build + tests pass after each batch of fixes
 
+### Pre-Review Self-Check (Optional)
+
+Before handing off to the Reviewer Gate, optionally invoke relevant reviewer agents for an early catch:
+
+- If the phase involved API changes → reference `.github/agents/api-contract-reviewer.agent.md` checklist
+- If the phase involved data access → reference `.github/agents/database-reviewer.agent.md` checklist
+- If the phase involved auth/security → reference `.github/agents/security-reviewer.agent.md` checklist
+- If the phase involved UI → reference `.github/agents/accessibility-reviewer.agent.md` checklist
+
+Run the `/code-review` skill if available for a consolidated pre-check. This catches obvious issues before the independent Review Gate, reducing LOCKOUT cycles.
+
 ### Parallel Execution
 
 - After all slices in a `[parallel-safe]` group complete, run the **Parallel Merge Checkpoint**
@@ -87,4 +98,5 @@ If the OpenBrain MCP server is available:
 
 When all slices pass and the completeness sweep is clean:
 - Output: "Execution complete — ready for review"
+- **State the plan file path explicitly**: e.g., "Plan: `docs/plans/Phase-3-USER-PREFERENCES-PLAN.md`" and list files changed — this helps the Reviewer Gate orient immediately
 - The **Run Review Gate** handoff button will appear to switch to the Reviewer Gate agent

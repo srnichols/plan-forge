@@ -1,7 +1,7 @@
 ---
 description: "Interview the user to define what and why before any technical planning. Surfaces ambiguities as [NEEDS CLARIFICATION] markers that block hardening."
 name: "Specifier"
-tools: [read, search]
+tools: [read, search, editFiles]
 handoffs:
   - agent: "plan-hardener"
     label: "Start Plan Hardening →"
@@ -167,4 +167,5 @@ If the OpenBrain MCP server is available:
 
 When all markers are resolved and the specification is compiled:
 - Output: "Specification complete — proceed to plan hardening"
+- **State the plan file path explicitly**: e.g., "Plan file: `docs/plans/Phase-3-USER-PREFERENCES-PLAN.md`" — this helps the next agent locate it immediately
 - The **Start Plan Hardening** handoff button will appear to switch to the Plan Hardener agent

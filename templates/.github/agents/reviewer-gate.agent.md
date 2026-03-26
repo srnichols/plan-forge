@@ -1,7 +1,7 @@
 ---
 description: "Independent read-only audit of completed phase work — scope compliance, drift detection, architecture review, and severity reporting."
 name: "Reviewer Gate"
-tools: [read, search]
+tools: [read, search, runCommands]
 handoffs:
   - agent: "shipper"
     label: "Ship It →"
@@ -48,7 +48,7 @@ Output Part A:
 
 ### Part B: Drift Detection
 
-Compare the Scope Contract against actual changes:
+First, run `git diff --name-only` to get the definitive list of all changed files. Then compare against the Scope Contract:
 
 1. **Scope Creep** — Work not listed in the Scope Contract?
 2. **Unplanned Files** — Files created/modified not in any Execution Slice?
@@ -98,5 +98,5 @@ If the OpenBrain MCP server is available:
 
 - DO NOT modify any files — report only
 - DO NOT suggest fixes — only identify violations
-- You are read-only: `tools: [read, search]` only
+- Only run **read-only commands**: `git diff`, `git log`, `git status`, `git show`, build commands, test commands. Do NOT run destructive commands (`rm`, `git reset`, `git push`)
 - Maintain independence — do not carry context from the execution session

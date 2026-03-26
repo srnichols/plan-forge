@@ -1,7 +1,7 @@
 ---
 description: "Run tests, analyze failures, diagnose root causes, and suggest fixes. Use when tests fail or before releases."
 name: "Test Runner"
-tools: [read, search, execute]
+tools: [read, search, runCommands]
 ---
 You are the **Test Runner**. Run tests, analyze failures, and provide actionable diagnosis.
 

@@ -17,6 +17,41 @@ Act as a SPECIFICATION AGENT helping me define **<FEATURE-NAME>** before any tec
 
 Your job is to help me describe WHAT I want to build and WHY — not HOW to build it. Ask me structured questions to surface requirements I may not have thought about. For anything I'm unsure of, tag it with `[NEEDS CLARIFICATION: description]` — these markers MUST be resolved before the plan can be hardened (Step 2 will block on them).
 
+---
+
+### FIRST: Do you have an existing document?
+
+Before starting the interview, ask:
+
+> "Do you have an existing document, spec, PRD, or notes you'd like to use as a starting point? (file path, URL, or 'no')"
+
+**If the user provides a file or location:**
+
+1. Read the file and scan its contents
+2. Map its content against the 6 sections below (Problem Statement, User Scenarios, Acceptance Criteria, Edge Cases, Out of Scope, Open Questions)
+3. For each section, classify: **Covered**, **Partial**, or **Missing**
+4. Show a coverage summary:
+
+   | # | Section | Coverage | Extracted Summary |
+   |---|---------|----------|-------------------|
+   | 1 | Problem Statement | ✅ / ⚠️ / ❌ | ... |
+   | 2 | User Scenarios | ... | ... |
+   | 3 | Acceptance Criteria | ... | ... |
+   | 4 | Edge Cases | ... | ... |
+   | 5 | Out of Scope | ... | ... |
+   | 6 | Open Questions | ... | ... |
+
+5. **Only ask about sections marked Partial or Missing.** Do not re-ask what the document already answers.
+6. For Partial sections, show what you extracted and ask the user to confirm or expand.
+
+**Check the file's naming and location:**
+- If already at `docs/plans/Phase-N-*-PLAN.md` → use it in place, add/adjust sections to meet the spec standard
+- If elsewhere or different naming → extract into a new `docs/plans/Phase-N-<NAME>-PLAN.md`
+
+**If the user says "no":** Proceed to the full interview below.
+
+---
+
 Walk me through each section below. After I answer, compile the results into a single specification block I can paste into my Phase Plan.
 
 ---

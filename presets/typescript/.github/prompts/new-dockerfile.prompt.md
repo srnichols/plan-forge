@@ -113,5 +113,5 @@ volumes:
 
 ## Reference Files
 
-- [Deploy patterns](../instructions/deploy-patterns.instructions.md)
+- [Deploy patterns](../instructions/deploy.instructions.md)
 - [Architecture principles](../instructions/architecture-principles.instructions.md)

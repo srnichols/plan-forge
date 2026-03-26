@@ -1655,9 +1655,9 @@ OpenClaw:
 | [Plan Forge README](https://github.com/srnichols/plan-forge) | Full framework documentation |
 | [OpenBrain README](https://github.com/srnichols/OpenBrain) | Memory server setup and API reference |
 | [OpenClaw README](https://github.com/openclaw/openclaw) | Gateway setup, channels, skills |
-| [Plan Forge Memory Extension](../docs/plans/examples/extensions/plan-forge-memory/README.md) | OpenBrain extension for Plan Forge |
+| [Plan Forge Memory Extension](plans/examples/extensions/plan-forge-memory/README.md) | OpenBrain extension for Plan Forge |
 | [Copilot CLI Docs](https://docs.github.com/en/copilot/concepts/agents/copilot-cli/about-copilot-cli) | CLI installation, usage, ACP |
 | [ACP Server Reference](https://docs.github.com/en/copilot/reference/copilot-cli-reference/acp-server) | Agent Client Protocol integration |
 | [OpenClaw Skills Guide](https://docs.openclaw.ai/tools/skills) | Creating and configuring skills |
-| [CUSTOMIZATION.md](CUSTOMIZATION.md) | Plan Forge customization and extensions |
-| [COPILOT-VSCODE-GUIDE.md](docs/COPILOT-VSCODE-GUIDE.md) | VS Code + Copilot walkthrough |
+| [CUSTOMIZATION.md](../CUSTOMIZATION.md) | Plan Forge customization and extensions |
+| [COPILOT-VSCODE-GUIDE.md](COPILOT-VSCODE-GUIDE.md) | VS Code + Copilot walkthrough |

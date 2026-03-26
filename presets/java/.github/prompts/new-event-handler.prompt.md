@@ -114,4 +114,4 @@ public class AsyncConfig {
 ## Reference Files
 
 - [Architecture principles](../instructions/architecture-principles.instructions.md)
-- [Messaging patterns](../instructions/messaging-patterns.instructions.md)
+- [Messaging patterns](../instructions/messaging.instructions.md)

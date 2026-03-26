@@ -159,5 +159,5 @@ public class GraphQLExceptionHandler extends DataFetcherExceptionResolverAdapter
 
 ## Reference Files
 
-- [GraphQL patterns](../instructions/graphql-patterns.instructions.md)
+- [GraphQL patterns](../instructions/graphql.instructions.md)
 - [Architecture principles](../instructions/architecture-principles.instructions.md)

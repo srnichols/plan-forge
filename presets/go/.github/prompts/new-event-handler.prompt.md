@@ -155,4 +155,4 @@ func StartWorker(ctx context.Context, ch <-chan Event, handler Handler, workers 
 ## Reference Files
 
 - [Architecture principles](../instructions/architecture-principles.instructions.md)
-- [Messaging patterns](../instructions/messaging-patterns.instructions.md)
+- [Messaging patterns](../instructions/messaging.instructions.md)

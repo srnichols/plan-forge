@@ -108,4 +108,4 @@ def process_order_event(self, event_data: dict) -> None:
 ## Reference Files
 
 - [Architecture principles](../instructions/architecture-principles.instructions.md)
-- [Messaging patterns](../instructions/messaging-patterns.instructions.md)
+- [Messaging patterns](../instructions/messaging.instructions.md)

@@ -149,5 +149,5 @@ create{EntityName}: async (_parent, { input }, { dataSources }) => {
 
 ## Reference Files
 
-- [GraphQL patterns](../instructions/graphql-patterns.instructions.md)
+- [GraphQL patterns](../instructions/graphql.instructions.md)
 - [Architecture principles](../instructions/architecture-principles.instructions.md)

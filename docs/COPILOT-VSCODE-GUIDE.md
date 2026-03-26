@@ -97,34 +97,49 @@ The `ai-plan-hardening-runbook.instructions.md` file has `applyTo: 'docs/plans/*
 
 ## The 3-Session Workflow in Practice
 
-The pipeline uses 3 **separate** Copilot Chat sessions to prevent context bleed. Here's exactly how to do that in VS Code:
+The pipeline uses **4 sessions** to prevent context bleed. Here's exactly how to do that in VS Code:
 
-### Session 1: Plan Hardening
+### Session 1: Specify & Plan Hardening
 
 1. **Open a new chat**: `Ctrl+Shift+I` → click the `+` (new conversation) button
 2. **Select Agent mode** (bottom of chat panel)
-3. **Paste the Pre-flight Prompt** from `docs/plans/AI-Plan-Hardening-Runbook-Instructions.md` Step 1
-4. Wait for results
-5. **Paste the Hardening Prompt** (Step 2) in the same session
-6. Review the hardened plan output
-7. **Save context to memory** (see [Using Memory](#using-memory-to-bridge-sessions) below)
+3. **Attach** `.github/prompts/step0-specify-feature.prompt.md` to define the feature (or skip if requirements are clear)
+4. **Attach** `.github/prompts/step1-preflight-check.prompt.md` (Step 1 — Pre-flight)
+5. Wait for results
+6. **Attach** `.github/prompts/step2-harden-plan.prompt.md` (Step 2) in the same session
+7. Review the hardened plan output
+8. **Save context to memory** (see [Using Memory](#using-memory-to-bridge-sessions) below)
+
+> **Agent alternative**: Select the **Specifier** agent, describe your feature, then click **"Start Plan Hardening →"** when the spec is done. The Plan Hardener handles Steps 1–2 automatically.
 
 ### Session 2: Execution
 
 1. **Start a NEW chat session**: Click `+` again (critical — don't reuse Session 1)
 2. **Select Agent mode**
-3. **Paste the Execution Prompt** (Step 3)
+3. **Attach** `.github/prompts/step3-execute-slice.prompt.md` (Step 3)
 4. Let the agent work slice-by-slice
-5. After all slices pass, **paste the Completeness Sweep Prompt** (Step 4)
+5. After all slices pass, **attach** `.github/prompts/step4-completeness-sweep.prompt.md` (Step 4)
 6. Review and commit
+
+> **Agent alternative**: Click **"Start Execution →"** from the Plan Hardener handoff. The Executor handles Steps 3–4 with built-in skill awareness.
 
 ### Session 3: Review & Audit
 
 1. **Start a NEW chat session**: Click `+` again
-2. **Select Agent mode**
-3. **Paste the Reviewer Gate Prompt** (Step 5)
+2. **Select Agent mode** (or Ask mode for enforced read-only)
+3. **Attach** `.github/prompts/step5-review-gate.prompt.md` (Step 5)
 4. The reviewer audits without modifying files
 5. If critical findings: start a new Session 2 to fix
+
+> **Agent alternative**: Click **"Run Review Gate →"** from the Executor handoff. If it passes, click **"Ship It →"**. If LOCKOUT, click **"Fix Issues →"** to return to the Executor.
+
+### Session 4: Ship
+
+1. **Start a NEW chat session** (or continue if context allows)
+2. **Attach** `.github/prompts/step6-ship.prompt.md` (Step 6)
+3. The agent commits, updates the roadmap, captures postmortem, and optionally pushes
+
+> **Agent alternative**: Click **"Ship It →"** from the Reviewer Gate. The Shipper agent handles everything automatically.
 
 ### Why Separate Sessions Matter
 
@@ -134,6 +149,7 @@ The pipeline uses 3 **separate** Copilot Chat sessions to prevent context bleed.
 | **Self-audit bias** | "I wrote it, looks right" | Independent judgment |
 | **Context exhaustion** | Runs out of context budget | Full budget per session |
 | **Drift accumulation** | Small drifts compound unseen | Each session re-grounds |
+| **Forgotten cleanup** | Manual commit/roadmap steps | Shipper agent automates |
 
 ---
 

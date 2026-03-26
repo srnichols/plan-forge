@@ -479,6 +479,48 @@ $config = @{
 Set-Content -Path $configPath -Value $config
 Write-Host "  CREATED  .forge.json" -ForegroundColor Green
 
+# ─── Step 5b: Generate capabilities.json (machine-readable discovery) ────
+$capabilitiesPath = Join-Path $ProjectPath ".forge/capabilities.json"
+$promptsDir  = Join-Path $ProjectPath ".github/prompts"
+$agentsDir   = Join-Path $ProjectPath ".github/agents"
+$skillsDir   = Join-Path $ProjectPath ".github/skills"
+
+$promptFiles = @()
+if (Test-Path $promptsDir) {
+    $promptFiles = Get-ChildItem -Path $promptsDir -Filter "*.prompt.md" -File | ForEach-Object { $_.Name }
+}
+$agentFiles = @()
+if (Test-Path $agentsDir) {
+    $agentFiles = Get-ChildItem -Path $agentsDir -Filter "*.agent.md" -File | ForEach-Object { $_.Name }
+}
+$skillFiles = @()
+if (Test-Path $skillsDir) {
+    $skillFiles = Get-ChildItem -Path $skillsDir -Recurse -Filter "SKILL.md" -File | ForEach-Object {
+        $_.Directory.Name
+    }
+}
+
+$capabilities = @{
+    generatedBy = "plan-forge-setup"
+    generatedAt = (Get-Date -Format 'yyyy-MM-ddTHH:mm:ssZ')
+    preset      = $Preset
+    prompts     = $promptFiles
+    agents      = $agentFiles
+    skills      = $skillFiles
+    instructions = @()
+    hooks       = @(".github/hooks/plan-forge.json")
+}
+
+$instrDir = Join-Path $ProjectPath ".github/instructions"
+if (Test-Path $instrDir) {
+    $capabilities.instructions = Get-ChildItem -Path $instrDir -Filter "*.instructions.md" -File | ForEach-Object { $_.Name }
+}
+
+$capDir = Split-Path $capabilitiesPath -Parent
+if (!(Test-Path $capDir)) { New-Item -ItemType Directory -Path $capDir -Force | Out-Null }
+$capabilities | ConvertTo-Json -Depth 3 | Set-Content -Path $capabilitiesPath
+Write-Host "  CREATED  .forge/capabilities.json" -ForegroundColor Green
+
 # ─── Step 6: Copy VS Code Settings Template ────────────────────────────
 Write-Host ""
 Write-Host "Step 6: VS Code settings template" -ForegroundColor Cyan

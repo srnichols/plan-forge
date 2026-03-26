@@ -14,14 +14,12 @@ priority: HIGH
 
 ## Workflow Overview
 
-The pipeline has **6 steps** (Step 0–5) using **3 separate agent sessions**. Each session is isolated to prevent context bleed.
+The pipeline has **7 steps** (Step 0–6) using **4 sessions**. Each session is isolated to prevent context bleed.
 
 ```
 ┌───────────────────────────────────────────────────────────────────┐
-│  STEP 0 — Specify (optional, recommended)                         │
-│  Define WHAT and WHY before any technical planning                 │
-├───────────────────────────────────────────────────────────────────┤
-│  SESSION 1 — Plan Hardening                                       │
+│  SESSION 1 — Specify & Plan                                       │
+│  Step 0: Specify feature (recommended — define what & why)        │
 │  Step 1: Pre-flight checks (agent — automated)                    │
 │  Step 2: Harden the plan + resolve TBDs (agent)                   │
 ├───────────────────────────────────────────────────────────────────┤
@@ -31,10 +29,15 @@ The pipeline has **6 steps** (Step 0–5) using **3 separate agent sessions**. E
 ├───────────────────────────────────────────────────────────────────┤
 │  SESSION 3 — Review & Audit                                       │
 │  Step 5: Independent review + drift detection (fresh agent, R/O)  │
+├───────────────────────────────────────────────────────────────────┤
+│  SESSION 4 — Ship                                                 │
+│  Step 6: Commit, update roadmap, capture postmortem, push/PR      │
 └───────────────────────────────────────────────────────────────────┘
 ```
 
 > **Why separate sessions?** The executor shouldn't self-audit. Fresh context eliminates blind spots.
+>
+> **Step 0 in Session 1**: Step 0 (Specify) runs at the start of Session 1 instead of floating outside. If you already have clear requirements, skip Step 0 and start at Step 1.
 >
 > **Pipeline prompts**: Each step is also available as a prompt template in `.github/prompts/step<N>-*.prompt.md` — browse the file picker for a self-documenting workflow.
 
@@ -402,10 +405,28 @@ Do NOT modify any files. Report only.
 - [ ] All Definition of Done criteria satisfied
 - [ ] Completeness Sweep passed (zero TODO/mock/stub artifacts)
 - [ ] Review & Audit Gate passed (zero 🔴 Critical, no drift)
-- [ ] Post-Mortem template completed
+- [ ] Phase shipped via Step 6 (or manually committed)
+- [ ] Post-Mortem captured in plan file
 - [ ] Guardrail files updated with new patterns
 - [ ] `DEPLOYMENT-ROADMAP.md` status updated to ✅ Complete
 - [ ] Committed and pushed
+
+---
+
+## Step 6: Ship
+
+Open a **new agent session** (or continue after the Review Gate if context allows).
+
+> **Prompt template**: `.github/prompts/step6-ship.prompt.md`
+
+This step handles the post-review housekeeping that's easy to forget:
+
+1. **Commit** with a conventional commit message derived from the plan
+2. **Update roadmap** status to ✅ Complete
+3. **Capture postmortem** (what went well, what was tricky, lessons learned)
+4. **Push & PR** (with your confirmation)
+
+> **Skip this step** for micro/small changes where you handle git manually.
 
 ---
 
@@ -419,6 +440,7 @@ Do NOT modify any files. Report only.
 | Plan is hardened, ready to build | Step 3 | Execution Prompt | `step3-execute-slice.prompt.md` |
 | All slices done, clean up | Step 4 | Completeness Sweep | `step4-completeness-sweep.prompt.md` |
 | Independent quality audit | Step 5 | Review & Audit Prompt | `step5-review-gate.prompt.md` |
+| Ship the completed phase | Step 6 | Ship Prompt | `step6-ship.prompt.md` |
 | Gate failed mid-execution | — | Rollback Protocol (Section 10) | — |
 | Scope changed mid-execution | — | Amendment Protocol (Section 11) | — |
 

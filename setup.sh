@@ -456,6 +456,49 @@ EOF
 
 green "  CREATED  .forge.json"
 
+# ─── Step 5b: Generate capabilities.json (machine-readable discovery) ────
+CAPABILITIES_PATH="$PROJECT_PATH/.forge/capabilities.json"
+mkdir -p "$(dirname "$CAPABILITIES_PATH")"
+
+PROMPT_LIST="[]"
+if [[ -d "$PROJECT_PATH/.github/prompts" ]]; then
+    PROMPT_LIST=$(find "$PROJECT_PATH/.github/prompts" -maxdepth 1 -name "*.prompt.md" -printf '"%f",' 2>/dev/null | sed 's/,$//' | awk '{print "["$0"]"}')
+    [[ "$PROMPT_LIST" == "[]" ]] || true
+fi
+
+AGENT_LIST="[]"
+if [[ -d "$PROJECT_PATH/.github/agents" ]]; then
+    AGENT_LIST=$(find "$PROJECT_PATH/.github/agents" -maxdepth 1 -name "*.agent.md" -printf '"%f",' 2>/dev/null | sed 's/,$//' | awk '{print "["$0"]"}')
+    [[ "$AGENT_LIST" == "[]" ]] || true
+fi
+
+SKILL_LIST="[]"
+if [[ -d "$PROJECT_PATH/.github/skills" ]]; then
+    SKILL_LIST=$(find "$PROJECT_PATH/.github/skills" -mindepth 1 -maxdepth 1 -type d -printf '"%f",' 2>/dev/null | sed 's/,$//' | awk '{print "["$0"]"}')
+    [[ "$SKILL_LIST" == "[]" ]] || true
+fi
+
+INSTR_LIST="[]"
+if [[ -d "$PROJECT_PATH/.github/instructions" ]]; then
+    INSTR_LIST=$(find "$PROJECT_PATH/.github/instructions" -maxdepth 1 -name "*.instructions.md" -printf '"%f",' 2>/dev/null | sed 's/,$//' | awk '{print "["$0"]"}')
+    [[ "$INSTR_LIST" == "[]" ]] || true
+fi
+
+cat > "$CAPABILITIES_PATH" <<EOF
+{
+  "generatedBy": "plan-forge-setup",
+  "generatedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "preset": "$PRESET",
+  "prompts": ${PROMPT_LIST:-[]},
+  "agents": ${AGENT_LIST:-[]},
+  "skills": ${SKILL_LIST:-[]},
+  "instructions": ${INSTR_LIST:-[]},
+  "hooks": [".github/hooks/plan-forge.json"]
+}
+EOF
+
+green "  CREATED  .forge/capabilities.json"
+
 # ─── Step 6: Copy VS Code Settings Template ────────────────────────────
 echo ""
 cyan "Step 6: VS Code settings template"

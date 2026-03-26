@@ -178,6 +178,7 @@ The validation script checks for these files. All must be present and non-empty:
 | `.github/instructions/project-principles.instructions.md` | Auto-loads Project Principles when they exist |
 | `.github/prompts/project-principles.prompt.md` | Guided workshop to define Project Principles |
 | `.forge.json` | Setup metadata |
+| `.forge/capabilities.json` | Machine-readable manifest of all prompts, agents, skills, instructions |
 | `.forge/extensions/extensions.json` | Installed extensions manifest |
 | `.github/hooks/plan-forge.json` | Lifecycle hooks (SessionStart, PreToolUse, PostToolUse) |
 | `.github/hooks/scripts/*.sh`, `*.ps1` | Hook scripts (inject context, enforce forbidden actions, warn on TODOs) |
@@ -226,11 +227,45 @@ See `docs/CLI-GUIDE.md` for full command reference and AI Agent integration guid
 ### Option B: Using the Pipeline Prompts (Manual or Agent Mode)
 
 1. **Read** `docs/plans/AI-Plan-Hardening-Runbook-Instructions.md`
-2. **Follow** the copy-paste prompts for each step
-3. **Use 3 separate sessions** (plan → execute → review) to avoid context bleed
+2. **Follow** the copy-paste prompts for each step (Step 0–6)
+3. **Use 4 sessions** (specify & plan → execute → review → ship) to avoid context bleed
 4. **Use prompt templates** (`.github/prompts/`) during execution for consistent scaffolding
 5. **Use agent definitions** (`.github/agents/`) for focused reviews (security, architecture, performance)
 6. **Use skills** (`.github/skills/`) for multi-step procedures (migrations, deploys, test sweeps)
+
+### Option C: Using Pipeline Agents (Recommended for Autonomous Execution)
+
+Instead of copy-pasting prompts, use the **5 pipeline agents** that chain with handoff buttons:
+
+| Agent | File | Step | Hands Off To |
+|-------|------|------|-------------|
+| **Specifier** | `.github/agents/specifier.agent.md` | Step 0 | Plan Hardener |
+| **Plan Hardener** | `.github/agents/plan-hardener.agent.md` | Steps 1–2 | Executor |
+| **Executor** | `.github/agents/executor.agent.md` | Steps 3–4 | Reviewer Gate |
+| **Reviewer Gate** | `.github/agents/reviewer-gate.agent.md` | Step 5 | Shipper (PASS) / Executor (LOCKOUT) |
+| **Shipper** | `.github/agents/shipper.agent.md` | Step 6 | (terminal) |
+
+**For autonomous AI agent execution:**
+1. Start with the Specifier agent — provide the feature description
+2. Follow the handoff chain through to Ship
+3. Each handoff uses `send: false` — the user reviews the prompt before it's sent
+4. If the Review Gate issues a LOCKOUT, the "Fix Issues →" handoff returns to the Executor
+
+### Lifecycle Hooks
+
+Plan Forge installs lifecycle hooks (`.github/hooks/plan-forge.json`) that run automatically:
+
+| Hook | What It Does |
+|------|-------------|
+| **SessionStart** | Injects Project Principles, current phase, and forbidden patterns into context |
+| **PreToolUse** | Blocks file edits to paths listed in the active plan's Forbidden Actions |
+| **PostToolUse** | Auto-formats edited files, warns on TODO/FIXME/stub markers |
+| **Stop** | Warns if code was modified but no test run was detected |
+
+These hooks enforce guardrails without manual intervention. The agent should expect that:
+- Forbidden file edits will be blocked automatically
+- TODO markers in edited files will trigger warnings
+- Sessions without test runs will produce a reminder
 
 ### Post-Setup Recommendations
 

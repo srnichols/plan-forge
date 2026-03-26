@@ -13,8 +13,7 @@
 ## Start Here
 
 | You are... | Start with |
-|------------|-----------|
-| **A developer using VS Code + Copilot** | Run [`setup.ps1`](#2-run-the-setup-wizard) → Read [CUSTOMIZATION.md](CUSTOMIZATION.md) → Read [docs/COPILOT-VSCODE-GUIDE.md](docs/COPILOT-VSCODE-GUIDE.md) |
+|------------|-----------|| **Brand new to AI guardrails** | Read [What Is This?](#what-is-this-plain-english) → Run [`setup.ps1`](#2-run-the-setup-wizard) → Follow [docs/QUICKSTART-WALKTHROUGH.md](docs/QUICKSTART-WALKTHROUGH.md) || **A developer using VS Code + Copilot** | Run [`setup.ps1`](#2-run-the-setup-wizard) → Read [CUSTOMIZATION.md](CUSTOMIZATION.md) → Read [docs/COPILOT-VSCODE-GUIDE.md](docs/COPILOT-VSCODE-GUIDE.md) |
 | **An AI agent setting up a project** | Read [AGENT-SETUP.md](AGENT-SETUP.md) (your entry point) |
 | **A CLI-first developer** | Run [`setup.ps1`](#2-run-the-setup-wizard) → Read [docs/CLI-GUIDE.md](docs/CLI-GUIDE.md) |
 | **Just browsing / evaluating** | Keep reading — [What Is This?](#what-is-this-plain-english) below |
@@ -117,7 +116,7 @@ These problems get worse the less technical your team is — you may not even no
 
 ## The Solution
 
-A **6-step pipeline** (Step 0–5) with **3 isolated agent sessions** that converts rough ideas into bounded execution contracts:
+A **7-step pipeline** (Step 0–6) with **4 sessions** that converts rough ideas into shipped, reviewed code:
 
 ```mermaid
 flowchart LR
@@ -126,11 +125,10 @@ flowchart LR
     S2 --> S3["Step 3<br/>Execute<br/><i>slice by slice</i>"]
     S3 --> S4["Step 4<br/>Sweep<br/><i>no TODOs left</i>"]
     S4 --> S5["Step 5<br/>Review<br/><i>drift detection</i>"]
+    S5 --> S6["Step 6<br/>Ship<br/><i>commit & close</i>"]
 
-    subgraph Optional
+    subgraph "Session 1 — Specify & Plan"
         S0
-    end
-    subgraph "Session 1 — Plan"
         S1
         S2
     end
@@ -141,6 +139,9 @@ flowchart LR
     subgraph "Session 3 — Audit"
         S5
     end
+    subgraph "Session 4 — Ship"
+        S6
+    end
 
     style S0 fill:#FFF3CD,stroke:#C9A800,color:#333
     style S1 fill:#D1ECF1,stroke:#0C5460,color:#333
@@ -148,11 +149,12 @@ flowchart LR
     style S3 fill:#D4EDDA,stroke:#155724,color:#333
     style S4 fill:#D4EDDA,stroke:#155724,color:#333
     style S5 fill:#F8D7DA,stroke:#721C24,color:#333
+    style S6 fill:#E8DAEF,stroke:#6C3483,color:#333
 ```
 
-**In plain English:** You describe what you want → the AI creates a detailed plan → the plan gets locked down so nothing can drift → the AI builds it in small checkpointed chunks → a fresh AI session reviews everything for mistakes.
+**In plain English:** You describe what you want → the AI creates a detailed plan → the plan gets locked down so nothing can drift → the AI builds it in small checkpointed chunks → a fresh AI session reviews everything for mistakes → the Shipper commits, updates the roadmap, and captures lessons learned.
 
-### Why 3 Sessions?
+### Why Separate Sessions?
 
 The executor shouldn't self-audit — that's like grading your own exam. Fresh context eliminates blind spots. Each session loads the same guardrails but brings independent judgment.
 
@@ -347,7 +349,10 @@ Now you're ready to build your first feature with the pipeline. Here's how:
 5. **Start a new chat session**, then attach `.github/prompts/step3-execute-slice.prompt.md` — builds the feature
 6. Attach `.github/prompts/step4-completeness-sweep.prompt.md` — checks for leftover TODOs
 7. **Start another new chat session**, then attach `.github/prompts/step5-review-gate.prompt.md` — independent review
+8. **Start a final session**, then attach `.github/prompts/step6-ship.prompt.md` — commit, update roadmap, push
 
+> **First time?** See [docs/QUICKSTART-WALKTHROUGH.md](docs/QUICKSTART-WALKTHROUGH.md) for a hands-on tutorial that walks you through every step.
+>
 > **Tip**: The step prompts are numbered so they appear in order when you browse the file picker. You can also copy-paste the equivalent prompts from `docs/plans/AI-Plan-Hardening-Runbook-Instructions.md` if you prefer.
 
 ---
@@ -377,21 +382,24 @@ I need to build a new feature using the Plan Forge Pipeline.
 
 1. Read docs/plans/AI-Plan-Hardening-Runbook-Instructions.md for the full workflow
 2. Read docs/plans/DEPLOYMENT-ROADMAP.md for current project status
-3. Help me draft a plan in docs/plans/ for this feature: <DESCRIBE YOUR FEATURE>
-4. Walk me through the pipeline:
-   - Step 0: Specify the feature (optional — use .github/prompts/step0-specify-feature.prompt.md)
+3. Ask me if I have an existing doc/spec to start from (or start fresh)
+4. Help me draft a plan in docs/plans/ for this feature: <DESCRIBE YOUR FEATURE>
+5. Walk me through the pipeline:
+   - Step 0: Specify the feature (use .github/prompts/step0-specify-feature.prompt.md)
    - Step 1: Run pre-flight checks
    - Step 2: Harden the plan (add Scope Contract, Execution Slices, Definition of Done)
    - Step 3: Execute slice-by-slice with validation gates
    - Step 4: Completeness sweep (eliminate TODOs, stubs, mocks)
    - Step 5: Independent review & drift detection (new session)
+   - Step 6: Ship — commit, update roadmap, capture postmortem
 
-Use 3 separate sessions to prevent context bleed:
-- Session 1: Steps 1-2 (Plan Hardening)
+Use 4 sessions to prevent context bleed:
+- Session 1: Steps 0-2 (Specify & Plan Hardening)
 - Session 2: Steps 3-4 (Execution)
 - Session 3: Step 5 (Review)
+- Session 4: Step 6 (Ship)
 
-Remind me when to start a new session. Start with Step 1 now.
+Remind me when to start a new session. Start with Step 0 now.
 ```
 
 ### Alternative: Pipeline Agents (No Copy-Pasting)

@@ -56,6 +56,13 @@ Optional<Order> findWithItemsById(Long id);
 - DO NOT modify any files — only identify issues
 - Report findings with file, line, severity
 
+## OpenBrain Integration (if configured)
+
+If the OpenBrain MCP server is available:
+
+- **Before reviewing**: `search_thoughts("database review findings", project: "<project>", created_by: "copilot-vscode", type: "bug")` — load prior SQL safety findings, N+1 patterns, and migration lessons
+- **After review**: `capture_thought("Database review: <N findings — key issues summary>", project: "<project>", created_by: "copilot-vscode", source: "agent-database-reviewer")` — persist findings for trend tracking
+
 ## Confidence
 
 When uncertain, qualify the finding:

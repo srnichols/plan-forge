@@ -45,3 +45,10 @@ go test -tags=integration ./...
 - NEVER silently skip failures
 - If tests need Docker (testcontainers-go), verify Docker first
 - Report: passed, failed, skipped counts
+
+## OpenBrain Integration (if configured)
+
+If the OpenBrain MCP server is available:
+
+- **Before running tests**: `search_thoughts("test failures", project: "<project>", created_by: "copilot-vscode", type: "bug")` — load known flaky tests, prior failure patterns, and test infrastructure issues
+- **After test run**: `capture_thought("Test run: <N passed, N failed — key failure patterns>", project: "<project>", created_by: "copilot-vscode", source: "agent-test-runner")` — persist test outcomes

@@ -97,6 +97,14 @@ You are the **Accessibility Reviewer**. Audit frontend code for WCAG 2.2 complia
 ## Constraints
 
 - Before reviewing, check `.github/instructions/*.instructions.md` for project-specific conventions
+
+## OpenBrain Integration (if configured)
+
+If the OpenBrain MCP server is available:
+
+- **Before reviewing**: `search_thoughts("accessibility findings", project: "<project>", created_by: "copilot-vscode", type: "bug")` — loads prior WCAG violations and known exceptions
+- **After review**: `capture_thought("Accessibility Reviewer: <N findings — key issues>", project: "<project>", created_by: "copilot-vscode", source: "agent-accessibility-reviewer")` — persists WCAG violations and remediation patterns
+
 - DO NOT modify any files — only identify accessibility violations
 - Rate findings by WCAG level impact: CRITICAL, HIGH, MEDIUM, LOW
 

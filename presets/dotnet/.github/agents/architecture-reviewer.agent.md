@@ -72,6 +72,13 @@ services.AddSingleton<IAppSettings>(appSettings);
 - DO NOT modify any files
 - Report findings with file, line, violation type, and severity
 
+## OpenBrain Integration (if configured)
+
+If the OpenBrain MCP server is available:
+
+- **Before reviewing**: `search_thoughts("architecture review findings", project: "<project>", created_by: "copilot-vscode", type: "convention")` — load prior architecture violations, pattern decisions, and accepted deviations
+- **After review**: `capture_thought("Architecture review: <N findings — key issues summary>", project: "<project>", created_by: "copilot-vscode", source: "agent-architecture-reviewer")` — persist findings for trend tracking
+
 ## Confidence
 
 When uncertain, qualify the finding:

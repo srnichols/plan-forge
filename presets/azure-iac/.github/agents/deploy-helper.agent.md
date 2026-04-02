@@ -112,3 +112,10 @@ git revert HEAD && terraform apply     # revert and re-apply
 
 - [Deploy instructions](../.github/instructions/deploy.instructions.md)
 - [Testing instructions](../.github/instructions/testing.instructions.md)
+
+## OpenBrain Integration (if configured)
+
+If the OpenBrain MCP server is available:
+
+- **Before deploying**: `search_thoughts("deployment failure", project: "<project>", created_by: "copilot-vscode", type: "postmortem")` — load prior deployment failures and environment-specific lessons
+- **After deployment**: `capture_thought("Deploy: <outcome — environment, method, success/failure>", project: "<project>", created_by: "copilot-vscode", source: "agent-deploy-helper")` — persist deployment outcome

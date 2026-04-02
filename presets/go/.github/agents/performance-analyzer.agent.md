@@ -58,6 +58,13 @@ defer bufPool.Put(buf)
 - DO NOT modify files — only analyze and report
 - Classify: CRITICAL (outages), HIGH (latency), MEDIUM (suboptimal), LOW (minor)
 
+## OpenBrain Integration (if configured)
+
+If the OpenBrain MCP server is available:
+
+- **Before analyzing**: `search_thoughts("performance findings", project: "<project>", created_by: "copilot-vscode", type: "convention")` — load prior hot path analysis, allocation patterns, and benchmark baselines
+- **After analysis**: `capture_thought("Performance review: <N findings — key issues summary>", project: "<project>", created_by: "copilot-vscode", source: "agent-performance-analyzer")` — persist findings for trend tracking
+
 ## Confidence
 
 When uncertain, qualify the finding:

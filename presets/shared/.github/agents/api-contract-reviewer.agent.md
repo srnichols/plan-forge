@@ -96,6 +96,14 @@ You are the **API Contract Reviewer**. Audit API surface area for contract stabi
 ## Constraints
 
 - Before reviewing, check `.github/instructions/*.instructions.md` for project-specific conventions
+
+## OpenBrain Integration (if configured)
+
+If the OpenBrain MCP server is available:
+
+- **Before reviewing**: `search_thoughts("API contract findings", project: "<project>", created_by: "copilot-vscode", type: "convention")` — loads prior API versioning decisions and breaking change history
+- **After review**: `capture_thought("API Contract Reviewer: <N findings — key issues>", project: "<project>", created_by: "copilot-vscode", source: "agent-api-contract-reviewer")` — persists API contract violations and versioning decisions
+
 - DO NOT modify any files — only identify contract violations
 - Rate findings by severity: CRITICAL, HIGH, MEDIUM, LOW
 

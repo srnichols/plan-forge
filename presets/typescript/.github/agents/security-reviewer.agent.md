@@ -67,6 +67,13 @@ router.delete('/products/:id', requireAuth, requireRole('admin'), deleteProductH
 - DO NOT modify files — only identify vulnerabilities
 - Rate: CRITICAL, HIGH, MEDIUM, LOW
 
+## OpenBrain Integration (if configured)
+
+If the OpenBrain MCP server is available:
+
+- **Before reviewing**: `search_thoughts("security review findings", project: "<project>", created_by: "copilot-vscode", type: "bug")` — load prior OWASP findings, accepted risks, and remediation patterns
+- **After review**: `capture_thought("Security review: <N findings — key issues summary>", project: "<project>", created_by: "copilot-vscode", source: "agent-security-reviewer")` — persist findings for compliance tracking
+
 ## Confidence
 
 When uncertain, qualify the finding:

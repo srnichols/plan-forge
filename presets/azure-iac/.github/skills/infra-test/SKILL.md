@@ -96,3 +96,8 @@ Invoke-Pester -Configuration $config
 - NEVER deploy if unit tests fail
 - ALWAYS run what-if/plan before production deployments
 - Integration tests require a real Azure subscription — never mock in integration tests
+
+## Persistent Memory (if OpenBrain is configured)
+
+- **Before running tests**: `search_thoughts("infra test failure", project: "<project>", created_by: "copilot-vscode", type: "bug")` — load known test failures, linter false-positives, and Pester patterns
+- **After test sweep**: `capture_thought("Infra test: <N passed, N failed — key failure patterns>", project: "<project>", created_by: "copilot-vscode", source: "skill-infra-test")` — persist test outcomes and recurring failure patterns

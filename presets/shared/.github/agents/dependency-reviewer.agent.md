@@ -62,4 +62,11 @@ For each finding:
 | # | Package | Finding | Severity | Fix |
 |---|---------|---------|----------|-----|
 
+## OpenBrain Integration (if configured)
+
+If the OpenBrain MCP server is available:
+
+- **Before reviewing**: `search_thoughts("dependency vulnerability", project: "<project>", created_by: "copilot-vscode", type: "bug")` — loads prior CVE findings and accepted risks
+- **After review**: `capture_thought("Dependency Reviewer: <N findings — key issues>", project: "<project>", created_by: "copilot-vscode", source: "agent-dependency-reviewer")` — persists vulnerability findings and upgrade decisions
+
 Do NOT modify any files. Report ONLY.

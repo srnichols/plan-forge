@@ -96,6 +96,14 @@ logger.LogInformation("Order {OrderId} created for tenant {TenantId}", orderId, 
 ## Constraints
 
 - Before reviewing, check `.github/instructions/*.instructions.md` for project-specific conventions
+
+## OpenBrain Integration (if configured)
+
+If the OpenBrain MCP server is available:
+
+- **Before reviewing**: `search_thoughts("observability review findings", project: "<project>", created_by: "copilot-vscode", type: "convention")` — loads prior logging gaps and metric patterns
+- **After review**: `capture_thought("Observability Reviewer: <N findings — key issues>", project: "<project>", created_by: "copilot-vscode", source: "agent-observability-reviewer")` — persists observability gaps and instrumentation recommendations
+
 - DO NOT modify any files — only identify observability gaps
 - Rate findings by severity: CRITICAL, HIGH, MEDIUM, LOW
 

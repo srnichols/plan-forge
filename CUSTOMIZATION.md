@@ -511,6 +511,71 @@ Type `/` in the chat input to see these alongside your prompt templates. Add `us
 
 ---
 
+## Tuning for Claude Opus 4.6
+
+Plan Forge's prompts are calibrated for Claude Opus 4.6 (the default model in VS Code Copilot as of 2026). If you're using an older model or a different provider, you may need to adjust prompt intensity.
+
+### What's Different About Claude 4.6
+
+Claude Opus 4.6 is significantly more responsive to instructions than earlier models. Key differences:
+
+- **More proactive**: Follows instructions without being told twice. Language like "CRITICAL: You MUST..." that was needed for earlier models will cause overtriggering on Opus 4.6.
+- **Adaptive thinking**: Automatically calibrates how much reasoning to apply based on task complexity. You don't need to say "think thoroughly" — the model does this naturally.
+- **Overengineering tendency**: May add abstractions, extra files, or flexibility that wasn't requested. The `<implementation_discipline>` tags in Step 3 address this.
+- **Parallel execution**: Excels at running multiple tool calls in parallel. Plan Forge's `[parallel-safe]` tagging maps directly to this capability.
+
+### If the Model Over-Halts
+
+If the agent pauses too frequently on minor ambiguities, add this to your `.github/copilot-instructions.md`:
+
+```markdown
+When you're deciding how to approach a problem, choose an approach and commit to it.
+Avoid revisiting decisions unless you encounter information that directly contradicts
+your reasoning. If you're weighing two approaches, pick one and proceed. You can
+always course-correct later if the chosen approach fails.
+```
+
+### If the Model Over-Explores
+
+If the agent spends too many tokens reading context before starting work, add:
+
+```markdown
+Gather enough context to proceed confidently, then move to implementation.
+If multiple searches return overlapping results, you have enough context.
+```
+
+### If the Model Overengineers
+
+The `<implementation_discipline>` block in Step 3 handles most cases. For persistent overengineering, add to your project profile:
+
+```markdown
+Keep solutions focused on what was explicitly requested. A bug fix doesn't need
+surrounding code cleaned up. A simple feature doesn't need extra configurability.
+Do not create helpers or abstractions for one-time operations.
+```
+
+### Context Budget Management
+
+Claude 4.6 has strong context awareness and can track its remaining token budget. For long phases (10+ slices):
+
+- Plan session breaks in Step 2: "Session break after Slice N"
+- Keep instruction files under ~150 lines each
+- Use targeted `applyTo` patterns instead of `'**'` (which loads on every file)
+- In execution slices, reference only the Scope Contract section of the plan, not the full document
+
+### Effort Parameter (API Users)
+
+If using Claude 4.6 via the API (not VS Code Copilot), use the `effort` parameter instead of `budget_tokens`:
+
+| Task | Recommended Effort |
+|------|-------------------|
+| Plan hardening (Step 2) | `high` |
+| Slice execution (Step 3) | `medium` to `high` |
+| Completeness sweep (Step 4) | `medium` |
+| Review gate (Step 5) | `high` |
+
+---
+
 ## Persistent Memory with OpenBrain (Optional)
 
 Plan Forge's 3-session model is powerful, but each session starts fresh. [OpenBrain](https://github.com/srnichols/OpenBrain) adds **persistent semantic memory** — decisions, patterns, and lessons captured in one session are searchable in every future session, across any AI tool.

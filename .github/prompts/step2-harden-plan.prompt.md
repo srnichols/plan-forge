@@ -34,6 +34,7 @@ Harden <YOUR-PLAN>.md by adding all 6 Mandatory Template Blocks from the runbook
 For each Execution Slice:
 - Tag as [parallel-safe] (with Parallel Group) or [sequential]
 - Include relevant .github/instructions/*.instructions.md files in Context Files
+- List only instruction files whose domain matches the slice (not all 15 — each consumes context budget)
 - Add a Parallel Merge Checkpoint after each parallel group
 
 Do NOT add features or expand scope. Only structure what already exists.

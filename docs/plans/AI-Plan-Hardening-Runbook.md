@@ -307,10 +307,14 @@ Rules:
 - Prefer smaller slices. Each slice must be completable in 30-120 minutes.
 - Every slice must have at least one validation gate with an exact command.
 - Include a "Roadmap Reference" backlink at the top of the output.
+- For each slice's Context Files, list only instruction files relevant to that slice's domain.
+  Do not load all 15 instruction files — each consumes context window space.
 
 Output:
 - A revised version of the plan document with all sections above integrated.
 - Use the template blocks from this runbook.
+- Order sections with Scope Contract and Stop Conditions first (most-referenced at top
+  improves model performance on long documents).
 ```
 
 ---
@@ -351,6 +355,8 @@ Operating rules:
   (including the relevant .github/instructions/*.instructions.md guardrail files).
 - Do not start the next slice until the current slice passes its Validation Gates.
 - After each slice, perform a RE-ANCHOR CHECKPOINT.
+- Use the lightweight re-anchor (4 yes/no questions) by default.
+  Do a full re-anchor every 3rd slice or when a lightweight check flags a concern.
 - Re-read the Scope Contract and Stop Conditions between every slice.
 - After each passed slice, commit: git add -A && git commit -m "phase-N/slice-K: <goal>"
 - After all slices pass, run the COMPLETENESS SWEEP (Section 6.1) to eliminate
@@ -590,7 +596,16 @@ Do NOT suggest fixes. Do NOT modify files. Report ONLY.
 
 ## Mandatory Template Blocks
 
-Every hardened `*-PLAN.md` must contain these six sections.
+Every hardened `*-PLAN.md` must contain these six sections. **Recommended ordering** places
+the most-referenced sections first — this improves AI model performance on long documents
+(queries at the end of context perform up to 30% better when reference material is at the top):
+
+1. Scope Contract (referenced every slice)
+2. Stop Conditions (checked every slice)
+3. Required Decisions (resolved before execution)
+4. Execution Slices (the work itself)
+5. Re-anchor Checkpoints (template, not plan-specific)
+6. Definition of Done (checked at the end)
 
 ### Template 1 — Scope Contract
 
@@ -681,6 +696,11 @@ trunk-based (work on current branch).
 - `path/to/relevant-file`
 - `.github/instructions/relevant.instructions.md`
 
+> **Context budget guidance**: List only instruction files whose domain matches this
+> slice's work. Do not load all 15 instruction files — each consumes context window
+> space. For the plan file, reference only the Scope Contract and current slice section,
+> not the full document. Aim for 3–5 context files per slice.
+
 **Test Strategy**: Unit tests | Integration tests | E2E tests | No new tests
 
 **Validation Gates**:
@@ -707,7 +727,22 @@ trunk-based (work on current branch).
 ```markdown
 ## Re-anchor Checkpoints
 
-After completing each slice, the executing agent should:
+After completing each slice, the executing agent should perform a re-anchor check.
+
+### Lightweight Re-anchor (default)
+
+Answer these four yes/no questions without re-reading the full Scope Contract:
+
+1. All changes in-scope? (yes/no)
+2. Non-goals violated? (yes/no)
+3. Forbidden files touched? (yes/no)
+4. Stop conditions triggered? (yes/no)
+
+If all answers are clean (yes, no, no, no), proceed to the next slice.
+
+### Full Re-anchor (on violation or every 3rd slice)
+
+If any lightweight check flags a concern, OR every 3rd slice as a periodic deep check:
 
 - [ ] Re-read the **Scope Contract** — confirm all changes are in-scope
 - [ ] Re-read the **Forbidden Actions** — confirm nothing off-limits was touched
@@ -718,6 +753,10 @@ After completing each slice, the executing agent should:
 - [ ] Confirm the next slice's dependencies are satisfied
 
 > If any checkbox fails: pause execution and report the issue.
+
+> **Why two modes?** Lightweight re-anchors save ~500-1,000 tokens per clean slice —
+> significant on a 10+ slice plan. The periodic full re-anchor catches gradual drift
+> that lightweight checks miss.
 ```
 
 ### Template 5 — Definition of Done

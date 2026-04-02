@@ -190,6 +190,7 @@ Harden <YOUR-PLAN>.md by adding all 6 Mandatory Template Blocks from the runbook
 For each Execution Slice:
 - Tag as [parallel-safe] (with Parallel Group) or [sequential]
 - Include relevant .github/instructions/*.instructions.md files in Context Files
+- List only instruction files whose domain matches the slice (not all 15 — each consumes context budget)
 - Add a Parallel Merge Checkpoint after each parallel group
 
 Do NOT add features or expand scope. Only structure what already exists.
@@ -272,6 +273,9 @@ Before each slice, load its Context Files (including .github/instructions/*.inst
 When scaffolding new entities/services/tests, use the matching prompt template from .github/prompts/.
 Follow the validation loop exactly. Commit after each passed slice.
 If any gate fails or any ambiguity arises, pause and ask for clarification.
+
+Re-anchor after each slice using the lightweight check (4 yes/no questions).
+Do a full re-anchor every 3rd slice or when a lightweight check flags a concern.
 
 For [parallel-safe] slices:
 - Note which Parallel Group they belong to

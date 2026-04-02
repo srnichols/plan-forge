@@ -39,6 +39,9 @@ When scaffolding new entities/services/tests, use the matching prompt template f
 Follow the validation loop exactly. Commit after each passed slice.
 If any gate fails or any ambiguity arises, pause and ask for clarification.
 
+Re-anchor after each slice using the lightweight check (4 yes/no questions).
+Do a full re-anchor every 3rd slice or when a lightweight check flags a concern.
+
 For [parallel-safe] slices:
 - Note which Parallel Group they belong to
 - After all slices in a group complete, run the Parallel Merge Checkpoint

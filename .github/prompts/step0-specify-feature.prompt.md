@@ -152,6 +152,30 @@ After collecting my answers, compile them into this format:
 - Recommended pipeline: Skip / Light hardening / Full pipeline / Full + branch-per-slice
 ```
 
+Additionally, output a **machine-readable summary** wrapped in XML tags so downstream
+pipeline steps (Harden, Execute, Review) can extract sections unambiguously:
+
+```xml
+<specification feature="<FEATURE-NAME>">
+  <problem_statement>(one-paragraph summary)</problem_statement>
+  <acceptance_criteria>
+    <criterion id="AC-1" priority="MUST">(testable statement)</criterion>
+    <criterion id="AC-2" priority="SHOULD">(testable statement)</criterion>
+  </acceptance_criteria>
+  <out_of_scope>
+    <item>(each out-of-scope item)</item>
+  </out_of_scope>
+  <open_questions>
+    <question status="resolved|open">(each question)</question>
+  </open_questions>
+  <complexity effort="Micro|Small|Medium|Large" files="N" pipeline="Skip|Light|Full|Full+branch"/>
+</specification>
+```
+
+Place this XML block at the end of the specification, after the Markdown format. It is consumed
+by Step 2 (Harden) to auto-generate validation gates from MUST criteria. If you prefer Markdown
+only, the XML block can be omitted — the pipeline works with either format.
+
 **Complexity classification** (include in the output):
 - **Micro** (<30 min, 1 file): Direct commit — skip the pipeline
 - **Small** (30–120 min, 1–3 files): Optional — Scope Contract + Definition of Done only

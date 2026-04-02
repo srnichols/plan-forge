@@ -1,6 +1,6 @@
 {
   "name": "plan-forge",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Plan Forge — Harden AI-driven development plans into drift-proof execution contracts. Includes pipeline prompts, guardrail instructions, reviewer agents, execution skills, and lifecycle hooks.",
   "author": "srnichols",
   "license": "MIT",

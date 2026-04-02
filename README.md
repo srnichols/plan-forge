@@ -532,6 +532,8 @@ These features are all **opt-in** — skip any that don't apply. Existing workfl
 | **Lifecycle Hooks** | Auto-enforce Forbidden Actions (PreToolUse), inject Project Principles at session start, warn on TODO/FIXME after edits. | Installed automatically with setup — see `.github/hooks/` |
 | **Agent Plugin** | Install Plan Forge as a VS Code agent plugin from a Git URL — no setup scripts needed. | `Chat: Install Plugin From Source` → repo URL |
 | **Skill Slash Commands** | Invoke skills directly: `/database-migration`, `/staging-deploy`, `/test-sweep`, `/dependency-audit`, `/code-review`, `/release-notes`, `/api-doc-gen`, `/onboarding`. | Type `/` in Copilot Chat to see available skills |
+| **Claude 4.6 Tuning** | Guidance for calibrating prompt intensity, managing context budgets, and controlling thinking depth with Claude Opus 4.6. Prevents over-halting, over-exploring, and overengineering. | See [CUSTOMIZATION.md → Tuning for Claude Opus 4.6](CUSTOMIZATION.md#tuning-for-claude-opus-46) |
+| **Session Memory Capture** | Step 6 (Ship) automatically saves conventions, lessons, and forbidden patterns to `/memories/repo/`. Step 2 (Harden) reads them so each phase builds on prior experience. | Built-in — no setup needed |
 | **Persistent Memory (OpenBrain)** | Capture decisions across sessions, search project history semantically, bridge the 3-session model with long-term context. | Install `plan-forge-memory` extension + [OpenBrain](https://github.com/srnichols/OpenBrain) MCP server |
 | **Unified System (Plan Forge + OpenBrain + OpenClaw)** | Full automated development system — OpenClaw orchestrates Plan Forge pipelines via Copilot CLI ACP, OpenBrain provides shared memory, you control everything from WhatsApp/Slack/Telegram. | See [docs/UNIFIED-SYSTEM-ARCHITECTURE.md](docs/UNIFIED-SYSTEM-ARCHITECTURE.md) |
 
@@ -565,10 +567,10 @@ Every hardened plan must contain these sections. Each one prevents a specific ty
 
 | Block | What It Does | What It Prevents |
 |-------|-------------|------------------|
-| **Scope Contract** | Lists what's in, what's out, and what's forbidden | AI adding features you didn't ask for |
+| **Scope Contract** | Lists what's in, what's out, and what's forbidden (placed first in plan for optimal long-context performance) | AI adding features you didn't ask for |
 | **Required Decisions** | Resolves all ambiguities before coding starts | AI guessing when it should ask |
 | **Execution Slices** | Breaks work into 30-120 min chunks with checkpoints | AI losing track in long sessions |
-| **Re-anchor Checkpoints** | Drift detection between slices | AI gradually wandering off-plan |
+| **Re-anchor Checkpoints** | Drift detection between slices (lightweight 4-question check by default, full re-anchor every 3rd slice or on violation) | AI gradually wandering off-plan |
 | **Definition of Done** | Measurable criteria — build passes, tests pass, no TODOs | AI declaring "done" when it's not |
 | **Post-Mortem** | Records what worked and what drifted | Same mistakes happening next time |
 

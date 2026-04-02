@@ -69,6 +69,7 @@ function Show-Help {
     Write-Host "  ext install <p>   Install extension from path"
     Write-Host "  ext list          List installed extensions"
     Write-Host "  ext remove <name> Remove an installed extension"
+    Write-Host "  update [source]   Update framework files from Plan Forge source (preserves customizations)"
     Write-Host "  help              Show this help message"
     Write-Host ""
     Write-Host "OPTIONS:" -ForegroundColor Yellow
@@ -810,6 +811,242 @@ function Invoke-Diff {
     }
 }
 
+# ─── Command: update ───────────────────────────────────────────────────
+function Invoke-Update {
+    Write-ManualSteps "update" @(
+        "Clone/pull the latest Plan Forge template repo"
+        "Compare .forge.json templateVersion with the source VERSION"
+        "Copy updated framework files (prompts, agents, skills, hooks, runbook)"
+        "Skip files that don't exist in the target (user hasn't adopted that feature)"
+        "Never overwrite copilot-instructions.md, project-profile, project-principles, or plan files"
+    )
+
+    $dryRun = $Arguments -contains '--dry-run'
+    $forceUpdate = $Arguments -contains '--force'
+
+    # ─── Locate source ───────────────────────────────────────────
+    # Source can be: a local path (argument), or auto-detect from .forge.json
+    $sourcePath = $null
+    foreach ($arg in $Arguments) {
+        if ($arg -notlike '--*' -and (Test-Path $arg)) {
+            $sourcePath = (Resolve-Path $arg).Path
+            break
+        }
+    }
+
+    if (-not $sourcePath) {
+        # Try to find plan-forge source as a sibling directory or parent
+        $candidates = @(
+            (Join-Path (Split-Path $RepoRoot -Parent) "plan-forge"),
+            (Join-Path (Split-Path $RepoRoot -Parent) "Plan-Forge")
+        )
+        foreach ($c in $candidates) {
+            if (Test-Path (Join-Path $c "VERSION")) {
+                $sourcePath = $c
+                break
+            }
+        }
+    }
+
+    if (-not $sourcePath) {
+        Write-Host "ERROR: Plan Forge source not found." -ForegroundColor Red
+        Write-Host "  Provide the path to your Plan Forge clone:" -ForegroundColor Yellow
+        Write-Host "    .\pforge.ps1 update C:\path\to\plan-forge" -ForegroundColor Yellow
+        Write-Host "  Or clone it next to your project:" -ForegroundColor Yellow
+        Write-Host "    git clone https://github.com/srnichols/plan-forge.git ../plan-forge" -ForegroundColor Yellow
+        exit 1
+    }
+
+    # ─── Read versions ───────────────────────────────────────────
+    $sourceVersion = (Get-Content (Join-Path $sourcePath "VERSION") -Raw).Trim()
+    $configPath = Join-Path $RepoRoot ".forge.json"
+    $currentVersion = "unknown"
+    $currentPreset = "custom"
+
+    if (Test-Path $configPath) {
+        $config = Get-Content $configPath -Raw | ConvertFrom-Json
+        $currentVersion = $config.templateVersion
+        $currentPreset = $config.preset
+    }
+
+    Write-Host ""
+    Write-Host "Plan Forge Update" -ForegroundColor Cyan
+    Write-Host "─────────────────────────────────────────────" -ForegroundColor DarkGray
+    Write-Host "  Source:   $sourcePath" -ForegroundColor White
+    Write-Host "  Current:  v$currentVersion" -ForegroundColor White
+    Write-Host "  Latest:   v$sourceVersion" -ForegroundColor White
+    Write-Host "  Preset:   $currentPreset" -ForegroundColor White
+    Write-Host ""
+
+    if ($currentVersion -eq $sourceVersion -and -not $forceUpdate) {
+        Write-Host "Already up to date (v$currentVersion). Use --force to re-apply." -ForegroundColor Green
+        return
+    }
+
+    # ─── Define update categories ─────────────────────────────────
+    # SAFE TO UPDATE: Framework files that users typically don't customize
+    $safeFiles = @(
+        # Pipeline prompts (step0-step6)
+        @{ Src = "shared/.github/prompts"; Dst = ".github/prompts"; Pattern = "step*.prompt.md" }
+        # Pipeline agents
+        @{ Src = "templates/.github/agents"; Dst = ".github/agents"; Pattern = "*.agent.md";
+           Names = @("specifier.agent.md", "plan-hardener.agent.md", "executor.agent.md", "reviewer-gate.agent.md", "shipper.agent.md") }
+        # Shared instruction files
+        @{ Src = "shared/.github/instructions"; Dst = ".github/instructions"; Pattern = "*.instructions.md";
+           Names = @("architecture-principles.instructions.md", "git-workflow.instructions.md", "ai-plan-hardening-runbook.instructions.md") }
+        # Runbook and instructions
+        @{ Src = "docs/plans"; Dst = "docs/plans"; Pattern = "*.md";
+           Names = @("AI-Plan-Hardening-Runbook.md", "AI-Plan-Hardening-Runbook-Instructions.md", "DEPLOYMENT-ROADMAP-TEMPLATE.md", "PROJECT-PRINCIPLES-TEMPLATE.md", "README.md") }
+        # Hooks
+        @{ Src = "templates/.github/hooks"; Dst = ".github/hooks"; Pattern = "*" }
+    )
+
+    # NEVER UPDATE: User-customized files
+    $neverUpdate = @(
+        ".github/copilot-instructions.md",
+        ".github/instructions/project-profile.instructions.md",
+        ".github/instructions/project-principles.instructions.md",
+        "docs/plans/DEPLOYMENT-ROADMAP.md",
+        "docs/plans/PROJECT-PRINCIPLES.md",
+        "AGENTS.md",
+        ".forge.json"
+    )
+
+    # ─── Calculate changes ────────────────────────────────────────
+    $updates = @()
+    $skipped = @()
+    $newFiles = @()
+
+    # Update step prompts from .github/prompts/ in the source
+    $srcPrompts = Join-Path $sourcePath ".github/prompts"
+    $dstPrompts = Join-Path $RepoRoot ".github/prompts"
+    if (Test-Path $srcPrompts) {
+        Get-ChildItem -Path $srcPrompts -Filter "step*.prompt.md" -File | ForEach-Object {
+            $dstFile = Join-Path $dstPrompts $_.Name
+            if (Test-Path $dstFile) {
+                $srcHash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
+                $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
+                if ($srcHash -ne $dstHash) {
+                    $updates += @{ Src = $_.FullName; Dst = $dstFile; Name = ".github/prompts/$($_.Name)" }
+                }
+            } else {
+                $newFiles += @{ Src = $_.FullName; Dst = $dstFile; Name = ".github/prompts/$($_.Name)" }
+            }
+        }
+    }
+
+    # Update pipeline agents from templates/
+    $srcAgents = Join-Path $sourcePath "templates/.github/agents"
+    $dstAgents = Join-Path $RepoRoot ".github/agents"
+    $pipelineAgents = @("specifier.agent.md", "plan-hardener.agent.md", "executor.agent.md", "reviewer-gate.agent.md", "shipper.agent.md")
+    if (Test-Path $srcAgents) {
+        foreach ($agentName in $pipelineAgents) {
+            $srcFile = Join-Path $srcAgents $agentName
+            $dstFile = Join-Path $dstAgents $agentName
+            if ((Test-Path $srcFile) -and (Test-Path $dstFile)) {
+                $srcHash = (Get-FileHash $srcFile -Algorithm SHA256).Hash
+                $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
+                if ($srcHash -ne $dstHash) {
+                    $updates += @{ Src = $srcFile; Dst = $dstFile; Name = ".github/agents/$agentName" }
+                }
+            }
+        }
+    }
+
+    # Update shared instruction files
+    $srcSharedInstr = Join-Path $sourcePath ".github/instructions"
+    $dstInstr = Join-Path $RepoRoot ".github/instructions"
+    $sharedInstructions = @("architecture-principles.instructions.md", "git-workflow.instructions.md", "ai-plan-hardening-runbook.instructions.md")
+    if (Test-Path $srcSharedInstr) {
+        foreach ($instrName in $sharedInstructions) {
+            $srcFile = Join-Path $srcSharedInstr $instrName
+            $dstFile = Join-Path $dstInstr $instrName
+            if ((Test-Path $srcFile) -and (Test-Path $dstFile)) {
+                $srcHash = (Get-FileHash $srcFile -Algorithm SHA256).Hash
+                $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
+                if ($srcHash -ne $dstHash) {
+                    $updates += @{ Src = $srcFile; Dst = $dstFile; Name = ".github/instructions/$instrName" }
+                }
+            }
+        }
+    }
+
+    # Update runbook docs
+    $srcDocs = Join-Path $sourcePath "docs/plans"
+    $dstDocs = Join-Path $RepoRoot "docs/plans"
+    $runbookFiles = @("AI-Plan-Hardening-Runbook.md", "AI-Plan-Hardening-Runbook-Instructions.md", "DEPLOYMENT-ROADMAP-TEMPLATE.md", "PROJECT-PRINCIPLES-TEMPLATE.md")
+    if (Test-Path $srcDocs) {
+        foreach ($docName in $runbookFiles) {
+            $srcFile = Join-Path $srcDocs $docName
+            $dstFile = Join-Path $dstDocs $docName
+            if ((Test-Path $srcFile) -and (Test-Path $dstFile)) {
+                $srcHash = (Get-FileHash $srcFile -Algorithm SHA256).Hash
+                $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
+                if ($srcHash -ne $dstHash) {
+                    $updates += @{ Src = $srcFile; Dst = $dstFile; Name = "docs/plans/$docName" }
+                }
+            }
+        }
+    }
+
+    # ─── Report ───────────────────────────────────────────────────
+    if ($updates.Count -eq 0 -and $newFiles.Count -eq 0) {
+        Write-Host "All framework files are up to date." -ForegroundColor Green
+        return
+    }
+
+    Write-Host "Changes found:" -ForegroundColor Yellow
+    foreach ($u in $updates) {
+        Write-Host "  UPDATE  $($u.Name)" -ForegroundColor Cyan
+    }
+    foreach ($n in $newFiles) {
+        Write-Host "  NEW     $($n.Name)" -ForegroundColor Green
+    }
+    Write-Host ""
+    Write-Host "Protected (never updated):" -ForegroundColor DarkGray
+    Write-Host "  .github/copilot-instructions.md, project-profile, project-principles," -ForegroundColor DarkGray
+    Write-Host "  DEPLOYMENT-ROADMAP.md, AGENTS.md, plan files, .forge.json" -ForegroundColor DarkGray
+    Write-Host ""
+
+    if ($dryRun) {
+        Write-Host "DRY RUN — no files were changed." -ForegroundColor Yellow
+        return
+    }
+
+    # ─── Confirm ──────────────────────────────────────────────────
+    if (-not $forceUpdate) {
+        $confirm = Read-Host "Apply $($updates.Count) updates and $($newFiles.Count) new files? [y/N]"
+        if ($confirm -notin @('y', 'Y', 'yes', 'Yes')) {
+            Write-Host "Cancelled." -ForegroundColor Yellow
+            return
+        }
+    }
+
+    # ─── Apply ────────────────────────────────────────────────────
+    foreach ($u in $updates) {
+        Copy-Item -Path $u.Src -Destination $u.Dst -Force
+        Write-Host "  ✅ Updated $($u.Name)" -ForegroundColor Green
+    }
+    foreach ($n in $newFiles) {
+        $parentDir = Split-Path $n.Dst -Parent
+        if (-not (Test-Path $parentDir)) { New-Item -ItemType Directory -Path $parentDir -Force | Out-Null }
+        Copy-Item -Path $n.Src -Destination $n.Dst
+        Write-Host "  ✅ Added $($n.Name)" -ForegroundColor Green
+    }
+
+    # ─── Update .forge.json version ───────────────────────────────
+    if (Test-Path $configPath) {
+        $config = Get-Content $configPath -Raw | ConvertFrom-Json
+        $config.templateVersion = $sourceVersion
+        $config | ConvertTo-Json -Depth 3 | Set-Content -Path $configPath
+        Write-Host "  ✅ Updated .forge.json templateVersion to $sourceVersion" -ForegroundColor Green
+    }
+
+    Write-Host ""
+    Write-Host "Update complete: v$currentVersion → v$sourceVersion" -ForegroundColor Green
+    Write-Host "Run 'pforge check' to validate the updated setup." -ForegroundColor DarkGray
+}
+
 # ─── Command Router ────────────────────────────────────────────────────
 switch ($Command) {
     'init'         { Invoke-Init }
@@ -822,6 +1059,7 @@ switch ($Command) {
     'sweep'        { Invoke-Sweep }
     'diff'         { Invoke-Diff }
     'ext'          { Invoke-Ext }
+    'update'       { Invoke-Update }
     'help'         { Show-Help }
     ''             { Show-Help }
     '--help'       { Show-Help }

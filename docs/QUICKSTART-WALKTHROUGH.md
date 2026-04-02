@@ -16,6 +16,14 @@ By the end of this walkthrough, you'll have:
 - ✅ Run an independent review (Step 5)
 - ✅ Shipped the feature (Step 6)
 
+> **Three ways to run the pipeline**: This walkthrough uses the **Prompt Template** approach
+> (attaching `.prompt.md` files in Copilot Chat) because it's the most educational — you see
+> exactly what each step does. After completing this walkthrough, try the **Pipeline Agent**
+> approach (select the Specifier agent, click handoff buttons) for a smoother experience.
+> If you don't use VS Code, the **Copy-Paste Prompts** in
+> `docs/plans/AI-Plan-Hardening-Runbook-Instructions.md` work in any AI tool.
+> See [README → Three Ways to Run the Pipeline](../README.md#three-ways-to-run-the-pipeline) for a comparison.
+
 ---
 
 ## Before You Start

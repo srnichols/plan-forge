@@ -1,5 +1,11 @@
 # Plan Forge
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/plan-forge-logo.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/assets/plan-forge-logo-light.svg">
+  <img alt="Plan Forge" src="docs/assets/plan-forge-logo-light.svg" width="400">
+</picture>
+
 > **A blacksmith doesn't hand raw iron to a customer. They heat it, hammer it, and temper it until it holds its edge.**
 >
 > Plan Forge does the same for AI-driven development. Your rough ideas go in as raw metal — and come out as **hardened execution contracts** that AI coding agents follow without scope creep, skipped tests, or silent rewrites.
@@ -103,6 +109,38 @@ Both agents and skills extend Copilot, but they serve different purposes:
 > **A note on "agent"**: This word appears in three contexts — **Agent Mode** (VS Code Copilot's code-editing mode), **Agent Definitions** (`.github/agents/*.agent.md` — reviewer/executor personas), and **Background Agents** (`AGENTS.md` — workers, scheduled tasks). They're different things. When in doubt, context clues: `.agent.md` files = reviewer personas, `AGENTS.md` = background workers.
 
 > **AI Agents**: If you're an AI coding agent installing this framework, skip to [AGENT-SETUP.md](AGENT-SETUP.md).
+
+---
+
+## Three Ways to Run the Pipeline
+
+The same pipeline (Specify → Plan → Execute → Review → Ship) can be run three different ways. Pick the one that matches your tool and preference:
+
+| Approach | How It Works | Best For | Requires |
+|----------|-------------|----------|----------|
+| **Pipeline Agents** (recommended) | Select the **Specifier** agent → click handoff buttons through the chain | Smoothest experience — context carries over, click-through flow | VS Code + GitHub Copilot |
+| **Prompt Templates** | Attach `.github/prompts/step0-*.prompt.md` through `step6-*.prompt.md` in Copilot Chat | Learning the pipeline — you see exactly what each step does | VS Code + GitHub Copilot |
+| **Copy-Paste Prompts** | Copy prompts from `docs/plans/AI-Plan-Hardening-Runbook-Instructions.md` | Works in **any AI tool** — Claude, Cursor, ChatGPT, terminal agents | Any AI tool |
+
+### Which Should I Use?
+
+```
+Are you using VS Code + GitHub Copilot?
+  │
+  ├─ YES → Do you want click-through flow with handoff buttons?
+  │          ├─ YES → Use Pipeline Agents (select Specifier from agent picker)
+  │          └─ NO  → Use Prompt Templates (attach step*.prompt.md files)
+  │
+  └─ NO → Use Copy-Paste Prompts (works in any AI tool)
+```
+
+**All three produce identical results.** The pipeline steps, guardrails, and validation gates are the same — only the delivery mechanism differs.
+
+- **Pipeline Agents** = least friction (click buttons, context auto-carries)
+- **Prompt Templates** = most visible (you see the full prompt, great for learning)
+- **Copy-Paste Prompts** = most portable (works anywhere, not just VS Code)
+
+You can mix approaches — use agents for execution and copy-paste for review in a different tool. The Quickstart walkthrough demonstrates the Prompt Template approach, then shows the Agent alternative.
 
 ---
 

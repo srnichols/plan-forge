@@ -358,6 +358,64 @@ Remove an installed extension. Prompts for confirmation unless `--force` is used
 
 ---
 
+### `pforge update [source-path]`
+
+Update framework files from a Plan Forge source without re-running the full setup wizard. Preserves all user-customized files.
+
+```powershell
+# PowerShell — auto-detect source (looks for ../plan-forge)
+.\pforge.ps1 update
+
+# Specify source path explicitly
+.\pforge.ps1 update C:\path\to\plan-forge
+
+# Preview changes without applying
+.\pforge.ps1 update --dry-run
+
+# Skip confirmation prompt
+.\pforge.ps1 update --force
+```
+
+```bash
+# Bash
+./pforge.sh update
+./pforge.sh update /path/to/plan-forge
+./pforge.sh update --dry-run
+```
+
+**What it updates** (framework files — safe to replace):
+- Pipeline prompts (`step0-step6*.prompt.md`)
+- Pipeline agents (specifier, plan-hardener, executor, reviewer-gate, shipper)
+- Shared instruction files (architecture-principles, git-workflow, ai-plan-hardening-runbook)
+- Runbook and Instructions docs
+- Lifecycle hooks
+
+**What it never touches** (user-customized files):
+- `.github/copilot-instructions.md`
+- `project-profile.instructions.md`
+- `project-principles.instructions.md`
+- `docs/plans/DEPLOYMENT-ROADMAP.md`
+- `docs/plans/PROJECT-PRINCIPLES.md`
+- `AGENTS.md`
+- `.forge.json` (only `templateVersion` is updated)
+- Your plan files (`Phase-*-PLAN.md`)
+- Stack-specific instruction files (database, testing, security, etc.)
+
+**What it does:**
+1. Compares `.forge.json` templateVersion with the source VERSION
+2. Hashes each framework file to detect actual changes
+3. Shows a preview of updates and new files
+4. Asks for confirmation (unless `--force`)
+5. Copies changed files and updates `.forge.json` version
+
+**Equivalent manual steps:**
+1. Clone the latest Plan Forge repo
+2. Compare VERSION against your `.forge.json` templateVersion
+3. Copy updated framework files, being careful not to overwrite customized files
+4. Update `.forge.json` templateVersion
+
+---
+
 ### `pforge help`
 
 Show all available commands.
@@ -388,6 +446,7 @@ Show all available commands.
 | Completeness sweep | `pforge sweep` | grep for TODO/FIXME/stub across codebase |
 | Scope drift check | `pforge diff <plan>` | git diff + manual comparison to Scope Contract |
 | Install extension | `pforge ext install <path>` | Copy files to 3 directories |
+| Update framework | `pforge update [source]` | Clone latest Plan Forge, manually copy framework files |
 | Harden a plan | *(use prompt)* | Paste Step 2 prompt into Copilot |
 | Execute slices | *(use prompt)* | Paste Step 3 prompt into Copilot |
 | Review & audit | *(use prompt)* | Paste Step 5 prompt into Copilot |

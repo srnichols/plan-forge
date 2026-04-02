@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 100" width="400" height="100">
+  <defs>
+    <linearGradient id="anvilGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4A90D9;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2C5F8A;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="hammerGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FF8C42;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#CC6F35;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <!-- Anvil body -->
+  <path d="M20,70 L30,45 L70,45 L80,70 Z" fill="url(#anvilGrad)" />
+  <rect x="25" y="38" width="50" height="10" rx="2" fill="url(#anvilGrad)" />
+  <!-- Anvil horn -->
+  <path d="M70,42 Q85,38 90,45 L70,48 Z" fill="#3A7BC8" />
+  <!-- Hammer -->
+  <rect x="42" y="10" width="6" height="30" rx="1" fill="#666" transform="rotate(-15, 45, 25)" />
+  <rect x="30" y="5" width="30" height="12" rx="3" fill="url(#hammerGrad)" transform="rotate(-15, 45, 11)" />
+  <!-- Spark dots -->
+  <circle cx="65" cy="20" r="2" fill="#FFD700" opacity="0.9" />
+  <circle cx="72" cy="28" r="1.5" fill="#FFD700" opacity="0.7" />
+  <circle cx="58" cy="15" r="1.5" fill="#FFD700" opacity="0.8" />
+  <!-- Text -->
+  <text x="105" y="48" font-family="'Segoe UI', system-ui, -apple-system, sans-serif" font-size="36" font-weight="700" fill="#E8E8E8">
+    Plan
+  </text>
+  <text x="195" y="48" font-family="'Segoe UI', system-ui, -apple-system, sans-serif" font-size="36" font-weight="700" fill="#FF8C42">
+    Forge
+  </text>
+  <text x="105" y="72" font-family="'Segoe UI', system-ui, -apple-system, sans-serif" font-size="14" font-weight="400" fill="#999" letter-spacing="0.5">
+    Harden plans. Ship with confidence.
+  </text>
+</svg>

@@ -132,11 +132,6 @@ function Invoke-Status {
     Write-Host "Phase Status (from DEPLOYMENT-ROADMAP.md):" -ForegroundColor Cyan
     Write-Host "─────────────────────────────────────────────" -ForegroundColor DarkGray
 
-    $content = Get-Content $roadmap -Raw
-    $phasePattern = '###\s+Phase\s+\d+.*'
-    $statusPattern = '\*\*Status\*\*:\s*(.*)'
-    $goalPattern = '\*\*Goal\*\*:\s*(.*)'
-
     $lines = Get-Content $roadmap
     $currentPhase = $null
     $currentGoal = $null
@@ -338,7 +333,6 @@ function Invoke-Commit {
 
     # Extract slice goal from "### Slice N..." or "### Slice N.X — Title"
     $sliceGoal = "slice $sliceNum"
-    $slicePattern = "###\s+Slice\s+[\d.]*$sliceNum[^#]*?(?=###|\z)"
     if ($content -match "###\s+Slice\s+[\d.]*${sliceNum}\s*[:\—–-]\s*(.+)") {
         $sliceGoal = $Matches[1].Trim()
     }
@@ -689,8 +683,8 @@ function Invoke-Sweep {
         Get-ChildItem -Path $RepoRoot -Filter $ext -Recurse -File -ErrorAction SilentlyContinue |
             Where-Object { $_.FullName -notmatch '(node_modules|bin|obj|dist|\.git|vendor|__pycache__)' } |
             ForEach-Object {
-                $matches = Select-String -Path $_.FullName -Pattern $patternRegex -CaseSensitive:$false
-                foreach ($m in $matches) {
+                $findings = Select-String -Path $_.FullName -Pattern $patternRegex -CaseSensitive:$false
+                foreach ($m in $findings) {
                     $relPath = $m.Path.Substring($RepoRoot.Length + 1)
                     Write-Host "  $relPath`:$($m.LineNumber): $($m.Line.Trim())" -ForegroundColor Yellow
                     $total++

@@ -109,14 +109,14 @@ Any Channel → Gateway → Agent Runtime → Tools/Skills → Response → Any 
 ### Without Integration
 
 ```
-┌──────────────────────┐   ┌─────────────────────┐   ┌─────────────────────┐
-│     Plan Forge       │   │     OpenBrain       │   │     OpenClaw        │
-│                      │   │                     │   │                     │
-│ ✅ Great guardrails │   │ ✅ Great memory     │   │ ✅ Great reach      │
-│ ❌ VS Code only     │   │ ❌ Must remember to │   │ ❌ No methodology   │
-│ ❌ Sessions forget  │   │    search/capture    │   │ ❌ No memory        │
-│ ❌ Can't notify you │   │ ❌ Passive — waits  │   │ ❌ No dev guardrails │
-└─────────────────────┘   └──────────────────────┘   └──────────────────────┘
+┌───────────────────────┐   ┌───────────────────────┐   ┌───────────────────────┐
+│     Plan Forge        │   │     OpenBrain         │   │     OpenClaw          │
+│                       │   │                       │   │                       │
+│ + Great guardrails    │   │ + Great memory        │   │ + Great reach         │
+│ - VS Code only        │   │ - Must remember to    │   │ - No methodology      │
+│ - Sessions forget     │   │   search/capture      │   │ - No memory           │
+│ - Can't notify you    │   │ - Passive — waits     │   │ - No dev guardrails   │
+└───────────────────────┘   └───────────────────────┘   └───────────────────────┘
 ```
 
 ### With Integration
@@ -1332,34 +1332,34 @@ OpenClaw: 🛑 Execution halted.
 ### Access Control Summary
 
 ```
-┌────────────────────────────────────────────────────────────┐
-│                    Security Boundaries                       │
-├────────────────────────────────────────────────────────────┤
-│                                                             │
-│  OpenClaw Gateway                                           │
-│    Auth: DM pairing + allowlist per channel                 │
-│    Scope: Only you (and approved users) can send commands   │
-│    Tools: Configurable allow/deny lists per agent           │
-│                                                             │
-│  Copilot CLI                                                │
-│    Auth: GitHub Copilot subscription (OAuth)                │
-│    Scope: Trusted directories only                          │
-│    Tools: --allow-tool / --deny-tool per session            │
-│    Safety: rm, git push, git reset denied by default        │
-│                                                             │
-│  OpenBrain                                                  │
-│    Auth: MCP_ACCESS_KEY (per-server)                        │
-│    Scope: Project-scoped queries (no cross-project leaks)   │
+┌──────────────────────────────────────────────────────────────┐
+│                      Security Boundaries                     │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│  OpenClaw Gateway                                            │
+│    Auth: DM pairing + allowlist per channel                  │
+│    Scope: Only you (and approved users) can send commands    │
+│    Tools: Configurable allow/deny lists per agent            │
+│                                                              │
+│  Copilot CLI                                                 │
+│    Auth: GitHub Copilot subscription (OAuth)                 │
+│    Scope: Trusted directories only                           │
+│    Tools: --allow-tool / --deny-tool per session             │
+│    Safety: rm, git push, git reset denied by default         │
+│                                                              │
+│  OpenBrain                                                   │
+│    Auth: MCP_ACCESS_KEY (per-server)                         │
+│    Scope: Project-scoped queries (no cross-project leaks)    │
 │    Provenance: created_by tracks which agent captured data   │
-│    Network: Loopback only (or Tailscale for remote)         │
-│    DB: Row-Level Security on thoughts table                 │
-│                                                             │
-│  VS Code + Copilot                                          │
-│    Auth: GitHub account (Copilot subscription)              │
-│    Scope: Workspace-level trust                             │
-│    MCP: Configured per-workspace in .vscode/mcp.json        │
-│                                                             │
-└────────────────────────────────────────────────────────────┘
+│    Network: Loopback only (or Tailscale for remote)          │
+│    DB: Row-Level Security on thoughts table                  │
+│                                                              │
+│  VS Code + Copilot                                           │
+│    Auth: GitHub account (Copilot subscription)               │
+│    Scope: Workspace-level trust                              │
+│    MCP: Configured per-workspace in .vscode/mcp.json         │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ### Key Security Principles

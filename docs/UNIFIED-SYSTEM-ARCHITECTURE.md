@@ -154,14 +154,14 @@ Any Channel → Gateway → Agent Runtime → Tools/Skills → Response → Any 
 ```mermaid
 graph TB
     subgraph "Developer Surfaces"
-        PHONE["📱 Phone<br/>(WhatsApp / Telegram / Slack)"]
-        DESKTOP["💻 Desktop<br/>(VS Code + Copilot)"]
-        TERMINAL["⌨️ Terminal<br/>(Copilot CLI)"]
-        VOICE["🎙️ Voice<br/>(OpenClaw Talk Mode)"]
+        PHONE["Phone<br/>(WhatsApp / Telegram / Slack)"]
+        DESKTOP["Desktop<br/>(VS Code + Copilot)"]
+        TERMINAL["Terminal<br/>(Copilot CLI)"]
+        VOICE["Voice<br/>(OpenClaw Talk Mode)"]
     end
 
     subgraph "OpenClaw Gateway"
-        GW["🦞 Gateway<br/>ws://127.0.0.1:18789"]
+        GW["Gateway<br/>ws://127.0.0.1:18789"]
         AGENT["Pi Agent Runtime"]
         SKILLS["Skills Engine"]
         CRON["Cron / Webhooks"]

@@ -683,6 +683,8 @@ If you open a subfolder of a monorepo (not the repo root), Copilot won't find `.
 
 This tells Copilot to walk up to the `.git` root and discover all instruction files, prompts, agents, skills, and hooks from parent directories.
 
+**CLI in monorepos**: The `pforge` CLI auto-detects the repo root by walking up to the nearest `.git` directory. Run it from any subfolder — it will find `.forge.json`, `docs/plans/`, and `.github/` at the repo root automatically.
+
 ---
 
 ## Troubleshooting
@@ -729,6 +731,12 @@ After setup, explain what was installed and how to start using the planning pipe
 ```
 
 </details>
+
+---
+
+## Roadmap
+
+See [ROADMAP.md](ROADMAP.md) for planned features and how to influence priorities.
 
 ---
 

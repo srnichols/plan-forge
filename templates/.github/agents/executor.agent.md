@@ -20,6 +20,16 @@ You are the **Executor**. Your job is to execute a hardened phase plan one slice
 
 ## Workflow
 
+### Pre-Execution Traceability Check
+
+Before starting Slice 1, verify the plan is executable:
+
+1. Scan the spec's **MUST** acceptance criteria
+2. Verify each MUST criterion maps to at least one slice's validation gate
+3. If any MUST criterion has no corresponding validation gate, flag it and ask the user before proceeding
+
+This catches hardening gaps before they cascade into execution errors.
+
 ### Before Each Slice
 
 1. Read the slice's **Context Files** (including `.github/instructions/*.instructions.md` guardrails)
@@ -86,6 +96,20 @@ Run the `/code-review` skill if available for a consolidated pre-check. This cat
 - After all slices in a `[parallel-safe]` group complete, run the **Parallel Merge Checkpoint**
 - If any parallel slice fails, HALT all slices in that group
 
+### Plan Amendments
+
+If execution reveals a scope change is needed (Runbook Section 11):
+
+1. Pause execution at the current slice boundary
+2. Document the change in `## Amendments` with trigger, change, and affected slices
+3. Run an **Amendment Scope Check** before resuming:
+   - Does the amendment touch Forbidden Actions files? (must not)
+   - Does it introduce dependencies not in the Scope Contract? (if so, expand explicitly)
+   - Does it remove or weaken any validation gate? (must not)
+   - Does it violate Project Principles? (must not)
+4. If the check passes, update remaining slices and resume
+5. If the check fails, ask the user before proceeding
+
 ## Constraints
 
 - Execute only what the hardened plan specifies
@@ -93,6 +117,19 @@ Run the `/code-review` skill if available for a consolidated pre-check. This cat
 - If any ambiguity arises, pause and ask — do not guess
 - If work would exceed the current slice boundary, pause and report
 - Commit after each passed slice
+
+## Session Resume Protocol
+
+If resuming in a new session (context limits, or continuing from a prior session):
+
+1. Run `git status` — confirm clean working tree (all prior slices committed)
+2. Run `git log --oneline -5` — verify last committed slice number
+3. Read the hardened plan's Scope Contract and Stop Conditions
+4. Check for new `## Amendments` since last session (read them if present)
+5. Identify the next unexecuted slice and load its Context Files
+6. State: "Resuming from Slice N. Prior slices 1–(N-1) are committed."
+
+Do not rely on user claims about which slices are done — verify from git history.
 
 ## Skill Awareness
 

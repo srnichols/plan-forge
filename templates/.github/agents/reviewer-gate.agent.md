@@ -80,6 +80,17 @@ If any 🔴 Critical finding or drift is detected:
 4. The **Fix Issues** handoff button will appear to switch to the Executor agent for targeted fixes
 5. After fixes, re-run this Reviewer Gate
 
+## Targeted Re-Review (after LOCKOUT fix)
+
+When re-reviewing after a LOCKOUT fix, focus on:
+
+1. The re-executed slices and their changed files (primary audit)
+2. Integration points between fixed slices and adjacent slices (regression check)
+3. The specific 🔴 Critical finding(s) that triggered the original LOCKOUT (confirm resolved)
+
+Full review of unchanged slices may be skipped, unless the fix introduced cross-cutting
+changes (shared interfaces, database schema). If in doubt, do a full review.
+
 ## Pass Protocol
 
 If no critical findings and no drift:
@@ -87,6 +98,8 @@ If no critical findings and no drift:
 1. Verdict = **PASS**
 2. The **Ship It** handoff button will appear to switch to the Shipper agent
 3. The Shipper handles commit, roadmap update, postmortem, and push
+4. For Small/Medium phases (≤5 slices): shipping can continue in this same session — Session 4 is optional
+5. For Large phases (6+ slices): a separate Session 4 is recommended to avoid context exhaustion
 
 ## OpenBrain Integration (if configured)
 

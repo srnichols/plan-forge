@@ -350,6 +350,9 @@ Context:
 - Agent patterns: AGENTS.md
 
 Operating rules:
+- Before starting Slice 1, run a PRE-EXECUTION TRACEABILITY CHECK:
+  Scan the spec's MUST acceptance criteria and verify each maps to at least one
+  slice's validation gate. Flag any untraced MUST criterion before proceeding.
 - Execute ONE execution slice at a time, top-down.
 - Before starting each slice, load the files listed in its Context Files field
   (including the relevant .github/instructions/*.instructions.md guardrail files).
@@ -509,6 +512,17 @@ When a reviewer issues a 🔴 Critical finding:
 3. Open a new agent session to re-execute the affected slice(s)
 4. New agent must re-read: Scope Contract, reviewer findings, and domain guardrails
 5. Re-run Reviewer Gate after the fix
+
+### Targeted Re-Review (after LOCKOUT fix)
+
+When re-reviewing after a LOCKOUT fix, the reviewer may focus on:
+
+1. The re-executed slices and their changed files (primary audit)
+2. Integration points between the fixed slices and adjacent slices (regression check)
+3. The specific 🔴 Critical finding(s) that triggered the original LOCKOUT (confirm resolved)
+
+Full review of unchanged slices may be skipped, unless the fix introduced cross-cutting
+changes (shared interfaces, database schema, etc.). If in doubt, do a full review.
 
 ### Reviewer Gate Prompt
 
@@ -920,7 +934,12 @@ them sequentially after the Parallel Merge Checkpoint passes.
 3. Update the Scope Contract if boundaries changed
 4. Re-validate Required Decisions
 5. Update slice dependencies
-6. Resume execution from the next unexecuted slice
+6. **Amendment Scope Check** — verify the amendment does not:
+   - Touch files listed in Forbidden Actions
+   - Introduce files or dependencies not in the original Scope Contract (if it does, expand the Scope Contract explicitly)
+   - Remove or weaken any existing validation gate
+   - Violate Project Principles (if they exist)
+7. Resume execution from the next unexecuted slice
 
 ### Amendment Log Template
 

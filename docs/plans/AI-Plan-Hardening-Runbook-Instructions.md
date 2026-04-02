@@ -280,6 +280,12 @@ The right amount of complexity is the minimum needed for the current slice.
 </implementation_discipline>
 
 Execute the hardened plan one slice at a time, starting with Slice 1.
+
+Before starting Slice 1, run a PRE-EXECUTION TRACEABILITY CHECK:
+- Scan the spec's MUST acceptance criteria
+- Verify each MUST criterion maps to at least one slice's validation gate
+- If any MUST criterion has no corresponding validation gate, flag it and ask before proceeding
+
 Before each slice, load its Context Files (including .github/instructions/*.instructions.md guardrails).
 When scaffolding new entities/services/tests, use the matching prompt template from .github/prompts/.
 Follow the validation loop exactly. Commit after each passed slice.
@@ -310,7 +316,13 @@ Follow the **Rollback Protocol** (Runbook Section 10):
 
 1. Commit completed work
 2. Open new session with same Execution Prompt
-3. Tell it: "Slices 1–N are complete. Resume from Slice N+1."
+3. Run the **Session Resume Checklist** before continuing:
+   - `git status` — confirm clean working tree (all prior slices committed)
+   - `git log --oneline -5` — verify last committed slice number
+   - Read the hardened plan's Scope Contract and Stop Conditions
+   - Check for new `## Amendments` since last session (read them if present)
+   - Identify the next unexecuted slice and load its Context Files
+   - State: "Resuming from Slice N. Prior slices 1–(N-1) are committed."
 
 ---
 
@@ -430,6 +442,10 @@ Specification Source (if referenced) as the source of truth.
 - Verdict: PASS or FAIL (LOCKOUT)
 
 Do NOT modify any files. Report only.
+
+If the verdict is PASS and the phase is Small or Medium (≤5 slices), you may proceed
+to Step 6 (Ship) in this same session — Session 4 is optional for smaller features.
+For Large phases (6+ slices), a separate Session 4 is recommended.
 ```
 
 ### If Lockout Is Triggered
@@ -438,6 +454,15 @@ Do NOT modify any files. Report only.
 2. Document the finding in `## Amendments`
 3. Open a new agent session to re-execute affected slice(s)
 4. Re-run Review & Audit Gate after the fix
+
+### Targeted Re-Review (after LOCKOUT fix)
+
+If re-reviewing after a LOCKOUT fix, the reviewer may focus on:
+1. The re-executed slices and their changed files (primary audit)
+2. Integration points between fixed and adjacent slices (regression check)
+3. The specific 🔴 Critical finding(s) from the original LOCKOUT (confirm resolved)
+
+Full review of unchanged slices may be skipped unless the fix introduced cross-cutting changes.
 
 ---
 

@@ -62,6 +62,10 @@ Output Part B:
 
 Do NOT modify any files. Report only.
 
+If the verdict is **PASS** and the phase is Small or Medium (≤5 slices), you may proceed
+to Step 6 (Ship) in this same session — Session 4 is optional for smaller features.
+For Large phases (6+ slices), a separate Session 4 is recommended to avoid context exhaustion.
+
 ---
 
 ### If Lockout Is Triggered
@@ -70,6 +74,18 @@ Do NOT modify any files. Report only.
 2. Document the finding in `## Amendments`
 3. Open a new agent session to re-execute affected slice(s)
 4. Re-run this Review & Audit Gate after the fix
+
+### Targeted Re-Review (after LOCKOUT fix)
+
+If you are re-reviewing after a LOCKOUT fix, the user may specify which slices were re-executed.
+In that case, focus the review on:
+
+1. The re-executed slices and their changed files (primary audit)
+2. Integration points between the fixed slices and adjacent slices (regression check)
+3. The specific 🔴 Critical finding(s) that triggered the original LOCKOUT (confirm resolved)
+
+You may skip full review of slices that were not re-executed, unless the fix introduced
+cross-cutting changes (e.g., shared interfaces, database schema). If in doubt, do a full review.
 
 ---
 

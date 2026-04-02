@@ -34,6 +34,12 @@ The right amount of complexity is the minimum needed for the current slice.
 </implementation_discipline>
 
 Execute the hardened plan one slice at a time, starting with Slice 1.
+
+Before starting Slice 1, run a **Pre-Execution Traceability Check**:
+- Scan the spec's MUST acceptance criteria
+- Verify each MUST criterion maps to at least one slice's validation gate
+- If any MUST criterion has no corresponding validation gate, flag it and ask before proceeding
+
 Before each slice, load its Context Files (including .github/instructions/*.instructions.md guardrails).
 When scaffolding new entities/services/tests, use the matching prompt template from .github/prompts/.
 Follow the validation loop exactly. Commit after each passed slice.
@@ -65,7 +71,18 @@ Follow the Rollback Protocol (Runbook Section 10):
 
 1. Commit completed work
 2. Open new session with this same prompt
-3. Tell it: "Slices 1–N are complete. Resume from Slice N+1."
+3. Run the **Session Resume Checklist** before continuing:
+
+```
+SESSION RESUME CHECKLIST:
+1. Run `git status` — confirm working tree is clean (all prior slices committed)
+2. Run `git log --oneline -5` — verify last committed slice number
+3. Read the hardened plan's Scope Contract and Stop Conditions
+4. Confirm the plan file has not been amended since last session
+   (check for ## Amendments section — if new amendments exist, read them first)
+5. Identify the next unexecuted slice and load its Context Files
+6. State: "Resuming from Slice N. Prior slices 1–(N-1) are committed."
+```
 
 ---
 

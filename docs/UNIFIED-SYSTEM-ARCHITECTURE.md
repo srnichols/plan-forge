@@ -109,14 +109,14 @@ Any Channel → Gateway → Agent Runtime → Tools/Skills → Response → Any 
 ### Without Integration
 
 ```
-┌─────────────────────┐   ┌─────────────────────┐   ┌─────────────────────┐
-│     Plan Forge      │   │     OpenBrain        │   │     OpenClaw        │
-│                     │   │                      │   │                     │
-│ ✅ Great guardrails │   │ ✅ Great memory      │   │ ✅ Great reach      │
-│ ❌ VS Code only     │   │ ❌ Must remember to  │   │ ❌ No methodology   │
+┌──────────────────────┐   ┌─────────────────────┐   ┌─────────────────────┐
+│     Plan Forge       │   │     OpenBrain       │   │     OpenClaw        │
+│                      │   │                     │   │                     │
+│ ✅ Great guardrails │   │ ✅ Great memory     │   │ ✅ Great reach      │
+│ ❌ VS Code only     │   │ ❌ Must remember to │   │ ❌ No methodology   │
 │ ❌ Sessions forget  │   │    search/capture    │   │ ❌ No memory        │
-│ ❌ Can't notify you │   │ ❌ Passive — waits   │   │ ❌ No dev guardrails│
-└─────────────────────┘   └─────────────────────┘   └─────────────────────┘
+│ ❌ Can't notify you │   │ ❌ Passive — waits  │   │ ❌ No dev guardrails │
+└─────────────────────┘   └──────────────────────┘   └──────────────────────┘
 ```
 
 ### With Integration
@@ -340,33 +340,33 @@ graph LR
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    ACP Message Flow                              │
+│                    ACP Message Flow                             │
 ├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  OpenClaw                          Copilot CLI                   │
-│  (ACP Client)                      (ACP Server)                  │
-│                                                                  │
-│  ──── initialize ──────────────►                                 │
-│  ◄─── initializeResult ────────                                  │
-│                                                                  │
-│  ──── newSession ──────────────►                                 │
-│       { cwd, mcpServers }                                        │
-│  ◄─── newSessionResult ────────                                  │
-│       { sessionId }                                              │
-│                                                                  │
-│  ──── prompt ──────────────────►                                 │
-│       { sessionId, prompt }                                      │
-│  ◄─── sessionUpdate ──────────── (streaming text chunks)         │
-│  ◄─── sessionUpdate ──────────── (streaming text chunks)         │
-│  ◄─── requestPermission ──────── (tool approval needed)          │
-│  ──── permissionResult ────────►                                 │
-│       { outcome: "approved" }                                    │
-│  ◄─── sessionUpdate ──────────── (more streaming)                │
-│  ◄─── promptResult ───────────── { stopReason: "end_turn" }      │
-│                                                                  │
-│  ──── prompt ──────────────────► (next slice)                     │
-│       ...                                                        │
-│                                                                  │
+│                                                                 │
+│  OpenClaw                          Copilot CLI                  │
+│  (ACP Client)                      (ACP Server)                 │
+│                                                                 │
+│  ──── initialize ──────────────►                                │
+│  ◄─── initializeResult ────────                                 │
+│                                                                 │
+│  ──── newSession ──────────────►                                │
+│       { cwd, mcpServers }                                       │
+│  ◄─── newSessionResult ────────                                 │
+│       { sessionId }                                             │
+│                                                                 │
+│  ──── prompt ──────────────────►                                │
+│       { sessionId, prompt }                                     │
+│  ◄─── sessionUpdate ──────────── (streaming text chunks)        │
+│  ◄─── sessionUpdate ──────────── (streaming text chunks)        │
+│  ◄─── requestPermission ──────── (tool approval needed)         │
+│  ──── permissionResult ────────►                                │
+│       { outcome: "approved" }                                   │
+│  ◄─── sessionUpdate ──────────── (more streaming)               │
+│  ◄─── promptResult ───────────── { stopReason: "end_turn" }     │
+│                                                                 │
+│  ──── prompt ──────────────────► (next slice)                   │
+│       ...                                                       │
+│                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -477,42 +477,42 @@ graph TD
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  Your Machine (Windows / macOS / Linux)                      │
-│                                                              │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐  │
+│  Your Machine (Windows / macOS / Linux)                     │
+│                                                             │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐   │
 │  │ OpenClaw     │  │ VS Code      │  │ Terminal          │  │
 │  │ Gateway      │  │ + Copilot    │  │ + Copilot CLI     │  │
 │  │ :18789       │  │              │  │                   │  │
 │  └──────┬───────┘  └──────┬───────┘  └──────┬────────────┘  │
-│         │                 │                  │               │
-│         └─────────┬───────┴──────────┬───────┘               │
-│                   │                  │                        │
-│         ┌─────────▼──────────────────▼───────┐               │
-│         │        OpenBrain Stack              │               │
-│         │  ┌──────────┐  ┌────────────────┐  │               │
-│         │  │ MCP :8080 │  │ REST API :8000 │  │               │
-│         │  └─────┬─────┘  └───────┬────────┘  │               │
-│         │        └────────┬───────┘            │               │
-│         │         ┌───────▼───────┐            │               │
-│         │         │ PostgreSQL    │            │               │
-│         │         │ + pgvector    │            │               │
-│         │         │ :5432         │            │               │
-│         │         └───────────────┘            │               │
-│         │  ┌──────────────────────┐            │               │
-│         │  │ Ollama               │            │               │
-│         │  │ (embeddings + LLM)   │            │               │
-│         │  │ :11434               │            │               │
-│         │  └──────────────────────┘            │               │
-│         └────────────────────────────────────┘               │
-│                                                              │
-│  Project Workspace: ~/projects/my-api/                       │
-│    ├── .github/instructions/    (Plan Forge guardrails)      │
-│    ├── .github/prompts/         (scaffolding templates)      │
-│    ├── .github/agents/          (reviewer personas)          │
-│    ├── .vscode/mcp.json         (OpenBrain MCP config)       │
-│    ├── docs/plans/              (hardened plans)              │
-│    └── src/                     (your application code)      │
-│                                                              │
+│         │                 │                  │              │
+│         └─────────┬───────┴──────────┬───────┘              │
+│                   │                  │                      │
+│         ┌─────────▼──────────────────▼───────┐              │
+│         │        OpenBrain Stack             │              │
+│         │  ┌──────────┐  ┌────────────────┐  │              │
+│         │  │ MCP :8080 │  │ REST API :8000 │ │              │
+│         │  └─────┬─────┘  └───────┬────────┘ │              │
+│         │        └────────┬───────┘          │              │
+│         │         ┌───────▼───────┐          │              │
+│         │         │ PostgreSQL    │          │              │
+│         │         │ + pgvector    │          │              │
+│         │         │ :5432         │          │              │
+│         │         └───────────────┘          │              │
+│         │  ┌──────────────────────┐          │              │
+│         │  │ Ollama               │          │              │
+│         │  │ (embeddings + LLM)   │          │              │
+│         │  │ :11434               │          │              │
+│         │  └──────────────────────┘          │              │
+│         └────────────────────────────────────┘              │
+│                                                             │
+│  Project Workspace: ~/projects/my-api/                      │
+│    ├── .github/instructions/    (Plan Forge guardrails)     │
+│    ├── .github/prompts/         (scaffolding templates)     │
+│    ├── .github/agents/          (reviewer personas)         │
+│    ├── .vscode/mcp.json         (OpenBrain MCP config)      │
+│    ├── docs/plans/              (hardened plans)            │
+│    └── src/                     (your application code)     │
+│                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -531,10 +531,10 @@ graph TD
 │  (accessed via Tailscale)  │                │
 └────────────────────────────┘                │
                                     ┌─────────▼──────────┐
-                                    │  Your Phone         │
-                                    │  WhatsApp/Telegram  │
-                                    │  (notifications +   │
-                                    │   approvals)        │
+                                    │  Your Phone        │
+                                    │  WhatsApp/Telegram │
+                                    │  (notifications +  │
+                                    │   approvals)       │
                                     └────────────────────┘
 ```
 
@@ -544,32 +544,32 @@ For teams that don't want to maintain on-prem infrastructure, OpenBrain can run 
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│  Azure Resource Group: rg-openbrain                               │
-│                                                                   │
+│  Azure Resource Group: rg-openbrain                              │
+│                                                                  │
 │  ┌──────────────────────────────────────────────────────────┐    │
-│  │  Azure Container Apps Environment                         │    │
-│  │                                                           │    │
-│  │  ┌─────────────────────────────────┐                      │    │
-│  │  │  openbrain-api                  │                      │    │
-│  │  │  (Container App — Consumption)  │                      │    │
-│  │  │                                 │                      │    │
-│  │  │  REST API  :8000 (internal)     │                      │    │
-│  │  │  MCP SSE   :8080 (external)     │                      │    │
-│  │  │  Image: ghcr.io/srnichols/      │                      │    │
-│  │  │         openbrain:latest        │                      │    │
-│  │  └──────────┬──────────────────────┘                      │    │
-│  └─────────────┼─────────────────────────────────────────────┘    │
-│                │                                                   │
+│  │  Azure Container Apps Environment                        │    │
+│  │                                                          │    │
+│  │  ┌─────────────────────────────────┐                     │    │
+│  │  │  openbrain-api                  │                     │    │
+│  │  │  (Container App — Consumption)  │                     │    │
+│  │  │                                 │                     │    │
+│  │  │  REST API  :8000 (internal)     │                     │    │
+│  │  │  MCP SSE   :8080 (external)     │                     │    │
+│  │  │  Image: ghcr.io/srnichols/      │                     │    │
+│  │  │         openbrain:latest        │                     │    │
+│  │  └──────────┬──────────────────────┘                     │    │
+│  └─────────────┼────────────────────────────────────────────┘    │
+│                │                                                 │
 │       ┌────────┴────────┐      ┌──────────────────────────┐      │
 │       │                 │      │                          │      │
-│  ┌────▼─────────────┐  │  ┌───▼────────────────────────┐ │      │
-│  │ Azure Database    │  │  │ Azure OpenAI               │ │      │
-│  │ for PostgreSQL    │  │  │                            │ │      │
-│  │ (Flexible Server) │  │  │ text-embedding-3-small     │ │      │
-│  │                   │  │  │ gpt-4o-mini                │ │      │
-│  │ SKU: B1ms         │  │  │                            │ │      │
-│  │ 1 vCore / 2 GiB   │  │  │ (pay-per-token)           │ │      │
-│  │ pgvector enabled  │  │  └────────────────────────────┘ │      │
+│  ┌────▼──────────────┐  │  ┌───▼───────────────────────┐  │      │
+│  │ Azure Database    │  │  │ Azure OpenAI              │  │      │
+│  │ for PostgreSQL    │  │  │                           │  │      │
+│  │ (Flexible Server) │  │  │ text-embedding-3-small    │  │      │
+│  │                   │  │  │ gpt-4o-mini               │  │      │
+│  │ SKU: B1ms         │  │  │                           │  │      │
+│  │ 1 vCore / 2 GiB   │  │  │ (pay-per-token)           │  │      │
+│  │ pgvector enabled  │  │  └───────────────────────────┘  │      │
 │  │ 32 GiB storage    │  │                                 │      │
 │  └───────────────────┘  │  ┌────────────────────────────┐ │      │
 │                         │  │ Azure Key Vault            │ │      │
@@ -897,7 +897,7 @@ When you're at your desk in VS Code, the system works through MCP and instructio
 ### How Plan Forge + OpenBrain Work in VS Code
 
 ```
-┌─────────────────────────────────────────────────────────┐
+┌──────────────────────────────────────────────────────────┐
 │  VS Code + GitHub Copilot (Agent Mode)                   │
 │                                                          │
 │  1. Open Copilot Chat → Agent Mode                       │
@@ -909,21 +909,21 @@ When you're at your desk in VS Code, the system works through MCP and instructio
 │                                                          │
 │  4. persistent-memory.instructions.md triggers:          │
 │     → search_thoughts("prior context", project: "my-api",│
-│         created_by: "copilot-vscode")                     │
-│     → Prior decisions loaded into session context         │
+│         created_by: "copilot-vscode")                    │
+│     → Prior decisions loaded into session context        │
 │                                                          │
-│  5. Copilot hardens the plan following Plan Forge rules   │
-│  6. On completion:                                        │
+│  5. Copilot hardens the plan following Plan Forge rules  │
+│  6. On completion:                                       │
 │     → capture_thought("Decision: X", project: "my-api",  │
-│         created_by: "copilot-vscode",                     │
-│         source: "plan-forge-phase-4-hardening")           │
+│         created_by: "copilot-vscode",                    │
+│         source: "plan-forge-phase-4-hardening")          │
 │     → Stored in OpenBrain with auto-metadata             │
 │                                                          │
-│  7. Start new chat session (Session 2)                    │
-│  8. Attach step3-execute-slice.prompt.md                  │
-│  9. Copilot searches OpenBrain for Session 1 decisions    │
-│  10. Executes with full context                           │
-└─────────────────────────────────────────────────────────┘
+│  7. Start new chat session (Session 2)                   │
+│  8. Attach step3-execute-slice.prompt.md                 │
+│  9. Copilot searches OpenBrain for Session 1 decisions   │
+│  10. Executes with full context                          │
+└──────────────────────────────────────────────────────────┘
 ```
 
 ### When to Use VS Code vs. OpenClaw-Orchestrated Copilot CLI
@@ -1038,28 +1038,28 @@ If any are omitted, the thought is orphaned — unsearchable by project, unattri
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │  Injection Point 1: OpenClaw Skill Config (env vars)                │
-│                                                                      │
-│  Skills inject DEFAULT_PROJECT, DEFAULT_USER, and derive SOURCE      │
-│  from the channel + pipeline step automatically.                     │
-│  → REST calls to /memories always include project + created_by       │
-│                                                                      │
+│                                                                     │
+│  Skills inject DEFAULT_PROJECT, DEFAULT_USER, and derive SOURCE     │
+│  from the channel + pipeline step automatically.                    │
+│  → REST calls to /memories always include project + created_by      │
+│                                                                     │
 ├─────────────────────────────────────────────────────────────────────┤
-│  Injection Point 2: persistent-memory.instructions.md                │
-│                                                                      │
-│  The instruction file tells Copilot (VS Code or CLI):                │
-│  "Always pass project: '<project-name>' and                          │
+│  Injection Point 2: persistent-memory.instructions.md               │
+│                                                                     │
+│  The instruction file tells Copilot (VS Code or CLI):               │
+│  "Always pass project: '<project-name>' and                         │
 │   created_by: 'copilot-vscode' or 'copilot-cli' and                 │
-│   source: '<current-pipeline-step>' on every capture/search call."   │
+│   source: '<current-pipeline-step>' on every capture/search call."  │
 │  → MCP calls from Copilot always include all 3 params               │
-│                                                                      │
+│                                                                     │
 ├─────────────────────────────────────────────────────────────────────┤
-│  Injection Point 3: ACP Session Init (Copilot CLI)                   │
-│                                                                      │
-│  OpenClaw passes project + user context in the ACP prompt prefix:    │
-│  "You are working on project 'my-api'. Your identity for OpenBrain   │
+│  Injection Point 3: ACP Session Init (Copilot CLI)                  │
+│                                                                     │
+│  OpenClaw passes project + user context in the ACP prompt prefix:   │
+│  "You are working on project 'my-api'. Your identity for OpenBrain  │
 │   is 'copilot-cli'. The current pipeline step is 'phase-4-slice-2'."│
-│  → Copilot CLI sessions always have the context to fill params       │
-│                                                                      │
+│  → Copilot CLI sessions always have the context to fill params      │
+│                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 

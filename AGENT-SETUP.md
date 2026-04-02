@@ -6,17 +6,22 @@
 
 ---
 
-## Quick Decision: Greenfield or Brownfield?
+## Quick Decision: Greenfield, Brownfield, or Update?
 
 Scan the target project directory. Choose ONE path:
 
 ```
+IF target has .forge.json
+   → Check .forge.json templateVersion vs Plan Forge source VERSION
+   → If versions differ → UPDATE — Go to Section 2b
+   → If versions match → Already up to date (proceed to Section 5)
+
 IF target has NO .github/copilot-instructions.md
    AND NO .github/instructions/ directory
    AND NO AGENTS.md
    → GREENFIELD — Go to Section 1
 
-IF target has ANY of those files already
+IF target has ANY of those files already (but no .forge.json)
    → BROWNFIELD — Go to Section 2
 ```
 
@@ -133,6 +138,63 @@ Run validation (same as Greenfield Step 4). The validator checks for the minimum
 
 ---
 
+## Section 2b: Update Existing Installation
+
+The target project already has Plan Forge installed (`.forge.json` exists) but is on an older version.
+
+### Step 1: Version Check
+
+```powershell
+# Read current version from .forge.json
+$config = Get-Content .forge.json | ConvertFrom-Json
+Write-Host "Current: v$($config.templateVersion)"
+```
+
+Compare against the Plan Forge source `VERSION` file. If they match, no update needed.
+
+### Step 2: Run the Update Command
+
+```powershell
+# PowerShell — with preview first
+.\pforge.ps1 update <path-to-plan-forge-source> --dry-run
+
+# Apply the update (non-interactive for agents)
+.\pforge.ps1 update <path-to-plan-forge-source> --force
+```
+
+```bash
+# Bash
+./pforge.sh update <path-to-plan-forge-source> --dry-run
+./pforge.sh update <path-to-plan-forge-source> --force
+```
+
+**`--force` is required for unattended agent execution** — it skips confirmation prompts.
+
+### What Gets Updated
+
+The update command uses SHA256 hashing to update only files that actually changed:
+
+| Updated (framework files) | Never Touched (user-customized) |
+|--------------------------|-------------------------------|
+| Pipeline prompts (`step*.prompt.md`) | `.github/copilot-instructions.md` |
+| Pipeline agents (specifier, plan-hardener, executor, reviewer-gate, shipper) | `project-profile.instructions.md` |
+| Shared instructions (architecture-principles, git-workflow) | `project-principles.instructions.md` |
+| Runbook + Instructions docs | `DEPLOYMENT-ROADMAP.md` |
+| Lifecycle hooks | `PROJECT-PRINCIPLES.md` |
+| | `AGENTS.md`, plan files, `.forge.json` |
+
+Stack-specific files (database.instructions.md, testing.instructions.md, etc.) are NOT updated — they may have been customized for the project.
+
+### Step 3: Validate
+
+```powershell
+.\pforge.ps1 check
+```
+
+All checks should pass. If any fail, the update may have added new required files that need configuration.
+
+---
+
 ## Section 3: What Files Must Exist After Setup
 
 The validation script checks for these files. All must be present and non-empty:
@@ -216,6 +278,7 @@ pforge check                          # Validate setup
 pforge status                         # Show all phases with status
 pforge new-phase <feature-name>       # Create plan file + roadmap entry
 pforge branch <plan-file>             # Create branch from plan's Branch Strategy
+pforge update <source-path>           # Update framework files (preserves customizations)
 pforge ext install <path>             # Install an extension
 pforge ext list                       # List installed extensions
 ```

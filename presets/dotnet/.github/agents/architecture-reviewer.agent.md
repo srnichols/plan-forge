@@ -76,8 +76,8 @@ services.AddSingleton<IAppSettings>(appSettings);
 
 If the OpenBrain MCP server is available:
 
-- **Before reviewing**: `search_thoughts("architecture review findings", project: "<project>", created_by: "copilot-vscode", type: "convention")` — load prior architecture violations, pattern decisions, and accepted deviations
-- **After review**: `capture_thought("Architecture review: <N findings — key issues summary>", project: "<project>", created_by: "copilot-vscode", source: "agent-architecture-reviewer")` — persist findings for trend tracking
+- **Before reviewing**: `search_thoughts("architecture review findings", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "convention")` — load prior architecture violations, pattern decisions, and accepted deviations
+- **After review**: `capture_thought("Architecture review: <N findings — key issues summary>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "agent-architecture-reviewer")` — persist findings for trend tracking
 
 ## Confidence
 

@@ -59,8 +59,8 @@ finally { client.release(); }
 
 If the OpenBrain MCP server is available:
 
-- **Before reviewing**: `search_thoughts("database review findings", project: "<project>", created_by: "copilot-vscode", type: "bug")` — load prior SQL safety findings, N+1 patterns, and migration lessons
-- **After review**: `capture_thought("Database review: <N findings — key issues summary>", project: "<project>", created_by: "copilot-vscode", source: "agent-database-reviewer")` — persist findings for trend tracking
+- **Before reviewing**: `search_thoughts("database review findings", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "bug")` — load prior SQL safety findings, N+1 patterns, and migration lessons
+- **After review**: `capture_thought("Database review: <N findings — key issues summary>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "agent-database-reviewer")` — persist findings for trend tracking
 
 ## Confidence
 

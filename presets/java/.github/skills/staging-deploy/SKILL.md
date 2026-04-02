@@ -51,5 +51,5 @@ curl https://staging-api.contoso.com/api/version
 
 ## Persistent Memory (if OpenBrain is configured)
 
-- **Before deploying**: `search_thoughts("deploy failure", project: "<project>", created_by: "copilot-vscode", type: "postmortem")` — load prior deployment failures and environment-specific gotchas
-- **After deploy succeeds/fails**: `capture_thought("Deploy: <outcome — success or failure details>", project: "<project>", created_by: "copilot-vscode", source: "skill-staging-deploy")` — persist environment issues and config changes for next deployment
+- **Before deploying**: `search_thoughts("deploy failure", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "postmortem")` — load prior deployment failures and environment-specific gotchas
+- **After deploy succeeds/fails**: `capture_thought("Deploy: <outcome — success or failure details>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "skill-staging-deploy")` — persist environment issues and config changes for next deployment

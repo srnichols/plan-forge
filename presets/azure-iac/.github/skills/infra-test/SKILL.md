@@ -99,5 +99,5 @@ Invoke-Pester -Configuration $config
 
 ## Persistent Memory (if OpenBrain is configured)
 
-- **Before running tests**: `search_thoughts("infra test failure", project: "<project>", created_by: "copilot-vscode", type: "bug")` — load known test failures, linter false-positives, and Pester patterns
-- **After test sweep**: `capture_thought("Infra test: <N passed, N failed — key failure patterns>", project: "<project>", created_by: "copilot-vscode", source: "skill-infra-test")` — persist test outcomes and recurring failure patterns
+- **Before running tests**: `search_thoughts("infra test failure", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "bug")` — load known test failures, linter false-positives, and Pester patterns
+- **After test sweep**: `capture_thought("Infra test: <N passed, N failed — key failure patterns>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "skill-infra-test")` — persist test outcomes and recurring failure patterns

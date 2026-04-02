@@ -2,9 +2,42 @@
 
 > **Purpose**: Adds persistent semantic memory to Plan Forge via [OpenBrain](https://github.com/srnichols/OpenBrain) — a self-hosted MCP memory server. Decisions, patterns, and lessons captured in one session are searchable in every future session, across any AI tool.
 
+---
+
+## Why This Extension Exists
+
+AI agents are powerful but amnesiac. Every session starts from zero — the agent that spent 45 minutes resolving an architecture decision forgets it the moment the session ends. The next session re-discovers the same answer, or worse, contradicts it.
+
+**Plan Forge's 4-session model** (Plan → Build → Review → Ship) deliberately isolates sessions to prevent self-review bias. That isolation is a feature — but the amnesia between sessions is the cost. This extension eliminates that cost.
+
+### The Real-World Impact
+
+| Metric | Without OpenBrain | With OpenBrain |
+|--------|------------------|----------------|
+| **Rework from forgotten decisions** | Agent re-discovers solved problems each session | Searches memory → gets the answer in seconds |
+| **Contradicted decisions** | Caught at Step 5 review — after code is already written | Caught at Step 3 pre-slice search — before code starts |
+| **Token spend per phase** | Agent explores, reads files, reasons from scratch | Agent loads 5-10 prior decisions → skips exploration |
+| **Post-mortem value** | Written once, rarely re-read | Automatically searched at start of every future phase |
+| **New team member ramp-up** | Read the docs, ask the team, hope nothing was missed | `search_thoughts("architecture")` → full decision history |
+| **Cross-session context** | Manual copy-paste or lossy plan summaries | Semantic search bridges sessions automatically |
+
+### How This Tightens Code Quality
+
+1. **Fewer pattern violations** — The Executor searches for established conventions before each slice. If Phase 2 captured "Convention: all repos return domain objects, never DTOs," Phase 5 follows it automatically without a human reminding.
+
+2. **Fewer repeated bugs** — The Security Reviewer captures "Bug: missing rate limiting on /api/login." The next Executor slice touching auth finds that finding *before* building, not after. Bugs get prevented, not just detected.
+
+3. **Less wasted context budget** — Instead of the agent reading 10 files to reconstruct project context, a single `search_thoughts()` returns the 5-10 most relevant prior decisions. That's ~500 tokens instead of ~5,000 — freeing context budget for actual code generation.
+
+4. **Consistent architecture across phases** — Phase 1 decides "use CQRS for read/write separation." Without memory, Phase 4 might use a different pattern. With memory, the Executor finds the CQRS decision and follows it.
+
+5. **Review Gate gets smarter over time** — The Reviewer captures findings with `type: "postmortem"`. Future reviews search for those — the agent already knows what to look for in this codebase. Review quality compounds.
+
+---
+
 ## The Problem This Solves
 
-Plan Forge's 3-session model (Plan → Build → Audit) is powerful, but each session starts fresh. The hardened plan carries forward, but:
+Plan Forge's 4-session model (Plan → Build → Review → Ship) is powerful, but each session starts fresh. The hardened plan carries forward, but:
 
 - **"Why did we decide X?"** — The rationale lives in an old chat session, gone forever
 - **"Has this been tried before?"** — No way to search past sessions semantically
@@ -32,13 +65,19 @@ This extension adds 4 files, but the memory integration extends **across the ent
 
 | Component | Count | Memory Behavior |
 |-----------|-------|-----------------|
-| **Pipeline prompts** (step0–step6) | 7 | Search before, capture after each step |
+| **Pipeline prompts** (step0–step6 + profile) | 8 | Search before, capture after each step |
 | **Pipeline agents** (specifier → shipper) | 5 | Search for context + capture decisions at each stage |
+| **Stack agents** (6 per preset × 6 presets) | 36 | Search prior review findings, capture new findings |
+| **Shared agents** (cross-stack reviewers) | 7 | Search prior cross-cutting findings, capture results |
+| **Azure-iac agents** (IaC reviewers) | 5 | Search prior IaC findings, capture sweep/review results |
+| **App skills** (8 per preset × 5 presets) | 40 | Each skill searches prior patterns and captures outcomes |
+| **Azure-iac skills** | 3 | Search deploy/test/sweep history, capture outcomes |
 | **SessionStart hook** | 1 | Injects reminder to search OpenBrain on session open |
 | **Stop hook** | 1 | Reminds agent to capture decisions before session ends |
-| **Skills** (all presets) | 40 | Each skill searches prior patterns and captures outcomes |
 
-All calls include `project`, `created_by`, and `source` for full provenance.
+**Total: 106 files** with OpenBrain hooks — all gated behind "if configured."
+
+All calls include `project`, `created_by`, `source`, and `type` for full provenance and filtered search.
 
 ## Prerequisites
 

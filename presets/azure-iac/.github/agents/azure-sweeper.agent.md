@@ -258,8 +258,8 @@ For every **HIGH** or **CRITICAL** finding, generate remediation in at least two
 
 If the OpenBrain MCP server is available:
 
-- **Before sweeping**: `search_thoughts("azure sweep", project: "<project>", created_by: "copilot-vscode", type: "convention")` — load prior sweep findings, accepted risks, and baseline trends
-- **After sweep completes**: `capture_thought("Azure sweep: <overall verdict — N findings across N layers, key blockers>", project: "<project>", created_by: "copilot-vscode", source: "agent-azure-sweeper")` — persist sweep results for trend analysis
+- **Before sweeping**: `search_thoughts("azure sweep", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "convention")` — load prior sweep findings, accepted risks, and baseline trends
+- **After sweep completes**: `capture_thought("Azure sweep: <overall verdict — N findings across N layers, key blockers>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "agent-azure-sweeper")` — persist sweep results for trend analysis
 
 ## Output Format
 

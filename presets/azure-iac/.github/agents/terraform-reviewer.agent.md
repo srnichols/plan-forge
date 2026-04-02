@@ -70,8 +70,8 @@ You are the **Terraform Reviewer**. Audit Terraform configurations for violation
 
 If the OpenBrain MCP server is available:
 
-- **Before reviewing**: `search_thoughts("terraform review findings", project: "<project>", created_by: "copilot-vscode", type: "bug")` — load prior Terraform review findings and recurring patterns
-- **After review**: `capture_thought("Terraform review: <N findings — key issues summary>", project: "<project>", created_by: "copilot-vscode", source: "agent-terraform-reviewer")` — persist findings for trend tracking
+- **Before reviewing**: `search_thoughts("terraform review findings", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "bug")` — load prior Terraform review findings and recurring patterns
+- **After review**: `capture_thought("Terraform review: <N findings — key issues summary>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "agent-terraform-reviewer")` — persist findings for trend tracking
 
 ## Constraints
 

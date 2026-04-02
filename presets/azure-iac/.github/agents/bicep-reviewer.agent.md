@@ -74,8 +74,8 @@ You are the **Bicep Reviewer**. Audit Bicep files for violations of Azure IaC be
 
 If the OpenBrain MCP server is available:
 
-- **Before reviewing**: `search_thoughts("bicep review findings", project: "<project>", created_by: "copilot-vscode", type: "bug")` — load prior Bicep review findings, common violations, and accepted patterns
-- **After review**: `capture_thought("Bicep review: <N findings — key issues summary>", project: "<project>", created_by: "copilot-vscode", source: "agent-bicep-reviewer")` — persist findings for trend tracking
+- **Before reviewing**: `search_thoughts("bicep review findings", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "bug")` — load prior Bicep review findings, common violations, and accepted patterns
+- **After review**: `capture_thought("Bicep review: <N findings — key issues summary>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "agent-bicep-reviewer")` — persist findings for trend tracking
 
 ## Constraints
 

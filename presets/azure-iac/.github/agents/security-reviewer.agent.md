@@ -83,8 +83,8 @@ You are the **IaC Security Reviewer**. Perform a security-focused audit of Azure
 
 If the OpenBrain MCP server is available:
 
-- **Before reviewing**: `search_thoughts("azure security findings", project: "<project>", created_by: "copilot-vscode", type: "bug")` — load prior security audit findings, accepted risks, and remediation patterns
-- **After review**: `capture_thought("Azure security review: <N findings — key issues summary>", project: "<project>", created_by: "copilot-vscode", source: "agent-security-reviewer")` — persist findings for compliance tracking
+- **Before reviewing**: `search_thoughts("azure security findings", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "bug")` — load prior security audit findings, accepted risks, and remediation patterns
+- **After review**: `capture_thought("Azure security review: <N findings — key issues summary>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "agent-security-reviewer")` — persist findings for compliance tracking
 
 ## Constraints
 

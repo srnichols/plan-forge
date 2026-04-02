@@ -646,18 +646,21 @@ When the extension is installed, **every pipeline touchpoint** participates — 
 | **SessionStart hook** | ✅ Reminds agent to search on session open | — |
 | **Stop hook** | — | ✅ Reminds agent to capture before ending |
 
-All calls include `project`, `created_by`, and `source` for full provenance tracking.
+All calls include `project`, `created_by`, `source`, and `type` for full provenance tracking. **106 files total** with OpenBrain hooks — all gated behind "if configured."
 
 ### What it costs: Zero if not installed
 
-Every integration is gated behind "if OpenBrain is configured." Without it, prompts, agents, hooks, and skills work identically. There is no new dependency or behavior change for users who don't opt in.
+Every integration is gated behind "if OpenBrain is configured." Without it, prompts, agents, hooks, and skills work identically. There is no new dependency, no behavior change, and no performance impact for users who don't opt in.
 
-### When This Matters
+### Why This Matters: Better Code, Fewer Bugs, Less Rework
 
-- **Long-running projects** — "Why did we decide X three months ago?"
-- **Team rotation** — New member gets full decision history via search
-- **Multi-tool workflows** — Same memory works across Copilot, Claude, Cursor
-- **Post-mortem insights** — Lessons feed back into future planning automatically
+- **Agents stop re-discovering solved problems** — A convention captured in Phase 1 is found by the Executor in Phase 8 via a single search call. No human reminding needed.
+- **Bugs get prevented, not just detected** — The Security Reviewer captures "missing rate limiting on /login." The next Executor building auth finds it *before* coding, saving a full review-fix-re-review cycle.
+- **Lower token spend per phase** — One `search_thoughts()` returns 5–10 relevant decisions in ~500 tokens. Without memory, the agent reads 10+ files to reconstruct context (~5,000+ tokens). That difference multiplies across every slice, every phase.
+- **Review quality compounds** — Each Review Gate captures findings with `type: "postmortem"`. Future reviews search those first — the agent already knows this codebase's weak spots.
+- **Long-running projects** — "Why did we choose PostgreSQL over MongoDB?" gets an answer with exact reasoning, phase number, and who decided — months later.
+- **Team rotation** — New member or new AI tool gets the same institutional knowledge as someone who was there from Phase 1.
+- **Cross-tool portability** — A decision captured from Copilot is searchable from Claude, Cursor, ChatGPT, or a CI/CD pipeline. Your context travels with you.
 
 ### Setup
 

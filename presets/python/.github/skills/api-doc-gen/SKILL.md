@@ -82,5 +82,5 @@ API Documentation Status:
 
 ## Persistent Memory (if OpenBrain is configured)
 
-- **Before generating docs**: `search_thoughts("API design", project: "<project>", created_by: "copilot-vscode", type: "convention")` — load API naming conventions, pagination patterns, and error response standards
-- **After spec update**: `capture_thought("API doc: <endpoints added/changed summary>", project: "<project>", created_by: "copilot-vscode", source: "skill-api-doc-gen")` — persist API evolution for breaking change tracking
+- **Before generating docs**: `search_thoughts("API design", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "convention")` — load API naming conventions, pagination patterns, and error response standards
+- **After spec update**: `capture_thought("API doc: <endpoints added/changed summary>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "skill-api-doc-gen")` — persist API evolution for breaking change tracking

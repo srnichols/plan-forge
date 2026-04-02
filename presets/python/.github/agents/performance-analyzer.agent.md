@@ -61,8 +61,8 @@ async def stream_products(repo) -> AsyncIterator[Product]:
 
 If the OpenBrain MCP server is available:
 
-- **Before analyzing**: `search_thoughts("performance findings", project: "<project>", created_by: "copilot-vscode", type: "convention")` — load prior hot path analysis, allocation patterns, and benchmark baselines
-- **After analysis**: `capture_thought("Performance review: <N findings — key issues summary>", project: "<project>", created_by: "copilot-vscode", source: "agent-performance-analyzer")` — persist findings for trend tracking
+- **Before analyzing**: `search_thoughts("performance findings", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "convention")` — load prior hot path analysis, allocation patterns, and benchmark baselines
+- **After analysis**: `capture_thought("Performance review: <N findings — key issues summary>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "agent-performance-analyzer")` — persist findings for trend tracking
 
 ## Confidence
 

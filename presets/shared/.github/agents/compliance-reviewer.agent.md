@@ -78,7 +78,7 @@ For each finding:
 
 If the OpenBrain MCP server is available:
 
-- **Before reviewing**: `search_thoughts("compliance findings", project: "<project>", created_by: "copilot-vscode", type: "convention")` — loads prior GDPR/SOC2 findings and remediation patterns
-- **After review**: `capture_thought("Compliance Reviewer: <N findings — key issues>", project: "<project>", created_by: "copilot-vscode", source: "agent-compliance-reviewer")` — persists compliance violations and regulatory remediation patterns
+- **Before reviewing**: `search_thoughts("compliance findings", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "convention")` — loads prior GDPR/SOC2 findings and remediation patterns
+- **After review**: `capture_thought("Compliance Reviewer: <N findings — key issues>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "agent-compliance-reviewer")` — persists compliance violations and regulatory remediation patterns
 
 Do NOT modify any files. Report ONLY.

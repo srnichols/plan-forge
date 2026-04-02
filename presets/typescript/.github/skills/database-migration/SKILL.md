@@ -59,5 +59,5 @@ npx knex migrate:latest --env staging
 
 ## Persistent Memory (if OpenBrain is configured)
 
-- **Before generating migration**: `search_thoughts("database migration", project: "<project>", created_by: "copilot-vscode", type: "pattern")` — load prior migration patterns, naming conventions, and lessons from failed migrations
-- **After migration succeeds**: `capture_thought("Migration: <summary of schema change>", project: "<project>", created_by: "copilot-vscode", source: "skill-database-migration")` — persist the migration decision for future reference
+- **Before generating migration**: `search_thoughts("database migration", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "pattern")` — load prior migration patterns, naming conventions, and lessons from failed migrations
+- **After migration succeeds**: `capture_thought("Migration: <summary of schema change>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "skill-database-migration")` — persist the migration decision for future reference

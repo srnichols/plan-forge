@@ -98,8 +98,8 @@ cacheKey = "tenant:{tenantId}:product:{productId}"
 
 If the OpenBrain MCP server is available:
 
-- **Before reviewing**: `search_thoughts("tenant isolation findings", project: "<project>", created_by: "copilot-vscode", type: "bug")` — loads prior data leakage risks and RLS patterns
-- **After review**: `capture_thought("Multi-Tenancy Reviewer: <N findings — key issues>", project: "<project>", created_by: "copilot-vscode", source: "agent-multi-tenancy-reviewer")` — persists tenant isolation gaps and remediation patterns
+- **Before reviewing**: `search_thoughts("tenant isolation findings", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "bug")` — loads prior data leakage risks and RLS patterns
+- **After review**: `capture_thought("Multi-Tenancy Reviewer: <N findings — key issues>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "agent-multi-tenancy-reviewer")` — persists tenant isolation gaps and remediation patterns
 
 - DO NOT modify any files — only identify isolation violations
 - Treat ANY missing tenant filter as CRITICAL — data leakage is the #1 SaaS risk

@@ -79,10 +79,33 @@ The following example extensions are included in `docs/plans/examples/extensions
 |-----------|-------------|----------|
 | `saas-multi-tenancy` | RLS policies, tenant isolation middleware, cross-tenant prevention | SaaS platforms with row-level security |
 | `azure-infrastructure` | Bicep, Terraform, azd, CAF naming, security guardrails | Any app repo with an `infra/` folder |
-| `plan-forge-memory` | Persistent decision capture, project history search | Teams using OpenBrain/memory tools |
+| `plan-forge-memory` | Persistent decision capture, project history search, cross-session context | Any project — especially long-running or team-based |
 
 > For pure Azure infrastructure repos (no application code), use the `azure-iac` preset instead of the extension.  
 > See `presets/azure-iac/` for the full standalone preset.
+
+### Featured: `plan-forge-memory` — Persistent Memory via OpenBrain
+
+Plan Forge's 4-session isolation model prevents self-review bias but creates a side effect: **each session starts from zero context**. The agent that spent 45 minutes resolving a CQRS decision forgets it when the session ends. The next session re-discovers the same answer — or silently contradicts it.
+
+The `plan-forge-memory` extension connects Plan Forge to [OpenBrain](https://github.com/srnichols/OpenBrain) — a self-hosted semantic memory server. Once installed, **106 files** across the pipeline automatically search OpenBrain for prior context before acting and capture decisions after completing. Knowledge compounds across phases instead of evaporating between sessions.
+
+**What this means in practice:**
+
+- **Less rework** — Agents find prior decisions before writing code, not after. A convention established in Phase 1 is automatically followed in Phase 8 without human reminding.
+- **Fewer bugs from contradicted decisions** — The Executor searches for "data access patterns" before each slice and finds "Convention: all repos return domain objects, never DTOs" — preventing a pattern violation that would otherwise be caught at review (after the code is already written).
+- **Lower token spend** — A single `search_thoughts()` returns the 5–10 most relevant prior decisions in ~500 tokens. Without memory, the agent reads 10+ files to reconstruct context (~5,000+ tokens). Multiply that by every slice in every phase.
+- **Review quality compounds** — The Reviewer captures findings with `type: "postmortem"`. Future reviews search those — the agent already knows what to look for in this codebase.
+- **Works across AI tools** — A decision captured from Copilot is searchable from Claude, Cursor, ChatGPT, or a terminal agent. Your context travels with you, not locked to one vendor.
+
+**Install:**
+```bash
+pforge ext install docs/plans/examples/extensions/plan-forge-memory
+```
+
+**Requires:** [OpenBrain](https://github.com/srnichols/OpenBrain) running (Docker Compose, Kubernetes, or Azure — 5-minute setup). Zero cost if self-hosted with Ollama.
+
+See the [extension README](plans/examples/extensions/plan-forge-memory/README.md) for the complete integration map, setup guide, and worked examples.
 
 ## Distribution Channels
 

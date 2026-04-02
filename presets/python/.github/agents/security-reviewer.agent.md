@@ -66,8 +66,8 @@ async def delete_product(product_id: int, user: User = Depends(require_admin)):
 
 If the OpenBrain MCP server is available:
 
-- **Before reviewing**: `search_thoughts("security review findings", project: "<project>", created_by: "copilot-vscode", type: "bug")` — load prior OWASP findings, accepted risks, and remediation patterns
-- **After review**: `capture_thought("Security review: <N findings — key issues summary>", project: "<project>", created_by: "copilot-vscode", source: "agent-security-reviewer")` — persist findings for compliance tracking
+- **Before reviewing**: `search_thoughts("security review findings", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "bug")` — load prior OWASP findings, accepted risks, and remediation patterns
+- **After review**: `capture_thought("Security review: <N findings — key issues summary>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "agent-security-reviewer")` — persist findings for compliance tracking
 
 ## Confidence
 

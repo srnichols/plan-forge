@@ -200,8 +200,8 @@ After collecting all findings, the Azure Sweeper agent generates:
 
 ## Persistent Memory (if OpenBrain is configured)
 
-- **Before sweeping**: `search_thoughts("azure sweep findings", project: "<project>", created_by: "copilot-vscode", type: "convention")` — load prior sweep findings, accepted risks, and remediation patterns
-- **After sweep completes**: `capture_thought("Azure sweep: <N findings across N layers — key issues and pass/fail>", project: "<project>", created_by: "copilot-vscode", source: "skill-azure-sweep")` — persist sweep results for trend tracking across runs
+- **Before sweeping**: `search_thoughts("azure sweep findings", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "convention")` — load prior sweep findings, accepted risks, and remediation patterns
+- **After sweep completes**: `capture_thought("Azure sweep: <N findings across N layers — key issues and pass/fail>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "skill-azure-sweep")` — persist sweep results for trend tracking across runs
 
 The skill produces a markdown sweep report:
 

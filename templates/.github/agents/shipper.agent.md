@@ -70,8 +70,8 @@ If a file doesn't exist yet, create it with a header and the first entry. Always
 
 If the OpenBrain MCP server is available:
 
-- `search_thoughts("postmortem lessons", project: "<project>", created_by: "copilot-vscode", type: "postmortem")` — load prior postmortem lessons to check for recurring shipping issues before writing this phase's postmortem
-- `capture_thoughts([...lessons], project: "<project>", created_by: "copilot-vscode", source: "phase-N-postmortem", type: "postmortem")` — batch capture all lessons, patterns, and decisions from this phase
+- `search_thoughts("postmortem lessons", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "postmortem")` — load prior postmortem lessons to check for recurring shipping issues before writing this phase's postmortem
+- `capture_thoughts([...lessons], project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "phase-N-postmortem", type: "postmortem")` — batch capture all lessons, patterns, and decisions from this phase
 - Include: architecture decisions, patterns discovered, bugs encountered, conventions established
 
 ### Phase 7: Push & PR (with confirmation)

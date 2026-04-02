@@ -105,5 +105,5 @@ git revert HEAD && azd up
 
 ## Persistent Memory (if OpenBrain is configured)
 
-- **Before deploying**: `search_thoughts("deploy failure", project: "<project>", created_by: "copilot-vscode", type: "postmortem")` — load prior deployment failures, rollback patterns, and environment-specific lessons
-- **After deploy succeeds/fails**: `capture_thought("Infra deploy: <outcome — environment, tool, success/failure details>", project: "<project>", created_by: "copilot-vscode", source: "skill-infra-deploy")` — persist deployment outcome for future reference
+- **Before deploying**: `search_thoughts("deploy failure", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "postmortem")` — load prior deployment failures, rollback patterns, and environment-specific lessons
+- **After deploy succeeds/fails**: `capture_thought("Infra deploy: <outcome — environment, tool, success/failure details>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "skill-infra-deploy")` — persist deployment outcome for future reference

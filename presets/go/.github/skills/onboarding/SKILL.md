@@ -96,5 +96,5 @@ Key files to bookmark:
 
 ## Persistent Memory (if OpenBrain is configured)
 
-- **During onboarding**: `search_thoughts("architecture", project: "<project>", created_by: "copilot-vscode")` — surface architecture decisions, conventions, and lessons learned to give the new developer full project context
-- **After onboarding**: `capture_thought("Onboarding: <questions asked, gaps found in docs>", project: "<project>", created_by: "copilot-vscode", source: "skill-onboarding")` — persist common onboarding questions to improve docs
+- **During onboarding**: `search_thoughts("architecture", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode")` — surface architecture decisions, conventions, and lessons learned to give the new developer full project context
+- **After onboarding**: `capture_thought("Onboarding: <questions asked, gaps found in docs>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "skill-onboarding")` — persist common onboarding questions to improve docs

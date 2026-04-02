@@ -92,9 +92,9 @@ If any check fails, revise the plan before outputting.
 
 If the OpenBrain MCP server is available:
 
-- **Before hardening**: `search_thoughts("<phase topic>", project: "<project>", created_by: "copilot-vscode", type: "decision")` — load prior decisions, patterns, and lessons that inform scope and slicing
-- **During TBD resolution**: `search_thoughts("<ambiguous topic>", project: "<project>", created_by: "copilot-vscode", type: "decision")` — check if prior decisions already resolve the ambiguity
-- **After hardening**: `capture_thought("Plan hardened: <phase name> — N slices, key decisions: ...", project: "<project>", created_by: "copilot-vscode", source: "plan-forge-step-2", type: "decision")` — persist hardening decisions
+- **Before hardening**: `search_thoughts("<phase topic>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "decision")` — load prior decisions, patterns, and lessons that inform scope and slicing
+- **During TBD resolution**: `search_thoughts("<ambiguous topic>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "decision")` — check if prior decisions already resolve the ambiguity
+- **After hardening**: `capture_thought("Plan hardened: <phase name> — N slices, key decisions: ...", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "plan-forge-step-2", type: "decision")` — persist hardening decisions
 
 ## Completion
 

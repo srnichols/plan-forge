@@ -80,5 +80,5 @@ Findings by Category:
 
 ## Persistent Memory (if OpenBrain is configured)
 
-- **Before reviewing**: `search_thoughts("code review findings", project: "<project>", created_by: "copilot-vscode", type: "bug")` — load prior review findings and recurring violation patterns to check proactively
-- **After review**: `capture_thought("Review: <N findings — key issues summary>", project: "<project>", created_by: "copilot-vscode", source: "skill-code-review")` — persist recurring patterns so future reviews catch them earlier
+- **Before reviewing**: `search_thoughts("code review findings", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "bug")` — load prior review findings and recurring violation patterns to check proactively
+- **After review**: `capture_thought("Review: <N findings — key issues summary>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "skill-code-review")` — persist recurring patterns so future reviews catch them earlier

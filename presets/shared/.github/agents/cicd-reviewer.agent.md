@@ -109,8 +109,8 @@ deploy-prod:
 
 If the OpenBrain MCP server is available:
 
-- **Before reviewing**: `search_thoughts("CI/CD review findings", project: "<project>", created_by: "copilot-vscode", type: "convention")` — loads prior pipeline issues and promotion gate decisions
-- **After review**: `capture_thought("CI/CD Pipeline Reviewer: <N findings — key issues>", project: "<project>", created_by: "copilot-vscode", source: "agent-cicd-reviewer")` — persists pipeline risks and deployment safety findings
+- **Before reviewing**: `search_thoughts("CI/CD review findings", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "convention")` — loads prior pipeline issues and promotion gate decisions
+- **After review**: `capture_thought("CI/CD Pipeline Reviewer: <N findings — key issues>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "agent-cicd-reviewer")` — persists pipeline risks and deployment safety findings
 
 - DO NOT modify any files — only identify pipeline issues
 - Rate findings by severity: CRITICAL, HIGH, MEDIUM, LOW

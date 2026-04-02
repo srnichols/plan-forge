@@ -850,12 +850,37 @@ When you're at your desk in VS Code, the system works through MCP and instructio
 
 ### MCP Configuration (`.vscode/mcp.json`)
 
+**Local (Docker Compose):**
 ```json
 {
   "servers": {
     "openbrain": {
       "type": "sse",
       "url": "http://localhost:8080/sse?key=${env:OPENBRAIN_KEY}"
+    }
+  }
+}
+```
+
+**Tailscale (access from any device on your tailnet):**
+```json
+{
+  "servers": {
+    "openbrain": {
+      "type": "sse",
+      "url": "https://<your-machine>.<tailnet>.ts.net/sse?key=${env:OPENBRAIN_KEY}"
+    }
+  }
+}
+```
+
+**Azure Container Apps:**
+```json
+{
+  "servers": {
+    "openbrain": {
+      "type": "sse",
+      "url": "https://openbrain-api.<region>.azurecontainerapps.io/sse?key=${env:OPENBRAIN_KEY}"
     }
   }
 }

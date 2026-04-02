@@ -635,7 +635,9 @@ Every integration is gated behind "if OpenBrain is configured." Without it, prom
    # Windows (PowerShell)
    $env:OPENBRAIN_KEY = "your-mcp-access-key"
    ```
-   If OpenBrain runs on a different host, edit the `url` in `.vscode/mcp.json`.
+   If OpenBrain runs on a different host, edit the `url` in `.vscode/mcp.json`:
+   - **Tailscale**: `https://<your-machine>.<tailnet>.ts.net/sse?key=${env:OPENBRAIN_KEY}`
+   - **Azure**: `https://openbrain-api.<region>.azurecontainerapps.io/sse?key=${env:OPENBRAIN_KEY}`
 
 ### What It Adds
 

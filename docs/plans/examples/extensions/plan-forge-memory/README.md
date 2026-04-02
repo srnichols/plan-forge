@@ -60,7 +60,21 @@ export OPENBRAIN_KEY=your-mcp-access-key
 $env:OPENBRAIN_KEY = "your-mcp-access-key"
 ```
 
-If OpenBrain runs on a different host (e.g. Azure, remote server via Tailscale), edit the `url` in `.vscode/mcp.json`:
+If OpenBrain runs on a different host, edit the `url` in `.vscode/mcp.json`:
+
+**Tailscale (access from any device on your tailnet):**
+```json
+{
+  "servers": {
+    "openbrain": {
+      "type": "sse",
+      "url": "https://<your-machine>.<tailnet>.ts.net/sse?key=${env:OPENBRAIN_KEY}"
+    }
+  }
+}
+```
+
+**Azure Container Apps:**
 ```json
 {
   "servers": {
@@ -71,6 +85,8 @@ If OpenBrain runs on a different host (e.g. Azure, remote server via Tailscale),
   }
 }
 ```
+
+> **Tip**: The Tailscale option is ideal for developers who self-host OpenBrain on a home server or NAS — it works from any PC on your tailnet without exposing ports to the internet.
 
 ## Installation
 

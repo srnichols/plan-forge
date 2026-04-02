@@ -344,20 +344,20 @@ If total slices × average context > 2× context window:
 
 | # | Enhancement | Impact | Effort | Priority |
 |---|------------|--------|--------|----------|
-| 1.2 | Few-shot examples in Step 0 | High | Low | **P0** |
-| 1.3 | Structured acceptance criteria | High | Low | **P0** |
-| 2.3 | Calibrate aggressive language for Claude 4.6 | High | Medium | **P0** |
-| 2.4 | Plan self-review substep | High | Low | **P0** |
-| 3.3 | Anti-hallucination directive in execution | High | Low | **P0** |
-| 3.4 | Anti-overengineering guard in execution | High | Low | **P0** |
-| 1.1 | XML structuring in spec output | Medium | Medium | **P1** |
-| 2.1 | Context budget awareness per slice | High | Medium | **P1** |
-| 2.2 | Claude 4.6 thinking/effort guidance | Medium | Low | **P1** |
-| 3.1 | Restructure plan template for long context | Medium | Low | **P1** |
-| 3.2 | Lightweight re-anchor option | Medium | Low | **P1** |
-| 4.1 | Memory-augmented planning protocol | Medium | Medium | **P2** |
-| 1.4 | Complexity estimation routing | Medium | Low | **P2** |
-| 4.2 | Token budget estimation per phase | Medium | Medium | **P2** |
+| 1.2 | Few-shot examples in Step 0 | High | Low | **P0 ✅** |
+| 1.3 | Structured acceptance criteria | High | Low | **P0 ✅** |
+| 2.3 | Calibrate aggressive language for Claude 4.6 | High | Medium | **P0 ✅** |
+| 2.4 | Plan self-review substep | High | Low | **P0 ✅** |
+| 3.3 | Anti-hallucination directive in execution | High | Low | **P0 ✅** |
+| 3.4 | Anti-overengineering guard in execution | High | Low | **P0 ✅** |
+| 1.1 | XML structuring in spec output | Medium | Medium | **P1 ✅** |
+| 2.1 | Context budget awareness per slice | High | Medium | **P1 ✅** |
+| 2.2 | Claude 4.6 thinking/effort guidance | Medium | Low | **P1 ✅** |
+| 3.1 | Restructure plan template for long context | Medium | Low | **P1 ✅** |
+| 3.2 | Lightweight re-anchor option | Medium | Low | **P1 ✅** |
+| 4.1 | Memory-augmented planning protocol | Medium | Medium | **P2 ✅** |
+| 1.4 | Complexity estimation routing | Medium | Low | **P2 ✅** |
+| 4.2 | Token budget estimation per phase | Medium | Medium | **P2 ✅** |
 
 ---
 

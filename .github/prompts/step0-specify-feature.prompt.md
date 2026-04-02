@@ -248,6 +248,16 @@ We need notifications.
 If there are ZERO `[NEEDS CLARIFICATION]` markers, say:
 "Specification complete ✅ — ready to write a Phase Plan and proceed to Step 1."
 
+Then, based on the complexity estimate, recommend the next action:
+
+- **Micro**: "This is a micro change. Skip the pipeline — implement and commit directly."
+- **Small**: "This is a small change. Consider light hardening: write a Scope Contract and
+  Definition of Done, then implement. Full pipeline is optional."
+- **Medium**: "This is a medium feature. Use the full pipeline — proceed to Step 1 (Pre-flight)
+  then Step 2 (Harden) in this session."
+- **Large**: "This is a large feature. Use the full pipeline with branch-per-slice. Proceed to
+  Step 1 (Pre-flight), and plan for multiple execution sessions."
+
 If there ARE markers, say:
 "Specification has N open questions ⚠️ — resolve all [NEEDS CLARIFICATION] items before proceeding to Step 1."
 

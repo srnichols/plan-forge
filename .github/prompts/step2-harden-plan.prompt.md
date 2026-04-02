@@ -18,6 +18,11 @@ Read these files first:
 3. docs/plans/DEPLOYMENT-ROADMAP.md
 4. .github/copilot-instructions.md
 
+Also check for prior phase lessons (if they exist — skip if not found):
+- `/memories/repo/conventions.md` — patterns and conventions from earlier phases
+- `/memories/repo/lessons-learned.md` — past mistakes to avoid
+- `/memories/repo/forbidden-patterns.md` — patterns that caused regressions
+
 Now act as a PLAN HARDENING AGENT (see the Plan Hardening Prompt in the runbook).
 
 **CLARIFICATION CHECK**: Before hardening, scan the plan for `[NEEDS CLARIFICATION]` markers.
@@ -60,6 +65,13 @@ After all sections are drafted, run a **PLAN QUALITY SELF-CHECK** before outputt
 7. Are MUST acceptance criteria from the spec traceable to at least one slice's validation gate?
 
 If any check fails, revise the plan before outputting. Do not present a plan that fails its own quality check.
+
+Finally, run a **SESSION BUDGET CHECK**:
+
+- Count total slices
+- If 8+ slices: recommend a session break point (e.g., "Plan for a session break after Slice N —
+  commit progress, start a new session, resume from Slice N+1")
+- If any single slice has 5+ Context Files: flag it and suggest trimming to the 3 most relevant
 
 Output a TBD summary:
 | # | Decision | Status | Resolution |

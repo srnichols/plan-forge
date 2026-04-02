@@ -83,6 +83,33 @@ If phase is complete: "Phase shipped ✅ — ready for the next feature."
 
 ---
 
+### 7. CAPTURE LESSONS TO MEMORY
+
+After shipping, persist lessons learned so future phases benefit from this experience.
+This step uses Copilot's built-in memory system — no external tools required.
+
+**Save to `/memories/repo/`** (workspace-scoped, survives across sessions):
+
+1. **`conventions.md`** — Append any new coding patterns, naming conventions, or
+   architectural decisions established during this phase. Do not overwrite existing entries.
+
+2. **`lessons-learned.md`** — Append what went wrong and how it was fixed. Include:
+   - Slices that required retries (and why)
+   - Amendments triggered during execution
+   - Review Gate findings and their root causes
+
+3. **`forbidden-patterns.md`** — Append any patterns that caused regressions or
+   were flagged by the Review Gate. These become "watch for" items in future phases.
+
+If a memory file doesn't exist yet, create it with a header and the first entry.
+If it already exists, append — never overwrite prior entries.
+
+> **Why this matters**: Without memory, every phase starts from zero. With memory,
+> Phase N+1 avoids Phase N's mistakes and reuses its patterns automatically. The
+> hardening step (Step 2) reads these files to inform scope and slicing decisions.
+
+---
+
 ## Persistent Memory (if OpenBrain is configured)
 
 - **After postmortem**: `capture_thoughts([...lessons], project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "phase-N-postmortem")` — batch capture all lessons, patterns, architecture decisions, bugs, and conventions from this phase

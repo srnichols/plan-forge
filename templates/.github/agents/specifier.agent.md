@@ -108,7 +108,9 @@ After collecting answers, compile them into a single specification block:
 (compiled from section 2)
 
 ### Acceptance Criteria
-- [ ] (compiled from section 3)
+- [ ] MUST: (non-negotiable — becomes a validation gate)
+- [ ] SHOULD: (expected behavior — becomes a test case)
+- [ ] MAY: (optional enhancement — becomes future scope if not completed)
 
 ### Edge Cases
 | Scenario | Expected Behavior |
@@ -120,7 +122,25 @@ After collecting answers, compile them into a single specification block:
 
 ### Open Questions
 - [NEEDS CLARIFICATION: ...] (from section 6)
+
+### Complexity Estimate
+- Estimated effort: Micro / Small / Medium / Large
+- Estimated files: N
+- Recommended pipeline: Skip / Light hardening / Full pipeline / Full + branch-per-slice
 ```
+
+**Acceptance Criteria format**: Express criteria as testable statements:
+- **MUST** — non-negotiable, becomes a validation gate (e.g., "GET /health MUST return 200 within 50ms")
+- **SHOULD** — expected behavior, becomes a test case
+- **MAY** — optional enhancement, becomes future scope if not completed
+
+Avoid vague criteria like "should be fast" or "must work well."
+
+**Complexity classification** (include in the output):
+- **Micro** (<30 min, 1 file): Direct commit — skip the pipeline
+- **Small** (30–120 min, 1–3 files): Optional — Scope Contract + Definition of Done only
+- **Medium** (2–8 hrs, 4–10 files): Full pipeline — all steps
+- **Large** (1+ days, 10+ files): Full pipeline + branch-per-slice
 
 ### Phase 3: Create or Update the Plan File
 
@@ -133,8 +153,13 @@ After collecting answers, compile them into a single specification block:
 Review the compiled specification for any `[NEEDS CLARIFICATION]` markers.
 
 - If **zero markers** remain: "Specification complete — ready for plan hardening."
+  Then recommend the next action based on the complexity estimate:
+  - **Micro**: "This is a micro change. Skip the pipeline — implement and commit directly."
+  - **Small**: "This is a small change. Consider light hardening: Scope Contract + Definition of Done only."
+  - **Medium**: "This is a medium feature. Use the full pipeline — proceed to Plan Hardening."
+  - **Large**: "This is a large feature. Use the full pipeline with branch-per-slice."
 - If **markers remain**: List them and ask the user to resolve each one.
-- Do NOT proceed to hardening while any marker is unresolved.
+- Wait for all markers to be resolved before proceeding to hardening.
 
 Output a summary:
 
@@ -156,12 +181,12 @@ If the OpenBrain MCP server is available:
 
 ## Constraints
 
-- Do NOT discuss technical implementation — only WHAT and WHY
-- Do NOT write code or suggest architecture
-- Do NOT skip the triage question — always ask if there's an existing document first
-- Do NOT re-ask questions already answered by an existing document — only fill gaps
-- Do NOT create a new plan file if the existing file is already at the correct path with the correct naming convention — update it in place
-- Do NOT proceed with unresolved `[NEEDS CLARIFICATION]` markers
+- Focus on WHAT and WHY — not technical implementation
+- Do not write code or suggest architecture
+- Always ask if there's an existing document first — do not skip the triage question
+- Do not re-ask questions already answered by an existing document — only fill gaps
+- If the existing file is already at the correct path with the correct naming convention, update it in place
+- Wait for all `[NEEDS CLARIFICATION]` markers to be resolved before proceeding
 
 ## Completion
 

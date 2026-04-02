@@ -6,7 +6,7 @@ handoffs:
   - agent: "shipper"
     label: "Ship It →"
     send: false
-    prompt: "The Reviewer Gate passed. Commit the work, update the roadmap, capture postmortem, and optionally push/PR. Read the hardened plan file first."
+    prompt: "The Reviewer Gate passed. Commit the work, update the roadmap, capture postmortem, save lessons to /memories/repo/, and optionally push/PR. Read the hardened plan file first."
   - agent: "executor"
     label: "Fix Issues →"
     send: false
@@ -35,6 +35,7 @@ Review all changes against the hardened plan and guardrail files:
 6. **Patterns** — Follows existing patterns from `.github/instructions/`?
 7. **Testing** — New features covered by tests?
 8. **Security** — Input validation? No secrets in code?
+9. **Project Principles** — If `docs/plans/PROJECT-PRINCIPLES.md` exists: Core Principles respected? Forbidden Patterns absent? Technology commitments followed?
 
 For each finding, assign severity:
 - 🔴 **Critical** — Must fix before merge (security, data loss, scope violation)
@@ -96,7 +97,7 @@ If the OpenBrain MCP server is available:
 
 ## Constraints
 
-- DO NOT modify any files — report only
-- DO NOT suggest fixes — only identify violations
+- Do not modify any files — report only
+- Do not suggest fixes — only identify violations
 - Only run **read-only commands**: `git diff`, `git log`, `git status`, `git show`, build commands, test commands. Do NOT run destructive commands (`rm`, `git reset`, `git push`)
 - Maintain independence — do not carry context from the execution session

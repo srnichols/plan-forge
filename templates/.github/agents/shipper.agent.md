@@ -56,14 +56,24 @@ Compile a brief postmortem from the execution:
 3. Append the postmortem as a `## Postmortem` section at the bottom of the plan file
 4. Commit: `docs(phase-N): add postmortem`
 
-### Phase 5: OpenBrain Capture (if configured)
+### Phase 5: Capture Lessons to Memory
+
+Save lessons to `/memories/repo/` so future phases benefit from this experience (uses Copilot's built-in memory — no external tools required):
+
+1. **`/memories/repo/conventions.md`** — Append new coding patterns, naming conventions, or architectural decisions established during this phase
+2. **`/memories/repo/lessons-learned.md`** — Append what went wrong and how it was fixed (retries, amendments, Review Gate findings)
+3. **`/memories/repo/forbidden-patterns.md`** — Append patterns that caused regressions or were flagged by the Review Gate
+
+If a file doesn't exist yet, create it with a header and the first entry. Always append — never overwrite.
+
+### Phase 6: OpenBrain Capture (if configured)
 
 If the OpenBrain MCP server is available:
 
 - `capture_thoughts([...lessons], project: "<project>", created_by: "copilot-vscode", source: "phase-N-postmortem")` — batch capture all lessons, patterns, and decisions from this phase
 - Include: architecture decisions, patterns discovered, bugs encountered, conventions established
 
-### Phase 6: Push & PR (with confirmation)
+### Phase 7: Push & PR (with confirmation)
 
 **Ask the user before pushing.** Do not push automatically.
 
@@ -74,7 +84,7 @@ If the OpenBrain MCP server is available:
 3. If **Push only**: `git push origin <branch>`
 4. If **Skip**: Leave commits local
 
-### Phase 7: Summary
+### Phase 8: Summary
 
 Output a final summary:
 
@@ -92,9 +102,9 @@ PR: #N / None
 
 ## Constraints
 
-- Do NOT push without user confirmation
-- Do NOT modify source code — only plan files, roadmap, and git operations
-- Do NOT proceed if the Review Gate verdict is not PASS
+- Do not push without user confirmation
+- Do not modify source code — only plan files, roadmap, and git operations
+- Do not proceed if the Review Gate verdict is not PASS
 - Always use conventional commit format
 
 ## Completion

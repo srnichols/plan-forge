@@ -882,23 +882,6 @@ function Invoke-Update {
     }
 
     # ─── Define update categories ─────────────────────────────────
-    # SAFE TO UPDATE: Framework files that users typically don't customize
-    $safeFiles = @(
-        # Pipeline prompts (step0-step6)
-        @{ Src = "shared/.github/prompts"; Dst = ".github/prompts"; Pattern = "step*.prompt.md" }
-        # Pipeline agents
-        @{ Src = "templates/.github/agents"; Dst = ".github/agents"; Pattern = "*.agent.md";
-           Names = @("specifier.agent.md", "plan-hardener.agent.md", "executor.agent.md", "reviewer-gate.agent.md", "shipper.agent.md") }
-        # Shared instruction files
-        @{ Src = "shared/.github/instructions"; Dst = ".github/instructions"; Pattern = "*.instructions.md";
-           Names = @("architecture-principles.instructions.md", "git-workflow.instructions.md", "ai-plan-hardening-runbook.instructions.md") }
-        # Runbook and instructions
-        @{ Src = "docs/plans"; Dst = "docs/plans"; Pattern = "*.md";
-           Names = @("AI-Plan-Hardening-Runbook.md", "AI-Plan-Hardening-Runbook-Instructions.md", "DEPLOYMENT-ROADMAP-TEMPLATE.md", "PROJECT-PRINCIPLES-TEMPLATE.md", "README.md") }
-        # Hooks
-        @{ Src = "templates/.github/hooks"; Dst = ".github/hooks"; Pattern = "*" }
-    )
-
     # NEVER UPDATE: User-customized files
     $neverUpdate = @(
         ".github/copilot-instructions.md",
@@ -912,7 +895,6 @@ function Invoke-Update {
 
     # ─── Calculate changes ────────────────────────────────────────
     $updates = @()
-    $skipped = @()
     $newFiles = @()
 
     # Update step prompts from .github/prompts/ in the source

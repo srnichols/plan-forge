@@ -542,6 +542,49 @@ After running the wizard, you can **delete the `presets/` and `templates/` direc
 
 ---
 
+## Updating Plan Forge
+
+Already using Plan Forge and want the latest prompts, agents, and workflow improvements?
+
+### If You Have `pforge update` (v1.2.1+)
+
+```powershell
+# Clone the latest source (one-time)
+git clone https://github.com/srnichols/plan-forge.git ../plan-forge
+
+# Preview what will change
+.\pforge.ps1 update ../plan-forge --dry-run
+
+# Apply updates
+.\pforge.ps1 update ../plan-forge
+```
+
+### If You're on an Older Version (no `update` command)
+
+Run this one-liner from your project root to bootstrap:
+
+```powershell
+# PowerShell — downloads latest pforge.ps1, then runs update
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/srnichols/plan-forge/master/pforge.ps1" -OutFile pforge.ps1
+git clone https://github.com/srnichols/plan-forge.git ../plan-forge
+.\pforge.ps1 update ../plan-forge
+```
+
+```bash
+# Bash — same thing
+curl -sL https://raw.githubusercontent.com/srnichols/plan-forge/master/pforge.sh -o pforge.sh && chmod +x pforge.sh
+git clone https://github.com/srnichols/plan-forge.git ../plan-forge
+./pforge.sh update ../plan-forge
+```
+
+**What gets updated**: Pipeline prompts, pipeline agents, shared instructions, runbook docs, lifecycle hooks.
+
+**What's never touched**: Your `copilot-instructions.md`, project profile, project principles, DEPLOYMENT-ROADMAP, AGENTS.md, plan files, and stack-specific instruction files.
+
+See [docs/CLI-GUIDE.md → `pforge update`](docs/CLI-GUIDE.md#pforge-update-source-path) for full details.
+
+---
+
 ## When to Use This Pipeline
 
 | Change Size | Examples | Recommendation |

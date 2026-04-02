@@ -383,6 +383,20 @@ Update framework files from a Plan Forge source without re-running the full setu
 ./pforge.sh update --dry-run
 ```
 
+**Bootstrapping from an older version**: If your `pforge.ps1` / `pforge.sh` doesn't have the `update` command yet (pre-v1.2.1), replace it first:
+
+```powershell
+# PowerShell — download latest pforge.ps1, then update
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/srnichols/plan-forge/master/pforge.ps1" -OutFile pforge.ps1
+.\pforge.ps1 update ../plan-forge
+```
+
+```bash
+# Bash — download latest pforge.sh, then update
+curl -sL https://raw.githubusercontent.com/srnichols/plan-forge/master/pforge.sh -o pforge.sh && chmod +x pforge.sh
+./pforge.sh update ../plan-forge
+```
+
 **What it updates** (framework files — safe to replace):
 - Pipeline prompts (`step0-step6*.prompt.md`)
 - Pipeline agents (specifier, plan-hardener, executor, reviewer-gate, shipper)

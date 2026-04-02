@@ -154,6 +154,8 @@ Compare against the Plan Forge source `VERSION` file. If they match, no update n
 
 ### Step 2: Run the Update Command
 
+If the target project already has `pforge update` (v1.2.1+):
+
 ```powershell
 # PowerShell — with preview first
 .\pforge.ps1 update <path-to-plan-forge-source> --dry-run
@@ -165,6 +167,20 @@ Compare against the Plan Forge source `VERSION` file. If they match, no update n
 ```bash
 # Bash
 ./pforge.sh update <path-to-plan-forge-source> --dry-run
+./pforge.sh update <path-to-plan-forge-source> --force
+```
+
+If the target project is on an **older version** (no `update` command in `pforge.ps1`), bootstrap first:
+
+```powershell
+# PowerShell — copy latest pforge.ps1 from source, then run update
+Copy-Item "<path-to-plan-forge-source>/pforge.ps1" -Destination "./pforge.ps1" -Force
+.\pforge.ps1 update <path-to-plan-forge-source> --force
+```
+
+```bash
+# Bash — copy latest pforge.sh from source, then run update
+cp <path-to-plan-forge-source>/pforge.sh ./pforge.sh && chmod +x ./pforge.sh
 ./pforge.sh update <path-to-plan-forge-source> --force
 ```
 

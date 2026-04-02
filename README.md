@@ -99,10 +99,10 @@ Both agents and skills extend Copilot, but they serve different purposes:
 **Quick rule**: Agents *look at* your code. Skills *do things* to your project.
 
 **Installed counts** (per preset after setup):
-- **8 stack-specific agents** — architecture, database, deploy, performance, security, test runner + 2 new per-stack
+- **Stack-specific agents**: 6 for app presets (dotnet/typescript/python/java/go) · **5** for `azure-iac` (bicep-reviewer, terraform-reviewer, security-reviewer, deploy-helper, azure-sweeper)
 - **7 shared agents** — API contracts, accessibility, multi-tenancy, CI/CD, observability, dependency, compliance
 - **5 pipeline agents** — specifier, plan-hardener, executor, reviewer-gate, shipper
-- **8 skills** — database-migration, staging-deploy, test-sweep, dependency-audit, code-review, release-notes, api-doc-gen, onboarding
+- **Skills**: 8 for app presets (database-migration, staging-deploy, test-sweep + dependency-audit, code-review, release-notes, api-doc-gen, onboarding) · **3** for `azure-iac` (infra-deploy, infra-test, azure-sweep)
 
 > **You don't need to understand all of this upfront.** Run the setup wizard, follow the numbered step prompts, and the framework guides you through.
 
@@ -250,6 +250,7 @@ The wizard bootstraps your `.github/instructions/`, `AGENTS.md`, and `copilot-in
 .\setup.ps1 -Preset python
 .\setup.ps1 -Preset java
 .\setup.ps1 -Preset go
+.\setup.ps1 -Preset azure-iac
 ```
 
 ```bash
@@ -263,6 +264,7 @@ chmod +x setup.sh
 ./setup.sh --preset python
 ./setup.sh --preset java
 ./setup.sh --preset go
+./setup.sh --preset azure-iac
 ```
 
 ### 3. Available Presets
@@ -274,11 +276,12 @@ chmod +x setup.sh
 | `python` | Python / FastAPI / Django | `pytest` | `pytest --cov` |
 | `java` | Java / Spring Boot / Gradle / Maven | `./gradlew build` | `./gradlew test` |
 | `go` | Go / Chi / Gin / Standard Library | `go build ./...` | `go test ./...` |
+| `azure-iac` | Azure Bicep / Terraform / PowerShell / azd | `az bicep build` | `Invoke-Pester` |
 | `custom` | Any stack | (you configure) | (you configure) |
 
 ### Instruction Files Per Preset
 
-Each preset includes **15 instruction files** (16 for TypeScript) that auto-load based on the file being edited:
+App presets (dotnet / typescript / python / java / go) include **16 instruction files** (17 for TypeScript) that auto-load based on the file being edited:
 
 | Instruction File | Purpose |
 |------------------|---------|
@@ -298,10 +301,28 @@ Each preset includes **15 instruction files** (16 for TypeScript) that auto-load
 | `security.instructions.md` | Input validation, secret management, CORS, rate limiting |
 | `testing.instructions.md` | Unit tests, integration tests, test containers |
 | `version.instructions.md` | Semantic versioning, commit-driven bumps, release tagging |
+| `project-principles.instructions.md` | Auto-loads declared principles and forbidden patterns (activates after running the Project Principles workshop) |
+
+The `azure-iac` preset instead includes **12 IaC-specific instruction files**:
+
+| Instruction File | Purpose |
+|------------------|---------|
+| `bicep.instructions.md` | Bicep patterns, linter config, modules, secure params |
+| `terraform.instructions.md` | Provider versions, OIDC auth, remote state, `for_each` patterns |
+| `powershell.instructions.md` | Az module, `CmdletBinding`, PSScriptAnalyzer, error handling |
+| `azd.instructions.md` | `azure.yaml` schema, azd tags, hooks, `azd pipeline config` |
+| `naming.instructions.md` | CAF abbreviations, `uniqueString()`, character limits per resource type |
+| `security.instructions.md` | Key Vault refs, managed identity, RBAC, network isolation, storage hardening |
+| `testing.instructions.md` | Pester 5, ARM TTK, Bicep lint, what-if, integration tests |
+| `deploy.instructions.md` | GitHub Actions + Azure DevOps YAML, OIDC auth, approval gates, rollback |
+| `waf.instructions.md` | Azure Well-Architected Framework — Reliability, Security, Cost, Ops Excellence, Performance |
+| `caf.instructions.md` | Cloud Adoption Framework — management groups, subscription design, mandatory tags, PIM |
+| `landing-zone.instructions.md` | Azure Landing Zone baselines — identity, network, policy, management, security, tagging |
+| `policy.instructions.md` | Azure Policy effects, assignments, initiatives, exemptions, remediation tasks |
 
 ### Prompt Templates Per Preset
 
-Each preset includes **14 prompt templates** (`.github/prompts/`) that agents use as scaffolding recipes:
+App presets include **15 prompt templates** (`.github/prompts/`) that agents use as scaffolding recipes:
 
 | Prompt Template | Purpose |
 |-----------------|--------|
@@ -319,10 +340,22 @@ Each preset includes **14 prompt templates** (`.github/prompts/`) that agents us
 | `new-service.prompt.md` | Service class with interface, DI, logging, validation |
 | `new-test.prompt.md` | Unit/integration test with naming conventions, traits, mocking |
 | `new-worker.prompt.md` | Background worker/job with retry, graceful shutdown, health checks |
+| `project-principles.prompt.md` | Guided workshop to define non-negotiable project principles and forbidden patterns |
+
+The `azure-iac` preset includes **6 IaC-specific prompts**:
+
+| Prompt Template | Purpose |
+|-----------------|--------|
+| `new-bicep-module.prompt.md` | Scaffold a Bicep module with parameters, resources, outputs, linter config |
+| `new-terraform-module.prompt.md` | Scaffold a Terraform module with versions.tf, variables, locals, outputs |
+| `new-pester-test.prompt.md` | Pester 5 unit test for PowerShell/Az cmdlets |
+| `new-pipeline.prompt.md` | GitHub Actions or Azure DevOps pipeline with OIDC, what-if, approval gates |
+| `new-azd-service.prompt.md` | Add a new service/environment to an `azure.yaml` azd project |
+| `new-org-rules.prompt.md` | Populate `org-rules.instructions.md` from your org’s standards |
 
 ### Agent Definitions Per Preset
 
-Each preset includes **6 stack-specific agent definitions** (`.github/agents/`) — specialized reviewer/executor roles:
+App presets include **6 stack-specific agent definitions** (`.github/agents/`) — specialized reviewer/executor roles:
 
 | Agent | Purpose |
 |-------|--------|
@@ -333,9 +366,19 @@ Each preset includes **6 stack-specific agent definitions** (`.github/agents/`) 
 | `test-runner.agent.md` | Run tests, analyze failures, diagnose root causes |
 | `deploy-helper.agent.md` | Build, push, migrate, deploy, verify health checks |
 
+The `azure-iac` preset includes **5 IaC-specific agents**:
+
+| Agent | Purpose |
+|-------|--------|
+| `bicep-reviewer.agent.md` | PR review of Bicep templates — naming, security, tags, linter |
+| `terraform-reviewer.agent.md` | PR review of Terraform — providers, state, OIDC, security |
+| `security-reviewer.agent.md` | OWASP Cloud Top 10, credential exposure, network isolation audit |
+| `deploy-helper.agent.md` | Guided Bicep / Terraform / azd deployments with pre-flight and rollback |
+| `azure-sweeper.agent.md` | **Enterprise governance sweep**: WAF + CAF + Landing Zone + Policy + Org Rules + Resource Graph + Telemetry + Remediation codegen |
+
 ### SaaS & Cross-Stack Agents (Shared)
 
-In addition, the setup wizard installs **5 cross-stack agents** for SaaS-critical concerns:
+In addition, the setup wizard installs **7 cross-stack agents** for SaaS-critical concerns:
 
 | Agent | Purpose |
 |-------|--------|
@@ -344,6 +387,8 @@ In addition, the setup wizard installs **5 cross-stack agents** for SaaS-critica
 | `multi-tenancy-reviewer.agent.md` | Tenant isolation, data leakage prevention, RLS, cache separation |
 | `cicd-reviewer.agent.md` | Pipeline safety, environment promotion, secrets, rollback strategies |
 | `observability-reviewer.agent.md` | Structured logging, distributed tracing, metrics, health checks, alerting |
+| `dependency-reviewer.agent.md` | Supply chain security, CVEs, outdated packages, license conflicts |
+| `compliance-reviewer.agent.md` | GDPR, CCPA, SOC2, PII handling, audit logging |
 
 ### Pipeline Agents (Shared)
 
@@ -363,13 +408,26 @@ These are stack-independent and use `handoffs:` frontmatter to chain sessions wi
 
 ### Skills Per Preset
 
-Each preset includes **3 skills** (`.github/skills/`) — multi-step executable procedures:
+App presets (dotnet / typescript / python / java / go) include **8 skills**:
 
-| Skill | Purpose |
-|-------|---------|
-| `database-migration/` | Generate → validate → deploy schema migrations |
-| `staging-deploy/` | Build images → run migrations → apply manifests → verify |
-| `test-sweep/` | Run all test suites with aggregated pass/fail reporting |
+| Skill | Slash Command | Purpose |
+|-------|-------------|--------|
+| `database-migration/` | `/database-migration` | Generate → validate → deploy schema migrations |
+| `staging-deploy/` | `/staging-deploy` | Build images → run migrations → apply manifests → verify |
+| `test-sweep/` | `/test-sweep` | Run all test suites with aggregated pass/fail reporting |
+| `dependency-audit/` | `/dependency-audit` | Scan for vulnerable, outdated, or license-conflicting packages |
+| `code-review/` | `/code-review` | Comprehensive review: architecture, security, testing, patterns |
+| `release-notes/` | `/release-notes` | Generate release notes from git history and CHANGELOG |
+| `api-doc-gen/` | `/api-doc-gen` | Generate or update OpenAPI spec, validate spec-to-code consistency |
+| `onboarding/` | `/onboarding` | Walk a new developer through setup, architecture, and first task |
+
+The `azure-iac` preset includes **3 IaC-specific skills**:
+
+| Skill | Slash Command | Purpose |
+|-------|----------|--------|
+| `infra-deploy/` | `/infra-deploy` | Pre-flight → what-if/plan → deploy → verify (Bicep, Terraform, azd) |
+| `infra-test/` | `/infra-test` | PSScriptAnalyzer → Bicep lint → Pester → what-if → Terraform validate |
+| `azure-sweep/` | `/azure-sweep` | Full 8-layer governance sweep: WAF + CAF + Landing Zone + Policy + Org Rules + Resource Graph + Telemetry + Remediation codegen |
 
 ### 4. Start Planning
 
@@ -504,14 +562,20 @@ plan-forge/
 ├── presets/                           ← Tech-specific starter files
 │   ├── dotnet/                        ← .NET / C# / Blazor / ASP.NET
 │   │   └── .github/
-│   │       ├── instructions/          ← 15 instruction files (16 for TypeScript)
-│   │       ├── prompts/               ← 14 prompt templates
+│   │       ├── instructions/          ← 16 instruction files (17 for TypeScript)
+│   │       ├── prompts/               ← 15 scaffolding prompts + 8 pipeline prompts (step0–step6 + project-profile)
 │   │       ├── agents/                ← 6 stack-specific agent definitions
-│   │       └── skills/                ← 3 multi-step skills
+│   │       └── skills/                ← 8 multi-step skills
 │   ├── typescript/                    ← TypeScript / React / Node / Express
 │   ├── python/                        ← Python / FastAPI / Django
 │   ├── java/                          ← Java / Spring Boot / Gradle / Maven
 │   ├── go/                            ← Go / Chi / Gin / Standard Library
+│   ├── azure-iac/                     ← Azure Bicep / Terraform / PowerShell / azd
+│   │   └── .github/
+│   │       ├── instructions/          ← 12 IaC instruction files (incl. WAF/CAF/Landing Zone/Policy)
+│   │       ├── prompts/               ← 6 IaC prompt templates
+│   │       ├── agents/                ← 5 IaC agents (incl. azure-sweeper)
+│   │       └── skills/                ← 3 IaC skills (infra-deploy, infra-test, azure-sweep)
 │   └── shared/                        ← Files common to ALL presets
 │
 └── templates/                         ← Raw templates for manual setup
@@ -526,10 +590,10 @@ plan-forge/
 
 Running `setup.ps1` (PowerShell) or `setup.sh` (Bash) with a preset:
 
-1. **Copies preset instruction files** from `presets/{stack}/` to your project root (15 instruction files, 16 for TypeScript)
-2. **Copies prompt templates** for scaffolding new entities, services, tests (14 prompts)
-3. **Copies agent definitions** for architecture review, security audit, testing (6 stack-specific + 7 shared + 5 pipeline agents)
-4. **Copies skill workflows** for migrations, deployments, test sweeps (3 skills)
+1. **Copies preset instruction files** from `presets/{stack}/` to your project root (16 files for app presets — 17 for TypeScript which adds `frontend.instructions.md`; 12 for `azure-iac`)
+2. **Copies prompt templates** for scaffolding new entities, services, tests, and Project Principles (15 for app presets, 6 for `azure-iac`)
+3. **Copies agent definitions** for architecture review, security audit, testing (6 stack-specific + 7 shared + 5 pipeline agents; `azure-iac` gets 5 stack-specific including the enterprise-grade `azure-sweeper`)
+4. **Copies skill workflows** — 8 for app presets (database-migration, staging-deploy, test-sweep, dependency-audit, code-review, release-notes, api-doc-gen, onboarding); `azure-iac` gets 3 (infra-deploy, infra-test, azure-sweep)
 5. **Generates `AGENTS.md`** with patterns for your tech stack
 6. **Generates `.github/copilot-instructions.md`** with stack-specific conventions
 7. **Copies shared instruction files** (git-workflow, architecture principles)
@@ -612,7 +676,7 @@ These features are all **opt-in** — skip any that don't apply. Existing workfl
 | **CLI Wrapper** | `pforge` commands for init, status, new-phase, branch, and extension management. | See [docs/CLI-GUIDE.md](docs/CLI-GUIDE.md) |
 | **Lifecycle Hooks** | Auto-enforce Forbidden Actions (PreToolUse), inject Project Principles at session start, warn on TODO/FIXME after edits. | Installed automatically with setup — see `.github/hooks/` |
 | **Agent Plugin** | Install Plan Forge as a VS Code agent plugin from a Git URL — no setup scripts needed. | `Chat: Install Plugin From Source` → repo URL |
-| **Skill Slash Commands** | Invoke skills directly: `/database-migration`, `/staging-deploy`, `/test-sweep`, `/dependency-audit`, `/code-review`, `/release-notes`, `/api-doc-gen`, `/onboarding`. | Type `/` in Copilot Chat to see available skills |
+| **Skill Slash Commands** | App presets: `/database-migration`, `/staging-deploy`, `/test-sweep`, `/dependency-audit`, `/code-review`, `/release-notes`, `/api-doc-gen`, `/onboarding`. Azure IaC: `/infra-deploy`, `/infra-test`, `/azure-sweep`. | Type `/` in Copilot Chat to see available skills |
 | **Claude 4.6 Tuning** | Guidance for calibrating prompt intensity, managing context budgets, and controlling thinking depth with Claude Opus 4.6. Prevents over-halting, over-exploring, and overengineering. | See [CUSTOMIZATION.md → Tuning for Claude Opus 4.6](CUSTOMIZATION.md#tuning-for-claude-opus-46) |
 | **Session Memory Capture** | Step 6 (Ship) automatically saves conventions, lessons, and forbidden patterns to `/memories/repo/`. Step 2 (Harden) reads them so each phase builds on prior experience. | Built-in — no setup needed |
 | **Persistent Memory (OpenBrain)** | Capture decisions across sessions, search project history semantically, bridge the 3-session model with long-term context. | Install `plan-forge-memory` extension + [OpenBrain](https://github.com/srnichols/OpenBrain) MCP server |
@@ -789,8 +853,9 @@ See [ROADMAP.md](ROADMAP.md) for planned features and how to influence prioritie
 2. Create a feature branch (`git checkout -b preset/rust`)
 3. Add your preset in `presets/your-stack/`
 4. Update `setup.ps1` and `setup.sh` to support the new preset
-5. Add a worked example in `docs/plans/examples/`
-6. Submit a PR
+5. Update `validate-setup.ps1` and `validate-setup.sh` with preset-specific file checks
+6. Add a worked example in `docs/plans/examples/`
+7. Submit a PR
 
 ---
 

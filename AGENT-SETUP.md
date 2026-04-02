@@ -41,20 +41,27 @@ Scan the target project root for these marker files to determine the correct pre
 | `package.json` + (`tsconfig.json` OR `*.ts` files) | `typescript` | TypeScript / React / Node.js |
 | `package.json` WITHOUT TypeScript markers | `typescript` | TypeScript / React / Node.js |
 | `requirements.txt`, `pyproject.toml`, `setup.py`, `Pipfile` | `python` | Python / FastAPI |
+| `*.bicep`, `bicepconfig.json`, `azure.yaml`, `*.tf` | `azure-iac` | Azure Bicep / Terraform / PowerShell / azd |
 | None of the above | `custom` | Custom (configure manually) |
 
-**Priority rule**: If multiple markers exist (e.g., `.csproj` + `package.json`), pick the one that matches the primary application — check for a `Program.cs` or `Startup.cs` (→ dotnet), `go.mod` (→ go), `pom.xml` (→ java) vs `src/index.ts` (→ typescript).
+**Priority rule**: If multiple markers exist, pick the one that matches the primary application. For mixed repos (e.g., `.csproj` + `*.bicep`), pass **both** presets: `-Preset dotnet,azure-iac`. Single-stack rules: `Program.cs`/`Startup.cs` → `dotnet`, `go.mod` → `go`, `pom.xml` → `java`, `src/index.ts` → `typescript`, `azure.yaml`/`main.bicep` → `azure-iac`.
 
 ### Step 2: Run the Setup Script Non-Interactively
 
 ```powershell
 # PowerShell — pass all parameters to skip prompts
 .\setup.ps1 -Preset <detected-preset> -ProjectPath "<target-path>" -ProjectName "<project-name>" -Force
+
+# For mixed repos (e.g., .NET app with Bicep infra):
+.\setup.ps1 -Preset dotnet,azure-iac -ProjectPath "<target-path>" -ProjectName "<project-name>" -Force
 ```
 
 ```bash
 # Bash — same thing
 ./setup.sh --preset <detected-preset> --path "<target-path>" --name "<project-name>" --force
+
+# For mixed repos:
+./setup.sh --preset dotnet,azure-iac --path "<target-path>" --name "<project-name>" --force
 ```
 
 **`-Force` is required for unattended agent execution** — it skips confirmation prompts and overwrites template files.
@@ -199,7 +206,9 @@ The update command uses SHA256 hashing to update only files that actually change
 | Lifecycle hooks | `PROJECT-PRINCIPLES.md` |
 | | `AGENTS.md`, plan files, `.forge.json` |
 
-Stack-specific files (database.instructions.md, testing.instructions.md, etc.) are NOT updated — they may have been customized for the project.
+Existing preset instruction/agent/prompt/skill files are NOT updated (they may have been customized). New files added in this version of Plan Forge ARE added if they don't yet exist in the project.
+
+For `azure-iac` preset: 5 stack-specific + 7 cross-stack + 5 pipeline = 17 agents.
 
 ### Step 3: Validate
 
@@ -240,8 +249,8 @@ The validation script checks for these files. All must be present and non-empty:
 
 | Directory / Files | Purpose |
 |-------------------|---------|
-| `.github/prompts/*.prompt.md` (14 files) | Scaffolding recipes for entities, services, tests, workers, middleware, DTOs, config, Dockerfiles |
-| `.github/agents/*.agent.md` (15 files) | Specialized reviewer/executor roles (security, architecture, API contracts, dependency, compliance, multi-tenancy, pipeline agents, etc.) |
+| `.github/prompts/*.prompt.md` (15 files) | Scaffolding recipes for entities, services, tests, workers, middleware, DTOs, config, Dockerfiles, project principles |
+| `.github/agents/*.agent.md` (18 files) | Specialized reviewer/executor roles (6 stack-specific + 7 cross-stack + 5 pipeline agents — security, architecture, API contracts, dependency, compliance, multi-tenancy, etc.) |
 | `.github/skills/*/SKILL.md` (8 skills) | Multi-step procedures for migrations, deploys, test sweeps, code review, dependency audit, release notes, API docs, onboarding |
 
 ### Optional but Recommended

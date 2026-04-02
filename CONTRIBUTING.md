@@ -10,7 +10,7 @@ Open a [GitHub Issue](https://github.com/srnichols/plan-forge/issues) with:
 - What you expected to happen
 - What actually happened
 - Steps to reproduce
-- Your preset (dotnet, typescript, python, java, go, custom)
+- Your preset (dotnet, typescript, python, java, go, azure-iac, custom)
 
 ### Suggesting Features
 

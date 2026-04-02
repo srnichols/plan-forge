@@ -81,7 +81,7 @@ graph TB
 
 ```mermaid
 flowchart LR
-    A["Run Setup Wizard<br/><code>setup.ps1</code>"] --> B["Get Universal Baseline<br/><i>15 instruction files</i>"]
+    A["Run Setup Wizard<br/><code>setup.ps1</code>"] --> B["Get Universal Baseline<br/><i>16 instruction files</i>"]
     B --> C["Run Project Profile Prompt<br/><i>optional, recommended</i>"]
     C --> D["Answer Interview<br/><i>testing, performance,<br/>security, domain rules</i>"]
     D --> E["Generated:<br/><code>project-profile.instructions.md</code>"]
@@ -109,11 +109,11 @@ The wizard generates a starter file. Customize it with:
 
 ### 3. Add Domain-Specific Instruction Files
 
-The presets include 15 instruction files (16 for TypeScript, which adds `frontend.instructions.md`). Add your own for project-specific domains:
+The presets include 16 instruction files (17 for TypeScript, which adds `frontend.instructions.md`). Add your own for project-specific domains:
 
 ```
 .github/instructions/
-├── architecture-principles.instructions.md  ← From preset
+├── architecture-principles.instructions.md  ← From shared
 ├── api-patterns.instructions.md             ← From preset
 ├── auth.instructions.md                     ← From preset
 ├── caching.instructions.md                  ← From preset
@@ -127,6 +127,7 @@ The presets include 15 instruction files (16 for TypeScript, which adds `fronten
 ├── multi-environment.instructions.md        ← From preset
 ├── observability.instructions.md            ← From preset
 ├── performance.instructions.md              ← From preset
+├── project-principles.instructions.md       ← From preset (activates when PROJECT-PRINCIPLES.md exists)
 ├── security.instructions.md                 ← From preset
 ├── testing.instructions.md                  ← From preset
 ├── version.instructions.md                  ← From preset
@@ -204,6 +205,33 @@ The presets include scaffolding recipes, reviewer roles, and multi-step procedur
 - Update build/test/deploy commands to match your CI/CD pipeline
 - Add project-specific validation steps (e.g., "Run RLS tests after migration")
 - Customize verification queries for your database schema
+
+#### `azure-iac` Preset — Additional Customization
+
+If you're using the `azure-iac` preset, two extra steps make the guardrails enterprise-ready for your org:
+
+**1. Populate `org-rules.instructions.md`** (fills the "org-specific knowledge base" layer of the sweeper):
+
+Run the `new-org-rules` prompt in Copilot Chat:
+```
+#file:.github/prompts/new-org-rules.prompt.md
+```
+This interviews you about your org's Azure standards (approved regions, SKUs, naming overrides, compliance frameworks, classification levels) and generates a fully-populated `.github/instructions/org-rules.instructions.md`.
+
+**2. Tune the `azure-sweeper` for your environment** (`.github/agents/azure-sweeper.agent.md`):
+- Add your subscription ID and default resource group scope to the agent's opening questions
+- Adjust the Secure Score pass threshold (default: ≥ 70%) to match your team's target
+- Add org-specific Resource Graph queries to Layer 6 for your custom orphan-detection rules
+
+**3. Adjust WAF/CAF baselines** (`.github/instructions/waf.instructions.md`, `caf.instructions.md`):
+- Mark which WAF pillars are highest priority for your workload type
+- Update the mandatory tag list in `caf.instructions.md` to match your billing/CMDB taxonomy
+
+**Run the sweeper** once your IaC is in place:
+```
+(Select azure-sweeper from the agent picker)
+Sweep subscription <id> and generate a findings report with Bicep remediation code.
+```
 
 ### 4. Create Agents with `/create-agent` and Use Handoffs
 
@@ -371,7 +399,7 @@ Review checklist:
 To contribute a preset for a new tech stack:
 
 1. Create `presets/your-stack/` directory
-2. Add **instruction files** (`.github/instructions/` — 15 files):
+2. Add **instruction files** (`.github/instructions/` — 16 files):
    - `api-patterns.instructions.md` — REST conventions, error responses
    - `auth.instructions.md` — JWT/OIDC, RBAC, multi-tenant isolation, API keys
    - `caching.instructions.md` — Cache strategies
@@ -386,8 +414,9 @@ To contribute a preset for a new tech stack:
    - `performance.instructions.md` — Hot/cold path, allocation reduction
    - `security.instructions.md` — Security patterns
    - `testing.instructions.md` — Test framework patterns
-   - `version.instructions.md` — Semantic versioning, release tagging
-3. Add **prompt templates** (`.github/prompts/` — 14 files):
+   - `version.instructions.md` — Semantic versioning, release tagging   - `project-principles.instructions.md` — Auto-loads declared principles and forbidden patterns (activates when `docs/plans/PROJECT-PRINCIPLES.md` exists)
+
+3. Add **prompt templates** (`.github/prompts/` — 15 files):
    - `bug-fix-tdd.prompt.md` — Red-Green-Refactor bug fix
    - `new-config.prompt.md` — Typed configuration with validation
    - `new-controller.prompt.md` — REST controller with auth, error mapping
@@ -401,7 +430,8 @@ To contribute a preset for a new tech stack:
    - `new-repository.prompt.md` — Data access layer
    - `new-service.prompt.md` — Service class with DI, logging
    - `new-test.prompt.md` — Unit/integration test
-   - `new-worker.prompt.md` — Background worker/job
+   - `new-worker.prompt.md` — Background worker/job   - `project-principles.prompt.md` — Guided workshop to define non-negotiable principles, tech commitments, and forbidden patterns
+
 4. Add **agent definitions** (`.github/agents/` — 6 files):
    - `architecture-reviewer.agent.md` — Layer separation audit
    - `security-reviewer.agent.md` — OWASP Top 10 audit
@@ -409,10 +439,15 @@ To contribute a preset for a new tech stack:
    - `performance-analyzer.agent.md` — Hot paths, allocations
    - `test-runner.agent.md` — Run tests, diagnose failures
    - `deploy-helper.agent.md` — Build, deploy, verify
-5. Add **skills** (`.github/skills/` — 3 directories):
+5. Add **skills** (`.github/skills/` — 8 directories):
    - `database-migration/SKILL.md` — Generate → validate → deploy migrations
    - `staging-deploy/SKILL.md` — Build → push → migrate → verify
    - `test-sweep/SKILL.md` — Run all test suites, aggregate results
+   - `dependency-audit/SKILL.md` — Scan for vulnerable, outdated, or license-conflicting packages
+   - `code-review/SKILL.md` — Comprehensive review: architecture, security, testing, patterns
+   - `release-notes/SKILL.md` — Generate release notes from git history and CHANGELOG
+   - `api-doc-gen/SKILL.md` — Generate or update OpenAPI spec, validate consistency
+   - `onboarding/SKILL.md` — Walk a new developer through setup, architecture, and first task
 6. Add `AGENTS.md` — Agent/worker patterns for this stack
 7. Add `.github/copilot-instructions.md` — Stack-specific conventions
 8. Add an example plan in `docs/plans/examples/Phase-YOUR-STACK-EXAMPLE.md`
@@ -703,10 +738,10 @@ The essential files for ongoing use are:
 
 ```
 docs/plans/                    ← Runbook + your plans
-.github/instructions/          ← Guardrail files (15 per preset, 16 for TypeScript)
-.github/prompts/               ← Scaffolding recipes (14 prompt templates)
-.github/agents/                ← Reviewer/executor roles (11 agent definitions)
-.github/skills/                ← Multi-step procedures (3 skills)
+.github/instructions/          ← Guardrail files (16 per preset, 17 for TypeScript)
+.github/prompts/               ← Scaffolding recipes (15 prompt templates)
+.github/agents/                ← Reviewer/executor roles (18 agent definitions: 6 stack + 7 shared + 5 pipeline)
+.github/skills/                ← Multi-step procedures (8 skills for app presets)
 .github/copilot-instructions.md
 AGENTS.md
 ```

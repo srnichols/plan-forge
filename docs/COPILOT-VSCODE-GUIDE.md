@@ -334,7 +334,7 @@ Create a Product entity with name, price, and category fields.
 
 Or use the VS Code **prompt picker** — open the Command Palette (`Ctrl+Shift+P`) → "GitHub Copilot: Use Prompt" → select a prompt template.
 
-**Available prompts** (14 per preset):
+**Available prompts** (15 per app preset):
 | Template | When to Use |
 |----------|-------------|
 | `bug-fix-tdd.prompt.md` | Fixing a bug using Red-Green-Refactor |
@@ -351,6 +351,7 @@ Or use the VS Code **prompt picker** — open the Command Palette (`Ctrl+Shift+P
 | `new-service.prompt.md` | Creating a business logic service with DI |
 | `new-test.prompt.md` | Writing unit or integration tests |
 | `new-worker.prompt.md` | Adding a background job or scheduled task |
+| `project-principles.prompt.md` | Defining non-negotiable project principles and forbidden patterns |
 
 #### Agent Definitions (`.github/agents/`)
 
@@ -409,7 +410,7 @@ Multi-step executable procedures that chain together tool calls. Each skill file
    Create a migration to add an "orders" table.
    ```
 
-**Available skills** (3 per preset):
+**Available skills** (varies by preset):
 | Skill | Slash Command | When to Use |
 |-------|--------------|-------------|
 | `database-migration/` | `/database-migration` | Creating, validating, and deploying schema changes |
@@ -420,6 +421,9 @@ Multi-step executable procedures that chain together tool calls. Each skill file
 | `release-notes/` | `/release-notes` | Generate release notes from git history and CHANGELOG |
 | `api-doc-gen/` | `/api-doc-gen` | Generate or update OpenAPI spec, validate consistency |
 | `onboarding/` | `/onboarding` | Walk a new developer through setup, architecture, and first task |
+| `infra-deploy/` *(azure-iac)* | `/infra-deploy` | Pre-flight → what-if/plan → deploy → verify for Bicep/Terraform/azd |
+| `infra-test/` *(azure-iac)* | `/infra-test` | PSScriptAnalyzer → Bicep lint → Pester → Terraform validate |
+| `azure-sweep/` *(azure-iac)* | `/azure-sweep` | 8-layer governance sweep: WAF, CAF, Landing Zone, Policy, Org Rules, Resource Graph, Telemetry, Remediation |
 
 **Auto-invocation**: Skills can also load automatically without typing `/`. When you ask "help me test the login page", Copilot reads each skill's `description` field and loads the best match (e.g., `test-sweep`). You don't need to know the slash command name — just describe what you want.
 
@@ -564,9 +568,9 @@ only what Slice 3 requires.
 │  Workspace:     @workspace <search query>                       │
 │                                                                 │
 │  AGENTIC FILES                                                  │
-│    Prompts:  .github/prompts/*.prompt.md  (14 scaffolding recipes)│
-│    Agents:   .github/agents/*.agent.md    (11 reviewer/executor)│
-│    Skills:   .github/skills/*/SKILL.md    (3 procedures)        │
+│    Prompts:  .github/prompts/*.prompt.md  (15 scaffolding recipes)│
+│    Agents:   .github/agents/*.agent.md    (18 per app preset)     │
+│    Skills:   .github/skills/*/SKILL.md    (8 per app preset)      │
 │                                                                 │
 │  SESSION 1 — Harden                                             │
 │    Mode: Agent                                                  │

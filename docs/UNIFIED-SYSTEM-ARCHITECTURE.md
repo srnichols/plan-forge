@@ -179,8 +179,8 @@ graph TB
 
     subgraph "Plan Forge Guardrails"
         INSTRUCTIONS[".github/instructions/<br/>16 instruction files"]
-        PROMPTS[".github/prompts/<br/>14 prompt templates"]
-        AGENTS_DEF[".github/agents/<br/>16 agent definitions"]
+        PROMPTS[".github/prompts/<br/>15 prompt templates"]
+        AGENTS_DEF[".github/agents/<br/>18 agent definitions"]
         HOOKS[".github/hooks/<br/>lifecycle hooks"]
         PLANS["docs/plans/<br/>hardened plans"]
     end
@@ -683,7 +683,7 @@ my-api/
 │   │   ├── step5-review-gate.prompt.md                ← Plan Forge: pipeline Step 5
 │   │   ├── search-project-history.prompt.md           ← OpenBrain: semantic search
 │   │   ├── capture-decision.prompt.md                 ← OpenBrain: structured capture
-│   │   └── ... (14 scaffolding prompts)
+│   │   └── ... (15 scaffolding prompts)
 │   ├── agents/
 │   │   ├── specifier.agent.md                         ← Plan Forge: pipeline agent
 │   │   ├── plan-hardener.agent.md                     ← Plan Forge: pipeline agent

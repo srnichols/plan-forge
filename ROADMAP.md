@@ -7,7 +7,9 @@
 
 ## Current Release
 
-**v1.2.1** (2026-04-01) — Claude 4.6 prompt engineering enhancements, pipeline workflow refinements, `pforge update` command, SVG logo, three-layer decision guide.
+**v1.2.2** (2026-04-02) — `azure-iac` preset (Bicep/Terraform/PowerShell/azd + WAF/CAF/Landing Zone/Policy guardrails + enterprise `azure-sweeper` agent), multi-preset support (`-Preset dotnet,azure-iac`), `pforge.sh update` command, corrected skills/prompt/instruction counts across all docs.
+
+**v1.2.1** (2026-04-01) — Claude 4.6 prompt engineering enhancements, pipeline workflow refinements, `pforge update` command (PowerShell + Bash), SVG logo, three-layer decision guide.
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 
@@ -22,10 +24,9 @@ See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 - Community-contributed preset framework improvements
 
 ### v1.4 — Enhanced Automation
-- `pforge update` for Bash (`pforge.sh update`)
 - Auto-update notification when source version is newer
 - `pforge doctor` — diagnose common setup problems
-- Preset-specific validation rules in `validate-setup`
+- Preset-specific validation minimum count checks in `validate-setup`
 
 ### v1.5 — Intelligence Layer
 - Built-in token usage estimation per slice

@@ -7,7 +7,10 @@
     Pipeline files, instruction files, and AGENTS.md from a chosen preset.
 
 .PARAMETER Preset
-    Tech stack preset to apply: dotnet, typescript, python, or custom.
+    One or more tech stack presets. Accepts a single value or a comma-separated list.
+    Valid values: dotnet, typescript, python, java, go, azure-iac, custom
+    Example: -Preset azure-iac                  (IaC-only repo)
+    Example: -Preset dotnet,azure-iac           (app with infra folder)
 
 .PARAMETER ProjectPath
     Target project directory. Defaults to current directory.
@@ -22,12 +25,14 @@
     .\setup.ps1 -Preset dotnet -ProjectPath "C:\Projects\MyApp" -ProjectName "MyApp"
 
 .EXAMPLE
+    .\setup.ps1 -Preset dotnet,azure-iac -ProjectPath "C:\Projects\MyApp"  # app + infra
+
+.EXAMPLE
     .\setup.ps1  # Interactive mode — prompts for all values
 #>
 
 param(
-    [ValidateSet('dotnet', 'typescript', 'python', 'java', 'go', 'custom')]
-    [string]$Preset,
+    [string[]]$Preset,
 
     [string]$ProjectPath,
 
@@ -118,6 +123,12 @@ function Find-Preset([string]$TargetPath) {
     $hasPackageJson = Test-Path (Join-Path $TargetPath "package.json")
     $hasTsConfig    = Test-Path (Join-Path $TargetPath "tsconfig.json")
 
+    # Azure IaC markers
+    $hasBicep     = $null -ne (Get-ChildItem -Path $TargetPath -Filter "*.bicep" -Recurse -Depth 3 -ErrorAction SilentlyContinue | Select-Object -First 1)
+    $hasAzureYaml = Test-Path (Join-Path $TargetPath "azure.yaml")
+    $hasBicepConfig = Test-Path (Join-Path $TargetPath "bicepconfig.json")
+    $hasTf        = $null -ne (Get-ChildItem -Path $TargetPath -Filter "*.tf" -Recurse -Depth 3 -ErrorAction SilentlyContinue | Select-Object -First 1)
+
     if ($hasCsproj -or $hasSln -or $hasFsproj) {
         Write-Host "  AUTO-DETECT  Found .NET project markers" -ForegroundColor Magenta
         return 'dotnet'
@@ -137,6 +148,10 @@ function Find-Preset([string]$TargetPath) {
     if ($hasPackageJson -or $hasTsConfig) {
         Write-Host "  AUTO-DETECT  Found TypeScript/Node project markers" -ForegroundColor Magenta
         return 'typescript'
+    }
+    if ($hasBicep -or $hasAzureYaml -or $hasBicepConfig -or $hasTf) {
+        Write-Host "  AUTO-DETECT  Found Azure IaC project markers" -ForegroundColor Magenta
+        return 'azure-iac'
     }
 
     Write-Host "  AUTO-DETECT  No known markers found — using 'custom'" -ForegroundColor Yellow
@@ -161,6 +176,19 @@ if (-not $ProjectName) {
     $ProjectName = Get-PromptValue "Project name" $defaultName
 }
 
+# Normalise: accept comma-separated string as well as array
+if ($Preset.Count -eq 1 -and $Preset[0] -match ',') {
+    $Preset = $Preset[0] -split ',' | ForEach-Object { $_.Trim() }
+}
+
+$validPresets = @('dotnet','typescript','python','java','go','azure-iac','custom')
+foreach ($p in $Preset) {
+    if ($p -notin $validPresets) {
+        Write-Host "  ERROR  Unknown preset '$p'. Valid values: $($validPresets -join ', ')" -ForegroundColor Red
+        exit 1
+    }
+}
+
 if (-not $Preset) {
     if ($AutoDetect) {
         Write-Host ""
@@ -176,16 +204,18 @@ if (-not $Preset) {
                 Write-Host "  3) python      — Python / FastAPI / SQLAlchemy"
                 Write-Host "  4) java        — Java / Spring Boot / Gradle / Maven"
                 Write-Host "  5) go          — Go / Chi / Gin / Standard Library"
-                Write-Host "  6) custom      — Shared files only (add your own instructions)"
+                Write-Host "  6) azure-iac   — Azure Bicep / Terraform / PowerShell / azd"
+                Write-Host "  7) custom      — Shared files only (add your own instructions)"
                 Write-Host ""
-                $choice = Get-PromptValue "Select preset (1-6 or name)" "1"
+                $choice = Get-PromptValue "Select preset (1-7 or name)" "1"
                 $Preset = switch ($choice) {
                     '1' { 'dotnet' }
                     '2' { 'typescript' }
                     '3' { 'python' }
                     '4' { 'java' }
                     '5' { 'go' }
-                    '6' { 'custom' }
+                    '6' { 'azure-iac' }
+                    '7' { 'custom' }
                     default { $choice }
                 }
             }
@@ -199,53 +229,76 @@ if (-not $Preset) {
         Write-Host "  3) python      — Python / FastAPI / SQLAlchemy"
         Write-Host "  4) java        — Java / Spring Boot / Gradle / Maven"
         Write-Host "  5) go          — Go / Chi / Gin / Standard Library"
-        Write-Host "  6) custom      — Shared files only (add your own instructions)"
+        Write-Host "  6) azure-iac   — Azure Bicep / Terraform / PowerShell / azd"
+        Write-Host "  7) custom      — Shared files only (add your own instructions)"
         Write-Host ""
-        $choice = Get-PromptValue "Select preset (1-6 or name)" "1"
+        $choice = Get-PromptValue "Select preset (1-7 or name)" "1"
         $Preset = switch ($choice) {
             '1' { 'dotnet' }
             '2' { 'typescript' }
             '3' { 'python' }
             '4' { 'java' }
             '5' { 'go' }
-            '6' { 'custom' }
+            '6' { 'azure-iac' }
+            '7' { 'custom' }
             default { $choice }
         }
     }
 }
 
-$stackLabel = switch ($Preset) {
-    'dotnet'     { '.NET / C# / ASP.NET Core' }
-    'typescript' { 'TypeScript / React / Node.js' }
-    'python'     { 'Python / FastAPI' }
-    'java'       { 'Java / Spring Boot' }
-    'go'         { 'Go / Standard Library' }
-    'custom'     { 'Custom (configure manually)' }
+$stackLabel = if ($Preset.Count -gt 1) {
+    ($Preset | ForEach-Object {
+        switch ($_) {
+            'dotnet'     { '.NET' }
+            'typescript' { 'TypeScript' }
+            'python'     { 'Python' }
+            'java'       { 'Java' }
+            'go'         { 'Go' }
+            'azure-iac'  { 'Azure IaC' }
+            'custom'     { 'Custom' }
+        }
+    }) -join ' + '
+} else {
+    switch ($Preset[0]) {
+        'dotnet'     { '.NET / C# / ASP.NET Core' }
+        'typescript' { 'TypeScript / React / Node.js' }
+        'python'     { 'Python / FastAPI' }
+        'java'       { 'Java / Spring Boot' }
+        'go'         { 'Go / Standard Library' }
+        'azure-iac'  { 'Azure Bicep / Terraform / PowerShell / azd' }
+        'custom'     { 'Custom (configure manually)' }
+    }
 }
 
+# Primary preset drives build/test/lint defaults (first non-custom wins)
+$primaryPreset = ($Preset | Where-Object { $_ -ne 'custom' } | Select-Object -First 1) ?? 'custom'
+
 # ─── Build/Test/Lint Commands ──────────────────────────────────────────
-$defaultBuild = switch ($Preset) {
+$defaultBuild = switch ($primaryPreset) {
     'dotnet'     { 'dotnet build' }
     'typescript' { 'pnpm build' }
     'python'     { 'python -m build' }
     'java'       { './gradlew build' }
     'go'         { 'go build ./...' }
+    'azure-iac'  { 'az bicep build --file infra/main.bicep' }
     'custom'     { '' }
 }
-$defaultTest = switch ($Preset) {
+$defaultTest = switch ($primaryPreset) {
     'dotnet'     { 'dotnet test' }
     'typescript' { 'pnpm test' }
     'python'     { 'pytest' }
     'java'       { './gradlew test' }
     'go'         { 'go test ./...' }
+    'azure-iac'  { 'Invoke-Pester -Path ./tests -Output Detailed' }
     'custom'     { '' }
 }
-$defaultLint = switch ($Preset) {
+$defaultLint = switch ($primaryPreset) {
     'dotnet'     { 'dotnet format --verify-no-changes' }
     'typescript' { 'pnpm lint' }
     'python'     { 'ruff check .' }
     'java'       { './gradlew spotlessCheck' }
     'go'         { 'golangci-lint run' }
+    'azure-iac'  { 'az bicep lint --file infra/main.bicep' }
     'custom'     { '' }
 }
 
@@ -267,7 +320,7 @@ Write-Host ""
 Write-Host "Configuration:" -ForegroundColor Cyan
 Write-Host "  Project:  $ProjectName"
 Write-Host "  Path:     $ProjectPath"
-Write-Host "  Preset:   $Preset ($stackLabel)"
+Write-Host "  Preset(s): $($Preset -join ', ') ($stackLabel)"
 Write-Host "  Build:    $BuildCmd"
 Write-Host "  Test:     $TestCmd"
 Write-Host "  Lint:     $LintCmd"
@@ -325,35 +378,44 @@ foreach ($f in $sharedFiles) {
 }
 
 # ─── Step 3: Copy Preset Files ────────────────────────────────────────
-if ($Preset -ne 'custom') {
-    Write-Host ""
-    Write-Host "Step 3: $Preset preset files" -ForegroundColor Cyan
+$isCustomOnly = ($Preset.Count -eq 1 -and $Preset[0] -eq 'custom')
 
-    $presetDir = Join-Path $templateRoot "presets/$Preset"
-    if (-not (Test-Path $presetDir)) {
-        Write-Host "  ERROR  Preset directory not found: $presetDir" -ForegroundColor Red
-        exit 1
-    }
+if (-not $isCustomOnly) {
+    $presetsToApply = $Preset | Where-Object { $_ -ne 'custom' }
+    $isFirstPreset  = $true
 
-    # Copy all files from preset, preserving relative paths
-    Get-ChildItem -Path $presetDir -Recurse -File | ForEach-Object {
-        $relativePath = $_.FullName.Substring($presetDir.Length + 1)
-        $dst = Join-Path $ProjectPath $relativePath
-        Copy-WithCreate $_.FullName $dst $Force.IsPresent
-    }
+    foreach ($activePreset in $presetsToApply) {
+        Write-Host ""
+        Write-Host "Step 3: $activePreset preset files" -ForegroundColor Cyan
 
-    # Copy preset copilot-instructions to project root if no root one exists
-    $presetCopilot = Join-Path $presetDir ".github/copilot-instructions.md"
-    $rootCopilot = Join-Path $ProjectPath ".github/copilot-instructions.md"
-    if ((Test-Path $presetCopilot) -and -not (Test-Path $rootCopilot)) {
-        Copy-WithCreate $presetCopilot $rootCopilot $Force.IsPresent
-    }
+        $presetDir = Join-Path $templateRoot "presets/$activePreset"
+        if (-not (Test-Path $presetDir)) {
+            Write-Host "  ERROR  Preset directory not found: $presetDir" -ForegroundColor Red
+            exit 1
+        }
 
-    # Copy preset AGENTS.md to project root if no root one exists
-    $presetAgents = Join-Path $presetDir "AGENTS.md"
-    $rootAgents = Join-Path $ProjectPath "AGENTS.md"
-    if ((Test-Path $presetAgents) -and -not (Test-Path $rootAgents)) {
-        Copy-WithCreate $presetAgents $rootAgents $Force.IsPresent
+        # Copy all files from preset, preserving relative paths
+        Get-ChildItem -Path $presetDir -Recurse -File | ForEach-Object {
+            $relativePath = $_.FullName.Substring($presetDir.Length + 1)
+            $dst = Join-Path $ProjectPath $relativePath
+            Copy-WithCreate $_.FullName $dst $Force.IsPresent
+        }
+
+        # First preset sets copilot-instructions.md; subsequent ones don't overwrite
+        $presetCopilot = Join-Path $presetDir ".github/copilot-instructions.md"
+        $rootCopilot   = Join-Path $ProjectPath ".github/copilot-instructions.md"
+        if ($isFirstPreset -and (Test-Path $presetCopilot) -and -not (Test-Path $rootCopilot)) {
+            Copy-WithCreate $presetCopilot $rootCopilot $Force.IsPresent
+        }
+
+        # First preset sets AGENTS.md; subsequent ones don't overwrite
+        $presetAgents = Join-Path $presetDir "AGENTS.md"
+        $rootAgents   = Join-Path $ProjectPath "AGENTS.md"
+        if ($isFirstPreset -and (Test-Path $presetAgents) -and -not (Test-Path $rootAgents)) {
+            Copy-WithCreate $presetAgents $rootAgents $Force.IsPresent
+        }
+
+        $isFirstPreset = $false
     }
 }
 else {
@@ -368,11 +430,11 @@ else {
 }
 
 # ─── Step 3b: Copy Shared Agents ───────────────────────────────────────
-if ($Preset -ne 'custom') {
+if (-not $isCustomOnly) {
     Write-Host ""
     Write-Host "Step 3b: Shared agents (cross-stack reviewers + pipeline agents)" -ForegroundColor Cyan
 
-    # Shared agents (api-contract, accessibility, multi-tenancy, cicd, observability)
+    # Shared agents (api-contract, accessibility, multi-tenancy, cicd, observability, dependency, compliance)
     $sharedAgentsDir = Join-Path $templateRoot "presets/shared/.github/agents"
     if (Test-Path $sharedAgentsDir) {
         Get-ChildItem -Path $sharedAgentsDir -Filter "*.agent.md" -File | ForEach-Object {
@@ -392,7 +454,7 @@ if ($Preset -ne 'custom') {
 }
 
 # ─── Step 3c: Copy Project Principles Prompt + Extension Templates + Hooks ─────
-if ($Preset -ne 'custom') {
+if (-not $isCustomOnly) {
     Write-Host ""
     Write-Host "Step 3c: Project Principles prompt + extension templates + hooks" -ForegroundColor Cyan
 
@@ -505,7 +567,7 @@ $versionFile = Join-Path $templateRoot "VERSION"
 $templateVersion = if (Test-Path $versionFile) { (Get-Content $versionFile -Raw).Trim() } else { "1.0.0" }
 $config = @{
     projectName  = $ProjectName
-    preset       = $Preset
+    preset       = if ($Preset.Count -eq 1) { $Preset[0] } else { $Preset }
     stack        = $stackLabel
     setupDate    = (Get-Date -Format 'yyyy-MM-dd')
     templateVersion = $templateVersion

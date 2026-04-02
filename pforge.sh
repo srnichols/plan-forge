@@ -53,6 +53,7 @@ COMMANDS:
   ext install <p>   Install extension from path
   ext list          List installed extensions
   ext remove <name> Remove an installed extension
+  update [source]   Update framework files from Plan Forge source (preserves customizations)
   help              Show this help message
 
 OPTIONS:
@@ -62,11 +63,14 @@ OPTIONS:
 
 EXAMPLES:
   ./pforge.sh init --preset dotnet
+  ./pforge.sh init --preset dotnet,azure-iac
   ./pforge.sh status
   ./pforge.sh new-phase user-auth
   ./pforge.sh new-phase user-auth --dry-run
   ./pforge.sh branch docs/plans/Phase-1-USER-AUTH-PLAN.md
   ./pforge.sh ext list
+  ./pforge.sh update ../plan-forge
+  ./pforge.sh update --dry-run
 
 EOF
 }
@@ -685,6 +689,297 @@ cmd_ext_remove() {
     echo "Extension '$ext_name' removed."
 }
 
+# ─── Command: update ───────────────────────────────────────────────────
+# SHA256 helper — portable Linux + macOS
+_pf_sha256() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$1" | cut -d' ' -f1
+    else
+        shasum -a 256 "$1" | cut -d' ' -f1
+    fi
+}
+
+cmd_update() {
+    local dry_run=false force=false source_path=""
+
+    for arg in "$@"; do
+        case "$arg" in
+            --dry-run) dry_run=true ;;
+            --force)   force=true ;;
+            --*) ;;
+            *)
+                if [ -z "$source_path" ] && [ -d "$arg" ]; then
+                    source_path="$(cd "$arg" && pwd)"
+                fi
+                ;;
+        esac
+    done
+
+    # Auto-detect source: sibling directories ../plan-forge or ../Plan-Forge
+    if [ -z "$source_path" ]; then
+        local parent
+        parent="$(dirname "$REPO_ROOT")"
+        for candidate in "$parent/plan-forge" "$parent/Plan-Forge"; do
+            if [ -f "$candidate/VERSION" ]; then
+                source_path="$(cd "$candidate" && pwd)"
+                break
+            fi
+        done
+    fi
+
+    if [ -z "$source_path" ]; then
+        echo "ERROR: Plan Forge source not found." >&2
+        echo "  Provide the path to your Plan Forge clone:" >&2
+        echo "    ./pforge.sh update /path/to/plan-forge" >&2
+        echo "  Or clone it next to your project:" >&2
+        echo "    git clone https://github.com/srnichols/plan-forge.git ../plan-forge" >&2
+        exit 1
+    fi
+
+    print_manual_steps "update" \
+        "Clone/pull the latest Plan Forge template repo" \
+        "Compare .forge.json templateVersion with the source VERSION" \
+        "Copy updated framework files (prompts, agents, skills, hooks, runbook)" \
+        "Skip files that don't exist in the target (user hasn't adopted that feature)" \
+        "Never overwrite copilot-instructions.md, project-profile, project-principles, or plan files"
+
+    # ─── Read versions ────────────────────────────────────────────
+    local source_version
+    source_version="$(tr -d '[:space:]' < "$source_path/VERSION")"
+
+    local config_path="$REPO_ROOT/.forge.json"
+    local current_version="unknown" current_preset_raw="custom"
+
+    if [ -f "$config_path" ]; then
+        current_version="$(python3 -c "import json; print(json.load(open('$config_path')).get('templateVersion','unknown'))" 2>/dev/null || \
+                           grep -oP '"templateVersion":\s*"\K[^"]+' "$config_path" 2>/dev/null | head -1 || echo "unknown")"
+        current_preset_raw="$(python3 -c "
+import json
+v = json.load(open('$config_path')).get('preset', 'custom')
+print(v if isinstance(v, str) else ','.join(v))
+" 2>/dev/null || grep -oP '"preset":\s*"\K[^"]+' "$config_path" 2>/dev/null | head -1 || echo "custom")"
+    fi
+
+    echo ""
+    echo "Plan Forge Update"
+    echo "─────────────────────────────────────────────"
+    echo "  Source:   $source_path"
+    echo "  Current:  v$current_version"
+    echo "  Latest:   v$source_version"
+    echo "  Preset:   $current_preset_raw"
+    echo ""
+
+    if [ "$current_version" = "$source_version" ] && ! $force; then
+        echo "Already up to date (v$current_version). Use --force to re-apply."
+        return 0
+    fi
+
+    # ─── Never-update list (relative paths) ───────────────────────
+    local _never_update=(
+        ".github/copilot-instructions.md"
+        ".github/instructions/project-profile.instructions.md"
+        ".github/instructions/project-principles.instructions.md"
+        "docs/plans/DEPLOYMENT-ROADMAP.md"
+        "docs/plans/PROJECT-PRINCIPLES.md"
+        "AGENTS.md"
+        ".forge.json"
+    )
+
+    # ─── Change tracking arrays: "src|dst|name" tuples ────────────
+    local _updates=() _new_files=()
+
+    # Inner helper — compare src vs dst, populate _updates / _new_files
+    _pf_check() {
+        local src="$1" dst="$2" rel="$3"
+        local nu
+        for nu in "${_never_update[@]}"; do
+            [ "$nu" = "$rel" ] && return 0
+        done
+        [ -f "$src" ] || return 0
+        if [ -f "$dst" ]; then
+            if [ "$(_pf_sha256 "$src")" != "$(_pf_sha256 "$dst")" ]; then
+                _updates+=("$src|$dst|$rel")
+            fi
+        else
+            _new_files+=("$src|$dst|$rel")
+        fi
+    }
+
+    # ─── Step prompts (step*.prompt.md) ───────────────────────────
+    local src_prompts="$source_path/.github/prompts"
+    if [ -d "$src_prompts" ]; then
+        while IFS= read -r -d '' f; do
+            local fname_p
+            fname_p="$(basename "$f")"
+            _pf_check "$f" "$REPO_ROOT/.github/prompts/$fname_p" ".github/prompts/$fname_p"
+        done < <(find "$src_prompts" -maxdepth 1 -name "step*.prompt.md" -type f -print0 2>/dev/null)
+    fi
+
+    # ─── Pipeline agents ──────────────────────────────────────────
+    local src_agents="$source_path/templates/.github/agents"
+    if [ -d "$src_agents" ]; then
+        local agent_name
+        for agent_name in "specifier.agent.md" "plan-hardener.agent.md" "executor.agent.md" "reviewer-gate.agent.md" "shipper.agent.md"; do
+            _pf_check "$src_agents/$agent_name" "$REPO_ROOT/.github/agents/$agent_name" ".github/agents/$agent_name"
+        done
+    fi
+
+    # ─── Shared instructions ──────────────────────────────────────
+    local src_instr="$source_path/.github/instructions"
+    if [ -d "$src_instr" ]; then
+        local instr_name
+        for instr_name in "architecture-principles.instructions.md" "git-workflow.instructions.md" "ai-plan-hardening-runbook.instructions.md"; do
+            _pf_check "$src_instr/$instr_name" "$REPO_ROOT/.github/instructions/$instr_name" ".github/instructions/$instr_name"
+        done
+    fi
+
+    # ─── Runbook docs ─────────────────────────────────────────────
+    local src_docs="$source_path/docs/plans"
+    if [ -d "$src_docs" ]; then
+        local doc_name
+        for doc_name in "AI-Plan-Hardening-Runbook.md" "AI-Plan-Hardening-Runbook-Instructions.md" "DEPLOYMENT-ROADMAP-TEMPLATE.md" "PROJECT-PRINCIPLES-TEMPLATE.md"; do
+            _pf_check "$src_docs/$doc_name" "$REPO_ROOT/docs/plans/$doc_name" "docs/plans/$doc_name"
+        done
+    fi
+
+    # ─── Hooks ────────────────────────────────────────────────────
+    local src_hooks="$source_path/templates/.github/hooks"
+    if [ -d "$src_hooks" ]; then
+        while IFS= read -r -d '' f; do
+            local fname_h
+            fname_h="$(basename "$f")"
+            _pf_check "$f" "$REPO_ROOT/.github/hooks/$fname_h" ".github/hooks/$fname_h"
+        done < <(find "$src_hooks" -maxdepth 1 -type f -print0 2>/dev/null)
+    fi
+
+    # ─── Preset-specific files (instructions, agents, prompts, skills) ─
+    local _presets=()
+    IFS=',' read -ra _presets <<< "$current_preset_raw"
+
+    local p
+    for p in "${_presets[@]}"; do
+        p="${p// /}"          # trim whitespace
+        [ "$p" = "custom" ] && continue
+
+        local src_preset="$source_path/presets/$p/.github"
+        [ -d "$src_preset" ] || continue
+
+        echo "  Checking preset: $p"
+
+        local sub_dir
+        for sub_dir in instructions agents prompts; do
+            local src_sub="$src_preset/$sub_dir"
+            [ -d "$src_sub" ] || continue
+            while IFS= read -r -d '' f; do
+                local fname_s rel dst _skip
+                fname_s="$(basename "$f")"
+                rel=".github/$sub_dir/$fname_s"
+                dst="$REPO_ROOT/.github/$sub_dir/$fname_s"
+                # Skip existing files — they may have been customized
+                [ -f "$dst" ] && continue
+                # Skip never-update list entries
+                _skip=false
+                for nu in "${_never_update[@]}"; do
+                    [ "$nu" = "$rel" ] && _skip=true && break
+                done
+                $_skip || _new_files+=("$f|$dst|$rel")
+            done < <(find "$src_sub" -maxdepth 1 -type f -print0 2>/dev/null)
+        done
+
+        # Skills — add new subdirectories only; existing SKILL.md files may be customized
+        local src_skills="$src_preset/skills"
+        if [ -d "$src_skills" ]; then
+            local skill_dir skill_name skill_src skill_dst
+            for skill_dir in "$src_skills"/*/; do
+                [ -d "$skill_dir" ] || continue
+                skill_name="$(basename "$skill_dir")"
+                skill_src="$skill_dir/SKILL.md"
+                skill_dst="$REPO_ROOT/.github/skills/$skill_name/SKILL.md"
+                [ -f "$skill_src" ] || continue
+                # Only add if skill doesn't exist yet
+                [ -f "$skill_dst" ] && continue
+                _new_files+=("$skill_src|$skill_dst|.github/skills/$skill_name/SKILL.md")
+            done
+        fi
+    done
+
+    unset -f _pf_check
+
+    # ─── Report ───────────────────────────────────────────────────
+    if [ "${#_updates[@]}" -eq 0 ] && [ "${#_new_files[@]}" -eq 0 ]; then
+        echo "All framework files are up to date."
+        return 0
+    fi
+
+    echo "Changes found:"
+    local entry
+    for entry in "${_updates[@]}"; do
+        echo "  UPDATE  ${entry##*|}"
+    done
+    for entry in "${_new_files[@]}"; do
+        echo "  NEW     ${entry##*|}"
+    done
+    echo ""
+    echo "Protected (never updated):"
+    echo "  .github/copilot-instructions.md, project-profile, project-principles,"
+    echo "  DEPLOYMENT-ROADMAP.md, AGENTS.md, plan files, .forge.json"
+    echo ""
+
+    if $dry_run; then
+        echo "DRY RUN — no files were changed."
+        return 0
+    fi
+
+    # ─── Confirm ──────────────────────────────────────────────────
+    if ! $force; then
+        read -rp "Apply ${#_updates[@]} updates and ${#_new_files[@]} new files? [y/N] " confirm
+        case "$confirm" in
+            y|Y|yes|Yes) ;;
+            *) echo "Cancelled."; return 0 ;;
+        esac
+    fi
+
+    # ─── Apply updates ────────────────────────────────────────────
+    for entry in "${_updates[@]}"; do
+        local src="${entry%%|*}" rest="${entry#*|}"
+        local dst="${rest%%|*}" name="${rest##*|}"
+        cp "$src" "$dst"
+        echo "  ✅ Updated $name"
+    done
+
+    # ─── Apply new files ──────────────────────────────────────────
+    for entry in "${_new_files[@]}"; do
+        local src="${entry%%|*}" rest="${entry#*|}"
+        local dst="${rest%%|*}" name="${rest##*|}"
+        mkdir -p "$(dirname "$dst")"
+        cp "$src" "$dst"
+        echo "  ✅ Added $name"
+    done
+
+    # ─── Update .forge.json templateVersion ───────────────────────
+    if [ -f "$config_path" ]; then
+        if command -v python3 >/dev/null 2>&1; then
+            python3 -c "
+import json
+with open('$config_path') as f:
+    c = json.load(f)
+c['templateVersion'] = '$source_version'
+with open('$config_path', 'w') as f:
+    json.dump(c, f, indent=2)
+    f.write('\n')
+"
+        else
+            sed -i.bak "s/\"templateVersion\": \"[^\"]*\"/\"templateVersion\": \"$source_version\"/" "$config_path"
+            rm -f "$config_path.bak"
+        fi
+        echo "  ✅ Updated .forge.json templateVersion to $source_version"
+    fi
+
+    echo ""
+    echo "Update complete: v$current_version → v$source_version"
+    echo "Run 'pforge check' to validate the updated setup."
+}
+
 # ─── Command Router ────────────────────────────────────────────────────
 COMMAND="${1:-help}"
 shift 2>/dev/null || true
@@ -700,6 +995,7 @@ case "$COMMAND" in
     sweep)        cmd_sweep ;;
     diff)         cmd_diff "$@" ;;
     ext)          cmd_ext "$@" ;;
+    update)       cmd_update "$@" ;;
     help|--help)  show_help ;;
     *)
         echo "ERROR: Unknown command '$COMMAND'" >&2

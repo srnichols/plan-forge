@@ -71,6 +71,19 @@ pforge ext install .forge/extensions/healthcare-compliance
 
 See `templates/.forge/extensions/example-extension/` for a starter template.
 
+## Example Extensions
+
+The following example extensions are included in `docs/plans/examples/extensions/`:
+
+| Extension | What It Adds | Best For |
+|-----------|-------------|----------|
+| `saas-multi-tenancy` | RLS policies, tenant isolation middleware, cross-tenant prevention | SaaS platforms with row-level security |
+| `azure-infrastructure` | Bicep, Terraform, azd, CAF naming, security guardrails | Any app repo with an `infra/` folder |
+| `plan-forge-memory` | Persistent decision capture, project history search | Teams using OpenBrain/memory tools |
+
+> For pure Azure infrastructure repos (no application code), use the `azure-iac` preset instead of the extension.  
+> See `presets/azure-iac/` for the full standalone preset.
+
 ## Distribution Channels
 
 | Channel | How | Best For |

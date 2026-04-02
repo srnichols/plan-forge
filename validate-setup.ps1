@@ -97,9 +97,19 @@ if (Test-Path $configPath) {
 
     if ($preset -ne 'custom') {
         Check-FileExists "AGENTS.md"
-        Check-FileExists ".github/instructions/database.instructions.md"
         Check-FileExists ".github/instructions/testing.instructions.md"
         Check-FileExists ".github/instructions/security.instructions.md"
+
+        if ($preset -eq 'azure-iac') {
+            # IaC-specific instruction files
+            Check-FileExists ".github/instructions/bicep.instructions.md"
+            Check-FileExists ".github/instructions/naming.instructions.md"
+            Check-FileExists ".github/instructions/deploy.instructions.md"
+        }
+        else {
+            # App-stack presets
+            Check-FileExists ".github/instructions/database.instructions.md"
+        }
     }
 
     # Check for agentic files (prompt templates, agent definitions, skills)

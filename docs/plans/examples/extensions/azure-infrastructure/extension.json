@@ -1,0 +1,24 @@
+{
+  "name": "azure-infrastructure",
+  "version": "1.0.0",
+  "description": "Azure IaC guardrails for app repos that ship infrastructure alongside application code. Covers Bicep modules, Terraform, Azure Developer CLI (azd), security patterns, and CAF naming conventions. Install on top of any language preset.",
+  "author": "plan-forge-community",
+  "minTemplateVersion": "1.2.0",
+  "files": {
+    "instructions": [
+      "bicep.instructions.md",
+      "terraform.instructions.md",
+      "azd.instructions.md",
+      "naming.instructions.md",
+      "security.instructions.md"
+    ],
+    "agents": [
+      "infra-reviewer.agent.md"
+    ],
+    "prompts": [
+      "new-bicep-module.prompt.md",
+      "new-terraform-module.prompt.md",
+      "add-azd-support.prompt.md"
+    ]
+  }
+}

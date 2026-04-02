@@ -7,7 +7,7 @@
 #   ./setup.sh                  # Interactive mode
 #   ./setup.sh --force          # Overwrite existing files
 #
-# Presets: dotnet, typescript, python, java, go, custom
+# Presets: dotnet, typescript, python, java, go, azure-iac, custom
 
 set -euo pipefail
 
@@ -35,7 +35,7 @@ while [[ $# -gt 0 ]]; do
         --force|-f)   FORCE=true; shift ;;
         --auto-detect|-a) AUTO_DETECT=true; shift ;;
         --help|-h)
-            echo "Usage: ./setup.sh [--preset dotnet|typescript|python|java|go|custom] [--path DIR] [--name NAME] [--force] [--auto-detect]"
+            echo "Usage: ./setup.sh [--preset dotnet|typescript|python|java|go|azure-iac|custom] [--path DIR] [--name NAME] [--force] [--auto-detect]"
             exit 0 ;;
         *) red "Unknown option: $1"; exit 1 ;;
     esac
@@ -142,6 +142,18 @@ detect_preset() {
         return
     fi
 
+    # Azure IaC markers
+    if find "$target" -maxdepth 4 -name "*.bicep" -o -name "bicepconfig.json" -o -name "azure.yaml" 2>/dev/null | head -1 | grep -q .; then
+        yellow "  AUTO-DETECT  Found Azure IaC project markers"
+        echo "azure-iac"
+        return
+    fi
+    if find "$target" -maxdepth 4 -name "*.tf" 2>/dev/null | head -1 | grep -q .; then
+        yellow "  AUTO-DETECT  Found Terraform project markers"
+        echo "azure-iac"
+        return
+    fi
+
     yellow "  AUTO-DETECT  No known markers found — using 'custom'"
     echo "custom"
 }
@@ -187,16 +199,18 @@ if [[ -z "$PRESET" ]]; then
                 echo "  3) python      — Python / FastAPI / SQLAlchemy"
                 echo "  4) java        — Java / Spring Boot / Gradle / Maven"
                 echo "  5) go          — Go / Chi / Gin / Standard Library"
-                echo "  6) custom      — Shared files only (add your own instructions)"
+                echo "  6) azure-iac   — Azure Bicep / Terraform / PowerShell / azd"
+                echo "  7) custom      — Shared files only (add your own instructions)"
                 echo ""
-                choice="$(prompt_value "Select preset (1-6 or name)" "1")"
+                choice="$(prompt_value "Select preset (1-7 or name)" "1")"
                 case "$choice" in
                     1|dotnet)     PRESET="dotnet" ;;
                     2|typescript) PRESET="typescript" ;;
                     3|python)     PRESET="python" ;;
                     4|java)       PRESET="java" ;;
                     5|go)         PRESET="go" ;;
-                    6|custom)     PRESET="custom" ;;
+                    6|azure-iac)  PRESET="azure-iac" ;;
+                    7|custom)     PRESET="custom" ;;
                     *)            PRESET="$choice" ;;
                 esac
             fi
@@ -209,16 +223,18 @@ if [[ -z "$PRESET" ]]; then
         echo "  3) python      — Python / FastAPI / SQLAlchemy"
         echo "  4) java        — Java / Spring Boot / Gradle / Maven"
         echo "  5) go          — Go / Chi / Gin / Standard Library"
-        echo "  6) custom      — Shared files only (add your own instructions)"
+        echo "  6) azure-iac   — Azure Bicep / Terraform / PowerShell / azd"
+        echo "  7) custom      — Shared files only (add your own instructions)"
         echo ""
-        choice="$(prompt_value "Select preset (1-6 or name)" "1")"
+        choice="$(prompt_value "Select preset (1-7 or name)" "1")"
         case "$choice" in
             1|dotnet)     PRESET="dotnet" ;;
             2|typescript) PRESET="typescript" ;;
             3|python)     PRESET="python" ;;
             4|java)       PRESET="java" ;;
             5|go)         PRESET="go" ;;
-            6|custom)     PRESET="custom" ;;
+            6|azure-iac)  PRESET="azure-iac" ;;
+            7|custom)     PRESET="custom" ;;
             *)            PRESET="$choice" ;;
         esac
     fi
@@ -230,17 +246,47 @@ case "$PRESET" in
     python)     STACK_LABEL="Python / FastAPI" ;;
     java)       STACK_LABEL="Java / Spring Boot" ;;
     go)         STACK_LABEL="Go / Standard Library" ;;
+    azure-iac)  STACK_LABEL="Azure Bicep / Terraform / PowerShell / azd" ;;
     custom)     STACK_LABEL="Custom (configure manually)" ;;
     *)          red "Unknown preset: $PRESET"; exit 1 ;;
 esac
 
 # ─── Build/Test/Lint Commands ──────────────────────────────────────────
-case "$PRESET" in
+# Normalise: split comma-separated preset string into array
+IFS=',' read -ra PRESETS <<< "$PRESET"
+for i in "${!PRESETS[@]}"; do
+    PRESETS[$i]="$(echo "${PRESETS[$i]}" | tr -d ' ')"
+done
+
+VALID_PRESETS=(dotnet typescript python java go azure-iac custom)
+for p in "${PRESETS[@]}"; do
+    valid=false
+    for v in "${VALID_PRESETS[@]}"; do [[ "$p" == "$v" ]] && valid=true && break; done
+    if [[ "$valid" != true ]]; then
+        red "  ERROR  Unknown preset '$p'. Valid values: ${VALID_PRESETS[*]}"
+        exit 1
+    fi
+done
+
+# Determine if custom-only
+IS_CUSTOM_ONLY=false
+if [[ "${#PRESETS[@]}" -eq 1 ]] && [[ "${PRESETS[0]}" == "custom" ]]; then
+    IS_CUSTOM_ONLY=true
+fi
+
+# Primary preset drives build/test/lint defaults
+PRIMARY_PRESET="custom"
+for p in "${PRESETS[@]}"; do
+    if [[ "$p" != "custom" ]]; then PRIMARY_PRESET="$p"; break; fi
+done
+
+case "$PRIMARY_PRESET" in
     dotnet)     DEFAULT_BUILD="dotnet build"; DEFAULT_TEST="dotnet test"; DEFAULT_LINT="dotnet format --verify-no-changes" ;;
     typescript) DEFAULT_BUILD="pnpm build"; DEFAULT_TEST="pnpm test"; DEFAULT_LINT="pnpm lint" ;;
     python)     DEFAULT_BUILD="python -m build"; DEFAULT_TEST="pytest"; DEFAULT_LINT="ruff check ." ;;
     java)       DEFAULT_BUILD="./gradlew build"; DEFAULT_TEST="./gradlew test"; DEFAULT_LINT="./gradlew spotlessCheck" ;;
     go)         DEFAULT_BUILD="go build ./..."; DEFAULT_TEST="go test ./..."; DEFAULT_LINT="golangci-lint run" ;;
+    azure-iac)  DEFAULT_BUILD="az bicep build --file infra/main.bicep"; DEFAULT_TEST="Invoke-Pester -Path ./tests -Output Detailed"; DEFAULT_LINT="az bicep lint --file infra/main.bicep" ;;
     custom)     DEFAULT_BUILD=""; DEFAULT_TEST=""; DEFAULT_LINT="" ;;
 esac
 
@@ -261,7 +307,7 @@ echo ""
 cyan "Configuration:"
 echo "  Project:  $PROJECT_NAME"
 echo "  Path:     $PROJECT_PATH"
-echo "  Preset:   $PRESET ($STACK_LABEL)"
+echo "  Preset(s): ${PRESETS[*]} ($STACK_LABEL)"
 echo "  Build:    $BUILD_CMD"
 echo "  Test:     $TEST_CMD"
 echo "  Lint:     $LINT_CMD"
@@ -324,36 +370,44 @@ for rel in "${SHARED_FILES[@]}"; do
 done
 
 # ─── Step 3: Copy Preset Files ────────────────────────────────────────
-if [[ "$PRESET" != "custom" ]]; then
-    echo ""
-    cyan "Step 3: $PRESET preset files"
+if [[ "$IS_CUSTOM_ONLY" != true ]]; then
+    is_first_preset=true
 
-    PRESET_DIR="$TEMPLATE_ROOT/presets/$PRESET"
-    if [[ ! -d "$PRESET_DIR" ]]; then
-        red "  ERROR  Preset directory not found: $PRESET_DIR"
-        exit 1
-    fi
+    for active_preset in "${PRESETS[@]}"; do
+        [[ "$active_preset" == "custom" ]] && continue
 
-    # Copy all files from preset, preserving relative paths
-    while IFS= read -r -d '' file; do
-        rel_path="${file#"$PRESET_DIR/"}"
-        dst="$PROJECT_PATH/$rel_path"
-        copy_with_create "$file" "$dst" || true
-    done < <(find "$PRESET_DIR" -type f -print0)
+        echo ""
+        cyan "Step 3: $active_preset preset files"
 
-    # Copy preset copilot-instructions to project root if none exists
-    preset_copilot="$PRESET_DIR/.github/copilot-instructions.md"
-    root_copilot="$PROJECT_PATH/.github/copilot-instructions.md"
-    if [[ -f "$preset_copilot" ]] && [[ ! -f "$root_copilot" ]]; then
-        copy_with_create "$preset_copilot" "$root_copilot" || true
-    fi
+        PRESET_DIR="$TEMPLATE_ROOT/presets/$active_preset"
+        if [[ ! -d "$PRESET_DIR" ]]; then
+            red "  ERROR  Preset directory not found: $PRESET_DIR"
+            exit 1
+        fi
 
-    # Copy preset AGENTS.md to project root if none exists
-    preset_agents="$PRESET_DIR/AGENTS.md"
-    root_agents="$PROJECT_PATH/AGENTS.md"
-    if [[ -f "$preset_agents" ]] && [[ ! -f "$root_agents" ]]; then
-        copy_with_create "$preset_agents" "$root_agents" || true
-    fi
+        # Copy all files from preset, preserving relative paths
+        while IFS= read -r -d '' file; do
+            rel_path="${file#"$PRESET_DIR/"}"
+            dst="$PROJECT_PATH/$rel_path"
+            copy_with_create "$file" "$dst" || true
+        done < <(find "$PRESET_DIR" -type f -print0)
+
+        # First preset sets copilot-instructions.md; subsequent ones don't overwrite
+        preset_copilot="$PRESET_DIR/.github/copilot-instructions.md"
+        root_copilot="$PROJECT_PATH/.github/copilot-instructions.md"
+        if [[ "$is_first_preset" == true ]] && [[ -f "$preset_copilot" ]] && [[ ! -f "$root_copilot" ]]; then
+            copy_with_create "$preset_copilot" "$root_copilot" || true
+        fi
+
+        # First preset sets AGENTS.md; subsequent ones don't overwrite
+        preset_agents="$PRESET_DIR/AGENTS.md"
+        root_agents="$PROJECT_PATH/AGENTS.md"
+        if [[ "$is_first_preset" == true ]] && [[ -f "$preset_agents" ]] && [[ ! -f "$root_agents" ]]; then
+            copy_with_create "$preset_agents" "$root_agents" || true
+        fi
+
+        is_first_preset=false
+    done
 else
     echo ""
     cyan "Step 3: Custom preset — copying template copilot-instructions.md only"
@@ -366,11 +420,11 @@ else
 fi
 
 # ─── Step 3b: Copy Shared Agents ───────────────────────────────────────
-if [[ "$PRESET" != "custom" ]]; then
+if [[ "$IS_CUSTOM_ONLY" != true ]]; then
     echo ""
     cyan "Step 3b: Shared agents (cross-stack reviewers + pipeline agents)"
 
-    # Shared agents (api-contract, accessibility, multi-tenancy, cicd, observability)
+    # Shared agents (api-contract, accessibility, multi-tenancy, cicd, observability, dependency, compliance)
     SHARED_AGENTS_DIR="$TEMPLATE_ROOT/presets/shared/.github/agents"
     if [[ -d "$SHARED_AGENTS_DIR" ]]; then
         while IFS= read -r -d '' file; do
@@ -392,7 +446,7 @@ if [[ "$PRESET" != "custom" ]]; then
 fi
 
 # ─── Step 3c: Copy Project Principles Prompt + Extension Templates ─────
-if [[ "$PRESET" != "custom" ]]; then
+if [[ "$IS_CUSTOM_ONLY" != true ]]; then
     echo ""
     cyan "Step 3c: Project Principles prompt + extension templates + hooks"
 
@@ -447,7 +501,7 @@ fi
 cat > "$CONFIG_PATH" <<EOF
 {
   "projectName": "$PROJECT_NAME",
-  "preset": "$PRESET",
+  "preset": "$(IFS=','; echo "${PRESETS[*]}")",
   "stack": "$STACK_LABEL",
   "setupDate": "$(date +%Y-%m-%d)",
   "templateVersion": "$TEMPLATE_VERSION"
@@ -488,9 +542,8 @@ cat > "$CAPABILITIES_PATH" <<EOF
 {
   "generatedBy": "plan-forge-setup",
   "generatedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "preset": "$PRESET",
+  "preset": "$(IFS=','; echo "${PRESETS[*]}")",
   "prompts": ${PROMPT_LIST:-[]},
-  "agents": ${AGENT_LIST:-[]},
   "skills": ${SKILL_LIST:-[]},
   "instructions": ${INSTR_LIST:-[]},
   "hooks": [".github/hooks/plan-forge.json"]

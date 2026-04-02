@@ -79,11 +79,15 @@ function Show-Help {
     Write-Host ""
     Write-Host "EXAMPLES:" -ForegroundColor Yellow
     Write-Host "  .\pforge.ps1 init -Preset dotnet"
+    Write-Host "  .\pforge.ps1 init -Preset azure-iac"
+    Write-Host "  .\pforge.ps1 init -Preset dotnet,azure-iac"
     Write-Host "  .\pforge.ps1 status"
     Write-Host "  .\pforge.ps1 new-phase user-auth"
     Write-Host "  .\pforge.ps1 new-phase user-auth --dry-run"
     Write-Host "  .\pforge.ps1 branch docs/plans/Phase-1-USER-AUTH-PLAN.md"
     Write-Host "  .\pforge.ps1 ext list"
+    Write-Host "  .\pforge.ps1 update ../plan-forge"
+    Write-Host "  .\pforge.ps1 update --dry-run"
     Write-Host ""
 }
 
@@ -978,6 +982,64 @@ function Invoke-Update {
                 $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
                 if ($srcHash -ne $dstHash) {
                     $updates += @{ Src = $srcFile; Dst = $dstFile; Name = "docs/plans/$docName" }
+                }
+            }
+        }
+    }
+
+    # ─── Preset-specific files (instructions, agents, prompts, skills) ───
+    # Normalise preset: .forge.json may store a single string or a comma-separated list
+    $presets = @()
+    if ($currentPreset -is [System.Array]) {
+        $presets = $currentPreset
+    } elseif ($currentPreset -match ',') {
+        $presets = $currentPreset -split ',' | ForEach-Object { $_.Trim() }
+    } else {
+        $presets = @($currentPreset)
+    }
+
+    foreach ($p in ($presets | Where-Object { $_ -ne 'custom' })) {
+        $srcPresetDir = Join-Path $sourcePath "presets/$p/.github"
+        if (-not (Test-Path $srcPresetDir)) { continue }
+
+        Write-Host "  Checking preset: $p" -ForegroundColor DarkGray
+
+        # Instructions, agents, prompts: add NEW files only — existing files may have been customized
+        foreach ($subDir in @('instructions', 'agents', 'prompts')) {
+            $srcSub = Join-Path $srcPresetDir $subDir
+            $dstSub = Join-Path $RepoRoot ".github/$subDir"
+
+            if (-not (Test-Path $srcSub)) { continue }
+
+            Get-ChildItem -Path $srcSub -File | ForEach-Object {
+                $srcFile = $_.FullName
+                $dstFile = Join-Path $dstSub $_.Name
+
+                # Never overwrite protected customization files
+                $relFile = ".github/$subDir/$($_.Name)"
+                if ($neverUpdate -contains $relFile) { return }
+
+                # Only add files that don't exist yet — existing files may be customized
+                if (-not (Test-Path $dstFile)) {
+                    $newFiles += @{ Src = $srcFile; Dst = $dstFile; Name = $relFile }
+                }
+            }
+        }
+
+        # Skills: add new skill directories only — existing SKILL.md files may be customized
+        $srcSkills = Join-Path $srcPresetDir "skills"
+        $dstSkills = Join-Path $RepoRoot ".github/skills"
+        if (Test-Path $srcSkills) {
+            Get-ChildItem -Path $srcSkills -Directory | ForEach-Object {
+                $skillName = $_.Name
+                $srcSkillFile = Join-Path $_.FullName "SKILL.md"
+                $dstSkillFile = Join-Path $dstSkills "$skillName/SKILL.md"
+
+                if (-not (Test-Path $srcSkillFile)) { return }
+
+                # Only add if skill doesn't exist yet
+                if (-not (Test-Path $dstSkillFile)) {
+                    $newFiles += @{ Src = $srcSkillFile; Dst = $dstSkillFile; Name = ".github/skills/$skillName/SKILL.md" }
                 }
             }
         }

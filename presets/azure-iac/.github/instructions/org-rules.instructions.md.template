@@ -1,0 +1,227 @@
+---
+description: Organisation-specific Azure rules — fill in this template with your org's naming standards, approved SKUs, data classification, compliance requirements, and cost guardrails
+applyTo: '**/*.bicep,**/*.tf,**/*.ps1'
+---
+
+# Organisation-Specific Azure Rules
+
+> **IMPORTANT**: This file is a template. Replace every `<!-- ... -->` placeholder with your
+> organisation's actual standards. Commit it to `.github/instructions/org-rules.instructions.md`
+> in your project. The `azure-sweeper` agent loads this file automatically.
+
+---
+
+## Tenant & Subscription Identity
+
+```
+Azure AD Tenant ID    : <!-- your-tenant-id -->
+Primary Subscription  : <!-- sub-id for production -->
+Management Group Root : <!-- mg-root-name -->
+Default Region        : <!-- e.g. eastus2 -->
+Approved Regions      : <!-- comma-separated list, e.g. eastus2, westus3 -->
+```
+
+---
+
+## Naming Conventions (Org-Specific Overrides)
+
+> Extends `naming.instructions.md`. List any deviations from CAF defaults.
+
+```
+Workload abbreviations:
+  payments       → pay
+  authentication → auth
+  data-platform  → dp
+  <!-- add your workload abbreviations here -->
+
+Environment suffixes:
+  dev       → d
+  test      → t
+  staging   → s
+  prod      → p
+  <!-- override or extend here -->
+
+Additional required naming segments:
+  <!-- e.g. team code, business unit, region code -->
+  Pattern: {type}-{team}-{workload}-{env}[-{region}][-{instance}]
+```
+
+---
+
+## Approved SKUs & Tiers
+
+> Resources deployed outside these approved SKUs/tiers are flagged as violations.
+
+| Resource | Dev/Test | Production | Rationale |
+|----------|----------|------------|-----------|
+| App Service Plan | `B2` | `P2v3` | <!-- e.g. cost control in dev --> |
+| SQL Database | `Basic` | `General Purpose, 4 vCores` | <!-- --> |
+| Storage Account | `Standard_LRS` | `Standard_ZRS` | <!-- HA in prod --> |
+| AKS VM Size | `Standard_DS2_v2` | `Standard_DS4_v2` | <!-- --> |
+| Key Vault | `standard` | `premium` (if HSM req) | <!-- --> |
+| Redis Cache | `C0 Basic` | `C2 Standard` | <!-- --> |
+| <!-- add more --> | | | |
+
+---
+
+## Data Classification Levels
+
+> Applied via `ClassificationLevel` tag. Controls network isolation and encryption requirements.
+
+| Level | Tag Value | Storage Encryption | Network | Examples |
+|-------|-----------|-------------------|---------|---------|
+| Public | `public` | Platform-managed | Optional private endpoint | Marketing assets, public docs |
+| Internal | `internal` | Platform-managed | Private endpoint recommended | Internal tooling, dashboards |
+| Confidential | `confidential` | CMK required | Private endpoint required | PII, financial data |
+| Restricted | `restricted` | CMK + HSM required | Private endpoint + NSG strict | Secrets, encryption keys, health data |
+
+```bicep
+// ✅ Enforce encryption based on ClassificationLevel
+// confidential and restricted: CustomerManaged key required
+var encryptionKeySource = (dataClassification == 'confidential' || dataClassification == 'restricted')
+  ? 'Microsoft.KeyVault'
+  : 'Microsoft.Storage'
+```
+
+---
+
+## Required Tags (Org-Specific Additions)
+
+> Extends the CAF mandatory tags in `caf.instructions.md`.
+
+| Tag | Required | Values | Notes |
+|-----|----------|--------|-------|
+| `TeamCode` | ✅ | <!-- e.g. PLAT, PAY, AUTH --> | For ITSM routing |
+| `ServiceTier` | ✅ | `gold`, `silver`, `bronze` | SLA tier for alerting |
+| `DataResidency` | ✅ (data stores) | `eu`, `us`, `global` | Regulatory compliance |
+| `PatchGroup` | ✅ (VMs) | `weekly`, `monthly`, `manual` | Update Management |
+| `<!-- add more -->` | | | |
+
+---
+
+## Compliance & Regulatory Requirements
+
+```
+Required compliance frameworks:
+  ☐ ISO 27001
+  ☐ SOC 2 Type II
+  ☐ GDPR / DPA
+  ☐ HIPAA
+  ☐ PCI-DSS
+  ☐ FedRAMP
+  ☐ <!-- other -->
+
+Policy initiatives assigned at management group:
+  - <!-- initiative name + management group -->
+  - <!-- initiative name + management group -->
+
+Audit frequency: <!-- monthly | quarterly -->
+Evidence export location: <!-- storage account or SharePoint URL -->
+```
+
+---
+
+## Cost Guardrails
+
+```
+Monthly budget per workload subscription: <!-- £/$ amount -->
+Alert thresholds: 50%, 80%, 100%
+Cost alert contacts: <!-- finops@yourorg.com, team-lead@yourorg.com -->
+
+Approved Reserved Instance strategy:
+  - Production workloads > 6 months stable: 1-year RI recommended
+  - Azure Hybrid Benefit: <!-- applicable | not applicable -->
+
+Auto-shutdown policy for non-production:
+  - VMs: weekdays 19:00 local time, exclude CI runners
+  - AKS dev clusters: scale to 0 after 20:00
+
+Orphan review cadence: <!-- monthly | quarterly -->
+Advisors reviewed by: <!-- finops team alias -->
+```
+
+---
+
+## Approved Azure Regions & Data Residency
+
+```
+Primary regions:
+  - <!-- e.g. East US 2 (eastus2) -->
+  - <!-- e.g. West Europe (westeurope) -->
+
+Disaster recovery pair:
+  - <!-- primary → DR pair mapping -->
+
+Restricted regions (blocked via Azure Policy Deny):
+  - <!-- regions outside approved list -->
+
+Data residency requirements:
+  - EU customer data: must stay in westeurope or northeurope
+  - US customer data: must stay in eastus2 or westus3
+  <!-- Add org-specific residency rules -->
+```
+
+---
+
+## Security Standards (Org-Specific)
+
+```
+Minimum TLS version: 1.2 (1.3 preferred for new services)
+Approved cipher suites: <!-- list if restricted -->
+Certificate authority: <!-- internal CA or public CA -->
+Certificate minimum validity: <!-- e.g. no certs with validity > 2 years -->
+
+Approved secret rotation intervals:
+  - API keys: 90 days
+  - Connection strings: 180 days
+  - Certificates: before expiry - 30 days warning, - 7 days critical
+
+Vulnerability SLAs:
+  - Critical: patch within 24 hours
+  - High: patch within 7 days
+  - Medium: patch within 30 days
+  - Low: next scheduled maintenance window
+
+Defender for Cloud Secure Score target: <!-- e.g. ≥ 80% -->
+Penetration testing cadence: <!-- annually | bi-annually -->
+```
+
+---
+
+## Network Rules (Org-Specific)
+
+```
+Hub VNet address space         : <!-- e.g. 10.0.0.0/16 -->
+DNS resolver IPs               : <!-- e.g. 10.0.0.4, 10.0.0.5 -->
+Azure Firewall private IP      : <!-- e.g. 10.0.1.4 -->
+Approved public IP ranges      : <!-- CIDR list for allowlisted inbound traffic -->
+
+Internal CIDR allocation process : <!-- link to IPAM tool or process doc -->
+VNet peering approved by        : <!-- network team alias -->
+ExpressRoute / VPN:             <!-- yes | no | planning -->
+```
+
+---
+
+## Incident & Change Management
+
+```
+Incident management tool   : <!-- e.g. PagerDuty, ServiceNow -->
+Change approval process    : <!-- e.g. CAB board, PR + auto via pipeline -->
+Production change freeze   : <!-- dates / recurring windows -->
+Rollback SLA               : <!-- e.g. within 30 minutes of detection -->
+RTO target                 : <!-- e.g. 4 hours -->
+RPO target                 : <!-- e.g. 1 hour -->
+```
+
+---
+
+## Contacts & Escalation
+
+```
+Platform team:       <!-- platform-team@yourorg.com -->
+Security team:       <!-- security@yourorg.com -->
+FinOps team:         <!-- finops@yourorg.com -->
+Compliance officer:  <!-- compliance@yourorg.com -->
+On-call rotation:    <!-- link to PagerDuty / OpsGenie -->
+```

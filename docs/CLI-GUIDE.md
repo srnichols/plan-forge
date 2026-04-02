@@ -38,12 +38,16 @@ Bootstrap a project with the Plan Forge Pipeline. Delegates to `setup.ps1` / `se
 # PowerShell
 .\pforge.ps1 init -Preset dotnet
 .\pforge.ps1 init -Preset typescript -ProjectPath ./my-app
+.\pforge.ps1 init -Preset azure-iac -ProjectPath ./infra
+.\pforge.ps1 init -Preset dotnet,azure-iac -ProjectPath ./my-app
 ```
 
 ```bash
 # Bash
 ./pforge.sh init --preset dotnet
 ./pforge.sh init --preset typescript --path ./my-app
+./pforge.sh init --preset azure-iac --path ./infra
+./pforge.sh init --preset dotnet,azure-iac --path ./my-app
 ```
 
 **Equivalent manual steps:**
@@ -381,6 +385,7 @@ Update framework files from a Plan Forge source without re-running the full setu
 ./pforge.sh update
 ./pforge.sh update /path/to/plan-forge
 ./pforge.sh update --dry-run
+./pforge.sh update --force
 ```
 
 **Bootstrapping from an older version**: If your `pforge.ps1` / `pforge.sh` doesn't have the `update` command yet (pre-v1.2.1), replace it first:
@@ -403,6 +408,7 @@ curl -sL https://raw.githubusercontent.com/srnichols/plan-forge/master/pforge.sh
 - Shared instruction files (architecture-principles, git-workflow, ai-plan-hardening-runbook)
 - Runbook and Instructions docs
 - Lifecycle hooks
+- **New** preset-specific files (instructions, agents, prompts, skills) that don’t yet exist in your project
 
 **What it never touches** (user-customized files):
 - `.github/copilot-instructions.md`
@@ -413,7 +419,7 @@ curl -sL https://raw.githubusercontent.com/srnichols/plan-forge/master/pforge.sh
 - `AGENTS.md`
 - `.forge.json` (only `templateVersion` is updated)
 - Your plan files (`Phase-*-PLAN.md`)
-- Stack-specific instruction files (database, testing, security, etc.)
+- Existing preset instruction/agent/prompt/skill files (preserved — you may have customized them)
 
 **What it does:**
 1. Compares `.forge.json` templateVersion with the source VERSION
@@ -451,6 +457,8 @@ Show all available commands.
 | Task | CLI | Manual |
 |------|-----|--------|
 | Bootstrap project | `pforge init -Preset dotnet` | Run `setup.ps1`, follow wizard |
+| Bootstrap Azure IaC | `pforge init -Preset azure-iac` | Run `setup.ps1 -Preset azure-iac` |
+| Bootstrap mixed (app + infra) | `pforge init -Preset dotnet,azure-iac` | Run `setup.ps1 -Preset dotnet,azure-iac` |
 | Check setup | `pforge check` | Run `validate-setup.ps1` |
 | See phase status | `pforge status` | Open `DEPLOYMENT-ROADMAP.md` |
 | Start new phase | `pforge new-phase <name>` | Create plan file, edit roadmap |

@@ -112,9 +112,18 @@ if [[ -f "$CONFIG_PATH" ]]; then
 
     if [[ "$PRESET" != "custom" ]]; then
         check_file "AGENTS.md" || true
-        check_file ".github/instructions/database.instructions.md" || true
         check_file ".github/instructions/testing.instructions.md" || true
         check_file ".github/instructions/security.instructions.md" || true
+
+        if [[ "$PRESET" == "azure-iac" ]]; then
+            # IaC-specific instruction files
+            check_file ".github/instructions/bicep.instructions.md" || true
+            check_file ".github/instructions/naming.instructions.md" || true
+            check_file ".github/instructions/deploy.instructions.md" || true
+        else
+            # App-stack presets
+            check_file ".github/instructions/database.instructions.md" || true
+        fi
     fi
 
     # Check for agentic files (prompt templates, agent definitions, skills)

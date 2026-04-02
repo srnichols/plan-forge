@@ -2,7 +2,7 @@
 
 > **Purpose**: A complete reference for integrating Plan Forge, OpenBrain, and OpenClaw into a single automated development system — where AI agents plan, build, remember, and communicate across every surface you use.
 >
-> **Last Updated**: 2026-03-26
+> **Last Updated**: 2026-04-02
 
 ---
 
@@ -22,7 +22,7 @@
 - [Copilot CLI Integration](#copilot-cli-integration)
 - [OpenBrain as Shared Memory Fabric](#openbrain-as-shared-memory-fabric)
   - [Automatic Parameter Injection](#automatic-parameter-injection)
-- [Session Management: The 3-Session Model Enhanced](#session-management-the-3-session-model-enhanced)
+- [Session Management: The 4-Session Model Enhanced](#session-management-the-4-session-model-enhanced)
 - [Notification and Approval Flows](#notification-and-approval-flows)
 - [Security Model](#security-model)
 - [Configuration Reference](#configuration-reference)
@@ -62,12 +62,15 @@ Alone, each is useful. Together, they form a **closed-loop development system** 
 Rough Idea → Hardened Plan → Slice-by-Slice Execution → Independent Review
 ```
 
-- **6-step pipeline**: Specify → Preflight → Harden → Execute → Sweep → Review
-- **3 isolated sessions**: Plan, Build, Audit (prevents self-review bias)
-- **16 instruction files** per tech stack: architecture, security, testing, database, etc.
-- **18 agents**: 6 stack-specific + 7 cross-stack + 5 pipeline
-- **8 skills**: database-migration, staging-deploy, test-sweep, etc.
+- **7-step pipeline**: Specify → Preflight → Harden → Execute → Sweep → Review → Ship
+- **4 isolated sessions**: Plan, Build, Review, Ship (prevents self-review bias)
+- **6 tech presets**: dotnet, typescript, python, java, go, azure-iac (plus custom)
+- **16–17 instruction files** per app preset (12 for azure-iac): architecture, security, testing, database, WAF, CAF, etc.
+- **18 agents per app preset**: 6 stack-specific + 7 cross-stack + 5 pipeline (17 for azure-iac)
+- **8 skills per app preset** (3 for azure-iac): database-migration, staging-deploy, test-sweep, etc.
+- **106 files with OpenBrain hooks**: search before acting, capture after completing
 - **Lifecycle hooks**: auto-enforce guardrails, format code, catch TODOs
+- **Multi-preset support**: combine app + IaC presets (`-Preset dotnet,azure-iac`)
 
 ### OpenBrain — The Persistent Semantic Memory
 
@@ -221,7 +224,7 @@ graph TB
 | Search prior context | ✅ Via skill | ✅ Extension triggers | ✅ Primary search | ✅ Via MCP |
 | Inject project/user/source | ✅ Via skill env vars | ✅ Via instruction files | ✅ Stores & indexes | ✅ Reads instruction defaults |
 | Notify developer | ✅ Primary | — | — | — |
-| Manage sessions | ✅ Multi-agent | ✅ 3-session model | — | — |
+| Manage sessions | ✅ Multi-agent | ✅ 4-session model | — | — |
 | Approve/reject work | ✅ Chat-based | ✅ Gate validation | — | ✅ UI-based |
 | Track progress | ✅ Via cron/webhooks | ✅ Slice checkpoints | ✅ thought_stats | ✅ Session state |
 | Store LLM tokens | — | — | — | ✅ Your Copilot quota |
@@ -673,7 +676,7 @@ my-api/
 │   │   ├── security.instructions.md                   ← Plan Forge: OWASP, validation
 │   │   ├── testing.instructions.md                    ← Plan Forge: TDD, coverage
 │   │   ├── persistent-memory.instructions.md          ← OpenBrain: search/capture rules
-│   │   └── ... (15-16 total instruction files)
+│   │   └── ... (16–17 total instruction files per app preset; 12 for azure-iac)
 │   ├── prompts/
 │   │   ├── step0-specify-feature.prompt.md            ← Plan Forge: pipeline Step 0
 │   │   ├── step1-preflight-check.prompt.md            ← Plan Forge: pipeline Step 1
@@ -696,7 +699,12 @@ my-api/
 │   ├── skills/
 │   │   ├── database-migration/SKILL.md                ← Plan Forge: migration skill
 │   │   ├── staging-deploy/SKILL.md                    ← Plan Forge: deploy skill
-│   │   └── test-sweep/SKILL.md                        ← Plan Forge: test skill
+│   │   ├── test-sweep/SKILL.md                        ← Plan Forge: test skill
+│   │   ├── dependency-audit/SKILL.md                  ← Plan Forge: vulnerability scan
+│   │   ├── code-review/SKILL.md                      ← Plan Forge: comprehensive review
+│   │   ├── release-notes/SKILL.md                    ← Plan Forge: changelog generation
+│   │   ├── api-doc-gen/SKILL.md                      ← Plan Forge: OpenAPI spec generation
+│   │   └── onboarding/SKILL.md                       ← Plan Forge: new developer walkthrough
 │   └── hooks/
 │       ├── session-start.sh                           ← Plan Forge: inject context
 │       ├── pre-tool-use.sh                            ← Plan Forge: block forbidden actions
@@ -742,7 +750,7 @@ metadata: {"openclaw": {"requires": {"bins": ["copilot", "git"]}, "os": ["darwin
 4. Launches Copilot CLI via ACP with the hardened plan prompt
 5. Monitors execution progress across slices
 6. Sends progress updates to the developer's channel
-7. Manages the 3-session boundary (new ACP session for review)
+7. Manages the 4-session boundary (new ACP session for review and ship)
 8. Handles approval gates via messaging
 
 **Example invocation from WhatsApp:**
@@ -1171,42 +1179,42 @@ Both fields are auto-injected — see [Automatic Parameter Injection](#automatic
 
 ---
 
-## Session Management: The 3-Session Model Enhanced
+## Session Management: The 4-Session Model Enhanced
 
-Plan Forge's 3-session model prevents self-review bias. OpenClaw + Copilot CLI + OpenBrain make the session boundaries seamless.
+Plan Forge's 4-session model prevents self-review bias. OpenClaw + Copilot CLI + OpenBrain make the session boundaries seamless.
 
 ### Without the Unified System
 
 ```
-Session 1 (Plan)     Session 2 (Build)     Session 3 (Review)
-    │                     │                      │
-    │ ← Manual start      │ ← Manual start       │ ← Manual start
-    │   new chat           │   new chat            │   new chat
-    │                     │                      │
-    │ Decisions made      │ ❌ Forgot why X       │ ❌ No decision trail
-    │ in chat             │ ❌ Re-discovers Y     │ ❌ Can't verify intent
-    │ ...gone forever     │ ❌ Contradicts Z      │
-    ▼                     ▼                      ▼
+Session 1 (Plan)     Session 2 (Build)     Session 3 (Review)    Session 4 (Ship)
+    │                     │                      │                     │
+    │ ← Manual start      │ ← Manual start       │ ← Manual start     │ ← Manual start
+    │   new chat           │   new chat            │   new chat         │   new chat
+    │                     │                      │                     │
+    │ Decisions made      │ ❌ Forgot why X       │ ❌ No decision trail│ ❌ Lessons lost
+    │ in chat             │ ❌ Re-discovers Y     │ ❌ Can't verify     │ ❌ Postmortem
+    │ ...gone forever     │ ❌ Contradicts Z      │    intent           │    sit unread
+    ▼                     ▼                      ▼                     ▼
 ```
 
 ### With the Unified System
 
 ```
-Session 1 (Plan)        Session 2 (Build)       Session 3 (Review)
-    │                        │                        │
-    │ ← OpenClaw launches    │ ← OpenClaw launches    │ ← OpenClaw launches
-    │   ACP session          │   NEW ACP session      │   NEW ACP session
-    │                        │                        │
-    │ Searches OpenBrain     │ Searches OpenBrain     │ Searches OpenBrain
-    │   (prior context)      │   (Session 1 decisions)│   (ALL decisions)
-    │                        │                        │
-    │ Makes decisions ───────┤──► Reads decisions     │──► Audits decisions
-    │                   │    │                        │
-    │ Captures to ──────┤    │ Captures to ──────────►│──► Full trail
-    │ OpenBrain         │    │ OpenBrain              │    available
-    │                   │    │                        │
-    │ Notifies dev ◄────┤    │ Notifies per slice ◄──┤    │ Notifies result
-    ▼                        ▼                        ▼
+Session 1 (Plan)        Session 2 (Build)       Session 3 (Review)      Session 4 (Ship)
+    │                        │                        │                       │
+    │ ← OpenClaw launches    │ ← OpenClaw launches    │ ← OpenClaw launches   │ ← OpenClaw launches
+    │   ACP session          │   NEW ACP session      │   NEW ACP session     │   NEW ACP session
+    │                        │                        │                       │
+    │ Searches OpenBrain     │ Searches OpenBrain     │ Searches OpenBrain    │ Searches OpenBrain
+    │   (prior context)      │   (Session 1 decisions)│   (ALL decisions)     │   (postmortem lessons)
+    │                        │                        │                       │
+    │ Makes decisions ───────┤──► Reads decisions     │──► Audits decisions   │──► Captures lessons
+    │                   │    │                        │                       │
+    │ Captures to ──────┤    │ Captures to ──────────►│──► Full trail         │──► Batch postmortem
+    │ OpenBrain         │    │ OpenBrain              │    available           │    to OpenBrain
+    │                   │    │                        │                       │
+    │ Notifies dev ◄────┤    │ Notifies per slice ◄──┤    │ Notifies result   │ Notifies shipped
+    ▼                        ▼                        ▼                       ▼
               OpenBrain persists everything
               OpenClaw delivers notifications
               Copilot CLI uses your tokens
@@ -1244,6 +1252,21 @@ const session3 = await connection.newSession({
   mcpServers: [{ name: "openbrain", url: openbrainUrl }],
 });
 // Independent reviewer with access to full decision history
+await connection.prompt({
+  sessionId: session3.sessionId,
+  prompt: [{ type: "text", text: reviewPrompt }],
+});
+
+// Session 4: Ship (completely fresh context)
+const session4 = await connection.newSession({
+  cwd: projectPath,
+  mcpServers: [{ name: "openbrain", url: openbrainUrl }],
+});
+// Shipper commits, updates roadmap, captures postmortem lessons
+await connection.prompt({
+  sessionId: session4.sessionId,
+  prompt: [{ type: "text", text: shipPrompt }],
+});
 ```
 
 ---
@@ -1543,7 +1566,7 @@ MCP_PORT=8080
 
 ### Phase 4: Full Pipeline Automation (Day 5-7)
 
-**Goal**: Complete 3-session lifecycle managed by OpenClaw.
+**Goal**: Complete 4-session lifecycle managed by OpenClaw.
 
 ```
 ┌─────────┐     ┌──────────┐     ┌──────────┐

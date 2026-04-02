@@ -324,7 +324,21 @@ Copy-paste this prompt into agent mode when executing a hardened plan slice-by-s
 
 You are an EXECUTION AGENT.
 
-You must follow the plan as a CONTRACT, not a suggestion.
+Follow the plan as a CONTRACT, not a suggestion.
+
+<investigate_before_coding>
+Before writing code that depends on an existing file, read that file first. Never
+assume a method signature, type name, or import path — verify it by opening the file.
+If the plan references a file you haven't loaded, load it before coding against it.
+</investigate_before_coding>
+
+<implementation_discipline>
+Only make changes specified in the current slice. Do not add features, refactor
+existing code, add abstractions, or create helpers beyond what the slice requires.
+Do not add error handling for scenarios that cannot occur within this slice's scope.
+Do not add docstrings, comments, or type annotations to code you did not change.
+The right amount of complexity is the minimum needed for the current slice.
+</implementation_discipline>
 
 Context:
 - Hardened plan: <path to *-PLAN.md>
@@ -333,13 +347,13 @@ Context:
 
 Operating rules:
 - Execute ONE execution slice at a time, top-down.
-- Before starting each slice, LOAD all files listed in its Context Files field
+- Before starting each slice, load the files listed in its Context Files field
   (including the relevant .github/instructions/*.instructions.md guardrail files).
 - Do not start the next slice until the current slice passes its Validation Gates.
 - After each slice, perform a RE-ANCHOR CHECKPOINT.
 - Re-read the Scope Contract and Stop Conditions between every slice.
 - After each passed slice, commit: git add -A && git commit -m "phase-N/slice-K: <goal>"
-- After ALL slices pass, run the COMPLETENESS SWEEP (Section 6.1) to eliminate
+- After all slices pass, run the COMPLETENESS SWEEP (Section 6.1) to eliminate
   any TODO/mock/stub/placeholder artifacts before the Reviewer Gate.
 
 Parallel execution rules:
@@ -355,16 +369,14 @@ Post-execution gates:
 - If Reviewer Gate returns 🔴 Critical: follow the Lockout Protocol (Section 6.2).
 
 If you encounter ambiguity:
-- STOP immediately.
-- Ask a clarification question.
-- Do NOT invent behavior, architecture, or new scope.
-- Do NOT work around the issue — wait for human resolution.
+- Pause and ask a clarification question.
+- Do not invent behavior, architecture, or new scope.
+- Do not work around the issue — wait for human resolution.
 
-If a Validation Gate FAILS:
-- STOP immediately.
-- Report the failure details.
+If a Validation Gate fails:
+- Pause and report the failure details.
 - Follow the Rollback Protocol (see Section 10).
-- Do NOT attempt alternate approaches without human approval.
+- Do not attempt alternate approaches without human approval.
 
 Output format after each slice:
 1) What changed (max 5 bullets)
@@ -376,7 +388,7 @@ Output format after each slice:
    - Stop conditions triggered? (yes/no)
 4) Next slice to execute (name only)
 
-If ANY re-anchor check returns a violation: STOP and report.
+If any re-anchor check returns a violation, pause and report.
 ```
 
 ---
@@ -412,7 +424,7 @@ Per-slice Validation Gates verify that code **builds and tests pass**. But agent
    | Inline mock data | Replace with API/service call |
    | Stub implementation | Wire to real service call |
    | Stale phase comment | Update to current phase attribution |
-   | Cannot resolve without scope expansion | **STOP** — report as blocked |
+   | Cannot resolve without scope expansion | **Pause** — report as blocked |
 
 3. **Validate** after each batch of fixes: build + test
 
@@ -446,7 +458,7 @@ For each finding:
 - Remove the deferred-work comment
 - Verify build + tests pass after each batch
 
-If ANY finding requires adding scope not covered by the plan: STOP and report.
+If ANY finding requires adding scope not covered by the plan: pause and report.
 
 Output format:
 1) Total findings (before → after)
@@ -468,8 +480,8 @@ Commit when complete.
 
 | Rule | Requirement |
 |------|-------------|
-| **Fresh context** | Reviewer MUST be a different agent session |
-| **Read-only** | Reviewer MUST NOT modify any files — audit only |
+| **Fresh context** | Reviewer should be a different agent session |
+| **Read-only** | Reviewer should not modify any files — audit only |
 | **Lockout on rejection** | If critical drift found: original execution agent is locked out |
 | **Escalation** | Locked-out slices require human re-assignment or a fresh agent |
 | **Evidence-based** | Every finding must cite the specific rule violated |
@@ -532,7 +544,7 @@ Summary:
 - Info: N
 - Verdict: PASS / FAIL (LOCKOUT)
 
-Do NOT modify any files. Report ONLY.
+Do NOT modify any files. Report only.
 ```
 
 ---
@@ -631,7 +643,7 @@ trunk-based (work on current branch).
 | 1 | (e.g., Which DB for storage?) | Option A / Option B | (TBD or resolved) |
 | 2 | (e.g., Auth pattern?) | JWT / API Key | (TBD or resolved) |
 
-> **Rule**: If ANY decision is marked TBD, execution MUST NOT begin.
+> **Rule**: If ANY decision is marked TBD, execution should not begin.
 ```
 
 ### Template 2b — Requirements Register (Optional)
@@ -695,7 +707,7 @@ trunk-based (work on current branch).
 ```markdown
 ## Re-anchor Checkpoints
 
-After completing each slice, the executing agent MUST:
+After completing each slice, the executing agent should:
 
 - [ ] Re-read the **Scope Contract** — confirm all changes are in-scope
 - [ ] Re-read the **Forbidden Actions** — confirm nothing off-limits was touched
@@ -705,7 +717,7 @@ After completing each slice, the executing agent MUST:
 - [ ] Confirm the next slice's inputs are ready
 - [ ] Confirm the next slice's dependencies are satisfied
 
-> If any checkbox fails: STOP execution and report the issue.
+> If any checkbox fails: pause execution and report the issue.
 ```
 
 ### Template 5 — Definition of Done

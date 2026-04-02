@@ -75,11 +75,17 @@ If you can't describe a scenario clearly, write:
 
 ### 3. ACCEPTANCE CRITERIA
 
-How will we know this feature is done? List measurable, testable criteria:
-- "Users can ___"
-- "The system responds with ___"
-- "Performance: ___ within ___ ms"
-- "Error case: when ___, the system ___"
+How will we know this feature is done? Express criteria as testable statements using this format:
+
+- **MUST** (non-negotiable — becomes a validation gate):
+  `"GET /health MUST return 200 OK with JSON body {status: 'healthy'} within 50ms"`
+- **SHOULD** (expected behavior — becomes a test case):
+  `"The notification bell SHOULD update the unread count within 2 seconds of a new event"`
+- **MAY** (optional enhancement — becomes future scope if not completed):
+  `"The dashboard MAY support dark mode toggle"`
+
+Each MUST criterion should be specific enough to verify with a command or test.
+Avoid vague criteria like "should be fast" or "must work well."
 
 If you're not sure what done looks like, write:
 `[NEEDS CLARIFICATION: define acceptance criteria for <aspect>]`
@@ -125,7 +131,9 @@ After collecting my answers, compile them into this format:
 (compiled from section 2)
 
 ### Acceptance Criteria
-- [ ] (compiled from section 3)
+- [ ] MUST: (compiled from section 3 — non-negotiable, testable)
+- [ ] SHOULD: (compiled from section 3 — expected behavior)
+- [ ] MAY: (compiled from section 3 — optional enhancements)
 
 ### Edge Cases
 | Scenario | Expected Behavior |
@@ -137,7 +145,81 @@ After collecting my answers, compile them into this format:
 
 ### Open Questions
 - [NEEDS CLARIFICATION: ...] (from section 6, if any)
+
+### Complexity Estimate
+- Estimated effort: Micro / Small / Medium / Large
+- Estimated files: N
+- Recommended pipeline: Skip / Light hardening / Full pipeline / Full + branch-per-slice
 ```
+
+**Complexity classification** (include in the output):
+- **Micro** (<30 min, 1 file): Direct commit — skip the pipeline
+- **Small** (30–120 min, 1–3 files): Optional — Scope Contract + Definition of Done only
+- **Medium** (2–8 hrs, 4–10 files): Full pipeline — all steps
+- **Large** (1+ days, 10+ files): Full pipeline + branch-per-slice
+
+---
+
+<examples>
+<example index="1" label="Strong specification">
+## Feature Specification: health-endpoint
+
+### Problem Statement
+Load balancers and monitoring tools need a way to verify the service is running.
+Today, they probe the root URL which returns HTML — unreliable for automated health checks.
+
+### User Scenarios
+1. A load balancer sends GET /health every 30 seconds. It receives 200 OK with
+   `{"status": "healthy"}`. If the service is down, it gets a connection refused.
+2. An ops engineer opens /health in a browser to triage an alert. They see the
+   JSON response immediately without authentication.
+
+### Acceptance Criteria
+- [ ] MUST: GET /health returns 200 with `{"status": "healthy"}` when the service is running
+- [ ] MUST: Response time under 50ms (no database calls in the happy path)
+- [ ] MUST: No authentication required on /health
+- [ ] SHOULD: Return 503 with `{"status": "degraded", "reason": "database"}` when DB is unreachable
+- [ ] MAY: Include service version in the response body
+
+### Edge Cases
+| Scenario | Expected Behavior |
+|----------|-------------------|
+| Database unreachable | Return 503 with degraded status |
+| Unknown path hit | Normal 404 — health endpoint doesn't change routing |
+| Concurrent requests | No shared state — each request is independent |
+
+### Out of Scope
+- No deep dependency checks (Redis, external APIs) — deferred to Phase N
+- No custom health check UI dashboard
+- No /metrics endpoint (separate phase)
+
+### Open Questions
+(none)
+
+### Complexity Estimate
+- Estimated effort: Small (~1 hour)
+- Estimated files: 2–3
+- Recommended pipeline: Light hardening only
+</example>
+
+<example index="2" label="Weak specification (avoid this)">
+## Feature Specification: notifications
+
+### Problem Statement
+We need notifications.
+<!-- ❌ Too vague — WHO needs them? What PROBLEM do they solve? What happens today? -->
+
+### Acceptance Criteria
+- [ ] Notifications should work
+- [ ] Should be fast
+<!-- ❌ Not testable — "work" and "fast" can't be verified with a command -->
+<!-- Better: "MUST deliver WebSocket event within 2 seconds of creation" -->
+
+### Out of Scope
+(nothing listed)
+<!-- ❌ Dangerous — without explicit boundaries, the agent will add email, SMS, push, etc. -->
+</example>
+</examples>
 
 If there are ZERO `[NEEDS CLARIFICATION]` markers, say:
 "Specification complete ✅ — ready to write a Phase Plan and proceed to Step 1."

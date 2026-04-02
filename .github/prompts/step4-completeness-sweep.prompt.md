@@ -38,7 +38,7 @@ Output:
 4) Build: pass/fail
 5) Tests: pass/fail
 
-If ANY finding cannot be resolved without scope expansion: STOP and report.
+If ANY finding cannot be resolved without scope expansion: pause and report the blocker.
 
 ---
 

@@ -97,7 +97,7 @@ Replace `<YOUR-PLAN>` with your plan filename, then copy the entire block.
 ```text
 Act as a PRE-FLIGHT CHECK AGENT for plan hardening.
 
-Run these checks and report results. STOP if any check fails.
+Run these checks and report results. If any check fails, report the failure and do not proceed to Step 2.
 
 1. GIT STATE — Run `git pull origin main` and `git status`.
    Report: clean / dirty (list uncommitted files if dirty).
@@ -208,12 +208,24 @@ requirement with no corresponding slice as a gap.
 After hardening, run a TBD RESOLUTION SWEEP:
 1. Scan Required Decisions for TBD entries.
 2. Resolve using context from the plan, roadmap, and guardrails.
-3. If a TBD requires human judgment, list it and ASK.
-4. Do NOT proceed while any TBD remains unresolved.
+3. If a TBD requires human judgment, list it and ask the user.
+4. Wait for all TBDs to be resolved before finalizing.
 
 Also validate parallelism tags:
 - Are [parallel-safe] slices truly independent (no shared files)?
 - Are Parallel Merge Checkpoints present after each parallel group?
+
+After all sections are drafted, run a PLAN QUALITY SELF-CHECK before outputting:
+
+1. Does every Execution Slice have at least one validation gate with an exact command?
+2. Does every [parallel-safe] slice avoid touching files shared by other slices in the same group?
+3. Are all REQUIRED DECISIONS resolved (no TBD remaining)?
+4. Does the Definition of Done include "Reviewer Gate passed (zero 🔴 Critical)"?
+5. Do the Stop Conditions cover: build failure, test failure, scope violation, and security breach?
+6. Does every slice list only the instruction files relevant to its domain (not all 15)?
+7. Are MUST acceptance criteria from the spec traceable to at least one slice's validation gate?
+
+If any check fails, revise the plan before outputting.
 
 Output a TBD summary:
 | # | Decision | Status | Resolution |
@@ -241,16 +253,30 @@ Read these files first:
 
 Now act as an EXECUTION AGENT (see the Execution Agent Prompt in the runbook).
 
+<investigate_before_coding>
+Before writing code that depends on an existing file, read that file first. Never
+assume a method signature, type name, or import path — verify it by opening the file.
+If the plan references a file you haven't loaded, load it before coding against it.
+</investigate_before_coding>
+
+<implementation_discipline>
+Only make changes specified in the current slice. Do not add features, refactor
+existing code, add abstractions, or create helpers beyond what the slice requires.
+Do not add error handling for scenarios that cannot occur within this slice's scope.
+Do not add docstrings, comments, or type annotations to code you did not change.
+The right amount of complexity is the minimum needed for the current slice.
+</implementation_discipline>
+
 Execute the hardened plan one slice at a time, starting with Slice 1.
 Before each slice, load its Context Files (including .github/instructions/*.instructions.md guardrails).
 When scaffolding new entities/services/tests, use the matching prompt template from .github/prompts/.
 Follow the validation loop exactly. Commit after each passed slice.
-STOP if any gate fails or any ambiguity arises.
+If any gate fails or any ambiguity arises, pause and ask for clarification.
 
 For [parallel-safe] slices:
 - Note which Parallel Group they belong to
 - After all slices in a group complete, run the Parallel Merge Checkpoint
-- If any parallel slice fails, HALT all slices in that group
+- If any parallel slice fails, pause all slices in that group and report
 
 After ALL slices pass, run the COMPLETENESS SWEEP (Section 6.1).
 ```
@@ -308,7 +334,7 @@ Output:
 4) Build: pass/fail
 5) Tests: pass/fail
 
-If ANY finding cannot be resolved without scope expansion: STOP and report.
+If ANY finding cannot be resolved without scope expansion: pause and report the blocker.
 ```
 
 ---
@@ -332,7 +358,7 @@ Read these files first:
 
 Now act as a REVIEWER GATE + DRIFT DETECTION AGENT.
 
-You are an independent quality gate. You must NOT be the same session that wrote the code.
+You are an independent quality gate. You should be a different session from the one that wrote the code.
 
 --- PART A: CODE REVIEW ---
 

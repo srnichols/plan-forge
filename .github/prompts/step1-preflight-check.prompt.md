@@ -14,7 +14,7 @@ Replace `<YOUR-PLAN>` with your plan filename (without path or `.md` extension).
 
 Act as a PRE-FLIGHT CHECK AGENT for plan hardening.
 
-Run these checks and report results. STOP if any check fails.
+Run these checks and report results. If any check fails, report the failure and do not proceed to Step 2.
 
 1. GIT STATE — Run `git pull origin main` and `git status`.
    Report: clean / dirty (list uncommitted files if dirty).

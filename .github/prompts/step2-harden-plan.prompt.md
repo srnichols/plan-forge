@@ -21,7 +21,7 @@ Read these files first:
 Now act as a PLAN HARDENING AGENT (see the Plan Hardening Prompt in the runbook).
 
 **CLARIFICATION CHECK**: Before hardening, scan the plan for `[NEEDS CLARIFICATION]` markers.
-If ANY exist, list them all and STOP. Do not proceed with hardening until all markers are resolved by the user.
+If any exist, list them all and wait for the user to resolve them before proceeding.
 
 Harden <YOUR-PLAN>.md by adding all 6 Mandatory Template Blocks from the runbook:
 - Scope Contract (in-scope, out-of-scope, forbidden actions)
@@ -41,12 +41,24 @@ Do NOT add features or expand scope. Only structure what already exists.
 After hardening, run a TBD RESOLUTION SWEEP:
 1. Scan Required Decisions for TBD entries.
 2. Resolve using context from the plan, roadmap, and guardrails.
-3. If a TBD requires human judgment, list it and ASK.
-4. Do NOT proceed while any TBD remains unresolved.
+3. If a TBD requires human judgment, list it and ask the user.
+4. Wait for all TBDs to be resolved before finalizing.
 
 Also validate parallelism tags:
 - Are [parallel-safe] slices truly independent (no shared files)?
 - Are Parallel Merge Checkpoints present after each parallel group?
+
+After all sections are drafted, run a **PLAN QUALITY SELF-CHECK** before outputting:
+
+1. Does every Execution Slice have at least one validation gate with an exact command?
+2. Does every [parallel-safe] slice avoid touching files shared by other slices in the same group?
+3. Are all REQUIRED DECISIONS resolved (no TBD remaining)?
+4. Does the Definition of Done include "Reviewer Gate passed (zero 🔴 Critical)"?
+5. Do the Stop Conditions cover: build failure, test failure, scope violation, and security breach?
+6. Does every slice list only the instruction files relevant to its domain (not all 15)?
+7. Are MUST acceptance criteria from the spec traceable to at least one slice's validation gate?
+
+If any check fails, revise the plan before outputting. Do not present a plan that fails its own quality check.
 
 Output a TBD summary:
 | # | Decision | Status | Resolution |

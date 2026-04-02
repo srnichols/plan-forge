@@ -21,7 +21,7 @@ Read these files first:
 
 Now act as a REVIEWER GATE + DRIFT DETECTION AGENT.
 
-You are an independent quality gate. You must NOT be the same session that wrote the code.
+You are an independent quality gate. You should be a different session from the one that wrote the code.
 
 --- PART A: CODE REVIEW ---
 

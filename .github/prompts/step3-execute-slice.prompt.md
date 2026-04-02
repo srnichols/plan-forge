@@ -19,16 +19,30 @@ Read these files first:
 
 Now act as an EXECUTION AGENT (see the Execution Agent Prompt in the runbook).
 
+<investigate_before_coding>
+Before writing code that depends on an existing file, read that file first. Never
+assume a method signature, type name, or import path — verify it by opening the file.
+If the plan references a file you haven't loaded, load it before coding against it.
+</investigate_before_coding>
+
+<implementation_discipline>
+Only make changes specified in the current slice. Do not add features, refactor
+existing code, add abstractions, or create helpers beyond what the slice requires.
+Do not add error handling for scenarios that cannot occur within this slice's scope.
+Do not add docstrings, comments, or type annotations to code you did not change.
+The right amount of complexity is the minimum needed for the current slice.
+</implementation_discipline>
+
 Execute the hardened plan one slice at a time, starting with Slice 1.
 Before each slice, load its Context Files (including .github/instructions/*.instructions.md guardrails).
 When scaffolding new entities/services/tests, use the matching prompt template from .github/prompts/.
 Follow the validation loop exactly. Commit after each passed slice.
-STOP if any gate fails or any ambiguity arises.
+If any gate fails or any ambiguity arises, pause and ask for clarification.
 
 For [parallel-safe] slices:
 - Note which Parallel Group they belong to
 - After all slices in a group complete, run the Parallel Merge Checkpoint
-- If any parallel slice fails, HALT all slices in that group
+- If any parallel slice fails, pause all slices in that group and report
 
 After ALL slices pass, run the COMPLETENESS SWEEP (Section 6.1).
 

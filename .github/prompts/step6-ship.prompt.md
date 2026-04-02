@@ -24,7 +24,7 @@ Now act as a SHIPPING AGENT. The Review Gate has passed — your job is to final
 ### 1. VERIFY REVIEW PASSED
 
 Confirm that the Review Gate (Step 5) issued a **PASS** verdict.
-If the verdict was LOCKOUT or unknown — **STOP** and direct me back to Step 5.
+If the verdict was LOCKOUT or unknown, direct me back to Step 5 before proceeding.
 
 ### 2. COMMIT
 

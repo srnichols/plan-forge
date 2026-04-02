@@ -36,6 +36,20 @@ AI coding tools make it easy to generate code fast. But fast isn't the same as g
 
 This framework doesn't slow you down. It teaches the AI your standards so you **move fast *and* build right** — with guardrails that enforce best practices whether you're a junior developer learning the craft or a senior architect protecting the system.
 
+### The Bottom Line
+
+| Without guardrails | With Plan Forge |
+|-------------------|----------------|
+| Agent writes code that passes once, breaks in production | Code follows your architecture from the first line |
+| 30–50% of AI-generated code needs rework after review | Independent review catches drift *before* merge |
+| Agent re-discovers solved problems every session | Persistent memory (OpenBrain) loads prior decisions in seconds |
+| Context window wasted on exploration and backtracking | Hardened plan tells the agent exactly what to build — less tokens, faster results |
+| "It works on my machine" shipped to staging | Validation gates (build + test) pass at every slice boundary |
+| Post-mortems written, never read again | Lessons automatically searched at the start of every future phase |
+
+**For developers**: fewer `git revert` moments, less time re-explaining decisions to the AI, more time shipping.
+**For managers**: measurable checkpoints per slice, independent review before merge, architecture that holds up at scale — not just today but six months from now.
+
 At its core, Plan Forge is a **specification-driven framework**. Every feature starts as a spec (Step 0), gets hardened into a binding execution contract (Step 2), is built slice-by-slice against that contract (Step 3), is swept for completeness to eliminate stubs and deferred work (Step 4), and is independently verified for spec compliance (Step 5). The spec is the source of truth — not the code, not the AI's interpretation. Already use a spec-driven workflow? Plan Forge picks up where your specs end and ensures they're actually followed.
 
 > *Vibe coding gets you a prototype. Plan Forge gets you a product.*

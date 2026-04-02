@@ -69,4 +69,5 @@ If ANY fail: "Pre-flight FAILED ❌" + list exactly what to fix.
 ## Persistent Memory (if OpenBrain is configured)
 
 - **Before checking**: `search_thoughts("preflight blockers", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "bug")` — check if prior preflights failed for known reasons
-- **If preflight fails**: `capture_thought("Preflight blocker: <what failed and why>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "plan-forge-step-1")` — persist the blocker so it's caught earlier next time
+- **If preflight fails**: `capture_thought("Preflight blocker: <what failed and why>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "plan-forge-step-1", type: "bug")` — persist the blocker so it's caught earlier next time
+- **If preflight passes with notable decisions**: `capture_thought("Preflight passed: <key confirmations — branch strategy, resolved ambiguities>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "plan-forge-step-1", type: "decision")` — persist confirmations so next phase doesn't re-ask

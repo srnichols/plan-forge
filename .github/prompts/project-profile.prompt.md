@@ -139,3 +139,10 @@ Keep the output under 100 lines — this file loads into every agent session via
 
 If I accept ALL defaults with no customization, say:
 "The universal baseline covers your needs — no project profile needed. You can run this prompt again anytime requirements change."
+
+---
+
+## Persistent Memory (if OpenBrain is configured)
+
+- **Before interviewing**: `search_thoughts("project profile", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "convention")` — load prior profile decisions, domain rules, and quality standards so the interview builds on existing knowledge rather than starting fresh
+- **After profile is generated**: `capture_thought("Project profile generated: <key customizations summary>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "plan-forge-project-profile", type: "convention")` — persist the profile decisions so future sessions know what was configured

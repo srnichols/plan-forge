@@ -265,5 +265,5 @@ If there ARE markers, say:
 
 ## Persistent Memory (if OpenBrain is configured)
 
-- **Before interviewing**: `search_thoughts("<feature topic>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode")` — check if this feature or similar has been specified before, load prior decisions and lessons
-- **After specification is complete**: `capture_thought("Feature spec: <summary of what and why>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "plan-forge-step-0")` — persist the specification for downstream sessions
+- **Before interviewing**: `search_thoughts("<feature topic>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "decision")` — check if this feature or similar has been specified before, load prior decisions and lessons
+- **After specification is complete**: `capture_thought("Feature spec: <summary of what and why>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "plan-forge-step-0", type: "decision")` — persist the specification for downstream sessions

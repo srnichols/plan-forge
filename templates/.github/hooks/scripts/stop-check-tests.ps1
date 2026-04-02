@@ -51,7 +51,7 @@ $mcpJson = Join-Path $repoRoot ".vscode/mcp.json"
 if (Test-Path $mcpJson) {
     $mcpContent = Get-Content $mcpJson -Raw
     if ($mcpContent -match 'openbrain') {
-        $warnings += "OPENBRAIN REMINDER: Code was modified in this session. Before ending, capture key decisions and outcomes with capture_thought() so the next session has full context."
+        $warnings += "OPENBRAIN REMINDER: Code was modified in this session. Before ending, capture key decisions with: capture_thought('Decision: <what you decided and why>', project: '<project-name>', created_by: 'copilot-vscode', source: '<current-step>', type: 'decision'). Include architecture choices, pattern decisions, and anything the next session needs to know."
     }
 }
 

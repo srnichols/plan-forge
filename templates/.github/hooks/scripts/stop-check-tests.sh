@@ -46,7 +46,7 @@ WARNINGS="WARNING: Code files were modified but no test run was detected in this
 # Remind to capture decisions to OpenBrain if configured
 MCP_JSON="$REPO_ROOT/.vscode/mcp.json"
 if [[ -f "$MCP_JSON" ]] && grep -q 'openbrain' "$MCP_JSON" 2>/dev/null; then
-    WARNINGS="$WARNINGS OPENBRAIN REMINDER: Code was modified in this session. Before ending, capture key decisions and outcomes with capture_thought() so the next session has full context."
+    WARNINGS="$WARNINGS OPENBRAIN REMINDER: Code was modified in this session. Before ending, capture key decisions with: capture_thought('Decision: <what you decided and why>', project: '<project-name>', created_by: 'copilot-vscode', source: '<current-step>', type: 'decision'). Include architecture choices, pattern decisions, and anything the next session needs to know."
 fi
 
 echo "{\"systemMessage\":\"$WARNINGS\"}"

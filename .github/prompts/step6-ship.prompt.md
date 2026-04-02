@@ -112,5 +112,6 @@ If it already exists, append — never overwrite prior entries.
 
 ## Persistent Memory (if OpenBrain is configured)
 
-- **After postmortem**: `capture_thoughts([...lessons], project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "phase-N-postmortem")` — batch capture all lessons, patterns, architecture decisions, bugs, and conventions from this phase
+- **Before shipping**: `search_thoughts("postmortem lessons", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "postmortem")` — load lessons from prior phase postmortems to check for recurring shipping issues (failed pushes, missed changelog entries, forgotten tags)
+- **After postmortem**: `capture_thoughts([...lessons], project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "phase-N-postmortem", type: "postmortem")` — batch capture all lessons, patterns, architecture decisions, bugs, and conventions from this phase
 - **Include**: architecture decisions, patterns discovered, bugs encountered, conventions established, and anything flagged for future phases

@@ -105,8 +105,8 @@ If no critical findings and no drift:
 
 If the OpenBrain MCP server is available:
 
-- **Before auditing**: `search_thoughts("all decisions for this phase", project: "<project>", created_by: "copilot-vscode")` — load the full decision trail from planning and execution sessions for comparison
-- **After verdict**: `capture_thought("Review verdict: PASS/FAIL — N findings", project: "<project>", created_by: "copilot-vscode", source: "plan-forge-step-5-review")` — persist the review outcome
+- **Before auditing**: `search_thoughts("all decisions for this phase", project: "<project>", created_by: "copilot-vscode", type: "decision")` — load the full decision trail from planning and execution sessions for comparison
+- **After verdict**: `capture_thought("Review verdict: PASS/FAIL — N findings", project: "<project>", created_by: "copilot-vscode", source: "plan-forge-step-5-review", type: "postmortem")` — persist the review outcome and any violations found
 
 ## Constraints
 

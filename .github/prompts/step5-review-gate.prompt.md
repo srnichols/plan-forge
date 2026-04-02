@@ -91,5 +91,5 @@ cross-cutting changes (e.g., shared interfaces, database schema). If in doubt, d
 
 ## Persistent Memory (if OpenBrain is configured)
 
-- **Before auditing**: `search_thoughts("all decisions for this phase", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode")` — load the full decision trail from planning and execution sessions for drift comparison
-- **After verdict**: `capture_thought("Review verdict: PASS/FAIL — N findings, details: ...", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "plan-forge-step-5-review")` — persist the review outcome and any violations found
+- **Before auditing**: `search_thoughts("all decisions for this phase", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "decision")` — load the full decision trail from planning and execution sessions for drift comparison
+- **After verdict**: `capture_thought("Review verdict: PASS/FAIL — N findings, details: ...", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "plan-forge-step-5-review", type: "postmortem")` — persist the review outcome and any violations found

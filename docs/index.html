@@ -86,6 +86,8 @@
     .nav-dropdown { display: none; }
     .nav-dropdown-trigger:hover .nav-dropdown,
     .nav-dropdown-trigger:focus-within .nav-dropdown { display: block; }
+    .nav-dropdown-trigger .nav-dropdown { padding-top: 0.5rem; margin-top: 0; }
+    .nav-dropdown::before { content: ''; position: absolute; top: -0.75rem; left: 0; right: 0; height: 0.75rem; }
 
     /* Copy feedback */
     .copy-btn.copied { color: #34d399 !important; }
@@ -115,10 +117,7 @@
 
         <!-- Logo -->
         <a href="#home" class="flex items-center gap-3 shrink-0">
-          <picture>
-            <source media="(prefers-color-scheme: dark)" srcset="assets/plan-forge-logo.svg" />
-            <img src="assets/plan-forge-logo-light.svg" alt="Plan Forge" class="h-7 w-auto" />
-          </picture>
+          <img src="assets/plan-forge-logo.svg" alt="Plan Forge" class="h-7 w-auto" />
         </a>
 
         <!-- Desktop links -->
@@ -132,7 +131,7 @@
               Resources
               <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
             </button>
-            <div class="nav-dropdown absolute top-full right-0 mt-2 w-52 py-2 bg-slate-900 border border-slate-700/60 rounded-xl shadow-2xl">
+            <div class="nav-dropdown absolute top-full right-0 w-52 py-2 bg-slate-900 border border-slate-700/60 rounded-xl shadow-2xl">
               <a href="problem.html" class="block px-4 py-2 text-sm text-slate-400 hover:bg-slate-800 transition-colors">The 80/20 Wall</a>
               <a href="#memory" class="block px-4 py-2 text-sm text-slate-400 hover:bg-slate-800 transition-colors">Persistent Memory</a>
               <a href="#unified" class="block px-4 py-2 text-sm text-slate-400 hover:bg-slate-800 transition-colors">Ecosystem</a>
@@ -202,10 +201,7 @@
 
       <!-- Logo -->
       <div class="mb-8">
-        <picture>
-          <source media="(prefers-color-scheme: dark)" srcset="assets/plan-forge-logo.svg" />
-          <img src="assets/plan-forge-logo-light.svg" alt="Plan Forge" class="h-16 md:h-20 mx-auto" />
-        </picture>
+        <img src="assets/plan-forge-logo.svg" alt="Plan Forge" class="h-16 md:h-20 mx-auto" />
       </div>
 
       <!-- Headline -->
@@ -218,13 +214,20 @@
       </h1>
 
       <p class="text-xl md:text-2xl text-slate-400 max-w-3xl mx-auto leading-relaxed mb-10">
-        AI coding guardrails that convert rough ideas into <strong class="text-slate-200">hardened execution contracts</strong> — so your AI agent builds exactly what you asked for, without drift, scope creep, or skipped tests.
+        AI coding guardrails that convert rough ideas into <strong class="text-slate-200">hardened execution contracts</strong> <span class="text-slate-500">(locked-down plans the AI can't deviate from)</span> — so your AI agent builds exactly what you asked for, without drift, scope creep, or skipped tests.
       </p>
 
       <!-- Read the problem story -->
-      <p class="text-sm text-slate-500 mb-10">
+      <p class="text-sm text-slate-500 mb-6">
         Spending thousands on AI tokens and hitting the 80% wall? <a href="problem.html" class="text-forge-400 hover:underline">Read why — and how to fix it →</a>
       </p>
+
+      <!-- Video / demo placeholder -->
+      <div class="mb-10 max-w-3xl mx-auto rounded-2xl border border-slate-700/40 bg-slate-800/30 p-8 text-center">
+        <div class="text-4xl mb-3">🎬</div>
+        <p class="text-sm text-slate-400 mb-2">See Plan Forge in action — from feature idea to shipped code in under 5 minutes.</p>
+        <p class="text-xs text-slate-600">(Video walkthrough coming soon — <a href="https://github.com/srnichols/plan-forge/blob/master/docs/QUICKSTART-WALKTHROUGH.md" class="text-forge-400 hover:underline">read the written walkthrough</a> in the meantime)</p>
+      </div>
 
       <!-- CTAs -->
       <div class="flex flex-col sm:flex-row gap-4 justify-center mb-16">
@@ -394,6 +397,32 @@
         </div>
       </div>
 
+      <!-- Why separate sessions? -->
+      <div class="mb-10 p-8 rounded-2xl bg-gradient-to-r from-slate-800/60 to-slate-800/30 border border-forge-500/20">
+        <h3 class="text-lg font-bold text-white mb-3">💡 Why 4 Separate Sessions Instead of One Long Chat?</h3>
+        <p class="text-sm text-slate-400 mb-4">Most people use AI as a single long conversation. Plan Forge breaks that pattern on purpose — because <strong class="text-white">the builder shouldn't grade its own exam</strong>.</p>
+        <div class="grid sm:grid-cols-2 gap-4 text-sm">
+          <div class="p-4 rounded-xl bg-red-950/20 border border-red-800/20">
+            <h4 class="font-semibold text-red-400 mb-2">Single Session (chatbot way)</h4>
+            <ul class="space-y-1.5 text-xs text-slate-400">
+              <li>• Context exhausts halfway through</li>
+              <li>• Same AI reviews its own work</li>
+              <li>• Scope creep goes unnoticed</li>
+              <li>• Failure = restart the whole conversation</li>
+            </ul>
+          </div>
+          <div class="p-4 rounded-xl bg-emerald-950/20 border border-emerald-800/20">
+            <h4 class="font-semibold text-emerald-400 mb-2">Plan Forge (4 sessions)</h4>
+            <ul class="space-y-1.5 text-xs text-slate-400">
+              <li>• Fresh context for each role</li>
+              <li>• Independent reviewer catches blind spots</li>
+              <li>• Scope drift detected immediately</li>
+              <li>• Failure = re-run only the failed session</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
       <!-- Why it works -->
       <div class="grid md:grid-cols-3 gap-6">
         <div class="p-6 rounded-2xl bg-slate-800/40 border border-slate-700/30">
@@ -404,7 +433,7 @@
         <div class="p-6 rounded-2xl bg-slate-800/40 border border-slate-700/30">
           <div class="text-2xl mb-3">🔍</div>
           <h3 class="font-semibold text-white mb-2">Independent Audit Session</h3>
-          <p class="text-sm text-slate-400">The reviewer runs in a completely separate session with fresh context. The executor can't self-audit — that's like grading your own exam. Each session loads the same guardrails but brings independent judgment.</p>
+          <p class="text-sm text-slate-400">The reviewer runs in a completely separate session with fresh context. The executor can't self-audit — that's like grading your own exam.</p>
         </div>
         <div class="p-6 rounded-2xl bg-slate-800/40 border border-slate-700/30">
           <div class="text-2xl mb-3">✅</div>
@@ -527,6 +556,51 @@
         </div>
 
       </div>
+
+      <!-- What's the difference? -->
+      <div class="mt-12 p-8 rounded-2xl bg-slate-800/30 border border-slate-700/30">
+        <h3 class="text-lg font-bold text-white mb-6 text-center">Wait — What's the Difference Between All These File Types?</h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-slate-700/50">
+                <th class="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase">Type</th>
+                <th class="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase">What It Is</th>
+                <th class="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase">When It Runs</th>
+                <th class="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase">Example</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800/60">
+              <tr>
+                <td class="px-4 py-3 text-forge-400 font-medium whitespace-nowrap">📋 Instruction</td>
+                <td class="px-4 py-3 text-slate-300">Coding rules the AI must follow</td>
+                <td class="px-4 py-3 text-slate-400">Auto-loads when you edit a matching file</td>
+                <td class="px-4 py-3 text-slate-500"><code class="text-xs">security.instructions.md</code></td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3 text-forge-400 font-medium whitespace-nowrap">📐 Prompt</td>
+                <td class="px-4 py-3 text-slate-300">Scaffolding recipe you attach in chat</td>
+                <td class="px-4 py-3 text-slate-400">When you reference it in Copilot Chat</td>
+                <td class="px-4 py-3 text-slate-500"><code class="text-xs">new-entity.prompt.md</code></td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3 text-forge-400 font-medium whitespace-nowrap">🤖 Agent</td>
+                <td class="px-4 py-3 text-slate-300">Specialized reviewer persona</td>
+                <td class="px-4 py-3 text-slate-400">When you pick it from the agent dropdown</td>
+                <td class="px-4 py-3 text-slate-500"><code class="text-xs">security-reviewer.agent.md</code></td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3 text-forge-400 font-medium whitespace-nowrap">⚙️ Skill</td>
+                <td class="px-4 py-3 text-slate-300">Multi-step procedure with validation</td>
+                <td class="px-4 py-3 text-slate-400">When you type <code class="text-forge-400">/skill-name</code></td>
+                <td class="px-4 py-3 text-slate-500"><code class="text-xs">/database-migration</code></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-xs text-slate-600 mt-4 text-center">Instructions = passive rules (auto-loaded). Prompts = recipes (you trigger). Agents = reviewers (you pick). Skills = workflows (you invoke).</p>
+      </div>
+
     </div>
   </section>
 
@@ -637,8 +711,11 @@
       <div class="text-center mb-16 reveal">
         <p class="text-forge-500 text-sm font-semibold tracking-widest uppercase mb-3">Unified System Architecture</p>
         <h2 class="text-4xl md:text-5xl font-bold text-white mb-6">Plan Forge Is One Piece of a Bigger Picture</h2>
-        <p class="text-xl text-slate-400 max-w-3xl mx-auto">
+        <p class="text-xl text-slate-400 max-w-3xl mx-auto mb-4">
           Combine Plan Forge with OpenBrain and OpenClaw to build a closed-loop development system — where AI agents plan, build, remember, and communicate across every surface you use.
+        </p>
+        <p class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-950/40 border border-emerald-800/30 text-sm text-emerald-400">
+          ✅ Plan Forge works fully standalone — these are optional power-ups, not requirements.
         </p>
       </div>
 
@@ -871,9 +948,17 @@
       <div class="text-center mb-16 reveal">
         <p class="text-forge-500 text-sm font-semibold tracking-widest uppercase mb-3">Quick Start</p>
         <h2 class="text-4xl md:text-5xl font-bold text-white mb-6">Up and Running in Minutes</h2>
-        <p class="text-xl text-slate-400 max-w-2xl mx-auto">
+        <p class="text-xl text-slate-400 max-w-2xl mx-auto mb-6">
           One setup script bootstraps your entire guardrails stack — instruction files, agents, skills, hooks, and Copilot config.
         </p>
+
+        <!-- Prerequisites -->
+        <div class="flex flex-wrap justify-center gap-3">
+          <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-800 border border-slate-700/60 text-xs text-slate-300">✅ VS Code</span>
+          <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-800 border border-slate-700/60 text-xs text-slate-300">✅ GitHub Copilot</span>
+          <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-800 border border-slate-700/60 text-xs text-slate-300">✅ Git</span>
+          <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-800/40 border border-slate-700/40 text-xs text-slate-500">That's it — no other dependencies</span>
+        </div>
       </div>
 
       <div class="space-y-8">
@@ -916,7 +1001,9 @@ cd my-project-plans</code></pre>
 .\setup.ps1 -Preset dotnet        <span class="text-slate-500"># .NET / C#</span>
 .\setup.ps1 -Preset typescript    <span class="text-slate-500"># TypeScript / React</span>
 .\setup.ps1 -Preset python        <span class="text-slate-500"># Python / FastAPI</span>
-./setup.sh  --preset java         <span class="text-slate-500"># Java / Spring Boot (Bash)</span></code></pre>
+./setup.sh  --preset java         <span class="text-slate-500"># Java / Spring Boot (Bash)</span>
+.\setup.ps1 -Preset go            <span class="text-slate-500"># Go / Chi / Gin</span>
+.\setup.ps1 -Preset azure-iac     <span class="text-slate-500"># Azure Bicep / Terraform / azd</span></code></pre>
             </div>
             <p class="text-xs text-slate-500 mt-2">Installs instruction files, agents, skills, lifecycle hooks, and <code class="text-forge-400">copilot-instructions.md</code> into your project.</p>
           </div>
@@ -1252,10 +1339,7 @@ Target project: (current directory)</code></pre>
 
         <!-- Brand -->
         <div>
-          <picture>
-            <source media="(prefers-color-scheme: dark)" srcset="assets/plan-forge-logo.svg" />
-            <img src="assets/plan-forge-logo-light.svg" alt="Plan Forge" class="h-7 mb-4" />
-          </picture>
+          <img src="assets/plan-forge-logo.svg" alt="Plan Forge" class="h-7 mb-4" />
           <p class="text-sm text-slate-500 leading-relaxed">AI coding guardrails for production-grade software. Open source. MIT licensed.</p>
         </div>
 

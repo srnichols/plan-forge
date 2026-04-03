@@ -52,6 +52,19 @@ nav a.nav-active { color: #f59e0b !important; }
 .nav-dropdown-trigger:focus-within .nav-dropdown {
   display: block;
 }
+.nav-dropdown-trigger .nav-dropdown {
+  padding-top: 0.5rem;
+  margin-top: 0;
+}
+/* Invisible hover bridge so cursor doesn't lose hover crossing the gap */
+.nav-dropdown::before {
+  content: '';
+  position: absolute;
+  top: -0.75rem;
+  left: 0;
+  right: 0;
+  height: 0.75rem;
+}
 
 /* FAQ accordion */
 details summary { list-style: none; }

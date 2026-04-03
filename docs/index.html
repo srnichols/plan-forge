@@ -963,6 +963,49 @@
 
       <div class="space-y-8">
 
+        <!-- Easy Button: One-Prompt Install -->
+        <details class="group rounded-2xl border border-forge-500/40 bg-gradient-to-br from-forge-500/8 to-slate-800/40 overflow-hidden">
+          <summary class="flex items-center justify-between px-6 py-4 cursor-pointer list-none hover:bg-slate-800/40 transition-colors">
+            <div class="flex items-center gap-3">
+              <span class="px-2.5 py-0.5 rounded-full bg-forge-500/20 text-forge-400 text-xs font-bold border border-forge-500/30">⚡ EASY BUTTON</span>
+              <h3 class="font-semibold text-white text-sm">Paste one prompt — your AI installs everything automatically</h3>
+            </div>
+            <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0 ml-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </summary>
+          <div class="px-6 pb-6 border-t border-forge-500/20 pt-5">
+            <p class="text-sm text-slate-400 mb-4">Open Copilot Chat (Agent Mode), Claude Code, or Cursor in your project — paste this prompt. The AI reads the setup guide, detects your stack, installs everything, customizes the files, and validates. Zero manual steps.</p>
+            <div class="rounded-xl bg-slate-950/80 border border-forge-500/30 overflow-hidden">
+              <div class="flex items-center justify-between px-4 py-2.5 bg-forge-500/10 border-b border-forge-500/20">
+                <span class="text-xs text-forge-400 font-semibold">Paste into any AI chat — Copilot, Claude, Cursor</span>
+                <button onclick="copyCode(this)" class="text-xs text-slate-500 hover:text-forge-400 transition-colors cursor-pointer">Copy</button>
+              </div>
+              <pre class="p-5 text-sm text-slate-200 overflow-x-auto whitespace-pre-wrap"><code>Clone https://github.com/srnichols/plan-forge into a temporary directory. Read its AGENT-SETUP.md file completely and follow the instructions exactly:
+
+1. Scan THIS project's root directory and auto-detect the tech stack from marker files (*.csproj = dotnet, go.mod = go, package.json + tsconfig.json = typescript, pom.xml = java, pyproject.toml = python, *.bicep = azure-iac). If multiple stacks exist, combine them.
+
+2. Run the Plan Forge setup script non-interactively:
+   .\setup.ps1 -Preset &lt;detected&gt; -ProjectPath "." -ProjectName "&lt;this folder name&gt;" -Force
+
+3. After setup completes, customize the generated files:
+   - Edit .github/copilot-instructions.md with this project's actual name, tech stack, build/test/lint commands, and architecture
+   - Edit AGENTS.md if this project has background services
+   - Edit docs/plans/DEPLOYMENT-ROADMAP.md with a first phase placeholder
+
+4. Run .\validate-setup.ps1 to confirm all checks pass.
+
+5. Show me a summary of what was installed and any issues found.</code></pre>
+            </div>
+            <p class="text-xs text-slate-600 mt-3 text-center">Works with GitHub Copilot (Agent Mode), Claude Code, Cursor, or any AI tool with terminal access.</p>
+          </div>
+        </details>
+
+        <!-- Divider -->
+        <div class="flex items-center gap-4">
+          <div class="flex-1 h-px bg-slate-700/40"></div>
+          <span class="text-xs text-slate-500 font-medium uppercase tracking-wider">or do it manually</span>
+          <div class="flex-1 h-px bg-slate-700/40"></div>
+        </div>
+
         <!-- Step 1 -->
         <div class="flex gap-5">
           <div class="w-10 h-10 rounded-full bg-forge-500/20 border-2 border-forge-500/60 flex items-center justify-center text-forge-400 font-bold shrink-0 mt-1">1</div>
@@ -1092,42 +1135,6 @@ role-based access control to the admin panel.</code></pre>
           Full Walkthrough Guide
         </a>
       </div>
-
-      <!-- Easy Button: One-Prompt Install -->
-      <details class="mt-10 group rounded-2xl border border-forge-500/40 bg-gradient-to-br from-forge-500/8 to-slate-800/40 overflow-hidden max-w-3xl mx-auto">
-        <summary class="flex items-center justify-between px-6 py-4 cursor-pointer list-none hover:bg-slate-800/40 transition-colors">
-          <div class="flex items-center gap-3">
-            <span class="px-2.5 py-0.5 rounded-full bg-forge-500/20 text-forge-400 text-xs font-bold border border-forge-500/30">⚡ EASY BUTTON</span>
-            <h3 class="font-semibold text-white text-sm">Skip the manual steps — paste one prompt and your AI does everything</h3>
-          </div>
-          <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0 ml-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-        </summary>
-        <div class="px-6 pb-6 border-t border-forge-500/20 pt-5">
-          <p class="text-sm text-slate-400 mb-4">Open Copilot Chat (Agent Mode), Claude Code, or Cursor in your project — paste this prompt. The AI reads the setup guide, detects your stack, installs everything, customizes the files, and validates. Zero manual steps.</p>
-          <div class="rounded-xl bg-slate-950/80 border border-forge-500/30 overflow-hidden">
-            <div class="flex items-center justify-between px-4 py-2.5 bg-forge-500/10 border-b border-forge-500/20">
-              <span class="text-xs text-forge-400 font-semibold">Paste into any AI chat — Copilot, Claude, Cursor</span>
-              <button onclick="copyCode(this)" class="text-xs text-slate-500 hover:text-forge-400 transition-colors cursor-pointer">Copy</button>
-            </div>
-            <pre class="p-5 text-sm text-slate-200 overflow-x-auto whitespace-pre-wrap"><code>Clone https://github.com/srnichols/plan-forge into a temporary directory. Read its AGENT-SETUP.md file completely and follow the instructions exactly:
-
-1. Scan THIS project's root directory and auto-detect the tech stack from marker files (*.csproj = dotnet, go.mod = go, package.json + tsconfig.json = typescript, pom.xml = java, pyproject.toml = python, *.bicep = azure-iac). If multiple stacks exist, combine them.
-
-2. Run the Plan Forge setup script non-interactively:
-   .\setup.ps1 -Preset &lt;detected&gt; -ProjectPath "." -ProjectName "&lt;this folder name&gt;" -Force
-
-3. After setup completes, customize the generated files:
-   - Edit .github/copilot-instructions.md with this project's actual name, tech stack, build/test/lint commands, and architecture
-   - Edit AGENTS.md if this project has background services
-   - Edit docs/plans/DEPLOYMENT-ROADMAP.md with a first phase placeholder
-
-4. Run .\validate-setup.ps1 to confirm all checks pass.
-
-5. Show me a summary of what was installed and any issues found.</code></pre>
-          </div>
-          <p class="text-xs text-slate-600 mt-3 text-center">Works with GitHub Copilot (Agent Mode), Claude Code, Cursor, or any AI tool with terminal access.</p>
-        </div>
-      </details>
     </div>
   </section>
 

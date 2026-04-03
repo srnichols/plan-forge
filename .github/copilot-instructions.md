@@ -52,6 +52,12 @@
 
 # Start dev
 <YOUR DEV COMMAND>
+
+# Inspect the forge (environment + setup diagnostics)
+pforge smith
+
+# Validate setup files
+pforge check
 ```
 
 ---

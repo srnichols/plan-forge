@@ -58,6 +58,9 @@ pforge smith
 
 # Validate setup files
 pforge check
+
+# CI validation (GitHub Action)
+# uses: srnichols/plan-forge-validate@v1
 ```
 
 ---

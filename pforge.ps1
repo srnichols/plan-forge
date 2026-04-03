@@ -70,6 +70,7 @@ function Show-Help {
     Write-Host "  ext list          List installed extensions"
     Write-Host "  ext remove <name> Remove an installed extension"
     Write-Host "  update [source]   Update framework files from Plan Forge source (preserves customizations)"
+    Write-Host "  smith             Inspect your forge — environment, VS Code config, setup health, and common problems"
     Write-Host "  help              Show this help message"
     Write-Host ""
     Write-Host "OPTIONS:" -ForegroundColor Yellow
@@ -1085,6 +1086,410 @@ function Invoke-Update {
     Write-Host "Run 'pforge check' to validate the updated setup." -ForegroundColor DarkGray
 }
 
+# ─── Command: smith ────────────────────────────────────────────────────
+function Invoke-Smith {
+    Write-ManualSteps "smith" @(
+        "Check that required tools are installed (git, VS Code, PowerShell)"
+        "Verify VS Code settings for Copilot agent mode"
+        "Validate .forge.json and file counts per preset"
+        "Check version currency against Plan Forge source"
+        "Scan for common problems (duplicates, orphans, broken references)"
+    )
+
+    $doc = @{ Pass = 0; Fail = 0; Warn = 0 }
+
+    function Doctor-Pass([string]$Msg) {
+        Write-Host "  ✅ $Msg" -ForegroundColor Green
+        $doc.Pass++
+    }
+    function Doctor-Fail([string]$Msg, [string]$Fix = '') {
+        Write-Host "  ❌ $Msg" -ForegroundColor Red
+        if ($Fix) { Write-Host "     FIX: $Fix" -ForegroundColor Yellow }
+        $doc.Fail++
+    }
+    function Doctor-Warn([string]$Msg, [string]$Fix = '') {
+        Write-Host "  ⚠️  $Msg" -ForegroundColor Yellow
+        if ($Fix) { Write-Host "     FIX: $Fix" -ForegroundColor DarkYellow }
+        $doc.Warn++
+    }
+
+    Write-Host ""
+    Write-Host "╔══════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+    Write-Host "║       Plan Forge — The Smith                                  ║" -ForegroundColor Cyan
+    Write-Host "╚══════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+    Write-Host ""
+
+    # ═══════════════════════════════════════════════════════════════
+    # 1. ENVIRONMENT
+    # ═══════════════════════════════════════════════════════════════
+    Write-Host "Environment:" -ForegroundColor Cyan
+
+    # Git
+    $gitVersion = git --version 2>$null
+    if ($LASTEXITCODE -eq 0 -and $gitVersion) {
+        $ver = ($gitVersion -replace 'git version ', '').Trim()
+        Doctor-Pass "git $ver"
+    }
+    else {
+        Doctor-Fail "git not found" "Install from https://git-scm.com/downloads"
+    }
+
+    # VS Code CLI
+    $codeCmd = Get-Command code -ErrorAction SilentlyContinue
+    if ($codeCmd) {
+        $codeVer = (code --version 2>$null | Select-Object -First 1)
+        if ($codeVer) {
+            Doctor-Pass "code (VS Code CLI) $codeVer"
+        }
+        else {
+            Doctor-Pass "code (VS Code CLI) found"
+        }
+    }
+    else {
+        $codeInsiders = Get-Command code-insiders -ErrorAction SilentlyContinue
+        if ($codeInsiders) {
+            Doctor-Pass "code-insiders (VS Code CLI) found"
+        }
+        else {
+            Doctor-Warn "VS Code CLI not in PATH (optional)" "Open VS Code → Ctrl+Shift+P → 'Shell Command: Install code in PATH'"
+        }
+    }
+
+    # PowerShell version
+    $psVer = $PSVersionTable.PSVersion.ToString()
+    if ($PSVersionTable.PSVersion.Major -ge 7) {
+        Doctor-Pass "PowerShell $psVer"
+    }
+    elseif ($PSVersionTable.PSVersion.Major -ge 5) {
+        Doctor-Warn "PowerShell $psVer (7.x recommended)" "Install from https://aka.ms/powershell"
+    }
+    else {
+        Doctor-Fail "PowerShell $psVer (5.1+ required)" "Install from https://aka.ms/powershell"
+    }
+
+    # Optional: GitHub CLI
+    $ghCmd = Get-Command gh -ErrorAction SilentlyContinue
+    if ($ghCmd) {
+        $ghVer = (gh --version 2>$null | Select-Object -First 1) -replace 'gh version ', '' -replace ' .*', ''
+        Doctor-Pass "gh (GitHub CLI) $ghVer"
+    }
+    else {
+        Doctor-Warn "gh (GitHub CLI) not found (optional — useful for PRs and branch protection)" "Install from https://cli.github.com/"
+    }
+
+    Write-Host ""
+
+    # ═══════════════════════════════════════════════════════════════
+    # 2. VS CODE CONFIGURATION
+    # ═══════════════════════════════════════════════════════════════
+    Write-Host "VS Code Configuration:" -ForegroundColor Cyan
+
+    $settingsPath = Join-Path $RepoRoot ".vscode/settings.json"
+    if (Test-Path $settingsPath) {
+        try {
+            $settings = Get-Content $settingsPath -Raw | ConvertFrom-Json
+
+            # chat.agent.enabled (may not exist in newer VS Code where it's default)
+            if ($null -ne $settings.'chat.agent.enabled') {
+                if ($settings.'chat.agent.enabled' -eq $true) {
+                    Doctor-Pass "chat.agent.enabled = true"
+                }
+                else {
+                    Doctor-Fail "chat.agent.enabled = false" 'Set to true in .vscode/settings.json'
+                }
+            }
+            else {
+                Doctor-Pass "chat.agent.enabled (default — OK)"
+            }
+
+            # chat.useCustomizationsInParentRepositories
+            if ($null -ne $settings.'chat.useCustomizationsInParentRepositories') {
+                if ($settings.'chat.useCustomizationsInParentRepositories' -eq $true) {
+                    Doctor-Pass "chat.useCustomizationsInParentRepositories = true"
+                }
+                else {
+                    Doctor-Warn "chat.useCustomizationsInParentRepositories = false" 'Set to true for monorepo support'
+                }
+            }
+            else {
+                Doctor-Warn "chat.useCustomizationsInParentRepositories not set" 'Add "chat.useCustomizationsInParentRepositories": true to .vscode/settings.json'
+            }
+
+            # chat.promptFiles
+            if ($null -ne $settings.'chat.promptFiles') {
+                if ($settings.'chat.promptFiles' -eq $true) {
+                    Doctor-Pass "chat.promptFiles = true"
+                }
+                else {
+                    Doctor-Warn "chat.promptFiles is not true" 'Set to true to enable prompt template discovery'
+                }
+            }
+            else {
+                Doctor-Warn "chat.promptFiles not set" 'Add "chat.promptFiles": true to .vscode/settings.json'
+            }
+        }
+        catch {
+            Doctor-Fail ".vscode/settings.json has invalid JSON" "Fix the JSON syntax in .vscode/settings.json"
+        }
+    }
+    else {
+        Doctor-Warn ".vscode/settings.json not found" "Run 'pforge init' or create it manually"
+    }
+
+    Write-Host ""
+
+    # ═══════════════════════════════════════════════════════════════
+    # 3. SETUP HEALTH
+    # ═══════════════════════════════════════════════════════════════
+    Write-Host "Setup Health:" -ForegroundColor Cyan
+
+    $configPath = Join-Path $RepoRoot ".forge.json"
+    $preset = 'unknown'
+    $templateVersion = 'unknown'
+
+    if (Test-Path $configPath) {
+        try {
+            $config = Get-Content $configPath -Raw | ConvertFrom-Json
+            $preset = $config.preset
+            $templateVersion = $config.templateVersion
+            Doctor-Pass ".forge.json valid (preset: $preset, v$templateVersion)"
+        }
+        catch {
+            Doctor-Fail ".forge.json has invalid JSON" "Delete and re-run 'pforge init'"
+            $preset = 'unknown'
+        }
+    }
+    else {
+        Doctor-Fail ".forge.json not found" "Run 'pforge init' to bootstrap your project"
+    }
+
+    # copilot-instructions.md
+    $copilotInstr = Join-Path $RepoRoot ".github/copilot-instructions.md"
+    if (Test-Path $copilotInstr) {
+        Doctor-Pass ".github/copilot-instructions.md exists"
+    }
+    else {
+        Doctor-Fail ".github/copilot-instructions.md missing" "Run 'pforge init' to create it"
+    }
+
+    # File count expectations per preset
+    $expectedCounts = @{
+        'dotnet'     = @{ instructions = 14; agents = 17; prompts = 9; skills = 8 }
+        'typescript' = @{ instructions = 14; agents = 17; prompts = 9; skills = 8 }
+        'python'     = @{ instructions = 14; agents = 17; prompts = 9; skills = 8 }
+        'java'       = @{ instructions = 14; agents = 17; prompts = 9; skills = 8 }
+        'go'         = @{ instructions = 14; agents = 17; prompts = 9; skills = 8 }
+        'azure-iac'  = @{ instructions = 14; agents = 17; prompts = 9; skills = 8 }
+        'custom'     = @{ instructions = 3;  agents = 5;  prompts = 7; skills = 0 }
+    }
+
+    # Handle multi-preset (e.g., "dotnet,azure-iac")
+    $presetKey = $preset
+    if ($preset -match ',') {
+        $presetKey = ($preset -split ',')[0].Trim()
+    }
+
+    if ($expectedCounts.ContainsKey($presetKey)) {
+        $expected = $expectedCounts[$presetKey]
+
+        $instrDir = Join-Path $RepoRoot ".github/instructions"
+        $agentsDir = Join-Path $RepoRoot ".github/agents"
+        $promptsDir = Join-Path $RepoRoot ".github/prompts"
+        $skillsDir = Join-Path $RepoRoot ".github/skills"
+
+        # Instructions
+        $instrCount = 0
+        if (Test-Path $instrDir) {
+            $instrCount = (Get-ChildItem -Path $instrDir -Filter "*.instructions.md" -File).Count
+        }
+        if ($instrCount -ge $expected.instructions) {
+            Doctor-Pass "$instrCount instruction files (expected: >=$($expected.instructions) for $presetKey)"
+        }
+        else {
+            Doctor-Warn "$instrCount instruction files (expected: >=$($expected.instructions) for $presetKey)" "Run 'pforge update' to get missing files"
+        }
+
+        # Agents
+        $agentCount = 0
+        if (Test-Path $agentsDir) {
+            $agentCount = (Get-ChildItem -Path $agentsDir -Filter "*.agent.md" -File).Count
+        }
+        if ($agentCount -ge $expected.agents) {
+            Doctor-Pass "$agentCount agent definitions (expected: >=$($expected.agents) for $presetKey)"
+        }
+        else {
+            Doctor-Warn "$agentCount agent definitions (expected: >=$($expected.agents) for $presetKey)" "Run 'pforge update' to get missing agents"
+        }
+
+        # Prompts
+        $promptCount = 0
+        if (Test-Path $promptsDir) {
+            $promptCount = (Get-ChildItem -Path $promptsDir -Filter "*.prompt.md" -File).Count
+        }
+        if ($promptCount -ge $expected.prompts) {
+            Doctor-Pass "$promptCount prompt templates (expected: >=$($expected.prompts) for $presetKey)"
+        }
+        else {
+            Doctor-Warn "$promptCount prompt templates (expected: >=$($expected.prompts) for $presetKey)" "Run 'pforge update' to get missing prompts"
+        }
+
+        # Skills
+        $skillCount = 0
+        if (Test-Path $skillsDir) {
+            $skillCount = (Get-ChildItem -Path $skillsDir -Recurse -Filter "SKILL.md" -File).Count
+        }
+        if ($skillCount -ge $expected.skills) {
+            Doctor-Pass "$skillCount skills (expected: >=$($expected.skills) for $presetKey)"
+        }
+        else {
+            Doctor-Warn "$skillCount skills (expected: >=$($expected.skills) for $presetKey)" "Run 'pforge update' to get missing skills"
+        }
+    }
+
+    Write-Host ""
+
+    # ═══════════════════════════════════════════════════════════════
+    # 4. VERSION CURRENCY
+    # ═══════════════════════════════════════════════════════════════
+    Write-Host "Version Currency:" -ForegroundColor Cyan
+
+    $sourceVersion = $null
+    # Try to find Plan Forge source nearby
+    $candidates = @(
+        (Join-Path (Split-Path $RepoRoot -Parent) "plan-forge"),
+        (Join-Path (Split-Path $RepoRoot -Parent) "Plan-Forge")
+    )
+    foreach ($c in $candidates) {
+        $vFile = Join-Path $c "VERSION"
+        if (Test-Path $vFile) {
+            $sourceVersion = (Get-Content $vFile -Raw).Trim()
+            break
+        }
+    }
+
+    if ($sourceVersion) {
+        if ($templateVersion -eq $sourceVersion) {
+            Doctor-Pass "Up to date (v$templateVersion)"
+        }
+        elseif ($templateVersion -eq 'unknown') {
+            Doctor-Warn "Cannot determine installed version (.forge.json missing)"
+        }
+        else {
+            Doctor-Warn "Installed v$templateVersion — latest is v$sourceVersion" "Run 'pforge update' to upgrade"
+        }
+    }
+    else {
+        Doctor-Pass "Installed v$templateVersion (source repo not found nearby — skipping currency check)"
+    }
+
+    Write-Host ""
+
+    # ═══════════════════════════════════════════════════════════════
+    # 5. COMMON PROBLEMS
+    # ═══════════════════════════════════════════════════════════════
+    Write-Host "Common Problems:" -ForegroundColor Cyan
+
+    $problemsFound = $false
+
+    # 5a. Duplicate instruction files (same base name, different case)
+    $instrDir = Join-Path $RepoRoot ".github/instructions"
+    if (Test-Path $instrDir) {
+        $instrFiles = Get-ChildItem -Path $instrDir -Filter "*.instructions.md" -File
+        $lowerNames = @{}
+        foreach ($f in $instrFiles) {
+            $lower = $f.Name.ToLower()
+            if ($lowerNames.ContainsKey($lower)) {
+                Doctor-Fail "Duplicate instruction: $($f.Name) and $($lowerNames[$lower])" "Remove one of the duplicates from .github/instructions/"
+                $problemsFound = $true
+            }
+            else {
+                $lowerNames[$lower] = $f.Name
+            }
+        }
+    }
+
+    # 5b. Orphaned agents — referenced in AGENTS.md but file missing
+    $agentsMdPath = Join-Path $RepoRoot "AGENTS.md"
+    $agentsDir = Join-Path $RepoRoot ".github/agents"
+    if ((Test-Path $agentsMdPath) -and (Test-Path $agentsDir)) {
+        $agentsMdContent = Get-Content $agentsMdPath -Raw
+        $referencedAgents = [regex]::Matches($agentsMdContent, '`([^`]+\.agent\.md)`') | ForEach-Object { $_.Groups[1].Value }
+        $actualAgents = Get-ChildItem -Path $agentsDir -Filter "*.agent.md" -File | ForEach-Object { $_.Name }
+
+        foreach ($ref in $referencedAgents) {
+            if ($ref -notin $actualAgents) {
+                Doctor-Warn "AGENTS.md references '$ref' but file not found in .github/agents/" "Remove from AGENTS.md or run 'pforge update'"
+                $problemsFound = $true
+            }
+        }
+    }
+
+    # 5c. Instruction files with missing or broken applyTo frontmatter
+    if (Test-Path $instrDir) {
+        foreach ($f in (Get-ChildItem -Path $instrDir -Filter "*.instructions.md" -File)) {
+            $content = Get-Content $f.FullName -Raw
+            if ($content -match '^---\s*\n') {
+                if ($content -notmatch 'applyTo\s*:') {
+                    Doctor-Warn "$($f.Name) has frontmatter but no applyTo pattern" "Add 'applyTo: **' or a specific glob pattern"
+                    $problemsFound = $true
+                }
+            }
+        }
+    }
+
+    # 5d. copilot-instructions.md still has placeholders
+    if (Test-Path $copilotInstr) {
+        $ciContent = Get-Content $copilotInstr -Raw
+        $placeholders = @('<YOUR PROJECT NAME>', '<YOUR TECH STACK>', '<YOUR BUILD COMMAND>', '<YOUR TEST COMMAND>', '<YOUR LINT COMMAND>', '<YOUR DEV COMMAND>', '<DATE>')
+        $foundPlaceholders = @()
+        foreach ($ph in $placeholders) {
+            if ($ciContent -match [regex]::Escape($ph)) {
+                $foundPlaceholders += $ph
+            }
+        }
+        if ($foundPlaceholders.Count -gt 0) {
+            Doctor-Warn "copilot-instructions.md has $($foundPlaceholders.Count) unresolved placeholder(s): $($foundPlaceholders -join ', ')" "Edit .github/copilot-instructions.md and fill in your project details"
+            $problemsFound = $true
+        }
+    }
+
+    # 5e. Roadmap file missing
+    $roadmapPath = Join-Path $RepoRoot "docs/plans/DEPLOYMENT-ROADMAP.md"
+    if (-not (Test-Path $roadmapPath)) {
+        Doctor-Warn "DEPLOYMENT-ROADMAP.md not found" "Run 'pforge init' or create docs/plans/DEPLOYMENT-ROADMAP.md"
+        $problemsFound = $true
+    }
+
+    if (-not $problemsFound) {
+        Doctor-Pass "No common problems detected"
+    }
+
+    # ═══════════════════════════════════════════════════════════════
+    # SUMMARY
+    # ═══════════════════════════════════════════════════════════════
+    Write-Host ""
+    Write-Host "────────────────────────────────────────────────────" -ForegroundColor Gray
+    $summaryColor = if ($doc.Fail -gt 0) { 'Red' } elseif ($doc.Warn -gt 0) { 'Yellow' } else { 'Green' }
+    Write-Host "  Results:  $($doc.Pass) passed  |  $($doc.Fail) failed  |  $($doc.Warn) warnings" -ForegroundColor $summaryColor
+    Write-Host "────────────────────────────────────────────────────" -ForegroundColor Gray
+
+    if ($doc.Fail -gt 0) {
+        Write-Host ""
+        Write-Host "Fix the $($doc.Fail) issue(s) above for the best Plan Forge experience." -ForegroundColor Red
+        exit 1
+    }
+    elseif ($doc.Warn -gt 0) {
+        Write-Host ""
+        Write-Host "$($doc.Warn) warning(s) — review the suggestions above." -ForegroundColor Yellow
+        exit 0
+    }
+    else {
+        Write-Host ""
+        Write-Host "Your forge is ready. Happy smithing!" -ForegroundColor Green
+        exit 0
+    }
+}
+
 # ─── Command Router ────────────────────────────────────────────────────
 switch ($Command) {
     'init'         { Invoke-Init }
@@ -1098,6 +1503,7 @@ switch ($Command) {
     'diff'         { Invoke-Diff }
     'ext'          { Invoke-Ext }
     'update'       { Invoke-Update }
+    'smith'        { Invoke-Smith }
     'help'         { Show-Help }
     ''             { Show-Help }
     '--help'       { Show-Help }

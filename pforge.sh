@@ -54,6 +54,7 @@ COMMANDS:
   ext list          List installed extensions
   ext remove <name> Remove an installed extension
   update [source]   Update framework files from Plan Forge source (preserves customizations)
+  smith             Inspect your forge — environment, VS Code config, setup health, and common problems
   help              Show this help message
 
 OPTIONS:
@@ -980,6 +981,294 @@ with open('$config_path', 'w') as f:
     echo "Run 'pforge check' to validate the updated setup."
 }
 
+# ─── Command: doctor ───────────────────────────────────────────────────
+cmd_doctor() {
+    print_manual_steps "smith" \
+        "Check that required tools are installed (git, VS Code, bash)" \
+        "Verify VS Code settings for Copilot agent mode" \
+        "Validate .forge.json and file counts per preset" \
+        "Check version currency against Plan Forge source" \
+        "Scan for common problems (duplicates, orphans, broken references)"
+
+    local d_pass=0 d_fail=0 d_warn=0
+
+    doctor_pass()  { echo "  ✅ $1"; d_pass=$((d_pass + 1)); }
+    doctor_fail()  { echo "  ❌ $1"; [ -n "${2:-}" ] && echo "     FIX: $2"; d_fail=$((d_fail + 1)); }
+    doctor_warn()  { echo "  ⚠️  $1"; [ -n "${2:-}" ] && echo "     FIX: $2"; d_warn=$((d_warn + 1)); }
+
+    echo ""
+    echo "╔══════════════════════════════════════════════════════════════╗"
+    echo "║       Plan Forge — The Smith                                  ║"
+    echo "╚══════════════════════════════════════════════════════════════╝"
+    echo ""
+
+    # ═══════════════════════════════════════════════════════════════
+    # 1. ENVIRONMENT
+    # ═══════════════════════════════════════════════════════════════
+    echo "Environment:"
+
+    # Git
+    if command -v git &>/dev/null; then
+        local git_ver
+        git_ver="$(git --version 2>/dev/null | sed 's/git version //')"
+        doctor_pass "git $git_ver"
+    else
+        doctor_fail "git not found" "Install from https://git-scm.com/downloads"
+    fi
+
+    # VS Code CLI
+    if command -v code &>/dev/null; then
+        local code_ver
+        code_ver="$(code --version 2>/dev/null | head -1)"
+        doctor_pass "code (VS Code CLI) ${code_ver:-found}"
+    elif command -v code-insiders &>/dev/null; then
+        doctor_pass "code-insiders (VS Code CLI) found"
+    else
+        doctor_warn "VS Code CLI not in PATH (optional)" "Open VS Code → Cmd+Shift+P → 'Shell Command: Install code in PATH'"
+    fi
+
+    # Bash version
+    local bash_ver="${BASH_VERSION:-unknown}"
+    doctor_pass "bash $bash_ver"
+
+    # Optional: GitHub CLI
+    if command -v gh &>/dev/null; then
+        local gh_ver
+        gh_ver="$(gh --version 2>/dev/null | head -1 | sed 's/gh version //' | sed 's/ .*//')"
+        doctor_pass "gh (GitHub CLI) $gh_ver"
+    else
+        doctor_warn "gh (GitHub CLI) not found (optional)" "Install from https://cli.github.com/"
+    fi
+
+    echo ""
+
+    # ═══════════════════════════════════════════════════════════════
+    # 2. VS CODE CONFIGURATION
+    # ═══════════════════════════════════════════════════════════════
+    echo "VS Code Configuration:"
+
+    local settings_path="$REPO_ROOT/.vscode/settings.json"
+    if [ -f "$settings_path" ]; then
+        # Check for key settings (basic grep — no jq dependency required)
+        if grep -q '"chat.agent.enabled"' "$settings_path" 2>/dev/null; then
+            if grep -q '"chat.agent.enabled":\s*true' "$settings_path" 2>/dev/null || grep -q '"chat.agent.enabled": true' "$settings_path" 2>/dev/null; then
+                doctor_pass "chat.agent.enabled = true"
+            else
+                doctor_fail "chat.agent.enabled = false" "Set to true in .vscode/settings.json"
+            fi
+        else
+            doctor_pass "chat.agent.enabled (default — OK)"
+        fi
+
+        if grep -q '"chat.useCustomizationsInParentRepositories"' "$settings_path" 2>/dev/null; then
+            if grep -q '"chat.useCustomizationsInParentRepositories": true' "$settings_path" 2>/dev/null; then
+                doctor_pass "chat.useCustomizationsInParentRepositories = true"
+            else
+                doctor_warn "chat.useCustomizationsInParentRepositories is not true" "Set to true for monorepo support"
+            fi
+        else
+            doctor_warn "chat.useCustomizationsInParentRepositories not set" 'Add "chat.useCustomizationsInParentRepositories": true to .vscode/settings.json'
+        fi
+
+        if grep -q '"chat.promptFiles"' "$settings_path" 2>/dev/null; then
+            if grep -q '"chat.promptFiles": true' "$settings_path" 2>/dev/null; then
+                doctor_pass "chat.promptFiles = true"
+            else
+                doctor_warn "chat.promptFiles is not true" "Set to true to enable prompt template discovery"
+            fi
+        else
+            doctor_warn "chat.promptFiles not set" 'Add "chat.promptFiles": true to .vscode/settings.json'
+        fi
+    else
+        doctor_warn ".vscode/settings.json not found" "Run 'pforge init' or create it manually"
+    fi
+
+    echo ""
+
+    # ═══════════════════════════════════════════════════════════════
+    # 3. SETUP HEALTH
+    # ═══════════════════════════════════════════════════════════════
+    echo "Setup Health:"
+
+    local config_path="$REPO_ROOT/.forge.json"
+    local preset="unknown"
+    local template_version="unknown"
+
+    if [ -f "$config_path" ]; then
+        # Parse with grep/sed (no jq dependency)
+        preset="$(grep -o '"preset"[^,}]*' "$config_path" | sed 's/"preset":\s*"//' | sed 's/"//' || echo "unknown")"
+        template_version="$(grep -o '"templateVersion"[^,}]*' "$config_path" | sed 's/"templateVersion":\s*"//' | sed 's/"//' || echo "unknown")"
+        doctor_pass ".forge.json valid (preset: $preset, v$template_version)"
+    else
+        doctor_fail ".forge.json not found" "Run 'pforge init' to bootstrap your project"
+    fi
+
+    local copilot_instr="$REPO_ROOT/.github/copilot-instructions.md"
+    if [ -f "$copilot_instr" ]; then
+        doctor_pass ".github/copilot-instructions.md exists"
+    else
+        doctor_fail ".github/copilot-instructions.md missing" "Run 'pforge init' to create it"
+    fi
+
+    # File count checks (use first preset for multi-preset)
+    local preset_key="${preset%%,*}"
+    local exp_instr=3 exp_agents=5 exp_prompts=7 exp_skills=0
+    case "$preset_key" in
+        dotnet|typescript|python|java|go|azure-iac)
+            exp_instr=14; exp_agents=17; exp_prompts=9; exp_skills=8 ;;
+        custom)
+            exp_instr=3; exp_agents=5; exp_prompts=7; exp_skills=0 ;;
+    esac
+
+    if [ "$preset_key" != "unknown" ]; then
+        local instr_count=0 agent_count=0 prompt_count=0 skill_count=0
+
+        [ -d "$REPO_ROOT/.github/instructions" ] && instr_count=$(find "$REPO_ROOT/.github/instructions" -name "*.instructions.md" -type f 2>/dev/null | wc -l | tr -d ' ')
+        [ -d "$REPO_ROOT/.github/agents" ]       && agent_count=$(find "$REPO_ROOT/.github/agents" -name "*.agent.md" -type f 2>/dev/null | wc -l | tr -d ' ')
+        [ -d "$REPO_ROOT/.github/prompts" ]      && prompt_count=$(find "$REPO_ROOT/.github/prompts" -name "*.prompt.md" -type f 2>/dev/null | wc -l | tr -d ' ')
+        [ -d "$REPO_ROOT/.github/skills" ]       && skill_count=$(find "$REPO_ROOT/.github/skills" -name "SKILL.md" -type f 2>/dev/null | wc -l | tr -d ' ')
+
+        [ "$instr_count" -ge "$exp_instr" ] \
+            && doctor_pass "$instr_count instruction files (expected: >=$exp_instr for $preset_key)" \
+            || doctor_warn "$instr_count instruction files (expected: >=$exp_instr for $preset_key)" "Run 'pforge update' to get missing files"
+
+        [ "$agent_count" -ge "$exp_agents" ] \
+            && doctor_pass "$agent_count agent definitions (expected: >=$exp_agents for $preset_key)" \
+            || doctor_warn "$agent_count agent definitions (expected: >=$exp_agents for $preset_key)" "Run 'pforge update' to get missing agents"
+
+        [ "$prompt_count" -ge "$exp_prompts" ] \
+            && doctor_pass "$prompt_count prompt templates (expected: >=$exp_prompts for $preset_key)" \
+            || doctor_warn "$prompt_count prompt templates (expected: >=$exp_prompts for $preset_key)" "Run 'pforge update' to get missing prompts"
+
+        [ "$skill_count" -ge "$exp_skills" ] \
+            && doctor_pass "$skill_count skills (expected: >=$exp_skills for $preset_key)" \
+            || doctor_warn "$skill_count skills (expected: >=$exp_skills for $preset_key)" "Run 'pforge update' to get missing skills"
+    fi
+
+    echo ""
+
+    # ═══════════════════════════════════════════════════════════════
+    # 4. VERSION CURRENCY
+    # ═══════════════════════════════════════════════════════════════
+    echo "Version Currency:"
+
+    local source_version=""
+    local parent_dir
+    parent_dir="$(dirname "$REPO_ROOT")"
+    for candidate in "$parent_dir/plan-forge" "$parent_dir/Plan-Forge"; do
+        if [ -f "$candidate/VERSION" ]; then
+            source_version="$(cat "$candidate/VERSION" | tr -d '[:space:]')"
+            break
+        fi
+    done
+
+    if [ -n "$source_version" ]; then
+        if [ "$template_version" = "$source_version" ]; then
+            doctor_pass "Up to date (v$template_version)"
+        elif [ "$template_version" = "unknown" ]; then
+            doctor_warn "Cannot determine installed version (.forge.json missing)"
+        else
+            doctor_warn "Installed v$template_version — latest is v$source_version" "Run 'pforge update' to upgrade"
+        fi
+    else
+        doctor_pass "Installed v$template_version (source repo not found nearby — skipping currency check)"
+    fi
+
+    echo ""
+
+    # ═══════════════════════════════════════════════════════════════
+    # 5. COMMON PROBLEMS
+    # ═══════════════════════════════════════════════════════════════
+    echo "Common Problems:"
+
+    local problems_found=false
+
+    # 5a. Duplicate instruction files (case-insensitive)
+    if [ -d "$REPO_ROOT/.github/instructions" ]; then
+        local dupes
+        dupes="$(find "$REPO_ROOT/.github/instructions" -name "*.instructions.md" -type f -exec basename {} \; 2>/dev/null | tr '[:upper:]' '[:lower:]' | sort | uniq -d)"
+        if [ -n "$dupes" ]; then
+            doctor_fail "Duplicate instruction files detected: $dupes" "Remove duplicates from .github/instructions/"
+            problems_found=true
+        fi
+    fi
+
+    # 5b. Orphaned agents in AGENTS.md
+    local agents_md="$REPO_ROOT/AGENTS.md"
+    local agents_dir="$REPO_ROOT/.github/agents"
+    if [ -f "$agents_md" ] && [ -d "$agents_dir" ]; then
+        local referenced
+        referenced="$(grep -oE '[a-z0-9-]+\.agent\.md' "$agents_md" 2>/dev/null | sort -u)"
+        for ref in $referenced; do
+            if [ ! -f "$agents_dir/$ref" ]; then
+                doctor_warn "AGENTS.md references '$ref' but file not found in .github/agents/" "Remove from AGENTS.md or run 'pforge update'"
+                problems_found=true
+            fi
+        done
+    fi
+
+    # 5c. Instruction files missing applyTo
+    if [ -d "$REPO_ROOT/.github/instructions" ]; then
+        for f in "$REPO_ROOT/.github/instructions/"*.instructions.md; do
+            [ -f "$f" ] || continue
+            if head -5 "$f" | grep -q '^---' && ! grep -q 'applyTo' "$f"; then
+                local fname
+                fname="$(basename "$f")"
+                doctor_warn "$fname has frontmatter but no applyTo pattern" "Add 'applyTo: **' or a specific glob pattern"
+                problems_found=true
+            fi
+        done
+    fi
+
+    # 5d. Unresolved placeholders in copilot-instructions.md
+    if [ -f "$copilot_instr" ]; then
+        local ph_count=0
+        local ph_list=""
+        for ph in '<YOUR PROJECT NAME>' '<YOUR TECH STACK>' '<YOUR BUILD COMMAND>' '<YOUR TEST COMMAND>' '<YOUR LINT COMMAND>' '<YOUR DEV COMMAND>' '<DATE>'; do
+            if grep -qF "$ph" "$copilot_instr" 2>/dev/null; then
+                ph_count=$((ph_count + 1))
+                ph_list="${ph_list:+$ph_list, }$ph"
+            fi
+        done
+        if [ "$ph_count" -gt 0 ]; then
+            doctor_warn "copilot-instructions.md has $ph_count unresolved placeholder(s): $ph_list" "Edit .github/copilot-instructions.md and fill in your project details"
+            problems_found=true
+        fi
+    fi
+
+    # 5e. Roadmap missing
+    if [ ! -f "$REPO_ROOT/docs/plans/DEPLOYMENT-ROADMAP.md" ]; then
+        doctor_warn "DEPLOYMENT-ROADMAP.md not found" "Run 'pforge init' or create docs/plans/DEPLOYMENT-ROADMAP.md"
+        problems_found=true
+    fi
+
+    if [ "$problems_found" = false ]; then
+        doctor_pass "No common problems detected"
+    fi
+
+    # ═══════════════════════════════════════════════════════════════
+    # SUMMARY
+    # ═══════════════════════════════════════════════════════════════
+    echo ""
+    echo "────────────────────────────────────────────────────"
+    echo "  Results:  $d_pass passed  |  $d_fail failed  |  $d_warn warnings"
+    echo "────────────────────────────────────────────────────"
+
+    if [ "$d_fail" -gt 0 ]; then
+        echo ""
+        echo "Fix the $d_fail issue(s) above for the best Plan Forge experience."
+        exit 1
+    elif [ "$d_warn" -gt 0 ]; then
+        echo ""
+        echo "$d_warn warning(s) — review the suggestions above."
+        exit 0
+    else
+        echo ""
+        echo "Your forge is ready. Happy smithing!"
+        exit 0
+    fi
+}
+
 # ─── Command Router ────────────────────────────────────────────────────
 COMMAND="${1:-help}"
 shift 2>/dev/null || true
@@ -996,6 +1285,7 @@ case "$COMMAND" in
     diff)         cmd_diff "$@" ;;
     ext)          cmd_ext "$@" ;;
     update)       cmd_update "$@" ;;
+    smith)        cmd_smith ;;
     help|--help)  show_help ;;
     *)
         echo "ERROR: Unknown command '$COMMAND'" >&2

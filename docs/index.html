@@ -92,16 +92,15 @@
     /* Copy feedback */
     .copy-btn.copied { color: #34d399 !important; }
 
-    /* Pipeline connector line */
-    .pipeline-line::before {
-      content: '';
-      position: absolute;
-      top: 50%;
-      left: 2rem;
-      right: 2rem;
-      height: 1px;
-      background: linear-gradient(90deg, #f59e0b44, #ef444444, #f59e0b44);
-      transform: translateY(-50%);
+    /* Back to top */
+    .back-to-top {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s;
+    }
+    .back-to-top.visible {
+      opacity: 1;
+      pointer-events: auto;
     }
   </style>
 </head>
@@ -144,7 +143,7 @@
 
         <!-- Desktop CTA -->
         <div class="hidden md:flex items-center gap-3">
-          <a href="https://github.com/srnichols/plan-forge"
+          <a href="https://github.com/srnichols/plan-forge" rel="noopener"
              class="flex items-center gap-2 text-sm text-slate-400 hover:text-slate-100 transition-colors">
             <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
               <path fill-rule="evenodd" d="M10 0C4.477 0 0 4.484 0 10.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0110 4.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.203 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0020 10.017C20 4.484 15.522 0 10 0z" clip-rule="evenodd"/>
@@ -177,7 +176,7 @@
         <a href="extensions.html" class="block py-2 text-sm text-slate-400 hover:text-slate-100">Extensions</a>
         <a href="docs.html" class="block py-2 text-sm text-slate-400 hover:text-slate-100">Docs</a>
         <a href="faq.html" class="block py-2 text-sm text-slate-400 hover:text-slate-100">FAQ</a>
-        <a href="https://github.com/srnichols/plan-forge" class="block py-2 text-sm text-forge-400 font-semibold">GitHub →</a>
+        <a href="https://github.com/srnichols/plan-forge" rel="noopener" class="block py-2 text-sm text-forge-400 font-semibold">GitHub →</a>
       </div>
     </div>
   </nav>
@@ -196,7 +195,7 @@
       <!-- Badge -->
       <div class="inline-flex items-center gap-2 px-4 py-1.5 mb-8 rounded-full bg-slate-800/80 border border-slate-700/60 text-sm text-slate-300">
         <span class="w-2 h-2 rounded-full bg-forge-500 animate-pulse"></span>
-        Open Source · MIT License · GitHub Template
+        Open Source · MIT License · GitHub Template · v1.2.2
       </div>
 
       <!-- Logo -->
@@ -238,7 +237,7 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
           </svg>
         </a>
-        <a href="https://github.com/srnichols/plan-forge"
+        <a href="https://github.com/srnichols/plan-forge" rel="noopener"
            class="inline-flex items-center justify-center gap-2 px-8 py-4 text-base font-semibold bg-slate-800 hover:bg-slate-700 text-slate-100 rounded-xl border border-slate-700 transition-all">
           <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
             <path fill-rule="evenodd" d="M10 0C4.477 0 0 4.484 0 10.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0110 4.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.203 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0020 10.017C20 4.484 15.522 0 10 0z" clip-rule="evenodd"/>
@@ -1126,7 +1125,7 @@ role-based access control to the admin panel.</code></pre>
       </div>
 
       <div class="mt-12 flex flex-col sm:flex-row gap-4 justify-center">
-        <a href="https://github.com/srnichols/plan-forge/generate"
+        <a href="https://github.com/srnichols/plan-forge/generate" rel="noopener"
            class="inline-flex items-center justify-center gap-2 px-8 py-4 font-bold bg-forge-500 hover:bg-forge-400 text-slate-900 rounded-xl transition-all transform hover:scale-105">
           Use This Template on GitHub →
         </a>
@@ -1312,7 +1311,7 @@ Target project: (current directory)</code></pre>
   <!-- ================================================
        AI TOOLS SUPPORTED
   ================================================ -->
-  <section class="py-20 bg-slate-900">
+  <section id="tools" class="py-20 bg-slate-900">
     <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
       <p class="text-forge-500 text-sm font-semibold tracking-widest uppercase mb-3">Compatibility</p>
       <h2 class="text-3xl md:text-4xl font-bold text-white mb-4">Works With Your AI Tools</h2>
@@ -1353,14 +1352,14 @@ Target project: (current directory)</code></pre>
           </p>
 
           <div class="flex flex-col sm:flex-row gap-4 justify-center">
-            <a href="https://github.com/srnichols/plan-forge/generate"
+            <a href="https://github.com/srnichols/plan-forge/generate" rel="noopener"
                class="group inline-flex items-center justify-center gap-2 px-8 py-4 text-base font-bold bg-forge-500 hover:bg-forge-400 text-slate-900 rounded-xl transition-all transform hover:scale-105 forge-glow">
               Use This Template
               <svg class="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
               </svg>
             </a>
-            <a href="https://github.com/srnichols/plan-forge/stargazers"
+            <a href="https://github.com/srnichols/plan-forge/stargazers" rel="noopener"
                class="inline-flex items-center justify-center gap-2 px-8 py-4 font-semibold bg-transparent text-slate-300 rounded-xl border border-slate-600 hover:border-slate-400 transition-all">
               ⭐ Star on GitHub
             </a>
@@ -1390,10 +1389,10 @@ Target project: (current directory)</code></pre>
         <div>
           <h4 class="text-sm font-semibold text-slate-300 mb-4">Getting Started</h4>
           <ul class="space-y-3">
-            <li><a href="https://github.com/srnichols/plan-forge/blob/master/docs/QUICKSTART-WALKTHROUGH.md" class="text-sm text-slate-500 hover:text-slate-300 transition-colors">Quickstart Walkthrough</a></li>
-            <li><a href="https://github.com/srnichols/plan-forge/blob/master/docs/COPILOT-VSCODE-GUIDE.md" class="text-sm text-slate-500 hover:text-slate-300 transition-colors">VS Code + Copilot Guide</a></li>
-            <li><a href="https://github.com/srnichols/plan-forge/blob/master/docs/CLI-GUIDE.md" class="text-sm text-slate-500 hover:text-slate-300 transition-colors">CLI Guide</a></li>
-            <li><a href="https://github.com/srnichols/plan-forge/blob/master/AGENT-SETUP.md" class="text-sm text-slate-500 hover:text-slate-300 transition-colors">Agent Setup</a></li>
+            <li><a href="docs.html" class="text-sm text-slate-500 hover:text-slate-300 transition-colors">Documentation Hub</a></li>
+            <li><a href="https://github.com/srnichols/plan-forge/blob/master/docs/QUICKSTART-WALKTHROUGH.md" class="text-sm text-slate-500 hover:text-slate-300 transition-colors" rel="noopener">Quickstart Walkthrough</a></li>
+            <li><a href="https://github.com/srnichols/plan-forge/blob/master/docs/COPILOT-VSCODE-GUIDE.md" class="text-sm text-slate-500 hover:text-slate-300 transition-colors" rel="noopener">VS Code + Copilot Guide</a></li>
+            <li><a href="faq.html" class="text-sm text-slate-500 hover:text-slate-300 transition-colors">FAQ</a></li>
           </ul>
         </div>
 
@@ -1401,10 +1400,10 @@ Target project: (current directory)</code></pre>
         <div>
           <h4 class="text-sm font-semibold text-slate-300 mb-4">Documentation</h4>
           <ul class="space-y-3">
-            <li><a href="https://github.com/srnichols/plan-forge/blob/master/CUSTOMIZATION.md" class="text-sm text-slate-500 hover:text-slate-300 transition-colors">Customization</a></li>
-            <li><a href="https://github.com/srnichols/plan-forge/blob/master/docs/EXTENSIONS.md" class="text-sm text-slate-500 hover:text-slate-300 transition-colors">Extensions</a></li>
-            <li><a href="https://github.com/srnichols/plan-forge/blob/master/CHANGELOG.md" class="text-sm text-slate-500 hover:text-slate-300 transition-colors">Changelog</a></li>
-            <li><a href="https://github.com/srnichols/plan-forge/blob/master/CONTRIBUTING.md" class="text-sm text-slate-500 hover:text-slate-300 transition-colors">Contributing</a></li>
+            <li><a href="extensions.html" class="text-sm text-slate-500 hover:text-slate-300 transition-colors">Extensions</a></li>
+            <li><a href="examples.html" class="text-sm text-slate-500 hover:text-slate-300 transition-colors">Stack Examples</a></li>
+            <li><a href="https://github.com/srnichols/plan-forge/blob/master/CHANGELOG.md" class="text-sm text-slate-500 hover:text-slate-300 transition-colors" rel="noopener">Changelog</a></li>
+            <li><a href="https://github.com/srnichols/plan-forge/blob/master/CONTRIBUTING.md" class="text-sm text-slate-500 hover:text-slate-300 transition-colors" rel="noopener">Contributing</a></li>
           </ul>
         </div>
 
@@ -1413,16 +1412,16 @@ Target project: (current directory)</code></pre>
           <h4 class="text-sm font-semibold text-slate-300 mb-4">Community</h4>
           <ul class="space-y-3">
             <li>
-              <a href="https://github.com/srnichols/plan-forge" class="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-300 transition-colors">
+              <a href="https://github.com/srnichols/plan-forge" rel="noopener" class="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-300 transition-colors">
                 <svg class="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 20 20">
                   <path fill-rule="evenodd" d="M10 0C4.477 0 0 4.484 0 10.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0110 4.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.203 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0020 10.017C20 4.484 15.522 0 10 0z" clip-rule="evenodd"/>
                 </svg>
                 GitHub Repository
               </a>
             </li>
-            <li><a href="https://github.com/srnichols/plan-forge/issues" class="text-sm text-slate-500 hover:text-slate-300 transition-colors">Report an Issue</a></li>
-            <li><a href="https://github.com/srnichols/plan-forge/blob/master/ROADMAP.md" class="text-sm text-slate-500 hover:text-slate-300 transition-colors">Roadmap</a></li>
-            <li><a href="https://github.com/srnichols/plan-forge/blob/master/SECURITY.md" class="text-sm text-slate-500 hover:text-slate-300 transition-colors">Security</a></li>
+            <li><a href="https://github.com/srnichols/plan-forge/issues" class="text-sm text-slate-500 hover:text-slate-300 transition-colors" rel="noopener">Report an Issue</a></li>
+            <li><a href="https://github.com/srnichols/plan-forge/blob/master/ROADMAP.md" class="text-sm text-slate-500 hover:text-slate-300 transition-colors" rel="noopener">Roadmap</a></li>
+            <li><a href="problem.html" class="text-sm text-slate-500 hover:text-slate-300 transition-colors">The 80/20 Wall</a></li>
           </ul>
         </div>
       </div>
@@ -1456,6 +1455,11 @@ Target project: (current directory)</code></pre>
     </div>
   </footer>
 
+  <!-- Back to top button -->
+  <a href="#home" id="back-to-top" class="back-to-top fixed bottom-6 right-6 w-10 h-10 rounded-full bg-slate-800 border border-slate-700/60 flex items-center justify-center text-slate-400 hover:text-forge-400 hover:border-forge-500/40 transition-all shadow-lg z-40" aria-label="Back to top">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/></svg>
+  </a>
+
   <!-- Shared JS: scroll reveal, active nav, mobile menu, copy buttons -->
   <script>
     // Scroll reveal
@@ -1478,6 +1482,12 @@ Target project: (current directory)</code></pre>
     const menu = document.getElementById('mobile-menu');
     btn.addEventListener('click', () => menu.classList.toggle('hidden'));
     menu.querySelectorAll('a').forEach(a => a.addEventListener('click', () => menu.classList.add('hidden')));
+
+    // Back to top visibility
+    const btt = document.getElementById('back-to-top');
+    window.addEventListener('scroll', () => {
+      btt.classList.toggle('visible', window.scrollY > 600);
+    }, { passive: true });
 
     // Copy button with feedback
     function copyCode(el) {

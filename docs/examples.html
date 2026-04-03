@@ -195,37 +195,180 @@ grep -rn "string interpolation" --include="*.cs"    # zero hits in new files</co
       <!-- Python -->
       <div id="tab-python" class="tab-content hidden">
         <div class="mb-10">
-          <h2 class="text-2xl font-bold text-white mb-2">Python / FastAPI Example</h2>
-          <p class="text-slate-400 mb-6">A complete hardened plan showing FastAPI endpoints, SQLAlchemy models, pytest tests, and Docker containerization with validation gates at every slice.</p>
+          <h2 class="text-2xl font-bold text-white mb-2">Phase 5: Background Task Queue</h2>
+          <div class="flex flex-wrap gap-3 mb-6">
+            <span class="px-3 py-1 rounded-full bg-amber-900/40 text-amber-400 text-xs border border-amber-800/40">🟡 HARDENED</span>
+            <span class="px-3 py-1 rounded-full bg-slate-700/60 text-xs text-slate-300">2 days · 6 slices</span>
+            <span class="px-3 py-1 rounded-full bg-slate-700/60 text-xs text-slate-300">Risk: Low-Medium</span>
+          </div>
+          <p class="text-slate-400">Add a background task queue for async processing: email sending, report generation, and data import jobs. Uses Celery with Redis as the broker and PostgreSQL for result storage.</p>
         </div>
-        <div class="p-8 rounded-2xl bg-slate-800/40 border border-slate-700/40 text-center">
-          <p class="text-slate-400 mb-4">View the full annotated example plan with all slices, stops conditions, and acceptance criteria:</p>
-          <a href="https://github.com/srnichols/plan-forge/blob/master/docs/plans/examples/Phase-PYTHON-EXAMPLE.md" class="inline-flex items-center gap-2 px-6 py-3 text-sm font-semibold text-forge-400 bg-slate-800 hover:bg-slate-700 rounded-xl border border-slate-700 transition-colors">View Python Example on GitHub →</a>
+
+        <div class="space-y-6">
+          <div class="p-6 rounded-2xl bg-slate-800/60 border border-slate-700/40">
+            <h3 class="text-sm font-bold text-white uppercase tracking-wider mb-4">Acceptance Criteria</h3>
+            <ul class="space-y-2 text-sm text-slate-400">
+              <li class="flex gap-2"><span class="text-slate-600">☐</span> Celery worker processes tasks from Redis queue</li>
+              <li class="flex gap-2"><span class="text-slate-600">☐</span> Three task types: email, report generation, data import</li>
+              <li class="flex gap-2"><span class="text-slate-600">☐</span> Task status tracking (pending, running, completed, failed)</li>
+              <li class="flex gap-2"><span class="text-slate-600">☐</span> Retry logic with exponential backoff</li>
+              <li class="flex gap-2"><span class="text-slate-600">☐</span> 90%+ test coverage on new code</li>
+            </ul>
+          </div>
+
+          <div class="p-6 rounded-2xl bg-slate-800/60 border border-emerald-700/30">
+            <div class="flex items-center gap-3 mb-4">
+              <span class="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 text-xs font-bold">1</span>
+              <h3 class="text-sm font-bold text-white">Slice 5.1 — Database: <code class="text-forge-400">tasks</code> Table + Alembic Migration</h3>
+            </div>
+            <div class="rounded-xl bg-slate-950/80 border border-slate-700/40 overflow-hidden mb-4">
+              <div class="px-4 py-2 bg-slate-800/50 border-b border-slate-700/40 text-xs text-slate-500">SQLAlchemy Model</div>
+              <pre class="p-4 text-xs text-slate-300 overflow-x-auto"><code>class Task(Base):
+    __tablename__ = "tasks"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    type: Mapped[str] = mapped_column(String(50), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    result: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())</code></pre>
+            </div>
+            <div class="rounded-xl bg-slate-950/80 border border-slate-700/40 overflow-hidden mb-4">
+              <div class="px-4 py-2 bg-slate-800/50 border-b border-slate-700/40 text-xs text-slate-500">Validation Gate</div>
+              <pre class="p-4 text-xs text-emerald-300 overflow-x-auto"><code>mypy .                                              # zero errors
+pytest --tb=short                                   # all pass
+grep -rn "type: ignore\|Any" --include="*.py" app/  # minimal in new files</code></pre>
+            </div>
+            <div class="px-3 py-2 rounded-lg bg-red-950/30 border border-red-800/30 text-xs text-red-400">
+              <strong>Stop Condition:</strong> If migration fails or tenant isolation test fails → STOP.
+            </div>
+          </div>
         </div>
+        <p class="mt-8 text-sm text-slate-500 text-center">
+          <a href="https://github.com/srnichols/plan-forge/blob/master/docs/plans/examples/Phase-PYTHON-EXAMPLE.md" class="text-forge-400 hover:underline">View full Python example on GitHub →</a>
+        </p>
       </div>
 
       <!-- Java -->
       <div id="tab-java" class="tab-content hidden">
         <div class="mb-10">
-          <h2 class="text-2xl font-bold text-white mb-2">Java / Spring Boot Example</h2>
-          <p class="text-slate-400 mb-6">A complete hardened plan showing Spring Boot REST controllers, service layer, JPA repositories, JUnit 5 tests, and Gradle build validation gates.</p>
+          <h2 class="text-2xl font-bold text-white mb-2">Phase 8: Order Processing API</h2>
+          <div class="flex flex-wrap gap-3 mb-6">
+            <span class="px-3 py-1 rounded-full bg-amber-900/40 text-amber-400 text-xs border border-amber-800/40">🟡 HARDENED</span>
+            <span class="px-3 py-1 rounded-full bg-slate-700/60 text-xs text-slate-300">3 days · 10 slices</span>
+            <span class="px-3 py-1 rounded-full bg-slate-700/60 text-xs text-slate-300">Risk: Medium</span>
+          </div>
+          <p class="text-slate-400">Build a RESTful order processing API with Spring Boot. Idempotent order creation, stock validation, event publishing, and full multi-tenant isolation.</p>
         </div>
-        <div class="p-8 rounded-2xl bg-slate-800/40 border border-slate-700/40 text-center">
-          <p class="text-slate-400 mb-4">View the full annotated example plan:</p>
-          <a href="https://github.com/srnichols/plan-forge/blob/master/docs/plans/examples/Phase-JAVA-EXAMPLE.md" class="inline-flex items-center gap-2 px-6 py-3 text-sm font-semibold text-forge-400 bg-slate-800 hover:bg-slate-700 rounded-xl border border-slate-700 transition-colors">View Java Example on GitHub →</a>
+
+        <div class="space-y-6">
+          <div class="p-6 rounded-2xl bg-slate-800/60 border border-slate-700/40">
+            <h3 class="text-sm font-bold text-white uppercase tracking-wider mb-4">Acceptance Criteria</h3>
+            <ul class="space-y-2 text-sm text-slate-400">
+              <li class="flex gap-2"><span class="text-slate-600">☐</span> Customers can create orders (idempotent via idempotency key)</li>
+              <li class="flex gap-2"><span class="text-slate-600">☐</span> Orders validate product availability before committing</li>
+              <li class="flex gap-2"><span class="text-slate-600">☐</span> Status transitions: PENDING → CONFIRMED → SHIPPED → DELIVERED</li>
+              <li class="flex gap-2"><span class="text-slate-600">☐</span> Order history endpoint with pagination</li>
+              <li class="flex gap-2"><span class="text-slate-600">☐</span> Multi-tenant isolation — customers only see their own tenant's orders</li>
+            </ul>
+          </div>
+
+          <div class="p-6 rounded-2xl bg-slate-800/60 border border-emerald-700/30">
+            <div class="flex items-center gap-3 mb-4">
+              <span class="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 text-xs font-bold">1</span>
+              <h3 class="text-sm font-bold text-white">Slice 8.1 — Database: Flyway Migration for Orders</h3>
+            </div>
+            <div class="rounded-xl bg-slate-950/80 border border-slate-700/40 overflow-hidden mb-4">
+              <div class="px-4 py-2 bg-slate-800/50 border-b border-slate-700/40 text-xs text-slate-500">SQL Migration</div>
+              <pre class="p-4 text-xs text-slate-300 overflow-x-auto"><code>CREATE TABLE orders (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id       VARCHAR(50)  NOT NULL,
+    customer_id     UUID         NOT NULL,
+    status          VARCHAR(20)  NOT NULL DEFAULT 'PENDING',
+    total           DECIMAL(12,2) NOT NULL,
+    idempotency_key VARCHAR(255),
+    created_at      TIMESTAMP    NOT NULL DEFAULT now(),
+    CONSTRAINT uq_order_idempotency UNIQUE (tenant_id, idempotency_key)
+);
+
+CREATE INDEX idx_orders_tenant_customer ON orders(tenant_id, customer_id);</code></pre>
+            </div>
+            <div class="rounded-xl bg-slate-950/80 border border-slate-700/40 overflow-hidden mb-4">
+              <div class="px-4 py-2 bg-slate-800/50 border-b border-slate-700/40 text-xs text-slate-500">Validation Gate</div>
+              <pre class="p-4 text-xs text-emerald-300 overflow-x-auto"><code>./gradlew build                                          # zero errors
+./gradlew test --tests "*IntegrationTest*"               # all pass
+grep -rn "DriverManager\|getConnection(" --include="*.java" src/  # zero hits</code></pre>
+            </div>
+            <div class="px-3 py-2 rounded-lg bg-red-950/30 border border-red-800/30 text-xs text-red-400">
+              <strong>Stop Condition:</strong> If migration fails or tenant isolation test fails → STOP, do not proceed.
+            </div>
+          </div>
         </div>
+        <p class="mt-8 text-sm text-slate-500 text-center">
+          <a href="https://github.com/srnichols/plan-forge/blob/master/docs/plans/examples/Phase-JAVA-EXAMPLE.md" class="text-forge-400 hover:underline">View full Java example on GitHub →</a>
+        </p>
       </div>
 
       <!-- Go -->
       <div id="tab-go" class="tab-content hidden">
         <div class="mb-10">
-          <h2 class="text-2xl font-bold text-white mb-2">Go / Chi Example</h2>
-          <p class="text-slate-400 mb-6">A complete hardened plan showing Go HTTP handlers, service layer, table-driven tests, and <code class="text-forge-400">go test</code> validation gates.</p>
+          <h2 class="text-2xl font-bold text-white mb-2">Phase 6: REST API & Middleware</h2>
+          <div class="flex flex-wrap gap-3 mb-6">
+            <span class="px-3 py-1 rounded-full bg-amber-900/40 text-amber-400 text-xs border border-amber-800/40">🟡 HARDENED</span>
+            <span class="px-3 py-1 rounded-full bg-slate-700/60 text-xs text-slate-300">2 days · 8 slices</span>
+            <span class="px-3 py-1 rounded-full bg-slate-700/60 text-xs text-slate-300">Risk: Medium</span>
+          </div>
+          <p class="text-slate-400">Build a RESTful API for user management with Chi router, middleware chain (logging, auth, rate limiting), PostgreSQL persistence via pgx, and structured JSON error responses.</p>
         </div>
-        <div class="p-8 rounded-2xl bg-slate-800/40 border border-slate-700/40 text-center">
-          <p class="text-slate-400 mb-4">View the full annotated example plan:</p>
-          <a href="https://github.com/srnichols/plan-forge/blob/master/docs/plans/examples/Phase-GO-EXAMPLE.md" class="inline-flex items-center gap-2 px-6 py-3 text-sm font-semibold text-forge-400 bg-slate-800 hover:bg-slate-700 rounded-xl border border-slate-700 transition-colors">View Go Example on GitHub →</a>
+
+        <div class="space-y-6">
+          <div class="p-6 rounded-2xl bg-slate-800/60 border border-slate-700/40">
+            <h3 class="text-sm font-bold text-white uppercase tracking-wider mb-4">Acceptance Criteria</h3>
+            <ul class="space-y-2 text-sm text-slate-400">
+              <li class="flex gap-2"><span class="text-slate-600">☐</span> CRUD endpoints for users (GET, POST, PUT, DELETE)</li>
+              <li class="flex gap-2"><span class="text-slate-600">☐</span> JWT authentication middleware</li>
+              <li class="flex gap-2"><span class="text-slate-600">☐</span> Rate limiting middleware (token bucket)</li>
+              <li class="flex gap-2"><span class="text-slate-600">☐</span> Structured error responses (JSON, consistent format)</li>
+              <li class="flex gap-2"><span class="text-slate-600">☐</span> Multi-tenant isolation via tenant_id in all queries</li>
+              <li class="flex gap-2"><span class="text-slate-600">☐</span> <code class="text-forge-400">go test -race ./...</code> passes with zero races</li>
+            </ul>
+          </div>
+
+          <div class="p-6 rounded-2xl bg-slate-800/60 border border-emerald-700/30">
+            <div class="flex items-center gap-3 mb-4">
+              <span class="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 text-xs font-bold">1</span>
+              <h3 class="text-sm font-bold text-white">Slice 6.1 — Database: Migration for <code class="text-forge-400">users</code> Table</h3>
+            </div>
+            <div class="rounded-xl bg-slate-950/80 border border-slate-700/40 overflow-hidden mb-4">
+              <div class="px-4 py-2 bg-slate-800/50 border-b border-slate-700/40 text-xs text-slate-500">SQL Migration</div>
+              <pre class="p-4 text-xs text-slate-300 overflow-x-auto"><code>CREATE TABLE users (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id  VARCHAR(50)  NOT NULL,
+    name       VARCHAR(255) NOT NULL,
+    email      VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP    NOT NULL DEFAULT now(),
+    updated_at TIMESTAMP    NOT NULL DEFAULT now(),
+    CONSTRAINT uq_users_tenant_email UNIQUE (tenant_id, email)
+);
+
+CREATE INDEX idx_users_tenant ON users(tenant_id);</code></pre>
+            </div>
+            <div class="rounded-xl bg-slate-950/80 border border-slate-700/40 overflow-hidden mb-4">
+              <div class="px-4 py-2 bg-slate-800/50 border-b border-slate-700/40 text-xs text-slate-500">Validation Gate</div>
+              <pre class="p-4 text-xs text-emerald-300 overflow-x-auto"><code>go build ./...                                           # zero errors
+go vet ./...                                             # zero warnings
+go test -short ./...                                     # all pass
+grep -rn 'fmt.Sprintf.*SELECT' --include="*.go"          # zero hits</code></pre>
+            </div>
+            <div class="px-3 py-2 rounded-lg bg-red-950/30 border border-red-800/30 text-xs text-red-400">
+              <strong>Stop Condition:</strong> If migration fails or tenant isolation test fails → STOP.
+            </div>
+          </div>
         </div>
+        <p class="mt-8 text-sm text-slate-500 text-center">
+          <a href="https://github.com/srnichols/plan-forge/blob/master/docs/plans/examples/Phase-GO-EXAMPLE.md" class="text-forge-400 hover:underline">View full Go example on GitHub →</a>
+        </p>
       </div>
 
       <!-- Azure IaC -->

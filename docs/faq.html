@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FAQ — Plan Forge</title>
+  <meta name="description" content="Frequently asked questions about Plan Forge — AI coding guardrails, the hardening pipeline, tech presets, memory integration, and more." />
+  <link rel="icon" type="image/svg+xml" href="assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { theme: { extend: { colors: { forge: { 300:'#fcd34d',400:'#fbbf24',500:'#f59e0b',600:'#d97706',700:'#b45309' }}, fontFamily: { sans:['Inter','system-ui','sans-serif'], mono:['"JetBrains Mono"','"Fira Code"','monospace'] }}}}
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/shared.css" />
+</head>
+<body class="bg-slate-950 text-slate-100 antialiased">
+
+  <!-- NAV -->
+  <nav class="sticky top-0 z-50 bg-slate-950/92 backdrop-blur-md border-b border-slate-800/60">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <a href="index.html" class="flex items-center gap-3 shrink-0">
+          <img src="assets/plan-forge-logo.svg" alt="Plan Forge" class="h-7 w-auto" />
+        </a>
+        <div class="hidden md:flex items-center gap-7">
+          <a href="index.html#solution" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">How It Works</a>
+          <a href="index.html#features" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">Features</a>
+          <a href="examples.html" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">Examples</a>
+          <div class="nav-dropdown-trigger relative">
+            <button class="text-sm text-slate-400 hover:text-slate-100 transition-colors flex items-center gap-1">Resources <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg></button>
+            <div class="nav-dropdown absolute top-full right-0 mt-2 w-52 py-2 bg-slate-900 border border-slate-700/60 rounded-xl shadow-2xl">
+              <a href="problem.html" class="block px-4 py-2 text-sm text-slate-400 hover:bg-slate-800">The 80/20 Wall</a>
+              <a href="extensions.html" class="block px-4 py-2 text-sm text-slate-400 hover:bg-slate-800">Extensions</a>
+              <a href="docs.html" class="block px-4 py-2 text-sm text-slate-400 hover:bg-slate-800">Documentation</a>
+              <a href="faq.html" class="block px-4 py-2 text-sm text-forge-400 hover:bg-slate-800">FAQ</a>
+            </div>
+          </div>
+        </div>
+        <div class="hidden md:flex items-center gap-3">
+          <a href="https://github.com/srnichols/plan-forge" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">GitHub</a>
+          <a href="index.html#quickstart" class="px-4 py-2 text-sm font-semibold bg-forge-500 hover:bg-forge-400 text-slate-900 rounded-lg transition-colors">Get Started</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- HEADER -->
+  <section class="page-header-bg py-20">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+      <p class="text-forge-500 text-sm font-semibold tracking-widest uppercase mb-4">FAQ</p>
+      <h1 class="text-5xl font-black text-white mb-4">Frequently Asked Questions</h1>
+      <p class="text-xl text-slate-400">Everything you need to know about Plan Forge.</p>
+    </div>
+  </section>
+
+  <!-- SEARCH -->
+  <section class="py-6 bg-slate-900 border-b border-slate-800/60 sticky top-16 z-40">
+    <div class="max-w-3xl mx-auto px-4">
+      <div class="relative">
+        <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        <input id="faq-search" type="text" placeholder="Search questions..." class="w-full pl-11 pr-4 py-3 bg-slate-800 border border-slate-700/60 rounded-xl text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-forge-500/60 transition-colors" />
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ SECTIONS -->
+  <section class="py-16 bg-slate-900">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
+
+      <!-- General -->
+      <div class="faq-category">
+        <h2 class="text-xl font-bold text-white mb-5 flex items-center gap-3">
+          <span class="w-8 h-8 rounded-lg bg-forge-500/20 flex items-center justify-center text-forge-400 text-sm">💡</span>
+          General
+        </h2>
+        <div class="space-y-3">
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">What is Plan Forge?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              Plan Forge is a specification-driven framework that converts rough feature ideas into hardened execution contracts for AI coding agents. It adds guardrails, validation gates, and independent review to prevent the scope creep, skipped tests, and architecture drift that plague unstructured AI-assisted development. It's a GitHub template — clone it, run the setup wizard, and you're ready.
+            </div>
+          </details>
+
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">How is this different from just using Copilot / Cursor / Claude directly?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              Those tools are great at <em>generating</em> code. Plan Forge makes them great at generating the <em>right</em> code. Without guardrails, agents silently expand scope, pick their own architecture, skip validation, and forget context across sessions. Plan Forge adds a 7-step pipeline, auto-loading instruction files (security, testing, architecture, etc.), and independent review — so the agent works within your standards, not its own improvisation.
+            </div>
+          </details>
+
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">Is Plan Forge free?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              Yes. MIT licensed — free for personal, commercial, and enterprise use. No sign-ups, no telemetry, no vendor lock-in. It's a GitHub template that installs files into your project's <code class="text-forge-400">.github/</code> directory.
+            </div>
+          </details>
+
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">Does it work with any AI tool or just Copilot?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              The pipeline works in three ways: Pipeline Agents (optimized for VS Code + Copilot), Prompt Templates (VS Code Copilot Chat), and Copy-Paste Prompts (works in <strong>any</strong> AI tool — Claude, Cursor, ChatGPT, Gemini, Windsurf, terminal agents). All three produce identical results.
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <!-- Setup -->
+      <div class="faq-category">
+        <h2 class="text-xl font-bold text-white mb-5 flex items-center gap-3">
+          <span class="w-8 h-8 rounded-lg bg-forge-500/20 flex items-center justify-center text-forge-400 text-sm">⚙️</span>
+          Setup & Configuration
+        </h2>
+        <div class="space-y-3">
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">Can I add Plan Forge to an existing project (brownfield)?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              Yes. The setup wizard detects existing files and merges rather than overwrites. It only adds missing guardrail files — your project-specific content is preserved. <code class="text-forge-400">AGENT-SETUP.md</code> has full brownfield instructions.
+            </div>
+          </details>
+
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">What tech stacks are supported?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              Six presets out of the box: <strong>.NET/C#</strong>, <strong>TypeScript/React</strong>, <strong>Python/FastAPI</strong>, <strong>Java/Spring Boot</strong>, <strong>Go</strong>, and <strong>Azure IaC</strong> (Bicep/Terraform). There's also a <strong>custom</strong> preset for any other stack. Multi-preset combinations are supported — e.g., <code class="text-forge-400">-Preset dotnet,azure-iac</code> for an app with infrastructure code.
+            </div>
+          </details>
+
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">Do I need to configure every guardrail file manually?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              No. All 16–17 instruction files ship pre-written with best practices and auto-load based on the file type being edited — no action needed. To customize, run the Project Profile workshop (a one-time interview that generates project-specific guardrails) or edit any instruction file directly.
+            </div>
+          </details>
+
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">How do I use this in a monorepo?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              Set <code class="text-forge-400">chat.useCustomizationsInParentRepositories</code> in VS Code settings so child workspaces inherit parent guardrails. Run multi-preset setup with different stacks for different directories (e.g., <code class="text-forge-400">-Preset typescript,azure-iac -ProjectPath ./packages/api</code>).
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <!-- Pipeline -->
+      <div class="faq-category">
+        <h2 class="text-xl font-bold text-white mb-5 flex items-center gap-3">
+          <span class="w-8 h-8 rounded-lg bg-forge-500/20 flex items-center justify-center text-forge-400 text-sm">🔨</span>
+          The Pipeline
+        </h2>
+        <div class="space-y-3">
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">Why separate sessions? Why not do everything in one chat?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              The executor shouldn't self-audit — that's like grading your own exam. Session isolation forces fresh context so the reviewer catches drift and bugs the builder is blind to. Each session loads the same guardrails but brings independent judgment.
+            </div>
+          </details>
+
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">Do I have to use all 7 steps for every feature?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              No. The pipeline has complexity routing — Step 0 classifies work as Micro, Small, Medium, or Large. Quick bug fixes can skip hardening. Small features get a lightweight plan. Only medium and large features run the full pipeline. You stay in control.
+            </div>
+          </details>
+
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">What if I need to change the plan mid-execution?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              There's a structured Plan Amendment Protocol. You can modify the scope contract through a defined process — not by silently drifting. Changes are documented and the remaining slices are re-evaluated against the updated contract.
+            </div>
+          </details>
+
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">What happens if a slice fails validation?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              The agent must fix the failure before proceeding. Build and test gates are hard gates — not suggestions. There's also a rollback protocol for reverting a failed slice cleanly, and stop conditions that immediately halt execution for critical issues.
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <!-- Memory -->
+      <div class="faq-category">
+        <h2 class="text-xl font-bold text-white mb-5 flex items-center gap-3">
+          <span class="w-8 h-8 rounded-lg bg-forge-500/20 flex items-center justify-center text-forge-400 text-sm">🧠</span>
+          Memory & OpenBrain
+        </h2>
+        <div class="space-y-3">
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">Do I need OpenBrain to use Plan Forge?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              No. Plan Forge works fully without OpenBrain. Memory integration is an optional extension (<code class="text-forge-400">plan-forge-memory</code>) — 106 files have OpenBrain hooks, but they're all gated behind "if configured." You get the full pipeline, all guardrails, and all agents without it. OpenBrain just makes the experience compound over time.
+            </div>
+          </details>
+
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">What does OpenBrain cost?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              Self-hosted with Ollama: <strong>$0/month</strong>. Local embeddings, local LLM, local PostgreSQL. Cloud option (Azure OpenAI): ~$15/month. OpenBrain is MIT-licensed and fully self-hosted.
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <!-- Enterprise -->
+      <div class="faq-category">
+        <h2 class="text-xl font-bold text-white mb-5 flex items-center gap-3">
+          <span class="w-8 h-8 rounded-lg bg-forge-500/20 flex items-center justify-center text-forge-400 text-sm">🏢</span>
+          Enterprise & Teams
+        </h2>
+        <div class="space-y-3">
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">Can I share guardrails across teams?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              Yes. Create extensions with your organization's standards — code as versioned packages with <code class="text-forge-400">extension.json</code> manifests. Distribute via GitHub repos, git submodules, or ZIP files. Teams install with <code class="text-forge-400">pforge ext install</code>. Add an <code class="text-forge-400">org-rules.instructions.md</code> for company-wide naming conventions, approved libraries, and compliance gates.
+            </div>
+          </details>
+
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">Does Plan Forge support compliance requirements (SOC2, GDPR, HIPAA)?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              The <strong>compliance-reviewer</strong> agent audits for GDPR, CCPA, SOC2, and PII handling. The Project Profile workshop captures your specific compliance requirements. The security guardrails auto-load when editing auth, API, or data access code. For regulated industries, the extension ecosystem lets you package domain-specific compliance guardrails (e.g., HIPAA, PCI-DSS).
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <!-- Comparison -->
+      <div class="faq-category">
+        <h2 class="text-xl font-bold text-white mb-5 flex items-center gap-3">
+          <span class="w-8 h-8 rounded-lg bg-forge-500/20 flex items-center justify-center text-forge-400 text-sm">⚖️</span>
+          Comparisons
+        </h2>
+        <div class="space-y-3">
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">How does Plan Forge compare to Spec Kit?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              Spec Kit focuses on specification-driven development — defining <em>what</em> to build. Plan Forge picks up where specs end — it hardens them into binding execution contracts, adds enterprise guardrails (security, architecture, testing), provides independent review, and integrates persistent memory. They're complementary: use Spec Kit to write the spec, Plan Forge to enforce it.
+            </div>
+          </details>
+
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">Does Plan Forge replace my CI/CD pipeline?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              No. Plan Forge operates at the <em>development</em> layer, before code reaches your CI/CD pipeline. Its validation gates (build/test) run locally during slice execution. Your existing CI/CD pipeline handles deployment, environments, and production gates. Plan Forge catches problems <em>before</em> they reach your pipeline.
+            </div>
+          </details>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="py-16 bg-slate-950">
+    <div class="max-w-3xl mx-auto px-4 text-center">
+      <p class="text-slate-400 mb-6">Still have questions?</p>
+      <div class="flex flex-col sm:flex-row gap-4 justify-center">
+        <a href="https://github.com/srnichols/plan-forge/issues" class="inline-flex items-center justify-center gap-2 px-6 py-3 font-semibold bg-slate-800 hover:bg-slate-700 text-slate-100 rounded-xl border border-slate-700 transition-all">Open an Issue on GitHub</a>
+        <a href="index.html#quickstart" class="inline-flex items-center justify-center gap-2 px-6 py-3 font-bold bg-forge-500 hover:bg-forge-400 text-slate-900 rounded-xl transition-all">Get Started →</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="border-t border-slate-800/60 bg-slate-950 py-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex flex-col md:flex-row items-center justify-between gap-4 mb-4">
+        <div class="flex items-center gap-3">
+          <img src="https://github.com/srnichols.png" alt="Scott Nichols" class="w-8 h-8 rounded-full border border-slate-700" loading="lazy" />
+          <p class="text-sm text-slate-500">Created by <a href="https://github.com/srnichols" class="text-forge-400 hover:underline">Scott Nichols</a> · Principal Cloud Solution Architect @ <a href="https://microsoft.com" class="text-slate-400 hover:text-slate-300">Microsoft</a></p>
+        </div>
+        <div class="flex gap-4">
+          <a href="https://github.com/srnichols" class="text-sm text-slate-500 hover:text-slate-300">GitHub</a>
+          <a href="https://www.linkedin.com/in/srnichols/" class="text-sm text-slate-500 hover:text-slate-300">LinkedIn</a>
+        </div>
+      </div>
+      <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+        <p class="text-sm text-slate-600">© 2026 Plan Forge. Open source under the MIT License.</p>
+        <div class="flex gap-6">
+          <a href="index.html" class="text-sm text-slate-500 hover:text-slate-300">Home</a>
+          <a href="https://github.com/srnichols/plan-forge" class="text-sm text-slate-500 hover:text-slate-300">GitHub</a>
+          <a href="docs.html" class="text-sm text-slate-500 hover:text-slate-300">Docs</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="assets/shared.js"></script>
+  <script>
+    // FAQ search filter
+    const search = document.getElementById('faq-search');
+    if (search) {
+      search.addEventListener('input', () => {
+        const q = search.value.toLowerCase();
+        document.querySelectorAll('.faq-item').forEach(item => {
+          const text = item.textContent.toLowerCase();
+          item.style.display = text.includes(q) ? '' : 'none';
+        });
+        document.querySelectorAll('.faq-category').forEach(cat => {
+          const visible = cat.querySelectorAll('.faq-item[style=""], .faq-item:not([style])');
+          cat.style.display = visible.length ? '' : 'none';
+        });
+      });
+    }
+  </script>
+</body>
+</html>

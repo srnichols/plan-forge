@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Examples — Real Plans, Real Code | Plan Forge</title>
+  <meta name="description" content="See real hardened plan files for .NET, TypeScript, Python, Java, and Go — complete with execution slices, validation gates, and code output." />
+  <link rel="icon" type="image/svg+xml" href="assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{300:'#fcd34d',400:'#fbbf24',500:'#f59e0b',600:'#d97706',700:'#b45309'}},fontFamily:{sans:['Inter','system-ui','sans-serif'],mono:['"JetBrains Mono"','"Fira Code"','monospace']}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/shared.css" />
+</head>
+<body class="bg-slate-950 text-slate-100 antialiased">
+
+  <!-- NAV -->
+  <nav class="sticky top-0 z-50 bg-slate-950/92 backdrop-blur-md border-b border-slate-800/60">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <a href="index.html" class="flex items-center gap-3 shrink-0"><img src="assets/plan-forge-logo.svg" alt="Plan Forge" class="h-7 w-auto" /></a>
+        <div class="hidden md:flex items-center gap-7">
+          <a href="index.html#solution" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">How It Works</a>
+          <a href="index.html#features" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">Features</a>
+          <a href="examples.html" class="text-sm text-forge-400 transition-colors">Examples</a>
+          <div class="nav-dropdown-trigger relative">
+            <button class="text-sm text-slate-400 hover:text-slate-100 transition-colors flex items-center gap-1">Resources <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg></button>
+            <div class="nav-dropdown absolute top-full right-0 mt-2 w-52 py-2 bg-slate-900 border border-slate-700/60 rounded-xl shadow-2xl">
+              <a href="problem.html" class="block px-4 py-2 text-sm text-slate-400 hover:bg-slate-800">The 80/20 Wall</a>
+              <a href="extensions.html" class="block px-4 py-2 text-sm text-slate-400 hover:bg-slate-800">Extensions</a>
+              <a href="docs.html" class="block px-4 py-2 text-sm text-slate-400 hover:bg-slate-800">Documentation</a>
+              <a href="faq.html" class="block px-4 py-2 text-sm text-slate-400 hover:bg-slate-800">FAQ</a>
+            </div>
+          </div>
+        </div>
+        <div class="hidden md:flex items-center gap-3">
+          <a href="https://github.com/srnichols/plan-forge" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">GitHub</a>
+          <a href="index.html#quickstart" class="px-4 py-2 text-sm font-semibold bg-forge-500 hover:bg-forge-400 text-slate-900 rounded-lg transition-colors">Get Started</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- HEADER -->
+  <section class="page-header-bg py-20">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+      <p class="text-forge-500 text-sm font-semibold tracking-widest uppercase mb-4">Examples</p>
+      <h1 class="text-5xl font-black text-white mb-4">Real Plans. Real Code.</h1>
+      <p class="text-xl text-slate-400 max-w-2xl mx-auto">See actual hardened plan files for each supported stack — complete with execution slices, validation gates, acceptance criteria, and code output.</p>
+    </div>
+  </section>
+
+  <!-- TAB SELECTOR -->
+  <section class="py-4 bg-slate-900 border-b border-slate-800/60 sticky top-16 z-40">
+    <div class="max-w-5xl mx-auto px-4 flex gap-2 overflow-x-auto pb-1">
+      <button onclick="showTab('dotnet')" class="tab-btn active px-4 py-2 rounded-lg text-sm font-medium bg-forge-500/20 text-forge-400 border border-forge-500/30 whitespace-nowrap" data-tab="dotnet">🔷 .NET / C#</button>
+      <button onclick="showTab('typescript')" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium bg-slate-800 text-slate-400 border border-slate-700/40 whitespace-nowrap hover:border-slate-600" data-tab="typescript">🟨 TypeScript</button>
+      <button onclick="showTab('python')" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium bg-slate-800 text-slate-400 border border-slate-700/40 whitespace-nowrap hover:border-slate-600" data-tab="python">🐍 Python</button>
+      <button onclick="showTab('java')" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium bg-slate-800 text-slate-400 border border-slate-700/40 whitespace-nowrap hover:border-slate-600" data-tab="java">☕ Java</button>
+      <button onclick="showTab('go')" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium bg-slate-800 text-slate-400 border border-slate-700/40 whitespace-nowrap hover:border-slate-600" data-tab="go">🐹 Go</button>
+    </div>
+  </section>
+
+  <!-- TAB CONTENTS -->
+  <section class="py-16 bg-slate-900">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+
+      <!-- .NET Example -->
+      <div id="tab-dotnet" class="tab-content">
+        <div class="mb-10">
+          <h2 class="text-2xl font-bold text-white mb-2">Phase 12: User Profile & Dashboard</h2>
+          <div class="flex flex-wrap gap-3 mb-6">
+            <span class="px-3 py-1 rounded-full bg-amber-900/40 text-amber-400 text-xs border border-amber-800/40">🟡 HARDENED</span>
+            <span class="px-3 py-1 rounded-full bg-slate-700/60 text-xs text-slate-300">3 days · 12 slices</span>
+            <span class="px-3 py-1 rounded-full bg-slate-700/60 text-xs text-slate-300">Risk: Medium</span>
+          </div>
+          <p class="text-slate-400">Add user profile management and personalized dashboard. Users can view/edit their profile, see activity history, and access personalized metrics with full multi-tenant isolation.</p>
+        </div>
+
+        <div class="space-y-6">
+          <!-- Acceptance Criteria -->
+          <div class="p-6 rounded-2xl bg-slate-800/60 border border-slate-700/40">
+            <h3 class="text-sm font-bold text-white uppercase tracking-wider mb-4">Acceptance Criteria</h3>
+            <ul class="space-y-2 text-sm text-slate-400">
+              <li class="flex gap-2"><span class="text-slate-600">☐</span> Users can view and edit their profile (name, email, avatar)</li>
+              <li class="flex gap-2"><span class="text-slate-600">☐</span> Dashboard shows personalized metrics (last login, activity count)</li>
+              <li class="flex gap-2"><span class="text-slate-600">☐</span> Profile changes are audited in the activity log</li>
+              <li class="flex gap-2"><span class="text-slate-600">☐</span> Multi-tenant isolation — users only see their own tenant's data</li>
+              <li class="flex gap-2"><span class="text-slate-600">☐</span> 90%+ test coverage on new code</li>
+            </ul>
+          </div>
+
+          <!-- Sample Slice -->
+          <div class="p-6 rounded-2xl bg-slate-800/60 border border-emerald-700/30">
+            <div class="flex items-center gap-3 mb-4">
+              <span class="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 text-xs font-bold">1</span>
+              <h3 class="text-sm font-bold text-white">Slice 12.1 — Database Migration: <code class="text-forge-400">user_profiles</code> Table</h3>
+            </div>
+            <div class="rounded-xl bg-slate-950/80 border border-slate-700/40 overflow-hidden mb-4">
+              <div class="px-4 py-2 bg-slate-800/50 border-b border-slate-700/40 text-xs text-slate-500">Tasks</div>
+              <div class="p-4 text-sm text-slate-300 space-y-2">
+                <p>1. Create migration <code class="text-forge-400">V012__add_user_profiles.sql</code></p>
+                <p>2. Add columns: <code class="text-forge-400">display_name</code>, <code class="text-forge-400">avatar_url</code>, <code class="text-forge-400">bio</code>, <code class="text-forge-400">last_login_at</code></p>
+                <p>3. Add RLS policy: <code class="text-forge-400">WHERE tenant_id = current_setting('app.tenant_id')</code></p>
+                <p>4. Write integration test: verify RLS blocks cross-tenant access</p>
+              </div>
+            </div>
+            <div class="rounded-xl bg-slate-950/80 border border-slate-700/40 overflow-hidden mb-4">
+              <div class="px-4 py-2 bg-slate-800/50 border-b border-slate-700/40 text-xs text-slate-500">Validation Gate</div>
+              <pre class="p-4 text-xs text-emerald-300 overflow-x-auto"><code>dotnet build                                        # zero errors
+dotnet test --filter "Category=Integration"         # all pass
+grep -rn "string interpolation" --include="*.cs"    # zero hits in new files</code></pre>
+            </div>
+            <div class="px-3 py-2 rounded-lg bg-red-950/30 border border-red-800/30 text-xs text-red-400">
+              <strong>Stop Condition:</strong> If RLS policy fails integration test → STOP, do not proceed.
+            </div>
+          </div>
+
+          <!-- Sample Slice 2 -->
+          <div class="p-6 rounded-2xl bg-slate-800/60 border border-emerald-700/30">
+            <div class="flex items-center gap-3 mb-4">
+              <span class="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 text-xs font-bold">2</span>
+              <h3 class="text-sm font-bold text-white">Slice 12.2 — Repository Layer: <code class="text-forge-400">UserProfileRepository</code></h3>
+            </div>
+            <div class="rounded-xl bg-slate-950/80 border border-slate-700/40 overflow-hidden">
+              <div class="px-4 py-2 bg-slate-800/50 border-b border-slate-700/40 text-xs text-slate-500">Tasks</div>
+              <div class="p-4 text-sm text-slate-300 space-y-2">
+                <p>1. Create <code class="text-forge-400">IUserProfileRepository</code> interface</p>
+                <p>2. Implement with Dapper, parameterized queries</p>
+                <p>3. Methods: <code class="text-forge-400">GetByUserIdAsync</code>, <code class="text-forge-400">UpdateAsync</code>, <code class="text-forge-400">GetActivitySummaryAsync</code></p>
+                <p>4. Unit tests for all repository methods</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="mt-8 text-sm text-slate-500 text-center">
+          <a href="https://github.com/srnichols/plan-forge/blob/master/docs/plans/examples/Phase-DOTNET-EXAMPLE.md" class="text-forge-400 hover:underline">View full .NET example on GitHub →</a>
+        </p>
+      </div>
+
+      <!-- TypeScript Example -->
+      <div id="tab-typescript" class="tab-content hidden">
+        <div class="mb-10">
+          <h2 class="text-2xl font-bold text-white mb-2">Phase 8: Real-Time Notifications</h2>
+          <div class="flex flex-wrap gap-3 mb-6">
+            <span class="px-3 py-1 rounded-full bg-amber-900/40 text-amber-400 text-xs border border-amber-800/40">🟡 HARDENED</span>
+            <span class="px-3 py-1 rounded-full bg-slate-700/60 text-xs text-slate-300">2 days · 8 slices</span>
+            <span class="px-3 py-1 rounded-full bg-slate-700/60 text-xs text-slate-300">Risk: Medium</span>
+          </div>
+          <p class="text-slate-400">Add real-time notification system using Socket.io. Users receive live updates for order status changes, new messages, and system alerts. Notifications persisted in PostgreSQL.</p>
+        </div>
+
+        <div class="space-y-6">
+          <div class="p-6 rounded-2xl bg-slate-800/60 border border-slate-700/40">
+            <h3 class="text-sm font-bold text-white uppercase tracking-wider mb-4">Acceptance Criteria</h3>
+            <ul class="space-y-2 text-sm text-slate-400">
+              <li class="flex gap-2"><span class="text-slate-600">☐</span> Notifications delivered in real-time via WebSocket</li>
+              <li class="flex gap-2"><span class="text-slate-600">☐</span> Notifications persisted with read/unread status</li>
+              <li class="flex gap-2"><span class="text-slate-600">☐</span> API endpoints: list, mark-read, mark-all-read</li>
+              <li class="flex gap-2"><span class="text-slate-600">☐</span> React notification bell component with unread count badge</li>
+              <li class="flex gap-2"><span class="text-slate-600">☐</span> Multi-tenant isolation — users only see their own notifications</li>
+            </ul>
+          </div>
+
+          <div class="p-6 rounded-2xl bg-slate-800/60 border border-emerald-700/30">
+            <div class="flex items-center gap-3 mb-4">
+              <span class="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 text-xs font-bold">1</span>
+              <h3 class="text-sm font-bold text-white">Slice 8.1 — Database: Notifications Table</h3>
+            </div>
+            <div class="rounded-xl bg-slate-950/80 border border-slate-700/40 overflow-hidden">
+              <div class="px-4 py-2 bg-slate-800/50 border-b border-slate-700/40 text-xs text-slate-500">Prisma Schema</div>
+              <pre class="p-4 text-xs text-slate-300 overflow-x-auto"><code>model Notification {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  tenantId  String    @map("tenant_id")
+  type      String    // "order_update" | "message" | "system"
+  title     String
+  body      String
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([tenantId, userId, readAt])
+  @@map("notifications")
+}</code></pre>
+            </div>
+          </div>
+        </div>
+        <p class="mt-8 text-sm text-slate-500 text-center">
+          <a href="https://github.com/srnichols/plan-forge/blob/master/docs/plans/examples/Phase-TYPESCRIPT-EXAMPLE.md" class="text-forge-400 hover:underline">View full TypeScript example on GitHub →</a>
+        </p>
+      </div>
+
+      <!-- Python -->
+      <div id="tab-python" class="tab-content hidden">
+        <div class="mb-10">
+          <h2 class="text-2xl font-bold text-white mb-2">Python / FastAPI Example</h2>
+          <p class="text-slate-400 mb-6">A complete hardened plan showing FastAPI endpoints, SQLAlchemy models, pytest tests, and Docker containerization with validation gates at every slice.</p>
+        </div>
+        <div class="p-8 rounded-2xl bg-slate-800/40 border border-slate-700/40 text-center">
+          <p class="text-slate-400 mb-4">View the full annotated example plan with all slices, stops conditions, and acceptance criteria:</p>
+          <a href="https://github.com/srnichols/plan-forge/blob/master/docs/plans/examples/Phase-PYTHON-EXAMPLE.md" class="inline-flex items-center gap-2 px-6 py-3 text-sm font-semibold text-forge-400 bg-slate-800 hover:bg-slate-700 rounded-xl border border-slate-700 transition-colors">View Python Example on GitHub →</a>
+        </div>
+      </div>
+
+      <!-- Java -->
+      <div id="tab-java" class="tab-content hidden">
+        <div class="mb-10">
+          <h2 class="text-2xl font-bold text-white mb-2">Java / Spring Boot Example</h2>
+          <p class="text-slate-400 mb-6">A complete hardened plan showing Spring Boot REST controllers, service layer, JPA repositories, JUnit 5 tests, and Gradle build validation gates.</p>
+        </div>
+        <div class="p-8 rounded-2xl bg-slate-800/40 border border-slate-700/40 text-center">
+          <p class="text-slate-400 mb-4">View the full annotated example plan:</p>
+          <a href="https://github.com/srnichols/plan-forge/blob/master/docs/plans/examples/Phase-JAVA-EXAMPLE.md" class="inline-flex items-center gap-2 px-6 py-3 text-sm font-semibold text-forge-400 bg-slate-800 hover:bg-slate-700 rounded-xl border border-slate-700 transition-colors">View Java Example on GitHub →</a>
+        </div>
+      </div>
+
+      <!-- Go -->
+      <div id="tab-go" class="tab-content hidden">
+        <div class="mb-10">
+          <h2 class="text-2xl font-bold text-white mb-2">Go / Chi Example</h2>
+          <p class="text-slate-400 mb-6">A complete hardened plan showing Go HTTP handlers, service layer, table-driven tests, and <code class="text-forge-400">go test</code> validation gates.</p>
+        </div>
+        <div class="p-8 rounded-2xl bg-slate-800/40 border border-slate-700/40 text-center">
+          <p class="text-slate-400 mb-4">View the full annotated example plan:</p>
+          <a href="https://github.com/srnichols/plan-forge/blob/master/docs/plans/examples/Phase-GO-EXAMPLE.md" class="inline-flex items-center gap-2 px-6 py-3 text-sm font-semibold text-forge-400 bg-slate-800 hover:bg-slate-700 rounded-xl border border-slate-700 transition-colors">View Go Example on GitHub →</a>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- OTHER EXAMPLES -->
+  <section class="py-16 bg-slate-950">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+      <h2 class="text-2xl font-bold text-white mb-8 text-center">Project-Level Examples</h2>
+      <div class="grid md:grid-cols-2 gap-6">
+        <a href="https://github.com/srnichols/plan-forge/blob/master/docs/plans/examples/PROJECT-PRINCIPLES-EXAMPLE.md" class="p-6 rounded-2xl bg-slate-800/60 border border-slate-700/40 hover:border-forge-500/40 transition-colors group">
+          <h3 class="font-bold text-white mb-2 group-hover:text-forge-400 transition-colors">Project Principles Example</h3>
+          <p class="text-sm text-slate-400">Real (anonymized) SaaS platform principles — locked-in tech decisions, forbidden patterns, non-negotiable quality standards.</p>
+        </a>
+        <a href="https://github.com/srnichols/plan-forge/blob/master/docs/plans/examples/PROJECT-PROFILE-EXAMPLE.md" class="p-6 rounded-2xl bg-slate-800/60 border border-slate-700/40 hover:border-forge-500/40 transition-colors group">
+          <h3 class="font-bold text-white mb-2 group-hover:text-forge-400 transition-colors">Project Profile Example</h3>
+          <p class="text-sm text-slate-400">Real (anonymized) project guardrails — testing targets, latency SLAs, security requirements, domain-specific rules generated from interview.</p>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="border-t border-slate-800/60 bg-slate-950 py-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex flex-col md:flex-row items-center justify-between gap-4 mb-4">
+        <div class="flex items-center gap-3">
+          <img src="https://github.com/srnichols.png" alt="Scott Nichols" class="w-8 h-8 rounded-full border border-slate-700" loading="lazy" />
+          <p class="text-sm text-slate-500">Created by <a href="https://github.com/srnichols" class="text-forge-400 hover:underline">Scott Nichols</a> · Principal Cloud Solution Architect @ <a href="https://microsoft.com" class="text-slate-400 hover:text-slate-300">Microsoft</a></p>
+        </div>
+        <div class="flex gap-4">
+          <a href="https://github.com/srnichols" class="text-sm text-slate-500 hover:text-slate-300">GitHub</a>
+          <a href="https://www.linkedin.com/in/srnichols/" class="text-sm text-slate-500 hover:text-slate-300">LinkedIn</a>
+        </div>
+      </div>
+      <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+        <p class="text-sm text-slate-600">© 2026 Plan Forge. Open source under the MIT License.</p>
+        <div class="flex gap-6">
+          <a href="index.html" class="text-sm text-slate-500 hover:text-slate-300">Home</a>
+          <a href="https://github.com/srnichols/plan-forge" class="text-sm text-slate-500 hover:text-slate-300">GitHub</a>
+          <a href="faq.html" class="text-sm text-slate-500 hover:text-slate-300">FAQ</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="assets/shared.js"></script>
+  <script>
+    function showTab(name) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+      document.getElementById('tab-' + name).classList.remove('hidden');
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        const isActive = btn.dataset.tab === name;
+        btn.classList.toggle('bg-forge-500/20', isActive);
+        btn.classList.toggle('text-forge-400', isActive);
+        btn.classList.toggle('border-forge-500/30', isActive);
+        btn.classList.toggle('bg-slate-800', !isActive);
+        btn.classList.toggle('text-slate-400', !isActive);
+        btn.classList.toggle('border-slate-700/40', !isActive);
+      });
+    }
+  </script>
+</body>
+</html>

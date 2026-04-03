@@ -1,0 +1,65 @@
+/* Plan Forge — Shared Styles */
+body { font-family: 'Inter', sans-serif; }
+code, pre { font-family: 'JetBrains Mono', 'Fira Code', monospace; }
+
+.hero-bg {
+  background:
+    radial-gradient(ellipse at 50% -10%, rgba(245, 158, 11, 0.18) 0%, transparent 65%),
+    radial-gradient(ellipse at 85% 40%, rgba(239, 68, 68, 0.08) 0%, transparent 55%),
+    radial-gradient(ellipse at 15% 60%, rgba(245, 158, 11, 0.06) 0%, transparent 50%),
+    #020617;
+}
+
+.grid-overlay {
+  background-image:
+    linear-gradient(rgba(148, 163, 184, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.04) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
+
+.forge-glow {
+  box-shadow: 0 0 30px rgba(245, 158, 11, 0.35), 0 0 60px rgba(245, 158, 11, 0.12);
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 0.7; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.02); }
+}
+.pulse-soft { animation: pulse-soft 4s ease-in-out infinite; }
+
+/* Scroll reveal */
+.reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1), transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Active nav link */
+nav a.nav-active { color: #f59e0b !important; }
+
+/* Copy button feedback */
+.copy-btn.copied {
+  color: #34d399 !important;
+}
+
+/* Dropdown menu */
+.nav-dropdown { display: none; }
+.nav-dropdown-trigger:hover .nav-dropdown,
+.nav-dropdown-trigger:focus-within .nav-dropdown {
+  display: block;
+}
+
+/* FAQ accordion */
+details summary { list-style: none; }
+details summary::-webkit-details-marker { display: none; }
+
+/* Page header bg */
+.page-header-bg {
+  background:
+    radial-gradient(ellipse at 50% 100%, rgba(245, 158, 11, 0.10) 0%, transparent 70%),
+    #020617;
+}

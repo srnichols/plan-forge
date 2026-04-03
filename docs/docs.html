@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Documentation — Plan Forge</title>
+  <meta name="description" content="Central documentation hub for Plan Forge — quick start, VS Code guide, CLI reference, customization, runbook, and architecture." />
+  <link rel="icon" type="image/svg+xml" href="assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{300:'#fcd34d',400:'#fbbf24',500:'#f59e0b',600:'#d97706',700:'#b45309'}},fontFamily:{sans:['Inter','system-ui','sans-serif'],mono:['"JetBrains Mono"','"Fira Code"','monospace']}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/shared.css" />
+</head>
+<body class="bg-slate-950 text-slate-100 antialiased">
+
+  <!-- NAV -->
+  <nav class="sticky top-0 z-50 bg-slate-950/92 backdrop-blur-md border-b border-slate-800/60">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <a href="index.html" class="flex items-center gap-3 shrink-0"><img src="assets/plan-forge-logo.svg" alt="Plan Forge" class="h-7 w-auto" /></a>
+        <div class="hidden md:flex items-center gap-7">
+          <a href="index.html#solution" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">How It Works</a>
+          <a href="index.html#features" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">Features</a>
+          <a href="examples.html" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">Examples</a>
+          <div class="nav-dropdown-trigger relative">
+            <button class="text-sm text-slate-400 hover:text-slate-100 transition-colors flex items-center gap-1">Resources <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg></button>
+            <div class="nav-dropdown absolute top-full right-0 mt-2 w-52 py-2 bg-slate-900 border border-slate-700/60 rounded-xl shadow-2xl">
+              <a href="problem.html" class="block px-4 py-2 text-sm text-slate-400 hover:bg-slate-800">The 80/20 Wall</a>
+              <a href="extensions.html" class="block px-4 py-2 text-sm text-slate-400 hover:bg-slate-800">Extensions</a>
+              <a href="docs.html" class="block px-4 py-2 text-sm text-forge-400 hover:bg-slate-800">Documentation</a>
+              <a href="faq.html" class="block px-4 py-2 text-sm text-slate-400 hover:bg-slate-800">FAQ</a>
+            </div>
+          </div>
+        </div>
+        <div class="hidden md:flex items-center gap-3">
+          <a href="https://github.com/srnichols/plan-forge" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">GitHub</a>
+          <a href="index.html#quickstart" class="px-4 py-2 text-sm font-semibold bg-forge-500 hover:bg-forge-400 text-slate-900 rounded-lg transition-colors">Get Started</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- HEADER -->
+  <section class="page-header-bg py-20">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+      <p class="text-forge-500 text-sm font-semibold tracking-widest uppercase mb-4">Documentation</p>
+      <h1 class="text-5xl font-black text-white mb-4">Learn Plan Forge</h1>
+      <p class="text-xl text-slate-400">Guides, references, and deep dives for every part of the framework.</p>
+    </div>
+  </section>
+
+  <!-- DOC GRID -->
+  <section class="py-16 bg-slate-900">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
+
+      <!-- Getting Started -->
+      <div class="reveal">
+        <h2 class="text-xl font-bold text-white mb-5 flex items-center gap-3">
+          <span class="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-400 text-sm">🚀</span>
+          Getting Started
+        </h2>
+        <div class="grid md:grid-cols-2 gap-4">
+          <a href="https://github.com/srnichols/plan-forge#readme" class="p-5 rounded-xl bg-slate-800/60 border border-slate-700/40 hover:border-forge-500/40 transition-colors group">
+            <h3 class="font-semibold text-white group-hover:text-forge-400 transition-colors mb-1">README</h3>
+            <p class="text-sm text-slate-400">Project overview, quick start, feature tour, the 4-layer system explained.</p>
+          </a>
+          <a href="https://github.com/srnichols/plan-forge/blob/master/docs/QUICKSTART-WALKTHROUGH.md" class="p-5 rounded-xl bg-slate-800/60 border border-slate-700/40 hover:border-forge-500/40 transition-colors group">
+            <h3 class="font-semibold text-white group-hover:text-forge-400 transition-colors mb-1">Quickstart Walkthrough</h3>
+            <p class="text-sm text-slate-400">Step-by-step guide to your first feature build using the full pipeline.</p>
+          </a>
+          <a href="https://github.com/srnichols/plan-forge/blob/master/AGENT-SETUP.md" class="p-5 rounded-xl bg-slate-800/60 border border-slate-700/40 hover:border-forge-500/40 transition-colors group">
+            <h3 class="font-semibold text-white group-hover:text-forge-400 transition-colors mb-1">Agent Setup</h3>
+            <p class="text-sm text-slate-400">Entry point for AI agents. Auto-detect stack, non-interactive setup, greenfield & brownfield paths.</p>
+          </a>
+          <a href="https://github.com/srnichols/plan-forge/blob/master/CUSTOMIZATION.md" class="p-5 rounded-xl bg-slate-800/60 border border-slate-700/40 hover:border-forge-500/40 transition-colors group">
+            <h3 class="font-semibold text-white group-hover:text-forge-400 transition-colors mb-1">Customization Guide</h3>
+            <p class="text-sm text-slate-400">Project profile, principles workshop, layer conflict resolution, org-rules template.</p>
+          </a>
+        </div>
+      </div>
+
+      <!-- Guides -->
+      <div class="reveal">
+        <h2 class="text-xl font-bold text-white mb-5 flex items-center gap-3">
+          <span class="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-400 text-sm">📖</span>
+          Guides
+        </h2>
+        <div class="grid md:grid-cols-2 gap-4">
+          <a href="https://github.com/srnichols/plan-forge/blob/master/docs/COPILOT-VSCODE-GUIDE.md" class="p-5 rounded-xl bg-slate-800/60 border border-slate-700/40 hover:border-forge-500/40 transition-colors group">
+            <h3 class="font-semibold text-white group-hover:text-forge-400 transition-colors mb-1">VS Code + Copilot Guide</h3>
+            <p class="text-sm text-slate-400">Agent Mode, instruction auto-loading, context budget management, memory bridging, troubleshooting.</p>
+          </a>
+          <a href="https://github.com/srnichols/plan-forge/blob/master/docs/CLI-GUIDE.md" class="p-5 rounded-xl bg-slate-800/60 border border-slate-700/40 hover:border-forge-500/40 transition-colors group">
+            <h3 class="font-semibold text-white group-hover:text-forge-400 transition-colors mb-1">CLI Guide</h3>
+            <p class="text-sm text-slate-400">All <code class="text-forge-400">pforge</code> commands — init, check, status, new-phase, branch, commit, sweep, diff, ext install.</p>
+          </a>
+          <a href="https://github.com/srnichols/plan-forge/blob/master/docs/EXTENSIONS.md" class="p-5 rounded-xl bg-slate-800/60 border border-slate-700/40 hover:border-forge-500/40 transition-colors group">
+            <h3 class="font-semibold text-white group-hover:text-forge-400 transition-colors mb-1">Extensions Guide</h3>
+            <p class="text-sm text-slate-400">Create, distribute, and install reusable guardrail packages for your team.</p>
+          </a>
+          <a href="https://github.com/srnichols/plan-forge/blob/master/docs/UNIFIED-SYSTEM-ARCHITECTURE.md" class="p-5 rounded-xl bg-slate-800/60 border border-slate-700/40 hover:border-forge-500/40 transition-colors group">
+            <h3 class="font-semibold text-white group-hover:text-forge-400 transition-colors mb-1">Unified System Architecture</h3>
+            <p class="text-sm text-slate-400">How Plan Forge + OpenBrain + OpenClaw integrate into a complete AI development system.</p>
+          </a>
+        </div>
+      </div>
+
+      <!-- Pipeline Reference -->
+      <div class="reveal">
+        <h2 class="text-xl font-bold text-white mb-5 flex items-center gap-3">
+          <span class="w-8 h-8 rounded-lg bg-forge-500/20 flex items-center justify-center text-forge-400 text-sm">🔨</span>
+          Pipeline Reference
+        </h2>
+        <div class="grid md:grid-cols-2 gap-4">
+          <a href="https://github.com/srnichols/plan-forge/blob/master/docs/plans/AI-Plan-Hardening-Runbook.md" class="p-5 rounded-xl bg-slate-800/60 border border-slate-700/40 hover:border-forge-500/40 transition-colors group">
+            <h3 class="font-semibold text-white group-hover:text-forge-400 transition-colors mb-1">Plan Hardening Runbook</h3>
+            <p class="text-sm text-slate-400">The complete runbook — how each step works, what it checks, when to skip or run full.</p>
+          </a>
+          <a href="https://github.com/srnichols/plan-forge/blob/master/docs/plans/AI-Plan-Hardening-Runbook-Instructions.md" class="p-5 rounded-xl bg-slate-800/60 border border-slate-700/40 hover:border-forge-500/40 transition-colors group">
+            <h3 class="font-semibold text-white group-hover:text-forge-400 transition-colors mb-1">Runbook Instructions (Copy-Paste)</h3>
+            <p class="text-sm text-slate-400">Ready-to-copy prompts for every pipeline step. Works in any AI tool, not just VS Code.</p>
+          </a>
+          <a href="https://github.com/srnichols/plan-forge/blob/master/docs/plans/DEPLOYMENT-ROADMAP.md" class="p-5 rounded-xl bg-slate-800/60 border border-slate-700/40 hover:border-forge-500/40 transition-colors group">
+            <h3 class="font-semibold text-white group-hover:text-forge-400 transition-colors mb-1">Deployment Roadmap Template</h3>
+            <p class="text-sm text-slate-400">Phase tracker template for managing multiple features across the pipeline.</p>
+          </a>
+          <a href="examples.html" class="p-5 rounded-xl bg-slate-800/60 border border-slate-700/40 hover:border-forge-500/40 transition-colors group">
+            <h3 class="font-semibold text-white group-hover:text-forge-400 transition-colors mb-1">Stack Examples</h3>
+            <p class="text-sm text-slate-400">Real plan files for .NET, TypeScript, Python, Java, Go — with slices, gates, and code output.</p>
+          </a>
+        </div>
+      </div>
+
+      <!-- Project -->
+      <div class="reveal">
+        <h2 class="text-xl font-bold text-white mb-5 flex items-center gap-3">
+          <span class="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center text-purple-400 text-sm">📋</span>
+          Project
+        </h2>
+        <div class="grid md:grid-cols-3 gap-4">
+          <a href="https://github.com/srnichols/plan-forge/blob/master/CHANGELOG.md" class="p-5 rounded-xl bg-slate-800/60 border border-slate-700/40 hover:border-forge-500/40 transition-colors group">
+            <h3 class="font-semibold text-white group-hover:text-forge-400 transition-colors mb-1">Changelog</h3>
+            <p class="text-xs text-slate-400">Version history and release notes.</p>
+          </a>
+          <a href="https://github.com/srnichols/plan-forge/blob/master/ROADMAP.md" class="p-5 rounded-xl bg-slate-800/60 border border-slate-700/40 hover:border-forge-500/40 transition-colors group">
+            <h3 class="font-semibold text-white group-hover:text-forge-400 transition-colors mb-1">Roadmap</h3>
+            <p class="text-xs text-slate-400">Upcoming features and planned improvements.</p>
+          </a>
+          <a href="https://github.com/srnichols/plan-forge/blob/master/CONTRIBUTING.md" class="p-5 rounded-xl bg-slate-800/60 border border-slate-700/40 hover:border-forge-500/40 transition-colors group">
+            <h3 class="font-semibold text-white group-hover:text-forge-400 transition-colors mb-1">Contributing</h3>
+            <p class="text-xs text-slate-400">How to add presets, extensions, and improvements.</p>
+          </a>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="border-t border-slate-800/60 bg-slate-950 py-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex flex-col md:flex-row items-center justify-between gap-4 mb-4">
+        <div class="flex items-center gap-3">
+          <img src="https://github.com/srnichols.png" alt="Scott Nichols" class="w-8 h-8 rounded-full border border-slate-700" loading="lazy" />
+          <p class="text-sm text-slate-500">Created by <a href="https://github.com/srnichols" class="text-forge-400 hover:underline">Scott Nichols</a> · Principal Cloud Solution Architect @ <a href="https://microsoft.com" class="text-slate-400 hover:text-slate-300">Microsoft</a></p>
+        </div>
+        <div class="flex gap-4">
+          <a href="https://github.com/srnichols" class="text-sm text-slate-500 hover:text-slate-300">GitHub</a>
+          <a href="https://www.linkedin.com/in/srnichols/" class="text-sm text-slate-500 hover:text-slate-300">LinkedIn</a>
+        </div>
+      </div>
+      <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+        <p class="text-sm text-slate-600">© 2026 Plan Forge. Open source under the MIT License.</p>
+        <div class="flex gap-6">
+          <a href="index.html" class="text-sm text-slate-500 hover:text-slate-300">Home</a>
+          <a href="https://github.com/srnichols/plan-forge" class="text-sm text-slate-500 hover:text-slate-300">GitHub</a>
+          <a href="faq.html" class="text-sm text-slate-500 hover:text-slate-300">FAQ</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="assets/shared.js"></script>
+</body>
+</html>

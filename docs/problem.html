@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The 80/20 Wall — Why AI Agents Break What They Build | Plan Forge</title>
+  <meta name="description" content="AI coding agents get you to 80% fast — then start breaking things trying to close the last 20%. The problem isn't the model. It's the plan. Here's how to fix it." />
+  <meta property="og:title" content="The 80/20 Wall — Why AI Agents Break What They Build" />
+  <meta property="og:description" content="You spend $1,500 in tokens, get to 80%, then watch the agent destroy its own work. Sound familiar? The fix isn't a better model — it's a better methodology." />
+  <meta property="og:type" content="article" />
+  <link rel="icon" type="image/svg+xml" href="assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { theme: { extend: { colors: { forge: { 300:'#fcd34d',400:'#fbbf24',500:'#f59e0b',600:'#d97706',700:'#b45309' }}, fontFamily: { sans:['Inter','system-ui','sans-serif'], mono:['"JetBrains Mono"','"Fira Code"','monospace'] }}}}
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/shared.css" />
+</head>
+<body class="bg-slate-950 text-slate-100 antialiased">
+
+  <!-- NAV -->
+  <nav class="sticky top-0 z-50 bg-slate-950/92 backdrop-blur-md border-b border-slate-800/60">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <a href="index.html" class="flex items-center gap-3 shrink-0">
+          <img src="assets/plan-forge-logo.svg" alt="Plan Forge" class="h-7 w-auto" />
+        </a>
+        <div class="hidden md:flex items-center gap-7">
+          <a href="index.html#solution" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">How It Works</a>
+          <a href="index.html#features" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">Features</a>
+          <a href="examples.html" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">Examples</a>
+          <div class="nav-dropdown-trigger relative">
+            <button class="text-sm text-slate-400 hover:text-slate-100 transition-colors flex items-center gap-1">
+              Resources
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </button>
+            <div class="nav-dropdown absolute top-full right-0 mt-2 w-52 py-2 bg-slate-900 border border-slate-700/60 rounded-xl shadow-2xl">
+              <a href="problem.html" class="block px-4 py-2 text-sm text-forge-400 hover:bg-slate-800 transition-colors">The 80/20 Wall</a>
+              <a href="extensions.html" class="block px-4 py-2 text-sm text-slate-400 hover:bg-slate-800 transition-colors">Extensions</a>
+              <a href="docs.html" class="block px-4 py-2 text-sm text-slate-400 hover:bg-slate-800 transition-colors">Documentation</a>
+              <a href="faq.html" class="block px-4 py-2 text-sm text-slate-400 hover:bg-slate-800 transition-colors">FAQ</a>
+            </div>
+          </div>
+        </div>
+        <div class="hidden md:flex items-center gap-3">
+          <a href="https://github.com/srnichols/plan-forge" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">GitHub</a>
+          <a href="index.html#quickstart" class="px-4 py-2 text-sm font-semibold bg-forge-500 hover:bg-forge-400 text-slate-900 rounded-lg transition-colors">Get Started</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="page-header-bg py-20">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+      <p class="text-forge-500 text-sm font-semibold tracking-widest uppercase mb-4">Why This Exists</p>
+      <h1 class="text-5xl md:text-6xl font-black text-white mb-6 leading-tight">
+        The 80/20 Wall
+      </h1>
+      <p class="text-xl md:text-2xl text-slate-400 max-w-3xl mx-auto leading-relaxed">
+        AI coding agents get you to 80% fast — then start <strong class="text-red-400">breaking things</strong> trying to close the last 20%. You've spent $1,500 in tokens to watch an agent destroy its own work. <em>Sound familiar?</em>
+      </p>
+    </div>
+  </section>
+
+  <!-- THE PATTERN -->
+  <section class="py-20 bg-slate-900">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="reveal">
+        <h2 class="text-3xl font-bold text-white mb-8">The Pattern Everyone Hits</h2>
+        <p class="text-lg text-slate-400 mb-10 leading-relaxed">
+          You fire up an AI agent — Copilot, Cursor, Claude, whatever — and describe the app you want. The first 80% is <em>magic</em>. Files appear, components wire up, the database schema materializes. You're shipping faster than you ever thought possible.
+        </p>
+
+        <!-- The timeline -->
+        <div class="space-y-6 mb-12">
+          <div class="flex gap-5">
+            <div class="flex flex-col items-center">
+              <div class="w-10 h-10 rounded-full bg-emerald-500/20 border-2 border-emerald-500/60 flex items-center justify-center text-emerald-400 font-bold text-sm shrink-0">0%</div>
+              <div class="w-0.5 flex-1 bg-gradient-to-b from-emerald-500/40 to-emerald-500/10 mt-2"></div>
+            </div>
+            <div class="pb-6">
+              <h3 class="font-semibold text-emerald-400 mb-1">The Greenfield Rush</h3>
+              <p class="text-sm text-slate-400">"Build me a task management app with React, Node.js, and PostgreSQL." Within hours you have scaffolding, routes, components, database migrations. It <em>feels</em> like the future.</p>
+            </div>
+          </div>
+
+          <div class="flex gap-5">
+            <div class="flex flex-col items-center">
+              <div class="w-10 h-10 rounded-full bg-amber-500/20 border-2 border-amber-500/60 flex items-center justify-center text-amber-400 font-bold text-sm shrink-0">50%</div>
+              <div class="w-0.5 flex-1 bg-gradient-to-b from-amber-500/40 to-amber-500/10 mt-2"></div>
+            </div>
+            <div class="pb-6">
+              <h3 class="font-semibold text-amber-400 mb-1">Complexity Creeps In</h3>
+              <p class="text-sm text-slate-400">The codebase grows. Auth flows interact with database queries. Middleware chains get long. The agent still works, but you notice it's making assumptions without asking. It picked a caching strategy you wouldn't have chosen.</p>
+            </div>
+          </div>
+
+          <div class="flex gap-5">
+            <div class="flex flex-col items-center">
+              <div class="w-10 h-10 rounded-full bg-orange-500/20 border-2 border-orange-500/60 flex items-center justify-center text-orange-400 font-bold text-sm shrink-0">80%</div>
+              <div class="w-0.5 flex-1 bg-gradient-to-b from-orange-500/40 to-red-500/40 mt-2"></div>
+            </div>
+            <div class="pb-6">
+              <h3 class="font-semibold text-orange-400 mb-1">The Wall</h3>
+              <p class="text-sm text-slate-400">Every change breaks something else. Fix the auth bug, break the dashboard. Fix the dashboard, break the API response format. The agent starts refactoring code it wrote three sessions ago — code that was working fine — because it forgot <em>why</em> it was written that way.</p>
+            </div>
+          </div>
+
+          <div class="flex gap-5">
+            <div class="flex flex-col items-center">
+              <div class="w-10 h-10 rounded-full bg-red-500/20 border-2 border-red-500/60 flex items-center justify-center text-red-400 font-bold text-sm shrink-0">💀</div>
+            </div>
+            <div>
+              <h3 class="font-semibold text-red-400 mb-1">"Maybe I Should Just Start Over"</h3>
+              <p class="text-sm text-slate-400">You've burned through tokens, lost track of what the agent changed, and the tests (if there are any) are all red. The agent is confidently producing code that compiles but doesn't work. You're debugging AI-generated code you don't fully understand, in an architecture you didn't fully choose.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- THE REAL PROBLEM -->
+  <section class="py-20 bg-slate-950">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="reveal">
+        <div class="p-8 md:p-12 rounded-3xl bg-gradient-to-br from-slate-800/80 to-slate-800/40 border border-slate-700/50">
+          <h2 class="text-3xl font-bold text-white mb-6">It's Not a Model Problem. It's a Planning Problem.</h2>
+          <p class="text-lg text-slate-400 mb-8 leading-relaxed">
+            When agents work from <strong class="text-white">loose intent</strong> rather than <strong class="text-white">hardened specs</strong>, they do fine on greenfield builds but start thrashing once the codebase gets complex enough that every change has downstream consequences. That's when they break things faster than they fix them.
+          </p>
+
+          <div class="grid md:grid-cols-2 gap-6">
+            <div class="p-6 rounded-xl bg-red-950/30 border border-red-800/30">
+              <h3 class="font-bold text-red-400 mb-3 text-sm uppercase tracking-wider">Vibe Coding (What Most People Do)</h3>
+              <ul class="space-y-3 text-sm text-slate-400">
+                <li class="flex gap-2"><span class="text-red-500 shrink-0">✗</span> Prompt → hope → fix → re-prompt → hope harder</li>
+                <li class="flex gap-2"><span class="text-red-500 shrink-0">✗</span> Agent picks its own architecture mid-stream</li>
+                <li class="flex gap-2"><span class="text-red-500 shrink-0">✗</span> Every session starts from zero context</li>
+                <li class="flex gap-2"><span class="text-red-500 shrink-0">✗</span> Agent reviews its own work (grades its own exam)</li>
+                <li class="flex gap-2"><span class="text-red-500 shrink-0">✗</span> "It compiles" = "it's done"</li>
+              </ul>
+            </div>
+            <div class="p-6 rounded-xl bg-emerald-950/30 border border-emerald-800/30">
+              <h3 class="font-bold text-emerald-400 mb-3 text-sm uppercase tracking-wider">Spec-Driven Development (The Fix)</h3>
+              <ul class="space-y-3 text-sm text-slate-400">
+                <li class="flex gap-2"><span class="text-emerald-500 shrink-0">✓</span> Specify what & why → harden the plan → then execute</li>
+                <li class="flex gap-2"><span class="text-emerald-500 shrink-0">✓</span> Architecture locked in scope contract before coding starts</li>
+                <li class="flex gap-2"><span class="text-emerald-500 shrink-0">✓</span> Persistent memory carries decisions across every session</li>
+                <li class="flex gap-2"><span class="text-emerald-500 shrink-0">✓</span> Fresh AI session reviews in isolation (independent audit)</li>
+                <li class="flex gap-2"><span class="text-emerald-500 shrink-0">✓</span> Build + test must pass at every slice boundary</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- THE PROGRESSION -->
+  <section class="py-20 bg-slate-900">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="reveal">
+        <div class="text-center mb-14">
+          <p class="text-forge-500 text-sm font-semibold tracking-widest uppercase mb-3">The Fix</p>
+          <h2 class="text-4xl font-bold text-white mb-4">Four Steps That Eliminated the Wall</h2>
+          <p class="text-slate-400 max-w-2xl mx-auto">Each step builds on the last. Use them independently or wire them together into a unified system.</p>
+        </div>
+
+        <div class="space-y-8">
+
+          <!-- Step 1: Spec-driven -->
+          <div class="p-8 rounded-2xl bg-slate-800/60 border border-slate-700/50 hover:border-forge-500/30 transition-colors">
+            <div class="flex items-start gap-5">
+              <div class="w-12 h-12 rounded-xl bg-forge-500/20 border border-forge-500/40 flex items-center justify-center text-forge-400 font-black text-lg shrink-0 mt-1">1</div>
+              <div>
+                <h3 class="text-xl font-bold text-white mb-2">Spec-Driven Development Instead of Vibe Coding</h3>
+                <p class="text-slate-400 mb-4">Stop prompting agents with intent and hoping for the best. Build structured plans before ever letting an agent write code. Define <em>what</em> you want and <em>why</em> — not the how.</p>
+                <p class="text-slate-400 mb-4">This alone is a gamechanger. Instead of "build me an app," you give the agent a clear specification to execute against. Ambiguities get surfaced before coding starts, not discovered after 500 lines of wrong code.</p>
+                <div class="flex flex-wrap gap-2">
+                  <span class="px-3 py-1 rounded-full bg-slate-700/60 text-xs text-slate-300">Feature specifications</span>
+                  <span class="px-3 py-1 rounded-full bg-slate-700/60 text-xs text-slate-300">Acceptance criteria</span>
+                  <span class="px-3 py-1 rounded-full bg-slate-700/60 text-xs text-slate-300">Edge cases identified early</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 2: Plan hardening -->
+          <div class="p-8 rounded-2xl bg-slate-800/60 border border-slate-700/50 hover:border-forge-500/30 transition-colors">
+            <div class="flex items-start gap-5">
+              <div class="w-12 h-12 rounded-xl bg-forge-500/20 border border-forge-500/40 flex items-center justify-center text-forge-400 font-black text-lg shrink-0 mt-1">2</div>
+              <div>
+                <h3 class="text-xl font-bold text-white mb-2">Plan Hardening with Enterprise Guardrails</h3>
+                <p class="text-slate-400 mb-4">Take the spec further — run it through a hardening pipeline that converts it into a <strong class="text-white">binding execution contract</strong>. Add enterprise guardrails that coding agents <em>have</em> to obey: architecture principles, security rules, testing standards, error handling patterns.</p>
+                <p class="text-slate-400 mb-4">Think of it as giving agents <strong class="text-white">rules of engagement, not just instructions</strong>. The scope is locked. The forbidden actions are listed. The validation gates are defined. Drift becomes structurally impossible.</p>
+                <div class="flex flex-wrap gap-2">
+                  <span class="px-3 py-1 rounded-full bg-forge-500/20 text-xs text-forge-400 border border-forge-500/30">Plan Forge</span>
+                  <span class="px-3 py-1 rounded-full bg-slate-700/60 text-xs text-slate-300">Scope contracts</span>
+                  <span class="px-3 py-1 rounded-full bg-slate-700/60 text-xs text-slate-300">16+ auto-loading guardrail files</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 3: Memory -->
+          <div class="p-8 rounded-2xl bg-slate-800/60 border border-slate-700/50 hover:border-forge-500/30 transition-colors">
+            <div class="flex items-start gap-5">
+              <div class="w-12 h-12 rounded-xl bg-forge-500/20 border border-forge-500/40 flex items-center justify-center text-forge-400 font-black text-lg shrink-0 mt-1">3</div>
+              <div>
+                <h3 class="text-xl font-bold text-white mb-2">Persistent Memory Across Sessions</h3>
+                <p class="text-slate-400 mb-4">One of the biggest reasons agents break things at 80% is they <strong class="text-white">lose context</strong>. They forget the architectural decisions from three sessions ago. They forget <em>why</em> a piece of code was structured a certain way. So they rewrite it — and break everything downstream.</p>
+                <p class="text-slate-400 mb-4">A semantic memory layer captures every decision, every pattern, every lesson learned — tagged by project, phase, and source. The next session searches memory <em>before writing a single line</em>. The agent already knows what you chose and why.</p>
+                <div class="flex flex-wrap gap-2">
+                  <span class="px-3 py-1 rounded-full bg-blue-500/20 text-xs text-blue-400 border border-blue-500/30">OpenBrain</span>
+                  <span class="px-3 py-1 rounded-full bg-slate-700/60 text-xs text-slate-300">pgvector semantic search</span>
+                  <span class="px-3 py-1 rounded-full bg-slate-700/60 text-xs text-slate-300">9 AI clients supported</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 4: Full SDLC -->
+          <div class="p-8 rounded-2xl bg-slate-800/60 border border-slate-700/50 hover:border-forge-500/30 transition-colors">
+            <div class="flex items-start gap-5">
+              <div class="w-12 h-12 rounded-xl bg-forge-500/20 border border-forge-500/40 flex items-center justify-center text-forge-400 font-black text-lg shrink-0 mt-1">4</div>
+              <div>
+                <h3 class="text-xl font-bold text-white mb-2">Full SDLC Automation — The Unified System</h3>
+                <p class="text-slate-400 mb-4">Wire it all together. The agents operate within the spec, within the guardrails, and with memory of the full project context. Describe a feature from your phone via WhatsApp. The system hardens the plan, executes it slice-by-slice with validation gates, notifies you on progress, runs an independent review, and ships — all while capturing every decision for next time.</p>
+                <p class="text-slate-400 mb-4"><strong class="text-white">The result:</strong> the 80/20 wall disappears. The agents stay coherent through the full build because they're executing hardened specs rather than improvising. Token usage drops by half or more — because the agent isn't wasting context on exploration and backtracking.</p>
+                <div class="flex flex-wrap gap-2">
+                  <span class="px-3 py-1 rounded-full bg-purple-500/20 text-xs text-purple-400 border border-purple-500/30">OpenClaw</span>
+                  <span class="px-3 py-1 rounded-full bg-slate-700/60 text-xs text-slate-300">20+ messaging channels</span>
+                  <span class="px-3 py-1 rounded-full bg-slate-700/60 text-xs text-slate-300">Always-on orchestration</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- THE NUMBERS -->
+  <section class="py-20 bg-slate-950">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="reveal">
+        <h2 class="text-3xl font-bold text-white mb-10 text-center">The Before and After</h2>
+        <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div class="p-6 rounded-2xl bg-slate-800/60 border border-slate-700/50 text-center">
+            <div class="text-4xl font-black text-red-400 mb-2">80%</div>
+            <p class="text-sm text-slate-400">Where vibe coding stalls</p>
+          </div>
+          <div class="p-6 rounded-2xl bg-slate-800/60 border border-slate-700/50 text-center">
+            <div class="text-4xl font-black text-emerald-400 mb-2">100%</div>
+            <p class="text-sm text-slate-400">Shipped with hardened plans</p>
+          </div>
+          <div class="p-6 rounded-2xl bg-slate-800/60 border border-slate-700/50 text-center">
+            <div class="text-4xl font-black text-forge-400 mb-2">50%+</div>
+            <p class="text-sm text-slate-400">Token reduction</p>
+          </div>
+          <div class="p-6 rounded-2xl bg-slate-800/60 border border-slate-700/50 text-center">
+            <div class="text-4xl font-black text-forge-400 mb-2">~0%</div>
+            <p class="text-sm text-slate-400">Rework after review</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TOOLBOX -->
+  <section class="py-20 bg-slate-900">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="reveal">
+        <div class="p-8 rounded-2xl bg-slate-800/40 border border-slate-700/40 text-center">
+          <h2 class="text-2xl font-bold text-white mb-4">Just Tools in a Toolbox</h2>
+          <p class="text-slate-400 max-w-2xl mx-auto mb-8">
+            The four steps form the complete unified approach — but each one works independently. Use one. Use two. Combine them however you want. They're tools, not a monolith.
+          </p>
+          <div class="grid sm:grid-cols-2 gap-4 max-w-lg mx-auto text-left">
+            <a href="index.html#quickstart" class="p-4 rounded-xl bg-slate-900/60 border border-slate-700/40 hover:border-forge-500/40 transition-colors">
+              <div class="text-sm font-semibold text-forge-400 mb-1">Plan Forge</div>
+              <div class="text-xs text-slate-500">Guardrails & pipeline</div>
+            </a>
+            <a href="https://github.com/srnichols/OpenBrain" class="p-4 rounded-xl bg-slate-900/60 border border-slate-700/40 hover:border-blue-500/40 transition-colors">
+              <div class="text-sm font-semibold text-blue-400 mb-1">OpenBrain</div>
+              <div class="text-xs text-slate-500">Persistent AI memory</div>
+            </a>
+            <a href="index.html#unified" class="p-4 rounded-xl bg-slate-900/60 border border-slate-700/40 hover:border-purple-500/40 transition-colors col-span-2">
+              <div class="text-sm font-semibold text-purple-400 mb-1">Unified System Architecture</div>
+              <div class="text-xs text-slate-500">Plan Forge + OpenBrain + OpenClaw wired together end-to-end</div>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="py-20 bg-slate-950">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+      <h2 class="text-4xl font-black text-white mb-4">
+        Stop Hitting the Wall.
+        <span class="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-500">Start Forging.</span>
+      </h2>
+      <p class="text-xl text-slate-400 mb-10 max-w-2xl mx-auto">
+        Plan Forge is free, open source, and ready in minutes. Your next feature build won't end in "maybe I should start over."
+      </p>
+      <div class="flex flex-col sm:flex-row gap-4 justify-center">
+        <a href="index.html#quickstart" class="inline-flex items-center justify-center gap-2 px-8 py-4 font-bold bg-forge-500 hover:bg-forge-400 text-slate-900 rounded-xl transition-all transform hover:scale-105 forge-glow">
+          Get Started Free →
+        </a>
+        <a href="index.html" class="inline-flex items-center justify-center gap-2 px-8 py-4 font-semibold bg-slate-800 hover:bg-slate-700 text-slate-100 rounded-xl border border-slate-700 transition-all">
+          Back to Home
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="border-t border-slate-800/60 bg-slate-950 py-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex flex-col md:flex-row items-center justify-between gap-4 mb-4">
+        <div class="flex items-center gap-3">
+          <img src="https://github.com/srnichols.png" alt="Scott Nichols" class="w-8 h-8 rounded-full border border-slate-700" loading="lazy" />
+          <p class="text-sm text-slate-500">Created by <a href="https://github.com/srnichols" class="text-forge-400 hover:underline">Scott Nichols</a> · Principal Cloud Solution Architect @ <a href="https://microsoft.com" class="text-slate-400 hover:text-slate-300">Microsoft</a></p>
+        </div>
+        <div class="flex gap-4">
+          <a href="https://github.com/srnichols" class="text-sm text-slate-500 hover:text-slate-300">GitHub</a>
+          <a href="https://www.linkedin.com/in/srnichols/" class="text-sm text-slate-500 hover:text-slate-300">LinkedIn</a>
+        </div>
+      </div>
+      <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+        <p class="text-sm text-slate-600">© 2026 Plan Forge. Open source under the MIT License.</p>
+        <div class="flex gap-6">
+          <a href="index.html" class="text-sm text-slate-500 hover:text-slate-300">Home</a>
+          <a href="https://github.com/srnichols/plan-forge" class="text-sm text-slate-500 hover:text-slate-300">GitHub</a>
+          <a href="faq.html" class="text-sm text-slate-500 hover:text-slate-300">FAQ</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="assets/shared.js"></script>
+</body>
+</html>

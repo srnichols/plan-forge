@@ -13,7 +13,7 @@ Brief description of the changes.
 ## Checklist
 
 - [ ] I've tested with at least one preset (which? _______)
-- [ ] `validate-setup.ps1` / `validate-setup.sh` passes
+- [ ] `validate-setup.ps1` / `validate-setup.sh` passes (or `pforge check`)
 - [ ] New files follow existing naming conventions
 - [ ] Documentation updated (if applicable)
 - [ ] CHANGELOG.md updated (if user-facing change)

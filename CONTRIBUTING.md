@@ -21,7 +21,7 @@ Open an issue with the `enhancement` label. Describe the problem you're solving,
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feat/your-feature`
 3. Make your changes
-4. Run validation: `.\validate-setup.ps1` or `./validate-setup.sh`
+4. Run validation: `.\validate-setup.ps1` or `./validate-setup.sh` (or `pforge check` / `pforge smith`)
 5. Commit using [conventional commits](https://www.conventionalcommits.org/): `git commit -m "feat(scope): description"`
 6. Push and open a Pull Request
 

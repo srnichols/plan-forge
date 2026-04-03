@@ -34,6 +34,12 @@ Make sure setup is done:
 .\validate-setup.ps1
 ```
 
+Or use the CLI equivalent:
+```powershell
+.\pforge.ps1 smith    # Inspect the forge (environment + setup health)
+.\pforge.ps1 check    # Validate setup files
+```
+
 All checks should pass. If not, re-run `.\setup.ps1 -Preset <your-stack>`.
 
 ---

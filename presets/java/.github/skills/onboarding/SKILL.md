@@ -40,6 +40,9 @@ go mod download             # Go
 
 ### 2. Verify Build & Tests
 ```bash
+# Inspect the forge first (diagnose environment + setup health)
+pforge smith
+
 # Build
 <BUILD_COMMAND>
 

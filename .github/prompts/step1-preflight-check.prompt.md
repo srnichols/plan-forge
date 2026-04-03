@@ -64,6 +64,8 @@ Output a summary table:
 If ALL pass: "Pre-flight complete ✅ — proceed to Step 2 (Harden the Plan)"
 If ANY fail: "Pre-flight FAILED ❌" + list exactly what to fix.
 
+> **Tip**: For deeper diagnostics (environment tools, VS Code config, version currency, common problems), suggest running `pforge smith`.
+
 ---
 
 ## Persistent Memory (if OpenBrain is configured)

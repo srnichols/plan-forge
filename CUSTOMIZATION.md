@@ -731,6 +731,26 @@ pforge help              Show all commands
 
 ---
 
+## CI Validation (Optional)
+
+Add automated plan validation to your PR workflow:
+
+```yaml
+# .github/workflows/plan-forge-validate.yml
+name: Plan Forge Validate
+on: [pull_request]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: srnichols/plan-forge-validate@v1
+```
+
+This checks setup health, file counts, placeholders, orphans, and plan artifacts on every PR. See [docs/plans/examples/plan-forge-validate.yml](docs/plans/examples/plan-forge-validate.yml) for all options.
+
+---
+
 ## Removing Template Scaffolding
 
 After setup, you can safely delete these directories:

@@ -550,6 +550,8 @@ plan-forge/
 ├── setup.sh                           ← Setup wizard (Bash, supports --auto-detect)
 ├── validate-setup.ps1                 ← Post-setup validator (PowerShell)
 ├── validate-setup.sh                  ← Post-setup validator (Bash)
+├── action.yml                         ← GitHub Action for CI plan validation
+├── scripts/validate-action.sh         ← CI validation script (used by action.yml)
 ├── CUSTOMIZATION.md                   ← How to adapt for your stack
 │
 ├── docs/
@@ -805,6 +807,29 @@ If you open a subfolder of a monorepo (not the repo root), Copilot won't find `.
 This tells Copilot to walk up to the `.git` root and discover all instruction files, prompts, agents, skills, and hooks from parent directories.
 
 **CLI in monorepos**: The `pforge` CLI auto-detects the repo root by walking up to the nearest `.git` directory. Run it from any subfolder — it will find `.forge.json`, `docs/plans/`, and `.github/` at the repo root automatically.
+
+---
+
+## CI/CD Integration
+
+Add automated plan validation to your PR workflow with the Plan Forge GitHub Action:
+
+```yaml
+# .github/workflows/plan-forge-validate.yml
+name: Plan Forge Validate
+on: [pull_request]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: srnichols/plan-forge-validate@v1
+        with:
+          sweep: true              # Run TODO/FIXME sweep
+          fail-on-warnings: false  # Warnings don't block merge
+```
+
+The action checks setup health, file counts, placeholders, orphaned agents, plan artifacts, and code cleanliness. See [docs/plans/examples/plan-forge-validate.yml](docs/plans/examples/plan-forge-validate.yml) for a complete example.
 
 ---
 

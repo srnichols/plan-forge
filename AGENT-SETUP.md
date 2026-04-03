@@ -91,6 +91,13 @@ Run the validation script to confirm everything landed correctly:
 
 All checks must pass before proceeding to plan hardening.
 
+**Optional: CI validation** — Add automated plan validation to your PR workflow:
+```yaml
+# .github/workflows/plan-forge-validate.yml
+- uses: srnichols/plan-forge-validate@v1
+```
+See [docs/plans/examples/plan-forge-validate.yml](docs/plans/examples/plan-forge-validate.yml) for the full workflow.
+
 ---
 
 ## Section 2: Brownfield Setup (Existing Project with Guardrails)

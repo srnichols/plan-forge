@@ -536,6 +536,39 @@ The CLI handles **project management tasks** (setup, status, phases, branches, e
 
 ---
 
+## CI Integration
+
+Automate plan validation in your GitHub workflow with the Plan Forge Validate action:
+
+```yaml
+# .github/workflows/plan-forge-validate.yml
+name: Plan Forge Validate
+on: [pull_request]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: srnichols/plan-forge-validate@v1
+        with:
+          sweep: true
+          fail-on-warnings: false
+```
+
+The action runs the same checks as `pforge smith` + `pforge check` + `pforge sweep` — setup health, file counts, placeholders, orphans, plan artifacts, and code cleanliness. See [docs/plans/examples/plan-forge-validate.yml](../docs/plans/examples/plan-forge-validate.yml) for a complete example.
+
+**Inputs:**
+| Input | Default | Description |
+|-------|---------|-------------|
+| `path` | `.` | Project directory to validate |
+| `fail-on-warnings` | `false` | Treat warnings as failures |
+| `sweep` | `true` | Run completeness sweep |
+| `sweep-fail` | `false` | Fail on sweep markers |
+
+**Outputs:** `passed`, `failed`, `warnings`, `result` (pass/warn/fail) — usable in downstream steps.
+
+---
+
 ## Options
 
 | Flag | Applies To | Effect |

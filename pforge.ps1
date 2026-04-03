@@ -1253,6 +1253,49 @@ function Invoke-Smith {
             $preset = $config.preset
             $templateVersion = $config.templateVersion
             Doctor-Pass ".forge.json valid (preset: $preset, v$templateVersion)"
+
+            # Check configured agents
+            $configuredAgents = @('copilot')
+            if ($config.agents) {
+                if ($config.agents -is [System.Array]) {
+                    $configuredAgents = $config.agents
+                } elseif ($config.agents -is [string]) {
+                    $configuredAgents = @($config.agents)
+                }
+            }
+
+            foreach ($ag in $configuredAgents) {
+                switch ($ag) {
+                    'copilot' {
+                        if (Test-Path (Join-Path $RepoRoot ".github/copilot-instructions.md")) {
+                            Doctor-Pass "Agent: copilot (configured)"
+                        } else {
+                            Doctor-Warn "Agent: copilot configured but .github/copilot-instructions.md missing"
+                        }
+                    }
+                    'claude' {
+                        if (Test-Path (Join-Path $RepoRoot "CLAUDE.md")) {
+                            Doctor-Pass "Agent: claude (CLAUDE.md + .claude/skills/)"
+                        } else {
+                            Doctor-Warn "Agent: claude configured but CLAUDE.md missing" "Re-run setup with -Agent claude"
+                        }
+                    }
+                    'cursor' {
+                        if (Test-Path (Join-Path $RepoRoot ".cursor/rules")) {
+                            Doctor-Pass "Agent: cursor (.cursor/rules + commands/)"
+                        } else {
+                            Doctor-Warn "Agent: cursor configured but .cursor/rules missing" "Re-run setup with -Agent cursor"
+                        }
+                    }
+                    'codex' {
+                        if (Test-Path (Join-Path $RepoRoot ".agents/skills")) {
+                            Doctor-Pass "Agent: codex (.agents/skills/)"
+                        } else {
+                            Doctor-Warn "Agent: codex configured but .agents/skills/ missing" "Re-run setup with -Agent codex"
+                        }
+                    }
+                }
+            }
         }
         catch {
             Doctor-Fail ".forge.json has invalid JSON" "Delete and re-run 'pforge init'"

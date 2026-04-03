@@ -1099,6 +1099,38 @@ cmd_doctor() {
         preset="$(grep -o '"preset"[^,}]*' "$config_path" | sed 's/"preset":\s*"//' | sed 's/"//' || echo "unknown")"
         template_version="$(grep -o '"templateVersion"[^,}]*' "$config_path" | sed 's/"templateVersion":\s*"//' | sed 's/"//' || echo "unknown")"
         doctor_pass ".forge.json valid (preset: $preset, v$template_version)"
+
+        # Check configured agents
+        local configured_agents
+        configured_agents="$(grep -o '"agents"[^,}]*' "$config_path" | sed 's/"agents":\s*"//' | sed 's/"//' || echo "copilot")"
+        [ -z "$configured_agents" ] && configured_agents="copilot"
+
+        IFS=',' read -ra agent_arr <<< "$configured_agents"
+        for ag in "${agent_arr[@]}"; do
+            ag="$(echo "$ag" | tr -d ' ')"
+            case "$ag" in
+                copilot)
+                    [ -f "$REPO_ROOT/.github/copilot-instructions.md" ] \
+                        && doctor_pass "Agent: copilot (configured)" \
+                        || doctor_warn "Agent: copilot configured but .github/copilot-instructions.md missing"
+                    ;;
+                claude)
+                    [ -f "$REPO_ROOT/CLAUDE.md" ] \
+                        && doctor_pass "Agent: claude (CLAUDE.md + .claude/skills/)" \
+                        || doctor_warn "Agent: claude configured but CLAUDE.md missing" "Re-run setup with --agent claude"
+                    ;;
+                cursor)
+                    [ -f "$REPO_ROOT/.cursor/rules" ] \
+                        && doctor_pass "Agent: cursor (.cursor/rules + commands/)" \
+                        || doctor_warn "Agent: cursor configured but .cursor/rules missing" "Re-run setup with --agent cursor"
+                    ;;
+                codex)
+                    [ -d "$REPO_ROOT/.agents/skills" ] \
+                        && doctor_pass "Agent: codex (.agents/skills/)" \
+                        || doctor_warn "Agent: codex configured but .agents/skills/ missing" "Re-run setup with --agent codex"
+                    ;;
+            esac
+        done
     else
         doctor_fail ".forge.json not found" "Run 'pforge init' to bootstrap your project"
     fi

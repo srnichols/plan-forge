@@ -436,6 +436,64 @@ curl -sL https://raw.githubusercontent.com/srnichols/plan-forge/master/pforge.sh
 
 ---
 
+### `pforge smith`
+
+Inspect your forge — diagnose your environment, VS Code configuration, setup health, version currency, and common problems. Every issue includes a `FIX:` suggestion.
+
+```powershell
+# PowerShell
+.\pforge.ps1 smith
+```
+
+```bash
+# Bash
+./pforge.sh smith
+```
+
+**What The Smith checks:**
+
+| Category | Checks |
+|----------|--------|
+| **Environment** | git, VS Code CLI, PowerShell/bash version, GitHub CLI |
+| **VS Code Config** | `chat.agent.enabled`, `chat.useCustomizationsInParentRepositories`, `chat.promptFiles` |
+| **Setup Health** | `.forge.json` valid, `copilot-instructions.md` exists, file counts match preset expectations |
+| **Version Currency** | Compare installed `templateVersion` vs source `VERSION` |
+| **Common Problems** | Duplicate instructions, orphaned agents, missing `applyTo`, unresolved placeholders |
+
+**Example output:**
+```
+╔══════════════════════════════════════════════════════════════╗
+║       Plan Forge — The Smith                                 ║
+╚══════════════════════════════════════════════════════════════╝
+
+Environment:
+  ✅ git 2.44.0
+  ✅ code (VS Code CLI) 1.99.0
+  ✅ PowerShell 7.5.0
+
+VS Code Configuration:
+  ✅ chat.agent.enabled = true
+  ❌ chat.useCustomizationsInParentRepositories not set
+     FIX: Add "chat.useCustomizationsInParentRepositories": true to .vscode/settings.json
+
+Setup Health:
+  ✅ .forge.json valid (preset: dotnet, v1.3.0)
+  ✅ 16 instruction files (expected: >=14 for dotnet)
+
+────────────────────────────────────────────────────
+  Results:  8 passed  |  1 failed  |  2 warnings
+────────────────────────────────────────────────────
+```
+
+**Equivalent manual steps:**
+1. Check that required tools are installed (git, VS Code, PowerShell)
+2. Verify VS Code settings for Copilot agent mode
+3. Validate `.forge.json` and file counts per preset
+4. Check version currency against Plan Forge source
+5. Scan for common problems (duplicates, orphans, broken references)
+
+---
+
 ### `pforge help`
 
 Show all available commands.
@@ -469,6 +527,7 @@ Show all available commands.
 | Scope drift check | `pforge diff <plan>` | git diff + manual comparison to Scope Contract |
 | Install extension | `pforge ext install <path>` | Copy files to 3 directories |
 | Update framework | `pforge update [source]` | Clone latest Plan Forge, manually copy framework files |
+| Inspect the forge | `pforge smith` | Manually check tools, VS Code settings, file counts, version |
 | Harden a plan | *(use prompt)* | Paste Step 2 prompt into Copilot |
 | Execute slices | *(use prompt)* | Paste Step 3 prompt into Copilot |
 | Review & audit | *(use prompt)* | Paste Step 5 prompt into Copilot |
@@ -539,6 +598,7 @@ IF pforge.ps1 does NOT exist in repo root
 Use CLI when:
   • Creating a new phase         → pforge new-phase <name>
   • Checking setup validity       → pforge check
+  • Inspecting the forge          → pforge smith
   • Reading roadmap status        → pforge status
   • Creating a branch from a plan → pforge branch <plan>
   • Installing an extension       → pforge ext install <path>
@@ -555,8 +615,9 @@ Do NOT use CLI when:
 When setting up a new feature for a user:
 
 ```
-1. pforge check                          # Verify setup is valid
-2. pforge new-phase <feature-name>       # Create plan file + roadmap entry
+1. pforge smith                          # Inspect the forge (environment + setup)
+2. pforge check                          # Verify setup files are valid
+3. pforge new-phase <feature-name>       # Create plan file + roadmap entry
 3. pforge phase-status <plan-file> in-progress  # Mark phase as active
 4. pforge branch <plan-file> --dry-run   # Show what branch would be created
 5. (ask user to confirm branch name)

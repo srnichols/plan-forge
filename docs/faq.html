@@ -167,6 +167,24 @@
               Set <code class="text-forge-400">chat.useCustomizationsInParentRepositories</code> in VS Code settings so child workspaces inherit parent guardrails. Run multi-preset setup with different stacks for different directories (e.g., <code class="text-forge-400">-Preset typescript,azure-iac -ProjectPath ./packages/api</code>).
             </div>
           </details>
+
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">What is "The Smith" and when should I run it?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              <p class="mb-3">A blacksmith inspects the forge, checks the tools, and makes sure everything is ready before the work begins. <code class="text-forge-400">pforge smith</code> does the same for your project — it diagnoses five areas in seconds:</p>
+              <ul class="list-disc list-inside space-y-1 mb-3">
+                <li><strong>Environment</strong> — git, VS Code CLI, PowerShell/bash, GitHub CLI</li>
+                <li><strong>VS Code Config</strong> — agent mode, parent repo customizations, prompt file discovery</li>
+                <li><strong>Setup Health</strong> — .forge.json, file counts per preset, copilot-instructions.md</li>
+                <li><strong>Version Currency</strong> — is your Plan Forge install up to date?</li>
+                <li><strong>Common Problems</strong> — duplicate files, orphaned agents, missing applyTo, unresolved placeholders</li>
+              </ul>
+              <p>Every issue includes a <strong>FIX:</strong> suggestion with the exact command or setting to resolve it. Run it after setup, after updates, or whenever something feels off.</p>
+            </div>
+          </details>
         </div>
       </div>
 

@@ -819,7 +819,7 @@ This tells Copilot to walk up to the `.git` root and discover all instruction fi
 | `pforge` command not found | CLI scripts not in repo root | Copy `pforge.ps1`/`pforge.sh` from the template, or use manual steps |
 | "Not inside a git repository" from CLI | Running `pforge` outside a git-initialized directory | `cd` into your project root, or run `git init` first |
 | Setup overwrites existing files | Used `-Force` flag on a brownfield project | Re-run without `-Force`; see AGENT-SETUP.md Section 2 for merge guidance |
-| Plan hardening agent drifts | Missing or stale instruction files | Run `pforge check` to verify all guardrail files exist |
+| Plan hardening agent drifts | Missing or stale instruction files | Run `pforge smith` to inspect the forge, or `pforge check` to verify guardrail files |
 | Framework files outdated | New version of Plan Forge available | Run `pforge update <source-path>` — see [CLI Guide](docs/CLI-GUIDE.md#pforge-update-source-path) |
 
 For CLI-specific issues, see [docs/CLI-GUIDE.md → Troubleshooting](docs/CLI-GUIDE.md#troubleshooting).

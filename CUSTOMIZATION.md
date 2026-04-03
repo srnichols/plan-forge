@@ -715,6 +715,7 @@ The `pforge` CLI is a convenience wrapper — every command shows the equivalent
 ```
 pforge init              Bootstrap project (delegates to setup.ps1/sh)
 pforge check             Validate setup (delegates to validate-setup.ps1/sh)
+pforge smith             Inspect the forge — environment, VS Code config, setup health, common problems
 pforge status            Show phase status from DEPLOYMENT-ROADMAP.md
 pforge new-phase <name>  Create plan file + add to roadmap
 pforge branch <plan>     Create branch from plan's Branch Strategy

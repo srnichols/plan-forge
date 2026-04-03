@@ -299,6 +299,7 @@ Once setup and validation pass, the agent can run the 5-step planning pipeline.
 If `pforge.ps1` (Windows) or `pforge.sh` (macOS/Linux) exists in the repo root, use CLI commands for project management tasks:
 
 ```
+pforge smith                          # Inspect the forge (environment + setup health)
 pforge check                          # Validate setup
 pforge status                         # Show all phases with status
 pforge new-phase <feature-name>       # Create plan file + roadmap entry

@@ -59,6 +59,7 @@
       <button onclick="showTab('python')" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium bg-slate-800 text-slate-400 border border-slate-700/40 whitespace-nowrap hover:border-slate-600" data-tab="python">🐍 Python</button>
       <button onclick="showTab('java')" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium bg-slate-800 text-slate-400 border border-slate-700/40 whitespace-nowrap hover:border-slate-600" data-tab="java">☕ Java</button>
       <button onclick="showTab('go')" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium bg-slate-800 text-slate-400 border border-slate-700/40 whitespace-nowrap hover:border-slate-600" data-tab="go">🐹 Go</button>
+      <button onclick="showTab('azure')" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium bg-slate-800 text-slate-400 border border-slate-700/40 whitespace-nowrap hover:border-slate-600" data-tab="azure">☁️ Azure IaC</button>
     </div>
   </section>
 
@@ -224,6 +225,62 @@ grep -rn "string interpolation" --include="*.cs"    # zero hits in new files</co
         <div class="p-8 rounded-2xl bg-slate-800/40 border border-slate-700/40 text-center">
           <p class="text-slate-400 mb-4">View the full annotated example plan:</p>
           <a href="https://github.com/srnichols/plan-forge/blob/master/docs/plans/examples/Phase-GO-EXAMPLE.md" class="inline-flex items-center gap-2 px-6 py-3 text-sm font-semibold text-forge-400 bg-slate-800 hover:bg-slate-700 rounded-xl border border-slate-700 transition-colors">View Go Example on GitHub →</a>
+        </div>
+      </div>
+
+      <!-- Azure IaC -->
+      <div id="tab-azure" class="tab-content hidden">
+        <div class="mb-10">
+          <h2 class="text-2xl font-bold text-white mb-2">Azure IaC — Bicep / Terraform / azd</h2>
+          <p class="text-slate-400 mb-6">The Azure IaC preset includes 12 specialized instruction files covering Bicep, Terraform, PowerShell, azd, plus enterprise governance guardrails for WAF, CAF, Landing Zones, and Azure Policy.</p>
+        </div>
+
+        <div class="space-y-6">
+          <div class="p-6 rounded-2xl bg-slate-800/60 border border-slate-700/40">
+            <h3 class="text-sm font-bold text-white uppercase tracking-wider mb-4">What the Preset Installs</h3>
+            <div class="grid sm:grid-cols-2 gap-4">
+              <div>
+                <h4 class="text-xs font-semibold text-forge-400 mb-2">12 Instruction Files</h4>
+                <ul class="space-y-1.5 text-xs text-slate-400">
+                  <li class="flex gap-2"><span class="text-slate-600">•</span> <code class="text-forge-400">bicep.instructions.md</code> — Parameters, modules, linter</li>
+                  <li class="flex gap-2"><span class="text-slate-600">•</span> <code class="text-forge-400">terraform.instructions.md</code> — Providers, state, OIDC</li>
+                  <li class="flex gap-2"><span class="text-slate-600">•</span> <code class="text-forge-400">waf.instructions.md</code> — Well-Architected Framework</li>
+                  <li class="flex gap-2"><span class="text-slate-600">•</span> <code class="text-forge-400">caf.instructions.md</code> — Cloud Adoption Framework</li>
+                  <li class="flex gap-2"><span class="text-slate-600">•</span> <code class="text-forge-400">landing-zone.instructions.md</code></li>
+                  <li class="flex gap-2"><span class="text-slate-600">•</span> <code class="text-forge-400">policy.instructions.md</code> — Azure Policy</li>
+                </ul>
+              </div>
+              <div>
+                <h4 class="text-xs font-semibold text-forge-400 mb-2">5 Specialized Agents</h4>
+                <ul class="space-y-1.5 text-xs text-slate-400">
+                  <li class="flex gap-2"><span class="text-slate-600">•</span> <strong>Bicep Reviewer</strong> — naming, security, tags, linter</li>
+                  <li class="flex gap-2"><span class="text-slate-600">•</span> <strong>Terraform Reviewer</strong> — providers, state, OIDC</li>
+                  <li class="flex gap-2"><span class="text-slate-600">•</span> <strong>Security Reviewer</strong> — OWASP Cloud Top 10</li>
+                  <li class="flex gap-2"><span class="text-slate-600">•</span> <strong>Deploy Helper</strong> — guided Bicep/TF/azd deploys</li>
+                  <li class="flex gap-2"><span class="text-slate-600">•</span> <strong>Azure Sweeper</strong> — 8-layer governance audit</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <div class="p-6 rounded-2xl bg-slate-800/60 border border-cyan-700/30">
+            <div class="flex items-center gap-3 mb-4">
+              <span class="w-8 h-8 rounded-full bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-400 text-xs font-bold">⚡</span>
+              <h3 class="text-sm font-bold text-white">Azure Sweeper — 8-Layer Enterprise Governance Audit</h3>
+            </div>
+            <div class="rounded-xl bg-slate-950/80 border border-slate-700/40 overflow-hidden">
+              <div class="p-4 text-sm text-slate-300 space-y-2">
+                <p>1. <strong class="text-white">WAF</strong> — Reliability, Security, Cost, Operations, Performance</p>
+                <p>2. <strong class="text-white">CAF</strong> — Management groups, subscriptions, mandatory tags</p>
+                <p>3. <strong class="text-white">Landing Zone</strong> — Identity, network, policy, management</p>
+                <p>4. <strong class="text-white">Azure Policy</strong> — Effects, assignments, initiatives, remediation</p>
+                <p>5. <strong class="text-white">Org Rules</strong> — Your organization's custom standards</p>
+                <p>6. <strong class="text-white">Resource Graph</strong> — Live resource inventory analysis</p>
+                <p>7. <strong class="text-white">Telemetry</strong> — Monitoring and alerting gaps</p>
+                <p>8. <strong class="text-white">Remediation</strong> — Auto-generates Bicep/TF fix code</p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 

@@ -290,7 +290,22 @@
               <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
             </summary>
             <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
-              Spec Kit focuses on specification-driven development — defining <em>what</em> to build. Plan Forge picks up where specs end — it hardens them into binding execution contracts, adds enterprise guardrails (security, architecture, testing), provides independent review, and integrates persistent memory. They're complementary: use Spec Kit to write the spec, Plan Forge to enforce it.
+              <p class="mb-3">Both are open-source, MIT-licensed frameworks for disciplined AI-assisted development — and both are excellent. They solve different parts of the problem:</p>
+              <p class="mb-3"><a href="https://github.com/github/spec-kit" class="text-forge-400 hover:underline font-medium">Spec Kit</a> (by GitHub) focuses on <strong>Spec-Driven Development</strong> — turning ideas into executable specifications via slash commands (<code class="text-forge-400">/speckit.specify</code>, <code class="text-forge-400">/speckit.plan</code>, <code class="text-forge-400">/speckit.implement</code>). It has a massive community (85K+ stars, 144 contributors), supports 25+ AI agents natively, and offers a rich extension and preset ecosystem with 40+ community extensions. It shines at defining <em>what</em> to build and generating implementation from specs.</p>
+              <p class="mb-3"><strong>Plan Forge</strong> focuses on <strong>hardened execution</strong> — locking specs into scope contracts the AI cannot deviate from, enforcing standards with 16–17 auto-loading guardrail files per stack, providing 18 specialized reviewer agents (security, architecture, performance, compliance, etc.), and validating at every slice boundary. It shines at ensuring the AI builds <em>exactly</em> what was specified with enterprise-grade quality.</p>
+              <p>They're genuinely complementary: use Spec Kit to write the spec, Plan Forge to enforce it. Or pick the one that matches your team's priorities (see the next question).</p>
+            </div>
+          </details>
+
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">If I can only pick one — Spec Kit or Plan Forge?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              <p class="mb-3"><strong>Pick Spec Kit if</strong> your team uses multiple AI tools (not just VS Code), you want the largest community and extension ecosystem, and you prefer a lightweight spec-first methodology you can adopt incrementally. GitHub's backing means strong long-term viability and rapid iteration.</p>
+              <p class="mb-3"><strong>Pick Plan Forge if</strong> your team lives in VS Code + GitHub Copilot, you want deep guardrails that auto-enforce <em>during</em> coding (not just at planning time), you need specialized reviewer agents, and you care about enterprise patterns like deployment templates, lifecycle hooks, and scope-contract enforcement.</p>
+              <p>Honest take: Spec Kit has the bigger ecosystem and broader agent support today. Plan Forge goes deeper on runtime enforcement and enterprise quality gates. Both are free. You really can't go wrong.</p>
             </div>
           </details>
 

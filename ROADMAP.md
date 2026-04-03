@@ -35,6 +35,27 @@ See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 
 ---
 
+### v1.6 — Broader Agent Support
+- First-class Claude Code integration (skills in `.claude/skills/`, `/speckit`-style slash commands)
+- Cursor agent support (`.cursor/` command directory)
+- Gemini CLI and Windsurf agent templates
+- `--ai <agent>` flag on setup to auto-configure the correct command format per agent
+- Generic agent adapter for unsupported tools (bring-your-own-agent pattern)
+
+### v1.7 — Community Extension Ecosystem
+- `pforge extension search` — browse and install community extensions from a catalog
+- `pforge extension publish` — package and submit extensions to the community catalog
+- Community preset framework — let contributors override templates/commands without forking
+- Extension categories: `docs`, `code`, `process`, `integration`, `visibility`
+- Extension website or registry for discoverability
+
+### v1.8 — Specification Interoperability
+- Spec Kit bridge — import Spec Kit `spec.md` / `plan.md` artifacts as Plan Forge execution contracts
+- `/speckit.implement` → Plan Forge executor handoff (use Spec Kit for specify/plan, Plan Forge for hardened execution)
+- Constitution-to-Project-Principles converter (map Spec Kit constitutions to Plan Forge `PROJECT-PRINCIPLES.md`)
+
+---
+
 ## Under Consideration
 
 These ideas are being evaluated but have no committed timeline:
@@ -44,6 +65,9 @@ These ideas are being evaluated but have no committed timeline:
 - **MCP server** exposing Plan Forge operations as tools (plan, harden, review)
 - **Multi-model support** documentation (prompt variants for GPT-4, Gemini, etc.)
 - **Team dashboard** for multi-developer plan coordination
+- **Specify CLI integration** — optional `specify init` detection that layers Plan Forge guardrails on top of a Spec Kit project
+- **Community walkthroughs** — greenfield and brownfield worked examples (similar to Spec Kit's demo repos)
+- **Cross-artifact analysis** — `/analyze` command that validates spec-to-plan-to-code consistency (inspired by Spec Kit's `/speckit.analyze`)
 
 ---
 

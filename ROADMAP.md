@@ -61,7 +61,7 @@ See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 These ideas are being evaluated but have no committed timeline:
 
 - **Web UI** for plan visualization and status tracking
-- **GitHub Action** for automated plan validation in CI
+- ~~**GitHub Action** for automated plan validation in CI~~ → shipped as `srnichols/plan-forge-validate` action
 - **MCP server** exposing Plan Forge operations as tools (plan, harden, review)
 - **Multi-model support** documentation (prompt variants for GPT-4, Gemini, etc.)
 - **Team dashboard** for multi-developer plan coordination

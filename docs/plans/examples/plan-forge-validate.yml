@@ -1,0 +1,23 @@
+# Plan Forge Validate — Example Workflow
+# Copy this file to your repo's .github/workflows/ directory.
+# It validates Plan Forge setup and guardrails on every pull request.
+
+name: Plan Forge Validate
+on:
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  validate:
+    name: Validate Forge
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Plan Forge Validate
+        uses: srnichols/plan-forge-validate@v1
+        with:
+          # path: '.'              # Project directory (default: repo root)
+          # fail-on-warnings: false  # Treat warnings as failures
+          # sweep: true            # Run TODO/FIXME/stub sweep
+          # sweep-fail: false      # Fail on sweep markers (default: warn only)

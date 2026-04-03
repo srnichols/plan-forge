@@ -185,4 +185,5 @@ Same pipeline, fewer copy-paste steps.
 - **Generate a Project Profile** — attach `.github/prompts/project-profile.prompt.md` to customize guardrails
 - **Define Project Principles** — attach `.github/prompts/project-principles.prompt.md` to declare non-negotiable rules
 - **Explore agents** — try the Security Reviewer or Architecture Reviewer on your codebase
+- **Add CI validation** — drop `uses: srnichols/plan-forge-validate@v1` into your PR workflow to automate quality gates
 - **Read the full guide** — [docs/COPILOT-VSCODE-GUIDE.md](COPILOT-VSCODE-GUIDE.md) for advanced tips

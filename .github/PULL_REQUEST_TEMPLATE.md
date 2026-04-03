@@ -14,6 +14,7 @@ Brief description of the changes.
 
 - [ ] I've tested with at least one preset (which? _______)
 - [ ] `validate-setup.ps1` / `validate-setup.sh` passes (or `pforge check`)
+- [ ] CI: Plan Forge Validate action passes (if configured)
 - [ ] New files follow existing naming conventions
 - [ ] Documentation updated (if applicable)
 - [ ] CHANGELOG.md updated (if user-facing change)

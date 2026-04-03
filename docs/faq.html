@@ -295,6 +295,31 @@
         </div>
       </div>
 
+      <!-- CI/CD -->
+      <div class="faq-category">
+        <h2 class="text-xl font-bold text-white mb-5 flex items-center gap-3">
+          <span class="w-8 h-8 rounded-lg bg-forge-500/20 flex items-center justify-center text-forge-400 text-sm">🔄</span>
+          CI/CD
+        </h2>
+        <div class="space-y-3">
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">How do I validate plans automatically on every PR?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              <p class="mb-3">Add the <strong>Plan Forge Validate</strong> GitHub Action to your workflow:</p>
+              <pre class="bg-slate-900/60 rounded-lg p-4 text-xs text-forge-400 overflow-x-auto mb-3"><code>- uses: srnichols/plan-forge-validate@v1
+  with:
+    sweep: true              # Run TODO/FIXME sweep
+    fail-on-warnings: false  # Warnings don't block merge</code></pre>
+              <p class="mb-3">It checks six areas: setup health, file counts per preset, unresolved placeholders, orphaned agents, plan artifacts (scope contracts + slices), and a completeness sweep. Every failure shows exactly what's wrong.</p>
+              <p>The action has zero dependencies beyond bash and git, runs in ~5 seconds, and outputs <code class="text-forge-400">passed</code>, <code class="text-forge-400">failed</code>, <code class="text-forge-400">warnings</code>, and <code class="text-forge-400">result</code> for use in downstream steps.</p>
+            </div>
+          </details>
+        </div>
+      </div>
+
       <!-- Comparison -->
       <div class="faq-category">
         <h2 class="text-xl font-bold text-white mb-5 flex items-center gap-3">

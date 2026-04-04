@@ -36,6 +36,14 @@
 
 ---
 
+
+---
+
+### Phase 1: orchestrator-run-plan
+**Goal**: (one-line description)
+**Plan**: [Phase-1-ORCHESTRATOR-RUN-PLAN-PLAN.md](./Phase-1-ORCHESTRATOR-RUN-PLAN-PLAN.md)
+**Status**: 📋 Planned
+
 ## Completed Phases
 
 <!-- Move phases here when they reach ✅ Complete status -->

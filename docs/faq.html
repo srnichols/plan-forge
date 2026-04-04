@@ -366,6 +366,17 @@
 
           <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
             <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">Can I use Plan Forge with an existing Spec Kit project?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              <p class="mb-3">Yes — Plan Forge auto-detects Spec Kit artifacts. When you start Step 0 (Specifier), it scans for <code class="text-forge-400">specs/*/spec.md</code>, <code class="text-forge-400">plan.md</code>, and <code class="text-forge-400">memory/constitution.md</code>. If found, it offers to import them directly — no re-specifying needed.</p>
+              <p>The extension catalogs also use the same format, so Spec Kit-compatible extensions work in both tools. See the <a href="speckit-interop.html" class="text-forge-400 hover:underline">full integration guide</a> for the combined workflow.</p>
+            </div>
+          </details>
+
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
               <span class="text-sm font-medium text-white pr-4">Does Plan Forge replace my CI/CD pipeline?</span>
               <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
             </summary>

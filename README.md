@@ -816,6 +816,34 @@ This tells Copilot to walk up to the `.git` root and discover all instruction fi
 
 ---
 
+## Extension Ecosystem
+
+Browse and install community extensions from the terminal:
+
+```bash
+pforge ext search                    # Show all extensions
+pforge ext search compliance         # Filter by keyword
+pforge ext add saas-multi-tenancy    # Download + install
+pforge ext info plan-forge-memory    # Show details first
+```
+
+The catalog uses a Spec Kit-compatible format — extensions marked `speckit_compatible` work in both tools. See [docs/EXTENSIONS.md](docs/EXTENSIONS.md) and [extensions/PUBLISHING.md](extensions/PUBLISHING.md) for creating your own.
+
+---
+
+## Spec Kit Interop
+
+Plan Forge integrates seamlessly with [Spec Kit](https://github.com/github/spec-kit):
+
+- **Step 0 auto-detects** Spec Kit artifacts (`specs/*/spec.md`, `plan.md`, `memory/constitution.md`) and offers to import them as Plan Forge execution contracts
+- **Project Principles Path D** converts Spec Kit constitutions to `PROJECT-PRINCIPLES.md`
+- **Extension catalog** uses the same format as Spec Kit's `catalog.community.json`
+- Use Spec Kit to **write the spec**, Plan Forge to **enforce it**
+
+See [Spec Kit + Plan Forge integration guide](https://srnichols.github.io/plan-forge/speckit-interop.html) for the combined workflow.
+
+---
+
 ## CI/CD Integration
 
 Add automated plan validation to your PR workflow with the Plan Forge GitHub Action:

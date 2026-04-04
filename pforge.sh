@@ -1177,6 +1177,20 @@ with open('$config_path', 'w') as f:
     echo ""
     echo "Update complete: v$current_version → v$source_version"
     echo "Run 'pforge check' to validate the updated setup."
+
+    # Check if MCP files were updated — remind to reinstall deps
+    local mcp_updated=false
+    for entry in "${_updates[@]}" "${_new_files[@]}"; do
+        local entry_name="${entry##*|}"
+        if [[ "$entry_name" == mcp/* ]]; then
+            mcp_updated=true
+            break
+        fi
+    done
+    if [ "$mcp_updated" = true ]; then
+        echo ""
+        echo "MCP server files were updated. Run: cd mcp && npm install"
+    fi
 }
 
 # ─── Command: doctor ───────────────────────────────────────────────────

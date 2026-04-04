@@ -1308,6 +1308,13 @@ function Invoke-Update {
     Write-Host ""
     Write-Host "Update complete: v$currentVersion → v$sourceVersion" -ForegroundColor Green
     Write-Host "Run 'pforge check' to validate the updated setup." -ForegroundColor DarkGray
+
+    # Check if MCP files were updated — remind to reinstall deps
+    $mcpUpdated = ($updates + $newFiles) | Where-Object { $_.Name -like "mcp/*" }
+    if ($mcpUpdated) {
+        Write-Host ""
+        Write-Host "MCP server files were updated. Run: cd mcp && npm install" -ForegroundColor Yellow
+    }
 }
 
 # ─── Command: smith ────────────────────────────────────────────────────

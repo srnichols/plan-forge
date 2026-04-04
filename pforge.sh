@@ -1789,8 +1789,18 @@ cmd_run_plan() {
             --estimate)     estimate=true ;;
             --assisted)     assisted=true ;;
             --dry-run)      dry_run=true ;;
-            --model)        shift; model="$1" ;;
-            --resume-from)  shift; resume_from="$1" ;;
+            --model)
+                shift
+                if [ -z "$1" ] || [ "${1#-}" != "$1" ]; then
+                    echo "ERROR: --model requires a value" >&2; exit 1
+                fi
+                model="$1" ;;
+            --resume-from)
+                shift
+                if [ -z "$1" ] || [ "${1#-}" != "$1" ]; then
+                    echo "ERROR: --resume-from requires a value" >&2; exit 1
+                fi
+                resume_from="$1" ;;
         esac
         shift
     done

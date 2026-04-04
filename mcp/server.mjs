@@ -265,16 +265,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         cwd,
         model: args.model || null,
         mode: args.mode || "auto",
-        resumeFrom: args.resumeFrom || null,
+        resumeFrom: args.resumeFrom != null ? Number(args.resumeFrom) : null,
         estimate: args.estimate || false,
         dryRun: args.dryRun || false,
         abortController: activeAbortController,
       });
       activeAbortController = null;
 
+      // C3: Safe status check with fallback
+      const isError = !result || result.status === "failed" || (result.results?.failed > 0);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-        isError: result.status === "failed",
+        isError,
       };
     } catch (err) {
       activeAbortController = null;
@@ -313,7 +315,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       let targetDir = runDirs[0];
       if (args.plan) {
         const planName = args.plan.replace(/\.md$/, "").split("/").pop();
-        const match = runDirs.find((d) => d.includes(planName));
+        // M1: Match plan name at end of directory name (after timestamp_) to avoid false positives
+        const match = runDirs.find((d) => d.endsWith(`_${planName}`) || d.endsWith(`_${planName}/`));
         if (match) targetDir = match;
       }
 

@@ -84,7 +84,13 @@ class OrchestratorEventBus extends EventEmitter {
  * @returns {{ meta, scopeContract, slices, dag }}
  */
 export function parsePlan(planPath) {
-  const content = readFileSync(resolve(planPath), "utf-8");
+  const fullPath = resolve(planPath);
+  // C4: Validate path is within project to prevent traversal
+  const projectRoot = resolve(process.cwd());
+  if (!fullPath.startsWith(projectRoot)) {
+    throw new Error(`Plan path must be within project directory: ${planPath}`);
+  }
+  const content = readFileSync(fullPath, "utf-8");
   const lines = content.split("\n");
 
   const meta = parseMeta(lines);
@@ -442,7 +448,7 @@ export function spawnWorker(prompt, options = {}) {
 
     child.on("error", (err) => {
       clearTimeout(timer);
-      reject(err);
+      reject(new Error(`Failed to spawn ${cmd}: ${err.message} (code: ${err.code || "unknown"})`));
     });
   });
 }
@@ -492,7 +498,7 @@ function extractTokens(events) {
 
   return {
     tokens_out: outputTokens,
-    tokens_in: "unknown", // Not reported by Copilot CLI — estimate from prompt
+    tokens_in: null, // Not directly reported by Copilot CLI
     model,
     premiumRequests,
     apiDurationMs,
@@ -503,12 +509,30 @@ function extractTokens(events) {
 
 /**
  * Run a validation gate command directly (no AI worker needed).
+ * Commands are validated against an allowlist of common build/test tools.
  *
  * @param {string} command - Shell command to run
  * @param {string} cwd - Working directory
  * @returns {{ success: boolean, output: string, error: string }}
  */
 export function runGate(command, cwd) {
+  // C1: Validate gate commands against allowlist to prevent arbitrary execution
+  const allowedPrefixes = [
+    "npm", "npx", "node", "cargo", "go", "dotnet", "python", "python3",
+    "pip", "mvn", "gradle", "make", "cmake", "bash", "sh", "pwsh",
+    "powershell", "pytest", "mypy", "ruff", "eslint", "tsc", "vitest",
+    "jest", "mocha", "grep", "test", "echo", "exit", "true", "false",
+  ];
+  const cmdBase = command.trim().split(/\s+/)[0].toLowerCase();
+  const isAllowed = allowedPrefixes.some((p) => cmdBase === p || cmdBase.endsWith(`/${p}`));
+  if (!isAllowed) {
+    return {
+      success: false,
+      output: "",
+      error: `Validation gate blocked: '${cmdBase}' not in allowlist. Allowed: ${allowedPrefixes.join(", ")}`,
+    };
+  }
+
   try {
     const output = execSync(command, {
       cwd,
@@ -795,9 +819,13 @@ async function executeSlice(slice, options) {
       .map((l) => l.replace(/\s{2,}#\s.*$/, "").trim()) // Strip inline comments (2+ spaces before #)
       .filter((l) => l.length > 0);
 
+    // C2: Track the first failure with its command for clear error reporting
     for (const gateLine of gateLines) {
       gateResult = runGate(gateLine, cwd);
-      if (!gateResult.success) break;
+      if (!gateResult.success) {
+        gateResult.failedCommand = gateLine;
+        break;
+      }
     }
   }
 
@@ -1138,6 +1166,15 @@ async function selfTest() {
 
     const failResult = runGate("exit 1", process.cwd());
     assert("Gate detects failure", !failResult.success);
+
+    // C1: Gate allowlist blocks unknown commands
+    const blockedResult = runGate("curl http://example.com", process.cwd());
+    assert("Gate blocks non-allowlisted commands", !blockedResult.success);
+    assert("Gate error mentions allowlist", blockedResult.error.includes("allowlist"));
+
+    // C1: Gate allows common build tools
+    const npmResult = runGate("node -e \"console.log('ok')\"", process.cwd());
+    assert("Gate allows node commands", npmResult.success);
   } catch (err) {
     assert(`Gate execution: ${err.message}`, false);
   }
@@ -1156,6 +1193,66 @@ async function selfTest() {
     }
   } catch (err) {
     assert(`Estimate: ${err.message}`, false);
+  }
+
+  // Test 10: runPlan() dry-run mode (T1: end-to-end test)
+  console.log("\n─── Full Run (Dry-Run) ───");
+  try {
+    const examplePlan = resolve(process.cwd(), "docs/plans/examples/Phase-DOTNET-EXAMPLE.md");
+    if (existsSync(examplePlan)) {
+      const result = await runPlan(examplePlan, { dryRun: true, cwd: process.cwd() });
+      assert("Dry-run returns status", result.status === "dry-run");
+      assert("Dry-run returns plan object", !!result.plan);
+      assert("Dry-run plan has slices", result.plan.slices.length > 0);
+    }
+  } catch (err) {
+    assert(`Dry-run: ${err.message}`, false);
+  }
+
+  // Test 11: Model routing (T2: loadModelRouting)
+  console.log("\n─── Model Routing ───");
+  try {
+    const routing = loadModelRouting(process.cwd());
+    assert("loadModelRouting returns object", typeof routing === "object");
+    assert("Has default key", "default" in routing);
+
+    // resolveModel priority chain
+    assert("CLI override wins", resolveModel("claude-sonnet-4.6", { default: "gpt-5" }, null) === "claude-sonnet-4.6");
+    assert("Routing default when CLI is auto", resolveModel("auto", { default: "gpt-5" }, null) === "gpt-5");
+    assert("Null when both auto", resolveModel(null, { default: "auto" }, null) === null);
+  } catch (err) {
+    assert(`Model routing: ${err.message}`, false);
+  }
+
+  // Test 12: Path traversal prevention (C4)
+  console.log("\n─── Security ───");
+  try {
+    try {
+      parsePlan("../../../../etc/passwd");
+      assert("Path traversal blocked", false);
+    } catch (err) {
+      assert("Path traversal blocked", err.message.includes("within project"));
+    }
+  } catch (err) {
+    assert(`Security: ${err.message}`, false);
+  }
+
+  // Test 13: Error paths (T2: missing file)
+  console.log("\n─── Error Paths ───");
+  try {
+    try {
+      parsePlan("nonexistent-plan.md");
+      assert("Missing file throws", false);
+    } catch {
+      assert("Missing file throws", true);
+    }
+
+    // Token extraction with empty events
+    const emptyTokens = extractTokens([]);
+    assert("Empty events returns null tokens_in", emptyTokens.tokens_in === null);
+    assert("Empty events returns 0 tokens_out", emptyTokens.tokens_out === 0);
+  } catch (err) {
+    assert(`Error paths: ${err.message}`, false);
   }
 
   // Summary

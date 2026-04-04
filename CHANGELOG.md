@@ -11,9 +11,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - **`pforge smith`** — Forge-themed diagnostic command that inspects environment, VS Code config, setup health, version currency, and common problems with actionable FIX suggestions (PowerShell + Bash parity)
 - **Plan Forge Validate GitHub Action** (`srnichols/plan-forge-validate@v1`) — Composite action for CI plan validation: setup health, file counts, placeholders, orphan detection, plan artifacts, completeness sweep
 - **Multi-agent support** — `-Agent` (PowerShell) / `--agent` (Bash) parameter on setup scripts. Supports `claude`, `cursor`, `codex`, or `all` alongside the default Copilot files
-  - Claude Code: generates `CLAUDE.md` context + `.claude/skills/planforge-*/SKILL.md`
-  - Cursor: generates `.cursor/rules` context + `.cursor/commands/planforge.*.md`
-  - Codex CLI: generates `.agents/skills/planforge-*/SKILL.md`
+  - Claude Code: rich `CLAUDE.md` (project context + all 16 guardrail files embedded by domain) + `.claude/skills/` (all prompts + all reviewer agents as invocable skills)
+  - Cursor: rich `.cursor/rules` (project context + all guardrails) + `.cursor/commands/` (all prompts + all reviewer agents as commands)
+  - Codex CLI: `.agents/skills/` (all prompts + all reviewer agents as skills)
+  - Smart guardrail instructions emulate Copilot's auto-loading, post-edit scanning, and forbidden path checking
 - `.forge.json` now records configured agents in an `agents` field
 - `pforge smith` detects and validates agent-specific file paths
 - **Extension ecosystem** — `pforge ext search`, `pforge ext add <name>`, `pforge ext info <name>` commands with `extensions/catalog.json` community catalog (Spec Kit catalog-compatible format)

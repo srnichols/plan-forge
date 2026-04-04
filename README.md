@@ -778,7 +778,7 @@ You don't need to write complex prompts yourself. The templates do it for you.
 
 ### "What if I don't use VS Code?"
 
-Plan Forge has **advanced integration with VS Code + GitHub Copilot** (auto-loading instructions, pipeline agents with handoff buttons, lifecycle hooks). It also generates **native files for Claude Code, Cursor, and Codex CLI** via the `-Agent` parameter. For any other AI tool, the copy-paste prompts from the runbook work identically — same pipeline, same results.
+Plan Forge has **advanced integration with VS Code + GitHub Copilot** (auto-loading instructions, pipeline agents with handoff buttons, lifecycle hooks). It also generates **rich native files for Claude Code, Cursor, and Codex CLI** via the `-Agent` parameter — including all 16 guardrail files embedded in context, all prompts as native skills/commands, all 18 reviewer agents as invocable skills, and smart instructions that emulate Copilot's auto-loading, post-edit scanning, and forbidden path checking. For any other AI tool, the copy-paste prompts from the runbook work identically.
 
 ### "Do I need to use every step every time?"
 

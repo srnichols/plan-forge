@@ -115,7 +115,7 @@ Connect autonomous execution to the unified system architecture.
 
 - **Trigger from anywhere** — Slack, WhatsApp, Telegram, Discord, phone, terminal
 - **Progress notifications** — "Slice 3 of 8 complete. Build passed. Score: 91."
-- **Approval gates** — "Phase 7 ready to ship. Approve?" → reply "yes" from your phone
+- **Approval gates** — "Phase 7 ready to ship. Approve?" → reply "yes" from Telegram or Slack
 - **OpenBrain context** — orchestrator loads full project history before spawning workers
 
 ### v3.0 — Multi-Agent Orchestration

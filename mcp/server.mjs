@@ -23,7 +23,7 @@ import {
 import { execSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { resolve, join } from "node:path";
-import { parsePlan, runPlan, detectWorkers } from "./orchestrator.mjs";
+import { parsePlan, runPlan, detectWorkers, getCostReport } from "./orchestrator.mjs";
 
 // ─── Config ───────────────────────────────────────────────────────────
 const PROJECT_DIR = process.env.PLAN_FORGE_PROJECT || process.argv.find((a, i) => process.argv[i - 1] === "--project") || process.cwd();
@@ -203,6 +203,16 @@ const TOOLS = [
       },
     },
   },
+  {
+    name: "forge_cost_report",
+    description: "Cost tracking report — shows total spend, per-model breakdown, and monthly aggregation from .forge/cost-history.json. Includes token counts and run history.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+    },
+  },
 ];
 
 // ─── Tool Execution ───────────────────────────────────────────────────
@@ -231,6 +241,7 @@ function executeTool(name, args) {
     case "forge_run_plan":
     case "forge_abort":
     case "forge_plan_status":
+    case "forge_cost_report":
       return null; // Handled async in CallToolRequestSchema handler
     default:
       return { success: false, error: `Unknown tool: ${name}` };
@@ -336,6 +347,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return { content: [{ type: "text", text: `Run directory exists but no data: ${targetDir}` }] };
     } catch (err) {
       return { content: [{ type: "text", text: `Status error: ${err.message}` }], isError: true };
+    }
+  }
+
+  if (name === "forge_cost_report") {
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const report = getCostReport(cwd);
+      return { content: [{ type: "text", text: JSON.stringify(report, null, 2) }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Cost report error: ${err.message}` }], isError: true };
     }
   }
 

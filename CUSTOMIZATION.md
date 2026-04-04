@@ -7,7 +7,9 @@
 
 ## After Running `setup.ps1`
 
-The setup wizard copies preset files and generates your project-specific configuration. Here's what to customize next:
+The setup wizard copies preset files and generates your project-specific configuration. If you used `-Agent claude`, `-Agent cursor`, or `-Agent codex`, native files for those agents were also generated (e.g., `CLAUDE.md`, `.cursor/rules`, `.agents/skills/`). Copilot files are always installed.
+
+Here's what to customize next:
 
 ### 1. Define Project Principles (Recommended)
 

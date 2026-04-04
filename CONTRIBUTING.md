@@ -24,6 +24,8 @@ Open an issue with the `enhancement` label. Describe the problem you're solving,
 4. Run validation: `.\validate-setup.ps1` or `./validate-setup.sh` (or `pforge check` / `pforge smith`)
 5. If your repo has CI configured, the **Plan Forge Validate** action runs automatically on PR
 6. Commit using [conventional commits](https://www.conventionalcommits.org/): `git commit -m "feat(scope): description"`
+
+> **Multi-agent users**: If you test with Claude, Cursor, or Codex, run setup with `-Agent <name>` and verify agent-specific files are generated.
 7. Push and open a Pull Request
 
 ### What Can You Contribute?

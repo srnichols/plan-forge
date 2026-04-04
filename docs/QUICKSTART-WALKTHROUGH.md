@@ -42,6 +42,8 @@ Or use the CLI equivalent:
 
 All checks should pass. If not, re-run `.\setup.ps1 -Preset <your-stack>`.
 
+> **Using Claude, Cursor, or Codex?** Add `-Agent claude` (or `cursor`, `codex`, `all`) to your setup command to generate native files for those tools alongside Copilot.
+
 ---
 
 ## Step 0: Specify the Feature

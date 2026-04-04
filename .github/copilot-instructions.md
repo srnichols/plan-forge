@@ -58,6 +58,9 @@ pforge smith
 
 # Validate setup files
 pforge check
+
+# Multi-agent: setup generates native files for Claude, Cursor, Codex
+# setup.ps1 -Agent claude | setup.sh --agent claude
 ```
 
 ---

@@ -64,11 +64,13 @@ flowchart LR
 1. **Specify your feature**: use `.github/prompts/step0-specify-feature.prompt.md` (or the Specifier agent)
 2. **Add your phase** to `DEPLOYMENT-ROADMAP.md`
 3. **Draft a plan** in `docs/plans/Phase-N-YOUR-FEATURE-PLAN.md`
-4. **Run the pipeline** using prompts from `.github/prompts/step1-*.prompt.md` through `step6-*.prompt.md`
-5. **Or use pipeline agents** — Specifier → Plan Hardener → Executor → Reviewer Gate → Shipper (handoff buttons)
-6. **Use scaffolding prompts** during execution for consistent code (`#file:.github/prompts/new-entity.prompt.md`)
-7. **Run reviewer agents** for focused audits (`#file:.github/agents/security-reviewer.agent.md`)
-8. **Update guardrails** after completion (new patterns → instruction files)
+4. **Execute automatically**: `pforge run-plan docs/plans/Phase-N-YOUR-PLAN.md` (Full Auto) or `--assisted` (interactive)
+5. **Or use the manual pipeline** with prompts from `.github/prompts/step1-*.prompt.md` through `step6-*.prompt.md`
+6. **Or use pipeline agents** — Specifier → Plan Hardener → Executor → Reviewer Gate → Shipper (handoff buttons)
+7. **Monitor progress**: Dashboard at `localhost:3100/dashboard` (live slice cards, cost, session replay)
+8. **Use scaffolding prompts** during execution for consistent code (`#file:.github/prompts/new-entity.prompt.md`)
+9. **Run reviewer agents** for focused audits (`#file:.github/agents/security-reviewer.agent.md`)
+10. **Update guardrails** after completion (new patterns → instruction files)
 
 > **First time?** See [QUICKSTART-WALKTHROUGH.md](../QUICKSTART-WALKTHROUGH.md) for a hands-on tutorial.
 

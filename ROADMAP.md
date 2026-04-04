@@ -13,9 +13,9 @@ See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 
 ---
 
-## Shipped (Unreleased — Pending v1.3.0 Tag)
+## Shipped in v2.0.0
 
-These features are on `master` and available to anyone who clones the repo. They'll be tagged as v1.3.0 soon.
+These features shipped alongside the v2.0 autonomous execution release:
 
 - **`pforge smith`** — forge-themed diagnostics: environment, VS Code config, setup health, version currency, common problems (PS + Bash)
 - **GitHub Action** (`srnichols/plan-forge-validate@v1`) — CI plan validation with 6 checks, configurable sweep, action outputs

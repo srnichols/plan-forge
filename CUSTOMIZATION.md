@@ -529,6 +529,68 @@ Plan Forge installs **lifecycle hooks** (`.github/hooks/plan-forge.json`) that r
 
 ---
 
+## Autonomous Execution (v2.0)
+
+Plan Forge v2.0 adds one-command plan execution with the `pforge run-plan` CLI and `forge_run_plan` MCP tool.
+
+### Execution Modes
+
+| Mode | Command | How It Works |
+|------|---------|-------------|
+| **Full Auto** | `pforge run-plan <plan>` | `gh copilot` CLI executes each slice with full project context |
+| **Assisted** | `pforge run-plan --assisted <plan>` | You code in VS Code; orchestrator prompts and validates gates |
+| **Estimate** | `pforge run-plan --estimate <plan>` | Shows slice count, token estimate, and cost — without executing |
+
+### Model Routing
+
+Configure which model executes which step type in `.forge.json`:
+
+```json
+{
+  "modelRouting": {
+    "execute": "gpt-5.2-codex",
+    "review": "claude-sonnet-4.6",
+    "default": "auto"
+  }
+}
+```
+
+Override for a single run: `pforge run-plan <plan> --model claude-opus-4.6`
+
+### Parallel Execution
+
+Mark independent slices with `[P]` in your hardened plan and they'll execute concurrently:
+
+```markdown
+### Slice 3: Auth Module [P] [scope: src/auth/**]
+### Slice 4: User Module [P] [scope: src/user/**]
+### Slice 5: Integration [depends: Slice 3, Slice 4]
+```
+
+Configure max parallelism in `.forge.json`:
+```json
+{ "maxParallelism": 3 }
+```
+
+### Dashboard
+
+Monitor runs at `localhost:3100/dashboard`:
+- **Progress** — live slice cards with WebSocket updates
+- **Runs** — history table with cost/duration
+- **Cost** — spend per model, monthly trends
+- **Actions** — one-click smith, sweep, analyze
+- **Replay** — browse agent session logs per slice
+- **Config** — visual `.forge.json` editor
+
+### Cost Tracking
+
+Token usage is automatically logged per slice/model. View with:
+- Dashboard Cost tab
+- `forge_cost_report` MCP tool
+- `.forge/cost-history.json` (raw data)
+
+---
+
 ## Skill Slash Commands (Automatic)
 
 After setup, eight skills are available as slash commands in Copilot Chat:

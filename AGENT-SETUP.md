@@ -108,7 +108,7 @@ See [docs/plans/examples/plan-forge-validate.yml](docs/plans/examples/plan-forge
 ```bash
 cd mcp && npm install
 ```
-This enables 8 forge tools (`forge_smith`, `forge_sweep`, `forge_diff`, etc.) as native MCP functions. The setup script already generated `.vscode/mcp.json` and `.claude/mcp.json` configs — `npm install` is the only manual step.
+This enables 13 forge tools (`forge_smith`, `forge_sweep`, `forge_diff`, `forge_run_plan`, `forge_cost_report`, etc.) as native MCP functions. The setup script already generated `.vscode/mcp.json` and `.claude/mcp.json` configs — `npm install` is the only manual step.
 
 ---
 
@@ -323,14 +323,19 @@ pforge check                          # Validate setup
 pforge status                         # Show all phases with status
 pforge new-phase <feature-name>       # Create plan file + roadmap entry
 pforge branch <plan-file>             # Create branch from plan's Branch Strategy
+pforge run-plan <plan-file>           # Execute plan autonomously (Full Auto mode)
+pforge run-plan --assisted <plan>     # Execute plan with human coding + automated gates
+pforge run-plan --estimate <plan>     # Estimate cost without executing
 pforge update <source-path>           # Update framework files (preserves customizations)
 pforge ext install <path>             # Install an extension
 pforge ext list                       # List installed extensions
 ```
 
+The orchestrator also runs as an MCP tool (`forge_run_plan`) and exposes a dashboard at `localhost:3100/dashboard` with live progress, cost tracking, session replay, and quick actions.
+
 See `docs/CLI-GUIDE.md` for full command reference and AI Agent integration guide.
 
-> **Important**: The CLI handles project management. The core pipeline (hardening, execution, review) still runs through Agent Mode prompts — see Option B.
+> **Important**: The CLI handles project management. The core pipeline (hardening, execution, review) can run through `pforge run-plan` (automated) or Agent Mode prompts (manual) — see Options B and C.
 
 ### Option B: Using the Pipeline Prompts (Manual or Agent Mode)
 

@@ -50,7 +50,7 @@ This framework doesn't slow you down. It teaches the AI your standards so you **
 **For developers**: fewer `git revert` moments, less time re-explaining decisions to the AI, more time shipping.
 **For managers**: measurable checkpoints per slice, independent review before merge, architecture that holds up at scale — not just today but six months from now.
 
-At its core, Plan Forge is a **specification-driven framework**. Every feature starts as a spec (Step 0), gets hardened into a binding execution contract (Step 2), is built slice-by-slice against that contract (Step 3), is swept for completeness to eliminate stubs and deferred work (Step 4), and is independently verified for spec compliance (Step 5). The spec is the source of truth — not the code, not the AI's interpretation. Already use a spec-driven workflow? Plan Forge picks up where your specs end and ensures they're actually followed.
+At its core, Plan Forge is a **specification-driven framework**. Every feature starts as a spec (Step 0), passes pre-flight verification (Step 1), gets hardened into a binding execution contract (Step 2), is built slice-by-slice against that contract (Step 3), is swept for completeness to eliminate stubs and deferred work (Step 4), and is independently verified for spec compliance (Step 5). The spec is the source of truth — not the code, not the AI's interpretation. Already use a spec-driven workflow? Plan Forge picks up where your specs end and ensures they're actually followed.
 
 > *Vibe coding gets you a prototype. Plan Forge gets you a product.*
 
@@ -412,12 +412,12 @@ In addition, the setup wizard installs **7 cross-stack agents** for SaaS-critica
 
 ### Pipeline Agents (Shared)
 
-In addition to the preset reviewer agents, the template includes **5 pipeline agents** that automate the full Specify → Plan → Execute → Review → Ship workflow with handoff buttons:
+In addition to the preset reviewer agents, the template includes **5 pipeline agents** that automate the full Specify → Pre-flight → Plan → Execute → Review → Ship workflow with handoff buttons:
 
 | Agent | Purpose | Hands Off To |
 |-------|---------|--------------|
 | `specifier.agent.md` | Interview user to define what & why (Step 0) | Plan Hardener |
-| `plan-hardener.agent.md` | Harden draft plans into execution contracts | Executor |
+| `plan-hardener.agent.md` | Run pre-flight checks (Step 1) + harden into execution contract (Step 2) | Executor |
 | `executor.agent.md` | Execute slices with validation gates | Reviewer Gate |
 | `reviewer-gate.agent.md` | Read-only audit for drift and violations | Shipper (PASS) / Executor (LOCKOUT) |
 | `shipper.agent.md` | Commit, update roadmap, capture postmortem, push/PR | (terminal) |
@@ -512,7 +512,7 @@ I need to build a new feature using the Plan Forge Pipeline.
    - Step 6: Ship — commit, update roadmap, capture postmortem
 
 Use 4 sessions to prevent context bleed:
-- Session 1: Steps 0-2 (Specify & Plan Hardening)
+- Session 1: Steps 0–2 (Specify, Pre-flight, Plan Hardening)
 - Session 2: Steps 3-4 (Execution)
 - Session 3: Step 5 (Review)
 - Session 4: Step 6 (Ship)

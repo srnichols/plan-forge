@@ -256,12 +256,12 @@ This complements the preset agents — use `/create-agent` for project-specific 
 
 #### Pipeline Agents with Handoffs
 
-The template includes **5 pipeline agents** that automate the full Specify → Plan → Execute → Review → Ship workflow using `handoffs:` — a frontmatter property that wires agent-to-agent transitions with clickable buttons:
+The template includes **5 pipeline agents** that automate the full Specify → Pre-flight → Plan → Execute → Review → Ship workflow using `handoffs:` — a frontmatter property that wires agent-to-agent transitions with clickable buttons:
 
 | Agent | Role | Hands Off To |
 |-------|------|-------------|
 | `specifier.agent.md` | Interviews user to define what & why (Step 0) | Plan Hardener |
-| `plan-hardener.agent.md` | Hardens draft plans into execution contracts | Executor |
+| `plan-hardener.agent.md` | Runs pre-flight checks (Step 1) + hardens into execution contract (Step 2) | Executor |
 | `executor.agent.md` | Executes slices with validation gates | Reviewer Gate |
 | `reviewer-gate.agent.md` | Read-only audit for drift and violations | Shipper (PASS) / Executor (LOCKOUT) |
 | `shipper.agent.md` | Commits, updates roadmap, captures postmortem, push/PR | (terminal) |

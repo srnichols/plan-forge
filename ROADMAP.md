@@ -7,70 +7,105 @@
 
 ## Current Release
 
-**v1.2.2** (2026-04-02) — `azure-iac` preset (Bicep/Terraform/PowerShell/azd + WAF/CAF/Landing Zone/Policy guardrails + enterprise `azure-sweeper` agent), multi-preset support (`-Preset dotnet,azure-iac`), `pforge.sh update` command, corrected skills/prompt/instruction counts across all docs.
-
-**v1.2.1** (2026-04-01) — Claude 4.6 prompt engineering enhancements, pipeline workflow refinements, `pforge update` command (PowerShell + Bash), SVG logo, three-layer decision guide.
+**v1.2.2** (2026-04-02) — `azure-iac` preset, multi-preset support, `pforge.sh update` command.
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 
 ---
 
-## Planned
+## Shipped (Unreleased — Pending v1.3.0 Tag)
 
-### v1.3 — Stack Ecosystem Expansion
-- Rust preset (`presets/rust/`)
-- PHP / Laravel preset (`presets/php/`)
-- Swift / iOS preset (`presets/swift/`)
-- Community-contributed preset framework improvements
+These features are on `master` and available to anyone who clones the repo. They'll be tagged as v1.3.0 soon.
 
-### v1.4 — Enhanced Automation
-- Auto-update notification when source version is newer
-- ~~`pforge doctor`~~ → shipped as `pforge smith` (unreleased)
-- Preset-specific validation minimum count checks in `validate-setup`
-
-### v1.5 — Intelligence Layer
-- Built-in token usage estimation per slice
-- Plan complexity scoring (auto-recommend pipeline depth)
-- Historical metrics from past phases (avg slices, pass rates, common findings)
+- **`pforge smith`** — forge-themed diagnostics: environment, VS Code config, setup health, version currency, common problems (PS + Bash)
+- **GitHub Action** (`srnichols/plan-forge-validate@v1`) — CI plan validation with 6 checks, configurable sweep, action outputs
+- **Multi-agent support** — `-Agent claude|cursor|codex|all` generates rich native files:
+  - Claude Code: `CLAUDE.md` with all 16 guardrails embedded + `.claude/skills/` (all prompts + all 18 reviewer agents)
+  - Cursor: `.cursor/rules` with guardrails + `.cursor/commands/` (all prompts + all agents)
+  - Codex CLI: `.agents/skills/` (all prompts + all agents)
+  - Smart guardrail instructions emulate Copilot's auto-loading, post-edit scanning, and forbidden path checking
+- **Extension ecosystem** — `pforge ext search/add/info` with `extensions/catalog.json` (Spec Kit catalog-compatible)
+- **Spec Kit bridge** — Step 0 auto-detects Spec Kit artifacts, Project Principles Path D imports constitution, shared extension format
+- **Spec Kit interop page** — `docs/speckit-interop.html` with combined workflow and artifact mapping
+- **Feature parity table** — agent-by-agent comparison on `index.html`
 
 ---
 
-### v1.6 — Broader Agent Support
-- ~~First-class Claude Code integration (skills in `.claude/skills/`, `/speckit`-style slash commands)~~
-- ~~Cursor agent support (`.cursor/` command directory)~~
-- ~~`--ai <agent>` flag on setup to auto-configure the correct command format per agent~~
-- Gemini CLI and Windsurf agent templates (deferred — TOML format adapter needed)
-- Generic agent adapter for unsupported tools (bring-your-own-agent pattern)
-- **Shipped**: Claude Code, Cursor, Codex CLI via `-Agent` / `--agent` parameter
+## Planned
 
-### v1.7 — Community Extension Ecosystem
-- ~~`pforge extension search` — browse and install community extensions from a catalog~~
-- ~~`pforge extension publish` — package and submit extensions to the community catalog~~
-- ~~Community preset framework — let contributors override templates/commands without forking~~
-- ~~Extension categories: `docs`, `code`, `process`, `integration`, `visibility`~~
-- **Shipped**: `pforge ext search/add/info` + `extensions/catalog.json` (Spec Kit catalog-compatible format)
-- Dual-publish to Spec Kit catalog (deferred — needs community traction first)
+### v1.4 — MCP Server (Plan Forge as a Tool)
+
+Expose Plan Forge operations as MCP tools so any agent with MCP support can invoke them as function calls — not just read prompt files.
+
+- **`plan-forge-mcp` server** — lightweight MCP server (Node.js or Python) exposing:
+  - `forge_smith` — run diagnostics, return structured JSON results
+  - `forge_validate` — run setup validation, return pass/fail/warnings
+  - `forge_sweep` — completeness sweep, return marker locations
+  - `forge_status` — read roadmap phases, return structured status
+  - `forge_diff` — scope drift check against active plan
+  - `forge_ext_search` — search extension catalog, return matches
+- **MCP config generation** — setup.ps1/sh generates `.vscode/mcp.json` (Copilot) and `.claude/mcp.json` (Claude) entries
+- **Self-hosted** — runs locally alongside the project, zero cloud dependencies
+- **Composable with OpenBrain** — if both MCP servers are configured, agents get Plan Forge operations + persistent memory in one session
+
+### v1.5 — Cross-Artifact Analysis
+
+Validate consistency across the full spec → plan → code → test chain.
+
+- **`pforge analyze`** command — scan plan artifacts for:
+  - Every requirement has a corresponding slice
+  - Every slice has a validation gate
+  - Every test file traces back to an acceptance criterion
+  - No orphaned code (files changed but not in scope contract)
+- **Drift report** — structured output showing spec-to-code consistency score
+- **CI integration** — `plan-forge-validate@v1` gets an `analyze: true` input
+- Inspired by Spec Kit's `/speckit.analyze` but runs against hardened plans, not just specs
+
+### v1.6 — Intelligence Layer
+
+Data-driven pipeline optimization from historical execution data.
+
+- **Token usage estimation** per slice — predict cost before executing
+- **Plan complexity scoring** — auto-recommend pipeline depth (skip/light/full)
+- **Historical metrics** — avg slices per phase, pass rates, common review findings
+- **Slice duration estimation** — predict time from plan structure + past data
+- Requires OpenBrain memory for historical data (optional — degrades gracefully without it)
+
+---
+
+## Backlog
+
+These are planned but not yet prioritized into a version:
+
+### Stack Expansion
+- Rust preset (`presets/rust/`)
+- PHP / Laravel preset (`presets/php/`)
+- Swift / iOS preset (`presets/swift/`)
+
+### Agent Expansion
+- Gemini CLI adapter (requires TOML format — different from Markdown adapters)
+- Windsurf adapter
+- Generic bring-your-own-agent pattern (`--agent generic --commands-dir <path>`)
+
+### Extension Ecosystem
+- Dual-publish extensions to Spec Kit catalog
 - Extension website or registry for discoverability
+- Auto-update notification when source version is newer
 
-### v1.8 — Specification Interoperability
-- Spec Kit bridge — import Spec Kit `spec.md` / `plan.md` artifacts as Plan Forge execution contracts
-- `/speckit.implement` → Plan Forge executor handoff (use Spec Kit for specify/plan, Plan Forge for hardened execution)
-- Constitution-to-Project-Principles converter (map Spec Kit constitutions to Plan Forge `PROJECT-PRINCIPLES.md`)
+### Enterprise
+- **Team dashboard** for multi-developer plan coordination
+- **Web UI** for plan visualization and status tracking
+- Preset-specific validation minimum count checks in `validate-setup`
 
 ---
 
 ## Under Consideration
 
-These ideas are being evaluated but have no committed timeline:
+No committed timeline — evaluating based on community feedback:
 
-- **Web UI** for plan visualization and status tracking
-- ~~**GitHub Action** for automated plan validation in CI~~ → shipped as `srnichols/plan-forge-validate` action
-- **MCP server** exposing Plan Forge operations as tools (plan, harden, review)
-- **Multi-model support** documentation (prompt variants for GPT-4, Gemini, etc.)
-- **Team dashboard** for multi-developer plan coordination
-- **Specify CLI integration** — optional `specify init` detection that layers Plan Forge guardrails on top of a Spec Kit project
-- **Community walkthroughs** — greenfield and brownfield worked examples (similar to Spec Kit's demo repos)
-- **Cross-artifact analysis** — `/analyze` command that validates spec-to-plan-to-code consistency (inspired by Spec Kit's `/speckit.analyze`)
+- **Community walkthroughs** — greenfield and brownfield worked examples (demos like Spec Kit's repos)
+- **`specify init` detection** — auto-detect Spec Kit project and layer Plan Forge guardrails on top
+- **Multi-model prompt variants** — GPT-4, Gemini-specific prompt tuning documentation
 
 ---
 
@@ -78,4 +113,5 @@ These ideas are being evaluated but have no committed timeline:
 
 1. **Vote on existing issues** — 👍 reactions help us prioritize
 2. **Open a feature request** — [GitHub Issues](https://github.com/srnichols/plan-forge/issues) with the `enhancement` label
+3. **Contribute directly** — See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines
 3. **Contribute directly** — See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines

@@ -195,7 +195,7 @@ Harden <YOUR-PLAN>.md by adding all 6 Mandatory Template Blocks from the runbook
 For each Execution Slice:
 - Tag as [parallel-safe] (with Parallel Group) or [sequential]
 - Include relevant .github/instructions/*.instructions.md files in Context Files
-- List only instruction files whose domain matches the slice (not all 15 — each consumes context budget)
+- List only instruction files whose domain matches the slice (not all 17 — each consumes context budget)
 - Add a Parallel Merge Checkpoint after each parallel group
 
 Do NOT add features or expand scope. Only structure what already exists.
@@ -228,7 +228,7 @@ After all sections are drafted, run a PLAN QUALITY SELF-CHECK before outputting:
 3. Are all REQUIRED DECISIONS resolved (no TBD remaining)?
 4. Does the Definition of Done include "Reviewer Gate passed (zero 🔴 Critical)"?
 5. Do the Stop Conditions cover: build failure, test failure, scope violation, and security breach?
-6. Does every slice list only the instruction files relevant to its domain (not all 15)?
+6. Does every slice list only the instruction files relevant to its domain (not all 17)?
 7. Are MUST acceptance criteria from the spec traceable to at least one slice's validation gate?
 
 If any check fails, revise the plan before outputting.

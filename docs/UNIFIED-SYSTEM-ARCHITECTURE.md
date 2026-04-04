@@ -181,7 +181,7 @@ graph TB
     end
 
     subgraph "Plan Forge Guardrails"
-        INSTRUCTIONS[".github/instructions/<br/>16 instruction files"]
+        INSTRUCTIONS[".github/instructions/<br/>17 instruction files"]
         PROMPTS[".github/prompts/<br/>15 prompt templates"]
         AGENTS_DEF[".github/agents/<br/>18 agent definitions"]
         HOOKS[".github/hooks/<br/>lifecycle hooks"]

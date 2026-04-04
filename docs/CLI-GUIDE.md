@@ -629,7 +629,7 @@ VS Code Configuration:
 
 Setup Health:
   ✅ .forge.json valid (preset: dotnet, v1.3.0)
-  ✅ 16 instruction files (expected: >=14 for dotnet)
+  ✅ 17 instruction files (expected: >=15 for dotnet)
 
 ────────────────────────────────────────────────────
   Results:  8 passed  |  1 failed  |  2 warnings

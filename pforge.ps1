@@ -1845,12 +1845,12 @@ function Invoke-Smith {
 
     # File count expectations per preset
     $expectedCounts = @{
-        'dotnet'     = @{ instructions = 14; agents = 17; prompts = 9; skills = 8 }
-        'typescript' = @{ instructions = 14; agents = 17; prompts = 9; skills = 8 }
-        'python'     = @{ instructions = 14; agents = 17; prompts = 9; skills = 8 }
-        'java'       = @{ instructions = 14; agents = 17; prompts = 9; skills = 8 }
-        'go'         = @{ instructions = 14; agents = 17; prompts = 9; skills = 8 }
-        'azure-iac'  = @{ instructions = 14; agents = 17; prompts = 9; skills = 8 }
+        'dotnet'     = @{ instructions = 15; agents = 17; prompts = 9; skills = 8 }
+        'typescript' = @{ instructions = 15; agents = 17; prompts = 9; skills = 8 }
+        'python'     = @{ instructions = 15; agents = 17; prompts = 9; skills = 8 }
+        'java'       = @{ instructions = 15; agents = 17; prompts = 9; skills = 8 }
+        'go'         = @{ instructions = 15; agents = 17; prompts = 9; skills = 8 }
+        'azure-iac'  = @{ instructions = 15; agents = 17; prompts = 9; skills = 8 }
         'custom'     = @{ instructions = 3;  agents = 5;  prompts = 7; skills = 0 }
     }
 

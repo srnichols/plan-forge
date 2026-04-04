@@ -303,7 +303,7 @@ chmod +x setup.sh
 
 ### Instruction Files Per Preset
 
-App presets (dotnet / typescript / python / java / go) include **16 instruction files** (17 for TypeScript) that auto-load based on the file being edited:
+App presets (dotnet / typescript / python / java / go) include **17 instruction files** (18 for TypeScript) that auto-load based on the file being edited:
 
 | Instruction File | Purpose |
 |------------------|---------|
@@ -588,7 +588,7 @@ plan-forge/
 ├── presets/                           ← Tech-specific starter files
 │   ├── dotnet/                        ← .NET / C# / Blazor / ASP.NET
 │   │   └── .github/
-│   │       ├── instructions/          ← 16 instruction files (17 for TypeScript)
+│   │       ├── instructions/          ← 17 instruction files (18 for TypeScript)
 │   │       ├── prompts/               ← 15 scaffolding prompts + 8 pipeline prompts (step0–step6 + project-profile)
 │   │       ├── agents/                ← 6 stack-specific agent definitions
 │   │       └── skills/                ← 8 multi-step skills

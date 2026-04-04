@@ -83,7 +83,7 @@ graph TB
 
 ```mermaid
 flowchart LR
-    A["Run Setup Wizard<br/><code>setup.ps1</code>"] --> B["Get Universal Baseline<br/><i>16 instruction files</i>"]
+    A["Run Setup Wizard<br/><code>setup.ps1</code>"] --> B["Get Universal Baseline<br/><i>17 instruction files</i>"]
     B --> C["Run Project Profile Prompt<br/><i>optional, recommended</i>"]
     C --> D["Answer Interview<br/><i>testing, performance,<br/>security, domain rules</i>"]
     D --> E["Generated:<br/><code>project-profile.instructions.md</code>"]
@@ -111,7 +111,7 @@ The wizard generates a starter file. Customize it with:
 
 ### 3. Add Domain-Specific Instruction Files
 
-The presets include 16 instruction files (17 for TypeScript, which adds `frontend.instructions.md`). Add your own for project-specific domains:
+The presets include 17 instruction files (18 for TypeScript, which adds `frontend.instructions.md`). Add your own for project-specific domains:
 
 ```
 .github/instructions/
@@ -401,7 +401,7 @@ Review checklist:
 To contribute a preset for a new tech stack:
 
 1. Create `presets/your-stack/` directory
-2. Add **instruction files** (`.github/instructions/` — 16 files):
+2. Add **instruction files** (`.github/instructions/` — 17 files):
    - `api-patterns.instructions.md` — REST conventions, error responses
    - `auth.instructions.md` — JWT/OIDC, RBAC, multi-tenant isolation, API keys
    - `caching.instructions.md` — Cache strategies
@@ -864,7 +864,7 @@ The essential files for ongoing use are:
 
 ```
 docs/plans/                    ← Runbook + your plans
-.github/instructions/          ← Guardrail files (16 per preset, 17 for TypeScript)
+.github/instructions/          ← Guardrail files (17 per preset, 18 for TypeScript)
 .github/prompts/               ← Scaffolding recipes (15 prompt templates)
 .github/agents/                ← Reviewer/executor roles (19 agent definitions: 6 stack + 8 shared + 5 pipeline)
 .github/skills/                ← Multi-step procedures (8 skills for app presets)

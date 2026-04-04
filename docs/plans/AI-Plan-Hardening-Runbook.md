@@ -308,7 +308,7 @@ Rules:
 - Every slice must have at least one validation gate with an exact command.
 - Include a "Roadmap Reference" backlink at the top of the output.
 - For each slice's Context Files, list only instruction files relevant to that slice's domain.
-  Do not load all 15 instruction files — each consumes context window space.
+  Do not load all 17 instruction files — each consumes context window space.
 
 Output:
 - A revised version of the plan document with all sections above integrated.
@@ -711,7 +711,7 @@ trunk-based (work on current branch).
 - `.github/instructions/relevant.instructions.md`
 
 > **Context budget guidance**: List only instruction files whose domain matches this
-> slice's work. Do not load all 15 instruction files — each consumes context window
+> slice's work. Do not load all 17 instruction files — each consumes context window
 > space. For the plan file, reference only the Scope Contract and current slice section,
 > not the full document. Aim for 3–5 context files per slice.
 

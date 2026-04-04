@@ -40,7 +40,7 @@ Add all **6 Mandatory Template Blocks** from the runbook:
 2. **Required Decisions** — Flag anything implicit or ambiguous as TBD
 3. **Execution Slices** — 30–120 min each with:
    - `Depends On` (which slices must complete first)
-   - `Context Files` (only instruction files whose domain matches the slice — not all 15)
+   - `Context Files` (only instruction files whose domain matches the slice — not all 17)
    - Parallelism tag: `[parallel-safe]` with group or `[sequential]`
    - Validation gates (build, test, manual checks)
 4. **Re-anchor Checkpoints** — Lightweight 4-question check by default, full re-anchor every 3rd slice
@@ -72,7 +72,7 @@ Before outputting the hardened plan, verify:
 3. Are all REQUIRED DECISIONS resolved (no TBD remaining)?
 4. Does the Definition of Done include "Reviewer Gate passed (zero 🔴 Critical)"?
 5. Do the Stop Conditions cover: build failure, test failure, scope violation, and security breach?
-6. Does every slice list only the instruction files relevant to its domain (not all 15)?
+6. Does every slice list only the instruction files relevant to its domain (not all 17)?
 7. Are MUST acceptance criteria from the spec traceable to at least one slice's validation gate?
 
 If any check fails, revise the plan before outputting.

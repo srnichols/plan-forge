@@ -31,7 +31,7 @@ Show a quick example: ask Copilot to "build an auth endpoint" without guardrails
 pforge smith    # Show: environment healthy, 16 guardrail files loaded
 ```
 
-> "16 instruction files auto-load based on what file you're editing. Security rules when editing auth. Database rules when editing queries. Architecture rules always."
+> "17 instruction files auto-load based on what file you're editing. Security rules when editing auth. Database rules when editing queries. Architecture rules always."
 
 ### 3. The Pipeline (5 min)
 

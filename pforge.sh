@@ -1573,7 +1573,7 @@ cmd_doctor() {
     local exp_instr=3 exp_agents=5 exp_prompts=7 exp_skills=0
     case "$preset_key" in
         dotnet|typescript|python|java|go|azure-iac)
-            exp_instr=14; exp_agents=17; exp_prompts=9; exp_skills=8 ;;
+            exp_instr=15; exp_agents=17; exp_prompts=9; exp_skills=8 ;;
         custom)
             exp_instr=3; exp_agents=5; exp_prompts=7; exp_skills=0 ;;
     esac

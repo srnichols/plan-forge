@@ -778,7 +778,7 @@ You don't need to write complex prompts yourself. The templates do it for you.
 
 ### "What if I don't use VS Code?"
 
-This template is designed for VS Code with GitHub Copilot. The instruction files (`.github/instructions/*.instructions.md`) and prompt templates are Copilot-specific features. If you use a different editor, you can still read the runbook and manually copy-paste the prompts into any AI chat, but you won't get the automatic file-based loading.
+Plan Forge has **advanced integration with VS Code + GitHub Copilot** (auto-loading instructions, pipeline agents with handoff buttons, lifecycle hooks). It also generates **native files for Claude Code, Cursor, and Codex CLI** via the `-Agent` parameter. For any other AI tool, the copy-paste prompts from the runbook work identically — same pipeline, same results.
 
 ### "Do I need to use every step every time?"
 

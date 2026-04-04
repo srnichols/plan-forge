@@ -622,17 +622,181 @@ export class SequentialScheduler {
 }
 
 /**
- * Parallel scheduler — Phase 6 placeholder.
- * Interface defined now, implementation deferred.
+ * Parallel scheduler — Phase 6: executes [P]-tagged slices concurrently.
+ * Respects DAG dependencies and merge points.
+ * Falls back to sequential for slices without [P] or with scope conflicts.
  */
 export class ParallelScheduler {
-  constructor(eventBus) {
+  constructor(eventBus, maxParallelism = 3) {
     this.eventBus = eventBus;
+    this.maxParallelism = maxParallelism;
   }
 
-  async execute(_nodes, _order, _executeFn, _options) {
-    throw new Error("ParallelScheduler not implemented — see Phase 6");
+  /**
+   * Execute slices respecting DAG dependencies with parallel [P]-tagged slices.
+   * Uses a readiness-based approach: slices become ready when all dependencies complete.
+   */
+  async execute(nodes, order, executeFn, options = {}) {
+    const { abortSignal } = options;
+    const results = new Map();
+    const completed = new Set();
+    const allResults = [];
+
+    // Check for scope conflicts among parallel-eligible slices
+    const conflicts = detectScopeConflicts(nodes);
+
+    // Process until all slices are done
+    while (completed.size < nodes.size) {
+      if (abortSignal?.aborted) {
+        this.eventBus.emit("run-aborted", { reason: "User abort" });
+        break;
+      }
+
+      // Find ready slices: all dependencies completed
+      const ready = [];
+      for (const id of order) {
+        if (completed.has(id)) continue;
+        const node = nodes.get(id);
+        const depsComplete = (node.depends || []).every((d) => completed.has(d));
+        if (!depsComplete) continue;
+        // Check if any dependency failed
+        const depFailed = (node.depends || []).some((d) => {
+          const r = results.get(d);
+          return r && (r.status === "failed" || r.status === "error");
+        });
+        if (depFailed) {
+          // Skip slices whose dependencies failed
+          const skipResult = { sliceId: id, status: "skipped", reason: "dependency failed" };
+          results.set(id, skipResult);
+          allResults.push(skipResult);
+          completed.add(id);
+          continue;
+        }
+        ready.push(id);
+      }
+
+      if (ready.length === 0) break; // No more slices can run
+
+      // Separate parallel-eligible from sequential
+      const parallelReady = ready.filter((id) => {
+        const node = nodes.get(id);
+        return node.parallel && !conflicts.has(id);
+      });
+      const sequentialReady = ready.filter((id) => !parallelReady.includes(id));
+
+      // Execute parallel batch (up to maxParallelism)
+      if (parallelReady.length > 1) {
+        const batch = parallelReady.slice(0, this.maxParallelism);
+        const promises = batch.map(async (id) => {
+          const slice = nodes.get(id);
+          this.eventBus.emit("slice-started", { sliceId: id, title: slice.title, parallel: true });
+          try {
+            const result = await executeFn(slice);
+            const r = { sliceId: id, ...result };
+            if (result.status === "passed") {
+              this.eventBus.emit("slice-completed", { sliceId: id, ...result, parallel: true });
+            } else {
+              this.eventBus.emit("slice-failed", { sliceId: id, ...result, parallel: true });
+            }
+            return r;
+          } catch (err) {
+            const r = { sliceId: id, status: "error", error: err.message };
+            this.eventBus.emit("slice-failed", r);
+            return r;
+          }
+        });
+
+        const batchResults = await Promise.all(promises);
+        for (const r of batchResults) {
+          results.set(r.sliceId, r);
+          allResults.push(r);
+          completed.add(r.sliceId);
+        }
+      } else {
+        // Execute one at a time (sequential or single parallel)
+        const id = sequentialReady[0] || parallelReady[0];
+        if (!id) break;
+
+        const slice = nodes.get(id);
+        if (slice.status === "completed") {
+          const r = { sliceId: id, status: "skipped" };
+          results.set(id, r);
+          allResults.push(r);
+          completed.add(id);
+          continue;
+        }
+
+        this.eventBus.emit("slice-started", { sliceId: id, title: slice.title });
+        try {
+          const result = await executeFn(slice);
+          const r = { sliceId: id, ...result };
+          results.set(id, r);
+          allResults.push(r);
+          completed.add(id);
+
+          if (result.status === "passed") {
+            this.eventBus.emit("slice-completed", { sliceId: id, ...result });
+          } else {
+            this.eventBus.emit("slice-failed", { sliceId: id, ...result });
+            // Don't break — parallel scheduler checks deps, not sequence
+          }
+        } catch (err) {
+          const r = { sliceId: id, status: "error", error: err.message };
+          results.set(id, r);
+          allResults.push(r);
+          completed.add(id);
+          this.eventBus.emit("slice-failed", r);
+        }
+      }
+    }
+
+    return allResults;
   }
+}
+
+/**
+ * Detect scope conflicts among parallel-eligible slices (M6).
+ * If two [P] slices have overlapping file scopes, they can't run in parallel.
+ * @returns {Set<string>} IDs of slices that have conflicts (forced sequential)
+ */
+function detectScopeConflicts(nodes) {
+  const conflicts = new Set();
+  const parallelSlices = [];
+
+  for (const [id, node] of nodes) {
+    if (node.parallel) {
+      parallelSlices.push({ id, scope: node.scope || [] });
+    }
+  }
+
+  // Check all pairs for overlapping scopes
+  for (let i = 0; i < parallelSlices.length; i++) {
+    for (let j = i + 1; j < parallelSlices.length; j++) {
+      const a = parallelSlices[i];
+      const b = parallelSlices[j];
+
+      // No scope declared = global = conflicts with everything
+      if (a.scope.length === 0 || b.scope.length === 0) {
+        conflicts.add(a.id);
+        conflicts.add(b.id);
+        continue;
+      }
+
+      // Check for overlap (simple prefix match)
+      for (const sa of a.scope) {
+        for (const sb of b.scope) {
+          const baseA = sa.replace(/\*\*/g, "");
+          const baseB = sb.replace(/\*\*/g, "");
+          if (baseA.startsWith(baseB) || baseB.startsWith(baseA)) {
+            conflicts.add(a.id);
+            conflicts.add(b.id);
+          }
+        }
+      }
+    }
+  }
+
+  return conflicts;
 }
 
 // ─── Orchestrator ─────────────────────────────────────────────────────
@@ -697,8 +861,12 @@ export async function runPlan(planPath, options = {}) {
   };
   writeFileSync(resolve(runDir, "run.json"), JSON.stringify(runMeta, null, 2));
 
-  // Select scheduler
-  const scheduler = new SequentialScheduler(eventBus);
+  // Select scheduler — use ParallelScheduler if plan has [P] tags
+  const hasParallelSlices = plan.slices.some((s) => s.parallel);
+  const maxParallelism = loadMaxParallelism(cwd);
+  const scheduler = hasParallelSlices
+    ? new ParallelScheduler(eventBus, maxParallelism)
+    : new SequentialScheduler(eventBus);
   const abortSignal = abortController?.signal || null;
 
   eventBus.emit("run-started", runMeta);
@@ -753,6 +921,24 @@ function loadModelRouting(cwd) {
     // Invalid JSON or missing file — use defaults
   }
   return { default: "auto" };
+}
+
+/**
+ * Load max parallelism from .forge.json.
+ * Schema: { "maxParallelism": 3 }
+ * @returns {number}
+ */
+function loadMaxParallelism(cwd) {
+  const configPath = resolve(cwd, ".forge.json");
+  try {
+    if (existsSync(configPath)) {
+      const config = JSON.parse(readFileSync(configPath, "utf-8"));
+      if (typeof config.maxParallelism === "number" && config.maxParallelism > 0) {
+        return config.maxParallelism;
+      }
+    }
+  } catch { /* defaults */ }
+  return 3; // Default: 3 concurrent workers
 }
 
 /**
@@ -1518,6 +1704,49 @@ async function selfTest() {
     assert("Cost report works (may be empty)", report !== undefined);
   } catch (err) {
     assert(`Cost calculation: ${err.message}`, false);
+  }
+
+  // Test 15: Parallel scheduler (Phase 6)
+  console.log("\n─── Parallel Scheduler ───");
+  try {
+    const events = [];
+    const handler = { handle: (e) => events.push(e) };
+    const bus = new OrchestratorEventBus(handler);
+    const pScheduler = new ParallelScheduler(bus, 2);
+
+    // Build a DAG with parallel slices
+    const pNodes = new Map();
+    pNodes.set("1", { number: "1", title: "Setup", depends: [], parallel: false, scope: [], children: ["2", "3"], inDegree: 0 });
+    pNodes.set("2", { number: "2", title: "AuthModule", depends: ["1"], parallel: true, scope: ["src/auth/**"], children: ["4"], inDegree: 1 });
+    pNodes.set("3", { number: "3", title: "UserModule", depends: ["1"], parallel: true, scope: ["src/user/**"], children: ["4"], inDegree: 1 });
+    pNodes.set("4", { number: "4", title: "Integration", depends: ["2", "3"], parallel: false, scope: [], children: [], inDegree: 2 });
+    const pOrder = ["1", "2", "3", "4"];
+
+    let concurrentCount = 0;
+    let maxConcurrent = 0;
+    const pResults = await pScheduler.execute(pNodes, pOrder, async (slice) => {
+      concurrentCount++;
+      maxConcurrent = Math.max(maxConcurrent, concurrentCount);
+      await new Promise((r) => setTimeout(r, 50)); // Simulate work
+      concurrentCount--;
+      return { status: "passed", duration: 50 };
+    });
+
+    assert("Parallel scheduler executed all 4 slices", pResults.length === 4);
+    assert("All slices passed", pResults.every((r) => r.status === "passed"));
+    assert("Slices 2+3 ran in parallel", maxConcurrent >= 2);
+    assert("Events fired for parallel slices", events.some((e) => e.type === "slice-completed"));
+
+    // Test conflict detection
+    const conflictNodes = new Map();
+    conflictNodes.set("1", { parallel: true, scope: ["src/auth/**"] });
+    conflictNodes.set("2", { parallel: true, scope: ["src/auth/login.js"] }); // Overlaps!
+    conflictNodes.set("3", { parallel: true, scope: ["src/user/**"] }); // No overlap
+    const conflicts = detectScopeConflicts(conflictNodes);
+    assert("Conflict detection finds overlapping scopes", conflicts.has("1") && conflicts.has("2"));
+    assert("Non-overlapping scope has no conflict", !conflicts.has("3"));
+  } catch (err) {
+    assert(`Parallel scheduler: ${err.message}`, false);
   }
 
   // Summary

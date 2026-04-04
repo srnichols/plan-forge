@@ -993,6 +993,65 @@ if (Test-Path $guideSrc) {
     Copy-WithCreate $guideSrc $guideDst $Force.IsPresent
 }
 
+# ─── Step 7b: Copy MCP Server + Generate Config ───────────────────────
+$mcpSrcDir = Join-Path $templateRoot "mcp"
+if (Test-Path $mcpSrcDir) {
+    Write-Host ""
+    Write-Host "Step 7b: MCP server (Plan Forge as tools)" -ForegroundColor Cyan
+
+    $mcpDstDir = Join-Path $ProjectPath "mcp"
+    if (-not (Test-Path $mcpDstDir)) {
+        New-Item -ItemType Directory -Path $mcpDstDir -Force | Out-Null
+    }
+    Copy-Item -Path (Join-Path $mcpSrcDir "server.mjs") -Destination (Join-Path $mcpDstDir "server.mjs") -Force
+    Copy-Item -Path (Join-Path $mcpSrcDir "package.json") -Destination (Join-Path $mcpDstDir "package.json") -Force
+    Write-Host "  COPY  mcp/server.mjs + package.json" -ForegroundColor Green
+
+    # Generate .vscode/mcp.json for Copilot MCP integration
+    $vscodeMcp = Join-Path $ProjectPath ".vscode/mcp.json"
+    $mcpEntry = @{
+        servers = @{
+            "plan-forge" = @{
+                type = "stdio"
+                command = "node"
+                args = @("mcp/server.mjs")
+                cwd = '${workspaceFolder}'
+            }
+        }
+    }
+
+    if (Test-Path $vscodeMcp) {
+        $existing = Get-Content $vscodeMcp -Raw | ConvertFrom-Json
+        if (-not $existing.servers.PSObject.Properties["plan-forge"]) {
+            $existing.servers | Add-Member -NotePropertyName "plan-forge" -NotePropertyValue $mcpEntry.servers."plan-forge" -Force
+            $existing | ConvertTo-Json -Depth 10 | Set-Content $vscodeMcp
+            Write-Host "  MERGE .vscode/mcp.json → added 'plan-forge' server" -ForegroundColor Green
+        }
+        else {
+            Write-Host "  SKIP  .vscode/mcp.json → 'plan-forge' already exists" -ForegroundColor Yellow
+        }
+    }
+    else {
+        $vscodeDir = Join-Path $ProjectPath ".vscode"
+        if (-not (Test-Path $vscodeDir)) { New-Item -ItemType Directory -Path $vscodeDir -Force | Out-Null }
+        $mcpEntry | ConvertTo-Json -Depth 10 | Set-Content $vscodeMcp
+        Write-Host "  CREATE .vscode/mcp.json (plan-forge MCP server)" -ForegroundColor Green
+    }
+
+    # Generate .claude/mcp.json for Claude MCP integration (if -Agent claude)
+    if ($agents -contains 'claude' -or $agents -contains 'all') {
+        $claudeMcpDir = Join-Path $ProjectPath ".claude"
+        $claudeMcp = Join-Path $claudeMcpDir "mcp.json"
+        if (-not (Test-Path $claudeMcpDir)) { New-Item -ItemType Directory -Path $claudeMcpDir -Force | Out-Null }
+        if (-not (Test-Path $claudeMcp)) {
+            $mcpEntry | ConvertTo-Json -Depth 10 | Set-Content $claudeMcp
+            Write-Host "  CREATE .claude/mcp.json (plan-forge MCP server)" -ForegroundColor Green
+        }
+    }
+
+    Write-Host "  Run 'cd mcp && npm install' to install MCP dependencies" -ForegroundColor DarkGray
+}
+
 # ─── Done ──────────────────────────────────────────────────────────────
 Write-Host ""
 Write-Host "╔══════════════════════════════════════════════════════════════╗" -ForegroundColor Green

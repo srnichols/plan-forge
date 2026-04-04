@@ -1,0 +1,19 @@
+{
+  "name": "plan-forge-mcp",
+  "version": "1.0.0",
+  "description": "MCP server exposing Plan Forge operations as tools for AI agents",
+  "main": "server.mjs",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "license": "MIT",
+  "author": "srnichols",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/srnichols/plan-forge"
+  }
+}

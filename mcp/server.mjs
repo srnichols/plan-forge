@@ -24,6 +24,7 @@ import { execSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { parsePlan, runPlan, detectWorkers, getCostReport } from "./orchestrator.mjs";
+import { createHub, readHubPort } from "./hub.mjs";
 
 // ─── Config ───────────────────────────────────────────────────────────
 const PROJECT_DIR = process.env.PLAN_FORGE_PROJECT || process.argv.find((a, i) => process.argv[i - 1] === "--project") || process.cwd();
@@ -33,6 +34,7 @@ const PFORGE = IS_WINDOWS ? "powershell.exe -NoProfile -ExecutionPolicy Bypass -
 // ─── Orchestrator State ───────────────────────────────────────────────
 let activeAbortController = null;
 let activeRunPromise = null;
+let activeHub = null; // Phase 3: WebSocket hub instance
 
 // ─── Helpers ──────────────────────────────────────────────────────────
 function runPforge(args, cwd = PROJECT_DIR) {
@@ -272,6 +274,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       activeAbortController = new AbortController();
+      // Phase 3: If hub is running, use it as event handler for live broadcasting
+      const eventHandler = activeHub ? { handle: (event) => activeHub.broadcast(event) } : null;
       const result = await runPlan(planPath, {
         cwd,
         model: args.model || null,
@@ -280,6 +284,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         estimate: args.estimate || false,
         dryRun: args.dryRun || false,
         abortController: activeAbortController,
+        eventHandler,
       });
       activeAbortController = null;
 
@@ -381,6 +386,23 @@ async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error("Plan Forge MCP server running (stdio transport)");
+
+  // Phase 3: Start WebSocket hub alongside MCP server
+  try {
+    activeHub = await createHub({ cwd: PROJECT_DIR });
+    console.error(`Plan Forge WebSocket hub running on port ${activeHub.port}`);
+  } catch (err) {
+    console.error(`[hub] WebSocket hub failed to start: ${err.message} (non-fatal)`);
+    // Non-fatal — MCP server works without hub
+  }
+
+  // Graceful shutdown
+  process.on("SIGTERM", () => {
+    if (activeHub) activeHub.close();
+  });
+  process.on("SIGINT", () => {
+    if (activeHub) activeHub.close();
+  });
 }
 
 main().catch((err) => {

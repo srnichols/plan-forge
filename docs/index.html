@@ -1013,17 +1013,26 @@
 
 1. Scan THIS project's root directory and auto-detect the tech stack from marker files (*.csproj = dotnet, go.mod = go, package.json + tsconfig.json = typescript, pom.xml = java, pyproject.toml = python, *.bicep = azure-iac). If multiple stacks exist, combine them.
 
-2. Run the Plan Forge setup script non-interactively:
-   .\setup.ps1 -Preset &lt;detected&gt; -ProjectPath "." -ProjectName "&lt;this folder name&gt;" -Force
+2. Detect which AI tool is running this prompt and set the -Agent flag:
+   - GitHub Copilot → -Agent copilot (default, can omit)
+   - Claude Code → -Agent claude
+   - Cursor → -Agent cursor
+   - Codex CLI → -Agent codex
+   - Not sure → -Agent all (installs all agent formats)
 
-3. After setup completes, customize the generated files:
+3. Run the Plan Forge setup script non-interactively:
+   .\setup.ps1 -Preset &lt;detected&gt; -Agent &lt;detected-agent&gt; -ProjectPath "." -ProjectName "&lt;this folder name&gt;" -Force
+
+4. After setup completes, customize the generated files:
    - Edit .github/copilot-instructions.md with this project's actual name, tech stack, build/test/lint commands, and architecture
-   - Edit AGENTS.md if this project has background services
+   - If CLAUDE.md was generated, verify it looks correct
    - Edit docs/plans/DEPLOYMENT-ROADMAP.md with a first phase placeholder
 
-4. Run .\validate-setup.ps1 to confirm all checks pass.
+5. Run .\pforge.ps1 smith to inspect the forge and confirm all checks pass.
 
-5. Show me a summary of what was installed and any issues found.</code></pre>
+6. If specs/ or memory/constitution.md exist (Spec Kit project), note that Step 0 will auto-detect and offer to import them.
+
+7. Show me a summary of what was installed and any issues found.</code></pre>
             </div>
             <p class="text-xs text-slate-600 mt-3 text-center">Works with GitHub Copilot (Agent Mode), Claude Code, Cursor, or any AI tool with terminal access.</p>
           </div>
@@ -1205,9 +1214,11 @@ role-based access control to the admin panel.</code></pre>
               <pre class="p-5 text-sm text-slate-200 overflow-x-auto whitespace-pre-wrap"><code>Read the file AGENT-SETUP.md in the plan-forge repo root.
 Follow the instructions exactly:
 1. Scan this project and detect the tech stack
-2. Run setup.ps1 (or setup.sh) non-interactively with the correct -Preset flag and -Force
-3. Customize copilot-instructions.md with this project's actual details
-4. Validate the setup completed successfully
+2. Detect which AI agent you are (Copilot/Claude/Cursor/Codex) for the -Agent flag
+3. Run setup.ps1 (or setup.sh) non-interactively with the correct -Preset and -Agent flags plus -Force
+4. Customize copilot-instructions.md with this project's actual details
+5. Run pforge smith to validate the setup
+6. Note any Spec Kit artifacts found (specs/, memory/constitution.md)
 
 Repo: https://github.com/srnichols/plan-forge
 Target project: (current directory)</code></pre>

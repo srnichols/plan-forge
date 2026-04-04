@@ -8,8 +8,34 @@
 
 ## Critical Fixes (Must Apply Before Execution)
 
-### C1: Worker Spawning Spike (Phase 1)
-**Add Slice 0** before all other slices: 30-min spike to confirm Copilot CLI / Claude CLI can be invoked non-interactively via `child_process.spawn`. Document exact invocation patterns. If neither works, identify alternative (e.g., direct model API calls, or shelling out to `gh copilot` CLI).
+### C1: Worker Spawning Spike + Execution Modes (Phase 1)
+**Add Slice 0** before all other slices: 60-min spike to test all worker spawning options and define execution modes.
+
+**Test matrix:**
+1. Can `claude` CLI be invoked non-interactively via `child_process.spawn`? (pipe plan context via stdin)
+2. Can `codex` CLI be invoked non-interactively? (skills mode)
+3. Can `gh copilot` CLI be invoked non-interactively? (suggest/explain modes)
+4. Can VS Code Copilot be controlled programmatically? (likely answer: NO — it's a UI extension)
+5. Can the orchestrator run build/test commands directly without an agent? (validation-only mode)
+
+**Define two execution modes based on spike results:**
+
+| Mode | Who Writes Code | Who Validates | Best For |
+|------|----------------|--------------|----------|
+| **Full Auto** | Claude CLI / Codex CLI (spawned workers) | Orchestrator runs gates | Hands-off execution, overnight builds |
+| **Assisted** | Developer in VS Code Copilot (manual) | Orchestrator runs gates between slices | VS Code Copilot users who want interactive coding + automated validation |
+
+**Assisted mode workflow:**
+1. Developer starts `pforge run-plan --assisted <plan>`
+2. Orchestrator shows: "Slice 1 ready. Execute in your Copilot session, then press Enter."
+3. Developer writes code in VS Code Copilot Agent Mode (their preferred tool)
+4. Developer presses Enter (or runs `pforge gate <plan> 1`)
+5. Orchestrator runs validation gates: build + test + sweep
+6. If gates pass → "Slice 1 complete. Slice 2 ready."
+7. If gates fail → "Slice 1 failed: test X broke. Fix and re-run gate."
+8. Repeat until all slices pass → auto-analyze → report
+
+**Why Assisted mode matters:** VS Code Copilot is the #1 usage pattern. Users shouldn't need to switch to CLI agents just because the orchestrator can't spawn VS Code sessions. Assisted mode lets them stay in their preferred tool while the orchestrator enforces quality.
 
 ### C2: DAG-Based Executor from Day 1 (Phase 1, Slice 1)
 Redesign `runPlan()` as a DAG scheduler, not a sequential loop. Sequential execution = DAG with no parallel tags. This prevents Phase 6 from being a rewrite. Add:
@@ -92,7 +118,7 @@ Specify in Phase 6 Slice 5: `.forge/phase.lock` with `{ user, timestamp, phase, 
 
 | Phase | Before | After | Delta | Notes |
 |-------|--------|-------|-------|-------|
-| Phase 1 | 8 slices | 9 slices | +1 | Added Slice 0 (spike), merged Slices 2+7 |
+| Phase 1 | 8 slices | 9 slices | +1 | Added Slice 0 (spike + execution modes), merged Slices 2+7 |
 | Phase 2 | 5 slices | 4 slices | -1 | Removed Slice 1 (consolidated into Phase 1) |
 | Phase 3 | 4 slices | 4 slices | 0 | Added architecture docs to existing slices |
 | Phase 4 | 9 slices | 10 slices | +1 | Added REST API slice |

@@ -5,6 +5,7 @@ description: "Pipeline Step 0 — Specify what you want to build and why, before
 # Step 0: Specify Feature
 
 > **Pipeline**: Step 0 (optional, recommended) — Run before Steps 1–5  
+> **Model suggestion**: Claude (best at conversational interviews and ambiguity detection)  
 > **When**: You have a rough idea for a feature but haven't written a plan yet  
 > **Next Step**: Write a `*-PLAN.md`, then `step1-preflight-check.prompt.md`  
 > **Output**: A specification section to include as front matter in your Phase Plan

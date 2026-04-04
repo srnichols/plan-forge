@@ -6,6 +6,7 @@ description: "Pipeline Step 5 — Independent review gate and drift detection. R
 
 > **Pipeline**: Step 5 of 5 (Session 3 — Review & Audit)  
 > **When**: After completeness sweep passes (Step 4), in a fresh agent session  
+> **Model suggestion**: Claude or Gemini — best at independent critical analysis and drift detection  
 > **Verdict**: PASS (ship it) or FAIL (lockout — fix and re-review)
 
 Replace `<YOUR-HARDENED-PLAN>` with your hardened plan filename.

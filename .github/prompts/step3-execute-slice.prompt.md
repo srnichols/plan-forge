@@ -6,6 +6,7 @@ description: "Pipeline Step 3 — Execute a hardened plan slice-by-slice with va
 
 > **Pipeline**: Step 3 of 5 (Session 2 — Execution)  
 > **When**: After plan is hardened (Step 2), in a new agent session  
+> **Model suggestion**: Any model / Codex — execution is mechanical; Codex is fast and focused  
 > **Next Step**: `step4-completeness-sweep.prompt.md`
 
 Replace `<YOUR-HARDENED-PLAN>` with your hardened plan filename.

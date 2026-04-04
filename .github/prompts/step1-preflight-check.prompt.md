@@ -6,6 +6,7 @@ description: "Pipeline Step 1 — Pre-flight checks before plan hardening. Verif
 
 > **Pipeline**: Step 1 of 5 (Session 1 — Plan Hardening)  
 > **When**: Before hardening any `*-PLAN.md`  
+> **Model suggestion**: Any model — checklist verification works well on all models  
 > **Next Step**: `step2-harden-plan.prompt.md`
 
 Replace `<YOUR-PLAN>` with your plan filename (without path or `.md` extension).

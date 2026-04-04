@@ -6,6 +6,7 @@ description: "Pipeline Step 2 — Harden a draft plan into an execution contract
 
 > **Pipeline**: Step 2 of 5 (Session 1 — Plan Hardening)  
 > **When**: After pre-flight passes (Step 1)  
+> **Model suggestion**: Claude (best at structured plan generation and scope contract design)  
 > **Next Step**: `step3-execute-slice.prompt.md` (new session)
 
 Replace `<YOUR-PLAN>` with your plan filename (without path or `.md` extension).

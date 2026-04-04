@@ -6,6 +6,7 @@ description: "Pipeline Step 6 — Ship the completed phase: commit, update roadm
 
 > **Pipeline**: Step 6 of 6 (Session 4 — Ship)  
 > **When**: After the Review Gate passes (Step 5)  
+> **Model suggestion**: Any model — commit, roadmap update, and postmortem are straightforward  
 > **Prerequisite**: Step 5 verdict must be **PASS**
 
 Replace `<YOUR-HARDENED-PLAN>` with your hardened plan filename.

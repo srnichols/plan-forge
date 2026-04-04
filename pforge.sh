@@ -532,7 +532,10 @@ cmd_diff() {
 cmd_ext() {
     if [ $# -eq 0 ]; then
         echo "Extension commands:"
-        echo "  ext install <path>  Install extension from path"
+        echo "  ext search [query]  Search the community catalog"
+        echo "  ext add <name>      Download and install from catalog"
+        echo "  ext info <name>     Show extension details"
+        echo "  ext install <path>  Install extension from local path"
         echo "  ext list            List installed extensions"
         echo "  ext remove <name>   Remove an installed extension"
         return 0
@@ -540,15 +543,188 @@ cmd_ext() {
 
     local subcmd="$1"; shift
     case "$subcmd" in
+        search)  cmd_ext_search "$@" ;;
+        add)     cmd_ext_add "$@" ;;
+        info)    cmd_ext_info "$@" ;;
         install) cmd_ext_install "$@" ;;
         list)    cmd_ext_list ;;
         remove)  cmd_ext_remove "$@" ;;
         *)
             echo "ERROR: Unknown ext command: $subcmd" >&2
-            echo "  Available: install, list, remove" >&2
+            echo "  Available: search, add, info, install, list, remove" >&2
             exit 1
             ;;
     esac
+}
+
+# ─── Catalog Helpers ───────────────────────────────────────────────────
+CATALOG_URL="https://raw.githubusercontent.com/srnichols/plan-forge/master/extensions/catalog.json"
+
+get_ext_catalog() {
+    local local_catalog="$REPO_ROOT/extensions/catalog.json"
+    if [ -f "$local_catalog" ]; then
+        cat "$local_catalog"
+        return 0
+    fi
+    curl -sS --max-time 10 "$CATALOG_URL" 2>/dev/null || {
+        echo "ERROR: Could not fetch extension catalog." >&2
+        return 1
+    }
+}
+
+cmd_ext_search() {
+    local query="${*:-}"
+    local catalog
+    catalog="$(get_ext_catalog)" || return 1
+
+    echo ""
+    if [ -n "$query" ]; then
+        echo "Plan Forge Extension Catalog — matching '$query':"
+    else
+        echo "Plan Forge Extension Catalog:"
+    fi
+    echo "───────────────────────────────────────────────────────"
+
+    # Parse with grep/sed (no jq dependency)
+    local found=0
+    local ids
+    ids="$(echo "$catalog" | grep -oP '"id"\s*:\s*"\K[^"]+' || true)"
+
+    for id in $ids; do
+        local name desc category verified
+        # Extract fields for this extension
+        name="$(echo "$catalog" | grep -A1 "\"$id\"" | grep '"name"' | head -1 | sed 's/.*"name":\s*"//' | sed 's/".*//' || echo "$id")"
+        desc="$(echo "$catalog" | grep -A20 "\"id\":\s*\"$id\"" | grep '"description"' | head -1 | sed 's/.*"description":\s*"//' | sed 's/".*//' || true)"
+        category="$(echo "$catalog" | grep -A25 "\"id\":\s*\"$id\"" | grep '"category"' | head -1 | sed 's/.*"category":\s*"//' | sed 's/".*//' || true)"
+
+        # Filter by query if provided
+        if [ -n "$query" ]; then
+            local q_lower
+            q_lower="$(echo "$query" | tr '[:upper:]' '[:lower:]')"
+            local match=false
+            echo "$name $desc $category $id" | tr '[:upper:]' '[:lower:]' | grep -q "$q_lower" && match=true
+            [ "$match" = false ] && continue
+        fi
+
+        echo "  ✅ $id  [$category]"
+        echo "     $desc"
+        found=$((found + 1))
+    done
+
+    if [ "$found" -eq 0 ]; then
+        echo "  No extensions found$([ -n "$query" ] && echo " matching '$query'")."
+    fi
+    echo ""
+    echo "Use 'pforge ext info <name>' for details, 'pforge ext add <name>' to install."
+}
+
+cmd_ext_add() {
+    if [ $# -eq 0 ]; then
+        echo "ERROR: Extension name required." >&2
+        echo "  Usage: pforge ext add <name>" >&2
+        echo "  Browse: pforge ext search" >&2
+        exit 1
+    fi
+
+    local ext_name="$1"
+    local catalog
+    catalog="$(get_ext_catalog)" || return 1
+
+    # Check if extension exists in catalog
+    if ! echo "$catalog" | grep -q "\"id\":\s*\"$ext_name\""; then
+        echo "ERROR: Extension '$ext_name' not found in catalog." >&2
+        echo "  Run 'pforge ext search' to see available extensions." >&2
+        exit 1
+    fi
+
+    # Extract download URL and path_in_repo
+    local download_url path_in_repo
+    download_url="$(echo "$catalog" | grep -A30 "\"id\":\s*\"$ext_name\"" | grep '"download_url"' | head -1 | sed 's/.*"download_url":\s*"//' | sed 's/".*//')"
+    path_in_repo="$(echo "$catalog" | grep -A30 "\"id\":\s*\"$ext_name\"" | grep '"path_in_repo"' | head -1 | sed 's/.*"path_in_repo":\s*"//' | sed 's/".*//')"
+
+    echo ""
+    echo "Installing: $ext_name"
+
+    local temp_dir
+    temp_dir="$(mktemp -d)/planforge-ext-$ext_name"
+    mkdir -p "$temp_dir"
+
+    # Download
+    if [ -n "$download_url" ]; then
+        local zip_file="$temp_dir/repo.zip"
+        echo "  Downloading..."
+        curl -sL "$download_url" -o "$zip_file" || {
+            echo "ERROR: Download failed." >&2
+            rm -rf "$temp_dir"
+            exit 1
+        }
+        unzip -q "$zip_file" -d "$temp_dir" 2>/dev/null
+
+        if [ -n "$path_in_repo" ]; then
+            # Find extracted root (ZIP has repo-branch/ prefix)
+            local repo_dir
+            repo_dir="$(find "$temp_dir" -maxdepth 1 -type d ! -name "$(basename "$temp_dir")" | head -1)"
+            local ext_source="$repo_dir/$path_in_repo"
+            if [ ! -d "$ext_source" ]; then
+                echo "ERROR: Path '$path_in_repo' not found in archive." >&2
+                rm -rf "$temp_dir"
+                exit 1
+            fi
+            cmd_ext_install "$ext_source"
+        else
+            cmd_ext_install "$temp_dir"
+        fi
+    fi
+
+    rm -rf "$temp_dir"
+    echo ""
+    echo "Extension '$ext_name' installed from catalog."
+}
+
+cmd_ext_info() {
+    if [ $# -eq 0 ]; then
+        echo "ERROR: Extension name required." >&2
+        echo "  Usage: pforge ext info <name>" >&2
+        exit 1
+    fi
+
+    local ext_name="$1"
+    local catalog
+    catalog="$(get_ext_catalog)" || return 1
+
+    if ! echo "$catalog" | grep -q "\"id\":\s*\"$ext_name\""; then
+        echo "ERROR: Extension '$ext_name' not found in catalog." >&2
+        exit 1
+    fi
+
+    # Extract fields
+    local block
+    block="$(echo "$catalog" | grep -A40 "\"id\":\s*\"$ext_name\"")"
+    local name desc author version category license repository
+    name="$(echo "$block" | grep '"name"' | head -1 | sed 's/.*"name":\s*"//' | sed 's/".*//')"
+    desc="$(echo "$block" | grep '"description"' | head -1 | sed 's/.*"description":\s*"//' | sed 's/".*//')"
+    author="$(echo "$block" | grep '"author"' | head -1 | sed 's/.*"author":\s*"//' | sed 's/".*//')"
+    version="$(echo "$block" | grep '"version"' | head -1 | sed 's/.*"version":\s*"//' | sed 's/".*//')"
+    category="$(echo "$block" | grep '"category"' | head -1 | sed 's/.*"category":\s*"//' | sed 's/".*//')"
+    license="$(echo "$block" | grep '"license"' | head -1 | sed 's/.*"license":\s*"//' | sed 's/".*//')"
+    repository="$(echo "$block" | grep '"repository"' | head -1 | sed 's/.*"repository":\s*"//' | sed 's/".*//')"
+
+    echo ""
+    echo "╔══════════════════════════════════════════════════════════════╗"
+    echo "║  $name"
+    echo "╚══════════════════════════════════════════════════════════════╝"
+    echo ""
+    echo "  ID:          $ext_name"
+    echo "  Version:     $version"
+    echo "  Author:      $author"
+    echo "  Category:    $category"
+    echo "  License:     $license"
+    echo ""
+    echo "  $desc"
+    echo ""
+    echo "  Repository:  $repository"
+    echo ""
+    echo "  Install: pforge ext add $ext_name"
 }
 
 cmd_ext_install() {

@@ -424,7 +424,10 @@ function Invoke-PhaseStatus {
 function Invoke-Ext {
     if (-not $Arguments -or $Arguments.Count -eq 0) {
         Write-Host "Extension commands:" -ForegroundColor Cyan
-        Write-Host "  ext install <path>  Install extension from path"
+        Write-Host "  ext search [query]  Search the community catalog"
+        Write-Host "  ext add <name>      Download and install from catalog"
+        Write-Host "  ext info <name>     Show extension details"
+        Write-Host "  ext install <path>  Install extension from local path"
         Write-Host "  ext list            List installed extensions"
         Write-Host "  ext remove <name>   Remove an installed extension"
         return
@@ -434,14 +437,214 @@ function Invoke-Ext {
     $extArgs = if ($Arguments.Count -gt 1) { $Arguments[1..($Arguments.Count - 1)] } else { @() }
 
     switch ($subCmd) {
+        'search'  { Invoke-ExtSearch $extArgs }
+        'add'     { Invoke-ExtAdd $extArgs }
+        'info'    { Invoke-ExtInfo $extArgs }
         'install' { Invoke-ExtInstall $extArgs }
         'list'    { Invoke-ExtList }
         'remove'  { Invoke-ExtRemove $extArgs }
         default   {
             Write-Host "ERROR: Unknown ext command: $subCmd" -ForegroundColor Red
-            Write-Host "  Available: install, list, remove" -ForegroundColor Yellow
+            Write-Host "  Available: search, add, info, install, list, remove" -ForegroundColor Yellow
         }
     }
+}
+
+# ─── Catalog Helpers ───────────────────────────────────────────────────
+$script:CatalogUrl = "https://raw.githubusercontent.com/srnichols/plan-forge/master/extensions/catalog.json"
+
+function Get-ExtCatalog {
+    # Try local catalog first, then remote
+    $localCatalog = Join-Path $RepoRoot "extensions/catalog.json"
+    if (Test-Path $localCatalog) {
+        return Get-Content $localCatalog -Raw | ConvertFrom-Json
+    }
+    try {
+        $response = Invoke-RestMethod -Uri $script:CatalogUrl -TimeoutSec 10
+        return $response
+    }
+    catch {
+        Write-Host "ERROR: Could not fetch extension catalog." -ForegroundColor Red
+        Write-Host "  Check your internet connection or try again later." -ForegroundColor Yellow
+        return $null
+    }
+}
+
+function Invoke-ExtSearch([string[]]$args_) {
+    Write-ManualSteps "ext search" @(
+        "Fetch the community catalog from GitHub"
+        "Filter by query (or show all)"
+        "Display matching extensions"
+    )
+
+    $query = if ($args_ -and $args_.Count -gt 0) { $args_ -join ' ' } else { '' }
+    $catalog = Get-ExtCatalog
+    if (-not $catalog) { return }
+
+    $extensions = $catalog.extensions.PSObject.Properties | ForEach-Object { $_.Value }
+
+    if ($query) {
+        $q = $query.ToLower()
+        $extensions = $extensions | Where-Object {
+            $_.name.ToLower().Contains($q) -or
+            $_.description.ToLower().Contains($q) -or
+            ($_.tags -and ($_.tags -join ',').ToLower().Contains($q)) -or
+            ($_.category -and $_.category.ToLower().Contains($q))
+        }
+    }
+
+    if ($extensions.Count -eq 0) {
+        Write-Host "No extensions found$(if ($query) { " matching '$query'" })." -ForegroundColor Yellow
+        return
+    }
+
+    Write-Host ""
+    Write-Host "Plan Forge Extension Catalog$(if ($query) { " — matching '$query'" }):" -ForegroundColor Cyan
+    Write-Host "───────────────────────────────────────────────────────" -ForegroundColor DarkGray
+
+    foreach ($ext in $extensions) {
+        $compat = if ($ext.speckit_compatible -eq $true) { " [Spec Kit Compatible]" } else { "" }
+        $verified = if ($ext.verified -eq $true) { "✅" } else { "  " }
+        Write-Host "  $verified $($ext.id)" -ForegroundColor White -NoNewline
+        Write-Host "  v$($ext.version)" -ForegroundColor DarkGray -NoNewline
+        Write-Host "  [$($ext.category)]" -ForegroundColor DarkCyan -NoNewline
+        Write-Host "$compat" -ForegroundColor Green
+        Write-Host "     $($ext.description)" -ForegroundColor Gray
+    }
+
+    Write-Host ""
+    Write-Host "Use 'pforge ext info <name>' for details, 'pforge ext add <name>' to install." -ForegroundColor DarkGray
+}
+
+function Invoke-ExtAdd([string[]]$args_) {
+    if (-not $args_ -or $args_.Count -eq 0) {
+        Write-Host "ERROR: Extension name required." -ForegroundColor Red
+        Write-Host "  Usage: pforge ext add <name>" -ForegroundColor Yellow
+        Write-Host "  Browse: pforge ext search" -ForegroundColor Yellow
+        exit 1
+    }
+
+    $extName = $args_[0]
+    $catalog = Get-ExtCatalog
+    if (-not $catalog) { return }
+
+    $ext = $catalog.extensions.PSObject.Properties[$extName]
+    if (-not $ext) {
+        Write-Host "ERROR: Extension '$extName' not found in catalog." -ForegroundColor Red
+        Write-Host "  Run 'pforge ext search' to see available extensions." -ForegroundColor Yellow
+        exit 1
+    }
+    $ext = $ext.Value
+
+    Write-Host ""
+    Write-Host "Installing: $($ext.name) v$($ext.version)" -ForegroundColor Cyan
+    Write-Host "  $($ext.description)" -ForegroundColor Gray
+    Write-Host ""
+
+    # Download
+    $tempDir = Join-Path ([System.IO.Path]::GetTempPath()) "planforge-ext-$extName-$(Get-Date -Format 'yyyyMMddHHmmss')"
+    New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
+
+    try {
+        if ($ext.path_in_repo) {
+            # Clone just the needed path via sparse checkout or download ZIP + extract subfolder
+            $zipUrl = $ext.download_url
+            $zipFile = Join-Path $tempDir "repo.zip"
+            Write-Host "  Downloading from $($ext.repository)..." -ForegroundColor DarkGray
+            Invoke-WebRequest -Uri $zipUrl -OutFile $zipFile -UseBasicParsing
+            Expand-Archive -Path $zipFile -DestinationPath $tempDir -Force
+
+            # Find the extracted path (ZIP contains repo-name-branch/ prefix)
+            $extractedDirs = Get-ChildItem -Path $tempDir -Directory | Where-Object { $_.Name -ne '__MACOSX' }
+            $repoRoot = $extractedDirs | Select-Object -First 1
+            $extSourcePath = Join-Path $repoRoot.FullName $ext.path_in_repo
+
+            if (-not (Test-Path $extSourcePath)) {
+                Write-Host "ERROR: Path '$($ext.path_in_repo)' not found in downloaded archive." -ForegroundColor Red
+                return
+            }
+        }
+        elseif ($ext.download_url -match '\.zip$') {
+            $zipFile = Join-Path $tempDir "ext.zip"
+            Write-Host "  Downloading $($ext.download_url)..." -ForegroundColor DarkGray
+            Invoke-WebRequest -Uri $ext.download_url -OutFile $zipFile -UseBasicParsing
+            Expand-Archive -Path $zipFile -DestinationPath $tempDir -Force
+            $extSourcePath = $tempDir
+        }
+        else {
+            # Git clone
+            Write-Host "  Cloning $($ext.repository)..." -ForegroundColor DarkGray
+            git clone --depth 1 $ext.repository $tempDir 2>$null
+            $extSourcePath = $tempDir
+        }
+
+        # Delegate to existing install logic
+        Invoke-ExtInstall @($extSourcePath)
+        Write-Host ""
+        Write-Host "Extension '$extName' installed from catalog." -ForegroundColor Green
+    }
+    finally {
+        # Cleanup temp
+        if (Test-Path $tempDir) {
+            Remove-Item $tempDir -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+function Invoke-ExtInfo([string[]]$args_) {
+    if (-not $args_ -or $args_.Count -eq 0) {
+        Write-Host "ERROR: Extension name required." -ForegroundColor Red
+        Write-Host "  Usage: pforge ext info <name>" -ForegroundColor Yellow
+        exit 1
+    }
+
+    $extName = $args_[0]
+    $catalog = Get-ExtCatalog
+    if (-not $catalog) { return }
+
+    $ext = $catalog.extensions.PSObject.Properties[$extName]
+    if (-not $ext) {
+        Write-Host "ERROR: Extension '$extName' not found in catalog." -ForegroundColor Red
+        exit 1
+    }
+    $ext = $ext.Value
+
+    Write-Host ""
+    Write-Host "╔══════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+    Write-Host "║  $($ext.name)" -ForegroundColor Cyan
+    Write-Host "╚══════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "  ID:          $($ext.id)" -ForegroundColor White
+    Write-Host "  Version:     $($ext.version)" -ForegroundColor White
+    Write-Host "  Author:      $($ext.author)" -ForegroundColor White
+    Write-Host "  Category:    $($ext.category)" -ForegroundColor DarkCyan
+    Write-Host "  Effect:      $($ext.effect)" -ForegroundColor White
+    Write-Host "  License:     $($ext.license)" -ForegroundColor White
+    Write-Host "  Verified:    $(if ($ext.verified) { '✅ Yes' } else { 'No' })" -ForegroundColor White
+    if ($ext.speckit_compatible -eq $true) {
+        Write-Host "  Spec Kit:    ✅ Compatible" -ForegroundColor Green
+    }
+    Write-Host ""
+    Write-Host "  $($ext.description)" -ForegroundColor Gray
+    Write-Host ""
+
+    if ($ext.provides) {
+        Write-Host "  Provides:" -ForegroundColor Yellow
+        if ($ext.provides.instructions) { Write-Host "    $($ext.provides.instructions) instruction files" }
+        if ($ext.provides.agents) { Write-Host "    $($ext.provides.agents) agent definitions" }
+        if ($ext.provides.prompts) { Write-Host "    $($ext.provides.prompts) prompt templates" }
+        if ($ext.provides.skills) { Write-Host "    $($ext.provides.skills) skills" }
+    }
+
+    if ($ext.tags) {
+        Write-Host ""
+        Write-Host "  Tags: $($ext.tags -join ', ')" -ForegroundColor DarkGray
+    }
+
+    Write-Host ""
+    Write-Host "  Repository:  $($ext.repository)" -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Host "  Install: pforge ext add $($ext.id)" -ForegroundColor Green
 }
 
 function Invoke-ExtInstall([string[]]$args_) {

@@ -1082,6 +1082,28 @@ print(v if isinstance(v, str) else ','.join(v))
 
     unset -f _pf_check
 
+    # ─── MCP server files ────────────────────────────────────────
+    local src_mcp="$SOURCE_PATH/mcp"
+    local dst_mcp="$REPO_ROOT/mcp"
+    if [ -d "$src_mcp" ]; then
+        for mcp_file in server.mjs package.json; do
+            local src_f="$src_mcp/$mcp_file"
+            local dst_f="$dst_mcp/$mcp_file"
+            if [ -f "$src_f" ]; then
+                if [ -f "$dst_f" ]; then
+                    local src_hash dst_hash
+                    src_hash="$(sha256sum "$src_f" 2>/dev/null | cut -d' ' -f1 || shasum -a 256 "$src_f" | cut -d' ' -f1)"
+                    dst_hash="$(sha256sum "$dst_f" 2>/dev/null | cut -d' ' -f1 || shasum -a 256 "$dst_f" | cut -d' ' -f1)"
+                    if [ "$src_hash" != "$dst_hash" ]; then
+                        _updates+=("$src_f|$dst_f|mcp/$mcp_file")
+                    fi
+                else
+                    _new_files+=("$src_f|$dst_f|mcp/$mcp_file")
+                fi
+            fi
+        done
+    fi
+
     # ─── Report ───────────────────────────────────────────────────
     if [ "${#_updates[@]}" -eq 0 ] && [ "${#_new_files[@]}" -eq 0 ]; then
         echo "All framework files are up to date."

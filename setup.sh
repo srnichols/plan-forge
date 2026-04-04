@@ -901,6 +901,67 @@ if [[ -f "$guide_src" ]]; then
     copy_with_create "$guide_src" "$guide_dst" || true
 fi
 
+# ─── Step 7b: Copy MCP Server + Generate Config ───────────────────────
+MCP_SRC_DIR="$TEMPLATE_ROOT/mcp"
+if [[ -d "$MCP_SRC_DIR" ]]; then
+    echo ""
+    cyan "Step 7b: MCP server (Plan Forge as tools)"
+
+    MCP_DST_DIR="$PROJECT_PATH/mcp"
+    mkdir -p "$MCP_DST_DIR"
+    cp "$MCP_SRC_DIR/server.mjs" "$MCP_DST_DIR/server.mjs"
+    cp "$MCP_SRC_DIR/package.json" "$MCP_DST_DIR/package.json"
+    green "  COPY  mcp/server.mjs + package.json"
+
+    # Generate .vscode/mcp.json for Copilot MCP integration
+    VSCODE_MCP="$PROJECT_PATH/.vscode/mcp.json"
+    if [[ ! -f "$VSCODE_MCP" ]]; then
+        mkdir -p "$PROJECT_PATH/.vscode"
+        cat > "$VSCODE_MCP" <<'MCPEOF'
+{
+  "servers": {
+    "plan-forge": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["mcp/server.mjs"],
+      "cwd": "${workspaceFolder}"
+    }
+  }
+}
+MCPEOF
+        green "  CREATE .vscode/mcp.json (plan-forge MCP server)"
+    elif ! grep -q '"plan-forge"' "$VSCODE_MCP" 2>/dev/null; then
+        # Simple check — if plan-forge not in file, tell user to add manually
+        yellow "  NOTE  .vscode/mcp.json exists but missing 'plan-forge' entry — add manually"
+    else
+        yellow "  SKIP  .vscode/mcp.json → 'plan-forge' already exists"
+    fi
+
+    # Generate .claude/mcp.json for Claude MCP integration (if --agent claude)
+    if [[ "$AGENTS" == *"claude"* ]] || [[ "$AGENTS" == "all" ]]; then
+        CLAUDE_MCP_DIR="$PROJECT_PATH/.claude"
+        CLAUDE_MCP="$CLAUDE_MCP_DIR/mcp.json"
+        if [[ ! -f "$CLAUDE_MCP" ]]; then
+            mkdir -p "$CLAUDE_MCP_DIR"
+            cat > "$CLAUDE_MCP" <<'MCPEOF'
+{
+  "servers": {
+    "plan-forge": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["mcp/server.mjs"],
+      "cwd": "${workspaceFolder}"
+    }
+  }
+}
+MCPEOF
+            green "  CREATE .claude/mcp.json (plan-forge MCP server)"
+        fi
+    fi
+
+    echo "  Run 'cd mcp && npm install' to install MCP dependencies"
+fi
+
 # ─── Done ──────────────────────────────────────────────────────────────
 echo ""
 green "╔══════════════════════════════════════════════════════════════╗"

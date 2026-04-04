@@ -22,6 +22,18 @@ inputs:
     description: 'Fail the action if sweep finds markers (false = warn only)'
     required: false
     default: 'false'
+  analyze:
+    description: 'Run cross-artifact analysis on a plan file'
+    required: false
+    default: 'false'
+  analyze-plan:
+    description: 'Path to the plan file for analysis (required if analyze=true)'
+    required: false
+    default: ''
+  analyze-threshold:
+    description: 'Minimum consistency score to pass (0-100, default: 60)'
+    required: false
+    default: '60'
 
 outputs:
   passed:

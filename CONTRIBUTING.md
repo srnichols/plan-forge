@@ -33,7 +33,7 @@ Open an issue with the `enhancement` label. Describe the problem you're solving,
 | Contribution | Where | Guidelines |
 |-------------|-------|-----------|
 | **New tech preset** | `presets/<stack>/` | See CUSTOMIZATION.md → "Adding a New Tech Preset" |
-| **New extension** | `.forge/extensions/` | See docs/EXTENSIONS.md → "Creating an Extension" |
+| **New extension** | `.forge/extensions/` | See [docs/EXTENSIONS.md](docs/EXTENSIONS.md) + [extensions/PUBLISHING.md](extensions/PUBLISHING.md) |
 | **Instruction file improvements** | `presets/<stack>/.github/instructions/` | Keep under 150 lines, include `applyTo` frontmatter |
 | **Prompt template improvements** | `presets/<stack>/.github/prompts/` | Include stack-specific code examples |
 | **Documentation fixes** | `docs/`, `README.md`, etc. | Fix typos, clarify confusing sections, add examples |

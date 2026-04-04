@@ -291,6 +291,64 @@ DRIFT DETECTED — 1 forbidden file(s) touched.
 
 ---
 
+### `pforge ext search [query]`
+
+Browse the community extension catalog. Shows all extensions, or filter by keyword.
+
+```powershell
+# PowerShell
+.\pforge.ps1 ext search              # Show all extensions
+.\pforge.ps1 ext search saas         # Filter by keyword
+.\pforge.ps1 ext search integration  # Filter by category
+```
+
+```bash
+# Bash
+./pforge.sh ext search
+./pforge.sh ext search compliance
+```
+
+Fetches from the local `extensions/catalog.json` first, falls back to GitHub. Extensions marked with `speckit_compatible` work in both Plan Forge and Spec Kit.
+
+---
+
+### `pforge ext add <name>`
+
+Download and install an extension from the community catalog in one step.
+
+```powershell
+# PowerShell
+.\pforge.ps1 ext add saas-multi-tenancy
+.\pforge.ps1 ext add plan-forge-memory
+```
+
+```bash
+# Bash
+./pforge.sh ext add azure-infrastructure
+```
+
+Downloads the extension ZIP from GitHub, extracts the relevant subfolder, and delegates to `ext install`. No manual cloning needed.
+
+---
+
+### `pforge ext info <name>`
+
+Show detailed information about a catalog extension before installing.
+
+```powershell
+# PowerShell
+.\pforge.ps1 ext info plan-forge-memory
+```
+
+```bash
+# Bash
+./pforge.sh ext info saas-multi-tenancy
+```
+
+Shows: name, version, author, category, provides (instructions/agents/prompts/skills), tags, Spec Kit compatibility, and install command.
+
+---
+
 ### `pforge ext install <path>`
 
 Install an extension from a local path.

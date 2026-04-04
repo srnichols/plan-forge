@@ -61,6 +61,29 @@ No runtime, no dependencies, no build step — just folders you copy.
 pforge ext install .forge/extensions/healthcare-compliance
 ```
 
+## Searching & Installing from the Community Catalog
+
+Browse extensions without leaving the terminal:
+
+```bash
+pforge ext search                    # Show all available extensions
+pforge ext search saas               # Filter by keyword
+pforge ext search integration        # Filter by category
+```
+
+Install directly from the catalog (downloads + installs in one step):
+
+```bash
+pforge ext add saas-multi-tenancy    # Download and install
+pforge ext info plan-forge-memory    # Show details before installing
+```
+
+The catalog is stored in `extensions/catalog.json` (fetches from GitHub if not local). Extensions marked with `speckit_compatible: true` also work as Spec Kit extensions.
+
+### Publishing Your Extension
+
+See [extensions/PUBLISHING.md](../extensions/PUBLISHING.md) for how to submit your extension to the community catalog.
+
 ## Creating an Extension
 
 1. Create a folder with the extension name

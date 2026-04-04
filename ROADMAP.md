@@ -83,15 +83,22 @@ Built on the existing `mcp/server.mjs` Node.js process — no new services.
 - **Abort/retry** — `forge_abort` to stop, automatic retry on transient failures
 - All existing manual workflows continue to work unchanged
 
-### v2.1 — WebSocket Hub (Real-Time Communication)
+### v2.1 — WebSocket Hub + Dashboard (Real-Time Communication)
 
-Add lightweight inter-session communication to the MCP server.
+Add lightweight inter-session communication and a visual monitoring UI to the MCP server.
 
 - **WebSocket server** (`ws` package) embedded in `mcp/server.mjs` — no separate service
 - **Event bus** — sessions publish events (`slice-complete`, `build-failed`, `review-passed`)
 - **Session registry** — tracks active workers, their model, slice assignment, status
 - **`forge_plan_status`** MCP tool — live progress view from any connected session
-- **Orchestrator dashboard** — real-time terminal output of all worker sessions
+- **Dashboard web UI** (`mcp/dashboard/`) — lightweight HTML + JS app served from the same MCP process
+  - Real-time slice progress cards (pending → executing → pass/fail)
+  - Model routing visualization (which model is running which slice)
+  - Consistency score after completion
+  - OpenBrain thought count per run
+  - Event log with timestamps
+  - Abort/retry controls
+  - Accessible at `http://localhost:3100/dashboard` — works on any device (phone via Tailscale, browser, etc.)
 
 ### v2.2 — Parallel Execution
 

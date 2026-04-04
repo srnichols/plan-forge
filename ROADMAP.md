@@ -98,7 +98,7 @@ No committed timeline — evaluating based on community feedback:
 
 - **Community walkthroughs** — greenfield and brownfield worked examples (demos like Spec Kit's repos)
 - **`specify init` detection** — auto-detect Spec Kit project and layer Plan Forge guardrails on top
-- **Multi-model prompt variants** — GPT-4, Gemini-specific prompt tuning documentation
+- ~~**Multi-model prompt variants** — GPT-4, Gemini-specific prompt tuning documentation~~ → shipped as "Tuning for Different Models" section in CUSTOMIZATION.md
 
 ---
 

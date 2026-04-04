@@ -548,11 +548,11 @@ Type `/` in the chat input to see these alongside your prompt templates. Add `us
 
 ---
 
-## Tuning for Claude Opus 4.6
+## Tuning for Different Models
 
-Plan Forge's prompts are calibrated for Claude Opus 4.6 (the default model in VS Code Copilot as of 2026). If you're using an older model or a different provider, you may need to adjust prompt intensity.
+Plan Forge's prompts are calibrated for Claude Opus 4.6 (the default model in VS Code Copilot as of 2026) and work well across all modern models. Below are model-specific tips for the best experience.
 
-### What's Different About Claude 4.6
+### Claude Opus 4.6 (Default — No Changes Needed)
 
 Claude Opus 4.6 is significantly more responsive to instructions than earlier models. Key differences:
 
@@ -610,6 +610,36 @@ If using Claude 4.6 via the API (not VS Code Copilot), use the `effort` paramete
 | Slice execution (Step 3) | `medium` to `high` |
 | Completeness sweep (Step 4) | `medium` |
 | Review gate (Step 5) | `high` |
+
+### GPT-4o / Codex
+
+GPT-4o and Codex work well with Plan Forge prompts out of the box. Minor adjustments for best results:
+
+- **Stronger directives**: GPT sometimes paraphrases instructions. If the agent improvises, add "Follow each step exactly as written. Do not skip or reorder steps." to your `.github/copilot-instructions.md`.
+- **Context window**: GPT-4o has 128K tokens (vs Claude's 1M). For large plans with many guardrail files, keep instruction files under 100 lines and use specific `applyTo` patterns instead of `'**'`.
+- **Codex for execution**: Codex excels at Step 3 (slice execution) — it's fast and focused. Less ideal for Step 0 (specification) which benefits from Claude's conversational depth.
+
+### Gemini 2.5
+
+Gemini has strong reasoning and a 1M token context window. Adjustments:
+
+- **Verbosity**: Gemini tends to over-explain. Add to your context file: "Be concise. Do not explain your reasoning unless asked. Show code, not commentary."
+- **Checklist adherence**: Gemini follows structured checklists well but may elaborate between items. The structured plan format works to your advantage here.
+- **MCP support**: Gemini CLI supports MCP — the forge tools work natively.
+
+### Switching Models Mid-Pipeline
+
+You can use different models for different pipeline steps:
+
+| Step | Best Model | Why |
+|------|-----------|-----|
+| Step 0 (Specify) | Claude | Best at conversational interviews and ambiguity detection |
+| Step 2 (Harden) | Claude or GPT-4o | Both handle structured plan generation well |
+| Step 3 (Execute) | Any / Codex | Execution is mechanical — all models handle it |
+| Step 5 (Review) | Claude | Best at independent critical review |
+| Step 6 (Ship) | Any | Commit + roadmap update is straightforward |
+
+The 4-session isolation model makes this natural — each session can use a different model.
 
 ---
 

@@ -687,8 +687,18 @@ export async function runPlan(planPath, options = {}) {
     { abortSignal, resumeFrom: resumeFrom ? String(resumeFrom) : null },
   );
 
+  // Auto-sweep + auto-analyze after all slices (Slice 6)
+  const allPassed = results.every((r) => r.status === "passed" || r.status === "skipped");
+  let sweepResult = null;
+  let analyzeResult = null;
+
+  if (allPassed && !estimate && !dryRun) {
+    sweepResult = runAutoSweep(cwd);
+    analyzeResult = runAutoAnalyze(cwd, planPath);
+  }
+
   // Write summary
-  const summary = buildSummary(plan, results, runMeta);
+  const summary = buildSummary(plan, results, runMeta, { sweepResult, analyzeResult });
   writeFileSync(resolve(runDir, "summary.json"), JSON.stringify(summary, null, 2));
 
   eventBus.emit("run-completed", summary);
@@ -877,7 +887,44 @@ function buildEstimate(plan, model) {
   };
 }
 
-function buildSummary(plan, results, runMeta) {
+/**
+ * Run auto-sweep after all slices pass.
+ * Calls pforge sweep and captures results.
+ */
+function runAutoSweep(cwd) {
+  const IS_WINDOWS = process.platform === "win32";
+  const pforge = IS_WINDOWS
+    ? `powershell.exe -NoProfile -ExecutionPolicy Bypass -File pforge.ps1 sweep`
+    : `bash pforge.sh sweep`;
+  try {
+    const output = execSync(pforge, { cwd, encoding: "utf-8", timeout: 30_000, env: { ...process.env, NO_COLOR: "1" } });
+    const markerCount = (output.match(/TODO|FIXME|HACK|stub|placeholder/gi) || []).length;
+    return { ran: true, clean: markerCount === 0, markerCount, output: output.trim() };
+  } catch (err) {
+    return { ran: true, clean: false, error: (err.stderr || err.message || "").trim() };
+  }
+}
+
+/**
+ * Run auto-analyze after all slices pass.
+ * Calls pforge analyze and captures consistency score.
+ */
+function runAutoAnalyze(cwd, planPath) {
+  const IS_WINDOWS = process.platform === "win32";
+  const pforge = IS_WINDOWS
+    ? `powershell.exe -NoProfile -ExecutionPolicy Bypass -File pforge.ps1 analyze "${planPath}"`
+    : `bash pforge.sh analyze "${planPath}"`;
+  try {
+    const output = execSync(pforge, { cwd, encoding: "utf-8", timeout: 30_000, env: { ...process.env, NO_COLOR: "1" } });
+    const scoreMatch = output.match(/(\d+)\s*\/\s*100|Score:\s*(\d+)/i);
+    const score = scoreMatch ? parseInt(scoreMatch[1] || scoreMatch[2], 10) : null;
+    return { ran: true, score, output: output.trim() };
+  } catch (err) {
+    return { ran: true, score: null, error: (err.stderr || err.message || "").trim() };
+  }
+}
+
+function buildSummary(plan, results, runMeta, extras = {}) {
   const passed = results.filter((r) => r.status === "passed").length;
   const failed = results.filter((r) => r.status === "failed" || r.status === "error").length;
   const skipped = results.filter((r) => r.status === "skipped").length;
@@ -887,7 +934,7 @@ function buildSummary(plan, results, runMeta) {
     return sum + (typeof t === "number" ? t : 0);
   }, 0);
 
-  return {
+  const summary = {
     plan: runMeta.plan,
     startTime: runMeta.startTime,
     endTime: new Date().toISOString(),
@@ -900,6 +947,22 @@ function buildSummary(plan, results, runMeta) {
     status: failed > 0 ? "failed" : "completed",
     sliceResults: results,
   };
+
+  // Auto-sweep + auto-analyze results (Slice 6)
+  if (extras.sweepResult) summary.sweep = extras.sweepResult;
+  if (extras.analyzeResult) summary.analyze = extras.analyzeResult;
+
+  // Build report line
+  const parts = [`All slices: ${passed} passed, ${failed} failed`];
+  if (extras.sweepResult?.ran) {
+    parts.push(`Sweep: ${extras.sweepResult.clean ? "clean" : `${extras.sweepResult.markerCount || "?"} markers`}`);
+  }
+  if (extras.analyzeResult?.ran && extras.analyzeResult.score !== null) {
+    parts.push(`Score: ${extras.analyzeResult.score}/100`);
+  }
+  summary.report = parts.join(". ") + ".";
+
+  return summary;
 }
 
 function createRunDir(cwd, planPath) {

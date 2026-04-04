@@ -89,6 +89,16 @@ cross-cutting changes (e.g., shared interfaces, database schema). If in doubt, d
 
 ---
 
+## MCP Tools (if Plan Forge MCP server is running)
+
+- **Scope drift check**: call `forge_diff` with the plan file — structured drift detection against the Scope Contract
+- **Completeness verification**: call `forge_sweep` to verify zero deferred-work markers remain
+- **Setup health**: call `forge_validate` to confirm all guardrail files are intact
+
+> Use MCP tools for structured results when available. Fall back to manual `git diff` + grep if MCP is not configured.
+
+---
+
 ## Persistent Memory (if OpenBrain is configured)
 
 - **Before auditing**: `search_thoughts("all decisions for this phase", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "decision")` — load the full decision trail from planning and execution sessions for drift comparison

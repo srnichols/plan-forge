@@ -1407,6 +1407,39 @@ cmd_doctor() {
     echo ""
 
     # ═══════════════════════════════════════════════════════════════
+    # 4b. MCP SERVER
+    # ═══════════════════════════════════════════════════════════════
+    echo "MCP Server:"
+
+    local mcp_server="$REPO_ROOT/mcp/server.mjs"
+    if [ -f "$mcp_server" ]; then
+        doctor_pass "mcp/server.mjs exists"
+
+        [ -f "$REPO_ROOT/mcp/package.json" ] \
+            || doctor_warn "mcp/package.json missing" "Copy from Plan Forge template"
+
+        if [ -d "$REPO_ROOT/mcp/node_modules" ]; then
+            doctor_pass "MCP dependencies installed"
+        else
+            doctor_warn "MCP dependencies not installed" "Run: cd mcp && npm install"
+        fi
+
+        if [ -f "$REPO_ROOT/.vscode/mcp.json" ]; then
+            if grep -q '"plan-forge"' "$REPO_ROOT/.vscode/mcp.json" 2>/dev/null; then
+                doctor_pass ".vscode/mcp.json has 'plan-forge' server entry"
+            else
+                doctor_warn ".vscode/mcp.json missing 'plan-forge' entry" "Re-run setup or add manually"
+            fi
+        else
+            doctor_warn ".vscode/mcp.json not found" "Run setup to generate MCP config"
+        fi
+    else
+        doctor_pass "MCP server not installed (optional — run setup to add)"
+    fi
+
+    echo ""
+
+    # ═══════════════════════════════════════════════════════════════
     # 5. COMMON PROBLEMS
     # ═══════════════════════════════════════════════════════════════
     echo "Common Problems:"

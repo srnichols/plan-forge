@@ -1652,6 +1652,45 @@ function Invoke-Smith {
     Write-Host ""
 
     # ═══════════════════════════════════════════════════════════════
+    # 4b. MCP SERVER
+    # ═══════════════════════════════════════════════════════════════
+    Write-Host "MCP Server:" -ForegroundColor Cyan
+
+    $mcpServer = Join-Path $RepoRoot "mcp/server.mjs"
+    $mcpPkg = Join-Path $RepoRoot "mcp/package.json"
+    $vscodeMcp = Join-Path $RepoRoot ".vscode/mcp.json"
+
+    if (Test-Path $mcpServer) {
+        Doctor-Pass "mcp/server.mjs exists"
+
+        if (-not (Test-Path $mcpPkg)) {
+            Doctor-Warn "mcp/package.json missing" "Copy from Plan Forge template or run setup again"
+        }
+
+        $mcpNodeModules = Join-Path $RepoRoot "mcp/node_modules"
+        if (Test-Path $mcpNodeModules) {
+            Doctor-Pass "MCP dependencies installed"
+        } else {
+            Doctor-Warn "MCP dependencies not installed" "Run: cd mcp && npm install"
+        }
+
+        if (Test-Path $vscodeMcp) {
+            $mcpContent = Get-Content $vscodeMcp -Raw
+            if ($mcpContent -match '"plan-forge"') {
+                Doctor-Pass ".vscode/mcp.json has 'plan-forge' server entry"
+            } else {
+                Doctor-Warn ".vscode/mcp.json missing 'plan-forge' entry" "Re-run setup or add manually"
+            }
+        } else {
+            Doctor-Warn ".vscode/mcp.json not found" "Run setup to generate MCP config"
+        }
+    } else {
+        Doctor-Pass "MCP server not installed (optional — run setup to add)"
+    }
+
+    Write-Host ""
+
+    # ═══════════════════════════════════════════════════════════════
     # 5. COMMON PROBLEMS
     # ═══════════════════════════════════════════════════════════════
     Write-Host "Common Problems:" -ForegroundColor Cyan

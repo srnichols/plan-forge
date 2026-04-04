@@ -86,6 +86,16 @@ SESSION RESUME CHECKLIST:
 
 ---
 
+## MCP Tools (if Plan Forge MCP server is running)
+
+- **After each slice**: call `forge_sweep` to scan for TODO/FIXME markers before moving to the next slice
+- **Before committing**: call `forge_diff` with the plan file to verify all changes are within scope
+- **If build/test fails**: call `forge_smith` to check if the environment is healthy
+
+> These tools are available as MCP function calls if `.vscode/mcp.json` or `.claude/mcp.json` is configured. Otherwise, use the equivalent CLI commands (`pforge sweep`, `pforge diff`, `pforge smith`).
+
+---
+
 ## Persistent Memory (if OpenBrain is configured)
 
 - **Before each slice**: `search_thoughts("<slice topic>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "decision")` — load prior decisions, patterns, and implementation lessons relevant to the current slice

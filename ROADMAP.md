@@ -87,27 +87,43 @@ Built on the existing `mcp/server.mjs` Node.js process — no new services.
 
 Add lightweight inter-session communication and a visual monitoring UI to the MCP server.
 
+**Infrastructure:**
 - **WebSocket server** (`ws` package) embedded in `mcp/server.mjs` — no separate service
 - **Event bus** — sessions publish events (`slice-complete`, `build-failed`, `review-passed`)
 - **Session registry** — tracks active workers, their model, slice assignment, status
 - **`forge_plan_status`** MCP tool — live progress view from any connected session
-- **Dashboard web UI** (`mcp/dashboard/`) — lightweight HTML + JS app served from the same MCP process
-  - Real-time slice progress cards (pending → executing → pass/fail)
-  - Model routing visualization (which model is running which slice)
-  - Consistency score after completion
-  - OpenBrain thought count per run
-  - Event log with timestamps
-  - Abort/retry controls
-  - Accessible at `http://localhost:3100/dashboard` — works on any device (phone via Tailscale, browser, etc.)
 
-### v2.2 — Parallel Execution
+**Dashboard Core** (`mcp/dashboard/` — lightweight HTML + JS, served at `localhost:3100/dashboard`):
+- Real-time slice progress cards (pending → executing → pass/fail)
+- Model routing visualization (which model is running which slice)
+- Consistency score after completion
+- OpenBrain thought count per run
+- Event log with timestamps
+- Abort/retry controls
+- Accessible on any device (phone via Tailscale, browser, etc.)
 
-Execute independent slices simultaneously for faster plan completion.
+**Dashboard Features:**
+- **Multi-project overview** — see all Plan Forge projects at a glance (reads `.forge.json` per repo)
+- **Phase timeline** — visual Gantt-style view of phases from `DEPLOYMENT-ROADMAP.md`
+- **Run history + trend charts** — consistency scores, slice durations, and sweep results over time
+- **OpenBrain memory explorer** — browse captured decisions, search by project/phase/type, see most-referenced thoughts
+- **Quick actions panel** — one-click buttons for smith, analyze, sweep, new-phase, ext search (calls MCP tools)
+- **Cost tracker** — token usage per slice/phase/project by model, monthly spend summary
+- **Diff viewer** — visual plan-vs-code traceability (requirement → implementing file → test file)
+- **Session replay** — stored agent session logs per slice; replay what the agent read, decided, and changed
+- **Extension marketplace UI** — visual catalog browser with cards, descriptions, install buttons
+- **Notifications center** — bell icon with run completions, sweep warnings, review findings (persists across reloads)
+- **Config editor** — visual editor for `.forge.json` (preset, agents, model routing, extensions)
+
+### v2.2 — Parallel Execution + Team Features
+
+Execute independent slices simultaneously and support multi-developer coordination.
 
 - **`[P]`-tagged slices** in hardened plans execute in parallel (already part of plan format)
 - **Worker pool** — configurable max parallelism (default: 3 concurrent sessions)
 - **Merge checkpoints** — parallel branches converge at defined sync points
 - **Conflict detection** — warn if parallel slices touch overlapping files
+- **Team activity feed** — see who's working on what phase, who's running what (multi-user dashboard)
 
 ### v2.3 — OpenClaw Bridge
 

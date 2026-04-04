@@ -792,7 +792,7 @@ async function executeSlice(slice, options) {
     // Execute each line of the validation gate as a separate command
     const gateLines = slice.validationGate
       .split("\n")
-      .map((l) => l.replace(/#.*$/, "").trim()) // Strip comments
+      .map((l) => l.replace(/\s{2,}#\s.*$/, "").trim()) // Strip inline comments (2+ spaces before #)
       .filter((l) => l.length > 0);
 
     for (const gateLine of gateLines) {

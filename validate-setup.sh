@@ -167,6 +167,61 @@ else
     ((WARN++))
 fi
 
+# ─── Agent-Specific Files ─────────────────────────────────────────────
+if [ -f "$CONFIG_PATH" ]; then
+    CONFIGURED_AGENTS="$(grep -o '"agents"[^,}]*' "$CONFIG_PATH" | sed 's/"agents":\s*"//' | sed 's/"//' || echo "copilot")"
+    [ -z "$CONFIGURED_AGENTS" ] && CONFIGURED_AGENTS="copilot"
+
+    IFS=',' read -ra AGENT_ARR <<< "$CONFIGURED_AGENTS"
+    HAS_EXTRA=false
+    for ag in "${AGENT_ARR[@]}"; do
+        ag="$(echo "$ag" | tr -d ' ')"
+        [ "$ag" = "copilot" ] && continue
+        if [ "$HAS_EXTRA" = false ]; then
+            echo ""
+            cyan "Agent-specific files:"
+            HAS_EXTRA=true
+        fi
+        case "$ag" in
+            claude)
+                check_file "CLAUDE.md" "false" || true
+                if [ -d "$PROJECT_PATH/.claude/skills" ]; then
+                    local claude_count
+                    claude_count=$(find "$PROJECT_PATH/.claude/skills" -name "SKILL.md" -type f 2>/dev/null | wc -l | tr -d ' ')
+                    green "  PASS  .claude/skills/ ($claude_count Claude skills)"
+                    ((PASS++))
+                else
+                    yellow "  WARN  .claude/skills/ (missing)"
+                    ((WARN++))
+                fi
+                ;;
+            cursor)
+                check_file ".cursor/rules" "false" || true
+                if [ -d "$PROJECT_PATH/.cursor/commands" ]; then
+                    local cursor_count
+                    cursor_count=$(find "$PROJECT_PATH/.cursor/commands" -name "*.md" -type f 2>/dev/null | wc -l | tr -d ' ')
+                    green "  PASS  .cursor/commands/ ($cursor_count Cursor commands)"
+                    ((PASS++))
+                else
+                    yellow "  WARN  .cursor/commands/ (missing)"
+                    ((WARN++))
+                fi
+                ;;
+            codex)
+                if [ -d "$PROJECT_PATH/.agents/skills" ]; then
+                    local codex_count
+                    codex_count=$(find "$PROJECT_PATH/.agents/skills" -name "SKILL.md" -type f 2>/dev/null | wc -l | tr -d ' ')
+                    green "  PASS  .agents/skills/ ($codex_count Codex skills)"
+                    ((PASS++))
+                else
+                    yellow "  WARN  .agents/skills/ (missing)"
+                    ((WARN++))
+                fi
+                ;;
+        esac
+    done
+fi
+
 # ─── Optional Files ───────────────────────────────────────────────────
 echo ""
 cyan "Optional files:"

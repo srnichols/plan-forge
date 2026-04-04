@@ -110,6 +110,16 @@ If it already exists, append — never overwrite prior entries.
 
 ---
 
+## MCP Tools (if Plan Forge MCP server is running)
+
+- **Pre-ship validation**: call `forge_analyze` with the plan file — verify consistency score meets threshold before committing
+- **Final sweep**: call `forge_sweep` to confirm zero deferred-work markers remain
+- **Scope check**: call `forge_diff` to verify no forbidden files were touched
+
+> Run these before the commit step. If forge_analyze scores below 80, flag for the user before proceeding.
+
+---
+
 ## Persistent Memory (if OpenBrain is configured)
 
 - **Before shipping**: `search_thoughts("postmortem lessons", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "postmortem")` — load lessons from prior phase postmortems to check for recurring shipping issues (failed pushes, missed changelog entries, forgotten tags)

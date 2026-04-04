@@ -252,6 +252,52 @@ if [ "$RUN_SWEEP" = "true" ]; then
 fi
 
 # ═══════════════════════════════════════════════════════════════════
+# 7. CROSS-ARTIFACT ANALYSIS (optional)
+# ═══════════════════════════════════════════════════════════════════
+RUN_ANALYZE="${INPUT_ANALYZE:-false}"
+ANALYZE_PLAN="${INPUT_ANALYZE_PLAN:-}"
+ANALYZE_THRESHOLD="${INPUT_ANALYZE_THRESHOLD:-60}"
+
+if [ "$RUN_ANALYZE" = "true" ]; then
+    echo "Cross-Artifact Analysis:"
+
+    if [ -z "$ANALYZE_PLAN" ]; then
+        warn "analyze=true but no analyze-plan specified — skipping"
+    elif [ ! -f "$PROJECT_DIR/$ANALYZE_PLAN" ]; then
+        fail "Plan file not found: $ANALYZE_PLAN"
+    else
+        # Run pforge analyze if available, otherwise do basic plan structure checks
+        PFORGE_SCRIPT=""
+        [ -f "$PROJECT_DIR/pforge.sh" ] && PFORGE_SCRIPT="$PROJECT_DIR/pforge.sh"
+
+        if [ -n "$PFORGE_SCRIPT" ]; then
+            ANALYZE_OUTPUT="$(bash "$PFORGE_SCRIPT" analyze "$ANALYZE_PLAN" 2>&1)" || true
+            echo "$ANALYZE_OUTPUT"
+
+            # Extract score from output
+            SCORE="$(echo "$ANALYZE_OUTPUT" | grep -oP 'Consistency Score: \K\d+' || echo "0")"
+            if [ "$SCORE" -ge "$ANALYZE_THRESHOLD" ]; then
+                pass "Consistency score: $SCORE/100 (threshold: $ANALYZE_THRESHOLD)"
+            else
+                fail "Consistency score: $SCORE/100 (below threshold: $ANALYZE_THRESHOLD)"
+            fi
+        else
+            # Fallback: basic plan structure validation
+            PLAN_FILE="$PROJECT_DIR/$ANALYZE_PLAN"
+            HAS_SCOPE=$(grep -c '### In Scope\|### Scope Contract' "$PLAN_FILE" 2>/dev/null || echo 0)
+            HAS_SLICES=$(grep -c '### Slice' "$PLAN_FILE" 2>/dev/null || echo 0)
+            HAS_GATES=$(grep -ciE 'validation gate|build.*pass|test.*pass' "$PLAN_FILE" 2>/dev/null || echo 0)
+
+            [ "$HAS_SCOPE" -gt 0 ] && pass "Plan has scope contract" || warn "No scope contract found"
+            [ "$HAS_SLICES" -gt 0 ] && pass "Plan has $HAS_SLICES slices" || warn "No execution slices found"
+            [ "$HAS_GATES" -gt 0 ] && pass "Plan has validation gates" || warn "No validation gates found"
+        fi
+    fi
+
+    echo ""
+fi
+
+# ═══════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════
 echo "────────────────────────────────────────────────────"

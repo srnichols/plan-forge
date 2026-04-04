@@ -42,6 +42,15 @@ If ANY finding cannot be resolved without scope expansion: pause and report the 
 
 ---
 
+## MCP Tools (if Plan Forge MCP server is running)
+
+- **Run sweep**: call `forge_sweep` for structured TODO/FIXME/stub scanning with file locations
+- **Verify scope**: call `forge_diff` with the plan file to confirm all changes are within scope before handoff to review
+
+> Use MCP tools for structured results when available. Fall back to manual grep if MCP is not configured.
+
+---
+
 ## Persistent Memory (if OpenBrain is configured)
 
 - **Before sweeping**: `search_thoughts("common stubs", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "bug")` — check if prior sweeps found recurring stub patterns so you can look for them proactively

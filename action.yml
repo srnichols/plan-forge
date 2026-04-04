@@ -60,5 +60,8 @@ runs:
         INPUT_FAIL_ON_WARNINGS: ${{ inputs.fail-on-warnings }}
         INPUT_SWEEP: ${{ inputs.sweep }}
         INPUT_SWEEP_FAIL: ${{ inputs.sweep-fail }}
+        INPUT_ANALYZE: ${{ inputs.analyze }}
+        INPUT_ANALYZE_PLAN: ${{ inputs.analyze-plan }}
+        INPUT_ANALYZE_THRESHOLD: ${{ inputs.analyze-threshold }}
       run: |
         bash "${GITHUB_ACTION_PATH}/scripts/validate-action.sh"

@@ -12,18 +12,33 @@
 **Add Slice 0** before all other slices: 60-min spike to test all worker spawning options and define execution modes.
 
 **Test matrix:**
-1. Can `claude` CLI be invoked non-interactively via `child_process.spawn`? (pipe plan context via stdin)
-2. Can `codex` CLI be invoked non-interactively? (skills mode)
-3. Can `gh copilot` CLI be invoked non-interactively? (suggest/explain modes)
-4. Can VS Code Copilot be controlled programmatically? (likely answer: NO — it's a UI extension)
-5. Can the orchestrator run build/test commands directly without an agent? (validation-only mode)
+1. Can `claude` CLI (Anthropic) be invoked non-interactively? — reads `CLAUDE.md` with all guardrails ✅
+2. Can `codex` CLI (OpenAI) be invoked non-interactively? — reads `.agents/skills/` ✅
+3. Can `gh copilot` CLI (Microsoft) be invoked non-interactively with **context injection** (pipe guardrail content via stdin)? — normally stateless, doesn't read `.github/` files
+4. Can VS Code Copilot be controlled programmatically? (likely answer: NO — UI extension)
+5. Can the orchestrator run build/test commands directly without an agent? (validation-only for Assisted mode)
 
-**Define two execution modes based on spike results:**
+**Tool landscape (critical for audience targeting):**
 
-| Mode | Who Writes Code | Who Validates | Best For |
-|------|----------------|--------------|----------|
-| **Full Auto** | Claude CLI / Codex CLI (spawned workers) | Orchestrator runs gates | Hands-off execution, overnight builds |
-| **Assisted** | Developer in VS Code Copilot (manual) | Orchestrator runs gates between slices | VS Code Copilot users who want interactive coding + automated validation |
+| Tool | License | Reads Project Context? | Non-Interactive? |
+|------|---------|----------------------|-----------------|
+| VS Code + GitHub Copilot | Microsoft (Copilot license) | ✅ Full `.github/` suite | ❌ UI only |
+| Copilot CLI (`gh copilot`) | Microsoft (same license) | ❌ Stateless — does NOT read `.github/` | ✅ But limited |
+| GitHub CLI (`gh`) | Microsoft (same license) | N/A — not an AI agent | ✅ |
+| Claude Code (`claude`) | Anthropic (separate) | ✅ Rich `CLAUDE.md` | ✅ Best worker |
+| Codex CLI (`codex`) | OpenAI (separate) | ✅ `.agents/skills/` | ✅ Good worker |
+| Cursor | Anysphere (separate) | ✅ `.cursor/rules` | ✅ |
+
+**Critical spike finding #3 (Copilot CLI context injection):**
+If `gh copilot` can accept piped context (guardrails + slice instructions via stdin), Microsoft-only teams get Full Auto mode. If not, they're limited to Assisted mode. This is the **highest-priority test** for the Microsoft enterprise audience.
+
+**Define three execution modes based on spike results:**
+
+| Mode | Worker | Guardrails? | Target Audience |
+|------|--------|------------|----------------|
+| **Full Auto (Claude)** | Claude Code CLI | ✅ Rich CLAUDE.md (all 16 guardrails) | Independent devs, overnight builds |
+| **Full Auto (Copilot)** | Copilot CLI + context injection | ⚠️ Injected (if spike #3 passes) | Microsoft employees (same license, no new tools) |
+| **Assisted** | Human in VS Code Copilot | ✅ Full `.github/` suite | Everyone — interactive coding + automated validation gates |
 
 **Assisted mode workflow:**
 1. Developer starts `pforge run-plan --assisted <plan>`

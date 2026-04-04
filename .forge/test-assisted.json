@@ -1,0 +1,38 @@
+{
+  "plan": "docs/plans/examples/Phase-DOTNET-EXAMPLE.md",
+  "startTime": "2026-04-04T14:29:46.459Z",
+  "endTime": "2026-04-04T14:29:46.638Z",
+  "mode": "assisted",
+  "model": "auto",
+  "sliceCount": 6,
+  "results": {
+    "passed": 0,
+    "failed": 1,
+    "skipped": 0,
+    "total": 1
+  },
+  "totalDuration": 175,
+  "totalTokensOut": 0,
+  "status": "failed",
+  "sliceResults": [
+    {
+      "sliceId": "12.1",
+      "number": "12.1",
+      "title": "Database Migration: `user_profiles` Table",
+      "status": "failed",
+      "duration": 175,
+      "exitCode": 0,
+      "gateStatus": "failed",
+      "gateOutput": "MSBUILD : error MSB1008: Only one project can be specified.\r\n    Full command line: 'C:\\Program Files\\dotnet\\sdk\\10.0.200-preview.0.26103.119\\MSBuild.dll -maxcpucount --verbosity:m -tlp:default=auto --property:NuGetInteractive=false --restoreProperty:NuGetInteractive=false --restoreProperty:EnableDefaultCompileItems=false --restoreProperty:EnableDefaultEmbeddedResourceItems=false --restoreProperty:EnableDefaultNoneItems=false --nologo # zero errors -consoleloggerparameters:Summary -restore -distributedlogger:Microsoft.DotNet.Cli.Commands.MSBuild.MSBuildLogger,C:\\Program Files\\dotnet\\sdk\\10.0.200-preview.0.26103.119\\dotnet.dll*Microsoft.DotNet.Cli.Commands.MSBuild.MSBuildForwardingLogger,C:\\Program Files\\dotnet\\sdk\\10.0.200-preview.0.26103.119\\dotnet.dll'\r\n  Switches appended by response files:\r\nSwitch: zero\r\n\r\nFor switch syntax, type \"MSBuild -help\"",
+      "gateError": "Command failed: dotnet build                                        # zero errors",
+      "tokens": {
+        "tokens_in": "n/a",
+        "tokens_out": "n/a",
+        "model": "human"
+      },
+      "worker": "human",
+      "model": "human"
+    }
+  ],
+  "report": "All slices: 0 passed, 1 failed."
+}

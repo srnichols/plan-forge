@@ -1,9 +1,9 @@
 # Phase 1: Orchestrator — `forge_run_plan` DAG-Based Execution
 
 > **Roadmap Reference**: [DEPLOYMENT-ROADMAP.md](./DEPLOYMENT-ROADMAP.md) → Phase 1
-> **Status**: 🚧 In Progress (Slice 0 ✅)
+> **Status**: ✅ Complete (all 9 slices pass)
 > **Feature Branch**: `feature/v2.0-autonomous-execution`
-> **Pipeline**: Step 0 ✅ → Step 1 ✅ → Step 2 ✅ (hardened) → Step 3 (executing)
+> **Pipeline**: Step 0 ✅ → Step 1 ✅ → Step 2 ✅ (hardened) → Step 3 ✅ (executed) → Step 5 pending
 > **Review Findings Applied**: C1, C2, C3, C4, M1, M2, M6
 > **Spike Results**: [SPIKE-RESULTS.md](./SPIKE-RESULTS.md)
 
@@ -268,17 +268,17 @@ Developers using Plan Forge currently execute pipeline steps manually — switch
 ---
 
 ## Definition of Done
-- [ ] All 9 slices (0-8) pass validation gates
-- [ ] CLI spawning spike documented with test results
-- [ ] DAG-based executor with pluggable scheduler interface
-- [ ] Event emitter fires lifecycle events (DI pattern)
-- [ ] `pforge run-plan --estimate` works end-to-end
-- [ ] `forge_run_plan` MCP tool callable from Copilot Chat
-- [ ] Token tracking logs to `.forge/runs/` (parsed from JSONL)
-- [ ] Session logs captured to `slice-N-log.txt`
-- [ ] `.forge/SCHEMA.md` documents all `.forge/` files
-- [ ] Auto-sweep + auto-analyze after completion
-- [ ] Full documentation audit passes
+- [x] All 9 slices (0-8) pass validation gates
+- [x] CLI spawning spike documented with test results
+- [x] DAG-based executor with pluggable scheduler interface
+- [x] Event emitter fires lifecycle events (DI pattern)
+- [x] `pforge run-plan --estimate` works end-to-end
+- [x] `forge_run_plan` MCP tool callable from Copilot Chat
+- [x] Token tracking logs to `.forge/runs/` (parsed from JSONL)
+- [x] Session logs captured to `slice-N-log.txt`
+- [x] `.forge/SCHEMA.md` documents all `.forge/` files
+- [x] Auto-sweep + auto-analyze after completion
+- [x] Full documentation audit passes
 - [ ] PR to master, squash merge
 
 ## Stop Conditions

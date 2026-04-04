@@ -1441,18 +1441,34 @@ Target project: (current directory)</code></pre>
                 <td class="px-4 py-3 text-center text-slate-500">📋</td>
               </tr>
               <tr class="border-b border-slate-800/50">
+                <td class="px-4 py-3 text-white">MCP tools (8 forge operations)</td>
+                <td class="px-4 py-3 text-center text-green-400">✅ native</td>
+                <td class="px-4 py-3 text-center text-green-400">✅ native</td>
+                <td class="px-4 py-3 text-center text-green-400">✅ native</td>
+                <td class="px-4 py-3 text-center text-slate-500">—</td>
+                <td class="px-4 py-3 text-center text-slate-500">—</td>
+              </tr>
+              <tr class="border-b border-slate-800/50">
                 <td class="px-4 py-3 text-white">File-type awareness</td>
                 <td class="px-4 py-3 text-center text-green-400">✅ native</td>
-                <td class="px-4 py-3 text-center text-forge-400">⚡ guided</td>
-                <td class="px-4 py-3 text-center text-forge-400">⚡ guided</td>
+                <td class="px-4 py-3 text-center text-green-400">✅ guided</td>
+                <td class="px-4 py-3 text-center text-green-400">✅ guided</td>
                 <td class="px-4 py-3 text-center text-slate-500">—</td>
                 <td class="px-4 py-3 text-center text-slate-500">—</td>
               </tr>
               <tr class="border-b border-slate-800/50">
                 <td class="px-4 py-3 text-white">Post-edit scanning</td>
                 <td class="px-4 py-3 text-center text-green-400">✅ hook</td>
-                <td class="px-4 py-3 text-center text-forge-400">⚡ guided</td>
-                <td class="px-4 py-3 text-center text-forge-400">⚡ guided</td>
+                <td class="px-4 py-3 text-center text-green-400">✅ MCP</td>
+                <td class="px-4 py-3 text-center text-green-400">✅ MCP</td>
+                <td class="px-4 py-3 text-center text-slate-500">—</td>
+                <td class="px-4 py-3 text-center text-slate-500">—</td>
+              </tr>
+              <tr class="border-b border-slate-800/50">
+                <td class="px-4 py-3 text-white">Scope drift detection</td>
+                <td class="px-4 py-3 text-center text-green-400">✅ hook + MCP</td>
+                <td class="px-4 py-3 text-center text-green-400">✅ MCP</td>
+                <td class="px-4 py-3 text-center text-green-400">✅ MCP</td>
                 <td class="px-4 py-3 text-center text-slate-500">—</td>
                 <td class="px-4 py-3 text-center text-slate-500">—</td>
               </tr>
@@ -1475,7 +1491,7 @@ Target project: (current directory)</code></pre>
             </tbody>
           </table>
         </div>
-        <p class="text-xs text-slate-500 mt-4 text-center">✅ = native platform feature · ⚡ = instruction-guided (AI follows reliably) · 📋 = copy-paste prompts from runbook</p>
+        <p class="text-xs text-slate-500 mt-4 text-center">✅ = native/MCP tool · ⚡ = instruction-guided · 📋 = copy-paste prompts · MCP = with <code class="text-slate-400">mcp/server.mjs</code> running</p>
       </div>
     </div>
   </section>

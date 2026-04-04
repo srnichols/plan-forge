@@ -1082,6 +1082,28 @@ print(v if isinstance(v, str) else ','.join(v))
 
     unset -f _pf_check
 
+    # ─── MCP server files ────────────────────────────────────────
+    local src_mcp="$SOURCE_PATH/mcp"
+    local dst_mcp="$REPO_ROOT/mcp"
+    if [ -d "$src_mcp" ]; then
+        for mcp_file in server.mjs package.json; do
+            local src_f="$src_mcp/$mcp_file"
+            local dst_f="$dst_mcp/$mcp_file"
+            if [ -f "$src_f" ]; then
+                if [ -f "$dst_f" ]; then
+                    local src_hash dst_hash
+                    src_hash="$(sha256sum "$src_f" 2>/dev/null | cut -d' ' -f1 || shasum -a 256 "$src_f" | cut -d' ' -f1)"
+                    dst_hash="$(sha256sum "$dst_f" 2>/dev/null | cut -d' ' -f1 || shasum -a 256 "$dst_f" | cut -d' ' -f1)"
+                    if [ "$src_hash" != "$dst_hash" ]; then
+                        _updates+=("$src_f|$dst_f|mcp/$mcp_file")
+                    fi
+                else
+                    _new_files+=("$src_f|$dst_f|mcp/$mcp_file")
+                fi
+            fi
+        done
+    fi
+
     # ─── Report ───────────────────────────────────────────────────
     if [ "${#_updates[@]}" -eq 0 ] && [ "${#_new_files[@]}" -eq 0 ]; then
         echo "All framework files are up to date."
@@ -1380,6 +1402,39 @@ cmd_doctor() {
         fi
     else
         doctor_pass "Installed v$template_version (source repo not found nearby — skipping currency check)"
+    fi
+
+    echo ""
+
+    # ═══════════════════════════════════════════════════════════════
+    # 4b. MCP SERVER
+    # ═══════════════════════════════════════════════════════════════
+    echo "MCP Server:"
+
+    local mcp_server="$REPO_ROOT/mcp/server.mjs"
+    if [ -f "$mcp_server" ]; then
+        doctor_pass "mcp/server.mjs exists"
+
+        [ -f "$REPO_ROOT/mcp/package.json" ] \
+            || doctor_warn "mcp/package.json missing" "Copy from Plan Forge template"
+
+        if [ -d "$REPO_ROOT/mcp/node_modules" ]; then
+            doctor_pass "MCP dependencies installed"
+        else
+            doctor_warn "MCP dependencies not installed" "Run: cd mcp && npm install"
+        fi
+
+        if [ -f "$REPO_ROOT/.vscode/mcp.json" ]; then
+            if grep -q '"plan-forge"' "$REPO_ROOT/.vscode/mcp.json" 2>/dev/null; then
+                doctor_pass ".vscode/mcp.json has 'plan-forge' server entry"
+            else
+                doctor_warn ".vscode/mcp.json missing 'plan-forge' entry" "Re-run setup or add manually"
+            fi
+        else
+            doctor_warn ".vscode/mcp.json not found" "Run setup to generate MCP config"
+        fi
+    else
+        doctor_pass "MCP server not installed (optional — run setup to add)"
     fi
 
     echo ""

@@ -1231,6 +1231,27 @@ function Invoke-Update {
         }
     }
 
+    # ─── MCP server files ────────────────────────────────────────
+    $srcMcp = Join-Path $sourcePath "mcp"
+    $dstMcp = Join-Path $RepoRoot "mcp"
+    if (Test-Path $srcMcp) {
+        foreach ($mcpFile in @("server.mjs", "package.json")) {
+            $srcFile = Join-Path $srcMcp $mcpFile
+            $dstFile = Join-Path $dstMcp $mcpFile
+            if (Test-Path $srcFile) {
+                if (Test-Path $dstFile) {
+                    $srcHash = (Get-FileHash $srcFile -Algorithm SHA256).Hash
+                    $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
+                    if ($srcHash -ne $dstHash) {
+                        $updates += @{ Src = $srcFile; Dst = $dstFile; Name = "mcp/$mcpFile" }
+                    }
+                } else {
+                    $newFiles += @{ Src = $srcFile; Dst = $dstFile; Name = "mcp/$mcpFile" }
+                }
+            }
+        }
+    }
+
     # ─── Report ───────────────────────────────────────────────────
     if ($updates.Count -eq 0 -and $newFiles.Count -eq 0) {
         Write-Host "All framework files are up to date." -ForegroundColor Green
@@ -1626,6 +1647,45 @@ function Invoke-Smith {
     }
     else {
         Doctor-Pass "Installed v$templateVersion (source repo not found nearby — skipping currency check)"
+    }
+
+    Write-Host ""
+
+    # ═══════════════════════════════════════════════════════════════
+    # 4b. MCP SERVER
+    # ═══════════════════════════════════════════════════════════════
+    Write-Host "MCP Server:" -ForegroundColor Cyan
+
+    $mcpServer = Join-Path $RepoRoot "mcp/server.mjs"
+    $mcpPkg = Join-Path $RepoRoot "mcp/package.json"
+    $vscodeMcp = Join-Path $RepoRoot ".vscode/mcp.json"
+
+    if (Test-Path $mcpServer) {
+        Doctor-Pass "mcp/server.mjs exists"
+
+        if (-not (Test-Path $mcpPkg)) {
+            Doctor-Warn "mcp/package.json missing" "Copy from Plan Forge template or run setup again"
+        }
+
+        $mcpNodeModules = Join-Path $RepoRoot "mcp/node_modules"
+        if (Test-Path $mcpNodeModules) {
+            Doctor-Pass "MCP dependencies installed"
+        } else {
+            Doctor-Warn "MCP dependencies not installed" "Run: cd mcp && npm install"
+        }
+
+        if (Test-Path $vscodeMcp) {
+            $mcpContent = Get-Content $vscodeMcp -Raw
+            if ($mcpContent -match '"plan-forge"') {
+                Doctor-Pass ".vscode/mcp.json has 'plan-forge' server entry"
+            } else {
+                Doctor-Warn ".vscode/mcp.json missing 'plan-forge' entry" "Re-run setup or add manually"
+            }
+        } else {
+            Doctor-Warn ".vscode/mcp.json not found" "Run setup to generate MCP config"
+        }
+    } else {
+        Doctor-Pass "MCP server not installed (optional — run setup to add)"
     }
 
     Write-Host ""

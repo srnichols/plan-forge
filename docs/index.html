@@ -585,6 +585,16 @@
           <a href="speckit-interop.html" class="text-xs text-forge-400 hover:underline">See the combined workflow →</a>
         </div>
 
+        <!-- MCP Server -->
+        <div class="p-8 rounded-2xl bg-slate-800/60 border border-purple-700/30">
+          <div class="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center text-2xl mb-4">🔌</div>
+          <h3 class="text-xl font-bold text-white mb-2">MCP Server</h3>
+          <p class="text-sm text-slate-400 mb-4">Expose forge commands as native MCP tools — any agent with MCP support can invoke <code class="text-forge-400">forge_smith</code>, <code class="text-forge-400">forge_sweep</code>, <code class="text-forge-400">forge_diff</code> as function calls. Auto-configured during setup. Composable with OpenBrain.</p>
+          <div class="space-y-1 text-xs text-slate-500">
+            <div>8 tools · Node.js · stdio transport · zero config</div>
+          </div>
+        </div>
+
       </div>
 
       <!-- What's the difference? -->
@@ -1431,18 +1441,34 @@ Target project: (current directory)</code></pre>
                 <td class="px-4 py-3 text-center text-slate-500">📋</td>
               </tr>
               <tr class="border-b border-slate-800/50">
+                <td class="px-4 py-3 text-white">MCP tools (8 forge operations)</td>
+                <td class="px-4 py-3 text-center text-green-400">✅ native</td>
+                <td class="px-4 py-3 text-center text-green-400">✅ native</td>
+                <td class="px-4 py-3 text-center text-green-400">✅ native</td>
+                <td class="px-4 py-3 text-center text-slate-500">—</td>
+                <td class="px-4 py-3 text-center text-slate-500">—</td>
+              </tr>
+              <tr class="border-b border-slate-800/50">
                 <td class="px-4 py-3 text-white">File-type awareness</td>
                 <td class="px-4 py-3 text-center text-green-400">✅ native</td>
-                <td class="px-4 py-3 text-center text-forge-400">⚡ guided</td>
-                <td class="px-4 py-3 text-center text-forge-400">⚡ guided</td>
+                <td class="px-4 py-3 text-center text-green-400">✅ guided</td>
+                <td class="px-4 py-3 text-center text-green-400">✅ guided</td>
                 <td class="px-4 py-3 text-center text-slate-500">—</td>
                 <td class="px-4 py-3 text-center text-slate-500">—</td>
               </tr>
               <tr class="border-b border-slate-800/50">
                 <td class="px-4 py-3 text-white">Post-edit scanning</td>
                 <td class="px-4 py-3 text-center text-green-400">✅ hook</td>
-                <td class="px-4 py-3 text-center text-forge-400">⚡ guided</td>
-                <td class="px-4 py-3 text-center text-forge-400">⚡ guided</td>
+                <td class="px-4 py-3 text-center text-green-400">✅ MCP</td>
+                <td class="px-4 py-3 text-center text-green-400">✅ MCP</td>
+                <td class="px-4 py-3 text-center text-slate-500">—</td>
+                <td class="px-4 py-3 text-center text-slate-500">—</td>
+              </tr>
+              <tr class="border-b border-slate-800/50">
+                <td class="px-4 py-3 text-white">Scope drift detection</td>
+                <td class="px-4 py-3 text-center text-green-400">✅ hook + MCP</td>
+                <td class="px-4 py-3 text-center text-green-400">✅ MCP</td>
+                <td class="px-4 py-3 text-center text-green-400">✅ MCP</td>
                 <td class="px-4 py-3 text-center text-slate-500">—</td>
                 <td class="px-4 py-3 text-center text-slate-500">—</td>
               </tr>
@@ -1465,7 +1491,7 @@ Target project: (current directory)</code></pre>
             </tbody>
           </table>
         </div>
-        <p class="text-xs text-slate-500 mt-4 text-center">✅ = native platform feature · ⚡ = instruction-guided (AI follows reliably) · 📋 = copy-paste prompts from runbook</p>
+        <p class="text-xs text-slate-500 mt-4 text-center">✅ = native/MCP tool · ⚡ = instruction-guided · 📋 = copy-paste prompts · MCP = with <code class="text-slate-400">mcp/server.mjs</code> running</p>
       </div>
     </div>
   </section>

@@ -297,6 +297,16 @@
 
           <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
             <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">Can I use forge commands without the CLI?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              Yes. The setup wizard generates <code class="text-forge-400">.vscode/mcp.json</code> (and <code class="text-forge-400">.claude/mcp.json</code> for Claude), which exposes 8 forge tools as native MCP functions: <code class="text-forge-400">forge_smith</code>, <code class="text-forge-400">forge_validate</code>, <code class="text-forge-400">forge_sweep</code>, <code class="text-forge-400">forge_status</code>, <code class="text-forge-400">forge_diff</code>, <code class="text-forge-400">forge_ext_search</code>, <code class="text-forge-400">forge_ext_info</code>, and <code class="text-forge-400">forge_new_phase</code>. Your AI agent can call these directly — no terminal commands needed. The MCP server is composable with OpenBrain for persistent memory.
+            </div>
+          </details>
+
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
               <span class="text-sm font-medium text-white pr-4">Does Plan Forge support compliance requirements (SOC2, GDPR, HIPAA)?</span>
               <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
             </summary>
@@ -359,7 +369,7 @@
             </summary>
             <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
               <p class="mb-3"><strong>Pick Spec Kit if</strong> your team uses multiple AI tools (not just VS Code), you want the largest community and extension ecosystem, and you prefer a lightweight spec-first methodology you can adopt incrementally. GitHub's backing means strong long-term viability and rapid iteration.</p>
-              <p class="mb-3"><strong>Pick Plan Forge if</strong> your team lives in VS Code + GitHub Copilot, you want deep guardrails that auto-enforce <em>during</em> coding (not just at planning time), you need specialized reviewer agents, and you care about enterprise patterns like deployment templates, lifecycle hooks, and scope-contract enforcement.</p>
+              <p class="mb-3"><strong>Pick Plan Forge if</strong> you want deep guardrails that auto-enforce <em>during</em> coding, you need specialized reviewer agents, and you care about enterprise patterns like deployment templates, lifecycle hooks, and scope-contract enforcement. First-class support for VS Code + Copilot, Claude Code, and Cursor — with MCP tools for native integration.</p>
               <p>Honest take: Spec Kit has the bigger ecosystem and broader agent support today. Plan Forge goes deeper on runtime enforcement and enterprise quality gates. Both are free. You really can't go wrong.</p>
             </div>
           </details>

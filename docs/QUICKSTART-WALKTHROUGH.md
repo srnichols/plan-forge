@@ -188,5 +188,6 @@ Same pipeline, fewer copy-paste steps.
 - **Define Project Principles** — attach `.github/prompts/project-principles.prompt.md` to declare non-negotiable rules
 - **Explore agents** — try the Security Reviewer or Architecture Reviewer on your codebase
 - **Browse extensions** — run `pforge ext search` to discover community guardrails (compliance, multi-tenancy, memory, etc.)
+- **Activate MCP tools** — run `cd mcp && npm install` to expose forge operations as native MCP functions in Claude Code, Cursor, and Copilot
 - **Add CI validation** — drop `uses: srnichols/plan-forge-validate@v1` into your PR workflow to automate quality gates
 - **Read the full guide** — [docs/COPILOT-VSCODE-GUIDE.md](COPILOT-VSCODE-GUIDE.md) for advanced tips

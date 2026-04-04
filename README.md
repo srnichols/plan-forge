@@ -560,6 +560,8 @@ plan-forge/
 ├── validate-setup.sh                  ← Post-setup validator (Bash)
 ├── action.yml                         ← GitHub Action for CI plan validation
 ├── scripts/validate-action.sh         ← CI validation script (used by action.yml)
+├── mcp/server.mjs                     ← MCP server — exposes forge tools to any MCP client
+├── mcp/package.json                   ← MCP server dependencies
 ├── CUSTOMIZATION.md                   ← How to adapt for your stack
 │
 ├── docs/
@@ -843,6 +845,20 @@ Plan Forge integrates seamlessly with [Spec Kit](https://github.com/github/spec-
 - Use Spec Kit to **write the spec**, Plan Forge to **enforce it**
 
 See [Spec Kit + Plan Forge integration guide](https://srnichols.github.io/plan-forge/speckit-interop.html) for the combined workflow.
+
+---
+
+## MCP Server (Optional)
+
+Expose Plan Forge operations as native MCP tools — any agent with MCP support can invoke `forge_smith`, `forge_sweep`, `forge_diff`, etc. as function calls instead of terminal commands.
+
+Setup installs `mcp/server.mjs` automatically and generates `.vscode/mcp.json` (Copilot) and `.claude/mcp.json` (Claude). To activate:
+
+```bash
+cd mcp && npm install    # Install MCP dependencies (one-time)
+```
+
+8 tools available: `forge_smith`, `forge_validate`, `forge_sweep`, `forge_status`, `forge_diff`, `forge_ext_search`, `forge_ext_info`, `forge_new_phase`. Composable with OpenBrain for persistent memory in the same MCP config.
 
 ---
 

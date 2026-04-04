@@ -56,13 +56,14 @@ Expose Plan Forge operations as MCP tools so any agent with MCP support can invo
 
 ### v1.6 — Intelligence Layer
 
-Data-driven pipeline optimization from historical execution data.
+~~Data-driven pipeline optimization from historical execution data.~~
 
-- **Token usage estimation** per slice — predict cost before executing
-- **Plan complexity scoring** — auto-recommend pipeline depth (skip/light/full)
-- **Historical metrics** — avg slices per phase, pass rates, common review findings
-- **Slice duration estimation** — predict time from plan structure + past data
-- Requires OpenBrain memory for historical data (optional — degrades gracefully without it)
+Merged into v2.0–v2.1 — token tracking, cost estimation, and historical metrics are built into the orchestrator and dashboard rather than standalone CLI features.
+
+- ~~Token usage estimation per slice~~ → v2.0 logs actual tokens per slice during `forge_run_plan`
+- ~~Plan complexity scoring~~ → v2.0 auto-recommends pipeline depth from plan structure
+- ~~Historical metrics~~ → v2.1 dashboard run history + trend charts
+- ~~Slice duration estimation~~ → v2.1 dashboard shows actual + predicted durations
 
 ---
 
@@ -81,6 +82,9 @@ Built on the existing `mcp/server.mjs` Node.js process — no new services.
 - **Validation gates enforced** — build + test must pass at each slice boundary before proceeding
 - **OpenBrain integration** — workers search before slices, capture after (existing hooks)
 - **Abort/retry** — `forge_abort` to stop, automatic retry on transient failures
+- **Token tracking** — log actual token usage per slice/model to `.forge/runs/` (feeds v2.1 cost tracker + trend charts)
+- **Cost estimation** — predict token cost before running based on plan structure + historical data
+- **Plan complexity scoring** — auto-recommend pipeline depth (skip/light/full) from plan analysis
 - All existing manual workflows continue to work unchanged
 
 ### v2.1 — WebSocket Hub + Dashboard (Real-Time Communication)

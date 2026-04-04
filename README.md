@@ -560,6 +560,8 @@ plan-forge/
 ├── validate-setup.sh                  ← Post-setup validator (Bash)
 ├── action.yml                         ← GitHub Action for CI plan validation
 ├── scripts/validate-action.sh         ← CI validation script (used by action.yml)
+├── mcp/server.mjs                     ← MCP server — exposes forge tools to any MCP client
+├── mcp/package.json                   ← MCP server dependencies
 ├── CUSTOMIZATION.md                   ← How to adapt for your stack
 │
 ├── docs/

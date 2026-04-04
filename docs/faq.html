@@ -297,6 +297,16 @@
 
           <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
             <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">Can I use forge commands without the CLI?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              Yes. The setup wizard generates <code class="text-forge-400">.vscode/mcp.json</code> (and <code class="text-forge-400">.claude/mcp.json</code> for Claude), which exposes 8 forge tools as native MCP functions: <code class="text-forge-400">forge_smith</code>, <code class="text-forge-400">forge_validate</code>, <code class="text-forge-400">forge_sweep</code>, <code class="text-forge-400">forge_status</code>, <code class="text-forge-400">forge_diff</code>, <code class="text-forge-400">forge_ext_search</code>, <code class="text-forge-400">forge_ext_info</code>, and <code class="text-forge-400">forge_new_phase</code>. Your AI agent can call these directly — no terminal commands needed. The MCP server is composable with OpenBrain for persistent memory.
+            </div>
+          </details>
+
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
               <span class="text-sm font-medium text-white pr-4">Does Plan Forge support compliance requirements (SOC2, GDPR, HIPAA)?</span>
               <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
             </summary>

@@ -50,7 +50,31 @@
     <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
       <p class="text-forge-500 text-sm font-semibold tracking-widest uppercase mb-4">Extensions</p>
       <h1 class="text-5xl font-black text-white mb-4">Reusable Guardrail Packages</h1>
-      <p class="text-xl text-slate-400 max-w-2xl mx-auto">Extend Plan Forge with domain-specific instructions, agents, and prompts. Share standards across teams. Install in one command.</p>
+      <p class="text-xl text-slate-400 max-w-2xl mx-auto">Extend Plan Forge with domain-specific instructions, agents, and prompts. Share standards across teams. Install in one command. <strong class="text-green-400">Spec Kit compatible</strong> catalog format.</p>
+    </div>
+  </section>
+
+  <!-- BROWSE & INSTALL -->
+  <section class="py-12 bg-slate-900 border-b border-slate-800/60">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="grid md:grid-cols-3 gap-6">
+        <div class="p-5 rounded-xl bg-slate-800/60 border border-slate-700/40 text-center">
+          <div class="text-2xl mb-2">🔍</div>
+          <h3 class="font-semibold text-white text-sm mb-1">Browse</h3>
+          <code class="text-xs text-forge-400">pforge ext search</code>
+        </div>
+        <div class="p-5 rounded-xl bg-slate-800/60 border border-slate-700/40 text-center">
+          <div class="text-2xl mb-2">📋</div>
+          <h3 class="font-semibold text-white text-sm mb-1">Details</h3>
+          <code class="text-xs text-forge-400">pforge ext info &lt;name&gt;</code>
+        </div>
+        <div class="p-5 rounded-xl bg-slate-800/60 border border-slate-700/40 text-center">
+          <div class="text-2xl mb-2">⬇️</div>
+          <h3 class="font-semibold text-white text-sm mb-1">Install</h3>
+          <code class="text-xs text-forge-400">pforge ext add &lt;name&gt;</code>
+        </div>
+      </div>
+      <p class="text-xs text-slate-500 text-center mt-4">Catalog fetches from local <code class="text-slate-400">extensions/catalog.json</code> first, falls back to GitHub. <a href="https://github.com/srnichols/plan-forge/blob/master/extensions/PUBLISHING.md" class="text-forge-400 hover:underline">Publish your own →</a></p>
     </div>
   </section>
 
@@ -79,7 +103,7 @@
             </div>
           </div>
           <div class="rounded-lg bg-slate-950/60 border border-slate-700/40 px-3 py-2">
-            <code class="text-xs text-forge-400">pforge ext install saas-multi-tenancy</code>
+            <code class="text-xs text-forge-400">pforge ext add saas-multi-tenancy</code>
           </div>
         </div>
 
@@ -102,7 +126,7 @@
             </div>
           </div>
           <div class="rounded-lg bg-slate-950/60 border border-slate-700/40 px-3 py-2">
-            <code class="text-xs text-forge-400">pforge ext install plan-forge-memory</code>
+            <code class="text-xs text-forge-400">pforge ext add plan-forge-memory</code>
           </div>
         </div>
 
@@ -125,9 +149,107 @@
             </div>
           </div>
           <div class="rounded-lg bg-slate-950/60 border border-slate-700/40 px-3 py-2">
-            <code class="text-xs text-forge-400">pforge ext install azure-infrastructure</code>
+            <code class="text-xs text-forge-400">pforge ext add azure-infrastructure</code>
           </div>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SPEC KIT COMPATIBLE EXTENSIONS -->
+  <section class="py-16 bg-slate-900 border-t border-slate-800/60">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center gap-3 mb-2">
+        <h2 class="text-2xl font-bold text-white">Spec Kit Compatible Extensions</h2>
+        <span class="px-3 py-1 rounded-full bg-green-500/20 border border-green-500/40 text-xs text-green-400 font-medium">Community</span>
+      </div>
+      <p class="text-sm text-slate-400 mb-8">Popular Spec Kit community extensions that pair well with Plan Forge's hardening pipeline. Plan Forge's catalog uses the same format — these extensions work in both tools.</p>
+
+      <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+
+        <div class="p-5 rounded-xl bg-slate-800/60 border border-green-700/30 hover:border-green-500/40 transition-colors">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="text-lg">🔍</span>
+            <h3 class="font-bold text-white text-sm">Verify Extension</h3>
+          </div>
+          <p class="text-xs text-slate-400 mb-3">Post-implementation quality gate that validates code against specification artifacts. Catches spec drift after execution.</p>
+          <div class="flex items-center gap-2 text-xs text-slate-500">
+            <span class="px-2 py-0.5 rounded bg-slate-700/60 text-slate-400">code</span>
+            <span class="px-2 py-0.5 rounded bg-slate-700/60 text-slate-400">Read-only</span>
+          </div>
+          <p class="text-xs text-green-400 mt-2">Pairs with: Step 5 (Review Gate)</p>
+        </div>
+
+        <div class="p-5 rounded-xl bg-slate-800/60 border border-green-700/30 hover:border-green-500/40 transition-colors">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="text-lg">🧹</span>
+            <h3 class="font-bold text-white text-sm">Cleanup Extension</h3>
+          </div>
+          <p class="text-xs text-slate-400 mb-3">Post-implementation quality gate — reviews changes, fixes small issues (scout rule), creates tasks for medium issues, generates analysis for large issues.</p>
+          <div class="flex items-center gap-2 text-xs text-slate-500">
+            <span class="px-2 py-0.5 rounded bg-slate-700/60 text-slate-400">code</span>
+            <span class="px-2 py-0.5 rounded bg-slate-700/60 text-slate-400">Read+Write</span>
+          </div>
+          <p class="text-xs text-green-400 mt-2">Pairs with: Step 4 (Completeness Sweep)</p>
+        </div>
+
+        <div class="p-5 rounded-xl bg-slate-800/60 border border-green-700/30 hover:border-green-500/40 transition-colors">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="text-lg">👨‍💻</span>
+            <h3 class="font-bold text-white text-sm">Staff Review Extension</h3>
+          </div>
+          <p class="text-xs text-slate-400 mb-3">Staff-engineer-level code review that validates implementation against spec, checks security, performance, and test coverage.</p>
+          <div class="flex items-center gap-2 text-xs text-slate-500">
+            <span class="px-2 py-0.5 rounded bg-slate-700/60 text-slate-400">code</span>
+            <span class="px-2 py-0.5 rounded bg-slate-700/60 text-slate-400">Read-only</span>
+          </div>
+          <p class="text-xs text-green-400 mt-2">Pairs with: Reviewer agents</p>
+        </div>
+
+        <div class="p-5 rounded-xl bg-slate-800/60 border border-green-700/30 hover:border-green-500/40 transition-colors">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="text-lg">🔄</span>
+            <h3 class="font-bold text-white text-sm">Reconcile Extension</h3>
+          </div>
+          <p class="text-xs text-slate-400 mb-3">Reconcile implementation drift by surgically updating feature artifacts. Detects when code diverges from spec and syncs them.</p>
+          <div class="flex items-center gap-2 text-xs text-slate-500">
+            <span class="px-2 py-0.5 rounded bg-slate-700/60 text-slate-400">docs</span>
+            <span class="px-2 py-0.5 rounded bg-slate-700/60 text-slate-400">Read+Write</span>
+          </div>
+          <p class="text-xs text-green-400 mt-2">Pairs with: Step 5 (Drift detection)</p>
+        </div>
+
+        <div class="p-5 rounded-xl bg-slate-800/60 border border-green-700/30 hover:border-green-500/40 transition-colors">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="text-lg">📊</span>
+            <h3 class="font-bold text-white text-sm">Retrospective Extension</h3>
+          </div>
+          <p class="text-xs text-slate-400 mb-3">Post-implementation retrospective with spec adherence scoring, drift analysis, and human-gated spec updates.</p>
+          <div class="flex items-center gap-2 text-xs text-slate-500">
+            <span class="px-2 py-0.5 rounded bg-slate-700/60 text-slate-400">docs</span>
+            <span class="px-2 py-0.5 rounded bg-slate-700/60 text-slate-400">Read+Write</span>
+          </div>
+          <p class="text-xs text-green-400 mt-2">Pairs with: Step 6 (Ship — postmortem)</p>
+        </div>
+
+        <div class="p-5 rounded-xl bg-slate-800/60 border border-green-700/30 hover:border-green-500/40 transition-colors">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="text-lg">🏗️</span>
+            <h3 class="font-bold text-white text-sm">AIDE Workflow</h3>
+          </div>
+          <p class="text-xs text-slate-400 mb-3">A structured 7-step workflow for building new projects from scratch with AI assistants — from vision through implementation.</p>
+          <div class="flex items-center gap-2 text-xs text-slate-500">
+            <span class="px-2 py-0.5 rounded bg-slate-700/60 text-slate-400">process</span>
+            <span class="px-2 py-0.5 rounded bg-slate-700/60 text-slate-400">Read+Write</span>
+          </div>
+          <p class="text-xs text-green-400 mt-2">Alternative to: Plan Forge pipeline</p>
+        </div>
+
+      </div>
+
+      <div class="mt-8 p-5 rounded-xl bg-green-900/10 border border-green-700/30 text-center">
+        <p class="text-sm text-slate-400">These extensions are maintained by the <a href="https://github.com/github/spec-kit" class="text-green-400 hover:underline">Spec Kit community</a>. Plan Forge's catalog format is compatible — install via <code class="text-forge-400">specify extension add</code> (Spec Kit) or <code class="text-forge-400">pforge ext add</code> (Plan Forge).</p>
+        <p class="text-xs text-slate-500 mt-2"><a href="speckit-interop.html" class="text-forge-400 hover:underline">See the full Spec Kit + Plan Forge integration guide →</a></p>
       </div>
     </div>
   </section>

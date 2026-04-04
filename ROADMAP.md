@@ -7,7 +7,7 @@
 
 ## Current Release
 
-**v1.2.2** (2026-04-02) — `azure-iac` preset, multi-preset support, `pforge.sh update` command.
+**v2.0.0** (2026-04-04) — Autonomous Execution: DAG orchestrator, cost tracking, WebSocket hub, dashboard, parallel execution.
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 

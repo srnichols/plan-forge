@@ -5,7 +5,32 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [Unreleased]
+## [2.0.0] — 2026-04-04
+
+### Added — Autonomous Execution (v2.0)
+- **`forge_run_plan`** MCP tool + `pforge run-plan` CLI command — one-command plan execution with DAG-based slice orchestration, `gh copilot` CLI worker spawning, validation gates at every boundary, token tracking from JSONL output, model routing from `.forge.json`, auto-sweep + auto-analyze, session log capture, cost estimation, and resume-from support
+- **`forge_abort`** MCP tool — signal abort between slices during plan execution
+- **`forge_plan_status`** MCP tool — read latest run status from `.forge/runs/`
+- **`forge_cost_report`** MCP tool — cost tracking report with total spend, per-model breakdown, and monthly aggregation from `.forge/cost-history.json`
+- **Cost calculation engine** — per-slice cost from token counts using embedded model pricing table (23 models), cost breakdown in `summary.json`, cost history aggregation across runs
+- **Historical estimation** — `--estimate` uses historical average tokens per slice when cost history exists, falls back to heuristic; shows confidence level
+- **WebSocket Hub** (`mcp/hub.mjs`) — real-time event broadcasting for live progress monitoring. Localhost-only WS server (port 3101) with port fallback, heartbeat, session registry, event history buffer (last 100 events), versioned events (v1.0)
+- **Event Schema** (`mcp/EVENTS.md`) — documented event types: `run-started`, `slice-started`, `slice-completed`, `slice-failed`, `run-completed`, `run-aborted`
+- **Live orchestrator events** — when hub is running, `forge_run_plan` broadcasts slice lifecycle events to all connected WebSocket clients in real-time
+- **Dashboard** (`mcp/dashboard/`) — real-time monitoring UI at `localhost:3100/dashboard`. Vanilla JS + Tailwind CDN + Chart.js. No build step. Features: live slice progress cards, run history table, cost tracker with charts, quick actions panel (Smith, Sweep, Analyze, Status, Validate, Extensions)
+- **REST API** — Express endpoints: `GET /api/status`, `GET /api/runs`, `GET /api/config`, `POST /api/config`, `GET /api/cost`, `POST /api/tool/:name`, `GET /api/hub`, `GET /api/replay/:run/:slice`
+- **Session Replay** — dashboard tab to browse and filter agent session logs per slice (errors, file ops, full log)
+- **Extension Marketplace UI** — visual catalog browser with search/filter
+- **Notification Center** — bell icon with persistent notifications (localStorage), auto-notifies on run-complete and slice-failed
+- **Config Editor** — visual editor for `.forge.json` (agents, model routing) with save confirmation
+- **Parallel Execution** — `[P]`-tagged slices execute concurrently via `ParallelScheduler` (up to configurable `maxParallelism`, default: 3). DAG-aware: respects dependencies, merge points, and scope-based conflict detection
+- **Scope Conflict Detection** — warns and falls back to sequential when parallel slices have overlapping file scopes
+- **Execution modes** — Full Auto (`gh copilot` CLI with any model) and Assisted (human codes in VS Code, orchestrator validates gates)
+- **`.forge/SCHEMA.md`** — documents all `.forge/` files with formats, schemas, and ownership
+
+---
+
+## [Unreleased — v1.3.0]
 
 ### Added
 - **`pforge smith`** — Forge-themed diagnostic command that inspects environment, VS Code config, setup health, version currency, and common problems with actionable FIX suggestions (PowerShell + Bash parity)
@@ -17,26 +42,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
   - Smart guardrail instructions emulate Copilot's auto-loading, post-edit scanning, and forbidden path checking
 - `.forge.json` now records configured agents in an `agents` field
 - `pforge smith` detects and validates agent-specific file paths
-- **MCP Server** (`mcp/server.mjs`) — Node.js MCP server exposing 12 forge tools: `forge_smith`, `forge_validate`, `forge_sweep`, `forge_status`, `forge_diff`, `forge_ext_search`, `forge_ext_info`, `forge_new_phase`, `forge_analyze`, `forge_run_plan`, `forge_abort`, `forge_plan_status`. Auto-generates `.vscode/mcp.json` and `.claude/mcp.json` during setup. Composable with OpenBrain.
-- **`forge_run_plan`** MCP tool + `pforge run-plan` CLI command — one-command plan execution with DAG-based slice orchestration, `gh copilot` CLI worker spawning, validation gates at every boundary, token tracking from JSONL output, model routing from `.forge.json`, auto-sweep + auto-analyze, session log capture, cost estimation, and resume-from support
-- **`forge_abort`** MCP tool — signal abort between slices during plan execution
-- **`forge_plan_status`** MCP tool — read latest run status from `.forge/runs/`
-- **`forge_cost_report`** MCP tool — cost tracking report with total spend, per-model breakdown, and monthly aggregation from `.forge/cost-history.json`
-- **Cost calculation engine** — per-slice cost from token counts using embedded model pricing table (23 models), cost breakdown in `summary.json`, cost history aggregation across runs
-- **Historical estimation** — `--estimate` uses historical average tokens per slice when cost history exists, falls back to heuristic; shows confidence level
-- **WebSocket Hub** (`mcp/hub.mjs`) — real-time event broadcasting for live progress monitoring. Localhost-only WS server (port 3101) with port fallback, heartbeat, session registry, event history buffer (last 100 events), versioned events (v1.0)
-- **Event Schema** (`mcp/EVENTS.md`) — documented event types: `run-started`, `slice-started`, `slice-completed`, `slice-failed`, `run-completed`, `run-aborted`
-- **Live orchestrator events** — when hub is running, `forge_run_plan` broadcasts slice lifecycle events to all connected WebSocket clients in real-time
-- **Dashboard** (`mcp/dashboard/`) — real-time monitoring UI at `localhost:3100/dashboard`. Vanilla JS + Tailwind CDN + Chart.js. No build step. Features: live slice progress cards, run history table, cost tracker with charts, quick actions panel (Smith, Sweep, Analyze, Status, Validate, Extensions)
-- **REST API** (C6) — Express endpoints: `GET /api/status`, `GET /api/runs`, `GET /api/config`, `POST /api/config`, `GET /api/cost`, `POST /api/tool/:name`, `GET /api/hub`, `GET /api/replay/:run/:slice`
-- **Session Replay** — dashboard tab to browse and filter agent session logs per slice (errors, file ops, full log)
-- **Extension Marketplace UI** — visual catalog browser with search/filter
-- **Notification Center** — bell icon with persistent notifications (localStorage), auto-notifies on run-complete and slice-failed
-- **Config Editor** — visual editor for `.forge.json` (agents, model routing) with save confirmation
-- **Parallel Execution** — `[P]`-tagged slices execute concurrently via `ParallelScheduler` (up to configurable `maxParallelism`, default: 3). DAG-aware: respects dependencies, merge points, and scope-based conflict detection
-- **Scope Conflict Detection** — warns and falls back to sequential when parallel slices have overlapping file scopes (M6)
-- **Execution modes** — Full Auto (`gh copilot` CLI with any model) and Assisted (human codes in VS Code, orchestrator validates gates)
-- **`.forge/SCHEMA.md`** — documents all `.forge/` files with formats, schemas, and ownership
+- **MCP Server** (`mcp/server.mjs`) — Node.js MCP server exposing 13 forge tools. Auto-generates `.vscode/mcp.json` and `.claude/mcp.json` during setup. Composable with OpenBrain.
 - **Extension ecosystem** — `pforge ext search`, `pforge ext add <name>`, `pforge ext info <name>` commands with `extensions/catalog.json` community catalog (Spec Kit catalog-compatible format)
 - **Cross-artifact analysis** (`pforge analyze`) — Consistency scoring across requirements, scope, tests, and validation gates. Four dimensions (traceability, coverage, test coverage, gates) scored 0–100. CI integration via `plan-forge-validate@v1` with `analyze` input.
 - **Spec Kit comparison FAQ** — Honest side-by-side guidance on when to use Spec Kit vs Plan Forge

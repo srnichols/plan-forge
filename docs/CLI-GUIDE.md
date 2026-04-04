@@ -527,6 +527,66 @@ curl -sL https://raw.githubusercontent.com/srnichols/plan-forge/master/pforge.sh
 
 ---
 
+### `pforge run-plan <plan-file>`
+
+Execute a hardened plan — spawn CLI workers for each slice, validate at every boundary, track tokens.
+
+```powershell
+# PowerShell — estimate cost without executing
+.\pforge.ps1 run-plan docs/plans/Phase-7-INVENTORY-PLAN.md --estimate
+
+# Full auto execution (gh copilot CLI)
+.\pforge.ps1 run-plan docs/plans/Phase-7-INVENTORY-PLAN.md
+
+# Assisted mode (you code in VS Code, orchestrator validates gates)
+.\pforge.ps1 run-plan docs/plans/Phase-7-INVENTORY-PLAN.md --assisted
+
+# Specify model
+.\pforge.ps1 run-plan docs/plans/Phase-7-INVENTORY-PLAN.md --model claude-sonnet-4.6
+
+# Resume from slice 3 after fixing a failure
+.\pforge.ps1 run-plan docs/plans/Phase-7-INVENTORY-PLAN.md --resume-from 3
+```
+
+```bash
+# Bash
+./pforge.sh run-plan docs/plans/Phase-7-INVENTORY-PLAN.md --estimate
+./pforge.sh run-plan docs/plans/Phase-7-INVENTORY-PLAN.md
+./pforge.sh run-plan docs/plans/Phase-7-INVENTORY-PLAN.md --assisted
+./pforge.sh run-plan docs/plans/Phase-7-INVENTORY-PLAN.md --model gpt-5.2-codex
+```
+
+**Execution Modes:**
+
+| Mode | Flag | What Happens |
+|------|------|--------------|
+| **Full Auto** | *(default)* | `gh copilot` CLI executes each slice with full project context |
+| **Assisted** | `--assisted` | You code in VS Code; orchestrator prompts you and validates gates |
+| **Estimate** | `--estimate` | Shows slice count, token estimate, and cost — without executing |
+
+**Flags:**
+- `--estimate` — Cost prediction only
+- `--assisted` — Interactive mode (human codes, orchestrator validates)
+- `--model <name>` — Override model (e.g., `claude-sonnet-4.6`, `gpt-5.2-codex`)
+- `--resume-from <N>` — Skip completed slices, resume from slice N
+- `--dry-run` — Parse and validate plan without executing
+
+**Results written to:** `.forge/runs/<timestamp>/`
+- `run.json` — run metadata
+- `slice-N.json` — per-slice results with token tracking
+- `slice-N-log.txt` — worker session logs
+- `summary.json` — aggregate results with sweep + analyze scores
+
+**Also available as:** `forge_run_plan` MCP tool (callable from Copilot Chat or Claude)
+
+**Equivalent manual steps:**
+1. Parse the plan to identify slices and validation gates
+2. For each slice: execute code changes, run build/test commands
+3. On failure: stop and fix before proceeding
+4. After all slices: run `pforge sweep` and `pforge analyze`
+
+---
+
 ### `pforge smith`
 
 Inspect your forge — diagnose your environment, VS Code configuration, setup health, version currency, and common problems. Every issue includes a `FIX:` suggestion.

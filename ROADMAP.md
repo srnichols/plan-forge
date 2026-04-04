@@ -25,7 +25,7 @@ See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 
 ### v1.4 — Enhanced Automation
 - Auto-update notification when source version is newer
-- ~~`pforge doctor`~~ → shipped as `pforge smith` in v1.3.0
+- ~~`pforge doctor`~~ → shipped as `pforge smith` (unreleased)
 - Preset-specific validation minimum count checks in `validate-setup`
 
 ### v1.5 — Intelligence Layer

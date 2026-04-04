@@ -100,6 +100,7 @@ This project uses the **Plan Forge Pipeline** for feature development.
 - **Roadmap**: `docs/plans/DEPLOYMENT-ROADMAP.md`
 - **Project Principles**: `docs/plans/PROJECT-PRINCIPLES.md` (if created)
 - **Extensions**: `docs/EXTENSIONS.md`
+- **CLI Guide**: `docs/CLI-GUIDE.md`
 - **VS Code Guide**: `docs/COPILOT-VSCODE-GUIDE.md`
 
 ### Pipeline Prompts

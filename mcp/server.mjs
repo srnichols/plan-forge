@@ -148,6 +148,18 @@ const TOOLS = [
       required: ["name"],
     },
   },
+  {
+    name: "forge_analyze",
+    description: "Cross-artifact analysis — validates requirement traceability, test coverage, scope compliance, and validation gates. Returns a consistency score (0-100) with detailed breakdown.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        plan: { type: "string", description: "Path to the plan file (e.g., docs/plans/Phase-1-AUTH-PLAN.md)" },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+      required: ["plan"],
+    },
+  },
 ];
 
 // ─── Tool Execution ───────────────────────────────────────────────────
@@ -171,6 +183,8 @@ function executeTool(name, args) {
       return runPforge(`ext info "${args.name}"`, cwd);
     case "forge_new_phase":
       return runPforge(`new-phase "${args.name}"`, cwd);
+    case "forge_analyze":
+      return runPforge(`analyze "${args.plan}"`, cwd);
     default:
       return { success: false, error: `Unknown tool: ${name}` };
   }

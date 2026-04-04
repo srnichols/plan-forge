@@ -17,8 +17,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
   - Smart guardrail instructions emulate Copilot's auto-loading, post-edit scanning, and forbidden path checking
 - `.forge.json` now records configured agents in an `agents` field
 - `pforge smith` detects and validates agent-specific file paths
-- **MCP Server** (`mcp/server.mjs`) — Node.js MCP server exposing 8 forge tools: `forge_smith`, `forge_validate`, `forge_sweep`, `forge_status`, `forge_diff`, `forge_ext_search`, `forge_ext_info`, `forge_new_phase`. Auto-generates `.vscode/mcp.json` and `.claude/mcp.json` during setup. Composable with OpenBrain.
+- **MCP Server** (`mcp/server.mjs`) — Node.js MCP server exposing 9 forge tools: `forge_smith`, `forge_validate`, `forge_sweep`, `forge_status`, `forge_diff`, `forge_ext_search`, `forge_ext_info`, `forge_new_phase`, `forge_analyze`. Auto-generates `.vscode/mcp.json` and `.claude/mcp.json` during setup. Composable with OpenBrain.
 - **Extension ecosystem** — `pforge ext search`, `pforge ext add <name>`, `pforge ext info <name>` commands with `extensions/catalog.json` community catalog (Spec Kit catalog-compatible format)
+- **Cross-artifact analysis** (`pforge analyze`) — Consistency scoring across requirements, scope, tests, and validation gates. Four dimensions (traceability, coverage, test coverage, gates) scored 0–100. CI integration via `plan-forge-validate@v1` with `analyze` input.
 - **Spec Kit comparison FAQ** — Honest side-by-side guidance on when to use Spec Kit vs Plan Forge
 
 ---

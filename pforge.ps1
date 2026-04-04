@@ -70,6 +70,7 @@ function Show-Help {
     Write-Host "  ext list          List installed extensions"
     Write-Host "  ext remove <name> Remove an installed extension"
     Write-Host "  update [source]   Update framework files from Plan Forge source (preserves customizations)"
+    Write-Host "  analyze <plan>    Cross-artifact analysis — requirement traceability, test coverage, scope compliance"
     Write-Host "  smith             Inspect your forge — environment, VS Code config, setup health, and common problems"
     Write-Host "  help              Show this help message"
     Write-Host ""
@@ -1317,6 +1318,298 @@ function Invoke-Update {
     }
 }
 
+# ─── Command: analyze ──────────────────────────────────────────────────
+function Invoke-Analyze {
+    if (-not $Arguments -or $Arguments.Count -eq 0) {
+        Write-Host "ERROR: Plan file required." -ForegroundColor Red
+        Write-Host "  Usage: pforge analyze <plan-file>" -ForegroundColor Yellow
+        Write-Host "  Example: pforge analyze docs/plans/Phase-1-AUTH-PLAN.md" -ForegroundColor Yellow
+        exit 1
+    }
+
+    $planFile = $Arguments[0]
+    if (-not (Test-Path $planFile)) {
+        $planFile = Join-Path $RepoRoot $planFile
+    }
+    if (-not (Test-Path $planFile)) {
+        Write-Host "ERROR: Plan file not found: $($Arguments[0])" -ForegroundColor Red
+        exit 1
+    }
+
+    Write-ManualSteps "analyze" @(
+        "Parse plan file for requirements, slices, validation gates, scope contract"
+        "Cross-reference git changes against scope contract"
+        "Match acceptance criteria against test files"
+        "Score traceability, coverage, completeness, and gates"
+    )
+
+    $planContent = Get-Content $planFile -Raw
+    $planName = [System.IO.Path]::GetFileNameWithoutExtension($planFile)
+
+    Write-Host ""
+    Write-Host "╔══════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+    Write-Host "║       Plan Forge — Analyze                                   ║" -ForegroundColor Cyan
+    Write-Host "╚══════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "Plan: $planName" -ForegroundColor Cyan
+    Write-Host ""
+
+    $scoreTrace = 0; $scoreMax_Trace = 25
+    $scoreCoverage = 0; $scoreMax_Coverage = 25
+    $scoreComplete = 0; $scoreMax_Complete = 25
+    $scoreGates = 0; $scoreMax_Gates = 25
+
+    # ═══════════════════════════════════════════════════════════════
+    # 1. REQUIREMENT → SLICE TRACEABILITY
+    # ═══════════════════════════════════════════════════════════════
+    Write-Host "Traceability:" -ForegroundColor Cyan
+
+    # Extract MUST and SHOULD criteria
+    $mustCriteria = [regex]::Matches($planContent, '(?m)^\s*[-*]\s*\*\*MUST\*\*[:\s]+(.+)') | ForEach-Object { $_.Groups[1].Value.Trim() }
+    $shouldCriteria = [regex]::Matches($planContent, '(?m)^\s*[-*]\s*\*\*SHOULD\*\*[:\s]+(.+)') | ForEach-Object { $_.Groups[1].Value.Trim() }
+    $allCriteria = @()
+    if ($mustCriteria) { $allCriteria += $mustCriteria }
+    if ($shouldCriteria) { $allCriteria += $shouldCriteria }
+
+    # Extract slice references
+    $sliceCount = ([regex]::Matches($planContent, '(?m)^###\s+Slice\s+\d')).Count
+
+    if ($allCriteria.Count -gt 0) {
+        # Check if slices reference criteria via Traces to:
+        $tracedCount = 0
+        foreach ($c in $allCriteria) {
+            $shortCriterion = $c.Substring(0, [Math]::Min(40, $c.Length))
+            if ($planContent -match [regex]::Escape($shortCriterion) -or $planContent -match 'Traces to:') {
+                $tracedCount++
+            }
+        }
+        Write-Host "  ✅ $($allCriteria.Count) acceptance criteria found ($($mustCriteria.Count) MUST, $($shouldCriteria.Count) SHOULD)" -ForegroundColor Green
+        $scoreTrace = [Math]::Floor(25 * ($tracedCount / [Math]::Max($allCriteria.Count, 1)))
+    }
+    else {
+        Write-Host "  ⚠️  No MUST/SHOULD criteria found in plan" -ForegroundColor Yellow
+        # Try alternate format — look for acceptance criteria section
+        if ($planContent -match '(?i)acceptance criteria|definition of done') {
+            Write-Host "  ✅ Acceptance criteria section detected (non-standard format)" -ForegroundColor Green
+            $scoreTrace = 15
+        }
+    }
+
+    if ($sliceCount -gt 0) {
+        Write-Host "  ✅ $sliceCount execution slices found" -ForegroundColor Green
+    }
+    else {
+        Write-Host "  ⚠️  No execution slices found (### Slice N pattern)" -ForegroundColor Yellow
+    }
+
+    Write-Host ""
+
+    # ═══════════════════════════════════════════════════════════════
+    # 2. SCOPE COMPLIANCE
+    # ═══════════════════════════════════════════════════════════════
+    Write-Host "Coverage:" -ForegroundColor Cyan
+
+    # Get changed files
+    $changedFiles = @()
+    $changedFiles += git diff --name-only 2>$null
+    $changedFiles += git diff --cached --name-only 2>$null
+    $changedFiles = $changedFiles | Sort-Object -Unique | Where-Object { $_ }
+
+    # Extract scope
+    $inScopePaths = @()
+    if ($planContent -match '(?s)### In Scope(.*?)(?=^###?\s|\z)') {
+        $inScopePaths = [regex]::Matches($Matches[1], '`([^`]+)`') | ForEach-Object { $_.Groups[1].Value }
+    }
+    $forbiddenPaths = @()
+    if ($planContent -match '(?s)### Forbidden Actions(.*?)(?=^###?\s|\z)') {
+        $forbiddenPaths = [regex]::Matches($Matches[1], '`([^`]+)`') | ForEach-Object { $_.Groups[1].Value }
+    }
+
+    $violations = 0; $outOfScope = 0; $inScope = 0
+    foreach ($file in $changedFiles) {
+        $isForbidden = $false
+        foreach ($fp in $forbiddenPaths) {
+            if ($file -like "*$fp*") { $violations++; $isForbidden = $true; break }
+        }
+        if ($isForbidden) { continue }
+
+        $isInScope = $false
+        if ($inScopePaths.Count -eq 0) { $isInScope = $true }
+        else {
+            foreach ($sp in $inScopePaths) {
+                if ($file -like "*$sp*") { $isInScope = $true; break }
+            }
+        }
+        if ($isInScope) { $inScope++ } else { $outOfScope++ }
+    }
+
+    $totalChanged = $changedFiles.Count
+    if ($totalChanged -gt 0) {
+        Write-Host "  ✅ $totalChanged changed files analyzed" -ForegroundColor Green
+        if ($violations -gt 0) {
+            Write-Host "  ❌ $violations forbidden file(s) touched" -ForegroundColor Red
+        }
+        if ($outOfScope -gt 0) {
+            Write-Host "  ⚠️  $outOfScope file(s) outside Scope Contract" -ForegroundColor Yellow
+        }
+        if ($violations -eq 0 -and $outOfScope -eq 0) {
+            Write-Host "  ✅ All changes within Scope Contract" -ForegroundColor Green
+        }
+        $scoreCoverage = [Math]::Floor(25 * ($inScope / [Math]::Max($totalChanged, 1)))
+        if ($violations -gt 0) { $scoreCoverage = [Math]::Max(0, $scoreCoverage - 10) }
+    }
+    else {
+        Write-Host "  ✅ No uncommitted changes (analyzing plan structure only)" -ForegroundColor Green
+        $scoreCoverage = 25
+    }
+
+    Write-Host ""
+
+    # ═══════════════════════════════════════════════════════════════
+    # 3. CRITERION → TEST TRACEABILITY
+    # ═══════════════════════════════════════════════════════════════
+    Write-Host "Test Coverage:" -ForegroundColor Cyan
+
+    $testDirs = @('tests', 'test', '__tests__', 'spec', 'Tests', 'Test', 'src/test', 'src/tests')
+    $testExtensions = @('*.test.*', '*.spec.*', '*Tests.cs', '*Test.java', '*_test.go', 'test_*.py', '*_test.py')
+
+    $testFiles = @()
+    foreach ($td in $testDirs) {
+        $testDir = Join-Path $RepoRoot $td
+        if (Test-Path $testDir) {
+            $testFiles += Get-ChildItem -Path $testDir -Recurse -File -ErrorAction SilentlyContinue
+        }
+    }
+    # Also search project root with test patterns
+    foreach ($pattern in $testExtensions) {
+        $testFiles += Get-ChildItem -Path $RepoRoot -Filter $pattern -Recurse -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -notmatch '(node_modules|bin|obj|dist|\.git|vendor)' }
+    }
+    $testFiles = $testFiles | Select-Object -Unique
+
+    $testedMust = 0; $untestedMust = @()
+    if ($mustCriteria -and $mustCriteria.Count -gt 0) {
+        foreach ($criterion in $mustCriteria) {
+            # Extract key terms from the criterion for fuzzy matching
+            $keywords = $criterion -replace '[^\w\s]', '' -split '\s+' | Where-Object { $_.Length -gt 4 } | Select-Object -First 3
+            $found = $false
+            foreach ($tf in $testFiles) {
+                $testContent = Get-Content $tf.FullName -Raw -ErrorAction SilentlyContinue
+                if ($testContent) {
+                    $matchCount = ($keywords | Where-Object { $testContent -match $_ }).Count
+                    if ($matchCount -ge 2) { $found = $true; break }
+                }
+            }
+            if ($found) { $testedMust++ }
+            else { $untestedMust += $criterion }
+        }
+        Write-Host "  ✅ $testedMust/$($mustCriteria.Count) MUST criteria have matching tests" -ForegroundColor $(if ($testedMust -eq $mustCriteria.Count) { 'Green' } else { 'Yellow' })
+        foreach ($u in $untestedMust) {
+            $short = if ($u.Length -gt 70) { $u.Substring(0,70) + "..." } else { $u }
+            Write-Host "  ⚠️  No test found for: $short" -ForegroundColor Yellow
+        }
+    }
+    else {
+        Write-Host "  ⚠️  No MUST criteria to trace (plan may use alternate format)" -ForegroundColor Yellow
+    }
+
+    if ($testFiles.Count -gt 0) {
+        Write-Host "  ✅ $($testFiles.Count) test file(s) found in project" -ForegroundColor Green
+    }
+    else {
+        Write-Host "  ⚠️  No test files found" -ForegroundColor Yellow
+    }
+
+    $scoreComplete_tests = if ($mustCriteria -and $mustCriteria.Count -gt 0) {
+        [Math]::Floor(25 * ($testedMust / $mustCriteria.Count))
+    } else { 15 }
+
+    Write-Host ""
+
+    # ═══════════════════════════════════════════════════════════════
+    # 4. SLICE → GATE COMPLETENESS
+    # ═══════════════════════════════════════════════════════════════
+    Write-Host "Validation Gates:" -ForegroundColor Cyan
+
+    $gatePatterns = @('Validation Gates', 'validation gate', 'build.*pass', 'test.*pass', '\- \[ \].*build', '\- \[ \].*test')
+    $gatesFound = 0
+    foreach ($p in $gatePatterns) {
+        $gatesFound += ([regex]::Matches($planContent, $p, 'IgnoreCase')).Count
+    }
+
+    if ($gatesFound -gt 0) {
+        Write-Host "  ✅ $gatesFound validation gate reference(s) found" -ForegroundColor Green
+        $scoreGates = 25
+    }
+    elseif ($sliceCount -gt 0) {
+        Write-Host "  ⚠️  Slices found but no explicit validation gates" -ForegroundColor Yellow
+        $scoreGates = 10
+    }
+    else {
+        Write-Host "  ⚠️  No validation gates found" -ForegroundColor Yellow
+        $scoreGates = 0
+    }
+
+    # Check for completeness markers (deferred work)
+    $sweepPatterns = @('TODO', 'FIXME', 'HACK', 'stub', 'placeholder', 'mock data')
+    $sweepRegex = ($sweepPatterns | ForEach-Object { [regex]::Escape($_) }) -join '|'
+    $markerCount = 0
+    foreach ($file in $changedFiles) {
+        $fullPath = Join-Path $RepoRoot $file
+        if (Test-Path $fullPath) {
+            $markerCount += (Select-String -Path $fullPath -Pattern $sweepRegex -CaseSensitive:$false -ErrorAction SilentlyContinue).Count
+        }
+    }
+
+    if ($markerCount -eq 0) {
+        Write-Host "  ✅ 0 deferred-work markers in changed files" -ForegroundColor Green
+    }
+    else {
+        Write-Host "  ⚠️  $markerCount deferred-work marker(s) in changed files" -ForegroundColor Yellow
+        $scoreGates = [Math]::Max(0, $scoreGates - 5)
+    }
+
+    Write-Host ""
+
+    # ═══════════════════════════════════════════════════════════════
+    # CONSISTENCY SCORE
+    # ═══════════════════════════════════════════════════════════════
+    $totalScore = $scoreTrace + $scoreCoverage + $scoreComplete_tests + $scoreGates
+    $maxScore = 100
+
+    Write-Host "Consistency Score: $totalScore/$maxScore" -ForegroundColor $(if ($totalScore -ge 80) { 'Green' } elseif ($totalScore -ge 60) { 'Yellow' } else { 'Red' })
+    Write-Host "  - Traceability: $scoreTrace/$scoreMax_Trace" -ForegroundColor $(if ($scoreTrace -ge 20) { 'Green' } else { 'Yellow' })
+    Write-Host "  - Coverage: $scoreCoverage/$scoreMax_Coverage" -ForegroundColor $(if ($scoreCoverage -ge 20) { 'Green' } else { 'Yellow' })
+    Write-Host "  - Test Coverage: $scoreComplete_tests/$scoreMax_Complete" -ForegroundColor $(if ($scoreComplete_tests -ge 20) { 'Green' } else { 'Yellow' })
+    Write-Host "  - Gates: $scoreGates/$scoreMax_Gates" -ForegroundColor $(if ($scoreGates -ge 20) { 'Green' } else { 'Yellow' })
+
+    Write-Host ""
+    Write-Host "────────────────────────────────────────────────────" -ForegroundColor Gray
+    $summaryItems = @()
+    if ($allCriteria) { $summaryItems += "$($allCriteria.Count) requirements" }
+    if ($sliceCount -gt 0) { $summaryItems += "$sliceCount slices" }
+    if ($totalChanged -gt 0) { $summaryItems += "$totalChanged files" }
+    $summaryItems += "$totalScore% consistent"
+    Write-Host "  $($summaryItems -join '  |  ')" -ForegroundColor $(if ($totalScore -ge 80) { 'Green' } elseif ($totalScore -ge 60) { 'Yellow' } else { 'Red' })
+    Write-Host "────────────────────────────────────────────────────" -ForegroundColor Gray
+
+    if ($totalScore -lt 60) {
+        Write-Host ""
+        Write-Host "ANALYSIS FAILED — score below 60%. Review gaps above." -ForegroundColor Red
+        exit 1
+    }
+    elseif ($totalScore -lt 80) {
+        Write-Host ""
+        Write-Host "ANALYSIS WARNING — score below 80%. Consider addressing gaps." -ForegroundColor Yellow
+        exit 0
+    }
+    else {
+        Write-Host ""
+        Write-Host "ANALYSIS PASSED — strong consistency." -ForegroundColor Green
+        exit 0
+    }
+}
+
 # ─── Command: smith ────────────────────────────────────────────────────
 function Invoke-Smith {
     Write-ManualSteps "smith" @(
@@ -1816,6 +2109,7 @@ switch ($Command) {
     'diff'         { Invoke-Diff }
     'ext'          { Invoke-Ext }
     'update'       { Invoke-Update }
+    'analyze'      { Invoke-Analyze }
     'smith'        { Invoke-Smith }
     'help'         { Show-Help }
     ''             { Show-Help }

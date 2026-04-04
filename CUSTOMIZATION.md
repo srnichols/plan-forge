@@ -723,6 +723,7 @@ pforge new-phase <name>  Create plan file + add to roadmap
 pforge branch <plan>     Create branch from plan's Branch Strategy
 pforge sweep             Scan code for TODO/FIXME/stub markers (completeness check)
 pforge diff <plan>       Compare changed files against plan's Scope Contract
+pforge analyze <plan>    Cross-artifact analysis — requirement traceability, test coverage, scope compliance
 pforge commit <plan> <N> Commit with conventional message from slice goal
 pforge phase-status <plan> <status>  Update roadmap (planned|in-progress|complete|paused)
 pforge ext search [q]    Search the community extension catalog

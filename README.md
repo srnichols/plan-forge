@@ -858,7 +858,19 @@ Setup installs `mcp/server.mjs` automatically and generates `.vscode/mcp.json` (
 cd mcp && npm install    # Install MCP dependencies (one-time)
 ```
 
-8 tools available: `forge_smith`, `forge_validate`, `forge_sweep`, `forge_status`, `forge_diff`, `forge_ext_search`, `forge_ext_info`, `forge_new_phase`. Composable with OpenBrain for persistent memory in the same MCP config.
+9 tools available: `forge_smith`, `forge_validate`, `forge_sweep`, `forge_status`, `forge_diff`, `forge_analyze`, `forge_ext_search`, `forge_ext_info`, `forge_new_phase`. Composable with OpenBrain for persistent memory in the same MCP config.
+
+---
+
+## Cross-Artifact Analysis
+
+Validate that your code matches the plan:
+
+```bash
+pforge analyze docs/plans/Phase-1-AUTH-PLAN.md
+```
+
+Scores 4 dimensions (25 pts each, 100 total): requirement traceability, scope compliance, test coverage, validation gates. Fails below 60%. Also available as `forge_analyze` MCP tool and `analyze: true` in the GitHub Action.
 
 ---
 

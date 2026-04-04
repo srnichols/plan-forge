@@ -339,6 +339,16 @@
               <p>The action has zero dependencies beyond bash and git, runs in ~5 seconds, and outputs <code class="text-forge-400">passed</code>, <code class="text-forge-400">failed</code>, <code class="text-forge-400">warnings</code>, and <code class="text-forge-400">result</code> for use in downstream steps.</p>
             </div>
           </details>
+
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">How do I verify my code actually matches the plan?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              Run <code class="text-forge-400">pforge analyze &lt;plan-file&gt;</code>. It scores your implementation against the plan across 4 dimensions: requirement traceability, scope compliance, test coverage, and validation gates. Returns a consistency score out of 100. Also available as the <code class="text-forge-400">forge_analyze</code> MCP tool and via <code class="text-forge-400">analyze: true</code> in the GitHub Action.
+            </div>
+          </details>
         </div>
       </div>
 

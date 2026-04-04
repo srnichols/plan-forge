@@ -291,6 +291,35 @@ DRIFT DETECTED — 1 forbidden file(s) touched.
 
 ---
 
+### `pforge analyze <plan-file>`
+
+Cross-artifact consistency analysis — validates that requirements are traced to slices, code changes are within scope, tests cover MUST criteria, and validation gates are defined.
+
+```powershell
+# PowerShell
+.\pforge.ps1 analyze docs/plans/Phase-1-AUTH-PLAN.md
+```
+
+```bash
+# Bash
+./pforge.sh analyze docs/plans/Phase-1-AUTH-PLAN.md
+```
+
+**Four scoring dimensions** (25 points each, 100 total):
+
+| Dimension | What It Checks |
+|---|---|
+| Traceability | MUST/SHOULD criteria exist, slices defined, criteria mapped to slices |
+| Coverage | Changed files within Scope Contract, no forbidden edits |
+| Test Coverage | MUST criteria matched against test files via keyword fuzzy matching |
+| Gates | Validation gates referenced in slices, no deferred-work markers in changed files |
+
+**Exit codes**: 0 = pass (score >= 60), 1 = fail (score < 60)
+
+**Also available as**: `forge_analyze` MCP tool, and `analyze: true` input on the GitHub Action.
+
+---
+
 ### `pforge ext search [query]`
 
 Browse the community extension catalog. Shows all extensions, or filter by keyword.

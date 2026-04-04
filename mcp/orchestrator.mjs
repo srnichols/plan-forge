@@ -672,7 +672,7 @@ export async function runPlan(planPath, options = {}) {
 
   // Estimation mode — return without executing
   if (estimate) {
-    return buildEstimate(plan, effectiveModel);
+    return buildEstimate(plan, effectiveModel, cwd);
   }
 
   // Dry run — parse and validate only
@@ -725,6 +725,11 @@ export async function runPlan(planPath, options = {}) {
   const summary = buildSummary(plan, results, runMeta, { sweepResult, analyzeResult });
   writeFileSync(resolve(runDir, "summary.json"), JSON.stringify(summary, null, 2));
 
+  // Phase 2: Append to cost history
+  if (summary.cost && summary.status !== "estimate") {
+    appendCostHistory(cwd, summary);
+  }
+
   eventBus.emit("run-completed", summary);
 
   return summary;
@@ -759,6 +764,115 @@ function resolveModel(cliModel, modelRouting, _slice) {
   // Future: match slice type (execute/review/test) to routing keys
   if (modelRouting.default && modelRouting.default !== "auto") return modelRouting.default;
   return null; // Let CLI worker pick default
+}
+
+// ─── Cost History (Phase 2) ───────────────────────────────────────────
+
+/**
+ * Append a run's cost data to .forge/cost-history.json.
+ * Each entry captures date, plan, total cost, and per-model breakdown.
+ */
+function appendCostHistory(cwd, summary) {
+  const historyPath = resolve(cwd, ".forge", "cost-history.json");
+  let history = [];
+  try {
+    if (existsSync(historyPath)) {
+      history = JSON.parse(readFileSync(historyPath, "utf-8"));
+      if (!Array.isArray(history)) history = [];
+    }
+  } catch {
+    history = [];
+  }
+
+  const entry = {
+    date: summary.endTime || new Date().toISOString(),
+    plan: summary.plan,
+    sliceCount: summary.sliceCount,
+    status: summary.status,
+    total_tokens_in: summary.cost?.total_tokens_in || 0,
+    total_tokens_out: summary.cost?.total_tokens_out || 0,
+    total_cost_usd: summary.cost?.total_cost_usd || 0,
+    by_model: summary.cost?.by_model || {},
+    duration_ms: summary.totalDuration || 0,
+  };
+
+  history.push(entry);
+
+  mkdirSync(resolve(cwd, ".forge"), { recursive: true });
+  writeFileSync(historyPath, JSON.stringify(history, null, 2));
+}
+
+/**
+ * Generate a cost report from .forge/cost-history.json.
+ * Returns formatted summary with totals, per-model breakdown, and monthly aggregation.
+ */
+export function getCostReport(cwd) {
+  const historyPath = resolve(cwd, ".forge", "cost-history.json");
+  if (!existsSync(historyPath)) {
+    return { runs: 0, message: "No cost history yet. Run `pforge run-plan` to start tracking." };
+  }
+
+  let history;
+  try {
+    history = JSON.parse(readFileSync(historyPath, "utf-8"));
+    if (!Array.isArray(history)) return { runs: 0, message: "Invalid cost history format." };
+  } catch {
+    return { runs: 0, message: "Could not parse cost-history.json." };
+  }
+
+  if (history.length === 0) {
+    return { runs: 0, message: "Cost history is empty." };
+  }
+
+  // Aggregate totals
+  let totalCost = 0;
+  let totalTokensIn = 0;
+  let totalTokensOut = 0;
+  const modelTotals = {};
+  const monthly = {};
+
+  for (const entry of history) {
+    totalCost += entry.total_cost_usd || 0;
+    totalTokensIn += entry.total_tokens_in || 0;
+    totalTokensOut += entry.total_tokens_out || 0;
+
+    // Per-model aggregation
+    if (entry.by_model) {
+      for (const [model, data] of Object.entries(entry.by_model)) {
+        if (!modelTotals[model]) modelTotals[model] = { tokens_in: 0, tokens_out: 0, cost_usd: 0, runs: 0 };
+        modelTotals[model].tokens_in += data.tokens_in || 0;
+        modelTotals[model].tokens_out += data.tokens_out || 0;
+        modelTotals[model].cost_usd += data.cost_usd || 0;
+        modelTotals[model].runs += 1;
+      }
+    }
+
+    // Monthly aggregation
+    const month = (entry.date || "").substring(0, 7); // YYYY-MM
+    if (month) {
+      if (!monthly[month]) monthly[month] = { runs: 0, cost_usd: 0 };
+      monthly[month].runs += 1;
+      monthly[month].cost_usd += entry.total_cost_usd || 0;
+    }
+  }
+
+  // Round model totals
+  for (const m of Object.values(modelTotals)) {
+    m.cost_usd = Math.round(m.cost_usd * 100) / 100;
+  }
+  for (const m of Object.values(monthly)) {
+    m.cost_usd = Math.round(m.cost_usd * 100) / 100;
+  }
+
+  return {
+    runs: history.length,
+    total_cost_usd: Math.round(totalCost * 100) / 100,
+    total_tokens_in: totalTokensIn,
+    total_tokens_out: totalTokensOut,
+    by_model: modelTotals,
+    monthly,
+    latest: history[history.length - 1],
+  };
 }
 
 /**
@@ -879,17 +993,128 @@ function buildSlicePrompt(slice) {
   return parts.join("\n");
 }
 
-function buildEstimate(plan, model) {
-  // Rough estimate: ~2000 tokens per slice for input, ~5000 for output
-  const tokensPerSlice = { input: 2000, output: 5000 };
-  const costPerToken = {
-    "claude-sonnet-4.6": { input: 0.003 / 1000, output: 0.015 / 1000 },
-    "gpt-5.2-codex": { input: 0.002 / 1000, output: 0.008 / 1000 },
-    "gpt-5-mini": { input: 0.0004 / 1000, output: 0.0016 / 1000 },
-    default: { input: 0.003 / 1000, output: 0.015 / 1000 },
-  };
+// ─── Pricing Table (Phase 2) ──────────────────────────────────────────
+// Per-token costs in USD. Updated April 2026.
+// Source: published API pricing pages. Rates are per 1 token.
+const MODEL_PRICING = {
+  // Anthropic Claude
+  "claude-opus-4.6":        { input: 15 / 1_000_000,   output: 75 / 1_000_000 },
+  "claude-opus-4.6-fast":   { input: 15 / 1_000_000,   output: 75 / 1_000_000 },
+  "claude-opus-4.5":        { input: 15 / 1_000_000,   output: 75 / 1_000_000 },
+  "claude-sonnet-4.6":      { input: 3 / 1_000_000,    output: 15 / 1_000_000 },
+  "claude-sonnet-4.5":      { input: 3 / 1_000_000,    output: 15 / 1_000_000 },
+  "claude-sonnet-4":        { input: 3 / 1_000_000,    output: 15 / 1_000_000 },
+  "claude-haiku-4.5":       { input: 0.8 / 1_000_000,  output: 4 / 1_000_000 },
+  // OpenAI GPT
+  "gpt-5.4":                { input: 5 / 1_000_000,    output: 15 / 1_000_000 },
+  "gpt-5.3-codex":          { input: 3 / 1_000_000,    output: 12 / 1_000_000 },
+  "gpt-5.2-codex":          { input: 2 / 1_000_000,    output: 8 / 1_000_000 },
+  "gpt-5.2":                { input: 2 / 1_000_000,    output: 8 / 1_000_000 },
+  "gpt-5.1-codex-max":      { input: 3 / 1_000_000,    output: 12 / 1_000_000 },
+  "gpt-5.1-codex":          { input: 2 / 1_000_000,    output: 8 / 1_000_000 },
+  "gpt-5.1":                { input: 2 / 1_000_000,    output: 8 / 1_000_000 },
+  "gpt-5.1-codex-mini":     { input: 0.3 / 1_000_000,  output: 1.2 / 1_000_000 },
+  "gpt-5-mini":             { input: 0.4 / 1_000_000,  output: 1.6 / 1_000_000 },
+  "gpt-4.1":                { input: 2 / 1_000_000,    output: 8 / 1_000_000 },
+  // Google Gemini
+  "gemini-3-pro-preview":   { input: 1.25 / 1_000_000, output: 5 / 1_000_000 },
+  // Fallback
+  default:                  { input: 3 / 1_000_000,    output: 15 / 1_000_000 },
+};
 
-  const pricing = costPerToken[model] || costPerToken.default;
+/**
+ * Calculate cost for a single slice from its token data.
+ * @param {{ tokens_in: number|null, tokens_out: number|null, model: string }} tokens
+ * @returns {{ cost_usd: number, model: string, tokens_in: number, tokens_out: number }}
+ */
+export function calculateSliceCost(tokens) {
+  const model = tokens?.model || "unknown";
+  const pricing = MODEL_PRICING[model] || MODEL_PRICING.default;
+  const tokensIn = typeof tokens?.tokens_in === "number" ? tokens.tokens_in : 0;
+  const tokensOut = typeof tokens?.tokens_out === "number" ? tokens.tokens_out : 0;
+  const cost = (tokensIn * pricing.input) + (tokensOut * pricing.output);
+  return {
+    cost_usd: Math.round(cost * 1_000_000) / 1_000_000, // 6 decimal places
+    model,
+    tokens_in: tokensIn,
+    tokens_out: tokensOut,
+  };
+}
+
+/**
+ * Build cost breakdown from all slice results.
+ * @param {Array} sliceResults
+ * @returns {{ total_cost_usd, by_model, by_slice }}
+ */
+export function buildCostBreakdown(sliceResults) {
+  const byModel = {};
+  const bySlice = [];
+  let totalCost = 0;
+  let totalIn = 0;
+  let totalOut = 0;
+
+  for (const sr of sliceResults) {
+    if (!sr.tokens || sr.status === "skipped") continue;
+    const cost = calculateSliceCost(sr.tokens);
+    totalCost += cost.cost_usd;
+    totalIn += cost.tokens_in;
+    totalOut += cost.tokens_out;
+
+    bySlice.push({
+      slice: sr.number || sr.sliceId,
+      ...cost,
+    });
+
+    if (!byModel[cost.model]) {
+      byModel[cost.model] = { tokens_in: 0, tokens_out: 0, cost_usd: 0, slices: 0 };
+    }
+    byModel[cost.model].tokens_in += cost.tokens_in;
+    byModel[cost.model].tokens_out += cost.tokens_out;
+    byModel[cost.model].cost_usd += cost.cost_usd;
+    byModel[cost.model].slices += 1;
+  }
+
+  // Round model totals
+  for (const m of Object.values(byModel)) {
+    m.cost_usd = Math.round(m.cost_usd * 1_000_000) / 1_000_000;
+  }
+
+  return {
+    total_cost_usd: Math.round(totalCost * 100) / 100,
+    total_tokens_in: totalIn,
+    total_tokens_out: totalOut,
+    by_model: byModel,
+    by_slice: bySlice,
+  };
+}
+
+function buildEstimate(plan, model, cwd) {
+  // Phase 2 Slice 4: Use historical data if available
+  const historyPath = cwd ? resolve(cwd, ".forge", "cost-history.json") : null;
+  let avgTokensPerSlice = null;
+
+  try {
+    if (historyPath && existsSync(historyPath)) {
+      const history = JSON.parse(readFileSync(historyPath, "utf-8"));
+      if (Array.isArray(history) && history.length > 0) {
+        const totalIn = history.reduce((s, e) => s + (e.total_tokens_in || 0), 0);
+        const totalOut = history.reduce((s, e) => s + (e.total_tokens_out || 0), 0);
+        const totalSlices = history.reduce((s, e) => s + (e.sliceCount || 1), 0);
+        if (totalSlices > 0) {
+          avgTokensPerSlice = {
+            input: Math.round(totalIn / totalSlices),
+            output: Math.round(totalOut / totalSlices),
+            source: `${history.length} prior run(s)`,
+          };
+        }
+      }
+    }
+  } catch {
+    // Fall back to heuristic
+  }
+
+  const tokensPerSlice = avgTokensPerSlice || { input: 2000, output: 5000, source: "heuristic" };
+  const pricing = MODEL_PRICING[model] || MODEL_PRICING.default;
   const sliceCount = plan.slices.length;
   const totalInputTokens = sliceCount * tokensPerSlice.input;
   const totalOutputTokens = sliceCount * tokensPerSlice.output;
@@ -903,8 +1128,10 @@ function buildEstimate(plan, model) {
     tokens: {
       estimatedInput: totalInputTokens,
       estimatedOutput: totalOutputTokens,
+      source: tokensPerSlice.source,
     },
     estimatedCostUSD: Math.round(estimatedCost * 100) / 100,
+    confidence: avgTokensPerSlice ? "historical" : "heuristic",
     slices: plan.slices.map((s) => ({
       number: s.number,
       title: s.title,
@@ -973,6 +1200,7 @@ function buildSummary(plan, results, runMeta, extras = {}) {
     totalDuration,
     totalTokensOut,
     status: failed > 0 ? "failed" : "completed",
+    cost: buildCostBreakdown(results),
     sliceResults: results,
   };
 
@@ -982,6 +1210,9 @@ function buildSummary(plan, results, runMeta, extras = {}) {
 
   // Build report line
   const parts = [`All slices: ${passed} passed, ${failed} failed`];
+  if (summary.cost?.total_cost_usd > 0) {
+    parts.push(`Cost: $${summary.cost.total_cost_usd}`);
+  }
   if (extras.sweepResult?.ran) {
     parts.push(`Sweep: ${extras.sweepResult.clean ? "clean" : `${extras.sweepResult.markerCount || "?"} markers`}`);
   }
@@ -1185,11 +1416,13 @@ async function selfTest() {
     const examplePlan = resolve(process.cwd(), "docs/plans/examples/Phase-DOTNET-EXAMPLE.md");
     if (existsSync(examplePlan)) {
       const plan = parsePlan(examplePlan);
-      const est = buildEstimate(plan, "claude-sonnet-4.6");
+      const est = buildEstimate(plan, "claude-sonnet-4.6", process.cwd());
       assert("Estimate has slice count", est.sliceCount > 0);
       assert("Estimate has cost", est.estimatedCostUSD >= 0);
       assert("Estimate has tokens", est.tokens.estimatedInput > 0);
       assert("Estimate has execution order", est.executionOrder.length > 0);
+      assert("Estimate has confidence", est.confidence === "heuristic" || est.confidence === "historical");
+      assert("Estimate has source", !!est.tokens.source);
     }
   } catch (err) {
     assert(`Estimate: ${err.message}`, false);
@@ -1253,6 +1486,38 @@ async function selfTest() {
     assert("Empty events returns 0 tokens_out", emptyTokens.tokens_out === 0);
   } catch (err) {
     assert(`Error paths: ${err.message}`, false);
+  }
+
+  // Test 14: Cost calculation (Phase 2)
+  console.log("\n─── Cost Calculation ───");
+  try {
+    // Per-slice cost
+    const cost1 = calculateSliceCost({ tokens_in: 1000, tokens_out: 500, model: "claude-sonnet-4.6" });
+    assert("Cost calculated for Claude Sonnet", cost1.cost_usd > 0);
+    assert("Cost has model", cost1.model === "claude-sonnet-4.6");
+    // 1000 * 3/1M + 500 * 15/1M = 0.003 + 0.0075 = 0.0105
+    assert("Cost matches expected", Math.abs(cost1.cost_usd - 0.0105) < 0.0001);
+
+    const cost2 = calculateSliceCost({ tokens_in: null, tokens_out: 100, model: "unknown-model" });
+    assert("Unknown model uses default pricing", cost2.cost_usd > 0);
+    assert("Null tokens_in treated as 0", cost2.tokens_in === 0);
+
+    // Breakdown
+    const mockResults = [
+      { number: "1", tokens: { tokens_in: 500, tokens_out: 200, model: "claude-sonnet-4.6" }, status: "passed" },
+      { number: "2", tokens: { tokens_in: 300, tokens_out: 100, model: "gpt-5-mini" }, status: "passed" },
+      { number: "3", status: "skipped" },
+    ];
+    const breakdown = buildCostBreakdown(mockResults);
+    assert("Breakdown has total cost", breakdown.total_cost_usd >= 0);
+    assert("Breakdown has 2 models", Object.keys(breakdown.by_model).length === 2);
+    assert("Breakdown has 2 slices (skipped excluded)", breakdown.by_slice.length === 2);
+
+    // Cost report with no history
+    const report = getCostReport(process.cwd());
+    assert("Cost report works (may be empty)", report !== undefined);
+  } catch (err) {
+    assert(`Cost calculation: ${err.message}`, false);
   }
 
   // Summary

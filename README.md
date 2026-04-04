@@ -265,6 +265,11 @@ The wizard bootstraps your `.github/instructions/`, `AGENTS.md`, and `copilot-in
 .\setup.ps1 -Preset java
 .\setup.ps1 -Preset go
 .\setup.ps1 -Preset azure-iac
+
+# Add support for additional AI agents (optional)
+.\setup.ps1 -Preset dotnet -Agent claude          # Copilot + Claude Code
+.\setup.ps1 -Preset dotnet -Agent claude,cursor    # Copilot + Claude + Cursor
+.\setup.ps1 -Preset dotnet -Agent all              # Copilot + Claude + Cursor + Codex
 ```
 
 ```bash
@@ -275,10 +280,11 @@ chmod +x setup.sh
 # Or specify a preset directly
 ./setup.sh --preset dotnet
 ./setup.sh --preset typescript
-./setup.sh --preset python
-./setup.sh --preset java
-./setup.sh --preset go
-./setup.sh --preset azure-iac
+
+# Add support for additional AI agents (optional)
+./setup.sh --preset dotnet --agent claude           # Copilot + Claude Code
+./setup.sh --preset dotnet --agent claude,cursor    # Copilot + Claude + Cursor
+./setup.sh --preset dotnet --agent all              # Copilot + Claude + Cursor + Codex
 ```
 
 ### 3. Available Presets

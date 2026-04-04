@@ -1066,9 +1066,13 @@ cd my-project-plans</code></pre>
 .\setup.ps1 -Preset python        <span class="text-slate-500"># Python / FastAPI</span>
 .\setup.ps1 -Preset java          <span class="text-slate-500"># Java / Spring Boot</span>
 .\setup.ps1 -Preset go            <span class="text-slate-500"># Go / Chi / Gin</span>
-.\setup.ps1 -Preset azure-iac     <span class="text-slate-500"># Azure Bicep / Terraform / azd</span></code></pre>
+.\setup.ps1 -Preset azure-iac     <span class="text-slate-500"># Azure Bicep / Terraform / azd</span>
+
+<span class="text-slate-500"># Add support for other AI agents (optional):</span>
+.\setup.ps1 -Preset dotnet -Agent claude   <span class="text-slate-500"># + Claude Code</span>
+.\setup.ps1 -Preset dotnet -Agent all      <span class="text-slate-500"># + Claude + Cursor + Codex</span></code></pre>
             </div>
-            <p class="text-xs text-slate-500 mt-2">Installs instruction files, agents, skills, lifecycle hooks, and <code class="text-forge-400">copilot-instructions.md</code> into your project.</p>
+            <p class="text-xs text-slate-500 mt-2">Installs instruction files, agents, skills, lifecycle hooks, and <code class="text-forge-400">copilot-instructions.md</code> into your project. Add <code class="text-forge-400">-Agent</code> to generate native files for Claude, Cursor, or Codex.</p>
           </div>
         </div>
 

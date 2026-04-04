@@ -40,6 +40,8 @@ Bootstrap a project with the Plan Forge Pipeline. Delegates to `setup.ps1` / `se
 .\pforge.ps1 init -Preset typescript -ProjectPath ./my-app
 .\pforge.ps1 init -Preset azure-iac -ProjectPath ./infra
 .\pforge.ps1 init -Preset dotnet,azure-iac -ProjectPath ./my-app
+.\pforge.ps1 init -Preset dotnet -Agent claude          # Add Claude Code support
+.\pforge.ps1 init -Preset dotnet -Agent all              # All agents
 ```
 
 ```bash
@@ -48,6 +50,8 @@ Bootstrap a project with the Plan Forge Pipeline. Delegates to `setup.ps1` / `se
 ./pforge.sh init --preset typescript --path ./my-app
 ./pforge.sh init --preset azure-iac --path ./infra
 ./pforge.sh init --preset dotnet,azure-iac --path ./my-app
+./pforge.sh init --preset dotnet --agent claude           # Add Claude Code support
+./pforge.sh init --preset dotnet --agent all               # All agents
 ```
 
 **Equivalent manual steps:**

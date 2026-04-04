@@ -36,11 +36,12 @@ See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 ---
 
 ### v1.6 — Broader Agent Support
-- First-class Claude Code integration (skills in `.claude/skills/`, `/speckit`-style slash commands)
-- Cursor agent support (`.cursor/` command directory)
-- Gemini CLI and Windsurf agent templates
-- `--ai <agent>` flag on setup to auto-configure the correct command format per agent
+- ~~First-class Claude Code integration (skills in `.claude/skills/`, `/speckit`-style slash commands)~~
+- ~~Cursor agent support (`.cursor/` command directory)~~
+- ~~`--ai <agent>` flag on setup to auto-configure the correct command format per agent~~
+- Gemini CLI and Windsurf agent templates (deferred — TOML format adapter needed)
 - Generic agent adapter for unsupported tools (bring-your-own-agent pattern)
+- **Shipped**: Claude Code, Cursor, Codex CLI via `-Agent` / `--agent` parameter
 
 ### v1.7 — Community Extension Ecosystem
 - `pforge extension search` — browse and install community extensions from a catalog

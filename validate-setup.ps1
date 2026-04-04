@@ -157,6 +157,62 @@ else {
     $warn++
 }
 
+# ─── Agent-Specific Files ─────────────────────────────────────────────
+if (Test-Path $configPath) {
+    $config = Get-Content $configPath -Raw | ConvertFrom-Json
+    $configuredAgents = @('copilot')
+    if ($config.agents) {
+        if ($config.agents -is [System.Array]) {
+            $configuredAgents = $config.agents
+        } elseif ($config.agents -is [string]) {
+            $configuredAgents = $config.agents -split ','
+        }
+    }
+
+    $extraAgents = $configuredAgents | Where-Object { $_ -ne 'copilot' }
+    if ($extraAgents.Count -gt 0) {
+        Write-Host ""
+        Write-Host "Agent-specific files:" -ForegroundColor Cyan
+
+        foreach ($ag in $extraAgents) {
+            switch ($ag.Trim()) {
+                'claude' {
+                    Check-FileExists "CLAUDE.md" $false
+                    if (Test-Path (Join-Path $ProjectPath ".claude/skills")) {
+                        $claudeSkills = (Get-ChildItem -Path (Join-Path $ProjectPath ".claude/skills") -Recurse -Filter "SKILL.md" -File).Count
+                        Write-Host "  PASS  .claude/skills/ ($claudeSkills Claude skills)" -ForegroundColor Green
+                        $pass++
+                    } else {
+                        Write-Host "  WARN  .claude/skills/ (missing)" -ForegroundColor Yellow
+                        $warn++
+                    }
+                }
+                'cursor' {
+                    Check-FileExists ".cursor/rules" $false
+                    if (Test-Path (Join-Path $ProjectPath ".cursor/commands")) {
+                        $cursorCmds = (Get-ChildItem -Path (Join-Path $ProjectPath ".cursor/commands") -Filter "*.md" -File).Count
+                        Write-Host "  PASS  .cursor/commands/ ($cursorCmds Cursor commands)" -ForegroundColor Green
+                        $pass++
+                    } else {
+                        Write-Host "  WARN  .cursor/commands/ (missing)" -ForegroundColor Yellow
+                        $warn++
+                    }
+                }
+                'codex' {
+                    if (Test-Path (Join-Path $ProjectPath ".agents/skills")) {
+                        $codexSkills = (Get-ChildItem -Path (Join-Path $ProjectPath ".agents/skills") -Recurse -Filter "SKILL.md" -File).Count
+                        Write-Host "  PASS  .agents/skills/ ($codexSkills Codex skills)" -ForegroundColor Green
+                        $pass++
+                    } else {
+                        Write-Host "  WARN  .agents/skills/ (missing)" -ForegroundColor Yellow
+                        $warn++
+                    }
+                }
+            }
+        }
+    }
+}
+
 # ─── Optional Files ───────────────────────────────────────────────────
 Write-Host ""
 Write-Host "Optional files:" -ForegroundColor Cyan

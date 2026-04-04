@@ -54,6 +54,9 @@ Scan the target project root for these marker files to determine the correct pre
 
 # For mixed repos (e.g., .NET app with Bicep infra):
 .\setup.ps1 -Preset dotnet,azure-iac -ProjectPath "<target-path>" -ProjectName "<project-name>" -Force
+
+# For multi-agent support (Claude, Cursor, Codex alongside Copilot):
+.\setup.ps1 -Preset <detected-preset> -Agent claude,cursor -ProjectPath "<target-path>" -ProjectName "<project-name>" -Force
 ```
 
 ```bash
@@ -62,6 +65,9 @@ Scan the target project root for these marker files to determine the correct pre
 
 # For mixed repos:
 ./setup.sh --preset dotnet,azure-iac --path "<target-path>" --name "<project-name>" --force
+
+# For multi-agent support:
+./setup.sh --preset <detected-preset> --agent claude,cursor --path "<target-path>" --name "<project-name>" --force
 ```
 
 **`-Force` is required for unattended agent execution** — it skips confirmation prompts and overwrites template files.

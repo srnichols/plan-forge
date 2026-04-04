@@ -6,7 +6,7 @@ description: "Pipeline Step 4 — Completeness sweep to eliminate TODOs, mocks, 
 
 > **Pipeline**: Step 4 of 5 (Session 2 — Execution)  
 > **When**: After all slices pass (Step 3), before the Review Gate  
-> **Model suggestion**: Any model — pattern scanning works well on all models  
+> **Model suggestion**: Any model / Copilot Auto (10% token savings) — pattern scanning works well on all models  
 > **Next Step**: `step5-review-gate.prompt.md` (new session)
 
 Replace `<YOUR-HARDENED-PLAN>` with your hardened plan filename.

@@ -33,6 +33,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - **Extension Marketplace UI** — visual catalog browser with search/filter
 - **Notification Center** — bell icon with persistent notifications (localStorage), auto-notifies on run-complete and slice-failed
 - **Config Editor** — visual editor for `.forge.json` (agents, model routing) with save confirmation
+- **Parallel Execution** — `[P]`-tagged slices execute concurrently via `ParallelScheduler` (up to configurable `maxParallelism`, default: 3). DAG-aware: respects dependencies, merge points, and scope-based conflict detection
+- **Scope Conflict Detection** — warns and falls back to sequential when parallel slices have overlapping file scopes (M6)
 - **Execution modes** — Full Auto (`gh copilot` CLI with any model) and Assisted (human codes in VS Code, orchestrator validates gates)
 - **`.forge/SCHEMA.md`** — documents all `.forge/` files with formats, schemas, and ownership
 - **Extension ecosystem** — `pforge ext search`, `pforge ext add <name>`, `pforge ext info <name>` commands with `extensions/catalog.json` community catalog (Spec Kit catalog-compatible format)

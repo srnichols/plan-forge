@@ -16,6 +16,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
   - Codex CLI: generates `.agents/skills/planforge-*/SKILL.md`
 - `.forge.json` now records configured agents in an `agents` field
 - `pforge smith` detects and validates agent-specific file paths
+- **Extension ecosystem** — `pforge ext search`, `pforge ext add <name>`, `pforge ext info <name>` commands with `extensions/catalog.json` community catalog (Spec Kit catalog-compatible format)
 - **Spec Kit comparison FAQ** — Honest side-by-side guidance on when to use Spec Kit vs Plan Forge
 
 ---

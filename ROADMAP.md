@@ -44,10 +44,12 @@ See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 - **Shipped**: Claude Code, Cursor, Codex CLI via `-Agent` / `--agent` parameter
 
 ### v1.7 — Community Extension Ecosystem
-- `pforge extension search` — browse and install community extensions from a catalog
-- `pforge extension publish` — package and submit extensions to the community catalog
-- Community preset framework — let contributors override templates/commands without forking
-- Extension categories: `docs`, `code`, `process`, `integration`, `visibility`
+- ~~`pforge extension search` — browse and install community extensions from a catalog~~
+- ~~`pforge extension publish` — package and submit extensions to the community catalog~~
+- ~~Community preset framework — let contributors override templates/commands without forking~~
+- ~~Extension categories: `docs`, `code`, `process`, `integration`, `visibility`~~
+- **Shipped**: `pforge ext search/add/info` + `extensions/catalog.json` (Spec Kit catalog-compatible format)
+- Dual-publish to Spec Kit catalog (deferred — needs community traction first)
 - Extension website or registry for discoverability
 
 ### v1.8 — Specification Interoperability

@@ -61,6 +61,10 @@ pforge check
 
 # Multi-agent: setup generates native files for Claude, Cursor, Codex
 # setup.ps1 -Agent claude | setup.sh --agent claude
+
+# Browse and install community extensions
+pforge ext search
+pforge ext add <name>
 ```
 
 ---

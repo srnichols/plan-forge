@@ -725,7 +725,10 @@ pforge sweep             Scan code for TODO/FIXME/stub markers (completeness che
 pforge diff <plan>       Compare changed files against plan's Scope Contract
 pforge commit <plan> <N> Commit with conventional message from slice goal
 pforge phase-status <plan> <status>  Update roadmap (planned|in-progress|complete|paused)
-pforge ext install <p>   Install an extension
+pforge ext search [q]    Search the community extension catalog
+pforge ext add <name>    Download and install from catalog
+pforge ext info <name>   Show extension details
+pforge ext install <p>   Install extension from local path
 pforge ext list          List installed extensions
 pforge ext remove <name> Remove an extension
 pforge help              Show all commands

@@ -19,9 +19,48 @@ Your job is to help me describe WHAT I want to build and WHY — not HOW to buil
 
 ---
 
-### FIRST: Do you have an existing document?
+### FIRST: Check for Spec Kit Artifacts
 
-Before starting the interview, ask:
+Before asking any questions, scan the project for Spec Kit artifacts:
+
+1. Check if `specs/` directory exists (Spec Kit feature directory)
+2. Check if `memory/constitution.md` exists (Spec Kit project constitution)
+3. Check if any `specs/*/spec.md` or `specs/*/plan.md` files exist
+
+**If Spec Kit artifacts are found:**
+
+> "I found Spec Kit artifacts in this project:
+> - `specs/<feature>/spec.md` — feature specification
+> - `specs/<feature>/plan.md` — implementation plan
+> - `memory/constitution.md` — project constitution
+>
+> Plan Forge can import these directly:
+> 1. **Import spec** → Skip the interview, map spec.md sections to Plan Forge format
+> 2. **Import plan** → Convert plan.md into a hardened execution contract (Phase Plan)
+> 3. **Import constitution** → Convert to `docs/plans/PROJECT-PRINCIPLES.md`
+> 4. **Start fresh** → Ignore Spec Kit files and run the full interview
+>
+> Which would you like?"
+
+**If the user chooses to import:**
+
+1. Read the Spec Kit `spec.md` and map its content to the 6 sections below
+2. Read `plan.md` (if it exists) and extract technology choices, architecture decisions, and task breakdown
+3. Read `constitution.md` (if it exists) and map principles to Plan Forge's `PROJECT-PRINCIPLES.md` format
+4. Show a coverage summary and fill in any gaps with targeted questions
+5. Generate the Plan Forge Phase Plan with a `### Specification Source` section:
+   ```markdown
+   ### Specification Source
+   - Imported from: Spec Kit (`specs/<feature>/spec.md`)
+   - Plan source: `specs/<feature>/plan.md`
+   - Constitution: `memory/constitution.md`
+   ```
+
+**If no Spec Kit artifacts found** — continue to the document check below.
+
+---
+
+### NEXT: Do you have an existing document?
 
 > "Do you have an existing document, spec, PRD, or notes you'd like to use as a starting point? (file path, URL, or 'no')"
 

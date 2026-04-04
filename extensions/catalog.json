@@ -1,0 +1,89 @@
+{
+  "schema_version": "1.0",
+  "updated_at": "2026-04-03T00:00:00Z",
+  "catalog_url": "https://raw.githubusercontent.com/srnichols/plan-forge/master/extensions/catalog.json",
+  "speckit_compatible": true,
+  "extensions": {
+    "saas-multi-tenancy": {
+      "name": "SaaS Multi-Tenancy",
+      "id": "saas-multi-tenancy",
+      "description": "RLS policies, tenant isolation middleware, cross-tenant prevention guardrails, and a tenant isolation reviewer agent.",
+      "author": "srnichols",
+      "version": "1.0.0",
+      "download_url": "https://github.com/srnichols/plan-forge/archive/refs/heads/master.zip",
+      "repository": "https://github.com/srnichols/plan-forge",
+      "path_in_repo": "docs/plans/examples/extensions/saas-multi-tenancy",
+      "license": "MIT",
+      "category": "code",
+      "effect": "Read+Write",
+      "requires": {
+        "planforge_version": ">=1.2.0"
+      },
+      "provides": {
+        "instructions": 0,
+        "agents": 1,
+        "prompts": 1,
+        "skills": 0
+      },
+      "tags": ["multi-tenancy", "saas", "rls", "tenant-isolation", "security"],
+      "speckit_compatible": false,
+      "verified": true,
+      "created_at": "2026-04-01T00:00:00Z",
+      "updated_at": "2026-04-03T00:00:00Z"
+    },
+    "azure-infrastructure": {
+      "name": "Azure Infrastructure",
+      "id": "azure-infrastructure",
+      "description": "Bicep, Terraform, and azd guardrails for mixed app+infra repos. Includes IaC reviewer agent and CAF naming conventions.",
+      "author": "srnichols",
+      "version": "1.0.0",
+      "download_url": "https://github.com/srnichols/plan-forge/archive/refs/heads/master.zip",
+      "repository": "https://github.com/srnichols/plan-forge",
+      "path_in_repo": "docs/plans/examples/extensions/azure-infrastructure",
+      "license": "MIT",
+      "category": "code",
+      "effect": "Read+Write",
+      "requires": {
+        "planforge_version": ">=1.2.0"
+      },
+      "provides": {
+        "instructions": 5,
+        "agents": 1,
+        "prompts": 3,
+        "skills": 0
+      },
+      "tags": ["azure", "bicep", "terraform", "azd", "infrastructure", "iac"],
+      "speckit_compatible": false,
+      "verified": true,
+      "created_at": "2026-04-01T00:00:00Z",
+      "updated_at": "2026-04-03T00:00:00Z"
+    },
+    "plan-forge-memory": {
+      "name": "Plan Forge Memory (OpenBrain)",
+      "id": "plan-forge-memory",
+      "description": "Persistent semantic memory via OpenBrain MCP server. Captures decisions, patterns, and postmortems across sessions. 106 files with search/capture hooks.",
+      "author": "srnichols",
+      "version": "1.0.0",
+      "download_url": "https://github.com/srnichols/plan-forge/archive/refs/heads/master.zip",
+      "repository": "https://github.com/srnichols/plan-forge",
+      "path_in_repo": "docs/plans/examples/extensions/plan-forge-memory",
+      "license": "MIT",
+      "category": "integration",
+      "effect": "Read+Write",
+      "requires": {
+        "planforge_version": ">=1.2.0"
+      },
+      "provides": {
+        "instructions": 1,
+        "agents": 1,
+        "prompts": 2,
+        "skills": 0
+      },
+      "tags": ["memory", "openbrain", "mcp", "semantic-search", "decisions", "persistence"],
+      "speckit_compatible": false,
+      "verified": true,
+      "created_at": "2026-04-01T00:00:00Z",
+      "updated_at": "2026-04-03T00:00:00Z"
+    }
+  }
+}

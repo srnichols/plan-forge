@@ -1360,6 +1360,100 @@ Target project: (current directory)</code></pre>
         <span class="px-5 py-2.5 rounded-full bg-slate-800 border border-slate-700/60 text-sm text-slate-300">💬 ChatGPT</span>
         <span class="px-5 py-2.5 rounded-full bg-slate-800 border border-slate-700/60 text-sm text-slate-300">🔧 Any AI tool</span>
       </div>
+
+      <!-- Feature Parity Table -->
+      <div class="mt-12 max-w-4xl mx-auto">
+        <h3 class="text-lg font-bold text-white mb-6">Feature Parity by Agent</h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-slate-700/50">
+                <th class="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase">Feature</th>
+                <th class="px-4 py-3 text-center text-xs font-semibold text-slate-400 uppercase">🐙 Copilot</th>
+                <th class="px-4 py-3 text-center text-xs font-semibold text-slate-400 uppercase">🤖 Claude</th>
+                <th class="px-4 py-3 text-center text-xs font-semibold text-slate-400 uppercase">⚡ Cursor</th>
+                <th class="px-4 py-3 text-center text-xs font-semibold text-slate-400 uppercase">📟 Codex</th>
+                <th class="px-4 py-3 text-center text-xs font-semibold text-slate-400 uppercase">Others</th>
+              </tr>
+            </thead>
+            <tbody class="text-slate-400">
+              <tr class="border-b border-slate-800/50">
+                <td class="px-4 py-3 text-white">Project context</td>
+                <td class="px-4 py-3 text-center text-green-400">✅</td>
+                <td class="px-4 py-3 text-center text-green-400">✅</td>
+                <td class="px-4 py-3 text-center text-green-400">✅</td>
+                <td class="px-4 py-3 text-center text-green-400">✅</td>
+                <td class="px-4 py-3 text-center text-slate-500">📋</td>
+              </tr>
+              <tr class="border-b border-slate-800/50">
+                <td class="px-4 py-3 text-white">16 guardrail files</td>
+                <td class="px-4 py-3 text-center text-green-400">✅ auto</td>
+                <td class="px-4 py-3 text-center text-green-400">✅ embedded</td>
+                <td class="px-4 py-3 text-center text-green-400">✅ embedded</td>
+                <td class="px-4 py-3 text-center text-slate-500">—</td>
+                <td class="px-4 py-3 text-center text-slate-500">📋</td>
+              </tr>
+              <tr class="border-b border-slate-800/50">
+                <td class="px-4 py-3 text-white">Pipeline prompts (7)</td>
+                <td class="px-4 py-3 text-center text-green-400">✅</td>
+                <td class="px-4 py-3 text-center text-green-400">✅</td>
+                <td class="px-4 py-3 text-center text-green-400">✅</td>
+                <td class="px-4 py-3 text-center text-green-400">✅</td>
+                <td class="px-4 py-3 text-center text-slate-500">📋</td>
+              </tr>
+              <tr class="border-b border-slate-800/50">
+                <td class="px-4 py-3 text-white">Scaffolding prompts (15+)</td>
+                <td class="px-4 py-3 text-center text-green-400">✅</td>
+                <td class="px-4 py-3 text-center text-green-400">✅</td>
+                <td class="px-4 py-3 text-center text-green-400">✅</td>
+                <td class="px-4 py-3 text-center text-green-400">✅</td>
+                <td class="px-4 py-3 text-center text-slate-500">📋</td>
+              </tr>
+              <tr class="border-b border-slate-800/50">
+                <td class="px-4 py-3 text-white">Reviewer agents (18)</td>
+                <td class="px-4 py-3 text-center text-green-400">✅ picker</td>
+                <td class="px-4 py-3 text-center text-green-400">✅ skills</td>
+                <td class="px-4 py-3 text-center text-green-400">✅ cmds</td>
+                <td class="px-4 py-3 text-center text-green-400">✅ skills</td>
+                <td class="px-4 py-3 text-center text-slate-500">📋</td>
+              </tr>
+              <tr class="border-b border-slate-800/50">
+                <td class="px-4 py-3 text-white">File-type awareness</td>
+                <td class="px-4 py-3 text-center text-green-400">✅ native</td>
+                <td class="px-4 py-3 text-center text-forge-400">⚡ guided</td>
+                <td class="px-4 py-3 text-center text-forge-400">⚡ guided</td>
+                <td class="px-4 py-3 text-center text-slate-500">—</td>
+                <td class="px-4 py-3 text-center text-slate-500">—</td>
+              </tr>
+              <tr class="border-b border-slate-800/50">
+                <td class="px-4 py-3 text-white">Post-edit scanning</td>
+                <td class="px-4 py-3 text-center text-green-400">✅ hook</td>
+                <td class="px-4 py-3 text-center text-forge-400">⚡ guided</td>
+                <td class="px-4 py-3 text-center text-forge-400">⚡ guided</td>
+                <td class="px-4 py-3 text-center text-slate-500">—</td>
+                <td class="px-4 py-3 text-center text-slate-500">—</td>
+              </tr>
+              <tr class="border-b border-slate-800/50">
+                <td class="px-4 py-3 text-white">Forbidden path blocking</td>
+                <td class="px-4 py-3 text-center text-green-400">✅ enforced</td>
+                <td class="px-4 py-3 text-center text-forge-400">⚡ advisory</td>
+                <td class="px-4 py-3 text-center text-forge-400">⚡ advisory</td>
+                <td class="px-4 py-3 text-center text-slate-500">—</td>
+                <td class="px-4 py-3 text-center text-slate-500">—</td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3 text-white">Pipeline handoff buttons</td>
+                <td class="px-4 py-3 text-center text-green-400">✅ click</td>
+                <td class="px-4 py-3 text-center text-forge-400">⚡ guided</td>
+                <td class="px-4 py-3 text-center text-forge-400">⚡ guided</td>
+                <td class="px-4 py-3 text-center text-slate-500">—</td>
+                <td class="px-4 py-3 text-center text-slate-500">—</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-xs text-slate-500 mt-4 text-center">✅ = native platform feature · ⚡ = instruction-guided (AI follows reliably) · 📋 = copy-paste prompts from runbook</p>
+      </div>
     </div>
   </section>
 

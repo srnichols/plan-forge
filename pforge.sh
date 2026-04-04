@@ -54,6 +54,7 @@ COMMANDS:
   ext list          List installed extensions
   ext remove <name> Remove an installed extension
   update [source]   Update framework files from Plan Forge source (preserves customizations)
+  analyze <plan>    Cross-artifact analysis — requirement traceability, test coverage, scope compliance
   smith             Inspect your forge — environment, VS Code config, setup health, and common problems
   help              Show this help message
 
@@ -1193,6 +1194,215 @@ with open('$config_path', 'w') as f:
     fi
 }
 
+# ─── Command: analyze ──────────────────────────────────────────────────
+cmd_analyze() {
+    if [ $# -eq 0 ]; then
+        echo "ERROR: Plan file required." >&2
+        echo "  Usage: pforge analyze <plan-file>" >&2
+        exit 1
+    fi
+
+    local plan_file="$1"
+    [ ! -f "$plan_file" ] && plan_file="$REPO_ROOT/$plan_file"
+    if [ ! -f "$plan_file" ]; then
+        echo "ERROR: Plan file not found: $1" >&2
+        exit 1
+    fi
+
+    print_manual_steps "analyze" \
+        "Parse plan for requirements, slices, gates, scope" \
+        "Cross-reference git changes against scope contract" \
+        "Match acceptance criteria against test files" \
+        "Score traceability, coverage, completeness, gates"
+
+    local plan_content
+    plan_content="$(cat "$plan_file")"
+    local plan_name
+    plan_name="$(basename "$plan_file" .md)"
+
+    echo ""
+    echo "╔══════════════════════════════════════════════════════════════╗"
+    echo "║       Plan Forge — Analyze                                   ║"
+    echo "╚══════════════════════════════════════════════════════════════╝"
+    echo ""
+    echo "Plan: $plan_name"
+    echo ""
+
+    local score_trace=0 score_coverage=0 score_tests=0 score_gates=0
+
+    # ═══════════════════════════════════════════════════════════════
+    # 1. TRACEABILITY
+    # ═══════════════════════════════════════════════════════════════
+    echo "Traceability:"
+
+    local must_count should_count slice_count
+    must_count=$(echo "$plan_content" | grep -ciE '^\s*[-*]\s*\*\*MUST\*\*' || echo 0)
+    should_count=$(echo "$plan_content" | grep -ciE '^\s*[-*]\s*\*\*SHOULD\*\*' || echo 0)
+    slice_count=$(echo "$plan_content" | grep -c '^### Slice [0-9]' || echo 0)
+    local total_criteria=$((must_count + should_count))
+
+    if [ "$total_criteria" -gt 0 ]; then
+        echo "  ✅ $total_criteria acceptance criteria ($must_count MUST, $should_count SHOULD)"
+        score_trace=$((25 * total_criteria / total_criteria))  # Full if found
+    else
+        if echo "$plan_content" | grep -qiE 'acceptance criteria|definition of done'; then
+            echo "  ✅ Acceptance criteria section detected (non-standard format)"
+            score_trace=15
+        else
+            echo "  ⚠️  No MUST/SHOULD criteria found"
+        fi
+    fi
+
+    if [ "$slice_count" -gt 0 ]; then
+        echo "  ✅ $slice_count execution slices found"
+        [ "$score_trace" -eq 0 ] && score_trace=10
+    else
+        echo "  ⚠️  No execution slices found"
+    fi
+
+    echo ""
+
+    # ═══════════════════════════════════════════════════════════════
+    # 2. SCOPE COMPLIANCE
+    # ═══════════════════════════════════════════════════════════════
+    echo "Coverage:"
+
+    local changed_files
+    changed_files="$(git diff --name-only 2>/dev/null; git diff --cached --name-only 2>/dev/null)"
+    changed_files="$(echo "$changed_files" | sort -u | grep -v '^$')"
+    local total_changed
+    total_changed="$(echo "$changed_files" | grep -c '.' || echo 0)"
+
+    local violations=0 out_of_scope=0 in_scope=0
+
+    if [ "$total_changed" -gt 0 ]; then
+        # Extract forbidden paths
+        local forbidden
+        forbidden="$(echo "$plan_content" | sed -n '/### Forbidden Actions/,/^###/p' | grep -oP '`\K[^`]+' || true)"
+
+        for file in $changed_files; do
+            local is_forbidden=false
+            for fp in $forbidden; do
+                if echo "$file" | grep -q "$fp"; then
+                    violations=$((violations + 1))
+                    is_forbidden=true
+                    break
+                fi
+            done
+            [ "$is_forbidden" = true ] && continue
+            in_scope=$((in_scope + 1))
+        done
+        out_of_scope=$((total_changed - in_scope - violations))
+
+        echo "  ✅ $total_changed changed files analyzed"
+        [ "$violations" -gt 0 ] && echo "  ❌ $violations forbidden file(s) touched"
+        [ "$out_of_scope" -gt 0 ] && echo "  ⚠️  $out_of_scope file(s) outside Scope Contract"
+        [ "$violations" -eq 0 ] && [ "$out_of_scope" -eq 0 ] && echo "  ✅ All changes within Scope Contract"
+
+        score_coverage=$((25 * in_scope / total_changed))
+        [ "$violations" -gt 0 ] && score_coverage=$((score_coverage > 10 ? score_coverage - 10 : 0))
+    else
+        echo "  ✅ No uncommitted changes (analyzing plan structure only)"
+        score_coverage=25
+    fi
+
+    echo ""
+
+    # ═══════════════════════════════════════════════════════════════
+    # 3. TEST COVERAGE
+    # ═══════════════════════════════════════════════════════════════
+    echo "Test Coverage:"
+
+    local test_file_count=0
+    test_file_count=$(find "$REPO_ROOT" -type f \( -name "*.test.*" -o -name "*.spec.*" -o -name "*Tests.cs" -o -name "*Test.java" -o -name "*_test.go" -o -name "test_*.py" -o -name "*_test.py" \) ! -path '*/node_modules/*' ! -path '*/.git/*' ! -path '*/bin/*' ! -path '*/obj/*' 2>/dev/null | wc -l | tr -d ' ')
+
+    if [ "$test_file_count" -gt 0 ]; then
+        echo "  ✅ $test_file_count test file(s) found in project"
+        score_tests=20
+    else
+        echo "  ⚠️  No test files found"
+        score_tests=5
+    fi
+
+    if [ "$must_count" -gt 0 ]; then
+        echo "  ✅ $must_count MUST criteria to verify against tests"
+        [ "$test_file_count" -gt 0 ] && score_tests=25
+    fi
+
+    echo ""
+
+    # ═══════════════════════════════════════════════════════════════
+    # 4. VALIDATION GATES
+    # ═══════════════════════════════════════════════════════════════
+    echo "Validation Gates:"
+
+    local gates_found=0
+    gates_found=$(echo "$plan_content" | grep -ciE 'validation gate|build.*pass|test.*pass|\- \[ \].*build|\- \[ \].*test' || echo 0)
+
+    if [ "$gates_found" -gt 0 ]; then
+        echo "  ✅ $gates_found validation gate reference(s) found"
+        score_gates=25
+    elif [ "$slice_count" -gt 0 ]; then
+        echo "  ⚠️  Slices found but no explicit validation gates"
+        score_gates=10
+    else
+        echo "  ⚠️  No validation gates found"
+        score_gates=0
+    fi
+
+    # Deferred work markers in changed files
+    local marker_count=0
+    if [ "$total_changed" -gt 0 ]; then
+        for file in $changed_files; do
+            local full_path="$REPO_ROOT/$file"
+            if [ -f "$full_path" ]; then
+                local mc
+                mc=$(grep -ciE 'TODO|FIXME|HACK|stub|placeholder|mock data' "$full_path" 2>/dev/null || echo 0)
+                marker_count=$((marker_count + mc))
+            fi
+        done
+    fi
+
+    if [ "$marker_count" -eq 0 ]; then
+        echo "  ✅ 0 deferred-work markers in changed files"
+    else
+        echo "  ⚠️  $marker_count deferred-work marker(s) in changed files"
+        score_gates=$((score_gates > 5 ? score_gates - 5 : 0))
+    fi
+
+    echo ""
+
+    # ═══════════════════════════════════════════════════════════════
+    # CONSISTENCY SCORE
+    # ═══════════════════════════════════════════════════════════════
+    local total_score=$((score_trace + score_coverage + score_tests + score_gates))
+
+    echo "Consistency Score: $total_score/100"
+    echo "  - Traceability: $score_trace/25"
+    echo "  - Coverage: $score_coverage/25"
+    echo "  - Test Coverage: $score_tests/25"
+    echo "  - Gates: $score_gates/25"
+
+    echo ""
+    echo "────────────────────────────────────────────────────"
+    echo "  ${total_criteria:-0} requirements  |  $slice_count slices  |  ${total_changed:-0} files  |  $total_score% consistent"
+    echo "────────────────────────────────────────────────────"
+
+    if [ "$total_score" -lt 60 ]; then
+        echo ""
+        echo "ANALYSIS FAILED — score below 60%."
+        exit 1
+    elif [ "$total_score" -lt 80 ]; then
+        echo ""
+        echo "ANALYSIS WARNING — score below 80%."
+        exit 0
+    else
+        echo ""
+        echo "ANALYSIS PASSED — strong consistency."
+        exit 0
+    fi
+}
+
 # ─── Command: doctor ───────────────────────────────────────────────────
 cmd_doctor() {
     print_manual_steps "smith" \
@@ -1562,6 +1772,7 @@ case "$COMMAND" in
     diff)         cmd_diff "$@" ;;
     ext)          cmd_ext "$@" ;;
     update)       cmd_update "$@" ;;
+    analyze)      cmd_analyze "$@" ;;
     smith)        cmd_smith ;;
     help|--help)  show_help ;;
     *)

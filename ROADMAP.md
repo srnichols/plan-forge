@@ -50,16 +50,9 @@ Expose Plan Forge operations as MCP tools so any agent with MCP support can invo
 
 ### v1.5 — Cross-Artifact Analysis
 
-Validate consistency across the full spec → plan → code → test chain.
+~~Validate consistency across the full spec → plan → code → test chain.~~
 
-- **`pforge analyze`** command — scan plan artifacts for:
-  - Every requirement has a corresponding slice
-  - Every slice has a validation gate
-  - Every test file traces back to an acceptance criterion
-  - No orphaned code (files changed but not in scope contract)
-- **Drift report** — structured output showing spec-to-code consistency score
-- **CI integration** — `plan-forge-validate@v1` gets an `analyze: true` input
-- Inspired by Spec Kit's `/speckit.analyze` but runs against hardened plans, not just specs
+**Shipped**: `pforge analyze <plan>` — consistency scoring with 4 dimensions (traceability, coverage, test coverage, gates). MCP tool `forge_analyze`. GitHub Action `analyze` input.
 
 ### v1.6 — Intelligence Layer
 

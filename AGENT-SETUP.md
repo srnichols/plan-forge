@@ -104,6 +104,12 @@ All checks must pass before proceeding to plan hardening.
 ```
 See [docs/plans/examples/plan-forge-validate.yml](docs/plans/examples/plan-forge-validate.yml) for the full workflow.
 
+**Optional: MCP server** — If ⁠`mcp/server.mjs` was installed, activate the MCP tools:
+```bash
+cd mcp && npm install
+```
+This exposes 8 forge tools as native MCP functions in Claude Code, Cursor, and Copilot.
+
 ---
 
 ## Section 2: Brownfield Setup (Existing Project with Guardrails)

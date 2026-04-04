@@ -848,6 +848,20 @@ See [Spec Kit + Plan Forge integration guide](https://srnichols.github.io/plan-f
 
 ---
 
+## MCP Server (Optional)
+
+Expose Plan Forge operations as native MCP tools — any agent with MCP support can invoke `forge_smith`, `forge_sweep`, `forge_diff`, etc. as function calls instead of terminal commands.
+
+Setup installs `mcp/server.mjs` automatically and generates `.vscode/mcp.json` (Copilot) and `.claude/mcp.json` (Claude). To activate:
+
+```bash
+cd mcp && npm install    # Install MCP dependencies (one-time)
+```
+
+8 tools available: `forge_smith`, `forge_validate`, `forge_sweep`, `forge_status`, `forge_diff`, `forge_ext_search`, `forge_ext_info`, `forge_new_phase`. Composable with OpenBrain for persistent memory in the same MCP config.
+
+---
+
 ## CI/CD Integration
 
 Add automated plan validation to your PR workflow with the Plan Forge GitHub Action:

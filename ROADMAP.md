@@ -73,10 +73,10 @@ Merged into v2.0–v2.1 — token tracking, cost estimation, and historical metr
 
 ### v2.0 — `forge_run_plan` (DAG-Based Orchestration) 🚧
 
-Built on the existing `mcp/server.mjs` Node.js process — no new services.
+Built on the existing `pforge-mcp/server.mjs` Node.js process — no new services.
 
 - ✅ **CLI Spawning Spike** — `gh copilot` CLI confirmed as primary worker (non-interactive, context-aware, multi-model)
-- ✅ **DAG-based orchestration engine** (`mcp/orchestrator.mjs`) — plan parser, topological sort, pluggable scheduler, event emitter (DI)
+- ✅ **DAG-based orchestration engine** (`pforge-mcp/orchestrator.mjs`) — plan parser, topological sort, pluggable scheduler, event emitter (DI)
 - ✅ **`forge_run_plan <plan>`** MCP tool + `pforge run-plan <plan>` CLI command
 - ✅ **Two execution modes**: Full Auto (`gh copilot` with any model) and Assisted (human + automated gates)
 - ✅ **Model routing config** in `.forge.json` — specify model per step type
@@ -93,12 +93,12 @@ Built on the existing `mcp/server.mjs` Node.js process — no new services.
 Add lightweight inter-session communication and a visual monitoring UI to the MCP server.
 
 **Infrastructure:**
-- **WebSocket server** (`ws` package) embedded in `mcp/server.mjs` — no separate service
+- **WebSocket server** (`ws` package) embedded in `pforge-mcp/server.mjs` — no separate service
 - **Event bus** — sessions publish events (`slice-complete`, `build-failed`, `review-passed`)
 - **Session registry** — tracks active workers, their model, slice assignment, status
 - **`forge_plan_status`** MCP tool — live progress view from any connected session
 
-**Dashboard Core** (`mcp/dashboard/` — lightweight HTML + JS, served at `localhost:3100/dashboard`):
+**Dashboard Core** (`pforge-mcp/dashboard/` — lightweight HTML + JS, served at `localhost:3100/dashboard`):
 - Real-time slice progress cards (pending → executing → pass/fail)
 - Model routing visualization (which model is running which slice)
 - Consistency score after completion

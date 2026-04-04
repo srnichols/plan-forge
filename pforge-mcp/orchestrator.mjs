@@ -13,8 +13,8 @@
  *   Non-interactive, context-aware, multi-model, JSONL output with tokens.
  *
  * Usage:
- *   node mcp/orchestrator.mjs --test              # run self-test
- *   node mcp/orchestrator.mjs --parse <plan>      # parse and dump DAG
+ *   node pforge-mcp/orchestrator.mjs --test              # run self-test
+ *   node pforge-mcp/orchestrator.mjs --parse <plan>      # parse and dump DAG
  *
  * @module orchestrator
  */

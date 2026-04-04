@@ -1088,8 +1088,8 @@ print(v if isinstance(v, str) else ','.join(v))
     unset -f _pf_check
 
     # ─── MCP server files ────────────────────────────────────────
-    local src_mcp="$SOURCE_PATH/mcp"
-    local dst_mcp="$REPO_ROOT/mcp"
+    local src_mcp="$SOURCE_PATH/pforge-mcp"
+    local dst_mcp="$REPO_ROOT/pforge-mcp"
     if [ -d "$src_mcp" ]; then
         for mcp_file in server.mjs package.json; do
             local src_f="$src_mcp/$mcp_file"
@@ -1100,10 +1100,10 @@ print(v if isinstance(v, str) else ','.join(v))
                     src_hash="$(sha256sum "$src_f" 2>/dev/null | cut -d' ' -f1 || shasum -a 256 "$src_f" | cut -d' ' -f1)"
                     dst_hash="$(sha256sum "$dst_f" 2>/dev/null | cut -d' ' -f1 || shasum -a 256 "$dst_f" | cut -d' ' -f1)"
                     if [ "$src_hash" != "$dst_hash" ]; then
-                        _updates+=("$src_f|$dst_f|mcp/$mcp_file")
+                        _updates+=("$src_f|$dst_f|pforge-mcp/$mcp_file")
                     fi
                 else
-                    _new_files+=("$src_f|$dst_f|mcp/$mcp_file")
+                    _new_files+=("$src_f|$dst_f|pforge-mcp/$mcp_file")
                 fi
             fi
         done
@@ -1187,14 +1187,14 @@ with open('$config_path', 'w') as f:
     local mcp_updated=false
     for entry in "${_updates[@]}" "${_new_files[@]}"; do
         local entry_name="${entry##*|}"
-        if [[ "$entry_name" == mcp/* ]]; then
+        if [[ "$entry_name" == pforge-mcp/* ]]; then
             mcp_updated=true
             break
         fi
     done
     if [ "$mcp_updated" = true ]; then
         echo ""
-        echo "MCP server files were updated. Run: cd mcp && npm install"
+        echo "MCP server files were updated. Run: cd pforge-mcp && npm install"
     fi
 }
 
@@ -1639,17 +1639,17 @@ cmd_doctor() {
     # ═══════════════════════════════════════════════════════════════
     echo "MCP Server:"
 
-    local mcp_server="$REPO_ROOT/mcp/server.mjs"
+    local mcp_server="$REPO_ROOT/pforge-mcp/server.mjs"
     if [ -f "$mcp_server" ]; then
-        doctor_pass "mcp/server.mjs exists"
+        doctor_pass "pforge-mcp/server.mjs exists"
 
-        [ -f "$REPO_ROOT/mcp/package.json" ] \
-            || doctor_warn "mcp/package.json missing" "Copy from Plan Forge template"
+        [ -f "$REPO_ROOT/pforge-mcp/package.json" ] \
+            || doctor_warn "pforge-mcp/package.json missing" "Copy from Plan Forge template"
 
-        if [ -d "$REPO_ROOT/mcp/node_modules" ]; then
+        if [ -d "$REPO_ROOT/pforge-mcp/node_modules" ]; then
             doctor_pass "MCP dependencies installed"
         else
-            doctor_warn "MCP dependencies not installed" "Run: cd mcp && npm install"
+            doctor_warn "MCP dependencies not installed" "Run: cd pforge-mcp && npm install"
         fi
 
         if [ -f "$REPO_ROOT/.vscode/mcp.json" ]; then
@@ -1815,7 +1815,7 @@ cmd_run_plan() {
         "Write results to .forge/runs/<timestamp>/"
 
     # Build node args
-    local node_args=("$REPO_ROOT/mcp/orchestrator.mjs" "--run" "$full_plan_path" "--mode" "$mode")
+    local node_args=("$REPO_ROOT/pforge-mcp/orchestrator.mjs" "--run" "$full_plan_path" "--mode" "$mode")
     if [ "$estimate" = true ]; then node_args+=("--estimate"); fi
     if [ "$dry_run" = true ]; then node_args+=("--dry-run"); fi
     if [ -n "$model" ]; then node_args+=("--model" "$model"); fi

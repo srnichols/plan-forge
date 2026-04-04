@@ -994,18 +994,18 @@ if (Test-Path $guideSrc) {
 }
 
 # ─── Step 7b: Copy MCP Server + Generate Config ───────────────────────
-$mcpSrcDir = Join-Path $templateRoot "mcp"
+$mcpSrcDir = Join-Path $templateRoot "pforge-mcp"
 if (Test-Path $mcpSrcDir) {
     Write-Host ""
     Write-Host "Step 7b: MCP server (Plan Forge as tools)" -ForegroundColor Cyan
 
-    $mcpDstDir = Join-Path $ProjectPath "mcp"
+    $mcpDstDir = Join-Path $ProjectPath "pforge-mcp"
     if (-not (Test-Path $mcpDstDir)) {
         New-Item -ItemType Directory -Path $mcpDstDir -Force | Out-Null
     }
     Copy-Item -Path (Join-Path $mcpSrcDir "server.mjs") -Destination (Join-Path $mcpDstDir "server.mjs") -Force
     Copy-Item -Path (Join-Path $mcpSrcDir "package.json") -Destination (Join-Path $mcpDstDir "package.json") -Force
-    Write-Host "  COPY  mcp/server.mjs + package.json" -ForegroundColor Green
+    Write-Host "  COPY  pforge-mcp/server.mjs + package.json" -ForegroundColor Green
 
     # Generate .vscode/mcp.json for Copilot MCP integration
     $vscodeMcp = Join-Path $ProjectPath ".vscode/mcp.json"
@@ -1014,7 +1014,7 @@ if (Test-Path $mcpSrcDir) {
             "plan-forge" = @{
                 type = "stdio"
                 command = "node"
-                args = @("mcp/server.mjs")
+                args = @("pforge-mcp/server.mjs")
                 cwd = '${workspaceFolder}'
             }
         }
@@ -1049,7 +1049,7 @@ if (Test-Path $mcpSrcDir) {
         }
     }
 
-    Write-Host "  Run 'cd mcp && npm install' to install MCP dependencies" -ForegroundColor DarkGray
+    Write-Host "  Run 'cd pforge-mcp && npm install' to install MCP dependencies" -ForegroundColor DarkGray
 }
 
 # ─── Done ──────────────────────────────────────────────────────────────

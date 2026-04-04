@@ -1237,8 +1237,8 @@ function Invoke-Update {
     }
 
     # ─── MCP server files ────────────────────────────────────────
-    $srcMcp = Join-Path $sourcePath "mcp"
-    $dstMcp = Join-Path $RepoRoot "mcp"
+    $srcMcp = Join-Path $sourcePath "pforge-mcp"
+    $dstMcp = Join-Path $RepoRoot "pforge-mcp"
     if (Test-Path $srcMcp) {
         foreach ($mcpFile in @("server.mjs", "package.json")) {
             $srcFile = Join-Path $srcMcp $mcpFile
@@ -1248,10 +1248,10 @@ function Invoke-Update {
                     $srcHash = (Get-FileHash $srcFile -Algorithm SHA256).Hash
                     $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
                     if ($srcHash -ne $dstHash) {
-                        $updates += @{ Src = $srcFile; Dst = $dstFile; Name = "mcp/$mcpFile" }
+                        $updates += @{ Src = $srcFile; Dst = $dstFile; Name = "pforge-mcp/$mcpFile" }
                     }
                 } else {
-                    $newFiles += @{ Src = $srcFile; Dst = $dstFile; Name = "mcp/$mcpFile" }
+                    $newFiles += @{ Src = $srcFile; Dst = $dstFile; Name = "pforge-mcp/$mcpFile" }
                 }
             }
         }
@@ -1315,10 +1315,10 @@ function Invoke-Update {
     Write-Host "Run 'pforge check' to validate the updated setup." -ForegroundColor DarkGray
 
     # Check if MCP files were updated — remind to reinstall deps
-    $mcpUpdated = ($updates + $newFiles) | Where-Object { $_.Name -like "mcp/*" }
+    $mcpUpdated = ($updates + $newFiles) | Where-Object { $_.Name -like "pforge-mcp/*" }
     if ($mcpUpdated) {
         Write-Host ""
-        Write-Host "MCP server files were updated. Run: cd mcp && npm install" -ForegroundColor Yellow
+        Write-Host "MCP server files were updated. Run: cd pforge-mcp && npm install" -ForegroundColor Yellow
     }
 }
 
@@ -1960,22 +1960,22 @@ function Invoke-Smith {
     # ═══════════════════════════════════════════════════════════════
     Write-Host "MCP Server:" -ForegroundColor Cyan
 
-    $mcpServer = Join-Path $RepoRoot "mcp/server.mjs"
-    $mcpPkg = Join-Path $RepoRoot "mcp/package.json"
+    $mcpServer = Join-Path $RepoRoot "pforge-mcp/server.mjs"
+    $mcpPkg = Join-Path $RepoRoot "pforge-mcp/package.json"
     $vscodeMcp = Join-Path $RepoRoot ".vscode/mcp.json"
 
     if (Test-Path $mcpServer) {
-        Doctor-Pass "mcp/server.mjs exists"
+        Doctor-Pass "pforge-mcp/server.mjs exists"
 
         if (-not (Test-Path $mcpPkg)) {
-            Doctor-Warn "mcp/package.json missing" "Copy from Plan Forge template or run setup again"
+            Doctor-Warn "pforge-mcp/package.json missing" "Copy from Plan Forge template or run setup again"
         }
 
-        $mcpNodeModules = Join-Path $RepoRoot "mcp/node_modules"
+        $mcpNodeModules = Join-Path $RepoRoot "pforge-mcp/node_modules"
         if (Test-Path $mcpNodeModules) {
             Doctor-Pass "MCP dependencies installed"
         } else {
-            Doctor-Warn "MCP dependencies not installed" "Run: cd mcp && npm install"
+            Doctor-Warn "MCP dependencies not installed" "Run: cd pforge-mcp && npm install"
         }
 
         if (Test-Path $vscodeMcp) {
@@ -2109,11 +2109,11 @@ function Invoke-Smith {
     }
 
     # Check orchestrator.mjs exists
-    $orchestratorPath = Join-Path $RepoRoot "mcp/orchestrator.mjs"
+    $orchestratorPath = Join-Path $RepoRoot "pforge-mcp/orchestrator.mjs"
     if (Test-Path $orchestratorPath) {
-        Doctor-Pass "mcp/orchestrator.mjs present"
+        Doctor-Pass "pforge-mcp/orchestrator.mjs present"
     } else {
-        Doctor-Warn "mcp/orchestrator.mjs not found" "Run setup again or update from Plan Forge source"
+        Doctor-Warn "pforge-mcp/orchestrator.mjs not found" "Run setup again or update from Plan Forge source"
     }
 
     # ═══════════════════════════════════════════════════════════════
@@ -2184,7 +2184,7 @@ function Invoke-RunPlan {
 
     # Build node args
     $nodeArgs = @(
-        (Join-Path $RepoRoot 'mcp/orchestrator.mjs'),
+        (Join-Path $RepoRoot 'pforge-mcp/orchestrator.mjs'),
         '--run', $fullPlanPath,
         '--mode', $mode
     )

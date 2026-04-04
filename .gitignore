@@ -15,5 +15,5 @@ Thumbs.db
 .forge.json
 
 # MCP dependencies (users run npm install themselves)
-mcp/node_modules/
+pforge-mcp/node_modules/
 

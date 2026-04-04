@@ -902,16 +902,16 @@ if [[ -f "$guide_src" ]]; then
 fi
 
 # ─── Step 7b: Copy MCP Server + Generate Config ───────────────────────
-MCP_SRC_DIR="$TEMPLATE_ROOT/mcp"
+MCP_SRC_DIR="$TEMPLATE_ROOT/pforge-mcp"
 if [[ -d "$MCP_SRC_DIR" ]]; then
     echo ""
     cyan "Step 7b: MCP server (Plan Forge as tools)"
 
-    MCP_DST_DIR="$PROJECT_PATH/mcp"
+    MCP_DST_DIR="$PROJECT_PATH/pforge-mcp"
     mkdir -p "$MCP_DST_DIR"
     cp "$MCP_SRC_DIR/server.mjs" "$MCP_DST_DIR/server.mjs"
     cp "$MCP_SRC_DIR/package.json" "$MCP_DST_DIR/package.json"
-    green "  COPY  mcp/server.mjs + package.json"
+    green "  COPY  pforge-mcp/server.mjs + package.json"
 
     # Generate .vscode/mcp.json for Copilot MCP integration
     VSCODE_MCP="$PROJECT_PATH/.vscode/mcp.json"
@@ -923,7 +923,7 @@ if [[ -d "$MCP_SRC_DIR" ]]; then
     "plan-forge": {
       "type": "stdio",
       "command": "node",
-      "args": ["mcp/server.mjs"],
+      "args": ["pforge-mcp/server.mjs"],
       "cwd": "${workspaceFolder}"
     }
   }
@@ -949,7 +949,7 @@ MCPEOF
     "plan-forge": {
       "type": "stdio",
       "command": "node",
-      "args": ["mcp/server.mjs"],
+      "args": ["pforge-mcp/server.mjs"],
       "cwd": "${workspaceFolder}"
     }
   }
@@ -959,7 +959,7 @@ MCPEOF
         fi
     fi
 
-    echo "  Run 'cd mcp && npm install' to install MCP dependencies"
+    echo "  Run 'cd pforge-mcp && npm install' to install MCP dependencies"
 fi
 
 # ─── Done ──────────────────────────────────────────────────────────────

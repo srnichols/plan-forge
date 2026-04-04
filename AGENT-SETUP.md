@@ -104,9 +104,9 @@ All checks must pass before proceeding to plan hardening.
 ```
 See [docs/plans/examples/plan-forge-validate.yml](docs/plans/examples/plan-forge-validate.yml) for the full workflow.
 
-**MCP server activation** — If `mcp/server.mjs` exists after setup, install its dependencies:
+**MCP server activation** — If `pforge-mcp/server.mjs` exists after setup, install its dependencies:
 ```bash
-cd mcp && npm install
+cd pforge-mcp && npm install
 ```
 This enables 13 forge tools (`forge_smith`, `forge_sweep`, `forge_diff`, `forge_run_plan`, `forge_cost_report`, etc.) as native MCP functions. The setup script already generated `.vscode/mcp.json` and `.claude/mcp.json` configs — `npm install` is the only manual step.
 

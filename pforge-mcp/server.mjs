@@ -9,9 +9,9 @@
  * commands. Zero business logic duplication — all logic stays in the CLI scripts.
  *
  * Usage:
- *   node mcp/server.mjs                        # stdio transport (default)
- *   node mcp/server.mjs --port 3100            # SSE transport
- *   node mcp/server.mjs --project /path/to/project
+ *   node pforge-mcp/server.mjs                        # stdio transport (default)
+ *   node pforge-mcp/server.mjs --port 3100            # SSE transport
+ *   node pforge-mcp/server.mjs --project /path/to/project
  */
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";

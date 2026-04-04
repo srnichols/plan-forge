@@ -529,9 +529,9 @@ Plan Forge installs **lifecycle hooks** (`.github/hooks/plan-forge.json`) that r
 
 ---
 
-## Autonomous Execution (v2.0)
+## Autonomous Execution
 
-Plan Forge v2.0 adds one-command plan execution with the `pforge run-plan` CLI and `forge_run_plan` MCP tool.
+Plan Forge includes one-command plan execution with the `pforge run-plan` CLI and `forge_run_plan` MCP tool.
 
 ### Execution Modes
 

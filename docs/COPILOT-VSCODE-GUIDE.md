@@ -114,7 +114,7 @@ The pipeline uses **4 sessions** to prevent context bleed. Here's exactly how to
 
 ### Session 2: Execution
 
-**v2.0 — Automated** (recommended):
+**Automatic execution** (recommended):
 ```bash
 # Full Auto — gh copilot CLI executes all slices
 pforge run-plan docs/plans/Phase-1-YOUR-PLAN.md
@@ -127,7 +127,7 @@ pforge run-plan --estimate docs/plans/Phase-1-YOUR-PLAN.md
 ```
 Monitor at `localhost:3100/dashboard` for live slice progress, cost tracking, and session replay.
 
-**Manual workflow** (still supported):
+**Manual execution** (step-by-step in Copilot Chat):
 1. **Start a NEW chat session**: Click `+` again (critical — don't reuse Session 1)
 2. **Select Agent mode**
 3. **Attach** `.github/prompts/step3-execute-slice.prompt.md` (Step 3)

@@ -101,19 +101,19 @@ When it says **"Plan hardened"** — Session 1 is done.
 
 ## Steps 3–4: Execute & Sweep
 
-**Option A — Full Auto** (recommended for v2.0):
+**Automatic execution** (recommended):
 ```bash
 pforge run-plan docs/plans/Phase-1-HEALTH-ENDPOINT-PLAN.md
 ```
-The orchestrator executes all slices automatically via `gh copilot` CLI, validates gates at every boundary, tracks tokens, and reports results. See the dashboard at `localhost:3100/dashboard` for live progress.
+The orchestrator executes all slices via `gh copilot` CLI, validates gates at every boundary, tracks tokens, and reports results. Monitor at `localhost:3100/dashboard` for live progress.
 
-**Option B — Assisted** (interactive):
+**Assisted execution** (interactive — you code, orchestrator validates):
 ```bash
 pforge run-plan --assisted docs/plans/Phase-1-HEALTH-ENDPOINT-PLAN.md
 ```
 The orchestrator prompts you to code each slice in VS Code, then validates the gates automatically.
 
-**Option C — Manual** (original workflow):
+**Manual execution** (step-by-step in Copilot Chat):
 1. **Start a NEW chat session** — click the `+` button in the chat panel (important!)
 2. Select **Agent Mode**
 3. Attach `.github/prompts/step3-execute-slice.prompt.md`

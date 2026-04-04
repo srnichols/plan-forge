@@ -484,6 +484,21 @@ function createExpressApp() {
     }
   });
 
+  // REST API: GET /api/replay/:runIdx/:sliceId — session replay log (Phase 5)
+  app.get("/api/replay/:runIdx/:sliceId", (req, res) => {
+    try {
+      const runsDir = resolve(PROJECT_DIR, ".forge", "runs");
+      if (!existsSync(runsDir)) return res.status(404).json({ error: "No runs" });
+      const dirs = readdirSync(runsDir, { withFileTypes: true })
+        .filter((d) => d.isDirectory()).map((d) => d.name).sort().reverse();
+      const runIdx = parseInt(req.params.runIdx, 10);
+      if (runIdx < 0 || runIdx >= dirs.length) return res.status(404).json({ error: "Run not found" });
+      const logPath = resolve(runsDir, dirs[runIdx], `slice-${req.params.sliceId}-log.txt`);
+      if (!existsSync(logPath)) return res.status(404).json({ error: "Log not found" });
+      res.json({ log: readFileSync(logPath, "utf-8") });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
   return app;
 }
 

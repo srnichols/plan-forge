@@ -28,7 +28,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - **Event Schema** (`mcp/EVENTS.md`) — documented event types: `run-started`, `slice-started`, `slice-completed`, `slice-failed`, `run-completed`, `run-aborted`
 - **Live orchestrator events** — when hub is running, `forge_run_plan` broadcasts slice lifecycle events to all connected WebSocket clients in real-time
 - **Dashboard** (`mcp/dashboard/`) — real-time monitoring UI at `localhost:3100/dashboard`. Vanilla JS + Tailwind CDN + Chart.js. No build step. Features: live slice progress cards, run history table, cost tracker with charts, quick actions panel (Smith, Sweep, Analyze, Status, Validate, Extensions)
-- **REST API** (C6) — Express endpoints: `GET /api/status`, `GET /api/runs`, `GET /api/config`, `POST /api/config`, `GET /api/cost`, `POST /api/tool/:name`, `GET /api/hub`
+- **REST API** (C6) — Express endpoints: `GET /api/status`, `GET /api/runs`, `GET /api/config`, `POST /api/config`, `GET /api/cost`, `POST /api/tool/:name`, `GET /api/hub`, `GET /api/replay/:run/:slice`
+- **Session Replay** — dashboard tab to browse and filter agent session logs per slice (errors, file ops, full log)
+- **Extension Marketplace UI** — visual catalog browser with search/filter
+- **Notification Center** — bell icon with persistent notifications (localStorage), auto-notifies on run-complete and slice-failed
+- **Config Editor** — visual editor for `.forge.json` (agents, model routing) with save confirmation
 - **Execution modes** — Full Auto (`gh copilot` CLI with any model) and Assisted (human codes in VS Code, orchestrator validates gates)
 - **`.forge/SCHEMA.md`** — documents all `.forge/` files with formats, schemas, and ownership
 - **Extension ecosystem** — `pforge ext search`, `pforge ext add <name>`, `pforge ext info <name>` commands with `extensions/catalog.json` community catalog (Spec Kit catalog-compatible format)

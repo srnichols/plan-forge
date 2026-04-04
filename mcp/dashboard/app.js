@@ -36,6 +36,7 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
     // Load data for the tab
     if (btn.dataset.tab === "runs") loadRuns();
     if (btn.dataset.tab === "cost") loadCost();
+    if (tabLoadHooks[btn.dataset.tab]) tabLoadHooks[btn.dataset.tab]();
   });
 });
 
@@ -351,6 +352,244 @@ async function runAction(tool, args) {
 // Make runAction available globally for onclick handlers
 window.runAction = runAction;
 
+// ─── Session Replay (Phase 5) ─────────────────────────────────────────
+let replayRuns = [];
+
+async function loadReplayRuns() {
+  try {
+    const res = await fetch(`${API_BASE}/api/runs`);
+    replayRuns = await res.json();
+    const select = document.getElementById("replay-run-select");
+    select.innerHTML = replayRuns.map((r, i) => {
+      const date = r.startTime ? new Date(r.startTime).toLocaleDateString() : "—";
+      return `<option value="${i}">${date} — ${shortName(r.plan)}</option>`;
+    }).join("");
+    if (replayRuns.length > 0) loadReplaySlices();
+  } catch { /* ignore */ }
+}
+
+function loadReplaySlices() {
+  const idx = document.getElementById("replay-run-select").value;
+  const run = replayRuns[idx];
+  if (!run?.sliceResults) return;
+  const select = document.getElementById("replay-slice-select");
+  select.innerHTML = run.sliceResults
+    .filter((s) => s.status !== "skipped")
+    .map((s) => `<option value="${s.number || s.sliceId}">Slice ${s.number || s.sliceId}: ${s.title || ""}</option>`)
+    .join("");
+  loadReplayLog();
+}
+
+async function loadReplayLog() {
+  const runIdx = document.getElementById("replay-run-select").value;
+  const sliceId = document.getElementById("replay-slice-select").value;
+  const run = replayRuns[runIdx];
+  if (!run) return;
+
+  // Derive run directory name from startTime + plan name
+  const logEl = document.getElementById("replay-log");
+  try {
+    const res = await fetch(`${API_BASE}/api/replay/${runIdx}/${sliceId}`);
+    if (res.ok) {
+      const data = await res.json();
+      logEl.textContent = data.log || "No log content available.";
+    } else {
+      logEl.textContent = "Log not available for this slice.";
+    }
+  } catch {
+    logEl.textContent = "Failed to load session log.";
+  }
+}
+
+function filterReplay(mode) {
+  const logEl = document.getElementById("replay-log");
+  const full = logEl.dataset.fullLog || logEl.textContent;
+  if (!logEl.dataset.fullLog) logEl.dataset.fullLog = full;
+
+  if (mode === "all") {
+    logEl.textContent = full;
+  } else if (mode === "error") {
+    logEl.textContent = full.split("\n").filter((l) => /error|fail|❌|ERR/i.test(l)).join("\n") || "No errors found.";
+  } else if (mode === "file") {
+    logEl.textContent = full.split("\n").filter((l) => /creat|modif|write|read|file/i.test(l)).join("\n") || "No file operations found.";
+  }
+}
+
+window.loadReplaySlices = loadReplaySlices;
+window.loadReplayLog = loadReplayLog;
+window.filterReplay = filterReplay;
+
+// ─── Extension Marketplace (Phase 5) ──────────────────────────────────
+let catalogData = [];
+
+async function loadExtensions() {
+  try {
+    const res = await fetch(`${API_BASE}/api/tool/ext`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ args: "search" }),
+    });
+    const data = await res.json();
+    // Parse the CLI output into cards (best-effort)
+    const output = data.output || "";
+    catalogData = output.split("\n").filter((l) => l.trim()).map((l) => ({ raw: l }));
+    renderExtensions(catalogData);
+  } catch {
+    document.getElementById("ext-cards").innerHTML = '<div class="text-gray-500 text-center py-12">Failed to load catalog</div>';
+  }
+}
+
+function renderExtensions(items) {
+  const container = document.getElementById("ext-cards");
+  if (items.length === 0) {
+    container.innerHTML = '<div class="text-gray-500 text-center py-12">No extensions found</div>';
+    return;
+  }
+  container.innerHTML = items.map((ext) => `
+    <div class="bg-gray-800 rounded-lg p-4 border border-gray-700 hover:border-gray-600 transition">
+      <p class="text-sm text-gray-300">${ext.raw}</p>
+    </div>
+  `).join("");
+}
+
+function filterExtensions() {
+  const q = document.getElementById("ext-search").value.toLowerCase();
+  renderExtensions(q ? catalogData.filter((e) => e.raw.toLowerCase().includes(q)) : catalogData);
+}
+
+window.filterExtensions = filterExtensions;
+
+// ─── Notification Center (Phase 5) ────────────────────────────────────
+let notifications = JSON.parse(localStorage.getItem("pf-notifications") || "[]");
+
+function addNotification(text, type = "info") {
+  const notif = { text, type, time: new Date().toISOString(), read: false };
+  notifications.unshift(notif);
+  if (notifications.length > 50) notifications = notifications.slice(0, 50);
+  localStorage.setItem("pf-notifications", JSON.stringify(notifications));
+  renderNotifications();
+}
+
+function renderNotifications() {
+  const unread = notifications.filter((n) => !n.read).length;
+  const countEl = document.getElementById("notif-count");
+  if (unread > 0) {
+    countEl.textContent = unread;
+    countEl.classList.remove("hidden");
+  } else {
+    countEl.classList.add("hidden");
+  }
+
+  const listEl = document.getElementById("notif-list");
+  if (notifications.length === 0) {
+    listEl.innerHTML = '<p class="text-gray-500 text-center py-4">No notifications</p>';
+    return;
+  }
+  listEl.innerHTML = notifications.slice(0, 20).map((n, i) => {
+    const icon = n.type === "success" ? "✅" : n.type === "error" ? "❌" : "ℹ️";
+    const opacity = n.read ? "opacity-50" : "";
+    const time = new Date(n.time).toLocaleTimeString();
+    return `<div class="flex items-start gap-2 py-2 border-b border-gray-700 ${opacity} cursor-pointer" onclick="markRead(${i})">
+      <span>${icon}</span>
+      <div class="flex-1 min-w-0">
+        <p class="text-xs truncate">${n.text}</p>
+        <p class="text-xs text-gray-500">${time}</p>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function toggleNotifications() {
+  document.getElementById("notif-panel").classList.toggle("hidden");
+  notifications.forEach((n) => (n.read = true));
+  localStorage.setItem("pf-notifications", JSON.stringify(notifications));
+  renderNotifications();
+}
+
+function markRead(idx) {
+  if (notifications[idx]) notifications[idx].read = true;
+  localStorage.setItem("pf-notifications", JSON.stringify(notifications));
+  renderNotifications();
+}
+
+function clearNotifications() {
+  notifications = [];
+  localStorage.setItem("pf-notifications", "[]");
+  renderNotifications();
+}
+
+window.toggleNotifications = toggleNotifications;
+window.clearNotifications = clearNotifications;
+window.markRead = markRead;
+
+// Hook notifications into WS events
+const origHandleEvent = handleEvent;
+const hookedHandleEvent = function (event) {
+  origHandleEvent(event);
+  if (event.type === "run-completed") {
+    const d = event.data || event;
+    addNotification(`Run complete: ${d.report || d.status}`, d.status === "completed" ? "success" : "error");
+  } else if (event.type === "slice-failed") {
+    const d = event.data || event;
+    addNotification(`Slice ${d.sliceId} failed: ${d.error || ""}`, "error");
+  }
+};
+// Monkey-patch handleEvent for notification hooks
+window._origHandleEvent = handleEvent;
+
+// ─── Config Editor (Phase 5) ──────────────────────────────────────────
+let currentConfig = {};
+
+async function loadConfig() {
+  try {
+    const res = await fetch(`${API_BASE}/api/config`);
+    currentConfig = await res.json();
+    document.getElementById("cfg-preset").value = currentConfig.preset || "";
+    document.getElementById("cfg-version").value = currentConfig.templateVersion || "";
+    document.getElementById("cfg-model-default").value = currentConfig.modelRouting?.default || "auto";
+
+    // Agents checkboxes
+    const agentsEl = document.getElementById("cfg-agents");
+    const allAgents = ["claude", "cursor", "codex"];
+    const active = currentConfig.agents || [];
+    agentsEl.innerHTML = allAgents.map((a) => `
+      <label class="flex items-center gap-1 bg-gray-700 px-3 py-1 rounded text-sm cursor-pointer">
+        <input type="checkbox" class="cfg-agent-checkbox" value="${a}" ${active.includes(a) ? "checked" : ""}> ${a}
+      </label>
+    `).join("");
+
+    document.getElementById("cfg-status").textContent = "Configuration loaded.";
+  } catch (err) {
+    document.getElementById("cfg-status").textContent = `Error: ${err.message}`;
+  }
+}
+
+async function saveConfig() {
+  if (!confirm("Save configuration changes to .forge.json?")) return;
+  try {
+    const agents = [...document.querySelectorAll(".cfg-agent-checkbox:checked")].map((c) => c.value);
+    const modelDefault = document.getElementById("cfg-model-default").value;
+    const updated = {
+      ...currentConfig,
+      agents,
+      modelRouting: { ...(currentConfig.modelRouting || {}), default: modelDefault },
+    };
+    const res = await fetch(`${API_BASE}/api/config`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updated),
+    });
+    const result = await res.json();
+    document.getElementById("cfg-status").textContent = result.success ? "Saved successfully." : `Error: ${result.error}`;
+    addNotification("Configuration saved", "success");
+  } catch (err) {
+    document.getElementById("cfg-status").textContent = `Error: ${err.message}`;
+  }
+}
+
+window.loadConfig = loadConfig;
+window.saveConfig = saveConfig;
+
 // ─── Init ─────────────────────────────────────────────────────────────
 // Load initial status
 fetch(`${API_BASE}/api/status`)
@@ -366,3 +605,13 @@ fetch(`${API_BASE}/api/status`)
 
 // Connect WebSocket
 connectWebSocket();
+
+// Load notifications from localStorage
+renderNotifications();
+
+// Tab load hooks
+const tabLoadHooks = {
+  replay: loadReplayRuns,
+  extensions: loadExtensions,
+  config: loadConfig,
+};

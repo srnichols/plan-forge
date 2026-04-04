@@ -55,6 +55,7 @@ COMMANDS:
   ext remove <name> Remove an installed extension
   update [source]   Update framework files from Plan Forge source (preserves customizations)
   analyze <plan>    Cross-artifact analysis — requirement traceability, test coverage, scope compliance
+  run-plan <plan>   Execute a hardened plan — spawn CLI workers, validate at every boundary, track tokens
   smith             Inspect your forge — environment, VS Code config, setup health, and common problems
   help              Show this help message
 
@@ -70,6 +71,9 @@ EXAMPLES:
   ./pforge.sh new-phase user-auth
   ./pforge.sh new-phase user-auth --dry-run
   ./pforge.sh branch docs/plans/Phase-1-USER-AUTH-PLAN.md
+  ./pforge.sh run-plan docs/plans/Phase-1-AUTH-PLAN.md
+  ./pforge.sh run-plan docs/plans/Phase-1-AUTH-PLAN.md --estimate
+  ./pforge.sh run-plan docs/plans/Phase-1-AUTH-PLAN.md --assisted
   ./pforge.sh ext list
   ./pforge.sh update ../plan-forge
   ./pforge.sh update --dry-run
@@ -1756,6 +1760,73 @@ cmd_doctor() {
     fi
 }
 
+# ─── Command: run-plan ─────────────────────────────────────────────────
+cmd_run_plan() {
+    if [ $# -lt 1 ]; then
+        echo "ERROR: Missing plan path" >&2
+        echo "Usage: pforge run-plan <plan-file> [--estimate] [--assisted] [--model <name>] [--resume-from <N>] [--dry-run]" >&2
+        exit 1
+    fi
+
+    local plan_path="$1"
+    shift
+    local full_plan_path="$REPO_ROOT/$plan_path"
+
+    if [ ! -f "$full_plan_path" ]; then
+        echo "ERROR: Plan file not found: $plan_path" >&2
+        exit 1
+    fi
+
+    # Parse flags
+    local estimate=false
+    local assisted=false
+    local dry_run=false
+    local model=""
+    local resume_from=""
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --estimate)     estimate=true ;;
+            --assisted)     assisted=true ;;
+            --dry-run)      dry_run=true ;;
+            --model)        shift; model="$1" ;;
+            --resume-from)  shift; resume_from="$1" ;;
+        esac
+        shift
+    done
+
+    local mode="auto"
+    if [ "$assisted" = true ]; then mode="assisted"; fi
+
+    print_manual_steps "run-plan" \
+        "Parse plan to extract slices and validation gates" \
+        "Execute each slice via CLI worker (gh copilot) or human (assisted mode)" \
+        "Validate build/test gates at each slice boundary" \
+        "Write results to .forge/runs/<timestamp>/"
+
+    # Build node args
+    local node_args=("$REPO_ROOT/mcp/orchestrator.mjs" "--run" "$full_plan_path" "--mode" "$mode")
+    if [ "$estimate" = true ]; then node_args+=("--estimate"); fi
+    if [ "$dry_run" = true ]; then node_args+=("--dry-run"); fi
+    if [ -n "$model" ]; then node_args+=("--model" "$model"); fi
+    if [ -n "$resume_from" ]; then node_args+=("--resume-from" "$resume_from"); fi
+
+    echo ""
+    if [ "$estimate" = true ]; then
+        echo "Estimating cost for: $plan_path"
+    elif [ "$dry_run" = true ]; then
+        echo "Dry run for: $plan_path"
+    elif [ "$assisted" = true ]; then
+        echo "Starting assisted execution: $plan_path"
+        echo "You code in VS Code, orchestrator validates gates."
+    else
+        echo "Starting full auto execution: $plan_path"
+    fi
+    echo ""
+
+    node "${node_args[@]}"
+}
+
 # ─── Command Router ────────────────────────────────────────────────────
 COMMAND="${1:-help}"
 shift 2>/dev/null || true
@@ -1773,6 +1844,7 @@ case "$COMMAND" in
     ext)          cmd_ext "$@" ;;
     update)       cmd_update "$@" ;;
     analyze)      cmd_analyze "$@" ;;
+    run-plan)     cmd_run_plan "$@" ;;
     smith)        cmd_smith ;;
     help|--help)  show_help ;;
     *)

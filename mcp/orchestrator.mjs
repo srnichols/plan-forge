@@ -1070,15 +1070,47 @@ async function selfTest() {
 
 const args = process.argv.slice(2);
 
+function getArg(name) {
+  const idx = args.indexOf(name);
+  return idx >= 0 && idx + 1 < args.length ? args[idx + 1] : null;
+}
+
 if (args.includes("--test")) {
   selfTest();
 } else if (args.includes("--parse")) {
-  const planIdx = args.indexOf("--parse") + 1;
-  const planPath = args[planIdx];
+  const planPath = getArg("--parse");
   if (!planPath) {
     console.error("Usage: node orchestrator.mjs --parse <plan-path>");
     process.exit(1);
   }
   const plan = parsePlan(planPath);
   console.log(JSON.stringify(plan, null, 2));
+} else if (args.includes("--run")) {
+  const planPath = getArg("--run");
+  if (!planPath) {
+    console.error("Usage: node orchestrator.mjs --run <plan-path> [options]");
+    process.exit(1);
+  }
+
+  const mode = getArg("--mode") || "auto";
+  const model = getArg("--model") || null;
+  const resumeFrom = getArg("--resume-from") ? Number(getArg("--resume-from")) : null;
+  const estimate = args.includes("--estimate");
+  const dryRun = args.includes("--dry-run");
+
+  try {
+    const result = await runPlan(planPath, {
+      cwd: process.cwd(),
+      mode,
+      model,
+      resumeFrom,
+      estimate,
+      dryRun,
+    });
+    console.log(JSON.stringify(result, null, 2));
+    process.exit(result.status === "failed" ? 1 : 0);
+  } catch (err) {
+    console.error(`Orchestrator error: ${err.message}`);
+    process.exit(1);
+  }
 }

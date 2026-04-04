@@ -71,6 +71,7 @@ function Show-Help {
     Write-Host "  ext remove <name> Remove an installed extension"
     Write-Host "  update [source]   Update framework files from Plan Forge source (preserves customizations)"
     Write-Host "  analyze <plan>    Cross-artifact analysis — requirement traceability, test coverage, scope compliance"
+    Write-Host "  run-plan <plan>   Execute a hardened plan — spawn CLI workers, validate at every boundary, track tokens"
     Write-Host "  smith             Inspect your forge — environment, VS Code config, setup health, and common problems"
     Write-Host "  help              Show this help message"
     Write-Host ""
@@ -87,6 +88,9 @@ function Show-Help {
     Write-Host "  .\pforge.ps1 new-phase user-auth"
     Write-Host "  .\pforge.ps1 new-phase user-auth --dry-run"
     Write-Host "  .\pforge.ps1 branch docs/plans/Phase-1-USER-AUTH-PLAN.md"
+    Write-Host "  .\pforge.ps1 run-plan docs/plans/Phase-1-AUTH-PLAN.md"
+    Write-Host "  .\pforge.ps1 run-plan docs/plans/Phase-1-AUTH-PLAN.md --estimate"
+    Write-Host "  .\pforge.ps1 run-plan docs/plans/Phase-1-AUTH-PLAN.md --assisted"
     Write-Host "  .\pforge.ps1 ext list"
     Write-Host "  .\pforge.ps1 update ../plan-forge"
     Write-Host "  .\pforge.ps1 update --dry-run"
@@ -2096,6 +2100,74 @@ function Invoke-Smith {
     }
 }
 
+# ─── Command: run-plan ─────────────────────────────────────────────────
+function Invoke-RunPlan {
+    if ($Arguments.Count -lt 1) {
+        Write-Host "ERROR: Missing plan path" -ForegroundColor Red
+        Write-Host "Usage: pforge run-plan <plan-file> [--estimate] [--assisted] [--model <name>] [--resume-from <N>] [--dry-run]" -ForegroundColor Yellow
+        exit 1
+    }
+
+    $planPath = $Arguments[0]
+    $fullPlanPath = Join-Path $RepoRoot $planPath
+    if (-not (Test-Path $fullPlanPath)) {
+        Write-Host "ERROR: Plan file not found: $planPath" -ForegroundColor Red
+        exit 1
+    }
+
+    # Parse flags
+    $estimate   = $Arguments -contains '--estimate'
+    $assisted   = $Arguments -contains '--assisted'
+    $dryRun     = $Arguments -contains '--dry-run'
+    $model      = $null
+    $resumeFrom = $null
+
+    for ($i = 1; $i -lt $Arguments.Count; $i++) {
+        if ($Arguments[$i] -eq '--model' -and ($i + 1) -lt $Arguments.Count) {
+            $model = $Arguments[$i + 1]
+        }
+        if ($Arguments[$i] -eq '--resume-from' -and ($i + 1) -lt $Arguments.Count) {
+            $resumeFrom = $Arguments[$i + 1]
+        }
+    }
+
+    $mode = if ($assisted) { 'assisted' } else { 'auto' }
+
+    Write-ManualSteps "run-plan" @(
+        "Parse plan to extract slices and validation gates"
+        "Execute each slice via CLI worker (gh copilot) or human (assisted mode)"
+        "Validate build/test gates at each slice boundary"
+        "Write results to .forge/runs/<timestamp>/"
+    )
+
+    # Build node args
+    $nodeArgs = @(
+        (Join-Path $RepoRoot 'mcp/orchestrator.mjs'),
+        '--run', $fullPlanPath,
+        '--mode', $mode
+    )
+    if ($estimate)   { $nodeArgs += '--estimate' }
+    if ($dryRun)     { $nodeArgs += '--dry-run' }
+    if ($model)      { $nodeArgs += '--model'; $nodeArgs += $model }
+    if ($resumeFrom) { $nodeArgs += '--resume-from'; $nodeArgs += $resumeFrom }
+
+    # Delegate to orchestrator
+    Write-Host ""
+    if ($estimate) {
+        Write-Host "Estimating cost for: $planPath" -ForegroundColor Cyan
+    } elseif ($dryRun) {
+        Write-Host "Dry run for: $planPath" -ForegroundColor Cyan
+    } elseif ($assisted) {
+        Write-Host "Starting assisted execution: $planPath" -ForegroundColor Cyan
+        Write-Host "You code in VS Code, orchestrator validates gates." -ForegroundColor DarkGray
+    } else {
+        Write-Host "Starting full auto execution: $planPath" -ForegroundColor Cyan
+    }
+    Write-Host ""
+
+    & node @nodeArgs
+}
+
 # ─── Command Router ────────────────────────────────────────────────────
 switch ($Command) {
     'init'         { Invoke-Init }
@@ -2110,6 +2182,7 @@ switch ($Command) {
     'ext'          { Invoke-Ext }
     'update'       { Invoke-Update }
     'analyze'      { Invoke-Analyze }
+    'run-plan'     { Invoke-RunPlan }
     'smith'        { Invoke-Smith }
     'help'         { Show-Help }
     ''             { Show-Help }

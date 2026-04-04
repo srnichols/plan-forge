@@ -66,6 +66,63 @@ Data-driven pipeline optimization from historical execution data.
 
 ---
 
+## v2.x — Autonomous Execution (Feature Branch: `feature/v2.0-autonomous-execution`)
+
+> **Vision**: "Kick it off and let the system run." One command executes an entire hardened plan — spawning worker sessions, routing to optimal models, validating at every boundary, and reporting back. Everything from v1.x still works — this layers automation on top.
+
+### v2.0 — `forge_run_plan` (Sequential Orchestration)
+
+Built on the existing `mcp/server.mjs` Node.js process — no new services.
+
+- **`forge_run_plan <plan>`** MCP tool + `pforge run-plan <plan>` CLI command
+- Reads hardened plan → extracts slices → executes sequentially via Copilot CLI / Claude Code
+- **Model routing config** in `.forge.json` — specify model per step type (specify→Claude, execute→Codex, review→Claude)
+- **File-based status** — `.forge/runs/<timestamp>/` with per-slice results (pass/fail, duration, output)
+- **Validation gates enforced** — build + test must pass at each slice boundary before proceeding
+- **OpenBrain integration** — workers search before slices, capture after (existing hooks)
+- **Abort/retry** — `forge_abort` to stop, automatic retry on transient failures
+- All existing manual workflows continue to work unchanged
+
+### v2.1 — WebSocket Hub (Real-Time Communication)
+
+Add lightweight inter-session communication to the MCP server.
+
+- **WebSocket server** (`ws` package) embedded in `mcp/server.mjs` — no separate service
+- **Event bus** — sessions publish events (`slice-complete`, `build-failed`, `review-passed`)
+- **Session registry** — tracks active workers, their model, slice assignment, status
+- **`forge_plan_status`** MCP tool — live progress view from any connected session
+- **Orchestrator dashboard** — real-time terminal output of all worker sessions
+
+### v2.2 — Parallel Execution
+
+Execute independent slices simultaneously for faster plan completion.
+
+- **`[P]`-tagged slices** in hardened plans execute in parallel (already part of plan format)
+- **Worker pool** — configurable max parallelism (default: 3 concurrent sessions)
+- **Merge checkpoints** — parallel branches converge at defined sync points
+- **Conflict detection** — warn if parallel slices touch overlapping files
+
+### v2.3 — OpenClaw Bridge
+
+Connect autonomous execution to the unified system architecture.
+
+- **Trigger from anywhere** — Slack, WhatsApp, Telegram, Discord, phone, terminal
+- **Progress notifications** — "Slice 3 of 8 complete. Build passed. Score: 91."
+- **Approval gates** — "Phase 7 ready to ship. Approve?" → reply "yes" from your phone
+- **OpenBrain context** — orchestrator loads full project history before spawning workers
+
+### v3.0 — Multi-Agent Orchestration
+
+Full autonomous development system.
+
+- **Agent-per-slice routing** — different AI models for different slice types based on learned performance data
+- **Auto-escalation** — if a slice fails 3x on Codex, re-route to Claude automatically
+- **CI/CD integration** — orchestrator triggers GitHub Actions, waits for green, proceeds
+- **Team mode** — multiple orchestrators coordinate across developers, avoiding merge conflicts
+- **Cost optimization** — historical data drives model selection for best quality/cost ratio
+
+---
+
 ## Backlog
 
 These are planned but not yet prioritized into a version:

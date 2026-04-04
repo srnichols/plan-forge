@@ -1040,9 +1040,11 @@
 
 5. Run .\pforge.ps1 smith to inspect the forge and confirm all checks pass.
 
-6. If specs/ or memory/constitution.md exist (Spec Kit project), note that Step 0 will auto-detect and offer to import them.
+6. If mcp/server.mjs was installed, run: cd mcp &amp;&amp; npm install (activates 8 forge MCP tools).
 
-7. Show me a summary of what was installed and any issues found.</code></pre>
+7. If specs/ or memory/constitution.md exist (Spec Kit project), note that Step 0 will auto-detect and offer to import them.
+
+8. Show me a summary of what was installed and any issues found.</code></pre>
             </div>
             <p class="text-xs text-slate-600 mt-3 text-center">Works with GitHub Copilot (Agent Mode), Claude Code, Cursor, or any AI tool with terminal access.</p>
           </div>
@@ -1228,7 +1230,8 @@ Follow the instructions exactly:
 3. Run setup.ps1 (or setup.sh) non-interactively with the correct -Preset and -Agent flags plus -Force
 4. Customize copilot-instructions.md with this project's actual details
 5. Run pforge smith to validate the setup
-6. Note any Spec Kit artifacts found (specs/, memory/constitution.md)
+6. If mcp/server.mjs exists, run: cd mcp &amp;&amp; npm install (activates MCP tools)
+7. Note any Spec Kit artifacts found (specs/, memory/constitution.md)
 
 Repo: https://github.com/srnichols/plan-forge
 Target project: (current directory)</code></pre>

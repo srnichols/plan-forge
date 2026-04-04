@@ -639,12 +639,16 @@ export async function runPlan(planPath, options = {}) {
     abortController = null,
   } = options;
 
+  // Load model routing from .forge.json (Slice 5)
+  const modelRouting = loadModelRouting(cwd);
+  const effectiveModel = model || modelRouting.default || null;
+
   // Parse plan
   const plan = parsePlan(planPath);
 
   // Estimation mode — return without executing
   if (estimate) {
-    return buildEstimate(plan, model);
+    return buildEstimate(plan, effectiveModel);
   }
 
   // Dry run — parse and validate only
@@ -661,7 +665,8 @@ export async function runPlan(planPath, options = {}) {
   const runMeta = {
     plan: planPath,
     startTime: new Date().toISOString(),
-    model: model || "auto",
+    model: effectiveModel || "auto",
+    modelRouting,
     mode,
     sliceCount: plan.slices.length,
     executionOrder: plan.dag.order,
@@ -678,7 +683,7 @@ export async function runPlan(planPath, options = {}) {
   const results = await scheduler.execute(
     plan.dag.nodes,
     plan.dag.order,
-    async (slice) => executeSlice(slice, { cwd, model, mode, runDir }),
+    async (slice) => executeSlice(slice, { cwd, model: effectiveModel, modelRouting, mode, runDir }),
     { abortSignal, resumeFrom: resumeFrom ? String(resumeFrom) : null },
   );
 
@@ -692,11 +697,43 @@ export async function runPlan(planPath, options = {}) {
 }
 
 /**
+ * Load model routing configuration from .forge.json.
+ * Schema: { "modelRouting": { "execute": "gpt-5.2-codex", "review": "claude-sonnet-4.6", "default": "auto" } }
+ * Returns the modelRouting object, or defaults if not configured.
+ */
+function loadModelRouting(cwd) {
+  const configPath = resolve(cwd, ".forge.json");
+  try {
+    if (existsSync(configPath)) {
+      const config = JSON.parse(readFileSync(configPath, "utf-8"));
+      if (config.modelRouting && typeof config.modelRouting === "object") {
+        return config.modelRouting;
+      }
+    }
+  } catch {
+    // Invalid JSON or missing file — use defaults
+  }
+  return { default: "auto" };
+}
+
+/**
+ * Resolve which model to use for a given slice based on routing config.
+ * Priority: CLI override > slice-type routing > default routing > null (auto)
+ */
+function resolveModel(cliModel, modelRouting, _slice) {
+  if (cliModel && cliModel !== "auto") return cliModel;
+  // Future: match slice type (execute/review/test) to routing keys
+  if (modelRouting.default && modelRouting.default !== "auto") return modelRouting.default;
+  return null; // Let CLI worker pick default
+}
+
+/**
  * Execute a single slice — spawn worker + run validation gates.
  */
 async function executeSlice(slice, options) {
-  const { cwd, model, mode, runDir } = options;
+  const { cwd, model, modelRouting = {}, mode, runDir } = options;
   const startTime = Date.now();
+  const resolvedModel = resolveModel(model, modelRouting, slice);
 
   const sliceInstructions = buildSlicePrompt(slice);
   let workerResult = null;
@@ -713,7 +750,7 @@ async function executeSlice(slice, options) {
   } else {
     // Full Auto mode: spawn worker
     try {
-      workerResult = await spawnWorker(sliceInstructions, { model, cwd });
+      workerResult = await spawnWorker(sliceInstructions, { model: resolvedModel, cwd });
     } catch (err) {
       return {
         status: "failed",

@@ -2075,6 +2075,48 @@ function Invoke-Smith {
     }
 
     # ═══════════════════════════════════════════════════════════════
+    # 6. ORCHESTRATOR STATUS
+    # ═══════════════════════════════════════════════════════════════
+    Write-Host ""
+    Write-Host "Orchestrator:" -ForegroundColor White
+
+    $runsDir = Join-Path $RepoRoot ".forge/runs"
+    if (Test-Path $runsDir) {
+        $runDirs = Get-ChildItem -Path $runsDir -Directory | Sort-Object Name -Descending
+        if ($runDirs.Count -gt 0) {
+            $latestRun = $runDirs[0]
+            $summaryPath = Join-Path $latestRun.FullName "summary.json"
+            if (Test-Path $summaryPath) {
+                $summary = Get-Content $summaryPath -Raw | ConvertFrom-Json
+                $runStatus = $summary.status
+                $passed = $summary.results.passed
+                $failed = $summary.results.failed
+                $report = $summary.report
+                if ($runStatus -eq 'completed') {
+                    Doctor-Pass "Last run: $report"
+                } else {
+                    Doctor-Warn "Last run: $runStatus ($passed passed, $failed failed)"
+                }
+            } else {
+                Doctor-Warn "Last run has no summary (may be in-progress)" "Check .forge/runs/ for details"
+            }
+            Doctor-Pass "$($runDirs.Count) run(s) in .forge/runs/"
+        } else {
+            Doctor-Pass "No runs yet — use 'pforge run-plan <plan>' to execute a plan"
+        }
+    } else {
+        Doctor-Pass "Orchestrator ready — use 'pforge run-plan <plan>' to execute a plan"
+    }
+
+    # Check orchestrator.mjs exists
+    $orchestratorPath = Join-Path $RepoRoot "mcp/orchestrator.mjs"
+    if (Test-Path $orchestratorPath) {
+        Doctor-Pass "mcp/orchestrator.mjs present"
+    } else {
+        Doctor-Warn "mcp/orchestrator.mjs not found" "Run setup again or update from Plan Forge source"
+    }
+
+    # ═══════════════════════════════════════════════════════════════
     # SUMMARY
     # ═══════════════════════════════════════════════════════════════
     Write-Host ""

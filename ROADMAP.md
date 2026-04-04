@@ -71,21 +71,22 @@ Merged into v2.0–v2.1 — token tracking, cost estimation, and historical metr
 
 > **Vision**: "Kick it off and let the system run." One command executes an entire hardened plan — spawning worker sessions, routing to optimal models, validating at every boundary, and reporting back. Everything from v1.x still works — this layers automation on top.
 
-### v2.0 — `forge_run_plan` (Sequential Orchestration)
+### v2.0 — `forge_run_plan` (DAG-Based Orchestration) 🚧
 
 Built on the existing `mcp/server.mjs` Node.js process — no new services.
 
-- **`forge_run_plan <plan>`** MCP tool + `pforge run-plan <plan>` CLI command
-- Reads hardened plan → extracts slices → executes sequentially via Copilot CLI / Claude Code
-- **Model routing config** in `.forge.json` — specify model per step type (specify→Claude, execute→Codex, review→Claude)
-- **File-based status** — `.forge/runs/<timestamp>/` with per-slice results (pass/fail, duration, output)
-- **Validation gates enforced** — build + test must pass at each slice boundary before proceeding
-- **OpenBrain integration** — workers search before slices, capture after (existing hooks)
-- **Abort/retry** — `forge_abort` to stop, automatic retry on transient failures
-- **Token tracking** — log actual token usage per slice/model to `.forge/runs/` (feeds v2.1 cost tracker + trend charts)
-- **Cost estimation** — predict token cost before running based on plan structure + historical data
-- **Plan complexity scoring** — auto-recommend pipeline depth (skip/light/full) from plan analysis
-- All existing manual workflows continue to work unchanged
+- ✅ **CLI Spawning Spike** — `gh copilot` CLI confirmed as primary worker (non-interactive, context-aware, multi-model)
+- ✅ **DAG-based orchestration engine** (`mcp/orchestrator.mjs`) — plan parser, topological sort, pluggable scheduler, event emitter (DI)
+- ✅ **`forge_run_plan <plan>`** MCP tool + `pforge run-plan <plan>` CLI command
+- ✅ **Two execution modes**: Full Auto (`gh copilot` with any model) and Assisted (human + automated gates)
+- ✅ **Model routing config** in `.forge.json` — specify model per step type
+- ✅ **File-based status** — `.forge/runs/<timestamp>/` with per-slice results, session logs, tokens
+- ✅ **Validation gates enforced** — build + test must pass at each slice boundary
+- ✅ **Abort/status** — `forge_abort` to stop, `forge_plan_status` for progress
+- ✅ **Token tracking** — parsed from JSONL output, logged per slice/model
+- ✅ **Cost estimation** — `--estimate` flag predicts tokens and cost before running
+- ✅ **Auto-sweep + auto-analyze** — runs after all slices pass, scores in summary
+- ✅ **`.forge/SCHEMA.md`** — documents all `.forge/` files
 
 ### v2.1 — WebSocket Hub + Dashboard (Real-Time Communication)
 

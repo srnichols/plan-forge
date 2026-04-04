@@ -21,13 +21,18 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { execSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { resolve, join } from "node:path";
+import { parsePlan, runPlan, detectWorkers } from "./orchestrator.mjs";
 
 // ─── Config ───────────────────────────────────────────────────────────
 const PROJECT_DIR = process.env.PLAN_FORGE_PROJECT || process.argv.find((a, i) => process.argv[i - 1] === "--project") || process.cwd();
 const IS_WINDOWS = process.platform === "win32";
 const PFORGE = IS_WINDOWS ? "powershell.exe -NoProfile -ExecutionPolicy Bypass -File pforge.ps1" : "bash pforge.sh";
+
+// ─── Orchestrator State ───────────────────────────────────────────────
+let activeAbortController = null;
+let activeRunPromise = null;
 
 // ─── Helpers ──────────────────────────────────────────────────────────
 function runPforge(args, cwd = PROJECT_DIR) {
@@ -160,6 +165,44 @@ const TOOLS = [
       required: ["plan"],
     },
   },
+  {
+    name: "forge_run_plan",
+    description: "Execute a hardened plan — spawn CLI workers for each slice, validate at every boundary, track tokens. Supports Full Auto (gh copilot CLI) and Assisted (human + automated gates) modes. Use --estimate for cost prediction without executing.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        plan: { type: "string", description: "Path to the hardened plan file (e.g., docs/plans/Phase-1-AUTH-PLAN.md)" },
+        mode: { type: "string", enum: ["auto", "assisted"], description: "Execution mode: 'auto' (CLI worker) or 'assisted' (human + gates). Default: auto" },
+        model: { type: "string", description: "Model override (e.g., claude-sonnet-4.6, gpt-5.2-codex). Default: auto" },
+        estimate: { type: "boolean", description: "If true, return cost estimate without executing" },
+        resumeFrom: { type: "number", description: "Slice number to resume from (skips completed slices)" },
+        dryRun: { type: "boolean", description: "If true, parse and validate plan without executing" },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+      required: ["plan"],
+    },
+  },
+  {
+    name: "forge_abort",
+    description: "Abort the currently running plan execution. The abort takes effect between slices — the current slice will finish first.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+    },
+  },
+  {
+    name: "forge_plan_status",
+    description: "Get the status of the latest plan execution run. Shows per-slice results, token usage, duration, and overall status from .forge/runs/.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        plan: { type: "string", description: "Filter by plan name (optional — shows latest if omitted)" },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+    },
+  },
 ];
 
 // ─── Tool Execution ───────────────────────────────────────────────────
@@ -185,6 +228,10 @@ function executeTool(name, args) {
       return runPforge(`new-phase "${args.name}"`, cwd);
     case "forge_analyze":
       return runPforge(`analyze "${args.plan}"`, cwd);
+    case "forge_run_plan":
+    case "forge_abort":
+    case "forge_plan_status":
+      return null; // Handled async in CallToolRequestSchema handler
     default:
       return { success: false, error: `Unknown tool: ${name}` };
   }
@@ -202,6 +249,94 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
+
+  // ─── Async orchestrator tools ───
+  if (name === "forge_run_plan") {
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const planPath = resolve(cwd, args.plan);
+
+      if (!existsSync(planPath)) {
+        return { content: [{ type: "text", text: `Plan file not found: ${args.plan}` }], isError: true };
+      }
+
+      activeAbortController = new AbortController();
+      const result = await runPlan(planPath, {
+        cwd,
+        model: args.model || null,
+        mode: args.mode || "auto",
+        resumeFrom: args.resumeFrom || null,
+        estimate: args.estimate || false,
+        dryRun: args.dryRun || false,
+        abortController: activeAbortController,
+      });
+      activeAbortController = null;
+
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        isError: result.status === "failed",
+      };
+    } catch (err) {
+      activeAbortController = null;
+      return { content: [{ type: "text", text: `Orchestrator error: ${err.message}` }], isError: true };
+    }
+  }
+
+  if (name === "forge_abort") {
+    if (activeAbortController) {
+      activeAbortController.abort();
+      return { content: [{ type: "text", text: "Abort signal sent. Current slice will finish, then execution stops." }] };
+    }
+    return { content: [{ type: "text", text: "No active plan execution to abort." }] };
+  }
+
+  if (name === "forge_plan_status") {
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const runsDir = resolve(cwd, ".forge", "runs");
+
+      if (!existsSync(runsDir)) {
+        return { content: [{ type: "text", text: "No runs found. Run `forge_run_plan` first." }] };
+      }
+
+      const runDirs = readdirSync(runsDir, { withFileTypes: true })
+        .filter((d) => d.isDirectory())
+        .map((d) => d.name)
+        .sort()
+        .reverse();
+
+      if (runDirs.length === 0) {
+        return { content: [{ type: "text", text: "No runs found." }] };
+      }
+
+      // Find matching run (by plan name filter or latest)
+      let targetDir = runDirs[0];
+      if (args.plan) {
+        const planName = args.plan.replace(/\.md$/, "").split("/").pop();
+        const match = runDirs.find((d) => d.includes(planName));
+        if (match) targetDir = match;
+      }
+
+      const summaryPath = resolve(runsDir, targetDir, "summary.json");
+      if (existsSync(summaryPath)) {
+        const summary = readFileSync(summaryPath, "utf-8");
+        return { content: [{ type: "text", text: summary }] };
+      }
+
+      // No summary yet — check run.json for in-progress
+      const runPath = resolve(runsDir, targetDir, "run.json");
+      if (existsSync(runPath)) {
+        const runMeta = readFileSync(runPath, "utf-8");
+        return { content: [{ type: "text", text: `Run in progress:\n${runMeta}` }] };
+      }
+
+      return { content: [{ type: "text", text: `Run directory exists but no data: ${targetDir}` }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Status error: ${err.message}` }], isError: true };
+    }
+  }
+
+  // ─── Sync pforge tools ───
   const result = executeTool(name, args || {});
 
   return {

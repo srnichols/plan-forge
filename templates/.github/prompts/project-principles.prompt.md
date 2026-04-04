@@ -12,15 +12,27 @@ their project's non-negotiable principles and produce a completed
 
 ## Step 1: Choose Your Path
 
-Start by asking:
+Start by checking for existing sources:
+
+1. Check if `memory/constitution.md` exists (Spec Kit project constitution)
+2. Check if `docs/plans/PROJECT-PRINCIPLES.md` already exists
+
+**If Spec Kit constitution found:**
+
+> "I found a Spec Kit constitution at `memory/constitution.md`. Want me to convert it to Plan Forge's Project Principles format? I'll map each article to a principle entry and flag any gaps."
+
+If yes: Read the constitution, extract principles, map to the template format, then ask the user to review and adjust.
+
+**If no existing sources found**, ask:
 
 > "How would you like to define your project principles?
 >
 > **A) I know my principles** — I'll interview you section by section
 > **B) Show me starter principles** — I'll suggest common principles for your tech stack and you accept, modify, or reject each one
 > **C) Discover from my codebase** — I'll scan your project files and suggest principles based on patterns I find
+> **D) Import from Spec Kit** — Point me to a `constitution.md` file and I'll convert it
 >
-> Pick A, B, or C (or a combination)."
+> Pick A, B, C, D (or a combination)."
 
 ---
 

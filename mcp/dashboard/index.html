@@ -30,12 +30,30 @@
   </header>
 
   <!-- Tabs -->
-  <nav class="bg-gray-800 border-b border-gray-700 flex gap-1 px-4 text-sm">
-    <button class="tab-btn tab-active px-4 py-2 hover:text-blue-400" data-tab="progress">Progress</button>
-    <button class="tab-btn px-4 py-2 hover:text-blue-400 text-gray-400" data-tab="runs">Runs</button>
-    <button class="tab-btn px-4 py-2 hover:text-blue-400 text-gray-400" data-tab="cost">Cost</button>
-    <button class="tab-btn px-4 py-2 hover:text-blue-400 text-gray-400" data-tab="actions">Actions</button>
+  <nav class="bg-gray-800 border-b border-gray-700 flex gap-1 px-4 text-sm overflow-x-auto">
+    <button class="tab-btn tab-active px-4 py-2 hover:text-blue-400 whitespace-nowrap" data-tab="progress">Progress</button>
+    <button class="tab-btn px-4 py-2 hover:text-blue-400 text-gray-400 whitespace-nowrap" data-tab="runs">Runs</button>
+    <button class="tab-btn px-4 py-2 hover:text-blue-400 text-gray-400 whitespace-nowrap" data-tab="cost">Cost</button>
+    <button class="tab-btn px-4 py-2 hover:text-blue-400 text-gray-400 whitespace-nowrap" data-tab="actions">Actions</button>
+    <button class="tab-btn px-4 py-2 hover:text-blue-400 text-gray-400 whitespace-nowrap" data-tab="replay">Replay</button>
+    <button class="tab-btn px-4 py-2 hover:text-blue-400 text-gray-400 whitespace-nowrap" data-tab="extensions">Extensions</button>
+    <button class="tab-btn px-4 py-2 hover:text-blue-400 text-gray-400 whitespace-nowrap" data-tab="config">Config</button>
+    <!-- Notification bell -->
+    <button id="notif-bell" class="ml-auto px-3 py-2 relative hover:text-yellow-400 text-gray-400" onclick="toggleNotifications()">
+      🔔<span id="notif-count" class="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center hidden">0</span>
+    </button>
   </nav>
+
+  <!-- Notification dropdown -->
+  <div id="notif-panel" class="hidden absolute right-4 top-24 w-80 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50 max-h-80 overflow-y-auto">
+    <div class="flex justify-between items-center p-3 border-b border-gray-700">
+      <span class="text-sm font-semibold">Notifications</span>
+      <button onclick="clearNotifications()" class="text-xs text-gray-500 hover:text-white">Clear all</button>
+    </div>
+    <div id="notif-list" class="p-2 text-sm">
+      <p class="text-gray-500 text-center py-4">No notifications</p>
+    </div>
+  </div>
 
   <!-- Tab Content -->
   <main class="p-4 max-w-6xl mx-auto">
@@ -145,6 +163,73 @@
           </div>
           <pre id="action-result-output" class="text-xs text-gray-300 whitespace-pre-wrap max-h-64 overflow-y-auto"></pre>
         </div>
+      </div>
+    </section>
+
+    <!-- Replay Tab (Phase 5) -->
+    <section id="tab-replay" class="tab-content hidden">
+      <div class="bg-gray-800 rounded-lg p-4 mb-4">
+        <div class="flex gap-2 items-center mb-3">
+          <label class="text-sm text-gray-400">Run:</label>
+          <select id="replay-run-select" class="bg-gray-700 text-white text-sm rounded px-3 py-1" onchange="loadReplaySlices()"></select>
+          <label class="text-sm text-gray-400 ml-2">Slice:</label>
+          <select id="replay-slice-select" class="bg-gray-700 text-white text-sm rounded px-3 py-1" onchange="loadReplayLog()"></select>
+          <div class="ml-auto flex gap-2">
+            <button onclick="filterReplay('all')" class="text-xs px-2 py-1 bg-gray-600 rounded hover:bg-gray-500">All</button>
+            <button onclick="filterReplay('error')" class="text-xs px-2 py-1 bg-gray-600 rounded hover:bg-gray-500">Errors</button>
+            <button onclick="filterReplay('file')" class="text-xs px-2 py-1 bg-gray-600 rounded hover:bg-gray-500">Files</button>
+          </div>
+        </div>
+      </div>
+      <div id="replay-content" class="bg-gray-800 rounded-lg p-4">
+        <pre id="replay-log" class="text-xs text-gray-300 whitespace-pre-wrap max-h-96 overflow-y-auto font-mono">Select a run and slice to view session replay...</pre>
+      </div>
+    </section>
+
+    <!-- Extensions Tab (Phase 5) -->
+    <section id="tab-extensions" class="tab-content hidden">
+      <div class="mb-4">
+        <input id="ext-search" type="text" placeholder="Search extensions..." class="bg-gray-700 text-white text-sm rounded-lg px-4 py-2 w-full max-w-sm" oninput="filterExtensions()">
+      </div>
+      <div id="ext-cards" class="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+        <div class="text-gray-500 text-center py-12">Loading catalog...</div>
+      </div>
+    </section>
+
+    <!-- Config Tab (Phase 5) -->
+    <section id="tab-config" class="tab-content hidden">
+      <div class="bg-gray-800 rounded-lg p-6 max-w-2xl">
+        <h2 class="text-lg font-semibold mb-4">Project Configuration</h2>
+        <div class="space-y-4">
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Preset</label>
+            <input id="cfg-preset" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full" readonly>
+          </div>
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Template Version</label>
+            <input id="cfg-version" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full" readonly>
+          </div>
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Agents</label>
+            <div id="cfg-agents" class="flex gap-2 flex-wrap"></div>
+          </div>
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Model Routing — Default</label>
+            <select id="cfg-model-default" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full">
+              <option value="auto">auto</option>
+              <option value="claude-sonnet-4.6">claude-sonnet-4.6</option>
+              <option value="claude-opus-4.6">claude-opus-4.6</option>
+              <option value="gpt-5.2-codex">gpt-5.2-codex</option>
+              <option value="gpt-5-mini">gpt-5-mini</option>
+              <option value="gemini-3-pro-preview">gemini-3-pro-preview</option>
+            </select>
+          </div>
+          <div class="flex gap-2 pt-2">
+            <button onclick="saveConfig()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded text-sm">Save Configuration</button>
+            <button onclick="loadConfig()" class="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm">Reload</button>
+          </div>
+        </div>
+        <p id="cfg-status" class="text-xs text-gray-500 mt-2"></p>
       </div>
     </section>
   </main>

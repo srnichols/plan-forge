@@ -170,6 +170,7 @@ These are planned but not yet prioritized into a version:
 - Auto-update notification when source version is newer
 
 ### Enterprise
+- **`/security-audit` skill** — multi-step security procedure: run security reviewer across all files, dependency audit, secrets scan, produce combined security report with severity ratings
 - **Team dashboard** for multi-developer plan coordination
 - **Web UI** for plan visualization and status tracking
 - Preset-specific validation minimum count checks in `validate-setup`

@@ -116,7 +116,7 @@ Both agents and skills extend Copilot, but they serve different purposes:
 
 **Installed counts** (per preset after setup):
 - **Stack-specific agents**: 6 for app presets (dotnet/typescript/python/java/go) · **5** for `azure-iac` (bicep-reviewer, terraform-reviewer, security-reviewer, deploy-helper, azure-sweeper)
-- **7 shared agents** — API contracts, accessibility, multi-tenancy, CI/CD, observability, dependency, compliance
+- **8 shared agents** — API contracts, accessibility, multi-tenancy, CI/CD, observability, dependency, compliance, error handling
 - **5 pipeline agents** — specifier, plan-hardener, executor, reviewer-gate, shipper
 - **Skills**: 8 for app presets (database-migration, staging-deploy, test-sweep + dependency-audit, code-review, release-notes, api-doc-gen, onboarding) · **3** for `azure-iac` (infra-deploy, infra-test, azure-sweep)
 
@@ -400,7 +400,7 @@ The `azure-iac` preset includes **5 IaC-specific agents**:
 
 ### SaaS & Cross-Stack Agents (Shared)
 
-In addition, the setup wizard installs **7 cross-stack agents** for SaaS-critical concerns:
+In addition, the setup wizard installs **8 cross-stack agents** for SaaS-critical concerns:
 
 | Agent | Purpose |
 |-------|--------|
@@ -618,7 +618,7 @@ Running `setup.ps1` (PowerShell) or `setup.sh` (Bash) with a preset:
 
 1. **Copies preset instruction files** from `presets/{stack}/` to your project root (16 files for app presets — 17 for TypeScript which adds `frontend.instructions.md`; 12 for `azure-iac`)
 2. **Copies prompt templates** for scaffolding new entities, services, tests, and Project Principles (15 for app presets, 6 for `azure-iac`)
-3. **Copies agent definitions** for architecture review, security audit, testing (6 stack-specific + 7 shared + 5 pipeline agents; `azure-iac` gets 5 stack-specific including the enterprise-grade `azure-sweeper`)
+3. **Copies agent definitions** for architecture review, security audit, testing (6 stack-specific + 8 shared + 5 pipeline agents; `azure-iac` gets 5 stack-specific including the enterprise-grade `azure-sweeper`)
 4. **Copies skill workflows** — 8 for app presets (database-migration, staging-deploy, test-sweep, dependency-audit, code-review, release-notes, api-doc-gen, onboarding); `azure-iac` gets 3 (infra-deploy, infra-test, azure-sweep)
 5. **Generates `AGENTS.md`** with patterns for your tech stack
 6. **Generates `.github/copilot-instructions.md`** with stack-specific conventions
@@ -782,7 +782,7 @@ You don't need to write complex prompts yourself. The templates do it for you.
 
 ### "What if I don't use VS Code?"
 
-Plan Forge has **advanced integration with VS Code + GitHub Copilot** (auto-loading instructions, pipeline agents with handoff buttons, lifecycle hooks). It also generates **rich native files for Claude Code, Cursor, and Codex CLI** via the `-Agent` parameter — including all 16 guardrail files embedded in context, all prompts as native skills/commands, all 18 reviewer agents as invocable skills, and smart instructions that emulate Copilot's auto-loading, post-edit scanning, and forbidden path checking. For any other AI tool, the copy-paste prompts from the runbook work identically.
+Plan Forge has **advanced integration with VS Code + GitHub Copilot** (auto-loading instructions, pipeline agents with handoff buttons, lifecycle hooks). It also generates **rich native files for Claude Code, Cursor, and Codex CLI** via the `-Agent` parameter — including all 16 guardrail files embedded in context, all prompts as native skills/commands, all 19 reviewer agents as invocable skills, and smart instructions that emulate Copilot's auto-loading, post-edit scanning, and forbidden path checking. For any other AI tool, the copy-paste prompts from the runbook work identically.
 
 ### "Do I need to use every step every time?"
 

@@ -20,7 +20,7 @@ These features are on `master` and available to anyone who clones the repo. They
 - **`pforge smith`** — forge-themed diagnostics: environment, VS Code config, setup health, version currency, common problems (PS + Bash)
 - **GitHub Action** (`srnichols/plan-forge-validate@v1`) — CI plan validation with 6 checks, configurable sweep, action outputs
 - **Multi-agent support** — `-Agent claude|cursor|codex|all` generates rich native files:
-  - Claude Code: `CLAUDE.md` with all 16 guardrails embedded + `.claude/skills/` (all prompts + all 18 reviewer agents)
+  - Claude Code: `CLAUDE.md` with all 16 guardrails embedded + `.claude/skills/` (all prompts + all 19 reviewer agents)
   - Cursor: `.cursor/rules` with guardrails + `.cursor/commands/` (all prompts + all agents)
   - Codex CLI: `.agents/skills/` (all prompts + all agents)
   - Smart guardrail instructions emulate Copilot's auto-loading, post-edit scanning, and forbidden path checking

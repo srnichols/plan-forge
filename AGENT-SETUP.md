@@ -227,7 +227,7 @@ The update command uses SHA256 hashing to update only files that actually change
 
 Existing preset instruction/agent/prompt/skill files are NOT updated (they may have been customized). New files added in this version of Plan Forge ARE added if they don't yet exist in the project.
 
-For `azure-iac` preset: 5 stack-specific + 7 cross-stack + 5 pipeline = 17 agents.
+For `azure-iac` preset: 5 stack-specific + 8 cross-stack + 5 pipeline = 18 agents.
 
 ### Step 3: Validate
 
@@ -269,7 +269,7 @@ The validation script checks for these files. All must be present and non-empty:
 | Directory / Files | Purpose |
 |-------------------|---------|
 | `.github/prompts/*.prompt.md` (15 files) | Scaffolding recipes for entities, services, tests, workers, middleware, DTOs, config, Dockerfiles, project principles |
-| `.github/agents/*.agent.md` (18 files) | Specialized reviewer/executor roles (6 stack-specific + 7 cross-stack + 5 pipeline agents — security, architecture, API contracts, dependency, compliance, multi-tenancy, etc.) |
+| `.github/agents/*.agent.md` (19 files) | Specialized reviewer/executor roles (6 stack-specific + 8 cross-stack + 5 pipeline agents — security, architecture, API contracts, dependency, compliance, multi-tenancy, etc.) |
 | `.github/skills/*/SKILL.md` (8 skills) | Multi-step procedures for migrations, deploys, test sweeps, code review, dependency audit, release notes, API docs, onboarding |
 
 ### Optional but Recommended

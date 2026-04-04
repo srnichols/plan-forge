@@ -7,7 +7,7 @@
 
 ## After Running `setup.ps1`
 
-The setup wizard copies preset files and generates your project-specific configuration. If you used `-Agent claude`, `-Agent cursor`, or `-Agent codex`, native files for those agents were also generated — including rich context files with all 16 guardrail files embedded, all prompts as native skills/commands, all 18 reviewer agents as invocable skills, and smart instructions that emulate Copilot's auto-loading and post-edit scanning. Copilot files are always installed.
+The setup wizard copies preset files and generates your project-specific configuration. If you used `-Agent claude`, `-Agent cursor`, or `-Agent codex`, native files for those agents were also generated — including rich context files with all 16 guardrail files embedded, all prompts as native skills/commands, all 19 reviewer agents as invocable skills, and smart instructions that emulate Copilot's auto-loading and post-edit scanning. Copilot files are always installed.
 
 Here's what to customize next:
 
@@ -671,7 +671,7 @@ When the extension is installed, **every pipeline touchpoint** participates — 
 | **8 pipeline prompts** (step0–step6 + profile) | ✅ Prior decisions, patterns, lessons | ✅ Specs, plans, reviews, postmortems |
 | **5 pipeline agents** (specifier → shipper) | ✅ Phase context, TBD resolution | ✅ Decisions, outcomes, verdicts |
 | **6 stack agents × 6 presets** (36 files) | ✅ Prior review findings, accepted risks | ✅ Review findings for trend tracking |
-| **7 shared agents** (cross-stack reviewers) | ✅ Prior cross-cutting findings | ✅ API, accessibility, security, compliance findings |
+| **8 shared agents** (cross-stack reviewers) | ✅ Prior cross-cutting findings | ✅ API, accessibility, security, compliance, error handling findings |
 | **5 azure-iac agents** (IaC reviewers) | ✅ Prior Bicep/Terraform/sweep findings | ✅ IaC review and sweep results |
 | **8 skills × 5 app presets** (40 files) | ✅ Prior failures, patterns, conventions | ✅ Outcomes, recurring issues |
 | **3 azure-iac skills** (infra-deploy, infra-test, azure-sweep) | ✅ Deploy failures, test patterns, sweep history | ✅ Deploy/test/sweep outcomes |
@@ -804,7 +804,7 @@ The essential files for ongoing use are:
 docs/plans/                    ← Runbook + your plans
 .github/instructions/          ← Guardrail files (16 per preset, 17 for TypeScript)
 .github/prompts/               ← Scaffolding recipes (15 prompt templates)
-.github/agents/                ← Reviewer/executor roles (18 agent definitions: 6 stack + 7 shared + 5 pipeline)
+.github/agents/                ← Reviewer/executor roles (19 agent definitions: 6 stack + 8 shared + 5 pipeline)
 .github/skills/                ← Multi-step procedures (8 skills for app presets)
 .github/copilot-instructions.md
 AGENTS.md

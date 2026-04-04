@@ -21,13 +21,18 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { execSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { resolve, join } from "node:path";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { resolve, join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { parsePlan, runPlan, detectWorkers, getCostReport } from "./orchestrator.mjs";
 import { createHub, readHubPort } from "./hub.mjs";
+import express from "express";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // ─── Config ───────────────────────────────────────────────────────────
 const PROJECT_DIR = process.env.PLAN_FORGE_PROJECT || process.argv.find((a, i) => process.argv[i - 1] === "--project") || process.cwd();
+const HTTP_PORT = parseInt(process.env.PLAN_FORGE_HTTP_PORT || "3100", 10);
 const IS_WINDOWS = process.platform === "win32";
 const PFORGE = IS_WINDOWS ? "powershell.exe -NoProfile -ExecutionPolicy Bypass -File pforge.ps1" : "bash pforge.sh";
 
@@ -381,11 +386,122 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   };
 });
 
+// ─── Express App + REST API (Phase 4, C6) ─────────────────────────────
+function createExpressApp() {
+  const app = express();
+  app.use(express.json());
+
+  // Dashboard static files
+  app.use("/dashboard", express.static(resolve(__dirname, "dashboard")));
+
+  // REST API: GET /api/status — current run status
+  app.get("/api/status", (_req, res) => {
+    try {
+      const runsDir = resolve(PROJECT_DIR, ".forge", "runs");
+      if (!existsSync(runsDir)) return res.json({ status: "idle", message: "No runs yet" });
+      const dirs = readdirSync(runsDir, { withFileTypes: true })
+        .filter((d) => d.isDirectory()).map((d) => d.name).sort().reverse();
+      if (dirs.length === 0) return res.json({ status: "idle" });
+      const summaryPath = resolve(runsDir, dirs[0], "summary.json");
+      if (existsSync(summaryPath)) {
+        return res.json(JSON.parse(readFileSync(summaryPath, "utf-8")));
+      }
+      const runPath = resolve(runsDir, dirs[0], "run.json");
+      if (existsSync(runPath)) {
+        return res.json({ status: "running", ...JSON.parse(readFileSync(runPath, "utf-8")) });
+      }
+      res.json({ status: "unknown" });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // REST API: GET /api/runs — run history
+  app.get("/api/runs", (_req, res) => {
+    try {
+      const runsDir = resolve(PROJECT_DIR, ".forge", "runs");
+      if (!existsSync(runsDir)) return res.json([]);
+      const dirs = readdirSync(runsDir, { withFileTypes: true })
+        .filter((d) => d.isDirectory()).map((d) => d.name).sort().reverse();
+      const runs = [];
+      for (const dir of dirs.slice(0, 50)) { // Limit to 50
+        const summaryPath = resolve(runsDir, dir, "summary.json");
+        if (existsSync(summaryPath)) {
+          try { runs.push(JSON.parse(readFileSync(summaryPath, "utf-8"))); } catch { /* skip corrupt */ }
+        }
+      }
+      res.json(runs);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // REST API: GET /api/config — read .forge.json
+  app.get("/api/config", (_req, res) => {
+    try {
+      const configPath = resolve(PROJECT_DIR, ".forge.json");
+      if (!existsSync(configPath)) return res.json({});
+      res.json(JSON.parse(readFileSync(configPath, "utf-8")));
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // REST API: POST /api/config — write .forge.json (with validation)
+  app.post("/api/config", (req, res) => {
+    try {
+      const configPath = resolve(PROJECT_DIR, ".forge.json");
+      if (!req.body || typeof req.body !== "object") {
+        return res.status(400).json({ error: "Request body must be a JSON object" });
+      }
+      // Validate required fields
+      const config = req.body;
+      if (config.preset && typeof config.preset !== "string") {
+        return res.status(400).json({ error: "preset must be a string" });
+      }
+      writeFileSync(configPath, JSON.stringify(config, null, 2));
+      res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // REST API: GET /api/cost — cost report
+  app.get("/api/cost", (_req, res) => {
+    try {
+      res.json(getCostReport(PROJECT_DIR));
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // REST API: POST /api/tool/:name — invoke forge tool (proxy to pforge CLI)
+  app.post("/api/tool/:name", (req, res) => {
+    try {
+      const toolName = req.params.name;
+      const toolArgs = req.body?.args || "";
+      const result = runPforge(`${toolName} ${toolArgs}`.trim(), PROJECT_DIR);
+      res.json(result);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // REST API: GET /api/hub — hub status
+  app.get("/api/hub", (_req, res) => {
+    if (activeHub) {
+      res.json({ running: true, port: activeHub.port, clients: activeHub.getClients() });
+    } else {
+      res.json({ running: false });
+    }
+  });
+
+  return app;
+}
+
 // ─── Start ────────────────────────────────────────────────────────────
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error("Plan Forge MCP server running (stdio transport)");
+
+  // Phase 4: Start Express HTTP server for dashboard + REST API
+  try {
+    const app = createExpressApp();
+    app.listen(HTTP_PORT, "127.0.0.1", () => {
+      console.error(`Plan Forge Dashboard at http://127.0.0.1:${HTTP_PORT}/dashboard`);
+    });
+  } catch (err) {
+    console.error(`[http] Express server failed to start: ${err.message} (non-fatal)`);
+  }
 
   // Phase 3: Start WebSocket hub alongside MCP server
   try {
@@ -393,7 +509,6 @@ async function main() {
     console.error(`Plan Forge WebSocket hub running on port ${activeHub.port}`);
   } catch (err) {
     console.error(`[hub] WebSocket hub failed to start: ${err.message} (non-fatal)`);
-    // Non-fatal — MCP server works without hub
   }
 
   // Graceful shutdown

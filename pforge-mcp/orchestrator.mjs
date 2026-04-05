@@ -19,10 +19,11 @@
  * @module orchestrator
  */
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync } from "node:fs";
 import { spawn, execSync } from "node:child_process";
 import { resolve, basename, dirname } from "node:path";
 import { EventEmitter } from "node:events";
+import { tmpdir } from "node:os";
 import { createTraceContext, createTelemetryHandler, writeManifest, appendRunIndex, pruneRunHistory, addLogSummary } from "./telemetry.mjs";
 import { isOpenBrainConfigured, buildMemorySearchBlock, buildMemoryCaptureBlock, buildRunSummaryThought, buildCostAnomalyThought } from "./memory.mjs";
 
@@ -391,20 +392,24 @@ export function spawnWorker(prompt, options = {}) {
     let args;
     let cmd;
 
+    // Write prompt to temp file to avoid CLI arg length/escaping issues
+    const promptFile = resolve(tmpdir(), `pforge-prompt-${Date.now()}.txt`);
+    writeFileSync(promptFile, prompt);
+
     switch (chosen.name) {
       case "gh-copilot":
         cmd = "gh";
-        args = ["copilot", "--", "-p", prompt, "--allow-all", "--no-ask-user", "--output-format", "json"];
+        args = ["copilot", "--", "-p", prompt, "--allow-all", "--no-ask-user"];
         if (model) args.push("--model", model);
         break;
       case "claude":
         cmd = "claude";
-        args = ["-p", prompt, "--output-format", "json"];
+        args = ["-p", prompt];
         if (model) args.push("--model", model);
         break;
       case "codex":
         cmd = "codex";
-        args = ["-p", prompt, "--output-format", "json"];
+        args = ["-p", prompt];
         if (model) args.push("--model", model);
         break;
       default:
@@ -432,6 +437,9 @@ export function spawnWorker(prompt, options = {}) {
 
     child.on("close", (code) => {
       clearTimeout(timer);
+
+      // Clean up temp prompt file
+      try { unlinkSync(promptFile); } catch { /* ignore */ }
 
       const jsonlEvents = parseJSONL(stdout);
       let tokens = extractTokens(jsonlEvents);

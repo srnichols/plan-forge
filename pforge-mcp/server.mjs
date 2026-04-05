@@ -26,6 +26,7 @@ import { resolve, join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parsePlan, runPlan, detectWorkers, getCostReport } from "./orchestrator.mjs";
 import { createHub, readHubPort } from "./hub.mjs";
+import { buildCapabilitySurface, writeToolsJson, writeCliSchema } from "./capabilities.mjs";
 import express from "express";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -220,6 +221,16 @@ const TOOLS = [
       },
     },
   },
+  {
+    name: "forge_capabilities",
+    description: "Machine-readable API surface — returns all MCP tools with semantic metadata (intent, prerequisites, errors, cost), CLI commands, workflow graphs, config schema, dashboard info, and installed extensions. Agents call this once on session start for full discoverability.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+    },
+  },
 ];
 
 // ─── Tool Execution ───────────────────────────────────────────────────
@@ -249,6 +260,7 @@ function executeTool(name, args) {
     case "forge_abort":
     case "forge_plan_status":
     case "forge_cost_report":
+    case "forge_capabilities":
       return null; // Handled async in CallToolRequestSchema handler
     default:
       return { success: false, error: `Unknown tool: ${name}` };
@@ -367,6 +379,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return { content: [{ type: "text", text: JSON.stringify(report, null, 2) }] };
     } catch (err) {
       return { content: [{ type: "text", text: `Cost report error: ${err.message}` }], isError: true };
+    }
+  }
+
+  if (name === "forge_capabilities") {
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const surface = buildCapabilitySurface(TOOLS, { cwd, hubPort: activeHub?.port || null });
+      return { content: [{ type: "text", text: JSON.stringify(surface, null, 2) }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Capabilities error: ${err.message}` }], isError: true };
     }
   }
 
@@ -499,6 +521,22 @@ function createExpressApp() {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
+  // v2.3: .well-known discovery endpoint
+  app.get("/.well-known/plan-forge.json", (_req, res) => {
+    try {
+      const surface = buildCapabilitySurface(TOOLS, { cwd: PROJECT_DIR, hubPort: activeHub?.port || null });
+      res.json(surface);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // v2.3: Capabilities API
+  app.get("/api/capabilities", (_req, res) => {
+    try {
+      const surface = buildCapabilitySurface(TOOLS, { cwd: PROJECT_DIR, hubPort: activeHub?.port || null });
+      res.json(surface);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
   return app;
 }
 
@@ -507,6 +545,15 @@ async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error("Plan Forge MCP server running (stdio transport)");
+
+  // v2.3: Auto-generate tools.json + cli-schema.json on startup
+  try {
+    writeToolsJson(TOOLS, __dirname);
+    writeCliSchema(__dirname);
+    console.error("[capabilities] tools.json + cli-schema.json generated");
+  } catch (err) {
+    console.error(`[capabilities] Auto-generation failed: ${err.message} (non-fatal)`);
+  }
 
   // Phase 4: Start Express HTTP server for dashboard + REST API
   try {

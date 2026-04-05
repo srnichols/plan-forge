@@ -27,6 +27,7 @@ import { fileURLToPath } from "node:url";
 import { parsePlan, runPlan, detectWorkers, getCostReport } from "./orchestrator.mjs";
 import { createHub, readHubPort } from "./hub.mjs";
 import { buildCapabilitySurface, writeToolsJson, writeCliSchema } from "./capabilities.mjs";
+import { readRunIndex } from "./telemetry.mjs";
 import express from "express";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -518,6 +519,30 @@ function createExpressApp() {
       const logPath = resolve(runsDir, dirs[runIdx], `slice-${req.params.sliceId}-log.txt`);
       if (!existsSync(logPath)) return res.status(404).json({ error: "Log not found" });
       res.json({ log: readFileSync(logPath, "utf-8") });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // v2.4: GET /api/traces — list all runs from index.jsonl
+  app.get("/api/traces", (_req, res) => {
+    try {
+      const entries = readRunIndex(PROJECT_DIR);
+      res.json(entries.reverse()); // Newest first
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // v2.4: GET /api/traces/:runId — single run trace detail
+  app.get("/api/traces/:runId", (req, res) => {
+    try {
+      const runDir = resolve(PROJECT_DIR, ".forge", "runs", req.params.runId);
+      if (!existsSync(runDir)) return res.status(404).json({ error: "Run not found" });
+      // Try trace.json first, fall back to manifest, then summary
+      const tracePath = resolve(runDir, "trace.json");
+      if (existsSync(tracePath)) return res.json(JSON.parse(readFileSync(tracePath, "utf-8")));
+      const manifestPath = resolve(runDir, "manifest.json");
+      if (existsSync(manifestPath)) return res.json(JSON.parse(readFileSync(manifestPath, "utf-8")));
+      const summaryPath = resolve(runDir, "summary.json");
+      if (existsSync(summaryPath)) return res.json(JSON.parse(readFileSync(summaryPath, "utf-8")));
+      res.status(404).json({ error: "No trace data" });
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 

@@ -313,7 +313,21 @@ Trace: run-plan (trace_id: abc123, plan: Phase-1-CLIENTS-CRUD)
 - **Log rotation** — `maxRunHistory` config in `.forge.json` (default: 50). On run completion, prune oldest directories beyond the limit. Index reader ignores entries whose directory no longer exists.
 - **Baggage propagation** — trace context (traceId, parentSpanId) passed to child spans so gate commands, worker output, and retries are all correlated in the waterfall.
 
-### v2.5 — OpenClaw Bridge
+### v2.5 — Quorum Mode (Multi-Model Consensus) 📋
+
+Dispatch high-complexity slices to multiple AI models in parallel dry-run, synthesize a consensus execution plan, then execute with higher confidence.
+
+- **Quorum dispatch** — fan out each slice to 3 models (Claude Opus 4.6, GPT-5.3-Codex, Gemini 3.1 Pro) in parallel dry-run sessions
+- **Dry-run mode** — workers produce detailed implementation plans (files, code skeletons, edge cases, test strategy) without executing
+- **Quorum reviewer** — synthesis agent merges 3 dry-run responses into a unified execution plan, picking best approach per file/component
+- **Complexity scoring** — `scoreSliceComplexity()` scores slices 1-10 based on file count, cross-module deps, security sensitivity, historical failure rate
+- **`quorum-mode=auto`** — slices scoring ≥7 automatically use quorum; others run normally (configurable threshold)
+- **Full guardrail compliance** — dry-run workers load all instructions.md, project profile, and principles (same as primary workers)
+- **Telemetry integration** — quorum legs modeled as child spans in trace.json; cost tracked per-leg
+- **Dashboard indicators** — quorum status visible on Progress tab; dry-run responses browsable in Replay tab
+- **Configuration** — `.forge.json` `quorum` block: `enabled`, `auto`, `threshold`, `models[]`, `reviewerModel`
+
+### v2.6 — OpenClaw Bridge
 
 Connect autonomous execution to the unified system architecture.
 

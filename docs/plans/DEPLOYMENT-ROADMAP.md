@@ -40,8 +40,15 @@
 ---
 
 ### Phase 1: orchestrator-run-plan
-**Goal**: (one-line description)
+**Goal**: DAG-based plan execution with CLI worker spawning
 **Plan**: [Phase-1-ORCHESTRATOR-RUN-PLAN-PLAN.md](./Phase-1-ORCHESTRATOR-RUN-PLAN-PLAN.md)
+**Status**: ✅ Complete
+
+---
+
+### Phase 7: Quorum Mode — Multi-Model Consensus Execution
+**Goal**: Dispatch high-complexity slices to 3 AI models for dry-run consensus, synthesize best approach, execute with higher confidence
+**Plan**: [Phase-7-QUORUM-MODE-PLAN.md](./Phase-7-QUORUM-MODE-PLAN.md)
 **Status**: 📋 Planned
 
 ## Completed Phases

@@ -375,7 +375,7 @@ export function spawnWorker(prompt, options = {}) {
   const {
     model = null,
     cwd = process.cwd(),
-    timeout = 600_000, // 10 min default
+    timeout = 1_200_000, // 20 min default
     worker = null,     // override worker choice
   } = options;
 
@@ -486,14 +486,22 @@ function extractTokens(events) {
     if (event.type === "session.tools_updated" && event.data?.model) {
       model = event.data.model;
     }
+    // Fallback: some CLI versions include model at top level
+    if (!model && event.data?.model && typeof event.data.model === "string") {
+      model = event.data.model;
+    }
     if (event.type === "assistant.message" && event.data?.outputTokens) {
       outputTokens += event.data.outputTokens;
     }
-    if (event.type === "result" && event.usage) {
-      premiumRequests = event.usage.premiumRequests || 0;
-      apiDurationMs = event.usage.totalApiDurationMs || 0;
-      sessionDurationMs = event.usage.sessionDurationMs || 0;
-      codeChanges = event.usage.codeChanges || null;
+    if (event.type === "result") {
+      if (event.usage) {
+        premiumRequests = event.usage.premiumRequests || 0;
+        apiDurationMs = event.usage.totalApiDurationMs || 0;
+        sessionDurationMs = event.usage.sessionDurationMs || 0;
+        codeChanges = event.usage.codeChanges || null;
+      }
+      // result event also has model sometimes
+      if (!model && event.model) model = event.model;
     }
   }
 
@@ -914,13 +922,14 @@ export async function runPlan(planPath, options = {}) {
     appendCostHistory(cwd, summary);
   }
 
-  // v2.4: Write manifest + index + prune
+  // Emit run-completed — telemetry handler writes trace.json during this emit
+  eventBus.emit("run-completed", summary);
+
+  // v2.4: Write manifest + index + prune (AFTER trace.json is written by emit)
   const runId = basename(runDir);
   const manifest = writeManifest(runDir, runId, { ...summary, traceId: trace.traceId });
   appendRunIndex(cwd, runId, manifest);
   pruneRunHistory(cwd, loadMaxRunHistory(cwd));
-
-  eventBus.emit("run-completed", summary);
 
   return summary;
 }
@@ -1194,8 +1203,21 @@ async function executeSlice(slice, options) {
       }
     }
 
-    // If gate passed or worker failed (no point retrying), break
-    if (gateResult.success || workerResult.exitCode !== 0) break;
+    // If gate passed AND worker didn't timeout/fail, we're done
+    if (gateResult.success && workerResult.exitCode === 0) break;
+
+    // Worker timed out — retry with timeout context
+    if (workerResult.timedOut) {
+      lastError = `Worker timed out after ${Math.round((Date.now() - startTime) / 1000)}s. The task may be too complex for a single slice — consider splitting it.`;
+      attempt++;
+      if (attempt <= maxRetries) {
+        writeFileSync(logFile, `\n\n--- WORKER TIMED OUT, RETRYING (attempt ${attempt + 1}) ---\n${lastError}\n`, { flag: "a" });
+      }
+      continue;
+    }
+
+    // Worker failed with non-zero exit (not timeout) — no point retrying
+    if (workerResult.exitCode !== 0) break;
 
     // Gate failed — set error for retry prompt
     lastError = `Gate command '${gateResult.failedCommand || "unknown"}' failed:\n${gateResult.error || gateResult.output}`;

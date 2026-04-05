@@ -270,7 +270,7 @@ function executeTool(name, args) {
 
 // ─── MCP Server ───────────────────────────────────────────────────────
 const server = new Server(
-  { name: "plan-forge-mcp", version: "2.0.0" },
+  { name: "plan-forge-mcp", version: "2.4.0" },
   { capabilities: { tools: {} } }
 );
 

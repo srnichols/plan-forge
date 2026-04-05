@@ -7,7 +7,7 @@
 
 ## Current Release
 
-**v2.0.0** (2026-04-04) — Autonomous Execution: DAG orchestrator, cost tracking, WebSocket hub, dashboard, parallel execution.
+**v2.4.0** (2026-04-05) — Machine-Readable API Surface + Unified Telemetry: `forge_capabilities` tool, OTLP traces, dashboard Traces tab.
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 
@@ -131,12 +131,12 @@ Shipped in v2.0.0. Execute independent slices simultaneously with conflict detec
 - ✅ **Scope isolation** — worker prompts include `SCOPE:` directive to prevent cross-slice file edits
 - Team activity feed — deferred to v3.0
 
-### v2.3 — Machine-Readable API Surface
+### v2.3 — Machine-Readable API Surface ✅
 
-Give AI agents instant understanding of Plan Forge capabilities without parsing Markdown docs. Full discoverability from a single MCP call or HTTP endpoint.
+Shipped. 14 MCP tools with full agent discoverability.
 
 **Core Schema Files:**
-- **`pforge-mcp/tools.json`** — auto-generated from MCP `TOOLS` array on server startup (always in sync). All 13+ tools with name, description, input schema, examples, and expected output shape.
+- **`pforge-mcp/tools.json`** — auto-generated from MCP `TOOLS` array on server startup (always in sync). All 14+ tools with name, description, input schema, examples, and expected output shape.
 - **`pforge-mcp/cli-schema.json`** — every CLI command with args, flags, types, defaults, examples. Machine-parseable alternative to `pforge help`.
 
 **Dynamic Capability Discovery:**
@@ -183,9 +183,9 @@ Give AI agents instant understanding of Plan Forge capabilities without parsing 
 - **Rate limit hints** — `"maxConcurrent": 1` for `forge_run_plan` (one at a time), `"maxConcurrent": 10` for read-only tools
 - **Operation ID aliases** — `forge_run_plan` also discoverable as `"aliases": ["execute-plan", "run-plan"]` for natural language matching
 
-### v2.4 — Unified Telemetry
+### v2.4 — Unified Telemetry ✅
 
-OpenTelemetry-compatible structured logging across the entire system for end-to-end observability. Built-in trace viewer in the dashboard — no external tools required.
+Shipped. OTLP-compatible traces, log registry, dashboard Traces tab.
 
 **Core Trace Infrastructure:**
 - **Trace context** — every `runPlan()` gets a `trace_id`; every slice gets a `span_id` correlated to the parent run

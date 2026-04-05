@@ -5,6 +5,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.4.0] — 2026-04-05
+
+### Added — Unified Telemetry
+- **`pforge-mcp/telemetry.mjs`** — OTLP-compatible trace/span/log capture. Every run produces `trace.json` with resource context, span kinds (SERVER/INTERNAL/CLIENT), severity levels, and log summaries.
+- **Log Registry** — per-run `manifest.json` + global `index.jsonl` (append-only, corruption-tolerant). Dashboard reads index for instant run listing.
+- **Dashboard Traces tab** — waterfall timeline with span detail panel, severity filters (All/Errors/Warnings), span attributes viewer
+- **REST API** — `GET /api/traces` (list runs from index), `GET /api/traces/:runId` (trace detail)
+- **Log rotation** — `maxRunHistory` config in `.forge.json` (default: 50), auto-prunes oldest runs
+
+## [2.3.0] — 2026-04-05
+
+### Added — Machine-Readable API Surface
+- **`forge_capabilities`** MCP tool (14th tool) — returns full capability surface: enriched tools with semantic metadata, CLI schema, workflow graphs, config schema, dashboard info
+- **`pforge-mcp/capabilities.mjs`** — enriched metadata for all 14 tools: intent tags, prerequisites, produces/consumes, side effects, cost hints, error catalog with recovery hints
+- **Workflow graphs** — 4 tool-chaining sequences: execute-plan, diagnose-project, plan-and-execute, review-run
+- **`tools.json` + `cli-schema.json`** — auto-generated on server startup (always in sync)
+- **`.well-known/plan-forge.json`** — HTTP discovery endpoint + `GET /api/capabilities` REST equivalent
+- **Operational metadata** — version compatibility, deprecation signals, rate limit hints, operation ID aliases
+
+---
+
 ## [2.0.0] — 2026-04-04
 
 ### Added — Autonomous Execution (v2.0)
@@ -42,7 +63,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
   - Smart guardrail instructions emulate Copilot's auto-loading, post-edit scanning, and forbidden path checking
 - `.forge.json` now records configured agents in an `agents` field
 - `pforge smith` detects and validates agent-specific file paths
-- **MCP Server** (`pforge-mcp/server.mjs`) — Node.js MCP server exposing 13 forge tools. Auto-generates `.vscode/mcp.json` and `.claude/mcp.json` during setup. Composable with OpenBrain.
+- **MCP Server** (`pforge-mcp/server.mjs`) — Node.js MCP server exposing 14 forge tools. Auto-generates `.vscode/mcp.json` and `.claude/mcp.json` during setup. Composable with OpenBrain.
 - **Extension ecosystem** — `pforge ext search`, `pforge ext add <name>`, `pforge ext info <name>` commands with `extensions/catalog.json` community catalog (Spec Kit catalog-compatible format)
 - **Cross-artifact analysis** (`pforge analyze`) — Consistency scoring across requirements, scope, tests, and validation gates. Four dimensions (traceability, coverage, test coverage, gates) scored 0–100. CI integration via `plan-forge-validate@v1` with `analyze` input.
 - **Spec Kit comparison FAQ** — Honest side-by-side guidance on when to use Spec Kit vs Plan Forge

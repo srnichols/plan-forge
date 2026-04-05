@@ -108,7 +108,7 @@ See [docs/plans/examples/plan-forge-validate.yml](docs/plans/examples/plan-forge
 ```bash
 cd pforge-mcp && npm install
 ```
-This enables 13 forge tools (`forge_smith`, `forge_sweep`, `forge_diff`, `forge_run_plan`, `forge_cost_report`, etc.) as native MCP functions. The setup script already generated `.vscode/mcp.json` and `.claude/mcp.json` configs — `npm install` is the only manual step.
+This enables 14 forge tools (`forge_smith`, `forge_sweep`, `forge_diff`, `forge_run_plan`, `forge_cost_report`, `forge_capabilities`, etc.) as native MCP functions. The setup script already generated `.vscode/mcp.json` and `.claude/mcp.json` configs — `npm install` is the only manual step.
 
 ---
 

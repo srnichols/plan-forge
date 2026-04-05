@@ -216,6 +216,19 @@ export const TOOL_METADATA = {
     errors: {},
     example: { input: { name: "user-auth" }, output: { file: "docs/plans/Phase-1-USER-AUTH-PLAN.md" } },
   },
+  forge_capabilities: {
+    intent: ["discover", "introspect", "api-surface"],
+    aliases: ["get-capabilities", "discover-tools", "api-schema"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "2.3.0",
+    prerequisites: [],
+    produces: [],
+    consumes: [".forge.json", ".vscode/mcp.json"],
+    sideEffects: [],
+    errors: {},
+    example: { input: {}, output: { tools: 14, workflows: 4, memory: { configured: true } } },
+  },
 };
 
 // ─── Workflow Graphs ──────────────────────────────────────────────────
@@ -327,6 +340,13 @@ export const CLI_SCHEMA = {
     },
     help: { description: "Show help", args: [], flags: {}, examples: ["pforge help"] },
   },
+  server: {
+    description: "MCP server commands (run directly with node)",
+    commands: {
+      start: { description: "Start MCP server (stdio + Express + WebSocket)", command: "node pforge-mcp/server.mjs" },
+      "dashboard-only": { description: "Start dashboard + REST API without MCP stdio", command: "node pforge-mcp/server.mjs --dashboard-only" },
+    },
+  },
 };
 
 // ─── Config Schema ────────────────────────────────────────────────────
@@ -338,6 +358,7 @@ export const CONFIG_SCHEMA = {
   properties: {
     pipelineVersion: { type: "string", description: "Pipeline version", default: "2.0" },
     templateVersion: { type: "string", description: "Plan Forge template version" },
+    projectName: { type: "string", description: "Project name (used for OpenBrain memory scoping)" },
     preset: { type: "string", enum: ["dotnet", "typescript", "python", "java", "go", "azure-iac", "custom"] },
     agents: { type: "array", items: { type: "string", enum: ["claude", "cursor", "codex"] }, description: "Configured agent adapters" },
     modelRouting: {
@@ -409,9 +430,55 @@ export function buildCapabilitySurface(mcpTools, options = {}) {
     },
     dashboard: {
       url: `http://127.0.0.1:3100/dashboard`,
-      tabs: ["Progress", "Runs", "Cost", "Actions", "Replay", "Extensions", "Config", "Traces"],
+      tabs: {
+        Progress: "Real-time slice progress cards via WebSocket — pending → executing → pass/fail",
+        Runs: "Run history table with date, plan, slices, status, cost, duration",
+        Cost: "Total spend, model breakdown (doughnut chart), monthly trend (bar chart)",
+        Actions: "One-click buttons: Smith, Sweep, Analyze, Status, Validate, Extensions",
+        Replay: "Browse agent session logs per slice with error/file filters",
+        Extensions: "Visual extension catalog browser with search/filter",
+        Config: "Visual .forge.json editor (agents, model routing) with save confirmation",
+        Traces: "OTLP trace waterfall with span detail, severity filters, attributes viewer",
+      },
+      standalone: "node pforge-mcp/server.mjs --dashboard-only",
+      description: "Use --dashboard-only to run the dashboard without MCP stdio (for standalone monitoring, demos, or testing)",
     },
-    hub: hubPort ? { url: `ws://127.0.0.1:${hubPort}`, status: "running" } : { status: "stopped" },
+    restApi: {
+      baseUrl: `http://127.0.0.1:3100`,
+      endpoints: [
+        { method: "GET", path: "/api/status", description: "Current run status (latest summary or in-progress)" },
+        { method: "GET", path: "/api/runs", description: "Run history (last 50 summaries)" },
+        { method: "GET", path: "/api/config", description: "Read .forge.json" },
+        { method: "POST", path: "/api/config", description: "Write .forge.json (with validation)" },
+        { method: "GET", path: "/api/cost", description: "Cost report from cost-history.json" },
+        { method: "POST", path: "/api/tool/:name", description: "Invoke any pforge CLI command via HTTP" },
+        { method: "GET", path: "/api/hub", description: "WebSocket hub status + connected clients" },
+        { method: "GET", path: "/api/replay/:runIdx/:sliceId", description: "Session replay log for a slice" },
+        { method: "GET", path: "/api/traces", description: "List all runs from index.jsonl" },
+        { method: "GET", path: "/api/traces/:runId", description: "Single run trace detail (trace.json)" },
+        { method: "GET", path: "/api/capabilities", description: "Full capability surface (same as forge_capabilities)" },
+        { method: "GET", path: "/.well-known/plan-forge.json", description: "HTTP discovery endpoint" },
+      ],
+    },
+    hub: hubPort
+      ? {
+          url: `ws://127.0.0.1:${hubPort}`,
+          status: "running",
+          connectionString: `ws://127.0.0.1:${hubPort}?label=<your-label>`,
+          features: ["broadcast", "heartbeat (30s)", "event history (last 100)", "session registry", "client labels"],
+          portFallback: "If 3101 unavailable, increments until free. Active port stored in .forge/server-ports.json",
+        }
+      : { status: "stopped" },
+    telemetry: {
+      traceFormat: "OTLP-compatible JSON in .forge/runs/<timestamp>/trace.json",
+      spanKinds: ["SERVER (run-plan root)", "INTERNAL (slice orchestration)", "CLIENT (worker spawn, gate execution)"],
+      severityLevels: { TRACE: 1, DEBUG: 5, INFO: 9, WARN: 13, ERROR: 17, FATAL: 21 },
+      logRegistry: {
+        manifest: ".forge/runs/<timestamp>/manifest.json — per-run artifact registry",
+        index: ".forge/runs/index.jsonl — append-only global run index (corruption-tolerant)",
+      },
+      retention: "maxRunHistory config in .forge.json (default: 50), auto-prunes oldest runs",
+    },
     extensions,
     memory: buildMemoryCapabilities(cwd),
   };

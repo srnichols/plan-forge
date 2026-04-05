@@ -24,6 +24,7 @@ import { spawn, execSync } from "node:child_process";
 import { resolve, basename, dirname } from "node:path";
 import { EventEmitter } from "node:events";
 import { createTraceContext, createTelemetryHandler, writeManifest, appendRunIndex, pruneRunHistory, addLogSummary } from "./telemetry.mjs";
+import { isOpenBrainConfigured, buildMemorySearchBlock, buildMemoryCaptureBlock, buildRunSummaryThought, buildCostAnomalyThought } from "./memory.mjs";
 
 // ─── Event Bus (C3: Dependency Injection) ─────────────────────────────
 
@@ -948,6 +949,10 @@ export async function runPlan(planPath, options = {}) {
     : new SequentialScheduler(eventBus);
   const abortSignal = abortController?.signal || null;
 
+  // OpenBrain memory integration
+  const memoryEnabled = isOpenBrainConfigured(cwd);
+  const projectName = loadProjectName(cwd);
+
   eventBus.emit("run-started", runMeta);
 
   // Execute slices
@@ -955,7 +960,10 @@ export async function runPlan(planPath, options = {}) {
   const results = await scheduler.execute(
     plan.dag.nodes,
     plan.dag.order,
-    async (slice) => executeSlice(slice, { cwd, model: effectiveModel, modelRouting, mode, runDir, maxRetries }),
+    async (slice) => executeSlice(slice, {
+      cwd, model: effectiveModel, modelRouting, mode, runDir, maxRetries,
+      memoryEnabled, projectName, planName: basename(planPath, ".md"),
+    }),
     { abortSignal, resumeFrom: resumeFrom ? String(resumeFrom) : null },
   );
 
@@ -986,6 +994,14 @@ export async function runPlan(planPath, options = {}) {
   const manifest = writeManifest(runDir, runId, { ...summary, traceId: trace.traceId });
   appendRunIndex(cwd, runId, manifest);
   pruneRunHistory(cwd, loadMaxRunHistory(cwd));
+
+  // OpenBrain: capture run summary + cost anomaly as thoughts
+  if (memoryEnabled) {
+    summary._memoryCapture = {
+      runSummary: buildRunSummaryThought(summary, projectName),
+      costAnomaly: buildCostAnomalyThought(summary, getCostReport(cwd), projectName),
+    };
+  }
 
   return summary;
 }
@@ -1059,6 +1075,20 @@ function loadMaxRunHistory(cwd) {
     }
   } catch { /* defaults */ }
   return 50;
+}
+
+/**
+ * Load project name from .forge.json.
+ */
+function loadProjectName(cwd) {
+  const configPath = resolve(cwd, ".forge.json");
+  try {
+    if (existsSync(configPath)) {
+      const config = JSON.parse(readFileSync(configPath, "utf-8"));
+      if (config.projectName) return config.projectName;
+    }
+  } catch { /* defaults */ }
+  return basename(cwd);
 }
 
 /**
@@ -1186,7 +1216,8 @@ export function getCostReport(cwd) {
  * Supports automatic retry: if gate fails, re-invokes worker with error context.
  */
 async function executeSlice(slice, options) {
-  const { cwd, model, modelRouting = {}, mode, runDir, maxRetries = 1 } = options;
+  const { cwd, model, modelRouting = {}, mode, runDir, maxRetries = 1,
+    memoryEnabled = false, projectName = "", planName = "" } = options;
   const startTime = Date.now();
   const resolvedModel = resolveModel(model, modelRouting, slice);
 
@@ -1198,6 +1229,12 @@ async function executeSlice(slice, options) {
   while (attempt <= maxRetries) {
     // Build prompt — on retry, include the error context
     let sliceInstructions = buildSlicePrompt(slice);
+
+    // OpenBrain: inject memory search + capture instructions
+    if (memoryEnabled) {
+      sliceInstructions = buildMemorySearchBlock(projectName, slice) + "\n" + sliceInstructions;
+      sliceInstructions += "\n" + buildMemoryCaptureBlock(projectName, slice, planName);
+    }
     if (attempt > 0 && lastError) {
       sliceInstructions += `\n\n--- RETRY (attempt ${attempt + 1}) ---\n` +
         `Previous attempt failed with this error:\n${lastError}\n` +

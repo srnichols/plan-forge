@@ -133,12 +133,55 @@ Shipped in v2.0.0. Execute independent slices simultaneously with conflict detec
 
 ### v2.3 — Machine-Readable API Surface
 
-Give AI agents instant understanding of Plan Forge capabilities without parsing Markdown docs.
+Give AI agents instant understanding of Plan Forge capabilities without parsing Markdown docs. Full discoverability from a single MCP call or HTTP endpoint.
 
-- **`pforge-mcp/tools.json`** — auto-generated from MCP `TOOLS` array. All 13 tools with name, description, input schema, examples. Agents load one file instead of reading CLI-GUIDE.md.
+**Core Schema Files:**
+- **`pforge-mcp/tools.json`** — auto-generated from MCP `TOOLS` array on server startup (always in sync). All 13+ tools with name, description, input schema, examples, and expected output shape.
 - **`pforge-mcp/cli-schema.json`** — every CLI command with args, flags, types, defaults, examples. Machine-parseable alternative to `pforge help`.
-- **Auto-generation** — `tools.json` regenerated on server startup from the live `TOOLS` definition (always in sync)
-- **Agent discovery** — agents check for `pforge-mcp/tools.json` on session start; if present, skip doc parsing
+
+**Dynamic Capability Discovery:**
+- **`forge_capabilities` MCP tool** — single call returns the full capability surface: MCP tools, CLI commands, dashboard URL + tabs, config options, installed extensions. Agents call this once on session start instead of reading multiple files.
+- **`.well-known` HTTP endpoint** — `GET http://localhost:3100/.well-known/plan-forge.json` serves the same capability surface over HTTP for non-MCP clients (dashboards, CI tools, external integrations).
+
+**Semantic Agent Hints** (on every tool definition):
+- **Intent tags** — `"intent": ["execute", "automate"]` tells agents *when* to use a tool (do vs read vs configure)
+- **Prerequisites** — `"prerequisites": ["plan file exists", "gh copilot CLI installed"]` lets agents pre-check before calling
+- **Produces / Consumes** — `"produces": [".forge/runs/*/summary.json"]`, `"consumes": ["docs/plans/*.md"]` for data flow understanding
+- **Side effects** — `"sideEffects": ["creates source files", "runs build commands"]` prevents unintended invocation
+- **Cost hint** — `"cost": "high"` (tokens + time) vs `"cost": "low"` (read-only, instant) prevents casual use of expensive tools
+
+**Workflow Graphs** (tool chaining):
+```json
+{
+  "workflows": {
+    "execute-plan": {
+      "steps": [
+        { "tool": "forge_run_plan", "args": { "estimate": true }, "decision": "Review cost" },
+        { "tool": "forge_run_plan", "args": { "estimate": false } },
+        { "tool": "forge_plan_status" },
+        { "tool": "forge_cost_report" }
+      ]
+    },
+    "diagnose-project": {
+      "steps": ["forge_smith", "forge_validate", "forge_sweep"]
+    }
+  }
+}
+```
+
+**Error Catalog** (per tool):
+- Structured error codes with recovery hints: `"PLAN_NOT_FOUND"` → "Check path or run `forge_status`", `"NO_WORKER"` → "Install gh copilot or use `--assisted`", `"GATE_FAILED"` → "Fix code, use `--resume-from N`"
+- Agents self-heal instead of reporting generic failures
+
+**Configuration Discovery:**
+- `.forge.json` JSON Schema included in capability surface — valid fields, types, enums, defaults
+- Agents know `modelRouting.default` accepts `["auto", "claude-sonnet-4.6", "gpt-5.2-codex", ...]` without reading docs
+
+**Operational Metadata:**
+- **Version compatibility** — `"schemaVersion": "2.3"`, `"serverVersion": "2.0.0"`, per-tool `"addedIn": "2.0.0"` for mismatch detection
+- **Deprecation signals** — `"deprecated": true, "replacedBy": "forge_new_tool"` for graceful agent migration
+- **Rate limit hints** — `"maxConcurrent": 1` for `forge_run_plan` (one at a time), `"maxConcurrent": 10` for read-only tools
+- **Operation ID aliases** — `forge_run_plan` also discoverable as `"aliases": ["execute-plan", "run-plan"]` for natural language matching
 
 ### v2.4 — Unified Telemetry
 

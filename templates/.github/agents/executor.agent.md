@@ -20,6 +20,12 @@ You are the **Executor**. Your job is to execute a hardened phase plan one slice
 
 ## Workflow
 
+### Session Start — Discover Capabilities
+
+Call `forge_capabilities` to discover all available tools, workflows, config, and memory integration.
+This tells you what MCP tools are available, whether OpenBrain memory is configured, and what
+workflow sequences to follow (e.g., estimate → execute → status → cost-report).
+
 ### Pre-Execution Traceability Check
 
 Before starting Slice 1, verify the plan is executable:

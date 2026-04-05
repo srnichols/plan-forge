@@ -566,10 +566,17 @@ function createExpressApp() {
 }
 
 // ─── Start ────────────────────────────────────────────────────────────
+const DASHBOARD_ONLY = process.argv.includes("--dashboard-only") || process.argv.includes("--dashboard");
+
 async function main() {
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  console.error("Plan Forge MCP server running (stdio transport)");
+  // MCP stdio transport (skip in dashboard-only mode)
+  if (!DASHBOARD_ONLY) {
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
+    console.error("Plan Forge MCP server running (stdio transport)");
+  } else {
+    console.error("Plan Forge Dashboard-only mode (no MCP stdio)");
+  }
 
   // v2.3: Auto-generate tools.json + cli-schema.json on startup
   try {

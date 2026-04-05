@@ -86,5 +86,5 @@ Show the interop page: `planforge.software/speckit-interop.html`
 |---|---|
 | "Isn't this competing with Spec Kit?" | Complementary. Spec Kit writes specs. Plan Forge enforces them. We link to Spec Kit on our site. |
 | "I already have /speckit.implement" | That generates code from spec. Plan Forge validates the generated code matches the spec at every step. |
-| "Why not just use Spec Kit extensions?" | You can! Our catalog is compatible. Plan Forge adds 18 reviewer agents, lifecycle hooks, and a consistency scoring engine. |
+| "Why not just use Spec Kit extensions?" | You can! Our catalog is compatible. Plan Forge adds 19 reviewer agents, lifecycle hooks, and a consistency scoring engine. |
 | "Do I need to learn a new workflow?" | Step 0 auto-imports your Spec Kit artifacts. You keep using Spec Kit for spec writing. Plan Forge handles enforcement. |

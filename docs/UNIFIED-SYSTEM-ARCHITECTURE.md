@@ -65,8 +65,8 @@ Rough Idea → Hardened Plan → Slice-by-Slice Execution → Independent Review
 - **7-step pipeline**: Specify → Preflight → Harden → Execute → Sweep → Review → Ship
 - **4 isolated sessions**: Plan, Build, Review, Ship (prevents self-review bias)
 - **6 tech presets**: dotnet, typescript, python, java, go, azure-iac (plus custom)
-- **16–17 instruction files** per app preset (12 for azure-iac): architecture, security, testing, database, WAF, CAF, etc.
-- **18 agents per app preset**: 6 stack-specific + 7 cross-stack + 5 pipeline (17 for azure-iac)
+- **17–18 instruction files** per app preset (12 for azure-iac): architecture, security, testing, database, naming, WAF, CAF, etc.
+- **19 agents per app preset**: 6 stack-specific + 8 cross-stack + 5 pipeline (18 for azure-iac)
 - **8 skills per app preset** (3 for azure-iac): database-migration, staging-deploy, test-sweep, etc.
 - **106 files with OpenBrain hooks**: search before acting, capture after completing
 - **Lifecycle hooks**: auto-enforce guardrails, format code, catch TODOs
@@ -183,7 +183,7 @@ graph TB
     subgraph "Plan Forge Guardrails"
         INSTRUCTIONS[".github/instructions/<br/>17 instruction files"]
         PROMPTS[".github/prompts/<br/>15 prompt templates"]
-        AGENTS_DEF[".github/agents/<br/>18 agent definitions"]
+        AGENTS_DEF[".github/agents/<br/>19 agent definitions"]
         HOOKS[".github/hooks/<br/>lifecycle hooks"]
         PLANS["docs/plans/<br/>hardened plans"]
     end
@@ -676,7 +676,7 @@ my-api/
 │   │   ├── security.instructions.md                   ← Plan Forge: OWASP, validation
 │   │   ├── testing.instructions.md                    ← Plan Forge: TDD, coverage
 │   │   ├── persistent-memory.instructions.md          ← OpenBrain: search/capture rules
-│   │   └── ... (16–17 total instruction files per app preset; 12 for azure-iac)
+│   │   └── ... (17–18 total instruction files per app preset; 12 for azure-iac)
 │   ├── prompts/
 │   │   ├── step0-specify-feature.prompt.md            ← Plan Forge: pipeline Step 0
 │   │   ├── step1-preflight-check.prompt.md            ← Plan Forge: pipeline Step 1

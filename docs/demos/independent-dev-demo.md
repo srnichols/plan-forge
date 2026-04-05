@@ -79,7 +79,7 @@ Savings: 39%
 
 | | Spec Kit | Plan Forge |
 |---|---|---|
-| Strength | Spec-first methodology, 85K community | Runtime enforcement, 18 reviewer agents |
+| Strength | Spec-first methodology, 85K community | Runtime enforcement, 19 reviewer agents |
 | Agent support | 25+ agents | 4 first-class + MCP tools + copy-paste |
 | Guardrails | At planning time | During coding (auto-load, hooks, MCP) |
 | Best for | Defining what to build | Ensuring it's built correctly |

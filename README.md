@@ -38,6 +38,19 @@ AI coding tools make it easy to generate code fast. But fast isn't the same as g
 
 This framework doesn't slow you down. It teaches the AI your standards so you **move fast *and* build right** — with guardrails that enforce best practices whether you're a junior developer learning the craft or a senior architect protecting the system.
 
+### Verified Performance
+
+| Metric | Result |
+|--------|--------|
+| **Execution speed** | 3 .NET CRUD slices (service + tests + controller) in 16 seconds |
+| **Pipeline reliability** | 24/24 validation gates pass across Steps 0–6 |
+| **Gate coverage** | `dotnet build` + `dotnet test` (12 tests) at every slice boundary |
+| **Model support** | Claude Opus/Sonnet/Haiku, GPT 5.x, Gemini — routed per slice |
+| **Orchestrator tests** | 65 self-tests passing (parser, DAG, scheduler, events, cost, security) |
+| **Cost tracking** | Per-slice token counts, 23-model pricing table, monthly aggregation |
+| **Observability** | OTLP traces with resource context, span kinds, severity levels |
+| **Memory** | OpenBrain integration — prior decisions searched before each slice |
+
 ### The Bottom Line
 
 | Without guardrails | With Plan Forge |

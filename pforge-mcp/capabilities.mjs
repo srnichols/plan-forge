@@ -290,6 +290,27 @@ export const CLI_SCHEMA = {
       args: [{ name: "plan", type: "path", required: true }],
       flags: { "--dry-run": { type: "boolean" } },
       examples: ["pforge branch docs/plans/Phase-1-AUTH-PLAN.md"],
+      note: "CLI-only — not available as MCP tool. Use via terminal.",
+    },
+    commit: {
+      description: "Auto-generate conventional commit from slice goal",
+      args: [
+        { name: "plan", type: "path", required: true },
+        { name: "slice", type: "number", required: true },
+      ],
+      flags: { "--dry-run": { type: "boolean" } },
+      examples: ["pforge commit docs/plans/Phase-1.md 2"],
+      note: "CLI-only — not available as MCP tool.",
+    },
+    "phase-status": {
+      description: "Update phase status in DEPLOYMENT-ROADMAP.md",
+      args: [
+        { name: "plan", type: "path", required: true },
+        { name: "status", type: "string", required: true, enum: ["planned", "in-progress", "complete", "paused"] },
+      ],
+      flags: {},
+      examples: ["pforge phase-status docs/plans/Phase-1.md complete"],
+      note: "CLI-only — not available as MCP tool.",
     },
     diff: {
       description: "Compare changes against plan's Scope Contract",
@@ -479,6 +500,23 @@ export function buildCapabilitySurface(mcpTools, options = {}) {
       },
       retention: "maxRunHistory config in .forge.json (default: 50), auto-prunes oldest runs",
     },
+    orchestratorApi: {
+      description: "Internal APIs exported from pforge-mcp/orchestrator.mjs for advanced integrations",
+      exports: {
+        parsePlan: { description: "Parse plan Markdown → DAG with slices, deps, scope, gates", args: "planPath" },
+        runPlan: { description: "Execute a plan end-to-end (main orchestration entry)", args: "planPath, options" },
+        detectWorkers: { description: "Detect available CLI workers (gh-copilot, claude, codex)", returns: "array" },
+        spawnWorker: { description: "Spawn a CLI worker with prompt, model, timeout", args: "prompt, options" },
+        runGate: { description: "Execute a validation gate command (allowlisted)", args: "command, cwd" },
+        getCostReport: { description: "Generate cost report from .forge/cost-history.json", args: "cwd" },
+        calculateSliceCost: { description: "Calculate cost for a single slice from token data", args: "tokens" },
+        buildCostBreakdown: { description: "Build cost breakdown from all slice results", args: "sliceResults" },
+        SequentialScheduler: { description: "Execute slices one-at-a-time in DAG order" },
+        ParallelScheduler: { description: "Execute [P]-tagged slices concurrently (up to maxParallelism)" },
+      },
+      schedulerSelection: "Auto-detected: if plan has [P] tags → ParallelScheduler, else SequentialScheduler",
+      conflictDetection: "Parallel slices with overlapping [scope:] patterns forced to sequential",
+    },
     extensions,
     memory: buildMemoryCapabilities(cwd),
   };
@@ -560,10 +598,25 @@ function buildMemoryCapabilities(cwd) {
 
     // How Plan Forge orchestrator integrates with OpenBrain
     orchestratorIntegration: {
-      beforeSlice: "Worker prompts include search_thoughts instructions to load prior conventions",
-      afterSlice: "Worker prompts include capture_thought instructions to persist decisions",
+      beforeSlice: "Worker prompts include search_thoughts instructions to load prior conventions and decisions",
+      afterSlice: "Worker prompts include capture_thought instructions to persist architecture decisions and patterns",
       afterRun: "Summary includes _memoryCapture field with run summary thought + cost anomaly thought",
-      costAnomaly: "If run cost exceeds 2x the historical average, a cost insight thought is generated",
+      costAnomaly: "If run cost exceeds 2x the historical average, a cost insight thought is auto-generated",
+      autoCapture: {
+        runSummary: {
+          trigger: "After every run (pass or fail)",
+          content: "Plan name, status, slices passed/failed, duration, cost, failed slice details",
+          project: "From .forge.json projectName",
+          source: "plan-forge-orchestrator/<plan-path>",
+        },
+        costAnomaly: {
+          trigger: "After run if cost > 2x historical average",
+          content: "Cost anomaly alert with current vs average cost",
+          threshold: "2.0x average cost per run",
+          requiresHistory: "At least 2 prior runs in cost-history.json",
+        },
+      },
+      summaryField: "_memoryCapture in summary JSON (in-memory only, not written to disk — caller acts on it)",
     },
 
     // Recommended workflows combining Plan Forge + OpenBrain

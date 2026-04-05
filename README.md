@@ -14,7 +14,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**[Website](https://srnichols.github.io/plan-forge/)** · **[Quick Start](https://srnichols.github.io/plan-forge/#quickstart)** · **[Documentation](https://srnichols.github.io/plan-forge/docs.html)** · **[FAQ](https://srnichols.github.io/plan-forge/faq.html)** · **[Extensions](https://srnichols.github.io/plan-forge/extensions.html)** · **[Spec Kit Interop](https://srnichols.github.io/plan-forge/speckit-interop.html)**
+**[Website](https://planforge.software/)** · **[Quick Start](https://planforge.software/#quickstart)** · **[Documentation](https://planforge.software/docs.html)** · **[FAQ](https://planforge.software/faq.html)** · **[Extensions](https://planforge.software/extensions.html)** · **[Spec Kit Interop](https://planforge.software/speckit-interop.html)**
 
 ---
 
@@ -857,7 +857,7 @@ Plan Forge integrates seamlessly with [Spec Kit](https://github.com/github/spec-
 - **Extension catalog** uses the same format as Spec Kit's `catalog.community.json`
 - Use Spec Kit to **write the spec**, Plan Forge to **enforce it**
 
-See [Spec Kit + Plan Forge integration guide](https://srnichols.github.io/plan-forge/speckit-interop.html) for the combined workflow.
+See [Spec Kit + Plan Forge integration guide](https://planforge.software/speckit-interop.html) for the combined workflow.
 
 ---
 

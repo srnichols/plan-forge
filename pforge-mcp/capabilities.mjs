@@ -408,6 +408,7 @@ const SYSTEM_REFERENCE = {
   description: "AI coding guardrails that convert rough ideas into hardened execution contracts. Spec-driven framework with autonomous execution, cost tracking, telemetry, and persistent memory.",
   version: VERSION,
   repository: "https://github.com/srnichols/plan-forge",
+  website: "https://planforge.software",
 
   architecture: {
     description: "Single Node.js process serving MCP (stdio) + Express (HTTP) + WebSocket (events)",

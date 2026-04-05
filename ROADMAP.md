@@ -142,16 +142,48 @@ Give AI agents instant understanding of Plan Forge capabilities without parsing 
 
 ### v2.4 — Unified Telemetry
 
-OpenTelemetry-compatible structured logging across the entire system for end-to-end observability.
+OpenTelemetry-compatible structured logging across the entire system for end-to-end observability. Built-in trace viewer in the dashboard — no external tools required.
 
 - **Trace context** — every `runPlan()` gets a `trace_id`; every slice gets a `span_id` correlated to the parent run
 - **Structured log format** — OTLP-compatible JSON emitted to `.forge/runs/<timestamp>/trace.json`
 - **Event correlation** — orchestrator events, worker stdout, gate results, and cost data all linked by span
 - **Optional collector forwarding** — if `OTEL_EXPORTER_OTLP_ENDPOINT` is set, forward to Jaeger / Aspire Dashboard / Grafana
-- **Dashboard integration** — trace viewer tab showing parent→child spans with timing waterfall
 - **Metrics** — tokens/sec, cost/slice, gate pass rate, retry rate exported as OTLP metrics
 
-Example trace for a 4-slice run:
+**Built-In Trace Viewer** (dashboard "Traces" tab at `localhost:3100/dashboard`):
+- **Waterfall timeline** — horizontal bars showing span duration per slice (like Chrome DevTools Network tab)
+- **Parallel lane rendering** — `[P]`-tagged slices shown side-by-side with dependency arrows
+- **Span detail panel** — click any span to see logs, tokens, cost, gate results, retry attempts
+- **Log stream** — filterable by level (info/warn/error), searchable by keyword
+- **REST API** — `GET /api/traces` (list runs), `GET /api/traces/:runId` (single run detail)
+- Zero external dependencies — vanilla JS canvas rendering, reads `.forge/runs/*/trace.json`
+
+**Trace JSON format** (simplified OTLP):
+```json
+{
+  "traceId": "abc123",
+  "spans": [
+    {
+      "spanId": "s1", "parentSpanId": null, "name": "run-plan",
+      "startTime": "...", "endTime": "...", "status": "completed",
+      "attributes": { "plan": "Phase-1", "slices": 4, "mode": "auto" }
+    },
+    {
+      "spanId": "s2", "parentSpanId": "s1", "name": "slice-1",
+      "startTime": "...", "endTime": "...", "status": "passed",
+      "attributes": { "model": "gpt-5-mini", "tokens_out": 4200, "cost_usd": 0.12, "attempts": 2 },
+      "events": [
+        { "time": "...", "name": "worker-spawned", "attributes": { "cmd": "gh copilot" } },
+        { "time": "...", "name": "gate-failed", "attributes": { "error": "CS1513" } },
+        { "time": "...", "name": "retry", "attributes": { "attempt": 2 } },
+        { "time": "...", "name": "gate-passed" }
+      ]
+    }
+  ]
+}
+```
+
+Example rendered trace:
 ```
 Trace: run-plan (trace_id: abc123, plan: Phase-1-CLIENTS-CRUD)
   ├─ Span: slice-1 [P] (467s, passed, gpt-5-mini, $0.12, 2 attempts)

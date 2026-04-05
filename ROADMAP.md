@@ -120,17 +120,52 @@ Add lightweight inter-session communication and a visual monitoring UI to the MC
 - **Notifications center** — bell icon with run completions, sweep warnings, review findings (persists across reloads)
 - **Config editor** — visual editor for `.forge.json` (preset, agents, model routing, extensions)
 
-### v2.2 — Parallel Execution + Team Features
+### v2.2 — Parallel Execution + Team Features ✅
 
-Execute independent slices simultaneously and support multi-developer coordination.
+Shipped in v2.0.0. Execute independent slices simultaneously with conflict detection.
 
-- **`[P]`-tagged slices** in hardened plans execute in parallel (already part of plan format)
-- **Worker pool** — configurable max parallelism (default: 3 concurrent sessions)
-- **Merge checkpoints** — parallel branches converge at defined sync points
-- **Conflict detection** — warn if parallel slices touch overlapping files
-- **Team activity feed** — see who's working on what phase, who's running what (multi-user dashboard)
+- ✅ **`[P]`-tagged slices** execute in parallel via `ParallelScheduler`
+- ✅ **Worker pool** — configurable `maxParallelism` (default: 3)
+- ✅ **Conflict detection** — overlapping scopes fall back to sequential
+- ✅ **Auto-retry** — gate failures re-invoke worker with error context (`maxRetries` config)
+- ✅ **Scope isolation** — worker prompts include `SCOPE:` directive to prevent cross-slice file edits
+- Team activity feed — deferred to v3.0
 
-### v2.3 — OpenClaw Bridge
+### v2.3 — Machine-Readable API Surface
+
+Give AI agents instant understanding of Plan Forge capabilities without parsing Markdown docs.
+
+- **`pforge-mcp/tools.json`** — auto-generated from MCP `TOOLS` array. All 13 tools with name, description, input schema, examples. Agents load one file instead of reading CLI-GUIDE.md.
+- **`pforge-mcp/cli-schema.json`** — every CLI command with args, flags, types, defaults, examples. Machine-parseable alternative to `pforge help`.
+- **Auto-generation** — `tools.json` regenerated on server startup from the live `TOOLS` definition (always in sync)
+- **Agent discovery** — agents check for `pforge-mcp/tools.json` on session start; if present, skip doc parsing
+
+### v2.4 — Unified Telemetry
+
+OpenTelemetry-compatible structured logging across the entire system for end-to-end observability.
+
+- **Trace context** — every `runPlan()` gets a `trace_id`; every slice gets a `span_id` correlated to the parent run
+- **Structured log format** — OTLP-compatible JSON emitted to `.forge/runs/<timestamp>/trace.json`
+- **Event correlation** — orchestrator events, worker stdout, gate results, and cost data all linked by span
+- **Optional collector forwarding** — if `OTEL_EXPORTER_OTLP_ENDPOINT` is set, forward to Jaeger / Aspire Dashboard / Grafana
+- **Dashboard integration** — trace viewer tab showing parent→child spans with timing waterfall
+- **Metrics** — tokens/sec, cost/slice, gate pass rate, retry rate exported as OTLP metrics
+
+Example trace for a 4-slice run:
+```
+Trace: run-plan (trace_id: abc123, plan: Phase-1-CLIENTS-CRUD)
+  ├─ Span: slice-1 [P] (467s, passed, gpt-5-mini, $0.12, 2 attempts)
+  │    ├─ Log: worker spawned (gh-copilot --model gpt-5-mini)
+  │    ├─ Log: file created: ClientsController.cs
+  │    ├─ Log: gate: dotnet build → failed (CS1513)
+  │    ├─ Log: retry: re-invoked with error context
+  │    └─ Log: gate: dotnet build → passed
+  ├─ Span: slice-2 [P] (320s, passed, claude-sonnet-4.6, $0.08)
+  ├─ Span: slice-3 (319s, passed, depends: slice-2)
+  └─ Span: slice-4 (180s, passed, depends: slice-1+3)
+```
+
+### v2.5 — OpenClaw Bridge
 
 Connect autonomous execution to the unified system architecture.
 

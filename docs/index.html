@@ -1065,11 +1065,13 @@
 
 5. Run .\pforge.ps1 smith to inspect the forge and confirm all checks pass.
 
-6. If pforge-mcp/server.mjs was installed, run: cd pforge-mcp &amp;&amp; npm install (activates 8 forge MCP tools).
+6. If pforge-mcp/server.mjs was installed, run: cd pforge-mcp &amp;&amp; npm install (activates 14 forge MCP tools).
 
 7. If specs/ or memory/constitution.md exist (Spec Kit project), note that Step 0 will auto-detect and offer to import them.
 
-8. Show me a summary of what was installed and any issues found.</code></pre>
+8. Call forge_capabilities to verify all tools are available and discover workflows, config options, and OpenBrain memory integration.
+
+9. Show me a summary of what was installed and any issues found.</code></pre>
             </div>
             <p class="text-xs text-slate-600 mt-3 text-center">Works with GitHub Copilot (Agent Mode), Claude Code, Cursor, or any AI tool with terminal access.</p>
           </div>
@@ -1256,7 +1258,8 @@ Follow the instructions exactly:
 4. Customize copilot-instructions.md with this project's actual details
 5. Run pforge smith to validate the setup
 6. If pforge-mcp/server.mjs exists, run: cd pforge-mcp &amp;&amp; npm install (activates MCP tools)
-7. Note any Spec Kit artifacts found (specs/, memory/constitution.md)
+7. Call forge_capabilities to verify all tools are available
+8. Note any Spec Kit artifacts found (specs/, memory/constitution.md)
 
 Repo: https://github.com/srnichols/plan-forge
 Target project: (current directory)</code></pre>
@@ -1269,7 +1272,7 @@ Target project: (current directory)</code></pre>
               </div>
               <div class="p-3 rounded-lg bg-slate-800/60 border border-slate-700/40 text-slate-400">
                 <span class="text-white font-medium block mb-1">What it installs</span>
-                16–17 instruction files, 19 agents, 8 skills, lifecycle hooks, pipeline prompts, copilot-instructions.md
+                17–18 instruction files, 19 agents, 8 skills, lifecycle hooks, pipeline prompts, copilot-instructions.md, 14 MCP tools
               </div>
               <div class="p-3 rounded-lg bg-slate-800/60 border border-slate-700/40 text-slate-400">
                 <span class="text-white font-medium block mb-1">What it customizes</span>

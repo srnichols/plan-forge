@@ -15,6 +15,7 @@
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { execSync } from "node:child_process";
+import { isOpenBrainConfigured } from "./memory.mjs";
 
 const VERSION = "2.3.0";
 
@@ -408,10 +409,117 @@ export function buildCapabilitySurface(mcpTools, options = {}) {
     },
     dashboard: {
       url: `http://127.0.0.1:3100/dashboard`,
-      tabs: ["Progress", "Runs", "Cost", "Actions", "Replay", "Extensions", "Config"],
+      tabs: ["Progress", "Runs", "Cost", "Actions", "Replay", "Extensions", "Config", "Traces"],
     },
     hub: hubPort ? { url: `ws://127.0.0.1:${hubPort}`, status: "running" } : { status: "stopped" },
     extensions,
+    memory: buildMemoryCapabilities(cwd),
+  };
+}
+
+// ─── OpenBrain Memory Integration ─────────────────────────────────────
+
+/**
+ * Build OpenBrain memory capabilities section for the API surface.
+ * Tells agents how to use persistent memory with Plan Forge.
+ */
+function buildMemoryCapabilities(cwd) {
+  const configured = isOpenBrainConfigured(cwd);
+
+  return {
+    provider: "OpenBrain",
+    configured,
+    description: configured
+      ? "Persistent semantic memory is active. Use search_thoughts before work and capture_thought after decisions."
+      : "OpenBrain is not configured. Memory features are disabled. See CUSTOMIZATION.md for setup.",
+
+    // Companion MCP tools (from OpenBrain server, not Plan Forge)
+    companionTools: {
+      search_thoughts: {
+        description: "Search for prior decisions, patterns, and lessons relevant to current work",
+        when: "Before starting any slice, review, or planning session",
+        params: {
+          query: "Natural language search (e.g., 'authentication patterns', 'database migration conventions')",
+          project: "Scope to current project name (from .forge.json projectName)",
+          type: "Filter by type: 'convention', 'decision', 'lesson', 'insight'",
+          limit: "Max results (default: 10)",
+        },
+        examples: [
+          { query: "project conventions", project: "MyApp", type: "convention", limit: 5 },
+          { query: "authentication patterns EF Core", project: "MyApp" },
+          { query: "prior phase mistakes lessons", project: "MyApp", type: "lesson" },
+        ],
+      },
+      capture_thought: {
+        description: "Save a decision, convention, or lesson for future sessions to find",
+        when: "After completing a slice, making an architecture decision, or discovering a pattern",
+        params: {
+          content: "The thought (e.g., 'Decision: Used repository pattern for data access because...')",
+          project: "Current project name",
+          source: "Where captured (e.g., 'plan-forge-orchestrator/Phase-1/slice-3')",
+          created_by: "Who captured (e.g., 'copilot-vscode', 'gh-copilot-worker')",
+        },
+        captureGuidelines: [
+          "Capture architecture decisions and WHY alternatives were rejected",
+          "Capture naming conventions and patterns established",
+          "Capture gotchas and constraints discovered (saves time in future phases)",
+          "Capture lessons from failures (what broke, what fixed it)",
+          "Do NOT capture trivial facts or code that's already in version control",
+        ],
+        examples: [
+          {
+            content: "Decision: Used IProjectService interface with EF Core repository pattern. Rejected Active Record because the team prefers explicit separation of concerns.",
+            project: "TimeTracker",
+            source: "plan-forge-orchestrator/Phase-2/slice-1",
+            created_by: "gh-copilot-worker",
+          },
+          {
+            content: "Convention: All soft-deletes use IsActive=false, never physical DELETE. GetAllAsync filters by IsActive=true by default.",
+            project: "TimeTracker",
+            source: "plan-forge-orchestrator/Phase-1/slice-2",
+            created_by: "gh-copilot-worker",
+          },
+        ],
+      },
+      capture_thoughts: {
+        description: "Batch capture multiple thoughts in one call (more efficient than multiple capture_thought calls)",
+        when: "After completing a run or phase with multiple decisions",
+      },
+      thought_stats: {
+        description: "Get statistics about captured thoughts (count by project, type, source)",
+        when: "To understand how much project knowledge has been accumulated",
+      },
+    },
+
+    // How Plan Forge orchestrator integrates with OpenBrain
+    orchestratorIntegration: {
+      beforeSlice: "Worker prompts include search_thoughts instructions to load prior conventions",
+      afterSlice: "Worker prompts include capture_thought instructions to persist decisions",
+      afterRun: "Summary includes _memoryCapture field with run summary thought + cost anomaly thought",
+      costAnomaly: "If run cost exceeds 2x the historical average, a cost insight thought is generated",
+    },
+
+    // Recommended workflows combining Plan Forge + OpenBrain
+    workflows: {
+      "memory-enhanced-execution": {
+        description: "Execute a plan with full memory context",
+        steps: [
+          { tool: "search_thoughts", args: { query: "project conventions", type: "convention" }, description: "Load conventions before planning" },
+          { tool: "forge_run_plan", args: { estimate: true }, description: "Estimate with historical data" },
+          { tool: "forge_run_plan", description: "Execute — workers auto-search/capture if OpenBrain configured" },
+          { tool: "forge_cost_report", description: "Review cost" },
+          { tool: "capture_thought", args: { content: "Phase N complete: <summary>" }, description: "Persist phase summary" },
+        ],
+      },
+      "knowledge-review": {
+        description: "Review accumulated project knowledge",
+        steps: [
+          { tool: "thought_stats", description: "See knowledge distribution" },
+          { tool: "search_thoughts", args: { query: "decisions", type: "decision" }, description: "Review architecture decisions" },
+          { tool: "search_thoughts", args: { query: "lessons mistakes", type: "lesson" }, description: "Review lessons learned" },
+        ],
+      },
+    },
   };
 }
 

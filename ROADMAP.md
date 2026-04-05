@@ -144,11 +144,17 @@ Give AI agents instant understanding of Plan Forge capabilities without parsing 
 
 OpenTelemetry-compatible structured logging across the entire system for end-to-end observability. Built-in trace viewer in the dashboard — no external tools required.
 
+**Core Trace Infrastructure:**
 - **Trace context** — every `runPlan()` gets a `trace_id`; every slice gets a `span_id` correlated to the parent run
 - **Structured log format** — OTLP-compatible JSON emitted to `.forge/runs/<timestamp>/trace.json`
+- **Resource context** — trace root includes `service.name`, `service.version`, `host.name`, `os.type`, `project.name`, `user.name` (from git config) for multi-machine identification
+- **Span kinds** — `SERVER` (run-plan), `INTERNAL` (slice orchestration), `CLIENT` (worker spawn, gate execution) for correct trace viewer rendering
+- **Severity levels** — all events include `severity` (TRACE/DEBUG/INFO/WARN/ERROR/FATAL) and `severityNumber` per OTLP convention for filtering
+- **Gates as child spans** — gate commands modeled as `CLIENT` child spans of slice spans (not just events) for waterfall timing visibility
+- **Worker output summary** — first 50 lines or pattern-matched lines (created/modified/error) embedded in trace; full log in `slice-N-log.txt`, lazy-loaded on click
 - **Event correlation** — orchestrator events, worker stdout, gate results, and cost data all linked by span
 - **Optional collector forwarding** — if `OTEL_EXPORTER_OTLP_ENDPOINT` is set, forward to Jaeger / Aspire Dashboard / Grafana
-- **Metrics** — tokens/sec, cost/slice, gate pass rate, retry rate exported as OTLP metrics
+- **Metrics as derived views** — tokens/sec, cost/slice, gate pass rate, retry rate computed at query time from `index.jsonl` + `summary.json` (no separate metrics file, single source of truth). Cache with TTL if performance matters.
 
 **Built-In Trace Viewer** (dashboard "Traces" tab at `localhost:3100/dashboard`):
 - **Waterfall timeline** — horizontal bars showing span duration per slice (like Chrome DevTools Network tab)
@@ -161,23 +167,44 @@ OpenTelemetry-compatible structured logging across the entire system for end-to-
 **Trace JSON format** (simplified OTLP):
 ```json
 {
+  "resource": {
+    "service.name": "plan-forge-orchestrator",
+    "service.version": "2.0.0",
+    "host.name": "SCOTT-PC",
+    "os.type": "windows",
+    "project.name": "TimeTracker",
+    "user.name": "scott"
+  },
   "traceId": "abc123",
   "spans": [
     {
       "spanId": "s1", "parentSpanId": null, "name": "run-plan",
+      "kind": "SERVER",
       "startTime": "...", "endTime": "...", "status": "completed",
       "attributes": { "plan": "Phase-1", "slices": 4, "mode": "auto" }
     },
     {
       "spanId": "s2", "parentSpanId": "s1", "name": "slice-1",
+      "kind": "INTERNAL",
       "startTime": "...", "endTime": "...", "status": "passed",
       "attributes": { "model": "gpt-5-mini", "tokens_out": 4200, "cost_usd": 0.12, "attempts": 2 },
       "events": [
-        { "time": "...", "name": "worker-spawned", "attributes": { "cmd": "gh copilot" } },
-        { "time": "...", "name": "gate-failed", "attributes": { "error": "CS1513" } },
-        { "time": "...", "name": "retry", "attributes": { "attempt": 2 } },
-        { "time": "...", "name": "gate-passed" }
-      ]
+        { "time": "...", "name": "worker-spawned", "severity": "INFO", "severityNumber": 9, "attributes": { "cmd": "gh copilot" } },
+        { "time": "...", "name": "gate-failed", "severity": "ERROR", "severityNumber": 17, "attributes": { "error": "CS1513" } },
+        { "time": "...", "name": "retry", "severity": "WARN", "severityNumber": 13, "attributes": { "attempt": 2 } },
+        { "time": "...", "name": "gate-passed", "severity": "INFO", "severityNumber": 9 }
+      ],
+      "logSummary": ["created: ClientsController.cs", "modified: Program.cs"]
+    },
+    {
+      "spanId": "s2-gate-1", "parentSpanId": "s2", "name": "gate: dotnet build",
+      "kind": "CLIENT",
+      "startTime": "...", "endTime": "...", "status": "ERROR"
+    },
+    {
+      "spanId": "s2-gate-2", "parentSpanId": "s2", "name": "gate: dotnet test",
+      "kind": "CLIENT",
+      "startTime": "...", "endTime": "...", "status": "OK"
     }
   ]
 }
@@ -186,15 +213,43 @@ OpenTelemetry-compatible structured logging across the entire system for end-to-
 Example rendered trace:
 ```
 Trace: run-plan (trace_id: abc123, plan: Phase-1-CLIENTS-CRUD)
-  ├─ Span: slice-1 [P] (467s, passed, gpt-5-mini, $0.12, 2 attempts)
-  │    ├─ Log: worker spawned (gh-copilot --model gpt-5-mini)
-  │    ├─ Log: file created: ClientsController.cs
-  │    ├─ Log: gate: dotnet build → failed (CS1513)
-  │    ├─ Log: retry: re-invoked with error context
-  │    └─ Log: gate: dotnet build → passed
-  ├─ Span: slice-2 [P] (320s, passed, claude-sonnet-4.6, $0.08)
-  ├─ Span: slice-3 (319s, passed, depends: slice-2)
-  └─ Span: slice-4 (180s, passed, depends: slice-1+3)
+  ├─ Span: slice-1 [P] INTERNAL (467s, 2 attempts)
+  │    ├─ Span: worker CLIENT (gh-copilot --model gpt-5-mini, 420s)
+  │    │    ├─ INFO: file created: ClientsController.cs
+  │    │    └─ INFO: file modified: Program.cs
+  │    ├─ Span: gate CLIENT (dotnet build, 12s) → ERROR CS1513
+  │    ├─ WARN: retry attempt 2
+  │    ├─ Span: worker CLIENT (attempt 2, 390s)
+  │    ├─ Span: gate CLIENT (dotnet build, 10s) → OK
+  │    └─ Span: gate CLIENT (dotnet test, 25s) → OK
+  ├─ Span: slice-2 [P] INTERNAL (320s, claude-sonnet-4.6, $0.08)
+  ├─ Span: slice-3 INTERNAL (319s, depends: slice-2)
+  └─ Span: slice-4 INTERNAL (180s, depends: slice-1+3)
+```
+
+**File Architecture:**
+```
+.forge/runs/
+├── index.jsonl                          ← append-only global index (1 line per run)
+├── 2026-04-04T20-37-07_Phase-1/
+│   ├── manifest.json                    ← artifact registry for this run
+│   ├── trace.json                       ← OTLP trace (resource + spans + events)
+│   │   ├── resource {}                  ← service, host, project, user
+│   │   └── spans []
+│   │       ├── run-plan (SERVER, root)
+│   │       ├── slice-1 (INTERNAL)
+│   │       │   ├── worker (CLIENT)
+│   │       │   ├── gate: dotnet build (CLIENT)
+│   │       │   └── gate: dotnet test (CLIENT)
+│   │       └── slice-2 (INTERNAL)
+│   ├── run.json                         ← run metadata
+│   ├── summary.json                     ← aggregate results + cost
+│   ├── events.log                       ← raw event stream
+│   ├── slice-1.json                     ← per-slice result
+│   ├── slice-1-log.txt                  ← full worker stdout/stderr
+│   └── slice-2.json
+└── 2026-04-04T14-22-00_Phase-2/
+    └── ...
 ```
 
 **Log Registry** (central discovery for all log sources):
@@ -209,6 +264,11 @@ Trace: run-plan (trace_id: abc123, plan: Phase-1-CLIENTS-CRUD)
 - **Dashboard run filter** — dropdown to select which run's events to display when multiple runs are active
 - **Trace isolation** — each `trace.json` is per-run directory, no cross-contamination between concurrent executions
 - **Shared resource safety** — `events.log` scoped per run directory (already isolated); `server-ports.json` uses atomic write
+
+**Operational:**
+- **Index corruption recovery** — `index.jsonl` reader skips malformed lines (`try/catch` per line). Periodic compaction rewrites index from actual directory contents.
+- **Log rotation** — `maxRunHistory` config in `.forge.json` (default: 50). On run completion, prune oldest directories beyond the limit. Index reader ignores entries whose directory no longer exists.
+- **Baggage propagation** — trace context (traceId, parentSpanId) passed to child spans so gate commands, worker output, and retries are all correlated in the waterfall.
 
 ### v2.5 — OpenClaw Bridge
 

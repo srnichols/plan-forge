@@ -197,6 +197,13 @@ Trace: run-plan (trace_id: abc123, plan: Phase-1-CLIENTS-CRUD)
   └─ Span: slice-4 (180s, passed, depends: slice-1+3)
 ```
 
+**Multi-Agent Concurrency** (safe concurrent runs):
+- **`runId` on all events** — hub broadcasts include `runId` field so clients filter by active run
+- **Append-only cost history** — `cost-history.json` switches from JSON array to JSONL (one entry per line) — safe for concurrent writes, no file locking needed
+- **Dashboard run filter** — dropdown to select which run's events to display when multiple runs are active
+- **Trace isolation** — each `trace.json` is per-run directory, no cross-contamination between concurrent executions
+- **Shared resource safety** — `events.log` scoped per run directory (already isolated); `server-ports.json` uses atomic write
+
 ### v2.5 — OpenClaw Bridge
 
 Connect autonomous execution to the unified system architecture.

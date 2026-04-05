@@ -197,6 +197,12 @@ Trace: run-plan (trace_id: abc123, plan: Phase-1-CLIENTS-CRUD)
   └─ Span: slice-4 (180s, passed, depends: slice-1+3)
 ```
 
+**Log Registry** (central discovery for all log sources):
+- **Per-run manifest** — `.forge/runs/<timestamp>/manifest.json` lists every artifact (run.json, summary.json, trace.json, slice-N.json, slice-N-log.txt) with status and format. Dashboard reads this instead of guessing file names.
+- **Global index** — `.forge/runs/index.jsonl` is an append-only file (one JSON entry per line per run). REST `/api/traces` reads this for instant run listing — no directory scanning.
+- **Auto-registration** — orchestrator writes manifest as last step of each run, appends to index. New log sources (e.g., trace.json) just add a manifest entry — dashboard auto-discovers.
+- **Query flow** — `GET /api/traces` reads `index.jsonl` → returns run list. `GET /api/traces/:runId` reads `manifest.json` → returns artifact map. Dashboard fetches specific files by name from manifest.
+
 **Multi-Agent Concurrency** (safe concurrent runs):
 - **`runId` on all events** — hub broadcasts include `runId` field so clients filter by active run
 - **Append-only cost history** — `cost-history.json` switches from JSON array to JSONL (one entry per line) — safe for concurrent writes, no file locking needed

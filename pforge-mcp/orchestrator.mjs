@@ -433,7 +433,16 @@ export function spawnWorker(prompt, options = {}) {
       clearTimeout(timer);
 
       const jsonlEvents = parseJSONL(stdout);
-      const tokens = extractTokens(jsonlEvents);
+      let tokens = extractTokens(jsonlEvents);
+
+      // Fallback: parse stderr stats (gh copilot outputs stats to stderr in non-TTY mode)
+      if (!tokens.model || tokens.tokens_out === 0) {
+        const stderrStats = parseStderrStats(stderr);
+        if (stderrStats.model) tokens.model = stderrStats.model;
+        if (stderrStats.tokens_out > 0) tokens.tokens_out = stderrStats.tokens_out;
+        if (stderrStats.tokens_in > 0) tokens.tokens_in = stderrStats.tokens_in;
+        if (stderrStats.premiumRequests > 0) tokens.premiumRequests = stderrStats.premiumRequests;
+      }
 
       resolve({
         output: stdout,
@@ -514,6 +523,53 @@ function extractTokens(events) {
     sessionDurationMs,
     codeChanges,
   };
+}
+
+/**
+ * Parse stats from gh copilot CLI stderr output.
+ * Format: "Breakdown by AI model:\n claude-sonnet-4.6  11.7m in, 97.5k out, ..."
+ */
+function parseStderrStats(stderr) {
+  const stats = { model: null, tokens_in: 0, tokens_out: 0, premiumRequests: 0 };
+  if (!stderr) return stats;
+
+  // Parse premium requests
+  const premiumMatch = stderr.match(/(\d+)\s+Premium request/);
+  if (premiumMatch) stats.premiumRequests = parseInt(premiumMatch[1], 10);
+
+  // Parse model breakdown lines: "claude-sonnet-4.6  11.7m in, 97.5k out, ..."
+  const modelLines = stderr.match(/^\s+([\w.-]+)\s+([\d.]+[kmb]?)\s+in,\s+([\d.]+[kmb]?)\s+out/gm);
+  if (modelLines) {
+    let maxTokens = 0;
+    for (const line of modelLines) {
+      const m = line.match(/^\s+([\w.-]+)\s+([\d.]+[kmb]?)\s+in,\s+([\d.]+[kmb]?)\s+out/);
+      if (!m) continue;
+      const model = m[1];
+      const tokIn = parseTokenCount(m[2]);
+      const tokOut = parseTokenCount(m[3]);
+      stats.tokens_in += tokIn;
+      stats.tokens_out += tokOut;
+      // Primary model = the one with most output tokens
+      if (tokOut > maxTokens) {
+        maxTokens = tokOut;
+        stats.model = model;
+      }
+    }
+  }
+
+  return stats;
+}
+
+/**
+ * Parse token count strings like "97.5k", "11.7m", "1.2b", "843.6k"
+ */
+function parseTokenCount(str) {
+  if (!str) return 0;
+  const num = parseFloat(str);
+  if (str.endsWith("b")) return Math.round(num * 1_000_000_000);
+  if (str.endsWith("m")) return Math.round(num * 1_000_000);
+  if (str.endsWith("k")) return Math.round(num * 1_000);
+  return Math.round(num);
 }
 
 /**

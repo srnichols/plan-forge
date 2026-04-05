@@ -392,7 +392,7 @@ export function spawnWorker(prompt, options = {}) {
     switch (chosen.name) {
       case "gh-copilot":
         cmd = "gh";
-        args = ["copilot", "--", "-p", prompt, "--allow-all", "--no-ask-user", "--output-format", "json", "-s"];
+        args = ["copilot", "--", "-p", prompt, "--allow-all", "--no-ask-user", "--output-format", "json"];
         if (model) args.push("--model", model);
         break;
       case "claude":
@@ -872,10 +872,11 @@ export async function runPlan(planPath, options = {}) {
   eventBus.emit("run-started", runMeta);
 
   // Execute slices
+  const maxRetries = loadMaxRetries(cwd);
   const results = await scheduler.execute(
     plan.dag.nodes,
     plan.dag.order,
-    async (slice) => executeSlice(slice, { cwd, model: effectiveModel, modelRouting, mode, runDir }),
+    async (slice) => executeSlice(slice, { cwd, model: effectiveModel, modelRouting, mode, runDir, maxRetries }),
     { abortSignal, resumeFrom: resumeFrom ? String(resumeFrom) : null },
   );
 
@@ -939,6 +940,24 @@ function loadMaxParallelism(cwd) {
     }
   } catch { /* defaults */ }
   return 3; // Default: 3 concurrent workers
+}
+
+/**
+ * Load max retries from .forge.json.
+ * Schema: { "maxRetries": 1 }
+ * @returns {number}
+ */
+function loadMaxRetries(cwd) {
+  const configPath = resolve(cwd, ".forge.json");
+  try {
+    if (existsSync(configPath)) {
+      const config = JSON.parse(readFileSync(configPath, "utf-8"));
+      if (typeof config.maxRetries === "number" && config.maxRetries >= 0) {
+        return config.maxRetries;
+      }
+    }
+  } catch { /* defaults */ }
+  return 1; // Default: 1 retry (2 total attempts)
 }
 
 /**
@@ -1063,76 +1082,98 @@ export function getCostReport(cwd) {
 
 /**
  * Execute a single slice — spawn worker + run validation gates.
+ * Supports automatic retry: if gate fails, re-invokes worker with error context.
  */
 async function executeSlice(slice, options) {
-  const { cwd, model, modelRouting = {}, mode, runDir } = options;
+  const { cwd, model, modelRouting = {}, mode, runDir, maxRetries = 1 } = options;
   const startTime = Date.now();
   const resolvedModel = resolveModel(model, modelRouting, slice);
 
-  const sliceInstructions = buildSlicePrompt(slice);
+  let attempt = 0;
   let workerResult = null;
-
-  if (mode === "assisted") {
-    // Assisted mode: don't spawn worker, just validate gates
-    workerResult = {
-      output: "Assisted mode — human executes in VS Code",
-      tokens: { tokens_in: "n/a", tokens_out: "n/a", model: "human" },
-      exitCode: 0,
-      worker: "human",
-      model: "human",
-    };
-  } else {
-    // Full Auto mode: spawn worker
-    try {
-      workerResult = await spawnWorker(sliceInstructions, { model: resolvedModel, cwd });
-    } catch (err) {
-      return {
-        status: "failed",
-        duration: Date.now() - startTime,
-        error: err.message,
-      };
-    }
-  }
-
-  // Capture session log (C4)
-  const logFile = resolve(runDir, `slice-${slice.number}-log.txt`);
-  const logContent = [
-    `=== Slice ${slice.number}: ${slice.title} ===`,
-    `Worker: ${workerResult.worker}`,
-    `Model: ${workerResult.model}`,
-    `Started: ${new Date(startTime).toISOString()}`,
-    "",
-    "=== STDOUT ===",
-    workerResult.output || "(empty)",
-    "",
-    "=== STDERR ===",
-    workerResult.stderr || "(empty)",
-  ].join("\n");
-  writeFileSync(logFile, logContent);
-
-  // Run validation gate if defined
   let gateResult = { success: true, output: "No validation gate defined" };
-  if (slice.validationGate) {
-    // Execute each line of the validation gate as a separate command
-    const gateLines = slice.validationGate
-      .split("\n")
-      .map((l) => l.replace(/\s{2,}#\s.*$/, "").trim()) // Strip inline comments (2+ spaces before #)
-      .filter((l) => l.length > 0);
+  let lastError = null;
 
-    // C2: Track the first failure with its command for clear error reporting
-    for (const gateLine of gateLines) {
-      gateResult = runGate(gateLine, cwd);
-      if (!gateResult.success) {
-        gateResult.failedCommand = gateLine;
-        break;
+  while (attempt <= maxRetries) {
+    // Build prompt — on retry, include the error context
+    let sliceInstructions = buildSlicePrompt(slice);
+    if (attempt > 0 && lastError) {
+      sliceInstructions += `\n\n--- RETRY (attempt ${attempt + 1}) ---\n` +
+        `Previous attempt failed with this error:\n${lastError}\n` +
+        `Fix the error and ensure the build/test gates pass.`;
+    }
+
+    if (mode === "assisted") {
+      workerResult = {
+        output: "Assisted mode — human executes in VS Code",
+        tokens: { tokens_in: null, tokens_out: null, model: "human" },
+        exitCode: 0,
+        worker: "human",
+        model: "human",
+      };
+    } else {
+      try {
+        workerResult = await spawnWorker(sliceInstructions, { model: resolvedModel, cwd });
+      } catch (err) {
+        return {
+          status: "failed",
+          duration: Date.now() - startTime,
+          error: err.message,
+          attempts: attempt + 1,
+        };
       }
+    }
+
+    // Capture session log (C4) — append on retry
+    const logFile = resolve(runDir, `slice-${slice.number}-log.txt`);
+    const logContent = [
+      attempt > 0 ? `\n=== RETRY ATTEMPT ${attempt + 1} ===` : "",
+      `=== Slice ${slice.number}: ${slice.title} ===`,
+      `Worker: ${workerResult.worker}`,
+      `Model: ${workerResult.model}`,
+      `Started: ${new Date(startTime).toISOString()}`,
+      "",
+      "=== STDOUT ===",
+      workerResult.output || "(empty)",
+      "",
+      "=== STDERR ===",
+      workerResult.stderr || "(empty)",
+    ].join("\n");
+    writeFileSync(logFile, logContent, attempt > 0 ? { flag: "a" } : undefined);
+
+    // Run validation gate if defined
+    gateResult = { success: true, output: "No validation gate defined" };
+    if (slice.validationGate) {
+      const gateLines = slice.validationGate
+        .split("\n")
+        .map((l) => l.replace(/\s{2,}#\s.*$/, "").trim())
+        .filter((l) => l.length > 0);
+
+      for (const gateLine of gateLines) {
+        gateResult = runGate(gateLine, cwd);
+        if (!gateResult.success) {
+          gateResult.failedCommand = gateLine;
+          break;
+        }
+      }
+    }
+
+    // If gate passed or worker failed (no point retrying), break
+    if (gateResult.success || workerResult.exitCode !== 0) break;
+
+    // Gate failed — set error for retry prompt
+    lastError = `Gate command '${gateResult.failedCommand || "unknown"}' failed:\n${gateResult.error || gateResult.output}`;
+    attempt++;
+
+    if (attempt <= maxRetries) {
+      // Log the retry
+      writeFileSync(logFile, `\n\n--- GATE FAILED, RETRYING (attempt ${attempt + 1}) ---\n${lastError}\n`, { flag: "a" });
     }
   }
 
   const duration = Date.now() - startTime;
   const status = workerResult.exitCode === 0 && gateResult.success ? "passed" : "failed";
 
-  // Write per-slice result (Slice 2 schema)
   const sliceResult = {
     number: slice.number,
     title: slice.title,
@@ -1142,9 +1183,11 @@ async function executeSlice(slice, options) {
     gateStatus: gateResult.success ? "passed" : "failed",
     gateOutput: gateResult.output,
     gateError: gateResult.error || null,
-    tokens: workerResult.tokens || { tokens_in: "unknown", tokens_out: "unknown", model: "unknown" },
+    failedCommand: gateResult.failedCommand || null,
+    tokens: workerResult.tokens || { tokens_in: null, tokens_out: null, model: "unknown" },
     worker: workerResult.worker,
     model: workerResult.model,
+    attempts: attempt + 1,
   };
 
   writeFileSync(
@@ -1163,6 +1206,11 @@ function buildSlicePrompt(slice) {
   ];
   for (const task of slice.tasks) {
     parts.push(`- ${task}`);
+  }
+  // Scope isolation: tell worker which files to modify
+  if (slice.scope && slice.scope.length > 0) {
+    parts.push("", `SCOPE: Only modify files matching: ${slice.scope.join(", ")}`);
+    parts.push("Do NOT create or modify files outside this scope.");
   }
   if (slice.buildCommand) {
     parts.push("", `Build command: ${slice.buildCommand}`);

@@ -530,6 +530,64 @@ const SYSTEM_REFERENCE = {
     dryRun: "Parses and validates plan without executing",
     resumeFrom: "Skips completed slices and resumes from specified slice number",
   },
+
+  glossary: {
+    // Core concepts
+    "Plan Forge": "The framework itself — AI coding guardrails that enforce spec-driven development",
+    "Forge": "Shorthand for Plan Forge. Also: .forge/ directory (project data), .forge.json (project config)",
+    "Plan": "A Markdown file in docs/plans/ describing a feature to build. Contains slices, scope contract, and validation gates",
+    "Hardened Plan": "A plan that has been through Step 2 (hardening) — locked-down execution contract with slices, gates, forbidden actions. The AI cannot deviate from it",
+    "Slice": "A single unit of execution within a plan. Each slice has tasks, a validation gate, and optional dependencies. Like a sprint task but machine-executable",
+    "Validation Gate": "Build + test commands that must pass at every slice boundary before proceeding. The quality checkpoint",
+    "Gate": "Short for Validation Gate",
+    "Scope Contract": "Section of a plan defining what files are In Scope, Out of Scope, and Forbidden. Prevents scope creep",
+    "Forbidden Actions": "Files or operations the AI must not touch during execution. Enforced by lifecycle hooks and scope checks",
+    "Stop Condition": "A condition that halts execution — e.g., 'If migration fails, STOP'",
+
+    // Pipeline
+    "Pipeline": "The 6-step process: Specify → Preflight → Harden → Execute → Sweep → Review",
+    "Step 0 (Specify)": "Define what and why — structured specification with acceptance criteria",
+    "Step 2 (Harden)": "Convert spec into binding execution contract with slices, gates, and scope",
+    "Step 3 (Execute)": "Build code slice-by-slice. Can be automated (pforge run-plan) or manual (Agent Mode)",
+    "Step 5 (Review Gate)": "Independent audit session — checks for drift, scope violations, and quality",
+
+    // Execution
+    "Full Auto": "Execution mode where gh copilot CLI runs each slice automatically with no human intervention",
+    "Assisted": "Execution mode where human codes in VS Code while orchestrator validates gates between slices",
+    "Worker": "The CLI process that executes a slice — usually gh copilot, with fallback to claude or codex CLI",
+    "DAG": "Directed Acyclic Graph — the dependency graph of slices. Determines execution order",
+    "[P] tag": "Parallel-safe marker on a slice header. Enables concurrent execution with other [P] slices",
+    "[depends: Slice N]": "Dependency marker. This slice waits for Slice N to complete before starting",
+    "[scope: path/**]": "File scope marker. Restricts the worker to these file paths. Enables conflict detection for parallel slices",
+
+    // Components
+    "Smith": "The diagnostic tool (pforge smith). Inspects environment, VS Code config, setup health, version currency. Named after a blacksmith inspecting the forge",
+    "Sweep": "Completeness scan (pforge sweep). Finds TODO, FIXME, HACK, stub, placeholder markers in code",
+    "Analyze": "Cross-artifact consistency scoring (pforge analyze). Scores 0-100 across traceability, coverage, tests, gates",
+    "Orchestrator": "The execution engine (pforge-mcp/orchestrator.mjs). Parses plans, schedules slices, spawns workers, validates gates",
+    "Hub": "WebSocket event server (pforge-mcp/hub.mjs). Broadcasts slice lifecycle events to connected clients in real-time",
+    "Dashboard": "Web UI at localhost:3100/dashboard. 8 tabs: Progress, Runs, Cost, Actions, Replay, Extensions, Config, Traces",
+
+    // Infrastructure
+    "Guardrails": "Instruction files (.github/instructions/*.instructions.md) that auto-load based on the file being edited. 17-18 per preset",
+    "Preset": "Stack-specific configuration (dotnet, typescript, python, java, go, azure-iac). Determines which guardrails, agents, and prompts are installed",
+    "Extension": "A community add-on providing additional agents, prompts, or instructions for specific domains (e.g., azure-infrastructure)",
+    "Lifecycle Hook": "Automatic actions during Copilot sessions — SessionStart, PreToolUse, PostToolUse, Stop",
+
+    // Data
+    "Run": "A single execution of a plan. Creates .forge/runs/<timestamp>/ with results, traces, and logs",
+    "Trace": "OTLP-compatible JSON (trace.json) recording the full execution with spans, events, and timing",
+    "Span": "A timed unit within a trace — run-plan (root), slice (child), gate (grandchild)",
+    "Manifest": "Per-run manifest.json listing all artifacts (files) produced by that run",
+    "Index": ".forge/runs/index.jsonl — append-only global run registry for instant lookup",
+    "Cost History": ".forge/cost-history.json — aggregate token/cost data across all runs",
+
+    // Memory
+    "OpenBrain": "Optional companion MCP server providing persistent semantic memory across sessions",
+    "Thought": "A unit of knowledge in OpenBrain — a decision, convention, lesson, or insight captured for future retrieval",
+    "search_thoughts": "OpenBrain tool to find prior decisions relevant to current work",
+    "capture_thought": "OpenBrain tool to save a decision or lesson for future sessions",
+  },
 };
 
 // ─── Capability Surface Builder ───────────────────────────────────────

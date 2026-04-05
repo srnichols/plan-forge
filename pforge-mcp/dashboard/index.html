@@ -172,9 +172,9 @@
       <div class="bg-gray-800 rounded-lg p-4 mb-4">
         <div class="flex gap-2 items-center mb-3">
           <label class="text-sm text-gray-400">Run:</label>
-          <select id="replay-run-select" class="bg-gray-700 text-white text-sm rounded px-3 py-1" onchange="loadReplaySlices()"></select>
+          <select id="replay-run-select" title="Select run" class="bg-gray-700 text-white text-sm rounded px-3 py-1" onchange="loadReplaySlices()"></select>
           <label class="text-sm text-gray-400 ml-2">Slice:</label>
-          <select id="replay-slice-select" class="bg-gray-700 text-white text-sm rounded px-3 py-1" onchange="loadReplayLog()"></select>
+          <select id="replay-slice-select" title="Select slice" class="bg-gray-700 text-white text-sm rounded px-3 py-1" onchange="loadReplayLog()"></select>
           <div class="ml-auto flex gap-2">
             <button onclick="filterReplay('all')" class="text-xs px-2 py-1 bg-gray-600 rounded hover:bg-gray-500">All</button>
             <button onclick="filterReplay('error')" class="text-xs px-2 py-1 bg-gray-600 rounded hover:bg-gray-500">Errors</button>
@@ -204,11 +204,11 @@
         <div class="space-y-4">
           <div>
             <label class="block text-sm text-gray-400 mb-1">Preset</label>
-            <input id="cfg-preset" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full" readonly>
+            <input id="cfg-preset" title="Preset" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full" readonly>
           </div>
           <div>
             <label class="block text-sm text-gray-400 mb-1">Template Version</label>
-            <input id="cfg-version" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full" readonly>
+            <input id="cfg-version" title="Template version" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full" readonly>
           </div>
           <div>
             <label class="block text-sm text-gray-400 mb-1">Agents</label>
@@ -216,7 +216,7 @@
           </div>
           <div>
             <label class="block text-sm text-gray-400 mb-1">Model Routing — Default</label>
-            <select id="cfg-model-default" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full">
+            <select id="cfg-model-default" title="Default model" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full">
               <option value="auto">auto</option>
               <option value="claude-sonnet-4.6">claude-sonnet-4.6</option>
               <option value="claude-opus-4.6">claude-opus-4.6</option>
@@ -237,7 +237,7 @@
     <!-- Traces Tab (v2.4) -->
     <section id="tab-traces" class="tab-content hidden">
       <div class="flex gap-4 mb-4">
-        <select id="trace-run-select" class="bg-gray-700 text-white text-sm rounded px-3 py-2" onchange="loadTraceDetail()">
+        <select id="trace-run-select" title="Select trace run" class="bg-gray-700 text-white text-sm rounded px-3 py-2" onchange="loadTraceDetail()">
           <option value="">Select a run...</option>
         </select>
         <div class="flex gap-2 text-xs">

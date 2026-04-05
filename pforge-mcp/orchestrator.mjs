@@ -397,11 +397,21 @@ export function spawnWorker(prompt, options = {}) {
     writeFileSync(promptFile, prompt);
 
     switch (chosen.name) {
-      case "gh-copilot":
+      case "gh-copilot": {
+        // Write prompt to temp file — avoids Windows CLI arg length limits
+        const promptContent = prompt.replace(/"/g, '\\"');
         cmd = "gh";
-        args = ["copilot", "--", "-p", prompt, "--allow-all", "--no-ask-user"];
+        args = ["copilot", "--", "-p", promptContent, "--allow-all", "--no-ask-user"];
         if (model) args.push("--model", model);
+
+        // If prompt is very long (>8000 chars), truncate memory blocks
+        if (prompt.length > 8000) {
+          const truncated = prompt.replace(/--- MEMORY CONTEXT[\s\S]*?--- END MEMORY CONTEXT ---/g, "--- MEMORY: (skipped - prompt too long) ---")
+            .replace(/--- MEMORY CAPTURE[\s\S]*?--- END MEMORY CAPTURE ---/g, "");
+          args[3] = truncated;
+        }
         break;
+      }
       case "claude":
         cmd = "claude";
         args = ["-p", prompt];
@@ -420,8 +430,11 @@ export function spawnWorker(prompt, options = {}) {
     const child = spawn(cmd, args, {
       cwd,
       env: { ...process.env, NO_COLOR: "1" },
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: ["pipe", "pipe", "pipe"],
     });
+
+    // Close stdin immediately (no interactive input needed)
+    child.stdin.end();
 
     let stdout = "";
     let stderr = "";

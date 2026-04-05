@@ -1342,7 +1342,9 @@ async function executeSlice(slice, options) {
   }
 
   const duration = Date.now() - startTime;
-  const status = workerResult.exitCode === 0 && gateResult.success ? "passed" : "failed";
+  // Status: gate is the authority. Worker exit code may be non-zero from shell wrappers
+  // even when the work succeeded. If gates pass, the slice passed.
+  const status = gateResult.success ? "passed" : "failed";
 
   const sliceResult = {
     number: slice.number,

@@ -401,6 +401,137 @@ export const CONFIG_SCHEMA = {
   },
 };
 
+// ─── System Reference ─────────────────────────────────────────────────
+
+const SYSTEM_REFERENCE = {
+  name: "Plan Forge",
+  description: "AI coding guardrails that convert rough ideas into hardened execution contracts. Spec-driven framework with autonomous execution, cost tracking, telemetry, and persistent memory.",
+  version: VERSION,
+  repository: "https://github.com/srnichols/plan-forge",
+
+  architecture: {
+    description: "Single Node.js process serving MCP (stdio) + Express (HTTP) + WebSocket (events)",
+    components: {
+      "pforge-mcp/server.mjs": "MCP server + Express REST API + routes",
+      "pforge-mcp/orchestrator.mjs": "DAG-based plan execution engine",
+      "pforge-mcp/hub.mjs": "WebSocket event broadcasting server",
+      "pforge-mcp/telemetry.mjs": "OTLP trace/span/log capture",
+      "pforge-mcp/capabilities.mjs": "Machine-readable API surface (this module)",
+      "pforge-mcp/memory.mjs": "OpenBrain persistent memory integration",
+      "pforge-mcp/dashboard/": "Web UI (vanilla JS + Tailwind CDN + Chart.js)",
+      "pforge.ps1": "CLI wrapper (PowerShell)",
+      "pforge.sh": "CLI wrapper (Bash)",
+    },
+    ports: {
+      3100: "Express HTTP (dashboard + REST API)",
+      3101: "WebSocket hub (events + real-time)",
+    },
+  },
+
+  pipeline: {
+    description: "6-step planning and execution pipeline with 3-session isolation",
+    steps: {
+      "Step 0": { name: "Specify", prompt: "step0-specify-feature.prompt.md", agent: "specifier", description: "Define what and why" },
+      "Step 1": { name: "Preflight", prompt: "step1-preflight-check.prompt.md", description: "Verify prerequisites" },
+      "Step 2": { name: "Harden", prompt: "step2-harden-plan.prompt.md", agent: "plan-hardener", description: "Convert spec into binding execution contract with slices, gates, scope" },
+      "Step 3": { name: "Execute", prompt: "step3-execute-slice.prompt.md", agent: "executor", description: "Build slice-by-slice. Also: pforge run-plan (automated)" },
+      "Step 4": { name: "Sweep", prompt: "step4-completeness-sweep.prompt.md", description: "Eliminate TODO/stub/mock markers" },
+      "Step 5": { name: "Review", prompt: "step5-review-gate.prompt.md", agent: "reviewer-gate", description: "Independent audit for drift, compliance, quality" },
+    },
+    sessionIsolation: "Steps 0-2 in Session 1, Steps 3-4 in Session 2, Step 5 in Session 3 (prevents context bleed)",
+  },
+
+  planFormat: {
+    description: "Hardened plan Markdown format parsed by the orchestrator",
+    sliceHeader: "### Slice N: Title [depends: Slice 1] [P] [scope: src/auth/**]",
+    tags: {
+      "[P]": "Parallel-eligible — can run concurrently with other [P] slices",
+      "[depends: Slice N]": "Dependency — waits for specified slice(s) to complete",
+      "[depends: Slice 1, Slice 3]": "Multiple dependencies",
+      "[scope: path/**]": "File scope — limits worker to these paths, enables conflict detection",
+    },
+    sections: {
+      "Scope Contract": "In Scope, Out of Scope, Forbidden Actions",
+      "Validation Gate": "Build/test commands run at every slice boundary",
+      "Stop Condition": "Halts execution if condition is met",
+      "Build command / Test command": "Per-slice build and test commands",
+    },
+  },
+
+  guardrails: {
+    description: "17-18 instruction files per preset that auto-load based on the file being edited",
+    shared: ["architecture-principles", "git-workflow", "ai-plan-hardening-runbook", "project-principles"],
+    perStack: {
+      dotnet: ["api-patterns", "auth", "caching", "dapr", "database", "deploy", "errorhandling", "graphql", "messaging", "multi-environment", "naming", "observability", "performance", "security", "testing", "version"],
+      typescript: ["...same + frontend"],
+    },
+    mechanism: "YAML frontmatter applyTo glob pattern → Copilot loads matching files automatically",
+  },
+
+  agents: {
+    description: "19 specialized AI reviewer/executor agents per app preset",
+    stackSpecific: ["architecture-reviewer", "database-reviewer", "deploy-helper", "performance-analyzer", "security-reviewer", "test-runner"],
+    crossStack: ["accessibility-reviewer", "api-contract-reviewer", "cicd-reviewer", "compliance-reviewer", "dependency-reviewer", "error-handling-reviewer", "multi-tenancy-reviewer", "observability-reviewer"],
+    pipeline: ["specifier", "plan-hardener", "executor", "reviewer-gate", "shipper"],
+    invocation: "Select from agent picker dropdown in VS Code, or reference via #file:.github/agents/<name>.agent.md",
+  },
+
+  skills: {
+    description: "8 multi-step executable procedures with validation gates",
+    available: {
+      "/database-migration": "Generate, review, test, and deploy schema migrations",
+      "/staging-deploy": "Build, push, migrate, deploy, and verify on staging",
+      "/test-sweep": "Run all test suites and aggregate results",
+      "/dependency-audit": "Scan dependencies for vulnerabilities, outdated, license issues",
+      "/code-review": "Comprehensive review: architecture, security, testing, patterns",
+      "/release-notes": "Generate release notes from git history and CHANGELOG",
+      "/api-doc-gen": "Generate or update OpenAPI spec, validate spec-to-code consistency",
+      "/onboarding": "Walk a new developer through project setup, architecture, first task",
+    },
+    invocation: "Type / in Copilot Chat to see available skills",
+  },
+
+  promptTemplates: {
+    description: "15 scaffolding prompts for generating consistent code patterns",
+    available: [
+      "new-entity", "new-service", "new-controller", "new-repository", "new-test",
+      "new-dto", "new-middleware", "new-event-handler", "new-worker", "new-config",
+      "new-error-types", "new-dockerfile", "new-graphql-resolver", "bug-fix-tdd",
+      "project-principles",
+    ],
+    invocation: "Attach via #file:.github/prompts/<name>.prompt.md in Copilot Chat",
+  },
+
+  lifecycleHooks: {
+    description: "Automatic hooks that run during Copilot agent sessions",
+    hooks: {
+      SessionStart: "Injects Project Principles, current phase, and forbidden patterns into context",
+      PreToolUse: "Blocks file edits to paths listed in the active plan's Forbidden Actions",
+      PostToolUse: "Auto-formats edited files, warns on TODO/FIXME/stub markers",
+      Stop: "Warns if code was modified but no test run was detected in the session",
+    },
+    config: ".github/hooks/plan-forge.json",
+  },
+
+  presets: {
+    available: ["dotnet", "typescript", "python", "java", "go", "azure-iac", "custom"],
+    description: "Stack-specific guardrail configurations with domain-relevant instruction files, agents, and prompts",
+    counts: {
+      dotnet: { instructions: 17, agents: 19, prompts: 15, skills: 8 },
+      typescript: { instructions: 18, agents: 19, prompts: 15, skills: 8 },
+      "azure-iac": { instructions: 12, agents: 18, prompts: 6, skills: 3 },
+    },
+  },
+
+  executionModes: {
+    auto: "gh copilot CLI executes each slice with full project context and model routing",
+    assisted: "Human codes in VS Code Copilot; orchestrator prompts and validates gates",
+    estimate: "Returns slice count, token estimate, and cost without executing",
+    dryRun: "Parses and validates plan without executing",
+    resumeFrom: "Skips completed slices and resumes from specified slice number",
+  },
+};
+
 // ─── Capability Surface Builder ───────────────────────────────────────
 
 /**
@@ -519,6 +650,7 @@ export function buildCapabilitySurface(mcpTools, options = {}) {
     },
     extensions,
     memory: buildMemoryCapabilities(cwd),
+    system: SYSTEM_REFERENCE,
   };
 }
 

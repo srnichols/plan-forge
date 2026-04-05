@@ -398,17 +398,15 @@ export function spawnWorker(prompt, options = {}) {
 
     switch (chosen.name) {
       case "gh-copilot": {
-        // Write prompt to temp file — avoids Windows CLI arg length limits
-        const promptContent = prompt.replace(/"/g, '\\"');
-        cmd = "gh";
-        args = ["copilot", "--", "-p", promptContent, "--allow-all", "--no-ask-user"];
-        if (model) args.push("--model", model);
-
-        // If prompt is very long (>8000 chars), truncate memory blocks
-        if (prompt.length > 8000) {
-          const truncated = prompt.replace(/--- MEMORY CONTEXT[\s\S]*?--- END MEMORY CONTEXT ---/g, "--- MEMORY: (skipped - prompt too long) ---")
-            .replace(/--- MEMORY CAPTURE[\s\S]*?--- END MEMORY CAPTURE ---/g, "");
-          args[3] = truncated;
+        // Use shell wrapper to read prompt from temp file (avoids Windows spawn arg limits)
+        if (process.platform === "win32") {
+          cmd = "powershell.exe";
+          args = ["-NoProfile", "-Command",
+            `$p = Get-Content -Path '${promptFile}' -Raw; & gh copilot -- -p $p --allow-all --no-ask-user` + (model ? ` --model ${model}` : "")];
+        } else {
+          cmd = "bash";
+          args = ["-c",
+            `gh copilot -- -p "$(cat '${promptFile}')" --allow-all --no-ask-user` + (model ? ` --model ${model}` : "")];
         }
         break;
       }

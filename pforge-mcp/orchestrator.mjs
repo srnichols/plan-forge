@@ -23,6 +23,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { spawn, execSync } from "node:child_process";
 import { resolve, basename, dirname } from "node:path";
 import { EventEmitter } from "node:events";
+import { createTraceContext, createTelemetryHandler, writeManifest, appendRunIndex, pruneRunHistory, addLogSummary } from "./telemetry.mjs";
 
 // ─── Event Bus (C3: Dependency Injection) ─────────────────────────────
 
@@ -847,11 +848,25 @@ export async function runPlan(planPath, options = {}) {
   // Set up event bus with DI handler
   const runDir = createRunDir(cwd, planPath);
   const logHandler = new LogEventHandler(runDir);
-  const eventBus = new OrchestratorEventBus(eventHandler || logHandler);
+
+  // v2.4: Create trace context and telemetry handler
+  const trace = createTraceContext(planPath, { mode, model: effectiveModel, sliceCount: plan.slices.length });
+  const telemetryHandler = createTelemetryHandler(trace, runDir);
+
+  // Chain handlers: user-provided → telemetry → log
+  const combinedHandler = {
+    handle(event) {
+      telemetryHandler.handle(event);
+      if (eventHandler) eventHandler.handle(event);
+      logHandler.handle(event);
+    },
+  };
+  const eventBus = new OrchestratorEventBus(combinedHandler);
 
   // Write run.json metadata
   const runMeta = {
     plan: planPath,
+    traceId: trace.traceId,
     startTime: new Date().toISOString(),
     model: effectiveModel || "auto",
     modelRouting,
@@ -898,6 +913,12 @@ export async function runPlan(planPath, options = {}) {
   if (summary.cost && summary.status !== "estimate") {
     appendCostHistory(cwd, summary);
   }
+
+  // v2.4: Write manifest + index + prune
+  const runId = basename(runDir);
+  const manifest = writeManifest(runDir, runId, { ...summary, traceId: trace.traceId });
+  appendRunIndex(cwd, runId, manifest);
+  pruneRunHistory(cwd, loadMaxRunHistory(cwd));
 
   eventBus.emit("run-completed", summary);
 
@@ -958,6 +979,21 @@ function loadMaxRetries(cwd) {
     }
   } catch { /* defaults */ }
   return 1; // Default: 1 retry (2 total attempts)
+}
+
+/**
+ * Load max run history from .forge.json.
+ * @returns {number}
+ */
+function loadMaxRunHistory(cwd) {
+  const configPath = resolve(cwd, ".forge.json");
+  try {
+    if (existsSync(configPath)) {
+      const config = JSON.parse(readFileSync(configPath, "utf-8"));
+      if (typeof config.maxRunHistory === "number" && config.maxRunHistory > 0) return config.maxRunHistory;
+    }
+  } catch { /* defaults */ }
+  return 50;
 }
 
 /**

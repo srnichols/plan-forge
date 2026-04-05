@@ -614,4 +614,122 @@ const tabLoadHooks = {
   replay: loadReplayRuns,
   extensions: loadExtensions,
   config: loadConfig,
+  traces: loadTraces,
 };
+
+// ─── Traces Tab (v2.4) ───────────────────────────────────────────────
+let traceData = null;
+
+async function loadTraces() {
+  try {
+    const res = await fetch(`${API_BASE}/api/traces`);
+    const runs = await res.json();
+    const select = document.getElementById("trace-run-select");
+    select.innerHTML = '<option value="">Select a run...</option>' +
+      runs.map((r) => {
+        const date = r.startTime ? new Date(r.startTime).toLocaleString() : "—";
+        const status = r.status === "completed" ? "✅" : "❌";
+        return `<option value="${r.dir}">${status} ${date} — ${r.plan?.split("/").pop() || "unknown"}</option>`;
+      }).join("");
+  } catch {
+    document.getElementById("waterfall-bars").innerHTML = '<p class="text-red-400 text-center py-8">Failed to load traces</p>';
+  }
+}
+
+async function loadTraceDetail() {
+  const runId = document.getElementById("trace-run-select").value;
+  if (!runId) return;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/traces/${encodeURIComponent(runId)}`);
+    traceData = await res.json();
+    renderWaterfall(traceData);
+  } catch {
+    document.getElementById("waterfall-bars").innerHTML = '<p class="text-red-400 text-center py-8">Failed to load trace</p>';
+  }
+}
+
+function renderWaterfall(trace) {
+  const container = document.getElementById("waterfall-bars");
+  const spans = trace.spans || [];
+  if (spans.length === 0) {
+    container.innerHTML = '<p class="text-gray-500 text-center py-8">No spans in trace</p>';
+    return;
+  }
+
+  // Calculate time range
+  const times = spans.flatMap((s) => [new Date(s.startTime).getTime(), s.endTime ? new Date(s.endTime).getTime() : Date.now()]);
+  const minTime = Math.min(...times);
+  const maxTime = Math.max(...times);
+  const range = maxTime - minTime || 1;
+
+  container.innerHTML = spans.map((span, idx) => {
+    const start = new Date(span.startTime).getTime();
+    const end = span.endTime ? new Date(span.endTime).getTime() : Date.now();
+    const left = ((start - minTime) / range * 100).toFixed(1);
+    const width = Math.max(((end - start) / range * 100), 1).toFixed(1);
+    const duration = ((end - start) / 1000).toFixed(1);
+
+    const color = span.status === "OK" ? "bg-green-600" :
+                  span.status === "ERROR" ? "bg-red-600" :
+                  span.kind === "CLIENT" ? "bg-purple-600" : "bg-blue-600";
+
+    const indent = span.parentSpanId ? (span.kind === "CLIENT" ? "ml-8" : "ml-4") : "";
+    const kindBadge = span.kind === "SERVER" ? "🌐" : span.kind === "CLIENT" ? "📡" : "⚙️";
+
+    return `
+      <div class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-700/50 rounded px-2 ${indent}" onclick="showSpanDetail(${idx})">
+        <span class="text-xs text-gray-500 w-32 truncate">${kindBadge} ${span.name}</span>
+        <div class="flex-1 relative h-5">
+          <div class="absolute h-full rounded ${color} opacity-80" style="left:${left}%;width:${width}%"></div>
+        </div>
+        <span class="text-xs text-gray-500 w-16 text-right">${duration}s</span>
+      </div>
+    `;
+  }).join("");
+}
+
+function showSpanDetail(idx) {
+  if (!traceData) return;
+  const span = traceData.spans[idx];
+
+  // Events
+  const eventsEl = document.getElementById("trace-events");
+  if (span.events?.length > 0) {
+    eventsEl.innerHTML = span.events.map((e) => {
+      const color = e.severity === "ERROR" ? "text-red-400" :
+                    e.severity === "WARN" ? "text-yellow-400" : "text-gray-300";
+      const time = new Date(e.time).toLocaleTimeString();
+      return `<div class="${color}">[${time}] ${e.severity} ${e.name} ${JSON.stringify(e.attributes || {})}</div>`;
+    }).join("");
+  } else {
+    eventsEl.innerHTML = '<p class="text-gray-500">No events</p>';
+  }
+
+  // Attributes
+  const attrsEl = document.getElementById("trace-attributes");
+  const attrs = { ...span.attributes, status: span.status, kind: span.kind, spanId: span.spanId };
+  if (span.logSummary?.length > 0) attrs.logSummary = span.logSummary;
+  attrsEl.textContent = JSON.stringify(attrs, null, 2);
+}
+
+function filterTraceEvents(severity) {
+  if (!traceData) return;
+  const eventsEl = document.getElementById("trace-events");
+  const allEvents = traceData.spans.flatMap((s) => (s.events || []).map((e) => ({ ...e, span: s.name })));
+  const filtered = severity === "all" ? allEvents : allEvents.filter((e) => e.severity === severity);
+
+  if (filtered.length === 0) {
+    eventsEl.innerHTML = `<p class="text-gray-500">No ${severity} events</p>`;
+    return;
+  }
+  eventsEl.innerHTML = filtered.map((e) => {
+    const color = e.severity === "ERROR" ? "text-red-400" : e.severity === "WARN" ? "text-yellow-400" : "text-gray-300";
+    const time = new Date(e.time).toLocaleTimeString();
+    return `<div class="${color}">[${time}] ${e.span} → ${e.name} ${JSON.stringify(e.attributes || {})}</div>`;
+  }).join("");
+}
+
+window.loadTraceDetail = loadTraceDetail;
+window.showSpanDetail = showSpanDetail;
+window.filterTraceEvents = filterTraceEvents;

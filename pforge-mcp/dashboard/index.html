@@ -38,6 +38,7 @@
     <button class="tab-btn px-4 py-2 hover:text-blue-400 text-gray-400 whitespace-nowrap" data-tab="replay">Replay</button>
     <button class="tab-btn px-4 py-2 hover:text-blue-400 text-gray-400 whitespace-nowrap" data-tab="extensions">Extensions</button>
     <button class="tab-btn px-4 py-2 hover:text-blue-400 text-gray-400 whitespace-nowrap" data-tab="config">Config</button>
+    <button class="tab-btn px-4 py-2 hover:text-blue-400 text-gray-400 whitespace-nowrap" data-tab="traces">Traces</button>
     <!-- Notification bell -->
     <button id="notif-bell" class="ml-auto px-3 py-2 relative hover:text-yellow-400 text-gray-400" onclick="toggleNotifications()">
       🔔<span id="notif-count" class="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center hidden">0</span>
@@ -230,6 +231,39 @@
           </div>
         </div>
         <p id="cfg-status" class="text-xs text-gray-500 mt-2"></p>
+      </div>
+    </section>
+
+    <!-- Traces Tab (v2.4) -->
+    <section id="tab-traces" class="tab-content hidden">
+      <div class="flex gap-4 mb-4">
+        <select id="trace-run-select" class="bg-gray-700 text-white text-sm rounded px-3 py-2" onchange="loadTraceDetail()">
+          <option value="">Select a run...</option>
+        </select>
+        <div class="flex gap-2 text-xs">
+          <button onclick="filterTraceEvents('all')" class="px-2 py-1 bg-gray-600 rounded hover:bg-gray-500">All</button>
+          <button onclick="filterTraceEvents('ERROR')" class="px-2 py-1 bg-red-900 rounded hover:bg-red-800">Errors</button>
+          <button onclick="filterTraceEvents('WARN')" class="px-2 py-1 bg-yellow-900 rounded hover:bg-yellow-800">Warnings</button>
+        </div>
+      </div>
+      <!-- Waterfall -->
+      <div id="trace-waterfall" class="bg-gray-800 rounded-lg p-4 mb-4 overflow-x-auto">
+        <div id="waterfall-bars" class="relative min-h-32">
+          <p class="text-gray-500 text-center py-8">Select a run to view its trace</p>
+        </div>
+      </div>
+      <!-- Span Detail -->
+      <div id="trace-detail" class="grid gap-4 md:grid-cols-2">
+        <div class="bg-gray-800 rounded-lg p-4">
+          <h3 class="text-sm text-gray-400 mb-2">Span Events</h3>
+          <div id="trace-events" class="text-xs space-y-1 max-h-64 overflow-y-auto font-mono">
+            <p class="text-gray-500">Click a span bar to view events</p>
+          </div>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-4">
+          <h3 class="text-sm text-gray-400 mb-2">Span Attributes</h3>
+          <pre id="trace-attributes" class="text-xs text-gray-300 max-h-64 overflow-y-auto">Click a span bar to view attributes</pre>
+        </div>
       </div>
     </section>
   </main>

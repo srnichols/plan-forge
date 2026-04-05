@@ -400,7 +400,7 @@ export function spawnWorker(prompt, options = {}) {
       case "gh-copilot": {
         // Use shell wrapper to read prompt from temp file (avoids Windows spawn arg limits)
         if (process.platform === "win32") {
-          cmd = "powershell.exe";
+          cmd = "pwsh";
           args = ["-NoProfile", "-Command",
             `$p = Get-Content -Path '${promptFile}' -Raw; & gh copilot -- -p $p --allow-all --no-ask-user` + (model ? ` --model ${model}` : "")];
         } else {

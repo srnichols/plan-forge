@@ -502,6 +502,8 @@ Now you're ready to build your first feature with the pipeline. Here's how:
 
 > **First time?** See [docs/QUICKSTART-WALKTHROUGH.md](docs/QUICKSTART-WALKTHROUGH.md) for a hands-on tutorial that walks you through every step.
 >
+> **Want a real example?** Follow the [Greenfield Walkthrough](docs/walkthroughs/greenfield-todo-api.md) (build a Todo API from scratch) or the [Brownfield Walkthrough](docs/walkthroughs/brownfield-legacy-app.md) (fix SQL injection and leaked secrets in a legacy app).
+>
 > **Tip**: The step prompts are numbered so they appear in order when you browse the file picker. You can also copy-paste the equivalent prompts from `docs/plans/AI-Plan-Hardening-Runbook-Instructions.md` if you prefer.
 
 ---

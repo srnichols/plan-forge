@@ -21,6 +21,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - Pipeline commands invoked as `/planforge:step0-specify`, `/planforge:step3-execute-slice`, etc.
 - `-Agent all` now includes gemini (5 agents total: copilot, claude, cursor, codex, gemini)
 
+### Added — Community Walkthroughs (Phase 14)
+- **Greenfield walkthrough** (`docs/walkthroughs/greenfield-todo-api.md`) — build a Todo API from scratch using the full pipeline: setup, specify, harden, execute, review, ship. Shows guardrails auto-loading, validation gates catching errors, and independent review finding gaps
+- **Brownfield walkthrough** (`docs/walkthroughs/brownfield-legacy-app.md`) — add Plan Forge to a legacy Express app with SQL injection, hardcoded secrets, and no tests. Shows security audit, incremental fixes, and consistency scoring going from 0 to 88
+- **Examples page updated** — walkthrough cards on `docs/examples.html` with links to both guides
+
+### Added — Stack Expansion
+- **Rust preset** (`presets/rust/`) — 49 files: tokio/axum patterns, cargo-audit, ownership/borrowing checks, `Cargo.toml` auto-detection
+- **PHP/Laravel preset** (`presets/php/`) — 49 files: Laravel patterns, composer audit, mass assignment/CSRF checks, `composer.json`/`artisan` auto-detection
+
 ---
 
 ## [2.9.0] — 2026-04-06

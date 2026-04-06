@@ -82,7 +82,22 @@ The catalog is stored in `extensions/catalog.json` (fetches from GitHub if not l
 
 ### Publishing Your Extension
 
-See [extensions/PUBLISHING.md](../extensions/PUBLISHING.md) for how to submit your extension to the community catalog.
+Use `pforge ext publish` to generate a ready-to-submit catalog entry from your extension's `extension.json`:
+
+```bash
+pforge ext publish .forge/extensions/my-extension
+```
+
+This validates your manifest, counts artifacts, and prints the catalog JSON to paste into `extensions/catalog.json`. It also prints the 4-step submission workflow:
+
+1. **Fork** `https://github.com/srnichols/plan-forge`
+2. **Edit** `extensions/catalog.json` — add the generated entry
+3. **Open PR** with title: `feat(catalog): add <your-extension-name>`
+4. **Link** to your extension's repository in the PR description
+
+Your `extension.json` must include: `name`, `version`, `description`, `author`. Optional fields (`repository`, `license`, `category`, `tags`, `speckit_compatible`) are inferred with sensible defaults if omitted.
+
+See [extensions/PUBLISHING.md](../extensions/PUBLISHING.md) for the full submission guide and catalog entry schema.
 
 ## Creating an Extension
 

@@ -1,6 +1,6 @@
 # Plan Forge — Capabilities Reference
 
-> **Tools**: 18 MCP | **Presets**: 7 | **Agents**: 19 | **Skills**: 10
+> **Tools**: 18 MCP | **Presets**: 9 | **Agents**: 19 | **Skills**: 11
 >
 > Machine-readable version: call `forge_capabilities` MCP tool or `GET https://planforge.software/.well-known/plan-forge.json`
 
@@ -159,7 +159,20 @@ Auto-loading instruction files in `.github/instructions/`:
 
 **Pipeline (5)**: specifier → plan-hardener → executor → reviewer-gate → shipper
 
-## Skills (10)
+**AI Tool Adapters**: `pforge init -Agent <tool>` generates adapter files for each platform:
+
+| Adapter | Files Generated | Notes |
+|---------|----------------|-------|
+| `copilot` | `.github/copilot-instructions.md` | Default — always included |
+| `claude` | `CLAUDE.md`, `.claude/commands/planforge/*.md` | Claude Code slash commands |
+| `cursor` | `.cursorrules`, `.cursor/rules/*.mdc` | Cursor rules + commands |
+| `windsurf` | `.windsurfrules`, `.windsurf/workflows/*.md` | Windsurf rules + workflows |
+| `codex` | `AGENTS.md`, `.codex/context.md` | OpenAI Codex context |
+| `gemini` | `GEMINI.md`, `.gemini/commands/planforge/*.toml`, `.gemini/settings.json` | Gemini CLI commands + MCP config |
+| `generic` | `.ai/instructions.md`, `.ai/commands/` | Any AI tool (configurable dir) |
+| `all` | All of the above | Full multi-tool support |
+
+## Skills (11)
 
 | Skill | Description |
 |-------|-------------|
@@ -167,6 +180,7 @@ Auto-loading instruction files in `.github/instructions/`:
 | `/staging-deploy` | Build, push, migrate, deploy, verify |
 | `/test-sweep` | Run all test suites, aggregate results |
 | `/dependency-audit` | Vulnerabilities, outdated, license issues |
+| `/security-audit` | OWASP scan, dependency CVEs, secret leak detection, hardening report |
 | `/code-review` | Architecture, security, testing, patterns |
 | `/release-notes` | Generate from git history + CHANGELOG |
 | `/api-doc-gen` | OpenAPI spec generation + validation |
@@ -273,13 +287,49 @@ Key OpenBrain tools: `search_thoughts`, `capture_thought`, `capture_thoughts`, `
 
 | Preset | Instructions | Agents | Prompts | Skills |
 |--------|-------------|--------|---------|--------|
-| dotnet | 17 | 19 | 15 | 8 |
-| typescript | 18 | 19 | 15 | 8 |
-| python | 17 | 19 | 15 | 8 |
-| java | 17 | 19 | 15 | 8 |
-| go | 17 | 19 | 15 | 8 |
+| dotnet | 17 | 19 | 15 | 9 |
+| typescript | 18 | 19 | 15 | 9 |
+| python | 17 | 19 | 15 | 9 |
+| java | 17 | 19 | 15 | 9 |
+| go | 17 | 19 | 15 | 9 |
+| php | 17 | 19 | 15 | 9 |
+| rust | 17 | 19 | 15 | 9 |
+| swift | 16 | 19 | 13 | 9 |
 | azure-iac | 12 | 18 | 6 | 3 |
 | custom | 3 | 5 | 7 | 0 |
+
+## Bridge (External Notifications)
+
+The Plan Forge Bridge connects the WebSocket hub to external platforms, dispatching run events as notifications. Configured in `.forge.json` under the `bridge` key.
+
+**Supported channels**: Telegram, Slack, Discord, generic webhooks
+
+**Notification levels** (hierarchical — each level includes the ones below):
+
+| Level | Events |
+|-------|--------|
+| `all` | run-started, slice-started, slice-completed, slice-failed, run-completed, run-aborted |
+| `important` | run-started, slice-failed, run-completed, run-aborted |
+| `critical` | slice-failed, run-aborted (+ run-completed with failures) |
+
+**Config (`.forge.json`)**:
+```json
+{
+  "bridge": {
+    "enabled": true,
+    "channels": [
+      { "type": "telegram", "url": "https://api.telegram.org/bot<TOKEN>/sendMessage", "chatId": "<CHAT_ID>", "level": "important" },
+      { "type": "slack",    "url": "https://hooks.slack.com/services/...", "level": "all" },
+      { "type": "discord",  "url": "https://discord.com/api/webhooks/...", "level": "critical" },
+      { "type": "webhook",  "url": "https://your-endpoint.example.com/hook", "level": "all" }
+    ]
+  }
+}
+```
+
+Rate limit: 1 notification per 5 seconds per channel (anti-spam). Bridge reconnects automatically after disconnect.
+
+Start the bridge: `node pforge-mcp/bridge.mjs` (or via dashboard standalone mode).
 
 ## Configuration (`.forge.json`)
 

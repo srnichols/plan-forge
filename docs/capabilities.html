@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Capabilities — Plan Forge | 18 MCP Tools, Quorum Mode, Autonomous Execution, Live Dashboard</title>
-  <meta name="description" content="Complete capability reference for Plan Forge — 18 MCP tools, Quorum Mode (multi-model consensus), DAG-based orchestrator, cost tracking, OTLP telemetry, OpenBrain memory, 19 reviewer agents, 10 skills, and a live dashboard." />
+  <meta name="description" content="Complete capability reference for Plan Forge — 18 MCP tools, Quorum Mode (multi-model consensus), DAG-based orchestrator, cost tracking, OTLP telemetry, OpenBrain memory, 19 reviewer agents, 11 skills, and a live dashboard." />
   <meta property="og:title" content="Plan Forge Capabilities — Full Tool & Feature Reference" />
   <meta property="og:description" content="18 MCP tools, autonomous plan execution, cost tracking, live dashboard, OTLP traces, OpenBrain memory integration. Enterprise-grade AI coding guardrails." />
   <meta property="og:type" content="website" />
@@ -12,7 +12,7 @@
   <meta property="og:image" content="https://planforge.software/assets/og-card.webp" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Plan Forge Capabilities — 18 MCP Tools + Autonomous Execution" />
-  <meta name="twitter:description" content="Complete capability reference: orchestrator, dashboard, telemetry, memory, 19 agents, 10 skills." />
+  <meta name="twitter:description" content="Complete capability reference: orchestrator, dashboard, telemetry, memory, 19 agents, 11 skills." />
   <link rel="canonical" href="https://planforge.software/capabilities.html" />
   <meta name="keywords" content="AI coding guardrails, MCP tools, plan execution, DAG scheduler, cost tracking, OTLP traces, OpenBrain, VS Code Copilot, Claude, GPT, autonomous development, quorum mode, multi-model consensus, A/B testing" />
   <script type="application/ld+json">
@@ -64,7 +64,7 @@
       <div class="mt-6 flex justify-center gap-3 text-sm">
         <span class="px-3 py-1 rounded-full bg-forge-500/20 text-forge-400 border border-forge-500/30">18 MCP Tools</span>
         <span class="px-3 py-1 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">19 Agents</span>
-        <span class="px-3 py-1 rounded-full bg-green-500/20 text-green-400 border border-green-500/30">10 Skills</span>
+        <span class="px-3 py-1 rounded-full bg-green-500/20 text-green-400 border border-green-500/30">11 Skills</span>
         <span class="px-3 py-1 rounded-full bg-purple-500/20 text-purple-400 border border-purple-500/30">8 Dashboard Tabs</span>
         <span class="px-3 py-1 rounded-full bg-red-500/20 text-red-400 border border-red-500/30">Quorum Mode</span>
       </div>
@@ -227,13 +227,24 @@
             <p class="text-slate-400"><strong class="text-white">Cross-stack (8):</strong> accessibility, API contracts, CI/CD, compliance, dependency, error handling, multi-tenancy, observability</p>
             <p class="text-slate-400"><strong class="text-white">Pipeline (5):</strong> specifier → plan-hardener → executor → reviewer-gate → shipper</p>
           </div>
+          <h3 class="text-lg font-semibold text-white mb-3 mt-6">AI Tool Adapters</h3>
+          <p class="text-sm text-slate-400 mb-2"><code class="text-forge-400">pforge init -Agent &lt;tool&gt;</code> generates adapter files for each platform:</p>
+          <div class="space-y-1 text-xs text-slate-500">
+            <p><code class="text-blue-400">copilot</code> — <code>.github/copilot-instructions.md</code> (default)</p>
+            <p><code class="text-blue-400">claude</code> — <code>CLAUDE.md</code> + <code>.claude/commands/</code></p>
+            <p><code class="text-blue-400">cursor</code> — <code>.cursorrules</code> + <code>.cursor/rules/</code></p>
+            <p><code class="text-blue-400">windsurf</code> — <code>.windsurfrules</code> + <code>.windsurf/workflows/</code></p>
+            <p><code class="text-blue-400">gemini</code> — <code>GEMINI.md</code> + <code>.gemini/commands/</code> + MCP config</p>
+            <p><code class="text-blue-400">generic</code> — <code>.ai/instructions.md</code> (configurable dir)</p>
+            <p><code class="text-blue-400">all</code> — all adapters at once</p>
+          </div>
         </div>
         <div>
-          <h3 class="text-lg font-semibold text-white mb-3">10 Slash Command Skills</h3>
+          <h3 class="text-lg font-semibold text-white mb-3">11 Slash Command Skills</h3>
           <div class="space-y-1 text-sm text-slate-400">
             <p><code class="text-forge-400">/database-migration</code> · <code class="text-forge-400">/staging-deploy</code> · <code class="text-forge-400">/test-sweep</code></p>
-            <p><code class="text-forge-400">/dependency-audit</code> · <code class="text-forge-400">/code-review</code> · <code class="text-forge-400">/release-notes</code></p>
-            <p><code class="text-forge-400">/api-doc-gen</code> · <code class="text-forge-400">/onboarding</code></p>
+            <p><code class="text-forge-400">/dependency-audit</code> · <code class="text-forge-400">/security-audit</code> · <code class="text-forge-400">/code-review</code></p>
+            <p><code class="text-forge-400">/release-notes</code> · <code class="text-forge-400">/api-doc-gen</code> · <code class="text-forge-400">/onboarding</code></p>
             <p><code class="text-forge-400">/health-check</code> · <code class="text-forge-400">/forge-execute</code></p>
           </div>
         </div>
@@ -273,14 +284,44 @@
         <table class="w-full text-sm">
           <thead><tr class="border-b border-slate-700 text-left"><th class="py-2 px-3 text-slate-400">Preset</th><th class="py-2 px-3 text-slate-400">Instructions</th><th class="py-2 px-3 text-slate-400">Agents</th><th class="py-2 px-3 text-slate-400">Prompts</th><th class="py-2 px-3 text-slate-400">Skills</th></tr></thead>
           <tbody class="text-slate-300">
-            <tr class="border-b border-slate-800"><td class="py-2 px-3 font-semibold">.NET</td><td class="py-2 px-3">17</td><td class="py-2 px-3">19</td><td class="py-2 px-3">15</td><td class="py-2 px-3">8</td></tr>
-            <tr class="border-b border-slate-800"><td class="py-2 px-3 font-semibold">TypeScript</td><td class="py-2 px-3">18</td><td class="py-2 px-3">19</td><td class="py-2 px-3">15</td><td class="py-2 px-3">8</td></tr>
-            <tr class="border-b border-slate-800"><td class="py-2 px-3 font-semibold">Python</td><td class="py-2 px-3">17</td><td class="py-2 px-3">19</td><td class="py-2 px-3">15</td><td class="py-2 px-3">8</td></tr>
-            <tr class="border-b border-slate-800"><td class="py-2 px-3 font-semibold">Java</td><td class="py-2 px-3">17</td><td class="py-2 px-3">19</td><td class="py-2 px-3">15</td><td class="py-2 px-3">8</td></tr>
-            <tr class="border-b border-slate-800"><td class="py-2 px-3 font-semibold">Go</td><td class="py-2 px-3">17</td><td class="py-2 px-3">19</td><td class="py-2 px-3">15</td><td class="py-2 px-3">8</td></tr>
+            <tr class="border-b border-slate-800"><td class="py-2 px-3 font-semibold">.NET</td><td class="py-2 px-3">17</td><td class="py-2 px-3">19</td><td class="py-2 px-3">15</td><td class="py-2 px-3">9</td></tr>
+            <tr class="border-b border-slate-800"><td class="py-2 px-3 font-semibold">TypeScript</td><td class="py-2 px-3">18</td><td class="py-2 px-3">19</td><td class="py-2 px-3">15</td><td class="py-2 px-3">9</td></tr>
+            <tr class="border-b border-slate-800"><td class="py-2 px-3 font-semibold">Python</td><td class="py-2 px-3">17</td><td class="py-2 px-3">19</td><td class="py-2 px-3">15</td><td class="py-2 px-3">9</td></tr>
+            <tr class="border-b border-slate-800"><td class="py-2 px-3 font-semibold">Java</td><td class="py-2 px-3">17</td><td class="py-2 px-3">19</td><td class="py-2 px-3">15</td><td class="py-2 px-3">9</td></tr>
+            <tr class="border-b border-slate-800"><td class="py-2 px-3 font-semibold">Go</td><td class="py-2 px-3">17</td><td class="py-2 px-3">19</td><td class="py-2 px-3">15</td><td class="py-2 px-3">9</td></tr>
+            <tr class="border-b border-slate-800"><td class="py-2 px-3 font-semibold">PHP</td><td class="py-2 px-3">17</td><td class="py-2 px-3">19</td><td class="py-2 px-3">15</td><td class="py-2 px-3">9</td></tr>
+            <tr class="border-b border-slate-800"><td class="py-2 px-3 font-semibold">Rust</td><td class="py-2 px-3">17</td><td class="py-2 px-3">19</td><td class="py-2 px-3">15</td><td class="py-2 px-3">9</td></tr>
+            <tr class="border-b border-slate-800"><td class="py-2 px-3 font-semibold">Swift</td><td class="py-2 px-3">16</td><td class="py-2 px-3">19</td><td class="py-2 px-3">13</td><td class="py-2 px-3">9</td></tr>
             <tr class="border-b border-slate-800"><td class="py-2 px-3 font-semibold">Azure IaC</td><td class="py-2 px-3">12</td><td class="py-2 px-3">18</td><td class="py-2 px-3">6</td><td class="py-2 px-3">3</td></tr>
           </tbody>
         </table>
+      </div>
+    </section>
+
+    <!-- Bridge -->
+    <section class="mb-16">
+      <h2 class="text-2xl font-bold text-white mb-6">Bridge — External Notifications</h2>
+      <p class="text-sm text-slate-400 mb-4">The Plan Forge Bridge subscribes to the WebSocket hub and dispatches run events to external platforms. Rate-limited (1/5s per channel), with automatic reconnect.</p>
+      <div class="grid gap-4 md:grid-cols-4 mb-6">
+        <div class="bg-slate-800/60 rounded-xl p-4 border border-slate-700/30 text-center"><p class="text-lg">📨</p><p class="text-xs font-semibold text-white mt-1">Telegram</p><p class="text-xs text-slate-500">Bot API</p></div>
+        <div class="bg-slate-800/60 rounded-xl p-4 border border-slate-700/30 text-center"><p class="text-lg">💬</p><p class="text-xs font-semibold text-white mt-1">Slack</p><p class="text-xs text-slate-500">Incoming webhook</p></div>
+        <div class="bg-slate-800/60 rounded-xl p-4 border border-slate-700/30 text-center"><p class="text-lg">🎮</p><p class="text-xs font-semibold text-white mt-1">Discord</p><p class="text-xs text-slate-500">Webhook</p></div>
+        <div class="bg-slate-800/60 rounded-xl p-4 border border-slate-700/30 text-center"><p class="text-lg">🔗</p><p class="text-xs font-semibold text-white mt-1">Generic</p><p class="text-xs text-slate-500">Any HTTP endpoint</p></div>
+      </div>
+      <div class="bg-slate-900/80 rounded-xl p-5 border border-slate-700/30 font-mono text-xs">
+        <div class="text-slate-400 mb-2">// .forge.json bridge config</div>
+        <pre class="text-slate-300 whitespace-pre-wrap">{
+  "bridge": {
+    "enabled": true,
+    "channels": [
+      { "type": "telegram", "url": "https://api.telegram.org/bot&lt;TOKEN&gt;/sendMessage", "chatId": "&lt;ID&gt;", "level": "important" },
+      { "type": "slack",    "url": "https://hooks.slack.com/services/...", "level": "all" },
+      { "type": "discord",  "url": "https://discord.com/api/webhooks/...", "level": "critical" },
+      { "type": "webhook",  "url": "https://your-endpoint.example.com/hook", "level": "all" }
+    ]
+  }
+}</pre>
+        <p class="text-slate-500 mt-2">Levels: <code class="text-forge-400">all</code> (every event) · <code class="text-forge-400">important</code> (run start/end + failures) · <code class="text-forge-400">critical</code> (failures only)</p>
       </div>
     </section>
 

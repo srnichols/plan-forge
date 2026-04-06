@@ -129,10 +129,10 @@ Both agents and skills extend Copilot, but they serve different purposes:
 **Quick rule**: Agents *look at* your code. Skills *do things* to your project.
 
 **Installed counts** (per preset after setup):
-- **Stack-specific agents**: 6 for app presets (dotnet/typescript/python/java/go/swift) · **5** for `azure-iac` (bicep-reviewer, terraform-reviewer, security-reviewer, deploy-helper, azure-sweeper)
+- **Stack-specific agents**: 8 for app presets (dotnet/typescript/python/java/go/swift/rust/php) · **5** for `azure-iac` (bicep-reviewer, terraform-reviewer, security-reviewer, deploy-helper, azure-sweeper)
 - **8 shared agents** — API contracts, accessibility, multi-tenancy, CI/CD, observability, dependency, compliance, error handling
 - **5 pipeline agents** — specifier, plan-hardener, executor, reviewer-gate, shipper
-- **Skills**: 10 for app presets (8 upgraded + 2 shared: health-check, forge-execute) · **3** for `azure-iac` (infra-deploy, infra-test, azure-sweep)
+- **Skills**: 11 for app presets (8 stack-specific + 3 shared: health-check, forge-execute, security-audit) · **3** for `azure-iac` (infra-deploy, infra-test, azure-sweep)
 
 > **You don't need to understand all of this upfront.** Run the setup wizard, follow the numbered step prompts, and the framework guides you through.
 
@@ -294,12 +294,14 @@ The wizard bootstraps your `.github/instructions/`, `AGENTS.md`, and `copilot-in
 .\setup.ps1 -Preset java
 .\setup.ps1 -Preset go
 .\setup.ps1 -Preset swift
+.\setup.ps1 -Preset rust
+.\setup.ps1 -Preset php
 .\setup.ps1 -Preset azure-iac
 
 # Add support for additional AI agents (optional)
 .\setup.ps1 -Preset dotnet -Agent claude          # Copilot + Claude Code
 .\setup.ps1 -Preset dotnet -Agent claude,cursor    # Copilot + Claude + Cursor
-.\setup.ps1 -Preset dotnet -Agent all              # Copilot + Claude + Cursor + Codex + Gemini
+.\setup.ps1 -Preset dotnet -Agent all              # Copilot + Claude + Cursor + Codex + Gemini + Windsurf + Generic
 ```
 
 ```bash
@@ -310,15 +312,23 @@ chmod +x setup.sh
 # Or specify a preset directly
 ./setup.sh --preset dotnet
 ./setup.sh --preset typescript
+./setup.sh --preset python
+./setup.sh --preset java
+./setup.sh --preset go
 ./setup.sh --preset swift
+./setup.sh --preset rust
+./setup.sh --preset php
+./setup.sh --preset azure-iac
 
 # Add support for additional AI agents (optional)
 ./setup.sh --preset dotnet --agent claude           # Copilot + Claude Code
 ./setup.sh --preset dotnet --agent claude,cursor    # Copilot + Claude + Cursor
-./setup.sh --preset dotnet --agent all              # Copilot + Claude + Cursor + Codex + Gemini
+./setup.sh --preset dotnet --agent all              # Copilot + Claude + Cursor + Codex + Gemini + Windsurf + Generic
 ```
 
 ### 3. Available Presets
+
+Plan Forge ships with **9 presets** (8 app + 1 IaC):
 
 | Preset | Stack | Build Cmd | Test Cmd |
 |--------|-------|-----------|----------|
@@ -328,12 +338,14 @@ chmod +x setup.sh
 | `java` | Java / Spring Boot / Gradle / Maven | `./gradlew build` | `./gradlew test` |
 | `go` | Go / Chi / Gin / Standard Library | `go build ./...` | `go test ./...` |
 | `swift` | Swift / SwiftUI / iOS / macOS / Vapor | `swift build` | `swift test` |
-| `azure-iac` | Azure Bicep / Terraform / PowerShell / azd | `az bicep build` | `Invoke-Pester` |
+| `rust` | Rust / Axum / Tokio / CLI | `cargo build` | `cargo test` |
+| `php` | PHP / Laravel / Symfony / Slim | `composer install` | `phpunit` |
+| `azure-iac` |Azure Bicep / Terraform / PowerShell / azd | `az bicep build` | `Invoke-Pester` |
 | `custom` | Any stack | (you configure) | (you configure) |
 
 ### Instruction Files Per Preset
 
-App presets (dotnet / typescript / python / java / go / swift) include **15–18 instruction files** that auto-load based on the file being edited:
+App presets (dotnet / typescript / python / java / go / swift / rust / php) include **15–18 instruction files** that auto-load based on the file being edited:
 
 | Instruction File | Purpose |
 |------------------|---------|
@@ -407,7 +419,7 @@ The `azure-iac` preset includes **6 IaC-specific prompts**:
 
 ### Agent Definitions Per Preset
 
-App presets include **6 stack-specific agent definitions** (`.github/agents/`) — specialized reviewer/executor roles:
+App presets include **8 stack-specific agent definitions** (`.github/agents/`) — specialized reviewer/executor roles:
 
 | Agent | Purpose |
 |-------|--------|
@@ -460,7 +472,7 @@ These are stack-independent and use `handoffs:` frontmatter to chain sessions wi
 
 ### Skills Per Preset
 
-App presets (dotnet / typescript / python / java / go) include **10 skills** (8 stack-specific + 2 shared):
+App presets (dotnet / typescript / python / java / go / swift / rust / php) include **11 skills** (8 stack-specific + 3 shared):
 
 | Skill | Slash Command | Purpose |
 |-------|-------------|--------|
@@ -472,6 +484,7 @@ App presets (dotnet / typescript / python / java / go) include **10 skills** (8 
 | `release-notes/` | `/release-notes` | Generate release notes from git history and CHANGELOG |
 | `api-doc-gen/` | `/api-doc-gen` | Generate or update OpenAPI spec, validate spec-to-code consistency |
 | `onboarding/` | `/onboarding` | Walk a new developer through setup, architecture, and first task |
+| `security-audit/` | `/security-audit` | Full security audit: OWASP, auth gaps, secrets, injection, dependency CVEs |
 | `health-check/` | `/health-check` | Forge diagnostic: forge_smith → forge_validate → forge_sweep |
 | `forge-execute/` | `/forge-execute` | Guided plan execution: list plans → estimate → execute → report |
 
@@ -652,8 +665,8 @@ Running `setup.ps1` (PowerShell) or `setup.sh` (Bash) with a preset:
 
 1. **Copies preset instruction files** from `presets/{stack}/` to your project root (16 files for app presets — 17 for TypeScript which adds `frontend.instructions.md`; 12 for `azure-iac`)
 2. **Copies prompt templates** for scaffolding new entities, services, tests, and Project Principles (15 for app presets, 6 for `azure-iac`)
-3. **Copies agent definitions** for architecture review, security audit, testing (6 stack-specific + 8 shared + 5 pipeline agents; `azure-iac` gets 5 stack-specific including the enterprise-grade `azure-sweeper`)
-4. **Copies skill workflows** — 10 for app presets (8 upgraded + 2 shared: health-check, forge-execute); `azure-iac` gets 3 (infra-deploy, infra-test, azure-sweep)
+3. **Copies agent definitions** for architecture review, security audit, testing (8 stack-specific + 8 shared + 5 pipeline agents; `azure-iac` gets 5 stack-specific including the enterprise-grade `azure-sweeper`)
+4. **Copies skill workflows** — 11 for app presets (8 stack-specific + 3 shared: health-check, forge-execute, security-audit); `azure-iac` gets 3 (infra-deploy, infra-test, azure-sweep)
 5. **Generates `AGENTS.md`** with patterns for your tech stack
 6. **Generates `.github/copilot-instructions.md`** with stack-specific conventions
 7. **Copies shared instruction files** (git-workflow, architecture principles)
@@ -736,7 +749,8 @@ These features are all **opt-in** — skip any that don't apply. Existing workfl
 | **CLI Wrapper** | `pforge` commands for init, status, new-phase, branch, and extension management. | See [docs/CLI-GUIDE.md](docs/CLI-GUIDE.md) |
 | **Lifecycle Hooks** | Auto-enforce Forbidden Actions (PreToolUse), inject Project Principles at session start, warn on TODO/FIXME after edits. | Installed automatically with setup — see `.github/hooks/` |
 | **Agent Plugin** | Install Plan Forge as a VS Code agent plugin from a Git URL — no setup scripts needed. | `Chat: Install Plugin From Source` → repo URL |
-| **Skill Slash Commands** | App presets: `/database-migration`, `/staging-deploy`, `/test-sweep`, `/dependency-audit`, `/code-review`, `/release-notes`, `/api-doc-gen`, `/onboarding`, `/health-check`, `/forge-execute`. Azure IaC: `/infra-deploy`, `/infra-test`, `/azure-sweep`. | Type `/` in Copilot Chat to see available skills |
+| **Skill Slash Commands** | App presets: `/database-migration`, `/staging-deploy`, `/test-sweep`, `/dependency-audit`, `/code-review`, `/release-notes`, `/api-doc-gen`, `/onboarding`, `/security-audit`, `/health-check`, `/forge-execute`. Azure IaC: `/infra-deploy`, `/infra-test`, `/azure-sweep`. | Type `/` in Copilot Chat to see available skills |
+| **Bridge & Approval Gates** | Send Slack/Teams/Telegram notifications on run events. Set `approvalRequired: true` on a channel to pause execution after all slices pass and require a human click before finalising. | Add a `bridge` section to `.forge.json` — see [docs/CLI-GUIDE.md](docs/CLI-GUIDE.md) |
 | **Claude 4.6 Tuning** | Guidance for calibrating prompt intensity, managing context budgets, and controlling thinking depth with Claude Opus 4.6. Prevents over-halting, over-exploring, and overengineering. | See [CUSTOMIZATION.md → Tuning for Claude Opus 4.6](CUSTOMIZATION.md#tuning-for-claude-opus-46) |
 | **Session Memory Capture** | Step 6 (Ship) automatically saves conventions, lessons, and forbidden patterns to `/memories/repo/`. Step 2 (Harden) reads them so each phase builds on prior experience. | Built-in — no setup needed |
 | **Persistent Memory (OpenBrain)** | Capture decisions across sessions, search project history semantically, bridge the 3-session model with long-term context. | Install `plan-forge-memory` extension + [OpenBrain](https://github.com/srnichols/OpenBrain) MCP server |
@@ -816,7 +830,21 @@ You don't need to write complex prompts yourself. The templates do it for you.
 
 ### "What if I don't use VS Code?"
 
-Plan Forge has **advanced integration with VS Code + GitHub Copilot** (auto-loading instructions, pipeline agents with handoff buttons, lifecycle hooks). It also generates **rich native files for Claude Code, Cursor, Codex CLI, and Gemini CLI** via the `-Agent` parameter — including all 16 guardrail files embedded in context, all prompts as native skills/commands, all 19 reviewer agents as invocable skills, and smart instructions that emulate Copilot's auto-loading, post-edit scanning, and forbidden path checking. For any other AI tool, the copy-paste prompts from the runbook work identically.
+Plan Forge has **advanced integration with VS Code + GitHub Copilot** (auto-loading instructions, pipeline agents with handoff buttons, lifecycle hooks). It also generates **rich native files for Claude Code, Cursor, Codex CLI, Gemini CLI, Windsurf, and Generic** via the `-Agent` parameter — including all 16 guardrail files embedded in context, all prompts as native skills/commands, all 19 reviewer agents as invocable skills, and smart instructions that emulate Copilot's auto-loading, post-edit scanning, and forbidden path checking. For any other AI tool, the copy-paste prompts from the runbook work identically.
+
+All 7 supported agent types:
+
+| Agent Flag | Tool | Files Generated |
+|---|---|---|
+| `copilot` (default) | GitHub Copilot / VS Code | `.github/` instructions, agents, skills, prompts, hooks |
+| `claude` | Claude Code | `CLAUDE.md` with embedded guardrails + slash commands |
+| `cursor` | Cursor | `.cursorrules` + `.cursor/rules/*.mdc` with embedded guardrails |
+| `codex` | Codex CLI | `AGENTS.md` + skill scripts for all pipeline steps |
+| `gemini` | Gemini CLI | `GEMINI.md` with embedded guardrails + `/planforge-*` commands |
+| `windsurf` | Windsurf | `.windsurfrules` + Cascade instructions with embedded guardrails |
+| `generic` | Any AI tool | `AI-ASSISTANT.md` — copy-paste guardrails for any tool |
+
+Use `-Agent all` to generate all formats at once. The OpenBrain memory integration **bridges the 3-session model** with long-term context — prior decisions, patterns, and postmortems automatically surface at the start of each new session. See [README → Persistent Memory](README.md#extension-ecosystem).
 
 ### "Do I need to use every step every time?"
 

@@ -179,10 +179,10 @@ export const TOOL_METADATA = {
     addedIn: "2.0.0",
     prerequisites: [],
     produces: [],
-    consumes: [".forge/cost-history.json"],
+    consumes: [".forge/cost-history.json", ".forge/model-performance.json"],
     sideEffects: [],
     errors: {},
-    example: { input: {}, output: { runs: 5, total_cost_usd: 1.23, by_model: {} } },
+    example: { input: {}, output: { runs: 5, total_cost_usd: 1.23, by_model: {}, forge_model_stats: { "claude-sonnet-4.6": { total_slices: 10, passed: 9, failed: 1, success_rate: 0.9, avg_cost_usd: 0.05 } } } },
   },
   forge_ext_search: {
     intent: ["search", "browse", "discover"],

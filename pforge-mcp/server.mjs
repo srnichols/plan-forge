@@ -239,7 +239,7 @@ const TOOLS = [
   },
   {
     name: "forge_cost_report",
-    description: "Cost tracking report — shows total spend, per-model breakdown, and monthly aggregation from .forge/cost-history.json. Includes token counts and run history.",
+    description: "Cost tracking report — shows total spend, per-model breakdown, and monthly aggregation from .forge/cost-history.json. Includes token counts, run history, and forge_model_stats (success rate per model from model-performance.json).",
     inputSchema: {
       type: "object",
       properties: {

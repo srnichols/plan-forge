@@ -5,6 +5,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.12.0] — 2026-04-06
+
+### Added — Escalation & CI Trigger Events (Phase 18)
+- **`slice-escalated` event** — emitted when a slice is escalated to quorum for multi-model consensus (includes `sliceId`, `reason`, `models`)
+- **`ci-triggered` event** — emitted when a CI workflow is dispatched from a plan run (includes `workflow`, `ref`, `inputs`)
+
+---
+
 ## [2.11.0] — 2026-04-06
 
 ### Added — v2.11 Quick Wins (Phase 17)

@@ -127,8 +127,17 @@
             </summary>
             <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
               <p class="mb-3">The pipeline works in three ways: Pipeline Agents (optimized for VS Code + Copilot), Prompt Templates (VS Code Copilot Chat), and Copy-Paste Prompts (works in <strong>any</strong> AI tool — Claude, Cursor, ChatGPT, Gemini, Windsurf, terminal agents).</p>
-              <p class="mb-3"><strong>First-class agent support</strong>: Setup generates <strong>rich native files</strong> for <strong>Claude Code</strong>, <strong>Cursor</strong>, and <strong>Codex CLI</strong>. This includes all 16 guardrail files embedded in the context file, all prompts and scaffolding recipes as native skills/commands, all 19 reviewer agents as invocable skills, and smart instructions that emulate Copilot's auto-loading and post-edit scanning. Use <code class="text-forge-400">-Agent claude,cursor</code> during setup.</p>
-              <p>Copilot files are always installed. Additional agents layer on top — use one, some, or all.</p>
+              <p class="mb-3"><strong>First-class agent support</strong>: Setup generates <strong>rich native files</strong> for all 7 supported agent types via the <code class="text-forge-400">-Agent</code> flag. Use <code class="text-forge-400">-Agent all</code> to install everything at once:</p>
+              <ul class="list-disc list-inside space-y-1 mb-3">
+                <li><strong>copilot</strong> (default) — VS Code + GitHub Copilot: auto-loading instructions, agent picker, handoff buttons</li>
+                <li><strong>claude</strong> — Claude Code: <code class="text-forge-400">CLAUDE.md</code> with embedded guardrails + <code class="text-forge-400">/planforge-*</code> slash commands</li>
+                <li><strong>cursor</strong> — Cursor: <code class="text-forge-400">.cursorrules</code> + <code class="text-forge-400">.cursor/rules/*.mdc</code> with embedded guardrails</li>
+                <li><strong>codex</strong> — Codex CLI: <code class="text-forge-400">AGENTS.md</code> + skill scripts for all pipeline steps</li>
+                <li><strong>gemini</strong> — Gemini CLI: <code class="text-forge-400">GEMINI.md</code> with embedded guardrails + <code class="text-forge-400">/planforge-*</code> commands</li>
+                <li><strong>windsurf</strong> — Windsurf: <code class="text-forge-400">.windsurfrules</code> + Cascade instructions with embedded guardrails</li>
+                <li><strong>generic</strong> — Any AI tool: <code class="text-forge-400">AI-ASSISTANT.md</code> with copy-paste guardrails for tools not listed above</li>
+              </ul>
+              <p>Copilot files are always installed. Additional agents layer on top — use one, some, or all. All 7 formats include all 16 guardrail files, all pipeline prompts, and all 19 reviewer agents.</p>
             </div>
           </details>
         </div>
@@ -157,7 +166,7 @@
               <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
             </summary>
             <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
-              Six presets out of the box: <strong>.NET/C#</strong>, <strong>TypeScript/React</strong>, <strong>Python/FastAPI</strong>, <strong>Java/Spring Boot</strong>, <strong>Go</strong>, and <strong>Azure IaC</strong> (Bicep/Terraform). There's also a <strong>custom</strong> preset for any other stack. Multi-preset combinations are supported — e.g., <code class="text-forge-400">-Preset dotnet,azure-iac</code> for an app with infrastructure code.
+              Nine presets out of the box: <strong>.NET/C#</strong>, <strong>TypeScript/React</strong>, <strong>Python/FastAPI</strong>, <strong>Java/Spring Boot</strong>, <strong>Go</strong>, <strong>Swift</strong>, <strong>Rust</strong>, <strong>PHP/Laravel</strong> (8 app presets), and <strong>Azure IaC</strong> (Bicep/Terraform, 1 IaC preset). There's also a <strong>custom</strong> preset for any other stack. Multi-preset combinations are supported — e.g., <code class="text-forge-400">-Preset dotnet,azure-iac</code> for an app with infrastructure code.
             </div>
           </details>
 
@@ -196,6 +205,61 @@
                 <li><strong>Common Problems</strong> — duplicate files, orphaned agents, missing applyTo, unresolved placeholders</li>
               </ul>
               <p>Every issue includes a <strong>FIX:</strong> suggestion with the exact command or setting to resolve it. Run it after setup, after updates, or whenever something feels off.</p>
+            </div>
+          </details>
+
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">Does Plan Forge work with Windsurf?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              <p class="mb-3">Yes — run setup with <code class="text-forge-400">-Agent windsurf</code>. This generates <code class="text-forge-400">.windsurfrules</code> and Cascade instruction files with all 16 guardrail files embedded, all pipeline prompts as native commands, and all 19 reviewer agents as invocable skills. Windsurf's Cascade agent reads these automatically — no manual attachment needed.</p>
+              <p>To install all agent formats at once: <code class="text-forge-400">.\setup.ps1 -Preset &lt;stack&gt; -Agent all</code></p>
+            </div>
+          </details>
+
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">Does Plan Forge work with Gemini CLI?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              <p class="mb-3">Yes — run setup with <code class="text-forge-400">-Agent gemini</code>. This generates <code class="text-forge-400">GEMINI.md</code> with all guardrail files embedded and <code class="text-forge-400">/planforge-*</code> slash commands for every pipeline step. Gemini CLI reads <code class="text-forge-400">GEMINI.md</code> automatically at session start.</p>
+              <p>Gemini CLI is also supported as a model provider in Quorum Mode — add it to your <code class="text-forge-400">.forge/config.json</code> API provider registry.</p>
+            </div>
+          </details>
+
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">What is the Generic agent and when should I use it?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              <p class="mb-3">The <strong>Generic agent</strong> (<code class="text-forge-400">-Agent generic</code>) generates <code class="text-forge-400">AI-ASSISTANT.md</code> — a self-contained document with all 16 guardrails, all pipeline prompts, and all reviewer agents as copy-paste blocks. It works with <em>any</em> AI tool: ChatGPT, Perplexity, GitHub Models, Mistral, local LLMs via Ollama, or any future tool.</p>
+              <p>Use it as a fallback bridge for tools not explicitly supported, or alongside a specific agent format when you want a portable reference that works everywhere.</p>
+            </div>
+          </details>
+
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">How does memory bridge the 3-session model?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              <p class="mb-3">Each Plan Forge session starts fresh — by design, so the reviewer catches what the builder missed. But that means prior decisions, patterns, and lessons are lost between features. The <code class="text-forge-400">plan-forge-memory</code> extension with <a href="https://github.com/srnichols/OpenBrain" class="text-forge-400 hover:underline">OpenBrain</a> bridges this gap: the Shipper (Step 6) captures decisions and postmortems to a semantic memory store, and the Plan Hardener (Step 2) searches it before locking down each new plan.</p>
+              <p>Built-in session memory (<code class="text-forge-400">/memories/repo/</code>) ships without any extension — it captures conventions and forbidden patterns as markdown files that load automatically. OpenBrain adds <em>semantic search</em> across thousands of prior decisions, cross-project pattern reuse, and memory that survives repo migrations.</p>
+            </div>
+          </details>
+
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">Does Plan Forge support CI/CD approval gates and bridge environments?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              <p class="mb-3">Yes. The <code class="text-forge-400">deploy.instructions.md</code> guardrail covers GitHub Actions and Azure DevOps pipelines with OIDC auth, environment approval gates, and rollback strategies. The <code class="text-forge-400">new-pipeline.prompt.md</code> template scaffolds full pipelines with what-if previews, bridge environments (dev → staging → prod), and manual approval gates baked in.</p>
+              <p>For Azure-specific deployments, the <code class="text-forge-400">azure-iac</code> preset adds the <code class="text-forge-400">/infra-deploy</code> skill which handles pre-flight checks, what-if/Terraform plan, environment promotion, and approval gate integration with <code class="text-forge-400">azd</code>, Bicep, and Terraform.</p>
             </div>
           </details>
         </div>
@@ -388,7 +452,25 @@
 
           <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
             <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
-              <span class="text-sm font-medium text-white pr-4">Does Plan Forge support compliance requirements (SOC2, GDPR, HIPAA)?</span>
+              <span class="text-sm font-medium text-white pr-4">Can I get Slack/Telegram notifications and approval gates for plan runs?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              <p class="mb-3">Yes — the <strong>Bridge</strong> feature sends notifications to Slack, Teams, Telegram, or any webhook when plan runs start, succeed, or fail. Add a <code class="text-forge-400">bridge</code> section to your <code class="text-forge-400">.forge.json</code>:</p>
+              <pre class="bg-slate-900/60 rounded-lg p-4 text-xs text-forge-400 overflow-x-auto mb-3"><code>"bridge": {
+  "enabled": true,
+  "channels": [
+    { "type": "slack",    "webhookUrl": "https://hooks.slack.com/...",
+      "approvalRequired": true, "serverUrl": "https://yourapp.com" },
+    { "type": "telegram", "botToken": "...", "chatId": "..." }
+  ]
+}</code></pre>
+              <p class="mb-3">Set <code class="text-forge-400">approvalRequired: true</code> on any channel to <strong>pause execution after all slices pass</strong> and send an Approve / Reject button. The run only finalises after a human clicks Approve. Timeout (default 30 min) auto-rejects if no response.</p>
+              <p>The bridge connects to the Plan Forge WebSocket hub as a subscriber — it observes events without modifying the hub. See <code class="text-forge-400">docs/CLI-GUIDE.md</code> for the full bridge configuration reference.</p>
+            </div>
+          </details>
+
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
               <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
             </summary>
             <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">

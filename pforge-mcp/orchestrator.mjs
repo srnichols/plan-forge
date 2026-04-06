@@ -65,7 +65,7 @@ class OrchestratorEventBus extends EventEmitter {
     // Proxy all known events to the handler
     const events = [
       "run-started", "slice-started", "slice-completed",
-      "slice-failed", "run-completed", "run-aborted",
+      "slice-failed", "slice-escalated", "run-completed", "run-aborted",
       "quorum-dispatch-started", "quorum-leg-completed", "quorum-review-completed",
       "skill-started", "skill-step-started", "skill-step-completed", "skill-completed",
     ];
@@ -1305,8 +1305,14 @@ export async function runPlan(planPath, options = {}) {
           case "slice-failed":
             process.stdout.write(`[${ts}] ❌ Slice ${event.sliceId}: ${event.title || ""} — FAILED\n`);
             break;
+          case "slice-escalated":
+            process.stdout.write(`[${ts}] ⬆ Slice ${event.sliceId}: ${event.title || ""} — escalating to ${event.toModel} (attempt ${event.attempt})\n`);
+            break;
           case "run-completed":
             process.stdout.write(`[${ts}] 🏁 Run complete: ${event.results?.passed || 0} passed, ${event.results?.failed || 0} failed\n`);
+            break;
+          case "ci-triggered":
+            process.stdout.write(`[${ts}] 🚀 CI triggered: ${event.workflow} @ ${event.ref} — ${event.status}\n`);
             break;
         }
       }
@@ -1358,13 +1364,14 @@ export async function runPlan(planPath, options = {}) {
 
   // Execute slices
   const maxRetries = loadMaxRetries(cwd);
+  const escalationChain = loadEscalationChain(cwd);
   const results = await scheduler.execute(
     plan.dag.nodes,
     plan.dag.order,
     async (slice) => executeSlice(slice, {
       cwd, model: effectiveModel, modelRouting, mode, runDir, maxRetries,
       memoryEnabled, projectName, planName: basename(planPath, ".md"),
-      quorumConfig,
+      quorumConfig, escalationChain, eventBus,
     }),
     { abortSignal, resumeFrom: resumeFrom ? String(resumeFrom) : null },
   );
@@ -1405,6 +1412,14 @@ export async function runPlan(planPath, options = {}) {
     } catch (err) {
       // Non-fatal — log and continue without blocking the run
       console.error(`[orchestrator] Approval gate error: ${err.message}`);
+    }
+  }
+
+  // CI/CD Integration Hook — trigger workflow after successful run
+  if (allPassed && summary.status !== "approval-rejected") {
+    const ciConfig = loadCiConfig(cwd);
+    if (ciConfig.enabled && ciConfig.workflow) {
+      summary.ci = triggerCiWorkflow(ciConfig, eventBus);
     }
   }
 
@@ -1492,7 +1507,25 @@ function loadMaxRetries(cwd) {
 }
 
 /**
- * Load max run history from .forge.json.
+ * Load escalation chain from .forge.json.
+ * Schema: { "escalationChain": ["auto", "claude-sonnet-4.6", "claude-opus-4.6"] }
+ * On each retry, the orchestrator escalates to the next model in the chain.
+ * @returns {string[]}
+ */
+function loadEscalationChain(cwd) {
+  const configPath = resolve(cwd, ".forge.json");
+  try {
+    if (existsSync(configPath)) {
+      const config = JSON.parse(readFileSync(configPath, "utf-8"));
+      if (Array.isArray(config.escalationChain) && config.escalationChain.length > 0) {
+        return config.escalationChain;
+      }
+    }
+  } catch { /* defaults */ }
+  return ["auto", "claude-sonnet-4.6", "claude-opus-4.6"];
+}
+
+/**
  * @returns {number}
  */
 function loadMaxRunHistory(cwd) {
@@ -1518,6 +1551,60 @@ function loadProjectName(cwd) {
     }
   } catch { /* defaults */ }
   return basename(cwd);
+}
+
+/**
+ * Load CI/CD integration configuration from .forge.json.
+ * Schema: { "ci": { "enabled": true, "workflow": "ci.yml", "ref": "main", "inputs": { "key": "value" } } }
+ * @returns {{ enabled: boolean, workflow: string|null, ref: string, inputs: object }}
+ */
+function loadCiConfig(cwd) {
+  const configPath = resolve(cwd, ".forge.json");
+  try {
+    if (existsSync(configPath)) {
+      const config = JSON.parse(readFileSync(configPath, "utf-8"));
+      if (config.ci && typeof config.ci === "object") {
+        return {
+          enabled: config.ci.enabled === true,
+          workflow: config.ci.workflow || null,
+          ref: config.ci.ref || "main",
+          inputs: config.ci.inputs && typeof config.ci.inputs === "object" ? config.ci.inputs : {},
+        };
+      }
+    }
+  } catch { /* defaults */ }
+  return { enabled: false, workflow: null, ref: "main", inputs: {} };
+}
+
+/**
+ * Trigger a GitHub Actions workflow via `gh workflow run`.
+ * Emits a `ci-triggered` event and returns a CI result object.
+ * @param {{ workflow: string, ref: string, inputs: object }} ciConfig
+ * @param {OrchestratorEventBus} eventBus
+ * @returns {{ workflow: string, ref: string, status: "triggered"|"failed", error?: string, timestamp: string }}
+ */
+function triggerCiWorkflow(ciConfig, eventBus) {
+  const { workflow, ref, inputs } = ciConfig;
+  const timestamp = new Date().toISOString();
+
+  try {
+    const args = ["workflow", "run", workflow, "--ref", ref];
+    if (inputs && Object.keys(inputs).length > 0) {
+      for (const [key, value] of Object.entries(inputs)) {
+        args.push("-f", `${key}=${value}`);
+      }
+    }
+    execSync(`gh ${args.join(" ")}`, { encoding: "utf-8", timeout: 30_000 });
+
+    const result = { workflow, ref, status: "triggered", timestamp };
+    eventBus.emit("ci-triggered", result);
+    return result;
+  } catch (err) {
+    const error = err.stderr?.trim() || err.message || "unknown error";
+    const result = { workflow, ref, status: "failed", error, timestamp };
+    eventBus.emit("ci-triggered", result);
+    return result;
+  }
 }
 
 /**
@@ -1573,20 +1660,21 @@ function appendCostHistory(cwd, summary) {
  */
 export function getCostReport(cwd) {
   const historyPath = resolve(cwd, ".forge", "cost-history.json");
+  const modelStats = aggregateModelStats(loadModelPerformance(cwd));
   if (!existsSync(historyPath)) {
-    return { runs: 0, message: "No cost history yet. Run `pforge run-plan` to start tracking." };
+    return { runs: 0, message: "No cost history yet. Run `pforge run-plan` to start tracking.", forge_model_stats: modelStats };
   }
 
   let history;
   try {
     history = JSON.parse(readFileSync(historyPath, "utf-8"));
-    if (!Array.isArray(history)) return { runs: 0, message: "Invalid cost history format." };
+    if (!Array.isArray(history)) return { runs: 0, message: "Invalid cost history format.", forge_model_stats: modelStats };
   } catch {
-    return { runs: 0, message: "Could not parse cost-history.json." };
+    return { runs: 0, message: "Could not parse cost-history.json.", forge_model_stats: modelStats };
   }
 
   if (history.length === 0) {
-    return { runs: 0, message: "Cost history is empty." };
+    return { runs: 0, message: "Cost history is empty.", forge_model_stats: modelStats };
   }
 
   // Aggregate totals
@@ -1637,7 +1725,68 @@ export function getCostReport(cwd) {
     by_model: modelTotals,
     monthly,
     latest: history[history.length - 1],
+    forge_model_stats: modelStats,
   };
+}
+
+// ─── Model Performance Tracking (Phase 3) ────────────────────────────
+
+/**
+ * Load the model performance log from .forge/model-performance.json.
+ * Returns an array of per-slice performance entries, or [] if none exists.
+ */
+export function loadModelPerformance(cwd) {
+  const perfPath = resolve(cwd, ".forge", "model-performance.json");
+  if (!existsSync(perfPath)) return [];
+  try {
+    const data = JSON.parse(readFileSync(perfPath, "utf-8"));
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Append a per-slice performance entry to .forge/model-performance.json.
+ * Each entry records the model used, pass/fail outcome, cost, and timing.
+ *
+ * @param {string} cwd
+ * @param {{ date, plan, sliceId, sliceTitle, model, status, attempts, duration_ms, cost_usd }} entry
+ */
+export function recordModelPerformance(cwd, entry) {
+  const perfPath = resolve(cwd, ".forge", "model-performance.json");
+  const records = loadModelPerformance(cwd);
+  records.push(entry);
+  mkdirSync(resolve(cwd, ".forge"), { recursive: true });
+  writeFileSync(perfPath, JSON.stringify(records, null, 2));
+}
+
+/**
+ * Aggregate model performance records into per-model stats.
+ * @param {Array} records - from loadModelPerformance()
+ * @returns {object} model → { total_slices, passed, failed, success_rate, avg_cost_usd }
+ */
+function aggregateModelStats(records) {
+  const stats = {};
+  for (const r of records) {
+    const m = r.model || "unknown";
+    if (!stats[m]) stats[m] = { total_slices: 0, passed: 0, failed: 0, total_cost_usd: 0 };
+    stats[m].total_slices += 1;
+    if (r.status === "passed") stats[m].passed += 1;
+    else stats[m].failed += 1;
+    stats[m].total_cost_usd += r.cost_usd || 0;
+  }
+  const result = {};
+  for (const [model, s] of Object.entries(stats)) {
+    result[model] = {
+      total_slices: s.total_slices,
+      passed: s.passed,
+      failed: s.failed,
+      success_rate: s.total_slices > 0 ? Math.round((s.passed / s.total_slices) * 1000) / 1000 : 0,
+      avg_cost_usd: s.total_slices > 0 ? Math.round((s.total_cost_usd / s.total_slices) * 1_000_000) / 1_000_000 : 0,
+    };
+  }
+  return result;
 }
 
 /**
@@ -1647,7 +1796,9 @@ export function getCostReport(cwd) {
 async function executeSlice(slice, options) {
   const { cwd, model, modelRouting = {}, mode, runDir, maxRetries = 1,
     memoryEnabled = false, projectName = "", planName = "",
-    quorumConfig = null } = options;
+    quorumConfig = null,
+    escalationChain = ["auto", "claude-sonnet-4.6", "claude-opus-4.6"],
+    eventBus = null } = options;
   const startTime = Date.now();
   const resolvedModel = resolveModel(model, modelRouting, slice);
 
@@ -1702,8 +1853,28 @@ async function executeSlice(slice, options) {
   let workerResult = null;
   let gateResult = { success: true, output: "No validation gate defined" };
   let lastError = null;
+  let currentModel = resolvedModel;
 
   while (attempt <= maxRetries) {
+    // Auto-escalate model on retries
+    if (attempt > 0 && escalationChain.length > 1) {
+      const chainIdx = Math.min(attempt, escalationChain.length - 1);
+      const chainModel = escalationChain[chainIdx] === "auto" ? null : escalationChain[chainIdx];
+      if (chainModel !== currentModel) {
+        const fromModel = currentModel || "auto";
+        currentModel = chainModel;
+        if (eventBus) {
+          eventBus.emit("slice-escalated", {
+            sliceId: slice.number,
+            title: slice.title,
+            attempt,
+            fromModel,
+            toModel: currentModel || "auto",
+          });
+        }
+      }
+    }
+
     // Build prompt — on retry, include the error context
     let sliceInstructions = (useQuorum && quorumResult)
       ? quorumResult.enhancedPrompt
@@ -1730,7 +1901,7 @@ async function executeSlice(slice, options) {
       };
     } else {
       try {
-        workerResult = await spawnWorker(sliceInstructions, { model: resolvedModel, cwd });
+        workerResult = await spawnWorker(sliceInstructions, { model: currentModel, cwd });
       } catch (err) {
         return {
           status: "failed",
@@ -1820,6 +1991,7 @@ async function executeSlice(slice, options) {
     worker: workerResult.worker,
     model: workerResult.model,
     attempts: attempt + 1,
+    ...(currentModel !== resolvedModel && { escalatedModel: currentModel || "auto" }),
     ...(useQuorum && {
       quorum: {
         score: complexityScore,
@@ -1838,6 +2010,24 @@ async function executeSlice(slice, options) {
     resolve(runDir, `slice-${slice.number}.json`),
     JSON.stringify(sliceResult, null, 2),
   );
+
+  // Record model performance for this slice
+  try {
+    const sliceCost = calculateSliceCost(sliceResult.tokens, sliceResult.worker);
+    recordModelPerformance(cwd, {
+      date: new Date().toISOString(),
+      plan: planName,
+      sliceId: slice.number,
+      sliceTitle: slice.title,
+      model: sliceResult.model || "unknown",
+      status: sliceResult.status,
+      attempts: sliceResult.attempts,
+      duration_ms: sliceResult.duration,
+      cost_usd: sliceCost.cost_usd,
+    });
+  } catch {
+    // Non-fatal — don't fail the slice over a tracking write error
+  }
 
   return sliceResult;
 }
@@ -2668,11 +2858,48 @@ function buildEstimate(plan, model, cwd, quorumConfig = null) {
     };
   }
 
+  // Phase 3: Recommend cheapest model with >80% success rate from performance history
+  let modelRecommendation = null;
+  if (cwd) {
+    try {
+      const perfRecords = loadModelPerformance(cwd);
+      if (perfRecords.length > 0) {
+        const stats = aggregateModelStats(perfRecords);
+        // Minimum 3 slices of data before trusting a model's success rate
+        const MIN_SAMPLE = 3;
+        const qualified = Object.entries(stats)
+          .filter(([, s]) => s.total_slices >= MIN_SAMPLE && s.success_rate > 0.8)
+          .map(([m, s]) => ({
+            model: m,
+            success_rate: s.success_rate,
+            total_slices: s.total_slices,
+            avg_cost_usd: s.avg_cost_usd,
+          }))
+          .sort((a, b) => a.avg_cost_usd - b.avg_cost_usd);
+
+        if (qualified.length > 0) {
+          const best = qualified[0];
+          modelRecommendation = {
+            model: best.model,
+            reason: `Cheapest model with >${(0.8 * 100).toFixed(0)}% success rate`,
+            success_rate: best.success_rate,
+            avg_cost_usd_per_slice: best.avg_cost_usd,
+            based_on_slices: best.total_slices,
+            all_qualified: qualified,
+          };
+        }
+      }
+    } catch {
+      // Non-fatal — skip recommendation if performance data unavailable
+    }
+  }
+
   return {
     status: "estimate",
     sliceCount,
     executionOrder: plan.dag.order,
     model: model || "auto",
+    ...(modelRecommendation && { modelRecommendation }),
     tokens: {
       estimatedInput: totalInputTokens,
       estimatedOutput: totalOutputTokens,
@@ -3190,6 +3417,21 @@ async function selfTest() {
     assert("Default threshold is 7", config.threshold === 7);
   } catch (err) {
     assert(`Quorum config: ${err.message}`, false);
+  }
+
+  // Test 18: CI config loading
+  console.log("\n─── CI/CD Integration ───");
+  try {
+    const ciConfig = loadCiConfig(process.cwd());
+    assert("loadCiConfig returns object", typeof ciConfig === "object");
+    assert("Has enabled flag", "enabled" in ciConfig);
+    assert("Has workflow field", "workflow" in ciConfig);
+    assert("Has ref field", "ref" in ciConfig);
+    assert("Has inputs field", typeof ciConfig.inputs === "object");
+    assert("Default enabled is false", ciConfig.enabled === false || typeof ciConfig.enabled === "boolean");
+    assert("Default ref is main (when no config)", ciConfig.workflow === null || typeof ciConfig.workflow === "string");
+  } catch (err) {
+    assert(`CI config: ${err.message}`, false);
   }
 
   // Summary

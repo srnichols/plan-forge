@@ -39,9 +39,14 @@ Bootstrap a project with the Plan Forge Pipeline. Delegates to `setup.ps1` / `se
 .\pforge.ps1 init -Preset dotnet
 .\pforge.ps1 init -Preset typescript -ProjectPath ./my-app
 .\pforge.ps1 init -Preset swift -ProjectPath ./my-ios-app
+.\pforge.ps1 init -Preset php -ProjectPath ./my-php-app
+.\pforge.ps1 init -Preset rust -ProjectPath ./my-rust-app
 .\pforge.ps1 init -Preset azure-iac -ProjectPath ./infra
 .\pforge.ps1 init -Preset dotnet,azure-iac -ProjectPath ./my-app
 .\pforge.ps1 init -Preset dotnet -Agent claude          # Add Claude Code support
+.\pforge.ps1 init -Preset dotnet -Agent windsurf        # Add Windsurf support
+.\pforge.ps1 init -Preset dotnet -Agent gemini          # Add Gemini CLI support
+.\pforge.ps1 init -Preset dotnet -Agent generic         # Generic AI adapter (.ai/)
 .\pforge.ps1 init -Preset dotnet -Agent all              # All agents
 ```
 
@@ -50,9 +55,14 @@ Bootstrap a project with the Plan Forge Pipeline. Delegates to `setup.ps1` / `se
 ./pforge.sh init --preset dotnet
 ./pforge.sh init --preset typescript --path ./my-app
 ./pforge.sh init --preset swift --path ./my-ios-app
+./pforge.sh init --preset php --path ./my-php-app
+./pforge.sh init --preset rust --path ./my-rust-app
 ./pforge.sh init --preset azure-iac --path ./infra
 ./pforge.sh init --preset dotnet,azure-iac --path ./my-app
 ./pforge.sh init --preset dotnet --agent claude           # Add Claude Code support
+./pforge.sh init --preset dotnet --agent windsurf         # Add Windsurf support
+./pforge.sh init --preset dotnet --agent gemini           # Add Gemini CLI support
+./pforge.sh init --preset dotnet --agent generic          # Generic AI adapter (.ai/)
 ./pforge.sh init --preset dotnet --agent all               # All agents
 ```
 
@@ -516,6 +526,47 @@ Remove an installed extension. Prompts for confirmation unless `--force` is used
 
 ---
 
+### `pforge ext publish <path>`
+
+Generate a community catalog entry for your extension and output next steps for submission. Does not upload anything — prints the catalog JSON you need to add via pull request.
+
+```powershell
+# PowerShell
+.\pforge.ps1 ext publish .forge/extensions/my-extension
+```
+
+```bash
+# Bash
+./pforge.sh ext publish .forge/extensions/my-extension
+```
+
+**What it does:**
+1. Validates `extension.json` exists and contains all required fields (`name`, `version`, `description`, `author`)
+2. Counts artifact files (instructions, agents, prompts, skills) from the extension directory
+3. Generates a ready-to-paste catalog entry in the `extensions/catalog.json` format
+4. Prints the 4-step submission workflow (fork → edit catalog → open PR → link repo)
+
+**Output:**
+```
+╔══════════════════════════════════════════════════════════════╗
+║  Catalog Entry: my-extension
+╚══════════════════════════════════════════════════════════════╝
+
+Add the following entry to extensions/catalog.json:
+"my-extension": { ... }
+
+─────────────────────────────────────────────────────────────
+Next steps to publish:
+  1. Fork   https://github.com/srnichols/plan-forge
+  2. Edit   extensions/catalog.json — add the entry above
+  3. Open PR with title: feat(catalog): add my-extension
+  4. Link to your extension's repository in the PR description
+```
+
+**Also see**: `extensions/PUBLISHING.md` for the full submission guide, and [docs/EXTENSIONS.md](EXTENSIONS.md) for extension structure.
+
+---
+
 ### `pforge update [source-path]`
 
 Update framework files from a Plan Forge source without re-running the full setup wizard. Preserves all user-customized files.
@@ -860,6 +911,46 @@ pforge diagnose src/services/billing.ts --models grok-4.20       # Bug investiga
 **How it works**: Any model name matching `grok-*` auto-routes to `api.x.ai/v1` via the `XAI_API_KEY` env var. The orchestrator uses the standard OpenAI chat completions API format. No `.forge.json` changes required.
 
 Get your API key at [console.x.ai](https://console.x.ai/).
+
+---
+
+## Bridge Configuration
+
+The Plan Forge Bridge forwards run events (slice completions, failures, run summaries) to external notification channels. Start it with `node pforge-mcp/bridge.mjs`.
+
+Configure in `.forge.json` under the `bridge` key:
+
+```json
+{
+  "bridge": {
+    "enabled": true,
+    "channels": [
+      { "type": "telegram", "url": "https://api.telegram.org/bot<TOKEN>/sendMessage", "chatId": "<CHAT_ID>", "level": "important" },
+      { "type": "slack",    "url": "https://hooks.slack.com/services/...", "level": "all" },
+      { "type": "discord",  "url": "https://discord.com/api/webhooks/...", "level": "critical" },
+      { "type": "webhook",  "url": "https://your-endpoint.example.com/hook", "level": "all" }
+    ]
+  }
+}
+```
+
+**Notification levels** (hierarchical — each includes those below):
+
+| Level | Events Delivered |
+|-------|-----------------|
+| `all` | Every event: run-started, slice-started, slice-completed, slice-failed, run-completed, run-aborted |
+| `important` | run-started, slice-failed, run-completed, run-aborted |
+| `critical` | slice-failed, run-aborted (+ failed run-completed) |
+
+**REST endpoints** (when MCP server is running):
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/bridge/status` | Connected channels + pending approvals |
+| POST | `/api/bridge/approve/:runId` | Approve a paused run |
+| GET | `/api/bridge/approve/:runId` | Browser-friendly approval link (for Telegram buttons) |
+
+Rate limit: 1 notification per 5 seconds per channel.
 
 ---
 

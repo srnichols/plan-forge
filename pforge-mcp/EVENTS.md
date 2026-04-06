@@ -243,6 +243,38 @@ Emitted when a webhook dispatch fails (network error, bad status, etc.).
 
 ---
 
+## Escalation & CI Events
+
+### `slice-escalated`
+Emitted when a slice is escalated to quorum for multi-model consensus review.
+
+```json
+{
+  "type": "slice-escalated",
+  "version": "1.0",
+  "sliceId": "3",
+  "reason": "complexity threshold exceeded",
+  "models": ["claude-sonnet-4.6", "gpt-5.2", "grok-3-mini"],
+  "timestamp": "..."
+}
+```
+
+### `ci-triggered`
+Emitted when a CI workflow is dispatched from a plan run.
+
+```json
+{
+  "type": "ci-triggered",
+  "version": "1.0",
+  "workflow": "ci.yml",
+  "ref": "main",
+  "inputs": { "plan": "docs/plans/Phase-1-AUTH-PLAN.md" },
+  "timestamp": "..."
+}
+```
+
+---
+
 ## Client → Server Messages
 
 ### `set-label`

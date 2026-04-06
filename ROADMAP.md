@@ -7,7 +7,7 @@
 
 ## Current Release
 
-**v2.11.0** (2026-04-06) — Quick Wins: Windsurf adapter, generic agent pattern, Swift/iOS preset. 8 supported stacks, 7 agent adapters.
+**v2.12.0** (2026-04-06) — Escalation & CI Trigger Events: `slice-escalated` and `ci-triggered` WebSocket event types added to EVENTS.md.
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 
@@ -341,8 +341,8 @@ These are planned but not yet prioritized into a version:
 - Preset-specific validation minimum count checks in `validate-setup`
 
 ### Agent Expansion
-- **Windsurf adapter** — Windsurf IDE native integration
-- **Generic bring-your-own-agent pattern** (`--agent generic --commands-dir <path>`)
+
+*(all planned adapters shipped)*
 
 ### Stack Expansion
 - *(all planned stacks shipped)*

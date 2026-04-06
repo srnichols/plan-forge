@@ -22,12 +22,12 @@ Create two end-to-end worked examples showing Plan Forge in real-world scenarios
 
 ## Acceptance Criteria
 
-- [ ] Greenfield walkthrough: full pipeline from `setup.ps1` to shipped feature (~2000 words)
-- [ ] Brownfield walkthrough: adding Plan Forge to existing messy codebase (~2000 words)
-- [ ] Both walkthroughs reference real commands, real file paths, real output
-- [ ] Examples page (docs/examples.html) updated with links to walkthroughs
-- [ ] README.md references the new walkthroughs
-- [ ] CHANGELOG.md updated
+- **MUST**: Greenfield walkthrough covers full pipeline from `setup.ps1` to shipped feature (>1500 words)
+- **MUST**: Brownfield walkthrough covers adding Plan Forge to existing messy codebase (>1500 words)
+- **MUST**: Both walkthroughs reference real commands, real file paths, real output
+- **MUST**: Examples page (docs/examples.html) updated with links to walkthroughs
+- **SHOULD**: README.md references the new walkthroughs
+- **SHOULD**: CHANGELOG.md updated
 
 ---
 

@@ -23,14 +23,14 @@ Add a `/security-audit` skill to every preset that orchestrates a comprehensive 
 
 ## Acceptance Criteria
 
-- [ ] `/security-audit` SKILL.md exists in all 5 stack presets + shared
-- [ ] Skill orchestrates 3 phases: OWASP scan, dependency audit, secrets scan
-- [ ] Combined report format with CRITICAL/HIGH/MEDIUM/LOW severity ratings
-- [ ] Secrets scan detects API keys, tokens, connection strings, private keys in source
-- [ ] Each preset's skill uses stack-appropriate tooling (npm audit / pip audit / dotnet list / go vuln / mvn dependency-check)
-- [ ] Smith diagnostics updated to detect and report installed security skills
-- [ ] Testable on plan-forge-testbed Tracker app
-- [ ] Claude/Cursor/Codex adapter generation includes the new skill
+- **MUST**: `/security-audit` SKILL.md exists in all 5 stack presets + shared (6 files total)
+- **MUST**: Skill orchestrates 3 phases: OWASP scan, dependency audit, secrets scan
+- **MUST**: Combined report format with CRITICAL/HIGH/MEDIUM/LOW severity ratings
+- **MUST**: Secrets scan detects API keys, tokens, connection strings, private keys in source
+- **MUST**: Each preset's skill uses stack-appropriate tooling (npm audit / pip audit / dotnet list / go vuln / mvn dependency-check)
+- **SHOULD**: Smith diagnostics detect and report installed security skills
+- **SHOULD**: Testable on plan-forge-testbed Tracker app
+- **MUST**: Claude/Cursor/Codex/Gemini adapter generation includes the new skill
 
 ---
 

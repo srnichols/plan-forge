@@ -51,6 +51,13 @@
 **Plan**: [Phase-7-QUORUM-MODE-PLAN.md](./Phase-7-QUORUM-MODE-PLAN.md)
 **Status**: ✅ Complete
 
+---
+
+### Phase 8: Skill Slash Command Upgrade — MCP-Integrated Executable Skills
+**Goal**: Upgrade all 8 app-preset skills and 3 azure-iac skills from static markdown playbooks to MCP-integrated procedures with validation gates, conditional logic, hub events, and structured output. Add 2 new shared skills (`/health-check`, `/forge-execute`). Tier 3 adds a programmable Skill Engine with `forge_run_skill` MCP tool. Includes comprehensive doc sweep across 18 markdown files, 5 HTML pages, and 11 code/config files.
+**Plan**: [Phase-8-SKILL-UPGRADE-PLAN.md](./Phase-8-SKILL-UPGRADE-PLAN.md)
+**Status**: ✅ Complete
+
 ## Completed Phases
 
 <!-- Move phases here when they reach ✅ Complete status -->

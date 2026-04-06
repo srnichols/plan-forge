@@ -2,6 +2,7 @@
 name: test-sweep
 description: Run all test suites (unit, integration, API, E2E) and aggregate results into a summary report. Use after completing execution slices or before the Review Gate.
 argument-hint: "[optional: specific test category to run]"
+tools: [run_in_terminal, read_file, forge_sweep]
 ---
 
 # Test Sweep Skill
@@ -15,6 +16,9 @@ argument-hint: "[optional: specific test category to run]"
 ```bash
 go test ./internal/... -v -count=1 -tags=unit 2>&1 | tee TestResults/unit.txt
 ```
+
+### Conditional: Unit Test Failure
+> If unit tests fail → skip integration/E2E tests, go directly to Report.
 
 ### 2. Integration Tests
 ```bash
@@ -37,7 +41,10 @@ go test ./tests/e2e/... -v -count=1 -tags=e2e 2>&1 | tee TestResults/e2e.txt
 go test ./... -race -count=1 2>&1 | tee TestResults/race.txt
 ```
 
-### 6. Report
+### 6. Completeness Scan
+Use the `forge_sweep` MCP tool to scan for TODO/FIXME/stub markers in the codebase.
+
+### 7. Report
 Aggregate results:
 ```
 ✅ Unit:        X passed, Y failed
@@ -45,6 +52,7 @@ Aggregate results:
 ✅ API:         X passed, Y failed
 ✅ E2E:         X passed, Y failed
 ✅ Race:        No data races detected
+✅ Sweep:       N markers (TODO/FIXME/stub)
 ──────────────────────────────────────
 Total:          X passed, Y failed
 ```

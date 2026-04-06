@@ -39,6 +39,7 @@
     <button class="tab-btn px-4 py-2 hover:text-blue-400 text-gray-400 whitespace-nowrap" data-tab="extensions">Extensions</button>
     <button class="tab-btn px-4 py-2 hover:text-blue-400 text-gray-400 whitespace-nowrap" data-tab="config">Config</button>
     <button class="tab-btn px-4 py-2 hover:text-blue-400 text-gray-400 whitespace-nowrap" data-tab="traces">Traces</button>
+    <button class="tab-btn px-4 py-2 hover:text-blue-400 text-gray-400 whitespace-nowrap" data-tab="skills">Skills</button>
     <!-- Notification bell -->
     <button id="notif-bell" class="ml-auto px-3 py-2 relative hover:text-yellow-400 text-gray-400" onclick="toggleNotifications()">
       🔔<span id="notif-count" class="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center hidden">0</span>
@@ -264,6 +265,17 @@
           <h3 class="text-sm text-gray-400 mb-2">Span Attributes</h3>
           <pre id="trace-attributes" class="text-xs text-gray-300 max-h-64 overflow-y-auto">Click a span bar to view attributes</pre>
         </div>
+      </div>
+    </section>
+
+    <!-- Skills Tab -->
+    <section id="tab-skills" class="tab-content hidden">
+      <div class="mb-4">
+        <h2 class="text-lg font-semibold text-white mb-2">Skill Executions</h2>
+        <p class="text-sm text-gray-400">Real-time timeline of slash command skill invocations via <code class="text-blue-400">forge_run_skill</code>.</p>
+      </div>
+      <div id="skill-timeline" class="space-y-2">
+        <div class="text-gray-500 text-center py-8">No skill executions yet. Invoke a skill via <code>/skill-name</code> or <code>forge_run_skill</code>.</div>
       </div>
     </section>
   </main>

@@ -1,7 +1,11 @@
 ---
 name: api-doc-gen
-description: Generate or update OpenAPI specification from code. Validate spec-to-code consistency. Use after adding or changing API endpoints.
-argument-hint: "[optional: specific endpoint or controller to document]"
+description: Generate or update OpenAPI specification from .NET controller attributes. Validate spec-to-code consistency. Use after adding or changing API endpoints.
+argument-hint: "[optional: specific controller to document]"
+tools:
+  - run_in_terminal
+  - read_file
+  - forge_analyze
 ---
 
 # API Documentation Generation Skill
@@ -13,35 +17,27 @@ argument-hint: "[optional: specific endpoint or controller to document]"
 
 ### 1. Discover API Endpoints
 ```bash
-# .NET — find controllers
 grep -rn "\[Http\(Get\|Post\|Put\|Delete\|Patch\)\]" --include="*.cs" src/
-
-# Node/Express — find route definitions
-grep -rn "router\.\(get\|post\|put\|delete\|patch\)" --include="*.ts" src/
-
-# Python/FastAPI — find route decorators
-grep -rn "@app\.\(get\|post\|put\|delete\|patch\)" --include="*.py" src/
-
-# Go — find handler registrations
-grep -rn "\.Handle\|\.HandleFunc\|\.Get\|\.Post" --include="*.go" .
 ```
+> **If this step fails** (no matches): Try `grep -rn "\[Route\|MapGet\|MapPost\|MapPut\|MapDelete" --include="*.cs" src/` for minimal API or attribute routing patterns.
+
+> **If no *.cs files found**: Stop and report "No .NET project found in this directory."
 
 ### 2. Extract Endpoint Details
 For each endpoint, document:
-- HTTP method and path
-- Request body schema (if applicable)
-- Query parameters
-- Path parameters
-- Response schema (success and error)
-- Authentication requirements
-- Rate limiting
+- HTTP method and route template (from `[HttpGet("route")]` or `[Route]` attributes)
+- Request body schema (from parameter types and `[FromBody]` attributes)
+- Query parameters (from `[FromQuery]` attributes)
+- Path parameters (from `[FromRoute]` attributes)
+- Response schema (from return types and `[ProducesResponseType]` attributes)
+- Authentication requirements (from `[Authorize]` attributes)
 
 ### 3. Generate/Update OpenAPI Spec
 ```yaml
 openapi: 3.1.0
 info:
-  title: (project name)
-  version: (from VERSION file or package.json)
+  title: (project name from .csproj)
+  version: (from VERSION file or AssemblyVersion)
 paths:
   /api/v1/resource:
     get:
@@ -58,27 +54,31 @@ paths:
 ```
 
 ### 4. Validate Consistency
-- [ ] Every code endpoint has a matching spec entry
+Use the `forge_analyze` MCP tool to verify spec-to-code consistency:
+- [ ] Every controller action has a matching spec entry
 - [ ] No spec entries without corresponding code (ghost endpoints)
-- [ ] Request/response schemas match actual DTOs/models
-- [ ] Status codes match error handling in code
-- [ ] Auth requirements match actual middleware/attributes
+- [ ] Request/response schemas match actual DTO classes
+- [ ] Status codes match `[ProducesResponseType]` attributes
+- [ ] Auth requirements match `[Authorize]` / `[AllowAnonymous]` attributes
 
 ### 5. Report
 ```
 API Documentation Status:
-  Endpoints in code: N
-  Endpoints in spec: N
-  Missing from spec: N (list them)
-  Ghost entries: N (in spec but not in code)
-  Schema mismatches: N
+  Endpoints in code:    N
+  Endpoints in spec:    N
+  Missing from spec:    N (list them)
+  Ghost entries:        N (in spec but not in code)
+  Schema mismatches:    N
+
+Overall: PASS / FAIL
 ```
 
 ## Safety Rules
 - NEVER invent endpoints not in the code
 - ALWAYS preserve existing spec customizations (descriptions, examples)
-- Validate against actual code, not assumptions
+- Validate against actual controller code, not assumptions
 - Flag breaking changes (removed endpoints, changed schemas)
+- Run `dotnet build` after any spec-related code changes
 
 ## Persistent Memory (if OpenBrain is configured)
 

@@ -1,7 +1,11 @@
 ---
 name: dependency-audit
-description: Scan project dependencies for vulnerabilities, outdated packages, and license issues. Use before PRs, after adding packages, or on a regular schedule.
-argument-hint: "[optional: specific package to audit]"
+description: Scan Java/Maven project dependencies for vulnerabilities, outdated packages, and license issues. Use before PRs, after adding packages, or on a regular schedule.
+argument-hint: "[optional: specific dependency to audit]"
+tools:
+  - run_in_terminal
+  - read_file
+  - forge_sweep
 ---
 
 # Dependency Audit Skill
@@ -11,71 +15,64 @@ argument-hint: "[optional: specific package to audit]"
 
 ## Steps
 
-### 1. Identify Package Manager
+### 1. Check for Known Vulnerabilities
 ```bash
-# Detect which package manager is in use
-# .NET: *.csproj → dotnet list package
-# Node: package.json → npm audit / pnpm audit
-# Python: requirements.txt / pyproject.toml → pip-audit / safety
-# Go: go.mod → govulncheck
-# Java: pom.xml → mvn dependency-check:check
+mvn dependency-check:check
+```
+> **If this step fails** (no pom.xml found): Stop and report "No Maven project found in this directory."
+
+> **If dependency-check plugin not configured**: Add `org.owasp:dependency-check-maven` plugin to pom.xml and retry.
+
+### 2. Check for Outdated Dependencies
+```bash
+mvn versions:display-dependency-updates
 ```
 
-### 2. Check for Known Vulnerabilities
+### 3. Check for Outdated Plugins
 ```bash
-# .NET
-dotnet list package --vulnerable --include-transitive
-
-# Node
-pnpm audit --audit-level high
-
-# Python
-pip-audit
-
-# Go
-govulncheck ./...
+mvn versions:display-plugin-updates
 ```
 
-### 3. Check for Outdated Packages
+### 4. Check for License Issues
 ```bash
-# .NET
-dotnet list package --outdated
-
-# Node
-pnpm outdated
-
-# Python
-pip list --outdated
-
-# Go
-go list -u -m all
+mvn license:third-party-report
 ```
+> **If this step fails** (license plugin not configured): Review dependency licenses manually via `mvn dependency:tree`.
 
-### 4. Review Findings
+Review output for any dependencies with restrictive licenses (GPL, AGPL) that conflict with your project license.
+
+### 5. Completeness Scan
+Use the `forge_sweep` MCP tool to check for TODO/FIXME markers that may have been left by prior dependency changes.
+
+### 6. Review Findings
 For each finding:
 - **Critical/High CVE**: Upgrade immediately or document accepted risk
 - **Outdated (major version behind)**: Plan upgrade in next phase
 - **Outdated (minor/patch)**: Update now if safe
 - **License conflict**: Flag for human review
 
-### 5. Report
+### 7. Report
 ```
-Vulnerability Summary:
-  🔴 Critical: N
-  🟡 High: N
-  🔵 Medium/Low: N
+Dependency Audit Summary:
+  🔴 Critical:     N vulnerabilities
+  🟡 High:         N vulnerabilities
+  🔵 Medium/Low:   N vulnerabilities
 
-Outdated Packages:
-  Major behind: N (plan upgrade)
-  Minor/Patch behind: N (update now)
+Outdated Dependencies:
+  Major behind:    N (plan upgrade)
+  Minor/Patch:     N (update now)
 
-License Issues: N
+Outdated Plugins:  N
+License Issues:    N
+Sweep Markers:     N (TODO/FIXME from prior changes)
+
+Overall: PASS / FAIL
 ```
 
 ## Safety Rules
 - NEVER auto-upgrade major versions without human approval
 - ALWAYS check if the upgrade has breaking changes
-- Run full test suite after any dependency change
+- Run `mvn verify` after any dependency change
 - Document any accepted vulnerabilities with justification
 
 ## Persistent Memory (if OpenBrain is configured)

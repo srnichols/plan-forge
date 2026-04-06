@@ -450,6 +450,8 @@ To contribute a preset for a new tech stack:
    - `release-notes/SKILL.md` — Generate release notes from git history and CHANGELOG
    - `api-doc-gen/SKILL.md` — Generate or update OpenAPI spec, validate consistency
    - `onboarding/SKILL.md` — Walk a new developer through setup, architecture, and first task
+   - `health-check/SKILL.md` — Forge diagnostic: forge_smith → forge_validate → forge_sweep
+   - `forge-execute/SKILL.md` — Guided plan execution: list plans → estimate → execute → report
 6. Add `AGENTS.md` — Agent/worker patterns for this stack
 7. Add `.github/copilot-instructions.md` — Stack-specific conventions
 8. Add an example plan in `docs/plans/examples/Phase-YOUR-STACK-EXAMPLE.md`
@@ -593,7 +595,7 @@ Token usage is automatically logged per slice/model. View with:
 
 ## Skill Slash Commands (Automatic)
 
-After setup, eight skills are available as slash commands in Copilot Chat:
+After setup, ten skills are available as slash commands in Copilot Chat:
 
 | Command | What It Does |
 |---------|-------------|
@@ -605,6 +607,8 @@ After setup, eight skills are available as slash commands in Copilot Chat:
 | `/release-notes` | Generate release notes from git history and CHANGELOG |
 | `/api-doc-gen` | Generate or update OpenAPI spec, validate spec-to-code consistency |
 | `/onboarding` | Walk a new developer through project setup, architecture, and first task |
+| `/health-check` | Forge diagnostic: forge_smith → forge_validate → forge_sweep |
+| `/forge-execute` | Guided plan execution: list plans → estimate cost → execute → report |
 
 Type `/` in the chat input to see these alongside your prompt templates. Add `user-invocable: false` to a skill's frontmatter to hide it from the menu while keeping it auto-invocable.
 
@@ -735,7 +739,7 @@ When the extension is installed, **every pipeline touchpoint** participates — 
 | **6 stack agents × 6 presets** (36 files) | ✅ Prior review findings, accepted risks | ✅ Review findings for trend tracking |
 | **8 shared agents** (cross-stack reviewers) | ✅ Prior cross-cutting findings | ✅ API, accessibility, security, compliance, error handling findings |
 | **5 azure-iac agents** (IaC reviewers) | ✅ Prior Bicep/Terraform/sweep findings | ✅ IaC review and sweep results |
-| **8 skills × 5 app presets** (40 files) | ✅ Prior failures, patterns, conventions | ✅ Outcomes, recurring issues |
+| **10 skills (8 × 5 presets + 2 shared)** (42 files) | ✅ Prior failures, patterns, conventions | ✅ Outcomes, recurring issues |
 | **3 azure-iac skills** (infra-deploy, infra-test, azure-sweep) | ✅ Deploy failures, test patterns, sweep history | ✅ Deploy/test/sweep outcomes |
 | **SessionStart hook** | ✅ Reminds agent to search on session open | — |
 | **Stop hook** | — | ✅ Reminds agent to capture before ending |
@@ -867,7 +871,7 @@ docs/plans/                    ← Runbook + your plans
 .github/instructions/          ← Guardrail files (17 per preset, 18 for TypeScript)
 .github/prompts/               ← Scaffolding recipes (15 prompt templates)
 .github/agents/                ← Reviewer/executor roles (19 agent definitions: 6 stack + 8 shared + 5 pipeline)
-.github/skills/                ← Multi-step procedures (8 skills for app presets)
+.github/skills/                ← Multi-step procedures (10 skills: 8 stack-specific + 2 shared)
 .github/copilot-instructions.md
 AGENTS.md
 ```

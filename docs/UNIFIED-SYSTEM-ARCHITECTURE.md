@@ -67,7 +67,7 @@ Rough Idea → Hardened Plan → Slice-by-Slice Execution → Independent Review
 - **6 tech presets**: dotnet, typescript, python, java, go, azure-iac (plus custom)
 - **17–18 instruction files** per app preset (12 for azure-iac): architecture, security, testing, database, naming, WAF, CAF, etc.
 - **19 agents per app preset**: 6 stack-specific + 8 cross-stack + 5 pipeline (18 for azure-iac)
-- **8 skills per app preset** (3 for azure-iac): database-migration, staging-deploy, test-sweep, etc.
+- **10 skills per app preset** (3 for azure-iac): 8 stack-specific + 2 shared (health-check, forge-execute)
 - **106 files with OpenBrain hooks**: search before acting, capture after completing
 - **Lifecycle hooks**: auto-enforce guardrails, format code, catch TODOs
 - **Multi-preset support**: combine app + IaC presets (`-Preset dotnet,azure-iac`)
@@ -704,7 +704,9 @@ my-api/
 │   │   ├── code-review/SKILL.md                      ← Plan Forge: comprehensive review
 │   │   ├── release-notes/SKILL.md                    ← Plan Forge: changelog generation
 │   │   ├── api-doc-gen/SKILL.md                      ← Plan Forge: OpenAPI spec generation
-│   │   └── onboarding/SKILL.md                       ← Plan Forge: new developer walkthrough
+│   │   ├── onboarding/SKILL.md                       ← Plan Forge: new developer walkthrough
+│   │   ├── health-check/SKILL.md                      ← Plan Forge: forge diagnostic skill
+│   │   └── forge-execute/SKILL.md                     ← Plan Forge: guided plan execution skill
 │   └── hooks/
 │       ├── session-start.sh                           ← Plan Forge: inject context
 │       ├── pre-tool-use.sh                            ← Plan Forge: block forbidden actions

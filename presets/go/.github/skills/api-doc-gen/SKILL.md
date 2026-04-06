@@ -1,7 +1,11 @@
 ---
 name: api-doc-gen
-description: Generate or update OpenAPI specification from code. Validate spec-to-code consistency. Use after adding or changing API endpoints.
-argument-hint: "[optional: specific endpoint or controller to document]"
+description: Generate or update OpenAPI specification from Go HTTP handler registrations. Validate spec-to-code consistency. Use after adding or changing API endpoints.
+argument-hint: "[optional: specific handler file to document]"
+tools:
+  - run_in_terminal
+  - read_file
+  - forge_analyze
 ---
 
 # API Documentation Generation Skill
@@ -13,35 +17,27 @@ argument-hint: "[optional: specific endpoint or controller to document]"
 
 ### 1. Discover API Endpoints
 ```bash
-# .NET — find controllers
-grep -rn "\[Http\(Get\|Post\|Put\|Delete\|Patch\)\]" --include="*.cs" src/
-
-# Node/Express — find route definitions
-grep -rn "router\.\(get\|post\|put\|delete\|patch\)" --include="*.ts" src/
-
-# Python/FastAPI — find route decorators
-grep -rn "@app\.\(get\|post\|put\|delete\|patch\)" --include="*.py" src/
-
-# Go — find handler registrations
-grep -rn "\.Handle\|\.HandleFunc\|\.Get\|\.Post" --include="*.go" .
+grep -rn "\.Handle\|\.HandleFunc\|\.Get\|\.Post\|\.Put\|\.Delete\|\.Patch" --include="*.go" .
 ```
+> **If this step fails** (no matches): Try `grep -rn "http\.Handle\|mux\.\|chi\.\|gin\.\|echo\." --include="*.go" .` to detect the router framework in use.
+
+> **If no *.go files found**: Stop and report "No Go project found in this directory."
 
 ### 2. Extract Endpoint Details
 For each endpoint, document:
-- HTTP method and path
-- Request body schema (if applicable)
-- Query parameters
-- Path parameters
-- Response schema (success and error)
-- Authentication requirements
-- Rate limiting
+- HTTP method and path (from `mux.HandleFunc("/path", handler)` or router registrations)
+- Request body schema (from struct types decoded in handlers)
+- Query parameters (from `r.URL.Query().Get()` usage)
+- Path parameters (from URL pattern variables or router params)
+- Response schema (from structs passed to `json.NewEncoder`)
+- Authentication requirements (from middleware wrappers)
 
 ### 3. Generate/Update OpenAPI Spec
 ```yaml
 openapi: 3.1.0
 info:
-  title: (project name)
-  version: (from VERSION file or package.json)
+  title: (project name from go.mod module path)
+  version: (from VERSION file or build tags)
 paths:
   /api/v1/resource:
     get:
@@ -58,27 +54,31 @@ paths:
 ```
 
 ### 4. Validate Consistency
-- [ ] Every code endpoint has a matching spec entry
+Use the `forge_analyze` MCP tool to verify spec-to-code consistency:
+- [ ] Every handler registration has a matching spec entry
 - [ ] No spec entries without corresponding code (ghost endpoints)
-- [ ] Request/response schemas match actual DTOs/models
-- [ ] Status codes match error handling in code
-- [ ] Auth requirements match actual middleware/attributes
+- [ ] Request/response schemas match actual Go struct types
+- [ ] Status codes match `http.StatusXxx` / `w.WriteHeader()` calls
+- [ ] Auth requirements match middleware chains
 
 ### 5. Report
 ```
 API Documentation Status:
-  Endpoints in code: N
-  Endpoints in spec: N
-  Missing from spec: N (list them)
-  Ghost entries: N (in spec but not in code)
-  Schema mismatches: N
+  Endpoints in code:    N
+  Endpoints in spec:    N
+  Missing from spec:    N (list them)
+  Ghost entries:        N (in spec but not in code)
+  Schema mismatches:    N
+
+Overall: PASS / FAIL
 ```
 
 ## Safety Rules
 - NEVER invent endpoints not in the code
 - ALWAYS preserve existing spec customizations (descriptions, examples)
-- Validate against actual code, not assumptions
+- Validate against actual handler registrations, not assumptions
 - Flag breaking changes (removed endpoints, changed schemas)
+- Run `go build ./...` after any spec-related code changes
 
 ## Persistent Memory (if OpenBrain is configured)
 

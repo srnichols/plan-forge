@@ -2,6 +2,7 @@
 name: staging-deploy
 description: Build, push, migrate, and deploy to staging environment with health check verification. Use when deploying a completed phase to staging.
 argument-hint: "[service or component to deploy]"
+tools: [run_in_terminal, read_file, forge_validate]
 ---
 
 # Staging Deploy Skill
@@ -10,6 +11,9 @@ argument-hint: "[service or component to deploy]"
 "Deploy to staging" / "Push to staging environment"
 
 ## Steps
+
+### 0. Pre-flight Forge Validation
+Use the `forge_validate` MCP tool to verify setup integrity before deploying.
 
 ### 1. Pre-Flight Checks
 ```bash
@@ -22,6 +26,9 @@ go build -o bin/contoso-api ./cmd/api
 # Lint
 golangci-lint run ./...
 ```
+
+### Conditional: Pre-Flight Failure
+> If Step 1 (Pre-Flight Checks) fails → STOP. Do not proceed to build.
 
 ### 2. Build Container
 ```bash

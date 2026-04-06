@@ -2,6 +2,7 @@
 name: database-migration
 description: Generate, review, test, and deploy database schema migrations. Use when adding columns, creating tables, or changing schema.
 argument-hint: "[migration description, e.g. 'add user_profiles table']"
+tools: [run_in_terminal, read_file]
 ---
 
 # Database Migration Skill
@@ -46,6 +47,9 @@ dotnet test --filter "Category=Integration"
 # Apply migration to staging
 psql -h staging-db -d contoso_staging -f Database/migrations/NNNN_description.sql
 ```
+
+### Conditional: Migration Failure
+> If migration fails → immediately run the rollback SQL (down migration), report the failure with the error message, and STOP. Do not proceed to deploy.
 
 ## Safety Rules
 - NEVER drop columns without a deprecation period

@@ -2,6 +2,7 @@
 name: database-migration
 description: Generate, review, test, and deploy database schema migrations. Use when adding columns, creating tables, or changing schema.
 argument-hint: "[migration description, e.g. 'add user_profiles table']"
+tools: [run_in_terminal, read_file]
 ---
 
 # Database Migration Skill
@@ -50,6 +51,9 @@ npm run test:integration
 ```bash
 npx knex migrate:latest --env staging
 ```
+
+### Conditional: Migration Failure
+> If migration fails → immediately run the rollback SQL (down migration), report the failure with the error message, and STOP. Do not proceed to deploy.
 
 ## Safety Rules
 - NEVER drop columns without a deprecation period

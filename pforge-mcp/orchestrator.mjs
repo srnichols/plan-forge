@@ -67,6 +67,7 @@ class OrchestratorEventBus extends EventEmitter {
       "run-started", "slice-started", "slice-completed",
       "slice-failed", "run-completed", "run-aborted",
       "quorum-dispatch-started", "quorum-leg-completed", "quorum-review-completed",
+      "skill-started", "skill-step-started", "skill-step-completed", "skill-completed",
     ];
     for (const evt of events) {
       this.on(evt, (data) => this.handler.handle({ type: evt, data, timestamp: new Date().toISOString() }));

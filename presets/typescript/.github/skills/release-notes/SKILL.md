@@ -2,6 +2,7 @@
 name: release-notes
 description: Generate release notes from git history and CHANGELOG. Formats for GitHub Release, Slack, or email. Use before tagging a release.
 argument-hint: "[version tag, e.g. 'v1.2.0']"
+tools: [run_in_terminal, read_file]
 ---
 
 # Release Notes Skill
@@ -19,6 +20,9 @@ git describe --tags --abbrev=0
 # List commits since last tag
 git log $(git describe --tags --abbrev=0)..HEAD --oneline --no-merges
 ```
+
+### Conditional: No Tags Found
+> If no tags found → ask user for the commit range to use.
 
 ### 2. Categorize Changes
 Parse commit messages using conventional commit prefixes:

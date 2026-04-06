@@ -118,6 +118,70 @@ Emitted when execution is aborted via `forge_abort`.
 
 ---
 
+## Skill Events
+
+### `skill-started`
+Emitted when a skill begins execution via `forge_run_skill`.
+
+```json
+{
+  "type": "skill-started",
+  "version": "1.0",
+  "skillName": "test-sweep",
+  "stepCount": 5,
+  "args": "unit tests only",
+  "timestamp": "..."
+}
+```
+
+### `skill-step-started`
+Emitted when a skill step begins.
+
+```json
+{
+  "type": "skill-step-started",
+  "version": "1.0",
+  "skillName": "test-sweep",
+  "stepNumber": 1,
+  "stepName": "Unit Tests",
+  "timestamp": "..."
+}
+```
+
+### `skill-step-completed`
+Emitted when a skill step finishes (pass or fail).
+
+```json
+{
+  "type": "skill-step-completed",
+  "version": "1.0",
+  "skillName": "test-sweep",
+  "stepNumber": 1,
+  "stepName": "Unit Tests",
+  "status": "passed",
+  "duration": 12000,
+  "timestamp": "..."
+}
+```
+
+### `skill-completed`
+Emitted when all skill steps finish.
+
+```json
+{
+  "type": "skill-completed",
+  "version": "1.0",
+  "skillName": "test-sweep",
+  "status": "completed",
+  "stepsPassed": 4,
+  "stepsFailed": 1,
+  "totalDuration": 45000,
+  "timestamp": "..."
+}
+```
+
+---
+
 ## Client → Server Messages
 
 ### `set-label`

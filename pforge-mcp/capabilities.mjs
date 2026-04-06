@@ -514,18 +514,20 @@ const SYSTEM_REFERENCE = {
   },
 
   skills: {
-    description: "8 multi-step executable procedures with validation gates",
+    description: "10 multi-step executable procedures with validation gates and MCP tool integration",
     available: {
       "/database-migration": "Generate, review, test, and deploy schema migrations",
-      "/staging-deploy": "Build, push, migrate, deploy, and verify on staging",
-      "/test-sweep": "Run all test suites and aggregate results",
+      "/staging-deploy": "Build, push, migrate, deploy, and verify on staging (forge_validate pre-flight)",
+      "/test-sweep": "Run all test suites, aggregate results, forge_sweep completeness scan",
       "/dependency-audit": "Scan dependencies for vulnerabilities, outdated, license issues",
-      "/code-review": "Comprehensive review: architecture, security, testing, patterns",
+      "/code-review": "Comprehensive review: architecture, security, testing, patterns (forge_analyze + forge_diff)",
       "/release-notes": "Generate release notes from git history and CHANGELOG",
-      "/api-doc-gen": "Generate or update OpenAPI spec, validate spec-to-code consistency",
-      "/onboarding": "Walk a new developer through project setup, architecture, first task",
+      "/api-doc-gen": "Generate or update OpenAPI spec, validate spec-to-code consistency (forge_analyze)",
+      "/onboarding": "Walk a new developer through project setup, architecture, first task (forge_smith)",
+      "/health-check": "Forge diagnostic: forge_smith → forge_validate → forge_sweep with structured report",
+      "/forge-execute": "Guided plan execution: list plans → estimate cost → choose mode → execute → report",
     },
-    invocation: "Type / in Copilot Chat to see available skills",
+    invocation: "Type / in Copilot Chat to see available skills, or use forge_run_skill MCP tool",
   },
 
   promptTemplates: {

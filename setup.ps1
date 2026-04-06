@@ -787,6 +787,19 @@ if (-not $isCustomOnly) {
             Copy-WithCreate $_.FullName $dst $Force.IsPresent
         }
     }
+
+    # Shared skills (health-check, forge-execute — stack-independent)
+    $sharedSkillsDir = Join-Path $templateRoot "presets/shared/skills"
+    if (Test-Path $sharedSkillsDir) {
+        Get-ChildItem -Path $sharedSkillsDir -Directory | ForEach-Object {
+            $skillName = $_.Name
+            $skillSrc  = Join-Path $_.FullName "SKILL.md"
+            $skillDst  = Join-Path $ProjectPath ".github/skills/$skillName/SKILL.md"
+            if (Test-Path $skillSrc) {
+                Copy-WithCreate $skillSrc $skillDst $Force.IsPresent
+            }
+        }
+    }
 }
 
 # ─── Step 3c: Copy Project Principles Prompt + Extension Templates + Hooks ─────

@@ -747,6 +747,19 @@ if [[ "$IS_CUSTOM_ONLY" != true ]]; then
             copy_with_create "$file" "$dst" || true
         done < <(find "$PIPELINE_AGENTS_DIR" -name "*.agent.md" -type f -print0)
     fi
+
+    # Shared skills (health-check, forge-execute — stack-independent)
+    SHARED_SKILLS_DIR="$TEMPLATE_ROOT/presets/shared/skills"
+    if [[ -d "$SHARED_SKILLS_DIR" ]]; then
+        for skill_dir in "$SHARED_SKILLS_DIR"/*/; do
+            skill_name="$(basename "$skill_dir")"
+            skill_src="$skill_dir/SKILL.md"
+            skill_dst="$PROJECT_PATH/.github/skills/$skill_name/SKILL.md"
+            if [[ -f "$skill_src" ]]; then
+                copy_with_create "$skill_src" "$skill_dst" || true
+            fi
+        done
+    fi
 fi
 
 # ─── Step 3c: Copy Project Principles Prompt + Extension Templates ─────

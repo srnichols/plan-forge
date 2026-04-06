@@ -253,12 +253,16 @@ async function loadRuns() {
     const runs = await res.json();
     const tbody = document.getElementById("runs-table-body");
     if (!runs.length) {
-      tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-gray-500">No runs yet</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-gray-500">No runs yet</td></tr>';
       return;
     }
     tbody.innerHTML = runs.map((r) => {
       const date = r.startTime ? new Date(r.startTime).toLocaleDateString() : "—";
       const plan = shortName(r.plan);
+      const modeColors = { auto: "blue", assisted: "amber", estimate: "gray" };
+      const modeColor = modeColors[r.mode] || "gray";
+      const mode = r.mode ? `<span class="px-1.5 py-0.5 text-xs rounded bg-${modeColor}-500/20 text-${modeColor}-400">${r.mode}</span>` : "—";
+      const model = r.model ? `<span class="text-xs text-gray-400">${r.model}</span>` : "—";
       const slices = `${r.results?.passed || 0}/${r.sliceCount || 0}`;
       const status = r.status === "completed"
         ? '<span class="text-green-400">✅ pass</span>'
@@ -268,6 +272,8 @@ async function loadRuns() {
       return `<tr class="border-t border-gray-700 hover:bg-gray-700/50">
         <td class="px-4 py-2">${date}</td>
         <td class="px-4 py-2">${plan}</td>
+        <td class="px-4 py-2 text-center">${mode}</td>
+        <td class="px-4 py-2">${model}</td>
         <td class="px-4 py-2 text-center">${slices}</td>
         <td class="px-4 py-2 text-center">${status}</td>
         <td class="px-4 py-2 text-right">${cost}</td>
@@ -276,7 +282,7 @@ async function loadRuns() {
     }).join("");
   } catch (err) {
     document.getElementById("runs-table-body").innerHTML =
-      `<tr><td colspan="6" class="px-4 py-8 text-center text-red-400">Error: ${err.message}</td></tr>`;
+      `<tr><td colspan="8" class="px-4 py-8 text-center text-red-400">Error: ${err.message}</td></tr>`;
   }
 }
 

@@ -46,7 +46,8 @@ This framework doesn't slow you down. It teaches the AI your standards so you **
 | **Pipeline reliability** | 24/24 validation gates pass across Steps 0–6 |
 | **Gate coverage** | `dotnet build` + `dotnet test` (12 tests) at every slice boundary |
 | **Model support** | Claude Opus/Sonnet/Haiku, GPT 5.x, Gemini — routed per slice |
-| **Orchestrator tests** | 65 self-tests passing (parser, DAG, scheduler, events, cost, security) |
+| **Quorum mode** | Multi-model consensus: 3 models analyze complex slices in parallel, reviewer synthesizes best approach |
+| **Orchestrator tests** | 83 self-tests passing (parser, DAG, scheduler, events, cost, security, quorum) |
 | **Cost tracking** | Per-slice token counts, 23-model pricing table, monthly aggregation |
 | **Observability** | OTLP traces with resource context, span kinds, severity levels |
 | **Memory** | OpenBrain integration — prior decisions searched before each slice |

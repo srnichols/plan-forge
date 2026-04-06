@@ -365,6 +365,55 @@ export function createTelemetryHandler(trace, runDir) {
           writeTrace(trace, runDir);
           break;
         }
+        // ─── Quorum Mode events (v2.5) ───
+        case "quorum-dispatch-started": {
+          const parentSpan = trace._activeSpans.get(`slice-${data?.sliceId}`);
+          if (parentSpan) {
+            addEvent(parentSpan, "quorum-dispatch", Severity.INFO, {
+              models: data?.models,
+              score: data?.score,
+            });
+            // Create child spans for each dry-run leg
+            for (let i = 0; i < (data?.models || []).length; i++) {
+              startSpan(trace, `slice-${data?.sliceId}-quorum-${i}`, parentSpan.spanId, "CLIENT", {
+                quorumLeg: i,
+                model: data.models[i],
+              });
+            }
+          }
+          break;
+        }
+        case "quorum-leg-completed": {
+          const legSpan = trace._activeSpans.get(`slice-${data?.sliceId}-quorum-${data?.legIndex ?? ""}`);
+          // Try to find by model if legIndex not provided
+          if (!legSpan) {
+            for (const [key, span] of trace._activeSpans) {
+              if (key.startsWith(`slice-${data?.sliceId}-quorum-`) && span.attributes?.model === data?.model) {
+                addEvent(span, "leg-completed", data?.success ? Severity.INFO : Severity.WARN, {
+                  model: data?.model,
+                  duration: data?.duration,
+                  tokens_out: data?.tokens?.tokens_out,
+                });
+                endSpan(span, data?.success ? "OK" : "ERROR");
+                break;
+              }
+            }
+          } else {
+            endSpan(legSpan, data?.success ? "OK" : "ERROR");
+          }
+          break;
+        }
+        case "quorum-review-completed": {
+          const parentSpan = trace._activeSpans.get(`slice-${data?.sliceId}`);
+          if (parentSpan) {
+            addEvent(parentSpan, "quorum-review", Severity.INFO, {
+              reviewerModel: data?.reviewerModel,
+              tokens_out: data?.tokens?.tokens_out,
+              modelCount: data?.modelCount,
+            });
+          }
+          break;
+        }
       }
     },
   };

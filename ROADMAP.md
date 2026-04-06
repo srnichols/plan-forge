@@ -7,7 +7,7 @@
 
 ## Current Release
 
-**v2.4.0** (2026-04-05) — Machine-Readable API Surface + Unified Telemetry: `forge_capabilities` tool, OTLP traces, dashboard Traces tab.
+**v2.5.0** (2026-04-05) — Quorum Mode: multi-model consensus execution with complexity scoring, dry-run fan-out, synthesis review, and auto/forced modes.
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 
@@ -313,9 +313,9 @@ Trace: run-plan (trace_id: abc123, plan: Phase-1-CLIENTS-CRUD)
 - **Log rotation** — `maxRunHistory` config in `.forge.json` (default: 50). On run completion, prune oldest directories beyond the limit. Index reader ignores entries whose directory no longer exists.
 - **Baggage propagation** — trace context (traceId, parentSpanId) passed to child spans so gate commands, worker output, and retries are all correlated in the waterfall.
 
-### v2.5 — Quorum Mode (Multi-Model Consensus) 📋
+### v2.5 — Quorum Mode (Multi-Model Consensus) ✅
 
-Dispatch high-complexity slices to multiple AI models in parallel dry-run, synthesize a consensus execution plan, then execute with higher confidence.
+Shipped. Dispatches high-complexity slices to multiple AI models in parallel dry-run, synthesizes a consensus execution plan, then executes with higher confidence.
 
 - **Quorum dispatch** — fan out each slice to 3 models (Claude Opus 4.6, GPT-5.3-Codex, Gemini 3.1 Pro) in parallel dry-run sessions
 - **Dry-run mode** — workers produce detailed implementation plans (files, code skeletons, edge cases, test strategy) without executing

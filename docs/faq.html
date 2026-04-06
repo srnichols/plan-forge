@@ -47,6 +47,7 @@
               <a href="index.html#memory" class="block px-4 py-2 text-sm text-slate-400 hover:bg-slate-800 transition-colors">Persistent Memory</a>
               <a href="index.html#unified" class="block px-4 py-2 text-sm text-slate-400 hover:bg-slate-800 transition-colors">Ecosystem</a>
               <a href="faq.html" class="block px-4 py-2 text-sm text-forge-400 hover:bg-slate-800">FAQ</a>
+              <a href="capabilities.html" class="block px-4 py-2 text-sm text-slate-400 hover:bg-slate-800">Capabilities</a>
             </div>
           </div>
         </div>
@@ -243,6 +244,76 @@
             </summary>
             <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
               The agent must fix the failure before proceeding. Build and test gates are hard gates — not suggestions. There's also a rollback protocol for reverting a failed slice cleanly, and stop conditions that immediately halt execution for critical issues.
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <!-- Quorum Mode -->
+      <div class="faq-category">
+        <h2 class="text-xl font-bold text-white mb-5 flex items-center gap-3">
+          <span class="w-8 h-8 rounded-lg bg-forge-500/20 flex items-center justify-center text-forge-400 text-sm">🗳️</span>
+          Quorum Mode
+        </h2>
+        <div class="space-y-3">
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">What is Quorum Mode?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              <p class="mb-3">Quorum Mode dispatches each slice to <strong>3 AI models in parallel</strong> (Claude Opus, GPT-5.3-Codex, Claude Sonnet) for independent dry-run analysis. Each model produces a detailed implementation plan <em>without executing code</em>. A reviewer agent then synthesizes the best elements — picking the strongest approach per file/component — and produces a unified execution plan. The final builder uses that consensus plan instead of the raw slice instructions.</p>
+              <p>Think of it as a design review by three senior engineers before any code is written.</p>
+            </div>
+          </details>
+
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">Does it actually produce better code?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              <p class="mb-3">Yes — A/B tested on an Invoice Engine feature (rate tiers, volume discounts, tax calculation, banker's rounding). Both runs passed all gates, but quorum produced measurably higher-quality code:</p>
+              <ul class="list-disc list-inside space-y-1 mb-3">
+                <li><strong>20% more tests</strong> (18 vs 15)</li>
+                <li><strong>Extracted DRY helpers</strong> (IsWeekend(), CalculateVolumeDiscount()) vs inline code</li>
+                <li><strong>Robust test dates</strong> (relative offsets) vs hardcoded literals that break when dates pass</li>
+                <li><strong>Extra edge case coverage</strong> — voided invoice regeneration, invoice number sequencing</li>
+                <li><strong>Modern .NET patterns</strong> — ArgumentException.ThrowIfNullOrWhiteSpace vs generic ValidationException</li>
+              </ul>
+              <p>The quality difference isn't in correctness (both pass gates) but in <em>craftsmanship</em> — code that's easier to maintain, debug, and extend.</p>
+            </div>
+          </details>
+
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">How much more does Quorum Mode cost?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              <p class="mb-3">In the A/B test, quorum added <strong>~3%</strong> to the token cost ($34.84 vs $33.89) but took <strong>2.7x longer</strong> (32 min vs 12 min). The extra time is the 3-model dry-run analysis + reviewer synthesis — the actual build takes roughly the same time.</p>
+              <p>Use <code class="text-forge-400">--estimate --quorum</code> before running to see the projected overhead breakdown per slice. With <code class="text-forge-400">--quorum=auto</code>, only complex slices incur the cost — simple CRUD runs normally.</p>
+            </div>
+          </details>
+
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">What is --quorum=auto and when should I use it?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              <p class="mb-3">Auto mode scores each slice's complexity (1-10) using 7 weighted signals: file scope count, cross-module dependencies, security keywords, database/migration keywords, gate count, task count, and historical failure rate. Only slices scoring at or above the threshold (default: 7) get the 3-model consensus treatment. Everything else runs normally.</p>
+              <p>This is the recommended default for most projects — you get quality where it matters (auth flows, billing logic, migrations) without burning tokens on simple CRUD slices. Override the threshold with <code class="text-forge-400">--quorum-threshold 8</code>.</p>
+            </div>
+          </details>
+
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">What happens if one of the 3 models is unavailable?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              Graceful degradation. If 2 of 3 models respond, the reviewer works with 2 analyses. If fewer than 2 respond, it falls back to normal single-model execution — your pipeline never blocks on model availability. If the reviewer itself fails, the best single dry-run response is used as the enhanced prompt.
             </div>
           </details>
         </div>

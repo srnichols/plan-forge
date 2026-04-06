@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Capabilities — Plan Forge | 14 MCP Tools, Autonomous Execution, Live Dashboard</title>
-  <meta name="description" content="Complete capability reference for Plan Forge — 14 MCP tools, DAG-based orchestrator, cost tracking, OTLP telemetry, OpenBrain memory, 19 reviewer agents, 8 skills, and a live dashboard." />
+  <title>Capabilities — Plan Forge | 14 MCP Tools, Quorum Mode, Autonomous Execution, Live Dashboard</title>
+  <meta name="description" content="Complete capability reference for Plan Forge — 14 MCP tools, Quorum Mode (multi-model consensus), DAG-based orchestrator, cost tracking, OTLP telemetry, OpenBrain memory, 19 reviewer agents, 8 skills, and a live dashboard." />
   <meta property="og:title" content="Plan Forge Capabilities — Full Tool & Feature Reference" />
   <meta property="og:description" content="14 MCP tools, autonomous plan execution, cost tracking, live dashboard, OTLP traces, OpenBrain memory integration. Enterprise-grade AI coding guardrails." />
   <meta property="og:type" content="website" />
@@ -14,7 +14,7 @@
   <meta name="twitter:title" content="Plan Forge Capabilities — 14 MCP Tools + Autonomous Execution" />
   <meta name="twitter:description" content="Complete capability reference: orchestrator, dashboard, telemetry, memory, 19 agents, 8 skills." />
   <link rel="canonical" href="https://planforge.software/capabilities.html" />
-  <meta name="keywords" content="AI coding guardrails, MCP tools, plan execution, DAG scheduler, cost tracking, OTLP traces, OpenBrain, VS Code Copilot, Claude, GPT, autonomous development" />
+  <meta name="keywords" content="AI coding guardrails, MCP tools, plan execution, DAG scheduler, cost tracking, OTLP traces, OpenBrain, VS Code Copilot, Claude, GPT, autonomous development, quorum mode, multi-model consensus, A/B testing" />
   <script type="application/ld+json">
   {"@context":"https://schema.org","@type":"WebPage","name":"Plan Forge Capabilities","url":"https://planforge.software/capabilities.html","description":"Complete capability reference for Plan Forge AI coding guardrails framework","isPartOf":{"@type":"WebSite","name":"Plan Forge","url":"https://planforge.software"}}
   </script>
@@ -28,14 +28,29 @@
   <!-- Header -->
   <header class="border-b border-slate-800/60 bg-slate-950/90 backdrop-blur-md sticky top-0 z-50">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-      <a href="/" class="flex items-center gap-3"><img src="assets/plan-forge-logo.svg" alt="Plan Forge" class="h-8" /><span class="font-bold text-white text-lg">Plan Forge</span></a>
-      <nav class="hidden md:flex items-center gap-6 text-sm">
-        <a href="/" class="text-slate-400 hover:text-white">Home</a>
-        <a href="docs.html" class="text-slate-400 hover:text-white">Docs</a>
-        <a href="faq.html" class="text-slate-400 hover:text-white">FAQ</a>
-        <a href="capabilities.html" class="text-forge-400 font-semibold">Capabilities</a>
-        <a href="https://github.com/srnichols/plan-forge" class="text-slate-400 hover:text-white">GitHub</a>
-      </nav>
+      <a href="index.html" class="flex items-center gap-3"><img src="assets/plan-forge-logo.svg" alt="Plan Forge" class="h-8" /><span class="font-bold text-white text-lg">Plan Forge</span></a>
+      <div class="hidden md:flex items-center gap-7">
+        <a href="index.html#solution" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">How It Works</a>
+        <a href="index.html#features" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">Features</a>
+        <a href="index.html#quickstart" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">Quick Start</a>
+        <a href="examples.html" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">Examples</a>
+        <div class="nav-dropdown-trigger relative">
+          <button class="text-sm text-slate-400 hover:text-slate-100 transition-colors flex items-center gap-1">Resources <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg></button>
+          <div class="nav-dropdown absolute top-full right-0 w-52 py-2 bg-slate-900 border border-slate-700/60 rounded-xl shadow-2xl">
+            <a href="problem.html" class="block px-4 py-2 text-sm text-slate-400 hover:bg-slate-800">The 80/20 Wall</a>
+            <a href="extensions.html" class="block px-4 py-2 text-sm text-slate-400 hover:bg-slate-800">Extensions</a>
+            <a href="docs.html" class="block px-4 py-2 text-sm text-slate-400 hover:bg-slate-800">Documentation</a>
+            <a href="index.html#memory" class="block px-4 py-2 text-sm text-slate-400 hover:bg-slate-800">Persistent Memory</a>
+            <a href="index.html#unified" class="block px-4 py-2 text-sm text-slate-400 hover:bg-slate-800">Ecosystem</a>
+            <a href="faq.html" class="block px-4 py-2 text-sm text-slate-400 hover:bg-slate-800">FAQ</a>
+            <a href="capabilities.html" class="block px-4 py-2 text-sm text-forge-400 hover:bg-slate-800">Capabilities</a>
+          </div>
+        </div>
+      </div>
+      <div class="hidden md:flex items-center gap-3">
+        <a href="https://github.com/srnichols/plan-forge" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">GitHub</a>
+        <a href="index.html#quickstart" class="px-4 py-2 text-sm font-semibold bg-forge-500 hover:bg-forge-400 text-slate-900 rounded-lg transition-colors">Get Started</a>
+      </div>
     </div>
   </header>
 
@@ -50,6 +65,7 @@
         <span class="px-3 py-1 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">19 Agents</span>
         <span class="px-3 py-1 rounded-full bg-green-500/20 text-green-400 border border-green-500/30">8 Skills</span>
         <span class="px-3 py-1 rounded-full bg-purple-500/20 text-purple-400 border border-purple-500/30">8 Dashboard Tabs</span>
+        <span class="px-3 py-1 rounded-full bg-red-500/20 text-red-400 border border-red-500/30">Quorum Mode</span>
       </div>
     </div>
 
@@ -64,7 +80,7 @@
         <div class="text-xs text-slate-500 mt-1">pipeline gates pass</div>
       </div>
       <div class="bg-slate-800/60 rounded-xl p-5 text-center border border-slate-700/30">
-        <div class="text-3xl font-bold text-blue-400">65</div>
+        <div class="text-3xl font-bold text-blue-400">83</div>
         <div class="text-xs text-slate-500 mt-1">self-tests passing</div>
       </div>
       <div class="bg-slate-800/60 rounded-xl p-5 text-center border border-slate-700/30">
@@ -110,6 +126,71 @@
         <div class="bg-slate-800/60 rounded-xl p-6 border border-purple-700/30">
           <h3 class="text-lg font-bold text-white mb-2">Parallel</h3>
           <p class="text-sm text-slate-400"><code class="text-purple-300">[P]</code>-tagged slices run concurrently. DAG-aware scheduling with scope conflict detection. Up to <code class="text-purple-300">maxParallelism: 3</code> workers.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Quorum Mode -->
+    <section class="mb-16">
+      <h2 class="text-2xl font-bold text-white mb-2">Quorum Mode <span class="text-sm font-normal text-forge-400 ml-2">v2.5</span></h2>
+      <p class="text-sm text-slate-400 mb-6">Multi-model consensus: dispatch complex slices to 3 AI models for independent analysis, synthesize the best approach, then execute with higher confidence. A/B tested: <strong class="text-white">+20% more tests, better code structure, fewer brittle patterns</strong> vs single-model execution.</p>
+
+      <!-- Workflow Diagram -->
+      <div class="bg-slate-800/60 rounded-xl p-6 border border-slate-700/30 mb-6 font-mono text-xs leading-relaxed">
+        <div class="text-slate-500 mb-3">// Quorum workflow per slice</div>
+        <div class="text-white">executeSlice(slice)</div>
+        <div class="text-slate-500 ml-4">│</div>
+        <div class="ml-4"><span class="text-slate-500">├─</span> <span class="text-forge-400">scoreComplexity()</span> <span class="text-slate-500">→ 1-10 score (7 weighted signals)</span></div>
+        <div class="text-slate-500 ml-4">│</div>
+        <div class="ml-4"><span class="text-slate-500">├─</span> <span class="text-slate-500">score &lt; threshold →</span> <span class="text-green-400">normal execution</span></div>
+        <div class="ml-4"><span class="text-slate-500">└─</span> <span class="text-slate-500">score ≥ threshold →</span> <span class="text-forge-400">quorumDispatch()</span></div>
+        <div class="text-slate-500 ml-12">│</div>
+        <div class="ml-12"><span class="text-slate-500">├─</span> <span class="text-blue-400">Claude Opus 4.6</span> <span class="text-slate-600">→ dry-run plan</span> <span class="text-slate-500">─┐</span></div>
+        <div class="ml-12"><span class="text-slate-500">├─</span> <span class="text-green-400">GPT-5.3-Codex</span>  <span class="text-slate-600">→ dry-run plan</span> <span class="text-slate-500"> ─┼─ Promise.all()</span></div>
+        <div class="ml-12"><span class="text-slate-500">└─</span> <span class="text-purple-400">Claude Sonnet</span>  <span class="text-slate-600">→ dry-run plan</span> <span class="text-slate-500"> ─┘</span></div>
+        <div class="text-slate-500 ml-20">│</div>
+        <div class="ml-16"><span class="text-forge-400">quorumReview()</span> <span class="text-slate-500">← synthesize best approach per file</span></div>
+        <div class="text-slate-500 ml-20">│</div>
+        <div class="ml-16"><span class="text-white">spawnWorker(enhancedPrompt)</span> <span class="text-slate-500">← execute with consensus</span></div>
+        <div class="text-slate-500 ml-20">│</div>
+        <div class="ml-16"><span class="text-green-400">gate ✓</span></div>
+      </div>
+
+      <!-- Quorum Features Grid -->
+      <div class="grid gap-4 md:grid-cols-2 mb-6">
+        <div class="bg-slate-800/60 rounded-xl p-5 border border-red-700/30">
+          <h3 class="text-sm font-bold text-white mb-2">Complexity Scoring</h3>
+          <p class="text-xs text-slate-400">7 weighted signals: file scope (20%), cross-module deps (20%), security keywords (15%), database keywords (15%), gate count (10%), task count (10%), historical failure rate (10%).</p>
+        </div>
+        <div class="bg-slate-800/60 rounded-xl p-5 border border-red-700/30">
+          <h3 class="text-sm font-bold text-white mb-2">Auto Mode</h3>
+          <p class="text-xs text-slate-400"><code class="text-red-300">--quorum=auto</code> triggers quorum only on high-complexity slices (score ≥ 7). Simple CRUD runs normally. Best of both: quality where it matters, speed where it doesn't.</p>
+        </div>
+        <div class="bg-slate-800/60 rounded-xl p-5 border border-red-700/30">
+          <h3 class="text-sm font-bold text-white mb-2">Graceful Degradation</h3>
+          <p class="text-xs text-slate-400">If &lt;2 models respond, falls back to normal execution. If reviewer fails, uses best single dry-run. No model unavailability blocks your pipeline.</p>
+        </div>
+        <div class="bg-slate-800/60 rounded-xl p-5 border border-red-700/30">
+          <h3 class="text-sm font-bold text-white mb-2">A/B Tested</h3>
+          <p class="text-xs text-slate-400">Invoice Engine (rate tiers, discounts, tax, rounding): quorum produced 20% more tests, extracted DRY helpers, used idiomatic .NET patterns, and caught edge cases the single model missed.</p>
+        </div>
+      </div>
+
+      <!-- A/B Results Summary -->
+      <div class="bg-slate-900/80 rounded-xl p-5 border border-slate-700/30">
+        <h3 class="text-sm font-bold text-white mb-3">A/B Test: Invoice Engine (4 slices, rate tiers + discounts + tax + banker's rounding)</h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-xs">
+            <thead><tr class="border-b border-slate-700 text-left"><th class="py-2 px-3 text-slate-400">Metric</th><th class="py-2 px-3 text-slate-400">Standard</th><th class="py-2 px-3 text-slate-400">Quorum (3 models)</th><th class="py-2 px-3 text-slate-400">Delta</th></tr></thead>
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800"><td class="py-2 px-3">Pass rate</td><td class="py-2 px-3">4/4</td><td class="py-2 px-3">4/4</td><td class="py-2 px-3 text-slate-500">Tie</td></tr>
+              <tr class="border-b border-slate-800"><td class="py-2 px-3">Duration</td><td class="py-2 px-3">12 min</td><td class="py-2 px-3">32 min</td><td class="py-2 px-3 text-slate-500">+168%</td></tr>
+              <tr class="border-b border-slate-800"><td class="py-2 px-3">Tests generated</td><td class="py-2 px-3">15</td><td class="py-2 px-3 text-green-400">18</td><td class="py-2 px-3 text-green-400">+20%</td></tr>
+              <tr class="border-b border-slate-800"><td class="py-2 px-3">DRY helpers</td><td class="py-2 px-3">Inline</td><td class="py-2 px-3 text-green-400">Extracted</td><td class="py-2 px-3 text-green-400">Better</td></tr>
+              <tr class="border-b border-slate-800"><td class="py-2 px-3">Test dates</td><td class="py-2 px-3">Hardcoded (fragile)</td><td class="py-2 px-3 text-green-400">Relative (robust)</td><td class="py-2 px-3 text-green-400">Better</td></tr>
+              <tr><td class="py-2 px-3">Edge case coverage</td><td class="py-2 px-3">Standard</td><td class="py-2 px-3 text-green-400">+voided regen, +sequence</td><td class="py-2 px-3 text-green-400">Better</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </section>

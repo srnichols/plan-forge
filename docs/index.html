@@ -146,6 +146,7 @@
               <a href="extensions.html" class="block px-4 py-2 text-sm text-slate-400 hover:bg-slate-800 transition-colors">Extensions</a>
               <a href="docs.html" class="block px-4 py-2 text-sm text-slate-400 hover:bg-slate-800 transition-colors">Documentation</a>
               <a href="faq.html" class="block px-4 py-2 text-sm text-slate-400 hover:bg-slate-800 transition-colors">FAQ</a>
+              <a href="capabilities.html" class="block px-4 py-2 text-sm text-slate-400 hover:bg-slate-800 transition-colors">Capabilities</a>
             </div>
           </div>
         </div>
@@ -583,6 +584,23 @@
           <p class="text-sm text-slate-400">Instruction files load automatically based on the file being edited. Editing SQL? Database guardrails load. Editing auth? Security guardrails load. No action needed.</p>
         </div>
 
+        <!-- Quorum Mode -->
+        <div class="p-8 rounded-2xl bg-gradient-to-br from-slate-800 to-slate-800/50 border border-red-700/30">
+          <div class="flex items-start gap-4 mb-4">
+            <div class="w-12 h-12 rounded-xl bg-red-500/20 flex items-center justify-center text-2xl shrink-0">🗳️</div>
+            <div>
+              <h3 class="text-xl font-bold text-white mb-1">Quorum Mode <span class="text-xs font-normal text-red-400 ml-1">v2.5</span></h3>
+              <p class="text-sm text-slate-400">Multi-model consensus. Dispatch each slice to 3 AI models in parallel for independent dry-run analysis, synthesize the best approach, then execute with higher confidence.</p>
+            </div>
+          </div>
+          <div class="space-y-2 text-xs text-slate-400">
+            <div class="flex items-center gap-2"><span class="text-red-400">→</span> <code class="text-red-300">--quorum=auto</code> triggers only on complex slices (score ≥ 7)</div>
+            <div class="flex items-center gap-2"><span class="text-red-400">→</span> Complexity scored by 7 weighted signals (scope, deps, security, DB keywords...)</div>
+            <div class="flex items-center gap-2"><span class="text-red-400">→</span> A/B tested: <strong class="text-white">+20% more tests</strong>, extracted DRY helpers, better edge case coverage</div>
+          </div>
+          <a href="capabilities.html#quorum" class="mt-3 inline-block text-xs text-red-400 hover:underline">See A/B results + workflow diagram →</a>
+        </div>
+
         <!-- Slash Command Skills -->
         <div class="p-8 rounded-2xl bg-slate-800/60 border border-slate-700/50">
           <div class="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center text-2xl mb-4">⚙️</div>
@@ -643,7 +661,7 @@
         <div class="p-8 rounded-2xl bg-slate-800/60 border border-purple-700/30">
           <div class="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center text-2xl mb-4">🔌</div>
           <h3 class="text-xl font-bold text-white mb-2">MCP Server + Orchestrator</h3>
-          <p class="text-sm text-slate-400 mb-4">13 MCP tools — run plans autonomously with <code class="text-forge-400">forge_run_plan</code>, track costs with <code class="text-forge-400">forge_cost_report</code>, monitor in real-time via WebSocket hub + dashboard at <code class="text-forge-400">localhost:3100/dashboard</code>. Full Auto (gh copilot CLI) or Assisted (human + gates) execution modes. Parallel execution with <code class="text-forge-400">[P]</code> tags.</p>
+          <p class="text-sm text-slate-400 mb-4">14 MCP tools — run plans autonomously with <code class="text-forge-400">forge_run_plan</code>, track costs with <code class="text-forge-400">forge_cost_report</code>, monitor in real-time via WebSocket hub + dashboard at <code class="text-forge-400">localhost:3100/dashboard</code>. Full Auto (gh copilot CLI) or Assisted (human + gates) execution modes. Parallel execution with <code class="text-forge-400">[P]</code> tags. Quorum mode with <code class="text-forge-400">--quorum</code> for multi-model consensus.</p>
           <div class="space-y-1 text-xs text-slate-500">
             <div>14 tools · Dashboard · REST API · WebSocket · Traces · Parallel</div>
           </div>

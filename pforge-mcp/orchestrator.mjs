@@ -66,6 +66,7 @@ class OrchestratorEventBus extends EventEmitter {
     const events = [
       "run-started", "slice-started", "slice-completed",
       "slice-failed", "run-completed", "run-aborted",
+      "quorum-dispatch-started", "quorum-leg-completed", "quorum-review-completed",
     ];
     for (const evt of events) {
       this.on(evt, (data) => this.handler.handle({ type: evt, data, timestamp: new Date().toISOString() }));
@@ -381,10 +382,10 @@ export function spawnWorker(prompt, options = {}) {
     worker = null,     // override worker choice
   } = options;
 
-  return new Promise((resolve, reject) => {
+  return new Promise((workerResolve, workerReject) => {
     const workers = worker ? [{ name: worker }] : detectWorkers().filter((w) => w.available);
     if (workers.length === 0) {
-      reject(new Error("No CLI workers available. Install gh copilot, claude, or codex CLI."));
+      workerReject(new Error("No CLI workers available. Install gh copilot, claude, or codex CLI."));
       return;
     }
 
@@ -393,21 +394,16 @@ export function spawnWorker(prompt, options = {}) {
     let cmd;
 
     // Write prompt to temp file to avoid CLI arg length/escaping issues
-    const promptFile = resolve(tmpdir(), `pforge-prompt-${Date.now()}.txt`);
+    // Use random suffix to prevent collisions when spawning multiple workers in parallel (quorum)
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const promptFile = resolve(tmpdir(), `pforge-prompt-${suffix}.txt`);
     writeFileSync(promptFile, prompt);
 
     switch (chosen.name) {
       case "gh-copilot": {
-        // Use shell wrapper to read prompt from temp file (avoids Windows spawn arg limits)
-        if (process.platform === "win32") {
-          cmd = "pwsh";
-          args = ["-NoProfile", "-Command",
-            `$p = Get-Content -Path '${promptFile}' -Raw; & gh copilot -- -p $p --allow-all --no-ask-user` + (model ? ` --model ${model}` : "")];
-        } else {
-          cmd = "bash";
-          args = ["-c",
-            `gh copilot -- -p "$(cat '${promptFile}')" --allow-all --no-ask-user` + (model ? ` --model ${model}` : "")];
-        }
+        // Pass prompt file directly via @filepath syntax — avoids PS variable expansion and newline splitting
+        cmd = "gh";
+        args = ["copilot", "--", "-p", `@${promptFile}`, "--allow-all", "--allow-all-paths", "--allow-all-tools", "--no-ask-user", ...(model ? ["--model", model] : [])];
         break;
       }
       case "claude":
@@ -421,7 +417,7 @@ export function spawnWorker(prompt, options = {}) {
         if (model) args.push("--model", model);
         break;
       default:
-        reject(new Error(`Unknown worker: ${chosen.name}`));
+        workerReject(new Error(`Unknown worker: ${chosen.name}`));
         return;
     }
 
@@ -464,7 +460,7 @@ export function spawnWorker(prompt, options = {}) {
         if (stderrStats.premiumRequests > 0) tokens.premiumRequests = stderrStats.premiumRequests;
       }
 
-      resolve({
+      workerResolve({
         output: stdout,
         stderr,
         jsonlEvents,
@@ -478,7 +474,7 @@ export function spawnWorker(prompt, options = {}) {
 
     child.on("error", (err) => {
       clearTimeout(timer);
-      reject(new Error(`Failed to spawn ${cmd}: ${err.message} (code: ${err.code || "unknown"})`));
+      workerReject(new Error(`Failed to spawn ${cmd}: ${err.message} (code: ${err.code || "unknown"})`));
     });
   });
 }
@@ -910,6 +906,8 @@ export async function runPlan(planPath, options = {}) {
     dryRun = false,
     eventHandler = null,
     abortController = null,
+    quorum = false,        // false | true | "auto"
+    quorumThreshold = null, // override threshold from config
   } = options;
 
   // Load model routing from .forge.json (Slice 5)
@@ -921,7 +919,18 @@ export async function runPlan(planPath, options = {}) {
 
   // Estimation mode — return without executing
   if (estimate) {
-    return buildEstimate(plan, effectiveModel, cwd);
+    // Build quorum config for estimate even though we're not running
+    let estimateQuorumConfig = null;
+    if (quorum) {
+      estimateQuorumConfig = loadQuorumConfig(cwd);
+      estimateQuorumConfig.enabled = true;
+      if (quorum === "auto") estimateQuorumConfig.auto = true;
+      else if (quorum === true) estimateQuorumConfig.auto = false;
+      if (quorumThreshold !== null && typeof quorumThreshold === "number") {
+        estimateQuorumConfig.threshold = quorumThreshold;
+      }
+    }
+    return buildEstimate(plan, effectiveModel, cwd, estimateQuorumConfig);
   }
 
   // Dry run — parse and validate only
@@ -972,7 +981,22 @@ export async function runPlan(planPath, options = {}) {
   const memoryEnabled = isOpenBrainConfigured(cwd);
   const projectName = loadProjectName(cwd);
 
-  eventBus.emit("run-started", runMeta);
+  // Quorum mode (v2.5)
+  let quorumConfig = null;
+  if (quorum) {
+    quorumConfig = loadQuorumConfig(cwd);
+    quorumConfig.enabled = true;
+    if (quorum === "auto") {
+      quorumConfig.auto = true;
+    } else if (quorum === true) {
+      quorumConfig.auto = false; // Force quorum on all slices
+    }
+    if (quorumThreshold !== null && typeof quorumThreshold === "number") {
+      quorumConfig.threshold = quorumThreshold;
+    }
+  }
+
+  eventBus.emit("run-started", { ...runMeta, quorum: quorumConfig ? { enabled: true, auto: quorumConfig.auto, threshold: quorumConfig.threshold } : null });
 
   // Execute slices
   const maxRetries = loadMaxRetries(cwd);
@@ -982,6 +1006,7 @@ export async function runPlan(planPath, options = {}) {
     async (slice) => executeSlice(slice, {
       cwd, model: effectiveModel, modelRouting, mode, runDir, maxRetries,
       memoryEnabled, projectName, planName: basename(planPath, ".md"),
+      quorumConfig,
     }),
     { abortSignal, resumeFrom: resumeFrom ? String(resumeFrom) : null },
   );
@@ -1236,9 +1261,57 @@ export function getCostReport(cwd) {
  */
 async function executeSlice(slice, options) {
   const { cwd, model, modelRouting = {}, mode, runDir, maxRetries = 1,
-    memoryEnabled = false, projectName = "", planName = "" } = options;
+    memoryEnabled = false, projectName = "", planName = "",
+    quorumConfig = null } = options;
   const startTime = Date.now();
   const resolvedModel = resolveModel(model, modelRouting, slice);
+
+  // ─── Quorum Mode (v2.5) ───
+  let quorumResult = null;
+  let useQuorum = false;
+  let complexityScore = 0;
+
+  if (quorumConfig && quorumConfig.enabled && mode !== "assisted") {
+    const { score, signals } = scoreSliceComplexity(slice, cwd);
+    complexityScore = score;
+
+    // Determine if this slice qualifies for quorum
+    if (quorumConfig.auto) {
+      useQuorum = score >= quorumConfig.threshold;
+    } else {
+      useQuorum = true; // Force quorum on all slices
+    }
+
+    if (useQuorum) {
+      // Dispatch to multiple models for dry-run analysis
+      const dispatchResult = await quorumDispatch(slice, quorumConfig, {
+        cwd,
+        memoryEnabled,
+        projectName,
+        complexityScore: score,
+      });
+
+      // Synthesize responses
+      quorumResult = await quorumReview(dispatchResult, slice, quorumConfig, { cwd });
+
+      // Log quorum data
+      const quorumLog = {
+        score,
+        signals,
+        threshold: quorumConfig.threshold,
+        models: quorumConfig.models,
+        successfulLegs: dispatchResult.successful.length,
+        totalLegs: dispatchResult.all.length,
+        dispatchDuration: dispatchResult.totalDuration,
+        reviewerFallback: quorumResult.fallback,
+        reviewerCost: quorumResult.reviewerCost,
+      };
+      writeFileSync(
+        resolve(runDir, `slice-${slice.number}-quorum.json`),
+        JSON.stringify(quorumLog, null, 2),
+      );
+    }
+  }
 
   let attempt = 0;
   let workerResult = null;
@@ -1247,7 +1320,9 @@ async function executeSlice(slice, options) {
 
   while (attempt <= maxRetries) {
     // Build prompt — on retry, include the error context
-    let sliceInstructions = buildSlicePrompt(slice);
+    let sliceInstructions = (useQuorum && quorumResult)
+      ? quorumResult.enhancedPrompt
+      : buildSlicePrompt(slice);
 
     // OpenBrain: inject memory search + capture instructions
     if (memoryEnabled) {
@@ -1360,6 +1435,18 @@ async function executeSlice(slice, options) {
     worker: workerResult.worker,
     model: workerResult.model,
     attempts: attempt + 1,
+    ...(useQuorum && {
+      quorum: {
+        score: complexityScore,
+        models: quorumResult?.modelResponses?.map((r) => r.model) || [],
+        reviewerFallback: quorumResult?.fallback || false,
+        reviewerCost: quorumResult?.reviewerCost || 0,
+        dryRunTokens: quorumResult?.modelResponses?.reduce((sum, r) => ({
+          tokens_in: (sum.tokens_in || 0) + (r.tokens?.tokens_in || 0),
+          tokens_out: (sum.tokens_out || 0) + (r.tokens?.tokens_out || 0),
+        }), { tokens_in: 0, tokens_out: 0 }) || { tokens_in: 0, tokens_out: 0 },
+      },
+    }),
   };
 
   writeFileSync(
@@ -1397,6 +1484,379 @@ function buildSlicePrompt(slice) {
     parts.push("", `Stop condition: ${slice.stopCondition}`);
   }
   return parts.join("\n");
+}
+
+// ─── Quorum Mode (Phase 7 — v2.5) ────────────────────────────────────
+
+/**
+ * Security-sensitive keywords that increase complexity score.
+ * @type {RegExp}
+ */
+const SECURITY_KEYWORDS = /\b(auth|token|rbac|encryption|secret|cors|jwt|oauth|password|credential|permission|role)\b/i;
+
+/**
+ * Database/migration keywords that increase complexity score.
+ * @type {RegExp}
+ */
+const DATABASE_KEYWORDS = /\b(migration|schema|alter|create\s+table|drop|seed|index|foreign\s+key|constraint|ef\s+core|dbcontext|repository)\b/i;
+
+/**
+ * Load quorum configuration from .forge.json.
+ * Schema: { "quorum": { "enabled": false, "auto": true, "threshold": 7, "models": [...], "reviewerModel": "...", "dryRunTimeout": 300000 } }
+ * Returns merged config with defaults.
+ */
+export function loadQuorumConfig(cwd) {
+  const defaults = {
+    enabled: false,
+    auto: true,
+    threshold: 7,
+    models: ["claude-opus-4.6", "gpt-5.3-codex", "claude-sonnet-4.6"],
+    reviewerModel: "claude-opus-4.6",
+    dryRunTimeout: 300_000, // 5 min per dry-run leg
+  };
+  const configPath = resolve(cwd, ".forge.json");
+  try {
+    if (existsSync(configPath)) {
+      const config = JSON.parse(readFileSync(configPath, "utf-8"));
+      if (config.quorum && typeof config.quorum === "object") {
+        return { ...defaults, ...config.quorum };
+      }
+    }
+  } catch { /* defaults */ }
+  return defaults;
+}
+
+/**
+ * Score a slice's technical complexity on a 1-10 scale.
+ *
+ * Weighted signals:
+ *   - File count in scope (20%)
+ *   - Cross-module dependencies (20%)
+ *   - Security-sensitive keywords (15%)
+ *   - Database/migration keywords (15%)
+ *   - Acceptance criteria / gate length (10%)
+ *   - Task count (10%)
+ *   - Historical failure rate (10%)
+ *
+ * @param {object} slice - Parsed slice from plan
+ * @param {string} cwd - Working directory (for historical data)
+ * @returns {{ score: number, signals: object }}
+ */
+export function scoreSliceComplexity(slice, cwd) {
+  const signals = {};
+
+  // 1. File count in scope (0-1 normalized: 0 files=0, 5+=1)
+  const scopeCount = (slice.scope && slice.scope.length) || 0;
+  signals.scopeWeight = Math.min(scopeCount / 5, 1);
+
+  // 2. Cross-module dependencies (0-1: 0 deps=0, 4+=1)
+  const depCount = (slice.depends && slice.depends.length) || 0;
+  signals.dependencyWeight = Math.min(depCount / 4, 1);
+
+  // 3. Security-sensitive keywords in tasks + title
+  const allText = [slice.title || "", ...(slice.tasks || []), slice.validationGate || ""].join(" ");
+  const securityHits = (allText.match(SECURITY_KEYWORDS) || []).length;
+  signals.securityWeight = Math.min(securityHits / 3, 1);
+
+  // 4. Database/migration keywords
+  const dbHits = (allText.match(DATABASE_KEYWORDS) || []).length;
+  signals.databaseWeight = Math.min(dbHits / 3, 1);
+
+  // 5. Validation gate length (lines of gate commands)
+  const gateLines = slice.validationGate
+    ? slice.validationGate.split("\n").filter((l) => l.trim().length > 0).length
+    : 0;
+  signals.gateWeight = Math.min(gateLines / 5, 1);
+
+  // 6. Task count (0-1: 1 task=0.1, 10+=1)
+  const taskCount = (slice.tasks && slice.tasks.length) || 0;
+  signals.taskWeight = Math.min(taskCount / 10, 1);
+
+  // 7. Historical failure rate (0-1: scan past runs for similar slice titles)
+  signals.historicalWeight = getHistoricalFailureRate(slice, cwd);
+
+  // Weighted sum
+  const raw =
+    signals.scopeWeight * 0.20 +
+    signals.dependencyWeight * 0.20 +
+    signals.securityWeight * 0.15 +
+    signals.databaseWeight * 0.15 +
+    signals.gateWeight * 0.10 +
+    signals.taskWeight * 0.10 +
+    signals.historicalWeight * 0.10;
+
+  // Normalize to 1-10 scale (raw is 0-1)
+  const score = Math.max(1, Math.min(10, Math.round(raw * 9) + 1));
+
+  return { score, signals };
+}
+
+/**
+ * Scan historical runs for failure rate of slices with similar titles/keywords.
+ * Returns 0-1 (0 = no history or never failed, 1 = always fails).
+ */
+function getHistoricalFailureRate(slice, cwd) {
+  const runsDir = resolve(cwd, ".forge", "runs");
+  if (!existsSync(runsDir)) return 0;
+
+  const titleWords = (slice.title || "").toLowerCase().split(/\s+/).filter((w) => w.length > 3);
+  if (titleWords.length === 0) return 0;
+
+  let matches = 0;
+  let failures = 0;
+
+  try {
+    const indexPath = resolve(runsDir, "index.jsonl");
+    if (!existsSync(indexPath)) return 0;
+
+    const lines = readFileSync(indexPath, "utf-8").split("\n").filter((l) => l.trim());
+    // Sample last 20 runs max
+    const recent = lines.slice(-20);
+
+    for (const line of recent) {
+      try {
+        const entry = JSON.parse(line);
+        const runDir = resolve(runsDir, entry.runDir || entry.runId || "");
+        const summaryPath = resolve(runDir, "summary.json");
+        if (!existsSync(summaryPath)) continue;
+
+        const summary = JSON.parse(readFileSync(summaryPath, "utf-8"));
+        if (!summary.slices) continue;
+
+        for (const s of summary.slices) {
+          const sTitle = (s.title || "").toLowerCase();
+          const isMatch = titleWords.some((w) => sTitle.includes(w));
+          if (isMatch) {
+            matches++;
+            if (s.status === "failed") failures++;
+          }
+        }
+      } catch { /* skip malformed entries */ }
+    }
+  } catch { /* no history */ }
+
+  return matches > 0 ? failures / matches : 0;
+}
+
+/**
+ * Build the dry-run prompt for quorum dispatch.
+ * Wraps the original slice prompt with dry-run instructions.
+ */
+function buildDryRunPrompt(slice) {
+  const originalPrompt = buildSlicePrompt(slice);
+  return [
+    "You are in QUORUM DRY-RUN mode. Do NOT execute any code changes.",
+    "Do NOT create, modify, or delete any files.",
+    "",
+    "Instead, produce a detailed implementation plan for the slice below:",
+    "",
+    "1. **Files to create or modify** — exact paths, one per line",
+    "2. **Implementation approach** — for each file, describe the key changes (classes, methods, patterns)",
+    "3. **Edge cases and failure modes** — what could go wrong, how to handle it",
+    "4. **Testing strategy** — how to verify the validation gate passes",
+    "5. **Risk assessment** — rate confidence (high/medium/low) and explain concerns",
+    "",
+    "--- ORIGINAL SLICE INSTRUCTIONS ---",
+    originalPrompt,
+  ].join("\n");
+}
+
+/**
+ * Build the reviewer synthesis prompt from dry-run responses.
+ */
+function buildReviewerPrompt(dryRunResults, slice) {
+  const originalPrompt = buildSlicePrompt(slice);
+  const parts = [
+    "You are the QUORUM REVIEWER. Three AI models independently analyzed the same coding task",
+    "and produced implementation plans. Your job is to synthesize the BEST execution plan.",
+    "",
+    "Rules:",
+    "- Pick the BEST approach for each file/component (not necessarily from the same model)",
+    "- When models DISAGREE on architecture, choose the approach with better error handling and testability",
+    "- Flag any RISK AREAS where all three models expressed concerns",
+    "- Produce a CONCRETE execution plan (not vague guidance) — the output will be used as instructions for the executing agent",
+    "- Include specific file paths, class names, method signatures, and patterns to use",
+    "",
+  ];
+
+  for (let i = 0; i < dryRunResults.length; i++) {
+    const r = dryRunResults[i];
+    parts.push(`--- MODEL ${String.fromCharCode(65 + i)} (${r.model}) ---`);
+    parts.push(r.output || "(no response)");
+    parts.push("");
+  }
+
+  parts.push("--- ORIGINAL SLICE ---");
+  parts.push(originalPrompt);
+  parts.push("");
+  parts.push("Produce the unified execution plan now.");
+
+  return parts.join("\n");
+}
+
+/**
+ * Dispatch a slice to multiple models for parallel dry-run analysis.
+ * Returns array of dry-run results.
+ *
+ * @param {object} slice - Parsed slice
+ * @param {object} config - Quorum config from loadQuorumConfig()
+ * @param {object} options - { cwd, eventBus, memoryEnabled, projectName }
+ * @returns {Promise<{ model: string, output: string, tokens: object, duration: number, exitCode: number }[]>}
+ */
+export async function quorumDispatch(slice, config, options = {}) {
+  const { cwd = process.cwd(), eventBus = null, memoryEnabled = false, projectName = "" } = options;
+
+  let dryPrompt = buildDryRunPrompt(slice);
+
+  // OpenBrain: inject memory search for dry-run agents too
+  if (memoryEnabled) {
+    dryPrompt = buildMemorySearchBlock(projectName, slice) + "\n" + dryPrompt;
+  }
+
+  if (eventBus) {
+    eventBus.emit("quorum-dispatch-started", {
+      sliceId: slice.number,
+      models: config.models,
+      score: options.complexityScore || null,
+    });
+  }
+
+  const startTime = Date.now();
+  const promises = config.models.map(async (model) => {
+    const legStart = Date.now();
+    try {
+      const result = await spawnWorker(dryPrompt, {
+        model,
+        cwd,
+        timeout: config.dryRunTimeout || 300_000,
+      });
+      const legResult = {
+        model,
+        output: result.output || result.stderr || "",
+        tokens: result.tokens,
+        duration: Date.now() - legStart,
+        exitCode: result.exitCode,
+        success: true, // gh copilot may exit non-zero but still produce useful output
+      };
+      // Determine success: has meaningful output (stdout or stderr) regardless of exit code
+      // gh copilot outputs text to stderr in non-TTY mode
+      legResult.success = (legResult.output || "").trim().length > 50;
+      if (eventBus) {
+        eventBus.emit("quorum-leg-completed", { sliceId: slice.number, ...legResult });
+      }
+      return legResult;
+    } catch (err) {
+      const legResult = {
+        model,
+        output: "",
+        tokens: { tokens_in: null, tokens_out: null, model },
+        duration: Date.now() - legStart,
+        exitCode: 1,
+        success: false,
+        error: err.message,
+      };
+      if (eventBus) {
+        eventBus.emit("quorum-leg-completed", { sliceId: slice.number, ...legResult });
+      }
+      return legResult;
+    }
+  });
+
+  const results = await Promise.all(promises);
+
+  // Filter to successful responses
+  const successful = results.filter((r) => r.success && (r.output || "").trim().length > 0);
+
+  return { all: results, successful, totalDuration: Date.now() - startTime };
+}
+
+/**
+ * Synthesize multiple dry-run responses into a unified execution plan.
+ * Spawns a reviewer agent to merge the best elements.
+ *
+ * @param {{ successful: object[] }} dispatchResult - Output from quorumDispatch()
+ * @param {object} slice - Original slice
+ * @param {object} config - Quorum config
+ * @param {object} options - { cwd, eventBus }
+ * @returns {Promise<{ enhancedPrompt: string, reviewerTokens: object, reviewerCost: number, modelResponses: object[] }>}
+ */
+export async function quorumReview(dispatchResult, slice, config, options = {}) {
+  const { cwd = process.cwd(), eventBus = null } = options;
+  const { successful } = dispatchResult;
+
+  // Need at least 2 responses for meaningful consensus
+  if (successful.length < 2) {
+    // Fall back: use the single best response or original prompt
+    const fallback = successful.length === 1
+      ? `Based on analysis, here is the recommended approach:\n\n${successful[0].output}\n\n--- EXECUTE ---\n${buildSlicePrompt(slice)}`
+      : buildSlicePrompt(slice);
+
+    return {
+      enhancedPrompt: fallback,
+      reviewerTokens: { tokens_in: 0, tokens_out: 0, model: "none" },
+      reviewerCost: 0,
+      modelResponses: successful,
+      fallback: true,
+    };
+  }
+
+  const reviewerPrompt = buildReviewerPrompt(successful, slice);
+
+  try {
+    const reviewerResult = await spawnWorker(reviewerPrompt, {
+      model: config.reviewerModel,
+      cwd,
+      timeout: config.dryRunTimeout || 300_000,
+    });
+
+    const enhancedPrompt = [
+      `Execute Slice ${slice.number}: ${slice.title}`,
+      "",
+      "The following execution plan was synthesized from multi-model consensus analysis.",
+      "Follow this plan precisely:",
+      "",
+      reviewerResult.output,
+      "",
+      "--- ORIGINAL REQUIREMENTS ---",
+      // Include scope and gate from original so they're not lost
+      ...(slice.scope && slice.scope.length > 0
+        ? [`SCOPE: Only modify files matching: ${slice.scope.join(", ")}`, "Do NOT create or modify files outside this scope.", ""]
+        : []),
+      ...(slice.validationGate
+        ? ["Validation gate (run these after completion):", slice.validationGate, ""]
+        : []),
+    ].join("\n");
+
+    if (eventBus) {
+      eventBus.emit("quorum-review-completed", {
+        sliceId: slice.number,
+        reviewerModel: config.reviewerModel,
+        tokens: reviewerResult.tokens,
+        modelCount: successful.length,
+      });
+    }
+
+    return {
+      enhancedPrompt,
+      reviewerTokens: reviewerResult.tokens,
+      reviewerCost: calculateSliceCost(reviewerResult.tokens).cost_usd,
+      modelResponses: successful,
+      fallback: false,
+    };
+  } catch (err) {
+    // Reviewer failed — fall back to best single dry-run
+    const best = successful.reduce((a, b) =>
+      (a.output || "").length > (b.output || "").length ? a : b);
+
+    return {
+      enhancedPrompt: `Based on analysis by ${best.model}, here is the recommended approach:\n\n${best.output || ""}\n\n--- EXECUTE ---\n${buildSlicePrompt(slice)}`,
+      reviewerTokens: { tokens_in: 0, tokens_out: 0, model: "none" },
+      reviewerCost: 0,
+      modelResponses: successful,
+      fallback: true,
+      error: err.message,
+    };
+  }
 }
 
 // ─── Pricing Table (Phase 2) ──────────────────────────────────────────
@@ -1494,7 +1954,7 @@ export function buildCostBreakdown(sliceResults) {
   };
 }
 
-function buildEstimate(plan, model, cwd) {
+function buildEstimate(plan, model, cwd, quorumConfig = null) {
   // Phase 2 Slice 4: Use historical data if available
   const historyPath = cwd ? resolve(cwd, ".forge", "cost-history.json") : null;
   let avgTokensPerSlice = null;
@@ -1526,6 +1986,41 @@ function buildEstimate(plan, model, cwd) {
   const totalOutputTokens = sliceCount * tokensPerSlice.output;
   const estimatedCost = (totalInputTokens * pricing.input) + (totalOutputTokens * pricing.output);
 
+  // Quorum overhead estimation (v2.5)
+  let quorumOverhead = null;
+  if (quorumConfig && quorumConfig.enabled) {
+    const quorumSlices = quorumConfig.auto
+      ? plan.slices.filter((s) => scoreSliceComplexity(s, cwd).score >= quorumConfig.threshold)
+      : plan.slices;
+    const modelCount = quorumConfig.models.length;
+    // Each quorum slice: N dry-run prompt+response + 1 reviewer
+    const dryRunInputPerLeg = tokensPerSlice.input * 1.5; // Dry-run prompt is larger
+    const dryRunOutputPerLeg = tokensPerSlice.output * 0.8; // Plan output is shorter than code
+    const reviewerInput = dryRunOutputPerLeg * modelCount + tokensPerSlice.input; // All outputs + original
+    const reviewerOutput = tokensPerSlice.output * 0.6;
+
+    const dryRunCostPerSlice = modelCount * (
+      (dryRunInputPerLeg * pricing.input) + (dryRunOutputPerLeg * pricing.output)
+    );
+    const reviewerPricing = MODEL_PRICING[quorumConfig.reviewerModel] || pricing;
+    const reviewerCostPerSlice = (reviewerInput * reviewerPricing.input) + (reviewerOutput * reviewerPricing.output);
+
+    quorumOverhead = {
+      quorumSliceCount: quorumSlices.length,
+      totalSliceCount: sliceCount,
+      dryRunCostPerSlice: Math.round(dryRunCostPerSlice * 100) / 100,
+      reviewerCostPerSlice: Math.round(reviewerCostPerSlice * 100) / 100,
+      totalOverheadUSD: Math.round((dryRunCostPerSlice + reviewerCostPerSlice) * quorumSlices.length * 100) / 100,
+      models: quorumConfig.models,
+      reviewerModel: quorumConfig.reviewerModel,
+      slices: quorumSlices.map((s) => ({
+        number: s.number,
+        title: s.title,
+        complexityScore: scoreSliceComplexity(s, cwd).score,
+      })),
+    };
+  }
+
   return {
     status: "estimate",
     sliceCount,
@@ -1537,6 +2032,10 @@ function buildEstimate(plan, model, cwd) {
       source: tokensPerSlice.source,
     },
     estimatedCostUSD: Math.round(estimatedCost * 100) / 100,
+    ...(quorumOverhead && {
+      quorumOverhead,
+      totalCostWithQuorumUSD: Math.round((estimatedCost + quorumOverhead.totalOverheadUSD) * 100) / 100,
+    }),
     confidence: avgTokensPerSlice ? "historical" : "heuristic",
     slices: plan.slices.map((s) => ({
       number: s.number,
@@ -1544,6 +2043,12 @@ function buildEstimate(plan, model, cwd) {
       depends: s.depends,
       parallel: s.parallel,
       scope: s.scope,
+      ...(quorumConfig && quorumConfig.enabled && {
+        complexityScore: scoreSliceComplexity(s, cwd).score,
+        quorumEligible: quorumConfig.auto
+          ? scoreSliceComplexity(s, cwd).score >= quorumConfig.threshold
+          : true,
+      }),
     })),
   };
 }
@@ -1969,6 +2474,67 @@ async function selfTest() {
     assert(`Parallel scheduler: ${err.message}`, false);
   }
 
+  // Test 16: Quorum — Complexity scoring (v2.5)
+  console.log("\n─── Quorum: Complexity Scoring ───");
+  try {
+    // Simple slice — low complexity
+    const simpleSlice = {
+      number: "1", title: "Add README",
+      tasks: ["Create README.md"],
+      scope: [], depends: [], validationGate: "",
+    };
+    const simpleResult = scoreSliceComplexity(simpleSlice, process.cwd());
+    assert("Simple slice scores low", simpleResult.score <= 3);
+    assert("Score has signals object", typeof simpleResult.signals === "object");
+    assert("Signals have scopeWeight", "scopeWeight" in simpleResult.signals);
+
+    // Complex slice — auth + migration + many deps + many tasks
+    const complexSlice = {
+      number: "2", title: "Auth migration with RBAC",
+      tasks: [
+        "Create migration for users table",
+        "Implement JWT authentication",
+        "Add RBAC role checking middleware",
+        "Create token refresh endpoint",
+        "Add password hashing service",
+        "Write auth integration tests",
+        "Add CORS policy for auth endpoints",
+        "Seed admin role data",
+      ],
+      scope: ["src/auth/**", "src/middleware/**", "db/migrations/**", "tests/auth/**"],
+      depends: ["1", "3", "4"],
+      validationGate: "dotnet build\ndotnet test --filter Auth\ndotnet ef database update\ncurl -f http://localhost/health",
+    };
+    const complexResult = scoreSliceComplexity(complexSlice, process.cwd());
+    assert("Complex slice scores high", complexResult.score >= 7);
+    assert("Security keywords detected", complexResult.signals.securityWeight > 0);
+    assert("Database keywords detected", complexResult.signals.databaseWeight > 0);
+    assert("High task count detected", complexResult.signals.taskWeight > 0);
+    assert("Multiple deps detected", complexResult.signals.dependencyWeight > 0);
+
+    // Score is always 1-10
+    assert("Score >= 1", simpleResult.score >= 1);
+    assert("Score <= 10", complexResult.score <= 10);
+  } catch (err) {
+    assert(`Complexity scoring: ${err.message}`, false);
+  }
+
+  // Test 17: Quorum — Config loading (v2.5)
+  console.log("\n─── Quorum: Config ───");
+  try {
+    const config = loadQuorumConfig(process.cwd());
+    assert("Config has enabled flag", "enabled" in config);
+    assert("Config has auto flag", "auto" in config);
+    assert("Config has threshold", typeof config.threshold === "number");
+    assert("Config has models array", Array.isArray(config.models));
+    assert("Config has 3 default models", config.models.length === 3);
+    assert("Config has reviewerModel", typeof config.reviewerModel === "string");
+    assert("Config has dryRunTimeout", typeof config.dryRunTimeout === "number");
+    assert("Default threshold is 7", config.threshold === 7);
+  } catch (err) {
+    assert(`Quorum config: ${err.message}`, false);
+  }
+
   // Summary
   console.log(`\n═══════════════════════════════════════════`);
   console.log(`  Results: ${passed} passed, ${failed} failed`);
@@ -2009,6 +2575,15 @@ if (args.includes("--test")) {
   const estimate = args.includes("--estimate");
   const dryRun = args.includes("--dry-run");
 
+  // Quorum mode: --quorum (force all) or --quorum=auto (threshold-based)
+  let quorum = false;
+  const quorumArg = args.find((a) => a.startsWith("--quorum"));
+  if (quorumArg) {
+    if (quorumArg === "--quorum=auto") quorum = "auto";
+    else quorum = true;
+  }
+  const quorumThreshold = getArg("--quorum-threshold") ? Number(getArg("--quorum-threshold")) : null;
+
   try {
     const result = await runPlan(planPath, {
       cwd: process.cwd(),
@@ -2017,6 +2592,8 @@ if (args.includes("--test")) {
       resumeFrom,
       estimate,
       dryRun,
+      quorum,
+      quorumThreshold,
     });
     console.log(JSON.stringify(result, null, 2));
     process.exit(result.status === "failed" ? 1 : 0);

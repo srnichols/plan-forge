@@ -121,6 +121,15 @@ export const TOOL_METADATA = {
     produces: [".forge/runs/<timestamp>/summary.json", ".forge/runs/<timestamp>/slice-N.json"],
     consumes: ["docs/plans/*.md", ".forge.json"],
     sideEffects: ["creates/modifies source files", "runs build/test commands", "spawns CLI workers"],
+    quorum: {
+      addedIn: "2.5.0",
+      description: "Multi-model consensus: dispatch to 3+ models for dry-run analysis, synthesize best approach, then execute",
+      parameters: {
+        quorum: { type: "string", enum: ["false", "true", "auto"], description: "Quorum mode control" },
+        quorumThreshold: { type: "number", description: "Complexity score threshold for auto mode (1-10, default: 7)" },
+      },
+      config: ".forge.json → quorum { enabled, auto, threshold, models[], reviewerModel, dryRunTimeout }",
+    },
     errors: {
       PLAN_NOT_FOUND: { message: "Plan file not found", recovery: "Check the path or run forge_status to see available plans" },
       NO_WORKER: { message: "No CLI workers available", recovery: "Install gh copilot CLI, or use mode: 'assisted'" },
@@ -269,6 +278,15 @@ export const WORKFLOWS = {
       { tool: "forge_analyze", description: "Consistency score" },
     ],
   },
+  "quorum-execute": {
+    description: "Run a plan with multi-model consensus on complex slices",
+    steps: [
+      { tool: "forge_run_plan", args: { estimate: true, quorum: "auto" }, decision: "Review estimate including quorum overhead. If acceptable, proceed." },
+      { tool: "forge_run_plan", args: { quorum: "auto" }, decision: "Monitor at localhost:3100/dashboard — quorum legs visible in trace" },
+      { tool: "forge_plan_status", description: "Check results including quorum scores per slice" },
+      { tool: "forge_cost_report", description: "Review cost — includes quorum dry-run + reviewer tokens" },
+    ],
+  },
 };
 
 // ─── CLI Schema ───────────────────────────────────────────────────────
@@ -333,6 +351,8 @@ export const CLI_SCHEMA = {
         "--model": { type: "string", description: "Model override (e.g., claude-sonnet-4.6)" },
         "--resume-from": { type: "number", description: "Skip completed slices, resume from N" },
         "--dry-run": { type: "boolean", description: "Parse and validate without executing" },
+        "--quorum": { type: "boolean|auto", description: "Force quorum on all slices, or 'auto' for threshold-based" },
+        "--quorum-threshold": { type: "number", description: "Override complexity threshold (1-10, default: 7)" },
       },
       examples: [
         "pforge run-plan docs/plans/Phase-1.md",
@@ -340,6 +360,10 @@ export const CLI_SCHEMA = {
         "pforge run-plan docs/plans/Phase-1.md --assisted",
         "pforge run-plan docs/plans/Phase-1.md --model claude-sonnet-4.6",
         "pforge run-plan docs/plans/Phase-1.md --resume-from 3",
+        "pforge run-plan docs/plans/Phase-1.md --quorum",
+        "pforge run-plan docs/plans/Phase-1.md --quorum=auto",
+        "pforge run-plan docs/plans/Phase-1.md --quorum=auto --quorum-threshold 8",
+        "pforge run-plan docs/plans/Phase-1.md --estimate --quorum",
       ],
     },
     ext: {
@@ -397,6 +421,18 @@ export const CONFIG_SCHEMA = {
     maxParallelism: { type: "number", default: 3, minimum: 1, maximum: 10, description: "Max concurrent parallel slices" },
     maxRetries: { type: "number", default: 1, minimum: 0, maximum: 5, description: "Gate failure retry attempts" },
     maxRunHistory: { type: "number", default: 50, minimum: 1, description: "Max run directories to retain" },
+    quorum: {
+      type: "object",
+      description: "Multi-model consensus configuration (v2.5)",
+      properties: {
+        enabled: { type: "boolean", default: false, description: "Master switch for quorum mode" },
+        auto: { type: "boolean", default: true, description: "When enabled, only quorum high-complexity slices" },
+        threshold: { type: "number", default: 7, minimum: 1, maximum: 10, description: "Complexity score threshold for auto mode" },
+        models: { type: "array", items: { type: "string" }, default: ["claude-opus-4.6", "gpt-5.3-codex", "gemini-3.1-pro"], description: "Models for dry-run fan-out" },
+        reviewerModel: { type: "string", default: "claude-opus-4.6", description: "Model for synthesis review" },
+        dryRunTimeout: { type: "number", default: 300000, description: "Timeout per dry-run worker (ms)" },
+      },
+    },
     extensions: { type: "array", items: { type: "string" }, description: "Installed extensions" },
   },
 };
@@ -588,6 +624,14 @@ const SYSTEM_REFERENCE = {
     "Thought": "A unit of knowledge in OpenBrain — a decision, convention, lesson, or insight captured for future retrieval",
     "search_thoughts": "OpenBrain tool to find prior decisions relevant to current work",
     "capture_thought": "OpenBrain tool to save a decision or lesson for future sessions",
+
+    // Quorum (v2.5)
+    "Quorum Mode": "Multi-model consensus execution. Dispatches a slice to 3+ AI models for dry-run analysis, synthesizes the best approach, then executes with higher confidence",
+    "Dry-Run": "A quorum analysis mode where the worker produces a detailed implementation plan without executing any code changes",
+    "Quorum Dispatch": "The fan-out phase: sending the same slice to multiple models (Claude, GPT, Gemini) in parallel for independent analysis",
+    "Quorum Reviewer": "A synthesis agent that merges multiple dry-run responses into a single unified execution plan",
+    "Complexity Score": "A 1-10 rating of a slice's technical difficulty based on file scope, dependencies, security keywords, database operations, gate count, task count, and historical failure rate",
+    "Quorum Auto": "Threshold-based mode where only slices scoring above the configured threshold (default: 7) use quorum. Others run normally",
   },
 };
 

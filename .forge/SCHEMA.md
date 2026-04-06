@@ -26,6 +26,14 @@ This document defines every file and directory under `.forge/`, their format, wh
     "review": "claude-sonnet-4.6",
     "default": "auto"
   },
+  "quorum": {
+    "enabled": false,
+    "auto": true,
+    "threshold": 7,
+    "models": ["claude-opus-4.6", "gpt-5.3-codex", "gemini-3.1-pro"],
+    "reviewerModel": "claude-opus-4.6",
+    "dryRunTimeout": 300000
+  },
   "extensions": []
 }
 ```
@@ -85,6 +93,24 @@ This document defines every file and directory under `.forge/`, their format, wh
 - **Created By**: Orchestrator — worker stdout/stderr capture
 - **Used By**: Dashboard Session Replay
 - **Contents**: Worker name, model, timestamps, full stdout + stderr
+
+### `.forge/runs/<timestamp>/slice-N-quorum.json`
+- **Format**: JSON
+- **Created By**: Orchestrator — when slice runs with quorum mode (v2.5)
+- **Schema**:
+```json
+{
+  "score": 8,
+  "signals": { "scopeWeight": 0.8, "dependencyWeight": 0.75, "securityWeight": 0.67, "databaseWeight": 0.33, "gateWeight": 0.6, "taskWeight": 0.8, "historicalWeight": 0 },
+  "threshold": 7,
+  "models": ["claude-opus-4.6", "gpt-5.3-codex", "gemini-3.1-pro"],
+  "successfulLegs": 3,
+  "totalLegs": 3,
+  "dispatchDuration": 125000,
+  "reviewerFallback": false,
+  "reviewerCost": 0.32
+}
+```
 
 ### `.forge/runs/<timestamp>/summary.json`
 - **Format**: JSON

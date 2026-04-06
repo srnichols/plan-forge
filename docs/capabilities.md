@@ -1,6 +1,6 @@
 # Plan Forge — Capabilities Reference
 
-> **Version**: 2.4.0 | **Tools**: 14 MCP | **Presets**: 7 | **Agents**: 19 | **Skills**: 8
+> **Version**: 2.5.0 | **Tools**: 14 MCP | **Presets**: 7 | **Agents**: 19 | **Skills**: 8
 >
 > Machine-readable version: call `forge_capabilities` MCP tool or `GET https://planforge.software/.well-known/plan-forge.json`
 
@@ -31,6 +31,8 @@
 |------|------|--------|-------------|
 | **Full Auto** | *(default)* | `gh copilot` CLI | Agent executes each slice with full project context |
 | **Assisted** | `--assisted` | Human in VS Code | Orchestrator prompts, human codes, gates validate |
+| **Quorum** | `--quorum` | 3 models + reviewer | All slices: 3 dry-run analyses → synthesis → execute |
+| **Quorum Auto** | `--quorum=auto` | 3 models (selective) | Only high-complexity slices (score ≥ threshold) get quorum |
 | **Estimate** | `--estimate` | None | Returns cost prediction without executing |
 | **Dry Run** | `--dry-run` | None | Parses and validates plan structure |
 | **Resume** | `--resume-from N` | Same as auto | Skips completed slices |
@@ -51,6 +53,8 @@ pforge analyze <plan>                 # Consistency scoring (0-100)
 pforge run-plan <plan>                # Execute plan (Full Auto)
 pforge run-plan <plan> --estimate     # Cost prediction
 pforge run-plan <plan> --assisted     # Human + automated gates
+pforge run-plan <plan> --quorum       # Multi-model consensus (all slices)
+pforge run-plan <plan> --quorum=auto  # Consensus for complex slices only
 pforge ext search|add|info|list       # Extension management
 ```
 
@@ -174,6 +178,63 @@ Severity levels: TRACE(1), DEBUG(5), INFO(9), WARN(13), ERROR(17), FATAL(21)
 - `.forge/cost-history.json` — aggregate across runs
 - `forge_cost_report` MCP tool / `GET /api/cost`
 - `--estimate` uses historical averages when available
+- `--estimate --quorum` shows overhead breakdown per quorum-eligible slice
+
+## Quorum Mode (v2.5)
+
+Multi-model consensus: dispatch complex slices to 3 AI models for independent dry-run analysis, then a reviewer synthesizes the best approach.
+
+```
+slice → scoreComplexity (1-10)
+          ├─ score < threshold → normal execution
+          └─ score ≥ threshold → quorumDispatch
+                    ├─ Claude Opus 4.6  → dry-run plan  ─┐
+                    ├─ GPT-5.3-Codex    → dry-run plan  ─┼─ Promise.all() (parallel)
+                    └─ Claude Sonnet    → dry-run plan  ─┘
+                              ↓
+                    quorumReview (synthesis — pick best approach per file)
+                              ↓
+                    spawnWorker (enhanced prompt) → gate ✓
+```
+
+| Signal | Weight | Source |
+|--------|--------|--------|
+| File scope count | 20% | `[scope:]` patterns in slice header |
+| Cross-module deps | 20% | `[depends:]` tag count |
+| Security keywords | 15% | auth, token, RBAC, encryption, JWT, etc. |
+| Database keywords | 15% | migration, schema, ALTER, CREATE TABLE, etc. |
+| Gate line count | 10% | Lines in validation gate |
+| Task count | 10% | Number of tasks in slice |
+| Historical failures | 10% | Past failure rate from `.forge/runs/` |
+
+Config (`.forge.json`):
+```json
+{
+  "quorum": {
+    "enabled": false,
+    "auto": true,
+    "threshold": 7,
+    "models": ["claude-opus-4.6", "gpt-5.3-codex", "gemini-3.1-pro"],
+    "reviewerModel": "claude-opus-4.6",
+    "dryRunTimeout": 300000
+  }
+}
+```
+
+CLI: `--quorum` (all slices) | `--quorum=auto` (threshold) | `--quorum-threshold N` (override)
+
+Degradation: <2 successful dry-runs → falls back to normal execution. Reviewer failure → uses best single response.
+
+### A/B Test Results (Invoice Engine — rate tiers, discounts, tax, banker's rounding)
+
+| Metric | Standard | Quorum (3 models) | Delta |
+|--------|----------|-------------------|-------|
+| Pass rate | 4/4 | 4/4 | Tie |
+| Duration | 12 min | 32 min | +168% |
+| Tests generated | 15 | **18** | **+20%** |
+| Code structure | Inline | **Extracted helpers** | Better |
+| Test robustness | Hardcoded dates | **Relative dates** | Better |
+| Edge cases | Standard | **+voided regen, +sequence** | Better |
 
 ## OpenBrain Memory (Optional)
 
@@ -212,7 +273,14 @@ Key OpenBrain tools: `search_thoughts`, `capture_thought`, `capture_thoughts`, `
   },
   "maxParallelism": 3,
   "maxRetries": 1,
-  "maxRunHistory": 50
+  "maxRunHistory": 50,
+  "quorum": {
+    "enabled": false,
+    "auto": true,
+    "threshold": 7,
+    "models": ["claude-opus-4.6", "gpt-5.3-codex", "gemini-3.1-pro"],
+    "reviewerModel": "claude-opus-4.6"
+  }
 }
 ```
 
@@ -227,4 +295,4 @@ Key OpenBrain tools: `search_thoughts`, `capture_thought`, `capture_thoughts`, `
 
 ---
 
-*Generated from Plan Forge v2.4.0 capability surface. For the live version, call `forge_capabilities` or visit `https://planforge.software/.well-known/plan-forge.json`.*
+*Generated from Plan Forge v2.5.0 capability surface. For the live version, call `forge_capabilities` or visit `https://planforge.software/.well-known/plan-forge.json`.*

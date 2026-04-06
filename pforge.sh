@@ -1668,6 +1668,53 @@ cmd_doctor() {
     echo ""
 
     # ═══════════════════════════════════════════════════════════════
+    # 4b-ii. IMAGE GENERATION STACK
+    # ═══════════════════════════════════════════════════════════════
+    if [ -f "$mcp_server" ]; then
+        echo "Image Generation:"
+
+        # Check for sharp (format conversion)
+        if [ -d "$REPO_ROOT/pforge-mcp/node_modules/sharp" ]; then
+            doctor_pass "sharp installed (WebP, PNG, AVIF conversion)"
+        else
+            doctor_warn "sharp not installed — image format conversion disabled" "Run: cd pforge-mcp && npm install sharp"
+        fi
+
+        # Check for API keys
+        local has_xai="${XAI_API_KEY:+1}"
+        local has_openai="${OPENAI_API_KEY:+1}"
+
+        if [ -n "$has_xai" ] && [ -n "$has_openai" ]; then
+            doctor_pass "XAI_API_KEY set (Grok Aurora)"
+            doctor_pass "OPENAI_API_KEY set (DALL-E)"
+        elif [ -n "$has_xai" ]; then
+            doctor_pass "XAI_API_KEY set (Grok Aurora)"
+            doctor_pass "OPENAI_API_KEY not set (DALL-E unavailable — optional)"
+        elif [ -n "$has_openai" ]; then
+            doctor_pass "OPENAI_API_KEY set (DALL-E)"
+            doctor_pass "XAI_API_KEY not set (Grok Aurora unavailable — optional)"
+        else
+            doctor_warn "No image API keys configured" "Set XAI_API_KEY or OPENAI_API_KEY environment variable for forge_generate_image"
+        fi
+
+        # Check Node.js version (sharp requires >= 18.17.0)
+        if command -v node &>/dev/null; then
+            local node_ver
+            node_ver="$(node --version 2>/dev/null | sed 's/^v//')"
+            local node_major="${node_ver%%.*}"
+            if [ "$node_major" -ge 18 ] 2>/dev/null; then
+                doctor_pass "Node.js v$node_ver (sharp requires >= 18.17)"
+            else
+                doctor_fail "Node.js v$node_ver — sharp requires >= 18.17" "Upgrade Node.js from https://nodejs.org/"
+            fi
+        else
+            doctor_fail "Node.js not found — required for image generation" "Install from https://nodejs.org/"
+        fi
+
+        echo ""
+    fi
+
+    # ═══════════════════════════════════════════════════════════════
     # 4c. QUORUM MODE
     # ═══════════════════════════════════════════════════════════════
     local config_path="$REPO_ROOT/.forge.json"

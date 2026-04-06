@@ -7,7 +7,7 @@
 
 ## Current Release
 
-**v2.5.0** (2026-04-05) — Quorum Mode: multi-model consensus execution with complexity scoring, dry-run fan-out, synthesis review, and auto/forced modes.
+**v2.9.0** (2026-04-06) — Dashboard v2.9 Full Capability Surface: 5 bug fixes, memory search redesign, run launch panel, DAG visualizer, event log, tab badges, duration chart, trace search, worker detection, notification sound. Plus: image generation (WebP/AVIF), expanded smith diagnostics, MCP schema files.
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 
@@ -33,20 +33,9 @@ These features shipped alongside the v2.0 autonomous execution release:
 
 ## Planned
 
-### v1.4 — MCP Server (Plan Forge as a Tool)
+### v1.4 — MCP Server (Plan Forge as a Tool) ✅
 
-Expose Plan Forge operations as MCP tools so any agent with MCP support can invoke them as function calls — not just read prompt files.
-
-- **`plan-forge-mcp` server** — lightweight MCP server (Node.js or Python) exposing:
-  - `forge_smith` — run diagnostics, return structured JSON results
-  - `forge_validate` — run setup validation, return pass/fail/warnings
-  - `forge_sweep` — completeness sweep, return marker locations
-  - `forge_status` — read roadmap phases, return structured status
-  - `forge_diff` — scope drift check against active plan
-  - `forge_ext_search` — search extension catalog, return matches
-- **MCP config generation** — setup.ps1/sh generates `.vscode/mcp.json` (Copilot) and `.claude/mcp.json` (Claude) entries
-- **Self-hosted** — runs locally alongside the project, zero cloud dependencies
-- **Composable with OpenBrain** — if both MCP servers are configured, agents get Plan Forge operations + persistent memory in one session
+Shipped in v2.0.0. 17+ MCP tools, `.vscode/mcp.json` auto-generation, composable with OpenBrain.
 
 ### v1.5 — Cross-Artifact Analysis
 
@@ -67,11 +56,11 @@ Merged into v2.0–v2.1 — token tracking, cost estimation, and historical metr
 
 ---
 
-## v2.x — Autonomous Execution (Feature Branch: `feature/v2.0-autonomous-execution`)
+## v2.x — Autonomous Execution
 
 > **Vision**: "Kick it off and let the system run." One command executes an entire hardened plan — spawning worker sessions, routing to optimal models, validating at every boundary, and reporting back. Everything from v1.x still works — this layers automation on top.
 
-### v2.0 — `forge_run_plan` (DAG-Based Orchestration) 🚧
+### v2.0 — `forge_run_plan` (DAG-Based Orchestration) ✅
 
 Built on the existing `pforge-mcp/server.mjs` Node.js process — no new services.
 
@@ -327,7 +316,7 @@ Shipped. Dispatches high-complexity slices to multiple AI models in parallel dry
 - **Dashboard indicators** — quorum status visible on Progress tab; dry-run responses browsable in Replay tab
 - **Configuration** — `.forge.json` `quorum` block: `enabled`, `auto`, `threshold`, `models[]`, `reviewerModel`
 
-### v2.6 — OpenClaw Bridge
+### v2.6 — OpenClaw Bridge 🚧
 
 Connect autonomous execution to the unified system architecture.
 
@@ -352,33 +341,37 @@ Full autonomous development system.
 
 These are planned but not yet prioritized into a version:
 
-### Stack Expansion
-- Rust preset (`presets/rust/`)
-- PHP / Laravel preset (`presets/php/`)
-- Swift / iOS preset (`presets/swift/`)
+### Security & Compliance
+- **`/security-audit` skill** — multi-step security procedure: run security reviewer across all files, dependency audit, secrets scan, produce combined security report with severity ratings 🔜
+- Preset-specific validation minimum count checks in `validate-setup`
 
 ### Agent Expansion
-- Gemini CLI adapter (requires TOML format — different from Markdown adapters)
+- **Gemini CLI adapter** (requires TOML format — different from Markdown adapters) 🔜
 - Windsurf adapter
 - Generic bring-your-own-agent pattern (`--agent generic --commands-dir <path>`)
 
+### Stack Expansion
+- **Rust preset** (`presets/rust/`) 🔜
+- **PHP / Laravel preset** (`presets/php/`) 🔜
+- Swift / iOS preset (`presets/swift/`)
+
 ### Extension Ecosystem
+- **Extension registry/website** for discoverability 🔜
 - Dual-publish extensions to Spec Kit catalog
-- Extension website or registry for discoverability
 - Auto-update notification when source version is newer
 
+### Community & Docs
+- **Community walkthroughs** — greenfield and brownfield worked examples 🔜
+- `specify init` detection — auto-detect Spec Kit project and layer Plan Forge guardrails on top
+
 ### Enterprise
-- **`/security-audit` skill** — multi-step security procedure: run security reviewer across all files, dependency audit, secrets scan, produce combined security report with severity ratings
 - **Team dashboard** for multi-developer plan coordination
 - **Web UI** for plan visualization and status tracking
-- Preset-specific validation minimum count checks in `validate-setup`
 
-### Quorum Analysis (extends Quorum Mode beyond execution) ✅
-- ✅ **`pforge analyze <plan> --quorum`** — 3-model independent consistency scoring, reviewer merges findings. Catches issues a single model misses (untested edge cases, naming inconsistencies, missing error handlers)
-- ✅ **`pforge diagnose <file> --quorum`** — 3-model bug investigation. Each model analyzes the file independently, reviewer synthesizes root cause + fix recommendations
-- ✅ **`/code-review --quorum`** — multi-model code review skill. Three models review the same PR diff, reviewer merges severity ratings and recommendations
-- ✅ API provider abstraction — `grok-*` models auto-route to xAI API via `XAI_API_KEY`, extensible to other OpenAI-compatible providers
-- Reuses existing quorum infrastructure (dispatch, review, telemetry spans, cost tracking)
+### Shipped (Backlog Items)
+- ✅ **Quorum Analysis** — `pforge analyze --quorum`, `pforge diagnose --quorum`, `/code-review --quorum`, API provider abstraction (xAI, OpenAI)
+- ✅ **Image Generation** — `forge_generate_image` MCP tool, WebP/AVIF conversion via sharp, magic byte detection
+- ✅ **Expanded Smith Diagnostics** — MCP deps, dashboard assets, lifecycle hooks, extensions catalog, VERSION sync
 
 ---
 
@@ -386,9 +379,7 @@ These are planned but not yet prioritized into a version:
 
 No committed timeline — evaluating based on community feedback:
 
-- **Community walkthroughs** — greenfield and brownfield worked examples (demos like Spec Kit's repos)
-- **`specify init` detection** — auto-detect Spec Kit project and layer Plan Forge guardrails on top
-- ~~**Multi-model prompt variants** — GPT-4, Gemini-specific prompt tuning documentation~~ → shipped as "Tuning for Different Models" section in CUSTOMIZATION.md
+- ~~**Multi-model prompt variants**~~ → shipped as "Tuning for Different Models" in CUSTOMIZATION.md
 
 ---
 
@@ -396,5 +387,4 @@ No committed timeline — evaluating based on community feedback:
 
 1. **Vote on existing issues** — 👍 reactions help us prioritize
 2. **Open a feature request** — [GitHub Issues](https://github.com/srnichols/plan-forge/issues) with the `enhancement` label
-3. **Contribute directly** — See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines
 3. **Contribute directly** — See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines

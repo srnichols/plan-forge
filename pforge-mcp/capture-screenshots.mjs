@@ -267,10 +267,13 @@ async function main() {
     </table>`;
   });
   await page.waitForTimeout(300);
-  // v2.9: Inject duration chart data
+  // v2.9: Inject duration chart data only if not already rendered by loadCost
   await page.evaluate(() => {
     const ctx = document.getElementById("chart-duration-trend");
     if (!ctx || typeof Chart === "undefined") return;
+    // Skip if chart already exists from real data
+    const existingChart = Chart.getChart(ctx);
+    if (existingChart) return;
     const labels = ["Mar 28", "Mar 29", "Mar 30", "Mar 31", "Apr 1", "Apr 2", "Apr 3", "Apr 4", "Apr 5", "Apr 6"];
     const durations = [42, 65, 38, 124, 55, 89, 48, 33, 71, 52];
     new Chart(ctx, {

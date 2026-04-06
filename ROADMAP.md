@@ -338,26 +338,20 @@ Full autonomous development system.
 These are planned but not yet prioritized into a version:
 
 ### Security & Compliance
-- **`/security-audit` skill** — multi-step security procedure: run security reviewer across all files, dependency audit, secrets scan, produce combined security report with severity ratings 🔜
 - Preset-specific validation minimum count checks in `validate-setup`
 
 ### Agent Expansion
-- **Gemini CLI adapter** (requires TOML format — different from Markdown adapters) 🔜
-- Windsurf adapter
-- Generic bring-your-own-agent pattern (`--agent generic --commands-dir <path>`)
+- **Windsurf adapter** — Windsurf IDE native integration
+- **Generic bring-your-own-agent pattern** (`--agent generic --commands-dir <path>`)
 
 ### Stack Expansion
-- **Rust preset** (`presets/rust/`) 🔜
-- **PHP / Laravel preset** (`presets/php/`) 🔜
-- Swift / iOS preset (`presets/swift/`)
+- **Swift / iOS preset** (`presets/swift/`)
 
 ### Extension Ecosystem
-- **Extension registry/website** for discoverability 🔜
 - Dual-publish extensions to Spec Kit catalog
 - Auto-update notification when source version is newer
 
 ### Community & Docs
-- **Community walkthroughs** — greenfield and brownfield worked examples 🔜
 - `specify init` detection — auto-detect Spec Kit project and layer Plan Forge guardrails on top
 
 ### Enterprise
@@ -368,6 +362,11 @@ These are planned but not yet prioritized into a version:
 - ✅ **Quorum Analysis** — `pforge analyze --quorum`, `pforge diagnose --quorum`, `/code-review --quorum`, API provider abstraction (xAI, OpenAI)
 - ✅ **Image Generation** — `forge_generate_image` MCP tool, WebP/AVIF conversion via sharp, magic byte detection
 - ✅ **Expanded Smith Diagnostics** — MCP deps, dashboard assets, lifecycle hooks, extensions catalog, VERSION sync
+- ✅ **`/security-audit` skill** — OWASP + dependency audit + secrets detection, 7 stack variants
+- ✅ **Gemini CLI adapter** — GEMINI.md + .gemini/commands/*.toml + settings.json
+- ✅ **Rust preset** + **PHP/Laravel preset** — 98 files each, auto-detect
+- ✅ **Extension registry** — `pforge ext publish` + live catalog on extensions.html
+- ✅ **Community walkthroughs** — greenfield Todo API + brownfield legacy security fix
 
 ---
 

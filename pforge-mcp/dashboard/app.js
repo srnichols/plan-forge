@@ -213,7 +213,7 @@ function handleRunCompleted(data) {
   document.getElementById("run-progress-fill").style.width = "100%";
   document.getElementById("run-progress-fill").className =
     data.status === "completed" ? "h-full bg-green-500 transition-all duration-500" : "h-full bg-red-500 transition-all duration-500";
-  // v2.9: Tab badges + sound
+  // Tab badges + sound
   tabBadgeState.runsNew++;
   updateTabBadges();
   playNotificationSound(data.status === "completed" ? "success" : "error");
@@ -272,7 +272,7 @@ function shortName(path) {
   return path.split("/").pop().replace(/\.md$/, "").replace(/-/g, " ");
 }
 
-// ─── Runs Tab (v2.8: filters, sort, drawer, compare, export) ──────────
+// ─── Runs Tab ──────────
 let allRuns = [];
 let filteredRuns = [];
 let sortColumn = "date";
@@ -411,7 +411,7 @@ function renderRunsTable() {
   }).join("");
 }
 
-// ─── Run Detail Drawer (v2.8) ─────────────────────────────────────────
+// ─── Run Detail Drawer ─────────────────────────────────────────
 async function openRunDrawer(runIdx) {
   try {
     const res = await fetch(`${API_BASE}/api/runs/${runIdx}`);
@@ -519,7 +519,7 @@ function resumeRunFromDrawer(plan, fromSlice) {
 
 window.resumeRunFromDrawer = resumeRunFromDrawer;
 
-// ─── Run Comparison (v2.8) ────────────────────────────────────────────
+// ─── Run Comparison ────────────────────────────────────────────
 function toggleCompareMode() {
   compareMode = !compareMode;
   compareSelections = [];
@@ -607,7 +607,7 @@ window.toggleCompareMode = toggleCompareMode;
 window.toggleCompareSelection = toggleCompareSelection;
 window.closeComparison = closeComparison;
 
-// ─── Export (v2.8) ────────────────────────────────────────────────────
+// ─── Export ────────────────────────────────────────────────────
 function toggleExportMenu(id) {
   document.getElementById(`export-menu-${id}`).classList.toggle("hidden");
 }
@@ -662,7 +662,7 @@ window.toggleExportMenu = toggleExportMenu;
 window.exportRuns = exportRuns;
 window.exportCost = exportCost;
 
-// ─── Cost Tab (v2.8: trend line + anomaly) ────────────────────────────
+// ─── Cost Tab ────────────────────────────
 async function loadCost() {
   try {
     const [costRes, runsRes] = await Promise.all([
@@ -690,7 +690,7 @@ async function loadCost() {
       renderChart("chart-monthly", "bar", months, values, "Monthly Spend ($)");
     }
 
-    // Cost Trend Line (v2.8)
+    // Cost Trend Line 
     if (runs.length > 0) {
       const runCosts = runs.slice().reverse().map((r) => r.cost?.total_cost_usd || 0);
       const runLabels = runs.slice().reverse().map((r) => r.startTime ? new Date(r.startTime).toLocaleDateString() : "?");
@@ -751,7 +751,7 @@ async function loadCost() {
         });
       }
 
-      // Anomaly banner (v2.8)
+      // Anomaly banner 
       const recent = runs.slice(0, 5);
       const anomaly = recent.find((r) => (r.cost?.total_cost_usd || 0) > avg * 3 && avg > 0);
       if (anomaly) {
@@ -765,7 +765,7 @@ async function loadCost() {
         updateTabBadges();
       }
 
-      // Duration Per Run Chart (v2.9)
+      // Duration Per Run Chart 
       const runDurations = runs.slice().reverse().map((r) => r.totalDuration ? r.totalDuration / 1000 : 0);
       const durCtx = document.getElementById("chart-duration-trend");
       if (durCtx && runDurations.some((d) => d > 0)) {
@@ -880,7 +880,7 @@ async function runDiagnose() {
 window.runAnalyzeQuorum = runAnalyzeQuorum;
 window.runDiagnose = runDiagnose;
 
-// ─── Plan Browser (v2.7) ─────────────────────────────────────────────
+// ─── Plan Browser ─────────────────────────────────────────────
 async function loadPlans() {
   const listEl = document.getElementById("plan-list");
   const countEl = document.getElementById("plan-count");
@@ -972,7 +972,7 @@ async function estimatePlan(file) {
 }
 
 function runPlanFromBrowser(file, title, sliceCount, planIdx) {
-  // v2.8: Gather unchecked slices to build --skip-slices arg
+  // Gather unchecked slices to build --skip-slices arg
   const unchecked = [];
   for (let i = 1; i <= sliceCount; i++) {
     const cb = document.querySelector(`input.plan-slice-toggle[data-plan="${planIdx}"][data-slice="${i}"]`);
@@ -989,7 +989,7 @@ window.loadPlans = loadPlans;
 window.estimatePlan = estimatePlan;
 window.runPlanFromBrowser = runPlanFromBrowser;
 
-// ─── Launch Plan Panel (v2.9) ─────────────────────────────────────────
+// ─── Launch Plan Panel ─────────────────────────────────────────
 async function openLaunchPanel() {
   const modal = document.getElementById("launch-modal");
   const planSelect = document.getElementById("launch-plan");
@@ -1061,7 +1061,7 @@ window.openLaunchPanel = openLaunchPanel;
 window.closeLaunchPanel = closeLaunchPanel;
 window.submitLaunch = submitLaunch;
 
-// ─── Git Operations (v2.7) ───────────────────────────────────────────
+// ─── Git Operations ───────────────────────────────────────────
 async function runBranch() {
   const plan = prompt("Plan file path:", "docs/plans/");
   if (!plan) return;
@@ -1121,7 +1121,7 @@ window.runBranch = runBranch;
 window.runCommit = runCommit;
 window.runDiff = runDiff;
 
-// ─── Sweep Table (v2.7) ──────────────────────────────────────────────
+// ─── Sweep Table ──────────────────────────────────────────────
 async function runSweep() {
   const resultDiv = document.getElementById("action-result");
   const titleEl = document.getElementById("action-result-title");
@@ -1184,7 +1184,7 @@ function filterSweepTable(type) {
 window.runSweep = runSweep;
 window.filterSweepTable = filterSweepTable;
 
-// ─── Model Comparison (v2.7) ─────────────────────────────────────────
+// ─── Model Comparison ─────────────────────────────────────────
 async function loadModelComparison() {
   const el = document.getElementById("model-comparison");
   if (!el) return;
@@ -1247,7 +1247,7 @@ async function loadModelComparison() {
   }
 }
 
-// ─── Phase Status Editor (v2.7) ──────────────────────────────────────
+// ─── Phase Status Editor ──────────────────────────────────────
 async function runStatusEditable() {
   const resultDiv = document.getElementById("action-result");
   const titleEl = document.getElementById("action-result-title");
@@ -1308,7 +1308,7 @@ async function updatePhaseStatus(planFile, newStatus, rowIdx) {
 window.runStatusEditable = runStatusEditable;
 window.updatePhaseStatus = updatePhaseStatus;
 
-// ─── Memory Search (v2.9: presets + redesign) ────────────────────────
+// ─── Memory Search ────────────────────────
 let memoryPresets = null;
 
 async function loadMemoryPresets() {
@@ -1385,7 +1385,7 @@ async function searchMemory() {
 
 window.searchMemory = searchMemory;
 
-// ─── Session Replay (Phase 5) ─────────────────────────────────────────
+// ─── Session Replay  ─────────────────────────────────────────
 let replayRuns = [];
 
 async function loadReplayRuns() {
@@ -1452,7 +1452,7 @@ window.loadReplaySlices = loadReplaySlices;
 window.loadReplayLog = loadReplayLog;
 window.filterReplay = filterReplay;
 
-// ─── Extension Marketplace (Phase 5) ──────────────────────────────────
+// ─── Extension Marketplace  ──────────────────────────────────
 let catalogData = [];
 let installedExtensions = [];
 
@@ -1613,7 +1613,7 @@ function filterExtensions() {
 
 window.filterExtensions = filterExtensions;
 
-// ─── Notification Center (Phase 5, v2.8: localStorage persistence) ───
+// ─── Notification Center  ───
 let notifications = JSON.parse(localStorage.getItem("pf-notifications") || "[]");
 
 function addNotification(text, type = "info") {
@@ -1678,7 +1678,7 @@ window.markRead = markRead;
 
 // B1: Notification hooks are now inline in ws.onmessage — no monkey-patch needed
 
-// ─── Config Editor (Phase 5) ──────────────────────────────────────────
+// ─── Config Editor  ──────────────────────────────────────────
 let currentConfig = {};
 
 async function loadConfig() {
@@ -1689,7 +1689,7 @@ async function loadConfig() {
     document.getElementById("cfg-version").value = currentConfig.templateVersion || "";
     document.getElementById("cfg-model-default").value = currentConfig.modelRouting?.default || "auto";
 
-    // Image generation model (v2.9)
+    // Image generation model 
     const imgModel = document.getElementById("cfg-model-image");
     if (imgModel) imgModel.value = currentConfig.modelRouting?.imageGeneration || "";
 
@@ -1705,7 +1705,7 @@ async function loadConfig() {
 
     document.getElementById("cfg-status").textContent = "Configuration loaded.";
 
-    // Advanced settings (v2.9)
+    // Advanced settings 
     const maxP = document.getElementById("cfg-max-parallel");
     const maxR = document.getElementById("cfg-max-retries");
     const maxH = document.getElementById("cfg-max-history");
@@ -1752,7 +1752,7 @@ async function loadApiProviderStatus() {
   }
 }
 
-// ─── Worker Detection (v2.9) ─────────────────────────────────────────
+// ─── Worker Detection ─────────────────────────────────────────
 async function loadWorkerStatus() {
   const el = document.getElementById("cfg-workers");
   if (!el) return;
@@ -1810,7 +1810,7 @@ async function saveConfig() {
     const agents = [...document.querySelectorAll(".cfg-agent-checkbox:checked")].map((c) => c.value);
     const modelDefault = document.getElementById("cfg-model-default").value;
     const modelImage = document.getElementById("cfg-model-image")?.value || "";
-    // Advanced settings (v2.9)
+    // Advanced settings 
     const maxP = parseInt(document.getElementById("cfg-max-parallel")?.value, 10);
     const maxR = parseInt(document.getElementById("cfg-max-retries")?.value, 10);
     const maxH = parseInt(document.getElementById("cfg-max-history")?.value, 10);
@@ -1849,7 +1849,7 @@ async function saveConfig() {
 window.loadConfig = loadConfig;
 window.saveConfig = saveConfig;
 
-// ─── DAG Dependency Visualizer (v2.9) ─────────────────────────────────
+// ─── DAG Dependency Visualizer ─────────────────────────────────
 function renderDAGView(slices) {
   if (!slices || slices.length === 0) return "";
   // Only show if there are dependencies or parallel tags
@@ -1876,7 +1876,7 @@ function renderDAGView(slices) {
   </details>`;
 }
 
-// ─── Tab Badges (v2.9) ───────────────────────────────────────────────
+// ─── Tab Badges ───────────────────────────────────────────────
 let tabBadgeState = { runsNew: 0, hasAnomaly: false, skillsActive: 0 };
 
 function updateTabBadges() {
@@ -1904,7 +1904,7 @@ function updateTabBadges() {
   });
 }
 
-// ─── Auto-Scroll + Elapsed Time (v2.9) ───────────────────────────────
+// ─── Auto-Scroll + Elapsed Time ───────────────────────────────
 let sliceTimers = {};
 
 function startSliceTimer(sliceId) {
@@ -1925,7 +1925,7 @@ function stopSliceTimer(sliceId) {
   }
 }
 
-// ─── Notification Sound (v2.9) ────────────────────────────────────────
+// ─── Notification Sound ────────────────────────────────────────
 function playNotificationSound(type) {
   if (localStorage.getItem("pf-sound") === "off") return;
   try {
@@ -1942,7 +1942,7 @@ function playNotificationSound(type) {
   } catch { /* audio blocked by browser — fail silently */ }
 }
 
-// ─── Hub Client Monitor (v2.9) ───────────────────────────────────────
+// ─── Hub Client Monitor ───────────────────────────────────────
 let hubPollInterval = null;
 
 function startHubPolling() {
@@ -2027,7 +2027,7 @@ const tabLoadHooks = {
   skills: loadSkillCatalog,
 };
 
-// ─── Theme Toggle (v2.8) ─────────────────────────────────────────────
+// ─── Theme Toggle ─────────────────────────────────────────────
 function toggleTheme() {
   const isLight = document.documentElement.classList.toggle("light");
   localStorage.setItem("pf-theme", isLight ? "light" : "dark");
@@ -2047,7 +2047,7 @@ function toggleTheme() {
 }
 window.toggleTheme = toggleTheme;
 
-// ─── Keyboard Navigation (v2.8) ──────────────────────────────────────
+// ─── Keyboard Navigation ──────────────────────────────────────
 document.addEventListener("keydown", (e) => {
   // Skip if focus is in input/select/textarea
   if (["INPUT", "SELECT", "TEXTAREA"].includes(e.target.tagName)) return;
@@ -2100,7 +2100,7 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
-// ─── Skill Catalog (v2.8) ────────────────────────────────────────────
+// ─── Skill Catalog ────────────────────────────────────────────
 async function loadSkillCatalog() {
   const container = document.getElementById("skill-catalog");
   if (!container) return;
@@ -2126,7 +2126,7 @@ async function loadSkillCatalog() {
   }
 }
 
-// ─── Traces Tab (v2.4) ───────────────────────────────────────────────
+// ─── Traces Tab ───────────────────────────────────────────────
 let traceData = null;
 
 async function loadTraces() {
@@ -2249,7 +2249,7 @@ function renderWaterfall(trace) {
     return;
   }
 
-  // v2.8: Quorum summary banner
+  // Quorum summary banner
   let quorumBanner = "";
   if (trace.quorum && Object.keys(trace.quorum).length > 0) {
     const slices = Object.entries(trace.quorum);
@@ -2273,7 +2273,7 @@ function renderWaterfall(trace) {
   const maxTime = Math.max(...times);
   const range = maxTime - minTime || 1;
 
-  // v2.8: Build quorum lookup for slice spans
+  // Build quorum lookup for slice spans
   const quorumLookup = {};
   if (trace.quorum) {
     for (const [sliceNum, qd] of Object.entries(trace.quorum)) {
@@ -2295,7 +2295,7 @@ function renderWaterfall(trace) {
     const indent = span.parentSpanId ? (span.kind === "CLIENT" ? "ml-8" : "ml-4") : "";
     const kindBadge = span.kind === "SERVER" ? "🌐" : span.kind === "CLIENT" ? "📡" : "⚙️";
 
-    // v2.8: Quorum indicator on slice spans
+    // Quorum indicator on slice spans
     const sliceMatch = span.name?.match(/slice[- ]?(\d+)/i);
     const qData = sliceMatch ? quorumLookup[`slice-${sliceMatch[1]}`] : null;
     const quorumBadge = qData ? `<span class="text-purple-400 text-xs ml-1" title="Quorum: ${qData.successfulLegs}/${qData.totalLegs} legs, threshold ${qData.threshold}">🔮${qData.successfulLegs}/${qData.totalLegs}</span>` : "";
@@ -2318,7 +2318,7 @@ function showSpanDetail(idx) {
   if (!traceData) return;
   const span = traceData.spans[idx];
 
-  // Events — render full detail (v2.8)
+  // Events — render full detail 
   const eventsEl = document.getElementById("trace-events");
   if (span.events?.length > 0) {
     eventsEl.innerHTML = span.events.map((e) => {
@@ -2337,7 +2337,7 @@ function showSpanDetail(idx) {
     eventsEl.innerHTML = '<p class="text-gray-500">No events</p>';
   }
 
-  // Attributes — formatted table (v2.8)
+  // Attributes — formatted table 
   const attrsEl = document.getElementById("trace-attributes");
   const labels = { model: "Model", tokens_in: "Input Tokens", tokens_out: "Output Tokens", worker: "Worker", cost_usd: "Cost ($)", exit_code: "Exit Code", duration_ms: "Duration (ms)", slice_id: "Slice ID" };
   const allAttrs = { ...span.attributes, status: span.status, kind: span.kind, spanId: span.spanId };
@@ -2347,14 +2347,14 @@ function showSpanDetail(idx) {
   }).join("");
   attrsEl.innerHTML = `<table class="w-full">${rows}</table>`;
 
-  // Log summary (v2.8)
+  // Log summary 
   if (span.logSummary?.length > 0) {
     attrsEl.innerHTML += `<details class="mt-2"><summary class="text-xs text-gray-500 cursor-pointer">Log Summary (${span.logSummary.length} entries)</summary>
       <pre class="text-xs text-gray-400 mt-1 whitespace-pre-wrap max-h-32 overflow-y-auto">${span.logSummary.map((l) => escHtml(l)).join("\n")}</pre>
     </details>`;
   }
 
-  // v2.8: Quorum detail for slice spans
+  // Quorum detail for slice spans
   const sliceMatch = span.name?.match(/slice[- ]?(\d+)/i);
   if (sliceMatch && traceData.quorum?.[sliceMatch[1]]) {
     const qd = traceData.quorum[sliceMatch[1]];
@@ -2394,7 +2394,7 @@ window.loadTraceDetail = loadTraceDetail;
 window.showSpanDetail = showSpanDetail;
 window.filterTraceEvents = filterTraceEvents;
 
-// ─── Trace Span Search (v2.9) ────────────────────────────────────────
+// ─── Trace Span Search ────────────────────────────────────────
 function filterTraceSpans() {
   if (!traceData) return;
   const query = (document.getElementById("trace-search")?.value || "").toLowerCase();
@@ -2412,7 +2412,7 @@ function filterTraceSpans() {
 
 window.filterTraceSpans = filterTraceSpans;
 
-// ─── Event History Log (v2.9) ─────────────────────────────────────────
+// ─── Event History Log ─────────────────────────────────────────
 let eventLogEntries = [];
 
 function appendEventLog(event) {
@@ -2440,3 +2440,4 @@ function appendEventLog(event) {
   logEl.appendChild(entry);
   logEl.scrollTop = logEl.scrollHeight;
 }
+

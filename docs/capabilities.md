@@ -1,6 +1,6 @@
 # Plan Forge — Capabilities Reference
 
-> **Version**: 2.9.0 | **Tools**: 18 MCP | **Presets**: 7 | **Agents**: 19 | **Skills**: 10
+> **Tools**: 18 MCP | **Presets**: 7 | **Agents**: 19 | **Skills**: 10
 >
 > Machine-readable version: call `forge_capabilities` MCP tool or `GET https://planforge.software/.well-known/plan-forge.json`
 

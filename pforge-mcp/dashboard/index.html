@@ -102,7 +102,7 @@
         </div>
       </div>
 
-      <!-- Plan Browser (v2.7) -->
+      <!-- Plan Browser  -->
       <details id="plan-browser" class="bg-gray-800 rounded-lg mb-4">
         <summary class="px-4 py-3 cursor-pointer hover:bg-gray-700/50 flex items-center gap-2 text-sm font-semibold select-none">
           <span>📄</span> Available Plans
@@ -118,7 +118,7 @@
         <div class="text-gray-500 text-center py-12">Waiting for run events...</div>
       </div>
 
-      <!-- Event History (v2.9) -->
+      <!-- Event History  -->
       <details class="bg-gray-800 rounded-lg mt-4">
         <summary class="px-4 py-3 cursor-pointer hover:bg-gray-700/50 flex items-center gap-2 text-sm font-semibold select-none">
           <span>📜</span> Event Log
@@ -130,7 +130,7 @@
 
     <!-- Runs Tab -->
     <section id="tab-runs" class="tab-content hidden">
-      <!-- Filter Bar (v2.8) -->
+      <!-- Filter Bar  -->
       <div class="bg-gray-800 rounded-lg p-3 mb-3 flex flex-wrap gap-2 items-center text-sm">
         <select id="filter-plan" title="Filter by plan" class="bg-gray-700 text-white text-xs rounded px-2 py-1" onchange="applyRunFilters()">
           <option value="">All Plans</option>
@@ -164,7 +164,7 @@
           </div>
         </div>
       </div>
-      <!-- Comparison Panel (v2.8) -->
+      <!-- Comparison Panel  -->
       <div id="compare-panel" class="hidden bg-gray-800 rounded-lg p-4 mb-3 border border-amber-700/30">
         <div class="flex justify-between items-center mb-3">
           <h3 class="text-sm font-semibold text-amber-400">Run Comparison</h3>
@@ -195,7 +195,7 @@
 
     <!-- Cost Tab -->
     <section id="tab-cost" class="tab-content hidden">
-      <!-- Anomaly Banner (v2.8) -->
+      <!-- Anomaly Banner  -->
       <div id="cost-anomaly-banner" class="hidden bg-amber-900/30 border border-amber-600/40 rounded-lg p-3 mb-3 flex items-center justify-between">
         <span id="cost-anomaly-text" class="text-sm text-amber-300"></span>
         <button onclick="document.getElementById('cost-anomaly-banner').classList.add('hidden')" class="text-amber-500 hover:text-amber-300">✕</button>
@@ -224,7 +224,7 @@
           <canvas id="chart-monthly" height="200"></canvas>
         </div>
       </div>
-      <!-- Cost Trend Line (v2.8) -->
+      <!-- Cost Trend Line  -->
       <div class="bg-gray-800 rounded-lg p-4 mt-4">
         <div class="flex justify-between items-center mb-2 relative">
           <h3 class="text-sm text-gray-400">Cost Per Run</h3>
@@ -236,12 +236,12 @@
         </div>
         <canvas id="chart-cost-trend" height="120"></canvas>
       </div>
-      <!-- Duration Per Run Chart (v2.9) -->
+      <!-- Duration Per Run Chart  -->
       <div class="bg-gray-800 rounded-lg p-4 mt-4">
         <h3 class="text-sm text-gray-400 mb-2">Duration Per Run</h3>
         <canvas id="chart-duration-trend" height="120"></canvas>
       </div>
-      <!-- Model Performance Comparison (v2.7) -->
+      <!-- Model Performance Comparison  -->
       <div class="bg-gray-800 rounded-lg p-4 mt-4">
         <h3 class="text-sm text-gray-400 mb-3">Model Performance Comparison</h3>
         <div id="model-comparison" class="overflow-x-auto">
@@ -314,7 +314,7 @@
       </div>
     </section>
 
-    <!-- Replay Tab (Phase 5) -->
+    <!-- Replay Tab  -->
     <section id="tab-replay" class="tab-content hidden">
       <div class="bg-gray-800 rounded-lg p-4 mb-4">
         <div class="flex gap-2 items-center mb-3">
@@ -334,7 +334,7 @@
       </div>
     </section>
 
-    <!-- Extensions Tab (Phase 5) -->
+    <!-- Extensions Tab  -->
     <section id="tab-extensions" class="tab-content hidden">
       <div class="mb-4">
         <input id="ext-search" type="text" placeholder="Search extensions..." class="bg-gray-700 text-white text-sm rounded-lg px-4 py-2 w-full max-w-sm" oninput="filterExtensions()">
@@ -344,7 +344,7 @@
       </div>
     </section>
 
-    <!-- Config Tab (Phase 5) -->
+    <!-- Config Tab  -->
     <section id="tab-config" class="tab-content hidden">
       <div class="bg-gray-800 rounded-lg p-6 max-w-2xl">
         <h2 class="text-lg font-semibold mb-4">Project Configuration</h2>
@@ -403,7 +403,7 @@
             </div>
             <p class="text-xs text-gray-600 mt-1">Agents delegate image tasks (logos, diagrams, icons) to this model via <code class="text-gray-500">forge_generate_image</code>. Requires <code class="text-gray-500">XAI_API_KEY</code> for Grok or <code class="text-gray-500">OPENAI_API_KEY</code> for DALL-E.</p>
           </div>
-          <!-- Advanced Settings (v2.9) -->
+          <!-- Advanced Settings  -->
           <details class="border border-gray-700 rounded-lg p-3">
             <summary class="text-sm text-gray-400 cursor-pointer hover:text-gray-300 font-semibold">Advanced Settings</summary>
             <div class="space-y-3 mt-3">
@@ -452,7 +452,7 @@
           <div>
             <label class="block text-sm text-gray-400 mb-1">OpenBrain Memory</label>
             <div id="cfg-openbrain" class="text-sm text-gray-300 bg-gray-700 rounded px-3 py-2">Checking...</div>
-            <!-- Memory Search (v2.9: presets + redesign) -->
+            <!-- Memory Search  -->
             <div id="memory-search-panel" class="mt-3">
               <div class="flex gap-2">
                 <input id="memory-search-input" type="text" placeholder="Search plans, configs, runs..." class="flex-1 bg-gray-700 text-white text-sm rounded px-3 py-1.5 border border-gray-600 focus:border-blue-500 outline-none" onkeydown="if(event.key==='Enter')searchMemory()">
@@ -471,7 +471,7 @@
       </div>
     </section>
 
-    <!-- Traces Tab (v2.4) -->
+    <!-- Traces Tab  -->
     <section id="tab-traces" class="tab-content hidden">
       <div class="flex gap-4 mb-4 flex-wrap">
         <select id="trace-run-select" title="Select trace run" class="bg-gray-700 text-white text-sm rounded px-3 py-2" onchange="loadTraceDetail()">
@@ -507,7 +507,7 @@
 
     <!-- Skills Tab -->
     <section id="tab-skills" class="tab-content hidden">
-      <!-- Skill Catalog (v2.8) -->
+      <!-- Skill Catalog  -->
       <div class="mb-4">
         <h2 class="text-lg font-semibold text-white mb-2">Available Skills</h2>
         <div id="skill-catalog" class="grid gap-2 md:grid-cols-2 lg:grid-cols-3 mb-6">
@@ -524,7 +524,7 @@
     </section>
   </main>
 
-  <!-- Launch Plan Modal (v2.9) -->
+  <!-- Launch Plan Modal  -->
   <div id="launch-modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center" onclick="if(event.target===this)closeLaunchPanel()">
     <div class="bg-gray-800 border border-gray-700 rounded-xl p-6 w-[420px] shadow-2xl">
       <div class="flex justify-between items-center mb-4">
@@ -581,7 +581,7 @@
     </div>
   </div>
 
-  <!-- Run Detail Drawer (v2.8) -->
+  <!-- Run Detail Drawer  -->
   <div id="drawer-overlay" class="fixed inset-0 bg-black/50 z-40" onclick="closeRunDrawer()"></div>
   <div id="run-detail-drawer" class="fixed top-0 right-0 h-full w-[480px] bg-gray-800 border-l border-gray-700 z-50 overflow-y-auto shadow-2xl">
     <div class="sticky top-0 bg-gray-800 border-b border-gray-700 px-4 py-3 flex items-center justify-between z-10">
@@ -591,7 +591,7 @@
     <div id="drawer-content" class="p-4"></div>
   </div>
 
-  <!-- Keyboard Shortcuts Modal (v2.8) -->
+  <!-- Keyboard Shortcuts Modal  -->
   <div id="shortcuts-modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center" onclick="if(event.target===this)this.classList.add('hidden')">
     <div class="bg-gray-800 border border-gray-700 rounded-xl p-6 w-96 shadow-2xl">
       <h2 class="text-lg font-bold mb-3">Keyboard Shortcuts</h2>
@@ -611,3 +611,4 @@
   <script src="app.js"></script>
 </body>
 </html>
+

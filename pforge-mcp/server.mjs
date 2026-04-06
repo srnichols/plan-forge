@@ -43,7 +43,7 @@ const PFORGE = IS_WINDOWS ? "powershell.exe -NoProfile -ExecutionPolicy Bypass -
 // ─── Orchestrator State ───────────────────────────────────────────────
 let activeAbortController = null;
 let activeRunPromise = null;
-let activeHub = null; // Phase 3: WebSocket hub instance
+let activeHub = null; // WebSocket hub instance
 
 // ─── Helpers ──────────────────────────────────────────────────────────
 function runPforge(args, cwd = PROJECT_DIR) {
@@ -351,7 +351,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       activeAbortController = new AbortController();
-      // Phase 3: If hub is running, use it as event handler for live broadcasting
+      // If hub is running, use it as event handler for live broadcasting
       const eventHandler = activeHub ? { handle: (event) => activeHub.broadcast(event) } : null;
       // Parse quorum parameter
       let quorum = false;
@@ -623,7 +623,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   };
 });
 
-// ─── Express App + REST API (Phase 4, C6) ─────────────────────────────
+// ─── Express App + REST API  ─────────────────────────────
 function createExpressApp() {
   const app = express();
   app.use(express.json());
@@ -721,7 +721,7 @@ function createExpressApp() {
     }
   });
 
-  // REST API: GET /api/replay/:runIdx/:sliceId — session replay log (Phase 5)
+  // REST API: GET /api/replay/:runIdx/:sliceId — session replay log 
   app.get("/api/replay/:runIdx/:sliceId", (req, res) => {
     try {
       const runsDir = resolve(PROJECT_DIR, ".forge", "runs");
@@ -736,7 +736,7 @@ function createExpressApp() {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
-  // v2.4: GET /api/traces — list all runs from index.jsonl
+  // GET /api/traces — list all runs from index.jsonl
   app.get("/api/traces", (_req, res) => {
     try {
       const entries = readRunIndex(PROJECT_DIR);
@@ -744,7 +744,7 @@ function createExpressApp() {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
-  // v2.8: GET /api/runs/:runIdx — single run detail with slice data
+  // GET /api/runs/:runIdx — single run detail with slice data
   app.get("/api/runs/:runIdx", (req, res) => {
     try {
       const runsDir = resolve(PROJECT_DIR, ".forge", "runs");
@@ -770,7 +770,7 @@ function createExpressApp() {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
-  // v2.8: GET /api/skills — available slash command skills
+  // GET /api/skills — available slash command skills
   app.get("/api/skills", (_req, res) => {
     try {
       const skills = [];
@@ -805,7 +805,7 @@ function createExpressApp() {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
-  // v2.4: GET /api/traces/:runId — single run trace detail (v2.8: includes quorum data)
+  // GET /api/traces/:runId — single run trace detail (v2.8: includes quorum data)
   app.get("/api/traces/:runId", (req, res) => {
     try {
       const runDir = resolve(PROJECT_DIR, ".forge", "runs", req.params.runId);
@@ -824,7 +824,7 @@ function createExpressApp() {
       }
       if (!traceResult) return res.status(404).json({ error: "No trace data" });
 
-      // v2.8: Attach quorum data from slice-N-quorum.json files
+      // Attach quorum data from slice-N-quorum.json files
       const quorumFiles = readdirSync(runDir).filter((f) => /^slice-\d+-quorum\.json$/.test(f)).sort();
       if (quorumFiles.length > 0) {
         traceResult.quorum = {};
@@ -837,7 +837,7 @@ function createExpressApp() {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
-  // v2.3: .well-known discovery endpoint
+  // .well-known discovery endpoint
   app.get("/.well-known/plan-forge.json", (_req, res) => {
     try {
       const surface = buildCapabilitySurface(TOOLS, { cwd: PROJECT_DIR, hubPort: activeHub?.port || null });
@@ -845,7 +845,7 @@ function createExpressApp() {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
-  // v2.3: Capabilities API
+  // Capabilities API
   app.get("/api/capabilities", (_req, res) => {
     try {
       const surface = buildCapabilitySurface(TOOLS, { cwd: PROJECT_DIR, hubPort: activeHub?.port || null });
@@ -853,7 +853,7 @@ function createExpressApp() {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
-  // v2.6: Extensions catalog API (structured JSON)
+  // Extensions catalog API (structured JSON)
   app.get("/api/extensions", (_req, res) => {
     try {
       const catalogPath = join(PROJECT_DIR, "extensions", "catalog.json");
@@ -867,7 +867,7 @@ function createExpressApp() {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
-  // v2.7: Plans list API — parsed plan metadata for dashboard browser
+  // Plans list API — parsed plan metadata for dashboard browser
   app.get("/api/plans", (_req, res) => {
     try {
       const plansDir = resolve(PROJECT_DIR, "docs", "plans");
@@ -903,7 +903,7 @@ function createExpressApp() {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
-  // v2.7: OpenBrain memory status API
+  // OpenBrain memory status API
   app.get("/api/memory", (_req, res) => {
     try {
       const configured = isOpenBrainConfigured(PROJECT_DIR);
@@ -933,7 +933,7 @@ function createExpressApp() {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
-  // v2.7: OpenBrain memory search API
+  // OpenBrain memory search API
   app.post("/api/memory/search", (req, res) => {
     try {
       if (!isOpenBrainConfigured(PROJECT_DIR)) {
@@ -969,7 +969,7 @@ function createExpressApp() {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
-  // v2.9: Memory search presets API
+  // Memory search presets API
   app.get("/api/memory/presets", (_req, res) => {
     try {
       // Build context-aware presets from project config
@@ -1012,7 +1012,7 @@ function createExpressApp() {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
-  // v2.9: Worker detection API
+  // Worker detection API
   app.get("/api/workers", (_req, res) => {
     try {
       const workers = detectWorkers(PROJECT_DIR);
@@ -1020,7 +1020,7 @@ function createExpressApp() {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
-  // v2.9: Image generation API
+  // Image generation API
   app.post("/api/image/generate", async (req, res) => {
     try {
       const { prompt, outputPath, model, size } = req.body || {};
@@ -1056,7 +1056,7 @@ async function main() {
     console.error("Plan Forge Dashboard-only mode (no MCP stdio)");
   }
 
-  // v2.3: Auto-generate tools.json + cli-schema.json on startup
+  // Auto-generate tools.json + cli-schema.json on startup
   try {
     writeToolsJson(TOOLS, __dirname);
     writeCliSchema(__dirname);
@@ -1065,7 +1065,7 @@ async function main() {
     console.error(`[capabilities] Auto-generation failed: ${err.message} (non-fatal)`);
   }
 
-  // Phase 4: Start Express HTTP server for dashboard + REST API
+  // Start Express HTTP server for dashboard + REST API
   try {
     const app = createExpressApp();
     app.listen(HTTP_PORT, "127.0.0.1", () => {
@@ -1075,7 +1075,7 @@ async function main() {
     console.error(`[http] Express server failed to start: ${err.message} (non-fatal)`);
   }
 
-  // Phase 3: Start WebSocket hub alongside MCP server
+  // Start WebSocket hub alongside MCP server
   try {
     activeHub = await createHub({ cwd: PROJECT_DIR });
     console.error(`Plan Forge WebSocket hub running on port ${activeHub.port}`);
@@ -1096,3 +1096,4 @@ main().catch((err) => {
   console.error("Fatal:", err);
   process.exit(1);
 });
+

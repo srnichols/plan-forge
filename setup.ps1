@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Plan Forge — Project Setup Wizard
 
@@ -157,7 +157,7 @@ function Install-ClaudeAgent([string]$TargetPath) {
                 $domain = $_.BaseName -replace '\.instructions$', ''
                 $instrContent = Get-Content $_.FullName -Raw
                 # Strip YAML frontmatter for cleaner embedding
-                if ($instrContent -match '^---\s*\n[\s\S]*?\n---\s*\n(.*)') {
+                if ($instrContent -match '^---\s*\n[\s\S]*?\n---\s*\n([\s\S]*)') {
                     $instrContent = $Matches[1].Trim()
                 }
                 [void]$sb.AppendLine("### $domain")
@@ -285,7 +285,7 @@ function Install-CursorAgent([string]$TargetPath) {
             Get-ChildItem -Path $instrDir -Filter "*.instructions.md" -File | Sort-Object Name | ForEach-Object {
                 $domain = $_.BaseName -replace '\.instructions$', ''
                 $instrContent = Get-Content $_.FullName -Raw
-                if ($instrContent -match '^---\s*\n[\s\S]*?\n---\s*\n(.*)') {
+                if ($instrContent -match '^---\s*\n[\s\S]*?\n---\s*\n([\s\S]*)') {
                     $instrContent = $Matches[1].Trim()
                 }
                 [void]$sb.AppendLine("### $domain")
@@ -520,21 +520,21 @@ function Install-GeminiAgent([string]$TargetPath) {
                 }
                 # Strip YAML frontmatter for TOML prompt
                 $promptBody = $srcContent
-                if ($promptBody -match '^---\s*\n[\s\S]*?\n---\s*\n(.*)') {
+                if ($promptBody -match '^---\s*\n[\s\S]*?\n---\s*\n([\s\S]*)') {
                     $promptBody = $Matches[1].Trim()
                 }
                 # Escape TOML triple-quote edge cases
                 $promptBody = $promptBody -replace '"""', '\"\"\"'
 
-                $tomlContent = @"
-# Invoked via: /planforge:$name
-description = "$($desc -replace '"', '\"')"
-
-prompt = ""${'"'}
-$promptBody
-""${'"'}
-"@
-                Set-Content -Path $tomlFile -Value $tomlContent
+                $tomlLines = @(
+                    "# Invoked via: /planforge:$name"
+                    "description = `"$($desc -replace '"', '\"')`""
+                    ""
+                    'prompt = """'
+                )
+                $tomlLines += $promptBody -split "`n"
+                $tomlLines += '"""'
+                Set-Content -Path $tomlFile -Value ($tomlLines -join "`n")
                 Write-Host "  CREATE .gemini/commands/planforge/$name.toml" -ForegroundColor Green
             }
         }
@@ -558,20 +558,20 @@ $promptBody
                 }
                 # Strip YAML frontmatter
                 $promptBody = $srcContent
-                if ($promptBody -match '^---\s*\n[\s\S]*?\n---\s*\n(.*)') {
+                if ($promptBody -match '^---\s*\n[\s\S]*?\n---\s*\n([\s\S]*)') {
                     $promptBody = $Matches[1].Trim()
                 }
                 $promptBody = $promptBody -replace '"""', '\"\"\"'
 
-                $tomlContent = @"
-# Invoked via: /planforge:$name
-description = "$($desc -replace '"', '\"')"
-
-prompt = ""${'"'}
-$promptBody
-""${'"'}
-"@
-                Set-Content -Path $tomlFile -Value $tomlContent
+                $tomlLines = @(
+                    "# Invoked via: /planforge:$name"
+                    "description = `"$($desc -replace '"', '\"')`""
+                    ""
+                    'prompt = """'
+                )
+                $tomlLines += $promptBody -split "`n"
+                $tomlLines += '"""'
+                Set-Content -Path $tomlFile -Value ($tomlLines -join "`n")
                 Write-Host "  CREATE .gemini/commands/planforge/$name.toml" -ForegroundColor Green
             }
         }

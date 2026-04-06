@@ -482,6 +482,61 @@ grep -q "shared" setup.sh || exit 1
 | **Tier 2** — New Skills & Hub Integration | Slices 4, 5, 6, 7 | Medium — New features, moderate effort |
 | **Tier 3** — Executable Skill Engine | Slices 8, 9 | Lower — Architectural, higher effort |
 | **Doc Sweep** — Markdown, HTML, Code & Config | Slices 10, 11, 12 | Ships after each tier or as final sweep |
+| **Validation** — Testbed verification | Slice 13 | Ships last — validates everything in plan-forge-testbed |
+
+---
+
+### Slice 13: Testbed Validation — End-to-End Capability Testing
+
+**Goal**: Run the full capability suite in the `plan-forge-testbed` repo to validate all changes work in a real dotnet project environment.
+
+**Test Matrix**:
+
+| # | Capability | Command / Test | Expected | Status |
+|---|-----------|---------------|----------|--------|
+| 1 | Environment health | `pforge smith` | 14+ passed, 0 failed | Baseline ✅ |
+| 2 | Setup validation | `pforge check` | All checks pass | Pre-existing bug (empty path arg) |
+| 3 | Completeness sweep | `pforge sweep` | Returns marker count | Baseline ✅ |
+| 4 | Phase status | `pforge status` | Lists all phases | Baseline ✅ |
+| 5 | Plan analysis | `pforge analyze <plan>` | Consistency score | Pre-existing bug (git stderr as error in PS 5.1) |
+| 6 | Scope drift | `pforge diff <plan>` | Drift detection | Pre-existing bug (git stderr as error in PS 5.1) |
+| 7 | Orchestrator self-test | `node orchestrator.mjs --test` | 65+ passed, 0 failed | Baseline ✅ |
+| 8 | MCP capabilities | `buildCapabilitySurface()` | All 10 skills listed | After upgrade |
+| 9 | Skill frontmatter | All SKILL.md have `tools:` | 10/10 present | After Slice 2 |
+| 10 | `/test-sweep` invocation | Invoke via Copilot Chat | Calls `forge_sweep` in flow | After Slice 3 |
+| 11 | `/code-review` invocation | Invoke via Copilot Chat | Calls `forge_analyze` + `forge_diff` | After Slice 3 |
+| 12 | `/health-check` invocation | Invoke via Copilot Chat | Structured 3-step report | After Slice 4 |
+| 13 | `/forge-execute` invocation | Invoke via Copilot Chat | Plan selection + cost estimate flow | After Slice 5 |
+| 14 | Hub skill events | Start hub + invoke skill | `skill-started` events broadcast | After Slice 6 |
+| 15 | Dashboard skill timeline | Connect dashboard + invoke skill | Skill steps visible | After Slice 7 |
+| 16 | `forge_run_skill` MCP tool | Call via MCP client | Structured result with step statuses | After Slice 9 |
+| 17 | Doc consistency | `grep -rn "8 skills"` across all files | 0 stale references (excluding CHANGELOG) | After Slice 10–12 |
+
+**Pre-existing Bugs Found During Baseline Testing** (not caused by Phase 8 — document for separate fix):
+1. `validate-setup.ps1` — empty string passed to `-Path` parameter when checking required files (likely missing config value)
+2. `pforge analyze` / `pforge diff` — git stderr warnings (`LF will be replaced by CRLF`) treated as terminating errors by PS 5.1 (need `$ErrorActionPreference = 'SilentlyContinue'` around git calls)
+3. `pforge status` — emoji characters (📋, ✅) display as garbled text in PS 5.1 stdout (cosmetic, not functional)
+4. **UTF-8 BOM** — `pforge.ps1`, `setup.ps1`, `validate-setup.ps1` lacked UTF-8 BOM, causing all non-ASCII characters to corrupt in Windows PowerShell 5.1 (**fixed on this branch**)
+
+**Tasks**:
+1. Re-run `setup.ps1 -Preset dotnet` in testbed with updated Plan Forge source to install new shared skills
+2. Verify 10 skills appear in `.github/skills/` (8 existing + 2 shared)
+3. Run full test matrix above, marking each row pass/fail
+4. For manual Copilot Chat tests (rows 10–13), invoke each slash command and verify MCP tool calls appear in the output
+5. For hub/dashboard tests (rows 14–15), start MCP server with `--port 3100`, connect dashboard, invoke a skill, verify events
+6. Run `pforge smith` and confirm skill count shows 10
+7. Run `node orchestrator.mjs --test` and confirm 65+ pass
+8. Run final doc consistency check: `grep -rn "8 skills" --include="*.md" --include="*.html" . | grep -v CHANGELOG | grep -v Phase-8`
+
+**Validation Gate**:
+```bash
+# Orchestrator tests pass
+node pforge-mcp/orchestrator.mjs --test 2>&1 | grep -q "0 failed" || exit 1
+# 10 skills installed
+find .github/skills -name "SKILL.md" | wc -l | grep -q "10" || exit 1
+# No stale "8 skills" outside CHANGELOG/Phase-8
+grep -rn "8 skills" --include="*.md" --include="*.html" . | grep -v CHANGELOG | grep -v Phase-8 | grep -c . | grep -q "^0$" || exit 1
+```
 
 ---
 
@@ -507,6 +562,10 @@ grep -q "shared" setup.sh || exit 1
 - [ ] CHANGELOG.md has v2.6.0 entry
 - [ ] `pforge check` passes on all presets
 - [ ] Setup scripts copy shared skills directory
+- [ ] Self-tests pass: `node pforge-mcp/orchestrator.mjs --test`
+- [ ] Self-tests pass: `node pforge-mcp/skill-runner.mjs --test` (Tier 3)
+- [ ] **Testbed validation**: All 17 test matrix rows pass in `plan-forge-testbed`
+- [ ] **Testbed validation**: Copilot Chat slash command invocations verified (rows 10–13)
 - [ ] Self-tests pass: `node pforge-mcp/orchestrator.mjs --test`
 - [ ] Self-tests pass: `node pforge-mcp/skill-runner.mjs --test` (Tier 3)
 

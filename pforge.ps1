@@ -2043,6 +2043,186 @@ function Invoke-Smith {
     }
 
     # ═══════════════════════════════════════════════════════════════
+    # 4d. MCP RUNTIME DEPENDENCIES
+    # ═══════════════════════════════════════════════════════════════
+    if (Test-Path $mcpServer) {
+        Write-Host "MCP Runtime:" -ForegroundColor Cyan
+
+        # Granular dependency checks
+        $mcpDepsDir = Join-Path $RepoRoot "pforge-mcp/node_modules"
+        if (Test-Path $mcpDepsDir) {
+            $criticalDeps = @(
+                @{ Name = "@modelcontextprotocol/sdk"; Label = "MCP SDK (protocol layer)" },
+                @{ Name = "express"; Label = "Express (dashboard + REST API)" },
+                @{ Name = "ws"; Label = "ws (WebSocket hub for real-time events)" }
+            )
+            foreach ($dep in $criticalDeps) {
+                $depPath = Join-Path $mcpDepsDir $dep.Name
+                if (Test-Path $depPath) {
+                    # Try to read version
+                    $depPkgPath = Join-Path $depPath "package.json"
+                    if (Test-Path $depPkgPath) {
+                        try {
+                            $depPkg = Get-Content $depPkgPath -Raw | ConvertFrom-Json
+                            Doctor-Pass "$($dep.Label) v$($depPkg.version)"
+                        } catch { Doctor-Pass "$($dep.Label) installed" }
+                    } else { Doctor-Pass "$($dep.Label) installed" }
+                } else {
+                    Doctor-Fail "$($dep.Label) missing" "Run: cd pforge-mcp && npm install"
+                }
+            }
+
+            # Optional deps
+            $optionalDeps = @(
+                @{ Name = "playwright"; Label = "Playwright (screenshot capture)" }
+            )
+            foreach ($dep in $optionalDeps) {
+                $depPath = Join-Path $mcpDepsDir $dep.Name
+                if (Test-Path $depPath) {
+                    Doctor-Pass "$($dep.Label)"
+                } else {
+                    Doctor-Warn "$($dep.Label) not installed (optional)" "Run: cd pforge-mcp && npm install playwright"
+                }
+            }
+        }
+
+        # MCP version sync
+        $mcpPkgPath = Join-Path $RepoRoot "pforge-mcp/package.json"
+        $versionPath = Join-Path $RepoRoot "VERSION"
+        if ((Test-Path $mcpPkgPath) -and (Test-Path $versionPath)) {
+            try {
+                $mcpPkg = Get-Content $mcpPkgPath -Raw | ConvertFrom-Json
+                $mcpVer = $mcpPkg.version
+                $repoVer = (Get-Content $versionPath -Raw).Trim()
+                if ($mcpVer -eq $repoVer) {
+                    Doctor-Pass "MCP server version v$mcpVer matches VERSION file"
+                } else {
+                    Doctor-Warn "MCP server v$mcpVer but VERSION file says v$repoVer" "Update version in pforge-mcp/package.json"
+                }
+            } catch { }
+        }
+
+        Write-Host ""
+    }
+
+    # ═══════════════════════════════════════════════════════════════
+    # 4e. DASHBOARD & SITE ASSETS
+    # ═══════════════════════════════════════════════════════════════
+    $dashboardHtml = Join-Path $RepoRoot "pforge-mcp/dashboard/index.html"
+    $dashboardJs = Join-Path $RepoRoot "pforge-mcp/dashboard/app.js"
+    if ((Test-Path $dashboardHtml) -or (Test-Path $dashboardJs)) {
+        Write-Host "Dashboard:" -ForegroundColor Cyan
+
+        if (Test-Path $dashboardHtml) { Doctor-Pass "dashboard/index.html" }
+        else { Doctor-Warn "dashboard/index.html missing" "MCP dashboard will not render" }
+
+        if (Test-Path $dashboardJs) { Doctor-Pass "dashboard/app.js" }
+        else { Doctor-Warn "dashboard/app.js missing" "MCP dashboard has no frontend logic" }
+
+        # Dashboard screenshots for docs
+        $screenshotDir = Join-Path $RepoRoot "docs/assets/dashboard"
+        if (Test-Path $screenshotDir) {
+            $expectedScreenshots = @("progress.png", "runs.png", "cost.png", "actions.png", "config.png", "traces.png", "skills.png", "replay.png", "extensions.png")
+            $found = (Get-ChildItem -Path $screenshotDir -Filter "*.png" -File).Name
+            $missing = $expectedScreenshots | Where-Object { $_ -notin $found }
+            if ($missing.Count -eq 0) {
+                Doctor-Pass "$($expectedScreenshots.Count) dashboard screenshots in docs/assets/dashboard/"
+            } else {
+                Doctor-Warn "Missing $($missing.Count) screenshot(s): $($missing -join ', ')" "Run: node pforge-mcp/capture-screenshots.mjs"
+            }
+        } else {
+            Doctor-Warn "docs/assets/dashboard/ not found" "Run: node pforge-mcp/capture-screenshots.mjs to generate"
+        }
+
+        # Site images
+        $siteAssetsDir = Join-Path $RepoRoot "docs/assets"
+        if (Test-Path $siteAssetsDir) {
+            $siteImages = @("og-card.webp", "hero-illustration.webp", "problem-80-20-wall.webp")
+            $siteMissing = $siteImages | Where-Object { -not (Test-Path (Join-Path $siteAssetsDir $_)) }
+            if ($siteMissing.Count -eq 0) {
+                Doctor-Pass "$($siteImages.Count) site images (WebP)"
+            } else {
+                Doctor-Warn "Missing site image(s): $($siteMissing -join ', ')" "Generate with forge_generate_image MCP tool"
+            }
+        }
+
+        Write-Host ""
+    }
+
+    # ═══════════════════════════════════════════════════════════════
+    # 4f. LIFECYCLE HOOKS
+    # ═══════════════════════════════════════════════════════════════
+    $hooksDir = Join-Path $RepoRoot ".github/hooks"
+    if (Test-Path $hooksDir) {
+        Write-Host "Lifecycle Hooks:" -ForegroundColor Cyan
+        $expectedHooks = @("SessionStart", "PreToolUse", "PostToolUse", "Stop")
+        $hookFiles = Get-ChildItem -Path $hooksDir -File | ForEach-Object { $_.BaseName }
+        $hookCount = 0
+        foreach ($hook in $expectedHooks) {
+            $hookFound = $hookFiles | Where-Object { $_ -match $hook }
+            if ($hookFound) { $hookCount++ }
+        }
+        if ($hookCount -eq $expectedHooks.Count) {
+            Doctor-Pass "$hookCount/$($expectedHooks.Count) lifecycle hooks present"
+        } elseif ($hookCount -gt 0) {
+            $hookMissing = $expectedHooks | Where-Object { $h = $_; -not ($hookFiles | Where-Object { $_ -match $h }) }
+            Doctor-Warn "$hookCount/$($expectedHooks.Count) hooks — missing: $($hookMissing -join ', ')" "Run 'pforge update' to install missing hooks"
+        } else {
+            Doctor-Warn "No lifecycle hooks found" "Run 'pforge update' to install hooks"
+        }
+        Write-Host ""
+    }
+
+    # ═══════════════════════════════════════════════════════════════
+    # 4g. EXTENSIONS & SPEC KIT
+    # ═══════════════════════════════════════════════════════════════
+    $catalogPath = Join-Path $RepoRoot "extensions/catalog.json"
+    if (Test-Path $catalogPath) {
+        Write-Host "Extensions:" -ForegroundColor Cyan
+        try {
+            $catalog = Get-Content $catalogPath -Raw | ConvertFrom-Json
+            $extCount = 0
+            if ($catalog.extensions) { $extCount = $catalog.extensions.Count }
+            Doctor-Pass "Extension catalog valid ($extCount extension(s))"
+
+            if ($catalog.speckit_compatible -eq $true) {
+                Doctor-Pass "Spec Kit compatible"
+            }
+        } catch {
+            Doctor-Fail "extensions/catalog.json has invalid JSON" "Fix the JSON syntax"
+        }
+        Write-Host ""
+    }
+
+    # ═══════════════════════════════════════════════════════════════
+    # 4h. VERSION & CHANGELOG SYNC
+    # ═══════════════════════════════════════════════════════════════
+    Write-Host "Version & Changelog:" -ForegroundColor Cyan
+
+    $versionPath = Join-Path $RepoRoot "VERSION"
+    $changelogPath = Join-Path $RepoRoot "CHANGELOG.md"
+
+    if (Test-Path $versionPath) {
+        $currentVer = (Get-Content $versionPath -Raw).Trim()
+        Doctor-Pass "VERSION: $currentVer"
+    } else {
+        Doctor-Warn "VERSION file not found"
+    }
+
+    if (Test-Path $changelogPath) {
+        $clContent = Get-Content $changelogPath -Raw
+        if ($clContent -match "\[v?$([regex]::Escape($currentVer))\]|## v?$([regex]::Escape($currentVer))") {
+            Doctor-Pass "CHANGELOG.md has entry for v$currentVer"
+        } else {
+            Doctor-Warn "CHANGELOG.md missing entry for v$currentVer" "Add release notes for the current version"
+        }
+    } else {
+        Doctor-Warn "CHANGELOG.md not found"
+    }
+
+    Write-Host ""
+
+    # ═══════════════════════════════════════════════════════════════
     # 4c. QUORUM MODE
     # ═══════════════════════════════════════════════════════════════
     if (Test-Path $configPath) {

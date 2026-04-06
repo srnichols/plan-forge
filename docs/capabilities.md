@@ -180,7 +180,7 @@ Severity levels: TRACE(1), DEBUG(5), INFO(9), WARN(13), ERROR(17), FATAL(21)
 - `--estimate` uses historical averages when available
 - `--estimate --quorum` shows overhead breakdown per quorum-eligible slice
 
-## Quorum Mode (v2.5)
+## Quorum Mode
 
 Multi-model consensus: dispatch complex slices to 3 AI models for independent dry-run analysis, then a reviewer synthesizes the best approach.
 
@@ -295,4 +295,4 @@ Key OpenBrain tools: `search_thoughts`, `capture_thought`, `capture_thoughts`, `
 
 ---
 
-*Generated from Plan Forge v2.5.0 capability surface. For the live version, call `forge_capabilities` or visit `https://planforge.software/.well-known/plan-forge.json`.*
+*Generated from the Plan Forge capability surface. For the live version, call `forge_capabilities` or visit `https://planforge.software/.well-known/plan-forge.json`.*

@@ -279,13 +279,13 @@ const TOOLS = [
   },
   {
     name: "forge_generate_image",
-    description: "Generate an image using xAI Grok's Aurora image model. Provide a text description and get a generated image saved to disk. Useful for creating logos, diagrams, UI mockups, icons, and illustrations during plan execution. Requires XAI_API_KEY.",
+    description: "Generate an image using AI image models (xAI Grok Aurora or OpenAI DALL-E). Provide a text description and get a generated image saved to disk. Useful for creating logos, diagrams, UI mockups, icons, and illustrations during plan execution. Requires XAI_API_KEY (Grok) or OPENAI_API_KEY (DALL-E).",
     inputSchema: {
       type: "object",
       properties: {
         prompt: { type: "string", description: "Detailed text description of the image to generate. Be specific about style, colors, composition, and content." },
         outputPath: { type: "string", description: "File path to save the image (relative to project dir). e.g., 'assets/logo.png', 'docs/diagram.png'" },
-        model: { type: "string", description: "Image model to use. Default: grok-2-image", enum: ["grok-2-image", "grok-2-image-latest"] },
+        model: { type: "string", description: "Image model to use. Default: grok-2-image", enum: ["grok-2-image", "grok-2-image-latest", "dall-e-3", "dall-e-4", "gpt-image-1"] },
         size: { type: "string", description: "Image dimensions. Default: 1024x1024", enum: ["1024x1024", "1024x768", "768x1024"] },
         path: { type: "string", description: "Project directory (default: current)" },
       },

@@ -389,14 +389,19 @@
             <div class="flex gap-2 items-center">
               <select id="cfg-model-image" title="Image generation model" class="bg-gray-700 text-white text-sm rounded px-3 py-2 flex-1">
                 <option value="">None (disabled)</option>
-                <optgroup label="xAI Grok (API — requires XAI_API_KEY)">
-                  <option value="grok-2-image">grok-2-image</option>
+                <optgroup label="xAI Grok (XAI_API_KEY)">
+                  <option value="grok-2-image">grok-2-image (Aurora)</option>
                   <option value="grok-2-image-latest">grok-2-image-latest</option>
+                </optgroup>
+                <optgroup label="OpenAI (OPENAI_API_KEY)">
+                  <option value="dall-e-3">dall-e-3</option>
+                  <option value="dall-e-4">dall-e-4</option>
+                  <option value="gpt-image-1">gpt-image-1</option>
                 </optgroup>
               </select>
               <span class="text-xs text-gray-500 shrink-0">🎨</span>
             </div>
-            <p class="text-xs text-gray-600 mt-1">When set, agents delegate image tasks (logos, diagrams, icons) to this model via <code class="text-gray-500">forge_generate_image</code>.</p>
+            <p class="text-xs text-gray-600 mt-1">Agents delegate image tasks (logos, diagrams, icons) to this model via <code class="text-gray-500">forge_generate_image</code>. Requires <code class="text-gray-500">XAI_API_KEY</code> for Grok or <code class="text-gray-500">OPENAI_API_KEY</code> for DALL-E.</p>
           </div>
           <!-- Advanced Settings (v2.9) -->
           <details class="border border-gray-700 rounded-lg p-3">

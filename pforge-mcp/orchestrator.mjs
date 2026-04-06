@@ -352,9 +352,14 @@ const API_PROVIDERS = {
     envKey: "XAI_API_KEY",
     label: "xAI Grok",
   },
+  openai: {
+    pattern: /^(gpt-|dall-e-|chatgpt-)/,
+    baseUrl: "https://api.openai.com/v1",
+    envKey: "OPENAI_API_KEY",
+    label: "OpenAI",
+  },
   // Future providers:
   // anthropic: { pattern: /^claude-/, baseUrl: "https://api.anthropic.com/v1", envKey: "ANTHROPIC_API_KEY", label: "Anthropic Direct" },
-  // openai: { pattern: /^gpt-/, baseUrl: "https://api.openai.com/v1", envKey: "OPENAI_API_KEY", label: "OpenAI Direct" },
 };
 
 /**
@@ -470,10 +475,10 @@ export async function generateImage(prompt, options = {}) {
     cwd = process.cwd(),
   } = options;
 
-  // Resolve provider
-  const provider = detectApiProvider(model) || detectApiProvider("grok-2-image");
+  // Resolve provider — try the model's provider, then fall back to xAI, then OpenAI
+  const provider = detectApiProvider(model) || detectApiProvider("grok-2-image") || detectApiProvider("dall-e-3");
   if (!provider) {
-    return { success: false, error: "No xAI API key configured. Set XAI_API_KEY environment variable." };
+    return { success: false, error: "No image API key configured. Set XAI_API_KEY or OPENAI_API_KEY environment variable." };
   }
 
   try {

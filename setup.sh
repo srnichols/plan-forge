@@ -916,7 +916,8 @@ if [[ "$IS_CUSTOM_ONLY" != true ]]; then
         done < <(find "$PIPELINE_AGENTS_DIR" -name "*.agent.md" -type f -print0)
     fi
 
-    # Shared skills (health-check, forge-execute — stack-independent)
+    # Shared skills (health-check, forge-execute, security-audit — stack-independent fallbacks)
+    # Note: Never force-overwrite — preset skills take priority over shared versions
     SHARED_SKILLS_DIR="$TEMPLATE_ROOT/presets/shared/skills"
     if [[ -d "$SHARED_SKILLS_DIR" ]]; then
         for skill_dir in "$SHARED_SKILLS_DIR"/*/; do
@@ -924,7 +925,11 @@ if [[ "$IS_CUSTOM_ONLY" != true ]]; then
             skill_src="$skill_dir/SKILL.md"
             skill_dst="$PROJECT_PATH/.github/skills/$skill_name/SKILL.md"
             if [[ -f "$skill_src" ]]; then
+                # Don't overwrite — preset skills should win over shared fallbacks
+                local saved_force="$FORCE"
+                FORCE=false
                 copy_with_create "$skill_src" "$skill_dst" || true
+                FORCE="$saved_force"
             fi
         done
     fi

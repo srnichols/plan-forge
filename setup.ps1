@@ -966,7 +966,8 @@ if (-not $isCustomOnly) {
         }
     }
 
-    # Shared skills (health-check, forge-execute — stack-independent)
+    # Shared skills (health-check, forge-execute, security-audit — stack-independent fallbacks)
+    # Note: Never force-overwrite — preset skills take priority over shared versions
     $sharedSkillsDir = Join-Path $templateRoot "presets/shared/skills"
     if (Test-Path $sharedSkillsDir) {
         Get-ChildItem -Path $sharedSkillsDir -Directory | ForEach-Object {
@@ -974,7 +975,7 @@ if (-not $isCustomOnly) {
             $skillSrc  = Join-Path $_.FullName "SKILL.md"
             $skillDst  = Join-Path $ProjectPath ".github/skills/$skillName/SKILL.md"
             if (Test-Path $skillSrc) {
-                Copy-WithCreate $skillSrc $skillDst $Force.IsPresent
+                Copy-WithCreate $skillSrc $skillDst $false
             }
         }
     }

@@ -1341,7 +1341,8 @@ function Invoke-Update {
     $srcMcp = Join-Path $sourcePath "pforge-mcp"
     $dstMcp = Join-Path $RepoRoot "pforge-mcp"
     if (Test-Path $srcMcp) {
-        foreach ($mcpFile in @("server.mjs", "package.json")) {
+        $mcpFiles = @("server.mjs", "orchestrator.mjs", "hub.mjs", "bridge.mjs", "telemetry.mjs", "capabilities.mjs", "skill-runner.mjs", "memory.mjs", "package.json", "EVENTS.md")
+        foreach ($mcpFile in $mcpFiles) {
             $srcFile = Join-Path $srcMcp $mcpFile
             $dstFile = Join-Path $dstMcp $mcpFile
             if (Test-Path $srcFile) {
@@ -1355,6 +1356,88 @@ function Invoke-Update {
                     $newFiles += @{ Src = $srcFile; Dst = $dstFile; Name = "pforge-mcp/$mcpFile" }
                 }
             }
+        }
+    }
+
+    # ─── CLI scripts (pforge.ps1, pforge.sh) ─────────────────────
+    foreach ($cliFile in @("pforge.ps1", "pforge.sh")) {
+        $srcFile = Join-Path $sourcePath $cliFile
+        $dstFile = Join-Path $RepoRoot $cliFile
+        if ((Test-Path $srcFile) -and (Test-Path $dstFile)) {
+            $srcHash = (Get-FileHash $srcFile -Algorithm SHA256).Hash
+            $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
+            if ($srcHash -ne $dstHash) {
+                $updates += @{ Src = $srcFile; Dst = $dstFile; Name = $cliFile }
+            }
+        } elseif ((Test-Path $srcFile) -and -not (Test-Path $dstFile)) {
+            $newFiles += @{ Src = $srcFile; Dst = $dstFile; Name = $cliFile }
+        }
+    }
+
+    # ─── Validation scripts ──────────────────────────────────────
+    foreach ($valFile in @("validate-setup.ps1", "validate-setup.sh")) {
+        $srcFile = Join-Path $sourcePath $valFile
+        $dstFile = Join-Path $RepoRoot $valFile
+        if ((Test-Path $srcFile) -and (Test-Path $dstFile)) {
+            $srcHash = (Get-FileHash $srcFile -Algorithm SHA256).Hash
+            $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
+            if ($srcHash -ne $dstHash) {
+                $updates += @{ Src = $srcFile; Dst = $dstFile; Name = $valFile }
+            }
+        } elseif ((Test-Path $srcFile) -and -not (Test-Path $dstFile)) {
+            $newFiles += @{ Src = $srcFile; Dst = $dstFile; Name = $valFile }
+        }
+    }
+
+    # ─── MCP dashboard files ─────────────────────────────────────
+    $srcDash = Join-Path $sourcePath "pforge-mcp/dashboard"
+    $dstDash = Join-Path $RepoRoot "pforge-mcp/dashboard"
+    if (Test-Path $srcDash) {
+        foreach ($dashFile in @("index.html", "app.js")) {
+            $srcFile = Join-Path $srcDash $dashFile
+            $dstFile = Join-Path $dstDash $dashFile
+            if ((Test-Path $srcFile) -and (Test-Path $dstFile)) {
+                $srcHash = (Get-FileHash $srcFile -Algorithm SHA256).Hash
+                $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
+                if ($srcHash -ne $dstHash) {
+                    $updates += @{ Src = $srcFile; Dst = $dstFile; Name = "pforge-mcp/dashboard/$dashFile" }
+                }
+            } elseif ((Test-Path $srcFile) -and -not (Test-Path $dstFile)) {
+                $newFiles += @{ Src = $srcFile; Dst = $dstFile; Name = "pforge-mcp/dashboard/$dashFile" }
+            }
+        }
+    }
+
+    # ─── Shared skills (add new, update existing shared-only) ────
+    $srcSharedSkills = Join-Path $sourcePath "presets/shared/skills"
+    if (Test-Path $srcSharedSkills) {
+        Get-ChildItem -Path $srcSharedSkills -Directory | ForEach-Object {
+            $skillName = $_.Name
+            $srcSkillFile = Join-Path $_.FullName "SKILL.md"
+            $dstSkillFile = Join-Path $RepoRoot ".github/skills/$skillName/SKILL.md"
+
+            if (-not (Test-Path $srcSkillFile)) { return }
+
+            # Check if the preset has a stack-specific version
+            $hasPresetVersion = $false
+            foreach ($p in ($presets | Where-Object { $_ -ne 'custom' })) {
+                $presetSkill = Join-Path $sourcePath "presets/$p/.github/skills/$skillName/SKILL.md"
+                if (Test-Path $presetSkill) { $hasPresetVersion = $true; break }
+            }
+
+            if (-not $hasPresetVersion) {
+                # Pure shared skill — safe to update
+                if (Test-Path $dstSkillFile) {
+                    $srcHash = (Get-FileHash $srcSkillFile -Algorithm SHA256).Hash
+                    $dstHash = (Get-FileHash $dstSkillFile -Algorithm SHA256).Hash
+                    if ($srcHash -ne $dstHash) {
+                        $updates += @{ Src = $srcSkillFile; Dst = $dstSkillFile; Name = ".github/skills/$skillName/SKILL.md (shared)" }
+                    }
+                } else {
+                    $newFiles += @{ Src = $srcSkillFile; Dst = $dstSkillFile; Name = ".github/skills/$skillName/SKILL.md (shared)" }
+                }
+            }
+            # If preset has a stack-specific version, the preset skill update handles it
         }
     }
 

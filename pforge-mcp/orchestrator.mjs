@@ -483,6 +483,62 @@ function detectImageFormat(buffer) {
   return { ext: "jpg", mimeType: "image/jpeg" };
 }
 
+// Format metadata for conversion support
+const FORMAT_META = {
+  jpg:  { ext: "jpg",  mimeType: "image/jpeg", aliases: ["jpg", "jpeg"] },
+  jpeg: { ext: "jpg",  mimeType: "image/jpeg", aliases: ["jpg", "jpeg"] },
+  png:  { ext: "png",  mimeType: "image/png",  aliases: ["png"] },
+  webp: { ext: "webp", mimeType: "image/webp", aliases: ["webp"] },
+  avif: { ext: "avif", mimeType: "image/avif", aliases: ["avif"] },
+  gif:  { ext: "gif",  mimeType: "image/gif",  aliases: ["gif"] },
+};
+
+/**
+ * Convert image buffer to a target format using sharp.
+ * Falls back gracefully if sharp is not installed — returns original buffer.
+ *
+ * @param {Buffer} buffer - Source image bytes
+ * @param {string} targetFormat - Desired output format (jpg, png, webp, avif)
+ * @param {{ quality?: number }} options - Encoding options
+ * @returns {Promise<{ buffer: Buffer, format: { ext: string, mimeType: string }, converted: boolean }>}
+ */
+async function convertImageFormat(buffer, targetFormat, options = {}) {
+  const meta = FORMAT_META[targetFormat];
+  if (!meta) {
+    // Unknown target — return as-is
+    const detected = detectImageFormat(buffer);
+    return { buffer, format: detected, converted: false };
+  }
+
+  const detected = detectImageFormat(buffer);
+  const alreadyCorrect = meta.aliases.some((a) => detected.ext === a || (detected.ext === "jpeg" && a === "jpg"));
+  if (alreadyCorrect) {
+    return { buffer, format: { ext: meta.ext, mimeType: meta.mimeType }, converted: false };
+  }
+
+  try {
+    const sharp = (await import("sharp")).default;
+    const { quality = 85 } = options;
+
+    let pipeline = sharp(buffer);
+    switch (meta.ext) {
+      case "jpg":  pipeline = pipeline.jpeg({ quality, mozjpeg: true }); break;
+      case "png":  pipeline = pipeline.png({ quality: Math.min(quality, 100), compressionLevel: 9 }); break;
+      case "webp": pipeline = pipeline.webp({ quality, effort: 6 }); break;
+      case "avif": pipeline = pipeline.avif({ quality, effort: 4 }); break;
+      case "gif":  pipeline = pipeline.gif(); break;
+      default:     return { buffer, format: detected, converted: false };
+    }
+
+    const converted = await pipeline.toBuffer();
+    return { buffer: converted, format: { ext: meta.ext, mimeType: meta.mimeType }, converted: true };
+  } catch (err) {
+    // sharp not installed or conversion failed — fall back to original bytes
+    const detected2 = detectImageFormat(buffer);
+    return { buffer, format: detected2, converted: false, warning: `Format conversion to ${targetFormat} failed: ${err.message}. Saved as ${detected2.ext} instead.` };
+  }
+}
+
 /**
  * Generate an image via xAI Grok image API (Aurora).
  * Uses the OpenAI-compatible /v1/images/generations endpoint.
@@ -496,6 +552,7 @@ export async function generateImage(prompt, options = {}) {
     model = "grok-imagine-image",
     size = "1024x1024",
     format = "png",
+    quality = 85,
     outputPath = null,
     cwd = process.cwd(),
   } = options;
@@ -532,42 +589,55 @@ export async function generateImage(prompt, options = {}) {
     }
 
     // Decode bytes first so we can detect the actual format
-    const imageBuffer = Buffer.from(imageData.b64_json, "base64");
-    const detected = detectImageFormat(imageBuffer);
+    const rawBuffer = Buffer.from(imageData.b64_json, "base64");
+    const detected = detectImageFormat(rawBuffer);
+
+    // Determine the desired output format from the outputPath extension or format option
+    const { extname: getExt } = await import("node:path");
+    const requestedExt = outputPath ? getExt(outputPath).toLowerCase().replace(".", "") : format;
+    const targetFormat = requestedExt || detected.ext;
+
+    // Convert to the requested format if different from what the API returned
+    const conversion = await convertImageFormat(rawBuffer, targetFormat, { quality });
+    const finalBuffer = conversion.buffer;
+    const finalFormat = conversion.format;
 
     const result = {
       success: true,
       model: data.model || model,
       revisedPrompt: imageData.revised_prompt || prompt,
-      mimeType: detected.mimeType,
+      mimeType: finalFormat.mimeType,
+      originalFormat: detected.mimeType,
+      converted: conversion.converted,
     };
+
+    if (conversion.warning) {
+      result.warning = conversion.warning;
+    }
 
     // Save to file if outputPath specified
     if (outputPath) {
       const { writeFileSync, mkdirSync } = await import("node:fs");
-      const { dirname, extname, resolve: pathResolve } = await import("node:path");
+      const { dirname, resolve: pathResolve } = await import("node:path");
 
-      // Correct the file extension if it doesn't match the actual image format.
-      // xAI Grok Aurora returns JPEG bytes even when a PNG path is requested,
-      // which causes Claude to reject the image with a MIME type mismatch error.
+      // If conversion succeeded, use the requested path as-is.
+      // If conversion failed (fallback), correct the extension to match actual bytes.
       let resolvedPath = outputPath;
-      const requestedExt = extname(outputPath).toLowerCase().replace(".", "");
-      const formatAliases = { jpg: ["jpg", "jpeg"], jpeg: ["jpg", "jpeg"] };
-      const requested = formatAliases[requestedExt] ?? [requestedExt];
-      const actual = formatAliases[detected.ext] ?? [detected.ext];
-      const mismatch = !requested.some((e) => actual.includes(e));
-      if (mismatch) {
-        resolvedPath = outputPath.replace(/\.[^.]+$/, `.${detected.ext}`);
+      if (!conversion.converted && detected.ext !== targetFormat) {
+        const detectedMeta = FORMAT_META[detected.ext];
+        const targetMeta = FORMAT_META[targetFormat];
+        const alreadyMatch = targetMeta?.aliases?.some((a) => detectedMeta?.aliases?.includes(a));
+        if (!alreadyMatch) {
+          resolvedPath = outputPath.replace(/\.[^.]+$/, `.${finalFormat.ext}`);
+          result.extensionCorrected = true;
+          result.requestedPath = outputPath;
+        }
       }
 
       const fullPath = pathResolve(cwd, resolvedPath);
       mkdirSync(dirname(fullPath), { recursive: true });
-      writeFileSync(fullPath, imageBuffer);
+      writeFileSync(fullPath, finalBuffer);
       result.localPath = fullPath;
-      if (mismatch) {
-        result.extensionCorrected = true;
-        result.requestedPath = outputPath;
-      }
     }
 
     // Return truncated base64 for logging only — never return full base64 inline,

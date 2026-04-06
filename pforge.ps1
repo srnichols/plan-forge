@@ -1995,6 +1995,54 @@ function Invoke-Smith {
     Write-Host ""
 
     # ═══════════════════════════════════════════════════════════════
+    # 4b-ii. IMAGE GENERATION STACK
+    # ═══════════════════════════════════════════════════════════════
+    if (Test-Path $mcpServer) {
+        Write-Host "Image Generation:" -ForegroundColor Cyan
+
+        # Check for sharp (format conversion)
+        $sharpPath = Join-Path $RepoRoot "pforge-mcp/node_modules/sharp"
+        if (Test-Path $sharpPath) {
+            Doctor-Pass "sharp installed (WebP, PNG, AVIF conversion)"
+        } else {
+            Doctor-Warn "sharp not installed — image format conversion disabled" "Run: cd pforge-mcp && npm install sharp"
+        }
+
+        # Check for API keys (xAI / OpenAI)
+        $hasXai = -not [string]::IsNullOrEmpty($env:XAI_API_KEY)
+        $hasOpenAi = -not [string]::IsNullOrEmpty($env:OPENAI_API_KEY)
+
+        if ($hasXai -and $hasOpenAi) {
+            Doctor-Pass "XAI_API_KEY set (Grok Aurora)"
+            Doctor-Pass "OPENAI_API_KEY set (DALL-E)"
+        } elseif ($hasXai) {
+            Doctor-Pass "XAI_API_KEY set (Grok Aurora)"
+            Doctor-Pass "OPENAI_API_KEY not set (DALL-E unavailable — optional)"
+        } elseif ($hasOpenAi) {
+            Doctor-Pass "OPENAI_API_KEY set (DALL-E)"
+            Doctor-Pass "XAI_API_KEY not set (Grok Aurora unavailable — optional)"
+        } else {
+            Doctor-Warn "No image API keys configured" "Set XAI_API_KEY or OPENAI_API_KEY environment variable for forge_generate_image"
+        }
+
+        # Check Node.js version (sharp requires >= 18.17.0)
+        $nodeCmd = Get-Command node -ErrorAction SilentlyContinue
+        if ($nodeCmd) {
+            $nodeVer = (node --version 2>$null) -replace '^v', ''
+            $nodeMajor = [int]($nodeVer -split '\.')[0]
+            if ($nodeMajor -ge 18) {
+                Doctor-Pass "Node.js v$nodeVer (sharp requires >= 18.17)"
+            } else {
+                Doctor-Fail "Node.js v$nodeVer — sharp requires >= 18.17" "Upgrade Node.js from https://nodejs.org/"
+            }
+        } else {
+            Doctor-Fail "Node.js not found — required for image generation" "Install from https://nodejs.org/"
+        }
+
+        Write-Host ""
+    }
+
+    # ═══════════════════════════════════════════════════════════════
     # 4c. QUORUM MODE
     # ═══════════════════════════════════════════════════════════════
     if (Test-Path $configPath) {

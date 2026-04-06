@@ -1,27 +1,36 @@
 ---
-description: Swift security patterns — Keychain, ATS, force-unwrap prevention, input validation
+description: Swift security patterns — Keychain, ATS, certificate pinning, input validation, SQL injection prevention, CORS, OWASP Mobile Top 10
 applyTo: '**/*.swift'
 ---
 
 # Swift Security Patterns
 
-## Authentication & Authorization
+> **Applies to**: iOS/macOS apps and Vapor server-side Swift  
+> **Alignment**: OWASP Mobile Top 10 (2024) + OWASP Top 10 (2021)
 
-### Keychain Storage (Never UserDefaults for Secrets)
+---
+
+## Secrets Storage — Keychain (Never UserDefaults)
+
 ```swift
 // ❌ NEVER: UserDefaults for secrets
 UserDefaults.standard.set(token, forKey: "authToken")
 
-// ✅ ALWAYS: Keychain
+// ✅ ALWAYS: Keychain via Security framework
 import Security
+
+enum KeychainError: Error {
+    case unhandledError(status: OSStatus)
+    case itemNotFound
+}
 
 func saveToken(_ token: String, for key: String) throws {
     let data = Data(token.utf8)
     let query: [CFString: Any] = [
-        kSecClass:       kSecClassGenericPassword,
-        kSecAttrAccount: key,
-        kSecValueData:   data,
-        kSecAttrAccessible: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+        kSecClass:              kSecClassGenericPassword,
+        kSecAttrAccount:        key,
+        kSecValueData:          data,
+        kSecAttrAccessible:     kSecAttrAccessibleWhenUnlockedThisDeviceOnly
     ]
     SecItemDelete(query as CFDictionary)
     let status = SecItemAdd(query as CFDictionary, nil)
@@ -29,41 +38,141 @@ func saveToken(_ token: String, for key: String) throws {
         throw KeychainError.unhandledError(status: status)
     }
 }
-```
 
-### JWT Validation (JWTKit / Vapor)
-```swift
-import JWTKit
-
-// ✅ Validate audience, issuer, and expiry
-let payload = try await req.jwt.verify(as: AppJWTPayload.self)
-guard payload.audience.value.contains("my-app") else {
-    throw Abort(.unauthorized)
+func loadToken(for key: String) throws -> String {
+    let query: [CFString: Any] = [
+        kSecClass:              kSecClassGenericPassword,
+        kSecAttrAccount:        key,
+        kSecReturnData:         true,
+        kSecMatchLimit:         kSecMatchLimitOne
+    ]
+    var result: AnyObject?
+    let status = SecItemCopyMatching(query as CFDictionary, &result)
+    guard status == errSecSuccess, let data = result as? Data,
+          let token = String(data: data, encoding: .utf8) else {
+        throw KeychainError.itemNotFound
+    }
+    return token
 }
 ```
 
-### Role-Based Access (Vapor Middleware)
-```swift
-struct RequireRoleMiddleware: AsyncMiddleware {
-    let role: UserRole
+### Keychain Accessibility Values
 
-    func respond(to request: Request, chainingTo next: AsyncResponder) async throws -> Response {
-        let user = try request.auth.require(AuthUser.self)
-        guard user.role >= role else {
-            throw Abort(.forbidden)
+| Value | Use Case |
+|-------|----------|
+| `kSecAttrAccessibleWhenUnlockedThisDeviceOnly` | ✅ Preferred — tokens, keys |
+| `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` | Background access (push notifications) |
+| `kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly` | High-security — requires device passcode |
+| `kSecAttrAccessibleAlways` | ❌ Never — no protection |
+
+---
+
+## No Hardcoded Secrets
+
+```swift
+// ❌ NEVER: Hardcoded secrets in source code
+let apiKey = "sk-abc123secret"
+let dbPassword = "hunter2"
+
+// ✅ ALWAYS: Environment variables (Vapor server)
+guard let apiKey = Environment.get("API_KEY") else {
+    fatalError("API_KEY environment variable is required")
+}
+
+// ✅ iOS/macOS apps: load from Keychain (set during onboarding/auth flow)
+// ✅ Use .xcconfig files for non-secret build-time config (base URLs, feature flags)
+// ✅ Never commit .xcconfig files with secrets to source control
+```
+
+---
+
+## ATS — App Transport Security
+
+```xml
+<!-- ❌ NEVER in production — disables all TLS enforcement -->
+<key>NSAllowsArbitraryLoads</key>
+<true/>
+
+<!-- ✅ All production traffic must use HTTPS — no exceptions needed -->
+<!-- ✅ Only add exceptions with justification and App Store review justification -->
+<key>NSExceptionDomains</key>
+<dict>
+    <key>internal.dev.example.com</key>
+    <dict>
+        <key>NSExceptionAllowsInsecureHTTPLoads</key>
+        <true/>
+        <!-- REASON: Internal development server — debug builds only, not shipped -->
+    </dict>
+</dict>
+```
+
+---
+
+## Certificate Pinning
+
+```swift
+// ✅ Pin against the server's public key hash using URLSessionDelegate
+import CryptoKit
+
+final class PinnedSessionDelegate: NSObject, URLSessionDelegate {
+    // SHA-256 of the DER-encoded SubjectPublicKeyInfo
+    private let pinnedPublicKeyHashes: Set<String> = [
+        "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=",  // current cert
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="   // backup cert
+    ]
+
+    func urlSession(
+        _ session: URLSession,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+        guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+              let serverTrust = challenge.protectionSpace.serverTrust,
+              let certificate = SecTrustGetCertificateAtIndex(serverTrust, 0) else {
+            completionHandler(.cancelAuthenticationChallenge, nil)
+            return
         }
-        return try await next.respond(to: request)
+
+        var publicKey: SecKey?
+        if #available(iOS 14, *) {
+            publicKey = SecCertificateCopyKey(certificate)
+        }
+
+        guard let key = publicKey,
+              let keyData = SecKeyCopyExternalRepresentation(key, nil) as Data? else {
+            completionHandler(.cancelAuthenticationChallenge, nil)
+            return
+        }
+
+        let hash = SHA256.hash(data: keyData).map { String(format: "%02x", $0) }.joined()
+        let base64Hash = Data(SHA256.hash(data: keyData)).base64EncodedString()
+
+        if pinnedPublicKeyHashes.contains(base64Hash) {
+            completionHandler(.useCredential, URLCredential(trust: serverTrust))
+        } else {
+            completionHandler(.cancelAuthenticationChallenge, nil)
+        }
     }
 }
+
+// Usage
+let session = URLSession(
+    configuration: .default,
+    delegate: PinnedSessionDelegate(),
+    delegateQueue: nil
+)
 ```
+
+---
 
 ## Force-Unwrap Prevention
 
 ```swift
-// ❌ NEVER: Force-unwrap
+// ❌ NEVER: Force-unwrap — crashes in production
 let url = URL(string: userInput)!
+let value = dictionary["key"]! as! String
 
-// ✅ ALWAYS: Guard with error
+// ✅ ALWAYS: Guard with error or safe fallback
 guard let url = URL(string: userInput) else {
     throw ValidationError.invalidURL(userInput)
 }
@@ -71,116 +180,183 @@ guard let url = URL(string: userInput) else {
 // ❌ NEVER: try! in production
 let data = try! JSONEncoder().encode(payload)
 
-// ✅ ALWAYS: Propagate error
+// ✅ ALWAYS: Propagate or handle the error
 let data = try JSONEncoder().encode(payload)
+
+// ✅ Force-unwrap is ONLY acceptable with a justification comment:
+// The regex is a compile-time constant verified by unit tests — safe to force-unwrap
+let regex = try! NSRegularExpression(pattern: "^[a-z]{3,}$")
 ```
 
-## Input Validation
+---
+
+## Input Validation at Service Boundaries
 
 ```swift
 // ❌ NEVER: Trust input directly
 func createUser(req: Request) async throws -> UserResponse {
     let dto = try req.content.decode(CreateUserRequest.self)
-    return try await userService.create(dto)
+    return try await userService.create(dto)  // ❌ unvalidated
 }
 
-// ✅ ALWAYS: Validate before passing to service
+// ✅ ALWAYS: Validate before passing to service layer
 func createUser(req: Request) async throws -> UserResponse {
     let dto = try req.content.decode(CreateUserRequest.self)
-    try dto.validate()  // throws ValidationError with details
+    try dto.validate()
     return try await userService.create(dto)
 }
 
 extension CreateUserRequest: Validatable {
     static func validations(_ validations: inout Validations) {
-        validations.add("name", as: String.self, is: !.empty && .count(1...200))
+        validations.add("name",  as: String.self, is: !.empty && .count(1...200))
         validations.add("email", as: String.self, is: .email)
+        validations.add("age",   as: Int.self,    is: .range(13...120))
     }
 }
 ```
 
-## Secrets Management
+---
 
-```swift
-// ❌ NEVER: Hardcoded secrets
-let apiKey = "sk-abc123"
-
-// ✅ ALWAYS: Environment variables
-guard let apiKey = Environment.get("API_KEY") else {
-    fatalError("API_KEY environment variable is required")
-}
-```
-
-## SQL Injection Prevention (Fluent)
+## SQL Injection Prevention — Fluent / GRDB
 
 ```swift
 // ❌ NEVER: Raw SQL with string interpolation
 let results = try await db.raw("SELECT * FROM users WHERE id = '\(userInput)'").all()
 
-// ✅ ALWAYS: Fluent query builder (parameterized)
+// ✅ ALWAYS: Fluent query builder (parameterized automatically)
 let user = try await User.find(id, on: db)
 
-// ✅ ALSO OK: Raw SQL with bound parameters
-let results = try await db.raw("SELECT * FROM users WHERE id = \(bind: id)").all(decoding: User.self)
+let users = try await User.query(on: db)
+    .filter(\.$email == email)
+    .first()
+
+// ✅ Raw SQL with bound parameters (Fluent \(bind:) syntax)
+let results = try await db
+    .raw("SELECT * FROM users WHERE status = \(bind: status)")
+    .all(decoding: User.self)
+
+// ✅ GRDB parameterized queries
+let users = try dbQueue.read { db in
+    try User.fetchAll(db, sql: "SELECT * FROM users WHERE email = ?", arguments: [email])
+}
 ```
 
-## ATS (App Transport Security)
+---
 
-```xml
-<!-- ❌ NEVER in production: -->
-<key>NSAllowsArbitraryLoads</key>
-<true/>
+## JWT Validation (Vapor + JWTKit)
 
-<!-- ✅ ONLY specific domains with justification: -->
-<key>NSExceptionDomains</key>
-<dict>
-    <key>internal.company.com</key>
-    <dict>
-        <key>NSExceptionAllowsInsecureHTTPLoads</key>
-        <true/>
-        <!-- Reason: Internal dev server, not shipped to App Store -->
-    </dict>
-</dict>
+```swift
+import JWTKit
+
+// ✅ Always validate audience, issuer, and expiry
+let payload = try await req.jwt.verify(as: AppJWTPayload.self)
+guard payload.audience.value.contains("com.example.myapp") else {
+    throw Abort(.unauthorized, reason: "Invalid audience")
+}
+guard payload.issuer.value == "https://auth.example.com" else {
+    throw Abort(.unauthorized, reason: "Invalid issuer")
+}
+// expiry is validated automatically by JWTKit
 ```
+
+---
+
+## Role-Based Access Control (Vapor Middleware)
+
+```swift
+struct RequireRoleMiddleware: AsyncMiddleware {
+    let requiredRole: UserRole
+
+    func respond(to request: Request, chainingTo next: AsyncResponder) async throws -> Response {
+        let user = try request.auth.require(AuthUser.self)
+        guard user.role >= requiredRole else {
+            throw Abort(.forbidden, reason: "Insufficient permissions")
+        }
+        return try await next.respond(to: request)
+    }
+}
+
+// Usage in routes
+let adminRoutes = app.grouped(RequireRoleMiddleware(requiredRole: .admin))
+adminRoutes.delete("users", ":id", use: deleteUser)
+```
+
+---
 
 ## CORS Configuration (Vapor)
 
 ```swift
-// ✅ Explicit allowed origins only
+// ✅ Explicit allowed origins — never wildcard in production
 app.middleware.use(CORSMiddleware(configuration: .init(
-    allowedOrigin: .any(["https://yourdomain.com"]),
-    allowedMethods: [.GET, .POST, .PUT, .DELETE],
-    allowedHeaders: [.authorization, .contentType],
+    allowedOrigin: .any(["https://app.example.com", "https://admin.example.com"]),
+    allowedMethods: [.GET, .POST, .PUT, .PATCH, .DELETE],
+    allowedHeaders: [.authorization, .contentType, .accept],
     allowCredentials: true,
     cacheExpiration: 3600
 )))
+
+// ❌ NEVER in production:
+// allowedOrigin: .all   — allows any origin
 ```
 
-## Common Vulnerabilities to Prevent
+---
 
-| Vulnerability | Prevention |
-|--------------|------------|
-| Injection | Fluent query builder, `\(bind:)` in raw SQL |
-| Broken Auth | Keychain storage, JWT validation with audience/issuer |
-| Force-unwrap crash | `guard let` / `if let` / throw |
-| ATS bypass | No `NSAllowsArbitraryLoads`; document any exceptions |
-| Secrets in code | Environment variables, Keychain, not UserDefaults |
-| Insecure data storage | `kSecAttrAccessibleWhenUnlockedThisDeviceOnly` |
+## Security Headers Middleware (Vapor)
 
-## OWASP Top 10 (2021) Alignment
+```swift
+struct SecurityHeadersMiddleware: AsyncMiddleware {
+    func respond(to request: Request, chainingTo next: AsyncResponder) async throws -> Response {
+        let response = try await next.respond(to: request)
+        response.headers.add(name: "X-Content-Type-Options",    value: "nosniff")
+        response.headers.add(name: "X-Frame-Options",           value: "DENY")
+        response.headers.add(name: "X-XSS-Protection",          value: "1; mode=block")
+        response.headers.add(name: "Referrer-Policy",           value: "strict-origin-when-cross-origin")
+        response.headers.add(name: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains")
+        return response
+    }
+}
+```
+
+---
+
+## OWASP Mobile Top 10 Alignment
 
 | OWASP Category | How This File Addresses It |
 |----------------|----------------------------|
-| A01: Broken Access Control | `RequireRoleMiddleware`, route authentication groups |
-| A02: Cryptographic Failures | Keychain, `kSecAttrAccessibleWhenUnlocked*` |
-| A03: Injection | Fluent ORM, `\(bind:)` for raw SQL |
-| A04: Insecure Design | `Validatable` protocol, explicit validation |
-| A05: Security Misconfiguration | ATS, CORS configuration |
-| A07: Identification & Auth Failures | JWT audience/issuer check, no UserDefaults for tokens |
+| M1: Improper Credential Usage | Keychain storage, never UserDefaults |
+| M2: Inadequate Supply Chain Security | Pin SPM dependencies to exact versions |
+| M3: Insecure Authentication / Authorization | JWT audience/issuer validation, `RequireRoleMiddleware` |
+| M4: Insufficient Input/Output Validation | `Validatable` protocol, `guard let` |
+| M5: Insecure Communication | ATS enforcement, certificate pinning |
+| M6: Inadequate Privacy Controls | `.private` OSLog privacy, Keychain accessibility levels |
+| M7: Insufficient Binary Protections | Enable Bitcode, strip debug symbols in release builds |
+| M8: Security Misconfiguration | No `NSAllowsArbitraryLoads`, CORS explicit origins |
+| M9: Insecure Data Storage | `kSecAttrAccessibleWhenUnlockedThisDeviceOnly` |
+| M10: Insufficient Cryptography | No custom crypto — use CryptoKit, CommonCrypto |
+
+---
+
+## Non-Negotiable Rules
+
+```
+✅ Keychain for all credentials and tokens — never UserDefaults
+✅ Validate all input at service boundaries using Validatable
+✅ Parameterized queries only — Fluent query builder or \(bind:) for raw SQL
+✅ Guard let / if let everywhere — no ! without a justification comment
+✅ ATS enabled; document any NSExceptionDomains with a reason comment
+✅ CORS: explicit allowed origins list in production
+✅ JWT: always validate audience + issuer + expiry
+❌ Never hardcode secrets — use environment variables or Keychain
+❌ Never disable ATS globally (NSAllowsArbitraryLoads: true)
+❌ Never log passwords, tokens, credit card numbers, or PII
+❌ Never use try! or force-unwrap (!) without a comment justifying safety
+```
+
+---
 
 ## See Also
 
-- `auth.instructions.md` — OAuth, Sign In with Apple, biometric auth
-- `database.instructions.md` — Fluent query safety, migration security
-- `deploy.instructions.md` — Environment variables, secrets management in CI/CD
-- `api-patterns.instructions.md` — Input validation middleware
+- `auth.instructions.md` — OAuth 2.0, Sign In with Apple, biometric authentication
+- `observability.instructions.md` — Privacy-safe logging, .private OSLog values
+- `database.instructions.md` — Fluent migration security, query safety
+- `deploy.instructions.md` — Secrets injection in CI/CD pipelines

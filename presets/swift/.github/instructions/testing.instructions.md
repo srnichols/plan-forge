@@ -1,5 +1,5 @@
 ---
-description: Swift testing patterns — XCTest, Swift Testing framework, ViewInspector, async tests
+description: Swift testing patterns — XCTest, async tests, Vapor test helpers, mocking with protocols
 applyTo: '**/*Tests.swift,**/*Test.swift,**/Tests/**,**/Mocks/**'
 ---
 
@@ -7,99 +7,77 @@ applyTo: '**/*Tests.swift,**/*Test.swift,**/Tests/**,**/Mocks/**'
 
 ## Tech Stack
 
-- **Unit Tests**: XCTest (Swift 5.8 and earlier) or Swift Testing (`@Test`/`@Suite`, Swift 5.10+)
-- **Assertions**: `XCTAssert*` or `#expect` (Swift Testing)
-- **Mocking**: Protocol-based fakes (preferred over third-party mocking)
-- **Integration**: Vapor `XCTVapor` / `testcontainers-swift`
-- **SwiftUI Tests**: `ViewInspector`
-- **E2E**: XCUITest (iOS) or custom HTTP client tests (Vapor)
+- **Unit Tests**: `XCTest` framework
+- **Assertions**: `XCTAssert*` functions
+- **Mocking**: Protocol-based fakes (preferred over mocking frameworks)
+- **Integration (Vapor)**: `XCTVapor` — `Application` in `.testing` environment
+- **Async tests**: `async` test methods with `await`
+- **UI Tests**: `XCUITest` (separate target)
 
 ## Test Types
 
 | Type | Scope | Database | Speed |
 |------|-------|----------|-------|
-| **Unit** | Single function/type | Mocked/In-memory | Fast (ms) |
-| **Integration** | Service + DB | Real (Vapor test app) | Medium (1-3s) |
-| **UI/E2E** | Full screen flow | Real | Slow (10s+) |
+| **Unit** | Single function/type | Mocked (protocol fake) | Fast (ms) |
+| **Integration** | Service + DB | Real (in-memory SQLite or test Postgres) | Medium (1-3s) |
+| **API (Vapor)** | Full HTTP round-trip | Real (XCTVapor) | Medium (1-3s) |
+| **E2E / UI** | Full app flow | Real | Slow (10s+) |
 
 ## Patterns
 
 ### Unit Test (XCTest)
 ```swift
-final class ItemServiceTests: XCTestCase {
-    var sut: ItemService!
-    var mockRepository: MockItemRepository!
+final class UserServiceTests: XCTestCase {
 
-    override func setUp() async throws {
-        mockRepository = MockItemRepository()
-        sut = ItemService(repository: mockRepository)
+    func testGetUser_withValidID_returnsUser() async throws {
+        // Arrange
+        let fakeRepo = FakeUserRepository()
+        let testUser = User(id: UUID(), name: "Test User", email: "test@example.com")
+        fakeRepo.users[testUser.id!] = testUser
+        let sut = UserService(repository: fakeRepo)
+
+        // Act
+        let result = try await sut.getUser(id: testUser.id!)
+
+        // Assert
+        XCTAssertEqual(result.name, "Test User")
     }
 
-    func testGetByID_whenFound_returnsItem() async throws {
-        // Given
-        let expected = Item(id: UUID(), name: "Widget")
-        mockRepository.stubbedItem = expected
+    func testGetUser_withUnknownID_throwsNotFound() async {
+        let fakeRepo = FakeUserRepository()
+        let sut = UserService(repository: fakeRepo)
 
-        // When
-        let result = try await sut.getByID(expected.id!)
-
-        // Then
-        XCTAssertEqual(result.name, expected.name)
-    }
-
-    func testGetByID_whenNotFound_throwsNotFound() async throws {
-        // Given
-        mockRepository.stubbedItem = nil
-
-        // When / Then
         do {
-            _ = try await sut.getByID(UUID())
-            XCTFail("Expected AppError.notFound")
+            _ = try await sut.getUser(id: UUID())
+            XCTFail("Expected error to be thrown")
         } catch AppError.notFound {
-            // pass
+            // expected
+        } catch {
+            XCTFail("Unexpected error: \(error)")
         }
+    }
+}
+
+// Protocol-based fake
+final class FakeUserRepository: UserRepository {
+    var users: [UUID: User] = [:]
+
+    func find(id: UUID) async throws -> User? {
+        return users[id]
+    }
+
+    func save(_ user: User) async throws {
+        users[user.id!] = user
     }
 }
 ```
 
-### Unit Test (Swift Testing — Swift 5.10+)
-```swift
-@Suite("ItemService")
-struct ItemServiceTests {
-    let mockRepository = MockItemRepository()
-    let sut: ItemService
-
-    init() {
-        sut = ItemService(repository: mockRepository)
-    }
-
-    @Test("returns item when found")
-    func getByID_whenFound() async throws {
-        let expected = Item(id: UUID(), name: "Widget")
-        mockRepository.stubbedItem = expected
-
-        let result = try await sut.getByID(expected.id!)
-
-        #expect(result.name == expected.name)
-    }
-
-    @Test("throws notFound when missing")
-    func getByID_whenNotFound() async throws {
-        mockRepository.stubbedItem = nil
-
-        await #expect(throws: AppError.notFound) {
-            _ = try await sut.getByID(UUID())
-        }
-    }
-}
-```
-
-### Vapor Integration Test (XCTVapor)
+### Integration Test (XCTVapor)
 ```swift
 @testable import App
 import XCTVapor
 
-final class ItemRouteTests: XCTestCase {
+final class UserAPITests: XCTestCase {
     var app: Application!
 
     override func setUp() async throws {
@@ -113,80 +91,72 @@ final class ItemRouteTests: XCTestCase {
         await app.asyncShutdown()
     }
 
-    func testListItems_returnsOK() async throws {
-        try await app.test(.GET, "/items") { res async in
-            XCTAssertEqual(res.status, .ok)
-            let items = try res.content.decode([ItemResponse].self)
-            XCTAssertNotNil(items)
-        }
+    func testCreateUser_returnsCreated() async throws {
+        let body = CreateUserRequest(name: "Alice", email: "alice@example.com")
+
+        try await app.test(.POST, "/api/users", beforeRequest: { req in
+            try req.content.encode(body)
+        }, afterResponse: { res async throws in
+            XCTAssertEqual(res.status, .created)
+            let user = try res.content.decode(UserResponse.self)
+            XCTAssertEqual(user.name, "Alice")
+        })
     }
 
-    func testCreateItem_returnsCreated() async throws {
-        let dto = CreateItemRequest(name: "Widget")
-        try await app.test(.POST, "/items", beforeRequest: { req in
-            try req.content.encode(dto)
-        }, afterResponse: { res async in
-            XCTAssertEqual(res.status, .created)
+    func testGetUser_notFound_returns404() async throws {
+        try await app.test(.GET, "/api/users/\(UUID())", afterResponse: { res async throws in
+            XCTAssertEqual(res.status, .notFound)
         })
     }
 }
 ```
 
-### Protocol-Based Mock
+### Async Test Pattern
 ```swift
-// Protocol
-protocol ItemRepository {
-    func find(id: UUID) async throws -> Item?
-    func fetchAll() async throws -> [Item]
-    func save(_ item: Item) async throws -> Item
-}
+func testLoadUsers_setsUsersOnSuccess() async throws {
+    // Arrange
+    let mockService = MockUserService()
+    mockService.usersToReturn = [User(id: UUID(), name: "Bob")]
+    let viewModel = UserListViewModel(userService: mockService)
 
-// Fake
-final class MockItemRepository: ItemRepository {
-    var stubbedItem: Item?
-    var savedItems: [Item] = []
+    // Act
+    await viewModel.loadUsers()
 
-    func find(id: UUID) async throws -> Item? { stubbedItem }
-    func fetchAll() async throws -> [Item] { savedItems }
-    func save(_ item: Item) async throws -> Item {
-        savedItems.append(item)
-        return item
-    }
+    // Assert
+    XCTAssertEqual(viewModel.users.count, 1)
+    XCTAssertFalse(viewModel.hasError)
 }
 ```
 
-### SwiftUI Test (ViewInspector)
-```swift
-import ViewInspector
-
-final class ItemListViewTests: XCTestCase {
-    func testShowsLoadingIndicator_whenLoading() throws {
-        let vm = ItemListViewModel(service: MockItemService())
-        let view = ItemListView(viewModel: vm)
-
-        XCTAssertNoThrow(try view.inspect().find(ViewType.ProgressView.self))
-    }
-}
+### E2E Anti-Patterns
+```
+❌ Tests that depend on execution order — each test must be self-contained
+❌ No teardown — always revert migrations or wipe test state in tearDown
+❌ Missing async/await — all async test methods must be marked async throws
+❌ Force-unwraps in tests without clear intent — use XCTUnwrap() instead
+❌ Shared mutable state between tests — use setUp/tearDown to reset
 ```
 
 ## Conventions
 
-- Test file: `{TypeName}Tests.swift` (separate `Tests/` target)
-- Test function: `test{Method}_{Scenario}` (XCTest) or descriptive string (Swift Testing)
-- Use `setUp`/`tearDown` for test fixtures (XCTest) or `init` (Swift Testing)
-- Use in-memory SQLite for integration tests when possible (`DatabaseConfigurationFactory.sqlite(.memory)`)
+- Test file: `{TypeName}Tests.swift` in a dedicated test target
+- Test method: `test{MethodName}_{scenario}_{expectedOutcome}`
+- Use `XCTUnwrap()` instead of force-unwrapping in tests
+- Use `setUp() async throws` and `tearDown() async throws` for async setup
+- Use `@testable import` for white-box access to internal types
 
 ## Validation Gates (for Plan Hardening)
 
 ```markdown
 - [ ] `swift build` passes with zero errors
 - [ ] `swift test` — all pass
-- [ ] Anti-pattern grep: `grep -rn 'try!' --include="*.swift" Sources/` returns zero hits
-- [ ] Anti-pattern grep: `grep -rn 'XCTFail\b' --include="*.swift" Tests/` — only in error paths
+- [ ] `swift test --sanitize=thread` — no race conditions
+- [ ] No `try!` in production sources: `grep -rn 'try!' Sources/ App/`
+- [ ] No force-unwraps in production sources: `grep -rn '[^!]=\s*[^!]*![^=!]' Sources/ App/`
 ```
 
 ## See Also
 
-- `api-patterns.instructions.md` — Vapor route testing, request/response
-- `database.instructions.md` — Fluent test databases, migration testing
+- `api-patterns.instructions.md` — Vapor route testing, XCTVapor
+- `database.instructions.md` — Fluent test database setup, auto-migrate
 - `errorhandling.instructions.md` — Error assertion patterns

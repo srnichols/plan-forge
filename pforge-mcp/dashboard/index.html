@@ -49,6 +49,7 @@
       <span class="text-2xl">🔨</span>
       <h1 class="text-xl font-bold text-white">Plan Forge</h1>
       <span id="connection-badge" class="text-xs px-2 py-0.5 rounded-full bg-red-900 text-red-300">disconnected</span>
+      <span id="hub-clients" class="text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-400 hidden" title="Connected clients">0 clients</span>
     </div>
     <div class="flex items-center gap-4 text-sm text-gray-400">
       <span id="run-status">Idle</span>
@@ -116,6 +117,15 @@
       <div id="slice-cards" class="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
         <div class="text-gray-500 text-center py-12">Waiting for run events...</div>
       </div>
+
+      <!-- Event History (v2.9) -->
+      <details class="bg-gray-800 rounded-lg mt-4">
+        <summary class="px-4 py-3 cursor-pointer hover:bg-gray-700/50 flex items-center gap-2 text-sm font-semibold select-none">
+          <span>📜</span> Event Log
+          <span id="event-log-count" class="text-xs text-gray-500 ml-1">(0)</span>
+        </summary>
+        <div id="event-log" class="px-4 pb-3 max-h-48 overflow-y-auto font-mono text-xs space-y-0.5"></div>
+      </details>
     </section>
 
     <!-- Runs Tab -->
@@ -216,14 +226,20 @@
       </div>
       <!-- Cost Trend Line (v2.8) -->
       <div class="bg-gray-800 rounded-lg p-4 mt-4">
-        <div class="flex justify-between items-center mb-2">
+        <div class="flex justify-between items-center mb-2 relative">
           <h3 class="text-sm text-gray-400">Cost Per Run</h3>
           <button onclick="toggleExportMenu('cost')" class="text-xs px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded">Export ▾</button>
-          <div id="export-menu-cost" class="hidden absolute right-8 bg-gray-800 border border-gray-700 rounded shadow z-50">
-            <button onclick="exportCost()" class="block w-full text-left text-xs px-3 py-1.5 hover:bg-gray-700">JSON</button>
+          <div id="export-menu-cost" class="hidden absolute right-0 top-7 bg-gray-800 border border-gray-700 rounded shadow z-50">
+            <button onclick="exportCost('json')" class="block w-full text-left text-xs px-3 py-1.5 hover:bg-gray-700">JSON</button>
+            <button onclick="exportCost('csv')" class="block w-full text-left text-xs px-3 py-1.5 hover:bg-gray-700">CSV</button>
           </div>
         </div>
         <canvas id="chart-cost-trend" height="120"></canvas>
+      </div>
+      <!-- Duration Per Run Chart (v2.9) -->
+      <div class="bg-gray-800 rounded-lg p-4 mt-4">
+        <h3 class="text-sm text-gray-400 mb-2">Duration Per Run</h3>
+        <canvas id="chart-duration-trend" height="120"></canvas>
       </div>
       <!-- Model Performance Comparison (v2.7) -->
       <div class="bg-gray-800 rounded-lg p-4 mt-4">
@@ -280,6 +296,10 @@
         <button onclick="runDiff()" class="action-btn bg-gray-800 hover:bg-gray-700 rounded-lg p-4 text-left transition border border-blue-700/30">
           <div class="flex items-center gap-2 mb-1"><span>📝</span><span class="font-semibold">Diff</span></div>
           <p class="text-sm text-gray-400">Compare changes vs scope contract</p>
+        </button>
+        <button onclick="openLaunchPanel()" class="action-btn bg-gray-800 hover:bg-gray-700 rounded-lg p-4 text-left transition border border-cyan-700/30">
+          <div class="flex items-center gap-2 mb-1"><span>🚀</span><span class="font-semibold">Launch Plan</span></div>
+          <p class="text-sm text-gray-400">Execute a plan with model &amp; mode selection</p>
         </button>
       </div>
       <!-- Action result -->
@@ -364,6 +384,48 @@
               </optgroup>
             </select>
           </div>
+          <!-- Advanced Settings (v2.9) -->
+          <details class="border border-gray-700 rounded-lg p-3">
+            <summary class="text-sm text-gray-400 cursor-pointer hover:text-gray-300 font-semibold">Advanced Settings</summary>
+            <div class="space-y-3 mt-3">
+              <div class="grid grid-cols-3 gap-3">
+                <div>
+                  <label class="block text-xs text-gray-500 mb-1">Max Parallelism</label>
+                  <input id="cfg-max-parallel" type="number" min="1" max="10" value="3" class="bg-gray-700 text-white text-sm rounded px-3 py-1.5 w-full">
+                </div>
+                <div>
+                  <label class="block text-xs text-gray-500 mb-1">Max Retries</label>
+                  <input id="cfg-max-retries" type="number" min="0" max="5" value="1" class="bg-gray-700 text-white text-sm rounded px-3 py-1.5 w-full">
+                </div>
+                <div>
+                  <label class="block text-xs text-gray-500 mb-1">Run History Limit</label>
+                  <input id="cfg-max-history" type="number" min="10" max="500" value="50" class="bg-gray-700 text-white text-sm rounded px-3 py-1.5 w-full">
+                </div>
+              </div>
+              <div class="border-t border-gray-700 pt-3">
+                <p class="text-sm text-gray-400 font-semibold mb-2">Quorum Settings</p>
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="flex items-center gap-2 text-xs text-gray-500">
+                      <input id="cfg-quorum-enabled" type="checkbox" class="rounded border-gray-600 bg-gray-700 text-purple-500 focus:ring-0"> Enable Quorum
+                    </label>
+                  </div>
+                  <div>
+                    <label class="block text-xs text-gray-500 mb-1">Threshold (1-10)</label>
+                    <input id="cfg-quorum-threshold" type="number" min="1" max="10" value="7" class="bg-gray-700 text-white text-sm rounded px-3 py-1.5 w-full">
+                  </div>
+                </div>
+                <div class="mt-2">
+                  <label class="block text-xs text-gray-500 mb-1">Quorum Models (comma-separated)</label>
+                  <input id="cfg-quorum-models" type="text" placeholder="grok-3-mini, claude-sonnet-4.6, gpt-5.2-codex" class="bg-gray-700 text-white text-sm rounded px-3 py-1.5 w-full border border-gray-600 focus:border-purple-500 outline-none">
+                </div>
+              </div>
+              <div>
+                <label class="block text-xs text-gray-500 mb-1">Available Workers</label>
+                <div id="cfg-workers" class="text-sm text-gray-300 bg-gray-700 rounded px-3 py-2">Checking...</div>
+              </div>
+            </div>
+          </details>
           <div>
             <label class="block text-sm text-gray-400 mb-1">API Providers</label>
             <div id="cfg-api-providers" class="text-sm text-gray-300 bg-gray-700 rounded px-3 py-2">Checking...</div>
@@ -371,13 +433,14 @@
           <div>
             <label class="block text-sm text-gray-400 mb-1">OpenBrain Memory</label>
             <div id="cfg-openbrain" class="text-sm text-gray-300 bg-gray-700 rounded px-3 py-2">Checking...</div>
-            <!-- Memory Search (v2.7) -->
-            <div id="memory-search-panel" class="mt-2 hidden">
+            <!-- Memory Search (v2.9: presets + redesign) -->
+            <div id="memory-search-panel" class="mt-3">
               <div class="flex gap-2">
-                <input id="memory-search-input" type="text" placeholder="Search project memory..." class="flex-1 bg-gray-700 text-white text-sm rounded px-3 py-1.5 border border-gray-600 focus:border-blue-500 outline-none" onkeydown="if(event.key==='Enter')searchMemory()">
+                <input id="memory-search-input" type="text" placeholder="Search plans, configs, runs..." class="flex-1 bg-gray-700 text-white text-sm rounded px-3 py-1.5 border border-gray-600 focus:border-blue-500 outline-none" onkeydown="if(event.key==='Enter')searchMemory()">
                 <button onclick="searchMemory()" class="bg-blue-600 hover:bg-blue-500 text-white text-sm px-3 py-1.5 rounded">Search</button>
               </div>
-              <div id="memory-search-results" class="mt-2 max-h-48 overflow-y-auto"></div>
+              <div id="memory-presets" class="flex flex-wrap gap-1.5 mt-2"></div>
+              <div id="memory-search-results" class="mt-2 max-h-64 overflow-y-auto"></div>
             </div>
           </div>
           <div class="flex gap-2 pt-2">
@@ -391,11 +454,12 @@
 
     <!-- Traces Tab (v2.4) -->
     <section id="tab-traces" class="tab-content hidden">
-      <div class="flex gap-4 mb-4">
+      <div class="flex gap-4 mb-4 flex-wrap">
         <select id="trace-run-select" title="Select trace run" class="bg-gray-700 text-white text-sm rounded px-3 py-2" onchange="loadTraceDetail()">
           <option value="">Select a run...</option>
         </select>
-        <div class="flex gap-2 text-xs">
+        <input id="trace-search" type="text" placeholder="Search spans..." class="bg-gray-700 text-white text-sm rounded px-3 py-2 border border-gray-600 focus:border-blue-500 outline-none w-48" oninput="filterTraceSpans()">
+        <div class="flex gap-2 text-xs items-center">
           <button onclick="filterTraceEvents('all')" class="px-2 py-1 bg-gray-600 rounded hover:bg-gray-500">All</button>
           <button onclick="filterTraceEvents('ERROR')" class="px-2 py-1 bg-red-900 rounded hover:bg-red-800">Errors</button>
           <button onclick="filterTraceEvents('WARN')" class="px-2 py-1 bg-yellow-900 rounded hover:bg-yellow-800">Warnings</button>
@@ -441,6 +505,63 @@
     </section>
   </main>
 
+  <!-- Launch Plan Modal (v2.9) -->
+  <div id="launch-modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center" onclick="if(event.target===this)closeLaunchPanel()">
+    <div class="bg-gray-800 border border-gray-700 rounded-xl p-6 w-[420px] shadow-2xl">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-lg font-bold">🚀 Launch Plan</h2>
+        <button onclick="closeLaunchPanel()" class="text-gray-500 hover:text-white text-lg">✕</button>
+      </div>
+      <div class="space-y-3">
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">Plan</label>
+          <select id="launch-plan" title="Select plan" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full"></select>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Mode</label>
+            <select id="launch-mode" title="Execution mode" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full">
+              <option value="auto">Auto</option>
+              <option value="assisted">Assisted</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Model</label>
+            <select id="launch-model" title="Model" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full">
+              <option value="auto">auto</option>
+              <option value="grok-4.20">grok-4.20</option>
+              <option value="grok-4">grok-4</option>
+              <option value="grok-3">grok-3</option>
+              <option value="claude-sonnet-4.6">claude-sonnet-4.6</option>
+              <option value="gpt-5.2-codex">gpt-5.2-codex</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Quorum</label>
+            <select id="launch-quorum" title="Quorum mode" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full">
+              <option value="false">Off</option>
+              <option value="auto" selected>Auto (threshold)</option>
+              <option value="true">All slices</option>
+            </select>
+          </div>
+          <div class="flex items-end">
+            <label class="flex items-center gap-2 text-sm text-gray-400 pb-2">
+              <input id="launch-estimate" type="checkbox" class="rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-0"> Estimate only
+            </label>
+          </div>
+        </div>
+        <div id="launch-workers" class="text-xs text-gray-500"></div>
+        <div class="flex gap-2 pt-2">
+          <button onclick="submitLaunch()" class="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded text-sm font-semibold">Launch</button>
+          <button onclick="submitLaunch(true)" class="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm">Estimate First</button>
+        </div>
+        <div id="launch-status" class="text-xs text-gray-500"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- Run Detail Drawer (v2.8) -->
   <div id="drawer-overlay" class="fixed inset-0 bg-black/50 z-40" onclick="closeRunDrawer()"></div>
   <div id="run-detail-drawer" class="fixed top-0 right-0 h-full w-[480px] bg-gray-800 border-l border-gray-700 z-50 overflow-y-auto shadow-2xl">
@@ -466,7 +587,7 @@
     </div>
   </div>
 
-  <footer class="text-center text-xs text-gray-600 py-2">Press <kbd class="bg-gray-700 px-1 rounded">?</kbd> for keyboard shortcuts</footer>
+  <footer class="text-center text-xs text-gray-600 py-2">Plan Forge <span id="footer-version"></span> · Press <kbd class="bg-gray-700 px-1 rounded">?</kbd> for keyboard shortcuts</footer>
 
   <script src="app.js"></script>
 </body>

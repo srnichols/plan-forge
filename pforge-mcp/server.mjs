@@ -314,7 +314,7 @@ function executeTool(name, args) {
 
 // ─── MCP Server ───────────────────────────────────────────────────────
 const server = new Server(
-  { name: "plan-forge-mcp", version: "2.6.0" },
+  { name: "plan-forge-mcp", version: "2.9.0" },
   { capabilities: { tools: {} } }
 );
 
@@ -841,6 +841,17 @@ function createExpressApp() {
             status: parsed.meta.status || "Unknown",
             sliceCount: parsed.slices.length,
             branch: parsed.meta.branch || null,
+            scopeContract: parsed.scopeContract || null,
+            slices: parsed.slices.map((s) => ({
+              id: s.id || s.number,
+              title: s.title || s.name || `Slice ${s.number}`,
+              tasks: s.tasks || [],
+              buildCommand: s.buildCommand || null,
+              testCommand: s.testCommand || null,
+              parallel: s.parallel || false,
+              depends: s.depends || [],
+              scope: s.scope || [],
+            })),
           });
         } catch { /* skip malformed plans */ }
       }
@@ -882,17 +893,86 @@ function createExpressApp() {
   app.post("/api/memory/search", (req, res) => {
     try {
       if (!isOpenBrainConfigured(PROJECT_DIR)) {
-        return res.json({ error: "OpenBrain not configured" });
+        return res.json({ configured: false, results: [], note: "OpenBrain not configured. Add openbrain MCP server to enable project memory." });
       }
       const query = req.body?.query;
       if (!query || typeof query !== "string") {
         return res.status(400).json({ error: "query is required" });
       }
-      // Proxy search through pforge CLI (uses MCP search_thoughts tool)
-      const result = runPforge(`smith`, PROJECT_DIR);
-      // For now, return a placeholder since direct OpenBrain MCP call requires active connection
-      // The search_thoughts tool is available through the MCP server chain
-      res.json({ results: [], note: "Memory search requires active OpenBrain MCP connection. Use search_thoughts tool directly." });
+      // Search local .forge memory files for relevant content
+      const results = [];
+      const forgeDir = resolve(PROJECT_DIR, ".forge");
+      const searchDirs = [forgeDir, resolve(PROJECT_DIR, "docs", "plans")];
+      const searchPattern = query.toLowerCase();
+      for (const dir of searchDirs) {
+        if (!existsSync(dir)) continue;
+        try {
+          const files = readdirSync(dir).filter((f) => f.endsWith(".json") || f.endsWith(".md"));
+          for (const file of files.slice(0, 20)) {
+            try {
+              const content = readFileSync(resolve(dir, file), "utf-8");
+              if (content.toLowerCase().includes(searchPattern)) {
+                const lines = content.split("\n");
+                const matchLine = lines.findIndex((l) => l.toLowerCase().includes(searchPattern));
+                const excerpt = lines.slice(Math.max(0, matchLine - 1), matchLine + 3).join("\n").substring(0, 200);
+                results.push({ file: `${dir === forgeDir ? ".forge" : "docs/plans"}/${file}`, excerpt, line: matchLine + 1 });
+              }
+            } catch { /* skip unreadable */ }
+          }
+        } catch { /* skip missing dir */ }
+      }
+      res.json({ configured: true, results, note: results.length === 0 ? "No matches found. Try broader terms or check preset suggestions." : null });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // v2.9: Memory search presets API
+  app.get("/api/memory/presets", (_req, res) => {
+    try {
+      // Build context-aware presets from project config
+      let projectName = "Plan Forge";
+      let preset = "";
+      const configPath = resolve(PROJECT_DIR, ".forge.json");
+      if (existsSync(configPath)) {
+        try {
+          const config = JSON.parse(readFileSync(configPath, "utf-8"));
+          projectName = config.projectName || projectName;
+          preset = config.preset || "";
+        } catch { /* ignore */ }
+      }
+      // Check what data exists to suggest relevant searches
+      const hasRuns = existsSync(resolve(PROJECT_DIR, ".forge", "runs"));
+      const hasCost = existsSync(resolve(PROJECT_DIR, ".forge", "cost-history.json"));
+      const hasPlans = existsSync(resolve(PROJECT_DIR, "docs", "plans"));
+      const presets = {
+        categories: [
+          { name: "Plans & Phases", icon: "📋", queries: ["Phase", "PLAN", "roadmap", "slice", "scope contract"] },
+          { name: "Architecture", icon: "🏗️", queries: ["architecture", "design", "pattern", "layer", "service"] },
+          { name: "Configuration", icon: "⚙️", queries: ["config", "model", "routing", "quorum", "preset"] },
+          { name: "Testing", icon: "🧪", queries: ["test", "validation", "gate", "coverage", "sweep"] },
+          { name: "Cost & Tokens", icon: "💰", queries: ["cost", "token", "spend", "model", "budget"] },
+          { name: "Issues & Fixes", icon: "🐛", queries: ["bug", "fix", "error", "fail", "TODO"] },
+        ],
+        recentFiles: [],
+        projectContext: { projectName, preset, hasRuns, hasCost, hasPlans },
+      };
+      // Add recent run files as suggested search targets
+      if (hasRuns) {
+        const runsDir = resolve(PROJECT_DIR, ".forge", "runs");
+        try {
+          const dirs = readdirSync(runsDir, { withFileTypes: true })
+            .filter((d) => d.isDirectory()).map((d) => d.name).sort().reverse().slice(0, 5);
+          presets.recentFiles = dirs.map((d) => ({ dir: d, label: d.replace(/^\d{4}-\d{2}-\d{2}T[\d-]+_/, "") }));
+        } catch { /* ignore */ }
+      }
+      res.json(presets);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // v2.9: Worker detection API
+  app.get("/api/workers", (_req, res) => {
+    try {
+      const workers = detectWorkers(PROJECT_DIR);
+      res.json(workers);
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 

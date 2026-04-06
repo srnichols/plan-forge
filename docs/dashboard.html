@@ -85,7 +85,9 @@
         <span class="px-3 py-1 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">Export JSON/CSV</span>
         <span class="px-3 py-1 rounded-full bg-teal-500/20 text-teal-400 border border-teal-500/30">Light/Dark Theme</span>
         <span class="px-3 py-1 rounded-full bg-pink-500/20 text-pink-400 border border-pink-500/30">Skill Catalog</span>
-        <span class="px-3 py-1 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">Responsive Layout</span>
+        <span class="px-3 py-1 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">Run Launch Panel</span>
+        <span class="px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">DAG Visualizer</span>
+        <span class="px-3 py-1 rounded-full bg-lime-500/20 text-lime-400 border border-lime-500/30">Memory Search Presets</span>
       </div>
     </div>
   </section>
@@ -133,6 +135,8 @@
             <h2 class="text-2xl font-bold text-white">Progress</h2>
             <p class="text-slate-400 mt-1">Live view of the currently executing plan. Each slice is rendered as a card showing its status (pending, executing, completed, failed), the AI model used, execution time, and token cost. The progress bar updates in real time via WebSocket events. Slices using API-based models like Grok display a purple <span class="inline-block px-1.5 py-0.5 text-xs font-bold rounded bg-purple-500/30 text-purple-300 border border-purple-400/30">API</span> badge.</p>
             <p class="text-slate-400 mt-2">The <strong class="text-white">Plan Browser</strong> panel lists all plan files in <code class="text-forge-400 text-sm">docs/plans/</code> with their status, slice count, and branch. Click <strong>Estimate</strong> to preview cost/token estimates or <strong>Run</strong> to launch execution directly. Expand <strong class="text-white">Select slices</strong> to toggle individual slices on/off before running — unchecked slices are passed as <code class="text-forge-400 text-sm">--skip-slices</code>.</p>
+            <p class="text-slate-400 mt-2">The <strong class="text-white">Scope Contract</strong> accordion shows each plan's In Scope, Out of Scope, and Forbidden file lists. The <strong class="text-white">DAG View</strong> reveals slice dependency relationships with <code class="text-forge-400 text-xs">[P]</code> parallel tags and <code class="text-forge-400 text-xs">←</code> dependency arrows.</p>
+            <p class="text-slate-400 mt-2">The <strong class="text-white">Event Log</strong> panel at the bottom records all WebSocket events in real time with timestamps, color-coded by event type. It auto-scrolls during active execution and executing slice cards show a live elapsed-time counter.</p>
           </div>
         </div>
         <img src="assets/dashboard/progress.png" alt="Dashboard Progress tab with plan browser showing 6 plans, plus slice cards — 3 completed, 1 executing" class="w-full rounded-xl border border-slate-700/40 shadow-2xl" loading="lazy" />
@@ -148,7 +152,7 @@
             <ul class="text-slate-400 mt-2 space-y-1 text-sm list-disc list-inside">
               <li><strong class="text-white">Filter Bar</strong> — filter by plan, status, model, mode, and date range. Filters combine with AND logic.</li>
               <li><strong class="text-white">Sortable Columns</strong> — click any column header to cycle through ascending, descending, and default sort order.</li>
-              <li><strong class="text-white">Run Detail Drawer</strong> — click any row to slide open a right-panel drawer showing per-slice detail cards with status, worker, tokens, cost, gate errors, and expandable gate output.</li>
+              <li><strong class="text-white">Run Detail Drawer</strong> — click any row to slide open a right-panel drawer showing per-slice detail cards with status, worker, tokens, cost, gate errors, expandable gate output, and <strong>Tasks &amp; commands</strong> detail (task list, build/test commands). Failed runs show a <strong>Resume from Slice N</strong> button to restart from the failure point.</li>
               <li><strong class="text-white">Run Comparison</strong> — toggle Compare mode, select two runs, and view side-by-side cards with cost/duration/token deltas color-coded (green = lower, red = higher).</li>
               <li><strong class="text-white">Export</strong> — export filtered runs as JSON or CSV via the Export dropdown menu.</li>
               <li><strong class="text-white">Keyboard Navigation</strong> — press <code class="text-forge-400 text-xs">j</code>/<code class="text-forge-400 text-xs">k</code> to move between rows, <code class="text-forge-400 text-xs">Enter</code> to open detail, <code class="text-forge-400 text-xs">Esc</code> to close.</li>
@@ -166,7 +170,7 @@
             <h2 class="text-2xl font-bold text-white">Cost</h2>
             <p class="text-slate-400 mt-1">Cumulative cost visualization across all runs. The donut chart breaks down spend by model, and the monthly bar chart shows cost over time. Data comes from <code class="text-forge-400 text-sm">cost-history.json</code>.</p>
             <p class="text-slate-400 mt-2">The <strong class="text-white">Cost Trend Line Chart</strong> plots per-run cost with a dashed average line. Points are color-coded: <span class="text-green-400">green</span> (within 2&times; average), <span class="text-yellow-400">amber</span> (2-3&times;), <span class="text-red-400">red</span> (&gt;3&times;). An <strong class="text-white">Anomaly Detection Banner</strong> appears automatically when any of the latest 5 runs exceeds 3&times; the historical average — click to dismiss.</p>
-            <p class="text-slate-400 mt-2">The <strong class="text-white">Model Comparison</strong> table aggregates per-model performance: run count, pass rate (color-coded), average duration, cost per run, and total tokens. <strong class="text-white">Export Cost</strong> downloads cost data as JSON.</p>
+            <p class="text-slate-400 mt-2">The <strong class="text-white">Duration Per Run</strong> bar chart visualizes execution time per run — color-coded blue (&lt;2min), amber (2-5min), red (&gt;5min). The <strong class="text-white">Model Comparison</strong> table aggregates per-model performance: run count, pass rate, average duration, cost per run, and total tokens. <strong class="text-white">Export Cost</strong> downloads cost data as JSON or CSV.</p>
           </div>
         </div>
         <img src="assets/dashboard/cost.png" alt="Dashboard Cost tab showing cumulative cost chart across runs" class="w-full rounded-xl border border-slate-700/40 shadow-2xl" loading="lazy" />
@@ -178,8 +182,8 @@
           <span class="shrink-0 w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center text-purple-400 text-lg">🎯</span>
           <div>
             <h2 class="text-2xl font-bold text-white">Actions</h2>
-            <p class="text-slate-400 mt-1">One-click access to 11 forge operations. Run <strong>Smith</strong> (environment diagnostics), <strong>Sweep</strong> (TODO/FIXME detection with structured table view), <strong>Analyze</strong> (plan consistency scoring), <strong>Analyze (Quorum)</strong> (multi-model consensus analysis), <strong>Diagnose</strong> (multi-model bug investigation), <strong>Status</strong> (editable phase status with inline dropdowns), <strong>Validate</strong> (setup file checks), and <strong>Extensions</strong> (catalog browser). Results display inline below each card.</p>
-            <p class="text-slate-400 mt-2"><strong class="text-white">Create Branch</strong> creates a git branch from the plan's branch strategy. <strong class="text-white">Auto-Commit</strong> generates a conventional commit from the current slice goal. <strong class="text-white">Diff</strong> shows changed files color-coded against the scope contract — green for in-scope, yellow for out-of-scope, red for forbidden. The <strong class="text-white">Sweep</strong> action now renders results as a filterable table with type badges (TODO, FIXME, HACK, STUB).</p>
+            <p class="text-slate-400 mt-1">One-click access to 12 forge operations. Run <strong>Smith</strong> (environment diagnostics), <strong>Sweep</strong> (TODO/FIXME detection with structured table view), <strong>Analyze</strong> (plan consistency scoring), <strong>Analyze (Quorum)</strong> (multi-model consensus analysis), <strong>Diagnose</strong> (multi-model bug investigation), <strong>Status</strong> (editable phase status with inline dropdowns), <strong>Validate</strong> (setup file checks), and <strong>Extensions</strong> (catalog browser). Results display inline below each card.</p>
+            <p class="text-slate-400 mt-2"><strong class="text-white">Launch Plan</strong> opens a full execution modal — pick a plan, mode (auto/assisted), model, quorum toggle, then launch or estimate first. Worker detection shows available CLI workers and API providers. <strong class="text-white">Create Branch</strong> creates a git branch from the plan's branch strategy. <strong class="text-white">Auto-Commit</strong> generates a conventional commit from the current slice goal. <strong class="text-white">Diff</strong> shows changed files color-coded against the scope contract — green for in-scope, yellow for out-of-scope, red for forbidden.</p>
           </div>
         </div>
         <img src="assets/dashboard/actions.png" alt="Dashboard Actions tab showing 11 action cards including git ops, sweep, and status editor" class="w-full rounded-xl border border-slate-700/40 shadow-2xl" loading="lazy" />
@@ -192,7 +196,8 @@
           <div>
             <h2 class="text-2xl font-bold text-white">Config</h2>
             <p class="text-slate-400 mt-1">View and edit project configuration without touching files. Set the active preset, template version, enabled agents (Claude, Cursor, Codex, Grok), and default model routing. The <strong>API Providers</strong> section shows which external model providers are configured — set <code class="text-forge-400 text-sm">XAI_API_KEY</code> to enable Grok models (grok-4, grok-3, grok-3-mini). The <strong>OpenBrain Memory</strong> section shows whether the OpenBrain MCP server is connected for persistent project memory. Changes save to <code class="text-forge-400 text-sm">.forge/config.json</code>.</p>
-            <p class="text-slate-400 mt-2">When OpenBrain is connected, the <strong class="text-white">Memory Search</strong> panel lets you search project knowledge directly from the dashboard. Type a query and get matching memory entries rendered as cards with titles and excerpts.</p>
+            <p class="text-slate-400 mt-2">The <strong class="text-white">Advanced Settings</strong> panel exposes max parallelism, max retries, run history limit, and full <strong>Quorum Settings</strong> (enable/disable, complexity threshold, model list). The <strong>Available Workers</strong> section shows detected CLI workers and API providers.</p>
+            <p class="text-slate-400 mt-2">The <strong class="text-white">Memory Search</strong> panel features categorized preset chips (Plans, Architecture, Config, Testing, Cost, Issues) that auto-populate searches. Click any preset to instantly search, or type custom queries. Results render as formatted cards with file paths, line numbers, and excerpts. When no results match, the panel suggests alternative queries.</p>
           </div>
         </div>
         <img src="assets/dashboard/config.png" alt="Dashboard Config tab showing preset, agents, model routing, API providers, OpenBrain memory status, and memory search" class="w-full rounded-xl border border-slate-700/40 shadow-2xl" loading="lazy" />
@@ -204,7 +209,7 @@
           <span class="shrink-0 w-10 h-10 rounded-xl bg-orange-500/20 flex items-center justify-center text-orange-400 text-lg">🔍</span>
           <div>
             <h2 class="text-2xl font-bold text-white">Traces</h2>
-            <p class="text-slate-400 mt-1">OTLP-compatible execution trace viewer. Each plan run produces a trace with spans for every slice, gate check, and tool invocation. Select a run to see its full span tree with timing, status codes, and error details. Compatible with OpenTelemetry collectors for export to Jaeger, Zipkin, or Azure Monitor.</p>
+            <p class="text-slate-400 mt-1">OTLP-compatible execution trace viewer. Each plan run produces a trace with spans for every slice, gate check, and tool invocation. Select a run to see its full span tree with timing, status codes, and error details. Use the <strong class="text-white">Search spans</strong> input to filter by span name, attributes, or log summary content in real time. Compatible with OpenTelemetry collectors for export to Jaeger, Zipkin, or Azure Monitor.</p>
             <p class="text-slate-400 mt-2"><strong class="text-white">Quorum Visualization</strong> — when a run used quorum mode, a purple banner shows model legs, success rate, and dispatch duration. Slice spans show a <span class="inline-block px-1.5 py-0.5 text-xs font-bold rounded bg-purple-500/30 text-purple-300 border border-purple-400/30">&#x1F52E;</span> badge with leg counts. Click any quorum span to see a detail panel with complexity score, threshold, models dispatched, successful legs, dispatch duration, and reviewer cost.</p>
             <p class="text-slate-400 mt-2"><strong class="text-white">Enhanced Span Attributes</strong> — clicking any span now renders a formatted attribute table (not raw JSON) with friendly labels, expandable log summaries, and structured event rendering with per-event attributes and severity coloring.</p>
           </div>
@@ -302,7 +307,7 @@
           <div class="bg-slate-800/60 rounded-xl border border-slate-700/40 p-6">
             <div class="text-2xl mb-3">📤</div>
             <h3 class="font-semibold text-white mb-2">Export Data</h3>
-            <p class="text-sm text-slate-400">Export run history as JSON or CSV from the Runs tab, or export cost data as JSON from the Cost tab. Filtered results export only matching runs.</p>
+            <p class="text-sm text-slate-400">Export run history as JSON or CSV from the Runs tab, or export cost data as JSON or CSV from the Cost tab. Filtered results export only matching runs.</p>
           </div>
         </div>
       </div>

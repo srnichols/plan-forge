@@ -279,14 +279,16 @@ const TOOLS = [
   },
   {
     name: "forge_generate_image",
-    description: "Generate an image using AI image models (xAI Grok Aurora or OpenAI DALL-E). Provide a text description and get a generated image saved to disk. Useful for creating logos, diagrams, UI mockups, icons, and illustrations during plan execution. Requires XAI_API_KEY (Grok) or OPENAI_API_KEY (DALL-E).",
+    description: "Generate an image using AI image models (xAI Grok Aurora or OpenAI DALL-E). Provide a text description and get a generated image saved to disk. Supports format conversion — request WebP, PNG, AVIF, or JPEG regardless of what the API returns. Useful for creating logos, diagrams, UI mockups, icons, and illustrations during plan execution. Requires XAI_API_KEY (Grok) or OPENAI_API_KEY (DALL-E).",
     inputSchema: {
       type: "object",
       properties: {
         prompt: { type: "string", description: "Detailed text description of the image to generate. Be specific about style, colors, composition, and content." },
-        outputPath: { type: "string", description: "File path to save the image (relative to project dir). e.g., 'assets/logo.png', 'docs/diagram.png'" },
+        outputPath: { type: "string", description: "File path to save the image (relative to project dir). The file extension determines the output format — e.g., 'assets/logo.webp' converts to WebP, 'docs/hero.png' converts to PNG." },
         model: { type: "string", description: "Image model to use. Default: grok-imagine-image", enum: ["grok-imagine-image", "grok-imagine-image-pro", "dall-e-3", "dall-e-4", "gpt-image-1"] },
         size: { type: "string", description: "Image dimensions. Default: 1024x1024", enum: ["1024x1024", "1024x768", "768x1024"] },
+        format: { type: "string", description: "Output format override (if different from file extension). Default: inferred from outputPath extension.", enum: ["jpg", "png", "webp", "avif"] },
+        quality: { type: "number", description: "Encoding quality 1-100. Default: 85. Lower = smaller file, less detail.", minimum: 1, maximum: 100 },
         path: { type: "string", description: "Project directory (default: current)" },
       },
       required: ["prompt", "outputPath"],
@@ -584,6 +586,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const result = await generateImage(args.prompt, {
         model: args.model || "grok-imagine-image",
         size: args.size || "1024x1024",
+        format: args.format,
+        quality: args.quality,
         outputPath: args.outputPath,
         cwd,
       });
@@ -593,11 +597,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           status: "generated",
           localPath: result.localPath,
           mimeType: result.mimeType,
+          originalFormat: result.originalFormat,
+          converted: result.converted,
           model: result.model,
           revisedPrompt: result.revisedPrompt,
         };
         if (result.extensionCorrected) {
-          payload.warning = `File extension was corrected from requested path '${result.requestedPath}' to '${result.localPath}' to match the actual image format (${result.mimeType}). This prevents MIME type mismatch errors.`;
+          payload.extensionWarning = `File extension was corrected from '${result.requestedPath}' to '${result.localPath}' — conversion to requested format was not possible (${result.warning || "sharp not installed"}).`;
+        }
+        if (result.warning) {
+          payload.warning = result.warning;
         }
         return {
           content: [{

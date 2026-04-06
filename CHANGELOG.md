@@ -5,6 +5,83 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.9.0] — 2026-04-06
+
+### Fixed — Bug Fixes (Phase 11)
+- **B1**: Fixed notification hook — WebSocket events now correctly trigger toast notifications for `run-completed` and `slice-failed` (previously the monkey-patch was never applied)
+- **B2**: Fixed cost export dropdown positioning — menu now anchors correctly via relative parent container
+- **B3**: Fixed keyboard j/k edge case — `selectedRunIdx` now guards against empty rows and -1 initial state
+- **B4**: Fixed MCP server version — updated from stale `2.6.0` to match VERSION file
+- **B5**: Fixed memory search — replaced stub/placeholder response with real local file search across `.forge/` and `docs/plans/`
+
+### Added — Dashboard Full Capability Surface (Phase 11)
+
+#### Memory Search Redesign
+- **Categorized presets** — 6 categories (Plans, Architecture, Config, Testing, Cost, Issues) with clickable chip buttons that auto-populate and submit searches
+- **`GET /api/memory/presets`** — context-aware preset API that reads project config for relevant suggestions
+- **Helpful empty states** — when no results, shows alternative query suggestions from presets
+- **Result cards** — formatted with file path, line number, and excerpt instead of raw text
+
+#### Hub Client Monitor
+- **Client count badge** in header — polls `GET /api/hub` every 10s showing connected WebSocket client count
+- **Auto-start/stop** — polling starts on WS connect, stops on disconnect
+
+#### Runs Auto-Refresh
+- Runs table automatically reloads when `run-started` or `run-completed` events arrive via WebSocket
+
+#### Version Footer
+- Dashboard footer shows Plan Forge version fetched from `/api/capabilities`
+
+#### Plan Scope Contract
+- **Scope Contract accordion** in Plan Browser — shows In Scope, Out of Scope, and Forbidden file lists
+- **`GET /api/plans`** response now includes `scopeContract` and per-slice metadata (tasks, buildCommand, testCommand, depends, parallel, scope)
+
+#### Slice Task Detail
+- Run Detail Drawer shows expandable **Tasks & commands** section per slice — task list, build command, test command
+
+#### Resume From Slice
+- **Resume button** appears in Run Detail Drawer when a run has failed slices — "Resume from Slice N" skips completed slices
+
+#### Config Advanced Settings
+- **Advanced Settings** panel: max parallelism, max retries, run history limit
+- **Quorum Settings**: enable/disable, complexity threshold (1-10), model list
+- **Worker Detection**: `GET /api/workers` endpoint + display in Config and Launch panels
+
+#### Run Launch Panel
+- **Launch Plan modal** from Actions tab — pick plan, mode (auto/assisted), model, quorum toggle
+- **Estimate First** button for cost preview before execution
+- **Worker detection** shows available CLI workers and API providers in the modal
+
+#### Duration Chart
+- **Duration Per Run** bar chart in Cost tab — color-coded (blue <2min, amber 2-5min, red >5min)
+
+#### Cost CSV Export
+- Cost export dropdown now offers both **JSON** and **CSV** formats
+
+#### Event History Log
+- **Event Log** collapsible panel on Progress tab — scrollable list of all WebSocket events with timestamps, color-coded by type, auto-tailing during active runs
+
+#### Trace Span Search
+- **Search input** in Traces tab — filters spans by name, attributes, or log summary content in real time
+
+#### DAG Dependency Visualizer
+- **DAG View** accordion in Plan Browser — shows slice dependency tree with `[P]` parallel tags and `→` dependency arrows
+
+#### Tab Badges
+- **Active badges** on tab buttons: Runs (new run count), Cost (anomaly indicator), Skills (active execution count)
+- Badges clear when visiting the respective tab
+
+#### Auto-Scroll
+- Progress tab auto-scrolls to currently executing slice card during active runs
+
+#### Elapsed Time on Executing Slices
+- Executing slice cards show a live **elapsed timer** counting seconds
+
+#### Notification Sound
+- Optional audio cue on `run-completed` and `slice-failed` events (respects localStorage `pf-sound` preference)
+
+---
+
 ## [2.8.0] — 2026-04-06
 
 ### Added — Dashboard Power UX (Phase 10)

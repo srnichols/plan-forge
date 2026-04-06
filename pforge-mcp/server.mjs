@@ -24,7 +24,7 @@ import { execSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve, join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parsePlan, runPlan, detectWorkers, getCostReport, analyzeWithQuorum } from "./orchestrator.mjs";
+import { parsePlan, runPlan, detectWorkers, getCostReport, analyzeWithQuorum, generateImage } from "./orchestrator.mjs";
 import { isOpenBrainConfigured } from "./memory.mjs";
 import { createHub, readHubPort } from "./hub.mjs";
 import { buildCapabilitySurface, writeToolsJson, writeCliSchema } from "./capabilities.mjs";
@@ -43,7 +43,7 @@ const PFORGE = IS_WINDOWS ? "powershell.exe -NoProfile -ExecutionPolicy Bypass -
 // ─── Orchestrator State ───────────────────────────────────────────────
 let activeAbortController = null;
 let activeRunPromise = null;
-let activeHub = null; // Phase 3: WebSocket hub instance
+let activeHub = null; // WebSocket hub instance
 
 // ─── Helpers ──────────────────────────────────────────────────────────
 function runPforge(args, cwd = PROJECT_DIR) {
@@ -277,6 +277,21 @@ const TOOLS = [
       required: ["skill"],
     },
   },
+  {
+    name: "forge_generate_image",
+    description: "Generate an image using AI image models (xAI Grok Aurora or OpenAI DALL-E). Provide a text description and get a generated image saved to disk. Useful for creating logos, diagrams, UI mockups, icons, and illustrations during plan execution. Requires XAI_API_KEY (Grok) or OPENAI_API_KEY (DALL-E).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        prompt: { type: "string", description: "Detailed text description of the image to generate. Be specific about style, colors, composition, and content." },
+        outputPath: { type: "string", description: "File path to save the image (relative to project dir). e.g., 'assets/logo.png', 'docs/diagram.png'" },
+        model: { type: "string", description: "Image model to use. Default: grok-imagine-image", enum: ["grok-imagine-image", "grok-imagine-image-pro", "dall-e-3", "dall-e-4", "gpt-image-1"] },
+        size: { type: "string", description: "Image dimensions. Default: 1024x1024", enum: ["1024x1024", "1024x768", "768x1024"] },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+      required: ["prompt", "outputPath"],
+    },
+  },
 ];
 function executeTool(name, args) {
   const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -314,7 +329,7 @@ function executeTool(name, args) {
 
 // ─── MCP Server ───────────────────────────────────────────────────────
 const server = new Server(
-  { name: "plan-forge-mcp", version: "2.6.0" },
+  { name: "plan-forge-mcp", version: "2.9.0" },
   { capabilities: { tools: {} } }
 );
 
@@ -336,7 +351,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       activeAbortController = new AbortController();
-      // Phase 3: If hub is running, use it as event handler for live broadcasting
+      // If hub is running, use it as event handler for live broadcasting
       const eventHandler = activeHub ? { handle: (event) => activeHub.broadcast(event) } : null;
       // Parse quorum parameter
       let quorum = false;
@@ -563,6 +578,40 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
   }
 
+  if (name === "forge_generate_image") {
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const result = await generateImage(args.prompt, {
+        model: args.model || "grok-imagine-image",
+        size: args.size || "1024x1024",
+        outputPath: args.outputPath,
+        cwd,
+      });
+
+      if (result.success) {
+        const payload = {
+          status: "generated",
+          localPath: result.localPath,
+          mimeType: result.mimeType,
+          model: result.model,
+          revisedPrompt: result.revisedPrompt,
+        };
+        if (result.extensionCorrected) {
+          payload.warning = `File extension was corrected from requested path '${result.requestedPath}' to '${result.localPath}' to match the actual image format (${result.mimeType}). This prevents MIME type mismatch errors.`;
+        }
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify(payload, null, 2),
+          }],
+        };
+      }
+      return { content: [{ type: "text", text: `Image generation failed: ${result.error}` }], isError: true };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Image generation error: ${err.message}` }], isError: true };
+    }
+  }
+
   // ─── Sync pforge tools ───
   const result = executeTool(name, args || {});
 
@@ -579,7 +628,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   };
 });
 
-// ─── Express App + REST API (Phase 4, C6) ─────────────────────────────
+// ─── Express App + REST API  ─────────────────────────────
 function createExpressApp() {
   const app = express();
   app.use(express.json());
@@ -677,7 +726,7 @@ function createExpressApp() {
     }
   });
 
-  // REST API: GET /api/replay/:runIdx/:sliceId — session replay log (Phase 5)
+  // REST API: GET /api/replay/:runIdx/:sliceId — session replay log 
   app.get("/api/replay/:runIdx/:sliceId", (req, res) => {
     try {
       const runsDir = resolve(PROJECT_DIR, ".forge", "runs");
@@ -692,7 +741,7 @@ function createExpressApp() {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
-  // v2.4: GET /api/traces — list all runs from index.jsonl
+  // GET /api/traces — list all runs from index.jsonl
   app.get("/api/traces", (_req, res) => {
     try {
       const entries = readRunIndex(PROJECT_DIR);
@@ -700,7 +749,7 @@ function createExpressApp() {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
-  // v2.8: GET /api/runs/:runIdx — single run detail with slice data
+  // GET /api/runs/:runIdx — single run detail with slice data
   app.get("/api/runs/:runIdx", (req, res) => {
     try {
       const runsDir = resolve(PROJECT_DIR, ".forge", "runs");
@@ -726,7 +775,7 @@ function createExpressApp() {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
-  // v2.8: GET /api/skills — available slash command skills
+  // GET /api/skills — available slash command skills
   app.get("/api/skills", (_req, res) => {
     try {
       const skills = [];
@@ -761,7 +810,7 @@ function createExpressApp() {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
-  // v2.4: GET /api/traces/:runId — single run trace detail (v2.8: includes quorum data)
+  // GET /api/traces/:runId — single run trace detail (v2.8: includes quorum data)
   app.get("/api/traces/:runId", (req, res) => {
     try {
       const runDir = resolve(PROJECT_DIR, ".forge", "runs", req.params.runId);
@@ -780,7 +829,7 @@ function createExpressApp() {
       }
       if (!traceResult) return res.status(404).json({ error: "No trace data" });
 
-      // v2.8: Attach quorum data from slice-N-quorum.json files
+      // Attach quorum data from slice-N-quorum.json files
       const quorumFiles = readdirSync(runDir).filter((f) => /^slice-\d+-quorum\.json$/.test(f)).sort();
       if (quorumFiles.length > 0) {
         traceResult.quorum = {};
@@ -793,7 +842,7 @@ function createExpressApp() {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
-  // v2.3: .well-known discovery endpoint
+  // .well-known discovery endpoint
   app.get("/.well-known/plan-forge.json", (_req, res) => {
     try {
       const surface = buildCapabilitySurface(TOOLS, { cwd: PROJECT_DIR, hubPort: activeHub?.port || null });
@@ -801,7 +850,7 @@ function createExpressApp() {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
-  // v2.3: Capabilities API
+  // Capabilities API
   app.get("/api/capabilities", (_req, res) => {
     try {
       const surface = buildCapabilitySurface(TOOLS, { cwd: PROJECT_DIR, hubPort: activeHub?.port || null });
@@ -809,7 +858,7 @@ function createExpressApp() {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
-  // v2.6: Extensions catalog API (structured JSON)
+  // Extensions catalog API (structured JSON)
   app.get("/api/extensions", (_req, res) => {
     try {
       const catalogPath = join(PROJECT_DIR, "extensions", "catalog.json");
@@ -823,7 +872,7 @@ function createExpressApp() {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
-  // v2.7: Plans list API — parsed plan metadata for dashboard browser
+  // Plans list API — parsed plan metadata for dashboard browser
   app.get("/api/plans", (_req, res) => {
     try {
       const plansDir = resolve(PROJECT_DIR, "docs", "plans");
@@ -841,6 +890,17 @@ function createExpressApp() {
             status: parsed.meta.status || "Unknown",
             sliceCount: parsed.slices.length,
             branch: parsed.meta.branch || null,
+            scopeContract: parsed.scopeContract || null,
+            slices: parsed.slices.map((s) => ({
+              id: s.id || s.number,
+              title: s.title || s.name || `Slice ${s.number}`,
+              tasks: s.tasks || [],
+              buildCommand: s.buildCommand || null,
+              testCommand: s.testCommand || null,
+              parallel: s.parallel || false,
+              depends: s.depends || [],
+              scope: s.scope || [],
+            })),
           });
         } catch { /* skip malformed plans */ }
       }
@@ -848,7 +908,7 @@ function createExpressApp() {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
-  // v2.7: OpenBrain memory status API
+  // OpenBrain memory status API
   app.get("/api/memory", (_req, res) => {
     try {
       const configured = isOpenBrainConfigured(PROJECT_DIR);
@@ -878,21 +938,110 @@ function createExpressApp() {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
-  // v2.7: OpenBrain memory search API
+  // OpenBrain memory search API
   app.post("/api/memory/search", (req, res) => {
     try {
       if (!isOpenBrainConfigured(PROJECT_DIR)) {
-        return res.json({ error: "OpenBrain not configured" });
+        return res.json({ configured: false, results: [], note: "OpenBrain not configured. Add openbrain MCP server to enable project memory." });
       }
       const query = req.body?.query;
       if (!query || typeof query !== "string") {
         return res.status(400).json({ error: "query is required" });
       }
-      // Proxy search through pforge CLI (uses MCP search_thoughts tool)
-      const result = runPforge(`smith`, PROJECT_DIR);
-      // For now, return a placeholder since direct OpenBrain MCP call requires active connection
-      // The search_thoughts tool is available through the MCP server chain
-      res.json({ results: [], note: "Memory search requires active OpenBrain MCP connection. Use search_thoughts tool directly." });
+      // Search local .forge memory files for relevant content
+      const results = [];
+      const forgeDir = resolve(PROJECT_DIR, ".forge");
+      const searchDirs = [forgeDir, resolve(PROJECT_DIR, "docs", "plans")];
+      const searchPattern = query.toLowerCase();
+      for (const dir of searchDirs) {
+        if (!existsSync(dir)) continue;
+        try {
+          const files = readdirSync(dir).filter((f) => f.endsWith(".json") || f.endsWith(".md"));
+          for (const file of files.slice(0, 20)) {
+            try {
+              const content = readFileSync(resolve(dir, file), "utf-8");
+              if (content.toLowerCase().includes(searchPattern)) {
+                const lines = content.split("\n");
+                const matchLine = lines.findIndex((l) => l.toLowerCase().includes(searchPattern));
+                const excerpt = lines.slice(Math.max(0, matchLine - 1), matchLine + 3).join("\n").substring(0, 200);
+                results.push({ file: `${dir === forgeDir ? ".forge" : "docs/plans"}/${file}`, excerpt, line: matchLine + 1 });
+              }
+            } catch { /* skip unreadable */ }
+          }
+        } catch { /* skip missing dir */ }
+      }
+      res.json({ configured: true, results, note: results.length === 0 ? "No matches found. Try broader terms or check preset suggestions." : null });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // Memory search presets API
+  app.get("/api/memory/presets", (_req, res) => {
+    try {
+      // Build context-aware presets from project config
+      let projectName = "Plan Forge";
+      let preset = "";
+      const configPath = resolve(PROJECT_DIR, ".forge.json");
+      if (existsSync(configPath)) {
+        try {
+          const config = JSON.parse(readFileSync(configPath, "utf-8"));
+          projectName = config.projectName || projectName;
+          preset = config.preset || "";
+        } catch { /* ignore */ }
+      }
+      // Check what data exists to suggest relevant searches
+      const hasRuns = existsSync(resolve(PROJECT_DIR, ".forge", "runs"));
+      const hasCost = existsSync(resolve(PROJECT_DIR, ".forge", "cost-history.json"));
+      const hasPlans = existsSync(resolve(PROJECT_DIR, "docs", "plans"));
+      const presets = {
+        categories: [
+          { name: "Plans & Phases", icon: "📋", queries: ["Phase", "PLAN", "roadmap", "slice", "scope contract"] },
+          { name: "Architecture", icon: "🏗️", queries: ["architecture", "design", "pattern", "layer", "service"] },
+          { name: "Configuration", icon: "⚙️", queries: ["config", "model", "routing", "quorum", "preset"] },
+          { name: "Testing", icon: "🧪", queries: ["test", "validation", "gate", "coverage", "sweep"] },
+          { name: "Cost & Tokens", icon: "💰", queries: ["cost", "token", "spend", "model", "budget"] },
+          { name: "Issues & Fixes", icon: "🐛", queries: ["bug", "fix", "error", "fail", "TODO"] },
+        ],
+        recentFiles: [],
+        projectContext: { projectName, preset, hasRuns, hasCost, hasPlans },
+      };
+      // Add recent run files as suggested search targets
+      if (hasRuns) {
+        const runsDir = resolve(PROJECT_DIR, ".forge", "runs");
+        try {
+          const dirs = readdirSync(runsDir, { withFileTypes: true })
+            .filter((d) => d.isDirectory()).map((d) => d.name).sort().reverse().slice(0, 5);
+          presets.recentFiles = dirs.map((d) => ({ dir: d, label: d.replace(/^\d{4}-\d{2}-\d{2}T[\d-]+_/, "") }));
+        } catch { /* ignore */ }
+      }
+      res.json(presets);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // Worker detection API
+  app.get("/api/workers", (_req, res) => {
+    try {
+      const workers = detectWorkers(PROJECT_DIR);
+      res.json(workers);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // Image generation API
+  app.post("/api/image/generate", async (req, res) => {
+    try {
+      const { prompt, outputPath, model, size } = req.body || {};
+      if (!prompt || typeof prompt !== "string") {
+        return res.status(400).json({ error: "prompt is required" });
+      }
+      if (!outputPath || typeof outputPath !== "string") {
+        return res.status(400).json({ error: "outputPath is required" });
+      }
+      const result = await generateImage(prompt, {
+        model: model || "grok-2-image",
+        size: size || "1024x1024",
+        outputPath,
+        cwd: PROJECT_DIR,
+      });
+      res.json(result);
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
@@ -912,7 +1061,7 @@ async function main() {
     console.error("Plan Forge Dashboard-only mode (no MCP stdio)");
   }
 
-  // v2.3: Auto-generate tools.json + cli-schema.json on startup
+  // Auto-generate tools.json + cli-schema.json on startup
   try {
     writeToolsJson(TOOLS, __dirname);
     writeCliSchema(__dirname);
@@ -921,7 +1070,7 @@ async function main() {
     console.error(`[capabilities] Auto-generation failed: ${err.message} (non-fatal)`);
   }
 
-  // Phase 4: Start Express HTTP server for dashboard + REST API
+  // Start Express HTTP server for dashboard + REST API
   try {
     const app = createExpressApp();
     app.listen(HTTP_PORT, "127.0.0.1", () => {
@@ -931,7 +1080,7 @@ async function main() {
     console.error(`[http] Express server failed to start: ${err.message} (non-fatal)`);
   }
 
-  // Phase 3: Start WebSocket hub alongside MCP server
+  // Start WebSocket hub alongside MCP server
   try {
     activeHub = await createHub({ cwd: PROJECT_DIR });
     console.error(`Plan Forge WebSocket hub running on port ${activeHub.port}`);
@@ -952,3 +1101,4 @@ main().catch((err) => {
   console.error("Fatal:", err);
   process.exit(1);
 });
+

@@ -1,12 +1,12 @@
 # Plan Forge — Capabilities Reference
 
-> **Version**: 2.6.0 | **Tools**: 17 MCP | **Presets**: 7 | **Agents**: 19 | **Skills**: 10
+> **Tools**: 18 MCP | **Presets**: 7 | **Agents**: 19 | **Skills**: 10
 >
 > Machine-readable version: call `forge_capabilities` MCP tool or `GET https://planforge.software/.well-known/plan-forge.json`
 
 ---
 
-## MCP Tools (17)
+## MCP Tools (18)
 
 | Tool | Intent | Cost | Description |
 |------|--------|------|-------------|
@@ -27,6 +27,7 @@
 | `forge_new_phase` | create | low | Create plan file + roadmap entry |
 | `forge_skill_status` | read | low | Query recent skill execution events from the hub |
 | `forge_run_skill` | execute | medium | Execute any skill programmatically with dry-run mode and structured results |
+| `forge_generate_image` | create | medium | Generate images via xAI Grok Aurora or OpenAI DALL-E. Saves to disk. For logos, diagrams, icons, mockups |
 
 ## Execution Modes
 

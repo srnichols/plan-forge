@@ -352,9 +352,14 @@ const API_PROVIDERS = {
     envKey: "XAI_API_KEY",
     label: "xAI Grok",
   },
+  openai: {
+    pattern: /^(gpt-|dall-e-|chatgpt-)/,
+    baseUrl: "https://api.openai.com/v1",
+    envKey: "OPENAI_API_KEY",
+    label: "OpenAI",
+  },
   // Future providers:
   // anthropic: { pattern: /^claude-/, baseUrl: "https://api.anthropic.com/v1", envKey: "ANTHROPIC_API_KEY", label: "Anthropic Direct" },
-  // openai: { pattern: /^gpt-/, baseUrl: "https://api.openai.com/v1", envKey: "OPENAI_API_KEY", label: "OpenAI Direct" },
 };
 
 /**
@@ -450,6 +455,130 @@ async function callApiWorker(prompt, model, provider, options = {}) {
       };
     }
     throw err;
+  }
+}
+
+/**
+ * Detect the actual image format from raw bytes using magic byte signatures.
+ * Prevents MIME type mismatches when the API returns a different format than requested
+ * (e.g. xAI Grok Aurora returns JPEG bytes even when PNG is assumed).
+ *
+ * @param {Buffer} buffer - Raw image bytes
+ * @returns {{ ext: string, mimeType: string }}
+ */
+function detectImageFormat(buffer) {
+  if (buffer.length >= 3 && buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) {
+    return { ext: "jpg", mimeType: "image/jpeg" };
+  }
+  if (buffer.length >= 4 && buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) {
+    return { ext: "png", mimeType: "image/png" };
+  }
+  if (buffer.length >= 3 && buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46) {
+    return { ext: "gif", mimeType: "image/gif" };
+  }
+  if (buffer.length >= 12 && buffer.slice(8, 12).toString("ascii") === "WEBP") {
+    return { ext: "webp", mimeType: "image/webp" };
+  }
+  // Unknown — default to JPEG (most common from xAI)
+  return { ext: "jpg", mimeType: "image/jpeg" };
+}
+
+/**
+ * Generate an image via xAI Grok image API (Aurora).
+ * Uses the OpenAI-compatible /v1/images/generations endpoint.
+ *
+ * @param {string} prompt - Text description of the image to generate
+ * @param {object} options - { model, size, format, outputPath, cwd }
+ * @returns {Promise<{ success, url, localPath, mimeType, model, revisedPrompt }>}
+ */
+export async function generateImage(prompt, options = {}) {
+  const {
+    model = "grok-imagine-image",
+    size = "1024x1024",
+    format = "png",
+    outputPath = null,
+    cwd = process.cwd(),
+  } = options;
+
+  // Resolve provider — try the model's provider, then fall back to xAI, then OpenAI
+  const provider = detectApiProvider(model) || detectApiProvider("grok-imagine-image") || detectApiProvider("dall-e-3");
+  if (!provider) {
+    return { success: false, error: "No image API key configured. Set XAI_API_KEY or OPENAI_API_KEY environment variable." };
+  }
+
+  try {
+    // Build request body — xAI doesn't support 'size', OpenAI does
+    const reqBody = { model, prompt, n: 1, response_format: "b64_json" };
+    if (provider.name !== "xai" && size) reqBody.size = size;
+
+    const response = await fetch(`${provider.baseUrl}/images/generations`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${provider.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(reqBody),
+    });
+
+    if (!response.ok) {
+      const errBody = await response.text();
+      return { success: false, error: `Image generation failed (${response.status}): ${errBody}` };
+    }
+
+    const data = await response.json();
+    const imageData = data.data?.[0];
+    if (!imageData?.b64_json) {
+      return { success: false, error: "No image data in response" };
+    }
+
+    // Decode bytes first so we can detect the actual format
+    const imageBuffer = Buffer.from(imageData.b64_json, "base64");
+    const detected = detectImageFormat(imageBuffer);
+
+    const result = {
+      success: true,
+      model: data.model || model,
+      revisedPrompt: imageData.revised_prompt || prompt,
+      mimeType: detected.mimeType,
+    };
+
+    // Save to file if outputPath specified
+    if (outputPath) {
+      const { writeFileSync, mkdirSync } = await import("node:fs");
+      const { dirname, extname, resolve: pathResolve } = await import("node:path");
+
+      // Correct the file extension if it doesn't match the actual image format.
+      // xAI Grok Aurora returns JPEG bytes even when a PNG path is requested,
+      // which causes Claude to reject the image with a MIME type mismatch error.
+      let resolvedPath = outputPath;
+      const requestedExt = extname(outputPath).toLowerCase().replace(".", "");
+      const formatAliases = { jpg: ["jpg", "jpeg"], jpeg: ["jpg", "jpeg"] };
+      const requested = formatAliases[requestedExt] ?? [requestedExt];
+      const actual = formatAliases[detected.ext] ?? [detected.ext];
+      const mismatch = !requested.some((e) => actual.includes(e));
+      if (mismatch) {
+        resolvedPath = outputPath.replace(/\.[^.]+$/, `.${detected.ext}`);
+      }
+
+      const fullPath = pathResolve(cwd, resolvedPath);
+      mkdirSync(dirname(fullPath), { recursive: true });
+      writeFileSync(fullPath, imageBuffer);
+      result.localPath = fullPath;
+      if (mismatch) {
+        result.extensionCorrected = true;
+        result.requestedPath = outputPath;
+      }
+    }
+
+    // Return truncated base64 for logging only — never return full base64 inline,
+    // as passing raw image bytes through MCP tool results causes MIME type mismatch
+    // errors in the Claude API when the declared media_type doesn't match the bytes.
+    result.base64 = imageData.b64_json.substring(0, 100) + "..."; // Truncated for logging
+    result.fullBase64Length = imageData.b64_json.length;
+
+    return result;
+  } catch (err) {
+    return { success: false, error: `Image generation error: ${err.message}` };
   }
 }
 

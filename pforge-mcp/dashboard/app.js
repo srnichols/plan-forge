@@ -35,8 +35,8 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
     if (tab) tab.classList.remove("hidden");
 
     // Load data for the tab
-    if (btn.dataset.tab === "runs") loadRuns();
-    if (btn.dataset.tab === "cost") loadCost();
+    if (btn.dataset.tab === "runs") { loadRuns(); tabBadgeState.runsNew = 0; updateTabBadges(); }
+    if (btn.dataset.tab === "cost") { loadCost(); tabBadgeState.hasAnomaly = false; updateTabBadges(); }
     if (tabLoadHooks[btn.dataset.tab]) tabLoadHooks[btn.dataset.tab]();
   });
 });
@@ -58,12 +58,14 @@ function connectWebSocket() {
         state.ws = ws;
         state.connected = true;
         updateConnectionBadge(true);
+        startHubPolling();
         document.getElementById("ws-port").textContent = `WS :${info.port}`;
       };
 
       ws.onclose = () => {
         state.connected = false;
         updateConnectionBadge(false);
+        stopHubPolling();
         // Reconnect after 3s
         setTimeout(connectWebSocket, 3000);
       };
@@ -72,6 +74,15 @@ function connectWebSocket() {
         try {
           const data = JSON.parse(event.data);
           handleEvent(data);
+          appendEventLog(data);
+          // Notification hooks for key lifecycle events
+          if (data.type === "run-completed") {
+            const d = data.data || data;
+            addNotification(`Run complete: ${d.report || d.status}`, d.status === "completed" ? "success" : "error");
+          } else if (data.type === "slice-failed") {
+            const d = data.data || data;
+            addNotification(`Slice ${d.sliceId} failed: ${d.error || ""}`, "error");
+          }
         } catch { /* ignore malformed */ }
       };
     })
@@ -97,6 +108,7 @@ function handleEvent(event) {
   switch (event.type) {
     case "run-started":
       handleRunStarted(event.data || event);
+      loadRuns(); // Auto-refresh runs table
       break;
     case "slice-started":
       handleSliceStarted(event.data || event);
@@ -109,6 +121,7 @@ function handleEvent(event) {
       break;
     case "run-completed":
       handleRunCompleted(event.data || event);
+      loadRuns(); // Auto-refresh runs table
       break;
     case "run-aborted":
       handleRunAborted(event.data || event);
@@ -157,8 +170,14 @@ function handleSliceStarted(data) {
     slice.status = "executing";
     slice.title = data.title || slice.title;
   }
+  startSliceTimer(data.sliceId);
   updateProgress();
   renderSliceCards();
+  // Auto-scroll to executing slice
+  setTimeout(() => {
+    const card = document.querySelector(`[data-slice-id="${data.sliceId}"]`);
+    if (card) card.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, 100);
 }
 
 function handleSliceCompleted(data) {
@@ -170,6 +189,7 @@ function handleSliceCompleted(data) {
     slice.cost = data.cost_usd;
     Object.assign(slice, data);
   }
+  stopSliceTimer(data.sliceId);
   updateProgress();
   renderSliceCards();
 }
@@ -181,6 +201,7 @@ function handleSliceFailed(data) {
     slice.error = data.error;
     Object.assign(slice, data);
   }
+  stopSliceTimer(data.sliceId);
   updateProgress();
   renderSliceCards();
 }
@@ -192,6 +213,10 @@ function handleRunCompleted(data) {
   document.getElementById("run-progress-fill").style.width = "100%";
   document.getElementById("run-progress-fill").className =
     data.status === "completed" ? "h-full bg-green-500 transition-all duration-500" : "h-full bg-red-500 transition-all duration-500";
+  // Tab badges + sound
+  tabBadgeState.runsNew++;
+  updateTabBadges();
+  playNotificationSound(data.status === "completed" ? "success" : "error");
 }
 
 function handleRunAborted(data) {
@@ -215,12 +240,13 @@ function renderSliceCards() {
     const model = s.model || "";
     const isApiModel = /^grok-/.test(model);
     const modelBadge = isApiModel ? `<span class="text-purple-400">${model}</span> <span class="text-xs text-purple-600">API</span>` : model;
+    const elapsed = s.status === "executing" ? '<span class="slice-elapsed text-xs text-blue-300 ml-1">0s</span>' : "";
 
     return `
-      <div class="slice-card ${bgColor} rounded-lg p-3 border border-gray-700">
+      <div class="slice-card ${bgColor} rounded-lg p-3 border border-gray-700" data-slice-id="${s.id}">
         <div class="flex items-center justify-between mb-1">
           <span class="font-semibold text-sm">${statusIcon} Slice ${s.id}</span>
-          <span class="text-xs text-gray-500">${duration}</span>
+          <span class="text-xs text-gray-500">${duration}${elapsed}</span>
         </div>
         <p class="text-xs text-gray-400 truncate">${s.title}</p>
         ${model ? `<p class="text-xs text-gray-500 mt-1">${modelBadge} ${cost}</p>` : ""}
@@ -246,7 +272,7 @@ function shortName(path) {
   return path.split("/").pop().replace(/\.md$/, "").replace(/-/g, " ");
 }
 
-// ─── Runs Tab (v2.8: filters, sort, drawer, compare, export) ──────────
+// ─── Runs Tab ──────────
 let allRuns = [];
 let filteredRuns = [];
 let sortColumn = "date";
@@ -385,7 +411,7 @@ function renderRunsTable() {
   }).join("");
 }
 
-// ─── Run Detail Drawer (v2.8) ─────────────────────────────────────────
+// ─── Run Detail Drawer ─────────────────────────────────────────
 async function openRunDrawer(runIdx) {
   try {
     const res = await fetch(`${API_BASE}/api/runs/${runIdx}`);
@@ -398,6 +424,9 @@ async function openRunDrawer(runIdx) {
 
     const modeColors = { auto: "blue", assisted: "amber", estimate: "gray" };
     const mc = modeColors[s.mode] || "gray";
+    // Find first failed slice for resume
+    const firstFailed = data.slices.find((sl) => sl.status === "failed");
+    const resumeBtn = firstFailed ? `<button onclick="resumeRunFromDrawer('${escHtml(s.plan)}', ${firstFailed.number || firstFailed.sliceId})" class="text-xs px-2 py-1 bg-amber-600 hover:bg-amber-500 rounded text-white">Resume from Slice ${firstFailed.number || firstFailed.sliceId}</button>` : "";
     const header = `
       <div class="space-y-2 mb-4 text-sm">
         <div class="flex gap-2 flex-wrap">
@@ -411,6 +440,7 @@ async function openRunDrawer(runIdx) {
           <div>Slices: <span class="text-white">${s.results?.passed || 0}/${s.sliceCount || 0}</span></div>
         </div>
         <div class="text-xs text-gray-500">${s.startTime ? new Date(s.startTime).toLocaleString() : ""}</div>
+        ${resumeBtn}
       </div>`;
 
     const sliceCards = data.slices.map((sl) => {
@@ -434,6 +464,19 @@ async function openRunDrawer(runIdx) {
         gateBlock = `<details class="mt-2"><summary class="text-xs text-gray-500 cursor-pointer">Gate output</summary><pre class="text-xs text-gray-400 mt-1 whitespace-pre-wrap max-h-24 overflow-y-auto">${escHtml(sl.gateOutput)}</pre></details>`;
       }
 
+      // Slice detail: tasks, commands
+      let detailBlock = "";
+      const tasks = sl.tasks || [];
+      const buildCmd = sl.buildCommand || sl.build_command;
+      const testCmd = sl.testCommand || sl.test_command;
+      if (tasks.length > 0 || buildCmd || testCmd) {
+        detailBlock = `<details class="mt-2"><summary class="text-xs text-gray-500 cursor-pointer">Tasks & commands</summary><div class="mt-1 text-xs space-y-1">
+          ${tasks.length > 0 ? `<ol class="list-decimal ml-4 text-gray-400">${tasks.map((t) => `<li>${escHtml(typeof t === "string" ? t : t.description || t.name || JSON.stringify(t))}</li>`).join("")}</ol>` : ""}
+          ${buildCmd ? `<div class="text-gray-500">Build: <code class="bg-gray-700 px-1 rounded text-gray-300">${escHtml(buildCmd)}</code></div>` : ""}
+          ${testCmd ? `<div class="text-gray-500">Test: <code class="bg-gray-700 px-1 rounded text-gray-300">${escHtml(testCmd)}</code></div>` : ""}
+        </div></details>`;
+      }
+
       return `<div class="border ${borderColor} rounded-lg p-3 mb-2">
         <div class="flex justify-between items-center">
           <span class="font-medium text-sm">${icon} Slice ${sl.number || sl.sliceId}: ${escHtml(sl.title || "")}</span>
@@ -444,7 +487,7 @@ async function openRunDrawer(runIdx) {
           <span>${tokIn.toLocaleString()} in / ${tokOut.toLocaleString()} out</span>
           <span>$${(sl.cost_usd || 0).toFixed(4)}</span>
         </div>
-        ${errorBlock}${gateBlock}
+        ${errorBlock}${gateBlock}${detailBlock}
       </div>`;
     }).join("");
 
@@ -467,7 +510,16 @@ window.applyRunFilters = applyRunFilters;
 window.clearRunFilters = clearRunFilters;
 window.sortRuns = sortRuns;
 
-// ─── Run Comparison (v2.8) ────────────────────────────────────────────
+function resumeRunFromDrawer(plan, fromSlice) {
+  if (!confirm(`Resume "${plan}" from slice ${fromSlice}?\nCompleted slices will be skipped.`)) return;
+  closeRunDrawer();
+  runAction("run-plan", `${plan} --resume-from ${fromSlice}`);
+  addNotification(`Resuming ${plan} from slice ${fromSlice}`, "info");
+}
+
+window.resumeRunFromDrawer = resumeRunFromDrawer;
+
+// ─── Run Comparison ────────────────────────────────────────────
 function toggleCompareMode() {
   compareMode = !compareMode;
   compareSelections = [];
@@ -555,7 +607,7 @@ window.toggleCompareMode = toggleCompareMode;
 window.toggleCompareSelection = toggleCompareSelection;
 window.closeComparison = closeComparison;
 
-// ─── Export (v2.8) ────────────────────────────────────────────────────
+// ─── Export ────────────────────────────────────────────────────
 function toggleExportMenu(id) {
   document.getElementById(`export-menu-${id}`).classList.toggle("hidden");
 }
@@ -580,10 +632,21 @@ function exportRuns(format) {
   }
 }
 
-function exportCost() {
+function exportCost(format) {
   document.getElementById("export-menu-cost").classList.add("hidden");
   fetch(`${API_BASE}/api/cost`).then((r) => r.json()).then((data) => {
-    downloadFile("plan-forge-cost-report.json", JSON.stringify(data, null, 2), "application/json");
+    if (format === "csv") {
+      const rows = [["Model", "Cost ($)", "Tokens In", "Tokens Out", "Runs"]];
+      if (data.by_model) {
+        for (const [model, m] of Object.entries(data.by_model)) {
+          rows.push([model, (m.cost_usd || 0).toFixed(4), m.tokens_in || 0, m.tokens_out || 0, m.runs || 0]);
+        }
+      }
+      rows.push(["TOTAL", (data.total_cost_usd || 0).toFixed(4), data.total_tokens_in || 0, data.total_tokens_out || 0, data.runs || 0]);
+      downloadFile("plan-forge-cost-report.csv", rows.map((r) => r.join(",")).join("\n"), "text/csv");
+    } else {
+      downloadFile("plan-forge-cost-report.json", JSON.stringify(data, null, 2), "application/json");
+    }
   });
 }
 
@@ -599,7 +662,7 @@ window.toggleExportMenu = toggleExportMenu;
 window.exportRuns = exportRuns;
 window.exportCost = exportCost;
 
-// ─── Cost Tab (v2.8: trend line + anomaly) ────────────────────────────
+// ─── Cost Tab ────────────────────────────
 async function loadCost() {
   try {
     const [costRes, runsRes] = await Promise.all([
@@ -627,7 +690,7 @@ async function loadCost() {
       renderChart("chart-monthly", "bar", months, values, "Monthly Spend ($)");
     }
 
-    // Cost Trend Line (v2.8)
+    // Cost Trend Line 
     if (runs.length > 0) {
       const runCosts = runs.slice().reverse().map((r) => r.cost?.total_cost_usd || 0);
       const runLabels = runs.slice().reverse().map((r) => r.startTime ? new Date(r.startTime).toLocaleDateString() : "?");
@@ -688,7 +751,7 @@ async function loadCost() {
         });
       }
 
-      // Anomaly banner (v2.8)
+      // Anomaly banner 
       const recent = runs.slice(0, 5);
       const anomaly = recent.find((r) => (r.cost?.total_cost_usd || 0) > avg * 3 && avg > 0);
       if (anomaly) {
@@ -698,6 +761,36 @@ async function loadCost() {
         const ratio = (cost / avg).toFixed(1);
         text.textContent = `⚠ Cost Spike: "${shortName(anomaly.plan)}" on ${new Date(anomaly.startTime).toLocaleDateString()} cost $${cost.toFixed(2)} — ${ratio}× above your $${avg.toFixed(4)} average`;
         banner.classList.remove("hidden");
+        tabBadgeState.hasAnomaly = true;
+        updateTabBadges();
+      }
+
+      // Duration Per Run Chart 
+      const runDurations = runs.slice().reverse().map((r) => r.totalDuration ? r.totalDuration / 1000 : 0);
+      const durCtx = document.getElementById("chart-duration-trend");
+      if (durCtx && runDurations.some((d) => d > 0)) {
+        if (state.charts["chart-duration-trend"]) state.charts["chart-duration-trend"].destroy();
+        state.charts["chart-duration-trend"] = new Chart(durCtx, {
+          type: "bar",
+          data: {
+            labels: runLabels,
+            datasets: [{
+              label: "Duration (s)",
+              data: runDurations,
+              backgroundColor: runDurations.map((d) => d > 300 ? "#ef4444" : d > 120 ? "#f59e0b" : "#3b82f6"),
+              borderWidth: 0,
+              borderRadius: 2,
+            }],
+          },
+          options: {
+            responsive: true,
+            plugins: { legend: { labels: { color: "#9ca3af" } } },
+            scales: {
+              y: { ticks: { color: "#9ca3af" }, grid: { color: "#374151" }, title: { display: true, text: "seconds", color: "#6b7280" } },
+              x: { ticks: { color: "#9ca3af", maxTicksLimit: 10 }, grid: { display: false } },
+            },
+          },
+        });
       }
     }
 
@@ -787,7 +880,7 @@ async function runDiagnose() {
 window.runAnalyzeQuorum = runAnalyzeQuorum;
 window.runDiagnose = runDiagnose;
 
-// ─── Plan Browser (v2.7) ─────────────────────────────────────────────
+// ─── Plan Browser ─────────────────────────────────────────────
 async function loadPlans() {
   const listEl = document.getElementById("plan-list");
   const countEl = document.getElementById("plan-count");
@@ -804,11 +897,33 @@ async function loadPlans() {
       const icon = p.status.includes("Complete") ? "✅" : p.status.includes("Progress") ? "🚧" : p.status.includes("Paused") ? "⏸️" : "📋";
       const sliceCheckboxes = Array.from({ length: p.sliceCount }, (_, i) => {
         const num = i + 1;
+        const sl = p.slices?.[i];
+        const label = sl?.title || `Slice ${num}`;
+        const pTag = sl?.parallel ? ' <span class="text-purple-400">[P]</span>' : "";
+        const deps = sl?.depends?.length > 0 ? ` <span class="text-gray-600">→ ${sl.depends.join(",")}</span>` : "";
         return `<label class="inline-flex items-center gap-1 text-xs text-gray-400 cursor-pointer">
           <input type="checkbox" checked data-plan="${pi}" data-slice="${num}" class="plan-slice-toggle rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-0 w-3 h-3">
-          Slice ${num}
+          ${escHtml(label)}${pTag}${deps}
         </label>`;
       }).join(" ");
+
+      // Scope contract rendering
+      let scopeHtml = "";
+      if (p.scopeContract) {
+        const sc = p.scopeContract;
+        const inScope = (sc.inScope || []).map((s) => `<span class="text-green-400 text-xs">✓ ${escHtml(s)}</span>`).join("<br>");
+        const outScope = (sc.outOfScope || []).map((s) => `<span class="text-gray-500 text-xs">✗ ${escHtml(s)}</span>`).join("<br>");
+        const forbidden = (sc.forbidden || []).map((s) => `<span class="text-red-400 text-xs">⛔ ${escHtml(s)}</span>`).join("<br>");
+        scopeHtml = `<details class="mt-1 ml-7">
+          <summary class="text-xs text-gray-500 cursor-pointer hover:text-gray-300">Scope Contract</summary>
+          <div class="grid grid-cols-3 gap-2 mt-1 py-1 text-xs">
+            <div><p class="text-gray-500 font-semibold mb-1">In Scope</p>${inScope || '<span class="text-gray-600">—</span>'}</div>
+            <div><p class="text-gray-500 font-semibold mb-1">Out of Scope</p>${outScope || '<span class="text-gray-600">—</span>'}</div>
+            <div><p class="text-gray-500 font-semibold mb-1">Forbidden</p>${forbidden || '<span class="text-gray-600">—</span>'}</div>
+          </div>
+        </details>`;
+      }
+
       return `
         <div class="py-2 border-b border-gray-700/50 last:border-0 group">
           <div class="flex items-center gap-3">
@@ -822,10 +937,12 @@ async function loadPlans() {
               <button onclick="runPlanFromBrowser('${p.file}', '${p.title}', ${p.sliceCount}, ${pi})" class="text-xs px-2 py-1 bg-blue-600 hover:bg-blue-500 rounded transition">Run</button>
             </div>
           </div>
+          ${scopeHtml}
           <details class="mt-1 ml-7">
             <summary class="text-xs text-gray-500 cursor-pointer hover:text-gray-300">Select slices</summary>
             <div class="flex flex-wrap gap-2 mt-1 py-1">${sliceCheckboxes}</div>
           </details>
+          ${renderDAGView(p.slices || [])}
           <div id="plan-est-${p.file.replace(/[^a-zA-Z0-9]/g, '_')}" class="hidden text-xs text-gray-400 w-full pl-8 pb-1"></div>
         </div>`;
     }).join("");
@@ -855,7 +972,7 @@ async function estimatePlan(file) {
 }
 
 function runPlanFromBrowser(file, title, sliceCount, planIdx) {
-  // v2.8: Gather unchecked slices to build --skip-slices arg
+  // Gather unchecked slices to build --skip-slices arg
   const unchecked = [];
   for (let i = 1; i <= sliceCount; i++) {
     const cb = document.querySelector(`input.plan-slice-toggle[data-plan="${planIdx}"][data-slice="${i}"]`);
@@ -872,7 +989,79 @@ window.loadPlans = loadPlans;
 window.estimatePlan = estimatePlan;
 window.runPlanFromBrowser = runPlanFromBrowser;
 
-// ─── Git Operations (v2.7) ───────────────────────────────────────────
+// ─── Launch Plan Panel ─────────────────────────────────────────
+async function openLaunchPanel() {
+  const modal = document.getElementById("launch-modal");
+  const planSelect = document.getElementById("launch-plan");
+  const workersEl = document.getElementById("launch-workers");
+  modal.classList.remove("hidden");
+
+  // Load available plans
+  try {
+    const res = await fetch(`${API_BASE}/api/plans`);
+    const plans = await res.json();
+    planSelect.innerHTML = plans.map((p) => `<option value="${p.file}">${p.title} (${p.sliceCount} slices)</option>`).join("");
+  } catch {
+    planSelect.innerHTML = '<option value="">No plans found</option>';
+  }
+
+  // Load workers
+  try {
+    const res = await fetch(`${API_BASE}/api/workers`);
+    const workers = await res.json();
+    const workerNames = Array.isArray(workers) ? workers.filter((w) => w.available).map((w) => w.name) : Object.values(workers).flat().map((w) => typeof w === "string" ? w : w.name);
+    workersEl.innerHTML = workerNames.length > 0 ? `Available: ${workerNames.map((n) => `<span class="text-green-400">${escHtml(n)}</span>`).join(", ")}` : '<span class="text-yellow-400">No CLI workers detected</span>';
+  } catch {
+    workersEl.textContent = "";
+  }
+}
+
+function closeLaunchPanel() {
+  document.getElementById("launch-modal").classList.add("hidden");
+  document.getElementById("launch-status").textContent = "";
+}
+
+async function submitLaunch(estimateOnly) {
+  const plan = document.getElementById("launch-plan").value;
+  const mode = document.getElementById("launch-mode").value;
+  const model = document.getElementById("launch-model").value;
+  const quorum = document.getElementById("launch-quorum").value;
+  const estimate = estimateOnly || document.getElementById("launch-estimate").checked;
+  const statusEl = document.getElementById("launch-status");
+
+  if (!plan) { statusEl.textContent = "Select a plan first"; return; }
+  if (!confirm(`${estimate ? "Estimate" : "Launch"} "${plan}"?\nMode: ${mode}, Model: ${model}, Quorum: ${quorum}`)) return;
+
+  statusEl.textContent = estimate ? "Estimating..." : "Launching...";
+  try {
+    let args = plan;
+    if (mode !== "auto") args += ` --${mode}`;
+    if (model !== "auto") args += ` --model ${model}`;
+    if (quorum !== "false") args += ` --quorum ${quorum}`;
+    if (estimate) args += " --estimate";
+
+    const res = await fetch(`${API_BASE}/api/tool/run-plan`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ args }),
+    });
+    const data = await res.json();
+    if (estimate) {
+      statusEl.innerHTML = `<pre class="whitespace-pre-wrap text-gray-300 mt-1">${escHtml(data.output || JSON.stringify(data, null, 2))}</pre>`;
+    } else {
+      closeLaunchPanel();
+      addNotification(`Plan launched: ${plan}`, "success");
+    }
+  } catch (err) {
+    statusEl.textContent = `Error: ${err.message}`;
+  }
+}
+
+window.openLaunchPanel = openLaunchPanel;
+window.closeLaunchPanel = closeLaunchPanel;
+window.submitLaunch = submitLaunch;
+
+// ─── Git Operations ───────────────────────────────────────────
 async function runBranch() {
   const plan = prompt("Plan file path:", "docs/plans/");
   if (!plan) return;
@@ -905,12 +1094,16 @@ async function runDiff() {
     });
     const data = await res.json();
     const output = data.output || data.error || "";
-    // Color-code diff output
+    // Color-code diff output with +/- line formatting
     const lines = output.split("\n");
     outputEl.innerHTML = lines.map((l) => {
-      if (/forbidden|❌|FORBIDDEN/i.test(l)) return `<span class="text-red-400">${escHtml(l)}</span>`;
+      if (/forbidden|❌|FORBIDDEN/i.test(l)) return `<span class="text-red-400 font-semibold">${escHtml(l)}</span>`;
       if (/out.of.scope|⚠|WARNING/i.test(l)) return `<span class="text-yellow-400">${escHtml(l)}</span>`;
       if (/in.scope|✅|PASS/i.test(l)) return `<span class="text-green-400">${escHtml(l)}</span>`;
+      if (/^\+/.test(l)) return `<span class="text-green-300 bg-green-900/20">${escHtml(l)}</span>`;
+      if (/^-/.test(l)) return `<span class="text-red-300 bg-red-900/20">${escHtml(l)}</span>`;
+      if (/^@@/.test(l)) return `<span class="text-cyan-400">${escHtml(l)}</span>`;
+      if (/^diff|^index|^---|\+\+\+/.test(l)) return `<span class="text-gray-500 font-semibold">${escHtml(l)}</span>`;
       return escHtml(l);
     }).join("\n");
     titleEl.textContent = `diff: ${data.success ? "✅" : "❌"}`;
@@ -928,7 +1121,7 @@ window.runBranch = runBranch;
 window.runCommit = runCommit;
 window.runDiff = runDiff;
 
-// ─── Sweep Table (v2.7) ──────────────────────────────────────────────
+// ─── Sweep Table ──────────────────────────────────────────────
 async function runSweep() {
   const resultDiv = document.getElementById("action-result");
   const titleEl = document.getElementById("action-result-title");
@@ -991,7 +1184,7 @@ function filterSweepTable(type) {
 window.runSweep = runSweep;
 window.filterSweepTable = filterSweepTable;
 
-// ─── Model Comparison (v2.7) ─────────────────────────────────────────
+// ─── Model Comparison ─────────────────────────────────────────
 async function loadModelComparison() {
   const el = document.getElementById("model-comparison");
   if (!el) return;
@@ -1054,7 +1247,7 @@ async function loadModelComparison() {
   }
 }
 
-// ─── Phase Status Editor (v2.7) ──────────────────────────────────────
+// ─── Phase Status Editor ──────────────────────────────────────
 async function runStatusEditable() {
   const resultDiv = document.getElementById("action-result");
   const titleEl = document.getElementById("action-result-title");
@@ -1115,13 +1308,43 @@ async function updatePhaseStatus(planFile, newStatus, rowIdx) {
 window.runStatusEditable = runStatusEditable;
 window.updatePhaseStatus = updatePhaseStatus;
 
-// ─── Memory Search (v2.7) ────────────────────────────────────────────
+// ─── Memory Search ────────────────────────
+let memoryPresets = null;
+
+async function loadMemoryPresets() {
+  const presetsEl = document.getElementById("memory-presets");
+  if (!presetsEl) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/memory/presets`);
+    memoryPresets = await res.json();
+    const categories = memoryPresets.categories || [];
+    presetsEl.innerHTML = categories.map((cat) =>
+      cat.queries.map((q) =>
+        `<button onclick="searchMemoryPreset('${escHtml(q)}')" class="text-xs px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 transition" title="${escHtml(cat.name)}">${cat.icon} ${escHtml(q)}</button>`
+      ).join("")
+    ).join("");
+  } catch {
+    presetsEl.innerHTML = "";
+  }
+}
+
+function searchMemoryPreset(query) {
+  const input = document.getElementById("memory-search-input");
+  if (input) input.value = query;
+  searchMemory();
+}
+
+window.searchMemoryPreset = searchMemoryPreset;
+
 async function searchMemory() {
   const input = document.getElementById("memory-search-input");
   const resultsEl = document.getElementById("memory-search-results");
   if (!input || !resultsEl) return;
   const query = input.value.trim();
-  if (!query) return;
+  if (!query) {
+    resultsEl.innerHTML = '<p class="text-gray-500 text-sm py-2">Click a preset above or type a search term</p>';
+    return;
+  }
   resultsEl.innerHTML = '<p class="text-gray-500 text-sm py-2">Searching...</p>';
   try {
     const res = await fetch(`${API_BASE}/api/memory/search`, {
@@ -1130,23 +1353,30 @@ async function searchMemory() {
       body: JSON.stringify({ query }),
     });
     const data = await res.json();
-    if (data.error) {
-      resultsEl.innerHTML = `<p class="text-gray-500 text-sm py-2">${escHtml(data.error)}</p>`;
+    if (data.configured === false) {
+      resultsEl.innerHTML = `<p class="text-gray-500 text-sm py-2">${escHtml(data.note || "OpenBrain not configured")}</p>`;
       return;
     }
     const results = data.results || [];
     if (results.length === 0) {
-      resultsEl.innerHTML = '<p class="text-gray-500 text-sm py-2">No memories found for this query</p>';
+      // Show helpful suggestions when no results
+      const suggestions = memoryPresets?.categories?.flatMap((c) => c.queries).filter((q) => q !== query).slice(0, 5) || [];
+      resultsEl.innerHTML = `<div class="text-sm py-2">
+        <p class="text-gray-500 mb-2">No results for "${escHtml(query)}"</p>
+        ${suggestions.length > 0 ? `<p class="text-gray-600 text-xs mb-1">Try:</p>
+        <div class="flex flex-wrap gap-1">${suggestions.map((s) =>
+          `<button onclick="searchMemoryPreset('${escHtml(s)}')" class="text-xs px-2 py-0.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-400">${escHtml(s)}</button>`
+        ).join("")}</div>` : ""}
+      </div>`;
       return;
     }
     resultsEl.innerHTML = results.map((r) => `
-      <div class="bg-gray-700/50 rounded p-2 mb-2">
-        <p class="text-sm text-gray-200">${escHtml(r.thought || r.text || "")}</p>
-        <div class="flex gap-2 mt-1 text-xs text-gray-500">
-          ${r.source ? `<span>📁 ${escHtml(r.source)}</span>` : ""}
-          ${r.timestamp ? `<span>🕐 ${new Date(r.timestamp).toLocaleDateString()}</span>` : ""}
-          ${r.relevance ? `<span>🎯 ${(r.relevance * 100).toFixed(0)}%</span>` : ""}
+      <div class="bg-gray-700/50 rounded p-2 mb-2 border border-gray-700 hover:border-gray-600 transition">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-xs text-blue-400 font-mono">${escHtml(r.file || "")}</span>
+          ${r.line ? `<span class="text-xs text-gray-600">:${r.line}</span>` : ""}
         </div>
+        <pre class="text-xs text-gray-300 whitespace-pre-wrap max-h-20 overflow-hidden">${escHtml(r.excerpt || r.thought || r.text || "")}</pre>
       </div>`).join("");
   } catch {
     resultsEl.innerHTML = '<p class="text-red-400 text-sm py-2">Search failed</p>';
@@ -1155,7 +1385,7 @@ async function searchMemory() {
 
 window.searchMemory = searchMemory;
 
-// ─── Session Replay (Phase 5) ─────────────────────────────────────────
+// ─── Session Replay  ─────────────────────────────────────────
 let replayRuns = [];
 
 async function loadReplayRuns() {
@@ -1222,7 +1452,7 @@ window.loadReplaySlices = loadReplaySlices;
 window.loadReplayLog = loadReplayLog;
 window.filterReplay = filterReplay;
 
-// ─── Extension Marketplace (Phase 5) ──────────────────────────────────
+// ─── Extension Marketplace  ──────────────────────────────────
 let catalogData = [];
 let installedExtensions = [];
 
@@ -1383,7 +1613,7 @@ function filterExtensions() {
 
 window.filterExtensions = filterExtensions;
 
-// ─── Notification Center (Phase 5, v2.8: localStorage persistence) ───
+// ─── Notification Center  ───
 let notifications = JSON.parse(localStorage.getItem("pf-notifications") || "[]");
 
 function addNotification(text, type = "info") {
@@ -1446,22 +1676,9 @@ window.toggleNotifications = toggleNotifications;
 window.clearNotifications = clearNotifications;
 window.markRead = markRead;
 
-// Hook notifications into WS events
-const origHandleEvent = handleEvent;
-const hookedHandleEvent = function (event) {
-  origHandleEvent(event);
-  if (event.type === "run-completed") {
-    const d = event.data || event;
-    addNotification(`Run complete: ${d.report || d.status}`, d.status === "completed" ? "success" : "error");
-  } else if (event.type === "slice-failed") {
-    const d = event.data || event;
-    addNotification(`Slice ${d.sliceId} failed: ${d.error || ""}`, "error");
-  }
-};
-// Monkey-patch handleEvent for notification hooks
-window._origHandleEvent = handleEvent;
+// B1: Notification hooks are now inline in ws.onmessage — no monkey-patch needed
 
-// ─── Config Editor (Phase 5) ──────────────────────────────────────────
+// ─── Config Editor  ──────────────────────────────────────────
 let currentConfig = {};
 
 async function loadConfig() {
@@ -1471,6 +1688,10 @@ async function loadConfig() {
     document.getElementById("cfg-preset").value = currentConfig.preset || "";
     document.getElementById("cfg-version").value = currentConfig.templateVersion || "";
     document.getElementById("cfg-model-default").value = currentConfig.modelRouting?.default || "auto";
+
+    // Image generation model 
+    const imgModel = document.getElementById("cfg-model-image");
+    if (imgModel) imgModel.value = currentConfig.modelRouting?.imageGeneration || "";
 
     // Agents checkboxes
     const agentsEl = document.getElementById("cfg-agents");
@@ -1484,9 +1705,25 @@ async function loadConfig() {
 
     document.getElementById("cfg-status").textContent = "Configuration loaded.";
 
+    // Advanced settings 
+    const maxP = document.getElementById("cfg-max-parallel");
+    const maxR = document.getElementById("cfg-max-retries");
+    const maxH = document.getElementById("cfg-max-history");
+    const qEnabled = document.getElementById("cfg-quorum-enabled");
+    const qThresh = document.getElementById("cfg-quorum-threshold");
+    const qModels = document.getElementById("cfg-quorum-models");
+    if (maxP) maxP.value = currentConfig.maxParallelism ?? 3;
+    if (maxR) maxR.value = currentConfig.maxRetries ?? 1;
+    if (maxH) maxH.value = currentConfig.maxRunHistory ?? 50;
+    if (qEnabled) qEnabled.checked = currentConfig.quorum?.enabled || false;
+    if (qThresh) qThresh.value = currentConfig.quorum?.threshold ?? 7;
+    if (qModels) qModels.value = (currentConfig.quorum?.models || []).join(", ");
+
     // Check API provider availability
     loadApiProviderStatus();
     loadOpenBrainStatus();
+    loadMemoryPresets();
+    loadWorkerStatus();
   } catch (err) {
     document.getElementById("cfg-status").textContent = `Error: ${err.message}`;
   }
@@ -1512,6 +1749,37 @@ async function loadApiProviderStatus() {
     }
   } catch {
     el.textContent = "Unable to check";
+  }
+}
+
+// ─── Worker Detection ─────────────────────────────────────────
+async function loadWorkerStatus() {
+  const el = document.getElementById("cfg-workers");
+  if (!el) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/workers`);
+    const workers = await res.json();
+    if (Array.isArray(workers) && workers.length > 0) {
+      el.innerHTML = workers.map((w) => {
+        const color = w.available ? "text-green-400" : "text-gray-600";
+        const icon = w.available ? "✓" : "✗";
+        return `<span class="${color} text-xs mr-3">${icon} ${escHtml(w.name || w.command || w)}</span>`;
+      }).join("");
+    } else if (typeof workers === "object" && !Array.isArray(workers)) {
+      // Object format: { cli: [...], api: [...] }
+      const parts = [];
+      for (const [category, items] of Object.entries(workers)) {
+        if (Array.isArray(items)) {
+          parts.push(`<span class="text-gray-500 text-xs font-semibold mr-1">${category}:</span>` +
+            items.map((w) => `<span class="text-green-400 text-xs mr-2">✓ ${escHtml(typeof w === "string" ? w : w.name || "")}</span>`).join(""));
+        }
+      }
+      el.innerHTML = parts.join("") || '<span class="text-gray-500">No workers detected</span>';
+    } else {
+      el.innerHTML = '<span class="text-gray-500">No workers detected. Install gh-copilot, claude, or codex CLI.</span>';
+    }
+  } catch {
+    el.textContent = "Unable to detect workers";
   }
 }
 
@@ -1541,10 +1809,29 @@ async function saveConfig() {
   try {
     const agents = [...document.querySelectorAll(".cfg-agent-checkbox:checked")].map((c) => c.value);
     const modelDefault = document.getElementById("cfg-model-default").value;
+    const modelImage = document.getElementById("cfg-model-image")?.value || "";
+    // Advanced settings 
+    const maxP = parseInt(document.getElementById("cfg-max-parallel")?.value, 10);
+    const maxR = parseInt(document.getElementById("cfg-max-retries")?.value, 10);
+    const maxH = parseInt(document.getElementById("cfg-max-history")?.value, 10);
+    const qEnabled = document.getElementById("cfg-quorum-enabled")?.checked || false;
+    const qThresh = parseInt(document.getElementById("cfg-quorum-threshold")?.value, 10);
+    const qModelsStr = document.getElementById("cfg-quorum-models")?.value || "";
+    const qModels = qModelsStr ? qModelsStr.split(",").map((m) => m.trim()).filter(Boolean) : [];
+
     const updated = {
       ...currentConfig,
       agents,
-      modelRouting: { ...(currentConfig.modelRouting || {}), default: modelDefault },
+      modelRouting: { ...(currentConfig.modelRouting || {}), default: modelDefault, imageGeneration: modelImage || undefined },
+      maxParallelism: isNaN(maxP) ? 3 : maxP,
+      maxRetries: isNaN(maxR) ? 1 : maxR,
+      maxRunHistory: isNaN(maxH) ? 50 : maxH,
+      quorum: {
+        ...(currentConfig.quorum || {}),
+        enabled: qEnabled,
+        threshold: isNaN(qThresh) ? 7 : qThresh,
+        models: qModels.length > 0 ? qModels : (currentConfig.quorum?.models || []),
+      },
     };
     const res = await fetch(`${API_BASE}/api/config`, {
       method: "POST",
@@ -1562,6 +1849,131 @@ async function saveConfig() {
 window.loadConfig = loadConfig;
 window.saveConfig = saveConfig;
 
+// ─── DAG Dependency Visualizer ─────────────────────────────────
+function renderDAGView(slices) {
+  if (!slices || slices.length === 0) return "";
+  // Only show if there are dependencies or parallel tags
+  const hasDeps = slices.some((s) => (s.depends || []).length > 0);
+  const hasParallel = slices.some((s) => s.parallel);
+  if (!hasDeps && !hasParallel) return "";
+
+  const lines = slices.map((s) => {
+    const id = s.id || s.number || "?";
+    const title = s.title || `Slice ${id}`;
+    const deps = (s.depends || []).map((d) => `${d}`).join(",");
+    const pTag = s.parallel ? ' <span class="text-purple-400">[P]</span>' : "";
+    const depArrow = deps ? ` <span class="text-gray-600">← ${deps}</span>` : "";
+    const indent = (s.depends || []).length > 0 ? "ml-4" : "";
+    return `<div class="${indent} py-0.5 flex items-center gap-1">
+      <span class="text-gray-500 w-6 text-right">${id}.</span>
+      <span class="text-gray-300">${escHtml(title)}</span>${pTag}${depArrow}
+    </div>`;
+  });
+
+  return `<details class="mt-1 ml-7">
+    <summary class="text-xs text-gray-500 cursor-pointer hover:text-gray-300">DAG View</summary>
+    <div class="text-xs mt-1 py-1 font-mono">${lines.join("")}</div>
+  </details>`;
+}
+
+// ─── Tab Badges ───────────────────────────────────────────────
+let tabBadgeState = { runsNew: 0, hasAnomaly: false, skillsActive: 0 };
+
+function updateTabBadges() {
+  const tabs = document.querySelectorAll(".tab-btn[data-tab]");
+  tabs.forEach((tab) => {
+    // Remove existing badge
+    const existing = tab.querySelector(".tab-badge");
+    if (existing) existing.remove();
+
+    let badgeText = null;
+    if (tab.dataset.tab === "runs" && tabBadgeState.runsNew > 0) {
+      badgeText = tabBadgeState.runsNew;
+    } else if (tab.dataset.tab === "cost" && tabBadgeState.hasAnomaly) {
+      badgeText = "!";
+    } else if (tab.dataset.tab === "skills" && tabBadgeState.skillsActive > 0) {
+      badgeText = tabBadgeState.skillsActive;
+    }
+
+    if (badgeText !== null) {
+      const badge = document.createElement("span");
+      badge.className = "tab-badge ml-1 inline-flex items-center justify-center w-4 h-4 text-xs rounded-full bg-red-500 text-white";
+      badge.textContent = badgeText;
+      tab.appendChild(badge);
+    }
+  });
+}
+
+// ─── Auto-Scroll + Elapsed Time ───────────────────────────────
+let sliceTimers = {};
+
+function startSliceTimer(sliceId) {
+  const startTime = Date.now();
+  sliceTimers[sliceId] = setInterval(() => {
+    const card = document.querySelector(`[data-slice-id="${sliceId}"] .slice-elapsed`);
+    if (card) {
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(0);
+      card.textContent = `${elapsed}s`;
+    }
+  }, 1000);
+}
+
+function stopSliceTimer(sliceId) {
+  if (sliceTimers[sliceId]) {
+    clearInterval(sliceTimers[sliceId]);
+    delete sliceTimers[sliceId];
+  }
+}
+
+// ─── Notification Sound ────────────────────────────────────────
+function playNotificationSound(type) {
+  if (localStorage.getItem("pf-sound") === "off") return;
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    gain.gain.value = 0.1;
+    osc.frequency.value = type === "success" ? 880 : 440;
+    osc.type = "sine";
+    osc.start();
+    osc.stop(ctx.currentTime + 0.15);
+  } catch { /* audio blocked by browser — fail silently */ }
+}
+
+// ─── Hub Client Monitor ───────────────────────────────────────
+let hubPollInterval = null;
+
+function startHubPolling() {
+  if (hubPollInterval) return;
+  pollHubClients();
+  hubPollInterval = setInterval(pollHubClients, 10000);
+}
+
+function stopHubPolling() {
+  if (hubPollInterval) { clearInterval(hubPollInterval); hubPollInterval = null; }
+  const el = document.getElementById("hub-clients");
+  if (el) el.classList.add("hidden");
+}
+
+async function pollHubClients() {
+  try {
+    const res = await fetch(`${API_BASE}/api/hub`);
+    const info = await res.json();
+    const el = document.getElementById("hub-clients");
+    if (!el) return;
+    if (info.running) {
+      const clients = info.clients || [];
+      const count = Array.isArray(clients) ? clients.length : (typeof clients === "number" ? clients : 0);
+      el.textContent = `${count} client${count !== 1 ? "s" : ""}`;
+      el.classList.remove("hidden");
+    } else {
+      el.classList.add("hidden");
+    }
+  } catch { /* ignore */ }
+}
+
 // ─── Init ─────────────────────────────────────────────────────────────
 // Load initial status
 fetch(`${API_BASE}/api/status`)
@@ -1577,6 +1989,16 @@ fetch(`${API_BASE}/api/status`)
 
 // Connect WebSocket
 connectWebSocket();
+
+// Load version in footer
+fetch(`${API_BASE}/api/capabilities`)
+  .then((r) => r.json())
+  .then((data) => {
+    const ver = data.version || data.serverVersion || "";
+    const el = document.getElementById("footer-version");
+    if (el && ver) el.textContent = `v${ver}`;
+  })
+  .catch(() => {});
 
 // Load notifications from localStorage
 renderNotifications();
@@ -1605,7 +2027,7 @@ const tabLoadHooks = {
   skills: loadSkillCatalog,
 };
 
-// ─── Theme Toggle (v2.8) ─────────────────────────────────────────────
+// ─── Theme Toggle ─────────────────────────────────────────────
 function toggleTheme() {
   const isLight = document.documentElement.classList.toggle("light");
   localStorage.setItem("pf-theme", isLight ? "light" : "dark");
@@ -1625,7 +2047,7 @@ function toggleTheme() {
 }
 window.toggleTheme = toggleTheme;
 
-// ─── Keyboard Navigation (v2.8) ──────────────────────────────────────
+// ─── Keyboard Navigation ──────────────────────────────────────
 document.addEventListener("keydown", (e) => {
   // Skip if focus is in input/select/textarea
   if (["INPUT", "SELECT", "TEXTAREA"].includes(e.target.tagName)) return;
@@ -1660,6 +2082,7 @@ document.addEventListener("keydown", (e) => {
     e.preventDefault();
     const rows = document.querySelectorAll("#runs-table-body tr[data-row-idx]");
     if (rows.length === 0) return;
+    if (selectedRunIdx < 0) selectedRunIdx = 0;
     if (e.key === "j") selectedRunIdx = Math.min(selectedRunIdx + 1, rows.length - 1);
     else selectedRunIdx = Math.max(selectedRunIdx - 1, 0);
     rows.forEach((r) => r.classList.remove("row-selected"));
@@ -1677,7 +2100,7 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
-// ─── Skill Catalog (v2.8) ────────────────────────────────────────────
+// ─── Skill Catalog ────────────────────────────────────────────
 async function loadSkillCatalog() {
   const container = document.getElementById("skill-catalog");
   if (!container) return;
@@ -1703,7 +2126,7 @@ async function loadSkillCatalog() {
   }
 }
 
-// ─── Traces Tab (v2.4) ───────────────────────────────────────────────
+// ─── Traces Tab ───────────────────────────────────────────────
 let traceData = null;
 
 async function loadTraces() {
@@ -1826,7 +2249,7 @@ function renderWaterfall(trace) {
     return;
   }
 
-  // v2.8: Quorum summary banner
+  // Quorum summary banner
   let quorumBanner = "";
   if (trace.quorum && Object.keys(trace.quorum).length > 0) {
     const slices = Object.entries(trace.quorum);
@@ -1850,7 +2273,7 @@ function renderWaterfall(trace) {
   const maxTime = Math.max(...times);
   const range = maxTime - minTime || 1;
 
-  // v2.8: Build quorum lookup for slice spans
+  // Build quorum lookup for slice spans
   const quorumLookup = {};
   if (trace.quorum) {
     for (const [sliceNum, qd] of Object.entries(trace.quorum)) {
@@ -1872,7 +2295,7 @@ function renderWaterfall(trace) {
     const indent = span.parentSpanId ? (span.kind === "CLIENT" ? "ml-8" : "ml-4") : "";
     const kindBadge = span.kind === "SERVER" ? "🌐" : span.kind === "CLIENT" ? "📡" : "⚙️";
 
-    // v2.8: Quorum indicator on slice spans
+    // Quorum indicator on slice spans
     const sliceMatch = span.name?.match(/slice[- ]?(\d+)/i);
     const qData = sliceMatch ? quorumLookup[`slice-${sliceMatch[1]}`] : null;
     const quorumBadge = qData ? `<span class="text-purple-400 text-xs ml-1" title="Quorum: ${qData.successfulLegs}/${qData.totalLegs} legs, threshold ${qData.threshold}">🔮${qData.successfulLegs}/${qData.totalLegs}</span>` : "";
@@ -1895,7 +2318,7 @@ function showSpanDetail(idx) {
   if (!traceData) return;
   const span = traceData.spans[idx];
 
-  // Events — render full detail (v2.8)
+  // Events — render full detail 
   const eventsEl = document.getElementById("trace-events");
   if (span.events?.length > 0) {
     eventsEl.innerHTML = span.events.map((e) => {
@@ -1914,7 +2337,7 @@ function showSpanDetail(idx) {
     eventsEl.innerHTML = '<p class="text-gray-500">No events</p>';
   }
 
-  // Attributes — formatted table (v2.8)
+  // Attributes — formatted table 
   const attrsEl = document.getElementById("trace-attributes");
   const labels = { model: "Model", tokens_in: "Input Tokens", tokens_out: "Output Tokens", worker: "Worker", cost_usd: "Cost ($)", exit_code: "Exit Code", duration_ms: "Duration (ms)", slice_id: "Slice ID" };
   const allAttrs = { ...span.attributes, status: span.status, kind: span.kind, spanId: span.spanId };
@@ -1924,14 +2347,14 @@ function showSpanDetail(idx) {
   }).join("");
   attrsEl.innerHTML = `<table class="w-full">${rows}</table>`;
 
-  // Log summary (v2.8)
+  // Log summary 
   if (span.logSummary?.length > 0) {
     attrsEl.innerHTML += `<details class="mt-2"><summary class="text-xs text-gray-500 cursor-pointer">Log Summary (${span.logSummary.length} entries)</summary>
       <pre class="text-xs text-gray-400 mt-1 whitespace-pre-wrap max-h-32 overflow-y-auto">${span.logSummary.map((l) => escHtml(l)).join("\n")}</pre>
     </details>`;
   }
 
-  // v2.8: Quorum detail for slice spans
+  // Quorum detail for slice spans
   const sliceMatch = span.name?.match(/slice[- ]?(\d+)/i);
   if (sliceMatch && traceData.quorum?.[sliceMatch[1]]) {
     const qd = traceData.quorum[sliceMatch[1]];
@@ -1970,3 +2393,51 @@ function filterTraceEvents(severity) {
 window.loadTraceDetail = loadTraceDetail;
 window.showSpanDetail = showSpanDetail;
 window.filterTraceEvents = filterTraceEvents;
+
+// ─── Trace Span Search ────────────────────────────────────────
+function filterTraceSpans() {
+  if (!traceData) return;
+  const query = (document.getElementById("trace-search")?.value || "").toLowerCase();
+  if (!query) { renderWaterfall(traceData); return; }
+  const filtered = {
+    ...traceData,
+    spans: traceData.spans.filter((s) =>
+      (s.name || "").toLowerCase().includes(query) ||
+      JSON.stringify(s.attributes || {}).toLowerCase().includes(query) ||
+      (s.logSummary || []).some((l) => l.toLowerCase().includes(query))
+    ),
+  };
+  renderWaterfall(filtered);
+}
+
+window.filterTraceSpans = filterTraceSpans;
+
+// ─── Event History Log ─────────────────────────────────────────
+let eventLogEntries = [];
+
+function appendEventLog(event) {
+  const time = new Date().toLocaleTimeString();
+  const typeColors = {
+    "run-started": "text-blue-400", "run-completed": "text-green-400", "run-aborted": "text-yellow-400",
+    "slice-started": "text-cyan-400", "slice-completed": "text-green-300", "slice-failed": "text-red-400",
+    "skill-started": "text-purple-400", "skill-completed": "text-purple-300",
+  };
+  const color = typeColors[event.type] || "text-gray-400";
+  const summary = event.data?.sliceId ? ` slice ${event.data.sliceId}` : event.data?.plan ? ` ${shortName(event.data.plan)}` : event.data?.skillName ? ` /${event.data.skillName}` : "";
+
+  eventLogEntries.push({ time, type: event.type, summary, color });
+  if (eventLogEntries.length > 200) eventLogEntries.shift();
+
+  const logEl = document.getElementById("event-log");
+  const countEl = document.getElementById("event-log-count");
+  if (!logEl) return;
+
+  countEl.textContent = `(${eventLogEntries.length})`;
+  // Append to bottom, auto-scroll
+  const entry = document.createElement("div");
+  entry.className = `${color} py-0.5`;
+  entry.textContent = `[${time}] ${event.type}${summary}`;
+  logEl.appendChild(entry);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+

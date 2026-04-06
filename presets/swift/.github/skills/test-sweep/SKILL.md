@@ -1,6 +1,6 @@
 ---
 name: test-sweep
-description: Run all test suites (unit, integration, UI, E2E) and aggregate results into a summary report. Use after completing execution slices or before the Review Gate.
+description: Run all test suites (unit, integration, API, E2E) and aggregate results into a summary report. Use after completing execution slices or before the Review Gate.
 argument-hint: "[optional: specific test category to run]"
 tools: [run_in_terminal, read_file, forge_sweep]
 ---
@@ -14,36 +14,27 @@ tools: [run_in_terminal, read_file, forge_sweep]
 
 ### 1. Unit Tests
 ```bash
-swift test --filter UnitTests 2>&1 | tee TestResults/unit.txt
-# Or if no tags, run all unit tests (SPM target)
-swift test 2>&1 | tee TestResults/unit.txt
+swift test --filter "Unit" 2>&1 | tee TestResults/unit.txt
 ```
+> If no "Unit" filter target exists, run all tests: `swift test 2>&1 | tee TestResults/all.txt`
 
 ### Conditional: Unit Test Failure
-> If unit tests fail → skip integration/UI/E2E tests, Swift directly to Report.
+> If unit tests fail → skip integration/E2E tests, go directly to Report.
 
-### 2. Integration Tests (Vapor — requires database)
+### 2. Integration Tests
 ```bash
 # Requires database running (Docker or local)
-swift test --filter IntegrationTests 2>&1 | tee TestResults/integration.txt
-```
-> **If database not running**: `docker compose up -d db` then retry.
-
-### 3. Xcode Unit + Integration Tests (iOS/macOS)
-```bash
-xcodebuild test \
-  -scheme MyApp \
-  -destination 'platform=iOS Simulator,name=iPhone 16' \
-  2>&1 | tee TestResults/xcode.txt
+swift test --filter "Integration" 2>&1 | tee TestResults/integration.txt
 ```
 
-### 4. UI Tests with XCUITest (if available)
+### 3. API Tests (Vapor)
 ```bash
-xcodebuild test \
-  -scheme MyApp \
-  -destination 'platform=iOS Simulator,name=iPhone 16' \
-  -only-testing:MyAppUITests \
-  2>&1 | tee TestResults/ui.txt
+swift test --filter "APITests" 2>&1 | tee TestResults/api.txt
+```
+
+### 4. E2E Tests (if available)
+```bash
+swift test --filter "E2ETests" 2>&1 | tee TestResults/e2e.txt
 ```
 
 ### 5. Thread Sanitizer (Race Detection)
@@ -57,20 +48,20 @@ Use the `forge_sweep` MCP tool to scan for TODO/FIXME/stub markers in the codeba
 ### 7. Report
 Aggregate results:
 ```
-✅ Unit:         X passed, Y failed
-✅ Integration:  X passed, Y failed
-✅ UI Tests:     X passed, Y failed
-✅ Thread Sanitizer: No races detected
-✅ Sweep:        N markers (TODO/FIXME/stub)
+✅ Unit:        X passed, Y failed
+✅ Integration: X passed, Y failed
+✅ API:         X passed, Y failed
+✅ E2E:         X passed, Y failed
+✅ TSan:        No data races detected
+✅ Sweep:       N markers (TODO/FIXME/stub)
 ──────────────────────────────────────
-Total:           X passed, Y failed
+Total:          X passed, Y failed
 ```
 
 ## On Failure
 - Show failed test names and error messages
 - Read the failing test source to diagnose
-- Check for `XCTUnwrap` failures — may indicate unexpected nil
-- Check for async timing issues — increase `expectation.fulfill()` wait time
+- Check for thread safety issues with `--sanitize=thread`
 - Suggest fixes (ask before applying)
 
 ## Persistent Memory (if OpenBrain is configured)

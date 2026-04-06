@@ -206,7 +206,7 @@
       <!-- Badge -->
       <div class="inline-flex items-center gap-2 px-4 py-1.5 mb-8 rounded-full bg-slate-800/80 border border-slate-700/60 text-sm text-slate-300">
         <span class="w-2 h-2 rounded-full bg-forge-500 animate-pulse"></span>
-        Open Source · MIT License · GitHub Template · v2.0.0
+        Open Source · MIT License · Dogfooded · v2.9.0
       </div>
 
       <!-- Logo -->
@@ -242,20 +242,20 @@
       <!-- Verified metrics -->
       <div class="mb-12 grid grid-cols-2 md:grid-cols-4 gap-4 max-w-3xl mx-auto">
         <div class="bg-slate-800/60 rounded-xl p-4 text-center border border-slate-700/30">
-          <div class="text-2xl font-bold text-forge-400">16s</div>
-          <div class="text-xs text-slate-500">3 slices executed</div>
+          <div class="text-2xl font-bold text-forge-400">11</div>
+          <div class="text-xs text-slate-500">phases self-built</div>
         </div>
         <div class="bg-slate-800/60 rounded-xl p-4 text-center border border-slate-700/30">
-          <div class="text-2xl font-bold text-green-400">24/24</div>
-          <div class="text-xs text-slate-500">pipeline gates pass</div>
+          <div class="text-2xl font-bold text-green-400">69/69</div>
+          <div class="text-xs text-slate-500">self-tests passing</div>
         </div>
         <div class="bg-slate-800/60 rounded-xl p-4 text-center border border-slate-700/30">
-          <div class="text-2xl font-bold text-blue-400">14</div>
+          <div class="text-2xl font-bold text-blue-400">17</div>
           <div class="text-xs text-slate-500">MCP tools</div>
         </div>
         <div class="bg-slate-800/60 rounded-xl p-4 text-center border border-slate-700/30">
-          <div class="text-2xl font-bold text-purple-400">65</div>
-          <div class="text-xs text-slate-500">self-tests passing</div>
+          <div class="text-2xl font-bold text-purple-400">0</div>
+          <div class="text-xs text-slate-500">manual rollbacks</div>
         </div>
       </div>
 
@@ -1614,6 +1614,38 @@ Target project: (current directory)</code></pre>
 
           <p class="text-sm text-slate-600 mt-8">MIT Licensed · GitHub Template · No vendor lock-in · Works with any AI tool</p>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================================================
+       DOGFOODING
+  ================================================ -->
+  <section class="py-16 bg-slate-900 border-t border-slate-800/60">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+      <div class="reveal">
+        <p class="text-forge-500 text-sm font-semibold tracking-widest uppercase mb-3">Dogfooding</p>
+        <h2 class="text-3xl md:text-4xl font-bold text-white mb-4">Plan Forge Builds Plan Forge</h2>
+        <p class="text-lg text-slate-400 max-w-2xl mx-auto mb-8">Every feature in this repo &mdash; the MCP server, the dashboard, the orchestrator, the quorum system &mdash; was developed using the same hardened plan pipeline that ships to users. If the pipeline can build itself without drift, it can build your project too.</p>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-3xl mx-auto">
+          <div class="bg-slate-800/60 rounded-xl p-4 border border-slate-700/30">
+            <div class="text-2xl font-bold text-forge-400">11</div>
+            <div class="text-xs text-slate-500">phases executed</div>
+          </div>
+          <div class="bg-slate-800/60 rounded-xl p-4 border border-slate-700/30">
+            <div class="text-2xl font-bold text-green-400">v2.9</div>
+            <div class="text-xs text-slate-500">current version</div>
+          </div>
+          <div class="bg-slate-800/60 rounded-xl p-4 border border-slate-700/30">
+            <div class="text-2xl font-bold text-blue-400">0</div>
+            <div class="text-xs text-slate-500">manual rollbacks</div>
+          </div>
+          <div class="bg-slate-800/60 rounded-xl p-4 border border-slate-700/30">
+            <div class="text-2xl font-bold text-purple-400">69</div>
+            <div class="text-xs text-slate-500">self-tests passing</div>
+          </div>
+        </div>
+        <p class="text-sm text-slate-600 mt-6">The dashboard screenshots in our docs were captured by a Playwright script &mdash; itself built slice-by-slice using Plan Forge.</p>
       </div>
     </div>
   </section>

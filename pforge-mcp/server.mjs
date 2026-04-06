@@ -27,6 +27,7 @@ import { fileURLToPath } from "node:url";
 import { parsePlan, runPlan, detectWorkers, getCostReport, analyzeWithQuorum, generateImage } from "./orchestrator.mjs";
 import { isOpenBrainConfigured } from "./memory.mjs";
 import { createHub, readHubPort } from "./hub.mjs";
+import { createBridge } from "./bridge.mjs";
 import { buildCapabilitySurface, writeToolsJson, writeCliSchema } from "./capabilities.mjs";
 import { readRunIndex } from "./telemetry.mjs";
 import { parseSkill, executeSkill } from "./skill-runner.mjs";
@@ -43,7 +44,11 @@ const PFORGE = IS_WINDOWS ? "powershell.exe -NoProfile -ExecutionPolicy Bypass -
 // ─── Orchestrator State ───────────────────────────────────────────────
 let activeAbortController = null;
 let activeRunPromise = null;
-let activeHub = null; // WebSocket hub instance
+let activeHub = null;    // WebSocket hub instance
+let activeBridge = null; // OpenClaw Bridge instance
+
+// Set of runIds that have already received an approval decision (rate-limit: 1 per runId)
+const _approvedRunIds = new Set();
 
 // ─── Helpers ──────────────────────────────────────────────────────────
 function runPforge(args, cwd = PROJECT_DIR) {
@@ -1054,6 +1059,118 @@ function createExpressApp() {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
+  // ─── Bridge REST API ─────────────────────────────────────────────────
+
+  // Helper: validate the optional bridge approval secret.
+  // If bridge.approvalSecret is set, the request must supply it via
+  //   Authorization: Bearer <secret>  OR  ?token=<secret>
+  function checkApprovalSecret(req, res) {
+    const secret = activeBridge?.config?.approvalSecret;
+    if (!secret) return true; // No secret configured — open access
+    const authHeader = req.headers?.authorization ?? "";
+    const bearerToken = authHeader.startsWith("Bearer ")
+      ? authHeader.slice(7).trim()
+      : null;
+    const queryToken = req.query?.token ?? null;
+    if (bearerToken === secret || queryToken === secret) return true;
+    res.status(401).json({ error: "Unauthorized — invalid or missing approval secret" });
+    return false;
+  }
+
+  // GET /api/bridge/status — connected channels, pending approvals, stats
+  app.get("/api/bridge/status", (_req, res) => {
+    if (!activeBridge) {
+      return res.json({
+        enabled: false,
+        message: "Bridge not initialised (no bridge config in .forge.json)",
+      });
+    }
+    const channels = (activeBridge.config?.channels ?? []).map((c) => ({
+      type: c.type,
+      level: c.level ?? "important",
+      approvalRequired: c.approvalRequired ?? false,
+      // Mask URL to avoid leaking tokens
+      url: (c.url ?? "").replace(/\/bot[^/]+\//, "/bot[REDACTED]/"),
+    }));
+    res.json({
+      enabled: activeBridge.isEnabled,
+      connected: !!(activeBridge._ws && activeBridge._ws.readyState === 1),
+      hasApprovalChannels: activeBridge.hasApprovalChannels,
+      channels,
+      pendingApprovals: activeBridge.getPendingApprovals(),
+    });
+  });
+
+  // POST /api/bridge/approve/:runId — receive approval callback
+  //   Body: { action: "approve" | "reject", approver?: string }
+  app.post("/api/bridge/approve/:runId", (req, res) => {
+    if (!checkApprovalSecret(req, res)) return;
+
+    const { runId } = req.params;
+    if (!runId) return res.status(400).json({ error: "runId is required" });
+
+    if (!activeBridge) {
+      return res.status(503).json({ error: "Bridge not initialised" });
+    }
+
+    // Rate limit: only accept one decision per runId
+    if (_approvedRunIds.has(runId)) {
+      return res.status(409).json({ error: "Approval already received for this runId" });
+    }
+
+    const { action, approver } = req.body || {};
+    if (action !== "approve" && action !== "reject") {
+      return res.status(400).json({ error: 'action must be "approve" or "reject"' });
+    }
+
+    const approved = action === "approve";
+    const result = activeBridge.receiveApproval(runId, approved, approver ?? "api");
+
+    if (!result.ok) {
+      return res.status(404).json({ error: result.message });
+    }
+
+    _approvedRunIds.add(runId);
+    res.json({ ok: true, runId, action, approver: approver ?? "api" });
+  });
+
+  // GET /api/bridge/approve/:runId — browser-friendly approval link (Telegram inline buttons)
+  //   Query: ?action=approve|reject  (required)
+  //          ?token=<secret>         (optional, if approvalSecret is set)
+  app.get("/api/bridge/approve/:runId", (req, res) => {
+    if (!checkApprovalSecret(req, res)) return;
+
+    const { runId } = req.params;
+    if (!runId) return res.status(400).send("runId is required");
+
+    if (!activeBridge) {
+      return res.status(503).send("Bridge not initialised");
+    }
+
+    if (_approvedRunIds.has(runId)) {
+      return res.status(409).send(`<html><body><h2>Already processed</h2><p>Approval for run <code>${runId}</code> was already received.</p></body></html>`);
+    }
+
+    const action = req.query?.action;
+    if (action !== "approve" && action !== "reject") {
+      return res.status(400).send('Query parameter "action" must be "approve" or "reject"');
+    }
+
+    const approved = action === "approve";
+    const result = activeBridge.receiveApproval(runId, approved, "browser");
+
+    if (!result.ok) {
+      return res.status(404).send(`<html><body><h2>Not Found</h2><p>${result.message}</p></body></html>`);
+    }
+
+    _approvedRunIds.add(runId);
+    const icon = approved ? "✅" : "❌";
+    const label = approved ? "Approved" : "Rejected";
+    res.send(`<html><body><h2>${icon} ${label}</h2><p>Run <code>${runId}</code> has been <strong>${label.toLowerCase()}</strong>.</p></body></html>`);
+  });
+
+  // ─── Bridge REST API endpoints are registered above ─────────────────
+
   return app;
 }
 
@@ -1097,12 +1214,24 @@ async function main() {
     console.error(`[hub] WebSocket hub failed to start: ${err.message} (non-fatal)`);
   }
 
+  // Start Bridge (connects to hub as a WS client; activates if bridge config present)
+  try {
+    activeBridge = createBridge({ cwd: PROJECT_DIR, port: activeHub?.port });
+    if (activeBridge) {
+      console.error("[bridge] Bridge manager started");
+    }
+  } catch (err) {
+    console.error(`[bridge] Bridge failed to start: ${err.message} (non-fatal)`);
+  }
+
   // Graceful shutdown
   process.on("SIGTERM", () => {
     if (activeHub) activeHub.close();
+    if (activeBridge) activeBridge.stop();
   });
   process.on("SIGINT", () => {
     if (activeHub) activeHub.close();
+    if (activeBridge) activeBridge.stop();
   });
 }
 

@@ -182,6 +182,67 @@ Emitted when all skill steps finish.
 
 ---
 
+## Bridge Events
+
+### `approval-requested`
+Emitted when the bridge pauses execution and requests external approval.
+
+```json
+{
+  "type": "approval-requested",
+  "version": "1.0",
+  "runId": "Phase-1-AUTH-20260406T093000",
+  "plan": "docs/plans/Phase-1-AUTH-PLAN.md",
+  "channels": ["telegram", "slack"],
+  "timeoutMinutes": 30,
+  "timestamp": "..."
+}
+```
+
+### `approval-received`
+Emitted when an external approval callback is received.
+
+```json
+{
+  "type": "approval-received",
+  "version": "1.0",
+  "runId": "Phase-1-AUTH-20260406T093000",
+  "action": "approve",
+  "approver": "srnichols",
+  "timestamp": "..."
+}
+```
+
+### `bridge-notification-sent`
+Emitted after a webhook notification is successfully dispatched to a channel.
+
+```json
+{
+  "type": "bridge-notification-sent",
+  "version": "1.0",
+  "channel": "telegram",
+  "platform": "telegram",
+  "eventType": "run-completed",
+  "status": "sent",
+  "timestamp": "..."
+}
+```
+
+### `bridge-notification-failed`
+Emitted when a webhook dispatch fails (network error, bad status, etc.).
+
+```json
+{
+  "type": "bridge-notification-failed",
+  "version": "1.0",
+  "channel": "slack",
+  "error": "HTTP 403 Forbidden",
+  "timestamp": "..."
+}
+```
+
+---
+
 ## Client → Server Messages
 
 ### `set-label`

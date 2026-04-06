@@ -1243,6 +1243,7 @@ export async function runPlan(planPath, options = {}) {
     abortController = null,
     quorum = false,        // false | true | "auto"
     quorumThreshold = null, // override threshold from config
+    bridge = null,         // BridgeManager instance for approval gate
   } = options;
 
   // Load model routing from .forge.json (Slice 5)
@@ -1356,12 +1357,40 @@ export async function runPlan(planPath, options = {}) {
     analyzeResult = runAutoAnalyze(cwd, planPath);
   }
 
-  // Write summary
+  // Build summary in memory (needed for approval message content)
+  const runId = basename(runDir);
   const summary = buildSummary(plan, results, runMeta, { sweepResult, analyzeResult });
+
+  // Approval gate (Phase 16) — pause and await human approval before finalising
+  if (allPassed && bridge?.hasApprovalChannels) {
+    try {
+      const approvalResult = await bridge.requestApproval(runId, { ...summary, runId });
+      if (!approvalResult.approved) {
+        summary.status = "approval-rejected";
+        summary.approval = {
+          status: "rejected",
+          approver: approvalResult.approver ?? null,
+          timedOut: approvalResult.timedOut ?? false,
+          timestamp: new Date().toISOString(),
+        };
+      } else {
+        summary.approval = {
+          status: "approved",
+          approver: approvalResult.approver ?? null,
+          timestamp: new Date().toISOString(),
+        };
+      }
+    } catch (err) {
+      // Non-fatal — log and continue without blocking the run
+      console.error(`[orchestrator] Approval gate error: ${err.message}`);
+    }
+  }
+
+  // Write summary
   writeFileSync(resolve(runDir, "summary.json"), JSON.stringify(summary, null, 2));
 
   // Phase 2: Append to cost history
-  if (summary.cost && summary.status !== "estimate") {
+  if (summary.cost && summary.status !== "estimate" && summary.status !== "approval-rejected") {
     appendCostHistory(cwd, summary);
   }
 
@@ -1369,7 +1398,6 @@ export async function runPlan(planPath, options = {}) {
   eventBus.emit("run-completed", summary);
 
   // v2.4: Write manifest + index + prune (AFTER trace.json is written by emit)
-  const runId = basename(runDir);
   const manifest = writeManifest(runDir, runId, { ...summary, traceId: trace.traceId });
   appendRunIndex(cwd, runId, manifest);
   pruneRunHistory(cwd, loadMaxRunHistory(cwd));

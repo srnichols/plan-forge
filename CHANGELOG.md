@@ -5,6 +5,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.10.0] — 2026-04-06
+
+### Added — OpenClaw Bridge (Phase 16)
+- **`pforge-mcp/bridge.mjs`** — BridgeManager subscribes to WebSocket hub events and dispatches formatted notifications to external platforms (Telegram, Slack, Discord, generic webhooks)
+- **Platform formatters** — per-platform rich formatting: Telegram Markdown v2 with emoji, Slack Block Kit with action buttons, Discord Embeds with color-coded sidebars, Generic JSON envelope
+- **ApprovalGate state machine** — pause execution at `run-completed`, POST approval request to configured channels, resume on `POST /api/bridge/approve/:runId` callback; auto-rejects after configurable timeout (default 30 min)
+- **REST endpoints** — `GET /api/bridge/status` (connected channels + pending approvals), `POST /api/bridge/approve/:runId` (approval callback), `GET /api/bridge/approve/:runId` (browser-friendly for Telegram inline buttons)
+- **Notification level filtering** — `all`, `important`, `critical-only` per channel
+- **Rate limiting** — max 1 notification per 5 seconds per channel to prevent spam during parallel slices
+- **Config via `.forge.json`** — `bridge.channels[]` array with type, url, level, approvalRequired per channel
+- **4 new EVENTS.md event types** — `approval-requested`, `approval-received`, `bridge-notification-sent`, `bridge-notification-failed`
+- No new npm dependencies — uses Node.js built-in `fetch`
+
+---
+
 ## [2.9.2] — 2026-04-06
 
 ### Added — Extension Registry (Phase 15)

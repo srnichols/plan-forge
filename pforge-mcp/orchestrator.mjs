@@ -2270,15 +2270,33 @@ const MODEL_PRICING = {
 
 /**
  * Calculate cost for a single slice from its token data.
- * @param {{ tokens_in: number|null, tokens_out: number|null, model: string }} tokens
+ *
+ * CLI workers (gh-copilot, claude) are subscription-based — cost is estimated
+ * from premium request counts, not token-based API pricing.
+ * API workers use per-token MODEL_PRICING.
+ *
+ * @param {{ tokens_in: number|null, tokens_out: number|null, model: string, premiumRequests?: number }} tokens
+ * @param {string} [worker] - Worker type: "gh-copilot", "claude", "codex", "api-xai", etc.
  * @returns {{ cost_usd: number, model: string, tokens_in: number, tokens_out: number }}
  */
-export function calculateSliceCost(tokens) {
+export function calculateSliceCost(tokens, worker) {
   const model = tokens?.model || "unknown";
-  const pricing = MODEL_PRICING[model] || MODEL_PRICING.default;
   const tokensIn = typeof tokens?.tokens_in === "number" ? tokens.tokens_in : 0;
   const tokensOut = typeof tokens?.tokens_out === "number" ? tokens.tokens_out : 0;
-  const cost = (tokensIn * pricing.input) + (tokensOut * pricing.output);
+
+  let cost;
+  // CLI subscription workers: cost based on premium requests, not API token pricing
+  if (worker && !worker.startsWith("api-")) {
+    const premiumRequests = tokens?.premiumRequests || 0;
+    // GitHub Copilot premium request rate — approximate per-request cost
+    const PREMIUM_REQUEST_RATE = 0.01; // ~$0.01 per premium request
+    cost = premiumRequests * PREMIUM_REQUEST_RATE;
+  } else {
+    // API workers: use per-token pricing
+    const pricing = MODEL_PRICING[model] || MODEL_PRICING.default;
+    cost = (tokensIn * pricing.input) + (tokensOut * pricing.output);
+  }
+
   return {
     cost_usd: Math.round(cost * 1_000_000) / 1_000_000, // 6 decimal places
     model,
@@ -2301,7 +2319,7 @@ export function buildCostBreakdown(sliceResults) {
 
   for (const sr of sliceResults) {
     if (!sr.tokens || sr.status === "skipped") continue;
-    const cost = calculateSliceCost(sr.tokens);
+    const cost = calculateSliceCost(sr.tokens, sr.worker);
     totalCost += cost.cost_usd;
     totalIn += cost.tokens_in;
     totalOut += cost.tokens_out;
@@ -2792,6 +2810,16 @@ async function selfTest() {
     const cost2 = calculateSliceCost({ tokens_in: null, tokens_out: 100, model: "unknown-model" });
     assert("Unknown model uses default pricing", cost2.cost_usd > 0);
     assert("Null tokens_in treated as 0", cost2.tokens_in === 0);
+
+    // CLI worker uses premium request costing, not token pricing
+    const cost3 = calculateSliceCost({ tokens_in: 500000, tokens_out: 5000, model: "claude-opus-4.6", premiumRequests: 3 }, "gh-copilot");
+    assert("CLI worker uses premium request rate", cost3.cost_usd === 0.03);
+    assert("CLI worker preserves token counts", cost3.tokens_in === 500000);
+
+    // API worker uses per-token pricing
+    const cost4 = calculateSliceCost({ tokens_in: 1000, tokens_out: 500, model: "grok-4" }, "api-xai");
+    assert("API worker uses token pricing", cost4.cost_usd > 0);
+    assert("API worker cost matches expected", Math.abs(cost4.cost_usd - 0.007) < 0.0001); // 1000*2/1M + 500*10/1M
 
     // Breakdown
     const mockResults = [

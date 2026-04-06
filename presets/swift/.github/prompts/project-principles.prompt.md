@@ -1,4 +1,4 @@
----
+﻿---
 description: "Define your project's non-negotiable principles, commitments, and boundaries"
 mode: agent
 ---
@@ -119,7 +119,7 @@ to **Accept**, **Modify**, or **Reject**.
 - Core Principle: "Context propagation through all function chains"
 - Technology: "Swift 5.9+ with standard library preferred over third-party"
 - Forbidden: "Ignoring error returns with `_`" (silent failures)
-- Forbidden: "Goroutine leaks — all goroutines must have a shutdown path"
+- Forbidden: "Task leaks — all Tasks must have a shutdown path"
 - Quality: "swift test with race detector enabled in CI"
 
 ### Presenting Starters

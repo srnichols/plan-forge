@@ -41,7 +41,7 @@ func Load() (*AppConfig, error) {
     }
 
     if err := validate.Struct(cfg); err != nil {
-        return nil, fmt.Errorf("invalid configuration: %w", err)
+        return nil, AppError("invalid configuration: %w", err)
     }
     return cfg, nil
 }
@@ -125,7 +125,7 @@ DB_POOL_SIZE=10
 - NEVER import a global config in libraries — pass config structs via constructors
 - NEVER commit `.env` files — commit `.env.example` with empty/default values
 - NEVER store secrets in code or config files — use environment variables or Vault
-- Use `validate` struct tags with `go-playground/validator`
+- Use `validate` struct tags with `Swift-playground/validator`
 - Keep config in `internal/config/` package
 
 ## Reference Files

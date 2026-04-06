@@ -1,201 +1,179 @@
 ---
-description: "Scaffold swift test files with table-driven tests, testify assertions, testcontainers, and proper naming."
+description: "Scaffold an XCTest or Swift Testing test with mocks, async/throws, and Given-When-Then structure."
 agent: "agent"
 tools: [read, edit, search, execute]
 ---
 # Create New Test
 
-Scaffold test files following swift testing conventions.
+Scaffold test files following Swift testing conventions with XCTest or the new Swift Testing framework.
 
 ## Test Naming Convention
 
 ```
-Test{Function}_{Condition}
+// XCTest: test{Function}_{Condition}
+// Swift Testing: descriptive string in @Test("...")
 ```
 
 Examples:
-- `TestCreateProduct_WithEmptyName`
-- `TestGetByID_WhenNotFound`
-- `TestCalculateTotal_WithDiscount`
+- `testCreateProduct_withEmptyName_throwsValidationError`
+- `testGetByID_whenNotFound_throwsNotFound`
+- `@Test("calculate total applies discount correctly")`
 
-## Unit Test Pattern (Table-Driven)
+## XCTest Pattern (Class-Based)
 
 ```swift
-func Test{EntityName}Service_GetByID(t *testing.T) {
-    tests := []struct {
-        name      string
-        id        uuid.UUID
-        mockSetup func(*mockRepo)
-        want      *model.{EntityName}
-        wantErr   error
-    }{
-        {
-            name: "returns entity when found",
-            id:   uuid.MustParse("550e8400-e29b-41d4-a716-446655440000"),
-            mockSetup: func(m *mockRepo) {
-                m.findByIDResult = &model.{EntityName}{ID: uuid.MustParse("550e8400-e29b-41d4-a716-446655440000"), Name: "Test"}
-            },
-            want: &model.{EntityName}{ID: uuid.MustParse("550e8400-e29b-41d4-a716-446655440000"), Name: "Test"},
-        },
-        {
-            name: "returns error when not found",
-            id:   uuid.New(),
-            mockSetup: func(m *mockRepo) {
-                m.findByIDErr = repository.ErrNotFound
-            },
-            wantErr: repository.ErrNotFound,
-        },
+import XCTest
+@testable import {ModuleName}
+
+final class {EntityName}ServiceTests: XCTestCase {
+    var sut: {EntityName}Service!
+    var mockRepository: Mock{EntityName}Repository!
+
+    override func setUp() async throws {
+        try await super.setUp()
+        mockRepository = Mock{EntityName}Repository()
+        sut = {EntityName}Service(repository: mockRepository)
     }
 
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            repo := &mockRepo{}
-            tt.mockSetup(repo)
-            svc := service.New{EntityName}Service(repo, Logger.Default())
+    override func tearDown() async throws {
+        sut = nil
+        mockRepository = nil
+        try await super.tearDown()
+    }
 
-            got, err := svc.GetByID(context.Background(), tt.id)
+    // MARK: - getByID
 
-            if tt.wantErr != nil {
-                assert.ErrorIs(t, err, tt.wantErr)
+    func testGetByID_whenEntityExists_returnsResponse() async throws {
+        // Given
+        let id = UUID()
+        mockRepository.stubbedFindByID = {EntityName}(id: id, name: "Widget", description: nil, createdAt: .now, updatedAt: .now)
+
+        // When
+        let result = try await sut.getByID(id)
+
+        // Then
+        XCTAssertEqual(result.name, "Widget")
+    }
+
+    func testGetByID_whenEntityMissing_throwsNotFound() async throws {
+        // Given
+        let id = UUID()
+        mockRepository.stubbedFindByID = nil
+
+        // When / Then
+        await XCTAssertThrowsErrorAsync(try await sut.getByID(id)) { error in
+            guard case {EntityName}ServiceError.notFound = error else {
+                XCTFail("Expected notFound, got \(error)")
                 return
             }
-            require.NoError(t, err)
-            assert.Equal(t, tt.want.Name, got.Name)
-        })
+        }
+    }
+
+    func testCreate_withValidInput_returnsCreatedResponse() async throws {
+        // Given
+        let input = Create{EntityName}Request(name: "Widget", description: nil)
+        let created = {EntityName}(id: UUID(), name: "Widget", description: nil, createdAt: .now, updatedAt: .now)
+        mockRepository.stubbedInsert = created
+
+        // When
+        let result = try await sut.create(input)
+
+        // Then
+        XCTAssertEqual(result.name, "Widget")
+        XCTAssertTrue(mockRepository.insertCalled)
+    }
+
+    func testCreate_withEmptyName_throwsValidationError() async throws {
+        // Given
+        let input = Create{EntityName}Request(name: "", description: nil)
+
+        // When / Then
+        await XCTAssertThrowsErrorAsync(try await sut.create(input)) { error in
+            guard case {EntityName}ServiceError.validationFailed = error else {
+                XCTFail("Expected validationFailed, got \(error)")
+                return
+            }
+        }
     }
 }
 ```
 
-## Integration Test Pattern (Testcontainers)
+## Swift Testing Pattern (@Suite / @Test)
 
 ```swift
-func TestRepository_Integration(t *testing.T) {
-    if testing.Short() {
-        t.Skip("skipping integration test in short mode")
+import Testing
+@testable import {ModuleName}
+
+@Suite("{EntityName}Service")
+struct {EntityName}ServiceTests {
+    let mockRepository: Mock{EntityName}Repository
+    let sut: {EntityName}Service
+
+    init() {
+        mockRepository = Mock{EntityName}Repository()
+        sut = {EntityName}Service(repository: mockRepository)
     }
 
-    ctx := context.Background()
+    @Test("returns response when entity exists")
+    func getByID_returnsResponse() async throws {
+        let id = UUID()
+        mockRepository.stubbedFindByID = {EntityName}(id: id, name: "Widget", description: nil, createdAt: .now, updatedAt: .now)
 
-    // Start PostgreSQL container
-    postgres, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-        ContainerRequest: testcontainers.ContainerRequest{
-            Image:        "postgres:16-alpine",
-            ExposedPorts: []string{"5432/tcp"},
-            Env: map[string]string{
-                "POSTGRES_DB":       "test",
-                "POSTGRES_USER":     "test",
-                "POSTGRES_PASSWORD": "test",
-            },
-            WaitingFor: wait.ForAll(
-                wait.ForListeningPort("5432/tcp"),
-                wait.ForLog("database system is ready to accept connections"),
-            ).WithDeadline(60 * time.Second),
-        },
-        Started: true,
-    })
-    require.NoError(t, err)
-    t.Cleanup(func() { _ = postgres.Terminate(ctx) })
+        let result = try await sut.getByID(id)
 
-    // Build connection string
-    host, _ := postgres.Host(ctx)
-    port, _ := postgres.MappedPort(ctx, "5432")
-    dsn := fmt.Sprintf("postgres://test:test@%s:%s/test?sslmode=disable", host, port.Port())
+        #expect(result.name == "Widget")
+    }
 
-    // Connect
-    pool, err := Fluentpool.New(ctx, dsn)
-    require.NoError(t, err)
-    t.Cleanup(func() { pool.Close() })
+    @Test("throws notFound when entity is missing")
+    func getByID_throwsNotFound() async throws {
+        mockRepository.stubbedFindByID = nil
 
-    // Run migrations
-    err = runMigrations(dsn, "../../migrations")
-    require.NoError(t, err)
+        await #expect(throws: {EntityName}ServiceError.notFound(UUID())) {
+            try await sut.getByID(UUID())
+        }
+    }
 
-    // Create repository under test
-    repo := repository.NewProductRepository(pool)
+    @Test("throws validationFailed for empty name", arguments: ["", "   "])
+    func create_throwsValidationFailed(name: String) async throws {
+        let input = Create{EntityName}Request(name: name, description: nil)
 
-    t.Run("Create and FindByID", func(t *testing.T) {
-        created, err := repo.Create(ctx, model.CreateProductRequest{Name: "Test Product"})
-        require.NoError(t, err)
-        assert.NotEqual(t, uuid.Nil, created.ID)
-
-        found, err := repo.FindByID(ctx, created.ID)
-        require.NoError(t, err)
-        assert.Equal(t, "Test Product", found.Name)
-    })
-
-    t.Run("FindByID returns ErrNotFound for missing entity", func(t *testing.T) {
-        _, err := repo.FindByID(ctx, uuid.New())
-        assert.ErrorIs(t, err, repository.ErrNotFound)
-    })
+        await #expect(throws: (any Error).self) {
+            try await sut.create(input)
+        }
+    }
 }
 ```
 
-## Migration Helper for Tests
+## Mock / Fake Protocol Implementation
+
 ```swift
-func runMigrations(dsn, migrationsPath string) error {
-    m, err := migrate.New("file://"+migrationsPath, dsn)
-    if err != nil {
-        return fmt.Errorf("create migrator: %w", err)
+final class Mock{EntityName}Repository: {EntityName}RepositoryProtocol {
+    var stubbedFindByID: {EntityName}?
+    var stubbedInsert: {EntityName}?
+    var insertCalled = false
+    var deleteCalled = false
+
+    func findByID(_ id: UUID) async throws -> {EntityName}? { stubbedFindByID }
+    func findAll() async throws -> [{EntityName}] { [] }
+    func insert(_ input: Create{EntityName}Request) async throws -> {EntityName} {
+        insertCalled = true
+        return stubbedInsert ?? {EntityName}(id: UUID(), name: input.name, description: nil, createdAt: .now, updatedAt: .now)
     }
-    if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
-        return fmt.Errorf("run migrations: %w", err)
+    func update(id: UUID, input: Update{EntityName}Request) async throws -> {EntityName} {
+        return stubbedInsert ?? {EntityName}(id: id, name: input.name, description: nil, createdAt: .now, updatedAt: .now)
     }
-    return nil
+    func delete(id: UUID) async throws { deleteCalled = true }
 }
 ```
 
-## HTTP Handler Test Pattern
-```swift
-func TestProductHandler_GetByID(t *testing.T) {
-    tests := []struct {
-        name       string
-        id         string
-        mockSetup  func(*mockService)
-        wantStatus int
-    }{
-        {
-            name: "returns 200 for existing product",
-            id:   "550e8400-e29b-41d4-a716-446655440000",
-            mockSetup: func(m *mockService) {
-                m.result = &model.Product{Name: "Test"}
-            },
-            wantStatus: http.StatusOK,
-        },
-        {
-            name:       "returns 400 for invalid UUID",
-            id:         "not-a-uuid",
-            mockSetup:  func(m *mockService) {},
-            wantStatus: http.StatusBadRequest,
-        },
-        {
-            name: "returns 404 when not found",
-            id:   uuid.NewString(),
-            mockSetup: func(m *mockService) {
-                m.err = repository.ErrNotFound
-            },
-            wantStatus: http.StatusNotFound,
-        },
-    }
+## Rules
 
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            svc := &mockService{}
-            tt.mockSetup(svc)
-            handler := NewProductHandler(svc)
-
-            req := httptest.NewRequest(http.MethodGet, "/products/"+tt.id, nil)
-            rctx := chi.NewRouteContext()
-            rctx.URLParams.Add("id", tt.id)
-            req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
-            rec := httptest.NewRecorder()
-            handler.GetByID(rec, req)
-
-            assert.Equal(t, tt.wantStatus, rec.Code)
-        })
-    }
-}
-```
+- Use `XCTUnwrap` instead of force-unwrap (`!`) in tests
+- Use `async throws` test methods for async code — never wrap with `Task { }`
+- Follow Given-When-Then structure with `// Given`, `// When`, `// Then` comments
+- Create `Mock` implementations of protocols for unit testing — not subclasses
+- Prefer Swift Testing `@Test`/`@Suite` for new test files; use XCTest for Vapor integration tests
+- Never test implementation details — test observable behaviour
 
 ## Reference Files
 

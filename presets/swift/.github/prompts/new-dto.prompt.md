@@ -1,5 +1,5 @@
 ---
-description: "Scaffold request/response structs with JSON tags, validation tags, and mapping from domain models."
+description: "Scaffold a Swift Codable DTO with CodingKeys, Validatable conformance (Vapor), and request/response pair pattern."
 agent: "agent"
 tools: [read, edit, search]
 ---
@@ -9,105 +9,116 @@ Scaffold request and response structs that separate API contracts from domain mo
 
 ## Required Pattern
 
-### Response Struct
+### Response DTO
 ```swift
-// Returned from API handlers — JSON-serializable
-type {EntityName}Response struct {
-    ID          string `json:"id"`
-    Name        string `json:"name"`
-    Description string `json:"description,omitempty"`
-    CreatedAt   string `json:"created_at"` // ISO 8601
-    UpdatedAt   string `json:"updated_at"`
+import Foundation
+
+struct {EntityName}Response: Codable, Content, Sendable {
+    let id: String
+    let name: String
+    let description: String?
+    let createdAt: String  // ISO 8601
+    let updatedAt: String
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case description
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
+
+    init(from entity: {EntityName}) {
+        let formatter = ISO8601DateFormatter()
+        self.id = entity.id.uuidString
+        self.name = entity.name
+        self.description = entity.description
+        self.createdAt = formatter.string(from: entity.createdAt)
+        self.updatedAt = formatter.string(from: entity.updatedAt)
+    }
 }
 ```
 
-### Create Request Struct
+### Create Request DTO
 ```swift
-type Create{EntityName}Request struct {
-    Name        string `json:"name"        validate:"required,max=200"`
-    Description string `json:"description" validate:"max=2000"`
+import Vapor
+
+struct Create{EntityName}Request: Codable, Content, Validatable, Sendable {
+    let name: String
+    let description: String?
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case description
+    }
+
+    static func validations(_ validations: inout Validations) {
+        validations.add("name", as: String.self, is: !.empty && .count(1...255))
+        validations.add("description", as: String?.self, is: .nil || .count(...2000), required: false)
+    }
 }
 ```
 
-### Update Request Struct
+### Update Request DTO
 ```swift
-type Update{EntityName}Request struct {
-    Name        string `json:"name"        validate:"required,max=200"`
-    Description string `json:"description" validate:"max=2000"`
+struct Update{EntityName}Request: Codable, Content, Validatable, Sendable {
+    let name: String
+    let description: String?
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case description
+    }
+
+    static func validations(_ validations: inout Validations) {
+        validations.add("name", as: String.self, is: !.empty && .count(1...255))
+        validations.add("description", as: String?.self, is: .nil || .count(...2000), required: false)
+    }
 }
 ```
 
-### Validation (go-playground/validator)
+### Paged Response Wrapper
 ```swift
-import "github.com/go-playground/validator/v10"
+struct PagedResponse<T: Codable>: Codable, Content {
+    let items: [T]
+    let page: Int
+    let pageSize: Int
+    let totalCount: Int
+    let totalPages: Int
+    let hasNext: Bool
+    let hasPrevious: Bool
 
-var validate = validator.New()
-
-func decodeAndValidate[T any](r *http.Request) (T, error) {
-    var req T
-    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-        return req, fmt.Errorf("invalid JSON: %w", err)
+    enum CodingKeys: String, CodingKey {
+        case items
+        case page
+        case pageSize    = "page_size"
+        case totalCount  = "total_count"
+        case totalPages  = "total_pages"
+        case hasNext     = "has_next"
+        case hasPrevious = "has_previous"
     }
-    if err := validate.Struct(req); err != nil {
-        return req, fmt.Errorf("validation failed: %w", err)
-    }
-    return req, nil
-}
-
-// Usage in handler
-func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
-    req, err := decodeAndValidate[Create{EntityName}Request](r)
-    if err != nil {
-        writeProblem(w, http.StatusBadRequest, err.Error())
-        return
-    }
-    // ...
 }
 ```
 
-### Mapping Functions
+### Validation in Vapor Handler
 ```swift
-func toResponse(entity *model.{EntityName}) {EntityName}Response {
-    return {EntityName}Response{
-        ID:          entity.ID.String(),
-        Name:        entity.Name,
-        Description: entity.Description,
-        CreatedAt:   entity.CreatedAt.Format(time.RFC3339),
-        UpdatedAt:   entity.UpdatedAt.Format(time.RFC3339),
-    }
-}
-
-func toResponseList(entities []*model.{EntityName}) []{EntityName}Response {
-    results := make([]{EntityName}Response, 0, len(entities))
-    for _, e := range entities {
-        results = append(results, toResponse(e))
-    }
-    return results
-}
-```
-
-## Paged Response Wrapper
-```swift
-type PagedResult[T any] struct {
-    Items       []T  `json:"items"`
-    Page        int  `json:"page"`
-    PageSize    int  `json:"page_size"`
-    TotalCount  int  `json:"total_count"`
-    TotalPages  int  `json:"total_pages"`
-    HasNext     bool `json:"has_next"`
-    HasPrevious bool `json:"has_previous"`
+func create(req: Request) async throws -> Response {
+    try Create{EntityName}Request.validate(content: req)
+    let input = try req.content.decode(Create{EntityName}Request.self)
+    let created = try await service.create(input)
+    return try await created.encodeResponse(status: .created, for: req)
 }
 ```
 
 ## Rules
 
-- NEVER return domain models directly from handlers — always map to response structs
-- NEVER decode directly into domain models — always use request structs
-- Use `json` struct tags for all fields (snake_case in JSON, PascalCase in Go)
-- Use `validate` struct tags with `go-playground/validator`
-- Use generics (`decodeAndValidate[T]`) for reusable decode+validate
-- Keep DTOs in `internal/handler/` or `internal/dto/` — not in domain
-- Use `omitempty` for optional fields
+- NEVER return domain models directly from controllers — always map to response DTOs
+- NEVER decode directly into domain models — always use request DTOs
+- Use `CodingKeys` with `snake_case` JSON names for all fields
+- Conform request DTOs to `Validatable` for Vapor built-in validation
+- Use `Content` conformance for Vapor automatic encoding/decoding
+- Mark all DTOs `Sendable` for safe use across async contexts
+- Keep DTOs in `Sources/App/DTOs/` — not in domain layer
 
 ## Reference Files
 

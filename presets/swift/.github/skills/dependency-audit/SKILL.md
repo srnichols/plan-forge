@@ -1,6 +1,6 @@
 ---
 name: dependency-audit
-description: Scan Swift package dependencies for vulnerabilities, outdated packages, and license issues. Use before PRs, after adding packages, or on a regular schedule.
+description: Scan Swift Package Manager dependencies for vulnerabilities, outdated packages, and license issues. Use before PRs, after adding packages, or on a regular schedule.
 argument-hint: "[optional: specific package to audit]"
 tools:
   - run_in_terminal
@@ -8,7 +8,7 @@ tools:
   - forge_sweep
 ---
 
-# Dependency Audit Skill
+# Dependency Audit Skill (Swift)
 
 ## Trigger
 "Audit dependencies" / "Check for vulnerabilities" / "Are my packages up to date?"
@@ -19,42 +19,38 @@ tools:
 ```bash
 swift package audit
 ```
-> **If this step fails** (older toolchain): Review `Package.resolved` manually against known CVE databases. Report and continue.
+> **If this step fails** (`swift package audit` requires Swift 5.9+ / Xcode 15+): Report that the tool is unavailable and manually review dependencies against the [Swift Security Advisories](https://github.com/nicowillis/swift-security-advisories) or [OSV database](https://osv.dev).
 
-> **If no Package.swift found**: Stop and report "No Swift package found in this directory."
+> **If no Package.swift found**: Stop and report "No Swift Package Manager project found in this directory."
 
 ### 2. Check for Outdated Packages
 ```bash
 swift package show-dependencies
 ```
+Review each dependency and check if newer versions are available on GitHub/Swift Package Index.
 
 ### 3. Verify Package Integrity
 ```bash
 swift package resolve
 ```
-> **If this step fails**: Package cache may be corrupted. Run `swift package clean` and `swift package resolve` to recover.
+> **If this step fails**: Package cache may be corrupted. Run `swift package clean` and then `swift package resolve` to recover.
 
-### 4. Check Package.resolved is Committed
-```bash
-git status Package.resolved
-```
-> **If Package.resolved is in .gitignore**: Flag as a finding — it must be committed for reproducible builds.
+### 4. Check for License Issues
+Review `Package.resolved` for each dependency URL. Check the license on the GitHub repository for each package.
 
-### 5. Check for License Issues
-Review `Package.swift` dependencies and check their GitHub repositories for license files.
-Flag any dependencies with GPL, AGPL, or SSPL licenses that may conflict with your project license.
+Focus on packages with restrictive licenses (GPL, AGPL) that may conflict with your project license or App Store distribution.
 
-### 6. Completeness Scan
+### 5. Completeness Scan
 Use the `forge_sweep` MCP tool to check for TODO/FIXME markers that may have been left by prior dependency changes.
 
-### 7. Review Findings
+### 6. Review Findings
 For each finding:
 - **Critical/High CVE**: Upgrade immediately or document accepted risk
 - **Outdated (major version behind)**: Plan upgrade in next phase
 - **Outdated (minor/patch)**: Update now if safe
 - **License conflict**: Flag for human review
 
-### 8. Report
+### 7. Report
 ```
 Dependency Audit Summary:
   🔴 Critical:     N vulnerabilities
@@ -66,15 +62,15 @@ Outdated Packages:
   Minor/Patch:     N (update now)
 
 Package Integrity:  PASS / FAIL
-License Issues:    N
-Sweep Markers:     N (TODO/FIXME from prior changes)
+License Issues:     N
+Sweep Markers:      N (TODO/FIXME from prior changes)
 
 Overall: PASS / FAIL
 ```
 
 ## Safety Rules
 - NEVER auto-upgrade major versions without human approval
-- ALWAYS check if the upgrade has breaking changes (Swift packages often have API changes between major versions)
+- ALWAYS check the package changelog for breaking changes before upgrading
 - Run `swift test` after any dependency change
 - Document any accepted vulnerabilities with justification
 

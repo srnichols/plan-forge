@@ -1,207 +1,274 @@
 ---
-description: Version management — Semantic versioning, auto-increment, commit-driven version bumps, release tagging
-applyTo: '**/Package.swift,**/version.swift'
+description: Swift versioning — CFBundleShortVersionString, CFBundleVersion, SPM Package.swift, App Store Connect, fastlane, Git tags
+applyTo: '**/Package.swift,**/Info.plist,**/version.swift,**/*.xcconfig'
 ---
 
-# Version Management (Swift)
+# Swift Version Management
 
-## Versioning Scheme
+> **Applies to**: iOS/macOS apps and Swift Package Manager (SPM) libraries
+
+---
+
+## Semantic Versioning
 
 ```
 MAJOR.MINOR.PATCH
-  3  .  7  .  2
+  2  .  4  .  1
 ```
 
-Swift packages use [Semantic Versioning 2.0.0](https://semver.org/) with special import path rules for v2+.
-
-| Segment | When to Increment | Trigger |
+| Segment | When to Increment | Example |
 |---------|-------------------|---------|
-| **MAJOR** | Breaking API changes (import path changes!) | Manual approval required |
-| **MINOR** | New features (backward-compatible) | `feat:` commit prefix |
-| **PATCH** | Bug fixes, performance, refactors | `fix:` / `perf:` / `refactor:` prefix |
+| **MAJOR** | Breaking API changes | `1.x.x` → `2.0.0` |
+| **MINOR** | New features, backward-compatible | `2.3.x` → `2.4.0` |
+| **PATCH** | Bug fixes, performance, minor tweaks | `2.4.0` → `2.4.1` |
 
-## Commit Message → Version Bump
+### Conventional Commit → Version Bump
 
-| Commit Prefix | Version Impact | Example |
-|---|---|---|
-| `feat:` | MINOR +1 | v3.6.0 → v3.7.0 |
-| `fix:` / `perf:` / `refactor:` | PATCH +1 | v3.6.5 → v3.6.6 |
-| `docs:` / `chore:` / `test:` / `style:` / `ci:` | No version bump | — |
-| `feat!:` / `BREAKING CHANGE:` | MAJOR +1 (module path changes!) | v3.6.5 → v4.0.0 |
+| Commit Prefix | Version Impact |
+|---|---|
+| `feat:` | MINOR +1 |
+| `fix:` / `perf:` / `refactor:` | PATCH +1 |
+| `docs:` / `chore:` / `test:` / `ci:` | No bump |
+| `feat!:` / `BREAKING CHANGE:` | MAJOR +1 |
 
-## Implementation
+---
 
-### Embed Version at Build Time
+## iOS/macOS App Versioning
+
+### Info.plist Keys
+
+```xml
+<!-- CFBundleShortVersionString: marketing version shown in App Store and Settings -->
+<key>CFBundleShortVersionString</key>
+<string>2.4.1</string>
+
+<!-- CFBundleVersion: build number — must be monotonically increasing integer -->
+<key>CFBundleVersion</key>
+<string>241</string>
+```
+
+### Reading Version at Runtime
 
 ```swift
-// internal/version/version.swift
+// ✅ Always read from Bundle — never hardcode
+extension Bundle {
+    static var marketingVersion: String {
+        main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
+    }
 
-var (
-    Version   = "dev"     // Set via -ldflags
-    Commit    = "unknown"
-    BuildDate = "unknown"
+    static var buildNumber: String {
+        main.infoDictionary?["CFBundleVersion"] as? String ?? "0"
+    }
+}
+
+// Usage
+Logger.app.info("App version \(Bundle.marketingVersion) build \(Bundle.buildNumber)")
+```
+
+### xcconfig for Version Management
+
+```xcconfig
+// Version.xcconfig
+MARKETING_VERSION = 2.4.1
+CURRENT_PROJECT_VERSION = 241
+```
+
+```
+Project Settings → Build Settings → Versioning:
+  Marketing Version       = $(MARKETING_VERSION)
+  Current Project Version = $(CURRENT_PROJECT_VERSION)
+```
+
+---
+
+## SPM Library Versioning
+
+### Package.swift
+
+```swift
+// ✅ No version field in Package.swift itself — version is determined by Git tag
+// Package.swift declares the supported Swift tools version only
+// swift-tools-version: 5.10
+
+import PackageDescription
+
+let package = Package(
+    name: "MyLibrary",
+    platforms: [
+        .iOS(.v17),
+        .macOS(.v14)
+    ],
+    products: [
+        .library(name: "MyLibrary", targets: ["MyLibrary"])
+    ],
+    targets: [
+        .target(name: "MyLibrary"),
+        .testTarget(name: "MyLibraryTests", dependencies: ["MyLibrary"])
+    ]
 )
 ```
 
-```bash
-# Build with version info injected
-swift build -ldflags "-X internal/version.Version=3.7.2 \
-  -X internal/version.Commit=$(git rev-parse --short HEAD) \
-  -X internal/version.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-  -o bin/server ./cmd/server
-```
-
-### Swift Module Versioning (v2+)
-
-```
-# Package.swift — MAJOR v2+ requires /v2 suffix in module path
-module github.com/contoso/api-service/v4
-
-# Import path must match:
-import "github.com/contoso/api-service/v4/pkg/auth"
-```
-
-## Version Endpoint
+### Consuming a Versioned SPM Package
 
 ```swift
-func (h *VersionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-    render.JSON(w, r, map[string]string{
-        "version":   version.Version,
-        "commit":    version.Commit,
-        "buildDate": version.BuildDate,
-        "goVersion": runtime.Version(),
-    })
+// In your Package.swift dependencies
+dependencies: [
+    // ✅ Exact version — reproducible builds
+    .package(url: "https://github.com/org/library", exact: "2.4.1"),
+
+    // ✅ Up-to-next-major — allows patches and features, not breaking changes
+    .package(url: "https://github.com/org/library", from: "2.0.0"),
+
+    // ❌ Avoid branch-based dependencies in production
+    // .package(url: "...", branch: "main"),
+]
+```
+
+---
+
+## Git Tagging
+
+```bash
+# ✅ Always use v-prefix for Git tags
+git tag -a v2.4.1 -m "Release 2.4.1: fix order confirmation crash"
+git push origin v2.4.1
+
+# Pre-release tags
+git tag -a v2.5.0-beta.1 -m "Beta: new checkout flow"
+git push origin v2.5.0-beta.1
+```
+
+### Pre-Release Identifiers
+
+```
+v2.5.0-alpha.1   — early development, breaking changes expected
+v2.5.0-beta.1    — feature-complete, undergoing testing
+v2.5.0-rc.1      — release candidate, final validation
+v2.5.0           — production release
+```
+
+---
+
+## CI — Auto-Increment Build Number
+
+```yaml
+# GitHub Actions — auto-increment CFBundleVersion from run number
+- name: Set build number
+  run: |
+    BUILD_NUMBER=${{ github.run_number }}
+    /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" \
+      "${{ github.workspace }}/MyApp/Info.plist"
+```
+
+```bash
+# ✅ Fastlane: increment_build_number reads from App Store Connect
+lane :bump_build do
+  increment_build_number(
+    build_number: latest_testflight_build_number + 1,
+    xcodeproj: "MyApp.xcodeproj"
+  )
+end
+```
+
+---
+
+## fastlane match — Certificate Management
+
+```ruby
+# Matchfile
+git_url("https://github.com/org/certificates")
+storage_mode("git")
+type("appstore")          # "development", "adhoc", "appstore", "enterprise"
+app_identifier(["com.example.myapp"])
+username("ci@example.com")
+
+# Fastfile
+lane :sync_certs do
+  match(type: "appstore", readonly: true)   # ✅ readonly in CI — never generate
+end
+
+lane :renew_certs do
+  match(type: "appstore", force_for_new_devices: true)  # local/admin only
+end
+```
+
+---
+
+## App Store Connect Requirements
+
+| Field | Requirement |
+|-------|-------------|
+| `CFBundleShortVersionString` | Must increase for each App Store submission |
+| `CFBundleVersion` | Must be a positive integer; must increase for each build uploaded |
+| Version string format | `X.Y` or `X.Y.Z` — no pre-release suffixes visible in App Store |
+| Build number | Unique per version per platform (iOS, macOS, tvOS tracked separately) |
+
+---
+
+## Vapor Server Versioning
+
+```swift
+// ✅ Version file pattern for server-side Swift
+// Read version from VERSION file or environment at startup
+func configure(_ app: Application) throws {
+    let version = Environment.get("APP_VERSION")
+        ?? (try? String(contentsOfFile: "VERSION", encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines))
+        ?? "dev"
+
+    app.logger.info("Starting server version \(version)")
 }
 ```
 
-## Automated Versioning
-
-```bash
-# Use goreleaser for automated releases
-# .goreleaser.yaml reads git tags
-
-# Tag and release
-git tag -a v3.7.0 -m "Release 3.7.0: feature description"
-git push origin v3.7.0
-goreleaser release
 ```
+# VERSION file at repo root — updated by CI on release
+2.4.1
+```
+
+```yaml
+# GitHub Actions — inject version into Vapor container image
+- name: Build Docker image
+  run: |
+    VERSION=$(cat VERSION)
+    docker build --build-arg APP_VERSION=$VERSION -t myserver:$VERSION .
+```
+
+---
 
 ## Rules
 
-- **NEVER** manually edit version strings — inject via `-ldflags` at build time
-- **ALWAYS** use conventional commit prefixes to drive version bumps
-- **ALWAYS** use `v` prefix on Git tags: `v3.7.0` (Go toolchain requires it)
-- MAJOR bumps change the module import path (`/v2`, `/v3`, etc.)
-- Use `goreleaser` for cross-platform builds and GitHub releases
-- Store version in `internal/version/` — never in `Package.swift` comments
-
-## Git Tag Workflow
-
-```bash
-git tag -a v3.7.0 -m "Release 3.7.0: feature description"
-git push origin v3.7.0
+```
+✅ ALWAYS use v-prefix on Git tags: v2.4.1
+✅ CFBundleShortVersionString must increase for every App Store submission
+✅ CFBundleVersion must be a monotonically increasing integer
+✅ Use fastlane match in readonly mode in CI — never regenerate certificates in CI
+✅ Pin SPM dependencies to exact versions or from: for reproducible builds
+✅ Use VERSION file for Vapor server; read at runtime from environment or file
+❌ Never use branch-based SPM dependencies in production targets
+❌ Never hardcode version strings in source files — read from Bundle/environment
+❌ Never manually upload certificates to CI — use match encrypted git repo
+❌ Never submit the same build number twice for the same platform/version
 ```
 
-## Changelog Generation
+---
 
-Auto-generate changelogs from conventional commits:
-
-```yaml
-# .goreleaser.yaml — goreleaser generates changelog from Git tags
-changelog:
-  sort: asc
-  use: conventional-commits
-  filters:
-    exclude:
-      - '^docs'
-      - '^chore'
-      - '^ci'
-  groups:
-    - title: Features
-      regexp: '^feat'
-    - title: Bug Fixes
-      regexp: '^fix'
-```
-
-```bash
-# Generate changelog with goreleaser
-goreleaser release --snapshot --clean
-# Or use git-chglog
-git-chglog -o CHANGELOG.md
-```
-
-### Changelog Format
+## Changelog Format
 
 ```markdown
-## [v3.7.0] - 2025-01-15
-### Features
-- Producer bulk import endpoint (#142)
-- Tenant-scoped caching for catalog queries (#138)
-### Bug Fixes
-- Race condition in order processing (#145)
-### Dependencies
-- Upgraded chi to v5 (#140)
+## [2.4.1] - 2025-01-15
+### Fixed
+- Order confirmation screen crash on iPad (#234)
+- Memory leak in image cache (#231)
+
+## [2.4.0] - 2025-01-08
+### Added
+- New checkout flow with Apple Pay support (#220)
+- Dark mode for profile screen (#218)
 ```
 
-### Rules
-- **ALWAYS** generate changelog before tagging a release
-- One changelog entry per conventional commit (squash merge = one entry)
-- Link PR numbers in entries for traceability
-
-## Pre-release Versioning
-
-Use SemVer pre-release identifiers (Go toolchain supports these):
-
-```
-v3.7.0-alpha.1    → Early development, breaking changes expected
-v3.7.0-beta.1     → Feature-complete, testing in progress
-v3.7.0-rc.1       → Release candidate, final validation
-v3.7.0            → Production release
-```
-
-```bash
-# Tag pre-release (Go requires v prefix)
-git tag -a v3.7.0-rc.1 -m "Release candidate 3.7.0-rc.1"
-git push origin v3.7.0-rc.1
-
-# goreleaser detects pre-release from tag
-goreleaser release
-# Consumers: Swift get github.com/contoso/api-service@v3.7.0-rc.1
-```
-
-### Rules
-- Swift module system treats pre-release tags as lower precedence than release
-- `go get` won't auto-select pre-release unless explicitly requested
-- **NEVER** deploy pre-release versions to production
-- Beta/RC builds Swift to staging environment only
-
-## API Version Deprecation Timeline
-
-Coordinate API deprecation with `api-patterns.instructions.md` versioning:
-
-| Phase | Timeline | Action |
-|-------|----------|--------|
-| **Announce** | v(N+1) release | Add `Sunset` header to v(N), update docs |
-| **Warn** | +3 months | Log warnings for v(N) consumers, notify via email |
-| **Deprecate** | +6 months | Return `Deprecation` header, reduce rate limits |
-| **Remove** | +12 months | Return `410 Gone` for v(N) endpoints |
-
-### Deprecation Headers (Go Middleware)
-```swift
-func DeprecationMiddleware(next http.Handler) http.Handler {
-    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        next.ServeHTTP(w, r)
-        if strings.HasPrefix(r.URL.Path, "/api/v1") {
-            w.Header().Set("Sunset", "Sat, 01 Jan 2026 00:00:00 GMT")
-            w.Header().Set("Deprecation", "true")
-            w.Header().Set("Link", `</api/v2/docs>; rel="successor-version"`)
-        }
-    })
-}
-```
+---
 
 ## See Also
 
-- `api-patterns.instructions.md` — API versioning strategy, URL/header versioning
-- `deploy.instructions.md` — Release to production, container config
-- `testing.instructions.md` — Pre-release validation checklist
+- `deploy.instructions.md` — App Store submission, TestFlight distribution
+- `testing.instructions.md` — Pre-release validation gates
+- `ci.instructions.md` — Build number automation, certificate management

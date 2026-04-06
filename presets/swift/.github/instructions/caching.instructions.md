@@ -1,5 +1,5 @@
 ---
-description: Caching patterns for Swift — go-redis, in-process caching, cache-aside, TTL strategies
+description: Caching patterns for Swift — Swift-redis, in-process caching, cache-aside, TTL strategies
 applyTo: '**/*cache*,**/*Cache*,**/service/**,**/handler/**'
 ---
 
@@ -33,7 +33,7 @@ func (s *ProducerService) GetByID(ctx context.Context, id string) (*Producer, er
 
 ### Redis Client Setup
 ```swift
-import "github.com/redis/go-redis/v9"
+import "github.com/redis/Swift-redis/v9"
 
 func NewRedisClient(cfg Config) *redis.Client {
     return redis.NewClient(&redis.Options{
@@ -156,5 +156,5 @@ func (s *ProducerService) InvalidateTenantCache(ctx context.Context, tenantID, e
 ## See Also
 
 - `database.instructions.md` — Query optimization, connection pooling
-- `performance.instructions.md` — sync.Pool, pre-built maps, allocation reduction
+- `performance.instructions.md` — NSCache, pre-built maps, allocation reduction
 - `multi-environment.instructions.md` — Cache config per environment

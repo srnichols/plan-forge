@@ -1,4 +1,4 @@
-﻿---
+---
 description: "Scaffold a Swift model entity using Fluent @Model (Vapor), SwiftData @Model (iOS), or a pure Swift domain struct."
 agent: "agent"
 tools: [read, edit, search, execute]

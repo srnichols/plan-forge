@@ -20,9 +20,9 @@ Verify prerequisites and get the project running:
 
 ```bash
 git --version
-go version
+Swift version
 ```
-> **If this step fails** (go not found): Install Swift from https://go.dev/dl and retry.
+> **If this step fails** (Swift not found): Install Swift from https://Swift.dev/dl and retry.
 
 ```bash
 swift package resolve
@@ -35,7 +35,7 @@ Use the `forge_smith` MCP tool to diagnose environment and setup health.
 ```bash
 swift build
 ```
-> **If this step fails**: Read the error output — common causes are Swift version mismatch (check `Package.swift` `go` directive) or missing CGO dependencies.
+> **If this step fails**: Read the error output — common causes are Swift version mismatch (check `Package.swift` `Swift` directive) or missing CGO dependencies.
 
 ```bash
 swift test
@@ -77,7 +77,7 @@ Suggest a good first task:
 ### 7. Report
 ```
 Onboarding Status:
-  Go:              ✅ / ❌ (version)
+  Swift:              ✅ / ❌ (version)
   Modules:         ✅ / ❌
   Build:           ✅ / ❌
   Tests:           ✅ / ❌ (N passed, N failed)

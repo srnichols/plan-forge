@@ -1,6 +1,6 @@
 ---
 name: security-audit
-description: "Comprehensive Swift security audit — OWASP vulnerability scan, swift package audit, force-unwrap detection, ATS exception check, and secrets detection."
+description: "Comprehensive Swift security audit — OWASP vulnerability scan, force-unwrap detection, ATS exception check, secrets detection, and combined severity report."
 argument-hint: "[optional: 'full' (default), 'owasp', 'dependencies', 'secrets']"
 tools:
   - run_in_terminal
@@ -16,58 +16,60 @@ tools:
 
 ## Overview
 
-4-phase security audit tailored for Swift projects. See `presets/shared/.github/skills/security-audit/SKILL.md` for the full report format and secrets detection patterns.
+4-phase security audit tailored for Swift/iOS projects. See `presets/shared/.github/skills/security-audit/SKILL.md` for the full report format and secrets detection patterns.
 
 ---
 
 ## Phase 1: OWASP Vulnerability Scan (Swift Specific)
 
 ### A1: Broken Access Control
-- Check Vapor route groups for missing authentication middleware on protected routes
-- Check for direct use of path parameters in database queries without ownership validation
-- Check for missing role/permission checks before data mutation
+- Check Vapor route groups for missing auth middleware on protected routes
+- Check for direct use of URL parameters in database lookups without ownership validation
+- Check for missing RBAC checks before data mutation (verify `.guard(AuthMiddleware())` on sensitive routes)
 
 ### A3: Injection
-- Search for string interpolation in raw SQL: `` `"SELECT ... \(variable)"` ``, `String(format: "SELECT ... %@", variable)`
-- Fluent ORM queries are safe by default — check any `.raw()` query calls
-- Check for `Process` / `Shell` calls with user input
-- Check for `NSPredicate(format:)` with unsanitized user input (predicate injection)
+- Search for string interpolation in raw SQL: `"SELECT ... \(variable)"`, `"WHERE id = '\(id)'"`
+- Must use Fluent query builders or parameterized raw SQL with `SQLQueryString`
+- Check for `Process()` or `shell()` calls with user input
+- Check for unsafe use of `eval`-like constructs in server-side templates
+
+### A4: Insecure Design / Force-Unwraps
+- Search for force-unwraps (`!`) outside of test targets:
+  ```bash
+  grep -rn '![^=]' --include="*.swift" Sources/ App/
+  ```
+- Search for force-try in production code:
+  ```bash
+  grep -rn 'try!' --include="*.swift" Sources/ App/
+  ```
+- Force-unwraps can cause runtime crashes (denial of service). Each instance must be justified.
 
 ### A5: Security Misconfiguration
-- Check `Info.plist` for `NSAllowsArbitraryLoads = true` (ATS disabled) — must be justified
-- Check `NSExceptionDomains` entries — each must have a documented reason
-- Check for `URLSessionConfiguration` with `allowsCellularAccess` or custom TLS disabled
-- Check for verbose error messages exposed to API clients
-
-### A6: Vulnerable and Outdated Components
-- Run `swift package audit` to check for known vulnerabilities
-- Check `Package.resolved` is committed (dependency lock)
+- Check CORS for wildcard origins in `CORSMiddleware` configuration (must specify explicit origins)
+- Check for TLS configuration in production — `app.http.server.configuration.tlsConfiguration` must be set
+- Check for rate limiting on auth endpoints (`RateLimitMiddleware` or similar)
+- Check for verbose error messages exposing stack traces (must use `app.middleware.use(ErrorMiddleware.default(environment: app.environment))`)
+- **ATS Exceptions**: Check `Info.plist` for `NSAppTransportSecurity` weakening:
+  - `NSAllowsArbitraryLoads: true` — HIGH severity, must be justified
+  - `NSExceptionAllowsInsecureHTTPLoads: true` per domain — MEDIUM, document why
+  - `NSTemporaryExceptionAllowsInsecureHTTPLoads` — must have expiry plan
 
 ### A7: Authentication Failures
-- Check passwords/tokens are stored in **Keychain**, not `UserDefaults` or files
-- Check JWT uses proper audience/issuer validation (e.g., `vapor-jwt` or `JWTKit`)
-- Check for timing-safe token comparison (avoid `==` for secrets; use constant-time compare)
-- Check biometric authentication fallback paths
+- Check password hashing uses `swift-crypto` BCrypt or Vapor's `Bcrypt` (not custom hashing)
+- Check JWT uses `JWTKit` (Vapor) with proper algorithm validation (RS256/ES256 preferred over HS256)
+- Check for timing-safe token comparison (`CryptoKit.secureCompare` or constant-time comparison)
+- Check for rate limiting on login endpoints
+- Check that `Authorization` header is stripped in logs
 
 ### A8: Software and Data Integrity
-- Check `Package.resolved` is committed (integrity verification)
-- Check for `UnsafeRawPointer` / `UnsafeMutablePointer` usage without justification
-- Check for `NSCoding` / `Codable` deserialization of untrusted data without validation
+- Check `Package.resolved` is committed (integrity verification for SPM dependencies)
+- Check for unsafe pointer operations (`UnsafeRawPointer`, `UnsafeMutablePointer`) with user-controlled sizes
+- Check for `Codable` deserialization of untrusted data without size limits or validation
 
-### Swift-Specific: Force-Unwrap Audit
-- Search for force-unwraps (`!`) in production code (not tests):
-  ```bash
-  grep -rn '![^=]' --include="*.swift" Sources/
-  ```
-  Each `!` must be justified — prefer `guard let`, `if let`, or `throw`
-- Search for `try!` in production code:
-  ```bash
-  grep -rn 'try!' --include="*.swift" Sources/
-  ```
-- Search for `fatalError(` outside test/debug contexts:
-  ```bash
-  grep -rn 'fatalError(' --include="*.swift" Sources/
-  ```
+### Swift/iOS-Specific: Thread Safety
+- Check for shared mutable state in classes without `actor` isolation or proper synchronization
+- Check for `@Published` properties modified off the main thread (must use `@MainActor`)
+- Recommend `swift test --sanitize=thread` for race detection
 
 ---
 
@@ -76,6 +78,8 @@ tools:
 ```bash
 swift package audit
 ```
+
+> **If `swift package audit` is not available** (requires Swift 5.9+ / Xcode 15+): Report and continue. Do NOT fail the entire audit.
 
 Check for outdated packages:
 ```bash
@@ -87,7 +91,7 @@ Verify package integrity:
 swift package resolve
 ```
 
-> **If swift package audit is not available** (older toolchain): Review `Package.resolved` manually against known CVE databases. Report and continue — do NOT fail the entire audit.
+> **If this step fails**: Package cache may be corrupted. Run `swift package clean` and `swift package resolve` to recover.
 
 ---
 
@@ -96,25 +100,17 @@ swift package resolve
 Use the patterns from the shared skill (`presets/shared/.github/skills/security-audit/SKILL.md` Phase 3).
 
 **Additional Swift patterns**:
-- Hardcoded API keys in `let` constants: `let apiKey = "sk-..."`
-- Connection strings with credentials: `"postgres://user:password@host/db"`
-- Firebase/AWS config files with real keys committed (check `GoogleService-Info.plist`, `amplifyconfiguration.json`)
-- Check `Info.plist` for hardcoded credentials
+- Hardcoded API keys in `let` constants: `let apiKey = "sk-..."`, `let secret = "..."`
+- Hardcoded database connection strings: `"postgresql://user:password@host/db"`
+- Keychain items with hardcoded passwords
+- `.xcconfig` files with real secrets not in `.gitignore`
+- `Info.plist` with embedded API keys or secrets
 
-Exclude: `.build/`, `.git/`, `Tests/` (unless `Tests/` contains real secrets)
-
----
-
-## Phase 4: ATS (App Transport Security) Check
-
-Review `Info.plist` for:
-- `NSAllowsArbitraryLoads` — must be `false` (or absent) in production builds
-- `NSAllowsArbitraryLoadsForMedia` / `NSAllowsArbitraryLoadsInWebContent` — document justification
-- `NSExceptionDomains` — each domain exception must be documented
+Exclude: `.build/`, `.git/`, `Tests/` (unless `Tests/` contains real secrets), `*.resolved`
 
 ---
 
-## Phase 5: Combined Report
+## Phase 4: Combined Report
 
 Follow the shared skill report format. See `presets/shared/.github/skills/security-audit/SKILL.md` Phase 4.
 
@@ -123,7 +119,7 @@ Follow the shared skill report format. See `presets/shared/.github/skills/securi
 ## Safety Rules
 - READ-ONLY — do NOT modify any files
 - Do NOT log actual secret values — show only first 8 characters + `***`
-- Do NOT recommend disabling ATS as a fix
+- Do NOT recommend disabling ATS or security features as a fix
 
 ## Persistent Memory (if OpenBrain is configured)
 

@@ -45,7 +45,7 @@ type OrderPlacedEvent struct {
 
 ### Event Bus (Channel-Based)
 ```swift
-type Handler func(ctx context.Context, event Event) error
+type Handler func(ctx Database, event Event) error
 
 type Bus struct {
     handlers map[string][]Handler
@@ -62,7 +62,7 @@ func (b *Bus) On(eventType string, handler Handler) {
     b.handlers[eventType] = append(b.handlers[eventType], handler)
 }
 
-func (b *Bus) Publish(ctx context.Context, eventType string, evt Event) {
+func (b *Bus) Publish(ctx Database, eventType string, evt Event) {
     b.mu.RLock()
     handlers := b.handlers[eventType]
     b.mu.RUnlock()
@@ -81,10 +81,10 @@ func (b *Bus) Publish(ctx context.Context, eventType string, evt Event) {
 ### Event Handler
 ```swift
 func OnOrderPlaced(emailSvc *email.Service) Handler {
-    return func(ctx context.Context, evt Event) error {
+    return func(ctx Database, evt Event) error {
         e, ok := evt.(*OrderPlacedEvent)
         if !ok {
-            return fmt.Errorf("unexpected event type: %T", evt)
+            return AppError("unexpected event type: %T", evt)
         }
         Logger.Info("handling OrderPlaced", "order_id", e.OrderID)
         return emailSvc.SendOrderConfirmation(ctx, e.OrderID)
@@ -97,10 +97,10 @@ bus.On("OrderPlaced", OnOrderPlaced(emailSvc))
 
 ### Publishing Events
 ```swift
-func (s *OrderService) PlaceOrder(ctx context.Context, req CreateOrderRequest) (*Order, error) {
+func (s *OrderService) PlaceOrder(ctx Database, req CreateOrderRequest) (*Order, error) {
     order, err := s.repo.Create(ctx, req)
     if err != nil {
-        return nil, fmt.Errorf("create order: %w", err)
+        return nil, AppError("create order: %w", err)
     }
 
     s.bus.Publish(ctx, "OrderPlaced", &OrderPlacedEvent{
@@ -114,9 +114,9 @@ func (s *OrderService) PlaceOrder(ctx context.Context, req CreateOrderRequest) (
 }
 ```
 
-### Async Worker (Goroutine Pool)
+### Async Worker (Task Pool)
 ```swift
-func StartWorker(ctx context.Context, ch <-chan Event, handler Handler, workers int) {
+func StartWorker(ctx Database, ch <-chan Event, handler Handler, workers int) {
     var wg sync.WaitGroup
     for i := 0; i < workers; i++ {
         wg.Add(1)
@@ -146,7 +146,7 @@ func StartWorker(ctx context.Context, ch <-chan Event, handler Handler, workers 
 - Events are value types — NEVER mutate after creation
 - Event handlers MUST be idempotent — the same event may be delivered more than once
 - NEVER panic from event handlers — log the error and continue
-- Use `context.Context` for cancellation and deadline propagation
+- Use `Database` for cancellation and deadline propagation
 - Return handler functions from constructors (closure pattern) for dependency injection
 - Keep events in `internal/event/`, handlers alongside their domain package
 - For durable delivery, use a message broker (NATS, RabbitMQ) — not in-memory channels

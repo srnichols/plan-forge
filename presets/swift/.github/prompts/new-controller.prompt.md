@@ -1,4 +1,4 @@
-﻿---
+---
 description: "Scaffold a Vapor 4 RouteCollection controller with async/throws handlers, request decoding, and service delegation."
 agent: "agent"
 tools: [read, edit, search]

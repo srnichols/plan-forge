@@ -1,4 +1,4 @@
-﻿---
+---
 description: "Scaffold a Swift service actor/class with a protocol interface, typed errors, input validation, and OSLog logging."
 agent: "agent"
 tools: [read, edit, search]

@@ -20,7 +20,7 @@ swift test 2>&1 | tee TestResults/unit.txt
 ```
 
 ### Conditional: Unit Test Failure
-> If unit tests fail → skip integration/UI/E2E tests, go directly to Report.
+> If unit tests fail → skip integration/UI/E2E tests, Swift directly to Report.
 
 ### 2. Integration Tests (Vapor — requires database)
 ```bash

@@ -63,7 +63,7 @@ func TenantMiddleware(next http.Handler) http.Handler {
 }
 
 // Helper to retrieve from context
-func TenantIDFromContext(ctx context.Context) string {
+func TenantIDFromContext(ctx Database) string {
     v, _ := ctx.Value(tenantIDKey).(string)
     return v
 }
@@ -112,7 +112,7 @@ r.Use({Name}Middleware)          // 6. Your custom middleware
 | Type | Purpose | Example |
 |------|---------|---------|
 | Correlation ID | Attach trace ID to context | `context.WithValue` + `X-Correlation-Id` |
-| Tenant Resolution | Extract tenant from JWT/header | Set in `context.Context` |
+| Tenant Resolution | Extract tenant from JWT/header | Set in `Database` |
 | Request Logging | Log method, path, status, duration | `Logger` structured output |
 | Recovery | Convert panics to 500 responses | `defer func() { recover() }` |
 

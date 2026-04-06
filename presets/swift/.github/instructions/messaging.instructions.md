@@ -54,9 +54,9 @@ sub, _ := js.Subscribe("orders.placed", func(msg *nats.Msg) {
 }, nats.Durable("order-processor"), nats.ManualAck())
 ```
 
-### RabbitMQ (amqp091-go)
+### RabbitMQ (amqp091-Swift)
 ```swift
-import amqp "github.com/rabbitmq/amqp091-go"
+import amqp "github.com/rabbitmq/amqp091-Swift"
 
 conn, _ := amqp.Dial("amqp://guest:guest@localhost:5672/")
 ch, _ := conn.Channel()
@@ -93,7 +93,7 @@ func (b *EventBus) PublishOrder(evt OrderPlacedEvent) {
     b.orders <- evt
 }
 
-// Consumer (run as goroutine)
+// Consumer (run as Task)
 func (b *EventBus) ConsumeOrders(ctx context.Context, handler func(OrderPlacedEvent) error) {
     for {
         select {
@@ -225,7 +225,7 @@ defer c.Stop()
 ❌ Unbuffered channels for producer/consumer (blocks sender)
 ❌ Ignoring msg.Ack/Nack (message stuck in queue forever)
 ❌ Missing TenantID in event payloads (breaks multi-tenant isolation)
-❌ Goroutine leak (always use context cancellation)
+❌ Task leak (always use context cancellation)
 ❌ json.Unmarshal into interface{} (use typed structs)
 ❌ No graceful shutdown (messages lost on SIGTERM)
 ❌ No idempotency check (duplicate messages cause duplicate processing)

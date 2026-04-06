@@ -579,6 +579,13 @@ detect_preset() {
         return
     fi
 
+    # Rust markers
+    if [[ -f "$target/Cargo.toml" ]]; then
+        yellow "  AUTO-DETECT  Found Rust project markers"
+        echo "rust"
+        return
+    fi
+
     # Java markers
     if [[ -f "$target/pom.xml" ]] || [[ -f "$target/build.gradle" ]] || [[ -f "$target/build.gradle.kts" ]]; then
         yellow "  AUTO-DETECT  Found Java project markers"
@@ -597,6 +604,13 @@ detect_preset() {
     if [[ -f "$target/package.json" ]] || [[ -f "$target/tsconfig.json" ]]; then
         yellow "  AUTO-DETECT  Found TypeScript/Node project markers"
         echo "typescript"
+        return
+    fi
+
+    # PHP/Laravel markers
+    if [[ -f "$target/composer.json" ]] || [[ -f "$target/artisan" ]]; then
+        yellow "  AUTO-DETECT  Found PHP/Laravel project markers"
+        echo "php"
         return
     fi
 

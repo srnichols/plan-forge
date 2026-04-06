@@ -618,6 +618,13 @@ function Find-Preset([string]$TargetPath) {
     # Go markers
     $hasGoMod = Test-Path (Join-Path $TargetPath "go.mod")
 
+    # Rust markers
+    $hasCargoToml = Test-Path (Join-Path $TargetPath "Cargo.toml")
+
+    # PHP markers
+    $hasComposerJson = Test-Path (Join-Path $TargetPath "composer.json")
+    $hasArtisan      = Test-Path (Join-Path $TargetPath "artisan")
+
     # Node/TypeScript markers
     $hasPackageJson = Test-Path (Join-Path $TargetPath "package.json")
     $hasTsConfig    = Test-Path (Join-Path $TargetPath "tsconfig.json")
@@ -636,6 +643,10 @@ function Find-Preset([string]$TargetPath) {
         Write-Host "  AUTO-DETECT  Found Go project markers" -ForegroundColor Magenta
         return 'go'
     }
+    if ($hasCargoToml) {
+        Write-Host "  AUTO-DETECT  Found Rust project markers" -ForegroundColor Magenta
+        return 'rust'
+    }
     if ($hasPom -or $hasBuildGradle -or $hasBuildGradleKts) {
         Write-Host "  AUTO-DETECT  Found Java project markers" -ForegroundColor Magenta
         return 'java'
@@ -647,6 +658,10 @@ function Find-Preset([string]$TargetPath) {
     if ($hasPackageJson -or $hasTsConfig) {
         Write-Host "  AUTO-DETECT  Found TypeScript/Node project markers" -ForegroundColor Magenta
         return 'typescript'
+    }
+    if ($hasComposerJson -or $hasArtisan) {
+        Write-Host "  AUTO-DETECT  Found PHP/Laravel project markers" -ForegroundColor Magenta
+        return 'php'
     }
     if ($hasBicep -or $hasAzureYaml -or $hasBicepConfig -or $hasTf) {
         Write-Host "  AUTO-DETECT  Found Azure IaC project markers" -ForegroundColor Magenta

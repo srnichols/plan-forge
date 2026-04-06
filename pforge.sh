@@ -53,6 +53,7 @@ COMMANDS:
   ext install <p>   Install extension from path
   ext list          List installed extensions
   ext remove <name> Remove an installed extension
+  ext publish <p>   Validate and generate catalog entry for publishing
   update [source]   Update framework files from Plan Forge source (preserves customizations)
   analyze <plan>    Cross-artifact analysis — requirement traceability, test coverage, scope compliance
   run-plan <plan>   Execute a hardened plan — spawn CLI workers, validate at every boundary, track tokens
@@ -537,12 +538,13 @@ cmd_diff() {
 cmd_ext() {
     if [ $# -eq 0 ]; then
         echo "Extension commands:"
-        echo "  ext search [query]  Search the community catalog"
-        echo "  ext add <name>      Download and install from catalog"
-        echo "  ext info <name>     Show extension details"
-        echo "  ext install <path>  Install extension from local path"
-        echo "  ext list            List installed extensions"
-        echo "  ext remove <name>   Remove an installed extension"
+        echo "  ext search [query]   Search the community catalog"
+        echo "  ext add <name>       Download and install from catalog"
+        echo "  ext info <name>      Show extension details"
+        echo "  ext install <path>   Install extension from local path"
+        echo "  ext list             List installed extensions"
+        echo "  ext remove <name>    Remove an installed extension"
+        echo "  ext publish <path>   Validate and generate catalog entry for publishing"
         return 0
     fi
 
@@ -554,9 +556,10 @@ cmd_ext() {
         install) cmd_ext_install "$@" ;;
         list)    cmd_ext_list ;;
         remove)  cmd_ext_remove "$@" ;;
+        publish) cmd_ext_publish "$@" ;;
         *)
             echo "ERROR: Unknown ext command: $subcmd" >&2
-            echo "  Available: search, add, info, install, list, remove" >&2
+            echo "  Available: search, add, info, install, list, remove, publish" >&2
             exit 1
             ;;
     esac
@@ -871,8 +874,156 @@ cmd_ext_remove() {
     echo "Extension '$ext_name' removed."
 }
 
+cmd_ext_publish() {
+    if [ $# -eq 0 ]; then
+        echo "ERROR: Extension path required." >&2
+        echo "  Usage: pforge ext publish <path>" >&2
+        echo "  Validates extension.json and prints the catalog entry to submit." >&2
+        exit 1
+    fi
+
+    local ext_path="$1"
+    [ ! -d "$ext_path" ] && ext_path="$REPO_ROOT/$ext_path"
+
+    if [ ! -f "$ext_path/extension.json" ]; then
+        echo "ERROR: extension.json not found in $ext_path" >&2
+        exit 1
+    fi
+
+    # Extract all required fields
+    local ext_json_file="$ext_path/extension.json"
+    local id name description author version download_url repository license category effect
+
+    _ext_field() { grep -oP "\"$1\"\s*:\s*\"\K[^\"]+" "$ext_json_file" | head -1; }
+
+    id="$(_ext_field id)"
+    name="$(_ext_field name)"
+    description="$(_ext_field description)"
+    author="$(_ext_field author)"
+    version="$(_ext_field version)"
+    download_url="$(_ext_field download_url)"
+    repository="$(_ext_field repository)"
+    license="$(_ext_field license)"
+    category="$(_ext_field category)"
+    effect="$(_ext_field effect)"
+
+    local errors=0
+
+    # Validate required fields
+    for field_name in id name description author version download_url repository license category effect; do
+        eval "field_val=\$$field_name"
+        if [ -z "$field_val" ]; then
+            echo "  MISSING  $field_name (required in extension.json)"
+            errors=$((errors + 1))
+        fi
+    done
+
+    # Validate category
+    case "$category" in
+        code|docs|process|integration|visibility) ;;
+        "")  ;;  # already reported above
+        *)
+            echo "  INVALID  category '$category' — must be one of: code, docs, process, integration, visibility"
+            errors=$((errors + 1))
+            ;;
+    esac
+
+    # Validate effect
+    case "$effect" in
+        "Read-only"|"Read+Write") ;;
+        "") ;;  # already reported above
+        *)
+            echo "  INVALID  effect '$effect' — must be 'Read-only' or 'Read+Write'"
+            errors=$((errors + 1))
+            ;;
+    esac
+
+    # Validate README
+    if [ ! -f "$ext_path/README.md" ]; then
+        echo "  MISSING  README.md (recommended for catalog)"
+        errors=$((errors + 1))
+    fi
+
+    if [ "$errors" -gt 0 ]; then
+        echo ""
+        echo "ERROR: $errors validation error(s) — fix extension.json before publishing." >&2
+        exit 1
+    fi
+
+    # Extract optional provides counts
+    local inst_count agents_count prompts_count skills_count
+    if command -v python3 >/dev/null 2>&1; then
+        inst_count="$(python3 -c "import json; d=json.load(open('$ext_json_file')); print(d.get('provides',{}).get('instructions',0))" 2>/dev/null || echo "0")"
+        agents_count="$(python3 -c "import json; d=json.load(open('$ext_json_file')); print(d.get('provides',{}).get('agents',0))" 2>/dev/null || echo "0")"
+        prompts_count="$(python3 -c "import json; d=json.load(open('$ext_json_file')); print(d.get('provides',{}).get('prompts',0))" 2>/dev/null || echo "0")"
+        skills_count="$(python3 -c "import json; d=json.load(open('$ext_json_file')); print(d.get('provides',{}).get('skills',0))" 2>/dev/null || echo "0")"
+    else
+        inst_count=0; agents_count=0; prompts_count=0; skills_count=0
+    fi
+
+    local speckit_compat
+    speckit_compat="$(grep -oP '"speckit_compatible"\s*:\s*\K(true|false)' "$ext_json_file" | head -1)"
+    [ -z "$speckit_compat" ] && speckit_compat="false"
+
+    local planforge_ver
+    planforge_ver="$(grep -oP '"planforge_version"\s*:\s*"\K[^\"]+"' "$ext_json_file" | head -1 | tr -d '"')"
+    [ -z "$planforge_ver" ] && planforge_ver=">=1.2.0"
+
+    local tags_json
+    if command -v python3 >/dev/null 2>&1; then
+        tags_json="$(python3 -c "import json; d=json.load(open('$ext_json_file')); print(json.dumps(d.get('tags', [])))" 2>/dev/null || echo "[]")"
+    else
+        tags_json="[]"
+    fi
+
+    local now
+    now="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "$(date -u +%Y-%m-%dT%H:%M:%SZ)")"
+
+    echo ""
+    echo "✓ Validation passed — extension is ready to publish."
+    echo ""
+    echo "Add the following entry to extensions/catalog.json in a fork of srnichols/plan-forge:"
+    echo "────────────────────────────────────────────────────────────────"
+    cat <<EOF
+    "$id": {
+      "name": "$name",
+      "id": "$id",
+      "description": "$description",
+      "author": "$author",
+      "version": "$version",
+      "download_url": "$download_url",
+      "repository": "$repository",
+      "license": "$license",
+      "category": "$category",
+      "effect": "$effect",
+      "requires": {
+        "planforge_version": "$planforge_ver"
+      },
+      "provides": {
+        "instructions": $inst_count,
+        "agents": $agents_count,
+        "prompts": $prompts_count,
+        "skills": $skills_count
+      },
+      "tags": $tags_json,
+      "speckit_compatible": $speckit_compat,
+      "verified": false,
+      "created_at": "$now",
+      "updated_at": "$now"
+    }
+EOF
+    echo "────────────────────────────────────────────────────────────────"
+    echo ""
+    echo "Next steps:"
+    echo "  1. Fork https://github.com/srnichols/plan-forge"
+    echo "  2. Edit extensions/catalog.json — add the entry above"
+    echo "  3. Open a PR with title: feat(catalog): add $id"
+    echo "     Link your extension repository in the PR description."
+    echo ""
+    echo "  Full guide: extensions/PUBLISHING.md"
+}
+
 # ─── Command: update ───────────────────────────────────────────────────
-# SHA256 helper — portable Linux + macOS
 _pf_sha256() {
     if command -v sha256sum >/dev/null 2>&1; then
         sha256sum "$1" | cut -d' ' -f1

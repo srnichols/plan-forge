@@ -163,6 +163,68 @@
     </div>
   </section>
 
+  <!-- LIVE CATALOG -->
+  <section class="py-16 bg-slate-950 border-t border-slate-800/60">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between mb-2">
+        <h2 class="text-2xl font-bold text-white">Live Extension Catalog</h2>
+        <span id="catalog-status" class="text-xs text-slate-500"></span>
+      </div>
+      <p class="text-sm text-slate-400 mb-4">Loaded dynamically from <code class="text-forge-400">extensions/catalog.json</code>. Search by name, description, or tag.</p>
+      <input id="catalog-search" type="text" placeholder="Filter extensions..." class="w-full mb-6 px-4 py-2 rounded-lg bg-slate-800 border border-slate-700/40 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-forge-500/60" />
+      <div id="catalog-grid" class="grid md:grid-cols-2 gap-4">
+        <!-- Loading skeletons -->
+        <div class="p-5 rounded-xl bg-slate-800/40 animate-pulse h-36"></div>
+        <div class="p-5 rounded-xl bg-slate-800/40 animate-pulse h-36"></div>
+        <div class="p-5 rounded-xl bg-slate-800/40 animate-pulse h-36"></div>
+      </div>
+    </div>
+  </section>
+  <script>
+  (async function loadCatalog() {
+    const grid = document.getElementById('catalog-grid');
+    const status = document.getElementById('catalog-status');
+    const search = document.getElementById('catalog-search');
+    let extensions = [];
+    try {
+      // Try relative first (works locally), then GitHub raw
+      let resp;
+      try { resp = await fetch('../extensions/catalog.json'); if (!resp.ok) throw 0; }
+      catch { resp = await fetch('https://raw.githubusercontent.com/srnichols/plan-forge/master/extensions/catalog.json'); }
+      const data = await resp.json();
+      extensions = Object.values(data.extensions || {});
+      const updated = data.updated_at ? new Date(data.updated_at).toLocaleDateString() : '';
+      status.textContent = extensions.length + ' extension(s)' + (updated ? ' · updated ' + updated : '');
+      status.classList.add('text-green-400');
+    } catch (e) {
+      grid.innerHTML = '<p class="text-red-400 col-span-2">Failed to load catalog. Check your connection.</p>';
+      status.textContent = 'error'; status.classList.add('text-red-400');
+      return;
+    }
+    function render(list) {
+      if (!list.length) { grid.innerHTML = '<p class="text-slate-500 col-span-2">No extensions match your filter.</p>'; return; }
+      grid.innerHTML = list.map(ext => {
+        const verified = ext.verified ? '<span class="text-green-400 text-xs ml-1">✅</span>' : '';
+        const tags = (ext.tags || []).slice(0, 4).map(t => '<span class="px-2 py-0.5 rounded bg-slate-700/60 text-slate-400 text-xs">' + t + '</span>').join('');
+        return '<div class="p-5 rounded-xl bg-slate-800/60 border border-slate-700/40">' +
+          '<div class="flex items-center justify-between mb-2"><h3 class="font-semibold text-white text-sm">' + ext.name + verified + '</h3>' +
+          '<span class="text-xs text-slate-500">v' + ext.version + '</span></div>' +
+          '<p class="text-xs text-slate-400 mb-3">' + ext.description + '</p>' +
+          '<div class="flex flex-wrap gap-1 mb-3">' +
+          '<span class="px-2 py-0.5 rounded bg-cyan-900/40 text-cyan-400 text-xs">' + (ext.category || 'code') + '</span>' +
+          '<span class="px-2 py-0.5 rounded bg-slate-700/60 text-slate-400 text-xs">' + (ext.effect || '') + '</span>' +
+          tags + '</div>' +
+          '<code class="text-xs text-forge-400">pforge ext add ' + ext.id + '</code></div>';
+      }).join('');
+    }
+    render(extensions);
+    search.addEventListener('input', () => {
+      const q = search.value.toLowerCase();
+      render(q ? extensions.filter(e => (e.name+e.description+(e.tags||[]).join(',')).toLowerCase().includes(q)) : extensions);
+    });
+  })();
+  </script>
+
   <!-- SPEC KIT COMPATIBLE EXTENSIONS -->
   <section class="py-16 bg-slate-900 border-t border-slate-800/60">
     <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">

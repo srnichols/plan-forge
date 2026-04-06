@@ -5,6 +5,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.9.2] — 2026-04-06
+
+### Added — Extension Registry (Phase 15)
+- **`pforge ext publish <path>`** — validates extension.json, counts artifact files, and generates a ready-to-submit catalog.json entry (PowerShell + Bash)
+- **Live Extension Catalog** on `docs/extensions.html` — dynamically fetches catalog.json from GitHub, renders searchable/filterable extension cards with install commands
+- Plan executed via `pforge run-plan --quorum` orchestrator (3 slices, $0.03, 7.5 min)
+
 ## [2.9.1] — 2026-04-06
 
 ### Added — Security Audit Skill (Phase 12)

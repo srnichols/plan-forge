@@ -443,6 +443,29 @@ Multi-step executable procedures that chain together tool calls. Each skill file
 
 **Auto-invocation**: Skills can also load automatically without typing `/`. When you ask "help me test the login page", Copilot reads each skill's `description` field and loads the best match (e.g., `test-sweep`). You don't need to know the slash command name — just describe what you want.
 
+**Quorum mode**: The `/code-review` skill supports `--quorum` for multi-model code review. When invoked with `--quorum`, it dispatches analysis to multiple AI models independently and synthesizes findings:
+```
+/code-review --quorum
+```
+
+#### Multi-Model Analysis Tools
+
+Two MCP tools provide multi-model consensus analysis:
+
+1. **`forge_analyze`** — consistency scoring with optional quorum mode:
+   ```
+   Use forge_analyze with quorum=true to get multi-model consensus on this plan
+   ```
+
+2. **`forge_diagnose`** — multi-model bug investigation:
+   ```
+   Use forge_diagnose on src/services/billing.ts to investigate the race condition
+   ```
+
+Both tools dispatch to multiple models (including Grok via xAI API), then synthesize findings into a single report with confidence levels.
+
+**Setting up Grok**: To use xAI Grok models, set `XAI_API_KEY` in your environment before starting VS Code. Models like `grok-4.20`, `grok-4`, `grok-3`, `grok-3-mini` auto-route through the API provider registry. Get your key at [console.x.ai](https://console.x.ai/).
+
 #### AI Agent Discoverability
 
 All three file types follow consistent naming conventions for discoverability:

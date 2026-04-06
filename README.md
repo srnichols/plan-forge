@@ -874,7 +874,7 @@ Setup installs `pforge-mcp/server.mjs` automatically and generates `.vscode/mcp.
 cd pforge-mcp && npm install    # Install MCP dependencies (one-time)
 ```
 
-14 tools available: `forge_smith`, `forge_validate`, `forge_sweep`, `forge_status`, `forge_diff`, `forge_analyze`, `forge_ext_search`, `forge_ext_info`, `forge_new_phase`, `forge_run_plan`, `forge_abort`, `forge_plan_status`, `forge_cost_report`, `forge_capabilities`. Composable with OpenBrain for persistent memory in the same MCP config.
+17 tools available: `forge_smith`, `forge_validate`, `forge_sweep`, `forge_status`, `forge_diff`, `forge_analyze`, `forge_diagnose`, `forge_ext_search`, `forge_ext_info`, `forge_new_phase`, `forge_run_plan`, `forge_abort`, `forge_plan_status`, `forge_cost_report`, `forge_capabilities`, `forge_skill_status`, `forge_run_skill`. Composable with OpenBrain for persistent memory in the same MCP config.
 
 ---
 

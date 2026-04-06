@@ -1,12 +1,12 @@
 # Plan Forge — Capabilities Reference
 
-> **Version**: 2.5.0 | **Tools**: 14 MCP | **Presets**: 7 | **Agents**: 19 | **Skills**: 8
+> **Version**: 2.6.0 | **Tools**: 17 MCP | **Presets**: 7 | **Agents**: 19 | **Skills**: 10
 >
 > Machine-readable version: call `forge_capabilities` MCP tool or `GET https://planforge.software/.well-known/plan-forge.json`
 
 ---
 
-## MCP Tools (14)
+## MCP Tools (17)
 
 | Tool | Intent | Cost | Description |
 |------|--------|------|-------------|
@@ -20,10 +20,13 @@
 | `forge_sweep` | scan | low | Find TODO/FIXME/stub/placeholder markers |
 | `forge_status` | read | low | Phase status from DEPLOYMENT-ROADMAP.md |
 | `forge_diff` | compare | low | Scope drift detection against plan's Scope Contract |
-| `forge_analyze` | score | low | Consistency scoring (0-100) across 4 dimensions |
+| `forge_analyze` | score | medium | Consistency scoring (0-100) with optional quorum mode for multi-model consensus. Supports plan/file modes and custom model overrides |
+| `forge_diagnose` | analyze | medium | Multi-model bug investigation — dispatches file analysis to N models independently, synthesizes root cause + fix recommendations |
 | `forge_ext_search` | search | low | Browse extension catalog |
 | `forge_ext_info` | read | low | Extension details |
 | `forge_new_phase` | create | low | Create plan file + roadmap entry |
+| `forge_skill_status` | read | low | Query recent skill execution events from the hub |
+| `forge_run_skill` | execute | medium | Execute any skill programmatically with dry-run mode and structured results |
 
 ## Execution Modes
 
@@ -37,7 +40,7 @@
 | **Dry Run** | `--dry-run` | None | Parses and validates plan structure |
 | **Resume** | `--resume-from N` | Same as auto | Skips completed slices |
 
-## CLI Commands (14)
+## CLI Commands (16)
 
 ```
 pforge smith                          # Environment diagnostics
@@ -50,6 +53,11 @@ pforge commit <plan> <N>              # Conventional commit from slice goal
 pforge phase-status <plan> <status>   # Update roadmap status
 pforge diff <plan>                    # Scope drift detection
 pforge analyze <plan>                 # Consistency scoring (0-100)
+pforge analyze <plan> --quorum        # Multi-model consensus analysis
+pforge analyze <file> --mode file     # Code file analysis
+pforge analyze <target> --models m1,m2 # Custom model lineup
+pforge diagnose <file>                # Multi-model bug investigation
+pforge diagnose <file> --models m1,m2 # Bug investigation with custom models
 pforge run-plan <plan>                # Execute plan (Full Auto)
 pforge run-plan <plan> --estimate     # Cost prediction
 pforge run-plan <plan> --assisted     # Human + automated gates
@@ -57,6 +65,16 @@ pforge run-plan <plan> --quorum       # Multi-model consensus (all slices)
 pforge run-plan <plan> --quorum=auto  # Consensus for complex slices only
 pforge ext search|add|info|list       # Extension management
 ```
+
+## API Providers
+
+Plan Forge supports OpenAI-compatible HTTP endpoints via the `API_PROVIDERS` registry. Models are auto-routed by name pattern.
+
+| Provider | Models | Env Var | Endpoint |
+|----------|--------|---------|----------|
+| **xAI Grok** | `grok-4.20`, `grok-4`, `grok-3`, `grok-3-mini` | `XAI_API_KEY` | `api.x.ai/v1` |
+
+Set the env var, use any matching model name in `--models` or `.forge.json`, and the orchestrator routes automatically.
 
 ## REST API
 

@@ -296,13 +296,31 @@ DRIFT DETECTED — 1 forbidden file(s) touched.
 Cross-artifact consistency analysis — validates that requirements are traced to slices, code changes are within scope, tests cover MUST criteria, and validation gates are defined.
 
 ```powershell
-# PowerShell
+# PowerShell — Single-model analysis
 .\pforge.ps1 analyze docs/plans/Phase-1-AUTH-PLAN.md
+
+# Multi-model quorum analysis
+.\pforge.ps1 analyze docs/plans/Phase-1-AUTH-PLAN.md --quorum
+
+# Code file analysis (auto-detects mode from filename)
+.\pforge.ps1 analyze src/services/billing.ts --mode file
+
+# Custom model lineup
+.\pforge.ps1 analyze docs/plans/Phase-1-AUTH-PLAN.md --models grok-3-mini,grok-4
 ```
 
 ```bash
-# Bash
+# Bash — Single-model analysis
 ./pforge.sh analyze docs/plans/Phase-1-AUTH-PLAN.md
+
+# Multi-model quorum analysis
+./pforge.sh analyze docs/plans/Phase-1-AUTH-PLAN.md --quorum
+
+# Code file analysis
+./pforge.sh analyze src/services/billing.ts --mode file
+
+# Custom model lineup
+./pforge.sh analyze docs/plans/Phase-1-AUTH-PLAN.md --models grok-4,grok-3-mini
 ```
 
 **Four scoring dimensions** (25 points each, 100 total):
@@ -314,9 +332,52 @@ Cross-artifact consistency analysis — validates that requirements are traced t
 | Test Coverage | MUST criteria matched against test files via keyword fuzzy matching |
 | Gates | Validation gates referenced in slices, no deferred-work markers in changed files |
 
+**Quorum mode** (`--quorum`): Dispatches analysis to multiple AI models in parallel, then synthesizes findings into a consensus report with confidence levels and contradictions resolved.
+
+**Flags**:
+| Flag | Description |
+|------|-------------|
+| `--quorum` | Multi-model consensus analysis |
+| `--mode plan\|file` | Explicit analysis mode (auto-detected if omitted) |
+| `--models m1,m2` | Comma-separated model override (default: quorum config models) |
+
 **Exit codes**: 0 = pass (score >= 60), 1 = fail (score < 60)
 
 **Also available as**: `forge_analyze` MCP tool, and `analyze: true` input on the GitHub Action.
+
+---
+
+### `pforge diagnose <file>`
+
+Multi-model bug investigation — dispatches file analysis to multiple AI models independently, then synthesizes root cause analysis with fix recommendations.
+
+```powershell
+# PowerShell
+.\pforge.ps1 diagnose src/services/billing.ts
+
+# With custom models
+.\pforge.ps1 diagnose src/auth/token-validator.ts --models grok-3-mini,grok-4
+```
+
+```bash
+# Bash
+./pforge.sh diagnose src/services/billing.ts
+
+# With custom models
+./pforge.sh diagnose src/auth/token-validator.ts --models grok-4.20,grok-3-mini
+```
+
+**Each model analyzes independently for**:
+- Root cause identification
+- Failure modes and edge cases
+- Reproduction steps
+- Impact assessment
+- Fix recommendations with confidence levels
+- Regression risk
+
+**Output**: Synthesized consensus report saved to `.forge/analysis/diagnose-*`. Includes per-model findings, agreement/disagreement areas, and prioritized action items.
+
+**Also available as**: `forge_diagnose` MCP tool.
 
 ---
 
@@ -750,6 +811,53 @@ The `ext install` command requires a valid `extension.json` in the source path. 
 | `0` | Success |
 | `1` | Error (command failed, file not found, invalid input) |
 | `2` | Missing prerequisite (not in a git repo, required tool missing) |
+
+---
+
+## API Providers
+
+Plan Forge supports OpenAI-compatible HTTP endpoints via the API provider registry. Models are auto-routed by name pattern — no configuration needed beyond setting the API key.
+
+### xAI Grok
+
+Set your API key:
+
+```powershell
+# PowerShell (session)
+$env:XAI_API_KEY = "your-key-here"
+
+# PowerShell (persistent — add to $PROFILE)
+[Environment]::SetEnvironmentVariable("XAI_API_KEY", "your-key-here", "User")
+```
+
+```bash
+# Bash (session)
+export XAI_API_KEY="your-key-here"
+
+# Bash (persistent — add to ~/.bashrc or ~/.zshrc)
+echo 'export XAI_API_KEY="your-key-here"' >> ~/.bashrc
+```
+
+**Available Grok models**:
+
+| Model | Input $/M | Output $/M | Notes |
+|-------|-----------|------------|-------|
+| `grok-4.20` | $3.00 | $15.00 | Latest, recommended |
+| `grok-4` | $2.00 | $10.00 | Stable reasoning model |
+| `grok-3` | $3.00 | $15.00 | Previous generation |
+| `grok-3-mini` | $0.30 | $0.50 | Fast, budget-friendly |
+
+**Use in CLI commands**:
+
+```bash
+pforge run-plan docs/plans/Phase-1.md --model grok-4.20         # Plan execution
+pforge analyze docs/plans/Phase-1.md --models grok-4,grok-3-mini # Multi-model analysis
+pforge diagnose src/services/billing.ts --models grok-4.20       # Bug investigation
+```
+
+**How it works**: Any model name matching `grok-*` auto-routes to `api.x.ai/v1` via the `XAI_API_KEY` env var. The orchestrator uses the standard OpenAI chat completions API format. No `.forge.json` changes required.
+
+Get your API key at [console.x.ai](https://console.x.ai/).
 
 ---
 

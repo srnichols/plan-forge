@@ -64,7 +64,7 @@ pforge run-plan <plan-file>
 pforge run-plan --estimate <plan-file>
 pforge run-plan --assisted <plan-file>
 
-# Multi-agent: setup generates native files for Claude, Cursor, Codex
+# Multi-agent: setup generates native files for Claude, Cursor, Codex, Gemini
 # setup.ps1 -Agent claude | setup.sh --agent claude
 
 # Browse and install community extensions

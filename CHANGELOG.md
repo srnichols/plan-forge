@@ -12,7 +12,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - **6 variants**: shared base + TypeScript (npm audit), Python (pip-audit), .NET (dotnet list --vulnerable), Go (govulncheck), Java (mvn dependency-check)
 - **Stack-specific OWASP checks**: prototype pollution (Node.js), pickle injection (Python), BinaryFormatter (C#), race conditions (Go), JNDI injection (Java)
 - **Quorum support**: 3-model independent OWASP scan with synthesized findings
-- Registered in copilot-instructions.md template and all agent adapters (Claude, Cursor, Codex)
+- Registered in copilot-instructions.md template and all agent adapters (Claude, Cursor, Codex, Gemini)
+
+### Added — Gemini CLI Adapter (Phase 13)
+- **`-Agent gemini`** — new adapter generates `GEMINI.md` (project context + `@import` guardrails), `.gemini/commands/planforge/*.toml` (all prompts + agents as TOML commands), `.gemini/settings.json` (MCP server config)
+- Gemini CLI uses `@file.md` import syntax for instruction files instead of embedding (lighter context, auto-updated)
+- Commands use TOML format with `prompt = """..."""` multi-line strings
+- Pipeline commands invoked as `/planforge:step0-specify`, `/planforge:step3-execute-slice`, etc.
+- `-Agent all` now includes gemini (5 agents total: copilot, claude, cursor, codex, gemini)
 
 ---
 

@@ -298,7 +298,7 @@ The wizard bootstraps your `.github/instructions/`, `AGENTS.md`, and `copilot-in
 # Add support for additional AI agents (optional)
 .\setup.ps1 -Preset dotnet -Agent claude          # Copilot + Claude Code
 .\setup.ps1 -Preset dotnet -Agent claude,cursor    # Copilot + Claude + Cursor
-.\setup.ps1 -Preset dotnet -Agent all              # Copilot + Claude + Cursor + Codex
+.\setup.ps1 -Preset dotnet -Agent all              # Copilot + Claude + Cursor + Codex + Gemini
 ```
 
 ```bash
@@ -313,7 +313,7 @@ chmod +x setup.sh
 # Add support for additional AI agents (optional)
 ./setup.sh --preset dotnet --agent claude           # Copilot + Claude Code
 ./setup.sh --preset dotnet --agent claude,cursor    # Copilot + Claude + Cursor
-./setup.sh --preset dotnet --agent all              # Copilot + Claude + Cursor + Codex
+./setup.sh --preset dotnet --agent all              # Copilot + Claude + Cursor + Codex + Gemini
 ```
 
 ### 3. Available Presets
@@ -811,7 +811,7 @@ You don't need to write complex prompts yourself. The templates do it for you.
 
 ### "What if I don't use VS Code?"
 
-Plan Forge has **advanced integration with VS Code + GitHub Copilot** (auto-loading instructions, pipeline agents with handoff buttons, lifecycle hooks). It also generates **rich native files for Claude Code, Cursor, and Codex CLI** via the `-Agent` parameter — including all 16 guardrail files embedded in context, all prompts as native skills/commands, all 19 reviewer agents as invocable skills, and smart instructions that emulate Copilot's auto-loading, post-edit scanning, and forbidden path checking. For any other AI tool, the copy-paste prompts from the runbook work identically.
+Plan Forge has **advanced integration with VS Code + GitHub Copilot** (auto-loading instructions, pipeline agents with handoff buttons, lifecycle hooks). It also generates **rich native files for Claude Code, Cursor, Codex CLI, and Gemini CLI** via the `-Agent` parameter — including all 16 guardrail files embedded in context, all prompts as native skills/commands, all 19 reviewer agents as invocable skills, and smart instructions that emulate Copilot's auto-loading, post-edit scanning, and forbidden path checking. For any other AI tool, the copy-paste prompts from the runbook work identically.
 
 ### "Do I need to use every step every time?"
 

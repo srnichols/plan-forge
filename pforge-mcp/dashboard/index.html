@@ -384,6 +384,20 @@
               </optgroup>
             </select>
           </div>
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Image Generation Model</label>
+            <div class="flex gap-2 items-center">
+              <select id="cfg-model-image" title="Image generation model" class="bg-gray-700 text-white text-sm rounded px-3 py-2 flex-1">
+                <option value="">None (disabled)</option>
+                <optgroup label="xAI Grok (API — requires XAI_API_KEY)">
+                  <option value="grok-2-image">grok-2-image</option>
+                  <option value="grok-2-image-latest">grok-2-image-latest</option>
+                </optgroup>
+              </select>
+              <span class="text-xs text-gray-500 shrink-0">🎨</span>
+            </div>
+            <p class="text-xs text-gray-600 mt-1">When set, agents delegate image tasks (logos, diagrams, icons) to this model via <code class="text-gray-500">forge_generate_image</code>.</p>
+          </div>
           <!-- Advanced Settings (v2.9) -->
           <details class="border border-gray-700 rounded-lg p-3">
             <summary class="text-sm text-gray-400 cursor-pointer hover:text-gray-300 font-semibold">Advanced Settings</summary>

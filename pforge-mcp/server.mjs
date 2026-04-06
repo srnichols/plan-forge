@@ -24,7 +24,7 @@ import { execSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve, join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parsePlan, runPlan, detectWorkers, getCostReport, analyzeWithQuorum } from "./orchestrator.mjs";
+import { parsePlan, runPlan, detectWorkers, getCostReport, analyzeWithQuorum, generateImage } from "./orchestrator.mjs";
 import { isOpenBrainConfigured } from "./memory.mjs";
 import { createHub, readHubPort } from "./hub.mjs";
 import { buildCapabilitySurface, writeToolsJson, writeCliSchema } from "./capabilities.mjs";
@@ -275,6 +275,21 @@ const TOOLS = [
         path: { type: "string", description: "Project directory (default: current)" },
       },
       required: ["skill"],
+    },
+  },
+  {
+    name: "forge_generate_image",
+    description: "Generate an image using xAI Grok's Aurora image model. Provide a text description and get a generated image saved to disk. Useful for creating logos, diagrams, UI mockups, icons, and illustrations during plan execution. Requires XAI_API_KEY.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        prompt: { type: "string", description: "Detailed text description of the image to generate. Be specific about style, colors, composition, and content." },
+        outputPath: { type: "string", description: "File path to save the image (relative to project dir). e.g., 'assets/logo.png', 'docs/diagram.png'" },
+        model: { type: "string", description: "Image model to use. Default: grok-2-image", enum: ["grok-2-image", "grok-2-image-latest"] },
+        size: { type: "string", description: "Image dimensions. Default: 1024x1024", enum: ["1024x1024", "1024x768", "768x1024"] },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+      required: ["prompt", "outputPath"],
     },
   },
 ];
@@ -560,6 +575,35 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       };
     } catch (err) {
       return { content: [{ type: "text", text: `Skill execution error: ${err.message}` }], isError: true };
+    }
+  }
+
+  if (name === "forge_generate_image") {
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const result = await generateImage(args.prompt, {
+        model: args.model || "grok-2-image",
+        size: args.size || "1024x1024",
+        outputPath: args.outputPath,
+        cwd,
+      });
+
+      if (result.success) {
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              status: "generated",
+              localPath: result.localPath,
+              model: result.model,
+              revisedPrompt: result.revisedPrompt,
+            }, null, 2),
+          }],
+        };
+      }
+      return { content: [{ type: "text", text: `Image generation failed: ${result.error}` }], isError: true };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Image generation error: ${err.message}` }], isError: true };
     }
   }
 
@@ -973,6 +1017,26 @@ function createExpressApp() {
     try {
       const workers = detectWorkers(PROJECT_DIR);
       res.json(workers);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // v2.9: Image generation API
+  app.post("/api/image/generate", async (req, res) => {
+    try {
+      const { prompt, outputPath, model, size } = req.body || {};
+      if (!prompt || typeof prompt !== "string") {
+        return res.status(400).json({ error: "prompt is required" });
+      }
+      if (!outputPath || typeof outputPath !== "string") {
+        return res.status(400).json({ error: "outputPath is required" });
+      }
+      const result = await generateImage(prompt, {
+        model: model || "grok-2-image",
+        size: size || "1024x1024",
+        outputPath,
+        cwd: PROJECT_DIR,
+      });
+      res.json(result);
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 

@@ -453,6 +453,82 @@ async function callApiWorker(prompt, model, provider, options = {}) {
   }
 }
 
+/**
+ * Generate an image via xAI Grok image API (Aurora).
+ * Uses the OpenAI-compatible /v1/images/generations endpoint.
+ *
+ * @param {string} prompt - Text description of the image to generate
+ * @param {object} options - { model, size, format, outputPath, cwd }
+ * @returns {Promise<{ success, url, localPath, model, revisedPrompt }>}
+ */
+export async function generateImage(prompt, options = {}) {
+  const {
+    model = "grok-2-image",
+    size = "1024x1024",
+    format = "png",
+    outputPath = null,
+    cwd = process.cwd(),
+  } = options;
+
+  // Resolve provider
+  const provider = detectApiProvider(model) || detectApiProvider("grok-2-image");
+  if (!provider) {
+    return { success: false, error: "No xAI API key configured. Set XAI_API_KEY environment variable." };
+  }
+
+  try {
+    const response = await fetch(`${provider.baseUrl}/images/generations`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${provider.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        prompt,
+        n: 1,
+        size,
+        response_format: "b64_json",
+      }),
+    });
+
+    if (!response.ok) {
+      const errBody = await response.text();
+      return { success: false, error: `Image generation failed (${response.status}): ${errBody}` };
+    }
+
+    const data = await response.json();
+    const imageData = data.data?.[0];
+    if (!imageData?.b64_json) {
+      return { success: false, error: "No image data in response" };
+    }
+
+    const result = {
+      success: true,
+      model: data.model || model,
+      revisedPrompt: imageData.revised_prompt || prompt,
+    };
+
+    // Save to file if outputPath specified
+    if (outputPath) {
+      const { writeFileSync, mkdirSync } = await import("node:fs");
+      const { dirname, resolve: pathResolve } = await import("node:path");
+      const fullPath = pathResolve(cwd, outputPath);
+      mkdirSync(dirname(fullPath), { recursive: true });
+      writeFileSync(fullPath, Buffer.from(imageData.b64_json, "base64"));
+      result.localPath = fullPath;
+    }
+
+    // Also return base64 for inline use
+    result.base64 = imageData.b64_json.substring(0, 100) + "..."; // Truncated for logging
+    result.fullBase64Length = imageData.b64_json.length;
+
+    return result;
+  } catch (err) {
+    return { success: false, error: `Image generation error: ${err.message}` };
+  }
+}
+
 // ─── Worker Spawning ──────────────────────────────────────────────────
 
 /**

@@ -1689,6 +1689,10 @@ async function loadConfig() {
     document.getElementById("cfg-version").value = currentConfig.templateVersion || "";
     document.getElementById("cfg-model-default").value = currentConfig.modelRouting?.default || "auto";
 
+    // Image generation model (v2.9)
+    const imgModel = document.getElementById("cfg-model-image");
+    if (imgModel) imgModel.value = currentConfig.modelRouting?.imageGeneration || "";
+
     // Agents checkboxes
     const agentsEl = document.getElementById("cfg-agents");
     const allAgents = ["claude", "cursor", "codex", "grok"];
@@ -1805,6 +1809,7 @@ async function saveConfig() {
   try {
     const agents = [...document.querySelectorAll(".cfg-agent-checkbox:checked")].map((c) => c.value);
     const modelDefault = document.getElementById("cfg-model-default").value;
+    const modelImage = document.getElementById("cfg-model-image")?.value || "";
     // Advanced settings (v2.9)
     const maxP = parseInt(document.getElementById("cfg-max-parallel")?.value, 10);
     const maxR = parseInt(document.getElementById("cfg-max-retries")?.value, 10);
@@ -1817,7 +1822,7 @@ async function saveConfig() {
     const updated = {
       ...currentConfig,
       agents,
-      modelRouting: { ...(currentConfig.modelRouting || {}), default: modelDefault },
+      modelRouting: { ...(currentConfig.modelRouting || {}), default: modelDefault, imageGeneration: modelImage || undefined },
       maxParallelism: isNaN(maxP) ? 3 : maxP,
       maxRetries: isNaN(maxR) ? 1 : maxR,
       maxRunHistory: isNaN(maxH) ? 50 : maxH,

@@ -1995,6 +1995,55 @@ function Invoke-Smith {
     Write-Host ""
 
     # ═══════════════════════════════════════════════════════════════
+    # 4c. QUORUM MODE
+    # ═══════════════════════════════════════════════════════════════
+    if (Test-Path $configPath) {
+        try {
+            $config = Get-Content $configPath -Raw | ConvertFrom-Json
+            if ($config.quorum) {
+                Write-Host "Quorum Mode:" -ForegroundColor Cyan
+                $q = $config.quorum
+                $enabled = if ($q.enabled) { "enabled" } else { "disabled" }
+                $auto = if ($q.auto) { "auto (threshold: $($q.threshold))" } else { "forced (all slices)" }
+                Doctor-Pass "Quorum $enabled — mode: $auto"
+
+                # Check models
+                if ($q.models -and $q.models.Count -gt 0) {
+                    $modelList = $q.models -join ", "
+                    Doctor-Pass "Quorum models: $modelList"
+
+                    # Verify each model is available in gh copilot
+                    $ghAvailable = Get-Command "gh" -ErrorAction SilentlyContinue
+                    if ($ghAvailable) {
+                        foreach ($m in $q.models) {
+                            $testResult = & gh copilot -- -p "ping" --model $m --no-ask-user 2>&1 | Out-String
+                            if ($testResult -match "not available") {
+                                Doctor-Warn "Quorum model '$m' not available in gh copilot" "Run 'gh copilot -- --help' to see available models, or update .forge.json"
+                            }
+                        }
+                    }
+                } else {
+                    Doctor-Warn "Quorum models not configured" "Add models array to .forge.json quorum block"
+                }
+
+                # Threshold sanity check
+                if ($q.threshold -and ($q.threshold -lt 3 -or $q.threshold -gt 9)) {
+                    Doctor-Warn "Quorum threshold $($q.threshold) is unusual (recommended: 5-8)" "Most projects use threshold 6-8 for balanced cost/quality"
+                }
+
+                # Reviewer model
+                if ($q.reviewerModel) {
+                    Doctor-Pass "Reviewer model: $($q.reviewerModel)"
+                } else {
+                    Doctor-Pass "Reviewer model: default (claude-opus-4.6)"
+                }
+
+                Write-Host ""
+            }
+        } catch { }
+    }
+
+    # ═══════════════════════════════════════════════════════════════
     # 5. COMMON PROBLEMS
     # ═══════════════════════════════════════════════════════════════
     Write-Host "Common Problems:" -ForegroundColor Cyan

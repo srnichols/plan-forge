@@ -1668,6 +1668,49 @@ cmd_doctor() {
     echo ""
 
     # ═══════════════════════════════════════════════════════════════
+    # 4c. QUORUM MODE
+    # ═══════════════════════════════════════════════════════════════
+    local config_path="$REPO_ROOT/.forge.json"
+    if [ -f "$config_path" ]; then
+        local quorum_enabled quorum_auto quorum_threshold quorum_models quorum_reviewer
+        quorum_enabled=$(jq -r '.quorum.enabled // false' "$config_path" 2>/dev/null)
+        if [ "$quorum_enabled" != "null" ] && [ "$quorum_enabled" != "false" ] || jq -e '.quorum' "$config_path" >/dev/null 2>&1; then
+            echo "Quorum Mode:"
+            quorum_enabled=$(jq -r '.quorum.enabled // false' "$config_path" 2>/dev/null)
+            quorum_auto=$(jq -r '.quorum.auto // true' "$config_path" 2>/dev/null)
+            quorum_threshold=$(jq -r '.quorum.threshold // 7' "$config_path" 2>/dev/null)
+            quorum_models=$(jq -r '.quorum.models // [] | join(", ")' "$config_path" 2>/dev/null)
+            quorum_reviewer=$(jq -r '.quorum.reviewerModel // "claude-opus-4.6"' "$config_path" 2>/dev/null)
+
+            if [ "$quorum_enabled" = "true" ]; then
+                if [ "$quorum_auto" = "true" ]; then
+                    doctor_pass "Quorum enabled — mode: auto (threshold: $quorum_threshold)"
+                else
+                    doctor_pass "Quorum enabled — mode: forced (all slices)"
+                fi
+            else
+                doctor_pass "Quorum disabled (configure in .forge.json to enable)"
+            fi
+
+            if [ -n "$quorum_models" ] && [ "$quorum_models" != "" ]; then
+                doctor_pass "Quorum models: $quorum_models"
+            else
+                doctor_warn "Quorum models not configured" "Add models array to .forge.json quorum block"
+            fi
+
+            # Threshold sanity
+            if [ -n "$quorum_threshold" ]; then
+                if [ "$quorum_threshold" -lt 3 ] 2>/dev/null || [ "$quorum_threshold" -gt 9 ] 2>/dev/null; then
+                    doctor_warn "Quorum threshold $quorum_threshold is unusual (recommended: 5-8)" "Most projects use threshold 6-8 for balanced cost/quality"
+                fi
+            fi
+
+            doctor_pass "Reviewer model: $quorum_reviewer"
+            echo ""
+        fi
+    fi
+
+    # ═══════════════════════════════════════════════════════════════
     # 5. COMMON PROBLEMS
     # ═══════════════════════════════════════════════════════════════
     echo "Common Problems:"

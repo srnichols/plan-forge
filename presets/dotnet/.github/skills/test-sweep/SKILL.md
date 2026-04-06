@@ -2,6 +2,7 @@
 name: test-sweep
 description: Run all test suites (unit, integration, API, E2E) and aggregate results into a summary report. Use after completing execution slices or before the Review Gate.
 argument-hint: "[optional: specific test category to run]"
+tools: [run_in_terminal, read_file, forge_sweep]
 ---
 
 # Test Sweep Skill
@@ -15,6 +16,9 @@ argument-hint: "[optional: specific test category to run]"
 ```bash
 dotnet test --filter "Category=Unit" --logger "console;verbosity=normal" --results-directory TestResults/
 ```
+
+### Conditional: Unit Test Failure
+> If unit tests fail → skip integration/E2E tests, go directly to Report.
 
 ### 2. Integration Tests
 ```bash
@@ -31,13 +35,17 @@ dotnet test --filter "Category=Api|Category=GraphQL" --logger "console;verbosity
 dotnet test --filter "Category=E2E" --logger "console;verbosity=normal" --results-directory TestResults/
 ```
 
-### 5. Report
+### 5. Completeness Scan
+Use the `forge_sweep` MCP tool to scan for TODO/FIXME/stub markers in the codebase.
+
+### 6. Report
 Aggregate results:
 ```
 ✅ Unit:        X passed, Y failed, Z skipped
 ✅ Integration: X passed, Y failed, Z skipped
 ✅ API:         X passed, Y failed, Z skipped
 ✅ E2E:         X passed, Y failed, Z skipped
+✅ Sweep:       N markers (TODO/FIXME/stub)
 ──────────────────────────────────────────────
 Total:          X passed, Y failed, Z skipped
 ```

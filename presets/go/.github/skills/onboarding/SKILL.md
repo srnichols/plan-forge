@@ -1,7 +1,11 @@
 ---
 name: onboarding
-description: Walk a new developer through project setup, architecture, key files, and first task. Use when someone new joins the team or needs to understand the codebase.
+description: Walk a new developer through Go project setup, architecture, key files, and first task. Use when someone new joins the team or needs to understand the codebase.
 argument-hint: "[optional: specific area to focus on, e.g. 'backend' or 'testing']"
+tools:
+  - run_in_terminal
+  - read_file
+  - forge_smith
 ---
 
 # Developer Onboarding Skill
@@ -15,57 +19,45 @@ argument-hint: "[optional: specific area to focus on, e.g. 'backend' or 'testing
 Verify prerequisites and get the project running:
 
 ```bash
-# Check required tools
 git --version
-# Stack-specific:
-dotnet --version    # .NET
-node --version      # Node/TypeScript
-python --version    # Python
-go version          # Go
-java --version      # Java
+go version
 ```
+> **If this step fails** (go not found): Install Go from https://go.dev/dl and retry.
 
 ```bash
-# Clone and set up
-git clone <repo-url>
-cd <project>
-
-# Install dependencies (stack-specific)
-dotnet restore              # .NET
-pnpm install                # Node
-pip install -r requirements.txt  # Python
-go mod download             # Go
-./gradlew build             # Java
+go mod download
 ```
+> **If this step fails**: Check that `GOPROXY` is configured correctly and network access is available.
 
 ### 2. Verify Build & Tests
+Use the `forge_smith` MCP tool to diagnose environment and setup health.
+
 ```bash
-# Inspect the forge first (diagnose environment + setup health)
-pforge smith
-
-# Build
-<BUILD_COMMAND>
-
-# Run tests
-<TEST_COMMAND>
-
-# If both pass, environment is ready
+go build ./...
 ```
+> **If this step fails**: Read the error output — common causes are Go version mismatch (check `go.mod` `go` directive) or missing CGO dependencies.
+
+```bash
+go test ./...
+```
+> **If both pass**: Environment is ready.
 
 ### 3. Architecture Overview
 Read and explain:
 1. **`.github/copilot-instructions.md`** — project overview, tech stack, conventions
 2. **`docs/plans/PROJECT-PRINCIPLES.md`** — non-negotiable principles (if exists)
 3. **Project structure** — explain the folder layout and what lives where
-4. **Key patterns** — how data flows through the layers (controller → service → repository)
+4. **Key patterns** — how data flows through the layers (Handlers → Services → Repositories)
 
 ### 4. Key Files Tour
-Walk through the most important files:
-- Entry point (Program.cs, index.ts, main.py, main.go, Application.java)
-- Configuration (appsettings.json, .env, config.yaml)
-- Database (migrations, schema, connection setup)
-- Testing (test structure, how to run specific tests)
-- CI/CD (GitHub Actions, Dockerfile, deployment config)
+Walk through the most important Go files:
+- **Entry point**: `main.go` or `cmd/server/main.go` — application bootstrap and server startup
+- **Module config**: `go.mod` — module path, Go version, dependencies
+- **Environment**: `.env.example` — required environment variables
+- **Internal packages**: `internal/` — private application code
+- **Database**: migrations folder, database driver setup, connection config
+- **Testing**: `*_test.go` files alongside source, how to run specific tests
+- **CI/CD**: GitHub Actions workflows, Dockerfile, deployment config
 
 ### 5. Plan Forge Pipeline Tour
 Explain how the team works:
@@ -82,13 +74,19 @@ Suggest a good first task:
 - Follow the Step 3 execution prompt for guided implementation
 - Use `/test-sweep` to verify nothing broke
 
-### 7. Resources Summary
+### 7. Report
 ```
-Key files to bookmark:
-  📋 docs/plans/DEPLOYMENT-ROADMAP.md  — what we're building
-  📖 CUSTOMIZATION.md                  — how to customize guardrails
-  🔧 docs/CLI-GUIDE.md                — CLI commands reference
-  📚 docs/COPILOT-VSCODE-GUIDE.md     — how to use Copilot effectively
+Onboarding Status:
+  Go:              ✅ / ❌ (version)
+  Modules:         ✅ / ❌
+  Build:           ✅ / ❌
+  Tests:           ✅ / ❌ (N passed, N failed)
+  Forge Smith:     ✅ / ❌
+
+Key files reviewed:  N
+Architecture docs:   N
+
+Overall: PASS / FAIL
 ```
 
 ## Safety Rules
@@ -99,5 +97,5 @@ Key files to bookmark:
 
 ## Persistent Memory (if OpenBrain is configured)
 
-- **During onboarding**: `search_thoughts("architecture", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode")` — surface architecture decisions, conventions, and lessons learned to give the new developer full project context
-- **After onboarding**: `capture_thought("Onboarding: <questions asked, gaps found in docs>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "skill-onboarding")` — persist common onboarding questions to improve docs
+- **Before onboarding**: `search_thoughts("onboarding", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "convention")` — load known setup issues and environment quirks
+- **After onboarding**: `capture_thought("Onboarding: <environment status, blockers encountered>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "skill-onboarding")` — persist setup issues for future new developers

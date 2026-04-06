@@ -1,7 +1,11 @@
 ---
 name: dependency-audit
-description: Scan project dependencies for vulnerabilities, outdated packages, and license issues. Use before PRs, after adding packages, or on a regular schedule.
+description: Scan TypeScript/Node.js project dependencies for vulnerabilities, outdated packages, and license issues. Use before PRs, after adding packages, or on a regular schedule.
 argument-hint: "[optional: specific package to audit]"
+tools:
+  - run_in_terminal
+  - read_file
+  - forge_sweep
 ---
 
 # Dependency Audit Skill
@@ -11,71 +15,56 @@ argument-hint: "[optional: specific package to audit]"
 
 ## Steps
 
-### 1. Identify Package Manager
+### 1. Check for Known Vulnerabilities
 ```bash
-# Detect which package manager is in use
-# .NET: *.csproj → dotnet list package
-# Node: package.json → npm audit / pnpm audit
-# Python: requirements.txt / pyproject.toml → pip-audit / safety
-# Go: go.mod → govulncheck
-# Java: pom.xml → mvn dependency-check:check
-```
-
-### 2. Check for Known Vulnerabilities
-```bash
-# .NET
-dotnet list package --vulnerable --include-transitive
-
-# Node
 pnpm audit --audit-level high
-
-# Python
-pip-audit
-
-# Go
-govulncheck ./...
 ```
+> **If this step fails** (no package.json found): Stop and report "No Node.js project found in this directory."
 
-### 3. Check for Outdated Packages
+### 2. Check for Outdated Packages
 ```bash
-# .NET
-dotnet list package --outdated
-
-# Node
 pnpm outdated
-
-# Python
-pip list --outdated
-
-# Go
-go list -u -m all
 ```
 
-### 4. Review Findings
+### 3. Check for License Issues
+```bash
+npx license-checker --summary
+```
+> **If this step fails** (license-checker not installed): Run `pnpm add -D license-checker` and retry.
+
+Review output for any packages with restrictive licenses (GPL, AGPL) that conflict with your project license.
+
+### 4. Completeness Scan
+Use the `forge_sweep` MCP tool to check for TODO/FIXME markers that may have been left by prior dependency changes.
+
+### 5. Review Findings
 For each finding:
 - **Critical/High CVE**: Upgrade immediately or document accepted risk
 - **Outdated (major version behind)**: Plan upgrade in next phase
 - **Outdated (minor/patch)**: Update now if safe
 - **License conflict**: Flag for human review
 
-### 5. Report
+### 6. Report
 ```
-Vulnerability Summary:
-  🔴 Critical: N
-  🟡 High: N
-  🔵 Medium/Low: N
+Dependency Audit Summary:
+  🔴 Critical:     N vulnerabilities
+  🟡 High:         N vulnerabilities
+  🔵 Medium/Low:   N vulnerabilities
 
 Outdated Packages:
-  Major behind: N (plan upgrade)
-  Minor/Patch behind: N (update now)
+  Major behind:    N (plan upgrade)
+  Minor/Patch:     N (update now)
 
-License Issues: N
+License Issues:    N
+Sweep Markers:     N (TODO/FIXME from prior changes)
+
+Overall: PASS / FAIL
 ```
 
 ## Safety Rules
 - NEVER auto-upgrade major versions without human approval
 - ALWAYS check if the upgrade has breaking changes
-- Run full test suite after any dependency change
+- Run `pnpm test` after any dependency change
 - Document any accepted vulnerabilities with justification
 
 ## Persistent Memory (if OpenBrain is configured)

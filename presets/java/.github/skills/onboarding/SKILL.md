@@ -1,7 +1,11 @@
 ---
 name: onboarding
-description: Walk a new developer through project setup, architecture, key files, and first task. Use when someone new joins the team or needs to understand the codebase.
+description: Walk a new developer through Java/Maven project setup, architecture, key files, and first task. Use when someone new joins the team or needs to understand the codebase.
 argument-hint: "[optional: specific area to focus on, e.g. 'backend' or 'testing']"
+tools:
+  - run_in_terminal
+  - read_file
+  - forge_smith
 ---
 
 # Developer Onboarding Skill
@@ -15,57 +19,44 @@ argument-hint: "[optional: specific area to focus on, e.g. 'backend' or 'testing
 Verify prerequisites and get the project running:
 
 ```bash
-# Check required tools
 git --version
-# Stack-specific:
-dotnet --version    # .NET
-node --version      # Node/TypeScript
-python --version    # Python
-go version          # Go
-java --version      # Java
+java --version
+./mvnw --version
 ```
+> **If this step fails** (java not found): Install a JDK (17+) from https://adoptium.net and retry.
+
+> **If mvnw not found**: Try `mvn --version` for a system-wide Maven installation.
 
 ```bash
-# Clone and set up
-git clone <repo-url>
-cd <project>
-
-# Install dependencies (stack-specific)
-dotnet restore              # .NET
-pnpm install                # Node
-pip install -r requirements.txt  # Python
-go mod download             # Go
-./gradlew build             # Java
+./mvnw dependency:resolve
 ```
+> **If this step fails**: Check that Maven repository settings (`~/.m2/settings.xml`) are configured and network access is available.
 
 ### 2. Verify Build & Tests
+Use the `forge_smith` MCP tool to diagnose environment and setup health.
+
 ```bash
-# Inspect the forge first (diagnose environment + setup health)
-pforge smith
-
-# Build
-<BUILD_COMMAND>
-
-# Run tests
-<TEST_COMMAND>
-
-# If both pass, environment is ready
+./mvnw verify
 ```
+> **If this step fails**: Read the error output — common causes are missing JDK version (check `pom.xml` `<java.version>`) or database connection required for integration tests.
+
+> **If verify passes**: Environment is ready (compile + unit tests + integration tests).
 
 ### 3. Architecture Overview
 Read and explain:
 1. **`.github/copilot-instructions.md`** — project overview, tech stack, conventions
 2. **`docs/plans/PROJECT-PRINCIPLES.md`** — non-negotiable principles (if exists)
 3. **Project structure** — explain the folder layout and what lives where
-4. **Key patterns** — how data flows through the layers (controller → service → repository)
+4. **Key patterns** — how data flows through the layers (Controller → Service → Repository)
 
 ### 4. Key Files Tour
-Walk through the most important files:
-- Entry point (Program.cs, index.ts, main.py, main.go, Application.java)
-- Configuration (appsettings.json, .env, config.yaml)
-- Database (migrations, schema, connection setup)
-- Testing (test structure, how to run specific tests)
-- CI/CD (GitHub Actions, Dockerfile, deployment config)
+Walk through the most important Java files:
+- **Entry point**: `Application.java` — Spring Boot main class with `@SpringBootApplication`
+- **Build config**: `pom.xml` — dependencies, plugins, profiles
+- **Properties**: `application.yml` or `application.properties` — settings per environment
+- **Database**: `src/main/resources/db/migration/` (Flyway) or Liquibase changelogs
+- **Testing**: `src/test/java/` structure, how to run specific test classes
+- **CI/CD**: GitHub Actions workflows, Dockerfile, deployment config
 
 ### 5. Plan Forge Pipeline Tour
 Explain how the team works:
@@ -82,13 +73,19 @@ Suggest a good first task:
 - Follow the Step 3 execution prompt for guided implementation
 - Use `/test-sweep` to verify nothing broke
 
-### 7. Resources Summary
+### 7. Report
 ```
-Key files to bookmark:
-  📋 docs/plans/DEPLOYMENT-ROADMAP.md  — what we're building
-  📖 CUSTOMIZATION.md                  — how to customize guardrails
-  🔧 docs/CLI-GUIDE.md                — CLI commands reference
-  📚 docs/COPILOT-VSCODE-GUIDE.md     — how to use Copilot effectively
+Onboarding Status:
+  Java JDK:        ✅ / ❌ (version)
+  Maven:           ✅ / ❌ (version)
+  Dependencies:    ✅ / ❌
+  Build + Tests:   ✅ / ❌ (N passed, N failed)
+  Forge Smith:     ✅ / ❌
+
+Key files reviewed:  N
+Architecture docs:   N
+
+Overall: PASS / FAIL
 ```
 
 ## Safety Rules
@@ -99,5 +96,5 @@ Key files to bookmark:
 
 ## Persistent Memory (if OpenBrain is configured)
 
-- **During onboarding**: `search_thoughts("architecture", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode")` — surface architecture decisions, conventions, and lessons learned to give the new developer full project context
-- **After onboarding**: `capture_thought("Onboarding: <questions asked, gaps found in docs>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "skill-onboarding")` — persist common onboarding questions to improve docs
+- **Before onboarding**: `search_thoughts("onboarding", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "convention")` — load known setup issues and environment quirks
+- **After onboarding**: `capture_thought("Onboarding: <environment status, blockers encountered>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "skill-onboarding")` — persist setup issues for future new developers

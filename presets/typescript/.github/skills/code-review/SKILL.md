@@ -2,6 +2,7 @@
 name: code-review
 description: Run a comprehensive code review across architecture, security, testing, naming, and patterns. Invokes relevant reviewer agents in sequence. Use before merging features or at the end of a phase.
 argument-hint: "[optional: specific files or areas to focus on]"
+tools: [read_file, forge_analyze, forge_diff]
 ---
 
 # Code Review Skill
@@ -10,6 +11,9 @@ argument-hint: "[optional: specific files or areas to focus on]"
 "Review my code" / "Run code review" / "Check before merge"
 
 ## Steps
+
+### 0. Forge Analysis
+Use the `forge_analyze` MCP tool with the current plan (if available) to get a structured consistency score. Use the `forge_diff` MCP tool to detect scope drift and forbidden file edits.
 
 ### 1. Identify Changed Files
 ```bash
@@ -70,6 +74,8 @@ Findings by Category:
   Testing: N
   Code Quality: N
   Patterns: N
+Forge Analysis Score: N/100
+Scope Drift: N files outside scope
 ```
 
 ## Safety Rules

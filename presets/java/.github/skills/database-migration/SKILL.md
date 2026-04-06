@@ -2,6 +2,7 @@
 name: database-migration
 description: Generate, review, test, and deploy database schema migrations. Use when adding columns, creating tables, or changing schema.
 argument-hint: "[migration description, e.g. 'add user_profiles table']"
+tools: [run_in_terminal, read_file]
 ---
 
 # Database Migration Skill
@@ -44,6 +45,9 @@ flyway -url=jdbc:postgresql://localhost:5432/contoso_dev migrate
 ```bash
 flyway -url=jdbc:postgresql://staging-db:5432/contoso_staging migrate
 ```
+
+### Conditional: Migration Failure
+> If migration fails → immediately run the rollback SQL (down migration), report the failure with the error message, and STOP. Do not proceed to deploy.
 
 ## Safety Rules
 - NEVER drop columns without a deprecation period

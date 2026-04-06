@@ -23,20 +23,20 @@ Surface all remaining backend capabilities in the dashboard, fix 5 identified bu
 
 ## Acceptance Criteria
 
-- [ ] All 5 bugs (B1-B5) fixed
-- [ ] Memory Search returns useful results with preset queries and auto-populated suggestions
-- [ ] Hub client count shown in header
-- [ ] Runs table auto-refreshes on WebSocket events
-- [ ] Version displayed in footer
-- [ ] Plan scope contract visible in Plan Browser
-- [ ] Slice tasks/commands visible in Run Detail Drawer
-- [ ] Config tab exposes quorum, parallelism, retries settings
-- [ ] Run Launch Panel allows starting plans from dashboard
-- [ ] DAG dependency view in Plan Browser
-- [ ] Tab badge counts for runs/cost/skills
-- [ ] Cost + Duration charts with CSV export
-- [ ] Event history log visible
-- [ ] Self-tests passing (69/69)
+- **MUST**: All 5 bugs (B1-B5) fixed
+- **MUST**: Memory Search returns useful results with preset queries and auto-populated suggestions
+- **MUST**: Hub client count shown in header
+- **MUST**: Runs table auto-refreshes on WebSocket events
+- **SHOULD**: Version displayed in footer
+- **MUST**: Plan scope contract visible in Plan Browser
+- **MUST**: Slice tasks/commands visible in Run Detail Drawer
+- **MUST**: Config tab exposes quorum, parallelism, retries settings
+- **MUST**: Run Launch Panel allows starting plans from dashboard
+- **SHOULD**: DAG dependency view in Plan Browser
+- **SHOULD**: Tab badge counts for runs/cost/skills
+- **SHOULD**: Cost + Duration charts with CSV export
+- **SHOULD**: Event history log visible
+- **MUST**: Self-tests passing (69/69)
 
 ---
 

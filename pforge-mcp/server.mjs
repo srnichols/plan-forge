@@ -28,6 +28,7 @@ import { parsePlan, runPlan, detectWorkers, getCostReport } from "./orchestrator
 import { createHub, readHubPort } from "./hub.mjs";
 import { buildCapabilitySurface, writeToolsJson, writeCliSchema } from "./capabilities.mjs";
 import { readRunIndex } from "./telemetry.mjs";
+import { parseSkill, executeSkill } from "./skill-runner.mjs";
 import express from "express";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -234,9 +235,32 @@ const TOOLS = [
       },
     },
   },
+  {
+    name: "forge_skill_status",
+    description: "Get recent skill execution events from the WebSocket hub history. Shows which skills were run, per-step results, and timing.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        skillName: { type: "string", description: "Filter by skill name (optional — shows all recent if omitted)" },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+    },
+  },
+  {
+    name: "forge_run_skill",
+    description: "Execute a skill programmatically — parse the SKILL.md, run steps with validation gates, emit events to the hub, return structured results. Use for automated skill execution with progress tracking.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        skill: { type: "string", description: "Skill name (e.g., 'health-check', 'test-sweep') or path to SKILL.md" },
+        args: { type: "string", description: "Arguments to pass to the skill (optional)" },
+        dryRun: { type: "boolean", description: "If true, parse and validate skill without executing" },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+      required: ["skill"],
+    },
+  },
 ];
-
-// ─── Tool Execution ───────────────────────────────────────────────────
 function executeTool(name, args) {
   const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
 
@@ -399,6 +423,82 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return { content: [{ type: "text", text: JSON.stringify(surface, null, 2) }] };
     } catch (err) {
       return { content: [{ type: "text", text: `Capabilities error: ${err.message}` }], isError: true };
+    }
+  }
+
+  if (name === "forge_skill_status") {
+    try {
+      if (!activeHub) {
+        return { content: [{ type: "text", text: "Hub not running. Start the MCP server with --port to enable skill event tracking." }] };
+      }
+      const history = activeHub.getHistory();
+      let skillEvents = history.filter((e) => e.type?.startsWith("skill-"));
+      if (args.skillName) {
+        skillEvents = skillEvents.filter((e) => e.skillName === args.skillName || e.data?.skillName === args.skillName);
+      }
+      if (skillEvents.length === 0) {
+        return { content: [{ type: "text", text: "No skill execution events found. Run a skill via forge_run_skill first." }] };
+      }
+      return { content: [{ type: "text", text: JSON.stringify(skillEvents, null, 2) }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Skill status error: ${err.message}` }], isError: true };
+    }
+  }
+
+  if (name === "forge_run_skill") {
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+
+      // Resolve skill path — accept name or full path
+      let skillPath = args.skill;
+      if (!skillPath.endsWith(".md")) {
+        // Try well-known locations
+        const candidates = [
+          join(cwd, ".github", "skills", skillPath, "SKILL.md"),
+          join(cwd, "presets", "shared", "skills", skillPath, "SKILL.md"),
+        ];
+        skillPath = candidates.find((p) => existsSync(p));
+        if (!skillPath) {
+          return { content: [{ type: "text", text: `Skill not found: ${args.skill}. Looked in .github/skills/${args.skill}/SKILL.md` }], isError: true };
+        }
+      } else {
+        skillPath = resolve(cwd, skillPath);
+      }
+
+      if (!existsSync(skillPath)) {
+        return { content: [{ type: "text", text: `Skill file not found: ${skillPath}` }], isError: true };
+      }
+
+      const skill = parseSkill(skillPath);
+
+      // Dry run — return parsed structure without executing
+      if (args.dryRun) {
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              status: "dry-run",
+              skillName: skill.meta.name,
+              description: skill.meta.description,
+              tools: skill.meta.tools,
+              stepCount: skill.stepCount,
+              steps: skill.steps.map((s) => ({ number: s.number, name: s.name, hasConditional: !!s.conditional })),
+              safetyRules: skill.safetyRules,
+            }, null, 2),
+          }],
+        };
+      }
+
+      // Execute with hub event broadcasting
+      const eventHandler = activeHub ? { handle: (event) => activeHub.broadcast(event) } : null;
+      const result = await executeSkill(skill, { cwd, eventHandler });
+
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        isError: result.status === "failed",
+      };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Skill execution error: ${err.message}` }], isError: true };
     }
   }
 

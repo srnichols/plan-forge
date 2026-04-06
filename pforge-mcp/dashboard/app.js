@@ -13,6 +13,7 @@ const state = {
   ws: null,
   connected: false,
   slices: [],       // Current run slice states
+  skillRuns: [],    // Skill execution history
   runMeta: null,    // Current run metadata
   charts: {},       // Chart.js instances
 };
@@ -111,6 +112,18 @@ function handleEvent(event) {
       break;
     case "run-aborted":
       handleRunAborted(event.data || event);
+      break;
+    case "skill-started":
+      handleSkillStarted(event.data || event);
+      break;
+    case "skill-step-started":
+      handleSkillStepStarted(event.data || event);
+      break;
+    case "skill-step-completed":
+      handleSkillStepCompleted(event.data || event);
+      break;
+    case "skill-completed":
+      handleSkillCompleted(event.data || event);
       break;
   }
 }
@@ -647,6 +660,89 @@ async function loadTraceDetail() {
   } catch {
     document.getElementById("waterfall-bars").innerHTML = '<p class="text-red-400 text-center py-8">Failed to load trace</p>';
   }
+}
+
+// ─── Skill Event Handlers ─────────────────────────────────────────────
+
+function handleSkillStarted(data) {
+  const skillRun = {
+    name: data.skillName,
+    startTime: data.timestamp || new Date().toISOString(),
+    status: "running",
+    steps: [],
+    stepCount: data.stepCount || 0,
+  };
+  state.skillRuns.unshift(skillRun);
+  // Keep last 20 skill runs
+  if (state.skillRuns.length > 20) state.skillRuns.pop();
+  renderSkillTimeline();
+}
+
+function handleSkillStepStarted(data) {
+  const run = state.skillRuns.find((r) => r.name === data.skillName && r.status === "running");
+  if (!run) return;
+  run.steps.push({
+    number: data.stepNumber,
+    name: data.stepName,
+    status: "executing",
+    startTime: data.timestamp,
+  });
+  renderSkillTimeline();
+}
+
+function handleSkillStepCompleted(data) {
+  const run = state.skillRuns.find((r) => r.name === data.skillName && r.status === "running");
+  if (!run) return;
+  const step = run.steps.find((s) => s.number === data.stepNumber);
+  if (step) {
+    step.status = data.status || "passed";
+    step.duration = data.duration;
+  }
+  renderSkillTimeline();
+}
+
+function handleSkillCompleted(data) {
+  const run = state.skillRuns.find((r) => r.name === data.skillName && r.status === "running");
+  if (run) {
+    run.status = data.status || "completed";
+    run.duration = data.totalDuration;
+    run.stepsPassed = data.stepsPassed;
+    run.stepsFailed = data.stepsFailed;
+  }
+  renderSkillTimeline();
+}
+
+function renderSkillTimeline() {
+  const container = document.getElementById("skill-timeline");
+  if (!container) return;
+
+  if (state.skillRuns.length === 0) {
+    container.innerHTML = '<div class="text-gray-500 text-center py-8">No skill executions yet. Invoke a skill via <code>/skill-name</code> or <code>forge_run_skill</code>.</div>';
+    return;
+  }
+
+  container.innerHTML = state.skillRuns.map((run) => {
+    const statusIcon = { running: "⚡", completed: "✅", failed: "❌" }[run.status] || "❓";
+    const bgColor = { running: "bg-blue-900/50", completed: "bg-green-900/30", failed: "bg-red-900/30" }[run.status] || "bg-gray-800";
+    const duration = run.duration ? `${(run.duration / 1000).toFixed(1)}s` : "...";
+
+    const stepsHtml = run.steps.map((s) => {
+      const sIcon = { executing: "⚡", passed: "✅", failed: "❌" }[s.status] || "⏳";
+      const sDur = s.duration ? `${(s.duration / 1000).toFixed(1)}s` : "";
+      return `<span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded ${s.status === "failed" ? "bg-red-900/50 text-red-300" : "bg-gray-700 text-gray-300"}">${sIcon} ${s.name} ${sDur}</span>`;
+    }).join(" ");
+
+    return `
+      <div class="p-3 rounded ${bgColor} border border-gray-700 mb-2">
+        <div class="flex justify-between items-center mb-1">
+          <span class="font-medium text-white">${statusIcon} /${run.name}</span>
+          <span class="text-xs text-gray-400">${duration}</span>
+        </div>
+        <div class="flex flex-wrap gap-1">${stepsHtml}</div>
+        ${run.status !== "running" ? `<div class="text-xs text-gray-500 mt-1">${run.stepsPassed || 0} passed, ${run.stepsFailed || 0} failed</div>` : ""}
+      </div>
+    `;
+  }).join("");
 }
 
 function renderWaterfall(trace) {

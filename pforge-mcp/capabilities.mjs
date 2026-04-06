@@ -404,7 +404,7 @@ export const CONFIG_SCHEMA = {
     pipelineVersion: { type: "string", description: "Pipeline version", default: "2.0" },
     templateVersion: { type: "string", description: "Plan Forge template version" },
     projectName: { type: "string", description: "Project name (used for OpenBrain memory scoping)" },
-    preset: { type: "string", enum: ["dotnet", "typescript", "python", "java", "go", "azure-iac", "custom"] },
+    preset: { type: "string", enum: ["dotnet", "typescript", "python", "java", "go", "swift", "azure-iac", "custom"] },
     agents: { type: "array", items: { type: "string", enum: ["claude", "cursor", "codex"] }, description: "Configured agent adapters" },
     modelRouting: {
       type: "object",
@@ -496,11 +496,12 @@ const SYSTEM_REFERENCE = {
   },
 
   guardrails: {
-    description: "17-18 instruction files per preset that auto-load based on the file being edited",
+    description: "15-18 instruction files per preset that auto-load based on the file being edited",
     shared: ["architecture-principles", "git-workflow", "ai-plan-hardening-runbook", "project-principles"],
     perStack: {
       dotnet: ["api-patterns", "auth", "caching", "dapr", "database", "deploy", "errorhandling", "graphql", "messaging", "multi-environment", "naming", "observability", "performance", "security", "testing", "version"],
       typescript: ["...same + frontend"],
+      swift: ["api-patterns", "auth", "caching", "database", "deploy", "errorhandling", "messaging", "multi-environment", "naming", "observability", "performance", "security", "testing", "version"],
     },
     mechanism: "YAML frontmatter applyTo glob pattern → Copilot loads matching files automatically",
   },
@@ -553,11 +554,12 @@ const SYSTEM_REFERENCE = {
   },
 
   presets: {
-    available: ["dotnet", "typescript", "python", "java", "go", "azure-iac", "custom"],
+    available: ["dotnet", "typescript", "python", "java", "go", "swift", "azure-iac", "custom"],
     description: "Stack-specific guardrail configurations with domain-relevant instruction files, agents, and prompts",
     counts: {
       dotnet: { instructions: 17, agents: 19, prompts: 15, skills: 8 },
       typescript: { instructions: 18, agents: 19, prompts: 15, skills: 8 },
+      swift: { instructions: 15, agents: 17, prompts: 13, skills: 8 },
       "azure-iac": { instructions: 12, agents: 18, prompts: 6, skills: 3 },
     },
   },
@@ -608,8 +610,8 @@ const SYSTEM_REFERENCE = {
     "Dashboard": "Web UI at localhost:3100/dashboard. 8 tabs: Progress, Runs, Cost, Actions, Replay, Extensions, Config, Traces",
 
     // Infrastructure
-    "Guardrails": "Instruction files (.github/instructions/*.instructions.md) that auto-load based on the file being edited. 17-18 per preset",
-    "Preset": "Stack-specific configuration (dotnet, typescript, python, java, go, azure-iac). Determines which guardrails, agents, and prompts are installed",
+    "Guardrails": "Instruction files (.github/instructions/*.instructions.md) that auto-load based on the file being edited. 15-18 per preset",
+    "Preset": "Stack-specific configuration (dotnet, typescript, python, java, go, swift, azure-iac). Determines which guardrails, agents, and prompts are installed",
     "Extension": "A community add-on providing additional agents, prompts, or instructions for specific domains (e.g., azure-infrastructure)",
     "Lifecycle Hook": "Automatic actions during Copilot sessions — SessionStart, PreToolUse, PostToolUse, Stop",
 

@@ -1723,7 +1723,7 @@ cmd_doctor() {
     local preset_key="${preset%%,*}"
     local exp_instr=3 exp_agents=5 exp_prompts=7 exp_skills=0
     case "$preset_key" in
-        dotnet|typescript|python|java|go|azure-iac)
+        dotnet|typescript|python|java|go|swift|azure-iac)
             exp_instr=15; exp_agents=17; exp_prompts=9; exp_skills=8 ;;
         custom)
             exp_instr=3; exp_agents=5; exp_prompts=7; exp_skills=0 ;;

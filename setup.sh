@@ -7,7 +7,7 @@
 #   ./setup.sh                  # Interactive mode
 #   ./setup.sh --force          # Overwrite existing files
 #
-# Presets: dotnet, typescript, python, java, go, azure-iac, custom
+# Presets: dotnet, typescript, python, java, go, swift, azure-iac, custom
 
 set -euo pipefail
 
@@ -20,6 +20,7 @@ PROJECT_NAME=""
 FORCE=false
 AUTO_DETECT=false
 AGENTS="copilot"
+GENERIC_DIR=".ai"
 
 # ─── Color helpers ─────────────────────────────────────────────────────
 cyan()   { printf '\033[0;36m%s\033[0m\n' "$*"; }
@@ -34,10 +35,11 @@ while [[ $# -gt 0 ]]; do
         --path)       PROJECT_PATH="$2"; shift 2 ;;
         --name|-n)    PROJECT_NAME="$2"; shift 2 ;;
         --agent)      AGENTS="$2"; shift 2 ;;
+        --generic-dir) GENERIC_DIR="$2"; shift 2 ;;
         --force|-f)   FORCE=true; shift ;;
         --auto-detect|-a) AUTO_DETECT=true; shift ;;
         --help|-h)
-            echo "Usage: ./setup.sh [--preset dotnet|typescript|python|java|go|azure-iac|custom] [--path DIR] [--name NAME] [--agent copilot|claude|cursor|codex|gemini|all] [--force] [--auto-detect]"
+            echo "Usage: ./setup.sh [--preset dotnet|typescript|python|java|go|swift|azure-iac|custom] [--path DIR] [--name NAME] [--agent copilot|claude|cursor|codex|gemini|generic|all] [--generic-dir DIR] [--force] [--auto-detect]"
             exit 0 ;;
         *) red "Unknown option: $1"; exit 1 ;;
     esac
@@ -339,6 +341,108 @@ install_cursor_agent() {
     fi
 }
 
+# ─── Agent Adapter: Windsurf ───────────────────────────────────────────
+install_windsurf_agent() {
+    local target="$1"
+    echo "  Installing Windsurf files..."
+
+    # Generate .windsurf/rules/planforge.md — copilot-instructions + all guardrails
+    local copilot_instr="$target/.github/copilot-instructions.md"
+    local windsurf_dir="$target/.windsurf"
+    local rules_dir="$windsurf_dir/rules"
+    local rules_file="$rules_dir/planforge.md"
+    if [ -f "$copilot_instr" ] && [ ! -f "$rules_file" ]; then
+        mkdir -p "$rules_dir"
+        {
+            cat "$copilot_instr"
+            echo ""
+            echo "---"
+            echo ""
+            echo "## Plan Forge Agent Guidelines"
+            echo ""
+            echo "When editing code, apply the guardrail section that matches the file type:"
+            echo "- Database/SQL/ORM → **database** section | Auth/JWT → **auth** section"
+            echo "- API routes → **api-patterns** section | Tests → **testing** section"
+            echo "- Always follow **architecture-principles** and **security**"
+            echo ""
+            echo "After every file edit: scan for TODO/FIXME/HACK/stub markers. Warn immediately."
+            echo "Before editing: check the active plan's Forbidden Actions — do not touch listed files."
+            echo ""
+
+            local instr_dir="$target/.github/instructions"
+            if [ -d "$instr_dir" ]; then
+                echo "---"
+                echo ""
+                echo "## Guardrail Files (from Plan Forge)"
+                echo ""
+                for instr_file in "$instr_dir"/*.instructions.md; do
+                    [ -f "$instr_file" ] || continue
+                    local domain
+                    domain="$(basename "$instr_file" .instructions.md)"
+                    echo "### $domain"
+                    echo ""
+                    sed -n '/^---$/,/^---$/!p' "$instr_file" | tail -n +1
+                    echo ""
+                done
+            fi
+        } > "$rules_file"
+        green "  CREATE .windsurf/rules/planforge.md (project context + guardrails)"
+    fi
+
+    # Convert ALL prompts → Windsurf workflows
+    local prompts_dir="$target/.github/prompts"
+    local workflows_dir="$windsurf_dir/workflows"
+    if [ -d "$prompts_dir" ]; then
+        mkdir -p "$workflows_dir"
+        for prompt_file in "$prompts_dir"/*.prompt.md; do
+            [ -f "$prompt_file" ] || continue
+            local base
+            base="$(basename "$prompt_file" .prompt.md)"
+            local wf_file="$workflows_dir/planforge.$base.md"
+            if [ ! -f "$wf_file" ]; then
+                local desc="Plan Forge prompt"
+                local got_desc
+                got_desc="$(grep -oP 'description:\s*"?\K[^"]+' "$prompt_file" 2>/dev/null | head -1)" || true
+                [ -n "$got_desc" ] && desc="$got_desc"
+                {
+                    echo "---"
+                    echo "description: $desc"
+                    echo "---"
+                    echo ""
+                    cat "$prompt_file"
+                } > "$wf_file"
+                green "  CREATE .windsurf/workflows/planforge.$base.md"
+            fi
+        done
+    fi
+
+    # Convert reviewer agents → Windsurf workflows
+    local agents_dir="$target/.github/agents"
+    if [ -d "$agents_dir" ]; then
+        mkdir -p "$workflows_dir"
+        for agent_file in "$agents_dir"/*.agent.md; do
+            [ -f "$agent_file" ] || continue
+            local base
+            base="$(basename "$agent_file" .agent.md)"
+            local wf_file="$workflows_dir/planforge.$base.md"
+            if [ ! -f "$wf_file" ]; then
+                local desc="Plan Forge reviewer"
+                local got_desc
+                got_desc="$(grep -oP 'description:\s*"?\K[^"]+' "$agent_file" 2>/dev/null | head -1)" || true
+                [ -n "$got_desc" ] && desc="$got_desc"
+                {
+                    echo "---"
+                    echo "description: $desc"
+                    echo "---"
+                    echo ""
+                    cat "$agent_file"
+                } > "$wf_file"
+                green "  CREATE .windsurf/workflows/planforge.$base.md"
+            fi
+        done
+    fi
+}
+
 # ─── Agent Adapter: Codex CLI ──────────────────────────────────────────
 install_codex_agent() {
     local target="$1"
@@ -562,6 +666,110 @@ SETTINGS_EOF
     fi
 }
 
+# ─── Agent Adapter: Generic (any AI coding assistant) ──────────────────
+install_generic_agent() {
+    local target="$1"
+    local generic_dir="${2:-.ai}"
+    local output_dir="$target/$generic_dir"
+    echo "  Installing Generic AI adapter files (dir: $generic_dir)..."
+
+    mkdir -p "$output_dir"
+
+    # Generate AI_INSTRUCTIONS.md — full context + guardrails embedded inline
+    local copilot_instr="$target/.github/copilot-instructions.md"
+    local ai_ctx="$output_dir/AI_INSTRUCTIONS.md"
+    if [ -f "$copilot_instr" ] && [ ! -f "$ai_ctx" ]; then
+        {
+            echo "# Project Context for AI Coding Assistants"
+            echo ""
+            echo "> Auto-generated by Plan Forge. Load this file into your AI assistant's context."
+            echo "> Regenerate with: re-run setup with --agent generic"
+            echo ""
+            echo "## How to Use These Guardrails"
+            echo ""
+            echo "This file contains domain-specific guardrails organized by section. When editing code:"
+            echo "- Editing database/SQL/repository code → follow the **database** section"
+            echo "- Editing auth/JWT/OIDC code → follow the **auth** section"
+            echo "- Editing API controllers/routes → follow the **api-patterns** section"
+            echo "- Editing tests → follow the **testing** section"
+            echo "- Editing Docker/deploy files → follow the **deploy** section"
+            echo "- Always follow **architecture-principles** and **security** sections"
+            echo ""
+            echo "**After every file edit**: Scan for TODO, FIXME, HACK, stub, placeholder markers. Warn immediately if found."
+            echo ""
+            echo "**Before editing any file**: If a hardened plan exists in \`docs/plans/\`, check its Forbidden Actions section. Do not edit files listed there."
+            echo ""
+            echo "**Pipeline flow**: After completing a step, tell the user what to invoke next:"
+            echo "- After Step 0 (Specify) → run step1-preflight-check"
+            echo "- After Step 2 (Harden) → run step3-execute-slice"
+            echo "- After Step 4 (Sweep) → Start a NEW session for Step 5 (Review)"
+            echo "- After Step 5 (Review) → run step6-ship"
+            echo ""
+            echo "## Project Instructions"
+            echo ""
+            cat "$copilot_instr"
+            echo ""
+
+            # Embed all instruction files inline
+            local instr_dir="$target/.github/instructions"
+            if [ -d "$instr_dir" ]; then
+                echo "---"
+                echo ""
+                echo "## Guardrail Files"
+                echo ""
+                echo "The following guardrails are embedded from Plan Forge instruction files."
+                echo ""
+
+                for instr_file in "$instr_dir"/*.instructions.md; do
+                    [ -f "$instr_file" ] || continue
+                    local domain
+                    domain="$(basename "$instr_file" .instructions.md)"
+                    echo "### $domain"
+                    echo ""
+                    # Strip YAML frontmatter
+                    sed '/^---$/,/^---$/d' "$instr_file"
+                    echo ""
+                done
+            fi
+        } > "$ai_ctx"
+        green "  CREATE $generic_dir/AI_INSTRUCTIONS.md (project context + guardrails)"
+    fi
+
+    # Copy prompts as plain markdown files
+    local prompts_src="$target/.github/prompts"
+    local prompts_dst="$output_dir/prompts"
+    if [ -d "$prompts_src" ]; then
+        mkdir -p "$prompts_dst"
+        for prompt_file in "$prompts_src"/*.prompt.md; do
+            [ -f "$prompt_file" ] || continue
+            local base
+            base="$(basename "$prompt_file")"
+            local dst="$prompts_dst/$base"
+            if [ ! -f "$dst" ]; then
+                cp "$prompt_file" "$dst"
+                green "  COPY  $generic_dir/prompts/$base"
+            fi
+        done
+    fi
+
+    # Copy agent definition files as plain markdown files
+    local agents_src="$target/.github/agents"
+    local agents_dst="$output_dir/agents"
+    if [ -d "$agents_src" ]; then
+        mkdir -p "$agents_dst"
+        for agent_file in "$agents_src"/*.agent.md; do
+            [ -f "$agent_file" ] || continue
+            local base
+            base="$(basename "$agent_file")"
+            local dst="$agents_dst/$base"
+            if [ ! -f "$dst" ]; then
+                cp "$agent_file" "$dst"
+                green "  COPY  $generic_dir/agents/$base"
+            fi
+        done
+    fi
+}
+
 detect_preset() {
     local target="$1"
 
@@ -576,6 +784,13 @@ detect_preset() {
     if [[ -f "$target/go.mod" ]]; then
         yellow "  AUTO-DETECT  Found Go project markers"
         echo "go"
+        return
+    fi
+
+    # Swift markers
+    if [[ -f "$target/Package.swift" ]] || find "$target" -maxdepth 1 -name "*.xcodeproj" -o -name "*.xcworkspace" 2>/dev/null | head -1 | grep -q .; then
+        yellow "  AUTO-DETECT  Found Swift project markers"
+        echo "swift"
         return
     fi
 
@@ -671,18 +886,20 @@ if [[ -z "$PRESET" ]]; then
                 echo "  3) python      — Python / FastAPI / SQLAlchemy"
                 echo "  4) java        — Java / Spring Boot / Gradle / Maven"
                 echo "  5) go          — Go / Chi / Gin / Standard Library"
-                echo "  6) azure-iac   — Azure Bicep / Terraform / PowerShell / azd"
-                echo "  7) custom      — Shared files only (add your own instructions)"
+                echo "  6) swift       — Swift / SwiftUI / iOS / Vapor"
+                echo "  7) azure-iac   — Azure Bicep / Terraform / PowerShell / azd"
+                echo "  8) custom      — Shared files only (add your own instructions)"
                 echo ""
-                choice="$(prompt_value "Select preset (1-7 or name)" "1")"
+                choice="$(prompt_value "Select preset (1-8 or name)" "1")"
                 case "$choice" in
                     1|dotnet)     PRESET="dotnet" ;;
                     2|typescript) PRESET="typescript" ;;
                     3|python)     PRESET="python" ;;
                     4|java)       PRESET="java" ;;
                     5|go)         PRESET="go" ;;
-                    6|azure-iac)  PRESET="azure-iac" ;;
-                    7|custom)     PRESET="custom" ;;
+                    6|swift)      PRESET="swift" ;;
+                    7|azure-iac)  PRESET="azure-iac" ;;
+                    8|custom)     PRESET="custom" ;;
                     *)            PRESET="$choice" ;;
                 esac
             fi
@@ -695,18 +912,20 @@ if [[ -z "$PRESET" ]]; then
         echo "  3) python      — Python / FastAPI / SQLAlchemy"
         echo "  4) java        — Java / Spring Boot / Gradle / Maven"
         echo "  5) go          — Go / Chi / Gin / Standard Library"
-        echo "  6) azure-iac   — Azure Bicep / Terraform / PowerShell / azd"
-        echo "  7) custom      — Shared files only (add your own instructions)"
+        echo "  6) swift       — Swift / SwiftUI / iOS / Vapor"
+        echo "  7) azure-iac   — Azure Bicep / Terraform / PowerShell / azd"
+        echo "  8) custom      — Shared files only (add your own instructions)"
         echo ""
-        choice="$(prompt_value "Select preset (1-7 or name)" "1")"
+        choice="$(prompt_value "Select preset (1-8 or name)" "1")"
         case "$choice" in
             1|dotnet)     PRESET="dotnet" ;;
             2|typescript) PRESET="typescript" ;;
             3|python)     PRESET="python" ;;
             4|java)       PRESET="java" ;;
             5|go)         PRESET="go" ;;
-            6|azure-iac)  PRESET="azure-iac" ;;
-            7|custom)     PRESET="custom" ;;
+            6|swift)      PRESET="swift" ;;
+            7|azure-iac)  PRESET="azure-iac" ;;
+            8|custom)     PRESET="custom" ;;
             *)            PRESET="$choice" ;;
         esac
     fi
@@ -718,6 +937,7 @@ case "$PRESET" in
     python)     STACK_LABEL="Python / FastAPI" ;;
     java)       STACK_LABEL="Java / Spring Boot" ;;
     go)         STACK_LABEL="Go / Standard Library" ;;
+    swift)      STACK_LABEL="Swift / SwiftUI / iOS / Vapor" ;;
     azure-iac)  STACK_LABEL="Azure Bicep / Terraform / PowerShell / azd" ;;
     custom)     STACK_LABEL="Custom (configure manually)" ;;
     *)          red "Unknown preset: $PRESET"; exit 1 ;;
@@ -730,7 +950,7 @@ for i in "${!PRESETS[@]}"; do
     PRESETS[$i]="$(echo "${PRESETS[$i]}" | tr -d ' ')"
 done
 
-VALID_PRESETS=(dotnet typescript python java go azure-iac custom)
+VALID_PRESETS=(dotnet typescript python java go swift azure-iac custom)
 for p in "${PRESETS[@]}"; do
     valid=false
     for v in "${VALID_PRESETS[@]}"; do [[ "$p" == "$v" ]] && valid=true && break; done
@@ -758,6 +978,7 @@ case "$PRIMARY_PRESET" in
     python)     DEFAULT_BUILD="python -m build"; DEFAULT_TEST="pytest"; DEFAULT_LINT="ruff check ." ;;
     java)       DEFAULT_BUILD="./gradlew build"; DEFAULT_TEST="./gradlew test"; DEFAULT_LINT="./gradlew spotlessCheck" ;;
     go)         DEFAULT_BUILD="go build ./..."; DEFAULT_TEST="go test ./..."; DEFAULT_LINT="golangci-lint run" ;;
+    swift)      DEFAULT_BUILD="swift build"; DEFAULT_TEST="swift test"; DEFAULT_LINT="swift package plugin --allow-writing-to-package-directory swiftlint" ;;
     azure-iac)  DEFAULT_BUILD="az bicep build --file infra/main.bicep"; DEFAULT_TEST="Invoke-Pester -Path ./tests -Output Detailed"; DEFAULT_LINT="az bicep lint --file infra/main.bicep" ;;
     custom)     DEFAULT_BUILD=""; DEFAULT_TEST=""; DEFAULT_LINT="" ;;
 esac
@@ -1056,7 +1277,7 @@ fi
 # ─── Step 6b: Install Agent Adapters ───────────────────────────────────
 AGENT_LIST="$AGENTS"
 if [[ "$AGENT_LIST" == "all" ]]; then
-    AGENT_LIST="copilot,claude,cursor,codex,gemini"
+    AGENT_LIST="copilot,claude,cursor,windsurf,codex,gemini,generic"
 fi
 
 IFS=',' read -ra AGENT_ARRAY <<< "$AGENT_LIST"
@@ -1072,10 +1293,12 @@ if [[ ${#EXTRA_AGENTS[@]} -gt 0 ]]; then
 
     for ag in "${EXTRA_AGENTS[@]}"; do
         case "$ag" in
-            claude) install_claude_agent "$PROJECT_PATH" ;;
-            cursor) install_cursor_agent "$PROJECT_PATH" ;;
-            codex)  install_codex_agent "$PROJECT_PATH" ;;
-            gemini) install_gemini_agent "$PROJECT_PATH" ;;
+            claude)    install_claude_agent "$PROJECT_PATH" ;;
+            cursor)    install_cursor_agent "$PROJECT_PATH" ;;
+            windsurf)  install_windsurf_agent "$PROJECT_PATH" ;;
+            codex)     install_codex_agent "$PROJECT_PATH" ;;
+            gemini)    install_gemini_agent "$PROJECT_PATH" ;;
+            generic)   install_generic_agent "$PROJECT_PATH" "$GENERIC_DIR" ;;
             *) yellow "  Unknown agent: $ag — skipping" ;;
         esac
     done

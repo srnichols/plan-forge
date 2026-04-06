@@ -69,7 +69,7 @@ echo "File Counts:"
 PRESET_KEY="${PRESET%%,*}"  # First preset for multi-preset
 
 case "$PRESET_KEY" in
-    dotnet|typescript|python|java|go|azure-iac)
+    dotnet|typescript|python|java|go|swift|azure-iac)
         EXP_INSTR=14; EXP_AGENTS=17; EXP_PROMPTS=9; EXP_SKILLS=8 ;;
     custom)
         EXP_INSTR=3; EXP_AGENTS=5; EXP_PROMPTS=7; EXP_SKILLS=0 ;;

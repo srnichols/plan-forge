@@ -129,7 +129,7 @@ Both agents and skills extend Copilot, but they serve different purposes:
 **Quick rule**: Agents *look at* your code. Skills *do things* to your project.
 
 **Installed counts** (per preset after setup):
-- **Stack-specific agents**: 6 for app presets (dotnet/typescript/python/java/go) · **5** for `azure-iac` (bicep-reviewer, terraform-reviewer, security-reviewer, deploy-helper, azure-sweeper)
+- **Stack-specific agents**: 6 for app presets (dotnet/typescript/python/java/go/swift) · **5** for `azure-iac` (bicep-reviewer, terraform-reviewer, security-reviewer, deploy-helper, azure-sweeper)
 - **8 shared agents** — API contracts, accessibility, multi-tenancy, CI/CD, observability, dependency, compliance, error handling
 - **5 pipeline agents** — specifier, plan-hardener, executor, reviewer-gate, shipper
 - **Skills**: 10 for app presets (8 upgraded + 2 shared: health-check, forge-execute) · **3** for `azure-iac` (infra-deploy, infra-test, azure-sweep)
@@ -250,7 +250,7 @@ Plan Forge is built with Plan Forge. Every dashboard feature, bug fix, and MCP t
 
 - **11 phases** executed via `pforge run-plan` with quorum auto mode
 - **69 self-tests** passing after every slice
-- **v1.0 → v2.10** with zero manual rollbacks — every change flows through scope contracts, validation gates, and completeness sweeps
+- **v1.0 → v2.11** with zero manual rollbacks — every change flows through scope contracts, validation gates, and completeness sweeps
 - The dashboard screenshots in our docs were captured by a Playwright script that runs against the live dashboard — itself built slice-by-slice using Plan Forge
 
 If the pipeline can build itself without drift, it can build your project too.
@@ -293,6 +293,7 @@ The wizard bootstraps your `.github/instructions/`, `AGENTS.md`, and `copilot-in
 .\setup.ps1 -Preset python
 .\setup.ps1 -Preset java
 .\setup.ps1 -Preset go
+.\setup.ps1 -Preset swift
 .\setup.ps1 -Preset azure-iac
 
 # Add support for additional AI agents (optional)
@@ -309,6 +310,7 @@ chmod +x setup.sh
 # Or specify a preset directly
 ./setup.sh --preset dotnet
 ./setup.sh --preset typescript
+./setup.sh --preset swift
 
 # Add support for additional AI agents (optional)
 ./setup.sh --preset dotnet --agent claude           # Copilot + Claude Code
@@ -325,12 +327,13 @@ chmod +x setup.sh
 | `python` | Python / FastAPI / Django | `pytest` | `pytest --cov` |
 | `java` | Java / Spring Boot / Gradle / Maven | `./gradlew build` | `./gradlew test` |
 | `go` | Go / Chi / Gin / Standard Library | `go build ./...` | `go test ./...` |
+| `swift` | Swift / SwiftUI / iOS / macOS / Vapor | `swift build` | `swift test` |
 | `azure-iac` | Azure Bicep / Terraform / PowerShell / azd | `az bicep build` | `Invoke-Pester` |
 | `custom` | Any stack | (you configure) | (you configure) |
 
 ### Instruction Files Per Preset
 
-App presets (dotnet / typescript / python / java / go) include **17 instruction files** (18 for TypeScript) that auto-load based on the file being edited:
+App presets (dotnet / typescript / python / java / go / swift) include **15–18 instruction files** that auto-load based on the file being edited:
 
 | Instruction File | Purpose |
 |------------------|---------|

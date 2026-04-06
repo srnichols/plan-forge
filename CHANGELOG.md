@@ -5,6 +5,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.11.0] — 2026-04-06
+
+### Added — v2.11 Quick Wins (Phase 17)
+- **Windsurf adapter** (`-Agent windsurf`) — generates `.windsurf/rules/*.md` with trigger frontmatter (always_on/glob/model_decision), `.windsurf/workflows/planforge/*.md` for commands. 6th supported agent IDE.
+- **Generic agent adapter** (`-Agent generic`) — copies all prompts, agents, and skills to a user-specified `--commands-dir` path. Works with any AI tool that reads markdown files.
+- **Swift/iOS preset** (`presets/swift/`) — 49 files: XCTest patterns, Swift Package Manager, Vapor/SwiftUI conventions. Auto-detect via `Package.swift`, `*.xcodeproj`, `*.xcworkspace`.
+- `-Agent all` now includes windsurf + generic (7 agents total)
+
+---
+
 ## [2.10.0] — 2026-04-06
 
 ### Added — OpenClaw Bridge (Phase 16)

@@ -1282,12 +1282,34 @@ export async function runPlan(planPath, options = {}) {
   const trace = createTraceContext(planPath, { mode, model: effectiveModel, sliceCount: plan.slices.length });
   const telemetryHandler = createTelemetryHandler(trace, runDir);
 
-  // Chain handlers: user-provided → telemetry → log
+  // Chain handlers: user-provided → telemetry → log → console progress
+  const isCliRun = !eventHandler; // If no custom handler, we're running from CLI — show progress on stdout
   const combinedHandler = {
     handle(event) {
       telemetryHandler.handle(event);
       if (eventHandler) eventHandler.handle(event);
       logHandler.handle(event);
+      // Write progress to stdout so terminal stays alive (prevents VS Code "awaiting input" stall)
+      if (isCliRun && event?.type) {
+        const ts = new Date().toISOString().slice(11, 19);
+        switch (event.type) {
+          case "run-started":
+            process.stdout.write(`[${ts}] ▶ Run started: ${event.sliceCount || "?"} slices, mode=${event.mode || "auto"}\n`);
+            break;
+          case "slice-started":
+            process.stdout.write(`[${ts}] ⏳ Slice ${event.sliceId}: ${event.title || ""} — executing...\n`);
+            break;
+          case "slice-completed":
+            process.stdout.write(`[${ts}] ✅ Slice ${event.sliceId}: ${event.title || ""} — ${event.status} (${Math.round((event.duration || 0) / 1000)}s)\n`);
+            break;
+          case "slice-failed":
+            process.stdout.write(`[${ts}] ❌ Slice ${event.sliceId}: ${event.title || ""} — FAILED\n`);
+            break;
+          case "run-completed":
+            process.stdout.write(`[${ts}] 🏁 Run complete: ${event.results?.passed || 0} passed, ${event.results?.failed || 0} failed\n`);
+            break;
+        }
+      }
     },
   };
   const eventBus = new OrchestratorEventBus(combinedHandler);

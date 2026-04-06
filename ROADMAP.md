@@ -7,7 +7,7 @@
 
 ## Current Release
 
-**v2.10.0** (2026-04-06) — OpenClaw Bridge: Telegram/Slack/Discord notifications, approval gate state machine, 4 platform formatters. Plus: Security Audit skill, Gemini CLI adapter, Rust + PHP presets, community walkthroughs, extension registry.
+**v2.11.0** (2026-04-06) — Quick Wins: Windsurf adapter, generic agent pattern, Swift/iOS preset. 8 supported stacks, 7 agent adapters.
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 
@@ -345,7 +345,7 @@ These are planned but not yet prioritized into a version:
 - **Generic bring-your-own-agent pattern** (`--agent generic --commands-dir <path>`)
 
 ### Stack Expansion
-- **Swift / iOS preset** (`presets/swift/`)
+- *(all planned stacks shipped)*
 
 ### Extension Ecosystem
 - Dual-publish extensions to Spec Kit catalog
@@ -367,6 +367,9 @@ These are planned but not yet prioritized into a version:
 - ✅ **Rust preset** + **PHP/Laravel preset** — 98 files each, auto-detect
 - ✅ **Extension registry** — `pforge ext publish` + live catalog on extensions.html
 - ✅ **Community walkthroughs** — greenfield Todo API + brownfield legacy security fix
+- ✅ **Swift/iOS preset** — 49 files, auto-detect via Package.swift/xcodeproj
+- ✅ **Windsurf adapter** — `.windsurf/rules/*.md` with trigger frontmatter + workflows
+- ✅ **Generic agent** — `--agent generic --commands-dir <path>` for any AI tool
 
 ---
 

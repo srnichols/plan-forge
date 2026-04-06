@@ -2034,6 +2034,7 @@ function Invoke-Smith {
         'python'     = @{ instructions = 15; agents = 17; prompts = 9; skills = 8 }
         'java'       = @{ instructions = 15; agents = 17; prompts = 9; skills = 8 }
         'go'         = @{ instructions = 15; agents = 17; prompts = 9; skills = 8 }
+        'swift'      = @{ instructions = 15; agents = 17; prompts = 9; skills = 8 }
         'azure-iac'  = @{ instructions = 15; agents = 17; prompts = 9; skills = 8 }
         'custom'     = @{ instructions = 3;  agents = 5;  prompts = 7; skills = 0 }
     }

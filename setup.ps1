@@ -8,7 +8,7 @@
 
 .PARAMETER Preset
     One or more tech stack presets. Accepts a single value or a comma-separated list.
-    Valid values: dotnet, typescript, python, java, go, azure-iac, custom
+    Valid values: dotnet, typescript, python, java, go, swift, azure-iac, custom
     Example: -Preset azure-iac                  (IaC-only repo)
     Example: -Preset dotnet,azure-iac           (app with infra folder)
 
@@ -20,6 +20,10 @@
 
 .PARAMETER Force
     Overwrite existing files without prompting.
+
+.PARAMETER GenericDir
+    Output directory (relative to ProjectPath) for the generic AI adapter.
+    Defaults to '.ai'. Used when -Agent includes 'generic'.
 
 .EXAMPLE
     .\setup.ps1 -Preset dotnet -ProjectPath "C:\Projects\MyApp" -ProjectName "MyApp"
@@ -38,8 +42,10 @@ param(
 
     [string]$ProjectName,
 
-    [ValidateSet('copilot', 'claude', 'cursor', 'codex', 'gemini', 'all')]
+    [ValidateSet('copilot', 'claude', 'cursor', 'windsurf', 'codex', 'gemini', 'generic', 'all')]
     [string[]]$Agent = @('copilot'),
+
+    [string]$GenericDir = '.ai',
 
     [switch]$Force,
 
@@ -361,6 +367,123 @@ $srcContent
     }
 }
 
+# ─── Agent Adapter: Windsurf ───────────────────────────────────────────
+function Install-WindsurfAgent([string]$TargetPath) {
+    Write-Host "  Installing Windsurf files..." -ForegroundColor DarkCyan
+
+    # Generate .windsurf/rules/planforge.md — copilot-instructions + all guardrails
+    $copilotInstr = Join-Path $TargetPath ".github/copilot-instructions.md"
+    $windsurfDir  = Join-Path $TargetPath ".windsurf"
+    $rulesDir     = Join-Path $windsurfDir "rules"
+    $rulesFile    = Join-Path $rulesDir "planforge.md"
+    if ((Test-Path $copilotInstr) -and -not (Test-Path $rulesFile)) {
+        if (-not (Test-Path $rulesDir)) {
+            New-Item -ItemType Directory -Path $rulesDir -Force | Out-Null
+        }
+
+        $sb = [System.Text.StringBuilder]::new()
+        [void]$sb.AppendLine((Get-Content $copilotInstr -Raw))
+        [void]$sb.AppendLine("")
+        [void]$sb.AppendLine("---")
+        [void]$sb.AppendLine("")
+        [void]$sb.AppendLine("## Plan Forge Agent Guidelines")
+        [void]$sb.AppendLine("")
+        [void]$sb.AppendLine("When editing code, apply the guardrail section that matches the file type:")
+        [void]$sb.AppendLine("- Database/SQL/ORM → **database** section | Auth/JWT → **auth** section")
+        [void]$sb.AppendLine("- API routes → **api-patterns** section | Tests → **testing** section")
+        [void]$sb.AppendLine("- Always follow **architecture-principles** and **security**")
+        [void]$sb.AppendLine("")
+        [void]$sb.AppendLine("After every file edit: scan for TODO/FIXME/HACK/stub markers. Warn immediately.")
+        [void]$sb.AppendLine("Before editing: check the active plan's Forbidden Actions — do not touch listed files.")
+        [void]$sb.AppendLine("")
+
+        # Embed all instruction files
+        $instrDir = Join-Path $TargetPath ".github/instructions"
+        if (Test-Path $instrDir) {
+            [void]$sb.AppendLine("---")
+            [void]$sb.AppendLine("")
+            [void]$sb.AppendLine("## Guardrail Files (from Plan Forge)")
+            [void]$sb.AppendLine("")
+
+            Get-ChildItem -Path $instrDir -Filter "*.instructions.md" -File | Sort-Object Name | ForEach-Object {
+                $domain = $_.BaseName -replace '\.instructions$', ''
+                $instrContent = Get-Content $_.FullName -Raw
+                if ($instrContent -match '^---\s*\n[\s\S]*?\n---\s*\n([\s\S]*)') {
+                    $instrContent = $Matches[1].Trim()
+                }
+                [void]$sb.AppendLine("### $domain")
+                [void]$sb.AppendLine("")
+                [void]$sb.AppendLine($instrContent)
+                [void]$sb.AppendLine("")
+            }
+        }
+
+        Set-Content -Path $rulesFile -Value $sb.ToString()
+        Write-Host "  CREATE .windsurf/rules/planforge.md (project context + guardrails)" -ForegroundColor Green
+    }
+
+    # Convert ALL prompts → Windsurf workflows
+    $promptsDir   = Join-Path $TargetPath ".github/prompts"
+    $workflowsDir = Join-Path $windsurfDir "workflows"
+    if (Test-Path $promptsDir) {
+        if (-not (Test-Path $workflowsDir)) {
+            New-Item -ItemType Directory -Path $workflowsDir -Force | Out-Null
+        }
+        Get-ChildItem -Path $promptsDir -Filter "*.prompt.md" -File | ForEach-Object {
+            $name    = $_.BaseName -replace '\.prompt$', ''
+            $wfFile  = Join-Path $workflowsDir "planforge.$name.md"
+
+            if (-not (Test-Path $wfFile)) {
+                $srcContent = Get-Content $_.FullName -Raw
+                $desc = "Plan Forge prompt"
+                if ($srcContent -match 'description:\s*"?([^"\n]+)"?') {
+                    $desc = $Matches[1].Trim()
+                }
+
+                $wfContent = @"
+---
+description: $desc
+---
+
+$srcContent
+"@
+                Set-Content -Path $wfFile -Value $wfContent
+                Write-Host "  CREATE .windsurf/workflows/planforge.$name.md" -ForegroundColor Green
+            }
+        }
+    }
+
+    # Convert reviewer agents → Windsurf workflows
+    $agentsDir = Join-Path $TargetPath ".github/agents"
+    if (Test-Path $agentsDir) {
+        if (-not (Test-Path $workflowsDir)) {
+            New-Item -ItemType Directory -Path $workflowsDir -Force | Out-Null
+        }
+        Get-ChildItem -Path $agentsDir -Filter "*.agent.md" -File | ForEach-Object {
+            $name   = $_.BaseName -replace '\.agent$', ''
+            $wfFile = Join-Path $workflowsDir "planforge.$name.md"
+
+            if (-not (Test-Path $wfFile)) {
+                $srcContent = Get-Content $_.FullName -Raw
+                $desc = "Plan Forge reviewer"
+                if ($srcContent -match 'description:\s*"?([^"\n]+)"?') {
+                    $desc = $Matches[1].Trim()
+                }
+
+                $wfContent = @"
+---
+description: $desc
+---
+
+$srcContent
+"@
+                Set-Content -Path $wfFile -Value $wfContent
+                Write-Host "  CREATE .windsurf/workflows/planforge.$name.md" -ForegroundColor Green
+            }
+        }
+    }
+}
+
 # ─── Agent Adapter: Codex CLI ──────────────────────────────────────────
 function Install-CodexAgent([string]$TargetPath) {
     Write-Host "  Installing Codex CLI files..." -ForegroundColor DarkCyan
@@ -598,6 +721,112 @@ function Install-GeminiAgent([string]$TargetPath) {
     }
 }
 
+# ─── Agent Adapter: Generic (any AI coding assistant) ──────────────────
+function Install-GenericAgent([string]$TargetPath, [string]$GenericDir = '.ai') {
+    Write-Host "  Installing Generic AI adapter files (dir: $GenericDir)..." -ForegroundColor DarkCyan
+
+    $outputDir = Join-Path $TargetPath $GenericDir
+    if (-not (Test-Path $outputDir)) {
+        New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
+    }
+
+    # Generate AI_INSTRUCTIONS.md — full context + all guardrails embedded inline
+    $copilotInstr = Join-Path $TargetPath ".github/copilot-instructions.md"
+    $aiCtx = Join-Path $outputDir "AI_INSTRUCTIONS.md"
+    if ((Test-Path $copilotInstr) -and -not (Test-Path $aiCtx)) {
+        $sb = [System.Text.StringBuilder]::new()
+        [void]$sb.AppendLine("# Project Context for AI Coding Assistants")
+        [void]$sb.AppendLine("")
+        [void]$sb.AppendLine("> Auto-generated by Plan Forge. Load this file into your AI assistant's context.")
+        [void]$sb.AppendLine("> Regenerate with: re-run setup with -Agent generic")
+        [void]$sb.AppendLine("")
+        [void]$sb.AppendLine("## How to Use These Guardrails")
+        [void]$sb.AppendLine("")
+        [void]$sb.AppendLine("This file contains domain-specific guardrails organized by section. When editing code:")
+        [void]$sb.AppendLine("- Editing database/SQL/repository code → follow the **database** section")
+        [void]$sb.AppendLine("- Editing auth/JWT/OIDC code → follow the **auth** section")
+        [void]$sb.AppendLine("- Editing API controllers/routes → follow the **api-patterns** section")
+        [void]$sb.AppendLine("- Editing tests → follow the **testing** section")
+        [void]$sb.AppendLine("- Editing Docker/deploy files → follow the **deploy** section")
+        [void]$sb.AppendLine("- Always follow **architecture-principles** and **security** sections")
+        [void]$sb.AppendLine("")
+        [void]$sb.AppendLine("**After every file edit**: Scan for TODO, FIXME, HACK, stub, placeholder markers. Warn immediately if found.")
+        [void]$sb.AppendLine("")
+        [void]$sb.AppendLine("**Before editing any file**: If a hardened plan exists in ``docs/plans/``, check its Forbidden Actions section. Do not edit files listed there.")
+        [void]$sb.AppendLine("")
+        [void]$sb.AppendLine("**Pipeline flow**: After completing a step, tell the user what to invoke next:")
+        [void]$sb.AppendLine("- After Step 0 (Specify) → run step1-preflight-check")
+        [void]$sb.AppendLine("- After Step 2 (Harden) → run step3-execute-slice")
+        [void]$sb.AppendLine("- After Step 4 (Sweep) → Start a NEW session for Step 5 (Review)")
+        [void]$sb.AppendLine("- After Step 5 (Review) → run step6-ship")
+        [void]$sb.AppendLine("")
+
+        # Project instructions
+        [void]$sb.AppendLine("## Project Instructions")
+        [void]$sb.AppendLine("")
+        [void]$sb.AppendLine((Get-Content $copilotInstr -Raw))
+        [void]$sb.AppendLine("")
+
+        # Embed all instruction files inline
+        $instrDir = Join-Path $TargetPath ".github/instructions"
+        if (Test-Path $instrDir) {
+            [void]$sb.AppendLine("---")
+            [void]$sb.AppendLine("")
+            [void]$sb.AppendLine("## Guardrail Files")
+            [void]$sb.AppendLine("")
+            [void]$sb.AppendLine("The following guardrails are embedded from Plan Forge instruction files.")
+            [void]$sb.AppendLine("")
+
+            Get-ChildItem -Path $instrDir -Filter "*.instructions.md" -File | Sort-Object Name | ForEach-Object {
+                $domain = $_.BaseName -replace '\.instructions$', ''
+                $instrContent = Get-Content $_.FullName -Raw
+                if ($instrContent -match '^---\s*\n[\s\S]*?\n---\s*\n([\s\S]*)') {
+                    $instrContent = $Matches[1].Trim()
+                }
+                [void]$sb.AppendLine("### $domain")
+                [void]$sb.AppendLine("")
+                [void]$sb.AppendLine($instrContent)
+                [void]$sb.AppendLine("")
+            }
+        }
+
+        Set-Content -Path $aiCtx -Value $sb.ToString()
+        Write-Host "  CREATE $GenericDir/AI_INSTRUCTIONS.md (project context + guardrails)" -ForegroundColor Green
+    }
+
+    # Copy prompts as plain markdown files
+    $promptsDir = Join-Path $TargetPath ".github/prompts"
+    $promptsDst = Join-Path $outputDir "prompts"
+    if (Test-Path $promptsDir) {
+        if (-not (Test-Path $promptsDst)) {
+            New-Item -ItemType Directory -Path $promptsDst -Force | Out-Null
+        }
+        Get-ChildItem -Path $promptsDir -Filter "*.prompt.md" -File | ForEach-Object {
+            $dst = Join-Path $promptsDst $_.Name
+            if (-not (Test-Path $dst)) {
+                Copy-Item -Path $_.FullName -Destination $dst
+                Write-Host "  COPY  $GenericDir/prompts/$($_.Name)" -ForegroundColor Green
+            }
+        }
+    }
+
+    # Copy agent definition files as plain markdown files
+    $agentsDir = Join-Path $TargetPath ".github/agents"
+    $agentsDst = Join-Path $outputDir "agents"
+    if (Test-Path $agentsDir) {
+        if (-not (Test-Path $agentsDst)) {
+            New-Item -ItemType Directory -Path $agentsDst -Force | Out-Null
+        }
+        Get-ChildItem -Path $agentsDir -Filter "*.agent.md" -File | ForEach-Object {
+            $dst = Join-Path $agentsDst $_.Name
+            if (-not (Test-Path $dst)) {
+                Copy-Item -Path $_.FullName -Destination $dst
+                Write-Host "  COPY  $GenericDir/agents/$($_.Name)" -ForegroundColor Green
+            }
+        }
+    }
+}
+
 function Find-Preset([string]$TargetPath) {
     # .NET markers
     $hasCsproj = $null -ne (Get-ChildItem -Path $TargetPath -Filter "*.csproj" -Recurse -Depth 2 -ErrorAction SilentlyContinue | Select-Object -First 1)
@@ -617,6 +846,11 @@ function Find-Preset([string]$TargetPath) {
 
     # Go markers
     $hasGoMod = Test-Path (Join-Path $TargetPath "go.mod")
+
+    # Swift markers
+    $hasPackageSwift = Test-Path (Join-Path $TargetPath "Package.swift")
+    $hasXcodeproj   = $null -ne (Get-ChildItem -Path $TargetPath -Filter "*.xcodeproj" -Depth 1 -ErrorAction SilentlyContinue | Select-Object -First 1)
+    $hasXcworkspace = $null -ne (Get-ChildItem -Path $TargetPath -Filter "*.xcworkspace" -Depth 1 -ErrorAction SilentlyContinue | Select-Object -First 1)
 
     # Rust markers
     $hasCargoToml = Test-Path (Join-Path $TargetPath "Cargo.toml")
@@ -642,6 +876,10 @@ function Find-Preset([string]$TargetPath) {
     if ($hasGoMod) {
         Write-Host "  AUTO-DETECT  Found Go project markers" -ForegroundColor Magenta
         return 'go'
+    }
+    if ($hasPackageSwift -or $hasXcodeproj -or $hasXcworkspace) {
+        Write-Host "  AUTO-DETECT  Found Swift project markers" -ForegroundColor Magenta
+        return 'swift'
     }
     if ($hasCargoToml) {
         Write-Host "  AUTO-DETECT  Found Rust project markers" -ForegroundColor Magenta
@@ -695,7 +933,7 @@ if ($Preset.Count -eq 1 -and $Preset[0] -match ',') {
     $Preset = $Preset[0] -split ',' | ForEach-Object { $_.Trim() }
 }
 
-$validPresets = @('dotnet','typescript','python','java','go','azure-iac','custom')
+$validPresets = @('dotnet','typescript','python','java','go','swift','azure-iac','custom')
 foreach ($p in $Preset) {
     if ($p -notin $validPresets) {
         Write-Host "  ERROR  Unknown preset '$p'. Valid values: $($validPresets -join ', ')" -ForegroundColor Red
@@ -718,18 +956,20 @@ if (-not $Preset) {
                 Write-Host "  3) python      — Python / FastAPI / SQLAlchemy"
                 Write-Host "  4) java        — Java / Spring Boot / Gradle / Maven"
                 Write-Host "  5) go          — Go / Chi / Gin / Standard Library"
-                Write-Host "  6) azure-iac   — Azure Bicep / Terraform / PowerShell / azd"
-                Write-Host "  7) custom      — Shared files only (add your own instructions)"
+                Write-Host "  6) swift       — Swift / SwiftUI / iOS / Vapor"
+                Write-Host "  7) azure-iac   — Azure Bicep / Terraform / PowerShell / azd"
+                Write-Host "  8) custom      — Shared files only (add your own instructions)"
                 Write-Host ""
-                $choice = Get-PromptValue "Select preset (1-7 or name)" "1"
+                $choice = Get-PromptValue "Select preset (1-8 or name)" "1"
                 $Preset = switch ($choice) {
                     '1' { 'dotnet' }
                     '2' { 'typescript' }
                     '3' { 'python' }
                     '4' { 'java' }
                     '5' { 'go' }
-                    '6' { 'azure-iac' }
-                    '7' { 'custom' }
+                    '6' { 'swift' }
+                    '7' { 'azure-iac' }
+                    '8' { 'custom' }
                     default { $choice }
                 }
             }
@@ -743,18 +983,20 @@ if (-not $Preset) {
         Write-Host "  3) python      — Python / FastAPI / SQLAlchemy"
         Write-Host "  4) java        — Java / Spring Boot / Gradle / Maven"
         Write-Host "  5) go          — Go / Chi / Gin / Standard Library"
-        Write-Host "  6) azure-iac   — Azure Bicep / Terraform / PowerShell / azd"
-        Write-Host "  7) custom      — Shared files only (add your own instructions)"
+        Write-Host "  6) swift       — Swift / SwiftUI / iOS / Vapor"
+        Write-Host "  7) azure-iac   — Azure Bicep / Terraform / PowerShell / azd"
+        Write-Host "  8) custom      — Shared files only (add your own instructions)"
         Write-Host ""
-        $choice = Get-PromptValue "Select preset (1-7 or name)" "1"
+        $choice = Get-PromptValue "Select preset (1-8 or name)" "1"
         $Preset = switch ($choice) {
             '1' { 'dotnet' }
             '2' { 'typescript' }
             '3' { 'python' }
             '4' { 'java' }
             '5' { 'go' }
-            '6' { 'azure-iac' }
-            '7' { 'custom' }
+            '6' { 'swift' }
+            '7' { 'azure-iac' }
+            '8' { 'custom' }
             default { $choice }
         }
     }
@@ -768,6 +1010,7 @@ $stackLabel = if ($Preset.Count -gt 1) {
             'python'     { 'Python' }
             'java'       { 'Java' }
             'go'         { 'Go' }
+            'swift'      { 'Swift' }
             'azure-iac'  { 'Azure IaC' }
             'custom'     { 'Custom' }
         }
@@ -779,6 +1022,7 @@ $stackLabel = if ($Preset.Count -gt 1) {
         'python'     { 'Python / FastAPI' }
         'java'       { 'Java / Spring Boot' }
         'go'         { 'Go / Standard Library' }
+        'swift'      { 'Swift / SwiftUI / iOS / Vapor' }
         'azure-iac'  { 'Azure Bicep / Terraform / PowerShell / azd' }
         'custom'     { 'Custom (configure manually)' }
     }
@@ -794,6 +1038,7 @@ $defaultBuild = switch ($primaryPreset) {
     'python'     { 'python -m build' }
     'java'       { './gradlew build' }
     'go'         { 'go build ./...' }
+    'swift'      { 'swift build' }
     'azure-iac'  { 'az bicep build --file infra/main.bicep' }
     'custom'     { '' }
 }
@@ -803,6 +1048,7 @@ $defaultTest = switch ($primaryPreset) {
     'python'     { 'pytest' }
     'java'       { './gradlew test' }
     'go'         { 'go test ./...' }
+    'swift'      { 'swift test' }
     'azure-iac'  { 'Invoke-Pester -Path ./tests -Output Detailed' }
     'custom'     { '' }
 }
@@ -812,6 +1058,7 @@ $defaultLint = switch ($primaryPreset) {
     'python'     { 'ruff check .' }
     'java'       { './gradlew spotlessCheck' }
     'go'         { 'golangci-lint run' }
+    'swift'      { 'swift package plugin --allow-writing-to-package-directory swiftlint' }
     'azure-iac'  { 'az bicep lint --file infra/main.bicep' }
     'custom'     { '' }
 }
@@ -1160,7 +1407,7 @@ if (Test-Path $vscodeSrc) {
 # ─── Step 6b: Install Agent Adapters ───────────────────────────────────
 $agents = $Agent
 if ($agents -contains 'all') {
-    $agents = @('copilot', 'claude', 'cursor', 'codex', 'gemini')
+    $agents = @('copilot', 'claude', 'cursor', 'windsurf', 'codex', 'gemini', 'generic')
 }
 # Copilot files are already installed (the default). Only run adapters for others.
 $extraAgents = $agents | Where-Object { $_ -ne 'copilot' }
@@ -1171,10 +1418,12 @@ if ($extraAgents.Count -gt 0) {
 
     foreach ($ag in $extraAgents) {
         switch ($ag) {
-            'claude' { Install-ClaudeAgent $ProjectPath }
-            'cursor' { Install-CursorAgent $ProjectPath }
-            'codex'  { Install-CodexAgent $ProjectPath }
-            'gemini' { Install-GeminiAgent $ProjectPath }
+            'claude'    { Install-ClaudeAgent $ProjectPath }
+            'cursor'    { Install-CursorAgent $ProjectPath }
+            'windsurf'  { Install-WindsurfAgent $ProjectPath }
+            'codex'     { Install-CodexAgent $ProjectPath }
+            'gemini'    { Install-GeminiAgent $ProjectPath }
+            'generic'   { Install-GenericAgent $ProjectPath $GenericDir }
         }
     }
 }

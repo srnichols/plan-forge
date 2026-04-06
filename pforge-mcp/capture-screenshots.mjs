@@ -298,28 +298,20 @@ async function main() {
   await page.waitForTimeout(1500);
   await page.screenshot({ path: resolve(OUTPUT_DIR, "replay.png"), fullPage: false });
 
-  // ─── 10. Extensions tab + Install buttons (v2.7) ─────────────────────
+  // ─── 10. Extensions tab (v2.7) ───────────────────────────────────────
   console.log("Capturing Extensions tab...");
   await clickTab(page, "extensions");
   await page.waitForTimeout(2000);
-  // Inject install/uninstall button state on extension cards
+  // Mark first extension as installed (renderExtensions already has Install/Uninstall buttons)
   await page.evaluate(() => {
-    const cards = document.querySelectorAll('#tab-extensions .bg-gray-800');
-    cards.forEach((card, i) => {
-      // Find existing buttons area or add one
-      let btnArea = card.querySelector('.ext-install-btn');
-      if (!btnArea) {
-        btnArea = document.createElement('div');
-        btnArea.className = 'mt-2 pt-2 border-t border-gray-700/50';
-        if (i === 0) {
-          // First extension shown as "installed"
-          btnArea.innerHTML = '<button class="text-xs px-3 py-1 bg-red-600/20 text-red-400 border border-red-600/30 rounded hover:bg-red-600/30">Uninstall</button><span class="text-xs text-green-400 ml-2">✓ Installed</span>';
-        } else {
-          btnArea.innerHTML = '<button class="text-xs px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded">Install</button>';
-        }
-        card.appendChild(btnArea);
+    const firstCard = document.querySelector('#tab-extensions .bg-gray-800');
+    if (firstCard) {
+      const btn = firstCard.querySelector('.ext-btn');
+      if (btn) {
+        btn.textContent = 'Uninstall';
+        btn.className = 'ext-btn text-xs px-2 py-1 rounded bg-red-600/20 text-red-400 border border-red-600/30 hover:bg-red-600/40';
       }
-    });
+    }
   });
   await page.waitForTimeout(300);
   await page.screenshot({ path: resolve(OUTPUT_DIR, "extensions.png"), fullPage: false });

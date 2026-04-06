@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Plan Forge — Project Setup Wizard
 

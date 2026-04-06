@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Validates that Plan Forge setup completed correctly.
 

@@ -82,6 +82,7 @@
         <span class="px-3 py-1 rounded-full bg-purple-500/20 text-purple-400 border border-purple-500/30">Session Replay</span>
         <span class="px-3 py-1 rounded-full bg-forge-500/20 text-forge-400 border border-forge-500/30">OTLP Traces</span>
         <span class="px-3 py-1 rounded-full bg-red-500/20 text-red-400 border border-red-500/30">Quorum Actions</span>
+        <span class="px-3 py-1 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">OpenBrain Memory</span>
       </div>
     </div>
   </section>
@@ -175,10 +176,10 @@
           <span class="shrink-0 w-10 h-10 rounded-xl bg-slate-500/20 flex items-center justify-center text-slate-400 text-lg">⚙️</span>
           <div>
             <h2 class="text-2xl font-bold text-white">Config</h2>
-            <p class="text-slate-400 mt-1">View and edit project configuration without touching files. Set the active preset, template version, enabled agents (Claude, Cursor, Codex), and default model routing. The <strong>API Providers</strong> section shows which external model providers are configured — set <code class="text-forge-400 text-sm">XAI_API_KEY</code> to enable Grok models (grok-4, grok-3, grok-3-mini). Changes save to <code class="text-forge-400 text-sm">.forge/config.json</code>.</p>
+            <p class="text-slate-400 mt-1">View and edit project configuration without touching files. Set the active preset, template version, enabled agents (Claude, Cursor, Codex, Grok), and default model routing. The <strong>API Providers</strong> section shows which external model providers are configured — set <code class="text-forge-400 text-sm">XAI_API_KEY</code> to enable Grok models (grok-4, grok-3, grok-3-mini). The <strong>OpenBrain Memory</strong> section shows whether the OpenBrain MCP server is connected for persistent project memory. Changes save to <code class="text-forge-400 text-sm">.forge/config.json</code>.</p>
           </div>
         </div>
-        <img src="assets/dashboard/config.png" alt="Dashboard Config tab showing preset, agents, model routing, and API providers" class="w-full rounded-xl border border-slate-700/40 shadow-2xl" loading="lazy" />
+        <img src="assets/dashboard/config.png" alt="Dashboard Config tab showing preset, agents, model routing, API providers, and OpenBrain memory status" class="w-full rounded-xl border border-slate-700/40 shadow-2xl" loading="lazy" />
       </div>
 
       <!-- Traces -->

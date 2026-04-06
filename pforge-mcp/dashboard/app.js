@@ -636,6 +636,7 @@ async function loadConfig() {
 
     // Check API provider availability
     loadApiProviderStatus();
+    loadOpenBrainStatus();
   } catch (err) {
     document.getElementById("cfg-status").textContent = `Error: ${err.message}`;
   }
@@ -658,6 +659,23 @@ async function loadApiProviderStatus() {
       el.innerHTML = '<span class="text-green-400">xAI Grok</span> <span class="text-gray-500">— XAI_API_KEY configured</span>';
     } else {
       el.innerHTML = '<span class="text-gray-500">No API providers detected. Set XAI_API_KEY for Grok models.</span>';
+    }
+  } catch {
+    el.textContent = "Unable to check";
+  }
+}
+
+async function loadOpenBrainStatus() {
+  const el = document.getElementById("cfg-openbrain");
+  if (!el) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/memory`);
+    const data = await res.json();
+    if (data.configured) {
+      el.innerHTML = `<span class="text-green-400">✓ Connected</span> <span class="text-gray-500">— ${data.serverName || "openbrain"}</span>`
+        + (data.endpoint ? `<br><span class="text-xs text-gray-500">${data.endpoint}</span>` : "");
+    } else {
+      el.innerHTML = '<span class="text-gray-500">Not configured. Add openbrain MCP server to enable project memory.</span>';
     }
   } catch {
     el.textContent = "Unable to check";

@@ -25,6 +25,7 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve, join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parsePlan, runPlan, detectWorkers, getCostReport, analyzeWithQuorum } from "./orchestrator.mjs";
+import { isOpenBrainConfigured } from "./memory.mjs";
 import { createHub, readHubPort } from "./hub.mjs";
 import { buildCapabilitySurface, writeToolsJson, writeCliSchema } from "./capabilities.mjs";
 import { readRunIndex } from "./telemetry.mjs";
@@ -742,6 +743,36 @@ function createExpressApp() {
       } else {
         res.json([]);
       }
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // v2.7: OpenBrain memory status API
+  app.get("/api/memory", (_req, res) => {
+    try {
+      const configured = isOpenBrainConfigured(PROJECT_DIR);
+      const result = { configured, endpoint: null, serverName: null };
+      if (configured) {
+        // Extract endpoint from mcp.json
+        for (const configFile of [".vscode/mcp.json", ".claude/mcp.json"]) {
+          const configPath = join(PROJECT_DIR, configFile);
+          if (existsSync(configPath)) {
+            try {
+              const config = JSON.parse(readFileSync(configPath, "utf-8"));
+              const servers = config.servers || config.mcpServers || {};
+              for (const [name, server] of Object.entries(servers)) {
+                const serverStr = JSON.stringify(server).toLowerCase();
+                if (serverStr.includes("openbrain") || serverStr.includes("open-brain")) {
+                  result.serverName = name;
+                  result.endpoint = server.url || server.command || null;
+                  break;
+                }
+              }
+            } catch { /* ignore parse errors */ }
+          }
+          if (result.endpoint) break;
+        }
+      }
+      res.json(result);
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 

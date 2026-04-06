@@ -7,7 +7,7 @@
 
 ## Current Release
 
-**v2.9.0** (2026-04-06) — Dashboard v2.9 Full Capability Surface: 5 bug fixes, memory search redesign, run launch panel, DAG visualizer, event log, tab badges, duration chart, trace search, worker detection, notification sound. Plus: image generation (WebP/AVIF), expanded smith diagnostics, MCP schema files.
+**v2.10.0** (2026-04-06) — OpenClaw Bridge: Telegram/Slack/Discord notifications, approval gate state machine, 4 platform formatters. Plus: Security Audit skill, Gemini CLI adapter, Rust + PHP presets, community walkthroughs, extension registry.
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 
@@ -316,13 +316,9 @@ Shipped. Dispatches high-complexity slices to multiple AI models in parallel dry
 - **Dashboard indicators** — quorum status visible on Progress tab; dry-run responses browsable in Replay tab
 - **Configuration** — `.forge.json` `quorum` block: `enabled`, `auto`, `threshold`, `models[]`, `reviewerModel`
 
-### v2.6 — OpenClaw Bridge 🚧
+### v2.6 — OpenClaw Bridge ✅
 
-Connect autonomous execution to the unified system architecture.
-
-- **Trigger from anywhere** — Slack, WhatsApp, Telegram, Discord, phone, terminal
-- **Progress notifications** — "Slice 3 of 8 complete. Build passed. Score: 91."
-- **Approval gates** — "Phase 7 ready to ship. Approve?" → reply "yes" from Telegram or Slack
+Shipped in v2.10.0. Telegram/Slack/Discord webhook notifications, approval gate state machine, 4 platform formatters, REST endpoints.
 - **OpenBrain context** — orchestrator loads full project history before spawning workers
 
 ### v3.0 — Multi-Agent Orchestration

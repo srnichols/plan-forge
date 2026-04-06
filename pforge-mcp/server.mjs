@@ -285,7 +285,7 @@ const TOOLS = [
       properties: {
         prompt: { type: "string", description: "Detailed text description of the image to generate. Be specific about style, colors, composition, and content." },
         outputPath: { type: "string", description: "File path to save the image (relative to project dir). e.g., 'assets/logo.png', 'docs/diagram.png'" },
-        model: { type: "string", description: "Image model to use. Default: grok-2-image", enum: ["grok-2-image", "grok-2-image-latest", "dall-e-3", "dall-e-4", "gpt-image-1"] },
+        model: { type: "string", description: "Image model to use. Default: grok-imagine-image", enum: ["grok-imagine-image", "grok-imagine-image-pro", "dall-e-3", "dall-e-4", "gpt-image-1"] },
         size: { type: "string", description: "Image dimensions. Default: 1024x1024", enum: ["1024x1024", "1024x768", "768x1024"] },
         path: { type: "string", description: "Project directory (default: current)" },
       },
@@ -582,22 +582,27 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
       const result = await generateImage(args.prompt, {
-        model: args.model || "grok-2-image",
+        model: args.model || "grok-imagine-image",
         size: args.size || "1024x1024",
         outputPath: args.outputPath,
         cwd,
       });
 
       if (result.success) {
+        const payload = {
+          status: "generated",
+          localPath: result.localPath,
+          mimeType: result.mimeType,
+          model: result.model,
+          revisedPrompt: result.revisedPrompt,
+        };
+        if (result.extensionCorrected) {
+          payload.warning = `File extension was corrected from requested path '${result.requestedPath}' to '${result.localPath}' to match the actual image format (${result.mimeType}). This prevents MIME type mismatch errors.`;
+        }
         return {
           content: [{
             type: "text",
-            text: JSON.stringify({
-              status: "generated",
-              localPath: result.localPath,
-              model: result.model,
-              revisedPrompt: result.revisedPrompt,
-            }, null, 2),
+            text: JSON.stringify(payload, null, 2),
           }],
         };
       }

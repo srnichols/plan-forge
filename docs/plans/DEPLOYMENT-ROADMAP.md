@@ -58,6 +58,13 @@
 **Plan**: [Phase-8-SKILL-UPGRADE-PLAN.md](./Phase-8-SKILL-UPGRADE-PLAN.md)
 **Status**: ✅ Complete
 
+---
+
+### Phase 9: Dashboard Enhancement — Low-Hanging Fruit GUI Tools
+**Goal**: Add plan browser with estimate/run, git operation buttons (branch, commit, diff), sweep table view, model performance comparison, and phase status editor to the dashboard
+**Plan**: [Phase-9-DASHBOARD-ENHANCEMENT-PLAN.md](./Phase-9-DASHBOARD-ENHANCEMENT-PLAN.md)
+**Status**: 🚧 In Progress
+
 ## Completed Phases
 
 <!-- Move phases here when they reach ✅ Complete status -->

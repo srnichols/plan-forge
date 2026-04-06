@@ -459,15 +459,25 @@ let catalogData = [];
 
 async function loadExtensions() {
   try {
-    const res = await fetch(`${API_BASE}/api/tool/ext`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ args: "search" }),
-    });
-    const data = await res.json();
-    // Parse the CLI output into cards (best-effort)
-    const output = data.output || "";
-    catalogData = output.split("\n").filter((l) => l.trim()).map((l) => ({ raw: l }));
+    // Try structured JSON endpoint first, fall back to CLI
+    let items = [];
+    try {
+      const res = await fetch(`${API_BASE}/api/extensions`);
+      if (res.ok) items = await res.json();
+    } catch { /* fall through */ }
+
+    if (items.length > 0) {
+      catalogData = items;
+    } else {
+      const res = await fetch(`${API_BASE}/api/tool/ext`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ args: "search" }),
+      });
+      const data = await res.json();
+      const output = data.output || "";
+      catalogData = output.split("\n").filter((l) => l.trim()).map((l) => ({ raw: l }));
+    }
     renderExtensions(catalogData);
   } catch {
     document.getElementById("ext-cards").innerHTML = '<div class="text-gray-500 text-center py-12">Failed to load catalog</div>';
@@ -480,16 +490,45 @@ function renderExtensions(items) {
     container.innerHTML = '<div class="text-gray-500 text-center py-12">No extensions found</div>';
     return;
   }
-  container.innerHTML = items.map((ext) => `
-    <div class="bg-gray-800 rounded-lg p-4 border border-gray-700 hover:border-gray-600 transition">
-      <p class="text-sm text-gray-300">${ext.raw}</p>
-    </div>
-  `).join("");
+  container.innerHTML = items.map((ext) => {
+    // Structured catalog JSON item
+    if (ext.name && ext.description) {
+      const provides = ext.provides || {};
+      const badges = [];
+      if (provides.agents) badges.push(`${provides.agents} agent${provides.agents > 1 ? "s" : ""}`);
+      if (provides.instructions) badges.push(`${provides.instructions} instruction${provides.instructions > 1 ? "s" : ""}`);
+      if (provides.prompts) badges.push(`${provides.prompts} prompt${provides.prompts > 1 ? "s" : ""}`);
+      if (provides.skills) badges.push(`${provides.skills} skill${provides.skills > 1 ? "s" : ""}`);
+      const tagColor = ext.category === "integration" ? "purple" : "blue";
+      return `
+        <div class="bg-gray-800 rounded-lg p-4 border border-gray-700 hover:border-gray-500 transition">
+          <div class="flex items-start justify-between mb-2">
+            <h3 class="font-semibold text-white text-sm">${ext.name}</h3>
+            <span class="text-xs px-2 py-0.5 rounded-full bg-${tagColor}-500/20 text-${tagColor}-400 border border-${tagColor}-500/30">${ext.category || "code"}</span>
+          </div>
+          <p class="text-xs text-gray-400 mb-3">${ext.description}</p>
+          <div class="flex items-center justify-between">
+            <div class="flex gap-1 flex-wrap">${badges.map((b) => `<span class="text-xs bg-gray-700 text-gray-300 px-1.5 py-0.5 rounded">${b}</span>`).join("")}</div>
+            <span class="text-xs text-gray-500">v${ext.version || "1.0.0"}</span>
+          </div>
+          ${ext.author ? `<p class="text-xs text-gray-600 mt-2">by ${ext.author}${ext.verified ? ' <span class="text-green-400">✓</span>' : ""}</p>` : ""}
+        </div>`;
+    }
+    // Fallback: raw CLI text
+    return `
+      <div class="bg-gray-800 rounded-lg p-4 border border-gray-700 hover:border-gray-600 transition">
+        <p class="text-sm text-gray-300">${ext.raw}</p>
+      </div>`;
+  }).join("");
 }
 
 function filterExtensions() {
   const q = document.getElementById("ext-search").value.toLowerCase();
-  renderExtensions(q ? catalogData.filter((e) => e.raw.toLowerCase().includes(q)) : catalogData);
+  renderExtensions(q ? catalogData.filter((e) =>
+    (e.name || e.raw || "").toLowerCase().includes(q) ||
+    (e.description || "").toLowerCase().includes(q) ||
+    (e.tags || []).some((t) => t.includes(q))
+  ) : catalogData);
 }
 
 window.filterExtensions = filterExtensions;

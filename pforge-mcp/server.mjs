@@ -731,6 +731,20 @@ function createExpressApp() {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
+  // v2.6: Extensions catalog API (structured JSON)
+  app.get("/api/extensions", (_req, res) => {
+    try {
+      const catalogPath = join(PROJECT_DIR, "extensions", "catalog.json");
+      if (existsSync(catalogPath)) {
+        const catalog = JSON.parse(readFileSync(catalogPath, "utf-8"));
+        const extensions = catalog.extensions || {};
+        res.json(Object.values(extensions));
+      } else {
+        res.json([]);
+      }
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
   return app;
 }
 

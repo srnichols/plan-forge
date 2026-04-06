@@ -448,9 +448,10 @@ function Invoke-Ext {
         'install' { Invoke-ExtInstall $extArgs }
         'list'    { Invoke-ExtList }
         'remove'  { Invoke-ExtRemove $extArgs }
+        'publish' { Invoke-ExtPublish $extArgs }
         default   {
             Write-Host "ERROR: Unknown ext command: $subCmd" -ForegroundColor Red
-            Write-Host "  Available: search, add, info, install, list, remove" -ForegroundColor Yellow
+            Write-Host "  Available: search, add, info, install, list, remove, publish" -ForegroundColor Yellow
         }
     }
 }
@@ -873,6 +874,106 @@ function Invoke-ExtRemove([string[]]$args_) {
 
     Write-Host ""
     Write-Host "Extension '$extName' removed." -ForegroundColor Green
+}
+
+function Invoke-ExtPublish([string[]]$args_) {
+    if (-not $args_ -or $args_.Count -eq 0) {
+        Write-Host "ERROR: Extension path required." -ForegroundColor Red
+        Write-Host "  Usage: pforge ext publish <path-to-extension>" -ForegroundColor Yellow
+        exit 1
+    }
+
+    $extPath = $args_[0]
+    if (-not (Test-Path $extPath)) {
+        $extPath = Join-Path $RepoRoot $extPath
+    }
+
+    $manifestPath = Join-Path $extPath "extension.json"
+    if (-not (Test-Path $manifestPath)) {
+        Write-Host "ERROR: extension.json not found in $extPath" -ForegroundColor Red
+        exit 1
+    }
+
+    $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
+
+    # Validate required fields
+    $required = @('name', 'version', 'description', 'author')
+    foreach ($field in $required) {
+        if (-not $manifest.$field) {
+            Write-Host "ERROR: extension.json is missing required field: '$field'" -ForegroundColor Red
+            exit 1
+        }
+    }
+
+    $extId = $manifest.name
+    $now   = (Get-Date -Format 'yyyy-MM-ddTHH:mm:ssZ')
+
+    # Count artifact files from the extension's subdirectories
+    $countDir = {
+        param($subDir)
+        $dir = Join-Path $extPath $subDir
+        if (Test-Path $dir) { @(Get-ChildItem -Path $dir -File -ErrorAction SilentlyContinue).Count } else { 0 }
+    }
+
+    $instructionCount = & $countDir 'instructions'
+    $agentCount       = & $countDir 'agents'
+    $promptCount      = & $countDir 'prompts'
+    $skillCount       = & $countDir 'skills'
+
+    # Fall back to manifest.files arrays when directories are absent
+    if ($instructionCount -eq 0 -and $manifest.files.instructions) { $instructionCount = @($manifest.files.instructions).Count }
+    if ($agentCount       -eq 0 -and $manifest.files.agents)       { $agentCount       = @($manifest.files.agents).Count }
+    if ($promptCount      -eq 0 -and $manifest.files.prompts)      { $promptCount      = @($manifest.files.prompts).Count }
+
+    $minVersion = if ($manifest.minTemplateVersion) { $manifest.minTemplateVersion } else { "1.2.0" }
+    if ($minVersion -notmatch '>=') { $minVersion = ">=$minVersion" }
+
+    $repoUrl = if ($manifest.repository) { $manifest.repository } else { "https://github.com/<you>/<your-extension>" }
+
+    $catalogEntry = [ordered]@{
+        name               = if ($manifest.displayName) { $manifest.displayName } else { $extId }
+        id                 = $extId
+        description        = $manifest.description
+        author             = $manifest.author
+        version            = $manifest.version
+        download_url       = if ($manifest.download_url) { $manifest.download_url } else { "$repoUrl/archive/refs/tags/v$($manifest.version).zip" }
+        repository         = $repoUrl
+        license            = if ($manifest.license) { $manifest.license } else { "MIT" }
+        category           = if ($manifest.category) { $manifest.category } else { "code" }
+        effect             = if ($manifest.effect) { $manifest.effect } else { "Read+Write" }
+        requires           = [ordered]@{ planforge_version = $minVersion }
+        provides           = [ordered]@{
+            instructions = $instructionCount
+            agents       = $agentCount
+            prompts      = $promptCount
+            skills       = $skillCount
+        }
+        tags               = if ($manifest.tags) { $manifest.tags } else { @() }
+        speckit_compatible = if ($null -ne $manifest.speckit_compatible) { $manifest.speckit_compatible } else { $false }
+        verified           = $false
+        created_at         = $now
+        updated_at         = $now
+    }
+
+    $jsonEntry = $catalogEntry | ConvertTo-Json -Depth 5
+
+    Write-Host ""
+    Write-Host "╔══════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+    Write-Host "║  Catalog Entry: $extId" -ForegroundColor Cyan
+    Write-Host "╚══════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "Add the following entry to extensions/catalog.json:" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host """$extId"": $jsonEntry" -ForegroundColor White
+    Write-Host ""
+    Write-Host "─────────────────────────────────────────────────────────────" -ForegroundColor DarkGray
+    Write-Host "Next steps to publish:" -ForegroundColor Cyan
+    Write-Host "  1. Fork   https://github.com/srnichols/plan-forge" -ForegroundColor White
+    Write-Host "  2. Edit   extensions/catalog.json — add the entry above" -ForegroundColor White
+    Write-Host "  3. Open PR with title: feat(catalog): add $extId" -ForegroundColor White
+    Write-Host "  4. Link to your extension's repository in the PR description" -ForegroundColor White
+    Write-Host ""
+    Write-Host "See extensions/PUBLISHING.md for full submission guidelines." -ForegroundColor DarkGray
 }
 
 # ─── Command: sweep ────────────────────────────────────────────────────

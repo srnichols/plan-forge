@@ -338,31 +338,160 @@ function topologicalSort(nodes) {
   return order;
 }
 
+// ─── API Provider Registry ────────────────────────────────────────────
+
+/**
+ * Registry of API-based model providers (OpenAI-compatible endpoints).
+ * Each provider maps a model name pattern to an API endpoint + env var for the key.
+ * Models matching a provider pattern are dispatched via HTTP instead of CLI.
+ */
+const API_PROVIDERS = {
+  xai: {
+    pattern: /^grok-/,
+    baseUrl: "https://api.x.ai/v1",
+    envKey: "XAI_API_KEY",
+    label: "xAI Grok",
+  },
+  // Future providers:
+  // anthropic: { pattern: /^claude-/, baseUrl: "https://api.anthropic.com/v1", envKey: "ANTHROPIC_API_KEY", label: "Anthropic Direct" },
+  // openai: { pattern: /^gpt-/, baseUrl: "https://api.openai.com/v1", envKey: "OPENAI_API_KEY", label: "OpenAI Direct" },
+};
+
+/**
+ * Detect which API provider (if any) handles a given model name.
+ * @param {string} model - Model identifier (e.g., "grok-3-mini")
+ * @returns {{ name, baseUrl, apiKey, label } | null}
+ */
+function detectApiProvider(model) {
+  if (!model) return null;
+  for (const [name, provider] of Object.entries(API_PROVIDERS)) {
+    if (provider.pattern.test(model)) {
+      const apiKey = process.env[provider.envKey];
+      if (apiKey) return { name, baseUrl: provider.baseUrl, apiKey, label: provider.label };
+      return null; // Model matches but no API key configured
+    }
+  }
+  return null;
+}
+
+/**
+ * Call an OpenAI-compatible API endpoint directly (no CLI).
+ * Used for API-based providers (xAI Grok, etc.) in quorum and analysis modes.
+ *
+ * @param {string} prompt - The prompt text
+ * @param {string} model - Model identifier
+ * @param {{ name, baseUrl, apiKey, label }} provider - Resolved provider
+ * @param {object} options - { timeout }
+ * @returns {Promise<{ output, stderr, jsonlEvents, exitCode, timedOut, tokens, worker, model }>}
+ */
+async function callApiWorker(prompt, model, provider, options = {}) {
+  const { timeout = 300_000 } = options;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeout);
+
+  try {
+    const response = await fetch(`${provider.baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${provider.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "user", content: prompt }],
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timer);
+
+    if (!response.ok) {
+      const errBody = await response.text();
+      throw new Error(`${provider.label} API error ${response.status}: ${errBody}`);
+    }
+
+    const data = await response.json();
+    const choice = data.choices?.[0];
+    const usage = data.usage || {};
+    const completionDetails = usage.completion_tokens_details || {};
+
+    return {
+      output: choice?.message?.content || "",
+      stderr: "",
+      jsonlEvents: [],
+      exitCode: 0,
+      timedOut: false,
+      tokens: {
+        tokens_in: usage.prompt_tokens || 0,
+        tokens_out: usage.completion_tokens || 0,
+        model: data.model || model,
+        premiumRequests: 0,
+        apiDurationMs: 0,
+        sessionDurationMs: 0,
+        codeChanges: null,
+        reasoning_tokens: completionDetails.reasoning_tokens || 0,
+      },
+      worker: `api-${provider.name}`,
+      model: data.model || model,
+    };
+  } catch (err) {
+    clearTimeout(timer);
+    if (err.name === "AbortError") {
+      return {
+        output: "",
+        stderr: `${provider.label} API call timed out after ${timeout}ms`,
+        jsonlEvents: [],
+        exitCode: -1,
+        timedOut: true,
+        tokens: { tokens_in: 0, tokens_out: 0, model },
+        worker: `api-${provider.name}`,
+        model,
+      };
+    }
+    throw err;
+  }
+}
+
 // ─── Worker Spawning ──────────────────────────────────────────────────
 
 /**
- * Detect available CLI workers in priority order.
- * @returns {{ name: string, available: boolean }[]}
+ * Detect available workers (CLI + API providers).
+ * @returns {{ name: string, available: boolean, type: "cli"|"api" }[]}
  */
 export function detectWorkers() {
-  const workers = [
+  const cliWorkers = [
     { name: "gh-copilot", command: "gh", args: ["copilot", "--", "--version"] },
     { name: "claude", command: "claude", args: ["--version"] },
     { name: "codex", command: "codex", args: ["--version"] },
   ];
 
-  return workers.map((w) => {
+  const results = cliWorkers.map((w) => {
     try {
       execSync(`${w.command} ${w.args.join(" ")}`, {
         encoding: "utf-8",
         timeout: 10_000,
         stdio: "pipe",
       });
-      return { name: w.name, available: true };
+      return { name: w.name, available: true, type: "cli" };
     } catch {
-      return { name: w.name, available: false };
+      return { name: w.name, available: false, type: "cli" };
     }
   });
+
+  // Detect API providers
+  for (const [name, provider] of Object.entries(API_PROVIDERS)) {
+    const apiKey = process.env[provider.envKey];
+    results.push({
+      name: `api-${name}`,
+      available: !!apiKey,
+      type: "api",
+      label: provider.label,
+      models: provider.pattern.toString(),
+    });
+  }
+
+  return results;
 }
 
 /**
@@ -383,8 +512,14 @@ export function spawnWorker(prompt, options = {}) {
     worker = null,     // override worker choice
   } = options;
 
+  // Route API-based models (e.g., grok-*) to HTTP provider instead of CLI
+  const apiProvider = model ? detectApiProvider(model) : null;
+  if (apiProvider) {
+    return callApiWorker(prompt, model, apiProvider, { timeout });
+  }
+
   return new Promise((workerResolve, workerReject) => {
-    const workers = worker ? [{ name: worker }] : detectWorkers().filter((w) => w.available);
+    const workers = worker ? [{ name: worker }] : detectWorkers().filter((w) => w.available && w.type !== "api");
     if (workers.length === 0) {
       workerReject(new Error("No CLI workers available. Install gh copilot, claude, or codex CLI."));
       return;
@@ -1860,6 +1995,244 @@ export async function quorumReview(dispatchResult, slice, config, options = {}) 
   }
 }
 
+// ─── Quorum Analysis ─────────────────────────────────────────────────
+
+/**
+ * Multi-model analysis of a plan or file.
+ * Dispatches independent analysis to N models, then synthesizes findings.
+ *
+ * Modes:
+ *   - plan: Analyze a hardened plan for consistency, coverage gaps, risk
+ *   - file: Analyze source file(s) for bugs, patterns, improvements
+ *
+ * @param {object} options - { target, mode, models, cwd }
+ * @returns {Promise<{ results, synthesis, cost }>}
+ */
+export async function analyzeWithQuorum(options = {}) {
+  const {
+    target,
+    mode = "plan",   // "plan" | "file" | "diagnose"
+    models = null,
+    cwd = process.cwd(),
+  } = options;
+
+  const config = loadQuorumConfig(cwd);
+  const analyzeModels = models || config.models;
+
+  // Build analysis prompt based on mode
+  let content;
+  try {
+    content = readFileSync(resolve(cwd, target), "utf-8");
+  } catch (err) {
+    throw new Error(`Cannot read analysis target: ${target} — ${err.message}`);
+  }
+
+  const prompt = mode === "plan"
+    ? buildPlanAnalysisPrompt(content, target)
+    : mode === "diagnose"
+      ? buildDiagnosePrompt(content, target)
+      : buildFileAnalysisPrompt(content, target);
+
+  console.log(`\n🗳️  Quorum Analysis — dispatching to ${analyzeModels.length} models...`);
+  console.log(`   Target: ${target} (${mode} mode)`);
+  console.log(`   Models: ${analyzeModels.join(", ")}\n`);
+
+  // Dispatch to all models in parallel
+  const startTime = Date.now();
+  const promises = analyzeModels.map(async (model) => {
+    const legStart = Date.now();
+    console.log(`   ⏳ ${model} — analyzing...`);
+    try {
+      const result = await spawnWorker(prompt, {
+        model,
+        cwd,
+        timeout: config.dryRunTimeout || 300_000,
+      });
+      const duration = Date.now() - legStart;
+      console.log(`   ✅ ${model} — done (${Math.round(duration / 1000)}s)`);
+      return {
+        model,
+        output: result.output || "",
+        tokens: result.tokens,
+        duration,
+        success: (result.output || "").trim().length > 50,
+        worker: result.worker,
+      };
+    } catch (err) {
+      const duration = Date.now() - legStart;
+      console.log(`   ❌ ${model} — failed: ${err.message}`);
+      return {
+        model,
+        output: "",
+        tokens: { tokens_in: 0, tokens_out: 0, model },
+        duration,
+        success: false,
+        error: err.message,
+        worker: "failed",
+      };
+    }
+  });
+
+  const results = await Promise.all(promises);
+  const successful = results.filter((r) => r.success);
+  const totalDuration = Date.now() - startTime;
+
+  console.log(`\n   📊 ${successful.length}/${results.length} models returned results (${Math.round(totalDuration / 1000)}s total)`);
+
+  // Synthesize findings if we have 2+ responses
+  let synthesis = null;
+  let synthesisCost = 0;
+  if (successful.length >= 2) {
+    console.log(`   🔄 Synthesizing with ${config.reviewerModel}...`);
+    const synthPrompt = buildAnalysisSynthesisPrompt(successful, target, mode);
+    try {
+      const synthResult = await spawnWorker(synthPrompt, {
+        model: config.reviewerModel,
+        cwd,
+        timeout: config.dryRunTimeout || 300_000,
+      });
+      synthesis = synthResult.output || "";
+      synthesisCost = calculateSliceCost(synthResult.tokens).cost_usd;
+      console.log(`   ✅ Synthesis complete`);
+    } catch (err) {
+      console.log(`   ⚠️  Synthesis failed: ${err.message} — returning raw results`);
+    }
+  } else if (successful.length === 1) {
+    synthesis = successful[0].output;
+  }
+
+  // Calculate total cost
+  let totalCost = synthesisCost;
+  for (const r of results) {
+    totalCost += calculateSliceCost(r.tokens).cost_usd;
+  }
+
+  return {
+    target,
+    mode,
+    models: analyzeModels,
+    results: results.map((r) => ({
+      model: r.model,
+      output: r.output,
+      duration: r.duration,
+      success: r.success,
+      worker: r.worker,
+      cost: calculateSliceCost(r.tokens).cost_usd,
+      error: r.error,
+    })),
+    synthesis,
+    totalDuration,
+    totalCost: Math.round(totalCost * 100) / 100,
+    timestamp: new Date().toISOString(),
+  };
+}
+
+/**
+ * Build analysis prompt for a hardened plan file.
+ */
+function buildPlanAnalysisPrompt(content, filename) {
+  return [
+    "You are a senior software architect performing an independent code review of a hardened execution plan.",
+    "Analyze the following plan and report on:",
+    "",
+    "1. **Consistency**: Are slice dependencies correct? Do scopes overlap or conflict?",
+    "2. **Coverage Gaps**: Are there untested edge cases, missing error handlers, or validation gaps?",
+    "3. **Risk Assessment**: Which slices have the highest failure risk and why?",
+    "4. **Naming & Style**: Are naming conventions consistent across slices?",
+    "5. **Security**: Any security concerns in the planned implementation?",
+    "6. **Improvement Suggestions**: Concrete, actionable improvements.",
+    "",
+    "Format your response as structured Markdown with clear headings for each category.",
+    "Rate each category as: ✅ Good | ⚠️ Needs Attention | ❌ Critical Issue",
+    "End with an overall confidence score (1-10) for plan readiness.",
+    "",
+    `--- PLAN: ${filename} ---`,
+    content,
+  ].join("\n");
+}
+
+/**
+ * Build analysis prompt for source file(s).
+ */
+function buildFileAnalysisPrompt(content, filename) {
+  return [
+    "You are a senior software engineer performing an independent code review.",
+    "Analyze the following file and report on:",
+    "",
+    "1. **Bugs**: Logic errors, null reference risks, race conditions, off-by-one errors",
+    "2. **Security**: Input validation gaps, injection risks, auth issues, secret exposure",
+    "3. **Performance**: Hot paths, unnecessary allocations, N+1 queries, missing caching",
+    "4. **Architecture**: Separation of concerns, testability, coupling issues",
+    "5. **Error Handling**: Missing error handlers, swallowed exceptions, incomplete recovery",
+    "6. **Improvements**: Concrete, actionable fixes with code snippets where helpful",
+    "",
+    "Format your response as structured Markdown with clear headings.",
+    "Rate each category as: ✅ Good | ⚠️ Needs Attention | ❌ Critical Issue",
+    "End with an overall code quality score (1-10).",
+    "",
+    `--- FILE: ${filename} ---`,
+    content,
+  ].join("\n");
+}
+
+/**
+ * Build diagnosis prompt for bug investigation.
+ * Focused on root cause analysis, failure modes, and fix recommendations.
+ */
+function buildDiagnosePrompt(content, filename) {
+  return [
+    "You are a senior software engineer performing a focused bug investigation.",
+    "The user suspects there may be bugs or reliability issues in this file.",
+    "Investigate thoroughly and report on:",
+    "",
+    "1. **Root Cause Analysis**: What bugs exist? Trace the exact code path for each.",
+    "2. **Failure Modes**: How will each bug manifest at runtime? Under what conditions?",
+    "3. **Reproduction Steps**: How would you trigger each bug? What inputs or state?",
+    "4. **Impact Assessment**: Severity (crash/data loss/wrong result/cosmetic) and blast radius",
+    "5. **Fix Recommendations**: Exact code changes needed. Show before/after snippets.",
+    "6. **Regression Risk**: Could the fixes break other functionality? What tests should be added?",
+    "",
+    "Be thorough — examine every code path, every edge case, every null/undefined risk.",
+    "Check for: race conditions, boundary values, error propagation, resource leaks,",
+    "unhandled promise rejections, type coercion bugs, off-by-one errors, stale closures.",
+    "",
+    "Format your response as structured Markdown with clear headings.",
+    "Rate overall reliability as: ✅ Solid | ⚠️ Has Issues | ❌ Unreliable",
+    "End with a prioritized fix list (fix most critical bugs first).",
+    "",
+    `--- FILE UNDER INVESTIGATION: ${filename} ---`,
+    content,
+  ].join("\n");
+}
+
+/**
+ * Build synthesis prompt from multiple model analysis results.
+ */
+function buildAnalysisSynthesisPrompt(successful, target, mode) {
+  const type = mode === "plan" ? "plan analysis" : mode === "diagnose" ? "bug investigation" : "code review";
+  let prompt = [
+    `You are a senior technical reviewer synthesizing ${type} results from ${successful.length} independent AI models.`,
+    `Each model independently analyzed: ${target}`,
+    "",
+    "Your job is to:",
+    "1. Identify findings that MULTIPLE models agree on (high confidence)",
+    "2. Flag unique findings from single models that seem valid (medium confidence)",
+    "3. Resolve any contradictions between models",
+    "4. Produce a unified, prioritized report",
+    "",
+    "Format: Structured Markdown with priority levels (🔴 Critical, 🟡 Important, 🟢 Minor).",
+    "Include a confidence indicator for each finding: [Consensus: N/M models agree]",
+    "End with an overall assessment and top 3 action items.",
+    "",
+  ].join("\n");
+
+  for (const r of successful) {
+    prompt += `\n--- ANALYSIS BY ${r.model} ---\n${r.output}\n`;
+  }
+
+  return prompt;
+}
+
 // ─── Pricing Table (Phase 2) ──────────────────────────────────────────
 // Per-token costs in USD. Updated April 2026.
 // Source: published API pricing pages. Rates are per 1 token.
@@ -1885,6 +2258,12 @@ const MODEL_PRICING = {
   "gpt-4.1":                { input: 2 / 1_000_000,    output: 8 / 1_000_000 },
   // Google Gemini
   "gemini-3-pro-preview":   { input: 1.25 / 1_000_000, output: 5 / 1_000_000 },
+  // xAI Grok (reasoning_tokens billed as output)
+  "grok-4.20":              { input: 3 / 1_000_000,    output: 15 / 1_000_000 },
+  "grok-4":                 { input: 2 / 1_000_000,    output: 10 / 1_000_000 },
+  "grok-4-0709":            { input: 2 / 1_000_000,    output: 10 / 1_000_000 },
+  "grok-3":                 { input: 3 / 1_000_000,    output: 15 / 1_000_000 },
+  "grok-3-mini":            { input: 0.30 / 1_000_000, output: 0.50 / 1_000_000 },
   // Fallback
   default:                  { input: 3 / 1_000_000,    output: 15 / 1_000_000 },
 };
@@ -2600,6 +2979,94 @@ if (args.includes("--test")) {
     process.exit(result.status === "failed" ? 1 : 0);
   } catch (err) {
     console.error(`Orchestrator error: ${err.message}`);
+    process.exit(1);
+  }
+} else if (args.includes("--analyze")) {
+  const target = getArg("--analyze");
+  if (!target) {
+    console.error("Usage: node orchestrator.mjs --analyze <plan-or-file> [--mode plan|file] [--models model1,model2,...]");
+    process.exit(1);
+  }
+
+  const mode = getArg("--mode") || (target.match(/plan/i) ? "plan" : "file");
+  const modelsArg = getArg("--models");
+  const models = modelsArg ? modelsArg.split(",").map((m) => m.trim()) : null;
+
+  try {
+    const result = await analyzeWithQuorum({
+      target,
+      mode,
+      models,
+      cwd: process.cwd(),
+    });
+
+    // Print synthesis (readable) to stdout
+    if (result.synthesis) {
+      console.log("\n" + "═".repeat(60));
+      console.log("  QUORUM ANALYSIS — SYNTHESIZED REPORT");
+      console.log("═".repeat(60) + "\n");
+      console.log(result.synthesis);
+    }
+
+    // Print cost summary
+    console.log("\n" + "─".repeat(40));
+    console.log(`  Models: ${result.models.join(", ")}`);
+    console.log(`  Duration: ${Math.round(result.totalDuration / 1000)}s`);
+    console.log(`  Cost: $${result.totalCost.toFixed(2)}`);
+    console.log("─".repeat(40));
+
+    // Save full JSON report to .forge/
+    const reportDir = resolve(process.cwd(), ".forge", "analysis");
+    mkdirSync(reportDir, { recursive: true });
+    const reportFile = resolve(reportDir, `${basename(target, ".md")}-${Date.now()}.json`);
+    writeFileSync(reportFile, JSON.stringify(result, null, 2));
+    console.log(`\n  📄 Full report saved: ${reportFile}\n`);
+
+    process.exit(0);
+  } catch (err) {
+    console.error(`Analysis error: ${err.message}`);
+    process.exit(1);
+  }
+} else if (args.includes("--diagnose")) {
+  const target = getArg("--diagnose");
+  if (!target) {
+    console.error("Usage: node orchestrator.mjs --diagnose <file> [--models model1,model2,...]");
+    process.exit(1);
+  }
+
+  const modelsArg = getArg("--models");
+  const models = modelsArg ? modelsArg.split(",").map((m) => m.trim()) : null;
+
+  try {
+    const result = await analyzeWithQuorum({
+      target,
+      mode: "diagnose",
+      models,
+      cwd: process.cwd(),
+    });
+
+    if (result.synthesis) {
+      console.log("\n" + "═".repeat(60));
+      console.log("  QUORUM DIAGNOSIS — BUG INVESTIGATION REPORT");
+      console.log("═".repeat(60) + "\n");
+      console.log(result.synthesis);
+    }
+
+    console.log("\n" + "─".repeat(40));
+    console.log(`  Models: ${result.models.join(", ")}`);
+    console.log(`  Duration: ${Math.round(result.totalDuration / 1000)}s`);
+    console.log(`  Cost: $${result.totalCost.toFixed(2)}`);
+    console.log("─".repeat(40));
+
+    const reportDir = resolve(process.cwd(), ".forge", "analysis");
+    mkdirSync(reportDir, { recursive: true });
+    const reportFile = resolve(reportDir, `diagnose-${basename(target)}-${Date.now()}.json`);
+    writeFileSync(reportFile, JSON.stringify(result, null, 2));
+    console.log(`\n  📄 Full report saved: ${reportFile}\n`);
+
+    process.exit(0);
+  } catch (err) {
+    console.error(`Diagnosis error: ${err.message}`);
     process.exit(1);
   }
 }

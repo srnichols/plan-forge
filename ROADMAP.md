@@ -373,10 +373,11 @@ These are planned but not yet prioritized into a version:
 - **Web UI** for plan visualization and status tracking
 - Preset-specific validation minimum count checks in `validate-setup`
 
-### Quorum Analysis (extends Quorum Mode beyond execution)
-- **`pforge analyze <plan> --quorum`** — 3-model independent consistency scoring, reviewer merges findings. Catches issues a single model misses (untested edge cases, naming inconsistencies, missing error handlers)
-- **`pforge diagnose <file> --quorum`** — 3-model bug investigation. Each model analyzes the file independently, reviewer synthesizes root cause + fix recommendations
-- **`/code-review --quorum`** — multi-model code review skill. Three models review the same PR diff, reviewer merges severity ratings and recommendations
+### Quorum Analysis (extends Quorum Mode beyond execution) ✅
+- ✅ **`pforge analyze <plan> --quorum`** — 3-model independent consistency scoring, reviewer merges findings. Catches issues a single model misses (untested edge cases, naming inconsistencies, missing error handlers)
+- ✅ **`pforge diagnose <file> --quorum`** — 3-model bug investigation. Each model analyzes the file independently, reviewer synthesizes root cause + fix recommendations
+- ✅ **`/code-review --quorum`** — multi-model code review skill. Three models review the same PR diff, reviewer merges severity ratings and recommendations
+- ✅ API provider abstraction — `grok-*` models auto-route to xAI API via `XAI_API_KEY`, extensible to other OpenAI-compatible providers
 - Reuses existing quorum infrastructure (dispatch, review, telemetry spans, cost tracking)
 
 ---

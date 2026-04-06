@@ -24,7 +24,7 @@ import { execSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve, join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parsePlan, runPlan, detectWorkers, getCostReport } from "./orchestrator.mjs";
+import { parsePlan, runPlan, detectWorkers, getCostReport, analyzeWithQuorum } from "./orchestrator.mjs";
 import { createHub, readHubPort } from "./hub.mjs";
 import { buildCapabilitySurface, writeToolsJson, writeCliSchema } from "./capabilities.mjs";
 import { readRunIndex } from "./telemetry.mjs";
@@ -165,14 +165,30 @@ const TOOLS = [
   },
   {
     name: "forge_analyze",
-    description: "Cross-artifact analysis — validates requirement traceability, test coverage, scope compliance, and validation gates. Returns a consistency score (0-100) with detailed breakdown.",
+    description: "Cross-artifact analysis — validates requirement traceability, test coverage, scope compliance, and validation gates. Returns a consistency score (0-100) with detailed breakdown. With quorum=true, dispatches to multiple AI models (including API providers like xAI Grok) for multi-model consensus analysis.",
     inputSchema: {
       type: "object",
       properties: {
-        plan: { type: "string", description: "Path to the plan file (e.g., docs/plans/Phase-1-AUTH-PLAN.md)" },
+        plan: { type: "string", description: "Path to the plan or source file to analyze (e.g., docs/plans/Phase-1-AUTH-PLAN.md or src/services/billing.ts)" },
+        quorum: { type: "boolean", description: "If true, dispatch analysis to multiple models and synthesize findings. Default: false" },
+        mode: { type: "string", enum: ["plan", "file"], description: "Analysis mode: 'plan' (plan consistency) or 'file' (code review). Default: auto-detected from filename" },
+        models: { type: "string", description: "Comma-separated model list override (e.g., 'grok-3-mini,claude-sonnet-4.6,gpt-5.3-codex'). Default: quorum config models" },
         path: { type: "string", description: "Project directory (default: current)" },
       },
       required: ["plan"],
+    },
+  },
+  {
+    name: "forge_diagnose",
+    description: "Multi-model bug investigation — dispatches independent bug analysis to multiple AI models (including API providers like xAI Grok), then synthesizes root cause analysis with fix recommendations. Each model examines code paths, failure modes, edge cases, and race conditions independently.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        file: { type: "string", description: "Path to the source file to investigate (e.g., src/services/billing.ts)" },
+        models: { type: "string", description: "Comma-separated model list override (e.g., 'grok-3-mini,grok-4,claude-sonnet-4.6'). Default: quorum config models" },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+      required: ["file"],
     },
   },
   {
@@ -282,6 +298,7 @@ function executeTool(name, args) {
     case "forge_new_phase":
       return runPforge(`new-phase "${args.name}"`, cwd);
     case "forge_analyze":
+      if (args.quorum) return null; // Quorum analysis handled async
       return runPforge(`analyze "${args.plan}"`, cwd);
     case "forge_run_plan":
     case "forge_abort":
@@ -413,6 +430,49 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return { content: [{ type: "text", text: JSON.stringify(report, null, 2) }] };
     } catch (err) {
       return { content: [{ type: "text", text: `Cost report error: ${err.message}` }], isError: true };
+    }
+  }
+
+  if (name === "forge_analyze" && args.quorum) {
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const mode = args.mode || (args.plan.match(/plan/i) ? "plan" : "file");
+      const models = args.models ? args.models.split(",").map((m) => m.trim()) : null;
+
+      const result = await analyzeWithQuorum({
+        target: args.plan,
+        mode,
+        models,
+        cwd,
+      });
+
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        isError: false,
+      };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Quorum analysis error: ${err.message}` }], isError: true };
+    }
+  }
+
+  if (name === "forge_diagnose") {
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const models = args.models ? args.models.split(",").map((m) => m.trim()) : null;
+
+      const result = await analyzeWithQuorum({
+        target: args.file,
+        mode: "diagnose",
+        models,
+        cwd,
+      });
+
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        isError: false,
+      };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Diagnosis error: ${err.message}` }], isError: true };
     }
   }
 

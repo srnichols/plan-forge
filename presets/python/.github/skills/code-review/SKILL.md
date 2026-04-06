@@ -1,19 +1,21 @@
 ---
 name: code-review
-description: Run a comprehensive code review across architecture, security, testing, naming, and patterns. Invokes relevant reviewer agents in sequence. Use before merging features or at the end of a phase.
-argument-hint: "[optional: specific files or areas to focus on]"
-tools: [read_file, forge_analyze, forge_diff]
+description: Run a comprehensive code review across architecture, security, testing, naming, and patterns. Invokes relevant reviewer agents in sequence. Use before merging features or at the end of a phase. With --quorum, dispatches multi-model analysis for higher confidence.
+argument-hint: "[optional: specific files or areas to focus on] [--quorum]"
+tools: [read_file, forge_analyze, forge_diagnose, forge_diff]
 ---
 
 # Code Review Skill
 
 ## Trigger
-"Review my code" / "Run code review" / "Check before merge"
+"Review my code" / "Run code review" / "Check before merge" / "Code review --quorum"
 
 ## Steps
 
 ### 0. Forge Analysis
 Use the `forge_analyze` MCP tool with the current plan (if available) to get a structured consistency score. Use the `forge_diff` MCP tool to detect scope drift and forbidden file edits.
+
+**If `--quorum` was specified**: Use `forge_analyze` with `quorum: true` to dispatch multi-model analysis. Each changed file is independently reviewed by multiple AI models (e.g., grok-3-mini, claude-sonnet-4.6, gpt-5.3-codex), and findings are synthesized with consensus confidence levels. This catches issues a single model misses.
 
 ### 1. Identify Changed Files
 ```bash

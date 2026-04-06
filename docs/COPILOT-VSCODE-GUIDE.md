@@ -435,6 +435,8 @@ Multi-step executable procedures that chain together tool calls. Each skill file
 | `release-notes/` | `/release-notes` | Generate release notes from git history and CHANGELOG |
 | `api-doc-gen/` | `/api-doc-gen` | Generate or update OpenAPI spec, validate consistency |
 | `onboarding/` | `/onboarding` | Walk a new developer through setup, architecture, and first task |
+| `health-check/` | `/health-check` | Forge diagnostic — environment, setup, completeness |
+| `forge-execute/` | `/forge-execute` | Guided plan execution with cost estimate |
 | `infra-deploy/` *(azure-iac)* | `/infra-deploy` | Pre-flight → what-if/plan → deploy → verify for Bicep/Terraform/azd |
 | `infra-test/` *(azure-iac)* | `/infra-test` | PSScriptAnalyzer → Bicep lint → Pester → Terraform validate |
 | `azure-sweep/` *(azure-iac)* | `/azure-sweep` | 8-layer governance sweep: WAF, CAF, Landing Zone, Policy, Org Rules, Resource Graph, Telemetry, Remediation |

@@ -162,6 +162,8 @@ Skills are multi-step procedures invoked by typing `/` in chat. They also auto-l
 | `/release-notes` | Generate release notes from git history and CHANGELOG |
 | `/api-doc-gen` | Generate or update OpenAPI spec, validate spec-to-code consistency |
 | `/onboarding` | Walk a new developer through project setup, architecture, and first task |
+| `/health-check` | Forge diagnostic: forge_smith → forge_validate → forge_sweep |
+| `/forge-execute` | Guided plan execution: list plans → estimate cost → execute → report |
 
 ### Agent Definitions (`.github/agents/`)
 

@@ -140,7 +140,7 @@ Auto-loading instruction files in `.github/instructions/`:
 
 **Pipeline (5)**: specifier → plan-hardener → executor → reviewer-gate → shipper
 
-## Skills (8)
+## Skills (10)
 
 | Skill | Description |
 |-------|-------------|
@@ -152,6 +152,8 @@ Auto-loading instruction files in `.github/instructions/`:
 | `/release-notes` | Generate from git history + CHANGELOG |
 | `/api-doc-gen` | OpenAPI spec generation + validation |
 | `/onboarding` | New developer setup walkthrough |
+| `/health-check` | Forge diagnostic: smith → validate → sweep |
+| `/forge-execute` | Guided plan execution: list → estimate → execute → report |
 
 ## Telemetry
 

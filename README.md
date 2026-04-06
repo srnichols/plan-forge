@@ -132,7 +132,7 @@ Both agents and skills extend Copilot, but they serve different purposes:
 - **Stack-specific agents**: 6 for app presets (dotnet/typescript/python/java/go) · **5** for `azure-iac` (bicep-reviewer, terraform-reviewer, security-reviewer, deploy-helper, azure-sweeper)
 - **8 shared agents** — API contracts, accessibility, multi-tenancy, CI/CD, observability, dependency, compliance, error handling
 - **5 pipeline agents** — specifier, plan-hardener, executor, reviewer-gate, shipper
-- **Skills**: 8 for app presets (database-migration, staging-deploy, test-sweep + dependency-audit, code-review, release-notes, api-doc-gen, onboarding) · **3** for `azure-iac` (infra-deploy, infra-test, azure-sweep)
+- **Skills**: 10 for app presets (8 upgraded + 2 shared: health-check, forge-execute) · **3** for `azure-iac` (infra-deploy, infra-test, azure-sweep)
 
 > **You don't need to understand all of this upfront.** Run the setup wizard, follow the numbered step prompts, and the framework guides you through.
 
@@ -444,7 +444,7 @@ These are stack-independent and use `handoffs:` frontmatter to chain sessions wi
 
 ### Skills Per Preset
 
-App presets (dotnet / typescript / python / java / go) include **8 skills**:
+App presets (dotnet / typescript / python / java / go) include **10 skills** (8 stack-specific + 2 shared):
 
 | Skill | Slash Command | Purpose |
 |-------|-------------|--------|
@@ -456,6 +456,8 @@ App presets (dotnet / typescript / python / java / go) include **8 skills**:
 | `release-notes/` | `/release-notes` | Generate release notes from git history and CHANGELOG |
 | `api-doc-gen/` | `/api-doc-gen` | Generate or update OpenAPI spec, validate spec-to-code consistency |
 | `onboarding/` | `/onboarding` | Walk a new developer through setup, architecture, and first task |
+| `health-check/` | `/health-check` | Forge diagnostic: forge_smith → forge_validate → forge_sweep |
+| `forge-execute/` | `/forge-execute` | Guided plan execution: list plans → estimate → execute → report |
 
 The `azure-iac` preset includes **3 IaC-specific skills**:
 
@@ -633,7 +635,7 @@ Running `setup.ps1` (PowerShell) or `setup.sh` (Bash) with a preset:
 1. **Copies preset instruction files** from `presets/{stack}/` to your project root (16 files for app presets — 17 for TypeScript which adds `frontend.instructions.md`; 12 for `azure-iac`)
 2. **Copies prompt templates** for scaffolding new entities, services, tests, and Project Principles (15 for app presets, 6 for `azure-iac`)
 3. **Copies agent definitions** for architecture review, security audit, testing (6 stack-specific + 8 shared + 5 pipeline agents; `azure-iac` gets 5 stack-specific including the enterprise-grade `azure-sweeper`)
-4. **Copies skill workflows** — 8 for app presets (database-migration, staging-deploy, test-sweep, dependency-audit, code-review, release-notes, api-doc-gen, onboarding); `azure-iac` gets 3 (infra-deploy, infra-test, azure-sweep)
+4. **Copies skill workflows** — 10 for app presets (8 upgraded + 2 shared: health-check, forge-execute); `azure-iac` gets 3 (infra-deploy, infra-test, azure-sweep)
 5. **Generates `AGENTS.md`** with patterns for your tech stack
 6. **Generates `.github/copilot-instructions.md`** with stack-specific conventions
 7. **Copies shared instruction files** (git-workflow, architecture principles)
@@ -716,7 +718,7 @@ These features are all **opt-in** — skip any that don't apply. Existing workfl
 | **CLI Wrapper** | `pforge` commands for init, status, new-phase, branch, and extension management. | See [docs/CLI-GUIDE.md](docs/CLI-GUIDE.md) |
 | **Lifecycle Hooks** | Auto-enforce Forbidden Actions (PreToolUse), inject Project Principles at session start, warn on TODO/FIXME after edits. | Installed automatically with setup — see `.github/hooks/` |
 | **Agent Plugin** | Install Plan Forge as a VS Code agent plugin from a Git URL — no setup scripts needed. | `Chat: Install Plugin From Source` → repo URL |
-| **Skill Slash Commands** | App presets: `/database-migration`, `/staging-deploy`, `/test-sweep`, `/dependency-audit`, `/code-review`, `/release-notes`, `/api-doc-gen`, `/onboarding`. Azure IaC: `/infra-deploy`, `/infra-test`, `/azure-sweep`. | Type `/` in Copilot Chat to see available skills |
+| **Skill Slash Commands** | App presets: `/database-migration`, `/staging-deploy`, `/test-sweep`, `/dependency-audit`, `/code-review`, `/release-notes`, `/api-doc-gen`, `/onboarding`, `/health-check`, `/forge-execute`. Azure IaC: `/infra-deploy`, `/infra-test`, `/azure-sweep`. | Type `/` in Copilot Chat to see available skills |
 | **Claude 4.6 Tuning** | Guidance for calibrating prompt intensity, managing context budgets, and controlling thinking depth with Claude Opus 4.6. Prevents over-halting, over-exploring, and overengineering. | See [CUSTOMIZATION.md → Tuning for Claude Opus 4.6](CUSTOMIZATION.md#tuning-for-claude-opus-46) |
 | **Session Memory Capture** | Step 6 (Ship) automatically saves conventions, lessons, and forbidden patterns to `/memories/repo/`. Step 2 (Harden) reads them so each phase builds on prior experience. | Built-in — no setup needed |
 | **Persistent Memory (OpenBrain)** | Capture decisions across sessions, search project history semantically, bridge the 3-session model with long-term context. | Install `plan-forge-memory` extension + [OpenBrain](https://github.com/srnichols/OpenBrain) MCP server |

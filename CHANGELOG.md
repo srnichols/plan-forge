@@ -5,6 +5,33 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.6.0] — 2026-04-06
+
+### Added — Skill Slash Command Upgrade (Phase 8)
+
+#### Tier 1 — MCP Integration & Modernization
+- **De-duplicated 3 contaminated skills** — `dependency-audit`, `api-doc-gen`, `onboarding` were identical across all 5 presets with multi-stack commands. Each now has ONLY its stack's tools (40 files changed)
+- **`tools:` frontmatter** — all 40 app-preset skills now declare required tool access in YAML frontmatter
+- **Conditional step logic** — skills include "If step fails → skip/stop" patterns for intelligent flow control
+- **MCP tool integration** — `/test-sweep` calls `forge_sweep`, `/code-review` calls `forge_analyze` + `forge_diff`, `/staging-deploy` calls `forge_validate`, `/onboarding` calls `forge_smith`
+- **Structured reports** — all skills output pass/fail summary with counts
+
+#### Tier 2 — New Skills & Hub Integration
+- **`/health-check` skill** — chains `forge_smith` → `forge_validate` → `forge_sweep` into a structured diagnostic pipeline
+- **`/forge-execute` skill** — guided wrapper: list plans → estimate cost → choose mode → execute → report results
+- **Skill event schema** — 4 new event types: `skill-started`, `skill-step-started`, `skill-step-completed`, `skill-completed`
+- **Dashboard Skills tab** — real-time timeline of skill executions with per-step status
+- **`forge_skill_status` MCP tool** — query recent skill execution events from the hub
+
+#### Tier 3 — Executable Skill Engine
+- **`skill-runner.mjs`** — new module: parses SKILL.md frontmatter/steps/safety rules, executes steps with gate validation, emits events (29 self-tests passing)
+- **`forge_run_skill` MCP tool** — execute any skill programmatically with dry-run mode, hub event broadcasting, and structured results
+
+### Fixed
+- **UTF-8 BOM** — `pforge.ps1`, `setup.ps1`, `validate-setup.ps1` now have UTF-8 BOM for Windows PowerShell 5.1 compatibility (em-dashes, arrows, checkmarks, box-drawing were corrupted without BOM)
+
+---
+
 ## [2.5.0] — 2026-04-05
 
 ### Added — Quorum Mode (Multi-Model Consensus)

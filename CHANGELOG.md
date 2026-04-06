@@ -5,6 +5,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.9.1] — 2026-04-06
+
+### Added — Security Audit Skill (Phase 12)
+- **`/security-audit` skill** — 4-phase comprehensive security procedure: OWASP Top 10 vulnerability scan, dependency audit, secrets detection (13 regex patterns), and combined severity-rated report
+- **6 variants**: shared base + TypeScript (npm audit), Python (pip-audit), .NET (dotnet list --vulnerable), Go (govulncheck), Java (mvn dependency-check)
+- **Stack-specific OWASP checks**: prototype pollution (Node.js), pickle injection (Python), BinaryFormatter (C#), race conditions (Go), JNDI injection (Java)
+- **Quorum support**: 3-model independent OWASP scan with synthesized findings
+- Registered in copilot-instructions.md template and all agent adapters (Claude, Cursor, Codex)
+
+---
+
 ## [2.9.0] — 2026-04-06
 
 ### Fixed — Bug Fixes (Phase 11)

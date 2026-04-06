@@ -159,6 +159,7 @@ Skills are multi-step procedures invoked by typing `/` in chat. They also auto-l
 | `/staging-deploy` | Build, push, migrate, deploy, and verify on staging |
 | `/test-sweep` | Run all test suites and aggregate results |
 | `/dependency-audit` | Scan dependencies for vulnerabilities, outdated packages, license issues |
+| `/security-audit` | Comprehensive security audit: OWASP scan, dependency audit, secrets detection, severity report |
 | `/code-review` | Comprehensive review: architecture, security, testing, patterns |
 | `/release-notes` | Generate release notes from git history and CHANGELOG |
 | `/api-doc-gen` | Generate or update OpenAPI spec, validate spec-to-code consistency |

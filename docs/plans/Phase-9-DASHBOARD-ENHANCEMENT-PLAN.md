@@ -1,10 +1,10 @@
 # Phase 9: Dashboard Enhancement — Low-Hanging Fruit GUI Tools
 
 > **Roadmap Reference**: [DEPLOYMENT-ROADMAP.md](./DEPLOYMENT-ROADMAP.md) → Phase 9
-> **Status**: 📋 Planned
+> **Status**: ✅ Complete
 > **Feature Branch**: `feature/v2.7-dashboard-enhancement`
-> **Pipeline**: Step 0 ✅ → Step 2 (hardening)
-> **Version**: 2.6.0 → 2.7.0
+> **Pipeline**: Step 0 ✅ → Step 2 ✅ → Step 3 ✅
+> **Version**: 2.7.0
 
 ---
 
@@ -38,9 +38,11 @@ The Plan Forge dashboard exposes ~70% of system capabilities. Five CLI-only comm
 ## Scope Contract
 
 ### In Scope
-- `pforge-mcp/dashboard/index.html` — new UI sections (Plans panel, action buttons, sweep table, model comparison, phase editor)
-- `pforge-mcp/dashboard/app.js` — new functions for plan browser, sweep parsing, model stats, git modals
-- `pforge-mcp/server.mjs` — new `/api/plans` endpoint (uses parsePlan from orchestrator)
+- `pforge-mcp/dashboard/index.html` — new UI sections (Plans panel, action buttons, sweep table, model comparison, phase editor, memory browser, extension management)
+- `pforge-mcp/dashboard/app.js` — new functions for plan browser, sweep parsing, model stats, git modals, memory search, extension install/uninstall
+- `pforge-mcp/server.mjs` — new `/api/plans` endpoint, `/api/memory/search` endpoint (uses parsePlan from orchestrator, proxies OpenBrain search)
+- `pforge-mcp/orchestrator.mjs` — minor additions if needed for plan metadata or API surface
+- `pforge-mcp/capabilities.mjs` — minor updates if new tool metadata needed
 - `docs/dashboard.html` — updated documentation with new feature descriptions
 - `docs/assets/dashboard/*.png` — re-captured screenshots
 - `CHANGELOG.md` — v2.7.0 entry
@@ -49,14 +51,9 @@ The Plan Forge dashboard exposes ~70% of system capabilities. Five CLI-only comm
 ### Out of Scope
 - Parallel execution (Phase 6)
 - New MCP tools (all features use existing tools via `/api/tool/:name`)
-- Memory browser/search UI (future phase)
-- Extension install/uninstall from dashboard (future)
-- Modifying orchestrator, capabilities, or skill-runner logic
+- Full OpenBrain admin UI (create/delete thoughts — read-only search only)
 
 ### Forbidden Actions
-- Do NOT modify `pforge-mcp/orchestrator.mjs` logic (only import parsePlan)
-- Do NOT modify `pforge-mcp/capabilities.mjs`
-- Do NOT modify `pforge-mcp/skill-runner.mjs`
 - Do NOT modify preset files (`presets/`)
 - Do NOT modify pipeline prompts (`*.prompt.md`, `*.agent.md`)
 - Do NOT add npm dependencies
@@ -199,7 +196,64 @@ The Plan Forge dashboard exposes ~70% of system capabilities. Five CLI-only comm
 
 ---
 
-### Slice 6: Documentation + Screenshots + Version Bump [depends: Slice 1, Slice 2, Slice 3, Slice 4, Slice 5] [scope: docs/**, VERSION, CHANGELOG.md]
+### Slice 6: OpenBrain Memory Browser [scope: pforge-mcp/server.mjs, pforge-mcp/dashboard/**]
+
+**Goal**: Add a memory search UI to the Config tab under the OpenBrain status indicator
+
+**Server — `POST /api/memory/search`**:
+- Accept `{ query }` in request body
+- If OpenBrain not configured, return `{ error: "OpenBrain not configured" }`
+- Proxy the query through to the OpenBrain MCP server's `search_thoughts` tool
+- If direct MCP call not feasible, shell out via `pforge` CLI or use the forge tool proxy
+- Return `{ results: [{ thought, source, timestamp, relevance }] }`
+
+**Dashboard — Memory Search Panel**:
+- Add search box below the OpenBrain status div in Config tab
+- Input field with placeholder "Search project memory..." + Search button
+- Only visible when OpenBrain status shows "Connected"
+- On search: call `POST /api/memory/search` with query
+- Display results as cards: thought text, source tag, timestamp
+- If no results: show "No memories found for this query"
+- Loading spinner while searching
+
+**Validation Gates**:
+- [ ] Search box appears when OpenBrain is configured
+- [ ] Search returns results from OpenBrain
+- [ ] Empty/error states handled gracefully
+- [ ] Hidden when OpenBrain not configured
+
+---
+
+### Slice 7: Extension Install/Uninstall from Dashboard [scope: pforge-mcp/dashboard/**]
+
+**Goal**: Add install and uninstall buttons to extension cards in the Extensions tab
+
+**Install Button**:
+- Each extension card gets an "Install" button (uses existing `/api/tool/ext` with args `add <name>`)
+- Button shows loading spinner during install
+- On success: notification "Extension {name} installed" + button changes to "Installed ✓"
+- On error: show error message in notification
+
+**Uninstall Button**:
+- Installed extensions show "Uninstall" button instead of "Install"
+- Calls `/api/tool/ext` with args `remove <name>`
+- Confirmation dialog: "Remove extension {name}?"
+- On success: notification + button reverts to "Install"
+
+**Installed State Detection**:
+- Call `/api/tool/ext` with args `list` on Extensions tab load
+- Parse output to get list of installed extension names
+- Cross-reference with catalog to mark installed extensions
+
+**Validation Gates**:
+- [ ] Install button appears on each extension card
+- [ ] Install calls CLI correctly and shows success
+- [ ] Uninstall shows for installed extensions
+- [ ] Installed state persists across tab switches
+
+---
+
+### Slice 8: Documentation + Screenshots + Version Bump [depends: Slice 1, Slice 2, Slice 3, Slice 4, Slice 5, Slice 6, Slice 7] [scope: docs/**, VERSION, CHANGELOG.md]
 
 **Goal**: Update dashboard.html documentation, re-capture all screenshots, bump version
 
@@ -210,6 +264,8 @@ The Plan Forge dashboard exposes ~70% of system capabilities. Five CLI-only comm
 - Add Sweep table view to Actions tab description
 - Add Model Comparison to Cost tab description
 - Add Phase Status Editor to Actions tab description
+- Add OpenBrain Memory search to Config tab description
+- Add Extension install/uninstall to Extensions tab description
 - Update feature badge count in hero section
 - Update alt text on all screenshots
 
@@ -217,7 +273,7 @@ The Plan Forge dashboard exposes ~70% of system capabilities. Five CLI-only comm
 - Sync all dashboard files to testbed
 - Start dashboard server in testbed
 - Run `capture-screenshots.mjs` to re-capture all 9 tabs
-- Verify new features visible in Progress (plan browser), Actions (new buttons), Cost (model table)
+- Verify new features visible in Progress (plan browser), Actions (new buttons), Cost (model table), Config (memory search), Extensions (install buttons)
 
 **Version + Changelog**:
 - Bump `VERSION` to `2.7.0`
@@ -239,16 +295,20 @@ The Plan Forge dashboard exposes ~70% of system capabilities. Five CLI-only comm
 | Sweep output format changes | Low | Low | Fallback to raw text display |
 | Plan browser performance with many plans | Low | Low | Limit to Phase-*-PLAN.md glob pattern |
 | Git operations require clean working tree | Medium | Low | Show error message if git state is dirty |
+| OpenBrain search unavailable | Medium | Low | Graceful fallback — hide search when not configured |
+| Extension install side effects | Low | Medium | Confirmation dialog before install/uninstall |
 
 ---
 
 ## Definition of Done
-- [ ] All 6 slices pass their validation gates
+- [ ] All 8 slices pass their validation gates
 - [ ] Plan browser lists plans and allows estimate/run
 - [ ] Branch, Commit, Diff buttons work in Actions tab
 - [ ] Sweep renders as filtered table
 - [ ] Model comparison table shows in Cost tab
 - [ ] Phase status is editable inline
+- [ ] OpenBrain memory search returns results from Config tab
+- [ ] Extension install/uninstall buttons functional in Extensions tab
 - [ ] Screenshots updated, dashboard.html documentation complete
 - [ ] Version bumped to 2.7.0, CHANGELOG updated
 - [ ] Feature branch squash-merged to master

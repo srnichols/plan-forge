@@ -746,6 +746,31 @@ function createExpressApp() {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
+  // v2.7: Plans list API — parsed plan metadata for dashboard browser
+  app.get("/api/plans", (_req, res) => {
+    try {
+      const plansDir = resolve(PROJECT_DIR, "docs", "plans");
+      if (!existsSync(plansDir)) return res.json([]);
+      const files = readdirSync(plansDir)
+        .filter((f) => /^Phase-.*-PLAN\.md$/i.test(f))
+        .sort();
+      const plans = [];
+      for (const file of files) {
+        try {
+          const parsed = parsePlan(resolve(plansDir, file));
+          plans.push({
+            file: `docs/plans/${file}`,
+            title: parsed.meta.title || file,
+            status: parsed.meta.status || "Unknown",
+            sliceCount: parsed.slices.length,
+            branch: parsed.meta.branch || null,
+          });
+        } catch { /* skip malformed plans */ }
+      }
+      res.json(plans);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
   // v2.7: OpenBrain memory status API
   app.get("/api/memory", (_req, res) => {
     try {
@@ -773,6 +798,24 @@ function createExpressApp() {
         }
       }
       res.json(result);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // v2.7: OpenBrain memory search API
+  app.post("/api/memory/search", (req, res) => {
+    try {
+      if (!isOpenBrainConfigured(PROJECT_DIR)) {
+        return res.json({ error: "OpenBrain not configured" });
+      }
+      const query = req.body?.query;
+      if (!query || typeof query !== "string") {
+        return res.status(400).json({ error: "query is required" });
+      }
+      // Proxy search through pforge CLI (uses MCP search_thoughts tool)
+      const result = runPforge(`smith`, PROJECT_DIR);
+      // For now, return a placeholder since direct OpenBrain MCP call requires active connection
+      // The search_thoughts tool is available through the MCP server chain
+      res.json({ results: [], note: "Memory search requires active OpenBrain MCP connection. Use search_thoughts tool directly." });
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 

@@ -387,6 +387,353 @@ async function runDiagnose() {
 window.runAnalyzeQuorum = runAnalyzeQuorum;
 window.runDiagnose = runDiagnose;
 
+// ─── Plan Browser (v2.7) ─────────────────────────────────────────────
+async function loadPlans() {
+  const listEl = document.getElementById("plan-list");
+  const countEl = document.getElementById("plan-count");
+  if (!listEl) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/plans`);
+    const plans = await res.json();
+    countEl.textContent = `(${plans.length})`;
+    if (plans.length === 0) {
+      listEl.innerHTML = '<p class="text-gray-500 text-sm py-2">No plan files found in docs/plans/</p>';
+      return;
+    }
+    listEl.innerHTML = plans.map((p) => {
+      const icon = p.status.includes("Complete") ? "✅" : p.status.includes("Progress") ? "🚧" : p.status.includes("Paused") ? "⏸️" : "📋";
+      return `
+        <div class="flex items-center gap-3 py-2 border-b border-gray-700/50 last:border-0 group">
+          <span class="text-sm">${icon}</span>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium text-gray-200 truncate">${p.title}</p>
+            <p class="text-xs text-gray-500">${p.file} · ${p.sliceCount} slices${p.branch ? ` · ${p.branch}` : ""}</p>
+          </div>
+          <div class="flex gap-1 opacity-70 group-hover:opacity-100">
+            <button onclick="estimatePlan('${p.file}')" class="text-xs px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded transition">Estimate</button>
+            <button onclick="runPlanFromBrowser('${p.file}', '${p.title}', ${p.sliceCount})" class="text-xs px-2 py-1 bg-blue-600 hover:bg-blue-500 rounded transition">Run</button>
+          </div>
+          <div id="plan-est-${p.file.replace(/[^a-zA-Z0-9]/g, '_')}" class="hidden text-xs text-gray-400 w-full pl-8 pb-1"></div>
+        </div>`;
+    }).join("");
+  } catch {
+    listEl.innerHTML = '<p class="text-red-400 text-sm py-2">Failed to load plans</p>';
+  }
+}
+
+async function estimatePlan(file) {
+  const estId = `plan-est-${file.replace(/[^a-zA-Z0-9]/g, '_')}`;
+  const estEl = document.getElementById(estId);
+  if (estEl) {
+    estEl.classList.remove("hidden");
+    estEl.textContent = "Estimating...";
+  }
+  try {
+    const res = await fetch(`${API_BASE}/api/tool/run-plan`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ args: `${file} --estimate` }),
+    });
+    const data = await res.json();
+    if (estEl) estEl.textContent = data.output || data.error || "No estimate available";
+  } catch (err) {
+    if (estEl) estEl.textContent = `Error: ${err.message}`;
+  }
+}
+
+function runPlanFromBrowser(file, title, sliceCount) {
+  if (!confirm(`Run "${title}" with ${sliceCount} slices?\n\nPlan: ${file}`)) return;
+  runAction("run-plan", file);
+  addNotification(`Started run: ${title}`, "info");
+}
+
+window.loadPlans = loadPlans;
+window.estimatePlan = estimatePlan;
+window.runPlanFromBrowser = runPlanFromBrowser;
+
+// ─── Git Operations (v2.7) ───────────────────────────────────────────
+async function runBranch() {
+  const plan = prompt("Plan file path:", "docs/plans/");
+  if (!plan) return;
+  runAction("branch", plan);
+}
+
+async function runCommit() {
+  const plan = prompt("Plan file path:", "docs/plans/");
+  if (!plan) return;
+  const slice = prompt("Slice number:");
+  if (!slice) return;
+  runAction("commit", `${plan} ${slice}`);
+}
+
+async function runDiff() {
+  const plan = prompt("Plan file path:", "docs/plans/");
+  if (!plan) return;
+  // Use the standard runAction — the diff output will show in the action result panel
+  const resultDiv = document.getElementById("action-result");
+  const titleEl = document.getElementById("action-result-title");
+  const outputEl = document.getElementById("action-result-output");
+  titleEl.textContent = "Running: pforge diff " + plan;
+  outputEl.textContent = "Loading...";
+  resultDiv.classList.remove("hidden");
+  try {
+    const res = await fetch(`${API_BASE}/api/tool/diff`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ args: plan }),
+    });
+    const data = await res.json();
+    const output = data.output || data.error || "";
+    // Color-code diff output
+    const lines = output.split("\n");
+    outputEl.innerHTML = lines.map((l) => {
+      if (/forbidden|❌|FORBIDDEN/i.test(l)) return `<span class="text-red-400">${escHtml(l)}</span>`;
+      if (/out.of.scope|⚠|WARNING/i.test(l)) return `<span class="text-yellow-400">${escHtml(l)}</span>`;
+      if (/in.scope|✅|PASS/i.test(l)) return `<span class="text-green-400">${escHtml(l)}</span>`;
+      return escHtml(l);
+    }).join("\n");
+    titleEl.textContent = `diff: ${data.success ? "✅" : "❌"}`;
+  } catch (err) {
+    outputEl.textContent = `Error: ${err.message}`;
+    titleEl.textContent = "diff: ❌";
+  }
+}
+
+function escHtml(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+window.runBranch = runBranch;
+window.runCommit = runCommit;
+window.runDiff = runDiff;
+
+// ─── Sweep Table (v2.7) ──────────────────────────────────────────────
+async function runSweep() {
+  const resultDiv = document.getElementById("action-result");
+  const titleEl = document.getElementById("action-result-title");
+  const outputEl = document.getElementById("action-result-output");
+  titleEl.textContent = "Running: pforge sweep";
+  outputEl.textContent = "Loading...";
+  resultDiv.classList.remove("hidden");
+  try {
+    const res = await fetch(`${API_BASE}/api/tool/sweep`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ args: "" }),
+    });
+    const data = await res.json();
+    const output = data.output || "";
+    titleEl.textContent = `sweep: ${data.success ? "✅" : "❌"}`;
+    // Try to parse into structured table
+    const markers = [];
+    for (const line of output.split("\n")) {
+      const m = line.match(/^(.+?):(\d+):\s*(TODO|FIXME|HACK|STUB|stub|placeholder|mock)\b[:\s]*(.*)/i);
+      if (m) markers.push({ file: m[1].trim(), line: m[2], type: m[3].toUpperCase(), text: m[4].trim() });
+    }
+    if (markers.length > 0) {
+      const typeColors = { TODO: "blue", FIXME: "amber", HACK: "red", STUB: "gray", PLACEHOLDER: "gray", MOCK: "gray" };
+      const filters = `<div class="flex gap-1 mb-2">
+        <button onclick="filterSweepTable('all')" class="text-xs px-2 py-1 bg-gray-600 rounded hover:bg-gray-500">All (${markers.length})</button>
+        ${[...new Set(markers.map((m) => m.type))].map((t) =>
+          `<button onclick="filterSweepTable('${t}')" class="text-xs px-2 py-1 bg-gray-600 rounded hover:bg-gray-500">${t} (${markers.filter((m) => m.type === t).length})</button>`
+        ).join("")}
+      </div>`;
+      const rows = markers.map((m) => {
+        const c = typeColors[m.type] || "gray";
+        return `<tr class="sweep-row border-b border-gray-700/50" data-type="${m.type}">
+          <td class="px-2 py-1 text-xs text-gray-300 truncate max-w-[200px]">${escHtml(m.file)}</td>
+          <td class="px-2 py-1 text-xs text-gray-400">${m.line}</td>
+          <td class="px-2 py-1"><span class="text-xs px-1.5 py-0.5 rounded bg-${c}-500/20 text-${c}-400">${m.type}</span></td>
+          <td class="px-2 py-1 text-xs text-gray-300">${escHtml(m.text)}</td>
+        </tr>`;
+      }).join("");
+      outputEl.innerHTML = filters + `<table class="w-full text-left"><thead class="text-xs text-gray-500"><tr>
+        <th class="px-2 py-1">File</th><th class="px-2 py-1">Line</th><th class="px-2 py-1">Type</th><th class="px-2 py-1">Text</th>
+      </tr></thead><tbody>${rows}</tbody></table>`;
+    } else if (/clean|no.*markers|0 markers/i.test(output)) {
+      outputEl.innerHTML = '<span class="text-green-400">✓ Clean — no TODO/FIXME markers</span>';
+    } else {
+      outputEl.textContent = output;
+    }
+  } catch (err) {
+    outputEl.textContent = `Error: ${err.message}`;
+    titleEl.textContent = "sweep: ❌";
+  }
+}
+
+function filterSweepTable(type) {
+  document.querySelectorAll(".sweep-row").forEach((row) => {
+    row.style.display = (type === "all" || row.dataset.type === type) ? "" : "none";
+  });
+}
+
+window.runSweep = runSweep;
+window.filterSweepTable = filterSweepTable;
+
+// ─── Model Comparison (v2.7) ─────────────────────────────────────────
+async function loadModelComparison() {
+  const el = document.getElementById("model-comparison");
+  if (!el) return;
+  try {
+    const [costRes, runsRes] = await Promise.all([
+      fetch(`${API_BASE}/api/cost`),
+      fetch(`${API_BASE}/api/runs`),
+    ]);
+    const cost = await costRes.json();
+    const runs = await runsRes.json();
+    if (!cost.by_model || Object.keys(cost.by_model).length === 0) {
+      el.innerHTML = '<p class="text-gray-500 text-sm">No run data available yet</p>';
+      return;
+    }
+    // Aggregate per-model stats from runs
+    const modelStats = {};
+    for (const [model, data] of Object.entries(cost.by_model)) {
+      modelStats[model] = {
+        runs: data.runs || 0,
+        cost: data.cost_usd || 0,
+        tokens: (data.tokens_in || 0) + (data.tokens_out || 0),
+        duration: data.duration || 0,
+        passed: 0,
+        total: 0,
+      };
+    }
+    // Count pass/fail per model from run summaries
+    for (const run of runs) {
+      if (run.sliceResults) {
+        for (const sr of run.sliceResults) {
+          const model = sr.model || "unknown";
+          if (!modelStats[model]) modelStats[model] = { runs: 0, cost: 0, tokens: 0, duration: 0, passed: 0, total: 0 };
+          modelStats[model].total++;
+          if (sr.status === "passed") modelStats[model].passed++;
+        }
+      }
+    }
+    const sorted = Object.entries(modelStats).sort((a, b) => b[1].runs - a[1].runs);
+    el.innerHTML = `<table class="w-full text-sm">
+      <thead class="text-xs text-gray-500 border-b border-gray-700">
+        <tr><th class="px-3 py-2 text-left">Model</th><th class="px-3 py-2 text-right">Runs</th><th class="px-3 py-2 text-right">Pass Rate</th><th class="px-3 py-2 text-right">Avg Duration</th><th class="px-3 py-2 text-right">Avg Cost</th><th class="px-3 py-2 text-right">Tokens</th></tr>
+      </thead>
+      <tbody>${sorted.map(([model, s]) => {
+        const passRate = s.total > 0 ? ((s.passed / s.total) * 100) : 0;
+        const prColor = passRate >= 90 ? "text-green-400" : passRate >= 70 ? "text-amber-400" : "text-red-400";
+        const avgDur = s.runs > 0 ? (s.duration / s.runs / 1000).toFixed(1) + "s" : "—";
+        const avgCost = s.runs > 0 ? "$" + (s.cost / s.runs).toFixed(4) : "—";
+        return `<tr class="border-b border-gray-700/50 hover:bg-gray-700/30">
+          <td class="px-3 py-2 text-gray-200">${escHtml(model)}</td>
+          <td class="px-3 py-2 text-right text-gray-400">${s.runs}</td>
+          <td class="px-3 py-2 text-right ${prColor}">${s.total > 0 ? passRate.toFixed(0) + "%" : "—"}</td>
+          <td class="px-3 py-2 text-right text-gray-400">${avgDur}</td>
+          <td class="px-3 py-2 text-right text-gray-400">${avgCost}</td>
+          <td class="px-3 py-2 text-right text-gray-400">${s.tokens.toLocaleString()}</td>
+        </tr>`;
+      }).join("")}</tbody>
+    </table>`;
+  } catch {
+    el.innerHTML = '<p class="text-red-400 text-sm">Failed to load model data</p>';
+  }
+}
+
+// ─── Phase Status Editor (v2.7) ──────────────────────────────────────
+async function runStatusEditable() {
+  const resultDiv = document.getElementById("action-result");
+  const titleEl = document.getElementById("action-result-title");
+  const outputEl = document.getElementById("action-result-output");
+  titleEl.textContent = "Running: pforge status";
+  outputEl.textContent = "Loading...";
+  resultDiv.classList.remove("hidden");
+  try {
+    const res = await fetch(`${API_BASE}/api/tool/status`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ args: "" }),
+    });
+    const data = await res.json();
+    const output = data.output || "";
+    titleEl.textContent = `status: ${data.success ? "✅" : "❌"}`;
+    // Parse phase lines and add editable dropdowns
+    const lines = output.split("\n");
+    const parsed = lines.map((line) => {
+      const m = line.match(/^(.*?)(📋\s*Planned|🚧\s*In Progress|✅\s*Complete|⏸️\s*Paused)\s*$/);
+      if (!m) return { raw: line, editable: false };
+      // Try to extract plan file reference from the line
+      const planMatch = line.match(/\[(Phase-[^\]]+\.md)\]/);
+      return { raw: line, editable: true, planFile: planMatch ? `docs/plans/${planMatch[1]}` : null, prefix: m[1], currentStatus: m[2] };
+    });
+    outputEl.innerHTML = parsed.map((p, i) => {
+      if (!p.editable) return `<div class="text-xs">${escHtml(p.raw)}</div>`;
+      const statuses = ["planned", "in-progress", "complete", "paused"];
+      const current = p.currentStatus.includes("Planned") ? "planned" : p.currentStatus.includes("Progress") ? "in-progress" : p.currentStatus.includes("Complete") ? "complete" : "paused";
+      const options = statuses.map((s) => `<option value="${s}" ${s === current ? "selected" : ""}>${s}</option>`).join("");
+      return `<div class="flex items-center gap-2 text-xs py-0.5">
+        <span class="flex-1">${escHtml(p.prefix)}</span>
+        <select class="bg-gray-700 text-white text-xs rounded px-2 py-0.5" onchange="updatePhaseStatus('${p.planFile || ""}', this.value, ${i})">
+          ${options}
+        </select>
+      </div>`;
+    }).join("");
+  } catch (err) {
+    outputEl.textContent = `Error: ${err.message}`;
+    titleEl.textContent = "status: ❌";
+  }
+}
+
+async function updatePhaseStatus(planFile, newStatus, rowIdx) {
+  if (!planFile) { alert("Cannot determine plan file for this phase"); return; }
+  try {
+    await fetch(`${API_BASE}/api/tool/phase-status`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ args: `${planFile} ${newStatus}` }),
+    });
+    addNotification(`Phase status updated to ${newStatus}`, "success");
+  } catch (err) {
+    addNotification(`Failed to update status: ${err.message}`, "error");
+  }
+}
+
+window.runStatusEditable = runStatusEditable;
+window.updatePhaseStatus = updatePhaseStatus;
+
+// ─── Memory Search (v2.7) ────────────────────────────────────────────
+async function searchMemory() {
+  const input = document.getElementById("memory-search-input");
+  const resultsEl = document.getElementById("memory-search-results");
+  if (!input || !resultsEl) return;
+  const query = input.value.trim();
+  if (!query) return;
+  resultsEl.innerHTML = '<p class="text-gray-500 text-sm py-2">Searching...</p>';
+  try {
+    const res = await fetch(`${API_BASE}/api/memory/search`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query }),
+    });
+    const data = await res.json();
+    if (data.error) {
+      resultsEl.innerHTML = `<p class="text-gray-500 text-sm py-2">${escHtml(data.error)}</p>`;
+      return;
+    }
+    const results = data.results || [];
+    if (results.length === 0) {
+      resultsEl.innerHTML = '<p class="text-gray-500 text-sm py-2">No memories found for this query</p>';
+      return;
+    }
+    resultsEl.innerHTML = results.map((r) => `
+      <div class="bg-gray-700/50 rounded p-2 mb-2">
+        <p class="text-sm text-gray-200">${escHtml(r.thought || r.text || "")}</p>
+        <div class="flex gap-2 mt-1 text-xs text-gray-500">
+          ${r.source ? `<span>📁 ${escHtml(r.source)}</span>` : ""}
+          ${r.timestamp ? `<span>🕐 ${new Date(r.timestamp).toLocaleDateString()}</span>` : ""}
+          ${r.relevance ? `<span>🎯 ${(r.relevance * 100).toFixed(0)}%</span>` : ""}
+        </div>
+      </div>`).join("");
+  } catch {
+    resultsEl.innerHTML = '<p class="text-red-400 text-sm py-2">Search failed</p>';
+  }
+}
+
+window.searchMemory = searchMemory;
+
 // ─── Session Replay (Phase 5) ─────────────────────────────────────────
 let replayRuns = [];
 
@@ -456,9 +803,26 @@ window.filterReplay = filterReplay;
 
 // ─── Extension Marketplace (Phase 5) ──────────────────────────────────
 let catalogData = [];
+let installedExtensions = [];
 
 async function loadExtensions() {
   try {
+    // Load installed list
+    try {
+      const listRes = await fetch(`${API_BASE}/api/tool/ext`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ args: "list" }),
+      });
+      const listData = await listRes.json();
+      const output = listData.output || "";
+      installedExtensions = output.split("\n")
+        .map((l) => l.trim())
+        .filter((l) => l && !l.startsWith("─") && !l.startsWith("No") && !l.startsWith("Installed"))
+        .map((l) => l.replace(/^[•\-]\s*/, "").split(/\s/)[0].trim())
+        .filter(Boolean);
+    } catch { installedExtensions = []; }
+
     // Try structured JSON endpoint first, fall back to CLI
     let items = [];
     try {
@@ -500,8 +864,12 @@ function renderExtensions(items) {
       if (provides.prompts) badges.push(`${provides.prompts} prompt${provides.prompts > 1 ? "s" : ""}`);
       if (provides.skills) badges.push(`${provides.skills} skill${provides.skills > 1 ? "s" : ""}`);
       const tagColor = ext.category === "integration" ? "purple" : "blue";
+      const isInstalled = installedExtensions.includes(ext.id || ext.name);
+      const installBtn = isInstalled
+        ? `<button onclick="uninstallExtension('${ext.id || ext.name}')" class="ext-btn text-xs px-2 py-1 rounded bg-red-600/20 text-red-400 border border-red-600/30 hover:bg-red-600/40">Uninstall</button>`
+        : `<button onclick="installExtension('${ext.id || ext.name}')" class="ext-btn text-xs px-2 py-1 rounded bg-green-600/20 text-green-400 border border-green-600/30 hover:bg-green-600/40">Install</button>`;
       return `
-        <div class="bg-gray-800 rounded-lg p-4 border border-gray-700 hover:border-gray-500 transition">
+        <div class="bg-gray-800 rounded-lg p-4 border border-gray-700 hover:border-gray-500 transition" id="ext-card-${ext.id || ext.name}">
           <div class="flex items-start justify-between mb-2">
             <h3 class="font-semibold text-white text-sm">${ext.name}</h3>
             <span class="text-xs px-2 py-0.5 rounded-full bg-${tagColor}-500/20 text-${tagColor}-400 border border-${tagColor}-500/30">${ext.category || "code"}</span>
@@ -509,7 +877,10 @@ function renderExtensions(items) {
           <p class="text-xs text-gray-400 mb-3">${ext.description}</p>
           <div class="flex items-center justify-between">
             <div class="flex gap-1 flex-wrap">${badges.map((b) => `<span class="text-xs bg-gray-700 text-gray-300 px-1.5 py-0.5 rounded">${b}</span>`).join("")}</div>
-            <span class="text-xs text-gray-500">v${ext.version || "1.0.0"}</span>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-gray-500">v${ext.version || "1.0.0"}</span>
+              ${installBtn}
+            </div>
           </div>
           ${ext.author ? `<p class="text-xs text-gray-600 mt-2">by ${ext.author}${ext.verified ? ' <span class="text-green-400">✓</span>' : ""}</p>` : ""}
         </div>`;
@@ -521,6 +892,64 @@ function renderExtensions(items) {
       </div>`;
   }).join("");
 }
+
+async function installExtension(name) {
+  const btn = event.target;
+  btn.textContent = "Installing...";
+  btn.disabled = true;
+  try {
+    const res = await fetch(`${API_BASE}/api/tool/ext`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ args: `add ${name}` }),
+    });
+    const data = await res.json();
+    if (data.success !== false) {
+      installedExtensions.push(name);
+      addNotification(`Extension ${name} installed`, "success");
+      renderExtensions(catalogData);
+    } else {
+      addNotification(`Install failed: ${data.error || data.output}`, "error");
+      btn.textContent = "Install";
+      btn.disabled = false;
+    }
+  } catch (err) {
+    addNotification(`Install failed: ${err.message}`, "error");
+    btn.textContent = "Install";
+    btn.disabled = false;
+  }
+}
+
+async function uninstallExtension(name) {
+  if (!confirm(`Remove extension "${name}"?`)) return;
+  const btn = event.target;
+  btn.textContent = "Removing...";
+  btn.disabled = true;
+  try {
+    const res = await fetch(`${API_BASE}/api/tool/ext`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ args: `remove ${name}` }),
+    });
+    const data = await res.json();
+    if (data.success !== false) {
+      installedExtensions = installedExtensions.filter((e) => e !== name);
+      addNotification(`Extension ${name} removed`, "success");
+      renderExtensions(catalogData);
+    } else {
+      addNotification(`Uninstall failed: ${data.error || data.output}`, "error");
+      btn.textContent = "Uninstall";
+      btn.disabled = false;
+    }
+  } catch (err) {
+    addNotification(`Uninstall failed: ${err.message}`, "error");
+    btn.textContent = "Uninstall";
+    btn.disabled = false;
+  }
+}
+
+window.installExtension = installExtension;
+window.uninstallExtension = uninstallExtension;
 
 function filterExtensions() {
   const q = document.getElementById("ext-search").value.toLowerCase();
@@ -667,6 +1096,7 @@ async function loadApiProviderStatus() {
 
 async function loadOpenBrainStatus() {
   const el = document.getElementById("cfg-openbrain");
+  const searchPanel = document.getElementById("memory-search-panel");
   if (!el) return;
   try {
     const res = await fetch(`${API_BASE}/api/memory`);
@@ -674,11 +1104,14 @@ async function loadOpenBrainStatus() {
     if (data.configured) {
       el.innerHTML = `<span class="text-green-400">✓ Connected</span> <span class="text-gray-500">— ${data.serverName || "openbrain"}</span>`
         + (data.endpoint ? `<br><span class="text-xs text-gray-500">${data.endpoint}</span>` : "");
+      if (searchPanel) searchPanel.classList.remove("hidden");
     } else {
       el.innerHTML = '<span class="text-gray-500">Not configured. Add openbrain MCP server to enable project memory.</span>';
+      if (searchPanel) searchPanel.classList.add("hidden");
     }
   } catch {
     el.textContent = "Unable to check";
+    if (searchPanel) searchPanel.classList.add("hidden");
   }
 }
 
@@ -727,12 +1160,17 @@ connectWebSocket();
 // Load notifications from localStorage
 renderNotifications();
 
+// Load plan browser on init (Progress is default tab)
+loadPlans();
+
 // Tab load hooks
 const tabLoadHooks = {
+  progress: loadPlans,
   replay: loadReplayRuns,
   extensions: loadExtensions,
   config: loadConfig,
   traces: loadTraces,
+  cost: loadModelComparison,
 };
 
 // ─── Traces Tab (v2.4) ───────────────────────────────────────────────

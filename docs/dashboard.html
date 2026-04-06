@@ -83,6 +83,8 @@
         <span class="px-3 py-1 rounded-full bg-forge-500/20 text-forge-400 border border-forge-500/30">OTLP Traces</span>
         <span class="px-3 py-1 rounded-full bg-red-500/20 text-red-400 border border-red-500/30">Quorum Actions</span>
         <span class="px-3 py-1 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">OpenBrain Memory</span>
+        <span class="px-3 py-1 rounded-full bg-teal-500/20 text-teal-400 border border-teal-500/30">Plan Browser</span>
+        <span class="px-3 py-1 rounded-full bg-pink-500/20 text-pink-400 border border-pink-500/30">Git Operations</span>
       </div>
     </div>
   </section>
@@ -129,9 +131,10 @@
           <div>
             <h2 class="text-2xl font-bold text-white">Progress</h2>
             <p class="text-slate-400 mt-1">Live view of the currently executing plan. Each slice is rendered as a card showing its status (pending, executing, completed, failed), the AI model used, execution time, and token cost. The progress bar updates in real time via WebSocket events. Slices using API-based models like Grok display a purple <span class="inline-block px-1.5 py-0.5 text-xs font-bold rounded bg-purple-500/30 text-purple-300 border border-purple-400/30">API</span> badge.</p>
+            <p class="text-slate-400 mt-2">The <strong class="text-white">Plan Browser</strong> panel (v2.7) lists all plan files in <code class="text-forge-400 text-sm">docs/plans/</code> with their status, slice count, and branch. Click <strong>Estimate</strong> to preview cost/token estimates or <strong>Run</strong> to launch execution directly from the dashboard.</p>
           </div>
         </div>
-        <img src="assets/dashboard/progress.png" alt="Dashboard Progress tab showing 6 slices — 3 completed, 1 executing with blue pulse, 2 pending" class="w-full rounded-xl border border-slate-700/40 shadow-2xl" loading="lazy" />
+        <img src="assets/dashboard/progress.png" alt="Dashboard Progress tab with plan browser showing 6 plans, plus slice cards — 3 completed, 1 executing" class="w-full rounded-xl border border-slate-700/40 shadow-2xl" loading="lazy" />
       </div>
 
       <!-- Runs -->
@@ -152,7 +155,8 @@
           <span class="shrink-0 w-10 h-10 rounded-xl bg-forge-500/20 flex items-center justify-center text-forge-400 text-lg">💰</span>
           <div>
             <h2 class="text-2xl font-bold text-white">Cost</h2>
-            <p class="text-slate-400 mt-1">Cumulative cost visualization across all runs. Tracks input tokens, output tokens, and total cost per model. The chart shows cost over time so you can spot trends, compare model efficiency, and catch runaway sessions early. Data comes from <code class="text-forge-400 text-sm">cost-history.json</code>.</p>
+            <p class="text-slate-400 mt-1">Cumulative cost visualization across all runs. The donut chart breaks down spend by model, and the monthly bar chart shows cost over time to spot trends and catch runaway sessions early. Data comes from <code class="text-forge-400 text-sm">cost-history.json</code>.</p>
+            <p class="text-slate-400 mt-2">The <strong class="text-white">Model Comparison</strong> table (v2.7) aggregates per-model performance: run count, pass rate (color-coded green/amber/red), average duration, average cost per run, and total tokens consumed. Useful for comparing Claude vs Grok efficiency on your specific workloads.</p>
           </div>
         </div>
         <img src="assets/dashboard/cost.png" alt="Dashboard Cost tab showing cumulative cost chart across runs" class="w-full rounded-xl border border-slate-700/40 shadow-2xl" loading="lazy" />
@@ -164,10 +168,11 @@
           <span class="shrink-0 w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center text-purple-400 text-lg">🎯</span>
           <div>
             <h2 class="text-2xl font-bold text-white">Actions</h2>
-            <p class="text-slate-400 mt-1">One-click access to common forge operations. Run <strong>Smith</strong> (environment diagnostics), <strong>Sweep</strong> (TODO/FIXME detection), <strong>Analyze</strong> (plan consistency scoring), <strong>Analyze (Quorum)</strong> (multi-model consensus analysis), <strong>Diagnose</strong> (multi-model bug investigation), <strong>Status</strong> (roadmap phase status), <strong>Validate</strong> (setup file checks), and <strong>Extensions</strong> (catalog browser). Results display inline below each card.</p>
+            <p class="text-slate-400 mt-1">One-click access to 11 forge operations. Run <strong>Smith</strong> (environment diagnostics), <strong>Sweep</strong> (TODO/FIXME detection with structured table view), <strong>Analyze</strong> (plan consistency scoring), <strong>Analyze (Quorum)</strong> (multi-model consensus analysis), <strong>Diagnose</strong> (multi-model bug investigation), <strong>Status</strong> (editable phase status with inline dropdowns), <strong>Validate</strong> (setup file checks), and <strong>Extensions</strong> (catalog browser). Results display inline below each card.</p>
+            <p class="text-slate-400 mt-2">New in v2.7: <strong class="text-white">Create Branch</strong> creates a git branch from the plan's branch strategy. <strong class="text-white">Auto-Commit</strong> generates a conventional commit from the current slice goal. <strong class="text-white">Diff</strong> shows changed files color-coded against the scope contract — green for in-scope, yellow for out-of-scope, red for forbidden. The <strong class="text-white">Sweep</strong> action now renders results as a filterable table with type badges (TODO, FIXME, HACK, STUB).</p>
           </div>
         </div>
-        <img src="assets/dashboard/actions.png" alt="Dashboard Actions tab showing 8 action buttons including Quorum and Diagnose" class="w-full rounded-xl border border-slate-700/40 shadow-2xl" loading="lazy" />
+        <img src="assets/dashboard/actions.png" alt="Dashboard Actions tab showing 11 action cards including git ops, sweep, and status editor" class="w-full rounded-xl border border-slate-700/40 shadow-2xl" loading="lazy" />
       </div>
 
       <!-- Config -->
@@ -177,9 +182,10 @@
           <div>
             <h2 class="text-2xl font-bold text-white">Config</h2>
             <p class="text-slate-400 mt-1">View and edit project configuration without touching files. Set the active preset, template version, enabled agents (Claude, Cursor, Codex, Grok), and default model routing. The <strong>API Providers</strong> section shows which external model providers are configured — set <code class="text-forge-400 text-sm">XAI_API_KEY</code> to enable Grok models (grok-4, grok-3, grok-3-mini). The <strong>OpenBrain Memory</strong> section shows whether the OpenBrain MCP server is connected for persistent project memory. Changes save to <code class="text-forge-400 text-sm">.forge/config.json</code>.</p>
+            <p class="text-slate-400 mt-2">When OpenBrain is connected, the <strong class="text-white">Memory Search</strong> panel (v2.7) lets you search project knowledge directly from the dashboard. Type a query and get matching memory entries rendered as cards with titles and excerpts.</p>
           </div>
         </div>
-        <img src="assets/dashboard/config.png" alt="Dashboard Config tab showing preset, agents, model routing, API providers, and OpenBrain memory status" class="w-full rounded-xl border border-slate-700/40 shadow-2xl" loading="lazy" />
+        <img src="assets/dashboard/config.png" alt="Dashboard Config tab showing preset, agents, model routing, API providers, OpenBrain memory status, and memory search" class="w-full rounded-xl border border-slate-700/40 shadow-2xl" loading="lazy" />
       </div>
 
       <!-- Traces -->
@@ -224,10 +230,10 @@
           <span class="shrink-0 w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-400 text-lg">🧩</span>
           <div>
             <h2 class="text-2xl font-bold text-white">Extensions</h2>
-            <p class="text-slate-400 mt-1">Browse and install community extensions directly from the dashboard. Each extension card shows the name, description, author, version, and what it provides (agents, instructions, prompts, MCP config). Click to view the README or install with one click. Extensions are curated in the <a href="extensions.html" class="text-forge-400 hover:underline">community catalog</a>.</p>
+            <p class="text-slate-400 mt-1">Browse and manage community extensions directly from the dashboard. Each extension card shows the name, description, author, version, and what it provides (agents, instructions, prompts, MCP config). In v2.7, cards now include <strong class="text-white">Install</strong> and <strong class="text-white">Uninstall</strong> buttons — click to install or remove extensions without leaving the dashboard. Installed extensions show a green checkmark. Extensions are curated in the <a href="extensions.html" class="text-forge-400 hover:underline">community catalog</a>.</p>
           </div>
         </div>
-        <img src="assets/dashboard/extensions.png" alt="Dashboard Extensions tab showing community extension catalog" class="w-full rounded-xl border border-slate-700/40 shadow-2xl" loading="lazy" />
+        <img src="assets/dashboard/extensions.png" alt="Dashboard Extensions tab with install/uninstall buttons on extension cards" class="w-full rounded-xl border border-slate-700/40 shadow-2xl" loading="lazy" />
       </div>
 
     </div>

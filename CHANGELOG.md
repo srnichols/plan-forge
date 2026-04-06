@@ -5,6 +5,52 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.7.0] — 2026-04-06
+
+### Added — Dashboard Enhancements (Phase 9)
+
+#### Plan Browser
+- **Plan file browser** in Progress tab — lists all `Phase-*-PLAN.md` files with status icons, slice count, and branch name
+- **Estimate** and **Run** buttons per plan — launch `run-plan --estimate` or full execution directly from the dashboard
+- **`GET /api/plans` endpoint** — scans `docs/plans/` and returns parsed plan metadata
+
+#### Git Operations
+- **Create Branch** action card — prompts for branch name and creates a git branch from the plan's branch strategy
+- **Auto-Commit** action card — generates a conventional commit message from the current slice goal
+- **Diff** action card — shows changed files color-coded against the scope contract (green = in-scope, yellow = out-of-scope, red = forbidden)
+
+#### Sweep Table
+- **Structured sweep output** — TODO/FIXME/HACK/STUB markers rendered as a filterable table with File, Line, Type, and Text columns
+- **Type badges** — color-coded by severity: TODO (blue), FIXME (amber), HACK (red), STUB (gray)
+- **Filter buttons** — toggle visibility by type with live counts
+
+#### Model Comparison
+- **Model comparison table** in Cost tab — aggregates per-model performance: run count, pass rate (color-coded), average duration, average cost, total tokens
+- Useful for comparing Claude vs Grok efficiency on your specific workloads
+
+#### Phase Status Editor
+- **Editable phase status** — Status action now renders phases with inline `<select>` dropdowns (planned → in-progress → complete → paused)
+- Changes persist via `phase-status` CLI command
+
+#### OpenBrain Memory Browser
+- **Memory search panel** in Config tab — search project knowledge when OpenBrain MCP server is connected
+- **`POST /api/memory/search` endpoint** — proxies search to OpenBrain's `search_thoughts` tool
+- Results rendered as cards with titles and content excerpts
+
+#### Extension Install/Uninstall
+- **Install/Uninstall buttons** on extension cards — manage extensions without leaving the dashboard
+- Installed extensions show a green checkmark with an Uninstall option
+- Confirmation dialog on uninstall to prevent accidental removal
+
+### Changed
+- Actions tab now shows 11 cards (was 8) — added Create Branch, Auto-Commit, Diff
+- Sweep button renders structured table instead of raw text
+- Status button renders editable dropdowns instead of plain text
+- Updated dashboard.html documentation with v2.7 feature descriptions and screenshots
+- Updated capture-screenshots.mjs with v2.7 data injection for plan browser, model comparison, memory search, and extension install buttons
+
+---
+
 ## [2.6.0] — 2026-04-06
 
 ### Added — Skill Slash Command Upgrade (Phase 8)

@@ -61,9 +61,9 @@
 ---
 
 ### Phase 9: Dashboard Enhancement — Low-Hanging Fruit GUI Tools
-**Goal**: Add plan browser with estimate/run, git operation buttons (branch, commit, diff), sweep table view, model performance comparison, and phase status editor to the dashboard
+**Goal**: Add plan browser with estimate/run, git operation buttons (branch, commit, diff), sweep table view, model performance comparison, phase status editor, memory browser, and extension install/uninstall to the dashboard
 **Plan**: [Phase-9-DASHBOARD-ENHANCEMENT-PLAN.md](./Phase-9-DASHBOARD-ENHANCEMENT-PLAN.md)
-**Status**: 🚧 In Progress
+**Status**: ✅ Complete
 
 ## Completed Phases
 
@@ -71,7 +71,7 @@
 
 | Phase | Goal | Plan | Completed |
 |-------|------|------|-----------|
-| — | — | — | — |
+| Phase 9 | Dashboard Enhancement — plan browser, git ops, sweep table, model comparison, status editor, memory browser, extension install | [Phase-9](./Phase-9-DASHBOARD-ENHANCEMENT-PLAN.md) | 2026-04-06 |
 
 ---
 

@@ -1,6 +1,6 @@
 # Phase 16: OpenClaw Bridge — External Notifications & Approval Gates
 
-> **Status**: 🟡 HARDENED — Ready for execution  
+> **Status**: ✅ COMPLETE — All 5 slices executed  
 > **Estimated Effort**: 4 hours (5 execution slices)  
 > **Risk Level**: Medium (new module with external webhook calls, approval state machine)  
 > **Branch**: `feature/openclaw-bridge`  
@@ -251,13 +251,13 @@ After Slices 1 and 2 complete:
 
 ## Definition of Done
 
-- [ ] `bridge.mjs` created with BridgeManager, 4 platform formatters, approval gate
-- [ ] `server.mjs` wires bridge with 3 REST endpoints
-- [ ] `orchestrator.mjs` supports approval gate hook
-- [ ] EVENTS.md documents 4 new event types
-- [ ] Configuration via `.forge.json` bridge section
-- [ ] CHANGELOG.md and VERSION updated
-- [ ] All validation gates passed
+- [x] `bridge.mjs` created with BridgeManager, 4 platform formatters, approval gate
+- [x] `server.mjs` wires bridge with 3 REST endpoints
+- [x] `orchestrator.mjs` supports approval gate hook
+- [x] EVENTS.md documents 4 new event types
+- [x] Configuration via `.forge.json` bridge section
+- [x] CHANGELOG.md and VERSION updated
+- [x] All validation gates passed
 - [ ] Reviewer Gate passed (zero 🔴 Critical)
 
 ---

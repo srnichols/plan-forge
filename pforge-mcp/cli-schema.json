@@ -1,0 +1,300 @@
+{
+  "commands": {
+    "smith": {
+      "description": "Diagnose environment + setup health",
+      "args": [],
+      "flags": {},
+      "examples": [
+        "pforge smith"
+      ]
+    },
+    "check": {
+      "description": "Validate setup files",
+      "args": [],
+      "flags": {},
+      "examples": [
+        "pforge check"
+      ]
+    },
+    "status": {
+      "description": "Show phase status from roadmap",
+      "args": [],
+      "flags": {},
+      "examples": [
+        "pforge status"
+      ]
+    },
+    "sweep": {
+      "description": "Scan for TODO/FIXME markers",
+      "args": [],
+      "flags": {},
+      "examples": [
+        "pforge sweep"
+      ]
+    },
+    "new-phase": {
+      "description": "Create a new phase plan + roadmap entry",
+      "args": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "description": "Phase name (e.g., user-auth)"
+        }
+      ],
+      "flags": {
+        "--dry-run": {
+          "type": "boolean",
+          "description": "Preview without creating"
+        }
+      },
+      "examples": [
+        "pforge new-phase user-auth",
+        "pforge new-phase user-auth --dry-run"
+      ]
+    },
+    "branch": {
+      "description": "Create git branch from plan's Branch Strategy",
+      "args": [
+        {
+          "name": "plan",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "flags": {
+        "--dry-run": {
+          "type": "boolean"
+        }
+      },
+      "examples": [
+        "pforge branch docs/plans/Phase-1-AUTH-PLAN.md"
+      ],
+      "note": "CLI-only — not available as MCP tool. Use via terminal."
+    },
+    "commit": {
+      "description": "Auto-generate conventional commit from slice goal",
+      "args": [
+        {
+          "name": "plan",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "slice",
+          "type": "number",
+          "required": true
+        }
+      ],
+      "flags": {
+        "--dry-run": {
+          "type": "boolean"
+        }
+      },
+      "examples": [
+        "pforge commit docs/plans/Phase-1.md 2"
+      ],
+      "note": "CLI-only — not available as MCP tool."
+    },
+    "phase-status": {
+      "description": "Update phase status in DEPLOYMENT-ROADMAP.md",
+      "args": [
+        {
+          "name": "plan",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "status",
+          "type": "string",
+          "required": true,
+          "enum": [
+            "planned",
+            "in-progress",
+            "complete",
+            "paused"
+          ]
+        }
+      ],
+      "flags": {},
+      "examples": [
+        "pforge phase-status docs/plans/Phase-1.md complete"
+      ],
+      "note": "CLI-only — not available as MCP tool."
+    },
+    "diff": {
+      "description": "Compare changes against plan's Scope Contract",
+      "args": [
+        {
+          "name": "plan",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "flags": {},
+      "examples": [
+        "pforge diff docs/plans/Phase-1-AUTH-PLAN.md"
+      ]
+    },
+    "analyze": {
+      "description": "Cross-artifact consistency scoring (0-100)",
+      "args": [
+        {
+          "name": "plan",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "flags": {},
+      "examples": [
+        "pforge analyze docs/plans/Phase-1-AUTH-PLAN.md"
+      ]
+    },
+    "run-plan": {
+      "description": "Execute a hardened plan automatically or interactively",
+      "args": [
+        {
+          "name": "plan",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "flags": {
+        "--estimate": {
+          "type": "boolean",
+          "description": "Cost prediction only"
+        },
+        "--assisted": {
+          "type": "boolean",
+          "description": "Human codes, orchestrator validates gates"
+        },
+        "--model": {
+          "type": "string",
+          "description": "Model override (e.g., claude-sonnet-4.6)"
+        },
+        "--resume-from": {
+          "type": "number",
+          "description": "Skip completed slices, resume from N"
+        },
+        "--dry-run": {
+          "type": "boolean",
+          "description": "Parse and validate without executing"
+        },
+        "--quorum": {
+          "type": "boolean|auto",
+          "description": "Force quorum on all slices, or 'auto' for threshold-based"
+        },
+        "--quorum-threshold": {
+          "type": "number",
+          "description": "Override complexity threshold (1-10, default: 7)"
+        }
+      },
+      "examples": [
+        "pforge run-plan docs/plans/Phase-1.md",
+        "pforge run-plan docs/plans/Phase-1.md --estimate",
+        "pforge run-plan docs/plans/Phase-1.md --assisted",
+        "pforge run-plan docs/plans/Phase-1.md --model claude-sonnet-4.6",
+        "pforge run-plan docs/plans/Phase-1.md --resume-from 3",
+        "pforge run-plan docs/plans/Phase-1.md --quorum",
+        "pforge run-plan docs/plans/Phase-1.md --quorum=auto",
+        "pforge run-plan docs/plans/Phase-1.md --quorum=auto --quorum-threshold 8",
+        "pforge run-plan docs/plans/Phase-1.md --estimate --quorum"
+      ]
+    },
+    "ext": {
+      "description": "Extension management",
+      "subcommands": {
+        "search": {
+          "description": "Search extension catalog",
+          "args": [
+            {
+              "name": "query",
+              "type": "string",
+              "required": false
+            }
+          ]
+        },
+        "add": {
+          "description": "Install extension",
+          "args": [
+            {
+              "name": "name",
+              "type": "string",
+              "required": true
+            }
+          ]
+        },
+        "info": {
+          "description": "Extension details",
+          "args": [
+            {
+              "name": "name",
+              "type": "string",
+              "required": true
+            }
+          ]
+        },
+        "list": {
+          "description": "List installed extensions",
+          "args": []
+        },
+        "remove": {
+          "description": "Remove extension",
+          "args": [
+            {
+              "name": "name",
+              "type": "string",
+              "required": true
+            }
+          ]
+        }
+      },
+      "examples": [
+        "pforge ext search azure",
+        "pforge ext add azure-infrastructure",
+        "pforge ext list"
+      ]
+    },
+    "update": {
+      "description": "Update framework files from Plan Forge source",
+      "args": [
+        {
+          "name": "source",
+          "type": "path",
+          "required": false,
+          "description": "Plan Forge source path"
+        }
+      ],
+      "flags": {
+        "--dry-run": {
+          "type": "boolean"
+        }
+      },
+      "examples": [
+        "pforge update ../plan-forge",
+        "pforge update --dry-run"
+      ]
+    },
+    "help": {
+      "description": "Show help",
+      "args": [],
+      "flags": {},
+      "examples": [
+        "pforge help"
+      ]
+    }
+  },
+  "server": {
+    "description": "MCP server commands (run directly with node)",
+    "commands": {
+      "start": {
+        "description": "Start MCP server (stdio + Express + WebSocket)",
+        "command": "node pforge-mcp/server.mjs"
+      },
+      "dashboard-only": {
+        "description": "Start dashboard + REST API without MCP stdio",
+        "command": "node pforge-mcp/server.mjs --dashboard-only"
+      }
+    }
+  }
+}

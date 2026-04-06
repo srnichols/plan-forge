@@ -1715,6 +1715,190 @@ cmd_doctor() {
     fi
 
     # ═══════════════════════════════════════════════════════════════
+    # 4d. MCP RUNTIME DEPENDENCIES
+    # ═══════════════════════════════════════════════════════════════
+    if [ -f "$mcp_server" ]; then
+        echo "MCP Runtime:"
+
+        # Granular dependency checks
+        local mcp_deps_dir="$REPO_ROOT/pforge-mcp/node_modules"
+        if [ -d "$mcp_deps_dir" ]; then
+            # Critical deps
+            local critical_deps=("@modelcontextprotocol/sdk:MCP SDK (protocol layer)" "express:Express (dashboard + REST API)" "ws:ws (WebSocket hub for real-time events)")
+            for entry in "${critical_deps[@]}"; do
+                local dep_name="${entry%%:*}"
+                local dep_label="${entry#*:}"
+                local dep_path="$mcp_deps_dir/$dep_name"
+                if [ -d "$dep_path" ]; then
+                    local dep_pkg="$dep_path/package.json"
+                    if [ -f "$dep_pkg" ]; then
+                        local dep_ver
+                        dep_ver=$(jq -r '.version // "?"' "$dep_pkg" 2>/dev/null)
+                        doctor_pass "$dep_label v$dep_ver"
+                    else
+                        doctor_pass "$dep_label installed"
+                    fi
+                else
+                    doctor_fail "$dep_label missing" "Run: cd pforge-mcp && npm install"
+                fi
+            done
+
+            # Optional deps
+            if [ -d "$mcp_deps_dir/playwright" ]; then
+                doctor_pass "Playwright (screenshot capture)"
+            else
+                doctor_warn "Playwright (screenshot capture) not installed (optional)" "Run: cd pforge-mcp && npm install playwright"
+            fi
+        fi
+
+        # MCP version sync
+        local mcp_pkg_path="$REPO_ROOT/pforge-mcp/package.json"
+        local version_path="$REPO_ROOT/VERSION"
+        if [ -f "$mcp_pkg_path" ] && [ -f "$version_path" ]; then
+            local mcp_ver repo_ver
+            mcp_ver=$(jq -r '.version // ""' "$mcp_pkg_path" 2>/dev/null)
+            repo_ver=$(cat "$version_path" | tr -d '[:space:]')
+            if [ "$mcp_ver" = "$repo_ver" ]; then
+                doctor_pass "MCP server version v$mcp_ver matches VERSION file"
+            else
+                doctor_warn "MCP server v$mcp_ver but VERSION file says v$repo_ver" "Update version in pforge-mcp/package.json"
+            fi
+        fi
+
+        echo ""
+    fi
+
+    # ═══════════════════════════════════════════════════════════════
+    # 4e. DASHBOARD & SITE ASSETS
+    # ═══════════════════════════════════════════════════════════════
+    local dashboard_html="$REPO_ROOT/pforge-mcp/dashboard/index.html"
+    local dashboard_js="$REPO_ROOT/pforge-mcp/dashboard/app.js"
+    if [ -f "$dashboard_html" ] || [ -f "$dashboard_js" ]; then
+        echo "Dashboard:"
+
+        if [ -f "$dashboard_html" ]; then doctor_pass "dashboard/index.html"
+        else doctor_warn "dashboard/index.html missing" "MCP dashboard will not render"; fi
+
+        if [ -f "$dashboard_js" ]; then doctor_pass "dashboard/app.js"
+        else doctor_warn "dashboard/app.js missing" "MCP dashboard has no frontend logic"; fi
+
+        # Dashboard screenshots for docs
+        local screenshot_dir="$REPO_ROOT/docs/assets/dashboard"
+        if [ -d "$screenshot_dir" ]; then
+            local expected_screenshots=("progress.png" "runs.png" "cost.png" "actions.png" "config.png" "traces.png" "skills.png" "replay.png" "extensions.png")
+            local found_count=0 missing_names=""
+            for ss in "${expected_screenshots[@]}"; do
+                if [ -f "$screenshot_dir/$ss" ]; then
+                    found_count=$((found_count + 1))
+                else
+                    [ -n "$missing_names" ] && missing_names="$missing_names, "
+                    missing_names="$missing_names$ss"
+                fi
+            done
+            if [ $found_count -eq ${#expected_screenshots[@]} ]; then
+                doctor_pass "$found_count dashboard screenshots in docs/assets/dashboard/"
+            else
+                local missing_count=$(( ${#expected_screenshots[@]} - found_count ))
+                doctor_warn "Missing $missing_count screenshot(s): $missing_names" "Run: node pforge-mcp/capture-screenshots.mjs"
+            fi
+        else
+            doctor_warn "docs/assets/dashboard/ not found" "Run: node pforge-mcp/capture-screenshots.mjs to generate"
+        fi
+
+        # Site images
+        local site_assets="$REPO_ROOT/docs/assets"
+        if [ -d "$site_assets" ]; then
+            local site_images=("og-card.webp" "hero-illustration.webp" "problem-80-20-wall.webp")
+            local si_missing=""
+            for img in "${site_images[@]}"; do
+                [ ! -f "$site_assets/$img" ] && { [ -n "$si_missing" ] && si_missing="$si_missing, "; si_missing="$si_missing$img"; }
+            done
+            if [ -z "$si_missing" ]; then
+                doctor_pass "${#site_images[@]} site images (WebP)"
+            else
+                doctor_warn "Missing site image(s): $si_missing" "Generate with forge_generate_image MCP tool"
+            fi
+        fi
+
+        echo ""
+    fi
+
+    # ═══════════════════════════════════════════════════════════════
+    # 4f. LIFECYCLE HOOKS
+    # ═══════════════════════════════════════════════════════════════
+    local hooks_dir="$REPO_ROOT/.github/hooks"
+    if [ -d "$hooks_dir" ]; then
+        echo "Lifecycle Hooks:"
+        local expected_hooks=("SessionStart" "PreToolUse" "PostToolUse" "Stop")
+        local hook_count=0 hook_missing=""
+        for hook in "${expected_hooks[@]}"; do
+            if ls "$hooks_dir"/*"$hook"* >/dev/null 2>&1; then
+                hook_count=$((hook_count + 1))
+            else
+                [ -n "$hook_missing" ] && hook_missing="$hook_missing, "
+                hook_missing="$hook_missing$hook"
+            fi
+        done
+        if [ $hook_count -eq ${#expected_hooks[@]} ]; then
+            doctor_pass "$hook_count/${#expected_hooks[@]} lifecycle hooks present"
+        elif [ $hook_count -gt 0 ]; then
+            doctor_warn "$hook_count/${#expected_hooks[@]} hooks — missing: $hook_missing" "Run 'pforge update' to install missing hooks"
+        else
+            doctor_warn "No lifecycle hooks found" "Run 'pforge update' to install hooks"
+        fi
+        echo ""
+    fi
+
+    # ═══════════════════════════════════════════════════════════════
+    # 4g. EXTENSIONS & SPEC KIT
+    # ═══════════════════════════════════════════════════════════════
+    local catalog_path="$REPO_ROOT/extensions/catalog.json"
+    if [ -f "$catalog_path" ]; then
+        echo "Extensions:"
+        local ext_count
+        ext_count=$(jq -r '.extensions | length // 0' "$catalog_path" 2>/dev/null)
+        if [ $? -eq 0 ]; then
+            doctor_pass "Extension catalog valid ($ext_count extension(s))"
+            local speckit_compat
+            speckit_compat=$(jq -r '.speckit_compatible // false' "$catalog_path" 2>/dev/null)
+            if [ "$speckit_compat" = "true" ]; then
+                doctor_pass "Spec Kit compatible"
+            fi
+        else
+            doctor_fail "extensions/catalog.json has invalid JSON" "Fix the JSON syntax"
+        fi
+        echo ""
+    fi
+
+    # ═══════════════════════════════════════════════════════════════
+    # 4h. VERSION & CHANGELOG SYNC
+    # ═══════════════════════════════════════════════════════════════
+    echo "Version & Changelog:"
+
+    local version_path="$REPO_ROOT/VERSION"
+    local changelog_path="$REPO_ROOT/CHANGELOG.md"
+    local current_ver=""
+
+    if [ -f "$version_path" ]; then
+        current_ver=$(cat "$version_path" | tr -d '[:space:]')
+        doctor_pass "VERSION: $current_ver"
+    else
+        doctor_warn "VERSION file not found"
+    fi
+
+    if [ -f "$changelog_path" ]; then
+        if grep -qiE "\[v?${current_ver}\]|## v?${current_ver}" "$changelog_path" 2>/dev/null; then
+            doctor_pass "CHANGELOG.md has entry for v$current_ver"
+        else
+            doctor_warn "CHANGELOG.md missing entry for v$current_ver" "Add release notes for the current version"
+        fi
+    else
+        doctor_warn "CHANGELOG.md not found"
+    fi
+
+    echo ""
+
+    # ═══════════════════════════════════════════════════════════════
     # 4c. QUORUM MODE
     # ═══════════════════════════════════════════════════════════════
     local config_path="$REPO_ROOT/.forge.json"

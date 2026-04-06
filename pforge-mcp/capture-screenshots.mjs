@@ -123,25 +123,67 @@ async function main() {
     if (browser) browser.open = true;
     if (countEl) countEl.textContent = "(6)";
     const plans = [
-      { title: "Invoice Engine", file: "Phase-3-INVOICE-ENGINE-PLAN.md", status: "🚧", sliceCount: 6, branch: "feature/v2.4-invoice" },
+      { title: "Invoice Engine", file: "Phase-3-INVOICE-ENGINE-PLAN.md", status: "🚧", sliceCount: 6, branch: "feature/v2.4-invoice",
+        scope: { in: ["src/invoices/**", "prisma/migrations/**"], out: ["src/auth/**"], forbidden: ["src/config/**"] },
+        slices: [
+          { id: 1, title: "DB Migration", depends: [], parallel: false },
+          { id: 2, title: "Repository", depends: [1], parallel: false },
+          { id: 3, title: "Service Logic", depends: [2], parallel: false },
+          { id: 4, title: "API Controller", depends: [3], parallel: false },
+          { id: 5, title: "PDF Generation", depends: [3], parallel: true },
+          { id: 6, title: "E2E Tests", depends: [4, 5], parallel: false },
+        ] },
       { title: "Dashboard Core", file: "Phase-4-DASHBOARD-CORE-PLAN.md", status: "✅", sliceCount: 5, branch: "" },
       { title: "Dashboard Advanced", file: "Phase-5-DASHBOARD-ADVANCED-PLAN.md", status: "✅", sliceCount: 4, branch: "" },
       { title: "Parallel Execution", file: "Phase-6-PARALLEL-EXECUTION-PLAN.md", status: "📋", sliceCount: 7, branch: "" },
       { title: "WebSocket Hub", file: "Phase-3-WEBSOCKET-HUB-PLAN.md", status: "✅", sliceCount: 4, branch: "" },
-      { title: "Dashboard Enhancements", file: "Phase-9-DASHBOARD-ENHANCEMENT-PLAN.md", status: "🚧", sliceCount: 8, branch: "feature/v2.7-dashboard-enhancement" },
+      { title: "Dashboard v2.9", file: "Phase-11-DASHBOARD-V2.9-PLAN.md", status: "🚧", sliceCount: 8, branch: "feature/v2.9-dashboard-power-ux" },
     ];
-    listEl.innerHTML = plans.map(p => `
-      <div class="flex items-center gap-3 py-2 border-b border-gray-700/50 last:border-0 group">
-        <span class="text-sm">${p.status}</span>
-        <div class="flex-1 min-w-0">
-          <p class="text-sm font-medium text-gray-200 truncate">${p.title}</p>
-          <p class="text-xs text-gray-500">${p.file} · ${p.sliceCount} slices${p.branch ? " · " + p.branch : ""}</p>
-        </div>
-        <div class="flex gap-1 opacity-90">
-          <button class="text-xs px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded transition">Estimate</button>
-          <button class="text-xs px-2 py-1 bg-blue-600 hover:bg-blue-500 rounded transition">Run</button>
-        </div>
-      </div>`).join("");
+    function escH(s) { return s.replace(/&/g,"&amp;").replace(/</g,"&lt;"); }
+    listEl.innerHTML = plans.map((p, pi) => {
+      const icon = p.status;
+      // v2.9: Scope contract
+      let scopeHtml = "";
+      if (p.scope) {
+        scopeHtml = `<details class="mt-1 ml-7" ${pi === 0 ? 'open' : ''}>
+          <summary class="text-xs text-gray-500 cursor-pointer hover:text-gray-300">Scope Contract</summary>
+          <div class="grid grid-cols-3 gap-2 mt-1 py-1 text-xs">
+            <div><p class="text-gray-500 font-semibold mb-1">In Scope</p>${p.scope.in.map(s => `<span class="text-green-400 text-xs">✓ ${s}</span>`).join("<br>")}</div>
+            <div><p class="text-gray-500 font-semibold mb-1">Out of Scope</p>${p.scope.out.map(s => `<span class="text-gray-500 text-xs">✗ ${s}</span>`).join("<br>")}</div>
+            <div><p class="text-gray-500 font-semibold mb-1">Forbidden</p>${p.scope.forbidden.map(s => `<span class="text-red-400 text-xs">⛔ ${s}</span>`).join("<br>")}</div>
+          </div>
+        </details>`;
+      }
+      // v2.9: DAG view
+      let dagHtml = "";
+      if (p.slices && p.slices.some(s => s.depends?.length > 0 || s.parallel)) {
+        const lines = p.slices.map(s => {
+          const deps = s.depends?.length ? ` <span class="text-gray-600">← ${s.depends.join(",")}</span>` : "";
+          const pTag = s.parallel ? ' <span class="text-purple-400">[P]</span>' : "";
+          const indent = s.depends?.length > 0 ? "ml-4" : "";
+          return `<div class="${indent} py-0.5"><span class="text-gray-500 w-6 inline-block text-right">${s.id}.</span> <span class="text-gray-300">${escH(s.title)}</span>${pTag}${deps}</div>`;
+        }).join("");
+        dagHtml = `<details class="mt-1 ml-7" ${pi === 0 ? 'open' : ''}>
+          <summary class="text-xs text-gray-500 cursor-pointer hover:text-gray-300">DAG View</summary>
+          <div class="text-xs mt-1 py-1 font-mono">${lines}</div>
+        </details>`;
+      }
+      return `
+        <div class="py-2 border-b border-gray-700/50 last:border-0 group">
+          <div class="flex items-center gap-3">
+            <span class="text-sm">${icon}</span>
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-medium text-gray-200 truncate">${p.title}</p>
+              <p class="text-xs text-gray-500">${p.file} · ${p.sliceCount} slices${p.branch ? " · " + p.branch : ""}</p>
+            </div>
+            <div class="flex gap-1 opacity-90">
+              <button class="text-xs px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded transition">Estimate</button>
+              <button class="text-xs px-2 py-1 bg-blue-600 hover:bg-blue-500 rounded transition">Run</button>
+            </div>
+          </div>
+          ${scopeHtml}${dagHtml}
+        </div>`;
+    }).join("");
   });
   await page.waitForTimeout(300);
 
@@ -153,7 +195,39 @@ async function main() {
     await page.waitForTimeout(100);
   }
   await page.waitForTimeout(500);
-  await page.screenshot({ path: resolve(OUTPUT_DIR, "progress.png"), fullPage: false });
+
+  // v2.9: Inject event log entries
+  await page.evaluate(() => {
+    const logEl = document.getElementById("event-log");
+    const countEl = document.getElementById("event-log-count");
+    if (!logEl) return;
+    const events = [
+      { time: "10:42:01", type: "run-started", color: "text-blue-400" },
+      { time: "10:42:02", type: "slice-started", color: "text-cyan-400", detail: " slice 1" },
+      { time: "10:42:44", type: "slice-completed", color: "text-green-300", detail: " slice 1" },
+      { time: "10:42:45", type: "slice-started", color: "text-cyan-400", detail: " slice 2" },
+      { time: "10:43:24", type: "slice-completed", color: "text-green-300", detail: " slice 2" },
+      { time: "10:43:25", type: "slice-started", color: "text-cyan-400", detail: " slice 3" },
+      { time: "10:43:56", type: "slice-completed", color: "text-green-300", detail: " slice 3" },
+      { time: "10:43:57", type: "slice-started", color: "text-cyan-400", detail: " slice 4" },
+    ];
+    logEl.innerHTML = events.map(e => `<div class="${e.color} py-0.5">[${e.time}] ${e.type}${e.detail || ""}</div>`).join("");
+    if (countEl) countEl.textContent = `(${events.length})`;
+    // Open the event log details
+    const details = logEl.closest("details");
+    if (details) details.open = true;
+  });
+
+  // v2.9: Show hub clients badge and version footer
+  await page.evaluate(() => {
+    const hubEl = document.getElementById("hub-clients");
+    if (hubEl) { hubEl.textContent = "2 clients"; hubEl.classList.remove("hidden"); }
+    const verEl = document.getElementById("footer-version");
+    if (verEl) verEl.textContent = "v2.9.0";
+  });
+  await page.waitForTimeout(300);
+
+  await page.screenshot({ path: resolve(OUTPUT_DIR, "progress.png"), fullPage: true });
 
   // ─── 3. Runs tab ────────────────────────────────────────────────────
   console.log("Capturing Runs tab...");
@@ -193,13 +267,26 @@ async function main() {
     </table>`;
   });
   await page.waitForTimeout(300);
-  await page.screenshot({ path: resolve(OUTPUT_DIR, "cost.png"), fullPage: false });
+  // v2.9: Inject duration chart data
+  await page.evaluate(() => {
+    const ctx = document.getElementById("chart-duration-trend");
+    if (!ctx || typeof Chart === "undefined") return;
+    const labels = ["Mar 28", "Mar 29", "Mar 30", "Mar 31", "Apr 1", "Apr 2", "Apr 3", "Apr 4", "Apr 5", "Apr 6"];
+    const durations = [42, 65, 38, 124, 55, 89, 48, 33, 71, 52];
+    new Chart(ctx, {
+      type: "bar",
+      data: { labels, datasets: [{ label: "Duration (s)", data: durations, backgroundColor: durations.map(d => d > 300 ? "#ef4444" : d > 120 ? "#f59e0b" : "#3b82f6"), borderWidth: 0, borderRadius: 2 }] },
+      options: { responsive: true, plugins: { legend: { labels: { color: "#9ca3af" } } }, scales: { y: { ticks: { color: "#9ca3af" }, grid: { color: "#374151" } }, x: { ticks: { color: "#9ca3af" }, grid: { display: false } } } },
+    });
+  });
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: resolve(OUTPUT_DIR, "cost.png"), fullPage: true });
 
   // ─── 5. Actions tab ─────────────────────────────────────────────────
   console.log("Capturing Actions tab...");
   await clickTab(page, "actions");
   await page.waitForTimeout(500);
-  await page.screenshot({ path: resolve(OUTPUT_DIR, "actions.png"), fullPage: false });
+  await page.screenshot({ path: resolve(OUTPUT_DIR, "actions.png"), fullPage: true });
 
   // ─── 6. Config tab + Memory Search (v2.7) ────────────────────────────
   console.log("Capturing Config tab...");
@@ -213,26 +300,54 @@ async function main() {
     if (apiEl) apiEl.innerHTML = '<span class="text-green-400">✓ xAI Grok</span> <span class="text-gray-500">— XAI_API_KEY configured</span>';
     const obEl = document.getElementById("cfg-openbrain");
     if (obEl) obEl.innerHTML = '<span class="text-green-400">✓ Connected</span> <span class="text-gray-500">— openbrain</span><br><span class="text-xs text-gray-500">http://localhost:3200</span>';
-    // Show memory search panel with sample results
+    // v2.9: Advanced settings panel
+    const advDetails = document.querySelector('#tab-config details');
+    if (advDetails) advDetails.open = true;
+    const maxP = document.getElementById('cfg-max-parallel');
+    if (maxP) maxP.value = 3;
+    const maxR = document.getElementById('cfg-max-retries');
+    if (maxR) maxR.value = 1;
+    const maxH = document.getElementById('cfg-max-history');
+    if (maxH) maxH.value = 50;
+    const qEnabled = document.getElementById('cfg-quorum-enabled');
+    if (qEnabled) qEnabled.checked = true;
+    const qThresh = document.getElementById('cfg-quorum-threshold');
+    if (qThresh) qThresh.value = 7;
+    const qModels = document.getElementById('cfg-quorum-models');
+    if (qModels) qModels.value = 'grok-3-mini, claude-sonnet-4.6, gpt-5.2-codex';
+    // Workers
+    const workersEl = document.getElementById('cfg-workers');
+    if (workersEl) workersEl.innerHTML = '<span class="text-green-400 text-xs mr-3">✓ gh-copilot</span><span class="text-green-400 text-xs mr-3">✓ claude</span><span class="text-gray-600 text-xs mr-3">✗ codex</span><span class="text-green-400 text-xs mr-3">✓ grok (API)</span>';
+    // v2.9: Memory search with presets
     const searchPanel = document.getElementById("memory-search-panel");
     if (searchPanel) {
       searchPanel.classList.remove("hidden");
+      // Inject presets
+      const presetsEl = document.getElementById("memory-presets");
+      if (presetsEl) presetsEl.innerHTML = [
+        '📋 Phase', '📋 PLAN', '📋 roadmap',
+        '🏗️ architecture', '🏗️ design',
+        '⚙️ config', '⚙️ model', '⚙️ quorum',
+        '🧪 test', '🧪 validation',
+        '💰 cost', '💰 token',
+        '🐛 bug', '🐛 fix', '🐛 TODO'
+      ].map(q => `<button class="text-xs px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 transition">${q}</button>`).join('');
       const input = document.getElementById("memory-search-input");
-      if (input) input.value = "deployment strategy";
+      if (input) input.value = "architecture";
       const results = document.getElementById("memory-search-results");
       if (results) results.innerHTML = `
-        <div class="bg-gray-700/50 rounded p-2 mb-1 text-xs">
-          <p class="text-gray-300 font-medium">deployment-notes</p>
-          <p class="text-gray-500 mt-0.5">Use blue-green deploys for production. Always run smoke tests after helm upgrade...</p>
+        <div class="bg-gray-700/50 rounded p-2 mb-2 border border-gray-700">
+          <div class="flex items-center gap-2 mb-1"><span class="text-xs text-blue-400 font-mono">docs/plans/Phase-11-DASHBOARD-V2.9-PLAN.md</span><span class="text-xs text-gray-600">:42</span></div>
+          <pre class="text-xs text-gray-300 whitespace-pre-wrap max-h-20 overflow-hidden">## Scope Contract\n### In Scope\n- pforge-mcp/dashboard/app.js — all client-side enhancements</pre>
         </div>
-        <div class="bg-gray-700/50 rounded p-2 mb-1 text-xs">
-          <p class="text-gray-300 font-medium">infrastructure-decisions</p>
-          <p class="text-gray-500 mt-0.5">Azure Container Apps preferred over AKS for smaller services. Cost ~60% lower...</p>
+        <div class="bg-gray-700/50 rounded p-2 mb-2 border border-gray-700">
+          <div class="flex items-center gap-2 mb-1"><span class="text-xs text-blue-400 font-mono">.forge/cost-history.json</span><span class="text-xs text-gray-600">:1</span></div>
+          <pre class="text-xs text-gray-300 whitespace-pre-wrap max-h-20 overflow-hidden">{"total_cost_usd": 2.47, "runs": 30, "by_model": {"claude-opus-4.6": ...}}</pre>
         </div>`;
     }
   });
   await page.waitForTimeout(300);
-  await page.screenshot({ path: resolve(OUTPUT_DIR, "config.png"), fullPage: false });
+  await page.screenshot({ path: resolve(OUTPUT_DIR, "config.png"), fullPage: true });
 
   // ─── 7. Traces tab ─────────────────────────────────────────────────
   console.log("Capturing Traces tab...");
@@ -246,6 +361,11 @@ async function main() {
     await page.selectOption("#trace-run-select", traceOptions[0]);
     await page.waitForTimeout(2000);
   }
+  // v2.9: Show search input with value
+  await page.evaluate(() => {
+    const searchEl = document.getElementById("trace-search");
+    if (searchEl) searchEl.value = "slice";
+  });
   await page.screenshot({ path: resolve(OUTPUT_DIR, "traces.png"), fullPage: false });
 
   // ─── 8. Skills tab ──────────────────────────────────────────────────

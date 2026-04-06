@@ -1959,7 +1959,8 @@ async function pollHubClients() {
     const el = document.getElementById("hub-clients");
     if (!el) return;
     if (info.running) {
-      const count = info.clients || 0;
+      const clients = info.clients || [];
+      const count = Array.isArray(clients) ? clients.length : (typeof clients === "number" ? clients : 0);
       el.textContent = `${count} client${count !== 1 ? "s" : ""}`;
       el.classList.remove("hidden");
     } else {

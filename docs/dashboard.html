@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Dashboard — Plan Forge | Live Progress, Cost Tracking, Session Replay</title>
-  <meta name="description" content="Plan Forge Dashboard — real-time plan execution progress, cost tracking, session replay, trace viewer, extension marketplace, and project configuration. 9 tabs, one command." />
+  <meta name="description" content="Plan Forge Dashboard — real-time plan execution, cost trend analysis, run comparison, quorum visualization, keyboard navigation, theme toggle, skill catalog, and export. 9 tabs, zero config." />
   <meta property="og:title" content="Plan Forge Dashboard — Live Execution Dashboard" />
   <meta property="og:description" content="Real-time plan execution, cost tracking, session replay, OTLP traces, skill monitoring. Served at localhost:3100/dashboard." />
   <meta property="og:type" content="website" />
@@ -78,13 +78,14 @@
       <p class="text-xl text-slate-400 max-w-2xl mx-auto">Real-time visibility into plan execution, costs, traces, and configuration. 9 tabs, zero config, served at <code class="text-forge-400 bg-slate-800/60 px-2 py-0.5 rounded text-base">localhost:3100/dashboard</code>.</p>
       <div class="mt-6 flex justify-center gap-3 flex-wrap text-sm">
         <span class="px-3 py-1 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">Real-Time WebSocket</span>
-        <span class="px-3 py-1 rounded-full bg-green-500/20 text-green-400 border border-green-500/30">Cost Tracking</span>
-        <span class="px-3 py-1 rounded-full bg-purple-500/20 text-purple-400 border border-purple-500/30">Session Replay</span>
-        <span class="px-3 py-1 rounded-full bg-forge-500/20 text-forge-400 border border-forge-500/30">OTLP Traces</span>
-        <span class="px-3 py-1 rounded-full bg-red-500/20 text-red-400 border border-red-500/30">Quorum Actions</span>
-        <span class="px-3 py-1 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">OpenBrain Memory</span>
-        <span class="px-3 py-1 rounded-full bg-teal-500/20 text-teal-400 border border-teal-500/30">Plan Browser</span>
-        <span class="px-3 py-1 rounded-full bg-pink-500/20 text-pink-400 border border-pink-500/30">Git Operations</span>
+        <span class="px-3 py-1 rounded-full bg-green-500/20 text-green-400 border border-green-500/30">Cost Trends + Anomaly</span>
+        <span class="px-3 py-1 rounded-full bg-purple-500/20 text-purple-400 border border-purple-500/30">Run Comparison</span>
+        <span class="px-3 py-1 rounded-full bg-forge-500/20 text-forge-400 border border-forge-500/30">Quorum Visualization</span>
+        <span class="px-3 py-1 rounded-full bg-red-500/20 text-red-400 border border-red-500/30">Keyboard Navigation</span>
+        <span class="px-3 py-1 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">Export JSON/CSV</span>
+        <span class="px-3 py-1 rounded-full bg-teal-500/20 text-teal-400 border border-teal-500/30">Light/Dark Theme</span>
+        <span class="px-3 py-1 rounded-full bg-pink-500/20 text-pink-400 border border-pink-500/30">Skill Catalog</span>
+        <span class="px-3 py-1 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">Responsive Layout</span>
       </div>
     </div>
   </section>
@@ -131,7 +132,7 @@
           <div>
             <h2 class="text-2xl font-bold text-white">Progress</h2>
             <p class="text-slate-400 mt-1">Live view of the currently executing plan. Each slice is rendered as a card showing its status (pending, executing, completed, failed), the AI model used, execution time, and token cost. The progress bar updates in real time via WebSocket events. Slices using API-based models like Grok display a purple <span class="inline-block px-1.5 py-0.5 text-xs font-bold rounded bg-purple-500/30 text-purple-300 border border-purple-400/30">API</span> badge.</p>
-            <p class="text-slate-400 mt-2">The <strong class="text-white">Plan Browser</strong> panel (v2.7) lists all plan files in <code class="text-forge-400 text-sm">docs/plans/</code> with their status, slice count, and branch. Click <strong>Estimate</strong> to preview cost/token estimates or <strong>Run</strong> to launch execution directly from the dashboard.</p>
+            <p class="text-slate-400 mt-2">The <strong class="text-white">Plan Browser</strong> panel lists all plan files in <code class="text-forge-400 text-sm">docs/plans/</code> with their status, slice count, and branch. Click <strong>Estimate</strong> to preview cost/token estimates or <strong>Run</strong> to launch execution directly. Expand <strong class="text-white">Select slices</strong> to toggle individual slices on/off before running — unchecked slices are passed as <code class="text-forge-400 text-sm">--skip-slices</code>.</p>
           </div>
         </div>
         <img src="assets/dashboard/progress.png" alt="Dashboard Progress tab with plan browser showing 6 plans, plus slice cards — 3 completed, 1 executing" class="w-full rounded-xl border border-slate-700/40 shadow-2xl" loading="lazy" />
@@ -143,7 +144,15 @@
           <span class="shrink-0 w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center text-green-400 text-lg">📋</span>
           <div>
             <h2 class="text-2xl font-bold text-white">Runs</h2>
-            <p class="text-slate-400 mt-1">Historical log of every plan execution. Each row shows the plan file, execution mode (auto, assisted, estimate), total slices, pass/fail status, cost, and timestamp. Click any run to drill into per-slice details. Runs persist across sessions in <code class="text-forge-400 text-sm">run-history.json</code>.</p>
+            <p class="text-slate-400 mt-1">Historical log of every plan execution with powerful filtering, sorting, and analysis tools.</p>
+            <ul class="text-slate-400 mt-2 space-y-1 text-sm list-disc list-inside">
+              <li><strong class="text-white">Filter Bar</strong> — filter by plan, status, model, mode, and date range. Filters combine with AND logic.</li>
+              <li><strong class="text-white">Sortable Columns</strong> — click any column header to cycle through ascending, descending, and default sort order.</li>
+              <li><strong class="text-white">Run Detail Drawer</strong> — click any row to slide open a right-panel drawer showing per-slice detail cards with status, worker, tokens, cost, gate errors, and expandable gate output.</li>
+              <li><strong class="text-white">Run Comparison</strong> — toggle Compare mode, select two runs, and view side-by-side cards with cost/duration/token deltas color-coded (green = lower, red = higher).</li>
+              <li><strong class="text-white">Export</strong> — export filtered runs as JSON or CSV via the Export dropdown menu.</li>
+              <li><strong class="text-white">Keyboard Navigation</strong> — press <code class="text-forge-400 text-xs">j</code>/<code class="text-forge-400 text-xs">k</code> to move between rows, <code class="text-forge-400 text-xs">Enter</code> to open detail, <code class="text-forge-400 text-xs">Esc</code> to close.</li>
+            </ul>
           </div>
         </div>
         <img src="assets/dashboard/runs.png" alt="Dashboard Runs tab showing historical execution log" class="w-full rounded-xl border border-slate-700/40 shadow-2xl" loading="lazy" />
@@ -155,8 +164,9 @@
           <span class="shrink-0 w-10 h-10 rounded-xl bg-forge-500/20 flex items-center justify-center text-forge-400 text-lg">💰</span>
           <div>
             <h2 class="text-2xl font-bold text-white">Cost</h2>
-            <p class="text-slate-400 mt-1">Cumulative cost visualization across all runs. The donut chart breaks down spend by model, and the monthly bar chart shows cost over time to spot trends and catch runaway sessions early. Data comes from <code class="text-forge-400 text-sm">cost-history.json</code>.</p>
-            <p class="text-slate-400 mt-2">The <strong class="text-white">Model Comparison</strong> table (v2.7) aggregates per-model performance: run count, pass rate (color-coded green/amber/red), average duration, average cost per run, and total tokens consumed. Useful for comparing Claude vs Grok efficiency on your specific workloads.</p>
+            <p class="text-slate-400 mt-1">Cumulative cost visualization across all runs. The donut chart breaks down spend by model, and the monthly bar chart shows cost over time. Data comes from <code class="text-forge-400 text-sm">cost-history.json</code>.</p>
+            <p class="text-slate-400 mt-2">The <strong class="text-white">Cost Trend Line Chart</strong> plots per-run cost with a dashed average line. Points are color-coded: <span class="text-green-400">green</span> (within 2&times; average), <span class="text-yellow-400">amber</span> (2-3&times;), <span class="text-red-400">red</span> (&gt;3&times;). An <strong class="text-white">Anomaly Detection Banner</strong> appears automatically when any of the latest 5 runs exceeds 3&times; the historical average — click to dismiss.</p>
+            <p class="text-slate-400 mt-2">The <strong class="text-white">Model Comparison</strong> table aggregates per-model performance: run count, pass rate (color-coded), average duration, cost per run, and total tokens. <strong class="text-white">Export Cost</strong> downloads cost data as JSON.</p>
           </div>
         </div>
         <img src="assets/dashboard/cost.png" alt="Dashboard Cost tab showing cumulative cost chart across runs" class="w-full rounded-xl border border-slate-700/40 shadow-2xl" loading="lazy" />
@@ -169,7 +179,7 @@
           <div>
             <h2 class="text-2xl font-bold text-white">Actions</h2>
             <p class="text-slate-400 mt-1">One-click access to 11 forge operations. Run <strong>Smith</strong> (environment diagnostics), <strong>Sweep</strong> (TODO/FIXME detection with structured table view), <strong>Analyze</strong> (plan consistency scoring), <strong>Analyze (Quorum)</strong> (multi-model consensus analysis), <strong>Diagnose</strong> (multi-model bug investigation), <strong>Status</strong> (editable phase status with inline dropdowns), <strong>Validate</strong> (setup file checks), and <strong>Extensions</strong> (catalog browser). Results display inline below each card.</p>
-            <p class="text-slate-400 mt-2">New in v2.7: <strong class="text-white">Create Branch</strong> creates a git branch from the plan's branch strategy. <strong class="text-white">Auto-Commit</strong> generates a conventional commit from the current slice goal. <strong class="text-white">Diff</strong> shows changed files color-coded against the scope contract — green for in-scope, yellow for out-of-scope, red for forbidden. The <strong class="text-white">Sweep</strong> action now renders results as a filterable table with type badges (TODO, FIXME, HACK, STUB).</p>
+            <p class="text-slate-400 mt-2"><strong class="text-white">Create Branch</strong> creates a git branch from the plan's branch strategy. <strong class="text-white">Auto-Commit</strong> generates a conventional commit from the current slice goal. <strong class="text-white">Diff</strong> shows changed files color-coded against the scope contract — green for in-scope, yellow for out-of-scope, red for forbidden. The <strong class="text-white">Sweep</strong> action now renders results as a filterable table with type badges (TODO, FIXME, HACK, STUB).</p>
           </div>
         </div>
         <img src="assets/dashboard/actions.png" alt="Dashboard Actions tab showing 11 action cards including git ops, sweep, and status editor" class="w-full rounded-xl border border-slate-700/40 shadow-2xl" loading="lazy" />
@@ -182,7 +192,7 @@
           <div>
             <h2 class="text-2xl font-bold text-white">Config</h2>
             <p class="text-slate-400 mt-1">View and edit project configuration without touching files. Set the active preset, template version, enabled agents (Claude, Cursor, Codex, Grok), and default model routing. The <strong>API Providers</strong> section shows which external model providers are configured — set <code class="text-forge-400 text-sm">XAI_API_KEY</code> to enable Grok models (grok-4, grok-3, grok-3-mini). The <strong>OpenBrain Memory</strong> section shows whether the OpenBrain MCP server is connected for persistent project memory. Changes save to <code class="text-forge-400 text-sm">.forge/config.json</code>.</p>
-            <p class="text-slate-400 mt-2">When OpenBrain is connected, the <strong class="text-white">Memory Search</strong> panel (v2.7) lets you search project knowledge directly from the dashboard. Type a query and get matching memory entries rendered as cards with titles and excerpts.</p>
+            <p class="text-slate-400 mt-2">When OpenBrain is connected, the <strong class="text-white">Memory Search</strong> panel lets you search project knowledge directly from the dashboard. Type a query and get matching memory entries rendered as cards with titles and excerpts.</p>
           </div>
         </div>
         <img src="assets/dashboard/config.png" alt="Dashboard Config tab showing preset, agents, model routing, API providers, OpenBrain memory status, and memory search" class="w-full rounded-xl border border-slate-700/40 shadow-2xl" loading="lazy" />
@@ -195,6 +205,8 @@
           <div>
             <h2 class="text-2xl font-bold text-white">Traces</h2>
             <p class="text-slate-400 mt-1">OTLP-compatible execution trace viewer. Each plan run produces a trace with spans for every slice, gate check, and tool invocation. Select a run to see its full span tree with timing, status codes, and error details. Compatible with OpenTelemetry collectors for export to Jaeger, Zipkin, or Azure Monitor.</p>
+            <p class="text-slate-400 mt-2"><strong class="text-white">Quorum Visualization</strong> — when a run used quorum mode, a purple banner shows model legs, success rate, and dispatch duration. Slice spans show a <span class="inline-block px-1.5 py-0.5 text-xs font-bold rounded bg-purple-500/30 text-purple-300 border border-purple-400/30">&#x1F52E;</span> badge with leg counts. Click any quorum span to see a detail panel with complexity score, threshold, models dispatched, successful legs, dispatch duration, and reviewer cost.</p>
+            <p class="text-slate-400 mt-2"><strong class="text-white">Enhanced Span Attributes</strong> — clicking any span now renders a formatted attribute table (not raw JSON) with friendly labels, expandable log summaries, and structured event rendering with per-event attributes and severity coloring.</p>
           </div>
         </div>
         <img src="assets/dashboard/traces.png" alt="Dashboard Traces tab showing execution trace span tree" class="w-full rounded-xl border border-slate-700/40 shadow-2xl" loading="lazy" />
@@ -206,7 +218,8 @@
           <span class="shrink-0 w-10 h-10 rounded-xl bg-cyan-500/20 flex items-center justify-center text-cyan-400 text-lg">🛠️</span>
           <div>
             <h2 class="text-2xl font-bold text-white">Skills</h2>
-            <p class="text-slate-400 mt-1">Monitor multi-step skill executions in real time. Skills like <code class="text-forge-400 text-sm">/code-review</code>, <code class="text-forge-400 text-sm">/database-migration</code>, and <code class="text-forge-400 text-sm">/staging-deploy</code> emit step-level events via WebSocket. Each step shows its status (pending, running, completed, failed) with a progress indicator. Useful for long-running workflows where you need visibility into intermediate steps.</p>
+            <p class="text-slate-400 mt-1">Monitor multi-step skill executions in real time. Skills like <code class="text-forge-400 text-sm">/code-review</code>, <code class="text-forge-400 text-sm">/database-migration</code>, and <code class="text-forge-400 text-sm">/staging-deploy</code> emit step-level events via WebSocket. Each step shows its status (pending, running, completed, failed) with a progress indicator.</p>
+            <p class="text-slate-400 mt-2">The <strong class="text-white">Skill Catalog</strong> grid shows all available skills (both built-in and custom). Custom skills from <code class="text-forge-400 text-sm">.github/skills/</code> are tagged with a blue <span class="inline-block px-1.5 py-0.5 text-xs rounded bg-blue-500/30 text-blue-300">custom</span> badge; built-in skills show a gray <span class="inline-block px-1.5 py-0.5 text-xs rounded bg-gray-500/30 text-gray-300">built-in</span> badge. The catalog loads from the <code class="text-forge-400 text-sm">/api/skills</code> endpoint.</p>
           </div>
         </div>
         <img src="assets/dashboard/skills.png" alt="Dashboard Skills tab showing code-review skill with 4 steps in progress" class="w-full rounded-xl border border-slate-700/40 shadow-2xl" loading="lazy" />
@@ -230,7 +243,7 @@
           <span class="shrink-0 w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-400 text-lg">🧩</span>
           <div>
             <h2 class="text-2xl font-bold text-white">Extensions</h2>
-            <p class="text-slate-400 mt-1">Browse and manage community extensions directly from the dashboard. Each extension card shows the name, description, author, version, and what it provides (agents, instructions, prompts, MCP config). In v2.7, cards now include <strong class="text-white">Install</strong> and <strong class="text-white">Uninstall</strong> buttons — click to install or remove extensions without leaving the dashboard. Installed extensions show a green checkmark. Extensions are curated in the <a href="extensions.html" class="text-forge-400 hover:underline">community catalog</a>.</p>
+            <p class="text-slate-400 mt-1">Browse and manage community extensions directly from the dashboard. Each extension card shows the name, description, author, version, and what it provides (agents, instructions, prompts, MCP config). Cards include <strong class="text-white">Install</strong> and <strong class="text-white">Uninstall</strong> buttons — click to install or remove extensions without leaving the dashboard. Installed extensions show a green checkmark. Extensions are curated in the <a href="extensions.html" class="text-forge-400 hover:underline">community catalog</a>.</p>
           </div>
         </div>
         <img src="assets/dashboard/extensions.png" alt="Dashboard Extensions tab with install/uninstall buttons on extension cards" class="w-full rounded-xl border border-slate-700/40 shadow-2xl" loading="lazy" />
@@ -253,12 +266,43 @@
           <div class="bg-slate-800/60 rounded-xl border border-slate-700/40 p-6 text-center">
             <div class="text-3xl mb-3">🗂️</div>
             <h3 class="font-semibold text-white mb-2">REST API</h3>
-            <p class="text-sm text-slate-400">Port 3100 serves the dashboard UI and exposes JSON endpoints for run history, cost data, config, traces, and action execution.</p>
+            <p class="text-sm text-slate-400">Port 3100 serves the dashboard UI and exposes JSON endpoints for run history, cost data, config, traces, skills, and action execution.</p>
           </div>
           <div class="bg-slate-800/60 rounded-xl border border-slate-700/40 p-6 text-center">
             <div class="text-3xl mb-3">💾</div>
             <h3 class="font-semibold text-white mb-2">Persistent Data</h3>
             <p class="text-sm text-slate-400">Run history, cost records, and traces persist in <code class="text-forge-400 text-xs">.forge/</code> JSON files. Data survives server restarts and is scoped per project.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- POWER UX -->
+  <section class="py-16 bg-slate-950 border-t border-slate-800/60">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="reveal">
+        <h2 class="text-2xl font-bold text-white mb-8 text-center">Power UX</h2>
+        <div class="grid md:grid-cols-2 gap-6">
+          <div class="bg-slate-800/60 rounded-xl border border-slate-700/40 p-6">
+            <div class="text-2xl mb-3">⌨️</div>
+            <h3 class="font-semibold text-white mb-2">Keyboard Navigation</h3>
+            <p class="text-sm text-slate-400">Press <code class="text-forge-400 text-xs">1</code>–<code class="text-forge-400 text-xs">9</code> to switch tabs, <code class="text-forge-400 text-xs">j</code>/<code class="text-forge-400 text-xs">k</code> to navigate rows, <code class="text-forge-400 text-xs">Enter</code> to open details, <code class="text-forge-400 text-xs">Esc</code> to close panels. Press <code class="text-forge-400 text-xs">?</code> to show all shortcuts.</p>
+          </div>
+          <div class="bg-slate-800/60 rounded-xl border border-slate-700/40 p-6">
+            <div class="text-2xl mb-3">🌙</div>
+            <h3 class="font-semibold text-white mb-2">Light / Dark Theme</h3>
+            <p class="text-sm text-slate-400">Toggle between dark and light themes via the header button. Your preference persists in localStorage. Chart colors adapt automatically.</p>
+          </div>
+          <div class="bg-slate-800/60 rounded-xl border border-slate-700/40 p-6">
+            <div class="text-2xl mb-3">📱</div>
+            <h3 class="font-semibold text-white mb-2">Responsive Layout</h3>
+            <p class="text-sm text-slate-400">Dashboard adapts to tablet (1024px) and mobile (768px) breakpoints. Non-essential columns hide on smaller screens, and layouts switch from grid to stack.</p>
+          </div>
+          <div class="bg-slate-800/60 rounded-xl border border-slate-700/40 p-6">
+            <div class="text-2xl mb-3">📤</div>
+            <h3 class="font-semibold text-white mb-2">Export Data</h3>
+            <p class="text-sm text-slate-400">Export run history as JSON or CSV from the Runs tab, or export cost data as JSON from the Cost tab. Filtered results export only matching runs.</p>
           </div>
         </div>
       </div>

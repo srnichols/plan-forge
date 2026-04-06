@@ -246,51 +246,368 @@ function shortName(path) {
   return path.split("/").pop().replace(/\.md$/, "").replace(/-/g, " ");
 }
 
-// ─── Runs Tab ─────────────────────────────────────────────────────────
+// ─── Runs Tab (v2.8: filters, sort, drawer, compare, export) ──────────
+let allRuns = [];
+let filteredRuns = [];
+let sortColumn = "date";
+let sortDirection = "desc";
+let selectedRunIdx = -1;
+let compareMode = false;
+let compareSelections = [];
+
 async function loadRuns() {
   try {
     const res = await fetch(`${API_BASE}/api/runs`);
-    const runs = await res.json();
-    const tbody = document.getElementById("runs-table-body");
-    if (!runs.length) {
-      tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-gray-500">No runs yet</td></tr>';
-      return;
-    }
-    tbody.innerHTML = runs.map((r) => {
-      const date = r.startTime ? new Date(r.startTime).toLocaleDateString() : "—";
-      const plan = shortName(r.plan);
-      const modeColors = { auto: "blue", assisted: "amber", estimate: "gray" };
-      const modeColor = modeColors[r.mode] || "gray";
-      const mode = r.mode ? `<span class="px-1.5 py-0.5 text-xs rounded bg-${modeColor}-500/20 text-${modeColor}-400">${r.mode}</span>` : "—";
-      const model = r.model ? `<span class="text-xs text-gray-400">${r.model}</span>` : "—";
-      const slices = `${r.results?.passed || 0}/${r.sliceCount || 0}`;
-      const status = r.status === "completed"
-        ? '<span class="text-green-400">✅ pass</span>'
-        : '<span class="text-red-400">❌ fail</span>';
-      const cost = r.cost?.total_cost_usd != null ? `$${r.cost.total_cost_usd.toFixed(2)}` : "—";
-      const dur = r.totalDuration ? `${(r.totalDuration / 1000).toFixed(0)}s` : "—";
-      return `<tr class="border-t border-gray-700 hover:bg-gray-700/50">
-        <td class="px-4 py-2">${date}</td>
-        <td class="px-4 py-2">${plan}</td>
-        <td class="px-4 py-2 text-center">${mode}</td>
-        <td class="px-4 py-2">${model}</td>
-        <td class="px-4 py-2 text-center">${slices}</td>
-        <td class="px-4 py-2 text-center">${status}</td>
-        <td class="px-4 py-2 text-right">${cost}</td>
-        <td class="px-4 py-2 text-right">${dur}</td>
-      </tr>`;
-    }).join("");
+    allRuns = await res.json();
+    populateFilterDropdowns(allRuns);
+    applyRunFilters();
   } catch (err) {
     document.getElementById("runs-table-body").innerHTML =
       `<tr><td colspan="8" class="px-4 py-8 text-center text-red-400">Error: ${err.message}</td></tr>`;
   }
 }
 
-// ─── Cost Tab ─────────────────────────────────────────────────────────
+function populateFilterDropdowns(runs) {
+  const plans = [...new Set(runs.map((r) => shortName(r.plan)).filter(Boolean))];
+  const models = [...new Set(runs.map((r) => r.model).filter(Boolean))];
+  const planSel = document.getElementById("filter-plan");
+  const modelSel = document.getElementById("filter-model");
+  planSel.innerHTML = '<option value="">All Plans</option>' + plans.map((p) => `<option value="${p}">${p}</option>`).join("");
+  modelSel.innerHTML = '<option value="">All Models</option>' + models.map((m) => `<option value="${m}">${m}</option>`).join("");
+}
+
+function applyRunFilters() {
+  const planFilter = document.getElementById("filter-plan").value;
+  const statusFilter = document.getElementById("filter-status").value;
+  const modelFilter = document.getElementById("filter-model").value;
+  const modeFilter = document.getElementById("filter-mode").value;
+  const dateStart = document.getElementById("filter-date-start").value;
+  const dateEnd = document.getElementById("filter-date-end").value;
+
+  filteredRuns = allRuns.filter((r) => {
+    if (planFilter && shortName(r.plan) !== planFilter) return false;
+    if (statusFilter && r.status !== statusFilter) return false;
+    if (modelFilter && r.model !== modelFilter) return false;
+    if (modeFilter && r.mode !== modeFilter) return false;
+    if (dateStart && r.startTime && new Date(r.startTime) < new Date(dateStart)) return false;
+    if (dateEnd && r.startTime && new Date(r.startTime) > new Date(dateEnd + "T23:59:59")) return false;
+    return true;
+  });
+
+  applySorting();
+  renderRunsTable();
+}
+
+function clearRunFilters() {
+  document.getElementById("filter-plan").value = "";
+  document.getElementById("filter-status").value = "";
+  document.getElementById("filter-model").value = "";
+  document.getElementById("filter-mode").value = "";
+  document.getElementById("filter-date-start").value = "";
+  document.getElementById("filter-date-end").value = "";
+  applyRunFilters();
+}
+
+function sortRuns(col) {
+  if (sortColumn === col) {
+    sortDirection = sortDirection === "asc" ? "desc" : sortDirection === "desc" ? "none" : "asc";
+  } else {
+    sortColumn = col;
+    sortDirection = "asc";
+  }
+  // Update sort indicators
+  document.querySelectorAll("th.sortable").forEach((th) => {
+    th.textContent = th.textContent.replace(/ [▲▼]/g, "");
+    if (th.dataset.sort === sortColumn && sortDirection !== "none") {
+      th.textContent += sortDirection === "asc" ? " ▲" : " ▼";
+    }
+  });
+  applySorting();
+  renderRunsTable();
+}
+
+function applySorting() {
+  if (sortDirection === "none") return;
+  const dir = sortDirection === "asc" ? 1 : -1;
+  filteredRuns.sort((a, b) => {
+    switch (sortColumn) {
+      case "date": return dir * (new Date(a.startTime || 0) - new Date(b.startTime || 0));
+      case "plan": return dir * (shortName(a.plan) || "").localeCompare(shortName(b.plan) || "");
+      case "mode": return dir * (a.mode || "").localeCompare(b.mode || "");
+      case "model": return dir * (a.model || "").localeCompare(b.model || "");
+      case "slices": {
+        const ra = (a.results?.passed || 0) / (a.sliceCount || 1);
+        const rb = (b.results?.passed || 0) / (b.sliceCount || 1);
+        return dir * (ra - rb);
+      }
+      case "status": return dir * (a.status || "").localeCompare(b.status || "");
+      case "cost": return dir * ((a.cost?.total_cost_usd || 0) - (b.cost?.total_cost_usd || 0));
+      case "duration": return dir * ((a.totalDuration || 0) - (b.totalDuration || 0));
+      default: return 0;
+    }
+  });
+}
+
+function renderRunsTable() {
+  const tbody = document.getElementById("runs-table-body");
+  document.getElementById("runs-count").textContent = `Showing ${filteredRuns.length} of ${allRuns.length} runs`;
+  if (!filteredRuns.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-gray-500">No runs match filters</td></tr>';
+    return;
+  }
+  tbody.innerHTML = filteredRuns.map((r, idx) => {
+    const origIdx = allRuns.indexOf(r);
+    const date = r.startTime ? new Date(r.startTime).toLocaleDateString() : "—";
+    const plan = shortName(r.plan);
+    const modeColors = { auto: "blue", assisted: "amber", estimate: "gray" };
+    const modeColor = modeColors[r.mode] || "gray";
+    const mode = r.mode ? `<span class="px-1.5 py-0.5 text-xs rounded bg-${modeColor}-500/20 text-${modeColor}-400">${r.mode}</span>` : "—";
+    const model = r.model ? `<span class="text-xs text-gray-400">${r.model}</span>` : "—";
+    const slices = `${r.results?.passed || 0}/${r.sliceCount || 0}`;
+    const status = r.status === "completed"
+      ? '<span class="text-green-400">✅ pass</span>'
+      : '<span class="text-red-400">❌ fail</span>';
+    const cost = r.cost?.total_cost_usd != null ? `$${r.cost.total_cost_usd.toFixed(2)}` : "—";
+    const dur = r.totalDuration ? `${(r.totalDuration / 1000).toFixed(0)}s` : "—";
+    const sel = selectedRunIdx === idx ? "row-selected" : "";
+    const cmp = compareSelections.includes(idx) ? "row-compare" : "";
+    const clickHandler = compareMode ? `toggleCompareSelection(${idx})` : `openRunDrawer(${origIdx})`;
+    return `<tr class="border-t border-gray-700 hover:bg-gray-700/50 cursor-pointer ${sel} ${cmp}" data-row-idx="${idx}" onclick="${clickHandler}">
+      <td class="px-4 py-2">${date}</td>
+      <td class="px-4 py-2">${plan}</td>
+      <td class="px-4 py-2 text-center hide-tablet">${mode}</td>
+      <td class="px-4 py-2 hide-tablet">${model}</td>
+      <td class="px-4 py-2 text-center">${slices}</td>
+      <td class="px-4 py-2 text-center">${status}</td>
+      <td class="px-4 py-2 text-right">${cost}</td>
+      <td class="px-4 py-2 text-right">${dur}</td>
+    </tr>`;
+  }).join("");
+}
+
+// ─── Run Detail Drawer (v2.8) ─────────────────────────────────────────
+async function openRunDrawer(runIdx) {
+  try {
+    const res = await fetch(`${API_BASE}/api/runs/${runIdx}`);
+    if (!res.ok) throw new Error("Run not found");
+    const data = await res.json();
+    const s = data.summary;
+    const title = document.getElementById("drawer-title");
+    const content = document.getElementById("drawer-content");
+    title.textContent = shortName(s.plan);
+
+    const modeColors = { auto: "blue", assisted: "amber", estimate: "gray" };
+    const mc = modeColors[s.mode] || "gray";
+    const header = `
+      <div class="space-y-2 mb-4 text-sm">
+        <div class="flex gap-2 flex-wrap">
+          <span class="px-2 py-0.5 rounded text-xs bg-${mc}-500/20 text-${mc}-400">${s.mode || "auto"}</span>
+          <span class="px-2 py-0.5 rounded text-xs bg-gray-700 text-gray-300">${s.model || "unknown"}</span>
+          <span class="px-2 py-0.5 rounded text-xs ${s.status === "completed" ? "bg-green-900/40 text-green-400" : "bg-red-900/40 text-red-400"}">${s.status}</span>
+        </div>
+        <div class="grid grid-cols-3 gap-2 text-xs text-gray-400">
+          <div>Cost: <span class="text-white">$${(s.cost?.total_cost_usd || 0).toFixed(2)}</span></div>
+          <div>Duration: <span class="text-white">${s.totalDuration ? (s.totalDuration / 1000).toFixed(0) + "s" : "—"}</span></div>
+          <div>Slices: <span class="text-white">${s.results?.passed || 0}/${s.sliceCount || 0}</span></div>
+        </div>
+        <div class="text-xs text-gray-500">${s.startTime ? new Date(s.startTime).toLocaleString() : ""}</div>
+      </div>`;
+
+    const sliceCards = data.slices.map((sl) => {
+      const icon = sl.status === "passed" ? "✅" : sl.status === "failed" ? "❌" : "⏭️";
+      const borderColor = sl.status === "passed" ? "border-green-700/40" : sl.status === "failed" ? "border-red-700/40" : "border-gray-700";
+      const dur = sl.duration ? `${(sl.duration / 1000).toFixed(1)}s` : "—";
+      const tokIn = sl.tokens?.in || sl.tokens_in || 0;
+      const tokOut = sl.tokens?.out || sl.tokens_out || 0;
+
+      let errorBlock = "";
+      if (sl.status === "failed") {
+        errorBlock = `<div class="mt-2 bg-red-900/30 border border-red-700/40 rounded p-2 text-xs">
+          ${sl.gateError ? `<p class="text-red-300 mb-1">${escHtml(sl.gateError)}</p>` : ""}
+          ${sl.failedCommand ? `<pre class="text-red-200 font-mono text-xs whitespace-pre-wrap">${escHtml(sl.failedCommand)}</pre>` : ""}
+          ${sl.gateOutput ? `<details class="mt-1"><summary class="text-red-400 cursor-pointer">Gate output</summary><pre class="text-xs text-gray-300 mt-1 whitespace-pre-wrap max-h-32 overflow-y-auto">${escHtml(sl.gateOutput)}</pre></details>` : ""}
+        </div>`;
+      }
+
+      let gateBlock = "";
+      if (sl.status === "passed" && sl.gateOutput) {
+        gateBlock = `<details class="mt-2"><summary class="text-xs text-gray-500 cursor-pointer">Gate output</summary><pre class="text-xs text-gray-400 mt-1 whitespace-pre-wrap max-h-24 overflow-y-auto">${escHtml(sl.gateOutput)}</pre></details>`;
+      }
+
+      return `<div class="border ${borderColor} rounded-lg p-3 mb-2">
+        <div class="flex justify-between items-center">
+          <span class="font-medium text-sm">${icon} Slice ${sl.number || sl.sliceId}: ${escHtml(sl.title || "")}</span>
+          <span class="text-xs text-gray-500">${dur}</span>
+        </div>
+        <div class="flex gap-3 mt-1 text-xs text-gray-400">
+          <span>${sl.worker || "cli"}</span>
+          <span>${tokIn.toLocaleString()} in / ${tokOut.toLocaleString()} out</span>
+          <span>$${(sl.cost_usd || 0).toFixed(4)}</span>
+        </div>
+        ${errorBlock}${gateBlock}
+      </div>`;
+    }).join("");
+
+    content.innerHTML = header + sliceCards;
+    document.getElementById("run-detail-drawer").classList.add("open");
+    document.getElementById("drawer-overlay").classList.add("open");
+  } catch (err) {
+    console.error("Drawer error:", err);
+  }
+}
+
+function closeRunDrawer() {
+  document.getElementById("run-detail-drawer").classList.remove("open");
+  document.getElementById("drawer-overlay").classList.remove("open");
+}
+
+window.openRunDrawer = openRunDrawer;
+window.closeRunDrawer = closeRunDrawer;
+window.applyRunFilters = applyRunFilters;
+window.clearRunFilters = clearRunFilters;
+window.sortRuns = sortRuns;
+
+// ─── Run Comparison (v2.8) ────────────────────────────────────────────
+function toggleCompareMode() {
+  compareMode = !compareMode;
+  compareSelections = [];
+  const btn = document.getElementById("compare-btn");
+  btn.textContent = compareMode ? "Cancel Compare" : "Compare";
+  btn.className = compareMode
+    ? "text-xs px-2 py-1 bg-amber-600 hover:bg-amber-500 rounded ml-1 text-white"
+    : "text-xs px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded ml-1";
+  if (!compareMode) document.getElementById("compare-panel").classList.add("hidden");
+  renderRunsTable();
+}
+
+function toggleCompareSelection(idx) {
+  const pos = compareSelections.indexOf(idx);
+  if (pos >= 0) { compareSelections.splice(pos, 1); }
+  else if (compareSelections.length < 2) { compareSelections.push(idx); }
+  else { compareSelections.shift(); compareSelections.push(idx); }
+  renderRunsTable();
+  if (compareSelections.length === 2) showComparison();
+}
+
+function showComparison() {
+  const a = filteredRuns[compareSelections[0]];
+  const b = filteredRuns[compareSelections[1]];
+  if (!a || !b) return;
+
+  const costA = a.cost?.total_cost_usd || 0, costB = b.cost?.total_cost_usd || 0;
+  const durA = a.totalDuration || 0, durB = b.totalDuration || 0;
+  const tokA = (a.cost?.total_tokens_in || 0) + (a.cost?.total_tokens_out || 0);
+  const tokB = (b.cost?.total_tokens_in || 0) + (b.cost?.total_tokens_out || 0);
+
+  function delta(va, vb, fmt, lowerBetter = true) {
+    const diff = va - vb;
+    const color = (lowerBetter ? diff < 0 : diff > 0) ? "text-green-400" : diff === 0 ? "text-gray-400" : "text-red-400";
+    const sign = diff > 0 ? "+" : "";
+    return `<span class="${color}">${sign}${fmt(diff)}</span>`;
+  }
+
+  const fmtCost = (v) => `$${v.toFixed(2)}`;
+  const fmtDur = (v) => `${(v / 1000).toFixed(0)}s`;
+  const fmtTok = (v) => v.toLocaleString();
+
+  const panel = document.getElementById("compare-content");
+  panel.innerHTML = `
+    <div class="bg-gray-700/50 rounded p-3">
+      <h4 class="text-xs text-gray-500 mb-2">Run A — ${new Date(a.startTime).toLocaleDateString()}</h4>
+      <p class="font-medium">${shortName(a.plan)}</p>
+      <p class="text-xs text-gray-400">${a.mode} · ${a.model}</p>
+      <div class="grid grid-cols-3 gap-2 mt-2 text-xs">
+        <div>Cost: <span class="text-white">${fmtCost(costA)}</span></div>
+        <div>Duration: <span class="text-white">${fmtDur(durA)}</span></div>
+        <div>Tokens: <span class="text-white">${fmtTok(tokA)}</span></div>
+      </div>
+      <p class="text-xs mt-1">${a.results?.passed || 0}/${a.sliceCount || 0} passed · ${a.status}</p>
+    </div>
+    <div class="bg-gray-700/50 rounded p-3">
+      <h4 class="text-xs text-gray-500 mb-2">Run B — ${new Date(b.startTime).toLocaleDateString()}</h4>
+      <p class="font-medium">${shortName(b.plan)}</p>
+      <p class="text-xs text-gray-400">${b.mode} · ${b.model}</p>
+      <div class="grid grid-cols-3 gap-2 mt-2 text-xs">
+        <div>Cost: <span class="text-white">${fmtCost(costB)}</span></div>
+        <div>Duration: <span class="text-white">${fmtDur(durB)}</span></div>
+        <div>Tokens: <span class="text-white">${fmtTok(tokB)}</span></div>
+      </div>
+      <p class="text-xs mt-1">${b.results?.passed || 0}/${b.sliceCount || 0} passed · ${b.status}</p>
+    </div>
+    <div class="col-span-2 bg-gray-700/30 rounded p-3 text-center text-sm">
+      <span class="text-gray-400">Δ Cost:</span> ${delta(costA, costB, fmtCost)}
+      <span class="ml-4 text-gray-400">Δ Duration:</span> ${delta(durA, durB, fmtDur)}
+      <span class="ml-4 text-gray-400">Δ Tokens:</span> ${delta(tokA, tokB, fmtTok)}
+    </div>`;
+  document.getElementById("compare-panel").classList.remove("hidden");
+}
+
+function closeComparison() {
+  compareMode = false;
+  compareSelections = [];
+  document.getElementById("compare-panel").classList.add("hidden");
+  document.getElementById("compare-btn").textContent = "Compare";
+  document.getElementById("compare-btn").className = "text-xs px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded ml-1";
+  renderRunsTable();
+}
+
+window.toggleCompareMode = toggleCompareMode;
+window.toggleCompareSelection = toggleCompareSelection;
+window.closeComparison = closeComparison;
+
+// ─── Export (v2.8) ────────────────────────────────────────────────────
+function toggleExportMenu(id) {
+  document.getElementById(`export-menu-${id}`).classList.toggle("hidden");
+}
+
+function exportRuns(format) {
+  document.getElementById("export-menu-runs").classList.add("hidden");
+  const data = filteredRuns;
+  if (format === "json") {
+    downloadFile("plan-forge-runs.json", JSON.stringify(data, null, 2), "application/json");
+  } else {
+    const headers = "Date,Plan,Mode,Model,Slices Passed,Slices Total,Status,Cost,Duration\n";
+    const rows = data.map((r) => [
+      r.startTime ? new Date(r.startTime).toISOString() : "",
+      `"${shortName(r.plan).replace(/"/g, '""')}"`,
+      r.mode || "", r.model || "",
+      r.results?.passed || 0, r.sliceCount || 0,
+      r.status || "",
+      r.cost?.total_cost_usd?.toFixed(4) || 0,
+      r.totalDuration ? (r.totalDuration / 1000).toFixed(0) : 0,
+    ].join(",")).join("\n");
+    downloadFile("plan-forge-runs.csv", headers + rows, "text/csv");
+  }
+}
+
+function exportCost() {
+  document.getElementById("export-menu-cost").classList.add("hidden");
+  fetch(`${API_BASE}/api/cost`).then((r) => r.json()).then((data) => {
+    downloadFile("plan-forge-cost-report.json", JSON.stringify(data, null, 2), "application/json");
+  });
+}
+
+function downloadFile(name, content, type) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = name; a.click();
+  URL.revokeObjectURL(url);
+}
+
+window.toggleExportMenu = toggleExportMenu;
+window.exportRuns = exportRuns;
+window.exportCost = exportCost;
+
+// ─── Cost Tab (v2.8: trend line + anomaly) ────────────────────────────
 async function loadCost() {
   try {
-    const res = await fetch(`${API_BASE}/api/cost`);
-    const data = await res.json();
+    const [costRes, runsRes] = await Promise.all([
+      fetch(`${API_BASE}/api/cost`),
+      fetch(`${API_BASE}/api/runs`),
+    ]);
+    const data = await costRes.json();
+    const runs = await runsRes.json();
 
     document.getElementById("cost-total").textContent = `$${(data.total_cost_usd || 0).toFixed(2)}`;
     document.getElementById("cost-runs").textContent = data.runs || 0;
@@ -309,6 +626,83 @@ async function loadCost() {
       const values = months.map((m) => data.monthly[m].cost_usd);
       renderChart("chart-monthly", "bar", months, values, "Monthly Spend ($)");
     }
+
+    // Cost Trend Line (v2.8)
+    if (runs.length > 0) {
+      const runCosts = runs.slice().reverse().map((r) => r.cost?.total_cost_usd || 0);
+      const runLabels = runs.slice().reverse().map((r) => r.startTime ? new Date(r.startTime).toLocaleDateString() : "?");
+      const avg = runCosts.reduce((a, b) => a + b, 0) / runCosts.length;
+      const pointColors = runCosts.map((c) => {
+        if (c > avg * 3) return "#ef4444";
+        if (c > avg * 2) return "#f59e0b";
+        return "#10b981";
+      });
+      const ctx = document.getElementById("chart-cost-trend");
+      if (ctx) {
+        if (state.charts["chart-cost-trend"]) state.charts["chart-cost-trend"].destroy();
+        state.charts["chart-cost-trend"] = new Chart(ctx, {
+          type: "line",
+          data: {
+            labels: runLabels,
+            datasets: [
+              {
+                label: "Cost ($)",
+                data: runCosts,
+                borderColor: "#3b82f6",
+                backgroundColor: "transparent",
+                pointBackgroundColor: pointColors,
+                pointRadius: 4,
+                tension: 0.2,
+              },
+              {
+                label: "Average",
+                data: Array(runCosts.length).fill(avg),
+                borderColor: "#6b7280",
+                borderDash: [5, 5],
+                backgroundColor: "transparent",
+                pointRadius: 0,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              legend: { labels: { color: "#9ca3af" } },
+              tooltip: {
+                callbacks: {
+                  afterLabel: (ctx) => {
+                    if (ctx.datasetIndex === 0) {
+                      const diff = ((ctx.raw - avg) / avg * 100).toFixed(0);
+                      return `${diff > 0 ? "+" : ""}${diff}% vs avg ($${avg.toFixed(4)})`;
+                    }
+                    return "";
+                  },
+                },
+              },
+            },
+            scales: {
+              y: { ticks: { color: "#9ca3af" }, grid: { color: "#374151" } },
+              x: { ticks: { color: "#9ca3af", maxTicksLimit: 10 }, grid: { display: false } },
+            },
+          },
+        });
+      }
+
+      // Anomaly banner (v2.8)
+      const recent = runs.slice(0, 5);
+      const anomaly = recent.find((r) => (r.cost?.total_cost_usd || 0) > avg * 3 && avg > 0);
+      if (anomaly) {
+        const banner = document.getElementById("cost-anomaly-banner");
+        const text = document.getElementById("cost-anomaly-text");
+        const cost = anomaly.cost.total_cost_usd;
+        const ratio = (cost / avg).toFixed(1);
+        text.textContent = `⚠ Cost Spike: "${shortName(anomaly.plan)}" on ${new Date(anomaly.startTime).toLocaleDateString()} cost $${cost.toFixed(2)} — ${ratio}× above your $${avg.toFixed(4)} average`;
+        banner.classList.remove("hidden");
+      }
+    }
+
+    // Load model comparison
+    loadModelComparison();
   } catch (err) {
     document.getElementById("cost-total").textContent = "Error";
   }
@@ -406,19 +800,32 @@ async function loadPlans() {
       listEl.innerHTML = '<p class="text-gray-500 text-sm py-2">No plan files found in docs/plans/</p>';
       return;
     }
-    listEl.innerHTML = plans.map((p) => {
+    listEl.innerHTML = plans.map((p, pi) => {
       const icon = p.status.includes("Complete") ? "✅" : p.status.includes("Progress") ? "🚧" : p.status.includes("Paused") ? "⏸️" : "📋";
+      const sliceCheckboxes = Array.from({ length: p.sliceCount }, (_, i) => {
+        const num = i + 1;
+        return `<label class="inline-flex items-center gap-1 text-xs text-gray-400 cursor-pointer">
+          <input type="checkbox" checked data-plan="${pi}" data-slice="${num}" class="plan-slice-toggle rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-0 w-3 h-3">
+          Slice ${num}
+        </label>`;
+      }).join(" ");
       return `
-        <div class="flex items-center gap-3 py-2 border-b border-gray-700/50 last:border-0 group">
-          <span class="text-sm">${icon}</span>
-          <div class="flex-1 min-w-0">
-            <p class="text-sm font-medium text-gray-200 truncate">${p.title}</p>
-            <p class="text-xs text-gray-500">${p.file} · ${p.sliceCount} slices${p.branch ? ` · ${p.branch}` : ""}</p>
+        <div class="py-2 border-b border-gray-700/50 last:border-0 group">
+          <div class="flex items-center gap-3">
+            <span class="text-sm">${icon}</span>
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-medium text-gray-200 truncate">${p.title}</p>
+              <p class="text-xs text-gray-500">${p.file} · ${p.sliceCount} slices${p.branch ? ` · ${p.branch}` : ""}</p>
+            </div>
+            <div class="flex gap-1 opacity-70 group-hover:opacity-100">
+              <button onclick="estimatePlan('${p.file}')" class="text-xs px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded transition">Estimate</button>
+              <button onclick="runPlanFromBrowser('${p.file}', '${p.title}', ${p.sliceCount}, ${pi})" class="text-xs px-2 py-1 bg-blue-600 hover:bg-blue-500 rounded transition">Run</button>
+            </div>
           </div>
-          <div class="flex gap-1 opacity-70 group-hover:opacity-100">
-            <button onclick="estimatePlan('${p.file}')" class="text-xs px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded transition">Estimate</button>
-            <button onclick="runPlanFromBrowser('${p.file}', '${p.title}', ${p.sliceCount})" class="text-xs px-2 py-1 bg-blue-600 hover:bg-blue-500 rounded transition">Run</button>
-          </div>
+          <details class="mt-1 ml-7">
+            <summary class="text-xs text-gray-500 cursor-pointer hover:text-gray-300">Select slices</summary>
+            <div class="flex flex-wrap gap-2 mt-1 py-1">${sliceCheckboxes}</div>
+          </details>
           <div id="plan-est-${p.file.replace(/[^a-zA-Z0-9]/g, '_')}" class="hidden text-xs text-gray-400 w-full pl-8 pb-1"></div>
         </div>`;
     }).join("");
@@ -447,10 +854,18 @@ async function estimatePlan(file) {
   }
 }
 
-function runPlanFromBrowser(file, title, sliceCount) {
-  if (!confirm(`Run "${title}" with ${sliceCount} slices?\n\nPlan: ${file}`)) return;
-  runAction("run-plan", file);
-  addNotification(`Started run: ${title}`, "info");
+function runPlanFromBrowser(file, title, sliceCount, planIdx) {
+  // v2.8: Gather unchecked slices to build --skip-slices arg
+  const unchecked = [];
+  for (let i = 1; i <= sliceCount; i++) {
+    const cb = document.querySelector(`input.plan-slice-toggle[data-plan="${planIdx}"][data-slice="${i}"]`);
+    if (cb && !cb.checked) unchecked.push(i);
+  }
+  const skipNote = unchecked.length > 0 ? `\nSkipping slices: ${unchecked.join(", ")}` : "";
+  if (!confirm(`Run "${title}" with ${sliceCount - unchecked.length}/${sliceCount} slices?${skipNote}\n\nPlan: ${file}`)) return;
+  const args = unchecked.length > 0 ? `${file} --skip-slices ${unchecked.join(",")}` : file;
+  runAction("run-plan", args);
+  addNotification(`Started run: ${title}${skipNote}`, "info");
 }
 
 window.loadPlans = loadPlans;
@@ -968,7 +1383,7 @@ function filterExtensions() {
 
 window.filterExtensions = filterExtensions;
 
-// ─── Notification Center (Phase 5) ────────────────────────────────────
+// ─── Notification Center (Phase 5, v2.8: localStorage persistence) ───
 let notifications = JSON.parse(localStorage.getItem("pf-notifications") || "[]");
 
 function addNotification(text, type = "info") {
@@ -1169,6 +1584,16 @@ renderNotifications();
 // Load plan browser on init (Progress is default tab)
 loadPlans();
 
+// Apply saved theme
+(function initTheme() {
+  const saved = localStorage.getItem("pf-theme");
+  if (saved === "light") {
+    document.documentElement.classList.add("light");
+    const toggle = document.getElementById("theme-toggle");
+    if (toggle) toggle.textContent = "☀️";
+  }
+})();
+
 // Tab load hooks
 const tabLoadHooks = {
   progress: loadPlans,
@@ -1176,8 +1601,107 @@ const tabLoadHooks = {
   extensions: loadExtensions,
   config: loadConfig,
   traces: loadTraces,
-  cost: loadModelComparison,
+  cost: () => { loadCost(); },
+  skills: loadSkillCatalog,
 };
+
+// ─── Theme Toggle (v2.8) ─────────────────────────────────────────────
+function toggleTheme() {
+  const isLight = document.documentElement.classList.toggle("light");
+  localStorage.setItem("pf-theme", isLight ? "light" : "dark");
+  const toggle = document.getElementById("theme-toggle");
+  if (toggle) toggle.textContent = isLight ? "☀️" : "🌙";
+  // Update chart colors for theme
+  Object.values(state.charts).forEach((c) => {
+    if (c.options?.scales?.y) {
+      c.options.scales.y.ticks.color = isLight ? "#64748b" : "#9ca3af";
+      c.options.scales.y.grid.color = isLight ? "#e2e8f0" : "#374151";
+    }
+    if (c.options?.scales?.x) {
+      c.options.scales.x.ticks.color = isLight ? "#64748b" : "#9ca3af";
+    }
+    c.update();
+  });
+}
+window.toggleTheme = toggleTheme;
+
+// ─── Keyboard Navigation (v2.8) ──────────────────────────────────────
+document.addEventListener("keydown", (e) => {
+  // Skip if focus is in input/select/textarea
+  if (["INPUT", "SELECT", "TEXTAREA"].includes(e.target.tagName)) return;
+
+  const activeTab = document.querySelector(".tab-btn.tab-active")?.dataset?.tab;
+
+  // ? — show shortcuts modal
+  if (e.key === "?") {
+    e.preventDefault();
+    document.getElementById("shortcuts-modal").classList.toggle("hidden");
+    return;
+  }
+
+  // Esc — close drawer / comparison / modal
+  if (e.key === "Escape") {
+    closeRunDrawer();
+    document.getElementById("shortcuts-modal").classList.add("hidden");
+    if (compareMode) closeComparison();
+    return;
+  }
+
+  // 1-9 — switch tabs
+  if (e.key >= "1" && e.key <= "9" && !e.ctrlKey && !e.metaKey) {
+    const tabs = document.querySelectorAll(".tab-btn[data-tab]");
+    const idx = parseInt(e.key, 10) - 1;
+    if (idx < tabs.length) { tabs[idx].click(); e.preventDefault(); }
+    return;
+  }
+
+  // j/k — navigate run rows (Runs tab)
+  if (activeTab === "runs" && (e.key === "j" || e.key === "k")) {
+    e.preventDefault();
+    const rows = document.querySelectorAll("#runs-table-body tr[data-row-idx]");
+    if (rows.length === 0) return;
+    if (e.key === "j") selectedRunIdx = Math.min(selectedRunIdx + 1, rows.length - 1);
+    else selectedRunIdx = Math.max(selectedRunIdx - 1, 0);
+    rows.forEach((r) => r.classList.remove("row-selected"));
+    if (rows[selectedRunIdx]) rows[selectedRunIdx].classList.add("row-selected");
+    rows[selectedRunIdx]?.scrollIntoView({ block: "nearest" });
+    return;
+  }
+
+  // Enter — open detail for selected row
+  if (activeTab === "runs" && e.key === "Enter" && selectedRunIdx >= 0) {
+    e.preventDefault();
+    const origIdx = allRuns.indexOf(filteredRuns[selectedRunIdx]);
+    if (origIdx >= 0) openRunDrawer(origIdx);
+    return;
+  }
+});
+
+// ─── Skill Catalog (v2.8) ────────────────────────────────────────────
+async function loadSkillCatalog() {
+  const container = document.getElementById("skill-catalog");
+  if (!container) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/skills`);
+    const skills = await res.json();
+    if (skills.length === 0) {
+      container.innerHTML = '<p class="text-gray-500 text-sm">No skills available</p>';
+      return;
+    }
+    container.innerHTML = skills.map((s) => {
+      const isBuiltin = s.file === "built-in";
+      return `<div class="bg-gray-700/50 rounded p-3 border border-gray-700 hover:border-gray-500 transition">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-sm font-medium text-white">/${s.name}</span>
+          ${isBuiltin ? '<span class="text-xs px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400">built-in</span>' : '<span class="text-xs px-1.5 py-0.5 rounded bg-green-500/20 text-green-400">custom</span>'}
+        </div>
+        <p class="text-xs text-gray-400">${escHtml(s.description || "")}</p>
+      </div>`;
+    }).join("");
+  } catch {
+    container.innerHTML = '<p class="text-red-400 text-sm">Failed to load skills</p>';
+  }
+}
 
 // ─── Traces Tab (v2.4) ───────────────────────────────────────────────
 let traceData = null;
@@ -1302,13 +1826,39 @@ function renderWaterfall(trace) {
     return;
   }
 
+  // v2.8: Quorum summary banner
+  let quorumBanner = "";
+  if (trace.quorum && Object.keys(trace.quorum).length > 0) {
+    const slices = Object.entries(trace.quorum);
+    const totalLegs = slices.reduce((sum, [, q]) => sum + (q.totalLegs || 0), 0);
+    const successLegs = slices.reduce((sum, [, q]) => sum + (q.successfulLegs || 0), 0);
+    const models = [...new Set(slices.flatMap(([, q]) => q.models || []))];
+    quorumBanner = `<div class="mb-3 p-3 rounded bg-purple-900/30 border border-purple-700/50">
+      <div class="flex items-center gap-2 mb-1">
+        <span class="text-purple-400 font-semibold">🔮 Quorum Mode</span>
+        <span class="text-xs text-gray-400">${slices.length} slice(s) · ${successLegs}/${totalLegs} legs succeeded</span>
+      </div>
+      <div class="flex flex-wrap gap-1">${models.map((m) =>
+        `<span class="inline-block px-2 py-0.5 text-xs rounded bg-purple-800/50 text-purple-300">${escHtml(m)}</span>`
+      ).join("")}</div>
+    </div>`;
+  }
+
   // Calculate time range
   const times = spans.flatMap((s) => [new Date(s.startTime).getTime(), s.endTime ? new Date(s.endTime).getTime() : Date.now()]);
   const minTime = Math.min(...times);
   const maxTime = Math.max(...times);
   const range = maxTime - minTime || 1;
 
-  container.innerHTML = spans.map((span, idx) => {
+  // v2.8: Build quorum lookup for slice spans
+  const quorumLookup = {};
+  if (trace.quorum) {
+    for (const [sliceNum, qd] of Object.entries(trace.quorum)) {
+      quorumLookup[`slice-${sliceNum}`] = qd;
+    }
+  }
+
+  const rows = spans.map((span, idx) => {
     const start = new Date(span.startTime).getTime();
     const end = span.endTime ? new Date(span.endTime).getTime() : Date.now();
     const left = ((start - minTime) / range * 100).toFixed(1);
@@ -1322,9 +1872,14 @@ function renderWaterfall(trace) {
     const indent = span.parentSpanId ? (span.kind === "CLIENT" ? "ml-8" : "ml-4") : "";
     const kindBadge = span.kind === "SERVER" ? "🌐" : span.kind === "CLIENT" ? "📡" : "⚙️";
 
+    // v2.8: Quorum indicator on slice spans
+    const sliceMatch = span.name?.match(/slice[- ]?(\d+)/i);
+    const qData = sliceMatch ? quorumLookup[`slice-${sliceMatch[1]}`] : null;
+    const quorumBadge = qData ? `<span class="text-purple-400 text-xs ml-1" title="Quorum: ${qData.successfulLegs}/${qData.totalLegs} legs, threshold ${qData.threshold}">🔮${qData.successfulLegs}/${qData.totalLegs}</span>` : "";
+
     return `
-      <div class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-700/50 rounded px-2 ${indent}" onclick="showSpanDetail(${idx})">
-        <span class="text-xs text-gray-500 w-32 truncate">${kindBadge} ${span.name}</span>
+      <div class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-700/50 rounded px-2 ${indent}" onclick="showSpanDetail(${idx})" data-span-idx="${idx}">
+        <span class="text-xs text-gray-500 w-32 truncate">${kindBadge} ${span.name}${quorumBadge}</span>
         <div class="flex-1 relative h-5">
           <div class="absolute h-full rounded ${color} opacity-80" style="left:${left}%;width:${width}%"></div>
         </div>
@@ -1332,30 +1887,67 @@ function renderWaterfall(trace) {
       </div>
     `;
   }).join("");
+
+  container.innerHTML = quorumBanner + rows;
 }
 
 function showSpanDetail(idx) {
   if (!traceData) return;
   const span = traceData.spans[idx];
 
-  // Events
+  // Events — render full detail (v2.8)
   const eventsEl = document.getElementById("trace-events");
   if (span.events?.length > 0) {
     eventsEl.innerHTML = span.events.map((e) => {
       const color = e.severity === "ERROR" ? "text-red-400" :
                     e.severity === "WARN" ? "text-yellow-400" : "text-gray-300";
       const time = new Date(e.time).toLocaleTimeString();
-      return `<div class="${color}">[${time}] ${e.severity} ${e.name} ${JSON.stringify(e.attributes || {})}</div>`;
+      const attrs = e.attributes ? Object.entries(e.attributes).map(([k, v]) =>
+        `<span class="text-gray-500">${escHtml(k)}=</span><span class="text-gray-200">${escHtml(String(v))}</span>`
+      ).join(" ") : "";
+      return `<div class="${color} border-b border-gray-700/30 py-1">
+        <span class="text-gray-500">[${time}]</span> <span class="font-medium">${escHtml(e.name || e.severity || "")}</span>
+        ${attrs ? `<div class="ml-4 text-xs">${attrs}</div>` : ""}
+      </div>`;
     }).join("");
   } else {
     eventsEl.innerHTML = '<p class="text-gray-500">No events</p>';
   }
 
-  // Attributes
+  // Attributes — formatted table (v2.8)
   const attrsEl = document.getElementById("trace-attributes");
-  const attrs = { ...span.attributes, status: span.status, kind: span.kind, spanId: span.spanId };
-  if (span.logSummary?.length > 0) attrs.logSummary = span.logSummary;
-  attrsEl.textContent = JSON.stringify(attrs, null, 2);
+  const labels = { model: "Model", tokens_in: "Input Tokens", tokens_out: "Output Tokens", worker: "Worker", cost_usd: "Cost ($)", exit_code: "Exit Code", duration_ms: "Duration (ms)", slice_id: "Slice ID" };
+  const allAttrs = { ...span.attributes, status: span.status, kind: span.kind, spanId: span.spanId };
+  const rows = Object.entries(allAttrs).map(([k, v]) => {
+    const label = labels[k] || k;
+    return `<tr class="border-b border-gray-700/30"><td class="py-1 pr-3 text-gray-500 text-xs">${escHtml(label)}</td><td class="py-1 text-xs text-gray-200">${escHtml(String(v))}</td></tr>`;
+  }).join("");
+  attrsEl.innerHTML = `<table class="w-full">${rows}</table>`;
+
+  // Log summary (v2.8)
+  if (span.logSummary?.length > 0) {
+    attrsEl.innerHTML += `<details class="mt-2"><summary class="text-xs text-gray-500 cursor-pointer">Log Summary (${span.logSummary.length} entries)</summary>
+      <pre class="text-xs text-gray-400 mt-1 whitespace-pre-wrap max-h-32 overflow-y-auto">${span.logSummary.map((l) => escHtml(l)).join("\n")}</pre>
+    </details>`;
+  }
+
+  // v2.8: Quorum detail for slice spans
+  const sliceMatch = span.name?.match(/slice[- ]?(\d+)/i);
+  if (sliceMatch && traceData.quorum?.[sliceMatch[1]]) {
+    const qd = traceData.quorum[sliceMatch[1]];
+    attrsEl.innerHTML += `<div class="mt-3 p-2 rounded bg-purple-900/20 border border-purple-700/30">
+      <div class="text-xs font-semibold text-purple-400 mb-1">🔮 Quorum Detail</div>
+      <div class="grid grid-cols-2 gap-1 text-xs">
+        <span class="text-gray-500">Complexity Score</span><span class="text-gray-200">${qd.score ?? "—"}/10</span>
+        <span class="text-gray-500">Threshold</span><span class="text-gray-200">${qd.threshold ?? "—"}</span>
+        <span class="text-gray-500">Models</span><span class="text-gray-200">${(qd.models || []).join(", ") || "—"}</span>
+        <span class="text-gray-500">Legs</span><span class="text-gray-200">${qd.successfulLegs ?? 0}/${qd.totalLegs ?? 0} succeeded</span>
+        <span class="text-gray-500">Dispatch Duration</span><span class="text-gray-200">${qd.dispatchDuration ? (qd.dispatchDuration / 1000).toFixed(1) + "s" : "—"}</span>
+        <span class="text-gray-500">Reviewer Fallback</span><span class="text-gray-200">${qd.reviewerFallback ? "Yes" : "No"}</span>
+        <span class="text-gray-500">Reviewer Cost</span><span class="text-gray-200">${qd.reviewerCost ? "$" + qd.reviewerCost.toFixed(4) : "—"}</span>
+      </div>
+    </div>`;
+  }
 }
 
 function filterTraceEvents(severity) {

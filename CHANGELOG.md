@@ -5,6 +5,77 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.8.0] — 2026-04-06
+
+### Added — Dashboard Power UX (Phase 10)
+
+#### Run Detail Drawer
+- **Side-panel drawer** — click any run row to slide open a 480px drawer showing per-slice detail cards with status icon, worker badge, tokens, cost, gate errors, failed commands, and expandable gate output
+- **`GET /api/runs/:runIdx` endpoint** — returns summary.json + all slice-*.json for a single run
+
+#### Filter Bar + Sortable Columns
+- **5-filter bar** on Runs tab — filter by plan, status, model, mode, and date range with AND logic
+- **Sortable columns** — click any column header to cycle asc → desc → default sort; indicator arrows show current direction
+- **Runs counter** — shows filtered/total count in real time
+
+#### Cost Trend + Anomaly Detection
+- **Cost trend line chart** — Chart.js line chart plots per-run cost with a dashed average line
+- **Anomaly color coding** — points colored green (≤2× avg), amber (2-3×), red (>3×)
+- **Anomaly banner** — auto-appears when any of the latest 5 runs exceeds 3× historical average; dismissable
+
+#### Run Comparison
+- **Compare mode** — toggle Compare, select 2 runs, view side-by-side cards with cost/duration/token deltas
+- **Delta color coding** — green for lower values, red for higher values between runs
+
+#### Quorum Visualization
+- **Quorum banner** in Traces waterfall — shows model legs, success rate, and dispatch duration for quorum-enabled runs
+- **Per-span quorum badges** — slice spans show 🔮 indicator with leg counts
+- **Quorum detail panel** — click a quorum span to see complexity score, threshold, models, leg status, dispatch time, reviewer cost
+- **`GET /api/traces/:runId` enhanced** — now attaches quorum data from slice-N-quorum.json files
+
+#### Plan Slice Toggle
+- **Per-slice checkboxes** in Plan Browser — expand "Select slices" to toggle individual slices on/off before running
+- Unchecked slices passed as `--skip-slices` argument to the executor
+
+#### Skill Catalog
+- **Skill catalog grid** in Skills tab — shows all available skills (built-in + custom from .github/skills/)
+- **`GET /api/skills` endpoint** — scans custom skills directory and returns combined list with built-in skills
+- Custom skills tagged with blue "custom" badge; built-in with gray "built-in" badge
+
+#### Export
+- **JSON + CSV export** for run history from the Runs tab via dropdown menu
+- **Cost data export** as JSON from the Cost tab
+- Exports respect active filters — only matching runs are exported
+
+#### Keyboard Navigation
+- **Global shortcuts** — `1`-`9` switch tabs, `j`/`k` navigate rows, `Enter` opens detail, `Esc` closes panels
+- **Shortcuts modal** — press `?` to see all available keyboard shortcuts
+- **Visual focus indicator** — selected row highlighted with blue outline
+
+#### Theme Toggle
+- **Light/dark theme switch** — header toggle button persists preference in localStorage
+- Chart axis colors and backgrounds adapt to theme automatically
+
+#### Responsive Layout
+- **Tablet breakpoint** (1024px) — Mode/Model columns hidden, grid layouts adjusted
+- **Mobile breakpoint** (768px) — single-column layout, date filters hidden, filter bar wraps
+
+#### Enhanced Span Attributes
+- **Formatted attribute table** — span detail now renders a proper table with friendly labels instead of raw JSON
+- **Expandable log summaries** — log entries shown in collapsible `<details>` blocks
+- **Structured event rendering** — events display per-event attributes with severity color coding
+
+### Changed
+- Runs tab fully rewritten — now power-user oriented with filter/sort/compare/export
+- Cost tab enhanced — trend chart + anomaly detection + export added alongside existing donut/bar charts
+- Traces waterfall enhanced — quorum banners, per-span badges, formatted attribute detail
+- Skills tab enhanced — skill catalog grid above execution timeline
+- Plan Browser enhanced — per-slice toggle checkboxes before run
+- Updated dashboard.html documentation with all v2.8 feature descriptions
+- Added vendor prefix for user-select CSS (Safari compatibility)
+
+---
+
 ## [2.7.0] — 2026-04-06
 
 ### Added — Dashboard Enhancements (Phase 9)

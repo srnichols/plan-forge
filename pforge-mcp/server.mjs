@@ -700,19 +700,96 @@ function createExpressApp() {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
-  // v2.4: GET /api/traces/:runId — single run trace detail
+  // v2.8: GET /api/runs/:runIdx — single run detail with slice data
+  app.get("/api/runs/:runIdx", (req, res) => {
+    try {
+      const runsDir = resolve(PROJECT_DIR, ".forge", "runs");
+      if (!existsSync(runsDir)) return res.status(404).json({ error: "No runs" });
+      const dirs = readdirSync(runsDir, { withFileTypes: true })
+        .filter((d) => d.isDirectory()).map((d) => d.name).sort().reverse();
+      const idx = parseInt(req.params.runIdx, 10);
+      if (isNaN(idx) || idx < 0 || idx >= dirs.length) return res.status(404).json({ error: "Run not found" });
+      const runDir = resolve(runsDir, dirs[idx]);
+      const summaryPath = resolve(runDir, "summary.json");
+      if (!existsSync(summaryPath)) return res.status(404).json({ error: "No summary" });
+      const summary = JSON.parse(readFileSync(summaryPath, "utf-8"));
+      // Load per-slice detail files
+      const slices = [];
+      const sliceFiles = readdirSync(runDir).filter((f) => /^slice-\d+\.json$/.test(f)).sort((a, b) => {
+        const na = parseInt(a.match(/\d+/)[0], 10), nb = parseInt(b.match(/\d+/)[0], 10);
+        return na - nb;
+      });
+      for (const sf of sliceFiles) {
+        try { slices.push(JSON.parse(readFileSync(resolve(runDir, sf), "utf-8"))); } catch { /* skip */ }
+      }
+      res.json({ summary, slices });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // v2.8: GET /api/skills — available slash command skills
+  app.get("/api/skills", (_req, res) => {
+    try {
+      const skills = [];
+      // Check .github/skills/
+      const skillsDir = resolve(PROJECT_DIR, ".github", "skills");
+      if (existsSync(skillsDir)) {
+        for (const entry of readdirSync(skillsDir, { withFileTypes: true })) {
+          if (entry.isDirectory()) {
+            const skillMd = resolve(skillsDir, entry.name, "SKILL.md");
+            if (existsSync(skillMd)) {
+              try {
+                const content = readFileSync(skillMd, "utf-8");
+                const titleMatch = content.match(/^#\s+(.+)/m);
+                const descMatch = content.match(/^(?!#)(.{10,})/m);
+                skills.push({ name: entry.name, description: descMatch?.[1]?.trim() || "", file: `.github/skills/${entry.name}/SKILL.md` });
+              } catch { /* skip */ }
+            }
+          }
+        }
+      }
+      // Built-in forge skills
+      const builtins = [
+        { name: "code-review", description: "Comprehensive review: architecture, security, testing, patterns", file: "built-in" },
+        { name: "test-sweep", description: "Run all test suites and aggregate results", file: "built-in" },
+        { name: "staging-deploy", description: "Build, push, migrate, deploy, and verify on staging", file: "built-in" },
+        { name: "dependency-audit", description: "Scan dependencies for vulnerabilities and outdated packages", file: "built-in" },
+        { name: "release-notes", description: "Generate release notes from git history and CHANGELOG", file: "built-in" },
+        { name: "health-check", description: "Forge diagnostic: smith → validate → sweep", file: "built-in" },
+        { name: "forge-execute", description: "Guided plan execution: list plans → estimate cost → execute", file: "built-in" },
+      ];
+      res.json([...skills, ...builtins]);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // v2.4: GET /api/traces/:runId — single run trace detail (v2.8: includes quorum data)
   app.get("/api/traces/:runId", (req, res) => {
     try {
       const runDir = resolve(PROJECT_DIR, ".forge", "runs", req.params.runId);
       if (!existsSync(runDir)) return res.status(404).json({ error: "Run not found" });
+      let traceResult = null;
       // Try trace.json first, fall back to manifest, then summary
       const tracePath = resolve(runDir, "trace.json");
-      if (existsSync(tracePath)) return res.json(JSON.parse(readFileSync(tracePath, "utf-8")));
-      const manifestPath = resolve(runDir, "manifest.json");
-      if (existsSync(manifestPath)) return res.json(JSON.parse(readFileSync(manifestPath, "utf-8")));
-      const summaryPath = resolve(runDir, "summary.json");
-      if (existsSync(summaryPath)) return res.json(JSON.parse(readFileSync(summaryPath, "utf-8")));
-      res.status(404).json({ error: "No trace data" });
+      if (existsSync(tracePath)) traceResult = JSON.parse(readFileSync(tracePath, "utf-8"));
+      if (!traceResult) {
+        const manifestPath = resolve(runDir, "manifest.json");
+        if (existsSync(manifestPath)) traceResult = JSON.parse(readFileSync(manifestPath, "utf-8"));
+      }
+      if (!traceResult) {
+        const summaryPath = resolve(runDir, "summary.json");
+        if (existsSync(summaryPath)) traceResult = JSON.parse(readFileSync(summaryPath, "utf-8"));
+      }
+      if (!traceResult) return res.status(404).json({ error: "No trace data" });
+
+      // v2.8: Attach quorum data from slice-N-quorum.json files
+      const quorumFiles = readdirSync(runDir).filter((f) => /^slice-\d+-quorum\.json$/.test(f)).sort();
+      if (quorumFiles.length > 0) {
+        traceResult.quorum = {};
+        for (const qf of quorumFiles) {
+          const sliceNum = qf.match(/slice-(\d+)-quorum/)[1];
+          try { traceResult.quorum[sliceNum] = JSON.parse(readFileSync(resolve(runDir, qf), "utf-8")); } catch { /* skip */ }
+        }
+      }
+      res.json(traceResult);
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 

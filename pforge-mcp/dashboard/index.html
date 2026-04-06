@@ -13,6 +13,33 @@
     .slice-executing { animation: pulse 2s infinite; }
     @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.7; } }
     .tab-active { border-bottom: 2px solid #3b82f6; color: #3b82f6; }
+    /* Run detail drawer */
+    #run-detail-drawer { transform: translateX(100%); transition: transform 0.3s ease; }
+    #run-detail-drawer.open { transform: translateX(0); }
+    #drawer-overlay { opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+    #drawer-overlay.open { opacity: 1; pointer-events: auto; }
+    /* Sortable columns */
+    th.sortable { cursor: pointer; -webkit-user-select: none; user-select: none; }
+    th.sortable:hover { color: #3b82f6; }
+    /* Keyboard selection */
+    tr.row-selected { outline: 2px solid #3b82f6; outline-offset: -2px; }
+    tr.row-compare { outline: 2px solid #f59e0b; outline-offset: -2px; background: rgba(245,158,11,0.08); }
+    /* Theme toggle */
+    .light body, .light { background: #f1f5f9 !important; color: #1e293b !important; }
+    .light .bg-gray-800 { background: #fff !important; }
+    .light .bg-gray-900 { background: #f1f5f9 !important; }
+    .light .bg-gray-700 { background: #e2e8f0 !important; }
+    .light .text-gray-100 { color: #1e293b !important; }
+    .light .text-gray-400 { color: #64748b !important; }
+    .light .text-gray-500 { color: #94a3b8 !important; }
+    .light .text-white { color: #0f172a !important; }
+    .light .border-gray-700 { border-color: #cbd5e1 !important; }
+    /* Responsive */
+    @media (max-width: 1024px) { .hide-tablet { display: none; } }
+    @media (max-width: 768px) {
+      .hide-mobile { display: none; }
+      #run-detail-drawer { width: 100% !important; }
+    }
   </style>
 </head>
 <body class="bg-gray-900 text-gray-100 min-h-screen">
@@ -26,6 +53,7 @@
     <div class="flex items-center gap-4 text-sm text-gray-400">
       <span id="run-status">Idle</span>
       <span id="ws-port"></span>
+      <button id="theme-toggle" onclick="toggleTheme()" title="Toggle theme" class="hover:text-white transition">🌙</button>
     </div>
   </header>
 
@@ -92,18 +120,60 @@
 
     <!-- Runs Tab -->
     <section id="tab-runs" class="tab-content hidden">
+      <!-- Filter Bar (v2.8) -->
+      <div class="bg-gray-800 rounded-lg p-3 mb-3 flex flex-wrap gap-2 items-center text-sm">
+        <select id="filter-plan" title="Filter by plan" class="bg-gray-700 text-white text-xs rounded px-2 py-1" onchange="applyRunFilters()">
+          <option value="">All Plans</option>
+        </select>
+        <select id="filter-status" title="Filter by status" class="bg-gray-700 text-white text-xs rounded px-2 py-1" onchange="applyRunFilters()">
+          <option value="">All Status</option>
+          <option value="completed">Pass</option>
+          <option value="failed">Fail</option>
+        </select>
+        <select id="filter-model" title="Filter by model" class="bg-gray-700 text-white text-xs rounded px-2 py-1" onchange="applyRunFilters()">
+          <option value="">All Models</option>
+        </select>
+        <select id="filter-mode" title="Filter by mode" class="bg-gray-700 text-white text-xs rounded px-2 py-1" onchange="applyRunFilters()">
+          <option value="">All Modes</option>
+          <option value="auto">auto</option>
+          <option value="assisted">assisted</option>
+          <option value="estimate">estimate</option>
+        </select>
+        <input id="filter-date-start" type="date" title="Start date" class="bg-gray-700 text-white text-xs rounded px-2 py-1 hide-mobile" onchange="applyRunFilters()">
+        <input id="filter-date-end" type="date" title="End date" class="bg-gray-700 text-white text-xs rounded px-2 py-1 hide-mobile" onchange="applyRunFilters()">
+        <button onclick="clearRunFilters()" class="text-xs text-gray-500 hover:text-white ml-1">Clear</button>
+        <button id="compare-btn" onclick="toggleCompareMode()" class="text-xs px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded ml-1">Compare</button>
+        <div class="ml-auto flex gap-2">
+          <span id="runs-count" class="text-xs text-gray-500"></span>
+          <div class="relative">
+            <button onclick="toggleExportMenu('runs')" class="text-xs px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded">Export ▾</button>
+            <div id="export-menu-runs" class="hidden absolute right-0 top-7 bg-gray-800 border border-gray-700 rounded shadow z-50">
+              <button onclick="exportRuns('json')" class="block w-full text-left text-xs px-3 py-1.5 hover:bg-gray-700">JSON</button>
+              <button onclick="exportRuns('csv')" class="block w-full text-left text-xs px-3 py-1.5 hover:bg-gray-700">CSV</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Comparison Panel (v2.8) -->
+      <div id="compare-panel" class="hidden bg-gray-800 rounded-lg p-4 mb-3 border border-amber-700/30">
+        <div class="flex justify-between items-center mb-3">
+          <h3 class="text-sm font-semibold text-amber-400">Run Comparison</h3>
+          <button onclick="closeComparison()" class="text-gray-500 hover:text-white text-sm">✕</button>
+        </div>
+        <div id="compare-content" class="grid gap-4 md:grid-cols-2 text-sm"></div>
+      </div>
       <div class="bg-gray-800 rounded-lg overflow-hidden">
         <table class="w-full text-sm">
           <thead class="bg-gray-700">
             <tr>
-              <th class="px-4 py-2 text-left">Date</th>
-              <th class="px-4 py-2 text-left">Plan</th>
-              <th class="px-4 py-2 text-center">Mode</th>
-              <th class="px-4 py-2 text-left">Model</th>
-              <th class="px-4 py-2 text-center">Slices</th>
-              <th class="px-4 py-2 text-center">Status</th>
-              <th class="px-4 py-2 text-right">Cost</th>
-              <th class="px-4 py-2 text-right">Duration</th>
+              <th class="sortable px-4 py-2 text-left" data-sort="date" onclick="sortRuns('date')">Date</th>
+              <th class="sortable px-4 py-2 text-left" data-sort="plan" onclick="sortRuns('plan')">Plan</th>
+              <th class="sortable px-4 py-2 text-center hide-tablet" data-sort="mode" onclick="sortRuns('mode')">Mode</th>
+              <th class="sortable px-4 py-2 text-left hide-tablet" data-sort="model" onclick="sortRuns('model')">Model</th>
+              <th class="sortable px-4 py-2 text-center" data-sort="slices" onclick="sortRuns('slices')">Slices</th>
+              <th class="sortable px-4 py-2 text-center" data-sort="status" onclick="sortRuns('status')">Status</th>
+              <th class="sortable px-4 py-2 text-right" data-sort="cost" onclick="sortRuns('cost')">Cost</th>
+              <th class="sortable px-4 py-2 text-right" data-sort="duration" onclick="sortRuns('duration')">Duration</th>
             </tr>
           </thead>
           <tbody id="runs-table-body">
@@ -115,6 +185,11 @@
 
     <!-- Cost Tab -->
     <section id="tab-cost" class="tab-content hidden">
+      <!-- Anomaly Banner (v2.8) -->
+      <div id="cost-anomaly-banner" class="hidden bg-amber-900/30 border border-amber-600/40 rounded-lg p-3 mb-3 flex items-center justify-between">
+        <span id="cost-anomaly-text" class="text-sm text-amber-300"></span>
+        <button onclick="document.getElementById('cost-anomaly-banner').classList.add('hidden')" class="text-amber-500 hover:text-amber-300">✕</button>
+      </div>
       <div class="grid gap-4 md:grid-cols-3 mb-4">
         <div class="bg-gray-800 rounded-lg p-4">
           <p class="text-sm text-gray-400">Total Spend</p>
@@ -138,6 +213,17 @@
           <h3 class="text-sm text-gray-400 mb-2">Monthly Spend</h3>
           <canvas id="chart-monthly" height="200"></canvas>
         </div>
+      </div>
+      <!-- Cost Trend Line (v2.8) -->
+      <div class="bg-gray-800 rounded-lg p-4 mt-4">
+        <div class="flex justify-between items-center mb-2">
+          <h3 class="text-sm text-gray-400">Cost Per Run</h3>
+          <button onclick="toggleExportMenu('cost')" class="text-xs px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded">Export ▾</button>
+          <div id="export-menu-cost" class="hidden absolute right-8 bg-gray-800 border border-gray-700 rounded shadow z-50">
+            <button onclick="exportCost()" class="block w-full text-left text-xs px-3 py-1.5 hover:bg-gray-700">JSON</button>
+          </div>
+        </div>
+        <canvas id="chart-cost-trend" height="120"></canvas>
       </div>
       <!-- Model Performance Comparison (v2.7) -->
       <div class="bg-gray-800 rounded-lg p-4 mt-4">
@@ -338,6 +424,13 @@
 
     <!-- Skills Tab -->
     <section id="tab-skills" class="tab-content hidden">
+      <!-- Skill Catalog (v2.8) -->
+      <div class="mb-4">
+        <h2 class="text-lg font-semibold text-white mb-2">Available Skills</h2>
+        <div id="skill-catalog" class="grid gap-2 md:grid-cols-2 lg:grid-cols-3 mb-6">
+          <p class="text-gray-500 text-sm">Loading skills...</p>
+        </div>
+      </div>
       <div class="mb-4">
         <h2 class="text-lg font-semibold text-white mb-2">Skill Executions</h2>
         <p class="text-sm text-gray-400">Real-time timeline of slash command skill invocations via <code class="text-blue-400">forge_run_skill</code>.</p>
@@ -347,6 +440,33 @@
       </div>
     </section>
   </main>
+
+  <!-- Run Detail Drawer (v2.8) -->
+  <div id="drawer-overlay" class="fixed inset-0 bg-black/50 z-40" onclick="closeRunDrawer()"></div>
+  <div id="run-detail-drawer" class="fixed top-0 right-0 h-full w-[480px] bg-gray-800 border-l border-gray-700 z-50 overflow-y-auto shadow-2xl">
+    <div class="sticky top-0 bg-gray-800 border-b border-gray-700 px-4 py-3 flex items-center justify-between z-10">
+      <h3 id="drawer-title" class="font-semibold text-white truncate"></h3>
+      <button onclick="closeRunDrawer()" class="text-gray-500 hover:text-white text-lg">✕</button>
+    </div>
+    <div id="drawer-content" class="p-4"></div>
+  </div>
+
+  <!-- Keyboard Shortcuts Modal (v2.8) -->
+  <div id="shortcuts-modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center" onclick="if(event.target===this)this.classList.add('hidden')">
+    <div class="bg-gray-800 border border-gray-700 rounded-xl p-6 w-96 shadow-2xl">
+      <h2 class="text-lg font-bold mb-3">Keyboard Shortcuts</h2>
+      <div class="space-y-1 text-sm">
+        <div class="flex justify-between"><span class="text-gray-400">Switch tabs</span><kbd class="bg-gray-700 px-2 py-0.5 rounded text-xs">1-9</kbd></div>
+        <div class="flex justify-between"><span class="text-gray-400">Navigate runs</span><kbd class="bg-gray-700 px-2 py-0.5 rounded text-xs">j / k</kbd></div>
+        <div class="flex justify-between"><span class="text-gray-400">Open detail</span><kbd class="bg-gray-700 px-2 py-0.5 rounded text-xs">Enter</kbd></div>
+        <div class="flex justify-between"><span class="text-gray-400">Close panel</span><kbd class="bg-gray-700 px-2 py-0.5 rounded text-xs">Esc</kbd></div>
+        <div class="flex justify-between"><span class="text-gray-400">Show shortcuts</span><kbd class="bg-gray-700 px-2 py-0.5 rounded text-xs">?</kbd></div>
+      </div>
+      <button onclick="this.closest('#shortcuts-modal').classList.add('hidden')" class="mt-4 w-full text-center text-sm text-gray-500 hover:text-white">Close</button>
+    </div>
+  </div>
+
+  <footer class="text-center text-xs text-gray-600 py-2">Press <kbd class="bg-gray-700 px-1 rounded">?</kbd> for keyboard shortcuts</footer>
 
   <script src="app.js"></script>
 </body>

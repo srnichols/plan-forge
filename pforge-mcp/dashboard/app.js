@@ -213,6 +213,8 @@ function renderSliceCards() {
     const duration = s.duration ? `${(s.duration / 1000).toFixed(1)}s` : "";
     const cost = s.cost ? `$${s.cost.toFixed(4)}` : "";
     const model = s.model || "";
+    const isApiModel = /^grok-/.test(model);
+    const modelBadge = isApiModel ? `<span class="text-purple-400">${model}</span> <span class="text-xs text-purple-600">API</span>` : model;
 
     return `
       <div class="slice-card ${bgColor} rounded-lg p-3 border border-gray-700">
@@ -221,7 +223,7 @@ function renderSliceCards() {
           <span class="text-xs text-gray-500">${duration}</span>
         </div>
         <p class="text-xs text-gray-400 truncate">${s.title}</p>
-        ${model ? `<p class="text-xs text-gray-500 mt-1">${model} ${cost}</p>` : ""}
+        ${model ? `<p class="text-xs text-gray-500 mt-1">${modelBadge} ${cost}</p>` : ""}
         ${s.error ? `<p class="text-xs text-red-400 mt-1 truncate">${s.error}</p>` : ""}
       </div>
     `;
@@ -364,6 +366,26 @@ async function runAction(tool, args) {
 
 // Make runAction available globally for onclick handlers
 window.runAction = runAction;
+
+// ─── Quorum / Diagnose Actions ────────────────────────────────────────
+async function runAnalyzeQuorum() {
+  const target = prompt("Plan or file path:");
+  if (!target) return;
+  const models = prompt("Models (comma-separated, or leave blank for defaults):", "");
+  const args = models ? `${target} --quorum --models ${models}` : `${target} --quorum`;
+  runAction("analyze", args);
+}
+
+async function runDiagnose() {
+  const filePath = prompt("File to diagnose:");
+  if (!filePath) return;
+  const models = prompt("Models (comma-separated, or leave blank for defaults):", "");
+  const args = models ? `${filePath} --models ${models}` : filePath;
+  runAction("diagnose", args);
+}
+
+window.runAnalyzeQuorum = runAnalyzeQuorum;
+window.runDiagnose = runDiagnose;
 
 // ─── Session Replay (Phase 5) ─────────────────────────────────────────
 let replayRuns = [];
@@ -572,8 +594,34 @@ async function loadConfig() {
     `).join("");
 
     document.getElementById("cfg-status").textContent = "Configuration loaded.";
+
+    // Check API provider availability
+    loadApiProviderStatus();
   } catch (err) {
     document.getElementById("cfg-status").textContent = `Error: ${err.message}`;
+  }
+}
+
+async function loadApiProviderStatus() {
+  const el = document.getElementById("cfg-api-providers");
+  if (!el) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/tool/smith`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ args: "" }),
+    });
+    const data = await res.json();
+    const output = data.output || "";
+    // Look for API provider info in smith output
+    const hasXai = /XAI_API_KEY/.test(output) || /api-xai/.test(output) || /grok/.test(output);
+    if (hasXai) {
+      el.innerHTML = '<span class="text-green-400">xAI Grok</span> <span class="text-gray-500">— XAI_API_KEY configured</span>';
+    } else {
+      el.innerHTML = '<span class="text-gray-500">No API providers detected. Set XAI_API_KEY for Grok models.</span>';
+    }
+  } catch {
+    el.textContent = "Unable to check";
   }
 }
 

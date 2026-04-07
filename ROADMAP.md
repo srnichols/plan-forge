@@ -1091,6 +1091,7 @@ These are planned but not yet prioritized into a version:
 
 ### Community & Docs
 - `specify init` detection — auto-detect Spec Kit project and layer Plan Forge guardrails on top
+- **Interactive User Manual** (`docs/manual/`) — structured web-based reference book with TOC, chapter navigation, client-side search, screenshots, Mermaid diagrams. Consolidates README, AGENT-SETUP, CLI-GUIDE, CUSTOMIZATION, COPILOT-VSCODE-GUIDE, walkthroughs, FAQ, and demos into ~13 navigable chapters. Vanilla HTML (matches existing site), zero build dependencies. Plan: `docs/manual/book-manual-plan.md`
 
 ### Enterprise
 - **Web UI** for plan visualization and status tracking → ✅ shipped as `/ui` in v2.13.0

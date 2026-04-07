@@ -72,6 +72,7 @@ function Show-Help {
     Write-Host "  update [source]   Update framework files from Plan Forge source (preserves customizations)"
     Write-Host "  analyze <plan>    Cross-artifact analysis — requirement traceability, test coverage, scope compliance"
     Write-Host "  run-plan <plan>   Execute a hardened plan — spawn CLI workers, validate at every boundary, track tokens"
+    Write-Host "  version-bump <v>  Update version across all files (VERSION, package.json, docs, README)"
     Write-Host "  smith             Inspect your forge — environment, VS Code config, setup health, and common problems"
     Write-Host "  help              Show this help message"
     Write-Host ""
@@ -1431,6 +1432,25 @@ function Invoke-Update {
         }
     }
 
+    # ─── MCP UI files (plan browser) ─────────────────────────────
+    $srcUI = Join-Path $sourcePath "pforge-mcp/ui"
+    $dstUI = Join-Path $RepoRoot "pforge-mcp/ui"
+    if (Test-Path $srcUI) {
+        Get-ChildItem -Path $srcUI -File -Recurse | ForEach-Object {
+            $relPath = $_.FullName.Substring($srcUI.Length + 1)
+            $dstFile = Join-Path $dstUI $relPath
+            if (Test-Path $dstFile) {
+                $srcHash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
+                $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
+                if ($srcHash -ne $dstHash) {
+                    $updates += @{ Src = $_.FullName; Dst = $dstFile; Name = "pforge-mcp/ui/$relPath" }
+                }
+            } else {
+                $newFiles += @{ Src = $_.FullName; Dst = $dstFile; Name = "pforge-mcp/ui/$relPath" }
+            }
+        }
+    }
+
     # ─── Shared skills (add new, update existing shared-only) ────
     $srcSharedSkills = Join-Path $sourcePath "presets/shared/skills"
     if (Test-Path $srcSharedSkills) {
@@ -1581,6 +1601,23 @@ function Invoke-Analyze {
     $allCriteria = @()
     if ($mustCriteria) { $allCriteria += $mustCriteria }
     if ($shouldCriteria) { $allCriteria += $shouldCriteria }
+
+    # Fix 9: Also parse checkbox format as fallback criteria
+    if ($allCriteria.Count -eq 0) {
+        $checkboxCriteria = [regex]::Matches($planContent, '(?m)(?<=## Acceptance Criteria\s*\n)(?:^\s*- \[[ x]\]\s*(.+)\n?)+') 
+        if (-not $checkboxCriteria -or $checkboxCriteria.Count -eq 0) {
+            # Try line-by-line within acceptance criteria section
+            $inAC = $false
+            foreach ($line in $planContent -split "`n") {
+                if ($line -match '(?i)## Acceptance Criteria') { $inAC = $true; continue }
+                if ($inAC -and $line -match '^\s*---\s*$|^##\s') { break }
+                if ($inAC -and $line -match '^\s*-\s*\[[ x]\]\s*(.+)') { $allCriteria += $Matches[1].Trim() }
+            }
+            if ($allCriteria.Count -gt 0) {
+                $mustCriteria = $allCriteria  # Treat all checkboxes as MUST for scoring
+            }
+        }
+    }
 
     # Extract slice references
     $sliceCount = ([regex]::Matches($planContent, '(?m)^###\s+Slice\s+\d')).Count
@@ -2731,6 +2768,61 @@ function Invoke-RunPlan {
     & node @nodeArgs
 }
 
+# ─── Command: version-bump (Fix 3 + Fix 10) ───────────────────────────
+function Invoke-VersionBump {
+    if ($Arguments.Count -lt 1) {
+        Write-Host "ERROR: Version required." -ForegroundColor Red
+        Write-Host "  Usage: pforge version-bump <version>" -ForegroundColor Yellow
+        Write-Host "  Example: pforge version-bump 2.14.0" -ForegroundColor Yellow
+        exit 1
+    }
+
+    $newVersion = $Arguments[0]
+    Write-Host ""
+    Write-Host "Version Bump: → v$newVersion" -ForegroundColor Cyan
+    Write-Host "─────────────────────────────────────" -ForegroundColor DarkGray
+
+    $targets = @(
+        @{ File = "VERSION"; Pattern = '.*'; Replace = $newVersion; Desc = "VERSION file" },
+        @{ File = "pforge-mcp/package.json"; Pattern = '"version":\s*"[^"]+"'; Replace = "`"version`": `"$newVersion`""; Desc = "MCP package.json" }
+    )
+
+    # HTML files with version badges
+    $htmlVersionPatterns = @(
+        @{ File = "docs/index.html"; Pattern = 'Dogfooded · v[\d.]+'; Replace = "Dogfooded · v$newVersion"; Desc = "index.html hero badge" },
+        @{ File = "docs/index.html"; Pattern = '>v[\d.]+</div>'; Replace = ">v$($newVersion -replace '\.\d+$', '')</div>"; Desc = "index.html stats card" }
+    )
+    $targets += $htmlVersionPatterns
+
+    # README track record
+    $targets += @{ File = "README.md"; Pattern = 'v1\.0 → v[\d.]+'; Replace = "v1.0 → v$($newVersion -replace '\.\d+$', '')"; Desc = "README track record" }
+
+    # ROADMAP current release
+    $targets += @{ File = "ROADMAP.md"; Pattern = '\*\*v[\d.]+\*\* \(\d{4}-\d{2}-\d{2}\)'; Replace = "**v$newVersion** ($(Get-Date -Format 'yyyy-MM-dd'))"; Desc = "ROADMAP current release" }
+
+    $updated = 0
+    foreach ($t in $targets) {
+        $filePath = Join-Path $RepoRoot $t.File
+        if (Test-Path $filePath) {
+            $content = Get-Content $filePath -Raw
+            if ($content -match $t.Pattern) {
+                $content = $content -replace $t.Pattern, $t.Replace
+                Set-Content $filePath $content -NoNewline
+                Write-Host "  ✅ $($t.Desc)" -ForegroundColor Green
+                $updated++
+            } else {
+                Write-Host "  ⚠️  $($t.Desc) — pattern not found" -ForegroundColor Yellow
+            }
+        } else {
+            Write-Host "  ⚠️  $($t.File) not found" -ForegroundColor Yellow
+        }
+    }
+
+    Write-Host ""
+    Write-Host "Updated $updated files to v$newVersion" -ForegroundColor Green
+    Write-Host "Don't forget: Update CHANGELOG.md manually with release notes." -ForegroundColor DarkGray
+}
+
 # ─── Command Router ────────────────────────────────────────────────────
 switch ($Command) {
     'init'         { Invoke-Init }
@@ -2746,6 +2838,7 @@ switch ($Command) {
     'update'       { Invoke-Update }
     'analyze'      { Invoke-Analyze }
     'run-plan'     { Invoke-RunPlan }
+    'version-bump' { Invoke-VersionBump }
     'smith'        { Invoke-Smith }
     'help'         { Show-Help }
     ''             { Show-Help }

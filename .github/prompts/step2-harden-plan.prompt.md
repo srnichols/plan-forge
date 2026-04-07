@@ -32,10 +32,18 @@ If any exist, list them all and wait for the user to resolve them before proceed
 Harden <YOUR-PLAN>.md by adding all 6 Mandatory Template Blocks from the runbook:
 - Scope Contract (in-scope, out-of-scope, forbidden actions)
 - Required Decisions (flag anything implicit as TBD)
+- Acceptance Criteria (use **MUST**: and **SHOULD**: prefixes for each criterion — the analyzer scores these)
 - Execution Slices (30-120 min each, with Depends On + Context Files + Parallelism tag)
 - Re-anchor Checkpoints
 - Definition of Done (must include Reviewer Gate checkbox)
 - Stop Conditions
+
+**IMPORTANT**: Format Acceptance Criteria as:
+```
+- **MUST**: Description of required criterion
+- **SHOULD**: Description of recommended criterion
+```
+Do NOT use `- [ ]` checkbox format — the analyzer cannot score checkboxes as effectively.
 
 For each Execution Slice:
 - Tag as [parallel-safe] (with Parallel Group) or [sequential]

@@ -27,6 +27,10 @@ import { tmpdir } from "node:os";
 import { createTraceContext, createTelemetryHandler, writeManifest, appendRunIndex, pruneRunHistory, addLogSummary } from "./telemetry.mjs";
 import { isOpenBrainConfigured, buildMemorySearchBlock, buildMemoryCaptureBlock, buildRunSummaryThought, buildCostAnomalyThought, loadProjectContext } from "./memory.mjs";
 
+// ─── Centralized Constants ────────────────────────────────────────────
+/** Canonical list of all supported agent adapters. Update here — consumed by dashboard, setup, and docs. */
+export const SUPPORTED_AGENTS = ["copilot", "claude", "cursor", "codex", "gemini", "windsurf", "generic"];
+
 // ─── Event Bus (C3: Dependency Injection) ─────────────────────────────
 
 /**
@@ -235,12 +239,12 @@ function parseSlices(lines) {
     // Collect raw lines for the current slice
     current.rawLines.push(line);
 
-    // Parse build command
-    const buildMatch = line.match(/\*\*Build command\*\*:\s*`(.+?)`/);
+    // Parse build command (case-insensitive)
+    const buildMatch = line.match(/\*\*Build [Cc]ommand\*\*:\s*`(.+?)`/i);
     if (buildMatch) current.buildCommand = buildMatch[1];
 
-    // Parse test command
-    const testMatch = line.match(/\*\*Test command\*\*:\s*`(.+?)`/);
+    // Parse test command (case-insensitive)
+    const testMatch = line.match(/\*\*Test [Cc]ommand\*\*:\s*`(.+?)`/i);
     if (testMatch) current.testCommand = testMatch[1];
 
     // Detect validation gate section
@@ -762,6 +766,11 @@ export function spawnWorker(prompt, options = {}) {
       env: { ...process.env, NO_COLOR: "1" },
       stdio: ["pipe", "pipe", "pipe"],
     });
+
+    // Track child for cleanup on parent exit
+    if (!global.__pforgeChildren) global.__pforgeChildren = new Set();
+    global.__pforgeChildren.add(child);
+    child.on("close", () => global.__pforgeChildren?.delete(child));
 
     // Close stdin immediately (no interactive input needed)
     child.stdin.end();
@@ -1293,27 +1302,28 @@ export async function runPlan(planPath, options = {}) {
       // Write progress to stdout so terminal stays alive (prevents VS Code "awaiting input" stall)
       if (isCliRun && event?.type) {
         const ts = new Date().toISOString().slice(11, 19);
+        const d = event.data || event; // data is nested under event.data by the EventBus
         switch (event.type) {
           case "run-started":
-            process.stdout.write(`[${ts}] ▶ Run started: ${event.sliceCount || "?"} slices, mode=${event.mode || "auto"}\n`);
+            process.stdout.write(`[${ts}] ▶ Run started: ${d.sliceCount || "?"} slices, mode=${d.mode || "auto"}\n`);
             break;
           case "slice-started":
-            process.stdout.write(`[${ts}] ⏳ Slice ${event.sliceId}: ${event.title || ""} — executing...\n`);
+            process.stdout.write(`[${ts}] ⏳ Slice ${d.sliceId || "?"}: ${d.title || ""} — executing...\n`);
             break;
           case "slice-completed":
-            process.stdout.write(`[${ts}] ✅ Slice ${event.sliceId}: ${event.title || ""} — ${event.status} (${Math.round((event.duration || 0) / 1000)}s)\n`);
+            process.stdout.write(`[${ts}] ✅ Slice ${d.sliceId || "?"}: ${d.title || ""} — ${d.status || "done"} (${Math.round((d.duration || 0) / 1000)}s)\n`);
             break;
           case "slice-failed":
-            process.stdout.write(`[${ts}] ❌ Slice ${event.sliceId}: ${event.title || ""} — FAILED\n`);
+            process.stdout.write(`[${ts}] ❌ Slice ${d.sliceId || "?"}: ${d.title || ""} — FAILED\n`);
             break;
           case "slice-escalated":
-            process.stdout.write(`[${ts}] ⬆ Slice ${event.sliceId}: ${event.title || ""} — escalating to ${event.toModel} (attempt ${event.attempt})\n`);
+            process.stdout.write(`[${ts}] ⬆ Slice ${d.sliceId || "?"}: ${d.title || ""} — escalating to ${d.toModel} (attempt ${d.attempt})\n`);
             break;
           case "run-completed":
-            process.stdout.write(`[${ts}] 🏁 Run complete: ${event.results?.passed || 0} passed, ${event.results?.failed || 0} failed\n`);
+            process.stdout.write(`[${ts}] 🏁 Run complete: ${d.results?.passed || 0} passed, ${d.results?.failed || 0} failed\n`);
             break;
           case "ci-triggered":
-            process.stdout.write(`[${ts}] 🚀 CI triggered: ${event.workflow} @ ${event.ref} — ${event.status}\n`);
+            process.stdout.write(`[${ts}] 🚀 CI triggered: ${d.workflow} @ ${d.ref} — ${d.status}\n`);
             break;
         }
       }
@@ -1862,6 +1872,16 @@ async function executeSlice(slice, options) {
     eventBus = null } = options;
   const startTime = Date.now();
   const resolvedModel = resolveModel(model, modelRouting, slice);
+
+  // Fix 8: Snapshot working tree before slice (for safe rollback on failure)
+  let snapshotStash = false;
+  try {
+    const status = execSync("git status --porcelain", { cwd, encoding: "utf-8", timeout: 5000 }).trim();
+    if (status) {
+      execSync(`git stash push -m "pforge-slice-${slice.number}-snapshot"`, { cwd, encoding: "utf-8", timeout: 10000 });
+      snapshotStash = true;
+    }
+  } catch { /* not a git repo or git not available — skip snapshot */ }
 
   // ─── Agent-Per-Slice Routing (Slice 1) ───────────────────────────────
   // When no explicit model is set, recommend one from historical performance data.
@@ -3573,6 +3593,17 @@ async function selfTest() {
 }
 
 // ─── CLI Entry Point ──────────────────────────────────────────────────
+
+// Fix 1: Clean up zombie child processes when parent exits
+for (const sig of ["exit", "SIGINT", "SIGTERM", "SIGHUP"]) {
+  process.on(sig, () => {
+    if (global.__pforgeChildren) {
+      for (const child of global.__pforgeChildren) {
+        try { child.kill("SIGTERM"); } catch { /* already dead */ }
+      }
+    }
+  });
+}
 
 const args = process.argv.slice(2);
 

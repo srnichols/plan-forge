@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<!-- verified: v2.17.0 -->
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chapter 3: Installation — Plan Forge Manual</title>
+  <meta name="description" content="Get Plan Forge running. Zero to pforge smith green in 10 minutes. Prerequisites, setup wizard, presets, multi-agent adapters." />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+
+    <main>
+      <div class="chapter-content">
+
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 3</div>
+        <h1>Installation</h1>
+        <p class="text-lg text-slate-400 mb-8">Zero to <code>pforge smith</code> green in 10 minutes.</p>
+
+        <!-- ─── Prerequisites ─── -->
+        <h2 id="prerequisites">Prerequisites</h2>
+        <table>
+          <thead><tr><th>Requirement</th><th>Minimum Version</th><th>Check Command</th></tr></thead>
+          <tbody>
+            <tr><td><strong>VS Code</strong> (or Insiders)</td><td>1.99+</td><td><code>code --version</code></td></tr>
+            <tr><td><strong>GitHub Copilot</strong> extension</td><td>Copilot subscription active</td><td>Copilot icon visible in status bar</td></tr>
+            <tr><td><strong>Git</strong></td><td>2.30+</td><td><code>git --version</code></td></tr>
+            <tr><td><strong>Node.js</strong> (for MCP server)</td><td>18+</td><td><code>node --version</code></td></tr>
+          </tbody>
+        </table>
+
+        <div class="callout callout-info">
+          <strong>Node.js is optional</strong> unless you want the MCP server (dashboard, 18 tools, REST API). The core pipeline (prompts, instructions, agents) works without it.
+        </div>
+
+        <!-- ─── Option A ─── -->
+        <h2 id="one-click">Option A: One-Click Install</h2>
+        <p>The fastest path. Requires VS Code 1.113+:</p>
+
+        <div class="flex gap-3 mb-6">
+          <a href="vscode://chat-plugin/install?source=srnichols/plan-forge" class="inline-block px-5 py-2.5 text-sm font-semibold bg-forge-500 hover:bg-forge-400 text-slate-900 rounded-lg transition-colors no-underline">Install in VS Code</a>
+          <a href="vscode-insiders://chat-plugin/install?source=srnichols/plan-forge" class="inline-block px-5 py-2.5 text-sm font-semibold border border-forge-500 text-forge-400 hover:bg-forge-500/10 rounded-lg transition-colors no-underline">Install in Insiders</a>
+        </div>
+
+        <p>This adds Plan Forge MCP tools directly to Copilot Chat. Then proceed to the setup wizard below.</p>
+
+        <div class="callout callout-tip">
+          <strong>VS Code &lt; 1.113?</strong> Skip this step and go straight to Option B.
+        </div>
+
+        <!-- ─── Option B ─── -->
+        <h2 id="setup-wizard">Option B: Setup Wizard</h2>
+        <p>Clone the template and run the setup wizard:</p>
+
+        <div class="cmd-block">
+          <div class="cmd-block-header"><span>Step 1 — Clone</span><button class="cmd-copy-btn">Copy</button></div>
+          <pre><code>git clone https://github.com/srnichols/plan-forge.git my-project-plans
+cd my-project-plans</code></pre>
+        </div>
+
+        <div class="cmd-block">
+          <div class="cmd-block-header"><span>Step 2 — Run setup (PowerShell)</span><button class="cmd-copy-btn">Copy</button></div>
+          <pre><code># Interactive — the wizard asks which preset
+.\setup.ps1
+
+# Or specify directly
+.\setup.ps1 -Preset dotnet</code></pre>
+        </div>
+
+        <div class="cmd-block">
+          <div class="cmd-block-header"><span>Step 2 — Run setup (Bash)</span><button class="cmd-copy-btn">Copy</button></div>
+          <pre><code>chmod +x setup.sh
+./setup.sh --preset typescript</code></pre>
+        </div>
+
+        <p>The wizard detects your tech stack (or uses the preset you specify), creates <code>.github/</code> with instruction files, agents, prompts, skills, and hooks, generates <code>.forge.json</code>, and sets up <code>.vscode/settings.json</code>.</p>
+
+        <!-- ─── Choosing Your Preset ─── -->
+        <h2 id="presets">Choosing Your Preset</h2>
+        <p>Nine presets, each tailored to a tech stack. Each installs ~18 instruction files, 19 agents, 12 skills, and 7+ pipeline prompts.</p>
+
+        <div class="grid grid-cols-3 sm:grid-cols-3 gap-3 mb-8">
+          <div class="rounded-lg border border-slate-800/60 bg-slate-900/40 p-3 text-center">
+            <div class="text-lg mb-1">🟣</div>
+            <div class="text-sm font-semibold text-slate-200">dotnet</div>
+            <div class="text-xs text-slate-500">C# · ASP.NET · xUnit</div>
+          </div>
+          <div class="rounded-lg border border-slate-800/60 bg-slate-900/40 p-3 text-center">
+            <div class="text-lg mb-1">🟡</div>
+            <div class="text-sm font-semibold text-slate-200">typescript</div>
+            <div class="text-xs text-slate-500">Node.js · Express · Vitest</div>
+          </div>
+          <div class="rounded-lg border border-slate-800/60 bg-slate-900/40 p-3 text-center">
+            <div class="text-lg mb-1">🐍</div>
+            <div class="text-sm font-semibold text-slate-200">python</div>
+            <div class="text-xs text-slate-500">FastAPI · Pytest</div>
+          </div>
+          <div class="rounded-lg border border-slate-800/60 bg-slate-900/40 p-3 text-center">
+            <div class="text-lg mb-1">☕</div>
+            <div class="text-sm font-semibold text-slate-200">java</div>
+            <div class="text-xs text-slate-500">Spring Boot · Maven</div>
+          </div>
+          <div class="rounded-lg border border-slate-800/60 bg-slate-900/40 p-3 text-center">
+            <div class="text-lg mb-1">🔵</div>
+            <div class="text-sm font-semibold text-slate-200">go</div>
+            <div class="text-xs text-slate-500">Standard Library · Cobra</div>
+          </div>
+          <div class="rounded-lg border border-slate-800/60 bg-slate-900/40 p-3 text-center">
+            <div class="text-lg mb-1">🍎</div>
+            <div class="text-sm font-semibold text-slate-200">swift</div>
+            <div class="text-xs text-slate-500">SwiftUI · Vapor · XCTest</div>
+          </div>
+          <div class="rounded-lg border border-slate-800/60 bg-slate-900/40 p-3 text-center">
+            <div class="text-lg mb-1">🦀</div>
+            <div class="text-sm font-semibold text-slate-200">rust</div>
+            <div class="text-xs text-slate-500">Tokio · Axum · Cargo</div>
+          </div>
+          <div class="rounded-lg border border-slate-800/60 bg-slate-900/40 p-3 text-center">
+            <div class="text-lg mb-1">🐘</div>
+            <div class="text-sm font-semibold text-slate-200">php</div>
+            <div class="text-xs text-slate-500">Laravel · PHPUnit</div>
+          </div>
+          <div class="rounded-lg border border-slate-800/60 bg-slate-900/40 p-3 text-center">
+            <div class="text-lg mb-1">☁️</div>
+            <div class="text-sm font-semibold text-slate-200">azure-iac</div>
+            <div class="text-xs text-slate-500">Bicep · Terraform · azd</div>
+          </div>
+        </div>
+
+        <div class="callout callout-tip">
+          <strong>Polyglot projects?</strong> Use comma-separated presets: <code>.\setup.ps1 -Preset dotnet,typescript</code>
+        </div>
+
+        <!-- ─── What Just Happened ─── -->
+        <h2 id="what-happened">What Just Happened?</h2>
+        <p>After setup completes, your project has:</p>
+
+        <div class="cmd-block">
+          <div class="cmd-block-header"><span>Files created (dotnet preset example)</span></div>
+          <pre><code>.github/
+├── instructions/     18 files  (architecture, security, testing, database, ...)
+├── agents/           19 files  (6 stack + 8 shared + 5 pipeline)
+├── prompts/          12 files  (7 pipeline + 5 scaffolding)
+├── skills/           12 dirs   (8 stack + 4 shared)
+├── hooks/             4 files  (SessionStart, PreToolUse, PostToolUse, Stop)
+└── copilot-instructions.md     (master config)
+
+.forge.json                     (project configuration)
+.vscode/settings.json           (Copilot settings)
+docs/plans/
+├── DEPLOYMENT-ROADMAP.md       (phase tracker)
+└── AI-Plan-Hardening-Runbook.md (methodology reference)
+pforge.ps1 / pforge.sh          (CLI scripts)</code></pre>
+        </div>
+
+        <!-- ─── Verify with Smith ─── -->
+        <h2 id="verify">Verify with <code>pforge smith</code></h2>
+        <p>The Smith inspects your forge — environment, VS Code config, setup health, version currency. Run it to confirm everything is green:</p>
+
+        <div class="cmd-block">
+          <div class="cmd-block-header"><span>PowerShell</span><button class="cmd-copy-btn">Copy</button></div>
+          <pre><code>.\pforge.ps1 smith</code></pre>
+        </div>
+
+        <div class="cmd-block">
+          <div class="cmd-block-header"><span>Expected output</span></div>
+          <pre><code>╔══════════════════════════════════════════════════════════════╗
+║       Plan Forge — The Smith                                 ║
+╚══════════════════════════════════════════════════════════════╝
+
+Environment:
+  ✅ git 2.44.0
+  ✅ code (VS Code CLI) 1.99.0
+  ✅ PowerShell 7.5.0
+  ✅ node 22.3.0
+
+VS Code Configuration:
+  ✅ chat.agent.enabled = true
+  ✅ chat.promptFiles = true
+
+Setup Health:
+  ✅ .forge.json valid (preset: dotnet, v2.17.0)
+  ✅ 18 instruction files (expected: ≥15 for dotnet)
+  ✅ 19 agent definitions
+  ✅ copilot-instructions.md exists
+
+────────────────────────────────────────────────────
+  Results:  10 passed  |  0 failed  |  0 warnings</code></pre>
+        </div>
+
+        <div class="callout callout-warning">
+          <strong>Got failures?</strong> Each failed check includes a <code>FIX:</code> suggestion. Common fix: add <code>"chat.agent.enabled": true</code> to <code>.vscode/settings.json</code>. See <a href="troubleshooting.html">Chapter 14: Troubleshooting</a> for more.
+        </div>
+
+        <!-- ─── Multi-Agent Setup ─── -->
+        <h2 id="multi-agent">Multi-Agent Setup</h2>
+        <p>Plan Forge works primarily with VS Code + GitHub Copilot. But if you also use Claude Code, Cursor, Codex, Gemini, or Windsurf, add their adapters during setup:</p>
+
+        <div class="cmd-block">
+          <div class="cmd-block-header"><span>PowerShell</span><button class="cmd-copy-btn">Copy</button></div>
+          <pre><code># Add Claude Code support
+.\setup.ps1 -Preset dotnet -Agent claude
+
+# Add all agent adapters at once
+.\setup.ps1 -Preset dotnet -Agent all</code></pre>
+        </div>
+
+        <table>
+          <thead><tr><th>Agent Flag</th><th>Tool</th><th>Files Created</th></tr></thead>
+          <tbody>
+            <tr><td><code>copilot</code> (default)</td><td>GitHub Copilot</td><td><code>.github/</code> instructions, agents, skills, prompts, hooks</td></tr>
+            <tr><td><code>claude</code></td><td>Claude Code</td><td><code>CLAUDE.md</code> with embedded guardrails + slash commands</td></tr>
+            <tr><td><code>cursor</code></td><td>Cursor</td><td><code>.cursorrules</code> + <code>.cursor/rules/*.mdc</code></td></tr>
+            <tr><td><code>codex</code></td><td>Codex CLI</td><td><code>AGENTS.md</code> + skill scripts</td></tr>
+            <tr><td><code>gemini</code></td><td>Gemini CLI</td><td><code>GEMINI.md</code> + <code>.gemini/commands/*.toml</code></td></tr>
+            <tr><td><code>windsurf</code></td><td>Windsurf</td><td><code>.windsurfrules</code> + <code>.windsurf/rules/*.md</code></td></tr>
+            <tr><td><code>generic</code></td><td>Any AI tool</td><td><code>AI-ASSISTANT.md</code> — copy-paste guardrails</td></tr>
+          </tbody>
+        </table>
+
+        <p>See <a href="multi-agent.html">Chapter 12: Multi-Agent Setup</a> for detailed configuration per agent, feature parity matrix, and quorum mode.</p>
+
+        <!-- ─── Updating ─── -->
+        <h2 id="updating">Updating</h2>
+        <p>When a new Plan Forge version is available, <code>pforge smith</code> will tell you. Update without re-running the full setup:</p>
+
+        <div class="cmd-block">
+          <div class="cmd-block-header"><span>PowerShell</span><button class="cmd-copy-btn">Copy</button></div>
+          <pre><code># Preview what would change
+.\pforge.ps1 update --dry-run
+
+# Apply updates
+.\pforge.ps1 update</code></pre>
+        </div>
+
+        <p>Updates replace framework files (pipeline prompts, shared instructions, hooks) but never touch your customized files (<code>copilot-instructions.md</code>, project principles, plan files, <code>.forge.json</code>).</p>
+
+        <div class="callout callout-tip">
+          <strong>Next step:</strong> You're installed. Time to build something. Head to <a href="your-first-plan.html">Chapter 4: Your First Plan</a>.
+        </div>
+
+        <p class="text-sm text-slate-500 mt-8">📄 Full reference: <a href="../../AGENT-SETUP.md">AGENT-SETUP.md</a>, <a href="../../README.md#quick-start">README.md Quick Start</a></p>
+
+        <div id="chapter-prev-next" class="chapter-nav"></div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="assets/manual.js"></script>
+</body>
+</html>

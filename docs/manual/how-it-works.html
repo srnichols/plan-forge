@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<!-- verified: v2.17.0 -->
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chapter 2: How It Works — Plan Forge Manual</title>
+  <meta name="description" content="The 7-step pipeline, session isolation, guardrail auto-loading, and plan structure. Understand the mental model before touching a terminal." />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+
+    <main>
+      <div class="chapter-content">
+
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 2</div>
+        <h1>How It Works</h1>
+        <p class="text-lg text-slate-400 mb-8">The mental model. Understand the pipeline, sessions, and file structure without touching a terminal.</p>
+
+        <!-- ─── The 7-Step Pipeline ─── -->
+        <h2 id="pipeline">The 7-Step Pipeline</h2>
+        <p>Every feature in Plan Forge flows through these steps:</p>
+
+        <!-- Pipeline visual -->
+        <div class="overflow-x-auto mb-8">
+          <div class="flex gap-2 min-w-[700px] py-4">
+            <div class="flex-1 rounded-lg border border-amber-900/40 bg-amber-950/20 p-3 text-center">
+              <div class="text-xs font-bold text-amber-400 mb-1">Step 0</div>
+              <div class="text-sm font-semibold text-slate-200">Specify</div>
+              <div class="text-xs text-slate-500 mt-1">What &amp; why</div>
+            </div>
+            <div class="flex items-center text-slate-600">→</div>
+            <div class="flex-1 rounded-lg border border-sky-900/40 bg-sky-950/20 p-3 text-center">
+              <div class="text-xs font-bold text-sky-400 mb-1">Step 1</div>
+              <div class="text-sm font-semibold text-slate-200">Pre-flight</div>
+              <div class="text-xs text-slate-500 mt-1">Verify setup</div>
+            </div>
+            <div class="flex items-center text-slate-600">→</div>
+            <div class="flex-1 rounded-lg border border-sky-900/40 bg-sky-950/20 p-3 text-center">
+              <div class="text-xs font-bold text-sky-400 mb-1">Step 2</div>
+              <div class="text-sm font-semibold text-slate-200">Harden</div>
+              <div class="text-xs text-slate-500 mt-1">Scope contract</div>
+            </div>
+            <div class="flex items-center text-slate-600">→</div>
+            <div class="flex-1 rounded-lg border border-emerald-900/40 bg-emerald-950/20 p-3 text-center">
+              <div class="text-xs font-bold text-emerald-400 mb-1">Step 3</div>
+              <div class="text-sm font-semibold text-slate-200">Execute</div>
+              <div class="text-xs text-slate-500 mt-1">Slice by slice</div>
+            </div>
+            <div class="flex items-center text-slate-600">→</div>
+            <div class="flex-1 rounded-lg border border-emerald-900/40 bg-emerald-950/20 p-3 text-center">
+              <div class="text-xs font-bold text-emerald-400 mb-1">Step 4</div>
+              <div class="text-sm font-semibold text-slate-200">Sweep</div>
+              <div class="text-xs text-slate-500 mt-1">No TODOs left</div>
+            </div>
+            <div class="flex items-center text-slate-600">→</div>
+            <div class="flex-1 rounded-lg border border-rose-900/40 bg-rose-950/20 p-3 text-center">
+              <div class="text-xs font-bold text-rose-400 mb-1">Step 5</div>
+              <div class="text-sm font-semibold text-slate-200">Review</div>
+              <div class="text-xs text-slate-500 mt-1">Drift detection</div>
+            </div>
+            <div class="flex items-center text-slate-600">→</div>
+            <div class="flex-1 rounded-lg border border-purple-900/40 bg-purple-950/20 p-3 text-center">
+              <div class="text-xs font-bold text-purple-400 mb-1">Step 6</div>
+              <div class="text-sm font-semibold text-slate-200">Ship</div>
+              <div class="text-xs text-slate-500 mt-1">Commit &amp; close</div>
+            </div>
+          </div>
+        </div>
+
+        <p>You describe what you want (Step 0). The AI creates a spec. A pre-flight check verifies your setup (Step 1). The plan gets hardened into a binding scope contract with slices, gates, and forbidden actions (Step 2). The AI builds it slice by slice, validated at every boundary (Step 3). A completeness sweep eliminates stubs and TODOs (Step 4). A <em>fresh</em> session audits everything (Step 5). The shipper commits, updates the roadmap, and captures lessons (Step 6).</p>
+
+        <!-- ─── Sessions ─── -->
+        <h2 id="sessions">Sessions and Why They Matter</h2>
+
+        <div class="overflow-x-auto mb-6">
+          <div class="flex gap-4 min-w-[600px] py-4">
+            <div class="flex-1 rounded-xl border border-amber-800/30 bg-slate-900/60 p-4">
+              <div class="text-xs font-bold text-amber-400 mb-2">Session 1 — Plan</div>
+              <div class="text-sm text-slate-400">Steps 0–2</div>
+              <p class="text-xs text-slate-500 mt-2">Specify, verify, harden. Produces the scope contract.</p>
+            </div>
+            <div class="flex-1 rounded-xl border border-emerald-800/30 bg-slate-900/60 p-4">
+              <div class="text-xs font-bold text-emerald-400 mb-2">Session 2 — Build</div>
+              <div class="text-sm text-slate-400">Steps 3–4</div>
+              <p class="text-xs text-slate-500 mt-2">Execute slices, sweep for completeness.</p>
+            </div>
+            <div class="flex-1 rounded-xl border border-rose-800/30 bg-slate-900/60 p-4">
+              <div class="text-xs font-bold text-rose-400 mb-2">Session 3 — Audit</div>
+              <div class="text-sm text-slate-400">Step 5</div>
+              <p class="text-xs text-slate-500 mt-2">Fresh context. Independent review.</p>
+            </div>
+            <div class="flex-1 rounded-xl border border-purple-800/30 bg-slate-900/60 p-4">
+              <div class="text-xs font-bold text-purple-400 mb-2">Session 4 — Ship</div>
+              <div class="text-sm text-slate-400">Step 6</div>
+              <p class="text-xs text-slate-500 mt-2">Commit, close, capture lessons.</p>
+            </div>
+          </div>
+        </div>
+
+        <p>The executor shouldn't self-audit — that's like grading your own exam. Each session starts fresh, loads the same guardrails, but brings independent judgment. Session 3 (Review) has never seen the code being written — it reads the plan, reads the code, and checks for drift.</p>
+
+        <div class="callout callout-info">
+          <strong>Nested subagents</strong> (v2.16+): Within a session, agents can spawn sub-agents for complex tasks — the architecture reviewer can call the security reviewer, for example. This happens automatically; you don't need to configure it.
+        </div>
+
+        <!-- ─── File System ─── -->
+        <h2 id="file-system">The File System</h2>
+        <p>After setup, Plan Forge installs four types of files into your <code>.github/</code> directory:</p>
+
+        <!-- File tree diagram -->
+        <div class="cmd-block mb-6">
+          <div class="cmd-block-header"><span>Project structure after setup</span></div>
+          <pre><code>.github/
+├── instructions/          ← Rules (auto-load by file type)
+│   ├── architecture-principles.instructions.md
+│   ├── security.instructions.md
+│   ├── testing.instructions.md
+│   ├── database.instructions.md
+│   └── ... (14–18 files per preset)
+├── agents/                ← Reviewer personas (read-only audit)
+│   ├── architecture-reviewer.agent.md
+│   ├── security-reviewer.agent.md
+│   └── ... (19 agents)
+├── prompts/               ← Pipeline templates (attach in chat)
+│   ├── step0-specify-feature.prompt.md
+│   ├── step2-harden-plan.prompt.md
+│   └── ... (7 pipeline + scaffolding)
+├── skills/                ← Multi-step procedures (slash commands)
+│   ├── security-audit/SKILL.md
+│   ├── forge-execute/SKILL.md
+│   └── ... (12 skills)
+├── hooks/                 ← Lifecycle automation
+│   ├── sessionStart.sh
+│   └── postToolUse.sh
+└── copilot-instructions.md  ← Master config file</code></pre>
+        </div>
+
+        <table>
+          <thead><tr><th>File Type</th><th>What It Does</th><th>Analogy</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Instruction files</strong></td><td>Auto-load based on what file you're editing</td><td>The rulebook</td></tr>
+            <tr><td><strong>Agent definitions</strong></td><td>Specialized reviewers that audit your code</td><td>Expert consultants</td></tr>
+            <tr><td><strong>Pipeline prompts</strong></td><td>Step-by-step workflow templates</td><td>The recipe</td></tr>
+            <tr><td><strong>Skills</strong></td><td>Multi-step executable procedures</td><td>Power tools</td></tr>
+            <tr><td><strong>Lifecycle hooks</strong></td><td>Run automatically at agent lifecycle points</td><td>Safety rails</td></tr>
+          </tbody>
+        </table>
+
+        <!-- ─── applyTo ─── -->
+        <h2 id="apply-to">How Guardrails Auto-Load</h2>
+        <p>Each instruction file has an <code>applyTo</code> pattern in its YAML frontmatter. When you edit a file that matches the pattern, the instruction file loads automatically into the AI's context:</p>
+
+        <div class="cmd-block mb-4">
+          <div class="cmd-block-header"><span>security.instructions.md — frontmatter</span></div>
+          <pre><code>---
+description: Security best practices
+applyTo: "**/auth/**,**/security/**,**/middleware/**"
+---</code></pre>
+        </div>
+
+        <p>When you open <code>src/auth/token-validator.ts</code>, the security instruction file loads. When you open <code>src/models/User.ts</code>, the database instruction file loads. No manual action needed — the AI reads the right rules for the right code.</p>
+
+        <!-- ─── .forge.json ─── -->
+        <h2 id="forge-json">The <code>.forge.json</code> Config</h2>
+        <p>This file stores your project's Plan Forge configuration:</p>
+
+        <div class="cmd-block mb-4">
+          <div class="cmd-block-header"><span>.forge.json</span></div>
+          <pre><code>{
+  "preset": "dotnet",
+  "templateVersion": "2.17.0",
+  "modelRouting": {
+    "default": "claude-sonnet-4.6",
+    "execute": "grok-4",
+    "review": "claude-opus-4.6"
+  },
+  "escalationChain": ["grok-4", "claude-opus-4.6", "gpt-5.2-codex"],
+  "quorumThreshold": 6
+}</code></pre>
+        </div>
+
+        <p>Key settings: which preset was used, which models to use for each role (execution vs review), the escalation chain when a model fails, and the complexity threshold for quorum mode.</p>
+
+        <!-- ─── Plans Are Markdown ─── -->
+        <h2 id="plans">Plans Are Markdown</h2>
+        <p>A plan is just a <code>.md</code> file with structure. It lives in <code>docs/plans/</code> and follows a template. Here's the minimal skeleton:</p>
+
+        <div class="cmd-block mb-4">
+          <div class="cmd-block-header"><span>docs/plans/Phase-1-AUTH-PLAN.md — skeleton</span></div>
+          <pre><code># Phase 1 — User Authentication
+
+## Scope Contract
+**In Scope**: src/auth/**, src/middleware/auth*, tests/auth/**
+**Out of Scope**: frontend, deployment, CI
+**Forbidden Actions**: Do NOT modify src/database/migrations/
+
+## MUST Criteria
+- [ ] JWT token generation and validation
+- [ ] Role-based access control (admin, user)
+- [ ] Password hashing with bcrypt
+
+## Execution Slices
+
+### Slice 1 — Auth Models + Migration [30 min]
+**Tasks**: Create User model, JWT service
+**Gate**: `dotnet build` passes, `dotnet test` passes
+**Stop if**: Build fails or migration errors
+
+### Slice 2 — Auth Middleware [30 min]
+**Tasks**: JWT validation middleware, role decorator
+**Gate**: `dotnet test` — 6+ tests pass
+**Stop if**: Any existing test regresses</code></pre>
+        </div>
+
+        <p>The AI reads this contract and follows it literally. Slices are checkpointed — the gate at the end of each slice must pass before proceeding to the next.</p>
+
+        <!-- ─── Slices Gates Scope ─── -->
+        <h2 id="building-blocks">Slices, Gates, and Scope</h2>
+        <p>These are the three building blocks of every plan:</p>
+
+        <table>
+          <thead><tr><th>Concept</th><th>What It Is</th><th>Why It Matters</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>Slice</strong></td>
+              <td>A 30–120 minute chunk of work with a clear goal</td>
+              <td>Small enough to validate, large enough to be useful. One PR's worth.</td>
+            </tr>
+            <tr>
+              <td><strong>Gate</strong></td>
+              <td>A validation check at the end of each slice (<code>build</code>, <code>test</code>, specific assertions)</td>
+              <td>Catches failures immediately. No silent drift.</td>
+            </tr>
+            <tr>
+              <td><strong>Scope Contract</strong></td>
+              <td>What files the AI can touch, what's forbidden, what's out of scope</td>
+              <td>Prevents "I'll also refactor this unrelated file" creep.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="callout callout-warning">
+          <strong>Stop conditions</strong> are the safety valve. If a gate fails or a stop condition triggers, execution halts. The AI doesn't try to work around the failure — it stops and reports what went wrong.
+        </div>
+
+        <!-- ─── Three Ways ─── -->
+        <h2 id="three-ways">Three Ways to Run the Pipeline</h2>
+        <p>The same pipeline can run three different ways. Pick the one that matches your tools:</p>
+
+        <table>
+          <thead><tr><th>Approach</th><th>How It Works</th><th>Best For</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>Pipeline Agents</strong></td>
+              <td>Select the Specifier agent → click handoff buttons through the chain</td>
+              <td>VS Code + Copilot. Smoothest flow.</td>
+            </tr>
+            <tr>
+              <td><strong>Prompt Templates</strong></td>
+              <td>Attach <code>step0-*.prompt.md</code> files in Copilot Chat</td>
+              <td>Learning the pipeline. You see every prompt.</td>
+            </tr>
+            <tr>
+              <td><strong>Copy-Paste Prompts</strong></td>
+              <td>Copy prompts from the runbook into any AI tool</td>
+              <td>Claude, Cursor, ChatGPT, terminal agents.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p>All three produce identical results. The guardrails, validation gates, and pipeline steps are the same — only the delivery mechanism differs.</p>
+
+        <p class="text-sm text-slate-500 mt-8">📄 Full reference: <a href="../COPILOT-VSCODE-GUIDE.md">COPILOT-VSCODE-GUIDE.md</a>, <a href="../capabilities.md">capabilities.md</a></p>
+
+        <div id="chapter-prev-next" class="chapter-nav"></div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="assets/manual.js"></script>
+</body>
+</html>

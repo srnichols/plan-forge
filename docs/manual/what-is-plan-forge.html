@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<!-- verified: v2.17.0 -->
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chapter 1: What Is Plan Forge? — Plan Forge Manual</title>
+  <meta name="description" content="AI coding agents are powerful but directionless. Plan Forge hardens your development plans into drift-proof execution contracts. Here's what it does and who it's for." />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+
+    <main>
+      <!-- Hero -->
+      <img src="assets/chapter-heroes/ch1-forge-workshop-test.png" alt="A forge workshop — anvil, glowing metal, tools" class="chapter-hero" />
+
+      <div class="chapter-content">
+
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 1</div>
+        <h1>What Is Plan Forge?</h1>
+        <p class="text-lg text-slate-400 mb-8">Answer "should I keep reading?" in five minutes.</p>
+
+        <!-- ─── The Problem ─── -->
+        <h2 id="the-problem">The Problem in One Sentence</h2>
+        <p>AI coding agents are powerful but directionless.</p>
+        <p>They generate code fast. But <em>fast</em> isn't the same as <em>good</em>. Without structure, AI-generated code tends to be untestable, insecure, architecturally inconsistent, and impossible to maintain at scale. That's fine for prototypes — it's not fine for production systems.</p>
+
+        <!-- ─── What Happens Without Guardrails ─── -->
+        <h2 id="without-guardrails">What Happens Without Guardrails</h2>
+        <p>Without guardrails, AI coding agents:</p>
+        <ul>
+          <li><strong>Silently expand scope</strong> — "I'll also add..." (you didn't ask for that)</li>
+          <li><strong>Make undiscussed decisions</strong> — picks a database pattern without telling you</li>
+          <li><strong>Skip validation</strong> — ships code that doesn't build or pass tests</li>
+          <li><strong>Lose context</strong> — forgets requirements halfway through long sessions</li>
+          <li><strong>Never self-audit</strong> — the executor grades its own exam</li>
+        </ul>
+        <p>These problems get worse the less technical your team is — you may not even notice the drift until it's too late.</p>
+
+        <table>
+          <thead><tr><th>Without guardrails</th><th>With Plan Forge</th></tr></thead>
+          <tbody>
+            <tr><td>Agent writes code that passes once, breaks in production</td><td>Code follows your architecture from the first line</td></tr>
+            <tr><td>30–50% of AI-generated code needs rework after review</td><td>Independent review catches drift <em>before</em> merge</td></tr>
+            <tr><td>Agent re-discovers solved problems every session</td><td>Persistent memory loads prior decisions in seconds</td></tr>
+            <tr><td>Context window wasted on exploration and backtracking</td><td>Hardened plan tells the agent exactly what to build</td></tr>
+            <tr><td>"It works on my machine" shipped to staging</td><td>Validation gates pass at every slice boundary</td></tr>
+          </tbody>
+        </table>
+
+        <!-- ─── What Plan Forge Does ─── -->
+        <h2 id="what-it-does">What Plan Forge Does</h2>
+        <p>Plan Forge is a specification-driven framework that converts your rough ideas into <strong>hardened execution contracts</strong> — structured plans that AI coding agents follow without scope creep, skipped tests, or silent rewrites. It installs guardrail files into your project that automatically load when AI agents edit code, enforcing your architecture, security, testing, and coding standards at every step.</p>
+
+        <!-- ─── The Blacksmith Analogy ─── -->
+        <h2 id="the-analogy">The Blacksmith Analogy</h2>
+        <p>A blacksmith doesn't hand raw iron to a customer. They heat it, hammer it, and temper it until it holds its edge.</p>
+        <p>Plan Forge does the same for your development plans:</p>
+
+        <table>
+          <thead><tr><th>Forge Stage</th><th>What Happens</th><th>Pipeline Step</th></tr></thead>
+          <tbody>
+            <tr><td>🔥 <strong>Heat</strong> — raw iron</td><td>You describe what you want</td><td>Step 0: Specify</td></tr>
+            <tr><td>🔨 <strong>Hammer</strong> — shape it</td><td>The plan gets structured into slices with validation gates</td><td>Step 2: Harden</td></tr>
+            <tr><td>💧 <strong>Quench</strong> — cool it</td><td>AI builds it slice by slice, checked at every boundary</td><td>Step 3: Execute</td></tr>
+            <tr><td>🔍 <strong>Inspect</strong> — check the edge</td><td>A fresh session audits for drift, completeness, and quality</td><td>Step 5: Review</td></tr>
+          </tbody>
+        </table>
+
+        <!-- ─── Who This Is For ─── -->
+        <h2 id="who-its-for">Who This Is For</h2>
+
+        <h3>Solo Developers</h3>
+        <p>You're using Copilot or Claude to build features, but you've noticed the AI drifts when sessions get long. You spend time re-explaining your patterns. Plan Forge gives you a repeatable pipeline that remembers your standards, validates at every step, and catches the mistakes you'd normally catch in code review — except there's no reviewer. <em>You are the team.</em></p>
+
+        <h3>Development Teams</h3>
+        <p>Your team uses AI tools but everyone gets different quality results. Junior devs get code that works but violates your architecture. Senior devs spend review cycles catching AI-generated antipatterns. Plan Forge makes the architecture the default — instruction files load automatically, validation gates enforce build+test, and the reviewer-gate agent catches drift before anyone opens a PR.</p>
+
+        <h3>Enterprise &amp; Regulated Environments</h3>
+        <p>You need audit trails, consistent architecture, and code that meets compliance standards. Plan Forge gives you phase-level tracking (DEPLOYMENT-ROADMAP.md), per-slice cost accounting, OTLP telemetry, and 19 independent reviewer agents — including compliance, security, and multi-tenancy auditors that run automatically. Every execution has a trace.</p>
+
+        <!-- ─── What This Is NOT ─── -->
+        <h2 id="what-this-is-not">What This Is <em>Not</em></h2>
+        <ul>
+          <li><strong>Not a code generator.</strong> Plan Forge doesn't write your code — it tells the AI <em>how</em> to write it, then verifies the result.</li>
+          <li><strong>Not a CI/CD system.</strong> It doesn't deploy your app. It validates that what's built matches what was planned. Your CI pipeline is a separate concern.</li>
+          <li><strong>Not a project manager.</strong> It doesn't assign tasks to humans or track sprints. It structures work for AI agents — slices, gates, scope contracts.</li>
+          <li><strong>Not an AI model.</strong> Plan Forge works with whatever AI you already use — Copilot, Claude, Cursor, Codex, Gemini, Windsurf, or any tool that accepts text prompts.</li>
+          <li><strong>Not opinionated about your stack.</strong> Nine presets cover .NET, TypeScript, Python, Java, Go, Swift, Rust, PHP, and Azure IaC. Each installs stack-appropriate guardrails.</li>
+        </ul>
+
+        <!-- ─── How to Read This Manual ─── -->
+        <h2 id="how-to-read">How to Read This Manual</h2>
+        <p>This manual is structured in three acts:</p>
+        <ul>
+          <li><strong>Act I — Learn</strong> (Chapters 1–3): What Plan Forge is, how it works, how to install it. Start here if you're new.</li>
+          <li><strong>Act II — Build</strong> (Chapters 4–6): Hands-on. Build a feature with the pipeline, learn to write plans, tour the dashboard. Start here if you've already installed and want to use it.</li>
+          <li><strong>Act III — Master</strong> (Chapters 7–14): Reference and advanced topics. CLI commands, customization, MCP tools, multi-agent setup, troubleshooting. Start here if you're looking up a specific feature.</li>
+        </ul>
+
+        <div class="callout callout-tip">
+          <strong>Already installed and want to build something?</strong> Skip to <a href="your-first-plan.html">Chapter 4: Your First Plan</a>.
+        </div>
+
+        <p class="text-sm text-slate-500 mt-8">📄 Full reference: <a href="../../README.md">README.md</a></p>
+
+        <div id="chapter-prev-next" class="chapter-nav"></div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="assets/manual.js"></script>
+</body>
+</html>

@@ -638,15 +638,15 @@ The **`E:\GitHub\plan-forge-testbed`** repo contains a **Tracker sample app** wi
 ## Iteration Rounds
 
 ### Round 1 — Shell + Template Chapter
-- [ ] `index.html` — book cover with chapter cards, act structure
-- [ ] `manual.css` + `manual.js` — sidebar, navigation, search stub, dark mode
-- [ ] Chapter 7 (CLI Reference) — most structured, tests the page template
-- [ ] Verify: desktop, mobile, print
+- [x] `index.html` — book cover with chapter cards, act structure
+- [x] `manual.css` + `manual.js` — sidebar, navigation, search stub, dark mode
+- [x] Chapter 7 (CLI Reference) — most structured, tests the page template
+- [x] Verify: desktop, mobile, print
 
 ### Round 2 — Act I (Learn)
-- [ ] Chapter 1 (What Is Plan Forge) + hero art
-- [ ] Chapter 2 (How It Works) + pipeline diagram
-- [ ] Chapter 3 (Installation) + setup recording
+- [x] Chapter 1 (What Is Plan Forge) + hero art
+- [x] Chapter 2 (How It Works) + pipeline diagram
+- [x] Chapter 3 (Installation) + setup recording
 
 ### Round 3 — Act II (Build)
 - [ ] Chapter 4 (Your First Plan) + screenshots + pipeline recording

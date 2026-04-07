@@ -1765,7 +1765,7 @@ async function loadConfig() {
 
     // Agents checkboxes
     const agentsEl = document.getElementById("cfg-agents");
-    const allAgents = ["claude", "cursor", "codex", "grok"];
+    const allAgents = ["claude", "cursor", "codex", "gemini", "windsurf", "generic", "grok"];
     const active = currentConfig.agents || [];
     agentsEl.innerHTML = allAgents.map((a) => `
       <label class="flex items-center gap-1 bg-gray-700 px-3 py-1 rounded text-sm cursor-pointer">

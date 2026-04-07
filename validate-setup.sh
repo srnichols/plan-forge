@@ -222,6 +222,67 @@ if [ -f "$CONFIG_PATH" ]; then
     done
 fi
 
+# ─── Preset File Counts ───────────────────────────────────────────────
+echo ""
+cyan "Preset file counts:"
+
+if [[ -f "$CONFIG_PATH" ]]; then
+    PRIMARY_PRESET="$(grep '"preset"' "$CONFIG_PATH" | sed 's/.*: *"\([^"]*\)".*/\1/' | awk -F',' '{print $1}' | tr -d ' ')"
+
+    get_min() {
+        local preset="$1"
+        local field="$2"
+        case "$preset" in
+            typescript) case "$field" in instructions) echo 18;; prompts) echo 15;; skills) echo 9;; agents) echo 6;; esac ;;
+            python)     case "$field" in instructions) echo 17;; prompts) echo 15;; skills) echo 9;; agents) echo 6;; esac ;;
+            dotnet)     case "$field" in instructions) echo 17;; prompts) echo 15;; skills) echo 9;; agents) echo 6;; esac ;;
+            go)         case "$field" in instructions) echo 17;; prompts) echo 15;; skills) echo 9;; agents) echo 6;; esac ;;
+            java)       case "$field" in instructions) echo 17;; prompts) echo 15;; skills) echo 9;; agents) echo 6;; esac ;;
+            rust)       case "$field" in instructions) echo 17;; prompts) echo 15;; skills) echo 9;; agents) echo 6;; esac ;;
+            swift)      case "$field" in instructions) echo 16;; prompts) echo 13;; skills) echo 9;; agents) echo 6;; esac ;;
+            php)        case "$field" in instructions) echo 17;; prompts) echo 15;; skills) echo 9;; agents) echo 6;; esac ;;
+            azure-iac)  case "$field" in instructions) echo 12;; prompts) echo 6;;  skills) echo 3;; agents) echo 5;; esac ;;
+            *) echo "" ;;
+        esac
+    }
+
+    MIN_INSTR="$(get_min "$PRIMARY_PRESET" instructions)"
+    if [[ -n "$MIN_INSTR" && "$PRIMARY_PRESET" != "custom" ]]; then
+        MIN_PROMPTS="$(get_min "$PRIMARY_PRESET" prompts)"
+        MIN_SKILLS="$(get_min "$PRIMARY_PRESET" skills)"
+        MIN_AGENTS="$(get_min "$PRIMARY_PRESET" agents)"
+
+        ACTUAL_INSTR=$(find "$PROJECT_PATH/.github/instructions" -maxdepth 1 -name "*.instructions.md" -type f 2>/dev/null | wc -l | tr -d ' ')
+        ACTUAL_PROMPTS=$(find "$PROJECT_PATH/.github/prompts" -maxdepth 1 -name "*.prompt.md" -type f 2>/dev/null | wc -l | tr -d ' ')
+        ACTUAL_SKILLS=$(find "$PROJECT_PATH/.github/skills" -name "SKILL.md" -type f 2>/dev/null | wc -l | tr -d ' ')
+        ACTUAL_AGENTS=$(find "$PROJECT_PATH/.github/agents" -maxdepth 1 -name "*.agent.md" -type f 2>/dev/null | wc -l | tr -d ' ')
+
+        check_count() {
+            local label="$1" actual="$2" min="$3" name="$4"
+            if [[ "$actual" -ge "$min" ]]; then
+                green "  PASS  $label — $actual $name (min: $min)"
+                ((PASS++))
+            else
+                red "  FAIL  $label — $actual $name (expected ≥ $min for '$PRIMARY_PRESET' preset)"
+                ((FAIL++))
+            fi
+        }
+
+        check_count ".github/instructions/" "$ACTUAL_INSTR"   "$MIN_INSTR"    "instruction files"
+        check_count ".github/prompts/"      "$ACTUAL_PROMPTS" "$MIN_PROMPTS"  "prompt templates"
+        check_count ".github/skills/"       "$ACTUAL_SKILLS"  "$MIN_SKILLS"   "skills"
+        check_count ".github/agents/"       "$ACTUAL_AGENTS"  "$MIN_AGENTS"   "agent definitions"
+    elif [[ "$PRIMARY_PRESET" == "custom" || -z "$PRIMARY_PRESET" ]]; then
+        cyan "  INFO  Custom preset — skipping minimum count checks"
+    else
+        yellow "  WARN  Unknown preset '$PRIMARY_PRESET' — skipping minimum count checks"
+        ((WARN++))
+    fi
+else
+    yellow "  WARN  .forge.json not found — skipping minimum count checks"
+    ((WARN++))
+fi
+
 # ─── Optional Files ───────────────────────────────────────────────────
 echo ""
 cyan "Optional files:"

@@ -866,6 +866,43 @@ if [[ ! -d "$PROJECT_PATH" ]]; then
     mkdir -p "$PROJECT_PATH"
 fi
 
+# ─── Spec Kit Detection ───────────────────────────────────────────────
+SPEC_KIT_LINES=()
+if [[ -d "$PROJECT_PATH/specs" ]]; then
+    while IFS= read -r sf; do
+        rel="${sf#$PROJECT_PATH/}"
+        SPEC_KIT_LINES+=("  • $rel — feature specification")
+    done < <(find "$PROJECT_PATH/specs" -name "spec.md" -type f 2>/dev/null | head -5)
+    while IFS= read -r pf; do
+        rel="${pf#$PROJECT_PATH/}"
+        SPEC_KIT_LINES+=("  • $rel — implementation plan")
+    done < <(find "$PROJECT_PATH/specs" -name "plan.md" -type f 2>/dev/null | head -5)
+    while IFS= read -r tf; do
+        rel="${tf#$PROJECT_PATH/}"
+        SPEC_KIT_LINES+=("  • $rel — task breakdown")
+    done < <(find "$PROJECT_PATH/specs" -name "tasks.md" -type f 2>/dev/null | head -5)
+fi
+if [[ -f "$PROJECT_PATH/memory/constitution.md" ]]; then
+    SPEC_KIT_LINES+=("  • memory/constitution.md — project constitution")
+fi
+if [[ "${#SPEC_KIT_LINES[@]}" -gt 0 ]]; then
+    echo ""
+    printf '\033[0;35m%s\033[0m\n' "╔══════════════════════════════════════════════════════════════╗"
+    printf '\033[0;35m%s\033[0m\n' "║       Spec Kit Artifacts Detected                          ║"
+    printf '\033[0;35m%s\033[0m\n' "╚══════════════════════════════════════════════════════════════╝"
+    echo ""
+    printf '\033[0;35m%s\033[0m\n' "Found Spec Kit artifacts in this project:"
+    for line in "${SPEC_KIT_LINES[@]}"; do
+        printf '\033[0;35m%s\033[0m\n' "$line"
+    done
+    echo ""
+    cyan "Plan Forge will complement your Spec Kit workflow:"
+    echo "  - Spec Kit defines WHAT to build"
+    echo "  - Plan Forge hardens specs into execution contracts with validation gates"
+    echo "  - To import a spec: open docs/plans/AI-Plan-Hardening-Runbook-Instructions.md after setup"
+    echo ""
+fi
+
 if [[ -z "$PROJECT_NAME" ]]; then
     default_name="$(basename "$PROJECT_PATH")"
     PROJECT_NAME="$(prompt_value "Project name" "$default_name")"

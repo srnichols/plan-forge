@@ -923,6 +923,40 @@ if (-not (Test-Path $ProjectPath)) {
     New-Item -ItemType Directory -Path $ProjectPath -Force | Out-Null
 }
 
+# ─── Spec Kit Detection ───────────────────────────────────────────────
+$specKitLines = @()
+$specsDir = Join-Path $ProjectPath "specs"
+if (Test-Path $specsDir) {
+    foreach ($sf in (Get-ChildItem -Path $specsDir -Recurse -Filter "spec.md" -File -ErrorAction SilentlyContinue | Select-Object -First 5)) {
+        $specKitLines += "  • $($sf.FullName.Substring($ProjectPath.Length + 1)) — feature specification"
+    }
+    foreach ($pf in (Get-ChildItem -Path $specsDir -Recurse -Filter "plan.md" -File -ErrorAction SilentlyContinue | Select-Object -First 5)) {
+        $specKitLines += "  • $($pf.FullName.Substring($ProjectPath.Length + 1)) — implementation plan"
+    }
+    foreach ($tf in (Get-ChildItem -Path $specsDir -Recurse -Filter "tasks.md" -File -ErrorAction SilentlyContinue | Select-Object -First 5)) {
+        $specKitLines += "  • $($tf.FullName.Substring($ProjectPath.Length + 1)) — task breakdown"
+    }
+}
+$constitutionPath = Join-Path $ProjectPath "memory/constitution.md"
+if (Test-Path $constitutionPath) {
+    $specKitLines += "  • memory/constitution.md — project constitution"
+}
+if ($specKitLines.Count -gt 0) {
+    Write-Host ""
+    Write-Host "╔══════════════════════════════════════════════════════════════╗" -ForegroundColor Magenta
+    Write-Host "║       Spec Kit Artifacts Detected                          ║" -ForegroundColor Magenta
+    Write-Host "╚══════════════════════════════════════════════════════════════╝" -ForegroundColor Magenta
+    Write-Host ""
+    Write-Host "Found Spec Kit artifacts in this project:" -ForegroundColor Magenta
+    $specKitLines | ForEach-Object { Write-Host $_ -ForegroundColor Magenta }
+    Write-Host ""
+    Write-Host "Plan Forge will complement your Spec Kit workflow:" -ForegroundColor Cyan
+    Write-Host "  - Spec Kit defines WHAT to build"
+    Write-Host "  - Plan Forge hardens specs into execution contracts with validation gates"
+    Write-Host "  - To import a spec: open docs/plans/AI-Plan-Hardening-Runbook-Instructions.md after setup"
+    Write-Host ""
+}
+
 if (-not $ProjectName) {
     $defaultName = Split-Path $ProjectPath -Leaf
     $ProjectName = Get-PromptValue "Project name" $defaultName

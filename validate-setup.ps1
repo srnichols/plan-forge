@@ -213,6 +213,69 @@ if (Test-Path $configPath) {
     }
 }
 
+# ─── Preset File Counts ───────────────────────────────────────────────
+Write-Host ""
+Write-Host "Preset file counts:" -ForegroundColor Cyan
+
+if (Test-Path $configPath) {
+    $countConfig = Get-Content $configPath -Raw | ConvertFrom-Json
+    $rawPreset   = $countConfig.preset
+    $presetArr   = if ($rawPreset -is [System.Array]) { $rawPreset } else { @($rawPreset) }
+    $primaryPreset = ($presetArr | Where-Object { $_ -ne 'custom' } | Select-Object -First 1)
+
+    $minCountsTable = @{
+        'typescript' = @{ instructions = 18; prompts = 15; skills = 9; agents = 6 }
+        'python'     = @{ instructions = 17; prompts = 15; skills = 9; agents = 6 }
+        'dotnet'     = @{ instructions = 17; prompts = 15; skills = 9; agents = 6 }
+        'go'         = @{ instructions = 17; prompts = 15; skills = 9; agents = 6 }
+        'java'       = @{ instructions = 17; prompts = 15; skills = 9; agents = 6 }
+        'rust'       = @{ instructions = 17; prompts = 15; skills = 9; agents = 6 }
+        'swift'      = @{ instructions = 16; prompts = 13; skills = 9; agents = 6 }
+        'php'        = @{ instructions = 17; prompts = 15; skills = 9; agents = 6 }
+        'azure-iac'  = @{ instructions = 12; prompts = 6;  skills = 3; agents = 5 }
+    }
+
+    if ($primaryPreset -and $minCountsTable.ContainsKey($primaryPreset)) {
+        $mins = $minCountsTable[$primaryPreset]
+
+        $instrCount  = (Get-ChildItem -Path (Join-Path $ProjectPath ".github/instructions") -Filter "*.instructions.md" -File -ErrorAction SilentlyContinue).Count
+        $promptCount = (Get-ChildItem -Path (Join-Path $ProjectPath ".github/prompts") -Filter "*.prompt.md" -File -ErrorAction SilentlyContinue).Count
+        $skillCount  = (Get-ChildItem -Path (Join-Path $ProjectPath ".github/skills") -Recurse -Filter "SKILL.md" -File -ErrorAction SilentlyContinue).Count
+        $agentCount  = (Get-ChildItem -Path (Join-Path $ProjectPath ".github/agents") -Filter "*.agent.md" -File -ErrorAction SilentlyContinue).Count
+
+        foreach ($chk in @(
+            [pscustomobject]@{ label = '.github/instructions/'; actual = $instrCount;  min = $mins.instructions; name = 'instruction files' }
+            [pscustomobject]@{ label = '.github/prompts/';      actual = $promptCount; min = $mins.prompts;      name = 'prompt templates'  }
+            [pscustomobject]@{ label = '.github/skills/';       actual = $skillCount;  min = $mins.skills;       name = 'skills'            }
+            [pscustomobject]@{ label = '.github/agents/';       actual = $agentCount;  min = $mins.agents;       name = 'agent definitions' }
+        )) {
+            if ($chk.actual -ge $chk.min) {
+                Write-Host "  PASS  $($chk.label) — $($chk.actual) $($chk.name) (min: $($chk.min))" -ForegroundColor Green
+                $script:pass++
+            }
+            else {
+                Write-Host "  FAIL  $($chk.label) — $($chk.actual) $($chk.name) (expected ≥ $($chk.min) for '$primaryPreset' preset)" -ForegroundColor Red
+                $script:fail++
+            }
+        }
+
+        if ($presetArr.Count -gt 1) {
+            Write-Host "  INFO  Multi-preset ($($presetArr -join ', ')) — counts validated against primary preset '$primaryPreset'" -ForegroundColor Cyan
+        }
+    }
+    elseif (-not $primaryPreset -or $primaryPreset -eq 'custom') {
+        Write-Host "  INFO  Custom preset — skipping minimum count checks" -ForegroundColor Cyan
+    }
+    else {
+        Write-Host "  WARN  Unknown preset '$primaryPreset' — skipping minimum count checks" -ForegroundColor Yellow
+        $script:warn++
+    }
+}
+else {
+    Write-Host "  WARN  .forge.json not found — skipping minimum count checks" -ForegroundColor Yellow
+    $script:warn++
+}
+
 # ─── Optional Files ───────────────────────────────────────────────────
 Write-Host ""
 Write-Host "Optional files:" -ForegroundColor Cyan

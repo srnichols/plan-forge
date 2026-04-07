@@ -650,6 +650,9 @@ function createExpressApp() {
   // Dashboard static files
   app.use("/dashboard", express.static(resolve(__dirname, "dashboard")));
 
+  // Plan Browser static files
+  app.use("/ui", express.static(resolve(__dirname, "ui")));
+
   // REST API: GET /api/status — current run status
   app.get("/api/status", (_req, res) => {
     try {

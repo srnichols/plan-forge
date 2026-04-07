@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Plan Forge — Plan Browser</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='28' font-size='28'>📋</text></svg>">
+  <style>
+    body { font-family: 'Inter', system-ui, sans-serif; }
+    .plan-card { transition: all 0.15s ease; }
+    .plan-card:hover { transform: translateX(2px); }
+    .plan-card.selected { border-left: 3px solid #6366f1; }
+    .status-badge { display: inline-flex; align-items: center; gap: 4px; }
+    .slice-row { transition: background 0.1s; }
+    .slice-row:hover { background: rgba(99,102,241,0.05); }
+    .task-item::before { content: "▸ "; color: #6366f1; }
+    .scope-tag { background: rgba(99,102,241,0.1); color: #818cf8; }
+    #detail-panel { min-height: calc(100vh - 64px); }
+    .spinner { animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+  </style>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen">
+
+  <!-- Header -->
+  <header class="bg-gray-900 border-b border-gray-800 px-6 py-3 flex items-center justify-between sticky top-0 z-10">
+    <div class="flex items-center gap-3">
+      <span class="text-xl">📋</span>
+      <span class="font-semibold text-white">Plan Forge</span>
+      <span class="text-gray-500 text-sm">/ Plan Browser</span>
+    </div>
+    <div class="flex items-center gap-4">
+      <a href="/dashboard" class="text-gray-400 hover:text-white text-sm transition-colors">← Dashboard</a>
+      <button id="refresh-btn" onclick="loadPlans()" class="text-xs px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-md text-gray-300 transition-colors flex items-center gap-1.5">
+        <span id="refresh-icon">↻</span> Refresh
+      </button>
+      <span id="plan-count" class="text-xs text-gray-500"></span>
+    </div>
+  </header>
+
+  <!-- Layout -->
+  <div class="flex" style="height: calc(100vh - 56px);">
+
+    <!-- Sidebar: Plan List -->
+    <aside class="w-72 bg-gray-900 border-r border-gray-800 overflow-y-auto flex-shrink-0">
+      <div class="p-4 border-b border-gray-800">
+        <input
+          id="search-input"
+          type="text"
+          placeholder="Filter plans…"
+          class="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-1.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-indigo-500"
+          oninput="filterPlans(this.value)"
+        />
+      </div>
+      <div id="plan-list" class="py-2">
+        <div class="px-4 py-8 text-center text-gray-500 text-sm" id="sidebar-loading">
+          <div class="spinner inline-block w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full mb-2"></div>
+          <p>Loading plans…</p>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main: Plan Detail -->
+    <main id="detail-panel" class="flex-1 overflow-y-auto bg-gray-950 p-6">
+      <div id="empty-state" class="flex flex-col items-center justify-center h-full text-gray-600">
+        <div class="text-5xl mb-4">📂</div>
+        <p class="text-lg font-medium">Select a plan to view details</p>
+        <p class="text-sm mt-1">Plans from <code class="text-gray-500">docs/plans/</code> will appear on the left</p>
+      </div>
+      <div id="plan-detail" class="hidden max-w-3xl mx-auto"></div>
+    </main>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

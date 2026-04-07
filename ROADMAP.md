@@ -978,6 +978,97 @@ These items depend on external platform changes. Track them; build when APIs sta
 | D5 Customizations editor | No dashboard changes — VS Code native feature; mention in `pforge smith` output only |
 | D6 Agentic code review | **Skills** tab: update `/code-review` skill rendering to show native agentic review delegation steps |
 | D7 Plan mode metrics | **Runs** tab or new **Metrics** tab: show plan-mode adoption stats if GitHub metrics API exposes them |
+
+### Setup & Updater Sweep (Post v2.14 Release Gate)
+
+> **Purpose**: After all v2.14 features ship, verify that new users get everything on first `setup.ps1`/`setup.sh` run, and existing users can upgrade cleanly. This is the **release gate** — v2.14 is not shippable until every item below is addressed.
+
+#### New Install (`setup.ps1` / `setup.sh`)
+
+These items ensure a user running `setup.ps1 -Preset <stack>` for the first time gets all v2.14 capabilities automatically.
+
+| Feature | Script Section | Change Needed |
+|---------|---------------|---------------|
+| **A1** Plugin install link | Done banner (Step 8 "Next steps" output) | Add line: "Install Plan Forge plugin: vscode://chat-plugin/install?source=srnichols/plan-forge" |
+| **A2** Model deprecation | Step 5 `.forge.json` generation | Ensure default `modelRouting` and `escalationChain` use current models (GPT-5.3-Codex, GPT-5.4, Claude Sonnet 4.6); no deprecated models in defaults |
+| **A3** Cloud agent | New step or flag: `--cloud-agent` | Generate `copilot-setup-steps.yml` in project root; add cloud agent section to `.forge.json`; conditionally install based on flag or prompt |
+| **A4** Memory docs | No setup change | Documentation only — no files to generate |
+| **B1** Org rules export | Step 7b / CLI copy | Copy `pforge.ps1`/`pforge.sh` updated with `org-rules` subcommand; add `forge_org_rules` to MCP server tools |
+| **B2** Nested subagents | Step 6 VS Code settings | Add `"chat.subagents.allowInvocationsFromSubagents": true` to `vscode-settings.json.template`; update pipeline `.agent.md` files with subagent invocation capability |
+| **B3** Troubleshoot skill | Step 3 / Step 3b shared skills | Copy `presets/shared/skills/forge-troubleshoot/SKILL.md` to `.github/skills/forge-troubleshoot/`; include in capabilities.json skill count |
+| **B4** Validation tools | Step 5 `.forge.json` | Add `cloudAgentValidation` key with sensible defaults (all recommended, advisory) |
+| **C1** SDK tool provider | Step 7b MCP setup | If SDK package is published, add optional `pforge-sdk/` copy step; document in Next Steps output |
+| **C2** Plan export | Step 7b MCP tools | Ensure `forge_export_plan` is registered in server.mjs; `pforge.ps1` includes `export-plan` subcommand |
+| **C3** Memory sync | Step 7b MCP tools | Ensure `forge_sync_memories` is registered in server.mjs; add `memorySyncEnabled` default to `.forge.json` |
+| **C4** Tool approval | Step 6 VS Code settings | If API is stable: add tool approval scopes to settings template; otherwise no change |
+
+#### Existing User Upgrade (`pforge smith` + manual re-run)
+
+Plan Forge doesn't have a formal `upgrade` command yet. Existing users upgrade by pulling the latest Plan Forge repo and re-running `setup.ps1 -Force`. These items ensure that path works cleanly.
+
+| Concern | Script | Change Needed |
+|---------|--------|---------------|
+| **Additive file merge** | `setup.ps1` Step 3 | When `-Force` is used, new files (e.g., `forge-troubleshoot` skill, `copilot-setup-steps.yml`) are added without overwriting user-customized files. Current behavior: `-Force` overwrites everything. **Consider**: add `-Merge` flag that only copies files that don't exist yet, preserving user edits. |
+| **`.forge.json` schema migration** | `setup.ps1` Step 5 | If `.forge.json` already exists, merge new keys (`cloudAgentValidation`, `memorySyncEnabled`, `pipeline.nestedSubagents`) into existing config instead of overwriting. Preserve user's `modelRouting`, `quorum`, `gateCommands`, and `extensions`. |
+| **`.vscode/settings.json` merge** | `setup.ps1` Step 6 | If `settings.json` exists, add new keys (`allowInvocationsFromSubagents`) without replacing user's existing settings. Currently overwrites. |
+| **`.vscode/mcp.json` tool additions** | `setup.ps1` Step 7b | Already handles merge correctly (checks for existing `plan-forge` server). Verify new MCP tools (`forge_org_rules`, `forge_export_plan`, `forge_sync_memories`) are available after server.mjs update. |
+| **Deprecated model cleanup** | `pforge smith` | Add smith diagnostic: "⚠ Your `.forge.json` references deprecated model GPT-5.1. Recommended: GPT-5.3-Codex (LTS) or GPT-5.4." with auto-fix suggestion. |
+| **Version tracking** | `.forge.json` → `templateVersion` | Setup already writes `templateVersion` from `VERSION` file. Smith should compare installed `templateVersion` vs latest and warn if outdated: "Your project uses Plan Forge 2.13.1 templates but 2.14.0 is available. Re-run setup.ps1 -Force to upgrade." |
+| **New skill detection** | `validate-setup.ps1` | Add check for `forge-troubleshoot` skill directory existence. Update expected file counts for v2.14 (skill count 11→12, MCP tools count if changed). |
+| **Cloud agent detection** | `pforge smith` | Add smith check: if repo has `.github/` but no `copilot-setup-steps.yml`, suggest: "Consider adding cloud agent support: re-run setup.ps1 --cloud-agent" |
+
+#### Validate-Setup Updates (`validate-setup.ps1` / `validate-setup.sh`)
+
+| Check | Current | After v2.14 |
+|-------|---------|-------------|
+| Skill count | Validates shared skills exist | Add `forge-troubleshoot` to expected skills list |
+| `.forge.json` schema | Checks `projectName`, `preset`, `agents`, `stack` | Add checks for new optional keys: `cloudAgentValidation`, `memorySyncEnabled`, `pipeline` |
+| Settings template | Checks `.vscode/settings.json` exists | Verify `allowInvocationsFromSubagents` key is present (warn if missing, don't fail) |
+| Model references | Not checked | New check: scan `.forge.json` for deprecated model names and warn |
+| Cloud agent | Not checked | New check: if `copilot-setup-steps.yml` exists, verify it has required steps |
+| MCP tool count | Not explicitly checked | Add advisory check: compare registered tools in server.mjs vs expected count |
+
+#### Templates to Update
+
+| Template File | What Changes |
+|---------------|-------------|
+| `templates/copilot-instructions.md.template` | Add new CLI commands (`org-rules export`, `export-plan`); update skill table (add `/forge-troubleshoot`); update MCP tool count in comments; add cloud agent Quick Commands |
+| `templates/vscode-settings.json.template` | Add `chat.subagents.allowInvocationsFromSubagents: true` |
+| `templates/AGENTS.md.template` | Update pipeline agent descriptions with nested subagent capability |
+| `templates/copilot-setup-steps.yml` | **New template** — cloud agent setup steps for GitHub Copilot cloud agent |
+
+#### Agent Adapters to Update
+
+Each agent adapter function (`Install-ClaudeAgent`, `Install-CursorAgent`, etc.) may need updates:
+
+| Adapter | Function | Change |
+|---------|----------|--------|
+| **Claude** | `Install-ClaudeAgent` | Add `/forge-troubleshoot` to CLAUDE.md slash commands; update model references |
+| **Cursor** | `Install-CursorAgent` | Add troubleshoot command to `.cursor/commands/`; update model references |
+| **Codex** | `Install-CodexAgent` | Add troubleshoot skill to `.agents/skills/`; update model references |
+| **Gemini** | `Install-GeminiAgent` | Add `/planforge-troubleshoot` command to GEMINI.md; update model references |
+| **Windsurf** | `Install-WindsurfAgent` | Add troubleshoot rule to `.windsurf/rules/`; update model references |
+| **Generic** | `Install-GenericAgent` | Add troubleshoot skill; update model references |
+| **All adapters** | All functions | If org-rules export or plan import are CLI-only (not agent-specific), no adapter changes needed for B1/C2 |
+
+#### Release Checklist
+
+Before tagging v2.14.0:
+
+- [ ] `setup.ps1` generates all new files for a fresh project
+- [ ] `setup.sh` generates identical output (parity check)
+- [ ] `setup.ps1 -Force` on an existing v2.13.x project preserves user customizations
+- [ ] `validate-setup.ps1` passes with updated counts and checks
+- [ ] `validate-setup.sh` produces identical results
+- [ ] `pforge smith` detects deprecated models and suggests upgrade
+- [ ] `pforge smith` detects missing cloud agent setup and suggests it
+- [ ] `node pforge-mcp/orchestrator.mjs --test` passes (update expected count)
+- [ ] All 9 presets tested: `setup.ps1 -Preset <each> -Force` → validate passes
+- [ ] Agent adapters tested: `setup.ps1 -Agent all` → all 7 adapters produce correct output
+- [ ] `VERSION` bumped to `2.14.0`
+- [ ] `CHANGELOG.md` updated with all v2.14 items
+- [ ] `plugin.json` version bumped to `2.14.0` with updated description
+
 ---
 
 ## Backlog

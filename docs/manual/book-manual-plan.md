@@ -654,9 +654,9 @@ The **`E:\GitHub\plan-forge-testbed`** repo contains a **Tracker sample app** wi
 - [x] Chapter 6 (Dashboard) + all 8 tab screenshots
 
 ### Round 4 — Act III (Master)
-- [ ] Chapter 8 (Customization)
-- [ ] Chapter 9 (Instruction Files & Agents)
-- [ ] Chapter 10 (MCP Server & Tools)
+- [x] Chapter 8 (Customization)
+- [x] Chapter 9 (Instruction Files & Agents)
+- [x] Chapter 10 (MCP Server & Tools)
 
 ### Round 5 — Complete + Polish
 - [ ] Chapters 11–14 (Extensions, Multi-Agent, Advanced, Troubleshooting)

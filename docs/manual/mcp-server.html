@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<!-- verified: v2.17.0 -->
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chapter 10: MCP Server &amp; Tools — Plan Forge Manual</title>
+  <meta name="description" content="Architecture, 18 MCP tools, REST API, WebSocket hub, telemetry, cost tracking. The developer integration reference." />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+    <main><div class="chapter-content">
+
+      <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 10</div>
+      <h1>MCP Server &amp; Tools</h1>
+      <p class="text-lg text-slate-400 mb-8">18 MCP tools, REST API, WebSocket hub, telemetry, and cost tracking — the integration layer.</p>
+
+      <!-- ─── Architecture ─── -->
+      <h2 id="architecture">Architecture</h2>
+      <p>A single Node.js process runs three subsystems:</p>
+
+      <div class="overflow-x-auto mb-6">
+        <div class="flex gap-3 min-w-[500px] py-2">
+          <div class="flex-1 rounded-xl border border-amber-800/30 bg-amber-950/15 p-4 text-center">
+            <div class="text-sm font-bold text-amber-400 mb-1">MCP (stdio)</div>
+            <p class="text-xs text-slate-500">18 tools exposed via Model Context Protocol. Copilot, Claude, Cursor call these as function calls.</p>
+          </div>
+          <div class="flex-1 rounded-xl border border-sky-800/30 bg-sky-950/15 p-4 text-center">
+            <div class="text-sm font-bold text-sky-400 mb-1">Express (HTTP :3100)</div>
+            <p class="text-xs text-slate-500">Dashboard UI, REST API, static files. 12+ endpoints for programmatic access.</p>
+          </div>
+          <div class="flex-1 rounded-xl border border-emerald-800/30 bg-emerald-950/15 p-4 text-center">
+            <div class="text-sm font-bold text-emerald-400 mb-1">WebSocket (:3101)</div>
+            <p class="text-xs text-slate-500">Real-time events. Dashboard subscribes for live slice progress.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── Starting ─── -->
+      <h2 id="starting">Starting the Server</h2>
+      <div class="cmd-block">
+        <div class="cmd-block-header"><span>Terminal</span><button class="cmd-copy-btn">Copy</button></div>
+        <pre><code># Install dependencies (first time only)
+cd pforge-mcp && npm install && cd ..
+
+# Full server: MCP + HTTP + WebSocket
+node pforge-mcp/server.mjs
+
+# Dashboard only (no MCP stdio)
+node pforge-mcp/server.mjs --dashboard-only
+
+# Custom project path
+node pforge-mcp/server.mjs --project /path/to/project</code></pre>
+      </div>
+      <p>With <code>.vscode/mcp.json</code> configured (created by setup), the server auto-starts when Copilot calls any forge tool.</p>
+
+      <!-- ─── MCP Tools ─── -->
+      <h2 id="tools">MCP Tools (18)</h2>
+      <p>Every tool is callable from Copilot Chat, Claude Code, Cursor, or any MCP-compatible client:</p>
+
+      <table>
+        <thead><tr><th>Tool</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>forge_smith</code></td><td>Diagnose environment, VS Code config, setup health, version currency</td></tr>
+          <tr><td><code>forge_validate</code></td><td>Validate setup files — check counts match preset, no placeholders</td></tr>
+          <tr><td><code>forge_sweep</code></td><td>Scan for TODO/FIXME/HACK/stub/placeholder markers</td></tr>
+          <tr><td><code>forge_status</code></td><td>Show phases from DEPLOYMENT-ROADMAP.md with status</td></tr>
+          <tr><td><code>forge_diff</code></td><td>Compare changes against plan's Scope Contract — detect drift</td></tr>
+          <tr><td><code>forge_analyze</code></td><td>Cross-artifact consistency scoring (0–100, 4 dimensions)</td></tr>
+          <tr><td><code>forge_diagnose</code></td><td>Multi-model bug investigation — root cause + fix recommendations</td></tr>
+          <tr><td><code>forge_run_plan</code></td><td>Execute hardened plan: spawn workers, validate gates, track tokens</td></tr>
+          <tr><td><code>forge_abort</code></td><td>Abort currently running plan execution</td></tr>
+          <tr><td><code>forge_plan_status</code></td><td>Get latest execution status — per-slice results, tokens, duration</td></tr>
+          <tr><td><code>forge_cost_report</code></td><td>Cost tracking: total spend, per-model breakdown, monthly trend</td></tr>
+          <tr><td><code>forge_new_phase</code></td><td>Create new phase plan file + roadmap entry</td></tr>
+          <tr><td><code>forge_ext_search</code></td><td>Search community extension catalog</td></tr>
+          <tr><td><code>forge_ext_info</code></td><td>Detailed info about a specific extension</td></tr>
+          <tr><td><code>forge_capabilities</code></td><td>Machine-readable API surface — tools, intents, config, extensions</td></tr>
+          <tr><td><code>forge_run_skill</code></td><td>Execute a skill programmatically with step-level tracking</td></tr>
+          <tr><td><code>forge_skill_status</code></td><td>Get recent skill execution events from hub</td></tr>
+          <tr><td><code>forge_generate_image</code></td><td>Generate images via Grok Aurora or DALL-E, save with format conversion</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout callout-tip">
+        <strong>Discovery</strong>: Call <code>forge_capabilities</code> first — it returns the full API surface including tool schemas, config options, and available extensions.
+      </div>
+
+      <!-- ─── REST API ─── -->
+      <h2 id="rest-api">REST API</h2>
+      <p>All endpoints available at <code>http://localhost:3100</code>:</p>
+
+      <table>
+        <thead><tr><th>Method</th><th>Endpoint</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td>GET</td><td><code>/api/status</code></td><td>Current run status</td></tr>
+          <tr><td>GET</td><td><code>/api/runs</code></td><td>Run history (last 50)</td></tr>
+          <tr><td>GET</td><td><code>/api/config</code></td><td>Read <code>.forge.json</code></td></tr>
+          <tr><td>POST</td><td><code>/api/config</code></td><td>Write <code>.forge.json</code></td></tr>
+          <tr><td>GET</td><td><code>/api/cost</code></td><td>Cost report (same as <code>forge_cost_report</code>)</td></tr>
+          <tr><td>POST</td><td><code>/api/tool/:name</code></td><td>Invoke any CLI tool via HTTP</td></tr>
+          <tr><td>GET</td><td><code>/api/hub</code></td><td>WebSocket hub status + connected clients</td></tr>
+          <tr><td>GET</td><td><code>/api/replay/:run/:slice</code></td><td>Session replay log for a specific slice</td></tr>
+          <tr><td>GET</td><td><code>/api/traces</code></td><td>All runs from trace index</td></tr>
+          <tr><td>GET</td><td><code>/api/traces/:runId</code></td><td>Single run trace detail</td></tr>
+          <tr><td>GET</td><td><code>/api/capabilities</code></td><td>Full capability surface (JSON)</td></tr>
+          <tr><td>GET</td><td><code>/.well-known/plan-forge.json</code></td><td>Discovery endpoint</td></tr>
+        </tbody>
+      </table>
+
+      <!-- ─── WebSocket Hub ─── -->
+      <h2 id="websocket">WebSocket Hub</h2>
+      <p>Connect to <code>ws://localhost:3101</code> for real-time events. The dashboard uses this for live progress updates.</p>
+
+      <table>
+        <thead><tr><th>Event</th><th>When</th></tr></thead>
+        <tbody>
+          <tr><td><code>connected</code></td><td>Client connects — includes event history replay</td></tr>
+          <tr><td><code>run-started</code></td><td>Plan execution begins</td></tr>
+          <tr><td><code>slice-started</code></td><td>Slice begins execution</td></tr>
+          <tr><td><code>slice-completed</code></td><td>Slice passes all validation gates</td></tr>
+          <tr><td><code>slice-failed</code></td><td>Slice or gate fails</td></tr>
+          <tr><td><code>slice-escalated</code></td><td>Slice escalated to quorum for multi-model consensus</td></tr>
+          <tr><td><code>run-completed</code></td><td>All slices finish</td></tr>
+          <tr><td><code>run-aborted</code></td><td>Execution aborted via <code>forge_abort</code></td></tr>
+          <tr><td><code>skill-started</code></td><td>Skill execution begins</td></tr>
+          <tr><td><code>skill-completed</code></td><td>Skill finishes all steps</td></tr>
+          <tr><td><code>approval-requested</code></td><td>Bridge pauses for external approval</td></tr>
+          <tr><td><code>bridge-notification-sent</code></td><td>Webhook dispatched (Telegram, Slack, Discord)</td></tr>
+        </tbody>
+      </table>
+
+      <!-- ─── Telemetry ─── -->
+      <h2 id="telemetry">Telemetry</h2>
+      <p>Every plan execution emits OpenTelemetry (OTLP) traces stored in <code>.forge/runs/&lt;timestamp&gt;/traces.json</code>:</p>
+      <ul>
+        <li><strong>Resource context</strong> — project name, version, preset, model</li>
+        <li><strong>Span hierarchy</strong> — run → slice → gate → escalation</li>
+        <li><strong>Severity levels</strong> — INFO for passes, WARN for retries, ERROR for failures</li>
+        <li><strong>Export</strong> — traces are OTLP-compatible — send to Jaeger, Grafana Tempo, or any collector</li>
+      </ul>
+
+      <!-- ─── Cost Tracking ─── -->
+      <h2 id="cost">Cost Tracking</h2>
+      <p>The orchestrator tracks tokens and computes cost per slice using a 23-model pricing table:</p>
+      <ul>
+        <li><strong>Per-slice</strong> — tokens in/out, model, duration, USD cost</li>
+        <li><strong>Per-run</strong> — total cost, model breakdown</li>
+        <li><strong>Monthly</strong> — aggregated in <code>.forge/cost-history.json</code></li>
+        <li><strong>Model performance</strong> — <code>.forge/model-performance.json</code> tracks success rate, avg cost, avg duration per model</li>
+      </ul>
+      <p>The orchestrator auto-selects the cheapest model with &gt;80% historical pass rate. Use <code>--estimate</code> to preview costs before executing.</p>
+
+      <!-- ─── SDK ─── -->
+      <h2 id="sdk">SDK for Integrators</h2>
+      <p>The <code>pforge-sdk/</code> package provides a JavaScript/TypeScript API for building integrations:</p>
+      <div class="cmd-block">
+        <div class="cmd-block-header"><span>JavaScript</span></div>
+        <pre><code>import { createForgeClient } from 'pforge-sdk';
+
+const forge = createForgeClient({ baseUrl: 'http://localhost:3100' });
+
+// Run smith diagnostics
+const health = await forge.smith();
+
+// Get cost report
+const cost = await forge.costReport();
+
+// Execute a plan
+const run = await forge.runPlan('docs/plans/Phase-1.md', {
+  mode: 'estimate'
+});</code></pre>
+      </div>
+      <p>The SDK is currently in scaffold stage (v0.1.0) — API surface defined, implementation in progress.</p>
+
+      <p class="text-sm text-slate-500 mt-8">📄 Full reference: <a href="../capabilities.md">capabilities.md</a>, <a href="../../pforge-mcp/EVENTS.md">EVENTS.md</a>, <a href="../../pforge-mcp/tools.json">tools.json</a></p>
+      <div id="chapter-prev-next" class="chapter-nav"></div>
+
+    </div></main>
+  </div>
+  <script src="assets/manual.js"></script>
+</body>
+</html>

@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<!-- verified: v2.17.0 -->
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chapter 9: Instruction Files &amp; Agents — Plan Forge Manual</title>
+  <meta name="description" content="Deep dive into the guardrail system: 18 instruction files, 19 agents, 12 skills, 4 lifecycle hooks. What each covers and when it activates." />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+    <main><div class="chapter-content">
+
+      <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 9</div>
+      <h1>Instruction Files &amp; Agents</h1>
+      <p class="text-lg text-slate-400 mb-8">The guardrail system: what each file covers, when it activates, and how agents review your code.</p>
+
+      <!-- ─── Overview ─── -->
+      <h2 id="overview">How Auto-Loading Works</h2>
+      <p>Each instruction file has an <code>applyTo</code> glob pattern in its YAML frontmatter. When you edit a file matching that pattern, the instruction auto-loads into the AI's context. No manual action needed.</p>
+      <div class="cmd-block">
+        <div class="cmd-block-header"><span>Example: security.instructions.md</span></div>
+        <pre><code>---
+description: Security best practices — input validation, auth, secrets
+applyTo: "**/auth/**,**/security/**,**/middleware/**"
+---
+# Security Rules
+- Parameterized queries only — never string interpolation in SQL
+- Input validation at system boundaries
+- No secrets in code — use environment variables or secret managers
+...</code></pre>
+      </div>
+
+      <!-- ─── Shared (Universal) ─── -->
+      <h2 id="shared">Universal Files (All Presets)</h2>
+      <p>These four files ship with every preset — they form the universal baseline:</p>
+      <table>
+        <thead><tr><th>File</th><th>applyTo</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td><code>architecture-principles</code></td><td><code>**</code></td><td>5 questions before coding, 4-layer architecture, separation of concerns</td></tr>
+          <tr><td><code>git-workflow</code></td><td><code>**</code></td><td>Conventional commits, push reminders, version-aware messaging</td></tr>
+          <tr><td><code>ai-plan-hardening-runbook</code></td><td><code>docs/plans/**</code></td><td>Quick-reference when editing plan files</td></tr>
+          <tr><td><code>status-reporting</code></td><td><code>docs/plans/**, .forge/**</code></td><td>Standard output templates for orchestration updates</td></tr>
+        </tbody>
+      </table>
+
+      <!-- ─── Domain Files ─── -->
+      <h2 id="domain">Domain Instruction Files (Per Preset)</h2>
+      <p>Each preset installs 14 domain-specific instruction files. They auto-load based on what you're editing:</p>
+      <table>
+        <thead><tr><th>File</th><th>Domain</th><th>Loads When Editing</th></tr></thead>
+        <tbody>
+          <tr><td><code>api-patterns</code></td><td>REST conventions, pagination, error responses</td><td>Controllers, routes, endpoints</td></tr>
+          <tr><td><code>auth</code></td><td>JWT/OIDC, RBAC, multi-tenant isolation</td><td>Auth modules, middleware</td></tr>
+          <tr><td><code>caching</code></td><td>Redis, in-memory cache, TTL strategies</td><td>Cache services, config</td></tr>
+          <tr><td><code>database</code></td><td>ORM/query patterns, migrations, connections</td><td>Repositories, SQL, models</td></tr>
+          <tr><td><code>deploy</code></td><td>Dockerfiles, health checks, container optimization</td><td>Dockerfiles, compose, k8s</td></tr>
+          <tr><td><code>errorhandling</code></td><td>Exception hierarchy, ProblemDetails, error boundaries</td><td>Error handlers, middleware</td></tr>
+          <tr><td><code>messaging</code></td><td>Pub/sub, job queues, event-driven patterns</td><td>Event handlers, message consumers</td></tr>
+          <tr><td><code>multi-environment</code></td><td>Dev/staging/prod config, environment detection</td><td>Config files, env setup</td></tr>
+          <tr><td><code>observability</code></td><td>OpenTelemetry, structured logging, metrics</td><td>Logging, tracing, health</td></tr>
+          <tr><td><code>performance</code></td><td>Hot/cold path analysis, allocation reduction</td><td>Performance-critical code</td></tr>
+          <tr><td><code>security</code></td><td>Input validation, secret management, CORS</td><td>Auth, security, middleware</td></tr>
+          <tr><td><code>testing</code></td><td>Unit tests, integration tests, test containers</td><td>Test files</td></tr>
+          <tr><td><code>version</code></td><td>Semantic versioning, commit-driven bumps</td><td>Version files, changelogs</td></tr>
+          <tr><td><code>project-principles</code></td><td>Activates when PROJECT-PRINCIPLES.md exists</td><td>Plan files, reviews</td></tr>
+        </tbody>
+      </table>
+      <div class="callout callout-info">
+        <strong>TypeScript preset</strong> adds a 15th file: <code>frontend.instructions.md</code> for React/Vue patterns. The <code>azure-iac</code> preset replaces several app-specific files with Bicep/Terraform equivalents.
+      </div>
+
+      <!-- ─── Agents ─── -->
+      <h2 id="agents">Agents</h2>
+      <p>19 agents organized in three categories. Agents are <strong>read-only</strong> — they audit code but can't edit files.</p>
+
+      <h3>Stack-Specific Agents (6)</h3>
+      <p>Vary by preset — examples for <code>dotnet</code>:</p>
+      <table>
+        <thead><tr><th>Agent</th><th>Reviews</th></tr></thead>
+        <tbody>
+          <tr><td>architecture-reviewer</td><td>Layer separation, dependency direction, SOLID</td></tr>
+          <tr><td>database-reviewer</td><td>Query patterns, migrations, connection management</td></tr>
+          <tr><td>deploy-reviewer</td><td>Dockerfile, health checks, container optimization</td></tr>
+          <tr><td>performance-reviewer</td><td>Hot paths, allocations, async patterns</td></tr>
+          <tr><td>security-reviewer</td><td>Input validation, auth, secrets, OWASP</td></tr>
+          <tr><td>test-runner</td><td>Test coverage, test patterns, mocking strategy</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Cross-Stack Agents (8)</h3>
+      <p>Shared across all presets — same expertise regardless of language:</p>
+      <table>
+        <thead><tr><th>Agent</th><th>Reviews</th></tr></thead>
+        <tbody>
+          <tr><td>api-contract-reviewer</td><td>API versioning, backward compatibility, OpenAPI</td></tr>
+          <tr><td>accessibility-reviewer</td><td>WCAG 2.2, semantic HTML, ARIA, keyboard nav</td></tr>
+          <tr><td>multi-tenancy-reviewer</td><td>Tenant isolation, data leakage, RLS, cache separation</td></tr>
+          <tr><td>cicd-reviewer</td><td>Pipeline safety, secrets, rollback strategies</td></tr>
+          <tr><td>observability-reviewer</td><td>Structured logging, distributed tracing, metrics</td></tr>
+          <tr><td>dependency-reviewer</td><td>CVEs, outdated packages, license conflicts</td></tr>
+          <tr><td>compliance-reviewer</td><td>GDPR, CCPA, SOC2, PII handling, audit logs</td></tr>
+          <tr><td>error-handling-reviewer</td><td>Exception hierarchy, error boundaries, ProblemDetails</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Pipeline Agents (5)</h3>
+      <p>Drive the 7-step pipeline with handoff buttons between stages:</p>
+      <table>
+        <thead><tr><th>Agent</th><th>Pipeline Step</th><th>What It Does</th></tr></thead>
+        <tbody>
+          <tr><td>specifier</td><td>Step 0</td><td>Interviews you, produces specification</td></tr>
+          <tr><td>plan-hardener</td><td>Step 2</td><td>Converts spec into hardened execution contract</td></tr>
+          <tr><td>executor</td><td>Step 3</td><td>Executes slices, validates gates</td></tr>
+          <tr><td>reviewer-gate</td><td>Step 5</td><td>Independent audit for drift and compliance</td></tr>
+          <tr><td>shipper</td><td>Step 6</td><td>Commits, updates roadmap, captures lessons</td></tr>
+        </tbody>
+      </table>
+
+      <!-- ─── Skills ─── -->
+      <h2 id="skills">Skills</h2>
+      <p>12 slash commands per app preset. Skills <strong>do work</strong> — they can read, write, and run terminal commands:</p>
+      <table>
+        <thead><tr><th>Skill</th><th>Invocation</th><th>What It Does</th></tr></thead>
+        <tbody>
+          <tr><td>database-migration</td><td><code>/database-migration</code></td><td>Generate, review, test, deploy schema migrations</td></tr>
+          <tr><td>staging-deploy</td><td><code>/staging-deploy</code></td><td>Build, push, migrate, deploy, verify on staging</td></tr>
+          <tr><td>test-sweep</td><td><code>/test-sweep</code></td><td>Run all test suites and aggregate results</td></tr>
+          <tr><td>dependency-audit</td><td><code>/dependency-audit</code></td><td>Scan for vulnerabilities, outdated packages, licenses</td></tr>
+          <tr><td>security-audit</td><td><code>/security-audit</code></td><td>OWASP scan, secrets detection, severity report</td></tr>
+          <tr><td>code-review</td><td><code>/code-review</code></td><td>Architecture, security, testing, patterns review</td></tr>
+          <tr><td>release-notes</td><td><code>/release-notes</code></td><td>Generate from git history and CHANGELOG</td></tr>
+          <tr><td>api-doc-gen</td><td><code>/api-doc-gen</code></td><td>Generate/update OpenAPI spec, validate consistency</td></tr>
+          <tr><td>onboarding</td><td><code>/onboarding</code></td><td>Walk new dev through setup, architecture, first task</td></tr>
+          <tr><td>health-check</td><td><code>/health-check</code></td><td>Forge diagnostic: smith → validate → sweep</td></tr>
+          <tr><td>forge-execute</td><td><code>/forge-execute</code></td><td>Guided plan execution: list → estimate → execute → report</td></tr>
+          <tr><td>forge-troubleshoot</td><td><code>/forge-troubleshoot</code></td><td>Diagnose common Plan Forge issues</td></tr>
+        </tbody>
+      </table>
+
+      <!-- ─── Lifecycle Hooks ─── -->
+      <h2 id="hooks">Lifecycle Hooks</h2>
+      <p>Hooks run automatically during agent sessions — no manual activation:</p>
+      <table>
+        <thead><tr><th>Hook</th><th>When</th><th>What It Enforces</th></tr></thead>
+        <tbody>
+          <tr><td><strong>SessionStart</strong></td><td>Session begins</td><td>Injects Project Principles, current phase, forbidden patterns</td></tr>
+          <tr><td><strong>PreToolUse</strong></td><td>Before file edit</td><td>Blocks edits to paths listed in plan's Forbidden Actions</td></tr>
+          <tr><td><strong>PostToolUse</strong></td><td>After file edit</td><td>Auto-formats, warns on TODO/FIXME/stub markers</td></tr>
+          <tr><td><strong>Stop</strong></td><td>Session ends</td><td>Warns if code modified but no test run detected</td></tr>
+        </tbody>
+      </table>
+      <div class="callout callout-warning">
+        <strong>PostToolUse warning</strong>: If you see "⚠ Deferred-work marker detected" after an edit, the AI left a TODO or stub. Address it before moving on — the completeness sweep (Step 4) will catch it anyway.
+      </div>
+
+      <p class="text-sm text-slate-500 mt-8">📄 Full reference: <a href="../capabilities.md">capabilities.md</a>, <a href="../COPILOT-VSCODE-GUIDE.md">COPILOT-VSCODE-GUIDE.md</a></p>
+      <div id="chapter-prev-next" class="chapter-nav"></div>
+
+    </div></main>
+  </div>
+  <script src="assets/manual.js"></script>
+</body>
+</html>

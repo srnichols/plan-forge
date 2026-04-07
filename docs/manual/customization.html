@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<!-- verified: v2.17.0 -->
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chapter 8: Customization — Plan Forge Manual</title>
+  <meta name="description" content="Tailor Plan Forge to your project: Project Principles, Project Profile, custom instruction files, applyTo patterns, configuration hierarchy." />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+    <main><div class="chapter-content">
+
+      <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 8</div>
+      <h1>Customization</h1>
+      <p class="text-lg text-slate-400 mb-8">Make it yours: principles, profiles, custom instructions, configuration hierarchy.</p>
+
+      <!-- ─── Two-Layer Model ─── -->
+      <h2 id="two-layers">The Two-Layer Model</h2>
+      <p>Every project gets two layers of guardrails:</p>
+      <div class="overflow-x-auto mb-6">
+        <div class="flex gap-4 min-w-[400px] py-2">
+          <div class="flex-1 rounded-xl border border-sky-800/30 bg-sky-950/15 p-4">
+            <div class="text-sm font-bold text-sky-400 mb-2">Layer 1 — Universal Baseline</div>
+            <p class="text-xs text-slate-400">Ships with every preset. Architecture, security, testing, error handling, type safety, async patterns. You get these automatically.</p>
+          </div>
+          <div class="flex-1 rounded-xl border border-purple-800/30 bg-purple-950/15 p-4">
+            <div class="text-sm font-bold text-purple-400 mb-2">Layer 2 — Project-Specific</div>
+            <p class="text-xs text-slate-400">Generated per-project. Coverage targets, latency SLAs, compliance requirements, domain rules. You customize these.</p>
+          </div>
+        </div>
+      </div>
+      <p>If Layer 2 conflicts with Layer 1, Layer 2 wins for that specific project. Example: Layer 1 says "TDD for business logic" → Layer 2 says "TDD for ALL code" → Layer 2 applies.</p>
+
+      <!-- ─── Project Principles ─── -->
+      <h2 id="principles">Project Principles</h2>
+      <p>Principles declare what your project <em>believes</em> — non-negotiable commitments about technology, architecture, and quality. They're checked automatically during Steps 1, 2, and 5.</p>
+      <ol>
+        <li>Open Copilot Chat → Agent Mode</li>
+        <li>Attach <code>.github/prompts/project-principles.prompt.md</code></li>
+        <li>Choose your path: <strong>A)</strong> Interview, <strong>B)</strong> Starter set for your stack, or <strong>C)</strong> Discover from codebase</li>
+        <li>The prompt generates <code>docs/plans/PROJECT-PRINCIPLES.md</code></li>
+      </ol>
+      <div class="cmd-block">
+        <div class="cmd-block-header"><span>Example principles</span></div>
+        <pre><code>## Technology Commitments
+- PostgreSQL for all persistence — no MongoDB, no SQLite in production
+- All services communicate via gRPC — no REST between internal services
+
+## Architecture Commitments
+- All data access goes through repositories — no direct SQL in services
+- Background jobs use BackgroundService + PeriodicTimer — no Hangfire
+
+## Quality Commitments
+- 90% test coverage on business logic — non-negotiable
+- No secrets in code — ever. Use IConfiguration + Key Vault</code></pre>
+      </div>
+
+      <!-- ─── Project Profile ─── -->
+      <h2 id="profile">Project Profile</h2>
+      <p>The profile tells the AI <em>how</em> to write code — generated from an interview about your standards:</p>
+      <ol>
+        <li>Attach <code>.github/prompts/project-profile.prompt.md</code></li>
+        <li>Answer questions about testing, performance, security, domain rules</li>
+        <li>The prompt generates <code>.github/instructions/project-profile.instructions.md</code></li>
+      </ol>
+
+      <table>
+        <thead><tr><th></th><th>Project Principles</th><th>Project Profile</th></tr></thead>
+        <tbody>
+          <tr><td><strong>What it is</strong></td><td>"We use PostgreSQL, not MongoDB"</td><td>"Use parameterized queries with Dapper"</td></tr>
+          <tr><td><strong>Who writes it</strong></td><td>You (or guided by workshop)</td><td>Generated from interview</td></tr>
+          <tr><td><strong>Testing</strong></td><td>"90% coverage — non-negotiable"</td><td>"Use xUnit with [Fact] and [Theory]"</td></tr>
+          <tr><td><strong>When it matters</strong></td><td>Rejects a PR that uses MongoDB</td><td>Tells AI <em>how</em> to write the query</td></tr>
+        </tbody>
+      </table>
+
+      <!-- ─── copilot-instructions.md ─── -->
+      <h2 id="master-config">Editing <code>copilot-instructions.md</code></h2>
+      <p>This is the master config file — loaded <strong>every</strong> session, for every file. Keep it focused:</p>
+      <ul>
+        <li><strong>Project overview</strong> — what your app does, who it's for (2–3 sentences)</li>
+        <li><strong>Tech stack</strong> — specific versions, frameworks, libraries</li>
+        <li><strong>Architecture</strong> — how layers are organized, key patterns</li>
+        <li><strong>Quick commands</strong> — build, test, lint, run dev</li>
+      </ul>
+      <div class="callout callout-warning">
+        <strong>Keep it under 80 lines.</strong> This file loads for every interaction — a 300-line config wastes context budget. Put domain-specific rules in separate instruction files with targeted <code>applyTo</code> patterns.
+      </div>
+
+      <!-- ─── Custom Instruction Files ─── -->
+      <h2 id="custom-instructions">Writing Custom Instruction Files</h2>
+      <p>Create a new <code>.instructions.md</code> file in <code>.github/instructions/</code> with YAML frontmatter:</p>
+      <div class="cmd-block">
+        <div class="cmd-block-header"><span>.github/instructions/billing.instructions.md</span></div>
+        <pre><code>---
+description: Billing domain rules — Stripe integration, invoice generation
+applyTo: "**/billing/**,**/invoices/**,**/payments/**"
+---
+
+# Billing Domain Rules
+
+- All money amounts stored as `decimal(18,4)` — never `float`
+- Use Stripe SDK v45+ — never raw HTTP calls
+- Every payment mutation must be idempotent (use idempotency keys)
+- Invoice PDFs generated async via background service
+- All billing events published to `billing.*` topic</code></pre>
+      </div>
+      <p>When you edit <code>src/billing/InvoiceService.cs</code>, this file loads automatically alongside the universal baseline.</p>
+
+      <h3><code>applyTo</code> Pattern Reference</h3>
+      <table>
+        <thead><tr><th>Pattern</th><th>Loads When</th></tr></thead>
+        <tbody>
+          <tr><td><code>'**'</code></td><td>ALL files (use sparingly)</td></tr>
+          <tr><td><code>'**/*.cs'</code></td><td>Any C# file</td></tr>
+          <tr><td><code>'**/*.test.ts'</code></td><td>TypeScript test files</td></tr>
+          <tr><td><code>'**/auth/**'</code></td><td>Files in any auth/ directory</td></tr>
+          <tr><td><code>'docs/plans/**'</code></td><td>Plan documents</td></tr>
+        </tbody>
+      </table>
+
+      <!-- ─── Customizing Agents ─── -->
+      <h2 id="agents">Customizing Agents</h2>
+      <p>Agent definitions live in <code>.github/agents/</code>. Each is a Markdown file with YAML frontmatter that declares the agent's role, tool restrictions, and expertise:</p>
+      <div class="cmd-block">
+        <div class="cmd-block-header"><span>Agent definition frontmatter</span></div>
+        <pre><code>---
+name: "billing-reviewer"
+description: "Audit billing code for Stripe compliance and financial accuracy"
+tools: ["read_file", "grep_search", "semantic_search"]
+---</code></pre>
+      </div>
+      <p>Agents are <strong>read-only</strong> — they can search and read but can't edit files. This makes them safe to run as independent auditors. To create a new agent, copy an existing one and modify the expertise section.</p>
+
+      <!-- ─── Customizing Skills ─── -->
+      <h2 id="skills">Customizing Skills</h2>
+      <p>Skills are multi-step procedures in <code>.github/skills/*/SKILL.md</code>. Each skill defines steps, validation gates, and expected outputs. To create a custom skill:</p>
+      <ol>
+        <li>Create a directory: <code>.github/skills/my-workflow/</code></li>
+        <li>Add <code>SKILL.md</code> with steps, gates, and description</li>
+        <li>Invoke with <code>/my-workflow</code> in Copilot Chat</li>
+      </ol>
+
+      <!-- ─── Config Hierarchy ─── -->
+      <h2 id="config-hierarchy">Configuration Hierarchy</h2>
+      <p>Three levels of configuration, from team-wide to personal:</p>
+      <table>
+        <thead><tr><th>Level</th><th>File</th><th>Scope</th><th>Committed?</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Team</strong></td><td><code>.forge.json</code></td><td>Shared project config (presets, models, escalation)</td><td>Yes</td></tr>
+          <tr><td><strong>Personal</strong></td><td><code>preferences.json</code></td><td>Individual developer preferences</td><td>No (.gitignore)</td></tr>
+          <tr><td><strong>Editor</strong></td><td><code>.vscode/settings.json</code></td><td>VS Code and Copilot settings</td><td>Yes (recommended)</td></tr>
+        </tbody>
+      </table>
+      <p>Personal preferences override team config for the individual developer. Editor settings control VS Code behavior (agent mode enabled, prompt files, etc.).</p>
+
+      <p class="text-sm text-slate-500 mt-8">📄 Full reference: <a href="../../CUSTOMIZATION.md">CUSTOMIZATION.md</a></p>
+      <div id="chapter-prev-next" class="chapter-nav"></div>
+
+    </div></main>
+  </div>
+  <script src="assets/manual.js"></script>
+</body>
+</html>

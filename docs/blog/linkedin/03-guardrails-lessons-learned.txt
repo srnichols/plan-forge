@@ -1,0 +1,70 @@
+HERO IMAGE: docs/blog/assets/guardrails-hero.jpg
+TITLE: I Built Guardrails for AI Coding Agents — Here's What I Learned
+
+---
+
+Plan Forge started as a personal frustration. I kept watching AI agents produce code that looked great in a demo and fell apart in production. Not because the models were bad — they're genuinely impressive — but because they had no structural constraints. No architectural standards. No scope discipline. No memory of what they decided yesterday.
+
+So I built guardrails. 18 instruction files that auto-load based on context. 19 specialized reviewer agents. 9 tech stack presets. A 7-step pipeline that converts rough ideas into hardened execution contracts.
+
+Here are the seven lessons that cost the most to learn.
+
+LESSON 1: AGENTS DON'T DRIFT MALICIOUSLY — THEY DRIFT BECAUSE NOBODY SAID NOT TO
+
+The number one misconception is that AI agents "go rogue." They don't. They do exactly what you let them. If you say "build me a login page," you'll get a login page — plus a password reset flow, an admin panel, a user profile system, and refactored database migrations.
+
+The fix was embarrassingly simple: define what shouldn't be built. Every hardened plan has a Forbidden Actions section. Explicit prohibitions cut scope drift by an order of magnitude.
+
+The most powerful guardrail isn't "do this." It's "don't do that."
+
+LESSON 2: AUTO-LOADING BEATS MANUAL ATTACHMENT EVERY TIME
+
+Early versions required developers to manually attach instruction files to each chat session. Nobody did it. The guardrails existed but were never used — like safety goggles hanging on the wall.
+
+The breakthrough was applyTo frontmatter. Each instruction file declares which file patterns it cares about. Edit a database file and database guardrails load automatically. Edit a test file and testing guardrails load. No developer action required. Adoption went from ~20% to 100%.
+
+LESSON 3: THE BUILDER MUST NEVER REVIEW ITS OWN WORK
+
+This was the hardest lesson. In a single long chat session, the agent that wrote the code will always believe its code is correct. It has sunk-cost bias baked into its context window.
+
+Plan Forge mandates session isolation between execution and review. The builder works in Session 2. The reviewer works in Session 3 — fresh context, same guardrails, independent judgment.
+
+Would you let a developer merge their own PR without review? Then why would you let an AI agent do it?
+
+LESSON 4: SLICE BOUNDARIES ARE THE ONLY REAL VALIDATION POINTS
+
+Testing "at the end" doesn't work. By the time you run tests after building 15 files, the failures cascade so badly that the agent spends more time debugging than building.
+
+The answer was slices. Every feature gets decomposed into 3-7 execution slices, each with its own build and test gate. The agent cannot proceed to slice N+1 until slice N passes. Failures are caught when they're small (1-3 files, not 15).
+
+LESSON 5: ONE GUARDRAIL FILE PER CONCERN — NOT ONE GIANT FILE
+
+The first version had a single copilot-instructions.md that was 2,000 lines long. It was terrible. Agents process long instruction files worse than short ones. Key rules get buried.
+
+Splitting into 18 focused files — each under 150 lines, each with a single concern — was transformational. Compliance went up. Token usage went down. Everybody won.
+
+LESSON 6: TECH STACK PRESETS ELIMINATE 80% OF CUSTOMIZATION
+
+Every stack has different conventions. .NET uses PascalCase and xUnit. Python uses snake_case and pytest. If your guardrails say "use PascalCase" to a Python developer, they'll immediately distrust the entire system.
+
+Nine presets ship today: .NET, TypeScript, Python, Java, Go, Swift, Rust, PHP, and Azure IaC. The developer never has to customize anything. It just works for their stack.
+
+LESSON 7: ENTERPRISE QUALITY IS A DEFAULT, NOT AN UPGRADE
+
+The biggest mistake in AI-assisted development tooling is treating quality as optional. "Add tests later." "We'll refactor." No. Every feature should ship with tests, proper error handling, and architectural compliance from the first commit.
+
+Plan Forge makes this structural. There's no "opt in to quality" — quality is the default. You'd have to actively work around it to ship bad code.
+
+The best developer tools don't make quality easier. They make it unavoidable.
+
+WHAT'S NEXT
+
+These seven lessons shaped Plan Forge into what it is today. Quorum Mode (multi-model consensus) is already showing measurably better results than single-model execution. The MCP server exposes 18 forge tools as native operations. And community extensions are adding domain-specific guardrails for industries from healthcare to finance.
+
+The core insight hasn't changed: AI agents are as good as the constraints you give them. Give them none, and they'll improvise brilliantly — right up until they destroy everything they built. Give them structure, and they'll build things you're proud to ship.
+
+Plan Forge is free and open source → https://github.com/srnichols/plan-forge
+
+---
+
+HASHTAGS: #AIDevelopment #SoftwareArchitecture #CodeQuality #DevTools #AIGuardrails

@@ -1,0 +1,87 @@
+HERO IMAGE: docs/blog/assets/seven-agents-hero.jpg
+TITLE: One Framework, Seven AI Agents: Why We Stopped Picking Favorites
+
+---
+
+Here's a conversation I've had at least a dozen times:
+
+"Does Plan Forge work with Claude?" "What about Cursor?" "We use Gemini CLI — can we still use your guardrails?"
+
+The answer used to be "sort of — copy the instruction files and adapt them." That was slow, fragile, and nobody did it consistently.
+
+So we built native adapters for every major AI coding agent. One setup command. Seven agent formats. Same guardrails everywhere.
+
+THE PROBLEM: TEAMS DON'T AGREE ON TOOLS
+
+Your team doesn't all use the same AI coding tool. One dev swears by Copilot in VS Code. Another prefers Cursor's inline editing. The senior architect uses Claude Code for deep reasoning. The DevOps engineer likes Gemini CLI. The intern just discovered Windsurf.
+
+If your guardrails only work in one tool, most of your team isn't covered. And the team members who aren't covered are the ones who produce the code that fails review.
+
+ONE COMMAND, SEVEN AGENTS
+
+One setup command generates native files for every supported agent. Not generic text files — actual native configuration that each tool reads automatically at session start.
+
+What each agent gets:
+
+• Copilot (default): Auto-loading .github/instructions/, agents, prompts, skills, MCP tools
+• Claude Code: CLAUDE.md with all guardrails + .claude/skills/ for every prompt and agent + MCP
+• Cursor: .cursor/rules with all guardrails + .cursor/commands/ for pipeline steps and reviewers
+• Windsurf: .windsurf/rules/ + .windsurf/workflows/ for all pipeline and review commands
+• Codex CLI: .agents/skills/ with SKILL.md for every prompt and agent
+• Gemini CLI: GEMINI.md with @import syntax + .gemini/commands/ as TOML + MCP via settings.json
+• Generic: .ai/AI_INSTRUCTIONS.md — works with ChatGPT, Perplexity, Ollama, anything
+
+Every format includes all 18 guardrail files, all pipeline prompts, and all 19 reviewer agents — transformed into the native format each tool expects.
+
+HOW THE ADAPTERS WORK
+
+Each adapter takes Plan Forge's canonical files and transforms them into whatever format the AI tool reads natively.
+
+Copilot reads .github/instructions/ automatically based on file type. Edit a database file and database guardrails load. This is the gold standard.
+
+Claude reads CLAUDE.md at session start. The adapter generates a rich document with all guardrails embedded inline, organized by domain.
+
+Cursor reads .cursor/rules at session start. Commands go in .cursor/commands/ — type planforge.step3-execute-slice and Cursor runs it natively.
+
+Gemini reads GEMINI.md and supports @import syntax. Commands become TOML files. MCP auto-configures.
+
+The Generic adapter generates plain markdown that works with any AI tool — copy-paste it into any chat window.
+
+THE KILLER FEATURE: UNIFIED MEMORY ACROSS AGENTS
+
+Here's the part most people miss — and it might be the biggest deal of all.
+
+When you wire in OpenBrain (https://github.com/srnichols/OpenBrain) as a shared MCP server, agents in completely different tools share the same memory. Think about what that means:
+
+1. Your Claude Code session hardens the plan and captures architectural decisions to OpenBrain
+2. Your Cursor session executes the slices — and searches OpenBrain first, finding every decision Claude made
+3. Your Copilot session runs the independent review — and queries OpenBrain for the full decision history from both previous sessions
+
+Three different tools. Three different AI models. One shared institutional memory.
+
+This isn't just "same guardrails everywhere." This is cross-agent collaboration through persistent semantic memory. The Claude session doesn't know Cursor exists. The Cursor session doesn't know Claude was involved. But they're both working from the same decision history because OpenBrain sits underneath all of them.
+
+It doesn't matter which agent writes the code. What matters is that every agent knows what every other agent decided — and why.
+
+This is what makes the multi-agent story more than a convenience feature. Your whole team's AI agents build on each other's knowledge, across tools, across sessions, across time. The decisions compound. The mistakes are learned from. And nobody starts from zero — ever.
+
+WHY THIS MATTERS FOR TEAMS
+
+When every developer's AI agent loads the same architecture principles, the same security rules, and the same testing standards — regardless of tool — the code converges on the same quality bar.
+
+No more "this PR doesn't match our patterns because I used a different tool." The guidelines load automatically in every tool. The agent can't avoid them.
+
+• New hire on Cursor? — They have every guardrail from day one
+• Senior dev on Claude? — All 19 reviewer agents are available
+• Experimenting with Gemini? — MCP auto-configures
+• Using everything? — One command and every format generates in one pass
+
+TRY IT
+
+Plan Forge is free and open source. MIT licensed. Pick your stack, pick your agents, and your whole team gets the same quality gates — regardless of which tool they prefer.
+
+https://github.com/srnichols/plan-forge
+
+---
+
+HASHTAGS: #AIDevelopment #GitHubCopilot #ClaudeCode #CursorEditor #DevTools #MultiAgent

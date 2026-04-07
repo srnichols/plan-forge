@@ -1,0 +1,92 @@
+HERO IMAGE: docs/blog/assets/unified-hero.jpg
+TITLE: From WhatsApp to Shipped PR: How I Automated My Entire Dev Workflow
+
+---
+
+I'm at dinner. My phone buzzes — a WhatsApp message from me to myself, earlier that day: "Build user profile API for my-api project. Include avatar upload, email verification, and role-based access."
+
+By the time I get home, the feature is built. Tests pass. An independent review found zero drift violations. A PR is waiting. Every architectural decision is captured in semantic memory so the next feature starts smarter than this one did.
+
+No, this isn't a demo. This is what happens when you wire three open-source tools together into a closed-loop system.
+
+THE THREE PILLARS
+
+Each tool solves one critical problem in AI-assisted development:
+
+Plan Forge — The blueprint. What to build, how, and when to stop.
+OpenBrain — The memory. Why we decided, what we learned, what failed.
+OpenClaw — The nervous system. Always-on orchestration across every channel.
+
+Alone, each is useful. Plan Forge gives you guardrails but forgets between sessions. OpenBrain gives you memory but waits passively for queries. OpenClaw gives you reach (20+ messaging channels) but has no methodology or memory.
+
+Together, they form something none of them can be alone: a system that plans, builds, remembers, and communicates across every surface you use.
+
+THE FULL LIFECYCLE: PHONE TO PR
+
+Here's what actually happens when I send that WhatsApp message.
+
+1. Request Capture
+I send a message to my OpenClaw gateway on WhatsApp. Before doing anything else, OpenClaw queries OpenBrain: "What do we already know about this project?" OpenBrain returns prior architectural decisions, active conventions, and patterns from past features.
+
+2. Plan Hardening
+OpenClaw launches a Copilot CLI session. The session loads all Plan Forge guardrails — 18 instruction files that auto-enforce architecture, security, testing, and error handling standards. The AI generates a hardened execution contract.
+
+My phone buzzes: "Plan hardened. 5 slices. Approve?"
+I reply: "Approved."
+
+3. Slice-by-Slice Execution
+A new session starts (fresh context). For each slice:
+• The AI writes the code, following Plan Forge guardrails
+• Build + test gates run — the slice must pass before proceeding
+• Every decision gets captured to OpenBrain with full provenance
+• My phone buzzes: "Slice 2 done. Tests pass. ✓"
+
+If a slice fails, I get notified immediately.
+
+4. Independent Review
+A third session starts — fresh context again. The reviewer loads the hardened plan, queries OpenBrain for all captured decisions, and audits the implementation.
+
+My phone buzzes: "Review complete. 0 drift violations. Ship it?"
+I reply: "Ship it."
+
+5. Ship + Learn
+The code is committed, pushed, and a PR is created. OpenBrain captures a batch postmortem. Next time an AI session works on this project, it starts with all of that context.
+
+The loop closes. Each feature makes the next one smarter. Memory compounds. The system gets better without any manual intervention.
+
+WHY NOT JUST USE ONE TOOL?
+
+Plan Forge alone gives you excellent guardrails in VS Code. But no memory across features. And you can't interact with it from your phone.
+
+OpenBrain alone gives you semantic memory. But it's passive — it doesn't enforce anything.
+
+OpenClaw alone gives you reach across 20+ channels. But it has no development methodology and no memory.
+
+The magic is in the integration layer. OpenClaw routes work and manages sessions. Plan Forge provides the methodology and guardrails. OpenBrain makes sure nothing is ever forgotten.
+
+WHAT THIS MEANS IN PRACTICE
+
+• Describe a feature from your phone — WhatsApp, Telegram, Slack, Discord, Signal, even iMessage
+• Get progress updates wherever you are — every slice, every gate, every review result
+• Approve or reject via chat — no need to open an IDE
+• Every decision is captured automatically — no manual memory management
+• Every future session starts smarter — the AI already knows your conventions
+• Independent review is structural — fresh context, no sunk cost bias
+• Uses your existing Copilot subscription — unlimited tokens, no separate API bills
+
+TOOLS IN A TOOLBOX
+
+The unified system is the most powerful configuration, but each tool works standalone. They're tools in a toolbox, not a monolith.
+
+• Just want guardrails? → Plan Forge (https://github.com/srnichols/plan-forge)
+• Just want memory? → OpenBrain (https://github.com/srnichols/OpenBrain)
+• Just want reach? → OpenClaw (https://github.com/srnichols/OpenClaw)
+• Want the full loop? → Wire all three together
+
+All three are free. All three are MIT licensed. All three are self-hosted.
+
+The future of development isn't AI writing code. It's AI writing code within a system that plans, enforces, remembers, and improves — automatically, across every surface you use.
+
+---
+
+HASHTAGS: #AIDevelopment #DevOps #Automation #OpenSource #FutureOfWork

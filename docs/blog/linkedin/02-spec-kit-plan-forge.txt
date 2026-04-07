@@ -1,0 +1,83 @@
+HERO IMAGE: docs/blog/assets/speckit-hero.jpg
+TITLE: Spec Kit + Plan Forge: Write the Spec, Enforce the Build
+
+---
+
+I'll be honest: Plan Forge exists because of Spec Kit.
+
+Vibe coding was killing me. I'd fire up an AI agent, describe what I wanted, and watch it produce something that looked great for 30 minutes — then slowly disintegrate into a mess of scope drift, forgotten decisions, and "maybe I should start over." I was burning tokens and getting nowhere.
+
+Then I found Spec Kit (https://github.com/github/spec-kit). And it clicked. Specification-based planning and agentic coding is like peanut butter and jelly — they're good on their own, but together they're something else entirely. Spec Kit taught me that the fix wasn't a better model. It was structure. Define what you want. Plan before you build. Stop letting the agent improvise.
+
+As my ideas grew — as I learned what worked and what still broke even with good specs — Plan Forge (https://github.com/srnichols/plan-forge) started growing legs. What began as "I need more guardrails around my specs" became a full pipeline: scope contracts, auto-loading instruction files, independent review sessions, multi-model consensus, 18 MCP tools. Now it's laying down rubber in the quarter mile.
+
+But the foundation — the insight that you need to specify before you build — that came from Spec Kit. And the two tools are genuinely better together than either is alone.
+
+THE PROBLEM BOTH TOOLS SOLVE
+
+Without structure, AI coding agents have three failure modes:
+
+1. Scope drift — ask for a login page, get a login page plus a password reset flow plus an admin panel nobody requested
+2. Architecture improvisation — the agent picks its own patterns, frameworks, and trade-offs without consulting your standards
+3. Context amnesia — by session three, the agent has forgotten every decision from session one
+
+Spec Kit addresses the first by forcing you to specify before you build. Plan Forge addresses all three by enforcing the spec during the build.
+
+WHAT EACH TOOL DOES BEST
+
+Spec Kit (by GitHub):
+• Core philosophy: Spec-Driven Development
+• Primary strength: Defining what to build
+• 25+ AI agents supported natively
+• 85K+ stars, 144 contributors, 40+ extensions
+• Key mechanism: Slash commands (/speckit.specify, /speckit.plan)
+
+Plan Forge:
+• Core philosophy: Hardened Execution Contracts
+• Primary strength: Enforcing how it's built
+• 7 agents (Copilot, Claude, Cursor, Codex, Gemini, Windsurf, Generic)
+• 18 auto-loading guardrail files per stack
+• Key mechanism: 7-step pipeline with validation gates per slice
+
+Spec Kit has the bigger ecosystem and broader agent support. Plan Forge goes deeper on runtime enforcement and enterprise quality gates. Both are free. Both are MIT licensed.
+
+THE COMBINED WORKFLOW
+
+Phase 1: Define with Spec Kit
+Use Spec Kit's slash commands to build a structured specification — /speckit.constitution, /speckit.specify, /speckit.plan, /speckit.tasks. This produces specs, plans, tasks, and constitution files.
+
+Phase 2: Plan Forge Auto-Imports
+When you start Plan Forge's Step 0 (Specifier), it scans for Spec Kit artifacts. If found, it imports them directly — no re-specifying needed. spec.md maps to the feature specification, plan.md becomes the execution contract baseline, tasks.md maps to execution slices, and constitution.md imports as PROJECT-PRINCIPLES.md.
+
+Phase 3: Harden and Enforce
+The imported spec gets hardened into an execution contract with explicit forbidden actions, scope boundaries, and validation gates. 18 guardrail files auto-load during coding. Each slice executes with build + test gates. An independent reviewer audits the entire implementation in a fresh session.
+
+Spec Kit is the architect's blueprint. Plan Forge is the building inspector who won't sign off until every beam is to code.
+
+SHARED EXTENSION ECOSYSTEM
+
+Both tools support reusable extension packages, and the catalog format is compatible. Extensions marked "speckit_compatible" work in both tools. Same commands, same catalog model, shared extensions.
+
+WHEN TO USE WHICH
+
+Pick Spec Kit if your team uses multiple AI tools (not just VS Code), you want the largest community and extension library, and you prefer a lightweight spec-first methodology. GitHub's backing means rapid iteration and strong long-term support.
+
+Pick Plan Forge if you want guardrails that auto-enforce during coding, you need 19 specialized reviewer agents, and you care about enterprise patterns — scope-contract locking, lifecycle hooks, deployment templates, and multi-model consensus.
+
+Use both if you want the full pipeline. Spec Kit writes the spec. Plan Forge enforces it. Extensions work in both.
+
+HONEST TAKE
+
+I built Plan Forge, so I'm biased. But I'll say it straight: Spec Kit has the bigger ecosystem, broader agent support, and GitHub's engineering team behind it.
+
+If your problem is "I don't know what to build" — start with Spec Kit.
+If your problem is "I know what to build but the AI keeps drifting" — start with Plan Forge.
+If your problem is both — use both. They were designed for this.
+
+Get Spec Kit → https://github.com/github/spec-kit
+Get Plan Forge → https://github.com/srnichols/plan-forge
+Full integration guide → https://planforge.software/speckit-interop.html
+
+---
+
+HASHTAGS: #SpecKit #PlanForge #AIDevelopment #OpenSource #DevTools

@@ -1,0 +1,78 @@
+HERO IMAGE: docs/blog/assets/ → use the existing problem-80-20-wall.webp from docs/assets/
+TITLE: The 80/20 Wall: Why AI Agents Break What They Build
+
+---
+
+You fire up an AI agent — Copilot, Cursor, Claude, whatever — and describe the app you want. The first 80% is magic. Files appear, components wire up, the database schema materializes. You're shipping faster than you ever thought possible.
+
+Then you hit the wall.
+
+THE PATTERN EVERYONE HITS
+
+Every developer using AI coding agents eventually hits the same trajectory:
+
+0% → 50% — The Greenfield Rush. "Build me a task management app with React, Node.js, and PostgreSQL." Within hours you have scaffolding, routes, components, database migrations. It feels like the future.
+
+50% → 80% — Complexity Creeps In. The codebase grows. Auth flows interact with database queries. Middleware chains get long. The agent still works, but you notice it's making assumptions without asking. It picked a caching strategy you wouldn't have chosen.
+
+80% → The Wall. Every change breaks something else. Fix the auth bug, break the dashboard. Fix the dashboard, break the API response format. The agent starts refactoring code it wrote three sessions ago — code that was working fine — because it forgot why it was written that way.
+
+💀 "Maybe I Should Just Start Over." You've burned through tokens, lost track of what the agent changed, and the tests (if there are any) are all red. You're debugging AI-generated code you don't fully understand, in an architecture you didn't fully choose.
+
+Sound familiar? You're not alone. This is the defining failure mode of AI-assisted development in 2026.
+
+IT'S NOT A MODEL PROBLEM. IT'S A PLANNING PROBLEM.
+
+The instinct is to blame the model. "I need GPT-5.3." "I need Claude Opus." But the pattern repeats regardless of the model. The problem isn't intelligence. It's structure.
+
+When agents work from loose intent rather than hardened specs, they do fine on greenfield builds but start thrashing once the codebase gets complex. They lack three things humans take for granted:
+
+1. Architectural memory. They forget why code was written a certain way. So they "improve" it — and break every caller.
+
+2. Scope discipline. Ask for a login page, get a login page plus a password reset flow plus an admin panel plus refactored database migrations. Nobody asked for those.
+
+3. Independent review. The builder reviews its own work. That's like grading your own exam.
+
+VIBE CODING VS. SPEC-DRIVEN DEVELOPMENT
+
+Let's call the default approach what it is: vibe coding. Prompt → hope → fix → re-prompt → hope harder. It works for prototypes. It falls apart for anything you plan to maintain.
+
+The alternative is spec-driven development: define what you want and why before letting the agent write code. Lock the scope in a contract. Add validation gates at every boundary. Have a separate session review the work independently.
+
+Here's what changes:
+
+• Architecture is locked before coding starts — the agent can't improvise its way into the wrong pattern
+• Persistent memory carries decisions across sessions — the agent knows what was chosen and why
+• Build + test must pass at every slice boundary — not at the end, at every step
+• A fresh AI session reviews the work independently — the builder never audits itself
+
+FOUR PRINCIPLES THAT ELIMINATED THE WALL
+
+1. Spec-Driven Development Instead of Vibe Coding
+Stop prompting agents with intent and hoping for the best. Instead of "build me an app," give the agent a clear specification to execute against. Ambiguities get surfaced before coding starts, not discovered after 500 lines of wrong code.
+
+2. Plan Hardening with Enterprise Guardrails
+Run the spec through a hardening pipeline that converts it into an execution contract. Add guardrails the agent has to obey: architecture principles, security rules, testing standards, error handling patterns. The scope is locked. Drift becomes structurally impossible.
+
+3. Persistent Memory Across Sessions
+This is why I built OpenBrain (https://github.com/srnichols/OpenBrain) — a persistent semantic memory layer that captures every decision, pattern, and lesson learned. The next session searches memory before writing a single line. OpenBrain is one of three pillars in the Unified System Architecture: Plan Forge is the blueprint, OpenBrain is the memory, and OpenClaw is the nervous system. Together they form a closed-loop system where AI compounds knowledge over time instead of starting from zero every session.
+
+4. Independent Review in Isolation
+The executor shouldn't self-audit. Each review runs in a fresh session with the same guardrails but independent judgment. Drift, silent regressions, and architectural violations get caught because the reviewer has no sunk-cost bias.
+
+THE BEFORE AND AFTER
+
+• 80% → 100% — features ship completely, not "mostly done"
+• 50%+ token reduction — agents aren't wasting context on exploration and backtracking
+• ~0% rework after review — because review happens at every slice, not at the end
+• Architecture stays clean — because the agent was never allowed to improvise it
+
+TRY IT
+
+Plan Forge (https://github.com/srnichols/plan-forge) is free, open source, and MIT licensed. It works with Copilot, Claude, Cursor, Gemini, Windsurf, Codex, and any other AI tool. Run the setup wizard, pick your tech stack, and your next feature build won't end in "maybe I should start over."
+
+The 80/20 wall is real. But it's a planning problem, not a model problem. And planning problems have solutions.
+
+---
+
+HASHTAGS: #AIDevelopment #SoftwareEngineering #GitHubCopilot #DevTools #AIGuardrails

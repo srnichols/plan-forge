@@ -362,6 +362,19 @@ Add `vscode://chat-plugin/install?source=srnichols/plan-forge` and `vscode-insid
 - `AGENT-SETUP.md` Quick Start includes the URL handler as preferred install method
 - Fallback text for VS Code < 1.113 ("or run `Install Plugin From Source` manually")
 
+**Doc Sweep** (update after feature is live):
+| File | Type | What to Update |
+|------|------|----------------|
+| `docs/index.html` | Website / Marketing | Add install buttons to hero CTA section; add "One-Click Install" to feature list |
+| `docs/docs.html` | Website / Marketing | Add install button next to "VS Code Plugin" card |
+| `docs/capabilities.html` | Website / Reference | Mention URL handler install in setup instructions |
+| `AGENT-SETUP.md` | AI-agent entry point | Add URL handler as first install option in Quick Start |
+| `README.md` | Human docs | Add install link to Quick Start section |
+| `docs/QUICKSTART-WALKTHROUGH.md` | Human docs | Add one-click install as preferred method |
+| `docs/COPILOT-VSCODE-GUIDE.md` | Human docs | Mention URL handler in setup section |
+| `docs/llms.txt` | AI discovery | Add install URL to entry points |
+| `docs/.well-known/plan-forge.json` | AI discovery | Add `install_url` field to `entry_points` |
+
 #### A2. Model Deprecation Sweep
 
 **Source**: GitHub Copilot Changelog — GPT-5.1 deprecated (Apr 3), GPT-5.3-Codex LTS (Mar 18), GPT-5.4 GA (Mar 5), GPT-5.4 mini GA (Mar 17), Claude Sonnet 4 deprecation upcoming (Mar 31)  
@@ -376,6 +389,23 @@ Audit all files referencing model names and update:
 - README "Model Routing" section and any `copilot-instructions.md` template references
 
 **Files to check**: `orchestrator.mjs`, `tools.json`, `README.md`, `CUSTOMIZATION.md`, `docs/capabilities.html`, `docs/faq.html`, dashboard `app.js`, preset `copilot-instructions.md.template`
+
+**Doc Sweep** (update after feature is live):
+| File | Type | What to Update |
+|------|------|----------------|
+| `pforge-mcp/orchestrator.mjs` | Source code | Escalation chain defaults, pricing table constants |
+| `pforge-mcp/tools.json` | AI discovery | Model names in examples and defaults |
+| `README.md` | Human docs | Model Routing section — update default model names, escalation chain example |
+| `CUSTOMIZATION.md` | Human docs | `.forge.json` model routing examples, quorum model list |
+| `docs/capabilities.md` | Human/AI docs | Agent-Per-Slice Routing table defaults, escalation chain example |
+| `docs/capabilities.html` | Website / Reference | Same as capabilities.md (rendered version) |
+| `docs/faq.html` | Website / FAQ | Model routing FAQ answer, cost estimation |
+| `docs/index.html` | Website / Marketing | Any model names in feature descriptions |
+| `pforge-mcp/dashboard/app.js` | Dashboard UI | Cost estimation pricing table, model dropdown options |
+| `templates/copilot-instructions.md.template` | Template | MCP server comment mentioning model names |
+| `docs/.well-known/plan-forge.json` | AI discovery | `ai_models_supported` count if models added/removed |
+| `docs/llms.txt` | AI discovery | Model count if changed |
+| `CHANGELOG.md` | Release notes | Document which models deprecated/added |
 
 #### A3. Cloud Agent Integration Guide (`copilot-setup-steps.yml`)
 
@@ -401,6 +431,23 @@ Add to `docs/COPILOT-VSCODE-GUIDE.md` a new section: **"Using Plan Forge with Co
 - Docs section with step-by-step guide
 - Example in `docs/plans/examples/`
 
+**Doc Sweep** (update after feature is live):
+| File | Type | What to Update |
+|------|------|----------------|
+| `docs/COPILOT-VSCODE-GUIDE.md` | Human docs | New section: "Using Plan Forge with Copilot Cloud Agent" — step-by-step guide |
+| `README.md` | Human docs | Add cloud agent mention to Quick Start; add FAQ entry "Does Plan Forge work with Copilot cloud agent?" |
+| `AGENT-SETUP.md` | AI-agent entry point | Add cloud agent setup instructions alongside local VS Code setup |
+| `docs/index.html` | Website / Marketing | Add "Cloud Agent Ready" badge or feature bullet to hero section |
+| `docs/capabilities.html` | Website / Reference | Add cloud agent to Execution Modes table |
+| `docs/capabilities.md` | Human/AI docs | Add cloud agent execution mode |
+| `docs/faq.html` | Website / FAQ | New FAQ: "How does Plan Forge work with Copilot cloud agent?" |
+| `docs/docs.html` | Website / Marketing | Mention `copilot-setup-steps.yml` in setup resources |
+| `templates/copilot-instructions.md.template` | Template | Add cloud agent Quick Commands section |
+| `docs/llms.txt` | AI discovery | Add cloud agent as supported execution environment |
+| `docs/.well-known/plan-forge.json` | AI discovery | Add `cloud_agent` to `ai_agents_supported` or `execution_modes` |
+| `setup.ps1` / `setup.sh` | Source code | Implement `--cloud-agent` flag |
+| `CHANGELOG.md` | Release notes | Document new template and flag |
+
 #### A4. Copilot Memory Coexistence Documentation
 
 **Source**: Copilot Memory now on by default for Pro/Pro+ users (Mar 4) — repo-scoped, 28-day expiry, shared across coding agent/code review/CLI  
@@ -425,6 +472,16 @@ Key message: Copilot Memory handles *what* (conventions), Plan Forge tracks *how
 - Comparison table in `docs/COPILOT-VSCODE-GUIDE.md`
 - FAQ entry in `README.md`
 - No feature changes needed — documentation only
+
+**Doc Sweep** (update after feature is live):
+| File | Type | What to Update |
+|------|------|----------------|
+| `docs/COPILOT-VSCODE-GUIDE.md` | Human docs | New section: "Memory Layers" with comparison table (Copilot Memory vs Plan Forge vs OpenBrain) |
+| `README.md` | Human docs | New FAQ entry: "How does Plan Forge relate to Copilot Memory?" |
+| `docs/faq.html` | Website / FAQ | New FAQ: "What's the difference between Copilot Memory and Plan Forge?" |
+| `docs/capabilities.html` | Website / Reference | Add memory comparison to Features section |
+| `docs/capabilities.md` | Human/AI docs | Add Memory Layers section |
+| `CHANGELOG.md` | Release notes | Document memory coexistence guide |
 
 ### Phase B — Medium Effort, High Value (1–3 days each)
 
@@ -456,6 +513,25 @@ Also document the **two-layer model** in Plan Forge docs:
 - Docs explaining Layer 1 / Layer 2 model
 - Example output in `docs/plans/examples/`
 
+**Doc Sweep** (update after feature is live):
+| File | Type | What to Update |
+|------|------|----------------|
+| `README.md` | Human docs | Add `pforge org-rules export` to Quick Commands; update MCP tool count (18→19); add Layer 1/2 explanation |
+| `docs/CLI-GUIDE.md` | Human docs | Add `org-rules export` command with flags and examples |
+| `docs/COPILOT-VSCODE-GUIDE.md` | Human docs | New section: "Org-Level vs Repo-Level Instructions" with Layer 1/2 model |
+| `docs/capabilities.md` | Human/AI docs | Add `forge_org_rules` to MCP Tools table; update tool count; add CLI command |
+| `docs/capabilities.html` | Website / Reference | Add tool to MCP table; update tool count in header |
+| `docs/index.html` | Website / Marketing | Update MCP tool count; add Enterprise feature bullet |
+| `docs/faq.html` | Website / FAQ | New FAQ: "Can I set org-wide coding standards?" |
+| `docs/docs.html` | Website / Marketing | Update MCP tool count ("17 forge tools" → new count) |
+| `pforge-mcp/tools.json` | AI discovery | Add `forge_org_rules` tool definition |
+| `docs/.well-known/plan-forge.json` | AI discovery | Add tool to `mcp_tools` array; update `mcp_tools` count |
+| `docs/llms.txt` | AI discovery | Update MCP tool count |
+| `plugin.json` | VS Code plugin | Update description with new tool count |
+| `templates/copilot-instructions.md.template` | Template | Add `pforge org-rules export` to Quick Commands |
+| `pforge.ps1` / `pforge.sh` | Source code | Implement `org-rules` subcommand |
+| `CHANGELOG.md` | Release notes | Document new CLI command and MCP tool |
+
 #### B2. Nested Subagent Pipeline (Pipeline-as-Subagents)
 
 **Source**: VS Code 1.113 — Nested subagents: `chat.subagents.allowInvocationsFromSubagents` enables multi-step workflows where subagents can call other subagents  
@@ -479,6 +555,23 @@ Changes needed:
 - Setting auto-configured during setup
 - Manual handoff buttons preserved as fallback
 - End-to-end test with walkthrough project
+
+**Doc Sweep** (update after feature is live):
+| File | Type | What to Update |
+|------|------|----------------|
+| `README.md` | Human docs | Update pipeline description — mention single-session mode; update session count ("4 sessions" → "4 sessions (or 1 with nested subagents)") |
+| `docs/COPILOT-VSCODE-GUIDE.md` | Human docs | New section: "Single-Session Pipeline with Nested Subagents"; document setting |
+| `docs/capabilities.md` | Human/AI docs | Update Pipeline table — add "Sessions: 4 (manual) / 1 (nested subagents)" |
+| `docs/capabilities.html` | Website / Reference | Update pipeline section |
+| `docs/index.html` | Website / Marketing | Update session count references |
+| `docs/faq.html` | Website / FAQ | Update FAQ "How many sessions?" answer |
+| `templates/copilot-instructions.md.template` | Template | Update pipeline description; document nested subagent capability |
+| `templates/vscode-settings.json.template` | Template | Add `chat.subagents.allowInvocationsFromSubagents` setting |
+| `docs/.well-known/plan-forge.json` | AI discovery | Update `sessions` count or add `nested_subagent_mode` field |
+| `docs/llms.txt` | AI discovery | Update session description |
+| `presets/*/AGENTS.md` (9 files) | AI-agent docs | Update pipeline agent descriptions with subagent invocation info |
+| `docs/walkthroughs/greenfield-todo-api.md` | Human docs | Update walkthrough to demonstrate single-session flow |
+| `CHANGELOG.md` | Release notes | Document nested subagent pipeline mode |
 
 #### B3. `/troubleshoot` Integration Skill
 
@@ -510,6 +603,22 @@ Also add troubleshooting guidance to `docs/COPILOT-VSCODE-GUIDE.md`:
 - Docs section in VS Code guide
 - Works for all 9 presets
 
+**Doc Sweep** (update after feature is live):
+| File | Type | What to Update |
+|------|------|----------------|
+| `README.md` | Human docs | Update skill count (11→12); add `/forge-troubleshoot` to Skill Slash Commands table |
+| `docs/COPILOT-VSCODE-GUIDE.md` | Human docs | New section: "Troubleshooting Guardrail Issues"; document `/troubleshoot #session` integration |
+| `docs/capabilities.md` | Human/AI docs | Add `/forge-troubleshoot` to Skills table; update skill count |
+| `docs/capabilities.html` | Website / Reference | Add skill to table; update count in header |
+| `docs/index.html` | Website / Marketing | Update skill count |
+| `docs/faq.html` | Website / FAQ | New FAQ: "Why didn't Copilot follow my instruction files?" |
+| `templates/copilot-instructions.md.template` | Template | Add `/forge-troubleshoot` to Skill Slash Commands table |
+| `docs/.well-known/plan-forge.json` | AI discovery | Update `skills` count |
+| `docs/llms.txt` | AI discovery | Update skill count |
+| `plugin.json` | VS Code plugin | Update description with new skill count |
+| `presets/shared/skills/forge-troubleshoot/SKILL.md` | Skill definition | New file — skill entry point |
+| `CHANGELOG.md` | Release notes | Document new skill |
+
 #### B4. Validation Tools Complement Guide
 
 **Source**: Coding agent validation tools configurable (Mar 18) — admins toggle CodeQL, secret scanning, Copilot code review per repo  
@@ -532,6 +641,17 @@ Optionally, add a `.forge.json` key `cloudAgentValidation` that documents which 
 - Documentation section with comparison table
 - Optional `.forge.json` schema addition
 - `pforge smith` check (advisory, not blocking)
+
+**Doc Sweep** (update after feature is live):
+| File | Type | What to Update |
+|------|------|----------------|
+| `docs/COPILOT-VSCODE-GUIDE.md` | Human docs | New section: "Validation Layers" with comparison table (Plan Forge gates vs CodeQL vs secret scanning vs Copilot review vs CI) |
+| `README.md` | Human docs | Add FAQ: "How do Plan Forge gates relate to CodeQL and secret scanning?" |
+| `docs/faq.html` | Website / FAQ | New FAQ with validation layers comparison |
+| `docs/capabilities.md` | Human/AI docs | Add Validation Layers section after Execution Modes |
+| `docs/capabilities.html` | Website / Reference | Add validation layers comparison |
+| `CUSTOMIZATION.md` | Human docs | Document `cloudAgentValidation` `.forge.json` key |
+| `CHANGELOG.md` | Release notes | Document validation tools complement guide |
 
 ### Phase C — Strategic Investments (3–7 days each)
 
@@ -580,6 +700,22 @@ SDK-specific features:
 - Example agent that uses Plan Forge tools
 - OTEL trace continuity verified
 
+**Doc Sweep** (update after feature is live):
+| File | Type | What to Update |
+|------|------|----------------|
+| `README.md` | Human docs | New "SDK Integration" section; add npm install instructions; link to SDK README |
+| `docs/index.html` | Website / Marketing | Add "Copilot SDK Integration" feature card; add npm badge |
+| `docs/capabilities.md` | Human/AI docs | New "SDK Tools" section listing exposed functions |
+| `docs/capabilities.html` | Website / Reference | Add SDK integration section |
+| `docs/docs.html` | Website / Marketing | Add SDK package card to documentation grid |
+| `docs/faq.html` | Website / FAQ | New FAQ: "Can I embed Plan Forge in my own Copilot agent?" |
+| `docs/examples.html` | Website / Examples | Add SDK usage example |
+| `AGENT-SETUP.md` | AI-agent entry point | Add SDK as alternative integration path |
+| `docs/.well-known/plan-forge.json` | AI discovery | Add `sdk` section with package name, npm URL, exposed tools |
+| `docs/llms.txt` | AI discovery | Add SDK entry point |
+| `CHANGELOG.md` | Release notes | Document SDK package release |
+| `ROADMAP.md` | Roadmap | Mark C1 as shipped |
+
 #### C2. Cloud Agent Plan Export (`forge_export_plan`)
 
 **Source**: Copilot cloud agent now generates implementation plans before coding (Apr 1)  
@@ -615,6 +751,25 @@ Workflow:
 - Output passes `pforge validate`
 - Example in docs
 
+**Doc Sweep** (update after feature is live):
+| File | Type | What to Update |
+|------|------|----------------|
+| `README.md` | Human docs | Update MCP tool count; add `pforge export-plan` to Quick Commands; add FAQ |
+| `docs/CLI-GUIDE.md` | Human docs | Add `export-plan` command with usage examples |
+| `docs/COPILOT-VSCODE-GUIDE.md` | Human docs | Add "Hardening Cloud Agent Plans" workflow section |
+| `docs/capabilities.md` | Human/AI docs | Add `forge_export_plan` to MCP Tools table; update count; add CLI command |
+| `docs/capabilities.html` | Website / Reference | Add tool to table; update count |
+| `docs/index.html` | Website / Marketing | Update MCP tool count; mention cloud agent plan hardening |
+| `docs/docs.html` | Website / Marketing | Update MCP tool count |
+| `docs/faq.html` | Website / FAQ | New FAQ: "Can I harden a Copilot cloud agent plan?" |
+| `pforge-mcp/tools.json` | AI discovery | Add `forge_export_plan` tool definition |
+| `docs/.well-known/plan-forge.json` | AI discovery | Add tool; update count |
+| `docs/llms.txt` | AI discovery | Update tool count |
+| `plugin.json` | VS Code plugin | Update tool count in description |
+| `templates/copilot-instructions.md.template` | Template | Add `pforge export-plan` to Quick Commands |
+| `pforge.ps1` / `pforge.sh` | Source code | Implement `export-plan` subcommand |
+| `CHANGELOG.md` | Release notes | Document new tool and command |
+
 #### C3. `forge_sync_memories` — Bridge to Copilot Memory
 
 **Source**: Copilot Memory (Mar 4) — auto-discovers repo conventions, 28-day TTL, repo-scoped  
@@ -644,6 +799,21 @@ If Copilot Memory does NOT expose a write API (likely in current preview):
 - Runs as part of `pforge smith` or on-demand
 - Documented in Copilot Memory coexistence guide (A4)
 
+**Doc Sweep** (update after feature is live):
+| File | Type | What to Update |
+|------|------|----------------|
+| `README.md` | Human docs | Update MCP tool count; add FAQ: "Can Plan Forge sync decisions to Copilot Memory?" |
+| `docs/COPILOT-VSCODE-GUIDE.md` | Human docs | Expand Memory Layers section (from A4) with sync workflow |
+| `docs/capabilities.md` | Human/AI docs | Add `forge_sync_memories` to MCP Tools table; update count |
+| `docs/capabilities.html` | Website / Reference | Add tool to table; update count |
+| `docs/index.html` | Website / Marketing | Update tool count; add memory sync feature mention |
+| `docs/docs.html` | Website / Marketing | Update tool count |
+| `pforge-mcp/tools.json` | AI discovery | Add `forge_sync_memories` tool definition |
+| `docs/.well-known/plan-forge.json` | AI discovery | Add tool; update count |
+| `docs/llms.txt` | AI discovery | Update tool count |
+| `plugin.json` | VS Code plugin | Update tool count in description |
+| `CHANGELOG.md` | Release notes | Document memory sync feature |
+
 #### C4. Fine-Grained Tool Approval Integration
 
 **Source**: VS Code 1.114 proposed API — tools can scope approval to specific argument combinations. E.g., approve `read_file("config.json")` without blanket-approving all `read_file` calls.  
@@ -668,6 +838,18 @@ If/when Plan Forge ships as a VS Code extension:
 - VS Code extension prototype with approval scopes (if API is stable)
 - Fallback: document manual tool approval patterns for current users
 
+**Doc Sweep** (update after feature is live):
+| File | Type | What to Update |
+|------|------|----------------|
+| `README.md` | Human docs | Add tool risk classification table; document VS Code extension install |
+| `docs/COPILOT-VSCODE-GUIDE.md` | Human docs | New section: "Tool Approval Levels" — which tools auto-approve vs require confirmation |
+| `docs/capabilities.md` | Human/AI docs | Add risk level column to MCP Tools table |
+| `docs/capabilities.html` | Website / Reference | Add risk level indicators to tool table |
+| `docs/faq.html` | Website / FAQ | New FAQ: "Which Plan Forge tools are safe to auto-approve?" |
+| `pforge-mcp/tools.json` | AI discovery | Add `riskLevel` field to each tool definition |
+| `docs/.well-known/plan-forge.json` | AI discovery | Add risk classification metadata |
+| `CHANGELOG.md` | Release notes | Document tool approval integration |
+
 ### Phase D — Watch List (No Build Yet — Monitor & Evaluate)
 
 These items depend on external platform changes. Track them; build when APIs stabilize or opportunities mature.
@@ -681,6 +863,17 @@ These items depend on external platform changes. Track them; build when APIs sta
 | D5 | **Chat Customizations editor** | VS Code 1.113 | Unified UI for instructions, prompts, agents, skills | `pforge smith` could detect and suggest the editor for reviewing installed files — low effort, add when convenient |
 | D6 | **Copilot code review agentic mode** | Copilot changelog Mar 5 | Code review is now agentic (multi-step, tool-using) | Plan Forge's `/code-review` skill could delegate to native agentic review and layer Plan Forge-specific checks on top |
 | D7 | **Plan mode in Copilot metrics** | Copilot changelog Mar 2 | GitHub exposes plan-mode usage metrics | Track whether Plan Forge users' plan-mode metrics improve vs. non-Plan Forge users — build advocacy materials |
+
+**Doc Sweep for Watch List items** (update when each item is triggered):
+| Item | Files to Update |
+|------|-----------------|
+| D1 Signed commits | `docs/capabilities.md` (Shipper agent section), `docs/capabilities.html`, `presets/*/AGENTS.md` (shipper agent), `CHANGELOG.md` |
+| D2 Jira integration | `docs/capabilities.md` (new integration section), `docs/capabilities.html`, `docs/index.html` (integrations list), `docs/faq.html`, `README.md`, `docs/.well-known/plan-forge.json`, `CHANGELOG.md` |
+| D3 Merge conflict | `docs/capabilities.md` (parallel execution section), `docs/capabilities.html`, `README.md` (execution modes), `CHANGELOG.md` |
+| D4 Session tracing | `docs/capabilities.md` (traces section), `docs/capabilities.html`, `docs/dashboard.html` (Traces tab), `CHANGELOG.md` |
+| D5 Customizations editor | `docs/COPILOT-VSCODE-GUIDE.md`, `docs/faq.html`, `CHANGELOG.md` |
+| D6 Agentic code review | `docs/capabilities.md` (skills table), `docs/capabilities.html`, `templates/copilot-instructions.md.template` (update `/code-review` skill description), `CHANGELOG.md` |
+| D7 Plan mode metrics | `docs/index.html` (stats/social proof section), `README.md` (metrics), marketing materials only |
 
 ---
 

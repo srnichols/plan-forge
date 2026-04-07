@@ -68,6 +68,7 @@ class OrchestratorEventBus extends EventEmitter {
       "slice-failed", "slice-escalated", "run-completed", "run-aborted",
       "quorum-dispatch-started", "quorum-leg-completed", "quorum-review-completed",
       "skill-started", "skill-step-started", "skill-step-completed", "skill-completed",
+      "slice-model-routed",
     ];
     for (const evt of events) {
       this.on(evt, (data) => this.handler.handle({ type: evt, data, timestamp: new Date().toISOString() }));
@@ -1611,9 +1612,13 @@ function triggerCiWorkflow(ciConfig, eventBus) {
  * Resolve which model to use for a given slice based on routing config.
  * Priority: CLI override > slice-type routing > default routing > null (auto)
  */
-function resolveModel(cliModel, modelRouting, _slice) {
+function resolveModel(cliModel, modelRouting, slice) {
   if (cliModel && cliModel !== "auto") return cliModel;
-  // Future: match slice type (execute/review/test) to routing keys
+  // Match slice type to routing keys (e.g. modelRouting.test, modelRouting.review, etc.)
+  if (slice) {
+    const sliceType = inferSliceType(slice);
+    if (modelRouting[sliceType] && modelRouting[sliceType] !== "auto") return modelRouting[sliceType];
+  }
   if (modelRouting.default && modelRouting.default !== "auto") return modelRouting.default;
   return null; // Let CLI worker pick default
 }
@@ -1790,6 +1795,62 @@ function aggregateModelStats(records) {
 }
 
 /**
+ * Infer the slice type from its title and tasks for model routing purposes.
+ * Returns one of: "test" | "review" | "migration" | "execute"
+ * @param {object} slice - Parsed slice object
+ * @returns {string}
+ */
+export function inferSliceType(slice) {
+  const text = [slice.title || "", ...(slice.tasks || [])].join(" ").toLowerCase();
+  if (/\b(test|spec|unit test|integration test|e2e|coverage)\b/.test(text)) return "test";
+  if (/\b(review|audit|lint|analyze|analyse|check|inspect)\b/.test(text)) return "review";
+  if (/\b(migration|migrate|schema|seed|alter table|create table|drop table|dbcontext|ef core)\b/.test(text)) return "migration";
+  return "execute";
+}
+
+/**
+ * Recommend the best model for a given slice type based on historical performance.
+ *
+ * Selection criteria:
+ *   1. Minimum 3 slices of data (MIN_SAMPLE)
+ *   2. Success rate > 80%
+ *   3. Cheapest qualifying model wins
+ *
+ * Records are filtered by sliceType when type info is present in history.
+ * Falls back to all records when no type-specific data is available.
+ *
+ * @param {string} cwd - Project working directory
+ * @param {string|null} sliceType - Slice type from inferSliceType(), or null for global stats
+ * @returns {{ model: string, success_rate: number, avg_cost_usd: number, total_slices: number } | null}
+ */
+export function recommendModel(cwd, sliceType = null) {
+  try {
+    const records = loadModelPerformance(cwd);
+    if (records.length === 0) return null;
+
+    // Prefer type-specific records; fall back to all records
+    const typed = sliceType ? records.filter((r) => r.sliceType === sliceType) : records;
+    const relevant = typed.length >= 3 ? typed : records;
+
+    const stats = aggregateModelStats(relevant);
+    const MIN_SAMPLE = 3;
+    const qualified = Object.entries(stats)
+      .filter(([, s]) => s.total_slices >= MIN_SAMPLE && s.success_rate > 0.8)
+      .map(([m, s]) => ({
+        model: m,
+        success_rate: s.success_rate,
+        avg_cost_usd: s.avg_cost_usd,
+        total_slices: s.total_slices,
+      }))
+      .sort((a, b) => a.avg_cost_usd - b.avg_cost_usd);
+
+    return qualified.length > 0 ? qualified[0] : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Execute a single slice — spawn worker + run validation gates.
  * Supports automatic retry: if gate fails, re-invokes worker with error context.
  */
@@ -1801,6 +1862,27 @@ async function executeSlice(slice, options) {
     eventBus = null } = options;
   const startTime = Date.now();
   const resolvedModel = resolveModel(model, modelRouting, slice);
+
+  // ─── Agent-Per-Slice Routing (Slice 1) ───────────────────────────────
+  // When no explicit model is set, recommend one from historical performance data.
+  let finalModel = resolvedModel;
+  if (!finalModel && cwd) {
+    const sliceType = inferSliceType(slice);
+    const rec = recommendModel(cwd, sliceType);
+    if (rec) {
+      finalModel = rec.model;
+      if (eventBus) {
+        eventBus.emit("slice-model-routed", {
+          sliceId: slice.number,
+          title: slice.title,
+          model: rec.model,
+          sliceType,
+          success_rate: rec.success_rate,
+          based_on_slices: rec.total_slices,
+        });
+      }
+    }
+  }
 
   // ─── Quorum Mode (v2.5) ───
   let quorumResult = null;
@@ -1853,7 +1935,7 @@ async function executeSlice(slice, options) {
   let workerResult = null;
   let gateResult = { success: true, output: "No validation gate defined" };
   let lastError = null;
-  let currentModel = resolvedModel;
+  let currentModel = finalModel;
 
   while (attempt <= maxRetries) {
     // Auto-escalate model on retries
@@ -1991,7 +2073,7 @@ async function executeSlice(slice, options) {
     worker: workerResult.worker,
     model: workerResult.model,
     attempts: attempt + 1,
-    ...(currentModel !== resolvedModel && { escalatedModel: currentModel || "auto" }),
+    ...(currentModel !== finalModel && { escalatedModel: currentModel || "auto" }),
     ...(useQuorum && {
       quorum: {
         score: complexityScore,
@@ -2019,6 +2101,7 @@ async function executeSlice(slice, options) {
       plan: planName,
       sliceId: slice.number,
       sliceTitle: slice.title,
+      sliceType: inferSliceType(slice),
       model: sliceResult.model || "unknown",
       status: sliceResult.status,
       attempts: sliceResult.attempts,
@@ -2911,19 +2994,31 @@ function buildEstimate(plan, model, cwd, quorumConfig = null) {
       totalCostWithQuorumUSD: Math.round((estimatedCost + quorumOverhead.totalOverheadUSD) * 100) / 100,
     }),
     confidence: avgTokensPerSlice ? "historical" : "heuristic",
-    slices: plan.slices.map((s) => ({
-      number: s.number,
-      title: s.title,
-      depends: s.depends,
-      parallel: s.parallel,
-      scope: s.scope,
-      ...(quorumConfig && quorumConfig.enabled && {
-        complexityScore: scoreSliceComplexity(s, cwd).score,
-        quorumEligible: quorumConfig.auto
-          ? scoreSliceComplexity(s, cwd).score >= quorumConfig.threshold
-          : true,
-      }),
-    })),
+    slices: plan.slices.map((s) => {
+      const sliceType = inferSliceType(s);
+      const rec = cwd ? recommendModel(cwd, sliceType) : null;
+      return {
+        number: s.number,
+        title: s.title,
+        depends: s.depends,
+        parallel: s.parallel,
+        scope: s.scope,
+        sliceType,
+        ...(rec && {
+          recommendedModel: {
+            model: rec.model,
+            success_rate: rec.success_rate,
+            based_on_slices: rec.total_slices,
+          },
+        }),
+        ...(quorumConfig && quorumConfig.enabled && {
+          complexityScore: scoreSliceComplexity(s, cwd).score,
+          quorumEligible: quorumConfig.auto
+            ? scoreSliceComplexity(s, cwd).score >= quorumConfig.threshold
+            : true,
+        }),
+      };
+    }),
   };
 }
 
@@ -3432,6 +3527,41 @@ async function selfTest() {
     assert("Default ref is main (when no config)", ciConfig.workflow === null || typeof ciConfig.workflow === "string");
   } catch (err) {
     assert(`CI config: ${err.message}`, false);
+  }
+
+  // Test 19: Agent-Per-Slice Routing (Slice 1)
+  console.log("\n─── Agent-Per-Slice Routing ───");
+  try {
+    // inferSliceType detection
+    const testSlice = { title: "Write unit tests for auth module", tasks: ["Add spec coverage"] };
+    assert("Infers test type", inferSliceType(testSlice) === "test");
+
+    const reviewSlice = { title: "Code review and audit", tasks: ["Review PR changes"] };
+    assert("Infers review type", inferSliceType(reviewSlice) === "review");
+
+    const migrationSlice = { title: "Database migration", tasks: ["Add schema migration for users table"] };
+    assert("Infers migration type", inferSliceType(migrationSlice) === "migration");
+
+    const executeSlice2 = { title: "Implement auth service", tasks: ["Add login endpoint"] };
+    assert("Defaults to execute type", inferSliceType(executeSlice2) === "execute");
+
+    // recommendModel returns null when no performance data
+    const noRec = recommendModel(process.cwd(), "execute");
+    assert("recommendModel returns null or object", noRec === null || typeof noRec === "object");
+    if (noRec !== null) {
+      assert("Recommendation has model", typeof noRec.model === "string");
+      assert("Recommendation has success_rate", typeof noRec.success_rate === "number");
+      assert("Recommendation has total_slices", typeof noRec.total_slices === "number");
+    }
+
+    // slice-model-routed event is registered in the event bus
+    const events2 = [];
+    const handler2 = { handle: (e) => events2.push(e) };
+    const bus2 = new OrchestratorEventBus(handler2);
+    bus2.emit("slice-model-routed", { sliceId: "1", model: "test-model" });
+    assert("slice-model-routed event fires", events2.some((e) => e.type === "slice-model-routed"));
+  } catch (err) {
+    assert(`Agent-per-slice routing: ${err.message}`, false);
   }
 
   // Summary

@@ -5,6 +5,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.16.0] — 2026-04-07
+
+### Added — Platform Completion & Setup Hardening (Phase 23)
+- **Nested Subagent Pipeline (B2)** — all 5 pipeline agent templates (`specifier`, `plan-hardener`, `executor`, `reviewer-gate`, `shipper`) updated with `agents` tool in YAML frontmatter, `## Nested Subagent Invocation` section with precise handoff instructions, and termination guards to prevent recursion; Reviewer Gate LOCKOUT loop capped at 2 fix cycles before human escalation; Shipper marked as terminal node; `"chat.subagents.allowInvocationsFromSubagents": true` added to `templates/vscode-settings.json.template`; "Single-Session Pipeline with Nested Subagents" section added to `docs/COPILOT-VSCODE-GUIDE.md` explaining the 4→1 session collapse, VS Code setting, termination guard table, and manual handoff fallback
+- **Status-reporting instruction file** — new `.github/instructions/status-reporting.instructions.md` with 7 standard output templates (progress update, slice complete, blocker report, failure/recovery, run summary, handoff summary, slice status table); auto-loads via `applyTo` on plan, MCP, and forge files; wired into `setup.ps1` / `setup.sh` Step 2 and `copilot-instructions.md.template`
+
+---
+
 ## [2.15.0] — 2026-04-07
 
 ### Added — Copilot Platform Integration (Phase 22)

@@ -6,6 +6,10 @@
     // Enable Copilot Chat agent mode (required for execution pipeline)
     "github.copilot.chat.agent.enabled": true,
 
+    // Allow pipeline agents to invoke each other as nested subagents (single-session pipeline).
+    // Remove or set to false to require manual handoff button clicks between pipeline agents.
+    "chat.subagents.allowInvocationsFromSubagents": true,
+
     // Point Copilot to your instruction files for inline suggestions
     "github.copilot.chat.codeGeneration.instructions": [
         { "file": ".github/instructions/architecture-principles.instructions.md" },

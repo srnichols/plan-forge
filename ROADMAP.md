@@ -7,7 +7,7 @@
 
 ## Current Release
 
-**v2.15.0** (2026-04-07) — Copilot Platform Integration: one-click plugin install, model deprecation sweep, cloud agent setup template, Copilot Memory coexistence docs, `forge_org_rules` MCP tool, `pforge org-rules export` CLI command, `/forge-troubleshoot` skill.
+**v2.16.0** (2026-04-07) — Platform Completion & Setup Hardening: nested subagent pipeline with termination guards across all 5 pipeline agent templates, `chat.subagents.allowInvocationsFromSubagents` VS Code setting, status-reporting instruction file with 7 standard output templates.
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 
@@ -310,7 +310,7 @@ Shipped. Dispatches high-complexity slices to multiple AI models in parallel dry
 - **Dry-run mode** — workers produce detailed implementation plans (files, code skeletons, edge cases, test strategy) without executing
 - **Quorum reviewer** — synthesis agent merges 3 dry-run responses into a unified execution plan, picking best approach per file/component
 - **Complexity scoring** — `scoreSliceComplexity()` scores slices 1-10 based on file count, cross-module deps, security sensitivity, historical failure rate
-- **`quorum-mode=auto`** — slices scoring ≥7 automatically use quorum; others run normally (configurable threshold)
+- **`quorum-mode=auto`** — slices scoring ≥6 automatically use quorum; others run normally (configurable threshold)
 - **Full guardrail compliance** — dry-run workers load all instructions.md, project profile, and principles (same as primary workers)
 - **Telemetry integration** — quorum legs modeled as child spans in trace.json; cost tracked per-leg
 - **Dashboard indicators** — quorum status visible on Progress tab; dry-run responses browsable in Replay tab

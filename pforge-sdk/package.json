@@ -1,0 +1,22 @@
+{
+  "name": "pforge-sdk",
+  "version": "0.1.0",
+  "description": "Plan Forge SDK — programmatic access to Plan Forge MCP tools and orchestration primitives",
+  "type": "module",
+  "main": "src/index.mjs",
+  "exports": {
+    ".": "./src/index.mjs",
+    "./tools": "./src/tools.mjs",
+    "./client": "./src/client.mjs"
+  },
+  "scripts": {
+    "test": "node --test src/*.test.mjs 2>/dev/null || echo 'No tests yet'"
+  },
+  "keywords": ["plan-forge", "mcp", "sdk", "ai-agent"],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

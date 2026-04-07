@@ -420,7 +420,7 @@ const TOOLS = [
         resumeFrom: { type: "number", description: "Slice number to resume from (skips completed slices)" },
         dryRun: { type: "boolean", description: "If true, parse and validate plan without executing" },
         quorum: { type: "string", enum: ["false", "true", "auto"], description: "Quorum mode: 'false' (off), 'true' (all slices), 'auto' (threshold-based). Default: false" },
-        quorumThreshold: { type: "number", description: "Override complexity threshold for auto quorum (1-10). Default: 7" },
+        quorumThreshold: { type: "number", description: "Override complexity threshold for auto quorum (1-10). Default: 6" },
         path: { type: "string", description: "Project directory (default: current)" },
       },
       required: ["plan"],

@@ -1544,8 +1544,9 @@ function loadMaxRetries(cwd) {
 
 /**
  * Load escalation chain from .forge.json.
- * Schema: { "escalationChain": ["auto", "claude-sonnet-4.6", "claude-opus-4.6"] }
+ * Schema: { "escalationChain": ["auto", "claude-opus-4.6", "gpt-5.3-codex"] }
  * On each retry, the orchestrator escalates to the next model in the chain.
+ * First escalation jumps to top-tier reasoning (Opus), then to Codex for bug-fixing.
  * @returns {string[]}
  */
 function loadEscalationChain(cwd) {
@@ -1558,7 +1559,7 @@ function loadEscalationChain(cwd) {
       }
     }
   } catch { /* defaults */ }
-  return ["auto", "claude-sonnet-4.6", "claude-opus-4.6"];
+  return ["auto", "claude-opus-4.6", "gpt-5.3-codex"];
 }
 
 /**
@@ -1893,7 +1894,7 @@ async function executeSlice(slice, options) {
   const { cwd, model, modelRouting = {}, mode, runDir, maxRetries = 1,
     memoryEnabled = false, projectName = "", planName = "",
     quorumConfig = null,
-    escalationChain = ["auto", "claude-sonnet-4.6", "claude-opus-4.6"],
+    escalationChain = ["auto", "claude-opus-4.6", "gpt-5.3-codex"],
     eventBus = null } = options;
   const startTime = Date.now();
   const resolvedModel = resolveModel(model, modelRouting, slice);
@@ -2212,7 +2213,7 @@ export function loadQuorumConfig(cwd) {
   const defaults = {
     enabled: false,
     auto: true,
-    threshold: 7,
+    threshold: 6,
     models: ["claude-opus-4.6", "gpt-5.3-codex", "claude-sonnet-4.6"],
     reviewerModel: "claude-opus-4.6",
     dryRunTimeout: 300_000, // 5 min per dry-run leg

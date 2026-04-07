@@ -610,7 +610,7 @@ curl -sL https://raw.githubusercontent.com/srnichols/plan-forge/master/pforge.sh
 **What it updates** (framework files — safe to replace):
 - Pipeline prompts (`step0-step6*.prompt.md`)
 - Pipeline agents (specifier, plan-hardener, executor, reviewer-gate, shipper)
-- Shared instruction files (architecture-principles, git-workflow, ai-plan-hardening-runbook)
+- Shared instruction files (architecture-principles, git-workflow, ai-plan-hardening-runbook, status-reporting)
 - Runbook and Instructions docs
 - Lifecycle hooks
 - **New** preset-specific files (instructions, agents, prompts, skills) that don’t yet exist in your project

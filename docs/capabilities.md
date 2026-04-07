@@ -229,7 +229,7 @@ Auto-loading instruction files in `.github/instructions/`:
 
 **Cross-stack (8)**: accessibility-reviewer, api-contract-reviewer, cicd-reviewer, compliance-reviewer, dependency-reviewer, error-handling-reviewer, multi-tenancy-reviewer, observability-reviewer
 
-**Pipeline (5)**: specifier → plan-hardener → executor → reviewer-gate → shipper
+**Pipeline (6)**: specifier → preflight → plan-hardener → executor → reviewer-gate → shipper
 
 **AI Tool Adapters**: `pforge init -Agent <tool>` generates adapter files for each platform:
 

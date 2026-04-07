@@ -256,7 +256,7 @@ This complements the preset agents — use `/create-agent` for project-specific 
 
 #### Pipeline Agents with Handoffs
 
-The template includes **5 pipeline agents** that automate the full Specify → Pre-flight → Plan → Execute → Review → Ship workflow using `handoffs:` — a frontmatter property that wires agent-to-agent transitions with clickable buttons:
+The template includes **6 pipeline agents** that automate the full Specify → Pre-flight → Plan → Execute → Review → Ship workflow using `handoffs:` — a frontmatter property that wires agent-to-agent transitions with clickable buttons:
 
 | Agent | Role | Hands Off To |
 |-------|------|-------------|
@@ -735,7 +735,7 @@ When the extension is installed, **every pipeline touchpoint** participates — 
 | Component | Search Before | Capture After |
 |-----------|--------------|---------------|
 | **8 pipeline prompts** (step0–step6 + profile) | ✅ Prior decisions, patterns, lessons | ✅ Specs, plans, reviews, postmortems |
-| **5 pipeline agents** (specifier → shipper) | ✅ Phase context, TBD resolution | ✅ Decisions, outcomes, verdicts |
+| **6 pipeline agents** (specifier → shipper) | ✅ Phase context, TBD resolution | ✅ Decisions, outcomes, verdicts |
 | **6 stack agents × 6 presets** (36 files) | ✅ Prior review findings, accepted risks | ✅ Review findings for trend tracking |
 | **8 shared agents** (cross-stack reviewers) | ✅ Prior cross-cutting findings | ✅ API, accessibility, security, compliance, error handling findings |
 | **5 azure-iac agents** (IaC reviewers) | ✅ Prior Bicep/Terraform/sweep findings | ✅ IaC review and sweep results |

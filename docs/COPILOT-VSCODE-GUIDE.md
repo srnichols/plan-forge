@@ -174,7 +174,7 @@ Monitor at `localhost:3100/dashboard` for live slice progress, cost tracking, an
 
 > **VS Code requirement**: `chat.subagents.allowInvocationsFromSubagents: true` (see [Prerequisites](#prerequisites))
 
-The 5 pipeline agents can run end-to-end in a **single session** by invoking each other as nested subagents. This collapses what would otherwise be 4 separate sessions into one continuous run — no manual handoff clicks required.
+The 6 pipeline agents can run end-to-end in a **single session** by invoking each other as nested subagents. This collapses what would otherwise be 4 separate sessions into one continuous run — no manual handoff clicks required.
 
 ### How It Works
 

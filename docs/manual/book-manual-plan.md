@@ -351,7 +351,7 @@ This isn't a reference dump. It's a **learning journey** — a reader picks it u
 | Asset | Description | Size | Notes |
 |-------|------------|------|-------|
 | Auto-loading diagram | File opens → matching instruction file activates | 800×300 | Mermaid SVG |
-| Agent taxonomy | Tree: Stack-specific (6) → Cross-stack (8) → Pipeline (5) | 800×400 | Mermaid SVG |
+| Agent taxonomy | Tree: Stack-specific (6) → Cross-stack (8) → Pipeline (6) | 800×400 | Mermaid SVG |
 
 **Screenshots**:
 | Screenshot | Description | Size |

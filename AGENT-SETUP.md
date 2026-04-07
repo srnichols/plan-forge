@@ -288,7 +288,7 @@ The validation script checks for these files. All must be present and non-empty:
 | Directory / Files | Purpose |
 |-------------------|---------|
 | `.github/prompts/*.prompt.md` (15 files) | Scaffolding recipes for entities, services, tests, workers, middleware, DTOs, config, Dockerfiles, project principles |
-| `.github/agents/*.agent.md` (19 files) | Specialized reviewer/executor roles (6 stack-specific + 8 cross-stack + 5 pipeline agents — security, architecture, API contracts, dependency, compliance, multi-tenancy, etc.) |
+| `.github/agents/*.agent.md` (19 files) | Specialized reviewer/executor roles (6 stack-specific + 8 cross-stack + 6 pipeline agents — security, architecture, API contracts, dependency, compliance, multi-tenancy, etc.) |
 | `.github/skills/*/SKILL.md` (10 skills) | Multi-step procedures for migrations, deploys, test sweeps, code review, dependency audit, release notes, API docs, onboarding |
 
 ### Optional but Recommended
@@ -367,7 +367,7 @@ See `docs/CLI-GUIDE.md` for full command reference and AI Agent integration guid
 
 ### Option C: Using Pipeline Agents (Recommended for Autonomous Execution)
 
-Instead of copy-pasting prompts, use the **5 pipeline agents** that chain with handoff buttons:
+Instead of copy-pasting prompts, use the **6 pipeline agents** that chain with handoff buttons:
 
 | Agent | File | Step | Hands Off To |
 |-------|------|------|-------------|

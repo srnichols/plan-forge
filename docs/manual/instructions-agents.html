@@ -118,12 +118,13 @@ applyTo: "**/auth/**,**/security/**,**/middleware/**"
         </tbody>
       </table>
 
-      <h3>Pipeline Agents (5)</h3>
+      <h3>Pipeline Agents (6)</h3>
       <p>Drive the 7-step pipeline with handoff buttons between stages:</p>
       <table>
         <thead><tr><th>Agent</th><th>Pipeline Step</th><th>What It Does</th></tr></thead>
         <tbody>
           <tr><td>specifier</td><td>Step 0</td><td>Interviews you, produces specification</td></tr>
+          <tr><td>preflight</td><td>Step 1</td><td>Verifies prerequisites, checks environment readiness</td></tr>
           <tr><td>plan-hardener</td><td>Step 2</td><td>Converts spec into hardened execution contract</td></tr>
           <tr><td>executor</td><td>Step 3</td><td>Executes slices, validates gates</td></tr>
           <tr><td>reviewer-gate</td><td>Step 5</td><td>Independent audit for drift and compliance</td></tr>

@@ -137,7 +137,7 @@ Both agents and skills extend Copilot, but they serve different purposes:
 **Installed counts** (per preset after setup):
 - **Stack-specific agents**: 8 for app presets (dotnet/typescript/python/java/go/swift/rust/php) · **5** for `azure-iac` (bicep-reviewer, terraform-reviewer, security-reviewer, deploy-helper, azure-sweeper)
 - **8 shared agents** — API contracts, accessibility, multi-tenancy, CI/CD, observability, dependency, compliance, error handling
-- **5 pipeline agents** — specifier, plan-hardener, executor, reviewer-gate, shipper
+- **6 pipeline agents** — specifier, preflight, plan-hardener, executor, reviewer-gate, shipper
 - **Skills**: 12 for app presets (8 stack-specific + 4 shared: health-check, forge-execute, forge-troubleshoot, security-audit) · **3** for `azure-iac` (infra-deploy, infra-test, azure-sweep)
 
 > **You don't need to understand all of this upfront.** Run the setup wizard, follow the numbered step prompts, and the framework guides you through.
@@ -475,7 +475,7 @@ In addition, the setup wizard installs **8 cross-stack agents** for SaaS-critica
 
 ### Pipeline Agents (Shared)
 
-In addition to the preset reviewer agents, the template includes **5 pipeline agents** that automate the full Specify → Pre-flight → Plan → Execute → Review → Ship workflow with handoff buttons:
+In addition to the preset reviewer agents, the template includes **6 pipeline agents** that automate the full Specify → Pre-flight → Plan → Execute → Review → Ship workflow with handoff buttons:
 
 | Agent | Purpose | Hands Off To |
 |-------|---------|--------------|
@@ -685,7 +685,7 @@ Running `setup.ps1` (PowerShell) or `setup.sh` (Bash) with a preset:
 
 1. **Copies preset instruction files** from `presets/{stack}/` to your project root (16 files for app presets — 17 for TypeScript which adds `frontend.instructions.md`; 12 for `azure-iac`)
 2. **Copies prompt templates** for scaffolding new entities, services, tests, and Project Principles (15 for app presets, 6 for `azure-iac`)
-3. **Copies agent definitions** for architecture review, security audit, testing (6 stack-specific + 8 shared + 5 pipeline agents; `azure-iac` gets 5 stack-specific including the enterprise-grade `azure-sweeper`)
+3. **Copies agent definitions** for architecture review, security audit, testing (6 stack-specific + 8 shared + 6 pipeline agents; `azure-iac` gets 5 stack-specific including the enterprise-grade `azure-sweeper`)
 4. **Copies skill workflows** — 12 for app presets (8 stack-specific + 4 shared: health-check, forge-execute, forge-troubleshoot, security-audit); `azure-iac` gets 3 (infra-deploy, infra-test, azure-sweep)
 5. **Generates `AGENTS.md`** with patterns for your tech stack
 6. **Generates `.github/copilot-instructions.md`** with stack-specific conventions

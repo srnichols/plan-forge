@@ -51,7 +51,7 @@ flowchart LR
 |----------|----------|---------|
 | **Pipeline Prompts** (8) | `.github/prompts/step*.prompt.md` | Step-by-step pipeline workflow (Step 0–6 + Project Profile) |
 | **Scaffolding Prompts** (14) | `.github/prompts/*.prompt.md` | Recipes for entities, services, tests, workers |
-| **Pipeline Agents** (5) | `.github/agents/{specifier,plan-hardener,executor,reviewer-gate,shipper}.agent.md` | Click-through pipeline: Specify → Plan → Execute → Review → Ship |
+| **Pipeline Agents** (6) | `.github/agents/{specifier,preflight,plan-hardener,executor,reviewer-gate,shipper}.agent.md` | Click-through pipeline: Specify → Pre-flight → Plan → Execute → Review → Ship |
 | **Reviewer Agents** (13) | `.github/agents/*.agent.md` | Specialized reviewers (security, architecture, API contracts, multi-tenancy, etc.) |
 | **Skills** (8) | `.github/skills/*/SKILL.md` | Multi-step procedures (migrations, deploys, test sweeps, code review, etc.) |
 

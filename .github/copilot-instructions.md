@@ -174,7 +174,7 @@ Agents are specialized reviewer personas invoked via the agent picker dropdown o
 
 - **Stack-specific** (6): architecture, database, deploy, performance, security, test-runner
 - **Cross-stack** (7): API contracts, accessibility, multi-tenancy, CI/CD, observability, dependency, compliance
-- **Pipeline** (5): specifier → plan-hardener → executor → reviewer-gate → shipper (with handoff buttons)
+- **Pipeline** (6): specifier → preflight → plan-hardener → executor → reviewer-gate → shipper (with handoff buttons)
 
 ### Lifecycle Hooks (`.github/hooks/`)
 

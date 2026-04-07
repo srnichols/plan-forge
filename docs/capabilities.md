@@ -65,6 +65,38 @@ Config (`.forge.json`):
 Override at runtime: `pforge run-plan <plan> --model gpt-5.2-codex` (applies to all roles for that run).
 API providers (xAI Grok, etc.) are auto-routed by model name pattern — no extra config required.
 
+## Auto-Escalation
+
+When a slice fails repeatedly, the orchestrator automatically re-routes to the next model in `escalationChain` rather than retrying on the same model.
+
+Config (`.forge.json`):
+```json
+{
+  "escalationChain": ["auto", "claude-sonnet-4.6", "claude-opus-4.6"]
+}
+```
+
+- Attempt 0: uses the configured/default model
+- Attempt 1+: walks the chain in order (`"auto"` defers to `modelRouting.execute`)
+- Emits `slice-escalated` event with `sliceId`, `reason`, and `models`
+- Set `maxRetries` to control how many attempts are made before a slice is marked failed
+
+## Model Performance Tracking
+
+Per-slice performance data is appended to `.forge/model-performance.json` after every run. The orchestrator reads this file on startup and auto-selects the cheapest model with >80% historical success rate for each slice type.
+
+| Field | Description |
+|-------|-------------|
+| `model` | Model name used for the slice |
+| `sliceGoal` | Slice goal text (used for slice-type matching) |
+| `passed` | `true` if the validation gate passed |
+| `durationMs` | Slice execution time in milliseconds |
+| `cost` | Estimated token cost for the slice |
+
+- `--estimate` output shows the recommended model per slice with historical success rate
+- Dashboard **Cost tab** shows a **Model Performance** table: run count, pass rate (color-coded), average duration, cost per run, total tokens
+- `forge_cost_report` MCP tool includes `forge_model_stats` (aggregated per-model stats)
+
 ## CLI Commands (16)
 
 ```
@@ -369,6 +401,38 @@ The Plan Forge Bridge connects the WebSocket hub to external platforms, dispatch
 Rate limit: 1 notification per 5 seconds per channel (anti-spam). Bridge reconnects automatically after disconnect.
 
 Start the bridge: `node pforge-mcp/bridge.mjs` (or via dashboard standalone mode).
+
+## CI/CD Hook Event
+
+The `ci-triggered` event is emitted when a CI workflow is dispatched from a plan run, enabling external integrations to react when CI is started.
+
+| Field | Description |
+|-------|-------------|
+| `workflow` | Workflow file name or ID |
+| `ref` | Git ref (branch name or SHA) |
+| `inputs` | Workflow dispatch input parameters |
+
+The event is observable via the WebSocket hub (`GET /api/hub`) or captured in the run's `events.log` file. The `slice-escalated` event is emitted separately when a slice is re-routed to a new model via the escalation chain.
+
+## Auto-Update
+
+`pforge smith` automatically checks for a newer Plan Forge release:
+
+- Fetches `VERSION` from the GitHub source tree with a 5 s timeout
+- Result cached in `.forge/version-check.json` for 24 hours
+- Warns: `⚠ New version available: vX.Y.Z → run pforge update`
+- Silent when offline (network errors are suppressed)
+
+Run `pforge update` to pull the latest release.
+
+## Dual-Publish Extensions
+
+`pforge ext publish <path>` validates the extension and outputs two catalog entries simultaneously:
+
+- **Plan Forge catalog entry** — `catalog.json` format, installable with `pforge ext install`
+- **Spec Kit-compatible entry** — `extensions.json` format for the Spec Kit extension registry
+
+Extensions marked `speckit_compatible: true` in their `extension.json` work in both tools. See `extensions/PUBLISHING.md` for the full dual-publish workflow.
 
 ## Configuration (`.forge.json`)
 

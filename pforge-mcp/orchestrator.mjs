@@ -2073,7 +2073,7 @@ async function executeSlice(slice, options) {
     worker: workerResult.worker,
     model: workerResult.model,
     attempts: attempt + 1,
-    ...(currentModel !== finalModel && { escalatedModel: currentModel || "auto" }),
+    ...(currentModel !== finalModel && { escalatedModel: finalModel || "auto" }),
     ...(useQuorum && {
       quorum: {
         score: complexityScore,

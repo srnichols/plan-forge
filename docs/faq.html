@@ -398,6 +398,56 @@
         </div>
       </div>
 
+      <!-- Advanced Features -->
+      <div class="faq-category">
+        <h2 class="text-xl font-bold text-white mb-5 flex items-center gap-3">
+          <span class="w-8 h-8 rounded-lg bg-forge-500/20 flex items-center justify-center text-forge-400 text-sm">⚡</span>
+          Advanced Features
+        </h2>
+        <div class="space-y-3">
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">What is auto-escalation?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              <p class="mb-3">Auto-escalation automatically re-routes a failing slice to the next model in your <code class="text-forge-400">escalationChain</code> instead of retrying on the same model. If a slice fails on <code class="text-forge-400">gpt-5.2-codex</code>, it will automatically retry on <code class="text-forge-400">claude-sonnet-4.6</code>, then <code class="text-forge-400">claude-opus-4.6</code> — no manual intervention required.</p>
+              <p class="mb-3">Configure it in <code class="text-forge-400">.forge.json</code>:</p>
+              <pre class="bg-slate-900/60 rounded-lg p-3 text-xs text-forge-400 overflow-x-auto mb-3"><code>"escalationChain": ["auto", "claude-sonnet-4.6", "claude-opus-4.6"]</code></pre>
+              <p><code class="text-forge-400">"auto"</code> in the chain defers to your <code class="text-forge-400">modelRouting.execute</code> setting. Each escalation emits a <code class="text-forge-400">slice-escalated</code> event (visible in the dashboard and <code class="text-forge-400">events.log</code>). The number of attempts is controlled by <code class="text-forge-400">maxRetries</code> in your config.</p>
+            </div>
+          </details>
+
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">How does model routing work?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              <p class="mb-3">Plan Forge uses two layers of model routing that work together:</p>
+              <p class="mb-2"><strong class="text-white">1. Role-based routing (<code class="text-forge-400">modelRouting</code>)</strong> — assign a different model to each execution role in <code class="text-forge-400">.forge.json</code>: <code class="text-forge-400">default</code> (spec/harden/review), <code class="text-forge-400">execute</code> (code writing), and <code class="text-forge-400">review</code> (gate checks). This lets you tune cost vs. quality per stage.</p>
+              <p class="mb-3"><strong class="text-white">2. Performance-based auto-selection</strong> — the orchestrator reads <code class="text-forge-400">.forge/model-performance.json</code> (built up from past runs) and automatically selects the cheapest model with a &gt;80% historical success rate for each slice type. <code class="text-forge-400">--estimate</code> shows the recommended model and its success rate before you run.</p>
+              <p>Override any routing at runtime with <code class="text-forge-400">pforge run-plan &lt;plan&gt; --model &lt;model&gt;</code>.</p>
+            </div>
+          </details>
+
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">What is the Web UI?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              <p class="mb-3">Plan Forge ships two browser-based interfaces — both served from the MCP server with no build step required:</p>
+              <ul class="list-disc list-inside space-y-2 mb-3">
+                <li><strong class="text-white">Live Dashboard</strong> (<code class="text-forge-400">localhost:3100/dashboard</code>) — 8 real-time tabs via WebSocket: Progress (live slice cards), Runs (history), Cost (per-model breakdown), Actions (one-click run/abort), Replay (session logs), Extensions (catalog browser), Config (live editor), and Traces (OTLP waterfall).</li>
+                <li><strong class="text-white">Plan Browser</strong> (<code class="text-forge-400">localhost:3100/ui</code>) — read-only single-page app that lists all plans in your project, renders slice metadata cards, visualises DAG dependencies, and shows the scope contract. No execution controls — those remain on the dashboard.</li>
+              </ul>
+              <p>Start both with <code class="text-forge-400">node pforge-mcp/server.mjs</code>, or dashboard-only (no MCP client needed) with <code class="text-forge-400">node pforge-mcp/server.mjs --dashboard-only</code>.</p>
+            </div>
+          </details>
+        </div>
+      </div>
+
       <!-- Memory -->
       <div class="faq-category">
         <h2 class="text-xl font-bold text-white mb-5 flex items-center gap-3">

@@ -52,7 +52,11 @@ This framework doesn't slow you down. It teaches the AI your standards so you **
 | **Cost tracking** | Per-slice token counts, 23-model pricing table, monthly aggregation |
 | **Observability** | OTLP traces with resource context, span kinds, severity levels |
 | **Memory** | OpenBrain context injection — prior decisions and conventions searched and injected before each slice; captured after every run |
-| **Web UI** | Live dashboard at `localhost:3100` — 8 real-time tabs: Progress, Runs, Cost, Actions, Replay, Extensions, Config, Traces |
+| **Auto-escalation** | If a slice fails on one model, auto-routes through `escalationChain` to the next model — no manual intervention required; emits `slice-escalated` event |
+| **Model performance** | `.forge/model-performance.json` tracks success rate, cost, and duration per model; orchestrator auto-selects cheapest model with >80% pass rate; `--estimate` shows recommended model per slice |
+| **Auto-update** | `pforge smith` checks GitHub for newer releases (24 h cache, 5 s timeout, silent offline); prompts `pforge update` when behind |
+| **Dual-publish** | `pforge ext publish` outputs both a Plan Forge catalog entry and a Spec Kit-compatible `extensions.json` entry in one command |
+| **Web UI** | Live dashboard at `localhost:3100/dashboard` — 8 real-time tabs; read-only plan browser at `localhost:3100/ui` — slice metadata cards, DAG view, scope contract |
 
 ### The Bottom Line
 
@@ -252,7 +256,7 @@ Plan Forge is built with Plan Forge. Every dashboard feature, bug fix, and MCP t
 
 - **11 phases** executed via `pforge run-plan` with quorum auto mode
 - **69 self-tests** passing after every slice
-- **v1.0 → v2.11** with zero manual rollbacks — every change flows through scope contracts, validation gates, and completeness sweeps
+- **v1.0 → v2.13** with zero manual rollbacks — every change flows through scope contracts, validation gates, and completeness sweeps
 - The dashboard screenshots in our docs were captured by a Playwright script that runs against the live dashboard — itself built slice-by-slice using Plan Forge
 
 If the pipeline can build itself without drift, it can build your project too.

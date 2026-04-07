@@ -5,6 +5,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.13.1] — 2026-04-07
+
+### Added — Dashboard Capabilities + Doc Refresh (Phase 20)
+- **Model performance chart** — dashboard now renders a per-model success-rate bar chart sourced from `.forge/model-performance.json`; updates live on each run completion event
+- **Routing indicator** — dashboard displays the auto-selected model for the next slice alongside its historical success rate and estimated cost tier
+- **Bridge status section** — MCP bridge health (connected / reconnecting / offline) and last-heartbeat timestamp shown in the dashboard sidebar; escalation indicators highlight slices currently in quorum
+- **Plan Browser link** — dashboard header now links to the Web UI plan browser (`/ui`) opened in a new tab
+- **Public docs refresh** — `docs/index.html` updated with Web UI plan browser section, agent-per-slice routing feature entry, and OpenBrain deep-context description
+
+---
+
 ## [2.13.0] — 2026-04-07
 
 ### Added — Platform Complete (Phase 19)

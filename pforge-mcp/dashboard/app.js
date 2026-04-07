@@ -16,6 +16,7 @@ const state = {
   skillRuns: [],    // Skill execution history
   runMeta: null,    // Current run metadata
   charts: {},       // Chart.js instances
+  pendingApprovals: [], // Pending bridge approval gates
 };
 
 const API_BASE = `${window.location.protocol}//${window.location.host}`;
@@ -217,6 +218,8 @@ function handleRunCompleted(data) {
   tabBadgeState.runsNew++;
   updateTabBadges();
   playNotificationSound(data.status === "completed" ? "success" : "error");
+  // Check if bridge raised an approval gate
+  checkBridgeEscalation();
 }
 
 function handleRunAborted(data) {
@@ -232,7 +235,17 @@ function renderSliceCards() {
     return;
   }
 
-  container.innerHTML = state.slices.map((s) => {
+  const runId = state.runMeta?.runId;
+  const isEscalated = runId && state.pendingApprovals.some((a) => a.runId === runId && a.status === "pending");
+  const escalationBanner = isEscalated
+    ? `<div class="col-span-full flex items-center gap-2 bg-amber-900/40 border border-amber-700 rounded-lg px-4 py-2 text-sm text-amber-300">
+        <span class="text-lg">🔔</span>
+        <span class="font-semibold">Awaiting Approval</span>
+        <span class="text-amber-400/70 text-xs ml-1">— bridge escalation active, run paused for external sign-off</span>
+       </div>`
+    : "";
+
+  container.innerHTML = escalationBanner + state.slices.map((s) => {
     const statusIcon = { pending: "⏳", executing: "⚡", passed: "✅", failed: "❌", skipped: "⏭️" }[s.status] || "❓";
     const bgColor = { pending: "bg-gray-800", executing: "bg-blue-900/50 slice-executing", passed: "bg-green-900/30", failed: "bg-red-900/30", skipped: "bg-gray-800/50" }[s.status] || "bg-gray-800";
     const duration = s.duration ? `${(s.duration / 1000).toFixed(1)}s` : "";
@@ -241,11 +254,14 @@ function renderSliceCards() {
     const isApiModel = /^grok-/.test(model);
     const modelBadge = isApiModel ? `<span class="text-purple-400">${model}</span> <span class="text-xs text-purple-600">API</span>` : model;
     const elapsed = s.status === "executing" ? '<span class="slice-elapsed text-xs text-blue-300 ml-1">0s</span>' : "";
+    const escalatedMark = isEscalated && (s.status === "passed" || s.status === "failed")
+      ? `<span class="text-amber-400 text-xs ml-1" title="Awaiting bridge approval">🔔</span>`
+      : "";
 
     return `
       <div class="slice-card ${bgColor} rounded-lg p-3 border border-gray-700" data-slice-id="${s.id}">
         <div class="flex items-center justify-between mb-1">
-          <span class="font-semibold text-sm">${statusIcon} Slice ${s.id}</span>
+          <span class="font-semibold text-sm">${statusIcon} Slice ${s.id}${escalatedMark}</span>
           <span class="text-xs text-gray-500">${duration}${elapsed}</span>
         </div>
         <p class="text-xs text-gray-400 truncate">${s.title}</p>
@@ -390,9 +406,12 @@ function renderRunsTable() {
     const mode = r.mode ? `<span class="px-1.5 py-0.5 text-xs rounded bg-${modeColor}-500/20 text-${modeColor}-400">${r.mode}</span>` : "—";
     const model = r.model ? `<span class="text-xs text-gray-400">${r.model}</span>` : "—";
     const slices = `${r.results?.passed || 0}/${r.sliceCount || 0}`;
-    const status = r.status === "completed"
-      ? '<span class="text-green-400">✅ pass</span>'
-      : '<span class="text-red-400">❌ fail</span>';
+    const isPendingApproval = state.pendingApprovals.some((a) => a.runId === r.runId && a.status === "pending");
+    const status = isPendingApproval
+      ? '<span class="text-amber-400">🔔 approval</span>'
+      : r.status === "completed"
+        ? '<span class="text-green-400">✅ pass</span>'
+        : '<span class="text-red-400">❌ fail</span>';
     const cost = r.cost?.total_cost_usd != null ? `$${r.cost.total_cost_usd.toFixed(2)}` : "—";
     const dur = r.totalDuration ? `${(r.totalDuration / 1000).toFixed(0)}s` : "—";
     const sel = selectedRunIdx === idx ? "row-selected" : "";
@@ -477,6 +496,10 @@ async function openRunDrawer(runIdx) {
         </div></details>`;
       }
 
+      const routingBlock = sl.escalatedModel
+        ? `<div class="mt-1 text-xs text-amber-400/80">⬆ Recommended: <span class="font-mono">${escHtml(sl.escalatedModel)}</span> → Used: <span class="font-mono">${escHtml(sl.model || "auto")}</span> <span class="text-amber-600">(escalated)</span></div>`
+        : (sl.model ? `<div class="mt-1 text-xs text-gray-500">Model: <span class="font-mono text-gray-400">${escHtml(sl.model)}</span></div>` : "");
+
       return `<div class="border ${borderColor} rounded-lg p-3 mb-2">
         <div class="flex justify-between items-center">
           <span class="font-medium text-sm">${icon} Slice ${sl.number || sl.sliceId}: ${escHtml(sl.title || "")}</span>
@@ -487,6 +510,7 @@ async function openRunDrawer(runIdx) {
           <span>${tokIn.toLocaleString()} in / ${tokOut.toLocaleString()} out</span>
           <span>$${(sl.cost_usd || 0).toFixed(4)}</span>
         </div>
+        ${routingBlock}
         ${errorBlock}${gateBlock}${detailBlock}
       </div>`;
     }).join("");
@@ -1223,6 +1247,52 @@ async function loadModelComparison() {
       }
     }
     const sorted = Object.entries(modelStats).sort((a, b) => b[1].runs - a[1].runs);
+
+    // Pass-rate bar chart
+    const chartCtx = document.getElementById("chart-model-perf");
+    if (chartCtx && sorted.length > 0) {
+      if (state.charts["chart-model-perf"]) state.charts["chart-model-perf"].destroy();
+      const chartLabels = sorted.map(([m]) => m);
+      const passRates = sorted.map(([, s]) => s.total > 0 ? parseFloat(((s.passed / s.total) * 100).toFixed(1)) : 0);
+      const avgCosts = sorted.map(([, s]) => s.runs > 0 ? parseFloat((s.cost / s.runs).toFixed(4)) : 0);
+      state.charts["chart-model-perf"] = new Chart(chartCtx, {
+        type: "bar",
+        data: {
+          labels: chartLabels,
+          datasets: [
+            {
+              label: "Pass Rate (%)",
+              data: passRates,
+              backgroundColor: passRates.map((r) => r >= 90 ? "#10b981" : r >= 70 ? "#f59e0b" : "#ef4444"),
+              borderWidth: 0,
+              borderRadius: 3,
+              yAxisID: "yRate",
+            },
+            {
+              label: "Avg Cost ($)",
+              data: avgCosts,
+              type: "line",
+              borderColor: "#8b5cf6",
+              backgroundColor: "transparent",
+              pointBackgroundColor: "#8b5cf6",
+              pointRadius: 4,
+              tension: 0.2,
+              yAxisID: "yCost",
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { labels: { color: "#9ca3af" } } },
+          scales: {
+            yRate: { position: "left", min: 0, max: 100, ticks: { color: "#9ca3af", callback: (v) => v + "%" }, grid: { color: "#374151" } },
+            yCost: { position: "right", ticks: { color: "#8b5cf6", callback: (v) => "$" + v }, grid: { display: false } },
+            x: { ticks: { color: "#9ca3af" }, grid: { display: false } },
+          },
+        },
+      });
+    }
+
     el.innerHTML = `<table class="w-full text-sm">
       <thead class="text-xs text-gray-500 border-b border-gray-700">
         <tr><th class="px-3 py-2 text-left">Model</th><th class="px-3 py-2 text-right">Runs</th><th class="px-3 py-2 text-right">Pass Rate</th><th class="px-3 py-2 text-right">Avg Duration</th><th class="px-3 py-2 text-right">Avg Cost</th><th class="px-3 py-2 text-right">Tokens</th></tr>
@@ -1724,6 +1794,7 @@ async function loadConfig() {
     loadOpenBrainStatus();
     loadMemoryPresets();
     loadWorkerStatus();
+    loadBridgeStatus();
   } catch (err) {
     document.getElementById("cfg-status").textContent = `Error: ${err.message}`;
   }
@@ -1849,7 +1920,108 @@ async function saveConfig() {
 window.loadConfig = loadConfig;
 window.saveConfig = saveConfig;
 
-// ─── DAG Dependency Visualizer ─────────────────────────────────
+// ─── Bridge Status & Escalation ───────────────────────────────────────
+async function checkBridgeEscalation() {
+  try {
+    const res = await fetch(`${API_BASE}/api/bridge/status`);
+    if (!res.ok) return;
+    const data = await res.json();
+    state.pendingApprovals = data.pendingApprovals || [];
+    renderSliceCards();
+    renderRunsTable();
+    updateBridgeStatusUI(data);
+  } catch {
+    // Bridge not configured — ignore
+  }
+}
+
+function updateBridgeStatusUI(data) {
+  const badge = document.getElementById("bridge-enabled-badge");
+  const statusEl = document.getElementById("bridge-status-badge");
+  const channelsList = document.getElementById("bridge-channels-list");
+  const approvalsPanel = document.getElementById("bridge-approvals-panel");
+  const approvalsList = document.getElementById("bridge-approvals-list");
+
+  if (!statusEl) return;
+
+  if (!data || data.error) {
+    statusEl.innerHTML = '<span class="text-gray-500">Not configured — add <code class="text-gray-400">bridge</code> to .forge.json</span>';
+    if (badge) badge.classList.add("hidden");
+    return;
+  }
+
+  const connectedDot = data.connected
+    ? '<span class="inline-block w-2 h-2 rounded-full bg-green-500 mr-1"></span><span class="text-green-400">connected</span>'
+    : '<span class="inline-block w-2 h-2 rounded-full bg-gray-600 mr-1"></span><span class="text-gray-500">disconnected</span>';
+  const enabledText = data.enabled ? connectedDot : '<span class="text-gray-500">disabled</span>';
+  statusEl.innerHTML = enabledText;
+
+  if (badge) {
+    if (data.enabled) { badge.classList.remove("hidden"); } else { badge.classList.add("hidden"); }
+  }
+
+  if (channelsList) {
+    const channels = data.channels || [];
+    channelsList.innerHTML = channels.length === 0
+      ? '<p class="text-xs text-gray-600">No channels configured</p>'
+      : channels.map((c) => {
+        const levelColor = { all: "blue", important: "amber", critical: "red" }[c.level] || "gray";
+        return `<div class="flex items-center gap-2 text-xs">
+          <span class="text-gray-400 font-semibold w-16 shrink-0">${escHtml(c.type)}</span>
+          <span class="px-1.5 py-0.5 rounded bg-${levelColor}-500/20 text-${levelColor}-400">${escHtml(c.level || "important")}</span>
+          ${c.approvalRequired ? '<span class="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300">approval</span>' : ""}
+        </div>`;
+      }).join("");
+  }
+
+  const pending = data.pendingApprovals || [];
+  if (approvalsPanel && approvalsList) {
+    if (pending.length > 0) {
+      approvalsPanel.classList.remove("hidden");
+      approvalsList.innerHTML = pending.map((a) => `
+        <div class="flex items-center gap-2 bg-amber-900/30 border border-amber-800 rounded px-3 py-2 text-xs">
+          <span class="text-amber-300 font-semibold">Run ${escHtml(a.runId)}</span>
+          <span class="text-gray-500">requested ${new Date(a.requestedAt).toLocaleTimeString()}</span>
+          <div class="ml-auto flex gap-2">
+            <button onclick="sendApproval('${escHtml(a.runId)}', true)" class="bg-green-700 hover:bg-green-600 text-white px-2 py-0.5 rounded">Approve</button>
+            <button onclick="sendApproval('${escHtml(a.runId)}', false)" class="bg-red-800 hover:bg-red-700 text-white px-2 py-0.5 rounded">Reject</button>
+          </div>
+        </div>`).join("");
+    } else {
+      approvalsPanel.classList.add("hidden");
+    }
+  }
+}
+
+async function sendApproval(runId, approved) {
+  try {
+    await fetch(`${API_BASE}/api/bridge/approve/${encodeURIComponent(runId)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ approved, approver: "dashboard" }),
+    });
+    addNotification(`Run ${runId} ${approved ? "approved" : "rejected"}`, approved ? "success" : "error");
+    checkBridgeEscalation();
+  } catch (err) {
+    addNotification(`Approval failed: ${err.message}`, "error");
+  }
+}
+
+window.sendApproval = sendApproval;
+
+async function loadBridgeStatus() {
+  try {
+    const res = await fetch(`${API_BASE}/api/bridge/status`);
+    if (!res.ok) return;
+    const data = await res.json();
+    state.pendingApprovals = data.pendingApprovals || [];
+    updateBridgeStatusUI(data);
+  } catch {
+    updateBridgeStatusUI(null);
+  }
+}
+
+
 function renderDAGView(slices) {
   if (!slices || slices.length === 0) return "";
   // Only show if there are dependencies or parallel tags

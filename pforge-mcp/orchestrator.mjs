@@ -2817,10 +2817,7 @@ const MODEL_PRICING = {
   "gpt-5.3-codex":          { input: 3 / 1_000_000,    output: 12 / 1_000_000 },
   "gpt-5.2-codex":          { input: 2 / 1_000_000,    output: 8 / 1_000_000 },
   "gpt-5.2":                { input: 2 / 1_000_000,    output: 8 / 1_000_000 },
-  "gpt-5.1-codex-max":      { input: 3 / 1_000_000,    output: 12 / 1_000_000 },
-  "gpt-5.1-codex":          { input: 2 / 1_000_000,    output: 8 / 1_000_000 },
-  "gpt-5.1":                { input: 2 / 1_000_000,    output: 8 / 1_000_000 },
-  "gpt-5.1-codex-mini":     { input: 0.3 / 1_000_000,  output: 1.2 / 1_000_000 },
+  "gpt-5.4-mini":           { input: 0.4 / 1_000_000,  output: 1.6 / 1_000_000 },
   "gpt-5-mini":             { input: 0.4 / 1_000_000,  output: 1.6 / 1_000_000 },
   "gpt-4.1":                { input: 2 / 1_000_000,    output: 8 / 1_000_000 },
   // Google Gemini

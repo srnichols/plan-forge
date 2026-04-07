@@ -669,8 +669,6 @@ docs/manual/
 | Screenshots (VS Code) | 2 | Manual capture | File explorer after setup, Copilot chat with specifier (deferred to final polish) |
 | Animations | 0 | — | Deferred to v2 — static screenshots + HTML interactives are sufficient for v1 |
 | **Total visual assets** | **22** | | Down from ~51 in original plan — filtered by "does this teach?" |
-| Animations (GIF/WebM) | 5 | Screen recordings (setup wizard, live progress, auto-load, assisted mode, full pipeline) |
-| **Total visual assets** | **~51** | |
 
 ### Screenshot & Live Content Source
 

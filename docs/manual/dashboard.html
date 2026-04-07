@@ -82,6 +82,8 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
 
         <p>Each card shows: slice title, status (queued → executing → passed/failed), duration, model used, token count, and cost. Cards update in real-time as events arrive over WebSocket.</p>
 
+        <img src="../assets/dashboard/progress.png" alt="Dashboard Progress tab showing 3 slices passed, 1 executing, 2 queued, with plan browser, DAG view, and event log" class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
+
         <!-- ─── Runs Tab ─── -->
         <h2 id="runs">Runs Tab</h2>
         <p>History of all plan executions. Each row shows:</p>
@@ -101,6 +103,8 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
 
         <p>Click any row to expand slice-by-slice detail: per-slice tokens, duration, model, and pass/fail status.</p>
 
+        <img src="../assets/dashboard/runs.png" alt="Dashboard Runs tab showing run history with plan names, slice counts, durations, and costs" class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
+
         <!-- ─── Cost Tab ─── -->
         <h2 id="cost">Cost Tab</h2>
         <p>Two visualizations:</p>
@@ -109,6 +113,8 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
           <li><strong>Bar chart</strong> — monthly trend (cost over time, spot anomalies)</li>
         </ul>
         <p>Data comes from <code>.forge/cost-history.json</code> which is updated automatically after each run. The cost tab supports a 23-model pricing table — including Claude, GPT, Grok, Gemini, and custom API providers.</p>
+
+        <img src="../assets/dashboard/cost.png" alt="Dashboard Cost tab showing total spend, doughnut chart by model, monthly spend bar chart, and model performance table with pass rates" class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
 
         <div class="callout callout-info">
           <strong>Cost anomaly detection</strong>: If a run costs &gt;2× the historical average, the Runs tab shows a warning badge. Use <code>pforge run-plan --estimate</code> to predict costs before executing.
@@ -196,6 +202,8 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
         </table>
 
         <p>Click any span to expand: duration, resource attributes (project, version, preset), severity. Traces are stored in <code>.forge/runs/&lt;timestamp&gt;/traces.json</code> and can be exported to any OTLP-compatible backend (Jaeger, Grafana Tempo, etc.).</p>
+
+        <img src="../assets/dashboard/traces.png" alt="Dashboard Traces tab showing OTLP trace waterfall view" class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
 
         <!-- ─── Skills Tab ─── -->
         <h2 id="skills">Skills Tab</h2>

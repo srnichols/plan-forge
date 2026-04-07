@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>One Framework, Seven AI Agents: Why We Stopped Picking Favorites — Plan Forge Blog</title>
+  <meta name="description" content="Your team uses Copilot, Claude, Cursor, Gemini, Windsurf, and Codex. Plan Forge generates native guardrail files for all 7 — same quality gates, same pipeline, regardless of which agent writes the code." />
+  <meta property="og:title" content="One Framework, Seven AI Agents: Why We Stopped Picking Favorites" />
+  <meta property="og:description" content="Same guardrails, same pipeline, 7 AI agents. Copilot, Claude, Cursor, Gemini, Windsurf, Codex, and a generic fallback. One setup command." />
+  <meta property="og:type" content="article" />
+  <meta property="og:url" content="https://planforge.software/blog/seven-agents.html" />
+  <meta property="og:image" content="https://planforge.software/assets/og-card.webp" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="One Framework, Seven AI Agents: Why We Stopped Picking Favorites" />
+  <meta name="twitter:description" content="Your team uses different AI tools. Plan Forge generates native files for all 7. Same guardrails everywhere." />
+  <link rel="canonical" href="https://planforge.software/blog/seven-agents.html" />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    "headline": "One Framework, Seven AI Agents: Why We Stopped Picking Favorites",
+    "description": "Plan Forge generates native guardrail files for 7 AI agents — same quality gates, same pipeline, regardless of which agent writes the code.",
+    "url": "https://planforge.software/blog/seven-agents.html",
+    "datePublished": "2026-04-07",
+    "author": { "@type": "Person", "name": "Scott Nichols", "url": "https://github.com/srnichols" },
+    "publisher": { "@type": "Organization", "name": "Plan Forge", "url": "https://planforge.software" }
+  }
+  </script>
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { theme: { extend: { colors: { forge: { 300:'#fcd34d',400:'#fbbf24',500:'#f59e0b',600:'#d97706',700:'#b45309' }}, fontFamily: { sans:['Inter','system-ui','sans-serif'], mono:['"JetBrains Mono"','"Fira Code"','monospace'] }}}}
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/blog.css" />
+</head>
+<body class="bg-slate-950 text-slate-100 antialiased">
+
+  <!-- NAV -->
+  <nav class="sticky top-0 z-50 bg-slate-950/92 backdrop-blur-md border-b border-slate-800/60">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <a href="../index.html" class="flex items-center gap-3 shrink-0"><img src="../assets/plan-forge-logo.svg" alt="Plan Forge" class="h-7 w-auto" /></a>
+        <div class="hidden md:flex items-center gap-7">
+          <a href="../index.html#solution" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">How It Works</a>
+          <a href="../examples.html" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">Examples</a>
+          <a href="./" class="text-sm text-forge-400 transition-colors">Blog</a>
+          <a href="../faq.html" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">FAQ</a>
+        </div>
+        <div class="hidden md:flex items-center gap-3">
+          <a href="https://github.com/srnichols/plan-forge" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">GitHub</a>
+          <a href="../index.html#quickstart" class="px-4 py-2 text-sm font-semibold bg-forge-500 hover:bg-forge-400 text-slate-900 rounded-lg transition-colors">Get Started</a>
+        </div>
+        <button id="mobile-btn" class="md:hidden p-2 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors" aria-label="Open menu">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ARTICLE -->
+  <article class="py-16 bg-slate-900">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+
+      <!-- Meta -->
+      <div class="mb-8">
+        <a href="./" class="text-sm text-forge-400 hover:underline">← Back to Blog</a>
+      </div>
+      <div class="flex items-center gap-3 mb-6">
+        <span class="px-3 py-1 rounded-full bg-sky-500/10 text-xs font-medium text-sky-400 border border-sky-500/20">Multi-Agent</span>
+        <span class="text-xs text-slate-500">April 7, 2026 · 8 min read</span>
+      </div>
+      <h1 class="text-4xl md:text-5xl font-black text-white mb-6 leading-tight">One Framework, Seven AI Agents: Why We Stopped Picking Favorites</h1>
+      <div class="flex items-center gap-3 mb-10 pb-10 border-b border-slate-800/60">
+        <img src="https://github.com/srnichols.png" alt="Scott Nichols" class="w-10 h-10 rounded-full border border-slate-700" loading="lazy" />
+        <div>
+          <p class="text-sm font-medium text-slate-200">Scott Nichols</p>
+          <p class="text-xs text-slate-500">Director @ Microsoft</p>
+        </div>
+      </div>
+
+      <!-- Content -->
+      <div class="blog-content">
+
+        <img src="assets/seven-agents-hero.jpg" alt="Seven magical weapons on a forge rack — blue sword (Copilot), green staff (Claude), purple bow (Cursor), amber hammer (Gemini), teal scythe (Windsurf), red axe (Codex), silver dagger (Generic) — connected by a golden chain with an anvil below" class="w-full rounded-2xl border border-slate-700/40 shadow-2xl shadow-amber-500/10 mb-10" />
+
+        <p>Here's a conversation I've had at least a dozen times:</p>
+
+        <blockquote><p>"Does Plan Forge work with Claude?" "What about Cursor?" "We use Gemini CLI — can we still use your guardrails?"</p></blockquote>
+
+        <p>The answer used to be "sort of — copy the instruction files and adapt them." That was slow, fragile, and nobody did it consistently.</p>
+
+        <p>So we built native adapters for every major AI coding agent. One setup command. Seven agent formats. Same guardrails everywhere.</p>
+
+        <h2>The Problem: Teams Don't Agree on Tools</h2>
+
+        <p>Your team doesn't all use the same AI coding tool. One dev swears by Copilot in VS Code. Another prefers Cursor's inline editing. The senior architect uses Claude Code for deep reasoning. The DevOps engineer likes Gemini CLI because it's fast. The intern just discovered Windsurf.</p>
+
+        <p>If your guardrails only work in one tool, most of your team isn't covered. And the team members who <em>aren't</em> covered are the ones who produce the code that fails review.</p>
+
+        <h2>One Command, Seven Agents</h2>
+
+        <pre><code>.\setup.ps1 -Preset dotnet -Agent all</code></pre>
+
+        <p>That single command generates <strong>native files for every supported agent</strong>. Not generic text files that you paste into a chat — actual native configuration that each tool reads automatically at session start.</p>
+
+        <h2>What Each Agent Gets</h2>
+
+        <!-- Agent table -->
+        <div class="overflow-x-auto">
+        <table>
+          <thead>
+            <tr><th>Agent</th><th>Flag</th><th>Native Files Generated</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>Copilot</strong></td><td><code>copilot</code></td><td>Auto-loading <code>.github/instructions/*.instructions.md</code>, agents, prompts, skills, <code>.vscode/mcp.json</code></td></tr>
+            <tr><td><strong>Claude Code</strong></td><td><code>claude</code></td><td><code>CLAUDE.md</code> with all guardrails embedded + <code>.claude/skills/</code> for every prompt and agent + <code>.claude/mcp.json</code></td></tr>
+            <tr><td><strong>Cursor</strong></td><td><code>cursor</code></td><td><code>.cursor/rules</code> with all guardrails + <code>.cursor/commands/</code> for pipeline steps and reviewer agents</td></tr>
+            <tr><td><strong>Windsurf</strong></td><td><code>windsurf</code></td><td><code>.windsurf/rules/planforge.md</code> + <code>.windsurf/workflows/</code> for all pipeline and review commands</td></tr>
+            <tr><td><strong>Codex CLI</strong></td><td><code>codex</code></td><td><code>.agents/skills/</code> with SKILL.md for every prompt and agent</td></tr>
+            <tr><td><strong>Gemini CLI</strong></td><td><code>gemini</code></td><td><code>GEMINI.md</code> with <code>@import</code> syntax + <code>.gemini/commands/planforge/*.toml</code> + <code>.gemini/settings.json</code> with MCP</td></tr>
+            <tr><td><strong>Generic</strong></td><td><code>generic</code></td><td><code>.ai/AI_INSTRUCTIONS.md</code> + prompts and agents as plain markdown — works with ChatGPT, Perplexity, Ollama, anything</td></tr>
+          </tbody>
+        </table>
+        </div>
+
+        <p>Every format includes <strong>all 18 guardrail files</strong>, <strong>all pipeline prompts</strong>, and <strong>all 19 reviewer agents</strong> — transformed into the native format each tool expects.</p>
+
+        <h2>How the Adapters Work</h2>
+
+        <p>Each adapter follows the same pattern: take Plan Forge's canonical files (<code>.github/instructions/</code>, <code>.github/prompts/</code>, <code>.github/agents/</code>) and transform them into whatever format the AI tool reads natively.</p>
+
+        <h3>Copilot (the default)</h3>
+
+        <p>Copilot reads <code>.github/instructions/*.instructions.md</code> files automatically based on their <code>applyTo</code> frontmatter. Edit a database file and the database guardrails load. Edit a test file and the testing guardrails load. No manual attachment needed. This is the gold standard — and what every other adapter tries to replicate.</p>
+
+        <h3>Claude Code</h3>
+
+        <p>Claude reads <code>CLAUDE.md</code> at session start. The adapter generates a rich document with all guardrails embedded inline, organized by domain (security, database, testing, etc.), plus a "How to Use These Guardrails" header that tells Claude which section applies to which file type. Every prompt becomes a <code>/planforge-*</code> slash command via <code>.claude/skills/</code>. MCP tools work via <code>.claude/mcp.json</code>.</p>
+
+        <h3>Cursor</h3>
+
+        <p>Cursor reads <code>.cursor/rules</code> at session start and <code>.cursor/commands/</code> for custom commands. The adapter generates a rules file with all guardrails embedded plus command files for every pipeline step and reviewer agent. Type <code>planforge.step3-execute-slice</code> and Cursor runs it natively.</p>
+
+        <h3>Gemini CLI</h3>
+
+        <p>Gemini reads <code>GEMINI.md</code> and supports <code>@import</code> syntax to pull in external files. The adapter generates a context document with <code>@.github/instructions/security.instructions.md</code> imports, plus <code>.toml</code> command files in <code>.gemini/commands/planforge/</code> for every pipeline step. MCP auto-configures via <code>.gemini/settings.json</code>.</p>
+
+        <h3>Windsurf</h3>
+
+        <p>Windsurf's Cascade agent reads <code>.windsurf/rules/</code> and <code>.windsurf/workflows/</code>. Same embedding pattern — all guardrails in a single rules file, all prompts and agents as workflow files.</p>
+
+        <h3>Codex CLI</h3>
+
+        <p>Codex reads <code>.agents/skills/</code> directories with <code>SKILL.md</code> files. Every prompt and agent becomes an invocable skill.</p>
+
+        <h3>Generic (any tool)</h3>
+
+        <p>For tools not explicitly supported — ChatGPT, Perplexity, Ollama, Mistral, whatever comes next — the generic adapter generates <code>.ai/AI_INSTRUCTIONS.md</code> with everything embedded as plain markdown. Copy-paste it into any chat window. It works everywhere, forever.</p>
+
+        <h2>Why This Matters for Teams</h2>
+
+        <p>The guardrails aren't suggestions. They're structural. When every developer's AI agent loads the same architecture principles, the same security rules, and the same testing standards — regardless of whether they're using Copilot or Cursor or Claude — the code converges on the same quality bar.</p>
+
+        <p>No more "this PR doesn't match our patterns because I used a different tool." No more "I didn't know about the security guidelines." The guidelines load automatically in every tool. The agent can't avoid them.</p>
+
+        <ul>
+          <li><strong>New hire on Cursor?</strong> — <code>-Agent cursor</code> and they have every guardrail from day one</li>
+          <li><strong>Senior dev on Claude?</strong> — <code>-Agent claude</code> and the same 19 reviewer agents are available</li>
+          <li><strong>Experimenting with Gemini?</strong> — <code>-Agent gemini</code> and MCP auto-configures</li>
+          <li><strong>Using everything?</strong> — <code>-Agent all</code> and every format generates in one pass</li>
+        </ul>
+
+        <h2>What's the Same, What's Different</h2>
+
+        <table>
+          <thead>
+            <tr><th>Capability</th><th>All 7 Agents</th><th>Copilot Only</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>18 guardrail files</td><td>✅ embedded in native format</td><td>✅ auto-loading by file type</td></tr>
+            <tr><td>19 reviewer agents</td><td>✅ as native commands/skills</td><td>✅ as agent picker entries</td></tr>
+            <tr><td>Pipeline prompts</td><td>✅ as native slash commands</td><td>✅ as prompt templates</td></tr>
+            <tr><td>MCP tools (18)</td><td>✅ Claude + Gemini + Copilot</td><td>✅ via .vscode/mcp.json</td></tr>
+            <tr><td>Auto-load by file type</td><td>❌ embedded instead</td><td>✅ via applyTo frontmatter</td></tr>
+            <tr><td>Lifecycle hooks</td><td>❌ VS Code only</td><td>✅ SessionStart, PreToolUse, etc.</td></tr>
+          </tbody>
+        </table>
+
+        <p>Copilot in VS Code remains the richest experience — it's the only one with true file-type-scoped auto-loading and lifecycle hooks. The other adapters embed all guardrails at once (which is slightly less efficient in terms of context but functionally equivalent). Every agent gets the same rules; they just ingest them differently.</p>
+
+        <h2>Try It</h2>
+
+        <pre><code># Install for your stack + your team's agents
+.\setup.ps1 -Preset typescript -Agent copilot,claude,cursor
+
+# Or just install everything
+.\setup.ps1 -Preset python -Agent all
+
+# On macOS/Linux
+./setup.sh --preset java --agent all</code></pre>
+
+        <p>Copilot files are always installed (they're the canonical source). Additional agent formats layer on top. Use one, some, or all. The guardrails are the same everywhere.</p>
+
+        <p><a href="https://github.com/srnichols/plan-forge" class="text-forge-400 hover:underline font-semibold">Plan Forge is free and open source.</a> MIT licensed. Pick your stack, pick your agents, and your whole team gets the same quality gates — regardless of which tool they prefer.</p>
+
+      </div>
+
+      <!-- Post nav -->
+      <div class="mt-12 pt-8 border-t border-slate-800/60 flex justify-between items-center">
+        <a href="unified-system.html" class="text-sm text-forge-400 hover:underline">← Previous: Unified System</a>
+        <a href="./" class="text-sm text-forge-400 hover:underline">All posts →</a>
+      </div>
+
+    </div>
+  </article>
+
+  <!-- FOOTER -->
+  <footer class="border-t border-slate-800/60 bg-slate-950 py-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex flex-col md:flex-row items-center justify-between gap-4 mb-4">
+        <div class="flex items-center gap-3">
+          <img src="https://github.com/srnichols.png" alt="Scott Nichols" class="w-8 h-8 rounded-full border border-slate-700" loading="lazy" />
+          <p class="text-sm text-slate-500">Created by <a href="https://github.com/srnichols" class="text-forge-400 hover:underline">Scott Nichols</a></p>
+        </div>
+        <div class="flex gap-4">
+          <a href="https://github.com/srnichols" class="text-sm text-slate-500 hover:text-slate-300">GitHub</a>
+          <a href="https://www.linkedin.com/in/srnichols/" class="text-sm text-slate-500 hover:text-slate-300">LinkedIn</a>
+        </div>
+      </div>
+      <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+        <p class="text-sm text-slate-600">© 2026 Plan Forge. Open source under the MIT License.</p>
+        <div class="flex gap-6">
+          <a href="../index.html" class="text-sm text-slate-500 hover:text-slate-300">Home</a>
+          <a href="https://github.com/srnichols/plan-forge" class="text-sm text-slate-500 hover:text-slate-300">GitHub</a>
+          <a href="../docs.html" class="text-sm text-slate-500 hover:text-slate-300">Docs</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/shared.js"></script>
+</body>
+</html>

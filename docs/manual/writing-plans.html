@@ -142,7 +142,7 @@ Slice 6 — Documentation + cleanup                [30 min]</code></pre>
 
         <p>Slices 2 and 3 both depend on Slice 1 (the migration) but are independent of each other — they run in parallel. Slice 4 waits for both to finish. The orchestrator builds a DAG (directed acyclic graph) and schedules accordingly.</p>
 
-        <img src="assets/diagrams/dag-parallel.svg" alt="DAG diagram showing parallel slices 2 and 3 executing concurrently after slice 1, then converging on slice 4" style="width:100%;max-width:800px;margin:1rem 0 1.5rem" />
+        <img src="assets/diagrams/dag-parallel.svg" alt="DAG diagram showing parallel slices 2 and 3 executing concurrently after slice 1, then converging on slice 4" class="diagram-img diagram-img-lg" />
 
         <div class="callout callout-warning">
           <strong>When NOT to parallelize</strong>: If two slices modify the same files, they'll conflict. Only use <code>[P]</code> when slices touch different <code>[scope: ...]</code> paths.

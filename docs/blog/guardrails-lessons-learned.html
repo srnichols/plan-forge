@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>I Built Guardrails for AI Coding Agents — Here's What I Learned — Plan Forge Blog</title>
+  <meta name="description" content="After 18 guardrail files, 19 reviewer agents, and 9 tech stack presets, here are the seven hard-won lessons from building Plan Forge — and the mistakes that taught them." />
+  <meta property="og:title" content="I Built Guardrails for AI Coding Agents — Here's What I Learned" />
+  <meta property="og:description" content="After 18 guardrail files, 19 reviewer agents, and 9 tech presets — seven lessons from building Plan Forge." />
+  <meta property="og:type" content="article" />
+  <meta property="og:url" content="https://planforge.software/blog/guardrails-lessons-learned.html" />
+  <meta property="og:image" content="https://planforge.software/assets/og-card.webp" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="I Built Guardrails for AI Coding Agents — Here's What I Learned" />
+  <meta name="twitter:description" content="Seven hard-won lessons from building 18 guardrail files, 19 reviewer agents, and 9 tech stack presets." />
+  <link rel="canonical" href="https://planforge.software/blog/guardrails-lessons-learned.html" />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    "headline": "I Built Guardrails for AI Coding Agents — Here's What I Learned",
+    "description": "After 18 guardrail files, 19 reviewer agents, and 9 tech stack presets, here are the seven hard-won lessons from building Plan Forge.",
+    "url": "https://planforge.software/blog/guardrails-lessons-learned.html",
+    "datePublished": "2026-04-07",
+    "author": { "@type": "Person", "name": "Scott Nichols", "url": "https://github.com/srnichols" },
+    "publisher": { "@type": "Organization", "name": "Plan Forge", "url": "https://planforge.software" }
+  }
+  </script>
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { theme: { extend: { colors: { forge: { 300:'#fcd34d',400:'#fbbf24',500:'#f59e0b',600:'#d97706',700:'#b45309' }}, fontFamily: { sans:['Inter','system-ui','sans-serif'], mono:['"JetBrains Mono"','"Fira Code"','monospace'] }}}}
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <style>
+    .blog-content h2 { font-size: 1.5rem; font-weight: 700; color: #f1f5f9; margin-top: 2.5rem; margin-bottom: 1rem; }
+    .blog-content h3 { font-size: 1.125rem; font-weight: 600; color: #e2e8f0; margin-top: 2rem; margin-bottom: 0.75rem; }
+    .blog-content p { color: #94a3b8; line-height: 1.8; margin-bottom: 1.25rem; }
+    .blog-content ul, .blog-content ol { color: #94a3b8; line-height: 1.8; margin-bottom: 1.25rem; padding-left: 1.5rem; }
+    .blog-content li { margin-bottom: 0.5rem; }
+    .blog-content strong { color: #f1f5f9; }
+    .blog-content em { color: #cbd5e1; }
+    .blog-content blockquote { border-left: 3px solid #f59e0b; padding: 1rem 1.5rem; margin: 1.5rem 0; background: rgba(245, 158, 11, 0.05); border-radius: 0 0.75rem 0.75rem 0; }
+    .blog-content blockquote p { margin-bottom: 0; color: #cbd5e1; }
+    .blog-content code { color: #fbbf24; font-size: 0.875rem; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 antialiased">
+
+  <!-- NAV -->
+  <nav class="sticky top-0 z-50 bg-slate-950/92 backdrop-blur-md border-b border-slate-800/60">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <a href="../index.html" class="flex items-center gap-3 shrink-0"><img src="../assets/plan-forge-logo.svg" alt="Plan Forge" class="h-7 w-auto" /></a>
+        <div class="hidden md:flex items-center gap-7">
+          <a href="../index.html#solution" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">How It Works</a>
+          <a href="../examples.html" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">Examples</a>
+          <a href="./" class="text-sm text-forge-400 transition-colors">Blog</a>
+          <a href="../faq.html" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">FAQ</a>
+        </div>
+        <div class="hidden md:flex items-center gap-3">
+          <a href="https://github.com/srnichols/plan-forge" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">GitHub</a>
+          <a href="../index.html#quickstart" class="px-4 py-2 text-sm font-semibold bg-forge-500 hover:bg-forge-400 text-slate-900 rounded-lg transition-colors">Get Started</a>
+        </div>
+        <button id="mobile-btn" class="md:hidden p-2 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors" aria-label="Open menu">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ARTICLE -->
+  <article class="py-16 bg-slate-900">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+
+      <!-- Meta -->
+      <div class="mb-8">
+        <a href="./" class="text-sm text-forge-400 hover:underline">← Back to Blog</a>
+      </div>
+      <div class="flex items-center gap-3 mb-6">
+        <span class="px-3 py-1 rounded-full bg-forge-500/10 text-xs font-medium text-forge-400 border border-forge-500/20">Lessons</span>
+        <span class="text-xs text-slate-500">April 7, 2026 · 10 min read</span>
+      </div>
+      <h1 class="text-4xl md:text-5xl font-black text-white mb-6 leading-tight">I Built Guardrails for AI Coding Agents — Here's What I Learned</h1>
+      <div class="flex items-center gap-3 mb-10 pb-10 border-b border-slate-800/60">
+        <img src="https://github.com/srnichols.png" alt="Scott Nichols" class="w-10 h-10 rounded-full border border-slate-700" loading="lazy" />
+        <div>
+          <p class="text-sm font-medium text-slate-200">Scott Nichols</p>
+          <p class="text-xs text-slate-500">Principal Cloud Solution Architect @ Microsoft</p>
+        </div>
+      </div>
+
+      <!-- Content -->
+      <div class="blog-content">
+
+        <p>Plan Forge started as a personal frustration. I kept watching AI agents produce code that looked great in a demo and fell apart in production. Not because the models were bad — they're genuinely impressive — but because they had no structural constraints. No architectural standards. No scope discipline. No memory of what they decided yesterday.</p>
+
+        <p>So I built guardrails. 18 instruction files that auto-load based on context. 19 specialized reviewer agents. 9 tech stack presets. A 7-step pipeline that converts rough ideas into hardened execution contracts.</p>
+
+        <p>Here are the seven lessons that cost the most to learn.</p>
+
+        <h2>Lesson 1: Agents Don't Drift Maliciously — They Drift Because Nobody Said Not To</h2>
+
+        <p>The number one misconception is that AI agents "go rogue." They don't. They <strong>do exactly what you let them</strong>. If you say "build me a login page," you'll get a login page — plus a password reset flow, an admin panel, a user profile system, and refactored database migrations. The agent isn't being creative. It's being thorough with zero scope constraints.</p>
+
+        <p>The fix was embarrassingly simple: define what <em>shouldn't</em> be built. Every hardened plan in Plan Forge has a <strong>Forbidden Actions</strong> section. "Do NOT add features not in this spec. Do NOT refactor existing code outside the touched files. Do NOT change the database schema beyond what's specified." Explicit prohibitions cut scope drift by an order of magnitude.</p>
+
+        <blockquote><p>The most powerful guardrail isn't "do this." It's "don't do that."</p></blockquote>
+
+        <h2>Lesson 2: Auto-Loading Beats Manual Attachment Every Time</h2>
+
+        <p>Early versions required developers to manually attach instruction files to each chat session. Nobody did it. The guardrails existed but were never used — like safety goggles hanging on the wall.</p>
+
+        <p>The breakthrough was <code>applyTo</code> frontmatter. Each instruction file declares which file patterns it cares about:</p>
+
+        <ul>
+          <li><code>security.instructions.md</code> applies to <code>**/auth/**,**/middleware/**</code></li>
+          <li><code>database.instructions.md</code> applies to <code>**/repositories/**,**/migrations/**</code></li>
+          <li><code>testing.instructions.md</code> applies to <code>**/*.test.*,**/*.spec.*</code></li>
+        </ul>
+
+        <p>When you edit an auth file, security guardrails load automatically. No developer action required. Adoption went from ~20% ("whoever remembered") to 100% ("it just works").</p>
+
+        <h2>Lesson 3: The Builder Must Never Review Its Own Work</h2>
+
+        <p>This was the hardest lesson to internalize. In a single long chat session, the agent that wrote the code will <em>always</em> believe its code is correct. It has sunk-cost bias baked into its context window. It literally cannot see its own blind spots because those blind spots are in the same token sequence that produced the code.</p>
+
+        <p>Plan Forge mandates <strong>session isolation</strong> between execution and review. The builder works in Session 2. The reviewer works in Session 3 — fresh context, same guardrails, independent judgment. It catches bugs, drift, and architectural violations at a rate that shocked me.</p>
+
+        <p>Think of it this way: would you let a developer merge their own PR without review? Then why would you let an AI agent do it?</p>
+
+        <h2>Lesson 4: Slice Boundaries Are the Only Real Validation Points</h2>
+
+        <p>Testing "at the end" doesn't work. By the time you run tests after building 15 files, the failures cascade so badly that the agent spends more time debugging than it spent building. I've watched agents burn through entire context windows chasing regressions that compound across files.</p>
+
+        <p>The answer was slices. Every feature gets decomposed into 3-7 execution slices, each with its own build and test gate. <strong>The agent cannot proceed to slice N+1 until slice N passes.</strong> This means:</p>
+
+        <ul>
+          <li>Failures are caught when they're small (1-3 files, not 15)</li>
+          <li>The agent fixes the problem with full context of what it just wrote</li>
+          <li>Green-to-green progression means you always have a safe rollback point</li>
+        </ul>
+
+        <p>Slice boundaries are non-negotiable. They're the reason Plan Forge features actually ship complete instead of "mostly done."</p>
+
+        <h2>Lesson 5: One Guardrail File Per Concern — Not One Giant File</h2>
+
+        <p>The first version of Plan Forge had a single <code>copilot-instructions.md</code> that was 2,000 lines long. It covered security, testing, architecture, database patterns, error handling, deployment — everything. And it was terrible.</p>
+
+        <p>Agents process long instruction files <em>worse</em> than short ones. Key rules get buried. Contradictions creep in. The agent cherry-picks what's convenient and ignores the rest.</p>
+
+        <p>Splitting into 18 focused files — each under 150 lines, each with a single concern — was transformational. The security file only talks about security. The testing file only talks about testing. Each one loads only when relevant. Compliance went up. Token usage went down. Everybody won.</p>
+
+        <h2>Lesson 6: Tech Stack Presets Eliminate 80% of Customization</h2>
+
+        <p>Every stack has different conventions. .NET uses <code>PascalCase</code> and <code>xUnit</code>. Python uses <code>snake_case</code> and <code>pytest</code>. TypeScript uses <code>camelCase</code> and <code>vitest</code>. If your guardrails say "use PascalCase" to a Python developer, they'll immediately distrust the entire system.</p>
+
+        <p>Presets solved this. Run <code>setup.ps1 -Preset python</code> and you get Python-specific instruction files, agents, prompts, and skills — all pre-written with Python best practices. The developer never has to customize anything. It just works for their stack.</p>
+
+        <p>Nine presets ship today: .NET, TypeScript, Python, Java, Go, Swift, Rust, PHP, and Azure IaC. Plus a custom preset for anything else. Multi-preset support means a full-stack project can combine <code>-Preset typescript,azure-iac</code> and get the right guardrails for each layer.</p>
+
+        <h2>Lesson 7: Enterprise Quality Is a Default, Not an Upgrade</h2>
+
+        <p>The biggest mistake in AI-assisted development tooling is treating quality as optional. "Add tests later." "We'll refactor." "Security can wait." No. Every feature should ship with tests, proper error handling, input validation, and architectural compliance <em>from the first commit</em>.</p>
+
+        <p>Plan Forge makes this structural. The hardened plan includes test expectations per slice. The architecture guardrails load on every file change. The security guardrails load on every auth file. The testing guardrails load on every test file. There's no "opt in to quality" — quality is the default. You'd have to actively work around it to ship bad code.</p>
+
+        <blockquote><p>The best developer tools don't make quality easier. They make it unavoidable.</p></blockquote>
+
+        <h2>What's Next</h2>
+
+        <p>These seven lessons shaped Plan Forge into what it is today — but the landscape keeps evolving. Quorum Mode (multi-model consensus) is already showing <a href="quorum-mode-3-models.html" class="text-forge-400 hover:underline">measurably better results</a> than single-model execution. Auto-escalation routes failing slices to stronger models. The MCP server exposes 18 forge tools as native operations. And community extensions are adding domain-specific guardrails for industries from healthcare to finance.</p>
+
+        <p>The core insight hasn't changed: <strong>AI agents are as good as the constraints you give them</strong>. Give them none, and they'll improvise brilliantly — right up until they destroy everything they built. Give them structure, and they'll build things you're proud to ship.</p>
+
+        <p><a href="https://github.com/srnichols/plan-forge" class="text-forge-400 hover:underline font-semibold">Plan Forge is free and open source.</a> MIT licensed. Try it on your next feature.</p>
+
+      </div>
+
+      <!-- Post nav -->
+      <div class="mt-12 pt-8 border-t border-slate-800/60 flex justify-between items-center">
+        <a href="the-80-20-wall.html" class="text-sm text-forge-400 hover:underline">← Previous: The 80/20 Wall</a>
+        <a href="quorum-mode-3-models.html" class="text-sm text-forge-400 hover:underline">Next: Quorum Mode →</a>
+      </div>
+
+    </div>
+  </article>
+
+  <!-- FOOTER -->
+  <footer class="border-t border-slate-800/60 bg-slate-950 py-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex flex-col md:flex-row items-center justify-between gap-4 mb-4">
+        <div class="flex items-center gap-3">
+          <img src="https://github.com/srnichols.png" alt="Scott Nichols" class="w-8 h-8 rounded-full border border-slate-700" loading="lazy" />
+          <p class="text-sm text-slate-500">Created by <a href="https://github.com/srnichols" class="text-forge-400 hover:underline">Scott Nichols</a> · Principal Cloud Solution Architect @ <a href="https://microsoft.com" class="text-slate-400 hover:text-slate-300">Microsoft</a></p>
+        </div>
+        <div class="flex gap-4">
+          <a href="https://github.com/srnichols" class="text-sm text-slate-500 hover:text-slate-300">GitHub</a>
+          <a href="https://www.linkedin.com/in/srnichols/" class="text-sm text-slate-500 hover:text-slate-300">LinkedIn</a>
+        </div>
+      </div>
+      <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+        <p class="text-sm text-slate-600">© 2026 Plan Forge. Open source under the MIT License.</p>
+        <div class="flex gap-6">
+          <a href="../index.html" class="text-sm text-slate-500 hover:text-slate-300">Home</a>
+          <a href="https://github.com/srnichols/plan-forge" class="text-sm text-slate-500 hover:text-slate-300">GitHub</a>
+          <a href="../docs.html" class="text-sm text-slate-500 hover:text-slate-300">Docs</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/shared.js"></script>
+</body>
+</html>

@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Spec Kit + Plan Forge: Write the Spec, Enforce the Build — Plan Forge Blog</title>
+  <meta name="description" content="Spec Kit defines what to build. Plan Forge enforces how it's built. Together they solve the full AI-assisted development problem — from idea to shipped feature with zero drift." />
+  <meta property="og:title" content="Spec Kit + Plan Forge: Write the Spec, Enforce the Build" />
+  <meta property="og:description" content="Two open-source tools that solve different halves of the same problem. Here's how they work together — and when to use which." />
+  <meta property="og:type" content="article" />
+  <meta property="og:url" content="https://planforge.software/blog/spec-kit-plan-forge.html" />
+  <meta property="og:image" content="https://planforge.software/assets/og-card.webp" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Spec Kit + Plan Forge: Write the Spec, Enforce the Build" />
+  <meta name="twitter:description" content="Two open-source tools, complementary workflows. Spec Kit defines what. Plan Forge enforces how. Here's the combined workflow." />
+  <link rel="canonical" href="https://planforge.software/blog/spec-kit-plan-forge.html" />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    "headline": "Spec Kit + Plan Forge: Write the Spec, Enforce the Build",
+    "description": "Spec Kit defines what to build. Plan Forge enforces how it's built. Together they solve the full AI-assisted development problem.",
+    "url": "https://planforge.software/blog/spec-kit-plan-forge.html",
+    "datePublished": "2026-04-07",
+    "author": { "@type": "Person", "name": "Scott Nichols", "url": "https://github.com/srnichols" },
+    "publisher": { "@type": "Organization", "name": "Plan Forge", "url": "https://planforge.software" }
+  }
+  </script>
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { theme: { extend: { colors: { forge: { 300:'#fcd34d',400:'#fbbf24',500:'#f59e0b',600:'#d97706',700:'#b45309' }}, fontFamily: { sans:['Inter','system-ui','sans-serif'], mono:['"JetBrains Mono"','"Fira Code"','monospace'] }}}}
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <style>
+    .blog-content h2 { font-size: 1.5rem; font-weight: 700; color: #f1f5f9; margin-top: 2.5rem; margin-bottom: 1rem; }
+    .blog-content h3 { font-size: 1.125rem; font-weight: 600; color: #e2e8f0; margin-top: 2rem; margin-bottom: 0.75rem; }
+    .blog-content p { color: #94a3b8; line-height: 1.8; margin-bottom: 1.25rem; }
+    .blog-content ul, .blog-content ol { color: #94a3b8; line-height: 1.8; margin-bottom: 1.25rem; padding-left: 1.5rem; }
+    .blog-content li { margin-bottom: 0.5rem; }
+    .blog-content strong { color: #f1f5f9; }
+    .blog-content em { color: #cbd5e1; }
+    .blog-content blockquote { border-left: 3px solid #f59e0b; padding: 1rem 1.5rem; margin: 1.5rem 0; background: rgba(245, 158, 11, 0.05); border-radius: 0 0.75rem 0.75rem 0; }
+    .blog-content blockquote p { margin-bottom: 0; color: #cbd5e1; }
+    .blog-content code { color: #fbbf24; font-size: 0.875rem; }
+    .blog-content table { width: 100%; border-collapse: collapse; margin: 1.5rem 0; font-size: 0.875rem; }
+    .blog-content th { text-align: left; padding: 0.75rem 1rem; border-bottom: 2px solid #334155; color: #e2e8f0; font-weight: 600; }
+    .blog-content td { padding: 0.75rem 1rem; border-bottom: 1px solid #1e293b; color: #94a3b8; }
+    .blog-content tr:hover td { background: rgba(245, 158, 11, 0.03); }
+    .blog-content pre { background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(51, 65, 85, 0.4); border-radius: 0.75rem; padding: 1.25rem; overflow-x: auto; margin: 1.5rem 0; font-size: 0.8125rem; line-height: 1.7; color: #cbd5e1; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 antialiased">
+
+  <!-- NAV -->
+  <nav class="sticky top-0 z-50 bg-slate-950/92 backdrop-blur-md border-b border-slate-800/60">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <a href="../index.html" class="flex items-center gap-3 shrink-0"><img src="../assets/plan-forge-logo.svg" alt="Plan Forge" class="h-7 w-auto" /></a>
+        <div class="hidden md:flex items-center gap-7">
+          <a href="../index.html#solution" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">How It Works</a>
+          <a href="../examples.html" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">Examples</a>
+          <a href="./" class="text-sm text-forge-400 transition-colors">Blog</a>
+          <a href="../faq.html" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">FAQ</a>
+        </div>
+        <div class="hidden md:flex items-center gap-3">
+          <a href="https://github.com/srnichols/plan-forge" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">GitHub</a>
+          <a href="../index.html#quickstart" class="px-4 py-2 text-sm font-semibold bg-forge-500 hover:bg-forge-400 text-slate-900 rounded-lg transition-colors">Get Started</a>
+        </div>
+        <button id="mobile-btn" class="md:hidden p-2 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors" aria-label="Open menu">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ARTICLE -->
+  <article class="py-16 bg-slate-900">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+
+      <!-- Meta -->
+      <div class="mb-8">
+        <a href="./" class="text-sm text-forge-400 hover:underline">← Back to Blog</a>
+      </div>
+      <div class="flex items-center gap-3 mb-6">
+        <span class="px-3 py-1 rounded-full bg-green-500/10 text-xs font-medium text-green-400 border border-green-500/20">Interop</span>
+        <span class="text-xs text-slate-500">April 7, 2026 · 7 min read</span>
+      </div>
+      <h1 class="text-4xl md:text-5xl font-black text-white mb-6 leading-tight">Spec Kit + Plan Forge: Write the Spec, Enforce the Build</h1>
+      <div class="flex items-center gap-3 mb-10 pb-10 border-b border-slate-800/60">
+        <img src="https://github.com/srnichols.png" alt="Scott Nichols" class="w-10 h-10 rounded-full border border-slate-700" loading="lazy" />
+        <div>
+          <p class="text-sm font-medium text-slate-200">Scott Nichols</p>
+          <p class="text-xs text-slate-500">Principal Cloud Solution Architect @ Microsoft</p>
+        </div>
+      </div>
+
+      <!-- Content -->
+      <div class="blog-content">
+
+        <p>Two open-source frameworks are tackling the same fundamental problem from different angles: how do you make AI coding agents produce <em>reliable</em> software instead of impressive demos that fall apart in production?</p>
+
+        <p><a href="https://github.com/github/spec-kit" class="text-green-400 hover:underline font-semibold">Spec Kit</a> (by GitHub) focuses on defining <strong>what</strong> to build — turning ideas into executable specifications. <a href="https://github.com/srnichols/plan-forge" class="text-forge-400 hover:underline font-semibold">Plan Forge</a> focuses on enforcing <strong>how</strong> it's built — locking those specs into contracts the AI cannot deviate from.</p>
+
+        <p>They're not competitors. They're two halves of the same solution. And they're designed to work together.</p>
+
+        <h2>The Problem Both Tools Solve</h2>
+
+        <p>Without structure, AI coding agents have three failure modes:</p>
+
+        <ol>
+          <li><strong>Scope drift</strong> — ask for a login page, get a login page plus a password reset flow plus an admin panel nobody requested</li>
+          <li><strong>Architecture improvisation</strong> — the agent picks its own patterns, frameworks, and trade-offs without consulting your standards</li>
+          <li><strong>Context amnesia</strong> — by session three, the agent has forgotten every decision from session one</li>
+        </ol>
+
+        <p>Spec Kit addresses the first by forcing you to <em>specify before you build</em>. Plan Forge addresses all three by <em>enforcing the spec during the build</em>.</p>
+
+        <h2>What Each Tool Does Best</h2>
+
+        <table>
+          <thead>
+            <tr><th></th><th>Spec Kit</th><th>Plan Forge</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>Core philosophy</strong></td><td>Spec-Driven Development</td><td>Hardened Execution Contracts</td></tr>
+            <tr><td><strong>Primary strength</strong></td><td>Defining what to build</td><td>Enforcing how it's built</td></tr>
+            <tr><td><strong>Agent support</strong></td><td>25+ AI agents natively</td><td>7 agents (Copilot, Claude, Cursor, Codex, Gemini, Windsurf, Generic)</td></tr>
+            <tr><td><strong>Community</strong></td><td>85K+ stars, 144 contributors, 40+ extensions</td><td>Growing, MIT licensed, 9 tech presets</td></tr>
+            <tr><td><strong>Key mechanism</strong></td><td>Slash commands (<code>/speckit.specify</code>, <code>/speckit.plan</code>)</td><td>Auto-loading guardrail files (18 per stack)</td></tr>
+            <tr><td><strong>Execution model</strong></td><td>Spec → Plan → Implement</td><td>7-step pipeline with validation gates per slice</td></tr>
+            <tr><td><strong>Review approach</strong></td><td><code>/speckit.analyze</code> after building</td><td>Independent review in isolated session (Step 5)</td></tr>
+            <tr><td><strong>Memory</strong></td><td><code>memory/constitution.md</code></td><td>3-layer: Copilot Memory + session bridge + OpenBrain semantic search</td></tr>
+          </tbody>
+        </table>
+
+        <p>Spec Kit has the bigger ecosystem and broader agent support. Plan Forge goes deeper on runtime enforcement and enterprise quality gates. Both are free. Both are MIT licensed. You genuinely can't go wrong with either.</p>
+
+        <h2>The Combined Workflow</h2>
+
+        <p>Here's where it gets interesting. Using both tools together gives you coverage that neither provides alone.</p>
+
+        <h3>Phase 1: Define with Spec Kit</h3>
+
+        <p>Start in Spec Kit's territory. Use its slash commands to build a structured specification:</p>
+
+        <pre><code><span style="color: #64748b"># Set project principles</span>
+/speckit.constitution Create principles focused on code quality, testing, and security
+
+<span style="color: #64748b"># Define the feature</span>
+/speckit.specify Build a task management API with authentication,
+                 role-based access, and real-time updates via WebSocket
+
+<span style="color: #64748b"># Generate an execution plan</span>
+/speckit.plan Use .NET 9, PostgreSQL, SignalR
+
+<span style="color: #64748b"># Break into tasks</span>
+/speckit.tasks</code></pre>
+
+        <p>Spec Kit produces structured artifacts: <code>specs/feature/spec.md</code>, <code>plan.md</code>, <code>tasks.md</code>, and <code>memory/constitution.md</code>. These are well-defined, thorough, and leverage Spec Kit's strength at requirement elicitation.</p>
+
+        <h3>Phase 2: Plan Forge Auto-Imports</h3>
+
+        <p>When you start Plan Forge's Step 0 (Specifier), it scans the project for Spec Kit artifacts. If it finds them, it offers to import directly — no re-specifying needed:</p>
+
+        <ul>
+          <li><code>spec.md</code> → maps to Plan Forge's feature specification section</li>
+          <li><code>plan.md</code> → becomes the execution contract baseline</li>
+          <li><code>tasks.md</code> → maps to execution slices in Step 2</li>
+          <li><code>constitution.md</code> → imports as <code>PROJECT-PRINCIPLES.md</code></li>
+        </ul>
+
+        <p>The handoff is seamless. Spec Kit's output becomes Plan Forge's input.</p>
+
+        <h3>Phase 3: Harden and Enforce</h3>
+
+        <p>This is where Plan Forge adds what Spec Kit doesn't: <strong>runtime enforcement</strong>.</p>
+
+        <p>The imported spec gets hardened into an execution contract with explicit forbidden actions, scope boundaries, and validation gates. 18 guardrail files auto-load during coding — security rules when editing auth files, database patterns when editing queries, testing standards when editing test files. The agent doesn't need to remember the rules. The rules are injected automatically based on what file is being edited.</p>
+
+        <p>Each slice (task) executes with build + test gates. The agent cannot proceed to the next slice until the current one passes. And when all slices complete, an independent reviewer — running in a fresh session with zero context from the builder — audits the entire implementation against the original spec.</p>
+
+        <blockquote><p>Spec Kit is the architect's blueprint. Plan Forge is the building inspector who won't sign off until every beam is to code.</p></blockquote>
+
+        <h2>Shared Extension Ecosystem</h2>
+
+        <p>Both tools support reusable extension packages, and the catalog format is compatible. Extensions marked <code>speckit_compatible: true</code> in Plan Forge's catalog work in both tools. The commands are parallel:</p>
+
+        <table>
+          <thead>
+            <tr><th>Action</th><th>Spec Kit</th><th>Plan Forge</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Browse catalog</td><td><code>specify extension search</code></td><td><code>pforge ext search</code></td></tr>
+            <tr><td>Get details</td><td><code>specify extension info &lt;name&gt;</code></td><td><code>pforge ext info &lt;name&gt;</code></td></tr>
+            <tr><td>Install</td><td><code>specify extension add &lt;name&gt;</code></td><td><code>pforge ext add &lt;name&gt;</code></td></tr>
+          </tbody>
+        </table>
+
+        <p>Build a multi-tenancy extension, a compliance extension, or a domain-specific guardrail package — it works in both ecosystems.</p>
+
+        <h2>When to Use Which</h2>
+
+        <p><strong>Pick Spec Kit alone if:</strong> your team uses many different AI tools (not just VS Code), you want the largest community and extension library, and you prefer a lightweight spec-first methodology you can adopt incrementally. GitHub's backing means rapid iteration and strong long-term support.</p>
+
+        <p><strong>Pick Plan Forge alone if:</strong> you want guardrails that auto-enforce <em>during</em> coding, you need 19 specialized reviewer agents, and you care about enterprise patterns — scope-contract locking, lifecycle hooks, deployment templates, and multi-model consensus (Quorum Mode).</p>
+
+        <p><strong>Use both if:</strong> you want the full pipeline. Spec Kit's requirement elicitation and specification quality is best-in-class. Plan Forge's runtime enforcement and independent review is best-in-class. Together, you get specs that are both <em>well-defined</em> and <em>impossible to drift from</em>.</p>
+
+        <h2>Honest Take</h2>
+
+        <p>I built Plan Forge, so I'm biased. But I'll say it straight: Spec Kit has the bigger ecosystem, broader agent support, and GitHub's engineering team behind it. If I could only recommend one tool to someone starting out, the answer depends entirely on their pain point.</p>
+
+        <p>If your problem is <em>"I don't know what to build"</em> — start with Spec Kit. Its specification workflow is excellent.</p>
+
+        <p>If your problem is <em>"I know what to build but the AI keeps drifting"</em> — start with Plan Forge. Its enforcement pipeline is what you need.</p>
+
+        <p>If your problem is both — use both. They were designed for this.</p>
+
+        <p>
+          <a href="https://github.com/github/spec-kit" class="text-green-400 hover:underline font-semibold">Get Spec Kit →</a>
+          &nbsp;&nbsp;|&nbsp;&nbsp;
+          <a href="https://github.com/srnichols/plan-forge" class="text-forge-400 hover:underline font-semibold">Get Plan Forge →</a>
+          &nbsp;&nbsp;|&nbsp;&nbsp;
+          <a href="../speckit-interop.html" class="text-purple-400 hover:underline font-semibold">Full integration guide →</a>
+        </p>
+
+      </div>
+
+      <!-- Post nav -->
+      <div class="mt-12 pt-8 border-t border-slate-800/60 flex justify-between items-center">
+        <a href="quorum-mode-3-models.html" class="text-sm text-forge-400 hover:underline">← Previous: Quorum Mode</a>
+        <a href="./" class="text-sm text-forge-400 hover:underline">All posts →</a>
+      </div>
+
+    </div>
+  </article>
+
+  <!-- FOOTER -->
+  <footer class="border-t border-slate-800/60 bg-slate-950 py-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex flex-col md:flex-row items-center justify-between gap-4 mb-4">
+        <div class="flex items-center gap-3">
+          <img src="https://github.com/srnichols.png" alt="Scott Nichols" class="w-8 h-8 rounded-full border border-slate-700" loading="lazy" />
+          <p class="text-sm text-slate-500">Created by <a href="https://github.com/srnichols" class="text-forge-400 hover:underline">Scott Nichols</a> · Principal Cloud Solution Architect @ <a href="https://microsoft.com" class="text-slate-400 hover:text-slate-300">Microsoft</a></p>
+        </div>
+        <div class="flex gap-4">
+          <a href="https://github.com/srnichols" class="text-sm text-slate-500 hover:text-slate-300">GitHub</a>
+          <a href="https://www.linkedin.com/in/srnichols/" class="text-sm text-slate-500 hover:text-slate-300">LinkedIn</a>
+        </div>
+      </div>
+      <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+        <p class="text-sm text-slate-600">© 2026 Plan Forge. Open source under the MIT License.</p>
+        <div class="flex gap-6">
+          <a href="../index.html" class="text-sm text-slate-500 hover:text-slate-300">Home</a>
+          <a href="https://github.com/srnichols/plan-forge" class="text-sm text-slate-500 hover:text-slate-300">GitHub</a>
+          <a href="../docs.html" class="text-sm text-slate-500 hover:text-slate-300">Docs</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/shared.js"></script>
+</body>
+</html>

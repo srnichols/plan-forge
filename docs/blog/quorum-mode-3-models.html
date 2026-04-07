@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quorum Mode: What Happens When 3 AI Models Review Each Other's Code — Plan Forge Blog</title>
+  <meta name="description" content="We built a feature twice — once with a single model, once with three models in parallel consensus. Both passed all gates. But the code quality difference was measurable." />
+  <meta property="og:title" content="Quorum Mode: What Happens When 3 AI Models Review Each Other's Code" />
+  <meta property="og:description" content="A/B test: single-model vs 3-model consensus. Both passed all gates. But one produced 20% more tests, DRY helpers, and modern patterns." />
+  <meta property="og:type" content="article" />
+  <meta property="og:url" content="https://planforge.software/blog/quorum-mode-3-models.html" />
+  <meta property="og:image" content="https://planforge.software/assets/og-card.webp" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Quorum Mode: What Happens When 3 AI Models Review Each Other's Code" />
+  <meta name="twitter:description" content="A/B test results: single-model vs 3-model consensus. 20% more tests, DRY helpers, modern patterns — for 3% extra cost." />
+  <link rel="canonical" href="https://planforge.software/blog/quorum-mode-3-models.html" />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    "headline": "Quorum Mode: What Happens When 3 AI Models Review Each Other's Code",
+    "description": "We built a feature twice — once with a single model, once with three models in parallel consensus. Both passed all gates. But the code quality difference was measurable.",
+    "url": "https://planforge.software/blog/quorum-mode-3-models.html",
+    "datePublished": "2026-04-07",
+    "author": { "@type": "Person", "name": "Scott Nichols", "url": "https://github.com/srnichols" },
+    "publisher": { "@type": "Organization", "name": "Plan Forge", "url": "https://planforge.software" }
+  }
+  </script>
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { theme: { extend: { colors: { forge: { 300:'#fcd34d',400:'#fbbf24',500:'#f59e0b',600:'#d97706',700:'#b45309' }}, fontFamily: { sans:['Inter','system-ui','sans-serif'], mono:['"JetBrains Mono"','"Fira Code"','monospace'] }}}}
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <style>
+    .blog-content h2 { font-size: 1.5rem; font-weight: 700; color: #f1f5f9; margin-top: 2.5rem; margin-bottom: 1rem; }
+    .blog-content h3 { font-size: 1.125rem; font-weight: 600; color: #e2e8f0; margin-top: 2rem; margin-bottom: 0.75rem; }
+    .blog-content p { color: #94a3b8; line-height: 1.8; margin-bottom: 1.25rem; }
+    .blog-content ul, .blog-content ol { color: #94a3b8; line-height: 1.8; margin-bottom: 1.25rem; padding-left: 1.5rem; }
+    .blog-content li { margin-bottom: 0.5rem; }
+    .blog-content strong { color: #f1f5f9; }
+    .blog-content em { color: #cbd5e1; }
+    .blog-content blockquote { border-left: 3px solid #f59e0b; padding: 1rem 1.5rem; margin: 1.5rem 0; background: rgba(245, 158, 11, 0.05); border-radius: 0 0.75rem 0.75rem 0; }
+    .blog-content blockquote p { margin-bottom: 0; color: #cbd5e1; }
+    .blog-content code { color: #fbbf24; font-size: 0.875rem; }
+    .blog-content table { width: 100%; border-collapse: collapse; margin: 1.5rem 0; font-size: 0.875rem; }
+    .blog-content th { text-align: left; padding: 0.75rem 1rem; border-bottom: 2px solid #334155; color: #e2e8f0; font-weight: 600; }
+    .blog-content td { padding: 0.75rem 1rem; border-bottom: 1px solid #1e293b; color: #94a3b8; }
+    .blog-content tr:hover td { background: rgba(245, 158, 11, 0.03); }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 antialiased">
+
+  <!-- NAV -->
+  <nav class="sticky top-0 z-50 bg-slate-950/92 backdrop-blur-md border-b border-slate-800/60">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <a href="../index.html" class="flex items-center gap-3 shrink-0"><img src="../assets/plan-forge-logo.svg" alt="Plan Forge" class="h-7 w-auto" /></a>
+        <div class="hidden md:flex items-center gap-7">
+          <a href="../index.html#solution" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">How It Works</a>
+          <a href="../examples.html" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">Examples</a>
+          <a href="./" class="text-sm text-forge-400 transition-colors">Blog</a>
+          <a href="../faq.html" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">FAQ</a>
+        </div>
+        <div class="hidden md:flex items-center gap-3">
+          <a href="https://github.com/srnichols/plan-forge" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">GitHub</a>
+          <a href="../index.html#quickstart" class="px-4 py-2 text-sm font-semibold bg-forge-500 hover:bg-forge-400 text-slate-900 rounded-lg transition-colors">Get Started</a>
+        </div>
+        <button id="mobile-btn" class="md:hidden p-2 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors" aria-label="Open menu">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ARTICLE -->
+  <article class="py-16 bg-slate-900">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+
+      <!-- Meta -->
+      <div class="mb-8">
+        <a href="./" class="text-sm text-forge-400 hover:underline">← Back to Blog</a>
+      </div>
+      <div class="flex items-center gap-3 mb-6">
+        <span class="px-3 py-1 rounded-full bg-purple-500/10 text-xs font-medium text-purple-400 border border-purple-500/20">A/B Test</span>
+        <span class="text-xs text-slate-500">April 7, 2026 · 9 min read</span>
+      </div>
+      <h1 class="text-4xl md:text-5xl font-black text-white mb-6 leading-tight">Quorum Mode: What Happens When 3 AI Models Review Each Other's Code</h1>
+      <div class="flex items-center gap-3 mb-10 pb-10 border-b border-slate-800/60">
+        <img src="https://github.com/srnichols.png" alt="Scott Nichols" class="w-10 h-10 rounded-full border border-slate-700" loading="lazy" />
+        <div>
+          <p class="text-sm font-medium text-slate-200">Scott Nichols</p>
+          <p class="text-xs text-slate-500">Principal Cloud Solution Architect @ Microsoft</p>
+        </div>
+      </div>
+
+      <!-- Content -->
+      <div class="blog-content">
+
+        <p>What if three AI models reviewed each other's plans <em>before</em> any code was written?</p>
+
+        <p>That's the idea behind Quorum Mode in Plan Forge. Instead of dispatching a coding task to a single model, you dispatch it to three in parallel. Each model produces a detailed implementation plan — without executing code. A reviewer agent then synthesizes the best elements from all three into a unified execution plan. The final builder uses that consensus plan instead of the raw instructions.</p>
+
+        <p>Think of it as a design review by three senior engineers before any code is written.</p>
+
+        <p>But does it actually produce better code? We ran an A/B test to find out.</p>
+
+        <h2>The Test Setup</h2>
+
+        <p>We built the same feature twice using identical hardened plan files:</p>
+
+        <ul>
+          <li><strong>Feature:</strong> Invoice Engine — rate tiers, volume discounts, tax calculation, banker's rounding</li>
+          <li><strong>Plan:</strong> Same scope contract, same slices, same validation gates</li>
+          <li><strong>Run A (Control):</strong> Standard single-model execution (Claude Sonnet)</li>
+          <li><strong>Run B (Quorum):</strong> Three models in parallel (Claude Opus, GPT-5.3-Codex, Claude Sonnet) → reviewer synthesis → Claude Sonnet builds from consensus</li>
+        </ul>
+
+        <p>Both runs used identical guardrails, the same tech stack preset, and the same build/test gates. The only variable was whether the builder worked from raw slice instructions (Control) or a synthesized consensus plan (Quorum).</p>
+
+        <h2>The Results</h2>
+
+        <p>Both runs passed all gates. Every slice built, every test passed, and the independent reviewer signed off on both. But the <em>quality</em> of the code was measurably different.</p>
+
+        <table>
+          <thead>
+            <tr><th>Metric</th><th>Control (Single)</th><th>Quorum (3-Model)</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>Tests written</strong></td><td>15</td><td>18 (+20%)</td></tr>
+            <tr><td><strong>Helper extraction</strong></td><td>Inline code</td><td>DRY helpers (IsWeekend(), CalculateVolumeDiscount())</td></tr>
+            <tr><td><strong>Test dates</strong></td><td>Hardcoded literals</td><td>Relative offsets (don't break when dates pass)</td></tr>
+            <tr><td><strong>Edge cases</strong></td><td>Standard coverage</td><td>Voided invoice regeneration, invoice number sequencing</td></tr>
+            <tr><td><strong>.NET patterns</strong></td><td>Generic ValidationException</td><td>ArgumentException.ThrowIfNullOrWhiteSpace (modern)</td></tr>
+            <tr><td><strong>Total cost</strong></td><td>$33.89</td><td>$34.84 (+3%)</td></tr>
+            <tr><td><strong>Total time</strong></td><td>12 min</td><td>32 min (2.7x)</td></tr>
+          </tbody>
+        </table>
+
+        <h2>What the Numbers Mean</h2>
+
+        <h3>20% More Tests</h3>
+
+        <p>The quorum run produced 18 tests vs 15. The extra tests weren't padding — they covered edge cases that the single model missed entirely: voided invoice regeneration, invoice number sequencing under concurrent access, and boundary conditions in volume discount tiers. These are exactly the tests that would have caught production bugs.</p>
+
+        <h3>DRY Helpers vs. Inline Code</h3>
+
+        <p>The single-model run inlined business logic — volume discount calculation appeared in three places with slight variations. The quorum run extracted <code>IsWeekend()</code>, <code>CalculateVolumeDiscount()</code>, and <code>ApplyBankersRounding()</code> as reusable helpers. Same behavior, but the quorum code is easier to maintain and debug.</p>
+
+        <p>This is the synthesis effect — when one model suggests inline code and another suggests extraction, the reviewer picks the cleaner approach.</p>
+
+        <h3>Robust Test Dates</h3>
+
+        <p>A subtle but telling difference. The single-model run used hardcoded date literals like <code>new DateTime(2026, 3, 15)</code> in tests. Those tests will break when the dates pass, because the business logic validates that invoice dates aren't in the future. The quorum run used relative offsets: <code>DateTime.Now.AddDays(-7)</code>. Small thing, but it's the difference between tests that stay green forever and tests that start failing on April 16th.</p>
+
+        <h3>Modern .NET Patterns</h3>
+
+        <p>The control run used <code>throw new ValidationException("...")</code> — functional but generic. The quorum run used <code>ArgumentException.ThrowIfNullOrWhiteSpace()</code> — a .NET 7+ API that's more precise, generates better error messages, and is the current recommended pattern. Again, the synthesis effect: one model knew about the modern API, the reviewer picked it.</p>
+
+        <h2>Cost vs. Quality</h2>
+
+        <p>The quorum run cost <strong>$0.95 more</strong> ($34.84 vs $33.89) — about 3% extra. For a feature that will be maintained for years, that's negligible. The time increase was more significant: 32 minutes vs 12 minutes. The extra 20 minutes is the parallel dry-run analysis (3 models thinking) plus the reviewer synthesis step. The actual build time was comparable.</p>
+
+        <blockquote><p>For $0.95 more, you get 20% more tests, cleaner architecture, and modern patterns. That's the cheapest code review you'll ever buy.</p></blockquote>
+
+        <h2>When to Use It</h2>
+
+        <p>Quorum Mode isn't for every slice. Running it on a simple CRUD endpoint that creates a database record is overkill. Running it on your auth flow, billing logic, or database migration is worth every token.</p>
+
+        <p>That's why we built <code>--quorum=auto</code>. It scores each slice's complexity (1-10) using 7 weighted signals:</p>
+
+        <ol>
+          <li>File scope count</li>
+          <li>Cross-module dependencies</li>
+          <li>Security keywords</li>
+          <li>Database/migration keywords</li>
+          <li>Gate count</li>
+          <li>Task count</li>
+          <li>Historical failure rate</li>
+        </ol>
+
+        <p>Only slices scoring at or above the threshold (default: 6) get the 3-model treatment. Everything else runs normally. You get quality where it matters without burning tokens on trivial work.</p>
+
+        <h2>How It Works Under the Hood</h2>
+
+        <p>The architecture is straightforward:</p>
+
+        <ol>
+          <li><strong>Dispatch:</strong> The orchestrator sends the slice instructions to 3 models in parallel via their respective APIs</li>
+          <li><strong>Dry-run analysis:</strong> Each model produces a detailed implementation plan — file-by-file, with specific patterns and edge cases — but <em>does not write code</em></li>
+          <li><strong>Synthesis:</strong> A reviewer agent receives all 3 analyses and produces a unified plan, picking the best approach per file/component</li>
+          <li><strong>Build:</strong> The builder model executes from the consensus plan instead of the raw slice instructions</li>
+        </ol>
+
+        <p>If one model is unavailable, the reviewer works with 2 analyses. If fewer than 2 respond, it falls back to normal single-model execution. Your pipeline never blocks on model availability.</p>
+
+        <h2>The Takeaway</h2>
+
+        <p>The quality difference between single-model and quorum isn't in <em>correctness</em> — both passed all gates. It's in <strong>craftsmanship</strong>. Code that's easier to maintain, debug, and extend. Tests that cover edge cases you wouldn't have thought to test. Patterns that match current best practices instead of what the training data averaged out to.</p>
+
+        <p>For critical business logic, the 3% cost overhead pays for itself the first time a production bug <em>doesn't</em> happen.</p>
+
+        <p>Quorum Mode is available in <a href="https://github.com/srnichols/plan-forge" class="text-forge-400 hover:underline font-semibold">Plan Forge</a> via <code>pforge run-plan &lt;plan&gt; --quorum</code> or <code>--quorum=auto</code> for selective application. Use <code>--estimate --quorum</code> to preview the cost before committing.</p>
+
+      </div>
+
+      <!-- Post nav -->
+      <div class="mt-12 pt-8 border-t border-slate-800/60 flex justify-between items-center">
+        <a href="guardrails-lessons-learned.html" class="text-sm text-forge-400 hover:underline">← Previous: Guardrails Lessons</a>
+        <a href="spec-kit-plan-forge.html" class="text-sm text-forge-400 hover:underline">Next: Spec Kit + Plan Forge →</a>
+      </div>
+
+    </div>
+  </article>
+
+  <!-- FOOTER -->
+  <footer class="border-t border-slate-800/60 bg-slate-950 py-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex flex-col md:flex-row items-center justify-between gap-4 mb-4">
+        <div class="flex items-center gap-3">
+          <img src="https://github.com/srnichols.png" alt="Scott Nichols" class="w-8 h-8 rounded-full border border-slate-700" loading="lazy" />
+          <p class="text-sm text-slate-500">Created by <a href="https://github.com/srnichols" class="text-forge-400 hover:underline">Scott Nichols</a> · Principal Cloud Solution Architect @ <a href="https://microsoft.com" class="text-slate-400 hover:text-slate-300">Microsoft</a></p>
+        </div>
+        <div class="flex gap-4">
+          <a href="https://github.com/srnichols" class="text-sm text-slate-500 hover:text-slate-300">GitHub</a>
+          <a href="https://www.linkedin.com/in/srnichols/" class="text-sm text-slate-500 hover:text-slate-300">LinkedIn</a>
+        </div>
+      </div>
+      <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+        <p class="text-sm text-slate-600">© 2026 Plan Forge. Open source under the MIT License.</p>
+        <div class="flex gap-6">
+          <a href="../index.html" class="text-sm text-slate-500 hover:text-slate-300">Home</a>
+          <a href="https://github.com/srnichols/plan-forge" class="text-sm text-slate-500 hover:text-slate-300">GitHub</a>
+          <a href="../docs.html" class="text-sm text-slate-500 hover:text-slate-300">Docs</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/shared.js"></script>
+</body>
+</html>

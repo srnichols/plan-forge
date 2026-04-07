@@ -36,7 +36,7 @@
           <tr><td><strong>Plan</strong></td><td>A Markdown file in <code>docs/plans/</code> describing a feature. Contains slices, scope contract, and gates.</td></tr>
           <tr><td><strong>Hardened Plan</strong></td><td>A plan that passed Step 2 — locked-down execution contract with scope, slices, gates, forbidden actions.</td></tr>
           <tr><td><strong>Scope Contract</strong></td><td>Plan section defining In Scope, Out of Scope, and Forbidden files. Prevents scope creep.</td></tr>
-          <tr><td><strong>Slice</strong></td><td>A 30–120 minute unit of execution within a plan. Has tasks, a validation gate, and optional dependencies.</td></tr>
+          <tr><td><strong>Slice</strong></td><td>A 30–120 minute unit of execution within a plan. Has tasks, a validation gate, and optional dependencies. Think of it as a commit-sized piece of work that can be validated on its own — small enough to catch failures early, large enough to be useful.</td></tr>
           <tr><td><strong>Validation Gate</strong></td><td>Build + test commands that must pass at every slice boundary before proceeding.</td></tr>
           <tr><td><strong>Forbidden Actions</strong></td><td>Files or operations the AI must not touch. Enforced by lifecycle hooks and scope checks.</td></tr>
           <tr><td><strong>Stop Condition</strong></td><td>A condition that halts execution — e.g., "If migration fails, STOP."</td></tr>

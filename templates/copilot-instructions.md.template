@@ -147,6 +147,7 @@ This project uses the **Plan Forge Pipeline** for feature development.
 | `performance.instructions.md` | Hot/cold path analysis, allocation reduction |
 | `multi-environment.instructions.md` | Dev/staging/prod config, environment detection |
 | `version.instructions.md` | Semantic versioning, commit-driven bumps |
+| `status-reporting.instructions.md` | Standard output templates for orchestration updates, progress, blockers, handoffs |
 
 > **Note**: Instruction files auto-load via their `applyTo` frontmatter when you edit matching files.
 

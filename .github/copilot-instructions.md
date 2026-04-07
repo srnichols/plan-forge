@@ -146,6 +146,7 @@ This project uses the **Plan Forge Pipeline** for feature development.
 | `security.instructions.md` | Input validation, secret management, CORS |
 | `testing.instructions.md` | Unit tests, integration tests, test containers |
 | `version.instructions.md` | Semantic versioning, commit-driven bumps |
+| `status-reporting.instructions.md` | Standard output templates for orchestration updates, progress, blockers, handoffs |
 
 > **Note**: Instruction files auto-load via their `applyTo` frontmatter when you edit matching files.
 

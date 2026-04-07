@@ -155,6 +155,33 @@
       </div>
     </section>
 
+    <!-- Agent-Per-Slice Routing -->
+    <section class="mb-16">
+      <h2 class="text-2xl font-bold text-white mb-2">Agent-Per-Slice Routing</h2>
+      <p class="text-sm text-slate-400 mb-6">Assign a different AI model to each execution role. The orchestrator auto-selects based on the current operation — tune cost vs. quality at every stage without changing your plan files.</p>
+      <div class="grid gap-4 md:grid-cols-3 mb-6">
+        <div class="bg-slate-800/60 rounded-xl p-5 border border-slate-700/30">
+          <div class="text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">default</div>
+          <code class="text-forge-400 text-sm">claude-opus-4.6</code>
+          <p class="text-xs text-slate-500 mt-2">Spec, harden, review operations</p>
+        </div>
+        <div class="bg-slate-800/60 rounded-xl p-5 border border-slate-700/30">
+          <div class="text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">execute</div>
+          <code class="text-forge-400 text-sm">gpt-5.2-codex</code>
+          <p class="text-xs text-slate-500 mt-2">Writing code, generating tests</p>
+        </div>
+        <div class="bg-slate-800/60 rounded-xl p-5 border border-slate-700/30">
+          <div class="text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">review</div>
+          <code class="text-forge-400 text-sm">claude-sonnet-4.6</code>
+          <p class="text-xs text-slate-500 mt-2">Gate checks, drift detection</p>
+        </div>
+      </div>
+      <div class="bg-slate-800/60 rounded-xl p-4 border border-slate-700/30 font-mono text-xs text-slate-400">
+        <span class="text-slate-500">// .forge.json</span><br>
+        "modelRouting": { "default": "claude-opus-4.6", "execute": "gpt-5.2-codex", "review": "claude-sonnet-4.6" }
+      </div>
+    </section>
+
     <!-- Quorum Mode -->
     <section class="mb-16">
       <h2 class="text-2xl font-bold text-white mb-2">Quorum Mode</h2>
@@ -222,8 +249,8 @@
 
     <!-- Dashboard -->
     <section class="mb-16">
-      <h2 class="text-2xl font-bold text-white mb-6">Live Dashboard</h2>
-      <p class="text-sm text-slate-400 mb-4"><code class="text-forge-400">localhost:3100/dashboard</code> — 8 tabs, real-time via WebSocket, no build step required.</p>
+      <h2 class="text-2xl font-bold text-white mb-2">Web UI — Live Dashboard</h2>
+      <p class="text-sm text-slate-400 mb-4"><code class="text-forge-400">localhost:3100/dashboard</code> — 8 real-time tabs via WebSocket. No build step. Also runs standalone: <code class="text-slate-400">node pforge-mcp/server.mjs --dashboard-only</code></p>
       <div class="grid gap-3 md:grid-cols-4">
         <div class="bg-slate-800/60 rounded-lg p-3 border border-slate-700/30 text-center"><span class="text-lg">📊</span><p class="text-xs text-white font-semibold mt-1">Progress</p><p class="text-xs text-slate-500">Live slice cards</p></div>
         <div class="bg-slate-800/60 rounded-lg p-3 border border-slate-700/30 text-center"><span class="text-lg">📋</span><p class="text-xs text-white font-semibold mt-1">Runs</p><p class="text-xs text-slate-500">History table</p></div>
@@ -285,11 +312,11 @@
           </ul>
         </div>
         <div class="bg-slate-800/60 rounded-xl p-6 border border-slate-700/30">
-          <h3 class="text-lg font-bold text-white mb-2">OpenBrain Memory</h3>
-          <p class="text-sm text-slate-400 mb-3">Optional persistent semantic memory. Decisions and patterns captured in one session are searchable in every future session.</p>
+          <h3 class="text-lg font-bold text-white mb-2">OpenBrain Context Injection</h3>
+          <p class="text-sm text-slate-400 mb-3">Optional persistent semantic memory. Prior decisions and conventions are searched and <strong class="text-white">injected as context</strong> before each slice begins — bridging the 3-session model with long-term memory.</p>
           <ul class="text-xs text-slate-500 space-y-1">
-            <li>Auto-search before each slice for prior conventions</li>
-            <li>Auto-capture decisions after each slice</li>
+            <li>Context injected before each slice (<code class="text-slate-400">search_thoughts</code>)</li>
+            <li>Decisions captured after each slice (<code class="text-slate-400">capture_thought</code>)</li>
             <li>Cost anomaly detection (>2x average triggers insight)</li>
             <li>Run summary captured for future phase planning</li>
           </ul>

@@ -46,11 +46,13 @@ This framework doesn't slow you down. It teaches the AI your standards so you **
 | **Pipeline reliability** | 24/24 validation gates pass across Steps 0–6 |
 | **Gate coverage** | `dotnet build` + `dotnet test` (12 tests) at every slice boundary |
 | **Model support** | Claude Opus/Sonnet/Haiku, GPT 5.x, Gemini — routed per slice |
+| **Agent-per-slice routing** | Assign a different AI model per role (`default`, `execute`, `review`) via `modelRouting` in `.forge.json` — tune cost vs. quality at each stage |
 | **Quorum mode** | Multi-model consensus: 3 models analyze complex slices in parallel, reviewer synthesizes best approach |
 | **Orchestrator tests** | 83 self-tests passing (parser, DAG, scheduler, events, cost, security, quorum) |
 | **Cost tracking** | Per-slice token counts, 23-model pricing table, monthly aggregation |
 | **Observability** | OTLP traces with resource context, span kinds, severity levels |
-| **Memory** | OpenBrain integration — prior decisions searched before each slice |
+| **Memory** | OpenBrain context injection — prior decisions and conventions searched and injected before each slice; captured after every run |
+| **Web UI** | Live dashboard at `localhost:3100` — 8 real-time tabs: Progress, Runs, Cost, Actions, Replay, Extensions, Config, Traces |
 
 ### The Bottom Line
 

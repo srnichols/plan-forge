@@ -41,6 +41,30 @@
 | **Dry Run** | `--dry-run` | None | Parses and validates plan structure |
 | **Resume** | `--resume-from N` | Same as auto | Skips completed slices |
 
+## Agent-Per-Slice Routing
+
+Assign a different AI model to each execution role via `modelRouting` in `.forge.json`. The orchestrator selects the appropriate model automatically based on the current operation:
+
+| Role | Key | Default | Typical Use |
+|------|-----|---------|-------------|
+| General / fallback | `default` | `claude-opus-4.6` | Spec, harden, review |
+| Slice execution | `execute` | `gpt-5.2-codex` | Writing code, generating tests |
+| Review & audit | `review` | `claude-sonnet-4.6` | Gate checks, drift detection |
+
+Config (`.forge.json`):
+```json
+{
+  "modelRouting": {
+    "default": "claude-opus-4.6",
+    "execute": "gpt-5.2-codex",
+    "review": "claude-sonnet-4.6"
+  }
+}
+```
+
+Override at runtime: `pforge run-plan <plan> --model gpt-5.2-codex` (applies to all roles for that run).
+API providers (xAI Grok, etc.) are auto-routed by model name pattern — no extra config required.
+
 ## CLI Commands (16)
 
 ```
@@ -96,7 +120,22 @@ Set the env var, use any matching model name in `--models` or `.forge.json`, and
 
 Dashboard: `http://localhost:3100/dashboard` (8 tabs: Progress, Runs, Cost, Actions, Replay, Extensions, Config, Traces)
 
-Standalone mode: `node pforge-mcp/server.mjs --dashboard-only`
+### Web UI — Live Dashboard
+
+Real-time execution dashboard served at `http://localhost:3100/dashboard`. No build step required; updates via WebSocket as slices run.
+
+| Tab | Purpose |
+|-----|---------|
+| **Progress** | Live slice cards — status, gate output, retry count |
+| **Runs** | Full run history with pass/fail summary |
+| **Cost** | Per-model spend, monthly aggregation, token breakdown |
+| **Actions** | Trigger runs, abort, estimate cost |
+| **Replay** | Session log replay for any past slice |
+| **Extensions** | Browse, install, and manage extensions |
+| **Config** | Edit `.forge.json` live — model routing, quorum, parallelism |
+| **Traces** | OTLP waterfall timeline, span detail, severity filter |
+
+Standalone (no MCP client needed): `node pforge-mcp/server.mjs --dashboard-only`
 
 ## Pipeline (6 Steps)
 
@@ -273,12 +312,12 @@ Degradation: <2 successful dry-runs → falls back to normal execution. Reviewer
 
 ## OpenBrain Memory (Optional)
 
-When configured (`.vscode/mcp.json` includes `openbrain`):
+When configured (`.vscode/mcp.json` includes `openbrain`), the orchestrator injects prior decisions and conventions as context before each slice begins — bridging the 3-session model with long-term semantic memory.
 
 | Hook | When | What |
 |------|------|------|
-| Before slice | Worker prompt injection | `search_thoughts` for prior conventions |
-| After slice | Worker prompt injection | `capture_thought` for decisions |
+| Before slice | Worker prompt injection | `search_thoughts` — prior conventions injected as context |
+| After slice | Worker prompt injection | `capture_thought` — decisions recorded for future slices |
 | After run | Summary field | `_memoryCapture` with run summary + cost anomaly |
 
 Key OpenBrain tools: `search_thoughts`, `capture_thought`, `capture_thoughts`, `thought_stats`

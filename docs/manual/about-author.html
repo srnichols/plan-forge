@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<!-- verified: v2.17.0 -->
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>About the Author — Plan Forge Manual</title>
+  <meta name="description" content="Scott Nichols — Principal Cloud Solution Architect at Microsoft. Why he built Plan Forge and the frustrations that started it." />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+    <main><div class="chapter-content">
+
+      <h1>About the Author</h1>
+
+      <!-- Author card -->
+      <div class="flex gap-6 items-start mb-8 p-6 rounded-xl border border-slate-800/60 bg-slate-900/40">
+        <img src="https://avatars.githubusercontent.com/u/1429587?s=128&v=4" alt="Scott Nichols" class="w-24 h-24 rounded-xl border border-slate-700/40 shrink-0" />
+        <div>
+          <h2 class="text-xl font-bold text-slate-100 mb-1" style="margin-top:0; border:none; padding:0">Scott Nichols</h2>
+          <p class="text-sm text-forge-400 mb-2">Principal Cloud Solution Architect — Microsoft</p>
+          <p class="text-sm text-slate-500 mb-3">Azure Apps & Infrastructure · Boise, ID</p>
+          <div class="flex gap-3">
+            <a href="https://github.com/srnichols" class="text-xs text-slate-400 hover:text-slate-100 transition-colors">GitHub</a>
+            <a href="https://www.linkedin.com/in/srnichols/" class="text-xs text-slate-400 hover:text-slate-100 transition-colors">LinkedIn</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Why I Built This -->
+      <h2 id="why">Why I Built This</h2>
+
+      <p>Plan Forge came from frustration — my own.</p>
+
+      <p>I've spent my career as a software architect. First building enterprise systems, then helping teams at Microsoft build them on Azure. I know what good architecture looks like: clean layers, clear boundaries, every component with a purpose. Lasagna, not spaghetti.</p>
+
+      <p>When AI coding agents arrived, I was excited. Here was a tool that could generate code faster than any team I'd ever managed. But the excitement wore off fast. The agents were brilliant at greenfield work — scaffolding, boilerplate, CRUD endpoints — but they had no concept of architectural discipline. They made decisions I didn't ask for, expanded scope without warning, and produced code that compiled but couldn't be maintained.</p>
+
+      <p>Sound familiar? If you've hit the <a href="what-is-plan-forge.html#the-wall">80/20 wall</a>, you know exactly what I mean.</p>
+
+      <p>I realized the problem wasn't the models. The models were capable. The problem was that nobody was giving them <em>structure</em>. No scope contracts. No validation gates. No separation between building and reviewing. We'd spent decades learning that human dev teams need guardrails, code reviews, and architectural governance — then handed AI agents a blank prompt and said "build me an app."</p>
+
+      <p>So I started writing those guardrails. First as instruction files I pasted into Copilot chats. Then as structured prompts. Then as a pipeline with sessions and validation gates. Then as a full framework with agents, skills, lifecycle hooks, an orchestrator, a dashboard, and cost tracking.</p>
+
+      <p>I built Plan Forge because I needed it. The same impulse that made me establish coding standards for human teams drove me to establish them for AI teams. The tools are different, but the principles are the same: clear scope, layered architecture, validation at boundaries, independent review, and no spaghetti code — ever.</p>
+
+      <!-- Background -->
+      <h2 id="background">Background</h2>
+
+      <p>My work at Microsoft focuses on Azure enterprise architecture — helping organizations design cloud systems that scale, stay secure, and remain maintainable over years. Before that, I built distributed systems, designed multi-tenant SaaS platforms, and ran engineering teams where architecture governance was a daily concern.</p>
+
+      <p>That background shapes Plan Forge in specific ways:</p>
+
+      <ul>
+        <li><strong>Stamps pattern architecture</strong> — my open-source <a href="https://github.com/srnichols/StampsPattern">StampsPattern</a> project brings Azure enterprise cell isolation to infrastructure-as-code. The same boundary-thinking is in every Plan Forge scope contract.</li>
+        <li><strong>Multi-tenant isolation</strong> — years of building SaaS platforms taught me that "works for one tenant" is not the same as "works for all tenants." Plan Forge's multi-tenancy reviewer agent comes from real production incidents.</li>
+        <li><strong>Guardrails as culture</strong> — I've never seen a great team that didn't have standards. The guardrails aren't about distrust — they're about consistency. Whether your team member is a junior dev, a senior engineer, or an AI model, they all produce better work when they know the rules.</li>
+      </ul>
+
+      <!-- The Community -->
+      <h2 id="community">Community</h2>
+
+      <p>Plan Forge is open source (MIT). Contributions, extensions, bug reports, and feedback are all welcome.</p>
+
+      <ul>
+        <li><strong>GitHub</strong>: <a href="https://github.com/srnichols/plan-forge">srnichols/plan-forge</a></li>
+        <li><strong>Contributing</strong>: See <a href="../../CONTRIBUTING.md">CONTRIBUTING.md</a></li>
+        <li><strong>Extensions</strong>: Build and publish your own domain guardrails — <a href="extensions.html">Chapter 11</a></li>
+        <li><strong>BoiseCodeCamp</strong>: I organize <a href="https://github.com/BoiseCodeCamp">Boise Code Camp</a> — come say hi if you're in Idaho</li>
+      </ul>
+
+      <div class="callout callout-tip">
+        <strong>Plan Forge builds Plan Forge.</strong> Every feature in this framework was developed using the same pipeline it ships to users — 11 phases, 103 self-tests, v1.0 → v2.17 with zero manual rollbacks. If the pipeline can build itself without drift, it can build your project too.
+      </div>
+
+      <div id="chapter-prev-next" class="chapter-nav"></div>
+    </div></main>
+  </div>
+  <script src="assets/manual.js"></script>
+</body>
+</html>

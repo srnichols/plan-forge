@@ -77,7 +77,3 @@ For critical business logic, the 3% cost overhead pays for itself the first time
 Quorum Mode is available in Plan Forge → https://github.com/srnichols/plan-forge
 
 📖 Read the full post with dispatch diagrams and A/B data → https://planforge.software/blog/quorum-mode-3-models.html
-
----
-
-HASHTAGS: #AIDevelopment #MultiModel #CodeQuality #ABTesting #DevTools

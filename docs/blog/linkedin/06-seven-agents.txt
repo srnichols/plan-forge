@@ -84,7 +84,3 @@ Plan Forge is free and open source. MIT licensed. Pick your stack, pick your age
 https://github.com/srnichols/plan-forge
 
 📖 Read the full post with agent comparison tables → https://planforge.software/blog/seven-agents.html
-
----
-
-HASHTAGS: #AIDevelopment #GitHubCopilot #ClaudeCode #CursorEditor #DevTools #MultiAgent

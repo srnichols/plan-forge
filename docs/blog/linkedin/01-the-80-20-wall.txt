@@ -2,9 +2,9 @@ HERO IMAGE: docs/blog/assets/ → use the existing problem-80-20-wall.webp from 
 TITLE: The 80/20 Wall: Why AI Agents Break What They Build
 
 NETWORK TEASER (paste into "Tell your network what this article is about"):
-AI coding agents get you to 80% fast — then start breaking things trying to close the last 20%. I've been there. $1,500 in tokens, watching an agent destroy its own work. The fix isn't a better model. It's a better methodology. Here's the pattern and how to break through it.
+AI coding agents get you to 80% fast — then start breaking things trying to close the last 20%. I've been there. $1,500 in tokens, watching an agent destroy its own work. The fix isn't a better model. It's a better methodology. Here's the pattern and how to break through it. #AIDevelopment #SoftwareEngineering #GitHubCopilot #DevTools #AIGuardrails
 
----
+--- ARTICLE BODY (paste below into the editor) ---
 
 You fire up an AI agent — Copilot, Cursor, Claude, whatever — and describe the app you want. The first 80% is magic. Files appear, components wire up, the database schema materializes. You're shipping faster than you ever thought possible.
 
@@ -77,7 +77,3 @@ Plan Forge (https://github.com/srnichols/plan-forge) is free, open source, and M
 The 80/20 wall is real. But it's a planning problem, not a model problem. And planning problems have solutions.
 
 📖 Read the full post with diagrams and code examples → https://planforge.software/blog/the-80-20-wall.html
-
----
-
-HASHTAGS: #AIDevelopment #SoftwareEngineering #GitHubCopilot #DevTools #AIGuardrails

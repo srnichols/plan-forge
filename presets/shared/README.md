@@ -10,6 +10,7 @@ by the setup wizard regardless of which preset is selected.
 | `architecture-principles.instructions.md` | `.github/instructions/` | Universal architecture rules |
 | `git-workflow.instructions.md` | `.github/instructions/` | Commit conventions |
 | `ai-plan-hardening-runbook.instructions.md` | `.github/instructions/` | Quick-reference for plan editing |
+| `status-reporting.instructions.md` | `.github/instructions/` | Standard output templates for orchestration runs |
 
 > **Note**: The setup wizard copies these from `.github/instructions/` in the template root.
 

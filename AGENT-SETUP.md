@@ -269,6 +269,7 @@ The validation script checks for these files. All must be present and non-empty:
 | `.github/instructions/architecture-principles.instructions.md` | Universal coding principles |
 | `.github/instructions/git-workflow.instructions.md` | Commit conventions |
 | `.github/instructions/ai-plan-hardening-runbook.instructions.md` | Auto-loads for plan docs |
+| `.github/instructions/status-reporting.instructions.md` | Standard output templates for orchestration runs |
 | `docs/plans/AI-Plan-Hardening-Runbook.md` | Full pipeline runbook |
 | `docs/plans/AI-Plan-Hardening-Runbook-Instructions.md` | Copy-paste prompts |
 | `docs/plans/DEPLOYMENT-ROADMAP.md` | Phase tracker |

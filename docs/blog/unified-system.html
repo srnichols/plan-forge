@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>From WhatsApp to Shipped PR: How I Automated My Entire Dev Workflow — Plan Forge Blog</title>
+  <meta name="description" content="Describe a feature from your phone. The system hardens the plan, builds it slice-by-slice, captures every decision, sends progress to Telegram, reviews independently, and ships. Here's how the unified architecture works." />
+  <meta property="og:title" content="From WhatsApp to Shipped PR: How I Automated My Entire Dev Workflow" />
+  <meta property="og:description" content="Three open-source tools wired together: Plan Forge (guardrails), OpenBrain (memory), OpenClaw (orchestration). Describe a feature from your phone. Get a shipped PR." />
+  <meta property="og:type" content="article" />
+  <meta property="og:url" content="https://planforge.software/blog/unified-system.html" />
+  <meta property="og:image" content="https://planforge.software/assets/og-card.webp" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="From WhatsApp to Shipped PR: How I Automated My Entire Dev Workflow" />
+  <meta name="twitter:description" content="Three open-source tools. Phone to shipped PR. Zero drift. Here's the unified architecture." />
+  <link rel="canonical" href="https://planforge.software/blog/unified-system.html" />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    "headline": "From WhatsApp to Shipped PR: How I Automated My Entire Dev Workflow",
+    "description": "Three open-source tools wired together into a closed-loop development system. Describe a feature from your phone, get a shipped PR with zero drift.",
+    "url": "https://planforge.software/blog/unified-system.html",
+    "datePublished": "2026-04-07",
+    "author": { "@type": "Person", "name": "Scott Nichols", "url": "https://github.com/srnichols" },
+    "publisher": { "@type": "Organization", "name": "Plan Forge", "url": "https://planforge.software" }
+  }
+  </script>
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { theme: { extend: { colors: { forge: { 300:'#fcd34d',400:'#fbbf24',500:'#f59e0b',600:'#d97706',700:'#b45309' }}, fontFamily: { sans:['Inter','system-ui','sans-serif'], mono:['"JetBrains Mono"','"Fira Code"','monospace'] }}}}
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/blog.css" />
+</head>
+<body class="bg-slate-950 text-slate-100 antialiased">
+
+  <!-- NAV -->
+  <nav class="sticky top-0 z-50 bg-slate-950/92 backdrop-blur-md border-b border-slate-800/60">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <a href="../index.html" class="flex items-center gap-3 shrink-0"><img src="../assets/plan-forge-logo.svg" alt="Plan Forge" class="h-7 w-auto" /></a>
+        <div class="hidden md:flex items-center gap-7">
+          <a href="../index.html#solution" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">How It Works</a>
+          <a href="../examples.html" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">Examples</a>
+          <a href="./" class="text-sm text-forge-400 transition-colors">Blog</a>
+          <a href="../faq.html" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">FAQ</a>
+        </div>
+        <div class="hidden md:flex items-center gap-3">
+          <a href="https://github.com/srnichols/plan-forge" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">GitHub</a>
+          <a href="../index.html#quickstart" class="px-4 py-2 text-sm font-semibold bg-forge-500 hover:bg-forge-400 text-slate-900 rounded-lg transition-colors">Get Started</a>
+        </div>
+        <button id="mobile-btn" class="md:hidden p-2 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors" aria-label="Open menu">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ARTICLE -->
+  <article class="py-16 bg-slate-900">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+
+      <!-- Meta -->
+      <div class="mb-8">
+        <a href="./" class="text-sm text-forge-400 hover:underline">← Back to Blog</a>
+      </div>
+      <div class="flex items-center gap-3 mb-6">
+        <span class="px-3 py-1 rounded-full bg-purple-500/10 text-xs font-medium text-purple-400 border border-purple-500/20">Architecture</span>
+        <span class="text-xs text-slate-500">April 7, 2026 · 10 min read</span>
+      </div>
+      <h1 class="text-4xl md:text-5xl font-black text-white mb-6 leading-tight">From WhatsApp to Shipped PR: How I Automated My Entire Dev Workflow</h1>
+      <div class="flex items-center gap-3 mb-10 pb-10 border-b border-slate-800/60">
+        <img src="https://github.com/srnichols.png" alt="Scott Nichols" class="w-10 h-10 rounded-full border border-slate-700" loading="lazy" />
+        <div>
+          <p class="text-sm font-medium text-slate-200">Scott Nichols</p>
+          <p class="text-xs text-slate-500">Director @ Microsoft</p>
+        </div>
+      </div>
+
+      <!-- Content -->
+      <div class="blog-content">
+
+        <img src="assets/unified-hero.jpg" alt="Three forge stations connected by golden chains — amber blueprint scroll, blue memory orb, and purple message scrolls — with a smartphone beaming light into the central forge" class="w-full rounded-2xl border border-slate-700/40 shadow-2xl shadow-amber-500/10 mb-10" />
+
+        <p>I'm at dinner. My phone buzzes — a WhatsApp message from me to myself, earlier that day: <em>"Build user profile API for my-api project. Include avatar upload, email verification, and role-based access."</em></p>
+
+        <p>By the time I get home, the feature is built. Tests pass. An independent review found zero drift violations. A PR is waiting. Every architectural decision is captured in semantic memory so the next feature starts smarter than this one did.</p>
+
+        <p>No, this isn't a demo. This is what happens when you wire three open-source tools together into a closed-loop system.</p>
+
+        <h2>The Three Pillars</h2>
+
+        <p>Each tool solves one critical problem in AI-assisted development:</p>
+
+        <!-- Architecture diagram -->
+        <div class="bg-slate-800/60 rounded-xl p-6 border border-slate-700/30 mb-6 font-mono text-xs leading-relaxed overflow-x-auto">
+          <div class="text-slate-500 mb-3">// The Unified System</div>
+          <div class="ml-0"><span class="text-forge-400 font-bold">Plan Forge</span> <span class="text-slate-500">— The blueprint</span></div>
+          <div class="text-slate-600 ml-2">What to build, how, and when to stop</div>
+          <div class="text-slate-500 ml-2">│</div>
+          <div class="ml-0"><span class="text-blue-400 font-bold">OpenBrain</span> <span class="text-slate-500">— The memory</span></div>
+          <div class="text-slate-600 ml-2">Why we decided, what we learned, what failed</div>
+          <div class="text-slate-500 ml-2">│</div>
+          <div class="ml-0"><span class="text-purple-400 font-bold">OpenClaw</span> <span class="text-slate-500">— The nervous system</span></div>
+          <div class="text-slate-600 ml-2">Always-on orchestration across every channel</div>
+        </div>
+
+        <p>Alone, each is useful. Plan Forge gives you guardrails but forgets between sessions. OpenBrain gives you memory but waits passively for queries. OpenClaw gives you reach (20+ messaging channels) but has no methodology or memory.</p>
+
+        <p>Together, they form something none of them can be alone: a system that <strong>plans, builds, remembers, and communicates</strong> across every surface you use.</p>
+
+        <h2>The Full Lifecycle: Phone to PR</h2>
+
+        <p>Here's what actually happens when I send that WhatsApp message.</p>
+
+        <h3>1. Request Capture</h3>
+
+        <p>I send a message to my <a href="https://github.com/srnichols/OpenClaw" class="text-purple-400 hover:underline font-semibold">OpenClaw</a> gateway on WhatsApp: <em>"Build user profile API for my-api project."</em> OpenClaw's skill engine activates the <code>plan-forge-orchestrator</code> skill.</p>
+
+        <p>Before doing anything else, OpenClaw queries <a href="https://github.com/srnichols/OpenBrain" class="text-blue-400 hover:underline font-semibold">OpenBrain</a>: <em>"What do we already know about this project?"</em> OpenBrain returns prior architectural decisions, active conventions, and patterns from past features. OpenClaw compiles this into a context briefing.</p>
+
+        <h3>2. Plan Hardening</h3>
+
+        <p>OpenClaw launches a Copilot CLI session via the Agent Client Protocol (ACP). The session loads all <a href="https://github.com/srnichols/plan-forge" class="text-forge-400 hover:underline font-semibold">Plan Forge</a> guardrails — 18 instruction files that auto-enforce architecture, security, testing, and error handling standards.</p>
+
+        <p>The AI generates a hardened execution contract with the 6 mandatory blocks: scope contract, execution slices, validation gates, forbidden actions, rollback protocol, and completion criteria. It searches OpenBrain for prior decisions before locking anything down.</p>
+
+        <p>My phone buzzes: <em>"Plan hardened. 5 slices. Approve?"</em></p>
+
+        <p>I reply: <em>"Approved."</em></p>
+
+        <h3>3. Slice-by-Slice Execution</h3>
+
+        <p>A new Copilot CLI session starts (fresh context — the builder must not self-review). For each slice:</p>
+
+        <ol>
+          <li>The AI writes the code, following Plan Forge guardrails</li>
+          <li>Build + test gates run — the slice <strong>must pass</strong> before proceeding</li>
+          <li>Every decision gets captured to OpenBrain with full provenance</li>
+          <li>My phone buzzes: <em>"Slice 2 done. Tests pass. ✓"</em></li>
+        </ol>
+
+        <p>If a slice fails, I get notified immediately. I can reply with guidance, or let the auto-escalation chain try a more capable model.</p>
+
+        <h3>4. Independent Review</h3>
+
+        <p>A third Copilot CLI session starts — fresh context again. The reviewer loads the hardened plan as reference, queries OpenBrain for <em>all</em> captured decisions, and audits the implementation against Plan Forge guardrails.</p>
+
+        <p>My phone buzzes: <em>"Review complete. 0 drift violations. Ship it?"</em></p>
+
+        <p>I reply: <em>"Ship it."</em></p>
+
+        <h3>5. Ship + Learn</h3>
+
+        <p>The code is committed, pushed, and a PR is created. OpenBrain captures a batch postmortem — every decision, pattern, and lesson from the entire feature. Next time an AI session works on this project, it starts with all of that context.</p>
+
+        <blockquote><p>The loop closes. Each feature makes the next one smarter. Memory compounds. The system gets better without any manual intervention.</p></blockquote>
+
+        <h2>Why Not Just Use One Tool?</h2>
+
+        <p>I get this question a lot. Here's the honest answer:</p>
+
+        <p><strong>Plan Forge alone</strong> gives you excellent guardrails in VS Code. But it's session-isolated — great for preventing drift within a session, but no memory across features. And you can't interact with it from your phone.</p>
+
+        <p><strong>OpenBrain alone</strong> gives you semantic memory. But it's passive — it captures and retrieves, but doesn't enforce anything. You have to remember to search it.</p>
+
+        <p><strong>OpenClaw alone</strong> gives you reach across 20+ channels and an agent runtime. But it has no development methodology and no memory. It's a powerful conduit with nothing to enforce.</p>
+
+        <p>The magic is in the <strong>integration layer</strong>. OpenClaw routes work and manages sessions. Plan Forge provides the methodology and guardrails. OpenBrain makes sure nothing is ever forgotten. Each tool does one thing well. Together, they cover every gap.</p>
+
+        <h2>The Architecture</h2>
+
+        <!-- System diagram -->
+        <div class="bg-slate-800/60 rounded-xl p-6 border border-slate-700/30 mb-6 font-mono text-xs leading-relaxed overflow-x-auto">
+          <div class="text-slate-500 mb-3">// Unified Development System</div>
+          <div class="mb-4">
+            <div class="text-slate-400 mb-1">Developer Surfaces</div>
+            <div class="ml-2"><span class="text-green-400">Phone</span> <span class="text-slate-600">(WhatsApp / Telegram / Slack)</span></div>
+            <div class="ml-2"><span class="text-blue-400">Desktop</span> <span class="text-slate-600">(VS Code + Copilot)</span></div>
+            <div class="ml-2"><span class="text-amber-400">Terminal</span> <span class="text-slate-600">(Copilot CLI)</span></div>
+            <div class="ml-2"><span class="text-purple-400">Voice</span> <span class="text-slate-600">(OpenClaw Talk Mode)</span></div>
+          </div>
+          <div class="text-slate-500 ml-8">↓ all routes converge ↓</div>
+          <div class="mt-4 mb-4 p-3 border border-purple-500/30 rounded-lg">
+            <div class="text-purple-400 font-bold">OpenClaw Gateway</div>
+            <div class="text-slate-600">Skills engine · Session manager · Cron · Notifications</div>
+          </div>
+          <div class="text-slate-500 ml-8">↓ orchestrates ↓</div>
+          <div class="mt-4 grid grid-cols-2 gap-3">
+            <div class="p-3 border border-forge-500/30 rounded-lg">
+              <div class="text-forge-400 font-bold">Plan Forge</div>
+              <div class="text-slate-600">18 guardrails · 19 agents<br/>7-step pipeline · Lifecycle hooks</div>
+            </div>
+            <div class="p-3 border border-blue-500/30 rounded-lg">
+              <div class="text-blue-400 font-bold">OpenBrain</div>
+              <div class="text-slate-600">7 MCP tools · pgvector<br/>Semantic search · Provenance</div>
+            </div>
+          </div>
+          <div class="text-slate-500 ml-8 mt-3">↓ executes via ↓</div>
+          <div class="mt-3 p-3 border border-slate-600/30 rounded-lg">
+            <div class="text-white font-bold">Copilot CLI (ACP)</div>
+            <div class="text-slate-600">Headless · Programmable · Your unlimited Copilot tokens</div>
+          </div>
+        </div>
+
+        <p>The key enabler is the <strong>Agent Client Protocol (ACP)</strong> — GitHub Copilot CLI can run as a programmable server that any external tool can control. OpenClaw uses ACP to launch sessions, send prompts, manage tool approvals, and stream results. No GUI needed. No manual intervention.</p>
+
+        <h2>What This Means in Practice</h2>
+
+        <ul>
+          <li><strong>Describe a feature from your phone</strong> — WhatsApp, Telegram, Slack, Discord, Signal, even iMessage</li>
+          <li><strong>Get progress updates wherever you are</strong> — every slice, every gate, every review result</li>
+          <li><strong>Approve or reject via chat</strong> — no need to open an IDE</li>
+          <li><strong>Every decision is captured automatically</strong> — no manual memory management</li>
+          <li><strong>Every future session starts smarter</strong> — the AI already knows your conventions, patterns, and lessons</li>
+          <li><strong>Independent review is structural</strong> — fresh context, no sunk cost bias, full decision history</li>
+          <li><strong>Uses your existing Copilot subscription</strong> — unlimited tokens, no separate API bills</li>
+        </ul>
+
+        <h2>Tools in a Toolbox</h2>
+
+        <p>The unified system is the most powerful configuration, but each tool works standalone. Use one. Use two. Combine them however you want. They're tools in a toolbox, not a monolith.</p>
+
+        <ul>
+          <li><strong>Just want guardrails?</strong> — <a href="https://github.com/srnichols/plan-forge" class="text-forge-400 hover:underline">Plan Forge</a> standalone in VS Code</li>
+          <li><strong>Just want memory?</strong> — <a href="https://github.com/srnichols/OpenBrain" class="text-blue-400 hover:underline">OpenBrain</a> as a standalone MCP server</li>
+          <li><strong>Just want reach?</strong> — <a href="https://github.com/srnichols/OpenClaw" class="text-purple-400 hover:underline">OpenClaw</a> as a standalone AI gateway</li>
+          <li><strong>Want the full loop?</strong> — Wire all three together with the <a href="../UNIFIED-SYSTEM-ARCHITECTURE.html" class="text-slate-300 hover:underline">Unified System Architecture</a></li>
+        </ul>
+
+        <p>All three are free. All three are MIT licensed. All three are self-hosted — no cloud dependencies unless you want them.</p>
+
+        <blockquote><p>The future of development isn't AI writing code. It's AI writing code within a system that plans, enforces, remembers, and improves — automatically, across every surface you use.</p></blockquote>
+
+      </div>
+
+      <!-- Post nav -->
+      <div class="mt-12 pt-8 border-t border-slate-800/60 flex justify-between items-center">
+        <a href="quorum-mode-3-models.html" class="text-sm text-forge-400 hover:underline">← Previous: Quorum Mode</a>
+        <a href="./" class="text-sm text-forge-400 hover:underline">All posts →</a>
+      </div>
+
+    </div>
+  </article>
+
+  <!-- FOOTER -->
+  <footer class="border-t border-slate-800/60 bg-slate-950 py-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex flex-col md:flex-row items-center justify-between gap-4 mb-4">
+        <div class="flex items-center gap-3">
+          <img src="https://github.com/srnichols.png" alt="Scott Nichols" class="w-8 h-8 rounded-full border border-slate-700" loading="lazy" />
+          <p class="text-sm text-slate-500">Created by <a href="https://github.com/srnichols" class="text-forge-400 hover:underline">Scott Nichols</a></p>
+        </div>
+        <div class="flex gap-4">
+          <a href="https://github.com/srnichols" class="text-sm text-slate-500 hover:text-slate-300">GitHub</a>
+          <a href="https://www.linkedin.com/in/srnichols/" class="text-sm text-slate-500 hover:text-slate-300">LinkedIn</a>
+        </div>
+      </div>
+      <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+        <p class="text-sm text-slate-600">© 2026 Plan Forge. Open source under the MIT License.</p>
+        <div class="flex gap-6">
+          <a href="../index.html" class="text-sm text-slate-500 hover:text-slate-300">Home</a>
+          <a href="https://github.com/srnichols/plan-forge" class="text-sm text-slate-500 hover:text-slate-300">GitHub</a>
+          <a href="../docs.html" class="text-sm text-slate-500 hover:text-slate-300">Docs</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/shared.js"></script>
+</body>
+</html>

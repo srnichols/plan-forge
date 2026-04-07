@@ -144,7 +144,11 @@
 
         <h3>3. Persistent Memory Across Sessions</h3>
 
-        <p>Agents break things at 80% because they <strong>lose context</strong>. A semantic memory layer captures every decision, every pattern, every lesson learned. The next session searches memory <em>before writing a single line</em>. The agent already knows what you chose and why.</p>
+        <p>Agents break things at 80% because they <strong>lose context</strong>. They forget the architectural decisions from three sessions ago. They forget <em>why</em> a piece of code was structured a certain way. So they rewrite it — and break everything downstream.</p>
+
+        <p>This is why I built <a href="https://github.com/srnichols/OpenBrain" class="text-blue-400 hover:underline font-semibold">OpenBrain</a> — a persistent semantic memory layer that captures every decision, pattern, and lesson learned, tagged by project and phase. The next session searches memory <em>before writing a single line</em>. The agent already knows what you chose and why. It's self-hosted, MIT licensed, and runs on pgvector with local or cloud embeddings.</p>
+
+        <p>OpenBrain is one of three pillars in the <a href="../UNIFIED-SYSTEM-ARCHITECTURE.html" class="text-purple-400 hover:underline">Unified System Architecture</a>: <strong>Plan Forge</strong> is the blueprint (what to build and how), <strong>OpenBrain</strong> is the memory (why we decided, what we learned, what failed), and <strong>OpenClaw</strong> is the nervous system (always-on orchestration across every channel). Alone, each is useful. Together, they form a closed-loop development system where the AI compounds knowledge over time instead of starting from zero every session.</p>
 
         <h3>4. Independent Review in Isolation</h3>
 

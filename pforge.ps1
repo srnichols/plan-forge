@@ -95,6 +95,7 @@ function Show-Help {
     Write-Host "  .\pforge.ps1 ext list"
     Write-Host "  .\pforge.ps1 update ../plan-forge"
     Write-Host "  .\pforge.ps1 update --dry-run"
+    Write-Host "  .\pforge.ps1 update --check"
     Write-Host ""
 }
 
@@ -1153,7 +1154,7 @@ function Invoke-Update {
         "Never overwrite copilot-instructions.md, project-profile, project-principles, or plan files"
     )
 
-    $dryRun = $Arguments -contains '--dry-run'
+    $dryRun = $Arguments -contains '--dry-run' -or $Arguments -contains '--check'
     $forceUpdate = $Arguments -contains '--force'
 
     # ─── Locate source ───────────────────────────────────────────
@@ -1361,24 +1362,23 @@ function Invoke-Update {
         }
     }
 
-    # ─── MCP server files ────────────────────────────────────────
+    # ─── MCP server files (auto-discover all files) ──────────────
     $srcMcp = Join-Path $sourcePath "pforge-mcp"
     $dstMcp = Join-Path $RepoRoot "pforge-mcp"
     if (Test-Path $srcMcp) {
-        $mcpFiles = @("server.mjs", "orchestrator.mjs", "hub.mjs", "bridge.mjs", "telemetry.mjs", "capabilities.mjs", "skill-runner.mjs", "memory.mjs", "package.json", "EVENTS.md")
-        foreach ($mcpFile in $mcpFiles) {
-            $srcFile = Join-Path $srcMcp $mcpFile
-            $dstFile = Join-Path $dstMcp $mcpFile
-            if (Test-Path $srcFile) {
-                if (Test-Path $dstFile) {
-                    $srcHash = (Get-FileHash $srcFile -Algorithm SHA256).Hash
-                    $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
-                    if ($srcHash -ne $dstHash) {
-                        $updates += @{ Src = $srcFile; Dst = $dstFile; Name = "pforge-mcp/$mcpFile" }
-                    }
-                } else {
-                    $newFiles += @{ Src = $srcFile; Dst = $dstFile; Name = "pforge-mcp/$mcpFile" }
+        Get-ChildItem -Path $srcMcp -File -Recurse | Where-Object { $_.FullName -notmatch 'node_modules' } | ForEach-Object {
+            $relPath = $_.FullName.Substring($srcMcp.Length + 1)
+            $relName = "pforge-mcp/$($relPath.Replace('\', '/'))"
+            $dstFile = Join-Path $dstMcp $relPath
+            if ($neverUpdate -contains $relName) { return }
+            if (Test-Path $dstFile) {
+                $srcHash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
+                $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
+                if ($srcHash -ne $dstHash) {
+                    $updates += @{ Src = $_.FullName; Dst = $dstFile; Name = $relName }
                 }
+            } else {
+                $newFiles += @{ Src = $_.FullName; Dst = $dstFile; Name = $relName }
             }
         }
     }
@@ -2704,7 +2704,7 @@ function Invoke-Smith {
 function Invoke-RunPlan {
     if ($Arguments.Count -lt 1) {
         Write-Host "ERROR: Missing plan path" -ForegroundColor Red
-        Write-Host "Usage: pforge run-plan <plan-file> [--estimate] [--assisted] [--model <name>] [--resume-from <N>] [--dry-run]" -ForegroundColor Yellow
+        Write-Host "Usage: pforge run-plan <plan-file> [--estimate] [--assisted] [--model <name>] [--resume-from <N>] [--dry-run] [--foreground]" -ForegroundColor Yellow
         exit 1
     }
 
@@ -2716,11 +2716,12 @@ function Invoke-RunPlan {
     }
 
     # Parse flags
-    $estimate   = $Arguments -contains '--estimate'
-    $assisted   = $Arguments -contains '--assisted'
-    $dryRun     = $Arguments -contains '--dry-run'
-    $model      = $null
-    $resumeFrom = $null
+    $estimate    = $Arguments -contains '--estimate'
+    $assisted    = $Arguments -contains '--assisted'
+    $dryRun      = $Arguments -contains '--dry-run'
+    $foreground  = $Arguments -contains '--foreground'
+    $model       = $null
+    $resumeFrom  = $null
 
     for ($i = 1; $i -lt $Arguments.Count; $i++) {
         if ($Arguments[$i] -eq '--model' -and ($i + 1) -lt $Arguments.Count) {
@@ -2755,17 +2756,37 @@ function Invoke-RunPlan {
     Write-Host ""
     if ($estimate) {
         Write-Host "Estimating cost for: $planPath" -ForegroundColor Cyan
+        Write-Host ""
+        & node @nodeArgs
     } elseif ($dryRun) {
         Write-Host "Dry run for: $planPath" -ForegroundColor Cyan
-    } elseif ($assisted) {
-        Write-Host "Starting assisted execution: $planPath" -ForegroundColor Cyan
-        Write-Host "You code in VS Code, orchestrator validates gates." -ForegroundColor DarkGray
+        Write-Host ""
+        & node @nodeArgs
+    } elseif ($foreground) {
+        # Blocking mode — useful for debugging or CI pipelines
+        if ($assisted) {
+            Write-Host "Starting assisted execution (foreground): $planPath" -ForegroundColor Cyan
+            Write-Host "You code in VS Code, orchestrator validates gates." -ForegroundColor DarkGray
+        } else {
+            Write-Host "Starting full auto execution (foreground): $planPath" -ForegroundColor Cyan
+        }
+        Write-Host ""
+        & node @nodeArgs
     } else {
-        Write-Host "Starting full auto execution: $planPath" -ForegroundColor Cyan
+        # Background mode — default for interactive use
+        if ($assisted) {
+            Write-Host "Starting assisted execution (background): $planPath" -ForegroundColor Cyan
+            Write-Host "You code in VS Code, orchestrator validates gates." -ForegroundColor DarkGray
+        } else {
+            Write-Host "Starting full auto execution (background): $planPath" -ForegroundColor Cyan
+        }
+        Write-Host ""
+        $proc = Start-Process -FilePath 'node' -ArgumentList $nodeArgs -PassThru -NoNewWindow
+        Write-Host "Orchestrator running in background  PID: $($proc.Id)" -ForegroundColor Green
+        Write-Host "Monitor : pforge plan-status" -ForegroundColor DarkGray
+        Write-Host "Logs    : .forge/runs/ (latest sub-directory)" -ForegroundColor DarkGray
+        Write-Host "Stop    : Stop-Process -Id $($proc.Id)" -ForegroundColor DarkGray
     }
-    Write-Host ""
-
-    & node @nodeArgs
 }
 
 # ─── Command: version-bump (Fix 3 + Fix 10) ───────────────────────────

@@ -5,6 +5,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.14.0] — 2026-04-07
+
+### Added — Quality Engineering (Phase 21)
+- **Vitest test suite** — `pforge-mcp/tests/` with framework tests covering parser slice extraction, bridge formatters (Telegram/Slack/Discord/Generic), analyzer scoring (MUST/SHOULD extraction + checkbox fallback), and constants validation (SUPPORTED_AGENTS, MODEL_PRICING); run with `npm test` in `pforge-mcp/`
+- **Background orchestrator mode** — `pforge run-plan` now spawns `node orchestrator.mjs` as a detached background process, writes PID to `.forge/orchestrator.pid`, and polls `GET /api/runs/latest` every 5 s for live progress; `--foreground` flag restores blocking behavior for debugging
+- **`GET /api/runs/latest` endpoint** — `server.mjs` exposes the most recent run's summary and current slice status for the background polling client
+- **Parser format tolerance** — `parsePlan()` now accepts case-insensitive slice headers (`### Slice N:`, `### Slice N —`, `### Slice N.`), case-insensitive `Build Command` / `build command` / `**Build command**`, and flexible `Depends On` parsing (`Slice 1`, `1`, `depends: 1`)
+- **Auto-discover updater** — `pforge update` (ps1 and sh) now scans the entire `pforge-mcp/` directory tree by SHA-256 hash instead of a hardcoded file list; new files are added automatically; `--check` is now an alias for `--dry-run`
+- **Dashboard config loading states** — config tab shows an animated skeleton placeholder while the API fetch is in-flight; fields populate only after the response arrives; 5 s timeout handler prevents indefinite spinner
+- **stderr streaming safety** — `parseStderrStats()` is called inside the worker `close` handler so it always receives the fully-accumulated stderr string, not a partial stream; covered by `tests/worker.test.mjs`
+
+---
+
 ## [2.13.1] — 2026-04-07
 
 ### Added — Dashboard Capabilities + Doc Refresh (Phase 20)

@@ -7,7 +7,7 @@
 
 ## Current Release
 
-**v2.13.1** (2026-04-07) — Platform Complete: agent-per-slice routing, OpenBrain deep context, preset validation counts, Spec Kit auto-detection, dual-publish extensions, auto-update notification, Web UI plan browser, dashboard bridge/approval/escalation/performance panels.
+**v2.14.0** (2026-04-06) — Platform Complete: agent-per-slice routing, OpenBrain deep context, preset validation counts, Spec Kit auto-detection, dual-publish extensions, auto-update notification, Web UI plan browser, dashboard bridge/approval/escalation/performance panels.
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 
@@ -338,6 +338,349 @@ Coordinate multiple orchestrators across developers.
 - **Team mode** — multiple orchestrators coordinate across developers, avoiding merge conflicts
 - **Team activity feed** — real-time cross-developer plan progress (deferred from v2.2)
 - **Team dashboard** — multi-developer plan coordination UI (deferred from Enterprise backlog)
+
+---
+
+## v2.14 — Copilot Platform Integration
+
+> **Research date**: 2026-04-06  
+> **Sources**: VS Code 1.113–1.114 release notes, GitHub Copilot Changelog (March–April 2026), Copilot SDK public preview announcement, Copilot cloud agent updates, Org Custom Instructions GA  
+> **Goal**: Leverage new Copilot platform capabilities to make Plan Forge a first-class citizen of the native Copilot ecosystem rather than a bolt-on layer. Ordered by effort/impact ratio — low-hanging fruit and biggest-bang items first.
+
+### Phase A — Quick Wins (< 1 day each)
+
+#### A1. One-Click Plugin Install Link on Website
+
+**Source**: VS Code 1.113 — URL handlers for plugin installation  
+**Effort**: Trivial — one HTML link  
+**Impact**: Eliminates 3-step manual install; visitors go from website → installed in one click
+
+Add `vscode://chat-plugin/install?source=srnichols/plan-forge` and `vscode-insiders://chat-plugin/install?source=srnichols/plan-forge` buttons to `docs/index.html`, `docs/docs.html`, and `AGENT-SETUP.md`. Plan Forge already has a valid `plugin.json` — this just surfaces a URL handler that VS Code 1.113+ supports natively.
+
+**Acceptance criteria**:
+- Stable + Insiders install buttons on the website hero section
+- `AGENT-SETUP.md` Quick Start includes the URL handler as preferred install method
+- Fallback text for VS Code < 1.113 ("or run `Install Plugin From Source` manually")
+
+#### A2. Model Deprecation Sweep
+
+**Source**: GitHub Copilot Changelog — GPT-5.1 deprecated (Apr 3), GPT-5.3-Codex LTS (Mar 18), GPT-5.4 GA (Mar 5), GPT-5.4 mini GA (Mar 17), Claude Sonnet 4 deprecation upcoming (Mar 31)  
+**Effort**: Small — grep + update defaults  
+**Impact**: Prevents users hitting deprecated model errors; keeps pricing table accurate
+
+Audit all files referencing model names and update:
+- `.forge.json` defaults and documentation: replace `gpt-5.1` references → `gpt-5.3-codex` (LTS) or `gpt-5.4`
+- Quorum mode default models: verify Claude Sonnet 4.6 is still valid; check if Claude Sonnet 4 should be dropped from fallback chains
+- `pforge-mcp/orchestrator.mjs` — escalation chain defaults: ensure deprecated models aren't in the default list
+- Pricing/cost estimation tables in dashboard and `--estimate` output: update token rates for GPT-5.4 and GPT-5.4 mini
+- README "Model Routing" section and any `copilot-instructions.md` template references
+
+**Files to check**: `orchestrator.mjs`, `tools.json`, `README.md`, `CUSTOMIZATION.md`, `docs/capabilities.html`, `docs/faq.html`, dashboard `app.js`, preset `copilot-instructions.md.template`
+
+#### A3. Cloud Agent Integration Guide (`copilot-setup-steps.yml`)
+
+**Source**: GitHub Copilot cloud agent (renamed from "coding agent") now supports configurable setup steps, validation tools, and org-level runner controls (Mar–Apr 2026)  
+**Effort**: Small — one YAML template + docs section  
+**Impact**: High — makes Plan Forge guardrails apply automatically in every cloud agent session, not just local VS Code
+
+Create a `copilot-setup-steps.yml` template that:
+- Installs Node.js (for MCP server)
+- Runs `setup.ps1` / `setup.sh` to deploy instruction files
+- Configures `.vscode/mcp.json` for the MCP server
+- Optionally runs `pforge smith` as a post-setup validation
+
+Add to `docs/COPILOT-VSCODE-GUIDE.md` a new section: **"Using Plan Forge with Copilot Cloud Agent"** explaining:
+- How `copilot-setup-steps.yml` works (runs on cloud agent runner before each session)
+- How instruction files (.instructions.md) are automatically loaded by the cloud agent
+- How Plan Forge's validation gates complement the cloud agent's built-in CodeQL/secret-scanning/code-review validation
+- Positioning: "Copilot cloud agent plans. Plan Forge hardens." — cloud agent generates loose plans; Plan Forge converts them into locked execution contracts with scope isolation and forbidden actions
+
+**Acceptance criteria**:
+- `copilot-setup-steps.yml` template in `templates/`
+- `setup.ps1`/`setup.sh` generate it during setup with `--cloud-agent` flag
+- Docs section with step-by-step guide
+- Example in `docs/plans/examples/`
+
+#### A4. Copilot Memory Coexistence Documentation
+
+**Source**: Copilot Memory now on by default for Pro/Pro+ users (Mar 4) — repo-scoped, 28-day expiry, shared across coding agent/code review/CLI  
+**Effort**: Small — documentation only  
+**Impact**: Prevents user confusion about overlapping memory systems; positions OpenBrain as the long-term complement
+
+Add a section to `docs/COPILOT-VSCODE-GUIDE.md` and `README.md` FAQ:
+
+**"Plan Forge Memory vs. Copilot Memory vs. OpenBrain"**
+
+| Feature | Copilot Memory | Plan Forge Session Memory | OpenBrain |
+|---------|---------------|--------------------------|-----------|
+| Scope | Repo | Session / Run | Cross-project |
+| Persistence | 28 days (auto-expire) | Per-run (`.forge/runs/`) | Permanent |
+| Content | Auto-discovered conventions | Slice results, gate outcomes, cost | Architecture decisions, lessons learned |
+| Discovery | Automatic (GitHub infra) | Explicit (run artifacts) | Semantic search |
+| Sharing | Coding agent + code review + CLI | Dashboard + MCP tools | Any integrated tool |
+
+Key message: Copilot Memory handles *what* (conventions), Plan Forge tracks *how* (execution state), OpenBrain stores *why* (decisions). They're complementary layers, not competitors. A team using all three gets: automatic convention enforcement (Copilot Memory) + execution guardrails and traceability (Plan Forge) + institutional knowledge that never expires (OpenBrain).
+
+**Acceptance criteria**:
+- Comparison table in `docs/COPILOT-VSCODE-GUIDE.md`
+- FAQ entry in `README.md`
+- No feature changes needed — documentation only
+
+### Phase B — Medium Effort, High Value (1–3 days each)
+
+#### B1. Org Custom Instructions Generator (`pforge org-rules export`)
+
+**Source**: GitHub Copilot Org Custom Instructions — GA (Apr 2). Admins set default instructions across all repos; applied to Chat, code review, and cloud agent.  
+**Effort**: Medium — new CLI command + consolidation logic  
+**Impact**: High for enterprise — one command produces the org-level instruction block for GitHub settings; positions Plan Forge as the authoring tool for org governance
+
+New CLI command: `pforge org-rules export [--format github|markdown|json]`
+
+Logic:
+1. Read all `.github/instructions/*.instructions.md` files
+2. Read `copilot-instructions.md`
+3. Read `PROJECT-PRINCIPLES.md` if present
+4. Consolidate into a single instruction block optimized for the GitHub org custom instructions format (character limit TBD — research GitHub's max length)
+5. Output to stdout or `--output <file>`
+6. Include section headers: Architecture Principles, Coding Standards, Git Workflow, Security Rules, Testing Requirements
+7. Strip applyTo frontmatter (org instructions don't support it — they apply universally)
+8. Add a header comment: `# Generated by Plan Forge v2.14 from repo: <repo-name>`
+
+Also document the **two-layer model** in Plan Forge docs:
+- **Layer 1 (Org)**: Universal baseline from `pforge org-rules export` → GitHub org settings
+- **Layer 2 (Repo)**: Project-specific profile from `copilot-instructions.md` + `instructions/*.instructions.md` → loaded per-repo
+
+**Acceptance criteria**:
+- `pforge org-rules export` CLI command (PS + Bash)
+- Corresponding `forge_org_rules` MCP tool
+- Docs explaining Layer 1 / Layer 2 model
+- Example output in `docs/plans/examples/`
+
+#### B2. Nested Subagent Pipeline (Pipeline-as-Subagents)
+
+**Source**: VS Code 1.113 — Nested subagents: `chat.subagents.allowInvocationsFromSubagents` enables multi-step workflows where subagents can call other subagents  
+**Effort**: Medium — refactor 5 pipeline agent definitions  
+**Impact**: The pipeline currently requires manual handoff between sessions (Specifier → Plan Hardener → Executor → Reviewer Gate → Shipper). With nested subagents, the Specifier could programmatically spawn Plan Hardener as a child, which spawns Executor, etc. — making the 4-session pipeline collapse into 1 continuous session with automatic handoffs.
+
+Changes needed:
+- Update pipeline agent `.agent.md` files to include `subagent: true` capability and define which downstream agent they can invoke
+- Add handoff instructions to each agent's system prompt: "After completing your phase, invoke the next pipeline agent as a subagent with context: [spec output / hardened plan / execution report]"
+- Add `chat.subagents.allowInvocationsFromSubagents: true` to the generated `.vscode/settings.json` template
+- Document in `docs/COPILOT-VSCODE-GUIDE.md`: "Enable nested subagents for single-session pipeline execution"
+- Preserve backward compatibility — handoff buttons still work for users who prefer manual control or can't enable nested subagents
+
+**Notes for Step-0 spec**:
+- Risk: infinite recursion if guard conditions aren't tight — each agent must terminate after its phase
+- The VS Code setting is global, not per-agent — document implications
+- Test with the greenfield walkthrough end-to-end
+
+**Acceptance criteria**:
+- Pipeline agents can invoke next-stage agents as nested subagents
+- Setting auto-configured during setup
+- Manual handoff buttons preserved as fallback
+- End-to-end test with walkthrough project
+
+#### B3. `/troubleshoot` Integration Skill
+
+**Source**: VS Code 1.114 — `/troubleshoot` can now reference previous chat sessions via `#session`, enabling diagnosis of why instructions were ignored or guardrails bypassed  
+**Effort**: Small-to-medium — new skill file + docs  
+**Impact**: Directly addresses the #1 user complaint: "why didn't Copilot follow my instructions?"
+
+New skill: `.github/skills/forge-troubleshoot/SKILL.md`
+
+When invoked (manually or auto-detected), the skill:
+1. Runs `pforge smith` to verify all instruction files are correctly installed
+2. Checks `.vscode/settings.json` for correct `instructions` and `customInstructions` configuration
+3. Suggests running VS Code's `/troubleshoot #session` on the problematic session
+4. Provides a checklist of common Plan Forge instruction loading failures:
+   - `applyTo` pattern doesn't match the files being edited
+   - `.instructions.md` file not in `.github/instructions/` directory
+   - `copilot-instructions.md` not in `.github/` root
+   - Instruction file too large (VS Code has context limits)
+   - `settings.json` overrides blocking auto-load
+5. If OpenBrain is available, searches for similar past issues and their resolution
+
+Also add troubleshooting guidance to `docs/COPILOT-VSCODE-GUIDE.md`:
+- "If guardrails were ignored in a session, run `/troubleshoot #session:<id>` to see if instruction files were loaded"
+- Common causes and fixes table
+
+**Acceptance criteria**:
+- Skill file with detection triggers
+- Shared skill version in `presets/shared/skills/forge-troubleshoot/`
+- Docs section in VS Code guide
+- Works for all 9 presets
+
+#### B4. Validation Tools Complement Guide
+
+**Source**: Coding agent validation tools configurable (Mar 18) — admins toggle CodeQL, secret scanning, Copilot code review per repo  
+**Effort**: Small — documentation + optional `.forge.json` config  
+**Impact**: Clarifies that Plan Forge validation (build + test gates) and cloud agent validation (security scanning) are orthogonal; guides users to enable both
+
+Add to `docs/COPILOT-VSCODE-GUIDE.md` a section: **"Validation Layers"**
+
+| Layer | What It Checks | Where It Runs | Configured In |
+|-------|---------------|---------------|---------------|
+| **Plan Forge gates** | Build compiles, tests pass, sweep clean | MCP orchestrator | `.forge.json` gateCommands |
+| **CodeQL** | Security vulnerabilities, code smells | Cloud agent runner | Repo settings → Code security |
+| **Secret scanning** | Leaked credentials, API keys | Cloud agent runner | Repo settings → Code security |
+| **Copilot code review** | Style, patterns, logic issues | Cloud agent PR review | Repo settings → Copilot |
+| **GitHub Actions CI** | Full CI pipeline (lint, test, deploy) | GitHub runners | `.github/workflows/` |
+
+Optionally, add a `.forge.json` key `cloudAgentValidation` that documents which external validation tools the project expects, so `pforge smith` can warn if they're not enabled.
+
+**Acceptance criteria**:
+- Documentation section with comparison table
+- Optional `.forge.json` schema addition
+- `pforge smith` check (advisory, not blocking)
+
+### Phase C — Strategic Investments (3–7 days each)
+
+#### C1. Copilot SDK Tool Provider
+
+**Source**: Copilot SDK public preview (Apr 2) — 5 languages, custom tools + agents, system prompt customization (replace/append/prepend/transform), streaming, BYOK, OpenTelemetry built-in, permission framework  
+**Effort**: High — new package/module  
+**Impact**: Strategic — transforms Plan Forge from "files you install" to "tools that run inside any Copilot SDK-based agent"
+
+Build a `@plan-forge/copilot-sdk` npm package that exposes Plan Forge guardrails as Copilot SDK tools:
+
+```typescript
+// Usage in any Copilot SDK agent
+import { planForgeTools } from '@plan-forge/copilot-sdk';
+
+const agent = new CopilotAgent({
+  tools: [...planForgeTools],
+  systemPrompt: { 
+    transform: (base) => base + planForgeInstructions 
+  }
+});
+```
+
+Exposed tools (subset of MCP tools, repackaged for SDK):
+- `forge.harden(planText)` — take loose plan text → return hardened plan with scope contracts
+- `forge.validateSlice(sliceN, buildOutput, testOutput)` — check gate passage
+- `forge.sweep(directory)` — scan for TODOs/stubs/mocks
+- `forge.analyze(planFile)` — consistency scoring
+- `forge.smith()` — diagnostic check
+
+SDK-specific features:
+- **System prompt transform** — automatically append Plan Forge instructions to any agent's system prompt using SDK's `transform` mode (no manual copy-paste)
+- **OpenTelemetry passthrough** — SDK's built-in OTEL traces propagate through Plan Forge tools, creating unified trace trees
+- **Permission framework** — declare Plan Forge tools as "read" (smith, analyze, sweep) vs "write" (harden, run-plan) for SDK permission scoping
+
+**Notes for Step-0 spec**:
+- Must decide: TypeScript-first or multi-language? SDK supports 5 languages but TypeScript aligns with Plan Forge's Node.js base
+- The SDK is in public preview — API may change. Pin to a specific SDK version and document upgrade path
+- This is the path to Plan Forge becoming embeddable rather than installable
+- Consider publishing to npm and registering in the Copilot SDK tool marketplace (if one emerges)
+
+**Acceptance criteria**:
+- npm package with typed exports
+- README with usage examples
+- Integration tests against Copilot SDK
+- Example agent that uses Plan Forge tools
+- OTEL trace continuity verified
+
+#### C2. Cloud Agent Plan Export (`forge_export_plan`)
+
+**Source**: Copilot cloud agent now generates implementation plans before coding (Apr 1)  
+**Effort**: Medium-to-high — new MCP tool + plan parser  
+**Impact**: Bridges the gap between Copilot's loose planning and Plan Forge's hardened execution
+
+New MCP tool: `forge_export_plan`
+
+Takes a Copilot cloud agent session plan (markdown format) and converts it into a hardened Plan Forge plan:
+- Parses the cloud agent's step-by-step plan
+- Maps each step to a Plan Forge slice with scope isolation
+- Adds validation gates (build + test commands from `.forge.json`)
+- Identifies potential parallel slices (steps with no file overlap)
+- Adds forbidden actions based on scope analysis
+- Outputs a `Phase-X-PLAN.md` in Plan Forge format ready for `forge_run_plan`
+
+Workflow:
+1. User asks cloud agent to plan a feature → cloud agent produces a plan
+2. User reviews and says "harden this plan"
+3. `forge_export_plan` converts it → hardened Plan Forge format
+4. `forge_run_plan` executes it with full guardrails
+
+**Notes for Step-0 spec**:
+- Cloud agent plan format is not formally documented — need to reverse-engineer from examples
+- May need heuristics: "Step 1: Create X" → Slice 1, Scope: [files involved]
+- Could use an LLM call itself to do the semantic mapping (meta-tool: AI-assisted plan hardening)
+- Fallback: if plan format doesn't parse cleanly, output a template with TODOs for human refinement
+
+**Acceptance criteria**:
+- `forge_export_plan` MCP tool
+- `pforge export-plan <session-log>` CLI command
+- Handles at least 3 plan formats (numbered steps, headings, checkboxes)
+- Output passes `pforge validate`
+- Example in docs
+
+#### C3. `forge_sync_memories` — Bridge to Copilot Memory
+
+**Source**: Copilot Memory (Mar 4) — auto-discovers repo conventions, 28-day TTL, repo-scoped  
+**Effort**: Medium — depends on whether Copilot Memory has a write API (currently unclear)  
+**Impact**: Extends Plan Forge's captured architecture decisions into the ephemeral Copilot Memory layer
+
+New MCP tool: `forge_sync_memories`
+
+If Copilot Memory exposes a write/import API:
+- Export Plan Forge captured decisions (from OpenBrain or `.forge/` artifacts) into Copilot Memory format
+- This gives short-lived Copilot Memory entries a "permanent backing store" in OpenBrain
+- Sync runs periodically or on-demand, refreshing the 28-day TTL
+
+If Copilot Memory does NOT expose a write API (likely in current preview):
+- Alternative approach: generate a `.github/copilot-memory-hints.md` file that contains the most important architecture decisions in a format Copilot Memory's auto-discovery will pick up
+- This is a soft-sync — Plan Forge writes hints that Copilot Memory reads organically
+
+**Notes for Step-0 spec**:
+- Copilot Memory API is not documented yet — this item is speculative
+- Start with the soft-sync approach (`.github/copilot-memory-hints.md`) which works today
+- Monitor GitHub's API releases for a future hard-sync path
+- Privacy consideration: ensure no secrets or sensitive data flow into Memory
+
+**Acceptance criteria** (soft-sync v1):
+- `forge_sync_memories` generates `.github/copilot-memory-hints.md` from OpenBrain/forge decisions
+- Content is architecture decisions only (no code, no secrets)
+- Runs as part of `pforge smith` or on-demand
+- Documented in Copilot Memory coexistence guide (A4)
+
+#### C4. Fine-Grained Tool Approval Integration
+
+**Source**: VS Code 1.114 proposed API — tools can scope approval to specific argument combinations. E.g., approve `read_file("config.json")` without blanket-approving all `read_file` calls.  
+**Effort**: Medium — requires Plan Forge to ship as a VS Code extension (not just files)  
+**Impact**: Moderate — improves UX by auto-approving safe forge operations while requiring confirmation for destructive ones
+
+If/when Plan Forge ships as a VS Code extension:
+- Classify MCP tools by risk level:
+  - **Auto-approvable** (read-only, instant): `forge_smith`, `forge_validate`, `forge_sweep`, `forge_capabilities`, `forge_plan_status`, `forge_cost_report`, `forge_analyze`
+  - **Require approval** (side effects): `forge_run_plan`, `forge_abort`, `forge_new_phase`, `forge_run_skill`
+  - **Conditional** (depends on args): `forge_diff` (read-only = auto, apply = approval)
+- Register tool approval scopes using the proposed API so VS Code pre-approves safe tools
+
+**Notes for Step-0 spec**:
+- This API is still "proposed" in 1.114 — may not stabilize until 1.115+
+- Requires Plan Forge to be a real VS Code extension, not just instruction files + MCP server
+- Track the API's status in VS Code release notes before committing development effort
+- If the API stabilizes, this becomes a strong reason to create a Plan Forge VS Code extension
+
+**Acceptance criteria**:
+- Tool risk classification documented
+- VS Code extension prototype with approval scopes (if API is stable)
+- Fallback: document manual tool approval patterns for current users
+
+### Phase D — Watch List (No Build Yet — Monitor & Evaluate)
+
+These items depend on external platform changes. Track them; build when APIs stabilize or opportunities mature.
+
+| # | Item | Source | What to Watch | Trigger to Build |
+|---|------|--------|---------------|-----------------|
+| D1 | **Cloud agent signed commits** | Copilot changelog Apr 3 | Cloud agent now signs commits with verified signature | Plan Forge's Shipper agent could verify commit signatures as an additional gate — build when users request auditability |
+| D2 | **Copilot for Jira integration** | Copilot changelog Mar 5, public preview | Jira ↔ Copilot bidirectional sync | Plan Forge Step 0 (Specifier) could ingest Jira ticket as spec input — build when the Jira API is documented |
+| D3 | **Merge conflict resolution** | Copilot changelog Mar 26 | `@copilot` resolves merge conflicts automatically | Plan Forge's branch-per-slice strategy could invoke this when parallel slices create conflicts — build when the API is callable from MCP |
+| D4 | **Session tracing for audit** | Copilot changelog Mar 20 | Every cloud agent commit links to session logs | Plan Forge's Trace tab could deep-link to Copilot session logs for full provenance — build when trace format is documented |
+| D5 | **Chat Customizations editor** | VS Code 1.113 | Unified UI for instructions, prompts, agents, skills | `pforge smith` could detect and suggest the editor for reviewing installed files — low effort, add when convenient |
+| D6 | **Copilot code review agentic mode** | Copilot changelog Mar 5 | Code review is now agentic (multi-step, tool-using) | Plan Forge's `/code-review` skill could delegate to native agentic review and layer Plan Forge-specific checks on top |
+| D7 | **Plan mode in Copilot metrics** | Copilot changelog Mar 2 | GitHub exposes plan-mode usage metrics | Track whether Plan Forge users' plan-mode metrics improve vs. non-Plan Forge users — build advocacy materials |
 
 ---
 

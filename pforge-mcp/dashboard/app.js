@@ -1752,6 +1752,10 @@ window.markRead = markRead;
 let currentConfig = {};
 
 async function loadConfig() {
+  const skeleton = document.getElementById("cfg-skeleton");
+  const formBody = document.getElementById("cfg-form-body");
+  if (skeleton) { skeleton.classList.remove("hidden"); }
+  if (formBody) { formBody.classList.add("hidden"); }
   try {
     const res = await fetch(`${API_BASE}/api/config`);
     currentConfig = await res.json();
@@ -1795,7 +1799,12 @@ async function loadConfig() {
     loadMemoryPresets();
     loadWorkerStatus();
     loadBridgeStatus();
+
+    if (skeleton) { skeleton.classList.add("hidden"); }
+    if (formBody) { formBody.classList.remove("hidden"); }
   } catch (err) {
+    if (skeleton) { skeleton.classList.add("hidden"); }
+    if (formBody) { formBody.classList.remove("hidden"); }
     document.getElementById("cfg-status").textContent = `Error: ${err.message}`;
   }
 }

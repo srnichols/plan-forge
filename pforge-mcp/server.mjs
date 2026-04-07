@@ -766,6 +766,42 @@ function createExpressApp() {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
+  // GET /api/runs/latest — most recent run summary + current slice status
+  app.get("/api/runs/latest", (_req, res) => {
+    try {
+      const runsDir = resolve(PROJECT_DIR, ".forge", "runs");
+      if (!existsSync(runsDir)) return res.status(404).json({ error: "No runs yet" });
+      const dirs = readdirSync(runsDir, { withFileTypes: true })
+        .filter((d) => d.isDirectory()).map((d) => d.name).sort().reverse();
+      if (dirs.length === 0) return res.status(404).json({ error: "No runs yet" });
+      const runDir = resolve(runsDir, dirs[0]);
+      const summaryPath = resolve(runDir, "summary.json");
+      const runPath = resolve(runDir, "run.json");
+      let base = {};
+      if (existsSync(summaryPath)) {
+        base = JSON.parse(readFileSync(summaryPath, "utf-8"));
+      } else if (existsSync(runPath)) {
+        base = { status: "running", ...JSON.parse(readFileSync(runPath, "utf-8")) };
+      } else {
+        base = { status: "unknown" };
+      }
+      // Attach current slice status from the most recent slice-N.json
+      const sliceFiles = existsSync(runDir)
+        ? readdirSync(runDir).filter((f) => /^slice-\d+\.json$/.test(f)).sort((a, b) => {
+            const na = parseInt(a.match(/\d+/)[0], 10), nb = parseInt(b.match(/\d+/)[0], 10);
+            return nb - na; // descending — latest slice first
+          })
+        : [];
+      if (sliceFiles.length > 0) {
+        try {
+          const latestSlice = JSON.parse(readFileSync(resolve(runDir, sliceFiles[0]), "utf-8"));
+          base.currentSlice = latestSlice;
+        } catch { /* skip corrupt slice */ }
+      }
+      res.json(base);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
   // GET /api/runs/:runIdx — single run detail with slice data
   app.get("/api/runs/:runIdx", (req, res) => {
     try {

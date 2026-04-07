@@ -78,6 +78,7 @@ EXAMPLES:
   ./pforge.sh ext list
   ./pforge.sh update ../plan-forge
   ./pforge.sh update --dry-run
+  ./pforge.sh update --check
 
 EOF
 }
@@ -1065,7 +1066,7 @@ cmd_update() {
 
     for arg in "$@"; do
         case "$arg" in
-            --dry-run) dry_run=true ;;
+            --dry-run|--check) dry_run=true ;;
             --force)   force=true ;;
             --*) ;;
             *)
@@ -1266,26 +1267,28 @@ print(v if isinstance(v, str) else ','.join(v))
 
     unset -f _pf_check
 
-    # ─── MCP server files ────────────────────────────────────────
-    local src_mcp="$SOURCE_PATH/pforge-mcp"
+    # ─── MCP server files (auto-discover all files) ──────────────
+    local src_mcp="$source_path/pforge-mcp"
     local dst_mcp="$REPO_ROOT/pforge-mcp"
     if [ -d "$src_mcp" ]; then
-        for mcp_file in server.mjs package.json; do
-            local src_f="$src_mcp/$mcp_file"
-            local dst_f="$dst_mcp/$mcp_file"
-            if [ -f "$src_f" ]; then
-                if [ -f "$dst_f" ]; then
-                    local src_hash dst_hash
-                    src_hash="$(sha256sum "$src_f" 2>/dev/null | cut -d' ' -f1 || shasum -a 256 "$src_f" | cut -d' ' -f1)"
-                    dst_hash="$(sha256sum "$dst_f" 2>/dev/null | cut -d' ' -f1 || shasum -a 256 "$dst_f" | cut -d' ' -f1)"
-                    if [ "$src_hash" != "$dst_hash" ]; then
-                        _updates+=("$src_f|$dst_f|pforge-mcp/$mcp_file")
-                    fi
-                else
-                    _new_files+=("$src_f|$dst_f|pforge-mcp/$mcp_file")
+        while IFS= read -r -d '' f; do
+            local rel_path rel_name dst_f
+            rel_path="${f#"$src_mcp/"}"
+            rel_name="pforge-mcp/$rel_path"
+            dst_f="$dst_mcp/$rel_path"
+            local _skip=false
+            for nu in "${_never_update[@]}"; do
+                [ "$nu" = "$rel_name" ] && _skip=true && break
+            done
+            $_skip && continue
+            if [ -f "$dst_f" ]; then
+                if [ "$(_pf_sha256 "$f")" != "$(_pf_sha256 "$dst_f")" ]; then
+                    _updates+=("$f|$dst_f|$rel_name")
                 fi
+            else
+                _new_files+=("$f|$dst_f|$rel_name")
             fi
-        done
+        done < <(find "$src_mcp" -type f -not -path '*/node_modules/*' -print0 2>/dev/null)
     fi
 
     # ─── Report ───────────────────────────────────────────────────
@@ -2257,7 +2260,7 @@ cmd_doctor() {
 cmd_run_plan() {
     if [ $# -lt 1 ]; then
         echo "ERROR: Missing plan path" >&2
-        echo "Usage: pforge run-plan <plan-file> [--estimate] [--assisted] [--model <name>] [--resume-from <N>] [--dry-run]" >&2
+        echo "Usage: pforge run-plan <plan-file> [--estimate] [--assisted] [--model <name>] [--resume-from <N>] [--dry-run] [--foreground]" >&2
         exit 1
     fi
 
@@ -2274,6 +2277,7 @@ cmd_run_plan() {
     local estimate=false
     local assisted=false
     local dry_run=false
+    local foreground=false
     local model=""
     local resume_from=""
 
@@ -2282,6 +2286,7 @@ cmd_run_plan() {
             --estimate)     estimate=true ;;
             --assisted)     assisted=true ;;
             --dry-run)      dry_run=true ;;
+            --foreground)   foreground=true ;;
             --model)
                 shift
                 if [ -z "$1" ] || [ "${1#-}" != "$1" ]; then
@@ -2317,17 +2322,38 @@ cmd_run_plan() {
     echo ""
     if [ "$estimate" = true ]; then
         echo "Estimating cost for: $plan_path"
+        echo ""
+        node "${node_args[@]}"
     elif [ "$dry_run" = true ]; then
         echo "Dry run for: $plan_path"
-    elif [ "$assisted" = true ]; then
-        echo "Starting assisted execution: $plan_path"
-        echo "You code in VS Code, orchestrator validates gates."
+        echo ""
+        node "${node_args[@]}"
+    elif [ "$foreground" = true ]; then
+        # Blocking mode — useful for debugging or CI pipelines
+        if [ "$assisted" = true ]; then
+            echo "Starting assisted execution (foreground): $plan_path"
+            echo "You code in VS Code, orchestrator validates gates."
+        else
+            echo "Starting full auto execution (foreground): $plan_path"
+        fi
+        echo ""
+        node "${node_args[@]}"
     else
-        echo "Starting full auto execution: $plan_path"
+        # Background mode — default for interactive use
+        if [ "$assisted" = true ]; then
+            echo "Starting assisted execution (background): $plan_path"
+            echo "You code in VS Code, orchestrator validates gates."
+        else
+            echo "Starting full auto execution (background): $plan_path"
+        fi
+        echo ""
+        node "${node_args[@]}" &
+        local bg_pid=$!
+        echo "Orchestrator running in background  PID: $bg_pid"
+        echo "Monitor : pforge plan-status"
+        echo "Logs    : .forge/runs/ (latest sub-directory)"
+        echo "Stop    : kill $bg_pid"
     fi
-    echo ""
-
-    node "${node_args[@]}"
 }
 
 # ─── Command Router ────────────────────────────────────────────────────

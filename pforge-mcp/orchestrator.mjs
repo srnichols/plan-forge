@@ -184,9 +184,12 @@ function parseSlices(lines) {
       continue;
     }
 
-    // Match slice headers: ### Slice N: Title  OR  ### Slice N.N — Title
+    // Match slice headers (case-insensitive, flexible separators):
+    //   ### Slice N: Title
+    //   ### slice N — Title
+    //   ### SLICE N.N - Title
     const sliceMatch = line.match(
-      /^###\s+Slice\s+([\d.]+)\s*[:\u2014—-]\s*(.+?)(?:\s*\[(.+?)\])*\s*$/u
+      /^###\s+slice\s+([\d.]+)\s*[:\u2014\u2013—–-]\s*(.+?)(?:\s*\[.+?\])*\s*$/ui
     );
     if (sliceMatch) {
       // Save previous slice
@@ -211,14 +214,16 @@ function parseSlices(lines) {
       };
 
       // Parse tags from the full header line
-      const dependsMatch = rawTags.match(/\[depends:\s*([^\]]+)\]/i);
+      // Fuzzy depends: [depends: ...], [depends on: ...], [dep: ...], [needs: ...]
+      const dependsMatch = rawTags.match(/\[(?:depends\s+on|depends|dep|needs):\s*([^\]]+)\]/i);
       if (dependsMatch) {
         current.depends = dependsMatch[1]
           .split(",")
-          .map((d) => d.trim().replace(/^Slice\s+/i, ""));
+          .map((d) => d.trim().replace(/^slice\s+/i, ""));
       }
 
-      const parallelMatch = rawTags.match(/\[P\]/);
+      // Fuzzy parallel: [P], [parallel], [parallel-safe]
+      const parallelMatch = rawTags.match(/\[(?:P|parallel(?:-safe)?)\]/i);
       if (parallelMatch) current.parallel = true;
 
       const scopeMatch = rawTags.match(/\[scope:\s*([^\]]+)\]/i);
@@ -816,6 +821,7 @@ export function spawnWorker(prompt, options = {}) {
       let tokens = extractTokens(jsonlEvents);
 
       // Fallback: parse stderr stats (gh copilot outputs stats to stderr in non-TTY mode)
+      // Called inside "close" handler so `stderr` is the fully-accumulated string — not a partial stream.
       if (!tokens.model || tokens.tokens_out === 0) {
         const stderrStats = parseStderrStats(stderr);
         if (stderrStats.model) tokens.model = stderrStats.model;

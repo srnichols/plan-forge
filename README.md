@@ -256,7 +256,7 @@ Plan Forge is built with Plan Forge. Every dashboard feature, bug fix, and MCP t
 
 - **11 phases** executed via `pforge run-plan` with quorum auto mode
 - **103 self-tests** passing after every slice
-- **v1.0 → v2.13** with zero manual rollbacks — every change flows through scope contracts, validation gates, and completeness sweeps
+- **v1.0 → v2.14** with zero manual rollbacks — every change flows through scope contracts, validation gates, and completeness sweeps
 - The dashboard screenshots in our docs were captured by a Playwright script that runs against the live dashboard — itself built slice-by-slice using Plan Forge
 
 If the pipeline can build itself without drift, it can build your project too.

@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<!-- verified: v2.17.0 -->
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chapter 11: Extensions — Plan Forge Manual</title>
+  <meta name="description" content="Install, create, and publish guardrail extensions. Browse the catalog, build your own, submit to the community." />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+    <main><div class="chapter-content">
+
+      <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 11</div>
+      <h1>Extensions</h1>
+      <p class="text-lg text-slate-400 mb-8">Install, create, and publish guardrail extensions.</p>
+
+      <h2 id="what-extensions-add">What Extensions Add</h2>
+      <p>Extensions are packaged bundles of instruction files, agents, and prompts that add domain-specific guardrails to your project. Instead of writing custom rules from scratch, install a community extension and get pre-built expertise.</p>
+
+      <h2 id="catalog">Browsing the Catalog</h2>
+      <div class="cmd-block">
+        <div class="cmd-block-header"><span>Terminal</span><button class="cmd-copy-btn">Copy</button></div>
+        <pre><code># Browse all extensions
+pforge ext search
+
+# Filter by keyword
+pforge ext search compliance
+
+# Get details about a specific extension
+pforge ext info saas-multi-tenancy</code></pre>
+      </div>
+      <p>The catalog is also browsable in the <a href="dashboard.html#extensions-tab">Dashboard Extensions tab</a>.</p>
+
+      <h2 id="featured">Featured Extensions</h2>
+      <table>
+        <thead><tr><th>Extension</th><th>Category</th><th>What It Adds</th></tr></thead>
+        <tbody>
+          <tr><td><code>saas-multi-tenancy</code></td><td>Architecture</td><td>Tenant isolation patterns, RLS enforcement, cache separation, cross-tenant audit</td></tr>
+          <tr><td><code>azure-infrastructure</code></td><td>Cloud</td><td>Bicep/Terraform guardrails, resource naming, tagging, cost governance</td></tr>
+          <tr><td><code>plan-forge-memory</code></td><td>Integration</td><td>OpenBrain memory — persistent context across sessions, postmortem injection</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="installing">Installing an Extension</h2>
+      <div class="cmd-block">
+        <div class="cmd-block-header"><span>Terminal</span><button class="cmd-copy-btn">Copy</button></div>
+        <pre><code># One-step install from catalog
+pforge ext add saas-multi-tenancy
+
+# Install from local path
+pforge ext install .forge/extensions/my-extension</code></pre>
+      </div>
+      <p>This copies instruction files to <code>.github/instructions/</code>, agents to <code>.github/agents/</code>, and prompts to <code>.github/prompts/</code>. The extension metadata is tracked in <code>.forge/extensions/</code>.</p>
+
+      <h2 id="creating">Creating Your Own Extension</h2>
+      <ol>
+        <li><strong>Create directory</strong>: <code>.forge/extensions/my-extension/</code></li>
+        <li><strong>Add <code>extension.json</code></strong> manifest:
+          <div class="cmd-block">
+            <div class="cmd-block-header"><span>extension.json</span></div>
+            <pre><code>{
+  "name": "my-extension",
+  "version": "1.0.0",
+  "description": "Domain-specific guardrails for healthcare",
+  "author": "your-name",
+  "category": "compliance"
+}</code></pre>
+          </div>
+        </li>
+        <li><strong>Add guardrail files</strong>:
+          <div class="cmd-block">
+            <div class="cmd-block-header"><span>Extension structure</span></div>
+            <pre><code>my-extension/
+├── extension.json
+├── instructions/
+│   ├── hipaa-compliance.instructions.md
+│   └── phi-handling.instructions.md
+├── agents/
+│   └── hipaa-reviewer.agent.md
+└── prompts/
+    └── compliance-audit.prompt.md</code></pre>
+          </div>
+        </li>
+        <li><strong>Test locally</strong>: <code>pforge ext install .forge/extensions/my-extension</code></li>
+        <li><strong>Publish</strong>: <code>pforge ext publish .forge/extensions/my-extension</code></li>
+      </ol>
+
+      <h2 id="publishing">Publishing</h2>
+      <p>Publishing generates a catalog entry — it doesn't upload anything. You submit via pull request:</p>
+      <ol>
+        <li>Run <code>pforge ext publish .forge/extensions/my-extension</code></li>
+        <li>Fork <a href="https://github.com/srnichols/plan-forge">plan-forge</a> on GitHub</li>
+        <li>Add the generated entry to <code>extensions/catalog.json</code></li>
+        <li>Open a PR with title: <code>feat(catalog): add my-extension</code></li>
+      </ol>
+      <div class="callout callout-tip">
+        <strong>Spec Kit compatible</strong>: <code>pforge ext publish</code> outputs both a Plan Forge catalog entry and a Spec Kit-compatible <code>extensions.json</code> entry in one command.
+      </div>
+
+      <h2 id="managing">Managing Extensions</h2>
+      <div class="cmd-block">
+        <div class="cmd-block-header"><span>Terminal</span><button class="cmd-copy-btn">Copy</button></div>
+        <pre><code># List installed extensions
+pforge ext list
+
+# Remove an extension
+pforge ext remove healthcare-compliance</code></pre>
+      </div>
+
+      <p class="text-sm text-slate-500 mt-8">📄 Full reference: <a href="../EXTENSIONS.md">EXTENSIONS.md</a>, <a href="../../extensions/PUBLISHING.md">PUBLISHING.md</a></p>
+      <div id="chapter-prev-next" class="chapter-nav"></div>
+    </div></main>
+  </div>
+  <script src="assets/manual.js"></script>
+</body>
+</html>

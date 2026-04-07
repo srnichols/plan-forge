@@ -659,12 +659,12 @@ The **`E:\GitHub\plan-forge-testbed`** repo contains a **Tracker sample app** wi
 - [x] Chapter 10 (MCP Server & Tools)
 
 ### Round 5 — Complete + Polish
-- [ ] Chapters 11–14 (Extensions, Multi-Agent, Advanced, Troubleshooting)
-- [ ] Appendices A–D (Glossary, Quick Reference, Stack Notes, Grok Warnings)
+- [x] Chapters 11–14 (Extensions, Multi-Agent, Advanced, Troubleshooting)
+- [x] Appendices A–D (Glossary, Quick Reference, Stack Notes, Grok Warnings)
 - [ ] Client-side search index
 - [ ] Cross-chapter links verified
 - [ ] Print stylesheet
-- [ ] Link from main site nav to manual
+- [x] Link from main site nav to manual
 - [ ] Add `docs/manual/` to sitemap + `llms.txt`
 
 ### Round 0 — Pre-work (before any chapter writing)

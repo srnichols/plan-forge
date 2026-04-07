@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<!-- verified: v2.17.0 -->
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chapter 14: Troubleshooting — Plan Forge Manual</title>
+  <meta name="description" content="Diagnostic tools, decision trees, common error messages, and fixes for setup, execution, dashboard, and cost issues." />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+    <main><div class="chapter-content">
+
+      <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 14</div>
+      <h1>Troubleshooting</h1>
+      <p class="text-lg text-slate-400 mb-8">"Something's wrong." Find the answer fast.</p>
+
+      <h2 id="diagnostics">Diagnostic Tools</h2>
+      <table>
+        <thead><tr><th>Tool</th><th>What It Checks</th><th>When to Use</th></tr></thead>
+        <tbody>
+          <tr><td><code>pforge smith</code></td><td>Environment, VS Code config, setup health, version</td><td>First thing when anything seems off</td></tr>
+          <tr><td><code>pforge check</code></td><td>Setup file existence and validity</td><td>After setup or update</td></tr>
+          <tr><td><code>pforge diagnose &lt;file&gt;</code></td><td>Multi-model bug investigation on a specific file</td><td>When a slice fails and you can't see why</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="guardrails-not-loading">Agent Isn't Following Guardrails</h2>
+      <table>
+        <thead><tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr></thead>
+        <tbody>
+          <tr><td>AI ignores coding standards</td><td>Instruction files not loading</td><td>Check <code>applyTo</code> pattern matches the file you're editing. Run <code>pforge smith</code> to verify file counts.</td></tr>
+          <tr><td>Wrong instructions loading</td><td><code>applyTo</code> glob too broad</td><td>Narrow the pattern — use <code>**/auth/**</code> instead of <code>**</code></td></tr>
+          <tr><td>Guardrails load but AI ignores them</td><td>Context budget exceeded</td><td>Reduce <code>copilot-instructions.md</code> to &lt;80 lines. Remove <code>applyTo: '**'</code> from non-essential files.</td></tr>
+          <tr><td>Project Principles not enforced</td><td><code>PROJECT-PRINCIPLES.md</code> missing</td><td>Run the project-principles prompt. The instruction file activates only when this file exists.</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="execution-fails">Plan Execution Fails</h2>
+      <table>
+        <thead><tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr></thead>
+        <tbody>
+          <tr><td>Gate fails with build errors</td><td>Code doesn't compile</td><td>Fix the build error, then <code>pforge run-plan --resume-from N</code></td></tr>
+          <tr><td>Gate fails — tests regress</td><td>New code broke existing tests</td><td>Fix the regression. Check if scope contract is too broad.</td></tr>
+          <tr><td>Slice times out</td><td>Context window exhausted or model overloaded</td><td>Split the slice into smaller chunks. Try a different <code>--model</code>.</td></tr>
+          <tr><td>Model returns error</td><td>API key invalid or rate limited</td><td>Check <code>XAI_API_KEY</code> / <code>OPENAI_API_KEY</code> env vars. Wait for rate limit reset.</td></tr>
+          <tr><td>Scope violation detected</td><td>AI touched forbidden files</td><td>The PreToolUse hook should catch this. If not, tighten the Scope Contract.</td></tr>
+          <tr><td>Escalation exhausted</td><td>All models in chain failed</td><td>Review the slice — it may be too complex. Break into sub-slices or simplify gates.</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="dashboard-issues">Dashboard Won't Load</h2>
+      <table>
+        <thead><tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr></thead>
+        <tbody>
+          <tr><td>Connection refused on :3100</td><td>Server not running</td><td><code>node pforge-mcp/server.mjs</code></td></tr>
+          <tr><td>Port already in use</td><td>Another process on 3100</td><td><code>node pforge-mcp/server.mjs --port 4100</code> or kill the conflicting process</td></tr>
+          <tr><td>Blank page loads</td><td>Missing <code>node_modules</code></td><td><code>cd pforge-mcp && npm install</code></td></tr>
+          <tr><td>WebSocket disconnects</td><td>Firewall or proxy blocking :3101</td><td>Allow port 3101, or set <code>WS_PORT</code> env var</td></tr>
+          <tr><td>No data in Runs/Cost tabs</td><td>No execution history yet</td><td>Run a plan first: <code>pforge run-plan</code></td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="setup-issues">Setup Failed</h2>
+      <table>
+        <thead><tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr></thead>
+        <tbody>
+          <tr><td>"Preset not found"</td><td>Typo in preset name</td><td>Valid presets: dotnet, typescript, python, java, go, swift, rust, php, azure-iac</td></tr>
+          <tr><td>Permission denied</td><td>Read-only directory or no git access</td><td>Check file permissions. Run from a writable directory.</td></tr>
+          <tr><td>Existing files conflict</td><td>Previous setup exists</td><td>Use <code>-Force</code> flag to overwrite, or <code>pforge update</code> for selective updates</td></tr>
+          <tr><td>Wrong files installed</td><td>Incorrect preset for your stack</td><td>Re-run: <code>.\setup.ps1 -Preset &lt;correct-preset&gt; -Force</code></td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="costs-high">Costs Are Too High</h2>
+      <table>
+        <thead><tr><th>Strategy</th><th>Savings</th><th>How</th></tr></thead>
+        <tbody>
+          <tr><td>Use cheaper execution model</td><td>50–70%</td><td>Set <code>modelRouting.execute</code> to a smaller model</td></tr>
+          <tr><td>Reserve expensive model for review</td><td>30–50%</td><td><code>modelRouting.review: "claude-opus-4.6"</code></td></tr>
+          <tr><td>Raise quorum threshold</td><td>20–40%</td><td><code>--quorum-threshold 8</code> (fewer slices trigger consensus)</td></tr>
+          <tr><td>Reduce context per slice</td><td>10–20%</td><td>Use targeted <code>Context:</code> lists (see <a href="writing-plans.html#context">Chapter 5</a>)</td></tr>
+          <tr><td>Preview before running</td><td>N/A</td><td><code>pforge run-plan --estimate</code></td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="image-generation">Grok Image Generation Crashes Session</h2>
+      <p>xAI Grok Aurora returns JPEG bytes regardless of requested format. If raw bytes with wrong MIME type enter the conversation history, the session becomes unrecoverable.</p>
+      <div class="callout callout-warning">
+        <strong>Current mitigations</strong>: The MCP tool returns text-only responses (file path + metadata, never raw base64). The <code>generateImage()</code> function detects actual format via magic bytes and converts using <code>sharp</code>. Sessions should be safe — but if you encounter the MIME mismatch error, start a fresh session.
+      </div>
+      <p>Safe workflow: Use <code>.jpg</code> extensions (matches Grok's native output), generate art in dedicated sessions, or use the REST API: <code>POST /api/image/generate</code>.</p>
+
+      <h2 id="common-errors">Common Error Messages</h2>
+      <table>
+        <thead><tr><th>Error</th><th>Cause</th><th>Fix</th></tr></thead>
+        <tbody>
+          <tr><td><code>No .forge.json found</code></td><td>Not in a Plan Forge project</td><td>Run <code>pforge init</code> or <code>setup.ps1</code></td></tr>
+          <tr><td><code>templateVersion mismatch</code></td><td>Framework files outdated</td><td><code>pforge update</code></td></tr>
+          <tr><td><code>No API key configured</code></td><td>Missing env var for image/analysis</td><td>Set <code>XAI_API_KEY</code> or <code>OPENAI_API_KEY</code></td></tr>
+          <tr><td><code>Plan parsing failed</code></td><td>Malformed plan file</td><td>Check for missing <code>## Execution Slices</code> section or broken markdown</td></tr>
+          <tr><td><code>Gate command failed (exit 1)</code></td><td>Build or test failure</td><td>Fix the code, then <code>--resume-from N</code></td></tr>
+          <tr><td><code>DRIFT DETECTED</code></td><td>Forbidden file modified</td><td>Revert the forbidden change, re-run the slice</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="getting-help">Getting Help</h2>
+      <ul>
+        <li><strong>GitHub Issues</strong>: <a href="https://github.com/srnichols/plan-forge/issues">github.com/srnichols/plan-forge/issues</a></li>
+        <li><strong>Contributing</strong>: See <a href="../../CONTRIBUTING.md">CONTRIBUTING.md</a> for PR guidelines</li>
+        <li><strong>Security</strong>: See <a href="../../SECURITY.md">SECURITY.md</a> for vulnerability reporting</li>
+      </ul>
+
+      <p class="text-sm text-slate-500 mt-8">📄 Full reference: <a href="../faq.html">FAQ</a>, <a href="../COPILOT-VSCODE-GUIDE.md">COPILOT-VSCODE-GUIDE.md</a></p>
+      <div id="chapter-prev-next" class="chapter-nav"></div>
+    </div></main>
+  </div>
+  <script src="assets/manual.js"></script>
+</body>
+</html>

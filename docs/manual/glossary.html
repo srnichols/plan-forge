@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<!-- verified: v2.17.0 -->
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Appendix A: Glossary — Plan Forge Manual</title>
+  <meta name="description" content="Alphabetical definitions of every Plan Forge term — from DAG to Quorum Mode, from Slice to Smith." />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+    <main><div class="chapter-content">
+
+      <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Appendix A</div>
+      <h1>Glossary</h1>
+      <p class="text-lg text-slate-400 mb-8">Every Plan Forge term defined.</p>
+      <p class="text-sm text-slate-500 mb-6">Auto-generated from <code>capabilities.mjs</code> glossary, hand-edited for clarity.</p>
+
+      <h2 id="core">Core Concepts</h2>
+      <table>
+        <thead><tr><th>Term</th><th>Definition</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Plan Forge</strong></td><td>The framework itself — AI coding guardrails that enforce spec-driven development.</td></tr>
+          <tr><td><strong>Forge</strong></td><td>Shorthand for Plan Forge. Also: <code>.forge/</code> directory (project data), <code>.forge.json</code> (config).</td></tr>
+          <tr><td><strong>Plan</strong></td><td>A Markdown file in <code>docs/plans/</code> describing a feature. Contains slices, scope contract, and gates.</td></tr>
+          <tr><td><strong>Hardened Plan</strong></td><td>A plan that passed Step 2 — locked-down execution contract with scope, slices, gates, forbidden actions.</td></tr>
+          <tr><td><strong>Scope Contract</strong></td><td>Plan section defining In Scope, Out of Scope, and Forbidden files. Prevents scope creep.</td></tr>
+          <tr><td><strong>Slice</strong></td><td>A 30–120 minute unit of execution within a plan. Has tasks, a validation gate, and optional dependencies.</td></tr>
+          <tr><td><strong>Validation Gate</strong></td><td>Build + test commands that must pass at every slice boundary before proceeding.</td></tr>
+          <tr><td><strong>Forbidden Actions</strong></td><td>Files or operations the AI must not touch. Enforced by lifecycle hooks and scope checks.</td></tr>
+          <tr><td><strong>Stop Condition</strong></td><td>A condition that halts execution — e.g., "If migration fails, STOP."</td></tr>
+          <tr><td><strong>Guardrails</strong></td><td>Instruction files that auto-load based on the file being edited. 15–18 per preset.</td></tr>
+          <tr><td><strong>Preset</strong></td><td>Stack-specific configuration (dotnet, typescript, python, etc.). Determines which files are installed.</td></tr>
+          <tr><td><strong>Extension</strong></td><td>Community add-on providing instructions, agents, or prompts for a specific domain.</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="pipeline">Pipeline</h2>
+      <table>
+        <thead><tr><th>Term</th><th>Definition</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Pipeline</strong></td><td>The 7-step process: Specify → Preflight → Harden → Execute → Sweep → Review → Ship.</td></tr>
+          <tr><td><strong>Step 0 (Specify)</strong></td><td>Define what and why — structured specification with acceptance criteria.</td></tr>
+          <tr><td><strong>Step 2 (Harden)</strong></td><td>Convert spec into binding execution contract with slices, gates, and scope.</td></tr>
+          <tr><td><strong>Step 3 (Execute)</strong></td><td>Build code slice-by-slice. Can be automated or manual.</td></tr>
+          <tr><td><strong>Step 5 (Review Gate)</strong></td><td>Independent audit session — checks for drift, scope violations, and quality.</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="execution">Execution</h2>
+      <table>
+        <thead><tr><th>Term</th><th>Definition</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Full Auto</strong></td><td>Mode where <code>gh copilot</code> CLI runs each slice automatically. No human intervention.</td></tr>
+          <tr><td><strong>Assisted</strong></td><td>Mode where human codes in VS Code; orchestrator validates gates between slices.</td></tr>
+          <tr><td><strong>Worker</strong></td><td>The CLI process executing a slice — gh copilot, claude, or codex.</td></tr>
+          <tr><td><strong>DAG</strong></td><td>Directed Acyclic Graph — the dependency graph of slices determining execution order.</td></tr>
+          <tr><td><strong>[P] tag</strong></td><td>Parallel-safe marker on a slice header. Enables concurrent execution.</td></tr>
+          <tr><td><strong>[depends: Slice N]</strong></td><td>Dependency marker. Slice waits for N to complete before starting.</td></tr>
+          <tr><td><strong>Quorum Mode</strong></td><td>Multi-model consensus: 3+ models analyze a slice independently, reviewer synthesizes best approach.</td></tr>
+          <tr><td><strong>Quorum Auto</strong></td><td>Threshold-based: only slices scoring above the complexity threshold use quorum.</td></tr>
+          <tr><td><strong>Complexity Score</strong></td><td>1–10 rating based on file scope, dependencies, security keywords, gate count, historical failure rate.</td></tr>
+          <tr><td><strong>Escalation Chain</strong></td><td>Model failover order: if Model A fails, try B, then C.</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="components">Components</h2>
+      <table>
+        <thead><tr><th>Term</th><th>Definition</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Smith</strong></td><td>Diagnostic tool (<code>pforge smith</code>). Inspects environment, setup, version. Named after a blacksmith.</td></tr>
+          <tr><td><strong>Sweep</strong></td><td>Completeness scan (<code>pforge sweep</code>). Finds TODO/FIXME/stub markers.</td></tr>
+          <tr><td><strong>Analyze</strong></td><td>Consistency scoring (<code>pforge analyze</code>). Scores 0–100 across 4 dimensions.</td></tr>
+          <tr><td><strong>Orchestrator</strong></td><td>Execution engine. Parses plans, schedules slices, spawns workers, validates gates.</td></tr>
+          <tr><td><strong>Hub</strong></td><td>WebSocket event server. Broadcasts slice events to connected clients in real-time.</td></tr>
+          <tr><td><strong>Dashboard</strong></td><td>Web UI at <code>localhost:3100/dashboard</code>. 8 tabs for monitoring, cost, replay, config.</td></tr>
+          <tr><td><strong>Lifecycle Hook</strong></td><td>Automatic actions: SessionStart, PreToolUse, PostToolUse, Stop.</td></tr>
+          <tr><td><strong>OpenBrain</strong></td><td>Optional companion MCP server for persistent semantic memory across sessions.</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="data">Data Structures</h2>
+      <table>
+        <thead><tr><th>Term</th><th>Definition</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Run</strong></td><td>A single plan execution. Creates <code>.forge/runs/&lt;timestamp&gt;/</code> with results and traces.</td></tr>
+          <tr><td><strong>Trace</strong></td><td>OTLP-compatible JSON recording the full execution with spans, events, and timing.</td></tr>
+          <tr><td><strong>Span</strong></td><td>A timed unit within a trace — run (root), slice (child), gate (grandchild).</td></tr>
+          <tr><td><strong>Cost History</strong></td><td><code>.forge/cost-history.json</code> — aggregate token/cost data across all runs.</td></tr>
+          <tr><td><strong>Index</strong></td><td><code>.forge/runs/index.jsonl</code> — append-only run registry for instant lookup.</td></tr>
+        </tbody>
+      </table>
+
+      <div id="chapter-prev-next" class="chapter-nav"></div>
+    </div></main>
+  </div>
+  <script src="assets/manual.js"></script>
+</body>
+</html>

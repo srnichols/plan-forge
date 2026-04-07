@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<!-- verified: v2.17.0 -->
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Appendix B: Quick Reference Card — Plan Forge Manual</title>
+  <meta name="description" content="Two-page printable cheat sheet: CLI commands, key files, pipeline steps, port reference." />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+    <main><div class="chapter-content">
+
+      <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Appendix B</div>
+      <h1>Quick Reference Card</h1>
+      <p class="text-lg text-slate-400 mb-8">Printable cheat sheet. <code>Ctrl+P</code> for a clean print.</p>
+
+      <h2 id="cli">CLI Commands</h2>
+      <table>
+        <thead><tr><th>Command</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>pforge init</code></td><td>Bootstrap project with setup wizard</td></tr>
+          <tr><td><code>pforge check</code></td><td>Validate setup files</td></tr>
+          <tr><td><code>pforge smith</code></td><td>Diagnose environment + setup health</td></tr>
+          <tr><td><code>pforge status</code></td><td>Show phase status from roadmap</td></tr>
+          <tr><td><code>pforge new-phase &lt;name&gt;</code></td><td>Create new phase plan + roadmap entry</td></tr>
+          <tr><td><code>pforge branch &lt;plan&gt;</code></td><td>Create git branch from plan</td></tr>
+          <tr><td><code>pforge commit &lt;plan&gt; &lt;slice&gt;</code></td><td>Auto-generate conventional commit</td></tr>
+          <tr><td><code>pforge phase-status &lt;plan&gt; &lt;status&gt;</code></td><td>Update phase status in roadmap</td></tr>
+          <tr><td><code>pforge sweep</code></td><td>Scan for TODO/FIXME markers</td></tr>
+          <tr><td><code>pforge diff &lt;plan&gt;</code></td><td>Compare changes vs scope contract</td></tr>
+          <tr><td><code>pforge analyze &lt;plan&gt;</code></td><td>Consistency scoring (0–100)</td></tr>
+          <tr><td><code>pforge diagnose &lt;file&gt;</code></td><td>Multi-model bug investigation</td></tr>
+          <tr><td><code>pforge run-plan &lt;plan&gt;</code></td><td>Execute plan (auto/assisted/estimate)</td></tr>
+          <tr><td><code>pforge ext search|add|list|remove</code></td><td>Extension management</td></tr>
+          <tr><td><code>pforge update</code></td><td>Update framework files</td></tr>
+          <tr><td><code>pforge help</code></td><td>Show all commands</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="pipeline">Pipeline Steps</h2>
+      <table>
+        <thead><tr><th>Step</th><th>Name</th><th>Session</th><th>Agent</th></tr></thead>
+        <tbody>
+          <tr><td>0</td><td>Specify</td><td>1</td><td>specifier</td></tr>
+          <tr><td>1</td><td>Pre-flight</td><td>1</td><td>—</td></tr>
+          <tr><td>2</td><td>Harden</td><td>1</td><td>plan-hardener</td></tr>
+          <tr><td>3</td><td>Execute</td><td>2</td><td>executor</td></tr>
+          <tr><td>4</td><td>Sweep</td><td>2</td><td>—</td></tr>
+          <tr><td>5</td><td>Review</td><td>3</td><td>reviewer-gate</td></tr>
+          <tr><td>6</td><td>Ship</td><td>4</td><td>shipper</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="files">Key Files</h2>
+      <table>
+        <thead><tr><th>File</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td><code>.forge.json</code></td><td>Project config (preset, models, escalation, quorum)</td></tr>
+          <tr><td><code>.github/copilot-instructions.md</code></td><td>Master config — loads every session</td></tr>
+          <tr><td><code>.github/instructions/*.instructions.md</code></td><td>Auto-loading guardrails (15–18 files)</td></tr>
+          <tr><td><code>.github/agents/*.agent.md</code></td><td>Reviewer agents (19 total)</td></tr>
+          <tr><td><code>.github/prompts/step*.prompt.md</code></td><td>Pipeline prompt templates</td></tr>
+          <tr><td><code>.github/skills/*/SKILL.md</code></td><td>Slash command skills (12 total)</td></tr>
+          <tr><td><code>.github/hooks/</code></td><td>Lifecycle hooks (4 files)</td></tr>
+          <tr><td><code>docs/plans/DEPLOYMENT-ROADMAP.md</code></td><td>Phase tracker</td></tr>
+          <tr><td><code>docs/plans/PROJECT-PRINCIPLES.md</code></td><td>Non-negotiable commitments</td></tr>
+          <tr><td><code>.forge/runs/</code></td><td>Execution history, traces, logs</td></tr>
+          <tr><td><code>.forge/cost-history.json</code></td><td>Aggregate cost data</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="ports">Ports &amp; URLs</h2>
+      <table>
+        <thead><tr><th>Port</th><th>URL</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td>3100</td><td><code>localhost:3100/dashboard</code></td><td>Dashboard UI + REST API</td></tr>
+          <tr><td>3100</td><td><code>localhost:3100/ui</code></td><td>Read-only plan browser</td></tr>
+          <tr><td>3101</td><td><code>ws://localhost:3101</code></td><td>WebSocket real-time events</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="flags">Key Flags</h2>
+      <table>
+        <thead><tr><th>Flag</th><th>Command</th><th>Effect</th></tr></thead>
+        <tbody>
+          <tr><td><code>--estimate</code></td><td>run-plan</td><td>Cost prediction only</td></tr>
+          <tr><td><code>--assisted</code></td><td>run-plan</td><td>Human codes, orchestrator validates</td></tr>
+          <tr><td><code>--resume-from N</code></td><td>run-plan</td><td>Skip completed slices</td></tr>
+          <tr><td><code>--quorum</code></td><td>run-plan</td><td>Multi-model consensus</td></tr>
+          <tr><td><code>--dry-run</code></td><td>most commands</td><td>Preview without executing</td></tr>
+          <tr><td><code>-Agent all</code></td><td>init/setup</td><td>Generate files for all AI tools</td></tr>
+        </tbody>
+      </table>
+
+      <div id="chapter-prev-next" class="chapter-nav"></div>
+    </div></main>
+  </div>
+  <script src="assets/manual.js"></script>
+</body>
+</html>

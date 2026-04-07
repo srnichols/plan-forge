@@ -1,0 +1,22 @@
+graph TD
+    SRC["📁 Canonical Guardrail Files<br/>(Single Source of Truth)"]
+    
+    SRC --> T["🔄 Transform Engine"]
+    
+    T --> CP["🟦 Copilot<br/>.github/instructions/*.md<br/>applyTo frontmatter"]
+    T --> CL["🟣 Claude<br/>CLAUDE.md<br/>inline guardrails"]
+    T --> CU["🟢 Cursor<br/>.cursor/rules/*.mdc<br/>rule format"]
+    T --> WS["🔵 Windsurf<br/>.windsurf/rules/*.md<br/>workflow format"]
+    T --> CO["🟠 Codex<br/>.agents/skills/SKILL.md"]
+    T --> GM["🔴 Gemini<br/>GEMINI.md<br/>@import + TOML"]
+    T --> GN["⚪ Generic<br/>.ai/AI_INSTRUCTIONS.md"]
+    
+    style SRC fill:#f59e0b,color:#000
+    style T fill:#1e293b,color:#fff
+    style CP fill:#0078d4,color:#fff
+    style CL fill:#7c3aed,color:#fff
+    style CU fill:#22c55e,color:#fff
+    style WS fill:#3b82f6,color:#fff
+    style CO fill:#f97316,color:#fff
+    style GM fill:#ef4444,color:#fff
+    style GN fill:#6b7280,color:#fff

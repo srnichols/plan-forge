@@ -1,0 +1,17 @@
+graph TD
+    Q{"What's your<br/>problem?"}
+    Q -->|"I don't know<br/>what to build"| SK["✅ Start with Spec Kit"]
+    Q -->|"AI keeps drifting<br/>during the build"| PF["✅ Start with Plan Forge"]
+    Q -->|"Both"| BOTH["✅ Use Both Together"]
+    
+    SK -.- SK_URL["github.com/github/spec-kit"]
+    PF -.- PF_URL["github.com/srnichols/plan-forge"]
+    BOTH -.- BOTH_DESC["Spec Kit writes the spec<br/>Plan Forge enforces it"]
+    
+    style Q fill:#f59e0b,color:#000
+    style SK fill:#3b82f6,color:#fff
+    style PF fill:#22c55e,color:#fff
+    style BOTH fill:#8b5cf6,color:#fff
+    style SK_URL fill:none,stroke:none,color:#64748b
+    style PF_URL fill:none,stroke:none,color:#64748b
+    style BOTH_DESC fill:none,stroke:none,color:#64748b

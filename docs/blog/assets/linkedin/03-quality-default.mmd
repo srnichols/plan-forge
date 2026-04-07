@@ -1,0 +1,15 @@
+graph LR
+    SPEC["📝 Specify"] --> PLAN["🔨 Harden Plan<br/>+ Guardrails"]
+    PLAN --> EXEC["⚡ Execute<br/>with Gates"]
+    EXEC --> REVIEW["🔍 Independent<br/>Review"]
+    REVIEW --> SHIP["🚀 Ship"]
+    
+    PLAN -.->|"18 guardrail files<br/>auto-load"| EXEC
+    EXEC -.->|"Build + Test<br/>per slice"| EXEC
+    REVIEW -.->|"Fresh session<br/>no bias"| REVIEW
+    
+    style SPEC fill:#f59e0b,color:#000
+    style PLAN fill:#3b82f6,color:#fff
+    style EXEC fill:#8b5cf6,color:#fff
+    style REVIEW fill:#22c55e,color:#fff
+    style SHIP fill:#10b981,color:#fff

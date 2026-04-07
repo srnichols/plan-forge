@@ -1,0 +1,19 @@
+graph LR
+    subgraph BEFORE["❌ Before Guardrails"]
+        B1["$15-50 tokens/feature"]
+        B2["4-8 hrs debugging"]
+        B3["2-3 attempts per feature"]
+        B4["Architecture drift"]
+        B5["0 institutional memory"]
+    end
+    
+    subgraph AFTER["✅ After Plan Forge"]
+        A1["50%+ token reduction"]
+        A2["~0% rework after review"]
+        A3["103/103 tests passing"]
+        A4["11 phases self-built"]
+        A5["0 manual rollbacks"]
+    end
+    
+    style BEFORE fill:#fef2f2,stroke:#ef4444
+    style AFTER fill:#f0fdf4,stroke:#22c55e

@@ -1,0 +1,29 @@
+graph LR
+    subgraph CTRL["Control: Single Model"]
+        C1["15 tests"]
+        C2["Inline code"]
+        C3["Hardcoded dates"]
+        C4["Generic exceptions"]
+        C5["$0.62 · 12 min"]
+    end
+    
+    subgraph QUOR["Quorum: 3 Models"]
+        Q1["18 tests (+20%)"]
+        Q2["DRY helpers"]
+        Q3["Relative date offsets"]
+        Q4["Modern ThrowIf patterns"]
+        Q5["$0.84 · 32 min"]
+    end
+    
+    style CTRL fill:#fef2f2,stroke:#ef4444
+    style QUOR fill:#f0fdf4,stroke:#22c55e
+    style C1 fill:#fecaca,stroke:#ef4444
+    style C2 fill:#fecaca,stroke:#ef4444
+    style C3 fill:#fecaca,stroke:#ef4444
+    style C4 fill:#fecaca,stroke:#ef4444
+    style C5 fill:#fecaca,stroke:#ef4444
+    style Q1 fill:#bbf7d0,stroke:#22c55e
+    style Q2 fill:#bbf7d0,stroke:#22c55e
+    style Q3 fill:#bbf7d0,stroke:#22c55e
+    style Q4 fill:#bbf7d0,stroke:#22c55e
+    style Q5 fill:#bbf7d0,stroke:#22c55e

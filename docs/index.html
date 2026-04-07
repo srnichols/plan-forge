@@ -1525,113 +1525,177 @@ Target project: (current directory)</code></pre>
       </div>
 
       <!-- Feature Parity Table -->
-      <div class="mt-12 max-w-4xl mx-auto">
+      <div class="mt-12 max-w-5xl mx-auto">
         <h3 class="text-lg font-bold text-white mb-6">Feature Parity by Agent</h3>
         <div class="overflow-x-auto">
-          <table class="w-full text-sm">
+          <table class="w-full text-sm text-left">
             <thead>
               <tr class="border-b border-slate-700/50">
                 <th class="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase">Feature</th>
-                <th class="px-4 py-3 text-center text-xs font-semibold text-slate-400 uppercase">🐙 Copilot</th>
-                <th class="px-4 py-3 text-center text-xs font-semibold text-slate-400 uppercase">🤖 Claude</th>
-                <th class="px-4 py-3 text-center text-xs font-semibold text-slate-400 uppercase">⚡ Cursor</th>
-                <th class="px-4 py-3 text-center text-xs font-semibold text-slate-400 uppercase">📟 Codex</th>
-                <th class="px-4 py-3 text-center text-xs font-semibold text-slate-400 uppercase">Others</th>
+                <th class="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase">🐙 Copilot</th>
+                <th class="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase">🤖 Claude</th>
+                <th class="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase">⚡ Cursor</th>
+                <th class="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase">📟 Codex</th>
+                <th class="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase">Others</th>
               </tr>
             </thead>
             <tbody class="text-slate-400">
               <tr class="border-b border-slate-800/50">
                 <td class="px-4 py-3 text-white">Project context</td>
-                <td class="px-4 py-3 text-center text-green-400">✅</td>
-                <td class="px-4 py-3 text-center text-green-400">✅</td>
-                <td class="px-4 py-3 text-center text-green-400">✅</td>
-                <td class="px-4 py-3 text-center text-green-400">✅</td>
-                <td class="px-4 py-3 text-center text-slate-500">📋</td>
+                <td class="px-4 py-3 text-green-400">✅</td>
+                <td class="px-4 py-3 text-green-400">✅</td>
+                <td class="px-4 py-3 text-green-400">✅</td>
+                <td class="px-4 py-3 text-green-400">✅</td>
+                <td class="px-4 py-3 text-slate-500">📋</td>
               </tr>
               <tr class="border-b border-slate-800/50">
-                <td class="px-4 py-3 text-white">16 guardrail files</td>
-                <td class="px-4 py-3 text-center text-green-400">✅ auto</td>
-                <td class="px-4 py-3 text-center text-green-400">✅ embedded</td>
-                <td class="px-4 py-3 text-center text-green-400">✅ embedded</td>
-                <td class="px-4 py-3 text-center text-slate-500">—</td>
-                <td class="px-4 py-3 text-center text-slate-500">📋</td>
+                <td class="px-4 py-3 text-white">16 guardrail instruction files</td>
+                <td class="px-4 py-3 text-green-400">✅ auto-load</td>
+                <td class="px-4 py-3 text-green-400">✅ embedded</td>
+                <td class="px-4 py-3 text-green-400">✅ embedded</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+                <td class="px-4 py-3 text-slate-500">📋</td>
               </tr>
               <tr class="border-b border-slate-800/50">
-                <td class="px-4 py-3 text-white">Pipeline prompts (7)</td>
-                <td class="px-4 py-3 text-center text-green-400">✅</td>
-                <td class="px-4 py-3 text-center text-green-400">✅</td>
-                <td class="px-4 py-3 text-center text-green-400">✅</td>
-                <td class="px-4 py-3 text-center text-green-400">✅</td>
-                <td class="px-4 py-3 text-center text-slate-500">📋</td>
+                <td class="px-4 py-3 text-white">Pipeline prompts (8)</td>
+                <td class="px-4 py-3 text-green-400">✅</td>
+                <td class="px-4 py-3 text-green-400">✅</td>
+                <td class="px-4 py-3 text-green-400">✅</td>
+                <td class="px-4 py-3 text-green-400">✅</td>
+                <td class="px-4 py-3 text-slate-500">📋</td>
               </tr>
               <tr class="border-b border-slate-800/50">
-                <td class="px-4 py-3 text-white">Scaffolding prompts (15+)</td>
-                <td class="px-4 py-3 text-center text-green-400">✅</td>
-                <td class="px-4 py-3 text-center text-green-400">✅</td>
-                <td class="px-4 py-3 text-center text-green-400">✅</td>
-                <td class="px-4 py-3 text-center text-green-400">✅</td>
-                <td class="px-4 py-3 text-center text-slate-500">📋</td>
+                <td class="px-4 py-3 text-white">Scaffolding prompts (70+)</td>
+                <td class="px-4 py-3 text-green-400">✅</td>
+                <td class="px-4 py-3 text-green-400">✅</td>
+                <td class="px-4 py-3 text-green-400">✅</td>
+                <td class="px-4 py-3 text-green-400">✅</td>
+                <td class="px-4 py-3 text-slate-500">📋</td>
               </tr>
               <tr class="border-b border-slate-800/50">
-                <td class="px-4 py-3 text-white">Reviewer agents (18)</td>
-                <td class="px-4 py-3 text-center text-green-400">✅ picker</td>
-                <td class="px-4 py-3 text-center text-green-400">✅ skills</td>
-                <td class="px-4 py-3 text-center text-green-400">✅ cmds</td>
-                <td class="px-4 py-3 text-center text-green-400">✅ skills</td>
-                <td class="px-4 py-3 text-center text-slate-500">📋</td>
+                <td class="px-4 py-3 text-white">Reviewer agents (66)</td>
+                <td class="px-4 py-3 text-green-400">✅ picker</td>
+                <td class="px-4 py-3 text-green-400">✅ skills</td>
+                <td class="px-4 py-3 text-green-400">✅ cmds</td>
+                <td class="px-4 py-3 text-green-400">✅ skills</td>
+                <td class="px-4 py-3 text-slate-500">📋</td>
               </tr>
               <tr class="border-b border-slate-800/50">
                 <td class="px-4 py-3 text-white">MCP tools (18 forge operations)</td>
-                <td class="px-4 py-3 text-center text-green-400">✅ native</td>
-                <td class="px-4 py-3 text-center text-green-400">✅ native</td>
-                <td class="px-4 py-3 text-center text-green-400">✅ native</td>
-                <td class="px-4 py-3 text-center text-slate-500">—</td>
-                <td class="px-4 py-3 text-center text-slate-500">—</td>
+                <td class="px-4 py-3 text-green-400">✅ native</td>
+                <td class="px-4 py-3 text-green-400">✅ native</td>
+                <td class="px-4 py-3 text-green-400">✅ native</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+              </tr>
+              <tr class="border-b border-slate-800/50">
+                <td class="px-4 py-3 text-white">Skills (3 multi-step workflows)</td>
+                <td class="px-4 py-3 text-green-400">✅ slash cmd</td>
+                <td class="px-4 py-3 text-green-400">✅ MCP</td>
+                <td class="px-4 py-3 text-green-400">✅ MCP</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+                <td class="px-4 py-3 text-slate-500">📋</td>
+              </tr>
+              <tr class="border-b border-slate-800/50">
+                <td class="px-4 py-3 text-white">Lifecycle hooks (5 types)</td>
+                <td class="px-4 py-3 text-green-400">✅ native</td>
+                <td class="px-4 py-3 text-forge-400">⚡ guided</td>
+                <td class="px-4 py-3 text-forge-400">⚡ guided</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+              </tr>
+              <tr class="border-b border-slate-800/50">
+                <td class="px-4 py-3 text-white">Live dashboard (9 tabs)</td>
+                <td class="px-4 py-3 text-green-400">✅ MCP</td>
+                <td class="px-4 py-3 text-green-400">✅ MCP</td>
+                <td class="px-4 py-3 text-green-400">✅ MCP</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+              </tr>
+              <tr class="border-b border-slate-800/50">
+                <td class="px-4 py-3 text-white">Autonomous plan execution</td>
+                <td class="px-4 py-3 text-green-400">✅ MCP</td>
+                <td class="px-4 py-3 text-green-400">✅ MCP</td>
+                <td class="px-4 py-3 text-green-400">✅ MCP</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+              </tr>
+              <tr class="border-b border-slate-800/50">
+                <td class="px-4 py-3 text-white">Cost tracking &amp; telemetry</td>
+                <td class="px-4 py-3 text-green-400">✅ MCP</td>
+                <td class="px-4 py-3 text-green-400">✅ MCP</td>
+                <td class="px-4 py-3 text-green-400">✅ MCP</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+              </tr>
+              <tr class="border-b border-slate-800/50">
+                <td class="px-4 py-3 text-white">Quorum mode (multi-model consensus)</td>
+                <td class="px-4 py-3 text-green-400">✅ MCP</td>
+                <td class="px-4 py-3 text-green-400">✅ MCP</td>
+                <td class="px-4 py-3 text-green-400">✅ MCP</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+              </tr>
+              <tr class="border-b border-slate-800/50">
+                <td class="px-4 py-3 text-white">Extension ecosystem (3 packages)</td>
+                <td class="px-4 py-3 text-green-400">✅ MCP</td>
+                <td class="px-4 py-3 text-green-400">✅ MCP</td>
+                <td class="px-4 py-3 text-green-400">✅ MCP</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+              </tr>
+              <tr class="border-b border-slate-800/50">
+                <td class="px-4 py-3 text-white">Presets (10 — 8 stacks + IaC + shared)</td>
+                <td class="px-4 py-3 text-green-400">✅</td>
+                <td class="px-4 py-3 text-green-400">✅</td>
+                <td class="px-4 py-3 text-green-400">✅</td>
+                <td class="px-4 py-3 text-green-400">✅</td>
+                <td class="px-4 py-3 text-slate-500">📋</td>
               </tr>
               <tr class="border-b border-slate-800/50">
                 <td class="px-4 py-3 text-white">File-type awareness</td>
-                <td class="px-4 py-3 text-center text-green-400">✅ native</td>
-                <td class="px-4 py-3 text-center text-green-400">✅ guided</td>
-                <td class="px-4 py-3 text-center text-green-400">✅ guided</td>
-                <td class="px-4 py-3 text-center text-slate-500">—</td>
-                <td class="px-4 py-3 text-center text-slate-500">—</td>
+                <td class="px-4 py-3 text-green-400">✅ native</td>
+                <td class="px-4 py-3 text-green-400">✅ guided</td>
+                <td class="px-4 py-3 text-green-400">✅ guided</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
               </tr>
               <tr class="border-b border-slate-800/50">
                 <td class="px-4 py-3 text-white">Post-edit scanning</td>
-                <td class="px-4 py-3 text-center text-green-400">✅ hook</td>
-                <td class="px-4 py-3 text-center text-green-400">✅ MCP</td>
-                <td class="px-4 py-3 text-center text-green-400">✅ MCP</td>
-                <td class="px-4 py-3 text-center text-slate-500">—</td>
-                <td class="px-4 py-3 text-center text-slate-500">—</td>
+                <td class="px-4 py-3 text-green-400">✅ hook</td>
+                <td class="px-4 py-3 text-green-400">✅ MCP</td>
+                <td class="px-4 py-3 text-green-400">✅ MCP</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
               </tr>
               <tr class="border-b border-slate-800/50">
                 <td class="px-4 py-3 text-white">Scope drift detection</td>
-                <td class="px-4 py-3 text-center text-green-400">✅ hook + MCP</td>
-                <td class="px-4 py-3 text-center text-green-400">✅ MCP</td>
-                <td class="px-4 py-3 text-center text-green-400">✅ MCP</td>
-                <td class="px-4 py-3 text-center text-slate-500">—</td>
-                <td class="px-4 py-3 text-center text-slate-500">—</td>
+                <td class="px-4 py-3 text-green-400">✅ hook + MCP</td>
+                <td class="px-4 py-3 text-green-400">✅ MCP</td>
+                <td class="px-4 py-3 text-green-400">✅ MCP</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
               </tr>
               <tr class="border-b border-slate-800/50">
                 <td class="px-4 py-3 text-white">Forbidden path blocking</td>
-                <td class="px-4 py-3 text-center text-green-400">✅ enforced</td>
-                <td class="px-4 py-3 text-center text-forge-400">⚡ advisory</td>
-                <td class="px-4 py-3 text-center text-forge-400">⚡ advisory</td>
-                <td class="px-4 py-3 text-center text-slate-500">—</td>
-                <td class="px-4 py-3 text-center text-slate-500">—</td>
+                <td class="px-4 py-3 text-green-400">✅ enforced</td>
+                <td class="px-4 py-3 text-forge-400">⚡ advisory</td>
+                <td class="px-4 py-3 text-forge-400">⚡ advisory</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
               </tr>
               <tr>
                 <td class="px-4 py-3 text-white">Pipeline handoff buttons</td>
-                <td class="px-4 py-3 text-center text-green-400">✅ click</td>
-                <td class="px-4 py-3 text-center text-forge-400">⚡ guided</td>
-                <td class="px-4 py-3 text-center text-forge-400">⚡ guided</td>
-                <td class="px-4 py-3 text-center text-slate-500">—</td>
-                <td class="px-4 py-3 text-center text-slate-500">—</td>
+                <td class="px-4 py-3 text-green-400">✅ click</td>
+                <td class="px-4 py-3 text-forge-400">⚡ guided</td>
+                <td class="px-4 py-3 text-forge-400">⚡ guided</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
               </tr>
             </tbody>
           </table>
         </div>
-        <p class="text-xs text-slate-500 mt-4 text-center">✅ = native/MCP tool · ⚡ = instruction-guided · 📋 = copy-paste prompts · MCP = with <code class="text-slate-400">pforge-mcp/server.mjs</code> running</p>
+        <p class="text-xs text-slate-500 mt-4">✅ = native/MCP tool · ⚡ = instruction-guided · 📋 = copy-paste prompts · MCP = with <code class="text-slate-400">pforge-mcp/server.mjs</code> running · — = not supported</p>
       </div>
     </div>
   </section>

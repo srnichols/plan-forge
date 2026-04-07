@@ -601,6 +601,16 @@ docs/manual/
 | Animations (GIF/WebM) | 5 | Screen recordings (setup wizard, live progress, auto-load, assisted mode, full pipeline) |
 | **Total visual assets** | **~51** | |
 
+### Screenshot & Live Content Source
+
+The **`E:\GitHub\plan-forge-testbed`** repo contains a **Tracker sample app** with a fully configured Plan Forge installation. Use this repo for:
+- Dashboard screenshots (run the MCP server against a real project with run history)
+- `pforge smith` output captures (shows realistic file counts, preset detection, version checks)
+- Setup wizard recordings (run `setup.ps1` / `setup.sh` against the testbed)
+- Execution recordings (run a plan against the Tracker app for real slice progress)
+- VS Code screenshots (open the testbed in VS Code to show instruction files, agents, skills in the file tree)
+- Copilot chat screenshots (Copilot interacting with testbed code with guardrails loaded)
+
 ---
 
 ## Iteration Rounds

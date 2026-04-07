@@ -5,6 +5,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.17.0] — 2026-04-07
+
+### Fixed — Dashboard Reliability
+- **Event watcher rewrite** — on server startup the watcher now replays the full event history from the latest run log into hub history (not just tail from EOF); fixes dashboard showing "Waiting for run events" after a server restart
+- **Run-switch watcher detach** — on each new plan run, the old `watchFile` listener is explicitly removed and the read offset reset before the new log is attached; prevents duplicate events and stale handlers accumulating across runs
+- **ES module import cleanup** — replaced legacy `require('fs')` calls in the file-watcher code path with proper `import` statements, fixing module-type errors in `server.mjs`
+
+### Added — Setup Completion & Smith Diagnostics
+- **Phase 24 hardened plan** — `docs/plans/Phase-24-DASHBOARD-SETUP-HARDENING-v2.17-PLAN.md` documents the full scope contract, acceptance criteria, and 6-slice execution plan for the Dashboard Reliability & Setup Completion release
+
+---
+
 ## [2.16.0] — 2026-04-07
 
 ### Added — Platform Completion & Setup Hardening (Phase 23)

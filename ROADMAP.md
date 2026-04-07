@@ -7,7 +7,7 @@
 
 ## Current Release
 
-**v2.16.0** (2026-04-07) — Platform Completion & Setup Hardening: nested subagent pipeline with termination guards across all 5 pipeline agent templates, `chat.subagents.allowInvocationsFromSubagents` VS Code setting, status-reporting instruction file with 7 standard output templates.
+**v2.17.0** (2026-04-07) — Platform Completion & Setup Hardening: nested subagent pipeline with termination guards across all 5 pipeline agent templates, `chat.subagents.allowInvocationsFromSubagents` VS Code setting, status-reporting instruction file with 7 standard output templates.
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 

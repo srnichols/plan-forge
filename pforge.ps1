@@ -957,21 +957,44 @@ function Invoke-ExtPublish([string[]]$args_) {
 
     $jsonEntry = $catalogEntry | ConvertTo-Json -Depth 5
 
+    # Build Spec Kit-compatible entry
+    $speckitRules  = if ($manifest.files.instructions) { @($manifest.files.instructions) } else { @() }
+    $speckitAgents = if ($manifest.files.agents)       { @($manifest.files.agents) }       else { @() }
+    $speckitEntry  = [ordered]@{
+        name        = $extId
+        version     = $manifest.version
+        description = $manifest.description
+        files       = [ordered]@{
+            rules  = $speckitRules
+            agents = $speckitAgents
+        }
+    }
+    $speckitJson = $speckitEntry | ConvertTo-Json -Depth 5
+
     Write-Host ""
     Write-Host "╔══════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-    Write-Host "║  Catalog Entry: $extId" -ForegroundColor Cyan
+    Write-Host "║  Publishing: $extId" -ForegroundColor Cyan
     Write-Host "╚══════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
     Write-Host ""
-    Write-Host "Add the following entry to extensions/catalog.json:" -ForegroundColor Yellow
+    Write-Host "Plan Forge Catalog Entry:" -ForegroundColor Yellow
+    Write-Host "─────────────────────────────────────────────────────────────" -ForegroundColor DarkGray
+    Write-Host "Add to extensions/catalog.json in a fork of srnichols/plan-forge:" -ForegroundColor White
     Write-Host ""
     Write-Host """$extId"": $jsonEntry" -ForegroundColor White
+    Write-Host ""
+    Write-Host "Spec Kit Catalog Entry:" -ForegroundColor Yellow
+    Write-Host "─────────────────────────────────────────────────────────────" -ForegroundColor DarkGray
+    Write-Host "Add to your Spec Kit extensions.json:" -ForegroundColor White
+    Write-Host ""
+    Write-Host $speckitJson -ForegroundColor White
     Write-Host ""
     Write-Host "─────────────────────────────────────────────────────────────" -ForegroundColor DarkGray
     Write-Host "Next steps to publish:" -ForegroundColor Cyan
     Write-Host "  1. Fork   https://github.com/srnichols/plan-forge" -ForegroundColor White
-    Write-Host "  2. Edit   extensions/catalog.json — add the entry above" -ForegroundColor White
+    Write-Host "  2. Edit   extensions/catalog.json — add the Plan Forge entry above" -ForegroundColor White
     Write-Host "  3. Open PR with title: feat(catalog): add $extId" -ForegroundColor White
     Write-Host "  4. Link to your extension's repository in the PR description" -ForegroundColor White
+    Write-Host "  5. If Spec Kit compatible, add the Spec Kit entry to your Spec Kit extensions.json" -ForegroundColor White
     Write-Host ""
     Write-Host "See extensions/PUBLISHING.md for full submission guidelines." -ForegroundColor DarkGray
 }

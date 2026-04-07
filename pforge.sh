@@ -979,11 +979,22 @@ cmd_ext_publish() {
     local now
     now="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "$(date -u +%Y-%m-%dT%H:%M:%SZ)")"
 
+    # Build Spec Kit files arrays (instructions→rules, agents→agents)
+    local speckit_rules speckit_agents
+    if command -v python3 >/dev/null 2>&1; then
+        speckit_rules="$(python3 -c "import json; d=json.load(open('$ext_json_file')); print(json.dumps(d.get('files',{}).get('instructions',[])+d.get('files',{}).get('rules',[])))" 2>/dev/null || echo "[]")"
+        speckit_agents="$(python3 -c "import json; d=json.load(open('$ext_json_file')); print(json.dumps(d.get('files',{}).get('agents',[])))" 2>/dev/null || echo "[]")"
+    else
+        speckit_rules="[]"
+        speckit_agents="[]"
+    fi
+
     echo ""
     echo "✓ Validation passed — extension is ready to publish."
     echo ""
-    echo "Add the following entry to extensions/catalog.json in a fork of srnichols/plan-forge:"
+    echo "Plan Forge Catalog Entry:"
     echo "────────────────────────────────────────────────────────────────"
+    echo "Add to extensions/catalog.json in a fork of srnichols/plan-forge:"
     cat <<EOF
     "$id": {
       "name": "$name",
@@ -1014,11 +1025,28 @@ cmd_ext_publish() {
 EOF
     echo "────────────────────────────────────────────────────────────────"
     echo ""
+    echo "Spec Kit Catalog Entry:"
+    echo "────────────────────────────────────────────────────────────────"
+    echo "Add to your Spec Kit extensions.json:"
+    cat <<EOF
+{
+  "name": "$id",
+  "version": "$version",
+  "description": "$description",
+  "files": {
+    "rules": $speckit_rules,
+    "agents": $speckit_agents
+  }
+}
+EOF
+    echo "────────────────────────────────────────────────────────────────"
+    echo ""
     echo "Next steps:"
     echo "  1. Fork https://github.com/srnichols/plan-forge"
-    echo "  2. Edit extensions/catalog.json — add the entry above"
+    echo "  2. Edit extensions/catalog.json — add the Plan Forge entry above"
     echo "  3. Open a PR with title: feat(catalog): add $id"
     echo "     Link your extension repository in the PR description."
+    echo "  4. If Spec Kit compatible, add the Spec Kit entry to your Spec Kit extensions.json"
     echo ""
     echo "  Full guide: extensions/PUBLISHING.md"
 }

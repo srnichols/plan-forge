@@ -84,6 +84,22 @@ Open a PR to `srnichols/plan-forge` with:
 
 If your extension also works as a Spec Kit extension, set `"speckit_compatible": true`. This helps users who use both tools discover shared extensions.
 
+When `speckit_compatible` is `true`, `pforge ext publish` also outputs a **Spec Kit Catalog Entry** you can add to your Spec Kit `extensions.json`:
+
+```json
+{
+  "name": "your-extension-id",
+  "version": "1.0.0",
+  "description": "One-line description of what it does.",
+  "files": {
+    "rules": ["instructions/my-rules.instructions.md"],
+    "agents": ["agents/my-agent.agent.md"]
+  }
+}
+```
+
+The `rules` array maps from your extension's `files.instructions` list, and `agents` maps from `files.agents`. Add this entry to the `extensions.json` in your Spec Kit project alongside the Plan Forge catalog entry.
+
 ### Verification
 
 Extensions submitted by the Plan Forge maintainers are marked `"verified": true`. Community extensions start as `"verified": false` — maintainers may verify after review.

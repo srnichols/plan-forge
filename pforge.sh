@@ -57,6 +57,7 @@ COMMANDS:
   update [source]   Update framework files from Plan Forge source (preserves customizations)
   analyze <plan>    Cross-artifact analysis — requirement traceability, test coverage, scope compliance
   run-plan <plan>   Execute a hardened plan — spawn CLI workers, validate at every boundary, track tokens
+  org-rules export  Export org custom instructions from .github/instructions/ for GitHub org settings
   smith             Inspect your forge — environment, VS Code config, setup health, and common problems
   help              Show this help message
 
@@ -76,6 +77,8 @@ EXAMPLES:
   ./pforge.sh run-plan docs/plans/Phase-1-AUTH-PLAN.md --estimate
   ./pforge.sh run-plan docs/plans/Phase-1-AUTH-PLAN.md --assisted
   ./pforge.sh ext list
+  ./pforge.sh org-rules export
+  ./pforge.sh org-rules export --format markdown --output org-rules.md
   ./pforge.sh update ../plan-forge
   ./pforge.sh update --dry-run
   ./pforge.sh update --check
@@ -2369,6 +2372,80 @@ cmd_run_plan() {
     fi
 }
 
+# ─── Command: org-rules ────────────────────────────────────────────────
+cmd_org_rules() {
+    local subcmd="${1:-export}"
+    local format="github"
+    local out_file=""
+    shift 2>/dev/null || true
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --format)      format="$2"; shift 2 ;;
+            --format=*)    format="${1#--format=}"; shift ;;
+            --output)      out_file="$2"; shift 2 ;;
+            --output=*)    out_file="${1#--output=}"; shift ;;
+            *) shift ;;
+        esac
+    done
+
+    if [ "$subcmd" != "export" ]; then
+        echo "ERROR: Unknown org-rules sub-command '$subcmd'. Use: export" >&2
+        exit 1
+    fi
+
+    echo ""
+    echo "╔══════════════════════════════════════════════════════════════╗"
+    echo "║       Plan Forge — Org Rules Export                          ║"
+    echo "╚══════════════════════════════════════════════════════════════╝"
+    echo ""
+
+    # Try MCP server REST API (port 3100) first
+    if command -v curl >/dev/null 2>&1; then
+        local body="{\"format\":\"${format}\"}"
+        [ -n "$out_file" ] && body="{\"format\":\"${format}\",\"output\":\"${out_file}\"}"
+        local http_code
+        http_code=$(curl -s -o /tmp/pforge_org_rules_out.txt -w "%{http_code}" \
+            -X POST "http://localhost:3100/api/tool/org-rules" \
+            -H "Content-Type: application/json" \
+            -d "$body" --max-time 5 2>/dev/null)
+        if [ "$http_code" = "200" ]; then
+            if [ -n "$out_file" ]; then
+                echo "  ✅ Org rules exported to: $out_file"
+            else
+                cat /tmp/pforge_org_rules_out.txt
+            fi
+            rm -f /tmp/pforge_org_rules_out.txt
+            return 0
+        fi
+        rm -f /tmp/pforge_org_rules_out.txt
+    fi
+
+    # Fallback: inline Node.js
+    if ! command -v node >/dev/null 2>&1; then
+        echo "ERROR: node not found. Install Node.js or start the MCP server (pforge-mcp/server.mjs)." >&2
+        exit 1
+    fi
+
+    ORG_RULES_FORMAT="$format" ORG_RULES_OUTPUT="$out_file" node -e "
+const fs=require('fs'),path=require('path'),cwd=process.cwd();
+const fmt=process.env.ORG_RULES_FORMAT||'github';
+const outFile=process.env.ORG_RULES_OUTPUT||'';
+const instrDir=path.join(cwd,'.github','instructions');
+const instrFiles=fs.existsSync(instrDir)?fs.readdirSync(instrDir).filter(f=>f.endsWith('.instructions.md')).sort().map(f=>path.join(instrDir,f)):[];
+function stripFrontmatter(raw){return raw.replace(/^---[\s\S]*?---\s*/m,'').trim();}
+const parts=[];
+instrFiles.forEach(f=>{const body=stripFrontmatter(fs.readFileSync(f,'utf8'));if(body)parts.push(body);});
+const ci=path.join(cwd,'.github','copilot-instructions.md');
+if(fs.existsSync(ci))parts.push(stripFrontmatter(fs.readFileSync(ci,'utf8')));
+const pp=path.join(cwd,'PROJECT-PRINCIPLES.md');
+if(fs.existsSync(pp))parts.push(fs.readFileSync(pp,'utf8').trim());
+const out=parts.join('\n\n---\n\n');
+if(outFile){fs.writeFileSync(outFile,out,'utf8');console.log('Exported to: '+outFile);}
+else{process.stdout.write(out+'\n');}
+"
+}
+
 # ─── Command Router ────────────────────────────────────────────────────
 COMMAND="${1:-help}"
 shift 2>/dev/null || true
@@ -2387,6 +2464,7 @@ case "$COMMAND" in
     update)       cmd_update "$@" ;;
     analyze)      cmd_analyze "$@" ;;
     run-plan)     cmd_run_plan "$@" ;;
+    org-rules)    cmd_org_rules "$@" ;;
     smith)        cmd_smith ;;
     help|--help)  show_help ;;
     *)

@@ -2859,6 +2859,83 @@ function Invoke-VersionBump {
     Write-Host "Don't forget: Update CHANGELOG.md manually with release notes." -ForegroundColor DarkGray
 }
 
+# ─── Command: org-rules ────────────────────────────────────────────────
+function Invoke-OrgRules {
+    # Parse sub-command and flags
+    $subCmd   = if ($Arguments.Count -gt 0) { $Arguments[0] } else { 'export' }
+    $format   = 'github'
+    $outFile  = $null
+
+    for ($i = 1; $i -lt $Arguments.Count; $i++) {
+        if ($Arguments[$i] -eq '--format' -and ($i + 1) -lt $Arguments.Count) {
+            $format = $Arguments[$i + 1]; $i++
+        } elseif ($Arguments[$i] -like '--format=*') {
+            $format = $Arguments[$i].Substring(9)
+        } elseif ($Arguments[$i] -eq '--output' -and ($i + 1) -lt $Arguments.Count) {
+            $outFile = $Arguments[$i + 1]; $i++
+        } elseif ($Arguments[$i] -like '--output=*') {
+            $outFile = $Arguments[$i].Substring(9)
+        }
+    }
+
+    if ($subCmd -ne 'export') {
+        Write-Host "ERROR: Unknown org-rules sub-command '$subCmd'. Use: export" -ForegroundColor Red
+        exit 1
+    }
+
+    Write-Host ""
+    Write-Host "╔══════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+    Write-Host "║       Plan Forge — Org Rules Export                          ║" -ForegroundColor Cyan
+    Write-Host "╚══════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+    Write-Host ""
+
+    # Try the MCP server REST API first (port 3100)
+    $serverUrl = "http://localhost:3100/api/tool/org-rules"
+    $body = @{ format = $format } | ConvertTo-Json
+    if ($outFile) { $body = @{ format = $format; output = $outFile } | ConvertTo-Json }
+
+    try {
+        $response = Invoke-RestMethod -Uri $serverUrl -Method Post -Body $body -ContentType 'application/json' -TimeoutSec 5
+        if ($outFile) {
+            Write-Host "  ✅ Org rules exported to: $outFile" -ForegroundColor Green
+        } else {
+            Write-Host $response
+        }
+        return
+    } catch {
+        # Server not running — fall back to inline Node.js
+    }
+
+    # Fallback: run inline node script
+    $nodeScript = @'
+const fs=require('fs'),path=require('path'),cwd=process.cwd();
+const fmt=process.env.ORG_RULES_FORMAT||'github';
+const outFile=process.env.ORG_RULES_OUTPUT||'';
+const instrDir=path.join(cwd,'.github','instructions');
+const instrFiles=fs.existsSync(instrDir)?fs.readdirSync(instrDir).filter(f=>f.endsWith('.instructions.md')).sort().map(f=>path.join(instrDir,f)):[];
+const versionFile=path.join(cwd,'VERSION');
+const version=fs.existsSync(versionFile)?fs.readFileSync(versionFile,'utf8').trim():'unknown';
+function stripFrontmatter(raw){return raw.replace(/^---[\s\S]*?---\s*/m,'').trim();}
+const parts=[];
+instrFiles.forEach(f=>{const body=stripFrontmatter(fs.readFileSync(f,'utf8'));if(body)parts.push(body);});
+const ci=path.join(cwd,'.github','copilot-instructions.md');
+if(fs.existsSync(ci))parts.push(stripFrontmatter(fs.readFileSync(ci,'utf8')));
+const pp=path.join(cwd,'PROJECT-PRINCIPLES.md');
+if(fs.existsSync(pp))parts.push(fs.readFileSync(pp,'utf8').trim());
+const out=parts.join('\n\n---\n\n');
+if(outFile){fs.writeFileSync(outFile,out,'utf8');console.log('Exported to: '+outFile);}
+else{process.stdout.write(out+'\n');}
+'@
+
+    $env:ORG_RULES_FORMAT = $format
+    $env:ORG_RULES_OUTPUT  = if ($outFile) { $outFile } else { '' }
+
+    node -e $nodeScript
+
+    Remove-Item Env:ORG_RULES_FORMAT -ErrorAction SilentlyContinue
+    Remove-Item Env:ORG_RULES_OUTPUT  -ErrorAction SilentlyContinue
+}
+
 # ─── Command Router ────────────────────────────────────────────────────
 switch ($Command) {
     'init'         { Invoke-Init }
@@ -2874,6 +2951,7 @@ switch ($Command) {
     'update'       { Invoke-Update }
     'analyze'      { Invoke-Analyze }
     'run-plan'     { Invoke-RunPlan }
+    'org-rules'    { Invoke-OrgRules }
     'version-bump' { Invoke-VersionBump }
     'smith'        { Invoke-Smith }
     'help'         { Show-Help }

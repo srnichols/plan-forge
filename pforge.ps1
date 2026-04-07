@@ -2133,16 +2133,48 @@ function Invoke-Smith {
     Write-Host "Version Currency:" -ForegroundColor Cyan
 
     $sourceVersion = $null
-    # Try to find Plan Forge source nearby
-    $candidates = @(
-        (Join-Path (Split-Path $RepoRoot -Parent) "plan-forge"),
-        (Join-Path (Split-Path $RepoRoot -Parent) "Plan-Forge")
-    )
-    foreach ($c in $candidates) {
-        $vFile = Join-Path $c "VERSION"
-        if (Test-Path $vFile) {
-            $sourceVersion = (Get-Content $vFile -Raw).Trim()
-            break
+    $versionCheckCacheFile = Join-Path $RepoRoot ".forge/version-check.json"
+    $cacheMaxAgeHours = 24
+
+    # Try cache first (skip network call if < 24h old)
+    $cacheValid = $false
+    if (Test-Path $versionCheckCacheFile) {
+        try {
+            $cache = Get-Content $versionCheckCacheFile -Raw | ConvertFrom-Json
+            $cacheAge = (Get-Date) - [datetime]$cache.checkedAt
+            if ($cacheAge.TotalHours -lt $cacheMaxAgeHours -and $cache.latestVersion) {
+                $sourceVersion = $cache.latestVersion
+                $cacheValid = $true
+            }
+        }
+        catch { }
+    }
+
+    # Fetch from GitHub API if cache is stale or missing
+    if (-not $cacheValid) {
+        try {
+            $apiUrl = "https://api.github.com/repos/srnichols/plan-forge/releases/latest"
+            $response = Invoke-RestMethod -Uri $apiUrl -Headers @{ 'User-Agent' = 'plan-forge-smith' } -TimeoutSec 5 -ErrorAction Stop
+            $sourceVersion = $response.tag_name -replace '^v', ''
+            # Persist cache
+            $forgeDir = Join-Path $RepoRoot ".forge"
+            if (-not (Test-Path $forgeDir)) { New-Item -ItemType Directory -Path $forgeDir | Out-Null }
+            @{ checkedAt = (Get-Date -Format 'o'); latestVersion = $sourceVersion } |
+                ConvertTo-Json | Set-Content $versionCheckCacheFile -Encoding UTF8
+        }
+        catch {
+            # Fall back to local source repo if offline
+            $candidates = @(
+                (Join-Path (Split-Path $RepoRoot -Parent) "plan-forge"),
+                (Join-Path (Split-Path $RepoRoot -Parent) "Plan-Forge")
+            )
+            foreach ($c in $candidates) {
+                $vFile = Join-Path $c "VERSION"
+                if (Test-Path $vFile) {
+                    $sourceVersion = (Get-Content $vFile -Raw).Trim()
+                    break
+                }
+            }
         }
     }
 
@@ -2156,9 +2188,13 @@ function Invoke-Smith {
         else {
             Doctor-Warn "Installed v$templateVersion — latest is v$sourceVersion" "Run 'pforge update' to upgrade"
         }
+        if ($cacheValid) {
+            $cacheAge = (Get-Date) - [datetime](Get-Content $versionCheckCacheFile -Raw | ConvertFrom-Json).checkedAt
+            Write-Host "     (cached $([math]::Round($cacheAge.TotalMinutes))m ago)" -ForegroundColor DarkGray
+        }
     }
     else {
-        Doctor-Pass "Installed v$templateVersion (source repo not found nearby — skipping currency check)"
+        Doctor-Pass "Installed v$templateVersion (GitHub unreachable and no local source — skipping currency check)"
     }
 
     Write-Host ""

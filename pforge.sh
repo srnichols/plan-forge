@@ -1790,14 +1790,50 @@ cmd_doctor() {
     echo "Version Currency:"
 
     local source_version=""
-    local parent_dir
-    parent_dir="$(dirname "$REPO_ROOT")"
-    for candidate in "$parent_dir/plan-forge" "$parent_dir/Plan-Forge"; do
-        if [ -f "$candidate/VERSION" ]; then
-            source_version="$(cat "$candidate/VERSION" | tr -d '[:space:]')"
-            break
+    local version_check_cache="$REPO_ROOT/.forge/version-check.json"
+    local cache_valid=false
+
+    # Try cache first (skip network call if < 24h old)
+    if [ -f "$version_check_cache" ]; then
+        local cached_ver cached_at cache_age_s
+        cached_ver="$(python3 -c "import json; print(json.load(open('$version_check_cache')).get('latestVersion',''))" 2>/dev/null \
+                      || grep -oP '"latestVersion"\s*:\s*"\K[^"]+' "$version_check_cache" 2>/dev/null | head -1)"
+        cached_at="$(python3 -c "import json; print(json.load(open('$version_check_cache')).get('checkedAt',''))" 2>/dev/null \
+                     || grep -oP '"checkedAt"\s*:\s*"\K[^"]+' "$version_check_cache" 2>/dev/null | head -1)"
+        if [ -n "$cached_ver" ] && [ -n "$cached_at" ]; then
+            cache_age_s=$(( $(date +%s) - $(date -d "$cached_at" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%S" "${cached_at%%.*}" +%s 2>/dev/null || echo 0) ))
+            if [ "$cache_age_s" -lt 86400 ] 2>/dev/null; then
+                source_version="$cached_ver"
+                cache_valid=true
+            fi
         fi
-    done
+    fi
+
+    # Fetch from GitHub API if cache is stale or missing
+    if [ "$cache_valid" = false ]; then
+        local api_url="https://api.github.com/repos/srnichols/plan-forge/releases/latest"
+        local gh_response
+        gh_response="$(curl -sf --max-time 5 -H 'User-Agent: plan-forge-smith' "$api_url" 2>/dev/null)"
+        if [ -n "$gh_response" ]; then
+            source_version="$(echo "$gh_response" | python3 -c "import json,sys; print(json.load(sys.stdin).get('tag_name','').lstrip('v'))" 2>/dev/null \
+                              || echo "$gh_response" | grep -oP '"tag_name"\s*:\s*"\K[^"]+' | head -1 | sed 's/^v//')"
+            if [ -n "$source_version" ]; then
+                mkdir -p "$REPO_ROOT/.forge"
+                printf '{"checkedAt":"%s","latestVersion":"%s"}\n' \
+                    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$source_version" > "$version_check_cache"
+            fi
+        else
+            # Fall back to local source repo if offline
+            local parent_dir
+            parent_dir="$(dirname "$REPO_ROOT")"
+            for candidate in "$parent_dir/plan-forge" "$parent_dir/Plan-Forge"; do
+                if [ -f "$candidate/VERSION" ]; then
+                    source_version="$(cat "$candidate/VERSION" | tr -d '[:space:]')"
+                    break
+                fi
+            done
+        fi
+    fi
 
     if [ -n "$source_version" ]; then
         if [ "$template_version" = "$source_version" ]; then
@@ -1807,8 +1843,12 @@ cmd_doctor() {
         else
             doctor_warn "Installed v$template_version — latest is v$source_version" "Run 'pforge update' to upgrade"
         fi
+        if [ "$cache_valid" = true ]; then
+            local cache_min=$(( cache_age_s / 60 ))
+            echo "     (cached ${cache_min}m ago)"
+        fi
     else
-        doctor_pass "Installed v$template_version (source repo not found nearby — skipping currency check)"
+        doctor_pass "Installed v$template_version (GitHub unreachable and no local source — skipping currency check)"
     fi
 
     echo ""

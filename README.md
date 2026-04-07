@@ -14,7 +14,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**[Website](https://planforge.software/)** · **[Quick Start](https://planforge.software/#quickstart)** · **[Documentation](https://planforge.software/docs.html)** · **[FAQ](https://planforge.software/faq.html)** · **[Extensions](https://planforge.software/extensions.html)** · **[Spec Kit Interop](https://planforge.software/speckit-interop.html)**
+**[Website](https://planforge.software/)** · **[Quick Start](https://planforge.software/#quickstart)** · **[Manual](https://planforge.software/manual/)** · **[Documentation](https://planforge.software/docs.html)** · **[FAQ](https://planforge.software/faq.html)** · **[Extensions](https://planforge.software/extensions.html)** · **[Spec Kit Interop](https://planforge.software/speckit-interop.html)**
 
 ---
 
@@ -784,6 +784,7 @@ After setup, read these in order:
 
 | Order | Document | Time | Purpose |
 |-------|----------|------|---------|
+| 0 | [**Manual** (docs/manual/)](https://planforge.software/manual/) | 2 hrs | The complete book — 14 chapters from beginner to advanced |
 | 1 | [CUSTOMIZATION.md](CUSTOMIZATION.md) | 10 min | Define Project Principles + generate Project Profile |
 | 2 | [docs/COPILOT-VSCODE-GUIDE.md](docs/COPILOT-VSCODE-GUIDE.md) | 15 min | How Agent Mode, sessions, and context budgeting work |
 | 3 | [docs/plans/AI-Plan-Hardening-Runbook-Instructions.md](docs/plans/AI-Plan-Hardening-Runbook-Instructions.md) | Reference | Copy-paste prompts for the 7-step pipeline |

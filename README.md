@@ -48,7 +48,7 @@ This framework doesn't slow you down. It teaches the AI your standards so you **
 | **Model support** | Claude Opus/Sonnet/Haiku, GPT 5.x, Gemini — routed per slice |
 | **Agent-per-slice routing** | Assign a different AI model per role (`default`, `execute`, `review`) via `modelRouting` in `.forge.json` — tune cost vs. quality at each stage |
 | **Quorum mode** | Multi-model consensus: 3 models analyze complex slices in parallel, reviewer synthesizes best approach |
-| **Orchestrator tests** | 83 self-tests passing (parser, DAG, scheduler, events, cost, security, quorum) |
+| **Orchestrator tests** | 103 self-tests passing (parser, DAG, scheduler, events, cost, security, quorum, routing) |
 | **Cost tracking** | Per-slice token counts, 23-model pricing table, monthly aggregation |
 | **Observability** | OTLP traces with resource context, span kinds, severity levels |
 | **Memory** | OpenBrain context injection — prior decisions and conventions searched and injected before each slice; captured after every run |
@@ -255,7 +255,7 @@ See **[docs/COPILOT-VSCODE-GUIDE.md](docs/COPILOT-VSCODE-GUIDE.md)** for a compl
 Plan Forge is built with Plan Forge. Every dashboard feature, bug fix, and MCP tool in this repo was developed using the same hardened plan pipeline that ships to users:
 
 - **11 phases** executed via `pforge run-plan` with quorum auto mode
-- **69 self-tests** passing after every slice
+- **103 self-tests** passing after every slice
 - **v1.0 → v2.13** with zero manual rollbacks — every change flows through scope contracts, validation gates, and completeness sweeps
 - The dashboard screenshots in our docs were captured by a Playwright script that runs against the live dashboard — itself built slice-by-slice using Plan Forge
 
@@ -425,7 +425,7 @@ The `azure-iac` preset includes **6 IaC-specific prompts**:
 
 ### Agent Definitions Per Preset
 
-App presets include **8 stack-specific agent definitions** (`.github/agents/`) — specialized reviewer/executor roles:
+App presets include **6 stack-specific agent definitions** (`.github/agents/`) — specialized reviewer/executor roles:
 
 | Agent | Purpose |
 |-------|--------|
@@ -671,7 +671,7 @@ Running `setup.ps1` (PowerShell) or `setup.sh` (Bash) with a preset:
 
 1. **Copies preset instruction files** from `presets/{stack}/` to your project root (16 files for app presets — 17 for TypeScript which adds `frontend.instructions.md`; 12 for `azure-iac`)
 2. **Copies prompt templates** for scaffolding new entities, services, tests, and Project Principles (15 for app presets, 6 for `azure-iac`)
-3. **Copies agent definitions** for architecture review, security audit, testing (8 stack-specific + 8 shared + 5 pipeline agents; `azure-iac` gets 5 stack-specific including the enterprise-grade `azure-sweeper`)
+3. **Copies agent definitions** for architecture review, security audit, testing (6 stack-specific + 8 shared + 5 pipeline agents; `azure-iac` gets 5 stack-specific including the enterprise-grade `azure-sweeper`)
 4. **Copies skill workflows** — 11 for app presets (8 stack-specific + 3 shared: health-check, forge-execute, security-audit); `azure-iac` gets 3 (infra-deploy, infra-test, azure-sweep)
 5. **Generates `AGENTS.md`** with patterns for your tech stack
 6. **Generates `.github/copilot-instructions.md`** with stack-specific conventions
@@ -772,7 +772,7 @@ After setup, read these in order:
 |-------|----------|------|---------|
 | 1 | [CUSTOMIZATION.md](CUSTOMIZATION.md) | 10 min | Define Project Principles + generate Project Profile |
 | 2 | [docs/COPILOT-VSCODE-GUIDE.md](docs/COPILOT-VSCODE-GUIDE.md) | 15 min | How Agent Mode, sessions, and context budgeting work |
-| 3 | [docs/plans/AI-Plan-Hardening-Runbook-Instructions.md](docs/plans/AI-Plan-Hardening-Runbook-Instructions.md) | Reference | Copy-paste prompts for the 6-step pipeline |
+| 3 | [docs/plans/AI-Plan-Hardening-Runbook-Instructions.md](docs/plans/AI-Plan-Hardening-Runbook-Instructions.md) | Reference | Copy-paste prompts for the 7-step pipeline |
 | — | [docs/CLI-GUIDE.md](docs/CLI-GUIDE.md) | Optional | CLI commands for project management |
 | — | [docs/EXTENSIONS.md](docs/EXTENSIONS.md) | Optional | Share custom guardrails as installable packages |
 | — | [docs/UNIFIED-SYSTEM-ARCHITECTURE.md](docs/UNIFIED-SYSTEM-ARCHITECTURE.md) | Optional | Integrate Plan Forge + [OpenBrain](https://github.com/srnichols/OpenBrain) + [OpenClaw](https://github.com/openclaw/openclaw) into a unified automated development system — orchestration, persistent memory, and multi-channel control via Copilot CLI ACP |
@@ -863,7 +863,7 @@ Step 0 (Specify) and the Project Profile are both optional. Start with Steps 1�
 
 ### "What's a 'session' and why do I need to start new ones?"
 
-A session is a single conversation with the AI (one Copilot Chat thread). The pipeline uses 3 separate sessions because an AI that wrote the code shouldn't review its own work — it has blind spots about its own decisions. Starting a fresh session gives you an independent reviewer. In VS Code, just click the **+** button in the Copilot Chat panel to start a new session.
+A session is a single conversation with the AI (one Copilot Chat thread). The pipeline uses 4 separate sessions because an AI that wrote the code shouldn't review its own work — it has blind spots about its own decisions. Starting a fresh session gives you an independent reviewer. In VS Code, just click the **+** button in the Copilot Chat panel to start a new session.
 
 ### "What if the AI ignores the guardrails?"
 
@@ -926,7 +926,7 @@ Setup installs `pforge-mcp/server.mjs` automatically and generates `.vscode/mcp.
 cd pforge-mcp && npm install    # Install MCP dependencies (one-time)
 ```
 
-17 tools available: `forge_smith`, `forge_validate`, `forge_sweep`, `forge_status`, `forge_diff`, `forge_analyze`, `forge_diagnose`, `forge_ext_search`, `forge_ext_info`, `forge_new_phase`, `forge_run_plan`, `forge_abort`, `forge_plan_status`, `forge_cost_report`, `forge_capabilities`, `forge_skill_status`, `forge_run_skill`. Composable with OpenBrain for persistent memory in the same MCP config.
+18 tools available: `forge_smith`, `forge_validate`, `forge_sweep`, `forge_status`, `forge_diff`, `forge_analyze`, `forge_diagnose`, `forge_ext_search`, `forge_ext_info`, `forge_new_phase`, `forge_run_plan`, `forge_abort`, `forge_plan_status`, `forge_cost_report`, `forge_capabilities`, `forge_skill_status`, `forge_run_skill`, `forge_generate_image`. Composable with OpenBrain for persistent memory in the same MCP config.
 
 ---
 

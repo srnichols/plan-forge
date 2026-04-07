@@ -1,0 +1,91 @@
+{
+  "name": "Plan Forge",
+  "version": "2.13.1",
+  "tagline": "Forge the plan. Harden the scope. Ship with confidence.",
+  "description": "AI coding guardrails that convert rough ideas into hardened execution contracts — locked-down plans the AI can't deviate from. 7-step pipeline across 4 sessions with scope locking, validation gates, and independent review.",
+  "homepage": "https://planforge.software",
+  "repository": "https://github.com/srnichols/plan-forge",
+  "license": "MIT",
+  "author": {
+    "name": "Scott Nichols",
+    "github": "https://github.com/srnichols",
+    "role": "Principal Cloud Solution Architect @ Microsoft"
+  },
+  "capabilities": {
+    "mcp_tools": 18,
+    "agents": 19,
+    "skills": 11,
+    "instruction_files": "15-18 per preset",
+    "prompt_templates": "15 per app preset, 6 for azure-iac",
+    "pipeline_steps": 7,
+    "sessions": 4,
+    "dashboard_tabs": 9,
+    "presets": 9,
+    "ai_models_supported": 23
+  },
+  "presets": [
+    { "name": "dotnet", "label": ".NET / C# / ASP.NET Core", "detect": ["*.csproj", "*.sln"] },
+    { "name": "typescript", "label": "TypeScript / React / Node.js", "detect": ["tsconfig.json", "package.json"] },
+    { "name": "python", "label": "Python / FastAPI / Django", "detect": ["pyproject.toml", "requirements.txt"] },
+    { "name": "java", "label": "Java / Spring Boot", "detect": ["pom.xml", "build.gradle"] },
+    { "name": "go", "label": "Go / Chi / Gin", "detect": ["go.mod"] },
+    { "name": "swift", "label": "Swift / SwiftUI / Vapor", "detect": ["Package.swift"] },
+    { "name": "rust", "label": "Rust / Axum / Tokio", "detect": ["Cargo.toml"] },
+    { "name": "php", "label": "PHP / Laravel / Symfony", "detect": ["composer.json"] },
+    { "name": "azure-iac", "label": "Azure Bicep / Terraform / azd", "detect": ["*.bicep", "*.tf", "azure.yaml"] }
+  ],
+  "mcp_tools": [
+    "forge_capabilities",
+    "forge_run_plan",
+    "forge_abort",
+    "forge_plan_status",
+    "forge_cost_report",
+    "forge_smith",
+    "forge_validate",
+    "forge_sweep",
+    "forge_status",
+    "forge_diff",
+    "forge_analyze",
+    "forge_diagnose",
+    "forge_ext_search",
+    "forge_ext_info",
+    "forge_new_phase",
+    "forge_skill_status",
+    "forge_run_skill",
+    "forge_generate_image"
+  ],
+  "ai_agents_supported": [
+    { "name": "copilot", "label": "GitHub Copilot / VS Code", "tier": "primary" },
+    { "name": "claude", "label": "Claude Code", "tier": "first-class" },
+    { "name": "cursor", "label": "Cursor", "tier": "first-class" },
+    { "name": "codex", "label": "Codex CLI", "tier": "first-class" },
+    { "name": "gemini", "label": "Gemini CLI", "tier": "supported" },
+    { "name": "windsurf", "label": "Windsurf", "tier": "supported" },
+    { "name": "generic", "label": "Any AI tool", "tier": "copy-paste" }
+  ],
+  "pipeline_steps": [
+    { "step": 0, "name": "Specify", "session": 1, "purpose": "Define what & why" },
+    { "step": 1, "name": "Pre-flight", "session": 1, "purpose": "Verify setup" },
+    { "step": 2, "name": "Harden", "session": 1, "purpose": "Lock scope contract" },
+    { "step": 3, "name": "Execute", "session": 2, "purpose": "Build slice by slice" },
+    { "step": 4, "name": "Sweep", "session": 2, "purpose": "Eliminate TODOs" },
+    { "step": 5, "name": "Review", "session": 3, "purpose": "Independent audit" },
+    { "step": 6, "name": "Ship", "session": 4, "purpose": "Commit & close" }
+  ],
+  "entry_points": {
+    "ai_agent": "AGENT-SETUP.md",
+    "human_quickstart": "docs/QUICKSTART-WALKTHROUGH.md",
+    "vscode_guide": "docs/COPILOT-VSCODE-GUIDE.md",
+    "cli_guide": "docs/CLI-GUIDE.md",
+    "mcp_discovery": "forge_capabilities"
+  },
+  "links": {
+    "documentation": "https://planforge.software/docs.html",
+    "capabilities": "https://planforge.software/capabilities.html",
+    "examples": "https://planforge.software/examples.html",
+    "faq": "https://planforge.software/faq.html",
+    "extensions": "https://planforge.software/extensions.html",
+    "dashboard": "https://planforge.software/dashboard.html",
+    "speckit_interop": "https://planforge.software/speckit-interop.html"
+  }
+}

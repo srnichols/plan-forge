@@ -1,0 +1,65 @@
+# Plan Forge
+
+> AI coding guardrails that convert rough ideas into hardened execution contracts.
+
+## What It Does
+
+Plan Forge is an open-source framework that gives AI coding agents (Copilot, Claude, Cursor, Codex, Gemini, Windsurf, and others) structure, guardrails, and accountability. It prevents scope creep, skipped tests, and silent architecture decisions through a 7-step hardening pipeline across 4 isolated sessions.
+
+## Key Concepts
+
+- **Hardened Execution Contract**: A locked-down plan with scope boundaries, validation gates, and forbidden actions that the AI must follow without deviation.
+- **7-Step Pipeline**: Specify → Pre-flight → Harden → Execute → Sweep → Review → Ship
+- **4 Sessions**: Session isolation prevents self-auditing. The builder and reviewer are always different AI instances.
+- **Validation Gates**: Build + test must pass at every slice boundary before proceeding.
+- **Scope Contract**: Defines what's in scope, out of scope, and forbidden. Drift is structurally impossible.
+
+## Capabilities
+
+- 18 MCP tools (start with `forge_capabilities` for full discovery)
+- 19 reviewer agents (6 stack-specific + 8 cross-stack + 5 pipeline)
+- 11 slash command skills
+- 15-18 auto-loading instruction files per preset
+- 15 scaffolding prompt templates per app preset
+- Live dashboard at localhost:3100/dashboard (9 tabs)
+- Quorum mode: multi-model consensus for complex slices
+- Auto-escalation: automatic model promotion on slice failure
+- Agent-per-slice routing: assign different models per role
+- Cost tracking with 23-model pricing table
+- OTLP-compatible trace generation
+
+## Supported Stacks (9 Presets)
+
+dotnet, typescript, python, java, go, swift, rust, php, azure-iac
+
+## Supported AI Tools
+
+GitHub Copilot (primary), Claude Code, Cursor, Codex CLI, Gemini CLI, Windsurf, Generic (any AI tool)
+
+## Entry Points
+
+- AI agents: Read AGENT-SETUP.md
+- Humans: Read docs/QUICKSTART-WALKTHROUGH.md
+- MCP clients: Call forge_capabilities
+- Machine-readable: .well-known/plan-forge.json
+
+## Quick Start
+
+```
+git clone https://github.com/srnichols/plan-forge.git my-project-plans
+cd my-project-plans
+.\setup.ps1 -Preset <stack>
+```
+
+## Links
+
+- Website: https://planforge.software
+- Repository: https://github.com/srnichols/plan-forge
+- Documentation: https://planforge.software/docs.html
+- Capabilities: https://planforge.software/capabilities.html
+- FAQ: https://planforge.software/faq.html
+- Extensions: https://planforge.software/extensions.html
+
+## License
+
+MIT

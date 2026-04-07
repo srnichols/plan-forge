@@ -7,7 +7,7 @@
 
 ## Current Release
 
-**v2.13.0** (2026-04-07) — Platform Complete: agent-per-slice routing, OpenBrain deep context, preset validation counts, Spec Kit auto-detection, dual-publish extensions, auto-update notification, and Web UI plan browser.
+**v2.13.1** (2026-04-07) — Platform Complete: agent-per-slice routing, OpenBrain deep context, preset validation counts, Spec Kit auto-detection, dual-publish extensions, auto-update notification, Web UI plan browser, dashboard bridge/approval/escalation/performance panels.
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 

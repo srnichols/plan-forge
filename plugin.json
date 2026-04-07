@@ -1,7 +1,7 @@
 {
   "name": "plan-forge",
-  "version": "1.2.2",
-  "description": "Plan Forge — Harden AI-driven development plans into drift-proof execution contracts. Includes pipeline prompts, guardrail instructions, reviewer agents, execution skills, and lifecycle hooks. Supports app presets (dotnet, typescript, python, java, go, swift) and azure-iac preset (Bicep/Terraform/PowerShell/azd).",
+  "version": "2.13.1",
+  "description": "Plan Forge — Harden AI-driven development plans into drift-proof execution contracts. 7-step pipeline, 19 reviewer agents, 11 skills, 18 MCP tools, live dashboard, quorum mode, auto-escalation, cost tracking. Supports 9 presets (dotnet, typescript, python, java, go, swift, rust, php, azure-iac).",
   "author": "srnichols",
   "license": "MIT",
   "homepage": "https://github.com/srnichols/plan-forge",

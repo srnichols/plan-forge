@@ -375,6 +375,8 @@ Add `vscode://chat-plugin/install?source=srnichols/plan-forge` and `vscode-insid
 | `docs/llms.txt` | AI discovery | Add install URL to entry points |
 | `docs/.well-known/plan-forge.json` | AI discovery | Add `install_url` field to `entry_points` |
 
+**Dashboard Sweep**: No dashboard changes needed — this is a website/docs-only feature.
+
 #### A2. Model Deprecation Sweep
 
 **Source**: GitHub Copilot Changelog — GPT-5.1 deprecated (Apr 3), GPT-5.3-Codex LTS (Mar 18), GPT-5.4 GA (Mar 5), GPT-5.4 mini GA (Mar 17), Claude Sonnet 4 deprecation upcoming (Mar 31)  
@@ -406,6 +408,16 @@ Audit all files referencing model names and update:
 | `docs/.well-known/plan-forge.json` | AI discovery | `ai_models_supported` count if models added/removed |
 | `docs/llms.txt` | AI discovery | Model count if changed |
 | `CHANGELOG.md` | Release notes | Document which models deprecated/added |
+
+**Dashboard Sweep** (update after feature is live):
+| Tab / Component | File | What to Update |
+|-----------------|------|----------------|
+| **Cost** tab | `pforge-mcp/dashboard/app.js` → `loadCost()` | Update pricing constants for GPT-5.4, GPT-5.4 mini; remove GPT-5.1 rates |
+| **Cost** tab — Model Performance table | `app.js` → Model Comparison section | Update model dropdown options; remove deprecated models from selectors |
+| **Config** tab — Model Routing editor | `app.js` → Config Editor section | Update model dropdown/autocomplete to show current models; flag deprecated models with ⚠️ warning |
+| **Actions** tab — Estimate panel | `app.js` → `estimateCost()` | Ensure cost estimation uses updated pricing for new default models |
+| **Progress** tab — Slice cards | `app.js` → `renderSliceCards()` | Verify model name badges render correctly for new model names (length, truncation) |
+| Server-side pricing | `pforge-mcp/orchestrator.mjs` | Update `PRICING` constant object with new model rates |
 
 #### A3. Cloud Agent Integration Guide (`copilot-setup-steps.yml`)
 
@@ -448,6 +460,14 @@ Add to `docs/COPILOT-VSCODE-GUIDE.md` a new section: **"Using Plan Forge with Co
 | `setup.ps1` / `setup.sh` | Source code | Implement `--cloud-agent` flag |
 | `CHANGELOG.md` | Release notes | Document new template and flag |
 
+**Dashboard Sweep** (update after feature is live):
+| Tab / Component | File | What to Update |
+|-----------------|------|----------------|
+| **Actions** tab — Quick Actions | `app.js` → Actions Tab | Add "Cloud Agent Setup" button that runs `pforge smith --cloud-agent` to verify `copilot-setup-steps.yml` exists and is valid |
+| **Config** tab | `app.js` → Config Editor | Add `cloudAgent` section to `.forge.json` visual editor (enabled, setup steps path) |
+| **Progress** tab | `app.js` → `handleRunStarted()` | Show badge/indicator when run was triggered by cloud agent vs local (if detectable from run metadata) |
+| Notification center | `app.js` → Notification Center | Add notification type for cloud agent session events (if WebSocket events are forwarded) |
+
 #### A4. Copilot Memory Coexistence Documentation
 
 **Source**: Copilot Memory now on by default for Pro/Pro+ users (Mar 4) — repo-scoped, 28-day expiry, shared across coding agent/code review/CLI  
@@ -482,6 +502,14 @@ Key message: Copilot Memory handles *what* (conventions), Plan Forge tracks *how
 | `docs/capabilities.html` | Website / Reference | Add memory comparison to Features section |
 | `docs/capabilities.md` | Human/AI docs | Add Memory Layers section |
 | `CHANGELOG.md` | Release notes | Document memory coexistence guide |
+
+**Dashboard Sweep** (update after feature is live):
+| Tab / Component | File | What to Update |
+|-----------------|------|----------------|
+| **Actions** tab — Memory Search | `app.js` → Memory Search section | Add toggle/filter to show Copilot Memory entries alongside OpenBrain entries (if Copilot Memory data becomes accessible) |
+| **Actions** tab — Memory Search | `app.js` → Memory Search section | Add info tooltip explaining the 3 memory layers (Copilot Memory / Plan Forge / OpenBrain) with links to docs |
+
+Note: Primarily a docs-only feature. Dashboard changes are optional enhancements if memory data surfaces become queryable.
 
 ### Phase B — Medium Effort, High Value (1–3 days each)
 
@@ -532,6 +560,14 @@ Also document the **two-layer model** in Plan Forge docs:
 | `pforge.ps1` / `pforge.sh` | Source code | Implement `org-rules` subcommand |
 | `CHANGELOG.md` | Release notes | Document new CLI command and MCP tool |
 
+**Dashboard Sweep** (update after feature is live):
+| Tab / Component | File | What to Update |
+|-----------------|------|----------------|
+| **Actions** tab — Quick Actions | `app.js` → Actions Tab | Add "Export Org Rules" button that calls `forge_org_rules` MCP tool and displays output in a modal |
+| **Config** tab | `app.js` → Config Editor | Show org-level instructions status (detected/not detected); link to export command |
+| Server-side | `pforge-mcp/server.mjs` | Register `forge_org_rules` MCP tool handler |
+| REST API | `pforge-mcp/server.mjs` | Add `POST /api/tool/org-rules` endpoint |
+
 #### B2. Nested Subagent Pipeline (Pipeline-as-Subagents)
 
 **Source**: VS Code 1.113 — Nested subagents: `chat.subagents.allowInvocationsFromSubagents` enables multi-step workflows where subagents can call other subagents  
@@ -572,6 +608,15 @@ Changes needed:
 | `presets/*/AGENTS.md` (9 files) | AI-agent docs | Update pipeline agent descriptions with subagent invocation info |
 | `docs/walkthroughs/greenfield-todo-api.md` | Human docs | Update walkthrough to demonstrate single-session flow |
 | `CHANGELOG.md` | Release notes | Document nested subagent pipeline mode |
+
+**Dashboard Sweep** (update after feature is live):
+| Tab / Component | File | What to Update |
+|-----------------|------|----------------|
+| **Progress** tab — Slice cards | `app.js` → `renderSliceCards()` | Add visual indicator for subagent handoffs: show which pipeline agent is active per slice (Specifier → Hardener → Executor → Reviewer → Shipper) with transition arrows |
+| **Traces** tab — Waterfall | `app.js` → Traces section | Add nested subagent spans as child spans in the trace waterfall; show agent-to-agent handoff events |
+| **Replay** tab | `app.js` → Session Replay | Support replaying nested subagent chains — show which subagent produced which output in sequence |
+| **Runs** tab — Run detail drawer | `app.js` → Run Detail Drawer | Show pipeline mode ("4-session manual" vs "1-session nested subagents") in run metadata |
+| **Config** tab | `app.js` → Config Editor | Add `pipeline.nestedSubagents` toggle to the visual editor |
 
 #### B3. `/troubleshoot` Integration Skill
 
@@ -619,6 +664,13 @@ Also add troubleshooting guidance to `docs/COPILOT-VSCODE-GUIDE.md`:
 | `presets/shared/skills/forge-troubleshoot/SKILL.md` | Skill definition | New file — skill entry point |
 | `CHANGELOG.md` | Release notes | Document new skill |
 
+**Dashboard Sweep** (update after feature is live):
+| Tab / Component | File | What to Update |
+|-----------------|------|----------------|
+| **Skills** tab — Skill Catalog | `app.js` → Extension Marketplace / Skills section | Add `forge-troubleshoot` to the built-in skill catalog grid with description and status tracking |
+| **Skills** tab — Skill execution | `app.js` → Skill runs rendering | Support rendering `/forge-troubleshoot` step events (smith check → settings check → session diagnosis → results) |
+| **Actions** tab — Quick Actions | `app.js` → Actions Tab | Add "Troubleshoot" button that triggers the troubleshoot skill via `forge_run_skill` |
+
 #### B4. Validation Tools Complement Guide
 
 **Source**: Coding agent validation tools configurable (Mar 18) — admins toggle CodeQL, secret scanning, Copilot code review per repo  
@@ -652,6 +704,14 @@ Optionally, add a `.forge.json` key `cloudAgentValidation` that documents which 
 | `docs/capabilities.html` | Website / Reference | Add validation layers comparison |
 | `CUSTOMIZATION.md` | Human docs | Document `cloudAgentValidation` `.forge.json` key |
 | `CHANGELOG.md` | Release notes | Document validation tools complement guide |
+
+**Dashboard Sweep** (update after feature is live):
+| Tab / Component | File | What to Update |
+|-----------------|------|----------------|
+| **Progress** tab — Gate results | `app.js` → `handleSliceCompleted()` | Show validation layer indicators per slice: Plan Forge gate ✅/❌ + CodeQL status + secret scan status (if cloud agent data is available) |
+| **Config** tab | `app.js` → Config Editor | Add `cloudAgentValidation` section to `.forge.json` visual editor with checkboxes for expected external validation tools |
+| **Actions** tab — Smith panel | `app.js` → Actions Tab | `pforge smith` output should include advisory check for cloud agent validation tool configuration |
+| **Runs** tab — Run detail drawer | `app.js` → Run Detail Drawer | Show which validation layers ran for each slice in the detail view |
 
 ### Phase C — Strategic Investments (3–7 days each)
 
@@ -716,6 +776,15 @@ SDK-specific features:
 | `CHANGELOG.md` | Release notes | Document SDK package release |
 | `ROADMAP.md` | Roadmap | Mark C1 as shipped |
 
+**Dashboard Sweep** (update after feature is live):
+| Tab / Component | File | What to Update |
+|-----------------|------|----------------|
+| **Traces** tab | `app.js` → Traces section | Support rendering SDK-originated trace spans — SDK tools propagate OTEL traces that should appear in the waterfall alongside MCP tool traces |
+| **Cost** tab | `app.js` → `loadCost()` | Track and display cost from SDK-invoked tool calls (may arrive via different telemetry path than MCP) |
+| **Actions** tab | `app.js` → Actions Tab | If SDK agent is detected, show SDK connection status badge in header (similar to WebSocket badge) |
+| **Config** tab | `app.js` → Config Editor | Add SDK configuration section: package version, connected agents, permission scopes |
+| REST API | `pforge-mcp/server.mjs` | Ensure `/api/traces` and `/api/cost` aggregate data from both MCP and SDK sources |
+
 #### C2. Cloud Agent Plan Export (`forge_export_plan`)
 
 **Source**: Copilot cloud agent now generates implementation plans before coding (Apr 1)  
@@ -770,6 +839,15 @@ Workflow:
 | `pforge.ps1` / `pforge.sh` | Source code | Implement `export-plan` subcommand |
 | `CHANGELOG.md` | Release notes | Document new tool and command |
 
+**Dashboard Sweep** (update after feature is live):
+| Tab / Component | File | What to Update |
+|-----------------|------|----------------|
+| **Actions** tab — Quick Actions | `app.js` → Actions Tab | Add "Import Cloud Agent Plan" button/dropzone — paste or upload a cloud agent plan, preview parsed slices, then export as hardened Plan Forge plan |
+| **Actions** tab — Plan Browser | `app.js` → Plan Browser section | Show imported/exported plans with a badge indicating source ("cloud agent → hardened") |
+| **Progress** tab | `app.js` → `handleRunStarted()` | Show "Source: Cloud Agent Export" badge on runs that originated from an exported plan |
+| **Runs** tab — Run detail drawer | `app.js` → Run Detail Drawer | Link back to original cloud agent plan text in the run metadata |
+| REST API | `pforge-mcp/server.mjs` | Add `POST /api/tool/export-plan` endpoint for the import/export workflow |
+
 #### C3. `forge_sync_memories` — Bridge to Copilot Memory
 
 **Source**: Copilot Memory (Mar 4) — auto-discovers repo conventions, 28-day TTL, repo-scoped  
@@ -814,6 +892,14 @@ If Copilot Memory does NOT expose a write API (likely in current preview):
 | `plugin.json` | VS Code plugin | Update tool count in description |
 | `CHANGELOG.md` | Release notes | Document memory sync feature |
 
+**Dashboard Sweep** (update after feature is live):
+| Tab / Component | File | What to Update |
+|-----------------|------|----------------|
+| **Actions** tab — Memory Search | `app.js` → Memory Search section | Add "Sync to Copilot Memory" button that triggers `forge_sync_memories`; show last sync timestamp and entry count |
+| **Actions** tab — Memory Search | `app.js` → Memory Search section | Display synced decisions with a "🔄 synced" badge; show TTL countdown (28 days from last sync) |
+| **Config** tab | `app.js` → Config Editor | Add `memorySyncEnabled` toggle and `memorySyncSchedule` (manual / on-smith / daily) to `.forge.json` editor |
+| Notification center | `app.js` → Notification Center | Add notification when memory sync completes or when synced entries are approaching TTL expiry |
+
 #### C4. Fine-Grained Tool Approval Integration
 
 **Source**: VS Code 1.114 proposed API — tools can scope approval to specific argument combinations. E.g., approve `read_file("config.json")` without blanket-approving all `read_file` calls.  
@@ -850,6 +936,14 @@ If/when Plan Forge ships as a VS Code extension:
 | `docs/.well-known/plan-forge.json` | AI discovery | Add risk classification metadata |
 | `CHANGELOG.md` | Release notes | Document tool approval integration |
 
+**Dashboard Sweep** (update after feature is live):
+| Tab / Component | File | What to Update |
+|-----------------|------|----------------|
+| **Actions** tab — Quick Actions | `app.js` → Actions Tab | Color-code action buttons by risk level: green (auto-approvable), yellow (conditional), red (requires approval) |
+| **Config** tab | `app.js` → Config Editor | Show tool approval matrix — which tools are auto-approved, which require confirmation; allow editing approval scopes |
+| Header | `dashboard/index.html` | Add approval-pending indicator in header when a tool is awaiting user confirmation (alongside bridge approval badges) |
+| Bridge Status | `app.js` → Bridge Status & Escalation | Integrate tool approval requests into the existing approval gate workflow |
+
 ### Phase D — Watch List (No Build Yet — Monitor & Evaluate)
 
 These items depend on external platform changes. Track them; build when APIs stabilize or opportunities mature.
@@ -874,7 +968,16 @@ These items depend on external platform changes. Track them; build when APIs sta
 | D5 Customizations editor | `docs/COPILOT-VSCODE-GUIDE.md`, `docs/faq.html`, `CHANGELOG.md` |
 | D6 Agentic code review | `docs/capabilities.md` (skills table), `docs/capabilities.html`, `templates/copilot-instructions.md.template` (update `/code-review` skill description), `CHANGELOG.md` |
 | D7 Plan mode metrics | `docs/index.html` (stats/social proof section), `README.md` (metrics), marketing materials only |
-
+**Dashboard Sweep for Watch List items** (update when each item is triggered):
+| Item | Dashboard Changes |
+|------|-------------------|
+| D1 Signed commits | **Runs** tab: show commit signature verification status (✅ signed / ⚠️ unsigned) per slice in run detail drawer |
+| D2 Jira integration | **Actions** tab: add Jira ticket picker/linker in Plan Browser; **Progress** tab: show linked Jira ticket ID on slice cards |
+| D3 Merge conflict | **Progress** tab: add merge conflict indicator on parallel `[P]` slices; show auto-resolution status if triggered |
+| D4 Session tracing | **Traces** tab: add deep-link button per span to open the corresponding Copilot session log on GitHub |
+| D5 Customizations editor | No dashboard changes — VS Code native feature; mention in `pforge smith` output only |
+| D6 Agentic code review | **Skills** tab: update `/code-review` skill rendering to show native agentic review delegation steps |
+| D7 Plan mode metrics | **Runs** tab or new **Metrics** tab: show plan-mode adoption stats if GitHub metrics API exposes them |
 ---
 
 ## Backlog

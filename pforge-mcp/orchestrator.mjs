@@ -1544,9 +1544,9 @@ function loadMaxRetries(cwd) {
 
 /**
  * Load escalation chain from .forge.json.
- * Schema: { "escalationChain": ["auto", "claude-opus-4.6"] }
+ * Schema: { "escalationChain": ["auto", "claude-opus-4.6", "gpt-5.3-codex"] }
  * On each retry, the orchestrator escalates to the next model in the chain.
- * First escalation jumps directly to the top-tier model for fastest recovery.
+ * First escalation jumps to top-tier reasoning (Opus), then to Codex for bug-fixing.
  * @returns {string[]}
  */
 function loadEscalationChain(cwd) {
@@ -1559,7 +1559,7 @@ function loadEscalationChain(cwd) {
       }
     }
   } catch { /* defaults */ }
-  return ["auto", "claude-opus-4.6"];
+  return ["auto", "claude-opus-4.6", "gpt-5.3-codex"];
 }
 
 /**
@@ -1894,7 +1894,7 @@ async function executeSlice(slice, options) {
   const { cwd, model, modelRouting = {}, mode, runDir, maxRetries = 1,
     memoryEnabled = false, projectName = "", planName = "",
     quorumConfig = null,
-    escalationChain = ["auto", "claude-opus-4.6"],
+    escalationChain = ["auto", "claude-opus-4.6", "gpt-5.3-codex"],
     eventBus = null } = options;
   const startTime = Date.now();
   const resolvedModel = resolveModel(model, modelRouting, slice);

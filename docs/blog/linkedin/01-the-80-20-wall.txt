@@ -73,6 +73,8 @@ Plan Forge (https://github.com/srnichols/plan-forge) is free, open source, and M
 
 The 80/20 wall is real. But it's a planning problem, not a model problem. And planning problems have solutions.
 
+📖 Read the full post with diagrams and code examples → https://planforge.software/blog/the-80-20-wall.html
+
 ---
 
 HASHTAGS: #AIDevelopment #SoftwareEngineering #GitHubCopilot #DevTools #AIGuardrails

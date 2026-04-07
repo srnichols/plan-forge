@@ -87,6 +87,8 @@ All three are free. All three are MIT licensed. All three are self-hosted.
 
 The future of development isn't AI writing code. It's AI writing code within a system that plans, enforces, remembers, and improves — automatically, across every surface you use.
 
+📖 Read the full post with architecture diagrams → https://planforge.software/blog/unified-system.html
+
 ---
 
 HASHTAGS: #AIDevelopment #DevOps #Automation #OpenSource #FutureOfWork

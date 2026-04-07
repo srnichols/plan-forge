@@ -78,6 +78,8 @@ Get Spec Kit → https://github.com/github/spec-kit
 Get Plan Forge → https://github.com/srnichols/plan-forge
 Full integration guide → https://planforge.software/speckit-interop.html
 
+📖 Read the full post → https://planforge.software/blog/spec-kit-plan-forge.html
+
 ---
 
 HASHTAGS: #SpecKit #PlanForge #AIDevelopment #OpenSource #DevTools

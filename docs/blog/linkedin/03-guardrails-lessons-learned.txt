@@ -65,6 +65,8 @@ The core insight hasn't changed: AI agents are as good as the constraints you gi
 
 Plan Forge is free and open source → https://github.com/srnichols/plan-forge
 
+📖 Read the full post → https://planforge.software/blog/guardrails-lessons-learned.html
+
 ---
 
 HASHTAGS: #AIDevelopment #SoftwareArchitecture #CodeQuality #DevTools #AIGuardrails

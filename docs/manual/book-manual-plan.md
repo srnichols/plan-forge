@@ -572,6 +572,53 @@ This isn't a reference dump. It's a **learning journey** — a reader picks it u
 **Format**: Problem → Impact → Mitigations → Workarounds → Scripts.  
 **Why a full appendix**: This issue is severe enough (unrecoverable session crashes) to warrant permanent documentation rather than a troubleshooting footnote.
 
+### Appendix E: Sample Project — Build a Tracker App
+
+**Purpose**: Give readers a real project to build with Plan Forge. Not a toy — a functional multi-feature app they build end-to-end using the pipeline, learning each feature from the manual along the way.  
+**Tone**: Workshop. "Here's what we're building. Pick your stack. Follow along."
+
+**Sections**:
+1. **The Tracker App** — what it is (task tracker with users, projects, tasks, status, comments). Simple domain, rich enough to exercise all Plan Forge features.
+2. **Pick your preset** — reader chooses their stack (dotnet, typescript, python, java, go, swift, rust, php). The spec is framework-agnostic — Plan Forge generates stack-specific plans.
+3. **High-level spec** — provided as a pre-written Step 0 output:
+   - **Phase 1**: Project bootstrap + health endpoint (revisits Ch 4 tutorial)
+   - **Phase 2**: User model + authentication (exercises auth.instructions.md)
+   - **Phase 3**: Project & Task CRUD (exercises database, api-patterns, testing instructions)
+   - **Phase 4**: Comments + real-time updates (exercises messaging, observability instructions)
+   - **Phase 5**: Dashboard + reporting (exercises performance, caching instructions)
+4. **What you'll practice** — maps each phase to manual chapters:
+   - Phase 1 → Ch 4 (Your First Plan), Ch 3 (Installation)
+   - Phase 2 → Ch 5 (Writing Plans), Ch 9 (Instruction auto-loading)
+   - Phase 3 → Ch 6 (Dashboard monitoring), Ch 7 (CLI commands)
+   - Phase 4 → Ch 13 (Advanced: quorum, parallel slices, model routing)
+   - Phase 5 → Ch 8 (Customization: add custom instructions for reporting domain)
+5. **Getting started** — three commands:
+   ```bash
+   mkdir tracker-app && cd tracker-app
+   git init
+   .\setup.ps1 -Preset <your-choice>     # or ./setup.sh --preset <your-choice>
+   ```
+6. **Phase 1 spec (ready to paste)** — a complete Step 0 specification block for the health endpoint that the reader pastes into the specifier agent. Identical to Ch 4 but now in context of a larger app.
+7. **Phase 2–5 spec stubs** — high-level MUST criteria and scope for each phase. Reader runs them through the full pipeline (Step 0 → Step 6) themselves — that's the exercise.
+8. **Stretch goals** — for readers who finish all 5 phases:
+   - Add multi-tenancy (install `saas-multi-tenancy` extension)
+   - Add CI validation (copy `plan-forge-validate.yml` to `.github/workflows/`)
+   - Run a quorum analysis on Phase 3 (`pforge analyze --quorum`)
+   - Generate a Project Profile and re-run Phase 4 with tighter guardrails
+
+**Source material**: `plan-forge-testbed` repo (Tracker sample app), docs/walkthroughs/greenfield-todo-api.md (similar flow)  
+**Unique content to write**: Framework-agnostic spec blocks, phase-to-chapter mapping, stretch goal instructions  
+**Key design decision**: Specs are deliberately high-level — the reader uses Plan Forge (specifier → hardener → executor) to flesh them out. This teaches the pipeline by making them use it.
+
+**Page art**:
+| Asset | Description | Size | Notes |
+|-------|------------|------|-------|
+| Tracker wireframe | Simple wireframe showing projects, tasks, status columns | 800×400 | HTML/CSS diagram, not an image |
+| Phase roadmap | 5 phases as a horizontal timeline with completion indicators | 800×200 | HTML/CSS |
+
+**Screenshots**: None (readers generate their own output)  
+**Animations**: None
+
 ---
 
 ## File Structure (final)
@@ -596,7 +643,8 @@ docs/manual/
 ├── glossary.html              ← Appendix A
 ├── quick-reference.html       ← Appendix B
 ├── stack-notes.html           ← Appendix C
-├── grok-image-warnings.html   ← Appendix D (new — Grok MIME mismatch docs)
+├── grok-image-warnings.html   ← Appendix D (Grok MIME mismatch docs)
+├── sample-project.html        ← Appendix E (Build a Tracker App)
 ├── assets/
 │   ├── manual.css             ← Manual styles (extends shared.css)
 │   ├── manual.js              ← Sidebar, search, prev/next, print
@@ -661,6 +709,7 @@ The **`E:\GitHub\plan-forge-testbed`** repo contains a **Tracker sample app** wi
 ### Round 5 — Complete + Polish
 - [x] Chapters 11–14 (Extensions, Multi-Agent, Advanced, Troubleshooting)
 - [x] Appendices A–D (Glossary, Quick Reference, Stack Notes, Grok Warnings)
+- [ ] Appendix E (Sample Project — Build a Tracker App)
 - [ ] Client-side search index
 - [ ] Cross-chapter links verified
 - [ ] Print stylesheet
@@ -786,5 +835,84 @@ Standalone tests confirmed:
 | **Session recovery risk** | ⚠️ MITIGATED | The session crash only occurs if raw base64 with wrong MIME enters Claude's message history. Current code prevents this. |
 
 **Recommendation**: Use `.jpg` for all chapter heroes (fastest, no conversion overhead). Use PNG only when transparency is needed (logos, diagrams), and ensure `sharp` is installed.
+
+---
+
+## Post-Completion Reviewer Sweeps
+
+Once all chapters are written, run three independent reviewer passes. Each reviewer reads the entire manual through their own lens and files findings as a checklist. Run them sequentially — each reviewer should see fixes from the previous pass.
+
+### Sweep 1 — Technical Reviewer
+
+**Persona**: A senior engineer who uses Plan Forge daily. They know the codebase cold.  
+**Question**: "Is everything technically correct and current?"
+
+**Checklist**:
+- [ ] Every CLI command shown actually works (`pforge <cmd>` — test each one)
+- [ ] All flag names, types, and defaults match `cli-schema.json` and `CLI-GUIDE.md`
+- [ ] MCP tool names and descriptions match `tools.json` (source of truth)
+- [ ] REST API endpoints match what `server.mjs` actually exposes
+- [ ] WebSocket event names match `EVENTS.md`
+- [ ] File counts (instructions, agents, skills, prompts) match what `setup.ps1` actually installs for each preset
+- [ ] `applyTo` patterns shown match the actual YAML frontmatter in preset instruction files
+- [ ] Dashboard tab count (8) matches `pforge-mcp/dashboard/app.js`
+- [ ] Glossary terms match the `capabilities.mjs` glossary object
+- [ ] Version numbers match `VERSION` file (2.17.0 everywhere, no stale references)
+- [ ] Code examples compile/run (especially the SDK snippet in Ch 10 — SDK is v0.1.0 scaffold)
+- [ ] All "📄 Full reference" links at chapter bottoms point to files that exist
+- [ ] Port numbers (3100, 3101) are consistent throughout
+- [ ] Pricing/model references are current (23-model table, model names like `claude-opus-4.6`, `grok-4`)
+- [ ] Feature parity matrix in Ch 12 is accurate for each agent adapter
+- [ ] Sample Project (Appendix E) specs are achievable with current Plan Forge capabilities
+
+### Sweep 2 — Publisher / Editorial Reviewer
+
+**Persona**: A tech book editor at O'Reilly or Pragmatic Bookshelf. Never used Plan Forge.  
+**Question**: "Can a reader who's never seen this project follow from Chapter 1 to Chapter 14 without getting lost?"
+
+**Checklist**:
+- [ ] A reader can start at Ch 1 and reach Ch 4 (their first hands-on) without prerequisites they don't have
+- [ ] No forward references that break the reading flow ("as we'll see in Chapter 12" is fine; requiring Ch 12 knowledge to understand Ch 3 is not)
+- [ ] Every acronym/term is defined before first use or hyperlinked to the Glossary
+- [ ] Consistent voice throughout — authoritative but approachable, no marketing language, no "revolutionary" or "cutting-edge"
+- [ ] The blacksmith metaphor appears only in Ch 1 and Glossary — never forced into technical chapters
+- [ ] No chapter assumes the reader has read every previous chapter (Act III should be browsable)
+- [ ] Each chapter has a clear "what you'll learn" signal in the first paragraph
+- [ ] Tables have consistent column ordering and header capitalization
+- [ ] Code blocks have meaningful headers (not just "PowerShell" — say what the code does)
+- [ ] Callout boxes (tip/warning/info) are used consistently — tips for shortcuts, warnings for gotchas, info for context
+- [ ] Prev/Next navigation at every chapter bottom is correct and complete
+- [ ] No orphaned chapters — every chapter is reachable from the sidebar and index.html grid
+- [ ] The three acts (Learn/Build/Master) progression makes sense — does a reader really need Ch 1–3 before Ch 4?
+- [ ] Quick Reference Card (Appendix B) covers everything a reader would want on a printed cheat sheet
+- [ ] Sample Project (Appendix E) phase-to-chapter mapping is helpful, not confusing
+- [ ] No duplicate content — if two chapters explain the same thing, one should reference the other
+- [ ] Chapter lengths are balanced — 30 KB CLI Reference next to 7 KB Extensions feels lopsided (is Extensions underserved?)
+
+### Sweep 3 — Visual Design / Layout Reviewer
+
+**Persona**: A frontend developer or UX designer. Evaluates the reading experience.  
+**Question**: "Does this look professional and readable on every device?"
+
+**Checklist**:
+- [ ] Desktop (1440px+): sidebar + content layout works, tables don't overflow, code blocks readable
+- [ ] Tablet (768px–1024px): sidebar collapses cleanly, mobile button appears, content fills width
+- [ ] Mobile (375px): all content readable, tables horizontally scrollable, no broken layout
+- [ ] Print: sidebar hidden, colors inverted to light, code blocks don't break across pages, chapter headings print
+- [ ] Dark mode only is intentional — no light mode toggle needed (matches main site)
+- [ ] All chapter hero images (when generated) render at correct aspect ratio and don't pixelate
+- [ ] Typography hierarchy is clear: h1 > h2 > h3 > p — scan any page and the structure is obvious
+- [ ] Code blocks use monospace font and have sufficient contrast on dark background
+- [ ] Tables are scannable — no table wider than the content column without horizontal scroll
+- [ ] Callout boxes visually distinct by type (green=tip, amber=warning, blue=info)
+- [ ] Copy buttons on code blocks work and show "Copied!" feedback
+- [ ] Sidebar active state (amber highlight) correctly tracks current page
+- [ ] Search input is discoverable and results are clickable
+- [ ] Chapter card grid on index.html is visually balanced across rows
+- [ ] No Tailwind utility class soup visible in the HTML (classes should be semantic or in manual.css)
+- [ ] Interactive elements (links, buttons, accordion details) have hover/focus states
+- [ ] Page load performance: Tailwind CDN + 2 font families + manual CSS/JS — total under 500 KB first paint
+- [ ] Favicon loads correctly (`plan-forge-logo.svg`)
+- [ ] All images have alt text
 
 ---

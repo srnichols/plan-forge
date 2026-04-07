@@ -40,8 +40,50 @@
         <p>AI coding agents are powerful but directionless.</p>
         <p>They generate code fast. But <em>fast</em> isn't the same as <em>good</em>. Without structure, AI-generated code tends to be untestable, insecure, architecturally inconsistent, and impossible to maintain at scale. That's fine for prototypes — it's not fine for production systems.</p>
 
+        <!-- ─── The 80/20 Wall ─── -->
+        <h2 id="the-wall">The 80/20 Wall</h2>
+        <p>You've probably lived this pattern:</p>
+        <p>You fire up an AI agent — Copilot, Cursor, Claude, whatever — and describe the app you want. The first 80% is <em>magic</em>. Files appear, components wire up, the database schema materializes. You're shipping faster than you ever thought possible.</p>
+        <p>Then complexity creeps in. Auth flows interact with database queries. Middleware chains get long. The agent still works, but you notice it's making assumptions without asking — it picked a caching strategy you wouldn't have chosen, refactored code from three sessions ago that was working fine.</p>
+        <p>Then the wall. Every change breaks something else. Fix the auth bug, break the dashboard. Fix the dashboard, break the API response format. The agent is confidently producing code that compiles but doesn't work. You're debugging AI-generated code you don't fully understand, in an architecture you didn't fully choose.</p>
+        <p><strong>The pattern everyone hits:</strong> <em>prompt → hope → fix → re-prompt → hope harder.</em></p>
+
+        <div class="callout callout-warning">
+          <strong>This isn't a model problem. It's a planning problem.</strong> When agents work from loose intent rather than hardened specs, they do fine on greenfield builds but start thrashing once the codebase gets complex enough that every change has downstream consequences.
+        </div>
+
+        <p>The fix is spec-driven development: specify what you want <em>before</em> the agent writes a line of code, lock the scope so it can't drift, checkpoint at every boundary, and audit with a fresh session that never saw the original work.</p>
+        <p><em>Vibe coding gets you a prototype. Plan Forge gets you a product.</em></p>
+
         <!-- ─── What Happens Without Guardrails ─── -->
         <h2 id="without-guardrails">What Happens Without Guardrails</h2>
+
+        <!-- Vibe Coding vs Spec-Driven -->
+        <div class="overflow-x-auto mb-6">
+          <div class="flex gap-4 min-w-[500px] py-2">
+            <div class="flex-1 rounded-xl border border-red-800/30 bg-red-950/15 p-4">
+              <div class="text-xs font-bold text-red-400 mb-2 uppercase tracking-wider">Vibe Coding</div>
+              <ul class="text-xs text-slate-400 space-y-1.5">
+                <li>✗ Prompt → hope → fix → re-prompt</li>
+                <li>✗ Agent picks architecture mid-stream</li>
+                <li>✗ Every session starts from zero</li>
+                <li>✗ Agent reviews its own work</li>
+                <li>✗ "It compiles" = "it's done"</li>
+              </ul>
+            </div>
+            <div class="flex-1 rounded-xl border border-emerald-800/30 bg-emerald-950/15 p-4">
+              <div class="text-xs font-bold text-emerald-400 mb-2 uppercase tracking-wider">Spec-Driven (Plan Forge)</div>
+              <ul class="text-xs text-slate-400 space-y-1.5">
+                <li>✓ Specify → harden → execute → verify</li>
+                <li>✓ Architecture locked before coding starts</li>
+                <li>✓ Memory carries decisions across sessions</li>
+                <li>✓ Fresh session audits independently</li>
+                <li>✓ Build + test pass at every boundary</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
         <p>Without guardrails, AI coding agents:</p>
         <ul>
           <li><strong>Silently expand scope</strong> — "I'll also add..." (you didn't ask for that)</li>

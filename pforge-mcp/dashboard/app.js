@@ -2156,7 +2156,7 @@ async function pollHubClients() {
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────
-// Load initial status
+// Load initial status + reconstruct slice state from latest run
 fetch(`${API_BASE}/api/status`)
   .then((r) => r.json())
   .then((data) => {
@@ -2164,9 +2164,56 @@ fetch(`${API_BASE}/api/status`)
       document.getElementById("run-plan-name").textContent = shortName(data.plan);
       document.getElementById("run-progress-text").textContent = data.report || `Last run: ${data.status}`;
       document.getElementById("run-status").textContent = data.status === "completed" ? "Last: pass" : "Last: fail";
+    } else if (data.status === "running") {
+      document.getElementById("run-plan-name").textContent = shortName(data.plan);
+      document.getElementById("run-status").textContent = "Running...";
     }
   })
   .catch(() => {});
+
+// Populate slice cards from the latest run (REST fallback for when WS events are missed)
+fetch(`${API_BASE}/api/runs/latest`)
+  .then((r) => { if (!r.ok) throw new Error("no runs"); return r.json(); })
+  .then((run) => {
+    // Build run metadata
+    state.runMeta = run;
+    state.slices = [];
+    const order = run.executionOrder || [];
+    const count = run.sliceCount || order.length || 0;
+
+    for (let i = 0; i < count; i++) {
+      state.slices.push({
+        id: order[i] || String(i + 1),
+        title: `Slice ${order[i] || i + 1}`,
+        status: "pending",
+      });
+    }
+
+    // Now load per-slice files from runs/0 (latest run index)
+    return fetch(`${API_BASE}/api/runs/0`)
+      .then((r) => { if (!r.ok) throw new Error("no detail"); return r.json(); })
+      .then((detail) => {
+        if (detail.slices && detail.slices.length > 0) {
+          for (const slice of detail.slices) {
+            const found = state.slices.find((s) => s.id === String(slice.number));
+            if (found) {
+              found.status = slice.status === "passed" ? "passed" : slice.status === "failed" ? "failed" : found.status;
+              found.title = slice.title || found.title;
+              found.duration = slice.duration;
+              found.model = slice.model;
+              found.cost = slice.cost_usd;
+              Object.assign(found, slice);
+            }
+          }
+        }
+
+        document.getElementById("run-plan-name").textContent = shortName(run.plan);
+        document.getElementById("run-progress-bar").classList.remove("hidden");
+        renderSliceCards();
+        updateProgress();
+      });
+  })
+  .catch(() => { /* No runs yet — that's fine */ });
 
 // Connect WebSocket
 connectWebSocket();

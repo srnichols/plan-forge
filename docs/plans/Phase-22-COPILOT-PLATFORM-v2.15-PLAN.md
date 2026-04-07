@@ -267,8 +267,8 @@ node -e "const p = JSON.parse(require('fs').readFileSync('plugin.json','utf8'));
 **Validation Gate**:
 ```bash
 npm test --prefix pforge-mcp       # 91 tests pass
-Get-Content VERSION                # 2.15.0
-git log --oneline -3               # shows the version bump commit
+node -e "const v=require('fs').readFileSync('VERSION','utf8').trim();if(v!=='2.15.0'){process.exit(1);}console.log('VERSION='+v)"
+node -e "const o=require('child_process').execSync('git log --oneline -3',{encoding:'utf8'});console.log(o)"
 ```
 
 **Stop Condition**: Tests fail after version bump → STOP, do not push.

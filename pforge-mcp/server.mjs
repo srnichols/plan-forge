@@ -21,7 +21,7 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { execSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync, watchFile, statSync } from "node:fs";
 import { resolve, join, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parsePlan, runPlan, detectWorkers, getCostReport, analyzeWithQuorum, generateImage } from "./orchestrator.mjs";
@@ -46,11 +46,111 @@ let activeAbortController = null;
 let activeRunPromise = null;
 let activeHub = null;    // WebSocket hub instance
 let activeBridge = null; // OpenClaw Bridge instance
+let activeEventWatcher = null; // events.log file watcher
 
 // Set of runIds that have already received an approval decision (rate-limit: 1 per runId)
 const _approvedRunIds = new Set();
 
 // ─── Helpers ──────────────────────────────────────────────────────────
+
+/**
+ * Event File Watcher — tails events.log from the latest run dir and broadcasts
+ * new events to the WebSocket hub. This bridges the orchestrator (standalone CLI
+ * process writing to files) with the dashboard (WebSocket client).
+ */
+function startEventFileWatcher(hub, cwd) {
+  const runsDir = resolve(cwd, ".forge", "runs");
+  let currentLogFile = null;
+  let fileOffset = 0;
+  let scanInterval = null;
+
+  function findLatestEventsLog() {
+    if (!existsSync(runsDir)) return null;
+    const dirs = readdirSync(runsDir, { withFileTypes: true })
+      .filter(d => d.isDirectory())
+      .map(d => d.name)
+      .sort()
+      .reverse();
+    for (const dir of dirs) {
+      const logPath = resolve(runsDir, dir, "events.log");
+      if (existsSync(logPath)) return logPath;
+    }
+    return null;
+  }
+
+  function processNewLines(logPath) {
+    try {
+      const stat = statSync(logPath);
+      if (stat.size <= fileOffset) return;
+      const fd = require("node:fs").openSync(logPath, "r");
+      const buf = Buffer.alloc(stat.size - fileOffset);
+      require("node:fs").readSync(fd, buf, 0, buf.length, fileOffset);
+      require("node:fs").closeSync(fd);
+      fileOffset = stat.size;
+
+      const lines = buf.toString("utf-8").split("\n").filter(l => l.trim());
+      for (const line of lines) {
+        const match = line.match(/^\[([^\]]+)\]\s+(\S+):\s+(.*)$/);
+        if (!match) continue;
+        try {
+          const [, timestamp, type, jsonStr] = match;
+          const data = JSON.parse(jsonStr);
+          hub.broadcast({ type, data, timestamp, source: "file-watcher" });
+        } catch {
+          // Skip malformed event lines
+        }
+      }
+    } catch {
+      // File may be temporarily locked by the orchestrator
+    }
+  }
+
+  // Poll every 2 seconds: check for latest events.log and process new lines
+  scanInterval = setInterval(() => {
+    const logPath = findLatestEventsLog();
+    if (!logPath) return;
+
+    if (logPath !== currentLogFile) {
+      // New or different run — reset offset
+      currentLogFile = logPath;
+      fileOffset = 0;
+      console.error(`[event-watcher] Tracking: ${logPath}`);
+    }
+
+    processNewLines(logPath);
+  }, 2000);
+
+  // Also use watchFile for faster detection when the file changes
+  function attachWatcher(logPath) {
+    try {
+      watchFile(logPath, { interval: 1000 }, () => {
+        processNewLines(logPath);
+      });
+    } catch {
+      // watchFile not supported or file doesn't exist yet — polling covers it
+    }
+  }
+
+  // Initial scan
+  const initial = findLatestEventsLog();
+  if (initial) {
+    currentLogFile = initial;
+    // Start from current end of file (don't replay old events — hub has history)
+    try { fileOffset = statSync(initial).size; } catch { fileOffset = 0; }
+    attachWatcher(initial);
+    console.error(`[event-watcher] Watching: ${initial}`);
+  }
+
+  return {
+    stop() {
+      if (scanInterval) clearInterval(scanInterval);
+      if (currentLogFile) {
+        try { require("node:fs").unwatchFile(currentLogFile); } catch { /* ignore */ }
+      }
+    },
+  };
+}
+
 function runPforge(args, cwd = PROJECT_DIR) {
   const cmd = `${PFORGE} ${args}`;
   try {
@@ -1398,6 +1498,9 @@ async function main() {
   try {
     activeHub = await createHub({ cwd: PROJECT_DIR });
     console.error(`Plan Forge WebSocket hub running on port ${activeHub.port}`);
+
+    // Start event file watcher to bridge orchestrator events → dashboard
+    activeEventWatcher = startEventFileWatcher(activeHub, PROJECT_DIR);
   } catch (err) {
     console.error(`[hub] WebSocket hub failed to start: ${err.message} (non-fatal)`);
   }
@@ -1414,10 +1517,12 @@ async function main() {
 
   // Graceful shutdown
   process.on("SIGTERM", () => {
+    if (activeEventWatcher) activeEventWatcher.stop();
     if (activeHub) activeHub.close();
     if (activeBridge) activeBridge.stop();
   });
   process.on("SIGINT", () => {
+    if (activeEventWatcher) activeEventWatcher.stop();
     if (activeHub) activeHub.close();
     if (activeBridge) activeBridge.stop();
   });

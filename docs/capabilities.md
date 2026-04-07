@@ -35,6 +35,7 @@
 |------|------|--------|-------------|
 | **Full Auto** | *(default)* | `gh copilot` CLI | Agent executes each slice with full project context |
 | **Assisted** | `--assisted` | Human in VS Code | Orchestrator prompts, human codes, gates validate |
+| **Cloud Agent** | *(via `copilot-setup-steps.yml`)* | Copilot cloud agent | Cloud agent provisions environment, guardrails auto-load, MCP tools available |
 | **Quorum** | `--quorum` | 3 models + reviewer | All slices: 3 dry-run analyses → synthesis → execute |
 | **Quorum Auto** | `--quorum=auto` | 3 models (selective) | Only high-complexity slices (score ≥ threshold) get quorum |
 | **Estimate** | `--estimate` | None | Returns cost prediction without executing |

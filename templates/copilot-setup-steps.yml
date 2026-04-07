@@ -1,0 +1,59 @@
+# Plan Forge cloud agent setup — add to .github/copilot-setup-steps.yml
+# This file configures the Copilot cloud agent environment so Plan Forge guardrails,
+# MCP tools, and validation gates are ready when the agent starts work on an issue.
+#
+# Usage: copy this file to .github/copilot-setup-steps.yml in your project repo.
+# Adjust -Preset to match your tech stack (dotnet | typescript | python | java | go |
+# swift | rust | php | azure-iac).
+#
+# Docs: https://docs.github.com/en/copilot/how-tos/agents/copilot-coding-agent/customizing-the-development-environment-for-copilot-coding-agents
+
+steps:
+  - name: Install Node.js (required for Plan Forge MCP server)
+    run: |
+      if ! command -v node &>/dev/null || [[ "$(node -v | cut -d. -f1 | tr -d v)" -lt 20 ]]; then
+        curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+        sudo apt-get install -y nodejs
+      fi
+      node --version
+      npm --version
+
+  - name: Run Plan Forge setup (non-interactive)
+    run: |
+      # Adjust --preset to your stack: typescript | dotnet | python | java | go | ...
+      chmod +x ./setup.sh
+      ./setup.sh --preset typescript --force
+
+  - name: Install Plan Forge MCP server dependencies
+    run: |
+      if [ -d "pforge-mcp" ]; then
+        cd pforge-mcp && npm install --prefer-offline
+        echo "Plan Forge MCP server dependencies installed."
+      fi
+
+  - name: Configure MCP server (.vscode/mcp.json)
+    run: |
+      # Ensures forge tools (forge_run_plan, forge_analyze, etc.) are available
+      # inside the cloud agent VS Code session.
+      if [ ! -f ".vscode/mcp.json" ] && [ -f "pforge-mcp/server.mjs" ]; then
+        mkdir -p .vscode
+        cat > .vscode/mcp.json <<'EOF'
+{
+  "servers": {
+    "plan-forge": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["pforge-mcp/server.mjs"]
+    }
+  }
+}
+EOF
+        echo ".vscode/mcp.json created."
+      fi
+
+  - name: Validate Plan Forge setup (pforge smith)
+    run: |
+      # Post-setup health check — logs warnings but does not fail the build.
+      if [ -f "./pforge.sh" ]; then
+        ./pforge.sh smith || true
+      fi

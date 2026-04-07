@@ -2,7 +2,7 @@
 
 > **Purpose**: Practical guide for running the Plan Forge Pipeline using GitHub Copilot's Agent Mode in VS Code  
 > **Audience**: Developers using GitHub Copilot (free, Pro, or Enterprise) in VS Code  
-> **Last Updated**: 2026-03-20
+> **Last Updated**: 2026-04-07
 
 ---
 
@@ -18,6 +18,7 @@
 8. [Tips for Better Agent Execution](#tips-for-better-agent-execution)
    - [Prompt Templates, Agent Definitions & Skills](#0-use-prompt-templates-agent-definitions--skills)
 9. [Troubleshooting](#troubleshooting)
+10. [Using Plan Forge with Copilot Cloud Agent](#using-plan-forge-with-copilot-cloud-agent)
 
 ---
 
@@ -590,6 +591,63 @@ only what Slice 3 requires.
 2. Use specific `applyTo` patterns (not `'**'`)
 3. Keep each file under ~150 lines
 4. Move examples to a separate reference doc if needed
+
+---
+
+## Using Plan Forge with Copilot Cloud Agent
+
+> *"Copilot cloud agent plans. Plan Forge hardens."*
+
+GitHub Copilot's cloud agent can work on GitHub issues autonomously — cloning your repo, making code changes, and opening pull requests. Plan Forge integrates with this workflow so the cloud agent has your guardrails, MCP tools, and validation gates ready before it writes a single line of code.
+
+### How `copilot-setup-steps.yml` Works
+
+GitHub runs `.github/copilot-setup-steps.yml` to provision the cloud agent's environment before it starts on an issue. Add this file to your project to ensure Plan Forge is installed and validated every time:
+
+```bash
+# Copy the template from Plan Forge into your project
+cp templates/copilot-setup-steps.yml .github/copilot-setup-steps.yml
+```
+
+Then edit `.github/copilot-setup-steps.yml` to set the correct `--preset` for your stack. The template handles four steps:
+
+| Step | What It Does |
+|------|-------------|
+| **Install Node.js** | Ensures Node 20+ is available for the MCP server |
+| **Run `setup.sh --force`** | Installs guardrail files, instruction files, and pipeline prompts |
+| **Install MCP dependencies** | Runs `npm install` in `pforge-mcp/` so all 18 MCP tools are available |
+| **Configure `.vscode/mcp.json`** | Wires the MCP server into the agent's VS Code session |
+| **`pforge smith`** | Post-setup health check — logs any config issues before work begins |
+
+### How Instruction Files Auto-Load in the Cloud Agent
+
+The cloud agent reads `.github/copilot-instructions.md` and `.github/instructions/*.instructions.md` using the same `applyTo` mechanism as local VS Code. Your guardrails load automatically:
+
+- **Security rules** activate when the agent edits auth files
+- **Database patterns** activate when the agent edits query files
+- **Architecture principles** load on every file (`applyTo: '**'`)
+
+No changes needed to your instruction files — they work identically in cloud and local sessions.
+
+### How Plan Forge Gates Complement CodeQL and Secret Scanning
+
+Copilot cloud agent already integrates with GitHub's code scanning (CodeQL, secret scanning, dependency review). Plan Forge adds a complementary layer that runs **before** the code reaches GitHub's scanners:
+
+| Layer | When | What It Catches |
+|-------|------|----------------|
+| **Plan Forge slice gates** | During cloud agent execution | Build failures, test regressions, scope drift |
+| **Copilot code review** | PR opened | Style, correctness, suggestions |
+| **CodeQL** | PR/push CI | Security vulnerabilities, data flow issues |
+| **Secret scanning** | Commit time | Leaked credentials |
+
+Use `pforge run-plan --assisted` if you want the orchestrator to prompt the cloud agent per slice and validate gates automatically. The cloud agent picks up the MCP `forge_run_plan` tool from `.vscode/mcp.json`.
+
+### Quick Setup
+
+1. Copy `templates/copilot-setup-steps.yml` → `.github/copilot-setup-steps.yml`
+2. Set `--preset` to your stack in the setup step
+3. Enable Copilot cloud agent on your repository (Settings → Copilot → Coding agent)
+4. Assign a GitHub issue to `@copilot` — it will provision the environment and start with your guardrails loaded
 
 ---
 

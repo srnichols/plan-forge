@@ -275,6 +275,8 @@ Before you begin, make sure you have:
 - A project you want to add guardrails to (or a new empty project)
 
 > **New to VS Code + Copilot?** See [docs/COPILOT-VSCODE-GUIDE.md](docs/COPILOT-VSCODE-GUIDE.md) for a walkthrough of Agent Mode, how to open the chat panel, and how to use prompt templates.
+>
+> **Using Copilot cloud agent?** Copy [templates/copilot-setup-steps.yml](templates/copilot-setup-steps.yml) to `.github/copilot-setup-steps.yml` in your project to pre-install guardrails, MCP tools, and validation gates before the agent starts. See [docs/COPILOT-VSCODE-GUIDE.md#using-plan-forge-with-copilot-cloud-agent](docs/COPILOT-VSCODE-GUIDE.md#using-plan-forge-with-copilot-cloud-agent) for the full guide.
 
 ### 1. Use This Template
 
@@ -851,6 +853,18 @@ All 7 supported agent types:
 | `generic` | Any AI tool | `AI-ASSISTANT.md` — copy-paste guardrails for any tool |
 
 Use `-Agent all` to generate all formats at once. The OpenBrain memory integration **bridges the 3-session model** with long-term context — prior decisions, patterns, and postmortems automatically surface at the start of each new session. See [README → Persistent Memory](README.md#extension-ecosystem).
+
+### "How does Plan Forge work with the Copilot cloud agent?"
+
+GitHub's Copilot cloud agent works on issues autonomously — it clones your repo, edits files, and opens a PR. Plan Forge integrates with this via `.github/copilot-setup-steps.yml`, which provisions the agent's environment before it starts coding.
+
+Copy `templates/copilot-setup-steps.yml` to `.github/copilot-setup-steps.yml` in your project. It installs Node.js, runs the Plan Forge setup script, installs MCP server dependencies, and runs `pforge smith` as a post-setup health check. The cloud agent then starts with:
+
+- All guardrail instruction files loaded automatically (same `applyTo` mechanism as local VS Code)
+- All 18 MCP tools available via `.vscode/mcp.json`
+- `pforge run-plan` and `forge_run_plan` ready for slice-by-slice execution
+
+See [docs/COPILOT-VSCODE-GUIDE.md#using-plan-forge-with-copilot-cloud-agent](docs/COPILOT-VSCODE-GUIDE.md#using-plan-forge-with-copilot-cloud-agent) for the full setup guide.
 
 ### "Do I need to use every step every time?"
 

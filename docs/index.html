@@ -647,6 +647,18 @@
           <p class="text-sm text-slate-400">Hooks run automatically at agent lifecycle points — blocking edits to forbidden paths, warning on TODO markers, auto-formatting, and alerting when code ships without tests.</p>
         </div>
 
+        <!-- Cloud Agent Ready -->
+        <div class="p-8 rounded-2xl bg-slate-800/60 border border-sky-700/30">
+          <div class="w-12 h-12 rounded-xl bg-sky-500/20 flex items-center justify-center text-2xl mb-4">☁️</div>
+          <h3 class="text-xl font-bold text-white mb-2">Cloud Agent Ready</h3>
+          <p class="text-sm text-slate-400 mb-3">Works with the Copilot cloud agent out of the box. Add <code class="text-sky-300">copilot-setup-steps.yml</code> to provision guardrails, MCP tools, and validation gates before the agent writes a single line.</p>
+          <ul class="space-y-1 text-xs text-slate-500">
+            <li class="flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-sky-400 shrink-0"></span>Instruction files auto-load identically in cloud + local</li>
+            <li class="flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-sky-400 shrink-0"></span>18 MCP tools wired via <code class="text-sky-300">.vscode/mcp.json</code></li>
+            <li class="flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-sky-400 shrink-0"></span>Complements CodeQL, secret scanning, and Copilot code review</li>
+          </ul>
+        </div>
+
         <!-- The Smith -->
         <div class="p-8 rounded-2xl bg-slate-800/60 border border-slate-700/50">
           <div class="w-12 h-12 rounded-xl bg-amber-500/20 flex items-center justify-center text-2xl mb-4">🔨</div>

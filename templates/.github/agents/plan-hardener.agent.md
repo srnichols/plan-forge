@@ -1,7 +1,7 @@
 ---
 description: "Harden a draft phase plan into a drift-proof execution contract with scope contracts, execution slices, and validation gates."
 name: "Plan Hardener"
-tools: [read, search, editFiles, runCommands]
+tools: [read, search, editFiles, runCommands, agents]
 handoffs:
   - agent: "executor"
     label: "Start Execution →"
@@ -95,6 +95,27 @@ If the OpenBrain MCP server is available:
 - **Before hardening**: `search_thoughts("<phase topic>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "decision")` — load prior decisions, patterns, and lessons that inform scope and slicing
 - **During TBD resolution**: `search_thoughts("<ambiguous topic>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "decision")` — check if prior decisions already resolve the ambiguity
 - **After hardening**: `capture_thought("Plan hardened: <phase name> — N slices, key decisions: ...", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "plan-forge-step-2", type: "decision")` — persist hardening decisions
+
+## Nested Subagent Invocation
+
+> **Requires**: VS Code setting `chat.subagents.allowInvocationsFromSubagents: true` in `.vscode/settings.json`
+
+When the plan is hardened and all TBDs are resolved, you may invoke the **Executor** as a subagent instead of waiting for a manual handoff click:
+
+1. State: "Plan hardened — invoking Executor as subagent"
+2. Invoke `executor` as a subagent with: "Execute the hardened plan at `{PLAN_FILE_PATH}` slice-by-slice. Read `docs/plans/AI-Plan-Hardening-Runbook.md` and the plan's Scope Contract first."
+
+### Termination Guard
+
+| Rule | Detail |
+|------|--------|
+| ✅ **Invoke Executor once** | Only after all TBDs are resolved |
+| ❌ **Never invoke yourself** | Recursion risk — Plan Hardener must not invoke Plan Hardener |
+| ❌ **Never invoke Specifier** | Hardening does not loop back to specification |
+| ❌ **Never invoke Reviewer Gate or Shipper** | Pipeline is linear — skip-ahead is forbidden |
+| 🛑 **Stop if TBDs remain** | Unresolved TBD entries require human input before any subagent is invoked |
+
+If `chat.subagents.allowInvocationsFromSubagents` is not set, fall back to the **"Start Execution →"** handoff button — it carries context automatically.
 
 ## Completion
 

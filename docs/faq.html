@@ -381,7 +381,7 @@
               <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
             </summary>
             <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
-              <p class="mb-3">Auto mode scores each slice's complexity (1-10) using 7 weighted signals: file scope count, cross-module dependencies, security keywords, database/migration keywords, gate count, task count, and historical failure rate. Only slices scoring at or above the threshold (default: 7) get the 3-model consensus treatment. Everything else runs normally.</p>
+              <p class="mb-3">Auto mode scores each slice's complexity (1-10) using 7 weighted signals: file scope count, cross-module dependencies, security keywords, database/migration keywords, gate count, task count, and historical failure rate. Only slices scoring at or above the threshold (default: 6) get the 3-model consensus treatment. Everything else runs normally.</p>
               <p>This is the recommended default for most projects — you get quality where it matters (auth flows, billing logic, migrations) without burning tokens on simple CRUD slices. Override the threshold with <code class="text-forge-400">--quorum-threshold 8</code>.</p>
             </div>
           </details>

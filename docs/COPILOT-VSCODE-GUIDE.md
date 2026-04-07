@@ -11,14 +11,15 @@
 1. [Prerequisites](#prerequisites)
 2. [How Copilot Reads Your Guardrails](#how-copilot-reads-your-guardrails)
 3. [The 3-Session Workflow in Practice](#the-3-session-workflow-in-practice)
-4. [Agent Mode vs Ask Mode vs Edit Mode](#agent-mode-vs-ask-mode-vs-edit-mode)
-5. [Managing Context Budget](#managing-context-budget)
-6. [Using Memory to Bridge Sessions](#using-memory-to-bridge-sessions)
-7. [Referencing Files in Prompts](#referencing-files-in-prompts)
-8. [Tips for Better Agent Execution](#tips-for-better-agent-execution)
+4. [Single-Session Pipeline with Nested Subagents](#single-session-pipeline-with-nested-subagents)
+5. [Agent Mode vs Ask Mode vs Edit Mode](#agent-mode-vs-ask-mode-vs-edit-mode)
+6. [Managing Context Budget](#managing-context-budget)
+7. [Using Memory to Bridge Sessions](#using-memory-to-bridge-sessions)
+8. [Referencing Files in Prompts](#referencing-files-in-prompts)
+9. [Tips for Better Agent Execution](#tips-for-better-agent-execution)
    - [Prompt Templates, Agent Definitions & Skills](#0-use-prompt-templates-agent-definitions--skills)
-9. [Troubleshooting](#troubleshooting)
-10. [Using Plan Forge with Copilot Cloud Agent](#using-plan-forge-with-copilot-cloud-agent)
+10. [Troubleshooting](#troubleshooting)
+11. [Using Plan Forge with Copilot Cloud Agent](#using-plan-forge-with-copilot-cloud-agent)
 
 ---
 
@@ -30,6 +31,7 @@
 | **GitHub Copilot** | Free, Pro, or Enterprise plan |
 | **Copilot Chat extension** | Latest version (auto-updates) |
 | **Agent Mode** | Enabled (Settings → `github.copilot.chat.agent.enabled`) |
+| **Nested subagents** *(optional)* | `chat.subagents.allowInvocationsFromSubagents: true` — required for single-session pipeline; manual handoff works without it |
 
 ### Verify Setup
 
@@ -165,6 +167,78 @@ Monitor at `localhost:3100/dashboard` for live slice progress, cost tracking, an
 | **Context exhaustion** | Runs out of context budget | Full budget per session |
 | **Drift accumulation** | Small drifts compound unseen | Each session re-grounds |
 | **Forgotten cleanup** | Manual commit/roadmap steps | Shipper agent automates |
+
+---
+
+## Single-Session Pipeline with Nested Subagents
+
+> **VS Code requirement**: `chat.subagents.allowInvocationsFromSubagents: true` (see [Prerequisites](#prerequisites))
+
+The 5 pipeline agents can run end-to-end in a **single session** by invoking each other as nested subagents. This collapses what would otherwise be 4 separate sessions into one continuous run — no manual handoff clicks required.
+
+### How It Works
+
+Each agent invokes the next automatically after completing its phase:
+
+```
+Single session:
+  Specifier ──subagent──► Plan Hardener ──subagent──► Executor
+                                                          │
+                                            ──subagent──► Reviewer Gate
+                                                          │
+                                              ──subagent──► Shipper
+```
+
+The plan file path is passed from agent to agent so context flows without any copy-pasting.
+
+### Enable Nested Subagents
+
+Add this to `.vscode/settings.json` (already included in `templates/vscode-settings.json.template`):
+
+```json
+"chat.subagents.allowInvocationsFromSubagents": true
+```
+
+Without this setting, agents still display **handoff buttons** at the end of each phase — context carries over automatically when you click them.
+
+### Starting a Single-Session Pipeline Run
+
+1. Open Copilot Chat (`Ctrl+Shift+I`)
+2. Confirm `chat.subagents.allowInvocationsFromSubagents: true` is in `.vscode/settings.json`
+3. Select **Agent** mode
+4. Select the **Specifier** agent from the agent picker
+5. Describe your feature — the Specifier interviews you, creates the plan file, then invokes Plan Hardener automatically
+6. Each subsequent agent completes its phase and hands off to the next without requiring input
+
+You can type at any point to pause and redirect before the next subagent invocation.
+
+### Recursion Safety — Termination Guards
+
+Each pipeline agent has built-in **termination guards** to prevent runaway subagent loops:
+
+| Agent | Invokes | Guard |
+|-------|---------|-------|
+| **Specifier** | Plan Hardener (once) | Stops if `[NEEDS CLARIFICATION]` markers remain |
+| **Plan Hardener** | Executor (once) | Stops if TBD entries are unresolved |
+| **Executor** | Reviewer Gate (once) | Stops if any validation gate fails |
+| **Reviewer Gate** | Shipper (PASS) or Executor (FAIL, **max 2×**) | After 2 LOCKOUT→fix cycles, requires human intervention |
+| **Shipper** | — *(terminal)* | Never invokes another pipeline agent |
+
+The LOCKOUT guard is the most critical: the Reviewer Gate → Executor → Reviewer Gate loop runs at most **2 fix cycles** before stopping and asking for human input.
+
+### Fallback: Manual Handoff
+
+If `chat.subagents.allowInvocationsFromSubagents` is not set (or if you prefer step-by-step control), the pipeline falls back to **manual handoff buttons** — the same clickable buttons that appear at the end of each agent's response:
+
+| Handoff button | From → To |
+|----------------|-----------|
+| **Start Plan Hardening →** | Specifier → Plan Hardener |
+| **Start Execution →** | Plan Hardener → Executor |
+| **Run Review Gate →** | Executor → Reviewer Gate |
+| **Ship It →** | Reviewer Gate → Shipper |
+| **Fix Issues →** | Reviewer Gate → Executor (on LOCKOUT) |
+
+Manual handoff provides the same context transfer — the only difference is that you click the button rather than the agent invoking automatically.
 
 ---
 

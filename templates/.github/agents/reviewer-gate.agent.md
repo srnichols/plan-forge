@@ -1,7 +1,7 @@
 ---
 description: "Independent read-only audit of completed phase work — scope compliance, drift detection, architecture review, and severity reporting."
 name: "Reviewer Gate"
-tools: [read, search, runCommands]
+tools: [read, search, runCommands, agents]
 handoffs:
   - agent: "shipper"
     label: "Ship It →"
@@ -107,6 +107,37 @@ If the OpenBrain MCP server is available:
 
 - **Before auditing**: `search_thoughts("all decisions for this phase", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "decision")` — load the full decision trail from planning and execution sessions for comparison
 - **After verdict**: `capture_thought("Review verdict: PASS/FAIL — N findings", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "plan-forge-step-5-review", type: "postmortem")` — persist the review outcome and any violations found
+
+## Nested Subagent Invocation
+
+> **Requires**: VS Code setting `chat.subagents.allowInvocationsFromSubagents: true` in `.vscode/settings.json`
+
+After issuing a verdict, you may invoke the next agent as a subagent instead of waiting for a manual handoff click:
+
+**On PASS:**
+1. State: "Verdict: PASS — invoking Shipper as subagent"
+2. Invoke `shipper` as a subagent with: "The Reviewer Gate passed for `{PLAN_FILE_PATH}`. Commit the work, update the roadmap, capture postmortem, and ask before pushing."
+
+**On FAIL (LOCKOUT):**
+1. State: "Verdict: FAIL (LOCKOUT) — invoking Executor as subagent for targeted fix"
+2. Invoke `executor` as a subagent with: "Fix the 🔴 Critical findings listed in `{PLAN_FILE_PATH}` under `## Amendments`. Re-run validation gates after fixing. Do not expand scope."
+
+### Termination Guard — LOCKOUT Loop Prevention
+
+> ⚠️ **Critical**: The Reviewer Gate → Executor → Reviewer Gate loop is the highest recursion risk in the pipeline.
+
+| Rule | Detail |
+|------|--------|
+| ✅ **Invoke Shipper once on PASS** | Terminal handoff — Shipper is the end of the pipeline |
+| ✅ **Invoke Executor on FAIL — max 2 times** | Track fix cycles: first LOCKOUT invokes Executor; second LOCKOUT invokes Executor once more |
+| 🛑 **Stop after 2 LOCKOUT cycles** | If the Executor fails to resolve 🔴 Critical findings after 2 fix cycles, stop and escalate to the human — do not invoke a third fix cycle |
+| ❌ **Never invoke yourself** | Reviewer Gate must not invoke Reviewer Gate as a subagent |
+| ❌ **Never invoke Specifier or Plan Hardener** | Pipeline is linear — backward invocation is forbidden |
+
+**Escalation message after 2 failed cycles:**
+> "Two LOCKOUT cycles completed without resolving all 🔴 Critical findings. Human intervention required. Review the `## Amendments` section in the plan for details."
+
+If `chat.subagents.allowInvocationsFromSubagents` is not set, fall back to the **"Ship It →"** or **"Fix Issues →"** handoff buttons — they carry context automatically.
 
 ## Constraints
 

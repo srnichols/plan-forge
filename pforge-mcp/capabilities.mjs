@@ -126,7 +126,7 @@ export const TOOL_METADATA = {
       description: "Multi-model consensus: dispatch to 3+ models for dry-run analysis, synthesize best approach, then execute",
       parameters: {
         quorum: { type: "string", enum: ["false", "true", "auto"], default: "auto", description: "Quorum mode (default: 'auto' — threshold-based; 'true' forces all slices; 'false' disables)" },
-        quorumThreshold: { type: "number", description: "Complexity score threshold for auto mode (1-10, default: 7)" },
+        quorumThreshold: { type: "number", description: "Complexity score threshold for auto mode (1-10, default: 6)" },
       },
       config: ".forge.json → quorum { enabled, auto, threshold, models[], reviewerModel, dryRunTimeout }",
     },
@@ -352,7 +352,7 @@ export const CLI_SCHEMA = {
         "--resume-from": { type: "number", description: "Skip completed slices, resume from N" },
         "--dry-run": { type: "boolean", description: "Parse and validate without executing" },
         "--quorum": { type: "boolean|auto", description: "Force quorum on all slices, or 'auto' for threshold-based" },
-        "--quorum-threshold": { type: "number", description: "Override complexity threshold (1-10, default: 7)" },
+        "--quorum-threshold": { type: "number", description: "Override complexity threshold (1-10, default: 6)" },
       },
       examples: [
         "pforge run-plan docs/plans/Phase-1.md",
@@ -427,7 +427,7 @@ export const CONFIG_SCHEMA = {
       properties: {
         enabled: { type: "boolean", default: false, description: "Master switch for quorum mode" },
         auto: { type: "boolean", default: true, description: "When enabled, only quorum high-complexity slices" },
-        threshold: { type: "number", default: 7, minimum: 1, maximum: 10, description: "Complexity score threshold for auto mode" },
+        threshold: { type: "number", default: 6, minimum: 1, maximum: 10, description: "Complexity score threshold for auto mode" },
         models: { type: "array", items: { type: "string" }, default: ["claude-opus-4.6", "gpt-5.3-codex", "gemini-3.1-pro"], description: "Models for dry-run fan-out" },
         reviewerModel: { type: "string", default: "claude-opus-4.6", description: "Model for synthesis review" },
         dryRunTimeout: { type: "number", default: 300000, description: "Timeout per dry-run worker (ms)" },
@@ -635,7 +635,7 @@ const SYSTEM_REFERENCE = {
     "Quorum Dispatch": "The fan-out phase: sending the same slice to multiple models (Claude, GPT, Gemini) in parallel for independent analysis",
     "Quorum Reviewer": "A synthesis agent that merges multiple dry-run responses into a single unified execution plan",
     "Complexity Score": "A 1-10 rating of a slice's technical difficulty based on file scope, dependencies, security keywords, database operations, gate count, task count, and historical failure rate",
-    "Quorum Auto": "Threshold-based mode where only slices scoring above the configured threshold (default: 7) use quorum. Others run normally",
+    "Quorum Auto": "Threshold-based mode where only slices scoring above the configured threshold (default: 6) use quorum. Others run normally",
   },
 };
 

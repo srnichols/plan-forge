@@ -310,7 +310,7 @@ Shipped. Dispatches high-complexity slices to multiple AI models in parallel dry
 - **Dry-run mode** — workers produce detailed implementation plans (files, code skeletons, edge cases, test strategy) without executing
 - **Quorum reviewer** — synthesis agent merges 3 dry-run responses into a unified execution plan, picking best approach per file/component
 - **Complexity scoring** — `scoreSliceComplexity()` scores slices 1-10 based on file count, cross-module deps, security sensitivity, historical failure rate
-- **`quorum-mode=auto`** — slices scoring ≥7 automatically use quorum; others run normally (configurable threshold)
+- **`quorum-mode=auto`** — slices scoring ≥6 automatically use quorum; others run normally (configurable threshold)
 - **Full guardrail compliance** — dry-run workers load all instructions.md, project profile, and principles (same as primary workers)
 - **Telemetry integration** — quorum legs modeled as child spans in trace.json; cost tracked per-leg
 - **Dashboard indicators** — quorum status visible on Progress tab; dry-run responses browsable in Replay tab

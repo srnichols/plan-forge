@@ -2212,7 +2212,7 @@ export function loadQuorumConfig(cwd) {
   const defaults = {
     enabled: false,
     auto: true,
-    threshold: 7,
+    threshold: 6,
     models: ["claude-opus-4.6", "gpt-5.3-codex", "claude-sonnet-4.6"],
     reviewerModel: "claude-opus-4.6",
     dryRunTimeout: 300_000, // 5 min per dry-run leg

@@ -1,6 +1,6 @@
 # Plan Forge — Capabilities Reference
 
-> **Tools**: 18 MCP | **Presets**: 9 | **Agents**: 19 | **Skills**: 11
+> **Tools**: 18 MCP | **Presets**: 9 | **Agents**: 19 | **Skills**: 12
 >
 > Machine-readable version: call `forge_capabilities` MCP tool or `GET https://planforge.software/.well-known/plan-forge.json`
 
@@ -244,7 +244,7 @@ Auto-loading instruction files in `.github/instructions/`:
 | `generic` | `.ai/instructions.md`, `.ai/commands/` | Any AI tool (configurable dir) |
 | `all` | All of the above | Full multi-tool support |
 
-## Skills (11)
+## Skills (12)
 
 | Skill | Description |
 |-------|-------------|
@@ -259,6 +259,7 @@ Auto-loading instruction files in `.github/instructions/`:
 | `/onboarding` | New developer setup walkthrough |
 | `/health-check` | Forge diagnostic: smith → validate → sweep |
 | `/forge-execute` | Guided plan execution: list → estimate → execute → report |
+| `/forge-troubleshoot` | Diagnose and resolve plan failures, gate errors, and environment issues |
 
 ## Telemetry
 

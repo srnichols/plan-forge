@@ -167,6 +167,7 @@ Skills are multi-step procedures invoked by typing `/` in chat. They also auto-l
 | `/onboarding` | Walk a new developer through project setup, architecture, and first task |
 | `/health-check` | Forge diagnostic: forge_smith → forge_validate → forge_sweep |
 | `/forge-execute` | Guided plan execution: list plans → estimate cost → execute → report |
+| `/forge-troubleshoot` | Diagnose and resolve plan failures, gate errors, and environment issues |
 
 ### Agent Definitions (`.github/agents/`)
 
@@ -230,6 +231,7 @@ Multi-step executable procedures in `.github/skills/`:
 | `onboarding/` | Walk a new developer through setup, architecture, and first task |
 | `health-check/` | Forge diagnostic: forge_smith → forge_validate → forge_sweep |
 | `forge-execute/` | Guided plan execution: list plans → estimate → execute → report |
+| `forge-troubleshoot/` | Diagnose and resolve plan failures, gate errors, and environment issues |
 
 ---
 

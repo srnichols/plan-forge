@@ -575,7 +575,32 @@ only what Slice 3 requires.
 
 ## Troubleshooting
 
-### "Copilot isn't reading my instruction files"
+### "Forge run failed — where do I start?"
+
+Use the `/forge-troubleshoot` skill to diagnose the failure:
+
+1. Type `/forge-troubleshoot` in Copilot Chat (Agent mode)
+2. Optionally describe the symptom: `/forge-troubleshoot slice 3 failed gate error`
+3. The skill will:
+   - Run `forge_smith` to check environment health
+   - Run `forge_validate` to verify setup files
+   - Run `forge_plan_status` to retrieve the last run report
+   - Run `forge_sweep` to detect stubs/TODOs blocking gate passage
+   - Identify the root cause and provide specific fix steps
+4. After fixing, resume with: `forge_run_plan resumeFrom: <failed-slice-number>`
+
+**Common root causes and fixes:**
+
+| Symptom | Likely Cause | Fix |
+|---------|-------------|-----|
+| Gate error: build failed | Stub or TODO in production code | Fill in the stub, then resume |
+| Gate error: test failed | Missing implementation or broken import | Fix the failing test, then resume |
+| CLI worker not found | `gh copilot` / `claude` / `codex` CLI not installed | Install CLI or switch to `mode: 'assisted'` |
+| MCP tools missing | `pforge-mcp/` dependencies not installed | Run `npm install --prefix pforge-mcp` |
+| Cost overrun warning | Model too expensive for slice count | Switch to a cheaper model in `.forge.json` |
+| Slice stalled, no output | Run hung | Use `forge_abort`, then `resumeFrom` the stalled slice |
+
+
 
 1. Verify the file is in `.github/instructions/` (exact path)
 2. Check the `applyTo` pattern matches the file you're editing

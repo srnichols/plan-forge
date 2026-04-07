@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<!-- verified: v2.17.0 -->
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chapter 7: CLI Reference — Plan Forge Manual</title>
+  <meta name="description" content="Complete CLI reference for Plan Forge — every pforge command, every flag, with examples and equivalent manual steps." />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+
+  <!-- Mobile sidebar button -->
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <div class="manual-layout">
+    <!-- Sidebar -->
+    <aside id="manual-sidebar" class="manual-sidebar">
+      <nav id="sidebar-nav"></nav>
+    </aside>
+
+    <!-- Main content -->
+    <main>
+      <div class="chapter-content">
+
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 7</div>
+        <h1>CLI Reference</h1>
+        <p class="text-lg text-slate-400 mb-8">Every command, every flag, every example. The chapter you bookmark.</p>
+
+        <!-- ─── Overview ─── -->
+        <h2 id="overview">Overview</h2>
+        <p>The <code>pforge</code> CLI is a convenience wrapper — two scripts, no dependencies beyond Git and your shell. Every command shows the equivalent manual steps, so non-CLI users can follow along.</p>
+
+        <table>
+          <thead>
+            <tr><th>Platform</th><th>File</th><th>Usage</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Windows / PowerShell</td><td><code>pforge.ps1</code></td><td><code>.\pforge.ps1 &lt;command&gt;</code></td></tr>
+            <tr><td>macOS / Linux / Bash</td><td><code>pforge.sh</code></td><td><code>./pforge.sh &lt;command&gt;</code></td></tr>
+          </tbody>
+        </table>
+
+        <div class="callout callout-tip">
+          <strong>Not there?</strong> Both scripts are copied to your project root during <code>setup.ps1</code> / <code>setup.sh</code>. If they're missing, copy them manually from the Plan Forge repo.
+        </div>
+
+        <!-- ─── analyze vs diagnose ─── -->
+        <div class="callout callout-info">
+          <strong>analyze vs diagnose — which do I use?</strong><br />
+          <code>pforge analyze</code> scores a plan's quality (traceability, coverage, gates — 0 to 100).<br />
+          <code>pforge diagnose</code> investigates a bug in code (root cause, fix recommendations).<br />
+          Use <strong>analyze</strong> after hardening a plan. Use <strong>diagnose</strong> when a slice fails.
+        </div>
+
+        <!-- ═══════════════════════════════════════════════ -->
+        <!-- COMMANDS -->
+        <!-- ═══════════════════════════════════════════════ -->
+
+        <h2 id="commands">Commands</h2>
+
+        <!-- ─── init ─── -->
+        <div class="cmd-ref" id="init">
+          <div class="cmd-ref-title">pforge init</div>
+          <div class="cmd-ref-desc">Bootstrap a project with the Plan Forge Pipeline. Delegates to <code>setup.ps1</code> / <code>setup.sh</code>.</div>
+
+          <table>
+            <thead><tr><th>Flag</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>-Preset</code></td><td>string</td><td>Tech preset: dotnet, typescript, python, java, go, swift, rust, php, azure-iac. Comma-separated for multi-preset.</td></tr>
+              <tr><td><code>-ProjectPath</code></td><td>path</td><td>Target project directory (default: current dir)</td></tr>
+              <tr><td><code>-Agent</code></td><td>string</td><td>Agent adapter: copilot, claude, cursor, codex, gemini, windsurf, generic, all</td></tr>
+            </tbody>
+          </table>
+
+          <div class="cmd-block">
+            <div class="cmd-block-header"><span>PowerShell</span><button class="cmd-copy-btn">Copy</button></div>
+            <pre><code>.\pforge.ps1 init -Preset dotnet
+.\pforge.ps1 init -Preset typescript -ProjectPath ./my-app
+.\pforge.ps1 init -Preset dotnet -Agent all</code></pre>
+          </div>
+          <div class="cmd-block">
+            <div class="cmd-block-header"><span>Bash</span><button class="cmd-copy-btn">Copy</button></div>
+            <pre><code>./pforge.sh init --preset dotnet
+./pforge.sh init --preset typescript --path ./my-app
+./pforge.sh init --preset dotnet --agent all</code></pre>
+          </div>
+
+          <details class="mt-3">
+            <summary class="text-xs text-slate-500 cursor-pointer hover:text-slate-300">Equivalent manual steps</summary>
+            <ol class="mt-2 text-sm"><li>Run <code>.\setup.ps1</code> / <code>./setup.sh</code> with your preferred parameters</li><li>Follow the interactive wizard</li></ol>
+          </details>
+        </div>
+
+        <!-- ─── check ─── -->
+        <div class="cmd-ref" id="check">
+          <div class="cmd-ref-title">pforge check</div>
+          <div class="cmd-ref-desc">Validate that setup completed correctly. Delegates to <code>validate-setup.ps1</code> / <code>validate-setup.sh</code>.</div>
+
+          <div class="cmd-block">
+            <div class="cmd-block-header"><span>PowerShell / Bash</span><button class="cmd-copy-btn">Copy</button></div>
+            <pre><code>pforge check</code></pre>
+          </div>
+
+          <details class="mt-3">
+            <summary class="text-xs text-slate-500 cursor-pointer hover:text-slate-300">Equivalent manual steps</summary>
+            <ol class="mt-2 text-sm"><li>Run <code>.\validate-setup.ps1</code></li><li>Review the output for any missing files</li></ol>
+          </details>
+        </div>
+
+        <!-- ─── status ─── -->
+        <div class="cmd-ref" id="status">
+          <div class="cmd-ref-title">pforge status</div>
+          <div class="cmd-ref-desc">Show all phases from <code>DEPLOYMENT-ROADMAP.md</code> with their current status.</div>
+
+          <div class="cmd-block">
+            <div class="cmd-block-header"><span>PowerShell / Bash</span><button class="cmd-copy-btn">Copy</button></div>
+            <pre><code>pforge status</code></pre>
+          </div>
+          <div class="cmd-block">
+            <div class="cmd-block-header"><span>Example output</span></div>
+            <pre><code>Phase Status (from DEPLOYMENT-ROADMAP.md):
+─────────────────────────────────────────────
+  Phase 1: User Authentication  📋 Planned
+  Phase 2: Dashboard Widgets    🚧 In Progress</code></pre>
+          </div>
+        </div>
+
+        <!-- ─── new-phase ─── -->
+        <div class="cmd-ref" id="new-phase">
+          <div class="cmd-ref-title">pforge new-phase &lt;name&gt;</div>
+          <div class="cmd-ref-desc">Create a new phase plan file and add an entry to the deployment roadmap.</div>
+
+          <table>
+            <thead><tr><th>Arg / Flag</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>name</code></td><td>string (required)</td><td>Phase name, e.g. <code>user-auth</code></td></tr>
+              <tr><td><code>--dry-run</code></td><td>boolean</td><td>Preview without creating</td></tr>
+            </tbody>
+          </table>
+
+          <div class="cmd-block">
+            <div class="cmd-block-header"><span>PowerShell</span><button class="cmd-copy-btn">Copy</button></div>
+            <pre><code>.\pforge.ps1 new-phase user-auth --dry-run
+.\pforge.ps1 new-phase user-auth</code></pre>
+          </div>
+
+          <details class="mt-3">
+            <summary class="text-xs text-slate-500 cursor-pointer hover:text-slate-300">What it does</summary>
+            <ol class="mt-2 text-sm">
+              <li>Finds the next phase number (e.g., Phase 3)</li>
+              <li>Creates <code>docs/plans/Phase-3-USER-AUTH-PLAN.md</code> from template</li>
+              <li>Adds a Phase 3 entry to <code>DEPLOYMENT-ROADMAP.md</code></li>
+            </ol>
+          </details>
+        </div>
+
+        <!-- ─── branch ─── -->
+        <div class="cmd-ref" id="branch">
+          <div class="cmd-ref-title">pforge branch &lt;plan-file&gt;</div>
+          <div class="cmd-ref-desc">Create a Git branch matching the plan's declared Branch Strategy.</div>
+
+          <table>
+            <thead><tr><th>Arg / Flag</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>plan</code></td><td>path (required)</td><td>Path to plan file</td></tr>
+              <tr><td><code>--dry-run</code></td><td>boolean</td><td>Preview without creating</td></tr>
+            </tbody>
+          </table>
+
+          <div class="cmd-block">
+            <div class="cmd-block-header"><span>PowerShell</span><button class="cmd-copy-btn">Copy</button></div>
+            <pre><code>.\pforge.ps1 branch docs/plans/Phase-3-USER-AUTH-PLAN.md --dry-run
+.\pforge.ps1 branch docs/plans/Phase-3-USER-AUTH-PLAN.md</code></pre>
+          </div>
+
+          <div class="callout callout-info" class="callout-sm">
+            <strong>CLI-only</strong> — not available as MCP tool. Use via terminal.
+          </div>
+        </div>
+
+        <!-- ─── commit ─── -->
+        <div class="cmd-ref" id="commit">
+          <div class="cmd-ref-title">pforge commit &lt;plan-file&gt; &lt;slice-number&gt;</div>
+          <div class="cmd-ref-desc">Stage all changes and commit with a conventional commit message derived from the slice's goal.</div>
+
+          <table>
+            <thead><tr><th>Arg / Flag</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>plan</code></td><td>path (required)</td><td>Path to plan file</td></tr>
+              <tr><td><code>slice</code></td><td>number (required)</td><td>Slice number</td></tr>
+              <tr><td><code>--dry-run</code></td><td>boolean</td><td>Preview commit message without committing</td></tr>
+            </tbody>
+          </table>
+
+          <div class="cmd-block">
+            <div class="cmd-block-header"><span>PowerShell</span><button class="cmd-copy-btn">Copy</button></div>
+            <pre><code>.\pforge.ps1 commit docs/plans/Phase-3.md 2 --dry-run
+.\pforge.ps1 commit docs/plans/Phase-3.md 2</code></pre>
+          </div>
+
+          <div class="callout callout-info" class="callout-sm">
+            <strong>CLI-only</strong> — not available as MCP tool.
+          </div>
+        </div>
+
+        <!-- ─── phase-status ─── -->
+        <div class="cmd-ref" id="phase-status">
+          <div class="cmd-ref-title">pforge phase-status &lt;plan-file&gt; &lt;status&gt;</div>
+          <div class="cmd-ref-desc">Update a phase's status in the deployment roadmap.</div>
+
+          <table>
+            <thead><tr><th>Arg</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>plan</code></td><td>path (required)</td><td>Path to plan file</td></tr>
+              <tr><td><code>status</code></td><td>enum (required)</td><td><code>planned</code> · <code>in-progress</code> · <code>complete</code> · <code>paused</code></td></tr>
+            </tbody>
+          </table>
+
+          <div class="cmd-block">
+            <div class="cmd-block-header"><span>PowerShell</span><button class="cmd-copy-btn">Copy</button></div>
+            <pre><code>.\pforge.ps1 phase-status docs/plans/Phase-3.md in-progress
+.\pforge.ps1 phase-status docs/plans/Phase-3.md complete</code></pre>
+          </div>
+
+          <div class="callout callout-info" class="callout-sm">
+            <strong>CLI-only</strong> — not available as MCP tool.
+          </div>
+        </div>
+
+        <!-- ─── sweep ─── -->
+        <div class="cmd-ref" id="sweep">
+          <div class="cmd-ref-title">pforge sweep</div>
+          <div class="cmd-ref-desc">Scan all code files for deferred-work markers: TODO, FIXME, HACK, stub, placeholder, mock data.</div>
+
+          <div class="cmd-block">
+            <div class="cmd-block-header"><span>PowerShell / Bash</span><button class="cmd-copy-btn">Copy</button></div>
+            <pre><code>pforge sweep</code></pre>
+          </div>
+          <div class="cmd-block">
+            <div class="cmd-block-header"><span>Example output</span></div>
+            <pre><code>Completeness Sweep — scanning for deferred-work markers:
+─────────────────────────────────────────────────────────
+  src/Services/UserService.cs:42: // TODO: Wire to real email service
+  src/Controllers/AuthController.cs:18: // FIXME: Add rate limiting
+
+FOUND 2 deferred-work marker(s). Resolve before Step 5 (Review Gate).</code></pre>
+          </div>
+
+          <p class="text-sm text-slate-500">Also available as: <code>forge_sweep</code> MCP tool</p>
+        </div>
+
+        <!-- ─── diff ─── -->
+        <div class="cmd-ref" id="diff">
+          <div class="cmd-ref-title">pforge diff &lt;plan-file&gt;</div>
+          <div class="cmd-ref-desc">Compare changed files against the plan's Scope Contract. Flags forbidden files, unplanned files, and confirms in-scope changes.</div>
+
+          <div class="cmd-block">
+            <div class="cmd-block-header"><span>PowerShell</span><button class="cmd-copy-btn">Copy</button></div>
+            <pre><code>.\pforge.ps1 diff docs/plans/Phase-3-USER-AUTH-PLAN.md</code></pre>
+          </div>
+          <div class="cmd-block">
+            <div class="cmd-block-header"><span>Example output</span></div>
+            <pre><code>Scope Drift Check — 4 changed file(s) vs plan:
+──────────────────────────────────────────────────
+  ✅ IN SCOPE   src/Services/UserService.cs
+  ✅ IN SCOPE   src/Repositories/UserRepository.cs
+  🟡 UNPLANNED  src/Config/AppSettings.cs
+  🔴 FORBIDDEN  tests/Legacy/OldTests.cs
+
+DRIFT DETECTED — 1 forbidden file(s) touched.</code></pre>
+          </div>
+
+          <p class="text-sm text-slate-500">Also available as: <code>forge_diff</code> MCP tool</p>
+        </div>
+
+        <!-- ─── analyze ─── -->
+        <div class="cmd-ref" id="analyze">
+          <div class="cmd-ref-title">pforge analyze &lt;plan-file&gt;</div>
+          <div class="cmd-ref-desc">Cross-artifact consistency scoring — validates traceability, scope coverage, test coverage, and gate definitions. Scores 0–100.</div>
+
+          <table>
+            <thead><tr><th>Flag</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>--quorum</code></td><td>boolean</td><td>Multi-model consensus analysis</td></tr>
+              <tr><td><code>--mode</code></td><td>plan | file</td><td>Explicit analysis mode (auto-detected if omitted)</td></tr>
+              <tr><td><code>--models</code></td><td>string</td><td>Comma-separated model override</td></tr>
+            </tbody>
+          </table>
+
+          <div class="cmd-block">
+            <div class="cmd-block-header"><span>PowerShell</span><button class="cmd-copy-btn">Copy</button></div>
+            <pre><code># Single-model analysis
+.\pforge.ps1 analyze docs/plans/Phase-1-AUTH-PLAN.md
+
+# Multi-model quorum
+.\pforge.ps1 analyze docs/plans/Phase-1-AUTH-PLAN.md --quorum
+
+# Analyze a code file directly
+.\pforge.ps1 analyze src/services/billing.ts --mode file</code></pre>
+          </div>
+
+          <h3>Scoring Dimensions</h3>
+          <table>
+            <thead><tr><th>Dimension</th><th>Points</th><th>What It Checks</th></tr></thead>
+            <tbody>
+              <tr><td>Traceability</td><td>25</td><td>MUST/SHOULD criteria exist, slices defined, criteria mapped to slices</td></tr>
+              <tr><td>Coverage</td><td>25</td><td>Changed files within Scope Contract, no forbidden edits</td></tr>
+              <tr><td>Test Coverage</td><td>25</td><td>MUST criteria matched against test files via keyword fuzzy matching</td></tr>
+              <tr><td>Gates</td><td>25</td><td>Validation gates referenced in slices, no deferred-work markers</td></tr>
+            </tbody>
+          </table>
+
+          <p class="text-sm text-slate-500">Exit codes: 0 = pass (≥60), 1 = fail (&lt;60). Also available as: <code>forge_analyze</code> MCP tool.</p>
+        </div>
+
+        <!-- ─── diagnose ─── -->
+        <div class="cmd-ref" id="diagnose">
+          <div class="cmd-ref-title">pforge diagnose &lt;file&gt;</div>
+          <div class="cmd-ref-desc">Multi-model bug investigation — dispatches file analysis to multiple AI models independently, then synthesizes root cause analysis with fix recommendations.</div>
+
+          <table>
+            <thead><tr><th>Flag</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>--models</code></td><td>string</td><td>Comma-separated model override</td></tr>
+            </tbody>
+          </table>
+
+          <div class="cmd-block">
+            <div class="cmd-block-header"><span>PowerShell</span><button class="cmd-copy-btn">Copy</button></div>
+            <pre><code>.\pforge.ps1 diagnose src/services/billing.ts
+.\pforge.ps1 diagnose src/auth/token-validator.ts --models grok-3-mini,grok-4</code></pre>
+          </div>
+
+          <p class="text-sm text-slate-400 mt-2">Each model analyzes independently for: root cause, failure modes, reproduction steps, impact assessment, fix recommendations, regression risk.</p>
+          <p class="text-sm text-slate-500">Output saved to: <code>.forge/analysis/diagnose-*</code>. Also available as: <code>forge_diagnose</code> MCP tool.</p>
+        </div>
+
+        <!-- ─── run-plan ─── -->
+        <div class="cmd-ref" id="run-plan">
+          <div class="cmd-ref-title">pforge run-plan &lt;plan-file&gt;</div>
+          <div class="cmd-ref-desc">Execute a hardened plan — spawn CLI workers for each slice, validate at every boundary, track tokens and cost.</div>
+
+          <table>
+            <thead><tr><th>Flag</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>--estimate</code></td><td>boolean</td><td>—</td><td>Cost prediction only, no execution</td></tr>
+              <tr><td><code>--assisted</code></td><td>boolean</td><td>—</td><td>Human codes, orchestrator validates gates</td></tr>
+              <tr><td><code>--model</code></td><td>string</td><td>—</td><td>Model override (e.g., <code>claude-sonnet-4.6</code>)</td></tr>
+              <tr><td><code>--resume-from</code></td><td>number</td><td>—</td><td>Skip completed slices, resume from N</td></tr>
+              <tr><td><code>--dry-run</code></td><td>boolean</td><td>—</td><td>Parse and validate without executing</td></tr>
+              <tr><td><code>--quorum</code></td><td>boolean | auto</td><td>—</td><td>Force quorum on all slices, or <code>auto</code> for threshold-based</td></tr>
+              <tr><td><code>--quorum-threshold</code></td><td>number</td><td>6</td><td>Complexity threshold for auto quorum (1–10)</td></tr>
+            </tbody>
+          </table>
+
+          <div class="cmd-block">
+            <div class="cmd-block-header"><span>PowerShell</span><button class="cmd-copy-btn">Copy</button></div>
+            <pre><code># Estimate cost without executing
+.\pforge.ps1 run-plan docs/plans/Phase-7.md --estimate
+
+# Full auto execution
+.\pforge.ps1 run-plan docs/plans/Phase-7.md
+
+# Assisted mode
+.\pforge.ps1 run-plan docs/plans/Phase-7.md --assisted
+
+# Resume from slice 3 after fixing a failure
+.\pforge.ps1 run-plan docs/plans/Phase-7.md --resume-from 3
+
+# Quorum mode with custom threshold
+.\pforge.ps1 run-plan docs/plans/Phase-7.md --quorum=auto --quorum-threshold 8</code></pre>
+          </div>
+
+          <h3>Execution Modes</h3>
+          <table>
+            <thead><tr><th>Mode</th><th>Flag</th><th>What Happens</th></tr></thead>
+            <tbody>
+              <tr><td>Full Auto</td><td><em>(default)</em></td><td><code>gh copilot</code> CLI executes each slice with full project context</td></tr>
+              <tr><td>Assisted</td><td><code>--assisted</code></td><td>You code in VS Code; orchestrator prompts and validates gates</td></tr>
+              <tr><td>Estimate</td><td><code>--estimate</code></td><td>Shows slice count, token estimate, and cost — without executing</td></tr>
+            </tbody>
+          </table>
+
+          <p class="text-sm text-slate-500 mt-2">Results written to: <code>.forge/runs/&lt;timestamp&gt;/</code>. Also available as: <code>forge_run_plan</code> MCP tool.</p>
+        </div>
+
+        <!-- ─── smith ─── -->
+        <div class="cmd-ref" id="smith">
+          <div class="cmd-ref-title">pforge smith</div>
+          <div class="cmd-ref-desc">Inspect your forge — diagnose environment, VS Code config, setup health, version currency, and common problems. Every issue includes a <code>FIX:</code> suggestion.</div>
+
+          <div class="cmd-block">
+            <div class="cmd-block-header"><span>PowerShell / Bash</span><button class="cmd-copy-btn">Copy</button></div>
+            <pre><code>pforge smith</code></pre>
+          </div>
+
+          <h3>What The Smith Checks</h3>
+          <table>
+            <thead><tr><th>Category</th><th>Checks</th></tr></thead>
+            <tbody>
+              <tr><td>Environment</td><td>git, VS Code CLI, PowerShell/bash version, GitHub CLI</td></tr>
+              <tr><td>VS Code Config</td><td><code>chat.agent.enabled</code>, <code>chat.useCustomizationsInParentRepositories</code>, <code>chat.promptFiles</code></td></tr>
+              <tr><td>Setup Health</td><td><code>.forge.json</code> valid, <code>copilot-instructions.md</code> exists, file counts match preset</td></tr>
+              <tr><td>Version Currency</td><td>Installed <code>templateVersion</code> vs source <code>VERSION</code></td></tr>
+              <tr><td>Common Problems</td><td>Duplicate instructions, orphaned agents, missing <code>applyTo</code>, unresolved placeholders</td></tr>
+            </tbody>
+          </table>
+
+          <p class="text-sm text-slate-500">Also available as: <code>forge_smith</code> MCP tool.</p>
+        </div>
+
+        <!-- ─── ext ─── -->
+        <div class="cmd-ref" id="ext">
+          <div class="cmd-ref-title">pforge ext &lt;subcommand&gt;</div>
+          <div class="cmd-ref-desc">Extension management — browse, install, remove, and publish guardrail extensions.</div>
+
+          <table>
+            <thead><tr><th>Subcommand</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>ext search [query]</code></td><td>Browse the community catalog. Omit query for all extensions.</td></tr>
+              <tr><td><code>ext add &lt;name&gt;</code></td><td>Download and install from catalog in one step.</td></tr>
+              <tr><td><code>ext info &lt;name&gt;</code></td><td>Show detailed info before installing.</td></tr>
+              <tr><td><code>ext install &lt;path&gt;</code></td><td>Install from a local directory path.</td></tr>
+              <tr><td><code>ext list</code></td><td>List all installed extensions.</td></tr>
+              <tr><td><code>ext remove &lt;name&gt;</code></td><td>Remove an installed extension.</td></tr>
+              <tr><td><code>ext publish &lt;path&gt;</code></td><td>Generate a catalog entry for submission via PR.</td></tr>
+            </tbody>
+          </table>
+
+          <div class="cmd-block">
+            <div class="cmd-block-header"><span>PowerShell</span><button class="cmd-copy-btn">Copy</button></div>
+            <pre><code>.\pforge.ps1 ext search saas
+.\pforge.ps1 ext add saas-multi-tenancy
+.\pforge.ps1 ext info plan-forge-memory
+.\pforge.ps1 ext list
+.\pforge.ps1 ext remove healthcare-compliance
+.\pforge.ps1 ext publish .forge/extensions/my-extension</code></pre>
+          </div>
+
+          <p class="text-sm text-slate-500">Also available as: <code>forge_ext_search</code>, <code>forge_ext_info</code> MCP tools.</p>
+        </div>
+
+        <!-- ─── update ─── -->
+        <div class="cmd-ref" id="update">
+          <div class="cmd-ref-title">pforge update [source-path]</div>
+          <div class="cmd-ref-desc">Update framework files from a Plan Forge source without re-running the full setup wizard. Preserves all user-customized files.</div>
+
+          <table>
+            <thead><tr><th>Flag</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>source</code></td><td>path (optional)</td><td>Plan Forge source path (auto-detects <code>../plan-forge</code>)</td></tr>
+              <tr><td><code>--dry-run</code></td><td>boolean</td><td>Preview changes without applying</td></tr>
+              <tr><td><code>--force</code></td><td>boolean</td><td>Skip confirmation prompt</td></tr>
+            </tbody>
+          </table>
+
+          <div class="cmd-block">
+            <div class="cmd-block-header"><span>PowerShell</span><button class="cmd-copy-btn">Copy</button></div>
+            <pre><code>.\pforge.ps1 update
+.\pforge.ps1 update C:\path\to\plan-forge --dry-run
+.\pforge.ps1 update --force</code></pre>
+          </div>
+
+          <h3>What Gets Updated vs Protected</h3>
+          <table>
+            <thead><tr><th>Updated (safe to replace)</th><th>Never Touched (your files)</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>Pipeline prompts, agents, shared instructions, runbook, lifecycle hooks, new preset files</td>
+                <td><code>copilot-instructions.md</code>, project-profile, project-principles, <code>DEPLOYMENT-ROADMAP.md</code>, <code>.forge.json</code>, plan files, existing preset files</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="callout callout-warning" class="callout-sm">
+            <strong>Bootstrapping from older versions</strong>: If your <code>pforge.ps1</code> doesn't have the <code>update</code> command yet (pre-v1.2.1), download the latest script first, then run <code>pforge update</code>.
+          </div>
+        </div>
+
+        <!-- ─── help ─── -->
+        <div class="cmd-ref" id="help">
+          <div class="cmd-ref-title">pforge help</div>
+          <div class="cmd-ref-desc">Show help — list all available commands with one-line descriptions.</div>
+          <div class="cmd-block">
+            <div class="cmd-block-header"><span>PowerShell / Bash</span><button class="cmd-copy-btn">Copy</button></div>
+            <pre><code>pforge help</code></pre>
+          </div>
+        </div>
+
+        <!-- ─── Server commands ─── -->
+        <h2 id="server">MCP Server Commands</h2>
+        <p>The MCP server is started directly with Node.js, not through the <code>pforge</code> CLI:</p>
+
+        <div class="cmd-ref" id="server-start">
+          <div class="cmd-ref-title">node pforge-mcp/server.mjs</div>
+          <div class="cmd-ref-desc">Start the full stack: MCP (stdio) + Express (HTTP on 3100) + WebSocket (3101). Use with <code>.vscode/mcp.json</code> for auto-start.</div>
+
+          <div class="cmd-block">
+            <div class="cmd-block-header"><span>Terminal</span><button class="cmd-copy-btn">Copy</button></div>
+            <pre><code># Full MCP server (normal usage — started by VS Code via mcp.json)
+node pforge-mcp/server.mjs
+
+# Dashboard + REST API only (no MCP stdio)
+node pforge-mcp/server.mjs --dashboard-only
+
+# Custom project path
+node pforge-mcp/server.mjs --project /path/to/project</code></pre>
+          </div>
+        </div>
+
+        <!-- ─── Full reference link ─── -->
+        <h2 id="full-reference">Full Reference</h2>
+        <p>This chapter covers the happy path for each command. For exhaustive edge-case documentation, see the full source: <a href="../CLI-GUIDE.md">CLI-GUIDE.md</a></p>
+
+        <!-- Prev / Next -->
+        <div id="chapter-prev-next" class="chapter-nav"></div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="assets/manual.js"></script>
+</body>
+</html>

@@ -1,0 +1,377 @@
+/* Plan Forge Manual — Styles
+   Extends shared.css. Dark theme, sidebar layout, book navigation.
+   Tailwind CDN handles utilities; this file adds manual-specific components. */
+
+/* ─── Layout ─── */
+.manual-layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  min-height: 100vh;
+}
+@media (max-width: 1023px) {
+  .manual-layout { grid-template-columns: 1fr; }
+}
+
+/* ─── Sidebar ─── */
+.manual-sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  border-right: 1px solid rgba(51, 65, 85, 0.5);
+  background: #020617;
+  scrollbar-width: thin;
+  scrollbar-color: #334155 transparent;
+}
+.manual-sidebar::-webkit-scrollbar { width: 4px; }
+.manual-sidebar::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
+
+.sidebar-section { margin-bottom: 0.25rem; }
+.sidebar-act {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #64748b;
+  padding: 0.75rem 1.25rem 0.25rem;
+}
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 1.25rem;
+  font-size: 0.8rem;
+  color: #94a3b8;
+  text-decoration: none;
+  transition: color 0.15s, background 0.15s;
+  border-left: 2px solid transparent;
+}
+.sidebar-link:hover {
+  color: #e2e8f0;
+  background: rgba(51, 65, 85, 0.3);
+}
+.sidebar-link.active {
+  color: #f59e0b;
+  border-left-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.06);
+}
+.sidebar-link .chapter-num {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: #475569;
+  min-width: 1.2rem;
+}
+.sidebar-link.active .chapter-num { color: #d97706; }
+
+/* ─── Chapter content ─── */
+.chapter-content {
+  max-width: 52rem;
+  margin: 0 auto;
+  padding: 2rem 2rem 6rem;
+}
+@media (max-width: 640px) {
+  .chapter-content { padding: 1.5rem 1rem 4rem; }
+}
+
+/* Chapter hero image */
+.chapter-hero {
+  width: 100%;
+  height: 200px;
+  object-fit: cover;
+  border-radius: 0.75rem;
+  margin-bottom: 2rem;
+}
+@media (min-width: 768px) { .chapter-hero { height: 280px; } }
+
+/* ─── Typography ─── */
+.chapter-content h1 {
+  font-size: 2rem;
+  font-weight: 800;
+  color: #f1f5f9;
+  margin-bottom: 0.5rem;
+  line-height: 1.2;
+}
+.chapter-content h2 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #e2e8f0;
+  margin-top: 3rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+}
+.chapter-content h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #cbd5e1;
+  margin-top: 2rem;
+  margin-bottom: 0.75rem;
+}
+.chapter-content p {
+  line-height: 1.75;
+  margin-bottom: 1rem;
+  color: #94a3b8;
+}
+.chapter-content a {
+  color: #f59e0b;
+  text-decoration: underline;
+  text-decoration-color: rgba(245, 158, 11, 0.3);
+  text-underline-offset: 2px;
+}
+.chapter-content a:hover { text-decoration-color: #f59e0b; }
+
+.chapter-content ul, .chapter-content ol {
+  margin-bottom: 1rem;
+  padding-left: 1.5rem;
+  color: #94a3b8;
+}
+.chapter-content li { margin-bottom: 0.35rem; line-height: 1.65; }
+.chapter-content ul li { list-style: disc; }
+.chapter-content ol li { list-style: decimal; }
+
+/* Inline code */
+.chapter-content code:not(pre code) {
+  background: rgba(51, 65, 85, 0.5);
+  color: #e2e8f0;
+  padding: 0.15rem 0.4rem;
+  border-radius: 0.25rem;
+  font-size: 0.85em;
+}
+
+/* ─── Code blocks ─── */
+.cmd-block {
+  position: relative;
+  background: #0f172a;
+  border: 1px solid rgba(51, 65, 85, 0.5);
+  border-radius: 0.75rem;
+  margin-bottom: 1.5rem;
+  overflow: hidden;
+}
+.cmd-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 1rem;
+  background: rgba(30, 41, 59, 0.6);
+  border-bottom: 1px solid rgba(51, 65, 85, 0.4);
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.cmd-block pre {
+  padding: 1rem;
+  margin: 0;
+  overflow-x: auto;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  color: #e2e8f0;
+}
+.cmd-copy-btn {
+  padding: 0.2rem 0.5rem;
+  font-size: 0.65rem;
+  color: #64748b;
+  background: rgba(51, 65, 85, 0.4);
+  border: 1px solid rgba(71, 85, 105, 0.4);
+  border-radius: 0.3rem;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+.cmd-copy-btn:hover { color: #e2e8f0; background: rgba(51, 65, 85, 0.7); }
+.cmd-copy-btn.copied { color: #34d399; }
+
+/* ─── Tables ─── */
+.chapter-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1.5rem;
+  font-size: 0.85rem;
+}
+.chapter-content th {
+  text-align: left;
+  padding: 0.6rem 0.75rem;
+  background: rgba(30, 41, 59, 0.6);
+  border-bottom: 1px solid rgba(51, 65, 85, 0.6);
+  font-weight: 600;
+  color: #e2e8f0;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.chapter-content td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid rgba(51, 65, 85, 0.3);
+  color: #94a3b8;
+}
+.chapter-content tr:hover td { background: rgba(30, 41, 59, 0.3); }
+
+/* ─── Callout boxes ─── */
+.callout {
+  padding: 1rem 1.25rem;
+  border-radius: 0.5rem;
+  margin-bottom: 1.5rem;
+  font-size: 0.88rem;
+  line-height: 1.6;
+  border-left: 3px solid;
+}
+.callout-sm { font-size: 0.82rem; }
+.callout-tip {
+  background: rgba(52, 211, 153, 0.06);
+  border-left-color: #34d399;
+  color: #86efac;
+}
+.callout-warning {
+  background: rgba(245, 158, 11, 0.06);
+  border-left-color: #f59e0b;
+  color: #fbbf24;
+}
+.callout-info {
+  background: rgba(96, 165, 250, 0.06);
+  border-left-color: #60a5fa;
+  color: #93c5fd;
+}
+
+/* ─── Command reference cards ─── */
+.cmd-ref {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(51, 65, 85, 0.4);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+}
+.cmd-ref-title {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #f59e0b;
+  margin-bottom: 0.25rem;
+}
+.cmd-ref-desc {
+  font-size: 0.88rem;
+  color: #94a3b8;
+  margin-bottom: 1rem;
+}
+.cmd-ref h3 { margin-top: 1rem; }
+
+/* ─── Prev/Next navigation ─── */
+.chapter-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 4rem;
+  padding-top: 2rem;
+  border-top: 1px solid rgba(51, 65, 85, 0.4);
+}
+.chapter-nav a {
+  display: flex;
+  flex-direction: column;
+  padding: 0.75rem 1rem;
+  border: 1px solid rgba(51, 65, 85, 0.4);
+  border-radius: 0.5rem;
+  text-decoration: none;
+  transition: border-color 0.15s, background 0.15s;
+  max-width: 48%;
+}
+.chapter-nav a:hover {
+  border-color: rgba(245, 158, 11, 0.4);
+  background: rgba(245, 158, 11, 0.04);
+}
+.chapter-nav .nav-label {
+  font-size: 0.7rem;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.chapter-nav .nav-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #e2e8f0;
+  text-decoration: none;
+}
+.chapter-nav .next { text-align: right; margin-left: auto; }
+
+/* ─── Mobile sidebar toggle ─── */
+@media (max-width: 1023px) {
+  .manual-sidebar {
+    position: fixed;
+    left: -280px;
+    top: 0;
+    width: 280px;
+    z-index: 100;
+    transition: left 0.25s ease;
+    box-shadow: none;
+  }
+  .manual-sidebar.open {
+    left: 0;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.5);
+  }
+  .sidebar-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 99;
+  }
+  .sidebar-overlay.open { display: block; }
+}
+@media (min-width: 1024px) {
+  .sidebar-overlay { display: none !important; }
+  .mobile-sidebar-btn { display: none !important; }
+}
+
+/* ─── Search ─── */
+.search-input {
+  width: 100%;
+  padding: 0.5rem 0.75rem 0.5rem 2rem;
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(51, 65, 85, 0.5);
+  border-radius: 0.5rem;
+  color: #e2e8f0;
+  font-size: 0.8rem;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.search-input::placeholder { color: #475569; }
+.search-input:focus { border-color: rgba(245, 158, 11, 0.5); }
+
+.search-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: #0f172a;
+  border: 1px solid rgba(51, 65, 85, 0.5);
+  border-radius: 0 0 0.5rem 0.5rem;
+  max-height: 300px;
+  overflow-y: auto;
+  z-index: 50;
+  display: none;
+}
+.search-results.active { display: block; }
+.search-result-item {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8rem;
+  color: #94a3b8;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(51, 65, 85, 0.3);
+}
+.search-result-item:hover { background: rgba(51, 65, 85, 0.3); color: #e2e8f0; }
+.search-result-item mark { background: rgba(245, 158, 11, 0.25); color: #fbbf24; }
+
+/* ─── Print ─── */
+@media print {
+  .manual-sidebar, .sidebar-overlay, .mobile-sidebar-btn,
+  .chapter-nav, .cmd-copy-btn, .search-input { display: none !important; }
+  .manual-layout { grid-template-columns: 1fr; }
+  .chapter-content { max-width: 100%; padding: 0; }
+  .chapter-content h1 { font-size: 1.5rem; }
+  .chapter-content h2 { font-size: 1.2rem; break-after: avoid; }
+  .cmd-block { break-inside: avoid; }
+  body { background: white; color: #1e293b; }
+  .chapter-content p, .chapter-content li, .chapter-content td { color: #334155; }
+  .chapter-content th { background: #f1f5f9; color: #1e293b; }
+  .chapter-content code:not(pre code) { background: #f1f5f9; color: #1e293b; }
+  .cmd-block { background: #f8fafc; border-color: #e2e8f0; }
+  .cmd-block pre { color: #1e293b; }
+}

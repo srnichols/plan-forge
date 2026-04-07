@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Plan Forge Manual — The Forge Guide</title>
+  <meta name="description" content="The complete Plan Forge user manual. From apprentice to master smith — learn to harden AI-driven development plans into drift-proof execution contracts." />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+
+  <!-- Mobile sidebar button -->
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <div class="manual-layout">
+    <!-- Sidebar -->
+    <aside id="manual-sidebar" class="manual-sidebar">
+      <nav id="sidebar-nav"></nav>
+    </aside>
+
+    <!-- Main content -->
+    <main class="min-h-screen">
+      <!-- Cover -->
+      <div class="hero-bg grid-overlay flex items-center justify-center min-h-[70vh] px-6">
+        <div class="text-center max-w-2xl">
+          <div class="text-forge-400 text-sm font-semibold tracking-wider uppercase mb-4">The Forge Guide</div>
+          <h1 class="text-4xl sm:text-5xl font-extrabold text-white mb-4 leading-tight">Plan Forge Manual</h1>
+          <p class="text-lg text-slate-400 mb-8 leading-relaxed">From apprentice to master smith. Learn to harden AI-driven development plans into drift-proof execution contracts.</p>
+          <p class="text-sm text-slate-500">v2.17.0 · 14 chapters · 3 appendices</p>
+        </div>
+      </div>
+
+      <!-- Chapter grid -->
+      <div class="max-w-5xl mx-auto px-6 py-16">
+
+        <!-- Act I -->
+        <div class="mb-12">
+          <h2 class="text-xs font-bold tracking-widest uppercase text-slate-500 mb-6">Act I — Learn the Forge</h2>
+          <div class="grid md:grid-cols-3 gap-4">
+            <a href="what-is-plan-forge.html" class="group block p-5 bg-slate-900/50 border border-slate-800/60 rounded-xl hover:border-forge-400/30 transition-all">
+              <div class="text-xs font-semibold text-slate-500 mb-1">Chapter 1</div>
+              <div class="text-sm font-bold text-slate-100 group-hover:text-forge-400 transition-colors">What Is Plan Forge?</div>
+              <p class="text-xs text-slate-500 mt-2">The problem, the solution, who it's for.</p>
+            </a>
+            <a href="how-it-works.html" class="group block p-5 bg-slate-900/50 border border-slate-800/60 rounded-xl hover:border-forge-400/30 transition-all">
+              <div class="text-xs font-semibold text-slate-500 mb-1">Chapter 2</div>
+              <div class="text-sm font-bold text-slate-100 group-hover:text-forge-400 transition-colors">How It Works</div>
+              <p class="text-xs text-slate-500 mt-2">The 7-step pipeline, sessions, guardrails.</p>
+            </a>
+            <a href="installation.html" class="group block p-5 bg-slate-900/50 border border-slate-800/60 rounded-xl hover:border-forge-400/30 transition-all">
+              <div class="text-xs font-semibold text-slate-500 mb-1">Chapter 3</div>
+              <div class="text-sm font-bold text-slate-100 group-hover:text-forge-400 transition-colors">Installation</div>
+              <p class="text-xs text-slate-500 mt-2">Zero to <code>pforge smith</code> green in 10 min.</p>
+            </a>
+          </div>
+        </div>
+
+        <!-- Act II -->
+        <div class="mb-12">
+          <h2 class="text-xs font-bold tracking-widest uppercase text-slate-500 mb-6">Act II — Build with the Forge</h2>
+          <div class="grid md:grid-cols-3 gap-4">
+            <a href="your-first-plan.html" class="group block p-5 bg-slate-900/50 border border-slate-800/60 rounded-xl hover:border-forge-400/30 transition-all">
+              <div class="text-xs font-semibold text-slate-500 mb-1">Chapter 4</div>
+              <div class="text-sm font-bold text-slate-100 group-hover:text-forge-400 transition-colors">Your First Plan</div>
+              <p class="text-xs text-slate-500 mt-2">Hands-on: specify, harden, execute, ship.</p>
+            </a>
+            <a href="writing-plans.html" class="group block p-5 bg-slate-900/50 border border-slate-800/60 rounded-xl hover:border-forge-400/30 transition-all">
+              <div class="text-xs font-semibold text-slate-500 mb-1">Chapter 5</div>
+              <div class="text-sm font-bold text-slate-100 group-hover:text-forge-400 transition-colors">Writing Plans That Work</div>
+              <p class="text-xs text-slate-500 mt-2">Scope, slices, gates, common mistakes.</p>
+            </a>
+            <a href="dashboard.html" class="group block p-5 bg-slate-900/50 border border-slate-800/60 rounded-xl hover:border-forge-400/30 transition-all">
+              <div class="text-xs font-semibold text-slate-500 mb-1">Chapter 6</div>
+              <div class="text-sm font-bold text-slate-100 group-hover:text-forge-400 transition-colors">The Dashboard</div>
+              <p class="text-xs text-slate-500 mt-2">8 tabs: progress, cost, replay, config, traces.</p>
+            </a>
+          </div>
+        </div>
+
+        <!-- Act III -->
+        <div class="mb-12">
+          <h2 class="text-xs font-bold tracking-widest uppercase text-slate-500 mb-6">Act III — Master the Forge</h2>
+          <div class="grid md:grid-cols-4 gap-4">
+            <a href="cli-reference.html" class="group block p-5 bg-slate-900/50 border border-slate-800/60 rounded-xl hover:border-forge-400/30 transition-all">
+              <div class="text-xs font-semibold text-slate-500 mb-1">Chapter 7</div>
+              <div class="text-sm font-bold text-slate-100 group-hover:text-forge-400 transition-colors">CLI Reference</div>
+              <p class="text-xs text-slate-500 mt-2">Every command, every flag.</p>
+            </a>
+            <a href="customization.html" class="group block p-5 bg-slate-900/50 border border-slate-800/60 rounded-xl hover:border-forge-400/30 transition-all">
+              <div class="text-xs font-semibold text-slate-500 mb-1">Chapter 8</div>
+              <div class="text-sm font-bold text-slate-100 group-hover:text-forge-400 transition-colors">Customization</div>
+              <p class="text-xs text-slate-500 mt-2">Make it yours: principles, profiles, config.</p>
+            </a>
+            <a href="instructions-agents.html" class="group block p-5 bg-slate-900/50 border border-slate-800/60 rounded-xl hover:border-forge-400/30 transition-all">
+              <div class="text-xs font-semibold text-slate-500 mb-1">Chapter 9</div>
+              <div class="text-sm font-bold text-slate-100 group-hover:text-forge-400 transition-colors">Instructions & Agents</div>
+              <p class="text-xs text-slate-500 mt-2">Guardrails, reviewers, skills, hooks.</p>
+            </a>
+            <a href="mcp-server.html" class="group block p-5 bg-slate-900/50 border border-slate-800/60 rounded-xl hover:border-forge-400/30 transition-all">
+              <div class="text-xs font-semibold text-slate-500 mb-1">Chapter 10</div>
+              <div class="text-sm font-bold text-slate-100 group-hover:text-forge-400 transition-colors">MCP Server & Tools</div>
+              <p class="text-xs text-slate-500 mt-2">18 tools, REST API, WebSocket, telemetry.</p>
+            </a>
+            <a href="extensions.html" class="group block p-5 bg-slate-900/50 border border-slate-800/60 rounded-xl hover:border-forge-400/30 transition-all">
+              <div class="text-xs font-semibold text-slate-500 mb-1">Chapter 11</div>
+              <div class="text-sm font-bold text-slate-100 group-hover:text-forge-400 transition-colors">Extensions</div>
+              <p class="text-xs text-slate-500 mt-2">Install, create, publish guardrail packs.</p>
+            </a>
+            <a href="multi-agent.html" class="group block p-5 bg-slate-900/50 border border-slate-800/60 rounded-xl hover:border-forge-400/30 transition-all">
+              <div class="text-xs font-semibold text-slate-500 mb-1">Chapter 12</div>
+              <div class="text-sm font-bold text-slate-100 group-hover:text-forge-400 transition-colors">Multi-Agent Setup</div>
+              <p class="text-xs text-slate-500 mt-2">Copilot, Claude, Cursor, Codex, Gemini…</p>
+            </a>
+            <a href="advanced-execution.html" class="group block p-5 bg-slate-900/50 border border-slate-800/60 rounded-xl hover:border-forge-400/30 transition-all">
+              <div class="text-xs font-semibold text-slate-500 mb-1">Chapter 13</div>
+              <div class="text-sm font-bold text-slate-100 group-hover:text-forge-400 transition-colors">Advanced Execution</div>
+              <p class="text-xs text-slate-500 mt-2">Quorum, routing, CI, cost optimization.</p>
+            </a>
+            <a href="troubleshooting.html" class="group block p-5 bg-slate-900/50 border border-slate-800/60 rounded-xl hover:border-forge-400/30 transition-all">
+              <div class="text-xs font-semibold text-slate-500 mb-1">Chapter 14</div>
+              <div class="text-sm font-bold text-slate-100 group-hover:text-forge-400 transition-colors">Troubleshooting</div>
+              <p class="text-xs text-slate-500 mt-2">Diagnostics, common errors, decision trees.</p>
+            </a>
+          </div>
+        </div>
+
+        <!-- Appendices -->
+        <div class="mb-12">
+          <h2 class="text-xs font-bold tracking-widest uppercase text-slate-500 mb-6">Appendices</h2>
+          <div class="grid md:grid-cols-3 gap-4">
+            <a href="glossary.html" class="group block p-5 bg-slate-900/50 border border-slate-800/60 rounded-xl hover:border-forge-400/30 transition-all">
+              <div class="text-xs font-semibold text-slate-500 mb-1">Appendix A</div>
+              <div class="text-sm font-bold text-slate-100 group-hover:text-forge-400 transition-colors">Glossary</div>
+              <p class="text-xs text-slate-500 mt-2">Every Plan Forge term defined.</p>
+            </a>
+            <a href="quick-reference.html" class="group block p-5 bg-slate-900/50 border border-slate-800/60 rounded-xl hover:border-forge-400/30 transition-all">
+              <div class="text-xs font-semibold text-slate-500 mb-1">Appendix B</div>
+              <div class="text-sm font-bold text-slate-100 group-hover:text-forge-400 transition-colors">Quick Reference Card</div>
+              <p class="text-xs text-slate-500 mt-2">Printable 2-page cheat sheet.</p>
+            </a>
+            <a href="stack-notes.html" class="group block p-5 bg-slate-900/50 border border-slate-800/60 rounded-xl hover:border-forge-400/30 transition-all">
+              <div class="text-xs font-semibold text-slate-500 mb-1">Appendix C</div>
+              <div class="text-sm font-bold text-slate-100 group-hover:text-forge-400 transition-colors">Stack-Specific Notes</div>
+              <p class="text-xs text-slate-500 mt-2">Per-preset configs for all 9 stacks.</p>
+            </a>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="text-center text-xs text-slate-600 mt-16 pt-8 border-t border-slate-800/40">
+          <p>Plan Forge v2.17.0 · <a href="https://github.com/srnichols/plan-forge" class="hover:text-slate-400 transition-colors">GitHub</a> · <a href="../index.html" class="hover:text-slate-400 transition-colors">Main Site</a></p>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="assets/manual.js"></script>
+</body>
+</html>

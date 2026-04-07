@@ -60,6 +60,22 @@ cd my-project-plans
 - Capabilities: https://planforge.software/capabilities.html
 - FAQ: https://planforge.software/faq.html
 - Extensions: https://planforge.software/extensions.html
+- Blog: https://planforge.software/blog/
+- RSS Feed: https://planforge.software/blog/feed.xml
+
+## Blog Posts
+
+- The 80/20 Wall: Why AI Agents Break What They Build — https://planforge.software/blog/the-80-20-wall.html
+- Spec Kit + Plan Forge: Write the Spec, Enforce the Build — https://planforge.software/blog/spec-kit-plan-forge.html
+- I Built Guardrails for AI Coding Agents — Here's What I Learned — https://planforge.software/blog/guardrails-lessons-learned.html
+- Quorum Mode: What Happens When 3 AI Models Review Each Other's Code — https://planforge.software/blog/quorum-mode-3-models.html
+- From WhatsApp to Shipped PR: How I Automated My Entire Dev Workflow — https://planforge.software/blog/unified-system.html
+- One Framework, Seven AI Agents: Why We Stopped Picking Favorites — https://planforge.software/blog/seven-agents.html
+
+## Related Projects
+
+- OpenBrain (persistent semantic memory): https://github.com/srnichols/OpenBrain
+- OpenClaw (always-on AI gateway): https://github.com/srnichols/OpenClaw
 
 ## License
 

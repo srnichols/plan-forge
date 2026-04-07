@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Plan Forge Blog — From the Forge</title>
+    <link>https://planforge.software/blog/</link>
+    <description>Lessons, patterns, and A/B test results from building with AI coding agents. By Scott Nichols.</description>
+    <language>en-us</language>
+    <lastBuildDate>Mon, 07 Apr 2026 00:00:00 GMT</lastBuildDate>
+    <atom:link href="https://planforge.software/blog/feed.xml" rel="self" type="application/rss+xml" />
+
+    <item>
+      <title>The 80/20 Wall: Why AI Agents Break What They Build</title>
+      <link>https://planforge.software/blog/the-80-20-wall.html</link>
+      <guid>https://planforge.software/blog/the-80-20-wall.html</guid>
+      <pubDate>Mon, 07 Apr 2026 00:00:00 GMT</pubDate>
+      <description>AI coding agents get you to 80% fast — then start breaking things trying to close the last 20%. The fix isn't a better model. It's a better methodology.</description>
+    </item>
+
+    <item>
+      <title>Spec Kit + Plan Forge: Write the Spec, Enforce the Build</title>
+      <link>https://planforge.software/blog/spec-kit-plan-forge.html</link>
+      <guid>https://planforge.software/blog/spec-kit-plan-forge.html</guid>
+      <pubDate>Mon, 07 Apr 2026 01:00:00 GMT</pubDate>
+      <description>I started with Spec Kit and loved it. Specification-based planning and agentic coding is like peanut butter and jelly. As my ideas grew, Plan Forge was born. Here's how they work together.</description>
+    </item>
+
+    <item>
+      <title>I Built Guardrails for AI Coding Agents — Here's What I Learned</title>
+      <link>https://planforge.software/blog/guardrails-lessons-learned.html</link>
+      <guid>https://planforge.software/blog/guardrails-lessons-learned.html</guid>
+      <pubDate>Mon, 07 Apr 2026 02:00:00 GMT</pubDate>
+      <description>After 18 guardrail files, 19 reviewer agents, and 9 tech stack presets, here are the seven hard-won lessons from building Plan Forge — and the mistakes that taught them.</description>
+    </item>
+
+    <item>
+      <title>Quorum Mode: What Happens When 3 AI Models Review Each Other's Code</title>
+      <link>https://planforge.software/blog/quorum-mode-3-models.html</link>
+      <guid>https://planforge.software/blog/quorum-mode-3-models.html</guid>
+      <pubDate>Mon, 07 Apr 2026 03:00:00 GMT</pubDate>
+      <description>We built a feature twice — once with a single model, once with three models in parallel consensus. Both passed all gates. But the code quality difference was measurable.</description>
+    </item>
+
+    <item>
+      <title>From WhatsApp to Shipped PR: How I Automated My Entire Dev Workflow</title>
+      <link>https://planforge.software/blog/unified-system.html</link>
+      <guid>https://planforge.software/blog/unified-system.html</guid>
+      <pubDate>Mon, 07 Apr 2026 04:00:00 GMT</pubDate>
+      <description>Three open-source tools wired into a closed-loop system. Describe a feature from your phone. The system hardens the plan, builds it, captures every decision, reviews independently, and ships.</description>
+    </item>
+
+    <item>
+      <title>One Framework, Seven AI Agents: Why We Stopped Picking Favorites</title>
+      <link>https://planforge.software/blog/seven-agents.html</link>
+      <guid>https://planforge.software/blog/seven-agents.html</guid>
+      <pubDate>Mon, 07 Apr 2026 05:00:00 GMT</pubDate>
+      <description>Your team uses Copilot, Claude, Cursor, and Gemini. Plan Forge generates native guardrail files for all 7 agents — same quality gates, same pipeline, same 19 reviewer agents. One setup command.</description>
+    </item>
+
+  </channel>
+</rss>

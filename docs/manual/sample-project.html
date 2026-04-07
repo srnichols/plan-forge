@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<!-- verified: v2.17.0 -->
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Appendix E: Sample Project — Plan Forge Manual</title>
+  <meta name="description" content="Build a Tracker app from scratch using Plan Forge. Pick your stack, follow 5 phases, learn every feature of the pipeline." />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+    <main><div class="chapter-content">
+
+      <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Appendix E</div>
+      <h1>Sample Project — Build a Tracker App</h1>
+      <p class="text-lg text-slate-400 mb-8">Pick your stack. Build a real app. Learn Plan Forge by using it.</p>
+
+      <!-- ─── The App ─── -->
+      <h2 id="the-app">The Tracker App</h2>
+      <p>A task tracker with users, projects, tasks, statuses, and comments. Simple enough to build in an afternoon, rich enough to exercise every Plan Forge feature. You'll run the full pipeline (Specify → Harden → Execute → Review → Ship) five times — once per phase — and learn a different manual chapter with each one.</p>
+
+      <!-- Wireframe -->
+      <div class="overflow-x-auto mb-6">
+        <div class="rounded-xl border border-slate-700/40 bg-slate-900/40 p-4">
+          <div class="text-xs font-bold text-slate-500 mb-3">Tracker App — Data Model</div>
+          <div class="flex gap-4 min-w-[500px]">
+            <div class="flex-1 rounded-lg border border-slate-700/30 bg-slate-950/60 p-3">
+              <div class="text-xs font-bold text-amber-400 mb-2">Users</div>
+              <div class="text-xs text-slate-500">id, email, name, password_hash, role, created_at</div>
+            </div>
+            <div class="flex-1 rounded-lg border border-slate-700/30 bg-slate-950/60 p-3">
+              <div class="text-xs font-bold text-sky-400 mb-2">Projects</div>
+              <div class="text-xs text-slate-500">id, name, description, owner_id, status, created_at</div>
+            </div>
+            <div class="flex-1 rounded-lg border border-slate-700/30 bg-slate-950/60 p-3">
+              <div class="text-xs font-bold text-emerald-400 mb-2">Tasks</div>
+              <div class="text-xs text-slate-500">id, project_id, title, description, status, assignee_id, priority, due_date</div>
+            </div>
+            <div class="flex-1 rounded-lg border border-slate-700/30 bg-slate-950/60 p-3">
+              <div class="text-xs font-bold text-purple-400 mb-2">Comments</div>
+              <div class="text-xs text-slate-500">id, task_id, author_id, body, created_at</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── Pick Your Preset ─── -->
+      <h2 id="pick-preset">Pick Your Preset</h2>
+      <p>The specs below are framework-agnostic. Plan Forge generates stack-specific plans based on your preset. Pick the one you want to learn:</p>
+      <div class="grid grid-cols-3 gap-3 mb-6">
+        <div class="rounded-lg border border-slate-800/60 bg-slate-900/40 p-3 text-center"><div class="text-sm font-semibold text-slate-200">dotnet</div></div>
+        <div class="rounded-lg border border-slate-800/60 bg-slate-900/40 p-3 text-center"><div class="text-sm font-semibold text-slate-200">typescript</div></div>
+        <div class="rounded-lg border border-slate-800/60 bg-slate-900/40 p-3 text-center"><div class="text-sm font-semibold text-slate-200">python</div></div>
+        <div class="rounded-lg border border-slate-800/60 bg-slate-900/40 p-3 text-center"><div class="text-sm font-semibold text-slate-200">java</div></div>
+        <div class="rounded-lg border border-slate-800/60 bg-slate-900/40 p-3 text-center"><div class="text-sm font-semibold text-slate-200">go</div></div>
+        <div class="rounded-lg border border-slate-800/60 bg-slate-900/40 p-3 text-center"><div class="text-sm font-semibold text-slate-200">swift</div></div>
+        <div class="rounded-lg border border-slate-800/60 bg-slate-900/40 p-3 text-center"><div class="text-sm font-semibold text-slate-200">rust</div></div>
+        <div class="rounded-lg border border-slate-800/60 bg-slate-900/40 p-3 text-center"><div class="text-sm font-semibold text-slate-200">php</div></div>
+        <div class="rounded-lg border border-slate-800/60 bg-slate-900/40 p-3 text-center text-slate-500"><div class="text-sm">any stack</div></div>
+      </div>
+
+      <!-- ─── Getting Started ─── -->
+      <h2 id="getting-started">Getting Started</h2>
+      <div class="cmd-block">
+        <div class="cmd-block-header"><span>Terminal</span><button class="cmd-copy-btn">Copy</button></div>
+        <pre><code>mkdir tracker-app && cd tracker-app
+git init
+
+# Pick your preset (replace <your-stack> with dotnet, typescript, python, etc.)
+.\setup.ps1 -Preset &lt;your-stack&gt;
+
+# Verify
+.\pforge.ps1 smith</code></pre>
+      </div>
+
+      <!-- ─── Phase Roadmap ─── -->
+      <h2 id="roadmap">Phase Roadmap</h2>
+      <div class="overflow-x-auto mb-6">
+        <div class="flex gap-2 min-w-[700px] py-2">
+          <div class="flex-1 rounded-lg border border-amber-800/30 bg-amber-950/15 p-3 text-center">
+            <div class="text-xs font-bold text-amber-400">Phase 1</div>
+            <div class="text-xs text-slate-400 mt-1">Bootstrap + Health</div>
+          </div>
+          <div class="flex items-center text-slate-600">→</div>
+          <div class="flex-1 rounded-lg border border-sky-800/30 bg-sky-950/15 p-3 text-center">
+            <div class="text-xs font-bold text-sky-400">Phase 2</div>
+            <div class="text-xs text-slate-400 mt-1">Users + Auth</div>
+          </div>
+          <div class="flex items-center text-slate-600">→</div>
+          <div class="flex-1 rounded-lg border border-emerald-800/30 bg-emerald-950/15 p-3 text-center">
+            <div class="text-xs font-bold text-emerald-400">Phase 3</div>
+            <div class="text-xs text-slate-400 mt-1">Projects + Tasks</div>
+          </div>
+          <div class="flex items-center text-slate-600">→</div>
+          <div class="flex-1 rounded-lg border border-purple-800/30 bg-purple-950/15 p-3 text-center">
+            <div class="text-xs font-bold text-purple-400">Phase 4</div>
+            <div class="text-xs text-slate-400 mt-1">Comments + Events</div>
+          </div>
+          <div class="flex items-center text-slate-600">→</div>
+          <div class="flex-1 rounded-lg border border-rose-800/30 bg-rose-950/15 p-3 text-center">
+            <div class="text-xs font-bold text-rose-400">Phase 5</div>
+            <div class="text-xs text-slate-400 mt-1">Dashboard + Reports</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── What You'll Practice ─── -->
+      <h2 id="what-youll-practice">What You'll Practice</h2>
+      <table>
+        <thead><tr><th>Phase</th><th>What You Build</th><th>Manual Chapters Practiced</th></tr></thead>
+        <tbody>
+          <tr><td><strong>1</strong></td><td>Project scaffold + <code>GET /health</code></td><td><a href="installation.html">Ch 3</a> (Installation), <a href="your-first-plan.html">Ch 4</a> (Your First Plan)</td></tr>
+          <tr><td><strong>2</strong></td><td>User model + JWT auth + roles</td><td><a href="writing-plans.html">Ch 5</a> (Writing Plans), <a href="instructions-agents.html">Ch 9</a> (auto-loading auth + security instructions)</td></tr>
+          <tr><td><strong>3</strong></td><td>Project &amp; Task CRUD + tests</td><td><a href="dashboard.html">Ch 6</a> (Dashboard monitoring), <a href="cli-reference.html">Ch 7</a> (CLI: sweep, diff, analyze)</td></tr>
+          <tr><td><strong>4</strong></td><td>Comments + event publishing</td><td><a href="advanced-execution.html">Ch 13</a> (quorum mode, parallel slices, model routing)</td></tr>
+          <tr><td><strong>5</strong></td><td>Dashboard views + caching</td><td><a href="customization.html">Ch 8</a> (custom instructions for reporting domain)</td></tr>
+        </tbody>
+      </table>
+
+      <!-- ─── Phase 1 ─── -->
+      <h2 id="phase-1">Phase 1 — Bootstrap + Health Endpoint</h2>
+      <p>This is the same exercise from <a href="your-first-plan.html">Chapter 4</a>, but now in context of a larger project. Paste this into the specifier agent:</p>
+
+      <div class="cmd-block">
+        <div class="cmd-block-header"><span>Paste into Step 0 (Specifier)</span><button class="cmd-copy-btn">Copy</button></div>
+        <pre><code>Feature: health-endpoint
+
+Problem: The Tracker app needs a health check endpoint so load balancers
+and monitoring tools can verify the service is running.
+
+Scenarios: GET /health every 30 seconds. Returns 200 OK with
+{"status": "healthy", "version": "1.0.0"}.
+
+Acceptance Criteria:
+- GET /health returns 200 with JSON body
+- Response time under 50ms
+- No authentication required
+- If database unreachable: 503 {"status": "degraded", "reason": "database"}
+
+Out of Scope: Deep dependency checks, metrics endpoint, custom health UI.</code></pre>
+      </div>
+      <p>Run the full pipeline: Step 0 → Step 1 → Step 2 → Step 3 → Step 4 → Step 5 → Step 6. When done, <code>pforge phase-status docs/plans/Phase-1-*.md complete</code>.</p>
+
+      <!-- ─── Phase 2 ─── -->
+      <h2 id="phase-2">Phase 2 — Users + Authentication</h2>
+      <div class="cmd-block">
+        <div class="cmd-block-header"><span>Paste into Step 0 (Specifier)</span><button class="cmd-copy-btn">Copy</button></div>
+        <pre><code>Feature: user-authentication
+
+Problem: The Tracker app needs user accounts with login, registration,
+and role-based access control (admin, member).
+
+MUST Criteria:
+- User registration with email + password (hashed, never plaintext)
+- Login returns JWT token (access + refresh)
+- Role-based authorization: admin can manage all projects, member sees own
+- Protected endpoints return 401 without valid token, 403 without required role
+- Password reset flow (token-based)
+
+SHOULD Criteria:
+- Rate limiting on login endpoint (5 attempts per minute)
+- Audit log for authentication events
+
+Out of Scope: OAuth/social login, MFA, user profile editing.</code></pre>
+      </div>
+      <div class="callout callout-tip">
+        <strong>Watch for auto-loading</strong>: When the executor creates auth files, notice that <code>auth.instructions.md</code> and <code>security.instructions.md</code> load automatically. This is the <code>applyTo</code> mechanism from <a href="how-it-works.html#apply-to">Chapter 2</a> in action.
+      </div>
+
+      <!-- ─── Phase 3 ─── -->
+      <h2 id="phase-3">Phase 3 — Projects + Tasks CRUD</h2>
+      <div class="cmd-block">
+        <div class="cmd-block-header"><span>Paste into Step 0 (Specifier)</span><button class="cmd-copy-btn">Copy</button></div>
+        <pre><code>Feature: project-task-management
+
+Problem: Users need to create projects and manage tasks within them.
+
+MUST Criteria:
+- CRUD for Projects (create, read, update, delete)
+- CRUD for Tasks within a project
+- Task fields: title, description, status (todo/in-progress/done), priority (low/medium/high), assignee, due date
+- Only project owner or admin can delete a project
+- List tasks with filtering by status, assignee, priority
+- Pagination on list endpoints (default 20 per page)
+- 90%+ test coverage on service layer
+
+SHOULD Criteria:
+- Task sorting by priority, due date, created date
+- Bulk status update for selected tasks
+
+Out of Scope: File attachments, subtasks, task templates, Kanban board UI.</code></pre>
+      </div>
+      <div class="callout callout-info">
+        <strong>Try the dashboard</strong>: Start the MCP server (<code>node pforge-mcp/server.mjs</code>) and watch <code>localhost:3100/dashboard</code> during execution. You'll see slices progress in real-time — this is <a href="dashboard.html">Chapter 6</a> in action.
+      </div>
+
+      <!-- ─── Phase 4 ─── -->
+      <h2 id="phase-4">Phase 4 — Comments + Event Publishing</h2>
+      <div class="cmd-block">
+        <div class="cmd-block-header"><span>Paste into Step 0 (Specifier)</span><button class="cmd-copy-btn">Copy</button></div>
+        <pre><code>Feature: comments-and-events
+
+Problem: Users need to discuss tasks via comments, and the system needs
+an event bus for audit/notification purposes.
+
+MUST Criteria:
+- Add, edit, delete comments on tasks
+- Only comment author or admin can edit/delete
+- Event publishing: task-created, task-updated, task-status-changed, comment-added
+- Event consumers: update task activity log, update project last-modified timestamp
+- Comments include created_at, updated_at timestamps
+
+SHOULD Criteria:
+- @mention support in comments (notify mentioned user)
+- Activity feed endpoint: recent events across user's projects
+
+Out of Scope: Real-time WebSocket push to clients, email notifications, rich text.</code></pre>
+      </div>
+      <div class="callout callout-warning">
+        <strong>Try advanced execution</strong>: This phase has independent slices (comments vs events). Add <code>[P]</code> tags to the hardened plan for parallel execution. Try <code>--quorum=auto</code> to see multi-model consensus on complex slices. See <a href="advanced-execution.html">Chapter 13</a>.
+      </div>
+
+      <!-- ─── Phase 5 ─── -->
+      <h2 id="phase-5">Phase 5 — Dashboard + Reports</h2>
+      <div class="cmd-block">
+        <div class="cmd-block-header"><span>Paste into Step 0 (Specifier)</span><button class="cmd-copy-btn">Copy</button></div>
+        <pre><code>Feature: dashboard-and-reporting
+
+Problem: Users need an overview of their projects with status summaries,
+task distribution, and activity trends.
+
+MUST Criteria:
+- Dashboard endpoint: project count, task count by status, overdue tasks
+- Per-project summary: task breakdown, recent activity, completion percentage
+- Reporting endpoint: tasks completed this week/month, average time to close
+- Cache dashboard data (invalidate on task/project changes)
+
+SHOULD Criteria:
+- Configurable date ranges on reports
+- Export report as JSON
+
+Out of Scope: Charts/graphs (API only), PDF export, scheduled reports.</code></pre>
+      </div>
+      <div class="callout callout-tip">
+        <strong>Write a custom instruction</strong>: Create <code>.github/instructions/reporting.instructions.md</code> with rules for your reporting domain (cache invalidation patterns, aggregation query patterns). This is <a href="customization.html#custom-instructions">Chapter 8</a> in action.
+      </div>
+
+      <!-- ─── Stretch Goals ─── -->
+      <h2 id="stretch">Stretch Goals</h2>
+      <p>Finished all 5 phases? Try these advanced exercises:</p>
+      <table>
+        <thead><tr><th>Exercise</th><th>What You'll Learn</th><th>Command/Chapter</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Add multi-tenancy</strong></td>
+            <td>Install an extension, see guardrails auto-apply</td>
+            <td><code>pforge ext add saas-multi-tenancy</code> → <a href="extensions.html">Ch 11</a></td>
+          </tr>
+          <tr>
+            <td><strong>Add CI validation</strong></td>
+            <td>Automate quality gates on PRs</td>
+            <td>Copy <code>plan-forge-validate.yml</code> → <a href="advanced-execution.html#ci-integration">Ch 13</a></td>
+          </tr>
+          <tr>
+            <td><strong>Quorum analysis</strong></td>
+            <td>Multi-model consistency scoring</td>
+            <td><code>pforge analyze --quorum docs/plans/Phase-3-*.md</code></td>
+          </tr>
+          <tr>
+            <td><strong>Generate a Project Profile</strong></td>
+            <td>Tighten guardrails based on your standards</td>
+            <td>Attach <code>project-profile.prompt.md</code> → <a href="customization.html#profile">Ch 8</a></td>
+          </tr>
+          <tr>
+            <td><strong>Define Project Principles</strong></td>
+            <td>Declare non-negotiable commitments</td>
+            <td>Attach <code>project-principles.prompt.md</code> → <a href="customization.html#principles">Ch 8</a></td>
+          </tr>
+          <tr>
+            <td><strong>Run with a different AI tool</strong></td>
+            <td>Test multi-agent setup</td>
+            <td><code>.\setup.ps1 -Agent claude</code> → <a href="multi-agent.html">Ch 12</a></td>
+          </tr>
+          <tr>
+            <td><strong>Diagnose a bug</strong></td>
+            <td>Multi-model bug investigation</td>
+            <td><code>pforge diagnose src/services/TaskService.*</code> → <a href="cli-reference.html#diagnose">Ch 7</a></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout callout-info">
+        <strong>The specs are deliberately high-level.</strong> You use Plan Forge (specifier → hardener → executor) to flesh them out. That's the exercise — learning the pipeline by making it do the heavy lifting.
+      </div>
+
+      <p class="text-sm text-slate-500 mt-8">📄 Based on the Tracker sample app in <code>plan-forge-testbed</code>. See also: <a href="../walkthroughs/greenfield-todo-api.md">greenfield-todo-api.md</a></p>
+      <div id="chapter-prev-next" class="chapter-nav"></div>
+    </div></main>
+  </div>
+  <script src="assets/manual.js"></script>
+</body>
+</html>

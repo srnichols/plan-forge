@@ -709,7 +709,7 @@ The **`E:\GitHub\plan-forge-testbed`** repo contains a **Tracker sample app** wi
 ### Round 5 — Complete + Polish
 - [x] Chapters 11–14 (Extensions, Multi-Agent, Advanced, Troubleshooting)
 - [x] Appendices A–D (Glossary, Quick Reference, Stack Notes, Grok Warnings)
-- [ ] Appendix E (Sample Project — Build a Tracker App)
+- [x] Appendix E (Sample Project — Build a Tracker App)
 - [x] Client-side search index
 - [x] Cross-chapter links verified
 - [ ] Print stylesheet

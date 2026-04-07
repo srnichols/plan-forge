@@ -17,6 +17,22 @@ import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 
 /**
+ * Keyword patterns mapped to targeted search queries for `search_thoughts`.
+ * Matched against slice titles to generate domain-specific context requests.
+ */
+const KEYWORD_SEARCH_MAP = [
+  { pattern: /\b(database|migration|schema|alter|seed|index|ef\s+core|dbcontext|repository)\b/i, query: "database migration patterns" },
+  { pattern: /\b(auth|token|rbac|jwt|oauth|password|credential|permission|role)\b/i, query: "authentication authorization patterns" },
+  { pattern: /\b(api|endpoint|route|controller|http|rest|graphql)\b/i, query: "API endpoint design patterns" },
+  { pattern: /\b(test|spec|jest|xunit|mocha|vitest|coverage)\b/i, query: "testing patterns conventions" },
+  { pattern: /\b(deploy|ci|cd|pipeline|docker|kubernetes|container)\b/i, query: "deployment pipeline patterns" },
+  { pattern: /\b(ui|component|react|vue|angular|frontend|css)\b/i, query: "UI component patterns" },
+  { pattern: /\b(cache|redis|memcache|invalidat)\b/i, query: "caching invalidation patterns" },
+  { pattern: /\b(error|exception|logging|monitor|alert)\b/i, query: "error handling logging patterns" },
+  { pattern: /\b(memory|openbrain|context|semantic)\b/i, query: "memory context integration patterns" },
+];
+
+/**
  * Check if OpenBrain is configured in .vscode/mcp.json.
  */
 export function isOpenBrainConfigured(cwd) {

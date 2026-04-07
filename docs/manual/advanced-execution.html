@@ -54,8 +54,12 @@
       </div>
       <p>Model A fails → Model B retries the same slice → Model C if B fails too. Emits <code>slice-escalated</code> WebSocket event at each step. No manual intervention required.</p>
 
+      <img src="assets/diagrams/escalation-chain.svg" alt="Escalation chain: grok-4 fails, escalates to claude-opus-4.6 which fails, escalates to gpt-5.2-codex which passes" style="width:100%;max-width:700px;margin:1rem 0 1.5rem" />
+
       <h2 id="quorum">Quorum Mode</h2>
       <p>Multi-model consensus for complex slices. Multiple models analyze the same problem independently, then a reviewer synthesizes the best approach.</p>
+
+      <img src="assets/diagrams/quorum-flow.svg" alt="Quorum flow: dispatch to 3 models, independent analysis, reviewer synthesizes, then execute" style="width:100%;max-width:750px;margin:1rem 0 1.5rem" />
       <div class="cmd-block">
         <div class="cmd-block-header"><span>Terminal</span><button class="cmd-copy-btn">Copy</button></div>
         <pre><code># Force quorum on all slices

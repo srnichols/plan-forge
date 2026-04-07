@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 120" fill="none">
+  <style>
+    text { font-family: 'Inter', sans-serif; }
+    .node { rx: 8; ry: 8; stroke-width: 1.5; }
+    .arrow { stroke: #475569; stroke-width: 1.5; fill: none; marker-end: url(#ah); }
+    .label { font-size: 11px; fill: #94a3b8; }
+    .title { font-size: 11px; fill: #e2e8f0; font-weight: 600; }
+    .fail { font-size: 9px; fill: #f87171; }
+    .pass { font-size: 9px; fill: #34d399; }
+  </style>
+  <defs>
+    <marker id="ah" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#475569" />
+    </marker>
+  </defs>
+  <!-- Model A -->
+  <rect x="20" y="30" width="160" height="55" class="node" fill="#0f172a" stroke="#f59e0b" />
+  <text x="100" y="52" class="title" text-anchor="middle">grok-4</text>
+  <text x="100" y="70" class="fail" text-anchor="middle">❌ slice failed</text>
+  <!-- Arrow A→B -->
+  <path d="M180,57 L240,57" class="arrow" />
+  <text x="210" y="48" class="fail" text-anchor="middle">escalate</text>
+  <!-- Model B -->
+  <rect x="250" y="30" width="160" height="55" class="node" fill="#0f172a" stroke="#60a5fa" />
+  <text x="330" y="52" class="title" text-anchor="middle">claude-opus-4.6</text>
+  <text x="330" y="70" class="fail" text-anchor="middle">❌ slice failed</text>
+  <!-- Arrow B→C -->
+  <path d="M410,57 L470,57" class="arrow" />
+  <text x="440" y="48" class="fail" text-anchor="middle">escalate</text>
+  <!-- Model C -->
+  <rect x="480" y="30" width="160" height="55" class="node" fill="#0f172a" stroke="#34d399" />
+  <text x="560" y="52" class="title" text-anchor="middle">gpt-5.2-codex</text>
+  <text x="560" y="70" class="pass" text-anchor="middle">✅ slice passed</text>
+</svg>

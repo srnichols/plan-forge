@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 750 280" fill="none">
+  <style>
+    text { font-family: 'Inter', sans-serif; }
+    .node { rx: 8; ry: 8; stroke-width: 1.5; }
+    .arrow { stroke: #475569; stroke-width: 1.5; fill: none; marker-end: url(#ah2); }
+    .label { font-size: 10px; fill: #94a3b8; }
+    .title { font-size: 11px; fill: #e2e8f0; font-weight: 600; }
+    .phase { font-size: 9px; fill: #f59e0b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+  </style>
+  <defs>
+    <marker id="ah2" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#475569" />
+    </marker>
+  </defs>
+  <!-- Phase 1: Dispatch -->
+  <text x="100" y="20" class="phase" text-anchor="middle">1. DISPATCH</text>
+  <!-- Slice box -->
+  <rect x="40" y="35" width="120" height="45" class="node" fill="#0f172a" stroke="#f59e0b" />
+  <text x="100" y="55" class="title" text-anchor="middle">Complex Slice</text>
+  <text x="100" y="70" class="label" text-anchor="middle">score ≥ 6</text>
+  <!-- Fan-out arrows -->
+  <path d="M160,50 L230,40" class="arrow" />
+  <path d="M160,57 L230,100" class="arrow" />
+  <path d="M160,65 L230,160" class="arrow" />
+  <!-- Phase 2: Analyze -->
+  <text x="320" y="20" class="phase" text-anchor="middle">2. INDEPENDENT ANALYSIS</text>
+  <!-- Model A -->
+  <rect x="240" y="25" width="150" height="40" class="node" fill="#0f172a" stroke="#60a5fa" />
+  <text x="315" y="50" class="title" text-anchor="middle">Claude proposal</text>
+  <!-- Model B -->
+  <rect x="240" y="80" width="150" height="40" class="node" fill="#0f172a" stroke="#34d399" />
+  <text x="315" y="105" class="title" text-anchor="middle">Grok proposal</text>
+  <!-- Model C -->
+  <rect x="240" y="140" width="150" height="40" class="node" fill="#0f172a" stroke="#a78bfa" />
+  <text x="315" y="165" class="title" text-anchor="middle">GPT proposal</text>
+  <!-- Fan-in arrows -->
+  <path d="M390,45 L460,100" class="arrow" />
+  <path d="M390,100 L460,110" class="arrow" />
+  <path d="M390,160 L460,120" class="arrow" />
+  <!-- Phase 3: Synthesize -->
+  <text x="545" y="75" class="phase" text-anchor="middle">3. SYNTHESIZE</text>
+  <rect x="470" y="85" width="150" height="50" class="node" fill="#0f172a" stroke="#fbbf24" />
+  <text x="545" y="107" class="title" text-anchor="middle">Reviewer merges</text>
+  <text x="545" y="122" class="label" text-anchor="middle">best approach</text>
+  <!-- Arrow to execute -->
+  <path d="M620,110 L670,110" class="arrow" />
+  <!-- Phase 4: Execute -->
+  <text x="710" y="90" class="phase" text-anchor="middle">4. EXECUTE</text>
+  <rect x="680" y="95" width="55" height="30" class="node" fill="#0f172a" stroke="#34d399" />
+  <text x="707" y="115" class="title" text-anchor="middle">✅</text>
+</svg>

@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 420" fill="none">
+  <style>
+    text { font-family: 'Inter', sans-serif; }
+    .node { rx: 8; ry: 8; stroke-width: 1.5; }
+    .arrow { stroke: #475569; stroke-width: 1.5; fill: none; marker-end: url(#ah3); }
+    .label { font-size: 10px; fill: #94a3b8; }
+    .title { font-size: 11px; fill: #e2e8f0; font-weight: 600; }
+    .q { font-size: 10px; fill: #fbbf24; font-weight: 600; }
+    .fix { font-size: 9px; fill: #34d399; }
+    .cmd { font-size: 9px; fill: #60a5fa; font-family: 'JetBrains Mono', monospace; }
+  </style>
+  <defs>
+    <marker id="ah3" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#475569" />
+    </marker>
+  </defs>
+  <!-- Start -->
+  <rect x="300" y="10" width="200" height="40" class="node" fill="#1e293b" stroke="#f59e0b" />
+  <text x="400" y="35" class="title" text-anchor="middle">Something's wrong</text>
+  <path d="M400,50 L400,70" class="arrow" />
+  <!-- Q1: Smith -->
+  <rect x="280" y="75" width="240" height="35" class="node" fill="#0f172a" stroke="#475569" />
+  <text x="400" y="97" class="q" text-anchor="middle">Run pforge smith → all green?</text>
+  <!-- Yes branch -->
+  <path d="M520,92 L580,92" class="arrow" />
+  <text x="548" y="87" class="label">yes</text>
+  <!-- No branch -->
+  <path d="M400,110 L400,140" class="arrow" />
+  <text x="412" y="130" class="label">no</text>
+  <!-- Smith fix -->
+  <rect x="580" y="75" width="200" height="35" class="node" fill="#0f172a" stroke="#475569" />
+  <text x="680" y="92" class="q" text-anchor="middle">Execution or guardrails?</text>
+  <path d="M680,110 L680,150" class="arrow" />
+  <text x="652" y="135" class="label">execution</text>
+  <path d="M780,92 L780,200" class="arrow" />
+  <text x="755" y="140" class="label">guardrails</text>
+  <!-- Smith failures -->
+  <rect x="280" y="145" width="240" height="45" class="node" fill="#0f172a" stroke="#f87171" />
+  <text x="400" y="165" class="title" text-anchor="middle">Smith has failures</text>
+  <text x="400" y="180" class="fix" text-anchor="middle">Follow FIX: suggestions in output</text>
+  <!-- Execution branch -->
+  <rect x="580" y="155" width="200" height="55" class="node" fill="#0f172a" stroke="#60a5fa" />
+  <text x="680" y="173" class="title" text-anchor="middle">Gate failure?</text>
+  <text x="680" y="190" class="cmd" text-anchor="middle">Fix code → --resume-from N</text>
+  <text x="680" y="203" class="cmd" text-anchor="middle">pforge diagnose &lt;file&gt;</text>
+  <!-- Guardrails branch -->
+  <rect x="680" y="205" width="110" height="55" class="node" fill="#0f172a" stroke="#a78bfa" />
+  <text x="735" y="225" class="title" text-anchor="middle">applyTo</text>
+  <text x="735" y="240" class="fix" text-anchor="middle">Check glob</text>
+  <text x="735" y="253" class="fix" text-anchor="middle">patterns</text>
+  <!-- Q2: Dashboard -->
+  <rect x="20" y="145" width="220" height="35" class="node" fill="#0f172a" stroke="#475569" />
+  <text x="130" y="167" class="q" text-anchor="middle">Dashboard won't load?</text>
+  <path d="M280,170 L240,162" class="arrow" />
+  <path d="M130,180 L130,220" class="arrow" />
+  <!-- Dashboard fixes -->
+  <rect x="20" y="225" width="220" height="55" class="node" fill="#0f172a" stroke="#34d399" />
+  <text x="130" y="245" class="title" text-anchor="middle">Check server</text>
+  <text x="130" y="260" class="cmd" text-anchor="middle">node pforge-mcp/server.mjs</text>
+  <text x="130" y="273" class="cmd" text-anchor="middle">cd pforge-mcp && npm install</text>
+  <!-- Q3: Costs -->
+  <rect x="20" y="310" width="220" height="35" class="node" fill="#0f172a" stroke="#475569" />
+  <text x="130" y="332" class="q" text-anchor="middle">Costs too high?</text>
+  <path d="M130,280 L130,310" class="arrow" />
+  <path d="M130,345 L130,365" class="arrow" />
+  <rect x="20" y="370" width="220" height="40" class="node" fill="#0f172a" stroke="#34d399" />
+  <text x="130" y="393" class="cmd" text-anchor="middle">Cheaper model + raise quorum threshold</text>
+  <!-- Q4: Setup -->
+  <rect x="300" y="225" width="240" height="35" class="node" fill="#0f172a" stroke="#475569" />
+  <text x="420" y="247" class="q" text-anchor="middle">Setup failed?</text>
+  <path d="M400,190 L420,225" class="arrow" />
+  <path d="M420,260 L420,290" class="arrow" />
+  <rect x="300" y="295" width="240" height="40" class="node" fill="#0f172a" stroke="#34d399" />
+  <text x="420" y="315" class="cmd" text-anchor="middle">setup.ps1 -Preset &lt;stack&gt; -Force</text>
+  <text x="420" y="328" class="fix" text-anchor="middle">Check preset name + permissions</text>
+</svg>

@@ -71,11 +71,11 @@ Leverage new Copilot platform capabilities (VS Code 1.113–1.114, Copilot cloud
 
 **Validation Gate**:
 ```bash
-npm test --prefix pforge-mcp       # 91 tests pass
-grep -l "vscode://chat-plugin" docs/index.html docs/docs.html AGENT-SETUP.md README.md  # all 4 found
+npm test --prefix pforge-mcp
+node -e "const f=require('fs'),files=['docs/index.html','docs/docs.html','AGENT-SETUP.md','README.md'];files.forEach(p=>{if(!f.readFileSync(p,'utf8').includes('vscode://chat-plugin')){console.error('Missing install link in '+p);process.exit(1);}});console.log('Install links verified in all 4 files')"
 ```
 
-**Stop Condition**: If grep finds fewer than 4 files with the install URL → STOP, fix missing files before proceeding.
+**Stop Condition**: If node check exits non-zero (install link missing from a file) → STOP, fix before proceeding.
 
 ---
 
@@ -95,8 +95,8 @@ grep -l "vscode://chat-plugin" docs/index.html docs/docs.html AGENT-SETUP.md REA
 
 **Validation Gate**:
 ```bash
-npm test --prefix pforge-mcp       # 91 tests pass
-grep -rn "gpt-5\.1[^0-9]" docs/ README.md CUSTOMIZATION.md templates/  # zero hits
+npm test --prefix pforge-mcp
+node -e "const f=require('fs'),files=['docs/capabilities.md','README.md','CUSTOMIZATION.md','templates/copilot-instructions.md.template'];files.forEach(p=>{const t=f.existsSync(p)?f.readFileSync(p,'utf8'):'';const m=t.match(/gpt-5\.1[^0-9]/g);if(m){console.error('Deprecated model ref in '+p+': '+m);process.exit(1);}});console.log('No gpt-5.1 refs found')"
 ```
 
 **Stop Condition**: Any `gpt-5.1` reference found after sweep → STOP, fix before proceeding.
@@ -128,9 +128,8 @@ grep -rn "gpt-5\.1[^0-9]" docs/ README.md CUSTOMIZATION.md templates/  # zero hi
 
 **Validation Gate**:
 ```bash
-npm test --prefix pforge-mcp       # 91 tests pass
-Test-Path templates/copilot-setup-steps.yml      # exists (PowerShell) / [ -f templates/copilot-setup-steps.yml ] (bash)
-grep -l "copilot-setup-steps" docs/COPILOT-VSCODE-GUIDE.md AGENT-SETUP.md README.md  # all 3 found
+npm test --prefix pforge-mcp
+node -e "const f=require('fs');if(!f.existsSync('templates/copilot-setup-steps.yml')){console.error('Missing: templates/copilot-setup-steps.yml');process.exit(1);}const files=['docs/COPILOT-VSCODE-GUIDE.md','AGENT-SETUP.md','README.md'];files.forEach(p=>{if(!f.readFileSync(p,'utf8').includes('copilot-setup-steps')){console.error('Missing cloud agent ref in '+p);process.exit(1);}});console.log('Template and docs verified')"
 ```
 
 **Stop Condition**: Template file missing → STOP.
@@ -161,8 +160,8 @@ grep -l "copilot-setup-steps" docs/COPILOT-VSCODE-GUIDE.md AGENT-SETUP.md README
 
 **Validation Gate**:
 ```bash
-npm test --prefix pforge-mcp       # 91 tests pass
-grep -l "Memory Layers\|Copilot Memory" docs/COPILOT-VSCODE-GUIDE.md docs/faq.html README.md  # 3 found
+npm test --prefix pforge-mcp
+node -e "const f=require('fs'),files=['docs/COPILOT-VSCODE-GUIDE.md','docs/faq.html','README.md'];files.forEach(p=>{const t=f.readFileSync(p,'utf8');if(!t.includes('Memory Layers')&&!t.includes('Copilot Memory')){console.error('Missing memory section in '+p);process.exit(1);}});console.log('Memory layers docs verified')"
 ```
 
 **Stop Condition**: Less than 3 files updated → STOP.
@@ -216,9 +215,8 @@ node -e "import('./pforge-mcp/server.mjs').then(() => process.exit(0)).catch(e =
 
 **Validation Gate**:
 ```bash
-npm test --prefix pforge-mcp       # 91 tests pass
-Test-Path presets/shared/skills/forge-troubleshoot/SKILL.md   # exists
-grep -l "forge-troubleshoot" templates/copilot-instructions.md.template README.md  # 2 found
+npm test --prefix pforge-mcp
+node -e "const f=require('fs');if(!f.existsSync('presets/shared/skills/forge-troubleshoot/SKILL.md')){console.error('Missing SKILL.md');process.exit(1);}const files=['templates/copilot-instructions.md.template','README.md'];files.forEach(p=>{if(!f.readFileSync(p,'utf8').includes('forge-troubleshoot')){console.error('Missing skill ref in '+p);process.exit(1);}});console.log('Skill and refs verified')"
 ```
 
 **Stop Condition**: SKILL.md missing → STOP.

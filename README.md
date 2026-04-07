@@ -278,6 +278,17 @@ Before you begin, make sure you have:
 >
 > **Using Copilot cloud agent?** Copy [templates/copilot-setup-steps.yml](templates/copilot-setup-steps.yml) to `.github/copilot-setup-steps.yml` in your project to pre-install guardrails, MCP tools, and validation gates before the agent starts. See [docs/COPILOT-VSCODE-GUIDE.md#using-plan-forge-with-copilot-cloud-agent](docs/COPILOT-VSCODE-GUIDE.md#using-plan-forge-with-copilot-cloud-agent) for the full guide.
 
+### 0. Install the VS Code Plugin (Recommended)
+
+The fastest way to get started is the one-click plugin install (requires VS Code 1.113+):
+
+- [**Install in VS Code**](vscode://chat-plugin/install?source=srnichols/plan-forge)
+- [**Install in VS Code Insiders**](vscode-insiders://chat-plugin/install?source=srnichols/plan-forge)
+
+This adds Plan Forge MCP tools directly to Copilot Chat. Then proceed to step 1.
+
+> **VS Code < 1.113?** Use the manual setup steps below.
+
 ### 1. Use This Template
 
 Click **"Use this template"** on GitHub, or clone and run the setup wizard:
@@ -887,6 +898,18 @@ This can happen if the context window is full (too many files loaded). Tips:
 - Explicitly reference the relevant instruction file in your prompt: `#file:.github/instructions/security.instructions.md`
 
 See [docs/COPILOT-VSCODE-GUIDE.md](docs/COPILOT-VSCODE-GUIDE.md) for more troubleshooting tips.
+
+### "How does Plan Forge relate to Copilot Memory?"
+
+Plan Forge works alongside — not instead of — Copilot's built-in memory system. There are three distinct memory layers, and each serves a different purpose:
+
+| Layer | What It Is | Best For |
+|-------|-----------|---------|
+| **Copilot Memory** (`/memories/`) | Copilot's native note storage (user / session / repo scopes) | Free-form notes, personal patterns, ad-hoc insights |
+| **Plan Forge Session Bridge** (`/memories/repo/current-phase.md`) | Structured handoff files managed by the pipeline prompts | Carrying Session 1 → 2 → 3 state through the hardening pipeline |
+| **OpenBrain** (MCP `search_thoughts` / `capture_thought`) | Semantic vector memory that injects prior decisions automatically | Long-term pattern recall — auto-injected before each slice without manual prompting |
+
+All three are complementary. A typical phase uses all three: Copilot Memory for quick notes mid-session, the session bridge files for structured phase handoffs, and OpenBrain for surfacing relevant past decisions automatically. See [docs/COPILOT-VSCODE-GUIDE.md#memory-layers](docs/COPILOT-VSCODE-GUIDE.md#memory-layers) for the full guide.
 
 ### "I work in a monorepo — will Copilot find the Plan Forge files?"
 

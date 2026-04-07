@@ -343,6 +343,20 @@ Degradation: <2 successful dry-runs → falls back to normal execution. Reviewer
 | Test robustness | Hardcoded dates | **Relative dates** | Better |
 | Edge cases | Standard | **+voided regen, +sequence** | Better |
 
+## Memory Layers
+
+Plan Forge uses three distinct memory systems. Each has a specific role in the 3-session pipeline:
+
+| Layer | What It Is | Scope | Managed By | Best For |
+|-------|-----------|-------|------------|---------|
+| **Copilot Memory** | Built-in `/memories/` note storage (user / session / repo scopes) | User / Session / Repo | Copilot Chat natively | Free-form notes, personal patterns, ad-hoc insights |
+| **Plan Forge Session Bridge** | Structured `/memories/repo/current-phase.md` + `lessons-learned.md` | Repository | You (via pipeline prompts) | Carrying Session 1 → 2 → 3 state through the hardening pipeline |
+| **OpenBrain** | Semantic vector memory via MCP `search_thoughts` / `capture_thought` | Global (workspace-agnostic) | OpenBrain MCP server | Auto-injecting relevant prior decisions before each slice begins |
+
+All three are complementary. A typical phase uses all three: Copilot Memory for quick notes, the session bridge files for structured handoffs, and OpenBrain for surfacing past decisions automatically without manual prompting.
+
+See [COPILOT-VSCODE-GUIDE.md#memory-layers](COPILOT-VSCODE-GUIDE.md#memory-layers) for the full usage guide.
+
 ## OpenBrain Memory (Optional)
 
 When configured (`.vscode/mcp.json` includes `openbrain`), the orchestrator injects prior decisions and conventions as context before each slice begins — bridging the 3-session model with long-term semantic memory.

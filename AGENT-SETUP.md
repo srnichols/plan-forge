@@ -29,6 +29,17 @@ IF target has ANY of those files already (but no .forge.json)
 
 ## Section 1: Greenfield Setup (New Project or No Existing Guardrails)
 
+### Step 0: Install the VS Code Plugin (Preferred)
+
+For VS Code 1.113+, use the one-click URL handler to add Plan Forge MCP tools directly to Copilot Chat:
+
+- **VS Code stable**: `vscode://chat-plugin/install?source=srnichols/plan-forge`
+- **VS Code Insiders**: `vscode-insiders://chat-plugin/install?source=srnichols/plan-forge`
+
+Open the link in a browser or paste it into the VS Code address bar. Then proceed to Step 1.
+
+> **VS Code < 1.113?** Skip this step and follow Steps 1–4 below to set up manually.
+
 ### Step 1: Auto-Detect Tech Stack
 
 Scan the target project root for these marker files to determine the correct preset:

@@ -684,6 +684,27 @@
               No. Plan Forge operates at the <em>development</em> layer, before code reaches your CI/CD pipeline. Its validation gates (build/test) run locally during slice execution. Your existing CI/CD pipeline handles deployment, environments, and production gates. Plan Forge catches problems <em>before</em> they reach your pipeline.
             </div>
           </details>
+
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">What's the difference between Copilot Memory and Plan Forge?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              <p class="mb-3">They solve different problems and work best together. Plan Forge uses three memory layers — each with a distinct role:</p>
+              <div class="overflow-x-auto mb-3">
+                <table class="w-full text-xs border-collapse">
+                  <thead><tr class="border-b border-slate-700"><th class="py-2 pr-4 text-left text-slate-300">Layer</th><th class="py-2 pr-4 text-left text-slate-300">What It Is</th><th class="py-2 text-left text-slate-300">Best For</th></tr></thead>
+                  <tbody>
+                    <tr class="border-b border-slate-800"><td class="py-2 pr-4 font-medium text-white">Copilot Memory</td><td class="py-2 pr-4"><code class="text-forge-400">/memories/</code> — Copilot's built-in note storage (user / session / repo scopes)</td><td class="py-2">Free-form notes, personal patterns, ad-hoc insights</td></tr>
+                    <tr class="border-b border-slate-800"><td class="py-2 pr-4 font-medium text-white">Plan Forge Session Bridge</td><td class="py-2 pr-4">Structured <code class="text-forge-400">/memories/repo/current-phase.md</code> managed by pipeline prompts</td><td class="py-2">Carrying Session 1 → 2 → 3 state through the hardening pipeline</td></tr>
+                    <tr><td class="py-2 pr-4 font-medium text-white">OpenBrain</td><td class="py-2 pr-4">Semantic vector memory via MCP <code class="text-forge-400">search_thoughts</code> / <code class="text-forge-400">capture_thought</code></td><td class="py-2">Auto-injecting relevant prior decisions before each slice — no manual prompting needed</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <p>All three are complementary. A typical phase uses all three: Copilot Memory for quick mid-session notes, the session bridge files for structured phase handoffs, and OpenBrain for surfacing past decisions automatically.</p>
+            </div>
+          </details>
         </div>
       </div>
 

@@ -249,6 +249,23 @@ Load the Scope Contract and Stop Conditions before starting.
 
 Copilot's memory system lets you persist context between sessions. This is valuable for the 3-session pipeline.
 
+### Memory Layers
+
+Plan Forge works with three distinct memory systems. Understanding the difference helps you choose the right tool for each need:
+
+| Layer | What It Is | Scope | Managed By | Best For |
+|-------|-----------|-------|------------|---------|
+| **Copilot Memory** | Built-in `/memories/` note storage | User / Session / Repo | Copilot Chat natively | Personal patterns, general insights, ad-hoc notes |
+| **Plan Forge Session Bridge** | Structured `/memories/repo/current-phase.md` + `lessons-learned.md` | Repository | You (via pipeline prompts) | Carrying Session 1 → 2 → 3 state through the hardening pipeline |
+| **OpenBrain** | Semantic vector memory via MCP `search_thoughts` / `capture_thought` | Global (workspace-agnostic) | OpenBrain MCP server | Auto-injecting relevant prior decisions before each slice begins |
+
+**When to use each:**
+- Use **Copilot Memory** for free-form notes that don't fit the pipeline structure.
+- Use the **Plan Forge Session Bridge** files to hand off structured phase state between sessions — the pipeline prompts tell you exactly what to write.
+- Use **OpenBrain** when you want the agent to automatically surface relevant past decisions without any manual prompt — it hooks into `forge_run_plan` automatically.
+
+All three layers are complementary. A typical phase uses all three: Copilot Memory for quick notes, the session bridge files for structured handoffs, and OpenBrain for long-term pattern recall.
+
 ### Memory Scopes
 
 | Scope | Path | Persists | Use For |

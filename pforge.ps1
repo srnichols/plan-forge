@@ -74,6 +74,7 @@ function Show-Help {
     Write-Host "  run-plan <plan>   Execute a hardened plan — spawn CLI workers, validate at every boundary, track tokens"
     Write-Host "  version-bump <v>  Update version across all files (VERSION, package.json, docs, README)"
     Write-Host "  smith             Inspect your forge — environment, VS Code config, setup health, and common problems"
+    Write-Host "  org-rules export  Export org custom instructions from .github/instructions/ for GitHub org settings"
     Write-Host "  help              Show this help message"
     Write-Host ""
     Write-Host "OPTIONS:" -ForegroundColor Yellow
@@ -96,6 +97,8 @@ function Show-Help {
     Write-Host "  .\pforge.ps1 update ../plan-forge"
     Write-Host "  .\pforge.ps1 update --dry-run"
     Write-Host "  .\pforge.ps1 update --check"
+    Write-Host "  .\pforge.ps1 org-rules export"
+    Write-Host "  .\pforge.ps1 org-rules export --format markdown --output org-rules.md"
     Write-Host ""
 }
 

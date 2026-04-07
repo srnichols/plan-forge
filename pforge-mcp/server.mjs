@@ -360,10 +360,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       activeAbortController = new AbortController();
       // If hub is running, use it as event handler for live broadcasting
       const eventHandler = activeHub ? { handle: (event) => activeHub.broadcast(event) } : null;
-      // Parse quorum parameter
-      let quorum = false;
+      // Parse quorum parameter — default: "auto" (threshold-based)
+      let quorum = "auto";
       if (args.quorum === "true" || args.quorum === true) quorum = true;
-      else if (args.quorum === "auto") quorum = "auto";
+      else if (args.quorum === "false" || args.quorum === false) quorum = false;
+      else if (args.quorum === "auto" || args.quorum === undefined) quorum = "auto";
 
       const result = await runPlan(planPath, {
         cwd,

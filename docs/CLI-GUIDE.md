@@ -303,6 +303,17 @@ DRIFT DETECTED — 1 forbidden file(s) touched.
 
 ---
 
+> **`analyze` vs `diagnose` — which do I use?**
+>
+> | | `pforge analyze` | `pforge diagnose` |
+> |---|---|---|
+> | **Purpose** | Plan quality scoring | Bug investigation |
+> | **Input** | Plan file or code file | Code file with a suspected bug |
+> | **Question it answers** | "Is this plan well-structured and complete?" | "What's wrong with this code and how do I fix it?" |
+> | **Output** | Consistency score (0–100) across 4 dimensions | Root cause analysis with fix recommendations |
+> | **When to use** | After hardening a plan, before execution | When a slice fails or code behaves unexpectedly |
+> | **Multi-model** | `--quorum` flag (consensus scoring) | Always multi-model (independent investigation) |
+
 ### `pforge analyze <plan-file>`
 
 Cross-artifact consistency analysis — validates that requirements are traced to slices, code changes are within scope, tests cover MUST criteria, and validation gates are defined.

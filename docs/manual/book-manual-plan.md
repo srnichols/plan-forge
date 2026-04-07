@@ -2,7 +2,9 @@
 
 > **The Forge Guide**: From apprentice to master smith  
 > **Format**: Static HTML book (`docs/manual/`), Tailwind CDN, GitHub Pages  
-> **Status**: Planning — editorial outline complete, ready to scaffold
+> **Status**: Planning — editorial outline complete, ready to scaffold  
+> **Project version**: 2.17.0 (April 2026)  
+> **Manual version**: Track with project version (resolved — see Open Decisions)
 
 ---
 
@@ -34,13 +36,14 @@ This isn't a reference dump. It's a **learning journey** — a reader picks it u
 6. **What this is NOT** — not a code generator, not a CI system, not a project manager
 7. **How to read this manual** — act structure, where to start based on role
 
-**Source material**: README.md (problem/solution sections), docs/problem.html  
+**Source material**: README.md (problem/solution sections), docs/problem.html, docs/demos/ (persona narratives)  
 **Unique content to write**: The opening narrative, "what this is NOT" section  
+**Repo audit note**: README.md currently says "6 supported AI tools" — should be 8 (add Windsurf, Generic). Align chapter with corrected count.  
 
 **Page art**:
 | Asset | Description | Size | Notes |
 |-------|------------|------|-------|
-| Chapter hero | A forge workshop silhouette — anvil, glowing metal, tools on wall. Dark, moody, amber highlights. | 1200×400 | Grok: "dark fantasy forge workshop panoramic, amber firelight, silhouette of anvil and tools, no text, dark background" |
+| Chapter hero | A forge workshop silhouette — anvil, glowing metal, tools on wall. Dark, moody, amber highlights. | 1200×400 | Grok: "dark fantasy forge workshop panoramic, amber firelight, silhouette of anvil and tools, no text, dark background" — ⚠️ **See Grok Image Generation Warnings below** |
 | Before/after diagram | Split panel: left = chaotic AI output (tangled wires), right = structured output (organized forge) | 800×400 | Grok: "split comparison, left side chaotic colorful wires tangled mess, right side organized glowing amber circuits in clean grid, dark background" |
 
 **Screenshots**: None (conceptual chapter)  
@@ -61,8 +64,9 @@ This isn't a reference dump. It's a **learning journey** — a reader picks it u
 5. **The `.forge.json` config** — what it stores, how it drives behavior
 6. **Plans are Markdown** — a plan is just a `.md` file with structure. Show a minimal example.
 7. **Slices, gates, and scope** — the three building blocks of every plan
+8. **Nested subagents** — v2.16+ feature: agents spawning sub-agents for complex tasks
 
-**Source material**: AI-Plan-Hardening-Runbook.md (pipeline), COPILOT-VSCODE-GUIDE.md (sessions, applyTo), capabilities.md (file structure)  
+**Source material**: AI-Plan-Hardening-Runbook.md (pipeline), COPILOT-VSCODE-GUIDE.md (sessions, applyTo, nested subagents), capabilities.md (file structure)  
 **Unique content to write**: Simplified pipeline walkthrough without the full runbook detail  
 
 **Page art**:
@@ -89,20 +93,22 @@ This isn't a reference dump. It's a **learning journey** — a reader picks it u
 1. **Prerequisites** — VS Code, Copilot subscription, Node.js (for MCP), git. Version requirements table.
 2. **Option A: One-click install** — `vscode://chat-plugin/install` link (VS Code 1.113+)
 3. **Option B: Setup wizard** — `setup.ps1 -Preset dotnet` / `setup.sh --preset typescript` with full output
-4. **Choosing your preset** — 9-card grid with stack logos, what each installs (instruction count, agent count)
-5. **What just happened?** — tour of the files created, with a file tree
-6. **Verify with `pforge smith`** — run smith, read the output, understand each section
-7. **Multi-agent setup** — adding Claude, Cursor, Codex, Gemini, Windsurf adapters
-8. **Updating** — `pforge update` when new versions are available
+4. **Choosing your preset** — 9-card grid with stack logos, what each installs (~18 instructions, ~19 agents, ~12 skills per preset)
+5. **Multi-preset setup** — `setup.ps1 -Preset dotnet,typescript` for polyglot projects
+6. **What just happened?** — tour of the files created, with a file tree
+7. **Verify with `pforge smith`** — run smith, read the output, understand each section
+8. **Multi-agent setup** — adding Claude, Cursor, Codex, Gemini, Windsurf, Generic adapters (`-Agent all`)
+9. **Updating** — `pforge update` when new versions are available
 
-**Source material**: AGENT-SETUP.md, README.md (Quick Start), QUICKSTART-WALKTHROUGH.md (setup section)  
+**Source material**: AGENT-SETUP.md (decision tree: auto-detect, greenfield, brownfield, update), README.md (Quick Start), QUICKSTART-WALKTHROUGH.md (setup section), Spec Kit interop notes in AGENT-SETUP.md  
 **Unique content to write**: Simplified single-path instructions (the existing docs cover every edge case — the manual covers the happy path)  
+**Repo audit note**: AGENT-SETUP.md has excellent tree-based decision logic (auto-detect → greenfield/brownfield/update). Reference but simplify for manual.  
 
 **Page art**:
 | Asset | Description | Size | Notes |
 |-------|------------|------|-------|
 | Preset grid | 9 tech stack cards with icons (C#, TS, Python, Java, Go, Swift, Rust, PHP, Azure IaC) | 1000×400 | Reuse docs/assets/tech-stacks-grid.webp or regenerate with cleaner layout |
-| Agent adapter icons | 7 small logos: Copilot, Claude, Cursor, Codex, Gemini, Windsurf, Generic | 700×60 | Icon strip, SVG preferred |
+| Agent adapter icons | 7 small logos: Copilot, Claude, Cursor, Codex, Gemini, Windsurf, Generic | 700×60 | Icon strip, SVG preferred. Cloud Agent uses Copilot flag — not a separate adapter. |
 
 **Screenshots**:
 | Screenshot | Description | Size |
@@ -139,8 +145,9 @@ This isn't a reference dump. It's a **learning journey** — a reader picks it u
 8. **Step 5: Review** — how the reviewer-gate agent audits independently
 9. **Step 6: Ship** — `pforge commit`, update roadmap, done
 
-**Source material**: QUICKSTART-WALKTHROUGH.md (primary), greenfield-todo-api.md walkthrough  
+**Source material**: QUICKSTART-WALKTHROUGH.md (primary), greenfield-todo-api.md walkthrough, brownfield-legacy-app.md (alternate "real-world" flow)  
 **Unique content to write**: Annotated plan walkthrough (section 5 — no existing doc explains each plan section for a beginner)  
+**Sidebar**: Consider a "Brownfield variant" callout box that links to Chapter 14 or a later deep-dive, using the brownfield-legacy-app.md walkthrough content.  
 
 **Page art**:
 | Asset | Description | Size | Notes |
@@ -202,7 +209,7 @@ This isn't a reference dump. It's a **learning journey** — a reader picks it u
 **Tone**: Visual tour. Lead with screenshots, explain in captions.
 
 **Sections**:
-1. **Starting the dashboard** — `node pforge-mcp/server.mjs` → `localhost:3100/dashboard`
+1. **Starting the dashboard** — `node pforge-mcp/server.mjs` → `localhost:3100/dashboard` (HTTP port 3100, WebSocket port 3101)
 2. **Progress tab** — real-time slice cards, WebSocket updates, pending → executing → pass/fail
 3. **Runs tab** — run history table, status, cost, duration, filtering
 4. **Cost tab** — total spend, model breakdown doughnut chart, monthly trend bar chart
@@ -212,13 +219,15 @@ This isn't a reference dump. It's a **learning journey** — a reader picks it u
 8. **Config tab** — visual `.forge.json` editor, model routing, agent toggles
 9. **Traces tab** — OTLP trace waterfall, span detail, severity filters
 
+**Repo audit note**: Dashboard has 8 tabs (Progress, Runs, Cost, Actions, Replay, Extensions, Config, Traces). The hero art description below says "9 monitor screens" — correct to 8.
+
 **Source material**: docs/dashboard.html, pforge-mcp/dashboard/app.js (tab names and logic)  
 **Unique content to write**: Captions and explanations connecting each tab to the workflow  
 
 **Page art**:
 | Asset | Description | Size | Notes |
 |-------|------------|------|-------|
-| Dashboard overview | Stylized illustration of a forge command center with 9 monitor screens | 1200×400 | Grok: "sci-fi forge command center, 9 holographic monitors in a semicircle, dark room, amber and purple glow, no text" |
+| Dashboard overview | Stylized illustration of a forge command center with 8 monitor screens | 1200×400 | Grok: "sci-fi forge command center, 8 holographic monitors in a semicircle, dark room, amber and purple glow, no text" — ⚠️ **See Grok Image Generation Warnings below** |
 
 **Screenshots** (all from `capture-screenshots.mjs`):
 | Screenshot | Description | Size |
@@ -262,7 +271,8 @@ This isn't a reference dump. It's a **learning journey** — a reader picks it u
 **Equivalent manual steps**: [what to do without the CLI]
 ```
 
-**Commands to document** (16+): init, check, smith, status, new-phase, branch, commit, phase-status, sweep, diff, analyze, diagnose, run-plan, ext (search/add/info/list/remove/publish), update, org-rules
+**Commands to document** (16): init, check, smith, status, new-phase, branch, commit, phase-status, sweep, diff, analyze, diagnose, run-plan, ext (search/add/info/list/remove/publish), update, org-rules  
+**Repo audit note**: CLI-GUIDE.md uses mixed formatting currently. The manual should impose the consistent `### pforge <command>` format shown above. Also: the distinction between `pforge analyze` (consistency scoring) and `pforge diagnose` (multi-model bug investigation) is unclear in existing docs — the manual should add a comparison box.
 
 **Source material**: CLI-GUIDE.md (primary — restructure into consistent format)  
 **Unique content to write**: Consistent formatting (CLI-GUIDE uses mixed formatting currently)  
@@ -298,6 +308,7 @@ This isn't a reference dump. It's a **learning journey** — a reader picks it u
 
 **Source material**: CUSTOMIZATION.md (primary)  
 **Unique content to write**: Configuration hierarchy diagram (new with v2.17 preferences)  
+**Repo audit note**: CUSTOMIZATION.md has an "Adding a New Tech Preset" section (line 399). The manual can reference it safely.  
 
 **Page art**:
 | Asset | Description | Size | Notes |
@@ -506,10 +517,11 @@ This isn't a reference dump. It's a **learning journey** — a reader picks it u
 6. **"Costs are too high"** — model routing, quorum threshold tuning, context budget reduction
 7. **"Files are missing after update"** — `pforge update` behavior, never-update list, force flag
 8. **Common error messages** — table of error strings → causes → fixes
+8. **Grok image generation** — MIME mismatch crashes sessions (see Grok Image Generation Warnings appendix)
 9. **Getting help** — GitHub Issues, community, CONTRIBUTING.md
 
 **Source material**: faq.html (FAQ answers), COPILOT-VSCODE-GUIDE.md (troubleshooting section)  
-**Unique content to write**: Decision tree diagrams, common error message table  
+**Unique content to write**: Decision tree diagrams, common error message table, Grok image workarounds
 
 **Page art**:
 | Asset | Description | Size | Notes |
@@ -553,6 +565,13 @@ This isn't a reference dump. It's a **learning journey** — a reader picks it u
 **Purpose**: Per-preset differences at a glance.  
 **Format**: One page per stack (9 stacks). Build/test commands, unique instruction files, detection rules.
 
+### Appendix D: Grok Image Generation Warnings
+
+**Purpose**: Document the xAI Aurora MIME mismatch issue, recovery steps, and safe workflows.  
+**Source**: The "Grok Image Generation Warnings" section in this planning document (see above).  
+**Format**: Problem → Impact → Mitigations → Workarounds → Scripts.  
+**Why a full appendix**: This issue is severe enough (unrecoverable session crashes) to warrant permanent documentation rather than a troubleshooting footnote.
+
 ---
 
 ## File Structure (final)
@@ -577,6 +596,7 @@ docs/manual/
 ├── glossary.html              ← Appendix A
 ├── quick-reference.html       ← Appendix B
 ├── stack-notes.html           ← Appendix C
+├── grok-image-warnings.html   ← Appendix D (new — Grok MIME mismatch docs)
 ├── assets/
 │   ├── manual.css             ← Manual styles (extends shared.css)
 │   ├── manual.js              ← Sidebar, search, prev/next, print
@@ -593,11 +613,13 @@ docs/manual/
 
 | Category | Count | Source |
 |----------|-------|--------|
-| Chapter hero illustrations | 6 | Grok image generation (forge/workshop/smith themed) |
-| Conceptual illustrations | 5 | Grok (split panels, ecosystem diagrams, command centers) |
+| Chapter hero illustrations | 6 | Grok image generation — **use `.jpg` extension, standalone script** (see Grok Warnings) |
+| Conceptual illustrations | 5 | Grok (split panels, ecosystem diagrams, command centers) — same `.jpg` guidance |
 | Mermaid diagrams → SVG | 12 | Pipeline flow, DAG, architecture, escalation, decision trees |
 | HTML/CSS diagrams | 3 | File trees, annotated code blocks, interactive examples |
-| Screenshots | 25+ | Live app captures (dashboard tabs, smith, terminal output, VS Code) |
+| Screenshots | 25+ | Live app captures from `plan-forge-testbed` repo (dashboard tabs, smith, terminal, VS Code) |
+| Animations (GIF/WebM) | 5 | Screen recordings (setup wizard, live progress, auto-load, assisted mode, full pipeline) |
+| **Total visual assets** | **~51** | |
 | Animations (GIF/WebM) | 5 | Screen recordings (setup wizard, live progress, auto-load, assisted mode, full pipeline) |
 | **Total visual assets** | **~51** | |
 
@@ -629,7 +651,7 @@ The **`E:\GitHub\plan-forge-testbed`** repo contains a **Tracker sample app** wi
 ### Round 3 — Act II (Build)
 - [ ] Chapter 4 (Your First Plan) + screenshots + pipeline recording
 - [ ] Chapter 5 (Writing Plans) + annotated examples
-- [ ] Chapter 6 (Dashboard) + all 9 tab screenshots
+- [ ] Chapter 6 (Dashboard) + all 8 tab screenshots
 
 ### Round 4 — Act III (Master)
 - [ ] Chapter 8 (Customization)
@@ -638,20 +660,131 @@ The **`E:\GitHub\plan-forge-testbed`** repo contains a **Tracker sample app** wi
 
 ### Round 5 — Complete + Polish
 - [ ] Chapters 11–14 (Extensions, Multi-Agent, Advanced, Troubleshooting)
-- [ ] Appendices A–C (Glossary, Quick Reference, Stack Notes)
+- [ ] Appendices A–D (Glossary, Quick Reference, Stack Notes, Grok Warnings)
 - [ ] Client-side search index
 - [ ] Cross-chapter links verified
 - [ ] Print stylesheet
 - [ ] Link from main site nav to manual
 - [ ] Add `docs/manual/` to sitemap + `llms.txt`
 
+### Round 0 — Pre-work (before any chapter writing)
+- [ ] Fix `plugin.json` version (2.13.1 → 2.17.0)
+- [ ] Update README.md AI tools count (6 → 8, add Windsurf + Generic)
+- [x] ~~Add "Adding a New Tech Preset" section to CUSTOMIZATION.md~~ — already exists at line 399 (audit false alarm)
+- [ ] Add `pforge analyze` vs `pforge diagnose` comparison to CLI-GUIDE.md
+- [x] ~~Verify Grok image pipeline works end-to-end~~ — PASSED (2026-04-07). JPG direct works, PNG conversion via `sharp` works. See test results in Grok Warnings section.
+
 ---
 
-## Open Decisions
+## Open Decisions (Resolved)
 
-- [ ] Version tracking: should the manual version match Plan Forge version?
-- [ ] "Last verified" dates on chapters to flag stale content?
-- [ ] Auto-generate glossary from `capabilities.mjs` or maintain manually?
-- [ ] Auto-generate CLI Reference from `cli-schema.json` or write manually?
-- [ ] Include a "What's New" chapter mirroring CHANGELOG in narrative form?
-- [ ] Should the manual link back to the source `.md` files for "full detail"?
+- [x] **Version tracking**: YES — manual version tracks Plan Forge version. Added to header. When Plan Forge ships v2.18, the manual gets a "last verified: v2.18" stamp per chapter.
+- [x] **"Last verified" dates**: YES — add `<!-- verified: v2.17.0	-->` HTML comment at top of each chapter. Build script can surface stale chapters.
+- [x] **Auto-generate glossary**: HYBRID — auto-generate the term list from `capabilities.mjs` glossary object, then hand-edit descriptions for clarity. Script in `manual.js`.
+- [x] **Auto-generate CLI Reference**: HYBRID — auto-generate command skeletons from `cli-schema.json`, then hand-write examples and "Equivalent manual steps." Prevents doc drift.
+- [x] **"What's New" chapter**: NO — CHANGELOG.md already serves this purpose for devs. The manual is a learning tool, not a release log.
+- [x] **Link back to source `.md` files**: YES — each chapter gets a "📄 Full reference: [filename.md]" link at the bottom for readers who want exhaustive detail.
+
+---
+
+## Content Gaps Identified (Repo Audit)
+
+The following repo content is NOT covered by any current chapter. Each needs a home:
+
+| Content | Repo location | Recommended chapter |
+|---------|---------------|---------------------|
+| **OpenBrain memory integration** | UNIFIED-SYSTEM-ARCHITECTURE.md, plan-forge-memory extension | Ch 13 (Advanced) — add section |
+| **OpenClaw Bridge notifications** | pforge-mcp/bridge.mjs, EVENTS.md | Ch 10 (MCP Server) — add section |
+| **Brownfield remediation walkthrough** | docs/walkthroughs/brownfield-legacy-app.md | Ch 4 (sidebar callout) + Ch 14 (troubleshooting patterns) |
+| **CI validation / GitHub Action** | action.yml, scripts/validate-action.sh | Ch 13 (Advanced) — section 5 already covers CI |
+| **Spec Kit interoperability** | AGENT-SETUP.md, README.md | Ch 12 (Multi-Agent) — add section |
+| **Lifecycle hooks enforcement** | .github/hooks/ (SessionStart, PreToolUse, PostToolUse, Stop) | Ch 9 — section 7 already covers this |
+| **pforge-sdk (developer SDK)** | pforge-sdk/README.md, src/ | Ch 10 (MCP) — add "SDK for integrators" section |
+| **Demo scripts (5 personas)** | docs/demos/*.md | Ch 1 — can reference for "who this is for" testimonials |
+
+---
+
+## Grok Image Generation Warnings
+
+> **Status**: KNOWN ISSUE — xAI Grok Aurora MIME type mismatch causes unrecoverable session crashes
+
+### The Problem
+
+The xAI Grok image generation API (Aurora) returns **JPEG bytes** regardless of the requested format. When these bytes are passed through MCP tool results with a declared `media_type: "image/png"`, the Claude API rejects the request:
+
+```
+invalid_request_error: The image was specified using the image/png media type,
+but the image appears to be a image/jpeg image
+```
+
+### Why Sessions Lock Up
+
+1. The image tool generates an image → bytes land in the MCP tool result
+2. If raw base64 is included in the response, Claude adds it to conversation history
+3. Claude's API validates MIME types on **every subsequent request** (the entire message history is re-sent)
+4. Once a mismatched image enters the history, **every future message fails** with the same 400 error
+5. The session cannot be recovered — you must start a new conversation
+
+### Current Mitigations (in code)
+
+The `generateImage()` function in `orchestrator.mjs` already defends against this:
+
+- **Magic byte detection** (`detectImageFormat()`) — inspects first bytes to determine actual format (JPEG = `0xFF 0xD8 0xFF`, PNG = `0x89 0x50 0x4E 0x47`)
+- **Format conversion** (`convertImageFormat()`) — uses `sharp` to convert to the requested format when actual ≠ requested
+- **Text-only MCP response** — the tool handler returns `type: "text"` with a JSON payload (file path, metadata), never raw base64 image data
+- **Truncated base64 in logging** — only first 100 chars of base64 for diagnostics, never full bytes
+
+### Safe Workflow for Manual Chapter Art
+
+When generating chapter hero images or conceptual art:
+
+1. **Always specify `outputPath`** — image gets saved to disk, not returned inline
+2. **Prefer `.jpg` extension** — matches what Grok actually returns (no conversion needed)
+3. **If you need PNG**, ensure `sharp` is installed (`npm install sharp` in pforge-mcp/) — otherwise the extension gets corrected to `.jpg` automatically
+4. **Never generate images in a long-running Copilot session** — use the REST API endpoint (`POST /api/image/generate`) or a fresh `node` script instead
+5. **Use the MCP tool from a fresh session** — if image generation fails, the session is still recoverable since no bad bytes entered history
+6. **Batch image generation** — generate all chapter art in one dedicated session, separate from writing work
+
+### Standalone Image Generation Script (Recommended)
+
+For manual art production, bypass MCP entirely:
+
+```bash
+# Generate via REST API (server must be running)
+curl -X POST http://localhost:3100/api/image/generate \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "dark fantasy forge workshop panoramic...", "outputPath": "docs/manual/assets/chapter-heroes/ch1-hero.jpg"}'
+
+# Or use a one-shot Node script
+node -e "
+  import('./pforge-mcp/orchestrator.mjs').then(m =>
+    m.generateImage('dark fantasy forge workshop...', {
+      outputPath: 'docs/manual/assets/chapter-heroes/ch1-hero.jpg',
+      model: 'grok-imagine-image'
+    }).then(r => console.log(JSON.stringify(r, null, 2)))
+  )
+"
+```
+
+### Status of Chapter Hero Images
+
+| Asset | Status | File |
+|-------|--------|------|
+| Ch 1 hero (forge workshop) | ✅ Test generated | `assets/chapter-heroes/ch1-forge-workshop-test.png` |
+| All other heroes | ⏳ Not started | — |
+
+### Pipeline Test Results (2026-04-07)
+
+Standalone tests confirmed:
+
+| Test | Result | Details |
+|------|--------|---------|
+| **JPG direct** (`.jpg` output) | ✅ PASS | Grok returns JPEG, saved as `.jpg` — no conversion needed. 41 KB. |
+| **PNG conversion** (`.png` output) | ✅ PASS | Grok returns JPEG, `sharp` converts to PNG — 312 KB. |
+| **MIME detection** | ✅ PASS | `detectImageFormat()` correctly identified JPEG bytes (`originalFormat: image/jpeg`). |
+| **MCP tool response** | ✅ SAFE | Tool returns text-only JSON payload (file path + metadata), never raw base64. |
+| **Session recovery risk** | ⚠️ MITIGATED | The session crash only occurs if raw base64 with wrong MIME enters Claude's message history. Current code prevents this. |
+
+**Recommendation**: Use `.jpg` for all chapter heroes (fastest, no conversion overhead). Use PNG only when transparency is needed (logos, diagrams), and ensure `sharp` is installed.
+
+---

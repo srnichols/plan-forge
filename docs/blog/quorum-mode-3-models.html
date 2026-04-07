@@ -188,6 +188,27 @@
 
         <h2>How It Works Under the Hood</h2>
 
+        <!-- Quorum Dispatch Diagram -->
+        <div class="bg-slate-800/60 rounded-xl p-6 border border-slate-700/30 mb-6 font-mono text-xs leading-relaxed overflow-x-auto">
+          <div class="text-slate-500 mb-3">// Quorum workflow per slice</div>
+          <div class="text-white">executeSlice(slice)</div>
+          <div class="text-slate-500 ml-4">│</div>
+          <div class="ml-4"><span class="text-slate-500">├─</span> <span class="text-amber-400">scoreComplexity()</span> <span class="text-slate-500">→ 1-10 score (7 weighted signals)</span></div>
+          <div class="text-slate-500 ml-4">│</div>
+          <div class="ml-4"><span class="text-slate-500">├─</span> <span class="text-slate-500">score &lt; threshold →</span> <span class="text-green-400">normal execution</span></div>
+          <div class="ml-4"><span class="text-slate-500">└─</span> <span class="text-slate-500">score ≥ threshold →</span> <span class="text-amber-400">quorumDispatch()</span></div>
+          <div class="text-slate-500 ml-12">│</div>
+          <div class="ml-12"><span class="text-slate-500">├─</span> <span class="text-blue-400">Claude Opus 4.6</span> <span class="text-slate-600">→ dry-run plan</span> <span class="text-slate-500">─┐</span></div>
+          <div class="ml-12"><span class="text-slate-500">├─</span> <span class="text-green-400">GPT-5.3-Codex</span>  <span class="text-slate-600">→ dry-run plan</span> <span class="text-slate-500"> ─┼─ Promise.all()</span></div>
+          <div class="ml-12"><span class="text-slate-500">└─</span> <span class="text-purple-400">Claude Sonnet</span>  <span class="text-slate-600">→ dry-run plan</span> <span class="text-slate-500"> ─┘</span></div>
+          <div class="text-slate-500 ml-20">│</div>
+          <div class="ml-16"><span class="text-amber-400">quorumReview()</span> <span class="text-slate-500">← synthesize best approach per file</span></div>
+          <div class="text-slate-500 ml-20">│</div>
+          <div class="ml-16"><span class="text-white">spawnWorker(enhancedPrompt)</span> <span class="text-slate-500">← execute with consensus</span></div>
+          <div class="text-slate-500 ml-20">│</div>
+          <div class="ml-16"><span class="text-green-400">gate ✓</span></div>
+        </div>
+
         <p>The architecture is straightforward:</p>
 
         <ol>

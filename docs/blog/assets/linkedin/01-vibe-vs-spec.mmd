@@ -1,5 +1,6 @@
 graph TD
     subgraph VIBE["❌ Vibe Coding"]
+        direction LR
         V1["Prompt"] --> V2["Hope"]
         V2 --> V3["Fix"]
         V3 --> V4["Re-prompt"]
@@ -8,6 +9,7 @@ graph TD
     end
     
     subgraph SPEC["✅ Spec-Driven Development"]
+        direction LR
         S1["Specify"] --> S2["Harden Plan"]
         S2 --> S3["Execute Slices"]
         S3 --> S4["Gate: Build+Test ✓"]
@@ -15,5 +17,19 @@ graph TD
         S5 --> S6["Ship ✅"]
     end
     
-    style VIBE fill:#fef2f2,stroke:#ef4444
-    style SPEC fill:#f0fdf4,stroke:#22c55e
+    VIBE ~~~ SPEC
+    
+    style VIBE fill:#fef2f2,stroke:#ef4444,stroke-width:2px
+    style SPEC fill:#f0fdf4,stroke:#22c55e,stroke-width:2px
+    style V1 fill:#fecaca,stroke:#ef4444
+    style V2 fill:#fecaca,stroke:#ef4444
+    style V3 fill:#fecaca,stroke:#ef4444
+    style V4 fill:#fecaca,stroke:#ef4444
+    style V5 fill:#fecaca,stroke:#ef4444
+    style V6 fill:#fca5a5,stroke:#dc2626,stroke-width:2px
+    style S1 fill:#bbf7d0,stroke:#22c55e
+    style S2 fill:#bbf7d0,stroke:#22c55e
+    style S3 fill:#bbf7d0,stroke:#22c55e
+    style S4 fill:#bbf7d0,stroke:#22c55e
+    style S5 fill:#bbf7d0,stroke:#22c55e
+    style S6 fill:#86efac,stroke:#16a34a,stroke-width:2px

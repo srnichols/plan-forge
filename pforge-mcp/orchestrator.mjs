@@ -25,7 +25,7 @@ import { resolve, basename, dirname } from "node:path";
 import { EventEmitter } from "node:events";
 import { tmpdir } from "node:os";
 import { createTraceContext, createTelemetryHandler, writeManifest, appendRunIndex, pruneRunHistory, addLogSummary } from "./telemetry.mjs";
-import { isOpenBrainConfigured, buildMemorySearchBlock, buildMemoryCaptureBlock, buildRunSummaryThought, buildCostAnomalyThought } from "./memory.mjs";
+import { isOpenBrainConfigured, buildMemorySearchBlock, buildMemoryCaptureBlock, buildRunSummaryThought, buildCostAnomalyThought, loadProjectContext } from "./memory.mjs";
 
 // ─── Event Bus (C3: Dependency Injection) ─────────────────────────────
 

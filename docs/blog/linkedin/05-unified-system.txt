@@ -1,6 +1,7 @@
 HERO IMAGE: docs/blog/assets/unified-hero.jpg
 TITLE: From WhatsApp to Shipped PR: How I Automated My Entire Dev Workflow
-
+NETWORK TEASER (paste into "Tell your network what this article is about"):
+I described a feature on WhatsApp at dinner. By the time I got home, it was built, tested, independently reviewed, and a PR was waiting. Three open-source tools wired together: Plan Forge (guardrails), OpenBrain (memory), OpenClaw (orchestration). Here's how.
 ---
 
 I'm at dinner. My phone buzzes — a WhatsApp message from me to myself, earlier that day: "Build user profile API for my-api project. Include avatar upload, email verification, and role-based access."

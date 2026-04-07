@@ -1,6 +1,7 @@
 HERO IMAGE: docs/blog/assets/quorum-hero.jpg
 TITLE: Quorum Mode: What Happens When 3 AI Models Review Each Other's Code
-
+NETWORK TEASER (paste into "Tell your network what this article is about"):
+We built the same feature twice — once with one AI model, once with three models reviewing each other's plans before any code was written. Both passed all tests. But the quorum run produced 20% more tests, DRY helpers, and modern patterns — for $0.22 extra. Here are the full A/B results.
 ---
 
 What if three AI models reviewed each other's plans before any code was written?

@@ -1,6 +1,7 @@
 HERO IMAGE: docs/blog/assets/speckit-hero.jpg
 TITLE: Spec Kit + Plan Forge: Write the Spec, Enforce the Build
-
+NETWORK TEASER (paste into "Tell your network what this article is about"):
+I started with GitHub's Spec Kit and loved it — specification-based planning changed everything. As my ideas grew, Plan Forge was born. Two open-source tools solving different halves of the same problem. Here's how they work together and an honest comparison of when to use which.
 ---
 
 I'll be honest: Plan Forge exists because of Spec Kit.

@@ -1,6 +1,7 @@
 HERO IMAGE: docs/blog/assets/guardrails-hero.jpg
 TITLE: I Built Guardrails for AI Coding Agents — Here's What I Learned
-
+NETWORK TEASER (paste into "Tell your network what this article is about"):
+After building 18 guardrail files, 19 reviewer agents, and 9 tech stack presets for AI coding agents, here are the 7 hardest lessons — including why "don't do that" is more powerful than "do this" and why the builder must never review its own work.
 ---
 
 Plan Forge started as a personal frustration. I kept watching AI agents produce code that looked great in a demo and fell apart in production. Not because the models were bad — they're genuinely impressive — but because they had no structural constraints. No architectural standards. No scope discipline. No memory of what they decided yesterday.

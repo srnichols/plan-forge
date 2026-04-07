@@ -1,6 +1,7 @@
 HERO IMAGE: docs/blog/assets/seven-agents-hero.jpg
 TITLE: One Framework, Seven AI Agents: Why We Stopped Picking Favorites
-
+NETWORK TEASER (paste into "Tell your network what this article is about"):
+Your team uses Copilot, Claude, Cursor, and Gemini. Plan Forge generates native guardrail files for all 7 AI agents with one command — same quality gates, same 19 reviewer agents, same pipeline. Plus: unified memory means agents in different tools share the same decision history.
 ---
 
 Here's a conversation I've had at least a dozen times:

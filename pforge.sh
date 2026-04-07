@@ -2260,7 +2260,7 @@ cmd_doctor() {
 cmd_run_plan() {
     if [ $# -lt 1 ]; then
         echo "ERROR: Missing plan path" >&2
-        echo "Usage: pforge run-plan <plan-file> [--estimate] [--assisted] [--model <name>] [--resume-from <N>] [--dry-run] [--foreground]" >&2
+        echo "Usage: pforge run-plan <plan-file> [--estimate] [--assisted] [--model <name>] [--resume-from <N>] [--dry-run] [--foreground] [--no-quorum] [--quorum] [--quorum=auto] [--quorum-threshold <N>]" >&2
         exit 1
     fi
 
@@ -2280,6 +2280,8 @@ cmd_run_plan() {
     local foreground=false
     local model=""
     local resume_from=""
+    local quorum_arg=""
+    local quorum_threshold=""
 
     while [ $# -gt 0 ]; do
         case "$1" in
@@ -2287,6 +2289,9 @@ cmd_run_plan() {
             --assisted)     assisted=true ;;
             --dry-run)      dry_run=true ;;
             --foreground)   foreground=true ;;
+            --no-quorum)    quorum_arg="--no-quorum" ;;
+            --quorum=*)     quorum_arg="$1" ;;
+            --quorum)       quorum_arg="--quorum" ;;
             --model)
                 shift
                 if [ -z "$1" ] || [ "${1#-}" != "$1" ]; then
@@ -2299,6 +2304,12 @@ cmd_run_plan() {
                     echo "ERROR: --resume-from requires a value" >&2; exit 1
                 fi
                 resume_from="$1" ;;
+            --quorum-threshold)
+                shift
+                if [ -z "$1" ]; then
+                    echo "ERROR: --quorum-threshold requires a value" >&2; exit 1
+                fi
+                quorum_threshold="$1" ;;
         esac
         shift
     done
@@ -2318,6 +2329,8 @@ cmd_run_plan() {
     if [ "$dry_run" = true ]; then node_args+=("--dry-run"); fi
     if [ -n "$model" ]; then node_args+=("--model" "$model"); fi
     if [ -n "$resume_from" ]; then node_args+=("--resume-from" "$resume_from"); fi
+    if [ -n "$quorum_arg" ]; then node_args+=("$quorum_arg"); fi
+    if [ -n "$quorum_threshold" ]; then node_args+=("--quorum-threshold" "$quorum_threshold"); fi
 
     echo ""
     if [ "$estimate" = true ]; then

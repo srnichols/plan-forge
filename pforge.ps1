@@ -2704,7 +2704,7 @@ function Invoke-Smith {
 function Invoke-RunPlan {
     if ($Arguments.Count -lt 1) {
         Write-Host "ERROR: Missing plan path" -ForegroundColor Red
-        Write-Host "Usage: pforge run-plan <plan-file> [--estimate] [--assisted] [--model <name>] [--resume-from <N>] [--dry-run] [--foreground]" -ForegroundColor Yellow
+        Write-Host "Usage: pforge run-plan <plan-file> [--estimate] [--assisted] [--model <name>] [--resume-from <N>] [--dry-run] [--foreground] [--no-quorum] [--quorum] [--quorum=auto] [--quorum-threshold <N>]" -ForegroundColor Yellow
         exit 1
     }
 
@@ -2720,8 +2720,11 @@ function Invoke-RunPlan {
     $assisted    = $Arguments -contains '--assisted'
     $dryRun      = $Arguments -contains '--dry-run'
     $foreground  = $Arguments -contains '--foreground'
+    $noQuorum    = $Arguments -contains '--no-quorum'
     $model       = $null
     $resumeFrom  = $null
+    $quorumArg   = $null
+    $quorumThreshold = $null
 
     for ($i = 1; $i -lt $Arguments.Count; $i++) {
         if ($Arguments[$i] -eq '--model' -and ($i + 1) -lt $Arguments.Count) {
@@ -2729,6 +2732,12 @@ function Invoke-RunPlan {
         }
         if ($Arguments[$i] -eq '--resume-from' -and ($i + 1) -lt $Arguments.Count) {
             $resumeFrom = $Arguments[$i + 1]
+        }
+        if ($Arguments[$i] -like '--quorum*') {
+            $quorumArg = $Arguments[$i]
+        }
+        if ($Arguments[$i] -eq '--quorum-threshold' -and ($i + 1) -lt $Arguments.Count) {
+            $quorumThreshold = $Arguments[$i + 1]
         }
     }
 
@@ -2747,10 +2756,13 @@ function Invoke-RunPlan {
         '--run', $fullPlanPath,
         '--mode', $mode
     )
-    if ($estimate)   { $nodeArgs += '--estimate' }
-    if ($dryRun)     { $nodeArgs += '--dry-run' }
-    if ($model)      { $nodeArgs += '--model'; $nodeArgs += $model }
-    if ($resumeFrom) { $nodeArgs += '--resume-from'; $nodeArgs += $resumeFrom }
+    if ($estimate)        { $nodeArgs += '--estimate' }
+    if ($dryRun)          { $nodeArgs += '--dry-run' }
+    if ($model)           { $nodeArgs += '--model'; $nodeArgs += $model }
+    if ($resumeFrom)      { $nodeArgs += '--resume-from'; $nodeArgs += $resumeFrom }
+    if ($noQuorum)        { $nodeArgs += '--no-quorum' }
+    elseif ($quorumArg)   { $nodeArgs += $quorumArg }
+    if ($quorumThreshold) { $nodeArgs += '--quorum-threshold'; $nodeArgs += $quorumThreshold }
 
     # Delegate to orchestrator
     Write-Host ""

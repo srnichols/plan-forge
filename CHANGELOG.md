@@ -5,6 +5,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.13.0] — 2026-04-07
+
+### Added — Platform Complete (Phase 19)
+- **Agent-per-slice routing** — orchestrator reads `.forge/model-performance.json` and auto-selects the cheapest model with >80% success rate for each slice type; `--estimate` output now shows recommended model per slice with historical success rate; `slice-model-routed` event emitted on selection
+- **OpenBrain deep context** — `loadProjectContext()` in `memory.mjs` searches project history for decisions and patterns relevant to each slice title; context block injected into worker prompts before slice instructions; graceful no-op when OpenBrain is not configured
+- **Preset minimum-count validation** — `validate-setup.ps1` / `validate-setup.sh` now check per-preset minimum file counts (≥15 instructions, ≥6 agents, ≥9 prompts, ≥8 skills for full stacks; ≥5/1/3 for azure-iac); missing counts reported as warnings
+- **Spec Kit auto-detection** — `setup.ps1` / `setup.sh` detect `specs/`, `memory/constitution.md`, and `specs/*/spec.md` at startup and set `speckit: true` in `.forge.json`; prints "Spec Kit artifacts detected. Plan Forge will layer guardrails on top."
+- **Dual-publish extensions** — `pforge ext publish` now outputs both a Plan Forge catalog entry and a Spec Kit-compatible `extensions.json` entry; `extensions/PUBLISHING.md` updated with dual-publish instructions
+- **Auto-update notification in `pforge smith`** — fetches `VERSION` from GitHub (5 s timeout, 24 h cache in `.forge/version-check.json`); warns when a newer release is available with `pforge update` command; skips silently when offline
+- **Web UI plan browser** (`localhost:3100/ui`) — read-only single-page app served from `pforge-mcp/ui/`; lists plans via `/api/plans`, renders slice metadata cards, DAG dependency view, and scope contract; no execution controls (those remain on the dashboard)
+
+---
+
 ## [2.12.0] — 2026-04-06
 
 ### Added — Escalation & CI Trigger Events (Phase 18)

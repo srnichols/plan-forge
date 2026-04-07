@@ -7,7 +7,7 @@
 
 ## Current Release
 
-**v2.12.0** (2026-04-06) — Escalation & CI Trigger Events: `slice-escalated` and `ci-triggered` WebSocket event types added to EVENTS.md.
+**v2.13.0** (2026-04-07) — Platform Complete: agent-per-slice routing, OpenBrain deep context, preset validation counts, Spec Kit auto-detection, dual-publish extensions, auto-update notification, and Web UI plan browser.
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 
@@ -321,15 +321,23 @@ Shipped. Dispatches high-complexity slices to multiple AI models in parallel dry
 Shipped in v2.10.0. Telegram/Slack/Discord webhook notifications, approval gate state machine, 4 platform formatters, REST endpoints.
 - **OpenBrain context** — orchestrator loads full project history before spawning workers
 
-### v3.0 — Multi-Agent Orchestration
+### v3.0 — Multi-Agent Orchestration ✅
 
-Full autonomous development system.
+Full autonomous development system. Most features shipped across v2.12–v2.13.
 
-- **Agent-per-slice routing** — different AI models for different slice types based on learned performance data
-- **Auto-escalation** — if a slice fails 3x on Codex, re-route to Claude automatically
-- **CI/CD integration** — orchestrator triggers GitHub Actions, waits for green, proceeds
+- ✅ **Agent-per-slice routing** — different AI models for different slice types based on learned performance data (v2.13.0)
+- ✅ **Auto-escalation** — if a slice fails 3x on one model, re-routes to next in escalation chain (v2.12.0)
+- ✅ **CI/CD integration** — orchestrator triggers GitHub Actions, waits for green, proceeds (v2.12.0)
+- ✅ **Cost optimization** — historical data in `model-performance.json` drives model selection for best quality/cost ratio (v2.13.0)
+- Team mode — deferred to v3.1
+
+### v3.1 — Team Mode
+
+Coordinate multiple orchestrators across developers.
+
 - **Team mode** — multiple orchestrators coordinate across developers, avoiding merge conflicts
-- **Cost optimization** — historical data drives model selection for best quality/cost ratio
+- **Team activity feed** — real-time cross-developer plan progress (deferred from v2.2)
+- **Team dashboard** — multi-developer plan coordination UI (deferred from Enterprise backlog)
 
 ---
 
@@ -355,10 +363,14 @@ These are planned but not yet prioritized into a version:
 - `specify init` detection — auto-detect Spec Kit project and layer Plan Forge guardrails on top
 
 ### Enterprise
-- **Team dashboard** for multi-developer plan coordination
-- **Web UI** for plan visualization and status tracking
+- **Web UI** for plan visualization and status tracking → ✅ shipped as `/ui` in v2.13.0
 
 ### Shipped (Backlog Items)
+- ✅ **Agent-per-slice routing** — model-performance.json drives auto-selection; success rate shown in --estimate
+- ✅ **OpenBrain deep context** — project history injected into worker prompts before each slice
+- ✅ **Spec Kit auto-detect** — `setup.ps1`/`setup.sh` detect `specs/` + `constitution.md` and set `speckit: true`
+- ✅ **Dual-publish extensions** — `pforge ext publish` outputs Plan Forge + Spec Kit catalog entries
+- ✅ **Web UI** — read-only plan browser at `localhost:3100/ui` with DAG view
 - ✅ **Quorum Analysis** — `pforge analyze --quorum`, `pforge diagnose --quorum`, `/code-review --quorum`, API provider abstraction (xAI, OpenAI)
 - ✅ **Image Generation** — `forge_generate_image` MCP tool, WebP/AVIF conversion via sharp, magic byte detection
 - ✅ **Expanded Smith Diagnostics** — MCP deps, dashboard assets, lifecycle hooks, extensions catalog, VERSION sync

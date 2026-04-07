@@ -14,6 +14,94 @@
   <meta name="twitter:title" content="FAQ — Plan Forge" />
   <meta name="twitter:description" content="Frequently asked questions about Plan Forge — AI coding guardrails, the hardening pipeline, tech presets, memory integration, and more." />
   <link rel="canonical" href="https://planforge.software/faq.html" />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What is Plan Forge?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Plan Forge is a specification-driven framework that converts rough feature ideas into hardened execution contracts for AI coding agents. It adds guardrails, validation gates, and independent review to prevent scope creep, skipped tests, and architecture drift. It's a GitHub template — clone it, run the setup wizard, and you're ready."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How is this different from just using Copilot / Cursor / Claude directly?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Those tools are great at generating code. Plan Forge makes them great at generating the right code. Without guardrails, agents silently expand scope, pick their own architecture, skip validation, and forget context across sessions. Plan Forge adds a 7-step pipeline, auto-loading instruction files, and independent review — so the agent works within your standards."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Is Plan Forge free?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. MIT licensed — free for personal, commercial, and enterprise use. No sign-ups, no telemetry, no vendor lock-in."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Does it work with any AI tool or just Copilot?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Plan Forge supports 7 agent types: Copilot (default), Claude Code, Cursor, Codex CLI, Gemini CLI, Windsurf, and a Generic format for any AI tool. Use -Agent all to install everything at once. All formats include all guardrail files, pipeline prompts, and reviewer agents."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What tech stacks are supported?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Nine presets out of the box: .NET/C#, TypeScript/React, Python/FastAPI, Java/Spring Boot, Go, Swift, Rust, PHP/Laravel, and Azure IaC (Bicep/Terraform). There's also a custom preset for any other stack. Multi-preset combinations are supported."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Do I have to use all 7 steps for every feature?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No. The pipeline has complexity routing — Step 0 classifies work as Micro, Small, Medium, or Large. Quick bug fixes can skip hardening. Small features get a lightweight plan. Only medium and large features run the full pipeline."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is Quorum Mode?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Quorum Mode dispatches each slice to 3 AI models in parallel for independent dry-run analysis. A reviewer agent synthesizes the best elements into a unified execution plan. Think of it as a design review by three senior engineers before any code is written."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Do I need OpenBrain to use Plan Forge?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No. Plan Forge works fully without OpenBrain. Memory integration is an optional extension. You get the full pipeline, all guardrails, and all agents without it. OpenBrain just makes the experience compound over time."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can I add Plan Forge to an existing project?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. The setup wizard detects existing files and merges rather than overwrites. It only adds missing guardrail files — your project-specific content is preserved."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Does Plan Forge replace my CI/CD pipeline?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No. Plan Forge operates at the development layer, before code reaches your CI/CD pipeline. Its validation gates run locally during slice execution. Your existing CI/CD pipeline handles deployment, environments, and production gates."
+        }
+      }
+    ]
+  }
+  </script>
   <link rel="icon" type="image/svg+xml" href="assets/plan-forge-logo.svg" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script>

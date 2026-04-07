@@ -5,6 +5,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.15.0] — 2026-04-07
+
+### Added — Copilot Platform Integration (Phase 22)
+- **One-click plugin install** (A1) — `vscode://chat-plugin/install?source=srnichols/plan-forge` and `vscode-insiders://` buttons added to `docs/index.html`, `docs/docs.html`, `docs/capabilities.html`, `AGENT-SETUP.md`, `README.md`, and `docs/QUICKSTART-WALKTHROUGH.md`; fallback text for VS Code < 1.113
+- **Model deprecation sweep** (A2) — removed all `gpt-5.1` references from `pforge-mcp/server.mjs`, `README.md`, `CUSTOMIZATION.md`, `docs/capabilities.md`, `docs/capabilities.html`, `docs/faq.html`, and `templates/copilot-instructions.md.template`; confirmed `gpt-5.3-codex` (LTS), `gpt-5.4`, `gpt-5.4-mini`, and Claude Sonnet 4.6 are current defaults
+- **Cloud agent integration guide** (A3) — new `templates/copilot-setup-steps.yml` template for Copilot cloud agent setup; "Using Plan Forge with Copilot Cloud Agent" section added to `docs/COPILOT-VSCODE-GUIDE.md`; cloud agent references added to `README.md`, `AGENT-SETUP.md`, `docs/index.html`, `docs/capabilities.md`, `docs/capabilities.html`, `docs/faq.html`
+- **Copilot Memory coexistence docs** (A4) — Memory Layers three-way comparison table (Copilot Memory vs Plan Forge Run Memory vs OpenBrain) added to `docs/COPILOT-VSCODE-GUIDE.md`, `docs/capabilities.md`, `docs/capabilities.html`, `README.md`, and `docs/faq.html`
+- **`forge_org_rules` MCP tool + `pforge org-rules export` CLI** (B1) — consolidates `.github/instructions/*.instructions.md`, `copilot-instructions.md`, and `PROJECT-PRINCIPLES.md` into a single org-level instruction block; supports `--format github|markdown|json` and `--output <file>`; documents the two-layer model (Layer 1 org baseline vs Layer 2 repo-specific)
+- **`/forge-troubleshoot` skill** (B3) — new skill at `presets/shared/skills/forge-troubleshoot/SKILL.md`; auto-detects "instructions ignored" / "guardrail bypass" triggers; 5-step diagnosis: `pforge smith` → settings check → `/troubleshoot #session` suggestion → failure checklist → OpenBrain history search
+- **Quorum mode default** — `quorum=auto` is now the orchestrator and `forge_run_plan` default; threshold-based multi-model consensus kicks in automatically for complex slices (complexity ≥ 7) without requiring explicit `--quorum` flag
+
+---
+
 ## [2.14.0] — 2026-04-07
 
 ### Added — Quality Engineering (Phase 21)

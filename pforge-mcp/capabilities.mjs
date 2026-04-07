@@ -125,7 +125,7 @@ export const TOOL_METADATA = {
       addedIn: "2.5.0",
       description: "Multi-model consensus: dispatch to 3+ models for dry-run analysis, synthesize best approach, then execute",
       parameters: {
-        quorum: { type: "string", enum: ["false", "true", "auto"], description: "Quorum mode control" },
+        quorum: { type: "string", enum: ["false", "true", "auto"], default: "auto", description: "Quorum mode (default: 'auto' — threshold-based; 'true' forces all slices; 'false' disables)" },
         quorumThreshold: { type: "number", description: "Complexity score threshold for auto mode (1-10, default: 7)" },
       },
       config: ".forge.json → quorum { enabled, auto, threshold, models[], reviewerModel, dryRunTimeout }",

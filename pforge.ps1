@@ -74,6 +74,7 @@ function Show-Help {
     Write-Host "  run-plan <plan>   Execute a hardened plan — spawn CLI workers, validate at every boundary, track tokens"
     Write-Host "  version-bump <v>  Update version across all files (VERSION, package.json, docs, README)"
     Write-Host "  smith             Inspect your forge — environment, VS Code config, setup health, and common problems"
+    Write-Host "  org-rules export  Export org custom instructions from .github/instructions/ for GitHub org settings"
     Write-Host "  help              Show this help message"
     Write-Host ""
     Write-Host "OPTIONS:" -ForegroundColor Yellow
@@ -96,6 +97,8 @@ function Show-Help {
     Write-Host "  .\pforge.ps1 update ../plan-forge"
     Write-Host "  .\pforge.ps1 update --dry-run"
     Write-Host "  .\pforge.ps1 update --check"
+    Write-Host "  .\pforge.ps1 org-rules export"
+    Write-Host "  .\pforge.ps1 org-rules export --format markdown --output org-rules.md"
     Write-Host ""
 }
 
@@ -2704,7 +2707,7 @@ function Invoke-Smith {
 function Invoke-RunPlan {
     if ($Arguments.Count -lt 1) {
         Write-Host "ERROR: Missing plan path" -ForegroundColor Red
-        Write-Host "Usage: pforge run-plan <plan-file> [--estimate] [--assisted] [--model <name>] [--resume-from <N>] [--dry-run] [--foreground]" -ForegroundColor Yellow
+        Write-Host "Usage: pforge run-plan <plan-file> [--estimate] [--assisted] [--model <name>] [--resume-from <N>] [--dry-run] [--foreground] [--no-quorum] [--quorum] [--quorum=auto] [--quorum-threshold <N>]" -ForegroundColor Yellow
         exit 1
     }
 
@@ -2720,8 +2723,11 @@ function Invoke-RunPlan {
     $assisted    = $Arguments -contains '--assisted'
     $dryRun      = $Arguments -contains '--dry-run'
     $foreground  = $Arguments -contains '--foreground'
+    $noQuorum    = $Arguments -contains '--no-quorum'
     $model       = $null
     $resumeFrom  = $null
+    $quorumArg   = $null
+    $quorumThreshold = $null
 
     for ($i = 1; $i -lt $Arguments.Count; $i++) {
         if ($Arguments[$i] -eq '--model' -and ($i + 1) -lt $Arguments.Count) {
@@ -2729,6 +2735,12 @@ function Invoke-RunPlan {
         }
         if ($Arguments[$i] -eq '--resume-from' -and ($i + 1) -lt $Arguments.Count) {
             $resumeFrom = $Arguments[$i + 1]
+        }
+        if ($Arguments[$i] -like '--quorum*') {
+            $quorumArg = $Arguments[$i]
+        }
+        if ($Arguments[$i] -eq '--quorum-threshold' -and ($i + 1) -lt $Arguments.Count) {
+            $quorumThreshold = $Arguments[$i + 1]
         }
     }
 
@@ -2747,10 +2759,13 @@ function Invoke-RunPlan {
         '--run', $fullPlanPath,
         '--mode', $mode
     )
-    if ($estimate)   { $nodeArgs += '--estimate' }
-    if ($dryRun)     { $nodeArgs += '--dry-run' }
-    if ($model)      { $nodeArgs += '--model'; $nodeArgs += $model }
-    if ($resumeFrom) { $nodeArgs += '--resume-from'; $nodeArgs += $resumeFrom }
+    if ($estimate)        { $nodeArgs += '--estimate' }
+    if ($dryRun)          { $nodeArgs += '--dry-run' }
+    if ($model)           { $nodeArgs += '--model'; $nodeArgs += $model }
+    if ($resumeFrom)      { $nodeArgs += '--resume-from'; $nodeArgs += $resumeFrom }
+    if ($noQuorum)        { $nodeArgs += '--no-quorum' }
+    elseif ($quorumArg)   { $nodeArgs += $quorumArg }
+    if ($quorumThreshold) { $nodeArgs += '--quorum-threshold'; $nodeArgs += $quorumThreshold }
 
     # Delegate to orchestrator
     Write-Host ""
@@ -2844,6 +2859,83 @@ function Invoke-VersionBump {
     Write-Host "Don't forget: Update CHANGELOG.md manually with release notes." -ForegroundColor DarkGray
 }
 
+# ─── Command: org-rules ────────────────────────────────────────────────
+function Invoke-OrgRules {
+    # Parse sub-command and flags
+    $subCmd   = if ($Arguments.Count -gt 0) { $Arguments[0] } else { 'export' }
+    $format   = 'github'
+    $outFile  = $null
+
+    for ($i = 1; $i -lt $Arguments.Count; $i++) {
+        if ($Arguments[$i] -eq '--format' -and ($i + 1) -lt $Arguments.Count) {
+            $format = $Arguments[$i + 1]; $i++
+        } elseif ($Arguments[$i] -like '--format=*') {
+            $format = $Arguments[$i].Substring(9)
+        } elseif ($Arguments[$i] -eq '--output' -and ($i + 1) -lt $Arguments.Count) {
+            $outFile = $Arguments[$i + 1]; $i++
+        } elseif ($Arguments[$i] -like '--output=*') {
+            $outFile = $Arguments[$i].Substring(9)
+        }
+    }
+
+    if ($subCmd -ne 'export') {
+        Write-Host "ERROR: Unknown org-rules sub-command '$subCmd'. Use: export" -ForegroundColor Red
+        exit 1
+    }
+
+    Write-Host ""
+    Write-Host "╔══════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+    Write-Host "║       Plan Forge — Org Rules Export                          ║" -ForegroundColor Cyan
+    Write-Host "╚══════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+    Write-Host ""
+
+    # Try the MCP server REST API first (port 3100)
+    $serverUrl = "http://localhost:3100/api/tool/org-rules"
+    $body = @{ format = $format } | ConvertTo-Json
+    if ($outFile) { $body = @{ format = $format; output = $outFile } | ConvertTo-Json }
+
+    try {
+        $response = Invoke-RestMethod -Uri $serverUrl -Method Post -Body $body -ContentType 'application/json' -TimeoutSec 5
+        if ($outFile) {
+            Write-Host "  ✅ Org rules exported to: $outFile" -ForegroundColor Green
+        } else {
+            Write-Host $response
+        }
+        return
+    } catch {
+        # Server not running — fall back to inline Node.js
+    }
+
+    # Fallback: run inline node script
+    $nodeScript = @'
+const fs=require('fs'),path=require('path'),cwd=process.cwd();
+const fmt=process.env.ORG_RULES_FORMAT||'github';
+const outFile=process.env.ORG_RULES_OUTPUT||'';
+const instrDir=path.join(cwd,'.github','instructions');
+const instrFiles=fs.existsSync(instrDir)?fs.readdirSync(instrDir).filter(f=>f.endsWith('.instructions.md')).sort().map(f=>path.join(instrDir,f)):[];
+const versionFile=path.join(cwd,'VERSION');
+const version=fs.existsSync(versionFile)?fs.readFileSync(versionFile,'utf8').trim():'unknown';
+function stripFrontmatter(raw){return raw.replace(/^---[\s\S]*?---\s*/m,'').trim();}
+const parts=[];
+instrFiles.forEach(f=>{const body=stripFrontmatter(fs.readFileSync(f,'utf8'));if(body)parts.push(body);});
+const ci=path.join(cwd,'.github','copilot-instructions.md');
+if(fs.existsSync(ci))parts.push(stripFrontmatter(fs.readFileSync(ci,'utf8')));
+const pp=path.join(cwd,'PROJECT-PRINCIPLES.md');
+if(fs.existsSync(pp))parts.push(fs.readFileSync(pp,'utf8').trim());
+const out=parts.join('\n\n---\n\n');
+if(outFile){fs.writeFileSync(outFile,out,'utf8');console.log('Exported to: '+outFile);}
+else{process.stdout.write(out+'\n');}
+'@
+
+    $env:ORG_RULES_FORMAT = $format
+    $env:ORG_RULES_OUTPUT  = if ($outFile) { $outFile } else { '' }
+
+    node -e $nodeScript
+
+    Remove-Item Env:ORG_RULES_FORMAT -ErrorAction SilentlyContinue
+    Remove-Item Env:ORG_RULES_OUTPUT  -ErrorAction SilentlyContinue
+}
+
 # ─── Command Router ────────────────────────────────────────────────────
 switch ($Command) {
     'init'         { Invoke-Init }
@@ -2859,6 +2951,7 @@ switch ($Command) {
     'update'       { Invoke-Update }
     'analyze'      { Invoke-Analyze }
     'run-plan'     { Invoke-RunPlan }
+    'org-rules'    { Invoke-OrgRules }
     'version-bump' { Invoke-VersionBump }
     'smith'        { Invoke-Smith }
     'help'         { Show-Help }

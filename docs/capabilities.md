@@ -1,6 +1,6 @@
 # Plan Forge — Capabilities Reference
 
-> **Tools**: 18 MCP | **Presets**: 9 | **Agents**: 19 | **Skills**: 11
+> **Tools**: 18 MCP | **Presets**: 9 | **Agents**: 19 | **Skills**: 12
 >
 > Machine-readable version: call `forge_capabilities` MCP tool or `GET https://planforge.software/.well-known/plan-forge.json`
 
@@ -35,6 +35,7 @@
 |------|------|--------|-------------|
 | **Full Auto** | *(default)* | `gh copilot` CLI | Agent executes each slice with full project context |
 | **Assisted** | `--assisted` | Human in VS Code | Orchestrator prompts, human codes, gates validate |
+| **Cloud Agent** | *(via `copilot-setup-steps.yml`)* | Copilot cloud agent | Cloud agent provisions environment, guardrails auto-load, MCP tools available |
 | **Quorum** | `--quorum` | 3 models + reviewer | All slices: 3 dry-run analyses → synthesis → execute |
 | **Quorum Auto** | `--quorum=auto` | 3 models (selective) | Only high-complexity slices (score ≥ threshold) get quorum |
 | **Estimate** | `--estimate` | None | Returns cost prediction without executing |
@@ -243,7 +244,7 @@ Auto-loading instruction files in `.github/instructions/`:
 | `generic` | `.ai/instructions.md`, `.ai/commands/` | Any AI tool (configurable dir) |
 | `all` | All of the above | Full multi-tool support |
 
-## Skills (11)
+## Skills (12)
 
 | Skill | Description |
 |-------|-------------|
@@ -258,6 +259,7 @@ Auto-loading instruction files in `.github/instructions/`:
 | `/onboarding` | New developer setup walkthrough |
 | `/health-check` | Forge diagnostic: smith → validate → sweep |
 | `/forge-execute` | Guided plan execution: list → estimate → execute → report |
+| `/forge-troubleshoot` | Diagnose and resolve plan failures, gate errors, and environment issues |
 
 ## Telemetry
 
@@ -341,6 +343,20 @@ Degradation: <2 successful dry-runs → falls back to normal execution. Reviewer
 | Code structure | Inline | **Extracted helpers** | Better |
 | Test robustness | Hardcoded dates | **Relative dates** | Better |
 | Edge cases | Standard | **+voided regen, +sequence** | Better |
+
+## Memory Layers
+
+Plan Forge uses three distinct memory systems. Each has a specific role in the 3-session pipeline:
+
+| Layer | What It Is | Scope | Managed By | Best For |
+|-------|-----------|-------|------------|---------|
+| **Copilot Memory** | Built-in `/memories/` note storage (user / session / repo scopes) | User / Session / Repo | Copilot Chat natively | Free-form notes, personal patterns, ad-hoc insights |
+| **Plan Forge Session Bridge** | Structured `/memories/repo/current-phase.md` + `lessons-learned.md` | Repository | You (via pipeline prompts) | Carrying Session 1 → 2 → 3 state through the hardening pipeline |
+| **OpenBrain** | Semantic vector memory via MCP `search_thoughts` / `capture_thought` | Global (workspace-agnostic) | OpenBrain MCP server | Auto-injecting relevant prior decisions before each slice begins |
+
+All three are complementary. A typical phase uses all three: Copilot Memory for quick notes, the session bridge files for structured handoffs, and OpenBrain for surfacing past decisions automatically without manual prompting.
+
+See [COPILOT-VSCODE-GUIDE.md#memory-layers](COPILOT-VSCODE-GUIDE.md#memory-layers) for the full usage guide.
 
 ## OpenBrain Memory (Optional)
 

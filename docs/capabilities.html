@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Capabilities — Plan Forge | 18 MCP Tools, Quorum Mode, Autonomous Execution, Live Dashboard</title>
-  <meta name="description" content="Complete capability reference for Plan Forge — 18 MCP tools, Quorum Mode (multi-model consensus), DAG-based orchestrator, cost tracking, OTLP telemetry, OpenBrain memory, 19 reviewer agents, 11 skills, and a live dashboard." />
+  <meta name="description" content="Complete capability reference for Plan Forge — 18 MCP tools, Quorum Mode (multi-model consensus), DAG-based orchestrator, cost tracking, OTLP telemetry, OpenBrain memory, 19 reviewer agents, 12 skills, and a live dashboard." />
   <meta property="og:title" content="Plan Forge Capabilities — Full Tool & Feature Reference" />
   <meta property="og:description" content="18 MCP tools, autonomous plan execution, cost tracking, live dashboard, OTLP traces, OpenBrain memory integration. Enterprise-grade AI coding guardrails." />
   <meta property="og:type" content="website" />
@@ -12,7 +12,7 @@
   <meta property="og:image" content="https://planforge.software/assets/og-card.webp" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Plan Forge Capabilities — 18 MCP Tools + Autonomous Execution" />
-  <meta name="twitter:description" content="Complete capability reference: orchestrator, dashboard, telemetry, memory, 19 agents, 11 skills." />
+  <meta name="twitter:description" content="Complete capability reference: orchestrator, dashboard, telemetry, memory, 19 agents, 12 skills." />
   <link rel="canonical" href="https://planforge.software/capabilities.html" />
   <meta name="keywords" content="AI coding guardrails, MCP tools, plan execution, DAG scheduler, cost tracking, OTLP traces, OpenBrain, VS Code Copilot, Claude, GPT, autonomous development, quorum mode, multi-model consensus, A/B testing" />
   <script type="application/ld+json">
@@ -84,9 +84,21 @@
       <div class="mt-6 flex justify-center gap-3 text-sm">
         <span class="px-3 py-1 rounded-full bg-forge-500/20 text-forge-400 border border-forge-500/30">18 MCP Tools</span>
         <span class="px-3 py-1 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">19 Agents</span>
-        <span class="px-3 py-1 rounded-full bg-green-500/20 text-green-400 border border-green-500/30">11 Skills</span>
+        <span class="px-3 py-1 rounded-full bg-green-500/20 text-green-400 border border-green-500/30">12 Skills</span>
         <span class="px-3 py-1 rounded-full bg-purple-500/20 text-purple-400 border border-purple-500/30">8 Dashboard Tabs</span>
         <span class="px-3 py-1 rounded-full bg-red-500/20 text-red-400 border border-red-500/30">Quorum Mode</span>
+      </div>
+      <div class="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
+        <a href="vscode://chat-plugin/install?source=srnichols/plan-forge"
+           class="inline-flex items-center justify-center gap-2 px-6 py-3 text-sm font-semibold bg-blue-600 hover:bg-blue-500 text-white rounded-xl border border-blue-500 transition-all">
+          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M23.15 2.587L18.21.21a1.494 1.494 0 0 0-1.705.29l-9.46 8.63-4.12-3.128a.999.999 0 0 0-1.276.057L.327 7.261A1 1 0 0 0 .326 8.74L3.899 12 .326 15.26a1 1 0 0 0 .001 1.479L1.65 17.94a.999.999 0 0 0 1.276.057l4.12-3.128 9.46 8.63a1.492 1.492 0 0 0 1.704.29l4.942-2.377A1.5 1.5 0 0 0 24 19.50V4.5a1.5 1.5 0 0 0-.85-1.413zm-5.15 14.094L10.483 12l7.517-4.681v9.362z"/></svg>
+          Install in VS Code
+        </a>
+        <a href="vscode-insiders://chat-plugin/install?source=srnichols/plan-forge"
+           class="inline-flex items-center justify-center gap-2 px-6 py-3 text-sm font-semibold bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-xl border border-slate-600 transition-all">
+          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M23.15 2.587L18.21.21a1.494 1.494 0 0 0-1.705.29l-9.46 8.63-4.12-3.128a.999.999 0 0 0-1.276.057L.327 7.261A1 1 0 0 0 .326 8.74L3.899 12 .326 15.26a1 1 0 0 0 .001 1.479L1.65 17.94a.999.999 0 0 0 1.276.057l4.12-3.128 9.46 8.63a1.492 1.492 0 0 0 1.704.29l4.942-2.377A1.5 1.5 0 0 0 24 19.50V4.5a1.5 1.5 0 0 0-.85-1.413zm-5.15 14.094L10.483 12l7.517-4.681v9.362z"/></svg>
+          Install in VS Code Insiders
+        </a>
       </div>
     </div>
 
@@ -147,6 +159,10 @@
         <div class="bg-slate-800/60 rounded-xl p-6 border border-green-700/30">
           <h3 class="text-lg font-bold text-white mb-2">Assisted</h3>
           <p class="text-sm text-slate-400">You code in VS Code Copilot. Orchestrator prompts you per slice and validates gates automatically. Best of both: human creativity + automated quality.</p>
+        </div>
+        <div class="bg-slate-800/60 rounded-xl p-6 border border-sky-700/30">
+          <h3 class="text-lg font-bold text-white mb-2">Cloud Agent</h3>
+          <p class="text-sm text-slate-400">Copilot cloud agent provisions the environment via <code class="text-sky-300">copilot-setup-steps.yml</code>. Guardrails auto-load, all 18 MCP tools are available, and <code class="text-sky-300">forge_run_plan</code> executes slices autonomously on GitHub Issues.</p>
         </div>
         <div class="bg-slate-800/60 rounded-xl p-6 border border-purple-700/30">
           <h3 class="text-lg font-bold text-white mb-2">Parallel</h3>
@@ -325,12 +341,12 @@
           </div>
         </div>
         <div>
-          <h3 class="text-lg font-semibold text-white mb-3">11 Slash Command Skills</h3>
+          <h3 class="text-lg font-semibold text-white mb-3">12 Slash Command Skills</h3>
           <div class="space-y-1 text-sm text-slate-400">
             <p><code class="text-forge-400">/database-migration</code> · <code class="text-forge-400">/staging-deploy</code> · <code class="text-forge-400">/test-sweep</code></p>
             <p><code class="text-forge-400">/dependency-audit</code> · <code class="text-forge-400">/security-audit</code> · <code class="text-forge-400">/code-review</code></p>
             <p><code class="text-forge-400">/release-notes</code> · <code class="text-forge-400">/api-doc-gen</code> · <code class="text-forge-400">/onboarding</code></p>
-            <p><code class="text-forge-400">/health-check</code> · <code class="text-forge-400">/forge-execute</code></p>
+            <p><code class="text-forge-400">/health-check</code> · <code class="text-forge-400">/forge-execute</code> · <code class="text-forge-400">/forge-troubleshoot</code></p>
           </div>
         </div>
       </div>
@@ -339,6 +355,23 @@
     <!-- Telemetry & Memory -->
     <section class="mb-16">
       <h2 class="text-2xl font-bold text-white mb-6">Observability & Memory</h2>
+
+      <!-- Memory Layers -->
+      <div class="mb-8">
+        <h3 class="text-lg font-bold text-white mb-3">Memory Layers</h3>
+        <p class="text-sm text-slate-400 mb-4">Plan Forge uses three distinct memory systems — each with a specific role in the 3-session pipeline. They're complementary, not competing.</p>
+        <div class="overflow-x-auto mb-4">
+          <table class="w-full text-sm">
+            <thead><tr class="border-b border-slate-700 text-left"><th class="py-2 pr-4 text-slate-400">Layer</th><th class="py-2 pr-4 text-slate-400">What It Is</th><th class="py-2 pr-4 text-slate-400">Scope</th><th class="py-2 text-slate-400">Best For</th></tr></thead>
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800"><td class="py-2 pr-4 font-medium text-white">Copilot Memory</td><td class="py-2 pr-4"><code class="text-forge-400">/memories/</code> built-in note storage (user / session / repo scopes)</td><td class="py-2 pr-4">User / Session / Repo</td><td class="py-2">Free-form notes, personal patterns, ad-hoc insights</td></tr>
+              <tr class="border-b border-slate-800"><td class="py-2 pr-4 font-medium text-white">Plan Forge Session Bridge</td><td class="py-2 pr-4">Structured <code class="text-forge-400">/memories/repo/current-phase.md</code> + <code class="text-forge-400">lessons-learned.md</code></td><td class="py-2 pr-4">Repository</td><td class="py-2">Carrying Session 1 → 2 → 3 state through the hardening pipeline</td></tr>
+              <tr><td class="py-2 pr-4 font-medium text-white">OpenBrain</td><td class="py-2 pr-4">Semantic vector memory via MCP <code class="text-forge-400">search_thoughts</code> / <code class="text-forge-400">capture_thought</code></td><td class="py-2 pr-4">Global</td><td class="py-2">Auto-injecting prior decisions before each slice — no manual prompting</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <div class="grid gap-6 md:grid-cols-2">
         <div class="bg-slate-800/60 rounded-xl p-6 border border-slate-700/30">
           <h3 class="text-lg font-bold text-white mb-2">OTLP Telemetry</h3>

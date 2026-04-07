@@ -2,7 +2,7 @@
 
 > **Purpose**: Practical guide for running the Plan Forge Pipeline using GitHub Copilot's Agent Mode in VS Code  
 > **Audience**: Developers using GitHub Copilot (free, Pro, or Enterprise) in VS Code  
-> **Last Updated**: 2026-03-20
+> **Last Updated**: 2026-04-07
 
 ---
 
@@ -18,6 +18,7 @@
 8. [Tips for Better Agent Execution](#tips-for-better-agent-execution)
    - [Prompt Templates, Agent Definitions & Skills](#0-use-prompt-templates-agent-definitions--skills)
 9. [Troubleshooting](#troubleshooting)
+10. [Using Plan Forge with Copilot Cloud Agent](#using-plan-forge-with-copilot-cloud-agent)
 
 ---
 
@@ -247,6 +248,23 @@ Load the Scope Contract and Stop Conditions before starting.
 ## Using Memory to Bridge Sessions
 
 Copilot's memory system lets you persist context between sessions. This is valuable for the 3-session pipeline.
+
+### Memory Layers
+
+Plan Forge works with three distinct memory systems. Understanding the difference helps you choose the right tool for each need:
+
+| Layer | What It Is | Scope | Managed By | Best For |
+|-------|-----------|-------|------------|---------|
+| **Copilot Memory** | Built-in `/memories/` note storage | User / Session / Repo | Copilot Chat natively | Personal patterns, general insights, ad-hoc notes |
+| **Plan Forge Session Bridge** | Structured `/memories/repo/current-phase.md` + `lessons-learned.md` | Repository | You (via pipeline prompts) | Carrying Session 1 → 2 → 3 state through the hardening pipeline |
+| **OpenBrain** | Semantic vector memory via MCP `search_thoughts` / `capture_thought` | Global (workspace-agnostic) | OpenBrain MCP server | Auto-injecting relevant prior decisions before each slice begins |
+
+**When to use each:**
+- Use **Copilot Memory** for free-form notes that don't fit the pipeline structure.
+- Use the **Plan Forge Session Bridge** files to hand off structured phase state between sessions — the pipeline prompts tell you exactly what to write.
+- Use **OpenBrain** when you want the agent to automatically surface relevant past decisions without any manual prompt — it hooks into `forge_run_plan` automatically.
+
+All three layers are complementary. A typical phase uses all three: Copilot Memory for quick notes, the session bridge files for structured handoffs, and OpenBrain for long-term pattern recall.
 
 ### Memory Scopes
 
@@ -557,7 +575,32 @@ only what Slice 3 requires.
 
 ## Troubleshooting
 
-### "Copilot isn't reading my instruction files"
+### "Forge run failed — where do I start?"
+
+Use the `/forge-troubleshoot` skill to diagnose the failure:
+
+1. Type `/forge-troubleshoot` in Copilot Chat (Agent mode)
+2. Optionally describe the symptom: `/forge-troubleshoot slice 3 failed gate error`
+3. The skill will:
+   - Run `forge_smith` to check environment health
+   - Run `forge_validate` to verify setup files
+   - Run `forge_plan_status` to retrieve the last run report
+   - Run `forge_sweep` to detect stubs/TODOs blocking gate passage
+   - Identify the root cause and provide specific fix steps
+4. After fixing, resume with: `forge_run_plan resumeFrom: <failed-slice-number>`
+
+**Common root causes and fixes:**
+
+| Symptom | Likely Cause | Fix |
+|---------|-------------|-----|
+| Gate error: build failed | Stub or TODO in production code | Fill in the stub, then resume |
+| Gate error: test failed | Missing implementation or broken import | Fix the failing test, then resume |
+| CLI worker not found | `gh copilot` / `claude` / `codex` CLI not installed | Install CLI or switch to `mode: 'assisted'` |
+| MCP tools missing | `pforge-mcp/` dependencies not installed | Run `npm install --prefix pforge-mcp` |
+| Cost overrun warning | Model too expensive for slice count | Switch to a cheaper model in `.forge.json` |
+| Slice stalled, no output | Run hung | Use `forge_abort`, then `resumeFrom` the stalled slice |
+
+
 
 1. Verify the file is in `.github/instructions/` (exact path)
 2. Check the `applyTo` pattern matches the file you're editing
@@ -590,6 +633,63 @@ only what Slice 3 requires.
 2. Use specific `applyTo` patterns (not `'**'`)
 3. Keep each file under ~150 lines
 4. Move examples to a separate reference doc if needed
+
+---
+
+## Using Plan Forge with Copilot Cloud Agent
+
+> *"Copilot cloud agent plans. Plan Forge hardens."*
+
+GitHub Copilot's cloud agent can work on GitHub issues autonomously — cloning your repo, making code changes, and opening pull requests. Plan Forge integrates with this workflow so the cloud agent has your guardrails, MCP tools, and validation gates ready before it writes a single line of code.
+
+### How `copilot-setup-steps.yml` Works
+
+GitHub runs `.github/copilot-setup-steps.yml` to provision the cloud agent's environment before it starts on an issue. Add this file to your project to ensure Plan Forge is installed and validated every time:
+
+```bash
+# Copy the template from Plan Forge into your project
+cp templates/copilot-setup-steps.yml .github/copilot-setup-steps.yml
+```
+
+Then edit `.github/copilot-setup-steps.yml` to set the correct `--preset` for your stack. The template handles four steps:
+
+| Step | What It Does |
+|------|-------------|
+| **Install Node.js** | Ensures Node 20+ is available for the MCP server |
+| **Run `setup.sh --force`** | Installs guardrail files, instruction files, and pipeline prompts |
+| **Install MCP dependencies** | Runs `npm install` in `pforge-mcp/` so all 18 MCP tools are available |
+| **Configure `.vscode/mcp.json`** | Wires the MCP server into the agent's VS Code session |
+| **`pforge smith`** | Post-setup health check — logs any config issues before work begins |
+
+### How Instruction Files Auto-Load in the Cloud Agent
+
+The cloud agent reads `.github/copilot-instructions.md` and `.github/instructions/*.instructions.md` using the same `applyTo` mechanism as local VS Code. Your guardrails load automatically:
+
+- **Security rules** activate when the agent edits auth files
+- **Database patterns** activate when the agent edits query files
+- **Architecture principles** load on every file (`applyTo: '**'`)
+
+No changes needed to your instruction files — they work identically in cloud and local sessions.
+
+### How Plan Forge Gates Complement CodeQL and Secret Scanning
+
+Copilot cloud agent already integrates with GitHub's code scanning (CodeQL, secret scanning, dependency review). Plan Forge adds a complementary layer that runs **before** the code reaches GitHub's scanners:
+
+| Layer | When | What It Catches |
+|-------|------|----------------|
+| **Plan Forge slice gates** | During cloud agent execution | Build failures, test regressions, scope drift |
+| **Copilot code review** | PR opened | Style, correctness, suggestions |
+| **CodeQL** | PR/push CI | Security vulnerabilities, data flow issues |
+| **Secret scanning** | Commit time | Leaked credentials |
+
+Use `pforge run-plan --assisted` if you want the orchestrator to prompt the cloud agent per slice and validate gates automatically. The cloud agent picks up the MCP `forge_run_plan` tool from `.vscode/mcp.json`.
+
+### Quick Setup
+
+1. Copy `templates/copilot-setup-steps.yml` → `.github/copilot-setup-steps.yml`
+2. Set `--preset` to your stack in the setup step
+3. Enable Copilot cloud agent on your repository (Settings → Copilot → Coding agent)
+4. Assign a GitHub issue to `@copilot` — it will provision the environment and start with your guardrails loaded
 
 ---
 

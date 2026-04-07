@@ -212,7 +212,7 @@
       <!-- Badge -->
       <div class="inline-flex items-center gap-2 px-4 py-1.5 mb-8 rounded-full bg-slate-800/80 border border-slate-700/60 text-sm text-slate-300">
         <span class="w-2 h-2 rounded-full bg-forge-500 animate-pulse"></span>
-        Open Source · MIT License · Dogfooded · v2.14.0
+        Open Source · MIT License · Dogfooded · v2.15.0
       </div>
 
       <!-- Logo -->
@@ -285,6 +285,20 @@
             <path fill-rule="evenodd" d="M10 0C4.477 0 0 4.484 0 10.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0110 4.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.203 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0020 10.017C20 4.484 15.522 0 10 0z" clip-rule="evenodd"/>
           </svg>
           View on GitHub
+        </a>
+      </div>
+
+      <!-- VS Code install buttons -->
+      <div class="flex flex-col sm:flex-row gap-3 justify-center mb-16">
+        <a href="vscode://chat-plugin/install?source=srnichols/plan-forge"
+           class="inline-flex items-center justify-center gap-2 px-6 py-3 text-sm font-semibold bg-blue-600 hover:bg-blue-500 text-white rounded-xl border border-blue-500 transition-all">
+          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M23.15 2.587L18.21.21a1.494 1.494 0 0 0-1.705.29l-9.46 8.63-4.12-3.128a.999.999 0 0 0-1.276.057L.327 7.261A1 1 0 0 0 .326 8.74L3.899 12 .326 15.26a1 1 0 0 0 .001 1.479L1.65 17.94a.999.999 0 0 0 1.276.057l4.12-3.128 9.46 8.63a1.492 1.492 0 0 0 1.704.29l4.942-2.377A1.5 1.5 0 0 0 24 19.50V4.5a1.5 1.5 0 0 0-.85-1.413zm-5.15 14.094L10.483 12l7.517-4.681v9.362z"/></svg>
+          Install in VS Code
+        </a>
+        <a href="vscode-insiders://chat-plugin/install?source=srnichols/plan-forge"
+           class="inline-flex items-center justify-center gap-2 px-6 py-3 text-sm font-semibold bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-xl border border-slate-600 transition-all">
+          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M23.15 2.587L18.21.21a1.494 1.494 0 0 0-1.705.29l-9.46 8.63-4.12-3.128a.999.999 0 0 0-1.276.057L.327 7.261A1 1 0 0 0 .326 8.74L3.899 12 .326 15.26a1 1 0 0 0 .001 1.479L1.65 17.94a.999.999 0 0 0 1.276.057l4.12-3.128 9.46 8.63a1.492 1.492 0 0 0 1.704.29l4.942-2.377A1.5 1.5 0 0 0 24 19.50V4.5a1.5 1.5 0 0 0-.85-1.413zm-5.15 14.094L10.483 12l7.517-4.681v9.362z"/></svg>
+          Install in VS Code Insiders
         </a>
       </div>
 
@@ -645,6 +659,18 @@
           <div class="w-12 h-12 rounded-xl bg-red-500/20 flex items-center justify-center text-2xl mb-4">🔗</div>
           <h3 class="text-xl font-bold text-white mb-2">Lifecycle Hooks</h3>
           <p class="text-sm text-slate-400">Hooks run automatically at agent lifecycle points — blocking edits to forbidden paths, warning on TODO markers, auto-formatting, and alerting when code ships without tests.</p>
+        </div>
+
+        <!-- Cloud Agent Ready -->
+        <div class="p-8 rounded-2xl bg-slate-800/60 border border-sky-700/30">
+          <div class="w-12 h-12 rounded-xl bg-sky-500/20 flex items-center justify-center text-2xl mb-4">☁️</div>
+          <h3 class="text-xl font-bold text-white mb-2">Cloud Agent Ready</h3>
+          <p class="text-sm text-slate-400 mb-3">Works with the Copilot cloud agent out of the box. Add <code class="text-sky-300">copilot-setup-steps.yml</code> to provision guardrails, MCP tools, and validation gates before the agent writes a single line.</p>
+          <ul class="space-y-1 text-xs text-slate-500">
+            <li class="flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-sky-400 shrink-0"></span>Instruction files auto-load identically in cloud + local</li>
+            <li class="flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-sky-400 shrink-0"></span>18 MCP tools wired via <code class="text-sky-300">.vscode/mcp.json</code></li>
+            <li class="flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-sky-400 shrink-0"></span>Complements CodeQL, secret scanning, and Copilot code review</li>
+          </ul>
         </div>
 
         <!-- The Smith -->
@@ -1792,7 +1818,7 @@ Target project: (current directory)</code></pre>
             <div class="text-xs text-slate-500">phases executed</div>
           </div>
           <div class="bg-slate-800/60 rounded-xl p-4 border border-slate-700/30">
-            <div class="text-2xl font-bold text-green-400">v2.14</div>
+            <div class="text-2xl font-bold text-green-400">v2.15</div>
             <div class="text-xs text-slate-500">current version</div>
           </div>
           <div class="bg-slate-800/60 rounded-xl p-4 border border-slate-700/30">

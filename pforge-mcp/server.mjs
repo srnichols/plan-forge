@@ -21,8 +21,8 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { execSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { resolve, join, dirname } from "node:path";
+import { existsSync, readdirSync, readFileSync, writeFileSync, watchFile, statSync } from "node:fs";
+import { resolve, join, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parsePlan, runPlan, detectWorkers, getCostReport, analyzeWithQuorum, generateImage } from "./orchestrator.mjs";
 import { isOpenBrainConfigured } from "./memory.mjs";
@@ -46,11 +46,111 @@ let activeAbortController = null;
 let activeRunPromise = null;
 let activeHub = null;    // WebSocket hub instance
 let activeBridge = null; // OpenClaw Bridge instance
+let activeEventWatcher = null; // events.log file watcher
 
 // Set of runIds that have already received an approval decision (rate-limit: 1 per runId)
 const _approvedRunIds = new Set();
 
 // ─── Helpers ──────────────────────────────────────────────────────────
+
+/**
+ * Event File Watcher — tails events.log from the latest run dir and broadcasts
+ * new events to the WebSocket hub. This bridges the orchestrator (standalone CLI
+ * process writing to files) with the dashboard (WebSocket client).
+ */
+function startEventFileWatcher(hub, cwd) {
+  const runsDir = resolve(cwd, ".forge", "runs");
+  let currentLogFile = null;
+  let fileOffset = 0;
+  let scanInterval = null;
+
+  function findLatestEventsLog() {
+    if (!existsSync(runsDir)) return null;
+    const dirs = readdirSync(runsDir, { withFileTypes: true })
+      .filter(d => d.isDirectory())
+      .map(d => d.name)
+      .sort()
+      .reverse();
+    for (const dir of dirs) {
+      const logPath = resolve(runsDir, dir, "events.log");
+      if (existsSync(logPath)) return logPath;
+    }
+    return null;
+  }
+
+  function processNewLines(logPath) {
+    try {
+      const stat = statSync(logPath);
+      if (stat.size <= fileOffset) return;
+      const fd = require("node:fs").openSync(logPath, "r");
+      const buf = Buffer.alloc(stat.size - fileOffset);
+      require("node:fs").readSync(fd, buf, 0, buf.length, fileOffset);
+      require("node:fs").closeSync(fd);
+      fileOffset = stat.size;
+
+      const lines = buf.toString("utf-8").split("\n").filter(l => l.trim());
+      for (const line of lines) {
+        const match = line.match(/^\[([^\]]+)\]\s+(\S+):\s+(.*)$/);
+        if (!match) continue;
+        try {
+          const [, timestamp, type, jsonStr] = match;
+          const data = JSON.parse(jsonStr);
+          hub.broadcast({ type, data, timestamp, source: "file-watcher" });
+        } catch {
+          // Skip malformed event lines
+        }
+      }
+    } catch {
+      // File may be temporarily locked by the orchestrator
+    }
+  }
+
+  // Poll every 2 seconds: check for latest events.log and process new lines
+  scanInterval = setInterval(() => {
+    const logPath = findLatestEventsLog();
+    if (!logPath) return;
+
+    if (logPath !== currentLogFile) {
+      // New or different run — reset offset
+      currentLogFile = logPath;
+      fileOffset = 0;
+      console.error(`[event-watcher] Tracking: ${logPath}`);
+    }
+
+    processNewLines(logPath);
+  }, 2000);
+
+  // Also use watchFile for faster detection when the file changes
+  function attachWatcher(logPath) {
+    try {
+      watchFile(logPath, { interval: 1000 }, () => {
+        processNewLines(logPath);
+      });
+    } catch {
+      // watchFile not supported or file doesn't exist yet — polling covers it
+    }
+  }
+
+  // Initial scan
+  const initial = findLatestEventsLog();
+  if (initial) {
+    currentLogFile = initial;
+    // Start from current end of file (don't replay old events — hub has history)
+    try { fileOffset = statSync(initial).size; } catch { fileOffset = 0; }
+    attachWatcher(initial);
+    console.error(`[event-watcher] Watching: ${initial}`);
+  }
+
+  return {
+    stop() {
+      if (scanInterval) clearInterval(scanInterval);
+      if (currentLogFile) {
+        try { require("node:fs").unwatchFile(currentLogFile); } catch { /* ignore */ }
+      }
+    },
+  };
+}
+
 function runPforge(args, cwd = PROJECT_DIR) {
   const cmd = `${PFORGE} ${args}`;
   try {
@@ -78,6 +178,116 @@ function findProjectRoot(startDir) {
     dir = resolve(dir, "..");
   }
   return startDir;
+}
+
+// ─── Org Rules Consolidation ──────────────────────────────────────────
+function callOrgRules({ format = "github", output: outputFile = null } = {}, cwd = PROJECT_DIR) {
+  const instrDir = join(cwd, ".github", "instructions");
+  const copilotFile = join(cwd, ".github", "copilot-instructions.md");
+  const principlesFile = join(cwd, "PROJECT-PRINCIPLES.md");
+
+  const instrFiles = existsSync(instrDir)
+    ? readdirSync(instrDir).filter((f) => f.endsWith(".instructions.md")).sort().map((f) => join(instrDir, f))
+    : [];
+
+  let repoName = basename(cwd);
+  try {
+    const gitRemote = execSync("git remote get-url origin 2>/dev/null || true", { cwd, encoding: "utf-8", timeout: 5_000 }).trim();
+    if (gitRemote) repoName = gitRemote.split("/").pop().replace(/\.git$/, "");
+  } catch { /* keep folder name */ }
+
+  const versionFile = join(cwd, "VERSION");
+  const version = existsSync(versionFile) ? readFileSync(versionFile, "utf-8").trim() : "2.14.0";
+
+  function stripFrontmatter(raw) {
+    const stripped = raw.replace(/^---[\s\S]*?---\s*/m, "").trim();
+    const titleMatch = stripped.match(/^#\s+(.+)/m);
+    const title = titleMatch ? titleMatch[1].trim() : null;
+    const body = stripped.replace(/^#\s+.+\n?/m, "").trim();
+    return { title, body };
+  }
+
+  const SECTION_PATTERNS = [
+    { section: "Architecture Principles", pattern: /architect|design|layer|separation/i },
+    { section: "Git Workflow",            pattern: /git|commit|branch|workflow/i },
+    { section: "Security Rules",          pattern: /security|auth|secret|permission/i },
+    { section: "Testing Requirements",    pattern: /test|spec|coverage/i },
+    { section: "Coding Standards",        pattern: /./ },
+  ];
+
+  function categorise(filePath) {
+    const name = basename(filePath);
+    for (const { section, pattern } of SECTION_PATTERNS) {
+      if (pattern.test(name)) return section;
+    }
+    return "Coding Standards";
+  }
+
+  const grouped = {};
+  for (const f of instrFiles) {
+    const sec = categorise(f);
+    if (!grouped[sec]) grouped[sec] = [];
+    grouped[sec].push(f);
+  }
+
+  const sections = [];
+  const sectionOrder = ["Architecture Principles", "Coding Standards", "Git Workflow", "Security Rules", "Testing Requirements"];
+  for (const sec of sectionOrder) {
+    if (!grouped[sec]?.length) continue;
+    const entries = grouped[sec].map((f) => {
+      const raw = readFileSync(f, "utf-8");
+      const { title, body } = stripFrontmatter(raw);
+      return { file: basename(f), title: title || basename(f).replace(/\.instructions\.md$/, ""), body };
+    });
+    sections.push({ section: sec, entries });
+  }
+
+  if (existsSync(copilotFile)) {
+    const raw = readFileSync(copilotFile, "utf-8");
+    const { title, body } = stripFrontmatter(raw);
+    sections.push({ section: "Project Context", entries: [{ file: "copilot-instructions.md", title: title || "Project Context", body }] });
+  }
+
+  if (existsSync(principlesFile)) {
+    const raw = readFileSync(principlesFile, "utf-8");
+    const { title, body } = stripFrontmatter(raw);
+    sections.push({ section: "Project Principles", entries: [{ file: "PROJECT-PRINCIPLES.md", title: title || "Project Principles", body }] });
+  }
+
+  const header = `# Generated by Plan Forge v${version} from repo: ${repoName}`;
+  const timestamp = `# Generated: ${new Date().toISOString()}`;
+
+  let output;
+  if (format === "json") {
+    output = JSON.stringify({ repo: repoName, version, generated: new Date().toISOString(), sections }, null, 2);
+  } else if (format === "markdown") {
+    const parts = [header, timestamp, ""];
+    for (const { section, entries } of sections) {
+      parts.push(`## ${section}`, "");
+      for (const { title, body } of entries) {
+        parts.push(`### ${title}`, "", body, "");
+      }
+    }
+    output = parts.join("\n").trimEnd();
+  } else {
+    // github format — plain text for GitHub org custom instructions
+    const parts = [header, timestamp, ""];
+    for (const { section, entries } of sections) {
+      parts.push(`=== ${section} ===`, "");
+      for (const { body } of entries) {
+        parts.push(body, "");
+      }
+    }
+    output = parts.join("\n").trimEnd();
+  }
+
+  if (outputFile) {
+    const outPath = resolve(cwd, outputFile);
+    writeFileSync(outPath, output, "utf-8");
+    return `Org rules exported to: ${outPath}\n\n${output}`;
+  }
+
+  return output;
 }
 
 // ─── Tool Definitions ─────────────────────────────────────────────────
@@ -283,6 +493,18 @@ const TOOLS = [
     },
   },
   {
+    name: "forge_org_rules",
+    description: "Export org custom instructions — consolidate .github/instructions/*.instructions.md files into a single block for GitHub org-level Copilot custom instructions (Layer 1 of the two-layer model). Strips per-file frontmatter since org instructions apply universally. USE FOR: export org rules, generate org-level Copilot instructions, consolidate coding standards, org governance, GitHub org custom instructions.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Project directory (default: current)" },
+        format: { type: "string", description: "Output format: github (default, plain text for org settings), markdown (formatted with headers), or json (structured)", enum: ["github", "markdown", "json"] },
+        output: { type: "string", description: "File path to write output relative to project dir (optional — returns content if omitted)" },
+      },
+    },
+  },
+  {
     name: "forge_generate_image",
     description: "Generate an image using AI image models (xAI Grok Aurora or OpenAI DALL-E). Provide a text description and get a generated image saved to disk. Supports format conversion — request WebP, PNG, AVIF, or JPEG regardless of what the API returns. Useful for creating logos, diagrams, UI mockups, icons, and illustrations during plan execution. Requires XAI_API_KEY (Grok) or OPENAI_API_KEY (DALL-E).",
     inputSchema: {
@@ -323,6 +545,8 @@ function executeTool(name, args) {
     case "forge_analyze":
       if (args.quorum) return null; // Quorum analysis handled async
       return runPforge(`analyze "${args.plan}"`, cwd);
+    case "forge_org_rules":
+      return null; // Handled async in CallToolRequestSchema handler
     case "forge_run_plan":
     case "forge_abort":
     case "forge_plan_status":
@@ -360,10 +584,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       activeAbortController = new AbortController();
       // If hub is running, use it as event handler for live broadcasting
       const eventHandler = activeHub ? { handle: (event) => activeHub.broadcast(event) } : null;
-      // Parse quorum parameter
-      let quorum = false;
+      // Parse quorum parameter — default: "auto" (threshold-based)
+      let quorum = "auto";
       if (args.quorum === "true" || args.quorum === true) quorum = true;
-      else if (args.quorum === "auto") quorum = "auto";
+      else if (args.quorum === "false" || args.quorum === false) quorum = false;
+      else if (args.quorum === "auto" || args.quorum === undefined) quorum = "auto";
 
       const result = await runPlan(planPath, {
         cwd,
@@ -585,6 +810,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
   }
 
+  if (name === "forge_org_rules") {
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const result = callOrgRules({ format: args.format || "github", output: args.output || null }, cwd);
+      return { content: [{ type: "text", text: result }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Org rules error: ${err.message}` }], isError: true };
+    }
+  }
+
   if (name === "forge_generate_image") {
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -721,6 +956,20 @@ function createExpressApp() {
   app.get("/api/cost", (_req, res) => {
     try {
       res.json(getCostReport(PROJECT_DIR));
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // REST API: POST /api/tool/org-rules — export org custom instructions
+  app.post("/api/tool/org-rules", (req, res) => {
+    try {
+      const format = req.body?.format || "github";
+      const outputFile = req.body?.output || null;
+      const result = callOrgRules({ format, output: outputFile }, PROJECT_DIR);
+      if (outputFile) {
+        res.json({ success: true, output: result });
+      } else {
+        res.type("text/plain").send(result);
+      }
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
@@ -1249,6 +1498,9 @@ async function main() {
   try {
     activeHub = await createHub({ cwd: PROJECT_DIR });
     console.error(`Plan Forge WebSocket hub running on port ${activeHub.port}`);
+
+    // Start event file watcher to bridge orchestrator events → dashboard
+    activeEventWatcher = startEventFileWatcher(activeHub, PROJECT_DIR);
   } catch (err) {
     console.error(`[hub] WebSocket hub failed to start: ${err.message} (non-fatal)`);
   }
@@ -1265,10 +1517,12 @@ async function main() {
 
   // Graceful shutdown
   process.on("SIGTERM", () => {
+    if (activeEventWatcher) activeEventWatcher.stop();
     if (activeHub) activeHub.close();
     if (activeBridge) activeBridge.stop();
   });
   process.on("SIGINT", () => {
+    if (activeEventWatcher) activeEventWatcher.stop();
     if (activeHub) activeHub.close();
     if (activeBridge) activeBridge.stop();
   });

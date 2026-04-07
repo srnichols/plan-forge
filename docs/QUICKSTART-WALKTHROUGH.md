@@ -28,7 +28,12 @@ By the end of this walkthrough, you'll have:
 
 ## Before You Start
 
-Make sure setup is done:
+Install the VS Code plugin first (VS Code 1.113+):
+
+- [**Install in VS Code**](vscode://chat-plugin/install?source=srnichols/plan-forge)
+- [**Install in VS Code Insiders**](vscode-insiders://chat-plugin/install?source=srnichols/plan-forge)
+
+Then make sure setup is done:
 
 ```powershell
 .\validate-setup.ps1

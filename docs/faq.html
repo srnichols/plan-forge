@@ -579,6 +579,59 @@
         </div>
       </div>
 
+      <!-- Copilot Cloud Agent -->
+      <div class="faq-category">
+        <h2 class="text-xl font-bold text-white mb-5 flex items-center gap-3">
+          <span class="w-8 h-8 rounded-lg bg-forge-500/20 flex items-center justify-center text-forge-400 text-sm">☁️</span>
+          Copilot Cloud Agent
+        </h2>
+        <div class="space-y-3">
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">How does Plan Forge work with the Copilot cloud agent?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              <p class="mb-3">The Copilot cloud agent works on GitHub issues autonomously — cloning your repo, making code changes, and opening PRs. Plan Forge integrates via <code class="text-forge-400">.github/copilot-setup-steps.yml</code>, which GitHub runs to provision the agent's environment before it starts coding.</p>
+              <p class="mb-3">Copy <code class="text-forge-400">templates/copilot-setup-steps.yml</code> from the Plan Forge repo to your project's <code class="text-forge-400">.github/</code> directory. Set the correct <code class="text-forge-400">--preset</code> for your stack. The cloud agent then starts each session with:</p>
+              <ul class="list-disc list-inside space-y-1 mb-3">
+                <li>All guardrail instruction files installed and auto-loading</li>
+                <li>All 18 MCP tools available via <code class="text-forge-400">.vscode/mcp.json</code></li>
+                <li><code class="text-forge-400">pforge smith</code> health check run automatically</li>
+              </ul>
+              <p>The short version: <em>Copilot cloud agent plans. Plan Forge hardens.</em></p>
+            </div>
+          </details>
+
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">Do guardrails work the same in the cloud agent as in local VS Code?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              <p class="mb-3">Yes. The cloud agent reads <code class="text-forge-400">.github/copilot-instructions.md</code> and <code class="text-forge-400">.github/instructions/*.instructions.md</code> using the same <code class="text-forge-400">applyTo</code> mechanism as local VS Code. Security rules activate on auth files, database patterns activate on query files, and architecture principles load on every file — no changes to your instruction files needed.</p>
+              <p>The only difference: <code class="text-forge-400">copilot-setup-steps.yml</code> handles dependency installation that a local dev machine already has. Once provisioned, the guardrail behavior is identical.</p>
+            </div>
+          </details>
+
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">How does Plan Forge complement CodeQL and secret scanning?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              <p class="mb-3">Plan Forge operates at the <em>development</em> layer — slice gates (build + test) catch problems before the code ever reaches GitHub's CI/CD pipeline. CodeQL, secret scanning, and Copilot code review then add additional coverage after the PR is opened. The layers are complementary, not overlapping:</p>
+              <ul class="list-disc list-inside space-y-1">
+                <li><strong>Plan Forge slice gates</strong> — build failures, test regressions, scope drift (during execution)</li>
+                <li><strong>Copilot code review</strong> — style, correctness, suggestions (PR opened)</li>
+                <li><strong>CodeQL</strong> — security vulnerabilities, data flow (PR/push CI)</li>
+                <li><strong>Secret scanning</strong> — leaked credentials (commit time)</li>
+              </ul>
+            </div>
+          </details>
+        </div>
+      </div>
+
       <!-- Comparison -->
       <div class="faq-category">
         <h2 class="text-xl font-bold text-white mb-5 flex items-center gap-3">
@@ -629,6 +682,27 @@
             </summary>
             <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
               No. Plan Forge operates at the <em>development</em> layer, before code reaches your CI/CD pipeline. Its validation gates (build/test) run locally during slice execution. Your existing CI/CD pipeline handles deployment, environments, and production gates. Plan Forge catches problems <em>before</em> they reach your pipeline.
+            </div>
+          </details>
+
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">What's the difference between Copilot Memory and Plan Forge?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              <p class="mb-3">They solve different problems and work best together. Plan Forge uses three memory layers — each with a distinct role:</p>
+              <div class="overflow-x-auto mb-3">
+                <table class="w-full text-xs border-collapse">
+                  <thead><tr class="border-b border-slate-700"><th class="py-2 pr-4 text-left text-slate-300">Layer</th><th class="py-2 pr-4 text-left text-slate-300">What It Is</th><th class="py-2 text-left text-slate-300">Best For</th></tr></thead>
+                  <tbody>
+                    <tr class="border-b border-slate-800"><td class="py-2 pr-4 font-medium text-white">Copilot Memory</td><td class="py-2 pr-4"><code class="text-forge-400">/memories/</code> — Copilot's built-in note storage (user / session / repo scopes)</td><td class="py-2">Free-form notes, personal patterns, ad-hoc insights</td></tr>
+                    <tr class="border-b border-slate-800"><td class="py-2 pr-4 font-medium text-white">Plan Forge Session Bridge</td><td class="py-2 pr-4">Structured <code class="text-forge-400">/memories/repo/current-phase.md</code> managed by pipeline prompts</td><td class="py-2">Carrying Session 1 → 2 → 3 state through the hardening pipeline</td></tr>
+                    <tr><td class="py-2 pr-4 font-medium text-white">OpenBrain</td><td class="py-2 pr-4">Semantic vector memory via MCP <code class="text-forge-400">search_thoughts</code> / <code class="text-forge-400">capture_thought</code></td><td class="py-2">Auto-injecting relevant prior decisions before each slice — no manual prompting needed</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <p>All three are complementary. A typical phase uses all three: Copilot Memory for quick mid-session notes, the session bridge files for structured phase handoffs, and OpenBrain for surfacing past decisions automatically.</p>
             </div>
           </details>
         </div>

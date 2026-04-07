@@ -1276,7 +1276,7 @@ export async function runPlan(planPath, options = {}) {
     dryRun = false,
     eventHandler = null,
     abortController = null,
-    quorum = false,        // false | true | "auto"
+    quorum = "auto",       // false | true | "auto" — default: auto (threshold-based)
     quorumThreshold = null, // override threshold from config
     bridge = null,         // BridgeManager instance for approval gate
   } = options;
@@ -2817,10 +2817,7 @@ const MODEL_PRICING = {
   "gpt-5.3-codex":          { input: 3 / 1_000_000,    output: 12 / 1_000_000 },
   "gpt-5.2-codex":          { input: 2 / 1_000_000,    output: 8 / 1_000_000 },
   "gpt-5.2":                { input: 2 / 1_000_000,    output: 8 / 1_000_000 },
-  "gpt-5.1-codex-max":      { input: 3 / 1_000_000,    output: 12 / 1_000_000 },
-  "gpt-5.1-codex":          { input: 2 / 1_000_000,    output: 8 / 1_000_000 },
-  "gpt-5.1":                { input: 2 / 1_000_000,    output: 8 / 1_000_000 },
-  "gpt-5.1-codex-mini":     { input: 0.3 / 1_000_000,  output: 1.2 / 1_000_000 },
+  "gpt-5.4-mini":           { input: 0.4 / 1_000_000,  output: 1.6 / 1_000_000 },
   "gpt-5-mini":             { input: 0.4 / 1_000_000,  output: 1.6 / 1_000_000 },
   "gpt-4.1":                { input: 2 / 1_000_000,    output: 8 / 1_000_000 },
   // Google Gemini
@@ -3660,11 +3657,12 @@ if (args.includes("--test")) {
   const estimate = args.includes("--estimate");
   const dryRun = args.includes("--dry-run");
 
-  // Quorum mode: --quorum (force all) or --quorum=auto (threshold-based)
-  let quorum = false;
-  const quorumArg = args.find((a) => a.startsWith("--quorum"));
+  // Quorum mode: --quorum=auto (default), --quorum (force all), --no-quorum / --quorum=false (disable)
+  let quorum = "auto";
+  const quorumArg = args.find((a) => a.startsWith("--quorum") || a === "--no-quorum");
   if (quorumArg) {
     if (quorumArg === "--quorum=auto") quorum = "auto";
+    else if (quorumArg === "--no-quorum" || quorumArg === "--quorum=false") quorum = false;
     else quorum = true;
   }
   const quorumThreshold = getArg("--quorum-threshold") ? Number(getArg("--quorum-threshold")) : null;

@@ -7,7 +7,7 @@
 
 ## Current Release
 
-**v2.14.0** (2026-04-06) — Platform Complete: agent-per-slice routing, OpenBrain deep context, preset validation counts, Spec Kit auto-detection, dual-publish extensions, auto-update notification, Web UI plan browser, dashboard bridge/approval/escalation/performance panels.
+**v2.15.0** (2026-04-07) — Copilot Platform Integration: one-click plugin install, model deprecation sweep, cloud agent setup template, Copilot Memory coexistence docs, `forge_org_rules` MCP tool, `pforge org-rules export` CLI command, `/forge-troubleshoot` skill.
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 
@@ -349,7 +349,7 @@ Coordinate multiple orchestrators across developers.
 
 ### Phase A — Quick Wins (< 1 day each)
 
-#### A1. One-Click Plugin Install Link on Website
+#### A1. One-Click Plugin Install Link on Website ✅
 
 **Source**: VS Code 1.113 — URL handlers for plugin installation  
 **Effort**: Trivial — one HTML link  
@@ -377,7 +377,7 @@ Add `vscode://chat-plugin/install?source=srnichols/plan-forge` and `vscode-insid
 
 **Dashboard Sweep**: No dashboard changes needed — this is a website/docs-only feature.
 
-#### A2. Model Deprecation Sweep
+#### A2. Model Deprecation Sweep ✅
 
 **Source**: GitHub Copilot Changelog — GPT-5.1 deprecated (Apr 3), GPT-5.3-Codex LTS (Mar 18), GPT-5.4 GA (Mar 5), GPT-5.4 mini GA (Mar 17), Claude Sonnet 4 deprecation upcoming (Mar 31)  
 **Effort**: Small — grep + update defaults  
@@ -419,7 +419,7 @@ Audit all files referencing model names and update:
 | **Progress** tab — Slice cards | `app.js` → `renderSliceCards()` | Verify model name badges render correctly for new model names (length, truncation) |
 | Server-side pricing | `pforge-mcp/orchestrator.mjs` | Update `PRICING` constant object with new model rates |
 
-#### A3. Cloud Agent Integration Guide (`copilot-setup-steps.yml`)
+#### A3. Cloud Agent Integration Guide (`copilot-setup-steps.yml`) ✅
 
 **Source**: GitHub Copilot cloud agent (renamed from "coding agent") now supports configurable setup steps, validation tools, and org-level runner controls (Mar–Apr 2026)  
 **Effort**: Small — one YAML template + docs section  
@@ -468,7 +468,7 @@ Add to `docs/COPILOT-VSCODE-GUIDE.md` a new section: **"Using Plan Forge with Co
 | **Progress** tab | `app.js` → `handleRunStarted()` | Show badge/indicator when run was triggered by cloud agent vs local (if detectable from run metadata) |
 | Notification center | `app.js` → Notification Center | Add notification type for cloud agent session events (if WebSocket events are forwarded) |
 
-#### A4. Copilot Memory Coexistence Documentation
+#### A4. Copilot Memory Coexistence Documentation ✅
 
 **Source**: Copilot Memory now on by default for Pro/Pro+ users (Mar 4) — repo-scoped, 28-day expiry, shared across coding agent/code review/CLI  
 **Effort**: Small — documentation only  
@@ -618,7 +618,7 @@ Changes needed:
 | **Runs** tab — Run detail drawer | `app.js` → Run Detail Drawer | Show pipeline mode ("4-session manual" vs "1-session nested subagents") in run metadata |
 | **Config** tab | `app.js` → Config Editor | Add `pipeline.nestedSubagents` toggle to the visual editor |
 
-#### B3. `/troubleshoot` Integration Skill
+#### B3. `/troubleshoot` Integration Skill ✅
 
 **Source**: VS Code 1.114 — `/troubleshoot` can now reference previous chat sessions via `#session`, enabling diagnosis of why instructions were ignored or guardrails bypassed  
 **Effort**: Small-to-medium — new skill file + docs  

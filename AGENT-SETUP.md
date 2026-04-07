@@ -29,6 +29,17 @@ IF target has ANY of those files already (but no .forge.json)
 
 ## Section 1: Greenfield Setup (New Project or No Existing Guardrails)
 
+### Step 0: Install the VS Code Plugin (Preferred)
+
+For VS Code 1.113+, use the one-click URL handler to add Plan Forge MCP tools directly to Copilot Chat:
+
+- **VS Code stable**: `vscode://chat-plugin/install?source=srnichols/plan-forge`
+- **VS Code Insiders**: `vscode-insiders://chat-plugin/install?source=srnichols/plan-forge`
+
+Open the link in a browser or paste it into the VS Code address bar. Then proceed to Step 1.
+
+> **VS Code < 1.113?** Skip this step and follow Steps 1–4 below to set up manually.
+
 ### Step 1: Auto-Detect Tech Stack
 
 Scan the target project root for these marker files to determine the correct preset:
@@ -108,7 +119,14 @@ See [docs/plans/examples/plan-forge-validate.yml](docs/plans/examples/plan-forge
 ```bash
 cd pforge-mcp && npm install
 ```
-This enables 17 forge tools (`forge_smith`, `forge_sweep`, `forge_diff`, `forge_analyze`, `forge_diagnose`, `forge_run_plan`, `forge_cost_report`, `forge_capabilities`, etc.) as native MCP functions. The setup script already generated `.vscode/mcp.json` and `.claude/mcp.json` configs — `npm install` is the only manual step.
+This enables 18 forge tools (`forge_smith`, `forge_sweep`, `forge_diff`, `forge_analyze`, `forge_diagnose`, `forge_run_plan`, `forge_cost_report`, `forge_capabilities`, etc.) as native MCP functions. The setup script already generated `.vscode/mcp.json` and `.claude/mcp.json` configs — `npm install` is the only manual step.
+
+**Copilot cloud agent setup** — If the target project will be worked on by the Copilot cloud agent (GitHub Issues → automated PR), add the environment setup file:
+```bash
+# Copy the template from Plan Forge source into the target project
+cp templates/copilot-setup-steps.yml .github/copilot-setup-steps.yml
+```
+Edit `.github/copilot-setup-steps.yml` and set `--preset` to the detected tech stack. This file provisions the cloud agent's environment before it starts work — installing Node.js, running `setup.sh --force`, installing MCP dependencies, and running `pforge smith`. See [docs/COPILOT-VSCODE-GUIDE.md](docs/COPILOT-VSCODE-GUIDE.md#using-plan-forge-with-copilot-cloud-agent) for the full cloud agent guide.
 
 ---
 

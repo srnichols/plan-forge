@@ -138,7 +138,7 @@ Both agents and skills extend Copilot, but they serve different purposes:
 - **Stack-specific agents**: 8 for app presets (dotnet/typescript/python/java/go/swift/rust/php) · **5** for `azure-iac` (bicep-reviewer, terraform-reviewer, security-reviewer, deploy-helper, azure-sweeper)
 - **8 shared agents** — API contracts, accessibility, multi-tenancy, CI/CD, observability, dependency, compliance, error handling
 - **5 pipeline agents** — specifier, plan-hardener, executor, reviewer-gate, shipper
-- **Skills**: 11 for app presets (8 stack-specific + 3 shared: health-check, forge-execute, security-audit) · **3** for `azure-iac` (infra-deploy, infra-test, azure-sweep)
+- **Skills**: 12 for app presets (8 stack-specific + 4 shared: health-check, forge-execute, forge-troubleshoot, security-audit) · **3** for `azure-iac` (infra-deploy, infra-test, azure-sweep)
 
 > **You don't need to understand all of this upfront.** Run the setup wizard, follow the numbered step prompts, and the framework guides you through.
 
@@ -256,7 +256,7 @@ Plan Forge is built with Plan Forge. Every dashboard feature, bug fix, and MCP t
 
 - **11 phases** executed via `pforge run-plan` with quorum auto mode
 - **103 self-tests** passing after every slice
-- **v1.0 → v2.14** with zero manual rollbacks — every change flows through scope contracts, validation gates, and completeness sweeps
+- **v1.0 → v2.15** with zero manual rollbacks — every change flows through scope contracts, validation gates, and completeness sweeps
 - The dashboard screenshots in our docs were captured by a Playwright script that runs against the live dashboard — itself built slice-by-slice using Plan Forge
 
 If the pipeline can build itself without drift, it can build your project too.
@@ -275,6 +275,19 @@ Before you begin, make sure you have:
 - A project you want to add guardrails to (or a new empty project)
 
 > **New to VS Code + Copilot?** See [docs/COPILOT-VSCODE-GUIDE.md](docs/COPILOT-VSCODE-GUIDE.md) for a walkthrough of Agent Mode, how to open the chat panel, and how to use prompt templates.
+>
+> **Using Copilot cloud agent?** Copy [templates/copilot-setup-steps.yml](templates/copilot-setup-steps.yml) to `.github/copilot-setup-steps.yml` in your project to pre-install guardrails, MCP tools, and validation gates before the agent starts. See [docs/COPILOT-VSCODE-GUIDE.md#using-plan-forge-with-copilot-cloud-agent](docs/COPILOT-VSCODE-GUIDE.md#using-plan-forge-with-copilot-cloud-agent) for the full guide.
+
+### 0. Install the VS Code Plugin (Recommended)
+
+The fastest way to get started is the one-click plugin install (requires VS Code 1.113+):
+
+- [**Install in VS Code**](vscode://chat-plugin/install?source=srnichols/plan-forge)
+- [**Install in VS Code Insiders**](vscode-insiders://chat-plugin/install?source=srnichols/plan-forge)
+
+This adds Plan Forge MCP tools directly to Copilot Chat. Then proceed to step 1.
+
+> **VS Code < 1.113?** Use the manual setup steps below.
 
 ### 1. Use This Template
 
@@ -478,7 +491,7 @@ These are stack-independent and use `handoffs:` frontmatter to chain sessions wi
 
 ### Skills Per Preset
 
-App presets (dotnet / typescript / python / java / go / swift / rust / php) include **11 skills** (8 stack-specific + 3 shared):
+App presets (dotnet / typescript / python / java / go / swift / rust / php) include **12 skills** (8 stack-specific + 4 shared):
 
 | Skill | Slash Command | Purpose |
 |-------|-------------|--------|
@@ -493,6 +506,7 @@ App presets (dotnet / typescript / python / java / go / swift / rust / php) incl
 | `security-audit/` | `/security-audit` | Full security audit: OWASP, auth gaps, secrets, injection, dependency CVEs |
 | `health-check/` | `/health-check` | Forge diagnostic: forge_smith → forge_validate → forge_sweep |
 | `forge-execute/` | `/forge-execute` | Guided plan execution: list plans → estimate → execute → report |
+| `forge-troubleshoot/` | `/forge-troubleshoot` | Diagnose and resolve plan failures, gate errors, and environment issues |
 
 The `azure-iac` preset includes **3 IaC-specific skills**:
 
@@ -672,7 +686,7 @@ Running `setup.ps1` (PowerShell) or `setup.sh` (Bash) with a preset:
 1. **Copies preset instruction files** from `presets/{stack}/` to your project root (16 files for app presets — 17 for TypeScript which adds `frontend.instructions.md`; 12 for `azure-iac`)
 2. **Copies prompt templates** for scaffolding new entities, services, tests, and Project Principles (15 for app presets, 6 for `azure-iac`)
 3. **Copies agent definitions** for architecture review, security audit, testing (6 stack-specific + 8 shared + 5 pipeline agents; `azure-iac` gets 5 stack-specific including the enterprise-grade `azure-sweeper`)
-4. **Copies skill workflows** — 11 for app presets (8 stack-specific + 3 shared: health-check, forge-execute, security-audit); `azure-iac` gets 3 (infra-deploy, infra-test, azure-sweep)
+4. **Copies skill workflows** — 12 for app presets (8 stack-specific + 4 shared: health-check, forge-execute, forge-troubleshoot, security-audit); `azure-iac` gets 3 (infra-deploy, infra-test, azure-sweep)
 5. **Generates `AGENTS.md`** with patterns for your tech stack
 6. **Generates `.github/copilot-instructions.md`** with stack-specific conventions
 7. **Copies shared instruction files** (git-workflow, architecture principles)
@@ -755,7 +769,7 @@ These features are all **opt-in** — skip any that don't apply. Existing workfl
 | **CLI Wrapper** | `pforge` commands for init, status, new-phase, branch, and extension management. | See [docs/CLI-GUIDE.md](docs/CLI-GUIDE.md) |
 | **Lifecycle Hooks** | Auto-enforce Forbidden Actions (PreToolUse), inject Project Principles at session start, warn on TODO/FIXME after edits. | Installed automatically with setup — see `.github/hooks/` |
 | **Agent Plugin** | Install Plan Forge as a VS Code agent plugin from a Git URL — no setup scripts needed. | `Chat: Install Plugin From Source` → repo URL |
-| **Skill Slash Commands** | App presets: `/database-migration`, `/staging-deploy`, `/test-sweep`, `/dependency-audit`, `/code-review`, `/release-notes`, `/api-doc-gen`, `/onboarding`, `/security-audit`, `/health-check`, `/forge-execute`. Azure IaC: `/infra-deploy`, `/infra-test`, `/azure-sweep`. | Type `/` in Copilot Chat to see available skills |
+| **Skill Slash Commands** | App presets: `/database-migration`, `/staging-deploy`, `/test-sweep`, `/dependency-audit`, `/code-review`, `/release-notes`, `/api-doc-gen`, `/onboarding`, `/security-audit`, `/health-check`, `/forge-execute`, `/forge-troubleshoot`. Azure IaC: `/infra-deploy`, `/infra-test`, `/azure-sweep`. | Type `/` in Copilot Chat to see available skills |
 | **Bridge & Approval Gates** | Send Slack/Teams/Telegram notifications on run events. Set `approvalRequired: true` on a channel to pause execution after all slices pass and require a human click before finalising. | Add a `bridge` section to `.forge.json` — see [docs/CLI-GUIDE.md](docs/CLI-GUIDE.md) |
 | **Claude 4.6 Tuning** | Guidance for calibrating prompt intensity, managing context budgets, and controlling thinking depth with Claude Opus 4.6. Prevents over-halting, over-exploring, and overengineering. | See [CUSTOMIZATION.md → Tuning for Claude Opus 4.6](CUSTOMIZATION.md#tuning-for-claude-opus-46) |
 | **Session Memory Capture** | Step 6 (Ship) automatically saves conventions, lessons, and forbidden patterns to `/memories/repo/`. Step 2 (Harden) reads them so each phase builds on prior experience. | Built-in — no setup needed |
@@ -852,6 +866,18 @@ All 7 supported agent types:
 
 Use `-Agent all` to generate all formats at once. The OpenBrain memory integration **bridges the 3-session model** with long-term context — prior decisions, patterns, and postmortems automatically surface at the start of each new session. See [README → Persistent Memory](README.md#extension-ecosystem).
 
+### "How does Plan Forge work with the Copilot cloud agent?"
+
+GitHub's Copilot cloud agent works on issues autonomously — it clones your repo, edits files, and opens a PR. Plan Forge integrates with this via `.github/copilot-setup-steps.yml`, which provisions the agent's environment before it starts coding.
+
+Copy `templates/copilot-setup-steps.yml` to `.github/copilot-setup-steps.yml` in your project. It installs Node.js, runs the Plan Forge setup script, installs MCP server dependencies, and runs `pforge smith` as a post-setup health check. The cloud agent then starts with:
+
+- All guardrail instruction files loaded automatically (same `applyTo` mechanism as local VS Code)
+- All 18 MCP tools available via `.vscode/mcp.json`
+- `pforge run-plan` and `forge_run_plan` ready for slice-by-slice execution
+
+See [docs/COPILOT-VSCODE-GUIDE.md#using-plan-forge-with-copilot-cloud-agent](docs/COPILOT-VSCODE-GUIDE.md#using-plan-forge-with-copilot-cloud-agent) for the full setup guide.
+
 ### "Do I need to use every step every time?"
 
 No. Use the "When to Use" table as a guide:
@@ -873,6 +899,18 @@ This can happen if the context window is full (too many files loaded). Tips:
 - Explicitly reference the relevant instruction file in your prompt: `#file:.github/instructions/security.instructions.md`
 
 See [docs/COPILOT-VSCODE-GUIDE.md](docs/COPILOT-VSCODE-GUIDE.md) for more troubleshooting tips.
+
+### "How does Plan Forge relate to Copilot Memory?"
+
+Plan Forge works alongside — not instead of — Copilot's built-in memory system. There are three distinct memory layers, and each serves a different purpose:
+
+| Layer | What It Is | Best For |
+|-------|-----------|---------|
+| **Copilot Memory** (`/memories/`) | Copilot's native note storage (user / session / repo scopes) | Free-form notes, personal patterns, ad-hoc insights |
+| **Plan Forge Session Bridge** (`/memories/repo/current-phase.md`) | Structured handoff files managed by the pipeline prompts | Carrying Session 1 → 2 → 3 state through the hardening pipeline |
+| **OpenBrain** (MCP `search_thoughts` / `capture_thought`) | Semantic vector memory that injects prior decisions automatically | Long-term pattern recall — auto-injected before each slice without manual prompting |
+
+All three are complementary. A typical phase uses all three: Copilot Memory for quick notes mid-session, the session bridge files for structured phase handoffs, and OpenBrain for surfacing relevant past decisions automatically. See [docs/COPILOT-VSCODE-GUIDE.md#memory-layers](docs/COPILOT-VSCODE-GUIDE.md#memory-layers) for the full guide.
 
 ### "I work in a monorepo — will Copilot find the Plan Forge files?"
 

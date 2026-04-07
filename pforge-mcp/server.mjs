@@ -21,7 +21,7 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { execSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, writeFileSync, watchFile, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync, watchFile, unwatchFile, statSync, openSync, readSync, closeSync } from "node:fs";
 import { resolve, join, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parsePlan, runPlan, detectWorkers, getCostReport, analyzeWithQuorum, generateImage } from "./orchestrator.mjs";
@@ -57,6 +57,11 @@ const _approvedRunIds = new Set();
  * Event File Watcher — tails events.log from the latest run dir and broadcasts
  * new events to the WebSocket hub. This bridges the orchestrator (standalone CLI
  * process writing to files) with the dashboard (WebSocket client).
+ *
+ * On startup: finds the latest run, reads ALL events from it (so the hub history
+ * buffer has them for late-connecting dashboard clients).
+ * On new run: detects the new events.log, replays it from the start, detaches
+ * the old file watcher.
  */
 function startEventFileWatcher(hub, cwd) {
   const runsDir = resolve(cwd, ".forge", "runs");
@@ -82,10 +87,10 @@ function startEventFileWatcher(hub, cwd) {
     try {
       const stat = statSync(logPath);
       if (stat.size <= fileOffset) return;
-      const fd = require("node:fs").openSync(logPath, "r");
+      const fd = openSync(logPath, "r");
       const buf = Buffer.alloc(stat.size - fileOffset);
-      require("node:fs").readSync(fd, buf, 0, buf.length, fileOffset);
-      require("node:fs").closeSync(fd);
+      readSync(fd, buf, 0, buf.length, fileOffset);
+      closeSync(fd);
       fileOffset = stat.size;
 
       const lines = buf.toString("utf-8").split("\n").filter(l => l.trim());
@@ -105,48 +110,53 @@ function startEventFileWatcher(hub, cwd) {
     }
   }
 
-  // Poll every 2 seconds: check for latest events.log and process new lines
-  scanInterval = setInterval(() => {
-    const logPath = findLatestEventsLog();
-    if (!logPath) return;
-
-    if (logPath !== currentLogFile) {
-      // New or different run — reset offset
-      currentLogFile = logPath;
-      fileOffset = 0;
-      console.error(`[event-watcher] Tracking: ${logPath}`);
+  function detachWatcher() {
+    if (currentLogFile) {
+      try { unwatchFile(currentLogFile); } catch { /* ignore */ }
     }
+  }
 
-    processNewLines(logPath);
-  }, 2000);
-
-  // Also use watchFile for faster detection when the file changes
   function attachWatcher(logPath) {
     try {
       watchFile(logPath, { interval: 1000 }, () => {
         processNewLines(logPath);
       });
     } catch {
-      // watchFile not supported or file doesn't exist yet — polling covers it
+      // watchFile not supported — polling covers it
     }
   }
 
-  // Initial scan
+  // Poll every 2 seconds: check for latest events.log and process new lines
+  scanInterval = setInterval(() => {
+    const logPath = findLatestEventsLog();
+    if (!logPath) return;
+
+    if (logPath !== currentLogFile) {
+      // New or different run — detach old watcher, reset offset, replay from start
+      detachWatcher();
+      currentLogFile = logPath;
+      fileOffset = 0;
+      attachWatcher(logPath);
+      console.error(`[event-watcher] Tracking new run: ${logPath}`);
+    }
+
+    processNewLines(logPath);
+  }, 2000);
+
+  // Initial scan — replay ALL events from the latest run so hub has history
   const initial = findLatestEventsLog();
   if (initial) {
     currentLogFile = initial;
-    // Start from current end of file (don't replay old events — hub has history)
-    try { fileOffset = statSync(initial).size; } catch { fileOffset = 0; }
+    fileOffset = 0; // Start from beginning — replay full history into hub
+    processNewLines(initial);
     attachWatcher(initial);
-    console.error(`[event-watcher] Watching: ${initial}`);
+    console.error(`[event-watcher] Loaded ${initial} (replayed into hub history)`);
   }
 
   return {
     stop() {
       if (scanInterval) clearInterval(scanInterval);
-      if (currentLogFile) {
-        try { require("node:fs").unwatchFile(currentLogFile); } catch { /* ignore */ }
-      }
+      detachWatcher();
     },
   };
 }

@@ -18,10 +18,10 @@ Plan Forge is an open-source framework that gives AI coding agents (Copilot, Cla
 
 - 18 MCP tools (start with `forge_capabilities` for full discovery)
 - 19 reviewer agents (6 stack-specific + 8 cross-stack + 5 pipeline)
-- 11 slash command skills
+- 12 slash command skills
 - 15-18 auto-loading instruction files per preset
 - 15 scaffolding prompt templates per app preset
-- Live dashboard at localhost:3100/dashboard (9 tabs)
+- Live dashboard at localhost:3100/dashboard (8 tabs)
 - Quorum mode: multi-model consensus for complex slices
 - Auto-escalation: automatic model promotion on slice failure
 - Agent-per-slice routing: assign different models per role
@@ -56,6 +56,7 @@ cd my-project-plans
 - Website: https://planforge.software
 - Repository: https://github.com/srnichols/plan-forge
 - Documentation: https://planforge.software/docs.html
+- Manual: https://planforge.software/manual/ (14 chapters + 4 appendices)
 - Capabilities: https://planforge.software/capabilities.html
 - FAQ: https://planforge.software/faq.html
 - Extensions: https://planforge.software/extensions.html

@@ -145,18 +145,145 @@
   }
 
   // ─── Client-side search ───
+  // Cross-page search index: chapters + key sections from every chapter
+  const SEARCH_SECTIONS = [
+    // Ch 1
+    { t: "The Problem in One Sentence", u: "what-is-plan-forge.html#the-problem" },
+    { t: "What Happens Without Guardrails", u: "what-is-plan-forge.html#without-guardrails" },
+    { t: "What Plan Forge Does", u: "what-is-plan-forge.html#what-it-does" },
+    { t: "The Blacksmith Analogy", u: "what-is-plan-forge.html#the-analogy" },
+    { t: "Who This Is For", u: "what-is-plan-forge.html#who-its-for" },
+    { t: "What This Is Not", u: "what-is-plan-forge.html#what-this-is-not" },
+    // Ch 2
+    { t: "The 7-Step Pipeline", u: "how-it-works.html#pipeline" },
+    { t: "Sessions and Why They Matter", u: "how-it-works.html#sessions" },
+    { t: "The File System", u: "how-it-works.html#file-system" },
+    { t: "How Guardrails Auto-Load (applyTo)", u: "how-it-works.html#apply-to" },
+    { t: ".forge.json Config", u: "how-it-works.html#forge-json" },
+    { t: "Plans Are Markdown", u: "how-it-works.html#plans" },
+    { t: "Slices Gates and Scope", u: "how-it-works.html#building-blocks" },
+    { t: "Nested Subagents", u: "how-it-works.html#sessions" },
+    // Ch 3
+    { t: "Prerequisites", u: "installation.html#prerequisites" },
+    { t: "One-Click Install", u: "installation.html#one-click" },
+    { t: "Setup Wizard", u: "installation.html#setup-wizard" },
+    { t: "Choosing Your Preset", u: "installation.html#presets" },
+    { t: "pforge smith Verification", u: "installation.html#verify" },
+    { t: "Multi-Agent Setup", u: "installation.html#multi-agent" },
+    { t: "Updating Plan Forge", u: "installation.html#updating" },
+    // Ch 4
+    { t: "Step 0 Specify the Feature", u: "your-first-plan.html#step-0" },
+    { t: "Step 2 Harden the Plan", u: "your-first-plan.html#step-2" },
+    { t: "Reading the Hardened Plan", u: "your-first-plan.html#reading-the-plan" },
+    { t: "Step 3 Execute", u: "your-first-plan.html#step-3" },
+    { t: "Step 5 Review", u: "your-first-plan.html#step-5" },
+    { t: "Pipeline Agents Click-Through", u: "your-first-plan.html#alternative" },
+    // Ch 5
+    { t: "Plan Structure", u: "writing-plans.html#structure" },
+    { t: "Writing a Good Scope Contract", u: "writing-plans.html#scope-contract" },
+    { t: "Slicing Strategy", u: "writing-plans.html#slicing" },
+    { t: "Validation Gates", u: "writing-plans.html#gates" },
+    { t: "Parallel Execution [P] tag", u: "writing-plans.html#parallel" },
+    { t: "Stop Conditions", u: "writing-plans.html#stop-conditions" },
+    { t: "Context Files per Slice", u: "writing-plans.html#context" },
+    { t: "Common Mistakes", u: "writing-plans.html#mistakes" },
+    // Ch 6
+    { t: "Starting the Dashboard", u: "dashboard.html#starting" },
+    { t: "Progress Tab", u: "dashboard.html#progress" },
+    { t: "Runs Tab", u: "dashboard.html#runs" },
+    { t: "Cost Tab", u: "dashboard.html#cost" },
+    { t: "Actions Tab", u: "dashboard.html#actions" },
+    { t: "Replay Tab", u: "dashboard.html#replay" },
+    { t: "Config Tab", u: "dashboard.html#config" },
+    { t: "Traces Tab OTLP", u: "dashboard.html#traces" },
+    // Ch 7
+    { t: "pforge init", u: "cli-reference.html#init" },
+    { t: "pforge check", u: "cli-reference.html#check" },
+    { t: "pforge smith", u: "cli-reference.html#smith" },
+    { t: "pforge status", u: "cli-reference.html#status" },
+    { t: "pforge sweep", u: "cli-reference.html#sweep" },
+    { t: "pforge diff", u: "cli-reference.html#diff" },
+    { t: "pforge analyze", u: "cli-reference.html#analyze" },
+    { t: "pforge diagnose", u: "cli-reference.html#diagnose" },
+    { t: "pforge run-plan", u: "cli-reference.html#run-plan" },
+    { t: "pforge ext", u: "cli-reference.html#ext" },
+    { t: "pforge update", u: "cli-reference.html#update" },
+    { t: "analyze vs diagnose", u: "cli-reference.html#commands" },
+    // Ch 8
+    { t: "Two-Layer Guardrail Model", u: "customization.html#two-layers" },
+    { t: "Project Principles", u: "customization.html#principles" },
+    { t: "Project Profile", u: "customization.html#profile" },
+    { t: "copilot-instructions.md", u: "customization.html#master-config" },
+    { t: "Custom Instruction Files", u: "customization.html#custom-instructions" },
+    { t: "applyTo Pattern Reference", u: "customization.html#custom-instructions" },
+    { t: "Configuration Hierarchy", u: "customization.html#config-hierarchy" },
+    // Ch 9
+    { t: "Universal Instruction Files", u: "instructions-agents.html#shared" },
+    { t: "Domain Instruction Files", u: "instructions-agents.html#domain" },
+    { t: "Stack-Specific Agents", u: "instructions-agents.html#agents" },
+    { t: "Cross-Stack Agents", u: "instructions-agents.html#agents" },
+    { t: "Pipeline Agents", u: "instructions-agents.html#agents" },
+    { t: "Skills Slash Commands", u: "instructions-agents.html#skills" },
+    { t: "Lifecycle Hooks", u: "instructions-agents.html#hooks" },
+    // Ch 10
+    { t: "MCP Server Architecture", u: "mcp-server.html#architecture" },
+    { t: "18 MCP Tools", u: "mcp-server.html#tools" },
+    { t: "REST API Endpoints", u: "mcp-server.html#rest-api" },
+    { t: "WebSocket Hub Events", u: "mcp-server.html#websocket" },
+    { t: "OTLP Telemetry Traces", u: "mcp-server.html#telemetry" },
+    { t: "Cost Tracking", u: "mcp-server.html#cost" },
+    { t: "SDK for Integrators", u: "mcp-server.html#sdk" },
+    { t: "forge_run_plan", u: "mcp-server.html#tools" },
+    { t: "forge_generate_image", u: "mcp-server.html#tools" },
+    // Ch 11
+    { t: "Extension Catalog", u: "extensions.html#catalog" },
+    { t: "Installing Extensions", u: "extensions.html#installing" },
+    { t: "Creating Extensions", u: "extensions.html#creating" },
+    { t: "Publishing Extensions", u: "extensions.html#publishing" },
+    // Ch 12
+    { t: "Feature Parity Matrix", u: "multi-agent.html#comparison" },
+    { t: "Claude Code Setup", u: "multi-agent.html#claude" },
+    { t: "Cursor Setup", u: "multi-agent.html#cursor" },
+    { t: "Codex Setup", u: "multi-agent.html#codex" },
+    { t: "Gemini Setup", u: "multi-agent.html#gemini" },
+    { t: "Windsurf Setup", u: "multi-agent.html#windsurf" },
+    { t: "Cloud Agent", u: "multi-agent.html#cloud-agent" },
+    { t: "Spec Kit Interop", u: "multi-agent.html#spec-kit" },
+    // Ch 13
+    { t: "Model Routing", u: "advanced-execution.html#model-routing" },
+    { t: "Escalation Chains", u: "advanced-execution.html#escalation" },
+    { t: "Quorum Mode", u: "advanced-execution.html#quorum" },
+    { t: "Cost Optimization", u: "advanced-execution.html#cost-optimization" },
+    { t: "CI Integration GitHub Actions", u: "advanced-execution.html#ci-integration" },
+    { t: "Parallel Execution DAG", u: "advanced-execution.html#parallel" },
+    { t: "Resume and Retry", u: "advanced-execution.html#resume" },
+    { t: "OpenBrain Memory", u: "advanced-execution.html#openbrain" },
+    // Ch 14
+    { t: "Diagnostic Tools", u: "troubleshooting.html#diagnostics" },
+    { t: "Agent Not Following Guardrails", u: "troubleshooting.html#guardrails-not-loading" },
+    { t: "Plan Execution Fails", u: "troubleshooting.html#execution-fails" },
+    { t: "Dashboard Won't Load", u: "troubleshooting.html#dashboard-issues" },
+    { t: "Setup Failed", u: "troubleshooting.html#setup-issues" },
+    { t: "Costs Are Too High", u: "troubleshooting.html#costs-high" },
+    { t: "Grok Image Generation", u: "troubleshooting.html#image-generation" },
+    { t: "Common Error Messages", u: "troubleshooting.html#common-errors" },
+  ];
+
   function initSearch() {
     const input = document.querySelector(".search-input");
     const resultsEl = document.querySelector(".search-results");
     if (!input || !resultsEl) return;
 
-    // Build index from chapters + headings on current page
+    // Build index: chapter titles + cross-page section index + current-page headings
     const searchIndex = CHAPTERS.filter((_, i) => i > 0).map((ch) => ({
       title: (ch.num ? ch.num + ". " : "") + ch.title,
       url: ch.file,
     }));
 
-    // Add h2/h3 from current page
+    // Add cross-page sections
+    SEARCH_SECTIONS.forEach((s) => searchIndex.push({ title: s.t, url: s.u }));
+
+    // Add h2/h3 from current page (deep links within this page)
     document.querySelectorAll(".chapter-content h2[id], .chapter-content h3[id]").forEach((h) => {
       searchIndex.push({
         title: h.textContent.trim(),

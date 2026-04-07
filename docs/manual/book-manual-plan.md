@@ -710,11 +710,11 @@ The **`E:\GitHub\plan-forge-testbed`** repo contains a **Tracker sample app** wi
 - [x] Chapters 11–14 (Extensions, Multi-Agent, Advanced, Troubleshooting)
 - [x] Appendices A–D (Glossary, Quick Reference, Stack Notes, Grok Warnings)
 - [ ] Appendix E (Sample Project — Build a Tracker App)
-- [ ] Client-side search index
-- [ ] Cross-chapter links verified
+- [x] Client-side search index
+- [x] Cross-chapter links verified
 - [ ] Print stylesheet
 - [x] Link from main site nav to manual
-- [ ] Add `docs/manual/` to sitemap + `llms.txt`
+- [x] Add `docs/manual/` to sitemap + `llms.txt`
 
 ### Round 0 — Pre-work (before any chapter writing)
 - [ ] Fix `plugin.json` version (2.13.1 → 2.17.0)

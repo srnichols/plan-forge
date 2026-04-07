@@ -192,6 +192,26 @@
 
         <p>Copilot in VS Code remains the richest experience — it's the only one with true file-type-scoped auto-loading and lifecycle hooks. The other adapters embed all guardrails at once (which is slightly less efficient in terms of context but functionally equivalent). Every agent gets the same rules; they just ingest them differently.</p>
 
+        <h2>The Killer Feature: Unified Memory Across Agents</h2>
+
+        <p>Here's the part most people miss — and it might be the biggest deal of all.</p>
+
+        <p>When you wire in <a href="https://github.com/srnichols/OpenBrain" class="text-blue-400 hover:underline font-semibold">OpenBrain</a> as a shared MCP server, agents in <em>completely different tools</em> share the same memory. Think about what that means:</p>
+
+        <ol>
+          <li>Your <strong>Claude Code</strong> session hardens the plan and captures architectural decisions to OpenBrain</li>
+          <li>Your <strong>Cursor</strong> session executes the slices — and searches OpenBrain first, finding every decision Claude made</li>
+          <li>Your <strong>Copilot</strong> session runs the independent review — and queries OpenBrain for the full decision history from <em>both</em> previous sessions</li>
+        </ol>
+
+        <p>Three different tools. Three different AI models. <strong>One shared institutional memory.</strong></p>
+
+        <p>This isn't just "same guardrails everywhere." This is <strong>cross-agent collaboration through persistent semantic memory</strong>. The Claude session doesn't know Cursor exists. The Cursor session doesn't know Claude was involved. But they're both working from the same decision history because OpenBrain sits underneath all of them.</p>
+
+        <blockquote><p>It doesn't matter which agent writes the code. What matters is that every agent knows what every other agent decided — and why.</p></blockquote>
+
+        <p>This is what makes the multi-agent story more than a convenience feature. It's not just "pick your favorite tool." It's "your whole team's AI agents build on each other's knowledge, across tools, across sessions, across time." The decisions compound. The mistakes are learned from. And nobody starts from zero — ever.</p>
+
         <h2>Try It</h2>
 
         <pre><code># Install for your stack + your team's agents

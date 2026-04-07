@@ -1,0 +1,20 @@
+graph TD
+    SC["Slice Arrives"] --> SCORE["Complexity Scoring"]
+    
+    subgraph SIGNALS["7 Weighted Signals"]
+        SG1["File scope count"]
+        SG2["Cross-module deps"]
+        SG3["Security keywords"]
+        SG4["DB/migration keywords"]
+        SG5["Gate count"]
+        SG6["Task count"]
+        SG7["Historical failure rate"]
+    end
+    
+    SCORE --> CHECK{" Score >= Threshold? "}
+    CHECK -->|"Yes"| QUORUM["🔀 Quorum: 3 Models"]
+    CHECK -->|"No"| SINGLE["⚡ Standard: 1 Model"]
+    
+    style QUORUM fill:#8b5cf6,color:#fff
+    style SINGLE fill:#22c55e,color:#fff
+    style CHECK fill:#eab308,color:#000

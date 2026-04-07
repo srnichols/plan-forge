@@ -1,79 +1,137 @@
-HERO IMAGE: docs/blog/assets/quorum-hero.jpg
-TITLE: Quorum Mode: What Happens When 3 AI Models Review Each Other's Code
+HERO IMAGE: docs/blog/assets/quorum-hero.webp (1280x720, 16:9)
+TITLE: What Happens When 3 AI Models Review Each Other's Code
+
 NETWORK TEASER (paste into "Tell your network what this article is about"):
-We built the same feature twice — once with one AI model, once with three models reviewing each other's plans before any code was written. Both passed all tests. But the quorum run produced 20% more tests, DRY helpers, and modern patterns — for $0.22 extra. Here are the full A/B results.
----
+We built the same feature twice — once with one AI model, once with three models reviewing each other's plans before any code was written. Both passed all tests. But the quorum run produced 20% more tests, DRY helpers, and modern patterns — for $0.22 extra. Here are the full A/B results. #AIDevelopment #CodeQuality #SoftwareEngineering #GitHubCopilot #DevTools
+
+HASHTAGS: #AIDevelopment #CodeQuality #SoftwareEngineering #GitHubCopilot #DevTools
+
+FORMATTING NOTES:
+- ALL CAPS headers below must be formatted as H2 in LinkedIn's editor
+- Bold text marked with ** must be applied manually after pasting
+- [IMAGE] markers indicate where to insert inline images from docs/blog/assets/linkedin/
+- Paste body text, then go back and apply H2 + bold + insert images
+
+--- ARTICLE BODY (paste below into the editor) ---
 
 What if three AI models reviewed each other's plans before any code was written?
 
-That's the idea behind Quorum Mode in Plan Forge. Instead of dispatching a coding task to a single model, you dispatch it to three in parallel. Each model produces a detailed implementation plan — without executing code. A reviewer agent then synthesizes the best elements from all three into a unified execution plan. The final builder uses that consensus plan instead of the raw instructions.
+That's the idea behind Quorum Mode in Plan Forge. Instead of dispatching a coding task to a single model, **you dispatch it to three in parallel.** Each model produces a detailed implementation plan — without executing code. A reviewer agent then synthesizes the best elements from all three into a unified execution plan. The final builder uses that consensus plan instead of the raw instructions.
 
-Think of it as a design review by three senior engineers before any code is written.
+Think of it as a **design review by three senior engineers** before any code is written.
 
 But does it actually produce better code? We ran an A/B test to find out.
 
 THE TEST SETUP
 
-We built the same feature twice using identical hardened plan files:
+We built the same feature twice using identical hardened plan files. Same scope contract. Same slices. Same validation gates. The only variable was whether the builder worked from raw slice instructions or a synthesized consensus plan.
 
-• Feature: Invoice Engine — rate tiers, volume discounts, tax calculation, banker's rounding
-• Plan: Same scope contract, same slices, same validation gates
-• Run A (Control): Standard single-model execution (Claude Sonnet)
-• Run B (Quorum): Three models in parallel (Claude Opus, GPT-5.3-Codex, Claude Sonnet) → reviewer synthesis → Claude Sonnet builds from consensus
+**Feature:** Invoice Engine — rate tiers, volume discounts, tax calculation, banker's rounding
 
-Both runs used identical guardrails, the same tech stack preset, and the same build/test gates. The only variable was whether the builder worked from raw slice instructions or a synthesized consensus plan.
+**Run A (Control):** Standard single-model execution (Claude Sonnet)
+
+**Run B (Quorum):** Three models in parallel (Claude Opus, GPT-5.3-Codex, Claude Sonnet) → reviewer synthesis → Claude Sonnet builds from consensus
+
+Both runs used identical guardrails, the same tech stack preset (.NET), and the same build/test gates.
+
+[IMAGE: 04-quorum-sequence.png — Sequence diagram: Orchestrator dispatches to 3 models in parallel → Each returns dry-run analysis → Reviewer synthesizes → Builder executes from consensus plan]
 
 THE RESULTS
 
-Both runs passed all gates. Every slice built, every test passed, and the independent reviewer signed off on both. But the quality of the code was measurably different.
+Both runs passed all gates. Every slice built, every test passed, and the independent reviewer signed off on both. But **the quality of the code was measurably different.**
 
-• Tests written: Control 15, Quorum 18 (+20%)
-• Helper extraction: Control used inline code. Quorum extracted DRY helpers (IsWeekend(), CalculateVolumeDiscount())
-• Test dates: Control used hardcoded literals that break when dates pass. Quorum used relative offsets (DateTime.Now.AddDays(-7))
-• Edge cases: Quorum covered voided invoice regeneration and invoice number sequencing — missed entirely by single model
-• .NET patterns: Control used generic ValidationException. Quorum used modern ArgumentException.ThrowIfNullOrWhiteSpace
-• Total cost: Control $0.62, Quorum $0.84 (+35%)
-• Total time: Control 12 min, Quorum 32 min (2.7x)
+Here are the numbers side by side:
+
+**Tests written:** Control 15 → Quorum 18 **(+20%)**
+**Helper extraction:** Control used inline code → Quorum extracted DRY helpers
+**Test dates:** Control hardcoded literals → Quorum used relative offsets
+**Edge cases covered:** Control missed 2 critical scenarios → Quorum caught both
+**.NET patterns:** Control used generic exceptions → Quorum used modern ThrowIf patterns
+**Total cost:** Control $0.62 → Quorum $0.84 **(+$0.22)**
+**Total time:** Control 12 min → Quorum 32 min **(2.7x)**
+
+Let me break down what each of these means in practice.
 
 WHAT THE NUMBERS MEAN
 
-20% More Tests
-The extra tests covered edge cases the single model missed entirely: voided invoice regeneration, invoice number sequencing under concurrent access, and boundary conditions in volume discount tiers. These are exactly the tests that would have caught production bugs.
+**20% More Tests**
 
-DRY Helpers vs. Inline Code
-The single-model run inlined business logic — volume discount calculation appeared in three places. The quorum run extracted reusable helpers. Same behavior, but easier to maintain and debug. This is the synthesis effect — when one model suggests inline code and another suggests extraction, the reviewer picks the cleaner approach.
+The extra tests covered edge cases the single model missed entirely: **voided invoice regeneration, invoice number sequencing under concurrent access, and boundary conditions in volume discount tiers.** These aren't obscure scenarios. These are exactly the tests that would have caught production bugs — the kind you discover at 2 AM on a Saturday.
 
-Robust Test Dates
-The single-model run used hardcoded date literals. Those tests break when the dates pass. The quorum run used relative offsets. Small thing, but it's the difference between tests that stay green forever and tests that start failing next month.
+The synthesis effect is key here. Model A tested the happy path thoroughly. Model B focused on error cases. Model C tested boundary conditions. **The reviewer took the best of all three,** producing test coverage none of them would have written alone.
+
+**DRY Helpers vs. Inline Code**
+
+The single-model run inlined business logic — volume discount calculation appeared in **three places.** Same formula, three copies. The quorum run extracted reusable helpers: IsWeekend(), CalculateVolumeDiscount(), ApplyBankersRounding().
+
+Same behavior, but easier to maintain, easier to debug, and easier to test in isolation. **This is the synthesis effect in action** — when one model suggests inline code and another suggests extraction, the reviewer picks the cleaner approach.
+
+**Robust Test Dates**
+
+This one seems small but matters a lot. The single-model run used hardcoded date literals:
+
+• var invoiceDate = new DateTime(2026, 3, 15);
+
+Those tests break when the dates pass. **They start failing silently next month.** The quorum run used relative offsets:
+
+• var invoiceDate = DateTime.Now.AddDays(-7);
+
+Tests that stay green forever vs. tests that start failing next month. The quorum approach is what a senior engineer would write. The single-model approach is what a junior engineer would write.
+
+[IMAGE: 04-ab-comparison.png — Side-by-side visual comparison table: Control vs. Quorum results with color-coded quality indicators]
 
 COST VS. QUALITY
 
-The quorum run cost $0.22 more ($0.84 vs $0.62) — still under a dollar total. For a feature that will be maintained for years, that's negligible. The time increase was more significant: 32 minutes vs 12 minutes.
+The quorum run cost **$0.22 more** ($0.84 vs $0.62) — still under a dollar total. For a feature that will be maintained for years and touched by multiple developers, that's negligible. A single production bug in invoice calculation costs more than $0.22 to diagnose, let alone fix.
 
-For $0.22 more, you get 20% more tests, cleaner architecture, and modern patterns. That's the cheapest code review you'll ever buy.
+The time increase was more significant: 32 minutes vs 12 minutes. The extra time comes from the parallel dispatch and synthesis steps. But this is **wall-clock time for an autonomous process** — you're not sitting there watching it. Start the quorum run, get coffee, come back to better code.
 
-WHEN TO USE IT
+**For $0.22 more, you get 20% more tests, cleaner architecture, and modern patterns.** That's the cheapest code review you'll ever buy.
 
-Quorum Mode isn't for every slice. Running it on a simple CRUD endpoint is overkill. Running it on your auth flow, billing logic, or database migration is worth every token.
+WHEN TO USE IT — AND WHEN NOT TO
 
-That's why we built --quorum=auto. It scores each slice's complexity (1-10) using 7 weighted signals: file scope count, cross-module dependencies, security keywords, database/migration keywords, gate count, task count, and historical failure rate. Only slices scoring at or above the threshold get the 3-model treatment. Everything else runs normally.
+Quorum Mode isn't for every slice. Running it on a simple CRUD endpoint is overkill — the three models will produce nearly identical plans, and you'll spend tokens for no gain. Running it on your **auth flow, billing logic, or database migration** is worth every token.
 
-You get quality where it matters without burning tokens on trivial work.
+That's why we built **--quorum=auto.** It scores each slice's complexity (1-10) using 7 weighted signals:
 
-HOW IT WORKS
+• File scope count
+• Cross-module dependencies
+• Security keywords (auth, token, encrypt, permission)
+• Database/migration keywords
+• Gate count
+• Task count
+• Historical failure rate
 
-1. Dispatch: The orchestrator sends the slice instructions to 3 models in parallel
-2. Dry-run analysis: Each model produces a detailed implementation plan but does not write code
-3. Synthesis: A reviewer agent receives all 3 analyses and produces a unified plan
-4. Build: The builder model executes from the consensus plan
-5. If one model is unavailable, the reviewer works with 2 analyses. If fewer than 2 respond, it falls back to normal execution.
+Only slices scoring at or above the threshold get the 3-model treatment. Everything else runs normally. **You get quality where it matters without burning tokens on trivial work.**
 
-THE TAKEAWAY
+[IMAGE: 04-auto-scoring.png — Flowchart: Slice arrives → Complexity scoring (7 signals) → Score >= threshold? → Yes: Quorum dispatch → No: Standard single-model]
 
-The quality difference isn't in correctness — both passed all gates. It's in craftsmanship. Code that's easier to maintain, debug, and extend. Tests that cover edge cases you wouldn't have thought to test. Patterns that match current best practices.
+HOW IT WORKS UNDER THE HOOD
 
-For critical business logic, the 3% cost overhead pays for itself the first time a production bug doesn't happen.
+The sequence is straightforward:
+
+**1. Dispatch** — The orchestrator sends the slice instructions to 3 models in parallel. Each model receives the same hardened plan, same guardrails, same context.
+
+**2. Dry-run analysis** — Each model produces a detailed implementation plan but **does not write code.** This is critical — you get three perspectives without three implementations.
+
+**3. Synthesis** — A reviewer agent receives all 3 analyses and produces a unified plan. It takes the strongest elements from each: Model A's database design, Model B's error handling, Model C's test strategy.
+
+**4. Build** — The builder model executes from the consensus plan. It has a better blueprint than any single model would have produced alone.
+
+**5. Fallback** — If one model is unavailable, the reviewer works with 2 analyses. If fewer than 2 respond, it falls back to normal execution. The system degrades gracefully — it never blocks.
+
+THE DEEPER INSIGHT
+
+The quality difference isn't in **correctness** — both runs passed all gates. It's in **craftsmanship.** Code that's easier to maintain, debug, and extend. Tests that cover edge cases you wouldn't have thought to test. Patterns that match current best practices rather than 2-year-old training data.
+
+This maps directly to what happens in human teams. A single developer can produce working code. **Three developers reviewing each other's approach before coding produces better code.** Not because any one of them is smarter, but because diverse perspectives catch blind spots.
+
+The 3% cost overhead pays for itself the first time a production bug doesn't happen.
+
+---
+
+Have you experimented with multi-model approaches in your development workflow? What patterns have you seen? Drop your experience in the comments.
 
 Quorum Mode is available in Plan Forge → https://github.com/srnichols/plan-forge
 
-📖 Read the full post with dispatch diagrams and A/B data → https://planforge.software/blog/quorum-mode-3-models.html
+📖 Full post with dispatch diagrams and A/B data → https://planforge.software/blog/quorum-mode-3-models.html

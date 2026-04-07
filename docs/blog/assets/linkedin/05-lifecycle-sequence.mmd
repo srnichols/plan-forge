@@ -1,0 +1,29 @@
+sequenceDiagram
+    participant U as 📱 User (WhatsApp)
+    participant OC as ⚡ OpenClaw
+    participant OB as 🧠 OpenBrain
+    participant PF as 🔨 Plan Forge
+    participant RV as Reviewer
+
+    U->>OC: "Build user profile API..."
+    OC->>OB: Query project context
+    OB->>OC: Prior decisions + conventions
+    OC->>PF: Launch hardening session
+    PF->>PF: Generate execution contract
+    PF->>U: "Plan hardened. 5 slices. Approve?"
+    U->>PF: "Approved"
+    
+    loop Each Slice
+        PF->>PF: Execute slice with guardrails
+        PF->>PF: Build + Test gate ✅
+        PF->>OB: Capture decisions
+        PF->>U: "Slice N done. Tests pass. ✓"
+    end
+    
+    PF->>RV: Launch review session (fresh context)
+    RV->>OB: Query full decision history
+    RV->>RV: Audit against contract
+    RV->>U: "Review complete. 0 violations. Ship?"
+    U->>RV: "Ship it"
+    RV->>RV: Commit + PR
+    RV->>OB: Capture postmortem

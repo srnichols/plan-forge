@@ -1,69 +1,140 @@
-HERO IMAGE: docs/blog/assets/guardrails-hero.jpg
+HERO IMAGE: docs/blog/assets/guardrails-hero.webp (1280x720, 16:9)
 TITLE: I Built Guardrails for AI Coding Agents — Here's What I Learned
-NETWORK TEASER (paste into "Tell your network what this article is about"):
-After building 18 guardrail files, 19 reviewer agents, and 9 tech stack presets for AI coding agents, here are the 7 hardest lessons — including why "don't do that" is more powerful than "do this" and why the builder must never review its own work.
----
 
-Plan Forge started as a personal frustration. I kept watching AI agents produce code that looked great in a demo and fell apart in production. Not because the models were bad — they're genuinely impressive — but because they had no structural constraints. No architectural standards. No scope discipline. No memory of what they decided yesterday.
+NETWORK TEASER (paste into "Tell your network what this article is about"):
+After building 18 guardrail files, 19 reviewer agents, and 9 tech stack presets for AI coding agents, here are the 7 hardest lessons — including why "don't do that" is more powerful than "do this" and why the builder must never review its own work. #AIDevelopment #SoftwareEngineering #CodeQuality #DevTools #AIGuardrails
+
+HASHTAGS: #AIDevelopment #SoftwareEngineering #CodeQuality #DevTools #AIGuardrails
+
+FORMATTING NOTES:
+- ALL CAPS headers below must be formatted as H2 in LinkedIn's editor
+- Bold text marked with ** must be applied manually after pasting
+- [IMAGE] markers indicate where to insert inline images from docs/blog/assets/linkedin/
+- Paste body text, then go back and apply H2 + bold + insert images
+
+--- ARTICLE BODY (paste below into the editor) ---
+
+Plan Forge started as a personal frustration. I kept watching AI agents produce code that looked great in a demo and fell apart in production. Not because the models were bad — they're genuinely impressive — but because they had **no structural constraints.** No architectural standards. No scope discipline. No memory of what they decided yesterday.
 
 So I built guardrails. 18 instruction files that auto-load based on context. 19 specialized reviewer agents. 9 tech stack presets. A 7-step pipeline that converts rough ideas into hardened execution contracts.
 
-Here are the seven lessons that cost the most to learn.
+Along the way, I made every mistake possible. Here are the seven lessons that cost the most to learn.
 
 LESSON 1: AGENTS DON'T DRIFT MALICIOUSLY — THEY DRIFT BECAUSE NOBODY SAID NOT TO
 
-The number one misconception is that AI agents "go rogue." They don't. They do exactly what you let them. If you say "build me a login page," you'll get a login page — plus a password reset flow, an admin panel, a user profile system, and refactored database migrations.
+The number one misconception is that AI agents "go rogue." They don't. They do exactly what you let them. If you say "build me a login page," you'll get a login page — **plus a password reset flow, an admin panel, a user profile system, and refactored database migrations.**
 
-The fix was embarrassingly simple: define what shouldn't be built. Every hardened plan has a Forbidden Actions section. Explicit prohibitions cut scope drift by an order of magnitude.
+The fix was embarrassingly simple: **define what shouldn't be built.** Every hardened plan has a Forbidden Actions section. Explicit prohibitions cut scope drift by an order of magnitude.
 
-The most powerful guardrail isn't "do this." It's "don't do that."
+Here's what a Forbidden Actions section looks like in practice:
+
+• Do NOT modify the auth middleware
+• Do NOT add new NuGet packages without approval
+• Do NOT refactor existing tests
+• Do NOT create new database migrations
+• Do NOT change the API response format
+
+Each prohibition is a guardrail. **The most powerful guardrail isn't "do this." It's "don't do that."**
+
+Why? Because "do this" is ambiguous — the agent interprets it creatively. "Don't do that" is binary — either you touched the auth middleware or you didn't. Binary constraints are enforceable. Creative interpretations are not.
+
+[IMAGE: 03-forbidden-actions.png — Visual showing a plan with Forbidden Actions section highlighted, with red X marks on prohibited areas]
 
 LESSON 2: AUTO-LOADING BEATS MANUAL ATTACHMENT EVERY TIME
 
-Early versions required developers to manually attach instruction files to each chat session. Nobody did it. The guardrails existed but were never used — like safety goggles hanging on the wall.
+Early versions required developers to manually attach instruction files to each chat session. **Nobody did it.** The guardrails existed but were never used — like safety goggles hanging on the wall while everyone squints at sparks.
 
-The breakthrough was applyTo frontmatter. Each instruction file declares which file patterns it cares about. Edit a database file and database guardrails load automatically. Edit a test file and testing guardrails load. No developer action required. Adoption went from ~20% to 100%.
+The breakthrough was **applyTo frontmatter.** Each instruction file declares which file patterns it cares about:
+
+• database.instructions.md → applyTo: "**/repositories/**, **/migrations/**"
+• security.instructions.md → applyTo: "**/auth/**, **/middleware/**"
+• testing.instructions.md → applyTo: "**/*.test.*, **/*.spec.*"
+
+Edit a database file and database guardrails load automatically. Edit a test file and testing guardrails load. **No developer action required.** Adoption went from ~20% to 100% overnight.
+
+The lesson applies far beyond Plan Forge: **any safety mechanism that requires manual activation will be skipped under pressure.** Design for automatic engagement.
+
+[IMAGE: 03-auto-loading.png — Sequence diagram: Developer edits database file → VS Code detects file pattern → database.instructions.md auto-loads → Agent receives guardrails in context]
 
 LESSON 3: THE BUILDER MUST NEVER REVIEW ITS OWN WORK
 
-This was the hardest lesson. In a single long chat session, the agent that wrote the code will always believe its code is correct. It has sunk-cost bias baked into its context window.
+This was the hardest lesson. In a single long chat session, the agent that wrote the code **will always believe its code is correct.** It has sunk-cost bias baked into its context window. It wrote the code. It chose the patterns. It's not going to flag its own architectural decisions as problems.
 
-Plan Forge mandates session isolation between execution and review. The builder works in Session 2. The reviewer works in Session 3 — fresh context, same guardrails, independent judgment.
+Plan Forge mandates **session isolation between execution and review.** The builder works in Session 2. The reviewer works in Session 3 — fresh context, same guardrails, independent judgment.
+
+The reviewer has never seen the implementation before. It loads the hardened plan, examines the code, and audits against the contract. **Drift, silent regressions, and architectural violations get caught** because the reviewer has no investment in the builder's choices.
 
 Would you let a developer merge their own PR without review? Then why would you let an AI agent do it?
 
 LESSON 4: SLICE BOUNDARIES ARE THE ONLY REAL VALIDATION POINTS
 
-Testing "at the end" doesn't work. By the time you run tests after building 15 files, the failures cascade so badly that the agent spends more time debugging than building.
+Testing "at the end" doesn't work. By the time you run tests after building 15 files, **the failures cascade so badly** that the agent spends more time debugging than building. One wrong assumption in file 3 propagates through files 4-15, and untangling the mess takes longer than writing it from scratch.
 
-The answer was slices. Every feature gets decomposed into 3-7 execution slices, each with its own build and test gate. The agent cannot proceed to slice N+1 until slice N passes. Failures are caught when they're small (1-3 files, not 15).
+The answer was **slices.** Every feature gets decomposed into 3-7 execution slices, each with its own build and test gate. The agent cannot proceed to slice N+1 until slice N passes.
+
+Here's the difference in practice:
+
+**Without slices (old way):**
+Build 15 files → Run tests → 47 failures → Debug for 3 hours → Give up → Start over
+
+**With slices:**
+Build slice 1 (2 files) → Tests pass ✓ → Build slice 2 (3 files) → Tests pass ✓ → Build slice 3 (2 files) → 1 failure → Fix in 5 minutes → Continue
+
+Failures are caught when they're small — **1-3 files, not 15.** The fix is local. The context is fresh. The agent knows exactly what changed.
+
+[IMAGE: 03-slice-gates.png — Flow diagram: Slice 1 → Gate ✓ → Slice 2 → Gate ✓ → Slice 3 → Gate ✗ → Fix → Gate ✓ → Slice 4 → Gate ✓ → Ship]
 
 LESSON 5: ONE GUARDRAIL FILE PER CONCERN — NOT ONE GIANT FILE
 
-The first version had a single copilot-instructions.md that was 2,000 lines long. It was terrible. Agents process long instruction files worse than short ones. Key rules get buried.
+The first version had a single copilot-instructions.md that was **2,000 lines long.** It was terrible. Agents process long instruction files worse than short ones. Key rules get buried in a wall of text. The agent follows the rules it happened to "see" and ignores the ones that scrolled past the attention window.
 
-Splitting into 18 focused files — each under 150 lines, each with a single concern — was transformational. Compliance went up. Token usage went down. Everybody won.
+Splitting into **18 focused files — each under 150 lines, each with a single concern** — was transformational:
+
+• architecture-principles.instructions.md — layer separation, 5 questions before coding
+• security.instructions.md — input validation, parameterized queries, secret management
+• testing.instructions.md — TDD for business logic, integration test patterns
+• database.instructions.md — ORM patterns, migration strategy, connection management
+• errorhandling.instructions.md — exception hierarchy, structured error responses
+• performance.instructions.md — hot path analysis, allocation reduction
+• (12 more...)
+
+Compliance went up. Token usage went down. **Everybody won.** The agent processes 150 lines flawlessly. It struggles with 2,000.
 
 LESSON 6: TECH STACK PRESETS ELIMINATE 80% OF CUSTOMIZATION
 
-Every stack has different conventions. .NET uses PascalCase and xUnit. Python uses snake_case and pytest. If your guardrails say "use PascalCase" to a Python developer, they'll immediately distrust the entire system.
+Every stack has different conventions. .NET uses PascalCase and xUnit. Python uses snake_case and pytest. TypeScript uses camelCase and Vitest. **If your guardrails say "use PascalCase" to a Python developer, they'll immediately distrust the entire system.**
 
-Nine presets ship today: .NET, TypeScript, Python, Java, Go, Swift, Rust, PHP, and Azure IaC. The developer never has to customize anything. It just works for their stack.
+Nine presets ship today: .NET, TypeScript, Python, Java, Go, Swift, Rust, PHP, and Azure IaC. Each includes:
+
+• Stack-specific instruction files with idiomatic patterns
+• 6 stack-specific reviewer agents (architecture, database, deploy, performance, security, test-runner)
+• Stack-specific scaffolding prompts (create-entity, create-service, create-test)
+• Build/test/lint commands pre-configured
+
+The developer runs one setup command, picks their stack, and **everything just works.** No customization needed for 80% of projects.
 
 LESSON 7: ENTERPRISE QUALITY IS A DEFAULT, NOT AN UPGRADE
 
-The biggest mistake in AI-assisted development tooling is treating quality as optional. "Add tests later." "We'll refactor." No. Every feature should ship with tests, proper error handling, and architectural compliance from the first commit.
+The biggest mistake in AI-assisted development tooling is treating quality as optional. **"Add tests later." "We'll refactor." "Security can wait."** No. Every feature should ship with tests, proper error handling, and architectural compliance from the first commit.
 
-Plan Forge makes this structural. There's no "opt in to quality" — quality is the default. You'd have to actively work around it to ship bad code.
+Plan Forge makes this structural. There's no "opt in to quality" — **quality is the default.** The pipeline won't let you skip tests. The reviewer won't sign off without proper error handling. Security guardrails load automatically when you touch auth code.
 
-The best developer tools don't make quality easier. They make it unavoidable.
+You'd have to actively work around it to ship bad code. And the friction of working around it is higher than the friction of doing it right.
+
+**The best developer tools don't make quality easier. They make it unavoidable.**
+
+[IMAGE: 03-quality-default.png — Diagram showing quality baked into every pipeline step: Spec → Hardened Plan (with guardrails) → Execution (with gates) → Review (with agents) → Ship]
 
 WHAT'S NEXT
 
-These seven lessons shaped Plan Forge into what it is today. Quorum Mode (multi-model consensus) is already showing measurably better results than single-model execution. The MCP server exposes 18 forge tools as native operations. And community extensions are adding domain-specific guardrails for industries from healthcare to finance.
+These seven lessons shaped Plan Forge into what it is today. Quorum Mode (multi-model consensus) is already showing **measurably better results** than single-model execution — 20% more tests, DRY helpers, modern patterns, for $0.22 extra per feature. The MCP server exposes 18 forge tools as native operations. And community extensions are adding domain-specific guardrails for industries from healthcare to finance.
 
-The core insight hasn't changed: AI agents are as good as the constraints you give them. Give them none, and they'll improvise brilliantly — right up until they destroy everything they built. Give them structure, and they'll build things you're proud to ship.
+The core insight hasn't changed: **AI agents are as good as the constraints you give them.** Give them none, and they'll improvise brilliantly — right up until they destroy everything they built. Give them structure, and they'll build things you're proud to ship.
+
+---
+
+Which of these seven lessons resonates most with your experience? Have you found guardrail patterns that work for your team? Share in the comments — I learn as much from your experiences as my own.
 
 Plan Forge is free and open source → https://github.com/srnichols/plan-forge
 
-📖 Read the full post → https://planforge.software/blog/guardrails-lessons-learned.html
+📖 Full post → https://planforge.software/blog/guardrails-lessons-learned.html

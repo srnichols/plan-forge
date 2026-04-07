@@ -1,0 +1,17 @@
+sequenceDiagram
+    participant SK as Spec Kit
+    participant PF as Plan Forge
+    participant AI as AI Agent
+    participant RV as Reviewer
+
+    SK->>SK: /speckit.specify → spec.md
+    SK->>SK: /speckit.plan → plan.md
+    SK->>SK: /speckit.tasks → tasks.md
+    SK->>PF: Auto-import artifacts
+    PF->>PF: Harden into execution contract
+    PF->>PF: Add Forbidden Actions + Gates
+    PF->>AI: Execute slice-by-slice
+    AI->>AI: Build + Test gate per slice ✓
+    AI->>RV: Hand off to independent review
+    RV->>RV: Fresh session audit
+    RV->>PF: Ship ✅

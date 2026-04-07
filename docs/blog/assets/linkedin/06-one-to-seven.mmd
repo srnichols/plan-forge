@@ -1,0 +1,19 @@
+graph TD
+    CMD["pforge init --Agent all"] --> GEN["Generate Native Files"]
+    
+    GEN --> CP["🟦 Copilot<br/>.github/instructions/<br/>.github/agents/<br/>.github/prompts/"]
+    GEN --> CL["🟣 Claude<br/>CLAUDE.md<br/>.claude/skills/"]
+    GEN --> CU["🟢 Cursor<br/>.cursor/rules<br/>.cursor/commands/"]
+    GEN --> WS["🔵 Windsurf<br/>.windsurf/rules/<br/>.windsurf/workflows/"]
+    GEN --> CO["🟠 Codex<br/>.agents/skills/"]
+    GEN --> GM["🔴 Gemini<br/>GEMINI.md<br/>.gemini/commands/"]
+    GEN --> GN["⚪ Generic<br/>.ai/AI_INSTRUCTIONS.md"]
+    
+    style CMD fill:#f59e0b,color:#000
+    style CP fill:#0078d4,color:#fff
+    style CL fill:#7c3aed,color:#fff
+    style CU fill:#22c55e,color:#fff
+    style WS fill:#3b82f6,color:#fff
+    style CO fill:#f97316,color:#fff
+    style GM fill:#ef4444,color:#fff
+    style GN fill:#6b7280,color:#fff

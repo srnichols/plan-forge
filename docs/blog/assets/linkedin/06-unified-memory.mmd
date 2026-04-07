@@ -1,0 +1,22 @@
+sequenceDiagram
+    participant CL as 🟣 Claude Code
+    participant OB as 🧠 OpenBrain
+    participant CU as 🟢 Cursor
+    participant CP as 🟦 Copilot
+
+    Note over CL: Session 1: Plan Hardening
+    CL->>CL: Harden execution contract
+    CL->>OB: Write: architectural decisions
+    CL->>OB: Write: pattern choices
+    
+    Note over CU: Session 2: Execution
+    CU->>OB: Read: all prior decisions
+    OB->>CU: Return: Claude's decisions + context
+    CU->>CU: Execute slices with full context
+    CU->>OB: Write: implementation decisions
+    
+    Note over CP: Session 3: Review
+    CP->>OB: Read: full decision history
+    OB->>CP: Return: Claude + Cursor decisions
+    CP->>CP: Independent audit
+    CP->>OB: Write: review findings

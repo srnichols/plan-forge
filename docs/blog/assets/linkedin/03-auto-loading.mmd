@@ -1,0 +1,11 @@
+sequenceDiagram
+    participant Dev as Developer
+    participant VS as VS Code
+    participant GR as Guardrails
+
+    Dev->>VS: Edit database/UserRepository.cs
+    VS->>VS: Detect file pattern: **/repositories/**
+    VS->>GR: Auto-load database.instructions.md
+    VS->>GR: Auto-load security.instructions.md
+    GR->>VS: Inject guardrails into agent context
+    VS->>Dev: Agent responds with DB-aware code

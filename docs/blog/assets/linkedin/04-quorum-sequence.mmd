@@ -1,0 +1,22 @@
+sequenceDiagram
+    participant OR as Orchestrator
+    participant M1 as Claude Opus
+    participant M2 as GPT-5.3
+    participant M3 as Claude Sonnet
+    participant RV as Reviewer
+    participant BD as Builder
+
+    OR->>M1: Dispatch slice instructions
+    OR->>M2: Dispatch slice instructions
+    OR->>M3: Dispatch slice instructions
+    
+    Note over M1,M3: Parallel dry-run analysis (no code)
+    
+    M1->>RV: Analysis A (DB design focus)
+    M2->>RV: Analysis B (error handling focus)
+    M3->>RV: Analysis C (test strategy focus)
+    
+    RV->>RV: Synthesize best elements
+    RV->>BD: Consensus execution plan
+    BD->>BD: Build from consensus
+    BD->>BD: Gate: Build + Test ✅

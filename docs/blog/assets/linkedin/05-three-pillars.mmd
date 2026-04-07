@@ -1,0 +1,27 @@
+graph TD
+    subgraph PF["🔨 Plan Forge — Blueprint"]
+        PF1["7-step pipeline"]
+        PF2["18 guardrail files"]
+        PF3["19 reviewer agents"]
+    end
+    
+    subgraph OB["🧠 OpenBrain — Memory"]
+        OB1["Semantic search"]
+        OB2["Decision capture"]
+        OB3["Cross-session context"]
+    end
+    
+    subgraph OC["⚡ OpenClaw — Nervous System"]
+        OC1["20+ channels"]
+        OC2["Session orchestration"]
+        OC3["Progress notifications"]
+    end
+    
+    OC --> PF
+    PF --> OB
+    OB --> OC
+    OB --> PF
+    
+    style PF fill:#f59e0b20,stroke:#f59e0b
+    style OB fill:#8b5cf620,stroke:#8b5cf6
+    style OC fill:#3b82f620,stroke:#3b82f6

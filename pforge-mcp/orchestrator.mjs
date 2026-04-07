@@ -779,15 +779,34 @@ export function spawnWorker(prompt, options = {}) {
     let stderr = "";
     let timedOut = false;
 
+    // Fix A: Heartbeat — write a dot to stdout every 15s so VS Code terminal stays alive
+    // This prevents "The terminal is awaiting input" notification
+    const heartbeat = setInterval(() => {
+      process.stdout.write(".");
+    }, 15_000);
+
     const timer = setTimeout(() => {
       timedOut = true;
       child.kill("SIGTERM");
     }, timeout);
 
     child.stdout.on("data", (chunk) => { stdout += chunk.toString(); });
-    child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
+    child.stderr.on("data", (chunk) => {
+      const text = chunk.toString();
+      stderr += text;
+      // Fix B: Stream worker stderr to our stdout so terminal shows live progress
+      // gh copilot writes model selection, token counting, and timing to stderr
+      for (const line of text.split("\n")) {
+        const trimmed = line.trim();
+        if (trimmed && !trimmed.startsWith("{")) {
+          // Skip JSONL lines, show human-readable progress
+          process.stdout.write(`    ${trimmed}\n`);
+        }
+      }
+    });
 
     child.on("close", (code) => {
+      clearInterval(heartbeat);
       clearTimeout(timer);
 
       // Clean up temp prompt file

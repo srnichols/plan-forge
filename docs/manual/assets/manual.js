@@ -24,6 +24,7 @@
     { id: "glossary",            file: "glossary.html",            num: "A",  title: "Glossary",                 act: "Appendix" },
     { id: "quick-reference",     file: "quick-reference.html",     num: "B",  title: "Quick Reference Card",     act: "Appendix" },
     { id: "stack-notes",         file: "stack-notes.html",         num: "C",  title: "Stack-Specific Notes",     act: "Appendix" },
+    { id: "grok-warnings",       file: "grok-image-warnings.html", num: "D",  title: "Grok Image Warnings",      act: "Appendix" },
     { id: "sample-project",       file: "sample-project.html",      num: "E",  title: "Sample Project",            act: "Appendix" },
   ];
 

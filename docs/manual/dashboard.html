@@ -30,7 +30,7 @@
 
         <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 6</div>
         <h1>The Dashboard</h1>
-        <p class="text-lg text-slate-400 mb-8">8 tabs. Real-time execution monitoring, cost tracking, session replay, and one-click actions.</p>
+        <p class="text-lg text-slate-400 mb-8">9 tabs. Real-time execution monitoring, cost tracking, session replay, and one-click actions.</p>
 
         <!-- ─── Starting ─── -->
         <h2 id="starting">Starting the Dashboard</h2>
@@ -196,6 +196,15 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
         </table>
 
         <p>Click any span to expand: duration, resource attributes (project, version, preset), severity. Traces are stored in <code>.forge/runs/&lt;timestamp&gt;/traces.json</code> and can be exported to any OTLP-compatible backend (Jaeger, Grafana Tempo, etc.).</p>
+
+        <!-- ─── Skills Tab ─── -->
+        <h2 id="skills">Skills Tab</h2>
+        <p>Monitor skill executions triggered via <code>forge_run_skill</code> or <code>/slash-command</code>. Shows:</p>
+        <ul>
+          <li><strong>Recent skill runs</strong> — skill name, start time, status, duration</li>
+          <li><strong>Step-level detail</strong> — each skill step with pass/fail, output, timing</li>
+          <li><strong>Event log</strong> — WebSocket events (<code>skill-started</code>, <code>skill-step-completed</code>, <code>skill-completed</code>)</li>
+        </ul>
 
         <!-- ─── Port Reference ─── -->
         <h2 id="ports">Port Reference</h2>

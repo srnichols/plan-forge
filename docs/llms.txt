@@ -16,7 +16,7 @@ Plan Forge is an open-source framework that gives AI coding agents (Copilot, Cla
 
 ## Capabilities
 
-- 18 MCP tools (start with `forge_capabilities` for full discovery)
+- 19 MCP tools (start with `forge_capabilities` for full discovery)
 - 19 reviewer agents (6 stack-specific + 8 cross-stack + 5 pipeline)
 - 12 slash command skills
 - 15-18 auto-loading instruction files per preset

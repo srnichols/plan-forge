@@ -135,7 +135,7 @@
             <tr><td><strong>Test dates</strong></td><td>Hardcoded literals</td><td>Relative offsets (don't break when dates pass)</td></tr>
             <tr><td><strong>Edge cases</strong></td><td>Standard coverage</td><td>Voided invoice regeneration, invoice number sequencing</td></tr>
             <tr><td><strong>.NET patterns</strong></td><td>Generic ValidationException</td><td>ArgumentException.ThrowIfNullOrWhiteSpace (modern)</td></tr>
-            <tr><td><strong>Total cost</strong></td><td>$33.89</td><td>$34.84 (+3%)</td></tr>
+            <tr><td><strong>Total cost</strong></td><td>$0.62</td><td>$0.84 (+35%)</td></tr>
             <tr><td><strong>Total time</strong></td><td>12 min</td><td>32 min (2.7x)</td></tr>
           </tbody>
         </table>
@@ -162,9 +162,9 @@
 
         <h2>Cost vs. Quality</h2>
 
-        <p>The quorum run cost <strong>$0.95 more</strong> ($34.84 vs $33.89) — about 3% extra. For a feature that will be maintained for years, that's negligible. The time increase was more significant: 32 minutes vs 12 minutes. The extra 20 minutes is the parallel dry-run analysis (3 models thinking) plus the reviewer synthesis step. The actual build time was comparable.</p>
+        <p>The quorum run cost <strong>$0.22 more</strong> ($0.84 vs $0.62) — about 35% extra in percentage terms, but still under a dollar total. For a feature that will be maintained for years, that's negligible. The time increase was more significant: 32 minutes vs 12 minutes. The extra 20 minutes is the parallel dry-run analysis (3 models thinking) plus the reviewer synthesis step. The actual build time was comparable.</p>
 
-        <blockquote><p>For $0.95 more, you get 20% more tests, cleaner architecture, and modern patterns. That's the cheapest code review you'll ever buy.</p></blockquote>
+        <blockquote><p>For $0.22 more, you get 20% more tests, cleaner architecture, and modern patterns. That's the cheapest code review you'll ever buy.</p></blockquote>
 
         <h2>When to Use It</h2>
 

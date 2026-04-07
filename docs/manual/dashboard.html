@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<!-- verified: v2.17.0 -->
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chapter 6: The Dashboard — Plan Forge Manual</title>
+  <meta name="description" content="Tour every dashboard tab: progress, runs, cost, actions, replay, extensions, config, traces. Real-time execution monitoring and cost tracking." />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+
+    <main>
+      <div class="chapter-content">
+
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 6</div>
+        <h1>The Dashboard</h1>
+        <p class="text-lg text-slate-400 mb-8">8 tabs. Real-time execution monitoring, cost tracking, session replay, and one-click actions.</p>
+
+        <!-- ─── Starting ─── -->
+        <h2 id="starting">Starting the Dashboard</h2>
+        <p>The dashboard is part of the MCP server. Start it, then open your browser:</p>
+
+        <div class="cmd-block">
+          <div class="cmd-block-header"><span>Terminal</span><button class="cmd-copy-btn">Copy</button></div>
+          <pre><code># Full MCP server (stdio + HTTP + WebSocket)
+node pforge-mcp/server.mjs
+
+# Dashboard + REST API only (no MCP stdio)
+node pforge-mcp/server.mjs --dashboard-only</code></pre>
+        </div>
+
+        <p>Open <a href="http://localhost:3100/dashboard">localhost:3100/dashboard</a>. The dashboard connects via WebSocket on port 3101 for real-time updates.</p>
+
+        <div class="callout callout-tip">
+          <strong>Auto-start</strong>: If you have <code>.vscode/mcp.json</code> configured (created during setup), the MCP server starts automatically when Copilot uses a forge tool. The dashboard is always available at port 3100 while the server runs.
+        </div>
+
+        <!-- ─── Progress Tab ─── -->
+        <h2 id="progress">Progress Tab</h2>
+        <p>The default view during plan execution. Shows real-time slice status via WebSocket updates:</p>
+
+        <div class="overflow-x-auto mb-6">
+          <div class="flex gap-3 min-w-[600px] py-2">
+            <div class="flex-1 rounded-lg border border-emerald-700/40 bg-emerald-950/20 p-3">
+              <div class="text-xs font-bold text-emerald-400">Slice 1</div>
+              <div class="text-xs text-slate-400 mt-1">Auth Models + Migration</div>
+              <div class="text-xs text-emerald-500 mt-2">✅ passed · 42s · $0.08</div>
+            </div>
+            <div class="flex-1 rounded-lg border border-emerald-700/40 bg-emerald-950/20 p-3">
+              <div class="text-xs font-bold text-emerald-400">Slice 2</div>
+              <div class="text-xs text-slate-400 mt-1">Repository Layer</div>
+              <div class="text-xs text-emerald-500 mt-2">✅ passed · 39s · $0.07</div>
+            </div>
+            <div class="flex-1 rounded-lg border border-amber-700/40 bg-amber-950/20 p-3 animate-pulse">
+              <div class="text-xs font-bold text-amber-400">Slice 3</div>
+              <div class="text-xs text-slate-400 mt-1">Service Layer</div>
+              <div class="text-xs text-amber-500 mt-2">⏳ executing...</div>
+            </div>
+            <div class="flex-1 rounded-lg border border-slate-700/40 bg-slate-900/40 p-3">
+              <div class="text-xs font-bold text-slate-500">Slice 4</div>
+              <div class="text-xs text-slate-600 mt-1">API Controller</div>
+              <div class="text-xs text-slate-600 mt-2">⏸ queued</div>
+            </div>
+          </div>
+        </div>
+
+        <p>Each card shows: slice title, status (queued → executing → passed/failed), duration, model used, token count, and cost. Cards update in real-time as events arrive over WebSocket.</p>
+
+        <!-- ─── Runs Tab ─── -->
+        <h2 id="runs">Runs Tab</h2>
+        <p>History of all plan executions. Each row shows:</p>
+
+        <table>
+          <thead><tr><th>Column</th><th>Content</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Plan</strong></td><td>Plan file path (clickable → shows slice detail)</td></tr>
+            <tr><td><strong>Status</strong></td><td>✅ Complete, ❌ Failed, 🟡 Partial</td></tr>
+            <tr><td><strong>Slices</strong></td><td>Passed / Total count</td></tr>
+            <tr><td><strong>Duration</strong></td><td>Total wall-clock time</td></tr>
+            <tr><td><strong>Cost</strong></td><td>Total USD across all slices</td></tr>
+            <tr><td><strong>Model</strong></td><td>Primary model used</td></tr>
+            <tr><td><strong>Date</strong></td><td>Execution timestamp</td></tr>
+          </tbody>
+        </table>
+
+        <p>Click any row to expand slice-by-slice detail: per-slice tokens, duration, model, and pass/fail status.</p>
+
+        <!-- ─── Cost Tab ─── -->
+        <h2 id="cost">Cost Tab</h2>
+        <p>Two visualizations:</p>
+        <ul>
+          <li><strong>Doughnut chart</strong> — spend breakdown by model (which models cost the most)</li>
+          <li><strong>Bar chart</strong> — monthly trend (cost over time, spot anomalies)</li>
+        </ul>
+        <p>Data comes from <code>.forge/cost-history.json</code> which is updated automatically after each run. The cost tab supports a 23-model pricing table — including Claude, GPT, Grok, Gemini, and custom API providers.</p>
+
+        <div class="callout callout-info">
+          <strong>Cost anomaly detection</strong>: If a run costs &gt;2× the historical average, the Runs tab shows a warning badge. Use <code>pforge run-plan --estimate</code> to predict costs before executing.
+        </div>
+
+        <!-- ─── Actions Tab ─── -->
+        <h2 id="actions">Actions Tab</h2>
+        <p>One-click buttons for common operations — no terminal needed:</p>
+
+        <div class="grid grid-cols-3 gap-3 mb-6">
+          <div class="rounded-lg border border-slate-700/40 bg-slate-900/40 p-3 text-center">
+            <div class="text-sm font-semibold text-slate-200">🔨 Smith</div>
+            <div class="text-xs text-slate-500 mt-1">Environment diagnostics</div>
+          </div>
+          <div class="rounded-lg border border-slate-700/40 bg-slate-900/40 p-3 text-center">
+            <div class="text-sm font-semibold text-slate-200">🔍 Sweep</div>
+            <div class="text-xs text-slate-500 mt-1">Find TODO/FIXME markers</div>
+          </div>
+          <div class="rounded-lg border border-slate-700/40 bg-slate-900/40 p-3 text-center">
+            <div class="text-sm font-semibold text-slate-200">📊 Analyze</div>
+            <div class="text-xs text-slate-500 mt-1">Consistency scoring</div>
+          </div>
+          <div class="rounded-lg border border-slate-700/40 bg-slate-900/40 p-3 text-center">
+            <div class="text-sm font-semibold text-slate-200">📋 Status</div>
+            <div class="text-xs text-slate-500 mt-1">Phase status from roadmap</div>
+          </div>
+          <div class="rounded-lg border border-slate-700/40 bg-slate-900/40 p-3 text-center">
+            <div class="text-sm font-semibold text-slate-200">✅ Validate</div>
+            <div class="text-xs text-slate-500 mt-1">Setup file validation</div>
+          </div>
+          <div class="rounded-lg border border-slate-700/40 bg-slate-900/40 p-3 text-center">
+            <div class="text-sm font-semibold text-slate-200">🧩 Extensions</div>
+            <div class="text-xs text-slate-500 mt-1">Browse extension catalog</div>
+          </div>
+        </div>
+
+        <p>Each button calls the corresponding REST endpoint (<code>/api/smith</code>, <code>/api/sweep</code>, etc.) and displays results inline.</p>
+
+        <!-- ─── Replay Tab ─── -->
+        <h2 id="replay">Replay Tab</h2>
+        <p>Browse agent session logs from past executions. Each run's <code>.forge/runs/&lt;timestamp&gt;/</code> directory contains per-slice logs. The Replay tab renders them with:</p>
+        <ul>
+          <li><strong>Slice selector</strong> — pick which slice's log to view</li>
+          <li><strong>Error highlighting</strong> — errors and warnings highlighted in red/amber</li>
+          <li><strong>File filter</strong> — filter log entries by file path patterns</li>
+          <li><strong>Search</strong> — free-text search within the session log</li>
+        </ul>
+        <p>Use this to diagnose <em>why</em> a slice failed — the full agent conversation, including tool calls, is captured.</p>
+
+        <!-- ─── Extensions Tab ─── -->
+        <h2 id="extensions-tab">Extensions Tab</h2>
+        <p>Visual catalog browser with search. Shows all community extensions from <code>extensions/catalog.json</code>:</p>
+        <ul>
+          <li>Extension name, version, author, category</li>
+          <li>What it provides (instruction files, agents, prompts)</li>
+          <li>Tags and Spec Kit compatibility</li>
+          <li>One-click install button</li>
+        </ul>
+        <p>Equivalent to <code>pforge ext search</code> + <code>pforge ext add</code> but with a visual interface.</p>
+
+        <!-- ─── Config Tab ─── -->
+        <h2 id="config">Config Tab</h2>
+        <p>Visual editor for <code>.forge.json</code>. Edit without touching the file directly:</p>
+        <ul>
+          <li><strong>Model routing</strong> — set default, execution, and review models from a dropdown</li>
+          <li><strong>Image generation model</strong> — Grok Aurora or DALL-E for plan art</li>
+          <li><strong>Agent toggles</strong> — enable/disable specific reviewer agents</li>
+          <li><strong>Quorum threshold</strong> — complexity level that triggers multi-model consensus</li>
+          <li><strong>Escalation chain</strong> — model failover order</li>
+        </ul>
+        <p>Changes save directly to <code>.forge.json</code> via the REST API.</p>
+
+        <!-- ─── Traces Tab ─── -->
+        <h2 id="traces">Traces Tab</h2>
+        <p>OTLP trace waterfall view. Every plan execution emits OpenTelemetry spans:</p>
+
+        <table>
+          <thead><tr><th>Span</th><th>What It Captures</th></tr></thead>
+          <tbody>
+            <tr><td><strong>run</strong> (root)</td><td>Plan file, total duration, slice count, model</td></tr>
+            <tr><td>└ <strong>slice-N</strong></td><td>Slice title, status, tokens in/out, cost, gate result</td></tr>
+            <tr><td>&nbsp;&nbsp;└ <strong>gate</strong></td><td>Gate command, exit code, output</td></tr>
+            <tr><td>&nbsp;&nbsp;└ <strong>escalation</strong></td><td>If a model failed and escalated to the next in chain</td></tr>
+          </tbody>
+        </table>
+
+        <p>Click any span to expand: duration, resource attributes (project, version, preset), severity. Traces are stored in <code>.forge/runs/&lt;timestamp&gt;/traces.json</code> and can be exported to any OTLP-compatible backend (Jaeger, Grafana Tempo, etc.).</p>
+
+        <!-- ─── Port Reference ─── -->
+        <h2 id="ports">Port Reference</h2>
+        <table>
+          <thead><tr><th>Port</th><th>Protocol</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td><code>3100</code></td><td>HTTP</td><td>Dashboard UI + REST API</td></tr>
+            <tr><td><code>3101</code></td><td>WebSocket</td><td>Real-time events (slice progress, run completion)</td></tr>
+          </tbody>
+        </table>
+
+        <div class="callout callout-warning">
+          <strong>Port conflict?</strong> If another service uses 3100/3101, set <code>PORT</code> and <code>WS_PORT</code> environment variables, or use <code>--port</code> flag: <code>node pforge-mcp/server.mjs --port 4100</code>.
+        </div>
+
+        <p class="text-sm text-slate-500 mt-8">📄 Full reference: <a href="../capabilities.md">capabilities.md</a>, <a href="../../pforge-mcp/EVENTS.md">EVENTS.md</a> (WebSocket event types)</p>
+
+        <div id="chapter-prev-next" class="chapter-nav"></div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="assets/manual.js"></script>
+</body>
+</html>

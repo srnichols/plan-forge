@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<!-- verified: v2.17.0 -->
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chapter 5: Writing Plans That Work — Plan Forge Manual</title>
+  <meta name="description" content="Teach plan authoring: scope contracts, slicing strategy, validation gates, parallel execution, stop conditions, common mistakes." />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+
+    <main>
+      <div class="chapter-content">
+
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 5</div>
+        <h1>Writing Plans That Work</h1>
+        <p class="text-lg text-slate-400 mb-8">Here's what works and here's what breaks.</p>
+
+        <!-- ─── Plan Structure ─── -->
+        <h2 id="structure">Plan Structure</h2>
+        <p>Every hardened plan has these mandatory sections. The plan-hardener agent adds them automatically during Step 2, but you should understand what each does and how to edit them:</p>
+
+        <table>
+          <thead><tr><th>Section</th><th>Required?</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Scope Contract</strong></td><td>Yes</td><td>In-scope paths, out-of-scope, forbidden actions</td></tr>
+            <tr><td><strong>MUST Criteria</strong></td><td>Yes</td><td>Non-negotiable outcomes (checkboxes)</td></tr>
+            <tr><td><strong>SHOULD Criteria</strong></td><td>Optional</td><td>Best-effort goals</td></tr>
+            <tr><td><strong>Execution Slices</strong></td><td>Yes</td><td>Checkpointed work chunks with gates</td></tr>
+            <tr><td><strong>Branch Strategy</strong></td><td>Recommended</td><td>Git branch name and merge approach</td></tr>
+            <tr><td><strong>Rollback Plan</strong></td><td>Recommended</td><td>How to undo if things go wrong</td></tr>
+          </tbody>
+        </table>
+
+        <!-- ─── Scope Contract ─── -->
+        <h2 id="scope-contract">Writing a Good Scope Contract</h2>
+        <p>The scope contract is the most important section. It tells the AI exactly what files it can touch — and what's off-limits.</p>
+
+        <h3>Good: Tight Scope</h3>
+        <div class="cmd-block">
+          <div class="cmd-block-header"><span>✅ Clear boundaries</span></div>
+          <pre><code>## Scope Contract
+**In Scope**: src/services/UserService.cs, src/repositories/UserRepository.cs,
+              tests/services/UserServiceTests.cs, tests/repositories/UserRepositoryTests.cs
+**Out of Scope**: frontend/**, deployment/**, docs/** (except this plan)
+**Forbidden Actions**:
+- Do NOT modify src/database/migrations/ (migration is a separate phase)
+- Do NOT change AppSettings.json connection strings
+- Do NOT add NuGet packages without explicit approval</code></pre>
+        </div>
+
+        <h3>Bad: Loose Scope</h3>
+        <div class="cmd-block">
+          <div class="cmd-block-header"><span>❌ Too vague</span></div>
+          <pre><code>## Scope Contract
+**In Scope**: anything related to users
+**Out of Scope**: nothing specific
+**Forbidden Actions**: don't break things</code></pre>
+        </div>
+
+        <p>"Anything related to users" gives the AI free rein to refactor 20 files. "Don't break things" isn't enforceable. Be specific about paths, and list forbidden actions as concrete file patterns.</p>
+
+        <!-- ─── Slicing Strategy ─── -->
+        <h2 id="slicing">Slicing Strategy</h2>
+        <p>Slices are 30–120 minute chunks of work. Each slice should produce a commit-worthy change — the "one PR" rule.</p>
+
+        <h3>Rules of Thumb</h3>
+        <ul>
+          <li><strong>One layer per slice</strong> — don't mix database migration with API controller in the same slice</li>
+          <li><strong>Build on foundations</strong> — create the model/migration first, then the repository, then the service, then the controller</li>
+          <li><strong>Tests with the code</strong> — include tests in the same slice as the code they test (not a separate "add tests" slice at the end)</li>
+          <li><strong>30 minutes minimum</strong> — slices shorter than this have too much gate overhead</li>
+          <li><strong>120 minutes maximum</strong> — slices longer than this accumulate too much risk before the next checkpoint</li>
+        </ul>
+
+        <h3>Example: 6-Slice Plan</h3>
+        <div class="cmd-block">
+          <div class="cmd-block-header"><span>Layer-by-layer slicing</span></div>
+          <pre><code>Slice 1 — Database migration + model           [30 min]
+Slice 2 — Repository + unit tests               [45 min]
+Slice 3 — Service layer + business logic tests   [60 min]
+Slice 4 — API controller + integration tests     [45 min]
+Slice 5 — Error handling + edge case tests       [30 min]
+Slice 6 — Documentation + cleanup                [30 min]</code></pre>
+        </div>
+
+        <!-- ─── Validation Gates ─── -->
+        <h2 id="gates">Validation Gates</h2>
+        <p>Gates are the quality checkpoints between slices. A gate must be a concrete, executable command — not a human judgment call.</p>
+
+        <h3>Good Gates</h3>
+        <div class="cmd-block">
+          <div class="cmd-block-header"><span>✅ Executable and specific</span></div>
+          <pre><code>**Gate**:
+  dotnet build                              # zero errors
+  dotnet test --filter "UserProfile"        # 6+ tests pass
+  grep -rn "string interpolation" src/      # zero hits (security)</code></pre>
+        </div>
+
+        <h3>Bad Gates</h3>
+        <div class="cmd-block">
+          <div class="cmd-block-header"><span>❌ Vague or unenforceable</span></div>
+          <pre><code>**Gate**: "tests pass"           ← Which tests? How many?
+**Gate**: "code looks clean"     ← Not executable
+**Gate**: "review the changes"   ← Human-dependent, blocks automation</code></pre>
+        </div>
+
+        <!-- ─── Parallel Execution ─── -->
+        <h2 id="parallel">Parallel Execution</h2>
+        <p>Mark slices that can run concurrently with the <code>[P]</code> tag. Add dependency declarations when slices must run in order:</p>
+
+        <div class="cmd-block">
+          <div class="cmd-block-header"><span>Parallel slices with dependencies</span></div>
+          <pre><code>### Slice 1 — Database Migration [30 min]
+...
+
+### Slice 2 — Repository Layer [P] [depends: Slice 1] [scope: src/repos/**]
+...
+
+### Slice 3 — Service Layer [P] [depends: Slice 1] [scope: src/services/**]
+...
+
+### Slice 4 — API Controller [depends: Slice 2, Slice 3]
+...</code></pre>
+        </div>
+
+        <p>Slices 2 and 3 both depend on Slice 1 (the migration) but are independent of each other — they run in parallel. Slice 4 waits for both to finish. The orchestrator builds a DAG (directed acyclic graph) and schedules accordingly.</p>
+
+        <div class="callout callout-warning">
+          <strong>When NOT to parallelize</strong>: If two slices modify the same files, they'll conflict. Only use <code>[P]</code> when slices touch different <code>[scope: ...]</code> paths.
+        </div>
+
+        <!-- ─── Stop Conditions ─── -->
+        <h2 id="stop-conditions">Stop Conditions</h2>
+        <p>Stop conditions tell the AI when to halt instead of trying to work around a failure:</p>
+
+        <div class="cmd-block">
+          <div class="cmd-block-header"><span>Good stop conditions</span></div>
+          <pre><code>**Stop if**: Build fails with compilation error
+**Stop if**: Any existing test regresses (not just new tests)
+**Stop if**: Migration produces data loss warning
+**Stop if**: Security scan finds HIGH or CRITICAL vulnerability</code></pre>
+        </div>
+
+        <p>Without stop conditions, the AI may try to "fix" a build failure by removing code, or skip a failing test by commenting it out. Stop conditions force it to report the problem instead of hiding it.</p>
+
+        <!-- ─── Context Files ─── -->
+        <h2 id="context">Context Files</h2>
+        <p>Each slice can list which instruction files are relevant. Don't load all 18 — load only what's needed:</p>
+
+        <div class="cmd-block">
+          <div class="cmd-block-header"><span>Targeted context loading</span></div>
+          <pre><code>### Slice 1 — Database Migration
+**Context**: database.instructions.md, security.instructions.md
+
+### Slice 4 — API Controller
+**Context**: api-patterns.instructions.md, auth.instructions.md, errorhandling.instructions.md</code></pre>
+        </div>
+
+        <p>This keeps the AI's context window focused. A database slice doesn't need caching instructions; a controller slice doesn't need migration patterns.</p>
+
+        <!-- ─── Common Mistakes ─── -->
+        <h2 id="mistakes">Common Mistakes</h2>
+
+        <table>
+          <thead><tr><th>Mistake</th><th>What Happens</th><th>Fix</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>Scope too loose</strong></td>
+              <td>AI refactors 20 files instead of 3</td>
+              <td>List specific file paths, not categories</td>
+            </tr>
+            <tr>
+              <td><strong>Scope too tight</strong></td>
+              <td>AI can't create necessary helper files</td>
+              <td>Include reasonable wildcards: <code>src/services/**</code></td>
+            </tr>
+            <tr>
+              <td><strong>No stop conditions</strong></td>
+              <td>AI works around failures silently</td>
+              <td>Add "Stop if" to every slice</td>
+            </tr>
+            <tr>
+              <td><strong>Vague gates</strong></td>
+              <td>Gate "passes" without actually validating</td>
+              <td>Use executable commands with expected counts</td>
+            </tr>
+            <tr>
+              <td><strong>Tests in last slice</strong></td>
+              <td>5 slices of code, then discover it's untestable</td>
+              <td>Include tests alongside each code slice</td>
+            </tr>
+            <tr>
+              <td><strong>Giant slices</strong></td>
+              <td>120+ min of work before first checkpoint</td>
+              <td>Break into 30–60 min focused chunks</td>
+            </tr>
+            <tr>
+              <td><strong>Missing rollback</strong></td>
+              <td>Panic when something breaks in production</td>
+              <td>Add rollback plan with specific <code>git revert</code> commands</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- ─── Templates ─── -->
+        <h2 id="templates">Plan Templates</h2>
+        <p>Eight language-specific plan examples ship with Plan Forge. Use them as starting points:</p>
+
+        <table>
+          <thead><tr><th>Stack</th><th>File</th><th>Features Demonstrated</th></tr></thead>
+          <tbody>
+            <tr><td>.NET</td><td><code>Phase-DOTNET-EXAMPLE.md</code></td><td>RLS, Dapper, Blazor, GraphQL, 12 slices</td></tr>
+            <tr><td>TypeScript</td><td><code>Phase-TYPESCRIPT-EXAMPLE.md</code></td><td>Express, Prisma, Vitest</td></tr>
+            <tr><td>Python</td><td><code>Phase-PYTHON-EXAMPLE.md</code></td><td>FastAPI, SQLAlchemy, Pytest</td></tr>
+            <tr><td>Java</td><td><code>Phase-JAVA-EXAMPLE.md</code></td><td>Spring Boot, JPA, JUnit</td></tr>
+            <tr><td>Go</td><td><code>Phase-GO-EXAMPLE.md</code></td><td>Chi router, sqlx, testing</td></tr>
+            <tr><td>Swift</td><td><code>Phase-SWIFT-EXAMPLE.md</code></td><td>Vapor, Fluent, XCTest</td></tr>
+            <tr><td>Rust</td><td><code>Phase-RUST-EXAMPLE.md</code></td><td>Axum, sqlx, Cargo test</td></tr>
+            <tr><td>PHP</td><td><code>Phase-PHP-EXAMPLE.md</code></td><td>Laravel, Eloquent, PHPUnit</td></tr>
+          </tbody>
+        </table>
+
+        <p>All examples live in <code>docs/plans/examples/</code>.</p>
+
+        <p class="text-sm text-slate-500 mt-8">📄 Full reference: <a href="../plans/AI-Plan-Hardening-Runbook.md">AI-Plan-Hardening-Runbook.md</a></p>
+
+        <div id="chapter-prev-next" class="chapter-nav"></div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="assets/manual.js"></script>
+</body>
+</html>

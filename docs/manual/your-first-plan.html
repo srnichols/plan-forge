@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<!-- verified: v2.17.0 -->
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chapter 4: Your First Plan — Plan Forge Manual</title>
+  <meta name="description" content="Hands-on tutorial: specify, harden, and execute a real feature in 30 minutes using the full Plan Forge pipeline." />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+
+    <main>
+      <div class="chapter-content">
+
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 4</div>
+        <h1>Your First Plan</h1>
+        <p class="text-lg text-slate-400 mb-8">Hands-on: specify, harden, and execute a real feature in 30 minutes.</p>
+
+        <div class="callout callout-info">
+          <strong>Prerequisites</strong>: You've completed <a href="installation.html">Chapter 3</a> and <code>pforge smith</code> shows all green. You have VS Code + Copilot ready.
+        </div>
+
+        <!-- ─── What We're Building ─── -->
+        <h2 id="what-were-building">What We're Building</h2>
+        <p>A <code>GET /health</code> endpoint. It's deliberately simple — the point is to learn the pipeline, not build something complex. You'll run the full 7-step flow (Specify → Pre-flight → Harden → Execute → Sweep → Review → Ship) on a feature that takes 15 minutes to code, so you can focus on <em>how</em> the system works.</p>
+
+        <!-- ─── Step 0 ─── -->
+        <h2 id="step-0">Step 0: Specify the Feature</h2>
+        <ol>
+          <li>Open Copilot Chat: <code>Ctrl+Shift+I</code> (Windows) or <code>Cmd+Shift+I</code> (Mac)</li>
+          <li>Select <strong>Agent Mode</strong> at the bottom of the chat panel</li>
+          <li>Click the <strong>📎 attach file</strong> button → select <code>.github/prompts/step0-specify-feature.prompt.md</code></li>
+          <li>Replace <code>&lt;FEATURE-NAME&gt;</code> with <code>health-endpoint</code> and send</li>
+        </ol>
+
+        <p>The agent interviews you. Here are example answers for a health endpoint:</p>
+
+        <div class="cmd-block">
+          <div class="cmd-block-header"><span>Your answers to the specifier's questions</span></div>
+          <pre><code><strong>Problem</strong>: Load balancers need to verify the service is running.
+<strong>Scenarios</strong>: GET /health every 30s. Expects 200 OK with {"status":"healthy"}.
+<strong>Criteria</strong>: Returns 200 with JSON. Under 50ms. No auth required.
+<strong>Edge cases</strong>: If DB unreachable → 503 {"status":"degraded","reason":"database"}.
+<strong>Out of scope</strong>: No deep checks (Redis, APIs). No metrics endpoint.</code></pre>
+        </div>
+
+        <p>The agent compiles your answers into a specification and creates <code>docs/plans/Phase-1-HEALTH-ENDPOINT-PLAN.md</code>.</p>
+
+        <div class="callout callout-tip">
+          <strong>Alternative</strong>: Instead of attaching a prompt file, select the <strong>Specifier</strong> agent from the agent picker dropdown. It runs the same interview with handoff buttons at the end.
+        </div>
+
+        <!-- ─── Step 1 ─── -->
+        <h2 id="step-1">Step 1: Pre-flight Check</h2>
+        <p>Still in the same chat session:</p>
+        <ol>
+          <li>Attach <code>.github/prompts/step1-preflight-check.prompt.md</code></li>
+          <li>Replace <code>&lt;YOUR-PLAN&gt;</code> with <code>Phase-1-HEALTH-ENDPOINT-PLAN</code> and send</li>
+        </ol>
+        <p>The agent checks git state, guardrail files, and the roadmap. Everything should pass. If something fails, it tells you exactly what to fix.</p>
+
+        <!-- ─── Step 2 ─── -->
+        <h2 id="step-2">Step 2: Harden the Plan</h2>
+        <ol>
+          <li>Attach <code>.github/prompts/step2-harden-plan.prompt.md</code></li>
+          <li>Replace <code>&lt;YOUR-PLAN&gt;</code> with <code>Phase-1-HEALTH-ENDPOINT-PLAN</code> and send</li>
+        </ol>
+        <p>The agent adds the mandatory blocks to your plan. When it says <strong>"Plan hardened"</strong> — Session 1 is done.</p>
+
+        <!-- ─── Reading the Hardened Plan ─── -->
+        <h2 id="reading-the-plan">Reading the Hardened Plan</h2>
+        <p>Open the plan file. Every hardened plan has these sections — here's what each means:</p>
+
+        <div class="cmd-block">
+          <div class="cmd-block-header"><span>Annotated hardened plan structure</span></div>
+          <pre><code># Phase 1 — Health Endpoint
+
+## Scope Contract                    ← What files the AI can touch
+<strong>In Scope</strong>: src/controllers/**, tests/health/**
+<strong>Out of Scope</strong>: frontend, deployment, CI/CD
+<strong>Forbidden Actions</strong>: Do NOT modify src/database/migrations/
+
+## MUST Criteria                     ← Required outcomes (non-negotiable)
+- [ ] GET /health returns 200 with JSON body
+- [ ] 503 when database unreachable
+- [ ] Response time under 50ms
+
+## SHOULD Criteria                   ← Nice to have (best-effort)
+- [ ] Structured logging on health check calls
+
+## Execution Slices                  ← Checkpointed work chunks
+
+### Slice 1 — Health Controller [30 min]
+<strong>Tasks</strong>: Create controller, route, response model
+<strong>Gate</strong>: `dotnet build` passes             ← Must pass before Slice 2
+<strong>Stop if</strong>: Build fails                     ← Halts execution
+
+### Slice 2 — Tests + Edge Cases [30 min]
+<strong>Tasks</strong>: Unit tests, 503 degraded scenario
+<strong>Gate</strong>: `dotnet test` — 4+ tests pass
+<strong>Stop if</strong>: Any test regresses
+
+## Branch Strategy
+<strong>Branch</strong>: feature/phase-1-health-endpoint
+
+## Rollback Plan                     ← How to undo if things go wrong
+1. `git revert HEAD~2`</code></pre>
+        </div>
+
+        <table>
+          <thead><tr><th>Section</th><th>Purpose</th><th>What Goes Wrong Without It</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Scope Contract</strong></td><td>Boundaries: what's in, out, forbidden</td><td>AI refactors unrelated files</td></tr>
+            <tr><td><strong>MUST Criteria</strong></td><td>Non-negotiable requirements</td><td>Features ship incomplete</td></tr>
+            <tr><td><strong>Execution Slices</strong></td><td>30–120 min checkpointed chunks</td><td>Monolithic changes, late failure discovery</td></tr>
+            <tr><td><strong>Validation Gates</strong></td><td>Build/test commands at each boundary</td><td>Broken code propagates to next slice</td></tr>
+            <tr><td><strong>Stop Conditions</strong></td><td>When to halt instead of working around</td><td>AI hacks around failures</td></tr>
+            <tr><td><strong>Rollback Plan</strong></td><td>How to revert if needed</td><td>Panic when things break</td></tr>
+          </tbody>
+        </table>
+
+        <!-- ─── Step 3 ─── -->
+        <h2 id="step-3">Step 3: Execute</h2>
+        <p>Three ways to execute — pick one:</p>
+
+        <div class="overflow-x-auto mb-6">
+          <div class="flex gap-4 min-w-[600px]">
+            <div class="flex-1 rounded-xl border border-emerald-800/30 bg-slate-900/60 p-4">
+              <div class="text-sm font-bold text-emerald-400 mb-2">🤖 Automatic</div>
+              <div class="cmd-block" style="margin-bottom:0.5rem">
+                <pre><code>pforge run-plan docs/plans/Phase-1-HEALTH-ENDPOINT-PLAN.md</code></pre>
+              </div>
+              <p class="text-xs text-slate-500">Kick off and walk away. Watch progress at <code>localhost:3100/dashboard</code>.</p>
+            </div>
+            <div class="flex-1 rounded-xl border border-amber-800/30 bg-slate-900/60 p-4">
+              <div class="text-sm font-bold text-amber-400 mb-2">🤝 Assisted</div>
+              <div class="cmd-block" style="margin-bottom:0.5rem">
+                <pre><code>pforge run-plan --assisted docs/plans/Phase-1-HEALTH-ENDPOINT-PLAN.md</code></pre>
+              </div>
+              <p class="text-xs text-slate-500">You code in VS Code. Orchestrator validates gates automatically.</p>
+            </div>
+            <div class="flex-1 rounded-xl border border-sky-800/30 bg-slate-900/60 p-4">
+              <div class="text-sm font-bold text-sky-400 mb-2">📋 Manual</div>
+              <p class="text-xs text-slate-400">Start a <strong>new</strong> Copilot session. Attach <code>step3-execute-slice.prompt.md</code>. The AI reads the plan and executes slice by slice.</p>
+            </div>
+          </div>
+        </div>
+
+        <p>The agent creates the health endpoint, runs <code>build</code>, runs <code>test</code>, and reports pass/fail at each gate. If a gate fails, execution stops — no silent failures.</p>
+
+        <!-- ─── Step 4 ─── -->
+        <h2 id="step-4">Step 4: Sweep</h2>
+        <p>After execution, the completeness sweep scans for deferred-work markers:</p>
+
+        <div class="cmd-block">
+          <div class="cmd-block-header"><span>Terminal</span><button class="cmd-copy-btn">Copy</button></div>
+          <pre><code>pforge sweep</code></pre>
+        </div>
+
+        <p>It searches all code for <code>TODO</code>, <code>FIXME</code>, <code>HACK</code>, <code>stub</code>, <code>placeholder</code>, <code>mock data</code>. For a health endpoint, this should find zero. If it finds anything, resolve it before review.</p>
+
+        <!-- ─── Step 5 ─── -->
+        <h2 id="step-5">Step 5: Review</h2>
+        <p><strong>Start a NEW chat session</strong> — click the <code>+</code> button. This is critical: the reviewer must not carry context from the builder.</p>
+        <ol>
+          <li>Select <strong>Agent Mode</strong></li>
+          <li>Attach <code>.github/prompts/step5-review-gate.prompt.md</code></li>
+          <li>Replace <code>&lt;YOUR-HARDENED-PLAN&gt;</code> with <code>Phase-1-HEALTH-ENDPOINT-PLAN</code> and send</li>
+        </ol>
+        <p>The reviewer checks all changes against the Scope Contract: forbidden files, architecture compliance, test coverage, scope creep. For a health endpoint, expect a clean <strong>PASS</strong>.</p>
+
+        <!-- ─── Step 6 ─── -->
+        <h2 id="step-6">Step 6: Ship</h2>
+        <ol>
+          <li>Start a new session (or continue if context allows)</li>
+          <li>Attach <code>.github/prompts/step6-ship.prompt.md</code></li>
+          <li>The agent commits: <code>feat(health): add GET /health endpoint</code></li>
+          <li>Updates <code>DEPLOYMENT-ROADMAP.md</code> to mark the phase complete</li>
+          <li>Captures a brief postmortem for future sessions</li>
+        </ol>
+
+        <div class="callout callout-tip">
+          <strong>Done!</strong> You've run the full 7-step pipeline. The same process works for complex features with 8+ slices — the pipeline scales with the work.
+        </div>
+
+        <!-- ─── What Just Happened ─── -->
+        <h2 id="what-happened">What Just Happened</h2>
+
+        <div class="cmd-block">
+          <div class="cmd-block-header"><span>Summary</span></div>
+          <pre><code>Session 1 (Specify & Plan)  → You described what you wanted, the AI structured it
+Session 2 (Execute)         → The AI built it slice-by-slice with validation gates
+Session 3 (Review)          → A fresh AI session checked for mistakes and drift
+Session 4 (Ship)            → The AI committed, updated docs, captured lessons</code></pre>
+        </div>
+
+        <p>Each session was isolated — the reviewer didn't carry bias from the builder. Every step had guardrails loaded automatically from your <code>.github/instructions/</code> files.</p>
+
+        <!-- ─── Brownfield Sidebar ─── -->
+        <div class="callout callout-warning">
+          <strong>Working with legacy code?</strong> The brownfield walkthrough shows how to apply this pipeline to an existing codebase with security issues, missing tests, and architectural debt. Same pipeline, different starting point. See <a href="../walkthroughs/brownfield-legacy-app.md">brownfield-legacy-app.md</a> in the docs.
+        </div>
+
+        <!-- ─── Alternative: Pipeline Agents ─── -->
+        <h2 id="alternative">Alternative: Pipeline Agents (Click-Through)</h2>
+        <p>Instead of attaching prompt files, use pipeline agents with handoff buttons:</p>
+        <ol>
+          <li>Select the <strong>Specifier</strong> agent from the dropdown</li>
+          <li>Describe your feature</li>
+          <li>Click <strong>"Start Plan Hardening →"</strong> when done</li>
+          <li>Click <strong>"Start Execution →"</strong> when hardened</li>
+          <li>Click <strong>"Run Review Gate →"</strong> when executed</li>
+          <li>Click <strong>"Ship It →"</strong> when review passes</li>
+        </ol>
+        <p>Same pipeline, fewer steps. The prompt template approach is better for learning; agents are better for daily use.</p>
+
+        <p class="text-sm text-slate-500 mt-8">📄 Full reference: <a href="../QUICKSTART-WALKTHROUGH.md">QUICKSTART-WALKTHROUGH.md</a>, <a href="../walkthroughs/greenfield-todo-api.md">greenfield-todo-api.md</a></p>
+
+        <div id="chapter-prev-next" class="chapter-nav"></div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="assets/manual.js"></script>
+</body>
+</html>

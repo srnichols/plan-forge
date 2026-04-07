@@ -649,9 +649,9 @@ The **`E:\GitHub\plan-forge-testbed`** repo contains a **Tracker sample app** wi
 - [x] Chapter 3 (Installation) + setup recording
 
 ### Round 3 — Act II (Build)
-- [ ] Chapter 4 (Your First Plan) + screenshots + pipeline recording
-- [ ] Chapter 5 (Writing Plans) + annotated examples
-- [ ] Chapter 6 (Dashboard) + all 8 tab screenshots
+- [x] Chapter 4 (Your First Plan) + screenshots + pipeline recording
+- [x] Chapter 5 (Writing Plans) + annotated examples
+- [x] Chapter 6 (Dashboard) + all 8 tab screenshots
 
 ### Round 4 — Act III (Master)
 - [ ] Chapter 8 (Customization)

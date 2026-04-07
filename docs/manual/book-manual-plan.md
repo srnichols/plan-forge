@@ -657,17 +657,18 @@ docs/manual/
 
 ---
 
-## Visual Asset Summary
+## Visual Asset Summary (Revised after Sweep 4)
 
-| Category | Count | Source |
-|----------|-------|--------|
-| Chapter hero illustrations | 6 | Grok image generation — **use `.jpg` extension, standalone script** (see Grok Warnings) |
-| Conceptual illustrations | 5 | Grok (split panels, ecosystem diagrams, command centers) — same `.jpg` guidance |
-| Mermaid diagrams → SVG | 12 | Pipeline flow, DAG, architecture, escalation, decision trees |
-| HTML/CSS diagrams | 3 | File trees, annotated code blocks, interactive examples |
-| Screenshots | 25+ | Live app captures from `plan-forge-testbed` repo (dashboard tabs, smith, terminal, VS Code) |
-| Animations (GIF/WebM) | 5 | Screen recordings (setup wizard, live progress, auto-load, assisted mode, full pipeline) |
-| **Total visual assets** | **~51** | |
+| Category | Count | Source | Notes |
+|----------|-------|--------|-------|
+| Chapter hero illustrations | 3 | Grok `.jpg` | Ch 1 (forge workshop), Ch 4 (annotated plan), Ch 12 (agent ecosystem) |
+| Mermaid diagrams → SVG | 4 | Mermaid CLI | DAG parallel, escalation chain, quorum flow, troubleshooting tree |
+| HTML/CSS interactive diagrams | 6 | In-page markup | Pipeline flow, session cards, preset grid, file trees, slice cards, phase timeline |
+| Screenshots (Playwright) | 5 | `capture-screenshots.mjs` | Dashboard: Progress, Cost, Runs, Traces, Config |
+| Screenshots (terminal) | 2 | Manual capture | `pforge smith` output, gate pass output |
+| Screenshots (VS Code) | 2 | Manual capture | File explorer after setup, Copilot chat with specifier (deferred to final polish) |
+| Animations | 0 | — | Deferred to v2 — static screenshots + HTML interactives are sufficient for v1 |
+| **Total visual assets** | **22** | | Down from ~51 in original plan — filtered by "does this teach?" |
 | Animations (GIF/WebM) | 5 | Screen recordings (setup wizard, live progress, auto-load, assisted mode, full pipeline) |
 | **Total visual assets** | **~51** | |
 
@@ -914,5 +915,75 @@ Once all chapters are written, run three independent reviewer passes. Each revie
 - [ ] Page load performance: Tailwind CDN + 2 font families + manual CSS/JS — total under 500 KB first paint
 - [ ] Favicon loads correctly (`plan-forge-logo.svg`)
 - [ ] All images have alt text
+
+### Sweep 4 — Visual Arts / Asset Production Reviewer
+
+**Persona**: A design director who's shipped illustrated tech books. Evaluates whether the visual assets elevate the manual or whether text-only is sufficient per chapter.  
+**Question**: "Where do visuals clarify what text can't, and where are they just decoration?"
+
+**Audit methodology**: Walk every chapter and classify each potential visual as **ESSENTIAL** (concept can't be understood without it), **HELPFUL** (accelerates understanding), or **DECORATIVE** (nice but text suffices). Only produce ESSENTIAL and HELPFUL assets.
+
+**Checklist — Chapter Hero Images (Grok-generated, .jpg)**:
+- [ ] Ch 1 (forge workshop silhouette) — **HELPFUL**: Sets the tone, establishes the metaphor. Keep.
+- [ ] Ch 2 (pipeline flow) — **ESSENTIAL**: The 7-step pipeline is already rendered as HTML in-page. Hero adds atmosphere but the HTML version teaches better. **Decision**: Skip hero, keep HTML pipeline.
+- [ ] Ch 3 (preset grid) — **DECORATIVE**: The HTML preset grid with emoji icons is already effective. No hero needed.
+- [ ] Ch 4 (plan anatomy) — **ESSENTIAL**: An annotated plan screenshot showing arrows pointing to scope, slices, gates, stop conditions. The current code-block version works but a visual callout would help beginners. **Produce this one.**
+- [ ] Ch 6 (dashboard command center) — **HELPFUL**: Establishes the "mission control" feel. But real screenshots of each tab are more valuable. **Decision**: Skip hero, prioritize tab screenshots.
+- [ ] Ch 12 (agent ecosystem) — **HELPFUL**: Visual showing 7 agent logos connected to central forge hub. Communicates the multi-agent idea faster than text.
+- [ ] **Verdict**: Generate heroes only for Ch 1, Ch 4, Ch 12. Skip the rest — the HTML interactive elements and screenshots serve better.
+
+**Checklist — Diagrams (Mermaid SVG or HTML/CSS)**:
+- [ ] Pipeline flow (Ch 2) — **ESSENTIAL** ✅ Already built as HTML. Verify it's scannable at mobile widths.
+- [ ] Session isolation panels (Ch 2) — **ESSENTIAL** ✅ Already built as HTML cards. Good.
+- [ ] File tree diagram (Ch 2, Ch 3) — **ESSENTIAL** ✅ Already built as code-block trees. Consider converting to collapsible HTML tree for interactivity.
+- [ ] DAG diagram (Ch 5, parallel slices) — **HELPFUL**: Show a 6-slice plan with dependency arrows. Currently text-only (`[P]`, `[depends:]` tags). A visual DAG would clarify the concept. **Produce as Mermaid SVG.**
+- [ ] Escalation chain (Ch 13) — **HELPFUL**: Model A → Model B → Model C flow. Simple enough for text, but a visual makes it instantly scannable. **Produce as Mermaid SVG.**
+- [ ] Quorum consensus (Ch 13) — **HELPFUL**: 3 models analyze → reviewer synthesizes → best output. Currently text. A visual flow would help. **Produce as Mermaid SVG.**
+- [ ] Diagnostic decision tree (Ch 14) — **ESSENTIAL**: "What's wrong?" → branching paths. Currently a table. A flowchart would serve troubleshooting readers far better. **Produce as Mermaid SVG.**
+- [ ] **Verdict**: Produce 4 Mermaid SVGs (DAG, escalation, quorum, troubleshooting tree). Convert to `.svg` files in `assets/diagrams/`.
+
+**Checklist — SVG Icons / Visual Elements**:
+- [ ] Preset stack icons (Ch 3 grid) — Currently using emoji (🟣☕🐍🦀). Emoji renders inconsistently across OS. **Decision**: Replace with simple SVG icons or keep emoji but test on Windows/macOS/Linux/mobile. Emoji is faster to ship.
+- [ ] Agent adapter icons (Ch 12) — 7 tool logos. Currently no icons, just a table. **Decision**: Not needed — the feature parity matrix table is more useful than logos.
+- [ ] Slice status icons (Ch 6 progress tab) — ✅ ⏳ ⏸ emojis. Already effective. Keep.
+- [ ] Pipeline step badges (Ch 2) — Already color-coded HTML cards. No SVG needed.
+- [ ] **Verdict**: No custom SVG icons needed for v1. Emoji + HTML components are sufficient and render well in the dark theme.
+
+**Checklist — Screenshots (Playwright from plan-forge-testbed)**:
+- [ ] `pforge smith` output (Ch 3, Ch 7) — **ESSENTIAL**: Shows what "green" looks like. Readers need to compare their output. **Capture from testbed.**
+- [ ] Dashboard Progress tab mid-run (Ch 6) — **ESSENTIAL**: Real data with 3 passed, 1 running, 2 queued. **Capture via capture-screenshots.mjs.**
+- [ ] Dashboard Cost tab (Ch 6) — **HELPFUL**: Shows doughnut + bar chart with real data. **Capture.**
+- [ ] Dashboard Runs tab (Ch 6) — **HELPFUL**: History table with 3+ completed runs. **Capture.**
+- [ ] Dashboard Traces tab (Ch 6, Ch 10) — **HELPFUL**: Waterfall with expanded span detail. **Capture.**
+- [ ] Dashboard Config tab (Ch 6, Ch 8) — **HELPFUL**: Visual .forge.json editor. **Capture.**
+- [ ] VS Code after setup (Ch 3) — **HELPFUL**: File explorer showing `.github/` tree. Manual screenshots only (can't automate VS Code capture). **Defer to final polish.**
+- [ ] Copilot chat with specifier (Ch 4) — **HELPFUL**: Shows the interview in action. Manual screenshot. **Defer.**
+- [ ] Gate pass output in terminal (Ch 4) — **HELPFUL**: Green ✅ gate output. **Capture from testbed.**
+- [ ] **Verdict**: Capture 6 dashboard screenshots + 2 terminal screenshots (smith, gate pass). Defer 2 VS Code screenshots to manual production.
+
+**Checklist — Animations (GIF/WebM)**:
+- [ ] Setup wizard terminal recording — **HELPFUL** but heavy (large file). Defer to v2 of manual.
+- [ ] Live dashboard progress — **HELPFUL** but GIF at 1100×600 is 2+ MB. Defer.
+- [ ] **Verdict**: No animations for v1. Static screenshots + HTML interactive elements are sufficient. Animations add pageweight without proportional learning value.
+
+**Asset Production Plan (ordered by impact)**:
+| Priority | Asset | Type | Tool | Output Path |
+|----------|-------|------|------|-------------|
+| 1 | Ch 1 hero (forge workshop) | WebP/JPG | Grok | `assets/chapter-heroes/ch1-hero.jpg` |
+| 2 | Ch 4 hero (annotated plan) | WebP/JPG | Grok | `assets/chapter-heroes/ch4-hero.jpg` |
+| 3 | Ch 12 hero (agent ecosystem) | WebP/JPG | Grok | `assets/chapter-heroes/ch12-hero.jpg` |
+| 4 | Dashboard Progress screenshot | PNG | Playwright | `assets/screenshots/dashboard-progress.png` |
+| 5 | Dashboard Cost screenshot | PNG | Playwright | `assets/screenshots/dashboard-cost.png` |
+| 6 | Dashboard Runs screenshot | PNG | Playwright | `assets/screenshots/dashboard-runs.png` |
+| 7 | Dashboard Traces screenshot | PNG | Playwright | `assets/screenshots/dashboard-traces.png` |
+| 8 | Dashboard Config screenshot | PNG | Playwright | `assets/screenshots/dashboard-config.png` |
+| 9 | `pforge smith` terminal output | PNG | Terminal capture | `assets/screenshots/smith-output.png` |
+| 10 | Gate pass terminal output | PNG | Terminal capture | `assets/screenshots/gate-pass.png` |
+| 11 | DAG diagram (parallel slices) | SVG | Mermaid | `assets/diagrams/dag-parallel.svg` |
+| 12 | Escalation chain flow | SVG | Mermaid | `assets/diagrams/escalation-chain.svg` |
+| 13 | Quorum consensus flow | SVG | Mermaid | `assets/diagrams/quorum-flow.svg` |
+| 14 | Troubleshooting decision tree | SVG | Mermaid | `assets/diagrams/troubleshooting-tree.svg` |
+
+**Total**: 3 Grok heroes + 7 screenshots + 4 Mermaid SVGs = **14 visual assets** (down from ~51 in original plan — intentional reduction based on "does this teach?" filter)
 
 ---

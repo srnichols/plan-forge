@@ -96,6 +96,7 @@
         <tbody>
           <tr><td><strong>Run</strong></td><td>A single plan execution. Creates <code>.forge/runs/&lt;timestamp&gt;/</code> with results and traces.</td></tr>
           <tr><td><strong>Trace</strong></td><td>OTLP-compatible JSON recording the full execution with spans, events, and timing.</td></tr>
+          <tr><td><strong>OTLP</strong></td><td>OpenTelemetry Protocol — the standard format for distributed traces. Plan Forge traces are OTLP-compatible and can be exported to Jaeger, Grafana Tempo, or any collector.</td></tr>
           <tr><td><strong>Span</strong></td><td>A timed unit within a trace — run (root), slice (child), gate (grandchild).</td></tr>
           <tr><td><strong>Cost History</strong></td><td><code>.forge/cost-history.json</code> — aggregate token/cost data across all runs.</td></tr>
           <tr><td><strong>Index</strong></td><td><code>.forge/runs/index.jsonl</code> — append-only run registry for instant lookup.</td></tr>

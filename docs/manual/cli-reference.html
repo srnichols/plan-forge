@@ -84,13 +84,13 @@
           </table>
 
           <div class="cmd-block">
-            <div class="cmd-block-header"><span>PowerShell</span><button class="cmd-copy-btn">Copy</button></div>
+            <div class="cmd-block-header"><span>Bootstrap a project</span><button class="cmd-copy-btn">Copy</button></div>
             <pre><code>.\pforge.ps1 init -Preset dotnet
 .\pforge.ps1 init -Preset typescript -ProjectPath ./my-app
 .\pforge.ps1 init -Preset dotnet -Agent all</code></pre>
           </div>
           <div class="cmd-block">
-            <div class="cmd-block-header"><span>Bash</span><button class="cmd-copy-btn">Copy</button></div>
+            <div class="cmd-block-header"><span>Bash equivalent</span><button class="cmd-copy-btn">Copy</button></div>
             <pre><code>./pforge.sh init --preset dotnet
 ./pforge.sh init --preset typescript --path ./my-app
 ./pforge.sh init --preset dotnet --agent all</code></pre>
@@ -299,7 +299,7 @@ DRIFT DETECTED — 1 forbidden file(s) touched.</code></pre>
           </table>
 
           <div class="cmd-block">
-            <div class="cmd-block-header"><span>PowerShell</span><button class="cmd-copy-btn">Copy</button></div>
+            <div class="cmd-block-header"><span>Analyze plan consistency</span><button class="cmd-copy-btn">Copy</button></div>
             <pre><code># Single-model analysis
 .\pforge.ps1 analyze docs/plans/Phase-1-AUTH-PLAN.md
 
@@ -337,7 +337,7 @@ DRIFT DETECTED — 1 forbidden file(s) touched.</code></pre>
           </table>
 
           <div class="cmd-block">
-            <div class="cmd-block-header"><span>PowerShell</span><button class="cmd-copy-btn">Copy</button></div>
+            <div class="cmd-block-header"><span>Investigate a bug</span><button class="cmd-copy-btn">Copy</button></div>
             <pre><code>.\pforge.ps1 diagnose src/services/billing.ts
 .\pforge.ps1 diagnose src/auth/token-validator.ts --models grok-3-mini,grok-4</code></pre>
           </div>
@@ -365,7 +365,7 @@ DRIFT DETECTED — 1 forbidden file(s) touched.</code></pre>
           </table>
 
           <div class="cmd-block">
-            <div class="cmd-block-header"><span>PowerShell</span><button class="cmd-copy-btn">Copy</button></div>
+            <div class="cmd-block-header"><span>Execute a plan (5 modes)</span><button class="cmd-copy-btn">Copy</button></div>
             <pre><code># Estimate cost without executing
 .\pforge.ps1 run-plan docs/plans/Phase-7.md --estimate
 
@@ -439,7 +439,7 @@ DRIFT DETECTED — 1 forbidden file(s) touched.</code></pre>
           </table>
 
           <div class="cmd-block">
-            <div class="cmd-block-header"><span>PowerShell</span><button class="cmd-copy-btn">Copy</button></div>
+            <div class="cmd-block-header"><span>Manage extensions</span><button class="cmd-copy-btn">Copy</button></div>
             <pre><code>.\pforge.ps1 ext search saas
 .\pforge.ps1 ext add saas-multi-tenancy
 .\pforge.ps1 ext info plan-forge-memory
@@ -466,7 +466,7 @@ DRIFT DETECTED — 1 forbidden file(s) touched.</code></pre>
           </table>
 
           <div class="cmd-block">
-            <div class="cmd-block-header"><span>PowerShell</span><button class="cmd-copy-btn">Copy</button></div>
+            <div class="cmd-block-header"><span>Update framework files</span><button class="cmd-copy-btn">Copy</button></div>
             <pre><code>.\pforge.ps1 update
 .\pforge.ps1 update C:\path\to\plan-forge --dry-run
 .\pforge.ps1 update --force</code></pre>

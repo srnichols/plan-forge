@@ -153,6 +153,8 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
 
         <p>Each button calls the corresponding REST endpoint (<code>/api/smith</code>, <code>/api/sweep</code>, etc.) and displays results inline.</p>
 
+        <img src="../assets/dashboard/actions.png" alt="Dashboard Actions tab showing one-click buttons for Smith, Sweep, Analyze, Status, Validate, and Extensions" class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
+
         <!-- ─── Replay Tab ─── -->
         <h2 id="replay">Replay Tab</h2>
         <p>Browse agent session logs from past executions. Each run's <code>.forge/runs/&lt;timestamp&gt;/</code> directory contains per-slice logs. The Replay tab renders them with:</p>
@@ -163,6 +165,8 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
           <li><strong>Search</strong> — free-text search within the session log</li>
         </ul>
         <p>Use this to diagnose <em>why</em> a slice failed — the full agent conversation, including tool calls, is captured.</p>
+
+        <img src="../assets/dashboard/replay.png" alt="Dashboard Replay tab showing session log viewer with slice selector, error highlighting, and search" class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
 
         <!-- ─── Extensions Tab ─── -->
         <h2 id="extensions-tab">Extensions Tab</h2>
@@ -175,6 +179,8 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
         </ul>
         <p>Equivalent to <code>pforge ext search</code> + <code>pforge ext add</code> but with a visual interface.</p>
 
+        <img src="../assets/dashboard/extensions.png" alt="Dashboard Extensions tab showing visual catalog browser with search, install buttons, and extension details" class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
+
         <!-- ─── Config Tab ─── -->
         <h2 id="config">Config Tab</h2>
         <p>Visual editor for <code>.forge.json</code>. Edit without touching the file directly:</p>
@@ -186,6 +192,8 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
           <li><strong>Escalation chain</strong> — model failover order</li>
         </ul>
         <p>Changes save directly to <code>.forge.json</code> via the REST API.</p>
+
+        <img src="../assets/dashboard/config.png" alt="Dashboard Config tab showing visual editor for .forge.json with model routing, agent toggles, and quorum settings" class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
 
         <!-- ─── Traces Tab ─── -->
         <h2 id="traces">Traces Tab</h2>
@@ -213,6 +221,8 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
           <li><strong>Step-level detail</strong> — each skill step with pass/fail, output, timing</li>
           <li><strong>Event log</strong> — WebSocket events (<code>skill-started</code>, <code>skill-step-completed</code>, <code>skill-completed</code>)</li>
         </ul>
+
+        <img src="../assets/dashboard/skills.png" alt="Dashboard Skills tab showing recent skill runs with step-level detail and event log" class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
 
         <!-- ─── Port Reference ─── -->
         <h2 id="ports">Port Reference</h2>

@@ -630,18 +630,25 @@ export async function generateImage(prompt, options = {}) {
       const { writeFileSync, mkdirSync } = await import("node:fs");
       const { dirname, resolve: pathResolve } = await import("node:path");
 
-      // If conversion succeeded, use the requested path as-is.
-      // If conversion failed (fallback), correct the extension to match actual bytes.
+      // Final safety: re-detect format from the actual output bytes to prevent
+      // MIME mismatches (e.g. xAI Grok Aurora returns JPEG even when PNG requested).
+      // This catches cases where conversion claims success but bytes don't match.
+      const finalDetected = detectImageFormat(finalBuffer);
+
+      // Correct extension if the final bytes don't match the requested format
       let resolvedPath = outputPath;
-      if (!conversion.converted && detected.ext !== targetFormat) {
-        const detectedMeta = FORMAT_META[detected.ext];
-        const targetMeta = FORMAT_META[targetFormat];
-        const alreadyMatch = targetMeta?.aliases?.some((a) => detectedMeta?.aliases?.includes(a));
-        if (!alreadyMatch) {
-          resolvedPath = outputPath.replace(/\.[^.]+$/, `.${finalFormat.ext}`);
-          result.extensionCorrected = true;
-          result.requestedPath = outputPath;
-        }
+      const { extname: getExtForSave } = await import("node:path");
+      const pathExt = getExtForSave(outputPath).toLowerCase().replace(".", "");
+      const pathMeta = FORMAT_META[pathExt];
+      const bytesMeta = FORMAT_META[finalDetected.ext];
+      const extensionMatchesBytes = pathMeta?.aliases?.some((a) => bytesMeta?.aliases?.includes(a));
+
+      if (!extensionMatchesBytes) {
+        resolvedPath = outputPath.replace(/\.[^.]+$/, `.${finalDetected.ext}`);
+        result.extensionCorrected = true;
+        result.requestedPath = outputPath;
+        // Update mimeType to reflect actual saved bytes
+        result.mimeType = finalDetected.mimeType;
       }
 
       const fullPath = pathResolve(cwd, resolvedPath);

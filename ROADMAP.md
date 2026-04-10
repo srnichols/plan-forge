@@ -1233,7 +1233,35 @@ Welcome to Plan Forge! Let's walk through your project.
 | `templates/copilot-instructions.md.template` | Template | Add `pforge tour` to Quick Commands |
 | `CHANGELOG.md` | Release notes | Document all T1–T5 items |
 
+**MCP & Capabilities Sweep** (update after all T1–T5 are live):
+| File | What to Update |
+|------|----------------|
+| `pforge-mcp/capabilities.mjs` → `guardrails.shared` | Add `context-fuel` to shared guardrails list |
+| `pforge-mcp/capabilities.mjs` → `guardrails` | Add `temperGuards` and `warningSigns` as documented instruction file features |
+| `pforge-mcp/capabilities.mjs` → `presets.counts` | Update instruction counts if `context-fuel.instructions.md` adds to the total |
+| `docs/capabilities.md` | Add Temper Guards + Warning Signs to guardrails feature description |
+| `docs/capabilities.html` | Mirror capabilities.md updates |
+| `docs/.well-known/plan-forge.json` | Update guardrail feature descriptions |
+| `docs/llms.txt` | Mention Temper Guards as a guardrail mechanism |
+| `plugin.json` | Update description if feature count changes |
+
 **Dashboard Sweep**: No dashboard changes — v2.18 is all instruction-layer and CLI enhancements.
+
+### v2.18 Release Gate
+
+Before tagging v2.18.0:
+
+- [ ] Temper Guards section present in 6+ instruction files across all presets
+- [ ] Warning Signs section present in 6+ instruction files across all presets
+- [ ] `context-fuel.instructions.md` exists in `presets/shared/` with `applyTo: '**'`
+- [ ] Quick Forge Card visible on `docs/index.html` above the fold
+- [ ] `pforge tour` works in both `pforge.ps1` and `pforge.sh` (parity check)
+- [ ] `pforge-mcp/capabilities.mjs` updated with new guardrail features
+- [ ] `docs/capabilities.md` and `docs/capabilities.html` updated
+- [ ] `validate-setup.ps1` / `validate-setup.sh` updated to check for `context-fuel.instructions.md`
+- [ ] All 9 presets tested: `setup.ps1 -Preset <each>` installs Temper Guards files
+- [ ] `VERSION` bumped to `2.18.0`
+- [ ] `CHANGELOG.md` updated with all T1–T5 items
 
 ---
 
@@ -1347,7 +1375,32 @@ After completing this skill, confirm:
 | `docs/manual/extensions.html` | Website / Manual | Update skill authoring section |
 | `CHANGELOG.md` | Release notes | Document S1–S3 |
 
+**MCP & Capabilities Sweep** (update after S1–S3 are live):
+| File | What to Update |
+|------|----------------|
+| `pforge-mcp/capabilities.mjs` → `skills` | Update skill descriptions to mention Exit Proof and Temper Guards as standard sections |
+| `pforge-mcp/capabilities.mjs` → `skills` | If any new skills are added, update the skills object and counts |
+| `docs/capabilities.md` | Document Skill Blueprint as the canonical skill format spec |
+| `docs/capabilities.html` | Mirror capabilities.md updates |
+| `docs/.well-known/plan-forge.json` | Update skill feature descriptions |
+| `docs/llms.txt` | Mention Skill Blueprint and Exit Proof |
+
 **Dashboard Sweep**: No dashboard changes — v2.19 is skill-layer enhancements.
+
+### v2.19 Release Gate
+
+Before tagging v2.19.0:
+
+- [ ] `docs/SKILL-BLUEPRINT.md` published with full format specification
+- [ ] 4+ existing skills updated with Temper Guards, Warning Signs, and Exit Proof sections
+- [ ] All shared skills have Exit Proof checklists with verifiable evidence requirements
+- [ ] 5+ skills have Temper Guards with domain-specific rebuttals
+- [ ] `CUSTOMIZATION.md` links to SKILL-BLUEPRINT.md
+- [ ] `extensions/PUBLISHING.md` references the blueprint for skill contributions
+- [ ] `pforge-mcp/capabilities.mjs` updated with new skill features
+- [ ] `docs/capabilities.md` and `docs/capabilities.html` updated
+- [ ] `VERSION` bumped to `2.19.0`
+- [ ] `CHANGELOG.md` updated with all S1–S3 items
 
 ---
 
@@ -1400,6 +1453,38 @@ After completing this skill, confirm:
 | `docs/index.html` | Website | Update skill count |
 | `templates/copilot-instructions.md.template` | Template | Add `/forge-quench` to Skill Slash Commands table |
 | `CHANGELOG.md` | Release notes | Document new skill |
+
+**MCP & Capabilities Sweep** (update after feature is live):
+| File | What to Update |
+|------|----------------|
+| `pforge-mcp/capabilities.mjs` → `skills` | Add `/forge-quench` with description to the skills object |
+| `pforge-mcp/capabilities.mjs` → `presets.counts` | Increment skill counts for all app presets (e.g., dotnet: skills 8→9) |
+| `pforge-mcp/tools.json` | If `forge_run_skill` examples reference skills, add `forge-quench` |
+| `docs/capabilities.md` | Add `/forge-quench` to Skills table; update total skill count |
+| `docs/capabilities.html` | Mirror capabilities.md updates |
+| `docs/.well-known/plan-forge.json` | Update `skills` count |
+| `docs/llms.txt` | Update skill count |
+| `plugin.json` | Update description with new skill count |
+
+**Dashboard Sweep**:
+| Tab / Component | File | What to Update |
+|-----------------|------|----------------|
+| **Skills** tab — Skill Catalog | `app.js` → Extension / Skills section | Add `forge-quench` to built-in skill grid with description |
+
+### v2.20 Release Gate
+
+Before tagging v2.20.0:
+
+- [ ] `presets/shared/skills/forge-quench/SKILL.md` exists with full Blueprint format (Temper Guards, Warning Signs, Exit Proof)
+- [ ] Stack-specific variants have correct complexity measurement commands per framework
+- [ ] Skill follows Chesterton's Fence principle — `## Understand First` step is mandatory before any simplification
+- [ ] All tests pass after running `/forge-quench` on test fixtures
+- [ ] `pforge-mcp/capabilities.mjs` skill counts updated
+- [ ] `docs/capabilities.md` and `docs/capabilities.html` updated
+- [ ] Agent adapters updated: Claude, Cursor, Codex, Gemini, Windsurf, Generic all include `/forge-quench`
+- [ ] `validate-setup.ps1` / `validate-setup.sh` expected skill counts updated
+- [ ] `VERSION` bumped to `2.20.0`
+- [ ] `CHANGELOG.md` updated
 
 ---
 

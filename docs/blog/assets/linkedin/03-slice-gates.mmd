@@ -1,11 +1,32 @@
-graph LR
-    S1["Slice 1<br/>2 files"] -->|"✅ Gate Pass"| S2["Slice 2<br/>3 files"]
-    S2 -->|"✅ Gate Pass"| S3["Slice 3<br/>2 files"]
-    S3 -->|"❌ Gate Fail"| FIX["Fix<br/>5 min"]
-    FIX -->|"✅ Gate Pass"| S4["Slice 4<br/>2 files"]
-    S4 -->|"✅ Gate Pass"| S5["Slice 5<br/>3 files"]
-    S5 -->|"✅ Gate Pass"| SHIP["Ship ✅"]
-    
+---
+config:
+  themeVariables:
+    fontSize: 20px
+---
+block-beta
+    columns 15
+    S1["Slice 1\n2 files"]:3
+    space:1
+    S2["Slice 2\n3 files"]:3
+    space:1
+    S3["Slice 3\n2 files"]:3
+    space:1
+    FIX["Fix\n5 min"]:3
+    space:15
+    space:4
+    SHIP["Ship ✅"]:3
+    space:1
+    S5["Slice 5\n3 files"]:3
+    space:1
+    S4["Slice 4\n2 files"]:3
+
+    S1 --> S2
+    S2 --> S3
+    S3 --> FIX
+    FIX --> S4
+    S4 --> S5
+    S5 --> SHIP
+
     style S1 fill:#22c55e,color:#fff
     style S2 fill:#22c55e,color:#fff
     style S3 fill:#ef4444,color:#fff

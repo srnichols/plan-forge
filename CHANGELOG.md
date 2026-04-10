@@ -5,6 +5,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.20.0] — 2026-04-10
+
+### Added — Forge Quench (Code Simplification Skill)
+
+- **`/forge-quench` skill** — new shared skill that systematically reduces code complexity while preserving exact behavior. Named after the metallurgical quenching process. 5-step workflow: Measure → Understand First (Chesterton's Fence) → Propose → Apply & Prove → Report. Each simplification is committed individually with rationale; tests run after every change; failing tests trigger immediate revert.
+- **8 stack-specific variants** — each preset (dotnet, typescript, python, java, go, swift, rust, php) has a forge-quench variant with framework-appropriate complexity measurement tools: `radon` (Python), `gocyclo`/`gocognit` (Go), `cargo clippy` (Rust), ESLint complexity rule (TypeScript), `phpmd` (PHP), `pmd` (Java), `swiftlint` (Swift), manual analysis (.NET)
+- **Full Skill Blueprint compliance** — all 9 forge-quench files include Temper Guards (5 entries), Warning Signs (6 items), Exit Proof (6 verifiable checkboxes), and Persistent Memory hooks
+
+---
+
 ## [2.19.0] — 2026-04-10
 
 ### Added — Skill Blueprint & Verification Gates

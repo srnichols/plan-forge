@@ -1,6 +1,6 @@
 {
   "name": "plan-forge",
-  "version": "2.19.0",
+  "version": "2.20.0",
   "description": "Plan Forge — Harden AI-driven development plans into drift-proof execution contracts. 7-step pipeline, 19 reviewer agents, 12 skills, 18 MCP tools, live dashboard, quorum mode, auto-escalation, cost tracking. Supports 9 presets (dotnet, typescript, python, java, go, swift, rust, php, azure-iac).",
   "author": "srnichols",
   "license": "MIT",

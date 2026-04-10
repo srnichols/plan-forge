@@ -7,7 +7,9 @@
 
 ## Current Release
 
-**v2.20.0** (2026-04-10) — Forge Quench: code simplification skill with Chesterton's Fence principle, stack-specific complexity measurement for all 8 app presets, full Skill Blueprint format.
+**v2.21.0** (2026-04-10) — Forge Anneal: documentation consolidation pass. Human-facing docs reduced from 10,910 to 5,782 lines (47%). README 1082→216, ROADMAP 1714→191, Runbook archived to redirect, Unified Architecture compressed to summary.
+
+Previous: v2.20.0 (2026-04-10) — Forge Quench.
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 

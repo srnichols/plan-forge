@@ -252,7 +252,7 @@ Every instruction file includes two defensive sections:
 | `generic` | `.ai/instructions.md`, `.ai/commands/` | Any AI tool (configurable dir) |
 | `all` | All of the above | Full multi-tool support |
 
-## Skills (12)
+## Skills (13)
 
 Every skill follows the [Skill Blueprint](SKILL-BLUEPRINT.md) format: Frontmatter → Trigger → Steps → Safety Rules → Temper Guards → Warning Signs → Exit Proof → Persistent Memory.
 
@@ -270,6 +270,7 @@ Every skill follows the [Skill Blueprint](SKILL-BLUEPRINT.md) format: Frontmatte
 | `/health-check` | Forge diagnostic: smith → validate → sweep |
 | `/forge-execute` | Guided plan execution: list → estimate → execute → report |
 | `/forge-troubleshoot` | Diagnose and resolve plan failures, gate errors, and environment issues |
+| `/forge-quench` | Reduce code complexity while preserving behavior — Chesterton's Fence |
 
 ## Telemetry
 

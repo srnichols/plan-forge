@@ -7,9 +7,9 @@
 
 ## Current Release
 
-**v2.19.0** (2026-04-10) — Skill Blueprint & Verification Gates: formal SKILL-BLUEPRINT.md spec, Exit Proof checklists and Temper Guards in all 79 skills across 9 presets.
+**v2.20.0** (2026-04-10) — Forge Quench: code simplification skill with Chesterton's Fence principle, stack-specific complexity measurement for all 8 app presets, full Skill Blueprint format.
 
-Previous: v2.18.0 (2026-04-10) — Temper Guards & Onboarding Polish.
+Previous: v2.19.0 (2026-04-10) — Skill Blueprint & Verification Gates.
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 

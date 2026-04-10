@@ -533,6 +533,7 @@ const SYSTEM_REFERENCE = {
       "/onboarding": "Walk a new developer through project setup, architecture, first task (forge_smith)",
       "/health-check": "Forge diagnostic: forge_smith → forge_validate → forge_sweep with structured report",
       "/forge-execute": "Guided plan execution: list plans → estimate cost → choose mode → execute → report",
+      "/forge-quench": "Systematically reduce code complexity while preserving behavior — measure, understand (Chesterton's Fence), propose, prove, report",
     },
     invocation: "Type / in Copilot Chat to see available skills, or use forge_run_skill MCP tool",
   },

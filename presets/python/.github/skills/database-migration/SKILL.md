@@ -52,6 +52,32 @@ alembic -x env=staging upgrade head
 - ALWAYS add `IF NOT EXISTS` / `IF EXISTS` guards in raw SQL
 - Test migration on a copy of production data when possible
 
+
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "I'll just edit the model directly" | Skipping the migration file means no rollback path and no deployment audit trail. Schema changes must be versioned. |
+| "Rollback SQL isn't needed" | Deployments fail. Without rollback, recovery means restoring from backup — minutes of downtime vs seconds. |
+| "I'll seed data manually" | Manual data changes drift between environments. Seeding must be scripted and repeatable. |
+| "One migration for multiple changes is simpler" | Atomic migrations enable selective rollback. Bundled changes force all-or-nothing reversals. |
+
+## Warning Signs
+
+- Migration file missing — schema change made directly to model/entity without a migration file
+- No rollback section — up migration exists but down/revert migration is missing or empty
+- Migration not tested locally — pushed to staging without verifying on dev database first
+- Schema change not in PR diff — model updated but migration file not committed
+- Breaking change without deprecation — column dropped or renamed without a graceful transition period
+
+## Exit Proof
+
+After completing this skill, confirm:
+- [ ] Migration file created and committed
+- [ ] `alembic upgrade head` succeeds on local database
+- [ ] `pytest tests/integration/ -v` passes against migrated schema
+- [ ] Rollback tested — `alembic downgrade -1` runs cleanly
+- [ ] Schema change is backward compatible (or deprecation period documented)
 ## Persistent Memory (if OpenBrain is configured)
 
 - **Before generating migration**: `search_thoughts("database migration", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "pattern")` — load prior migration patterns, naming conventions, and lessons from failed migrations

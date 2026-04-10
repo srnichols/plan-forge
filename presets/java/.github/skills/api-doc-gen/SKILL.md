@@ -81,6 +81,32 @@ Overall: PASS / FAIL
 - Flag breaking changes (removed endpoints, changed schemas)
 - Run `mvn verify` after any spec-related code changes
 
+
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "The code is self-documenting" | Code shows implementation, not intent. API consumers need contracts, not source code. |
+| "We'll add the OpenAPI spec later" | Specs drift from implementation immediately. Generate alongside code or they'll never match. |
+| "Only internal consumers, no docs needed" | Internal APIs become external APIs. Undocumented internal APIs create onboarding bottlenecks. |
+| "Examples aren't necessary" | Examples are the most-read section of any API doc. Abstract schemas don't show real usage. |
+
+## Warning Signs
+
+- Endpoints without response type annotations — returns untyped or generic responses
+- Spec doesn't match actual routes — OpenAPI spec has different paths/methods than the running API
+- No request/response examples — spec has schemas but no concrete usage examples
+- Error responses undocumented — only success codes documented, error payloads missing
+- Spec not validated against running API — generated once but never verified against live routes
+
+## Exit Proof
+
+After completing this skill, confirm:
+- [ ] OpenAPI spec generated or updated (springdoc-openapi / Swagger)
+- [ ] Spec validates against actual endpoints — no ghost entries, no missing routes
+- [ ] Request/response examples present for key routes
+- [ ] Error responses documented (4xx/5xx with schemas)
+- [ ] `./mvnw package -DskipTests` succeeds after any spec-related code changes
 ## Persistent Memory (if OpenBrain is configured)
 
 - **Before generating docs**: `search_thoughts("API design", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "convention")` — load API naming conventions, pagination patterns, and error response standards

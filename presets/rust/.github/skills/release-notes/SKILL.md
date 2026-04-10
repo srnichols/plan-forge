@@ -77,6 +77,31 @@ Format for **GitHub Release**:
 - Include migration steps for any breaking change
 - Ask for human review before publishing
 
+
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "The commit messages are good enough" | Commit messages are for developers. Release notes are for users — different audience, different detail level. |
+| "Nobody reads release notes" | Users, support teams, and auditors rely on release notes. Missing notes cause support tickets and compliance gaps. |
+| "I'll write them after release" | Post-release notes are always incomplete. Context fades fast — write them while the work is fresh. |
+
+## Warning Signs
+
+- Release notes don't mention breaking changes — API or behavior changes not flagged
+- Version number missing or inconsistent — notes reference wrong version or omit it
+- No link to CHANGELOG — notes generated but not persisted to the project's changelog
+- New features undocumented — features merged but not mentioned in notes
+- Generated from wrong commit range — notes include changes from a different release cycle
+
+## Exit Proof
+
+After completing this skill, confirm:
+- [ ] Version number present and matches the release tag
+- [ ] Breaking changes explicitly documented with migration guidance
+- [ ] Generated from actual git history (`git log` range verified)
+- [ ] CHANGELOG.md updated with the new entry
+- [ ] All merged PRs and features accounted for in the notes
 ## Persistent Memory (if OpenBrain is configured)
 
 - **Before generating notes**: `search_thoughts("release", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "decision")` — load prior release decisions, breaking change precedents, and versioning conventions

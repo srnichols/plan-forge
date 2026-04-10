@@ -76,6 +76,32 @@ Overall: PASS / FAIL
 - Run `go test ./...` after any dependency change
 - Document any accepted vulnerabilities with justification
 
+
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "These are all false positives" | Dismissing findings without verification creates a blind spot. Each finding needs individual assessment. |
+| "We'll update after the release" | Post-release updates never happen. Vulnerable dependencies ship to production and stay there. |
+| "Dev dependencies don't matter" | Build-time dependencies can inject malicious code. Supply chain attacks target dev tooling. |
+| "The vulnerability doesn't apply to our usage" | Usage analysis requires proof. Document exactly which code paths are safe and why. |
+
+## Warning Signs
+
+- Findings dismissed without verification — CVEs marked "won't fix" without written justification
+- Critical/high CVEs with no resolution plan — severe vulnerabilities acknowledged but not addressed
+- Audit not run on all package managers — only one ecosystem scanned when project uses multiple
+- Outdated transitive dependencies ignored — direct deps updated but vulnerable transitives remain
+- License violations not flagged — incompatible licenses in dependencies not identified
+
+## Exit Proof
+
+After completing this skill, confirm:
+- [ ] All package managers scanned — `govulncheck ./...`
+- [ ] Outdated packages reviewed — `go list -m -u all`
+- [ ] Every critical/high finding has a resolution plan (upgrade, patch, or documented acceptance)
+- [ ] `go test ./...` passes after any dependency changes
+- [ ] Audit report generated with overall PASS/FAIL status
 ## Persistent Memory (if OpenBrain is configured)
 
 - **Before auditing**: `search_thoughts("dependency vulnerability", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "bug")` — load previously accepted vulnerabilities and known upgrade blockers

@@ -496,8 +496,13 @@ const SYSTEM_REFERENCE = {
   },
 
   guardrails: {
-    description: "15-18 instruction files per preset that auto-load based on the file being edited",
-    shared: ["architecture-principles", "git-workflow", "ai-plan-hardening-runbook", "project-principles", "status-reporting"],
+    description: "15-18 instruction files per preset that auto-load based on the file being edited. Each includes Temper Guards (agent shortcut prevention) and Warning Signs (behavioral anti-patterns).",
+    shared: ["architecture-principles", "context-fuel", "git-workflow", "ai-plan-hardening-runbook", "project-principles", "status-reporting"],
+    features: {
+      temperGuards: "Tables of common shortcuts agents take (excuses + rebuttals) embedded in each instruction file — prevents quality erosion within passing builds",
+      warningSigns: "Observable behavioral anti-patterns listed in each instruction file — helps agents and reviewers detect violations during and after execution",
+      contextFuel: "Meta-instruction that teaches agents context window management — when to load what, recognizing degradation, session boundaries",
+    },
     perStack: {
       dotnet: ["api-patterns", "auth", "caching", "dapr", "database", "deploy", "errorhandling", "graphql", "messaging", "multi-environment", "naming", "observability", "performance", "security", "testing", "version"],
       typescript: ["...same + frontend"],

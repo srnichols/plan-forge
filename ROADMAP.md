@@ -1351,7 +1351,7 @@ After completing this skill, confirm:
 
 ---
 
-## v3.2 — Forge Quench (Code Simplification Skill)
+## v2.20 — Forge Quench (Code Simplification Skill)
 
 > **Source**: Agent Skills' `code-simplification` skill based on Chesterton's Fence, Rule of 500, and complexity preservation. Plan Forge has review agents that flag complexity but no dedicated simplification workflow.
 
@@ -1388,7 +1388,7 @@ After completing this skill, confirm:
 - [ ] No new TODO/FIXME/HACK markers introduced
 
 **Effort**: ~5 hours (skill file + stack variants for complexity measurement commands)  
-**Roadmap fit**: v3.2 — nice-to-have after the core Temper Guards and Skill Blueprint foundation is in place.
+**Roadmap fit**: v2.20 — follows naturally after v2.19's Skill Blueprint and Exit Proof foundation.
 
 **Doc Sweep** (update after feature is live):
 | File | Type | What to Update |

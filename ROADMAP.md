@@ -1071,6 +1071,338 @@ Before tagging v2.14.0:
 
 ---
 
+## v2.18 — Temper Guards & Onboarding Polish
+
+> **Source**: Comparative analysis with [addyosmani/agent-skills](https://github.com/addyosmani/agent-skills) (April 2026). Agent Skills' #1 innovation is anti-rationalization tables — documented rebuttals for excuses agents use to skip steps. Plan Forge has structural enforcement (gates, scope contracts, forbidden actions) but lacks a psychological defense layer. v2.18 adds that layer to instruction files and skills, plus onboarding streamlining.
+>
+> **Design principle**: Build onto existing instruction files and skill format — no new runtime, no new tools. These are pure documentation enhancements with zero infrastructure cost.
+
+### T1. Temper Guards in Instruction Files
+
+**What**: Add a `## Temper Guards` section to core instruction files. Each table lists common excuses agents use to cut corners within a passing build, paired with documented rebuttals. Named after the metallurgical process — tempering strengthens steel against brittle failure while preserving its edge.
+
+**Why**: Validation gates catch code that doesn't compile or pass tests. They cannot catch quality erosion that still compiles — controller-level business logic, missing edge-case handling, DTOs that bypass validation, raw SQL where the ORM should be used. Temper Guards attack this at the cognitive layer before the agent writes the code.
+
+**Approach**: Each instruction file already tells agents *what to do*. Temper Guards add *why not to skip it*. Format:
+
+```markdown
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "This function is too simple to test" | Simple code gets modified later. The test documents the contract. Write it now. |
+| "I'll add tests after the feature works" | Debt compounds. Red-Green-Refactor means test exists before code. |
+```
+
+**Files to enhance** (priority order — highest agent-laziness risk first):
+
+| Instruction File | Key Temper Guards |
+|------------------|-------------------|
+| `testing.instructions.md` | "Too simple to test", "Integration test covers it", "Just a DTO — no logic", "Mocking is too complex" |
+| `security.instructions.md` | "This is internal-only", "Input validation is overkill", "We'll add auth later", "No real users yet" |
+| `errorhandling.instructions.md` | "This can't fail", "A generic catch is fine", "Logging it is enough", "The caller handles errors" |
+| `architecture-principles.instructions.md` | "Putting logic in the controller is simpler", "One service handles both", "We'll refactor later", "This is a one-off" |
+| `database.instructions.md` | "N+1 won't matter at our scale", "Raw SQL is faster here", "Migrations are overkill for this change" |
+| `api-patterns.instructions.md` | "Nobody uses pagination yet", "Versioning can wait", "Error codes aren't needed for MVP" |
+
+**Scope**: All 9 presets benefit (shared instruction files propagate). Stack-specific variants add framework-specific guards (e.g., TypeScript: "any is fine here temporarily"; .NET: "`dynamic` is easier than generics"; Python: "type hints slow me down").
+
+**Effort**: ~3 hours  
+**Acceptance criteria**:
+- Temper Guards section added to 6+ instruction files across all presets
+- Each table has 3–6 entries with concrete, non-generic rebuttals
+- Stack-specific variants include framework-specific temptations
+- No runtime changes — pure Markdown enhancement
+
+### T2. Warning Signs in Instruction Files
+
+**What**: Add a `## Warning Signs` section to instruction files — observable behavioral patterns indicating the file's guidance is being violated. Named for what they are: signals that something's going wrong.
+
+**Why**: The Review Gate (Step 5) runs *after* all slices complete. Warning Signs give both the agent (during execution) and the reviewer (during audit) a specific checklist of *behavioral* anti-patterns to watch for. The PostToolUse hook already scans for TODO/FIXME markers — Warning Signs extend this to architectural and quality markers.
+
+**Example for `architecture-principles.instructions.md`**:
+```markdown
+## Warning Signs
+
+- A controller method contains database queries (skipped the service layer)
+- A service returns HTTP status codes or HttpResponse objects (leaking HTTP concerns)
+- A repository contains if/else business logic (business rules in data access)
+- A single file handles both HTTP routing and data persistence
+- A new utility class exists for a one-time operation (premature abstraction)
+- A God object: single class with >10 public methods or >300 lines
+```
+
+**Files to enhance** (same set as T1):
+| File | Key Warning Signs |
+|------|-------------------|
+| `testing.instructions.md` | Test file has fewer test methods than the class under test has public methods; test names describe implementation not behavior |
+| `security.instructions.md` | Route handler missing auth middleware; string interpolation in SQL; hardcoded secret in assignment |
+| `errorhandling.instructions.md` | Empty catch block; all exceptions caught as base Exception; error message exposes stack trace |
+| `database.instructions.md` | Query inside a loop; SELECT * in production code; missing index on foreign key |
+| `api-patterns.instructions.md` | Endpoint returns unbounded collection; no Content-Type header; 200 OK for error conditions |
+
+**Effort**: ~2 hours  
+**Acceptance criteria**:
+- Warning Signs section in 6+ instruction files
+- Each list has 4–6 concrete, grep-checkable patterns
+- Signs are behavioral (observable in code) not subjective
+
+### T3. Context Fuel Instruction File
+
+**What**: A new `context-fuel.instructions.md` (shared, `applyTo: '**'`) that teaches agents how to manage their own context window within the Plan Forge ecosystem. Named because context is what fuels good agent output — running low starves quality.
+
+**Why**: Plan Forge loads 15–18 instruction files per preset. In long sessions, agents silently drop earlier context and start making mistakes that were already guarded against. There's no explicit guidance for "you're losing context — here's what to do."
+
+**Content**:
+- When to use `forge_capabilities` (session start) vs reading individual files
+- How to prioritize instruction files for the current task (database work → load `database.instructions.md` first)
+- Recognizing context degradation: repeated mistakes, forgotten constraints, contradicting earlier decisions
+- When to recommend a fresh session (Plan Forge's 4-session model exists for this)
+- How to use OpenBrain `search_thoughts` to restore lost context mid-session
+- Token budget awareness: large plan files + many instruction files can exceed windows
+
+**Effort**: ~2 hours — one new instruction file + add to `presets/shared/`  
+**Acceptance criteria**:
+- `context-fuel.instructions.md` in shared preset
+- Loads on `applyTo: '**'` with `priority: LOW` (informational, not blocking)
+- Contains actionable steps, not abstract advice
+- References Plan Forge-specific tools (forge_capabilities, OpenBrain)
+
+### T4. Quick Forge Card on Website
+
+**What**: A single "5-Minute Quick Start" card on `planforge.software` that shows exactly 4 steps: install → init → plan → execute. Distills the onboarding to the minimum viable path.
+
+**Why**: Plan Forge's documentation is comprehensive (50+ files, full manual, blog) which is a strength for depth but a weakness for first impressions. Evaluators need a fast signal: "can I be productive in 5 minutes?"
+
+**Content**:
+```
+1. Install the plugin: [one-click link]
+2. Init your project: pforge init -Preset <stack>
+3. Describe your feature to the Specifier agent
+4. Click through the pipeline: Specify → Harden → Execute → Review → Ship
+```
+
+**Effort**: ~1 hour — HTML/CSS card on `docs/index.html`  
+**Acceptance criteria**:
+- Card visible above the fold on the homepage
+- 4 steps maximum, no jargon
+- Links to detailed walkthrough for users who want more
+
+### T5. `pforge tour` — Interactive Walkthrough
+
+**What**: A new CLI command that walks through the installed Plan Forge files interactively, explaining what each type does (instructions, agents, prompts, skills, hooks, .forge.json). Guided introduction that builds familiarity without reading docs.
+
+**Why**: New users face 100+ files after setup. `pforge tour` provides a curated walk-through that teaches the framework by showing real files in their project, not abstract documentation.
+
+**Flow**:
+```
+$ pforge tour
+Welcome to Plan Forge! Let's walk through your project.
+
+[1/6] Instruction Files (.github/instructions/)
+  You have 17 instruction files. These auto-load when you edit matching files.
+  Example: database.instructions.md loads when editing *.sql files.
+  → Press Enter to see a list, or 's' to skip...
+
+[2/6] Agent Definitions (.github/agents/)
+  You have 19 agents. These are specialized reviewers you can invoke in chat.
+  → Press Enter to see them, or 's' to skip...
+
+[3/6] ...
+```
+
+**Effort**: ~4 hours (PS + Bash parity)  
+**Acceptance criteria**:
+- `pforge tour` command in both `pforge.ps1` and `pforge.sh`
+- Covers 6 categories: instructions, agents, prompts, skills, pipeline, config
+- Interactive (press Enter to continue, 's' to skip)
+- Uses real file counts and names from the user's project
+- No MCP dependency — works standalone
+
+**Doc Sweep** (update after all T1–T5 are live):
+| File | Type | What to Update |
+|------|------|----------------|
+| `README.md` | Human docs | Add `pforge tour` to Quick Commands; mention Temper Guards in "How It Works" section |
+| `docs/CLI-GUIDE.md` | Human docs | Add `tour` command documentation |
+| `docs/index.html` | Website | Add Quick Forge Card (T4); mention Temper Guards as feature |
+| `docs/capabilities.md` | Human/AI docs | Document Temper Guards and Warning Signs as instruction file features |
+| `docs/capabilities.html` | Website | Update features list |
+| `docs/COPILOT-VSCODE-GUIDE.md` | Human docs | Reference context-fuel.instructions.md in "Managing Context Budget" section |
+| `CUSTOMIZATION.md` | Human docs | Document Temper Guards format for teams adding custom guards |
+| `docs/faq.html` | Website / FAQ | New FAQ: "What are Temper Guards?" / "How does Plan Forge prevent agents from cutting corners?" |
+| `templates/copilot-instructions.md.template` | Template | Add `pforge tour` to Quick Commands |
+| `CHANGELOG.md` | Release notes | Document all T1–T5 items |
+
+**Dashboard Sweep**: No dashboard changes — v2.18 is all instruction-layer and CLI enhancements.
+
+---
+
+## v2.19 — Skill Blueprint & Verification Gates
+
+> **Source**: Continued learnings from agent-skills analysis. Agent Skills has a documented skill anatomy spec and mandatory verification checklists. Plan Forge skills have a consistent implicit format but no formal spec, and not all skills end with verifiable exit criteria.
+
+### S1. Skill Blueprint Spec (`docs/SKILL-BLUEPRINT.md`)
+
+**What**: A formal specification document for the Plan Forge skill format — the blueprint that skill authors (internal and extension contributors) follow when creating new skills.
+
+**Why**: Plan Forge has 12+ skills per preset, and the extension ecosystem invites third-party contributions. Without a formal spec, contributors reverse-engineer the format from existing skills. A blueprint ensures consistency and lowers the barrier for community skill authoring.
+
+**Plan Forge Skill Blueprint** (extended format):
+
+```
+SKILL.md
+├── Frontmatter
+│   ├── name (kebab-case, matches directory)
+│   ├── description (what + when trigger)
+│   ├── argument-hint (optional CLI-style usage hint)
+│   └── tools (MCP tools / VS Code tools this skill uses)
+├── Trigger (natural language phrases that activate the skill)
+├── Steps (numbered workflow with validation between steps)
+├── Safety Rules (invariants — what the skill must never do)
+├── Temper Guards (NEW — excuses agents use to shortcut this skill + rebuttals)
+├── Warning Signs (NEW — behavioral indicators the skill is being violated)
+├── Exit Proof (NEW — verifiable checklist confirming the skill completed correctly)
+└── Persistent Memory (OpenBrain search-before / capture-after hooks)
+```
+
+**New sections explained**:
+- **Temper Guards** — same format as instruction files but scoped to this skill's workflow. E.g., for `/database-migration`: "I'll just edit the model, no migration needed" → "Schema changes without migrations break other environments."
+- **Warning Signs** — behavioral patterns indicating the skill's process was circumvented.
+- **Exit Proof** — checklist of evidence requirements. Every checkbox must be verifiable with output (test results, build log, command output). Replaces vague "make sure it works" with "paste the output of `dotnet test` showing N tests pass."
+
+**Effort**: ~4 hours (spec doc + update 4–5 existing skills as reference implementations)  
+**Acceptance criteria**:
+- `docs/SKILL-BLUEPRINT.md` published
+- Updated `CUSTOMIZATION.md` links to it
+- 4+ existing skills updated with Temper Guards, Warning Signs, and Exit Proof sections
+- Extension `PUBLISHING.md` references the blueprint for skill contributions
+
+### S2. Exit Proof in Existing Skills
+
+**What**: Add `## Exit Proof` sections to all existing shared and stack-specific skills. Each proof is a checklist of verifiable evidence.
+
+**Why**: Skills currently end with a "Report" section that summarizes output. But there's no formal "did this skill actually complete?" gate. Exit Proof makes skill completion binary — either you have the evidence or you don't.
+
+**Example for `/database-migration`**:
+```markdown
+## Exit Proof
+
+After completing this skill, confirm:
+- [ ] Migration file exists in the expected directory
+- [ ] `dotnet ef migrations list` (or equivalent) shows the new migration
+- [ ] `dotnet ef database update` completes without errors
+- [ ] Application builds successfully after migration
+- [ ] At least one test exercises the new schema (query or seed)
+- [ ] No `TODO` or `FIXME` markers in migration file
+```
+
+**Example for `/test-sweep`**:
+```markdown
+## Exit Proof
+
+- [ ] All test suites executed (paste command + output summary)
+- [ ] Zero test failures (or all failures explained with linked issues)
+- [ ] Coverage report generated (if configured)
+- [ ] No skipped tests without documented reason
+```
+
+**Skills to update**: All 12+ shared/stack skills (health-check, forge-execute, forge-troubleshoot, security-audit, database-migration, staging-deploy, test-sweep, dependency-audit, code-review, release-notes, api-doc-gen, onboarding)
+
+**Effort**: ~3 hours  
+**Acceptance criteria**:
+- Exit Proof section in all shared skills
+- Stack-specific skills have framework-appropriate proof commands
+- Each checklist has 4–6 concrete, paste-the-output items
+
+### S3. Temper Guards in Existing Skills
+
+**What**: Add `## Temper Guards` sections to skills that have the highest risk of agent shortcuts.
+
+**Why**: Skills define multi-step procedures. Agents are tempted to collapse steps ("I'll combine the migration and the seed data"), skip validation ("the build passed, no need to run tests separately"), or defer work ("I'll add the rollback logic later"). Temper Guards in skills catch these within the workflow itself.
+
+**Skills to enhance** (highest shortcut risk):
+
+| Skill | Key Temper Guards |
+|-------|-------------------|
+| `/database-migration` | "I'll just edit the model directly" / "Rollback migration isn't needed" / "Seed data can wait" |
+| `/staging-deploy` | "It works locally, skip staging" / "Health check endpoint isn't needed yet" / "I'll add monitoring after launch" |
+| `/security-audit` | "This scan is probably all false positives" / "We'll fix the medium findings later" / "Test files don't need security review" |
+| `/code-review` | "The tests pass, so the code is fine" / "This change is too small to review" / "I wrote it, I can review it" |
+| `/test-sweep` | "Skipped tests are probably flaky" / "80% coverage is good enough" / "Integration tests cover the unit tests" |
+
+**Effort**: ~2 hours  
+**Acceptance criteria**:
+- Temper Guards in 5+ skills
+- Each table has 3–5 entries with concrete rebuttals specific to that skill's domain
+
+**Doc Sweep** (update after S1–S3 are live):
+| File | Type | What to Update |
+|------|------|----------------|
+| `README.md` | Human docs | Update skill description to mention Exit Proof and Temper Guards |
+| `docs/capabilities.md` | Human/AI docs | Document Skill Blueprint format; update skill feature list |
+| `docs/capabilities.html` | Website | Update skills section |
+| `CUSTOMIZATION.md` | Human docs | Link to SKILL-BLUEPRINT.md; document how to add Temper Guards to custom skills |
+| `docs/EXTENSIONS.md` | Human docs | Reference blueprint for extension skill contributions |
+| `extensions/PUBLISHING.md` | Human docs | Add SKILL-BLUEPRINT.md as required reading for skill submissions |
+| `docs/manual/extensions.html` | Website / Manual | Update skill authoring section |
+| `CHANGELOG.md` | Release notes | Document S1–S3 |
+
+**Dashboard Sweep**: No dashboard changes — v2.19 is skill-layer enhancements.
+
+---
+
+## v3.2 — Forge Quench (Code Simplification Skill)
+
+> **Source**: Agent Skills' `code-simplification` skill based on Chesterton's Fence, Rule of 500, and complexity preservation. Plan Forge has review agents that flag complexity but no dedicated simplification workflow.
+
+**What**: A new shared skill `/forge-quench` that systematically reduces code complexity while preserving exact behavior. Named after the metallurgical quenching process — rapidly cooling hot metal simplifies its crystal structure and hardens it.
+
+**When to use**: After a feature is complete and tests pass, but before the Review Gate. Code works but is harder to read or maintain than it should be.
+
+**Workflow**:
+1. **Measure** — calculate cyclomatic complexity of changed files; identify the top 3-5 most complex functions
+2. **Understand first** (Chesterton's Fence) — before simplifying any code, document *why* the complexity exists. If the reason is still valid, leave it. If the reason is gone, simplify.
+3. **Propose** — generate before/after diffs for each simplification with rationale
+4. **Prove** — run full test suite after each change to verify behavior unchanged
+5. **Report** — complexity delta, files changed, test results, functions simplified
+
+**Safety rails**:
+- NEVER simplify code you don't understand — always document the "why" first
+- NEVER combine simplification with feature changes — one concern per commit
+- ALWAYS run tests after each simplification — not just at the end
+- STOP if any test fails — revert the simplification, don't fix the test
+
+**Temper Guards**:
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "This code is obviously redundant — just delete it" | Chesterton's Fence: understand before removing. It may handle an edge case you haven't seen. |
+| "I'll simplify and add the feature at the same time" | Mixed commits make revert impossible. Simplify first, commit, then add the feature. |
+| "The tests still pass so the simplification is safe" | Tests may not cover the behavior the complexity protected. Check coverage of the specific function. |
+| "This whole class can be replaced with a utility function" | If it's used in multiple places, you're creating a God utility. Prefer targeted simplification. |
+
+**Exit Proof**:
+- [ ] Complexity metrics reduced (paste before/after scores)
+- [ ] All tests pass (paste test output)
+- [ ] No behavior changes (same inputs produce same outputs)
+- [ ] Each simplification committed separately with rationale in commit message
+- [ ] No new TODO/FIXME/HACK markers introduced
+
+**Effort**: ~5 hours (skill file + stack variants for complexity measurement commands)  
+**Roadmap fit**: v3.2 — nice-to-have after the core Temper Guards and Skill Blueprint foundation is in place.
+
+**Doc Sweep** (update after feature is live):
+| File | Type | What to Update |
+|------|------|----------------|
+| `README.md` | Human docs | Add `/forge-quench` to Skills table; update skill count |
+| `docs/CLI-GUIDE.md` | Human docs | (if CLI wrapper added) Add `quench` command |
+| `docs/capabilities.md` | Human/AI docs | Add to Skills table; update count |
+| `docs/capabilities.html` | Website | Add to skills section |
+| `docs/index.html` | Website | Update skill count |
+| `templates/copilot-instructions.md.template` | Template | Add `/forge-quench` to Skill Slash Commands table |
+| `CHANGELOG.md` | Release notes | Document new skill |
+
+---
+
 ## Backlog
 
 These are planned but not yet prioritized into a version:

@@ -127,3 +127,26 @@ func (h *ItemHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 - `observability.instructions.md` — Structured logging, error tracking
 - `api-patterns.instructions.md` — Error response format, status codes
 - `messaging.instructions.md` — Dead letter queues, retry strategies
+
+---
+
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "This operation can't fail" | Every I/O operation can fail — network timeouts, disk full, permission denied. If it touches external state, it fails. |
+| "A generic catch block is fine here" | Generic catches swallow specific failure signals. Catch the exception you expect, let the rest propagate to the global exception handler. |
+| "Logging the error is enough" | Logging without handling means the caller receives a cryptic 500. Return a structured error response so the consumer can act on it. |
+| "The caller handles errors, I don't need to" | If the caller expected your method to succeed unconditionally, the unhandled exception is a surprise. Define your error contract explicitly. |
+| "Returning `null` is simpler than throwing" | Null return values push error handling to every caller. Throw a specific exception or use typed result objects with a clear message. |
+
+---
+
+## Warning Signs
+
+- Empty catch blocks (`catch (\Exception $e) { }`) — silent failure
+- All exceptions caught as base `\Exception` instead of specific types
+- Error responses expose stack traces or internal paths when `APP_DEBUG=true` in production
+- Methods that return `null` on failure instead of throwing typed exceptions
+- Missing timeout configuration on HTTP client calls (Guzzle without `timeout` option)
+- Retry logic without a maximum retry count or exponential backoff (infinite retry loops)

@@ -115,3 +115,26 @@ public class GlobalExceptionHandler {
 - `observability.instructions.md` — Structured logging, error tracking
 - `api-patterns.instructions.md` — Error response format, status codes
 - `messaging.instructions.md` — Dead letter queues, retry strategies
+
+---
+
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "This operation can't fail" | Every I/O operation can fail — network timeouts, disk full, permission denied. If it touches external state, it fails. |
+| "A generic catch block is fine here" | Generic catches swallow specific failure signals. Catch the exception you expect, let the rest propagate to `@ControllerAdvice`. |
+| "Logging the error is enough" | Logging without handling means the caller receives a cryptic 500. Return a structured ProblemDetail response so the consumer can act on it. |
+| "The caller handles errors, I don't need to" | If the caller expected your method to succeed unconditionally, the unchecked exception is a surprise. Define your error contract explicitly. |
+| "Returning `null` is simpler than throwing" | Null return values push error handling to every caller. Use `Optional<T>` or throw a specific exception with a clear message. |
+
+---
+
+## Warning Signs
+
+- Empty catch blocks (`catch (Exception e) { }`) — silent failure
+- All exceptions caught as base `Exception` instead of specific types
+- Error responses expose stack traces or internal paths to API consumers
+- Methods that return `null` on failure instead of throwing or using `Optional<T>`
+- Missing timeout configuration on `RestTemplate` / `WebClient` calls (no way to cancel on timeout)
+- Retry logic without `@Retryable` max attempts or exponential backoff (infinite retry loops)

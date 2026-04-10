@@ -194,3 +194,27 @@ app.add_middleware(SecurityHeadersMiddleware)
 - `database.instructions.md` — SQL injection prevention, parameterized queries
 - `api-patterns.instructions.md` — Auth middleware, request validation
 - `deploy.instructions.md` — Secrets management, TLS configuration
+
+---
+
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "This endpoint is internal-only, no auth needed" | Internal endpoints get exposed through misconfiguration, reverse proxies, or future refactors. Apply auth everywhere — remove it explicitly when proven unnecessary. |
+| "Input validation is overkill for this field" | Every unvalidated input is an injection vector. Validate at system boundaries always — a Pydantic model is a single line that prevents a category of vulnerabilities. |
+| "We'll add authentication later" | Unauthenticated endpoints get discovered and exploited. Security is not a feature to add — it's a constraint present from line one. |
+| "No real users yet, security can wait" | Attackers scan for unprotected endpoints automatically. The window between "no real users" and "compromised" is often hours, not months. |
+| "I'll remove the `Depends()` guard temporarily for testing" | Temporary auth bypasses become permanent. Use test-specific dependency overrides instead. |
+| "Hardcoding this key is fine for development" | Hardcoded secrets leak via git history, logs, and error messages. Use `.env` files or environment variables even in development. |
+
+---
+
+## Warning Signs
+
+- Route handlers missing `Depends()` guards or authentication decorators
+- f-strings or string concatenation used in SQL queries (`f"SELECT ... {id}"`)
+- Secrets assigned as string literals (`API_KEY = "abc123"`)
+- CORS configured with wildcard origin (`allow_origins=["*"]`)
+- Missing CSRF protection on state-changing form endpoints
+- `DEBUG = True` left in production configuration

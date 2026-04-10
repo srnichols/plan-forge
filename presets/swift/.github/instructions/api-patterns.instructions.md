@@ -385,3 +385,26 @@ enum APIError: LocalizedError {
 - `errorhandling.instructions.md` — Typed AppError, ProblemDetail format
 - `database.instructions.md` — Fluent queries, repository pattern
 - `multi-environment.instructions.md` — Base URL configuration per environment
+
+---
+
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "Nobody uses pagination yet" | Unbounded queries return all rows. The first large dataset crashes the client or times out. Add `?page=1&per=20` from the first endpoint. |
+| "API versioning can wait until v2" | Unversioned APIs break all consumers on the first change. Add `/api/v1/` route group from day one — it costs zero lines of logic. |
+| "Error codes aren't needed for MVP" | API consumers parse error codes programmatically. Returning only string messages forces consumers to regex-match errors — brittle and untranslatable. |
+| "Returning 200 OK for all responses simplifies the client" | HTTP semantics exist for a reason. Returning 200 for errors breaks caching, monitoring, and every HTTP-aware tool in the pipeline. |
+| "This endpoint doesn't need request validation" | Every endpoint accepting input is an attack surface. Validate shape and constraints at the API boundary — `Validatable` conformance handles this with minimal code. |
+
+---
+
+## Warning Signs
+
+- An endpoint returns an unbounded collection without pagination parameters
+- No OpenAPI metadata or route documentation on handler functions (undocumented API contract)
+- Route paths don't include a version segment (`/api/users` instead of `/api/v1/users`)
+- HTTP 200 returned for error conditions instead of 4xx/5xx
+- Request body decoded as untyped `[String: Any]` instead of a `Content`-conforming struct
+- Missing `Content-Type` header on responses (clients can't parse reliably)

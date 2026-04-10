@@ -164,3 +164,28 @@ app.Use(async (context, next) =>
 - `database.instructions.md` — SQL injection prevention, parameterized queries
 - `api-patterns.instructions.md` — Auth middleware, request validation
 - `deploy.instructions.md` — Secrets management, TLS configuration
+
+---
+
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "This endpoint is internal-only, no auth needed" | Internal endpoints get exposed through misconfiguration, reverse proxies, or future refactors. Apply auth everywhere — remove it explicitly when proven unnecessary. |
+| "Input validation is overkill for this field" | Every unvalidated input is an injection vector. Validate at system boundaries always — it's a single line that prevents a category of vulnerabilities. |
+| "We'll add authentication later" | Unauthenticated endpoints get discovered and exploited. Security is not a feature to add — it's a constraint present from line one. |
+| "No real users yet, security can wait" | Attackers scan for unprotected endpoints automatically. The window between "no real users" and "compromised" is often hours, not months. |
+| "I'll use `AllowAnonymous` temporarily for testing" | Temporary `[AllowAnonymous]` attributes become permanent. Use test-specific auth configuration instead. |
+| "Hardcoding this key is fine for development" | Hardcoded secrets leak via git history, logs, and error messages. Use user-secrets or environment variables even in development. |
+
+---
+
+## Warning Signs
+
+- Route handlers missing `[Authorize]` attribute or auth middleware
+- String interpolation or concatenation used in SQL queries (`$"SELECT ... {id}"`)
+- Secrets assigned as string literals (`var key = "abc123"`)
+- CORS configured with wildcard origin (`"*"`)
+- Missing `[ValidateAntiForgeryToken]` on state-changing form endpoints
+- `AllowAnonymous` attribute without a comment explaining why
+- Error responses expose stack traces or internal paths in non-development mode

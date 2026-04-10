@@ -228,3 +228,26 @@ mvn flyway:repair
 - `security.instructions.md` — SQL injection prevention, parameterized queries
 - `caching.instructions.md` — Query result caching, invalidation strategies
 - `performance.instructions.md` — Query optimization, connection pooling
+
+---
+
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "N+1 queries won't matter at our scale" | N+1 queries scale linearly with data. 10 rows = 10 queries, 10,000 rows = 10,000 queries. Use `@EntityGraph` or `JOIN FETCH` from the start. |
+| "Raw SQL is faster than JPA here" | Raw SQL bypasses entity mapping, migration safety, and parameterization. Use JPA/Hibernate unless profiling proves a measurable bottleneck — then use named native queries with parameters. |
+| "A migration isn't needed for this small change" | Schema changes without migrations break other developers' environments and CI. If it touches the database, it gets a Flyway/Liquibase migration — always. |
+| "I'll seed the data manually" | Manual seed data doesn't reproduce in CI, staging, or other developers' machines. Use Flyway migrations or `data.sql` seed files with Spring profiles. |
+| "One connection string for all environments is fine" | Connection strings contain credentials that differ per environment. Use Spring profiles or environment variables with per-profile overrides. |
+
+---
+
+## Warning Signs
+
+- Queries executed inside a `for` loop (N+1 pattern — check `FetchType.LAZY` without batch fetching)
+- `SELECT *` or fetching entire entities when only a few columns are needed (use projections)
+- Missing `@Index` annotation on columns used in `WHERE` or `JOIN` clauses
+- Connection strings hardcoded in `application.properties` or source files
+- No Flyway/Liquibase migration file corresponds to a recent entity change
+- `EntityManager` or `DataSource` managed manually instead of via Spring's connection pooling

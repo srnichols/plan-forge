@@ -96,3 +96,26 @@ def register_exception_handlers(app: FastAPI) -> None:
 - `observability.instructions.md` — Structured logging, error tracking
 - `api-patterns.instructions.md` — Error response format, status codes
 - `messaging.instructions.md` — Dead letter queues, retry strategies
+
+---
+
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "This operation can't fail" | Every I/O operation can fail — network timeouts, disk full, permission denied. If it touches external state, it fails. |
+| "A bare `except:` is fine here" | Bare excepts swallow `KeyboardInterrupt`, `SystemExit`, and every signal. Catch the exception you expect, let the rest propagate to the global handler. |
+| "Logging the error is enough" | Logging without handling means the caller receives a cryptic 500. Return a structured error response so the consumer can act on it. |
+| "The caller handles errors, I don't need to" | If the caller expected your function to succeed unconditionally, the unhandled exception is a surprise. Define your error contract explicitly. |
+| "Returning `None` is simpler than raising" | `None` return values push error handling to every caller. Use typed exceptions or result objects with a clear message. |
+
+---
+
+## Warning Signs
+
+- Bare `except:` or `except Exception:` blocks that silently pass — swallows all errors
+- All exceptions caught as base `Exception` instead of specific types
+- Error responses expose tracebacks or internal paths to API consumers
+- Functions that return `None` on failure instead of raising specific exceptions
+- Missing `asyncio.timeout()` or `httpx` timeout parameters on async operations
+- Retry logic without a maximum retry count or exponential backoff (infinite retry loops)

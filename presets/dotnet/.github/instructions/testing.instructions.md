@@ -82,3 +82,27 @@ public class UsersApiTests(WebApplicationFactory<Program> factory)
 - `database.instructions.md` — Repository testing, test databases
 - `errorhandling.instructions.md` — Exception testing patterns
 ```
+
+---
+
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "This method is too simple to test" | Simple methods get modified later. The test documents the contract and catches regressions when someone changes the "simple" logic. |
+| "I'll add tests after the feature works" | Technical debt compounds exponentially. Red-Green-Refactor means the test exists before the implementation. |
+| "The integration test covers this unit" | Integration tests are slow, don't pinpoint failures, and can't run in CI quickly. Unit tests are the foundation of the test pyramid. |
+| "This is just a DTO — no logic to test" | Validation rules, default values, and serialization attributes are logic. Test that `[Required]` fields reject null, that defaults are correct. |
+| "Mocking this dependency is too complex" | If it's hard to mock, the design has too much coupling. Fix the design with interfaces and DI — don't skip the test. |
+| "One test for the happy path is enough" | Edge cases cause production incidents. Test null inputs, empty collections, boundary values, and concurrent access. |
+
+---
+
+## Warning Signs
+
+- A test file has fewer test methods than the class under test has public methods (coverage gap)
+- Test names describe implementation (`Test_CallsRepository`) instead of behavior (`GetUser_WithInvalidId_ThrowsNotFound`)
+- Tests use `Thread.Sleep` or hardcoded delays instead of async patterns or test fakes
+- No `[Trait("Category", "Integration")]` attributes — unable to filter fast vs slow tests
+- Arrange section is longer than 15 lines (test is testing too much or setup needs extraction)
+- Tests directly `new` up concrete dependencies instead of using mocks or DI containers

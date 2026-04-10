@@ -101,3 +101,27 @@ async def db_session(postgres):
 - `database.instructions.md` — Repository testing, test databases
 - `errorhandling.instructions.md` — Exception testing patterns
 ```
+
+---
+
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "This function is too simple to test" | Simple functions get modified later. The test documents the contract and catches regressions when someone changes the "simple" logic. |
+| "I'll add tests after the feature works" | Technical debt compounds exponentially. Red-Green-Refactor means the test exists before the implementation. |
+| "The integration test covers this unit" | Integration tests are slow, don't pinpoint failures, and can't run in CI quickly. Unit tests are the foundation of the test pyramid. |
+| "This is just a dataclass — no logic to test" | Validators, default factories, and `__post_init__` are logic. Test that Pydantic models reject invalid input, that defaults are correct. |
+| "Mocking this dependency is too complex" | If it's hard to mock, the design has too much coupling. Fix the design with dependency injection — don't skip the test. |
+| "One test for the happy path is enough" | Edge cases cause production incidents. Test `None` inputs, empty lists, boundary values, and async exception paths. |
+
+---
+
+## Warning Signs
+
+- A test file has fewer `def test_` functions than the module under test has public functions (coverage gap)
+- Test names describe implementation (`test_calls_repository`) instead of behavior (`test_get_user_with_invalid_id_raises_not_found`)
+- Tests use `time.sleep` or hardcoded delays instead of `pytest-asyncio` with proper async patterns
+- No pytest markers — unable to filter fast unit tests from slow integration tests
+- Fixture setup is longer than 15 lines (test is testing too much or fixture needs extraction)
+- Tests directly instantiate concrete dependencies instead of using `unittest.mock` or dependency injection

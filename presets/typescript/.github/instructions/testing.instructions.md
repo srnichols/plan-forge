@@ -83,3 +83,27 @@ describe('GET /api/users', () => {
 - `database.instructions.md` — Repository testing, test databases
 - `errorhandling.instructions.md` — Exception testing patterns
 ```
+
+---
+
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "This function is too simple to test" | Simple functions get modified later. The test documents the contract and catches regressions when someone changes the "simple" logic. |
+| "I'll add tests after the feature works" | Technical debt compounds exponentially. Red-Green-Refactor means the test exists before the implementation. |
+| "The integration test covers this unit" | Integration tests are slow, don't pinpoint failures, and can't run in CI quickly. Unit tests are the foundation of the test pyramid. |
+| "This is just a type/interface — no logic to test" | Validation schemas, default values, and transform logic are testable behavior. Test that Zod schemas reject invalid input, that defaults are correct. |
+| "Mocking this dependency is too complex" | If it's hard to mock, the design has too much coupling. Fix the design with dependency injection — don't skip the test. |
+| "One test for the happy path is enough" | Edge cases cause production incidents. Test null inputs, empty arrays, boundary values, and async error paths. |
+
+---
+
+## Warning Signs
+
+- A test file has fewer `it()` / `test()` blocks than the module under test has exported functions (coverage gap)
+- Test names describe implementation (`test calls repository`) instead of behavior (`returns 404 when user not found`)
+- Tests use `setTimeout` or hardcoded delays instead of `async/await` with proper assertions
+- No test categorization — unable to filter unit vs integration vs e2e tests
+- Arrange section is longer than 15 lines (test is testing too much or setup needs extraction)
+- Tests import concrete implementations instead of using mocks or dependency injection

@@ -360,3 +360,27 @@ struct SecurityHeadersMiddleware: AsyncMiddleware {
 - `observability.instructions.md` — Privacy-safe logging, .private OSLog values
 - `database.instructions.md` — Fluent migration security, query safety
 - `deploy.instructions.md` — Secrets injection in CI/CD pipelines
+
+---
+
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "This endpoint is internal-only, no auth needed" | Internal endpoints get exposed through misconfiguration, reverse proxies, or future refactors. Apply auth middleware everywhere — remove it explicitly when proven unnecessary. |
+| "Input validation is overkill for this field" | Every unvalidated input is an injection vector. Validate at system boundaries always — a `Validatable` conformance is a single protocol that prevents a category of vulnerabilities. |
+| "We'll add authentication later" | Unauthenticated endpoints get discovered and exploited. Security is not a feature to add — it's a constraint present from line one. |
+| "No real users yet, security can wait" | Attackers scan for unprotected endpoints automatically. The window between "no real users" and "compromised" is often hours, not months. |
+| "I'll remove the guard middleware temporarily for testing" | Temporary auth bypasses become permanent. Use test-specific `Application` configuration or mock authenticators instead. |
+| "Hardcoding this key is fine for development" | Hardcoded secrets leak via git history, logs, and error messages. Use `Environment.get()` or `.env` files even in development. |
+
+---
+
+## Warning Signs
+
+- Route groups missing `GuardMiddleware` or `BearerAuthenticator` in Vapor
+- String interpolation used in raw SQL queries (`"\(userInput)"` in Fluent raw queries)
+- Secrets assigned as string literals (`let apiKey = "abc123"`)
+- CORS configured with wildcard origin (`allowedOrigin: .all`)
+- Missing CSRF protection on state-changing endpoints
+- Error responses expose internal paths or stack information in non-development mode

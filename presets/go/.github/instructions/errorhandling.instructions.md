@@ -127,3 +127,26 @@ func (h *ItemHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 - `observability.instructions.md` — Structured logging, error tracking
 - `api-patterns.instructions.md` — Error response format, status codes
 - `messaging.instructions.md` — Dead letter queues, retry strategies
+
+---
+
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "This operation can't fail" | Every I/O operation can fail — network timeouts, disk full, permission denied. If it touches external state, it fails. |
+| "Ignoring the error return is fine here" | `_ = someFunc()` discards the error signal. Every returned `error` must be checked — the compiler doesn't enforce it, but correctness requires it. |
+| "Logging the error is enough" | Logging without returning means the caller continues with invalid state. Return the error (wrapped) so the caller can act on it. |
+| "The caller handles errors, I don't need to" | If the caller expected your function to return `nil` error unconditionally, the unexpected error is a surprise. Define your error contract explicitly. |
+| "Returning a zero value is simpler than an error" | Zero values without an error push failure detection to every caller. Return `(T, error)` consistently so callers can distinguish success from failure. |
+
+---
+
+## Warning Signs
+
+- Ignored error returns (`_ = fn()` or unchecked `err`) — silent failure
+- Errors wrapped without context (`return err` instead of `return fmt.Errorf("operation failed: %w", err)`)
+- Error responses expose internal details via `err.Error()` in JSON responses
+- Functions that `panic` for recoverable errors instead of returning `error`
+- Missing `context.Context` parameter on functions that do I/O (no way to cancel or set deadlines)
+- Retry logic without a maximum retry count or exponential backoff (infinite retry loops)

@@ -190,3 +190,26 @@ async def get_db():
 - `security.instructions.md` — SQL injection prevention, parameterized queries
 - `caching.instructions.md` — Query result caching, invalidation strategies
 - `performance.instructions.md` — Query optimization, connection pooling
+
+---
+
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "N+1 queries won't matter at our scale" | N+1 queries scale linearly with data. 10 rows = 10 queries, 10,000 rows = 10,000 queries. Use `joinedload()` / `selectinload()` or `prefetch_related()` from the start. |
+| "Raw SQL is faster than the ORM here" | Raw SQL bypasses model validation, migration tracking, and parameterization. Use SQLAlchemy/Django ORM unless profiling proves a measurable bottleneck — then use `text()` with bound parameters. |
+| "A migration isn't needed for this small change" | Schema changes without migrations break other developers' environments and CI. If it touches the database, it gets a migration — always. |
+| "I'll seed the data manually" | Manual seed data doesn't reproduce in CI, staging, or other developers' machines. Use fixtures, factories, or migration-based seeds. |
+| "One connection string for all environments is fine" | Connection strings contain credentials that differ per environment. Use environment variables with per-environment overrides. |
+
+---
+
+## Warning Signs
+
+- Queries executed inside a `for` loop (N+1 pattern)
+- `SELECT *` or `.all()` without limiting fields (over-fetching, schema coupling)
+- Missing `db_index=True` or `Index` on columns used in `filter()` or join clauses
+- Connection strings hardcoded or present in source files
+- No migration file corresponds to a recent model change
+- `engine` created without connection pool configuration (`pool_size`, `max_overflow`)

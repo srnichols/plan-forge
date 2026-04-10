@@ -156,3 +156,26 @@ try dbQueue.write { db in
 - `testing.instructions.md` — In-memory test databases
 - `security.instructions.md` — SQL injection prevention
 - `deploy.instructions.md` — Database migrations in CI/CD
+
+---
+
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "N+1 queries won't matter at our scale" | N+1 queries scale linearly with data. 10 rows = 10 queries, 10,000 rows = 10,000 queries. Use eager loading with `with()` or `join()` from the start. |
+| "Raw SQL is faster than Fluent here" | Raw SQL bypasses model validation, migration tracking, and parameterization. Use Fluent unless profiling proves a measurable bottleneck — then use parameterized raw queries. |
+| "A migration isn't needed for this small change" | Schema changes without migrations break other developers' environments and CI. If it touches the database, it gets a Fluent migration — always. |
+| "I'll seed the data manually" | Manual seed data doesn't reproduce in CI, staging, or other developers' machines. Use Fluent migration-based seeds or `configure.swift` seed commands. |
+| "One connection string for all environments is fine" | Connection strings contain credentials that differ per environment. Use `Environment` variables with per-environment overrides. |
+
+---
+
+## Warning Signs
+
+- Queries executed inside a `for` loop with `await` (N+1 pattern)
+- `SELECT *` or fetching full models when only a few fields are needed (use `@Field` projections)
+- Missing Fluent `@Index` on properties used in `.filter()` queries
+- Connection strings hardcoded or present in source files
+- No migration corresponds to a recent model change
+- Database pool created without configuring max connections (connection exhaustion)

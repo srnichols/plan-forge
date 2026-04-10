@@ -218,3 +218,27 @@ func TestE2E_LoginFlow(t *testing.T) {
 - `database.instructions.md` — Repository testing, test databases
 - `errorhandling.instructions.md` — Error assertion patterns
 ```
+
+---
+
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "This function is too simple to test" | Simple functions get modified later. The test documents the contract and catches regressions when someone changes the "simple" logic. |
+| "I'll add tests after the feature works" | Technical debt compounds exponentially. Write the test function before the implementation — table-driven tests make this fast. |
+| "The integration test covers this unit" | Integration tests are slow, don't pinpoint failures, and require external dependencies. Unit tests with interfaces are the foundation of the test pyramid. |
+| "This is just a struct — no logic to test" | Validation methods, constructors, and interface implementations are logic. Test that factory functions reject invalid input, that defaults are correct. |
+| "Mocking this dependency is too complex" | If it's hard to mock, the design has too much coupling. Define a small interface at the call site — don't skip the test. |
+| "One test case in the table is enough" | Edge cases cause production incidents. Add table cases for nil inputs, empty slices, boundary values, and concurrent access with `-race`. |
+
+---
+
+## Warning Signs
+
+- A `_test.go` file has fewer `Test` functions than the package has exported functions (coverage gap)
+- Test names describe implementation (`TestCallsRepository`) instead of behavior (`TestGetUser_InvalidID_ReturnsNotFound`)
+- Tests use `time.Sleep` instead of channels, `t.Deadline()`, or `testify` assertions
+- No `testing.Short()` checks — unable to skip slow integration tests in CI with `-short`
+- Table-driven test setup has more than 10 fields per case (test struct needs simplification)
+- Tests create real database connections instead of using interface mocks or `sqlmock`

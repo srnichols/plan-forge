@@ -111,3 +111,26 @@ Wrap page content in error boundaries to prevent full-page crashes:
 - `api-patterns.instructions.md` — Error response format, status codes
 - `messaging.instructions.md` — Dead letter queues, retry strategies
 ```
+
+---
+
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "This operation can't fail" | Every I/O operation can fail — network timeouts, disk full, permission denied, null reference. If it touches external state, it fails. |
+| "A generic catch block is fine here" | Generic catches swallow specific failure signals. Catch the exception you expect, let the rest propagate to the global handler. |
+| "Logging the error is enough" | Logging without handling means the caller receives a cryptic 500. Return a structured ProblemDetails response so the consumer can act on it. |
+| "The caller handles errors, I don't need to" | If the caller expected your method to succeed unconditionally, the unhandled exception is a surprise. Define your error contract explicitly. |
+| "Returning null is simpler than throwing" | Null return values push error handling to every caller. Use typed results (`Result<T>`) or throw a specific exception with a clear message. |
+
+---
+
+## Warning Signs
+
+- Empty catch blocks (`catch { }` or `catch (Exception) { }`) — silent failure
+- All exceptions caught as base `Exception` instead of specific types
+- Error responses expose stack traces or internal paths to API consumers
+- Methods that return `null` on failure instead of throwing or using Result types
+- Missing `CancellationToken` parameter on async methods (no way to cancel on timeout)
+- Retry logic without a maximum retry count or exponential backoff (infinite retry loops)

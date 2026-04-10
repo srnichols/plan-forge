@@ -127,3 +127,26 @@ func (h *ItemHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 - `observability.instructions.md` — Structured logging, error tracking
 - `api-patterns.instructions.md` — Error response format, status codes
 - `messaging.instructions.md` — Dead letter queues, retry strategies
+
+---
+
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "This operation can't fail" | Every I/O operation can fail — network timeouts, disk full, permission denied. If it touches external state, it fails. |
+| "Using `.unwrap()` is fine here" | `.unwrap()` panics on `Err`/`None`, crashing the server. Use `?` operator, `.map_err()`, or `.unwrap_or_else()` with proper error handling. |
+| "Logging the error is enough" | Logging without returning means the caller continues with invalid state. Propagate errors with `?` so the caller can handle them. |
+| "The caller handles errors, I don't need to" | If the caller expected your function to return `Ok` unconditionally, the unexpected `Err` is a surprise. Define your error contract explicitly via the return type. |
+| "Using `String` for errors is simpler than custom types" | `String` errors can't be matched programmatically. Use `thiserror` to derive structured error enums that callers can handle precisely. |
+
+---
+
+## Warning Signs
+
+- `.unwrap()` or `.expect()` in production code paths — panic on failure
+- Error types are `String` or `Box<dyn Error>` instead of structured enums
+- Error responses expose internal `Debug` output to API consumers
+- Functions that `panic!` for recoverable errors instead of returning `Result<T, E>`
+- Missing timeout configuration on async HTTP calls (no cancellation path)
+- Retry logic without a maximum retry count or exponential backoff (infinite retry loops)

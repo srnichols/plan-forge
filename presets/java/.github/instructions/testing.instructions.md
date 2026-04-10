@@ -131,3 +131,27 @@ class UserControllerTest {
 - `database.instructions.md` — Repository testing, test databases
 - `errorhandling.instructions.md` — Exception testing patterns
 ```
+
+---
+
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "This method is too simple to test" | Simple methods get modified later. The test documents the contract and catches regressions when someone changes the "simple" logic. |
+| "I'll add tests after the feature works" | Technical debt compounds exponentially. Red-Green-Refactor means the test exists before the implementation. |
+| "The integration test covers this unit" | Integration tests are slow, don't pinpoint failures, and can't run in CI quickly. Unit tests are the foundation of the test pyramid. |
+| "This is just a DTO/record — no logic to test" | Validation annotations, default values, and builder logic are testable. Test that `@NotNull` fields reject null, that defaults are correct. |
+| "Mocking this dependency is too complex" | If it's hard to mock, the design has too much coupling. Fix the design with interfaces and DI — don't skip the test. |
+| "One test for the happy path is enough" | Edge cases cause production incidents. Test null inputs, empty collections, boundary values, and concurrent access. |
+
+---
+
+## Warning Signs
+
+- A test class has fewer `@Test` methods than the class under test has public methods (coverage gap)
+- Test names describe implementation (`testCallsRepository`) instead of behavior (`getUser_withInvalidId_throwsNotFoundException`)
+- Tests use `Thread.sleep` or hardcoded delays instead of Awaitility or CompletableFuture assertions
+- No `@Tag` annotations — unable to filter unit vs integration tests in CI
+- Arrange section is longer than 15 lines (test is testing too much or setup needs extraction via `@BeforeEach`)
+- Tests directly `new` up concrete dependencies instead of using `@Mock` / `@InjectMocks`

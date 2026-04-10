@@ -86,6 +86,32 @@ Scope Drift: N files outside scope
 - Acknowledge what's done well, not just problems
 - Flag anything that needs human judgment rather than prescribing a fix
 
+
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "Tests pass so the code is fine" | Passing tests prove the happy path works. They don't prove the code is maintainable, secure, or architecturally sound. |
+| "This change is too small to review" | Small changes accumulate. A "tiny" shortcut in one PR establishes a pattern that scales into a systemic problem. |
+| "I wrote it, I can review it" | Self-review has blind spots. The author's mental model fills gaps that a reviewer would catch. |
+| "No findings means the review is thorough" | A clean review with zero findings is suspicious — it usually means the review was superficial, not perfect. |
+
+## Warning Signs
+
+- Review skipped one or more sections — not all 6 review areas (architecture, security, testing, quality, patterns, consistency) evaluated
+- No findings reported at all — suspiciously clean review with zero suggestions
+- Findings lack specific rule citations — vague comments like "looks off" without referencing a convention
+- Review completed in under 2 minutes — insufficient time for meaningful review
+- `forge_analyze` score not included — consistency analysis was skipped
+
+## Exit Proof
+
+After completing this skill, confirm:
+- [ ] All 6 review sections completed (architecture, security, testing, code quality, patterns, consistency)
+- [ ] Findings table generated with severity levels (critical / warning / info)
+- [ ] `forge_analyze` score included (if plan exists)
+- [ ] `forge_diff` scope drift check completed (if plan exists)
+- [ ] Every finding cites a specific rule or convention
 ## Persistent Memory (if OpenBrain is configured)
 
 - **Before reviewing**: `search_thoughts("code review findings", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "bug")` — load prior review findings and recurring violation patterns to check proactively

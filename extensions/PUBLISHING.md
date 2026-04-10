@@ -103,3 +103,7 @@ The `rules` array maps from your extension's `files.instructions` list, and `age
 ### Verification
 
 Extensions submitted by the Plan Forge maintainers are marked `"verified": true`. Community extensions start as `"verified": false` — maintainers may verify after review.
+
+### Skill Contributions
+
+If your extension includes skills (`"skills": N` in `provides`), each SKILL.md must follow the [Skill Blueprint](../docs/SKILL-BLUEPRINT.md) format. Required sections: Frontmatter, Trigger, Steps, Safety Rules, Temper Guards, Warning Signs, Exit Proof, Persistent Memory. Use the checklist at the bottom of the blueprint doc to validate before submitting.

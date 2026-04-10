@@ -103,6 +103,32 @@ azd down --force  # deprovision, then re-up from last commit
 git revert HEAD && azd up
 ```
 
+
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "What-if is overkill for this change" | What-if catches destructive changes before they execute. Skipping it risks deleting production resources. |
+| "Linting is too strict" | Linting rules encode best practices. Overriding them introduces drift from organizational standards. |
+| "This policy doesn't apply to our subscription" | Policy exemptions need documentation. Ignoring policies creates compliance gaps that auditors will flag. |
+| "I'll fix the warnings after deploy" | Post-deploy warnings become permanent. Fix them before they become the new baseline. |
+
+## Warning Signs
+
+- Deploy without what-if/plan output — changes applied without previewing impact first
+- Linting errors dismissed without justification — linter warnings overridden without documenting why
+- Policy violations ignored — Azure Policy or OPA violations not addressed before deploy
+- No post-deploy verification — resources created but not validated as functional
+- Secrets in IaC files — connection strings, keys, or passwords committed to templates
+
+## Exit Proof
+
+After completing this skill, confirm:
+- [ ] Lint checks pass (`az bicep lint` / `terraform validate` / `tflint`)
+- [ ] What-if/plan output reviewed — no unexpected deletes or replacements
+- [ ] Deployment succeeds without errors
+- [ ] Post-deploy verification passes (resource exists, responds, correct SKU/config)
+- [ ] No secrets committed in IaC files
 ## Persistent Memory (if OpenBrain is configured)
 
 - **Before deploying**: `search_thoughts("deploy failure", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "postmortem")` — load prior deployment failures, rollback patterns, and environment-specific lessons

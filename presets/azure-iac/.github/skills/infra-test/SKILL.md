@@ -97,6 +97,32 @@ Invoke-Pester -Configuration $config
 - ALWAYS run what-if/plan before production deployments
 - Integration tests require a real Azure subscription — never mock in integration tests
 
+
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "Linting is enough, no need for what-if" | Lint catches syntax issues. What-if catches destructive runtime changes. Both are required. |
+| "Unit tests for IaC are overkill" | IaC unit tests verify template logic (conditions, loops, defaults) before touching any cloud resources. |
+| "Integration tests are too expensive" | Skipping integration tests means the first real test is production. That's the most expensive test of all. |
+| "The template validated, so it will deploy fine" | Validation checks syntax. It doesn't check whether the SKU is available, the quota is sufficient, or the name is taken. |
+
+## Warning Signs
+
+- Static analysis skipped — templates deployed without linting or validation first
+- What-if/plan output not reviewed — plan generated but not actually inspected for destructive changes
+- Unit test failures ignored — Pester or test-framework failures dismissed as "environment issues"
+- Integration tests never run — always deferred to "after deploy" instead of as a gate
+- Test results not included in report — tests "ran" but no output pasted or summarised
+
+## Exit Proof
+
+After completing this skill, confirm:
+- [ ] All static analysis passes (`az bicep lint`, `terraform validate`, `Invoke-ScriptAnalyzer`)
+- [ ] Unit tests pass — `Invoke-Pester ./tests/unit` (or equivalent)
+- [ ] What-if/plan output reviewed — no unexpected resource changes
+- [ ] Integration tests pass (if deployed environment available)
+- [ ] Test results report generated with pass/fail counts per gate
 ## Persistent Memory (if OpenBrain is configured)
 
 - **Before running tests**: `search_thoughts("infra test failure", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "bug")` — load known test failures, linter false-positives, and Pester patterns

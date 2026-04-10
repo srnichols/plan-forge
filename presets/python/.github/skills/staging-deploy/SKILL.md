@@ -56,6 +56,32 @@ pytest tests/smoke/ --env staging
 - NEVER deploy to production using this skill
 - Rollback: `kubectl rollout undo deployment/api --context staging`
 
+
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "It works locally, skip staging" | Local environments mask configuration, networking, and scaling issues that only surface in staging. |
+| "Health check isn't needed yet" | Without health checks, orchestrators can't detect failures. A "successful" deploy may serve errors silently. |
+| "I'll add monitoring after launch" | Post-launch is too late. Staging is where you verify observability works before production traffic arrives. |
+| "One big deploy is simpler" | Monolithic deploys are harder to roll back. Deploy incrementally so failures are isolated to a single change. |
+
+## Warning Signs
+
+- No health check endpoint — container starts but no way to verify it's actually serving correctly
+- Deploy without tests — build pushed to staging without passing the test suite first
+- No rollback plan — deploy proceeds without a documented way to revert
+- Secrets hardcoded or missing — environment variables not configured for the staging environment
+- No smoke test after deploy — health endpoint returns 200 but actual business routes not verified
+
+## Exit Proof
+
+After completing this skill, confirm:
+- [ ] `pytest` passes before container build
+- [ ] Container builds successfully and pushes to registry
+- [ ] Health endpoint returns 200 after deploy (`curl -f https://staging/health`)
+- [ ] Smoke tests pass — `pytest tests/smoke/ -v`
+- [ ] Rollback procedure is documented and tested
 ## Persistent Memory (if OpenBrain is configured)
 
 - **Before deploying**: `search_thoughts("deploy failure", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "postmortem")` — load prior deployment failures and environment-specific gotchas

@@ -254,6 +254,8 @@ Every instruction file includes two defensive sections:
 
 ## Skills (12)
 
+Every skill follows the [Skill Blueprint](SKILL-BLUEPRINT.md) format: Frontmatter → Trigger → Steps → Safety Rules → Temper Guards → Warning Signs → Exit Proof → Persistent Memory.
+
 | Skill | Description |
 |-------|-------------|
 | `/database-migration` | Generate, review, test, deploy schema migrations |

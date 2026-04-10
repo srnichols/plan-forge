@@ -95,6 +95,32 @@ Overall: PASS / FAIL
 - Highlight gotchas and common mistakes specific to this codebase
 - Point to documentation rather than explaining everything from memory
 
+
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "The README covers everything" | READMEs go stale. An interactive onboarding verifies each step works right now, not when it was last updated. |
+| "New devs can figure it out" | Silent failures and undocumented prerequisites waste hours. Explicit verification prevents frustration. |
+| "Setup is straightforward" | What's obvious to the author is opaque to newcomers. Every assumption needs verification. |
+| "They can ask if they're stuck" | Asking requires knowing what to ask. New developers don't know what they don't know. |
+
+## Warning Signs
+
+- Prerequisites not checked — assumed to be installed without running version commands
+- Build/test not verified — "setup complete" declared without actually running build and test
+- No architecture walkthrough — code structure not explained, only file locations listed
+- No "first task" suggestion — onboarding ends without a concrete next step
+- Environment variables not documented — required config not listed or explained
+
+## Exit Proof
+
+After completing this skill, confirm:
+- [ ] All prerequisites verified — `php --version`, `composer --version` returns expected versions
+- [ ] `composer install` succeeds without errors
+- [ ] `./vendor/bin/phpunit` passes on the new environment
+- [ ] Architecture walkthrough completed (layers, key files, data flow)
+- [ ] First task suggested from DEPLOYMENT-ROADMAP.md or backlog
 ## Persistent Memory (if OpenBrain is configured)
 
 - **Before onboarding**: `search_thoughts("onboarding", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "convention")` — load known setup issues and environment quirks

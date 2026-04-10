@@ -520,7 +520,8 @@ const SYSTEM_REFERENCE = {
   },
 
   skills: {
-    description: "10 multi-step executable procedures with validation gates and MCP tool integration",
+    description: "12 multi-step executable procedures with validation gates, MCP tool integration, Temper Guards, Exit Proof, and Warning Signs per Skill Blueprint spec",
+    format: "Every skill follows the Skill Blueprint (docs/SKILL-BLUEPRINT.md): Frontmatter → Trigger → Steps → Safety Rules → Temper Guards → Warning Signs → Exit Proof → Persistent Memory",
     available: {
       "/database-migration": "Generate, review, test, and deploy schema migrations",
       "/staging-deploy": "Build, push, migrate, deploy, and verify on staging (forge_validate pre-flight)",

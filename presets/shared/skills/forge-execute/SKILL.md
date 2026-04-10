@@ -108,6 +108,33 @@ Plan Execution Summary:
 - NEVER auto-execute if estimated cost exceeds $5.00 without explicit user confirmation
 - Report failures immediately — do not silently continue past failed gates
 
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "I'll skip the cost estimate — it's a small plan" | Small plans with quorum mode or expensive models can still cost $10+. Always estimate first. |
+| "Auto mode is fine, no need to ask the user" | The user should always choose the execution mode. Auto mode modifies files autonomously — that decision belongs to the human. |
+| "The last run passed, so I'll reuse the same settings" | Model availability, pricing, and project state change between runs. Always verify current settings. |
+| "I'll ignore the failed slice and continue" | Failed gates exist for a reason. Continuing past a failure compounds the error into every subsequent slice. |
+
+## Warning Signs
+
+- Plan execution started without showing a cost estimate first
+- Mode or model selected without user confirmation
+- Failed slice not reported immediately (errors accumulated until end)
+- Execution resumed from a failed slice without the user fixing the underlying issue
+- Cost exceeded $5.00 without explicit user approval
+
+## Exit Proof
+
+After completing this skill, confirm:
+- [ ] Cost estimate was shown and acknowledged before execution
+- [ ] User confirmed mode (auto/assisted) and model selection
+- [ ] All passing slices have gate results (build + test output)
+- [ ] Failed slices (if any) have error details and suggested fix
+- [ ] Final report includes slice count, pass/fail, duration, and cost
+- [ ] `forge_cost_report` output matches expected spend
+
 ## Persistent Memory (if OpenBrain is configured)
 
 - **Before executing**: `search_thoughts("plan execution failure", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "postmortem")` — load prior execution failures for this plan to avoid repeating mistakes

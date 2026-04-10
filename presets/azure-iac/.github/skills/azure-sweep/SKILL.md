@@ -198,6 +198,32 @@ After collecting all findings, the Azure Sweeper agent generates:
 
 ## Output
 
+
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "Advisor recommendations are just suggestions" | Advisor findings reflect real configuration risks. Dismissing them without review means accepting unknown exposure. |
+| "Policy non-compliance is an IT problem" | Policy violations block deployments and trigger audit findings. Engineering owns compliance for their resources. |
+| "The secure score is close enough" | Each point of secure score represents a concrete hardening action. "Close enough" means known vulnerabilities remain open. |
+| "Orphaned resources don't cost much" | Orphaned disks, IPs, and NICs accumulate cost and expand attack surface. Clean them up or document the exception. |
+
+## Warning Signs
+
+- Sweep layers skipped — not all 7+ layers were evaluated (WAF, CAF, Landing Zone, Policy, Org, Resource Graph, Telemetry)
+- Critical findings downgraded — HIGH/CRITICAL findings reclassified without justification
+- Remediation code not generated — findings reported but no fix provided (Bicep/Terraform/CLI)
+- Sweep run on wrong subscription — results don't match the target environment
+- Pass/fail thresholds overridden — thresholds changed to force a passing result
+
+## Exit Proof
+
+After completing this skill, confirm:
+- [ ] All sweep layers executed (WAF, CAF, Landing Zone, Policy, Org Rules, Resource Graph, Telemetry)
+- [ ] Every CRITICAL/HIGH finding has remediation code or documented exception
+- [ ] Sweep report generated — `azure-sweep-report-<subscription>-<date>.md`
+- [ ] Secure Score reviewed and meets threshold (≥ 70%)
+- [ ] Overall pass/fail status documented with justification
 ## Persistent Memory (if OpenBrain is configured)
 
 - **Before sweeping**: `search_thoughts("azure sweep findings", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "convention")` — load prior sweep findings, accepted risks, and remediation patterns

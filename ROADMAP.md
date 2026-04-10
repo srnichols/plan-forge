@@ -7,9 +7,9 @@
 
 ## Current Release
 
-**v2.18.0** (2026-04-10) — Temper Guards & Onboarding Polish: anti-shortcut tables and behavioral warning signs in 41 instruction files across all 8 app presets, context-fuel instruction file for agent context management, Quick Forge Card on website, `pforge tour` interactive walkthrough CLI command.
+**v2.19.0** (2026-04-10) — Skill Blueprint & Verification Gates: formal SKILL-BLUEPRINT.md spec, Exit Proof checklists and Temper Guards in all 79 skills across 9 presets.
 
-Previous: v2.17.0 (2026-04-07) — Platform Completion & Setup Hardening.
+Previous: v2.18.0 (2026-04-10) — Temper Guards & Onboarding Polish.
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 

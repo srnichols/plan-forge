@@ -73,6 +73,30 @@ A PASS requires:
 - Report findings clearly with actionable fix recommendations
 - Distinguish between critical issues (must fix) and warnings (should fix)
 
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "Smith passed, so everything is fine" | Smith checks environment and config, not code quality or plan state. A passing smith doesn't mean your sweep is clean or your plans are valid. |
+| "The sweep found markers but they're just TODOs in tests" | Sweep markers in test files are INFO-level, but markers in production code block gate passage. Report them separately — don't dismiss the whole sweep. |
+| "Setup validation isn't needed — I ran setup recently" | File counts drift when files are manually deleted or instructions updated. Always validate after any change to the `.github/` directory. |
+
+## Warning Signs
+
+- Health check skipped one or more diagnostic steps (environment, setup, sweep)
+- Sweep markers in production code reported as OK
+- Setup validation failures dismissed without running `pforge check` or re-running setup
+- Report shows PASS when critical issues were found but downgraded
+
+## Exit Proof
+
+After completing this skill, confirm:
+- [ ] `forge_smith` output reviewed — zero environment failures
+- [ ] `forge_validate` output reviewed — zero setup failures
+- [ ] `forge_sweep` output reviewed — zero markers in production code
+- [ ] Final report includes counts for each category (environment, setup, sweep)
+- [ ] Overall status is PASS or FAIL with clear justification
+
 ## Persistent Memory (if OpenBrain is configured)
 
 - **Before checking**: `search_thoughts("setup issue", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "bug")` — load prior setup issues and recurring health check failures

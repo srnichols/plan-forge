@@ -132,6 +132,32 @@ A RESOLVED status means all identified issues have actionable fixes. NEEDS MANUA
 - Never auto-resume a failed run without user confirmation
 - Report all findings clearly with actionable next steps
 
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "The error message is clear enough — skip the full diagnosis" | Surface errors often mask deeper issues. A gate failure might be caused by a missing dependency, not the code itself. Run the full diagnosis. |
+| "I'll fix the code directly instead of diagnosing" | This skill is diagnostic-only. Fixing without understanding the root cause risks introducing new failures. Diagnose first, fix second. |
+| "The environment scan passed, so it's a code problem" | Environment scans check tools and config, not runtime state. A passing environment check doesn't rule out MCP issues, stale caches, or port conflicts. |
+| "I'll auto-resume the failed run after the fix" | Never auto-resume — the user must confirm the fix is correct and choose to continue. Auto-resuming risks running on partially broken state. |
+
+## Warning Signs
+
+- Source files modified during a troubleshoot session (this skill is read-only)
+- Failed run resumed without user confirmation
+- Diagnosis skipped steps (jumped from symptom to fix without environment/setup checks)
+- Root cause labeled as "unknown" without attempting multi-model diagnosis
+- Fix suggestions don't include the specific command or file to change
+
+## Exit Proof
+
+After completing this skill, confirm:
+- [ ] All 6+ diagnostic steps executed (symptom → environment → setup → run status → diagnosis → sweep)
+- [ ] Root cause identified with specific error and affected file/slice
+- [ ] Fix steps are actionable (specific commands, not vague advice)
+- [ ] Report shows overall status: RESOLVED or NEEDS MANUAL ATTENTION
+- [ ] No source files were modified during diagnosis
+
 ## Persistent Memory (if OpenBrain is configured)
 
 - **Before diagnosing**: `search_thoughts("forge failure", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "bug")` — load prior forge failures and recurring issues to avoid repeating diagnoses

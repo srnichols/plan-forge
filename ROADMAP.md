@@ -1491,6 +1491,167 @@ Before tagging v2.20.0:
 
 ---
 
+## v2.21 — Forge Anneal (Documentation Consolidation)
+
+> **Timing**: After v2.18–v2.20 ship. The product surface is complete — pipeline, orchestrator, dashboard, MCP tools, quorum, telemetry, skills, Temper Guards, Skill Blueprint, Forge Quench. This is the natural inflection point to harden the docs the same way we harden plans.
+>
+> **Named after**: Annealing — heating metal and slowly cooling it to relieve internal stress, reduce brittleness, and create a uniform structure. That's exactly what the documentation needs: relieve accumulated stress from 17 versions of additive growth and create a clean, uniform information architecture.
+>
+> **Design principle**: The planforge.software site is the primary onboarding surface. Markdown files in the repo serve developers who are already working. Optimize each surface for its audience — don't make repo .md files do double duty as marketing pages.
+
+### The Problem (Measured)
+
+| Metric | Current State |
+|--------|--------------|
+| Total `.md` files in repo | **519** |
+| Total lines across all `.md` | **80,165** |
+| Human-facing docs (root + `docs/`) | **14 files, 9,230 lines** |
+| README.md alone | **1,082 lines** |
+| ROADMAP.md | **1,551 lines** |
+| CUSTOMIZATION.md | **877 lines** |
+| CLI-GUIDE.md | **1,056 lines** |
+| COPILOT-VSCODE-GUIDE.md | **816 lines** |
+| Hardening Runbook | **996 lines** |
+
+The 519 total includes preset instruction files, agent definitions, and prompt templates — those are shipped artifacts and appropriately sized. The problem is the **14 human-facing files** that grew additively over 17 versions without pruning. A new evaluator encounters 9,230 lines of docs before writing their first line of code.
+
+### Principles
+
+1. **One home for each concept** — if something is explained in two places, pick one and link from the other
+2. **Website for onboarding, repo for reference** — `planforge.software` gets the narrative; repo `.md` files get the lookup tables
+3. **Shorter is stronger** — every paragraph must earn its line count. If removing it doesn't change reader behavior, remove it
+4. **Preset files are fine** — don't touch instruction files, agent definitions, prompt templates, or skill files. Those are machine-consumed artifacts
+5. **Audit the ROADMAP too** — this file itself is 1,551 lines. Shipped items should compress to summary lines, not retain full spec blocks
+
+### D1. README.md Thinning
+
+**Current**: 1,082 lines — effectively a book covering overview, problem, solution, guardrails model, pipeline flow, presets, agents, skills, prompts, setup, repo structure, and usage guide.
+
+**Target**: ~400 lines — hero + "what is this" + quickstart + architecture diagram + "what's included" tables (compact) + links to detailed docs.
+
+**What moves out**:
+- Detailed preset tables → `CUSTOMIZATION.md` or dedicated page on planforge.software
+- Full agent/skill/prompt listings → `docs/capabilities.md` (already exists, has these tables)
+- Pipeline usage guide → `docs/COPILOT-VSCODE-GUIDE.md` (already exists)
+- "Ongoing Usage" and "Daily Workflow Prompt" → `docs/COPILOT-VSCODE-GUIDE.md`
+- "What the Setup Wizard Does" → `CUSTOMIZATION.md` or CLI guide
+- Repo structure tree → `CONTRIBUTING.md`
+
+**What stays**:
+- Hero section + badges
+- "Beyond Vibe Coding" value prop (trimmed)
+- "What Is This?" plain-English explanation
+- "How the Pieces Fit Together" Mermaid diagram + table (trimmed)
+- Quick Start (4 steps max — matches T4 Quick Forge Card)
+- Link table pointing to all detailed docs
+
+### D2. ROADMAP.md Compression
+
+**Current**: 1,551 lines — shipped versions retain full spec blocks with doc sweeps, dashboard sweeps, and acceptance criteria.
+
+**Target**: ~600 lines — shipped items compressed to 2-3 line summaries; only current + planned versions retain full detail.
+
+**Rule**: Once a version ships and its CHANGELOG entry is written, compress the roadmap entry to:
+```
+### v2.5 — Quorum Mode ✅ (shipped v2.5.0)
+Multi-model consensus for high-complexity slices. 3 models in parallel dry-run,
+reviewer synthesizes best approach. Complexity scoring, auto threshold. 83 tests.
+```
+
+All doc sweeps, dashboard sweeps, acceptance criteria, and setup/updater sweeps for shipped versions get archived or deleted — that detail lives in the git history and CHANGELOG.
+
+### D3. Overlap Audit
+
+Identify content that exists in 2+ places and pick a canonical home:
+
+| Content | Currently In | Canonical Home | Others Become |
+|---------|-------------|---------------|---------------|
+| Pipeline steps (7-step flow) | README, COPILOT-VSCODE-GUIDE, Runbook-Instructions, capabilities.md | **COPILOT-VSCODE-GUIDE.md** (most detail) | Short summary + link |
+| Preset/agent/skill tables | README, capabilities.md, COPILOT-VSCODE-GUIDE | **capabilities.md** (reference) | "See capabilities.md for full tables" |
+| Setup wizard details | README, CLI-GUIDE, CUSTOMIZATION | **CLI-GUIDE.md** (`pforge init`) | Brief mention + link |
+| Guardrail model (2-layer) | README, CUSTOMIZATION | **CUSTOMIZATION.md** (primary) | One-sentence + link |
+| Memory comparison | COPILOT-VSCODE-GUIDE, capabilities.md | **COPILOT-VSCODE-GUIDE.md** | Link |
+| Agent vs Skill explanation | README, COPILOT-VSCODE-GUIDE | **README.md** (intro) | Link back |
+
+### D4. Runbook Consolidation
+
+**Current**: Two runbook files — `AI-Plan-Hardening-Runbook.md` (996 lines, full templates) and `AI-Plan-Hardening-Runbook-Instructions.md` (569 lines, copy-paste prompts). Plus `ai-plan-hardening-runbook.instructions.md` (quick reference).
+
+**Question**: With pipeline agents (Specifier → Shipper) and prompt templates (`step0-*.prompt.md` → `step6-*.prompt.md`), do users still need the copy-paste runbook? The prompts *are* the runbook in executable form.
+
+**Recommendation**: Keep `AI-Plan-Hardening-Runbook-Instructions.md` as the portable reference (works in any AI tool). Archive `AI-Plan-Hardening-Runbook.md` full templates — they're superseded by the prompt files. Trim the instructions file to reference prompt files instead of duplicating their content.
+
+### D5. Website ↔ Repo Boundary
+
+Clarify what lives where:
+
+| Surface | Audience | Content Type |
+|---------|----------|-------------|
+| **planforge.software** | Evaluators, new users, browsing | Narrative, visuals, demos, quickstart, FAQ, blog |
+| **README.md** | Developers who cloned the repo | Quick orientation + links |
+| **docs/*.md** | Developers actively using the framework | Reference lookup, guides, specs |
+| **docs/manual/\*.html** | Deep-dive readers | Structured book-format reference |
+
+**Rule**: If a `.md` file's primary audience is evaluators/browsers, its content should be on the website instead. The `.md` file becomes a brief pointer.
+
+### D6. Fresh Look at Every File
+
+Full audit checklist — read every human-facing `.md` and ask:
+
+- [ ] Does this file have a single clear purpose?
+- [ ] Is any content duplicated elsewhere? (If yes, pick one home)
+- [ ] Would an enterprise evaluator read more than the first 50 lines?
+- [ ] Can any section be replaced with a link to a more detailed source?
+- [ ] Are there sections that made sense in v1.x but are now covered by shipped features?
+- [ ] Does the file length match its importance? (README should be shorter than COPILOT-VSCODE-GUIDE)
+
+**Files to audit** (human-facing, in priority order):
+1. `README.md` (1,082 lines — the front door)
+2. `ROADMAP.md` (1,551 lines — compress shipped items)
+3. `docs/CLI-GUIDE.md` (1,056 lines — review for bloat)
+4. `docs/plans/AI-Plan-Hardening-Runbook.md` (996 lines — possibly archive)
+5. `CUSTOMIZATION.md` (877 lines — review for overlap with COPILOT-VSCODE-GUIDE)
+6. `docs/COPILOT-VSCODE-GUIDE.md` (816 lines — this IS the primary guide, size is OK)
+7. `docs/plans/AI-Plan-Hardening-Runbook-Instructions.md` (569 lines — trim duplication with prompt files)
+8. `docs/capabilities.md` (488 lines — reference doc, size is OK)
+9. `CHANGELOG.md` (564 lines — grows naturally, leave it)
+10. `docs/EXTENSIONS.md` (short, fine)
+11. `docs/QUICKSTART-WALKTHROUGH.md` (review freshness)
+12. `AGENT-SETUP.md` (AI entry point, review freshness)
+13. `CONTRIBUTING.md` (standard, fine)
+14. `docs/UNIFIED-SYSTEM-ARCHITECTURE.md` (1,840 lines — OpenBrain/OpenClaw vision doc, review relevance)
+
+### Effort & Approach
+
+**Total effort**: ~8-12 hours across multiple sessions  
+**Approach**: This is a documentation-only release — no code changes, no MCP changes, no dashboard changes. Execute as one focused pass, not spread across weeks.
+
+**Acceptance criteria**:
+- Human-facing docs total under 5,000 lines (from 9,230)
+- README.md under 450 lines
+- ROADMAP.md shipped sections compressed
+- Zero content duplicated in 2+ files (every concept has one canonical home)
+- Every `.md` file has a clear one-sentence purpose in its first line
+- All inter-doc links verified (no broken references after moves)
+- `planforge.software` updated to absorb any content moved from repo
+
+### v2.21 Release Gate
+
+Before tagging v2.21.0:
+
+- [ ] README.md ≤ 450 lines
+- [ ] ROADMAP.md shipped sections compressed (full detail only for current + planned)
+- [ ] Overlap audit complete — no content in 2+ places
+- [ ] All links between `.md` files verified (no dead refs)
+- [ ] `planforge.software` pages updated for any content absorbed from repo
+- [ ] `docs/manual/` HTML chapters reviewed for freshness after consolidation
+- [ ] `pforge smith` / `pforge check` still pass (no referenced files removed without updating references)
+- [ ] Agent adapters (Claude, Cursor, etc.) that embed instruction content regenerated if source files changed
+- [ ] `VERSION` bumped to `2.21.0`
+- [ ] `CHANGELOG.md` updated
+
+---
+
 ## Backlog
 
 These are planned but not yet prioritized into a version:

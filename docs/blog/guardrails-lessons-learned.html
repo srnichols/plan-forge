@@ -145,6 +145,8 @@
 
         <p>Splitting into 18 focused files — each under 150 lines, each with a single concern — was transformational. The security file only talks about security. The testing file only talks about testing. Each one loads only when relevant. Compliance went up. Token usage went down. Everybody won.</p>
 
+        <p><em>Update (v2.18):</em> We took this further with <strong>Temper Guards</strong> and <strong>Warning Signs</strong> in every instruction file. Temper Guards document the specific shortcuts agents take that still produce compiling code but erode quality — like “this is just a DTO, no logic to test” or “N+1 won’t matter at our scale.” Warning Signs list observable anti-patterns reviewers can grep for. Each file now teaches agents not just <em>what to do</em>, but <em>why not to skip it</em>.</p>
+
         <h2>Lesson 6: Tech Stack Presets Eliminate 80% of Customization</h2>
 
         <p>Every stack has different conventions. .NET uses <code>PascalCase</code> and <code>xUnit</code>. Python uses <code>snake_case</code> and <code>pytest</code>. TypeScript uses <code>camelCase</code> and <code>vitest</code>. If your guardrails say "use PascalCase" to a Python developer, they'll immediately distrust the entire system.</p>
@@ -158,7 +160,7 @@
         <p>The biggest mistake in AI-assisted development tooling is treating quality as optional. "Add tests later." "We'll refactor." "Security can wait." No. Every feature should ship with tests, proper error handling, input validation, and architectural compliance <em>from the first commit</em>.</p>
 
         <p>Plan Forge makes this structural. The hardened plan includes test expectations per slice. The architecture guardrails load on every file change. The security guardrails load on every auth file. The testing guardrails load on every test file. There's no "opt in to quality" — quality is the default. You'd have to actively work around it to ship bad code.</p>
-
+        <p>And with <strong>Exit Proof</strong> (v2.19), every skill now ends with a verifiable checklist — not “it seems right” but “paste the test output, show the migration file, prove coverage didn’t drop.” Evidence over assumption.</p>
         <blockquote><p>The best developer tools don't make quality easier. They make it unavoidable.</p></blockquote>
 
         <h2>What's Next</h2>

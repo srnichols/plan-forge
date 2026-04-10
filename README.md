@@ -96,7 +96,7 @@ This template installs four types of files into your project. Each serves a diff
 
 ```mermaid
 graph TD
-    A["🧭 Pipeline Prompts<br/><i>step0 → step5</i>"] -->|guide the workflow| B["📋 Instruction Files<br/><i>*.instructions.md</i>"]
+    A["🧭 Pipeline Prompts<br/><i>step0 → step5</i>"] -->|guide the workflow| B["📋 Instruction Files<br/><i>*.instructions.md<br/>+ Temper Guards</i>"]
     A -->|use during execution| C["🧩 Scaffolding Prompts<br/><i>new-entity, new-service...</i>"]
     A -->|trigger for review| D["🔍 Agent Definitions<br/><i>*.agent.md</i>"]
     B -->|loaded automatically<br/>based on file type| E["Your Code"]
@@ -113,7 +113,7 @@ graph TD
 | Piece | What It Is | Analogy |
 |-------|-----------|---------|
 | **Pipeline Prompts** | Step-by-step workflow templates (Step 0–5) | The recipe — tells you what to do and in what order |
-| **Instruction Files** | Rules that auto-load when editing specific file types | The rulebook — coding standards, security, testing, architecture |
+| **Instruction Files** | Rules that auto-load when editing specific file types | The rulebook — coding standards, security, testing, architecture + Temper Guards that prevent agent shortcuts |
 | **Scaffolding Prompts** | Templates for generating common code patterns | Cookie cutters — consistent entities, services, controllers, tests |
 | **Agent Definitions** | Specialized AI reviewer personas (security, architecture, etc.) | Expert reviewers — each focuses on one thing and checks it deeply |
 | **Skills** | Multi-step executable procedures invoked via `/` slash commands | Power tools — chain multiple operations with validation between steps |

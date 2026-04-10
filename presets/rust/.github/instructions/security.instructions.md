@@ -188,3 +188,27 @@ func RateLimit(requestsPerSecond int) func(http.Handler) http.Handler {
 | XSS | `html/template` auto-escaping |
 | SSRF | Validate URLs, restrict outbound |
 | Race Conditions | `Rust test -race`, proper synchronization |
+
+---
+
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "This endpoint is internal-only, no auth needed" | Internal endpoints get exposed through misconfiguration, reverse proxies, or future refactors. Apply auth extractors everywhere — remove them explicitly when proven unnecessary. |
+| "Input validation is overkill for this field" | Every unvalidated input is an injection vector. Validate at system boundaries always — a `#[derive(Validate)]` is a single line that prevents a category of vulnerabilities. |
+| "We'll add authentication later" | Unauthenticated endpoints get discovered and exploited. Security is not a feature to add — it's a constraint present from line one. |
+| "No real users yet, security can wait" | Attackers scan for unprotected endpoints automatically. The window between "no real users" and "compromised" is often hours, not months. |
+| "I'll skip the auth layer temporarily for testing" | Temporary auth bypasses become permanent. Use test-specific service configurations or mock auth extractors instead. |
+| "Hardcoding this key is fine for development" | Hardcoded secrets leak via git history, logs, and error messages. Use environment variables or `.env` files with `dotenvy` even in development. |
+
+---
+
+## Warning Signs
+
+- Handlers missing auth extractor parameters (`Claims`, `AuthUser`) in Axum/Actix
+- `format!` used to build SQL queries (`format!("SELECT ... {}", id)`)
+- Secrets assigned as string literals (`let api_key = "abc123"`)
+- CORS configured with permissive defaults (`.allow_any_origin()`)
+- Missing CSRF protection on state-changing endpoints
+- Error responses expose internal details via `Debug` formatting in non-development mode

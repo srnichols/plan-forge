@@ -283,3 +283,26 @@ app.use('/docs', swaggerUi.serve, swaggerUi.setup(spec));
 - `security.instructions.md` — Auth middleware, input validation, CORS
 - `errorhandling.instructions.md` — Error response format, Express middleware
 - `performance.instructions.md` — Hot-path optimization, async patterns
+
+---
+
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "Nobody uses pagination yet" | Unbounded queries return all rows. The first large dataset crashes the client or times out. Add `?page=1&limit=20` from the first endpoint. |
+| "API versioning can wait until v2" | Unversioned APIs break all consumers on the first change. Add `/api/v1/` from day one — it costs zero lines of logic. |
+| "Error codes aren't needed for MVP" | API consumers parse error codes programmatically. Returning only string messages forces consumers to regex-match errors — brittle and untranslatable. |
+| "Returning 200 OK for all responses simplifies the client" | HTTP semantics exist for a reason. Returning 200 for errors breaks caching, monitoring, and every HTTP-aware tool in the pipeline. |
+| "This endpoint doesn't need request validation" | Every endpoint accepting input is an attack surface. Validate shape and constraints at the API boundary — Zod + middleware handles this with minimal code. |
+
+---
+
+## Warning Signs
+
+- An endpoint returns an unbounded collection without pagination parameters
+- No JSDoc, OpenAPI decorator, or schema annotation on route handlers (undocumented API contract)
+- Route paths don't include a version segment (`/api/users` instead of `/api/v1/users`)
+- HTTP 200 returned for error conditions instead of 4xx/5xx
+- Request body accepted as `any` or untyped object instead of a validated schema
+- Missing `Content-Type` header on responses (clients can't parse reliably)

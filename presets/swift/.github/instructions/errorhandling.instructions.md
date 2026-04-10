@@ -145,3 +145,26 @@ func processItem(_ item: Item) async throws {
 - `observability.instructions.md` — Structured logging, error tracking
 - `api-patterns.instructions.md` — Error response format, status codes
 - `testing.instructions.md` — Error assertion patterns in tests
+
+---
+
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "This operation can't fail" | Every I/O operation can fail — network timeouts, disk full, permission denied. If it touches external state, it fails. |
+| "A generic `catch` is fine here" | Generic catches swallow specific failure signals. Catch the error type you expect, let the rest propagate to the global error middleware. |
+| "Logging the error is enough" | Logging without handling means the caller receives a cryptic 500. Return a structured `AbortError` response so the consumer can act on it. |
+| "The caller handles errors, I don't need to" | If the caller expected your function to succeed unconditionally, the unexpected throw is a surprise. Define your error contract explicitly. |
+| "Force-unwrapping is simpler than proper error handling" | `try!` and `!` crash the entire process. Use `guard let`, `if let`, or `try?` with proper fallback logic. |
+
+---
+
+## Warning Signs
+
+- Generic `catch { }` blocks without matching specific error types — silent failure
+- Force-unwraps (`!`) or `try!` in production code paths
+- Error responses expose stack traces or internal paths to API consumers
+- Functions that return `nil` on failure instead of throwing typed errors
+- Missing `Task.checkCancellation()` in long-running async operations
+- Retry logic without a maximum retry count or exponential backoff (infinite retry loops)

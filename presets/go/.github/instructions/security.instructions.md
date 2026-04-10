@@ -188,3 +188,27 @@ func RateLimit(requestsPerSecond int) func(http.Handler) http.Handler {
 | XSS | `html/template` auto-escaping |
 | SSRF | Validate URLs, restrict outbound |
 | Race Conditions | `go test -race`, proper synchronization |
+
+---
+
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "This endpoint is internal-only, no auth needed" | Internal endpoints get exposed through misconfiguration, reverse proxies, or future refactors. Apply auth middleware everywhere — remove it explicitly when proven unnecessary. |
+| "Input validation is overkill for this field" | Every unvalidated input is an injection vector. Validate at system boundaries always — a struct tag validator is a single line that prevents a category of vulnerabilities. |
+| "We'll add authentication later" | Unauthenticated endpoints get discovered and exploited. Security is not a feature to add — it's a constraint present from line one. |
+| "No real users yet, security can wait" | Attackers scan for unprotected endpoints automatically. The window between "no real users" and "compromised" is often hours, not months. |
+| "I'll skip the auth middleware temporarily for testing" | Temporary auth bypasses become permanent. Use test-specific middleware chains or mock JWT tokens instead. |
+| "Hardcoding this key is fine for development" | Hardcoded secrets leak via git history, logs, and error messages. Use environment variables or `.env` files even in development. |
+
+---
+
+## Warning Signs
+
+- Route groups missing auth middleware in the router setup
+- `fmt.Sprintf` used to build SQL queries (`fmt.Sprintf("SELECT ... %s", id)`)
+- Secrets assigned as string literals (`var apiKey = "abc123"`)
+- CORS configured with wildcard origin (`AllowOrigins: []string{"*"}`)
+- Missing CSRF protection on state-changing endpoints
+- Error responses expose internal details via `err.Error()` in JSON responses

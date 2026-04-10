@@ -1160,6 +1160,7 @@ Write-Host "Step 2: Shared instruction files" -ForegroundColor Cyan
 $sharedFiles = @(
     @{ Src = ".github/instructions/ai-plan-hardening-runbook.instructions.md"; Dst = ".github/instructions/ai-plan-hardening-runbook.instructions.md" }
     @{ Src = ".github/instructions/architecture-principles.instructions.md";   Dst = ".github/instructions/architecture-principles.instructions.md" }
+    @{ Src = ".github/instructions/context-fuel.instructions.md";              Dst = ".github/instructions/context-fuel.instructions.md" }
     @{ Src = ".github/instructions/git-workflow.instructions.md";              Dst = ".github/instructions/git-workflow.instructions.md" }
     @{ Src = ".github/instructions/status-reporting.instructions.md";          Dst = ".github/instructions/status-reporting.instructions.md" }
     @{ Src = "templates/.github/instructions/project-principles.instructions.md"; Dst = ".github/instructions/project-principles.instructions.md" }

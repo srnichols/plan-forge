@@ -215,3 +215,27 @@ public class SecurityHeadersFilter extends OncePerRequestFilter {
 | CSRF | Spring Security CSRF tokens |
 | Mass Assignment | Use DTOs, never bind directly to entities |
 | Insecure Deserialization | Validate input types, use records |
+
+---
+
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "This endpoint is internal-only, no auth needed" | Internal endpoints get exposed through misconfiguration, reverse proxies, or future refactors. Apply security everywhere — remove it explicitly when proven unnecessary. |
+| "Input validation is overkill for this field" | Every unvalidated input is an injection vector. Validate at system boundaries always — `@Valid` with Bean Validation is a single annotation that prevents a category of vulnerabilities. |
+| "We'll add authentication later" | Unauthenticated endpoints get discovered and exploited. Security is not a feature to add — it's a constraint present from line one. |
+| "No real users yet, security can wait" | Attackers scan for unprotected endpoints automatically. The window between "no real users" and "compromised" is often hours, not months. |
+| "I'll add `permitAll()` temporarily for testing" | Temporary `permitAll()` rules become permanent. Use test-specific `@WithMockUser` or security configuration instead. |
+| "Hardcoding this key is fine for development" | Hardcoded secrets leak via git history, logs, and error messages. Use Spring profiles or environment variables even in development. |
+
+---
+
+## Warning Signs
+
+- Endpoints missing `@PreAuthorize` or Spring Security configuration
+- String concatenation used in JPQL/SQL queries (`"SELECT ... " + id`)
+- Secrets assigned as string literals in `application.properties` or code
+- CORS configured with wildcard origin (`allowedOrigins("*")`)
+- Missing CSRF protection on state-changing endpoints (disabled without justification)
+- `@ControllerAdvice` exposes stack traces in non-development profiles

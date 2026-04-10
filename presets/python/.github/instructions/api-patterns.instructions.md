@@ -258,3 +258,26 @@ async def get_producer(producer_id: UUID) -> ProducerResponse:
 - `security.instructions.md` — Auth middleware, input validation, CORS
 - `errorhandling.instructions.md` — Error response format, exception handlers
 - `performance.instructions.md` — Hot-path optimization, async patterns
+
+---
+
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "Nobody uses pagination yet" | Unbounded queries return all rows. The first large dataset crashes the client or times out. Add `?page=1&size=20` from the first endpoint. |
+| "API versioning can wait until v2" | Unversioned APIs break all consumers on the first change. Add `/api/v1/` router prefix from day one — it costs zero lines of logic. |
+| "Error codes aren't needed for MVP" | API consumers parse error codes programmatically. Returning only string messages forces consumers to regex-match errors — brittle and untranslatable. |
+| "Returning 200 OK for all responses simplifies the client" | HTTP semantics exist for a reason. Returning 200 for errors breaks caching, monitoring, and every HTTP-aware tool in the pipeline. |
+| "This endpoint doesn't need request validation" | Every endpoint accepting input is an attack surface. Validate shape and constraints at the API boundary — Pydantic models handle this automatically in FastAPI. |
+
+---
+
+## Warning Signs
+
+- An endpoint returns an unbounded collection without pagination parameters
+- No type annotations or Pydantic response models on route handlers (undocumented API contract)
+- Route paths don't include a version segment (`/api/users` instead of `/api/v1/users`)
+- HTTP 200 returned for error conditions instead of 4xx/5xx
+- Request body accepted as `dict` or `Any` instead of a typed Pydantic model
+- Missing `response_model` on FastAPI endpoints (clients can't predict response shape)

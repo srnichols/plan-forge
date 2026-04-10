@@ -5,6 +5,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.18.0] — 2026-04-10
+
+### Added — Temper Guards & Onboarding Polish
+
+- **Temper Guards in instruction files** (T1) — 40 instruction files across all 8 app presets now include `## Temper Guards` tables: documented shortcuts agents use to cut corners (e.g., "This is too simple to test", "We'll add auth later") paired with concrete rebuttals. Covers testing, security, error handling, database, API patterns, and architecture principles. Stack-specific terminology used throughout (e.g., Zod for TypeScript, Pydantic for Python, `[Authorize]` for .NET)
+- **Warning Signs in instruction files** (T2) — same 40 files include `## Warning Signs` sections: observable behavioral anti-patterns that agents and reviewers can grep for during and after execution (e.g., "Controller contains database queries", "Empty catch block", "String interpolation in SQL")
+- **`context-fuel.instructions.md`** (T3) — new shared instruction file (`applyTo: '**'`, priority LOW) teaching agents context window management within Plan Forge: when to load which files, recognizing context degradation, token budget awareness, and session boundary guidance. Registered in `setup.ps1` and `setup.sh` Step 2
+- **Quick Forge Card** (T4) — 4-step quickstart card added to `planforge.software` homepage hero section: install plugin → init project → describe feature → click through pipeline. Links to detailed setup guide
+- **`pforge tour`** (T5) — new interactive CLI command in both `pforge.ps1` and `pforge.sh` that walks through 6 categories of installed Plan Forge files (instructions, agents, prompts, skills, hooks, config) with real file counts from the user's project
+- **MCP capabilities updated** — `capabilities.mjs` guardrails section now documents `temperGuards`, `warningSigns`, and `contextFuel` features; `context-fuel` added to shared guardrails list
+
+---
+
 ## [2.17.0] — 2026-04-07
 
 ### Fixed — Dashboard Reliability

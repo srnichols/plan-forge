@@ -180,3 +180,26 @@ npx prisma migrate dev --name revert_add_user_profile
 - `security.instructions.md` — SQL injection prevention, parameterized queries
 - `caching.instructions.md` — Query result caching, invalidation strategies
 - `performance.instructions.md` — Query optimization, connection pooling
+
+---
+
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "N+1 queries won't matter at our scale" | N+1 queries scale linearly with data. 10 rows = 10 queries, 10,000 rows = 10,000 queries. Use `include` / `with` relations or batch queries from the start. |
+| "Raw SQL is faster than the ORM here" | Raw SQL bypasses type safety, migration tracking, and parameterization. Use Prisma/Drizzle unless profiling proves a measurable bottleneck — then use parameterized raw queries. |
+| "A migration isn't needed for this small change" | Schema changes without migrations break other developers' environments and CI. If it touches the database, it gets a migration — always. |
+| "I'll seed the data manually" | Manual seed data doesn't reproduce in CI, staging, or other developers' machines. Use seed scripts or migration-based seeds. |
+| "One connection string for all environments is fine" | Connection strings contain credentials that differ per environment. Use environment variables with per-environment overrides. |
+
+---
+
+## Warning Signs
+
+- Queries executed inside a `for`/`forEach` loop (N+1 pattern)
+- `SELECT *` or `findMany()` without `select`/field filtering (over-fetching)
+- Missing indexes on columns used in `where` or `join` clauses
+- Connection strings hardcoded or present in source files
+- No migration file corresponds to a recent schema change
+- Database client created as a module-level singleton without connection pooling configuration

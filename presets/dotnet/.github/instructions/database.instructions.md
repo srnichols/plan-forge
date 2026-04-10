@@ -195,3 +195,26 @@ dotnet ef migrations script CurrentMigration PreviousMigration --idempotent -o r
 - `security.instructions.md` — SQL injection prevention, parameterized queries
 - `caching.instructions.md` — Query result caching, invalidation strategies
 - `performance.instructions.md` — Query optimization, connection pooling
+
+---
+
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "N+1 queries won't matter at our scale" | N+1 queries scale linearly with data. 10 rows = 10 queries, 10,000 rows = 10,000 queries. Use `.Include()` or batch queries from the start. |
+| "Raw SQL is faster than EF Core here" | Raw SQL bypasses change tracking, migration safety, and parameterization. Use EF Core unless profiling proves a measurable bottleneck — then use Dapper with parameterized queries. |
+| "A migration isn't needed for this small change" | Schema changes without migrations break other developers' environments and CI. If it touches the database, it gets a migration — always. |
+| "I'll seed the data manually" | Manual seed data doesn't reproduce in CI, staging, or other developers' machines. Use EF Core seed data or DbUp scripts. |
+| "One connection string for all environments is fine" | Connection strings contain credentials that differ per environment. Use `IConfiguration` with environment-specific overrides. |
+
+---
+
+## Warning Signs
+
+- Queries executed inside a `foreach` loop (N+1 pattern)
+- `SELECT *` used in production queries (over-fetching, schema coupling)
+- Missing `[Index]` attribute on columns used in `WHERE` or `JOIN` clauses
+- Connection strings hardcoded or present in source files
+- No migration file corresponds to a recent model change
+- `DbContext` registered as Singleton instead of Scoped (connection leaks)

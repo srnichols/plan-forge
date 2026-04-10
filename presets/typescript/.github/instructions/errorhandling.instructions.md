@@ -114,3 +114,26 @@ class ErrorBoundary extends React.Component<Props, { error?: Error }> {
 - `api-patterns.instructions.md` — Error response format, status codes
 - `messaging.instructions.md` — Dead letter queues, retry strategies
 ```
+
+---
+
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "This operation can't fail" | Every I/O operation can fail — network timeouts, disk full, permission denied. If it touches external state, it fails. |
+| "A generic catch block is fine here" | Generic catches swallow specific failure signals. Catch the error you expect, let the rest propagate to the global error handler. |
+| "Logging the error is enough" | Logging without handling means the caller receives a cryptic 500. Return a structured error response so the consumer can act on it. |
+| "The caller handles errors, I don't need to" | If the caller expected your function to succeed unconditionally, the unhandled rejection is a surprise. Define your error contract explicitly. |
+| "Returning `null` is simpler than throwing" | Null return values push error handling to every caller. Use typed result objects or throw a specific error with a clear message. |
+
+---
+
+## Warning Signs
+
+- Empty catch blocks (`catch (e) { }` or `catch { }`) — silent failure
+- All errors caught as generic `Error` instead of specific types or checked properties
+- Error responses expose stack traces or internal paths to API consumers
+- Functions that return `null` or `undefined` on failure instead of throwing or using Result types
+- Missing `AbortController` or timeout handling on async operations (no way to cancel on timeout)
+- Retry logic without a maximum retry count or exponential backoff (infinite retry loops)

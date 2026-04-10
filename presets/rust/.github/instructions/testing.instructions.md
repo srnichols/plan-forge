@@ -218,3 +218,27 @@ func TestE2E_LoginFlow(t *testing.T) {
 - `database.instructions.md` — Repository testing, test databases
 - `errorhandling.instructions.md` — Error assertion patterns
 ```
+
+---
+
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "This function is too simple to test" | Simple functions get modified later. The test documents the contract and catches regressions when someone changes the "simple" logic. |
+| "I'll add tests after the feature works" | Technical debt compounds exponentially. Write the `#[test]` function before the implementation. |
+| "The integration test covers this unit" | Integration tests are slow, don't pinpoint failures, and require external dependencies. Unit tests in `mod tests` are the foundation of the test pyramid. |
+| "This is just a struct — no logic to test" | `impl` blocks, `From`/`TryFrom` conversions, and validation in constructors are logic. Test that `::new()` rejects invalid input, that defaults are correct. |
+| "Mocking this dependency is too complex" | If it's hard to mock, the design has too much coupling. Define a trait and use generics or `mockall` — don't skip the test. |
+| "One test case is enough" | Edge cases cause production incidents. Test `None` inputs, empty `Vec`, boundary values, and error variants. |
+
+---
+
+## Warning Signs
+
+- A module has fewer `#[test]` functions than it has public functions (coverage gap)
+- Test names describe implementation (`test_calls_repository`) instead of behavior (`test_get_user_invalid_id_returns_not_found`)
+- Tests use `std::thread::sleep` instead of async test runtime or mock clocks
+- No `#[ignore]` attribute on slow tests — unable to separate fast unit tests from integration tests
+- Test setup is longer than 15 lines (test is testing too much or fixtures need extraction)
+- Tests create real database connections instead of using trait-based mocks or `sqlx::test`

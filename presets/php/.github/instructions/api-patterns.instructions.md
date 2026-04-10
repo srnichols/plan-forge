@@ -284,3 +284,26 @@ r.Get("/swagger/*", httpSwagger.WrapHandler)
 - `security.instructions.md` — JWT middleware, input validation
 - `errorhandling.instructions.md` — Error response format, ProblemDetail
 - `performance.instructions.md` — Hot-path optimization, concurrency patterns
+
+---
+
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "Nobody uses pagination yet" | Unbounded queries return all rows. The first large dataset crashes the client or times out. Add `->paginate(20)` from the first endpoint. |
+| "API versioning can wait until v2" | Unversioned APIs break all consumers on the first change. Add `/api/v1/` route prefix from day one — it costs zero lines of logic. |
+| "Error codes aren't needed for MVP" | API consumers parse error codes programmatically. Returning only string messages forces consumers to regex-match errors — brittle and untranslatable. |
+| "Returning 200 OK for all responses simplifies the client" | HTTP semantics exist for a reason. Returning 200 for errors breaks caching, monitoring, and every HTTP-aware tool in the pipeline. |
+| "This endpoint doesn't need request validation" | Every endpoint accepting input is an attack surface. Validate shape and constraints at the API boundary — a Form Request class handles this with minimal code. |
+
+---
+
+## Warning Signs
+
+- An endpoint returns an unbounded collection without `paginate()` or pagination parameters
+- No PHPDoc or OpenAPI annotations on controller methods (undocumented API contract)
+- Route paths don't include a version segment (`/api/users` instead of `/api/v1/users`)
+- HTTP 200 returned for error conditions instead of 4xx/5xx
+- Request data accessed as raw `request->all()` instead of validated Form Request
+- Missing `Content-Type` header or inconsistent response format (JSON vs plain text)

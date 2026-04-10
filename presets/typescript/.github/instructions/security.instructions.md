@@ -181,3 +181,27 @@ app.use(helmet({
 - `database.instructions.md` — SQL injection prevention, parameterized queries
 - `api-patterns.instructions.md` — Auth middleware, request validation
 - `deploy.instructions.md` — Secrets management, TLS configuration
+
+---
+
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "This endpoint is internal-only, no auth needed" | Internal endpoints get exposed through misconfiguration, reverse proxies, or future refactors. Apply auth everywhere — remove it explicitly when proven unnecessary. |
+| "Input validation is overkill for this field" | Every unvalidated input is an injection vector. Validate at system boundaries always — a Zod schema is a single line that prevents a category of vulnerabilities. |
+| "We'll add authentication later" | Unauthenticated endpoints get discovered and exploited. Security is not a feature to add — it's a constraint present from line one. |
+| "No real users yet, security can wait" | Attackers scan for unprotected endpoints automatically. The window between "no real users" and "compromised" is often hours, not months. |
+| "I'll disable auth middleware temporarily for testing" | Temporary auth bypasses become permanent. Use test-specific auth configuration or mock tokens instead. |
+| "Hardcoding this key is fine for development" | Hardcoded secrets leak via git history, logs, and error messages. Use `.env` files or environment variables even in development. |
+
+---
+
+## Warning Signs
+
+- Route handlers missing auth middleware or guard decorators
+- String interpolation or template literals used in SQL queries (`SELECT ... ${id} `)
+- Secrets assigned as string literals (`const key = "abc123"`)
+- CORS configured with wildcard origin (`"*"`)
+- Missing CSRF protection on state-changing endpoints
+- Error responses expose stack traces or internal paths in non-development mode

@@ -1082,6 +1082,7 @@ cyan "Step 2: Shared instruction files"
 SHARED_FILES=(
     ".github/instructions/ai-plan-hardening-runbook.instructions.md"
     ".github/instructions/architecture-principles.instructions.md"
+    ".github/instructions/context-fuel.instructions.md"
     ".github/instructions/git-workflow.instructions.md"
     ".github/instructions/status-reporting.instructions.md"
     "templates/.github/instructions/project-principles.instructions.md:.github/instructions/project-principles.instructions.md"

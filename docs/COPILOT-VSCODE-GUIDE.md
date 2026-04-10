@@ -90,11 +90,14 @@ The `ai-plan-hardening-runbook.instructions.md` file has `applyTo: 'docs/plans/*
 ```
 1. .github/copilot-instructions.md       ← Always loaded first
 2. .github/instructions/*.instructions.md ← Loaded if applyTo matches current file
+   • architecture-principles (applyTo: **)  — always active, includes Temper Guards
+   • context-fuel (applyTo: **)             — agent context management guidance
+   • domain-specific (applyTo: *.cs, etc.)  — loaded per file type
 3. Your prompt                            ← Your message in chat
 4. Attached files                         ← Files you explicitly reference
 ```
 
-> **Tip**: Keep `copilot-instructions.md` concise. Long files consume your context window and leave less room for code.
+> **Tip**: Keep `copilot-instructions.md` concise. Long files consume your context window and leave less room for code. The `context-fuel.instructions.md` file helps agents manage this budget.
 
 ---
 

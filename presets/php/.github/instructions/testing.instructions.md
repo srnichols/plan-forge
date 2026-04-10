@@ -218,3 +218,27 @@ func TestE2E_LoginFlow(t *testing.T) {
 - `database.instructions.md` — Repository testing, test databases
 - `errorhandling.instructions.md` — Error assertion patterns
 ```
+
+---
+
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "This method is too simple to test" | Simple methods get modified later. The test documents the contract and catches regressions when someone changes the "simple" logic. |
+| "I'll add tests after the feature works" | Technical debt compounds exponentially. Red-Green-Refactor means the test exists before the implementation. |
+| "The integration test covers this unit" | Integration tests are slow, don't pinpoint failures, and can't run in CI quickly. Unit tests are the foundation of the test pyramid. |
+| "This is just a DTO — no logic to test" | Validation rules, casts, and accessors are logic. Test that Form Requests reject invalid input, that attribute casting works correctly. |
+| "Mocking this dependency is too complex" | If it's hard to mock, the design has too much coupling. Use interface binding in the container — don't skip the test. |
+| "One test for the happy path is enough" | Edge cases cause production incidents. Test null inputs, empty arrays, boundary values, and exception paths. |
+
+---
+
+## Warning Signs
+
+- A test class has fewer `test` methods than the class under test has public methods (coverage gap)
+- Test names describe implementation (`testCallsRepository`) instead of behavior (`test_get_user_with_invalid_id_throws_not_found`)
+- Tests use `sleep()` or hardcoded delays instead of proper mocking or fake implementations
+- No `@group` annotations — unable to filter unit vs integration vs feature tests
+- Setup in `setUp()` is longer than 15 lines (test is testing too much or setup needs extraction)
+- Tests directly `new` up concrete dependencies instead of using mocks or Laravel's service container

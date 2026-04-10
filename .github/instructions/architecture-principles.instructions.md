@@ -155,3 +155,33 @@ Before suggesting code changes, verify:
 - [ ] Tests included for new features
 - [ ] No sync-over-async patterns
 - [ ] Security best practices followed
+
+---
+
+## Temper Guards
+
+Common shortcuts agents take that still produce compiling code but erode architecture quality:
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "Putting this logic in the controller is simpler" | Controllers become untestable God objects. Business logic belongs in services where it can be unit tested without HTTP plumbing. |
+| "One service can handle both concerns" | Violates Single Responsibility. When requirements diverge, the combined service becomes a maintenance bottleneck with tangled dependencies. |
+| "We'll refactor to the proper layer later" | Later never comes. Every shortcut trains the next agent session to copy the wrong pattern. Do it right now — it takes the same number of lines. |
+| "This is a one-off, patterns don't apply" | One-offs multiply. The next developer (or agent) sees the exception and copies it. Follow the pattern even for one-offs. |
+| "Adding an interface for one implementation is over-engineering" | Interfaces enable testing, future swaps, and dependency injection. The cost is one file — the benefit is permanent testability. |
+| "I'll skip the repository and query directly from the service" | Services with data access can't be unit tested without a database. The repository boundary exists to make testing fast and reliable. |
+
+---
+
+## Warning Signs
+
+Observable patterns indicating these principles are being violated:
+
+- A controller method contains database queries or ORM calls (bypassed service + repository layers)
+- A service imports HTTP-specific types like `HttpContext`, `IActionResult`, or status codes (leaking HTTP into business logic)
+- A repository contains `if/else` business rules, calculations, or validation beyond query construction (business logic in data access)
+- A single file handles both routing and data persistence (collapsed layers)
+- A new utility/helper class created for a one-time operation (premature abstraction — inline it)
+- A class has more than 10 public methods or exceeds 300 lines (God object forming)
+- A method accepts more than 5 parameters (missing a model or configuration object)
+- Test files are absent for new service or repository classes (TDD skipped)

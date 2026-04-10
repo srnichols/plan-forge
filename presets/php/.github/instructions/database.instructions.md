@@ -236,3 +236,26 @@ Post-Deploy:
 - `security.instructions.md` — SQL injection prevention, parameterized queries
 - `caching.instructions.md` — Query result caching, invalidation strategies
 - `performance.instructions.md` — Query optimization, connection pooling
+
+---
+
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "N+1 queries won't matter at our scale" | N+1 queries scale linearly with data. 10 rows = 10 queries, 10,000 rows = 10,000 queries. Use `with()` eager loading from the start. |
+| "Raw SQL is faster than Eloquent here" | Raw SQL bypasses model features, migration tracking, and parameterization. Use Eloquent/Doctrine unless profiling proves a measurable bottleneck — then use `DB::select()` with bindings. |
+| "A migration isn't needed for this small change" | Schema changes without migrations break other developers' environments and CI. If it touches the database, it gets an Artisan migration — always. |
+| "I'll seed the data manually" | Manual seed data doesn't reproduce in CI, staging, or other developers' machines. Use Laravel seeders or migration-based seeds. |
+| "One connection string for all environments is fine" | Connection strings contain credentials that differ per environment. Use `.env` files with per-environment overrides. |
+
+---
+
+## Warning Signs
+
+- Queries executed inside a `foreach` loop (N+1 pattern — use `with()` or `load()`)
+- `SELECT *` or `Model::all()` without selecting specific columns (over-fetching)
+- Missing database indexes on columns used in `where` or `join` clauses
+- Connection credentials hardcoded instead of using `env()` helper
+- No migration file corresponds to a recent model/schema change
+- Database connections not using persistent connections or connection pooling in high-traffic apps

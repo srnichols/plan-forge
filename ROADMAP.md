@@ -1223,12 +1223,15 @@ Welcome to Plan Forge! Let's walk through your project.
 | File | Type | What to Update |
 |------|------|----------------|
 | `README.md` | Human docs | Add `pforge tour` to Quick Commands; mention Temper Guards in "How It Works" section |
+| `README.md` → Mermaid `graph TD` | Diagram | Update "📋 Instruction Files" node description to mention Temper Guards + Warning Signs (the "How Pieces Fit Together" diagram) |
 | `docs/CLI-GUIDE.md` | Human docs | Add `tour` command documentation |
 | `docs/index.html` | Website | Add Quick Forge Card (T4); mention Temper Guards as feature |
 | `docs/capabilities.md` | Human/AI docs | Document Temper Guards and Warning Signs as instruction file features |
 | `docs/capabilities.html` | Website | Update features list |
 | `docs/COPILOT-VSCODE-GUIDE.md` | Human docs | Reference context-fuel.instructions.md in "Managing Context Budget" section |
+| `docs/COPILOT-VSCODE-GUIDE.md` → Load Order | Diagram | Add `context-fuel.instructions.md` to the numbered load order ASCII block (always loaded, `applyTo: '**'`) |
 | `CUSTOMIZATION.md` | Human docs | Document Temper Guards format for teams adding custom guards |
+| `CUSTOMIZATION.md` → Two-Layer Guardrail Model | Diagram | Optionally add "Temper Guards" to the Layer 1 description in the Mermaid `graph TB` |
 | `docs/faq.html` | Website / FAQ | New FAQ: "What are Temper Guards?" / "How does Plan Forge prevent agents from cutting corners?" |
 | `templates/copilot-instructions.md.template` | Template | Add `pforge tour` to Quick Commands |
 | `CHANGELOG.md` | Release notes | Document all T1–T5 items |

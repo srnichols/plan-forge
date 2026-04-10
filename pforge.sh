@@ -59,6 +59,7 @@ COMMANDS:
   run-plan <plan>   Execute a hardened plan — spawn CLI workers, validate at every boundary, track tokens
   org-rules export  Export org custom instructions from .github/instructions/ for GitHub org settings
   smith             Inspect your forge — environment, VS Code config, setup health, and common problems
+  tour              Guided walkthrough of your installed Plan Forge files
   help              Show this help message
 
 OPTIONS:
@@ -2446,6 +2447,97 @@ else{process.stdout.write(out+'\n');}
 "
 }
 
+# ─── Command: tour ─────────────────────────────────────────────────────
+cmd_tour() {
+    echo ""
+    echo "╔══════════════════════════════════════════════════════════════╗"
+    echo "║           Welcome to Plan Forge — Guided Tour               ║"
+    echo "╚══════════════════════════════════════════════════════════════╝"
+    echo ""
+
+    local instr_dir="$REPO_ROOT/.github/instructions"
+    local agents_dir="$REPO_ROOT/.github/agents"
+    local prompts_dir="$REPO_ROOT/.github/prompts"
+    local skills_dir="$REPO_ROOT/.github/skills"
+    local hooks_dir="$REPO_ROOT/.github/hooks"
+    local forge_json="$REPO_ROOT/.forge.json"
+
+    local sections=(
+        "1|6|Instruction Files (.github/instructions/)|These auto-load in Copilot based on the file type you're editing.|They contain coding standards, security rules, testing patterns, and Temper Guards.|Each file has an 'applyTo' pattern — e.g., database.instructions.md loads for *.sql files.|$instr_dir|*.instructions.md|file"
+        "2|6|Agent Definitions (.github/agents/)|Specialized AI reviewer personas — each focuses on one concern.|Agents are read-only: they audit code but can't edit files.|Invoke via the agent picker dropdown in Copilot Chat.|$agents_dir|*.agent.md|file"
+        "3|6|Prompt Templates (.github/prompts/)|Scaffolding recipes and pipeline step prompts.|Attach in Copilot Chat to generate consistent code patterns.|Step prompts (step0–step6) guide the full pipeline workflow.|$prompts_dir|*.prompt.md|file"
+        "4|6|Skills (.github/skills/)|Multi-step executable procedures invoked with / slash commands.|Each skill chains tool calls with validation between steps.|Examples: /database-migration, /test-sweep, /security-audit|$skills_dir||dir"
+        "5|6|Lifecycle Hooks (.github/hooks/)|Automatic actions during agent sessions — no manual activation needed.|SessionStart: injects project context. PostToolUse: warns on TODOs.|PreToolUse: blocks edits to forbidden files. Stop: warns if no tests ran.|$hooks_dir||file"
+        "6|6|Configuration (.forge.json)|Project config — preset, build/test commands, model routing, and extensions.|The orchestrator reads this to know how to execute your plans.|Edit directly or use the dashboard Config tab at localhost:3100/dashboard.|$forge_json||json"
+    )
+
+    for section in "${sections[@]}"; do
+        IFS='|' read -r num total title desc1 desc2 desc3 dir_path pattern mode <<< "$section"
+
+        printf "\033[33m[%s/%s] %s\033[0m\n" "$num" "$total" "$title"
+        echo ""
+        printf "  \033[37m%s\033[0m\n" "$desc1"
+        printf "  \033[37m%s\033[0m\n" "$desc2"
+        printf "  \033[37m%s\033[0m\n" "$desc3"
+        echo ""
+
+        if [ "$mode" = "json" ]; then
+            if [ -f "$dir_path" ]; then
+                printf "  \033[32mFound: %s\033[0m\n" "$(basename "$dir_path")"
+                read -rp "  Press Enter to show key fields, or 's' to skip: " choice
+                if [ "$choice" != "s" ]; then
+                    local pname tpreset tstack
+                    pname=$(node -e "try{const j=JSON.parse(require('fs').readFileSync('$dir_path','utf8'));console.log(j.projectName||'(not set)')}catch{console.log('(parse error)')}" 2>/dev/null)
+                    tpreset=$(node -e "try{const j=JSON.parse(require('fs').readFileSync('$dir_path','utf8'));console.log(j.preset||'(not set)')}catch{console.log('(parse error)')}" 2>/dev/null)
+                    tstack=$(node -e "try{const j=JSON.parse(require('fs').readFileSync('$dir_path','utf8'));console.log(j.stack||'(not set)')}catch{console.log('(parse error)')}" 2>/dev/null)
+                    echo "    Project: $pname"
+                    echo "    Preset:  $tpreset"
+                    echo "    Stack:   $tstack"
+                fi
+            else
+                printf "  \033[33mNot found — run 'pforge init' first\033[0m\n"
+            fi
+        elif [ -d "$dir_path" ]; then
+            local count=0
+            if [ "$mode" = "dir" ]; then
+                count=$(find "$dir_path" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
+            elif [ -n "$pattern" ]; then
+                count=$(find "$dir_path" -maxdepth 1 -name "$pattern" -type f 2>/dev/null | wc -l | tr -d ' ')
+            fi
+            printf "  \033[32mFound: %s items\033[0m\n" "$count"
+            read -rp "  Press Enter to list them, or 's' to skip: " choice
+            if [ "$choice" != "s" ]; then
+                if [ "$mode" = "dir" ]; then
+                    find "$dir_path" -maxdepth 1 -mindepth 1 -type d -exec basename {} \; 2>/dev/null | sort | while read -r f; do
+                        echo "    • $f"
+                    done
+                elif [ -n "$pattern" ]; then
+                    find "$dir_path" -maxdepth 1 -name "$pattern" -type f -exec basename {} \; 2>/dev/null | sort | while read -r f; do
+                        echo "    • $f"
+                    done
+                fi
+            fi
+        else
+            printf "  \033[33mNot found — run 'pforge init' first\033[0m\n"
+        fi
+
+        echo ""
+        if [ "$num" -lt "$total" ]; then
+            read -rp "  Press Enter to continue: "
+        fi
+        echo ""
+    done
+
+    echo "═══════════════════════════════════════════════════════════════"
+    printf "  \033[32mTour complete! Next steps:\033[0m\n"
+    echo ""
+    echo "  • Run 'pforge smith' to verify your forge health"
+    echo "  • Select the Specifier agent in Copilot Chat to plan your first feature"
+    echo "  • Read the walkthrough: docs/QUICKSTART-WALKTHROUGH.md"
+    echo "═══════════════════════════════════════════════════════════════"
+    echo ""
+}
+
 # ─── Command Router ────────────────────────────────────────────────────
 COMMAND="${1:-help}"
 shift 2>/dev/null || true
@@ -2466,6 +2558,7 @@ case "$COMMAND" in
     run-plan)     cmd_run_plan "$@" ;;
     org-rules)    cmd_org_rules "$@" ;;
     smith)        cmd_smith ;;
+    tour)         cmd_tour ;;
     help|--help)  show_help ;;
     *)
         echo "ERROR: Unknown command '$COMMAND'" >&2

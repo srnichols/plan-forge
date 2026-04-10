@@ -75,6 +75,7 @@ function Show-Help {
     Write-Host "  version-bump <v>  Update version across all files (VERSION, package.json, docs, README)"
     Write-Host "  smith             Inspect your forge — environment, VS Code config, setup health, and common problems"
     Write-Host "  org-rules export  Export org custom instructions from .github/instructions/ for GitHub org settings"
+    Write-Host "  tour              Guided walkthrough of your installed Plan Forge files"
     Write-Host "  help              Show this help message"
     Write-Host ""
     Write-Host "OPTIONS:" -ForegroundColor Yellow
@@ -2936,6 +2937,120 @@ else{process.stdout.write(out+'\n');}
     Remove-Item Env:ORG_RULES_OUTPUT  -ErrorAction SilentlyContinue
 }
 
+# ─── Command: tour ─────────────────────────────────────────────────────
+function Invoke-Tour {
+    Write-Host ""
+    Write-Host "╔══════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+    Write-Host "║           Welcome to Plan Forge — Guided Tour               ║" -ForegroundColor Cyan
+    Write-Host "╚══════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+    Write-Host ""
+
+    $instrDir  = Join-Path $RepoRoot ".github/instructions"
+    $agentsDir = Join-Path $RepoRoot ".github/agents"
+    $promptsDir = Join-Path $RepoRoot ".github/prompts"
+    $skillsDir = Join-Path $RepoRoot ".github/skills"
+    $hooksDir  = Join-Path $RepoRoot ".github/hooks"
+    $forgeJson = Join-Path $RepoRoot ".forge.json"
+
+    $sections = @(
+        @{
+            Num = 1; Total = 6; Title = "Instruction Files (.github/instructions/)"
+            Desc = "These auto-load in Copilot based on the file type you're editing.`nThey contain coding standards, security rules, testing patterns, and Temper Guards.`nEach file has an 'applyTo' pattern — e.g., database.instructions.md loads for *.sql files."
+            Dir = $instrDir; Filter = "*.instructions.md"
+        },
+        @{
+            Num = 2; Total = 6; Title = "Agent Definitions (.github/agents/)"
+            Desc = "Specialized AI reviewer personas — each focuses on one concern.`nAgents are read-only: they audit code but can't edit files.`nInvoke via the agent picker dropdown in Copilot Chat."
+            Dir = $agentsDir; Filter = "*.agent.md"
+        },
+        @{
+            Num = 3; Total = 6; Title = "Prompt Templates (.github/prompts/)"
+            Desc = "Scaffolding recipes and pipeline step prompts.`nAttach in Copilot Chat to generate consistent code patterns.`nStep prompts (step0–step6) guide the full pipeline workflow."
+            Dir = $promptsDir; Filter = "*.prompt.md"
+        },
+        @{
+            Num = 4; Total = 6; Title = "Skills (.github/skills/)"
+            Desc = "Multi-step executable procedures invoked with / slash commands.`nEach skill chains tool calls with validation between steps.`nExamples: /database-migration, /test-sweep, /security-audit"
+            Dir = $skillsDir; Filter = $null
+        },
+        @{
+            Num = 5; Total = 6; Title = "Lifecycle Hooks (.github/hooks/)"
+            Desc = "Automatic actions during agent sessions — no manual activation needed.`nSessionStart: injects project context. PostToolUse: warns on TODOs.`nPreToolUse: blocks edits to forbidden files. Stop: warns if no tests ran."
+            Dir = $hooksDir; Filter = $null
+        },
+        @{
+            Num = 6; Total = 6; Title = "Configuration (.forge.json)"
+            Desc = "Project config — preset, build/test commands, model routing, and extensions.`nThe orchestrator reads this to know how to execute your plans.`nEdit directly or use the dashboard Config tab at localhost:3100/dashboard."
+            Dir = $null; Filter = $null; File = $forgeJson
+        }
+    )
+
+    foreach ($section in $sections) {
+        Write-Host "[$($section.Num)/$($section.Total)] $($section.Title)" -ForegroundColor Yellow
+        Write-Host ""
+        foreach ($line in ($section.Desc -split "`n")) {
+            Write-Host "  $line" -ForegroundColor Gray
+        }
+        Write-Host ""
+
+        # Count and list files
+        if ($section.Dir -and (Test-Path $section.Dir)) {
+            if ($section.Filter) {
+                $files = Get-ChildItem -Path $section.Dir -Filter $section.Filter -File | Sort-Object Name
+            } else {
+                $files = Get-ChildItem -Path $section.Dir -Directory | Sort-Object Name
+            }
+            $count = $files.Count
+            Write-Host "  Found: $count items" -ForegroundColor Green
+
+            $showList = Read-Host "  Press Enter to list them, or 's' to skip"
+            if ($showList -ne 's') {
+                foreach ($f in $files) {
+                    Write-Host "    • $($f.Name)" -ForegroundColor White
+                }
+            }
+        } elseif ($section.File) {
+            if (Test-Path $section.File) {
+                Write-Host "  Found: $($section.File | Split-Path -Leaf)" -ForegroundColor Green
+                $showContent = Read-Host "  Press Enter to show key fields, or 's' to skip"
+                if ($showContent -ne 's') {
+                    try {
+                        $json = Get-Content $section.File -Raw | ConvertFrom-Json
+                        if ($json.projectName) { Write-Host "    Project: $($json.projectName)" -ForegroundColor White }
+                        if ($json.preset)      { Write-Host "    Preset:  $($json.preset)" -ForegroundColor White }
+                        if ($json.stack)        { Write-Host "    Stack:   $($json.stack)" -ForegroundColor White }
+                        if ($json.gateCommands) {
+                            Write-Host "    Build:   $($json.gateCommands.build)" -ForegroundColor White
+                            Write-Host "    Test:    $($json.gateCommands.test)" -ForegroundColor White
+                        }
+                    } catch {
+                        Write-Host "    (could not parse .forge.json)" -ForegroundColor DarkYellow
+                    }
+                }
+            } else {
+                Write-Host "  Not found — run 'pforge init' first" -ForegroundColor DarkYellow
+            }
+        } else {
+            Write-Host "  Not found — run 'pforge init' first" -ForegroundColor DarkYellow
+        }
+
+        Write-Host ""
+        if ($section.Num -lt $section.Total) {
+            $null = Read-Host "  Press Enter to continue"
+        }
+        Write-Host ""
+    }
+
+    Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host "  Tour complete! Next steps:" -ForegroundColor Green
+    Write-Host ""
+    Write-Host "  • Run 'pforge smith' to verify your forge health" -ForegroundColor White
+    Write-Host "  • Select the Specifier agent in Copilot Chat to plan your first feature" -ForegroundColor White
+    Write-Host "  • Read the walkthrough: docs/QUICKSTART-WALKTHROUGH.md" -ForegroundColor White
+    Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host ""
+}
+
 # ─── Command Router ────────────────────────────────────────────────────
 switch ($Command) {
     'init'         { Invoke-Init }
@@ -2954,6 +3069,7 @@ switch ($Command) {
     'org-rules'    { Invoke-OrgRules }
     'version-bump' { Invoke-VersionBump }
     'smith'        { Invoke-Smith }
+    'tour'         { Invoke-Tour }
     'help'         { Show-Help }
     ''             { Show-Help }
     '--help'       { Show-Help }

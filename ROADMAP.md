@@ -7,7 +7,9 @@
 
 ## Current Release
 
-**v2.17.0** (2026-04-07) — Platform Completion & Setup Hardening: nested subagent pipeline with termination guards across all 5 pipeline agent templates, `chat.subagents.allowInvocationsFromSubagents` VS Code setting, status-reporting instruction file with 7 standard output templates.
+**v2.18.0** (2026-04-10) — Temper Guards & Onboarding Polish: anti-shortcut tables and behavioral warning signs in 41 instruction files across all 8 app presets, context-fuel instruction file for agent context management, Quick Forge Card on website, `pforge tour` interactive walkthrough CLI command.
+
+Previous: v2.17.0 (2026-04-07) — Platform Completion & Setup Hardening.
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 

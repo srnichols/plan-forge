@@ -214,6 +214,7 @@ Auto-loading instruction files in `.github/instructions/`:
 | Domain | File | Loads When |
 |--------|------|-----------|
 | Architecture | `architecture-principles.instructions.md` | All files |
+| Context Management | `context-fuel.instructions.md` | All files |
 | Security | `security.instructions.md` | Auth, middleware, API files |
 | Database | `database.instructions.md` | Data access, migration files |
 | Testing | `testing.instructions.md` | Test files |
@@ -222,6 +223,13 @@ Auto-loading instruction files in `.github/instructions/`:
 | Performance | `performance.instructions.md` | Hot paths, query files |
 | Naming | `naming.instructions.md` | All files |
 | + 9 more | See preset directory | Per `applyTo` pattern |
+
+### Temper Guards & Warning Signs
+
+Every instruction file includes two defensive sections:
+
+- **Temper Guards** — tables of common shortcuts agents take that still produce compiling code but erode quality (e.g., "This is too simple to test" → "Simple code gets modified later. The test documents the contract."). Named after the metallurgical process — tempering strengthens steel against brittle failure.
+- **Warning Signs** — observable behavioral patterns indicating the file's guidance is being violated (e.g., "Controller contains database queries", "Empty catch block"). Helps agents self-monitor during execution and reviewers catch violations during audit.
 
 ## Agents (19 per app preset)
 

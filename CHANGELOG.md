@@ -5,6 +5,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.19.0] — 2026-04-10
+
+### Added — Skill Blueprint & Verification Gates
+
+- **SKILL-BLUEPRINT.md** (S1) — formal specification for Plan Forge skill format published at `docs/SKILL-BLUEPRINT.md`. Documents all required sections (Frontmatter, Trigger, Steps, Safety Rules, Temper Guards, Warning Signs, Exit Proof, Persistent Memory), naming conventions, token budget guidance, cross-skill references, and new skill checklist
+- **Exit Proof in all skills** (S2) — all 79 SKILL.md files across 9 presets now include `## Exit Proof` checklists with 4–6 verifiable evidence requirements per skill. Stack-specific commands used throughout (e.g., `dotnet test`, `pytest`, `cargo test`, `go test ./...`)
+- **Temper Guards and Warning Signs in all skills** (S3) — all 79 SKILL.md files now include `## Temper Guards` tables (3–5 shortcut/rebuttal pairs per skill) and `## Warning Signs` lists (4–6 observable anti-patterns). Domain-specific to each skill type (migration, deploy, review, audit, etc.)
+
+Every SKILL.md now follows the full Skill Blueprint format: Frontmatter → Trigger → Steps → Safety Rules → Temper Guards → Warning Signs → Exit Proof → Persistent Memory.
+
+---
+
 ## [2.18.0] — 2026-04-10
 
 ### Added — Temper Guards & Onboarding Polish

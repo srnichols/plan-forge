@@ -207,6 +207,8 @@ The presets include scaffolding recipes, reviewer roles, and multi-step procedur
 - Update build/test/deploy commands to match your CI/CD pipeline
 - Add project-specific validation steps (e.g., "Run RLS tests after migration")
 - Customize verification queries for your database schema
+- See [docs/SKILL-BLUEPRINT.md](docs/SKILL-BLUEPRINT.md) for the full skill format specification
+- Every skill should include Temper Guards, Warning Signs, and Exit Proof sections per the blueprint
 
 #### `azure-iac` Preset — Additional Customization
 

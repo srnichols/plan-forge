@@ -5,6 +5,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.21.0] — 2026-04-10
+
+### Changed — Forge Anneal (Documentation Consolidation)
+
+- **README.md** — thinned from 1,082 to 216 lines (80% reduction). Detailed preset/agent/skill tables moved to `capabilities.md` and `CUSTOMIZATION.md`. FAQ moved to website. Pipeline details moved to `COPILOT-VSCODE-GUIDE.md`. README now covers: hero + value prop + quickstart + compact "what's included" + doc links.
+- **ROADMAP.md** — compressed from 1,714 to 191 lines (89% reduction). Shipped versions compressed to 2-3 line summaries. Full release details live in `CHANGELOG.md`. Only planned/in-progress items retain full detail.
+- **AI-Plan-Hardening-Runbook.md** — replaced 996-line full template runbook with 22-line redirect to pipeline agents and prompt templates (`step0-*.prompt.md` through `step6-*.prompt.md`). Prompt files ARE the runbook in executable form.
+- **UNIFIED-SYSTEM-ARCHITECTURE.md** — compressed from 1,840 to 75 lines. Executive summary, architecture diagram, integration points, and memory layers retained. Full content preserved in git history.
+- **Total reduction**: 10,910 → 5,782 lines across 14 human-facing docs (47% reduction, 5,128 lines removed)
+
+---
+
 ## [2.20.0] — 2026-04-10
 
 ### Added — Forge Quench (Code Simplification Skill)

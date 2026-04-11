@@ -2843,10 +2843,15 @@ const MODEL_PRICING = {
   "gpt-4.1":                { input: 2 / 1_000_000,    output: 8 / 1_000_000 },
   // Google Gemini
   "gemini-3-pro-preview":   { input: 1.25 / 1_000_000, output: 5 / 1_000_000 },
-  // xAI Grok (reasoning_tokens billed as output)
-  "grok-4.20":              { input: 3 / 1_000_000,    output: 15 / 1_000_000 },
-  "grok-4":                 { input: 2 / 1_000_000,    output: 10 / 1_000_000 },
-  "grok-4-0709":            { input: 2 / 1_000_000,    output: 10 / 1_000_000 },
+  // xAI Grok (reasoning_tokens billed as output — per docs.x.ai/developers/models)
+  "grok-4.20":                         { input: 2 / 1_000_000,    output: 6 / 1_000_000 },
+  "grok-4.20-0309-reasoning":         { input: 2 / 1_000_000,    output: 6 / 1_000_000 },
+  "grok-4.20-0309-non-reasoning":     { input: 2 / 1_000_000,    output: 6 / 1_000_000 },
+  "grok-4.20-multi-agent-0309":       { input: 2 / 1_000_000,    output: 6 / 1_000_000 },
+  "grok-4-1-fast-reasoning":          { input: 0.20 / 1_000_000, output: 0.50 / 1_000_000 },
+  "grok-4-1-fast-non-reasoning":      { input: 0.20 / 1_000_000, output: 0.50 / 1_000_000 },
+  "grok-4":                 { input: 2 / 1_000_000,    output: 6 / 1_000_000 },
+  "grok-4-0709":            { input: 2 / 1_000_000,    output: 6 / 1_000_000 },
   "grok-3":                 { input: 3 / 1_000_000,    output: 15 / 1_000_000 },
   "grok-3-mini":            { input: 0.30 / 1_000_000, output: 0.50 / 1_000_000 },
   // Fallback

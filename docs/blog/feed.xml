@@ -5,8 +5,16 @@
     <link>https://planforge.software/blog/</link>
     <description>Lessons, patterns, and A/B test results from building with AI coding agents. By Scott Nichols.</description>
     <language>en-us</language>
-    <lastBuildDate>Mon, 07 Apr 2026 00:00:00 GMT</lastBuildDate>
+    <lastBuildDate>Fri, 11 Apr 2026 00:00:00 GMT</lastBuildDate>
     <atom:link href="https://planforge.software/blog/feed.xml" rel="self" type="application/rss+xml" />
+
+    <item>
+      <title>The A/B Test: 99 vs 44 — Same App, Same Model, Same Time</title>
+      <link>https://planforge.software/blog/ab-test-plan-forge-vs-vibe-coding.html</link>
+      <guid>https://planforge.software/blog/ab-test-plan-forge-vs-vibe-coding.html</guid>
+      <pubDate>Fri, 11 Apr 2026 00:00:00 GMT</pubDate>
+      <description>We built the same .NET app twice: once with Plan Forge guardrails, once with pure vibe coding. Same model. Same time. The quality score: 99/100 vs 44/100. 60 tests vs 13. The data speaks for itself.</description>
+    </item>
 
     <item>
       <title>The 80/20 Wall: Why AI Agents Break What They Build</title>

@@ -39,6 +39,19 @@ AI coding tools make it easy to generate code fast. But fast isn't the same as g
 
 **Verified**: 11 phases self-built, 103/103 self-tests, 18 MCP tools, zero manual rollbacks. See [docs/capabilities.md](docs/capabilities.md) for the full metrics table.
 
+### A/B Test Results (April 2026)
+
+We built the same .NET app twice — same requirements, same model (Claude Opus 4.6), same time (~7 min). The only difference: Run A had Plan Forge, Run B didn't.
+
+| Metric | Plan Forge | Vibe Coding |
+|--------|-----------|-------------|
+| **Tests** | **60** | 13 |
+| **Interfaces** | **6** | 0 |
+| **DTOs** | **9** | 0 |
+| **Quality Score** | **99/100** | **44/100** |
+
+Speed was comparable. Quality was not. [Read the full results →](https://planforge.software/blog/ab-test-plan-forge-vs-vibe-coding.html)
+
 ---
 
 ## What Is This?

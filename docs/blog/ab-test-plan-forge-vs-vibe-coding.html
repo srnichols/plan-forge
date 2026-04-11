@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The A/B Test: 99 vs 44 — Same App, Same Model, Same Time — Plan Forge Blog</title>
+  <meta name="description" content="We built the same .NET app twice: once with Plan Forge guardrails, once with pure vibe coding. Same model. Same time. The quality score: 99/100 vs 44/100." />
+  <meta property="og:title" content="The A/B Test: 99 vs 44 — Same App, Same Model, Same Time" />
+  <meta property="og:description" content="We built the same .NET app twice: once with Plan Forge guardrails, once with pure vibe coding. Same model. Same time. The quality score: 99/100 vs 44/100." />
+  <meta property="og:type" content="article" />
+  <meta property="og:url" content="https://planforge.software/blog/ab-test-plan-forge-vs-vibe-coding.html" />
+  <meta property="og:image" content="https://planforge.software/assets/og-card.webp" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="The A/B Test: 99 vs 44 — Same App, Same Model, Same Time" />
+  <meta name="twitter:description" content="Same .NET app, same model, same day. Plan Forge scored 99/100. Vibe coding scored 44/100. Both repos are public." />
+  <link rel="canonical" href="https://planforge.software/blog/ab-test-plan-forge-vs-vibe-coding.html" />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    "headline": "The A/B Test: 99 vs 44 — Same App, Same Model, Same Time",
+    "description": "We built the same .NET app twice: once with Plan Forge guardrails, once with pure vibe coding. Same model. Same time. The quality score: 99/100 vs 44/100.",
+    "url": "https://planforge.software/blog/ab-test-plan-forge-vs-vibe-coding.html",
+    "datePublished": "2026-04-11",
+    "author": { "@type": "Person", "name": "Scott Nichols", "url": "https://github.com/srnichols" },
+    "publisher": { "@type": "Organization", "name": "Plan Forge", "url": "https://planforge.software" }
+  }
+  </script>
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { theme: { extend: { colors: { forge: { 300:'#fcd34d',400:'#fbbf24',500:'#f59e0b',600:'#d97706',700:'#b45309' }}, fontFamily: { sans:['Inter','system-ui','sans-serif'], mono:['"JetBrains Mono"','"Fira Code"','monospace'] }}}}
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/blog.css" />
+</head>
+<body class="bg-slate-950 text-slate-100 antialiased">
+
+  <!-- NAV -->
+  <nav class="sticky top-0 z-50 bg-slate-950/92 backdrop-blur-md border-b border-slate-800/60">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <a href="../index.html" class="flex items-center gap-3 shrink-0"><img src="../assets/plan-forge-logo.svg" alt="Plan Forge" class="h-7 w-auto" /></a>
+        <div class="hidden md:flex items-center gap-7">
+          <a href="../index.html#solution" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">How It Works</a>
+          <a href="../examples.html" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">Examples</a>
+          <a href="./" class="text-sm text-forge-400 transition-colors">Blog</a>
+          <a href="../faq.html" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">FAQ</a>
+        </div>
+        <div class="hidden md:flex items-center gap-3">
+          <a href="https://github.com/srnichols/plan-forge" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">GitHub</a>
+          <a href="../index.html#quickstart" class="px-4 py-2 text-sm font-semibold bg-forge-500 hover:bg-forge-400 text-slate-900 rounded-lg transition-colors">Get Started</a>
+        </div>
+        <button id="mobile-btn" class="md:hidden p-2 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors" aria-label="Open menu">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+      </div>
+    </div>
+    <!-- Mobile Menu -->
+    <div id="mobile-menu" class="hidden md:hidden border-t border-slate-800/60 bg-slate-950/98">
+      <div class="px-4 py-3 space-y-1">
+        <a href="../index.html#solution" class="block py-2 text-sm text-slate-300 hover:text-slate-100">How It Works</a>
+        <a href="../examples.html" class="block py-2 text-sm text-slate-300 hover:text-slate-100">Examples</a>
+        <a href="./" class="block py-2 text-sm text-forge-400 hover:text-slate-100 font-semibold">Blog</a>
+        <a href="../faq.html" class="block py-2 text-sm text-slate-300 hover:text-slate-100">FAQ</a>
+        <a href="../manual/" class="block py-2 text-sm text-slate-300 hover:text-slate-100">Manual</a>
+        <a href="https://github.com/srnichols/plan-forge" class="block py-2 text-sm text-forge-400 font-semibold">GitHub →</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ARTICLE -->
+  <article class="py-16 bg-slate-900">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+
+      <!-- Meta -->
+      <div class="mb-8">
+        <a href="./" class="text-sm text-forge-400 hover:underline">← Back to Blog</a>
+      </div>
+      <div class="flex items-center gap-3 mb-6">
+        <span class="px-3 py-1 rounded-full bg-purple-500/10 text-xs font-medium text-purple-400 border border-purple-500/20">A/B Test</span>
+        <span class="text-xs text-slate-500">April 11, 2026 · 8 min read</span>
+      </div>
+      <h1 class="text-4xl md:text-5xl font-black text-white mb-6 leading-tight">The A/B Test: 99 vs 44 — Same App, Same Model, Same Time</h1>
+      <div class="flex items-center gap-3 mb-10 pb-10 border-b border-slate-800/60">
+        <img src="https://github.com/srnichols.png" alt="Scott Nichols" class="w-10 h-10 rounded-full border border-slate-700" loading="lazy" />
+        <div>
+          <p class="text-sm font-medium text-slate-200"><a href="../manual/about-author.html" class="hover:text-forge-400 transition-colors">Scott Nichols</a></p>
+          <p class="text-xs text-slate-500">Director @ Microsoft</p>
+        </div>
+      </div>
+
+      <!-- Content -->
+      <div class="blog-content">
+
+        <!-- TODO: Add hero image once generated -->
+
+        <p>We built the same .NET application twice. Same requirements. Same model. Same machine. Same day. The only variable was whether the AI had guardrails.</p>
+
+        <p>The results weren't close.</p>
+
+        <h2>The Setup</h2>
+
+        <p>Both projects started from an identical .NET 10 WebAPI skeleton — the same git commit, the same empty solution. The requirements were identical: Clients CRUD → Projects CRUD → Invoice Engine with rate tiers, volume discounts, tax calculation, and banker's rounding. Both runs used Claude Opus 4.6. Same machine, same afternoon.</p>
+
+        <p>The only difference:</p>
+
+        <ul>
+          <li><strong>Run A</strong> had <a href="https://github.com/srnichols/plan-forge" class="text-forge-400 hover:underline font-semibold">Plan Forge v2.22.1</a> installed — guardrails, Temper Guards, instruction files, the full pipeline.</li>
+          <li><strong>Run B</strong> had nothing. A blank project and a prompt. Pure vibe coding.</li>
+        </ul>
+
+        <p>Both runs were given the same natural language description of the application. No tricks, no handicapping. Just: "build this app."</p>
+
+        <h2>The Numbers</h2>
+
+        <p>Here's what each run produced:</p>
+
+        <div class="overflow-x-auto">
+          <table>
+            <thead>
+              <tr>
+                <th>Metric</th>
+                <th>Plan Forge (A)</th>
+                <th>Vibe Coding (B)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Duration</td>
+                <td class="text-green-400 font-semibold">~7 min</td>
+                <td>~8 min</td>
+              </tr>
+              <tr>
+                <td>Tests</td>
+                <td class="text-green-400 font-semibold">60</td>
+                <td class="text-red-400">13</td>
+              </tr>
+              <tr>
+                <td>Interfaces</td>
+                <td class="text-green-400 font-semibold">6</td>
+                <td class="text-red-400">0</td>
+              </tr>
+              <tr>
+                <td>DTOs</td>
+                <td class="text-green-400 font-semibold">9</td>
+                <td class="text-red-400">0</td>
+              </tr>
+              <tr>
+                <td>Typed exceptions</td>
+                <td class="text-green-400 font-semibold">4</td>
+                <td class="text-red-400">0</td>
+              </tr>
+              <tr>
+                <td>Error middleware</td>
+                <td class="text-green-400 font-semibold">ProblemDetails (RFC 7807)</td>
+                <td class="text-red-400">None</td>
+              </tr>
+              <tr>
+                <td>Banker's rounding</td>
+                <td class="text-green-400 font-semibold">5 usages</td>
+                <td class="text-red-400">0</td>
+              </tr>
+              <tr>
+                <td>CancellationToken</td>
+                <td class="text-green-400 font-semibold">79 references</td>
+                <td class="text-red-400">0</td>
+              </tr>
+              <tr>
+                <td>.gitignore</td>
+                <td class="text-green-400 font-semibold">Present</td>
+                <td class="text-red-400">Missing</td>
+              </tr>
+              <tr>
+                <td><strong>Quality Score</strong></td>
+                <td class="text-green-400 font-bold text-lg">99/100</td>
+                <td class="text-red-400 font-bold text-lg">44/100</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>Read that last row again. Same model. Same requirements. Same time budget. <strong>99 vs 44.</strong></p>
+
+        <h2>What Plan Forge Produced That Vibe Coding Didn't</h2>
+
+        <p>The Plan Forge run didn't just produce more code — it produced the <em>right</em> code. The architectural decisions that separate production software from a prototype:</p>
+
+        <ul>
+          <li><strong>3-layer architecture</strong> (Controller → Service → Repository) vs a flat 2-layer structure where controllers called EF Core directly</li>
+          <li><strong>Interfaces for every service and repository</strong> — dependency injection works, mocking works, testing works</li>
+          <li><strong>DTOs at the API boundary</strong> — mass assignment protection, clean contracts, no entity leakage</li>
+          <li><strong>4 typed exceptions</strong> with ProblemDetails middleware — <code>NotFoundException</code>, <code>DuplicateException</code>, <code>ValidationException</code>, <code>BusinessRuleException</code> — all mapped to proper HTTP status codes via RFC 7807</li>
+          <li><strong>Banker's rounding</strong> (<code>MidpointRounding.ToEven</code>) on all financial calculations — the requirement that was explicitly stated but silently dropped by the vibe run</li>
+          <li><strong>CancellationToken</strong> on every async method — 79 references throughout the codebase, enabling graceful shutdown and request cancellation</li>
+          <li><strong>60 tests</strong> covering rate tiers, discount brackets, state machine transitions, boundary values, and error cases</li>
+          <li><strong>A proper .gitignore</strong> — a small thing that speaks volumes about process discipline</li>
+        </ul>
+
+        <h2>What Went Wrong in the Vibe Coding Run</h2>
+
+        <p>The vibe-coded version wasn't just missing features. It had active problems that would block production deployment:</p>
+
+        <ul>
+          <li><strong>12 build errors on first attempt.</strong> The model configured EF Core decimal precision in a way that's incompatible with the InMemory provider. The fix? It removed the decimal precision configuration entirely — silently violating the banker's rounding requirement to make the build pass.</li>
+          <li><strong>No interfaces.</strong> Every service is a concrete class. You can't mock them. You can't test the controller without spinning up the full dependency chain. Unit testing is structurally impossible.</li>
+          <li><strong>Entities exposed directly as API responses.</strong> No DTOs, no mapping layer. Change a database column and your API contract breaks. Add a sensitive field and it leaks to every consumer.</li>
+          <li><strong>Generic exception catching in controllers.</strong> Every endpoint wraps its body in <code>try { ... } catch (Exception ex) { return StatusCode(500, ex.Message); }</code>. No typed exceptions, no ProblemDetails, no distinction between a validation error and a server crash.</li>
+          <li><strong>All 13 tests in a single file.</strong> No test organization, no test categories, no separation between unit and integration tests.</li>
+          <li><strong>bin/ and obj/ folders committed to git.</strong> 111 files in the initial commit that should never be in source control. No .gitignore was generated.</li>
+        </ul>
+
+        <p>To be clear: the vibe-coded version <em>works</em>. You can start it, call the endpoints, and get responses. But "it works" and "it's ready for production" are very different statements.</p>
+
+        <h2>The Surprise: Time Was the Same</h2>
+
+        <p>This is the part that challenges the common assumption about guardrails.</p>
+
+        <p>The conventional wisdom is that structure slows you down. More rules, more process, more overhead. Skip the architecture, skip the tests, ship faster. That's the entire appeal of vibe coding — remove friction, let the model rip.</p>
+
+        <p>But the numbers tell a different story: <strong>Plan Forge produced 4.6× more tests and a 2.25× higher quality score in less time</strong> (7 minutes vs 8 minutes). The guardrails didn't add overhead. They prevented the rework loop.</p>
+
+        <p>The vibe run spent its extra minute fighting build errors — the EF Core InMemory incompatibility that caused 12 compilation failures. The model had to diagnose the problem, backtrack, and apply a fix that sacrificed a requirement. That rework cycle is invisible in a demo but devastating at scale.</p>
+
+        <blockquote><p>Guardrails don't slow you down. Rework slows you down. Guardrails prevent rework.</p></blockquote>
+
+        <h2>Both Repos Are Public</h2>
+
+        <p>We're not asking you to trust a blog post. Both repositories are public — fork them, run the scoring yourself, read every line of code.</p>
+
+        <ul>
+          <li><strong>Plan Forge run:</strong> <a href="https://github.com/srnichols/ab-test-planforge" class="text-forge-400 hover:underline font-semibold">github.com/srnichols/ab-test-planforge</a></li>
+          <li><strong>Vibe coding run:</strong> <a href="https://github.com/srnichols/ab-test-vibecode" class="text-forge-400 hover:underline font-semibold">github.com/srnichols/ab-test-vibecode</a></li>
+        </ul>
+
+        <p>Same starting point. Same model. Same day. Different guardrails. Different outcomes.</p>
+
+        <h2>Scoring Breakdown</h2>
+
+        <p>The 99/100 and 44/100 scores come from a weighted rubric across seven dimensions. Here's the full breakdown:</p>
+
+        <div class="overflow-x-auto">
+          <table>
+            <thead>
+              <tr>
+                <th>Category</th>
+                <th>Weight</th>
+                <th>Plan Forge (A)</th>
+                <th>Vibe Coding (B)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Functional Completeness</td>
+                <td>25%</td>
+                <td class="text-green-400 font-semibold">25/25</td>
+                <td class="text-red-400">15/25</td>
+              </tr>
+              <tr>
+                <td>Architecture</td>
+                <td>20%</td>
+                <td class="text-green-400 font-semibold">20/20</td>
+                <td class="text-red-400">8/20</td>
+              </tr>
+              <tr>
+                <td>Testing</td>
+                <td>20%</td>
+                <td class="text-green-400 font-semibold">20/20</td>
+                <td class="text-red-400">6/20</td>
+              </tr>
+              <tr>
+                <td>Error Handling</td>
+                <td>10%</td>
+                <td class="text-green-400 font-semibold">10/10</td>
+                <td class="text-red-400">3/10</td>
+              </tr>
+              <tr>
+                <td>Security &amp; Validation</td>
+                <td>10%</td>
+                <td class="text-green-400 font-semibold">10/10</td>
+                <td class="text-red-400">4/10</td>
+              </tr>
+              <tr>
+                <td>Precision (Banker's Rounding)</td>
+                <td>10%</td>
+                <td class="text-green-400 font-semibold">10/10</td>
+                <td class="text-red-400">0/10</td>
+              </tr>
+              <tr>
+                <td>Git Hygiene</td>
+                <td>5%</td>
+                <td class="text-green-400 font-semibold">4/5</td>
+                <td class="text-red-400">0/5</td>
+              </tr>
+              <tr class="border-t-2 border-slate-600">
+                <td><strong>Total</strong></td>
+                <td><strong>100%</strong></td>
+                <td class="text-green-400 font-bold text-lg">99/100</td>
+                <td class="text-red-400 font-bold text-lg">44/100</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>The vibe run's only competitive category was Functional Completeness — it built most of the CRUD endpoints. But "most" isn't "all." The missing banker's rounding scored a flat zero in Precision. The missing .gitignore and committed build artifacts scored zero in Git Hygiene. No interfaces and no layered architecture capped Architecture at 8/20.</p>
+
+        <h2>Conclusion</h2>
+
+        <blockquote><p>Speed was comparable. Quality was not.</p></blockquote>
+
+        <p>The value proposition of Plan Forge isn't that it makes you faster — though in this test, it did. The value is that it makes the <strong>first pass the right pass</strong>.</p>
+
+        <p>The vibe-coded version would need substantial rework to reach production quality: add interfaces, extract DTOs, implement proper error handling, restore banker's rounding, add CancellationToken support, write 47 more tests, add a .gitignore, and clean up the committed build artifacts. That's not a polish pass — that's a rewrite of the architecture.</p>
+
+        <p>The Plan Forge version ships as-is.</p>
+
+        <p>Not because the model is smarter with guardrails. It's the same model. But with Plan Forge, the model has context about <em>what good looks like</em> — architecture principles, Temper Guards that catch common shortcuts, instruction files that encode best practices, and a pipeline that validates at every boundary. The model's capability doesn't change. Its <em>direction</em> does.</p>
+
+        <p>Try it yourself: <a href="https://github.com/srnichols/plan-forge" class="text-forge-400 hover:underline font-semibold">github.com/srnichols/plan-forge</a></p>
+
+      </div>
+
+      <!-- Post nav -->
+      <div class="mt-12 pt-8 border-t border-slate-800/60 flex justify-between items-center">
+        <a href="seven-agents.html" class="text-sm text-forge-400 hover:underline">← Previous: Seven Agents</a>
+        <a href="./" class="text-sm text-forge-400 hover:underline">All posts →</a>
+      </div>
+
+    </div>
+  </article>
+
+  <!-- FOOTER -->
+  <footer class="border-t border-slate-800/60 bg-slate-950 py-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex flex-col md:flex-row items-center justify-between gap-4 mb-4">
+        <div class="flex items-center gap-3">
+          <img src="https://github.com/srnichols.png" alt="Scott Nichols" class="w-8 h-8 rounded-full border border-slate-700" loading="lazy" />
+          <p class="text-sm text-slate-500">Created by <a href="https://github.com/srnichols" class="text-forge-400 hover:underline">Scott Nichols</a></p>
+        </div>
+        <div class="flex gap-4">
+          <a href="https://github.com/srnichols" class="text-sm text-slate-500 hover:text-slate-300">GitHub</a>
+          <a href="https://www.linkedin.com/in/srnichols/" class="text-sm text-slate-500 hover:text-slate-300">LinkedIn</a>
+        </div>
+      </div>
+      <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+        <p class="text-sm text-slate-600">© 2026 Plan Forge. Open source under the MIT License.</p>
+        <div class="flex gap-6">
+          <a href="../index.html" class="text-sm text-slate-500 hover:text-slate-300">Home</a>
+          <a href="https://github.com/srnichols/plan-forge" class="text-sm text-slate-500 hover:text-slate-300">GitHub</a>
+          <a href="../docs.html" class="text-sm text-slate-500 hover:text-slate-300">Docs</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/shared.js"></script>
+</body>
+</html>

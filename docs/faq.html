@@ -798,6 +798,45 @@
         </div>
       </div>
 
+      <!-- Concepts -->
+      <div class="faq-category">
+        <h2 class="text-xl font-bold text-white mb-5 flex items-center gap-3">
+          <span class="w-8 h-8 rounded-lg bg-forge-500/20 flex items-center justify-center text-forge-400 text-sm">🔥</span>
+          Concepts
+        </h2>
+        <div class="space-y-3">
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">What are Temper Guards?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              Temper Guards are tables embedded in every instruction file that document common shortcuts AI agents use to cut corners — like "this is too simple to test" or "we'll add auth later" — paired with concrete rebuttals explaining why the shortcut breaks production quality. Named after the metallurgical tempering process that strengthens steel against brittle failure.
+            </div>
+          </details>
+
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">What is Forge Quench?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              Forge Quench (<code class="text-forge-400">/forge-quench</code>) is a code simplification skill that systematically reduces complexity while preserving exact behavior. It follows the Chesterton's Fence principle — always understand WHY code is complex before simplifying it. The 5-step workflow: Measure → Understand First → Propose → Apply &amp; Prove → Report. Each simplification is committed individually with tests run after every change.
+            </div>
+          </details>
+
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">What is the Skill Blueprint?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              The Skill Blueprint (<code class="text-forge-400">docs/SKILL-BLUEPRINT.md</code>) is the formal specification for Plan Forge skill files. Every skill follows this format: Frontmatter → Trigger → Steps → Safety Rules → Temper Guards → Warning Signs → Exit Proof → Persistent Memory. Extension contributors use the blueprint to create skills that are consistent with the built-in ones.
+            </div>
+          </details>
+        </div>
+      </div>
+
     </div>
   </section>
 

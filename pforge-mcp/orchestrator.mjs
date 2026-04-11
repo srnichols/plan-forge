@@ -2234,7 +2234,7 @@ export function loadQuorumConfig(cwd) {
     enabled: false,
     auto: true,
     threshold: 6,
-    models: ["claude-opus-4.6", "gpt-5.3-codex", "claude-sonnet-4.6"],
+    models: ["claude-opus-4.6", "gpt-5.3-codex", "grok-4.20-0309-reasoning"],
     reviewerModel: "claude-opus-4.6",
     dryRunTimeout: 300_000, // 5 min per dry-run leg
   };

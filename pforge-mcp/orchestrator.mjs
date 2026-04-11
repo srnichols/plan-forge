@@ -1298,6 +1298,7 @@ export async function runPlan(planPath, options = {}) {
     abortController = null,
     quorum = "auto",       // false | true | "auto" — default: auto (threshold-based)
     quorumThreshold = null, // override threshold from config
+    quorumPreset = null,   // "power" | "speed" | null — selects model preset
     bridge = null,         // BridgeManager instance for approval gate
   } = options;
 
@@ -1313,7 +1314,7 @@ export async function runPlan(planPath, options = {}) {
     // Build quorum config for estimate even though we're not running
     let estimateQuorumConfig = null;
     if (quorum) {
-      estimateQuorumConfig = loadQuorumConfig(cwd);
+      estimateQuorumConfig = loadQuorumConfig(cwd, quorumPreset);
       estimateQuorumConfig.enabled = true;
       if (quorum === "auto") estimateQuorumConfig.auto = true;
       else if (quorum === true) estimateQuorumConfig.auto = false;
@@ -1404,7 +1405,7 @@ export async function runPlan(planPath, options = {}) {
   // Quorum mode (v2.5)
   let quorumConfig = null;
   if (quorum) {
-    quorumConfig = loadQuorumConfig(cwd);
+    quorumConfig = loadQuorumConfig(cwd, quorumPreset);
     quorumConfig.enabled = true;
     if (quorum === "auto") {
       quorumConfig.auto = true;
@@ -2226,10 +2227,26 @@ const DATABASE_KEYWORDS = /\b(migration|schema|alter|create\s+table|drop|seed|in
 
 /**
  * Load quorum configuration from .forge.json.
- * Schema: { "quorum": { "enabled": false, "auto": true, "threshold": 7, "models": [...], "reviewerModel": "...", "dryRunTimeout": 300000 } }
+ * Schema: { "quorum": { "enabled": false, "auto": true, "threshold": 7, "preset": "power|speed", "models": [...], "reviewerModel": "...", "dryRunTimeout": 300000 } }
  * Returns merged config with defaults.
  */
-export function loadQuorumConfig(cwd) {
+
+const QUORUM_PRESETS = {
+  power: {
+    models: ["claude-opus-4.6", "gpt-5.3-codex", "grok-4.20-0309-reasoning"],
+    reviewerModel: "claude-opus-4.6",
+    dryRunTimeout: 300_000, // 5 min — reasoning models need more time
+    threshold: 5,           // lower threshold = more slices get quorum treatment
+  },
+  speed: {
+    models: ["claude-sonnet-4.6", "gpt-5.4-mini", "grok-4-1-fast-reasoning"],
+    reviewerModel: "claude-sonnet-4.6",
+    dryRunTimeout: 120_000, // 2 min — fast models finish quickly
+    threshold: 7,           // higher threshold = only the most complex slices
+  },
+};
+
+export function loadQuorumConfig(cwd, presetOverride = null) {
   const defaults = {
     enabled: false,
     auto: true,
@@ -2239,15 +2256,22 @@ export function loadQuorumConfig(cwd) {
     dryRunTimeout: 300_000, // 5 min per dry-run leg
   };
   const configPath = resolve(cwd, ".forge.json");
+  let userConfig = {};
   try {
     if (existsSync(configPath)) {
       const config = JSON.parse(readFileSync(configPath, "utf-8"));
       if (config.quorum && typeof config.quorum === "object") {
-        return { ...defaults, ...config.quorum };
+        userConfig = config.quorum;
       }
     }
   } catch { /* defaults */ }
-  return defaults;
+
+  // Resolve preset: CLI override > .forge.json preset > none
+  const presetName = presetOverride || userConfig.preset || null;
+  const preset = presetName ? QUORUM_PRESETS[presetName] || {} : {};
+
+  // Merge order: defaults < preset < userConfig (explicit fields win)
+  return { ...defaults, ...preset, ...userConfig, ...(presetOverride ? { preset: presetOverride } : {}) };
 }
 
 /**
@@ -3683,11 +3707,14 @@ if (args.includes("--test")) {
   const estimate = args.includes("--estimate");
   const dryRun = args.includes("--dry-run");
 
-  // Quorum mode: --quorum=auto (default), --quorum (force all), --no-quorum / --quorum=false (disable)
+  // Quorum mode: --quorum=auto (default), --quorum=power, --quorum=speed, --quorum (force all), --no-quorum / --quorum=false (disable)
   let quorum = "auto";
+  let quorumPreset = null;
   const quorumArg = args.find((a) => a.startsWith("--quorum") || a === "--no-quorum");
   if (quorumArg) {
     if (quorumArg === "--quorum=auto") quorum = "auto";
+    else if (quorumArg === "--quorum=power") { quorum = true; quorumPreset = "power"; }
+    else if (quorumArg === "--quorum=speed") { quorum = true; quorumPreset = "speed"; }
     else if (quorumArg === "--no-quorum" || quorumArg === "--quorum=false") quorum = false;
     else quorum = true;
   }
@@ -3703,6 +3730,7 @@ if (args.includes("--test")) {
       dryRun,
       quorum,
       quorumThreshold,
+      quorumPreset,
     });
     console.log(JSON.stringify(result, null, 2));
     process.exit(result.status === "failed" ? 1 : 0);

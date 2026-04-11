@@ -429,7 +429,7 @@ const TOOLS = [
         estimate: { type: "boolean", description: "If true, return cost estimate without executing" },
         resumeFrom: { type: "number", description: "Slice number to resume from (skips completed slices)" },
         dryRun: { type: "boolean", description: "If true, parse and validate plan without executing" },
-        quorum: { type: "string", enum: ["false", "true", "auto"], description: "Quorum mode: 'false' (off), 'true' (all slices), 'auto' (threshold-based). Default: false" },
+        quorum: { type: "string", enum: ["false", "true", "auto", "power", "speed"], description: "Quorum mode: 'false' (off), 'true' (all slices), 'auto' (threshold-based), 'power' (flagship models: Opus + GPT-5.3 + Grok 4.20), 'speed' (fast models: Sonnet + GPT-5.4-mini + Grok 4.1-fast). Default: auto" },
         quorumThreshold: { type: "number", description: "Override complexity threshold for auto quorum (1-10). Default: 6" },
         path: { type: "string", description: "Project directory (default: current)" },
       },
@@ -596,7 +596,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const eventHandler = activeHub ? { handle: (event) => activeHub.broadcast(event) } : null;
       // Parse quorum parameter — default: "auto" (threshold-based)
       let quorum = "auto";
-      if (args.quorum === "true" || args.quorum === true) quorum = true;
+      let quorumPreset = null;
+      if (args.quorum === "power") { quorum = true; quorumPreset = "power"; }
+      else if (args.quorum === "speed") { quorum = true; quorumPreset = "speed"; }
+      else if (args.quorum === "true" || args.quorum === true) quorum = true;
       else if (args.quorum === "false" || args.quorum === false) quorum = false;
       else if (args.quorum === "auto" || args.quorum === undefined) quorum = "auto";
 
@@ -608,6 +611,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         estimate: args.estimate || false,
         dryRun: args.dryRun || false,
         quorum,
+        quorumPreset,
         quorumThreshold: args.quorumThreshold != null ? Number(args.quorumThreshold) : null,
         abortController: activeAbortController,
         eventHandler,

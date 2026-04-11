@@ -76,3 +76,18 @@ details summary::-webkit-details-marker { display: none; }
     radial-gradient(ellipse at 50% 100%, rgba(245, 158, 11, 0.10) 0%, transparent 70%),
     #020617;
 }
+
+/* ── Mobile readability: brighten text for glare resistance ── */
+/* slate-400 (#94a3b8) → slate-300 (#cbd5e1) on small screens */
+/* slate-500 (#64748b) → slate-400 (#94a3b8) on small screens */
+@media (max-width: 767px) {
+  .text-slate-400 { color: #cbd5e1 !important; }
+  .text-slate-500 { color: #94a3b8 !important; }
+  .text-slate-600 { color: #94a3b8 !important; }
+
+  /* Ensure table text is readable */
+  td, th { color: #e2e8f0; }
+
+  /* Brighten code blocks */
+  code { color: #e2e8f0; }
+}

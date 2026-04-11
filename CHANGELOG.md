@@ -5,6 +5,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- **Grok image model names** — corrected `grok-2-image` → `grok-imagine-image` in dashboard dropdown and REST API default; added URL response handling alongside b64_json
+- **Grok pricing table** — updated to match current xAI API rates ($2.00/$6.00 for flagship, $0.20/$0.50 for fast); added 6 new model IDs
+
+### Added
+- **Quorum power/speed presets** — `--quorum=power` (flagship models, threshold 5) and `--quorum=speed` (fast models, threshold 7); available via CLI, MCP, and `.forge.json`
+- **3-provider quorum default** — Claude Opus 4.6 + GPT-5.3-Codex + Grok 4.20 Reasoning (three different vendors for genuine multi-vendor consensus)
+- **`.forge/secrets.json` API key fallback** — store API keys in gitignored `.forge/secrets.json` as an alternative to environment variables; lookup order: env var → secrets file → null
+
+---
+
 ## [2.21.0] — 2026-04-10
 
 ### Changed — Forge Anneal (Documentation Consolidation)

@@ -671,6 +671,10 @@ Execute a hardened plan — spawn CLI workers for each slice, validate at every 
 
 # Resume from slice 3 after fixing a failure
 .\pforge.ps1 run-plan docs/plans/Phase-7-INVENTORY-PLAN.md --resume-from 3
+
+# Quorum presets
+.\pforge.ps1 run-plan docs/plans/Phase-7-INVENTORY-PLAN.md --quorum=power
+.\pforge.ps1 run-plan docs/plans/Phase-7-INVENTORY-PLAN.md --quorum=speed
 ```
 
 ```bash
@@ -679,6 +683,8 @@ Execute a hardened plan — spawn CLI workers for each slice, validate at every 
 ./pforge.sh run-plan docs/plans/Phase-7-INVENTORY-PLAN.md
 ./pforge.sh run-plan docs/plans/Phase-7-INVENTORY-PLAN.md --assisted
 ./pforge.sh run-plan docs/plans/Phase-7-INVENTORY-PLAN.md --model gpt-5.2-codex
+./pforge.sh run-plan docs/plans/Phase-7-INVENTORY-PLAN.md --quorum=power
+./pforge.sh run-plan docs/plans/Phase-7-INVENTORY-PLAN.md --quorum=speed
 ```
 
 **Execution Modes:**
@@ -695,6 +701,11 @@ Execute a hardened plan — spawn CLI workers for each slice, validate at every 
 - `--model <name>` — Override model (e.g., `claude-sonnet-4.6`, `gpt-5.2-codex`)
 - `--resume-from <N>` — Skip completed slices, resume from slice N
 - `--dry-run` — Parse and validate plan without executing
+- `--quorum` — Multi-model consensus on all slices (3× cost)
+- `--quorum=auto` — Consensus only for complex slices (threshold-based)
+- `--quorum=power` — Flagship preset: Claude Opus 4.6 + GPT-5.3-Codex + Grok 4.20 Reasoning (threshold 5, 5min timeout)
+- `--quorum=speed` — Fast preset: Claude Sonnet 4.6 + GPT-5.4-mini + Grok 4.1 Fast Reasoning (threshold 7, 2min timeout)
+- `--quorum-threshold <N>` — Override complexity threshold (1-10)
 
 **Results written to:** `.forge/runs/<timestamp>/`
 - `run.json` — run metadata
@@ -920,6 +931,19 @@ pforge diagnose src/services/billing.ts --models grok-4.20       # Bug investiga
 ```
 
 **How it works**: Any model name matching `grok-*` auto-routes to `api.x.ai/v1` via the `XAI_API_KEY` env var. The orchestrator uses the standard OpenAI chat completions API format. No `.forge.json` changes required.
+
+### `.forge/secrets.json` Fallback
+
+As an alternative to environment variables, store API keys in `.forge/secrets.json`:
+
+```json
+{
+  "XAI_API_KEY": "xai-...",
+  "OPENAI_API_KEY": "sk-..."
+}
+```
+
+Lookup order: environment variable → `.forge/secrets.json` → null. The `.forge/` directory is gitignored by default — secrets are never committed.
 
 Get your API key at [console.x.ai](https://console.x.ai/).
 

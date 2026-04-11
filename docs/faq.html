@@ -98,6 +98,22 @@
           "@type": "Answer",
           "text": "No. Plan Forge operates at the development layer, before code reaches your CI/CD pipeline. Its validation gates run locally during slice execution. Your existing CI/CD pipeline handles deployment, environments, and production gates."
         }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I configure API keys for Grok/OpenAI?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Two options: set environment variables (XAI_API_KEY, OPENAI_API_KEY) or store keys in .forge/secrets.json. Lookup order: env var → secrets file → null. The .forge/ directory is gitignored by default."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What are quorum power and speed presets?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Pre-configured quorum profiles. --quorum=power uses flagship models (Claude Opus 4.6 + GPT-5.3-Codex + Grok 4.20 Reasoning) with threshold 5 and 5min timeout. --quorum=speed uses fast models (Claude Sonnet 4.6 + GPT-5.4-mini + Grok 4.1 Fast Reasoning) with threshold 7 and 2min timeout."
+        }
       }
     ]
   }
@@ -336,6 +352,21 @@
 
           <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
             <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">How do I configure API keys for Grok/OpenAI?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              <p class="mb-3">Two options — both work, and the orchestrator checks both automatically:</p>
+              <ul class="list-disc list-inside space-y-2 mb-3">
+                <li><strong class="text-white">Environment variables</strong> (recommended for CI/CD): Set <code class="text-forge-400">XAI_API_KEY</code> or <code class="text-forge-400">OPENAI_API_KEY</code> in your shell profile or CI secrets.</li>
+                <li><strong class="text-white"><code class="text-forge-400">.forge/secrets.json</code></strong> (recommended for local dev): Create a JSON file with your keys: <code class="text-forge-400">{ "XAI_API_KEY": "xai-...", "OPENAI_API_KEY": "sk-..." }</code>. The <code class="text-forge-400">.forge/</code> directory is gitignored by default — secrets are never committed.</li>
+              </ul>
+              <p>Lookup order: environment variable → <code class="text-forge-400">.forge/secrets.json</code> → null. Any model name matching <code class="text-forge-400">grok-*</code> auto-routes to <code class="text-forge-400">api.x.ai/v1</code>.</p>
+            </div>
+          </details>
+
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
               <span class="text-sm font-medium text-white pr-4">What is the Generic agent and when should I use it?</span>
               <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
             </summary>
@@ -431,7 +462,7 @@
               <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
             </summary>
             <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
-              <p class="mb-3">Quorum Mode dispatches each slice to <strong>3 AI models in parallel</strong> (Claude Opus, GPT-5.3-Codex, Claude Sonnet) for independent dry-run analysis. Each model produces a detailed implementation plan <em>without executing code</em>. A reviewer agent then synthesizes the best elements — picking the strongest approach per file/component — and produces a unified execution plan. The final builder uses that consensus plan instead of the raw slice instructions.</p>
+              <p class="mb-3">Quorum Mode dispatches each slice to <strong>3 AI models in parallel</strong> (Claude Opus, GPT-5.3-Codex, Grok 4.20 Reasoning) for independent dry-run analysis. Each model produces a detailed implementation plan <em>without executing code</em>. A reviewer agent then synthesizes the best elements — picking the strongest approach per file/component — and produces a unified execution plan. The final builder uses that consensus plan instead of the raw slice instructions.</p>
               <p>Think of it as a design review by three senior engineers before any code is written.</p>
             </div>
           </details>
@@ -483,6 +514,21 @@
             </summary>
             <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
               Graceful degradation. If 2 of 3 models respond, the reviewer works with 2 analyses. If fewer than 2 respond, it falls back to normal single-model execution — your pipeline never blocks on model availability. If the reviewer itself fails, the best single dry-run response is used as the enhanced prompt.
+            </div>
+          </details>
+
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">What are quorum power and speed presets?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              <p class="mb-3">Pre-configured quorum profiles that select models, thresholds, and timeouts in one flag:</p>
+              <ul class="list-disc list-inside space-y-2 mb-3">
+                <li><strong class="text-white"><code class="text-forge-400">--quorum=power</code></strong> — Claude Opus 4.6 + GPT-5.3-Codex + Grok 4.20 Reasoning. Reviewer: Opus. Threshold 5. Timeout 5 min. Best for complex features where quality matters most.</li>
+                <li><strong class="text-white"><code class="text-forge-400">--quorum=speed</code></strong> — Claude Sonnet 4.6 + GPT-5.4-mini + Grok 4.1 Fast Reasoning. Reviewer: Sonnet. Threshold 7. Timeout 2 min. Best for rapid iteration where cost and speed matter.</li>
+              </ul>
+              <p>Available via CLI (<code class="text-forge-400">--quorum=power</code>), MCP (<code class="text-forge-400">quorum: "power"</code>), and config (<code class="text-forge-400">.forge.json</code> → <code class="text-forge-400">quorum.preset: "power"</code>).</p>
             </div>
           </details>
         </div>

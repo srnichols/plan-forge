@@ -79,7 +79,7 @@ node pforge-mcp/server.mjs --project /path/to/project</code></pre>
           <tr><td><code>forge_diff</code></td><td>Compare changes against plan's Scope Contract — detect drift</td></tr>
           <tr><td><code>forge_analyze</code></td><td>Cross-artifact consistency scoring (0–100, 4 dimensions)</td></tr>
           <tr><td><code>forge_diagnose</code></td><td>Multi-model bug investigation — root cause + fix recommendations</td></tr>
-          <tr><td><code>forge_run_plan</code></td><td>Execute hardened plan: spawn workers, validate gates, track tokens</td></tr>
+          <tr><td><code>forge_run_plan</code></td><td>Execute hardened plan: spawn workers, validate gates, track tokens. Supports <code>--quorum=power</code> (flagship) and <code>--quorum=speed</code> (fast) presets</td></tr>
           <tr><td><code>forge_abort</code></td><td>Abort currently running plan execution</td></tr>
           <tr><td><code>forge_plan_status</code></td><td>Get latest execution status — per-slice results, tokens, duration</td></tr>
           <tr><td><code>forge_cost_report</code></td><td>Cost tracking: total spend, per-model breakdown, monthly trend</td></tr>
@@ -184,6 +184,18 @@ const run = await forge.runPlan('docs/plans/Phase-1.md', {
 });</code></pre>
       </div>
       <p>The SDK is currently in scaffold stage (v0.1.0) — API surface defined, implementation in progress.</p>
+
+      <!-- ─── API Key Configuration ─── -->
+      <h2 id="api-keys">API Key Configuration</h2>
+      <p>API keys for external providers (xAI Grok, OpenAI) are resolved in order: environment variable → <code>.forge/secrets.json</code> → null.</p>
+      <div class="cmd-block">
+        <div class="cmd-block-header"><span>.forge/secrets.json</span></div>
+        <pre><code>{
+  "XAI_API_KEY": "xai-...",
+  "OPENAI_API_KEY": "sk-..."
+}</code></pre>
+      </div>
+      <p>The <code>.forge/</code> directory is gitignored by default — secrets never enter version control.</p>
 
       <p class="text-sm text-slate-500 mt-8">📄 Full reference: <a href="https://github.com/srnichols/plan-forge/blob/master/docs/capabilities.md" rel="noopener">capabilities.md</a>, <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/EVENTS.md" rel="noopener">EVENTS.md</a>, <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/tools.json" rel="noopener">tools.json</a></p>
       <div id="chapter-prev-next" class="chapter-nav"></div>

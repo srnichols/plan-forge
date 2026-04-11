@@ -121,6 +121,8 @@ pforge run-plan <plan> --estimate     # Cost prediction
 pforge run-plan <plan> --assisted     # Human + automated gates
 pforge run-plan <plan> --quorum       # Multi-model consensus (all slices)
 pforge run-plan <plan> --quorum=auto  # Consensus for complex slices only
+pforge run-plan <plan> --quorum=power # Flagship models, threshold 5, 5min timeout
+pforge run-plan <plan> --quorum=speed # Fast models, threshold 7, 2min timeout
 pforge ext search|add|info|list       # Extension management
 ```
 
@@ -130,9 +132,24 @@ Plan Forge supports OpenAI-compatible HTTP endpoints via the `API_PROVIDERS` reg
 
 | Provider | Models | Env Var | Endpoint |
 |----------|--------|---------|----------|
-| **xAI Grok** | `grok-4.20`, `grok-4`, `grok-3`, `grok-3-mini` | `XAI_API_KEY` | `api.x.ai/v1` |
+| **xAI Grok** | `grok-4.20`, `grok-4`, `grok-3`, `grok-3-mini`, `grok-4.1-fast-*` | `XAI_API_KEY` | `api.x.ai/v1` |
 
 Set the env var, use any matching model name in `--models` or `.forge.json`, and the orchestrator routes automatically.
+
+### API Key Fallback (`.forge/secrets.json`)
+
+Lookup order: environment variable → `.forge/secrets.json` → null.
+
+Store API keys in the gitignored `.forge/` directory as an alternative to environment variables:
+
+```json
+{
+  "XAI_API_KEY": "xai-...",
+  "OPENAI_API_KEY": "sk-..."
+}
+```
+
+`.forge/` is in `.gitignore` by default — secrets are never committed.
 
 ## REST API
 
@@ -309,7 +326,7 @@ slice → scoreComplexity (1-10)
           └─ score ≥ threshold → quorumDispatch
                     ├─ Claude Opus 4.6  → dry-run plan  ─┐
                     ├─ GPT-5.3-Codex    → dry-run plan  ─┼─ Promise.all() (parallel)
-                    └─ Claude Sonnet    → dry-run plan  ─┘
+                    └─ Grok 4.20        → dry-run plan  ─┘
                               ↓
                     quorumReview (synthesis — pick best approach per file)
                               ↓
@@ -333,14 +350,23 @@ Config (`.forge.json`):
     "enabled": false,
     "auto": true,
     "threshold": 7,
-    "models": ["claude-opus-4.6", "gpt-5.3-codex", "gemini-3.1-pro"],
+    "models": ["claude-opus-4.6", "gpt-5.3-codex", "grok-4.20-0309-reasoning"],
     "reviewerModel": "claude-opus-4.6",
     "dryRunTimeout": 300000
   }
 }
 ```
 
-CLI: `--quorum` (all slices) | `--quorum=auto` (threshold) | `--quorum-threshold N` (override)
+CLI: `--quorum` (all slices) | `--quorum=auto` (threshold) | `--quorum-threshold N` (override) | `--quorum=power` (flagship preset) | `--quorum=speed` (fast preset)
+
+### Quorum Presets
+
+| Preset | Models | Reviewer | Threshold | Timeout |
+|--------|--------|----------|-----------|---------|
+| `power` | Claude Opus 4.6 + GPT-5.3-Codex + Grok 4.20 Reasoning | Claude Opus 4.6 | 5 | 5 min |
+| `speed` | Claude Sonnet 4.6 + GPT-5.4-mini + Grok 4.1 Fast Reasoning | Claude Sonnet 4.6 | 7 | 2 min |
+
+Use via CLI (`--quorum=power`), MCP (`quorum: "power"`), or config (`.forge.json` → `quorum.preset: "power"`).
 
 Degradation: <2 successful dry-runs → falls back to normal execution. Reviewer failure → uses best single response.
 
@@ -479,8 +505,9 @@ Extensions marked `speckit_compatible: true` in their `extension.json` work in b
     "enabled": false,
     "auto": true,
     "threshold": 7,
-    "models": ["claude-opus-4.6", "gpt-5.3-codex", "gemini-3.1-pro"],
-    "reviewerModel": "claude-opus-4.6"
+    "models": ["claude-opus-4.6", "gpt-5.3-codex", "grok-4.20-0309-reasoning"],
+    "reviewerModel": "claude-opus-4.6",
+    "preset": null
   }
 }
 ```

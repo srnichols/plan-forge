@@ -593,6 +593,30 @@ Token usage is automatically logged per slice/model. View with:
 - `forge_cost_report` MCP tool
 - `.forge/cost-history.json` (raw data)
 
+### Quorum Presets
+
+Pre-configured quorum profiles that select models, thresholds, and timeouts in one flag:
+
+| Preset | Models | Reviewer | Threshold | Timeout |
+|--------|--------|----------|-----------|---------|
+| `--quorum=power` | Claude Opus 4.6 + GPT-5.3-Codex + Grok 4.20 Reasoning | Opus | 5 | 5 min |
+| `--quorum=speed` | Claude Sonnet 4.6 + GPT-5.4-mini + Grok 4.1 Fast Reasoning | Sonnet | 7 | 2 min |
+
+Available via CLI, MCP (`quorum: "power"`), and `.forge.json` (`quorum.preset: "power"`).
+
+### API Key Fallback (`.forge/secrets.json`)
+
+Store API keys in the gitignored `.forge/` directory as an alternative to environment variables:
+
+```json
+{
+  "XAI_API_KEY": "xai-...",
+  "OPENAI_API_KEY": "sk-..."
+}
+```
+
+Lookup order: environment variable → `.forge/secrets.json` → null. Secrets are never committed.
+
 ---
 
 ## Skill Slash Commands (Automatic)

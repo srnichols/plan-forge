@@ -70,13 +70,21 @@ pforge run-plan docs/plans/Phase-7.md --quorum
 pforge run-plan docs/plans/Phase-7.md --quorum=auto
 
 # Custom threshold (1-10, higher = fewer slices use quorum)
-pforge run-plan docs/plans/Phase-7.md --quorum=auto --quorum-threshold 8</code></pre>
+pforge run-plan docs/plans/Phase-7.md --quorum=auto --quorum-threshold 8
+
+# Flagship preset (Opus + GPT-5.3-Codex + Grok 4.20, threshold 5)
+pforge run-plan docs/plans/Phase-7.md --quorum=power
+
+# Fast preset (Sonnet + GPT-5.4-mini + Grok 4.1 Fast, threshold 7)
+pforge run-plan docs/plans/Phase-7.md --quorum=speed</code></pre>
       </div>
       <table>
         <thead><tr><th>Setting</th><th>Effect</th><th>Cost Impact</th></tr></thead>
         <tbody>
           <tr><td><code>--quorum</code></td><td>Every slice gets multi-model consensus</td><td>3× normal cost</td></tr>
           <tr><td><code>--quorum=auto</code></td><td>Only slices above complexity threshold</td><td>1.2–1.5× normal cost</td></tr>
+          <tr><td><code>--quorum=power</code></td><td>Flagship models (Opus + GPT-5.3-Codex + Grok 4.20), threshold 5, 5min timeout</td><td>3× at threshold 5</td></tr>
+          <tr><td><code>--quorum=speed</code></td><td>Fast models (Sonnet + GPT-5.4-mini + Grok 4.1 Fast), threshold 7, 2min timeout</td><td>1.5× at threshold 7</td></tr>
           <tr><td>No flag</td><td>Single model per slice</td><td>1× baseline cost</td></tr>
         </tbody>
       </table>
@@ -89,6 +97,18 @@ pforge run-plan docs/plans/Phase-7.md --quorum=auto --quorum-threshold 8</code><
         <li><strong>Agent-per-slice routing</strong>: Override model per slice with <code>--model</code> flag</li>
         <li><strong>Reduce context</strong>: Use targeted <code>Context:</code> lists per slice (see <a href="writing-plans.html#context">Chapter 5</a>)</li>
       </ul>
+
+      <h2 id="api-keys">API Key Configuration</h2>
+      <p>API keys for external providers (xAI Grok, OpenAI) are resolved in order: environment variable → <code>.forge/secrets.json</code> → null.</p>
+      <p>For local development, store keys in the gitignored <code>.forge/secrets.json</code>:</p>
+      <div class="cmd-block">
+        <div class="cmd-block-header"><span>.forge/secrets.json</span></div>
+        <pre><code>{
+  "XAI_API_KEY": "xai-...",
+  "OPENAI_API_KEY": "sk-..."
+}</code></pre>
+      </div>
+      <p>The <code>.forge/</code> directory is in <code>.gitignore</code> by default — secrets are never committed.</p>
 
       <h2 id="ci-integration">CI Integration</h2>
       <p>Add Plan Forge validation to your GitHub Actions PR workflow:</p>

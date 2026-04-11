@@ -250,7 +250,7 @@
         <div class="text-slate-500 ml-12">│</div>
         <div class="ml-12"><span class="text-slate-500">├─</span> <span class="text-blue-400">Claude Opus 4.6</span> <span class="text-slate-600">→ dry-run plan</span> <span class="text-slate-500">─┐</span></div>
         <div class="ml-12"><span class="text-slate-500">├─</span> <span class="text-green-400">GPT-5.3-Codex</span>  <span class="text-slate-600">→ dry-run plan</span> <span class="text-slate-500"> ─┼─ Promise.all()</span></div>
-        <div class="ml-12"><span class="text-slate-500">└─</span> <span class="text-purple-400">Claude Sonnet</span>  <span class="text-slate-600">→ dry-run plan</span> <span class="text-slate-500"> ─┘</span></div>
+        <div class="ml-12"><span class="text-slate-500">└─</span> <span class="text-red-400">Grok 4.20</span>      <span class="text-slate-600">→ dry-run plan</span> <span class="text-slate-500"> ─┘</span></div>
         <div class="text-slate-500 ml-20">│</div>
         <div class="ml-16"><span class="text-forge-400">quorumReview()</span> <span class="text-slate-500">← synthesize best approach per file</span></div>
         <div class="text-slate-500 ml-20">│</div>
@@ -295,6 +295,21 @@
             </tbody>
           </table>
         </div>
+      </div>
+
+      <!-- Quorum Presets -->
+      <div class="bg-slate-800/60 rounded-xl p-5 border border-slate-700/30 mt-6">
+        <h3 class="text-sm font-bold text-white mb-3">Quorum Presets</h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-xs">
+            <thead><tr class="border-b border-slate-700 text-left"><th class="py-2 px-3 text-slate-400">Preset</th><th class="py-2 px-3 text-slate-400">Models</th><th class="py-2 px-3 text-slate-400">Reviewer</th><th class="py-2 px-3 text-slate-400">Threshold</th><th class="py-2 px-3 text-slate-400">Timeout</th></tr></thead>
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800"><td class="py-2 px-3 text-forge-400"><code>--quorum=power</code></td><td class="py-2 px-3">Claude Opus 4.6 + GPT-5.3-Codex + Grok 4.20 Reasoning</td><td class="py-2 px-3">Opus</td><td class="py-2 px-3">5</td><td class="py-2 px-3">5 min</td></tr>
+              <tr><td class="py-2 px-3 text-forge-400"><code>--quorum=speed</code></td><td class="py-2 px-3">Claude Sonnet 4.6 + GPT-5.4-mini + Grok 4.1 Fast Reasoning</td><td class="py-2 px-3">Sonnet</td><td class="py-2 px-3">7</td><td class="py-2 px-3">2 min</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-xs text-slate-500 mt-3">Available via CLI (<code class="text-slate-400">--quorum=power</code>), MCP (<code class="text-slate-400">quorum: "power"</code>), and config (<code class="text-slate-400">.forge.json</code> → <code class="text-slate-400">quorum.preset: "power"</code>).</p>
       </div>
     </section>
 

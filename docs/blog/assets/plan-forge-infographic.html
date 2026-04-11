@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Plan Forge Pipeline — Infographic</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Inter', sans-serif; background: #0f172a; color: #e2e8f0; }
+    .card { width: 1080px; min-height: 1350px; margin: 0 auto; padding: 48px 40px; background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%); }
+
+    /* Header */
+    .header { text-align: center; margin-bottom: 40px; }
+    .header .logo { font-size: 14px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; color: #f59e0b; margin-bottom: 8px; }
+    .header h1 { font-size: 42px; font-weight: 900; color: #fff; line-height: 1.1; margin-bottom: 8px; }
+    .header h1 span { color: #f59e0b; }
+    .header .subtitle { font-size: 16px; color: #94a3b8; max-width: 600px; margin: 0 auto; }
+
+    /* Pipeline strip */
+    .pipeline { display: flex; gap: 8px; margin-bottom: 40px; justify-content: center; }
+    .step { width: 130px; text-align: center; }
+    .step .box { height: 90px; border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; margin-bottom: 8px; }
+    .step .icon { font-size: 28px; margin-bottom: 4px; }
+    .step .label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+    .step .cmd { display: inline-block; background: rgba(0,0,0,0.3); border-radius: 4px; padding: 2px 8px; font-size: 10px; font-weight: 600; color: #cbd5e1; margin-top: 4px; font-family: 'JetBrains Mono', monospace; }
+    .step .desc { font-size: 10px; color: #64748b; margin-top: 4px; }
+    .arrow { display: flex; align-items: center; color: #475569; font-size: 18px; padding-top: 20px; }
+
+    /* Step colors */
+    .s-specify .box { background: linear-gradient(135deg, #f59e0b22, #f59e0b11); border: 1px solid #f59e0b44; }
+    .s-specify .label { color: #f59e0b; }
+    .s-preflight .box { background: linear-gradient(135deg, #06b6d422, #06b6d411); border: 1px solid #06b6d444; }
+    .s-preflight .label { color: #06b6d4; }
+    .s-harden .box { background: linear-gradient(135deg, #3b82f622, #3b82f611); border: 1px solid #3b82f644; }
+    .s-harden .label { color: #3b82f6; }
+    .s-execute .box { background: linear-gradient(135deg, #8b5cf622, #8b5cf611); border: 1px solid #8b5cf644; }
+    .s-execute .label { color: #8b5cf6; }
+    .s-sweep .box { background: linear-gradient(135deg, #f9731622, #f9731611); border: 1px solid #f9731644; }
+    .s-sweep .label { color: #f97316; }
+    .s-review .box { background: linear-gradient(135deg, #ef444422, #ef444411); border: 1px solid #ef444444; }
+    .s-review .label { color: #ef4444; }
+    .s-ship .box { background: linear-gradient(135deg, #22c55e22, #22c55e11); border: 1px solid #22c55e44; }
+    .s-ship .label { color: #22c55e; }
+
+    /* Skills table */
+    .section-title { font-size: 12px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; color: #f59e0b; margin-bottom: 16px; }
+    .skills-table { width: 100%; margin-bottom: 36px; }
+    .skills-table tr { border-bottom: 1px solid #1e293b; }
+    .skills-table td { padding: 10px 12px; vertical-align: middle; }
+    .skills-table .emoji { font-size: 20px; width: 36px; text-align: center; }
+    .skills-table .what { font-size: 13px; color: #cbd5e1; font-weight: 500; }
+    .skills-table .cmd-cell { font-family: monospace; font-size: 12px; background: #1e293b; color: #f59e0b; padding: 4px 10px; border-radius: 6px; display: inline-block; }
+    .skills-table .principle { font-size: 12px; color: #64748b; }
+
+    /* Stats bar */
+    .stats { display: flex; gap: 16px; margin-bottom: 36px; }
+    .stat { flex: 1; text-align: center; padding: 14px 8px; border-radius: 12px; background: #1e293b; border: 1px solid #334155; }
+    .stat .val { font-size: 26px; font-weight: 900; color: #f59e0b; }
+    .stat .lbl { font-size: 10px; color: #64748b; margin-top: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+    /* Temper Guards callout */
+    .callout { background: linear-gradient(135deg, #f59e0b11, #1e293b); border: 1px solid #f59e0b33; border-radius: 12px; padding: 20px 24px; margin-bottom: 36px; }
+    .callout h3 { font-size: 14px; font-weight: 800; color: #f59e0b; margin-bottom: 8px; }
+    .callout p { font-size: 12px; color: #94a3b8; line-height: 1.6; }
+    .callout .example { background: #0f172a; border-radius: 8px; padding: 12px 16px; margin-top: 12px; font-size: 11px; }
+    .callout .excuse { color: #ef4444; font-style: italic; }
+    .callout .rebuttal { color: #22c55e; }
+
+    /* Footer */
+    .footer { text-align: center; margin-top: 24px; padding-top: 20px; border-top: 1px solid #334155; }
+    .footer .brand { font-size: 11px; color: #475569; }
+    .footer .url { font-size: 13px; color: #f59e0b; font-weight: 700; margin-top: 4px; }
+
+    /* A/B callout */
+    .ab-strip { display: flex; gap: 16px; margin-bottom: 36px; }
+    .ab-card { flex: 1; text-align: center; padding: 16px; border-radius: 12px; }
+    .ab-card.forge { background: #22c55e11; border: 1px solid #22c55e44; }
+    .ab-card.vibe { background: #ef444411; border: 1px solid #ef444444; }
+    .ab-card .score { font-size: 48px; font-weight: 900; }
+    .ab-card.forge .score { color: #22c55e; }
+    .ab-card.vibe .score { color: #ef4444; }
+    .ab-card .name { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; margin-top: 2px; }
+    .ab-card.forge .name { color: #22c55e; }
+    .ab-card.vibe .name { color: #ef4444; }
+    .ab-card .detail { font-size: 10px; color: #64748b; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+
+    <!-- Header -->
+    <div class="header">
+      <div class="logo">⚒️ Plan Forge</div>
+      <h1>Hardened <span>AI Development</span><br>Pipeline</h1>
+      <p class="subtitle">Enterprise-grade guardrails that convert rough ideas into drift-proof execution contracts. Forge the plan. Harden the scope. Ship with confidence.</p>
+    </div>
+
+    <!-- Pipeline -->
+    <div class="pipeline">
+      <div class="step s-specify">
+        <div class="box"><span class="icon">💡</span><span class="label">Specify</span></div>
+        <div class="cmd">Step 0</div>
+        <div class="desc">What & why</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="step s-harden">
+        <div class="box"><span class="icon">🔨</span><span class="label">Harden</span></div>
+        <div class="cmd">Step 1-2</div>
+        <div class="desc">Scope contract</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="step s-execute">
+        <div class="box"><span class="icon">⚡</span><span class="label">Execute</span></div>
+        <div class="cmd">Step 3</div>
+        <div class="desc">Slice by slice</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="step s-sweep">
+        <div class="box"><span class="icon">🧹</span><span class="label">Sweep</span></div>
+        <div class="cmd">Step 4</div>
+        <div class="desc">No TODOs left</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="step s-review">
+        <div class="box"><span class="icon">🔍</span><span class="label">Review</span></div>
+        <div class="cmd">Step 5</div>
+        <div class="desc">Drift detection</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="step s-ship">
+        <div class="box"><span class="icon">🚀</span><span class="label">Ship</span></div>
+        <div class="cmd">Step 6</div>
+        <div class="desc">Commit & close</div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats">
+      <div class="stat"><div class="val">7</div><div class="lbl">Pipeline Steps</div></div>
+      <div class="stat"><div class="val">9</div><div class="lbl">Tech Presets</div></div>
+      <div class="stat"><div class="val">19</div><div class="lbl">Reviewer Agents</div></div>
+      <div class="stat"><div class="val">13</div><div class="lbl">Skills</div></div>
+      <div class="stat"><div class="val">18</div><div class="lbl">MCP Tools</div></div>
+    </div>
+
+    <!-- What's in the Forge -->
+    <div class="section-title">What's in the Forge</div>
+    <table class="skills-table">
+      <tr><td class="emoji">📋</td><td class="what">Instruction files auto-load by file type</td><td><span class="cmd-cell">18 per preset</span></td><td class="principle">+ Temper Guards</td></tr>
+      <tr><td class="emoji">🔍</td><td class="what">Reviewer agents audit your code read-only</td><td><span class="cmd-cell">19 agents</span></td><td class="principle">Independent review</td></tr>
+      <tr><td class="emoji">⚡</td><td class="what">Skills chain tool calls with validation</td><td><span class="cmd-cell">/forge-quench</span></td><td class="principle">Exit Proof required</td></tr>
+      <tr><td class="emoji">🧩</td><td class="what">Scaffold prompts generate consistent code</td><td><span class="cmd-cell">15 templates</span></td><td class="principle">Cookie cutters</td></tr>
+      <tr><td class="emoji">🔒</td><td class="what">Scope contracts prevent drift</td><td><span class="cmd-cell">Forbidden Actions</span></td><td class="principle">Binary enforcement</td></tr>
+      <tr><td class="emoji">🧠</td><td class="what">OpenBrain carries memory across sessions</td><td><span class="cmd-cell">search + capture</span></td><td class="principle">Nothing forgotten</td></tr>
+    </table>
+
+    <!-- A/B Results -->
+    <div class="section-title">Verified: A/B Test Results</div>
+    <div class="ab-strip">
+      <div class="ab-card forge">
+        <div class="score">99</div>
+        <div class="name">Plan Forge</div>
+        <div class="detail">60 tests · 6 interfaces · 9 DTOs</div>
+      </div>
+      <div class="ab-card vibe">
+        <div class="score">44</div>
+        <div class="name">Vibe Coding</div>
+        <div class="detail">13 tests · 0 interfaces · 0 DTOs</div>
+      </div>
+    </div>
+
+    <!-- Temper Guards -->
+    <div class="callout">
+      <h3>🛡️ Temper Guards — Shortcut Prevention</h3>
+      <p>Every instruction file includes tables of common shortcuts AI agents use to cut corners — paired with concrete rebuttals. Named after the metallurgical tempering process.</p>
+      <div class="example">
+        <span class="excuse">"This is too simple to test"</span><br>
+        <span class="rebuttal">→ Simple code gets modified later. The test documents the contract.</span>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <div class="brand">Open Source · MIT License · Dogfooded · v2.22</div>
+      <div class="url">planforge.software</div>
+    </div>
+
+  </div>
+</body>
+</html>

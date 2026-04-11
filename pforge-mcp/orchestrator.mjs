@@ -374,6 +374,7 @@ const API_PROVIDERS = {
 
 /**
  * Detect which API provider (if any) handles a given model name.
+ * Lookup order: environment variable → .forge/secrets.json → null
  * @param {string} model - Model identifier (e.g., "grok-3-mini")
  * @returns {{ name, baseUrl, apiKey, label } | null}
  */
@@ -381,11 +382,30 @@ function detectApiProvider(model) {
   if (!model) return null;
   for (const [name, provider] of Object.entries(API_PROVIDERS)) {
     if (provider.pattern.test(model)) {
-      const apiKey = process.env[provider.envKey];
+      // 1. Environment variable (preferred — never on disk)
+      const apiKey = process.env[provider.envKey] || loadSecretFromForge(provider.envKey);
       if (apiKey) return { name, baseUrl: provider.baseUrl, apiKey, label: provider.label };
       return null; // Model matches but no API key configured
     }
   }
+  return null;
+}
+
+/**
+ * Load an API key from .forge/secrets.json (fallback when env var is not set).
+ * File is gitignored via **\/.forge/ pattern. Never committed.
+ * Schema: { "XAI_API_KEY": "xai-...", "OPENAI_API_KEY": "sk-..." }
+ * @param {string} key - Environment variable name to look up
+ * @returns {string|null}
+ */
+function loadSecretFromForge(key) {
+  try {
+    const secretsPath = resolve(process.cwd(), ".forge", "secrets.json");
+    if (existsSync(secretsPath)) {
+      const secrets = JSON.parse(readFileSync(secretsPath, "utf-8"));
+      return secrets[key] || null;
+    }
+  } catch { /* ignore parse errors */ }
   return null;
 }
 
@@ -708,9 +728,9 @@ export function detectWorkers() {
     }
   });
 
-  // Detect API providers
+  // Detect API providers (check env var + .forge/secrets.json fallback)
   for (const [name, provider] of Object.entries(API_PROVIDERS)) {
-    const apiKey = process.env[provider.envKey];
+    const apiKey = process.env[provider.envKey] || loadSecretFromForge(provider.envKey);
     results.push({
       name: `api-${name}`,
       available: !!apiKey,

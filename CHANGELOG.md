@@ -5,7 +5,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [Unreleased]
+## [2.22.0] — 2026-04-10
 
 ### Fixed
 - **Grok image model names** — corrected `grok-2-image` → `grok-imagine-image` in dashboard dropdown and REST API default; added URL response handling alongside b64_json

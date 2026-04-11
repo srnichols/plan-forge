@@ -7,9 +7,9 @@
 
 ## Current Release
 
-**v2.21.0** (2026-04-10) — Forge Anneal: documentation consolidation pass. Human-facing docs reduced from 10,910 to 5,782 lines (47%). README 1082→216, ROADMAP 1714→191, Runbook archived to redirect, Unified Architecture compressed to summary.
+**v2.22.0** (2026-04-10) — Quorum power/speed presets, `.forge/secrets.json` API key fallback, updated Grok model IDs and pricing, 3-provider quorum default, dashboard preset toggles.
 
-Previous: v2.20.0 (2026-04-10) — Forge Quench.
+Previous: v2.21.0 (2026-04-10) — Forge Anneal.
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 

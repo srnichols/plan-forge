@@ -1,0 +1,25 @@
+graph TD
+    subgraph SCORE["Quality Score: 99 vs 44"]
+        direction LR
+        S1["Functional<br/>25 vs 15"]
+        S2["Architecture<br/>20 vs 8"]
+        S3["Testing<br/>20 vs 6"]
+        S4["Error Handling<br/>10 vs 3"]
+        S5["Security<br/>10 vs 4"]
+        S6["Precision<br/>10 vs 0"]
+        S7["Git Hygiene<br/>4 vs 0"]
+    end
+    
+    SAME["Same model · Same time · Same requirements"] --> SCORE
+    SCORE --> VERDICT["Speed was comparable.<br/>Quality was not."]
+    
+    style SCORE fill:#1e293b,stroke:#f59e0b
+    style SAME fill:#f59e0b,color:#000
+    style VERDICT fill:#22c55e,color:#fff
+    style S1 fill:#bbf7d0,stroke:#22c55e
+    style S2 fill:#bbf7d0,stroke:#22c55e
+    style S3 fill:#bbf7d0,stroke:#22c55e
+    style S4 fill:#bbf7d0,stroke:#22c55e
+    style S5 fill:#bbf7d0,stroke:#22c55e
+    style S6 fill:#bbf7d0,stroke:#22c55e
+    style S7 fill:#bbf7d0,stroke:#22c55e

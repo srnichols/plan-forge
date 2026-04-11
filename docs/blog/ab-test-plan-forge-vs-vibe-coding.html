@@ -98,6 +98,20 @@
 
         <img src="assets/ab-test-hero.jpg" alt="Split-screen forge workshop: chaotic left side with scattered code scrolls and red warnings versus pristine right side with golden blueprints and green checkmarks, divided by forge flames" class="w-full rounded-2xl border border-slate-700/40 shadow-2xl shadow-amber-500/10 mb-10" />
 
+        <!-- Score callout -->
+        <div class="grid grid-cols-2 gap-4 mb-12">
+          <div class="text-center p-6 rounded-2xl bg-green-500/10 border border-green-500/30">
+            <div class="text-5xl font-black text-green-400 mb-1">99</div>
+            <div class="text-xs text-green-400/70 uppercase tracking-wider font-semibold">Plan Forge</div>
+            <div class="text-xs text-slate-500 mt-1">60 tests · 6 interfaces · 9 DTOs</div>
+          </div>
+          <div class="text-center p-6 rounded-2xl bg-red-500/10 border border-red-500/30">
+            <div class="text-5xl font-black text-red-400 mb-1">44</div>
+            <div class="text-xs text-red-400/70 uppercase tracking-wider font-semibold">Vibe Coding</div>
+            <div class="text-xs text-slate-500 mt-1">13 tests · 0 interfaces · 0 DTOs</div>
+          </div>
+        </div>
+
         <p>We built the same .NET application twice. Same requirements. Same model. Same machine. Same day. The only variable was whether the AI had guardrails.</p>
 
         <p>The results weren't close.</p>
@@ -184,6 +198,72 @@
         </div>
 
         <p>Read that last row again. Same model. Same requirements. Same time budget. <strong>99 vs 44.</strong></p>
+
+        <!-- Visual: Side-by-side bar chart -->
+        <div class="my-12 p-6 rounded-2xl bg-slate-800/60 border border-slate-700/40">
+          <h3 class="text-lg font-bold text-white text-center mb-6">Head-to-Head Comparison</h3>
+          <div class="space-y-4">
+            <!-- Tests -->
+            <div>
+              <div class="flex justify-between text-xs text-slate-400 mb-1"><span>Tests</span><span class="text-green-400 font-semibold">60</span></div>
+              <div class="flex gap-2 items-center">
+                <div class="h-6 rounded bg-green-500/80" style="width: 100%"></div>
+              </div>
+              <div class="flex justify-between text-xs text-slate-500 mt-0.5"><span></span><span class="text-red-400">13</span></div>
+              <div class="flex gap-2 items-center">
+                <div class="h-6 rounded bg-red-500/60" style="width: 21.7%"></div>
+              </div>
+            </div>
+            <!-- Interfaces -->
+            <div>
+              <div class="flex justify-between text-xs text-slate-400 mb-1"><span>Interfaces</span><span class="text-green-400 font-semibold">6</span></div>
+              <div class="flex gap-2 items-center">
+                <div class="h-6 rounded bg-green-500/80" style="width: 100%"></div>
+              </div>
+              <div class="flex justify-between text-xs text-slate-500 mt-0.5"><span></span><span class="text-red-400">0</span></div>
+              <div class="flex gap-2 items-center">
+                <div class="h-6 rounded bg-red-500/60" style="width: 2%"></div>
+              </div>
+            </div>
+            <!-- DTOs -->
+            <div>
+              <div class="flex justify-between text-xs text-slate-400 mb-1"><span>DTOs</span><span class="text-green-400 font-semibold">9</span></div>
+              <div class="flex gap-2 items-center">
+                <div class="h-6 rounded bg-green-500/80" style="width: 100%"></div>
+              </div>
+              <div class="flex justify-between text-xs text-slate-500 mt-0.5"><span></span><span class="text-red-400">0</span></div>
+              <div class="flex gap-2 items-center">
+                <div class="h-6 rounded bg-red-500/60" style="width: 2%"></div>
+              </div>
+            </div>
+            <!-- Typed Exceptions -->
+            <div>
+              <div class="flex justify-between text-xs text-slate-400 mb-1"><span>Typed Exceptions</span><span class="text-green-400 font-semibold">4</span></div>
+              <div class="flex gap-2 items-center">
+                <div class="h-6 rounded bg-green-500/80" style="width: 100%"></div>
+              </div>
+              <div class="flex justify-between text-xs text-slate-500 mt-0.5"><span></span><span class="text-red-400">0</span></div>
+              <div class="flex gap-2 items-center">
+                <div class="h-6 rounded bg-red-500/60" style="width: 2%"></div>
+              </div>
+            </div>
+            <!-- CancellationToken -->
+            <div>
+              <div class="flex justify-between text-xs text-slate-400 mb-1"><span>CancellationToken Refs</span><span class="text-green-400 font-semibold">79</span></div>
+              <div class="flex gap-2 items-center">
+                <div class="h-6 rounded bg-green-500/80" style="width: 100%"></div>
+              </div>
+              <div class="flex justify-between text-xs text-slate-500 mt-0.5"><span></span><span class="text-red-400">0</span></div>
+              <div class="flex gap-2 items-center">
+                <div class="h-6 rounded bg-red-500/60" style="width: 2%"></div>
+              </div>
+            </div>
+          </div>
+          <div class="flex justify-center gap-6 mt-6 text-xs">
+            <span class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-green-500/80"></span> Plan Forge</span>
+            <span class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-red-500/60"></span> Vibe Coding</span>
+          </div>
+        </div>
 
         <h2>What Plan Forge Produced That Vibe Coding Didn't</h2>
 
@@ -306,6 +386,52 @@
         </div>
 
         <p>The vibe run's only competitive category was Functional Completeness — it built most of the CRUD endpoints. But "most" isn't "all." The missing banker's rounding scored a flat zero in Precision. The missing .gitignore and committed build artifacts scored zero in Git Hygiene. No interfaces and no layered architecture capped Architecture at 8/20.</p>
+
+        <!-- Visual: Scoring radar (CSS-based) -->
+        <div class="my-12 p-6 rounded-2xl bg-slate-800/60 border border-slate-700/40">
+          <h3 class="text-lg font-bold text-white text-center mb-6">Quality Scoring by Dimension</h3>
+          <div class="space-y-3 max-w-lg mx-auto">
+            <div>
+              <div class="flex justify-between text-xs mb-1"><span class="text-slate-400">Functional (25%)</span><span><span class="text-green-400">25</span> / <span class="text-red-400">15</span></span></div>
+              <div class="h-2 rounded-full bg-slate-700 overflow-hidden"><div class="h-full rounded-full bg-green-500/80" style="width: 100%"></div></div>
+              <div class="h-2 rounded-full bg-slate-700 overflow-hidden mt-1"><div class="h-full rounded-full bg-red-500/60" style="width: 60%"></div></div>
+            </div>
+            <div>
+              <div class="flex justify-between text-xs mb-1"><span class="text-slate-400">Architecture (20%)</span><span><span class="text-green-400">20</span> / <span class="text-red-400">8</span></span></div>
+              <div class="h-2 rounded-full bg-slate-700 overflow-hidden"><div class="h-full rounded-full bg-green-500/80" style="width: 100%"></div></div>
+              <div class="h-2 rounded-full bg-slate-700 overflow-hidden mt-1"><div class="h-full rounded-full bg-red-500/60" style="width: 40%"></div></div>
+            </div>
+            <div>
+              <div class="flex justify-between text-xs mb-1"><span class="text-slate-400">Testing (20%)</span><span><span class="text-green-400">20</span> / <span class="text-red-400">6</span></span></div>
+              <div class="h-2 rounded-full bg-slate-700 overflow-hidden"><div class="h-full rounded-full bg-green-500/80" style="width: 100%"></div></div>
+              <div class="h-2 rounded-full bg-slate-700 overflow-hidden mt-1"><div class="h-full rounded-full bg-red-500/60" style="width: 30%"></div></div>
+            </div>
+            <div>
+              <div class="flex justify-between text-xs mb-1"><span class="text-slate-400">Error Handling (10%)</span><span><span class="text-green-400">10</span> / <span class="text-red-400">3</span></span></div>
+              <div class="h-2 rounded-full bg-slate-700 overflow-hidden"><div class="h-full rounded-full bg-green-500/80" style="width: 100%"></div></div>
+              <div class="h-2 rounded-full bg-slate-700 overflow-hidden mt-1"><div class="h-full rounded-full bg-red-500/60" style="width: 30%"></div></div>
+            </div>
+            <div>
+              <div class="flex justify-between text-xs mb-1"><span class="text-slate-400">Security (10%)</span><span><span class="text-green-400">10</span> / <span class="text-red-400">4</span></span></div>
+              <div class="h-2 rounded-full bg-slate-700 overflow-hidden"><div class="h-full rounded-full bg-green-500/80" style="width: 100%"></div></div>
+              <div class="h-2 rounded-full bg-slate-700 overflow-hidden mt-1"><div class="h-full rounded-full bg-red-500/60" style="width: 40%"></div></div>
+            </div>
+            <div>
+              <div class="flex justify-between text-xs mb-1"><span class="text-slate-400">Precision (10%)</span><span><span class="text-green-400">10</span> / <span class="text-red-400">0</span></span></div>
+              <div class="h-2 rounded-full bg-slate-700 overflow-hidden"><div class="h-full rounded-full bg-green-500/80" style="width: 100%"></div></div>
+              <div class="h-2 rounded-full bg-slate-700 overflow-hidden mt-1"><div class="h-full rounded-full bg-red-500/60" style="width: 2%"></div></div>
+            </div>
+            <div>
+              <div class="flex justify-between text-xs mb-1"><span class="text-slate-400">Git Hygiene (5%)</span><span><span class="text-green-400">4</span> / <span class="text-red-400">0</span></span></div>
+              <div class="h-2 rounded-full bg-slate-700 overflow-hidden"><div class="h-full rounded-full bg-green-500/80" style="width: 80%"></div></div>
+              <div class="h-2 rounded-full bg-slate-700 overflow-hidden mt-1"><div class="h-full rounded-full bg-red-500/60" style="width: 2%"></div></div>
+            </div>
+          </div>
+          <div class="flex justify-center gap-6 mt-6 text-xs">
+            <span class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-green-500/80"></span> Plan Forge (99)</span>
+            <span class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-red-500/60"></span> Vibe Coding (44)</span>
+          </div>
+        </div>
 
         <h2>Conclusion</h2>
 

@@ -1786,12 +1786,14 @@ async function loadConfig() {
     const qEnabled = document.getElementById("cfg-quorum-enabled");
     const qThresh = document.getElementById("cfg-quorum-threshold");
     const qModels = document.getElementById("cfg-quorum-models");
+    const qPreset = document.getElementById("cfg-quorum-preset");
     if (maxP) maxP.value = currentConfig.maxParallelism ?? 3;
     if (maxR) maxR.value = currentConfig.maxRetries ?? 1;
     if (maxH) maxH.value = currentConfig.maxRunHistory ?? 50;
     if (qEnabled) qEnabled.checked = currentConfig.quorum?.enabled || false;
     if (qThresh) qThresh.value = currentConfig.quorum?.threshold ?? 7;
     if (qModels) qModels.value = (currentConfig.quorum?.models || []).join(", ");
+    if (qPreset) qPreset.value = currentConfig.quorum?.preset || "";
 
     // Check API provider availability
     loadApiProviderStatus();
@@ -1898,6 +1900,7 @@ async function saveConfig() {
     const qThresh = parseInt(document.getElementById("cfg-quorum-threshold")?.value, 10);
     const qModelsStr = document.getElementById("cfg-quorum-models")?.value || "";
     const qModels = qModelsStr ? qModelsStr.split(",").map((m) => m.trim()).filter(Boolean) : [];
+    const qPreset = document.getElementById("cfg-quorum-preset")?.value || "";
 
     const updated = {
       ...currentConfig,
@@ -1911,6 +1914,7 @@ async function saveConfig() {
         enabled: qEnabled,
         threshold: isNaN(qThresh) ? 7 : qThresh,
         models: qModels.length > 0 ? qModels : (currentConfig.quorum?.models || []),
+        ...(qPreset ? { preset: qPreset } : {}),
       },
     };
     const res = await fetch(`${API_BASE}/api/config`, {

@@ -440,11 +440,19 @@
               </div>
               <div class="border-t border-gray-700 pt-3">
                 <p class="text-sm text-gray-400 font-semibold mb-2">Quorum Settings</p>
-                <div class="grid grid-cols-2 gap-3">
+                <div class="grid grid-cols-3 gap-3">
                   <div>
                     <label class="flex items-center gap-2 text-xs text-gray-500">
                       <input id="cfg-quorum-enabled" type="checkbox" class="rounded border-gray-600 bg-gray-700 text-purple-500 focus:ring-0"> Enable Quorum
                     </label>
+                  </div>
+                  <div>
+                    <label class="block text-xs text-gray-500 mb-1">Preset</label>
+                    <select id="cfg-quorum-preset" class="bg-gray-700 text-white text-xs rounded px-2 py-1.5 w-full border border-gray-600">
+                      <option value="">Custom</option>
+                      <option value="power">Power (flagships)</option>
+                      <option value="speed">Speed (fast)</option>
+                    </select>
                   </div>
                   <div>
                     <label class="block text-xs text-gray-500 mb-1">Threshold (1-10)</label>
@@ -453,7 +461,7 @@
                 </div>
                 <div class="mt-2">
                   <label class="block text-xs text-gray-500 mb-1">Quorum Models (comma-separated)</label>
-                  <input id="cfg-quorum-models" type="text" placeholder="grok-3-mini, claude-sonnet-4.6, gpt-5.2-codex" class="bg-gray-700 text-white text-sm rounded px-3 py-1.5 w-full border border-gray-600 focus:border-purple-500 outline-none">
+                  <input id="cfg-quorum-models" type="text" placeholder="claude-opus-4.6, gpt-5.3-codex, grok-4.20-0309-reasoning" class="bg-gray-700 text-white text-sm rounded px-3 py-1.5 w-full border border-gray-600 focus:border-purple-500 outline-none">
                 </div>
               </div>
               <div>
@@ -598,7 +606,9 @@
             <select id="launch-quorum" title="Quorum mode" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full">
               <option value="false">Off</option>
               <option value="auto" selected>Auto (threshold)</option>
-              <option value="true">All slices</option>
+              <option value="power">Power (Opus + GPT-5.3 + Grok 4.20)</option>
+              <option value="speed">Speed (Sonnet + GPT-5.4-mini + Grok 4.1)</option>
+              <option value="true">All slices (custom models)</option>
             </select>
           </div>
           <div class="flex items-end">

@@ -1,0 +1,92 @@
+HERO IMAGE: docs/blog/assets/origin-story-hero.jpg (1280x720, 16:9)
+TITLE: From Impossible to 7 Minutes — A Year of Building AI Coding Guardrails
+
+NETWORK TEASER (paste into "Tell your network what this article is about"):
+A year ago, getting enterprise-grade code from an AI coding agent was nearly impossible. The models were capable but the tooling was raw — untestable, insecure, architecturally inconsistent code every time. Today I build a 99/100 quality app in 7 minutes. Here's the story of that journey. #AIDevelopment #SoftwareEngineering #GitHubCopilot #DevTools #OpenSource
+
+HASHTAGS: #AIDevelopment #SoftwareEngineering #GitHubCopilot #DevTools #OpenSource #AIAgents #EnterpriseArchitecture
+
+FORMATTING NOTES:
+- ALL CAPS headers below must be formatted as H2 in LinkedIn's editor
+- Bold text marked with ** must be applied manually after pasting
+- [IMAGE] markers indicate where to insert inline images from docs/blog/assets/linkedin/
+- Paste body text, then go back and apply H2 + bold + insert images
+- ⚠️ DRAFT: Sections marked [PERSONAL] need Scott's input before publishing
+
+--- ARTICLE BODY (paste below into the editor) ---
+
+A year ago, I tried to use AI coding agents to build enterprise software. The models were getting capable — Claude could write code, Copilot could suggest completions — but the tooling gap was enormous.
+
+Every session started from zero. The AI would generate code that compiled, sometimes even ran, but was architecturally inconsistent, untestable, insecure, and impossible to maintain. Ask for a login page, get a login page plus a password reset flow, an admin panel, and refactored database migrations nobody requested.
+
+**The models weren't the problem. The methodology was.**
+
+[PERSONAL: What specific project or failure triggered this realization? What was the moment you thought "there has to be a better way"?]
+
+THE FIRST GUARDRAIL
+
+The first version of Plan Forge was a single file: a 2,000-line `copilot-instructions.md` that tried to cover security, testing, architecture, database patterns, error handling, and deployment — all in one document.
+
+It was terrible.
+
+Agents process long instruction files worse than short ones. Key rules get buried. Contradictions creep in. The agent cherry-picks what's convenient and ignores the rest.
+
+[PERSONAL: What was the first guardrail rule you wrote? When was the first time it actually caught a mistake before it shipped?]
+
+THE EVOLUTION
+
+That single file became **18 focused instruction files** — each under 150 lines, each with a single concern, each loading only when relevant. The security file only talks about security. The testing file only talks about testing.
+
+Then came the pipeline: **7 steps across 4 isolated sessions.** The key insight was that the builder should never review its own work. A fresh session with fresh context — no sunk-cost bias, no blind spots — catches what the builder can't see.
+
+Then **19 reviewer agents** — specialized personas that each focus on one concern. Architecture. Security. Database. Performance. Testing. Accessibility. Compliance. Multi-tenancy.
+
+Then **9 tech stack presets** so a Python developer gets Python guardrails and a .NET developer gets .NET guardrails. No one-size-fits-all.
+
+THE MILESTONES
+
+Here's how the forge was built, version by version:
+
+• **v1.0** — Template + 18 instruction files + 15 prompt templates
+• **v2.0** — Autonomous orchestrator: DAG scheduler, CLI workers, validation gates at every slice boundary
+• **v2.5** — Quorum Mode: 3 models analyze each slice in parallel, reviewer synthesizes the best approach
+• **v2.10** — OpenClaw bridge: Telegram/Slack/Discord notifications for slice completions and failures
+• **v2.14** — Copilot platform integration: one-click plugin install, cloud agent support, org-level guardrails
+• **v2.18** — Temper Guards: anti-shortcut tables in every instruction file (learned from analyzing Google's agent-skills project)
+• **v2.22** — Power/speed quorum presets, .forge/secrets.json, 3-provider consensus (Claude + GPT + Grok)
+
+Each version was built with Plan Forge. The framework that builds frameworks — dogfooded from day one.
+
+THE HUMAN COST OF NO GUARDRAILS
+
+[PERSONAL: A story about the cost — wasted tokens, wasted hours, a late night fixing AI-generated code. Make it real. Numbers help: "$X in tokens," "Y hours," "the third time the agent destroyed its own tests." Whatever resonates from your experience.]
+
+WHAT I LEARNED
+
+**1. Guardrails don't slow you down.** Our A/B test proved it — Plan Forge produced 4.6× more tests and 2.25× higher quality in LESS time. The overhead isn't the guardrails. It's the rework when you don't have them.
+
+**2. The builder must never review its own work.** Session isolation isn't optional. The agent that wrote the code will always believe its code is correct. Fresh context catches what sunk-cost bias hides.
+
+**3. Anti-rationalization matters as much as rules.** Agents don't just ignore rules — they rationalize around them. "This is too simple to test." "We'll add auth later." "N+1 won't matter at our scale." We added Temper Guards — documented rebuttals for every shortcut.
+
+**4. Multi-model consensus catches what single models miss.** Three different providers (Anthropic, OpenAI, xAI) bring three different training biases. The reviewer synthesizes the best of each. It's like having three senior engineers review every complex decision.
+
+**5. Enterprise quality must be the default, not an upgrade.** If quality requires opting in, teams won't opt in under deadline pressure. Plan Forge makes proper architecture, testing, and error handling structural — you'd have to actively work around it to ship bad code.
+
+[PERSONAL: What would you tell yourself a year ago? One piece of advice, specific and honest.]
+
+TODAY: 99/100 IN 7 MINUTES
+
+We ran the A/B test last week. Same app. Same model. Same time. Plan Forge scored 99/100 with 60 tests, 6 interfaces, 9 DTOs, and banker's rounding. The vibe-coded version scored 44/100 with 13 tests and zero interfaces.
+
+A year ago, getting enterprise-grade code from AI was nearly impossible.
+
+Today it takes 7 minutes.
+
+The forge is lit.
+
+---
+
+Plan Forge is open source (MIT): github.com/srnichols/plan-forge
+A/B test results: planforge.software/blog/ab-test-plan-forge-vs-vibe-coding.html
+Full origin story: planforge.software/blog/the-journey-from-impossible-to-seven-minutes.html

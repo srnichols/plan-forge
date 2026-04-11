@@ -1,0 +1,115 @@
+HERO IMAGE: docs/blog/assets/ab-test-hero.jpg (1280x720, 16:9)
+TITLE: 99 vs 44 — We Built the Same App Twice. Same Model. Same Time. Different Quality.
+
+NETWORK TEASER (paste into "Tell your network what this article is about"):
+We built the same .NET app twice — once with Plan Forge guardrails, once with pure vibe coding. Same model (Claude Opus 4.6). Same time (~7 min). The result: 99/100 vs 44/100. 60 tests vs 13. 6 interfaces vs 0. 9 DTOs vs 0. Speed was comparable. Quality was not. #AIDevelopment #CodeQuality #SoftwareEngineering #VibeCoding #GitHubCopilot
+
+HASHTAGS: #AIDevelopment #CodeQuality #SoftwareEngineering #VibeCoding #GitHubCopilot #AIAgents #DevTools
+
+FORMATTING NOTES:
+- ALL CAPS headers below must be formatted as H2 in LinkedIn's editor
+- Bold text marked with ** must be applied manually after pasting
+- [IMAGE] markers indicate where to insert inline images from docs/blog/assets/linkedin/
+- Paste body text, then go back and apply H2 + bold + insert images
+
+--- ARTICLE BODY (paste below into the editor) ---
+
+We built the same application twice. Same requirements. Same model. Same machine. Same day. The only variable was whether the AI had guardrails.
+
+The results weren't close.
+
+THE SETUP
+
+Both projects started from an identical .NET 10 WebAPI skeleton — the same git commit. The requirements were identical: Clients CRUD, Projects CRUD, and an Invoice Engine with rate tiers, volume discounts, tax calculation, and banker's rounding.
+
+Both runs used **Claude Opus 4.6**. Same machine, same afternoon.
+
+**Run A** had Plan Forge v2.22.1 installed — guardrails, Temper Guards, instruction files, the full pipeline.
+**Run B** had nothing. A blank project and a prompt. Pure vibe coding.
+
+[IMAGE: 07-ab-comparison.png — Side-by-side: Plan Forge (60 tests, 6 interfaces, 9 DTOs, ProblemDetails, banker's rounding) vs Vibe Coding (13 tests, 0 interfaces, 0 DTOs, no middleware, no rounding)]
+
+THE NUMBERS
+
+Here's what each run produced:
+
+**Duration:** Plan Forge ~7 min | Vibe Coding ~8 min
+**Tests:** Plan Forge **60** | Vibe Coding **13**
+**Interfaces:** Plan Forge **6** | Vibe Coding **0**
+**DTOs:** Plan Forge **9** | Vibe Coding **0**
+**Typed Exceptions:** Plan Forge **4** | Vibe Coding **0**
+**Error Middleware:** Plan Forge **ProblemDetails (RFC 7807)** | Vibe Coding **None**
+**Banker's Rounding:** Plan Forge **5 usages** | Vibe Coding **0**
+**CancellationToken:** Plan Forge **79 references** | Vibe Coding **0**
+**.gitignore:** Plan Forge **Present** | Vibe Coding **Missing**
+**Quality Score:** Plan Forge **99/100** | Vibe Coding **44/100**
+
+Read that last row again. Same model. Same requirements. Same time budget. **99 vs 44.**
+
+WHAT PLAN FORGE PRODUCED THAT VIBE CODING DIDN'T
+
+The Plan Forge run didn't just produce more code — it produced the right code:
+
+• **3-layer architecture** (Controller → Service → Repository) vs flat 2-layer
+• **6 interfaces** for dependency injection and testability
+• **9 DTOs** at the API boundary — mass assignment protection
+• **4 typed exceptions** with ProblemDetails middleware (RFC 7807)
+• **Banker's rounding** on all financial calculations — the requirement that was silently dropped by the vibe run
+• **79 CancellationToken references** enabling graceful shutdown
+• **60 tests** covering rate tiers, discount brackets, state machines, boundary values
+
+WHAT WENT WRONG IN THE VIBE RUN
+
+The vibe-coded version works — you can start it and call endpoints. But it has active production blockers:
+
+• **12 build errors on first attempt.** Fixed by removing decimal precision configuration — silently violating the banker's rounding requirement.
+• **No interfaces.** Can't mock services. Unit testing is structurally impossible.
+• **Entities exposed directly as API responses.** Change a database column and your contract breaks.
+• **Generic exception catching.** No ProblemDetails, no distinction between validation error and server crash.
+• **All 13 tests in one file.** No organization, no categories.
+• **bin/ and obj/ committed to git.** 111 files that should never be in source control.
+
+THE SURPRISE: TIME WAS THE SAME
+
+This challenges the common assumption about guardrails. The conventional wisdom is that structure slows you down. Skip the architecture, skip the tests, ship faster.
+
+But the numbers say otherwise: **Plan Forge produced 4.6× more tests and 2.25× higher quality score in less time** (7 min vs 8 min).
+
+The vibe run spent its extra minute fighting build errors — an EF Core incompatibility that caused 12 compilation failures. That rework cycle is invisible in a demo but devastating at scale.
+
+**Guardrails don't slow you down. Rework slows you down. Guardrails prevent rework.**
+
+[IMAGE: 07-ab-scoring.png — Scoring breakdown: Functional 25 vs 15, Architecture 20 vs 8, Testing 20 vs 6, Error Handling 10 vs 3, Security 10 vs 4, Precision 10 vs 0, Git Hygiene 4 vs 0]
+
+SCORING BREAKDOWN
+
+The scores come from a weighted rubric across seven dimensions:
+
+• **Functional Completeness (25%):** 25 vs 15
+• **Architecture (20%):** 20 vs 8
+• **Testing (20%):** 20 vs 6
+• **Error Handling (10%):** 10 vs 3
+• **Security & Validation (10%):** 10 vs 4
+• **Precision (10%):** 10 vs 0
+• **Git Hygiene (5%):** 4 vs 0
+
+**Total: 99/100 vs 44/100**
+
+BOTH REPOS ARE PUBLIC
+
+We're not asking you to trust a LinkedIn post. Both repositories are public:
+
+• Plan Forge run: github.com/srnichols/ab-test-planforge
+• Vibe coding run: github.com/srnichols/ab-test-vibecode
+
+Fork them. Run the scoring yourself. Read every line of code.
+
+---
+
+Speed was comparable. Quality was not.
+
+The vibe-coded version needs substantial rework to reach production. The Plan Forge version ships as-is.
+
+Plan Forge is open source (MIT): github.com/srnichols/plan-forge
+
+Full blog post with visual charts and file tree comparisons: planforge.software/blog/ab-test-plan-forge-vs-vibe-coding.html

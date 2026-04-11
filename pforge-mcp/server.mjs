@@ -1348,7 +1348,7 @@ function createExpressApp() {
         return res.status(400).json({ error: "outputPath is required" });
       }
       const result = await generateImage(prompt, {
-        model: model || "grok-2-image",
+        model: model || "grok-imagine-image",
         size: size || "1024x1024",
         outputPath,
         cwd: PROJECT_DIR,

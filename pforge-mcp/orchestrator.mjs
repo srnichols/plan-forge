@@ -594,12 +594,21 @@ export async function generateImage(prompt, options = {}) {
 
     const data = await response.json();
     const imageData = data.data?.[0];
-    if (!imageData?.b64_json) {
-      return { success: false, error: "No image data in response" };
+    if (!imageData?.b64_json && !imageData?.url) {
+      return { success: false, error: "No image data in response (neither b64_json nor url)" };
     }
 
-    // Decode bytes first so we can detect the actual format
-    const rawBuffer = Buffer.from(imageData.b64_json, "base64");
+    // Decode bytes — handle both b64_json and url response formats
+    let rawBuffer;
+    if (imageData.b64_json) {
+      rawBuffer = Buffer.from(imageData.b64_json, "base64");
+    } else if (imageData.url) {
+      const imgRes = await fetch(imageData.url);
+      if (!imgRes.ok) {
+        return { success: false, error: `Failed to download image from URL: ${imgRes.status}` };
+      }
+      rawBuffer = Buffer.from(await imgRes.arrayBuffer());
+    }
     const detected = detectImageFormat(rawBuffer);
 
     // Determine the desired output format from the outputPath extension or format option
@@ -660,8 +669,12 @@ export async function generateImage(prompt, options = {}) {
     // Return truncated base64 for logging only — never return full base64 inline,
     // as passing raw image bytes through MCP tool results causes MIME type mismatch
     // errors in the Claude API when the declared media_type doesn't match the bytes.
-    result.base64 = imageData.b64_json.substring(0, 100) + "..."; // Truncated for logging
-    result.fullBase64Length = imageData.b64_json.length;
+    if (imageData.b64_json) {
+      result.base64 = imageData.b64_json.substring(0, 100) + "..."; // Truncated for logging
+      result.fullBase64Length = imageData.b64_json.length;
+    } else if (imageData.url) {
+      result.sourceUrl = imageData.url; // URL-based response — no base64 to truncate
+    }
 
     return result;
   } catch (err) {

@@ -1906,21 +1906,33 @@ cmd_doctor() {
             doctor_warn "sharp not installed — image format conversion disabled" "Run: cd pforge-mcp && npm install sharp"
         fi
 
-        # Check for API keys
+        # Check for API keys (env vars + .forge/secrets.json fallback)
         local has_xai="${XAI_API_KEY:+1}"
         local has_openai="${OPENAI_API_KEY:+1}"
+        local secrets_src=""
+
+        # Fallback: check .forge/secrets.json
+        local secrets_file="$REPO_ROOT/.forge/secrets.json"
+        if [ -f "$secrets_file" ]; then
+            if [ -z "$has_xai" ] && node -e "const s=JSON.parse(require('fs').readFileSync('$secrets_file','utf8'));process.exit(s.XAI_API_KEY?0:1)" 2>/dev/null; then
+                has_xai=1; secrets_src=" (from .forge/secrets.json)"
+            fi
+            if [ -z "$has_openai" ] && node -e "const s=JSON.parse(require('fs').readFileSync('$secrets_file','utf8'));process.exit(s.OPENAI_API_KEY?0:1)" 2>/dev/null; then
+                has_openai=1; secrets_src=" (from .forge/secrets.json)"
+            fi
+        fi
 
         if [ -n "$has_xai" ] && [ -n "$has_openai" ]; then
-            doctor_pass "XAI_API_KEY set (Grok Aurora)"
-            doctor_pass "OPENAI_API_KEY set (DALL-E)"
+            doctor_pass "XAI_API_KEY set (Grok Aurora)$secrets_src"
+            doctor_pass "OPENAI_API_KEY set (DALL-E)$secrets_src"
         elif [ -n "$has_xai" ]; then
-            doctor_pass "XAI_API_KEY set (Grok Aurora)"
+            doctor_pass "XAI_API_KEY set (Grok Aurora)$secrets_src"
             doctor_pass "OPENAI_API_KEY not set (DALL-E unavailable — optional)"
         elif [ -n "$has_openai" ]; then
-            doctor_pass "OPENAI_API_KEY set (DALL-E)"
+            doctor_pass "OPENAI_API_KEY set (DALL-E)$secrets_src"
             doctor_pass "XAI_API_KEY not set (Grok Aurora unavailable — optional)"
         else
-            doctor_warn "No image API keys configured" "Set XAI_API_KEY or OPENAI_API_KEY environment variable for forge_generate_image"
+            doctor_warn "No image API keys configured" "Set XAI_API_KEY or OPENAI_API_KEY env var, or add to .forge/secrets.json"
         fi
 
         # Check Node.js version (sharp requires >= 18.17.0)

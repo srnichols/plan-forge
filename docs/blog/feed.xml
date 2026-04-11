@@ -9,14 +9,6 @@
     <atom:link href="https://planforge.software/blog/feed.xml" rel="self" type="application/rss+xml" />
 
     <item>
-      <title>From Impossible to 7 Minutes: A Year of Building AI Coding Guardrails</title>
-      <link>https://planforge.software/blog/the-journey-from-impossible-to-seven-minutes.html</link>
-      <guid>https://planforge.software/blog/the-journey-from-impossible-to-seven-minutes.html</guid>
-      <pubDate>Fri, 11 Apr 2026 12:00:00 GMT</pubDate>
-      <description>A year ago, getting enterprise-grade code from an AI agent was nearly impossible. Today we build a 99/100 app in 7 minutes. This is the story of that journey.</description>
-    </item>
-
-    <item>
       <title>The A/B Test: 99 vs 44 — Same App, Same Model, Same Time</title>
       <link>https://planforge.software/blog/ab-test-plan-forge-vs-vibe-coding.html</link>
       <guid>https://planforge.software/blog/ab-test-plan-forge-vs-vibe-coding.html</guid>
@@ -70,6 +62,14 @@
       <guid>https://planforge.software/blog/seven-agents.html</guid>
       <pubDate>Mon, 07 Apr 2026 05:00:00 GMT</pubDate>
       <description>Your team uses Copilot, Claude, Cursor, and Gemini. Plan Forge generates native guardrail files for all 7 agents — same quality gates, same pipeline, same 19 reviewer agents. One setup command.</description>
+    </item>
+
+    <item>
+      <title>From Impossible to 7 Minutes: A Year of Building AI Coding Guardrails</title>
+      <link>https://planforge.software/blog/the-journey-from-impossible-to-seven-minutes.html</link>
+      <guid>https://planforge.software/blog/the-journey-from-impossible-to-seven-minutes.html</guid>
+      <pubDate>Fri, 11 Apr 2026 12:00:00 GMT</pubDate>
+      <description>A year ago, getting enterprise-grade code from an AI agent was nearly impossible. Today we build a 99/100 app in 7 minutes. This is the story of that journey.</description>
     </item>
 
   </channel>

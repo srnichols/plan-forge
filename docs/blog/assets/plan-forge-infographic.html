@@ -32,13 +32,12 @@
     /* Pipeline strip */
     .pipeline { display: flex; gap: 8px; margin-bottom: 40px; justify-content: center; }
     .step { width: 130px; text-align: center; }
-    .step .box { height: 90px; border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; margin-bottom: 8px; backdrop-filter: blur(8px); }
-    .step .icon { font-size: 28px; margin-bottom: 4px; }
-    .step .icon img { width: 48px; height: 48px; border-radius: 8px; object-fit: cover; }
-    .step .label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
-    .step .cmd { display: inline-block; background: rgba(0,0,0,0.3); border-radius: 4px; padding: 2px 8px; font-size: 10px; font-weight: 600; color: #cbd5e1; margin-top: 4px; font-family: 'JetBrains Mono', monospace; }
-    .step .desc { font-size: 10px; color: #64748b; margin-top: 4px; }
-    .arrow { display: flex; align-items: center; color: #475569; font-size: 18px; padding-top: 20px; }
+    .step .box { height: 120px; border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; position: relative; margin-bottom: 8px; backdrop-filter: blur(8px); overflow: hidden; }
+    .step .box img { width: 100%; height: 100%; object-fit: cover; position: absolute; inset: 0; border-radius: 12px; }
+    .step .label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; position: relative; z-index: 1; margin-top: 6px; text-shadow: 0 1px 6px rgba(0,0,0,0.8), 0 0 12px rgba(0,0,0,0.6); }
+    .step .cmd { display: inline-block; background: rgba(0,0,0,0.5); border-radius: 4px; padding: 2px 8px; font-size: 10px; font-weight: 600; color: #cbd5e1; margin-top: 4px; font-family: 'JetBrains Mono', monospace; }
+    .step .desc { font-size: 10px; color: #94a3b8; margin-top: 4px; }
+    .arrow { display: flex; align-items: center; color: #475569; font-size: 18px; padding-top: 30px; }
 
     /* Step colors */
     .s-specify .box { background: linear-gradient(135deg, #f59e0b22, #f59e0b11); border: 1px solid #f59e0b44; }
@@ -113,37 +112,37 @@
     <!-- Pipeline -->
     <div class="pipeline">
       <div class="step s-specify">
-        <div class="box"><span class="icon"><img src="icon-specify.webp" alt="Specify"></span><span class="label">Specify</span></div>
+        <div class="box"><img src="icon-specify.webp" alt="Specify"><span class="label">Specify</span></div>
         <div class="cmd">Step 0</div>
         <div class="desc">What & why</div>
       </div>
       <div class="arrow">→</div>
       <div class="step s-harden">
-        <div class="box"><span class="icon"><img src="icon-harden.webp" alt="Harden"></span><span class="label">Harden</span></div>
+        <div class="box"><img src="icon-harden.webp" alt="Harden"><span class="label">Harden</span></div>
         <div class="cmd">Step 1-2</div>
         <div class="desc">Scope contract</div>
       </div>
       <div class="arrow">→</div>
       <div class="step s-execute">
-        <div class="box"><span class="icon"><img src="icon-execute.webp" alt="Execute"></span><span class="label">Execute</span></div>
+        <div class="box"><img src="icon-execute.webp" alt="Execute"><span class="label">Execute</span></div>
         <div class="cmd">Step 3</div>
         <div class="desc">Slice by slice</div>
       </div>
       <div class="arrow">→</div>
       <div class="step s-sweep">
-        <div class="box"><span class="icon"><img src="icon-sweep.webp" alt="Sweep"></span><span class="label">Sweep</span></div>
+        <div class="box"><img src="icon-sweep.webp" alt="Sweep"><span class="label">Sweep</span></div>
         <div class="cmd">Step 4</div>
         <div class="desc">No TODOs left</div>
       </div>
       <div class="arrow">→</div>
       <div class="step s-review">
-        <div class="box"><span class="icon"><img src="icon-review.webp" alt="Review"></span><span class="label">Review</span></div>
+        <div class="box"><img src="icon-review.webp" alt="Review"><span class="label">Review</span></div>
         <div class="cmd">Step 5</div>
         <div class="desc">Drift detection</div>
       </div>
       <div class="arrow">→</div>
       <div class="step s-ship">
-        <div class="box"><span class="icon"><img src="icon-ship.webp" alt="Ship"></span><span class="label">Ship</span></div>
+        <div class="box"><img src="icon-ship.webp" alt="Ship"><span class="label">Ship</span></div>
         <div class="cmd">Step 6</div>
         <div class="desc">Commit & close</div>
       </div>
@@ -252,6 +251,7 @@
   </div>
 </body>
 </html>
+
 
 
 

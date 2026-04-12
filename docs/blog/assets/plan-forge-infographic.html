@@ -8,20 +8,31 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Inter', sans-serif; background: #0f172a; color: #e2e8f0; }
-    .card { width: 1080px; min-height: 1350px; margin: 0 auto; padding: 48px 40px; background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%); }
+    body { font-family: 'Inter', sans-serif; background: #0a0a0a; color: #e2e8f0; }
+    .card {
+      width: 1080px; min-height: 1350px; margin: 0 auto; padding: 48px 40px;
+      background: url('infographic-bg.jpg') center/cover no-repeat;
+      position: relative;
+    }
+    .card::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: linear-gradient(180deg, rgba(10,10,10,0.88) 0%, rgba(15,23,42,0.92) 50%, rgba(10,10,10,0.95) 100%);
+      z-index: 0;
+    }
+    .card > * { position: relative; z-index: 1; }
 
     /* Header */
     .header { text-align: center; margin-bottom: 40px; }
-    .header .logo { font-size: 14px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; color: #f59e0b; margin-bottom: 8px; }
-    .header h1 { font-size: 42px; font-weight: 900; color: #fff; line-height: 1.1; margin-bottom: 8px; }
-    .header h1 span { color: #f59e0b; }
+    .header .logo { font-size: 14px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; color: #f59e0b; margin-bottom: 8px; text-shadow: 0 0 20px rgba(245,158,11,0.5); }
+    .header h1 { font-size: 42px; font-weight: 900; color: #fff; line-height: 1.1; margin-bottom: 8px; text-shadow: 0 2px 20px rgba(0,0,0,0.6); }
+    .header h1 span { color: #f59e0b; text-shadow: 0 0 30px rgba(245,158,11,0.4); }
     .header .subtitle { font-size: 16px; color: #94a3b8; max-width: 600px; margin: 0 auto; }
 
     /* Pipeline strip */
     .pipeline { display: flex; gap: 8px; margin-bottom: 40px; justify-content: center; }
     .step { width: 130px; text-align: center; }
-    .step .box { height: 90px; border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; margin-bottom: 8px; }
+    .step .box { height: 90px; border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; margin-bottom: 8px; backdrop-filter: blur(8px); }
     .step .icon { font-size: 28px; margin-bottom: 4px; }
     .step .label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
     .step .cmd { display: inline-block; background: rgba(0,0,0,0.3); border-radius: 4px; padding: 2px 8px; font-size: 10px; font-weight: 600; color: #cbd5e1; margin-top: 4px; font-family: 'JetBrains Mono', monospace; }
@@ -45,7 +56,7 @@
     .s-ship .label { color: #22c55e; }
 
     /* Skills table */
-    .section-title { font-size: 12px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; color: #f59e0b; margin-bottom: 16px; }
+    .section-title { font-size: 12px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; color: #f59e0b; margin-bottom: 16px; text-shadow: 0 0 12px rgba(245,158,11,0.3); }
     .skills-table { width: 100%; margin-bottom: 36px; }
     .skills-table tr { border-bottom: 1px solid #1e293b; }
     .skills-table td { padding: 10px 12px; vertical-align: middle; }
@@ -56,15 +67,15 @@
 
     /* Stats bar */
     .stats { display: flex; gap: 16px; margin-bottom: 36px; }
-    .stat { flex: 1; text-align: center; padding: 14px 8px; border-radius: 12px; background: #1e293b; border: 1px solid #334155; }
-    .stat .val { font-size: 26px; font-weight: 900; color: #f59e0b; }
+    .stat { flex: 1; text-align: center; padding: 14px 8px; border-radius: 12px; background: rgba(30,41,59,0.75); border: 1px solid #334155; backdrop-filter: blur(8px); }
+    .stat .val { font-size: 26px; font-weight: 900; color: #f59e0b; text-shadow: 0 0 12px rgba(245,158,11,0.3); }
     .stat .lbl { font-size: 10px; color: #64748b; margin-top: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
 
     /* Temper Guards callout */
-    .callout { background: linear-gradient(135deg, #f59e0b11, #1e293b); border: 1px solid #f59e0b33; border-radius: 12px; padding: 20px 24px; margin-bottom: 36px; }
+    .callout { background: linear-gradient(135deg, rgba(245,158,11,0.08), rgba(30,41,59,0.75)); border: 1px solid #f59e0b33; border-radius: 12px; padding: 20px 24px; margin-bottom: 36px; backdrop-filter: blur(8px); }
     .callout h3 { font-size: 14px; font-weight: 800; color: #f59e0b; margin-bottom: 8px; }
     .callout p { font-size: 12px; color: #94a3b8; line-height: 1.6; }
-    .callout .example { background: #0f172a; border-radius: 8px; padding: 12px 16px; margin-top: 12px; font-size: 11px; }
+    .callout .example { background: rgba(15,23,42,0.8); border-radius: 8px; padding: 12px 16px; margin-top: 12px; font-size: 11px; backdrop-filter: blur(4px); }
     .callout .excuse { color: #ef4444; font-style: italic; }
     .callout .rebuttal { color: #22c55e; }
 
@@ -76,11 +87,11 @@
     /* A/B callout */
     .ab-strip { display: flex; gap: 16px; margin-bottom: 36px; }
     .ab-card { flex: 1; text-align: center; padding: 16px; border-radius: 12px; }
-    .ab-card.forge { background: #22c55e11; border: 1px solid #22c55e44; }
-    .ab-card.vibe { background: #ef444411; border: 1px solid #ef444444; }
+    .ab-card.forge { background: rgba(34,197,94,0.08); border: 1px solid #22c55e44; backdrop-filter: blur(8px); }
+    .ab-card.vibe { background: rgba(239,68,68,0.08); border: 1px solid #ef444444; backdrop-filter: blur(8px); }
     .ab-card .score { font-size: 48px; font-weight: 900; }
-    .ab-card.forge .score { color: #22c55e; }
-    .ab-card.vibe .score { color: #ef4444; }
+    .ab-card.forge .score { color: #22c55e; text-shadow: 0 0 20px rgba(34,197,94,0.4); }
+    .ab-card.vibe .score { color: #ef4444; text-shadow: 0 0 20px rgba(239,68,68,0.4); }
     .ab-card .name { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; margin-top: 2px; }
     .ab-card.forge .name { color: #22c55e; }
     .ab-card.vibe .name { color: #ef4444; }
@@ -186,32 +197,32 @@
     <!-- Key Differentiators -->
     <div class="section-title">What Sets the Forge Apart</div>
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 36px;">
-      <div style="background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 14px 16px;">
+      <div style="background: rgba(30,41,59,0.7); border: 1px solid #33415588; border-radius: 10px; padding: 14px 16px; backdrop-filter: blur(8px);">
         <div style="font-size: 16px; margin-bottom: 4px;">🔀</div>
         <div style="font-size: 12px; font-weight: 700; color: #e2e8f0; margin-bottom: 2px;">Quorum Mode</div>
         <div style="font-size: 10px; color: #64748b;">3 models analyze each slice in parallel. Reviewer synthesizes the best approach. Power + Speed presets.</div>
       </div>
-      <div style="background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 14px 16px;">
+      <div style="background: rgba(30,41,59,0.7); border: 1px solid #33415588; border-radius: 10px; padding: 14px 16px; backdrop-filter: blur(8px);">
         <div style="font-size: 16px; margin-bottom: 4px;">🔄</div>
         <div style="font-size: 12px; font-weight: 700; color: #e2e8f0; margin-bottom: 2px;">4-Session Isolation</div>
         <div style="font-size: 10px; color: #64748b;">Builder never reviews its own work. Fresh context per session eliminates sunk-cost bias.</div>
       </div>
-      <div style="background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 14px 16px;">
+      <div style="background: rgba(30,41,59,0.7); border: 1px solid #33415588; border-radius: 10px; padding: 14px 16px; backdrop-filter: blur(8px);">
         <div style="font-size: 16px; margin-bottom: 4px;">⚙️</div>
         <div style="font-size: 12px; font-weight: 700; color: #e2e8f0; margin-bottom: 2px;">Lifecycle Hooks</div>
         <div style="font-size: 10px; color: #64748b;">SessionStart · PreToolUse · PostToolUse · Stop — automatic enforcement without human intervention.</div>
       </div>
-      <div style="background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 14px 16px;">
+      <div style="background: rgba(30,41,59,0.7); border: 1px solid #33415588; border-radius: 10px; padding: 14px 16px; backdrop-filter: blur(8px);">
         <div style="font-size: 16px; margin-bottom: 4px;">🤖</div>
         <div style="font-size: 12px; font-weight: 700; color: #e2e8f0; margin-bottom: 2px;">7 Agent Adapters</div>
         <div style="font-size: 10px; color: #64748b;">Copilot · Claude · Cursor · Windsurf · Codex · Gemini · Generic — one setup, every tool.</div>
       </div>
-      <div style="background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 14px 16px;">
+      <div style="background: rgba(30,41,59,0.7); border: 1px solid #33415588; border-radius: 10px; padding: 14px 16px; backdrop-filter: blur(8px);">
         <div style="font-size: 16px; margin-bottom: 4px;">💰</div>
         <div style="font-size: 12px; font-weight: 700; color: #e2e8f0; margin-bottom: 2px;">Cost Tracking</div>
         <div style="font-size: 10px; color: #64748b;">Per-slice tokens, 23-model pricing table, --estimate before running, monthly aggregation.</div>
       </div>
-      <div style="background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 14px 16px;">
+      <div style="background: rgba(30,41,59,0.7); border: 1px solid #33415588; border-radius: 10px; padding: 14px 16px; backdrop-filter: blur(8px);">
         <div style="font-size: 16px; margin-bottom: 4px;">🔃</div>
         <div style="font-size: 12px; font-weight: 700; color: #e2e8f0; margin-bottom: 2px;">Auto-Escalation</div>
         <div style="font-size: 10px; color: #64748b;">Slice fails on one model? Auto-routes to the next in the escalation chain. No manual intervention.</div>
@@ -227,3 +238,4 @@
   </div>
 </body>
 </html>
+

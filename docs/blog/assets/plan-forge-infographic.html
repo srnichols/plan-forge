@@ -11,7 +11,7 @@
     body { font-family: 'Inter', sans-serif; background: #0a0a0a; color: #e2e8f0; }
     .card {
       width: 1080px; min-height: 1350px; margin: 0 auto; padding: 48px 40px;
-      background: url('infographic-bg.jpg') center/cover no-repeat;
+      background: url('infographic-bg.webp') center/cover no-repeat;
       position: relative;
     }
     .card::before {
@@ -34,6 +34,7 @@
     .step { width: 130px; text-align: center; }
     .step .box { height: 90px; border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; margin-bottom: 8px; backdrop-filter: blur(8px); }
     .step .icon { font-size: 28px; margin-bottom: 4px; }
+    .step .icon img { width: 48px; height: 48px; border-radius: 8px; object-fit: cover; }
     .step .label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
     .step .cmd { display: inline-block; background: rgba(0,0,0,0.3); border-radius: 4px; padding: 2px 8px; font-size: 10px; font-weight: 600; color: #cbd5e1; margin-top: 4px; font-family: 'JetBrains Mono', monospace; }
     .step .desc { font-size: 10px; color: #64748b; margin-top: 4px; }
@@ -60,7 +61,8 @@
     .skills-table { width: 100%; margin-bottom: 36px; }
     .skills-table tr { border-bottom: 1px solid #1e293b; }
     .skills-table td { padding: 10px 12px; vertical-align: middle; }
-    .skills-table .emoji { font-size: 20px; width: 36px; text-align: center; }
+    .skills-table .emoji { font-size: 20px; width: 48px; text-align: center; }
+    .skills-table .emoji img { width: 40px; height: 40px; border-radius: 6px; object-fit: cover; }
     .skills-table .what { font-size: 13px; color: #cbd5e1; font-weight: 500; }
     .skills-table .cmd-cell { font-family: monospace; font-size: 12px; background: #1e293b; color: #f59e0b; padding: 4px 10px; border-radius: 6px; display: inline-block; }
     .skills-table .principle { font-size: 12px; color: #64748b; }
@@ -111,37 +113,37 @@
     <!-- Pipeline -->
     <div class="pipeline">
       <div class="step s-specify">
-        <div class="box"><span class="icon">💡</span><span class="label">Specify</span></div>
+        <div class="box"><span class="icon"><img src="icon-specify.webp" alt="Specify"></span><span class="label">Specify</span></div>
         <div class="cmd">Step 0</div>
         <div class="desc">What & why</div>
       </div>
       <div class="arrow">→</div>
       <div class="step s-harden">
-        <div class="box"><span class="icon">🔨</span><span class="label">Harden</span></div>
+        <div class="box"><span class="icon"><img src="icon-harden.webp" alt="Harden"></span><span class="label">Harden</span></div>
         <div class="cmd">Step 1-2</div>
         <div class="desc">Scope contract</div>
       </div>
       <div class="arrow">→</div>
       <div class="step s-execute">
-        <div class="box"><span class="icon">⚡</span><span class="label">Execute</span></div>
+        <div class="box"><span class="icon"><img src="icon-execute.webp" alt="Execute"></span><span class="label">Execute</span></div>
         <div class="cmd">Step 3</div>
         <div class="desc">Slice by slice</div>
       </div>
       <div class="arrow">→</div>
       <div class="step s-sweep">
-        <div class="box"><span class="icon">🧹</span><span class="label">Sweep</span></div>
+        <div class="box"><span class="icon"><img src="icon-sweep.webp" alt="Sweep"></span><span class="label">Sweep</span></div>
         <div class="cmd">Step 4</div>
         <div class="desc">No TODOs left</div>
       </div>
       <div class="arrow">→</div>
       <div class="step s-review">
-        <div class="box"><span class="icon">🔍</span><span class="label">Review</span></div>
+        <div class="box"><span class="icon"><img src="icon-review.webp" alt="Review"></span><span class="label">Review</span></div>
         <div class="cmd">Step 5</div>
         <div class="desc">Drift detection</div>
       </div>
       <div class="arrow">→</div>
       <div class="step s-ship">
-        <div class="box"><span class="icon">🚀</span><span class="label">Ship</span></div>
+        <div class="box"><span class="icon"><img src="icon-ship.webp" alt="Ship"></span><span class="label">Ship</span></div>
         <div class="cmd">Step 6</div>
         <div class="desc">Commit & close</div>
       </div>
@@ -159,14 +161,14 @@
     <!-- What's in the Forge -->
     <div class="section-title">What's in the Forge</div>
     <table class="skills-table">
-      <tr><td class="emoji">📋</td><td class="what">Instruction files auto-load by file type</td><td><span class="cmd-cell">18 per preset</span></td><td class="principle">+ Temper Guards</td></tr>
-      <tr><td class="emoji">🔍</td><td class="what">Reviewer agents audit your code read-only</td><td><span class="cmd-cell">19 agents</span></td><td class="principle">Independent review</td></tr>
-      <tr><td class="emoji">⚡</td><td class="what">Skills chain tool calls with validation</td><td><span class="cmd-cell">/forge-quench</span></td><td class="principle">Exit Proof required</td></tr>
-      <tr><td class="emoji">🧩</td><td class="what">Scaffold prompts generate consistent code</td><td><span class="cmd-cell">15 templates</span></td><td class="principle">Cookie cutters</td></tr>
-      <tr><td class="emoji">🔒</td><td class="what">Scope contracts prevent drift</td><td><span class="cmd-cell">Forbidden Actions</span></td><td class="principle">Binary enforcement</td></tr>
-      <tr><td class="emoji">📊</td><td class="what">Live dashboard with 8 real-time tabs</td><td><span class="cmd-cell">:3100/dashboard</span></td><td class="principle">Traces · Cost · Replay</td></tr>
-      <tr><td class="emoji">🖥️</td><td class="what">CLI + MCP tools for automation</td><td><span class="cmd-cell">pforge smith</span></td><td class="principle">18 forge tools</td></tr>
-      <tr><td class="emoji">🧠</td><td class="what">OpenBrain carries memory across sessions</td><td><span class="cmd-cell">search + capture</span></td><td class="principle">Nothing forgotten</td></tr>
+      <tr><td class="emoji"><img src="icon-guardrails.webp" alt="Guardrails"></td><td class="what">Instruction files auto-load by file type</td><td><span class="cmd-cell">18 per preset</span></td><td class="principle">+ Temper Guards</td></tr>
+      <tr><td class="emoji"><img src="icon-agents.webp" alt="Agents"></td><td class="what">Reviewer agents audit your code read-only</td><td><span class="cmd-cell">19 agents</span></td><td class="principle">Independent review</td></tr>
+      <tr><td class="emoji"><img src="icon-skills.webp" alt="Skills"></td><td class="what">Skills chain tool calls with validation</td><td><span class="cmd-cell">/forge-quench</span></td><td class="principle">Exit Proof required</td></tr>
+      <tr><td class="emoji"><img src="icon-prompts.webp" alt="Prompts"></td><td class="what">Scaffold prompts generate consistent code</td><td><span class="cmd-cell">15 templates</span></td><td class="principle">Cookie cutters</td></tr>
+      <tr><td class="emoji"><img src="icon-scope.webp" alt="Scope"></td><td class="what">Scope contracts prevent drift</td><td><span class="cmd-cell">Forbidden Actions</span></td><td class="principle">Binary enforcement</td></tr>
+      <tr><td class="emoji"><img src="icon-dashboard.webp" alt="Dashboard"></td><td class="what">Live dashboard with 8 real-time tabs</td><td><span class="cmd-cell">:3100/dashboard</span></td><td class="principle">Traces · Cost · Replay</td></tr>
+      <tr><td class="emoji"><img src="icon-cli.webp" alt="CLI"></td><td class="what">CLI + MCP tools for automation</td><td><span class="cmd-cell">pforge smith</span></td><td class="principle">18 forge tools</td></tr>
+      <tr><td class="emoji"><img src="icon-memory.webp" alt="Memory"></td><td class="what">OpenBrain carries memory across sessions</td><td><span class="cmd-cell">search + capture</span></td><td class="principle">Nothing forgotten</td></tr>
     </table>
 
     <!-- A/B Results -->
@@ -238,4 +240,6 @@
   </div>
 </body>
 </html>
+
+
 

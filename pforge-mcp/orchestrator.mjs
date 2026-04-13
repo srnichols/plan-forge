@@ -1014,6 +1014,43 @@ function parseTokenCount(str) {
 }
 
 /**
+ * Coalesce multi-line gate commands from a validation gate block.
+ * Joins lines inside unmatched quotes into single commands, strips
+ * inline comments and standalone comment lines.
+ *
+ * @param {string} gateText - Raw validation gate text block
+ * @returns {string[]} Array of complete, executable gate commands
+ */
+export function coalesceGateLines(gateText) {
+  const rawLines = gateText.split("\n");
+  const commands = [];
+  let pending = "";
+  for (const raw of rawLines) {
+    const trimmed = raw.trim();
+    if (!trimmed) continue;
+    if (pending) {
+      pending += "\n" + trimmed;
+      const dblQuotes = (pending.match(/"/g) || []).length;
+      if (dblQuotes % 2 === 0) {
+        commands.push(pending);
+        pending = "";
+      }
+    } else {
+      const stripped = trimmed.replace(/\s{2,}#\s.*$/, "");
+      if (!stripped || stripped.startsWith("#")) continue;
+      const dblQuotes = (stripped.match(/"/g) || []).length;
+      if (dblQuotes % 2 !== 0) {
+        pending = stripped;
+      } else {
+        commands.push(stripped);
+      }
+    }
+  }
+  if (pending) commands.push(pending);
+  return commands;
+}
+
+/**
  * Run a validation gate command directly (no AI worker needed).
  * Commands are validated against an allowlist of common build/test tools.
  *
@@ -2003,51 +2040,27 @@ export function lintGateCommands(planFilePath) {
   for (const slice of plan.slices) {
     if (!slice.validationGate) continue;
 
-    // Coalesce multi-line commands: join lines inside unmatched quotes
-    // e.g. node -e "\n  import(...)...\n" becomes one logical command
-    const rawLines = slice.validationGate.split("\n");
-    const commands = [];
-    let pending = "";
+    // Also lint raw lines for comment detection before coalescing
+    const rawLines = slice.validationGate.split("\n").map(l => l.trim()).filter(l => l.length > 0);
     for (const raw of rawLines) {
-      const trimmed = raw.trim();
-      if (!trimmed) continue;
-      if (pending) {
-        pending += "\n" + trimmed;
-        // Check if quotes are now balanced
-        const dblQuotes = (pending.match(/"/g) || []).length;
-        if (dblQuotes % 2 === 0) {
-          commands.push(pending);
-          pending = "";
-        }
-      } else {
-        const stripped = trimmed.replace(/\s{2,}#\s.*$/, "");
-        const dblQuotes = (stripped.match(/"/g) || []).length;
-        if (dblQuotes % 2 !== 0) {
-          // Unmatched quote — start of multi-line command
-          pending = stripped;
-        } else {
-          commands.push(stripped);
-        }
+      if (raw.startsWith("#")) {
+        const loc = `Slice ${slice.number} ("${slice.title}")`;
+        warnings.push({
+          slice: slice.number,
+          command: raw,
+          rule: "comment-line",
+          severity: "warn",
+          message: `${loc}: Standalone comment '${raw.slice(0, 60)}...' will be treated as a command. Remove or prefix with a real command.`,
+        });
       }
     }
-    if (pending) commands.push(pending); // flush any remaining
+
+    const commands = coalesceGateLines(slice.validationGate);
 
     for (const line of commands) {
       const loc = `Slice ${slice.number} ("${slice.title}")`;
 
-      // 1. Standalone comment lines
-      if (line.startsWith("#")) {
-        warnings.push({
-          slice: slice.number,
-          command: line,
-          rule: "comment-line",
-          severity: "warn",
-          message: `${loc}: Standalone comment '${line.slice(0, 60)}...' will be treated as a command. Remove or prefix with a real command.`,
-        });
-        continue; // Don't lint further — it's a comment
-      }
-
-      // 2. /dev/stdin (not cross-platform)
+      // 1. /dev/stdin (not cross-platform)
       if (line.includes("/dev/stdin")) {
         errors.push({
           slice: slice.number,
@@ -2497,10 +2510,7 @@ async function executeSlice(slice, options) {
     // Run validation gate if defined
     gateResult = { success: true, output: "No validation gate defined" };
     if (slice.validationGate) {
-      const gateLines = slice.validationGate
-        .split("\n")
-        .map((l) => l.replace(/\s{2,}#\s.*$/, "").trim())
-        .filter((l) => l.length > 0);
+      const gateLines = coalesceGateLines(slice.validationGate);
 
       for (const gateLine of gateLines) {
         gateResult = runGate(gateLine, cwd);

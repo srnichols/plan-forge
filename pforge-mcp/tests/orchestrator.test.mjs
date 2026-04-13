@@ -307,6 +307,36 @@ describe("lintGateCommands", () => {
     expect(GATE_ALLOWED_PREFIXES).toContain("cd");
     expect(GATE_ALLOWED_PREFIXES).not.toContain("wget");
   });
+
+  it("warns on Windows-unavailable commands (grep, sed, awk)", () => {
+    const origCwd = process.cwd();
+    process.chdir(tempDir);
+    try {
+      const plan = writePlan(["grep -c 'forge_' docs/capabilities.md"]);
+      const result = lintGateCommands(plan);
+      expect(result.warnings.some(w => w.rule === "windows-unavailable")).toBe(true);
+    } finally { process.chdir(origCwd); }
+  });
+
+  it("warns on Unix-only paths (/tmp/)", () => {
+    const origCwd = process.cwd();
+    process.chdir(tempDir);
+    try {
+      const plan = writePlan(["echo 'test' > /tmp/test.env"]);
+      const result = lintGateCommands(plan);
+      expect(result.warnings.some(w => w.rule === "unix-only-path")).toBe(true);
+    } finally { process.chdir(origCwd); }
+  });
+
+  it("warns on project scripts not on PATH (pforge)", () => {
+    const origCwd = process.cwd();
+    process.chdir(tempDir);
+    try {
+      const plan = writePlan(["pforge runbook docs/plans/test.md"]);
+      const result = lintGateCommands(plan);
+      expect(result.warnings.some(w => w.rule === "project-script")).toBe(true);
+    } finally { process.chdir(origCwd); }
+  });
 });
 
 // ─── emitToolTelemetry ───────────────────────────────────────────────

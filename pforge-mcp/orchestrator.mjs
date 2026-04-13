@@ -2243,6 +2243,40 @@ export function lintGateCommands(planFilePath, cwd = process.cwd()) {
           message: `${loc}: 'node *.test.*' fails for vitest test files. Use 'npx vitest run <file>' instead.`,
         });
       }
+
+      // 6. Unix-only commands (not available in cmd.exe on Windows)
+      const WINDOWS_UNAVAILABLE = ["grep", "sed", "awk", "wc", "head", "tail", "sort", "diff", "test", "tr", "xargs", "find"];
+      if (WINDOWS_UNAVAILABLE.includes(cmdToken) && !/^bash\s+-c/.test(line)) {
+        warnings.push({
+          slice: slice.number,
+          command: line,
+          rule: "windows-unavailable",
+          severity: "warn",
+          message: `${loc}: '${cmdToken}' is not available in cmd.exe on Windows. Wrap in 'bash -c' or use a 'node -e' equivalent.`,
+        });
+      }
+
+      // 7. Unix-only paths (/tmp/, /dev/null)
+      if (/\/tmp\/|\/dev\/null/.test(line)) {
+        warnings.push({
+          slice: slice.number,
+          command: line,
+          rule: "unix-only-path",
+          severity: "warn",
+          message: `${loc}: Unix-only path (/tmp/ or /dev/null) — fails on Windows. Use os.tmpdir() or NUL.`,
+        });
+      }
+
+      // 8. Project scripts not on PATH (pforge is a .ps1/.sh script, not a global binary)
+      if (/^pforge\s/.test(line)) {
+        warnings.push({
+          slice: slice.number,
+          command: line,
+          rule: "project-script",
+          severity: "warn",
+          message: `${loc}: 'pforge' is a project script, not on PATH during gate execution. Use 'pwsh ./pforge.ps1' or rewrite as 'node -e'.`,
+        });
+      }
     }
   }
 

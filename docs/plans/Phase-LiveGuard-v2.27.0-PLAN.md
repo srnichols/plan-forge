@@ -200,7 +200,6 @@ If `.forge/cost-history.json` does not exist, `forge_health_trend` degrades grac
 ```bash
 node pforge-mcp/server.mjs --validate
 bash -c "cd pforge-mcp && npx vitest run tests/orchestrator.test.mjs"
-# Verify no naming conflicts
 node -e "import('./pforge-mcp/orchestrator.mjs').then(m => { ['ensureForgeDir','readForgeJson','appendForgeJsonl','parseValidationGates'].forEach(fn => { if(typeof m[fn] !== 'function') throw new Error(fn + ' missing'); }); console.log('ok'); })"
 ```
 
@@ -266,7 +265,6 @@ The hub event fired by `emitToolTelemetry` enables the v2.28 dashboard to update
 ```bash
 node pforge-mcp/server.mjs --validate
 bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
-# Shape check
 curl -s http://localhost:3100/api/drift | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); if(typeof d.score !== 'number') throw new Error('bad shape')"
 curl -s http://localhost:3100/api/drift/history | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); if(!Array.isArray(d)) throw new Error('expected array')"
 ```
@@ -314,7 +312,6 @@ curl -s http://localhost:3100/api/drift/history | node -e "const d=JSON.parse(re
 ```bash
 node pforge-mcp/server.mjs --validate
 bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
-# Shape check (unauthenticated endpoint)
 curl -s http://localhost:3100/api/incidents | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); if(!Array.isArray(d)) throw new Error('expected array')"
 ```
 
@@ -400,7 +397,6 @@ curl http://localhost:3100/api/deps/watch | node -e "const d=JSON.parse(require(
 ```bash
 node pforge-mcp/server.mjs --validate
 bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
-# Verify allowlist enforcement with a blocked command
 node -e "
 import('./pforge-mcp/orchestrator.mjs').then(m => {
   const allowed = m.isGateCommandAllowed('npm test');
@@ -520,7 +516,6 @@ curl http://localhost:3100/api/hotspots | node -e "const d=JSON.parse(require('f
 node pforge-mcp/server.mjs --validate
 bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
 curl "http://localhost:3100/api/health-trend?days=7" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); if(!d.period||!d.trend) throw new Error('bad shape')"
-# Verify forge_cost_report is backward compatible
 curl http://localhost:3100/api/cost | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); if(typeof d.total !== 'number') throw new Error('cost report broken')"
 ```
 
@@ -601,7 +596,6 @@ curl http://localhost:3100/api/alerts/triage | node -e "const d=JSON.parse(requi
 node pforge-mcp/server.mjs --validate
 bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
 curl -s http://localhost:3100/api/deploy/journal | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); if(!Array.isArray(d)) throw new Error('expected array')"
-# Sidecar merge check — GET must combine JSONL + meta
 curl -s "http://localhost:3100/api/deploy/journal" | node -e "process.stdin.resume()" # no error exit
 ```
 
@@ -671,16 +665,11 @@ curl -s "http://localhost:3100/api/deploy/journal" | node -e "process.stdin.resu
 ```bash
 node pforge-mcp/server.mjs --validate
 bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
-# Count check
 grep -c "forge_" docs/capabilities.md
-# Node errors check
 node -e "import('./pforge-mcp/capabilities.mjs').then(m => m.buildCapabilitySurface()).then(s => console.log('tools:', s.tools?.length))"
-# Stub pages created with placeholders
 grep -c "CONTENT-PLACEHOLDER" docs/manual/what-is-liveguard.html  # must be 1
 grep -c "CONTENT-PLACEHOLDER" docs/manual/liveguard-tools.html    # must be 1
-# manual.js parses without syntax error
 node --input-type=module < /dev/null; node -e "require('fs').readFileSync('docs/manual/assets/manual.js','utf8')" 2>&1 | grep -i syntaxerror || echo 'ok'
-# .gitignore has LiveGuard entries
 grep -c "incidents" .gitignore  # must be >= 1
 ```
 
@@ -737,12 +726,10 @@ curl http://localhost:3100/api/capabilities | node -e "const d=JSON.parse(requir
 ## Anti-Pattern Checks
 
 ```bash
-# After each slice — must all be 0 in new code
 grep -rn "any\b" pforge-mcp/*.mjs --include="*.mjs"          # no TypeScript 'any' equivalent in JS modules
 grep -rn "exec(" pforge-mcp/orchestrator.mjs                 # no exec() — use execFile() or spawn() instead
 grep -rn "rm -rf\|rimraf" pforge-mcp/                        # no destructive filesystem ops
 grep -rn "process.exit" pforge-mcp/server.mjs                # no abrupt exits from new handlers
-# Telemetry: every LiveGuard handler must call emitToolTelemetry — must be 0 missing
 node -e "
 const fs = require('fs');
 const src = fs.readFileSync('pforge-mcp/server.mjs', 'utf8');

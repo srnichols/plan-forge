@@ -158,7 +158,6 @@ LiveGuard tool call
 **Validation Gate**:
 ```bash
 node pforge-mcp/server.mjs --validate
-# All 9 LIVEGUARD handlers confirmed to have emitToolTelemetry — scoped check to avoid counting pre-existing non-LiveGuard calls
 node -e "
 const fs = require('fs');
 const src = fs.readFileSync('pforge-mcp/server.mjs', 'utf8');
@@ -239,7 +238,6 @@ function shannonEntropy(str) {
 ```bash
 node pforge-mcp/server.mjs --validate
 bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
-# Confirm no values in output — findings.masked must all be <REDACTED>
 pforge secret-scan --since HEAD~1 | node -e "
 const d = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
 const leaked = (d.findings || []).filter(f => f.masked !== '<REDACTED>');
@@ -287,7 +285,6 @@ curl http://localhost:3100/api/secrets/scan | node -e "const d=JSON.parse(requir
 ```bash
 node pforge-mcp/server.mjs --validate
 bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
-# Create test env files and verify diff shape
 echo "A=1\nB=2\nC=3" > /tmp/test.env.baseline
 echo "A=x\nD=y" > /tmp/test.env.staging
 pforge env-diff --baseline /tmp/test.env.baseline --files /tmp/test.env.staging | node -e "
@@ -319,7 +316,6 @@ curl http://localhost:3100/api/env/diff | node -e "const d=JSON.parse(require('f
 #### Prerequisite Check (run BEFORE any file edits)
 
 ```bash
-# Confirm tabLoadHooks pattern exists in app.js — LiveGuard tabs cannot be added without it
 grep -c "tabLoadHooks\[" pforge-mcp/dashboard/app.js  # must be >= 1
 ```
 
@@ -429,10 +425,8 @@ AFTER (two-section nav, single page):
 ```bash
 node pforge-mcp/server.mjs --validate
 bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
-# Section divider present in HTML
 grep -c "section-divider" pforge-mcp/dashboard/index.html  # must be 1
 
-# All 5 LiveGuard data-tab attributes present
 node -e "
 const html = require('fs').readFileSync('pforge-mcp/dashboard/index.html', 'utf8');
 const lgTabs = ['lg-health','lg-incidents','lg-triage','lg-security','lg-env'];
@@ -440,16 +434,12 @@ const missing = lgTabs.filter(t => !html.includes('data-tab=\"' + t + '\"'));
 if (missing.length) throw new Error('Missing tabs: ' + missing.join(', '));
 console.log('ok — all 5 LiveGuard tabs present');
 "
-# Hub event handler wired
 grep -c "liveguard-tool-completed" pforge-mcp/dashboard/app.js  # must be >= 2 (onmessage + onLiveGuardEvent)
 
-# Amber active color for LiveGuard section
 grep -c "lg-tab\|amber" pforge-mcp/dashboard/index.html  # must be > 0
 
-# tabBadgeState has LiveGuard keys
 grep -c "lgHealthAlert\|lgIncidentsNew\|lgCritical\|lgSecurityAlert" pforge-mcp/dashboard/app.js  # must be >= 4
 
-# Docs link wired in section header
 grep -c "liveguard-dashboard.html" pforge-mcp/dashboard/index.html  # must be >= 6 (1 section header + 5 per-tab)
 ```
 
@@ -506,7 +496,6 @@ node pforge-mcp/server.mjs --validate
 bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
 node -e "import('./pforge-mcp/capabilities.mjs').then(m => m.buildCapabilitySurface([])).then(s => { const count = Object.keys(m.TOOL_METADATA || {}).length; console.log('TOOL_METADATA entries:', count); })"
 grep -c "forge_" docs/capabilities.md
-# Must be 30
 curl http://localhost:3100/api/capabilities | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); if(d.tools.length!==30) throw new Error('Expected 30, got '+d.tools.length); console.log('ok')"
 ```
 
@@ -570,7 +559,6 @@ npx vitest run
 cat VERSION  # must read 2.28.0
 git log --oneline -1
 curl http://localhost:3100/api/capabilities | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); if(d.tools.length!==30) throw new Error('tool count wrong'); console.log('ok — 30 tools')"
-# Final security check — no values in any .forge/ store
 node -e "
 const fs = require('fs'), path = require('path');
 const caches = ['.forge/secret-scan-cache.json', '.forge/env-diff-cache.json'];
@@ -598,12 +586,10 @@ console.log('ok — no value leaks in .forge/ stores');
 ## Anti-Pattern Checks
 
 ```bash
-# Security — must all be 0 in new code
 grep -rn '\.value\b\|rawValue\|secretValue' pforge-mcp/server.mjs    # no secret value capture
 grep -rn '\.split.*=.*\[1\]' pforge-mcp/server.mjs                   # no value extraction after = in env parse
 grep -rn 'console\.log.*findings' pforge-mcp/server.mjs               # no raw findings logging
 
-# Telemetry — all handlers must be present (scoped check — not aggregate count, avoids overcounting pre-existing non-LiveGuard calls)
 node -e "
 const fs = require('fs');
 const src = fs.readFileSync('pforge-mcp/server.mjs', 'utf8');
@@ -618,7 +604,6 @@ if (covered.length < 11) throw new Error('Expected 11 handlers covered, got ' + 
 console.log('ok:', covered.length, '/ 11 handlers covered');
 "
 
-# Architecture
 grep -rn "exec(" pforge-mcp/orchestrator.mjs                          # no exec() — use execFile() or spawn()
 grep -rn "require(" pforge-mcp/dashboard/app.js                       # no Node.js require() in browser JS
 ```

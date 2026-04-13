@@ -131,7 +131,6 @@ All created lazily on first use.
 ```bash
 node pforge-mcp/server.mjs --validate
 bash -c "cd pforge-mcp && npx vitest run tests/orchestrator.test.mjs"
-# Verify generated plan has both mandatory slices
 node -e "
 const { generateFixPlan } = await import('./pforge-mcp/orchestrator.mjs');
 const result = await generateFixPlan({
@@ -192,12 +191,9 @@ console.log('ok — plan generated at', result.planFile);
 ```bash
 node pforge-mcp/server.mjs --validate
 bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
-# POST without auth returns 401
 curl -s -X POST http://localhost:3100/api/fix/propose -H "Content-Type: application/json" \
   -d '{"source":"regression"}' | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); if(d.status !== 401 && !d.error?.includes('auth')) throw new Error('expected 401')"
-# GET proposals returns array
 curl -s http://localhost:3100/api/fix/proposals | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); if(!Array.isArray(d)) throw new Error('expected array')"
-# Cap enforcement: duplicate incidentId returns alreadyExists: true
 node -e "
 import('./pforge-mcp/server.mjs').then(async () => {
   // Use REST or direct handler test via test harness
@@ -251,11 +247,9 @@ import('./pforge-mcp/server.mjs').then(async () => {
 ```bash
 node pforge-mcp/server.mjs --validate
 bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
-# Returns a string prompt with all 3 sections
 curl -s -X POST http://localhost:3100/api/quorum/prompt \
   -H "Content-Type: application/json" -d '{"source":"triage","analysisGoal":"risk-assess"}' | \
   node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); if(!d.quorumPrompt?.includes('confidence')) throw new Error('voting instruction missing'); if(!d.questionUsed) throw new Error('questionUsed missing'); console.log('tokens:', d.promptTokenEstimate)"
-# Custom question overrides preset
 curl -s -X POST http://localhost:3100/api/quorum/prompt \
   -H "Content-Type: application/json" \
   -d '{"source":"triage","customQuestion":"Which alert should I address first given the current sprint deadline?"}' | \
@@ -293,11 +287,8 @@ curl -s -X POST http://localhost:3100/api/quorum/prompt \
 ```bash
 node pforge-mcp/server.mjs --validate
 bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
-# Manual test: simulate deploy trigger with known finding
 echo '{"clean":false,"findings":[{"file":"src/config.js","line":5,"type":"api_key","entropyScore":4.8,"masked":"<REDACTED>","confidence":"high"}],"scannedAt":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}' > .forge/secret-scan-cache.json
-# Trigger hook via test harness — verify block response
 bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs" --grep "PreDeploy"
-# Clean up
 rm .forge/secret-scan-cache.json
 ```
 
@@ -364,11 +355,8 @@ export async function postOpenClawSnapshot(endpoint, apiKey, snapshot) {
 ```bash
 node pforge-mcp/server.mjs --validate
 bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
-# Verify OpenClaw helper exists and is exported
 node -e "import('./pforge-mcp/orchestrator.mjs').then(m => { if(typeof m.postOpenClawSnapshot !== 'function') throw new Error('missing'); console.log('ok'); })"
-# Verify hook triggers do not crash when all .forge/ stores are absent
 bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs" --grep "PreAgentHandoff.*empty"
-# Verify quorum turn guard skips injection
 PFORGE_QUORUM_TURN=1 bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs" --grep "PreAgentHandoff.*quorum"
 ```
 
@@ -400,12 +388,9 @@ PFORGE_QUORUM_TURN=1 bash -c "cd pforge-mcp && npx vitest run tests/server.test.
 
 **Validation Gate**:
 ```bash
-# Verify gitignore entry
 grep -c "docs/plans/auto" .gitignore  # must be >= 1
 grep -c '!docs/plans/auto/README.md' .gitignore  # must be >= 1 (exception)
-# Directory exists
 test -d docs/plans/auto && echo "ok"
-# git status shows auto/ as ignored but README.md is tracked
 git status --ignored docs/plans/auto/ | grep -c "Ignored" || echo "not ignored — check .gitignore"
 git ls-files docs/plans/auto/README.md | grep -c README.md  # must be 1 (tracked)
 ```
@@ -501,9 +486,7 @@ npx vitest run
 cat VERSION  # must read 2.29.0
 git log --oneline -1
 curl http://localhost:3100/api/capabilities | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); if(d.tools.length!==32) throw new Error('tool count wrong'); console.log('ok — 32 tools')"
-# No docs/plans/auto/ content committed
 git show --stat HEAD | grep "plans/auto" && echo "FAIL — auto plans committed" || echo "ok — auto plans not committed"
-# Vertical smoke test — end-to-end: seed → propose → verify → clean
 node -e "
 const fs = require('fs');
 // Seed a minimal regression failure
@@ -531,12 +514,10 @@ node -e "const fs=require('fs'); const fp=JSON.parse(fs.readFileSync('.forge/fix
 ## Anti-Pattern Checks
 
 ```bash
-# Must all be 0 in new code
 grep -rn "exec(" pforge-mcp/orchestrator.mjs                  # no exec() — use execFile() or spawn()
 grep -rn "run-plan" pforge-mcp/server.mjs                     # forge_fix_proposal must NOT invoke run-plan
 grep -rn "require(" pforge-mcp/dashboard/app.js               # no Node.js require() in browser JS
 
-# Security — auto-generated plan must contain ONLY template markers, not code
 node -e "
 const fs = require('fs'), path = require('path');
 const autoDir = 'docs/plans/auto';
@@ -551,7 +532,6 @@ for (const p of plans) {
 console.log('ok — ' + plans.length + ' auto plan(s) checked');
 "
 
-# Telemetry: both new handlers must call emitToolTelemetry
 node -e "
 const fs = require('fs');
 const src = fs.readFileSync('pforge-mcp/server.mjs', 'utf8');

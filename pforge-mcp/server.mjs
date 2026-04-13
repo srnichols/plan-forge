@@ -24,7 +24,7 @@ import { execSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, writeFileSync, watchFile, unwatchFile, statSync, openSync, readSync, closeSync } from "node:fs";
 import { resolve, join, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parsePlan, runPlan, detectWorkers, getCostReport, analyzeWithQuorum, generateImage } from "./orchestrator.mjs";
+import { parsePlan, runPlan, detectWorkers, getCostReport, analyzeWithQuorum, generateImage, runAnalyze, readForgeJson, appendForgeJsonl, emitToolTelemetry } from "./orchestrator.mjs";
 import { isOpenBrainConfigured } from "./memory.mjs";
 import { createHub, readHubPort } from "./hub.mjs";
 import { createBridge } from "./bridge.mjs";
@@ -547,6 +547,19 @@ const TOOLS = [
       required: ["prompt", "outputPath"],
     },
   },
+  {
+    name: "forge_drift_report",
+    description: "Score the codebase against architecture guardrail rules. Tracks drift over time in .forge/drift-history.json. Fires a bridge notification when score drops below threshold.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Directory to scan (default: project root)" },
+        threshold: { type: "number", description: "Alert threshold 0-100. Fires drift-alert when score drops below this value. Default: 70", minimum: 0, maximum: 100 },
+        rules: { type: "array", items: { type: "string" }, description: "Guardrail rule IDs to check. Default: all rules (empty-catch, any-type, sync-over-async, sql-injection, deferred-work)" },
+      },
+      required: [],
+    },
+  },
 ];
 function executeTool(name, args) {
   const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -928,6 +941,39 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
   }
 
+  if (name === "forge_drift_report") {
+    try {
+      const t0 = Date.now();
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const threshold = Math.max(0, Math.min(100, args.threshold ?? 70));
+      const penaltyPerViolation = 2;
+
+      const analysis = await runAnalyze({ mode: "file", path: ".", rules: args.rules || null, cwd });
+
+      const score = Math.max(0, 100 - (analysis.violations.length * penaltyPerViolation));
+
+      const history = readForgeJson("drift-history.json", [], cwd);
+      const prev = history.length ? history[history.length - 1] : null;
+      const delta = prev ? score - prev.score : 0;
+      const trend = !prev ? "stable" : delta > 0 ? "improving" : delta < 0 ? "degrading" : "stable";
+
+      const record = { timestamp: new Date().toISOString(), score, violations: analysis.violations, filesScanned: analysis.filesScanned, delta, trend };
+      appendForgeJsonl("drift-history.json", record, cwd);
+
+      if (score < threshold) {
+        activeHub?.broadcast({ type: "drift-alert", data: { score, threshold, violations: analysis.violations.length }, timestamp: record.timestamp });
+        activeBridge?.dispatch?.({ type: "drift-alert", score, threshold });
+      }
+
+      const result = { score, violations: analysis.violations, filesScanned: analysis.filesScanned, trend, delta, historyLength: history.length + 1 };
+      emitToolTelemetry("forge_drift_report", args, result, Date.now() - t0, "OK", cwd);
+
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Drift report error: ${err.message}` }], isError: true };
+    }
+  }
+
   // ─── Sync pforge tools ───
   const result = executeTool(name, args || {});
 
@@ -1037,6 +1083,32 @@ function createExpressApp() {
       } else {
         res.type("text/plain").send(result);
       }
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // REST API: GET /api/drift — run drift check
+  app.get("/api/drift", async (_req, res) => {
+    try {
+      const threshold = Math.max(0, Math.min(100, parseInt(_req.query.threshold) || 70));
+      const analysis = await runAnalyze({ mode: "file", path: ".", cwd: PROJECT_DIR });
+      const score = Math.max(0, 100 - (analysis.violations.length * 2));
+      const history = readForgeJson("drift-history.json", [], PROJECT_DIR);
+      const prev = history.length ? history[history.length - 1] : null;
+      const delta = prev ? score - prev.score : 0;
+      const trend = !prev ? "stable" : delta > 0 ? "improving" : delta < 0 ? "degrading" : "stable";
+      const record = { timestamp: new Date().toISOString(), score, violations: analysis.violations, filesScanned: analysis.filesScanned, delta, trend };
+      appendForgeJsonl("drift-history.json", record, PROJECT_DIR);
+      if (score < threshold) {
+        activeHub?.broadcast({ type: "drift-alert", data: { score, threshold, violations: analysis.violations.length }, timestamp: record.timestamp });
+      }
+      res.json({ score, violations: analysis.violations, filesScanned: analysis.filesScanned, trend, delta, historyLength: history.length + 1 });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // REST API: GET /api/drift/history — drift history
+  app.get("/api/drift/history", (_req, res) => {
+    try {
+      res.json(readForgeJson("drift-history.json", [], PROJECT_DIR));
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 

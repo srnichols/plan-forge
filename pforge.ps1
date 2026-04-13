@@ -75,6 +75,7 @@ function Show-Help {
     Write-Host "  version-bump <v>  Update version across all files (VERSION, package.json, docs, README)"
     Write-Host "  smith             Inspect your forge — environment, VS Code config, setup health, and common problems"
     Write-Host "  org-rules export  Export org custom instructions from .github/instructions/ for GitHub org settings"
+    Write-Host "  drift             Score codebase against architecture guardrail rules — track drift over time"
     Write-Host "  tour              Guided walkthrough of your installed Plan Forge files"
     Write-Host "  help              Show this help message"
     Write-Host ""
@@ -1862,6 +1863,120 @@ function Invoke-Analyze {
     }
 }
 
+# ─── Command: drift ────────────────────────────────────────────────────
+function Invoke-Drift {
+    $threshold = 70
+    foreach ($arg in $Arguments) {
+        if ($arg -match '^--threshold[= ]?(\d+)$') { $threshold = [int]$Matches[1] }
+        elseif ($arg -match '^\d+$') { $threshold = [int]$arg }
+    }
+
+    Write-Host ""
+    Write-Host "╔══════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+    Write-Host "║       Plan Forge — Drift Report                              ║" -ForegroundColor Cyan
+    Write-Host "╚══════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "Scanning source files for architecture guardrail violations..." -ForegroundColor Cyan
+    Write-Host "Threshold: $threshold/100" -ForegroundColor White
+    Write-Host ""
+
+    $extensions = @("*.js", "*.mjs", "*.ts", "*.tsx", "*.cs", "*.py")
+    $excludeDirs = @("node_modules", ".git", "bin", "obj", "dist", ".forge", "vendor", "coverage")
+
+    $rules = @(
+        @{ id = "empty-catch";     pattern = 'catch\s*\([^)]*\)\s*\{\s*\}';                                 severity = "high";     label = "Empty catch block" },
+        @{ id = "any-type";        pattern = ':\s*any\b|<any>|as\s+any\b';                                  severity = "medium";   label = "Avoid 'any' type" },
+        @{ id = "sync-over-async"; pattern = '\.(Result|Wait\(\))\b';                                       severity = "high";     label = "Sync-over-async (.Result/.Wait())" },
+        @{ id = "sql-injection";   pattern = '`[^`]*\b(SELECT|INSERT|UPDATE|DELETE|WHERE)\b[^`]*\$\{';      severity = "critical"; label = "SQL string interpolation" },
+        @{ id = "deferred-work";   pattern = '\b(TODO|FIXME|HACK)\b';                                       severity = "low";      label = "Deferred work marker" }
+    )
+
+    $violations = [System.Collections.Generic.List[object]]::new()
+    $filesScanned = 0
+
+    $excludeFilter = "($($excludeDirs -join '|'))"
+
+    foreach ($ext in $extensions) {
+        $files = Get-ChildItem -Path $RepoRoot -Filter $ext -Recurse -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -notmatch $excludeFilter }
+        foreach ($file in $files) {
+            $filesScanned++
+            try {
+                $content = Get-Content -Path $file.FullName -Raw -ErrorAction Stop
+                foreach ($rule in $rules) {
+                    $matches = [regex]::Matches($content, $rule.pattern)
+                    foreach ($m in $matches) {
+                        $lineNum = ($content.Substring(0, $m.Index) -split "`n").Count
+                        $relPath = $file.FullName.Substring($RepoRoot.Length).TrimStart('\', '/')
+                        $violations.Add([PSCustomObject]@{
+                            file        = $relPath
+                            rule        = $rule.id
+                            severity    = $rule.severity
+                            line        = $lineNum
+                            description = $rule.label
+                        })
+                    }
+                }
+            } catch { }
+        }
+    }
+
+    $penaltyPerViolation = 2
+    $score = [Math]::Max(0, 100 - ($violations.Count * $penaltyPerViolation))
+
+    Write-Host "Files scanned:  $filesScanned" -ForegroundColor White
+    Write-Host "Violations:     $($violations.Count)" -ForegroundColor $(if ($violations.Count -eq 0) { 'Green' } elseif ($violations.Count -le 5) { 'Yellow' } else { 'Red' })
+    Write-Host "Score:          $score/100" -ForegroundColor $(if ($score -ge 80) { 'Green' } elseif ($score -ge $threshold) { 'Yellow' } else { 'Red' })
+    Write-Host ""
+
+    if ($violations.Count -gt 0) {
+        Write-Host "Violations:" -ForegroundColor Cyan
+        foreach ($v in $violations | Select-Object -First 20) {
+            $color = switch ($v.severity) { 'critical' { 'Red' } 'high' { 'Red' } 'medium' { 'Yellow' } default { 'DarkYellow' } }
+            Write-Host "  [$($v.severity.ToUpper())] $($v.file):$($v.line) — $($v.description)" -ForegroundColor $color
+        }
+        if ($violations.Count -gt 20) {
+            Write-Host "  ... and $($violations.Count - 20) more violations" -ForegroundColor DarkYellow
+        }
+        Write-Host ""
+    }
+
+    # Load history and compute trend
+    $historyFile = Join-Path $RepoRoot ".forge\drift-history.json"
+    $history = @()
+    if (Test-Path $historyFile) {
+        try { $history = Get-Content $historyFile -Raw | ConvertFrom-Json } catch { }
+    }
+    $prev = if ($history.Count -gt 0) { $history[-1] } else { $null }
+    $delta = if ($prev) { $score - $prev.score } else { 0 }
+    $trend = if (-not $prev) { "stable" } elseif ($delta -gt 0) { "improving" } elseif ($delta -lt 0) { "degrading" } else { "stable" }
+
+    $record = @{
+        timestamp    = (Get-Date -Format "o")
+        score        = $score
+        violations   = @($violations | ForEach-Object { @{ file = $_.file; rule = $_.rule; severity = $_.severity; line = $_.line } })
+        filesScanned = $filesScanned
+        delta        = $delta
+        trend        = $trend
+    }
+
+    $forgeDir = Join-Path $RepoRoot ".forge"
+    if (-not (Test-Path $forgeDir)) { New-Item -ItemType Directory -Path $forgeDir -Force | Out-Null }
+    $record | ConvertTo-Json -Depth 5 -Compress | Add-Content -Path $historyFile
+
+    Write-Host "Trend:          $trend" -ForegroundColor $(if ($trend -eq 'improving') { 'Green' } elseif ($trend -eq 'degrading') { 'Red' } else { 'White' })
+    Write-Host "History:        $($history.Count + 1) record(s) in .forge/drift-history.json" -ForegroundColor White
+    Write-Host ""
+
+    if ($score -lt $threshold) {
+        Write-Host "⚠  DRIFT ALERT — score $score is below threshold $threshold" -ForegroundColor Red
+        exit 1
+    } else {
+        Write-Host "✅ Drift score within threshold ($score >= $threshold)" -ForegroundColor Green
+        exit 0
+    }
+}
+
 # ─── Command: smith ────────────────────────────────────────────────────
 function Invoke-Smith {
     Write-ManualSteps "smith" @(
@@ -2950,6 +3065,42 @@ else{process.stdout.write(out+'\n');}
     Remove-Item Env:ORG_RULES_OUTPUT  -ErrorAction SilentlyContinue
 }
 
+# ─── Command: drift ────────────────────────────────────────────────────
+function Invoke-Drift {
+    $threshold = 70
+    for ($i = 0; $i -lt $Arguments.Count; $i++) {
+        if ($Arguments[$i] -eq '--threshold' -and ($i + 1) -lt $Arguments.Count) {
+            $threshold = [int]$Arguments[$i + 1]; $i++
+        }
+    }
+
+    Write-ManualSteps "drift" @(
+        "Scan source files for architecture rule violations"
+        "Score codebase (100 minus penalties)"
+        "Compare against .forge/drift-history.json"
+        "Report trend: improving / stable / degrading"
+    )
+
+    $port = 3100
+    try {
+        $response = Invoke-RestMethod -Uri "http://localhost:$port/api/drift?threshold=$threshold" -Method GET -ErrorAction Stop
+        Write-Host "`n`u{1F4CA} Drift Score: $($response.score)/100" -ForegroundColor $(if ($response.score -ge $threshold) { 'Green' } else { 'Red' })
+        Write-Host "   Trend: $($response.trend) ($([char]0x0394)$($response.delta))"
+        Write-Host "   Files scanned: $($response.filesScanned)"
+        Write-Host "   Violations: $($response.violations.Count)"
+        Write-Host "   History entries: $($response.historyLength)"
+        if ($response.violations.Count -gt 0) {
+            foreach ($v in $response.violations) {
+                $color = if ($v.severity -eq 'critical') { 'Red' } else { 'Yellow' }
+                Write-Host "   `u{26A0} [$($v.severity)] $($v.file):$($v.line) $($v.rule)" -ForegroundColor $color
+            }
+        }
+    } catch {
+        Write-Host "ERROR: MCP server not running on port $port. Start with: node pforge-mcp/server.mjs" -ForegroundColor Red
+        exit 1
+    }
+}
+
 # ─── Command: tour ─────────────────────────────────────────────────────
 function Invoke-Tour {
     Write-Host ""
@@ -3080,6 +3231,7 @@ switch ($Command) {
     'analyze'      { Invoke-Analyze }
     'run-plan'     { Invoke-RunPlan }
     'org-rules'    { Invoke-OrgRules }
+    'drift'        { Invoke-Drift }
     'version-bump' { Invoke-VersionBump }
     'smith'        { Invoke-Smith }
     'tour'         { Invoke-Tour }

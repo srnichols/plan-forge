@@ -19,9 +19,9 @@
  * @module orchestrator
  */
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync, appendFileSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync, appendFileSync, readdirSync } from "node:fs";
 import { spawn, execSync } from "node:child_process";
-import { resolve, basename, dirname } from "node:path";
+import { resolve, basename, dirname, join, relative, extname } from "node:path";
 import { EventEmitter } from "node:events";
 import { tmpdir } from "node:os";
 import { createTraceContext, createTelemetryHandler, writeManifest, appendRunIndex, pruneRunHistory, addLogSummary } from "./telemetry.mjs";
@@ -3247,6 +3247,66 @@ function runAutoSweep(cwd) {
   } catch (err) {
     return { ran: true, clean: false, error: (err.stderr || err.message || "").trim() };
   }
+}
+
+// ─── Architecture Guardrail Rules ────────────────────────────────────
+const GUARDRAIL_RULES = [
+  { id: "empty-catch",     pattern: /catch\s*\([^)]*\)\s*\{\s*\}/g,                            severity: "high",     description: "Empty catch block — must log or handle the error" },
+  { id: "any-type",        pattern: /:\s*any\b|<any>|as\s+any\b/g,                             severity: "medium",   description: "Avoid 'any' type — use explicit types" },
+  { id: "sync-over-async", pattern: /\.(Result|Wait\(\))\b/g,                                  severity: "high",     description: "Sync-over-async (.Result/.Wait()) — use await instead" },
+  { id: "sql-injection",   pattern: /`[^`]*\b(SELECT|INSERT|UPDATE|DELETE|WHERE)\b[^`]*\$\{/gi, severity: "critical", description: "SQL string interpolation — use parameterized queries" },
+  { id: "deferred-work",   pattern: /\b(TODO|FIXME|HACK)\b/g,                                  severity: "low",      description: "Deferred work marker in production code" },
+];
+
+const SOURCE_EXTENSIONS = new Set([".js", ".mjs", ".ts", ".tsx", ".cs", ".py"]);
+const EXCLUDE_DIRS = new Set(["node_modules", ".git", "bin", "obj", "dist", ".forge", "vendor", "coverage", ".next", "out"]);
+
+/**
+ * Scan source files for architecture guardrail violations.
+ * Called by forge_drift_report to score the codebase without spawning a subprocess.
+ *
+ * @param {object} options
+ * @param {string} [options.path="."]   - Directory to scan (relative to cwd)
+ * @param {string} [options.mode="file"] - Analysis mode (currently only "file" is used)
+ * @param {string[]|null} [options.rules=null] - Rule IDs to run; null = all rules
+ * @param {string} [options.cwd=process.cwd()] - Project root
+ * @returns {Promise<{violations: Array<{file,rule,severity,line,description}>, filesScanned: number}>}
+ */
+export async function runAnalyze({ mode = "file", path: targetPath = ".", rules = null, cwd = process.cwd() } = {}) {
+  const activeRules = rules
+    ? GUARDRAIL_RULES.filter(r => rules.includes(r.id))
+    : GUARDRAIL_RULES;
+
+  const rootPath = resolve(cwd, targetPath);
+  const violations = [];
+  let filesScanned = 0;
+
+  function scanDir(dirPath) {
+    let entries;
+    try { entries = readdirSync(dirPath, { withFileTypes: true }); } catch { return; }
+    for (const entry of entries) {
+      const fullPath = join(dirPath, entry.name);
+      if (entry.isDirectory()) {
+        if (!EXCLUDE_DIRS.has(entry.name)) scanDir(fullPath);
+      } else if (entry.isFile() && SOURCE_EXTENSIONS.has(extname(entry.name))) {
+        filesScanned++;
+        let content;
+        try { content = readFileSync(fullPath, "utf-8"); } catch { continue; }
+        const relPath = relative(cwd, fullPath);
+        for (const rule of activeRules) {
+          const re = new RegExp(rule.pattern.source, rule.pattern.flags);
+          let match;
+          while ((match = re.exec(content)) !== null) {
+            const line = content.substring(0, match.index).split("\n").length;
+            violations.push({ file: relPath, rule: rule.id, severity: rule.severity, line, description: rule.description });
+          }
+        }
+      }
+    }
+  }
+
+  scanDir(rootPath);
+  return { violations, filesScanned };
 }
 
 /**

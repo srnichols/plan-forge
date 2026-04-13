@@ -184,6 +184,19 @@ export const TOOL_METADATA = {
     errors: {},
     example: { input: {}, output: { runs: 5, total_cost_usd: 1.23, by_model: {}, forge_model_stats: { "claude-sonnet-4.6": { total_slices: 10, passed: 9, failed: 1, success_rate: 0.9, avg_cost_usd: 0.05 } } } },
   },
+  forge_drift_report: {
+    intent: ["audit", "guardrail", "architecture"],
+    aliases: ["drift-check", "arch-score"],
+    cost: "low",
+    maxConcurrent: 1,
+    addedIn: "2.27.0",
+    prerequisites: [],
+    produces: [".forge/drift-history.json"],
+    consumes: [],
+    sideEffects: ["appends to .forge/drift-history.json", "broadcasts drift-alert hub event when score < threshold"],
+    errors: {},
+    example: { input: { threshold: 70 }, output: { score: 82, violations: [], filesScanned: 45, trend: "stable", delta: 0, historyLength: 1 } },
+  },
   forge_ext_search: {
     intent: ["search", "browse", "discover"],
     aliases: ["find-extensions", "browse-catalog"],
@@ -237,6 +250,22 @@ export const TOOL_METADATA = {
     sideEffects: [],
     errors: {},
     example: { input: {}, output: { tools: 14, workflows: 4, memory: { configured: true } } },
+  },
+  forge_drift_report: {
+    intent: ["drift-detect", "architecture-audit", "guardrail-score"],
+    aliases: ["drift-check", "drift-score", "arch-drift"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "2.27.0",
+    prerequisites: ["git initialized"],
+    produces: [".forge/drift-history.json"],
+    consumes: [".github/instructions/*.instructions.md", "**/*.{js,ts,cs,py}"],
+    sideEffects: ["appends to .forge/drift-history.json", "may fire drift-alert hub event"],
+    errors: {
+      NO_SOURCE_FILES: { message: "No source files found to analyze", recovery: "Check path argument" },
+      ANALYSIS_FAILED: { message: "Rule analysis failed", recovery: "Check file permissions and path" },
+    },
+    example: { input: { threshold: 70 }, output: { score: 85, violations: [], trend: "stable", delta: 0, historyLength: 1 } },
   },
 };
 

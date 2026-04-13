@@ -9,6 +9,7 @@ import {
   appendForgeJsonl,
   parseValidationGates,
   emitToolTelemetry,
+  runAnalyze,
 } from "../orchestrator.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -222,5 +223,73 @@ describe("emitToolTelemetry", () => {
     expect(() => {
       emitToolTelemetry("forge_status", {}, "test", 5, "ok", "/nonexistent/Z:/impossible/path");
     }).not.toThrow();
+  });
+});
+
+// ─── runAnalyze ──────────────────────────────────────────────────────
+
+describe("runAnalyze", () => {
+  it("returns violations array and filesScanned count", async () => {
+    // Create a .ts file with a known violation (any type usage)
+    const srcDir = resolve(tempDir, "src");
+    mkdirSync(srcDir, { recursive: true });
+    writeFileSync(resolve(srcDir, "bad.ts"), "const x: any = 5;\n");
+
+    const result = await runAnalyze({ path: "src", cwd: tempDir });
+    expect(result).toHaveProperty("violations");
+    expect(result).toHaveProperty("filesScanned");
+    expect(Array.isArray(result.violations)).toBe(true);
+    expect(result.filesScanned).toBeGreaterThanOrEqual(1);
+    expect(result.violations.length).toBeGreaterThanOrEqual(1);
+    expect(result.violations[0]).toHaveProperty("file");
+    expect(result.violations[0]).toHaveProperty("rule");
+    expect(result.violations[0]).toHaveProperty("severity");
+    expect(result.violations[0]).toHaveProperty("line");
+  });
+
+  it("returns empty violations for clean project", async () => {
+    const srcDir = resolve(tempDir, "clean");
+    mkdirSync(srcDir, { recursive: true });
+    writeFileSync(resolve(srcDir, "good.ts"), "const x: number = 5;\nexport default x;\n");
+
+    const result = await runAnalyze({ path: "clean", cwd: tempDir });
+    expect(result.violations).toEqual([]);
+    expect(result.filesScanned).toBe(1);
+  });
+
+  it("accepts cwd parameter for testability", async () => {
+    const result = await runAnalyze({ path: ".", cwd: tempDir });
+    expect(result).toHaveProperty("filesScanned");
+    expect(result.filesScanned).toBe(0);
+  });
+
+  it("detects empty catch blocks", async () => {
+    const srcDir = resolve(tempDir, "src2");
+    mkdirSync(srcDir, { recursive: true });
+    writeFileSync(resolve(srcDir, "catch.js"), "try { foo(); } catch (e) {}\n");
+
+    const result = await runAnalyze({ path: "src2", cwd: tempDir });
+    expect(result.violations.some(v => v.rule === "empty-catch")).toBe(true);
+  });
+
+  it("filters by specific rules when provided", async () => {
+    const srcDir = resolve(tempDir, "src3");
+    mkdirSync(srcDir, { recursive: true });
+    writeFileSync(resolve(srcDir, "multi.ts"), "const x: any = 5;\ntry { foo(); } catch (e) {}\n");
+
+    const allResult = await runAnalyze({ path: "src3", cwd: tempDir });
+    const filteredResult = await runAnalyze({ path: "src3", rules: ["empty-catch"], cwd: tempDir });
+
+    expect(allResult.violations.length).toBeGreaterThan(filteredResult.violations.length);
+    expect(filteredResult.violations.every(v => v.rule === "empty-catch")).toBe(true);
+  });
+
+  it("skips node_modules and .git directories", async () => {
+    const nmDir = resolve(tempDir, "node_modules", "pkg");
+    mkdirSync(nmDir, { recursive: true });
+    writeFileSync(resolve(nmDir, "index.ts"), "const x: any = 5;\n");
+
+    const result = await runAnalyze({ path: ".", cwd: tempDir });
+    expect(result.violations).toEqual([]);
   });
 });

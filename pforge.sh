@@ -58,6 +58,7 @@ COMMANDS:
   analyze <plan>    Cross-artifact analysis — requirement traceability, test coverage, scope compliance
   run-plan <plan>   Execute a hardened plan — spawn CLI workers, validate at every boundary, track tokens
   org-rules export  Export org custom instructions from .github/instructions/ for GitHub org settings
+  drift             Score codebase against architecture guardrail rules — track drift over time
   smith             Inspect your forge — environment, VS Code config, setup health, and common problems
   tour              Guided walkthrough of your installed Plan Forge files
   help              Show this help message
@@ -1593,6 +1594,130 @@ cmd_analyze() {
     fi
 }
 
+# ─── Command: drift ────────────────────────────────────────────────────
+cmd_drift() {
+    local threshold=70
+    for arg in "$@"; do
+        case "$arg" in
+            --threshold=*) threshold="${arg#*=}" ;;
+            --threshold)   shift; threshold="$1" ;;
+            [0-9]*)        threshold="$arg" ;;
+        esac
+    done
+
+    echo ""
+    echo "╔══════════════════════════════════════════════════════════════╗"
+    echo "║       Plan Forge — Drift Report                              ║"
+    echo "╚══════════════════════════════════════════════════════════════╝"
+    echo ""
+    echo "Scanning source files for architecture guardrail violations..."
+    echo "Threshold: $threshold/100"
+    echo ""
+
+    local files_scanned=0
+    local violation_count=0
+    local violations_json="["
+    local first_violation=true
+    local penalty_per_violation=2
+
+    # Scan source files for guardrail violations
+    while IFS= read -r -d '' file; do
+        files_scanned=$((files_scanned + 1))
+        local rel="${file#$REPO_ROOT/}"
+        local content
+        content=$(cat "$file" 2>/dev/null) || continue
+
+        check_rule() {
+            local rule_id="$1" pattern="$2" severity="$3" label="$4"
+            local line_num=1 found=false
+            while IFS= read -r line; do
+                if echo "$line" | grep -qE "$pattern" 2>/dev/null; then
+                    violation_count=$((violation_count + 1))
+                    if [ "$first_violation" = "true" ]; then
+                        first_violation=false
+                    else
+                        violations_json="$violations_json,"
+                    fi
+                    local escaped_rel escaped_label
+                    escaped_rel=$(printf '%s' "$rel" | sed 's/\\/\\\\/g; s/"/\\"/g')
+                    escaped_label=$(printf '%s' "$label" | sed 's/"/\\"/g')
+                    violations_json="$violations_json{\"file\":\"$escaped_rel\",\"rule\":\"$rule_id\",\"severity\":\"$severity\",\"line\":$line_num,\"description\":\"$escaped_label\"}"
+                fi
+                line_num=$((line_num + 1))
+            done <<< "$content"
+        }
+
+        check_rule "empty-catch"     'catch[[:space:]]*\([^)]*\)[[:space:]]*\{[[:space:]]*\}'   "high"     "Empty catch block"
+        check_rule "any-type"        ':[[:space:]]*any[[:space:];|,>]|<any>|as[[:space:]]+any'  "medium"   "Avoid 'any' type"
+        check_rule "sync-over-async" '\.(Result|Wait\(\))'                                      "high"     "Sync-over-async"
+        check_rule "sql-injection"   'SELECT|INSERT|UPDATE|DELETE.*\$\{'                        "critical" "SQL string interpolation"
+        check_rule "deferred-work"   '\b(TODO|FIXME|HACK)\b'                                    "low"      "Deferred work marker"
+
+    done < <(find "$REPO_ROOT" -type f \( -name "*.js" -o -name "*.mjs" -o -name "*.ts" -o -name "*.tsx" -o -name "*.cs" -o -name "*.py" \) \
+        ! -path '*/node_modules/*' ! -path '*/.git/*' ! -path '*/bin/*' ! -path '*/obj/*' \
+        ! -path '*/dist/*' ! -path '*/.forge/*' ! -path '*/vendor/*' ! -path '*/coverage/*' \
+        -print0 2>/dev/null)
+
+    violations_json="$violations_json]"
+
+    local score=$(( 100 - violation_count * penalty_per_violation ))
+    [ "$score" -lt 0 ] && score=0
+
+    printf "Files scanned:  %d\n" "$files_scanned"
+    if [ "$violation_count" -eq 0 ]; then
+        printf "Violations:     \033[32m%d\033[0m\n" "$violation_count"
+    elif [ "$violation_count" -le 5 ]; then
+        printf "Violations:     \033[33m%d\033[0m\n" "$violation_count"
+    else
+        printf "Violations:     \033[31m%d\033[0m\n" "$violation_count"
+    fi
+    if [ "$score" -ge 80 ]; then
+        printf "Score:          \033[32m%d/100\033[0m\n" "$score"
+    elif [ "$score" -ge "$threshold" ]; then
+        printf "Score:          \033[33m%d/100\033[0m\n" "$score"
+    else
+        printf "Score:          \033[31m%d/100\033[0m\n" "$score"
+    fi
+    echo ""
+
+    # Append to drift-history.json
+    local forge_dir="$REPO_ROOT/.forge"
+    mkdir -p "$forge_dir"
+    local history_file="$forge_dir/drift-history.json"
+    local prev_score=""
+    local history_count=0
+    if [ -f "$history_file" ]; then
+        history_count=$(grep -c '"score"' "$history_file" 2>/dev/null || echo 0)
+        prev_score=$(grep -o '"score":[0-9]*' "$history_file" 2>/dev/null | tail -1 | grep -o '[0-9]*$')
+    fi
+
+    local delta=0 trend="stable"
+    if [ -n "$prev_score" ]; then
+        delta=$((score - prev_score))
+        if [ "$delta" -gt 0 ]; then trend="improving"
+        elif [ "$delta" -lt 0 ]; then trend="degrading"
+        fi
+    fi
+
+    local ts
+    ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date -u +"%Y-%m-%dT%H:%M:%SZ")
+    local record="{\"timestamp\":\"$ts\",\"score\":$score,\"filesScanned\":$files_scanned,\"delta\":$delta,\"trend\":\"$trend\",\"violations\":$violations_json}"
+    echo "$record" >> "$history_file"
+
+    local history_length=$((history_count + 1))
+    printf "Trend:          %s\n" "$trend"
+    printf "History:        %d record(s) in .forge/drift-history.json\n" "$history_length"
+    echo ""
+
+    if [ "$score" -lt "$threshold" ]; then
+        printf "\033[31m⚠  DRIFT ALERT — score %d is below threshold %d\033[0m\n" "$score" "$threshold"
+        exit 1
+    else
+        printf "\033[32m✅ Drift score within threshold (%d >= %d)\033[0m\n" "$score" "$threshold"
+        exit 0
+    fi
+}
+
 # ─── Command: doctor ───────────────────────────────────────────────────
 cmd_doctor() {
     print_manual_steps "smith" \
@@ -2459,6 +2584,43 @@ else{process.stdout.write(out+'\n');}
 "
 }
 
+# ─── Command: drift ────────────────────────────────────────────────────
+cmd_drift() {
+    local threshold=70
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --threshold) threshold="$2"; shift 2 ;;
+            *) shift ;;
+        esac
+    done
+
+    print_manual_steps "drift" \
+        "Scan source files for architecture rule violations" \
+        "Score codebase (100 minus penalties)" \
+        "Compare against .forge/drift-history.json" \
+        "Report trend: improving / stable / degrading"
+
+    local port=3100
+    local response
+    response=$(curl -sf "http://localhost:${port}/api/drift?threshold=${threshold}") || {
+        echo "ERROR: MCP server not running on port ${port}. Start with: node pforge-mcp/server.mjs" >&2
+        exit 1
+    }
+    echo "$response" | node -e "
+      const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
+      const color = d.score >= ${threshold} ? '\x1b[32m' : '\x1b[31m';
+      console.log('\n\u{1F4CA} Drift Score: ' + color + d.score + '/100\x1b[0m');
+      console.log('   Trend: ' + d.trend + ' (\u0394' + d.delta + ')');
+      console.log('   Files scanned: ' + d.filesScanned);
+      console.log('   Violations: ' + d.violations.length);
+      console.log('   History entries: ' + d.historyLength);
+      d.violations.forEach(v => {
+        const vc = v.severity === 'critical' ? '\x1b[31m' : '\x1b[33m';
+        console.log('   \u26A0 ' + vc + '[' + v.severity + '] ' + v.file + ':' + v.line + ' ' + v.rule + '\x1b[0m');
+      });
+    "
+}
+
 # ─── Command: tour ─────────────────────────────────────────────────────
 cmd_tour() {
     echo ""
@@ -2569,6 +2731,7 @@ case "$COMMAND" in
     analyze)      cmd_analyze "$@" ;;
     run-plan)     cmd_run_plan "$@" ;;
     org-rules)    cmd_org_rules "$@" ;;
+    drift)        cmd_drift "$@" ;;
     smith)        cmd_smith ;;
     tour)         cmd_tour ;;
     help|--help)  show_help ;;

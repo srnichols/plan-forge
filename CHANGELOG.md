@@ -4,7 +4,17 @@ All notable changes to Plan Forge are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
+## [2.26.0] - 2026-04-12
 
+### Added
+- `faq.html`: 3 new QAs — remote trigger, memory API, and discovery layer for OpenClaw/external agents
+- `capabilities.html`: `forge_memory_capture` card added to MCP tool grid; 19 MCP count updated throughout; new "REST API — External Integration" section with run control, memory, discovery, and auth details
+- `capabilities.md`: `forge_memory_capture` row in MCP table; 4 new REST endpoints in API table (trigger, abort, memory/search, memory/capture); auth note on write endpoints; new "External Integration" section with curl examples and required config
+
+### Changed
+- MCP tool count updated to 19 across all docs (faq.html ×2, capabilities.html ×6, capabilities.md ×2)
+
+---
 ## [2.25.0] — 2026-04-12
 
 ### Added

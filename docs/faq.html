@@ -646,7 +646,7 @@
               <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
             </summary>
             <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
-              Yes. The setup wizard generates <code class="text-forge-400">.vscode/mcp.json</code> (and <code class="text-forge-400">.claude/mcp.json</code> for Claude), which exposes 18 forge tools as native MCP functions: <code class="text-forge-400">forge_smith</code>, <code class="text-forge-400">forge_validate</code>, <code class="text-forge-400">forge_sweep</code>, <code class="text-forge-400">forge_status</code>, <code class="text-forge-400">forge_diff</code>, <code class="text-forge-400">forge_analyze</code>, <code class="text-forge-400">forge_diagnose</code>, <code class="text-forge-400">forge_run_plan</code>, <code class="text-forge-400">forge_abort</code>, <code class="text-forge-400">forge_plan_status</code>, <code class="text-forge-400">forge_cost_report</code>, <code class="text-forge-400">forge_capabilities</code>, <code class="text-forge-400">forge_ext_search</code>, <code class="text-forge-400">forge_ext_info</code>, <code class="text-forge-400">forge_new_phase</code>, <code class="text-forge-400">forge_skill_status</code>, <code class="text-forge-400">forge_run_skill</code>, and <code class="text-forge-400">forge_generate_image</code>. Your AI agent can call these directly — no terminal commands needed. The MCP server is composable with OpenBrain for persistent memory.
+              Yes. The setup wizard generates <code class="text-forge-400">.vscode/mcp.json</code> (and <code class="text-forge-400">.claude/mcp.json</code> for Claude), which exposes 19 forge tools as native MCP functions: <code class="text-forge-400">forge_smith</code>, <code class="text-forge-400">forge_validate</code>, <code class="text-forge-400">forge_sweep</code>, <code class="text-forge-400">forge_status</code>, <code class="text-forge-400">forge_diff</code>, <code class="text-forge-400">forge_analyze</code>, <code class="text-forge-400">forge_diagnose</code>, <code class="text-forge-400">forge_run_plan</code>, <code class="text-forge-400">forge_abort</code>, <code class="text-forge-400">forge_plan_status</code>, <code class="text-forge-400">forge_cost_report</code>, <code class="text-forge-400">forge_capabilities</code>, <code class="text-forge-400">forge_ext_search</code>, <code class="text-forge-400">forge_ext_info</code>, <code class="text-forge-400">forge_new_phase</code>, <code class="text-forge-400">forge_skill_status</code>, <code class="text-forge-400">forge_run_skill</code>, <code class="text-forge-400">forge_generate_image</code>, and <code class="text-forge-400">forge_memory_capture</code>. Your AI agent can call these directly — no terminal commands needed. The MCP server is composable with OpenBrain for persistent memory.
             </div>
           </details>
 
@@ -667,6 +667,68 @@
 }</code></pre>
               <p class="mb-3">Set <code class="text-forge-400">approvalRequired: true</code> on any channel to <strong>pause execution after all slices pass</strong> and send an Approve / Reject button. The run only finalises after a human clicks Approve. Timeout (default 30 min) auto-rejects if no response.</p>
               <p>The bridge connects to the Plan Forge WebSocket hub as a subscriber — it observes events without modifying the hub. See <code class="text-forge-400">docs/CLI-GUIDE.md</code> for the full bridge configuration reference.</p>
+            </div>
+          </details>
+
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">Can an external agent like OpenClaw trigger a plan run remotely?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              <p class="mb-3">Yes — the MCP server exposes <code class="text-forge-400">POST /api/runs/trigger</code> and <code class="text-forge-400">POST /api/runs/abort</code> for inbound control from any external system, including <a href="https://github.com/srnichols/OpenClaw" class="text-forge-400 hover:underline">OpenClaw</a>, CI pipelines, or custom automation:</p>
+              <pre class="bg-slate-900/60 rounded-lg p-4 text-xs text-forge-400 overflow-x-auto mb-3"><code># Start a plan run (fire-and-forget — returns immediately)
+curl -X POST http://localhost:3100/api/runs/trigger \
+  -H "Authorization: Bearer &lt;approvalSecret&gt;" \
+  -H "Content-Type: application/json" \
+  -d '{ "plan": "docs/plans/my-feature.md" }'
+
+# Abort the active run
+curl -X POST http://localhost:3100/api/runs/abort \
+  -H "Authorization: Bearer &lt;approvalSecret&gt;"</code></pre>
+              <p class="mb-3">The trigger endpoint prevents concurrent runs, returns a <code class="text-forge-400">triggerId</code>, and emits <code class="text-forge-400">run-started</code> on the WebSocket hub. If the bridge is configured with <code class="text-forge-400">approvalRequired: true</code>, Plan Forge pauses at the end and sends an Approve/Reject message to your Telegram or Slack.</p>
+              <p>Set <code class="text-forge-400">bridge.approvalSecret</code> in <code class="text-forge-400">.forge.json</code> to require bearer-token auth on write endpoints. Without a secret, endpoints are open (suitable for local-only setups).</p>
+            </div>
+          </details>
+
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">Can external tools read and write OpenBrain project memory via the REST API?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              <p class="mb-3">Yes — two memory endpoints are available when OpenBrain is configured:</p>
+              <ul class="list-disc list-inside space-y-1 mb-3">
+                <li><strong class="text-white"><code class="text-forge-400">POST /api/memory/search</code></strong> — semantic search across past decisions and patterns. Returns the matching thoughts payload to forward to OpenBrain.</li>
+                <li><strong class="text-white"><code class="text-forge-400">POST /api/memory/capture</code></strong> — normalise and broadcast a <code class="text-forge-400">memory-captured</code> hub event. Returns a structured <code class="text-forge-400">capture_thought</code> payload for the caller to forward to OpenBrain.</li>
+              </ul>
+              <pre class="bg-slate-900/60 rounded-lg p-4 text-xs text-forge-400 overflow-x-auto mb-3"><code># Search project memory
+curl -X POST http://localhost:3100/api/memory/search \
+  -H "Content-Type: application/json" \
+  -d '{ "query": "authentication patterns", "topK": 5 }'
+
+# Capture a new thought
+curl -X POST http://localhost:3100/api/memory/capture \
+  -H "Authorization: Bearer &lt;approvalSecret&gt;" \
+  -H "Content-Type: application/json" \
+  -d '{ "content": "Decided to use OIDC for auth layer", "tags": ["auth","decision"] }'</code></pre>
+              <p>Plan Forge normalises the payload and emits the hub event — the caller is responsible for forwarding to OpenBrain. This keeps the memory boundary clean: Plan Forge doesn't own OpenBrain writes directly. The <code class="text-forge-400">forge_memory_capture</code> MCP tool provides the same capability for in-session agents.</p>
+            </div>
+          </details>
+
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">How does an external agent discover Plan Forge's REST API surface?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              <p class="mb-3">Three discovery layers are available — an agent only needs one:</p>
+              <ul class="list-disc list-inside space-y-2 mb-3">
+                <li><strong class="text-white">Programmatic</strong>: <code class="text-forge-400">GET /.well-known/plan-forge.json</code> or <code class="text-forge-400">GET /api/capabilities</code> — returns the full machine-readable surface: all MCP tools, all REST endpoints (with methods, auth requirements, and body shapes), config schema, version, and memory/bridge status. Best for agents that self-configure on first connect.</li>
+                <li><strong class="text-white">LLM-readable</strong>: <code class="text-forge-400">docs/llms.txt</code> (served at <code class="text-forge-400">/llms.txt</code>) — plain-text description of all 13 REST endpoints. Formatted for LLM ingestion.</li>
+                <li><strong class="text-white">Human reference</strong>: <code class="text-forge-400">AGENT-SETUP.md</code> Section 6 — curl examples for all external integration endpoints with copy-paste config.</li>
+              </ul>
+              <p>The recommended pattern for OpenClaw or any agent: on first connection, call <code class="text-forge-400">GET /api/capabilities</code>, parse <code class="text-forge-400">restApi.endpoints</code>, and store the surface locally. Subsequent connections reuse the cached surface and only refresh on version change.</p>
             </div>
           </details>
 

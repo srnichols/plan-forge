@@ -1,12 +1,12 @@
 # Plan Forge — Capabilities Reference
 
-> **Tools**: 18 MCP | **Presets**: 9 | **Agents**: 19 | **Skills**: 12
+> **Tools**: 19 MCP | **Presets**: 9 | **Agents**: 19 | **Skills**: 12
 >
 > Machine-readable version: call `forge_capabilities` MCP tool or `GET https://planforge.software/.well-known/plan-forge.json`
 
 ---
 
-## MCP Tools (18)
+## MCP Tools (19)
 
 | Tool | Intent | Cost | Description |
 |------|--------|------|-------------|
@@ -28,6 +28,7 @@
 | `forge_skill_status` | read | low | Query recent skill execution events from the hub |
 | `forge_run_skill` | execute | medium | Execute any skill programmatically with dry-run mode and structured results |
 | `forge_generate_image` | create | medium | Generate images via xAI Grok Aurora or OpenAI DALL-E. Saves to disk. For logos, diagrams, icons, mockups |
+| `forge_memory_capture` | capture | low | Normalise and broadcast a `memory-captured` hub event; returns `capture_thought` payload for OpenBrain |
 
 ## Execution Modes
 
@@ -166,7 +167,13 @@ Store API keys in the gitignored `.forge/` directory as an alternative to enviro
 | GET | `/api/traces` | All runs from index |
 | GET | `/api/traces/:runId` | Single run trace detail |
 | GET | `/api/capabilities` | Full capability surface |
-| GET | `/.well-known/plan-forge.json` | Discovery endpoint |
+| GET | `/.well-known/plan-forge.json` | Discovery endpoint (RFC 8615) |
+| POST | `/api/runs/trigger` | Start a plan run remotely — fire-and-forget, returns `triggerId` |
+| POST | `/api/runs/abort` | Abort the active run |
+| POST | `/api/memory/search` | Semantic search via OpenBrain (requires OpenBrain configured) |
+| POST | `/api/memory/capture` | Normalise + broadcast `memory-captured` event; returns capture payload |
+
+Write endpoints (`/api/runs/trigger`, `/api/runs/abort`, `/api/memory/capture`, `POST /api/config`) require `Authorization: Bearer <secret>` or `?token=<secret>` when `bridge.approvalSecret` is set in `.forge.json`. Without a secret, all endpoints are open (suitable for local-only use).
 
 Dashboard: `http://localhost:3100/dashboard` (8 tabs: Progress, Runs, Cost, Actions, Replay, Extensions, Config, Traces)
 
@@ -421,6 +428,52 @@ Key OpenBrain tools: `search_thoughts`, `capture_thought`, `capture_thoughts`, `
 | swift | 16 | 19 | 13 | 9 |
 | azure-iac | 12 | 18 | 6 | 3 |
 | custom | 3 | 5 | 7 | 0 |
+
+## External Integration (OpenClaw / CI / Webhooks)
+
+External agents and CI systems can control Plan Forge over HTTP. Discover the full surface on first connect:
+
+```bash
+# Programmatic discovery
+curl http://localhost:3100/api/capabilities
+curl http://localhost:3100/.well-known/plan-forge.json
+
+# Start a plan run (fire-and-forget)
+curl -X POST http://localhost:3100/api/runs/trigger \
+  -H "Authorization: Bearer <approvalSecret>" \
+  -H "Content-Type: application/json" \
+  -d '{ "plan": "docs/plans/my-feature.md" }'
+
+# Abort the active run
+curl -X POST http://localhost:3100/api/runs/abort \
+  -H "Authorization: Bearer <approvalSecret>"
+
+# Search project memory (OpenBrain)
+curl -X POST http://localhost:3100/api/memory/search \
+  -H "Content-Type: application/json" \
+  -d '{ "query": "authentication patterns", "topK": 5 }'
+
+# Capture a memory thought
+curl -X POST http://localhost:3100/api/memory/capture \
+  -H "Authorization: Bearer <approvalSecret>" \
+  -H "Content-Type: application/json" \
+  -d '{ "content": "Decided to use OIDC", "tags": ["auth","decision"] }'
+```
+
+Required `.forge.json` config:
+```json
+{
+  "bridge": {
+    "approvalSecret": "your-secret-here",
+    "enabled": true,
+    "channels": [
+      { "type": "telegram", "botToken": "...", "chatId": "...", "approvalRequired": true }
+    ]
+  }
+}
+```
+
+Full reference: `AGENT-SETUP.md` Section 6.
 
 ## Bridge (External Notifications)
 

@@ -62,6 +62,7 @@ COMMANDS:
   incident <desc>   Capture an incident — record description, severity, affected files, and optional resolvedAt for MTTR
   regression-guard  Run validation gates from plan files — guard against regressions when files change
   runbook <plan>    Generate an operational runbook from a hardened plan file
+  hotspot           Identify git churn hotspots — most frequently changed files
   smith             Inspect your forge — environment, VS Code config, setup health, and common problems
   tour              Guided walkthrough of your installed Plan Forge files
   help              Show this help message
@@ -2711,6 +2712,49 @@ cmd_runbook() {
     "
 }
 
+# ─── Command: hotspot ──────────────────────────────────────────────────
+cmd_hotspot() {
+    local top=10
+    local since="6 months ago"
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --top)   top="$2";   shift 2 ;;
+            --since) since="$2"; shift 2 ;;
+            *) shift ;;
+        esac
+    done
+
+    print_manual_steps "hotspot" \
+        "Run git log to collect file change frequency" \
+        "Rank files by number of commits" \
+        "Cache results in .forge/hotspot-cache.json (24h TTL)" \
+        "Return top N hotspot files"
+
+    local port=3100
+    local encoded_since
+    encoded_since=$(node -e "process.stdout.write(encodeURIComponent('${since}'))")
+    local response
+    response=$(curl -sf "http://localhost:${port}/api/hotspots?top=${top}&since=${encoded_since}") || {
+        echo "ERROR: MCP server not running on port ${port}. Start with: node pforge-mcp/server.mjs" >&2
+        exit 1
+    }
+    echo "$response" | node -e "
+      const d = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
+      console.log('\n\u{1F525} Git Churn Hotspots');
+      console.log('   Since:       ' + d.since);
+      console.log('   Total files: ' + d.totalFiles);
+      console.log('   Showing:     ' + d.showing);
+      console.log('');
+      d.hotspots.forEach((h, i) => {
+        const bar = '\u2588'.repeat(Math.min(h.commits, 40));
+        console.log('   ' + (i + 1) + '. \x1b[33m' + h.file + ' (' + h.commits + ' commits)\x1b[0m');
+        console.log('      \x1b[33m' + bar + '\x1b[0m');
+      });
+      console.log('');
+      console.log('   Cached at: \x1b[90m' + d.generatedAt + '\x1b[0m');
+    "
+}
+
 # ─── Command: drift ────────────────────────────────────────────────────
 cmd_drift() {
     local threshold=70
@@ -2928,6 +2972,7 @@ case "$COMMAND" in
     incident)     cmd_incident "$@" ;;
     regression-guard) cmd_regression_guard "$@" ;;
     runbook)      cmd_runbook "$@" ;;
+    hotspot)      cmd_hotspot "$@" ;;
     smith)        cmd_smith ;;
     tour)         cmd_tour ;;
     help|--help)  show_help ;;

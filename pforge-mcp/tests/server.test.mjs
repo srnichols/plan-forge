@@ -568,3 +568,39 @@ describe("planNameToRunbookName derivation", () => {
     expect(result).not.toMatch(/--/);
   });
 });
+
+// ─── forge_hotspot metadata ───────────────────────────────────────────────
+
+describe("TOOL_METADATA forge_hotspot", () => {
+  it("is present in TOOL_METADATA", () => {
+    expect(TOOL_METADATA).toHaveProperty("forge_hotspot");
+  });
+
+  it("has correct addedIn version", () => {
+    expect(TOOL_METADATA.forge_hotspot.addedIn).toBe("2.31.0");
+  });
+
+  it("produces hotspot-cache.json", () => {
+    expect(TOOL_METADATA.forge_hotspot.produces).toContain(".forge/hotspot-cache.json");
+  });
+
+  it("has exactly one entry (no duplicates)", () => {
+    const keys = Object.keys(TOOL_METADATA).filter(k => k === "forge_hotspot");
+    expect(keys).toHaveLength(1);
+  });
+
+  it("has GIT_LOG_FAILED and NO_COMMITS error entries", () => {
+    const errors = TOOL_METADATA.forge_hotspot.errors;
+    expect(errors).toHaveProperty("GIT_LOG_FAILED");
+    expect(errors).toHaveProperty("NO_COMMITS");
+  });
+
+  it("sideEffects mentions hotspot-cache", () => {
+    const effects = TOOL_METADATA.forge_hotspot.sideEffects.join(" ");
+    expect(effects).toMatch(/hotspot-cache/);
+  });
+
+  it("has cost low", () => {
+    expect(TOOL_METADATA.forge_hotspot.cost).toBe("low");
+  });
+});

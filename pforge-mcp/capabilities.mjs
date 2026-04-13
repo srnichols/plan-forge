@@ -310,6 +310,25 @@ export const TOOL_METADATA = {
       output: { runbook: ".forge/runbooks/phase-1-auth-plan-runbook.md", slices: 4, generatedAt: "2024-01-01T00:00:00.000Z" },
     },
   },
+  forge_hotspot: {
+    intent: ["churn-analysis", "hotspot-detect", "risk-files"],
+    aliases: ["hotspot", "churn", "change-frequency"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "2.31.0",
+    prerequisites: ["git initialized"],
+    produces: [".forge/hotspot-cache.json"],
+    consumes: ["git log history"],
+    sideEffects: ["writes .forge/hotspot-cache.json (24h cache TTL)"],
+    errors: {
+      GIT_LOG_FAILED: { message: "git log command failed", recovery: "Ensure you are inside a git repository with commit history" },
+      NO_COMMITS: { message: "No commits found in the given time range", recovery: "Widen the --since filter or check the branch has history" },
+    },
+    example: {
+      input: { top: 5, since: "3 months ago" },
+      output: { generatedAt: "2024-01-01T00:00:00.000Z", since: "3 months ago", totalFiles: 42, showing: 5, hotspots: [{ file: "src/api.ts", commits: 28 }] },
+    },
+  },
 };
 
 // ─── Workflow Graphs ──────────────────────────────────────────────────

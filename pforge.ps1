@@ -79,6 +79,7 @@ function Show-Help {
     Write-Host "  incident <desc>   Capture an incident — record description, severity, affected files, and optional resolvedAt for MTTR"
     Write-Host "  regression-guard  Run validation gates from plan files — guard against regressions when files change"
     Write-Host "  runbook <plan>    Generate an operational runbook from a hardened plan file"
+    Write-Host "  hotspot           Identify git churn hotspots — most frequently changed files"
     Write-Host "  tour              Guided walkthrough of your installed Plan Forge files"
     Write-Host "  help              Show this help message"
     Write-Host ""
@@ -3205,6 +3206,49 @@ function Invoke-Runbook {
     }
 }
 
+# ─── Command: hotspot ──────────────────────────────────────────────────
+function Invoke-Hotspot {
+    $top   = 10
+    $since = "6 months ago"
+    for ($i = 0; $i -lt $Arguments.Count; $i++) {
+        switch ($Arguments[$i]) {
+            '--top'   { if (($i + 1) -lt $Arguments.Count) { $top = [int]$Arguments[$i + 1]; $i++ } }
+            '--since' { if (($i + 1) -lt $Arguments.Count) { $since = $Arguments[$i + 1]; $i++ } }
+        }
+    }
+
+    Write-ManualSteps "hotspot" @(
+        "Run git log to collect file change frequency"
+        "Rank files by number of commits"
+        "Cache results in .forge/hotspot-cache.json (24h TTL)"
+        "Return top N hotspot files"
+    )
+
+    $port = 3100
+    try {
+        $encodedSince = [System.Uri]::EscapeDataString($since)
+        $response = Invoke-RestMethod -Uri "http://localhost:$port/api/hotspots?top=$top&since=$encodedSince" -Method GET -ErrorAction Stop
+        Write-Host ""
+        Write-Host "`u{1F525} Git Churn Hotspots" -ForegroundColor Cyan
+        Write-Host "   Since:       $($response.since)" -ForegroundColor White
+        Write-Host "   Total files: $($response.totalFiles)" -ForegroundColor White
+        Write-Host "   Showing:     $($response.showing)" -ForegroundColor White
+        Write-Host ""
+        $rank = 1
+        foreach ($h in $response.hotspots) {
+            $bar = "`u{2588}" * [math]::Min($h.commits, 40)
+            Write-Host "   $rank. $($h.file) ($($h.commits) commits)" -ForegroundColor Yellow
+            Write-Host "      $bar" -ForegroundColor DarkYellow
+            $rank++
+        }
+        Write-Host ""
+        Write-Host "   Cached at: $($response.generatedAt)" -ForegroundColor DarkGray
+    } catch {
+        Write-Host "ERROR: MCP server not running on port $port. Start with: node pforge-mcp/server.mjs" -ForegroundColor Red
+        exit 1
+    }
+}
+
 # ─── Command: drift ────────────────────────────────────────────────────
 function Invoke-Drift {
     $threshold = 70
@@ -3437,6 +3481,7 @@ switch ($Command) {
     'incident'     { Invoke-Incident }
     'regression-guard' { Invoke-RegressionGuard }
     'runbook'      { Invoke-Runbook }
+    'hotspot'      { Invoke-Hotspot }
     'version-bump' { Invoke-VersionBump }
     'smith'        { Invoke-Smith }
     'tour'         { Invoke-Tour }

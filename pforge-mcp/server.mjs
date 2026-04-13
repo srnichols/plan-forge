@@ -601,6 +601,19 @@ const TOOLS = [
       required: ["plan"],
     },
   },
+  {
+    name: "forge_hotspot",
+    description: "Identify git churn hotspots — files that change most frequently. Helps prioritize refactoring, testing, and review effort. Caches results in .forge/hotspot-cache.json (24h TTL). Accepts --top N and --since filters.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        top: { type: "number", description: "Number of hotspot files to return. Default: 10", minimum: 1, maximum: 100 },
+        since: { type: "string", description: "Git log --since filter (e.g., '3 months ago', '2024-01-01'). Default: '6 months ago'" },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+      required: [],
+    },
+  },
 ];
 // ─── Runbook helpers ──────────────────────────────────────────────────
 
@@ -1223,6 +1236,46 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
   }
 
+  if (name === "forge_hotspot") {
+    try {
+      const t0 = Date.now();
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const top = Math.max(1, Math.min(100, args.top ?? 10));
+      const since = args.since || "6 months ago";
+
+      const cacheFile = resolve(cwd, ".forge", "hotspot-cache.json");
+      let cached = null;
+      if (existsSync(cacheFile)) {
+        try {
+          cached = JSON.parse(readFileSync(cacheFile, "utf-8"));
+          const age = Date.now() - new Date(cached.generatedAt).getTime();
+          if (age > 24 * 60 * 60 * 1000 || cached.since !== since) cached = null;
+        } catch { cached = null; }
+      }
+
+      if (!cached) {
+        const raw = execSync(`git log --format=format: --name-only --since="${since}"`, { cwd, encoding: "utf-8", timeout: 30_000 });
+        const counts = {};
+        for (const line of raw.split("\n")) {
+          const f = line.trim();
+          if (f && !f.startsWith(".forge/")) counts[f] = (counts[f] || 0) + 1;
+        }
+        const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+        const hotspots = sorted.map(([file, commits]) => ({ file, commits }));
+
+        mkdirSync(resolve(cwd, ".forge"), { recursive: true });
+        cached = { generatedAt: new Date().toISOString(), since, totalFiles: hotspots.length, hotspots };
+        writeFileSync(cacheFile, JSON.stringify(cached, null, 2), "utf-8");
+      }
+
+      const result = { ...cached, hotspots: cached.hotspots.slice(0, top), showing: Math.min(top, cached.hotspots.length) };
+      emitToolTelemetry("forge_hotspot", args, result, Date.now() - t0, "OK", cwd);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Hotspot analysis error: ${err.message}` }], isError: true };
+    }
+  }
+
   // ─── Sync pforge tools ───
   const result = executeTool(name, args || {});
 
@@ -1440,6 +1493,40 @@ function createExpressApp() {
       if (!existsSync(runbooksDir)) return res.json([]);
       const files = readdirSync(runbooksDir).filter((f) => f.endsWith(".md")).sort();
       res.json(files.map((f) => ({ file: `.forge/runbooks/${f}` })));
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // REST API: GET /api/hotspots — git churn hotspot analysis (cache TTL 24h)
+  app.get("/api/hotspots", (_req, res) => {
+    try {
+      const top = Math.max(1, Math.min(100, parseInt(_req.query.top) || 10));
+      const since = _req.query.since || "6 months ago";
+      const cacheFile = resolve(PROJECT_DIR, ".forge", "hotspot-cache.json");
+
+      let cached = null;
+      if (existsSync(cacheFile)) {
+        try {
+          cached = JSON.parse(readFileSync(cacheFile, "utf-8"));
+          const age = Date.now() - new Date(cached.generatedAt).getTime();
+          if (age > 24 * 60 * 60 * 1000 || cached.since !== since) cached = null;
+        } catch { cached = null; }
+      }
+
+      if (!cached) {
+        const raw = execSync(`git log --format=format: --name-only --since="${since}"`, { cwd: PROJECT_DIR, encoding: "utf-8", timeout: 30_000 });
+        const counts = {};
+        for (const line of raw.split("\n")) {
+          const f = line.trim();
+          if (f && !f.startsWith(".forge/")) counts[f] = (counts[f] || 0) + 1;
+        }
+        const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+        const hotspots = sorted.map(([file, commits]) => ({ file, commits }));
+        mkdirSync(resolve(PROJECT_DIR, ".forge"), { recursive: true });
+        cached = { generatedAt: new Date().toISOString(), since, totalFiles: hotspots.length, hotspots };
+        writeFileSync(cacheFile, JSON.stringify(cached, null, 2), "utf-8");
+      }
+
+      res.json({ ...cached, hotspots: cached.hotspots.slice(0, top), showing: Math.min(top, cached.hotspots.length) });
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 

@@ -258,9 +258,9 @@ bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
 ```bash
 node pforge-mcp/server.mjs --validate
 bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
-echo '{"clean":false,"findings":[{"file":"src/config.js","line":5,"type":"api_key","entropyScore":4.8,"masked":"<REDACTED>","confidence":"high"}],"scannedAt":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}' > .forge/secret-scan-cache.json
-bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs" --grep "PreDeploy"
-rm .forge/secret-scan-cache.json
+node -e "require('fs').writeFileSync('.forge/secret-scan-cache.json',JSON.stringify({clean:false,findings:[{file:'src/config.js',line:5,type:'api_key',entropyScore:4.8,masked:'<REDACTED>',confidence:'high'}],scannedAt:new Date().toISOString()}))"
+bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs --grep PreDeploy"
+node -e "try{require('fs').unlinkSync('.forge/secret-scan-cache.json')}catch{}"
 ```
 
 **Stop Condition**: If the existing `PreToolUse` hook mechanism does not support returning `{ blocked: true }` (no block API) → implement block as a warning injection only (`blockOnSecrets` becomes advisory-only for this release); document the limitation in `PreDeploy.md` under Implementation Notes.

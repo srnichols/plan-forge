@@ -299,6 +299,8 @@ function handleSliceStarted(data) {
     const card = document.querySelector(`[data-slice-id="${data.sliceId}"]`);
     if (card) card.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, 100);
+  // Auto-load slice log panel for executing slice
+  loadSliceLog(data.sliceId);
 }
 
 function handleSliceCompleted(data) {
@@ -313,6 +315,7 @@ function handleSliceCompleted(data) {
   stopSliceTimer(data.sliceId);
   updateProgress();
   renderSliceCards();
+  if (activeSliceLogId === data.sliceId) fetchSliceLogContent(data.sliceId);
 }
 
 function handleSliceFailed(data) {
@@ -325,6 +328,7 @@ function handleSliceFailed(data) {
   stopSliceTimer(data.sliceId);
   updateProgress();
   renderSliceCards();
+  if (activeSliceLogId === data.sliceId) fetchSliceLogContent(data.sliceId);
 }
 
 function handleRunCompleted(data) {
@@ -418,6 +422,133 @@ function updateProgress() {
   document.getElementById("run-progress-fill").style.width = `${pct}%`;
   document.getElementById("run-progress-text").textContent =
     executing ? `Slice ${executing.id} of ${total} executing — ${pct}% complete` : `${done} of ${total} slices — ${pct}%`;
+}
+
+// ─── Slice Log Panel ──────────────────────────────────────────────────
+let activeSliceLogId = null;
+let sliceLogPollInterval = null;
+
+function loadSliceLog(sliceId) {
+  activeSliceLogId = sliceId;
+  const label = document.getElementById("slice-log-label");
+  if (label) label.textContent = `— Slice ${sliceId}`;
+
+  // Highlight selected card
+  document.querySelectorAll(".slice-card").forEach((c) => {
+    c.classList.toggle("ring-1", c.dataset.sliceId === sliceId);
+    c.classList.toggle("ring-blue-500", c.dataset.sliceId === sliceId);
+  });
+
+  fetchSliceLogContent(sliceId);
+
+  // Poll while executing
+  const slice = state.slices.find((s) => s.id === sliceId);
+  if (sliceLogPollInterval) clearInterval(sliceLogPollInterval);
+  if (slice && slice.status === "executing") {
+    sliceLogPollInterval = setInterval(() => {
+      if (activeSliceLogId === sliceId) fetchSliceLogContent(sliceId);
+      else clearInterval(sliceLogPollInterval);
+    }, 3000);
+  }
+}
+
+function fetchSliceLogContent(sliceId) {
+  const logEl = document.getElementById("slice-log");
+  if (!logEl) return;
+
+  fetch(`${API_BASE}/api/replay/0/${sliceId}`)
+    .then((r) => {
+      if (!r.ok) throw new Error("not found");
+      return r.json();
+    })
+    .then((data) => {
+      const text = data.log || "";
+      logEl.innerHTML = formatSliceLog(text);
+      logEl.scrollTop = logEl.scrollHeight;
+    })
+    .catch(() => {
+      const slice = state.slices.find((s) => s.id === sliceId);
+      if (slice && slice.status === "executing") {
+        logEl.innerHTML = '<div class="text-blue-300 animate-pulse py-2">⚡ Slice executing — log will appear when worker output is captured...</div>';
+      } else if (slice && slice.status === "pending") {
+        logEl.innerHTML = '<div class="text-gray-500 py-2">⏳ Slice not started yet</div>';
+      } else {
+        logEl.innerHTML = '<div class="text-gray-500 py-2">No log available for this slice</div>';
+      }
+    });
+}
+
+function formatSliceLog(text) {
+  const lines = text.split("\n");
+  const sections = [];
+  let currentSection = null;
+  let sectionLines = [];
+
+  for (const line of lines) {
+    if (line.startsWith("=== ") && line.endsWith(" ===")) {
+      if (currentSection) {
+        sections.push({ title: currentSection, lines: sectionLines });
+      }
+      currentSection = line.replace(/^=== | ===$/g, "");
+      sectionLines = [];
+    } else {
+      sectionLines.push(line);
+    }
+  }
+  if (currentSection) sections.push({ title: currentSection, lines: sectionLines });
+  if (sections.length === 0) {
+    return lines.map((l) => `<div class="text-gray-400">${escapeHtml(l) || "&nbsp;"}</div>`).join("");
+  }
+
+  return sections.map((sec) => {
+    const lineCount = sec.lines.filter((l) => l.trim()).length;
+    const isOutput = /STDOUT|STDERR/.test(sec.title);
+    const isCollapsed = isOutput && lineCount > 15;
+    const id = `sec-${Math.random().toString(36).slice(2, 8)}`;
+
+    let headerCls = "text-blue-400 font-semibold";
+    if (/STDERR/.test(sec.title)) headerCls = "text-yellow-400 font-semibold";
+
+    const formatted = sec.lines.map((line) => {
+      let cls = "text-gray-400";
+      if (/\bFAIL|\bERROR|\bfailed|❌/.test(line)) cls = "text-red-400";
+      else if (/\bPASS|\bsuccess|✅|passed/.test(line)) cls = "text-green-400";
+      else if (/^Worker:|^Model:|^Started:/.test(line)) cls = "text-cyan-400";
+      else if (/RETRY|GATE FAILED|TIMED OUT/.test(line)) cls = "text-yellow-400";
+      else if (/^\s*\d+\s+(passing|failing)/.test(line)) cls = line.includes("failing") ? "text-red-400" : "text-green-400";
+      return `<div class="${cls}">${escapeHtml(line) || "&nbsp;"}</div>`;
+    }).join("");
+
+    if (isCollapsed) {
+      return `<div class="mt-1">
+        <div class="${headerCls} cursor-pointer select-none" onclick="document.getElementById('${id}').classList.toggle('hidden')">
+          ▶ ${escapeHtml(sec.title)} <span class="text-gray-600 font-normal">(${lineCount} lines — click to expand)</span>
+        </div>
+        <div id="${id}" class="hidden pl-2 border-l border-gray-700 ml-1">${formatted}</div>
+      </div>`;
+    }
+
+    return `<div class="mt-1">
+      <div class="${headerCls}">${escapeHtml(sec.title)} <span class="text-gray-600 font-normal">${lineCount > 0 ? `(${lineCount} lines)` : ""}</span></div>
+      <div class="pl-2 border-l border-gray-700 ml-1">${formatted}</div>
+    </div>`;
+  }).join("");
+}
+
+function escapeHtml(str) {
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function clearSliceLog() {
+  activeSliceLogId = null;
+  if (sliceLogPollInterval) clearInterval(sliceLogPollInterval);
+  const label = document.getElementById("slice-log-label");
+  const logEl = document.getElementById("slice-log");
+  if (label) label.textContent = "";
+  if (logEl) logEl.innerHTML = '<p class="py-4 text-center text-gray-500">Click a slice card to view its log</p>';
+  document.querySelectorAll(".slice-card").forEach((c) => {
+    c.classList.remove("ring-1", "ring-blue-500");
+  });
 }
 
 function shortName(path) {

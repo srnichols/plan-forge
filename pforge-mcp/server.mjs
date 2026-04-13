@@ -654,6 +654,18 @@ const TOOLS = [
       required: ["version"],
     },
   },
+  {
+    name: "forge_dep_watch",
+    description: "Scan project dependencies for known vulnerabilities using npm audit. Compares against previous snapshot in .forge/deps-snapshot.json to detect new and resolved CVEs. Fires a bridge notification when new vulnerabilities are found. Non-npm projects degrade gracefully.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Project directory (default: current)" },
+        notify: { type: "boolean", description: "Send bridge notification for new vulnerabilities. Default: true" },
+      },
+      required: [],
+    },
+  },
 ];
 // ─── Runbook helpers ──────────────────────────────────────────────────
 
@@ -1438,6 +1450,92 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
   }
 
+  // ─── forge_dep_watch — dependency vulnerability scan ───
+  if (name === "forge_dep_watch") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : PROJECT_DIR;
+      const notify = args.notify !== false;
+      const snapshotPath = resolve(cwd, ".forge", "deps-snapshot.json");
+      const pkgPath = resolve(cwd, "package.json");
+
+      if (!existsSync(pkgPath)) {
+        return { content: [{ type: "text", text: JSON.stringify({ error: "No package.json found — non-npm projects are not yet supported", newVulnerabilities: [], resolvedVulnerabilities: [], unchanged: 0, snapshot: null }) }], isError: false };
+      }
+
+      // Load previous snapshot
+      let prevSnapshot = null;
+      if (existsSync(snapshotPath)) {
+        try { prevSnapshot = JSON.parse(readFileSync(snapshotPath, "utf-8")); } catch { prevSnapshot = null; }
+      }
+
+      // Run npm audit
+      let auditResult;
+      try {
+        const raw = execSync("npm audit --json 2>&1", { cwd, encoding: "utf-8", timeout: 60_000 });
+        auditResult = JSON.parse(raw);
+      } catch (err) {
+        // npm audit exits non-zero when vulnerabilities are found — parse stdout
+        if (err.stdout) {
+          try { auditResult = JSON.parse(err.stdout); } catch { auditResult = null; }
+        }
+        if (!auditResult) {
+          return { content: [{ type: "text", text: JSON.stringify({ error: `npm audit failed: ${err.message}`, newVulnerabilities: [], resolvedVulnerabilities: [], unchanged: 0, snapshot: null }) }], isError: true };
+        }
+      }
+
+      // Extract vulnerabilities from npm audit output
+      const currentVulns = [];
+      const vulns = auditResult.vulnerabilities || {};
+      for (const [name, info] of Object.entries(vulns)) {
+        currentVulns.push({ name, severity: info.severity || "unknown", via: Array.isArray(info.via) ? info.via.filter(v => typeof v === "string") : [], range: info.range || "" });
+      }
+
+      // Compare with previous snapshot
+      const prevVulnNames = new Set((prevSnapshot?.vulnerabilities || []).map(v => v.name));
+      const currVulnNames = new Set(currentVulns.map(v => v.name));
+      const newVulnerabilities = currentVulns.filter(v => !prevVulnNames.has(v.name));
+      const resolvedVulnerabilities = (prevSnapshot?.vulnerabilities || []).filter(v => !currVulnNames.has(v.name));
+      const unchanged = currentVulns.length - newVulnerabilities.length;
+
+      // Save new snapshot
+      mkdirSync(resolve(cwd, ".forge"), { recursive: true });
+      const snapshot = { capturedAt: new Date().toISOString(), depCount: Object.keys(auditResult.vulnerabilities || {}).length, vulnerabilities: currentVulns };
+      writeFileSync(snapshotPath, JSON.stringify(snapshot, null, 2), "utf-8");
+
+      // Bridge notification for new vulnerabilities
+      if (notify && newVulnerabilities.length > 0 && activeBridge) {
+        activeBridge.dispatch?.({ type: "dep-vulnerability", newVulnerabilities: newVulnerabilities.map(v => ({ name: v.name, severity: v.severity })), count: newVulnerabilities.length });
+      }
+
+      const result = { newVulnerabilities, resolvedVulnerabilities, unchanged, snapshot: { capturedAt: snapshot.capturedAt, depCount: snapshot.depCount } };
+      emitToolTelemetry("forge_dep_watch", args, result, Date.now() - t0, "OK", cwd);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Dependency watch error: ${err.message}` }], isError: true };
+    }
+  }
+
+  // ─── forge_smith — onCall validation enhancement ───
+  if (name === "forge_smith") {
+    const result = executeTool(name, args || {});
+    let output = result.success ? result.output : `Error (exit code ${result.exitCode}):\n${result.output}\n${result.error}`;
+    try {
+      const smithCwd = args.path ? findProjectRoot(resolve(args.path)) : PROJECT_DIR;
+      const forgeJsonPath = resolve(smithCwd, ".forge.json");
+      if (existsSync(forgeJsonPath)) {
+        const config = JSON.parse(readFileSync(forgeJsonPath, "utf-8"));
+        if (config.onCall) {
+          const missing = [];
+          if (!config.onCall.name) missing.push("name");
+          if (!config.onCall.channel) missing.push("channel");
+          if (missing.length) output += `\n\n⚠️  .forge.json: onCall is configured but missing required field(s): ${missing.join(", ")}. Incident notifications may not route correctly.`;
+        }
+      }
+    } catch { /* .forge.json parse error — skip */ }
+    return { content: [{ type: "text", text: output }], isError: !result.success };
+  }
+
   // ─── Sync pforge tools ───
   const result = executeTool(name, args || {});
 
@@ -1776,6 +1874,44 @@ function createExpressApp() {
       }
 
       res.json({ ...cached, hotspots: cached.hotspots.slice(0, top), showing: Math.min(top, cached.hotspots.length) });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // REST API: GET /api/deps/watch — latest dependency vulnerability snapshot
+  app.get("/api/deps/watch", (_req, res) => {
+    try {
+      const snapshotPath = resolve(PROJECT_DIR, ".forge", "deps-snapshot.json");
+      if (!existsSync(snapshotPath)) return res.json({ snapshot: null, message: "No dependency snapshot yet — run forge_dep_watch first" });
+      res.json(JSON.parse(readFileSync(snapshotPath, "utf-8")));
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // REST API: POST /api/deps/watch/run — trigger dependency scan (auth required)
+  app.post("/api/deps/watch/run", (req, res) => {
+    try {
+      if (!checkApprovalSecret(req, res)) return;
+      const pkgPath = resolve(PROJECT_DIR, "package.json");
+      if (!existsSync(pkgPath)) return res.status(400).json({ error: "No package.json found" });
+
+      let auditResult;
+      try {
+        const raw = execSync("npm audit --json 2>&1", { cwd: PROJECT_DIR, encoding: "utf-8", timeout: 60_000 });
+        auditResult = JSON.parse(raw);
+      } catch (err) {
+        if (err.stdout) { try { auditResult = JSON.parse(err.stdout); } catch { auditResult = null; } }
+        if (!auditResult) return res.status(500).json({ error: `npm audit failed: ${err.message}` });
+      }
+
+      const currentVulns = [];
+      const vulns = auditResult.vulnerabilities || {};
+      for (const [name, info] of Object.entries(vulns)) {
+        currentVulns.push({ name, severity: info.severity || "unknown" });
+      }
+
+      mkdirSync(resolve(PROJECT_DIR, ".forge"), { recursive: true });
+      const snapshot = { capturedAt: new Date().toISOString(), depCount: currentVulns.length, vulnerabilities: currentVulns };
+      writeFileSync(resolve(PROJECT_DIR, ".forge", "deps-snapshot.json"), JSON.stringify(snapshot, null, 2), "utf-8");
+      res.json(snapshot);
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 

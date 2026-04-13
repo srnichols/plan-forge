@@ -470,6 +470,25 @@ export const TOOL_METADATA = {
     },
     notes: "Read-only — does not write to any data store. Priority = severity_weight × recency_factor. Tiebreak: more recent timestamp ranks higher.",
   },
+  forge_dep_watch: {
+    intent: ["dep-scan", "cve-check", "dependency-audit"],
+    aliases: ["dep-watch", "dependency-watch", "cve-scan"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "2.27.0",
+    prerequisites: ["package.json or package-lock.json in project root"],
+    produces: [".forge/deps-snapshot.json"],
+    consumes: ["package.json", "package-lock.json"],
+    sideEffects: ["writes .forge/deps-snapshot.json", "may fire dep-vulnerability hub event"],
+    errors: {
+      NO_PACKAGE_JSON: { message: "No package.json found in project root", recovery: "Ensure you are in a Node.js project with a package.json file" },
+      AUDIT_FAILED: { message: "npm audit command failed", recovery: "Check npm is installed and network connectivity; non-npm projects return graceful degradation" },
+    },
+    example: {
+      input: { path: ".", notify: true },
+      output: { newVulnerabilities: [], resolvedVulnerabilities: [], unchanged: 42, snapshot: { capturedAt: "2024-01-01T00:00:00.000Z", depCount: 42 } },
+    },
+  },
 };
 
 // ─── Workflow Graphs ──────────────────────────────────────────────────
@@ -1019,6 +1038,8 @@ export function buildCapabilitySurface(mcpTools, options = {}) {
         { method: "GET", path: "/api/runbooks", description: "List all generated runbooks from .forge/runbooks/" },
         { method: "GET", path: "/api/hotspots", description: "Git churn hotspot analysis. Query: ?top=&since=" },
         { method: "GET", path: "/api/health-trend", description: "Health trend analysis — drift, cost, incidents, model performance over time. Query: ?days=&metrics=" },
+        { method: "GET", path: "/api/deps/watch", description: "Latest dependency vulnerability snapshot from .forge/deps-snapshot.json" },
+        { method: "POST", path: "/api/deps/watch/run", description: "Trigger a new dependency vulnerability scan. Auth: bridge.approvalSecret Bearer token. Body: { path?, notify? }" },
         { method: "POST", path: "/api/tool/org-rules", description: "Generate org-rules instruction file via REST" },
         { method: "POST", path: "/api/image/generate", description: "Generate an image via xAI Aurora or OpenAI DALL-E. Body: { prompt, outputPath, model?, size?, format?, quality? }" },
       ],

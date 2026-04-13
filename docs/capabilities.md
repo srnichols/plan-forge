@@ -31,6 +31,7 @@
 | `forge_memory_capture` | capture | low | Normalise and broadcast a `memory-captured` hub event; returns `capture_thought` payload for OpenBrain |
 | `forge_drift_report` | drift-detect | low | Score codebase against architecture guardrail rules; track drift over time |
 | `forge_incident_capture` | capture-incident | low | Record incidents with severity, affected files, MTTR tracking, on-call notification |
+| `forge_dep_watch` | dep-scan | low | Scan dependencies for CVEs; compare against previous snapshot; alert on new vulnerabilities |
 | `forge_regression_guard` | regression-check | medium | Extract validation gates from plans, execute against codebase, report pass/fail |
 | `forge_runbook` | generate-runbook | low | Generate operational runbook from a hardened plan file |
 | `forge_hotspot` | churn-analysis | low | Identify git churn hotspots — files that change most frequently |

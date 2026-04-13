@@ -626,6 +626,19 @@ const TOOLS = [
       },
     },
   },
+  {
+    name: "forge_alert_triage",
+    description: "Triage open alerts — read incidents and drift violations, rank by priority (severity × recency), and return a prioritized list. Read-only: does not modify any data store. Tiebreak: more recent alerts rank higher when priority scores are equal.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        minSeverity: { type: "string", enum: ["low", "medium", "high", "critical"], description: "Minimum severity to include. Default: low (all)" },
+        max: { type: "number", description: "Maximum number of alerts to return. Default: 20", minimum: 1, maximum: 200 },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+      required: [],
+    },
+  },
 ];
 // ─── Runbook helpers ──────────────────────────────────────────────────
 
@@ -753,6 +766,7 @@ function executeTool(name, args) {
     case "forge_plan_status":
     case "forge_cost_report":
     case "forge_health_trend":
+    case "forge_alert_triage":
     case "forge_capabilities":
       return null; // Handled async in CallToolRequestSchema handler
     default:
@@ -900,6 +914,63 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return { content: [{ type: "text", text: JSON.stringify(report, null, 2) }] };
     } catch (err) {
       return { content: [{ type: "text", text: `Health trend error: ${err.message}` }], isError: true };
+    }
+  }
+
+  if (name === "forge_alert_triage") {
+    try {
+      const t0 = Date.now();
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const SEVERITY_ORDER = ["low", "medium", "high", "critical"];
+      const SEVERITY_WEIGHT = { low: 1, medium: 2, high: 3, critical: 4 };
+      const minSeverity = SEVERITY_ORDER.includes(args.minSeverity) ? args.minSeverity : "low";
+      const minIdx = SEVERITY_ORDER.indexOf(minSeverity);
+      const maxResults = Math.max(1, Math.min(200, parseInt(args.max) || 20));
+
+      const now = Date.now();
+      const recencyFactor = (isoTimestamp) => {
+        const age = now - new Date(isoTimestamp).getTime();
+        const hours24 = 24 * 60 * 60 * 1000;
+        if (age < hours24) return 1.0;
+        if (age < 7 * hours24) return 0.8;
+        if (age < 30 * hours24) return 0.5;
+        return 0.3;
+      };
+
+      const alerts = [];
+
+      // Collect open incidents
+      const incidents = readForgeJsonl("incidents.jsonl", [], cwd);
+      for (const inc of incidents) {
+        if (inc.resolvedAt) continue; // skip resolved
+        const sev = SEVERITY_ORDER.includes(inc.severity) ? inc.severity : "medium";
+        if (SEVERITY_ORDER.indexOf(sev) < minIdx) continue;
+        const ts = inc.capturedAt || new Date(0).toISOString();
+        const priority = SEVERITY_WEIGHT[sev] * recencyFactor(ts);
+        alerts.push({ source: "incident", id: inc.id, description: inc.description, severity: sev, timestamp: ts, files: inc.files || [], priority: Math.round(priority * 100) / 100 });
+      }
+
+      // Collect latest drift violations
+      const driftHistory = readForgeJsonl("drift-history.json", [], cwd);
+      if (driftHistory.length) {
+        const latest = driftHistory[driftHistory.length - 1];
+        for (const v of (latest.violations || [])) {
+          const sev = SEVERITY_ORDER.includes(v.severity) ? v.severity : "medium";
+          if (SEVERITY_ORDER.indexOf(sev) < minIdx) continue;
+          const ts = latest.timestamp || new Date(0).toISOString();
+          const priority = SEVERITY_WEIGHT[sev] * recencyFactor(ts);
+          alerts.push({ source: "drift", id: `drift-${v.rule}-${v.file}:${v.line}`, description: `${v.rule}: ${v.file}:${v.line}`, severity: sev, timestamp: ts, files: [v.file], priority: Math.round(priority * 100) / 100 });
+        }
+      }
+
+      // Sort: primary by priority desc, tiebreak by timestamp desc (more recent first)
+      alerts.sort((a, b) => b.priority - a.priority || new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+      const result = { total: alerts.length, showing: Math.min(maxResults, alerts.length), minSeverity, alerts: alerts.slice(0, maxResults), generatedAt: new Date().toISOString() };
+      emitToolTelemetry("forge_alert_triage", args, result, Date.now() - t0, "OK", cwd);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Alert triage error: ${err.message}` }], isError: true };
     }
   }
 
@@ -1500,6 +1571,56 @@ function createExpressApp() {
   app.get("/api/incidents", (_req, res) => {
     try {
       res.json(readForgeJsonl("incidents.jsonl", [], PROJECT_DIR));
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // REST API: GET /api/triage — prioritized alert triage (read-only)
+  app.get("/api/triage", (req, res) => {
+    try {
+      const SEVERITY_ORDER = ["low", "medium", "high", "critical"];
+      const SEVERITY_WEIGHT = { low: 1, medium: 2, high: 3, critical: 4 };
+      const minSeverity = SEVERITY_ORDER.includes(req.query.minSeverity) ? req.query.minSeverity : "low";
+      const minIdx = SEVERITY_ORDER.indexOf(minSeverity);
+      const maxResults = Math.max(1, Math.min(200, parseInt(req.query.max) || 20));
+
+      const now = Date.now();
+      const recencyFactor = (isoTimestamp) => {
+        const age = now - new Date(isoTimestamp).getTime();
+        const hours24 = 24 * 60 * 60 * 1000;
+        if (age < hours24) return 1.0;
+        if (age < 7 * hours24) return 0.8;
+        if (age < 30 * hours24) return 0.5;
+        return 0.3;
+      };
+
+      const alerts = [];
+
+      // Open incidents
+      const incidents = readForgeJsonl("incidents.jsonl", [], PROJECT_DIR);
+      for (const inc of incidents) {
+        if (inc.resolvedAt) continue;
+        const sev = SEVERITY_ORDER.includes(inc.severity) ? inc.severity : "medium";
+        if (SEVERITY_ORDER.indexOf(sev) < minIdx) continue;
+        const ts = inc.capturedAt || new Date(0).toISOString();
+        const priority = SEVERITY_WEIGHT[sev] * recencyFactor(ts);
+        alerts.push({ source: "incident", id: inc.id, description: inc.description, severity: sev, timestamp: ts, files: inc.files || [], priority: Math.round(priority * 100) / 100 });
+      }
+
+      // Latest drift violations
+      const driftHistory = readForgeJsonl("drift-history.json", [], PROJECT_DIR);
+      if (driftHistory.length) {
+        const latest = driftHistory[driftHistory.length - 1];
+        for (const v of (latest.violations || [])) {
+          const sev = SEVERITY_ORDER.includes(v.severity) ? v.severity : "medium";
+          if (SEVERITY_ORDER.indexOf(sev) < minIdx) continue;
+          const ts = latest.timestamp || new Date(0).toISOString();
+          const priority = SEVERITY_WEIGHT[sev] * recencyFactor(ts);
+          alerts.push({ source: "drift", id: `drift-${v.rule}-${v.file}:${v.line}`, description: `${v.rule}: ${v.file}:${v.line}`, severity: sev, timestamp: ts, files: [v.file], priority: Math.round(priority * 100) / 100 });
+        }
+      }
+
+      alerts.sort((a, b) => b.priority - a.priority || new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      res.json({ total: alerts.length, showing: Math.min(maxResults, alerts.length), minSeverity, alerts: alerts.slice(0, maxResults), generatedAt: new Date().toISOString() });
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 

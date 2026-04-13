@@ -77,6 +77,7 @@ function Show-Help {
     Write-Host "  org-rules export  Export org custom instructions from .github/instructions/ for GitHub org settings"
     Write-Host "  drift             Score codebase against architecture guardrail rules — track drift over time"
     Write-Host "  incident <desc>   Capture an incident — record description, severity, affected files, and optional resolvedAt for MTTR"
+    Write-Host "  triage            Triage open alerts — rank incidents and drift violations by priority"
     Write-Host "  regression-guard  Run validation gates from plan files — guard against regressions when files change"
     Write-Host "  runbook <plan>    Generate an operational runbook from a hardened plan file"
     Write-Host "  hotspot           Identify git churn hotspots — most frequently changed files"
@@ -3162,6 +3163,49 @@ function Invoke-Incident {
     }
 }
 
+# ─── Command: triage ──────────────────────────────────────────────────
+function Invoke-Triage {
+    $minSeverity = "low"
+    $maxResults  = 20
+    for ($i = 0; $i -lt $Arguments.Count; $i++) {
+        switch ($Arguments[$i]) {
+            '--min-severity' { if (($i + 1) -lt $Arguments.Count) { $minSeverity = $Arguments[$i + 1]; $i++ } }
+            '--max'          { if (($i + 1) -lt $Arguments.Count) { $maxResults  = [int]$Arguments[$i + 1]; $i++ } }
+        }
+    }
+
+    Write-ManualSteps "triage" @(
+        "Read open incidents from .forge/incidents.jsonl"
+        "Read latest drift violations from .forge/drift-history.json"
+        "Score each alert: severity_weight * recency_factor"
+        "Rank by priority (tiebreak: more recent first)"
+    )
+
+    $port = 3100
+    try {
+        $uri = "http://localhost:$port/api/triage?minSeverity=$minSeverity&max=$maxResults"
+        $response = Invoke-RestMethod -Uri $uri -Method GET -ErrorAction Stop
+        Write-Host ""
+        Write-Host "`u{1F6A8} Alert Triage ($($response.showing)/$($response.total) alerts, min-severity: $($response.minSeverity))" -ForegroundColor Cyan
+        Write-Host ""
+        if ($response.alerts.Count -eq 0) {
+            Write-Host "   No open alerts found." -ForegroundColor Green
+        } else {
+            foreach ($a in $response.alerts) {
+                $sevColor = switch ($a.severity) { 'critical' { 'Red' } 'high' { 'DarkYellow' } 'medium' { 'Yellow' } default { 'White' } }
+                $sourceIcon = if ($a.source -eq 'incident') { "`u{1F6A8}" } else { "`u{1F4CA}" }
+                Write-Host "   $sourceIcon [$($a.severity)] $($a.description)" -ForegroundColor $sevColor
+                Write-Host "      Priority: $($a.priority)  Source: $($a.source)  ID: $($a.id)" -ForegroundColor DarkGray
+            }
+        }
+        Write-Host ""
+        Write-Host "   Generated: $($response.generatedAt)" -ForegroundColor DarkGray
+    } catch {
+        Write-Host "ERROR: MCP server not running on port $port. Start with: node pforge-mcp/server.mjs" -ForegroundColor Red
+        exit 1
+    }
+}
+
 # ─── Command: runbook ────────────────────────────────────────────────────
 function Invoke-Runbook {
     $plan          = $null
@@ -3533,6 +3577,7 @@ switch ($Command) {
     'org-rules'    { Invoke-OrgRules }
     'drift'        { Invoke-Drift }
     'incident'     { Invoke-Incident }
+    'triage'       { Invoke-Triage }
     'regression-guard' { Invoke-RegressionGuard }
     'runbook'      { Invoke-Runbook }
     'hotspot'      { Invoke-Hotspot }

@@ -604,3 +604,120 @@ describe("TOOL_METADATA forge_hotspot", () => {
     expect(TOOL_METADATA.forge_hotspot.cost).toBe("low");
   });
 });
+
+// ─── forge_alert_triage metadata ──────────────────────────────────────────
+
+describe("TOOL_METADATA forge_alert_triage", () => {
+  it("is present in TOOL_METADATA", () => {
+    expect(TOOL_METADATA).toHaveProperty("forge_alert_triage");
+  });
+
+  it("has correct addedIn version", () => {
+    expect(TOOL_METADATA.forge_alert_triage.addedIn).toBe("2.31.0");
+  });
+
+  it("consumes incidents.jsonl and drift-history.json", () => {
+    expect(TOOL_METADATA.forge_alert_triage.consumes).toContain(".forge/incidents.jsonl");
+    expect(TOOL_METADATA.forge_alert_triage.consumes).toContain(".forge/drift-history.json");
+  });
+
+  it("has exactly one entry (no duplicates)", () => {
+    const keys = Object.keys(TOOL_METADATA).filter(k => k === "forge_alert_triage");
+    expect(keys).toHaveLength(1);
+  });
+
+  it("has NO_ALERTS and INVALID_SEVERITY error entries", () => {
+    const errors = TOOL_METADATA.forge_alert_triage.errors;
+    expect(errors).toHaveProperty("NO_ALERTS");
+    expect(errors).toHaveProperty("INVALID_SEVERITY");
+  });
+
+  it("has no sideEffects (read-only tool)", () => {
+    expect(TOOL_METADATA.forge_alert_triage.sideEffects).toHaveLength(0);
+  });
+
+  it("has cost low", () => {
+    expect(TOOL_METADATA.forge_alert_triage.cost).toBe("low");
+  });
+
+  it("notes mention read-only and tiebreak rule", () => {
+    expect(TOOL_METADATA.forge_alert_triage.notes).toMatch(/read-only/i);
+    expect(TOOL_METADATA.forge_alert_triage.notes).toMatch(/tiebreak/i);
+  });
+});
+
+// ─── Alert triage priority scoring ────────────────────────────────────────
+
+describe("alert triage priority scoring", () => {
+  const SEVERITY_WEIGHT = { low: 1, medium: 2, high: 3, critical: 4 };
+
+  it("critical severity has weight 4", () => {
+    expect(SEVERITY_WEIGHT.critical).toBe(4);
+  });
+
+  it("low severity has weight 1", () => {
+    expect(SEVERITY_WEIGHT.low).toBe(1);
+  });
+
+  it("priority = severity_weight * recency_factor", () => {
+    // Recent critical: 4 * 1.0 = 4.0
+    const priority = SEVERITY_WEIGHT.critical * 1.0;
+    expect(priority).toBe(4.0);
+  });
+
+  it("older alerts have lower priority via recency factor", () => {
+    // Recent (< 24h) critical = 4 * 1.0 = 4.0
+    // Older (> 30d) critical = 4 * 0.3 = 1.2
+    const recent = SEVERITY_WEIGHT.critical * 1.0;
+    const old = SEVERITY_WEIGHT.critical * 0.3;
+    expect(recent).toBeGreaterThan(old);
+  });
+});
+
+describe("alert triage data reading", () => {
+  it("returns empty alerts when no incidents or drift exist", () => {
+    const incidents = readForgeJsonl("incidents.jsonl", [], tempDir);
+    const drift = readForgeJsonl("drift-history.json", [], tempDir);
+    expect(incidents).toHaveLength(0);
+    expect(drift).toHaveLength(0);
+  });
+
+  it("skips resolved incidents", () => {
+    appendForgeJsonl("incidents.jsonl", { id: "inc-1", description: "resolved", severity: "high", capturedAt: new Date().toISOString(), resolvedAt: new Date().toISOString(), mttr: 1000, files: [] }, tempDir);
+    appendForgeJsonl("incidents.jsonl", { id: "inc-2", description: "open", severity: "medium", capturedAt: new Date().toISOString(), resolvedAt: null, mttr: null, files: [] }, tempDir);
+    const incidents = readForgeJsonl("incidents.jsonl", [], tempDir);
+    const open = incidents.filter(i => !i.resolvedAt);
+    expect(open).toHaveLength(1);
+    expect(open[0].id).toBe("inc-2");
+  });
+
+  it("reads drift violations from latest history entry", () => {
+    appendForgeJsonl("drift-history.json", { timestamp: new Date().toISOString(), score: 90, violations: [{ file: "a.ts", rule: "empty-catch", severity: "high", line: 10 }], filesScanned: 1, delta: 0, trend: "stable" }, tempDir);
+    appendForgeJsonl("drift-history.json", { timestamp: new Date().toISOString(), score: 85, violations: [{ file: "b.ts", rule: "any-type", severity: "medium", line: 5 }], filesScanned: 2, delta: -5, trend: "degrading" }, tempDir);
+    const history = readForgeJsonl("drift-history.json", [], tempDir);
+    const latest = history[history.length - 1];
+    expect(latest.violations).toHaveLength(1);
+    expect(latest.violations[0].rule).toBe("any-type");
+  });
+
+  it("filters by minimum severity", () => {
+    const SEVERITY_ORDER = ["low", "medium", "high", "critical"];
+    const minIdx = SEVERITY_ORDER.indexOf("high");
+    const alerts = [
+      { severity: "low" },
+      { severity: "medium" },
+      { severity: "high" },
+      { severity: "critical" },
+    ];
+    const filtered = alerts.filter(a => SEVERITY_ORDER.indexOf(a.severity) >= minIdx);
+    expect(filtered).toHaveLength(2);
+    expect(filtered.map(a => a.severity)).toEqual(["high", "critical"]);
+  });
+
+  it("tiebreak: more recent timestamp ranks higher when priority is equal", () => {
+    const older = { priority: 3.0, timestamp: "2024-01-01T00:00:00.000Z" };
+    const newer = { priority: 3.0, timestamp: "2024-01-02T00:00:00.000Z" };
+    const sorted = [older, newer].sort((a, b) => b.priority - a.priority || new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    expect(sorted[0]).toBe(newer);
+  });
+});

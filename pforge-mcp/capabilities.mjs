@@ -347,6 +347,26 @@ export const TOOL_METADATA = {
       output: { days: 30, healthScore: 87, trend: "stable", dataPoints: 15, drift: { snapshots: 5, avg: 85 }, cost: { runs: 3, totalUsd: 1.23 }, incidents: { total: 2, open: 0 }, models: { totalSlices: 10 } },
     },
   },
+  forge_alert_triage: {
+    intent: ["triage-alerts", "prioritize-incidents", "rank-alerts"],
+    aliases: ["alert-triage", "triage", "prioritize-alerts"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "2.31.0",
+    prerequisites: [],
+    produces: [],
+    consumes: [".forge/incidents.jsonl", ".forge/drift-history.json"],
+    sideEffects: [],
+    errors: {
+      NO_ALERTS: { message: "No open alerts found matching the filter criteria", recovery: "Lower --min-severity or check that incidents exist in .forge/incidents.jsonl" },
+      INVALID_SEVERITY: { message: "minSeverity must be low, medium, high, or critical", recovery: "Use one of: low, medium, high, critical" },
+    },
+    example: {
+      input: { minSeverity: "medium", max: 5 },
+      output: { total: 3, showing: 3, minSeverity: "medium", alerts: [{ source: "incident", id: "inc-1700000000000", description: "API latency spike", severity: "high", priority: 2.4, timestamp: "2024-01-01T00:00:00.000Z", files: ["src/api.ts"] }], generatedAt: "2024-01-01T00:00:00.000Z" },
+    },
+    notes: "Read-only — does not write to any data store. Priority = severity_weight × recency_factor. Tiebreak: more recent timestamp ranks higher.",
+  },
 };
 
 // ─── Workflow Graphs ──────────────────────────────────────────────────
@@ -505,6 +525,19 @@ export const CLI_SCHEMA = {
         'pforge incident "Database connection pool exhausted" --severity high',
         'pforge incident "Deploy failed" --severity critical --files src/deploy.ts,infra/k8s.yaml',
         'pforge incident "Resolved: API latency" --resolved-at 2024-01-01T02:30:00Z',
+      ],
+    },
+    triage: {
+      description: "Triage open alerts — rank incidents and drift violations by priority (severity × recency). Read-only.",
+      args: [],
+      flags: {
+        "--min-severity": { type: "string", enum: ["low", "medium", "high", "critical"], description: "Minimum severity to include (default: low)" },
+        "--max": { type: "number", description: "Maximum number of alerts to return (default: 20)" },
+      },
+      examples: [
+        "pforge triage",
+        "pforge triage --min-severity high",
+        "pforge triage --min-severity medium --max 10",
       ],
     },
     runbook: {

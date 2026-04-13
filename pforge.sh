@@ -60,6 +60,7 @@ COMMANDS:
   org-rules export  Export org custom instructions from .github/instructions/ for GitHub org settings
   drift             Score codebase against architecture guardrail rules — track drift over time
   incident <desc>   Capture an incident — record description, severity, affected files, and optional resolvedAt for MTTR
+  triage            Triage open alerts — rank incidents and drift violations by priority
   regression-guard  Run validation gates from plan files — guard against regressions when files change
   runbook <plan>    Generate an operational runbook from a hardened plan file
   hotspot           Identify git churn hotspots — most frequently changed files
@@ -2660,6 +2661,51 @@ cmd_incident() {
     "
 }
 
+# ─── Command: triage ───────────────────────────────────────────────────
+cmd_triage() {
+    local min_severity="low"
+    local max_results=20
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --min-severity) min_severity="$2"; shift 2 ;;
+            --max)          max_results="$2";  shift 2 ;;
+            *) shift ;;
+        esac
+    done
+
+    print_manual_steps "triage" \
+        "Read open incidents from .forge/incidents.jsonl" \
+        "Read latest drift violations from .forge/drift-history.json" \
+        "Score each alert: severity_weight * recency_factor" \
+        "Rank by priority (tiebreak: more recent first)"
+
+    local port=3100
+    local response
+    response=$(curl -sf "http://localhost:${port}/api/triage?minSeverity=${min_severity}&max=${max_results}") || {
+        echo "ERROR: MCP server not running on port ${port}. Start with: node pforge-mcp/server.mjs" >&2
+        exit 1
+    }
+
+    echo "$response" | node -e "
+      const d = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
+      console.log('\n\u{1F6A8} Alert Triage (' + d.showing + '/' + d.total + ' alerts, min-severity: ' + d.minSeverity + ')');
+      console.log('');
+      if (d.alerts.length === 0) {
+        console.log('   \x1b[32mNo open alerts found.\x1b[0m');
+      } else {
+        const sev_colors = { critical: '\x1b[31m', high: '\x1b[33m', medium: '\x1b[33m', low: '\x1b[37m' };
+        for (const a of d.alerts) {
+          const sc = sev_colors[a.severity] || '\x1b[37m';
+          const icon = a.source === 'incident' ? '\u{1F6A8}' : '\u{1F4CA}';
+          console.log('   ' + icon + ' ' + sc + '[' + a.severity + '] ' + a.description + '\x1b[0m');
+          console.log('      \x1b[90mPriority: ' + a.priority + '  Source: ' + a.source + '  ID: ' + a.id + '\x1b[0m');
+        }
+      }
+      console.log('');
+      console.log('   \x1b[90mGenerated: ' + d.generatedAt + '\x1b[0m');
+    "
+}
+
 # ─── Command: runbook ──────────────────────────────────────────────────
 cmd_runbook() {
     local plan=""
@@ -3029,6 +3075,7 @@ case "$COMMAND" in
     org-rules)    cmd_org_rules "$@" ;;
     drift)        cmd_drift "$@" ;;
     incident)     cmd_incident "$@" ;;
+    triage)       cmd_triage "$@" ;;
     regression-guard) cmd_regression_guard "$@" ;;
     runbook)      cmd_runbook "$@" ;;
     hotspot)      cmd_hotspot "$@" ;;

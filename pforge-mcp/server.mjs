@@ -548,7 +548,7 @@ const TOOLS = [
     },
   },
   {
-    name: "forge_drift_report",
+    name: "forge_drift_report", // LiveGuard — emitToolTelemetry in handler
     description: "Score the codebase against architecture guardrail rules. Tracks drift over time in .forge/drift-history.json. Fires a bridge notification when score drops below threshold.",
     inputSchema: {
       type: "object",
@@ -561,7 +561,7 @@ const TOOLS = [
     },
   },
   {
-    name: "forge_incident_capture",
+    name: "forge_incident_capture", // LiveGuard — emitToolTelemetry in handler
     description: "Capture an incident — record description, severity, affected files, and optional resolution timestamp for MTTR tracking. Appends to .forge/incidents.jsonl. Dispatches a bridge notification to the onCall target configured in .forge.json when an incident is captured.",
     inputSchema: {
       type: "object",
@@ -576,7 +576,7 @@ const TOOLS = [
     },
   },
   {
-    name: "forge_regression_guard",
+    name: "forge_regression_guard", // LiveGuard — emitToolTelemetry in handler
     description: "Run regression guard — extract validation gate commands from plan files, execute them against the current codebase, and report passed/failed/blocked results. Guards against regressions when files change. Accepts a list of changed files and an optional plan to scope the check. Falls back to testCommand slice fields when no bash-block gates are present.",
     inputSchema: {
       type: "object",
@@ -589,7 +589,7 @@ const TOOLS = [
     },
   },
   {
-    name: "forge_runbook",
+    name: "forge_runbook", // LiveGuard — emitToolTelemetry in handler
     description: "Generate a human-readable operational runbook from a hardened plan file. Parses slices, scope contract, build/test commands, and validation gates into a structured Markdown document. Optionally appends recent incidents from .forge/incidents.jsonl for operational context. Saves to .forge/runbooks/<plan-name>-runbook.md and returns the output path.",
     inputSchema: {
       type: "object",
@@ -602,7 +602,7 @@ const TOOLS = [
     },
   },
   {
-    name: "forge_hotspot",
+    name: "forge_hotspot", // LiveGuard — emitToolTelemetry in handler
     description: "Identify git churn hotspots — files that change most frequently. Helps prioritize refactoring, testing, and review effort. Caches results in .forge/hotspot-cache.json (24h TTL). Accepts --top N and --since filters.",
     inputSchema: {
       type: "object",
@@ -615,7 +615,7 @@ const TOOLS = [
     },
   },
   {
-    name: "forge_health_trend",
+    name: "forge_health_trend", // LiveGuard — emitToolTelemetry in handler
     description: "Health trend analysis — aggregates drift scores, cost history, incident frequency, and model performance over a configurable time window. Returns per-metric summaries, an overall health score (0–100), and trend direction. Data sourced from .forge/ operational files.",
     inputSchema: {
       type: "object",
@@ -627,7 +627,7 @@ const TOOLS = [
     },
   },
   {
-    name: "forge_alert_triage",
+    name: "forge_alert_triage", // LiveGuard — emitToolTelemetry in handler
     description: "Triage open alerts — read incidents and drift violations, rank by priority (severity × recency), and return a prioritized list. Read-only: does not modify any data store. Tiebreak: more recent alerts rank higher when priority scores are equal.",
     inputSchema: {
       type: "object",
@@ -640,7 +640,7 @@ const TOOLS = [
     },
   },
   {
-    name: "forge_deploy_journal",
+    name: "forge_deploy_journal", // LiveGuard — emitToolTelemetry in handler
     description: "Record a deployment — log version, deployer, optional notes, and optional slice reference. Appends to .forge/deploy-journal.jsonl. Used by forge_incident_capture to correlate incidents with the most recent deploy.",
     inputSchema: {
       type: "object",
@@ -655,7 +655,7 @@ const TOOLS = [
     },
   },
   {
-    name: "forge_dep_watch",
+    name: "forge_dep_watch", // LiveGuard — emitToolTelemetry in handler
     description: "Scan project dependencies for known vulnerabilities using npm audit. Compares against previous snapshot in .forge/deps-snapshot.json to detect new and resolved CVEs. Fires a bridge notification when new vulnerabilities are found. Non-npm projects degrade gracefully.",
     inputSchema: {
       type: "object",

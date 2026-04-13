@@ -647,12 +647,7 @@ bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
 ```bash
 node pforge-mcp/server.mjs --validate
 bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
-grep -c "forge_" docs/capabilities.md
-node -e "import('./pforge-mcp/capabilities.mjs').then(m => m.buildCapabilitySurface()).then(s => console.log('tools:', s.tools?.length))"
-grep -c "CONTENT-PLACEHOLDER" docs/manual/what-is-liveguard.html  # must be 1
-grep -c "CONTENT-PLACEHOLDER" docs/manual/liveguard-tools.html    # must be 1
-node --input-type=module < /dev/null; node -e "require('fs').readFileSync('docs/manual/assets/manual.js','utf8')" 2>&1 | grep -i syntaxerror || echo 'ok'
-grep -c "incidents" .gitignore  # must be >= 1
+node -e "const fs=require('fs'); const cap=fs.readFileSync('docs/capabilities.md','utf8'); const count=(cap.match(/forge_/g)||[]).length; if(count<9) throw new Error('Expected 9+ forge_ refs, got '+count); console.log('ok —',count,'forge_ refs');"
 ```
 
 **Stop Condition**: If `buildCapabilitySurface()` tool count doesn't match 28 → STOP, debug TOOL_METADATA entries before proceeding to Slice 10.

@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<!-- verified: v2.29.0 -->
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chapter 17: The LiveGuard Dashboard — Plan Forge Manual</title>
+  <meta name="description" content="Tour the LiveGuard section of the Plan Forge dashboard: 5 real-time tabs for health, incidents, triage, security, and environment diff. Driven by WebSocket hub events." />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+
+    <main>
+      <div class="chapter-content">
+
+        <div class="text-xs font-semibold text-amber-500 uppercase tracking-wider mb-2">Act IV — Guard with LiveGuard · Chapter 17</div>
+        <h1>The LiveGuard Dashboard</h1>
+        <p class="text-lg text-slate-400 mb-8">The same unified dashboard, extended with a LIVEGUARD section — 5 real-time tabs driven by WebSocket hub events.</p>
+
+        <div class="callout callout-warning">
+          <strong>In development (v2.28.0–v2.29.0)</strong> — This chapter is a structural placeholder. Full tab walkthrough content (screenshots, widget descriptions, badge behavior, real-time update flow) ships with each release.
+        </div>
+
+        <!-- CONTENT-PLACEHOLDER -->
+
+        <h2 id="opening">Opening the Dashboard</h2>
+        <p>The LiveGuard section is part of the unified Plan Forge dashboard — no separate app or port required:</p>
+
+        <div class="cmd-block">
+          <div class="cmd-block-header"><span>Terminal</span><button class="cmd-copy-btn">Copy</button></div>
+          <pre><code>node pforge-mcp/server.mjs</code></pre>
+        </div>
+
+        <p>Open <a href="http://localhost:3100/dashboard">localhost:3100/dashboard</a>. The LIVEGUARD section appears in the tab bar after a visual divider, separated from the FORGE section.</p>
+
+        <h2 id="two-sections">Two Sections, One Dashboard</h2>
+        <p>The tab bar uses a two-section layout:</p>
+
+        <div class="overflow-x-auto mb-6">
+          <div class="flex items-center gap-0 min-w-[700px] text-xs font-mono border border-slate-700/60 rounded-lg overflow-hidden">
+            <div class="px-3 py-2.5 bg-slate-900 text-slate-400 border-r border-slate-700/40">Progress</div>
+            <div class="px-3 py-2.5 bg-slate-900 text-slate-400 border-r border-slate-700/40">Runs</div>
+            <div class="px-3 py-2.5 bg-slate-900 text-slate-400 border-r border-slate-700/40">Cost</div>
+            <div class="px-3 py-2.5 bg-slate-900 text-slate-500 border-r border-slate-700/40">···</div>
+            <div class="px-3 py-2.5 bg-slate-900/50 border-r border-amber-700/40 text-amber-500 font-semibold">LIVEGUARD</div>
+            <div class="px-3 py-2.5 bg-slate-900 text-amber-400 border-r border-slate-700/40">🛡️ Health</div>
+            <div class="px-3 py-2.5 bg-slate-900 text-amber-400 border-r border-slate-700/40">Incidents</div>
+            <div class="px-3 py-2.5 bg-slate-900 text-amber-400 border-r border-slate-700/40">Triage</div>
+            <div class="px-3 py-2.5 bg-slate-900 text-amber-400 border-r border-slate-700/40">Security</div>
+            <div class="px-3 py-2.5 bg-slate-900 text-amber-400">Env</div>
+          </div>
+        </div>
+
+        <p>FORGE tabs use a blue active indicator. LIVEGUARD tabs use amber — you always know which half of the dashboard you're in.</p>
+
+        <h2 id="health-tab">Health Tab</h2>
+        <p id="incidents-tab">Full content coming in v2.28.0.</p>
+
+        <h2 id="incidents-tab-heading">Incidents Tab</h2>
+        <p>Live list of open incidents from <code>.forge/incidents/</code>. Each card shows incidentId, severity badge, MTTR, on-call engineer, and affected files.</p>
+        <p id="fix-proposals-feed"><strong>Fix Proposals Feed (v2.29)</strong> — when <code>forge_fix_proposal</code> has generated plans, a <strong>Proposed Fixes</strong> section appears at the top of the Incidents tab. Each entry shows the proposal file path, source type (regression/drift/incident/secret), and a <strong>Run in Assisted Mode →</strong> button that opens the Actions tab pre-filled with the plan path. The feed reads from <code>GET /api/fix/proposals</code> on tab load and on every <code>fix-proposal-ready</code> hub event.</p>
+
+        <h2 id="triage-tab-heading">Triage Tab</h2>
+        <p id="security-tab">Full content coming in v2.28.0.</p>
+
+        <h2 id="security-tab-heading">Security Tab</h2>
+        <p id="env-tab">Full content coming in v2.28.0.</p>
+
+        <h2 id="env-tab-heading">Env Tab</h2>
+        <p>Key-by-key comparison of all <code>.env.*</code> files in the project root. Missing keys are highlighted in red. Values are never displayed — keys only.</p>
+
+        <h2 id="quorum-in-dashboard">Quorum Analysis from the Dashboard (v2.29)</h2>
+        <p>The Health and Incidents tabs each include a <strong>Run Quorum Analysis →</strong> link. Clicking it calls <code>GET /api/quorum/prompt?source=&lt;tab-source&gt;&amp;goal=risk-assess</code> and opens a pre-populated quorum prompt in the Actions tab, ready to copy into your AI client. No model calls happen from the dashboard — it assembles the prompt for you.</p>
+
+        <h2 id="help-links">Help Links from the Dashboard</h2>
+        <p>Each LiveGuard tab header includes a <strong>Docs ↗</strong> link. Clicking it opens this chapter in a new tab — you never lose your live dashboard session. The section header also has a Docs link pointing to this page's overview.</p>
+
+        <div class="callout callout-tip">
+          <strong>Related</strong>: See <a href="liveguard-tools.html">Chapter 16 — LiveGuard Tools Reference</a> for the CLI tools that power each widget. See <a href="liveguard-runbooks.html">Appendix F</a> for how to respond to alerts.
+        </div>
+
+        <!-- Chapter nav -->
+        <div class="chapter-nav mt-12">
+          <a class="chapter-nav-prev" href="liveguard-tools.html">← Chapter 16: LiveGuard Tools Reference</a>
+          <a class="chapter-nav-next" href="glossary.html">Appendix A: Glossary →</a>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="assets/manual.js"></script>
+</body>
+</html>

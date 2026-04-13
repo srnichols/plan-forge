@@ -620,6 +620,30 @@
           Enterprise & Teams
         </h2>
         <div class="space-y-3">
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-amber-800/20 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">Does Plan Forge help monitor the app after coding? <span class="ml-2 px-1.5 py-0.5 text-xs rounded bg-amber-900/40 text-amber-400 border border-amber-700/30">New in v2.27</span></span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              <p class="mb-3">Yes — that's <strong class="text-amber-400">LiveGuard</strong>, the post-coding intelligence layer arriving in v2.27.0–v2.28.0. The forge pipeline handles build-time: specify, plan, execute, and ship. LiveGuard picks up where the forge stops and watches the deployed code:</p>
+              <ul class="space-y-1.5 mb-3">
+                <li>🛡️ <code class="text-amber-400">forge_drift_report</code> — detects when the codebase drifts away from the plan's architectural baseline</li>
+                <li>🚨 <code class="text-amber-400">forge_incident_capture</code> — logs incidents with MTTR and on-call tracking</li>
+                <li>📦 <code class="text-amber-400">forge_dep_watch</code> — alerts on new CVEs in your dependency snapshot</li>
+                <li>🔐 <code class="text-amber-400">forge_secret_scan</code> — scans staged diffs for high-entropy strings; never logs values</li>
+                <li>🌱 <code class="text-amber-400">forge_env_diff</code> — compares <code>.env*</code> files for missing or extra keys across environments</li>
+                <li>📈 <code class="text-amber-400">forge_health_trend</code> — tracks MTTR, drift score, and MTTBF over time</li>
+                <li>🎯 <code class="text-amber-400">forge_alert_triage</code> — surfaces a ranked list of the most critical signals across all guards</li>
+                <li>🔥 <code class="text-amber-400">forge_hotspot</code> — identifies high-churn, high-failure files worth extra attention</li>
+                <li>📋 <code class="text-amber-400">forge_runbook</code> — stores and retrieves operational runbooks for each alert type</li>
+                <li>🚢 <code class="text-amber-400">forge_deploy_journal</code> — logs every deployment with pre/post health delta</li>
+                <li>✔️ <code class="text-amber-400">forge_regression_guard</code> — tracks whether previously passing validation gates stay passing</li>
+              </ul>
+              <p>All 11 tools appear in the LIVEGUARD section of the dashboard (<code class="text-forge-400">localhost:3100/dashboard</code>), separated from the FORGE section by a visual divider. See <a href="manual/what-is-liveguard.html" class="text-amber-400 hover:underline">Manual Chapter 15 — What Is LiveGuard?</a> and <a href="manual/liveguard-tools.html" class="text-amber-400 hover:underline">Chapter 16 — LiveGuard Tools Reference</a>.</p>
+            </div>
+          </details>
+
           <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
             <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
               <span class="text-sm font-medium text-white pr-4">Can I share guardrails across teams?</span>

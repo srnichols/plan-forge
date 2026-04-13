@@ -1,6 +1,6 @@
 # Plan Forge — Capabilities Reference
 
-> **Tools**: 19 MCP | **Presets**: 9 | **Agents**: 19 | **Skills**: 12
+> **Tools**: 19 MCP + 13 LiveGuard (v2.27.0–v2.29.0, in development) | **Presets**: 9 | **Agents**: 19 | **Skills**: 12
 >
 > Machine-readable version: call `forge_capabilities` MCP tool or `GET https://planforge.software/.well-known/plan-forge.json`
 
@@ -125,6 +125,26 @@ pforge run-plan <plan> --quorum=auto  # Consensus for complex slices only
 pforge run-plan <plan> --quorum=power # Flagship models, threshold 5, 5min timeout
 pforge run-plan <plan> --quorum=speed # Fast models, threshold 7, 2min timeout
 pforge ext search|add|info|list       # Extension management
+
+# LiveGuard CLI (v2.27.0+)
+pforge drift [--since <ref>]          # Architecture drift score
+pforge incident list                   # Open incidents
+pforge incident capture                # Capture a new incident
+pforge dep-watch                       # Dependency vulnerability scan
+pforge regression-guard [--plan <plan>] # Validate regression gates
+pforge hotspot                         # High-churn / high-failure files
+pforge health-trend                    # 30-day MTTBF trend
+pforge alert-triage                    # Ranked cross-signal alert list
+pforge deploy-log [--tag <tag>]        # Append deploy journal entry
+pforge runbook list|get|add            # Operational runbook management
+
+# LiveGuard CLI (v2.28.0+)
+pforge secret-scan [--since HEAD~1]    # High-entropy secret detection in diffs
+pforge env-diff                        # Env variable key divergence
+
+# LiveGuard CLI (v2.29.0+)
+pforge fix-proposal --source regression|drift|incident|secret [--incident-id ID]  # Generate scoped fix plan
+pforge quorum-analyze --source drift|triage|incident [--goal root-cause|risk-assess|fix-review|runbook-validate] [--custom-question "..."] [--quorum-size 3]  # Assemble quorum prompt from LiveGuard data
 ```
 
 ## API Providers
@@ -173,9 +193,20 @@ Store API keys in the gitignored `.forge/` directory as an alternative to enviro
 | POST | `/api/memory/search` | Semantic search via OpenBrain (requires OpenBrain configured) |
 | POST | `/api/memory/capture` | Normalise + broadcast `memory-captured` event; returns capture payload |
 
+**LiveGuard REST (v2.27–v2.28)** — 18 endpoints across drift, incident, dep-watch, regression, hotspot, health-trend, triage, runbook, deploy-journal, secret-scan, env-diff. Documented in [Chapter 16 — LiveGuard Tools Reference](manual/liveguard-tools.html).
+
+**LiveGuard REST (v2.29):**
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET` | `/api/fix/proposals` | none | List all fix proposals from `.forge/fix-proposals.json` |
+| `POST` | `/api/fix/propose` | `approvalSecret` | Generate a fix plan from regression/drift/incident/secret source |
+| `GET` | `/api/quorum/prompt` | none | Assemble quorum prompt (query params: `source`, `goal`) |
+| `POST` | `/api/quorum/prompt` | none | Assemble quorum prompt (JSON body, supports `customQuestion`) |
+
 Write endpoints (`/api/runs/trigger`, `/api/runs/abort`, `/api/memory/capture`, `POST /api/config`) require `Authorization: Bearer <secret>` or `?token=<secret>` when `bridge.approvalSecret` is set in `.forge.json`. Without a secret, all endpoints are open (suitable for local-only use).
 
-Dashboard: `http://localhost:3100/dashboard` (8 tabs: Progress, Runs, Cost, Actions, Replay, Extensions, Config, Traces)
+Dashboard: `http://localhost:3100/dashboard` (9+ tabs: Progress, Runs, Cost, Actions, Replay, Extensions, Config, Traces, Skills + LIVEGUARD section: 🛡️ Health, Incidents, Triage, Security, Env)
 
 ### Web UI — Live Dashboard
 
@@ -192,7 +223,61 @@ Real-time execution dashboard served at `http://localhost:3100/dashboard`. No bu
 | **Config** | Edit `.forge.json` live — model routing, quorum, parallelism |
 | **Traces** | OTLP waterfall timeline, span detail, severity filter |
 
+### LiveGuard Dashboard Section
+
+A second LIVEGUARD section appears in the tab bar after a visual divider. LIVEGUARD tabs use amber — visually distinct from FORGE tabs.
+
+| Tab | Purpose |
+|-----|---------|
+| **🛡️ Health** | Overall health score, drift trend, MTTBF chart |
+| **Incidents** | Open incident list, MTTR tracking, **fix-proposals feed** (v2.29) |
+| **Triage** | Ranked cross-signal alert list with severity badges |
+| **Security** | Secret scan results, env diff gap summary |
+| **Env** | Environment variable key comparison across `.env.*` files |
+
 Standalone (no MCP client needed): `node pforge-mcp/server.mjs --dashboard-only`
+
+## LiveGuard MCP Tools (13, v2.27.0–v2.29.0)
+
+> Post-coding intelligence — watches gates after the forge ships. All tools available as MCP tools and REST endpoints.
+
+| Tool | What It Guards | Since |
+|------|---------------|-------|
+| `forge_drift_report` | Architecture drift vs. plan baseline | v2.27 |
+| `forge_incident_capture` | Incident log + MTTR tracking | v2.27 |
+| `forge_dep_watch` | Dependency vulnerability changes | v2.27 |
+| `forge_regression_guard` | Regression gate pass/fail history | v2.27 |
+| `forge_runbook` | Operational runbook store | v2.27 |
+| `forge_hotspot` | High-churn / high-failure files | v2.27 |
+| `forge_health_trend` | Long-term health + MTTBF trending | v2.27 |
+| `forge_alert_triage` | Ranked cross-signal alert list | v2.27 |
+| `forge_deploy_journal` | Deploy log with pre/post health delta | v2.27 |
+| `forge_secret_scan` | High-entropy secret detection in diffs — values always redacted | v2.28 |
+| `forge_env_diff` | Env variable key divergence across `.env` files — keys only, values never read | v2.28 |
+| `forge_fix_proposal` | Generates scoped 1-2 slice fix plan from regression/drift/incident/secret failure; loop-capped, human-approved | v2.29 |
+| `forge_quorum_analyze` | Assembles structured LiveGuard quorum prompt for multi-model analysis — no LLM calls in server | v2.29 |
+
+## Lifecycle Hooks (v2.29.0)
+
+Three hooks configured in `.forge.json` `hooks.*` block. Specs in `.github/hooks/*.md`.
+
+| Hook | Trigger | Behavior | Blocking? |
+|------|---------|----------|-----------|
+| **PreDeploy** | File write to `deploy/**`, `Dockerfile*`, `*.tf`; CLI command `docker push`, `git push`, `azd up` | Runs `forge_secret_scan`; blocks on findings (hard stop). Runs `forge_env_diff`; warns on missing keys. | Hard block on secrets; advisory on env gaps |
+| **PostSlice** | `git commit` with conventional commit message (`feat\|fix\|refactor\|...`) | Reads drift history; injects amber advisory (delta >5) or red warning (delta >10 or score <70) | Never blocks |
+| **PreAgentHandoff** | SessionStart with dirty branch, active plan, or `--resume-from` flag | Injects LiveGuard context header; runs regression guard on dirty files; POSTs snapshot to OpenClaw (fire-and-forget, 5s timeout). Skipped when `PFORGE_QUORUM_TURN` env var is set. | Never blocks |
+
+Config (`.forge.json`):
+```json
+{
+  "hooks": {
+    "preDeploy":        { "enabled": true, "blockOnSecrets": true,  "warnOnEnvGaps": true, "scanSince": "HEAD~1" },
+    "postSlice":        { "enabled": true, "silentDeltaThreshold": 5, "warnDeltaThreshold": 10, "scoreFloor": 70 },
+    "preAgentHandoff":  { "enabled": true, "injectContext": true, "runRegressionGuard": true, "cacheMaxAgeMinutes": 30, "minAlertSeverity": "medium" }
+  },
+  "openclaw": { "endpoint": "https://your-openclaw-instance", "apiKey": "see .forge/secrets.json" }
+}
+```
 
 ## Pipeline (6 Steps)
 
@@ -530,6 +615,82 @@ The event is observable via the WebSocket hub (`GET /api/hub`) or captured in th
 - Silent when offline (network errors are suppressed)
 
 Run `pforge update` to pull the latest release.
+
+---
+
+## LiveGuard — Post-Coding Intelligence (coming v2.27.0–v2.28.0)
+
+LiveGuard is the operational intelligence layer that activates after the forge pipeline ships code. While the build pipeline (Chapters 1–14) focuses on writing correct, tested, guardrailed code, LiveGuard watches what happens after — catching drift, secrets, environment divergence, incidents, and regressions before they become production failures.
+
+### LiveGuard MCP Tools (v2.27.0 — 9 tools)
+
+| Tool | Guards | Data Store |
+|------|--------|------------|
+| `forge_drift_report` | Architecture drift vs. plan baseline | `.forge/drift-history.json` |
+| `forge_incident_capture` | Incident log, MTTR, on-call tracking | `.forge/incidents/*.json` |
+| `forge_dep_watch` | Dependency vulnerability change detection | `.forge/deps-snapshot.json` |
+| `forge_regression_guard` | Validation gate pass/fail history | `.forge/regression-gates.json` |
+| `forge_runbook` | Operational runbook store and retrieval | `.forge/runbooks/*.md` |
+| `forge_hotspot` | High-churn / high-failure file detection | `.forge/hotspot-cache.json` |
+| `forge_health_trend` | Long-term health trend + MTTBF scoring | `.forge/health-trend.json` |
+| `forge_alert_triage` | Cross-signal ranked alert list | `.forge/alert-triage-cache.json` |
+| `forge_deploy_journal` | Deploy log with pre/post health delta | `.forge/deploy-journal.jsonl` |
+
+### LiveGuard MCP Tools (v2.28.0 — 2 additional tools)
+
+| Tool | Guards | Security Notes |
+|------|--------|----------------|
+| `forge_secret_scan` | High-entropy string detection in `git diff` staged changes | Never logs values — redacts to `<REDACTED>` in all output |
+| `forge_env_diff` | Environment variable key divergence across `.env*` files | Keys-only parse — never reads values; excludes `.env.local` |
+
+### LiveGuard REST Endpoints (v2.27.0 — 14 new endpoints)
+
+| Method | Path | Tool |
+|--------|------|------|
+| GET | `/api/drift/history` | `forge_drift_report` |
+| POST | `/api/drift/check` | `forge_drift_report` |
+| GET | `/api/incidents` | `forge_incident_capture` |
+| POST | `/api/incidents` | `forge_incident_capture` |
+| GET | `/api/deps/snapshot` | `forge_dep_watch` |
+| GET | `/api/regression/gates` | `forge_regression_guard` |
+| POST | `/api/regression/gates` | `forge_regression_guard` |
+| GET | `/api/runbooks` | `forge_runbook` |
+| GET | `/api/hotspots` | `forge_hotspot` |
+| GET | `/api/health-trend` | `forge_health_trend` |
+| GET | `/api/alerts/triage` | `forge_alert_triage` |
+| GET | `/api/deploy/journal` | `forge_deploy_journal` |
+| POST | `/api/deploy/journal` | `forge_deploy_journal` |
+| GET | `/api/liveguard/events` | unified event log |
+
+### LiveGuard REST Endpoints (v2.28.0 — 4 additional endpoints)
+
+| Method | Path | Tool |
+|--------|------|------|
+| GET | `/api/secrets/scan` | `forge_secret_scan` |
+| POST | `/api/secrets/scan` | `forge_secret_scan` |
+| GET | `/api/env/diff` | `forge_env_diff` |
+| POST | `/api/env/diff` | `forge_env_diff` |
+
+### LiveGuard Dashboard (v2.28.0)
+
+The existing unified dashboard at `localhost:3100/dashboard` gains a **LIVEGUARD section** (5 amber-accented tabs) separated by a visual divider from the existing FORGE section (9 blue-accented tabs). Single WebSocket, single Chart.js, no new server process.
+
+**Dashboard sections after v2.28.0 (14 tabs total)**:
+
+| Section | Tabs | Active Color |
+|---------|---------|--------------|
+| FORGE | Progress, Runs, Cost, Actions, Replay, Extensions, Config, Traces, Skills | Blue (`#3b82f6`) |
+| LIVEGUARD | Health, Incidents, Triage, Security, Env | Amber (`#f59e0b`) |
+
+Each LiveGuard tab includes a `Docs ↗` link to the corresponding manual chapter.
+
+### LiveGuard Telemetry
+
+Every LiveGuard tool call writes to `.forge/liveguard-events.jsonl` and broadcasts a `liveguard-tool-completed` hub event. Structure mirrors the existing plan-run telemetry (OTLP-compatible, Severity constants from `telemetry.mjs`).
+
+**Manual documentation**: See [Plan Forge Manual — Act IV](manual/what-is-liveguard.html) (Chapters 15–17 + Appendix F).
+
+---
 
 ## Dual-Publish Extensions
 

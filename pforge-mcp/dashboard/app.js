@@ -139,6 +139,18 @@ function handleEvent(event) {
     case "skill-completed":
       handleSkillCompleted(event.data || event);
       break;
+    case "liveguard-drift":
+      handleLGDrift(event.data || event);
+      break;
+    case "liveguard-incident":
+      handleLGIncident(event.data || event);
+      break;
+    case "liveguard-triage":
+      handleLGTriage(event.data || event);
+      break;
+    case "fix-proposal-ready":
+      handleFixProposal(event.data || event);
+      break;
   }
 }
 
@@ -2257,7 +2269,126 @@ const tabLoadHooks = {
   traces: loadTraces,
   cost: () => { loadCost(); },
   skills: loadSkillCatalog,
+  'lg-health': loadLGHealth,
+  'lg-incidents': loadLGIncidents,
+  'lg-triage': loadLGTriage,
+  'lg-security': loadLGSecurity,
+  'lg-env': loadLGEnv,
 };
+
+// ─── Theme Toggle ─────────────────────────────────────────────
+
+// ─── LiveGuard Tab Loaders ─────────────────────────────────────
+async function loadLGHealth() {
+  try {
+    const res = await fetch(`${API_BASE}/api/capabilities`).then(r => r.ok ? r.json() : null).catch(() => null);
+    if (res?.liveguard) {
+      const el = document.getElementById('lg-drift-score');
+      if (el) el.textContent = res.liveguard.driftScore ?? '—';
+      const inc = document.getElementById('lg-open-incidents');
+      if (inc) inc.textContent = res.liveguard.openIncidents ?? '—';
+      const scan = document.getElementById('lg-last-scan');
+      if (scan) scan.textContent = res.liveguard.lastScan ? new Date(res.liveguard.lastScan).toLocaleString() : '—';
+    }
+  } catch { /* tab remains in placeholder state */ }
+}
+window.loadLGHealth = loadLGHealth;
+
+async function loadLGIncidents() {
+  try {
+    const proposals = await fetch(`${API_BASE}/api/fix/proposals`).then(r => r.ok ? r.json() : []).catch(() => []);
+    renderFixProposals(proposals);
+  } catch { /* tab remains in placeholder state */ }
+}
+window.loadLGIncidents = loadLGIncidents;
+
+async function loadLGTriage() {
+  // Placeholder — loads triage data when triage REST endpoint ships
+  const el = document.getElementById('lg-triage-list');
+  if (el && el.children.length <= 1) {
+    el.innerHTML = '<p class="text-gray-500 text-sm text-center py-8">No triage data yet. Run <code class="bg-gray-700 px-1 rounded">pforge alert-triage</code> to populate.</p>';
+  }
+}
+window.loadLGTriage = loadLGTriage;
+
+async function loadLGSecurity() {
+  // Placeholder — loads secret scan cache when security REST endpoint ships
+  const el = document.getElementById('lg-security-results');
+  if (el && el.children.length <= 1) {
+    el.innerHTML = '<p class="text-gray-500 text-sm text-center py-8">No scan results. Run <code class="bg-gray-700 px-1 rounded">pforge secret-scan</code> to populate.</p>';
+  }
+}
+window.loadLGSecurity = loadLGSecurity;
+
+async function loadLGEnv() {
+  // Placeholder — loads env diff data when env REST endpoint ships
+  const el = document.getElementById('lg-env-diff');
+  if (el && el.children.length <= 1) {
+    el.innerHTML = '<p class="text-gray-500 text-sm text-center py-8">No diff data yet. Run <code class="bg-gray-700 px-1 rounded">pforge env-diff</code> to populate.</p>';
+  }
+}
+window.loadLGEnv = loadLGEnv;
+
+function renderFixProposals(proposals) {
+  const el = document.getElementById('lg-fix-proposals-list');
+  if (!el) return;
+  if (!proposals || !proposals.length) {
+    el.innerHTML = '<p class="text-gray-500 text-sm text-center py-4">No fix proposals yet. Run <code class="bg-gray-700 px-1 rounded">pforge fix-proposal --source regression</code> after a LiveGuard alert.</p>';
+    return;
+  }
+  el.innerHTML = proposals.map(p => `
+    <div class="bg-gray-700/50 rounded-lg p-3 flex items-center justify-between mb-2">
+      <div>
+        <code class="text-amber-400 text-xs">${escHtml(p.incidentId || 'unknown')}</code>
+        <span class="ml-2 text-xs px-1.5 py-0.5 rounded ${p.status === 'applied' ? 'bg-green-900 text-green-300' : p.status === 'needs-human-intervention' ? 'bg-red-900 text-red-300' : 'bg-gray-600 text-gray-300'}">${escHtml(p.status || 'pending')}</span>
+        <p class="text-xs text-gray-500 mt-0.5">${escHtml(p.planFile || '')}</p>
+      </div>
+      <span class="text-xs text-gray-500">${p.generatedAt ? new Date(p.generatedAt).toLocaleDateString() : ''}</span>
+    </div>`).join('');
+}
+
+function escHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+// LiveGuard hub event handlers
+function handleLGDrift(data) {
+  const el = document.getElementById('lg-drift-score');
+  if (el && data.score != null) el.textContent = data.score;
+}
+
+function handleLGIncident(data) {
+  // Refresh incident list on new incident
+  loadLGIncidents();
+}
+
+function handleLGTriage(data) {
+  loadLGTriage();
+}
+
+function handleFixProposal(data) {
+  // Refresh fix proposals on new proposal event
+  loadLGIncidents();
+  addNotification(`Fix proposal ready: ${data.incidentId || 'new'}`, 'amber');
+}
+
+// Dashboard quorum shortcut — copies quorum prompt to clipboard
+async function runQuorumFromDashboard(source) {
+  try {
+    const res = await fetch(`${API_BASE}/api/quorum/prompt?source=${encodeURIComponent(source)}&goal=risk-assess`);
+    if (!res.ok) { addNotification('Quorum prompt generation failed', 'red'); return; }
+    const json = await res.json();
+    if (json.prompt) {
+      await navigator.clipboard.writeText(json.prompt);
+      addNotification('Quorum prompt copied to clipboard', 'green');
+    }
+  } catch {
+    addNotification('Quorum prompt generation failed', 'red');
+  }
+}
+window.runQuorumFromDashboard = runQuorumFromDashboard;
 
 // ─── Theme Toggle ─────────────────────────────────────────────
 function toggleTheme() {

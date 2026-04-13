@@ -499,6 +499,74 @@ DRIFT DETECTED — 1 forbidden file(s) touched.</code></pre>
           </div>
         </div>
 
+        <!-- ─── LiveGuard commands ─── -->
+        <h2 id="liveguard">LiveGuard Commands (v2.27.0+)</h2>
+        <p>Post-coding intelligence commands. All run locally — no network unless <code>openclaw.endpoint</code> is configured.</p>
+
+        <div class="cmd-ref" id="liveguard-drift">
+          <div class="cmd-ref-title">pforge drift</div>
+          <div class="cmd-ref-desc">Architecture drift score vs. the plan baseline. Lower is better (100 = full alignment).</div>
+          <div class="cmd-block"><div class="cmd-block-header"><span>PowerShell / Bash</span><button class="cmd-copy-btn">Copy</button></div>
+          <pre><code>pforge drift
+pforge drift --since HEAD~5</code></pre></div>
+          <p class="text-sm text-slate-500">Also available as: <code>forge_drift_report</code> MCP tool.</p>
+        </div>
+
+        <div class="cmd-ref" id="liveguard-secret-scan">
+          <div class="cmd-ref-title">pforge secret-scan</div>
+          <div class="cmd-ref-desc">Scan staged diff for high-entropy secrets. Values are always redacted in output. Runs automatically via the <strong>PreDeploy</strong> hook.</div>
+          <div class="cmd-block"><div class="cmd-block-header"><span>PowerShell / Bash</span><button class="cmd-copy-btn">Copy</button></div>
+          <pre><code>pforge secret-scan
+pforge secret-scan --since HEAD~1</code></pre></div>
+          <p class="text-sm text-slate-500">Also available as: <code>forge_secret_scan</code> MCP tool.</p>
+        </div>
+
+        <div class="cmd-ref" id="liveguard-env-diff">
+          <div class="cmd-ref-title">pforge env-diff</div>
+          <div class="cmd-ref-desc">Compare environment variable keys across all <code>.env.*</code> files. Keys only — values are never read.</div>
+          <div class="cmd-block"><div class="cmd-block-header"><span>PowerShell / Bash</span><button class="cmd-copy-btn">Copy</button></div>
+          <pre><code>pforge env-diff</code></pre></div>
+          <p class="text-sm text-slate-500">Also available as: <code>forge_env_diff</code> MCP tool.</p>
+        </div>
+
+        <div class="cmd-ref" id="liveguard-fix-proposal">
+          <div class="cmd-ref-title">pforge fix-proposal</div>
+          <div class="cmd-ref-desc">Generate a scoped 1-2 slice fix plan from a LiveGuard failure. Human reviews and runs the plan. Capped at one proposal per incident.</div>
+          <table>
+            <thead><tr><th>Flag</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>--source</code></td><td>enum (required)</td><td><code>regression</code> · <code>drift</code> · <code>incident</code> · <code>secret</code></td></tr>
+              <tr><td><code>--incident-id</code></td><td>string (optional)</td><td>Specific incident ID (used when <code>source=incident</code>)</td></tr>
+            </tbody>
+          </table>
+          <div class="cmd-block"><div class="cmd-block-header"><span>PowerShell / Bash</span><button class="cmd-copy-btn">Copy</button></div>
+          <pre><code>pforge fix-proposal --source regression
+pforge fix-proposal --source drift
+pforge fix-proposal --source secret
+pforge fix-proposal --source incident --incident-id INC-2026-04-001</code></pre></div>
+          <p class="text-sm text-slate-500">Also available as: <code>forge_fix_proposal</code> MCP tool, <code>POST /api/fix/propose</code> REST endpoint (requires auth).</p>
+          <div class="callout callout-info callout-sm"><strong>Review before running:</strong> Open <code>docs/plans/auto/LIVEGUARD-FIX-*.md</code> and fill in the TODO markers, then <code>pforge run-plan --assisted &lt;plan&gt;</code> on a branch.</div>
+        </div>
+
+        <div class="cmd-ref" id="liveguard-quorum-analyze">
+          <div class="cmd-ref-title">pforge quorum-analyze</div>
+          <div class="cmd-ref-desc">Assemble a structured quorum prompt from any LiveGuard data source. Returns the prompt text for you to run through your AI client's quorum mode. No model calls happen.</div>
+          <table>
+            <thead><tr><th>Flag</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>--source</code></td><td>enum (required)</td><td><code>drift</code> · <code>triage</code> · <code>incident</code> · <code>runbook</code> · <code>fix-proposal</code></td></tr>
+              <tr><td><code>--goal</code></td><td>enum (optional)</td><td><code>root-cause</code> · <code>risk-assess</code> (default) · <code>fix-review</code> · <code>runbook-validate</code></td></tr>
+              <tr><td><code>--custom-question</code></td><td>string (optional)</td><td>Freeform question that overrides <code>--goal</code> (max 500 chars)</td></tr>
+              <tr><td><code>--quorum-size</code></td><td>number (optional)</td><td>Model vote count requested in the prompt (default 3)</td></tr>
+            </tbody>
+          </table>
+          <div class="cmd-block"><div class="cmd-block-header"><span>PowerShell / Bash</span><button class="cmd-copy-btn">Copy</button></div>
+          <pre><code>pforge quorum-analyze --source triage
+pforge quorum-analyze --source drift --goal root-cause
+pforge quorum-analyze --source incident --custom-question "Which fix should I prioritize given the sprint deadline?"</code></pre></div>
+          <p class="text-sm text-slate-500">Also available as: <code>forge_quorum_analyze</code> MCP tool, <code>POST /api/quorum/prompt</code> REST endpoint (no auth required).</p>
+        </div>
+
         <!-- ─── Server commands ─── -->
         <h2 id="server">MCP Server Commands</h2>
         <p>The MCP server is started directly with Node.js, not through the <code>pforge</code> CLI:</p>

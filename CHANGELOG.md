@@ -4,6 +4,33 @@ All notable changes to Plan Forge are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
+
+## [2.29.0] — planned
+
+### Added
+- `forge_fix_proposal` MCP tool — generates 1-2 slice fix plan (`docs/plans/auto/LIVEGUARD-FIX-<id>.md`) from regression, drift, incident, or secret-scan failure; capped at one proposal per incidentId; `source="secret"` supported with credential-rotation template; `alreadyExists: true` on duplicate calls
+- `forge_quorum_analyze` MCP tool — assembles structured 3-section quorum prompt from any LiveGuard data source; `customQuestion` freeform override (max 500 chars, XSS-validated); echoes `questionUsed` for audit trail; no LLM calls from `server.mjs`
+- `GET /api/fix/proposals` — list all fix proposals (no auth)
+- `POST /api/fix/propose` — generate fix proposal (requires `approvalSecret`)
+- `GET /api/quorum/prompt` + `POST /api/quorum/prompt` — assemble quorum prompt (no auth, read-only)
+- `docs/plans/auto/` directory — gitignored runtime directory; `README.md` committed via explicit gitignore exception `!docs/plans/auto/README.md`
+- `generateFixPlan()` and `postOpenClawSnapshot()` helpers in `orchestrator.mjs`
+
+### Hooks (new)
+- **PreDeploy** — blocks file writes to `deploy/**`, `Dockerfile*`, `*.tf`, `k8s/**` and CLI commands (`docker push`, `git push`, `azd up`) when `forge_secret_scan` returns findings; warns on env key gaps; configurable via `.forge.json` `hooks.preDeploy.*`
+- **PostSlice** — injects amber advisory (delta >5, score ≥70) or red warning (delta >10, score <70) after every `feat|fix|refactor|perf|chore|style|test` commit; never blocks; configurable via `hooks.postSlice.*`
+- **PreAgentHandoff** — injects LiveGuard context header at session start; skips entirely when `PFORGE_QUORUM_TURN` env var is set (quorum turns get clean context); fires OpenClaw snapshot POST (5s hard timeout, fire-and-forget); configurable via `hooks.preAgentHandoff.*` + `openclaw.*`
+
+### Integration
+- OpenClaw analytics bridge — optional `POST` to `openclaw.endpoint` on `PreAgentHandoff` with drift score, open incidents, last deploy version, alert summary, secret scan status
+- `.forge.json` `hooks.*` config block (all three hooks) + `openclaw.endpoint` + `openclaw.apiKey` (references `.forge/secrets.json`)
+
+### Config (`.forge.json`)
+- `hooks.preDeploy.blockOnSecrets` (default `true`), `.warnOnEnvGaps` (default `true`), `.scanSince` (default `"HEAD~1"`)
+- `hooks.postSlice.silentDeltaThreshold` (default 5), `.warnDeltaThreshold` (default 10), `.scoreFloor` (default 70)
+- `hooks.preAgentHandoff.injectContext` (default `true`), `.runRegressionGuard` (default `true`), `.cacheMaxAgeMinutes` (default 30), `.minAlertSeverity` (default `"medium"`)
+
+---
 ## [2.26.0] - 2026-04-12
 
 ### Added

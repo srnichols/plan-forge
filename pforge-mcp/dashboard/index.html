@@ -69,6 +69,14 @@
     <button class="tab-btn px-4 py-2 hover:text-blue-400 text-gray-400 whitespace-nowrap" data-tab="config">Config</button>
     <button class="tab-btn px-4 py-2 hover:text-blue-400 text-gray-400 whitespace-nowrap" data-tab="traces">Traces</button>
     <button class="tab-btn px-4 py-2 hover:text-blue-400 text-gray-400 whitespace-nowrap" data-tab="skills">Skills</button>
+    <!-- LiveGuard section -->
+    <span class="px-1 py-2 text-amber-600/50 text-xs self-center">│</span>
+    <span class="px-2 py-2 text-amber-500/70 text-xs font-semibold tracking-wider self-center whitespace-nowrap">🛡️ LG</span>
+    <button class="tab-btn px-4 py-2 hover:text-amber-400 text-gray-400 whitespace-nowrap" data-tab="lg-health">Health</button>
+    <button class="tab-btn px-4 py-2 hover:text-amber-400 text-gray-400 whitespace-nowrap" data-tab="lg-incidents">Incidents</button>
+    <button class="tab-btn px-4 py-2 hover:text-amber-400 text-gray-400 whitespace-nowrap" data-tab="lg-triage">Triage</button>
+    <button class="tab-btn px-4 py-2 hover:text-amber-400 text-gray-400 whitespace-nowrap" data-tab="lg-security">Security</button>
+    <button class="tab-btn px-4 py-2 hover:text-amber-400 text-gray-400 whitespace-nowrap" data-tab="lg-env">Env</button>
     <!-- Notification bell -->
     <button id="notif-bell" class="ml-auto px-3 py-2 relative hover:text-yellow-400 text-gray-400" onclick="toggleNotifications()">
       🔔<span id="notif-count" class="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center hidden">0</span>
@@ -564,6 +572,103 @@
       </div>
       <div id="skill-timeline" class="space-y-2">
         <div class="text-gray-500 text-center py-8">No skill executions yet. Invoke a skill via <code>/skill-name</code> or <code>forge_run_skill</code>.</div>
+      </div>
+    </section>
+
+    <!-- LiveGuard Health Tab -->
+    <section id="tab-lg-health" class="tab-content hidden">
+      <div class="mb-4 flex items-center justify-between">
+        <h2 class="text-lg font-semibold text-amber-400">🛡️ LiveGuard · Health</h2>
+        <button onclick="loadLGHealth()" class="text-xs px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded">Refresh</button>
+      </div>
+      <div class="grid gap-4 md:grid-cols-3 mb-4">
+        <div class="bg-gray-800 rounded-lg p-4">
+          <p class="text-sm text-gray-400">Drift Score</p>
+          <p id="lg-drift-score" class="text-2xl font-bold text-amber-400">—</p>
+          <p class="text-xs text-gray-500 mt-1">100 = full alignment</p>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-4">
+          <p class="text-sm text-gray-400">Open Incidents</p>
+          <p id="lg-open-incidents" class="text-2xl font-bold">—</p>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-4">
+          <p class="text-sm text-gray-400">Last Scan</p>
+          <p id="lg-last-scan" class="text-sm text-gray-300 mt-1">—</p>
+        </div>
+      </div>
+      <div class="bg-gray-800 rounded-lg p-4">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-sm text-gray-400">Drift History</h3>
+          <button onclick="runQuorumFromDashboard('health')" class="text-xs px-2 py-1 bg-amber-900/40 hover:bg-amber-900/70 text-amber-300 rounded">Run Quorum Analysis →</button>
+        </div>
+        <div id="lg-health-trend" class="text-gray-500 text-sm text-center py-8">No drift history yet. Run <code>pforge drift</code> to populate.</div>
+      </div>
+    </section>
+
+    <!-- LiveGuard Incidents Tab -->
+    <section id="tab-lg-incidents" class="tab-content hidden">
+      <div class="mb-4 flex items-center justify-between">
+        <h2 class="text-lg font-semibold text-amber-400">🛡️ LiveGuard · Incidents</h2>
+        <button onclick="loadLGIncidents()" class="text-xs px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded">Refresh</button>
+      </div>
+      <!-- Fix Proposals Feed -->
+      <div class="bg-gray-800 rounded-lg p-4 mb-4">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-sm font-semibold text-amber-300">🔧 Fix Proposals</h3>
+          <span class="text-xs text-gray-500">from <code>.forge/fix-proposals.json</code></span>
+        </div>
+        <div id="lg-fix-proposals-list">
+          <p class="text-gray-500 text-sm text-center py-4">No fix proposals yet. Run <code class="bg-gray-700 px-1 rounded">pforge fix-proposal --source regression</code> after a LiveGuard alert.</p>
+        </div>
+      </div>
+      <!-- Incident List -->
+      <div class="bg-gray-800 rounded-lg p-4">
+        <h3 class="text-sm font-semibold text-white mb-3">Open Incidents</h3>
+        <div id="lg-incidents-list">
+          <p class="text-gray-500 text-sm text-center py-8">No open incidents. Run <code class="bg-gray-700 px-1 rounded">pforge incident list</code> to populate.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- LiveGuard Triage Tab -->
+    <section id="tab-lg-triage" class="tab-content hidden">
+      <div class="mb-4 flex items-center justify-between">
+        <h2 class="text-lg font-semibold text-amber-400">🛡️ LiveGuard · Alert Triage</h2>
+        <div class="flex gap-2">
+          <button onclick="runQuorumFromDashboard('triage')" class="text-xs px-2 py-1 bg-amber-900/40 hover:bg-amber-900/70 text-amber-300 rounded">Run Quorum Analysis →</button>
+          <button onclick="loadLGTriage()" class="text-xs px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded">Refresh</button>
+        </div>
+      </div>
+      <div id="lg-triage-list" class="space-y-2">
+        <p class="text-gray-500 text-sm text-center py-8">No triage data yet. Run <code class="bg-gray-700 px-1 rounded">pforge alert-triage</code> to populate.</p>
+      </div>
+    </section>
+
+    <!-- LiveGuard Security Tab -->
+    <section id="tab-lg-security" class="tab-content hidden">
+      <div class="mb-4 flex items-center justify-between">
+        <h2 class="text-lg font-semibold text-amber-400">🛡️ LiveGuard · Security</h2>
+        <button onclick="loadLGSecurity()" class="text-xs px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded">Refresh</button>
+      </div>
+      <div class="bg-gray-800 rounded-lg p-4 mb-4">
+        <h3 class="text-sm font-semibold text-white mb-3">Secret Scan Results</h3>
+        <div id="lg-security-results">
+          <p class="text-gray-500 text-sm text-center py-8">No scan results. Run <code class="bg-gray-700 px-1 rounded">pforge secret-scan</code> to populate.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- LiveGuard Env Tab -->
+    <section id="tab-lg-env" class="tab-content hidden">
+      <div class="mb-4 flex items-center justify-between">
+        <h2 class="text-lg font-semibold text-amber-400">🛡️ LiveGuard · Env Diff</h2>
+        <button onclick="loadLGEnv()" class="text-xs px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded">Refresh</button>
+      </div>
+      <div class="bg-gray-800 rounded-lg p-4">
+        <p class="text-sm text-gray-400 mb-3">Keys only — values are never displayed.</p>
+        <div id="lg-env-diff">
+          <p class="text-gray-500 text-sm text-center py-8">No diff data yet. Run <code class="bg-gray-700 px-1 rounded">pforge env-diff</code> to populate.</p>
+        </div>
       </div>
     </section>
   </main>

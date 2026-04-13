@@ -21,11 +21,15 @@
     { id: "multi-agent",         file: "multi-agent.html",         num: "12", title: "Multi-Agent Setup",        act: "III" },
     { id: "advanced-execution",  file: "advanced-execution.html",  num: "13", title: "Advanced Execution",       act: "III" },
     { id: "troubleshooting",     file: "troubleshooting.html",     num: "14", title: "Troubleshooting",          act: "III" },
+    { id: "what-is-liveguard",   file: "what-is-liveguard.html",   num: "15", title: "What Is LiveGuard?",        act: "IV" },
+    { id: "liveguard-tools",     file: "liveguard-tools.html",     num: "16", title: "LiveGuard Tools Reference", act: "IV" },
+    { id: "liveguard-dashboard", file: "liveguard-dashboard.html", num: "17", title: "The LiveGuard Dashboard",    act: "IV" },
     { id: "glossary",            file: "glossary.html",            num: "A",  title: "Glossary",                 act: "Appendix" },
     { id: "quick-reference",     file: "quick-reference.html",     num: "B",  title: "Quick Reference Card",     act: "Appendix" },
     { id: "stack-notes",         file: "stack-notes.html",         num: "C",  title: "Stack-Specific Notes",     act: "Appendix" },
     { id: "grok-warnings",       file: "grok-image-warnings.html", num: "D",  title: "Grok Image Warnings",      act: "Appendix" },
     { id: "sample-project",       file: "sample-project.html",      num: "E",  title: "Sample Project",            act: "Appendix" },
+    { id: "liveguard-runbooks",  file: "liveguard-runbooks.html",  num: "F",  title: "LiveGuard Alert Runbooks",  act: "Appendix" },
     { id: "about-author",         file: "about-author.html",        num: "",   title: "About the Author",          act: "Appendix" },
   ];
 

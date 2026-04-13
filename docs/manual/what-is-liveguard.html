@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<!-- verified: v2.27.0 -->
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chapter 15: What Is LiveGuard? — Plan Forge Manual</title>
+  <meta name="description" content="LiveGuard is the post-coding intelligence layer in Plan Forge. The forge builds your software — LiveGuard watches the gates after it ships." />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+
+    <main>
+      <div class="chapter-content">
+
+        <div class="text-xs font-semibold text-amber-500 uppercase tracking-wider mb-2">Act IV — Guard with LiveGuard · Chapter 15</div>
+        <h1>What Is LiveGuard?</h1>
+        <p class="text-lg text-slate-400 mb-8">The forge builds your software. LiveGuard watches the gates after it ships.</p>
+
+        <div class="callout callout-warning">
+          <strong>Coming in v2.27.0</strong> — This chapter is a structural placeholder. Full content ships with the LiveGuard feature release. The outline below reflects the planned content.
+        </div>
+
+        <!-- CONTENT-PLACEHOLDER -->
+
+        <h2 id="the-problem">The Problem LiveGuard Solves</h2>
+        <p>Plan Forge sessions end when the code ships. The forge hardens your plan, executes your slices, and pushes a clean commit. Then it stops — because that's the right boundary for a build-time tool.</p>
+        <p>But software doesn't stop when the build does. Secrets drift into environment variables. Dependencies acquire CVEs. Configuration diverges between environments. The regression gate you wrote last month no longer covers the new payment flow. None of these are build-time failures — they're post-coding failures. And without a watch on the gates, they grow silently until they become incidents.</p>
+        <p><strong>LiveGuard is what watches after the forge stops.</strong></p>
+
+        <h2 id="lifecycle">The Lifecycle Position</h2>
+        <p>LiveGuard occupies the operational phase — after code is shipped but before (and alongside) production APM:</p>
+
+        <div class="overflow-x-auto mb-6">
+          <div class="flex items-center gap-2 min-w-[640px] py-3 text-xs font-mono">
+            <div class="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-300">Specify</div>
+            <div class="text-slate-600">→</div>
+            <div class="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-300">Plan</div>
+            <div class="text-slate-600">→</div>
+            <div class="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-300">Execute</div>
+            <div class="text-slate-600">→</div>
+            <div class="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-300">Ship</div>
+            <div class="text-slate-600">→</div>
+            <div class="px-3 py-2 rounded-lg bg-amber-950/40 border border-amber-700/50 text-amber-400 font-semibold">🛡️ LiveGuard Watches</div>
+          </div>
+        </div>
+
+        <p>The forge pipeline (Chapters 1–14) covers everything left of the arrow. LiveGuard picks up at the right.</p>
+
+        <h2 id="not-an-apm">What LiveGuard Is Not</h2>
+        <p>Full content coming in v2.27.0.</p>
+
+        <h2 id="guardian-metaphor">The Guardian Metaphor</h2>
+        <p>Full content coming in v2.27.0.</p>
+
+        <h2 id="when-to-run">When to Run LiveGuard Tools</h2>
+        <p>Full content coming in v2.27.0.</p>
+
+        <div class="callout callout-tip">
+          <strong>Next steps</strong>: See <a href="liveguard-tools.html">Chapter 16 — LiveGuard Tools Reference</a> for every tool and its CLI flags. See <a href="liveguard-dashboard.html">Chapter 17 — The LiveGuard Dashboard</a> to learn the real-time monitoring UI.
+        </div>
+
+        <!-- Chapter nav -->
+        <div class="chapter-nav mt-12">
+          <a class="chapter-nav-prev" href="troubleshooting.html">← Chapter 14: Troubleshooting</a>
+          <a class="chapter-nav-next" href="liveguard-tools.html">Chapter 16: LiveGuard Tools Reference →</a>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="assets/manual.js"></script>
+</body>
+</html>

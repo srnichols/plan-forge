@@ -356,8 +356,7 @@ node -e "import('./pforge-mcp/orchestrator.mjs').then(m => { if(typeof m.postOpe
 ```bash
 node -e "const gi=require('fs').readFileSync('.gitignore','utf8');if(!gi.includes('docs/plans/auto'))throw new Error('missing gitignore entry');if(!gi.includes('!docs/plans/auto/README.md'))throw new Error('missing README exception');console.log('ok');"
 node -e "if(!require('fs').existsSync('docs/plans/auto'))throw new Error('dir missing');console.log('ok');"
-git status --ignored docs/plans/auto/ | grep -c "Ignored" || echo "not ignored"
-git ls-files docs/plans/auto/README.md | grep -c README.md
+node -e "const{execSync}=require('child_process');const out=execSync('git ls-files docs/plans/auto/README.md',{encoding:'utf8'});if(!out.includes('README.md'))throw new Error('README.md not tracked');console.log('ok');"
 ```
 
 ---

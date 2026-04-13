@@ -292,6 +292,24 @@ export const TOOL_METADATA = {
       output: { gatesChecked: 3, passed: 3, failed: 0, blocked: 0, skipped: 0, success: true },
     },
   },
+  forge_runbook: {
+    intent: ["generate-runbook", "document-plan", "ops-runbook"],
+    aliases: ["runbook-gen", "plan-runbook", "generate-ops-doc"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "2.30.0",
+    prerequisites: ["plan file exists"],
+    produces: [".forge/runbooks/<plan-name>-runbook.md"],
+    consumes: ["docs/plans/*.md", ".forge/incidents.jsonl"],
+    sideEffects: ["creates .forge/runbooks/ directory", "writes runbook markdown file"],
+    errors: {
+      PLAN_NOT_FOUND: { message: "Plan file not found", recovery: "Check the plan path argument" },
+    },
+    example: {
+      input: { plan: "docs/plans/Phase-1-AUTH-PLAN.md", includeIncidents: true },
+      output: { runbook: ".forge/runbooks/phase-1-auth-plan-runbook.md", slices: 4, generatedAt: "2024-01-01T00:00:00.000Z" },
+    },
+  },
 };
 
 // ─── Workflow Graphs ──────────────────────────────────────────────────
@@ -450,6 +468,17 @@ export const CLI_SCHEMA = {
         'pforge incident "Database connection pool exhausted" --severity high',
         'pforge incident "Deploy failed" --severity critical --files src/deploy.ts,infra/k8s.yaml',
         'pforge incident "Resolved: API latency" --resolved-at 2024-01-01T02:30:00Z',
+      ],
+    },
+    runbook: {
+      description: "Generate a human-readable operational runbook from a hardened plan file — includes slices, scope, gates, and recent incidents",
+      args: [{ name: "plan", type: "path", required: true, description: "Path to the plan file (e.g., docs/plans/Phase-1-AUTH-PLAN.md)" }],
+      flags: {
+        "--no-incidents": { type: "boolean", description: "Exclude recent incidents from the runbook" },
+      },
+      examples: [
+        "pforge runbook docs/plans/Phase-1-AUTH-PLAN.md",
+        "pforge runbook docs/plans/Phase-1-AUTH-PLAN.md --no-incidents",
       ],
     },
     help: { description: "Show help", args: [], flags: {}, examples: ["pforge help"] },

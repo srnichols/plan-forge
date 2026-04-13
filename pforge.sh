@@ -61,6 +61,7 @@ COMMANDS:
   drift             Score codebase against architecture guardrail rules — track drift over time
   incident <desc>   Capture an incident — record description, severity, affected files, and optional resolvedAt for MTTR
   regression-guard  Run validation gates from plan files — guard against regressions when files change
+  runbook <plan>    Generate an operational runbook from a hardened plan file
   smith             Inspect your forge — environment, VS Code config, setup health, and common problems
   tour              Guided walkthrough of your installed Plan Forge files
   help              Show this help message
@@ -2657,6 +2658,59 @@ cmd_incident() {
     "
 }
 
+# ─── Command: runbook ──────────────────────────────────────────────────
+cmd_runbook() {
+    local plan=""
+    local no_incidents=false
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --no-incidents) no_incidents=true; shift ;;
+            --*) shift ;;
+            *)
+                if [ -z "$plan" ]; then plan="$1"; fi
+                shift
+                ;;
+        esac
+    done
+
+    if [ -z "$plan" ]; then
+        echo "ERROR: plan file is required. Usage: ./pforge.sh runbook <plan-file> [--no-incidents]" >&2
+        exit 1
+    fi
+
+    print_manual_steps "runbook" \
+        "Parse the plan file (slices, scope contract, gates)" \
+        "Collect recent incidents from .forge/incidents.jsonl (unless --no-incidents)" \
+        "Render a structured Markdown runbook" \
+        "Save to .forge/runbooks/<plan-name>-runbook.md"
+
+    local port=3100
+    local include_incidents="true"
+    if [ "$no_incidents" = "true" ]; then include_incidents="false"; fi
+
+    local payload
+    payload=$(node -e "
+      console.log(JSON.stringify({ plan: process.env.RB_PLAN, includeIncidents: process.env.RB_INC === 'true' }));
+    " RB_PLAN="$plan" RB_INC="$include_incidents")
+
+    local response
+    response=$(curl -sf -X POST "http://localhost:${port}/api/runbook" \
+        -H "Content-Type: application/json" \
+        -d "$payload") || {
+        echo "ERROR: MCP server not running on port ${port}. Start with: node pforge-mcp/server.mjs" >&2
+        exit 1
+    }
+
+    echo "$response" | node -e "
+      const d = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
+      console.log('\n\u{1F4D6} Runbook Generated');
+      console.log('   File:   ' + d.runbook);
+      console.log('   Slices: ' + d.slices);
+      console.log('   At:     \x1b[90m' + d.generatedAt + '\x1b[0m');
+    "
+}
+
 # ─── Command: drift ────────────────────────────────────────────────────
 cmd_drift() {
     local threshold=70
@@ -2873,6 +2927,7 @@ case "$COMMAND" in
     drift)        cmd_drift "$@" ;;
     incident)     cmd_incident "$@" ;;
     regression-guard) cmd_regression_guard "$@" ;;
+    runbook)      cmd_runbook "$@" ;;
     smith)        cmd_smith ;;
     tour)         cmd_tour ;;
     help|--help)  show_help ;;

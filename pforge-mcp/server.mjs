@@ -21,7 +21,7 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { execSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, writeFileSync, watchFile, unwatchFile, statSync, openSync, readSync, closeSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, watchFile, unwatchFile, statSync, openSync, readSync, closeSync } from "node:fs";
 import { resolve, join, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parsePlan, runPlan, detectWorkers, getCostReport, analyzeWithQuorum, generateImage, runAnalyze, readForgeJson, readForgeJsonl, appendForgeJsonl, emitToolTelemetry, regressionGuard } from "./orchestrator.mjs";
@@ -588,7 +588,116 @@ const TOOLS = [
       },
     },
   },
+  {
+    name: "forge_runbook",
+    description: "Generate a human-readable operational runbook from a hardened plan file. Parses slices, scope contract, build/test commands, and validation gates into a structured Markdown document. Optionally appends recent incidents from .forge/incidents.jsonl for operational context. Saves to .forge/runbooks/<plan-name>-runbook.md and returns the output path.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        plan: { type: "string", description: "Path to the plan file (e.g., docs/plans/Phase-1-AUTH-PLAN.md)" },
+        includeIncidents: { type: "boolean", description: "Include recent incidents from .forge/incidents.jsonl for operational context. Default: true" },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+      required: ["plan"],
+    },
+  },
 ];
+// ─── Runbook helpers ──────────────────────────────────────────────────
+
+function planNameToRunbookName(planPath) {
+  const base = basename(planPath, ".md");
+  return base.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") + "-runbook.md";
+}
+
+function generateRunbook(plan, cwd, options = {}) {
+  const { includeIncidents = true } = options;
+  const lines = [];
+
+  lines.push(`# Runbook: ${plan.meta.title || "Unnamed Plan"}`);
+  lines.push("");
+  lines.push(`Generated: ${new Date().toISOString()}`);
+  if (plan.meta.status) lines.push(`Status: ${plan.meta.status}`);
+  if (plan.meta.branch) lines.push(`Branch: \`${plan.meta.branch}\``);
+  lines.push("");
+
+  // Scope Contract
+  const sc = plan.scopeContract;
+  if (sc && (sc.inScope.length || sc.outOfScope.length || sc.forbidden.length)) {
+    lines.push("## Scope Contract");
+    lines.push("");
+    if (sc.inScope.length) {
+      lines.push("### In Scope");
+      sc.inScope.forEach((item) => lines.push(`- ${item}`));
+      lines.push("");
+    }
+    if (sc.outOfScope.length) {
+      lines.push("### Out of Scope");
+      sc.outOfScope.forEach((item) => lines.push(`- ${item}`));
+      lines.push("");
+    }
+    if (sc.forbidden.length) {
+      lines.push("### Forbidden Actions");
+      sc.forbidden.forEach((item) => lines.push(`- ${item}`));
+      lines.push("");
+    }
+  }
+
+  // Execution Slices
+  lines.push("## Execution Slices");
+  lines.push("");
+  for (const slice of plan.slices) {
+    const deps = slice.depends || [];
+    const parallel = slice.parallel ? " [parallel]" : "";
+    lines.push(`### Slice ${slice.number}: ${slice.title}${parallel}`);
+    lines.push("");
+    if (deps.length) {
+      lines.push(`**Depends on:** Slice ${deps.join(", Slice ")}`);
+      lines.push("");
+    }
+    if (slice.tasks && slice.tasks.length) {
+      lines.push("**Tasks:**");
+      slice.tasks.forEach((t) => lines.push(`1. ${t}`));
+      lines.push("");
+    }
+    if (slice.buildCommand) {
+      lines.push(`**Build Command:** \`${slice.buildCommand}\``);
+      lines.push("");
+    }
+    if (slice.testCommand) {
+      lines.push(`**Test Command:** \`${slice.testCommand}\``);
+      lines.push("");
+    }
+    if (slice.validationGate) {
+      lines.push("**Validation Gate:**");
+      lines.push("```");
+      lines.push(slice.validationGate);
+      lines.push("```");
+      lines.push("");
+    }
+    if (slice.stopCondition) {
+      lines.push(`**Stop Condition:** ${slice.stopCondition}`);
+      lines.push("");
+    }
+  }
+
+  // Recent incidents
+  if (includeIncidents) {
+    const incidents = readForgeJsonl("incidents.jsonl", [], cwd);
+    if (incidents.length) {
+      lines.push("## Recent Incidents");
+      lines.push("");
+      for (const inc of incidents.slice(-5)) {
+        const sev = (inc.severity || "medium").toUpperCase();
+        const resolved = inc.resolvedAt ? ` — resolved ${inc.resolvedAt}` : " — unresolved";
+        lines.push(`- **[${sev}]** ${inc.description}${resolved} (${inc.capturedAt})`);
+      }
+      lines.push("");
+    }
+  }
+
+  return lines.join("\n");
+}
+
 function executeTool(name, args) {
   const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
 
@@ -1086,6 +1195,34 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
   }
 
+  if (name === "forge_runbook") {
+    try {
+      const t0 = Date.now();
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const planPath = resolve(cwd, args.plan);
+
+      if (!existsSync(planPath)) {
+        return { content: [{ type: "text", text: `Plan file not found: ${args.plan}` }], isError: true };
+      }
+
+      const plan = parsePlan(planPath, cwd);
+      const includeIncidents = args.includeIncidents !== false;
+      const content = generateRunbook(plan, cwd, { includeIncidents });
+
+      const runbookName = planNameToRunbookName(planPath);
+      const runbooksDir = resolve(cwd, ".forge", "runbooks");
+      mkdirSync(runbooksDir, { recursive: true });
+      writeFileSync(resolve(runbooksDir, runbookName), content, "utf-8");
+
+      const result = { runbook: `.forge/runbooks/${runbookName}`, slices: plan.slices.length, generatedAt: new Date().toISOString() };
+      emitToolTelemetry("forge_runbook", args, result, Date.now() - t0, "OK", cwd);
+
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Runbook error: ${err.message}` }], isError: true };
+    }
+  }
+
   // ─── Sync pforge tools ───
   const result = executeTool(name, args || {});
 
@@ -1272,6 +1409,37 @@ function createExpressApp() {
   app.get("/api/incidents", (_req, res) => {
     try {
       res.json(readForgeJsonl("incidents.jsonl", [], PROJECT_DIR));
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // REST API: POST /api/runbook — generate runbook from plan file
+  app.post("/api/runbook", (req, res) => {
+    try {
+      const { plan, includeIncidents = true } = req.body || {};
+      if (!plan || typeof plan !== "string") {
+        return res.status(400).json({ error: "plan is required and must be a string" });
+      }
+      const planPath = resolve(PROJECT_DIR, plan);
+      if (!existsSync(planPath)) {
+        return res.status(404).json({ error: `Plan file not found: ${plan}` });
+      }
+      const parsed = parsePlan(planPath, PROJECT_DIR);
+      const content = generateRunbook(parsed, PROJECT_DIR, { includeIncidents });
+      const runbookName = planNameToRunbookName(planPath);
+      const runbooksDir = resolve(PROJECT_DIR, ".forge", "runbooks");
+      mkdirSync(runbooksDir, { recursive: true });
+      writeFileSync(resolve(runbooksDir, runbookName), content, "utf-8");
+      res.status(201).json({ runbook: `.forge/runbooks/${runbookName}`, slices: parsed.slices.length, generatedAt: new Date().toISOString() });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // REST API: GET /api/runbooks — list generated runbooks
+  app.get("/api/runbooks", (_req, res) => {
+    try {
+      const runbooksDir = resolve(PROJECT_DIR, ".forge", "runbooks");
+      if (!existsSync(runbooksDir)) return res.json([]);
+      const files = readdirSync(runbooksDir).filter((f) => f.endsWith(".md")).sort();
+      res.json(files.map((f) => ({ file: `.forge/runbooks/${f}` })));
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 

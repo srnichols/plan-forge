@@ -78,6 +78,7 @@ function Show-Help {
     Write-Host "  drift             Score codebase against architecture guardrail rules — track drift over time"
     Write-Host "  incident <desc>   Capture an incident — record description, severity, affected files, and optional resolvedAt for MTTR"
     Write-Host "  regression-guard  Run validation gates from plan files — guard against regressions when files change"
+    Write-Host "  runbook <plan>    Generate an operational runbook from a hardened plan file"
     Write-Host "  tour              Guided walkthrough of your installed Plan Forge files"
     Write-Host "  help              Show this help message"
     Write-Host ""
@@ -3159,6 +3160,51 @@ function Invoke-Incident {
     }
 }
 
+# ─── Command: runbook ────────────────────────────────────────────────────
+function Invoke-Runbook {
+    $plan          = $null
+    $noIncidents   = $false
+
+    for ($i = 0; $i -lt $Arguments.Count; $i++) {
+        switch ($Arguments[$i]) {
+            '--no-incidents' { $noIncidents = $true }
+            default {
+                if (-not $plan -and -not $Arguments[$i].StartsWith('--')) {
+                    $plan = $Arguments[$i]
+                }
+            }
+        }
+    }
+
+    if (-not $plan) {
+        Write-Host "ERROR: plan file is required. Usage: .\pforge.ps1 runbook <plan-file> [--no-incidents]" -ForegroundColor Red
+        exit 1
+    }
+
+    Write-ManualSteps "runbook" @(
+        "Parse the plan file (slices, scope contract, gates)"
+        "Collect recent incidents from .forge/incidents.jsonl (unless --no-incidents)"
+        "Render a structured Markdown runbook"
+        "Save to .forge/runbooks/<plan-name>-runbook.md"
+    )
+
+    $port = 3100
+    $payload = @{ plan = $plan; includeIncidents = (-not $noIncidents) } | ConvertTo-Json -Compress
+
+    try {
+        $response = Invoke-RestMethod -Uri "http://localhost:$port/api/runbook" -Method POST `
+            -ContentType "application/json" -Body $payload -ErrorAction Stop
+        Write-Host ""
+        Write-Host "`u{1F4D6} Runbook Generated" -ForegroundColor Green
+        Write-Host "   File:   $($response.runbook)" -ForegroundColor White
+        Write-Host "   Slices: $($response.slices)" -ForegroundColor White
+        Write-Host "   At:     $($response.generatedAt)" -ForegroundColor DarkGray
+    } catch {
+        Write-Host "ERROR: MCP server not running on port $port. Start with: node pforge-mcp/server.mjs" -ForegroundColor Red
+        exit 1
+    }
+}
+
 # ─── Command: drift ────────────────────────────────────────────────────
 function Invoke-Drift {
     $threshold = 70
@@ -3390,6 +3436,7 @@ switch ($Command) {
     'drift'        { Invoke-Drift }
     'incident'     { Invoke-Incident }
     'regression-guard' { Invoke-RegressionGuard }
+    'runbook'      { Invoke-Runbook }
     'version-bump' { Invoke-VersionBump }
     'smith'        { Invoke-Smith }
     'tour'         { Invoke-Tour }

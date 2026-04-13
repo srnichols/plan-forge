@@ -509,3 +509,62 @@ describe("regressionGuard — scoped to specific plan", () => {
     expect(result.success).toBe(true);
   });
 });
+
+// ─── forge_runbook metadata ───────────────────────────────────────────────
+
+describe("TOOL_METADATA forge_runbook", () => {
+  it("is present in TOOL_METADATA", () => {
+    expect(TOOL_METADATA).toHaveProperty("forge_runbook");
+  });
+
+  it("has correct addedIn version", () => {
+    expect(TOOL_METADATA.forge_runbook.addedIn).toBe("2.30.0");
+  });
+
+  it("produces runbook markdown file", () => {
+    expect(TOOL_METADATA.forge_runbook.produces.join(" ")).toMatch(/runbook\.md/);
+  });
+
+  it("has exactly one entry (no duplicates)", () => {
+    const keys = Object.keys(TOOL_METADATA).filter(k => k === "forge_runbook");
+    expect(keys).toHaveLength(1);
+  });
+
+  it("has PLAN_NOT_FOUND error entry", () => {
+    expect(TOOL_METADATA.forge_runbook.errors).toHaveProperty("PLAN_NOT_FOUND");
+  });
+
+  it("consumes plan files and incidents", () => {
+    const consumes = TOOL_METADATA.forge_runbook.consumes.join(" ");
+    expect(consumes).toMatch(/plans/);
+    expect(consumes).toMatch(/incidents/);
+  });
+
+  it("has cost low", () => {
+    expect(TOOL_METADATA.forge_runbook.cost).toBe("low");
+  });
+});
+
+// ─── planNameToRunbookName ────────────────────────────────────────────────
+
+describe("planNameToRunbookName derivation", () => {
+  function planNameToRunbookName(planPath) {
+    const base = planPath.replace(/\.md$/i, "").split(/[\\/]/).pop();
+    return base.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") + "-runbook.md";
+  }
+
+  it("converts Phase-TYPESCRIPT-EXAMPLE.md correctly", () => {
+    expect(planNameToRunbookName("docs/plans/examples/Phase-TYPESCRIPT-EXAMPLE.md"))
+      .toBe("phase-typescript-example-runbook.md");
+  });
+
+  it("converts Phase-1-AUTH-PLAN.md correctly", () => {
+    expect(planNameToRunbookName("docs/plans/Phase-1-AUTH-PLAN.md"))
+      .toBe("phase-1-auth-plan-runbook.md");
+  });
+
+  it("collapses multiple hyphens", () => {
+    const result = planNameToRunbookName("docs/plans/Phase--DOUBLE.md");
+    expect(result).not.toMatch(/--/);
+  });
+});

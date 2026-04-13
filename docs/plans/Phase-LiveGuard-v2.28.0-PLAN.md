@@ -141,14 +141,7 @@ LiveGuard tool call
 **Tasks**:
 1. Run the telemetry anti-pattern check from v2.27 Slice 10:
    ```bash
-   node -e "
-   const fs = require('fs');
-   const src = fs.readFileSync('pforge-mcp/server.mjs', 'utf8');
-   const handlers = src.match(/case 'forge_(drift|incident|dep_watch|regression|runbook|hotspot|health_trend|alert_triage|deploy_journal)':/g) || [];
-   const withTelemetry = src.match(/emitToolTelemetry/g) || [];
-   console.log('handlers:', handlers.length, '/ telemetry calls:', withTelemetry.length);
-   if (withTelemetry.length < handlers.length) throw new Error('Missing emitToolTelemetry calls — fix before proceeding');
-   "
+node -e " const fs = require('fs'); const src = fs.readFileSync('pforge-mcp/server.mjs', 'utf8'); const handlers = src.match(/case 'forge_(drift|incident|dep_watch|regression|runbook|hotspot|health_trend|alert_triage|deploy_journal)':/g) || []; const withTelemetry = src.match(/emitToolTelemetry/g) || []; console.log('handlers:', handlers.length, '/ telemetry calls:', withTelemetry.length); if (withTelemetry.length < handlers.length) throw new Error('Missing emitToolTelemetry calls — fix before proceeding'); "
    ```
 2. If any handlers are missing `emitToolTelemetry()`: add the call now (wrap in try/finally as specified in v2.27 cross-cutting requirement). Do not proceed to Slice 2 until the check passes.
 3. Add REST endpoint: `GET /api/liveguard/traces` (no auth) — reads `.forge/liveguard-events.jsonl`, returns as array (same JSONL→array pattern as `readRunIndex`). Returns `[]` if file absent.
@@ -158,20 +151,7 @@ LiveGuard tool call
 **Validation Gate**:
 ```bash
 node pforge-mcp/server.mjs --validate
-node -e "
-const fs = require('fs');
-const src = fs.readFileSync('pforge-mcp/server.mjs', 'utf8');
-const lgTools = ['forge_drift_report','forge_incident_capture','forge_dep_watch','forge_regression_guard','forge_runbook','forge_hotspot','forge_health_trend','forge_alert_triage','forge_deploy_journal'];
-const covered = lgTools.filter(t => {
-  const toolIdx = src.indexOf(t);
-  if (toolIdx < 0) return false;
-  // check for emitToolTelemetry within the next 1500 chars of the handler block
-  const handlerBlock = src.substring(toolIdx, toolIdx + 1500);
-  return handlerBlock.includes('emitToolTelemetry');
-});
-if (covered.length < 9) throw new Error('Only ' + covered.length + '/9 LiveGuard handlers have emitToolTelemetry. Missing: ' + lgTools.filter(t => !covered.includes(t)).join(', '));
-console.log('ok — all 9 handlers covered:', covered.length);
-"
+node -e " const fs = require('fs'); const src = fs.readFileSync('pforge-mcp/server.mjs', 'utf8'); const lgTools = ['forge_drift_report','forge_incident_capture','forge_dep_watch','forge_regression_guard','forge_runbook','forge_hotspot','forge_health_trend','forge_alert_triage','forge_deploy_journal']; const covered = lgTools.filter(t => { const toolIdx = src.indexOf(t); if (toolIdx < 0) return false; // check for emitToolTelemetry within the next 1500 chars of the handler block const handlerBlock = src.substring(toolIdx, toolIdx + 1500); return handlerBlock.includes('emitToolTelemetry'); }); if (covered.length < 9) throw new Error('Only ' + covered.length + '/9 LiveGuard handlers have emitToolTelemetry. Missing: ' + lgTools.filter(t => !covered.includes(t)).join(', ')); console.log('ok — all 9 handlers covered:', covered.length); "
 bash -c "cd pforge-mcp && npx vitest run tests/orchestrator.test.mjs"
 ```
 
@@ -424,13 +404,7 @@ node pforge-mcp/server.mjs --validate
 bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
 grep -c "section-divider" pforge-mcp/dashboard/index.html  # must be 1
 
-node -e "
-const html = require('fs').readFileSync('pforge-mcp/dashboard/index.html', 'utf8');
-const lgTabs = ['lg-health','lg-incidents','lg-triage','lg-security','lg-env'];
-const missing = lgTabs.filter(t => !html.includes('data-tab=\"' + t + '\"'));
-if (missing.length) throw new Error('Missing tabs: ' + missing.join(', '));
-console.log('ok — all 5 LiveGuard tabs present');
-"
+node -e " const html = require('fs').readFileSync('pforge-mcp/dashboard/index.html', 'utf8'); const lgTabs = ['lg-health','lg-incidents','lg-triage','lg-security','lg-env']; const missing = lgTabs.filter(t => !html.includes('data-tab=\"' + t + '\"')); if (missing.length) throw new Error('Missing tabs: ' + missing.join(', ')); console.log('ok — all 5 LiveGuard tabs present'); "
 grep -c "liveguard-tool-completed" pforge-mcp/dashboard/app.js  # must be >= 2 (onmessage + onLiveGuardEvent)
 
 grep -c "lg-tab\|amber" pforge-mcp/dashboard/index.html  # must be > 0
@@ -554,17 +528,7 @@ grep -c "forge_" docs/capabilities.md
 npx vitest run
 cat VERSION
 git log --oneline -1
-node -e "
-const fs = require('fs'), path = require('path');
-const caches = ['.forge/secret-scan-cache.json', '.forge/env-diff-cache.json'];
-for (const f of caches) {
-  if (!fs.existsSync(f)) continue;
-  const raw = fs.readFileSync(f, 'utf8');
-  if (raw.includes('password') && !raw.includes('<REDACTED>') && !raw.includes('missing') && !raw.includes('extra'))
-    throw new Error('Possible value leak in ' + f);
-}
-console.log('ok — no value leaks in .forge/ stores');
-"
+node -e " const fs = require('fs'), path = require('path'); const caches = ['.forge/secret-scan-cache.json', '.forge/env-diff-cache.json']; for (const f of caches) { if (!fs.existsSync(f)) continue; const raw = fs.readFileSync(f, 'utf8'); if (raw.includes('password') && !raw.includes('<REDACTED>') && !raw.includes('missing') && !raw.includes('extra')) throw new Error('Possible value leak in ' + f); } console.log('ok — no value leaks in .forge/ stores'); "
 ```
 
 ---
@@ -585,19 +549,7 @@ grep -rn '\.value\b\|rawValue\|secretValue' pforge-mcp/server.mjs    # no secret
 grep -rn '\.split.*=.*\[1\]' pforge-mcp/server.mjs                   # no value extraction after = in env parse
 grep -rn 'console\.log.*findings' pforge-mcp/server.mjs               # no raw findings logging
 
-node -e "
-const fs = require('fs');
-const src = fs.readFileSync('pforge-mcp/server.mjs', 'utf8');
-const allLgTools = ['forge_drift_report','forge_incident_capture','forge_dep_watch','forge_regression_guard','forge_runbook','forge_hotspot','forge_health_trend','forge_alert_triage','forge_deploy_journal','forge_secret_scan','forge_env_diff'];
-const covered = allLgTools.filter(t => {
-  const toolIdx = src.indexOf(t);
-  if (toolIdx < 0) return false;
-  const handlerBlock = src.substring(toolIdx, toolIdx + 1500);
-  return handlerBlock.includes('emitToolTelemetry');
-});
-if (covered.length < 11) throw new Error('Expected 11 handlers covered, got ' + covered.length + '. Missing: ' + allLgTools.filter(t => !covered.includes(t)).join(', '));
-console.log('ok:', covered.length, '/ 11 handlers covered');
-"
+node -e " const fs = require('fs'); const src = fs.readFileSync('pforge-mcp/server.mjs', 'utf8'); const allLgTools = ['forge_drift_report','forge_incident_capture','forge_dep_watch','forge_regression_guard','forge_runbook','forge_hotspot','forge_health_trend','forge_alert_triage','forge_deploy_journal','forge_secret_scan','forge_env_diff']; const covered = allLgTools.filter(t => { const toolIdx = src.indexOf(t); if (toolIdx < 0) return false; const handlerBlock = src.substring(toolIdx, toolIdx + 1500); return handlerBlock.includes('emitToolTelemetry'); }); if (covered.length < 11) throw new Error('Expected 11 handlers covered, got ' + covered.length + '. Missing: ' + allLgTools.filter(t => !covered.includes(t)).join(', ')); console.log('ok:', covered.length, '/ 11 handlers covered'); "
 
 grep -rn "exec(" pforge-mcp/orchestrator.mjs                          # no exec() — use execFile() or spawn()
 grep -rn "require(" pforge-mcp/dashboard/app.js                       # no Node.js require() in browser JS

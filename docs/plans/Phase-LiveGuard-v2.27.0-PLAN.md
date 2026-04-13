@@ -393,13 +393,7 @@ bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
 ```bash
 node pforge-mcp/server.mjs --validate
 bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
-node -e "
-import('./pforge-mcp/orchestrator.mjs').then(m => {
-  const allowed = m.isGateCommandAllowed('npm test');
-  const blocked = m.isGateCommandAllowed('rm -rf /');
-  if (!allowed || blocked) throw new Error('allowlist check failed');
-  console.log('ok');
-})"
+node -e "import('./pforge-mcp/orchestrator.mjs').then(m => { const allowed = m.isGateCommandAllowed('npm test'); const blocked = m.isGateCommandAllowed('rm -rf /'); if (!allowed || blocked) throw new Error('allowlist check failed'); console.log('ok'); })"
 ```
 
 **Stop Condition**: If `parseValidationGates` cannot reliably extract commands from existing plan files → limit regression guard to `testCommand` fields only (defined in slice header, not bash block) and document the limitation.
@@ -719,14 +713,7 @@ grep -rn "any\b" pforge-mcp/*.mjs --include="*.mjs"          # no TypeScript 'an
 grep -rn "exec(" pforge-mcp/orchestrator.mjs                 # no exec() — use execFile() or spawn() instead
 grep -rn "rm -rf\|rimraf" pforge-mcp/                        # no destructive filesystem ops
 grep -rn "process.exit" pforge-mcp/server.mjs                # no abrupt exits from new handlers
-node -e "
-const fs = require('fs');
-const src = fs.readFileSync('pforge-mcp/server.mjs', 'utf8');
-const handlers = src.match(/case 'forge_(drift|incident|dep_watch|regression|runbook|hotspot|health_trend|alert_triage|deploy_journal)':/g) || [];
-const withTelemetry = src.match(/emitToolTelemetry/g) || [];
-console.log('handlers:', handlers.length, '/ telemetry calls:', withTelemetry.length);
-if (withTelemetry.length < handlers.length) throw new Error('Missing emitToolTelemetry calls');
-"
+node -e " const fs = require('fs'); const src = fs.readFileSync('pforge-mcp/server.mjs', 'utf8'); const handlers = src.match(/case 'forge_(drift|incident|dep_watch|regression|runbook|hotspot|health_trend|alert_triage|deploy_journal)':/g) || []; const withTelemetry = src.match(/emitToolTelemetry/g) || []; console.log('handlers:', handlers.length, '/ telemetry calls:', withTelemetry.length); if (withTelemetry.length < handlers.length) throw new Error('Missing emitToolTelemetry calls'); "
 ```
 
 ---

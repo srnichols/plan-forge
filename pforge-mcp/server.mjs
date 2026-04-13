@@ -891,7 +891,7 @@ function executeTool(name, args) {
 
 // ─── MCP Server ───────────────────────────────────────────────────────
 const server = new Server(
-  { name: "plan-forge-mcp", version: "2.9.1" },
+  { name: "plan-forge-mcp", version: "2.9.2" },
   { capabilities: { tools: {} } }
 );
 
@@ -1560,11 +1560,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       // Detect project type: npm or dotnet
       const hasPkgJson = existsSync(pkgPath);
-      const csprojFiles = hasPkgJson ? [] : readdirSync(cwd).filter(f => f.endsWith(".csproj") || f.endsWith(".sln"));
+      const csprojFiles = hasPkgJson ? [] : readdirSync(cwd).filter(f => f.endsWith(".csproj") || f.endsWith(".sln") || f.endsWith(".slnx"));
       const isDotnet = !hasPkgJson && csprojFiles.length > 0;
 
       if (!hasPkgJson && !isDotnet) {
-        return { content: [{ type: "text", text: JSON.stringify({ error: "No package.json or .csproj/.sln found — project type not supported", newVulnerabilities: [], resolvedVulnerabilities: [], unchanged: 0, snapshot: null }) }], isError: false };
+        return { content: [{ type: "text", text: JSON.stringify({ error: "No package.json or .csproj/.sln/.slnx found — project type not supported", newVulnerabilities: [], resolvedVulnerabilities: [], unchanged: 0, snapshot: null }) }], isError: false };
       }
 
       // Load previous snapshot

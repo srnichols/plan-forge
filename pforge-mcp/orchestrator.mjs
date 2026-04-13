@@ -271,7 +271,7 @@ function parseSlices(lines) {
     // Supports two formats:
     //   1. **Validation Gate**: <inline text>  (prose description, no code block)
     //   2. **Validation Gate**:\n```bash\n<commands>\n```  (fenced code block)
-    const gateMatch = line.match(/\*\*Validation Gate\*?\*?[:\s]*(.*)$/i);
+    const gateMatch = line.match(/\*\*Validation Gate\*?\*?\s*:?\s*(.*)$/i);
     if (gateMatch) {
       const inlineText = (gateMatch[1] || "").trim();
       if (inlineText && current) {
@@ -2398,7 +2398,18 @@ export async function regressionGuard(files, { plan, failFast = false, cwd = pro
   const gateItems = [];
   for (const planPath of planPaths) {
     try {
-      const sliceGates = parseValidationGates(planPath, cwd);
+      const parsed = parsePlan(planPath, cwd);
+      const sliceGates = parsed.slices
+        .filter(s => s.validationGate)
+        .map(s => ({
+          sliceNumber: s.number,
+          sliceTitle: s.title,
+          gates: s.validationGate
+            .split("\n")
+            .map(l => l.replace(/\s{2,}#\s.*$/, "").trim())
+            .filter(l => l.length > 0),
+        }));
+
       let foundGates = false;
       for (const sg of sliceGates) {
         for (const cmd of sg.gates) {
@@ -2406,18 +2417,27 @@ export async function regressionGuard(files, { plan, failFast = false, cwd = pro
           foundGates = true;
         }
       }
-      // Stop-condition fallback: if no bash-block gates, use testCommand or buildCommand fields
+
+      // Fallback chain: testCommand → buildCommand → backtick commands from validationGateDescription
       if (!foundGates) {
-        try {
-          const parsed = parsePlan(planPath, cwd);
-          for (const s of parsed.slices) {
-            if (s.testCommand) {
-              gateItems.push({ planFile: basename(planPath), sliceNumber: s.number, sliceTitle: s.title, cmd: s.testCommand, source: "testCommand" });
-            } else if (s.buildCommand) {
-              gateItems.push({ planFile: basename(planPath), sliceNumber: s.number, sliceTitle: s.title, cmd: s.buildCommand, source: "buildCommand" });
+        for (const s of parsed.slices) {
+          if (s.testCommand) {
+            gateItems.push({ planFile: basename(planPath), sliceNumber: s.number, sliceTitle: s.title, cmd: s.testCommand, source: "testCommand" });
+          } else if (s.buildCommand) {
+            gateItems.push({ planFile: basename(planPath), sliceNumber: s.number, sliceTitle: s.title, cmd: s.buildCommand, source: "buildCommand" });
+          } else if (s.validationGateDescription) {
+            // Extract backtick-wrapped commands from prose gate descriptions
+            const backtickRe = /`([^`]+)`/g;
+            let bm;
+            while ((bm = backtickRe.exec(s.validationGateDescription)) !== null) {
+              const candidate = bm[1].trim();
+              // Only treat as executable if it looks like a command (starts with a known tool)
+              if (/^(dotnet|npm|npx|node|bash|pwsh|powershell|python|go|cargo|make|mvn|gradle)\b/i.test(candidate)) {
+                gateItems.push({ planFile: basename(planPath), sliceNumber: s.number, sliceTitle: s.title, cmd: candidate, source: "prose-gate" });
+              }
             }
           }
-        } catch { /* unreadable plan — skip */ }
+        }
       }
     } catch { /* unreadable plan — skip */ }
   }

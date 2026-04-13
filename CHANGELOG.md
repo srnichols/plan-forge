@@ -5,6 +5,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.29.2] — 2026-04-13
+
+### Fixed — v2.29.1 Verification Failures
+- **`pforge.ps1`** — Fixed syntax error (stray `})` in `Invoke-Drift` violation loop) that broke all CLI commands (regression from v2.29.1)
+- **`forge_diff`** — Wraps git calls with `$ErrorActionPreference = 'Continue'` so CRLF warnings don't throw under the global `Stop` preference
+- **`forge_dep_watch`** — Detects `.slnx` files (.NET 10's XML solution format) in addition to `.sln` and `.csproj`
+- **`forge_regression_guard`** — Prose-format gates (`**Validation Gate**: \`dotnet build\` succeeds`) now parsed via full fallback chain: fenced code blocks → inline backtick commands → `testCommand` → `buildCommand` → backtick commands from prose descriptions
+
 ## [2.29.1] — 2026-04-13
 
 ### Fixed — 9 Platform Bugs from v2.29.0 Testing

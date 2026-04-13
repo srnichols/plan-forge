@@ -1087,10 +1087,13 @@ function Invoke-Diff {
         "Compare changed files against plan's In Scope and Forbidden Actions sections"
     )
 
-    # Get changed files
+    # Get changed files (temporarily lower ErrorActionPreference so git CRLF warnings don't throw)
+    $savedEAP = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
     $changedFiles = @()
     $changedFiles += (git diff --name-only 2>&1 | Where-Object { $_ -isnot [System.Management.Automation.ErrorRecord] })
     $changedFiles += (git diff --cached --name-only 2>&1 | Where-Object { $_ -isnot [System.Management.Automation.ErrorRecord] })
+    $ErrorActionPreference = $savedEAP
     $changedFiles = $changedFiles | Sort-Object -Unique | Where-Object { $_ }
 
     if ($changedFiles.Count -eq 0) {
@@ -1734,10 +1737,13 @@ function Invoke-Analyze {
     # ═══════════════════════════════════════════════════════════════
     Write-Host "Coverage:" -ForegroundColor Cyan
 
-    # Get changed files
+    # Get changed files (temporarily lower ErrorActionPreference so git CRLF warnings don't throw)
+    $savedEAP = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
     $changedFiles = @()
     $changedFiles += (git diff --name-only 2>&1 | Where-Object { $_ -isnot [System.Management.Automation.ErrorRecord] })
     $changedFiles += (git diff --cached --name-only 2>&1 | Where-Object { $_ -isnot [System.Management.Automation.ErrorRecord] })
+    $ErrorActionPreference = $savedEAP
     $changedFiles = $changedFiles | Sort-Object -Unique | Where-Object { $_ }
 
     # Extract scope
@@ -2024,7 +2030,6 @@ function Invoke-Drift {
                         } else {
                             $violations.Add($entry)
                         }
-                        })
                     }
                 }
             } catch { }

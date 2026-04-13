@@ -3210,6 +3210,23 @@ function createExpressApp() {
     }
   });
 
+  // POST /api/openclaw/snapshot — post LiveGuard snapshot to OpenClaw endpoint
+  app.post("/api/openclaw/snapshot", async (req, res) => {
+    try {
+      const extraContext = req.body || {};
+      const result = await postOpenClawSnapshot(PROJECT_DIR, extraContext);
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET /api/openclaw/config — check OpenClaw configuration status
+  app.get("/api/openclaw/config", (req, res) => {
+    const config = loadOpenClawConfig(PROJECT_DIR);
+    res.json({ configured: !!config.endpoint, endpoint: config.endpoint || null, hasApiKey: !!config.apiKey });
+  });
+
   return app;
 }
 

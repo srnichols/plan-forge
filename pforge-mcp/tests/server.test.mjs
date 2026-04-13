@@ -1034,3 +1034,34 @@ describe("forge_health_trend integration", () => {
     expect(result.drift.latest).toBe(95);
   });
 });
+
+// ─── GET /api/liveguard/traces — LiveGuard event JSONL persistence ──────
+
+describe("liveguard traces endpoint data", () => {
+  it("returns empty array when liveguard-events.jsonl is absent", () => {
+    const result = readForgeJsonl("liveguard-events.jsonl", [], tempDir);
+    expect(result).toEqual([]);
+  });
+
+  it("returns array of events when liveguard-events.jsonl exists", () => {
+    const event1 = { timestamp: new Date().toISOString(), tool: "forge_alert_triage", status: "OK", durationMs: 42 };
+    const event2 = { timestamp: new Date().toISOString(), tool: "forge_drift_report", status: "OK", durationMs: 105 };
+    appendForgeJsonl("liveguard-events.jsonl", event1, tempDir);
+    appendForgeJsonl("liveguard-events.jsonl", event2, tempDir);
+
+    const result = readForgeJsonl("liveguard-events.jsonl", [], tempDir);
+    expect(Array.isArray(result)).toBe(true);
+    expect(result).toHaveLength(2);
+    expect(result[0].tool).toBe("forge_alert_triage");
+    expect(result[1].tool).toBe("forge_drift_report");
+  });
+
+  it("returns default when liveguard-events.jsonl has corrupt lines", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    writeFileSync(resolve(forgeDir, "liveguard-events.jsonl"), '{"tool":"forge_hotspot","status":"OK"}\nBAD LINE\n{"tool":"forge_runbook","status":"OK"}\n');
+
+    const result = readForgeJsonl("liveguard-events.jsonl", [], tempDir);
+    expect(result).toEqual([]);
+  });
+});

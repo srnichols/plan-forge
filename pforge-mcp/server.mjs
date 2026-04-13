@@ -933,11 +933,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 
   if (name === "forge_health_trend") {
+    const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
       const days = Math.max(1, Math.min(365, parseInt(args.days) || 30));
       const metrics = args.metrics ? args.metrics.split(",").map(m => m.trim()) : null;
       const report = getHealthTrend(cwd, days, metrics);
+      emitToolTelemetry("forge_health_trend", args, report, Date.now() - t0, "OK", cwd);
+      activeHub?.broadcast({ type: "liveguard-tool-completed", tool: "forge_health_trend", status: "OK", durationMs: Date.now() - t0 });
       return { content: [{ type: "text", text: JSON.stringify(report, null, 2) }] };
     } catch (err) {
       return { content: [{ type: "text", text: `Health trend error: ${err.message}` }], isError: true };
@@ -995,6 +998,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       const result = { total: alerts.length, showing: Math.min(maxResults, alerts.length), minSeverity, alerts: alerts.slice(0, maxResults), generatedAt: new Date().toISOString() };
       emitToolTelemetry("forge_alert_triage", args, result, Date.now() - t0, "OK", cwd);
+      activeHub?.broadcast({ type: "liveguard-tool-completed", tool: "forge_alert_triage", status: "OK", durationMs: Date.now() - t0 });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
     } catch (err) {
       return { content: [{ type: "text", text: `Alert triage error: ${err.message}` }], isError: true };
@@ -1292,6 +1296,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       emitToolTelemetry("forge_incident_capture", args, record, Date.now() - t0, "OK", cwd);
+      activeHub?.broadcast({ type: "liveguard-tool-completed", tool: "forge_incident_capture", status: "OK", durationMs: Date.now() - t0 });
 
       return { content: [{ type: "text", text: JSON.stringify(record, null, 2) }], isError: false };
     } catch (err) {
@@ -1322,6 +1327,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       activeHub?.broadcast({ type: "deploy-recorded", data: record, timestamp: record.deployedAt });
 
       emitToolTelemetry("forge_deploy_journal", args, record, Date.now() - t0, "OK", cwd);
+      activeHub?.broadcast({ type: "liveguard-tool-completed", tool: "forge_deploy_journal", status: "OK", durationMs: Date.now() - t0 });
 
       return { content: [{ type: "text", text: JSON.stringify(record, null, 2) }], isError: false };
     } catch (err) {
@@ -1340,6 +1346,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         cwd,
       });
       emitToolTelemetry("forge_regression_guard", args, result, Date.now() - t0, result.success ? "ok" : "error", cwd);
+      activeHub?.broadcast({ type: "liveguard-tool-completed", tool: "forge_regression_guard", status: result.success ? "ok" : "error", durationMs: Date.now() - t0 });
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         isError: !result.success,
@@ -1375,6 +1382,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       const result = { score, violations: analysis.violations, filesScanned: analysis.filesScanned, trend, delta, historyLength: history.length + 1 };
       emitToolTelemetry("forge_drift_report", args, result, Date.now() - t0, "OK", cwd);
+      activeHub?.broadcast({ type: "liveguard-tool-completed", tool: "forge_drift_report", status: "OK", durationMs: Date.now() - t0 });
 
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
     } catch (err) {
@@ -1403,6 +1411,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       const result = { runbook: `.forge/runbooks/${runbookName}`, slices: plan.slices.length, generatedAt: new Date().toISOString() };
       emitToolTelemetry("forge_runbook", args, result, Date.now() - t0, "OK", cwd);
+      activeHub?.broadcast({ type: "liveguard-tool-completed", tool: "forge_runbook", status: "OK", durationMs: Date.now() - t0 });
 
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
     } catch (err) {
@@ -1444,6 +1453,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       const result = { ...cached, hotspots: cached.hotspots.slice(0, top), showing: Math.min(top, cached.hotspots.length) };
       emitToolTelemetry("forge_hotspot", args, result, Date.now() - t0, "OK", cwd);
+      activeHub?.broadcast({ type: "liveguard-tool-completed", tool: "forge_hotspot", status: "OK", durationMs: Date.now() - t0 });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
     } catch (err) {
       return { content: [{ type: "text", text: `Hotspot analysis error: ${err.message}` }], isError: true };
@@ -1510,6 +1520,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       const result = { newVulnerabilities, resolvedVulnerabilities, unchanged, snapshot: { capturedAt: snapshot.capturedAt, depCount: snapshot.depCount } };
       emitToolTelemetry("forge_dep_watch", args, result, Date.now() - t0, "OK", cwd);
+      activeHub?.broadcast({ type: "liveguard-tool-completed", tool: "forge_dep_watch", status: "OK", durationMs: Date.now() - t0 });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
     } catch (err) {
       return { content: [{ type: "text", text: `Dependency watch error: ${err.message}` }], isError: true };
@@ -1759,6 +1770,13 @@ function createExpressApp() {
   app.get("/api/deploy-journal", (_req, res) => {
     try {
       res.json(readForgeJsonl("deploy-journal.jsonl", [], PROJECT_DIR));
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // REST API: GET /api/liveguard/traces — LiveGuard tool completion events
+  app.get("/api/liveguard/traces", (_req, res) => {
+    try {
+      res.json(readForgeJsonl("liveguard-events.jsonl", [], PROJECT_DIR));
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 

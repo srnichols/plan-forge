@@ -2428,6 +2428,12 @@ export async function regressionGuard(files, { plan, failFast = false, cwd = pro
  * @param {string} [cwd=process.cwd()] - Project root directory
  * @returns {object} The telemetry record written
  */
+const LIVEGUARD_TOOLS = new Set([
+  "forge_drift_report", "forge_incident_capture", "forge_dep_watch",
+  "forge_regression_guard", "forge_runbook", "forge_hotspot",
+  "forge_health_trend", "forge_alert_triage", "forge_deploy_journal",
+]);
+
 export function emitToolTelemetry(toolName, inputs, result, durationMs, status, cwd = process.cwd()) {
   const normalizedResult = typeof result === "string"
     ? result.slice(0, 2000)
@@ -2443,6 +2449,11 @@ export function emitToolTelemetry(toolName, inputs, result, durationMs, status, 
   try {
     appendForgeJsonl("telemetry/tool-calls.jsonl", record, cwd);
   } catch { /* telemetry is best-effort — never crash the tool */ }
+  if (LIVEGUARD_TOOLS.has(toolName)) {
+    try {
+      appendForgeJsonl("liveguard-events.jsonl", { timestamp: record.timestamp, tool: toolName, status, durationMs }, cwd);
+    } catch { /* best-effort */ }
+  }
   return record;
 }
 

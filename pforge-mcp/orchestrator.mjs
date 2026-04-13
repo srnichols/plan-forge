@@ -19,7 +19,7 @@
  * @module orchestrator
  */
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync, appendFileSync } from "node:fs";
 import { spawn, execSync } from "node:child_process";
 import { resolve, basename, dirname } from "node:path";
 import { EventEmitter } from "node:events";
@@ -1869,6 +1869,98 @@ function aggregateModelStats(records) {
     };
   }
   return result;
+}
+
+// ─── Operational Data Infrastructure ──────────────────────────────────
+
+/**
+ * Ensure a subdirectory exists under .forge/.
+ * @param {string} subpath - Relative path under .forge/ (e.g. "runs", "telemetry"). Use "" for .forge/ root.
+ * @param {string} [cwd=process.cwd()] - Project root directory
+ * @returns {string} Resolved absolute path of the created directory
+ */
+export function ensureForgeDir(subpath, cwd = process.cwd()) {
+  const dir = resolve(cwd, ".forge", subpath);
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+/**
+ * Read and parse a JSON file from .forge/.
+ * @param {string} filePath - Path relative to .forge/ (e.g. "cost-history.json")
+ * @param {*} [defaultValue=null] - Returned when file is missing or contains invalid JSON
+ * @param {string} [cwd=process.cwd()] - Project root directory
+ * @returns {*} Parsed JSON or defaultValue
+ */
+export function readForgeJson(filePath, defaultValue = null, cwd = process.cwd()) {
+  const fullPath = resolve(cwd, ".forge", filePath);
+  try {
+    if (existsSync(fullPath)) {
+      return JSON.parse(readFileSync(fullPath, "utf-8"));
+    }
+  } catch { /* corrupt/missing → return default */ }
+  return defaultValue;
+}
+
+/**
+ * Append a JSON record as a single line to a JSONL file under .forge/.
+ * Creates parent directories if absent.
+ * @param {string} filePath - Path relative to .forge/ (e.g. "telemetry/tool-calls.jsonl")
+ * @param {object} record - JSON-serializable object to append
+ * @param {string} [cwd=process.cwd()] - Project root directory
+ */
+export function appendForgeJsonl(filePath, record, cwd = process.cwd()) {
+  const fullPath = resolve(cwd, ".forge", filePath);
+  mkdirSync(dirname(fullPath), { recursive: true });
+  appendFileSync(fullPath, JSON.stringify(record) + "\n");
+}
+
+/**
+ * Extract validation gates from a parsed plan file.
+ * Delegates to parsePlan() — does not duplicate parsing logic.
+ * @param {string} planFilePath - Absolute or project-relative path to a plan markdown file
+ * @returns {Array<{sliceNumber: string, sliceTitle: string, gates: string[]}>}
+ */
+export function parseValidationGates(planFilePath) {
+  const plan = parsePlan(planFilePath);
+  return plan.slices
+    .filter(s => s.validationGate)
+    .map(s => ({
+      sliceNumber: s.number,
+      sliceTitle: s.title,
+      gates: s.validationGate
+        .split("\n")
+        .map(l => l.replace(/\s{2,}#\s.*$/, "").trim())
+        .filter(l => l.length > 0),
+    }));
+}
+
+/**
+ * Emit a telemetry record for a tool invocation. Best-effort — never throws.
+ * @param {string} toolName - Tool identifier (e.g. "forge_smith")
+ * @param {object|string} inputs - Tool input parameters
+ * @param {*} result - Tool result (truncated to 2000 chars)
+ * @param {number} durationMs - Execution time in milliseconds
+ * @param {string} status - "ok" | "error" | "timeout"
+ * @param {string} [cwd=process.cwd()] - Project root directory
+ * @returns {object} The telemetry record written
+ */
+export function emitToolTelemetry(toolName, inputs, result, durationMs, status, cwd = process.cwd()) {
+  const normalizedResult = typeof result === "string"
+    ? result.slice(0, 2000)
+    : JSON.stringify(result ?? "").slice(0, 2000);
+  const record = {
+    timestamp: new Date().toISOString(),
+    tool: toolName,
+    inputs: typeof inputs === "object" ? inputs : { raw: inputs },
+    result: normalizedResult,
+    durationMs,
+    status,
+  };
+  try {
+    appendForgeJsonl("telemetry/tool-calls.jsonl", record, cwd);
+  } catch { /* telemetry is best-effort — never crash the tool */ }
+  return record;
 }
 
 /**

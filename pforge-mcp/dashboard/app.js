@@ -24,6 +24,7 @@ const API_BASE = `${window.location.protocol}//${window.location.host}`;
 // ─── Tab Switching ────────────────────────────────────────────────────
 document.querySelectorAll(".tab-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
+    // Clear active from ALL tab-btn elements across all groups
     document.querySelectorAll(".tab-btn").forEach((b) => {
       b.classList.remove("tab-active");
       b.classList.add("text-gray-400");
@@ -39,6 +40,34 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
     if (tabLoadHooks[btn.dataset.tab]) tabLoadHooks[btn.dataset.tab]();
   });
 });
+
+// ─── Group Tab Switching ──────────────────────────────────────────────
+function switchGroup(group) {
+  // Update group tab styles
+  document.querySelectorAll(".group-tab").forEach((g) => {
+    g.classList.remove("group-active", "text-blue-400", "text-amber-400", "border-blue-400", "border-amber-400");
+    g.classList.add("text-gray-500", "border-transparent");
+  });
+  const activeGroup = document.querySelector(`.group-tab[data-group="${group}"]`);
+  if (activeGroup) {
+    activeGroup.classList.add("group-active");
+    activeGroup.classList.remove("text-gray-500", "border-transparent");
+    const color = group === "liveguard" ? "amber" : "blue";
+    activeGroup.classList.add(`text-${color}-400`, `border-${color}-400`);
+  }
+
+  // Show/hide subtab rows
+  document.getElementById("subtabs-forge").classList.toggle("hidden", group !== "forge");
+  document.getElementById("subtabs-liveguard").classList.toggle("hidden", group !== "liveguard");
+
+  // Auto-click the first subtab in the group if none active
+  const subtabRow = document.getElementById(`subtabs-${group}`);
+  const activeSubtab = subtabRow?.querySelector(".tab-active");
+  if (!activeSubtab) {
+    const first = subtabRow?.querySelector(".tab-btn");
+    if (first) first.click();
+  }
+}
 
 // ─── WebSocket Connection ─────────────────────────────────────────────
 function connectWebSocket() {
@@ -403,16 +432,36 @@ function renderSliceCards() {
       ? `<span class="text-xs px-1.5 py-0.5 rounded bg-purple-900/50 text-purple-300 border border-purple-800" title="Quorum mode">Q</span>`
       : (s.status !== "pending" ? `<span class="text-xs px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-400 border border-blue-800" title="Single-pass">S</span>` : "");
 
+    // Gate status indicator
+    let gateHtml = "";
+    if (s.gateStatus === "passed") {
+      gateHtml = `<span class="text-xs text-green-500" title="Gate passed">⛩ pass</span>`;
+    } else if (s.gateStatus === "failed") {
+      gateHtml = `<span class="text-xs text-red-400" title="Gate failed: ${s.failedCommand || ''}">⛩ fail</span>`;
+    }
+
+    // Retry indicator
+    const retryHtml = s.attempts && s.attempts > 1
+      ? `<span class="text-xs text-yellow-400" title="${s.attempts} attempts">🔄${s.attempts}</span>`
+      : "";
+
+    // Duration bar (proportional to max duration across all slices)
+    const maxDuration = Math.max(...state.slices.map((x) => x.duration || 0), 1);
+    const durationPct = s.duration ? Math.round((s.duration / maxDuration) * 100) : 0;
+    const durationBarColor = s.status === "failed" ? "bg-red-500/40" : s.status === "passed" ? "bg-green-500/30" : "bg-blue-500/30";
+    const durationBar = s.duration ? `<div class="mt-1.5 h-1 rounded-full bg-gray-700 overflow-hidden"><div class="${durationBarColor} h-full rounded-full" style="width:${durationPct}%"></div></div>` : "";
+
     return `
       <div class="slice-card ${bgColor} rounded-lg p-3 border border-gray-700 cursor-pointer hover:border-gray-500 transition-colors" data-slice-id="${s.id}" onclick="loadSliceLog('${s.id}')">
         <div class="flex items-center justify-between mb-1">
           <span class="font-semibold text-sm">${statusIcon} Slice ${s.id} ${sliceModeBadge}${escalatedMark}</span>
-          <span class="text-xs text-gray-500">${duration}${elapsed}</span>
+          <span class="text-xs text-gray-500 flex items-center gap-1.5">${retryHtml}${gateHtml}${duration}${elapsed}</span>
         </div>
         <p class="text-xs text-gray-400 truncate">${s.title}</p>
         ${model ? `<p class="text-xs text-gray-500 mt-1">${modelBadge} ${cost}</p>` : ""}
         ${quorumHtml}
         ${s.error ? `<p class="text-xs text-red-400 mt-1 truncate">${s.error}</p>` : ""}
+        ${durationBar}
       </div>
     `;
   }).join("");
@@ -574,10 +623,32 @@ function clearSliceLog() {
   if (sliceLogPollInterval) clearInterval(sliceLogPollInterval);
   const label = document.getElementById("slice-log-label");
   const logEl = document.getElementById("slice-log");
+  const searchEl = document.getElementById("slice-log-search");
   if (label) label.textContent = "";
+  if (searchEl) searchEl.value = "";
   if (logEl) logEl.innerHTML = '<p class="py-4 text-center text-gray-500">Click a slice card to view its log</p>';
   document.querySelectorAll(".slice-card").forEach((c) => {
     c.classList.remove("ring-1", "ring-blue-500");
+  });
+}
+
+function filterSliceLog(query) {
+  const logEl = document.getElementById("slice-log");
+  if (!logEl) return;
+  const q = query.toLowerCase().trim();
+  logEl.querySelectorAll("div").forEach((line) => {
+    if (!q) {
+      line.style.display = "";
+      return;
+    }
+    // Always show section headers and containers
+    if (line.id?.startsWith("sec-") || line.querySelector("[id^='sec-']") || line.classList.contains("mt-1")) {
+      line.style.display = "";
+      return;
+    }
+    // Filter leaf lines
+    const text = line.textContent?.toLowerCase() || "";
+    line.style.display = text.includes(q) ? "" : "none";
   });
 }
 

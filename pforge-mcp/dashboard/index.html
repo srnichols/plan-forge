@@ -59,30 +59,36 @@
     </div>
   </header>
 
-  <!-- Tabs -->
-  <nav class="bg-gray-800 border-b border-gray-700 flex gap-1 px-4 text-sm overflow-x-auto">
-    <button class="tab-btn tab-active px-4 py-2 hover:text-blue-400 whitespace-nowrap" data-tab="progress">Progress</button>
-    <button class="tab-btn px-4 py-2 hover:text-blue-400 text-gray-400 whitespace-nowrap" data-tab="runs">Runs</button>
-    <button class="tab-btn px-4 py-2 hover:text-blue-400 text-gray-400 whitespace-nowrap" data-tab="cost">Cost</button>
-    <button class="tab-btn px-4 py-2 hover:text-blue-400 text-gray-400 whitespace-nowrap" data-tab="actions">Actions</button>
-    <button class="tab-btn px-4 py-2 hover:text-blue-400 text-gray-400 whitespace-nowrap" data-tab="replay">Replay</button>
-    <button class="tab-btn px-4 py-2 hover:text-blue-400 text-gray-400 whitespace-nowrap" data-tab="extensions">Extensions</button>
-    <button class="tab-btn px-4 py-2 hover:text-blue-400 text-gray-400 whitespace-nowrap" data-tab="config">Config</button>
-    <button class="tab-btn px-4 py-2 hover:text-blue-400 text-gray-400 whitespace-nowrap" data-tab="traces">Traces</button>
-    <button class="tab-btn px-4 py-2 hover:text-blue-400 text-gray-400 whitespace-nowrap" data-tab="skills">Skills</button>
-    <!-- LiveGuard section -->
-    <span class="section-divider px-1 py-2 text-amber-600/50 text-xs self-center">│</span>
-    <span class="px-2 py-2 text-amber-500/70 text-xs font-semibold tracking-wider self-center whitespace-nowrap">🛡️ LG</span>
-    <a href="liveguard-dashboard.html" target="_blank" class="self-center text-xs text-amber-600/60 hover:text-amber-400 whitespace-nowrap" title="LiveGuard docs">Docs ↗</a>
-    <button class="tab-btn px-4 py-2 hover:text-amber-400 text-gray-400 whitespace-nowrap" data-tab="lg-health">Health</button>
-    <button class="tab-btn px-4 py-2 hover:text-amber-400 text-gray-400 whitespace-nowrap" data-tab="lg-incidents">Incidents</button>
-    <button class="tab-btn px-4 py-2 hover:text-amber-400 text-gray-400 whitespace-nowrap" data-tab="lg-triage">Triage</button>
-    <button class="tab-btn px-4 py-2 hover:text-amber-400 text-gray-400 whitespace-nowrap" data-tab="lg-security">Security</button>
-    <button class="tab-btn px-4 py-2 hover:text-amber-400 text-gray-400 whitespace-nowrap" data-tab="lg-env">Env</button>
-    <!-- Notification bell -->
-    <button id="notif-bell" class="ml-auto px-3 py-2 relative hover:text-yellow-400 text-gray-400" onclick="toggleNotifications()">
-      🔔<span id="notif-count" class="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center hidden">0</span>
-    </button>
+  <!-- Tabs — Two-level: Group tabs + Sub tabs -->
+  <nav class="bg-gray-800 border-b border-gray-700 px-4 text-sm">
+    <!-- Group tabs -->
+    <div class="flex gap-1 items-center">
+      <button class="group-tab group-active px-4 py-2 font-semibold text-blue-400 border-b-2 border-blue-400 whitespace-nowrap" data-group="forge" onclick="switchGroup('forge')">🔨 Forge</button>
+      <button class="group-tab px-4 py-2 font-semibold text-gray-500 hover:text-amber-400 border-b-2 border-transparent whitespace-nowrap" data-group="liveguard" onclick="switchGroup('liveguard')">🛡️ LiveGuard</button>
+      <button id="notif-bell" class="ml-auto px-3 py-2 relative hover:text-yellow-400 text-gray-400" onclick="toggleNotifications()">
+        🔔<span id="notif-count" class="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center hidden">0</span>
+      </button>
+    </div>
+    <!-- Sub tabs: Forge -->
+    <div id="subtabs-forge" class="flex gap-1 pt-1 pb-0.5 overflow-x-auto">
+      <button class="tab-btn tab-active px-3 py-1.5 rounded-t hover:text-blue-400 whitespace-nowrap text-xs" data-tab="progress">Progress</button>
+      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="runs">Runs</button>
+      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="cost">Cost</button>
+      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="actions">Actions</button>
+      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="replay">Replay</button>
+      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="extensions">Extensions</button>
+      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="config">Config</button>
+      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="traces">Traces</button>
+      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="skills">Skills</button>
+    </div>
+    <!-- Sub tabs: LiveGuard -->
+    <div id="subtabs-liveguard" class="hidden flex gap-1 pt-1 pb-0.5 overflow-x-auto">
+      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-amber-400 text-gray-400 whitespace-nowrap text-xs" data-tab="lg-health">Health</button>
+      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-amber-400 text-gray-400 whitespace-nowrap text-xs" data-tab="lg-incidents">Incidents</button>
+      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-amber-400 text-gray-400 whitespace-nowrap text-xs" data-tab="lg-triage">Triage</button>
+      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-amber-400 text-gray-400 whitespace-nowrap text-xs" data-tab="lg-security">Security</button>
+      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-amber-400 text-gray-400 whitespace-nowrap text-xs" data-tab="lg-env">Env</button>
+    </div>
   </nav>
 
   <!-- Notification dropdown -->
@@ -150,7 +156,10 @@
           <div class="flex-1">
             <div class="px-3 py-1.5 text-xs font-semibold text-gray-500 bg-gray-800/80 border-b border-gray-700 flex items-center justify-between">
               <span>Slice Log <span id="slice-log-label" class="text-blue-400"></span></span>
-              <button onclick="clearSliceLog()" class="text-gray-600 hover:text-gray-400 text-xs">Clear</button>
+              <div class="flex items-center gap-2">
+                <input id="slice-log-search" type="text" placeholder="Filter..." class="bg-gray-700 text-white text-xs rounded px-2 py-0.5 w-28 focus:w-40 transition-all focus:outline-none focus:ring-1 focus:ring-blue-500" oninput="filterSliceLog(this.value)">
+                <button onclick="clearSliceLog()" class="text-gray-600 hover:text-gray-400 text-xs">Clear</button>
+              </div>
             </div>
             <div id="slice-log" class="px-3 pb-2 max-h-52 overflow-y-auto font-mono text-xs space-y-0.5 text-gray-500">
               <p class="py-4 text-center">Click a slice card to view its log</p>

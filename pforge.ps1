@@ -1803,6 +1803,33 @@ function Invoke-Analyze {
         $scoreGates = 0
     }
 
+    # Gate command lint — catch errors that would fail at runtime
+    try {
+        $lintOutput = node -e "import('$($RepoRoot -replace '\\','/')/pforge-mcp/orchestrator.mjs').then(m => { const r = m.lintGateCommands('$($planFile -replace '\\','/').replace(\"'\",\"\\'\")'); console.log(JSON.stringify(r)); })" 2>&1
+        $lintResult = $lintOutput | ConvertFrom-Json -ErrorAction SilentlyContinue
+        if ($lintResult) {
+            if ($lintResult.errors.Count -gt 0) {
+                Write-Host "  ❌ Gate lint: $($lintResult.errors.Count) error(s) — plan will fail at runtime" -ForegroundColor Red
+                foreach ($e in $lintResult.errors) {
+                    Write-Host "     $($e.message)" -ForegroundColor Red
+                }
+                $scoreGates = [Math]::Max(0, $scoreGates - (5 * $lintResult.errors.Count))
+            }
+            if ($lintResult.warnings.Count -gt 0) {
+                Write-Host "  ⚠️  Gate lint: $($lintResult.warnings.Count) warning(s)" -ForegroundColor Yellow
+                foreach ($w in $lintResult.warnings) {
+                    Write-Host "     $($w.message)" -ForegroundColor Yellow
+                }
+                $scoreGates = [Math]::Max(0, $scoreGates - (2 * $lintResult.warnings.Count))
+            }
+            if ($lintResult.errors.Count -eq 0 -and $lintResult.warnings.Count -eq 0) {
+                Write-Host "  ✅ Gate lint: all commands pass pre-flight checks" -ForegroundColor Green
+            }
+        }
+    } catch {
+        # Gate lint is advisory — don't block analyze on lint failures
+    }
+
     # Check for completeness markers (deferred work)
     $sweepPatterns = @('TODO', 'FIXME', 'HACK', 'stub', 'placeholder', 'mock data')
     $sweepRegex = ($sweepPatterns | ForEach-Object { [regex]::Escape($_) }) -join '|'

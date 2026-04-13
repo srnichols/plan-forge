@@ -155,17 +155,29 @@ function handleEvent(event) {
 }
 
 function handleRunStarted(data) {
+  const isSameRun = state.runMeta && state.runMeta.plan === data.plan && state.slices.length > 0;
   state.runMeta = data;
-  state.slices = [];
+
   const count = data.sliceCount || data.executionOrder?.length || 0;
   const order = data.executionOrder || [];
 
-  for (let i = 0; i < count; i++) {
-    state.slices.push({
-      id: order[i] || String(i + 1),
-      title: `Slice ${order[i] || i + 1}`,
-      status: "pending",
-    });
+  if (isSameRun) {
+    // Duplicate run-started (e.g. WS history replay) — preserve existing slice statuses
+    for (let i = 0; i < count; i++) {
+      const id = order[i] || String(i + 1);
+      if (!state.slices.find((s) => s.id === id)) {
+        state.slices.push({ id, title: `Slice ${id}`, status: "pending" });
+      }
+    }
+  } else {
+    state.slices = [];
+    for (let i = 0; i < count; i++) {
+      state.slices.push({
+        id: order[i] || String(i + 1),
+        title: `Slice ${order[i] || i + 1}`,
+        status: "pending",
+      });
+    }
   }
 
   document.getElementById("run-plan-name").textContent = shortName(data.plan);
@@ -175,6 +187,7 @@ function handleRunStarted(data) {
   document.getElementById("run-status").textContent = "Running...";
 
   renderSliceCards();
+  updateProgress();
 }
 
 function handleSliceStarted(data) {
@@ -2191,6 +2204,14 @@ fetch(`${API_BASE}/api/status`)
 fetch(`${API_BASE}/api/runs/latest`)
   .then((r) => { if (!r.ok) throw new Error("no runs"); return r.json(); })
   .then((run) => {
+    // Skip REST init if WebSocket history replay has already populated slice state.
+    // WS is the authoritative real-time source; REST is only a fallback.
+    if (state.slices.length > 0) {
+      // Still update metadata if not set
+      if (!state.runMeta) state.runMeta = run;
+      return;
+    }
+
     // Build run metadata
     state.runMeta = run;
     state.slices = [];

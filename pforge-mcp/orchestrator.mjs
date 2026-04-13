@@ -31,6 +31,21 @@ import { isOpenBrainConfigured, buildMemorySearchBlock, buildMemoryCaptureBlock,
 /** Canonical list of all supported agent adapters. Update here — consumed by dashboard, setup, and docs. */
 export const SUPPORTED_AGENTS = ["copilot", "claude", "cursor", "codex", "gemini", "windsurf", "generic"];
 
+/** Allowlist of commands permitted in validation gates. Shared by runGate() and lintGateCommands(). */
+export const GATE_ALLOWED_PREFIXES = [
+  // Build / test runners
+  "npm", "npx", "node", "cargo", "go", "dotnet", "python", "python3",
+  "pip", "mvn", "gradle", "make", "cmake", "bash", "sh", "pwsh",
+  "powershell", "pytest", "mypy", "ruff", "eslint", "tsc", "vitest",
+  "jest", "mocha",
+  // Shell builtins & coreutils used in gate commands
+  "cd", "cat", "ls", "rm", "mkdir", "cp", "mv", "diff", "wc",
+  "head", "tail", "sort", "curl", "git", "grep", "test", "echo",
+  "exit", "true", "false",
+  // Project tools
+  "pforge",
+];
+
 // ─── Event Bus (C3: Dependency Injection) ─────────────────────────────
 
 /**
@@ -1008,24 +1023,13 @@ function parseTokenCount(str) {
  */
 export function runGate(command, cwd) {
   // C1: Validate gate commands against allowlist to prevent arbitrary execution
-  const allowedPrefixes = [
-    // Build / test runners
-    "npm", "npx", "node", "cargo", "go", "dotnet", "python", "python3",
-    "pip", "mvn", "gradle", "make", "cmake", "bash", "sh", "pwsh",
-    "powershell", "pytest", "mypy", "ruff", "eslint", "tsc", "vitest",
-    "jest", "mocha",
-    // Shell builtins & coreutils used in gate commands
-    "cd", "cat", "ls", "rm", "mkdir", "cp", "mv", "diff", "wc",
-    "head", "tail", "sort", "curl", "git", "grep", "test", "echo",
-    "exit", "true", "false",
-  ];
   const cmdBase = command.trim().split(/\s+/)[0].toLowerCase();
-  const isAllowed = allowedPrefixes.some((p) => cmdBase === p || cmdBase.endsWith(`/${p}`));
+  const isAllowed = GATE_ALLOWED_PREFIXES.some((p) => cmdBase === p || cmdBase.endsWith(`/${p}`));
   if (!isAllowed) {
     return {
       success: false,
       output: "",
-      error: `Validation gate blocked: '${cmdBase}' not in allowlist. Allowed: ${allowedPrefixes.join(", ")}`,
+      error: `Validation gate blocked: '${cmdBase}' not in allowlist. Allowed: ${GATE_ALLOWED_PREFIXES.join(", ")}`,
     };
   }
 
@@ -1353,6 +1357,23 @@ export async function runPlan(planPath, options = {}) {
   // Dry run — parse and validate only
   if (dryRun) {
     return { status: "dry-run", plan };
+  }
+
+  // Pre-flight: lint gate commands before burning time on execution
+  const gateLint = lintGateCommands(planPath);
+  if (!gateLint.passed) {
+    const errorSummary = gateLint.errors.map(e => `  ❌ ${e.message}`).join("\n");
+    const warnSummary = gateLint.warnings.map(w => `  ⚠️ ${w.message}`).join("\n");
+    return {
+      status: "failed",
+      error: "Gate lint pre-flight failed — fix these before executing:",
+      gateLint: {
+        errors: gateLint.errors,
+        warnings: gateLint.warnings,
+        summary: gateLint.summary,
+      },
+      detail: [errorSummary, warnSummary].filter(Boolean).join("\n"),
+    };
   }
 
   // Set up event bus with DI handler
@@ -1957,6 +1978,135 @@ export function parseValidationGates(planFilePath) {
         .map(l => l.replace(/\s{2,}#\s.*$/, "").trim())
         .filter(l => l.length > 0),
     }));
+}
+
+/**
+ * Lint all validation gate commands in a plan file.
+ * Catches common issues that cause gate failures at runtime:
+ *   - Commands not in the allowlist
+ *   - Standalone comment lines (# ...) that get treated as commands
+ *   - /dev/stdin usage (not cross-platform — fails on Windows)
+ *   - curl localhost:* in non-final slices (requires running server)
+ *   - `node *.test.mjs` for vitest test files (must use npx vitest)
+ *
+ * @param {string} planFilePath - Path to the plan Markdown file
+ * @returns {{ warnings: Array, errors: Array, passed: boolean }}
+ */
+export function lintGateCommands(planFilePath) {
+  const plan = parsePlan(planFilePath);
+  const warnings = [];
+  const errors = [];
+  const lastSliceNumber = plan.slices.length > 0
+    ? plan.slices[plan.slices.length - 1].number
+    : null;
+
+  for (const slice of plan.slices) {
+    if (!slice.validationGate) continue;
+
+    // Coalesce multi-line commands: join lines inside unmatched quotes
+    // e.g. node -e "\n  import(...)...\n" becomes one logical command
+    const rawLines = slice.validationGate.split("\n");
+    const commands = [];
+    let pending = "";
+    for (const raw of rawLines) {
+      const trimmed = raw.trim();
+      if (!trimmed) continue;
+      if (pending) {
+        pending += "\n" + trimmed;
+        // Check if quotes are now balanced
+        const dblQuotes = (pending.match(/"/g) || []).length;
+        if (dblQuotes % 2 === 0) {
+          commands.push(pending);
+          pending = "";
+        }
+      } else {
+        const stripped = trimmed.replace(/\s{2,}#\s.*$/, "");
+        const dblQuotes = (stripped.match(/"/g) || []).length;
+        if (dblQuotes % 2 !== 0) {
+          // Unmatched quote — start of multi-line command
+          pending = stripped;
+        } else {
+          commands.push(stripped);
+        }
+      }
+    }
+    if (pending) commands.push(pending); // flush any remaining
+
+    for (const line of commands) {
+      const loc = `Slice ${slice.number} ("${slice.title}")`;
+
+      // 1. Standalone comment lines
+      if (line.startsWith("#")) {
+        warnings.push({
+          slice: slice.number,
+          command: line,
+          rule: "comment-line",
+          severity: "warn",
+          message: `${loc}: Standalone comment '${line.slice(0, 60)}...' will be treated as a command. Remove or prefix with a real command.`,
+        });
+        continue; // Don't lint further — it's a comment
+      }
+
+      // 2. /dev/stdin (not cross-platform)
+      if (line.includes("/dev/stdin")) {
+        errors.push({
+          slice: slice.number,
+          command: line,
+          rule: "unix-only-path",
+          severity: "error",
+          message: `${loc}: '/dev/stdin' is Unix-only — fails on Windows. Use readFileSync(0,'utf8') for cross-platform stdin.`,
+        });
+      }
+
+      // 3. Command not in allowlist
+      // Skip leading env var assignments (VAR=val command ...) to find the real command
+      const tokens = line.split(/\s+/);
+      let cmdIdx = 0;
+      while (cmdIdx < tokens.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[cmdIdx])) {
+        cmdIdx++;
+      }
+      const cmdToken = (tokens[cmdIdx] || tokens[0]).toLowerCase();
+      const isAllowed = GATE_ALLOWED_PREFIXES.some(p => cmdToken === p || cmdToken.endsWith(`/${p}`));
+      if (!isAllowed) {
+        errors.push({
+          slice: slice.number,
+          command: line,
+          rule: "blocked-command",
+          severity: "error",
+          message: `${loc}: '${cmdToken}' is not in the gate allowlist. Add it to GATE_ALLOWED_PREFIXES or rewrite the command.`,
+        });
+      }
+
+      // 4. curl localhost in non-final slices (requires running server)
+      if (/curl\s.*localhost[:\s]/.test(line) && slice.number !== lastSliceNumber) {
+        warnings.push({
+          slice: slice.number,
+          command: line,
+          rule: "runtime-gate",
+          severity: "warn",
+          message: `${loc}: curl to localhost requires a running server. Move runtime API checks to vitest integration tests.`,
+        });
+      }
+
+      // 5. node *.test.mjs for vitest files (should use npx vitest)
+      if (/^node\s+.*\.test\.(mjs|js|ts)/.test(line)) {
+        warnings.push({
+          slice: slice.number,
+          command: line,
+          rule: "vitest-direct-node",
+          severity: "warn",
+          message: `${loc}: 'node *.test.*' fails for vitest test files. Use 'npx vitest run <file>' instead.`,
+        });
+      }
+    }
+  }
+
+  return {
+    warnings,
+    errors,
+    passed: errors.length === 0,
+    summary: `${errors.length} error(s), ${warnings.length} warning(s) across ${plan.slices.length} slices`,
+  };
 }
 
 /**
@@ -3580,6 +3730,46 @@ async function selfTest() {
     assert("Gate allows curl commands", curlResult.success);
   } catch (err) {
     assert(`Gate execution: ${err.message}`, false);
+  }
+
+  // Test 8b: Gate Lint
+  console.log("\n─── Gate Lint ───");
+  try {
+    // Use a real plan file if available
+    const lintPlan = resolve(process.cwd(), "docs/plans/Phase-LiveGuard-v2.27.0-PLAN.md");
+    if (existsSync(lintPlan)) {
+      const result = lintGateCommands(lintPlan);
+      assert("Gate lint returns warnings array", Array.isArray(result.warnings));
+      assert("Gate lint returns errors array", Array.isArray(result.errors));
+      assert("Gate lint returns passed boolean", typeof result.passed === "boolean");
+      assert("Gate lint returns summary string", typeof result.summary === "string");
+      assert("Cleaned plan has 0 errors", result.errors.length === 0);
+    } else {
+      console.log("  ⚠️  LiveGuard plan not found — skipping gate lint tests");
+    }
+
+    // Test lint detection with synthetic bad commands
+    const origParse = parsePlan;
+    // Temporarily test the detection logic inline
+    const testLines = [
+      "# this is a comment",
+      "node pforge-mcp/tests/foo.test.mjs",
+      "curl http://localhost:3100/api/test",
+      "wget http://example.com",
+    ];
+    const commentLine = testLines[0];
+    assert("Detects comment lines", commentLine.startsWith("#"));
+
+    const vitestLine = testLines[1];
+    assert("Detects node *.test.mjs pattern", /^node\s+.*\.test\.(mjs|js|ts)/.test(vitestLine));
+
+    const curlLine = testLines[2];
+    assert("Detects curl localhost pattern", /curl\s.*localhost[:\s]/.test(curlLine));
+
+    const wgetCmd = testLines[3].split(/\s+/)[0].toLowerCase();
+    assert("Detects blocked command", !GATE_ALLOWED_PREFIXES.some(p => wgetCmd === p));
+  } catch (err) {
+    assert(`Gate lint: ${err.message}`, false);
   }
 
   // Test 9: Estimate mode

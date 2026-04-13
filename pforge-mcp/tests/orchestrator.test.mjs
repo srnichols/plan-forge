@@ -8,6 +8,8 @@ import {
   readForgeJson,
   appendForgeJsonl,
   parseValidationGates,
+  lintGateCommands,
+  GATE_ALLOWED_PREFIXES,
   emitToolTelemetry,
   runAnalyze,
 } from "../orchestrator.mjs";
@@ -182,6 +184,121 @@ describe("parseValidationGates", () => {
     const gate = gates.find(g => g.sliceNumber === "1");
     expect(gate).toBeDefined();
     expect(gate.sliceTitle).toBe("Setup Framework");
+  });
+});
+
+// ─── lintGateCommands ────────────────────────────────────────────────
+
+describe("lintGateCommands", () => {
+  function writePlan(gates, sliceNumber = "1", title = "Test Slice") {
+    const planPath = resolve(tempDir, `lint-test-${Date.now()}.md`);
+    writeFileSync(planPath, [
+      "# Lint Test Plan",
+      "**Status**: draft",
+      "## Scope Contract",
+      "### In Scope",
+      "- Something",
+      "## Execution Slices",
+      `### Slice ${sliceNumber}: ${title}`,
+      "**Validation Gate**",
+      "```",
+      ...gates,
+      "```",
+    ].join("\n"));
+    return planPath;
+  }
+
+  it("passes clean gates with no errors or warnings", () => {
+    const origCwd = process.cwd();
+    process.chdir(tempDir);
+    try {
+      const plan = writePlan(["node --version", "npm test"]);
+      const result = lintGateCommands(plan);
+      expect(result.passed).toBe(true);
+      expect(result.errors).toHaveLength(0);
+      expect(result.warnings).toHaveLength(0);
+    } finally { process.chdir(origCwd); }
+  });
+
+  it("detects /dev/stdin as error", () => {
+    const origCwd = process.cwd();
+    process.chdir(tempDir);
+    try {
+      const plan = writePlan(["curl http://localhost:3100/api/test | node -e \"require('fs').readFileSync('/dev/stdin','utf8')\""]);
+      const result = lintGateCommands(plan);
+      expect(result.passed).toBe(false);
+      expect(result.errors.some(e => e.rule === "unix-only-path")).toBe(true);
+    } finally { process.chdir(origCwd); }
+  });
+
+  it("detects blocked commands as error", () => {
+    const origCwd = process.cwd();
+    process.chdir(tempDir);
+    try {
+      const plan = writePlan(["wget http://example.com"]);
+      const result = lintGateCommands(plan);
+      expect(result.passed).toBe(false);
+      expect(result.errors.some(e => e.rule === "blocked-command")).toBe(true);
+    } finally { process.chdir(origCwd); }
+  });
+
+  it("warns on standalone comment lines", () => {
+    const origCwd = process.cwd();
+    process.chdir(tempDir);
+    try {
+      const plan = writePlan(["# This is a comment", "npm test"]);
+      const result = lintGateCommands(plan);
+      expect(result.passed).toBe(true); // comments are warnings, not errors
+      expect(result.warnings.some(w => w.rule === "comment-line")).toBe(true);
+    } finally { process.chdir(origCwd); }
+  });
+
+  it("warns on node *.test.mjs (vitest pattern)", () => {
+    const origCwd = process.cwd();
+    process.chdir(tempDir);
+    try {
+      const plan = writePlan(["node pforge-mcp/tests/server.test.mjs"]);
+      const result = lintGateCommands(plan);
+      expect(result.passed).toBe(true); // warning, not error
+      expect(result.warnings.some(w => w.rule === "vitest-direct-node")).toBe(true);
+    } finally { process.chdir(origCwd); }
+  });
+
+  it("warns on curl localhost in non-final slices", () => {
+    const origCwd = process.cwd();
+    process.chdir(tempDir);
+    try {
+      // Write a plan with 2 slices, curl in the first
+      const planPath = resolve(tempDir, `lint-curl-${Date.now()}.md`);
+      writeFileSync(planPath, [
+        "# Curl Test Plan",
+        "**Status**: draft",
+        "## Scope Contract",
+        "### In Scope",
+        "- Something",
+        "## Execution Slices",
+        "### Slice 1: First",
+        "**Validation Gate**",
+        "```",
+        "curl http://localhost:3100/api/test | node -e \"console.log('ok')\"",
+        "```",
+        "### Slice 2: Last",
+        "**Validation Gate**",
+        "```",
+        "npm test",
+        "```",
+      ].join("\n"));
+      const result = lintGateCommands(planPath);
+      expect(result.warnings.some(w => w.rule === "runtime-gate")).toBe(true);
+    } finally { process.chdir(origCwd); }
+  });
+
+  it("GATE_ALLOWED_PREFIXES is exported and contains expected entries", () => {
+    expect(Array.isArray(GATE_ALLOWED_PREFIXES)).toBe(true);
+    expect(GATE_ALLOWED_PREFIXES).toContain("node");
+    expect(GATE_ALLOWED_PREFIXES).toContain("curl");
+    expect(GATE_ALLOWED_PREFIXES).toContain("cd");
+    expect(GATE_ALLOWED_PREFIXES).not.toContain("wget");
   });
 });
 

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- verified: v2.29.0 -->
+<!-- verified: v2.28.0 -->
 <html lang="en" class="scroll-smooth">
 <head>
   <meta charset="UTF-8" />
@@ -32,11 +32,11 @@
         <h1>LiveGuard Tools Reference</h1>
         <p class="text-lg text-slate-400 mb-8">13 post-coding intelligence tools. Each guards a different gate.</p>
 
-        <div class="callout callout-warning">
-          <strong>In development (v2.27.0–v2.29.0)</strong> — This chapter is a structural placeholder. Full tool reference content (CLI flags, output shapes, threshold defaults, integration notes) ships with each release. The tool index below reflects the complete planned surface.
+        <div class="callout callout-tip">
+          <strong>v2.28.0</strong> — 11 tools shipped (v2.27 + v2.28). Per-tool reference below includes CLI invocation, options, output shape, thresholds, and integration notes. 2 more tools (<code class="text-forge-400">forge_fix_proposal</code>, <code class="text-forge-400">forge_quorum_analyze</code>) ship in v2.29.
         </div>
 
-        <!-- CONTENT-PLACEHOLDER -->
+        <!-- CONTENT: full tool reference -->
 
         <h2 id="tool-index">Tool Index</h2>
         <p>All 13 LiveGuard tools are available as MCP tools and via REST API. Full reference per tool below.</p>
@@ -68,14 +68,193 @@
           </table>
         </div>
 
-        <p class="text-slate-500 text-sm">Full per-tool sections with CLI invocation, options, output shape, threshold defaults, and integration notes will appear in v2.28.0–v2.29.0.</p>
+        <p class="text-slate-500 text-sm">2 remaining tools (<code class="text-forge-400">forge_fix_proposal</code>, <code class="text-forge-400">forge_quorum_analyze</code>) ship in v2.29.</p>
+
+        <!-- Per-tool reference sections -->
+
+        <h2 id="forge-drift-report">forge_drift_report</h2>
+        <p>Scores codebase against architecture guardrail rules from instruction files. Tracks drift over time in <code class="text-forge-400">.forge/drift-history.json</code>. Fires a bridge notification when the score drops below the configured threshold.</p>
+        <div class="cmd-block mb-4">
+          <div class="cmd-block-header"><span>CLI</span></div>
+          <pre><code>pforge drift [--since &lt;ref&gt;]</code></pre>
+        </div>
+        <div class="overflow-x-auto mb-6">
+          <table class="w-full text-sm">
+            <thead><tr class="text-left border-b border-slate-700/60"><th class="pb-2 pr-4 text-slate-400 font-semibold">Option</th><th class="pb-2 pr-4 text-slate-400 font-semibold">Default</th><th class="pb-2 text-slate-400 font-semibold">Description</th></tr></thead>
+            <tbody class="divide-y divide-slate-800/60">
+              <tr><td class="py-2 pr-4 font-mono text-amber-400 text-xs">--since</td><td class="py-2 pr-4 text-slate-400">HEAD~5</td><td class="py-2 text-slate-300">Git ref for comparison baseline</td></tr>
+              <tr><td class="py-2 pr-4 font-mono text-amber-400 text-xs">--threshold</td><td class="py-2 pr-4 text-slate-400">70</td><td class="py-2 text-slate-300">Score below which a bridge notification fires</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-sm text-slate-400 mb-6"><strong>Output</strong>: <code class="text-forge-400">{ score, delta, violations[], timestamp }</code>. Score is 0–100; higher is better. <code>delta</code> is the change since the previous run.</p>
+
+        <h2 id="forge-incident-capture">forge_incident_capture</h2>
+        <p>Records incidents with severity, affected files, and MTTR tracking. Dispatches on-call notification via the <code class="text-forge-400">.forge.json</code> <code>onCall</code> config if present.</p>
+        <div class="cmd-block mb-4">
+          <div class="cmd-block-header"><span>CLI</span></div>
+          <pre><code>pforge incident capture
+pforge incident list</code></pre>
+        </div>
+        <div class="overflow-x-auto mb-6">
+          <table class="w-full text-sm">
+            <thead><tr class="text-left border-b border-slate-700/60"><th class="pb-2 pr-4 text-slate-400 font-semibold">Option</th><th class="pb-2 pr-4 text-slate-400 font-semibold">Default</th><th class="pb-2 text-slate-400 font-semibold">Description</th></tr></thead>
+            <tbody class="divide-y divide-slate-800/60">
+              <tr><td class="py-2 pr-4 font-mono text-amber-400 text-xs">severity</td><td class="py-2 pr-4 text-slate-400">medium</td><td class="py-2 text-slate-300">One of: critical, high, medium, low</td></tr>
+              <tr><td class="py-2 pr-4 font-mono text-amber-400 text-xs">files</td><td class="py-2 pr-4 text-slate-400">[]</td><td class="py-2 text-slate-300">Affected file paths</td></tr>
+              <tr><td class="py-2 pr-4 font-mono text-amber-400 text-xs">description</td><td class="py-2 pr-4 text-slate-400">—</td><td class="py-2 text-slate-300">Human-readable incident description</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-sm text-slate-400 mb-6"><strong>Output</strong>: <code class="text-forge-400">{ incidentId, severity, mttr, onCallNotified, storedAt }</code>. Incidents are stored in <code>.forge/incidents/</code> as individual JSON files.</p>
+
+        <h2 id="forge-dep-watch">forge_dep_watch</h2>
+        <p>Scans dependencies for CVEs using <code>npm audit</code>. Compares against a previous snapshot in <code class="text-forge-400">.forge/deps-snapshot.json</code>. Alerts on new vulnerabilities only — unchanged findings are suppressed.</p>
+        <div class="cmd-block mb-4">
+          <div class="cmd-block-header"><span>CLI</span></div>
+          <pre><code>pforge dep-watch</code></pre>
+        </div>
+        <p class="text-sm text-slate-400 mb-6"><strong>Output</strong>: <code class="text-forge-400">{ newVulnerabilities[], resolvedVulnerabilities[], unchanged, snapshot }</code>. Fires a <code>dep-vulnerability</code> hub event when new CVEs appear.</p>
+
+        <h2 id="forge-regression-guard">forge_regression_guard</h2>
+        <p>Extracts validation gate commands from plan files, executes them against the codebase, and reports pass/fail/blocked results. Used by the <code>PostSlice</code> hook and manually after refactors.</p>
+        <div class="cmd-block mb-4">
+          <div class="cmd-block-header"><span>CLI</span></div>
+          <pre><code>pforge regression-guard [--plan &lt;plan-file&gt;]</code></pre>
+        </div>
+        <div class="overflow-x-auto mb-6">
+          <table class="w-full text-sm">
+            <thead><tr class="text-left border-b border-slate-700/60"><th class="pb-2 pr-4 text-slate-400 font-semibold">Option</th><th class="pb-2 pr-4 text-slate-400 font-semibold">Default</th><th class="pb-2 text-slate-400 font-semibold">Description</th></tr></thead>
+            <tbody class="divide-y divide-slate-800/60">
+              <tr><td class="py-2 pr-4 font-mono text-amber-400 text-xs">--plan</td><td class="py-2 pr-4 text-slate-400">all plans in docs/plans/</td><td class="py-2 text-slate-300">Specific plan file to check gates for</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-sm text-slate-400 mb-6"><strong>Output</strong>: <code class="text-forge-400">{ gates[], passed, failed, blocked, summary }</code>. Commands are allow-listed via <code>GATE_ALLOWED_PREFIXES</code> — dangerous patterns like <code>rm -rf /</code> are blocked.</p>
+
+        <h2 id="forge-runbook">forge_runbook</h2>
+        <p>Generates a human-readable operational runbook from a hardened plan file. Optionally appends recent incidents for context. Saves to <code class="text-forge-400">.forge/runbooks/</code>.</p>
+        <div class="cmd-block mb-4">
+          <div class="cmd-block-header"><span>CLI</span></div>
+          <pre><code>pforge runbook list
+pforge runbook get &lt;name&gt;
+pforge runbook add &lt;plan-file&gt;</code></pre>
+        </div>
+        <p class="text-sm text-slate-400 mb-6"><strong>Naming</strong>: Plan filename → lowercase → non-<code>[a-z0-9-]</code> replaced with hyphens → collapse → append <code>-runbook.md</code>.</p>
+
+        <h2 id="forge-hotspot">forge_hotspot</h2>
+        <p>Identifies git churn hotspots — files that change most frequently. Uses a 24-hour cache to avoid repeated git log queries.</p>
+        <div class="cmd-block mb-4">
+          <div class="cmd-block-header"><span>CLI</span></div>
+          <pre><code>pforge hotspot [--top 10] [--since 30d]</code></pre>
+        </div>
+        <div class="overflow-x-auto mb-6">
+          <table class="w-full text-sm">
+            <thead><tr class="text-left border-b border-slate-700/60"><th class="pb-2 pr-4 text-slate-400 font-semibold">Option</th><th class="pb-2 pr-4 text-slate-400 font-semibold">Default</th><th class="pb-2 text-slate-400 font-semibold">Description</th></tr></thead>
+            <tbody class="divide-y divide-slate-800/60">
+              <tr><td class="py-2 pr-4 font-mono text-amber-400 text-xs">--top</td><td class="py-2 pr-4 text-slate-400">10</td><td class="py-2 text-slate-300">Number of hotspot files to return</td></tr>
+              <tr><td class="py-2 pr-4 font-mono text-amber-400 text-xs">--since</td><td class="py-2 pr-4 text-slate-400">30d</td><td class="py-2 text-slate-300">Time window for churn analysis</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-sm text-slate-400 mb-6"><strong>Output</strong>: <code class="text-forge-400">{ hotspots[{ file, changeCount, lastChanged }], since, cachedUntil }</code>.</p>
+
+        <h2 id="forge-health-trend">forge_health_trend</h2>
+        <p>Aggregates drift scores, cost history, incident frequency, and model performance over a configurable time window. Returns an overall health score 0–100.</p>
+        <div class="cmd-block mb-4">
+          <div class="cmd-block-header"><span>CLI</span></div>
+          <pre><code>pforge health-trend [--window 30d]</code></pre>
+        </div>
+        <p class="text-sm text-slate-400 mb-6"><strong>Output</strong>: <code class="text-forge-400">{ healthScore, driftTrend[], costTrend[], incidentTrend[], mttbf, window }</code>. Displayed on the dashboard Health tab as a line chart.</p>
+
+        <h2 id="forge-alert-triage">forge_alert_triage</h2>
+        <p>Reads incidents and drift violations, ranks by priority (severity × recency), and returns a prioritized list. Read-only — never modifies data.</p>
+        <div class="cmd-block mb-4">
+          <div class="cmd-block-header"><span>CLI</span></div>
+          <pre><code>pforge alert-triage</code></pre>
+        </div>
+        <p class="text-sm text-slate-400 mb-6"><strong>Output</strong>: <code class="text-forge-400">{ alerts[{ source, severity, priority, description, timestamp }], totalAlerts }</code>. Priority is a computed score — higher means "address first".</p>
+
+        <h2 id="forge-deploy-journal">forge_deploy_journal</h2>
+        <p>Records deployments with version, deployer, notes, and an optional slice reference. Correlates with <code class="text-forge-400">forge_incident_capture</code> so incidents can be linked to the deploy that introduced them.</p>
+        <div class="cmd-block mb-4">
+          <div class="cmd-block-header"><span>CLI</span></div>
+          <pre><code>pforge deploy-log [--tag &lt;tag&gt;] [--notes "..."]</code></pre>
+        </div>
+        <p class="text-sm text-slate-400 mb-6"><strong>Output</strong>: <code class="text-forge-400">{ deployId, version, deployer, timestamp, notes }</code>. Stored in <code>.forge/deploy-journal.jsonl</code>.</p>
+
+        <h2 id="forge-secret-scan">forge_secret_scan <span class="ml-2 px-1.5 py-0.5 text-[10px] rounded bg-amber-900/40 text-amber-500 border border-amber-700/30">v2.28</span></h2>
+        <p>Scans <code>git diff</code> output for high-entropy strings using Shannon entropy analysis. <strong>Never logs actual secret values</strong> — all findings are masked to <code class="text-forge-400">&lt;REDACTED&gt;</code> in output, cache, and telemetry.</p>
+        <div class="cmd-block mb-4">
+          <div class="cmd-block-header"><span>CLI</span></div>
+          <pre><code>pforge secret-scan [--since HEAD~1] [--threshold 4.0]</code></pre>
+        </div>
+        <div class="overflow-x-auto mb-6">
+          <table class="w-full text-sm">
+            <thead><tr class="text-left border-b border-slate-700/60"><th class="pb-2 pr-4 text-slate-400 font-semibold">Option</th><th class="pb-2 pr-4 text-slate-400 font-semibold">Default</th><th class="pb-2 text-slate-400 font-semibold">Description</th></tr></thead>
+            <tbody class="divide-y divide-slate-800/60">
+              <tr><td class="py-2 pr-4 font-mono text-amber-400 text-xs">--since</td><td class="py-2 pr-4 text-slate-400">HEAD~1</td><td class="py-2 text-slate-300">Git ref to diff against</td></tr>
+              <tr><td class="py-2 pr-4 font-mono text-amber-400 text-xs">--threshold</td><td class="py-2 pr-4 text-slate-400">4.0</td><td class="py-2 text-slate-300">Shannon entropy threshold (higher = fewer but more confident findings)</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-sm text-slate-400 mb-4"><strong>Output</strong>:</p>
+        <pre class="bg-slate-900/60 rounded-lg p-4 text-xs text-forge-400 overflow-x-auto mb-6"><code>{
+  "scannedAt": "2026-04-13T...",
+  "since": "HEAD~1",
+  "threshold": 4.0,
+  "scannedFiles": 5,
+  "clean": false,
+  "findings": [{
+    "file": "src/config.js",
+    "line": 5,
+    "type": "api_key",
+    "entropyScore": 4.8,
+    "masked": "&lt;REDACTED&gt;",
+    "confidence": "high"
+  }]
+}</code></pre>
+        <div class="callout callout-warning mb-6">
+          <strong>Security</strong>: Cache file (<code class="text-forge-400">.forge/secret-scan-cache.json</code>) stores only file paths, line numbers, entropy scores, and <code>&lt;REDACTED&gt;</code> placeholders. If git is unavailable, the tool degrades gracefully with <code>{ clean: null, scannedFiles: 0 }</code>. May annotate <code>.forge/deploy-journal-meta.json</code> sidecar with scan results.
+        </div>
+
+        <h2 id="forge-env-diff">forge_env_diff <span class="ml-2 px-1.5 py-0.5 text-[10px] rounded bg-amber-900/40 text-amber-500 border border-amber-700/30">v2.28</span></h2>
+        <p>Compares environment variable <strong>key names</strong> across <code>.env</code> files. Identifies keys present in the baseline but missing in targets (and vice versa). <strong>Never reads, logs, or caches environment variable values.</strong></p>
+        <div class="cmd-block mb-4">
+          <div class="cmd-block-header"><span>CLI</span></div>
+          <pre><code>pforge env-diff [--baseline .env] [--files .env.staging,.env.production]</code></pre>
+        </div>
+        <div class="overflow-x-auto mb-6">
+          <table class="w-full text-sm">
+            <thead><tr class="text-left border-b border-slate-700/60"><th class="pb-2 pr-4 text-slate-400 font-semibold">Option</th><th class="pb-2 pr-4 text-slate-400 font-semibold">Default</th><th class="pb-2 text-slate-400 font-semibold">Description</th></tr></thead>
+            <tbody class="divide-y divide-slate-800/60">
+              <tr><td class="py-2 pr-4 font-mono text-amber-400 text-xs">--baseline</td><td class="py-2 pr-4 text-slate-400">.env</td><td class="py-2 text-slate-300">The reference environment file</td></tr>
+              <tr><td class="py-2 pr-4 font-mono text-amber-400 text-xs">--files</td><td class="py-2 pr-4 text-slate-400">.env.*</td><td class="py-2 text-slate-300">Comma-separated target files to compare</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-sm text-slate-400 mb-4"><strong>Output</strong>:</p>
+        <pre class="bg-slate-900/60 rounded-lg p-4 text-xs text-forge-400 overflow-x-auto mb-6"><code>{
+  "scannedAt": "2026-04-13T...",
+  "baseline": ".env",
+  "filesCompared": 2,
+  "pairs": [{
+    "file": ".env.staging",
+    "missingInTarget": ["STRIPE_KEY"],
+    "missingInBaseline": []
+  }],
+  "summary": { "clean": false, "totalGaps": 1, "baselineKeyCount": 12 }
+}</code></pre>
+        <div class="callout callout-warning mb-6">
+          <strong>Security</strong>: Cache file (<code class="text-forge-400">.forge/env-diff-cache.json</code>) stores key names only. Values are never read from the environment files — the parser extracts the key portion of each <code>KEY=value</code> line and discards the rest.
+        </div>
 
         <div class="callout callout-tip">
           <strong>Related</strong>: See <a href="liveguard-runbooks.html">Appendix F — LiveGuard Alert Runbooks</a> for how to respond when each tool fires an alert.
         </div>
 
         <h2 id="forge-json-schema">.forge.json Schema</h2>
-        <p>LiveGuard tools read configuration from <code class="text-forge-400">.forge.json</code> at project root. Below are the root-level fields relevant to LiveGuard. Full schema details ship in v2.28 Slice 5.</p>
+        <p>LiveGuard tools read configuration from <code class="text-forge-400">.forge.json</code> at project root. Below are the root-level fields relevant to LiveGuard.</p>
 
         <div class="overflow-x-auto mb-6">
           <table class="w-full text-sm">

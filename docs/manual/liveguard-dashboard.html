@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- verified: v2.29.0 -->
+<!-- verified: v2.28.0 -->
 <html lang="en" class="scroll-smooth">
 <head>
   <meta charset="UTF-8" />
@@ -32,11 +32,11 @@
         <h1>The LiveGuard Dashboard</h1>
         <p class="text-lg text-slate-400 mb-8">The same unified dashboard, extended with a LIVEGUARD section — 5 real-time tabs driven by WebSocket hub events.</p>
 
-        <div class="callout callout-warning">
-          <strong>In development (v2.28.0–v2.29.0)</strong> — This chapter is a structural placeholder. Full tab walkthrough content (screenshots, widget descriptions, badge behavior, real-time update flow) ships with each release.
+        <div class="callout callout-tip">
+          <strong>v2.28.0</strong> — Dashboard LiveGuard section fully operational. 5 tabs: Health, Incidents, Triage, Security, Env. Quorum Analysis links and Fix Proposals Feed ship in v2.29.
         </div>
 
-        <!-- CONTENT-PLACEHOLDER -->
+        <!-- CONTENT: full dashboard walkthrough -->
 
         <h2 id="opening">Opening the Dashboard</h2>
         <p>The LiveGuard section is part of the unified Plan Forge dashboard — no separate app or port required:</p>
@@ -69,20 +69,56 @@
         <p>FORGE tabs use a blue active indicator. LIVEGUARD tabs use amber — you always know which half of the dashboard you're in.</p>
 
         <h2 id="health-tab">Health Tab</h2>
-        <p id="incidents-tab">Full content coming in v2.28.0.</p>
+        <p>The Health tab shows aggregate project health powered by <code class="text-forge-400">forge_health_trend</code>. Key widgets:</p>
+        <ul class="space-y-2 text-sm text-slate-300 list-disc list-inside mb-6">
+          <li><strong>Health Score</strong> — a single 0–100 number, color-coded: green (80+), amber (50–79), red (&lt;50). Computed from drift, incidents, cost, and model performance.</li>
+          <li><strong>Drift Trend</strong> — 30-day line chart of architecture drift scores. The x-axis is time; the y-axis is score 0–100.</li>
+          <li><strong>MTTBF</strong> — Mean Time Between Failures, calculated from incident timestamps. Lower is worse.</li>
+          <li><strong>Cost Trend</strong> — monthly aggregated cost from <code class="text-forge-400">forge_cost_report</code>.</li>
+        </ul>
+        <p>The Health tab auto-refreshes on every <code class="text-forge-400">liveguard-tool-completed</code> WebSocket event. No manual refresh needed.</p>
 
         <h2 id="incidents-tab-heading">Incidents Tab</h2>
-        <p>Live list of open incidents from <code>.forge/incidents/</code>. Each card shows incidentId, severity badge, MTTR, on-call engineer, and affected files.</p>
-        <p id="fix-proposals-feed"><strong>Fix Proposals Feed (v2.29)</strong> — when <code>forge_fix_proposal</code> has generated plans, a <strong>Proposed Fixes</strong> section appears at the top of the Incidents tab. Each entry shows the proposal file path, source type (regression/drift/incident/secret), and a <strong>Run in Assisted Mode →</strong> button that opens the Actions tab pre-filled with the plan path. The feed reads from <code>GET /api/fix/proposals</code> on tab load and on every <code>fix-proposal-ready</code> hub event.</p>
+        <p>Live list of open incidents from <code class="text-forge-400">.forge/incidents/</code>. Each card shows:</p>
+        <ul class="space-y-2 text-sm text-slate-300 list-disc list-inside mb-6">
+          <li><strong>Incident ID</strong> — unique identifier</li>
+          <li><strong>Severity badge</strong> — color-coded: red (critical), orange (high), yellow (medium), grey (low)</li>
+          <li><strong>MTTR</strong> — time elapsed since the incident was captured, updated in real-time</li>
+          <li><strong>On-call</strong> — engineer name from <code class="text-forge-400">.forge.json</code> <code>onCall</code> config</li>
+          <li><strong>Affected files</strong> — file list, clickable to view in editor</li>
+        </ul>
+        <p id="fix-proposals-feed"><strong>Fix Proposals Feed (v2.29)</strong> — when <code class="text-forge-400">forge_fix_proposal</code> has generated plans, a <strong>Proposed Fixes</strong> section appears at the top of the Incidents tab. Each entry shows the proposal file path, source type (regression/drift/incident/secret), and a <strong>Run in Assisted Mode →</strong> button that opens the Actions tab pre-filled with the plan path. The feed reads from <code>GET /api/fix/proposals</code> on tab load and on every <code>fix-proposal-ready</code> hub event.</p>
 
         <h2 id="triage-tab-heading">Triage Tab</h2>
-        <p id="security-tab">Full content coming in v2.28.0.</p>
+        <p>Displays the output of <code class="text-forge-400">forge_alert_triage</code> — a ranked list of all open alerts sorted by priority (severity × recency). Each row shows:</p>
+        <ul class="space-y-2 text-sm text-slate-300 list-disc list-inside mb-6">
+          <li><strong>Source</strong> — which tool generated the alert (drift, regression, dep-watch, etc.)</li>
+          <li><strong>Severity</strong> — badge matching the severity matrix in <a href="liveguard-runbooks.html" class="text-amber-400 hover:underline">Appendix F</a></li>
+          <li><strong>Priority score</strong> — computed rank (higher = address first)</li>
+          <li><strong>Description</strong> — one-line summary</li>
+          <li><strong>Timestamp</strong> — when the alert was generated</li>
+        </ul>
+        <p>Critical and high alerts show a red/amber left-border on their row. The tab badge shows the total number of unresolved critical+high alerts.</p>
 
         <h2 id="security-tab-heading">Security Tab</h2>
-        <p id="env-tab">Full content coming in v2.28.0.</p>
+        <p>Surfaces results from <code class="text-forge-400">forge_secret_scan</code>. Shows:</p>
+        <ul class="space-y-2 text-sm text-slate-300 list-disc list-inside mb-6">
+          <li><strong>Scan status</strong> — clean (green shield) or findings (red shield with count)</li>
+          <li><strong>Findings list</strong> — file path, line number, type (api_key, token, etc.), entropy score, confidence level. <strong>Values are never shown</strong> — only <code>&lt;REDACTED&gt;</code> placeholders.</li>
+          <li><strong>Last scan time</strong> — from cache file</li>
+          <li><strong>Run Scan</strong> button — triggers <code>POST /api/secrets/scan</code></li>
+        </ul>
+        <p>The Security tab reads from <code class="text-forge-400">.forge/secret-scan-cache.json</code> on load and refreshes on <code>liveguard-tool-completed</code> events where <code>tool === "forge_secret_scan"</code>.</p>
 
         <h2 id="env-tab-heading">Env Tab</h2>
-        <p>Key-by-key comparison of all <code>.env.*</code> files in the project root. Missing keys are highlighted in red. Values are never displayed — keys only.</p>
+        <p>Key-by-key comparison of all <code class="text-forge-400">.env.*</code> files in the project root, powered by <code class="text-forge-400">forge_env_diff</code>.</p>
+        <ul class="space-y-2 text-sm text-slate-300 list-disc list-inside mb-6">
+          <li><strong>Key matrix</strong> — rows are env keys, columns are files. Present keys show a green check; missing keys show a red ✗.</li>
+          <li><strong>Gap count</strong> — total missing keys, highlighted in the tab badge</li>
+          <li><strong>Values are never displayed</strong> — the Env tab shows key names only</li>
+          <li><strong>Run Diff</strong> button — triggers <code>POST /api/env/diff</code></li>
+        </ul>
+        <p>The tab reads from <code class="text-forge-400">.forge/env-diff-cache.json</code> on load. Cache is refreshed when <code>forge_env_diff</code> completes.</p>
 
         <h2 id="quorum-in-dashboard">Quorum Analysis from the Dashboard (v2.29)</h2>
         <p>The Health and Incidents tabs each include a <strong>Run Quorum Analysis →</strong> link. Clicking it calls <code>GET /api/quorum/prompt?source=&lt;tab-source&gt;&amp;goal=risk-assess</code> and opens a pre-populated quorum prompt in the Actions tab, ready to copy into your AI client. No model calls happen from the dashboard — it assembles the prompt for you.</p>

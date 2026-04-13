@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- verified: v2.29.0 -->
+<!-- verified: v2.28.0 -->
 <html lang="en" class="scroll-smooth">
 <head>
   <meta charset="UTF-8" />
@@ -32,11 +32,11 @@
         <h1>LiveGuard Alert Runbooks</h1>
         <p class="text-lg text-slate-400 mb-8">The guardian fired. Here's exactly what to do next.</p>
 
-        <div class="callout callout-warning">
-          <strong>In development (v2.28.0–v2.29.0)</strong> — This appendix is a structural placeholder. Full runbook content (severity matrix, per-alert response procedures, escalation paths, fix proposal workflow) ships with each release.
+        <div class="callout callout-tip">
+          <strong>v2.28.0</strong> — Full runbook content for all 6 alert types. Severity matrix, per-alert response procedures, and escalation paths. Fix proposal workflow details ship in v2.29.
         </div>
 
-        <!-- CONTENT-PLACEHOLDER -->
+        <!-- CONTENT: full runbooks -->
 
         <h2 id="severity-matrix">Severity Matrix</h2>
         <p>Every LiveGuard alert carries one of four severity levels. The matrix below defines response SLA and escalation path. Full runbooks per alert type follow.</p>
@@ -80,16 +80,68 @@
           </table>
         </div>
 
-        <h2 id="runbook-index">Runbook Index</h2>
-        <p class="text-slate-500 text-sm mb-4">Full runbooks shipping in v2.28.0 — one per major alert type:</p>
-        <ul class="space-y-1 text-sm text-slate-400 list-disc list-inside mb-8">
-          <li>Drift spike — architecture diverged from plan baseline</li>
-          <li>Secret found — high-entropy string detected in a committed diff</li>
-          <li>Env diff gap — required key missing from one or more environment files</li>
-          <li>Regression gate failure — previously passing gate now fails</li>
-          <li>Dependency vulnerability — new CVE in a watched package</li>
-          <li>Incident MTTR exceeded — time-to-resolve beyond threshold</li>
-        </ul>
+        <h2 id="runbook-index">Per-Alert Runbooks</h2>
+
+        <h3 id="runbook-drift">Drift Spike — Architecture Diverged from Plan Baseline</h3>
+        <p class="text-sm text-slate-400 mb-2"><strong>Source</strong>: <code class="text-forge-400">forge_drift_report</code> | <strong>Typical severity</strong>: Medium–High</p>
+        <ol class="mt-2 space-y-2 text-sm text-slate-300 list-decimal list-inside mb-6">
+          <li><strong>Assess</strong>: Run <code class="text-forge-400">pforge drift</code> to get the current score and delta. If delta &gt; 10 points in one session, treat as High.</li>
+          <li><strong>Identify</strong>: Check the <code>violations[]</code> in the output — each violation lists the file, rule, and instruction file it violates.</li>
+          <li><strong>Root cause</strong>: Was this an intentional architectural change? If yes, update the instruction file or plan baseline. If no, the code drifted from the plan.</li>
+          <li><strong>Fix</strong>: For unintentional drift, refactor to match the plan. For intentional changes, update the plan's Scope Contract to reflect the new architecture.</li>
+          <li><strong>Verify</strong>: Re-run <code class="text-forge-400">pforge drift</code> — score should recover to within 5 points of the previous baseline.</li>
+        </ol>
+
+        <h3 id="runbook-secret">Secret Found — High-Entropy String in Committed Diff</h3>
+        <p class="text-sm text-slate-400 mb-2"><strong>Source</strong>: <code class="text-forge-400">forge_secret_scan</code> | <strong>Typical severity</strong>: Critical</p>
+        <ol class="mt-2 space-y-2 text-sm text-slate-300 list-decimal list-inside mb-6">
+          <li><strong>Do not push</strong>: If the commit hasn't been pushed, amend it to remove the secret. <code>git reset HEAD~1</code>, remove the credential, re-commit.</li>
+          <li><strong>Rotate immediately</strong>: If the commit has been pushed, the credential is compromised. Rotate it in the external provider (API dashboard, vault, etc.) before any other action.</li>
+          <li><strong>Remove from history</strong>: Use <code>git filter-repo</code> or BFG Repo-Cleaner to purge the secret from git history. A simple amendment is not sufficient — the old commit object still exists.</li>
+          <li><strong>Move to secrets manager</strong>: Store the new credential in <code>.forge/secrets.json</code> (gitignored), an environment variable, or your cloud vault. Never in source code.</li>
+          <li><strong>Verify</strong>: Re-run <code class="text-forge-400">pforge secret-scan</code> — output should show <code>clean: true</code>.</li>
+        </ol>
+        <div class="callout callout-warning mb-6">
+          <strong>Time-critical</strong>: Secret findings should be treated as Critical regardless of the entropy score. Automated rotation is out of scope for LiveGuard — the tool detects and alerts; humans rotate.
+        </div>
+
+        <h3 id="runbook-env">Env Diff Gap — Required Key Missing from Environment File</h3>
+        <p class="text-sm text-slate-400 mb-2"><strong>Source</strong>: <code class="text-forge-400">forge_env_diff</code> | <strong>Typical severity</strong>: Medium–High</p>
+        <ol class="mt-2 space-y-2 text-sm text-slate-300 list-decimal list-inside mb-6">
+          <li><strong>Review gaps</strong>: Run <code class="text-forge-400">pforge env-diff</code> to see which keys are missing and in which files.</li>
+          <li><strong>Categorize</strong>: Is the key required for the target environment? Some keys (e.g., <code>DEBUG=true</code>) are intentionally absent from production.</li>
+          <li><strong>Add missing keys</strong>: For required keys, add them to the target <code>.env.*</code> file with the appropriate value for that environment.</li>
+          <li><strong>Document exceptions</strong>: If a key is intentionally absent, add a comment in the baseline <code>.env</code> file: <code># NOT_IN_PROD: DEBUG</code>.</li>
+          <li><strong>Verify</strong>: Re-run <code class="text-forge-400">pforge env-diff</code> — output should show <code>clean: true</code> or only expected gaps.</li>
+        </ol>
+
+        <h3 id="runbook-regression">Regression Gate Failure — Previously Passing Gate Now Fails</h3>
+        <p class="text-sm text-slate-400 mb-2"><strong>Source</strong>: <code class="text-forge-400">forge_regression_guard</code> | <strong>Typical severity</strong>: High</p>
+        <ol class="mt-2 space-y-2 text-sm text-slate-300 list-decimal list-inside mb-6">
+          <li><strong>Identify</strong>: Run <code class="text-forge-400">pforge regression-guard</code> to see which gates failed and their error output.</li>
+          <li><strong>Bisect</strong>: Use <code>git log</code> to find which commit broke the gate. The gate command output usually points at the exact file.</li>
+          <li><strong>Fix or update</strong>: If the code broke a valid gate, fix the code. If the gate is outdated (the feature was intentionally changed), update the gate command in the plan file.</li>
+          <li><strong>Verify</strong>: Re-run <code class="text-forge-400">pforge regression-guard --plan &lt;affected-plan&gt;</code> — all gates should pass.</li>
+        </ol>
+
+        <h3 id="runbook-dep">Dependency Vulnerability — New CVE in a Watched Package</h3>
+        <p class="text-sm text-slate-400 mb-2"><strong>Source</strong>: <code class="text-forge-400">forge_dep_watch</code> | <strong>Typical severity</strong>: Medium–Critical (depends on CVE severity)</p>
+        <ol class="mt-2 space-y-2 text-sm text-slate-300 list-decimal list-inside mb-6">
+          <li><strong>Assess</strong>: Run <code class="text-forge-400">pforge dep-watch</code> to see new vulnerabilities with their CVE IDs and severity.</li>
+          <li><strong>Check exploitability</strong>: Not all CVEs are exploitable in your context. Check if the vulnerable code path is reachable in your app.</li>
+          <li><strong>Update</strong>: <code>npm update &lt;package&gt;</code> or pin to a patched version. For transitive dependencies, use <code>npm audit fix</code>.</li>
+          <li><strong>If no patch exists</strong>: Evaluate alternatives, add a compensating control, or document the accepted risk with a timeline for re-evaluation.</li>
+          <li><strong>Verify</strong>: Re-run <code class="text-forge-400">pforge dep-watch</code> — the vulnerability should move from <code>newVulnerabilities</code> to <code>resolvedVulnerabilities</code>.</li>
+        </ol>
+
+        <h3 id="runbook-mttr">Incident MTTR Exceeded — Time-to-Resolve Beyond Threshold</h3>
+        <p class="text-sm text-slate-400 mb-2"><strong>Source</strong>: <code class="text-forge-400">forge_alert_triage</code> (via MTTR calculation) | <strong>Typical severity</strong>: High</p>
+        <ol class="mt-2 space-y-2 text-sm text-slate-300 list-decimal list-inside mb-6">
+          <li><strong>Review</strong>: Run <code class="text-forge-400">pforge incident list</code> to see open incidents and their MTTR.</li>
+          <li><strong>Escalate</strong>: If the incident has been open beyond the SLA for its severity level (see severity matrix above), escalate to the next tier defined in <code>onCall.escalation</code>.</li>
+          <li><strong>Root cause</strong>: Is the incident blocked on external factors? If so, document the blocker in the incident description.</li>
+          <li><strong>Close</strong>: Once resolved, update the incident status. MTTR is automatically calculated from capture time to close time.</li>
+        </ol>
 
         <h2 id="fix-proposal-workflow">Fix Proposal Workflow (v2.29)</h2>
         <p>When a LiveGuard tool fires a failure (regression, drift, incident, or secret found), <code>forge_fix_proposal</code> generates a scoped 1-2 slice fix plan for human review. This is the detect → propose → approve → fix loop.</p>

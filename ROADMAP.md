@@ -7,11 +7,11 @@
 
 ## Current Release
 
-**v2.22.0** (2026-04-10) — Quorum power/speed presets, `.forge/secrets.json` API key fallback, updated Grok model IDs and pricing, 3-provider quorum default, dashboard preset toggles.
+**v2.28.0** (2026-04-13) — LiveGuard II: `forge_secret_scan` (Shannon entropy analysis, sidecar annotations, redacted output), `forge_env_diff` (key-name-only comparison, env-diff-cache), 4 new REST endpoints, LiveGuard dashboard tabs (Health, Incidents, Triage, Security, Env), manual chapters 15–17 + Appendix F full content.
 
-> **In development**: LiveGuard I–III (v2.27–v2.29) — 13 post-coding intelligence tools, 22 REST endpoints, 3 lifecycle hooks, 5 dashboard tabs, OpenClaw analytics bridge.
+> **In development**: LiveGuard III (v2.29) — `forge_fix_proposal`, `forge_quorum_analyze`, 3 lifecycle hooks (PreDeploy, PostSlice, PreAgentHandoff), OpenClaw analytics bridge.
 
-Previous: v2.21.0 (2026-04-10) — Forge Anneal.
+Previous: v2.22.0 (2026-04-10) — Quorum power/speed presets, `.forge/secrets.json` API key fallback, updated Grok model IDs and pricing, 3-provider quorum default, dashboard preset toggles.
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 
@@ -86,25 +86,19 @@ Temper Guards (anti-shortcut tables) and Warning Signs (behavioral anti-patterns
 
 ---
 
+## Shipped (LiveGuard)
+
+### v2.27.0 — LiveGuard I: Post-Coding Intelligence ✅
+
+9 MCP tools for post-deploy monitoring, drift detection, incident tracking, and operational runbooks. 14 REST endpoints. `.forge.json` `onCall` field. Dashboard LIVEGUARD section.
+
+### v2.28.0 — LiveGuard II: Secret Scanning & Env Diff ✅
+
+`forge_secret_scan` (Shannon entropy, sidecar annotations, redacted output) and `forge_env_diff` (key-name-only comparison). 4 new REST endpoints. Manual chapters 15–17 + Appendix F fully written. Dashboard Security + Env tabs.
+
+---
+
 ## Planned
-
-### v2.27.0 — LiveGuard I: Post-Coding Intelligence
-
-> **In development** — 9 new MCP tools for post-deploy monitoring, drift detection, incident tracking, and operational runbooks.
-
-- **`forge_drift_report`** — score codebase against architecture guardrail rules; track drift over time in `.forge/drift-history.json`; fire bridge notification when score drops below threshold
-- **`forge_incident_capture`** — record incidents with severity, affected files, and MTTR tracking; dispatch on-call notification via `.forge.json` `onCall` config
-- **`forge_regression_guard`** — extract validation gate commands from plan files, execute against codebase, report pass/fail/blocked results
-- **`forge_runbook`** — generate human-readable operational runbook from a hardened plan file; optionally append recent incidents
-- **`forge_hotspot`** — identify git churn hotspots (most frequently changed files); 24h cache TTL; `--top N` and `--since` filters
-- **`forge_health_trend`** — aggregate drift scores, cost history, incident frequency, model performance over configurable time window; overall health score 0–100
-- **`forge_alert_triage`** — read incidents and drift violations, rank by priority (severity × recency), return prioritized list; read-only
-- **`forge_deploy_journal`** — record deployments with version, deployer, notes, slice reference; correlates with `forge_incident_capture`
-- **`forge_dep_watch`** — dependency vulnerability change detection (planned)
-- 14 new REST endpoints across drift, incident, regression, runbook, hotspot, health-trend, triage, deploy-journal
-- `.forge.json` `onCall` field for incident notification routing
-- Dashboard LIVEGUARD section: 🛡️ Health, Incidents, Triage tabs (v2.28 Slice 4)
-- Predecessor: v2.22.0
 
 ### v2.29.0 — LiveGuard III: Self-Healing Proposals, Hooks & OpenClaw Bridge
 
@@ -119,7 +113,7 @@ Temper Guards (anti-shortcut tables) and Warning Signs (behavioral anti-patterns
 - Hooks configurable via `.forge.json` `hooks.*` block; all config keys documented
 - Predecessor: v2.28.0 must ship first
 
-### v2.27.0–v2.28.0 — LiveGuard I & II (In Development)
+### LiveGuard Complements
 
 #### B1. Org Custom Instructions Generator (`pforge org-rules export`) ✅
 

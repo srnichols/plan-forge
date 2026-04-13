@@ -1,12 +1,12 @@
 # Plan Forge — Capabilities Reference
 
-> **Tools**: 28 MCP (19 core + 9 LiveGuard v2.27.0) + 4 LiveGuard planned (v2.28.0–v2.29.0) | **Presets**: 9 | **Agents**: 19 | **Skills**: 12
+> **Tools**: 30 MCP (19 core + 11 LiveGuard v2.27–v2.28) + 2 LiveGuard planned (v2.29.0) | **Presets**: 9 | **Agents**: 19 | **Skills**: 12
 >
 > Machine-readable version: call `forge_capabilities` MCP tool or `GET https://planforge.software/.well-known/plan-forge.json`
 
 ---
 
-## MCP Tools (28)
+## MCP Tools (30)
 
 | Tool | Intent | Cost | Description |
 |------|--------|------|-------------|
@@ -38,6 +38,8 @@
 | `forge_health_trend` | health | low | Aggregate drift, cost, incidents, model performance over time; health score 0–100 |
 | `forge_alert_triage` | triage-alerts | low | Read incidents and drift violations, rank by priority, return prioritized list |
 | `forge_deploy_journal` | record-deploy | low | Record deployments with version, deployer, notes; correlates with incident capture |
+| `forge_secret_scan` | secret-scan | low | High-entropy secret detection in diffs — values always redacted, findings masked before caching |
+| `forge_env_diff` | env-diff | low | Environment variable key divergence across `.env` files — keys only, values never read |
 
 ## Execution Modes
 
@@ -267,7 +269,7 @@ Standalone (no MCP client needed): `node pforge-mcp/server.mjs --dashboard-only`
 
 ## LiveGuard MCP Tools (9 shipped in v2.27.0; 4 planned in v2.28.0–v2.29.0)
 
-> Post-coding intelligence — watches gates after the forge ships. v2.27 tools are included in the 28-tool count above. All available as MCP tools and REST endpoints.
+> Post-coding intelligence — watches gates after the forge ships. v2.27–v2.28 tools are included in the 30-tool count above. All available as MCP tools and REST endpoints.
 
 | Tool | What It Guards | Since |
 |------|---------------|-------|

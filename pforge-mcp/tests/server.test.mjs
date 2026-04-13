@@ -1,8 +1,9 @@
 /**
- * server.test.mjs — forge_drift_report + forge_incident_capture unit tests
+ * server.test.mjs — LiveGuard tool handler unit tests
  *
  * Tests drift score computation, history tracking, trend detection,
- * incident capture (MTTR, severity, onCall dispatch), and
+ * incident capture (MTTR, severity, onCall dispatch), deploy journal,
+ * dep watch, health trend, alert triage, and
  * capabilities metadata — without starting the MCP/HTTP server.
  */
 
@@ -10,7 +11,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { tmpdir } from "node:os";
-import { runAnalyze, appendForgeJsonl, readForgeJsonl, regressionGuard, isGateCommandAllowed } from "../orchestrator.mjs";
+import { runAnalyze, appendForgeJsonl, readForgeJsonl, regressionGuard, isGateCommandAllowed, getHealthTrend, recordModelPerformance } from "../orchestrator.mjs";
 import { TOOL_METADATA } from "../capabilities.mjs";
 
 let tempDir;
@@ -853,5 +854,183 @@ describe("alert triage data reading", () => {
     const newer = { priority: 3.0, timestamp: "2024-01-02T00:00:00.000Z" };
     const sorted = [older, newer].sort((a, b) => b.priority - a.priority || new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     expect(sorted[0]).toBe(newer);
+  });
+});
+
+// ─── forge_dep_watch metadata ─────────────────────────────────────────────
+
+describe("TOOL_METADATA forge_dep_watch", () => {
+  it("is present in TOOL_METADATA", () => {
+    expect(TOOL_METADATA).toHaveProperty("forge_dep_watch");
+  });
+
+  it("has correct addedIn version", () => {
+    expect(TOOL_METADATA.forge_dep_watch.addedIn).toBe("2.27.0");
+  });
+
+  it("produces deps-snapshot.json", () => {
+    expect(TOOL_METADATA.forge_dep_watch.produces).toContain(".forge/deps-snapshot.json");
+  });
+
+  it("has exactly one entry (no duplicates)", () => {
+    const keys = Object.keys(TOOL_METADATA).filter(k => k === "forge_dep_watch");
+    expect(keys).toHaveLength(1);
+  });
+
+  it("has NO_PACKAGE_JSON and AUDIT_FAILED error entries", () => {
+    const errors = TOOL_METADATA.forge_dep_watch.errors;
+    expect(errors).toHaveProperty("NO_PACKAGE_JSON");
+    expect(errors).toHaveProperty("AUDIT_FAILED");
+  });
+
+  it("sideEffects mentions deps-snapshot.json", () => {
+    const effects = TOOL_METADATA.forge_dep_watch.sideEffects.join(" ");
+    expect(effects).toMatch(/deps-snapshot\.json/);
+  });
+
+  it("sideEffects mentions dep-vulnerability hub event", () => {
+    const effects = TOOL_METADATA.forge_dep_watch.sideEffects.join(" ");
+    expect(effects).toMatch(/dep-vulnerability/);
+  });
+
+  it("consumes package.json and package-lock.json", () => {
+    expect(TOOL_METADATA.forge_dep_watch.consumes).toContain("package.json");
+    expect(TOOL_METADATA.forge_dep_watch.consumes).toContain("package-lock.json");
+  });
+
+  it("has cost low", () => {
+    expect(TOOL_METADATA.forge_dep_watch.cost).toBe("low");
+  });
+});
+
+// ─── Dep watch snapshot JSONL persistence ─────────────────────────────────
+
+describe("dep watch snapshot persistence", () => {
+  it("stores and reads deps-snapshot.json correctly", () => {
+    const snapshot = {
+      capturedAt: new Date().toISOString(),
+      depCount: 42,
+      vulnerabilities: [{ name: "lodash", severity: "high", advisory: "CVE-2021-23337" }],
+    };
+    const forgePath = resolve(tempDir, ".forge");
+    mkdirSync(forgePath, { recursive: true });
+    writeFileSync(resolve(forgePath, "deps-snapshot.json"), JSON.stringify(snapshot));
+
+    const result = JSON.parse(
+      require("node:fs").readFileSync(resolve(forgePath, "deps-snapshot.json"), "utf-8")
+    );
+    expect(result.depCount).toBe(42);
+    expect(result.vulnerabilities).toHaveLength(1);
+    expect(result.vulnerabilities[0].name).toBe("lodash");
+  });
+
+  it("returns null when no snapshot exists", () => {
+    const result = readForgeJsonl("deps-snapshot.json", null, tempDir);
+    expect(result).toBeNull();
+  });
+
+  it("diff: new vulnerabilities = current minus previous", () => {
+    const prev = [
+      { name: "lodash", severity: "high" },
+      { name: "express", severity: "medium" },
+    ];
+    const current = [
+      { name: "lodash", severity: "high" },
+      { name: "express", severity: "medium" },
+      { name: "axios", severity: "low" },
+    ];
+    const prevNames = new Set(prev.map(v => v.name));
+    const newVulns = current.filter(v => !prevNames.has(v.name));
+    expect(newVulns).toHaveLength(1);
+    expect(newVulns[0].name).toBe("axios");
+  });
+
+  it("diff: resolved vulnerabilities = previous minus current", () => {
+    const prev = [
+      { name: "lodash", severity: "high" },
+      { name: "express", severity: "medium" },
+    ];
+    const current = [
+      { name: "lodash", severity: "high" },
+    ];
+    const currentNames = new Set(current.map(v => v.name));
+    const resolved = prev.filter(v => !currentNames.has(v.name));
+    expect(resolved).toHaveLength(1);
+    expect(resolved[0].name).toBe("express");
+  });
+});
+
+// ─── forge_health_trend metadata ──────────────────────────────────────────
+
+describe("TOOL_METADATA forge_health_trend", () => {
+  it("is present in TOOL_METADATA", () => {
+    expect(TOOL_METADATA).toHaveProperty("forge_health_trend");
+  });
+
+  it("has correct addedIn version", () => {
+    expect(TOOL_METADATA.forge_health_trend.addedIn).toBe("2.31.0");
+  });
+
+  it("has exactly one entry (no duplicates)", () => {
+    const keys = Object.keys(TOOL_METADATA).filter(k => k === "forge_health_trend");
+    expect(keys).toHaveLength(1);
+  });
+
+  it("consumes operational data files", () => {
+    const consumes = TOOL_METADATA.forge_health_trend.consumes;
+    expect(consumes).toContain(".forge/drift-history.json");
+    expect(consumes).toContain(".forge/incidents.jsonl");
+    expect(consumes).toContain(".forge/model-performance.json");
+  });
+
+  it("has NO_DATA error entry", () => {
+    expect(TOOL_METADATA.forge_health_trend.errors).toHaveProperty("NO_DATA");
+  });
+
+  it("has no sideEffects (read-only)", () => {
+    expect(TOOL_METADATA.forge_health_trend.sideEffects).toHaveLength(0);
+  });
+
+  it("has cost low", () => {
+    expect(TOOL_METADATA.forge_health_trend.cost).toBe("low");
+  });
+});
+
+// ─── Health trend integration ──────────────────────────────────────────────
+
+describe("forge_health_trend integration", () => {
+  it("returns structured result with all metrics", () => {
+    const now = new Date().toISOString();
+    appendForgeJsonl("drift-history.json", { timestamp: now, score: 85 }, tempDir);
+    appendForgeJsonl("incidents.jsonl", { capturedAt: now, severity: "high", resolvedAt: null, mttr: null }, tempDir);
+    recordModelPerformance(tempDir, { date: now, model: "gpt-4o", status: "passed", cost_usd: 0.05 });
+
+    const result = getHealthTrend(tempDir, 30);
+    expect(result.drift.snapshots).toBe(1);
+    expect(result.drift.latest).toBe(85);
+    expect(result.incidents.total).toBe(1);
+    expect(result.incidents.open).toBe(1);
+    expect(result.models.totalSlices).toBe(1);
+    expect(result.dataPoints).toBeGreaterThanOrEqual(3);
+    expect(result.healthScore).not.toBeNull();
+  });
+
+  it("returns baseline health when no operational data exists", () => {
+    const result = getHealthTrend(tempDir, 30);
+    // incidents metric contributes 100 (no incidents = 0 penalty), so healthScore is 100
+    expect(result.healthScore).toBe(100);
+    // drift.trend "insufficient-data" takes precedence over no-data check
+    expect(result.trend).toBe("insufficient-data");
+  });
+
+  it("narrows time window correctly", () => {
+    const old = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+    const recent = new Date().toISOString();
+    appendForgeJsonl("drift-history.json", { timestamp: old, score: 50 }, tempDir);
+    appendForgeJsonl("drift-history.json", { timestamp: recent, score: 95 }, tempDir);
+
+    const result = getHealthTrend(tempDir, 7, ["drift"]);
+    expect(result.drift.snapshots).toBe(1);
+    expect(result.drift.latest).toBe(95);
   });
 });

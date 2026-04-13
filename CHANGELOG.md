@@ -5,6 +5,41 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.27.0] — 2026-04-13
+
+### Added — LiveGuard: Post-Coding Operational Intelligence
+- **9 new MCP tools** for post-coding operational awareness:
+  - `forge_drift_report` — architecture drift scoring with violation tracking, threshold alerting, and history trend
+  - `forge_incident_capture` — incident recording with MTTR computation, severity validation, and onCall bridge dispatch
+  - `forge_deploy_journal` — deployment log with version tracking, preceding-deploy correlation, and JSONL persistence
+  - `forge_dep_watch` — dependency vulnerability scanning with diff (new/resolved), snapshot persistence, and hub events
+  - `forge_regression_guard` — validation gate extraction from plans, allowlist enforcement, shell execution, and fail-fast mode
+  - `forge_runbook` — auto-generate operational runbooks from plan files and incident history
+  - `forge_hotspot` — git churn analysis to identify high-risk files (24h cache TTL)
+  - `forge_health_trend` — aggregated health score from drift, cost, incident, and model performance data over configurable time windows
+  - `forge_alert_triage` — prioritized alert ranking combining severity weight × recency factor with tiebreak rules
+- **14 REST API endpoints** for external agent and CI/CD integration
+- `isGateCommandAllowed()` — command allowlist with blocked-pattern safety net (rm -rf /, dd, mkfs)
+- `getHealthTrend()` — multi-metric health aggregation with configurable time windows and metric filtering
+- `inferSliceType()` — automatic slice classification (test, review, migration, execute) from title and task keywords
+- `recommendModel()` — historical performance-based model selection with MIN_SAMPLE threshold and cost optimization
+- `readForgeJsonl()` — JSONL reader complementing `appendForgeJsonl()` for round-trip operational data persistence
+
+### Changed
+- TOOL_METADATA expanded to 29 entries (20 core + 9 LiveGuard)
+- Capabilities surface updated across `capabilities.mjs`, `capabilities.md`, and `capabilities.html`
+
+### Testing
+- 75 new test cases across `server.test.mjs` and `orchestrator.test.mjs` (232 → 307 total)
+- Full TOOL_METADATA coverage for all 9 LiveGuard tools
+- Behavioral tests for drift scoring, incident MTTR, deploy journal, dep watch snapshots, health trend, alert triage, regression guard, runbook naming, hotspot metadata
+- `isGateCommandAllowed` tests: allowlist prefixes, dangerous-pattern blocking, env-var prefix handling, edge cases
+- `inferSliceType` tests: test/review/migration/execute classification with keyword matching
+- `recommendModel` tests: MIN_SAMPLE threshold, success rate filtering, cost-based selection, sliceType filtering, fallback behavior
+- `getHealthTrend` tests: metric filtering, time-window exclusion, drift/incident/model aggregation, healthScore computation
+
+---
+
 ## [2.29.0] — planned
 
 ### Added

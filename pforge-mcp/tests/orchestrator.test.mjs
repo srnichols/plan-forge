@@ -7,11 +7,18 @@ import {
   ensureForgeDir,
   readForgeJson,
   appendForgeJsonl,
+  readForgeJsonl,
   parseValidationGates,
   lintGateCommands,
   GATE_ALLOWED_PREFIXES,
+  isGateCommandAllowed,
   emitToolTelemetry,
   runAnalyze,
+  getHealthTrend,
+  inferSliceType,
+  recommendModel,
+  loadModelPerformance,
+  recordModelPerformance,
 } from "../orchestrator.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -408,5 +415,355 @@ describe("runAnalyze", () => {
 
     const result = await runAnalyze({ path: ".", cwd: tempDir });
     expect(result.violations).toEqual([]);
+  });
+});
+
+// ─── readForgeJsonl ──────────────────────────────────────────────────
+
+describe("readForgeJsonl", () => {
+  it("returns defaultValue when file does not exist", () => {
+    const result = readForgeJsonl("nonexistent.jsonl", [], tempDir);
+    expect(result).toEqual([]);
+  });
+
+  it("returns custom default for missing file", () => {
+    const result = readForgeJsonl("missing.jsonl", [{ fallback: true }], tempDir);
+    expect(result).toEqual([{ fallback: true }]);
+  });
+
+  it("reads single-line JSONL correctly", () => {
+    appendForgeJsonl("single.jsonl", { key: "value" }, tempDir);
+    const result = readForgeJsonl("single.jsonl", [], tempDir);
+    expect(result).toHaveLength(1);
+    expect(result[0].key).toBe("value");
+  });
+
+  it("reads multi-line JSONL correctly", () => {
+    appendForgeJsonl("multi.jsonl", { n: 1 }, tempDir);
+    appendForgeJsonl("multi.jsonl", { n: 2 }, tempDir);
+    appendForgeJsonl("multi.jsonl", { n: 3 }, tempDir);
+    const result = readForgeJsonl("multi.jsonl", [], tempDir);
+    expect(result).toHaveLength(3);
+    expect(result.map(r => r.n)).toEqual([1, 2, 3]);
+  });
+
+  it("returns defaultValue for corrupt JSONL", () => {
+    const forgePath = resolve(tempDir, ".forge");
+    mkdirSync(forgePath, { recursive: true });
+    writeFileSync(resolve(forgePath, "bad.jsonl"), "not json{{{");
+    const result = readForgeJsonl("bad.jsonl", [], tempDir);
+    expect(result).toEqual([]);
+  });
+
+  it("skips blank lines in JSONL", () => {
+    const forgePath = resolve(tempDir, ".forge");
+    mkdirSync(forgePath, { recursive: true });
+    writeFileSync(resolve(forgePath, "blanks.jsonl"), '{"a":1}\n\n{"b":2}\n\n');
+    const result = readForgeJsonl("blanks.jsonl", [], tempDir);
+    expect(result).toHaveLength(2);
+    expect(result[0].a).toBe(1);
+    expect(result[1].b).toBe(2);
+  });
+});
+
+// ─── isGateCommandAllowed ────────────────────────────────────────────
+
+describe("isGateCommandAllowed", () => {
+  it("allows npm test", () => {
+    expect(isGateCommandAllowed("npm test")).toBe(true);
+  });
+
+  it("allows node -e command", () => {
+    expect(isGateCommandAllowed('node -e "console.log(1)"')).toBe(true);
+  });
+
+  it("allows dotnet test", () => {
+    expect(isGateCommandAllowed("dotnet test")).toBe(true);
+  });
+
+  it("allows npx vitest run", () => {
+    expect(isGateCommandAllowed("npx vitest run")).toBe(true);
+  });
+
+  it("allows cd followed by command", () => {
+    expect(isGateCommandAllowed("cd pforge-mcp")).toBe(true);
+  });
+
+  it("allows curl localhost", () => {
+    expect(isGateCommandAllowed("curl http://localhost:3100/api/test")).toBe(true);
+  });
+
+  it("allows env-var prefix (NODE_ENV=test npm test)", () => {
+    expect(isGateCommandAllowed("NODE_ENV=test npm test")).toBe(true);
+  });
+
+  it("allows git commands", () => {
+    expect(isGateCommandAllowed("git status")).toBe(true);
+  });
+
+  it("allows cat command", () => {
+    expect(isGateCommandAllowed("cat VERSION")).toBe(true);
+  });
+
+  it("allows python command", () => {
+    expect(isGateCommandAllowed("python -m pytest")).toBe(true);
+  });
+
+  it("blocks rm -rf /", () => {
+    expect(isGateCommandAllowed("rm -rf /")).toBe(false);
+  });
+
+  it("blocks rm -fr ~", () => {
+    expect(isGateCommandAllowed("rm -fr ~")).toBe(false);
+  });
+
+  it("blocks dd to block device", () => {
+    expect(isGateCommandAllowed("dd if=/dev/zero of=/dev/sda")).toBe(false);
+  });
+
+  it("blocks mkfs", () => {
+    expect(isGateCommandAllowed("mkfs.ext4 /dev/sda1")).toBe(false);
+  });
+
+  it("blocks wget (not in allowlist)", () => {
+    expect(isGateCommandAllowed("wget http://example.com")).toBe(false);
+  });
+
+  it("returns false for empty string", () => {
+    expect(isGateCommandAllowed("")).toBe(false);
+  });
+
+  it("returns false for null/undefined", () => {
+    expect(isGateCommandAllowed(null)).toBe(false);
+    expect(isGateCommandAllowed(undefined)).toBe(false);
+  });
+
+  it("GATE_ALLOWED_PREFIXES contains all expected entries", () => {
+    const expected = ["node", "npm", "npx", "curl", "cd", "git", "cat", "dotnet", "python", "go"];
+    for (const prefix of expected) {
+      expect(GATE_ALLOWED_PREFIXES).toContain(prefix);
+    }
+  });
+});
+
+// ─── inferSliceType ──────────────────────────────────────────────────
+
+describe("inferSliceType", () => {
+  it("returns 'test' for slice with test tasks", () => {
+    expect(inferSliceType({ title: "Add unit test for login", tasks: [] })).toBe("test");
+  });
+
+  it("returns 'test' for slice with spec in title", () => {
+    expect(inferSliceType({ title: "Write spec for login", tasks: [] })).toBe("test");
+  });
+
+  it("returns 'test' for slice with e2e in tasks", () => {
+    expect(inferSliceType({ title: "Slice 3", tasks: ["Run e2e suite"] })).toBe("test");
+  });
+
+  it("returns 'test' for coverage task", () => {
+    expect(inferSliceType({ title: "Check coverage", tasks: [] })).toBe("test");
+  });
+
+  it("returns 'review' for audit tasks", () => {
+    expect(inferSliceType({ title: "Security audit", tasks: [] })).toBe("review");
+  });
+
+  it("returns 'review' for lint tasks", () => {
+    expect(inferSliceType({ title: "Run lint checks", tasks: [] })).toBe("review");
+  });
+
+  it("returns 'review' for analyze task", () => {
+    expect(inferSliceType({ title: "Analyze code quality", tasks: [] })).toBe("review");
+  });
+
+  it("returns 'migration' for schema changes", () => {
+    expect(inferSliceType({ title: "Database migration", tasks: [] })).toBe("migration");
+  });
+
+  it("returns 'migration' for create table tasks", () => {
+    expect(inferSliceType({ title: "Build feature", tasks: ["Create table users"] })).toBe("migration");
+  });
+
+  it("returns 'migration' for EF Core tasks", () => {
+    expect(inferSliceType({ title: "Setup DbContext", tasks: ["Add EF Core migration"] })).toBe("migration");
+  });
+
+  it("returns 'execute' for generic slices", () => {
+    expect(inferSliceType({ title: "Implement API endpoints", tasks: ["Build REST routes"] })).toBe("execute");
+  });
+
+  it("returns 'execute' when title and tasks are empty", () => {
+    expect(inferSliceType({ title: "", tasks: [] })).toBe("execute");
+  });
+
+  it("handles missing fields gracefully", () => {
+    expect(inferSliceType({})).toBe("execute");
+    expect(inferSliceType({ title: null })).toBe("execute");
+  });
+});
+
+// ─── getHealthTrend ──────────────────────────────────────────────────
+
+describe("getHealthTrend", () => {
+  it("returns result with no data when .forge directory is empty", () => {
+    const result = getHealthTrend(tempDir, 30);
+    expect(result).toHaveProperty("days", 30);
+    expect(result).toHaveProperty("metricsIncluded");
+    expect(result).toHaveProperty("generatedAt");
+    expect(result).toHaveProperty("dataPoints", 0);
+    // drift.trend is "insufficient-data" with 0 snapshots; that takes precedence
+    expect(result.trend).toBe("insufficient-data");
+    // incidents metric contributes 100 (no incidents = no penalty), so healthScore is not null
+    expect(typeof result.healthScore).toBe("number");
+  });
+
+  it("includes all 4 metrics by default", () => {
+    const result = getHealthTrend(tempDir, 30);
+    expect(result.metricsIncluded).toEqual(["drift", "cost", "incidents", "models"]);
+  });
+
+  it("filters to requested metrics only", () => {
+    const result = getHealthTrend(tempDir, 30, ["drift"]);
+    expect(result.metricsIncluded).toEqual(["drift"]);
+    expect(result).toHaveProperty("drift");
+    expect(result).not.toHaveProperty("cost");
+    expect(result).not.toHaveProperty("incidents");
+  });
+
+  it("ignores unknown metric names", () => {
+    const result = getHealthTrend(tempDir, 30, ["drift", "nonexistent"]);
+    expect(result.metricsIncluded).toEqual(["drift"]);
+  });
+
+  it("computes drift stats from drift-history.json", () => {
+    const now = new Date().toISOString();
+    appendForgeJsonl("drift-history.json", { timestamp: now, score: 90, violations: [], filesScanned: 10 }, tempDir);
+    appendForgeJsonl("drift-history.json", { timestamp: now, score: 80, violations: [], filesScanned: 10 }, tempDir);
+
+    const result = getHealthTrend(tempDir, 30, ["drift"]);
+    expect(result.drift.snapshots).toBe(2);
+    expect(result.drift.latest).toBe(80);
+    expect(result.drift.avg).toBe(85);
+    expect(result.drift.min).toBe(80);
+    expect(result.drift.max).toBe(90);
+    expect(result.dataPoints).toBe(2);
+  });
+
+  it("excludes drift records outside the time window", () => {
+    const old = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString(); // 60 days ago
+    const recent = new Date().toISOString();
+    appendForgeJsonl("drift-history.json", { timestamp: old, score: 50 }, tempDir);
+    appendForgeJsonl("drift-history.json", { timestamp: recent, score: 90 }, tempDir);
+
+    const result = getHealthTrend(tempDir, 30, ["drift"]);
+    expect(result.drift.snapshots).toBe(1);
+    expect(result.drift.latest).toBe(90);
+  });
+
+  it("computes incident stats from incidents.jsonl", () => {
+    const now = new Date().toISOString();
+    appendForgeJsonl("incidents.jsonl", { capturedAt: now, severity: "high", resolvedAt: now, mttr: 60000 }, tempDir);
+    appendForgeJsonl("incidents.jsonl", { capturedAt: now, severity: "low", resolvedAt: null, mttr: null }, tempDir);
+
+    const result = getHealthTrend(tempDir, 30, ["incidents"]);
+    expect(result.incidents.total).toBe(2);
+    expect(result.incidents.resolved).toBe(1);
+    expect(result.incidents.open).toBe(1);
+    expect(result.incidents.avgMttrMs).toBe(60000);
+    expect(result.incidents.bySeverity.high).toBe(1);
+    expect(result.incidents.bySeverity.low).toBe(1);
+  });
+
+  it("computes model stats from model-performance.json", () => {
+    const now = new Date().toISOString();
+    recordModelPerformance(tempDir, { date: now, model: "gpt-4o", status: "passed", cost_usd: 0.05 });
+    recordModelPerformance(tempDir, { date: now, model: "gpt-4o", status: "passed", cost_usd: 0.03 });
+    recordModelPerformance(tempDir, { date: now, model: "claude-sonnet", status: "failed", cost_usd: 0.10 });
+
+    const result = getHealthTrend(tempDir, 30, ["models"]);
+    expect(result.models.totalSlices).toBe(3);
+    expect(result.models.byModel["gpt-4o"].slices).toBe(2);
+    expect(result.models.byModel["gpt-4o"].successRate).toBe(1);
+    expect(result.models.byModel["claude-sonnet"].slices).toBe(1);
+  });
+
+  it("computes healthScore as average of component scores", () => {
+    const now = new Date().toISOString();
+    appendForgeJsonl("drift-history.json", { timestamp: now, score: 80 }, tempDir);
+
+    const result = getHealthTrend(tempDir, 30, ["drift"]);
+    expect(result.healthScore).toBe(80);
+  });
+});
+
+// ─── recommendModel ──────────────────────────────────────────────────
+
+describe("recommendModel", () => {
+  it("returns null when no performance data exists", () => {
+    expect(recommendModel(tempDir)).toBeNull();
+  });
+
+  it("returns null when all models have fewer than 3 records", () => {
+    recordModelPerformance(tempDir, { date: new Date().toISOString(), model: "gpt-4o", status: "passed", cost_usd: 0.05 });
+    recordModelPerformance(tempDir, { date: new Date().toISOString(), model: "gpt-4o", status: "passed", cost_usd: 0.05 });
+    expect(recommendModel(tempDir)).toBeNull();
+  });
+
+  it("returns the cheapest qualifying model", () => {
+    const date = new Date().toISOString();
+    // Model A: 4 slices, 100% pass, avg $0.10
+    for (let i = 0; i < 4; i++) {
+      recordModelPerformance(tempDir, { date, model: "cheap-model", status: "passed", cost_usd: 0.10 });
+    }
+    // Model B: 4 slices, 100% pass, avg $0.50
+    for (let i = 0; i < 4; i++) {
+      recordModelPerformance(tempDir, { date, model: "expensive-model", status: "passed", cost_usd: 0.50 });
+    }
+
+    const rec = recommendModel(tempDir);
+    expect(rec).not.toBeNull();
+    expect(rec.model).toBe("cheap-model");
+    expect(rec.success_rate).toBeGreaterThan(0.8);
+  });
+
+  it("excludes models with success rate <= 80%", () => {
+    const date = new Date().toISOString();
+    // Model: 5 slices, 2 passed (40% success) — should NOT qualify
+    for (let i = 0; i < 5; i++) {
+      recordModelPerformance(tempDir, { date, model: "bad-model", status: i < 2 ? "passed" : "failed", cost_usd: 0.01 });
+    }
+
+    expect(recommendModel(tempDir)).toBeNull();
+  });
+
+  it("filters by sliceType when provided", () => {
+    const date = new Date().toISOString();
+    // "test" slices: model-a has 4 records
+    for (let i = 0; i < 4; i++) {
+      recordModelPerformance(tempDir, { date, model: "model-a", sliceType: "test", status: "passed", cost_usd: 0.02 });
+    }
+    // "execute" slices: model-b has 4 records
+    for (let i = 0; i < 4; i++) {
+      recordModelPerformance(tempDir, { date, model: "model-b", sliceType: "execute", status: "passed", cost_usd: 0.08 });
+    }
+
+    const recTest = recommendModel(tempDir, "test");
+    expect(recTest).not.toBeNull();
+    expect(recTest.model).toBe("model-a");
+  });
+
+  it("falls back to all records when type-specific data is insufficient", () => {
+    const date = new Date().toISOString();
+    // Only 1 test record — fewer than MIN_SAMPLE of 3
+    recordModelPerformance(tempDir, { date, model: "model-a", sliceType: "test", status: "passed", cost_usd: 0.02 });
+    // 3 execute records for the same model
+    for (let i = 0; i < 3; i++) {
+      recordModelPerformance(tempDir, { date, model: "model-a", sliceType: "execute", status: "passed", cost_usd: 0.02 });
+    }
+
+    const rec = recommendModel(tempDir, "test");
+    expect(rec).not.toBeNull();
+    expect(rec.model).toBe("model-a");
   });
 });

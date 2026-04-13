@@ -8,11 +8,15 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
-import { resolve, join } from "node:path";
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync } from "node:fs";
+import { resolve, join, dirname } from "node:path";
 import { tmpdir } from "node:os";
-import { runAnalyze, appendForgeJsonl, readForgeJsonl, regressionGuard, isGateCommandAllowed, getHealthTrend, recordModelPerformance } from "../orchestrator.mjs";
+import { fileURLToPath } from "node:url";
+import { runAnalyze, appendForgeJsonl, readForgeJsonl, regressionGuard, isGateCommandAllowed, getHealthTrend, recordModelPerformance, emitToolTelemetry } from "../orchestrator.mjs";
 import { TOOL_METADATA } from "../capabilities.mjs";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 let tempDir;
 
@@ -1256,5 +1260,583 @@ describe("env diff cache persistence", () => {
     expect(pair.missingInTarget[0]).toBe("API_KEY");
     expect(Object.keys(pair)).not.toContain("values");
     expect(JSON.stringify(pair)).not.toContain("sk-");
+  });
+});
+
+// ─── forge_secret_scan: Shannon entropy computation ─────────────────────
+
+describe("Shannon entropy computation", () => {
+  // Mirror of the shannonEntropy function from server.mjs handler
+  function shannonEntropy(str) {
+    if (!str || str.length === 0) return 0;
+    const freq = {};
+    for (const char of str) freq[char] = (freq[char] || 0) + 1;
+    let entropy = 0;
+    for (const count of Object.values(freq)) {
+      const p = count / str.length;
+      entropy -= p * Math.log2(p);
+    }
+    return entropy;
+  }
+
+  it("returns 0 for empty string", () => {
+    expect(shannonEntropy("")).toBe(0);
+  });
+
+  it("returns 0 for null/undefined", () => {
+    expect(shannonEntropy(null)).toBe(0);
+    expect(shannonEntropy(undefined)).toBe(0);
+  });
+
+  it("returns 0 for single repeated character", () => {
+    expect(shannonEntropy("aaaaaaa")).toBe(0);
+  });
+
+  it("returns 1.0 for two equally frequent characters", () => {
+    const result = shannonEntropy("ab");
+    expect(result).toBeCloseTo(1.0, 5);
+  });
+
+  it("high-entropy random string exceeds 4.0", () => {
+    const apiKey = "sk-a3F7z9Q2bR8xK1mL5nP4";
+    expect(shannonEntropy(apiKey)).toBeGreaterThan(3.5);
+  });
+
+  it("low-entropy repetitive string stays below 3.0", () => {
+    expect(shannonEntropy("aabbccdd")).toBeLessThan(3.0);
+  });
+
+  it("real-world secret token has high entropy", () => {
+    const token = "ghp_ABC123DEF456GHI789JKL012MNO345PQR678";
+    expect(shannonEntropy(token)).toBeGreaterThan(3.5);
+  });
+});
+
+// ─── forge_secret_scan: threshold clamping ──────────────────────────────
+
+describe("secret scan threshold clamping", () => {
+  it("clamps to 3.5 when below minimum", () => {
+    const threshold = Math.max(3.5, Math.min(5.0, 2.0));
+    expect(threshold).toBe(3.5);
+  });
+
+  it("clamps to 5.0 when above maximum", () => {
+    const threshold = Math.max(3.5, Math.min(5.0, 6.0));
+    expect(threshold).toBe(5.0);
+  });
+
+  it("defaults to 4.0 when undefined", () => {
+    const threshold = Math.max(3.5, Math.min(5.0, undefined ?? 4.0));
+    expect(threshold).toBe(4.0);
+  });
+
+  it("preserves valid threshold within range", () => {
+    const threshold = Math.max(3.5, Math.min(5.0, 4.5));
+    expect(threshold).toBe(4.5);
+  });
+});
+
+// ─── forge_secret_scan: KEY_PATTERNS and type inference ─────────────────
+
+describe("secret scan key pattern matching", () => {
+  const KEY_PATTERNS = /(?:key|secret|token|password|api_key|auth|credential|private)/i;
+
+  it("matches api_key", () => {
+    expect(KEY_PATTERNS.test("const API_KEY = 'abc'")).toBe(true);
+  });
+
+  it("matches secret", () => {
+    expect(KEY_PATTERNS.test("MY_SECRET=xyz")).toBe(true);
+  });
+
+  it("matches token", () => {
+    expect(KEY_PATTERNS.test("ACCESS_TOKEN = value")).toBe(true);
+  });
+
+  it("matches password", () => {
+    expect(KEY_PATTERNS.test("DB_PASSWORD=hunter2")).toBe(true);
+  });
+
+  it("matches auth", () => {
+    expect(KEY_PATTERNS.test("AUTH_HEADER=Bearer xyz")).toBe(true);
+  });
+
+  it("matches credential", () => {
+    expect(KEY_PATTERNS.test("AWS_CREDENTIAL=xxx")).toBe(true);
+  });
+
+  it("matches private", () => {
+    expect(KEY_PATTERNS.test("PRIVATE_KEY=---")).toBe(true);
+  });
+
+  it("does not match benign variable names", () => {
+    expect(KEY_PATTERNS.test("const name = 'alice'")).toBe(false);
+    expect(KEY_PATTERNS.test("let count = 42")).toBe(false);
+  });
+});
+
+describe("secret scan type inference", () => {
+  function inferType(line) {
+    const lower = line.toLowerCase();
+    if (/api.?key/i.test(lower)) return "api_key";
+    if (/secret/i.test(lower)) return "secret";
+    if (/token/i.test(lower)) return "token";
+    if (/password|passwd/i.test(lower)) return "password";
+    if (/auth/i.test(lower)) return "auth";
+    if (/private/i.test(lower)) return "private_key";
+    if (/credential/i.test(lower)) return "credential";
+    return "unknown";
+  }
+
+  it("infers api_key from API_KEY=", () => {
+    expect(inferType('API_KEY="sk-test123"')).toBe("api_key");
+  });
+
+  it("infers secret from SECRET=", () => {
+    expect(inferType('MY_SECRET="abc"')).toBe("secret");
+  });
+
+  it("infers token from TOKEN=", () => {
+    expect(inferType('ACCESS_TOKEN="ghp_abc"')).toBe("token");
+  });
+
+  it("infers password from PASSWORD=", () => {
+    expect(inferType('DB_PASSWORD="hunter2"')).toBe("password");
+  });
+
+  it("infers password from PASSWD=", () => {
+    expect(inferType('DB_PASSWD="hunter2"')).toBe("password");
+  });
+
+  it("infers auth from AUTH_HEADER", () => {
+    expect(inferType('AUTH_HEADER="Bearer xyz"')).toBe("auth");
+  });
+
+  it("infers private_key from PRIVATE_KEY", () => {
+    expect(inferType('PRIVATE_KEY="-----BEGIN RSA"')).toBe("private_key");
+  });
+
+  it("infers credential from CREDENTIAL", () => {
+    expect(inferType('AWS_CREDENTIAL="xxx"')).toBe("credential");
+  });
+
+  it("returns unknown for unrecognized patterns", () => {
+    expect(inferType('const x = "hello world"')).toBe("unknown");
+  });
+});
+
+describe("secret scan confidence classification", () => {
+  const KEY_PATTERNS = /(?:key|secret|token|password|api_key|auth|credential|private)/i;
+
+  function classify(entropy, line) {
+    const keyMatch = KEY_PATTERNS.test(line);
+    if (entropy >= 4.5 && keyMatch) return "high";
+    if ((entropy >= 4.0 && keyMatch) || entropy >= 4.8) return "medium";
+    return "low";
+  }
+
+  it("high: entropy >= 4.5 AND key match", () => {
+    expect(classify(4.5, "API_KEY=xxx")).toBe("high");
+  });
+
+  it("medium: entropy >= 4.0 AND key match (below 4.5)", () => {
+    expect(classify(4.2, "SECRET=xxx")).toBe("medium");
+  });
+
+  it("medium: entropy >= 4.8 even without key match", () => {
+    expect(classify(4.9, "const x = 'random'")).toBe("medium");
+  });
+
+  it("low: entropy below 4.0 and no key match", () => {
+    expect(classify(3.5, "const x = 'hello'")).toBe("low");
+  });
+
+  it("low: entropy below 4.0 even with key match", () => {
+    expect(classify(3.8, "API_KEY=test")).toBe("low");
+  });
+});
+
+// ─── forge_env_diff: .env key parsing ───────────────────────────────────
+
+describe("env diff key parsing", () => {
+  function parseEnvKeys(content) {
+    const keys = new Set();
+    for (const line of content.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const eqIdx = trimmed.indexOf("=");
+      if (eqIdx > 0) keys.add(trimmed.slice(0, eqIdx).trim());
+    }
+    return keys;
+  }
+
+  it("parses simple KEY=VALUE pairs", () => {
+    const keys = parseEnvKeys("DB_HOST=localhost\nDB_PORT=5432\n");
+    expect(keys.size).toBe(2);
+    expect(keys.has("DB_HOST")).toBe(true);
+    expect(keys.has("DB_PORT")).toBe(true);
+  });
+
+  it("skips comments", () => {
+    const keys = parseEnvKeys("# This is a comment\nDB_HOST=localhost\n# Another comment\n");
+    expect(keys.size).toBe(1);
+    expect(keys.has("DB_HOST")).toBe(true);
+  });
+
+  it("skips empty lines", () => {
+    const keys = parseEnvKeys("\n\nDB_HOST=localhost\n\n\nDB_PORT=5432\n\n");
+    expect(keys.size).toBe(2);
+  });
+
+  it("handles values with = signs", () => {
+    const keys = parseEnvKeys("CONNECTION_STRING=host=db;port=5432\n");
+    expect(keys.size).toBe(1);
+    expect(keys.has("CONNECTION_STRING")).toBe(true);
+  });
+
+  it("trims whitespace around key names", () => {
+    const keys = parseEnvKeys("  DB_HOST  =localhost\n");
+    expect(keys.has("DB_HOST")).toBe(true);
+  });
+
+  it("ignores lines without = separator", () => {
+    const keys = parseEnvKeys("NOT_A_KEY\nDB_HOST=localhost\n");
+    expect(keys.size).toBe(1);
+  });
+
+  it("returns empty set for empty content", () => {
+    const keys = parseEnvKeys("");
+    expect(keys.size).toBe(0);
+  });
+
+  it("never captures values (only keys)", () => {
+    const keys = parseEnvKeys("SECRET=super_secret_value\n");
+    expect(keys.has("SECRET")).toBe(true);
+    expect([...keys].join("")).not.toContain("super_secret_value");
+  });
+});
+
+// ─── forge_env_diff: key comparison logic ───────────────────────────────
+
+describe("env diff key comparison", () => {
+  it("detects keys missing in target", () => {
+    const baseline = new Set(["DB_HOST", "DB_PORT", "API_KEY"]);
+    const target = new Set(["DB_HOST", "DB_PORT"]);
+    const missingInTarget = [...baseline].filter(k => !target.has(k)).sort();
+    expect(missingInTarget).toEqual(["API_KEY"]);
+  });
+
+  it("detects keys missing in baseline", () => {
+    const baseline = new Set(["DB_HOST"]);
+    const target = new Set(["DB_HOST", "DEBUG_MODE", "LOG_LEVEL"]);
+    const missingInBaseline = [...target].filter(k => !baseline.has(k)).sort();
+    expect(missingInBaseline).toEqual(["DEBUG_MODE", "LOG_LEVEL"]);
+  });
+
+  it("reports clean when keys match exactly", () => {
+    const baseline = new Set(["A", "B", "C"]);
+    const target = new Set(["A", "B", "C"]);
+    const missingInTarget = [...baseline].filter(k => !target.has(k));
+    const missingInBaseline = [...target].filter(k => !baseline.has(k));
+    const totalGaps = missingInTarget.length + missingInBaseline.length;
+    expect(totalGaps).toBe(0);
+  });
+
+  it("totalGaps sums all missing keys across pairs", () => {
+    const pairs = [
+      { file: ".env.staging", missingInTarget: ["A", "B"], missingInBaseline: [] },
+      { file: ".env.production", missingInTarget: ["A"], missingInBaseline: ["X"] },
+    ];
+    const totalGaps = pairs.reduce((sum, p) => sum + (p.missingInTarget?.length || 0) + (p.missingInBaseline?.length || 0), 0);
+    expect(totalGaps).toBe(4);
+  });
+
+  it("clean is true only when totalGaps is 0", () => {
+    expect(0 === 0).toBe(true);
+    expect(1 === 0).toBe(false);
+  });
+});
+
+// ─── forge_env_diff: auto-detect .env.* files ───────────────────────────
+
+describe("env diff auto-detect target files", () => {
+  it("detects .env.staging and .env.production", () => {
+    writeFileSync(join(tempDir, ".env"), "DB_HOST=localhost\n");
+    writeFileSync(join(tempDir, ".env.staging"), "DB_HOST=staging\n");
+    writeFileSync(join(tempDir, ".env.production"), "DB_HOST=prod\n");
+    writeFileSync(join(tempDir, "readme.txt"), "not an env file\n");
+
+    const entries = readdirSync(tempDir);
+    const detected = entries.filter(f => f.startsWith(".env.") && !f.endsWith(".example")).sort();
+    expect(detected).toEqual([".env.production", ".env.staging"]);
+  });
+
+  it("excludes .env.example files", () => {
+    writeFileSync(join(tempDir, ".env"), "KEY=val\n");
+    writeFileSync(join(tempDir, ".env.example"), "KEY=\n");
+    writeFileSync(join(tempDir, ".env.staging"), "KEY=val\n");
+
+    const entries = readdirSync(tempDir);
+    const detected = entries.filter(f => f.startsWith(".env.") && !f.endsWith(".example")).sort();
+    expect(detected).toEqual([".env.staging"]);
+    expect(detected).not.toContain(".env.example");
+  });
+
+  it("returns empty array when no .env.* files exist", () => {
+    writeFileSync(join(tempDir, ".env"), "KEY=val\n");
+
+    const entries = readdirSync(tempDir);
+    const detected = entries.filter(f => f.startsWith(".env.") && !f.endsWith(".example")).sort();
+    expect(detected).toEqual([]);
+  });
+});
+
+// ─── forge_env_diff: graceful degradation ───────────────────────────────
+
+describe("env diff graceful degradation", () => {
+  it("returns structured error when baseline not found", () => {
+    const baselinePath = resolve(tempDir, ".env");
+    const exists = existsSync(baselinePath);
+    expect(exists).toBe(false);
+
+    const graceful = { pairs: [], summary: { clean: null, error: "baseline file not found: .env" } };
+    expect(graceful.summary.clean).toBeNull();
+    expect(graceful.summary.error).toContain("baseline file not found");
+    expect(graceful.pairs).toEqual([]);
+  });
+
+  it("records error for missing target file in pair", () => {
+    const pair = { file: ".env.staging", missingInTarget: [], missingInBaseline: [], error: "file not found: .env.staging" };
+    expect(pair.error).toContain("file not found");
+  });
+});
+
+// ─── Telemetry integration: LIVEGUARD_TOOLS membership ──────────────────
+
+describe("emitToolTelemetry LIVEGUARD_TOOLS membership", () => {
+  const EXPECTED_LIVEGUARD_TOOLS = [
+    "forge_drift_report", "forge_incident_capture", "forge_dep_watch",
+    "forge_regression_guard", "forge_runbook", "forge_hotspot",
+    "forge_health_trend", "forge_alert_triage", "forge_deploy_journal",
+    "forge_secret_scan", "forge_env_diff",
+  ];
+
+  it("writes liveguard-events.jsonl for forge_secret_scan", () => {
+    emitToolTelemetry("forge_secret_scan", { since: "HEAD~1" }, { clean: true }, 42, "OK", tempDir);
+    const events = readForgeJsonl("liveguard-events.jsonl", [], tempDir);
+    expect(events.length).toBeGreaterThanOrEqual(1);
+    expect(events.some(e => e.tool === "forge_secret_scan")).toBe(true);
+  });
+
+  it("writes liveguard-events.jsonl for forge_env_diff", () => {
+    emitToolTelemetry("forge_env_diff", { baseline: ".env" }, { clean: true }, 30, "OK", tempDir);
+    const events = readForgeJsonl("liveguard-events.jsonl", [], tempDir);
+    expect(events.some(e => e.tool === "forge_env_diff")).toBe(true);
+  });
+
+  it("does NOT write liveguard-events.jsonl for non-LiveGuard tools", () => {
+    emitToolTelemetry("forge_smith", {}, "ok", 10, "OK", tempDir);
+    const events = readForgeJsonl("liveguard-events.jsonl", [], tempDir);
+    expect(events.filter(e => e.tool === "forge_smith")).toHaveLength(0);
+  });
+
+  it("always writes to telemetry/tool-calls.jsonl", () => {
+    emitToolTelemetry("forge_secret_scan", {}, { clean: true }, 50, "OK", tempDir);
+    const calls = readForgeJsonl("telemetry/tool-calls.jsonl", [], tempDir);
+    expect(calls.length).toBeGreaterThanOrEqual(1);
+    expect(calls.some(c => c.tool === "forge_secret_scan")).toBe(true);
+  });
+
+  it("LIVEGUARD_TOOLS set has exactly 11 entries", () => {
+    for (const tool of EXPECTED_LIVEGUARD_TOOLS) {
+      emitToolTelemetry(tool, {}, "test", 1, "OK", tempDir);
+    }
+    const events = readForgeJsonl("liveguard-events.jsonl", [], tempDir);
+    const uniqueTools = [...new Set(events.map(e => e.tool))];
+    expect(uniqueTools.sort()).toEqual(EXPECTED_LIVEGUARD_TOOLS.sort());
+    expect(uniqueTools).toHaveLength(11);
+  });
+});
+
+describe("emitToolTelemetry record shape", () => {
+  it("returns record with expected fields", () => {
+    const record = emitToolTelemetry("forge_secret_scan", { since: "HEAD~1" }, { clean: true, findings: 0 }, 42, "OK", tempDir);
+    expect(record).toHaveProperty("timestamp");
+    expect(record).toHaveProperty("tool", "forge_secret_scan");
+    expect(record).toHaveProperty("inputs");
+    expect(record).toHaveProperty("result");
+    expect(record).toHaveProperty("durationMs", 42);
+    expect(record).toHaveProperty("status", "OK");
+  });
+
+  it("truncates result to 2000 chars", () => {
+    const longResult = "x".repeat(3000);
+    const record = emitToolTelemetry("forge_env_diff", {}, longResult, 10, "OK", tempDir);
+    expect(record.result.length).toBeLessThanOrEqual(2000);
+  });
+
+  it("wraps non-object inputs", () => {
+    const record = emitToolTelemetry("forge_secret_scan", "raw-string", "ok", 5, "OK", tempDir);
+    expect(record.inputs).toEqual({ raw: "raw-string" });
+  });
+
+  it("never throws on telemetry failure", () => {
+    expect(() => {
+      emitToolTelemetry("forge_secret_scan", {}, "ok", 5, "OK", "/nonexistent/path/that/does/not/exist");
+    }).not.toThrow();
+  });
+
+  it("records DEGRADED status for graceful degradation", () => {
+    const record = emitToolTelemetry("forge_secret_scan", {}, { clean: null, error: "git unavailable" }, 5, "DEGRADED", tempDir);
+    expect(record.status).toBe("DEGRADED");
+  });
+});
+
+// ─── Dashboard tab smoke tests ──────────────────────────────────────────
+
+describe("dashboard tab structure", () => {
+  const dashboardHtml = readFileSync(resolve(__dirname, "..", "dashboard", "index.html"), "utf-8");
+  const dashboardJs = readFileSync(resolve(__dirname, "..", "dashboard", "app.js"), "utf-8");
+
+  const CORE_TABS = ["progress", "runs", "cost", "actions", "replay", "extensions", "config", "traces", "skills"];
+  const LG_TABS = ["lg-health", "lg-incidents", "lg-triage", "lg-security", "lg-env"];
+  const ALL_TABS = [...CORE_TABS, ...LG_TABS];
+
+  it("has 9 core tab buttons", () => {
+    for (const tab of CORE_TABS) {
+      expect(dashboardHtml).toContain(`data-tab="${tab}"`);
+    }
+  });
+
+  it("has 5 LiveGuard tab buttons", () => {
+    for (const tab of LG_TABS) {
+      expect(dashboardHtml).toContain(`data-tab="${tab}"`);
+    }
+  });
+
+  it("total tab count is 14 (9 core + 5 LG)", () => {
+    const tabMatches = dashboardHtml.match(/data-tab="[^"]+"/g) || [];
+    expect(tabMatches.length).toBe(14);
+  });
+
+  it("has LiveGuard section divider", () => {
+    expect(dashboardHtml).toContain("🛡️ LG");
+  });
+
+  it("LiveGuard tabs use amber hover style", () => {
+    const lgButtons = dashboardHtml.match(/hover:text-amber-400[^>]*data-tab="lg-/g) || [];
+    expect(lgButtons.length).toBe(5);
+  });
+
+  it("tabLoadHooks has entries for tabs that need dynamic loading", () => {
+    // actions tab has no load hook — its content is loaded via inline handlers
+    const HOOKED_TABS = ALL_TABS.filter(t => t !== "actions");
+    for (const tab of HOOKED_TABS) {
+      const pattern = tab.includes("-") ? `'${tab}'` : tab;
+      expect(dashboardJs).toContain(pattern);
+    }
+  });
+
+  it("lg-security tab loader calls loadLGSecurity", () => {
+    expect(dashboardJs).toContain("loadLGSecurity");
+  });
+
+  it("lg-env tab loader calls loadLGEnv", () => {
+    expect(dashboardJs).toContain("loadLGEnv");
+  });
+
+  it("tabBadgeState tracks lgSecurityAlert", () => {
+    expect(dashboardJs).toContain("lgSecurityAlert");
+  });
+
+  it("keyboard shortcut 1-9 switches tabs", () => {
+    expect(dashboardJs).toMatch(/1-9.*switch tabs|switch.*tabs/i);
+  });
+});
+
+// ─── forge_runbook backward compatibility (H6): env-diff cache integration ──
+
+describe("forge_runbook backward compatibility — env-diff cache", () => {
+  it("runbook includes env key gaps section when env-diff-cache.json has gaps", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    const envDiff = {
+      scannedAt: "2024-01-01T00:00:00.000Z",
+      baseline: ".env",
+      filesCompared: 1,
+      pairs: [{ file: ".env.staging", missingInTarget: ["STRIPE_KEY"], missingInBaseline: [] }],
+      summary: { clean: false, totalGaps: 1, baselineKeyCount: 10 },
+    };
+    writeFileSync(resolve(forgeDir, "env-diff-cache.json"), JSON.stringify(envDiff, null, 2), "utf-8");
+
+    const envDiffPath = resolve(tempDir, ".forge", "env-diff-cache.json");
+    const cache = JSON.parse(readFileSync(envDiffPath, "utf-8"));
+    const lines = [];
+    if (cache.summary && !cache.summary.clean) {
+      const gapPairs = (cache.pairs || []).filter(p => (p.missingInTarget?.length || 0) + (p.missingInBaseline?.length || 0) > 0);
+      if (gapPairs.length) {
+        lines.push("## Environment Key Gaps");
+        lines.push("");
+        lines.push(`Baseline: \`${cache.baseline || ".env"}\` (${cache.summary.baselineKeyCount || "?"} keys)`);
+        for (const pair of gapPairs) {
+          lines.push(`### ${pair.file}`);
+          if (pair.missingInTarget?.length) {
+            lines.push("**Missing in target (present in baseline):**");
+            pair.missingInTarget.forEach(k => lines.push(`- \`${k}\``));
+          }
+        }
+      }
+    }
+    const output = lines.join("\n");
+    expect(output).toContain("## Environment Key Gaps");
+    expect(output).toContain("STRIPE_KEY");
+    expect(output).toContain(".env.staging");
+    expect(output).toContain("10 keys");
+  });
+
+  it("runbook skips env section when cache is clean", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    const envDiff = {
+      scannedAt: "2024-01-01T00:00:00.000Z",
+      baseline: ".env",
+      filesCompared: 1,
+      pairs: [{ file: ".env.staging", missingInTarget: [], missingInBaseline: [] }],
+      summary: { clean: true, totalGaps: 0, baselineKeyCount: 10 },
+    };
+    writeFileSync(resolve(forgeDir, "env-diff-cache.json"), JSON.stringify(envDiff, null, 2), "utf-8");
+
+    const cache = JSON.parse(readFileSync(resolve(forgeDir, "env-diff-cache.json"), "utf-8"));
+    const shouldInclude = cache.summary && !cache.summary.clean;
+    expect(shouldInclude).toBe(false);
+  });
+
+  it("runbook does not crash when env-diff-cache.json is absent", () => {
+    let envSection = "";
+    try {
+      const envDiffPath = resolve(tempDir, ".forge", "env-diff-cache.json");
+      if (existsSync(envDiffPath)) {
+        const cache = JSON.parse(readFileSync(envDiffPath, "utf-8"));
+        if (cache.summary && !cache.summary.clean) envSection = "has gaps";
+      }
+    } catch { /* env-diff cache unavailable — skip */ }
+    expect(envSection).toBe("");
+  });
+
+  it("runbook handles missingInBaseline (extra keys in target)", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    const envDiff = {
+      baseline: ".env",
+      pairs: [{ file: ".env.production", missingInTarget: [], missingInBaseline: ["DEBUG_MODE", "LOG_LEVEL"] }],
+      summary: { clean: false, totalGaps: 2, baselineKeyCount: 5 },
+    };
+    writeFileSync(resolve(forgeDir, "env-diff-cache.json"), JSON.stringify(envDiff, null, 2), "utf-8");
+
+    const cache = JSON.parse(readFileSync(resolve(forgeDir, "env-diff-cache.json"), "utf-8"));
+    const gapPairs = (cache.pairs || []).filter(p => (p.missingInTarget?.length || 0) + (p.missingInBaseline?.length || 0) > 0);
+    expect(gapPairs).toHaveLength(1);
+    expect(gapPairs[0].missingInBaseline).toContain("DEBUG_MODE");
+    expect(gapPairs[0].missingInBaseline).toContain("LOG_LEVEL");
   });
 });

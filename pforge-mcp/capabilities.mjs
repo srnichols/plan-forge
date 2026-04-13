@@ -529,9 +529,47 @@ export const TOOL_METADATA = {
       output: { scannedAt: "2024-01-01T00:00:00.000Z", baseline: ".env", filesCompared: 2, pairs: [{ file: ".env.staging", missingInTarget: ["STRIPE_KEY"], missingInBaseline: [] }], summary: { clean: false, totalGaps: 1, baselineKeyCount: 12 } },
     },
   },
+  forge_fix_proposal: {
+    intent: ["fix-proposal", "auto-fix", "liveguard-fix", "generate-fix-plan"],
+    aliases: ["fix-proposal", "auto-fix", "generate-fix"],
+    cost: "low",
+    maxConcurrent: 3,
+    addedIn: "2.29.0",
+    prerequisites: ["LiveGuard data available (drift, incidents, secret scan)"],
+    produces: ["docs/plans/auto/LIVEGUARD-FIX-<id>.md"],
+    consumes: [".forge/drift-history.json", ".forge/incidents.jsonl", ".forge/secret-scan-cache.json"],
+    sideEffects: ["writes fix plan to docs/plans/auto/", "broadcasts fix-proposal-ready event"],
+    securityNote: "Plans are generated locally. One proposal per incidentId to prevent spam.",
+    errors: {
+      NO_DATA: { message: "No LiveGuard data found", recovery: "Run drift, incident-capture, or secret-scan first" },
+      ALREADY_EXISTS: { message: "Fix proposal already exists for this ID", recovery: "Check docs/plans/auto/ for existing plan" },
+    },
+    example: {
+      input: { source: "incident", incidentId: "INC-001" },
+      output: { fixId: "INC-001", plan: "docs/plans/auto/LIVEGUARD-FIX-INC-001.md", source: "incident", sliceCount: 2, alreadyExists: false },
+    },
+  },
+  forge_quorum_analyze: {
+    intent: ["quorum-analyze", "quorum-prompt", "multi-model-analysis"],
+    aliases: ["quorum-analyze", "quorum-prompt", "multi-model"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "2.29.0",
+    prerequisites: [],
+    produces: [],
+    consumes: [".forge/drift-history.json", ".forge/incidents.jsonl", ".forge/deploy-journal.jsonl", ".forge/secret-scan-cache.json"],
+    sideEffects: ["none — read-only prompt assembly, no LLM calls"],
+    securityNote: "customQuestion is XSS-validated and length-capped at 500 chars. No data leaves the server.",
+    errors: {
+      QUESTION_TOO_LONG: { message: "customQuestion exceeds 500 chars", recovery: "Shorten the question" },
+      XSS_DETECTED: { message: "customQuestion contains disallowed content", recovery: "Remove script tags or event handlers" },
+    },
+    example: {
+      input: { source: "drift", customQuestion: "Why did drift score drop 15 points?" },
+      output: { source: "drift", questionUsed: "Why did drift score drop 15 points?", prompt: { context: "...", question: "...", outputFormat: "..." }, generatedAt: "2026-04-13T00:00:00.000Z" },
+    },
+  },
 };
-
-// ─── Workflow Graphs ──────────────────────────────────────────────────
 
 export const WORKFLOWS = {
   "execute-plan": {

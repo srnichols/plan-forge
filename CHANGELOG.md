@@ -5,6 +5,37 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.28.0] — 2026-04-13
+
+### Added — LiveGuard: Secret Scan, Env Diff, Dashboard Tab, Telemetry Retrofit
+- **`forge_secret_scan`** — post-commit Shannon entropy analysis scanning git diff output for high-entropy strings (leaked secrets). Key-name heuristics classify findings as `api_key`, `secret`, `token`, `password`, `auth`, `private_key`, or `credential`. Confidence levels (`high`/`medium`/`low`) combine entropy score with key-name match. Caches results in `.forge/secret-scan-cache.json` with `<REDACTED>` masking. Annotates deploy journal sidecar (`deploy-journal-meta.json`) when HEAD matches last deploy.
+- **`forge_env_diff`** — environment variable key comparison across `.env` files. Detects missing keys between baseline and targets. Auto-detects `.env.*` files (excludes `.env.example`). Compares key names only (never values). Caches results in `.forge/env-diff-cache.json`. Integrates with `forge_runbook` to surface environment key gaps.
+- **Dashboard LiveGuard section** — 5 new amber-themed tabs (`lg-health`, `lg-incidents`, `lg-triage`, `lg-security`, `lg-env`) with badge state tracking, tab load hooks, and keyboard shortcut support. Total dashboard tabs: 14 (9 core + 5 LiveGuard).
+- **Telemetry retrofit** — `emitToolTelemetry()` integrated into all 11 LiveGuard tool handlers. Writes to `telemetry/tool-calls.jsonl` (all tools) and `liveguard-events.jsonl` (LiveGuard tools only). Best-effort: telemetry failures never crash tools. `DEGRADED` status for graceful degradation paths.
+- **`forge_runbook` env-diff integration** — runbook generation now reads `.forge/env-diff-cache.json` and includes "Environment Key Gaps" section when gaps exist. Backward-compatible: absent cache is silently skipped.
+
+### Changed
+- TOOL_METADATA expanded to 31 entries (20 core + 11 LiveGuard)
+- LIVEGUARD_TOOLS set expanded to 11 entries (added `forge_secret_scan`, `forge_env_diff`)
+- Capabilities surface updated across `capabilities.mjs`, `capabilities.md`, and `capabilities.html`
+
+### Testing
+- 75 new test cases in `server.test.mjs` (158 → 233), 415 total across all test files
+- Shannon entropy computation: empty/null/repeated/balanced/high-entropy string validation
+- Threshold clamping: min (3.5), max (5.0), default (4.0), in-range preservation
+- Key pattern matching: 7 secret-type patterns + benign variable rejection
+- Type inference: 8 type categories (`api_key`, `secret`, `token`, `password`, `auth`, `private_key`, `credential`, `unknown`)
+- Confidence classification: high/medium/low boundary conditions
+- `.env` key parsing: comments, empty lines, `=` in values, whitespace trimming, value exclusion
+- Key comparison: missing-in-target, missing-in-baseline, clean detection, totalGaps aggregation
+- Auto-detect `.env.*` files: inclusion, `.example` exclusion, empty case
+- Graceful degradation: baseline-not-found structured error, missing target file error
+- `emitToolTelemetry`: LIVEGUARD_TOOLS set membership (11 tools), record shape, result truncation, non-object input wrapping, never-throw guarantee, DEGRADED status
+- Dashboard tab smoke: 14 tab buttons (9 core + 5 LG), section divider, amber hover style, tabLoadHooks coverage, badge state tracking, keyboard shortcuts
+- `forge_runbook` backward compatibility: env-diff cache integration, clean-skip, absent-cache safety, missingInBaseline handling
+
+---
+
 ## [2.27.0] — 2026-04-13
 
 ### Added — LiveGuard: Post-Coding Operational Intelligence

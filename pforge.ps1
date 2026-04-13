@@ -3409,6 +3409,44 @@ function Invoke-Hotspot {
     }
 }
 
+# ─── Command: dep-watch ────────────────────────────────────────────────
+function Invoke-DepWatch {
+    Write-ManualSteps "dep-watch" @(
+        "Run npm audit / pip-audit to scan dependencies"
+        "Diff against previous snapshot (.forge/dep-watch.json)"
+        "Report new and resolved vulnerabilities"
+    )
+
+    $port = 3100
+    try {
+        $response = Invoke-RestMethod -Uri "http://localhost:$port/api/deps/watch/run" -Method POST -ErrorAction Stop
+        Write-Host ""
+        Write-Host "`u{1F50D} Dependency Watch" -ForegroundColor Cyan
+        Write-Host "   Total:    $($response.total)" -ForegroundColor White
+        Write-Host "   New:      $($response.new_count)" -ForegroundColor $(if ($response.new_count -gt 0) { 'Red' } else { 'Green' })
+        Write-Host "   Resolved: $($response.resolved_count)" -ForegroundColor Green
+        Write-Host ""
+        if ($response.new_vulnerabilities -and $response.new_vulnerabilities.Count -gt 0) {
+            Write-Host "   New Vulnerabilities:" -ForegroundColor Red
+            foreach ($v in $response.new_vulnerabilities) {
+                Write-Host "   - $($v.package) ($($v.severity)): $($v.title)" -ForegroundColor Yellow
+            }
+            Write-Host ""
+        }
+        if ($response.resolved -and $response.resolved.Count -gt 0) {
+            Write-Host "   Resolved:" -ForegroundColor Green
+            foreach ($v in $response.resolved) {
+                Write-Host "   - $($v.package): $($v.title)" -ForegroundColor DarkGreen
+            }
+            Write-Host ""
+        }
+        Write-Host "   Snapshot: .forge/dep-watch.json" -ForegroundColor DarkGray
+    } catch {
+        Write-Host "ERROR: MCP server not running on port $port. Start with: node pforge-mcp/server.mjs" -ForegroundColor Red
+        exit 1
+    }
+}
+
 # ─── Command: secret-scan ──────────────────────────────────────────────
 function Invoke-SecretScan {
     $since     = "HEAD~1"
@@ -3796,6 +3834,7 @@ switch ($Command) {
     'regression-guard' { Invoke-RegressionGuard }
     'runbook'      { Invoke-Runbook }
     'hotspot'      { Invoke-Hotspot }
+    'dep-watch'    { Invoke-DepWatch }
     'secret-scan'  { Invoke-SecretScan }
     'env-diff'     { Invoke-EnvDiff }
     'health-trend' { Invoke-HealthTrend }

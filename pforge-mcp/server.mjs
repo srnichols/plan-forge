@@ -692,6 +692,32 @@ const TOOLS = [
       required: [],
     },
   },
+  {
+    name: "forge_fix_proposal",
+    description: "Generate a 1-2 slice fix plan from regression, drift, incident, or secret-scan failure. Writes to docs/plans/auto/LIVEGUARD-FIX-<id>.md. Capped at one proposal per incidentId.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        source: { type: "string", description: "Data source: 'regression', 'drift', 'incident', or 'secret'. Default: auto-detect from latest data" },
+        incidentId: { type: "string", description: "Incident ID to generate fix for (required for incident source)" },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "forge_quorum_analyze",
+    description: "Assemble a structured 3-section quorum prompt from any LiveGuard data source. No LLM calls — returns the prompt for multi-model dispatch. Supports customQuestion freeform override (max 500 chars).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        source: { type: "string", description: "Data source: 'drift', 'incident', 'regression', 'deploy', 'health'. Default: all" },
+        customQuestion: { type: "string", description: "Freeform question override (max 500 chars). Replaces the auto-generated question section." },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+      required: [],
+    },
+  },
 ];
 // ─── Runbook helpers ──────────────────────────────────────────────────
 
@@ -852,6 +878,8 @@ function executeTool(name, args) {
     case "forge_health_trend":
     case "forge_alert_triage":
     case "forge_capabilities":
+    case "forge_fix_proposal":
+    case "forge_quorum_analyze":
       return null; // Handled async in CallToolRequestSchema handler
     default:
       return { success: false, error: `Unknown tool: ${name}` };
@@ -1798,6 +1826,199 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
     } catch (err) {
       return { content: [{ type: "text", text: `Env diff error: ${err.message}` }], isError: true };
+    }
+  }
+
+  // ─── forge_fix_proposal — generate fix plan from LiveGuard data ───
+  if (name === "forge_fix_proposal") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : PROJECT_DIR;
+      const source = args.source || "auto";
+      const incidentId = args.incidentId || null;
+
+      // Determine fix source data
+      let sourceData = {};
+      let fixId = "";
+
+      if (source === "incident" || (source === "auto" && incidentId)) {
+        if (!incidentId) return { content: [{ type: "text", text: "incidentId required for incident source" }], isError: true };
+        const incidents = readForgeJsonl(cwd, "incidents.jsonl");
+        const incident = incidents.find((i) => i.id === incidentId || i.incidentId === incidentId);
+        if (!incident) return { content: [{ type: "text", text: `Incident not found: ${incidentId}` }], isError: true };
+        sourceData = { type: "incident", incident };
+        fixId = incidentId;
+      } else if (source === "drift" || source === "auto") {
+        const driftPath = resolve(cwd, ".forge/drift-history.json");
+        if (existsSync(driftPath)) {
+          const history = JSON.parse(readFileSync(driftPath, "utf-8"));
+          const latest = Array.isArray(history) ? history[history.length - 1] : history;
+          sourceData = { type: "drift", drift: latest };
+          fixId = `drift-${Date.now()}`;
+        }
+      } else if (source === "regression") {
+        sourceData = { type: "regression" };
+        fixId = `regression-${Date.now()}`;
+      } else if (source === "secret") {
+        const scanPath = resolve(cwd, ".forge/secret-scan-cache.json");
+        if (existsSync(scanPath)) {
+          const scan = JSON.parse(readFileSync(scanPath, "utf-8"));
+          sourceData = { type: "secret", scan };
+          fixId = `secret-${Date.now()}`;
+        }
+      }
+
+      if (!fixId) {
+        return { content: [{ type: "text", text: "No LiveGuard data found for fix proposal generation" }], isError: true };
+      }
+
+      // Check for duplicate
+      const autoDir = resolve(cwd, "docs/plans/auto");
+      mkdirSync(autoDir, { recursive: true });
+      const planName = `LIVEGUARD-FIX-${fixId}.md`;
+      const planPath = resolve(autoDir, planName);
+
+      if (existsSync(planPath)) {
+        return { content: [{ type: "text", text: JSON.stringify({ alreadyExists: true, plan: `docs/plans/auto/${planName}`, fixId }) }], isError: false };
+      }
+
+      // Generate fix plan
+      const slices = [];
+      if (sourceData.type === "incident") {
+        slices.push({
+          title: `Investigate: ${sourceData.incident.description || sourceData.incident.title || fixId}`,
+          tasks: ["Review incident details and affected files", "Identify root cause", "Determine fix scope"],
+          scope: sourceData.incident.affectedFiles || [],
+        });
+        slices.push({
+          title: "Apply Fix + Verify",
+          tasks: ["Implement the fix", "Run regression guard", "Verify incident resolution"],
+          gate: "node pforge-mcp/orchestrator.mjs --test",
+        });
+      } else if (sourceData.type === "drift") {
+        slices.push({
+          title: `Resolve Drift Violations (score: ${sourceData.drift?.score || "unknown"})`,
+          tasks: ["Review drift violations", "Fix architectural deviations", "Re-run drift report to verify score improvement"],
+          gate: "pforge drift",
+        });
+      } else if (sourceData.type === "secret") {
+        slices.push({
+          title: "Credential Rotation",
+          tasks: ["Rotate any exposed credentials", "Update secret references to use environment variables or secret manager", "Remove hardcoded values from source"],
+          gate: "pforge secret-scan --since HEAD~1",
+        });
+      } else {
+        slices.push({
+          title: `Fix: ${source}`,
+          tasks: ["Investigate the issue", "Apply fix", "Validate"],
+          gate: "pforge regression-guard",
+        });
+      }
+
+      // Write plan
+      let planContent = `# LiveGuard Auto-Fix: ${fixId}\n\n`;
+      planContent += `> Generated: ${new Date().toISOString()}\n`;
+      planContent += `> Source: ${sourceData.type}\n\n`;
+      planContent += `## Scope Contract\n\n`;
+      planContent += `This plan addresses a ${sourceData.type} finding detected by LiveGuard.\n\n`;
+      for (let i = 0; i < slices.length; i++) {
+        const s = slices[i];
+        planContent += `## Slice ${i + 1} — ${s.title}\n\n`;
+        planContent += `**Tasks:**\n`;
+        for (const t of s.tasks) planContent += `- [ ] ${t}\n`;
+        if (s.scope && s.scope.length > 0) {
+          planContent += `\n**Scope:** ${s.scope.join(", ")}\n`;
+        }
+        if (s.gate) {
+          planContent += `\n**Validation Gate:**\n\`\`\`bash\n${s.gate}\n\`\`\`\n`;
+        }
+        planContent += "\n";
+      }
+
+      writeFileSync(planPath, planContent, "utf-8");
+
+      const result = { fixId, plan: `docs/plans/auto/${planName}`, source: sourceData.type, sliceCount: slices.length, alreadyExists: false };
+      emitToolTelemetry("forge_fix_proposal", args, result, Date.now() - t0, "OK", cwd);
+      activeHub?.broadcast({ type: "fix-proposal-ready", data: result });
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Fix proposal error: ${err.message}` }], isError: true };
+    }
+  }
+
+  // ─── forge_quorum_analyze — assemble structured quorum prompt ───
+  if (name === "forge_quorum_analyze") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : PROJECT_DIR;
+      const source = args.source || "all";
+      const customQuestion = args.customQuestion || null;
+
+      // Validate customQuestion length and XSS
+      if (customQuestion) {
+        if (customQuestion.length > 500) {
+          return { content: [{ type: "text", text: "customQuestion exceeds 500 character limit" }], isError: true };
+        }
+        if (/<script|javascript:|on\w+=/i.test(customQuestion)) {
+          return { content: [{ type: "text", text: "customQuestion contains disallowed content" }], isError: true };
+        }
+      }
+
+      // Section 1: Context — gather LiveGuard data
+      const context = {};
+      if (source === "all" || source === "drift") {
+        const driftPath = resolve(cwd, ".forge/drift-history.json");
+        if (existsSync(driftPath)) {
+          try { context.drift = JSON.parse(readFileSync(driftPath, "utf-8")); } catch { /* skip */ }
+        }
+      }
+      if (source === "all" || source === "incident") {
+        context.incidents = readForgeJsonl(cwd, "incidents.jsonl").slice(-10);
+      }
+      if (source === "all" || source === "deploy") {
+        context.deploys = readForgeJsonl(cwd, "deploy-journal.jsonl").slice(-5);
+      }
+      if (source === "all" || source === "health") {
+        try { context.health = getHealthTrend(cwd, {}); } catch { /* skip */ }
+      }
+      if (source === "all" || source === "regression") {
+        const scanPath = resolve(cwd, ".forge/secret-scan-cache.json");
+        if (existsSync(scanPath)) {
+          try { context.secretScan = JSON.parse(readFileSync(scanPath, "utf-8")); } catch { /* skip */ }
+        }
+      }
+
+      // Section 2: Question
+      let questionUsed;
+      if (customQuestion) {
+        questionUsed = customQuestion;
+      } else {
+        const parts = [];
+        if (context.drift) parts.push("current drift score and trend");
+        if (context.incidents?.length) parts.push(`${context.incidents.length} recent incident(s)`);
+        if (context.deploys?.length) parts.push(`${context.deploys.length} recent deployment(s)`);
+        if (context.secretScan) parts.push("latest secret scan results");
+        if (context.health) parts.push("health trend data");
+        questionUsed = parts.length > 0
+          ? `Analyze the following LiveGuard data (${parts.join(", ")}) and recommend prioritized actions to improve project health.`
+          : "No LiveGuard data available. Recommend initial setup steps for operational monitoring.";
+      }
+
+      // Section 3: Output format instructions
+      const outputFormat = "Respond with: 1) Summary of findings (2-3 sentences), 2) Prioritized action list (numbered, most impactful first), 3) Risk assessment (high/medium/low with reasoning).";
+
+      // Build 3-section prompt
+      const prompt = {
+        context: JSON.stringify(context, null, 2),
+        question: questionUsed,
+        outputFormat,
+      };
+
+      const result = { source, questionUsed, prompt, generatedAt: new Date().toISOString() };
+      emitToolTelemetry("forge_quorum_analyze", args, { source, questionLength: questionUsed.length }, Date.now() - t0, "OK", cwd);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Quorum analyze error: ${err.message}` }], isError: true };
     }
   }
 
@@ -2886,6 +3107,108 @@ function createExpressApp() {
   });
 
   // ─── Bridge REST API endpoints are registered above ─────────────────
+
+  // GET /api/fix/proposals — list all fix proposals
+  app.get("/api/fix/proposals", (req, res) => {
+    try {
+      const autoDir = resolve(PROJECT_DIR, "docs/plans/auto");
+      if (!existsSync(autoDir)) return res.json([]);
+      const files = readdirSync(autoDir).filter((f) => f.startsWith("LIVEGUARD-FIX-") && f.endsWith(".md"));
+      const proposals = files.map((f) => {
+        const content = readFileSync(resolve(autoDir, f), "utf-8");
+        const sourceMatch = content.match(/> Source: (.+)/);
+        const genMatch = content.match(/> Generated: (.+)/);
+        return { file: f, source: sourceMatch?.[1] || "unknown", generatedAt: genMatch?.[1] || null };
+      });
+      res.json(proposals);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST /api/fix/propose — generate a fix proposal
+  app.post("/api/fix/propose", (req, res) => {
+    if (!checkApprovalSecret(req, res)) return;
+    try {
+      const { source, incidentId } = req.body || {};
+      // Delegate to the MCP tool logic by simulating a tool call
+      const args = { source, incidentId, path: PROJECT_DIR };
+      // Inline the same logic (simplified)
+      const autoDir = resolve(PROJECT_DIR, "docs/plans/auto");
+      mkdirSync(autoDir, { recursive: true });
+      const fixId = incidentId || `${source || "auto"}-${Date.now()}`;
+      const planName = `LIVEGUARD-FIX-${fixId}.md`;
+      const planPath = resolve(autoDir, planName);
+      if (existsSync(planPath)) {
+        return res.json({ alreadyExists: true, plan: `docs/plans/auto/${planName}`, fixId });
+      }
+      const planContent = `# LiveGuard Auto-Fix: ${fixId}\n\n> Generated: ${new Date().toISOString()}\n> Source: ${source || "auto"}\n\n## Slice 1 — Investigate\n\n- [ ] Review findings\n- [ ] Identify root cause\n\n## Slice 2 — Fix + Verify\n\n- [ ] Apply fix\n- [ ] Run validation\n`;
+      writeFileSync(planPath, planContent, "utf-8");
+      activeHub?.broadcast({ type: "fix-proposal-ready", data: { fixId, plan: `docs/plans/auto/${planName}` } });
+      res.json({ fixId, plan: `docs/plans/auto/${planName}`, alreadyExists: false });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET /api/quorum/prompt — assemble quorum prompt (read-only)
+  app.get("/api/quorum/prompt", (req, res) => {
+    try {
+      const source = req.query.source || "all";
+      const customQuestion = req.query.question || null;
+      if (customQuestion && customQuestion.length > 500) {
+        return res.status(400).json({ error: "question exceeds 500 character limit" });
+      }
+      if (customQuestion && /<script|javascript:|on\w+=/i.test(customQuestion)) {
+        return res.status(400).json({ error: "question contains disallowed content" });
+      }
+      const context = {};
+      const driftPath = resolve(PROJECT_DIR, ".forge/drift-history.json");
+      if ((source === "all" || source === "drift") && existsSync(driftPath)) {
+        try { context.drift = JSON.parse(readFileSync(driftPath, "utf-8")); } catch { /* skip */ }
+      }
+      if (source === "all" || source === "incident") {
+        context.incidents = readForgeJsonl(PROJECT_DIR, "incidents.jsonl").slice(-10);
+      }
+      if (source === "all" || source === "deploy") {
+        context.deploys = readForgeJsonl(PROJECT_DIR, "deploy-journal.jsonl").slice(-5);
+      }
+      const questionUsed = customQuestion || "Analyze LiveGuard data and recommend prioritized actions.";
+      const outputFormat = "Respond with: 1) Summary, 2) Prioritized actions, 3) Risk assessment.";
+      res.json({ source, questionUsed, prompt: { context: JSON.stringify(context, null, 2), question: questionUsed, outputFormat }, generatedAt: new Date().toISOString() });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST /api/quorum/prompt — same as GET but with body params
+  app.post("/api/quorum/prompt", (req, res) => {
+    try {
+      const { source, customQuestion } = req.body || {};
+      if (customQuestion && customQuestion.length > 500) {
+        return res.status(400).json({ error: "customQuestion exceeds 500 character limit" });
+      }
+      if (customQuestion && /<script|javascript:|on\w+=/i.test(customQuestion)) {
+        return res.status(400).json({ error: "customQuestion contains disallowed content" });
+      }
+      const context = {};
+      const driftPath = resolve(PROJECT_DIR, ".forge/drift-history.json");
+      if ((!source || source === "all" || source === "drift") && existsSync(driftPath)) {
+        try { context.drift = JSON.parse(readFileSync(driftPath, "utf-8")); } catch { /* skip */ }
+      }
+      if (!source || source === "all" || source === "incident") {
+        context.incidents = readForgeJsonl(PROJECT_DIR, "incidents.jsonl").slice(-10);
+      }
+      if (!source || source === "all" || source === "deploy") {
+        context.deploys = readForgeJsonl(PROJECT_DIR, "deploy-journal.jsonl").slice(-5);
+      }
+      const questionUsed = customQuestion || "Analyze LiveGuard data and recommend prioritized actions.";
+      const outputFormat = "Respond with: 1) Summary, 2) Prioritized actions, 3) Risk assessment.";
+      res.json({ source: source || "all", questionUsed, prompt: { context: JSON.stringify(context, null, 2), question: questionUsed, outputFormat }, generatedAt: new Date().toISOString() });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
 
   return app;
 }

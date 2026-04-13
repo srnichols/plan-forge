@@ -733,20 +733,12 @@ Extensions marked `speckit_compatible: true` in their `extension.json` work in b
 
 ## File Outputs
 
-<<<<<<< Updated upstream
-Directories and files written by Plan Forge at runtime. All paths relative to the project root.
-=======
 Directories and files written by Plan Forge at runtime. All paths are relative to the project root.
->>>>>>> Stashed changes
 
 | Path | Written By | Gitignored | Purpose |
 |------|-----------|------------|---------|
 | `.forge/` | All tools | Yes (`**/.forge/`) | Runtime data — runs, cost, drift, incidents, caches |
-<<<<<<< Updated upstream
-| `.forge/runs/<ts>/` | `forge_run_plan` | Yes | Per-run telemetry, traces, slice results |
-=======
 | `.forge/runs/<timestamp>/` | `forge_run_plan` | Yes | Per-run telemetry, traces, slice results |
->>>>>>> Stashed changes
 | `.forge/cost-history.json` | `forge_cost_report` | Yes | Aggregate cost across runs |
 | `.forge/drift-history.json` | `forge_drift_report` | Yes | Architecture drift score history |
 | `.forge/incidents/` | `forge_incident_capture` | Yes | Incident logs with MTTR tracking |

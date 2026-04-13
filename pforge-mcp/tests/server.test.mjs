@@ -12,7 +12,7 @@ import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync, readdirSyn
 import { resolve, join, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { runAnalyze, appendForgeJsonl, readForgeJsonl, regressionGuard, isGateCommandAllowed, getHealthTrend, recordModelPerformance, emitToolTelemetry, isDeployTrigger, runPreDeployHook } from "../orchestrator.mjs";
+import { runAnalyze, appendForgeJsonl, readForgeJsonl, regressionGuard, isGateCommandAllowed, getHealthTrend, recordModelPerformance, emitToolTelemetry, isDeployTrigger, runPreDeployHook, runPostSliceHook, resetPostSliceHookFired, runPreAgentHandoffHook } from "../orchestrator.mjs";
 import { TOOL_METADATA } from "../capabilities.mjs";
 
 const __filename = fileURLToPath(import.meta.url);

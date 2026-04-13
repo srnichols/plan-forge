@@ -511,8 +511,12 @@
             </div>
           </details>
           <div>
-            <label class="block text-sm text-gray-400 mb-1">API Providers</label>
-            <div id="cfg-api-providers" class="text-sm text-gray-300 bg-gray-700 rounded px-3 py-2">Checking...</div>
+            <label class="block text-sm text-gray-400 mb-1">API Provider Keys</label>
+            <p class="text-xs text-gray-600 mb-2">Stored in <code class="text-gray-500">.forge/secrets.json</code> (gitignored). Environment variables take precedence.</p>
+            <div id="cfg-api-keys" class="space-y-2">
+              <div class="text-xs text-gray-500">Loading...</div>
+            </div>
+            <div id="cfg-api-providers" class="text-sm text-gray-300 mt-2"></div>
           </div>
           <div>
             <label class="block text-sm text-gray-400 mb-1">OpenBrain Memory</label>

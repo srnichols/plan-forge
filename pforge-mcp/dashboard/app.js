@@ -2166,6 +2166,7 @@ async function loadConfig() {
 
     // Check API provider availability
     loadApiProviderStatus();
+    loadApiKeys();
     loadOpenBrainStatus();
     loadMemoryPresets();
     loadWorkerStatus();
@@ -2200,6 +2201,84 @@ async function loadApiProviderStatus() {
     }
   } catch {
     el.textContent = "Unable to check";
+  }
+}
+
+// ─── Provider API Keys ────────────────────────────────────────
+const KNOWN_PROVIDER_KEYS = [
+  { key: "XAI_API_KEY", label: "xAI (Grok)", placeholder: "xai-..." },
+  { key: "OPENAI_API_KEY", label: "OpenAI (GPT / DALL-E)", placeholder: "sk-..." },
+  { key: "ANTHROPIC_API_KEY", label: "Anthropic (Claude API)", placeholder: "sk-ant-..." },
+  { key: "OPENCLAW_API_KEY", label: "OpenClaw Analytics", placeholder: "oc-..." },
+];
+
+async function loadApiKeys() {
+  const container = document.getElementById("cfg-api-keys");
+  if (!container) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/secrets`);
+    const data = await res.json();
+    const keys = data.keys || {};
+
+    container.innerHTML = KNOWN_PROVIDER_KEYS.map((pk) => {
+      const info = keys[pk.key];
+      const isSet = info?.set;
+      const source = info?.source === "env" ? " (env var)" : "";
+      const masked = info?.masked || "";
+      const statusIcon = isSet ? '<span class="text-green-400">✓</span>' : '<span class="text-gray-600">○</span>';
+      const statusText = isSet ? `<span class="text-xs text-gray-500">${masked}${source}</span>` : '<span class="text-xs text-gray-600">not set</span>';
+
+      return `
+        <div class="flex items-center gap-2 bg-gray-700/50 rounded px-3 py-1.5">
+          <span class="text-xs w-40 text-gray-300">${statusIcon} ${pk.label}</span>
+          ${statusText}
+          <input type="password" id="secret-${pk.key}" placeholder="${pk.placeholder}" class="flex-1 bg-gray-700 text-white text-xs rounded px-2 py-1 border border-gray-600 focus:border-blue-500 outline-none" autocomplete="off">
+          <button onclick="saveApiKey('${pk.key}')" class="text-xs px-2 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded">Save</button>
+          ${isSet && info?.source !== "env" ? `<button onclick="removeApiKey('${pk.key}')" class="text-xs px-2 py-1 bg-red-900 hover:bg-red-800 text-red-300 rounded">✗</button>` : ""}
+        </div>`;
+    }).join("");
+  } catch (err) {
+    container.innerHTML = `<div class="text-xs text-red-400">Error loading keys: ${err.message}</div>`;
+  }
+}
+
+async function saveApiKey(key) {
+  const input = document.getElementById(`secret-${key}`);
+  if (!input || !input.value.trim()) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/secrets`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key, value: input.value.trim() }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      input.value = "";
+      addNotification(`${key} saved`, "success");
+      loadApiKeys(); // Refresh display
+    } else {
+      addNotification(`Error: ${data.error}`, "error");
+    }
+  } catch (err) {
+    addNotification(`Error saving key: ${err.message}`, "error");
+  }
+}
+
+async function removeApiKey(key) {
+  if (!confirm(`Remove ${key} from .forge/secrets.json?`)) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/secrets`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key, value: "" }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      addNotification(`${key} removed`, "success");
+      loadApiKeys();
+    }
+  } catch (err) {
+    addNotification(`Error: ${err.message}`, "error");
   }
 }
 

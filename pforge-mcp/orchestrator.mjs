@@ -2631,6 +2631,333 @@ export function runPreDeployHook({ toolName, filePath = "", command = "", cwd = 
   return result;
 }
 
+// ─── PostSlice Hook ───────────────────────────────────────────────────
+
+/** Conventional commit types that affect code drift. */
+const POSTSLICE_COMMIT_PATTERN = /^(feat|fix|refactor|perf|chore|style|test)\(/;
+
+/** Commit patterns that should NOT trigger the PostSlice hook. */
+const POSTSLICE_SKIP_PATTERNS = [
+  /^docs[:(]/,
+  /^ci[:(]/,
+  /^Merge /,
+  /--no-verify/,
+];
+
+/** Default configuration for the PostSlice hook. */
+const POSTSLICE_DEFAULTS = {
+  enabled: true,
+  silentDeltaThreshold: 5,
+  warnDeltaThreshold: 10,
+  scoreFloor: 70,
+};
+
+/** Module-level guard to prevent duplicate firings within the same session. */
+let _postSliceHookFired = false;
+
+/**
+ * Reset the PostSlice hook fired flag. Exposed for testing.
+ */
+export function resetPostSliceHookFired() {
+  _postSliceHookFired = false;
+}
+
+/**
+ * Run the PostSlice hook logic. Detects conventional commits, reads drift
+ * history, computes delta, and returns an advisory or warning message.
+ *
+ * @param {object} params
+ * @param {string} params.commitMessage - The git commit message
+ * @param {string} [params.cwd=process.cwd()] - Project root directory
+ * @returns {{ triggered: boolean, action?: string, message?: string, priorScore?: number, newScore?: number, delta?: number, skippedReason?: string }}
+ */
+export function runPostSliceHook({ commitMessage, cwd = process.cwd() } = {}) {
+  if (!commitMessage) return { triggered: false, skippedReason: "no-commit-message" };
+
+  // Guard: prevent duplicate firings in the same session
+  if (_postSliceHookFired) {
+    return { triggered: false, skippedReason: "already-fired" };
+  }
+
+  // Check skip patterns (docs, ci, merge, --no-verify)
+  for (const pattern of POSTSLICE_SKIP_PATTERNS) {
+    if (pattern.test(commitMessage)) {
+      return { triggered: false, skippedReason: `skip-pattern: ${pattern.source}` };
+    }
+  }
+
+  // Check conventional commit pattern
+  if (!POSTSLICE_COMMIT_PATTERN.test(commitMessage)) {
+    return { triggered: false, skippedReason: "not-conventional-commit" };
+  }
+
+  // Load config
+  let config = { ...POSTSLICE_DEFAULTS };
+  try {
+    const configPath = resolve(cwd, ".forge.json");
+    if (existsSync(configPath)) {
+      const raw = JSON.parse(readFileSync(configPath, "utf-8"));
+      if (raw?.hooks?.postSlice) {
+        config = { ...POSTSLICE_DEFAULTS, ...raw.hooks.postSlice };
+      }
+    }
+  } catch { /* use defaults */ }
+
+  if (config.enabled === false) {
+    return { triggered: true, action: "disabled", message: null };
+  }
+
+  // Read drift history
+  const driftHistory = readForgeJsonl("drift-history.json", [], cwd);
+  if (driftHistory.length < 2) {
+    return { triggered: true, action: "skip", skippedReason: "insufficient-drift-history", message: null };
+  }
+
+  const priorScore = driftHistory[driftHistory.length - 2]?.score;
+  const newScore = driftHistory[driftHistory.length - 1]?.score;
+  const violations = driftHistory[driftHistory.length - 1]?.violations || [];
+
+  if (priorScore == null || newScore == null) {
+    return { triggered: true, action: "skip", skippedReason: "missing-scores", message: null };
+  }
+
+  const delta = priorScore - newScore; // positive = regression
+
+  // Mark as fired (prevent duplicate firing for the same commit)
+  _postSliceHookFired = true;
+
+  // Evaluate thresholds
+  if (newScore >= priorScore) {
+    return { triggered: true, action: "silent", message: null, priorScore, newScore, delta: -delta };
+  }
+  if (delta <= config.silentDeltaThreshold) {
+    return { triggered: true, action: "silent", message: null, priorScore, newScore, delta };
+  }
+
+  // Warning: delta > warnDeltaThreshold OR score below floor
+  if (delta > config.warnDeltaThreshold || newScore < config.scoreFloor) {
+    const topViolations = violations.slice(0, 5).map(v => `• ${v.file}: ${v.rule} (${v.severity})`).join("\n");
+    const belowFloor = newScore < config.scoreFloor ? `Score is BELOW threshold (${config.scoreFloor}/${newScore}). ` : "";
+    const message = `🔴 PostSlice Hook — Drift Warning\n\nDrift score dropped ${delta} points after this commit (${priorScore} → ${newScore}).\n${belowFloor}Recommend resolving violations before starting the next slice.\n\nTop violations:\n${topViolations}\n\nOptions:\n1. Fix violations now and amend the commit\n2. Accept and continue — run \`pforge incident\` if this causes a prod issue later\n3. Run \`pforge runbook docs/plans/<current-plan>\` to update ops docs with new risk\n\nThe next slice will start with this reduced score as the new baseline.`;
+    return { triggered: true, action: "warning", message, priorScore, newScore, delta };
+  }
+
+  // Advisory: delta > silentDeltaThreshold but <= warnDeltaThreshold and score still >= floor
+  const topViolations = violations.slice(0, 3).map(v => `• ${v.file}: ${v.rule} (${v.severity})`).join("\n");
+  const message = `🟡 PostSlice Hook — Drift Advisory\n\nDrift score dropped ${delta} points after this commit (${priorScore} → ${newScore}).\nScore is still above threshold (${config.scoreFloor}) — proceeding is safe, but investigate before shipping.\n\nTop new violations:\n${topViolations}\n\nRun \`pforge drift\` to see the full report.`;
+  return { triggered: true, action: "advisory", message, priorScore, newScore, delta };
+}
+
+// ─── PreAgentHandoff Hook ─────────────────────────────────────────────
+
+/** Default configuration for the PreAgentHandoff hook. */
+const PRE_AGENT_HANDOFF_DEFAULTS = {
+  enabled: true,
+  injectContext: true,
+  runRegressionGuard: true,
+  cacheMaxAgeMinutes: 30,
+  minAlertSeverity: "medium",
+};
+
+/**
+ * Check whether a LiveGuard cache file is stale based on its timestamp field.
+ * @param {object|null} cache - Cache object with a timestamp or scannedAt field
+ * @param {number} maxAgeMinutes - Maximum acceptable age in minutes
+ * @returns {boolean}
+ */
+function isLiveGuardCacheStale(cache, maxAgeMinutes) {
+  if (!cache) return true;
+  const ts = cache.scannedAt || cache.timestamp || cache.createdAt;
+  if (!ts) return true;
+  const age = Date.now() - new Date(ts).getTime();
+  return age > maxAgeMinutes * 60 * 1000;
+}
+
+/**
+ * Format a relative time string like "5 min" or "2 hr".
+ * @param {string} isoTimestamp
+ * @returns {string}
+ */
+function formatSnapshotAge(isoTimestamp) {
+  if (!isoTimestamp) return "unknown";
+  const ms = Date.now() - new Date(isoTimestamp).getTime();
+  const minutes = Math.round(ms / 60_000);
+  if (minutes < 1) return "<1 min";
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.round(minutes / 60);
+  return `${hours} hr`;
+}
+
+/**
+ * Run the PreAgentHandoff hook. Reads LiveGuard caches and builds a
+ * structured context header for injection into a new agent session.
+ *
+ * When PFORGE_QUORUM_TURN env var is set, skips context injection entirely
+ * to avoid inflating token usage in quorum model turns.
+ *
+ * @param {object} params
+ * @param {string} [params.cwd=process.cwd()] - Project root directory
+ * @param {string[]} [params.dirtyFiles=[]] - Files modified on the current branch (git diff)
+ * @param {boolean} [params.hasActivePlan=false] - Whether an active plan file exists
+ * @param {boolean} [params.hasAutoFixPlan=false] - Whether a LIVEGUARD-FIX-*.md auto-fix plan exists
+ * @param {boolean} [params.isResumeSession=false] - Whether the session references --resume-from
+ * @returns {Promise<{ triggered: boolean, contextHeader?: string, regressionResult?: object, openClawResult?: object, skippedReason?: string }>}
+ */
+export async function runPreAgentHandoffHook({
+  cwd = process.cwd(),
+  dirtyFiles = [],
+  hasActivePlan = false,
+  hasAutoFixPlan = false,
+  isResumeSession = false,
+} = {}) {
+  // PFORGE_QUORUM_TURN guard — skip context injection for quorum model turns
+  if (process.env.PFORGE_QUORUM_TURN) {
+    console.error("[PreAgentHandoff] skipping context injection — PFORGE_QUORUM_TURN active");
+    return { triggered: false, skippedReason: "PFORGE_QUORUM_TURN active" };
+  }
+
+  // Check trigger conditions
+  const hasDirtyBranch = dirtyFiles.length > 0;
+  const shouldFire = hasDirtyBranch || hasActivePlan || hasAutoFixPlan || isResumeSession;
+  if (!shouldFire) {
+    return { triggered: false, skippedReason: "no-trigger-conditions" };
+  }
+
+  // Load config
+  let config = { ...PRE_AGENT_HANDOFF_DEFAULTS };
+  try {
+    const configPath = resolve(cwd, ".forge.json");
+    if (existsSync(configPath)) {
+      const raw = JSON.parse(readFileSync(configPath, "utf-8"));
+      if (raw?.hooks?.preAgentHandoff) {
+        config = { ...PRE_AGENT_HANDOFF_DEFAULTS, ...raw.hooks.preAgentHandoff };
+      }
+    }
+  } catch { /* use defaults */ }
+
+  if (config.enabled === false) {
+    return { triggered: true, contextHeader: null, skippedReason: "disabled" };
+  }
+
+  const maxAge = config.cacheMaxAgeMinutes ?? 30;
+
+  // Read LiveGuard caches (all file reads, no subprocesses)
+  const triageCache = readForgeJson("alert-triage-cache.json", null, cwd);
+  const driftHistory = readForgeJsonl("drift-history.json", [], cwd);
+  const incidents = readForgeJsonl("incidents.jsonl", [], cwd);
+  const secretScanCache = readForgeJson("secret-scan-cache.json", null, cwd);
+  const deployJournal = readForgeJsonl("deploy-journal.jsonl", [], cwd);
+
+  // Check if all data stores are empty
+  const hasAnyData = triageCache || driftHistory.length > 0 || incidents.length > 0 || secretScanCache || deployJournal.length > 0;
+
+  if (!hasAnyData) {
+    const contextHeader = "🛡️ LIVEGUARD CONTEXT — No data yet\nRun `pforge triage` after completing the first deploy to activate LiveGuard monitoring.\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
+    return { triggered: true, contextHeader, regressionResult: null, openClawResult: null };
+  }
+
+  // Build snapshot data
+  const latestDrift = driftHistory.length > 0 ? driftHistory[driftHistory.length - 1] : null;
+  const score = latestDrift?.score ?? "N/A";
+  const trend = latestDrift?.trend ?? "unknown";
+  const violationCount = latestDrift?.violations?.length ?? 0;
+  const snapshotTs = latestDrift?.timestamp || triageCache?.scannedAt || new Date().toISOString();
+  const snapshotAge = formatSnapshotAge(snapshotTs);
+
+  const openIncidents = incidents.filter(i => !i.resolvedAt);
+
+  const lastDeploy = deployJournal.length > 0 ? deployJournal[deployJournal.length - 1] : null;
+
+  const secretScan = secretScanCache || { clean: true, findings: [] };
+  const secretScanAge = secretScanCache ? formatSnapshotAge(secretScanCache.scannedAt) : "never";
+
+  // Filter alerts by minAlertSeverity
+  const severityRank = { critical: 4, high: 3, medium: 2, low: 1 };
+  const minRank = severityRank[config.minAlertSeverity] || 2;
+  const alerts = (triageCache?.alerts || triageCache?.results || [])
+    .filter(a => (severityRank[a.severity] || 0) >= minRank);
+
+  // Build context header
+  const lines = [
+    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+    "🛡️ LIVEGUARD CONTEXT — Session Start",
+    `(As of ${snapshotAge} ago — run \`pforge triage\` to refresh)`,
+    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+    "",
+    `Drift Score: ${score}/100 (${trend}) — ${violationCount} active violations`,
+    `Open Incidents: ${openIncidents.length}${openIncidents.length > 0 ? ` (${openIncidents.map(i => i.severity).join(", ")})` : ""}`,
+  ];
+
+  if (lastDeploy) {
+    const postHealth = lastDeploy.postHealthScore ?? "not yet recorded";
+    lines.push(`Last Deploy: ${lastDeploy.version || "unknown"} @ ${lastDeploy.timestamp || "unknown"} (pre: ${lastDeploy.preHealthScore ?? "N/A"}, post: ${postHealth})`);
+  } else {
+    lines.push("Last Deploy: none recorded");
+  }
+
+  lines.push(`Last Secret Scan: ${secretScan.clean !== false ? "✅ Clean" : `⛔ ${(secretScan.findings || []).length} finding(s)`} (${secretScanAge})`);
+  lines.push("");
+
+  if (alerts.length > 0) {
+    lines.push("Top Alerts (medium+):");
+    alerts.slice(0, 5).forEach((a, i) => {
+      lines.push(`${i + 1}. [${(a.severity || "unknown").toUpperCase()}] ${a.title || a.message || "untitled"} — ${a.recommendedAction || "investigate"}`);
+    });
+    if (alerts.length > 5) {
+      lines.push(`...and ${alerts.length - 5} more. Run \`pforge triage\` for full list.`);
+    }
+    lines.push("");
+  }
+
+  lines.push("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
+  let contextHeader = lines.join("\n");
+
+  // Regression guard on dirty branch
+  let regressionResult = null;
+  if (hasDirtyBranch && config.runRegressionGuard !== false) {
+    try {
+      regressionResult = await regressionGuard(dirtyFiles, { cwd });
+      if (regressionResult && regressionResult.failed > 0) {
+        const failedGates = (regressionResult.results || []).filter(r => r.status === "failed");
+        const regressionLines = [
+          "",
+          `⚠️ Regression Alert — ${regressionResult.failed} gate(s) failing on current branch changes`,
+          "",
+          ...failedGates.map(r => `• Slice ${r.sliceNumber} (${r.planFile}): ${r.cmd}`),
+          "",
+          "Resolve these before adding new code — the current branch has introduced regressions.",
+        ];
+        contextHeader += "\n" + regressionLines.join("\n");
+      }
+    } catch (err) {
+      // Regression guard failure is non-blocking
+      console.error(`[PreAgentHandoff] regression guard error: ${err.message}`);
+    }
+  }
+
+  // OpenClaw bridge (fire-and-forget)
+  let openClawResult = null;
+  try {
+    const { endpoint } = loadOpenClawConfig(cwd);
+    if (endpoint) {
+      // Fire-and-forget — no await
+      const openClawPromise = postOpenClawSnapshot(cwd, {
+        trigger: "preAgentHandoff",
+        dirtyFiles: dirtyFiles.length,
+        openIncidents: openIncidents.length,
+      });
+      openClawPromise.then(r => { openClawResult = r; }).catch(err => {
+        console.error(`[PreAgentHandoff] openclaw snapshot skipped: ${err.message}`);
+      });
+    }
+  } catch (err) {
+    console.error(`[PreAgentHandoff] openclaw snapshot skipped: ${err.message}`);
+  }
+
+  return { triggered: true, contextHeader, regressionResult, openClawResult };
+}
+
 /**
  * Infer the slice type from its title and tasks for model routing purposes.
  * Returns one of: "test" | "review" | "migration" | "execute"

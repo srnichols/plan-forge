@@ -24,7 +24,7 @@ import { execSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, watchFile, unwatchFile, statSync, openSync, readSync, closeSync } from "node:fs";
 import { resolve, join, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parsePlan, runPlan, detectWorkers, getCostReport, getHealthTrend, analyzeWithQuorum, generateImage, runAnalyze, readForgeJson, readForgeJsonl, appendForgeJsonl, emitToolTelemetry, regressionGuard } from "./orchestrator.mjs";
+import { parsePlan, runPlan, detectWorkers, getCostReport, getHealthTrend, analyzeWithQuorum, generateImage, runAnalyze, readForgeJson, readForgeJsonl, appendForgeJsonl, emitToolTelemetry, regressionGuard, runPostSliceHook, resetPostSliceHookFired, runPreAgentHandoffHook, postOpenClawSnapshot, loadOpenClawConfig } from "./orchestrator.mjs";
 import { isOpenBrainConfigured } from "./memory.mjs";
 import { createHub, readHubPort } from "./hub.mjs";
 import { createBridge } from "./bridge.mjs";
@@ -2167,6 +2167,58 @@ function createExpressApp() {
       }
       writeFileSync(configPath, JSON.stringify(config, null, 2));
       res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // REST API: GET /api/secrets — read .forge/secrets.json (masked values)
+  app.get("/api/secrets", (_req, res) => {
+    try {
+      const secretsPath = resolve(PROJECT_DIR, ".forge", "secrets.json");
+      if (!existsSync(secretsPath)) return res.json({ keys: {} });
+      const secrets = JSON.parse(readFileSync(secretsPath, "utf-8"));
+      // Mask values: show only last 4 chars
+      const masked = {};
+      for (const [key, value] of Object.entries(secrets)) {
+        if (typeof value === "string" && value.length > 4) {
+          masked[key] = { set: true, masked: "••••" + value.slice(-4) };
+        } else if (typeof value === "string" && value.length > 0) {
+          masked[key] = { set: true, masked: "••••" };
+        } else {
+          masked[key] = { set: false, masked: "" };
+        }
+      }
+      // Also check env vars for known provider keys
+      const envKeys = ["XAI_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "OPENCLAW_API_KEY"];
+      for (const ek of envKeys) {
+        if (!masked[ek] && process.env[ek]) {
+          masked[ek] = { set: true, masked: "••••" + process.env[ek].slice(-4), source: "env" };
+        }
+      }
+      res.json({ keys: masked });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // POST /api/secrets — write individual keys to .forge/secrets.json
+  app.post("/api/secrets", (req, res) => {
+    if (!checkApprovalSecret(req, res)) return;
+    try {
+      const { key, value } = req.body || {};
+      if (!key || typeof key !== "string") return res.status(400).json({ error: "key is required" });
+      if (!/^[A-Z][A-Z0-9_]*$/.test(key)) return res.status(400).json({ error: "key must be UPPER_SNAKE_CASE" });
+      const secretsDir = resolve(PROJECT_DIR, ".forge");
+      mkdirSync(secretsDir, { recursive: true });
+      const secretsPath = resolve(secretsDir, "secrets.json");
+      let secrets = {};
+      if (existsSync(secretsPath)) {
+        try { secrets = JSON.parse(readFileSync(secretsPath, "utf-8")); } catch { secrets = {}; }
+      }
+      if (value === "" || value === null || value === undefined) {
+        delete secrets[key];
+      } else {
+        secrets[key] = value;
+      }
+      writeFileSync(secretsPath, JSON.stringify(secrets, null, 2));
+      res.json({ success: true, key, action: value ? "set" : "removed" });
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 

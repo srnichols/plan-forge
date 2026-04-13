@@ -74,6 +74,45 @@
           <strong>Related</strong>: See <a href="liveguard-runbooks.html">Appendix F — LiveGuard Alert Runbooks</a> for how to respond when each tool fires an alert.
         </div>
 
+        <h2 id="forge-json-schema">.forge.json Schema</h2>
+        <p>LiveGuard tools read configuration from <code class="text-forge-400">.forge.json</code> at project root. Below are the root-level fields relevant to LiveGuard. Full schema details ship in v2.28 Slice 5.</p>
+
+        <div class="overflow-x-auto mb-6">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left border-b border-slate-700/60">
+                <th class="pb-2 pr-4 text-slate-400 font-semibold">Field</th>
+                <th class="pb-2 pr-4 text-slate-400 font-semibold">Type</th>
+                <th class="pb-2 text-slate-400 font-semibold">Description</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800/60">
+              <tr><td class="py-2 pr-4 font-mono text-amber-400 text-xs">bridge</td><td class="py-2 pr-4 text-slate-400 text-xs">object</td><td class="py-2 text-slate-300">Bridge configuration — <code>url</code> (string), <code>approvalSecret</code> (string). Used for webhook notifications and approval gates.</td></tr>
+              <tr><td class="py-2 pr-4 font-mono text-amber-400 text-xs">model</td><td class="py-2 pr-4 text-slate-400 text-xs">string</td><td class="py-2 text-slate-300">Default AI model for plan execution (e.g., <code>"claude-sonnet-4.6"</code>).</td></tr>
+              <tr><td class="py-2 pr-4 font-mono text-amber-400 text-xs">onCall</td><td class="py-2 pr-4 text-slate-400 text-xs">object</td><td class="py-2 text-slate-300">On-call routing for incident notifications. <code>name</code> (string, required) — person or team name. <code>channel</code> (string, required) — notification channel ID or webhook. <code>escalation</code> (string, optional) — escalation target if primary is unavailable.</td></tr>
+              <tr><td class="py-2 pr-4 font-mono text-amber-400 text-xs">hooks</td><td class="py-2 pr-4 text-slate-400 text-xs">object</td><td class="py-2 text-slate-300">Lifecycle hook configuration — <code>preDeploy</code>, <code>postSlice</code>, <code>preAgentHandoff</code>. See v2.29 for details.</td></tr>
+              <tr><td class="py-2 pr-4 font-mono text-amber-400 text-xs">openclaw</td><td class="py-2 pr-4 text-slate-400 text-xs">object</td><td class="py-2 text-slate-300">OpenClaw analytics bridge — <code>endpoint</code> (string), <code>apiKey</code> (string, see .forge/secrets.json).</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p class="text-sm text-slate-400 mb-4">Example <code class="text-forge-400">.forge.json</code> with LiveGuard fields:</p>
+        <pre class="bg-slate-900/60 rounded-lg p-4 text-xs text-forge-400 overflow-x-auto mb-6"><code>{
+  "bridge": { "url": "https://hooks.slack.com/...", "approvalSecret": "..." },
+  "model": "claude-sonnet-4.6",
+  "onCall": { "name": "Platform Team", "channel": "#incidents", "escalation": "eng-lead" },
+  "hooks": {
+    "preDeploy": { "enabled": true },
+    "postSlice": { "enabled": true },
+    "preAgentHandoff": { "enabled": true }
+  },
+  "openclaw": { "endpoint": "https://your-openclaw-instance" }
+}</code></pre>
+
+        <div class="callout callout-warning">
+          <strong>Validation</strong>: <code class="text-forge-400">forge_smith</code> checks <code>onCall</code> — if the field exists, it verifies that both <code>name</code> and <code>channel</code> are present and emits a warning (not an error) if either is missing.
+        </div>
+
         <!-- Chapter nav -->
         <div class="chapter-nav mt-12">
           <a class="chapter-nav-prev" href="what-is-liveguard.html">← Chapter 15: What Is LiveGuard?</a>

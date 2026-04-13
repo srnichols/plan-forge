@@ -88,6 +88,24 @@ Temper Guards (anti-shortcut tables) and Warning Signs (behavioral anti-patterns
 
 ## Planned
 
+### v2.27.0 — LiveGuard I: Post-Coding Intelligence
+
+> **In development** — 9 new MCP tools for post-deploy monitoring, drift detection, incident tracking, and operational runbooks.
+
+- **`forge_drift_report`** — score codebase against architecture guardrail rules; track drift over time in `.forge/drift-history.json`; fire bridge notification when score drops below threshold
+- **`forge_incident_capture`** — record incidents with severity, affected files, and MTTR tracking; dispatch on-call notification via `.forge.json` `onCall` config
+- **`forge_regression_guard`** — extract validation gate commands from plan files, execute against codebase, report pass/fail/blocked results
+- **`forge_runbook`** — generate human-readable operational runbook from a hardened plan file; optionally append recent incidents
+- **`forge_hotspot`** — identify git churn hotspots (most frequently changed files); 24h cache TTL; `--top N` and `--since` filters
+- **`forge_health_trend`** — aggregate drift scores, cost history, incident frequency, model performance over configurable time window; overall health score 0–100
+- **`forge_alert_triage`** — read incidents and drift violations, rank by priority (severity × recency), return prioritized list; read-only
+- **`forge_deploy_journal`** — record deployments with version, deployer, notes, slice reference; correlates with `forge_incident_capture`
+- **`forge_dep_watch`** — dependency vulnerability change detection (planned)
+- 14 new REST endpoints across drift, incident, regression, runbook, hotspot, health-trend, triage, deploy-journal
+- `.forge.json` `onCall` field for incident notification routing
+- Dashboard LIVEGUARD section: 🛡️ Health, Incidents, Triage tabs (v2.28 Slice 4)
+- Predecessor: v2.22.0
+
 ### v2.29.0 — LiveGuard III: Self-Healing Proposals, Hooks & OpenClaw Bridge
 
 - **`forge_fix_proposal`** — generate scoped 1-2 slice fix plan from any LiveGuard failure (regression, drift, incident, secret); capped at one proposal per incident; human approves and runs on branch

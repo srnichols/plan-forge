@@ -1,12 +1,12 @@
 # Plan Forge — Capabilities Reference
 
-> **Tools**: 19 MCP + 13 LiveGuard (v2.27.0–v2.29.0, in development) | **Presets**: 9 | **Agents**: 19 | **Skills**: 12
+> **Tools**: 28 MCP (19 core + 9 LiveGuard v2.27.0) + 4 LiveGuard planned (v2.28.0–v2.29.0) | **Presets**: 9 | **Agents**: 19 | **Skills**: 12
 >
 > Machine-readable version: call `forge_capabilities` MCP tool or `GET https://planforge.software/.well-known/plan-forge.json`
 
 ---
 
-## MCP Tools (19)
+## MCP Tools (28)
 
 | Tool | Intent | Cost | Description |
 |------|--------|------|-------------|
@@ -29,6 +29,14 @@
 | `forge_run_skill` | execute | medium | Execute any skill programmatically with dry-run mode and structured results |
 | `forge_generate_image` | create | medium | Generate images via xAI Grok Aurora or OpenAI DALL-E. Saves to disk. For logos, diagrams, icons, mockups |
 | `forge_memory_capture` | capture | low | Normalise and broadcast a `memory-captured` hub event; returns `capture_thought` payload for OpenBrain |
+| `forge_drift_report` | drift-detect | low | Score codebase against architecture guardrail rules; track drift over time |
+| `forge_incident_capture` | capture-incident | low | Record incidents with severity, affected files, MTTR tracking, on-call notification |
+| `forge_regression_guard` | regression-check | medium | Extract validation gates from plans, execute against codebase, report pass/fail |
+| `forge_runbook` | generate-runbook | low | Generate operational runbook from a hardened plan file |
+| `forge_hotspot` | churn-analysis | low | Identify git churn hotspots — files that change most frequently |
+| `forge_health_trend` | health | low | Aggregate drift, cost, incidents, model performance over time; health score 0–100 |
+| `forge_alert_triage` | triage-alerts | low | Read incidents and drift violations, rank by priority, return prioritized list |
+| `forge_deploy_journal` | record-deploy | low | Record deployments with version, deployer, notes; correlates with incident capture |
 
 ## Execution Modes
 
@@ -193,7 +201,26 @@ Store API keys in the gitignored `.forge/` directory as an alternative to enviro
 | POST | `/api/memory/search` | Semantic search via OpenBrain (requires OpenBrain configured) |
 | POST | `/api/memory/capture` | Normalise + broadcast `memory-captured` event; returns capture payload |
 
-**LiveGuard REST (v2.27–v2.28)** — 18 endpoints across drift, incident, dep-watch, regression, hotspot, health-trend, triage, runbook, deploy-journal, secret-scan, env-diff. Documented in [Chapter 16 — LiveGuard Tools Reference](manual/liveguard-tools.html).
+### LiveGuard REST (v2.27.0)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/drift` | Run architecture drift check; returns score, violations, trend |
+| GET | `/api/drift/history` | Drift score history from `.forge/drift-history.json` |
+| POST | `/api/incident` | Capture an incident with severity, affected files, optional resolution |
+| GET | `/api/incidents` | List all captured incidents from `.forge/incidents.jsonl` |
+| POST | `/api/regression-guard` | Run regression guard — execute validation gates from plan files |
+| POST | `/api/deploy-journal` | Record a deployment with version, deployer, notes |
+| GET | `/api/deploy-journal` | List all deploy journal entries |
+| GET | `/api/triage` | Prioritized alert triage — ranked cross-signal alert list |
+| POST | `/api/runbook` | Generate operational runbook from a plan file |
+| GET | `/api/runbooks` | List all generated runbooks |
+| GET | `/api/hotspots` | Git churn hotspot analysis |
+| GET | `/api/health-trend` | Health trend analysis over configurable time window |
+| POST | `/api/tool/org-rules` | Generate org-rules instruction file via REST |
+| POST | `/api/image/generate` | Generate image via xAI Aurora or OpenAI DALL-E |
+
+**LiveGuard REST (v2.28–v2.29)** — Additional endpoints for secret-scan, env-diff, fix-proposals, and quorum-analyze. Documented in [Chapter 16 — LiveGuard Tools Reference](manual/liveguard-tools.html).
 
 **LiveGuard REST (v2.29):**
 
@@ -237,9 +264,9 @@ A second LIVEGUARD section appears in the tab bar after a visual divider. LIVEGU
 
 Standalone (no MCP client needed): `node pforge-mcp/server.mjs --dashboard-only`
 
-## LiveGuard MCP Tools (13, v2.27.0–v2.29.0)
+## LiveGuard MCP Tools (9 shipped in v2.27.0; 4 planned in v2.28.0–v2.29.0)
 
-> Post-coding intelligence — watches gates after the forge ships. All tools available as MCP tools and REST endpoints.
+> Post-coding intelligence — watches gates after the forge ships. v2.27 tools are included in the 28-tool count above. All available as MCP tools and REST endpoints.
 
 | Tool | What It Guards | Since |
 |------|---------------|-------|

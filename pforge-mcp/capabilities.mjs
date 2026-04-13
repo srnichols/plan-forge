@@ -236,7 +236,92 @@ export const TOOL_METADATA = {
     consumes: [".forge.json", ".vscode/mcp.json"],
     sideEffects: [],
     errors: {},
-    example: { input: {}, output: { tools: 14, workflows: 4, memory: { configured: true } } },
+    example: { input: {}, output: { tools: 28, workflows: 4, memory: { configured: true } } },
+  },
+  forge_diagnose: {
+    intent: ["analyze", "debug", "investigate"],
+    aliases: ["bug-investigate", "multi-model-debug", "root-cause"],
+    cost: "medium",
+    maxConcurrent: 3,
+    addedIn: "2.15.0",
+    prerequisites: ["file exists"],
+    produces: [],
+    consumes: ["src/**", "tests/**"],
+    sideEffects: [],
+    errors: {
+      FILE_NOT_FOUND: { message: "Target file not found", recovery: "Check the file path" },
+    },
+    example: { input: { file: "src/api.ts" }, output: { diagnosis: "Root cause identified", models: 3 } },
+  },
+  forge_skill_status: {
+    intent: ["read", "status", "skills"],
+    aliases: ["skill-events", "recent-skills"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "2.16.0",
+    prerequisites: [],
+    produces: [],
+    consumes: [],
+    sideEffects: [],
+    errors: {},
+    example: { input: {}, output: { events: [] } },
+  },
+  forge_run_skill: {
+    intent: ["execute", "skill", "automate"],
+    aliases: ["invoke-skill", "execute-skill"],
+    cost: "medium",
+    maxConcurrent: 3,
+    addedIn: "2.16.0",
+    prerequisites: ["skill exists"],
+    produces: [],
+    consumes: [".github/skills/*.md"],
+    sideEffects: ["may modify source files depending on skill"],
+    errors: {
+      SKILL_NOT_FOUND: { message: "Skill not found", recovery: "Use forge_skill_status to list available skills" },
+    },
+    example: { input: { skill: "test-sweep" }, output: { status: "completed", steps: 5 } },
+  },
+  forge_org_rules: {
+    intent: ["generate", "export", "org-standards"],
+    aliases: ["org-rules-export", "org-instructions"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "2.15.0",
+    prerequisites: [".forge.json exists"],
+    produces: ["org-rules.instructions.md"],
+    consumes: [".forge.json", ".github/instructions/*.instructions.md"],
+    sideEffects: ["generates org-rules instruction file"],
+    errors: {},
+    example: { input: {}, output: { file: "org-rules.instructions.md", rules: 12 } },
+  },
+  forge_memory_capture: {
+    intent: ["capture", "remember", "persist"],
+    aliases: ["save-thought", "memory-broadcast"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "2.6.0",
+    prerequisites: [],
+    produces: [],
+    consumes: [],
+    sideEffects: ["broadcasts memory-captured hub event"],
+    errors: {},
+    example: { input: { content: "Use JWT for auth", type: "convention" }, output: { event: "memory-captured" } },
+  },
+  forge_generate_image: {
+    intent: ["create", "generate", "image"],
+    aliases: ["image-gen", "generate-artwork", "create-image"],
+    cost: "medium",
+    maxConcurrent: 3,
+    addedIn: "2.17.0",
+    prerequisites: ["XAI_API_KEY or OPENAI_API_KEY set"],
+    produces: ["<outputPath>"],
+    consumes: [],
+    sideEffects: ["creates image file on disk", "calls external API"],
+    errors: {
+      NO_API_KEY: { message: "No image generation API key found", recovery: "Set XAI_API_KEY or OPENAI_API_KEY in env or .forge/secrets.json" },
+      GENERATION_FAILED: { message: "Image generation failed", recovery: "Check the prompt, try a different model, or verify API key" },
+    },
+    example: { input: { prompt: "minimalist logo", outputPath: "assets/logo.webp" }, output: { file: "assets/logo.webp", model: "grok-imagine-image" } },
   },
   forge_drift_report: {
     intent: ["drift-detect", "architecture-audit", "guardrail-score"],
@@ -836,14 +921,17 @@ const SYSTEM_REFERENCE = {
 
 /**
  * Build the full capability surface for forge_capabilities and .well-known.
- * @param {Array} mcpTools - Live TOOLS array from server.mjs
- * @param {object} options - { cwd, hubPort }
+ * @param {Array} [mcpTools] - Live TOOLS array from server.mjs. If omitted, builds from TOOL_METADATA keys.
+ * @param {object} [options] - { cwd, hubPort }
  */
 export function buildCapabilitySurface(mcpTools, options = {}) {
   const { cwd = process.cwd(), hubPort = null } = options;
 
+  // If no tools array provided, build minimal tool objects from TOOL_METADATA keys
+  const tools = mcpTools || Object.keys(TOOL_METADATA).map((name) => ({ name, description: TOOL_METADATA[name]?.intent?.[0] || name }));
+
   // Enrich MCP tools with metadata
-  const enrichedTools = mcpTools.map((tool) => {
+  const enrichedTools = tools.map((tool) => {
     const meta = TOOL_METADATA[tool.name] || {};
     return {
       ...tool,
@@ -918,6 +1006,21 @@ export function buildCapabilitySurface(mcpTools, options = {}) {
         { method: "GET", path: "/api/bridge/status", description: "Bridge status — channels, pending approvals, stats" },
         { method: "POST", path: "/api/bridge/approve/:runId", description: "Receive approval callback. Auth: bridge.approvalSecret. Body: { action: 'approve'|'reject', approver? }" },
         { method: "GET", path: "/api/bridge/approve/:runId", description: "Browser-friendly approval link for Telegram inline buttons. Query: ?action=approve|reject&token=<secret>" },
+        // LiveGuard REST endpoints (v2.27.0)
+        { method: "GET", path: "/api/drift", description: "Run architecture drift check against guardrail rules. Returns score, violations, trend." },
+        { method: "GET", path: "/api/drift/history", description: "Drift score history from .forge/drift-history.json" },
+        { method: "POST", path: "/api/incident", description: "Capture an incident. Body: { description, severity?, files?, resolvedAt? }" },
+        { method: "GET", path: "/api/incidents", description: "List all captured incidents from .forge/incidents.jsonl" },
+        { method: "POST", path: "/api/regression-guard", description: "Run regression guard — execute validation gates from plan files. Body: { files?, plan?, failFast? }" },
+        { method: "POST", path: "/api/deploy-journal", description: "Record a deployment. Body: { version, by?, notes?, slice? }" },
+        { method: "GET", path: "/api/deploy-journal", description: "List all deploy journal entries from .forge/deploy-journal.jsonl" },
+        { method: "GET", path: "/api/triage", description: "Prioritized alert triage — ranked cross-signal alert list. Query: ?minSeverity=&max=" },
+        { method: "POST", path: "/api/runbook", description: "Generate operational runbook from a plan file. Body: { plan, includeIncidents? }" },
+        { method: "GET", path: "/api/runbooks", description: "List all generated runbooks from .forge/runbooks/" },
+        { method: "GET", path: "/api/hotspots", description: "Git churn hotspot analysis. Query: ?top=&since=" },
+        { method: "GET", path: "/api/health-trend", description: "Health trend analysis — drift, cost, incidents, model performance over time. Query: ?days=&metrics=" },
+        { method: "POST", path: "/api/tool/org-rules", description: "Generate org-rules instruction file via REST" },
+        { method: "POST", path: "/api/image/generate", description: "Generate an image via xAI Aurora or OpenAI DALL-E. Body: { prompt, outputPath, model?, size?, format?, quality? }" },
       ],
     },
     hub: hubPort

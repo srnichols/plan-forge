@@ -1086,7 +1086,11 @@ async function loadCost() {
     // Cost Trend Line 
     if (runs.length > 0) {
       const runCosts = runs.slice().reverse().map((r) => r.cost?.total_cost_usd || 0);
-      const runLabels = runs.slice().reverse().map((r) => r.startTime ? new Date(r.startTime).toLocaleDateString() : "?");
+      const runLabels = runs.slice().reverse().map((r) => {
+        const d = r.startTime ? new Date(r.startTime) : null;
+        const plan = r.plan ? r.plan.split("/").pop().replace(/\.md$/, "").replace(/Phase-/i, "").substring(0, 20) : "?";
+        return d ? `${d.toLocaleDateString()} ${d.toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"})}` : plan;
+      });
       const avg = runCosts.reduce((a, b) => a + b, 0) / runCosts.length;
       const pointColors = runCosts.map((c) => {
         if (c > avg * 3) return "#ef4444";

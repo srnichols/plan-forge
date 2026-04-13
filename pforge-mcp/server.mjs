@@ -24,7 +24,7 @@ import { execSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, watchFile, unwatchFile, statSync, openSync, readSync, closeSync } from "node:fs";
 import { resolve, join, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parsePlan, runPlan, detectWorkers, getCostReport, getHealthTrend, analyzeWithQuorum, generateImage, runAnalyze, readForgeJson, readForgeJsonl, appendForgeJsonl, emitToolTelemetry, regressionGuard, runPostSliceHook, resetPostSliceHookFired, runPreAgentHandoffHook, postOpenClawSnapshot, loadOpenClawConfig } from "./orchestrator.mjs";
+import { parsePlan, runPlan, detectWorkers, getCostReport, getHealthTrend, analyzeWithQuorum, generateImage, runAnalyze, readForgeJson, readForgeJsonl, appendForgeJsonl, emitToolTelemetry, regressionGuard, runPostSliceHook, resetPostSliceHookFired, runPreAgentHandoffHook, postOpenClawSnapshot, loadOpenClawConfig, loadQuorumConfig } from "./orchestrator.mjs";
 import { isOpenBrainConfigured } from "./memory.mjs";
 import { createHub, readHubPort } from "./hub.mjs";
 import { createBridge } from "./bridge.mjs";
@@ -707,12 +707,15 @@ const TOOLS = [
   },
   {
     name: "forge_quorum_analyze",
-    description: "Assemble a structured 3-section quorum prompt from any LiveGuard data source. No LLM calls — returns the prompt for multi-model dispatch. Supports customQuestion freeform override (max 500 chars).",
+    description: "Assemble a structured 3-section quorum prompt from any LiveGuard data source. No LLM calls — returns the prompt for multi-model dispatch. Supports customQuestion freeform override (max 500 chars) and analysisGoal presets.",
     inputSchema: {
       type: "object",
       properties: {
-        source: { type: "string", description: "Data source: 'drift', 'incident', 'regression', 'deploy', 'health'. Default: all" },
-        customQuestion: { type: "string", description: "Freeform question override (max 500 chars). Replaces the auto-generated question section." },
+        source: { type: "string", description: "Data source: 'drift', 'incident', 'triage', 'runbook', 'fix-proposal'. Required." },
+        targetFile: { type: "string", description: "Specific data file path (relative to .forge/). Defaults to most recent for source type." },
+        analysisGoal: { type: "string", description: "Preset question: 'root-cause', 'risk-assess', 'fix-review', 'runbook-validate'. Ignored when customQuestion is provided." },
+        customQuestion: { type: "string", description: "Freeform question override (max 500 chars). Replaces the analysisGoal preset entirely." },
+        quorumSize: { type: "number", description: "Number of model votes to request in the prompt. Default: 3." },
         path: { type: "string", description: "Project directory (default: current)" },
       },
       required: [],
@@ -1990,72 +1993,136 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : PROJECT_DIR;
       const source = args.source || "all";
       const customQuestion = args.customQuestion || null;
+      const analysisGoal = args.analysisGoal || null;
+      const quorumSize = Math.max(1, Math.min(10, parseInt(args.quorumSize) || 3));
+      const targetFile = args.targetFile || null;
 
       // Validate customQuestion length and XSS
       if (customQuestion) {
         if (customQuestion.length > 500) {
-          return { content: [{ type: "text", text: "customQuestion exceeds 500 character limit" }], isError: true };
+          return { content: [{ type: "text", text: JSON.stringify({ quorumPrompt: null, error: "customQuestion exceeds 500 character limit" }) }], isError: true };
         }
         if (/<script|javascript:|on\w+=/i.test(customQuestion)) {
-          return { content: [{ type: "text", text: "customQuestion contains disallowed content" }], isError: true };
+          return { content: [{ type: "text", text: JSON.stringify({ quorumPrompt: null, error: "customQuestion contains disallowed content" }) }], isError: true };
         }
       }
 
-      // Section 1: Context — gather LiveGuard data
+      // analysisGoal preset map
+      const GOAL_PRESETS = {
+        "root-cause": "Identify the root cause of the issues shown in the data. Trace the causal chain from symptoms to underlying problems.",
+        "risk-assess": "Assess the risk level of the current project state. Identify the highest-impact risks and their likelihood.",
+        "fix-review": "Review the proposed fixes and assess whether they adequately address the underlying issues. Identify gaps or risks in the remediation approach.",
+        "runbook-validate": "Validate the operational runbook against the current data. Identify any gaps, outdated steps, or missing escalation paths.",
+      };
+
+      // Section 1: Context — gather LiveGuard data based on source
       const context = {};
-      if (source === "all" || source === "drift") {
-        const driftPath = resolve(cwd, ".forge/drift-history.json");
-        if (existsSync(driftPath)) {
-          try { context.drift = JSON.parse(readFileSync(driftPath, "utf-8")); } catch { /* skip */ }
+      let oldestTimestamp = null;
+
+      const trackAge = (ts) => {
+        if (ts && (!oldestTimestamp || ts < oldestTimestamp)) oldestTimestamp = ts;
+      };
+
+      if (targetFile) {
+        // Load a specific file from .forge/
+        const data = readForgeJson(targetFile, null, cwd);
+        if (data) {
+          context.targetFile = data;
+          if (data.timestamp) trackAge(data.timestamp);
         }
-      }
-      if (source === "all" || source === "incident") {
-        context.incidents = readForgeJsonl(cwd, "incidents.jsonl").slice(-10);
-      }
-      if (source === "all" || source === "deploy") {
-        context.deploys = readForgeJsonl(cwd, "deploy-journal.jsonl").slice(-5);
-      }
-      if (source === "all" || source === "health") {
-        try { context.health = getHealthTrend(cwd, {}); } catch { /* skip */ }
-      }
-      if (source === "all" || source === "regression") {
-        const scanPath = resolve(cwd, ".forge/secret-scan-cache.json");
-        if (existsSync(scanPath)) {
-          try { context.secretScan = JSON.parse(readFileSync(scanPath, "utf-8")); } catch { /* skip */ }
+      } else {
+        if (source === "all" || source === "drift") {
+          const driftHistory = readForgeJsonl("drift-history.json", [], cwd);
+          if (driftHistory.length) {
+            const recent = driftHistory.slice(-5);
+            context.drift = recent;
+            trackAge(recent[0]?.timestamp);
+          }
+        }
+        if (source === "all" || source === "incident") {
+          const incidents = readForgeJsonl("incidents.jsonl", [], cwd).slice(-10);
+          if (incidents.length) {
+            context.incidents = incidents;
+            trackAge(incidents[0]?.capturedAt);
+          }
+        }
+        if (source === "all" || source === "triage") {
+          const triageCache = readForgeJson("alert-triage-cache.json", null, cwd);
+          if (triageCache) {
+            context.triage = triageCache;
+            trackAge(triageCache.generatedAt || triageCache.timestamp);
+          }
+        }
+        if (source === "all" || source === "runbook") {
+          const runbooksDir = resolve(cwd, ".forge/runbooks");
+          if (existsSync(runbooksDir)) {
+            try {
+              const files = readdirSync(runbooksDir).filter(f => f.endsWith("-runbook.md")).slice(-3);
+              if (files.length) {
+                context.runbooks = files.map(f => {
+                  const content = readFileSync(resolve(runbooksDir, f), "utf-8").slice(0, 2000);
+                  const stat = statSync(resolve(runbooksDir, f));
+                  trackAge(stat.mtime.toISOString());
+                  return { file: f, preview: content };
+                });
+              }
+            } catch { /* skip */ }
+          }
+        }
+        if (source === "all" || source === "fix-proposal") {
+          const proposals = readForgeJsonl("fix-proposals.json", [], cwd).slice(-5);
+          if (proposals.length) {
+            context.fixProposals = proposals;
+            trackAge(proposals[0]?.generatedAt || proposals[0]?.timestamp);
+          }
         }
       }
 
-      // Section 2: Question
+      // Stop condition: if specific source requested and no data found
+      if (source !== "all" && !targetFile && Object.keys(context).length === 0) {
+        const result = { quorumPrompt: null, error: `no ${source} data available — run the corresponding LiveGuard tool first` };
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
+      }
+
+      // Section 2: Question — customQuestion overrides analysisGoal
       let questionUsed;
       if (customQuestion) {
         questionUsed = customQuestion;
+      } else if (analysisGoal && GOAL_PRESETS[analysisGoal]) {
+        questionUsed = GOAL_PRESETS[analysisGoal];
       } else {
-        const parts = [];
-        if (context.drift) parts.push("current drift score and trend");
-        if (context.incidents?.length) parts.push(`${context.incidents.length} recent incident(s)`);
-        if (context.deploys?.length) parts.push(`${context.deploys.length} recent deployment(s)`);
-        if (context.secretScan) parts.push("latest secret scan results");
-        if (context.health) parts.push("health trend data");
-        questionUsed = parts.length > 0
-          ? `Analyze the following LiveGuard data (${parts.join(", ")}) and recommend prioritized actions to improve project health.`
-          : "No LiveGuard data available. Recommend initial setup steps for operational monitoring.";
+        // Default to risk-assess preset
+        questionUsed = GOAL_PRESETS["risk-assess"];
       }
 
-      // Section 3: Output format instructions
-      const outputFormat = "Respond with: 1) Summary of findings (2-3 sentences), 2) Prioritized action list (numbered, most impactful first), 3) Risk assessment (high/medium/low with reasoning).";
+      // Section 3: Voting instruction
+      const votingInstruction = `Each model must respond with: (1) a confidence score 0-100, (2) a one-paragraph answer, (3) one concrete recommendation. The aggregator accepts answers with confidence >= 60 and majority consensus. Quorum size: ${quorumSize} models.`;
 
-      // Build 3-section prompt
-      const prompt = {
-        context: JSON.stringify(context, null, 2),
-        question: questionUsed,
-        outputFormat,
-      };
+      // Build the 3-section quorum prompt string
+      const contextStr = JSON.stringify(context, null, 2);
+      const quorumPrompt = `## Context\n${contextStr}\n\n## Question\n${questionUsed}\n\n## Voting Instruction\n${votingInstruction}`;
 
-      const result = { source, questionUsed, prompt, generatedAt: new Date().toISOString() };
+      // suggestedModels from .forge.json quorum.models (config is source of truth)
+      const qConfig = loadQuorumConfig(cwd);
+      const suggestedModels = (qConfig.models || ["claude-opus-4.6", "grok-4.20", "gemini-3-pro-preview"]).slice(0, quorumSize);
+
+      // promptTokenEstimate
+      const promptTokenEstimate = Math.ceil(quorumPrompt.length / 4);
+
+      // dataSnapshotAge
+      let dataSnapshotAge = "unknown";
+      if (oldestTimestamp) {
+        const ageMs = Date.now() - new Date(oldestTimestamp).getTime();
+        const ageMins = Math.round(ageMs / 60000);
+        dataSnapshotAge = ageMins < 60 ? `${ageMins}m ago` : `${Math.round(ageMins / 60)}h ago`;
+      }
+
+      const result = { quorumPrompt, promptTokenEstimate, suggestedModels, dataSnapshotAge, questionUsed };
       emitToolTelemetry("forge_quorum_analyze", args, { source, questionLength: questionUsed.length }, Date.now() - t0, "OK", cwd);
+      activeHub?.broadcast({ type: "liveguard-tool-completed", tool: "forge_quorum_analyze", status: "OK", durationMs: Date.now() - t0 });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
     } catch (err) {
-      return { content: [{ type: "text", text: `Quorum analyze error: ${err.message}` }], isError: true };
+      return { content: [{ type: "text", text: JSON.stringify({ quorumPrompt: null, error: `Quorum analyze error: ${err.message}` }) }], isError: true };
     }
   }
 
@@ -3245,57 +3312,144 @@ function createExpressApp() {
     try {
       const source = req.query.source || "all";
       const customQuestion = req.query.question || null;
+      const analysisGoal = req.query.goal || null;
+      const quorumSize = Math.max(1, Math.min(10, parseInt(req.query.quorumSize) || 3));
       if (customQuestion && customQuestion.length > 500) {
-        return res.status(400).json({ error: "question exceeds 500 character limit" });
+        return res.status(400).json({ quorumPrompt: null, error: "question exceeds 500 character limit" });
       }
       if (customQuestion && /<script|javascript:|on\w+=/i.test(customQuestion)) {
-        return res.status(400).json({ error: "question contains disallowed content" });
+        return res.status(400).json({ quorumPrompt: null, error: "question contains disallowed content" });
       }
+
+      const GOAL_PRESETS = {
+        "root-cause": "Identify the root cause of the issues shown in the data. Trace the causal chain from symptoms to underlying problems.",
+        "risk-assess": "Assess the risk level of the current project state. Identify the highest-impact risks and their likelihood.",
+        "fix-review": "Review the proposed fixes and assess whether they adequately address the underlying issues. Identify gaps or risks in the remediation approach.",
+        "runbook-validate": "Validate the operational runbook against the current data. Identify any gaps, outdated steps, or missing escalation paths.",
+      };
+
       const context = {};
-      const driftPath = resolve(PROJECT_DIR, ".forge/drift-history.json");
-      if ((source === "all" || source === "drift") && existsSync(driftPath)) {
-        try { context.drift = JSON.parse(readFileSync(driftPath, "utf-8")); } catch { /* skip */ }
+      let oldestTimestamp = null;
+      const trackAge = (ts) => { if (ts && (!oldestTimestamp || ts < oldestTimestamp)) oldestTimestamp = ts; };
+
+      if (source === "all" || source === "drift") {
+        const driftHistory = readForgeJsonl("drift-history.json", [], PROJECT_DIR);
+        if (driftHistory.length) { context.drift = driftHistory.slice(-5); trackAge(driftHistory[0]?.timestamp); }
       }
       if (source === "all" || source === "incident") {
-        context.incidents = readForgeJsonl(PROJECT_DIR, "incidents.jsonl").slice(-10);
+        const incidents = readForgeJsonl("incidents.jsonl", [], PROJECT_DIR).slice(-10);
+        if (incidents.length) { context.incidents = incidents; trackAge(incidents[0]?.capturedAt); }
       }
-      if (source === "all" || source === "deploy") {
-        context.deploys = readForgeJsonl(PROJECT_DIR, "deploy-journal.jsonl").slice(-5);
+      if (source === "all" || source === "triage") {
+        const triageCache = readForgeJson("alert-triage-cache.json", null, PROJECT_DIR);
+        if (triageCache) { context.triage = triageCache; trackAge(triageCache.generatedAt); }
       }
-      const questionUsed = customQuestion || "Analyze LiveGuard data and recommend prioritized actions.";
-      const outputFormat = "Respond with: 1) Summary, 2) Prioritized actions, 3) Risk assessment.";
-      res.json({ source, questionUsed, prompt: { context: JSON.stringify(context, null, 2), question: questionUsed, outputFormat }, generatedAt: new Date().toISOString() });
+      if (source === "all" || source === "fix-proposal") {
+        const proposals = readForgeJsonl("fix-proposals.json", [], PROJECT_DIR).slice(-5);
+        if (proposals.length) { context.fixProposals = proposals; trackAge(proposals[0]?.generatedAt); }
+      }
+
+      if (source !== "all" && Object.keys(context).length === 0) {
+        return res.json({ quorumPrompt: null, error: `no ${source} data available — run the corresponding LiveGuard tool first` });
+      }
+
+      let questionUsed;
+      if (customQuestion) { questionUsed = customQuestion; }
+      else if (analysisGoal && GOAL_PRESETS[analysisGoal]) { questionUsed = GOAL_PRESETS[analysisGoal]; }
+      else { questionUsed = GOAL_PRESETS["risk-assess"]; }
+
+      const votingInstruction = `Each model must respond with: (1) a confidence score 0-100, (2) a one-paragraph answer, (3) one concrete recommendation. The aggregator accepts answers with confidence >= 60 and majority consensus. Quorum size: ${quorumSize} models.`;
+      const contextStr = JSON.stringify(context, null, 2);
+      const quorumPrompt = `## Context\n${contextStr}\n\n## Question\n${questionUsed}\n\n## Voting Instruction\n${votingInstruction}`;
+
+      const qConfig = loadQuorumConfig(PROJECT_DIR);
+      const suggestedModels = (qConfig.models || ["claude-opus-4.6", "grok-4.20", "gemini-3-pro-preview"]).slice(0, quorumSize);
+      const promptTokenEstimate = Math.ceil(quorumPrompt.length / 4);
+
+      let dataSnapshotAge = "unknown";
+      if (oldestTimestamp) {
+        const ageMins = Math.round((Date.now() - new Date(oldestTimestamp).getTime()) / 60000);
+        dataSnapshotAge = ageMins < 60 ? `${ageMins}m ago` : `${Math.round(ageMins / 60)}h ago`;
+      }
+
+      res.json({ quorumPrompt, promptTokenEstimate, suggestedModels, dataSnapshotAge, questionUsed });
     } catch (err) {
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ quorumPrompt: null, error: err.message });
     }
   });
 
   // POST /api/quorum/prompt — same as GET but with body params
   app.post("/api/quorum/prompt", (req, res) => {
     try {
-      const { source, customQuestion } = req.body || {};
+      const { source: reqSource, customQuestion, analysisGoal, quorumSize: reqQuorumSize, targetFile } = req.body || {};
+      const source = reqSource || "all";
+      const quorumSize = Math.max(1, Math.min(10, parseInt(reqQuorumSize) || 3));
       if (customQuestion && customQuestion.length > 500) {
-        return res.status(400).json({ error: "customQuestion exceeds 500 character limit" });
+        return res.status(400).json({ quorumPrompt: null, error: "customQuestion exceeds 500 character limit" });
       }
       if (customQuestion && /<script|javascript:|on\w+=/i.test(customQuestion)) {
-        return res.status(400).json({ error: "customQuestion contains disallowed content" });
+        return res.status(400).json({ quorumPrompt: null, error: "customQuestion contains disallowed content" });
       }
+
+      const GOAL_PRESETS = {
+        "root-cause": "Identify the root cause of the issues shown in the data. Trace the causal chain from symptoms to underlying problems.",
+        "risk-assess": "Assess the risk level of the current project state. Identify the highest-impact risks and their likelihood.",
+        "fix-review": "Review the proposed fixes and assess whether they adequately address the underlying issues. Identify gaps or risks in the remediation approach.",
+        "runbook-validate": "Validate the operational runbook against the current data. Identify any gaps, outdated steps, or missing escalation paths.",
+      };
+
       const context = {};
-      const driftPath = resolve(PROJECT_DIR, ".forge/drift-history.json");
-      if ((!source || source === "all" || source === "drift") && existsSync(driftPath)) {
-        try { context.drift = JSON.parse(readFileSync(driftPath, "utf-8")); } catch { /* skip */ }
+      let oldestTimestamp = null;
+      const trackAge = (ts) => { if (ts && (!oldestTimestamp || ts < oldestTimestamp)) oldestTimestamp = ts; };
+
+      if (targetFile) {
+        const data = readForgeJson(targetFile, null, PROJECT_DIR);
+        if (data) { context.targetFile = data; if (data.timestamp) trackAge(data.timestamp); }
+      } else {
+        if (source === "all" || source === "drift") {
+          const driftHistory = readForgeJsonl("drift-history.json", [], PROJECT_DIR);
+          if (driftHistory.length) { context.drift = driftHistory.slice(-5); trackAge(driftHistory[0]?.timestamp); }
+        }
+        if (source === "all" || source === "incident") {
+          const incidents = readForgeJsonl("incidents.jsonl", [], PROJECT_DIR).slice(-10);
+          if (incidents.length) { context.incidents = incidents; trackAge(incidents[0]?.capturedAt); }
+        }
+        if (source === "all" || source === "triage") {
+          const triageCache = readForgeJson("alert-triage-cache.json", null, PROJECT_DIR);
+          if (triageCache) { context.triage = triageCache; trackAge(triageCache.generatedAt); }
+        }
+        if (source === "all" || source === "fix-proposal") {
+          const proposals = readForgeJsonl("fix-proposals.json", [], PROJECT_DIR).slice(-5);
+          if (proposals.length) { context.fixProposals = proposals; trackAge(proposals[0]?.generatedAt); }
+        }
       }
-      if (!source || source === "all" || source === "incident") {
-        context.incidents = readForgeJsonl(PROJECT_DIR, "incidents.jsonl").slice(-10);
+
+      if (source !== "all" && !targetFile && Object.keys(context).length === 0) {
+        return res.json({ quorumPrompt: null, error: `no ${source} data available — run the corresponding LiveGuard tool first` });
       }
-      if (!source || source === "all" || source === "deploy") {
-        context.deploys = readForgeJsonl(PROJECT_DIR, "deploy-journal.jsonl").slice(-5);
+
+      let questionUsed;
+      if (customQuestion) { questionUsed = customQuestion; }
+      else if (analysisGoal && GOAL_PRESETS[analysisGoal]) { questionUsed = GOAL_PRESETS[analysisGoal]; }
+      else { questionUsed = GOAL_PRESETS["risk-assess"]; }
+
+      const votingInstruction = `Each model must respond with: (1) a confidence score 0-100, (2) a one-paragraph answer, (3) one concrete recommendation. The aggregator accepts answers with confidence >= 60 and majority consensus. Quorum size: ${quorumSize} models.`;
+      const contextStr = JSON.stringify(context, null, 2);
+      const quorumPrompt = `## Context\n${contextStr}\n\n## Question\n${questionUsed}\n\n## Voting Instruction\n${votingInstruction}`;
+
+      const qConfig = loadQuorumConfig(PROJECT_DIR);
+      const suggestedModels = (qConfig.models || ["claude-opus-4.6", "grok-4.20", "gemini-3-pro-preview"]).slice(0, quorumSize);
+      const promptTokenEstimate = Math.ceil(quorumPrompt.length / 4);
+
+      let dataSnapshotAge = "unknown";
+      if (oldestTimestamp) {
+        const ageMins = Math.round((Date.now() - new Date(oldestTimestamp).getTime()) / 60000);
+        dataSnapshotAge = ageMins < 60 ? `${ageMins}m ago` : `${Math.round(ageMins / 60)}h ago`;
       }
-      const questionUsed = customQuestion || "Analyze LiveGuard data and recommend prioritized actions.";
-      const outputFormat = "Respond with: 1) Summary, 2) Prioritized actions, 3) Risk assessment.";
-      res.json({ source: source || "all", questionUsed, prompt: { context: JSON.stringify(context, null, 2), question: questionUsed, outputFormat }, generatedAt: new Date().toISOString() });
+
+      res.json({ quorumPrompt, promptTokenEstimate, suggestedModels, dataSnapshotAge, questionUsed });
     } catch (err) {
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ quorumPrompt: null, error: err.message });
     }
   });
 

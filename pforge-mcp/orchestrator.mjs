@@ -974,11 +974,26 @@ function parseStderrStats(stderr) {
   const stats = { model: null, tokens_in: 0, tokens_out: 0, premiumRequests: 0 };
   if (!stderr) return stats;
 
-  // Parse premium requests
-  const premiumMatch = stderr.match(/(\d+)\s+Premium request/);
+  // Parse premium requests — two formats:
+  //   Old: "1 Premium request" / "3 Premium requests"
+  //   New: "Requests  3 Premium (1m 35s)"
+  const premiumMatch = stderr.match(/(\d+)\s+Premium\s+request/i) || stderr.match(/Requests\s+(\d+)\s+Premium/i);
   if (premiumMatch) stats.premiumRequests = parseInt(premiumMatch[1], 10);
 
-  // Parse model breakdown lines: "claude-sonnet-4.6  11.7m in, 97.5k out, ..."
+  // Parse token counts — two formats:
+  //   Old: " claude-sonnet-4.6  639.4k in, 4.5k out, 552.1k cached"
+  //   New: "Tokens    ↑ 476.0k • ↓ 3.1k • 430.1k (cached)"
+  const newTokenMatch = stderr.match(/Tokens\s+[↑⬆]\s*([\d.]+[kmb]?)\s*[•·]\s*[↓⬇]\s*([\d.]+[kmb]?)/i);
+  if (newTokenMatch) {
+    stats.tokens_in = parseTokenCount(newTokenMatch[1]);
+    stats.tokens_out = parseTokenCount(newTokenMatch[2]);
+  }
+
+  // Parse model from new format: "Model     claude-opus-4.6" or model line in breakdown
+  const newModelMatch = stderr.match(/Model\s+([\w.-]+)/);
+  if (newModelMatch) stats.model = newModelMatch[1];
+
+  // Old format: model breakdown lines "claude-sonnet-4.6  11.7m in, 97.5k out, ..."
   const modelLines = stderr.match(/^\s+([\w.-]+)\s+([\d.]+[kmb]?)\s+in,\s+([\d.]+[kmb]?)\s+out/gm);
   if (modelLines) {
     let maxTokens = 0;

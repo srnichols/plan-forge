@@ -82,6 +82,7 @@ function Show-Help {
     Write-Host "  regression-guard  Run validation gates from plan files — guard against regressions when files change"
     Write-Host "  runbook <plan>    Generate an operational runbook from a hardened plan file"
     Write-Host "  hotspot           Identify git churn hotspots — most frequently changed files"
+    Write-Host "  secret-scan       Scan recent commits for leaked secrets using Shannon entropy analysis"
     Write-Host "  health-trend      Health trend analysis — drift, cost, incidents, model performance over time"
     Write-Host "  tour              Guided walkthrough of your installed Plan Forge files"
     Write-Host "  help              Show this help message"
@@ -3355,6 +3356,53 @@ function Invoke-Hotspot {
     }
 }
 
+# ─── Command: secret-scan ──────────────────────────────────────────────
+function Invoke-SecretScan {
+    $since     = "HEAD~1"
+    $threshold = 4.0
+    for ($i = 0; $i -lt $Arguments.Count; $i++) {
+        switch ($Arguments[$i]) {
+            '--since'     { if (($i + 1) -lt $Arguments.Count) { $since = $Arguments[$i + 1]; $i++ } }
+            '--threshold' { if (($i + 1) -lt $Arguments.Count) { $threshold = [double]$Arguments[$i + 1]; $i++ } }
+        }
+    }
+
+    Write-ManualSteps "secret-scan" @(
+        "Run git diff to collect changed lines"
+        "Compute Shannon entropy for token-like strings"
+        "Flag findings above threshold ($threshold)"
+        "Cache results in .forge/secret-scan-cache.json"
+    )
+
+    $port = 3100
+    try {
+        $encodedSince = [System.Uri]::EscapeDataString($since)
+        $response = Invoke-RestMethod -Uri "http://localhost:$port/api/secret-scan" -Method GET -ErrorAction Stop
+        Write-Host ""
+        Write-Host "`u{1F50D} Secret Scan Results" -ForegroundColor Cyan
+        if ($null -eq $response.cache) {
+            Write-Host "   No scan results yet. Run forge_secret_scan to populate." -ForegroundColor DarkGray
+        } else {
+            Write-Host "   Since:         $($response.since)" -ForegroundColor White
+            Write-Host "   Threshold:     $($response.threshold)" -ForegroundColor White
+            Write-Host "   Scanned files: $($response.scannedFiles)" -ForegroundColor White
+            if ($response.clean) {
+                Write-Host "   Status:        `u{2705} Clean — no secrets detected" -ForegroundColor Green
+            } else {
+                Write-Host "   Status:        `u{26A0} $($response.findings.Count) finding(s)" -ForegroundColor Yellow
+                foreach ($f in $response.findings) {
+                    Write-Host "      $($f.file):$($f.line) [$($f.confidence)] entropy=$($f.entropyScore) type=$($f.type)" -ForegroundColor Red
+                }
+            }
+            Write-Host ""
+            Write-Host "   Scanned at: $($response.scannedAt)" -ForegroundColor DarkGray
+        }
+    } catch {
+        Write-Host "ERROR: MCP server not running on port $port. Start with: node pforge-mcp/server.mjs" -ForegroundColor Red
+        exit 1
+    }
+}
+
 # ─── Command: health-trend ─────────────────────────────────────────────
 function Invoke-HealthTrend {
     $days = 30
@@ -3643,6 +3691,7 @@ switch ($Command) {
     'regression-guard' { Invoke-RegressionGuard }
     'runbook'      { Invoke-Runbook }
     'hotspot'      { Invoke-Hotspot }
+    'secret-scan'  { Invoke-SecretScan }
     'health-trend' { Invoke-HealthTrend }
     'version-bump' { Invoke-VersionBump }
     'smith'        { Invoke-Smith }

@@ -65,6 +65,7 @@ COMMANDS:
   regression-guard  Run validation gates from plan files — guard against regressions when files change
   runbook <plan>    Generate an operational runbook from a hardened plan file
   hotspot           Identify git churn hotspots — most frequently changed files
+  secret-scan       Scan recent commits for leaked secrets using Shannon entropy analysis
   health-trend      Health trend analysis — drift, cost, incidents, model performance over time
   smith             Inspect your forge — environment, VS Code config, setup health, and common problems
   tour              Guided walkthrough of your installed Plan Forge files
@@ -2864,6 +2865,54 @@ cmd_hotspot() {
     "
 }
 
+# ─── Command: secret-scan ──────────────────────────────────────────────
+cmd_secret_scan() {
+    local since="HEAD~1"
+    local threshold="4.0"
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --since)     since="$2";     shift 2 ;;
+            --threshold) threshold="$2"; shift 2 ;;
+            *) shift ;;
+        esac
+    done
+
+    print_manual_steps "secret-scan" \
+        "Run git diff to collect changed lines" \
+        "Compute Shannon entropy for token-like strings" \
+        "Flag findings above threshold ($threshold)" \
+        "Cache results in .forge/secret-scan-cache.json"
+
+    local port=3100
+    local response
+    response=$(curl -sf "http://localhost:${port}/api/secret-scan") || {
+        echo "ERROR: MCP server not running on port ${port}. Start with: node pforge-mcp/server.mjs" >&2
+        exit 1
+    }
+    echo "$response" | node -e "
+      const d = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
+      if (d.cache === null) {
+        console.log('\n\u{1F50D} Secret Scan Results');
+        console.log('   No scan results yet. Run forge_secret_scan to populate.');
+      } else {
+        console.log('\n\u{1F50D} Secret Scan Results');
+        console.log('   Since:         ' + d.since);
+        console.log('   Threshold:     ' + d.threshold);
+        console.log('   Scanned files: ' + d.scannedFiles);
+        if (d.clean) {
+          console.log('   Status:        \x1b[32m\u2705 Clean — no secrets detected\x1b[0m');
+        } else {
+          console.log('   Status:        \x1b[33m\u26A0 ' + d.findings.length + ' finding(s)\x1b[0m');
+          d.findings.forEach(f => {
+            console.log('      \x1b[31m' + f.file + ':' + f.line + ' [' + f.confidence + '] entropy=' + f.entropyScore + ' type=' + f.type + '\x1b[0m');
+          });
+        }
+        console.log('');
+        console.log('   Scanned at: \x1b[90m' + d.scannedAt + '\x1b[0m');
+      }
+    "
+}
+
 # ─── Command: health-trend ─────────────────────────────────────────────
 cmd_health_trend() {
     local days=30
@@ -3142,6 +3191,7 @@ case "$COMMAND" in
     regression-guard) cmd_regression_guard "$@" ;;
     runbook)      cmd_runbook "$@" ;;
     hotspot)      cmd_hotspot "$@" ;;
+    secret-scan)  cmd_secret_scan "$@" ;;
     health-trend) cmd_health_trend "$@" ;;
     smith)        cmd_smith ;;
     tour)         cmd_tour ;;

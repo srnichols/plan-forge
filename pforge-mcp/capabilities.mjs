@@ -489,6 +489,26 @@ export const TOOL_METADATA = {
       output: { newVulnerabilities: [], resolvedVulnerabilities: [], unchanged: 42, snapshot: { capturedAt: "2024-01-01T00:00:00.000Z", depCount: 42 } },
     },
   },
+  forge_secret_scan: {
+    intent: ["secret-scan", "entropy-scan", "leak-detection"],
+    aliases: ["secret-scan", "scan-secrets", "entropy-check"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "2.28.0",
+    prerequisites: ["git initialized"],
+    produces: [".forge/secret-scan-cache.json"],
+    consumes: ["git diff output"],
+    sideEffects: ["writes .forge/secret-scan-cache.json", "may annotate .forge/deploy-journal-meta.json sidecar"],
+    securityNote: "Never logs actual secret values — only file paths, line numbers, entropy scores, and <REDACTED> placeholders. All findings are masked before caching or emitting telemetry.",
+    errors: {
+      GIT_UNAVAILABLE: { message: "git is not available or not a git repository", recovery: "Ensure you are inside a git repository — tool degrades gracefully returning { clean: null, scannedFiles: 0, findings: [], error: 'git unavailable' }" },
+      DIFF_TIMEOUT: { message: "git diff timed out (30s limit)", recovery: "Narrow the --since range to reduce diff size" },
+    },
+    example: {
+      input: { since: "HEAD~1", threshold: 4.0 },
+      output: { scannedAt: "2024-01-01T00:00:00.000Z", since: "HEAD~1", threshold: 4.0, scannedFiles: 5, clean: false, findings: [{ file: "src/config.js", line: 5, type: "api_key", entropyScore: 4.8, masked: "<REDACTED>", confidence: "high" }] },
+    },
+  },
 };
 
 // ─── Workflow Graphs ──────────────────────────────────────────────────

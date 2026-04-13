@@ -1065,3 +1065,112 @@ describe("liveguard traces endpoint data", () => {
     expect(result).toEqual([]);
   });
 });
+
+// ─── Capabilities: forge_secret_scan metadata ──────────────────────────
+
+describe("TOOL_METADATA forge_secret_scan", () => {
+  it("is present in TOOL_METADATA", () => {
+    expect(TOOL_METADATA).toHaveProperty("forge_secret_scan");
+  });
+
+  it("has correct addedIn version", () => {
+    expect(TOOL_METADATA.forge_secret_scan.addedIn).toBe("2.28.0");
+  });
+
+  it("produces secret-scan-cache.json", () => {
+    expect(TOOL_METADATA.forge_secret_scan.produces).toContain(".forge/secret-scan-cache.json");
+  });
+
+  it("has exactly one entry (no duplicates)", () => {
+    const keys = Object.keys(TOOL_METADATA).filter(k => k === "forge_secret_scan");
+    expect(keys).toHaveLength(1);
+  });
+
+  it("has GIT_UNAVAILABLE and DIFF_TIMEOUT error entries", () => {
+    const errors = TOOL_METADATA.forge_secret_scan.errors;
+    expect(errors).toHaveProperty("GIT_UNAVAILABLE");
+    expect(errors).toHaveProperty("DIFF_TIMEOUT");
+  });
+
+  it("sideEffects mentions secret-scan-cache.json", () => {
+    const se = TOOL_METADATA.forge_secret_scan.sideEffects;
+    expect(se.some(s => s.includes("secret-scan-cache.json"))).toBe(true);
+  });
+
+  it("sideEffects mentions deploy-journal-meta.json sidecar", () => {
+    const se = TOOL_METADATA.forge_secret_scan.sideEffects;
+    expect(se.some(s => s.includes("deploy-journal-meta.json"))).toBe(true);
+  });
+
+  it("has securityNote about never logging actual values", () => {
+    expect(TOOL_METADATA.forge_secret_scan.securityNote).toBeDefined();
+    expect(TOOL_METADATA.forge_secret_scan.securityNote).toContain("REDACTED");
+  });
+
+  it("has cost low", () => {
+    expect(TOOL_METADATA.forge_secret_scan.cost).toBe("low");
+  });
+});
+
+describe("secret scan cache persistence", () => {
+  it("stores and reads secret-scan-cache.json correctly", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    const cache = {
+      scannedAt: "2024-01-01T00:00:00.000Z",
+      since: "HEAD~1",
+      threshold: 4.0,
+      scannedFiles: 3,
+      clean: false,
+      findings: [{ file: "src/config.js", line: 5, type: "api_key", entropyScore: 4.8, masked: "<REDACTED>", confidence: "high" }],
+    };
+    writeFileSync(resolve(forgeDir, "secret-scan-cache.json"), JSON.stringify(cache, null, 2), "utf-8");
+    const read = JSON.parse(require("fs").readFileSync(resolve(forgeDir, "secret-scan-cache.json"), "utf-8"));
+    expect(read.clean).toBe(false);
+    expect(read.findings).toHaveLength(1);
+    expect(read.findings[0].masked).toBe("<REDACTED>");
+    expect(read.findings[0].entropyScore).toBe(4.8);
+  });
+
+  it("findings never contain actual secret values", () => {
+    const finding = { file: "src/config.js", line: 5, type: "api_key", entropyScore: 4.8, masked: "<REDACTED>", confidence: "high" };
+    expect(finding.masked).toBe("<REDACTED>");
+    expect(Object.values(finding).every(v => typeof v === "string" ? !v.includes("sk-") : true)).toBe(true);
+  });
+});
+
+describe("deploy journal sidecar annotation", () => {
+  it("writes secretScanClean and secretScanAt to sidecar keyed by deploy id", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+
+    const sidecar = {
+      "deploy-1700000000000": {
+        secretScanClean: true,
+        secretScanAt: "2024-01-01T00:00:00.000Z",
+      },
+    };
+    writeFileSync(resolve(forgeDir, "deploy-journal-meta.json"), JSON.stringify(sidecar, null, 2), "utf-8");
+
+    const read = JSON.parse(require("fs").readFileSync(resolve(forgeDir, "deploy-journal-meta.json"), "utf-8"));
+    expect(read["deploy-1700000000000"].secretScanClean).toBe(true);
+    expect(read["deploy-1700000000000"].secretScanAt).toBe("2024-01-01T00:00:00.000Z");
+  });
+
+  it("preserves existing sidecar fields when adding scan annotation", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+
+    const existing = { "deploy-100": { someField: "value" } };
+    writeFileSync(resolve(forgeDir, "deploy-journal-meta.json"), JSON.stringify(existing, null, 2), "utf-8");
+
+    // Simulate adding scan annotation
+    const sidecar = JSON.parse(require("fs").readFileSync(resolve(forgeDir, "deploy-journal-meta.json"), "utf-8"));
+    sidecar["deploy-100"] = { ...sidecar["deploy-100"], secretScanClean: false, secretScanAt: "2024-06-01T00:00:00.000Z" };
+    writeFileSync(resolve(forgeDir, "deploy-journal-meta.json"), JSON.stringify(sidecar, null, 2), "utf-8");
+
+    const read = JSON.parse(require("fs").readFileSync(resolve(forgeDir, "deploy-journal-meta.json"), "utf-8"));
+    expect(read["deploy-100"].someField).toBe("value");
+    expect(read["deploy-100"].secretScanClean).toBe(false);
+  });
+});

@@ -666,6 +666,19 @@ const TOOLS = [
       required: [],
     },
   },
+  {
+    name: "forge_secret_scan", // LiveGuard — emitToolTelemetry in handler
+    description: "Post-commit entropy analysis — scan git diff output for high-entropy strings that may be leaked secrets. Uses Shannon entropy with key-name heuristics. Never logs actual secret values — only file paths, line numbers, entropy scores, and <REDACTED> placeholders. Caches results in .forge/secret-scan-cache.json. Annotates deploy journal sidecar when last deploy matches HEAD.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        since: { type: "string", description: "Git ref or range to scan (e.g., 'HEAD~1', 'abc123..def456'). Default: HEAD~1" },
+        threshold: { type: "number", description: "Minimum Shannon entropy to flag (3.5–5.0). Default: 4.0", minimum: 3.5, maximum: 5.0 },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+      required: [],
+    },
+  },
 ];
 // ─── Runbook helpers ──────────────────────────────────────────────────
 
@@ -1527,6 +1540,146 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
   }
 
+  // ─── forge_secret_scan — post-commit entropy analysis ───
+  if (name === "forge_secret_scan") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const since = args.since || "HEAD~1";
+      const threshold = Math.max(3.5, Math.min(5.0, args.threshold ?? 4.0));
+
+      // Shannon entropy — pure JS, zero dependencies
+      function shannonEntropy(str) {
+        if (!str || str.length === 0) return 0;
+        const freq = {};
+        for (const char of str) freq[char] = (freq[char] || 0) + 1;
+        let entropy = 0;
+        for (const count of Object.values(freq)) {
+          const p = count / str.length;
+          entropy -= p * Math.log2(p);
+        }
+        return entropy;
+      }
+
+      const KEY_PATTERNS = /(?:key|secret|token|password|api_key|auth|credential|private)/i;
+
+      // Graceful degradation when git is unavailable
+      let diffOutput;
+      try {
+        diffOutput = execSync(`git diff ${since}`, { cwd, encoding: "utf-8", timeout: 30_000 });
+      } catch (err) {
+        if (err.status === 128 || (err.message && err.message.includes("not a git repository"))) {
+          const graceful = { clean: null, scannedFiles: 0, findings: [], error: "git unavailable" };
+          emitToolTelemetry("forge_secret_scan", args, graceful, Date.now() - t0, "DEGRADED", cwd);
+          return { content: [{ type: "text", text: JSON.stringify(graceful, null, 2) }], isError: false };
+        }
+        throw err;
+      }
+
+      // Parse diff: extract added lines with file context
+      const findings = [];
+      const scannedFiles = new Set();
+      let currentFile = null;
+      let lineNumber = 0;
+      for (const line of diffOutput.split("\n")) {
+        if (line.startsWith("+++ b/")) {
+          currentFile = line.slice(6);
+          scannedFiles.add(currentFile);
+          continue;
+        }
+        if (line.startsWith("@@ ")) {
+          const match = line.match(/@@ -\d+(?:,\d+)? \+(\d+)/);
+          lineNumber = match ? parseInt(match[1], 10) - 1 : 0;
+          continue;
+        }
+        if (line.startsWith("+") && !line.startsWith("+++")) {
+          lineNumber++;
+          const added = line.slice(1);
+          // Extract tokens: quoted strings and long unbroken sequences
+          const tokens = added.match(/["']([^"']{8,})["']|(?:=|:|=>)\s*["']?([^\s"',;]{8,})["']?/g) || [];
+          for (const raw of tokens) {
+            const cleaned = raw.replace(/^[=:>]\s*["']?|["']$/g, "").replace(/^["']/, "");
+            if (cleaned.length < 8) continue;
+            const entropy = shannonEntropy(cleaned);
+            if (entropy < threshold) continue;
+
+            const keyMatch = KEY_PATTERNS.test(added);
+            let confidence;
+            if (entropy >= 4.5 && keyMatch) confidence = "high";
+            else if ((entropy >= 4.0 && keyMatch) || entropy >= 4.8) confidence = "medium";
+            else confidence = "low";
+
+            // Infer type from key-name heuristic
+            let type = "unknown";
+            const lowerLine = added.toLowerCase();
+            if (/api.?key/i.test(lowerLine)) type = "api_key";
+            else if (/secret/i.test(lowerLine)) type = "secret";
+            else if (/token/i.test(lowerLine)) type = "token";
+            else if (/password|passwd/i.test(lowerLine)) type = "password";
+            else if (/auth/i.test(lowerLine)) type = "auth";
+            else if (/private/i.test(lowerLine)) type = "private_key";
+            else if (/credential/i.test(lowerLine)) type = "credential";
+
+            findings.push({
+              file: currentFile,
+              line: lineNumber,
+              type,
+              entropyScore: Math.round(entropy * 100) / 100,
+              masked: "<REDACTED>",
+              confidence,
+            });
+          }
+        } else if (!line.startsWith("-")) {
+          lineNumber++;
+        }
+      }
+
+      const clean = findings.length === 0;
+      const result = {
+        scannedAt: new Date().toISOString(),
+        since,
+        threshold,
+        scannedFiles: scannedFiles.size,
+        clean,
+        findings,
+      };
+
+      // Write cache
+      mkdirSync(resolve(cwd, ".forge"), { recursive: true });
+      writeFileSync(resolve(cwd, ".forge", "secret-scan-cache.json"), JSON.stringify(result, null, 2), "utf-8");
+
+      // Deploy journal sidecar annotation
+      try {
+        const journalPath = resolve(cwd, ".forge", "deploy-journal.jsonl");
+        if (existsSync(journalPath)) {
+          const deploys = readForgeJsonl("deploy-journal.jsonl", [], cwd);
+          if (deploys.length > 0) {
+            const lastDeploy = deploys[deploys.length - 1];
+            let headSha = null;
+            try { headSha = execSync("git rev-parse HEAD", { cwd, encoding: "utf-8", timeout: 5_000 }).trim(); } catch { /* skip */ }
+            if (headSha && lastDeploy.id) {
+              const sidecarPath = resolve(cwd, ".forge", "deploy-journal-meta.json");
+              let sidecar = {};
+              try { if (existsSync(sidecarPath)) sidecar = JSON.parse(readFileSync(sidecarPath, "utf-8")); } catch { sidecar = {}; }
+              sidecar[lastDeploy.id] = {
+                ...(sidecar[lastDeploy.id] || {}),
+                secretScanClean: clean,
+                secretScanAt: result.scannedAt,
+              };
+              writeFileSync(sidecarPath, JSON.stringify(sidecar, null, 2), "utf-8");
+            }
+          }
+        }
+      } catch { /* best-effort sidecar annotation */ }
+
+      emitToolTelemetry("forge_secret_scan", args, { clean, findings: findings.length, scannedFiles: scannedFiles.size }, Date.now() - t0, "OK", cwd);
+      activeHub?.broadcast({ type: "liveguard-tool-completed", tool: "forge_secret_scan", status: "OK", durationMs: Date.now() - t0 });
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Secret scan error: ${err.message}` }], isError: true };
+    }
+  }
+
   // ─── forge_smith — onCall validation enhancement ───
   if (name === "forge_smith") {
     const result = executeTool(name, args || {});
@@ -1930,6 +2083,75 @@ function createExpressApp() {
       const snapshot = { capturedAt: new Date().toISOString(), depCount: currentVulns.length, vulnerabilities: currentVulns };
       writeFileSync(resolve(PROJECT_DIR, ".forge", "deps-snapshot.json"), JSON.stringify(snapshot, null, 2), "utf-8");
       res.json(snapshot);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // REST API: GET /api/secret-scan — latest secret scan cache
+  app.get("/api/secret-scan", (_req, res) => {
+    try {
+      const cachePath = resolve(PROJECT_DIR, ".forge", "secret-scan-cache.json");
+      if (!existsSync(cachePath)) return res.json({ cache: null, message: "No scan results yet — run forge_secret_scan first" });
+      res.json(JSON.parse(readFileSync(cachePath, "utf-8")));
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // REST API: POST /api/secret-scan/run — trigger secret scan (auth required)
+  app.post("/api/secret-scan/run", (req, res) => {
+    try {
+      if (!checkApprovalSecret(req, res)) return;
+      const since = req.body?.since || "HEAD~1";
+      const threshold = Math.max(3.5, Math.min(5.0, parseFloat(req.body?.threshold) || 4.0));
+
+      function shannonEntropy(str) {
+        if (!str || str.length === 0) return 0;
+        const freq = {};
+        for (const char of str) freq[char] = (freq[char] || 0) + 1;
+        let entropy = 0;
+        for (const count of Object.values(freq)) {
+          const p = count / str.length;
+          entropy -= p * Math.log2(p);
+        }
+        return entropy;
+      }
+
+      const KEY_PATTERNS = /(?:key|secret|token|password|api_key|auth|credential|private)/i;
+      let diffOutput;
+      try {
+        diffOutput = execSync(`git diff ${since}`, { cwd: PROJECT_DIR, encoding: "utf-8", timeout: 30_000 });
+      } catch {
+        return res.json({ clean: null, scannedFiles: 0, findings: [], error: "git unavailable" });
+      }
+
+      const findings = [];
+      const scannedFiles = new Set();
+      let currentFile = null;
+      let lineNumber = 0;
+      for (const line of diffOutput.split("\n")) {
+        if (line.startsWith("+++ b/")) { currentFile = line.slice(6); scannedFiles.add(currentFile); continue; }
+        if (line.startsWith("@@ ")) { const m = line.match(/@@ -\d+(?:,\d+)? \+(\d+)/); lineNumber = m ? parseInt(m[1], 10) - 1 : 0; continue; }
+        if (line.startsWith("+") && !line.startsWith("+++")) {
+          lineNumber++;
+          const added = line.slice(1);
+          const tokens = added.match(/["']([^"']{8,})["']|(?:=|:|=>)\s*["']?([^\s"',;]{8,})["']?/g) || [];
+          for (const raw of tokens) {
+            const cleaned = raw.replace(/^[=:>]\s*["']?|["']$/g, "").replace(/^["']/, "");
+            if (cleaned.length < 8) continue;
+            const entropy = shannonEntropy(cleaned);
+            if (entropy < threshold) continue;
+            const keyMatch = KEY_PATTERNS.test(added);
+            let confidence;
+            if (entropy >= 4.5 && keyMatch) confidence = "high";
+            else if ((entropy >= 4.0 && keyMatch) || entropy >= 4.8) confidence = "medium";
+            else confidence = "low";
+            findings.push({ file: currentFile, line: lineNumber, type: "unknown", entropyScore: Math.round(entropy * 100) / 100, masked: "<REDACTED>", confidence });
+          }
+        } else if (!line.startsWith("-")) { lineNumber++; }
+      }
+
+      const result = { scannedAt: new Date().toISOString(), since, threshold, scannedFiles: scannedFiles.size, clean: findings.length === 0, findings };
+      mkdirSync(resolve(PROJECT_DIR, ".forge"), { recursive: true });
+      writeFileSync(resolve(PROJECT_DIR, ".forge", "secret-scan-cache.json"), JSON.stringify(result, null, 2), "utf-8");
+      res.json(result);
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 

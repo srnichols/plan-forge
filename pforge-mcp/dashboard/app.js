@@ -2439,9 +2439,29 @@ async function loadLGTriage() {
 window.loadLGTriage = loadLGTriage;
 
 async function loadLGSecurity() {
-  // Placeholder — loads secret scan cache when security REST endpoint ships
   const el = document.getElementById('lg-security-results');
-  if (el && el.children.length <= 1) {
+  if (!el) return;
+  try {
+    const res = await fetch('/api/secret-scan');
+    const data = await res.json();
+    if (!data || data.cache === null || !data.scannedAt) {
+      el.innerHTML = '<p class="text-gray-500 text-sm text-center py-8">No scan results. Run <code class="bg-gray-700 px-1 rounded">pforge secret-scan</code> to populate.</p>';
+      return;
+    }
+    let html = `<div class="text-xs text-gray-400 mb-2">Scanned: ${data.scannedAt} | Since: ${data.since} | Files: ${data.scannedFiles} | Threshold: ${data.threshold}</div>`;
+    if (data.clean) {
+      html += '<p class="text-green-400 text-sm py-2">\u2705 Clean — no secrets detected</p>';
+    } else {
+      html += `<p class="text-yellow-400 text-sm mb-2">\u26A0\uFE0F ${data.findings.length} finding(s)</p>`;
+      html += '<div class="space-y-1">';
+      for (const f of data.findings) {
+        const color = f.confidence === 'high' ? 'text-red-400' : f.confidence === 'medium' ? 'text-yellow-400' : 'text-gray-400';
+        html += `<div class="${color} text-xs font-mono">${f.file}:${f.line} [${f.confidence}] entropy=${f.entropyScore} type=${f.type}</div>`;
+      }
+      html += '</div>';
+    }
+    el.innerHTML = html;
+  } catch {
     el.innerHTML = '<p class="text-gray-500 text-sm text-center py-8">No scan results. Run <code class="bg-gray-700 px-1 rounded">pforge secret-scan</code> to populate.</p>';
   }
 }

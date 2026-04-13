@@ -1843,33 +1843,65 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       if (source === "incident" || (source === "auto" && incidentId)) {
         if (!incidentId) return { content: [{ type: "text", text: "incidentId required for incident source" }], isError: true };
-        const incidents = readForgeJsonl(cwd, "incidents.jsonl");
+        const incidents = readForgeJsonl("incidents.jsonl", [], cwd);
+        if (!incidents.length) {
+          return { content: [{ type: "text", text: JSON.stringify({ error: "no incident data — run pforge incident first", planFile: null }) }], isError: false };
+        }
         const incident = incidents.find((i) => i.id === incidentId || i.incidentId === incidentId);
         if (!incident) return { content: [{ type: "text", text: `Incident not found: ${incidentId}` }], isError: true };
         sourceData = { type: "incident", incident };
         fixId = incidentId;
+      } else if (source === "regression") {
+        const regPath = resolve(cwd, ".forge", "regression-gates.json");
+        if (!existsSync(regPath)) {
+          return { content: [{ type: "text", text: JSON.stringify({ error: "no regression data — run pforge regression-guard first", planFile: null }) }], isError: false };
+        }
+        try {
+          const regData = JSON.parse(readFileSync(regPath, "utf-8"));
+          if (!regData || (Array.isArray(regData) && regData.length === 0)) {
+            return { content: [{ type: "text", text: JSON.stringify({ error: "no regression data — run pforge regression-guard first", planFile: null }) }], isError: false };
+          }
+          sourceData = { type: "regression", regression: regData };
+        } catch {
+          return { content: [{ type: "text", text: JSON.stringify({ error: "no regression data — run pforge regression-guard first", planFile: null }) }], isError: false };
+        }
+        fixId = `regression-${Date.now()}`;
       } else if (source === "drift" || source === "auto") {
-        const driftPath = resolve(cwd, ".forge/drift-history.json");
-        if (existsSync(driftPath)) {
-          const history = JSON.parse(readFileSync(driftPath, "utf-8"));
-          const latest = Array.isArray(history) ? history[history.length - 1] : history;
+        const driftHistory = readForgeJsonl("drift-history.json", [], cwd);
+        if (!driftHistory.length) {
+          if (source === "drift") {
+            return { content: [{ type: "text", text: JSON.stringify({ error: "no drift data — run pforge drift first", planFile: null }) }], isError: false };
+          }
+          // auto mode: fall through to try other sources below
+        } else {
+          const latest = driftHistory[driftHistory.length - 1];
           sourceData = { type: "drift", drift: latest };
           fixId = `drift-${Date.now()}`;
         }
-      } else if (source === "regression") {
-        sourceData = { type: "regression" };
-        fixId = `regression-${Date.now()}`;
-      } else if (source === "secret") {
-        const scanPath = resolve(cwd, ".forge/secret-scan-cache.json");
-        if (existsSync(scanPath)) {
-          const scan = JSON.parse(readFileSync(scanPath, "utf-8"));
-          sourceData = { type: "secret", scan };
-          fixId = `secret-${Date.now()}`;
+      }
+
+      // auto mode: try secret if no source found yet
+      if (source === "secret" || (source === "auto" && !fixId)) {
+        const scanPath = resolve(cwd, ".forge", "secret-scan-cache.json");
+        if (!existsSync(scanPath)) {
+          if (source === "secret") {
+            return { content: [{ type: "text", text: JSON.stringify({ error: "no secret scan data — run pforge secret-scan first", planFile: null }) }], isError: false };
+          }
+        } else {
+          try {
+            const scan = JSON.parse(readFileSync(scanPath, "utf-8"));
+            sourceData = { type: "secret", scan };
+            fixId = `secret-${Date.now()}`;
+          } catch {
+            if (source === "secret") {
+              return { content: [{ type: "text", text: JSON.stringify({ error: "no secret scan data — run pforge secret-scan first", planFile: null }) }], isError: false };
+            }
+          }
         }
       }
 
       if (!fixId) {
-        return { content: [{ type: "text", text: "No LiveGuard data found for fix proposal generation" }], isError: true };
+        return { content: [{ type: "text", text: JSON.stringify({ error: "no LiveGuard data found — run drift, incident-capture, regression-guard, or secret-scan first", planFile: null }) }], isError: false };
       }
 
       // Check for duplicate
@@ -1937,9 +1969,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       writeFileSync(planPath, planContent, "utf-8");
 
+      // Persist proposal record
+      const proposalRecord = { fixId, plan: `docs/plans/auto/${planName}`, source: sourceData.type, sliceCount: slices.length, generatedAt: new Date().toISOString() };
+      appendForgeJsonl("fix-proposals.json", proposalRecord, cwd);
+
       const result = { fixId, plan: `docs/plans/auto/${planName}`, source: sourceData.type, sliceCount: slices.length, alreadyExists: false };
       emitToolTelemetry("forge_fix_proposal", args, result, Date.now() - t0, "OK", cwd);
       activeHub?.broadcast({ type: "fix-proposal-ready", data: result });
+      activeHub?.broadcast({ type: "liveguard-tool-completed", tool: "forge_fix_proposal", status: "OK", durationMs: Date.now() - t0 });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
     } catch (err) {
       return { content: [{ type: "text", text: `Fix proposal error: ${err.message}` }], isError: true };

@@ -3546,6 +3546,51 @@ function Invoke-EnvDiff {
     }
 }
 
+# ─── Command: fix-proposal ──────────────────────────────────────────────
+function Invoke-FixProposal {
+    $source = ""
+    $incidentId = ""
+    for ($i = 0; $i -lt $Arguments.Count; $i++) {
+        switch ($Arguments[$i]) {
+            '--source'      { if (($i + 1) -lt $Arguments.Count) { $source = $Arguments[$i + 1]; $i++ } }
+            '--incident-id' { if (($i + 1) -lt $Arguments.Count) { $incidentId = $Arguments[$i + 1]; $i++ } }
+        }
+    }
+
+    Write-ManualSteps "fix-proposal" @(
+        "Read LiveGuard data (drift, incidents, secrets, regression)"
+        "Generate 1-2 slice fix plan"
+        "Write to docs/plans/auto/LIVEGUARD-FIX-<id>.md"
+        "Append record to .forge/fix-proposals.json"
+    )
+
+    $port = 3100
+    try {
+        $body = @{}
+        if ($source)     { $body["source"]     = $source }
+        if ($incidentId) { $body["incidentId"] = $incidentId }
+        $json = $body | ConvertTo-Json -Compress
+        $response = Invoke-RestMethod -Uri "http://localhost:$port/api/fix/propose" `
+            -Method POST -Body $json -ContentType "application/json" -ErrorAction Stop
+
+        Write-Host ""
+        Write-Host "`u{1F527} Fix Proposal" -ForegroundColor Cyan
+        if ($response.error) {
+            Write-Host "   $($response.error)" -ForegroundColor Yellow
+        } elseif ($response.alreadyExists) {
+            Write-Host "   Already exists: $($response.plan)" -ForegroundColor DarkGray
+        } else {
+            Write-Host "   Fix ID:   $($response.fixId)" -ForegroundColor White
+            Write-Host "   Source:   $($response.source)" -ForegroundColor White
+            Write-Host "   Plan:     $($response.plan)" -ForegroundColor Green
+            Write-Host "   Slices:   $($response.sliceCount)" -ForegroundColor White
+        }
+    } catch {
+        Write-Host "ERROR: MCP server not running on port $port. Start with: node pforge-mcp/server.mjs" -ForegroundColor Red
+        exit 1
+    }
+}
+
 # ─── Command: health-trend ─────────────────────────────────────────────
 function Invoke-HealthTrend {
     $days = 30
@@ -3836,8 +3881,9 @@ switch ($Command) {
     'hotspot'      { Invoke-Hotspot }
     'dep-watch'    { Invoke-DepWatch }
     'secret-scan'  { Invoke-SecretScan }
-    'env-diff'     { Invoke-EnvDiff }
-    'health-trend' { Invoke-HealthTrend }
+    'env-diff'        { Invoke-EnvDiff }
+    'fix-proposal'    { Invoke-FixProposal }
+    'health-trend'    { Invoke-HealthTrend }
     'version-bump' { Invoke-VersionBump }
     'smith'        { Invoke-Smith }
     'tour'         { Invoke-Tour }

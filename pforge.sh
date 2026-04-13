@@ -2964,6 +2964,54 @@ cmd_env_diff() {
     "
 }
 
+# ─── Command: fix-proposal ──────────────────────────────────────────────
+cmd_fix_proposal() {
+    local source=""
+    local incident_id=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --source)      source="$2";      shift 2 ;;
+            --incident-id) incident_id="$2"; shift 2 ;;
+            *) shift ;;
+        esac
+    done
+
+    print_manual_steps "fix-proposal" \
+        "Read LiveGuard data (drift, incidents, secrets, regression)" \
+        "Generate 1-2 slice fix plan" \
+        "Write to docs/plans/auto/LIVEGUARD-FIX-<id>.md" \
+        "Append record to .forge/fix-proposals.json"
+
+    local port=3100
+    local body="{}"
+    if [ -n "$source" ] && [ -n "$incident_id" ]; then
+        body="{\"source\":\"${source}\",\"incidentId\":\"${incident_id}\"}"
+    elif [ -n "$source" ]; then
+        body="{\"source\":\"${source}\"}"
+    elif [ -n "$incident_id" ]; then
+        body="{\"incidentId\":\"${incident_id}\"}"
+    fi
+    local response
+    response=$(curl -sf -X POST -H "Content-Type: application/json" -d "$body" "http://localhost:${port}/api/fix/propose") || {
+        echo "ERROR: MCP server not running on port ${port}. Start with: node pforge-mcp/server.mjs" >&2
+        exit 1
+    }
+    echo "$response" | node -e "
+      const d = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
+      console.log('\n\u{1F527} Fix Proposal');
+      if (d.error) {
+        console.log('   \x1b[33m' + d.error + '\x1b[0m');
+      } else if (d.alreadyExists) {
+        console.log('   \x1b[90mAlready exists: ' + d.plan + '\x1b[0m');
+      } else {
+        console.log('   Fix ID:   ' + d.fixId);
+        console.log('   Source:   ' + d.source);
+        console.log('   Plan:     \x1b[32m' + d.plan + '\x1b[0m');
+        console.log('   Slices:   ' + (d.sliceCount || 'unknown'));
+      }
+    "
+}
+
 # ─── Command: health-trend ─────────────────────────────────────────────
 cmd_health_trend() {
     local days=30
@@ -3244,6 +3292,7 @@ case "$COMMAND" in
     hotspot)      cmd_hotspot "$@" ;;
     secret-scan)  cmd_secret_scan "$@" ;;
     env-diff)     cmd_env_diff "$@" ;;
+    fix-proposal) cmd_fix_proposal "$@" ;;
     health-trend) cmd_health_trend "$@" ;;
     smith)        cmd_smith ;;
     tour)         cmd_tour ;;

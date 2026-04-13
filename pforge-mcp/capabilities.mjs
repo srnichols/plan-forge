@@ -537,11 +537,11 @@ export const TOOL_METADATA = {
     addedIn: "2.29.0",
     prerequisites: ["LiveGuard data available (drift, incidents, secret scan)"],
     produces: ["docs/plans/auto/LIVEGUARD-FIX-<id>.md"],
-    consumes: [".forge/drift-history.json", ".forge/incidents.jsonl", ".forge/secret-scan-cache.json"],
-    sideEffects: ["writes fix plan to docs/plans/auto/", "broadcasts fix-proposal-ready event"],
+    consumes: [".forge/drift-history.json", ".forge/incidents.jsonl", ".forge/secret-scan-cache.json", ".forge/regression-gates.json"],
+    sideEffects: ["writes docs/plans/auto/LIVEGUARD-FIX-{incidentId}.md", "appends .forge/fix-proposals.json", "broadcasts fix-proposal-ready event"],
     securityNote: "Plans are generated locally. One proposal per incidentId to prevent spam.",
     errors: {
-      NO_DATA: { message: "No LiveGuard data found", recovery: "Run drift, incident-capture, or secret-scan first" },
+      NO_DATA: { message: "No LiveGuard data found", recovery: "Run drift, incident-capture, regression-guard, or secret-scan first" },
       ALREADY_EXISTS: { message: "Fix proposal already exists for this ID", recovery: "Check docs/plans/auto/ for existing plan" },
     },
     example: {

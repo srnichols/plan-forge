@@ -1230,6 +1230,58 @@ describe("TOOL_METADATA forge_env_diff", () => {
   });
 });
 
+// ─── forge_fix_proposal metadata ──────────────────────────────────────
+
+describe("TOOL_METADATA forge_fix_proposal", () => {
+  it("is present in TOOL_METADATA", () => {
+    expect(TOOL_METADATA).toHaveProperty("forge_fix_proposal");
+  });
+
+  it("has correct addedIn version", () => {
+    expect(TOOL_METADATA.forge_fix_proposal.addedIn).toBe("2.29.0");
+  });
+
+  it("produces docs/plans/auto/LIVEGUARD-FIX-<id>.md", () => {
+    expect(TOOL_METADATA.forge_fix_proposal.produces).toContain("docs/plans/auto/LIVEGUARD-FIX-<id>.md");
+  });
+
+  it("has exactly one entry (no duplicates)", () => {
+    const keys = Object.keys(TOOL_METADATA).filter(k => k === "forge_fix_proposal");
+    expect(keys).toHaveLength(1);
+  });
+
+  it("has NO_DATA and ALREADY_EXISTS error entries", () => {
+    const errors = TOOL_METADATA.forge_fix_proposal.errors;
+    expect(errors).toHaveProperty("NO_DATA");
+    expect(errors).toHaveProperty("ALREADY_EXISTS");
+  });
+
+  it("sideEffects mentions LIVEGUARD-FIX-{incidentId}.md", () => {
+    const se = TOOL_METADATA.forge_fix_proposal.sideEffects;
+    expect(se.some(s => s.includes("LIVEGUARD-FIX-{incidentId}.md"))).toBe(true);
+  });
+
+  it("sideEffects mentions fix-proposals.json", () => {
+    const se = TOOL_METADATA.forge_fix_proposal.sideEffects;
+    expect(se.some(s => s.includes("fix-proposals.json"))).toBe(true);
+  });
+
+  it("has securityNote about local generation and spam prevention", () => {
+    expect(TOOL_METADATA.forge_fix_proposal.securityNote).toBeDefined();
+    expect(TOOL_METADATA.forge_fix_proposal.securityNote).toContain("One proposal per incidentId");
+  });
+
+  it("has cost low", () => {
+    expect(TOOL_METADATA.forge_fix_proposal.cost).toBe("low");
+  });
+
+  it("consumes LiveGuard data files", () => {
+    expect(TOOL_METADATA.forge_fix_proposal.consumes).toContain(".forge/drift-history.json");
+    expect(TOOL_METADATA.forge_fix_proposal.consumes).toContain(".forge/incidents.jsonl");
+    expect(TOOL_METADATA.forge_fix_proposal.consumes).toContain(".forge/secret-scan-cache.json");
+  });
+});
+
 // ─── forge_env_diff cache persistence ──────────────────────────────────
 
 describe("env diff cache persistence", () => {
@@ -1618,7 +1670,7 @@ describe("emitToolTelemetry LIVEGUARD_TOOLS membership", () => {
     "forge_drift_report", "forge_incident_capture", "forge_dep_watch",
     "forge_regression_guard", "forge_runbook", "forge_hotspot",
     "forge_health_trend", "forge_alert_triage", "forge_deploy_journal",
-    "forge_secret_scan", "forge_env_diff",
+    "forge_secret_scan", "forge_env_diff", "forge_fix_proposal",
   ];
 
   it("writes liveguard-events.jsonl for forge_secret_scan", () => {
@@ -1647,14 +1699,20 @@ describe("emitToolTelemetry LIVEGUARD_TOOLS membership", () => {
     expect(calls.some(c => c.tool === "forge_secret_scan")).toBe(true);
   });
 
-  it("LIVEGUARD_TOOLS set has exactly 11 entries", () => {
+  it("writes liveguard-events.jsonl for forge_fix_proposal", () => {
+    emitToolTelemetry("forge_fix_proposal", { source: "drift" }, { fixId: "test" }, 25, "OK", tempDir);
+    const events = readForgeJsonl("liveguard-events.jsonl", [], tempDir);
+    expect(events.some(e => e.tool === "forge_fix_proposal")).toBe(true);
+  });
+
+  it("LIVEGUARD_TOOLS set has exactly 12 entries", () => {
     for (const tool of EXPECTED_LIVEGUARD_TOOLS) {
       emitToolTelemetry(tool, {}, "test", 1, "OK", tempDir);
     }
     const events = readForgeJsonl("liveguard-events.jsonl", [], tempDir);
     const uniqueTools = [...new Set(events.map(e => e.tool))];
     expect(uniqueTools.sort()).toEqual(EXPECTED_LIVEGUARD_TOOLS.sort());
-    expect(uniqueTools).toHaveLength(11);
+    expect(uniqueTools).toHaveLength(12);
   });
 });
 

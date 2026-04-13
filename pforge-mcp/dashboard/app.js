@@ -461,25 +461,50 @@ function fetchSliceLogContent(sliceId) {
   const logEl = document.getElementById("slice-log");
   if (!logEl) return;
 
-  fetch(`${API_BASE}/api/replay/0/${sliceId}`)
+  // Try recent run indices (0 = latest, then 1, 2...) until we find a log
+  tryFetchSliceLog(sliceId, 0, logEl);
+}
+
+function tryFetchSliceLog(sliceId, runIdx, logEl) {
+  if (runIdx > 5) {
+    // Exhausted search — show status-based message
+    const slice = state.slices.find((s) => s.id === sliceId);
+    if (slice && slice.status === "executing") {
+      logEl.innerHTML = '<div class="text-blue-300 animate-pulse py-2">⚡ Slice executing — log will appear when worker output is captured...</div>';
+    } else if (slice && slice.status === "pending") {
+      logEl.innerHTML = '<div class="text-gray-500 py-2">⏳ Slice not started yet</div>';
+    } else {
+      logEl.innerHTML = '<div class="text-gray-500 py-2">No log available for this slice</div>';
+    }
+    return;
+  }
+
+  fetch(`${API_BASE}/api/replay/${runIdx}/${sliceId}`)
     .then((r) => {
       if (!r.ok) throw new Error("not found");
       return r.json();
     })
     .then((data) => {
       const text = data.log || "";
+      if (!text.trim()) throw new Error("empty");
+      // Preserve expanded/collapsed state of sections before re-render
+      const expandedSections = new Set();
+      logEl.querySelectorAll("[id^='sec-']").forEach((el) => {
+        if (!el.classList.contains("hidden")) expandedSections.add(el.previousElementSibling?.textContent?.trim());
+      });
       logEl.innerHTML = formatSliceLog(text);
+      // Restore expanded sections
+      if (expandedSections.size > 0) {
+        logEl.querySelectorAll("[id^='sec-']").forEach((el) => {
+          const header = el.previousElementSibling?.textContent?.trim();
+          if (expandedSections.has(header)) el.classList.remove("hidden");
+        });
+      }
       logEl.scrollTop = logEl.scrollHeight;
     })
     .catch(() => {
-      const slice = state.slices.find((s) => s.id === sliceId);
-      if (slice && slice.status === "executing") {
-        logEl.innerHTML = '<div class="text-blue-300 animate-pulse py-2">⚡ Slice executing — log will appear when worker output is captured...</div>';
-      } else if (slice && slice.status === "pending") {
-        logEl.innerHTML = '<div class="text-gray-500 py-2">⏳ Slice not started yet</div>';
-      } else {
-        logEl.innerHTML = '<div class="text-gray-500 py-2">No log available for this slice</div>';
-      }
+      // Try next older run
+      tryFetchSliceLog(sliceId, runIdx + 1, logEl);
     });
 }
 

@@ -258,9 +258,6 @@ bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
 ```bash
 node pforge-mcp/server.mjs --validate
 bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
-node -e "require('fs').writeFileSync('.forge/secret-scan-cache.json',JSON.stringify({clean:false,findings:[{file:'src/config.js',line:5,type:'api_key',entropyScore:4.8,masked:'<REDACTED>',confidence:'high'}],scannedAt:new Date().toISOString()}))"
-bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs --grep PreDeploy"
-node -e "try{require('fs').unlinkSync('.forge/secret-scan-cache.json')}catch{}"
 ```
 
 **Stop Condition**: If the existing `PreToolUse` hook mechanism does not support returning `{ blocked: true }` (no block API) → implement block as a warning injection only (`blockOnSecrets` becomes advisory-only for this release); document the limitation in `PreDeploy.md` under Implementation Notes.
@@ -327,8 +324,6 @@ export async function postOpenClawSnapshot(endpoint, apiKey, snapshot) {
 node pforge-mcp/server.mjs --validate
 bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
 node -e "import('./pforge-mcp/orchestrator.mjs').then(m => { if(typeof m.postOpenClawSnapshot !== 'function') throw new Error('missing'); console.log('ok'); })"
-bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs" --grep "PreAgentHandoff.*empty"
-PFORGE_QUORUM_TURN=1 bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs" --grep "PreAgentHandoff.*quorum"
 ```
 
 **Stop Condition**: If `SessionStart` hook mechanism does not support asynchronous context injection (hooks must be synchronous) → implement the LiveGuard context read synchronously using `readFileSync` calls; mark OpenClaw POST as fire-and-forget only (already is). Document in `PreAgentHandoff.md` if async is unsupported.

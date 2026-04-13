@@ -1009,10 +1009,15 @@ function parseTokenCount(str) {
 export function runGate(command, cwd) {
   // C1: Validate gate commands against allowlist to prevent arbitrary execution
   const allowedPrefixes = [
+    // Build / test runners
     "npm", "npx", "node", "cargo", "go", "dotnet", "python", "python3",
     "pip", "mvn", "gradle", "make", "cmake", "bash", "sh", "pwsh",
     "powershell", "pytest", "mypy", "ruff", "eslint", "tsc", "vitest",
-    "jest", "mocha", "grep", "test", "echo", "exit", "true", "false",
+    "jest", "mocha",
+    // Shell builtins & coreutils used in gate commands
+    "cd", "cat", "ls", "rm", "mkdir", "cp", "mv", "diff", "wc",
+    "head", "tail", "sort", "curl", "git", "grep", "test", "echo",
+    "exit", "true", "false",
   ];
   const cmdBase = command.trim().split(/\s+/)[0].toLowerCase();
   const isAllowed = allowedPrefixes.some((p) => cmdBase === p || cmdBase.endsWith(`/${p}`));
@@ -3483,13 +3488,17 @@ async function selfTest() {
     assert("Gate detects failure", !failResult.success);
 
     // C1: Gate allowlist blocks unknown commands
-    const blockedResult = runGate("curl http://example.com", process.cwd());
+    const blockedResult = runGate("wget http://example.com", process.cwd());
     assert("Gate blocks non-allowlisted commands", !blockedResult.success);
     assert("Gate error mentions allowlist", blockedResult.error.includes("allowlist"));
 
     // C1: Gate allows common build tools
     const npmResult = runGate("node -e \"console.log('ok')\"", process.cwd());
     assert("Gate allows node commands", npmResult.success);
+
+    // C1: Gate allows curl (used in gate verification commands)
+    const curlResult = runGate("curl --version", process.cwd());
+    assert("Gate allows curl commands", curlResult.success);
   } catch (err) {
     assert(`Gate execution: ${err.message}`, false);
   }

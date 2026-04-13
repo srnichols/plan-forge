@@ -166,7 +166,7 @@ If `.forge/cost-history.json` does not exist, `forge_health_trend` degrades grac
 
 ### Slice 1 — Operational Data Infrastructure
 **Build command**: `node pforge-mcp/server.mjs --validate`  
-**Test command**: `cd pforge-mcp && npx vitest run tests/orchestrator.test.mjs`
+**Test command**: `bash -c "cd pforge-mcp && npx vitest run tests/orchestrator.test.mjs"`
 
 **Goal**: Add shared data helpers to `orchestrator.mjs` that all 7 LiveGuard features depend on. This slice is a hard prerequisite for all others.
 
@@ -199,7 +199,7 @@ If `.forge/cost-history.json` does not exist, `forge_health_trend` degrades grac
 **Validation Gate**:
 ```bash
 node pforge-mcp/server.mjs --validate
-cd pforge-mcp && npx vitest run tests/orchestrator.test.mjs
+bash -c "cd pforge-mcp && npx vitest run tests/orchestrator.test.mjs"
 # Verify no naming conflicts
 node -e "import('./pforge-mcp/orchestrator.mjs').then(m => { ['ensureForgeDir','readForgeJson','appendForgeJsonl','parseValidationGates'].forEach(fn => { if(typeof m[fn] !== 'function') throw new Error(fn + ' missing'); }); console.log('ok'); })"
 ```
@@ -236,7 +236,7 @@ The hub event fired by `emitToolTelemetry` enables the v2.28 dashboard to update
 
 ### Slice 2 — `forge_drift_report` [P, depends: Slice 1]
 **Build command**: `node pforge-mcp/server.mjs --validate`  
-**Test command**: `cd pforge-mcp && npx vitest run tests/server.test.mjs`
+**Test command**: `bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"`
 
 **Goal**: Score the codebase against architecture guardrail rules on demand. Track drift over time. Fire bridge alert when score drops below threshold.
 
@@ -265,7 +265,7 @@ The hub event fired by `emitToolTelemetry` enables the v2.28 dashboard to update
 **Validation Gate**:
 ```bash
 node pforge-mcp/server.mjs --validate
-cd pforge-mcp && npx vitest run tests/server.test.mjs
+bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
 # Shape check
 curl -s http://localhost:3100/api/drift | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); if(typeof d.score !== 'number') throw new Error('bad shape')"
 curl -s http://localhost:3100/api/drift/history | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); if(!Array.isArray(d)) throw new Error('expected array')"
@@ -277,7 +277,7 @@ curl -s http://localhost:3100/api/drift/history | node -e "const d=JSON.parse(re
 
 ### Slice 3 — `forge_incident_capture` [P, depends: Slice 1]
 **Build command**: `node pforge-mcp/server.mjs --validate`  
-**Test command**: `cd pforge-mcp && npx vitest run tests/server.test.mjs`
+**Test command**: `bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"`
 
 **Goal**: Accept a prod incident description, trace it to the originating plan slice, generate a structured postmortem, and return a `capture_thought` payload ready to forward to OpenBrain.
 
@@ -313,7 +313,7 @@ curl -s http://localhost:3100/api/drift/history | node -e "const d=JSON.parse(re
 **Validation Gate**:
 ```bash
 node pforge-mcp/server.mjs --validate
-cd pforge-mcp && npx vitest run tests/server.test.mjs
+bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
 # Shape check (unauthenticated endpoint)
 curl -s http://localhost:3100/api/incidents | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); if(!Array.isArray(d)) throw new Error('expected array')"
 ```
@@ -322,7 +322,7 @@ curl -s http://localhost:3100/api/incidents | node -e "const d=JSON.parse(requir
 
 ### Slice 4 — `forge_dep_watch` [P, depends: Slice 1]
 **Build command**: `node pforge-mcp/server.mjs --validate`  
-**Test command**: `cd pforge-mcp && npx vitest run tests/server.test.mjs`
+**Test command**: `bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"`
 
 **Goal**: Snapshot dependency CVE state. Diff against the prior snapshot. Fire bridge notification when new vulnerabilities appear.
 
@@ -351,7 +351,7 @@ curl -s http://localhost:3100/api/incidents | node -e "const d=JSON.parse(requir
 **Validation Gate**:
 ```bash
 node pforge-mcp/server.mjs --validate
-cd pforge-mcp && npx vitest run tests/server.test.mjs
+bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
 curl http://localhost:3100/api/deps/watch | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); console.log('capturedAt' in d || 'err' in d ? 'ok' : 'fail')"
 ```
 
@@ -359,7 +359,7 @@ curl http://localhost:3100/api/deps/watch | node -e "const d=JSON.parse(require(
 
 ### Slice 5 — `forge_regression_guard` [P, depends: Slice 1]
 **Build command**: `node pforge-mcp/server.mjs --validate`  
-**Test command**: `cd pforge-mcp && npx vitest run tests/server.test.mjs`
+**Test command**: `bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"`
 
 **Goal**: After a deploy, re-execute the validation gates from plan slices whose scope intersects the deployed files. Report regressions when previously-defined gates now fail.
 
@@ -399,7 +399,7 @@ curl http://localhost:3100/api/deps/watch | node -e "const d=JSON.parse(require(
 **Validation Gate**:
 ```bash
 node pforge-mcp/server.mjs --validate
-cd pforge-mcp && npx vitest run tests/server.test.mjs
+bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
 # Verify allowlist enforcement with a blocked command
 node -e "
 import('./pforge-mcp/orchestrator.mjs').then(m => {
@@ -416,7 +416,7 @@ import('./pforge-mcp/orchestrator.mjs').then(m => {
 
 ### Slice 6 — `forge_runbook` [P, depends: Slice 1]
 **Build command**: `node pforge-mcp/server.mjs --validate`  
-**Test command**: `cd pforge-mcp && npx vitest run tests/server.test.mjs`
+**Test command**: `bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"`
 
 **Goal**: Synthesize an operational runbook from a plan file. Combine plan artifacts (rollback, gates, stop conditions) with any captured incidents to produce a living ops reference.
 
@@ -444,14 +444,14 @@ import('./pforge-mcp/orchestrator.mjs').then(m => {
 node pforge-mcp/server.mjs --validate
 pforge runbook docs/plans/examples/Phase-TYPESCRIPT-EXAMPLE.md
 test -f .forge/runbooks/phase-typescript-example-runbook.md && echo "ok" || echo "fail"
-cd pforge-mcp && npx vitest run tests/server.test.mjs
+bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
 ```
 
 ---
 
 ### Slice 7 — `forge_hotspot` [P, depends: Slice 1]
 **Build command**: `node pforge-mcp/server.mjs --validate`  
-**Test command**: `cd pforge-mcp && npx vitest run tests/server.test.mjs`
+**Test command**: `bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"`
 
 **Goal**: Rank files by a weighted combination of git churn, plan execution failure rate, and incident frequency. Surface the riskiest areas of the codebase in one command.
 
@@ -479,7 +479,7 @@ cd pforge-mcp && npx vitest run tests/server.test.mjs
 **Validation Gate**:
 ```bash
 node pforge-mcp/server.mjs --validate
-cd pforge-mcp && npx vitest run tests/server.test.mjs
+bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
 curl http://localhost:3100/api/hotspots | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); if(!Array.isArray(d.hotspots)) throw new Error('bad shape')"
 ```
 
@@ -487,7 +487,7 @@ curl http://localhost:3100/api/hotspots | node -e "const d=JSON.parse(require('f
 
 ### Slice 8 — `forge_health_trend` [P, depends: Slice 1]
 **Build command**: `node pforge-mcp/server.mjs --validate`  
-**Test command**: `cd pforge-mcp && npx vitest run tests/server.test.mjs`
+**Test command**: `bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"`
 
 **Goal**: Aggregate data written by all other LiveGuard features plus existing run history into a single health trend view. Report trajectory: improving, stable, or degrading.
 
@@ -518,7 +518,7 @@ curl http://localhost:3100/api/hotspots | node -e "const d=JSON.parse(require('f
 **Validation Gate**:
 ```bash
 node pforge-mcp/server.mjs --validate
-cd pforge-mcp && npx vitest run tests/server.test.mjs
+bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
 curl "http://localhost:3100/api/health-trend?days=7" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); if(!d.period||!d.trend) throw new Error('bad shape')"
 # Verify forge_cost_report is backward compatible
 curl http://localhost:3100/api/cost | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); if(typeof d.total !== 'number') throw new Error('cost report broken')"
@@ -528,7 +528,7 @@ curl http://localhost:3100/api/cost | node -e "const d=JSON.parse(require('fs').
 
 ### Slice 8.5 — `forge_alert_triage` [P, depends: Slice 1]
 **Build command**: `node pforge-mcp/server.mjs --validate`  
-**Test command**: `cd pforge-mcp && npx vitest run tests/server.test.mjs`
+**Test command**: `bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"`
 
 **Goal**: Aggregate all LiveGuard signals into one ranked triage list — the guardian's morning briefing. Pure read-only aggregation over the other data stores. No new side effects from this tool.
 
@@ -560,7 +560,7 @@ curl http://localhost:3100/api/cost | node -e "const d=JSON.parse(require('fs').
 **Validation Gate**:
 ```bash
 node pforge-mcp/server.mjs --validate
-cd pforge-mcp && npx vitest run tests/server.test.mjs
+bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
 curl http://localhost:3100/api/alerts/triage | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); if(!Array.isArray(d.items)||!d.summary) throw new Error('bad shape')"
 ```
 
@@ -570,7 +570,7 @@ curl http://localhost:3100/api/alerts/triage | node -e "const d=JSON.parse(requi
 
 ### Slice 8.6 — `forge_deploy_journal` [P, depends: Slice 1]
 **Build command**: `node pforge-mcp/server.mjs --validate`  
-**Test command**: `cd pforge-mcp && npx vitest run tests/server.test.mjs`
+**Test command**: `bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"`
 
 **Goal**: Flight recorder for every deploy event. Links deploy version, trigger, and pre/post health scores. Enables `forge_incident_capture` to cross-reference which deploy preceded an incident and `forge_alert_triage` to surface deploys with no post-health check.
 
@@ -599,7 +599,7 @@ curl http://localhost:3100/api/alerts/triage | node -e "const d=JSON.parse(requi
 **Validation Gate**:
 ```bash
 node pforge-mcp/server.mjs --validate
-cd pforge-mcp && npx vitest run tests/server.test.mjs
+bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
 curl -s http://localhost:3100/api/deploy/journal | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); if(!Array.isArray(d)) throw new Error('expected array')"
 # Sidecar merge check — GET must combine JSONL + meta
 curl -s "http://localhost:3100/api/deploy/journal" | node -e "process.stdin.resume()" # no error exit
@@ -611,7 +611,7 @@ curl -s "http://localhost:3100/api/deploy/journal" | node -e "process.stdin.resu
 
 ### Slice 9 — Capabilities Surface + All Doc Updates [depends: Slices 2–8.6]
 **Build command**: `node pforge-mcp/server.mjs --validate`  
-**Test command**: `cd pforge-mcp && npx vitest run tests/server.test.mjs`
+**Test command**: `bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"`
 
 **Goal**: Update the machine-readable API surface and all public documentation to reflect 28 MCP tools, 14 new REST endpoints, and the LiveGuard feature set.
 
@@ -670,7 +670,7 @@ curl -s "http://localhost:3100/api/deploy/journal" | node -e "process.stdin.resu
 **Validation Gate**:
 ```bash
 node pforge-mcp/server.mjs --validate
-cd pforge-mcp && npx vitest run tests/server.test.mjs
+bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
 # Count check
 grep -c "forge_" docs/capabilities.md
 # Node errors check

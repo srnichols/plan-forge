@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- verified: v2.21.0 -->
+<!-- verified: v2.29.0 -->
 <html lang="en" class="scroll-smooth">
 <head>
   <meta charset="UTF-8" />
@@ -26,8 +26,8 @@
       <h1>MCP Server &amp; Tools</h1>
       <p class="text-lg text-slate-400 mb-8">19 MCP tools, REST API, WebSocket hub, telemetry, and cost tracking — the integration layer.</p>
 
-      <div class="callout callout-tip">
-        <strong>LiveGuard tools coming in v2.27.0–v2.28.0</strong> — 11 additional MCP tools for post-coding intelligence: drift detection, incident capture, secret scanning, env diff, health trending, regression guards, and alert triage. They follow the same MCP tool and REST endpoint patterns described in this chapter. See <a href="what-is-liveguard.html">Chapter 15 — What Is LiveGuard?</a> for the overview and <a href="liveguard-tools.html">Chapter 16</a> for the full reference.
+      <div class="callout callout-info">
+        <strong>LiveGuard tools shipped in v2.27.0</strong> — 11 additional MCP tools for post-coding intelligence: drift detection, incident capture, secret scanning, env diff, health trending, regression guards, and alert triage. They follow the same MCP tool and REST endpoint patterns described in this chapter. See <a href="what-is-liveguard.html">Chapter 15 — What Is LiveGuard?</a> for the overview and <a href="liveguard-tools.html">Chapter 16</a> for the full reference.
       </div>
 
       <!-- ─── Architecture ─── -->
@@ -38,7 +38,7 @@
         <div class="flex gap-3 min-w-[500px] py-2">
           <div class="flex-1 rounded-xl border border-amber-800/30 bg-amber-950/15 p-4 text-center">
             <div class="text-sm font-bold text-amber-400 mb-1">MCP (stdio)</div>
-            <p class="text-xs text-slate-500">19 tools today (+11 LiveGuard in v2.27–v2.28) exposed via Model Context Protocol. Copilot, Claude, Cursor call these as function calls.</p>
+            <p class="text-xs text-slate-500">19 core tools + 11 LiveGuard tools exposed via Model Context Protocol. Copilot, Claude, Cursor call these as function calls.</p>
           </div>
           <div class="flex-1 rounded-xl border border-sky-800/30 bg-sky-950/15 p-4 text-center">
             <div class="text-sm font-bold text-sky-400 mb-1">Express (HTTP :3100)</div>
@@ -121,6 +121,12 @@ node pforge-mcp/server.mjs --project /path/to/project</code></pre>
           <tr><td>GET</td><td><code>/api/traces/:runId</code></td><td>Single run trace detail</td></tr>
           <tr><td>GET</td><td><code>/api/capabilities</code></td><td>Full capability surface (JSON)</td></tr>
           <tr><td>GET</td><td><code>/.well-known/plan-forge.json</code></td><td>Discovery endpoint</td></tr>
+          <tr><td>GET</td><td><code>/api/fix/proposals</code></td><td>List all fix proposals</td></tr>
+          <tr><td>POST</td><td><code>/api/fix/propose</code></td><td>Generate a fix proposal (requires auth)</td></tr>
+          <tr><td>GET</td><td><code>/api/quorum/prompt</code></td><td>Assemble quorum prompt (read-only)</td></tr>
+          <tr><td>POST</td><td><code>/api/quorum/prompt</code></td><td>Assemble quorum prompt with body params</td></tr>
+          <tr><td>POST</td><td><code>/api/openclaw/snapshot</code></td><td>Post LiveGuard snapshot to OpenClaw</td></tr>
+          <tr><td>GET</td><td><code>/api/openclaw/config</code></td><td>Check OpenClaw configuration status</td></tr>
         </tbody>
       </table>
 

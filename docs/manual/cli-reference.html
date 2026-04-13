@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- verified: v2.21.0 -->
+<!-- verified: v2.29.0 -->
 <html lang="en" class="scroll-smooth">
 <head>
   <meta charset="UTF-8" />
@@ -505,28 +505,192 @@ DRIFT DETECTED — 1 forbidden file(s) touched.</code></pre>
 
         <div class="cmd-ref" id="liveguard-drift">
           <div class="cmd-ref-title">pforge drift</div>
-          <div class="cmd-ref-desc">Architecture drift score vs. the plan baseline. Lower is better (100 = full alignment).</div>
+          <div class="cmd-ref-desc">Score codebase against architecture guardrail rules. Tracks drift over time.</div>
           <div class="cmd-block"><div class="cmd-block-header"><span>PowerShell / Bash</span><button class="cmd-copy-btn">Copy</button></div>
           <pre><code>pforge drift
 pforge drift --since HEAD~5</code></pre></div>
           <p class="text-sm text-slate-500">Also available as: <code>forge_drift_report</code> MCP tool.</p>
         </div>
 
+        <div class="cmd-ref" id="liveguard-incident">
+          <div class="cmd-ref-title">pforge incident &lt;desc&gt;</div>
+          <div class="cmd-ref-desc">Capture an incident with description, severity, affected files, and optional <code>resolvedAt</code> for MTTR tracking.</div>
+
+          <table>
+            <thead><tr><th>Flag</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>--severity</code></td><td>enum</td><td><code>critical</code> · <code>high</code> · <code>medium</code> · <code>low</code></td></tr>
+              <tr><td><code>--files</code></td><td>string</td><td>Comma-separated affected file paths, e.g. <code>src/api/handler.ts</code></td></tr>
+            </tbody>
+          </table>
+
+          <div class="cmd-block">
+            <div class="cmd-block-header"><span>PowerShell / Bash</span><button class="cmd-copy-btn">Copy</button></div>
+            <pre><code>pforge incident "Auth token validation bypass" --severity critical --files src/auth/validator.ts
+pforge incident "Slow query on dashboard load" --severity medium</code></pre>
+          </div>
+        </div>
+
+        <div class="cmd-ref" id="liveguard-triage">
+          <div class="cmd-ref-title">pforge triage</div>
+          <div class="cmd-ref-desc">Rank open alerts by priority (severity × recency).</div>
+
+          <table>
+            <thead><tr><th>Flag</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>--min-severity</code></td><td>enum</td><td>Filter by minimum severity: <code>critical</code> · <code>high</code> · <code>medium</code> · <code>low</code></td></tr>
+              <tr><td><code>--max</code></td><td>number</td><td>Maximum number of results to display</td></tr>
+            </tbody>
+          </table>
+
+          <div class="cmd-block">
+            <div class="cmd-block-header"><span>PowerShell / Bash</span><button class="cmd-copy-btn">Copy</button></div>
+            <pre><code>pforge triage
+pforge triage --min-severity medium --max 10</code></pre>
+          </div>
+        </div>
+
+        <div class="cmd-ref" id="liveguard-deploy-log">
+          <div class="cmd-ref-title">pforge deploy-log</div>
+          <div class="cmd-ref-desc">Log a deployment with version, environment, and status.</div>
+
+          <table>
+            <thead><tr><th>Flag</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>--version</code></td><td>string</td><td>Deployment version, e.g. <code>v2.27.0</code></td></tr>
+              <tr><td><code>--env</code></td><td>string</td><td>Target environment, e.g. <code>production</code></td></tr>
+              <tr><td><code>--status</code></td><td>enum</td><td><code>success</code> · <code>failure</code> · <code>rollback</code></td></tr>
+            </tbody>
+          </table>
+
+          <div class="cmd-block">
+            <div class="cmd-block-header"><span>PowerShell / Bash</span><button class="cmd-copy-btn">Copy</button></div>
+            <pre><code>pforge deploy-log --version v2.27.0 --env production --status success
+pforge deploy-log --version v2.27.0 --env staging --status failure</code></pre>
+          </div>
+        </div>
+
+        <div class="cmd-ref" id="liveguard-regression-guard">
+          <div class="cmd-ref-title">pforge regression-guard</div>
+          <div class="cmd-ref-desc">Run validation gates from plans with command allowlist enforcement.</div>
+
+          <table>
+            <thead><tr><th>Flag</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>--plan</code></td><td>path</td><td>Path to plan file, e.g. <code>docs/plans/Phase-LiveGuard-v2.27.0-PLAN.md</code></td></tr>
+            </tbody>
+          </table>
+
+          <div class="cmd-block">
+            <div class="cmd-block-header"><span>PowerShell / Bash</span><button class="cmd-copy-btn">Copy</button></div>
+            <pre><code>pforge regression-guard --plan docs/plans/Phase-LiveGuard-v2.27.0-PLAN.md</code></pre>
+          </div>
+        </div>
+
+        <div class="cmd-ref" id="liveguard-runbook">
+          <div class="cmd-ref-title">pforge runbook</div>
+          <div class="cmd-ref-desc">Auto-generate an operational runbook from plan files and incident history.</div>
+
+          <table>
+            <thead><tr><th>Flag</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>--plan</code></td><td>path</td><td>Path to plan file</td></tr>
+            </tbody>
+          </table>
+
+          <div class="cmd-block">
+            <div class="cmd-block-header"><span>PowerShell / Bash</span><button class="cmd-copy-btn">Copy</button></div>
+            <pre><code>pforge runbook --plan docs/plans/Phase-7-DASHBOARD-PLAN.md</code></pre>
+          </div>
+        </div>
+
+        <div class="cmd-ref" id="liveguard-hotspot">
+          <div class="cmd-ref-title">pforge hotspot</div>
+          <div class="cmd-ref-desc">Git churn analysis to identify high-risk files. Results cached for 24 hours.</div>
+
+          <table>
+            <thead><tr><th>Flag</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>--top</code></td><td>number</td><td>Number of files to display (default: 10)</td></tr>
+              <tr><td><code>--since</code></td><td>string</td><td>Git log time range, e.g. <code>"3 months ago"</code></td></tr>
+            </tbody>
+          </table>
+
+          <div class="cmd-block">
+            <div class="cmd-block-header"><span>PowerShell / Bash</span><button class="cmd-copy-btn">Copy</button></div>
+            <pre><code>pforge hotspot
+pforge hotspot --top 15 --since "3 months ago"</code></pre>
+          </div>
+        </div>
+
+        <div class="cmd-ref" id="liveguard-dep-watch">
+          <div class="cmd-ref-title">pforge dep-watch</div>
+          <div class="cmd-ref-desc">Scan dependencies for vulnerabilities and diff against the previous snapshot.</div>
+
+          <div class="cmd-block">
+            <div class="cmd-block-header"><span>PowerShell / Bash</span><button class="cmd-copy-btn">Copy</button></div>
+            <pre><code>pforge dep-watch</code></pre>
+          </div>
+        </div>
+
         <div class="cmd-ref" id="liveguard-secret-scan">
           <div class="cmd-ref-title">pforge secret-scan</div>
-          <div class="cmd-ref-desc">Scan staged diff for high-entropy secrets. Values are always redacted in output. Runs automatically via the <strong>PreDeploy</strong> hook.</div>
-          <div class="cmd-block"><div class="cmd-block-header"><span>PowerShell / Bash</span><button class="cmd-copy-btn">Copy</button></div>
-          <pre><code>pforge secret-scan
-pforge secret-scan --since HEAD~1</code></pre></div>
+          <div class="cmd-ref-desc">Scan recent commits for potential secrets via entropy analysis. Values are always redacted in output.</div>
+
+          <table>
+            <thead><tr><th>Flag</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>--since</code></td><td>string</td><td>Git ref range to scan, e.g. <code>HEAD~3</code></td></tr>
+              <tr><td><code>--threshold</code></td><td>number</td><td>Entropy threshold for detection (default: 4.5), e.g. <code>4.0</code></td></tr>
+            </tbody>
+          </table>
+
+          <div class="cmd-block">
+            <div class="cmd-block-header"><span>PowerShell / Bash</span><button class="cmd-copy-btn">Copy</button></div>
+            <pre><code>pforge secret-scan
+pforge secret-scan --since HEAD~3 --threshold 4.0</code></pre>
+          </div>
+
           <p class="text-sm text-slate-500">Also available as: <code>forge_secret_scan</code> MCP tool.</p>
         </div>
 
         <div class="cmd-ref" id="liveguard-env-diff">
           <div class="cmd-ref-title">pforge env-diff</div>
-          <div class="cmd-ref-desc">Compare environment variable keys across all <code>.env.*</code> files. Keys only — values are never read.</div>
-          <div class="cmd-block"><div class="cmd-block-header"><span>PowerShell / Bash</span><button class="cmd-copy-btn">Copy</button></div>
-          <pre><code>pforge env-diff</code></pre></div>
+          <div class="cmd-ref-desc">Compare environment variable keys across <code>.env</code> files. Keys only — values are never read.</div>
+
+          <table>
+            <thead><tr><th>Flag</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>--baseline</code></td><td>path</td><td>Baseline env file, e.g. <code>.env</code></td></tr>
+              <tr><td><code>--files</code></td><td>string</td><td>Comma-separated env files to compare, e.g. <code>.env.staging,.env.production</code></td></tr>
+            </tbody>
+          </table>
+
+          <div class="cmd-block">
+            <div class="cmd-block-header"><span>PowerShell / Bash</span><button class="cmd-copy-btn">Copy</button></div>
+            <pre><code>pforge env-diff
+pforge env-diff --baseline .env --files .env.staging,.env.production</code></pre>
+          </div>
+
           <p class="text-sm text-slate-500">Also available as: <code>forge_env_diff</code> MCP tool.</p>
+        </div>
+
+        <div class="cmd-ref" id="liveguard-health-trend">
+          <div class="cmd-ref-title">pforge health-trend</div>
+          <div class="cmd-ref-desc">Aggregated health score over time.</div>
+
+          <table>
+            <thead><tr><th>Flag</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>--days</code></td><td>number</td><td>Number of days to include (default: 14), e.g. <code>30</code></td></tr>
+            </tbody>
+          </table>
+
+          <div class="cmd-block">
+            <div class="cmd-block-header"><span>PowerShell / Bash</span><button class="cmd-copy-btn">Copy</button></div>
+            <pre><code>pforge health-trend
+pforge health-trend --days 30</code></pre>
+          </div>
         </div>
 
         <div class="cmd-ref" id="liveguard-fix-proposal">

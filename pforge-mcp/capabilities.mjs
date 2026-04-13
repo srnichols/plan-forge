@@ -273,6 +273,25 @@ export const TOOL_METADATA = {
       output: { id: "inc-1700000000000", description: "API latency spike on /checkout", severity: "high", capturedAt: "2024-01-01T00:00:00.000Z", resolvedAt: null, mttr: null },
     },
   },
+  forge_regression_guard: {
+    intent: ["regression-check", "gate-validation", "ci-guard"],
+    aliases: ["regression-guard", "run-gates", "guard-regressions"],
+    cost: "medium",
+    maxConcurrent: 1,
+    addedIn: "2.29.0",
+    prerequisites: ["docs/plans/ contains at least one *-PLAN.md (or supply plan arg)"],
+    produces: [".forge/telemetry/tool-calls.jsonl"],
+    consumes: ["docs/plans/*.md"],
+    sideEffects: ["executes shell commands from validation gates"],
+    errors: {
+      NO_PLANS_FOUND: { message: "No plan files found in docs/plans/", recovery: "Supply a plan path via the plan argument or create a plan file" },
+      GATE_FAILED: { message: "One or more validation gates failed", recovery: "Review failed gate output and fix the issue, then re-run" },
+    },
+    example: {
+      input: { files: ["src/api.ts", "src/auth.ts"], failFast: false },
+      output: { gatesChecked: 3, passed: 3, failed: 0, blocked: 0, skipped: 0, success: true },
+    },
+  },
 };
 
 // ─── Workflow Graphs ──────────────────────────────────────────────────

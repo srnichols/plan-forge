@@ -60,6 +60,7 @@ COMMANDS:
   org-rules export  Export org custom instructions from .github/instructions/ for GitHub org settings
   drift             Score codebase against architecture guardrail rules — track drift over time
   incident <desc>   Capture an incident — record description, severity, affected files, and optional resolvedAt for MTTR
+  regression-guard  Run validation gates from plan files — guard against regressions when files change
   smith             Inspect your forge — environment, VS Code config, setup health, and common problems
   tour              Guided walkthrough of your installed Plan Forge files
   help              Show this help message
@@ -2693,6 +2694,72 @@ cmd_drift() {
     "
 }
 
+# ─── Command: regression-guard ──────────────────────────────────────────
+cmd_regression_guard() {
+    local files=""
+    local plan=""
+    local fail_fast="false"
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --files)     files="$2";     shift 2 ;;
+            --plan)      plan="$2";      shift 2 ;;
+            --fail-fast) fail_fast="true"; shift ;;
+            *) shift ;;
+        esac
+    done
+
+    print_manual_steps "regression-guard" \
+        "Extract validation gate commands from plan files in docs/plans/" \
+        "Check each command against the gate allowlist" \
+        "Execute allowed commands and report passed/failed results" \
+        "Return structured result with per-gate status"
+
+    local port=3100
+
+    local payload
+    payload=$(node -e "
+      const p = { files: process.env.RG_FILES ? process.env.RG_FILES.split(',').map(f => f.trim()).filter(Boolean) : [], failFast: process.env.RG_FAIL_FAST === 'true' };
+      if (process.env.RG_PLAN) p.plan = process.env.RG_PLAN;
+      console.log(JSON.stringify(p));
+    " RG_FILES="$files" RG_FAIL_FAST="$fail_fast" RG_PLAN="$plan")
+
+    local response
+    response=$(curl -sf -X POST "http://localhost:${port}/api/regression-guard" \
+        -H "Content-Type: application/json" \
+        -d "$payload") || {
+        echo "ERROR: MCP server not running on port ${port}. Start with: node pforge-mcp/server.mjs" >&2
+        exit 1
+    }
+
+    echo "$response" | node -e "
+      const d = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
+      const ok = d.success;
+      const icon = ok ? '\u2705' : '\u274C';
+      const color = ok ? '\x1b[32m' : '\x1b[31m';
+      console.log('\n' + icon + ' Regression Guard: ' + color + (ok ? 'PASSED' : 'FAILED') + '\x1b[0m');
+      console.log('   Gates checked: ' + d.gatesChecked);
+      console.log('   \x1b[32mPassed:        ' + d.passed + '\x1b[0m');
+      if (d.failed > 0) console.log('   \x1b[31mFailed:        ' + d.failed + '\x1b[0m');
+      if (d.blocked > 0) console.log('   \x1b[33mBlocked:       ' + d.blocked + '\x1b[0m');
+      if (d.skipped > 0) console.log('   \x1b[90mSkipped:       ' + d.skipped + '\x1b[0m');
+      (d.results || []).forEach(r => {
+        if (r.status === 'failed') {
+          console.log('   \u274C Slice ' + r.sliceNumber + ' [' + r.planFile + ']: ' + r.sliceTitle);
+          if (r.output) console.log('      \x1b[90m' + r.output + '\x1b[0m');
+        } else if (r.status === 'blocked') {
+          console.log('   \u26A0 Slice ' + r.sliceNumber + ' [' + r.planFile + ']: BLOCKED \u2014 ' + r.reason);
+        }
+      });
+    "
+
+    # Exit non-zero if any gates failed
+    echo "$response" | node -e "
+      const d = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
+      process.exit(d.success ? 0 : 1);
+    " || exit 1
+}
+
 # ─── Command: tour ─────────────────────────────────────────────────────
 cmd_tour() {
     echo ""
@@ -2805,6 +2872,7 @@ case "$COMMAND" in
     org-rules)    cmd_org_rules "$@" ;;
     drift)        cmd_drift "$@" ;;
     incident)     cmd_incident "$@" ;;
+    regression-guard) cmd_regression_guard "$@" ;;
     smith)        cmd_smith ;;
     tour)         cmd_tour ;;
     help|--help)  show_help ;;

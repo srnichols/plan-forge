@@ -24,7 +24,7 @@ import { execSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, writeFileSync, watchFile, unwatchFile, statSync, openSync, readSync, closeSync } from "node:fs";
 import { resolve, join, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parsePlan, runPlan, detectWorkers, getCostReport, analyzeWithQuorum, generateImage, runAnalyze, readForgeJson, readForgeJsonl, appendForgeJsonl, emitToolTelemetry } from "./orchestrator.mjs";
+import { parsePlan, runPlan, detectWorkers, getCostReport, analyzeWithQuorum, generateImage, runAnalyze, readForgeJson, readForgeJsonl, appendForgeJsonl, emitToolTelemetry, regressionGuard } from "./orchestrator.mjs";
 import { isOpenBrainConfigured } from "./memory.mjs";
 import { createHub, readHubPort } from "./hub.mjs";
 import { createBridge } from "./bridge.mjs";
@@ -575,6 +575,19 @@ const TOOLS = [
       required: ["description"],
     },
   },
+  {
+    name: "forge_regression_guard",
+    description: "Run regression guard — extract validation gate commands from plan files, execute them against the current codebase, and report passed/failed/blocked results. Guards against regressions when files change. Accepts a list of changed files and an optional plan to scope the check. Falls back to testCommand slice fields when no bash-block gates are present.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        files: { type: "array", items: { type: "string" }, description: "Changed file paths to guard (included in result for traceability). If omitted, all plan gates are checked." },
+        plan: { type: "string", description: "Path to a specific plan file to extract gates from (e.g., docs/plans/Phase-1-AUTH-PLAN.md). If omitted, all plan files in docs/plans/ are scanned." },
+        failFast: { type: "boolean", description: "If true, stop on first gate failure. Default: false" },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+    },
+  },
 ];
 function executeTool(name, args) {
   const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -1020,6 +1033,26 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
   }
 
+  if (name === "forge_regression_guard") {
+    try {
+      const t0 = Date.now();
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const files = args.files || [];
+      const result = await regressionGuard(files, {
+        plan: args.plan || null,
+        failFast: args.failFast || false,
+        cwd,
+      });
+      emitToolTelemetry("forge_regression_guard", args, result, Date.now() - t0, result.success ? "ok" : "error", cwd);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        isError: !result.success,
+      };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Regression guard error: ${err.message}` }], isError: true };
+    }
+  }
+
   if (name === "forge_drift_report") {
     try {
       const t0 = Date.now();
@@ -1188,6 +1221,18 @@ function createExpressApp() {
   app.get("/api/drift/history", (_req, res) => {
     try {
       res.json(readForgeJsonl("drift-history.json", [], PROJECT_DIR));
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // REST API: POST /api/regression-guard — run regression guard
+  app.post("/api/regression-guard", async (req, res) => {
+    try {
+      const { files = [], plan = null, failFast = false } = req.body || {};
+      if (!Array.isArray(files)) {
+        return res.status(400).json({ error: "files must be an array of strings" });
+      }
+      const result = await regressionGuard(files, { plan, failFast, cwd: PROJECT_DIR });
+      res.status(result.success ? 200 : 422).json(result);
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 

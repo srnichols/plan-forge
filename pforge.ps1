@@ -77,6 +77,7 @@ function Show-Help {
     Write-Host "  org-rules export  Export org custom instructions from .github/instructions/ for GitHub org settings"
     Write-Host "  drift             Score codebase against architecture guardrail rules — track drift over time"
     Write-Host "  incident <desc>   Capture an incident — record description, severity, affected files, and optional resolvedAt for MTTR"
+    Write-Host "  regression-guard  Run validation gates from plan files — guard against regressions when files change"
     Write-Host "  tour              Guided walkthrough of your installed Plan Forge files"
     Write-Host "  help              Show this help message"
     Write-Host ""
@@ -3194,6 +3195,68 @@ function Invoke-Drift {
     }
 }
 
+# ─── Command: regression-guard ──────────────────────────────────────────
+function Invoke-RegressionGuard {
+    $files    = @()
+    $plan     = $null
+    $failFast = $false
+
+    for ($i = 0; $i -lt $Arguments.Count; $i++) {
+        switch ($Arguments[$i]) {
+            '--files' {
+                if (($i + 1) -lt $Arguments.Count) { $files = $Arguments[$i + 1] -split ','; $i++ }
+            }
+            '--plan' {
+                if (($i + 1) -lt $Arguments.Count) { $plan = $Arguments[$i + 1]; $i++ }
+            }
+            '--fail-fast' { $failFast = $true }
+        }
+    }
+
+    Write-ManualSteps "regression-guard" @(
+        "Extract validation gate commands from plan files in docs/plans/"
+        "Check each command against the gate allowlist"
+        "Execute allowed commands and report passed/failed results"
+        "Return structured result with per-gate status"
+    )
+
+    $port = 3100
+    $payload = @{ files = $files; failFast = $failFast }
+    if ($plan) { $payload.plan = $plan }
+    $body = $payload | ConvertTo-Json -Compress
+
+    try {
+        $response = Invoke-RestMethod -Uri "http://localhost:$port/api/regression-guard" -Method POST `
+            -ContentType "application/json" -Body $body -ErrorAction Stop
+        Write-Host ""
+        $icon = if ($response.success) { "`u{2705}" } else { "`u{274C}" }
+        $color = if ($response.success) { 'Green' } else { 'Red' }
+        Write-Host "$icon Regression Guard: $(if ($response.success) { 'PASSED' } else { 'FAILED' })" -ForegroundColor $color
+        Write-Host "   Gates checked: $($response.gatesChecked)"
+        Write-Host "   Passed:        $($response.passed)"  -ForegroundColor Green
+        if ($response.failed -gt 0) {
+            Write-Host "   Failed:        $($response.failed)"  -ForegroundColor Red
+        }
+        if ($response.blocked -gt 0) {
+            Write-Host "   Blocked:       $($response.blocked)" -ForegroundColor Yellow
+        }
+        if ($response.skipped -gt 0) {
+            Write-Host "   Skipped:       $($response.skipped)" -ForegroundColor DarkGray
+        }
+        foreach ($r in $response.results) {
+            if ($r.status -eq 'failed') {
+                Write-Host "   `u{274C} Slice $($r.sliceNumber) [$($r.planFile)]: $($r.sliceTitle)" -ForegroundColor Red
+                if ($r.output) { Write-Host "      $($r.output)" -ForegroundColor DarkGray }
+            } elseif ($r.status -eq 'blocked') {
+                Write-Host "   `u{26A0} Slice $($r.sliceNumber) [$($r.planFile)]: BLOCKED — $($r.reason)" -ForegroundColor Yellow
+            }
+        }
+    } catch {
+        Write-Host "ERROR: MCP server not running on port $port. Start with: node pforge-mcp/server.mjs" -ForegroundColor Red
+        exit 1
+    }
+}
+
 # ─── Command: tour ─────────────────────────────────────────────────────
 function Invoke-Tour {
     Write-Host ""
@@ -3326,6 +3389,7 @@ switch ($Command) {
     'org-rules'    { Invoke-OrgRules }
     'drift'        { Invoke-Drift }
     'incident'     { Invoke-Incident }
+    'regression-guard' { Invoke-RegressionGuard }
     'version-bump' { Invoke-VersionBump }
     'smith'        { Invoke-Smith }
     'tour'         { Invoke-Tour }

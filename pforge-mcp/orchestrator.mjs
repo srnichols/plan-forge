@@ -2110,6 +2110,136 @@ export function lintGateCommands(planFilePath) {
 }
 
 /**
+ * Check if a command string is permitted in validation gates.
+ * Uses the same GATE_ALLOWED_PREFIXES allowlist as runGate() and lintGateCommands().
+ * Skips leading env-var assignments (e.g., "NODE_ENV=test npm test").
+ * Additionally blocks known-dangerous patterns (e.g., rm -rf /) regardless of prefix.
+ * @param {string} cmd - The command line to check
+ * @returns {boolean} true if the command is allowed, false if blocked
+ */
+export function isGateCommandAllowed(cmd) {
+  if (!cmd || typeof cmd !== "string") return false;
+  const trimmed = cmd.trim();
+
+  // Block known-dangerous patterns first — allowlist cannot override these
+  const BLOCKED_PATTERNS = [
+    /\brm\s+(-[a-z]*r[a-z]*f[a-z]*|-[a-z]*f[a-z]*r[a-z]*)\s+[/~*]/i,  // rm -rf / or rm -fr ~
+    /\brm\s+-[a-z]*\s+\/(\s|$)/,                                          // rm -* /
+    /\bdd\s+.*of=\/dev\/(sda|hda|nvme)/i,                                 // dd to raw block device
+    /\bmkfs\b/i,                                                           // format filesystem
+    /\b:>\s*\/dev\/(sda|hda)/i,                                           // truncate block device
+  ];
+  if (BLOCKED_PATTERNS.some((p) => p.test(trimmed))) return false;
+
+  const tokens = trimmed.split(/\s+/);
+  let cmdIdx = 0;
+  while (cmdIdx < tokens.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[cmdIdx])) {
+    cmdIdx++;
+  }
+  const cmdToken = (tokens[cmdIdx] || tokens[0] || "").toLowerCase();
+  return GATE_ALLOWED_PREFIXES.some((p) => cmdToken === p || cmdToken.endsWith(`/${p}`));
+}
+
+/**
+ * Run regression guard — extract validation gate commands from plan files,
+ * check each against the allowlist, execute allowed commands, and report results.
+ *
+ * Stop condition: if parseValidationGates cannot reliably extract commands from a plan
+ * (e.g., no bash-block gates found), falls back to `testCommand` fields from parsed slices.
+ *
+ * @param {string[]} files - Changed file paths to guard (informational — included in result)
+ * @param {object} [options]
+ * @param {string} [options.plan] - Path to a specific plan file (relative to cwd). If omitted, scans docs/plans/
+ * @param {boolean} [options.failFast=false] - Stop on first gate failure
+ * @param {string} [options.cwd=process.cwd()] - Project root
+ * @returns {Promise<{files: string[], gatesChecked: number, passed: number, failed: number, blocked: number, skipped: number, success: boolean, results: object[]}>}
+ */
+export async function regressionGuard(files, { plan, failFast = false, cwd = process.cwd() } = {}) {
+  // Resolve plan files to check
+  let planPaths = [];
+  if (plan) {
+    const resolved = resolve(cwd, plan);
+    if (existsSync(resolved)) {
+      planPaths = [resolved];
+    }
+  } else {
+    const plansDir = resolve(cwd, "docs", "plans");
+    if (existsSync(plansDir)) {
+      planPaths = readdirSync(plansDir)
+        .filter((f) => f.endsWith("-PLAN.md") || f.endsWith("-plan.md"))
+        .map((f) => resolve(plansDir, f));
+    }
+  }
+
+  // Collect gate commands from plans
+  const gateItems = [];
+  for (const planPath of planPaths) {
+    try {
+      const sliceGates = parseValidationGates(planPath);
+      let foundGates = false;
+      for (const sg of sliceGates) {
+        for (const cmd of sg.gates) {
+          gateItems.push({ planFile: basename(planPath), sliceNumber: sg.sliceNumber, sliceTitle: sg.sliceTitle, cmd, source: "validation-gate" });
+          foundGates = true;
+        }
+      }
+      // Stop-condition fallback: if no bash-block gates, use testCommand fields
+      if (!foundGates) {
+        try {
+          const parsed = parsePlan(planPath);
+          for (const s of parsed.slices) {
+            if (s.testCommand) {
+              gateItems.push({ planFile: basename(planPath), sliceNumber: s.number, sliceTitle: s.title, cmd: s.testCommand, source: "testCommand" });
+            }
+          }
+        } catch { /* unreadable plan — skip */ }
+      }
+    } catch { /* unreadable plan — skip */ }
+  }
+
+  const results = [];
+  let passed = 0, failed = 0, blocked = 0, skipped = 0;
+
+  for (const gate of gateItems) {
+    if (!isGateCommandAllowed(gate.cmd)) {
+      results.push({ ...gate, status: "blocked", reason: `'${gate.cmd.split(/\s+/)[0]}' not in gate allowlist` });
+      blocked++;
+      continue;
+    }
+
+    try {
+      const output = execSync(gate.cmd, { cwd, stdio: "pipe", timeout: 120000, encoding: "utf-8" });
+      results.push({ ...gate, status: "passed", output: (output || "").trim().slice(0, 500) });
+      passed++;
+    } catch (err) {
+      const errOut = ((err.stderr || "") + (err.stdout || "")).trim().slice(0, 500) || err.message;
+      results.push({ ...gate, status: "failed", output: errOut });
+      failed++;
+      if (failFast) {
+        // Mark remaining as skipped
+        const remaining = gateItems.slice(gateItems.indexOf(gate) + 1);
+        for (const rem of remaining) {
+          results.push({ ...rem, status: "skipped", reason: "fail-fast: previous gate failed" });
+          skipped++;
+        }
+        break;
+      }
+    }
+  }
+
+  return {
+    files: files || [],
+    gatesChecked: gateItems.length,
+    passed,
+    failed,
+    blocked,
+    skipped,
+    success: failed === 0,
+    results,
+  };
+}
+
+/**
  * Emit a telemetry record for a tool invocation. Best-effort — never throws.
  * @param {string} toolName - Tool identifier (e.g. "forge_smith")
  * @param {object|string} inputs - Tool input parameters

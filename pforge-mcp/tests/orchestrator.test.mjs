@@ -337,6 +337,26 @@ describe("lintGateCommands", () => {
       expect(result.warnings.some(w => w.rule === "project-script")).toBe(true);
     } finally { process.chdir(origCwd); }
   });
+
+  it("warns on JS comments in node -e one-liners", () => {
+    const origCwd = process.cwd();
+    process.chdir(tempDir);
+    try {
+      const plan = writePlan(["node -e \"const x = 1; // this breaks everything\""]);
+      const result = lintGateCommands(plan);
+      expect(result.warnings.some(w => w.rule === "js-comment-in-eval")).toBe(true);
+    } finally { process.chdir(origCwd); }
+  });
+
+  it("does NOT warn on http:// URLs in node -e", () => {
+    const origCwd = process.cwd();
+    process.chdir(tempDir);
+    try {
+      const plan = writePlan(["node -e \"fetch('http://localhost:3100').then(r=>console.log(r.status))\""]);
+      const result = lintGateCommands(plan);
+      expect(result.warnings.some(w => w.rule === "js-comment-in-eval")).toBe(false);
+    } finally { process.chdir(origCwd); }
+  });
 });
 
 // ─── emitToolTelemetry ───────────────────────────────────────────────

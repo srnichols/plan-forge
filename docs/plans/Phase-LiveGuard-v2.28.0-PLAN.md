@@ -448,8 +448,8 @@ node -e "const h=require('fs').readFileSync('pforge-mcp/dashboard/index.html','u
 ```bash
 node pforge-mcp/server.mjs --validate
 bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
-node -e "import('./pforge-mcp/capabilities.mjs').then(m => m.buildCapabilitySurface([])).then(s => { const count = Object.keys(m.TOOL_METADATA || {}).length; console.log('TOOL_METADATA entries:', count); })"
-node -e "const c=require('fs').readFileSync('docs/capabilities.md','utf8'); const count=(c.match(/forge_/g)||[]).length; if(count<11) throw new Error('Expected 11+ forge_ refs, got '+count); console.log('ok — '+count+' forge_ refs');"
+node -e "import('./pforge-mcp/capabilities.mjs').then(m=>{const count=Object.keys(m.TOOL_METADATA||{}).length;console.log('TOOL_METADATA entries:',count);if(count<11)throw new Error('Expected 11+, got '+count)})"
+node -e "const c=require('fs').readFileSync('docs/capabilities.md','utf8');const count=(c.match(/forge_/g)||[]).length;if(count<11)throw new Error('Expected 11+ forge_ refs, got '+count);console.log('ok -',count,'forge_ refs');"
 ```
 
 **Stop Condition**: If tool count at `GET /api/capabilities` is not 30 → debug TOOL_METADATA vs TOOLS array discrepancy in server.mjs before proceeding to Slice 6.

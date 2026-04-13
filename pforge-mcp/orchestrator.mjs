@@ -2277,6 +2277,17 @@ export function lintGateCommands(planFilePath, cwd = process.cwd()) {
           message: `${loc}: 'pforge' is a project script, not on PATH during gate execution. Use 'pwsh ./pforge.ps1' or rewrite as 'node -e'.`,
         });
       }
+
+      // 9. JS comments inside node -e one-liners (// swallows the rest of the line)
+      if (/^node\s+-e\s+".*\/\//.test(line) && !line.includes("http://") && !line.includes("https://")) {
+        warnings.push({
+          slice: slice.number,
+          command: line,
+          rule: "js-comment-in-eval",
+          severity: "warn",
+          message: `${loc}: node -e contains '//' which acts as a line comment on a single line, breaking the code. Remove JS comments from gate commands.`,
+        });
+      }
     }
   }
 

@@ -32,6 +32,7 @@ const SIMULATED_EVENTS = [
       executionOrder: ["1", "2", "3", "4", "5", "6"],
       mode: "auto",
       model: "claude-opus-4.6",
+      quorum: { enabled: true, auto: true, threshold: 6 },
     },
   },
   {
@@ -47,6 +48,8 @@ const SIMULATED_EVENTS = [
       model: "claude-opus-4.6",
       duration: 42300,
       cost_usd: 0.0847,
+      gateStatus: "passed",
+      attempts: 1,
       tokens_in: 12400,
       tokens_out: 3200,
     },
@@ -64,6 +67,8 @@ const SIMULATED_EVENTS = [
       model: "claude-opus-4.6",
       duration: 38700,
       cost_usd: 0.0723,
+      gateStatus: "passed",
+      attempts: 2,
       tokens_in: 10800,
       tokens_out: 2900,
     },
@@ -81,6 +86,8 @@ const SIMULATED_EVENTS = [
       model: "grok-4",
       duration: 31200,
       cost_usd: 0.0512,
+      gateStatus: "passed",
+      attempts: 1,
       tokens_in: 8900,
       tokens_out: 2100,
     },
@@ -445,6 +452,15 @@ async function main() {
 }
 
 async function clickTab(page, tabName) {
+  // Switch to correct group first (LiveGuard tabs need the liveguard group visible)
+  const isLG = tabName.startsWith("lg-");
+  if (isLG) {
+    await page.evaluate(() => { if (typeof switchGroup === "function") switchGroup("liveguard"); });
+    await page.waitForTimeout(200);
+  } else {
+    await page.evaluate(() => { if (typeof switchGroup === "function") switchGroup("forge"); });
+    await page.waitForTimeout(200);
+  }
   await page.click(`button[data-tab="${tabName}"]`);
   await page.waitForTimeout(300);
 }

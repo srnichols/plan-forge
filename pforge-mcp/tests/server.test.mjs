@@ -2272,3 +2272,446 @@ describe("PreDeploy hook corrupt cache resilience", () => {
     expect(result.blocked).toBe(true);
   });
 });
+
+// ─── PostSlice hook: trigger detection ──────────────────────────────────
+
+describe("PostSlice hook trigger detection", () => {
+  beforeEach(() => {
+    resetPostSliceHookFired();
+  });
+
+  it("triggers on feat() conventional commit", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    appendForgeJsonl("drift-history.json", { score: 85, timestamp: new Date().toISOString(), violations: [] }, tempDir);
+    appendForgeJsonl("drift-history.json", { score: 80, timestamp: new Date().toISOString(), violations: [] }, tempDir);
+
+    const result = runPostSliceHook({ commitMessage: "feat(auth): add login flow", cwd: tempDir });
+    expect(result.triggered).toBe(true);
+  });
+
+  it("triggers on fix() conventional commit", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    appendForgeJsonl("drift-history.json", { score: 90, timestamp: new Date().toISOString(), violations: [] }, tempDir);
+    appendForgeJsonl("drift-history.json", { score: 88, timestamp: new Date().toISOString(), violations: [] }, tempDir);
+
+    const result = runPostSliceHook({ commitMessage: "fix(api): resolve null ref", cwd: tempDir });
+    expect(result.triggered).toBe(true);
+  });
+
+  it("does not trigger on docs: commit", () => {
+    const result = runPostSliceHook({ commitMessage: "docs: update readme", cwd: tempDir });
+    expect(result.triggered).toBe(false);
+    expect(result.skippedReason).toMatch(/skip-pattern/);
+  });
+
+  it("does not trigger on ci: commit", () => {
+    const result = runPostSliceHook({ commitMessage: "ci: add deploy workflow", cwd: tempDir });
+    expect(result.triggered).toBe(false);
+    expect(result.skippedReason).toMatch(/skip-pattern/);
+  });
+
+  it("does not trigger on merge commit", () => {
+    const result = runPostSliceHook({ commitMessage: "Merge branch 'feature' into main", cwd: tempDir });
+    expect(result.triggered).toBe(false);
+    expect(result.skippedReason).toMatch(/skip-pattern/);
+  });
+
+  it("does not trigger on --no-verify commit", () => {
+    const result = runPostSliceHook({ commitMessage: "feat(auth): quick fix --no-verify", cwd: tempDir });
+    expect(result.triggered).toBe(false);
+    expect(result.skippedReason).toMatch(/skip-pattern/);
+  });
+
+  it("does not trigger on non-conventional commit", () => {
+    const result = runPostSliceHook({ commitMessage: "random commit message", cwd: tempDir });
+    expect(result.triggered).toBe(false);
+    expect(result.skippedReason).toBe("not-conventional-commit");
+  });
+
+  it("returns no-commit-message when commitMessage is empty", () => {
+    const result = runPostSliceHook({ commitMessage: "", cwd: tempDir });
+    expect(result.triggered).toBe(false);
+    expect(result.skippedReason).toBe("no-commit-message");
+  });
+});
+
+describe("PostSlice hook delta evaluation", () => {
+  beforeEach(() => {
+    resetPostSliceHookFired();
+  });
+
+  it("returns silent when score improved", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    appendForgeJsonl("drift-history.json", { score: 80, timestamp: new Date().toISOString(), violations: [] }, tempDir);
+    appendForgeJsonl("drift-history.json", { score: 85, timestamp: new Date().toISOString(), violations: [] }, tempDir);
+
+    const result = runPostSliceHook({ commitMessage: "feat(auth): add login", cwd: tempDir });
+    expect(result.triggered).toBe(true);
+    expect(result.action).toBe("silent");
+    expect(result.message).toBeNull();
+  });
+
+  it("returns silent when delta <= silentDeltaThreshold (5)", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    appendForgeJsonl("drift-history.json", { score: 85, timestamp: new Date().toISOString(), violations: [] }, tempDir);
+    appendForgeJsonl("drift-history.json", { score: 81, timestamp: new Date().toISOString(), violations: [] }, tempDir);
+
+    const result = runPostSliceHook({ commitMessage: "feat(auth): add login", cwd: tempDir });
+    expect(result.triggered).toBe(true);
+    expect(result.action).toBe("silent");
+    expect(result.delta).toBe(4);
+  });
+
+  it("returns advisory when delta > 5 and score >= 70", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    appendForgeJsonl("drift-history.json", { score: 85, timestamp: new Date().toISOString(), violations: [] }, tempDir);
+    appendForgeJsonl("drift-history.json", { score: 78, timestamp: new Date().toISOString(), violations: [
+      { file: "src/auth.ts", rule: "no-any", severity: "warning" },
+    ] }, tempDir);
+
+    const result = runPostSliceHook({ commitMessage: "feat(auth): add login", cwd: tempDir });
+    expect(result.triggered).toBe(true);
+    expect(result.action).toBe("advisory");
+    expect(result.message).toContain("🟡 PostSlice Hook");
+    expect(result.message).toContain("7 points");
+    expect(result.priorScore).toBe(85);
+    expect(result.newScore).toBe(78);
+    expect(result.delta).toBe(7);
+  });
+
+  it("returns warning when delta > 10", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    appendForgeJsonl("drift-history.json", { score: 90, timestamp: new Date().toISOString(), violations: [] }, tempDir);
+    appendForgeJsonl("drift-history.json", { score: 75, timestamp: new Date().toISOString(), violations: [
+      { file: "src/api.ts", rule: "no-unused", severity: "error" },
+      { file: "src/db.ts", rule: "no-any", severity: "warning" },
+    ] }, tempDir);
+
+    const result = runPostSliceHook({ commitMessage: "feat(api): overhaul endpoints", cwd: tempDir });
+    expect(result.triggered).toBe(true);
+    expect(result.action).toBe("warning");
+    expect(result.message).toContain("🔴 PostSlice Hook");
+    expect(result.message).toContain("15 points");
+    expect(result.delta).toBe(15);
+  });
+
+  it("returns warning when score drops below floor (70)", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    appendForgeJsonl("drift-history.json", { score: 75, timestamp: new Date().toISOString(), violations: [] }, tempDir);
+    appendForgeJsonl("drift-history.json", { score: 68, timestamp: new Date().toISOString(), violations: [
+      { file: "src/main.ts", rule: "max-lines", severity: "warning" },
+    ] }, tempDir);
+
+    const result = runPostSliceHook({ commitMessage: "refactor(core): restructure", cwd: tempDir });
+    expect(result.triggered).toBe(true);
+    expect(result.action).toBe("warning");
+    expect(result.message).toContain("BELOW threshold");
+    expect(result.newScore).toBe(68);
+  });
+
+  it("skips when drift history has < 2 entries", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    appendForgeJsonl("drift-history.json", { score: 85, timestamp: new Date().toISOString(), violations: [] }, tempDir);
+
+    const result = runPostSliceHook({ commitMessage: "feat(auth): first commit", cwd: tempDir });
+    expect(result.triggered).toBe(true);
+    expect(result.action).toBe("skip");
+    expect(result.skippedReason).toBe("insufficient-drift-history");
+  });
+});
+
+describe("PostSlice hook duplicate prevention", () => {
+  beforeEach(() => {
+    resetPostSliceHookFired();
+  });
+
+  it("prevents duplicate firing after first trigger", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    appendForgeJsonl("drift-history.json", { score: 85, timestamp: new Date().toISOString(), violations: [] }, tempDir);
+    appendForgeJsonl("drift-history.json", { score: 80, timestamp: new Date().toISOString(), violations: [] }, tempDir);
+
+    const first = runPostSliceHook({ commitMessage: "feat(auth): add login", cwd: tempDir });
+    expect(first.triggered).toBe(true);
+
+    const second = runPostSliceHook({ commitMessage: "feat(auth): add logout", cwd: tempDir });
+    expect(second.triggered).toBe(false);
+    expect(second.skippedReason).toBe("already-fired");
+  });
+
+  it("resetPostSliceHookFired allows re-firing", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    appendForgeJsonl("drift-history.json", { score: 85, timestamp: new Date().toISOString(), violations: [] }, tempDir);
+    appendForgeJsonl("drift-history.json", { score: 80, timestamp: new Date().toISOString(), violations: [] }, tempDir);
+
+    runPostSliceHook({ commitMessage: "feat(auth): add login", cwd: tempDir });
+    resetPostSliceHookFired();
+    const result = runPostSliceHook({ commitMessage: "feat(auth): add logout", cwd: tempDir });
+    expect(result.triggered).toBe(true);
+  });
+});
+
+describe("PostSlice hook config override", () => {
+  beforeEach(() => {
+    resetPostSliceHookFired();
+  });
+
+  it("respects enabled=false in config", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    appendForgeJsonl("drift-history.json", { score: 85, timestamp: new Date().toISOString(), violations: [] }, tempDir);
+    appendForgeJsonl("drift-history.json", { score: 50, timestamp: new Date().toISOString(), violations: [] }, tempDir);
+    writeFileSync(resolve(tempDir, ".forge.json"), JSON.stringify({
+      hooks: { postSlice: { enabled: false } }
+    }));
+
+    const result = runPostSliceHook({ commitMessage: "feat(auth): add login", cwd: tempDir });
+    expect(result.triggered).toBe(true);
+    expect(result.action).toBe("disabled");
+  });
+
+  it("respects custom thresholds in config", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    appendForgeJsonl("drift-history.json", { score: 85, timestamp: new Date().toISOString(), violations: [] }, tempDir);
+    appendForgeJsonl("drift-history.json", { score: 78, timestamp: new Date().toISOString(), violations: [
+      { file: "a.ts", rule: "no-any", severity: "warning" },
+    ] }, tempDir);
+    writeFileSync(resolve(tempDir, ".forge.json"), JSON.stringify({
+      hooks: { postSlice: { silentDeltaThreshold: 10, warnDeltaThreshold: 20, scoreFloor: 60 } }
+    }));
+
+    const result = runPostSliceHook({ commitMessage: "feat(auth): add login", cwd: tempDir });
+    expect(result.triggered).toBe(true);
+    expect(result.action).toBe("silent"); // delta is 7, within custom threshold of 10
+  });
+
+  it("handles corrupt .forge.json gracefully", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    appendForgeJsonl("drift-history.json", { score: 85, timestamp: new Date().toISOString(), violations: [] }, tempDir);
+    appendForgeJsonl("drift-history.json", { score: 70, timestamp: new Date().toISOString(), violations: [] }, tempDir);
+    writeFileSync(resolve(tempDir, ".forge.json"), "CORRUPT");
+
+    const result = runPostSliceHook({ commitMessage: "feat(auth): add login", cwd: tempDir });
+    expect(result.triggered).toBe(true);
+    // Falls back to defaults — delta=15, should be warning
+    expect(result.action).toBe("warning");
+  });
+});
+
+// ─── PreAgentHandoff hook ──────────────────────────────────────────────
+
+describe("PreAgentHandoff hook trigger conditions", () => {
+  it("does not trigger when no conditions are met", async () => {
+    const result = await runPreAgentHandoffHook({ cwd: tempDir });
+    expect(result.triggered).toBe(false);
+    expect(result.skippedReason).toBe("no-trigger-conditions");
+  });
+
+  it("triggers on dirty branch", async () => {
+    const result = await runPreAgentHandoffHook({ cwd: tempDir, dirtyFiles: ["src/auth.ts"] });
+    expect(result.triggered).toBe(true);
+    expect(result.contextHeader).toBeTruthy();
+  });
+
+  it("triggers on active plan", async () => {
+    const result = await runPreAgentHandoffHook({ cwd: tempDir, hasActivePlan: true });
+    expect(result.triggered).toBe(true);
+  });
+
+  it("triggers on auto-fix plan", async () => {
+    const result = await runPreAgentHandoffHook({ cwd: tempDir, hasAutoFixPlan: true });
+    expect(result.triggered).toBe(true);
+  });
+
+  it("triggers on resume session", async () => {
+    const result = await runPreAgentHandoffHook({ cwd: tempDir, isResumeSession: true });
+    expect(result.triggered).toBe(true);
+  });
+});
+
+describe("PreAgentHandoff hook PFORGE_QUORUM_TURN guard", () => {
+  const origEnv = process.env.PFORGE_QUORUM_TURN;
+
+  afterEach(() => {
+    if (origEnv === undefined) {
+      delete process.env.PFORGE_QUORUM_TURN;
+    } else {
+      process.env.PFORGE_QUORUM_TURN = origEnv;
+    }
+  });
+
+  it("skips context injection when PFORGE_QUORUM_TURN is set", async () => {
+    process.env.PFORGE_QUORUM_TURN = "1";
+    const result = await runPreAgentHandoffHook({
+      cwd: tempDir,
+      dirtyFiles: ["src/auth.ts"],
+      hasActivePlan: true,
+    });
+    expect(result.triggered).toBe(false);
+    expect(result.skippedReason).toBe("PFORGE_QUORUM_TURN active");
+  });
+
+  it("injects context when PFORGE_QUORUM_TURN is not set", async () => {
+    delete process.env.PFORGE_QUORUM_TURN;
+    const result = await runPreAgentHandoffHook({ cwd: tempDir, dirtyFiles: ["src/auth.ts"] });
+    expect(result.triggered).toBe(true);
+    expect(result.contextHeader).toBeTruthy();
+  });
+});
+
+describe("PreAgentHandoff hook context header", () => {
+  it("returns no-data header when .forge/ is empty", async () => {
+    const result = await runPreAgentHandoffHook({ cwd: tempDir, hasActivePlan: true });
+    expect(result.triggered).toBe(true);
+    expect(result.contextHeader).toContain("No data yet");
+    expect(result.contextHeader).toContain("pforge triage");
+  });
+
+  it("includes drift score in header", async () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    appendForgeJsonl("drift-history.json", { score: 82, trend: "improving", violations: [{ file: "a.ts", rule: "no-any", severity: "warning" }], timestamp: new Date().toISOString() }, tempDir);
+
+    const result = await runPreAgentHandoffHook({ cwd: tempDir, hasActivePlan: true });
+    expect(result.contextHeader).toContain("Drift Score: 82/100");
+    expect(result.contextHeader).toContain("improving");
+    expect(result.contextHeader).toContain("1 active violations");
+  });
+
+  it("includes open incident count in header", async () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    appendForgeJsonl("incidents.jsonl", { id: "1", severity: "high", description: "API down", resolvedAt: null }, tempDir);
+    appendForgeJsonl("incidents.jsonl", { id: "2", severity: "low", description: "Slow query", resolvedAt: "2026-01-01T00:00:00Z" }, tempDir);
+
+    const result = await runPreAgentHandoffHook({ cwd: tempDir, hasActivePlan: true });
+    expect(result.contextHeader).toContain("Open Incidents: 1");
+    expect(result.contextHeader).toContain("high");
+  });
+
+  it("includes last deploy info in header", async () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    appendForgeJsonl("deploy-journal.jsonl", { version: "1.2.3", timestamp: "2026-04-13T10:00:00Z", preHealthScore: 85, postHealthScore: 90 }, tempDir);
+
+    const result = await runPreAgentHandoffHook({ cwd: tempDir, hasActivePlan: true });
+    expect(result.contextHeader).toContain("Last Deploy: 1.2.3");
+    expect(result.contextHeader).toContain("pre: 85");
+    expect(result.contextHeader).toContain("post: 90");
+  });
+
+  it("includes secret scan status in header", async () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    writeFileSync(resolve(forgeDir, "secret-scan-cache.json"), JSON.stringify({
+      clean: false,
+      scannedAt: new Date().toISOString(),
+      findings: [{ file: "config.js", line: 3, type: "api_key" }],
+    }));
+
+    const result = await runPreAgentHandoffHook({ cwd: tempDir, hasActivePlan: true });
+    expect(result.contextHeader).toContain("⛔ 1 finding(s)");
+  });
+
+  it("includes clean secret scan in header", async () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    writeFileSync(resolve(forgeDir, "secret-scan-cache.json"), JSON.stringify({
+      clean: true,
+      scannedAt: new Date().toISOString(),
+      findings: [],
+    }));
+
+    const result = await runPreAgentHandoffHook({ cwd: tempDir, hasActivePlan: true });
+    expect(result.contextHeader).toContain("✅ Clean");
+  });
+
+  it("includes top alerts in header", async () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    writeFileSync(resolve(forgeDir, "alert-triage-cache.json"), JSON.stringify({
+      scannedAt: new Date().toISOString(),
+      alerts: [
+        { severity: "high", title: "SQL injection risk", recommendedAction: "parameterize queries" },
+        { severity: "medium", title: "Missing auth check", recommendedAction: "add middleware" },
+        { severity: "low", title: "Code style issue", recommendedAction: "run linter" },
+      ],
+    }));
+
+    const result = await runPreAgentHandoffHook({ cwd: tempDir, hasActivePlan: true });
+    expect(result.contextHeader).toContain("SQL injection risk");
+    expect(result.contextHeader).toContain("Missing auth check");
+    // Low severity should be filtered out (minAlertSeverity default = "medium")
+    expect(result.contextHeader).not.toContain("Code style issue");
+  });
+
+  it("shows separator bars in header", async () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    appendForgeJsonl("drift-history.json", { score: 90, trend: "stable", violations: [], timestamp: new Date().toISOString() }, tempDir);
+
+    const result = await runPreAgentHandoffHook({ cwd: tempDir, hasActivePlan: true });
+    expect(result.contextHeader).toContain("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    expect(result.contextHeader).toContain("🛡️ LIVEGUARD CONTEXT — Session Start");
+  });
+});
+
+describe("PreAgentHandoff hook config", () => {
+  it("respects enabled=false in config", async () => {
+    writeFileSync(resolve(tempDir, ".forge.json"), JSON.stringify({
+      hooks: { preAgentHandoff: { enabled: false } }
+    }));
+
+    const result = await runPreAgentHandoffHook({ cwd: tempDir, hasActivePlan: true });
+    expect(result.triggered).toBe(true);
+    expect(result.contextHeader).toBeNull();
+    expect(result.skippedReason).toBe("disabled");
+  });
+
+  it("handles corrupt .forge.json gracefully", async () => {
+    writeFileSync(resolve(tempDir, ".forge.json"), "NOT JSON");
+
+    const result = await runPreAgentHandoffHook({ cwd: tempDir, hasActivePlan: true });
+    // Should use defaults and still produce header (even if empty data → no-data header)
+    expect(result.triggered).toBe(true);
+  });
+
+  it("respects custom minAlertSeverity", async () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    writeFileSync(resolve(tempDir, ".forge.json"), JSON.stringify({
+      hooks: { preAgentHandoff: { minAlertSeverity: "high" } }
+    }));
+    writeFileSync(resolve(forgeDir, "alert-triage-cache.json"), JSON.stringify({
+      scannedAt: new Date().toISOString(),
+      alerts: [
+        { severity: "high", title: "Critical vulnerability", recommendedAction: "fix now" },
+        { severity: "medium", title: "Minor issue", recommendedAction: "fix later" },
+      ],
+    }));
+
+    const result = await runPreAgentHandoffHook({ cwd: tempDir, hasActivePlan: true });
+    expect(result.contextHeader).toContain("Critical vulnerability");
+    expect(result.contextHeader).not.toContain("Minor issue");
+  });
+});
+
+describe("PreAgentHandoff hook no-data header", () => {
+  it("returns no-data header when all caches are empty", async () => {
+    const result = await runPreAgentHandoffHook({ cwd: tempDir, hasActivePlan: true });
+    expect(result.triggered).toBe(true);
+    expect(result.contextHeader).toContain("No data yet");
+    expect(result.regressionResult).toBeNull();
+  });
+});

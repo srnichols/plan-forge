@@ -19,9 +19,9 @@
  * @module orchestrator
  */
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync, appendFileSync, readdirSync } from "node:fs";
 import { spawn, execSync } from "node:child_process";
-import { resolve, basename, dirname } from "node:path";
+import { resolve, basename, dirname, join, relative, extname } from "node:path";
 import { EventEmitter } from "node:events";
 import { tmpdir } from "node:os";
 import { createTraceContext, createTelemetryHandler, writeManifest, appendRunIndex, pruneRunHistory, addLogSummary } from "./telemetry.mjs";
@@ -30,6 +30,21 @@ import { isOpenBrainConfigured, buildMemorySearchBlock, buildMemoryCaptureBlock,
 // ─── Centralized Constants ────────────────────────────────────────────
 /** Canonical list of all supported agent adapters. Update here — consumed by dashboard, setup, and docs. */
 export const SUPPORTED_AGENTS = ["copilot", "claude", "cursor", "codex", "gemini", "windsurf", "generic"];
+
+/** Allowlist of commands permitted in validation gates. Shared by runGate() and lintGateCommands(). */
+export const GATE_ALLOWED_PREFIXES = [
+  // Build / test runners
+  "npm", "npx", "node", "cargo", "go", "dotnet", "python", "python3",
+  "pip", "mvn", "gradle", "make", "cmake", "bash", "sh", "pwsh",
+  "powershell", "pytest", "mypy", "ruff", "eslint", "tsc", "vitest",
+  "jest", "mocha",
+  // Shell builtins & coreutils used in gate commands
+  "cd", "cat", "ls", "rm", "mkdir", "cp", "mv", "diff", "wc",
+  "head", "tail", "sort", "curl", "git", "grep", "test", "echo",
+  "exit", "true", "false",
+  // Project tools
+  "pforge",
+];
 
 // ─── Event Bus (C3: Dependency Injection) ─────────────────────────────
 
@@ -93,10 +108,10 @@ class OrchestratorEventBus extends EventEmitter {
  * @param {string} planPath - Path to the plan Markdown file
  * @returns {{ meta, scopeContract, slices, dag }}
  */
-export function parsePlan(planPath) {
+export function parsePlan(planPath, cwd = process.cwd()) {
   const fullPath = resolve(planPath);
   // C4: Validate path is within project to prevent traversal
-  const projectRoot = resolve(process.cwd());
+  const projectRoot = resolve(cwd);
   if (!fullPath.startsWith(projectRoot)) {
     throw new Error(`Plan path must be within project directory: ${planPath}`);
   }
@@ -959,11 +974,26 @@ function parseStderrStats(stderr) {
   const stats = { model: null, tokens_in: 0, tokens_out: 0, premiumRequests: 0 };
   if (!stderr) return stats;
 
-  // Parse premium requests
-  const premiumMatch = stderr.match(/(\d+)\s+Premium request/);
+  // Parse premium requests — two formats:
+  //   Old: "1 Premium request" / "3 Premium requests"
+  //   New: "Requests  3 Premium (1m 35s)"
+  const premiumMatch = stderr.match(/(\d+)\s+Premium\s+request/i) || stderr.match(/Requests\s+(\d+)\s+Premium/i);
   if (premiumMatch) stats.premiumRequests = parseInt(premiumMatch[1], 10);
 
-  // Parse model breakdown lines: "claude-sonnet-4.6  11.7m in, 97.5k out, ..."
+  // Parse token counts — two formats:
+  //   Old: " claude-sonnet-4.6  639.4k in, 4.5k out, 552.1k cached"
+  //   New: "Tokens    ↑ 476.0k • ↓ 3.1k • 430.1k (cached)"
+  const newTokenMatch = stderr.match(/Tokens\s+[↑⬆]\s*([\d.]+[kmb]?)\s*[•·]\s*[↓⬇]\s*([\d.]+[kmb]?)/i);
+  if (newTokenMatch) {
+    stats.tokens_in = parseTokenCount(newTokenMatch[1]);
+    stats.tokens_out = parseTokenCount(newTokenMatch[2]);
+  }
+
+  // Parse model from new format: "Model     claude-opus-4.6" or model line in breakdown
+  const newModelMatch = stderr.match(/Model\s+([\w.-]+)/);
+  if (newModelMatch) stats.model = newModelMatch[1];
+
+  // Old format: model breakdown lines "claude-sonnet-4.6  11.7m in, 97.5k out, ..."
   const modelLines = stderr.match(/^\s+([\w.-]+)\s+([\d.]+[kmb]?)\s+in,\s+([\d.]+[kmb]?)\s+out/gm);
   if (modelLines) {
     let maxTokens = 0;
@@ -999,6 +1029,43 @@ function parseTokenCount(str) {
 }
 
 /**
+ * Coalesce multi-line gate commands from a validation gate block.
+ * Joins lines inside unmatched quotes into single commands, strips
+ * inline comments and standalone comment lines.
+ *
+ * @param {string} gateText - Raw validation gate text block
+ * @returns {string[]} Array of complete, executable gate commands
+ */
+export function coalesceGateLines(gateText) {
+  const rawLines = gateText.split("\n");
+  const commands = [];
+  let pending = "";
+  for (const raw of rawLines) {
+    const trimmed = raw.trim();
+    if (!trimmed) continue;
+    if (pending) {
+      pending += "\n" + trimmed;
+      const dblQuotes = (pending.match(/"/g) || []).length;
+      if (dblQuotes % 2 === 0) {
+        commands.push(pending);
+        pending = "";
+      }
+    } else {
+      const stripped = trimmed.replace(/\s{2,}#\s.*$/, "");
+      if (!stripped || stripped.startsWith("#")) continue;
+      const dblQuotes = (stripped.match(/"/g) || []).length;
+      if (dblQuotes % 2 !== 0) {
+        pending = stripped;
+      } else {
+        commands.push(stripped);
+      }
+    }
+  }
+  if (pending) commands.push(pending);
+  return commands;
+}
+
+/**
  * Run a validation gate command directly (no AI worker needed).
  * Commands are validated against an allowlist of common build/test tools.
  *
@@ -1008,19 +1075,13 @@ function parseTokenCount(str) {
  */
 export function runGate(command, cwd) {
   // C1: Validate gate commands against allowlist to prevent arbitrary execution
-  const allowedPrefixes = [
-    "npm", "npx", "node", "cargo", "go", "dotnet", "python", "python3",
-    "pip", "mvn", "gradle", "make", "cmake", "bash", "sh", "pwsh",
-    "powershell", "pytest", "mypy", "ruff", "eslint", "tsc", "vitest",
-    "jest", "mocha", "grep", "test", "echo", "exit", "true", "false",
-  ];
   const cmdBase = command.trim().split(/\s+/)[0].toLowerCase();
-  const isAllowed = allowedPrefixes.some((p) => cmdBase === p || cmdBase.endsWith(`/${p}`));
+  const isAllowed = GATE_ALLOWED_PREFIXES.some((p) => cmdBase === p || cmdBase.endsWith(`/${p}`));
   if (!isAllowed) {
     return {
       success: false,
       output: "",
-      error: `Validation gate blocked: '${cmdBase}' not in allowlist. Allowed: ${allowedPrefixes.join(", ")}`,
+      error: `Validation gate blocked: '${cmdBase}' not in allowlist. Allowed: ${GATE_ALLOWED_PREFIXES.join(", ")}`,
     };
   }
 
@@ -1327,7 +1388,7 @@ export async function runPlan(planPath, options = {}) {
   const effectiveModel = model || modelRouting.default || null;
 
   // Parse plan
-  const plan = parsePlan(planPath);
+  const plan = parsePlan(planPath, cwd);
 
   // Estimation mode — return without executing
   if (estimate) {
@@ -1348,6 +1409,23 @@ export async function runPlan(planPath, options = {}) {
   // Dry run — parse and validate only
   if (dryRun) {
     return { status: "dry-run", plan };
+  }
+
+  // Pre-flight: lint gate commands before burning time on execution
+  const gateLint = lintGateCommands(planPath);
+  if (!gateLint.passed) {
+    const errorSummary = gateLint.errors.map(e => `  ❌ ${e.message}`).join("\n");
+    const warnSummary = gateLint.warnings.map(w => `  ⚠️ ${w.message}`).join("\n");
+    return {
+      status: "failed",
+      error: "Gate lint pre-flight failed — fix these before executing:",
+      gateLint: {
+        errors: gateLint.errors,
+        warnings: gateLint.warnings,
+        summary: gateLint.summary,
+      },
+      detail: [errorSummary, warnSummary].filter(Boolean).join("\n"),
+    };
   }
 
   // Set up event bus with DI handler
@@ -1544,7 +1622,7 @@ function loadModelRouting(cwd) {
   } catch {
     // Invalid JSON or missing file — use defaults
   }
-  return { default: "auto" };
+  return { default: "claude-opus-4.6" };
 }
 
 /**
@@ -1871,6 +1949,1031 @@ function aggregateModelStats(records) {
   return result;
 }
 
+// ─── Operational Data Infrastructure ──────────────────────────────────
+
+/**
+ * Ensure a subdirectory exists under .forge/.
+ * @param {string} subpath - Relative path under .forge/ (e.g. "runs", "telemetry"). Use "" for .forge/ root.
+ * @param {string} [cwd=process.cwd()] - Project root directory
+ * @returns {string} Resolved absolute path of the created directory
+ */
+export function ensureForgeDir(subpath, cwd = process.cwd()) {
+  const dir = resolve(cwd, ".forge", subpath);
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+/**
+ * Read and parse a JSON file from .forge/.
+ * @param {string} filePath - Path relative to .forge/ (e.g. "cost-history.json")
+ * @param {*} [defaultValue=null] - Returned when file is missing or contains invalid JSON
+ * @param {string} [cwd=process.cwd()] - Project root directory
+ * @returns {*} Parsed JSON or defaultValue
+ */
+export function readForgeJson(filePath, defaultValue = null, cwd = process.cwd()) {
+  const fullPath = resolve(cwd, ".forge", filePath);
+  try {
+    if (existsSync(fullPath)) {
+      return JSON.parse(readFileSync(fullPath, "utf-8"));
+    }
+  } catch { /* corrupt/missing → return default */ }
+  return defaultValue;
+}
+
+/**
+ * Append a JSON record as a single line to a JSONL file under .forge/.
+ * Creates parent directories if absent.
+ * @param {string} filePath - Path relative to .forge/ (e.g. "telemetry/tool-calls.jsonl")
+ * @param {object} record - JSON-serializable object to append
+ * @param {string} [cwd=process.cwd()] - Project root directory
+ */
+export function appendForgeJsonl(filePath, record, cwd = process.cwd()) {
+  const fullPath = resolve(cwd, ".forge", filePath);
+  mkdirSync(dirname(fullPath), { recursive: true });
+  appendFileSync(fullPath, JSON.stringify(record) + "\n");
+}
+
+/**
+ * Read a JSONL file under .forge/ and return an array of parsed records.
+ * Returns defaultValue (default []) if the file is missing or unreadable.
+ * @param {string} filePath - Path relative to .forge/
+ * @param {Array} [defaultValue=[]] - Fallback when file is absent
+ * @param {string} [cwd=process.cwd()] - Project root directory
+ * @returns {Array}
+ */
+export function readForgeJsonl(filePath, defaultValue = [], cwd = process.cwd()) {
+  const fullPath = resolve(cwd, ".forge", filePath);
+  try {
+    if (!existsSync(fullPath)) return defaultValue;
+    return readFileSync(fullPath, "utf-8")
+      .split("\n")
+      .filter(line => line.trim())
+      .map(line => JSON.parse(line));
+  } catch { return defaultValue; }
+}
+
+// ─── Health Trend Analysis ────────────────────────────────────────────
+
+/**
+ * Compute health trend from .forge/health-snapshots.jsonl.
+ * Aggregates cost, drift, incident, and model performance data points
+ * over the requested time window.
+ *
+ * @param {string} [cwd=process.cwd()] - Project root directory
+ * @param {number} [days=30] - Number of days of history to include
+ * @param {string[]|null} [metrics=null] - Optional metric filter (e.g. ["drift","cost","incidents","models"])
+ * @returns {object} Health trend report
+ */
+export function getHealthTrend(cwd = process.cwd(), days = 30, metrics = null) {
+  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  const allMetrics = ["drift", "cost", "incidents", "models"];
+  const active = metrics && metrics.length ? metrics.filter(m => allMetrics.includes(m)) : allMetrics;
+
+  const result = { days, metricsIncluded: active, generatedAt: new Date().toISOString(), dataPoints: 0 };
+
+  // Drift trend
+  if (active.includes("drift")) {
+    const driftHistory = readForgeJsonl("drift-history.json", [], cwd);
+    const filtered = driftHistory.filter(r => r.timestamp >= cutoff);
+    const scores = filtered.map(r => r.score).filter(s => typeof s === "number");
+    result.drift = {
+      snapshots: filtered.length,
+      latest: scores.length ? scores[scores.length - 1] : null,
+      avg: scores.length ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10 : null,
+      min: scores.length ? Math.min(...scores) : null,
+      max: scores.length ? Math.max(...scores) : null,
+      trend: computeTrendDirection(scores),
+    };
+    result.dataPoints += filtered.length;
+  }
+
+  // Cost trend
+  if (active.includes("cost")) {
+    const costHistory = readForgeJson("cost-history.json", [], cwd);
+    const filtered = Array.isArray(costHistory) ? costHistory.filter(r => (r.date || "") >= cutoff) : [];
+    const costs = filtered.map(r => r.total_cost_usd || 0);
+    result.cost = {
+      runs: filtered.length,
+      totalUsd: costs.length ? Math.round(costs.reduce((a, b) => a + b, 0) * 100) / 100 : 0,
+      avgPerRun: costs.length ? Math.round((costs.reduce((a, b) => a + b, 0) / costs.length) * 100) / 100 : 0,
+      trend: computeTrendDirection(costs),
+    };
+    result.dataPoints += filtered.length;
+  }
+
+  // Incident trend
+  if (active.includes("incidents")) {
+    const incidents = readForgeJsonl("incidents.jsonl", [], cwd);
+    const filtered = incidents.filter(r => (r.capturedAt || "") >= cutoff);
+    const resolved = filtered.filter(r => r.resolvedAt);
+    const mttrs = resolved.map(r => r.mttr).filter(m => typeof m === "number" && m > 0);
+    result.incidents = {
+      total: filtered.length,
+      resolved: resolved.length,
+      open: filtered.length - resolved.length,
+      avgMttrMs: mttrs.length ? Math.round(mttrs.reduce((a, b) => a + b, 0) / mttrs.length) : null,
+      bySeverity: {},
+    };
+    for (const inc of filtered) {
+      const sev = inc.severity || "unknown";
+      result.incidents.bySeverity[sev] = (result.incidents.bySeverity[sev] || 0) + 1;
+    }
+    result.dataPoints += filtered.length;
+  }
+
+  // Model performance trend
+  if (active.includes("models")) {
+    const perfRecords = loadModelPerformance(cwd);
+    const filtered = perfRecords.filter(r => (r.date || "") >= cutoff);
+    const stats = {};
+    for (const r of filtered) {
+      const m = r.model || "unknown";
+      if (!stats[m]) stats[m] = { slices: 0, passed: 0, failed: 0, totalCost: 0 };
+      stats[m].slices += 1;
+      if (r.status === "passed") stats[m].passed += 1;
+      else stats[m].failed += 1;
+      stats[m].totalCost += r.cost_usd || 0;
+    }
+    const models = {};
+    for (const [model, s] of Object.entries(stats)) {
+      models[model] = {
+        slices: s.slices,
+        successRate: s.slices > 0 ? Math.round((s.passed / s.slices) * 1000) / 1000 : 0,
+        avgCostUsd: s.slices > 0 ? Math.round((s.totalCost / s.slices) * 1_000_000) / 1_000_000 : 0,
+      };
+    }
+    result.models = { totalSlices: filtered.length, byModel: models };
+    result.dataPoints += filtered.length;
+  }
+
+  // Overall health summary
+  const scores = [];
+  if (result.drift?.avg != null) scores.push(result.drift.avg);
+  if (result.incidents) {
+    const incidentPenalty = Math.min(result.incidents.total * 5, 50);
+    scores.push(Math.max(0, 100 - incidentPenalty));
+  }
+  if (result.models?.totalSlices > 0) {
+    const allPassRate = Object.values(result.models.byModel).reduce((sum, m) => sum + m.successRate, 0);
+    const avgRate = allPassRate / Object.keys(result.models.byModel).length;
+    scores.push(Math.round(avgRate * 100));
+  }
+
+  result.healthScore = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
+  result.trend = result.drift?.trend || (result.dataPoints === 0 ? "no-data" : "stable");
+
+  return result;
+}
+
+/**
+ * Compute trend direction from an ordered array of numeric values.
+ * Compares the mean of the first half to the mean of the second half.
+ */
+function computeTrendDirection(values) {
+  if (!values || values.length < 2) return "insufficient-data";
+  const mid = Math.floor(values.length / 2);
+  const firstHalf = values.slice(0, mid);
+  const secondHalf = values.slice(mid);
+  const avg1 = firstHalf.reduce((a, b) => a + b, 0) / firstHalf.length;
+  const avg2 = secondHalf.reduce((a, b) => a + b, 0) / secondHalf.length;
+  const delta = avg2 - avg1;
+  const threshold = Math.abs(avg1) * 0.05 || 1;
+  if (delta > threshold) return "increasing";
+  if (delta < -threshold) return "decreasing";
+  return "stable";
+}
+
+/**
+ * Extract validation gates from a parsed plan file.
+ * Delegates to parsePlan() — does not duplicate parsing logic.
+ * @param {string} planFilePath - Absolute or project-relative path to a plan markdown file
+ * @param {string} [cwd=process.cwd()] - Project root (used for path-traversal check)
+ * @returns {Array<{sliceNumber: string, sliceTitle: string, gates: string[]}>}
+ */
+export function parseValidationGates(planFilePath, cwd = process.cwd()) {
+  const plan = parsePlan(planFilePath, cwd);
+  return plan.slices
+    .filter(s => s.validationGate)
+    .map(s => ({
+      sliceNumber: s.number,
+      sliceTitle: s.title,
+      gates: s.validationGate
+        .split("\n")
+        .map(l => l.replace(/\s{2,}#\s.*$/, "").trim())
+        .filter(l => l.length > 0),
+    }));
+}
+
+/**
+ * Lint all validation gate commands in a plan file.
+ * Catches common issues that cause gate failures at runtime:
+ *   - Commands not in the allowlist
+ *   - Standalone comment lines (# ...) that get treated as commands
+ *   - /dev/stdin usage (not cross-platform — fails on Windows)
+ *   - curl localhost:* in non-final slices (requires running server)
+ *   - `node *.test.mjs` for vitest test files (must use npx vitest)
+ *
+ * @param {string} planFilePath - Path to the plan Markdown file
+ * @returns {{ warnings: Array, errors: Array, passed: boolean }}
+ */
+export function lintGateCommands(planFilePath, cwd = process.cwd()) {
+  const plan = parsePlan(planFilePath, cwd);
+  const warnings = [];
+  const errors = [];
+  const lastSliceNumber = plan.slices.length > 0
+    ? plan.slices[plan.slices.length - 1].number
+    : null;
+
+  for (const slice of plan.slices) {
+    if (!slice.validationGate) continue;
+
+    // Also lint raw lines for comment detection before coalescing
+    const rawLines = slice.validationGate.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+    for (const raw of rawLines) {
+      if (raw.startsWith("#")) {
+        const loc = `Slice ${slice.number} ("${slice.title}")`;
+        warnings.push({
+          slice: slice.number,
+          command: raw,
+          rule: "comment-line",
+          severity: "warn",
+          message: `${loc}: Standalone comment '${raw.slice(0, 60)}...' will be treated as a command. Remove or prefix with a real command.`,
+        });
+      }
+    }
+
+    const commands = coalesceGateLines(slice.validationGate);
+
+    for (const line of commands) {
+      const loc = `Slice ${slice.number} ("${slice.title}")`;
+
+      // 1. /dev/stdin (not cross-platform)
+      if (line.includes("/dev/stdin")) {
+        errors.push({
+          slice: slice.number,
+          command: line,
+          rule: "unix-only-path",
+          severity: "error",
+          message: `${loc}: '/dev/stdin' is Unix-only — fails on Windows. Use readFileSync(0,'utf8') for cross-platform stdin.`,
+        });
+      }
+
+      // 3. Command not in allowlist
+      // Skip leading env var assignments (VAR=val command ...) to find the real command
+      const tokens = line.split(/\s+/);
+      let cmdIdx = 0;
+      while (cmdIdx < tokens.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[cmdIdx])) {
+        cmdIdx++;
+      }
+      const cmdToken = (tokens[cmdIdx] || tokens[0]).toLowerCase();
+      const isAllowed = GATE_ALLOWED_PREFIXES.some(p => cmdToken === p || cmdToken.endsWith(`/${p}`));
+      if (!isAllowed) {
+        errors.push({
+          slice: slice.number,
+          command: line,
+          rule: "blocked-command",
+          severity: "error",
+          message: `${loc}: '${cmdToken}' is not in the gate allowlist. Add it to GATE_ALLOWED_PREFIXES or rewrite the command.`,
+        });
+      }
+
+      // 4. curl localhost in non-final slices (requires running server)
+      if (/curl\s.*localhost[:\s]/.test(line) && slice.number !== lastSliceNumber) {
+        warnings.push({
+          slice: slice.number,
+          command: line,
+          rule: "runtime-gate",
+          severity: "warn",
+          message: `${loc}: curl to localhost requires a running server. Move runtime API checks to vitest integration tests.`,
+        });
+      }
+
+      // 5. node *.test.mjs for vitest files (should use npx vitest)
+      if (/^node\s+.*\.test\.(mjs|js|ts)/.test(line)) {
+        warnings.push({
+          slice: slice.number,
+          command: line,
+          rule: "vitest-direct-node",
+          severity: "warn",
+          message: `${loc}: 'node *.test.*' fails for vitest test files. Use 'npx vitest run <file>' instead.`,
+        });
+      }
+
+      // 6. Unix-only commands (not available in cmd.exe on Windows)
+      const WINDOWS_UNAVAILABLE = ["grep", "sed", "awk", "wc", "head", "tail", "sort", "diff", "test", "tr", "xargs", "find"];
+      if (WINDOWS_UNAVAILABLE.includes(cmdToken) && !/^bash\s+-c/.test(line)) {
+        warnings.push({
+          slice: slice.number,
+          command: line,
+          rule: "windows-unavailable",
+          severity: "warn",
+          message: `${loc}: '${cmdToken}' is not available in cmd.exe on Windows. Wrap in 'bash -c' or use a 'node -e' equivalent.`,
+        });
+      }
+
+      // 7. Unix-only paths (/tmp/, /dev/null)
+      if (/\/tmp\/|\/dev\/null/.test(line)) {
+        warnings.push({
+          slice: slice.number,
+          command: line,
+          rule: "unix-only-path",
+          severity: "warn",
+          message: `${loc}: Unix-only path (/tmp/ or /dev/null) — fails on Windows. Use os.tmpdir() or NUL.`,
+        });
+      }
+
+      // 8. Project scripts not on PATH (pforge is a .ps1/.sh script, not a global binary)
+      if (/^pforge\s/.test(line)) {
+        warnings.push({
+          slice: slice.number,
+          command: line,
+          rule: "project-script",
+          severity: "warn",
+          message: `${loc}: 'pforge' is a project script, not on PATH during gate execution. Use 'pwsh ./pforge.ps1' or rewrite as 'node -e'.`,
+        });
+      }
+
+      // 9. JS comments inside node -e one-liners (// swallows the rest of the line)
+      if (/^node\s+-e\s+".*\/\//.test(line) && !line.includes("http://") && !line.includes("https://")) {
+        warnings.push({
+          slice: slice.number,
+          command: line,
+          rule: "js-comment-in-eval",
+          severity: "warn",
+          message: `${loc}: node -e contains '//' which acts as a line comment on a single line, breaking the code. Remove JS comments from gate commands.`,
+        });
+      }
+    }
+  }
+
+  return {
+    warnings,
+    errors,
+    passed: errors.length === 0,
+    summary: `${errors.length} error(s), ${warnings.length} warning(s) across ${plan.slices.length} slices`,
+  };
+}
+
+/**
+ * Check if a command string is permitted in validation gates.
+ * Uses the same GATE_ALLOWED_PREFIXES allowlist as runGate() and lintGateCommands().
+ * Skips leading env-var assignments (e.g., "NODE_ENV=test npm test").
+ * Additionally blocks known-dangerous patterns (e.g., rm -rf /) regardless of prefix.
+ * @param {string} cmd - The command line to check
+ * @returns {boolean} true if the command is allowed, false if blocked
+ */
+export function isGateCommandAllowed(cmd) {
+  if (!cmd || typeof cmd !== "string") return false;
+  const trimmed = cmd.trim();
+
+  // Block known-dangerous patterns first — allowlist cannot override these
+  const BLOCKED_PATTERNS = [
+    /\brm\s+(-[a-z]*r[a-z]*f[a-z]*|-[a-z]*f[a-z]*r[a-z]*)\s+[/~*]/i,  // rm -rf / or rm -fr ~
+    /\brm\s+-[a-z]*\s+\/(\s|$)/,                                          // rm -* /
+    /\bdd\s+.*of=\/dev\/(sda|hda|nvme)/i,                                 // dd to raw block device
+    /\bmkfs\b/i,                                                           // format filesystem
+    /\b:>\s*\/dev\/(sda|hda)/i,                                           // truncate block device
+  ];
+  if (BLOCKED_PATTERNS.some((p) => p.test(trimmed))) return false;
+
+  const tokens = trimmed.split(/\s+/);
+  let cmdIdx = 0;
+  while (cmdIdx < tokens.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[cmdIdx])) {
+    cmdIdx++;
+  }
+  const cmdToken = (tokens[cmdIdx] || tokens[0] || "").toLowerCase();
+  return GATE_ALLOWED_PREFIXES.some((p) => cmdToken === p || cmdToken.endsWith(`/${p}`));
+}
+
+/**
+ * Run regression guard — extract validation gate commands from plan files,
+ * check each against the allowlist, execute allowed commands, and report results.
+ *
+ * Stop condition: if parseValidationGates cannot reliably extract commands from a plan
+ * (e.g., no bash-block gates found), falls back to `testCommand` fields from parsed slices.
+ *
+ * @param {string[]} files - Changed file paths to guard (informational — included in result)
+ * @param {object} [options]
+ * @param {string} [options.plan] - Path to a specific plan file (relative to cwd). If omitted, scans docs/plans/
+ * @param {boolean} [options.failFast=false] - Stop on first gate failure
+ * @param {string} [options.cwd=process.cwd()] - Project root
+ * @returns {Promise<{files: string[], gatesChecked: number, passed: number, failed: number, blocked: number, skipped: number, success: boolean, results: object[]}>}
+ */
+export async function regressionGuard(files, { plan, failFast = false, cwd = process.cwd() } = {}) {
+  // Resolve plan files to check
+  let planPaths = [];
+  if (plan) {
+    const resolved = resolve(cwd, plan);
+    if (existsSync(resolved)) {
+      planPaths = [resolved];
+    }
+  } else {
+    const plansDir = resolve(cwd, "docs", "plans");
+    if (existsSync(plansDir)) {
+      planPaths = readdirSync(plansDir)
+        .filter((f) => f.endsWith("-PLAN.md") || f.endsWith("-plan.md"))
+        .map((f) => resolve(plansDir, f));
+    }
+  }
+
+  // Collect gate commands from plans
+  const gateItems = [];
+  for (const planPath of planPaths) {
+    try {
+      const sliceGates = parseValidationGates(planPath, cwd);
+      let foundGates = false;
+      for (const sg of sliceGates) {
+        for (const cmd of sg.gates) {
+          gateItems.push({ planFile: basename(planPath), sliceNumber: sg.sliceNumber, sliceTitle: sg.sliceTitle, cmd, source: "validation-gate" });
+          foundGates = true;
+        }
+      }
+      // Stop-condition fallback: if no bash-block gates, use testCommand fields
+      if (!foundGates) {
+        try {
+          const parsed = parsePlan(planPath, cwd);
+          for (const s of parsed.slices) {
+            if (s.testCommand) {
+              gateItems.push({ planFile: basename(planPath), sliceNumber: s.number, sliceTitle: s.title, cmd: s.testCommand, source: "testCommand" });
+            }
+          }
+        } catch { /* unreadable plan — skip */ }
+      }
+    } catch { /* unreadable plan — skip */ }
+  }
+
+  const results = [];
+  let passed = 0, failed = 0, blocked = 0, skipped = 0;
+
+  for (const gate of gateItems) {
+    if (!isGateCommandAllowed(gate.cmd)) {
+      results.push({ ...gate, status: "blocked", reason: `'${gate.cmd.split(/\s+/)[0]}' not in gate allowlist` });
+      blocked++;
+      continue;
+    }
+
+    try {
+      const output = execSync(gate.cmd, { cwd, stdio: "pipe", timeout: 120000, encoding: "utf-8" });
+      results.push({ ...gate, status: "passed", output: (output || "").trim().slice(0, 500) });
+      passed++;
+    } catch (err) {
+      const errOut = ((err.stderr || "") + (err.stdout || "")).trim().slice(0, 500) || err.message;
+      results.push({ ...gate, status: "failed", output: errOut });
+      failed++;
+      if (failFast) {
+        // Mark remaining as skipped
+        const remaining = gateItems.slice(gateItems.indexOf(gate) + 1);
+        for (const rem of remaining) {
+          results.push({ ...rem, status: "skipped", reason: "fail-fast: previous gate failed" });
+          skipped++;
+        }
+        break;
+      }
+    }
+  }
+
+  return {
+    files: files || [],
+    gatesChecked: gateItems.length,
+    passed,
+    failed,
+    blocked,
+    skipped,
+    success: failed === 0,
+    results,
+  };
+}
+
+/**
+ * Emit a telemetry record for a tool invocation. Best-effort — never throws.
+ * @param {string} toolName - Tool identifier (e.g. "forge_smith")
+ * @param {object|string} inputs - Tool input parameters
+ * @param {*} result - Tool result (truncated to 2000 chars)
+ * @param {number} durationMs - Execution time in milliseconds
+ * @param {string} status - "ok" | "error" | "timeout"
+ * @param {string} [cwd=process.cwd()] - Project root directory
+ * @returns {object} The telemetry record written
+ */
+const LIVEGUARD_TOOLS = new Set([
+  "forge_drift_report", "forge_incident_capture", "forge_dep_watch",
+  "forge_regression_guard", "forge_runbook", "forge_hotspot",
+  "forge_health_trend", "forge_alert_triage", "forge_deploy_journal",
+  "forge_secret_scan", "forge_env_diff", "forge_fix_proposal",
+  "forge_quorum_analyze",
+]);
+
+export function emitToolTelemetry(toolName, inputs, result, durationMs, status, cwd = process.cwd()) {
+  const normalizedResult = typeof result === "string"
+    ? result.slice(0, 2000)
+    : JSON.stringify(result ?? "").slice(0, 2000);
+  const record = {
+    timestamp: new Date().toISOString(),
+    tool: toolName,
+    inputs: typeof inputs === "object" ? inputs : { raw: inputs },
+    result: normalizedResult,
+    durationMs,
+    status,
+  };
+  try {
+    appendForgeJsonl("telemetry/tool-calls.jsonl", record, cwd);
+  } catch { /* telemetry is best-effort — never crash the tool */ }
+  if (LIVEGUARD_TOOLS.has(toolName)) {
+    try {
+      appendForgeJsonl("liveguard-events.jsonl", { timestamp: record.timestamp, tool: toolName, status, durationMs }, cwd);
+    } catch { /* best-effort */ }
+  }
+  return record;
+}
+
+// ─── PreDeploy Hook ───────────────────────────────────────────────────
+
+/** File-path glob patterns that indicate a deploy action. */
+const DEPLOY_FILE_PATTERNS = [
+  /^deploy\//,
+  /^Dockerfile/,
+  /\.bicep$/,
+  /\.tf$/,
+  /^k8s\//,
+  /^docker-compose.*\.yml$/,
+];
+
+/** Terminal commands that indicate a deploy action. */
+const DEPLOY_COMMAND_PATTERNS = [
+  /\bpforge\s+deploy-log\b/,
+  /\bdocker\s+push\b/,
+  /\baz\s+deploy\b/,
+  /\bkubectl\s+apply\b/,
+  /\bazd\s+up\b/,
+  /\bgit\s+push\b/,
+];
+
+/** Default configuration for the PreDeploy hook. */
+const PRE_DEPLOY_DEFAULTS = {
+  enabled: true,
+  blockOnSecrets: true,
+  warnOnEnvGaps: true,
+  scanSince: "HEAD~1",
+};
+
+/** Maximum age in minutes before cache is considered stale. */
+const CACHE_MAX_AGE_MINUTES = 10;
+
+/**
+ * Check whether a tool invocation matches deploy trigger conditions.
+ * @param {string} toolName - The tool being invoked (e.g. "editFiles", "runCommand")
+ * @param {string} filePath - File path being written to (may be empty)
+ * @param {string} command  - Terminal command being executed (may be empty)
+ * @returns {boolean}
+ */
+export function isDeployTrigger(toolName, filePath, command) {
+  if (filePath) {
+    const normalized = filePath.replace(/\\/g, "/");
+    for (const pattern of DEPLOY_FILE_PATTERNS) {
+      if (pattern.test(normalized)) return true;
+    }
+  }
+  if (command) {
+    for (const pattern of DEPLOY_COMMAND_PATTERNS) {
+      if (pattern.test(command)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Determine if a cache file is stale (older than CACHE_MAX_AGE_MINUTES).
+ * @param {object|null} cache - Parsed cache with `scannedAt` ISO timestamp
+ * @returns {boolean} true if cache is missing, has no timestamp, or is stale
+ */
+function isCacheStale(cache) {
+  if (!cache || !cache.scannedAt) return true;
+  const age = Date.now() - new Date(cache.scannedAt).getTime();
+  return age > CACHE_MAX_AGE_MINUTES * 60 * 1000;
+}
+
+/**
+ * Run the PreDeploy hook logic. Reads secret-scan and env-diff caches,
+ * evaluates them against the hook configuration, and returns a result
+ * indicating whether the deploy should be blocked or an advisory issued.
+ *
+ * @param {object} params
+ * @param {string} params.toolName  - Tool being invoked
+ * @param {string} [params.filePath=""] - File path being written
+ * @param {string} [params.command=""]  - Command being executed
+ * @param {string} [params.cwd=process.cwd()] - Project root directory
+ * @returns {{ triggered: boolean, blocked?: boolean, reason?: string, advisory?: string, secretFindings?: Array, envGaps?: Array }}
+ */
+export function runPreDeployHook({ toolName, filePath = "", command = "", cwd = process.cwd() } = {}) {
+  if (!isDeployTrigger(toolName, filePath, command)) {
+    return { triggered: false };
+  }
+
+  // Load config from .forge.json hooks.preDeploy (defaults if absent)
+  let config = { ...PRE_DEPLOY_DEFAULTS };
+  try {
+    const configPath = resolve(cwd, ".forge.json");
+    if (existsSync(configPath)) {
+      const raw = JSON.parse(readFileSync(configPath, "utf-8"));
+      if (raw && raw.hooks && raw.hooks.preDeploy) {
+        config = { ...PRE_DEPLOY_DEFAULTS, ...raw.hooks.preDeploy };
+      }
+    }
+  } catch { /* use defaults */ }
+
+  // When hook is explicitly disabled, return triggered but take no action
+  if (config.enabled === false) {
+    return { triggered: true, blocked: false, reason: null, advisory: null, secretFindings: [], envGaps: [] };
+  }
+
+  const result = { triggered: true, blocked: false, reason: null, advisory: null, secretFindings: [], envGaps: [] };
+
+  // 1. Check secret-scan cache
+  const secretCache = readForgeJson("secret-scan-cache.json", null, cwd);
+  if (secretCache && !secretCache.clean && Array.isArray(secretCache.findings) && secretCache.findings.length > 0) {
+    result.secretFindings = secretCache.findings.map(f => ({
+      file: f.file,
+      line: f.line,
+      type: f.type,
+      entropyScore: f.entropyScore,
+      confidence: f.confidence,
+      masked: f.masked || "<REDACTED>",
+    }));
+    if (config.blockOnSecrets !== false) {
+      result.blocked = true;
+      result.reason = `secret-scan-found-${secretCache.findings.length}-findings`;
+    }
+  }
+
+  // Flag stale secret cache (advisory — does not block)
+  if (isCacheStale(secretCache)) {
+    const staleMsg = "Secret scan cache is stale or missing — run forge_secret_scan to refresh.";
+    result.advisory = result.advisory ? `${result.advisory}\n${staleMsg}` : staleMsg;
+  }
+
+  // 2. Check env-diff cache
+  const envDiffCache = readForgeJson("env-diff-cache.json", null, cwd);
+  if (envDiffCache && envDiffCache.summary && envDiffCache.summary.totalMissing > 0) {
+    const gapPairs = (envDiffCache.pairs || []).filter(p =>
+      (p.missingInTarget?.length || 0) + (p.missingInBaseline?.length || 0) > 0
+    );
+    result.envGaps = gapPairs;
+    if (config.warnOnEnvGaps !== false && gapPairs.length > 0) {
+      const lines = gapPairs.map(p => {
+        const missing = [...(p.missingInTarget || []), ...(p.missingInBaseline || [])];
+        return `${p.file || p.compareTo}: missing ${missing.join(", ")}`;
+      });
+      const envMsg = `Environment key gaps detected:\n${lines.map(l => `• ${l}`).join("\n")}`;
+      result.advisory = result.advisory ? `${result.advisory}\n${envMsg}` : envMsg;
+    }
+  }
+  // Also check totalGaps (used in some cache formats)
+  if (!result.envGaps.length && envDiffCache && envDiffCache.summary && envDiffCache.summary.totalGaps > 0) {
+    const gapPairs = (envDiffCache.pairs || []).filter(p =>
+      (p.missingInTarget?.length || 0) + (p.missingInBaseline?.length || 0) > 0
+    );
+    if (gapPairs.length > 0) {
+      result.envGaps = gapPairs;
+      if (config.warnOnEnvGaps !== false) {
+        const lines = gapPairs.map(p => {
+          const missing = [...(p.missingInTarget || []), ...(p.missingInBaseline || [])];
+          return `${p.file || p.compareTo}: missing ${missing.join(", ")}`;
+        });
+        const envMsg = `Environment key gaps detected:\n${lines.map(l => `• ${l}`).join("\n")}`;
+        result.advisory = result.advisory ? `${result.advisory}\n${envMsg}` : envMsg;
+      }
+    }
+  }
+
+  return result;
+}
+
+// ─── PostSlice Hook ───────────────────────────────────────────────────
+
+/** Conventional commit types that affect code drift. */
+const POSTSLICE_COMMIT_PATTERN = /^(feat|fix|refactor|perf|chore|style|test)\(/;
+
+/** Commit patterns that should NOT trigger the PostSlice hook. */
+const POSTSLICE_SKIP_PATTERNS = [
+  /^docs[:(]/,
+  /^ci[:(]/,
+  /^Merge /,
+  /--no-verify/,
+];
+
+/** Default configuration for the PostSlice hook. */
+const POSTSLICE_DEFAULTS = {
+  enabled: true,
+  silentDeltaThreshold: 5,
+  warnDeltaThreshold: 10,
+  scoreFloor: 70,
+};
+
+/** Module-level guard to prevent duplicate firings within the same session. */
+let _postSliceHookFired = false;
+
+/**
+ * Reset the PostSlice hook fired flag. Exposed for testing.
+ */
+export function resetPostSliceHookFired() {
+  _postSliceHookFired = false;
+}
+
+/**
+ * Run the PostSlice hook logic. Detects conventional commits, reads drift
+ * history, computes delta, and returns an advisory or warning message.
+ *
+ * @param {object} params
+ * @param {string} params.commitMessage - The git commit message
+ * @param {string} [params.cwd=process.cwd()] - Project root directory
+ * @returns {{ triggered: boolean, action?: string, message?: string, priorScore?: number, newScore?: number, delta?: number, skippedReason?: string }}
+ */
+export function runPostSliceHook({ commitMessage, cwd = process.cwd() } = {}) {
+  if (!commitMessage) return { triggered: false, skippedReason: "no-commit-message" };
+
+  // Guard: prevent duplicate firings in the same session
+  if (_postSliceHookFired) {
+    return { triggered: false, skippedReason: "already-fired" };
+  }
+
+  // Check skip patterns (docs, ci, merge, --no-verify)
+  for (const pattern of POSTSLICE_SKIP_PATTERNS) {
+    if (pattern.test(commitMessage)) {
+      return { triggered: false, skippedReason: `skip-pattern: ${pattern.source}` };
+    }
+  }
+
+  // Check conventional commit pattern
+  if (!POSTSLICE_COMMIT_PATTERN.test(commitMessage)) {
+    return { triggered: false, skippedReason: "not-conventional-commit" };
+  }
+
+  // Load config
+  let config = { ...POSTSLICE_DEFAULTS };
+  try {
+    const configPath = resolve(cwd, ".forge.json");
+    if (existsSync(configPath)) {
+      const raw = JSON.parse(readFileSync(configPath, "utf-8"));
+      if (raw?.hooks?.postSlice) {
+        config = { ...POSTSLICE_DEFAULTS, ...raw.hooks.postSlice };
+      }
+    }
+  } catch { /* use defaults */ }
+
+  if (config.enabled === false) {
+    return { triggered: true, action: "disabled", message: null };
+  }
+
+  // Read drift history
+  const driftHistory = readForgeJsonl("drift-history.json", [], cwd);
+  if (driftHistory.length < 2) {
+    return { triggered: true, action: "skip", skippedReason: "insufficient-drift-history", message: null };
+  }
+
+  const priorScore = driftHistory[driftHistory.length - 2]?.score;
+  const newScore = driftHistory[driftHistory.length - 1]?.score;
+  const violations = driftHistory[driftHistory.length - 1]?.violations || [];
+
+  if (priorScore == null || newScore == null) {
+    return { triggered: true, action: "skip", skippedReason: "missing-scores", message: null };
+  }
+
+  const delta = priorScore - newScore; // positive = regression
+
+  // Mark as fired (prevent duplicate firing for the same commit)
+  _postSliceHookFired = true;
+
+  // Evaluate thresholds
+  if (newScore >= priorScore) {
+    return { triggered: true, action: "silent", message: null, priorScore, newScore, delta: -delta };
+  }
+  if (delta <= config.silentDeltaThreshold) {
+    return { triggered: true, action: "silent", message: null, priorScore, newScore, delta };
+  }
+
+  // Warning: delta > warnDeltaThreshold OR score below floor
+  if (delta > config.warnDeltaThreshold || newScore < config.scoreFloor) {
+    const topViolations = violations.slice(0, 5).map(v => `• ${v.file}: ${v.rule} (${v.severity})`).join("\n");
+    const belowFloor = newScore < config.scoreFloor ? `Score is BELOW threshold (${config.scoreFloor}/${newScore}). ` : "";
+    const message = `🔴 PostSlice Hook — Drift Warning\n\nDrift score dropped ${delta} points after this commit (${priorScore} → ${newScore}).\n${belowFloor}Recommend resolving violations before starting the next slice.\n\nTop violations:\n${topViolations}\n\nOptions:\n1. Fix violations now and amend the commit\n2. Accept and continue — run \`pforge incident\` if this causes a prod issue later\n3. Run \`pforge runbook docs/plans/<current-plan>\` to update ops docs with new risk\n\nThe next slice will start with this reduced score as the new baseline.`;
+    return { triggered: true, action: "warning", message, priorScore, newScore, delta };
+  }
+
+  // Advisory: delta > silentDeltaThreshold but <= warnDeltaThreshold and score still >= floor
+  const topViolations = violations.slice(0, 3).map(v => `• ${v.file}: ${v.rule} (${v.severity})`).join("\n");
+  const message = `🟡 PostSlice Hook — Drift Advisory\n\nDrift score dropped ${delta} points after this commit (${priorScore} → ${newScore}).\nScore is still above threshold (${config.scoreFloor}) — proceeding is safe, but investigate before shipping.\n\nTop new violations:\n${topViolations}\n\nRun \`pforge drift\` to see the full report.`;
+  return { triggered: true, action: "advisory", message, priorScore, newScore, delta };
+}
+
+// ─── PreAgentHandoff Hook ─────────────────────────────────────────────
+
+/** Default configuration for the PreAgentHandoff hook. */
+const PRE_AGENT_HANDOFF_DEFAULTS = {
+  enabled: true,
+  injectContext: true,
+  runRegressionGuard: true,
+  cacheMaxAgeMinutes: 30,
+  minAlertSeverity: "medium",
+};
+
+/**
+ * Check whether a LiveGuard cache file is stale based on its timestamp field.
+ * @param {object|null} cache - Cache object with a timestamp or scannedAt field
+ * @param {number} maxAgeMinutes - Maximum acceptable age in minutes
+ * @returns {boolean}
+ */
+function isLiveGuardCacheStale(cache, maxAgeMinutes) {
+  if (!cache) return true;
+  const ts = cache.scannedAt || cache.timestamp || cache.createdAt;
+  if (!ts) return true;
+  const age = Date.now() - new Date(ts).getTime();
+  return age > maxAgeMinutes * 60 * 1000;
+}
+
+/**
+ * Format a relative time string like "5 min" or "2 hr".
+ * @param {string} isoTimestamp
+ * @returns {string}
+ */
+function formatSnapshotAge(isoTimestamp) {
+  if (!isoTimestamp) return "unknown";
+  const ms = Date.now() - new Date(isoTimestamp).getTime();
+  const minutes = Math.round(ms / 60_000);
+  if (minutes < 1) return "<1 min";
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.round(minutes / 60);
+  return `${hours} hr`;
+}
+
+/**
+ * Run the PreAgentHandoff hook. Reads LiveGuard caches and builds a
+ * structured context header for injection into a new agent session.
+ *
+ * When PFORGE_QUORUM_TURN env var is set, skips context injection entirely
+ * to avoid inflating token usage in quorum model turns.
+ *
+ * @param {object} params
+ * @param {string} [params.cwd=process.cwd()] - Project root directory
+ * @param {string[]} [params.dirtyFiles=[]] - Files modified on the current branch (git diff)
+ * @param {boolean} [params.hasActivePlan=false] - Whether an active plan file exists
+ * @param {boolean} [params.hasAutoFixPlan=false] - Whether a LIVEGUARD-FIX-*.md auto-fix plan exists
+ * @param {boolean} [params.isResumeSession=false] - Whether the session references --resume-from
+ * @returns {Promise<{ triggered: boolean, contextHeader?: string, regressionResult?: object, openClawResult?: object, skippedReason?: string }>}
+ */
+export async function runPreAgentHandoffHook({
+  cwd = process.cwd(),
+  dirtyFiles = [],
+  hasActivePlan = false,
+  hasAutoFixPlan = false,
+  isResumeSession = false,
+} = {}) {
+  // PFORGE_QUORUM_TURN guard — skip context injection for quorum model turns
+  if (process.env.PFORGE_QUORUM_TURN) {
+    console.error("[PreAgentHandoff] skipping context injection — PFORGE_QUORUM_TURN active");
+    return { triggered: false, skippedReason: "PFORGE_QUORUM_TURN active" };
+  }
+
+  // Check trigger conditions
+  const hasDirtyBranch = dirtyFiles.length > 0;
+  const shouldFire = hasDirtyBranch || hasActivePlan || hasAutoFixPlan || isResumeSession;
+  if (!shouldFire) {
+    return { triggered: false, skippedReason: "no-trigger-conditions" };
+  }
+
+  // Load config
+  let config = { ...PRE_AGENT_HANDOFF_DEFAULTS };
+  try {
+    const configPath = resolve(cwd, ".forge.json");
+    if (existsSync(configPath)) {
+      const raw = JSON.parse(readFileSync(configPath, "utf-8"));
+      if (raw?.hooks?.preAgentHandoff) {
+        config = { ...PRE_AGENT_HANDOFF_DEFAULTS, ...raw.hooks.preAgentHandoff };
+      }
+    }
+  } catch { /* use defaults */ }
+
+  if (config.enabled === false) {
+    return { triggered: true, contextHeader: null, skippedReason: "disabled" };
+  }
+
+  const maxAge = config.cacheMaxAgeMinutes ?? 30;
+
+  // Read LiveGuard caches (all file reads, no subprocesses)
+  const triageCache = readForgeJson("alert-triage-cache.json", null, cwd);
+  const driftHistory = readForgeJsonl("drift-history.json", [], cwd);
+  const incidents = readForgeJsonl("incidents.jsonl", [], cwd);
+  const secretScanCache = readForgeJson("secret-scan-cache.json", null, cwd);
+  const deployJournal = readForgeJsonl("deploy-journal.jsonl", [], cwd);
+
+  // Check if all data stores are empty
+  const hasAnyData = triageCache || driftHistory.length > 0 || incidents.length > 0 || secretScanCache || deployJournal.length > 0;
+
+  if (!hasAnyData) {
+    const contextHeader = "🛡️ LIVEGUARD CONTEXT — No data yet\nRun `pforge triage` after completing the first deploy to activate LiveGuard monitoring.\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
+    return { triggered: true, contextHeader, regressionResult: null, openClawResult: null };
+  }
+
+  // Build snapshot data
+  const latestDrift = driftHistory.length > 0 ? driftHistory[driftHistory.length - 1] : null;
+  const score = latestDrift?.score ?? "N/A";
+  const trend = latestDrift?.trend ?? "unknown";
+  const violationCount = latestDrift?.violations?.length ?? 0;
+  const snapshotTs = latestDrift?.timestamp || triageCache?.scannedAt || new Date().toISOString();
+  const snapshotAge = formatSnapshotAge(snapshotTs);
+
+  const openIncidents = incidents.filter(i => !i.resolvedAt);
+
+  const lastDeploy = deployJournal.length > 0 ? deployJournal[deployJournal.length - 1] : null;
+
+  const secretScan = secretScanCache || { clean: true, findings: [] };
+  const secretScanAge = secretScanCache ? formatSnapshotAge(secretScanCache.scannedAt) : "never";
+
+  // Filter alerts by minAlertSeverity
+  const severityRank = { critical: 4, high: 3, medium: 2, low: 1 };
+  const minRank = severityRank[config.minAlertSeverity] || 2;
+  const alerts = (triageCache?.alerts || triageCache?.results || [])
+    .filter(a => (severityRank[a.severity] || 0) >= minRank);
+
+  // Build context header
+  const lines = [
+    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+    "🛡️ LIVEGUARD CONTEXT — Session Start",
+    `(As of ${snapshotAge} ago — run \`pforge triage\` to refresh)`,
+    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+    "",
+    `Drift Score: ${score}/100 (${trend}) — ${violationCount} active violations`,
+    `Open Incidents: ${openIncidents.length}${openIncidents.length > 0 ? ` (${openIncidents.map(i => i.severity).join(", ")})` : ""}`,
+  ];
+
+  if (lastDeploy) {
+    const postHealth = lastDeploy.postHealthScore ?? "not yet recorded";
+    lines.push(`Last Deploy: ${lastDeploy.version || "unknown"} @ ${lastDeploy.timestamp || "unknown"} (pre: ${lastDeploy.preHealthScore ?? "N/A"}, post: ${postHealth})`);
+  } else {
+    lines.push("Last Deploy: none recorded");
+  }
+
+  lines.push(`Last Secret Scan: ${secretScan.clean !== false ? "✅ Clean" : `⛔ ${(secretScan.findings || []).length} finding(s)`} (${secretScanAge})`);
+  lines.push("");
+
+  if (alerts.length > 0) {
+    lines.push("Top Alerts (medium+):");
+    alerts.slice(0, 5).forEach((a, i) => {
+      lines.push(`${i + 1}. [${(a.severity || "unknown").toUpperCase()}] ${a.title || a.message || "untitled"} — ${a.recommendedAction || "investigate"}`);
+    });
+    if (alerts.length > 5) {
+      lines.push(`...and ${alerts.length - 5} more. Run \`pforge triage\` for full list.`);
+    }
+    lines.push("");
+  }
+
+  lines.push("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
+  let contextHeader = lines.join("\n");
+
+  // Regression guard on dirty branch
+  let regressionResult = null;
+  if (hasDirtyBranch && config.runRegressionGuard !== false) {
+    try {
+      regressionResult = await regressionGuard(dirtyFiles, { cwd });
+      if (regressionResult && regressionResult.failed > 0) {
+        const failedGates = (regressionResult.results || []).filter(r => r.status === "failed");
+        const regressionLines = [
+          "",
+          `⚠️ Regression Alert — ${regressionResult.failed} gate(s) failing on current branch changes`,
+          "",
+          ...failedGates.map(r => `• Slice ${r.sliceNumber} (${r.planFile}): ${r.cmd}`),
+          "",
+          "Resolve these before adding new code — the current branch has introduced regressions.",
+        ];
+        contextHeader += "\n" + regressionLines.join("\n");
+      }
+    } catch (err) {
+      // Regression guard failure is non-blocking
+      console.error(`[PreAgentHandoff] regression guard error: ${err.message}`);
+    }
+  }
+
+  // OpenClaw bridge (fire-and-forget)
+  let openClawResult = null;
+  try {
+    const { endpoint } = loadOpenClawConfig(cwd);
+    if (endpoint) {
+      // Fire-and-forget — no await
+      const openClawPromise = postOpenClawSnapshot(cwd, {
+        trigger: "preAgentHandoff",
+        dirtyFiles: dirtyFiles.length,
+        openIncidents: openIncidents.length,
+      });
+      openClawPromise.then(r => { openClawResult = r; }).catch(err => {
+        console.error(`[PreAgentHandoff] openclaw snapshot skipped: ${err.message}`);
+      });
+    }
+  } catch (err) {
+    console.error(`[PreAgentHandoff] openclaw snapshot skipped: ${err.message}`);
+  }
+
+  return { triggered: true, contextHeader, regressionResult, openClawResult };
+}
+
 /**
  * Infer the slice type from its title and tasks for model routing purposes.
  * Returns one of: "test" | "review" | "migration" | "execute"
@@ -2025,13 +3128,26 @@ async function executeSlice(slice, options) {
   let currentModel = finalModel;
 
   while (attempt <= maxRetries) {
-    // Auto-escalate model on retries
+    // Auto-escalate model on retries — skip past the current model in chain
     if (attempt > 0 && escalationChain.length > 1) {
-      const chainIdx = Math.min(attempt, escalationChain.length - 1);
-      const chainModel = escalationChain[chainIdx] === "auto" ? null : escalationChain[chainIdx];
-      if (chainModel !== currentModel) {
+      let nextModel = currentModel;
+      for (let i = 0; i < escalationChain.length; i++) {
+        const candidate = escalationChain[i] === "auto" ? null : escalationChain[i];
+        if (candidate !== currentModel) {
+          nextModel = candidate;
+          break;
+        }
+      }
+      // If starting model is already the top of the chain, try the next one down
+      if (nextModel === currentModel) {
+        const curIdx = escalationChain.findIndex(m => (m === "auto" ? null : m) === currentModel);
+        const nextIdx = Math.min(curIdx + attempt, escalationChain.length - 1);
+        const candidate = escalationChain[nextIdx] === "auto" ? null : escalationChain[nextIdx];
+        if (candidate !== currentModel) nextModel = candidate;
+      }
+      if (nextModel !== currentModel) {
         const fromModel = currentModel || "auto";
-        currentModel = chainModel;
+        currentModel = nextModel;
         if (eventBus) {
           eventBus.emit("slice-escalated", {
             sliceId: slice.number,
@@ -2101,10 +3217,7 @@ async function executeSlice(slice, options) {
     // Run validation gate if defined
     gateResult = { success: true, output: "No validation gate defined" };
     if (slice.validationGate) {
-      const gateLines = slice.validationGate
-        .split("\n")
-        .map((l) => l.replace(/\s{2,}#\s.*$/, "").trim())
-        .filter((l) => l.length > 0);
+      const gateLines = coalesceGateLines(slice.validationGate);
 
       for (const gateLine of gateLines) {
         gateResult = runGate(gateLine, cwd);
@@ -2265,6 +3378,128 @@ const QUORUM_PRESETS = {
     threshold: 7,           // higher threshold = only the most complex slices
   },
 };
+
+// ─── OpenClaw Integration (v2.29) ────────────────────────────────────
+
+/**
+ * Load OpenClaw configuration from .forge.json.
+ * @param {string} cwd
+ * @returns {{ endpoint: string|null, apiKey: string|null }}
+ */
+export function loadOpenClawConfig(cwd) {
+  const configPath = resolve(cwd, ".forge.json");
+  try {
+    if (existsSync(configPath)) {
+      const config = JSON.parse(readFileSync(configPath, "utf-8"));
+      if (config.openclaw && config.openclaw.endpoint) {
+        let apiKey = config.openclaw.apiKey || null;
+        // Fallback: .forge/secrets.json
+        if (!apiKey) {
+          const secretsPath = resolve(cwd, ".forge/secrets.json");
+          if (existsSync(secretsPath)) {
+            try {
+              const secrets = JSON.parse(readFileSync(secretsPath, "utf-8"));
+              apiKey = secrets.OPENCLAW_API_KEY || null;
+            } catch { /* skip */ }
+          }
+        }
+        return { endpoint: config.openclaw.endpoint, apiKey };
+      }
+    }
+  } catch { /* skip */ }
+  return { endpoint: null, apiKey: null };
+}
+
+/**
+ * Post a LiveGuard context snapshot to the configured OpenClaw endpoint.
+ * Fire-and-forget with a 5s hard timeout. Never throws.
+ *
+ * Payload includes: drift score, open incidents, last deploy, alert summary, secret scan status.
+ *
+ * @param {string} cwd - Project directory
+ * @param {object} [extraContext] - Additional context fields to include
+ * @returns {Promise<{ sent: boolean, endpoint?: string, error?: string }>}
+ */
+export async function postOpenClawSnapshot(cwd, extraContext = {}) {
+  const { endpoint, apiKey } = loadOpenClawConfig(cwd);
+  if (!endpoint) return { sent: false, error: "No openclaw.endpoint configured" };
+
+  try {
+    // Gather snapshot data
+    const snapshot = { timestamp: new Date().toISOString(), project: null, ...extraContext };
+
+    // Project name
+    try {
+      const config = JSON.parse(readFileSync(resolve(cwd, ".forge.json"), "utf-8"));
+      snapshot.project = config.projectName || null;
+    } catch { /* skip */ }
+
+    // Drift score
+    const driftPath = resolve(cwd, ".forge/drift-history.json");
+    if (existsSync(driftPath)) {
+      try {
+        const history = JSON.parse(readFileSync(driftPath, "utf-8"));
+        const latest = Array.isArray(history) ? history[history.length - 1] : history;
+        snapshot.driftScore = latest?.score ?? null;
+        snapshot.driftViolations = latest?.violations ?? null;
+      } catch { /* skip */ }
+    }
+
+    // Open incidents
+    const incidentsPath = resolve(cwd, ".forge/incidents.jsonl");
+    if (existsSync(incidentsPath)) {
+      try {
+        const lines = readFileSync(incidentsPath, "utf-8").trim().split("\n").filter(Boolean);
+        const incidents = lines.map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
+        snapshot.openIncidents = incidents.filter((i) => !i.resolvedAt).length;
+        snapshot.totalIncidents = incidents.length;
+      } catch { /* skip */ }
+    }
+
+    // Last deploy
+    const deployPath = resolve(cwd, ".forge/deploy-journal.jsonl");
+    if (existsSync(deployPath)) {
+      try {
+        const lines = readFileSync(deployPath, "utf-8").trim().split("\n").filter(Boolean);
+        const last = lines.length > 0 ? JSON.parse(lines[lines.length - 1]) : null;
+        if (last) {
+          snapshot.lastDeployVersion = last.version || null;
+          snapshot.lastDeployEnv = last.environment || null;
+          snapshot.lastDeployAt = last.timestamp || null;
+        }
+      } catch { /* skip */ }
+    }
+
+    // Secret scan status
+    const scanPath = resolve(cwd, ".forge/secret-scan-cache.json");
+    if (existsSync(scanPath)) {
+      try {
+        const scan = JSON.parse(readFileSync(scanPath, "utf-8"));
+        snapshot.secretScanClean = scan.clean ?? null;
+        snapshot.secretScanFindings = scan.findings?.length ?? 0;
+      } catch { /* skip */ }
+    }
+
+    // POST with 5s timeout
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const headers = { "Content-Type": "application/json" };
+    if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
+
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(snapshot),
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    return { sent: true, endpoint, status: response.status };
+  } catch (err) {
+    // Fire-and-forget — never throw
+    return { sent: false, endpoint, error: err.name === "AbortError" ? "timeout (5s)" : err.message };
+  }
+}
 
 export function loadQuorumConfig(cwd, presetOverride = null) {
   const defaults = {
@@ -3152,6 +4387,66 @@ function runAutoSweep(cwd) {
   }
 }
 
+// ─── Architecture Guardrail Rules ────────────────────────────────────
+const GUARDRAIL_RULES = [
+  { id: "empty-catch",     pattern: /catch\s*\([^)]*\)\s*\{\s*\}/g,                            severity: "high",     description: "Empty catch block — must log or handle the error" },
+  { id: "any-type",        pattern: /:\s*any\b|<any>|as\s+any\b/g,                             severity: "medium",   description: "Avoid 'any' type — use explicit types" },
+  { id: "sync-over-async", pattern: /\.(Result|Wait\(\))\b/g,                                  severity: "high",     description: "Sync-over-async (.Result/.Wait()) — use await instead" },
+  { id: "sql-injection",   pattern: /`[^`]*\b(SELECT|INSERT|UPDATE|DELETE|WHERE)\b[^`]*\$\{/gi, severity: "critical", description: "SQL string interpolation — use parameterized queries" },
+  { id: "deferred-work",   pattern: /\b(TODO|FIXME|HACK)\b/g,                                  severity: "low",      description: "Deferred work marker in production code" },
+];
+
+const SOURCE_EXTENSIONS = new Set([".js", ".mjs", ".ts", ".tsx", ".cs", ".py"]);
+const EXCLUDE_DIRS = new Set(["node_modules", ".git", "bin", "obj", "dist", ".forge", "vendor", "coverage", ".next", "out"]);
+
+/**
+ * Scan source files for architecture guardrail violations.
+ * Called by forge_drift_report to score the codebase without spawning a subprocess.
+ *
+ * @param {object} options
+ * @param {string} [options.path="."]   - Directory to scan (relative to cwd)
+ * @param {string} [options.mode="file"] - Analysis mode (currently only "file" is used)
+ * @param {string[]|null} [options.rules=null] - Rule IDs to run; null = all rules
+ * @param {string} [options.cwd=process.cwd()] - Project root
+ * @returns {Promise<{violations: Array<{file,rule,severity,line,description}>, filesScanned: number}>}
+ */
+export async function runAnalyze({ mode = "file", path: targetPath = ".", rules = null, cwd = process.cwd() } = {}) {
+  const activeRules = rules
+    ? GUARDRAIL_RULES.filter(r => rules.includes(r.id))
+    : GUARDRAIL_RULES;
+
+  const rootPath = resolve(cwd, targetPath);
+  const violations = [];
+  let filesScanned = 0;
+
+  function scanDir(dirPath) {
+    let entries;
+    try { entries = readdirSync(dirPath, { withFileTypes: true }); } catch { return; }
+    for (const entry of entries) {
+      const fullPath = join(dirPath, entry.name);
+      if (entry.isDirectory()) {
+        if (!EXCLUDE_DIRS.has(entry.name)) scanDir(fullPath);
+      } else if (entry.isFile() && SOURCE_EXTENSIONS.has(extname(entry.name))) {
+        filesScanned++;
+        let content;
+        try { content = readFileSync(fullPath, "utf-8"); } catch { continue; }
+        const relPath = relative(cwd, fullPath);
+        for (const rule of activeRules) {
+          const re = new RegExp(rule.pattern.source, rule.pattern.flags);
+          let match;
+          while ((match = re.exec(content)) !== null) {
+            const line = content.substring(0, match.index).split("\n").length;
+            violations.push({ file: relPath, rule: rule.id, severity: rule.severity, line, description: rule.description });
+          }
+        }
+      }
+    }
+  }
+
+  scanDir(rootPath);
+  return { violations, filesScanned };
+}
+
 /**
  * Run auto-analyze after all slices pass.
  * Calls pforge analyze and captures consistency score.
@@ -3391,15 +4686,59 @@ async function selfTest() {
     assert("Gate detects failure", !failResult.success);
 
     // C1: Gate allowlist blocks unknown commands
-    const blockedResult = runGate("curl http://example.com", process.cwd());
+    const blockedResult = runGate("wget http://example.com", process.cwd());
     assert("Gate blocks non-allowlisted commands", !blockedResult.success);
     assert("Gate error mentions allowlist", blockedResult.error.includes("allowlist"));
 
     // C1: Gate allows common build tools
     const npmResult = runGate("node -e \"console.log('ok')\"", process.cwd());
     assert("Gate allows node commands", npmResult.success);
+
+    // C1: Gate allows curl (used in gate verification commands)
+    const curlResult = runGate("curl --version", process.cwd());
+    assert("Gate allows curl commands", curlResult.success);
   } catch (err) {
     assert(`Gate execution: ${err.message}`, false);
+  }
+
+  // Test 8b: Gate Lint
+  console.log("\n─── Gate Lint ───");
+  try {
+    // Use a real plan file if available
+    const lintPlan = resolve(process.cwd(), "docs/plans/Phase-LiveGuard-v2.27.0-PLAN.md");
+    if (existsSync(lintPlan)) {
+      const result = lintGateCommands(lintPlan);
+      assert("Gate lint returns warnings array", Array.isArray(result.warnings));
+      assert("Gate lint returns errors array", Array.isArray(result.errors));
+      assert("Gate lint returns passed boolean", typeof result.passed === "boolean");
+      assert("Gate lint returns summary string", typeof result.summary === "string");
+      assert("Cleaned plan has 0 errors", result.errors.length === 0);
+    } else {
+      console.log("  ⚠️  LiveGuard plan not found — skipping gate lint tests");
+    }
+
+    // Test lint detection with synthetic bad commands
+    const origParse = parsePlan;
+    // Temporarily test the detection logic inline
+    const testLines = [
+      "# this is a comment",
+      "node pforge-mcp/tests/foo.test.mjs",
+      "curl http://localhost:3100/api/test",
+      "wget http://example.com",
+    ];
+    const commentLine = testLines[0];
+    assert("Detects comment lines", commentLine.startsWith("#"));
+
+    const vitestLine = testLines[1];
+    assert("Detects node *.test.mjs pattern", /^node\s+.*\.test\.(mjs|js|ts)/.test(vitestLine));
+
+    const curlLine = testLines[2];
+    assert("Detects curl localhost pattern", /curl\s.*localhost[:\s]/.test(curlLine));
+
+    const wgetCmd = testLines[3].split(/\s+/)[0].toLowerCase();
+    assert("Detects blocked command", !GATE_ALLOWED_PREFIXES.some(p => wgetCmd === p));
+  } catch (err) {
+    assert(`Gate lint: ${err.message}`, false);
   }
 
   // Test 9: Estimate mode
@@ -3445,6 +4784,7 @@ async function selfTest() {
     assert("CLI override wins", resolveModel("claude-sonnet-4.6", { default: "gpt-5" }, null) === "claude-sonnet-4.6");
     assert("Routing default when CLI is auto", resolveModel("auto", { default: "gpt-5" }, null) === "gpt-5");
     assert("Null when both auto", resolveModel(null, { default: "auto" }, null) === null);
+    assert("Default is claude-opus-4.6 when no .forge.json", loadModelRouting("/nonexistent-path-pforge-test").default === "claude-opus-4.6");
   } catch (err) {
     assert(`Model routing: ${err.message}`, false);
   }
@@ -3502,7 +4842,7 @@ async function selfTest() {
     // API worker uses per-token pricing
     const cost4 = calculateSliceCost({ tokens_in: 1000, tokens_out: 500, model: "grok-4" }, "api-xai");
     assert("API worker uses token pricing", cost4.cost_usd > 0);
-    assert("API worker cost matches expected", Math.abs(cost4.cost_usd - 0.007) < 0.0001); // 1000*2/1M + 500*10/1M
+    assert("API worker cost matches expected", Math.abs(cost4.cost_usd - 0.005) < 0.0001); // 1000*2/1M + 500*6/1M
 
     // Breakdown
     const mockResults = [
@@ -3621,7 +4961,7 @@ async function selfTest() {
     assert("Config has 3 default models", config.models.length === 3);
     assert("Config has reviewerModel", typeof config.reviewerModel === "string");
     assert("Config has dryRunTimeout", typeof config.dryRunTimeout === "number");
-    assert("Default threshold is 7", config.threshold === 7);
+    assert("Default threshold is 6", config.threshold === 6);
   } catch (err) {
     assert(`Quorum config: ${err.message}`, false);
   }

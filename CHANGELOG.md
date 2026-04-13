@@ -4,6 +4,128 @@ All notable changes to Plan Forge are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
+
+## [2.29.0] — 2026-04-13
+
+### Added — LiveGuard: Fix Proposals, Quorum Analysis, Deploy/Slice/Handoff Hooks, OpenClaw Bridge
+- **`forge_fix_proposal`** — generates 1–2 slice fix plans from regression, drift, incident, or secret-scan failures. Writes to `docs/plans/auto/LIVEGUARD-FIX-<id>.md`. Capped at one proposal per `incidentId` to prevent spam. Persists proposal records to `.forge/fix-proposals.json`. Auto-detects source when not specified (drift → incident → secret fallback chain).
+- **`forge_quorum_analyze`** — assembles a structured 3-section quorum prompt (Context, Question, Voting Instruction) from any LiveGuard data source. No LLM calls — returns the prompt for multi-model dispatch. Supports `customQuestion` freeform override (max 500 chars, XSS-validated) and `analysisGoal` presets (`root-cause`, `risk-assess`, `fix-review`, `runbook-validate`). Configurable `quorumSize` (1–10, default 3).
+- **PreDeploy hook** — `runPreDeployHook()` intercepts deploy triggers (Dockerfile edits, `docker push`, `kubectl apply`, etc.) and evaluates secret-scan + env-diff caches. Blocks on secret findings (configurable), advises on env key gaps and stale caches. Configurable via `.forge.json` `hooks.preDeploy`.
+- **PostSlice hook** — `runPostSliceHook()` fires after conventional commits, reads drift history, and computes score delta. Returns silent/advisory/warning based on configurable thresholds (`silentDeltaThreshold`, `warnDeltaThreshold`, `scoreFloor`). Duplicate-firing prevention within sessions.
+- **PreAgentHandoff hook** — `runPreAgentHandoffHook()` builds a structured LiveGuard context header for injection into new agent sessions. Includes drift score, open incidents, deploy history, secret scan status, and top alerts filtered by severity. Skips context injection when `PFORGE_QUORUM_TURN` env var is set. Fires regression guard on dirty branches. Posts snapshot to OpenClaw when configured.
+- **OpenClaw bridge** — `loadOpenClawConfig()` and `postOpenClawSnapshot()` enable fire-and-forget context snapshots to external OpenClaw endpoints. API key fallback to `.forge/secrets.json`.
+- **`loadQuorumConfig()`** — reads quorum configuration from `.forge.json` with preset support (`power`, `speed`), merge order: defaults < preset < user config.
+
+### Changed
+- TOOL_METADATA expanded to 33 entries (20 core + 13 LiveGuard)
+- LIVEGUARD_TOOLS set expanded to 13 entries (added `forge_fix_proposal`, `forge_quorum_analyze`)
+- Capabilities surface updated across `capabilities.mjs`, `capabilities.md`, and `capabilities.html`
+
+### Testing
+- 68 new test cases across `server.test.mjs` (327 → 380) and `orchestrator.test.mjs` (91 → 106), 577 total across all test files
+- `forge_fix_proposal`: plan file writing, fix-proposals.json persistence, duplicate detection, source-specific plan structure (incident/drift/secret/regression), auto-detection data flow
+- `forge_quorum_analyze`: XSS regex validation (script/javascript/on-event patterns), customQuestion length cap, quorumSize clamping, GOAL_PRESETS resolution (4 presets), prompt 3-section assembly, dataSnapshotAge computation, source-specific data loading (drift/incident/triage/runbook/fix-proposal/targetFile)
+- `loadQuorumConfig`: defaults, .forge.json merge, corrupt config resilience, preset override, user-overrides-preset priority
+- `loadOpenClawConfig`: no config, endpoint+apiKey, secrets.json fallback, missing endpoint, corrupt config/secrets resilience
+- `scoreSliceComplexity`: simple vs security-sensitive scoring, signals object shape
+- LIVEGUARD_TOOLS v2.29.0: all 13 tools write to `liveguard-events.jsonl`, `forge_fix_proposal` + `forge_quorum_analyze` membership
+- Hook integration: PreDeploy→PostSlice chaining (block+trigger, pass+advisory), PreAgentHandoff with full LiveGuard state (drift+incidents+deploy+secrets combined context header)
+- TOOL_METADATA v2.29.0 count validation (≥33 entries)
+
+---
+
+## [2.28.0] — 2026-04-13
+
+### Added — LiveGuard: Secret Scan, Env Diff, Dashboard Tab, Telemetry Retrofit
+- **`forge_secret_scan`** — post-commit Shannon entropy analysis scanning git diff output for high-entropy strings (leaked secrets). Key-name heuristics classify findings as `api_key`, `secret`, `token`, `password`, `auth`, `private_key`, or `credential`. Confidence levels (`high`/`medium`/`low`) combine entropy score with key-name match. Caches results in `.forge/secret-scan-cache.json` with `<REDACTED>` masking. Annotates deploy journal sidecar (`deploy-journal-meta.json`) when HEAD matches last deploy.
+- **`forge_env_diff`** — environment variable key comparison across `.env` files. Detects missing keys between baseline and targets. Auto-detects `.env.*` files (excludes `.env.example`). Compares key names only (never values). Caches results in `.forge/env-diff-cache.json`. Integrates with `forge_runbook` to surface environment key gaps.
+- **Dashboard LiveGuard section** — 5 new amber-themed tabs (`lg-health`, `lg-incidents`, `lg-triage`, `lg-security`, `lg-env`) with badge state tracking, tab load hooks, and keyboard shortcut support. Total dashboard tabs: 14 (9 core + 5 LiveGuard).
+- **Telemetry retrofit** — `emitToolTelemetry()` integrated into all 11 LiveGuard tool handlers. Writes to `telemetry/tool-calls.jsonl` (all tools) and `liveguard-events.jsonl` (LiveGuard tools only). Best-effort: telemetry failures never crash tools. `DEGRADED` status for graceful degradation paths.
+- **`forge_runbook` env-diff integration** — runbook generation now reads `.forge/env-diff-cache.json` and includes "Environment Key Gaps" section when gaps exist. Backward-compatible: absent cache is silently skipped.
+
+### Changed
+- TOOL_METADATA expanded to 31 entries (20 core + 11 LiveGuard)
+- LIVEGUARD_TOOLS set expanded to 11 entries (added `forge_secret_scan`, `forge_env_diff`)
+- Capabilities surface updated across `capabilities.mjs`, `capabilities.md`, and `capabilities.html`
+
+### Testing
+- 75 new test cases in `server.test.mjs` (158 → 233), 415 total across all test files
+- Shannon entropy computation: empty/null/repeated/balanced/high-entropy string validation
+- Threshold clamping: min (3.5), max (5.0), default (4.0), in-range preservation
+- Key pattern matching: 7 secret-type patterns + benign variable rejection
+- Type inference: 8 type categories (`api_key`, `secret`, `token`, `password`, `auth`, `private_key`, `credential`, `unknown`)
+- Confidence classification: high/medium/low boundary conditions
+- `.env` key parsing: comments, empty lines, `=` in values, whitespace trimming, value exclusion
+- Key comparison: missing-in-target, missing-in-baseline, clean detection, totalGaps aggregation
+- Auto-detect `.env.*` files: inclusion, `.example` exclusion, empty case
+- Graceful degradation: baseline-not-found structured error, missing target file error
+- `emitToolTelemetry`: LIVEGUARD_TOOLS set membership (11 tools), record shape, result truncation, non-object input wrapping, never-throw guarantee, DEGRADED status
+- Dashboard tab smoke: 14 tab buttons (9 core + 5 LG), section divider, amber hover style, tabLoadHooks coverage, badge state tracking, keyboard shortcuts
+- `forge_runbook` backward compatibility: env-diff cache integration, clean-skip, absent-cache safety, missingInBaseline handling
+
+---
+
+## [2.27.0] — 2026-04-13
+
+### Added — LiveGuard: Post-Coding Operational Intelligence
+- **9 new MCP tools** for post-coding operational awareness:
+  - `forge_drift_report` — architecture drift scoring with violation tracking, threshold alerting, and history trend
+  - `forge_incident_capture` — incident recording with MTTR computation, severity validation, and onCall bridge dispatch
+  - `forge_deploy_journal` — deployment log with version tracking, preceding-deploy correlation, and JSONL persistence
+  - `forge_dep_watch` — dependency vulnerability scanning with diff (new/resolved), snapshot persistence, and hub events
+  - `forge_regression_guard` — validation gate extraction from plans, allowlist enforcement, shell execution, and fail-fast mode
+  - `forge_runbook` — auto-generate operational runbooks from plan files and incident history
+  - `forge_hotspot` — git churn analysis to identify high-risk files (24h cache TTL)
+  - `forge_health_trend` — aggregated health score from drift, cost, incident, and model performance data over configurable time windows
+  - `forge_alert_triage` — prioritized alert ranking combining severity weight × recency factor with tiebreak rules
+- **14 REST API endpoints** for external agent and CI/CD integration
+- `isGateCommandAllowed()` — command allowlist with blocked-pattern safety net (rm -rf /, dd, mkfs)
+- `getHealthTrend()` — multi-metric health aggregation with configurable time windows and metric filtering
+- `inferSliceType()` — automatic slice classification (test, review, migration, execute) from title and task keywords
+- `recommendModel()` — historical performance-based model selection with MIN_SAMPLE threshold and cost optimization
+- `readForgeJsonl()` — JSONL reader complementing `appendForgeJsonl()` for round-trip operational data persistence
+
+### Changed
+- TOOL_METADATA expanded to 29 entries (20 core + 9 LiveGuard)
+- Capabilities surface updated across `capabilities.mjs`, `capabilities.md`, and `capabilities.html`
+
+### Testing
+- 75 new test cases across `server.test.mjs` and `orchestrator.test.mjs` (232 → 307 total)
+- Full TOOL_METADATA coverage for all 9 LiveGuard tools
+- Behavioral tests for drift scoring, incident MTTR, deploy journal, dep watch snapshots, health trend, alert triage, regression guard, runbook naming, hotspot metadata
+- `isGateCommandAllowed` tests: allowlist prefixes, dangerous-pattern blocking, env-var prefix handling, edge cases
+- `inferSliceType` tests: test/review/migration/execute classification with keyword matching
+- `recommendModel` tests: MIN_SAMPLE threshold, success rate filtering, cost-based selection, sliceType filtering, fallback behavior
+- `getHealthTrend` tests: metric filtering, time-window exclusion, drift/incident/model aggregation, healthScore computation
+
+---
+
+## [2.29.0] — planned
+
+### Added
+- `forge_fix_proposal` MCP tool — generates 1-2 slice fix plan (`docs/plans/auto/LIVEGUARD-FIX-<id>.md`) from regression, drift, incident, or secret-scan failure; capped at one proposal per incidentId; `source="secret"` supported with credential-rotation template; `alreadyExists: true` on duplicate calls
+- `forge_quorum_analyze` MCP tool — assembles structured 3-section quorum prompt from any LiveGuard data source; `customQuestion` freeform override (max 500 chars, XSS-validated); echoes `questionUsed` for audit trail; no LLM calls from `server.mjs`
+- `GET /api/fix/proposals` — list all fix proposals (no auth)
+- `POST /api/fix/propose` — generate fix proposal (requires `approvalSecret`)
+- `GET /api/quorum/prompt` + `POST /api/quorum/prompt` — assemble quorum prompt (no auth, read-only)
+- `docs/plans/auto/` directory — gitignored runtime directory; `README.md` committed via explicit gitignore exception `!docs/plans/auto/README.md`
+- `generateFixPlan()` and `postOpenClawSnapshot()` helpers in `orchestrator.mjs`
+
+### Hooks (new)
+- **PreDeploy** — blocks file writes to `deploy/**`, `Dockerfile*`, `*.tf`, `k8s/**` and CLI commands (`docker push`, `git push`, `azd up`) when `forge_secret_scan` returns findings; warns on env key gaps; configurable via `.forge.json` `hooks.preDeploy.*`
+- **PostSlice** — injects amber advisory (delta >5, score ≥70) or red warning (delta >10, score <70) after every `feat|fix|refactor|perf|chore|style|test` commit; never blocks; configurable via `hooks.postSlice.*`
+- **PreAgentHandoff** — injects LiveGuard context header at session start; skips entirely when `PFORGE_QUORUM_TURN` env var is set (quorum turns get clean context); fires OpenClaw snapshot POST (5s hard timeout, fire-and-forget); configurable via `hooks.preAgentHandoff.*` + `openclaw.*`
+
+### Integration
+- OpenClaw analytics bridge — optional `POST` to `openclaw.endpoint` on `PreAgentHandoff` with drift score, open incidents, last deploy version, alert summary, secret scan status
+- `.forge.json` `hooks.*` config block (all three hooks) + `openclaw.endpoint` + `openclaw.apiKey` (references `.forge/secrets.json`)
+
+### Config (`.forge.json`)
+- `hooks.preDeploy.blockOnSecrets` (default `true`), `.warnOnEnvGaps` (default `true`), `.scanSince` (default `"HEAD~1"`)
+- `hooks.postSlice.silentDeltaThreshold` (default 5), `.warnDeltaThreshold` (default 10), `.scoreFloor` (default 70)
+- `hooks.preAgentHandoff.injectContext` (default `true`), `.runRegressionGuard` (default `true`), `.cacheMaxAgeMinutes` (default 30), `.minAlertSeverity` (default `"medium"`)
+
+---
 ## [2.26.0] - 2026-04-12
 
 ### Added

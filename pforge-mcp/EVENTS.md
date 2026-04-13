@@ -289,6 +289,72 @@ Update the client's label in the session registry.
 
 ---
 
+## LiveGuard Events (v2.27+)
+
+### `liveguard-drift`
+Emitted when drift score changes. Used by dashboard Health tab.
+
+```json
+{
+  "type": "liveguard-drift",
+  "data": { "score": 82, "delta": -3, "violations": 2, "timestamp": "2026-04-13T..." }
+}
+```
+
+### `liveguard-incident`
+Emitted when an incident is captured or resolved.
+
+```json
+{
+  "type": "liveguard-incident",
+  "data": { "id": "INC-001", "severity": "high", "description": "...", "status": "open" }
+}
+```
+
+### `liveguard-triage`
+Emitted when alert triage runs.
+
+```json
+{
+  "type": "liveguard-triage",
+  "data": { "alertCount": 5, "topSeverity": "high", "rankedAlerts": [...] }
+}
+```
+
+### `liveguard-secret-scan`
+Emitted after a secret scan completes.
+
+```json
+{
+  "type": "liveguard-secret-scan",
+  "data": { "clean": false, "findingsCount": 2, "scannedAt": "2026-04-13T..." }
+}
+```
+
+### `liveguard-tool-completed`
+Generic event emitted after any LiveGuard tool executes.
+
+```json
+{
+  "type": "liveguard-tool-completed",
+  "tool": "forge_drift_report",
+  "status": "OK",
+  "durationMs": 1234
+}
+```
+
+### `fix-proposal-ready`
+Emitted when `forge_fix_proposal` generates a new fix plan.
+
+```json
+{
+  "type": "fix-proposal-ready",
+  "data": { "fixId": "INC-001", "plan": "docs/plans/auto/LIVEGUARD-FIX-INC-001.md", "source": "incident" }
+}
+```
+
+---
+
 ## Connection
 
 ```

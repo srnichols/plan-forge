@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<!-- verified: v2.28.0 -->
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Appendix F: LiveGuard Alert Runbooks — Plan Forge Manual</title>
+  <meta name="description" content="Response runbooks for every LiveGuard alert severity. Critical, high, medium, low — know exactly what to do when the guardian fires." />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+
+    <main>
+      <div class="chapter-content">
+
+        <div class="text-xs font-semibold text-amber-500 uppercase tracking-wider mb-2">Appendix F</div>
+        <h1>LiveGuard Alert Runbooks</h1>
+        <p class="text-lg text-slate-400 mb-8">The guardian fired. Here's exactly what to do next.</p>
+
+        <div class="callout callout-tip">
+          <strong>v2.28.0</strong> — Full runbook content for all 6 alert types. Severity matrix, per-alert response procedures, and escalation paths. Fix proposal workflow details ship in v2.29.
+        </div>
+
+        <!-- CONTENT: full runbooks -->
+
+        <h2 id="severity-matrix">Severity Matrix</h2>
+        <p>Every LiveGuard alert carries one of four severity levels. The matrix below defines response SLA and escalation path. Full runbooks per alert type follow.</p>
+
+        <div class="overflow-x-auto mb-8">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left border-b border-slate-700/60">
+                <th class="pb-2 pr-4 text-slate-400 font-semibold">Severity</th>
+                <th class="pb-2 pr-4 text-slate-400 font-semibold">Response SLA</th>
+                <th class="pb-2 pr-4 text-slate-400 font-semibold">Notify</th>
+                <th class="pb-2 text-slate-400 font-semibold">Dashboard Badge</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800/60">
+              <tr>
+                <td class="py-2 pr-4"><span class="px-2 py-0.5 rounded text-xs font-bold bg-red-950/50 text-red-400 border border-red-800/40">Critical</span></td>
+                <td class="py-2 pr-4 text-slate-400">Immediate — within 1 hour</td>
+                <td class="py-2 pr-4 text-slate-400">On-call + team lead</td>
+                <td class="py-2 text-slate-400">Red badge on Triage tab</td>
+              </tr>
+              <tr>
+                <td class="py-2 pr-4"><span class="px-2 py-0.5 rounded text-xs font-bold bg-orange-950/50 text-orange-400 border border-orange-800/40">High</span></td>
+                <td class="py-2 pr-4 text-slate-400">Same business day</td>
+                <td class="py-2 pr-4 text-slate-400">On-call engineer</td>
+                <td class="py-2 text-slate-400">Amber badge on Triage tab</td>
+              </tr>
+              <tr>
+                <td class="py-2 pr-4"><span class="px-2 py-0.5 rounded text-xs font-bold bg-yellow-950/50 text-yellow-400 border border-yellow-800/40">Medium</span></td>
+                <td class="py-2 pr-4 text-slate-400">Next sprint</td>
+                <td class="py-2 pr-4 text-slate-400">Team chat</td>
+                <td class="py-2 text-slate-400">Yellow dot on relevant tab</td>
+              </tr>
+              <tr>
+                <td class="py-2 pr-4"><span class="px-2 py-0.5 rounded text-xs font-bold bg-slate-800/80 text-slate-400 border border-slate-700/40">Low</span></td>
+                <td class="py-2 pr-4 text-slate-400">Backlog</td>
+                <td class="py-2 pr-4 text-slate-400">—</td>
+                <td class="py-2 text-slate-400">No badge</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2 id="runbook-index">Per-Alert Runbooks</h2>
+
+        <h3 id="runbook-drift">Drift Spike — Architecture Diverged from Plan Baseline</h3>
+        <p class="text-sm text-slate-400 mb-2"><strong>Source</strong>: <code class="text-forge-400">forge_drift_report</code> | <strong>Typical severity</strong>: Medium–High</p>
+        <ol class="mt-2 space-y-2 text-sm text-slate-300 list-decimal list-inside mb-6">
+          <li><strong>Assess</strong>: Run <code class="text-forge-400">pforge drift</code> to get the current score and delta. If delta &gt; 10 points in one session, treat as High.</li>
+          <li><strong>Identify</strong>: Check the <code>violations[]</code> in the output — each violation lists the file, rule, and instruction file it violates.</li>
+          <li><strong>Root cause</strong>: Was this an intentional architectural change? If yes, update the instruction file or plan baseline. If no, the code drifted from the plan.</li>
+          <li><strong>Fix</strong>: For unintentional drift, refactor to match the plan. For intentional changes, update the plan's Scope Contract to reflect the new architecture.</li>
+          <li><strong>Verify</strong>: Re-run <code class="text-forge-400">pforge drift</code> — score should recover to within 5 points of the previous baseline.</li>
+        </ol>
+
+        <h3 id="runbook-secret">Secret Found — High-Entropy String in Committed Diff</h3>
+        <p class="text-sm text-slate-400 mb-2"><strong>Source</strong>: <code class="text-forge-400">forge_secret_scan</code> | <strong>Typical severity</strong>: Critical</p>
+        <ol class="mt-2 space-y-2 text-sm text-slate-300 list-decimal list-inside mb-6">
+          <li><strong>Do not push</strong>: If the commit hasn't been pushed, amend it to remove the secret. <code>git reset HEAD~1</code>, remove the credential, re-commit.</li>
+          <li><strong>Rotate immediately</strong>: If the commit has been pushed, the credential is compromised. Rotate it in the external provider (API dashboard, vault, etc.) before any other action.</li>
+          <li><strong>Remove from history</strong>: Use <code>git filter-repo</code> or BFG Repo-Cleaner to purge the secret from git history. A simple amendment is not sufficient — the old commit object still exists.</li>
+          <li><strong>Move to secrets manager</strong>: Store the new credential in <code>.forge/secrets.json</code> (gitignored), an environment variable, or your cloud vault. Never in source code.</li>
+          <li><strong>Verify</strong>: Re-run <code class="text-forge-400">pforge secret-scan</code> — output should show <code>clean: true</code>.</li>
+        </ol>
+        <div class="callout callout-warning mb-6">
+          <strong>Time-critical</strong>: Secret findings should be treated as Critical regardless of the entropy score. Automated rotation is out of scope for LiveGuard — the tool detects and alerts; humans rotate.
+        </div>
+
+        <h3 id="runbook-env">Env Diff Gap — Required Key Missing from Environment File</h3>
+        <p class="text-sm text-slate-400 mb-2"><strong>Source</strong>: <code class="text-forge-400">forge_env_diff</code> | <strong>Typical severity</strong>: Medium–High</p>
+        <ol class="mt-2 space-y-2 text-sm text-slate-300 list-decimal list-inside mb-6">
+          <li><strong>Review gaps</strong>: Run <code class="text-forge-400">pforge env-diff</code> to see which keys are missing and in which files.</li>
+          <li><strong>Categorize</strong>: Is the key required for the target environment? Some keys (e.g., <code>DEBUG=true</code>) are intentionally absent from production.</li>
+          <li><strong>Add missing keys</strong>: For required keys, add them to the target <code>.env.*</code> file with the appropriate value for that environment.</li>
+          <li><strong>Document exceptions</strong>: If a key is intentionally absent, add a comment in the baseline <code>.env</code> file: <code># NOT_IN_PROD: DEBUG</code>.</li>
+          <li><strong>Verify</strong>: Re-run <code class="text-forge-400">pforge env-diff</code> — output should show <code>clean: true</code> or only expected gaps.</li>
+        </ol>
+
+        <h3 id="runbook-regression">Regression Gate Failure — Previously Passing Gate Now Fails</h3>
+        <p class="text-sm text-slate-400 mb-2"><strong>Source</strong>: <code class="text-forge-400">forge_regression_guard</code> | <strong>Typical severity</strong>: High</p>
+        <ol class="mt-2 space-y-2 text-sm text-slate-300 list-decimal list-inside mb-6">
+          <li><strong>Identify</strong>: Run <code class="text-forge-400">pforge regression-guard</code> to see which gates failed and their error output.</li>
+          <li><strong>Bisect</strong>: Use <code>git log</code> to find which commit broke the gate. The gate command output usually points at the exact file.</li>
+          <li><strong>Fix or update</strong>: If the code broke a valid gate, fix the code. If the gate is outdated (the feature was intentionally changed), update the gate command in the plan file.</li>
+          <li><strong>Verify</strong>: Re-run <code class="text-forge-400">pforge regression-guard --plan &lt;affected-plan&gt;</code> — all gates should pass.</li>
+        </ol>
+
+        <h3 id="runbook-dep">Dependency Vulnerability — New CVE in a Watched Package</h3>
+        <p class="text-sm text-slate-400 mb-2"><strong>Source</strong>: <code class="text-forge-400">forge_dep_watch</code> | <strong>Typical severity</strong>: Medium–Critical (depends on CVE severity)</p>
+        <ol class="mt-2 space-y-2 text-sm text-slate-300 list-decimal list-inside mb-6">
+          <li><strong>Assess</strong>: Run <code class="text-forge-400">pforge dep-watch</code> to see new vulnerabilities with their CVE IDs and severity.</li>
+          <li><strong>Check exploitability</strong>: Not all CVEs are exploitable in your context. Check if the vulnerable code path is reachable in your app.</li>
+          <li><strong>Update</strong>: <code>npm update &lt;package&gt;</code> or pin to a patched version. For transitive dependencies, use <code>npm audit fix</code>.</li>
+          <li><strong>If no patch exists</strong>: Evaluate alternatives, add a compensating control, or document the accepted risk with a timeline for re-evaluation.</li>
+          <li><strong>Verify</strong>: Re-run <code class="text-forge-400">pforge dep-watch</code> — the vulnerability should move from <code>newVulnerabilities</code> to <code>resolvedVulnerabilities</code>.</li>
+        </ol>
+
+        <h3 id="runbook-mttr">Incident MTTR Exceeded — Time-to-Resolve Beyond Threshold</h3>
+        <p class="text-sm text-slate-400 mb-2"><strong>Source</strong>: <code class="text-forge-400">forge_alert_triage</code> (via MTTR calculation) | <strong>Typical severity</strong>: High</p>
+        <ol class="mt-2 space-y-2 text-sm text-slate-300 list-decimal list-inside mb-6">
+          <li><strong>Review</strong>: Run <code class="text-forge-400">pforge incident list</code> to see open incidents and their MTTR.</li>
+          <li><strong>Escalate</strong>: If the incident has been open beyond the SLA for its severity level (see severity matrix above), escalate to the next tier defined in <code>onCall.escalation</code>.</li>
+          <li><strong>Root cause</strong>: Is the incident blocked on external factors? If so, document the blocker in the incident description.</li>
+          <li><strong>Close</strong>: Once resolved, update the incident status. MTTR is automatically calculated from capture time to close time.</li>
+        </ol>
+
+        <h2 id="fix-proposal-workflow">Fix Proposal Workflow (v2.29)</h2>
+        <p>When a LiveGuard tool fires a failure (regression, drift, incident, or secret found), <code>forge_fix_proposal</code> generates a scoped 1-2 slice fix plan for human review. This is the detect → propose → approve → fix loop.</p>
+
+        <ol class="mt-4 space-y-3 text-sm text-slate-300 list-decimal list-inside">
+          <li><strong>Trigger</strong>: Run <code>pforge fix-proposal --source regression</code> (or drift/incident/secret) after the alert fires.</li>
+          <li><strong>Review the plan</strong>: Open <code>docs/plans/auto/LIVEGUARD-FIX-&lt;incidentId&gt;.md</code>. The plan contains the failing command, affected files, and a template fix slice with <code>&lt;!-- TODO --&gt;</code> markers for you to fill in.</li>
+          <li><strong>Fill in the fix</strong>: Complete the TODO markers in the fix slice. For secret findings, the template directs you to remove the credential from the diff and rotate it externally before proceeding.</li>
+          <li><strong>Execute on a branch</strong>: <code>pforge run-plan --assisted docs/plans/auto/LIVEGUARD-FIX-&lt;incidentId&gt;.md</code>. The plan targets a dedicated branch — never master.</li>
+          <li><strong>Verify</strong>: The second slice re-runs the exact commands that originally failed. Green gate = fix confirmed.</li>
+          <li><strong>Promote or close</strong>: Merge the branch if the fix holds. Close the proposal by updating its status in <code>.forge/fix-proposals.json</code>. Auto-generated plans in <code>docs/plans/auto/</code> are gitignored — promote manually to <code>docs/plans/</code> if you want to keep it in version history.</li>
+        </ol>
+
+        <div class="callout callout-warning">
+          <strong>Loop cap</strong>: <code>forge_fix_proposal</code> generates at most one proposal per <code>incidentId</code>. If the first proposal doesn’t resolve the issue, address it manually — the tool will return <code>status: &quot;needs-human-intervention&quot;</code> on the second call.
+        </div>
+
+        <div class="callout callout-tip">
+          <strong>Related</strong>: See <a href="liveguard-tools.html">Chapter 16 — LiveGuard Tools Reference</a> for the exact CLI commands to run during each runbook step. See <a href="liveguard-dashboard.html">Chapter 17</a> to navigate to the alert from the dashboard.
+        </div>
+
+        <!-- Appendix nav -->
+        <div class="chapter-nav mt-12">
+          <a class="chapter-nav-prev" href="sample-project.html">← Appendix E: Sample Project</a>
+          <a class="chapter-nav-next" href="about-author.html">About the Author →</a>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="assets/manual.js"></script>
+</body>
+</html>

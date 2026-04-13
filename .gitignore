@@ -32,3 +32,14 @@ GEMINI.md
 .cursor/
 .windsurf/
 .agents/
+
+# LiveGuard operational data (contains incident details, secret scan results, deploy history)
+.forge/incidents/
+.forge/secret-scan-cache.json
+.forge/deploy-journal.jsonl
+.forge/deploy-journal-meta.json
+.forge/liveguard-events.jsonl
+
+# LiveGuard auto-generated fix plans (runtime artifacts, not source-controlled)
+docs/plans/auto/*
+!docs/plans/auto/README.md

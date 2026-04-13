@@ -24,6 +24,7 @@ const API_BASE = `${window.location.protocol}//${window.location.host}`;
 // ─── Tab Switching ────────────────────────────────────────────────────
 document.querySelectorAll(".tab-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
+    // Clear active from ALL tab-btn elements across all groups
     document.querySelectorAll(".tab-btn").forEach((b) => {
       b.classList.remove("tab-active");
       b.classList.add("text-gray-400");
@@ -36,11 +37,37 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
     if (tab) tab.classList.remove("hidden");
 
     // Load data for the tab
-    if (btn.dataset.tab === "runs") { loadRuns(); tabBadgeState.runsNew = 0; updateTabBadges(); }
-    if (btn.dataset.tab === "cost") { loadCost(); tabBadgeState.hasAnomaly = false; updateTabBadges(); }
     if (tabLoadHooks[btn.dataset.tab]) tabLoadHooks[btn.dataset.tab]();
   });
 });
+
+// ─── Group Tab Switching ──────────────────────────────────────────────
+function switchGroup(group) {
+  // Update group tab styles
+  document.querySelectorAll(".group-tab").forEach((g) => {
+    g.classList.remove("group-active", "text-blue-400", "text-amber-400", "border-blue-400", "border-amber-400");
+    g.classList.add("text-gray-500", "border-transparent");
+  });
+  const activeGroup = document.querySelector(`.group-tab[data-group="${group}"]`);
+  if (activeGroup) {
+    activeGroup.classList.add("group-active");
+    activeGroup.classList.remove("text-gray-500", "border-transparent");
+    const color = group === "liveguard" ? "amber" : "blue";
+    activeGroup.classList.add(`text-${color}-400`, `border-${color}-400`);
+  }
+
+  // Show/hide subtab rows
+  document.getElementById("subtabs-forge").classList.toggle("hidden", group !== "forge");
+  document.getElementById("subtabs-liveguard").classList.toggle("hidden", group !== "liveguard");
+
+  // Auto-click the first subtab in the group if none active
+  const subtabRow = document.getElementById(`subtabs-${group}`);
+  const activeSubtab = subtabRow?.querySelector(".tab-active");
+  if (!activeSubtab) {
+    const first = subtabRow?.querySelector(".tab-btn");
+    if (first) first.click();
+  }
+}
 
 // ─── WebSocket Connection ─────────────────────────────────────────────
 function connectWebSocket() {
@@ -83,6 +110,9 @@ function connectWebSocket() {
           } else if (data.type === "slice-failed") {
             const d = data.data || data;
             addNotification(`Slice ${d.sliceId} failed: ${d.error || ""}`, "error");
+          } else if (data.type === "liveguard-tool-completed") {
+            const d = data.data || data;
+            addNotification(`LiveGuard tool done: ${d.tool || d.name || 'unknown'}`, "amber");
           }
         } catch { /* ignore malformed */ }
       };
@@ -120,6 +150,18 @@ function handleEvent(event) {
     case "slice-failed":
       handleSliceFailed(event.data || event);
       break;
+    case "slice-model-routed":
+      handleSliceModelRouted(event.data || event);
+      break;
+    case "quorum-dispatch-started":
+      handleQuorumDispatch(event.data || event);
+      break;
+    case "quorum-leg-completed":
+      handleQuorumLeg(event.data || event);
+      break;
+    case "quorum-review-completed":
+      handleQuorumReview(event.data || event);
+      break;
     case "run-completed":
       handleRunCompleted(event.data || event);
       loadRuns(); // Auto-refresh runs table
@@ -139,21 +181,51 @@ function handleEvent(event) {
     case "skill-completed":
       handleSkillCompleted(event.data || event);
       break;
+    case "liveguard-drift":
+      handleLGDrift(event.data || event);
+      break;
+    case "liveguard-incident":
+      handleLGIncident(event.data || event);
+      break;
+    case "liveguard-triage":
+      handleLGTriage(event.data || event);
+      break;
+    case "fix-proposal-ready":
+      handleFixProposal(event.data || event);
+      break;
+    case "liveguard-tool-completed":
+      handleLGToolCompleted(event.data || event);
+      break;
+    case "liveguard-secret-scan":
+      handleLGSecretScan(event.data || event);
+      break;
   }
 }
 
 function handleRunStarted(data) {
+  const isSameRun = state.runMeta && state.runMeta.plan === data.plan && state.slices.length > 0;
   state.runMeta = data;
-  state.slices = [];
+
   const count = data.sliceCount || data.executionOrder?.length || 0;
   const order = data.executionOrder || [];
 
-  for (let i = 0; i < count; i++) {
-    state.slices.push({
-      id: order[i] || String(i + 1),
-      title: `Slice ${order[i] || i + 1}`,
-      status: "pending",
-    });
+  if (isSameRun) {
+    // Duplicate run-started (e.g. WS history replay) — preserve existing slice statuses
+    for (let i = 0; i < count; i++) {
+      const id = order[i] || String(i + 1);
+      if (!state.slices.find((s) => s.id === id)) {
+        state.slices.push({ id, title: `Slice ${id}`, status: "pending" });
+      }
+    }
+  } else {
+    state.slices = [];
+    for (let i = 0; i < count; i++) {
+      state.slices.push({
+        id: order[i] || String(i + 1),
+        title: `Slice ${order[i] || i + 1}`,
+        status: "pending",
+      });
+    }
   }
 
   document.getElementById("run-plan-name").textContent = shortName(data.plan);
@@ -162,6 +234,83 @@ function handleRunStarted(data) {
   document.getElementById("run-progress-fill").style.width = "0%";
   document.getElementById("run-status").textContent = "Running...";
 
+  // Show run mode + model badges
+  updateRunBadges(data);
+
+  renderSliceCards();
+  updateProgress();
+}
+
+function updateRunBadges(data) {
+  const modeBadge = document.getElementById("run-mode-badge");
+  const modelBadge = document.getElementById("run-model-badge");
+  const execBadge = document.getElementById("run-exec-mode-badge");
+  if (!modeBadge || !modelBadge) return;
+
+  // Quorum vs single-pass
+  if (data.quorum && data.quorum.enabled) {
+    modeBadge.textContent = `\u26a1 Quorum${data.quorum.auto ? " (auto)" : ""}${data.quorum.threshold ? " T" + data.quorum.threshold : ""}`;
+    modeBadge.className = "text-xs px-2 py-0.5 rounded-full bg-purple-900/60 text-purple-300 border border-purple-700";
+    modeBadge.classList.remove("hidden");
+  } else {
+    modeBadge.textContent = "Single-pass";
+    modeBadge.className = "text-xs px-2 py-0.5 rounded-full bg-blue-900/60 text-blue-300 border border-blue-700";
+    modeBadge.classList.remove("hidden");
+  }
+
+  // Model
+  const model = data.model || "";
+  if (model) {
+    modelBadge.textContent = model;
+    modelBadge.className = "text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-300";
+    modelBadge.classList.remove("hidden");
+  } else {
+    modelBadge.classList.add("hidden");
+  }
+
+  // Execution mode (autonomous / assisted)
+  if (execBadge) {
+    const mode = data.mode || "";
+    if (mode) {
+      execBadge.textContent = mode === "assisted" ? "\ud83d\udc64 Assisted" : "\ud83e\udd16 Autonomous";
+      execBadge.classList.remove("hidden");
+    } else {
+      execBadge.classList.add("hidden");
+    }
+  }
+}
+
+function handleSliceModelRouted(data) {
+  const slice = state.slices.find((s) => s.id === String(data.sliceId));
+  if (slice) {
+    slice.model = data.model;
+    slice.sliceType = data.sliceType;
+  }
+  renderSliceCards();
+}
+
+function handleQuorumDispatch(data) {
+  const slice = state.slices.find((s) => s.id === String(data.sliceId));
+  if (slice) {
+    slice.quorum = { models: data.models, legs: [], status: "dispatched" };
+  }
+  renderSliceCards();
+}
+
+function handleQuorumLeg(data) {
+  const slice = state.slices.find((s) => s.id === String(data.sliceId));
+  if (slice && slice.quorum) {
+    slice.quorum.legs.push({ model: data.model, success: data.success, duration: data.duration });
+  }
+  renderSliceCards();
+}
+
+function handleQuorumReview(data) {
+  const slice = state.slices.find((s) => s.id === String(data.sliceId));
+  if (slice && slice.quorum) {
+    slice.quorum.status = "reviewed";
+    slice.quorum.winner = data.winner || data.selectedModel;
+  }
   renderSliceCards();
 }
 
@@ -179,6 +328,8 @@ function handleSliceStarted(data) {
     const card = document.querySelector(`[data-slice-id="${data.sliceId}"]`);
     if (card) card.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, 100);
+  // Auto-load slice log panel for executing slice
+  loadSliceLog(data.sliceId);
 }
 
 function handleSliceCompleted(data) {
@@ -193,6 +344,7 @@ function handleSliceCompleted(data) {
   stopSliceTimer(data.sliceId);
   updateProgress();
   renderSliceCards();
+  if (activeSliceLogId === data.sliceId) fetchSliceLogContent(data.sliceId);
 }
 
 function handleSliceFailed(data) {
@@ -205,6 +357,7 @@ function handleSliceFailed(data) {
   stopSliceTimer(data.sliceId);
   updateProgress();
   renderSliceCards();
+  if (activeSliceLogId === data.sliceId) fetchSliceLogContent(data.sliceId);
 }
 
 function handleRunCompleted(data) {
@@ -258,15 +411,57 @@ function renderSliceCards() {
       ? `<span class="text-amber-400 text-xs ml-1" title="Awaiting bridge approval">🔔</span>`
       : "";
 
+    // Quorum leg indicators
+    let quorumHtml = "";
+    if (s.quorum) {
+      const q = s.quorum;
+      const legDots = (q.models || []).map((m) => {
+        const leg = (q.legs || []).find((l) => l.model === m);
+        if (!leg) return `<span class="inline-block w-2 h-2 rounded-full bg-gray-600" title="${m}: pending"></span>`;
+        return leg.success
+          ? `<span class="inline-block w-2 h-2 rounded-full bg-green-500" title="${m}: done ${leg.duration ? (leg.duration / 1000).toFixed(1) + 's' : ''}"></span>`
+          : `<span class="inline-block w-2 h-2 rounded-full bg-red-500" title="${m}: failed"></span>`;
+      }).join(" ");
+      const winnerLabel = q.winner ? `<span class="text-green-400 text-xs ml-1">→ ${q.winner}</span>` : "";
+      quorumHtml = `<div class="flex items-center gap-1 mt-1"><span class="text-xs text-purple-400">⚡ Quorum</span> ${legDots}${winnerLabel}</div>
+        <p class="text-xs text-gray-600 mt-0.5">${(q.models || []).join(", ")}</p>`;
+    }
+
+    // Quorum vs single-pass badge on card
+    const sliceModeBadge = s.quorum
+      ? `<span class="text-xs px-1.5 py-0.5 rounded bg-purple-900/50 text-purple-300 border border-purple-800" title="Quorum mode">Q</span>`
+      : (s.status !== "pending" ? `<span class="text-xs px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-400 border border-blue-800" title="Single-pass">S</span>` : "");
+
+    // Gate status indicator
+    let gateHtml = "";
+    if (s.gateStatus === "passed") {
+      gateHtml = `<span class="text-xs text-green-500" title="Gate passed">⛩ pass</span>`;
+    } else if (s.gateStatus === "failed") {
+      gateHtml = `<span class="text-xs text-red-400" title="Gate failed: ${s.failedCommand || ''}">⛩ fail</span>`;
+    }
+
+    // Retry indicator
+    const retryHtml = s.attempts && s.attempts > 1
+      ? `<span class="text-xs text-yellow-400" title="${s.attempts} attempts">🔄${s.attempts}</span>`
+      : "";
+
+    // Duration bar (proportional to max duration across all slices)
+    const maxDuration = Math.max(...state.slices.map((x) => x.duration || 0), 1);
+    const durationPct = s.duration ? Math.round((s.duration / maxDuration) * 100) : 0;
+    const durationBarColor = s.status === "failed" ? "bg-red-500/40" : s.status === "passed" ? "bg-green-500/30" : "bg-blue-500/30";
+    const durationBar = s.duration ? `<div class="mt-1.5 h-1 rounded-full bg-gray-700 overflow-hidden"><div class="${durationBarColor} h-full rounded-full" style="width:${durationPct}%"></div></div>` : "";
+
     return `
-      <div class="slice-card ${bgColor} rounded-lg p-3 border border-gray-700" data-slice-id="${s.id}">
+      <div class="slice-card ${bgColor} rounded-lg p-3 border border-gray-700 cursor-pointer hover:border-gray-500 transition-colors" data-slice-id="${s.id}" onclick="loadSliceLog('${s.id}')">
         <div class="flex items-center justify-between mb-1">
-          <span class="font-semibold text-sm">${statusIcon} Slice ${s.id}${escalatedMark}</span>
-          <span class="text-xs text-gray-500">${duration}${elapsed}</span>
+          <span class="font-semibold text-sm">${statusIcon} Slice ${s.id} ${sliceModeBadge}${escalatedMark}</span>
+          <span class="text-xs text-gray-500 flex items-center gap-1.5">${retryHtml}${gateHtml}${duration}${elapsed}</span>
         </div>
         <p class="text-xs text-gray-400 truncate">${s.title}</p>
         ${model ? `<p class="text-xs text-gray-500 mt-1">${modelBadge} ${cost}</p>` : ""}
+        ${quorumHtml}
         ${s.error ? `<p class="text-xs text-red-400 mt-1 truncate">${s.error}</p>` : ""}
+        ${durationBar}
       </div>
     `;
   }).join("");
@@ -281,6 +476,180 @@ function updateProgress() {
   document.getElementById("run-progress-fill").style.width = `${pct}%`;
   document.getElementById("run-progress-text").textContent =
     executing ? `Slice ${executing.id} of ${total} executing — ${pct}% complete` : `${done} of ${total} slices — ${pct}%`;
+}
+
+// ─── Slice Log Panel ──────────────────────────────────────────────────
+let activeSliceLogId = null;
+let sliceLogPollInterval = null;
+
+function loadSliceLog(sliceId) {
+  activeSliceLogId = sliceId;
+  const label = document.getElementById("slice-log-label");
+  if (label) label.textContent = `— Slice ${sliceId}`;
+
+  // Highlight selected card
+  document.querySelectorAll(".slice-card").forEach((c) => {
+    c.classList.toggle("ring-1", c.dataset.sliceId === sliceId);
+    c.classList.toggle("ring-blue-500", c.dataset.sliceId === sliceId);
+  });
+
+  fetchSliceLogContent(sliceId);
+
+  // Poll while executing
+  const slice = state.slices.find((s) => s.id === sliceId);
+  if (sliceLogPollInterval) clearInterval(sliceLogPollInterval);
+  if (slice && slice.status === "executing") {
+    sliceLogPollInterval = setInterval(() => {
+      if (activeSliceLogId === sliceId) fetchSliceLogContent(sliceId);
+      else clearInterval(sliceLogPollInterval);
+    }, 3000);
+  }
+}
+
+function fetchSliceLogContent(sliceId) {
+  const logEl = document.getElementById("slice-log");
+  if (!logEl) return;
+
+  // Try recent run indices (0 = latest, then 1, 2...) until we find a log
+  tryFetchSliceLog(sliceId, 0, logEl);
+}
+
+function tryFetchSliceLog(sliceId, runIdx, logEl) {
+  if (runIdx > 5) {
+    // Exhausted search — show status-based message
+    const slice = state.slices.find((s) => s.id === sliceId);
+    if (slice && slice.status === "executing") {
+      logEl.innerHTML = '<div class="text-blue-300 animate-pulse py-2">⚡ Slice executing — log will appear when worker output is captured...</div>';
+    } else if (slice && slice.status === "pending") {
+      logEl.innerHTML = '<div class="text-gray-500 py-2">⏳ Slice not started yet</div>';
+    } else {
+      logEl.innerHTML = '<div class="text-gray-500 py-2">No log available for this slice</div>';
+    }
+    return;
+  }
+
+  fetch(`${API_BASE}/api/replay/${runIdx}/${sliceId}`)
+    .then((r) => {
+      if (!r.ok) throw new Error("not found");
+      return r.json();
+    })
+    .then((data) => {
+      const text = data.log || "";
+      if (!text.trim()) throw new Error("empty");
+      // Preserve expanded/collapsed state of sections before re-render
+      const expandedSections = new Set();
+      logEl.querySelectorAll("[id^='sec-']").forEach((el) => {
+        if (!el.classList.contains("hidden")) expandedSections.add(el.previousElementSibling?.textContent?.trim());
+      });
+      logEl.innerHTML = formatSliceLog(text);
+      // Restore expanded sections
+      if (expandedSections.size > 0) {
+        logEl.querySelectorAll("[id^='sec-']").forEach((el) => {
+          const header = el.previousElementSibling?.textContent?.trim();
+          if (expandedSections.has(header)) el.classList.remove("hidden");
+        });
+      }
+      logEl.scrollTop = logEl.scrollHeight;
+    })
+    .catch(() => {
+      // Try next older run
+      tryFetchSliceLog(sliceId, runIdx + 1, logEl);
+    });
+}
+
+function formatSliceLog(text) {
+  const lines = text.split("\n");
+  const sections = [];
+  let currentSection = null;
+  let sectionLines = [];
+
+  for (const line of lines) {
+    if (line.startsWith("=== ") && line.endsWith(" ===")) {
+      if (currentSection) {
+        sections.push({ title: currentSection, lines: sectionLines });
+      }
+      currentSection = line.replace(/^=== | ===$/g, "");
+      sectionLines = [];
+    } else {
+      sectionLines.push(line);
+    }
+  }
+  if (currentSection) sections.push({ title: currentSection, lines: sectionLines });
+  if (sections.length === 0) {
+    return lines.map((l) => `<div class="text-gray-400">${escapeHtml(l) || "&nbsp;"}</div>`).join("");
+  }
+
+  return sections.map((sec) => {
+    const lineCount = sec.lines.filter((l) => l.trim()).length;
+    const isOutput = /STDOUT|STDERR/.test(sec.title);
+    const isCollapsed = isOutput && lineCount > 15;
+    const id = `sec-${Math.random().toString(36).slice(2, 8)}`;
+
+    let headerCls = "text-blue-400 font-semibold";
+    if (/STDERR/.test(sec.title)) headerCls = "text-yellow-400 font-semibold";
+
+    const formatted = sec.lines.map((line) => {
+      let cls = "text-gray-400";
+      if (/\bFAIL|\bERROR|\bfailed|❌/.test(line)) cls = "text-red-400";
+      else if (/\bPASS|\bsuccess|✅|passed/.test(line)) cls = "text-green-400";
+      else if (/^Worker:|^Model:|^Started:/.test(line)) cls = "text-cyan-400";
+      else if (/RETRY|GATE FAILED|TIMED OUT/.test(line)) cls = "text-yellow-400";
+      else if (/^\s*\d+\s+(passing|failing)/.test(line)) cls = line.includes("failing") ? "text-red-400" : "text-green-400";
+      return `<div class="${cls}">${escapeHtml(line) || "&nbsp;"}</div>`;
+    }).join("");
+
+    if (isCollapsed) {
+      return `<div class="mt-1">
+        <div class="${headerCls} cursor-pointer select-none" onclick="document.getElementById('${id}').classList.toggle('hidden')">
+          ▶ ${escapeHtml(sec.title)} <span class="text-gray-600 font-normal">(${lineCount} lines — click to expand)</span>
+        </div>
+        <div id="${id}" class="hidden pl-2 border-l border-gray-700 ml-1">${formatted}</div>
+      </div>`;
+    }
+
+    return `<div class="mt-1">
+      <div class="${headerCls}">${escapeHtml(sec.title)} <span class="text-gray-600 font-normal">${lineCount > 0 ? `(${lineCount} lines)` : ""}</span></div>
+      <div class="pl-2 border-l border-gray-700 ml-1">${formatted}</div>
+    </div>`;
+  }).join("");
+}
+
+function escapeHtml(str) {
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function clearSliceLog() {
+  activeSliceLogId = null;
+  if (sliceLogPollInterval) clearInterval(sliceLogPollInterval);
+  const label = document.getElementById("slice-log-label");
+  const logEl = document.getElementById("slice-log");
+  const searchEl = document.getElementById("slice-log-search");
+  if (label) label.textContent = "";
+  if (searchEl) searchEl.value = "";
+  if (logEl) logEl.innerHTML = '<p class="py-4 text-center text-gray-500">Click a slice card to view its log</p>';
+  document.querySelectorAll(".slice-card").forEach((c) => {
+    c.classList.remove("ring-1", "ring-blue-500");
+  });
+}
+
+function filterSliceLog(query) {
+  const logEl = document.getElementById("slice-log");
+  if (!logEl) return;
+  const q = query.toLowerCase().trim();
+  logEl.querySelectorAll("div").forEach((line) => {
+    if (!q) {
+      line.style.display = "";
+      return;
+    }
+    // Always show section headers and containers
+    if (line.id?.startsWith("sec-") || line.querySelector("[id^='sec-']") || line.classList.contains("mt-1")) {
+      line.style.display = "";
+      return;
+    }
+    // Filter leaf lines
+    const text = line.textContent?.toLowerCase() || "";
+    line.style.display = text.includes(q) ? "" : "none";
+  });
 }
 
 function shortName(path) {
@@ -717,7 +1086,11 @@ async function loadCost() {
     // Cost Trend Line 
     if (runs.length > 0) {
       const runCosts = runs.slice().reverse().map((r) => r.cost?.total_cost_usd || 0);
-      const runLabels = runs.slice().reverse().map((r) => r.startTime ? new Date(r.startTime).toLocaleDateString() : "?");
+      const runLabels = runs.slice().reverse().map((r) => {
+        const d = r.startTime ? new Date(r.startTime) : null;
+        const plan = r.plan ? r.plan.split("/").pop().replace(/\.md$/, "").replace(/Phase-/i, "").substring(0, 20) : "?";
+        return d ? `${d.toLocaleDateString()} ${d.toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"})}` : plan;
+      });
       const avg = runCosts.reduce((a, b) => a + b, 0) / runCosts.length;
       const pointColors = runCosts.map((c) => {
         if (c > avg * 3) return "#ef4444";
@@ -1797,6 +2170,7 @@ async function loadConfig() {
 
     // Check API provider availability
     loadApiProviderStatus();
+    loadApiKeys();
     loadOpenBrainStatus();
     loadMemoryPresets();
     loadWorkerStatus();
@@ -1831,6 +2205,84 @@ async function loadApiProviderStatus() {
     }
   } catch {
     el.textContent = "Unable to check";
+  }
+}
+
+// ─── Provider API Keys ────────────────────────────────────────
+const KNOWN_PROVIDER_KEYS = [
+  { key: "XAI_API_KEY", label: "xAI (Grok)", placeholder: "xai-..." },
+  { key: "OPENAI_API_KEY", label: "OpenAI (GPT / DALL-E)", placeholder: "sk-..." },
+  { key: "ANTHROPIC_API_KEY", label: "Anthropic (Claude API)", placeholder: "sk-ant-..." },
+  { key: "OPENCLAW_API_KEY", label: "OpenClaw Analytics", placeholder: "oc-..." },
+];
+
+async function loadApiKeys() {
+  const container = document.getElementById("cfg-api-keys");
+  if (!container) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/secrets`);
+    const data = await res.json();
+    const keys = data.keys || {};
+
+    container.innerHTML = KNOWN_PROVIDER_KEYS.map((pk) => {
+      const info = keys[pk.key];
+      const isSet = info?.set;
+      const source = info?.source === "env" ? " (env var)" : "";
+      const masked = info?.masked || "";
+      const statusIcon = isSet ? '<span class="text-green-400">✓</span>' : '<span class="text-gray-600">○</span>';
+      const statusText = isSet ? `<span class="text-xs text-gray-500">${masked}${source}</span>` : '<span class="text-xs text-gray-600">not set</span>';
+
+      return `
+        <div class="flex items-center gap-2 bg-gray-700/50 rounded px-3 py-1.5">
+          <span class="text-xs w-40 text-gray-300">${statusIcon} ${pk.label}</span>
+          ${statusText}
+          <input type="password" id="secret-${pk.key}" placeholder="${pk.placeholder}" class="flex-1 bg-gray-700 text-white text-xs rounded px-2 py-1 border border-gray-600 focus:border-blue-500 outline-none" autocomplete="off">
+          <button onclick="saveApiKey('${pk.key}')" class="text-xs px-2 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded">Save</button>
+          ${isSet && info?.source !== "env" ? `<button onclick="removeApiKey('${pk.key}')" class="text-xs px-2 py-1 bg-red-900 hover:bg-red-800 text-red-300 rounded">✗</button>` : ""}
+        </div>`;
+    }).join("");
+  } catch (err) {
+    container.innerHTML = `<div class="text-xs text-red-400">Error loading keys: ${err.message}</div>`;
+  }
+}
+
+async function saveApiKey(key) {
+  const input = document.getElementById(`secret-${key}`);
+  if (!input || !input.value.trim()) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/secrets`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key, value: input.value.trim() }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      input.value = "";
+      addNotification(`${key} saved`, "success");
+      loadApiKeys(); // Refresh display
+    } else {
+      addNotification(`Error: ${data.error}`, "error");
+    }
+  } catch (err) {
+    addNotification(`Error saving key: ${err.message}`, "error");
+  }
+}
+
+async function removeApiKey(key) {
+  if (!confirm(`Remove ${key} from .forge/secrets.json?`)) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/secrets`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key, value: "" }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      addNotification(`${key} removed`, "success");
+      loadApiKeys();
+    }
+  } catch (err) {
+    addNotification(`Error: ${err.message}`, "error");
   }
 }
 
@@ -2062,7 +2514,7 @@ function renderDAGView(slices) {
 }
 
 // ─── Tab Badges ───────────────────────────────────────────────
-let tabBadgeState = { runsNew: 0, hasAnomaly: false, skillsActive: 0 };
+let tabBadgeState = { runsNew: 0, hasAnomaly: false, skillsActive: 0, lgHealthAlert: false, lgIncidentsNew: 0, lgCritical: false, lgSecurityAlert: false };
 
 function updateTabBadges() {
   const tabs = document.querySelectorAll(".tab-btn[data-tab]");
@@ -2078,6 +2530,14 @@ function updateTabBadges() {
       badgeText = "!";
     } else if (tab.dataset.tab === "skills" && tabBadgeState.skillsActive > 0) {
       badgeText = tabBadgeState.skillsActive;
+    } else if (tab.dataset.tab === "lg-health" && tabBadgeState.lgHealthAlert) {
+      badgeText = "!";
+    } else if (tab.dataset.tab === "lg-incidents" && tabBadgeState.lgIncidentsNew > 0) {
+      badgeText = tabBadgeState.lgIncidentsNew;
+    } else if (tab.dataset.tab === "lg-security" && tabBadgeState.lgSecurityAlert) {
+      badgeText = "!";
+    } else if (tab.dataset.tab === "lg-triage" && tabBadgeState.lgCritical) {
+      badgeText = "⚠";
     }
 
     if (badgeText !== null) {
@@ -2179,6 +2639,14 @@ fetch(`${API_BASE}/api/status`)
 fetch(`${API_BASE}/api/runs/latest`)
   .then((r) => { if (!r.ok) throw new Error("no runs"); return r.json(); })
   .then((run) => {
+    // Skip REST init if WebSocket history replay has already populated slice state.
+    // WS is the authoritative real-time source; REST is only a fallback.
+    if (state.slices.length > 0) {
+      // Still update metadata if not set
+      if (!state.runMeta) state.runMeta = run;
+      return;
+    }
+
     // Build run metadata
     state.runMeta = run;
     state.slices = [];
@@ -2213,6 +2681,7 @@ fetch(`${API_BASE}/api/runs/latest`)
 
         document.getElementById("run-plan-name").textContent = shortName(run.plan);
         document.getElementById("run-progress-bar").classList.remove("hidden");
+        updateRunBadges(run);
         renderSliceCards();
         updateProgress();
       });
@@ -2251,13 +2720,242 @@ loadPlans();
 // Tab load hooks
 const tabLoadHooks = {
   progress: loadPlans,
+  runs: () => { loadRuns(); tabBadgeState.runsNew = 0; updateTabBadges(); },
   replay: loadReplayRuns,
   extensions: loadExtensions,
   config: loadConfig,
   traces: loadTraces,
-  cost: () => { loadCost(); },
+  cost: () => { loadCost(); tabBadgeState.hasAnomaly = false; updateTabBadges(); },
   skills: loadSkillCatalog,
+  'lg-health': loadLGHealth,
+  'lg-incidents': () => { loadLGIncidents(); tabBadgeState.lgIncidentsNew = 0; updateTabBadges(); },
+  'lg-triage': loadLGTriage,
+  'lg-security': () => { loadLGSecurity(); tabBadgeState.lgSecurityAlert = false; updateTabBadges(); },
+  'lg-env': loadLGEnv,
 };
+
+// ─── Theme Toggle ─────────────────────────────────────────────
+
+// ─── LiveGuard Tab Loaders ─────────────────────────────────────
+async function loadLGHealth() {
+  try {
+    const res = await fetch(`${API_BASE}/api/capabilities`).then(r => r.ok ? r.json() : null).catch(() => null);
+    if (res?.liveguard) {
+      const el = document.getElementById('lg-drift-score');
+      const score = res.liveguard.driftScore ?? null;
+      if (el) el.textContent = score ?? '—';
+      const inc = document.getElementById('lg-open-incidents');
+      if (inc) inc.textContent = res.liveguard.openIncidents ?? '—';
+      const scan = document.getElementById('lg-last-scan');
+      if (scan) scan.textContent = res.liveguard.lastScan ? new Date(res.liveguard.lastScan).toLocaleString() : '—';
+      // Drift gauge
+      const gauge = document.getElementById('lg-drift-gauge');
+      if (gauge && score != null) {
+        gauge.value = score;
+        const color = score >= 80 ? 'text-green-400' : score >= 50 ? 'text-amber-400' : 'text-red-400';
+        if (el) el.className = `text-2xl font-bold ${color}`;
+      }
+    }
+    // Drift history chart
+    const driftData = await fetch(`${API_BASE}/api/liveguard/traces`).then(r => r.ok ? r.json() : []).catch(() => []);
+    const healthCanvas = document.getElementById('lg-health-chart');
+    if (healthCanvas && typeof Chart !== 'undefined') {
+      if (window._lgHealthChart) { window._lgHealthChart.destroy(); window._lgHealthChart = null; }
+      const driftEntries = driftData.filter(e => e.tool === 'forge_drift_report' && e.result?.score != null).slice(-20);
+      if (driftEntries.length > 0) {
+        window._lgHealthChart = new Chart(healthCanvas, {
+          type: 'line',
+          data: {
+            labels: driftEntries.map(e => new Date(e.timestamp || e.ts).toLocaleDateString()),
+            datasets: [{ label: 'Drift Score', data: driftEntries.map(e => e.result.score), borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.1)', fill: true, tension: 0.3 }]
+          },
+          options: { responsive: true, scales: { y: { min: 0, max: 100, ticks: { color: '#9ca3af' }, grid: { color: '#374151' } }, x: { ticks: { color: '#9ca3af' } } }, plugins: { legend: { display: false } } }
+        });
+      } else {
+        const ctx = healthCanvas.getContext('2d');
+        ctx.clearRect(0, 0, healthCanvas.width, healthCanvas.height);
+        document.getElementById('lg-health-trend').innerHTML = '<p class="text-gray-500 text-sm text-center py-8">No drift history yet. Run <code>pforge drift</code> to populate.</p>';
+      }
+    }
+    // Hotspot chart
+    const hotspotCanvas = document.getElementById('lg-hotspot-chart');
+    if (hotspotCanvas && typeof Chart !== 'undefined') {
+      if (window._lgHotspotChart) { window._lgHotspotChart.destroy(); window._lgHotspotChart = null; }
+      const toolCounts = {};
+      for (const e of driftData) { const t = e.tool || 'unknown'; toolCounts[t] = (toolCounts[t] || 0) + 1; }
+      const sorted = Object.entries(toolCounts).sort((a, b) => b[1] - a[1]).slice(0, 8);
+      if (sorted.length > 0) {
+        window._lgHotspotChart = new Chart(hotspotCanvas, {
+          type: 'bar',
+          data: {
+            labels: sorted.map(([k]) => k.replace('forge_', '')),
+            datasets: [{ label: 'Invocations', data: sorted.map(([, v]) => v), backgroundColor: '#f59e0b' }]
+          },
+          options: { responsive: true, indexAxis: 'y', scales: { x: { ticks: { color: '#9ca3af' }, grid: { color: '#374151' } }, y: { ticks: { color: '#9ca3af' } } }, plugins: { legend: { display: false } } }
+        });
+      } else {
+        document.getElementById('lg-hotspot-container').innerHTML = '<p class="text-gray-500 text-sm text-center py-8">No data yet — run <code>pforge drift</code></p>';
+      }
+    }
+  } catch { /* tab remains in placeholder state */ }
+}
+window.loadLGHealth = loadLGHealth;
+
+async function loadLGIncidents() {
+  try {
+    const proposals = await fetch(`${API_BASE}/api/fix/proposals`).then(r => r.ok ? r.json() : []).catch(() => []);
+    renderFixProposals(proposals);
+  } catch { /* tab remains in placeholder state */ }
+}
+window.loadLGIncidents = loadLGIncidents;
+
+async function loadLGTriage() {
+  // Placeholder — loads triage data when triage REST endpoint ships
+  const el = document.getElementById('lg-triage-list');
+  if (el && el.children.length <= 1) {
+    el.innerHTML = '<p class="text-gray-500 text-sm text-center py-8">No triage data yet. Run <code class="bg-gray-700 px-1 rounded">pforge alert-triage</code> to populate.</p>';
+  }
+}
+window.loadLGTriage = loadLGTriage;
+
+async function loadLGSecurity() {
+  const el = document.getElementById('lg-security-results');
+  if (!el) return;
+  try {
+    const res = await fetch('/api/secret-scan');
+    const data = await res.json();
+    if (!data || data.cache === null || !data.scannedAt) {
+      el.innerHTML = '<p class="text-gray-500 text-sm text-center py-8">No scan results. Run <code class="bg-gray-700 px-1 rounded">pforge secret-scan</code> to populate.</p>';
+      return;
+    }
+    let html = `<div class="text-xs text-gray-400 mb-2">Scanned: ${data.scannedAt} | Since: ${data.since} | Files: ${data.scannedFiles} | Threshold: ${data.threshold}</div>`;
+    if (data.clean) {
+      html += '<p class="text-green-400 text-sm py-2">\u2705 Clean — no secrets detected</p>';
+    } else {
+      html += `<p class="text-yellow-400 text-sm mb-2">\u26A0\uFE0F ${data.findings.length} finding(s)</p>`;
+      html += '<div class="space-y-1">';
+      for (const f of data.findings) {
+        const color = f.confidence === 'high' ? 'text-red-400' : f.confidence === 'medium' ? 'text-yellow-400' : 'text-gray-400';
+        html += `<div class="${color} text-xs font-mono">${f.file}:${f.line} [${f.confidence}] entropy=${f.entropyScore} type=${f.type}</div>`;
+      }
+      html += '</div>';
+    }
+    el.innerHTML = html;
+  } catch {
+    el.innerHTML = '<p class="text-gray-500 text-sm text-center py-8">No scan results. Run <code class="bg-gray-700 px-1 rounded">pforge secret-scan</code> to populate.</p>';
+  }
+}
+window.loadLGSecurity = loadLGSecurity;
+
+async function loadLGEnv() {
+  // Placeholder — loads env diff data when env REST endpoint ships
+  const el = document.getElementById('lg-env-diff');
+  if (el && el.children.length <= 1) {
+    el.innerHTML = '<p class="text-gray-500 text-sm text-center py-8">No diff data yet. Run <code class="bg-gray-700 px-1 rounded">pforge env-diff</code> to populate.</p>';
+  }
+}
+window.loadLGEnv = loadLGEnv;
+
+function renderFixProposals(proposals) {
+  const el = document.getElementById('lg-fix-proposals-list');
+  if (!el) return;
+  if (!proposals || !proposals.length) {
+    el.innerHTML = '<p class="text-gray-500 text-sm text-center py-4">No fix proposals yet. Run <code class="bg-gray-700 px-1 rounded">pforge fix-proposal --source regression</code> after a LiveGuard alert.</p>';
+    return;
+  }
+  el.innerHTML = proposals.map(p => `
+    <div class="bg-gray-700/50 rounded-lg p-3 flex items-center justify-between mb-2">
+      <div>
+        <code class="text-amber-400 text-xs">${escHtml(p.incidentId || 'unknown')}</code>
+        <span class="ml-2 text-xs px-1.5 py-0.5 rounded ${p.status === 'applied' ? 'bg-green-900 text-green-300' : p.status === 'needs-human-intervention' ? 'bg-red-900 text-red-300' : 'bg-gray-600 text-gray-300'}">${escHtml(p.status || 'pending')}</span>
+        <p class="text-xs text-gray-500 mt-0.5">${escHtml(p.planFile || '')}</p>
+      </div>
+      <span class="text-xs text-gray-500">${p.generatedAt ? new Date(p.generatedAt).toLocaleDateString() : ''}</span>
+    </div>`).join('');
+}
+
+function escHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+// LiveGuard hub event handlers
+function handleLGDrift(data) {
+  const el = document.getElementById('lg-drift-score');
+  if (el && data.score != null) el.textContent = data.score;
+  // Update drift gauge
+  const gauge = document.getElementById('lg-drift-gauge');
+  if (gauge && data.score != null) {
+    gauge.value = data.score;
+    const color = data.score >= 80 ? 'text-green-400' : data.score >= 50 ? 'text-amber-400' : 'text-red-400';
+    el.className = `text-2xl font-bold ${color}`;
+  }
+  if (data.score != null && data.score < 50) {
+    tabBadgeState.lgHealthAlert = true;
+    updateTabBadges();
+  }
+}
+
+function handleLGIncident(data) {
+  tabBadgeState.lgIncidentsNew++;
+  updateTabBadges();
+  loadLGIncidents();
+}
+
+function handleLGTriage(data) {
+  if (data.severity === 'critical') {
+    tabBadgeState.lgCritical = true;
+    updateTabBadges();
+  }
+  loadLGTriage();
+}
+
+function handleFixProposal(data) {
+  loadLGIncidents();
+  addNotification(`Fix proposal ready: ${data.incidentId || 'new'}`, 'amber');
+}
+
+function handleLGToolCompleted(data) {
+  const tool = data.tool || data.name || '';
+  if (tool.includes('secret') || tool.includes('scan')) {
+    tabBadgeState.lgSecurityAlert = true;
+    updateTabBadges();
+    addNotification(`LiveGuard: ${tool} completed`, 'amber');
+  } else if (tool.includes('drift')) {
+    tabBadgeState.lgHealthAlert = true;
+    updateTabBadges();
+  }
+  // Refresh the active LG tab if one is showing
+  const activeTab = document.querySelector(".tab-btn.tab-active")?.dataset?.tab;
+  if (activeTab && activeTab.startsWith('lg-') && tabLoadHooks[activeTab]) {
+    tabLoadHooks[activeTab]();
+  }
+}
+
+function handleLGSecretScan(data) {
+  tabBadgeState.lgSecurityAlert = true;
+  updateTabBadges();
+  addNotification('LiveGuard: secret scan results available', 'amber');
+  const activeTab = document.querySelector(".tab-btn.tab-active")?.dataset?.tab;
+  if (activeTab === 'lg-security') loadLGSecurity();
+}
+
+// Dashboard quorum shortcut — copies quorum prompt to clipboard
+async function runQuorumFromDashboard(source) {
+  try {
+    const res = await fetch(`${API_BASE}/api/quorum/prompt?source=${encodeURIComponent(source)}&goal=risk-assess`);
+    if (!res.ok) { addNotification('Quorum prompt generation failed', 'red'); return; }
+    const json = await res.json();
+    if (json.prompt) {
+      await navigator.clipboard.writeText(json.prompt);
+      addNotification('Quorum prompt copied to clipboard', 'green');
+    }
+  } catch {
+    addNotification('Quorum prompt generation failed', 'red');
+  }
+}
+window.runQuorumFromDashboard = runQuorumFromDashboard;
 
 // ─── Theme Toggle ─────────────────────────────────────────────
 function toggleTheme() {
@@ -2652,10 +3350,21 @@ function appendEventLog(event) {
   const typeColors = {
     "run-started": "text-blue-400", "run-completed": "text-green-400", "run-aborted": "text-yellow-400",
     "slice-started": "text-cyan-400", "slice-completed": "text-green-300", "slice-failed": "text-red-400",
+    "slice-model-routed": "text-indigo-400",
+    "quorum-dispatch-started": "text-purple-400", "quorum-leg-completed": "text-purple-300", "quorum-review-completed": "text-purple-200",
     "skill-started": "text-purple-400", "skill-completed": "text-purple-300",
   };
   const color = typeColors[event.type] || "text-gray-400";
-  const summary = event.data?.sliceId ? ` slice ${event.data.sliceId}` : event.data?.plan ? ` ${shortName(event.data.plan)}` : event.data?.skillName ? ` /${event.data.skillName}` : "";
+  let summary = event.data?.sliceId ? ` slice ${event.data.sliceId}` : event.data?.plan ? ` ${shortName(event.data.plan)}` : event.data?.skillName ? ` /${event.data.skillName}` : "";
+  if (event.type === "slice-model-routed" && event.data?.model) {
+    summary += ` \u2192 ${event.data.model}`;
+  } else if (event.type === "quorum-dispatch-started" && event.data?.models) {
+    summary += ` [${event.data.models.join(", ")}]`;
+  } else if (event.type === "quorum-leg-completed" && event.data?.model) {
+    summary += ` ${event.data.model} ${event.data.success ? "\u2713" : "\u2717"}`;
+  } else if (event.type === "quorum-review-completed" && (event.data?.winner || event.data?.selectedModel)) {
+    summary += ` winner: ${event.data.winner || event.data.selectedModel}`;
+  }
 
   eventLogEntries.push({ time, type: event.type, summary, color });
   if (eventLogEntries.length > 200) eventLogEntries.shift();

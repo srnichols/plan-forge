@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- verified: v2.21.0 -->
+<!-- verified: v2.29.0 -->
 <html lang="en" class="scroll-smooth">
 <head>
   <meta charset="UTF-8" />
@@ -145,6 +145,32 @@ pforge run-plan docs/plans/Phase-7.md --dry-run</code></pre>
       <h2 id="openbrain">OpenBrain Memory</h2>
       <p>The OpenBrain integration bridges the 3-session model with long-term context. Prior decisions, patterns, and postmortems are automatically searched and injected at the start of each session. After every run, lessons are captured for future phases.</p>
       <p>Install via extension: <code>pforge ext add plan-forge-memory</code></p>
+
+      <!-- ─── LiveGuard Hooks ─── -->
+      <h2 id="liveguard-hooks">LiveGuard Lifecycle Hooks <span class="text-sm font-normal text-slate-500">(v2.29)</span></h2>
+      <p>Three hooks fire automatically during agent sessions to enforce operational safety:</p>
+
+      <table>
+        <thead><tr><th>Hook</th><th>Trigger</th><th>Behavior</th><th>Blocking</th></tr></thead>
+        <tbody>
+          <tr><td><strong>PreDeploy</strong></td><td>Before deploy-related file writes or commands</td><td>Runs <code>forge_secret_scan</code> + <code>forge_env_diff</code> — blocks on findings</td><td>Yes</td></tr>
+          <tr><td><strong>PostSlice</strong></td><td>After every slice commit</td><td>Runs <code>forge_drift_report</code> — warns on drift regression</td><td>No (advisory)</td></tr>
+          <tr><td><strong>PreAgentHandoff</strong></td><td>At session start when resuming work</td><td>Injects LiveGuard context into agent prompt</td><td>No</td></tr>
+        </tbody>
+      </table>
+
+      <p>Configure in <code>.forge.json</code>:</p>
+      <div class="cmd-block">
+        <div class="cmd-block-header"><span>.forge.json</span></div>
+        <pre><code>{
+  "hooks": {
+    "preDeploy": { "blockOnSecrets": true, "warnOnEnvGaps": true, "scanSince": "HEAD~1" },
+    "postSlice": { "silentDeltaThreshold": 5, "warnDeltaThreshold": 10, "scoreFloor": 70 },
+    "preAgentHandoff": { "injectContext": true, "cacheMaxAgeMinutes": 30, "minAlertSeverity": "medium" }
+  }
+}</code></pre>
+      </div>
+      <p>See <a href="what-is-liveguard.html">Chapter 15 — What Is LiveGuard?</a> for the full operational intelligence overview.</p>
 
       <p class="text-sm text-slate-500 mt-8">📄 Full reference: <a href="https://github.com/srnichols/plan-forge/blob/master/docs/capabilities.md" rel="noopener">capabilities.md</a>, <a href="https://github.com/srnichols/plan-forge/blob/master/docs/CLI-GUIDE.md" rel="noopener">CLI-GUIDE.md → run-plan</a></p>
       <div id="chapter-prev-next" class="chapter-nav"></div>

@@ -797,6 +797,101 @@ Show all available commands.
 
 ---
 
+## LiveGuard Commands (v2.27+)
+
+Operational intelligence commands for post-coding monitoring. Requires MCP server running (`node pforge-mcp/server.mjs`).
+
+### `pforge drift`
+
+Score the codebase against architecture guardrail rules. Tracks drift over time in `.forge/drift-history.json`.
+
+```powershell
+.\pforge.ps1 drift
+```
+
+### `pforge incident <description>`
+
+Capture an incident — record description, severity, affected files, and optional `resolvedAt` for MTTR.
+
+```powershell
+.\pforge.ps1 incident "API timeout under load" --severity high --files "src/api/handler.ts"
+```
+
+### `pforge triage`
+
+Rank open alerts by priority — combines severity weight × recency factor.
+
+```powershell
+.\pforge.ps1 triage
+.\pforge.ps1 triage --min-severity high --max 5
+```
+
+### `pforge deploy-log`
+
+Log a deployment with version, environment, and status.
+
+```powershell
+.\pforge.ps1 deploy-log --version v2.27.0 --env production --status success
+```
+
+### `pforge regression-guard`
+
+Run validation gates from plans — extracts `bash` code blocks and executes them with allowlist enforcement.
+
+```powershell
+.\pforge.ps1 regression-guard --plan docs/plans/Phase-LiveGuard-v2.27.0-PLAN.md
+```
+
+### `pforge runbook`
+
+Auto-generate an operational runbook from a plan file and incident history.
+
+```powershell
+.\pforge.ps1 runbook --plan docs/plans/Phase-LiveGuard-v2.27.0-PLAN.md
+```
+
+### `pforge hotspot`
+
+Identify high-churn files via git log analysis. Results cached for 24h.
+
+```powershell
+.\pforge.ps1 hotspot --top 15 --since "3 months ago"
+```
+
+### `pforge dep-watch`
+
+Scan dependencies for vulnerabilities. Diffs against previous snapshot.
+
+```powershell
+.\pforge.ps1 dep-watch
+```
+
+### `pforge secret-scan`
+
+Scan recent commits for potential secrets using entropy analysis.
+
+```powershell
+.\pforge.ps1 secret-scan --since HEAD~3
+```
+
+### `pforge env-diff`
+
+Compare environment variable keys across `.env` files. Reports gaps.
+
+```powershell
+.\pforge.ps1 env-diff --baseline .env --files .env.staging,.env.production
+```
+
+### `pforge health-trend`
+
+Aggregated health score from drift, cost, incidents, and model performance over time.
+
+```powershell
+.\pforge.ps1 health-trend --days 30
+```
+
+---
+
 ## CLI vs Manual Workflow
 
 | Task | CLI | Manual |

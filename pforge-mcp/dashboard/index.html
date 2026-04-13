@@ -52,27 +52,43 @@
       <span id="hub-clients" class="text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-400 hidden" title="Connected clients">0 clients</span>
     </div>
     <div class="flex items-center gap-4 text-sm text-gray-400">
+      <a href="/ui" target="_blank" class="hover:text-white transition-colors">Plan Browser →</a>
       <span id="run-status">Idle</span>
       <span id="ws-port"></span>
       <button id="theme-toggle" onclick="toggleTheme()" title="Toggle theme" class="hover:text-white transition">🌙</button>
     </div>
   </header>
 
-  <!-- Tabs -->
-  <nav class="bg-gray-800 border-b border-gray-700 flex gap-1 px-4 text-sm overflow-x-auto">
-    <button class="tab-btn tab-active px-4 py-2 hover:text-blue-400 whitespace-nowrap" data-tab="progress">Progress</button>
-    <button class="tab-btn px-4 py-2 hover:text-blue-400 text-gray-400 whitespace-nowrap" data-tab="runs">Runs</button>
-    <button class="tab-btn px-4 py-2 hover:text-blue-400 text-gray-400 whitespace-nowrap" data-tab="cost">Cost</button>
-    <button class="tab-btn px-4 py-2 hover:text-blue-400 text-gray-400 whitespace-nowrap" data-tab="actions">Actions</button>
-    <button class="tab-btn px-4 py-2 hover:text-blue-400 text-gray-400 whitespace-nowrap" data-tab="replay">Replay</button>
-    <button class="tab-btn px-4 py-2 hover:text-blue-400 text-gray-400 whitespace-nowrap" data-tab="extensions">Extensions</button>
-    <button class="tab-btn px-4 py-2 hover:text-blue-400 text-gray-400 whitespace-nowrap" data-tab="config">Config</button>
-    <button class="tab-btn px-4 py-2 hover:text-blue-400 text-gray-400 whitespace-nowrap" data-tab="traces">Traces</button>
-    <button class="tab-btn px-4 py-2 hover:text-blue-400 text-gray-400 whitespace-nowrap" data-tab="skills">Skills</button>
-    <!-- Notification bell -->
-    <button id="notif-bell" class="ml-auto px-3 py-2 relative hover:text-yellow-400 text-gray-400" onclick="toggleNotifications()">
-      🔔<span id="notif-count" class="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center hidden">0</span>
-    </button>
+  <!-- Tabs — Two-level: Group tabs + Sub tabs -->
+  <nav class="bg-gray-800 border-b border-gray-700 px-4 text-sm">
+    <!-- Group tabs -->
+    <div class="flex gap-1 items-center">
+      <button class="group-tab group-active px-4 py-2 font-semibold text-blue-400 border-b-2 border-blue-400 whitespace-nowrap" data-group="forge" onclick="switchGroup('forge')">🔨 Forge</button>
+      <button class="group-tab px-4 py-2 font-semibold text-gray-500 hover:text-amber-400 border-b-2 border-transparent whitespace-nowrap" data-group="liveguard" onclick="switchGroup('liveguard')">🛡️ LiveGuard</button>
+      <button id="notif-bell" class="ml-auto px-3 py-2 relative hover:text-yellow-400 text-gray-400" onclick="toggleNotifications()">
+        🔔<span id="notif-count" class="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center hidden">0</span>
+      </button>
+    </div>
+    <!-- Sub tabs: Forge -->
+    <div id="subtabs-forge" class="flex gap-1 pt-1 pb-0.5 overflow-x-auto">
+      <button class="tab-btn tab-active px-3 py-1.5 rounded-t hover:text-blue-400 whitespace-nowrap text-xs" data-tab="progress">Progress</button>
+      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="runs">Runs</button>
+      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="cost">Cost</button>
+      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="actions">Actions</button>
+      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="replay">Replay</button>
+      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="extensions">Extensions</button>
+      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="config">Config</button>
+      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="traces">Traces</button>
+      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="skills">Skills</button>
+    </div>
+    <!-- Sub tabs: LiveGuard -->
+    <div id="subtabs-liveguard" class="hidden flex gap-1 pt-1 pb-0.5 overflow-x-auto">
+      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-amber-400 text-gray-400 whitespace-nowrap text-xs" data-tab="lg-health">Health</button>
+      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-amber-400 text-gray-400 whitespace-nowrap text-xs" data-tab="lg-incidents">Incidents</button>
+      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-amber-400 text-gray-400 whitespace-nowrap text-xs" data-tab="lg-triage">Triage</button>
+      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-amber-400 text-gray-400 whitespace-nowrap text-xs" data-tab="lg-security">Security</button>
+      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-amber-400 text-gray-400 whitespace-nowrap text-xs" data-tab="lg-env">Env</button>
+    </div>
   </nav>
 
   <!-- Notification dropdown -->
@@ -94,7 +110,12 @@
       <!-- Run summary bar -->
       <div id="run-summary" class="bg-gray-800 rounded-lg p-4 mb-4 flex items-center justify-between">
         <div>
-          <h2 id="run-plan-name" class="text-lg font-semibold">No active run</h2>
+          <div class="flex items-center gap-2 flex-wrap">
+            <h2 id="run-plan-name" class="text-lg font-semibold">No active run</h2>
+            <span id="run-mode-badge" class="hidden text-xs px-2 py-0.5 rounded-full"></span>
+            <span id="run-model-badge" class="hidden text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-300"></span>
+            <span id="run-exec-mode-badge" class="hidden text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-400"></span>
+          </div>
           <p id="run-progress-text" class="text-sm text-gray-400">Start a run with <code class="bg-gray-700 px-1 rounded">pforge run-plan</code></p>
         </div>
         <div id="run-progress-bar" class="w-48 h-2 bg-gray-700 rounded-full overflow-hidden hidden">
@@ -119,13 +140,32 @@
         <div class="text-gray-500 text-center py-12">Waiting for run events...</div>
       </div>
 
-      <!-- Event History  -->
-      <details class="bg-gray-800 rounded-lg mt-4">
+      <!-- Event History — Split Panel -->
+      <details class="bg-gray-800 rounded-lg mt-4" open>
         <summary class="px-4 py-3 cursor-pointer hover:bg-gray-700/50 flex items-center gap-2 text-sm font-semibold select-none">
           <span>📜</span> Event Log
           <span id="event-log-count" class="text-xs text-gray-500 ml-1">(0)</span>
         </summary>
-        <div id="event-log" class="px-4 pb-3 max-h-48 overflow-y-auto font-mono text-xs space-y-0.5"></div>
+        <div class="flex gap-0 border-t border-gray-700">
+          <!-- Left: Plan lifecycle events -->
+          <div class="flex-1 border-r border-gray-700">
+            <div class="px-3 py-1.5 text-xs font-semibold text-gray-500 bg-gray-800/80 border-b border-gray-700">Run Events</div>
+            <div id="event-log" class="px-3 pb-2 max-h-52 overflow-y-auto font-mono text-xs space-y-0.5"></div>
+          </div>
+          <!-- Right: Active slice log -->
+          <div class="flex-1">
+            <div class="px-3 py-1.5 text-xs font-semibold text-gray-500 bg-gray-800/80 border-b border-gray-700 flex items-center justify-between">
+              <span>Slice Log <span id="slice-log-label" class="text-blue-400"></span></span>
+              <div class="flex items-center gap-2">
+                <input id="slice-log-search" type="text" placeholder="Filter..." class="bg-gray-700 text-white text-xs rounded px-2 py-0.5 w-28 focus:w-40 transition-all focus:outline-none focus:ring-1 focus:ring-blue-500" oninput="filterSliceLog(this.value)">
+                <button onclick="clearSliceLog()" class="text-gray-600 hover:text-gray-400 text-xs">Clear</button>
+              </div>
+            </div>
+            <div id="slice-log" class="px-3 pb-2 max-h-52 overflow-y-auto font-mono text-xs space-y-0.5 text-gray-500">
+              <p class="py-4 text-center">Click a slice card to view its log</p>
+            </div>
+          </div>
+        </div>
       </details>
     </section>
 
@@ -471,8 +511,12 @@
             </div>
           </details>
           <div>
-            <label class="block text-sm text-gray-400 mb-1">API Providers</label>
-            <div id="cfg-api-providers" class="text-sm text-gray-300 bg-gray-700 rounded px-3 py-2">Checking...</div>
+            <label class="block text-sm text-gray-400 mb-1">API Provider Keys</label>
+            <p class="text-xs text-gray-600 mb-2">Stored in <code class="text-gray-500">.forge/secrets.json</code> (gitignored). Environment variables take precedence.</p>
+            <div id="cfg-api-keys" class="space-y-2">
+              <div class="text-xs text-gray-500">Loading...</div>
+            </div>
+            <div id="cfg-api-providers" class="text-sm text-gray-300 mt-2"></div>
           </div>
           <div>
             <label class="block text-sm text-gray-400 mb-1">OpenBrain Memory</label>
@@ -564,6 +608,140 @@
       </div>
       <div id="skill-timeline" class="space-y-2">
         <div class="text-gray-500 text-center py-8">No skill executions yet. Invoke a skill via <code>/skill-name</code> or <code>forge_run_skill</code>.</div>
+      </div>
+    </section>
+
+    <!-- LiveGuard Health Tab -->
+    <section id="tab-lg-health" class="tab-content hidden">
+      <div class="mb-4 flex items-center justify-between">
+        <h2 class="text-lg font-semibold text-amber-400">🛡️ LiveGuard · Health</h2>
+        <div class="flex gap-2 items-center">
+          <a href="liveguard-dashboard.html" target="_blank" class="text-xs text-amber-600/60 hover:text-amber-400">Docs ↗</a>
+          <button onclick="loadLGHealth()" class="text-xs px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded">Refresh</button>
+        </div>
+      </div>
+      <div class="grid gap-4 grid-cols-1 lg:grid-cols-2 mb-4">
+        <div class="bg-gray-800 rounded-lg p-4">
+          <p class="text-sm text-gray-400 mb-2">Drift Score</p>
+          <div class="flex items-center gap-4">
+            <p id="lg-drift-score" class="text-2xl font-bold text-amber-400">—</p>
+            <progress id="lg-drift-gauge" max="100" value="0" class="flex-1 h-3 rounded"></progress>
+          </div>
+          <p class="text-xs text-gray-500 mt-1">100 = full alignment</p>
+        </div>
+        <div class="grid gap-4 grid-cols-2">
+          <div class="bg-gray-800 rounded-lg p-4">
+            <p class="text-sm text-gray-400">Open Incidents</p>
+            <p id="lg-open-incidents" class="text-2xl font-bold">—</p>
+          </div>
+          <div class="bg-gray-800 rounded-lg p-4">
+            <p class="text-sm text-gray-400">Last Scan</p>
+            <p id="lg-last-scan" class="text-sm text-gray-300 mt-1">—</p>
+          </div>
+        </div>
+      </div>
+      <div class="grid gap-4 grid-cols-1 lg:grid-cols-2">
+        <div class="bg-gray-800 rounded-lg p-4">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm text-gray-400">Drift History</h3>
+            <button onclick="runQuorumFromDashboard('health')" class="text-xs px-2 py-1 bg-amber-900/40 hover:bg-amber-900/70 text-amber-300 rounded">Run Quorum Analysis →</button>
+          </div>
+          <div id="lg-health-trend"><canvas id="lg-health-chart" height="180"></canvas></div>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-4">
+          <h3 class="text-sm text-gray-400 mb-2">Hotspot Analysis</h3>
+          <div id="lg-hotspot-container"><canvas id="lg-hotspot-chart" height="180"></canvas></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- LiveGuard Incidents Tab -->
+    <section id="tab-lg-incidents" class="tab-content hidden">
+      <div class="mb-4 flex items-center justify-between">
+        <h2 class="text-lg font-semibold text-amber-400">🛡️ LiveGuard · Incidents</h2>
+        <div class="flex gap-2 items-center">
+          <a href="liveguard-dashboard.html" target="_blank" class="text-xs text-amber-600/60 hover:text-amber-400">Docs ↗</a>
+          <button onclick="loadLGIncidents()" class="text-xs px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded">Refresh</button>
+        </div>
+      </div>
+      <!-- Fix Proposals Feed -->
+      <div class="bg-gray-800 rounded-lg p-4 mb-4">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-sm font-semibold text-amber-300">🔧 Fix Proposals</h3>
+          <span class="text-xs text-gray-500">from <code>.forge/fix-proposals.json</code></span>
+        </div>
+        <div id="lg-fix-proposals-list">
+          <p class="text-gray-500 text-sm text-center py-4">No fix proposals yet. Run <code class="bg-gray-700 px-1 rounded">pforge fix-proposal --source regression</code> after a LiveGuard alert.</p>
+        </div>
+      </div>
+      <!-- Incident List -->
+      <div class="bg-gray-800 rounded-lg p-4">
+        <h3 class="text-sm font-semibold text-white mb-3">Open Incidents</h3>
+        <div id="lg-incidents-list">
+          <p class="text-gray-500 text-sm text-center py-8">No open incidents. Run <code class="bg-gray-700 px-1 rounded">pforge incident list</code> to populate.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- LiveGuard Triage Tab -->
+    <section id="tab-lg-triage" class="tab-content hidden">
+      <div class="mb-4 flex items-center justify-between">
+        <h2 class="text-lg font-semibold text-amber-400">🛡️ LiveGuard · Alert Triage</h2>
+        <div class="flex gap-2 items-center">
+          <a href="liveguard-dashboard.html" target="_blank" class="text-xs text-amber-600/60 hover:text-amber-400">Docs ↗</a>
+          <button onclick="runQuorumFromDashboard('triage')" class="text-xs px-2 py-1 bg-amber-900/40 hover:bg-amber-900/70 text-amber-300 rounded">Run Quorum Analysis →</button>
+          <button onclick="loadLGTriage()" class="text-xs px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded">Refresh</button>
+        </div>
+      </div>
+      <div class="grid gap-4 grid-cols-1 lg:grid-cols-2">
+        <div id="lg-triage-list" class="space-y-2">
+          <p class="text-gray-500 text-sm text-center py-8">No triage data yet. Run <code class="bg-gray-700 px-1 rounded">pforge alert-triage</code> to populate.</p>
+        </div>
+        <div id="lg-triage-summary" class="space-y-2">
+          <p class="text-gray-500 text-sm text-center py-8">Triage summary will appear after data loads.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- LiveGuard Security Tab -->
+    <section id="tab-lg-security" class="tab-content hidden">
+      <div class="mb-4 flex items-center justify-between">
+        <h2 class="text-lg font-semibold text-amber-400">🛡️ LiveGuard · Security</h2>
+        <div class="flex gap-2 items-center">
+          <a href="liveguard-dashboard.html" target="_blank" class="text-xs text-amber-600/60 hover:text-amber-400">Docs ↗</a>
+          <button onclick="loadLGSecurity()" class="text-xs px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded">Refresh</button>
+        </div>
+      </div>
+      <div class="grid gap-4 grid-cols-1 lg:grid-cols-2">
+        <div class="bg-gray-800 rounded-lg p-4">
+          <h3 class="text-sm font-semibold text-white mb-3">Secret Scan Results</h3>
+          <div id="lg-security-results">
+            <p class="text-gray-500 text-sm text-center py-8">No scan results. Run <code class="bg-gray-700 px-1 rounded">pforge secret-scan</code> to populate.</p>
+          </div>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-4">
+          <h3 class="text-sm font-semibold text-white mb-3">Security Overview</h3>
+          <div id="lg-security-overview">
+            <p class="text-gray-500 text-sm text-center py-8">No data yet — run <code class="bg-gray-700 px-1 rounded">pforge secret-scan</code></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- LiveGuard Env Tab -->
+    <section id="tab-lg-env" class="tab-content hidden">
+      <div class="mb-4 flex items-center justify-between">
+        <h2 class="text-lg font-semibold text-amber-400">🛡️ LiveGuard · Env Diff</h2>
+        <div class="flex gap-2 items-center">
+          <a href="liveguard-dashboard.html" target="_blank" class="text-xs text-amber-600/60 hover:text-amber-400">Docs ↗</a>
+          <button onclick="loadLGEnv()" class="text-xs px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded">Refresh</button>
+        </div>
+      </div>
+      <div class="bg-gray-800 rounded-lg p-4">
+        <p class="text-sm text-gray-400 mb-3">Keys only — values are never displayed.</p>
+        <div id="lg-env-diff">
+          <p class="text-gray-500 text-sm text-center py-8">No diff data yet. Run <code class="bg-gray-700 px-1 rounded">pforge env-diff</code> to populate.</p>
+        </div>
       </div>
     </section>
   </main>

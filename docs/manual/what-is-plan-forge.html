@@ -55,6 +55,14 @@
         <p>The fix is spec-driven development: specify what you want <em>before</em> the agent writes a line of code, lock the scope so it can't drift, checkpoint at every boundary, and audit with a fresh session that never saw the original work.</p>
         <p><em>Vibe coding gets you a prototype. Plan Forge gets you a product.</em></p>
 
+        <div class="callout callout-info">
+          <strong>💡 Cost Model</strong><br>
+          The core pipeline (prompts, instructions, agents) is free — it works with your existing Copilot subscription.
+          Automated execution (<code>pforge run-plan</code>) and quorum mode use your IDE's AI model, consuming premium requests.
+          Direct API providers (xAI Grok, OpenAI) require API keys and are billed per-token.
+          The Dashboard's Cost tab tracks every dollar.
+        </div>
+
         <!-- ─── What Happens Without Guardrails ─── -->
         <h2 id="without-guardrails">What Happens Without Guardrails</h2>
 
@@ -154,6 +162,7 @@
           <li><strong>Act I — Learn</strong> (Chapters 1–3): What Plan Forge is, how it works, how to install it. Start here if you're new.</li>
           <li><strong>Act II — Build</strong> (Chapters 4–6): Hands-on. Build a feature with the pipeline, learn to write plans, tour the dashboard. Start here if you've already installed and want to use it.</li>
           <li><strong>Act III — Master</strong> (Chapters 7–14): Reference and advanced topics. CLI commands, customization, MCP tools, multi-agent setup, troubleshooting. Start here if you're looking up a specific feature.</li>
+          <li><strong>Act IV — Guard</strong> (Chapters 15–17): Post-coding operational intelligence with LiveGuard — drift detection, incident tracking, secret scanning, and health trending.</li>
         </ul>
 
         <div class="callout callout-tip">

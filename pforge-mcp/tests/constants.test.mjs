@@ -15,6 +15,7 @@ describe("TOOL_METADATA", () => {
     "forge_analyze",
     "forge_new_phase",
     "forge_capabilities",
+    "forge_drift_report",
   ];
 
   it("defines all required tool entries", () => {

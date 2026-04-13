@@ -58,6 +58,17 @@ COMMANDS:
   analyze <plan>    Cross-artifact analysis — requirement traceability, test coverage, scope compliance
   run-plan <plan>   Execute a hardened plan — spawn CLI workers, validate at every boundary, track tokens
   org-rules export  Export org custom instructions from .github/instructions/ for GitHub org settings
+  drift             Score codebase against architecture guardrail rules — track drift over time
+  incident <desc>   Capture an incident — record description, severity, affected files, and optional resolvedAt for MTTR
+  deploy-log <ver>  Record a deployment — log version, deployer, optional notes, and optional slice reference
+  triage            Triage open alerts — rank incidents and drift violations by priority
+  regression-guard  Run validation gates from plan files — guard against regressions when files change
+  runbook <plan>    Generate an operational runbook from a hardened plan file
+  hotspot           Identify git churn hotspots — most frequently changed files
+  secret-scan       Scan recent commits for leaked secrets using Shannon entropy analysis
+  env-diff          Compare environment variable keys across .env files — detect missing keys
+  health-trend      Health trend analysis — drift, cost, incidents, model performance over time
+  quorum-analyze    Assemble a quorum analysis prompt from LiveGuard data for multi-model dispatch
   smith             Inspect your forge — environment, VS Code config, setup health, and common problems
   tour              Guided walkthrough of your installed Plan Forge files
   help              Show this help message
@@ -1593,6 +1604,130 @@ cmd_analyze() {
     fi
 }
 
+# ─── Command: drift ────────────────────────────────────────────────────
+cmd_drift() {
+    local threshold=70
+    for arg in "$@"; do
+        case "$arg" in
+            --threshold=*) threshold="${arg#*=}" ;;
+            --threshold)   shift; threshold="$1" ;;
+            [0-9]*)        threshold="$arg" ;;
+        esac
+    done
+
+    echo ""
+    echo "╔══════════════════════════════════════════════════════════════╗"
+    echo "║       Plan Forge — Drift Report                              ║"
+    echo "╚══════════════════════════════════════════════════════════════╝"
+    echo ""
+    echo "Scanning source files for architecture guardrail violations..."
+    echo "Threshold: $threshold/100"
+    echo ""
+
+    local files_scanned=0
+    local violation_count=0
+    local violations_json="["
+    local first_violation=true
+    local penalty_per_violation=2
+
+    # Scan source files for guardrail violations
+    while IFS= read -r -d '' file; do
+        files_scanned=$((files_scanned + 1))
+        local rel="${file#$REPO_ROOT/}"
+        local content
+        content=$(cat "$file" 2>/dev/null) || continue
+
+        check_rule() {
+            local rule_id="$1" pattern="$2" severity="$3" label="$4"
+            local line_num=1 found=false
+            while IFS= read -r line; do
+                if echo "$line" | grep -qE "$pattern" 2>/dev/null; then
+                    violation_count=$((violation_count + 1))
+                    if [ "$first_violation" = "true" ]; then
+                        first_violation=false
+                    else
+                        violations_json="$violations_json,"
+                    fi
+                    local escaped_rel escaped_label
+                    escaped_rel=$(printf '%s' "$rel" | sed 's/\\/\\\\/g; s/"/\\"/g')
+                    escaped_label=$(printf '%s' "$label" | sed 's/"/\\"/g')
+                    violations_json="$violations_json{\"file\":\"$escaped_rel\",\"rule\":\"$rule_id\",\"severity\":\"$severity\",\"line\":$line_num,\"description\":\"$escaped_label\"}"
+                fi
+                line_num=$((line_num + 1))
+            done <<< "$content"
+        }
+
+        check_rule "empty-catch"     'catch[[:space:]]*\([^)]*\)[[:space:]]*\{[[:space:]]*\}'   "high"     "Empty catch block"
+        check_rule "any-type"        ':[[:space:]]*any[[:space:];|,>]|<any>|as[[:space:]]+any'  "medium"   "Avoid 'any' type"
+        check_rule "sync-over-async" '\.(Result|Wait\(\))'                                      "high"     "Sync-over-async"
+        check_rule "sql-injection"   'SELECT|INSERT|UPDATE|DELETE.*\$\{'                        "critical" "SQL string interpolation"
+        check_rule "deferred-work"   '\b(TODO|FIXME|HACK)\b'                                    "low"      "Deferred work marker"
+
+    done < <(find "$REPO_ROOT" -type f \( -name "*.js" -o -name "*.mjs" -o -name "*.ts" -o -name "*.tsx" -o -name "*.cs" -o -name "*.py" \) \
+        ! -path '*/node_modules/*' ! -path '*/.git/*' ! -path '*/bin/*' ! -path '*/obj/*' \
+        ! -path '*/dist/*' ! -path '*/.forge/*' ! -path '*/vendor/*' ! -path '*/coverage/*' \
+        -print0 2>/dev/null)
+
+    violations_json="$violations_json]"
+
+    local score=$(( 100 - violation_count * penalty_per_violation ))
+    [ "$score" -lt 0 ] && score=0
+
+    printf "Files scanned:  %d\n" "$files_scanned"
+    if [ "$violation_count" -eq 0 ]; then
+        printf "Violations:     \033[32m%d\033[0m\n" "$violation_count"
+    elif [ "$violation_count" -le 5 ]; then
+        printf "Violations:     \033[33m%d\033[0m\n" "$violation_count"
+    else
+        printf "Violations:     \033[31m%d\033[0m\n" "$violation_count"
+    fi
+    if [ "$score" -ge 80 ]; then
+        printf "Score:          \033[32m%d/100\033[0m\n" "$score"
+    elif [ "$score" -ge "$threshold" ]; then
+        printf "Score:          \033[33m%d/100\033[0m\n" "$score"
+    else
+        printf "Score:          \033[31m%d/100\033[0m\n" "$score"
+    fi
+    echo ""
+
+    # Append to drift-history.json
+    local forge_dir="$REPO_ROOT/.forge"
+    mkdir -p "$forge_dir"
+    local history_file="$forge_dir/drift-history.json"
+    local prev_score=""
+    local history_count=0
+    if [ -f "$history_file" ]; then
+        history_count=$(grep -c '"score"' "$history_file" 2>/dev/null || echo 0)
+        prev_score=$(grep -o '"score":[0-9]*' "$history_file" 2>/dev/null | tail -1 | grep -o '[0-9]*$')
+    fi
+
+    local delta=0 trend="stable"
+    if [ -n "$prev_score" ]; then
+        delta=$((score - prev_score))
+        if [ "$delta" -gt 0 ]; then trend="improving"
+        elif [ "$delta" -lt 0 ]; then trend="degrading"
+        fi
+    fi
+
+    local ts
+    ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date -u +"%Y-%m-%dT%H:%M:%SZ")
+    local record="{\"timestamp\":\"$ts\",\"score\":$score,\"filesScanned\":$files_scanned,\"delta\":$delta,\"trend\":\"$trend\",\"violations\":$violations_json}"
+    echo "$record" >> "$history_file"
+
+    local history_length=$((history_count + 1))
+    printf "Trend:          %s\n" "$trend"
+    printf "History:        %d record(s) in .forge/drift-history.json\n" "$history_length"
+    echo ""
+
+    if [ "$score" -lt "$threshold" ]; then
+        printf "\033[31m⚠  DRIFT ALERT — score %d is below threshold %d\033[0m\n" "$score" "$threshold"
+        exit 1
+    else
+        printf "\033[32m✅ Drift score within threshold (%d >= %d)\033[0m\n" "$score" "$threshold"
+        exit 0
+    fi
+}
+
 # ─── Command: doctor ───────────────────────────────────────────────────
 cmd_doctor() {
     print_manual_steps "smith" \
@@ -2459,6 +2594,646 @@ else{process.stdout.write(out+'\n');}
 "
 }
 
+# ─── Command: incident ─────────────────────────────────────────────────
+cmd_incident() {
+    local description="${1:-}"
+    if [ -z "$description" ]; then
+        echo "ERROR: description is required. Usage: pforge incident \"<description>\" [--severity S] [--files f1,f2] [--resolved-at ISO]" >&2
+        exit 1
+    fi
+    shift
+
+    local severity="medium"
+    local files=""
+    local resolved_at=""
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --severity)    severity="$2";    shift 2 ;;
+            --files)       files="$2";       shift 2 ;;
+            --resolved-at) resolved_at="$2"; shift 2 ;;
+            *) shift ;;
+        esac
+    done
+
+    print_manual_steps "incident" \
+        "Build incident payload (description, severity, files, resolvedAt)" \
+        "POST to /api/incident on the MCP server" \
+        "Append record to .forge/incidents.jsonl" \
+        "Dispatch bridge notification if onCall configured in .forge.json"
+
+    local port=3100
+
+    # Build JSON payload using node to avoid manual escaping
+    local payload
+    payload=$(node -e "
+      const p = {
+        description: process.env.INC_DESC,
+        severity: process.env.INC_SEV || 'medium',
+        files: process.env.INC_FILES ? process.env.INC_FILES.split(',').map(f => f.trim()).filter(Boolean) : [],
+      };
+      if (process.env.INC_RESOLVED) p.resolvedAt = process.env.INC_RESOLVED;
+      console.log(JSON.stringify(p));
+    " INC_DESC="$description" INC_SEV="$severity" INC_FILES="$files" INC_RESOLVED="$resolved_at")
+
+    local response
+    response=$(curl -sf -X POST "http://localhost:${port}/api/incident" \
+        -H "Content-Type: application/json" \
+        -d "$payload") || {
+        echo "ERROR: MCP server not running on port ${port}. Start with: node pforge-mcp/server.mjs" >&2
+        exit 1
+    }
+
+    echo "$response" | node -e "
+      const d = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
+      const sev_colors = { critical: '\x1b[31m', high: '\x1b[33m', medium: '\x1b[33m', low: '\x1b[37m' };
+      const sc = sev_colors[d.severity] || '\x1b[37m';
+      console.log('\n\u{1F6A8} Incident Captured');
+      console.log('   ID:          ' + d.id);
+      console.log('   Description: ' + d.description);
+      console.log('   Severity:    ' + sc + d.severity + '\x1b[0m');
+      console.log('   Captured at: ' + d.capturedAt);
+      if (d.resolvedAt) {
+        const mttrMin = Math.round(d.mttr / 60000 * 10) / 10;
+        console.log('   Resolved at: \x1b[32m' + d.resolvedAt + '\x1b[0m');
+        console.log('   MTTR:        \x1b[32m' + mttrMin + ' minutes\x1b[0m');
+      } else {
+        console.log('   MTTR:        \x1b[90mpending (supply --resolved-at when resolved)\x1b[0m');
+      }
+      if (d.files && d.files.length > 0) console.log('   Files:       ' + d.files.join(', '));
+      console.log('   Saved to:    \x1b[90m.forge/incidents.jsonl\x1b[0m');
+    "
+}
+
+# ─── Command: deploy-log ──────────────────────────────────────────────
+cmd_deploy_log() {
+    local version="${1:-}"
+    if [ -z "$version" ]; then
+        echo "ERROR: version is required. Usage: pforge deploy-log \"<version>\" [--by CI] [--notes \"...\"] [--slice S]" >&2
+        exit 1
+    fi
+    shift
+
+    local by="unknown"
+    local notes=""
+    local slice=""
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --by)    by="$2";    shift 2 ;;
+            --notes) notes="$2"; shift 2 ;;
+            --slice) slice="$2"; shift 2 ;;
+            *) shift ;;
+        esac
+    done
+
+    print_manual_steps "deploy-log" \
+        "Build deploy payload (version, by, notes, slice)" \
+        "POST to /api/deploy-journal on the MCP server" \
+        "Append record to .forge/deploy-journal.jsonl"
+
+    local port=3100
+
+    local payload
+    payload=$(node -e "
+      const p = {
+        version: process.env.DPL_VER,
+        by: process.env.DPL_BY || 'unknown',
+      };
+      if (process.env.DPL_NOTES) p.notes = process.env.DPL_NOTES;
+      if (process.env.DPL_SLICE) p.slice = process.env.DPL_SLICE;
+      console.log(JSON.stringify(p));
+    " DPL_VER="$version" DPL_BY="$by" DPL_NOTES="$notes" DPL_SLICE="$slice")
+
+    local response
+    response=$(curl -sf -X POST "http://localhost:${port}/api/deploy-journal" \
+        -H "Content-Type: application/json" \
+        -d "$payload") || {
+        echo "ERROR: MCP server not running on port ${port}. Start with: node pforge-mcp/server.mjs" >&2
+        exit 1
+    }
+
+    echo "$response" | node -e "
+      const d = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
+      console.log('\n\u{1F680} Deploy Recorded');
+      console.log('   ID:          ' + d.id);
+      console.log('   Version:     ' + d.version);
+      console.log('   By:          ' + d.by);
+      console.log('   Deployed at: ' + d.deployedAt);
+      if (d.notes) console.log('   Notes:       ' + d.notes);
+      if (d.slice) console.log('   Slice:       ' + d.slice);
+      console.log('   Saved to:    \x1b[90m.forge/deploy-journal.jsonl\x1b[0m');
+    "
+}
+
+# ─── Command: triage ───────────────────────────────────────────────────
+cmd_triage() {
+    local min_severity="low"
+    local max_results=20
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --min-severity) min_severity="$2"; shift 2 ;;
+            --max)          max_results="$2";  shift 2 ;;
+            *) shift ;;
+        esac
+    done
+
+    print_manual_steps "triage" \
+        "Read open incidents from .forge/incidents.jsonl" \
+        "Read latest drift violations from .forge/drift-history.json" \
+        "Score each alert: severity_weight * recency_factor" \
+        "Rank by priority (tiebreak: more recent first)"
+
+    local port=3100
+    local response
+    response=$(curl -sf "http://localhost:${port}/api/triage?minSeverity=${min_severity}&max=${max_results}") || {
+        echo "ERROR: MCP server not running on port ${port}. Start with: node pforge-mcp/server.mjs" >&2
+        exit 1
+    }
+
+    echo "$response" | node -e "
+      const d = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
+      console.log('\n\u{1F6A8} Alert Triage (' + d.showing + '/' + d.total + ' alerts, min-severity: ' + d.minSeverity + ')');
+      console.log('');
+      if (d.alerts.length === 0) {
+        console.log('   \x1b[32mNo open alerts found.\x1b[0m');
+      } else {
+        const sev_colors = { critical: '\x1b[31m', high: '\x1b[33m', medium: '\x1b[33m', low: '\x1b[37m' };
+        for (const a of d.alerts) {
+          const sc = sev_colors[a.severity] || '\x1b[37m';
+          const icon = a.source === 'incident' ? '\u{1F6A8}' : '\u{1F4CA}';
+          console.log('   ' + icon + ' ' + sc + '[' + a.severity + '] ' + a.description + '\x1b[0m');
+          console.log('      \x1b[90mPriority: ' + a.priority + '  Source: ' + a.source + '  ID: ' + a.id + '\x1b[0m');
+        }
+      }
+      console.log('');
+      console.log('   \x1b[90mGenerated: ' + d.generatedAt + '\x1b[0m');
+    "
+}
+
+# ─── Command: runbook ──────────────────────────────────────────────────
+cmd_runbook() {
+    local plan=""
+    local no_incidents=false
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --no-incidents) no_incidents=true; shift ;;
+            --*) shift ;;
+            *)
+                if [ -z "$plan" ]; then plan="$1"; fi
+                shift
+                ;;
+        esac
+    done
+
+    if [ -z "$plan" ]; then
+        echo "ERROR: plan file is required. Usage: ./pforge.sh runbook <plan-file> [--no-incidents]" >&2
+        exit 1
+    fi
+
+    print_manual_steps "runbook" \
+        "Parse the plan file (slices, scope contract, gates)" \
+        "Collect recent incidents from .forge/incidents.jsonl (unless --no-incidents)" \
+        "Render a structured Markdown runbook" \
+        "Save to .forge/runbooks/<plan-name>-runbook.md"
+
+    local port=3100
+    local include_incidents="true"
+    if [ "$no_incidents" = "true" ]; then include_incidents="false"; fi
+
+    local payload
+    payload=$(node -e "
+      console.log(JSON.stringify({ plan: process.env.RB_PLAN, includeIncidents: process.env.RB_INC === 'true' }));
+    " RB_PLAN="$plan" RB_INC="$include_incidents")
+
+    local response
+    response=$(curl -sf -X POST "http://localhost:${port}/api/runbook" \
+        -H "Content-Type: application/json" \
+        -d "$payload") || {
+        echo "ERROR: MCP server not running on port ${port}. Start with: node pforge-mcp/server.mjs" >&2
+        exit 1
+    }
+
+    echo "$response" | node -e "
+      const d = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
+      console.log('\n\u{1F4D6} Runbook Generated');
+      console.log('   File:   ' + d.runbook);
+      console.log('   Slices: ' + d.slices);
+      console.log('   At:     \x1b[90m' + d.generatedAt + '\x1b[0m');
+    "
+}
+
+# ─── Command: hotspot ──────────────────────────────────────────────────
+cmd_hotspot() {
+    local top=10
+    local since="6 months ago"
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --top)   top="$2";   shift 2 ;;
+            --since) since="$2"; shift 2 ;;
+            *) shift ;;
+        esac
+    done
+
+    print_manual_steps "hotspot" \
+        "Run git log to collect file change frequency" \
+        "Rank files by number of commits" \
+        "Cache results in .forge/hotspot-cache.json (24h TTL)" \
+        "Return top N hotspot files"
+
+    local port=3100
+    local encoded_since
+    encoded_since=$(node -e "process.stdout.write(encodeURIComponent('${since}'))")
+    local response
+    response=$(curl -sf "http://localhost:${port}/api/hotspots?top=${top}&since=${encoded_since}") || {
+        echo "ERROR: MCP server not running on port ${port}. Start with: node pforge-mcp/server.mjs" >&2
+        exit 1
+    }
+    echo "$response" | node -e "
+      const d = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
+      console.log('\n\u{1F525} Git Churn Hotspots');
+      console.log('   Since:       ' + d.since);
+      console.log('   Total files: ' + d.totalFiles);
+      console.log('   Showing:     ' + d.showing);
+      console.log('');
+      d.hotspots.forEach((h, i) => {
+        const bar = '\u2588'.repeat(Math.min(h.commits, 40));
+        console.log('   ' + (i + 1) + '. \x1b[33m' + h.file + ' (' + h.commits + ' commits)\x1b[0m');
+        console.log('      \x1b[33m' + bar + '\x1b[0m');
+      });
+      console.log('');
+      console.log('   Cached at: \x1b[90m' + d.generatedAt + '\x1b[0m');
+    "
+}
+
+# ─── Command: secret-scan ──────────────────────────────────────────────
+cmd_secret_scan() {
+    local since="HEAD~1"
+    local threshold="4.0"
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --since)     since="$2";     shift 2 ;;
+            --threshold) threshold="$2"; shift 2 ;;
+            *) shift ;;
+        esac
+    done
+
+    print_manual_steps "secret-scan" \
+        "Run git diff to collect changed lines" \
+        "Compute Shannon entropy for token-like strings" \
+        "Flag findings above threshold ($threshold)" \
+        "Cache results in .forge/secret-scan-cache.json"
+
+    local port=3100
+    local response
+    response=$(curl -sf "http://localhost:${port}/api/secret-scan") || {
+        echo "ERROR: MCP server not running on port ${port}. Start with: node pforge-mcp/server.mjs" >&2
+        exit 1
+    }
+    echo "$response" | node -e "
+      const d = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
+      if (d.cache === null) {
+        console.log('\n\u{1F50D} Secret Scan Results');
+        console.log('   No scan results yet. Run forge_secret_scan to populate.');
+      } else {
+        console.log('\n\u{1F50D} Secret Scan Results');
+        console.log('   Since:         ' + d.since);
+        console.log('   Threshold:     ' + d.threshold);
+        console.log('   Scanned files: ' + d.scannedFiles);
+        if (d.clean) {
+          console.log('   Status:        \x1b[32m\u2705 Clean — no secrets detected\x1b[0m');
+        } else {
+          console.log('   Status:        \x1b[33m\u26A0 ' + d.findings.length + ' finding(s)\x1b[0m');
+          d.findings.forEach(f => {
+            console.log('      \x1b[31m' + f.file + ':' + f.line + ' [' + f.confidence + '] entropy=' + f.entropyScore + ' type=' + f.type + '\x1b[0m');
+          });
+        }
+        console.log('');
+        console.log('   Scanned at: \x1b[90m' + d.scannedAt + '\x1b[0m');
+      }
+    "
+}
+
+# ─── Command: env-diff ──────────────────────────────────────────────────
+cmd_env_diff() {
+    local baseline=".env"
+    local files=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --baseline) baseline="$2"; shift 2 ;;
+            --files)    files="$2";    shift 2 ;;
+            *) shift ;;
+        esac
+    done
+
+    print_manual_steps "env-diff" \
+        "Read baseline $baseline and compare key names" \
+        "Detect missing keys across target .env files" \
+        "Cache results in .forge/env-diff-cache.json (key names only, no values)"
+
+    local port=3100
+    local response
+    response=$(curl -sf "http://localhost:${port}/api/env/diff") || {
+        echo "ERROR: MCP server not running on port ${port}. Start with: node pforge-mcp/server.mjs" >&2
+        exit 1
+    }
+    echo "$response" | node -e "
+      const d = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
+      if (d.cache === null) {
+        console.log('\n\u{1F50E} Environment Key Diff');
+        console.log('   No diff data yet. Run forge_env_diff to populate.');
+      } else {
+        console.log('\n\u{1F50E} Environment Key Diff');
+        console.log('   Baseline:       ' + d.baseline);
+        console.log('   Files compared: ' + d.filesCompared);
+        if (d.summary.clean) {
+          console.log('   Status:        \x1b[32m\u2705 Clean — all keys aligned\x1b[0m');
+        } else {
+          console.log('   Status:        \x1b[33m\u26A0 ' + d.summary.totalGaps + ' gap(s) found\x1b[0m');
+          d.pairs.forEach(p => {
+            if ((p.missingInTarget && p.missingInTarget.length) || (p.missingInBaseline && p.missingInBaseline.length)) {
+              console.log('   --- ' + p.file + ' ---');
+              (p.missingInTarget || []).forEach(k => console.log('      \x1b[31mMissing in target: ' + k + '\x1b[0m'));
+              (p.missingInBaseline || []).forEach(k => console.log('      \x1b[33mMissing in baseline: ' + k + '\x1b[0m'));
+            }
+          });
+        }
+        console.log('');
+        console.log('   Scanned at: \x1b[90m' + d.scannedAt + '\x1b[0m');
+      }
+    "
+}
+
+# ─── Command: fix-proposal ──────────────────────────────────────────────
+cmd_fix_proposal() {
+    local source=""
+    local incident_id=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --source)      source="$2";      shift 2 ;;
+            --incident-id) incident_id="$2"; shift 2 ;;
+            *) shift ;;
+        esac
+    done
+
+    print_manual_steps "fix-proposal" \
+        "Read LiveGuard data (drift, incidents, secrets, regression)" \
+        "Generate 1-2 slice fix plan" \
+        "Write to docs/plans/auto/LIVEGUARD-FIX-<id>.md" \
+        "Append record to .forge/fix-proposals.json"
+
+    local port=3100
+    local body="{}"
+    if [ -n "$source" ] && [ -n "$incident_id" ]; then
+        body="{\"source\":\"${source}\",\"incidentId\":\"${incident_id}\"}"
+    elif [ -n "$source" ]; then
+        body="{\"source\":\"${source}\"}"
+    elif [ -n "$incident_id" ]; then
+        body="{\"incidentId\":\"${incident_id}\"}"
+    fi
+    local response
+    response=$(curl -sf -X POST -H "Content-Type: application/json" -d "$body" "http://localhost:${port}/api/fix/propose") || {
+        echo "ERROR: MCP server not running on port ${port}. Start with: node pforge-mcp/server.mjs" >&2
+        exit 1
+    }
+    echo "$response" | node -e "
+      const d = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
+      console.log('\n\u{1F527} Fix Proposal');
+      if (d.error) {
+        console.log('   \x1b[33m' + d.error + '\x1b[0m');
+      } else if (d.alreadyExists) {
+        console.log('   \x1b[90mAlready exists: ' + d.plan + '\x1b[0m');
+      } else {
+        console.log('   Fix ID:   ' + d.fixId);
+        console.log('   Source:   ' + d.source);
+        console.log('   Plan:     \x1b[32m' + d.plan + '\x1b[0m');
+        console.log('   Slices:   ' + (d.sliceCount || 'unknown'));
+      }
+    "
+}
+
+# ─── Command: quorum-analyze ───────────────────────────────────────────
+cmd_quorum_analyze() {
+    local source=""
+    local goal=""
+    local custom_question=""
+    local quorum_size=3
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --source)          source="$2";          shift 2 ;;
+            --goal)            goal="$2";             shift 2 ;;
+            --custom-question) custom_question="$2";  shift 2 ;;
+            --quorum-size)     quorum_size="$2";      shift 2 ;;
+            *) shift ;;
+        esac
+    done
+
+    print_manual_steps "quorum-analyze" \
+        "Read LiveGuard data from .forge/ (source: ${source:-all})" \
+        "Assemble 3-section prompt (context, question, voting instruction)" \
+        "Return structured prompt object for multi-model dispatch"
+
+    local port=3100
+    local body="{\"quorumSize\":${quorum_size}}"
+    if [ -n "$custom_question" ]; then
+        if [ -n "$source" ]; then
+            body="{\"source\":\"${source}\",\"customQuestion\":\"${custom_question}\",\"quorumSize\":${quorum_size}}"
+        else
+            body="{\"customQuestion\":\"${custom_question}\",\"quorumSize\":${quorum_size}}"
+        fi
+    elif [ -n "$goal" ]; then
+        if [ -n "$source" ]; then
+            body="{\"source\":\"${source}\",\"analysisGoal\":\"${goal}\",\"quorumSize\":${quorum_size}}"
+        else
+            body="{\"analysisGoal\":\"${goal}\",\"quorumSize\":${quorum_size}}"
+        fi
+    elif [ -n "$source" ]; then
+        body="{\"source\":\"${source}\",\"quorumSize\":${quorum_size}}"
+    fi
+
+    local response
+    response=$(curl -sf -X POST -H "Content-Type: application/json" -d "$body" "http://localhost:${port}/api/quorum/prompt") || {
+        echo "ERROR: MCP server not running on port ${port}. Start with: node pforge-mcp/server.mjs" >&2
+        exit 1
+    }
+    echo "$response" | node -e "
+      const d = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
+      console.log('\n\u{1F50E} Quorum Analyze');
+      if (d.error) {
+        console.log('   \x1b[33m' + d.error + '\x1b[0m');
+      } else {
+        console.log('   Question:  ' + d.questionUsed);
+        console.log('   Tokens:    ~' + d.promptTokenEstimate);
+        console.log('   Models:    ' + (d.suggestedModels || []).join(', '));
+        console.log('   Data age:  \x1b[90m' + d.dataSnapshotAge + '\x1b[0m');
+        console.log('');
+        console.log('   \x1b[32mPrompt assembled — pipe to quorum runner or copy from JSON output.\x1b[0m');
+      }
+    "
+}
+
+# ─── Command: health-trend ─────────────────────────────────────────────
+cmd_health_trend() {
+    local days=30
+    local metrics=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --days)    days="$2";    shift 2 ;;
+            --metrics) metrics="$2"; shift 2 ;;
+            *) shift ;;
+        esac
+    done
+
+    print_manual_steps "health-trend" \
+        "Read .forge/ operational data (drift, cost, incidents, model performance)" \
+        "Filter to requested time window ($days days)" \
+        "Compute per-metric summaries and overall health score" \
+        "Report trend direction"
+
+    local port=3100
+    local uri="http://localhost:${port}/api/health-trend?days=${days}"
+    if [ -n "$metrics" ]; then
+        uri="${uri}&metrics=${metrics}"
+    fi
+    local response
+    response=$(curl -sf "$uri") || {
+        echo "ERROR: MCP server not running on port ${port}. Start with: node pforge-mcp/server.mjs" >&2
+        exit 1
+    }
+    echo "$response" | node -e "
+      const d = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
+      console.log('\n\u{1F3E5} Health Trend (' + d.days + '-day window)');
+      const sc = d.healthScore;
+      const color = sc >= 80 ? '\x1b[32m' : sc >= 50 ? '\x1b[33m' : '\x1b[31m';
+      console.log('   Health Score: ' + color + (sc != null ? sc + '/100' : 'N/A') + '\x1b[0m');
+      console.log('   Trend:        ' + d.trend);
+      console.log('   Data Points:  ' + d.dataPoints);
+      console.log('');
+      if (d.drift) {
+        console.log('   Drift:');
+        console.log('     Snapshots: ' + d.drift.snapshots + '  Avg: ' + (d.drift.avg != null ? d.drift.avg : 'N/A') + '  Trend: ' + d.drift.trend);
+      }
+      if (d.cost) {
+        console.log('   Cost:');
+        console.log('     Runs: ' + d.cost.runs + '  Total: \$' + d.cost.totalUsd + '  Avg/run: \$' + d.cost.avgPerRun);
+      }
+      if (d.incidents) {
+        console.log('   Incidents:');
+        console.log('     Total: ' + d.incidents.total + '  Open: ' + d.incidents.open + '  Resolved: ' + d.incidents.resolved);
+      }
+      if (d.models) {
+        console.log('   Models:');
+        console.log('     Total slices: ' + d.models.totalSlices);
+      }
+      console.log('');
+      console.log('   Generated: \x1b[90m' + d.generatedAt + '\x1b[0m');
+    "
+}
+
+# ─── Command: drift ────────────────────────────────────────────────────
+cmd_drift() {
+    local threshold=70
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --threshold) threshold="$2"; shift 2 ;;
+            *) shift ;;
+        esac
+    done
+
+    print_manual_steps "drift" \
+        "Scan source files for architecture rule violations" \
+        "Score codebase (100 minus penalties)" \
+        "Compare against .forge/drift-history.json" \
+        "Report trend: improving / stable / degrading"
+
+    local port=3100
+    local response
+    response=$(curl -sf "http://localhost:${port}/api/drift?threshold=${threshold}") || {
+        echo "ERROR: MCP server not running on port ${port}. Start with: node pforge-mcp/server.mjs" >&2
+        exit 1
+    }
+    echo "$response" | node -e "
+      const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
+      const color = d.score >= ${threshold} ? '\x1b[32m' : '\x1b[31m';
+      console.log('\n\u{1F4CA} Drift Score: ' + color + d.score + '/100\x1b[0m');
+      console.log('   Trend: ' + d.trend + ' (\u0394' + d.delta + ')');
+      console.log('   Files scanned: ' + d.filesScanned);
+      console.log('   Violations: ' + d.violations.length);
+      console.log('   History entries: ' + d.historyLength);
+      d.violations.forEach(v => {
+        const vc = v.severity === 'critical' ? '\x1b[31m' : '\x1b[33m';
+        console.log('   \u26A0 ' + vc + '[' + v.severity + '] ' + v.file + ':' + v.line + ' ' + v.rule + '\x1b[0m');
+      });
+    "
+}
+
+# ─── Command: regression-guard ──────────────────────────────────────────
+cmd_regression_guard() {
+    local files=""
+    local plan=""
+    local fail_fast="false"
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --files)     files="$2";     shift 2 ;;
+            --plan)      plan="$2";      shift 2 ;;
+            --fail-fast) fail_fast="true"; shift ;;
+            *) shift ;;
+        esac
+    done
+
+    print_manual_steps "regression-guard" \
+        "Extract validation gate commands from plan files in docs/plans/" \
+        "Check each command against the gate allowlist" \
+        "Execute allowed commands and report passed/failed results" \
+        "Return structured result with per-gate status"
+
+    local port=3100
+
+    local payload
+    payload=$(node -e "
+      const p = { files: process.env.RG_FILES ? process.env.RG_FILES.split(',').map(f => f.trim()).filter(Boolean) : [], failFast: process.env.RG_FAIL_FAST === 'true' };
+      if (process.env.RG_PLAN) p.plan = process.env.RG_PLAN;
+      console.log(JSON.stringify(p));
+    " RG_FILES="$files" RG_FAIL_FAST="$fail_fast" RG_PLAN="$plan")
+
+    local response
+    response=$(curl -sf -X POST "http://localhost:${port}/api/regression-guard" \
+        -H "Content-Type: application/json" \
+        -d "$payload") || {
+        echo "ERROR: MCP server not running on port ${port}. Start with: node pforge-mcp/server.mjs" >&2
+        exit 1
+    }
+
+    echo "$response" | node -e "
+      const d = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
+      const ok = d.success;
+      const icon = ok ? '\u2705' : '\u274C';
+      const color = ok ? '\x1b[32m' : '\x1b[31m';
+      console.log('\n' + icon + ' Regression Guard: ' + color + (ok ? 'PASSED' : 'FAILED') + '\x1b[0m');
+      console.log('   Gates checked: ' + d.gatesChecked);
+      console.log('   \x1b[32mPassed:        ' + d.passed + '\x1b[0m');
+      if (d.failed > 0) console.log('   \x1b[31mFailed:        ' + d.failed + '\x1b[0m');
+      if (d.blocked > 0) console.log('   \x1b[33mBlocked:       ' + d.blocked + '\x1b[0m');
+      if (d.skipped > 0) console.log('   \x1b[90mSkipped:       ' + d.skipped + '\x1b[0m');
+      (d.results || []).forEach(r => {
+        if (r.status === 'failed') {
+          console.log('   \u274C Slice ' + r.sliceNumber + ' [' + r.planFile + ']: ' + r.sliceTitle);
+          if (r.output) console.log('      \x1b[90m' + r.output + '\x1b[0m');
+        } else if (r.status === 'blocked') {
+          console.log('   \u26A0 Slice ' + r.sliceNumber + ' [' + r.planFile + ']: BLOCKED \u2014 ' + r.reason);
+        }
+      });
+    "
+
+    # Exit non-zero if any gates failed
+    echo "$response" | node -e "
+      const d = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
+      process.exit(d.success ? 0 : 1);
+    " || exit 1
+}
+
 # ─── Command: tour ─────────────────────────────────────────────────────
 cmd_tour() {
     echo ""
@@ -2569,6 +3344,18 @@ case "$COMMAND" in
     analyze)      cmd_analyze "$@" ;;
     run-plan)     cmd_run_plan "$@" ;;
     org-rules)    cmd_org_rules "$@" ;;
+    drift)        cmd_drift "$@" ;;
+    incident)     cmd_incident "$@" ;;
+    deploy-log)   cmd_deploy_log "$@" ;;
+    triage)       cmd_triage "$@" ;;
+    regression-guard) cmd_regression_guard "$@" ;;
+    runbook)      cmd_runbook "$@" ;;
+    hotspot)      cmd_hotspot "$@" ;;
+    secret-scan)  cmd_secret_scan "$@" ;;
+    env-diff)     cmd_env_diff "$@" ;;
+    fix-proposal)    cmd_fix_proposal "$@" ;;
+    quorum-analyze)  cmd_quorum_analyze "$@" ;;
+    health-trend)    cmd_health_trend "$@" ;;
     smith)        cmd_smith ;;
     tour)         cmd_tour ;;
     help|--help)  show_help ;;

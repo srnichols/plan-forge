@@ -236,11 +236,340 @@ export const TOOL_METADATA = {
     consumes: [".forge.json", ".vscode/mcp.json"],
     sideEffects: [],
     errors: {},
-    example: { input: {}, output: { tools: 14, workflows: 4, memory: { configured: true } } },
+    example: { input: {}, output: { tools: 28, workflows: 4, memory: { configured: true } } },
+  },
+  forge_diagnose: {
+    intent: ["analyze", "debug", "investigate"],
+    aliases: ["bug-investigate", "multi-model-debug", "root-cause"],
+    cost: "medium",
+    maxConcurrent: 3,
+    addedIn: "2.15.0",
+    prerequisites: ["file exists"],
+    produces: [],
+    consumes: ["src/**", "tests/**"],
+    sideEffects: [],
+    errors: {
+      FILE_NOT_FOUND: { message: "Target file not found", recovery: "Check the file path" },
+    },
+    example: { input: { file: "src/api.ts" }, output: { diagnosis: "Root cause identified", models: 3 } },
+  },
+  forge_skill_status: {
+    intent: ["read", "status", "skills"],
+    aliases: ["skill-events", "recent-skills"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "2.16.0",
+    prerequisites: [],
+    produces: [],
+    consumes: [],
+    sideEffects: [],
+    errors: {},
+    example: { input: {}, output: { events: [] } },
+  },
+  forge_run_skill: {
+    intent: ["execute", "skill", "automate"],
+    aliases: ["invoke-skill", "execute-skill"],
+    cost: "medium",
+    maxConcurrent: 3,
+    addedIn: "2.16.0",
+    prerequisites: ["skill exists"],
+    produces: [],
+    consumes: [".github/skills/*.md"],
+    sideEffects: ["may modify source files depending on skill"],
+    errors: {
+      SKILL_NOT_FOUND: { message: "Skill not found", recovery: "Use forge_skill_status to list available skills" },
+    },
+    example: { input: { skill: "test-sweep" }, output: { status: "completed", steps: 5 } },
+  },
+  forge_org_rules: {
+    intent: ["generate", "export", "org-standards"],
+    aliases: ["org-rules-export", "org-instructions"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "2.15.0",
+    prerequisites: [".forge.json exists"],
+    produces: ["org-rules.instructions.md"],
+    consumes: [".forge.json", ".github/instructions/*.instructions.md"],
+    sideEffects: ["generates org-rules instruction file"],
+    errors: {},
+    example: { input: {}, output: { file: "org-rules.instructions.md", rules: 12 } },
+  },
+  forge_memory_capture: {
+    intent: ["capture", "remember", "persist"],
+    aliases: ["save-thought", "memory-broadcast"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "2.6.0",
+    prerequisites: [],
+    produces: [],
+    consumes: [],
+    sideEffects: ["broadcasts memory-captured hub event"],
+    errors: {},
+    example: { input: { content: "Use JWT for auth", type: "convention" }, output: { event: "memory-captured" } },
+  },
+  forge_generate_image: {
+    intent: ["create", "generate", "image"],
+    aliases: ["image-gen", "generate-artwork", "create-image"],
+    cost: "medium",
+    maxConcurrent: 3,
+    addedIn: "2.17.0",
+    prerequisites: ["XAI_API_KEY or OPENAI_API_KEY set"],
+    produces: ["<outputPath>"],
+    consumes: [],
+    sideEffects: ["creates image file on disk", "calls external API"],
+    errors: {
+      NO_API_KEY: { message: "No image generation API key found", recovery: "Set XAI_API_KEY or OPENAI_API_KEY in env or .forge/secrets.json" },
+      GENERATION_FAILED: { message: "Image generation failed", recovery: "Check the prompt, try a different model, or verify API key" },
+    },
+    example: { input: { prompt: "minimalist logo", outputPath: "assets/logo.webp" }, output: { file: "assets/logo.webp", model: "grok-imagine-image" } },
+  },
+  forge_drift_report: {
+    intent: ["drift-detect", "architecture-audit", "guardrail-score"],
+    aliases: ["drift-check", "drift-score", "arch-drift"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "2.27.0",
+    prerequisites: ["git initialized"],
+    produces: [".forge/drift-history.json"],
+    consumes: [".github/instructions/*.instructions.md", "**/*.{js,ts,cs,py}"],
+    sideEffects: ["appends to .forge/drift-history.json", "may fire drift-alert hub event"],
+    errors: {
+      NO_SOURCE_FILES: { message: "No source files found to analyze", recovery: "Check path argument" },
+      ANALYSIS_FAILED: { message: "Rule analysis failed", recovery: "Check file permissions and path" },
+    },
+    example: { input: { threshold: 70 }, output: { score: 85, violations: [], trend: "stable", delta: 0, historyLength: 1 } },
+  },
+  forge_incident_capture: {
+    intent: ["capture-incident", "record-outage", "track-mttr"],
+    aliases: ["incident-capture", "record-incident", "log-incident"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "2.27.0",
+    prerequisites: [".forge directory exists or will be created"],
+    produces: [".forge/incidents.jsonl"],
+    consumes: [".forge.json"],
+    sideEffects: ["appends to .forge/incidents.jsonl", "may fire incident-captured hub event", "may dispatch bridge notification to onCall target"],
+    errors: {
+      RESOLVED_BEFORE_CAPTURED: { message: "resolvedAt is earlier than capturedAt", recovery: "Check the resolvedAt timestamp — it must be after the incident was captured" },
+      INVALID_SEVERITY: { message: "severity must be low, medium, high, or critical", recovery: "Use one of: low, medium, high, critical" },
+    },
+    example: {
+      input: { description: "API latency spike on /checkout", severity: "high", files: ["src/api/checkout.ts"] },
+      output: { id: "inc-1700000000000", description: "API latency spike on /checkout", severity: "high", capturedAt: "2024-01-01T00:00:00.000Z", resolvedAt: null, mttr: null },
+    },
+  },
+  forge_deploy_journal: {
+    intent: ["record-deploy", "log-deployment", "deploy-tracking"],
+    aliases: ["deploy-journal", "deploy-log", "record-deployment"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "2.27.0",
+    prerequisites: [".forge directory exists or will be created"],
+    produces: [".forge/deploy-journal.jsonl"],
+    consumes: [],
+    sideEffects: ["appends to .forge/deploy-journal.jsonl", "may fire deploy-recorded hub event"],
+    errors: {
+      MISSING_VERSION: { message: "version is required", recovery: "Supply a version string (e.g., 'v2.31.0')" },
+    },
+    example: {
+      input: { version: "v2.31.0", by: "CI", notes: "hotfix for checkout timeout", slice: "S3" },
+      output: { id: "deploy-1700000000000", version: "v2.31.0", by: "CI", notes: "hotfix for checkout timeout", slice: "S3", deployedAt: "2024-01-01T00:00:00.000Z" },
+    },
+  },
+  forge_regression_guard: {
+    intent: ["regression-check", "gate-validation", "ci-guard"],
+    aliases: ["regression-guard", "run-gates", "guard-regressions"],
+    cost: "medium",
+    maxConcurrent: 1,
+    addedIn: "2.29.0",
+    prerequisites: ["docs/plans/ contains at least one *-PLAN.md (or supply plan arg)"],
+    produces: [".forge/telemetry/tool-calls.jsonl"],
+    consumes: ["docs/plans/*.md"],
+    sideEffects: ["executes shell commands from validation gates"],
+    errors: {
+      NO_PLANS_FOUND: { message: "No plan files found in docs/plans/", recovery: "Supply a plan path via the plan argument or create a plan file" },
+      GATE_FAILED: { message: "One or more validation gates failed", recovery: "Review failed gate output and fix the issue, then re-run" },
+    },
+    example: {
+      input: { files: ["src/api.ts", "src/auth.ts"], failFast: false },
+      output: { gatesChecked: 3, passed: 3, failed: 0, blocked: 0, skipped: 0, success: true },
+    },
+  },
+  forge_runbook: {
+    intent: ["generate-runbook", "document-plan", "ops-runbook"],
+    aliases: ["runbook-gen", "plan-runbook", "generate-ops-doc"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "2.30.0",
+    prerequisites: ["plan file exists"],
+    produces: [".forge/runbooks/<plan-name>-runbook.md"],
+    consumes: ["docs/plans/*.md", ".forge/incidents.jsonl"],
+    sideEffects: ["creates .forge/runbooks/ directory", "writes runbook markdown file"],
+    errors: {
+      PLAN_NOT_FOUND: { message: "Plan file not found", recovery: "Check the plan path argument" },
+    },
+    example: {
+      input: { plan: "docs/plans/Phase-1-AUTH-PLAN.md", includeIncidents: true },
+      output: { runbook: ".forge/runbooks/phase-1-auth-plan-runbook.md", slices: 4, generatedAt: "2024-01-01T00:00:00.000Z" },
+    },
+  },
+  forge_hotspot: {
+    intent: ["churn-analysis", "hotspot-detect", "risk-files"],
+    aliases: ["hotspot", "churn", "change-frequency"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "2.31.0",
+    prerequisites: ["git initialized"],
+    produces: [".forge/hotspot-cache.json"],
+    consumes: ["git log history"],
+    sideEffects: ["writes .forge/hotspot-cache.json (24h cache TTL)"],
+    errors: {
+      GIT_LOG_FAILED: { message: "git log command failed", recovery: "Ensure you are inside a git repository with commit history" },
+      NO_COMMITS: { message: "No commits found in the given time range", recovery: "Widen the --since filter or check the branch has history" },
+    },
+    example: {
+      input: { top: 5, since: "3 months ago" },
+      output: { generatedAt: "2024-01-01T00:00:00.000Z", since: "3 months ago", totalFiles: 42, showing: 5, hotspots: [{ file: "src/api.ts", commits: 28 }] },
+    },
+  },
+  forge_health_trend: {
+    intent: ["health", "trend", "monitoring"],
+    aliases: ["health-analysis", "system-health", "health-report"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "2.31.0",
+    prerequisites: [],
+    produces: [],
+    consumes: [".forge/drift-history.json", ".forge/cost-history.json", ".forge/incidents.jsonl", ".forge/model-performance.json"],
+    sideEffects: [],
+    errors: {
+      NO_DATA: { message: "No operational data found for the requested time window", recovery: "Run forge tools (drift, run-plan, incident) to generate data, or widen the --days window" },
+    },
+    example: {
+      input: { days: 30 },
+      output: { days: 30, healthScore: 87, trend: "stable", dataPoints: 15, drift: { snapshots: 5, avg: 85 }, cost: { runs: 3, totalUsd: 1.23 }, incidents: { total: 2, open: 0 }, models: { totalSlices: 10 } },
+    },
+  },
+  forge_alert_triage: {
+    intent: ["triage-alerts", "prioritize-incidents", "rank-alerts"],
+    aliases: ["alert-triage", "triage", "prioritize-alerts"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "2.31.0",
+    prerequisites: [],
+    produces: [],
+    consumes: [".forge/incidents.jsonl", ".forge/drift-history.json"],
+    sideEffects: [],
+    errors: {
+      NO_ALERTS: { message: "No open alerts found matching the filter criteria", recovery: "Lower --min-severity or check that incidents exist in .forge/incidents.jsonl" },
+      INVALID_SEVERITY: { message: "minSeverity must be low, medium, high, or critical", recovery: "Use one of: low, medium, high, critical" },
+    },
+    example: {
+      input: { minSeverity: "medium", max: 5 },
+      output: { total: 3, showing: 3, minSeverity: "medium", alerts: [{ source: "incident", id: "inc-1700000000000", description: "API latency spike", severity: "high", priority: 2.4, timestamp: "2024-01-01T00:00:00.000Z", files: ["src/api.ts"] }], generatedAt: "2024-01-01T00:00:00.000Z" },
+    },
+    notes: "Read-only — does not write to any data store. Priority = severity_weight × recency_factor. Tiebreak: more recent timestamp ranks higher.",
+  },
+  forge_dep_watch: {
+    intent: ["dep-scan", "cve-check", "dependency-audit"],
+    aliases: ["dep-watch", "dependency-watch", "cve-scan"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "2.27.0",
+    prerequisites: ["package.json or package-lock.json in project root"],
+    produces: [".forge/deps-snapshot.json"],
+    consumes: ["package.json", "package-lock.json"],
+    sideEffects: ["writes .forge/deps-snapshot.json", "may fire dep-vulnerability hub event"],
+    errors: {
+      NO_PACKAGE_JSON: { message: "No package.json found in project root", recovery: "Ensure you are in a Node.js project with a package.json file" },
+      AUDIT_FAILED: { message: "npm audit command failed", recovery: "Check npm is installed and network connectivity; non-npm projects return graceful degradation" },
+    },
+    example: {
+      input: { path: ".", notify: true },
+      output: { newVulnerabilities: [], resolvedVulnerabilities: [], unchanged: 42, snapshot: { capturedAt: "2024-01-01T00:00:00.000Z", depCount: 42 } },
+    },
+  },
+  forge_secret_scan: {
+    intent: ["secret-scan", "entropy-scan", "leak-detection"],
+    aliases: ["secret-scan", "scan-secrets", "entropy-check"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "2.28.0",
+    prerequisites: ["git initialized"],
+    produces: [".forge/secret-scan-cache.json"],
+    consumes: ["git diff output"],
+    sideEffects: ["writes .forge/secret-scan-cache.json", "may annotate .forge/deploy-journal-meta.json sidecar"],
+    securityNote: "Never logs actual secret values — only file paths, line numbers, entropy scores, and <REDACTED> placeholders. All findings are masked before caching or emitting telemetry.",
+    errors: {
+      GIT_UNAVAILABLE: { message: "git is not available or not a git repository", recovery: "Ensure you are inside a git repository — tool degrades gracefully returning { clean: null, scannedFiles: 0, findings: [], error: 'git unavailable' }" },
+      DIFF_TIMEOUT: { message: "git diff timed out (30s limit)", recovery: "Narrow the --since range to reduce diff size" },
+    },
+    example: {
+      input: { since: "HEAD~1", threshold: 4.0 },
+      output: { scannedAt: "2024-01-01T00:00:00.000Z", since: "HEAD~1", threshold: 4.0, scannedFiles: 5, clean: false, findings: [{ file: "src/config.js", line: 5, type: "api_key", entropyScore: 4.8, masked: "<REDACTED>", confidence: "high" }] },
+    },
+  },
+  forge_env_diff: {
+    intent: ["env-diff", "environment-comparison", "env-key-gaps"],
+    aliases: ["env-diff", "compare-env", "env-check"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "2.28.0",
+    prerequisites: ["baseline .env file exists"],
+    produces: [".forge/env-diff-cache.json"],
+    consumes: [".env", ".env.*"],
+    sideEffects: ["writes .forge/env-diff-cache.json — key names only, no values"],
+    securityNote: "Compares key names only — never reads, logs, or caches environment variable values.",
+    errors: {
+      BASELINE_NOT_FOUND: { message: "baseline .env file does not exist", recovery: "Create the baseline file or pass --baseline pointing to an existing .env file" },
+      TARGET_NOT_FOUND: { message: "one or more target .env files not found", recovery: "Check the --files argument or ensure .env.* files exist in the project root" },
+    },
+    example: {
+      input: { baseline: ".env", files: ".env.staging,.env.production" },
+      output: { scannedAt: "2024-01-01T00:00:00.000Z", baseline: ".env", filesCompared: 2, pairs: [{ file: ".env.staging", missingInTarget: ["STRIPE_KEY"], missingInBaseline: [] }], summary: { clean: false, totalGaps: 1, baselineKeyCount: 12 } },
+    },
+  },
+  forge_fix_proposal: {
+    intent: ["fix-proposal", "auto-fix", "liveguard-fix", "generate-fix-plan"],
+    aliases: ["fix-proposal", "auto-fix", "generate-fix"],
+    cost: "low",
+    maxConcurrent: 3,
+    addedIn: "2.29.0",
+    prerequisites: ["LiveGuard data available (drift, incidents, secret scan)"],
+    produces: ["docs/plans/auto/LIVEGUARD-FIX-<id>.md"],
+    consumes: [".forge/drift-history.json", ".forge/incidents.jsonl", ".forge/secret-scan-cache.json", ".forge/regression-gates.json"],
+    sideEffects: ["writes docs/plans/auto/LIVEGUARD-FIX-{incidentId}.md", "appends .forge/fix-proposals.json", "broadcasts fix-proposal-ready event"],
+    securityNote: "Plans are generated locally. One proposal per incidentId to prevent spam.",
+    errors: {
+      NO_DATA: { message: "No LiveGuard data found", recovery: "Run drift, incident-capture, regression-guard, or secret-scan first" },
+      ALREADY_EXISTS: { message: "Fix proposal already exists for this ID", recovery: "Check docs/plans/auto/ for existing plan" },
+    },
+    example: {
+      input: { source: "incident", incidentId: "INC-001" },
+      output: { fixId: "INC-001", plan: "docs/plans/auto/LIVEGUARD-FIX-INC-001.md", source: "incident", sliceCount: 2, alreadyExists: false },
+    },
+  },
+  forge_quorum_analyze: {
+    intent: ["quorum-analyze", "quorum-prompt", "multi-model-analysis"],
+    aliases: ["quorum-analyze", "quorum-prompt", "multi-model"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "2.29.0",
+    prerequisites: [],
+    produces: [],
+    consumes: [".forge/drift-history.json", ".forge/incidents.jsonl", ".forge/deploy-journal.jsonl", ".forge/secret-scan-cache.json"],
+    sideEffects: ["none — read-only prompt assembly, no LLM calls"],
+    securityNote: "customQuestion is XSS-validated and length-capped at 500 chars. No data leaves the server.",
+    errors: {
+      QUESTION_TOO_LONG: { message: "customQuestion exceeds 500 chars", recovery: "Shorten the question" },
+      XSS_DETECTED: { message: "customQuestion contains disallowed content", recovery: "Remove script tags or event handlers" },
+    },
+    example: {
+      input: { source: "drift", customQuestion: "Why did drift score drop 15 points?" },
+      output: { quorumPrompt: "## Context\n...\n\n## Question\nWhy did drift score drop 15 points?\n\n## Voting Instruction\n...", promptTokenEstimate: 250, suggestedModels: ["claude-opus-4.6", "grok-4.20", "gemini-3-pro-preview"], dataSnapshotAge: "12m ago", questionUsed: "Why did drift score drop 15 points?" },
+    },
   },
 };
-
-// ─── Workflow Graphs ──────────────────────────────────────────────────
 
 export const WORKFLOWS = {
   "execute-plan": {
@@ -383,6 +712,45 @@ export const CLI_SCHEMA = {
       flags: { "--dry-run": { type: "boolean" } },
       examples: ["pforge update ../plan-forge", "pforge update --dry-run"],
     },
+    incident: {
+      description: "Capture an incident — record description, severity, affected files, and optional resolution time for MTTR tracking",
+      args: [{ name: "description", type: "string", required: true, description: "Short description of the incident" }],
+      flags: {
+        "--severity": { type: "string", enum: ["low", "medium", "high", "critical"], description: "Incident severity (default: medium)" },
+        "--files": { type: "string", description: "Comma-separated list of affected file paths" },
+        "--resolved-at": { type: "string", description: "ISO 8601 resolution timestamp for MTTR calculation (e.g., 2024-01-01T02:30:00Z)" },
+      },
+      examples: [
+        'pforge incident "API latency spike on /checkout"',
+        'pforge incident "Database connection pool exhausted" --severity high',
+        'pforge incident "Deploy failed" --severity critical --files src/deploy.ts,infra/k8s.yaml',
+        'pforge incident "Resolved: API latency" --resolved-at 2024-01-01T02:30:00Z',
+      ],
+    },
+    triage: {
+      description: "Triage open alerts — rank incidents and drift violations by priority (severity × recency). Read-only.",
+      args: [],
+      flags: {
+        "--min-severity": { type: "string", enum: ["low", "medium", "high", "critical"], description: "Minimum severity to include (default: low)" },
+        "--max": { type: "number", description: "Maximum number of alerts to return (default: 20)" },
+      },
+      examples: [
+        "pforge triage",
+        "pforge triage --min-severity high",
+        "pforge triage --min-severity medium --max 10",
+      ],
+    },
+    runbook: {
+      description: "Generate a human-readable operational runbook from a hardened plan file — includes slices, scope, gates, and recent incidents",
+      args: [{ name: "plan", type: "path", required: true, description: "Path to the plan file (e.g., docs/plans/Phase-1-AUTH-PLAN.md)" }],
+      flags: {
+        "--no-incidents": { type: "boolean", description: "Exclude recent incidents from the runbook" },
+      },
+      examples: [
+        "pforge runbook docs/plans/Phase-1-AUTH-PLAN.md",
+        "pforge runbook docs/plans/Phase-1-AUTH-PLAN.md --no-incidents",
+      ],
+    },
     help: { description: "Show help", args: [], flags: {}, examples: ["pforge help"] },
   },
   server: {
@@ -434,6 +802,46 @@ export const CONFIG_SCHEMA = {
       },
     },
     extensions: { type: "array", items: { type: "string" }, description: "Installed extensions" },
+    hooks: {
+      type: "object",
+      description: "LiveGuard hook configuration (v2.29)",
+      properties: {
+        preDeploy: {
+          type: "object",
+          properties: {
+            enabled: { type: "boolean", default: true, description: "Enable or disable the PreDeploy hook" },
+            blockOnSecrets: { type: "boolean", default: true, description: "Block deploy when secrets detected" },
+            warnOnEnvGaps: { type: "boolean", default: true, description: "Warn on env key gaps" },
+            scanSince: { type: "string", default: "HEAD~1", description: "Git range for secret scan" },
+          },
+        },
+        postSlice: {
+          type: "object",
+          properties: {
+            silentDeltaThreshold: { type: "number", default: 5, description: "Drift delta below this is silent" },
+            warnDeltaThreshold: { type: "number", default: 10, description: "Drift delta above this is a warning" },
+            scoreFloor: { type: "number", default: 70, description: "Score below this triggers red warning" },
+          },
+        },
+        preAgentHandoff: {
+          type: "object",
+          properties: {
+            injectContext: { type: "boolean", default: true, description: "Inject LiveGuard context on session start" },
+            runRegressionGuard: { type: "boolean", default: true, description: "Run regression guard on handoff" },
+            cacheMaxAgeMinutes: { type: "number", default: 30, description: "Max cache age before re-running tools" },
+            minAlertSeverity: { type: "string", default: "medium", description: "Minimum severity for injected alerts" },
+          },
+        },
+      },
+    },
+    openclaw: {
+      type: "object",
+      description: "OpenClaw analytics bridge — optional POST on PreAgentHandoff (v2.29)",
+      properties: {
+        endpoint: { type: "string", description: "OpenClaw ingest endpoint URL" },
+        apiKey: { type: "string", description: "API key (or use .forge/secrets.json OPENCLAW_API_KEY)" },
+      },
+    },
   },
 };
 
@@ -614,7 +1022,7 @@ const SYSTEM_REFERENCE = {
     "Analyze": "Cross-artifact consistency scoring (pforge analyze). Scores 0-100 across traceability, coverage, tests, gates",
     "Orchestrator": "The execution engine (pforge-mcp/orchestrator.mjs). Parses plans, schedules slices, spawns workers, validates gates",
     "Hub": "WebSocket event server (pforge-mcp/hub.mjs). Broadcasts slice lifecycle events to connected clients in real-time",
-    "Dashboard": "Web UI at localhost:3100/dashboard. 8 tabs: Progress, Runs, Cost, Actions, Replay, Extensions, Config, Traces",
+    "Dashboard": "Web UI at localhost:3100/dashboard. FORGE section (9 tabs: Progress, Runs, Cost, Actions, Replay, Extensions, Config, Traces, Skills) + LIVEGUARD section (5 tabs: Health, Incidents, Triage, Security, Env)",
 
     // Infrastructure
     "Guardrails": "Instruction files (.github/instructions/*.instructions.md) that auto-load based on the file being edited. 15-18 per preset",
@@ -650,14 +1058,17 @@ const SYSTEM_REFERENCE = {
 
 /**
  * Build the full capability surface for forge_capabilities and .well-known.
- * @param {Array} mcpTools - Live TOOLS array from server.mjs
- * @param {object} options - { cwd, hubPort }
+ * @param {Array} [mcpTools] - Live TOOLS array from server.mjs. If omitted, builds from TOOL_METADATA keys.
+ * @param {object} [options] - { cwd, hubPort }
  */
 export function buildCapabilitySurface(mcpTools, options = {}) {
   const { cwd = process.cwd(), hubPort = null } = options;
 
+  // If no tools array provided, build minimal tool objects from TOOL_METADATA keys
+  const tools = mcpTools || Object.keys(TOOL_METADATA).map((name) => ({ name, description: TOOL_METADATA[name]?.intent?.[0] || name }));
+
   // Enrich MCP tools with metadata
-  const enrichedTools = mcpTools.map((tool) => {
+  const enrichedTools = tools.map((tool) => {
     const meta = TOOL_METADATA[tool.name] || {};
     return {
       ...tool,
@@ -705,9 +1116,15 @@ export function buildCapabilitySurface(mcpTools, options = {}) {
         Extensions: "Visual extension catalog browser with search/filter",
         Config: "Visual .forge.json editor (agents, model routing) with save confirmation",
         Traces: "OTLP trace waterfall with span detail, severity filters, attributes viewer",
+        Skills: "Skill catalog and execution history with step-level detail",
+        "LG Health": "LiveGuard drift score gauge, drift history chart, hotspot analysis — monitors plan alignment over time",
+        "LG Incidents": "Open incidents feed and fix proposals from LiveGuard alerting pipeline",
+        "LG Triage": "Alert triage view — severity grouping, quorum analysis launch, actionable summaries",
+        "LG Security": "Secret scan results with Shannon entropy findings, confidence levels, and file locations",
+        "LG Env": "Environment key diff — key-name-only comparison across .env files (values never displayed)",
       },
       standalone: "node pforge-mcp/server.mjs --dashboard-only",
-      description: "Use --dashboard-only to run the dashboard without MCP stdio (for standalone monitoring, demos, or testing)",
+      description: "Use --dashboard-only to run the dashboard without MCP stdio (for standalone monitoring, demos, or testing). FORGE section covers plan execution; LIVEGUARD section covers runtime safety",
     },
     restApi: {
       baseUrl: `http://127.0.0.1:3100`,
@@ -732,6 +1149,23 @@ export function buildCapabilitySurface(mcpTools, options = {}) {
         { method: "GET", path: "/api/bridge/status", description: "Bridge status — channels, pending approvals, stats" },
         { method: "POST", path: "/api/bridge/approve/:runId", description: "Receive approval callback. Auth: bridge.approvalSecret. Body: { action: 'approve'|'reject', approver? }" },
         { method: "GET", path: "/api/bridge/approve/:runId", description: "Browser-friendly approval link for Telegram inline buttons. Query: ?action=approve|reject&token=<secret>" },
+        // LiveGuard REST endpoints (v2.27.0)
+        { method: "GET", path: "/api/drift", description: "Run architecture drift check against guardrail rules. Returns score, violations, trend." },
+        { method: "GET", path: "/api/drift/history", description: "Drift score history from .forge/drift-history.json" },
+        { method: "POST", path: "/api/incident", description: "Capture an incident. Body: { description, severity?, files?, resolvedAt? }" },
+        { method: "GET", path: "/api/incidents", description: "List all captured incidents from .forge/incidents.jsonl" },
+        { method: "POST", path: "/api/regression-guard", description: "Run regression guard — execute validation gates from plan files. Body: { files?, plan?, failFast? }" },
+        { method: "POST", path: "/api/deploy-journal", description: "Record a deployment. Body: { version, by?, notes?, slice? }" },
+        { method: "GET", path: "/api/deploy-journal", description: "List all deploy journal entries from .forge/deploy-journal.jsonl" },
+        { method: "GET", path: "/api/triage", description: "Prioritized alert triage — ranked cross-signal alert list. Query: ?minSeverity=&max=" },
+        { method: "POST", path: "/api/runbook", description: "Generate operational runbook from a plan file. Body: { plan, includeIncidents? }" },
+        { method: "GET", path: "/api/runbooks", description: "List all generated runbooks from .forge/runbooks/" },
+        { method: "GET", path: "/api/hotspots", description: "Git churn hotspot analysis. Query: ?top=&since=" },
+        { method: "GET", path: "/api/health-trend", description: "Health trend analysis — drift, cost, incidents, model performance over time. Query: ?days=&metrics=" },
+        { method: "GET", path: "/api/deps/watch", description: "Latest dependency vulnerability snapshot from .forge/deps-snapshot.json" },
+        { method: "POST", path: "/api/deps/watch/run", description: "Trigger a new dependency vulnerability scan. Auth: bridge.approvalSecret Bearer token. Body: { path?, notify? }" },
+        { method: "POST", path: "/api/tool/org-rules", description: "Generate org-rules instruction file via REST" },
+        { method: "POST", path: "/api/image/generate", description: "Generate an image via xAI Aurora or OpenAI DALL-E. Body: { prompt, outputPath, model?, size?, format?, quality? }" },
       ],
     },
     hub: hubPort

@@ -88,6 +88,14 @@ cd my-project-plans</code></pre>
 
         <p>The wizard detects your tech stack (or uses the preset you specify), creates <code>.github/</code> with instruction files, agents, prompts, skills, and hooks, generates <code>.forge.json</code>, and sets up <code>.vscode/settings.json</code>.</p>
 
+        <div class="callout callout-tip">
+          <strong>Adding to an Existing Project</strong><br>
+          Clone Plan Forge alongside your project, then point the setup wizard at your repo:<br>
+          <code>git clone https://github.com/srnichols/plan-forge.git ../plan-forge</code><br>
+          <code>cd ../plan-forge && ./setup.ps1 -ProjectPath ../my-existing-app -Preset typescript</code><br>
+          This copies prompts, instructions, agents, and hooks into your existing repo without touching your source code.
+        </div>
+
         <!-- ─── Choosing Your Preset ─── -->
         <h2 id="presets">Choosing Your Preset</h2>
         <p>Nine presets, each tailored to a tech stack. Each installs ~21 instruction files, 19 agents, 12 skills, and 7+ pipeline prompts.</p>

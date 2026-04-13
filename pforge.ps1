@@ -75,6 +75,17 @@ function Show-Help {
     Write-Host "  version-bump <v>  Update version across all files (VERSION, package.json, docs, README)"
     Write-Host "  smith             Inspect your forge — environment, VS Code config, setup health, and common problems"
     Write-Host "  org-rules export  Export org custom instructions from .github/instructions/ for GitHub org settings"
+    Write-Host "  drift             Score codebase against architecture guardrail rules — track drift over time"
+    Write-Host "  incident <desc>   Capture an incident — record description, severity, affected files, and optional resolvedAt for MTTR"
+    Write-Host "  deploy-log <ver>  Record a deployment — log version, deployer, optional notes, and optional slice reference"
+    Write-Host "  triage            Triage open alerts — rank incidents and drift violations by priority"
+    Write-Host "  regression-guard  Run validation gates from plan files — guard against regressions when files change"
+    Write-Host "  runbook <plan>    Generate an operational runbook from a hardened plan file"
+    Write-Host "  hotspot           Identify git churn hotspots — most frequently changed files"
+    Write-Host "  secret-scan       Scan recent commits for leaked secrets using Shannon entropy analysis"
+    Write-Host "  env-diff          Compare environment variable keys across .env files — detect missing keys"
+    Write-Host "  health-trend      Health trend analysis — drift, cost, incidents, model performance over time"
+    Write-Host "  quorum-analyze    Assemble a quorum analysis prompt from LiveGuard data for multi-model dispatch"
     Write-Host "  tour              Guided walkthrough of your installed Plan Forge files"
     Write-Host "  help              Show this help message"
     Write-Host ""
@@ -1275,7 +1286,7 @@ function Invoke-Update {
     # Update shared instruction files
     $srcSharedInstr = Join-Path $sourcePath ".github/instructions"
     $dstInstr = Join-Path $RepoRoot ".github/instructions"
-    $sharedInstructions = @("architecture-principles.instructions.md", "git-workflow.instructions.md", "ai-plan-hardening-runbook.instructions.md")
+    $sharedInstructions = @("architecture-principles.instructions.md", "git-workflow.instructions.md", "ai-plan-hardening-runbook.instructions.md", "status-reporting.instructions.md", "context-fuel.instructions.md")
     if (Test-Path $srcSharedInstr) {
         foreach ($instrName in $sharedInstructions) {
             $srcFile = Join-Path $srcSharedInstr $instrName
@@ -1455,6 +1466,26 @@ function Invoke-Update {
         }
     }
 
+    # ─── Hook files (lifecycle + LiveGuard) ─────────────────────
+    $srcHooks = Join-Path $sourcePath "templates/.github/hooks"
+    $dstHooks = Join-Path $RepoRoot ".github/hooks"
+    if (Test-Path $srcHooks) {
+        Get-ChildItem -Path $srcHooks -File -Recurse | ForEach-Object {
+            $relPath = $_.FullName.Substring($srcHooks.Length + 1)
+            $relName = ".github/hooks/$($relPath.Replace('\', '/'))"
+            $dstFile = Join-Path $dstHooks $relPath
+            if (Test-Path $dstFile) {
+                $srcHash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
+                $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
+                if ($srcHash -ne $dstHash) {
+                    $updates += @{ Src = $_.FullName; Dst = $dstFile; Name = $relName }
+                }
+            } else {
+                $newFiles += @{ Src = $_.FullName; Dst = $dstFile; Name = $relName }
+            }
+        }
+    }
+
     # ─── Shared skills (add new, update existing shared-only) ────
     $srcSharedSkills = Join-Path $sourcePath "presets/shared/skills"
     if (Test-Path $srcSharedSkills) {
@@ -1533,12 +1564,44 @@ function Invoke-Update {
         Write-Host "  ✅ Added $($n.Name)" -ForegroundColor Green
     }
 
-    # ─── Update .forge.json version ───────────────────────────────
+    # ─── Update .forge.json version + migrate new fields ─────────
     if (Test-Path $configPath) {
         $config = Get-Content $configPath -Raw | ConvertFrom-Json
         $config.templateVersion = $sourceVersion
-        $config | ConvertTo-Json -Depth 3 | Set-Content -Path $configPath
+
+        # Migrate: add modelRouting.default if missing (v2.27+)
+        if (-not $config.modelRouting) {
+            $config | Add-Member -NotePropertyName "modelRouting" -NotePropertyValue @{ default = "claude-opus-4.6" }
+            Write-Host "  ✅ Added modelRouting.default = claude-opus-4.6" -ForegroundColor Green
+        }
+
+        # Migrate: add hooks config if missing (v2.29+)
+        if (-not $config.hooks) {
+            $config | Add-Member -NotePropertyName "hooks" -NotePropertyValue @{
+                preDeploy       = @{ blockOnSecrets = $true; warnOnEnvGaps = $true; scanSince = "HEAD~1" }
+                postSlice       = @{ silentDeltaThreshold = 5; warnDeltaThreshold = 10; scoreFloor = 70 }
+                preAgentHandoff = @{ injectContext = $true; runRegressionGuard = $true; cacheMaxAgeMinutes = 30; minAlertSeverity = "medium" }
+            }
+            Write-Host "  ✅ Added hooks config (preDeploy, postSlice, preAgentHandoff)" -ForegroundColor Green
+        }
+
+        $config | ConvertTo-Json -Depth 4 | Set-Content -Path $configPath
         Write-Host "  ✅ Updated .forge.json templateVersion to $sourceVersion" -ForegroundColor Green
+    }
+
+    # ─── Create docs/plans/auto/ if missing (v2.29+) ─────────────
+    $autoPlansDir = Join-Path $RepoRoot "docs/plans/auto"
+    if (-not (Test-Path $autoPlansDir)) {
+        New-Item -ItemType Directory -Path $autoPlansDir -Force | Out-Null
+        $autoReadme = Join-Path $autoPlansDir "README.md"
+        Set-Content -Path $autoReadme -Value @"
+# Auto-Generated Plans
+
+This directory contains plans auto-generated by LiveGuard tools (e.g. ``forge_fix_proposal``).
+
+Files in this directory (except this README) are gitignored — they are runtime artifacts, not source-controlled plans.
+"@
+        Write-Host "  ✅ Created docs/plans/auto/" -ForegroundColor Green
     }
 
     Write-Host ""
@@ -1802,6 +1865,33 @@ function Invoke-Analyze {
         $scoreGates = 0
     }
 
+    # Gate command lint — catch errors that would fail at runtime
+    try {
+        $lintOutput = node -e "import('$($RepoRoot -replace '\\','/')/pforge-mcp/orchestrator.mjs').then(m => { const r = m.lintGateCommands('$($planFile -replace '\\','/').replace(\"'\",\"\\'\")'); console.log(JSON.stringify(r)); })" 2>&1
+        $lintResult = $lintOutput | ConvertFrom-Json -ErrorAction SilentlyContinue
+        if ($lintResult) {
+            if ($lintResult.errors.Count -gt 0) {
+                Write-Host "  ❌ Gate lint: $($lintResult.errors.Count) error(s) — plan will fail at runtime" -ForegroundColor Red
+                foreach ($e in $lintResult.errors) {
+                    Write-Host "     $($e.message)" -ForegroundColor Red
+                }
+                $scoreGates = [Math]::Max(0, $scoreGates - (5 * $lintResult.errors.Count))
+            }
+            if ($lintResult.warnings.Count -gt 0) {
+                Write-Host "  ⚠️  Gate lint: $($lintResult.warnings.Count) warning(s)" -ForegroundColor Yellow
+                foreach ($w in $lintResult.warnings) {
+                    Write-Host "     $($w.message)" -ForegroundColor Yellow
+                }
+                $scoreGates = [Math]::Max(0, $scoreGates - (2 * $lintResult.warnings.Count))
+            }
+            if ($lintResult.errors.Count -eq 0 -and $lintResult.warnings.Count -eq 0) {
+                Write-Host "  ✅ Gate lint: all commands pass pre-flight checks" -ForegroundColor Green
+            }
+        }
+    } catch {
+        # Gate lint is advisory — don't block analyze on lint failures
+    }
+
     # Check for completeness markers (deferred work)
     $sweepPatterns = @('TODO', 'FIXME', 'HACK', 'stub', 'placeholder', 'mock data')
     $sweepRegex = ($sweepPatterns | ForEach-Object { [regex]::Escape($_) }) -join '|'
@@ -1858,6 +1948,120 @@ function Invoke-Analyze {
     else {
         Write-Host ""
         Write-Host "ANALYSIS PASSED — strong consistency." -ForegroundColor Green
+        exit 0
+    }
+}
+
+# ─── Command: drift ────────────────────────────────────────────────────
+function Invoke-Drift {
+    $threshold = 70
+    foreach ($arg in $Arguments) {
+        if ($arg -match '^--threshold[= ]?(\d+)$') { $threshold = [int]$Matches[1] }
+        elseif ($arg -match '^\d+$') { $threshold = [int]$arg }
+    }
+
+    Write-Host ""
+    Write-Host "╔══════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+    Write-Host "║       Plan Forge — Drift Report                              ║" -ForegroundColor Cyan
+    Write-Host "╚══════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "Scanning source files for architecture guardrail violations..." -ForegroundColor Cyan
+    Write-Host "Threshold: $threshold/100" -ForegroundColor White
+    Write-Host ""
+
+    $extensions = @("*.js", "*.mjs", "*.ts", "*.tsx", "*.cs", "*.py")
+    $excludeDirs = @("node_modules", ".git", "bin", "obj", "dist", ".forge", "vendor", "coverage")
+
+    $rules = @(
+        @{ id = "empty-catch";     pattern = 'catch\s*\([^)]*\)\s*\{\s*\}';                                 severity = "high";     label = "Empty catch block" },
+        @{ id = "any-type";        pattern = ':\s*any\b|<any>|as\s+any\b';                                  severity = "medium";   label = "Avoid 'any' type" },
+        @{ id = "sync-over-async"; pattern = '\.(Result|Wait\(\))\b';                                       severity = "high";     label = "Sync-over-async (.Result/.Wait())" },
+        @{ id = "sql-injection";   pattern = '`[^`]*\b(SELECT|INSERT|UPDATE|DELETE|WHERE)\b[^`]*\$\{';      severity = "critical"; label = "SQL string interpolation" },
+        @{ id = "deferred-work";   pattern = '\b(TODO|FIXME|HACK)\b';                                       severity = "low";      label = "Deferred work marker" }
+    )
+
+    $violations = [System.Collections.Generic.List[object]]::new()
+    $filesScanned = 0
+
+    $excludeFilter = "($($excludeDirs -join '|'))"
+
+    foreach ($ext in $extensions) {
+        $files = Get-ChildItem -Path $RepoRoot -Filter $ext -Recurse -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -notmatch $excludeFilter }
+        foreach ($file in $files) {
+            $filesScanned++
+            try {
+                $content = Get-Content -Path $file.FullName -Raw -ErrorAction Stop
+                foreach ($rule in $rules) {
+                    $matches = [regex]::Matches($content, $rule.pattern)
+                    foreach ($m in $matches) {
+                        $lineNum = ($content.Substring(0, $m.Index) -split "`n").Count
+                        $relPath = $file.FullName.Substring($RepoRoot.Length).TrimStart('\', '/')
+                        $violations.Add([PSCustomObject]@{
+                            file        = $relPath
+                            rule        = $rule.id
+                            severity    = $rule.severity
+                            line        = $lineNum
+                            description = $rule.label
+                        })
+                    }
+                }
+            } catch { }
+        }
+    }
+
+    $penaltyPerViolation = 2
+    $score = [Math]::Max(0, 100 - ($violations.Count * $penaltyPerViolation))
+
+    Write-Host "Files scanned:  $filesScanned" -ForegroundColor White
+    Write-Host "Violations:     $($violations.Count)" -ForegroundColor $(if ($violations.Count -eq 0) { 'Green' } elseif ($violations.Count -le 5) { 'Yellow' } else { 'Red' })
+    Write-Host "Score:          $score/100" -ForegroundColor $(if ($score -ge 80) { 'Green' } elseif ($score -ge $threshold) { 'Yellow' } else { 'Red' })
+    Write-Host ""
+
+    if ($violations.Count -gt 0) {
+        Write-Host "Violations:" -ForegroundColor Cyan
+        foreach ($v in $violations | Select-Object -First 20) {
+            $color = switch ($v.severity) { 'critical' { 'Red' } 'high' { 'Red' } 'medium' { 'Yellow' } default { 'DarkYellow' } }
+            Write-Host "  [$($v.severity.ToUpper())] $($v.file):$($v.line) — $($v.description)" -ForegroundColor $color
+        }
+        if ($violations.Count -gt 20) {
+            Write-Host "  ... and $($violations.Count - 20) more violations" -ForegroundColor DarkYellow
+        }
+        Write-Host ""
+    }
+
+    # Load history and compute trend
+    $historyFile = Join-Path $RepoRoot ".forge\drift-history.json"
+    $history = @()
+    if (Test-Path $historyFile) {
+        try { $history = Get-Content $historyFile -Raw | ConvertFrom-Json } catch { }
+    }
+    $prev = if ($history.Count -gt 0) { $history[-1] } else { $null }
+    $delta = if ($prev) { $score - $prev.score } else { 0 }
+    $trend = if (-not $prev) { "stable" } elseif ($delta -gt 0) { "improving" } elseif ($delta -lt 0) { "degrading" } else { "stable" }
+
+    $record = @{
+        timestamp    = (Get-Date -Format "o")
+        score        = $score
+        violations   = @($violations | ForEach-Object { @{ file = $_.file; rule = $_.rule; severity = $_.severity; line = $_.line } })
+        filesScanned = $filesScanned
+        delta        = $delta
+        trend        = $trend
+    }
+
+    $forgeDir = Join-Path $RepoRoot ".forge"
+    if (-not (Test-Path $forgeDir)) { New-Item -ItemType Directory -Path $forgeDir -Force | Out-Null }
+    $record | ConvertTo-Json -Depth 5 -Compress | Add-Content -Path $historyFile
+
+    Write-Host "Trend:          $trend" -ForegroundColor $(if ($trend -eq 'improving') { 'Green' } elseif ($trend -eq 'degrading') { 'Red' } else { 'White' })
+    Write-Host "History:        $($history.Count + 1) record(s) in .forge/drift-history.json" -ForegroundColor White
+    Write-Host ""
+
+    if ($score -lt $threshold) {
+        Write-Host "⚠  DRIFT ALERT — score $score is below threshold $threshold" -ForegroundColor Red
+        exit 1
+    } else {
+        Write-Host "✅ Drift score within threshold ($score >= $threshold)" -ForegroundColor Green
         exit 0
     }
 }
@@ -2950,6 +3154,644 @@ else{process.stdout.write(out+'\n');}
     Remove-Item Env:ORG_RULES_OUTPUT  -ErrorAction SilentlyContinue
 }
 
+# ─── Command: incident ─────────────────────────────────────────────────
+function Invoke-Incident {
+    $description = if ($Arguments.Count -gt 0) { $Arguments[0] } else { $null }
+    if (-not $description) {
+        Write-Host "ERROR: description is required. Usage: pforge incident `"<description>`" [--severity S] [--files f1,f2] [--resolved-at ISO]" -ForegroundColor Red
+        exit 1
+    }
+
+    $severity   = "medium"
+    $files      = @()
+    $resolvedAt = $null
+
+    for ($i = 1; $i -lt $Arguments.Count; $i++) {
+        switch ($Arguments[$i]) {
+            '--severity' {
+                if (($i + 1) -lt $Arguments.Count) { $severity = $Arguments[$i + 1]; $i++ }
+            }
+            '--files' {
+                if (($i + 1) -lt $Arguments.Count) { $files = $Arguments[$i + 1] -split ','; $i++ }
+            }
+            '--resolved-at' {
+                if (($i + 1) -lt $Arguments.Count) { $resolvedAt = $Arguments[$i + 1]; $i++ }
+            }
+        }
+    }
+
+    Write-ManualSteps "incident" @(
+        "Build incident payload (description, severity, files, resolvedAt)"
+        "POST to /api/incident on the MCP server"
+        "Append record to .forge/incidents.jsonl"
+        "Dispatch bridge notification if onCall configured in .forge.json"
+    )
+
+    $port = 3100
+    $payload = @{ description = $description; severity = $severity; files = $files }
+    if ($resolvedAt) { $payload.resolvedAt = $resolvedAt }
+    $body = $payload | ConvertTo-Json -Compress
+
+    try {
+        $response = Invoke-RestMethod -Uri "http://localhost:$port/api/incident" -Method POST `
+            -ContentType "application/json" -Body $body -ErrorAction Stop
+        Write-Host ""
+        Write-Host "`u{1F6A8} Incident Captured" -ForegroundColor Red
+        Write-Host "   ID:          $($response.id)" -ForegroundColor White
+        Write-Host "   Description: $($response.description)" -ForegroundColor White
+        $severityColor = switch ($response.severity) { 'critical' { 'Red' } 'high' { 'DarkYellow' } 'medium' { 'Yellow' } default { 'White' } }
+        Write-Host "   Severity:    $($response.severity)" -ForegroundColor $severityColor
+        Write-Host "   Captured at: $($response.capturedAt)" -ForegroundColor White
+        if ($response.resolvedAt) {
+            $mttrMin = [math]::Round($response.mttr / 60000, 1)
+            Write-Host "   Resolved at: $($response.resolvedAt)" -ForegroundColor Green
+            Write-Host "   MTTR:        $mttrMin minutes" -ForegroundColor Green
+        } else {
+            Write-Host "   MTTR:        pending (supply --resolved-at when resolved)" -ForegroundColor DarkGray
+        }
+        if ($response.files -and $response.files.Count -gt 0) {
+            Write-Host "   Files:       $($response.files -join ', ')" -ForegroundColor White
+        }
+        Write-Host "   Saved to:    .forge/incidents.jsonl" -ForegroundColor DarkGray
+    } catch {
+        Write-Host "ERROR: MCP server not running on port $port. Start with: node pforge-mcp/server.mjs" -ForegroundColor Red
+        exit 1
+    }
+}
+
+# ─── Command: deploy-log ──────────────────────────────────────────────
+function Invoke-DeployLog {
+    $version = if ($Arguments.Count -gt 0) { $Arguments[0] } else { $null }
+    if (-not $version) {
+        Write-Host "ERROR: version is required. Usage: pforge deploy-log `"<version>`" [--by CI] [--notes `"...`"] [--slice S]" -ForegroundColor Red
+        exit 1
+    }
+
+    $by    = "unknown"
+    $notes = $null
+    $slice = $null
+
+    for ($i = 1; $i -lt $Arguments.Count; $i++) {
+        switch ($Arguments[$i]) {
+            '--by' {
+                if (($i + 1) -lt $Arguments.Count) { $by = $Arguments[$i + 1]; $i++ }
+            }
+            '--notes' {
+                if (($i + 1) -lt $Arguments.Count) { $notes = $Arguments[$i + 1]; $i++ }
+            }
+            '--slice' {
+                if (($i + 1) -lt $Arguments.Count) { $slice = $Arguments[$i + 1]; $i++ }
+            }
+        }
+    }
+
+    Write-ManualSteps "deploy-log" @(
+        "Build deploy payload (version, by, notes, slice)"
+        "POST to /api/deploy-journal on the MCP server"
+        "Append record to .forge/deploy-journal.jsonl"
+    )
+
+    $port = 3100
+    $payload = @{ version = $version; by = $by }
+    if ($notes) { $payload.notes = $notes }
+    if ($slice) { $payload.slice = $slice }
+    $body = $payload | ConvertTo-Json -Compress
+
+    try {
+        $response = Invoke-RestMethod -Uri "http://localhost:$port/api/deploy-journal" -Method POST `
+            -ContentType "application/json" -Body $body -ErrorAction Stop
+        Write-Host ""
+        Write-Host "`u{1F680} Deploy Recorded" -ForegroundColor Cyan
+        Write-Host "   ID:          $($response.id)" -ForegroundColor White
+        Write-Host "   Version:     $($response.version)" -ForegroundColor White
+        Write-Host "   By:          $($response.by)" -ForegroundColor White
+        Write-Host "   Deployed at: $($response.deployedAt)" -ForegroundColor White
+        if ($response.notes) {
+            Write-Host "   Notes:       $($response.notes)" -ForegroundColor White
+        }
+        if ($response.slice) {
+            Write-Host "   Slice:       $($response.slice)" -ForegroundColor White
+        }
+        Write-Host "   Saved to:    .forge/deploy-journal.jsonl" -ForegroundColor DarkGray
+    } catch {
+        Write-Host "ERROR: MCP server not running on port $port. Start with: node pforge-mcp/server.mjs" -ForegroundColor Red
+        exit 1
+    }
+}
+
+# ─── Command: triage ──────────────────────────────────────────────────
+function Invoke-Triage {
+    $minSeverity = "low"
+    $maxResults  = 20
+    for ($i = 0; $i -lt $Arguments.Count; $i++) {
+        switch ($Arguments[$i]) {
+            '--min-severity' { if (($i + 1) -lt $Arguments.Count) { $minSeverity = $Arguments[$i + 1]; $i++ } }
+            '--max'          { if (($i + 1) -lt $Arguments.Count) { $maxResults  = [int]$Arguments[$i + 1]; $i++ } }
+        }
+    }
+
+    Write-ManualSteps "triage" @(
+        "Read open incidents from .forge/incidents.jsonl"
+        "Read latest drift violations from .forge/drift-history.json"
+        "Score each alert: severity_weight * recency_factor"
+        "Rank by priority (tiebreak: more recent first)"
+    )
+
+    $port = 3100
+    try {
+        $uri = "http://localhost:$port/api/triage?minSeverity=$minSeverity&max=$maxResults"
+        $response = Invoke-RestMethod -Uri $uri -Method GET -ErrorAction Stop
+        Write-Host ""
+        Write-Host "`u{1F6A8} Alert Triage ($($response.showing)/$($response.total) alerts, min-severity: $($response.minSeverity))" -ForegroundColor Cyan
+        Write-Host ""
+        if ($response.alerts.Count -eq 0) {
+            Write-Host "   No open alerts found." -ForegroundColor Green
+        } else {
+            foreach ($a in $response.alerts) {
+                $sevColor = switch ($a.severity) { 'critical' { 'Red' } 'high' { 'DarkYellow' } 'medium' { 'Yellow' } default { 'White' } }
+                $sourceIcon = if ($a.source -eq 'incident') { "`u{1F6A8}" } else { "`u{1F4CA}" }
+                Write-Host "   $sourceIcon [$($a.severity)] $($a.description)" -ForegroundColor $sevColor
+                Write-Host "      Priority: $($a.priority)  Source: $($a.source)  ID: $($a.id)" -ForegroundColor DarkGray
+            }
+        }
+        Write-Host ""
+        Write-Host "   Generated: $($response.generatedAt)" -ForegroundColor DarkGray
+    } catch {
+        Write-Host "ERROR: MCP server not running on port $port. Start with: node pforge-mcp/server.mjs" -ForegroundColor Red
+        exit 1
+    }
+}
+
+# ─── Command: runbook ────────────────────────────────────────────────────
+function Invoke-Runbook {
+    $plan          = $null
+    $noIncidents   = $false
+
+    for ($i = 0; $i -lt $Arguments.Count; $i++) {
+        switch ($Arguments[$i]) {
+            '--no-incidents' { $noIncidents = $true }
+            default {
+                if (-not $plan -and -not $Arguments[$i].StartsWith('--')) {
+                    $plan = $Arguments[$i]
+                }
+            }
+        }
+    }
+
+    if (-not $plan) {
+        Write-Host "ERROR: plan file is required. Usage: .\pforge.ps1 runbook <plan-file> [--no-incidents]" -ForegroundColor Red
+        exit 1
+    }
+
+    Write-ManualSteps "runbook" @(
+        "Parse the plan file (slices, scope contract, gates)"
+        "Collect recent incidents from .forge/incidents.jsonl (unless --no-incidents)"
+        "Render a structured Markdown runbook"
+        "Save to .forge/runbooks/<plan-name>-runbook.md"
+    )
+
+    $port = 3100
+    $payload = @{ plan = $plan; includeIncidents = (-not $noIncidents) } | ConvertTo-Json -Compress
+
+    try {
+        $response = Invoke-RestMethod -Uri "http://localhost:$port/api/runbook" -Method POST `
+            -ContentType "application/json" -Body $payload -ErrorAction Stop
+        Write-Host ""
+        Write-Host "`u{1F4D6} Runbook Generated" -ForegroundColor Green
+        Write-Host "   File:   $($response.runbook)" -ForegroundColor White
+        Write-Host "   Slices: $($response.slices)" -ForegroundColor White
+        Write-Host "   At:     $($response.generatedAt)" -ForegroundColor DarkGray
+    } catch {
+        Write-Host "ERROR: MCP server not running on port $port. Start with: node pforge-mcp/server.mjs" -ForegroundColor Red
+        exit 1
+    }
+}
+
+# ─── Command: hotspot ──────────────────────────────────────────────────
+function Invoke-Hotspot {
+    $top   = 10
+    $since = "6 months ago"
+    for ($i = 0; $i -lt $Arguments.Count; $i++) {
+        switch ($Arguments[$i]) {
+            '--top'   { if (($i + 1) -lt $Arguments.Count) { $top = [int]$Arguments[$i + 1]; $i++ } }
+            '--since' { if (($i + 1) -lt $Arguments.Count) { $since = $Arguments[$i + 1]; $i++ } }
+        }
+    }
+
+    Write-ManualSteps "hotspot" @(
+        "Run git log to collect file change frequency"
+        "Rank files by number of commits"
+        "Cache results in .forge/hotspot-cache.json (24h TTL)"
+        "Return top N hotspot files"
+    )
+
+    $port = 3100
+    try {
+        $encodedSince = [System.Uri]::EscapeDataString($since)
+        $response = Invoke-RestMethod -Uri "http://localhost:$port/api/hotspots?top=$top&since=$encodedSince" -Method GET -ErrorAction Stop
+        Write-Host ""
+        Write-Host "`u{1F525} Git Churn Hotspots" -ForegroundColor Cyan
+        Write-Host "   Since:       $($response.since)" -ForegroundColor White
+        Write-Host "   Total files: $($response.totalFiles)" -ForegroundColor White
+        Write-Host "   Showing:     $($response.showing)" -ForegroundColor White
+        Write-Host ""
+        $rank = 1
+        foreach ($h in $response.hotspots) {
+            $bar = "`u{2588}" * [math]::Min($h.commits, 40)
+            Write-Host "   $rank. $($h.file) ($($h.commits) commits)" -ForegroundColor Yellow
+            Write-Host "      $bar" -ForegroundColor DarkYellow
+            $rank++
+        }
+        Write-Host ""
+        Write-Host "   Cached at: $($response.generatedAt)" -ForegroundColor DarkGray
+    } catch {
+        Write-Host "ERROR: MCP server not running on port $port. Start with: node pforge-mcp/server.mjs" -ForegroundColor Red
+        exit 1
+    }
+}
+
+# ─── Command: dep-watch ────────────────────────────────────────────────
+function Invoke-DepWatch {
+    Write-ManualSteps "dep-watch" @(
+        "Run npm audit / pip-audit to scan dependencies"
+        "Diff against previous snapshot (.forge/dep-watch.json)"
+        "Report new and resolved vulnerabilities"
+    )
+
+    $port = 3100
+    try {
+        $response = Invoke-RestMethod -Uri "http://localhost:$port/api/deps/watch/run" -Method POST -ErrorAction Stop
+        Write-Host ""
+        Write-Host "`u{1F50D} Dependency Watch" -ForegroundColor Cyan
+        Write-Host "   Total:    $($response.total)" -ForegroundColor White
+        Write-Host "   New:      $($response.new_count)" -ForegroundColor $(if ($response.new_count -gt 0) { 'Red' } else { 'Green' })
+        Write-Host "   Resolved: $($response.resolved_count)" -ForegroundColor Green
+        Write-Host ""
+        if ($response.new_vulnerabilities -and $response.new_vulnerabilities.Count -gt 0) {
+            Write-Host "   New Vulnerabilities:" -ForegroundColor Red
+            foreach ($v in $response.new_vulnerabilities) {
+                Write-Host "   - $($v.package) ($($v.severity)): $($v.title)" -ForegroundColor Yellow
+            }
+            Write-Host ""
+        }
+        if ($response.resolved -and $response.resolved.Count -gt 0) {
+            Write-Host "   Resolved:" -ForegroundColor Green
+            foreach ($v in $response.resolved) {
+                Write-Host "   - $($v.package): $($v.title)" -ForegroundColor DarkGreen
+            }
+            Write-Host ""
+        }
+        Write-Host "   Snapshot: .forge/dep-watch.json" -ForegroundColor DarkGray
+    } catch {
+        Write-Host "ERROR: MCP server not running on port $port. Start with: node pforge-mcp/server.mjs" -ForegroundColor Red
+        exit 1
+    }
+}
+
+# ─── Command: secret-scan ──────────────────────────────────────────────
+function Invoke-SecretScan {
+    $since     = "HEAD~1"
+    $threshold = 4.0
+    for ($i = 0; $i -lt $Arguments.Count; $i++) {
+        switch ($Arguments[$i]) {
+            '--since'     { if (($i + 1) -lt $Arguments.Count) { $since = $Arguments[$i + 1]; $i++ } }
+            '--threshold' { if (($i + 1) -lt $Arguments.Count) { $threshold = [double]$Arguments[$i + 1]; $i++ } }
+        }
+    }
+
+    Write-ManualSteps "secret-scan" @(
+        "Run git diff to collect changed lines"
+        "Compute Shannon entropy for token-like strings"
+        "Flag findings above threshold ($threshold)"
+        "Cache results in .forge/secret-scan-cache.json"
+    )
+
+    $port = 3100
+    try {
+        $encodedSince = [System.Uri]::EscapeDataString($since)
+        $response = Invoke-RestMethod -Uri "http://localhost:$port/api/secret-scan" -Method GET -ErrorAction Stop
+        Write-Host ""
+        Write-Host "`u{1F50D} Secret Scan Results" -ForegroundColor Cyan
+        if ($null -eq $response.cache) {
+            Write-Host "   No scan results yet. Run forge_secret_scan to populate." -ForegroundColor DarkGray
+        } else {
+            Write-Host "   Since:         $($response.since)" -ForegroundColor White
+            Write-Host "   Threshold:     $($response.threshold)" -ForegroundColor White
+            Write-Host "   Scanned files: $($response.scannedFiles)" -ForegroundColor White
+            if ($response.clean) {
+                Write-Host "   Status:        `u{2705} Clean — no secrets detected" -ForegroundColor Green
+            } else {
+                Write-Host "   Status:        `u{26A0} $($response.findings.Count) finding(s)" -ForegroundColor Yellow
+                foreach ($f in $response.findings) {
+                    Write-Host "      $($f.file):$($f.line) [$($f.confidence)] entropy=$($f.entropyScore) type=$($f.type)" -ForegroundColor Red
+                }
+            }
+            Write-Host ""
+            Write-Host "   Scanned at: $($response.scannedAt)" -ForegroundColor DarkGray
+        }
+    } catch {
+        Write-Host "ERROR: MCP server not running on port $port. Start with: node pforge-mcp/server.mjs" -ForegroundColor Red
+        exit 1
+    }
+}
+
+# ─── Command: env-diff ─────────────────────────────────────────────────
+function Invoke-EnvDiff {
+    $baseline = ".env"
+    $files = ""
+    for ($i = 0; $i -lt $Arguments.Count; $i++) {
+        switch ($Arguments[$i]) {
+            '--baseline' { if (($i + 1) -lt $Arguments.Count) { $baseline = $Arguments[$i + 1]; $i++ } }
+            '--files'    { if (($i + 1) -lt $Arguments.Count) { $files = $Arguments[$i + 1]; $i++ } }
+        }
+    }
+
+    Write-ManualSteps "env-diff" @(
+        "Read baseline $baseline and compare key names"
+        "Detect missing keys across target .env files"
+        "Cache results in .forge/env-diff-cache.json (key names only, no values)"
+    )
+
+    $port = 3100
+    try {
+        $response = Invoke-RestMethod -Uri "http://localhost:$port/api/env/diff" -Method GET -ErrorAction Stop
+        Write-Host ""
+        Write-Host "`u{1F50E} Environment Key Diff" -ForegroundColor Cyan
+        if ($null -eq $response.cache) {
+            Write-Host "   No diff data yet. Run forge_env_diff to populate." -ForegroundColor DarkGray
+        } else {
+            Write-Host "   Baseline:       $($response.baseline)" -ForegroundColor White
+            Write-Host "   Files compared: $($response.filesCompared)" -ForegroundColor White
+            if ($response.summary.clean) {
+                Write-Host "   Status:         `u{2705} Clean — all keys aligned" -ForegroundColor Green
+            } else {
+                Write-Host "   Status:         `u{26A0} $($response.summary.totalGaps) gap(s) found" -ForegroundColor Yellow
+                foreach ($pair in $response.pairs) {
+                    if (($pair.missingInTarget -and $pair.missingInTarget.Count -gt 0) -or ($pair.missingInBaseline -and $pair.missingInBaseline.Count -gt 0)) {
+                        Write-Host "   --- $($pair.file) ---" -ForegroundColor White
+                        foreach ($k in $pair.missingInTarget) {
+                            Write-Host "      Missing in target: $k" -ForegroundColor Red
+                        }
+                        foreach ($k in $pair.missingInBaseline) {
+                            Write-Host "      Missing in baseline: $k" -ForegroundColor Yellow
+                        }
+                    }
+                }
+            }
+            Write-Host ""
+            Write-Host "   Scanned at: $($response.scannedAt)" -ForegroundColor DarkGray
+        }
+    } catch {
+        Write-Host "ERROR: MCP server not running on port $port. Start with: node pforge-mcp/server.mjs" -ForegroundColor Red
+        exit 1
+    }
+}
+
+# ─── Command: fix-proposal ──────────────────────────────────────────────
+function Invoke-FixProposal {
+    $source = ""
+    $incidentId = ""
+    for ($i = 0; $i -lt $Arguments.Count; $i++) {
+        switch ($Arguments[$i]) {
+            '--source'      { if (($i + 1) -lt $Arguments.Count) { $source = $Arguments[$i + 1]; $i++ } }
+            '--incident-id' { if (($i + 1) -lt $Arguments.Count) { $incidentId = $Arguments[$i + 1]; $i++ } }
+        }
+    }
+
+    Write-ManualSteps "fix-proposal" @(
+        "Read LiveGuard data (drift, incidents, secrets, regression)"
+        "Generate 1-2 slice fix plan"
+        "Write to docs/plans/auto/LIVEGUARD-FIX-<id>.md"
+        "Append record to .forge/fix-proposals.json"
+    )
+
+    $port = 3100
+    try {
+        $body = @{}
+        if ($source)     { $body["source"]     = $source }
+        if ($incidentId) { $body["incidentId"] = $incidentId }
+        $json = $body | ConvertTo-Json -Compress
+        $response = Invoke-RestMethod -Uri "http://localhost:$port/api/fix/propose" `
+            -Method POST -Body $json -ContentType "application/json" -ErrorAction Stop
+
+        Write-Host ""
+        Write-Host "`u{1F527} Fix Proposal" -ForegroundColor Cyan
+        if ($response.error) {
+            Write-Host "   $($response.error)" -ForegroundColor Yellow
+        } elseif ($response.alreadyExists) {
+            Write-Host "   Already exists: $($response.plan)" -ForegroundColor DarkGray
+        } else {
+            Write-Host "   Fix ID:   $($response.fixId)" -ForegroundColor White
+            Write-Host "   Source:   $($response.source)" -ForegroundColor White
+            Write-Host "   Plan:     $($response.plan)" -ForegroundColor Green
+            Write-Host "   Slices:   $($response.sliceCount)" -ForegroundColor White
+        }
+    } catch {
+        Write-Host "ERROR: MCP server not running on port $port. Start with: node pforge-mcp/server.mjs" -ForegroundColor Red
+        exit 1
+    }
+}
+
+# ─── Command: quorum-analyze ───────────────────────────────────────────
+function Invoke-QuorumAnalyze {
+    $source = ""
+    $goal = ""
+    $customQuestion = ""
+    $quorumSize = 3
+    for ($i = 0; $i -lt $Arguments.Count; $i++) {
+        switch ($Arguments[$i]) {
+            '--source'          { if (($i + 1) -lt $Arguments.Count) { $source = $Arguments[$i + 1]; $i++ } }
+            '--goal'            { if (($i + 1) -lt $Arguments.Count) { $goal = $Arguments[$i + 1]; $i++ } }
+            '--custom-question' { if (($i + 1) -lt $Arguments.Count) { $customQuestion = $Arguments[$i + 1]; $i++ } }
+            '--quorum-size'     { if (($i + 1) -lt $Arguments.Count) { $quorumSize = [int]$Arguments[$i + 1]; $i++ } }
+        }
+    }
+
+    Write-ManualSteps "quorum-analyze" @(
+        "Read LiveGuard data from .forge/ (source: $( if ($source) { $source } else { 'all' } ))"
+        "Assemble 3-section prompt (context, question, voting instruction)"
+        "Return structured prompt object for multi-model dispatch"
+    )
+
+    $port = 3100
+    try {
+        $body = @{ quorumSize = $quorumSize }
+        if ($source)         { $body["source"]         = $source }
+        if ($customQuestion) { $body["customQuestion"]  = $customQuestion }
+        elseif ($goal)       { $body["analysisGoal"]    = $goal }
+        $json = $body | ConvertTo-Json -Compress
+        $response = Invoke-RestMethod -Uri "http://localhost:$port/api/quorum/prompt" `
+            -Method POST -Body $json -ContentType "application/json" -ErrorAction Stop
+
+        Write-Host ""
+        Write-Host "`u{1F50E} Quorum Analyze" -ForegroundColor Cyan
+        if ($response.error) {
+            Write-Host "   $($response.error)" -ForegroundColor Yellow
+        } else {
+            Write-Host "   Question:  $($response.questionUsed)" -ForegroundColor White
+            Write-Host "   Tokens:    ~$($response.promptTokenEstimate)" -ForegroundColor White
+            Write-Host "   Models:    $($response.suggestedModels -join ', ')" -ForegroundColor White
+            Write-Host "   Data age:  $($response.dataSnapshotAge)" -ForegroundColor DarkGray
+            Write-Host ""
+            Write-Host "   Prompt assembled — pipe to quorum runner or copy from JSON output." -ForegroundColor Green
+        }
+    } catch {
+        Write-Host "ERROR: MCP server not running on port $port. Start with: node pforge-mcp/server.mjs" -ForegroundColor Red
+        exit 1
+    }
+}
+
+# ─── Command: health-trend ─────────────────────────────────────────────
+function Invoke-HealthTrend {
+    $days = 30
+    $metrics = ""
+    for ($i = 0; $i -lt $Arguments.Count; $i++) {
+        switch ($Arguments[$i]) {
+            '--days'    { if (($i + 1) -lt $Arguments.Count) { $days = [int]$Arguments[$i + 1]; $i++ } }
+            '--metrics' { if (($i + 1) -lt $Arguments.Count) { $metrics = $Arguments[$i + 1]; $i++ } }
+        }
+    }
+
+    Write-ManualSteps "health-trend" @(
+        "Read .forge/ operational data (drift, cost, incidents, model performance)"
+        "Filter to requested time window ($days days)"
+        "Compute per-metric summaries and overall health score"
+        "Report trend direction"
+    )
+
+    $port = 3100
+    try {
+        $uri = "http://localhost:$port/api/health-trend?days=$days"
+        if ($metrics) { $uri += "&metrics=$metrics" }
+        $response = Invoke-RestMethod -Uri $uri -Method GET -ErrorAction Stop
+        Write-Host ""
+        Write-Host "`u{1F3E5} Health Trend ($($response.days)-day window)" -ForegroundColor Cyan
+        Write-Host "   Health Score: $(if ($null -ne $response.healthScore) { $response.healthScore } else { 'N/A' })/100" -ForegroundColor $(if ($response.healthScore -ge 80) { 'Green' } elseif ($response.healthScore -ge 50) { 'Yellow' } else { 'Red' })
+        Write-Host "   Trend:        $($response.trend)" -ForegroundColor White
+        Write-Host "   Data Points:  $($response.dataPoints)" -ForegroundColor White
+        Write-Host ""
+        if ($response.drift) {
+            Write-Host "   Drift:" -ForegroundColor Yellow
+            Write-Host "     Snapshots: $($response.drift.snapshots)  Avg: $(if ($null -ne $response.drift.avg) { $response.drift.avg } else { 'N/A' })  Trend: $($response.drift.trend)"
+        }
+        if ($response.cost) {
+            Write-Host "   Cost:" -ForegroundColor Yellow
+            Write-Host "     Runs: $($response.cost.runs)  Total: `$$($response.cost.totalUsd)  Avg/run: `$$($response.cost.avgPerRun)"
+        }
+        if ($response.incidents) {
+            Write-Host "   Incidents:" -ForegroundColor Yellow
+            Write-Host "     Total: $($response.incidents.total)  Open: $($response.incidents.open)  Resolved: $($response.incidents.resolved)"
+        }
+        if ($response.models) {
+            Write-Host "   Models:" -ForegroundColor Yellow
+            Write-Host "     Total slices: $($response.models.totalSlices)"
+        }
+        Write-Host ""
+        Write-Host "   Generated: $($response.generatedAt)" -ForegroundColor DarkGray
+    } catch {
+        Write-Host "ERROR: MCP server not running on port $port. Start with: node pforge-mcp/server.mjs" -ForegroundColor Red
+        exit 1
+    }
+}
+
+# ─── Command: drift ────────────────────────────────────────────────────
+function Invoke-Drift {
+    $threshold = 70
+    for ($i = 0; $i -lt $Arguments.Count; $i++) {
+        if ($Arguments[$i] -eq '--threshold' -and ($i + 1) -lt $Arguments.Count) {
+            $threshold = [int]$Arguments[$i + 1]; $i++
+        }
+    }
+
+    Write-ManualSteps "drift" @(
+        "Scan source files for architecture rule violations"
+        "Score codebase (100 minus penalties)"
+        "Compare against .forge/drift-history.json"
+        "Report trend: improving / stable / degrading"
+    )
+
+    $port = 3100
+    try {
+        $response = Invoke-RestMethod -Uri "http://localhost:$port/api/drift?threshold=$threshold" -Method GET -ErrorAction Stop
+        Write-Host "`n`u{1F4CA} Drift Score: $($response.score)/100" -ForegroundColor $(if ($response.score -ge $threshold) { 'Green' } else { 'Red' })
+        Write-Host "   Trend: $($response.trend) ($([char]0x0394)$($response.delta))"
+        Write-Host "   Files scanned: $($response.filesScanned)"
+        Write-Host "   Violations: $($response.violations.Count)"
+        Write-Host "   History entries: $($response.historyLength)"
+        if ($response.violations.Count -gt 0) {
+            foreach ($v in $response.violations) {
+                $color = if ($v.severity -eq 'critical') { 'Red' } else { 'Yellow' }
+                Write-Host "   `u{26A0} [$($v.severity)] $($v.file):$($v.line) $($v.rule)" -ForegroundColor $color
+            }
+        }
+    } catch {
+        Write-Host "ERROR: MCP server not running on port $port. Start with: node pforge-mcp/server.mjs" -ForegroundColor Red
+        exit 1
+    }
+}
+
+# ─── Command: regression-guard ──────────────────────────────────────────
+function Invoke-RegressionGuard {
+    $files    = @()
+    $plan     = $null
+    $failFast = $false
+
+    for ($i = 0; $i -lt $Arguments.Count; $i++) {
+        switch ($Arguments[$i]) {
+            '--files' {
+                if (($i + 1) -lt $Arguments.Count) { $files = $Arguments[$i + 1] -split ','; $i++ }
+            }
+            '--plan' {
+                if (($i + 1) -lt $Arguments.Count) { $plan = $Arguments[$i + 1]; $i++ }
+            }
+            '--fail-fast' { $failFast = $true }
+        }
+    }
+
+    Write-ManualSteps "regression-guard" @(
+        "Extract validation gate commands from plan files in docs/plans/"
+        "Check each command against the gate allowlist"
+        "Execute allowed commands and report passed/failed results"
+        "Return structured result with per-gate status"
+    )
+
+    $port = 3100
+    $payload = @{ files = $files; failFast = $failFast }
+    if ($plan) { $payload.plan = $plan }
+    $body = $payload | ConvertTo-Json -Compress
+
+    try {
+        $response = Invoke-RestMethod -Uri "http://localhost:$port/api/regression-guard" -Method POST `
+            -ContentType "application/json" -Body $body -ErrorAction Stop
+        Write-Host ""
+        $icon = if ($response.success) { "`u{2705}" } else { "`u{274C}" }
+        $color = if ($response.success) { 'Green' } else { 'Red' }
+        Write-Host "$icon Regression Guard: $(if ($response.success) { 'PASSED' } else { 'FAILED' })" -ForegroundColor $color
+        Write-Host "   Gates checked: $($response.gatesChecked)"
+        Write-Host "   Passed:        $($response.passed)"  -ForegroundColor Green
+        if ($response.failed -gt 0) {
+            Write-Host "   Failed:        $($response.failed)"  -ForegroundColor Red
+        }
+        if ($response.blocked -gt 0) {
+            Write-Host "   Blocked:       $($response.blocked)" -ForegroundColor Yellow
+        }
+        if ($response.skipped -gt 0) {
+            Write-Host "   Skipped:       $($response.skipped)" -ForegroundColor DarkGray
+        }
+        foreach ($r in $response.results) {
+            if ($r.status -eq 'failed') {
+                Write-Host "   `u{274C} Slice $($r.sliceNumber) [$($r.planFile)]: $($r.sliceTitle)" -ForegroundColor Red
+                if ($r.output) { Write-Host "      $($r.output)" -ForegroundColor DarkGray }
+            } elseif ($r.status -eq 'blocked') {
+                Write-Host "   `u{26A0} Slice $($r.sliceNumber) [$($r.planFile)]: BLOCKED — $($r.reason)" -ForegroundColor Yellow
+            }
+        }
+    } catch {
+        Write-Host "ERROR: MCP server not running on port $port. Start with: node pforge-mcp/server.mjs" -ForegroundColor Red
+        exit 1
+    }
+}
+
 # ─── Command: tour ─────────────────────────────────────────────────────
 function Invoke-Tour {
     Write-Host ""
@@ -3080,6 +3922,19 @@ switch ($Command) {
     'analyze'      { Invoke-Analyze }
     'run-plan'     { Invoke-RunPlan }
     'org-rules'    { Invoke-OrgRules }
+    'drift'        { Invoke-Drift }
+    'incident'     { Invoke-Incident }
+    'deploy-log'   { Invoke-DeployLog }
+    'triage'       { Invoke-Triage }
+    'regression-guard' { Invoke-RegressionGuard }
+    'runbook'      { Invoke-Runbook }
+    'hotspot'      { Invoke-Hotspot }
+    'dep-watch'    { Invoke-DepWatch }
+    'secret-scan'  { Invoke-SecretScan }
+    'env-diff'        { Invoke-EnvDiff }
+    'fix-proposal'    { Invoke-FixProposal }
+    'quorum-analyze'  { Invoke-QuorumAnalyze }
+    'health-trend'    { Invoke-HealthTrend }
     'version-bump' { Invoke-VersionBump }
     'smith'        { Invoke-Smith }
     'tour'         { Invoke-Tour }

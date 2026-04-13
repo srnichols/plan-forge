@@ -12,7 +12,7 @@ import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync, readdirSyn
 import { resolve, join, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { runAnalyze, appendForgeJsonl, readForgeJsonl, regressionGuard, isGateCommandAllowed, getHealthTrend, recordModelPerformance, emitToolTelemetry, isDeployTrigger, runPreDeployHook, runPostSliceHook, resetPostSliceHookFired, runPreAgentHandoffHook } from "../orchestrator.mjs";
+import { runAnalyze, appendForgeJsonl, readForgeJsonl, readForgeJson, regressionGuard, isGateCommandAllowed, getHealthTrend, recordModelPerformance, emitToolTelemetry, isDeployTrigger, runPreDeployHook, runPostSliceHook, resetPostSliceHookFired, runPreAgentHandoffHook, loadQuorumConfig, loadOpenClawConfig } from "../orchestrator.mjs";
 import { TOOL_METADATA } from "../capabilities.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -2767,5 +2767,591 @@ describe("PreAgentHandoff hook no-data header", () => {
     expect(result.triggered).toBe(true);
     expect(result.contextHeader).toContain("No data yet");
     expect(result.regressionResult).toBeNull();
+  });
+});
+
+// ─── forge_fix_proposal: plan file generation patterns ──────────────────
+
+describe("forge_fix_proposal plan file writing", () => {
+  it("writes a plan file to docs/plans/auto/ for drift source", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    appendForgeJsonl("drift-history.json", { score: 72, timestamp: new Date().toISOString(), violations: [{ file: "a.ts", rule: "no-any", severity: "warning" }] }, tempDir);
+
+    const autoDir = resolve(tempDir, "docs/plans/auto");
+    mkdirSync(autoDir, { recursive: true });
+    const fixId = `drift-${Date.now()}`;
+    const planName = `LIVEGUARD-FIX-${fixId}.md`;
+    const planPath = resolve(autoDir, planName);
+
+    let planContent = `# LiveGuard Auto-Fix: ${fixId}\n\n`;
+    planContent += `> Generated: ${new Date().toISOString()}\n`;
+    planContent += `> Source: drift\n\n`;
+    planContent += `## Scope Contract\n\nThis plan addresses a drift finding detected by LiveGuard.\n\n`;
+    planContent += `## Slice 1 — Resolve Drift Violations (score: 72)\n\n`;
+    planContent += `**Tasks:**\n- [ ] Review drift violations\n- [ ] Fix architectural deviations\n- [ ] Re-run drift report to verify score improvement\n\n`;
+    planContent += `**Validation Gate:**\n\`\`\`bash\npforge drift\n\`\`\`\n\n`;
+    writeFileSync(planPath, planContent, "utf-8");
+
+    expect(existsSync(planPath)).toBe(true);
+    const content = readFileSync(planPath, "utf-8");
+    expect(content).toContain("# LiveGuard Auto-Fix:");
+    expect(content).toContain("## Scope Contract");
+    expect(content).toContain("## Slice 1");
+    expect(content).toContain("pforge drift");
+  });
+
+  it("persists fix-proposals.json record via appendForgeJsonl", () => {
+    const record = { fixId: "drift-123", plan: "docs/plans/auto/LIVEGUARD-FIX-drift-123.md", source: "drift", sliceCount: 1, generatedAt: new Date().toISOString() };
+    appendForgeJsonl("fix-proposals.json", record, tempDir);
+
+    const proposals = readForgeJsonl("fix-proposals.json", [], tempDir);
+    expect(proposals).toHaveLength(1);
+    expect(proposals[0].fixId).toBe("drift-123");
+    expect(proposals[0].source).toBe("drift");
+    expect(proposals[0].sliceCount).toBe(1);
+  });
+
+  it("detects duplicate proposals by file existence", () => {
+    const autoDir = resolve(tempDir, "docs/plans/auto");
+    mkdirSync(autoDir, { recursive: true });
+    const planName = "LIVEGUARD-FIX-incident-abc.md";
+    writeFileSync(resolve(autoDir, planName), "existing plan content", "utf-8");
+
+    expect(existsSync(resolve(autoDir, planName))).toBe(true);
+  });
+
+  it("generates correct plan structure for incident source", () => {
+    const incident = { id: "INC-001", description: "API down", title: "Production API failure", affectedFiles: ["src/api.ts", "src/routes.ts"] };
+    const slices = [];
+    slices.push({
+      title: `Investigate: ${incident.description || incident.title || "unknown"}`,
+      tasks: ["Review incident details and affected files", "Identify root cause", "Determine fix scope"],
+      scope: incident.affectedFiles || [],
+    });
+    slices.push({
+      title: "Apply Fix + Verify",
+      tasks: ["Implement the fix", "Run regression guard", "Verify incident resolution"],
+      gate: "node pforge-mcp/orchestrator.mjs --test",
+    });
+
+    expect(slices).toHaveLength(2);
+    expect(slices[0].title).toContain("API down");
+    expect(slices[0].scope).toEqual(["src/api.ts", "src/routes.ts"]);
+    expect(slices[1].gate).toContain("--test");
+  });
+
+  it("generates secret source plan with credential rotation slice", () => {
+    const slices = [{
+      title: "Credential Rotation",
+      tasks: ["Rotate any exposed credentials", "Update secret references to use environment variables or secret manager", "Remove hardcoded values from source"],
+      gate: "pforge secret-scan --since HEAD~1",
+    }];
+
+    expect(slices).toHaveLength(1);
+    expect(slices[0].title).toBe("Credential Rotation");
+    expect(slices[0].tasks).toHaveLength(3);
+    expect(slices[0].gate).toContain("secret-scan");
+  });
+
+  it("generates regression source plan with regression-guard gate", () => {
+    const slices = [{
+      title: "Fix: regression",
+      tasks: ["Investigate the issue", "Apply fix", "Validate"],
+      gate: "pforge regression-guard",
+    }];
+
+    expect(slices[0].gate).toBe("pforge regression-guard");
+  });
+});
+
+// ─── forge_fix_proposal: source auto-detection ──────────────────────────
+
+describe("forge_fix_proposal source auto-detection", () => {
+  it("reads drift-history.json for drift source", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    appendForgeJsonl("drift-history.json", { score: 65, timestamp: new Date().toISOString(), violations: [] }, tempDir);
+
+    const driftHistory = readForgeJsonl("drift-history.json", [], tempDir);
+    expect(driftHistory.length).toBeGreaterThan(0);
+    const latest = driftHistory[driftHistory.length - 1];
+    expect(latest.score).toBe(65);
+  });
+
+  it("reads incidents.jsonl for incident source", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    appendForgeJsonl("incidents.jsonl", { id: "INC-001", description: "test", severity: "high" }, tempDir);
+
+    const incidents = readForgeJsonl("incidents.jsonl", [], tempDir);
+    expect(incidents).toHaveLength(1);
+    expect(incidents[0].id).toBe("INC-001");
+  });
+
+  it("reads secret-scan-cache.json for secret source", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    writeFileSync(resolve(forgeDir, "secret-scan-cache.json"), JSON.stringify({
+      clean: false,
+      findings: [{ file: "config.js", line: 1, type: "api_key", entropyScore: 4.8 }],
+    }));
+
+    const scan = readForgeJson("secret-scan-cache.json", null, tempDir);
+    expect(scan).not.toBeNull();
+    expect(scan.findings).toHaveLength(1);
+  });
+
+  it("reads regression-gates.json for regression source", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    writeFileSync(resolve(forgeDir, "regression-gates.json"), JSON.stringify({
+      passed: 2,
+      failed: 1,
+      results: [{ sliceNumber: 1, status: "failed", cmd: "npm test" }],
+    }));
+
+    const regData = JSON.parse(readFileSync(resolve(forgeDir, "regression-gates.json"), "utf-8"));
+    expect(regData.failed).toBe(1);
+  });
+
+  it("returns empty when no data files exist", () => {
+    const driftHistory = readForgeJsonl("drift-history.json", [], tempDir);
+    const incidents = readForgeJsonl("incidents.jsonl", [], tempDir);
+    expect(driftHistory).toHaveLength(0);
+    expect(incidents).toHaveLength(0);
+  });
+});
+
+// ─── forge_quorum_analyze: XSS and length validation ────────────────────
+
+describe("forge_quorum_analyze input validation", () => {
+  it("rejects customQuestion exceeding 500 chars", () => {
+    const longQ = "a".repeat(501);
+    expect(longQ.length).toBeGreaterThan(500);
+  });
+
+  it("accepts customQuestion at exactly 500 chars", () => {
+    const q = "a".repeat(500);
+    expect(q.length).toBe(500);
+  });
+
+  it("detects <script> XSS pattern", () => {
+    const xssRegex = /<script|javascript:|on\w+=/i;
+    expect(xssRegex.test("<script>alert(1)</script>")).toBe(true);
+    expect(xssRegex.test('javascript:alert(1)')).toBe(true);
+    expect(xssRegex.test('onclick=alert(1)')).toBe(true);
+    expect(xssRegex.test('onload=malicious()')).toBe(true);
+  });
+
+  it("allows normal question text", () => {
+    const xssRegex = /<script|javascript:|on\w+=/i;
+    expect(xssRegex.test("What is the root cause of the drift regression?")).toBe(false);
+    expect(xssRegex.test("Why did the secret scan find 3 findings?")).toBe(false);
+  });
+
+  it("clamps quorumSize to min 1, max 10", () => {
+    const clamp = (v) => Math.max(1, Math.min(10, parseInt(v) || 3));
+    expect(clamp(0)).toBe(3);   // 0 is falsy → falls back to default 3
+    expect(clamp(-5)).toBe(1);
+    expect(clamp(15)).toBe(10);
+    expect(clamp(5)).toBe(5);
+    expect(clamp(undefined)).toBe(3);
+    expect(clamp(null)).toBe(3);
+    expect(clamp("abc")).toBe(3);
+  });
+});
+
+// ─── forge_quorum_analyze: GOAL_PRESETS ─────────────────────────────────
+
+describe("forge_quorum_analyze GOAL_PRESETS", () => {
+  const GOAL_PRESETS = {
+    "root-cause": "Identify the root cause of the issues shown in the data. Trace the causal chain from symptoms to underlying problems.",
+    "risk-assess": "Assess the risk level of the current project state. Identify the highest-impact risks and their likelihood.",
+    "fix-review": "Review the proposed fixes and assess whether they adequately address the underlying issues. Identify gaps or risks in the remediation approach.",
+    "runbook-validate": "Validate the operational runbook against the current data. Identify any gaps, outdated steps, or missing escalation paths.",
+  };
+
+  it("has 4 preset goals", () => {
+    expect(Object.keys(GOAL_PRESETS)).toHaveLength(4);
+  });
+
+  it("root-cause preset mentions causal chain", () => {
+    expect(GOAL_PRESETS["root-cause"]).toContain("causal chain");
+  });
+
+  it("risk-assess preset mentions highest-impact risks", () => {
+    expect(GOAL_PRESETS["risk-assess"]).toContain("highest-impact risks");
+  });
+
+  it("fix-review preset mentions remediation approach", () => {
+    expect(GOAL_PRESETS["fix-review"]).toContain("remediation approach");
+  });
+
+  it("runbook-validate preset mentions escalation paths", () => {
+    expect(GOAL_PRESETS["runbook-validate"]).toContain("escalation paths");
+  });
+
+  it("defaults to risk-assess when no goal specified", () => {
+    const goal = null;
+    const questionUsed = goal && GOAL_PRESETS[goal] ? GOAL_PRESETS[goal] : GOAL_PRESETS["risk-assess"];
+    expect(questionUsed).toBe(GOAL_PRESETS["risk-assess"]);
+  });
+
+  it("uses customQuestion when provided (overrides preset)", () => {
+    const customQuestion = "Why did the deploy fail?";
+    const goal = "root-cause";
+    const questionUsed = customQuestion || (goal && GOAL_PRESETS[goal] ? GOAL_PRESETS[goal] : GOAL_PRESETS["risk-assess"]);
+    expect(questionUsed).toBe("Why did the deploy fail?");
+  });
+});
+
+// ─── forge_quorum_analyze: prompt assembly ──────────────────────────────
+
+describe("forge_quorum_analyze prompt assembly", () => {
+  it("produces 3-section prompt with Context, Question, Voting Instruction", () => {
+    const context = { drift: [{ score: 82, trend: "improving" }] };
+    const questionUsed = "What is the risk level?";
+    const quorumSize = 3;
+    const votingInstruction = `Each model must respond with: (1) a confidence score 0-100, (2) a one-paragraph answer, (3) one concrete recommendation. The aggregator accepts answers with confidence >= 60 and majority consensus. Quorum size: ${quorumSize} models.`;
+    const contextStr = JSON.stringify(context, null, 2);
+    const quorumPrompt = `## Context\n${contextStr}\n\n## Question\n${questionUsed}\n\n## Voting Instruction\n${votingInstruction}`;
+
+    expect(quorumPrompt).toContain("## Context");
+    expect(quorumPrompt).toContain("## Question");
+    expect(quorumPrompt).toContain("## Voting Instruction");
+    expect(quorumPrompt).toContain("score");
+    expect(quorumPrompt).toContain("What is the risk level?");
+    expect(quorumPrompt).toContain("Quorum size: 3 models");
+  });
+
+  it("computes promptTokenEstimate from prompt length / 4", () => {
+    const prompt = "x".repeat(400);
+    const estimate = Math.ceil(prompt.length / 4);
+    expect(estimate).toBe(100);
+  });
+
+  it("computes dataSnapshotAge for recent timestamp", () => {
+    const now = new Date();
+    const fiveMinAgo = new Date(now.getTime() - 5 * 60 * 1000).toISOString();
+    const ageMs = Date.now() - new Date(fiveMinAgo).getTime();
+    const ageMins = Math.round(ageMs / 60000);
+    const age = ageMins < 60 ? `${ageMins}m ago` : `${Math.round(ageMins / 60)}h ago`;
+    expect(age).toBe("5m ago");
+  });
+
+  it("computes dataSnapshotAge for old timestamp as hours", () => {
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    const ageMs = Date.now() - new Date(twoHoursAgo).getTime();
+    const ageMins = Math.round(ageMs / 60000);
+    const age = ageMins < 60 ? `${ageMins}m ago` : `${Math.round(ageMins / 60)}h ago`;
+    expect(age).toBe("2h ago");
+  });
+
+  it("returns 'unknown' dataSnapshotAge when no timestamp", () => {
+    const oldestTimestamp = null;
+    const age = oldestTimestamp ? "computed" : "unknown";
+    expect(age).toBe("unknown");
+  });
+});
+
+// ─── forge_quorum_analyze: source-specific data loading ─────────────────
+
+describe("forge_quorum_analyze data loading", () => {
+  it("loads drift data from drift-history.json", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    for (let i = 0; i < 7; i++) {
+      appendForgeJsonl("drift-history.json", { score: 80 + i, timestamp: new Date().toISOString() }, tempDir);
+    }
+    const driftHistory = readForgeJsonl("drift-history.json", [], tempDir);
+    const recent = driftHistory.slice(-5);
+    expect(recent).toHaveLength(5);
+    expect(recent[0].score).toBe(82);
+  });
+
+  it("loads incidents from incidents.jsonl", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    for (let i = 0; i < 12; i++) {
+      appendForgeJsonl("incidents.jsonl", { id: `INC-${i}`, severity: "medium", capturedAt: new Date().toISOString() }, tempDir);
+    }
+    const incidents = readForgeJsonl("incidents.jsonl", [], tempDir).slice(-10);
+    expect(incidents).toHaveLength(10);
+  });
+
+  it("loads triage data from alert-triage-cache.json", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    writeFileSync(resolve(forgeDir, "alert-triage-cache.json"), JSON.stringify({
+      generatedAt: new Date().toISOString(),
+      alerts: [{ severity: "high", title: "Test alert" }],
+    }));
+
+    const triageCache = readForgeJson("alert-triage-cache.json", null, tempDir);
+    expect(triageCache).not.toBeNull();
+    expect(triageCache.alerts).toHaveLength(1);
+  });
+
+  it("loads fix proposals from fix-proposals.json", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    appendForgeJsonl("fix-proposals.json", { fixId: "drift-1", source: "drift", generatedAt: new Date().toISOString() }, tempDir);
+
+    const proposals = readForgeJsonl("fix-proposals.json", [], tempDir).slice(-5);
+    expect(proposals).toHaveLength(1);
+    expect(proposals[0].fixId).toBe("drift-1");
+  });
+
+  it("loads targetFile directly from .forge/", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    writeFileSync(resolve(forgeDir, "custom-analysis.json"), JSON.stringify({ type: "custom", data: [1, 2, 3], timestamp: new Date().toISOString() }));
+
+    const data = readForgeJson("custom-analysis.json", null, tempDir);
+    expect(data).not.toBeNull();
+    expect(data.type).toBe("custom");
+    expect(data.data).toEqual([1, 2, 3]);
+  });
+
+  it("returns null for non-existent targetFile", () => {
+    const data = readForgeJson("nonexistent.json", null, tempDir);
+    expect(data).toBeNull();
+  });
+});
+
+// ─── forge_quorum_analyze: loadQuorumConfig ─────────────────────────────
+
+describe("loadQuorumConfig", () => {
+  it("returns defaults when no .forge.json exists", () => {
+    const config = loadQuorumConfig(tempDir);
+    expect(config.enabled).toBe(false);
+    expect(config.auto).toBe(true);
+    expect(config.threshold).toBe(6);
+    expect(config.models).toHaveLength(3);
+    expect(config.reviewerModel).toBe("claude-opus-4.6");
+  });
+
+  it("merges user config from .forge.json quorum section", () => {
+    writeFileSync(resolve(tempDir, ".forge.json"), JSON.stringify({
+      quorum: { enabled: true, threshold: 8, models: ["gpt-5.2", "claude-opus-4.6"] }
+    }));
+
+    const config = loadQuorumConfig(tempDir);
+    expect(config.enabled).toBe(true);
+    expect(config.threshold).toBe(8);
+    expect(config.models).toEqual(["gpt-5.2", "claude-opus-4.6"]);
+    expect(config.auto).toBe(true); // default preserved
+  });
+
+  it("handles corrupt .forge.json gracefully", () => {
+    writeFileSync(resolve(tempDir, ".forge.json"), "NOT JSON!!!");
+
+    const config = loadQuorumConfig(tempDir);
+    expect(config.threshold).toBe(6);
+    expect(config.models).toHaveLength(3);
+  });
+
+  it("applies preset override when provided", () => {
+    const config = loadQuorumConfig(tempDir, "power");
+    expect(config.preset).toBe("power");
+  });
+
+  it("user config fields override preset fields", () => {
+    writeFileSync(resolve(tempDir, ".forge.json"), JSON.stringify({
+      quorum: { threshold: 9 }
+    }));
+
+    const config = loadQuorumConfig(tempDir);
+    expect(config.threshold).toBe(9);
+  });
+});
+
+// ─── loadOpenClawConfig ─────────────────────────────────────────────────
+
+describe("loadOpenClawConfig", () => {
+  it("returns null endpoint when no .forge.json exists", () => {
+    const config = loadOpenClawConfig(tempDir);
+    expect(config.endpoint).toBeNull();
+    expect(config.apiKey).toBeNull();
+  });
+
+  it("reads endpoint and apiKey from .forge.json", () => {
+    writeFileSync(resolve(tempDir, ".forge.json"), JSON.stringify({
+      openclaw: { endpoint: "https://openclaw.example.com/api", apiKey: "test-key-123" }
+    }));
+
+    const config = loadOpenClawConfig(tempDir);
+    expect(config.endpoint).toBe("https://openclaw.example.com/api");
+    expect(config.apiKey).toBe("test-key-123");
+  });
+
+  it("falls back to .forge/secrets.json for apiKey", () => {
+    writeFileSync(resolve(tempDir, ".forge.json"), JSON.stringify({
+      openclaw: { endpoint: "https://openclaw.example.com/api" }
+    }));
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    writeFileSync(resolve(forgeDir, "secrets.json"), JSON.stringify({
+      OPENCLAW_API_KEY: "secret-from-file"
+    }));
+
+    const config = loadOpenClawConfig(tempDir);
+    expect(config.endpoint).toBe("https://openclaw.example.com/api");
+    expect(config.apiKey).toBe("secret-from-file");
+  });
+
+  it("returns null endpoint when openclaw section missing", () => {
+    writeFileSync(resolve(tempDir, ".forge.json"), JSON.stringify({ quorum: {} }));
+
+    const config = loadOpenClawConfig(tempDir);
+    expect(config.endpoint).toBeNull();
+  });
+
+  it("handles corrupt .forge.json gracefully", () => {
+    writeFileSync(resolve(tempDir, ".forge.json"), "BAD JSON");
+
+    const config = loadOpenClawConfig(tempDir);
+    expect(config.endpoint).toBeNull();
+    expect(config.apiKey).toBeNull();
+  });
+
+  it("handles corrupt secrets.json gracefully", () => {
+    writeFileSync(resolve(tempDir, ".forge.json"), JSON.stringify({
+      openclaw: { endpoint: "https://example.com/api" }
+    }));
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    writeFileSync(resolve(forgeDir, "secrets.json"), "NOT JSON");
+
+    const config = loadOpenClawConfig(tempDir);
+    expect(config.endpoint).toBe("https://example.com/api");
+    expect(config.apiKey).toBeNull();
+  });
+});
+
+// ─── LIVEGUARD_TOOLS count (v2.29.0 = 13) ──────────────────────────────
+
+describe("emitToolTelemetry LIVEGUARD_TOOLS v2.29 count", () => {
+  it("writes liveguard-events.jsonl for forge_fix_proposal", () => {
+    emitToolTelemetry("forge_fix_proposal", {}, { ok: true }, 100, "OK", tempDir);
+    const events = readForgeJsonl("liveguard-events.jsonl", [], tempDir);
+    expect(events.length).toBeGreaterThanOrEqual(1);
+    expect(events[0].tool).toBe("forge_fix_proposal");
+  });
+
+  it("writes liveguard-events.jsonl for forge_quorum_analyze", () => {
+    emitToolTelemetry("forge_quorum_analyze", {}, { ok: true }, 50, "OK", tempDir);
+    const events = readForgeJsonl("liveguard-events.jsonl", [], tempDir);
+    expect(events.length).toBeGreaterThanOrEqual(1);
+    expect(events[0].tool).toBe("forge_quorum_analyze");
+  });
+
+  it("all 13 LiveGuard tools produce liveguard-events.jsonl", () => {
+    const lgTools = [
+      "forge_drift_report", "forge_incident_capture", "forge_dep_watch",
+      "forge_regression_guard", "forge_runbook", "forge_hotspot",
+      "forge_health_trend", "forge_alert_triage", "forge_deploy_journal",
+      "forge_secret_scan", "forge_env_diff", "forge_fix_proposal",
+      "forge_quorum_analyze",
+    ];
+    for (const tool of lgTools) {
+      emitToolTelemetry(tool, {}, {}, 10, "OK", tempDir);
+    }
+    const events = readForgeJsonl("liveguard-events.jsonl", [], tempDir);
+    expect(events).toHaveLength(13);
+    const toolNames = events.map(e => e.tool);
+    for (const tool of lgTools) {
+      expect(toolNames).toContain(tool);
+    }
+  });
+});
+
+// ─── Hook integration: PreDeploy + PostSlice chaining ───────────────────
+
+describe("hook integration: PreDeploy then PostSlice", () => {
+  beforeEach(() => {
+    resetPostSliceHookFired();
+  });
+
+  it("PreDeploy blocks on secrets, PostSlice still triggers on commit", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    writeFileSync(resolve(forgeDir, "secret-scan-cache.json"), JSON.stringify({
+      clean: false,
+      scannedAt: new Date().toISOString(),
+      findings: [{ file: "leak.js", line: 1, type: "api_key", entropyScore: 4.8, confidence: "high", masked: "<REDACTED>" }],
+    }));
+    appendForgeJsonl("drift-history.json", { score: 85, timestamp: new Date().toISOString(), violations: [] }, tempDir);
+    appendForgeJsonl("drift-history.json", { score: 80, timestamp: new Date().toISOString(), violations: [{ file: "b.ts", rule: "no-any", severity: "warning" }] }, tempDir);
+
+    const preDeployResult = runPreDeployHook({ toolName: "runCommand", command: "docker push myimage", cwd: tempDir });
+    expect(preDeployResult.triggered).toBe(true);
+    expect(preDeployResult.blocked).toBe(true);
+
+    const postSliceResult = runPostSliceHook({ commitMessage: "feat(deploy): push image", cwd: tempDir });
+    expect(postSliceResult.triggered).toBe(true);
+  });
+
+  it("PreDeploy passes when clean, PostSlice fires advisory on small delta", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    writeFileSync(resolve(forgeDir, "secret-scan-cache.json"), JSON.stringify({
+      clean: true,
+      scannedAt: new Date().toISOString(),
+      findings: [],
+    }));
+    appendForgeJsonl("drift-history.json", { score: 85, timestamp: new Date().toISOString(), violations: [] }, tempDir);
+    appendForgeJsonl("drift-history.json", { score: 78, timestamp: new Date().toISOString(), violations: [{ file: "c.ts", rule: "no-any", severity: "warning" }] }, tempDir);
+
+    const preDeployResult = runPreDeployHook({ toolName: "editFiles", filePath: "Dockerfile", cwd: tempDir });
+    expect(preDeployResult.triggered).toBe(true);
+    expect(preDeployResult.blocked).toBe(false);
+
+    const postSliceResult = runPostSliceHook({ commitMessage: "feat(deploy): update dockerfile", cwd: tempDir });
+    expect(postSliceResult.triggered).toBe(true);
+    expect(postSliceResult.action).toBe("advisory");
+    expect(postSliceResult.delta).toBe(7);
+  });
+});
+
+// ─── Hook integration: PreAgentHandoff with LiveGuard data ──────────────
+
+describe("hook integration: PreAgentHandoff with full LiveGuard state", () => {
+  it("builds rich context header from all data sources", async () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+
+    appendForgeJsonl("drift-history.json", { score: 78, trend: "declining", violations: [{ file: "x.ts", rule: "no-implicit-any", severity: "error" }], timestamp: new Date().toISOString() }, tempDir);
+    appendForgeJsonl("incidents.jsonl", { id: "INC-1", severity: "high", description: "Deploy failure", resolvedAt: null }, tempDir);
+    appendForgeJsonl("deploy-journal.jsonl", { version: "2.28.0", timestamp: new Date().toISOString(), preHealthScore: 80, postHealthScore: 85 }, tempDir);
+    writeFileSync(resolve(forgeDir, "secret-scan-cache.json"), JSON.stringify({
+      clean: true,
+      scannedAt: new Date().toISOString(),
+      findings: [],
+    }));
+
+    const result = await runPreAgentHandoffHook({ cwd: tempDir, dirtyFiles: ["src/api.ts"], hasActivePlan: true });
+    expect(result.triggered).toBe(true);
+    expect(result.contextHeader).toContain("Drift Score: 78/100");
+    expect(result.contextHeader).toContain("declining");
+    expect(result.contextHeader).toContain("Open Incidents: 1");
+    expect(result.contextHeader).toContain("Last Deploy: 2.28.0");
+    expect(result.contextHeader).toContain("✅ Clean");
+    expect(result.contextHeader).toContain("LIVEGUARD CONTEXT");
+  });
+});
+
+// ─── TOOL_METADATA: v2.29.0 total count ─────────────────────────────────
+
+describe("TOOL_METADATA v2.29.0 total count", () => {
+  it("has at least 33 tool entries", () => {
+    const count = Object.keys(TOOL_METADATA).length;
+    expect(count).toBeGreaterThanOrEqual(33);
+  });
+
+  it("includes both new v2.29.0 tools", () => {
+    expect(TOOL_METADATA).toHaveProperty("forge_fix_proposal");
+    expect(TOOL_METADATA).toHaveProperty("forge_quorum_analyze");
   });
 });

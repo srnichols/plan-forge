@@ -19,6 +19,9 @@ import {
   recommendModel,
   loadModelPerformance,
   recordModelPerformance,
+  loadQuorumConfig,
+  loadOpenClawConfig,
+  scoreSliceComplexity,
 } from "../orchestrator.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -815,5 +818,140 @@ describe("recommendModel", () => {
     const rec = recommendModel(tempDir, "test");
     expect(rec).not.toBeNull();
     expect(rec.model).toBe("model-a");
+  });
+});
+
+// ─── loadQuorumConfig ───────────────────────────────────────────────────
+
+describe("loadQuorumConfig", () => {
+  it("returns defaults when no config exists", () => {
+    const config = loadQuorumConfig(tempDir);
+    expect(config.enabled).toBe(false);
+    expect(config.auto).toBe(true);
+    expect(config.threshold).toBe(6);
+    expect(config.models).toEqual(["claude-opus-4.6", "gpt-5.3-codex", "grok-4.20-0309-reasoning"]);
+    expect(config.reviewerModel).toBe("claude-opus-4.6");
+    expect(config.dryRunTimeout).toBe(300_000);
+  });
+
+  it("merges quorum section from .forge.json", () => {
+    writeFileSync(resolve(tempDir, ".forge.json"), JSON.stringify({
+      quorum: { enabled: true, threshold: 9 }
+    }));
+    const config = loadQuorumConfig(tempDir);
+    expect(config.enabled).toBe(true);
+    expect(config.threshold).toBe(9);
+    expect(config.auto).toBe(true);
+  });
+
+  it("ignores non-quorum sections in .forge.json", () => {
+    writeFileSync(resolve(tempDir, ".forge.json"), JSON.stringify({
+      hooks: { preDeploy: { enabled: false } }
+    }));
+    const config = loadQuorumConfig(tempDir);
+    expect(config.threshold).toBe(6);
+  });
+
+  it("handles corrupt .forge.json with defaults", () => {
+    writeFileSync(resolve(tempDir, ".forge.json"), "CORRUPT");
+    const config = loadQuorumConfig(tempDir);
+    expect(config.threshold).toBe(6);
+    expect(config.models).toHaveLength(3);
+  });
+
+  it("applies preset override parameter", () => {
+    const config = loadQuorumConfig(tempDir, "power");
+    expect(config.preset).toBe("power");
+  });
+
+  it("user config overrides preset values", () => {
+    writeFileSync(resolve(tempDir, ".forge.json"), JSON.stringify({
+      quorum: { threshold: 10, models: ["custom-model"] }
+    }));
+    const config = loadQuorumConfig(tempDir, "speed");
+    expect(config.threshold).toBe(10);
+    expect(config.models).toEqual(["custom-model"]);
+    expect(config.preset).toBe("speed");
+  });
+});
+
+// ─── loadOpenClawConfig ─────────────────────────────────────────────────
+
+describe("loadOpenClawConfig", () => {
+  it("returns null endpoint when no config exists", () => {
+    const config = loadOpenClawConfig(tempDir);
+    expect(config.endpoint).toBeNull();
+    expect(config.apiKey).toBeNull();
+  });
+
+  it("reads endpoint and apiKey from .forge.json openclaw section", () => {
+    writeFileSync(resolve(tempDir, ".forge.json"), JSON.stringify({
+      openclaw: { endpoint: "https://example.com/api", apiKey: "key-123" }
+    }));
+    const config = loadOpenClawConfig(tempDir);
+    expect(config.endpoint).toBe("https://example.com/api");
+    expect(config.apiKey).toBe("key-123");
+  });
+
+  it("falls back to .forge/secrets.json for apiKey", () => {
+    writeFileSync(resolve(tempDir, ".forge.json"), JSON.stringify({
+      openclaw: { endpoint: "https://example.com" }
+    }));
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    writeFileSync(resolve(forgeDir, "secrets.json"), JSON.stringify({ OPENCLAW_API_KEY: "secret-key" }));
+
+    const config = loadOpenClawConfig(tempDir);
+    expect(config.endpoint).toBe("https://example.com");
+    expect(config.apiKey).toBe("secret-key");
+  });
+
+  it("returns null when openclaw section has no endpoint", () => {
+    writeFileSync(resolve(tempDir, ".forge.json"), JSON.stringify({
+      openclaw: { apiKey: "key-only" }
+    }));
+    const config = loadOpenClawConfig(tempDir);
+    expect(config.endpoint).toBeNull();
+  });
+
+  it("handles corrupt .forge.json gracefully", () => {
+    writeFileSync(resolve(tempDir, ".forge.json"), "BAD");
+    const config = loadOpenClawConfig(tempDir);
+    expect(config.endpoint).toBeNull();
+  });
+
+  it("handles corrupt secrets.json gracefully", () => {
+    writeFileSync(resolve(tempDir, ".forge.json"), JSON.stringify({
+      openclaw: { endpoint: "https://test.com" }
+    }));
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    writeFileSync(resolve(forgeDir, "secrets.json"), "NOT JSON");
+
+    const config = loadOpenClawConfig(tempDir);
+    expect(config.endpoint).toBe("https://test.com");
+    expect(config.apiKey).toBeNull();
+  });
+});
+
+// ─── scoreSliceComplexity ───────────────────────────────────────────────
+
+describe("scoreSliceComplexity", () => {
+  it("returns low score for simple slice", () => {
+    const result = scoreSliceComplexity({ title: "Update readme", tasks: ["Edit README.md"], scope: ["README.md"] }, tempDir);
+    expect(result.score).toBeGreaterThanOrEqual(1);
+    expect(result.score).toBeLessThanOrEqual(10);
+  });
+
+  it("returns higher score for security-sensitive slice", () => {
+    const simple = scoreSliceComplexity({ title: "Update readme", tasks: ["Edit file"], scope: ["README.md"] }, tempDir);
+    const complex = scoreSliceComplexity({ title: "Fix auth security vulnerability", tasks: ["Patch SQL injection", "Update RBAC middleware", "Add auth tests", "Fix CSRF token"], scope: ["src/auth.ts", "src/middleware.ts", "src/db.ts", "src/routes.ts", "src/tests/auth.test.ts"] }, tempDir);
+    expect(complex.score).toBeGreaterThanOrEqual(simple.score);
+  });
+
+  it("returns signals object with weight fields", () => {
+    const result = scoreSliceComplexity({ title: "Test slice", tasks: ["Task 1"], scope: [] }, tempDir);
+    expect(result).toHaveProperty("signals");
+    expect(typeof result.signals).toBe("object");
   });
 });

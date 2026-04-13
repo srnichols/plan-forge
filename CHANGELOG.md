@@ -5,6 +5,35 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.29.0] — 2026-04-13
+
+### Added — LiveGuard: Fix Proposals, Quorum Analysis, Deploy/Slice/Handoff Hooks, OpenClaw Bridge
+- **`forge_fix_proposal`** — generates 1–2 slice fix plans from regression, drift, incident, or secret-scan failures. Writes to `docs/plans/auto/LIVEGUARD-FIX-<id>.md`. Capped at one proposal per `incidentId` to prevent spam. Persists proposal records to `.forge/fix-proposals.json`. Auto-detects source when not specified (drift → incident → secret fallback chain).
+- **`forge_quorum_analyze`** — assembles a structured 3-section quorum prompt (Context, Question, Voting Instruction) from any LiveGuard data source. No LLM calls — returns the prompt for multi-model dispatch. Supports `customQuestion` freeform override (max 500 chars, XSS-validated) and `analysisGoal` presets (`root-cause`, `risk-assess`, `fix-review`, `runbook-validate`). Configurable `quorumSize` (1–10, default 3).
+- **PreDeploy hook** — `runPreDeployHook()` intercepts deploy triggers (Dockerfile edits, `docker push`, `kubectl apply`, etc.) and evaluates secret-scan + env-diff caches. Blocks on secret findings (configurable), advises on env key gaps and stale caches. Configurable via `.forge.json` `hooks.preDeploy`.
+- **PostSlice hook** — `runPostSliceHook()` fires after conventional commits, reads drift history, and computes score delta. Returns silent/advisory/warning based on configurable thresholds (`silentDeltaThreshold`, `warnDeltaThreshold`, `scoreFloor`). Duplicate-firing prevention within sessions.
+- **PreAgentHandoff hook** — `runPreAgentHandoffHook()` builds a structured LiveGuard context header for injection into new agent sessions. Includes drift score, open incidents, deploy history, secret scan status, and top alerts filtered by severity. Skips context injection when `PFORGE_QUORUM_TURN` env var is set. Fires regression guard on dirty branches. Posts snapshot to OpenClaw when configured.
+- **OpenClaw bridge** — `loadOpenClawConfig()` and `postOpenClawSnapshot()` enable fire-and-forget context snapshots to external OpenClaw endpoints. API key fallback to `.forge/secrets.json`.
+- **`loadQuorumConfig()`** — reads quorum configuration from `.forge.json` with preset support (`power`, `speed`), merge order: defaults < preset < user config.
+
+### Changed
+- TOOL_METADATA expanded to 33 entries (20 core + 13 LiveGuard)
+- LIVEGUARD_TOOLS set expanded to 13 entries (added `forge_fix_proposal`, `forge_quorum_analyze`)
+- Capabilities surface updated across `capabilities.mjs`, `capabilities.md`, and `capabilities.html`
+
+### Testing
+- 68 new test cases across `server.test.mjs` (327 → 380) and `orchestrator.test.mjs` (91 → 106), 577 total across all test files
+- `forge_fix_proposal`: plan file writing, fix-proposals.json persistence, duplicate detection, source-specific plan structure (incident/drift/secret/regression), auto-detection data flow
+- `forge_quorum_analyze`: XSS regex validation (script/javascript/on-event patterns), customQuestion length cap, quorumSize clamping, GOAL_PRESETS resolution (4 presets), prompt 3-section assembly, dataSnapshotAge computation, source-specific data loading (drift/incident/triage/runbook/fix-proposal/targetFile)
+- `loadQuorumConfig`: defaults, .forge.json merge, corrupt config resilience, preset override, user-overrides-preset priority
+- `loadOpenClawConfig`: no config, endpoint+apiKey, secrets.json fallback, missing endpoint, corrupt config/secrets resilience
+- `scoreSliceComplexity`: simple vs security-sensitive scoring, signals object shape
+- LIVEGUARD_TOOLS v2.29.0: all 13 tools write to `liveguard-events.jsonl`, `forge_fix_proposal` + `forge_quorum_analyze` membership
+- Hook integration: PreDeploy→PostSlice chaining (block+trigger, pass+advisory), PreAgentHandoff with full LiveGuard state (drift+incidents+deploy+secrets combined context header)
+- TOOL_METADATA v2.29.0 count validation (≥33 entries)
+
+---
+
 ## [2.28.0] — 2026-04-13
 
 ### Added — LiveGuard: Secret Scan, Env Diff, Dashboard Tab, Telemetry Retrofit

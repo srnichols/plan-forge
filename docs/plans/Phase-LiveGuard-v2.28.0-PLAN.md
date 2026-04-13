@@ -151,7 +151,7 @@ node -e " const fs = require('fs'); const src = fs.readFileSync('pforge-mcp/serv
 **Validation Gate**:
 ```bash
 node pforge-mcp/server.mjs --validate
-node -e " const fs = require('fs'); const src = fs.readFileSync('pforge-mcp/server.mjs', 'utf8'); const lgTools = ['forge_drift_report','forge_incident_capture','forge_dep_watch','forge_regression_guard','forge_runbook','forge_hotspot','forge_health_trend','forge_alert_triage','forge_deploy_journal']; const covered = lgTools.filter(t => { const toolIdx = src.indexOf(t); if (toolIdx < 0) return false; // check for emitToolTelemetry within the next 1500 chars of the handler block const handlerBlock = src.substring(toolIdx, toolIdx + 1500); return handlerBlock.includes('emitToolTelemetry'); }); if (covered.length < 9) throw new Error('Only ' + covered.length + '/9 LiveGuard handlers have emitToolTelemetry. Missing: ' + lgTools.filter(t => !covered.includes(t)).join(', ')); console.log('ok — all 9 handlers covered:', covered.length); "
+node -e "const fs=require('fs');const src=fs.readFileSync('pforge-mcp/server.mjs','utf8');const lgTools=['forge_drift_report','forge_incident_capture','forge_dep_watch','forge_regression_guard','forge_runbook','forge_hotspot','forge_health_trend','forge_alert_triage','forge_deploy_journal'];const covered=lgTools.filter(t=>{const i=src.indexOf(t);if(i<0)return false;return src.substring(i,i+1500).includes('emitToolTelemetry')});if(covered.length<9)throw new Error('Only '+covered.length+'/9 have emitToolTelemetry. Missing: '+lgTools.filter(t=>!covered.includes(t)).join(', '));console.log('ok -',covered.length,'handlers covered');"
 bash -c "cd pforge-mcp && npx vitest run tests/orchestrator.test.mjs"
 ```
 

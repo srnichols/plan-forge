@@ -72,8 +72,42 @@ After all sections are drafted, run a **PLAN QUALITY SELF-CHECK** before outputt
 5. Do the Stop Conditions cover: build failure, test failure, scope violation, and security breach?
 6. Does every slice list only the instruction files relevant to its domain (not all 17)?
 7. Are MUST acceptance criteria from the spec traceable to at least one slice's validation gate?
+8. Do all validation gate commands pass the **Gate Portability Rules** below?
+
+### Gate Portability Rules
+
+Gate commands run via `execSync` on the host OS — on Windows this means `cmd.exe`, not bash.
+Every gate command MUST be cross-platform. Apply these rules when writing gates:
+
+| Rule | Bad | Good |
+|------|-----|------|
+| **No Unix-only commands** | `grep -c "foo" file.md` | `node -e "const c=require('fs').readFileSync('file.md','utf8');if(!c.includes('foo'))throw new Error('missing');console.log('ok');"` |
+| **No `/dev/stdin`** | `curl ... \| node -e "...readFileSync('/dev/stdin',...)"` | `readFileSync(0,'utf8')` for fd 0, or move to vitest |
+| **No `/tmp/` or `/dev/null`** | `echo '{}' > /tmp/test.json` | `node -e "require('fs').writeFileSync(require('os').tmpdir()+'/test.json','{}')"` |
+| **No pipe to grep** | `git status \| grep -c "Ignored"` | `node -e "const{execSync}=require('child_process');const o=execSync('git status',{encoding:'utf8'});..."` |
+| **No `//` comments in `node -e`** | `node -e "const x=1; // comment"` | Remove comments — `//` swallows the rest of a one-liner |
+| **No `--grep` with vitest** | `npx vitest run --grep "pattern"` | Run the full suite: `bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"` |
+| **No `pforge` CLI in gates** | `pforge runbook plan.md` | `pwsh ./pforge.ps1 runbook plan.md` or rewrite as `node -e` |
+| **No multi-line `node -e`** | `node -e "\n import(...)...\n"` | Collapse to single line |
+| **No `cat FILE`** | `cat VERSION` | `node -e "console.log(require('fs').readFileSync('VERSION','utf8').trim())"` |
+| **`npx vitest` from project root** | `npx vitest run` (picks up wrong version) | `bash -c "cd pforge-mcp && npx vitest run"` |
+| **curl localhost:* in non-final slices** | `curl http://localhost:3100/api/...` | Move runtime API checks to vitest integration tests |
+
+**Preferred gate pattern** (covers 90% of slices):
+```bash
+node pforge-mcp/server.mjs --validate
+bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
+```
+
+Add additional `node -e` checks only when the vitest suite doesn't cover a specific validation (e.g., checking a file exists, verifying an export).
 
 If any check fails, revise the plan before outputting. Do not present a plan that fails its own quality check.
+
+**After hardening, run the automated gate linter** (if `forge_analyze` or the orchestrator is available):
+```
+node --input-type=module -e "import{lintGateCommands}from'./pforge-mcp/orchestrator.mjs';const r=lintGateCommands('<plan-file>');console.log(r.summary);r.errors.forEach(e=>console.log('ERR:',e.message));r.warnings.forEach(w=>console.log('WARN:',w.message));"
+```
+Fix all errors and warnings before declaring the plan hardened. The same lint runs as a pre-flight check in `runPlan()` — errors will block execution.
 
 Finally, run a **SESSION BUDGET CHECK**:
 

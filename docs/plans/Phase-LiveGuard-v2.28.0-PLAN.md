@@ -385,16 +385,16 @@ AFTER (two-section nav, single page):
 ```bash
 node pforge-mcp/server.mjs --validate
 bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
-grep -c "section-divider" pforge-mcp/dashboard/index.html  # must be 1
+node -e "const h=require('fs').readFileSync('pforge-mcp/dashboard/index.html','utf8'); if(!h.includes('section-divider')) throw new Error('missing section-divider'); console.log('ok');"
 
 node -e " const html = require('fs').readFileSync('pforge-mcp/dashboard/index.html', 'utf8'); const lgTabs = ['lg-health','lg-incidents','lg-triage','lg-security','lg-env']; const missing = lgTabs.filter(t => !html.includes('data-tab=\"' + t + '\"')); if (missing.length) throw new Error('Missing tabs: ' + missing.join(', ')); console.log('ok — all 5 LiveGuard tabs present'); "
-grep -c "liveguard-tool-completed" pforge-mcp/dashboard/app.js  # must be >= 2 (onmessage + onLiveGuardEvent)
+node -e "const js=require('fs').readFileSync('pforge-mcp/dashboard/app.js','utf8'); const c=(js.match(/liveguard-tool-completed/g)||[]).length; if(c<2) throw new Error('Expected 2+ liveguard-tool-completed refs, got '+c); console.log('ok — '+c+' refs');"
 
-grep -c "lg-tab\|amber" pforge-mcp/dashboard/index.html  # must be > 0
+node -e "const h=require('fs').readFileSync('pforge-mcp/dashboard/index.html','utf8'); if(!h.includes('lg-tab') && !h.includes('amber')) throw new Error('missing lg-tab or amber styling'); console.log('ok');"
 
-grep -c "lgHealthAlert\|lgIncidentsNew\|lgCritical\|lgSecurityAlert" pforge-mcp/dashboard/app.js  # must be >= 4
+node -e "const js=require('fs').readFileSync('pforge-mcp/dashboard/app.js','utf8'); const keys=['lgHealthAlert','lgIncidentsNew','lgCritical','lgSecurityAlert']; const missing=keys.filter(k=>!js.includes(k)); if(missing.length) throw new Error('Missing badge states: '+missing.join(', ')); console.log('ok — all badge states');"
 
-grep -c "liveguard-dashboard.html" pforge-mcp/dashboard/index.html  # must be >= 6 (1 section header + 5 per-tab)
+node -e "const h=require('fs').readFileSync('pforge-mcp/dashboard/index.html','utf8'); const c=(h.match(/liveguard-dashboard\.html/g)||[]).length; if(c<6) throw new Error('Expected 6+ doc links, got '+c); console.log('ok — '+c+' doc links');"
 ```
 
 **Stop Condition**: If `tabLoadHooks` refactor is needed but breaks more than 3 existing tabs during validation — stop, revert the refactor commit, document which tabs broke, and raise a blocker for the user before proceeding. Do not force-proceed with broken existing functionality.
@@ -449,7 +449,7 @@ grep -c "liveguard-dashboard.html" pforge-mcp/dashboard/index.html  # must be >=
 node pforge-mcp/server.mjs --validate
 bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
 node -e "import('./pforge-mcp/capabilities.mjs').then(m => m.buildCapabilitySurface([])).then(s => { const count = Object.keys(m.TOOL_METADATA || {}).length; console.log('TOOL_METADATA entries:', count); })"
-grep -c "forge_" docs/capabilities.md
+node -e "const c=require('fs').readFileSync('docs/capabilities.md','utf8'); const count=(c.match(/forge_/g)||[]).length; if(count<11) throw new Error('Expected 11+ forge_ refs, got '+count); console.log('ok — '+count+' forge_ refs');"
 ```
 
 **Stop Condition**: If tool count at `GET /api/capabilities` is not 30 → debug TOOL_METADATA vs TOOLS array discrepancy in server.mjs before proceeding to Slice 6.
@@ -508,8 +508,8 @@ grep -c "forge_" docs/capabilities.md
 
 **Validation Gate**:
 ```bash
-npx vitest run
-cat VERSION
+bash -c "cd pforge-mcp && npx vitest run"
+node -e "const v=require('fs').readFileSync('VERSION','utf8').trim(); if(!v.startsWith('2.28')) throw new Error('VERSION is '+v); console.log('ok — '+v);"
 git log --oneline -1
 node -e " const fs = require('fs'), path = require('path'); const caches = ['.forge/secret-scan-cache.json', '.forge/env-diff-cache.json']; for (const f of caches) { if (!fs.existsSync(f)) continue; const raw = fs.readFileSync(f, 'utf8'); if (raw.includes('password') && !raw.includes('<REDACTED>') && !raw.includes('missing') && !raw.includes('extra')) throw new Error('Possible value leak in ' + f); } console.log('ok — no value leaks in .forge/ stores'); "
 ```

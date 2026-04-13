@@ -683,8 +683,8 @@ node -e "const fs=require('fs'); const cap=fs.readFileSync('docs/capabilities.md
 
 **Validation Gate**:
 ```bash
-npx vitest run
-cat VERSION
+bash -c "cd pforge-mcp && npx vitest run"
+node -e "const v=require('fs').readFileSync('VERSION','utf8').trim(); if(!v.startsWith('2.27')) throw new Error('VERSION is '+v); console.log('ok — '+v);"
 git log --oneline -1
 ```
 

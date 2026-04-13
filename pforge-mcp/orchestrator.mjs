@@ -2600,13 +2600,26 @@ async function executeSlice(slice, options) {
   let currentModel = finalModel;
 
   while (attempt <= maxRetries) {
-    // Auto-escalate model on retries
+    // Auto-escalate model on retries — skip past the current model in chain
     if (attempt > 0 && escalationChain.length > 1) {
-      const chainIdx = Math.min(attempt, escalationChain.length - 1);
-      const chainModel = escalationChain[chainIdx] === "auto" ? null : escalationChain[chainIdx];
-      if (chainModel !== currentModel) {
+      let nextModel = currentModel;
+      for (let i = 0; i < escalationChain.length; i++) {
+        const candidate = escalationChain[i] === "auto" ? null : escalationChain[i];
+        if (candidate !== currentModel) {
+          nextModel = candidate;
+          break;
+        }
+      }
+      // If starting model is already the top of the chain, try the next one down
+      if (nextModel === currentModel) {
+        const curIdx = escalationChain.findIndex(m => (m === "auto" ? null : m) === currentModel);
+        const nextIdx = Math.min(curIdx + attempt, escalationChain.length - 1);
+        const candidate = escalationChain[nextIdx] === "auto" ? null : escalationChain[nextIdx];
+        if (candidate !== currentModel) nextModel = candidate;
+      }
+      if (nextModel !== currentModel) {
         const fromModel = currentModel || "auto";
-        currentModel = chainModel;
+        currentModel = nextModel;
         if (eventBus) {
           eventBus.emit("slice-escalated", {
             sliceId: slice.number,

@@ -1647,8 +1647,24 @@ function createExpressApp() {
 
 // ─── Start ────────────────────────────────────────────────────────────
 const DASHBOARD_ONLY = process.argv.includes("--dashboard-only") || process.argv.includes("--dashboard");
+const VALIDATE_ONLY = process.argv.includes("--validate");
 
 async function main() {
+  // --validate: quick startup check — verify imports, tool list, and exit
+  if (VALIDATE_ONLY) {
+    try {
+      const toolNames = TOOLS.map((t) => t.name);
+      if (!toolNames.length) throw new Error("No tools registered");
+      writeToolsJson(TOOLS, __dirname);
+      writeCliSchema(__dirname);
+      console.error(`[validate] OK — ${toolNames.length} tools registered, capabilities generated`);
+      process.exit(0);
+    } catch (err) {
+      console.error(`[validate] FAIL — ${err.message}`);
+      process.exit(1);
+    }
+  }
+
   // MCP stdio transport (skip in dashboard-only mode)
   if (!DASHBOARD_ONLY) {
     const transport = new StdioServerTransport();

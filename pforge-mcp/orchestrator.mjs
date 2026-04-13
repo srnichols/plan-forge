@@ -268,7 +268,25 @@ function parseSlices(lines) {
     if (testMatch) current.testCommand = testMatch[1];
 
     // Detect validation gate section
-    if (line.match(/\*\*Validation Gate/i)) {
+    // Supports two formats:
+    //   1. **Validation Gate**: <inline text>  (prose description, no code block)
+    //   2. **Validation Gate**:\n```bash\n<commands>\n```  (fenced code block)
+    const gateMatch = line.match(/\*\*Validation Gate\*?\*?[:\s]*(.*)$/i);
+    if (gateMatch) {
+      const inlineText = (gateMatch[1] || "").trim();
+      if (inlineText && current) {
+        // Inline gate text — extract backtick-wrapped commands or use prose
+        const backtickCmds = [];
+        const backtickRe = /`([^`]+)`/g;
+        let bm;
+        while ((bm = backtickRe.exec(inlineText)) !== null) backtickCmds.push(bm[1]);
+        if (backtickCmds.length > 0) {
+          current.validationGate = (current.validationGate ? current.validationGate + "\n" : "") + backtickCmds.join("\n");
+        } else {
+          // Store prose description as gate (regression guard won't execute it, but it's discoverable)
+          current.validationGateDescription = inlineText;
+        }
+      }
       inValidationGate = true;
       continue;
     }
@@ -2388,13 +2406,15 @@ export async function regressionGuard(files, { plan, failFast = false, cwd = pro
           foundGates = true;
         }
       }
-      // Stop-condition fallback: if no bash-block gates, use testCommand fields
+      // Stop-condition fallback: if no bash-block gates, use testCommand or buildCommand fields
       if (!foundGates) {
         try {
           const parsed = parsePlan(planPath, cwd);
           for (const s of parsed.slices) {
             if (s.testCommand) {
               gateItems.push({ planFile: basename(planPath), sliceNumber: s.number, sliceTitle: s.title, cmd: s.testCommand, source: "testCommand" });
+            } else if (s.buildCommand) {
+              gateItems.push({ planFile: basename(planPath), sliceNumber: s.number, sliceTitle: s.title, cmd: s.buildCommand, source: "buildCommand" });
             }
           }
         } catch { /* unreadable plan — skip */ }
@@ -4389,7 +4409,7 @@ function runAutoSweep(cwd) {
 
 // ─── Architecture Guardrail Rules ────────────────────────────────────
 const GUARDRAIL_RULES = [
-  { id: "empty-catch",     pattern: /catch\s*\([^)]*\)\s*\{\s*\}/g,                            severity: "high",     description: "Empty catch block — must log or handle the error" },
+  { id: "empty-catch",     pattern: /catch\s*(?:\([^)]*\))?\s*\{\s*\}/g,                          severity: "high",     description: "Empty catch block — must log or handle the error" },
   { id: "any-type",        pattern: /:\s*any\b|<any>|as\s+any\b/g,                             severity: "medium",   description: "Avoid 'any' type — use explicit types" },
   { id: "sync-over-async", pattern: /\.(Result|Wait\(\))\b/g,                                  severity: "high",     description: "Sync-over-async (.Result/.Wait()) — use await instead" },
   { id: "sql-injection",   pattern: /`[^`]*\b(SELECT|INSERT|UPDATE|DELETE|WHERE)\b[^`]*\$\{/gi, severity: "critical", description: "SQL string interpolation — use parameterized queries" },
@@ -4399,16 +4419,20 @@ const GUARDRAIL_RULES = [
 const SOURCE_EXTENSIONS = new Set([".js", ".mjs", ".ts", ".tsx", ".cs", ".py"]);
 const EXCLUDE_DIRS = new Set(["node_modules", ".git", "bin", "obj", "dist", ".forge", "vendor", "coverage", ".next", "out"]);
 
+/** Framework paths that belong to Plan Forge itself, not the user's application code. */
+const FRAMEWORK_PATHS = ["pforge-mcp", "pforge.ps1", "pforge.sh", "setup.ps1", "setup.sh", "validate-setup.ps1", "validate-setup.sh"];
+
 /**
  * Scan source files for architecture guardrail violations.
  * Called by forge_drift_report to score the codebase without spawning a subprocess.
+ * Separates app code violations from framework (Plan Forge) code violations.
  *
  * @param {object} options
  * @param {string} [options.path="."]   - Directory to scan (relative to cwd)
  * @param {string} [options.mode="file"] - Analysis mode (currently only "file" is used)
  * @param {string[]|null} [options.rules=null] - Rule IDs to run; null = all rules
  * @param {string} [options.cwd=process.cwd()] - Project root
- * @returns {Promise<{violations: Array<{file,rule,severity,line,description}>, filesScanned: number}>}
+ * @returns {Promise<{violations: Array<{file,rule,severity,line,description,framework?:boolean}>, frameworkViolations: Array, filesScanned: number}>}
  */
 export async function runAnalyze({ mode = "file", path: targetPath = ".", rules = null, cwd = process.cwd() } = {}) {
   const activeRules = rules
@@ -4417,7 +4441,13 @@ export async function runAnalyze({ mode = "file", path: targetPath = ".", rules 
 
   const rootPath = resolve(cwd, targetPath);
   const violations = [];
+  const frameworkViolations = [];
   let filesScanned = 0;
+
+  function isFrameworkPath(relPath) {
+    const normalized = relPath.replace(/\\/g, "/");
+    return FRAMEWORK_PATHS.some(fp => normalized === fp || normalized.startsWith(fp + "/"));
+  }
 
   function scanDir(dirPath) {
     let entries;
@@ -4431,12 +4461,21 @@ export async function runAnalyze({ mode = "file", path: targetPath = ".", rules 
         let content;
         try { content = readFileSync(fullPath, "utf-8"); } catch { continue; }
         const relPath = relative(cwd, fullPath);
-        for (const rule of activeRules) {
+        const isFramework = isFrameworkPath(relPath);
+        const applicableRules = isFramework
+          ? activeRules.filter(r => r.id !== "sql-injection") // Skip SQL injection in framework/client-side code
+          : activeRules;
+        for (const rule of applicableRules) {
           const re = new RegExp(rule.pattern.source, rule.pattern.flags);
           let match;
           while ((match = re.exec(content)) !== null) {
             const line = content.substring(0, match.index).split("\n").length;
-            violations.push({ file: relPath, rule: rule.id, severity: rule.severity, line, description: rule.description });
+            const violation = { file: relPath, rule: rule.id, severity: rule.severity, line, description: rule.description };
+            if (isFramework) {
+              frameworkViolations.push({ ...violation, framework: true });
+            } else {
+              violations.push(violation);
+            }
           }
         }
       }
@@ -4444,7 +4483,7 @@ export async function runAnalyze({ mode = "file", path: targetPath = ".", rules 
   }
 
   scanDir(rootPath);
-  return { violations, filesScanned };
+  return { violations, frameworkViolations, filesScanned };
 }
 
 /**

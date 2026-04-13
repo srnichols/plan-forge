@@ -891,7 +891,7 @@ function executeTool(name, args) {
 
 // ─── MCP Server ───────────────────────────────────────────────────────
 const server = new Server(
-  { name: "plan-forge-mcp", version: "2.9.0" },
+  { name: "plan-forge-mcp", version: "2.9.1" },
   { capabilities: { tools: {} } }
 );
 
@@ -1453,6 +1453,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       const analysis = await runAnalyze({ mode: "file", path: ".", rules: args.rules || null, cwd });
 
+      // Score based on app code violations only (framework violations reported separately)
       const score = Math.max(0, 100 - (analysis.violations.length * penaltyPerViolation));
 
       const history = readForgeJsonl("drift-history.json", [], cwd);
@@ -1460,7 +1461,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const delta = prev ? score - prev.score : 0;
       const trend = !prev ? "stable" : delta > 0 ? "improving" : delta < 0 ? "degrading" : "stable";
 
-      const record = { timestamp: new Date().toISOString(), score, violations: analysis.violations, filesScanned: analysis.filesScanned, delta, trend };
+      const record = { timestamp: new Date().toISOString(), score, violations: analysis.violations, frameworkViolations: analysis.frameworkViolations || [], filesScanned: analysis.filesScanned, delta, trend };
       appendForgeJsonl("drift-history.json", record, cwd);
 
       if (score < threshold) {
@@ -1468,7 +1469,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         activeBridge?.dispatch?.({ type: "drift-alert", score, threshold });
       }
 
-      const result = { score, violations: analysis.violations, filesScanned: analysis.filesScanned, trend, delta, historyLength: history.length + 1 };
+      const result = { score, violations: analysis.violations, frameworkViolations: analysis.frameworkViolations || [], filesScanned: analysis.filesScanned, trend, delta, historyLength: history.length + 1 };
       emitToolTelemetry("forge_drift_report", args, result, Date.now() - t0, "OK", cwd);
       activeHub?.broadcast({ type: "liveguard-tool-completed", tool: "forge_drift_report", status: "OK", durationMs: Date.now() - t0 });
 
@@ -1557,8 +1558,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const snapshotPath = resolve(cwd, ".forge", "deps-snapshot.json");
       const pkgPath = resolve(cwd, "package.json");
 
-      if (!existsSync(pkgPath)) {
-        return { content: [{ type: "text", text: JSON.stringify({ error: "No package.json found — non-npm projects are not yet supported", newVulnerabilities: [], resolvedVulnerabilities: [], unchanged: 0, snapshot: null }) }], isError: false };
+      // Detect project type: npm or dotnet
+      const hasPkgJson = existsSync(pkgPath);
+      const csprojFiles = hasPkgJson ? [] : readdirSync(cwd).filter(f => f.endsWith(".csproj") || f.endsWith(".sln"));
+      const isDotnet = !hasPkgJson && csprojFiles.length > 0;
+
+      if (!hasPkgJson && !isDotnet) {
+        return { content: [{ type: "text", text: JSON.stringify({ error: "No package.json or .csproj/.sln found — project type not supported", newVulnerabilities: [], resolvedVulnerabilities: [], unchanged: 0, snapshot: null }) }], isError: false };
       }
 
       // Load previous snapshot
@@ -1567,26 +1573,76 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         try { prevSnapshot = JSON.parse(readFileSync(snapshotPath, "utf-8")); } catch { prevSnapshot = null; }
       }
 
-      // Run npm audit
-      let auditResult;
-      try {
-        const raw = execSync("npm audit --json 2>&1", { cwd, encoding: "utf-8", timeout: 60_000 });
-        auditResult = JSON.parse(raw);
-      } catch (err) {
-        // npm audit exits non-zero when vulnerabilities are found — parse stdout
-        if (err.stdout) {
-          try { auditResult = JSON.parse(err.stdout); } catch { auditResult = null; }
-        }
-        if (!auditResult) {
-          return { content: [{ type: "text", text: JSON.stringify({ error: `npm audit failed: ${err.message}`, newVulnerabilities: [], resolvedVulnerabilities: [], unchanged: 0, snapshot: null }) }], isError: true };
-        }
-      }
+      let currentVulns = [];
 
-      // Extract vulnerabilities from npm audit output
-      const currentVulns = [];
-      const vulns = auditResult.vulnerabilities || {};
-      for (const [name, info] of Object.entries(vulns)) {
-        currentVulns.push({ name, severity: info.severity || "unknown", via: Array.isArray(info.via) ? info.via.filter(v => typeof v === "string") : [], range: info.range || "" });
+      if (isDotnet) {
+        // .NET: dotnet list package --vulnerable
+        let dotnetOutput;
+        try {
+          dotnetOutput = execSync("dotnet list package --vulnerable --format json 2>&1", { cwd, encoding: "utf-8", timeout: 120_000 });
+        } catch (err) {
+          const raw = err.stdout || err.stderr || err.message || "";
+          // Try parsing even on non-zero exit (dotnet may exit 1 when vulns found)
+          try { dotnetOutput = raw; } catch { dotnetOutput = null; }
+          if (!dotnetOutput) {
+            return { content: [{ type: "text", text: JSON.stringify({ error: `dotnet list package --vulnerable failed: ${err.message}`, newVulnerabilities: [], resolvedVulnerabilities: [], unchanged: 0, snapshot: null }) }], isError: true };
+          }
+        }
+
+        // Parse dotnet JSON output
+        try {
+          const parsed = JSON.parse(dotnetOutput);
+          const projects = parsed.projects || [];
+          for (const proj of projects) {
+            for (const fw of (proj.frameworks || [])) {
+              for (const pkg of (fw.topLevelPackages || [])) {
+                if (pkg.vulnerabilities && pkg.vulnerabilities.length > 0) {
+                  for (const vuln of pkg.vulnerabilities) {
+                    const severity = (vuln.severity || "unknown").toLowerCase();
+                    currentVulns.push({ name: pkg.id, severity, via: [vuln.advisoryurl || ""], range: `${pkg.resolvedVersion || ""}` });
+                  }
+                }
+              }
+              for (const pkg of (fw.transitivePackages || [])) {
+                if (pkg.vulnerabilities && pkg.vulnerabilities.length > 0) {
+                  for (const vuln of pkg.vulnerabilities) {
+                    const severity = (vuln.severity || "unknown").toLowerCase();
+                    currentVulns.push({ name: pkg.id, severity, via: [vuln.advisoryurl || ""], range: `${pkg.resolvedVersion || ""}` });
+                  }
+                }
+              }
+            }
+          }
+        } catch {
+          // Fallback: parse text output line by line
+          const lines = dotnetOutput.split("\n");
+          for (const line of lines) {
+            const match = line.match(/>\s+(\S+)\s+(\S+)\s+(\S+)\s+(Low|Moderate|High|Critical)/i);
+            if (match) {
+              currentVulns.push({ name: match[1], severity: match[4].toLowerCase().replace("moderate", "medium"), via: [], range: match[2] });
+            }
+          }
+        }
+      } else {
+        // npm audit
+        let auditResult;
+        try {
+          const raw = execSync("npm audit --json 2>&1", { cwd, encoding: "utf-8", timeout: 60_000 });
+          auditResult = JSON.parse(raw);
+        } catch (err) {
+          // npm audit exits non-zero when vulnerabilities are found — parse stdout
+          if (err.stdout) {
+            try { auditResult = JSON.parse(err.stdout); } catch { auditResult = null; }
+          }
+          if (!auditResult) {
+            return { content: [{ type: "text", text: JSON.stringify({ error: `npm audit failed: ${err.message}`, newVulnerabilities: [], resolvedVulnerabilities: [], unchanged: 0, snapshot: null }) }], isError: true };
+          }
+        }
+
+        const vulns = auditResult.vulnerabilities || {};
+        for (const [pkgName, info] of Object.entries(vulns)) {
+          currentVulns.push({ name: pkgName, severity: info.severity || "unknown", via: Array.isArray(info.via) ? info.via.filter(v => typeof v === "string") : [], range: info.range || "" });
+        }
       }
 
       // Compare with previous snapshot
@@ -1920,15 +1976,58 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       // Generate fix plan
       const slices = [];
       if (sourceData.type === "incident") {
+        const inc = sourceData.incident;
+        const affectedFiles = inc.files || inc.affectedFiles || [];
+        const desc = inc.description || inc.title || fixId;
+        const sev = inc.severity || "medium";
+
+        // Slice 1: Investigate with specific guidance
+        const investTasks = [`Review incident: ${desc}`];
+        if (affectedFiles.length > 0) {
+          investTasks.push(`Inspect affected file(s): ${affectedFiles.join(", ")}`);
+        }
+        investTasks.push("Identify root cause — check for: empty catch blocks, inverted logic, missing validation, null references");
+        investTasks.push("Document the exact code location and failure mechanism");
         slices.push({
-          title: `Investigate: ${sourceData.incident.description || sourceData.incident.title || fixId}`,
-          tasks: ["Review incident details and affected files", "Identify root cause", "Determine fix scope"],
-          scope: sourceData.incident.affectedFiles || [],
+          title: `Investigate: ${desc}`,
+          tasks: investTasks,
+          scope: affectedFiles,
         });
+
+        // Slice 2: Apply fix with concrete validation
+        const fixTasks = ["Implement the fix in the identified file(s)"];
+        if (affectedFiles.length > 0) {
+          fixTasks.push(`Add or update unit tests covering the fix in affected file(s)`);
+        }
+        fixTasks.push("Run regression guard to verify no side effects");
+        fixTasks.push("Verify incident resolution by reproducing the original failure scenario");
+
+        // Build concrete gate command based on project type
+        let gateCmd = null;
+        const hasCsproj = existsSync(resolve(cwd, "*.csproj")) || readdirSync(cwd).some(f => f.endsWith(".csproj") || f.endsWith(".sln"));
+        const hasPkgJson = existsSync(resolve(cwd, "package.json"));
+        if (hasCsproj) {
+          gateCmd = "dotnet test";
+          if (affectedFiles.length > 0) {
+            // Try to derive a test filter from affected file names
+            const testFilters = affectedFiles
+              .map(f => basename(f, extname(f)).replace(/\.(cs|fs|vb)$/, ""))
+              .filter(n => n.length > 0);
+            if (testFilters.length > 0) {
+              gateCmd = `dotnet test --filter "${testFilters.map(n => `FullyQualifiedName~${n}`).join("|")}"`;
+            }
+          }
+        } else if (hasPkgJson) {
+          gateCmd = "npm test";
+        } else {
+          gateCmd = "pforge regression-guard";
+        }
+
         slices.push({
-          title: "Apply Fix + Verify",
-          tasks: ["Implement the fix", "Run regression guard", "Verify incident resolution"],
-          gate: "node pforge-mcp/orchestrator.mjs --test",
+          title: `Apply Fix + Verify (${sev})`,
+          tasks: fixTasks,
+          scope: affectedFiles,
+          gate: gateCmd,
         });
       } else if (sourceData.type === "drift") {
         slices.push({

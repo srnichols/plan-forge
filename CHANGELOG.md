@@ -5,6 +5,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.29.1] — 2026-04-13
+
+### Fixed — 9 Platform Bugs from v2.29.0 Testing
+- **`forge_drift_report`** — `empty-catch` regex now matches C#'s parameterless `catch { }` syntax (was only matching `catch (e) {}`)
+- **`forge_diff`** — CRLF git warnings on Windows no longer crash with `NativeCommandError` (4 call sites fixed)
+- **`forge_dep_watch`** — .NET project support via `dotnet list package --vulnerable --format json` (was npm-only)
+- **`forge_regression_guard`** — parses inline `**Validation Gate**: \`cmd\`` format + falls back to `buildCommand` fields
+- **`forge_fix_proposal`** — incident-based proposals now reference specific files, suggest concrete investigation steps, and generate project-type-aware test gates
+- **`pforge smith`** — detects LiveGuard hooks (`PostSlice`, `PreAgentHandoff`, `PreDeploy`) in addition to core hooks
+- **`forge_sweep`** / **`forge_drift_report`** — framework code (`pforge-mcp/`, `pforge.*`, `setup.*`) separated from app code in scoring and sweep output; SQL injection false-positives in browser JS eliminated
+- **`forge_alert_triage`** — drift violations from framework paths excluded from app scoring
+
 ## [2.29.0] — 2026-04-13
 
 ### Added — LiveGuard: Fix Proposals, Quorum Analysis, Deploy/Slice/Handoff Hooks, OpenClaw Bridge

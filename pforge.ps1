@@ -1032,26 +1032,36 @@ function Invoke-Sweep {
 
     $codeExtensions = @('*.cs', '*.ts', '*.tsx', '*.js', '*.jsx', '*.py', '*.go', '*.java', '*.kt', '*.rb', '*.rs', '*.sql', '*.sh', '*.ps1')
     $total = 0
+    $frameworkTotal = 0
 
     foreach ($ext in $codeExtensions) {
         Get-ChildItem -Path $RepoRoot -Filter $ext -Recurse -File -ErrorAction SilentlyContinue |
             Where-Object { $_.FullName -notmatch '(node_modules|bin|obj|dist|\.git|vendor|__pycache__)' } |
             ForEach-Object {
                 $findings = Select-String -Path $_.FullName -Pattern $patternRegex -CaseSensitive:$false
+                $relPath = $_.FullName.Substring($RepoRoot.Length + 1)
+                $isFramework = $relPath -match '^(pforge-mcp[/\\]|pforge\.(ps1|sh)$|setup\.(ps1|sh)$|validate-setup\.(ps1|sh)$)'
                 foreach ($m in $findings) {
-                    $relPath = $m.Path.Substring($RepoRoot.Length + 1)
-                    Write-Host "  $relPath`:$($m.LineNumber): $($m.Line.Trim())" -ForegroundColor Yellow
-                    $total++
+                    $relDisplay = $m.Path.Substring($RepoRoot.Length + 1)
+                    if ($isFramework) {
+                        $frameworkTotal++
+                    } else {
+                        Write-Host "  $relDisplay`:$($m.LineNumber): $($m.Line.Trim())" -ForegroundColor Yellow
+                        $total++
+                    }
                 }
             }
     }
 
     Write-Host ""
     if ($total -eq 0) {
-        Write-Host "SWEEP CLEAN — zero deferred-work markers found." -ForegroundColor Green
+        Write-Host "SWEEP CLEAN — zero deferred-work markers found in app code." -ForegroundColor Green
     }
     else {
-        Write-Host "FOUND $total deferred-work marker(s). Resolve before Step 5 (Review Gate)." -ForegroundColor Red
+        Write-Host "FOUND $total deferred-work marker(s) in app code. Resolve before Step 5 (Review Gate)." -ForegroundColor Red
+    }
+    if ($frameworkTotal -gt 0) {
+        Write-Host "  ($frameworkTotal marker(s) in framework code — informational)" -ForegroundColor DarkGray
     }
 }
 
@@ -1079,8 +1089,8 @@ function Invoke-Diff {
 
     # Get changed files
     $changedFiles = @()
-    $changedFiles += git diff --name-only 2>$null
-    $changedFiles += git diff --cached --name-only 2>$null
+    $changedFiles += (git diff --name-only 2>&1 | Where-Object { $_ -isnot [System.Management.Automation.ErrorRecord] })
+    $changedFiles += (git diff --cached --name-only 2>&1 | Where-Object { $_ -isnot [System.Management.Automation.ErrorRecord] })
     $changedFiles = $changedFiles | Sort-Object -Unique | Where-Object { $_ }
 
     if ($changedFiles.Count -eq 0) {
@@ -1726,8 +1736,8 @@ function Invoke-Analyze {
 
     # Get changed files
     $changedFiles = @()
-    $changedFiles += git diff --name-only 2>$null
-    $changedFiles += git diff --cached --name-only 2>$null
+    $changedFiles += (git diff --name-only 2>&1 | Where-Object { $_ -isnot [System.Management.Automation.ErrorRecord] })
+    $changedFiles += (git diff --cached --name-only 2>&1 | Where-Object { $_ -isnot [System.Management.Automation.ErrorRecord] })
     $changedFiles = $changedFiles | Sort-Object -Unique | Where-Object { $_ }
 
     # Extract scope
@@ -1973,7 +1983,7 @@ function Invoke-Drift {
     $excludeDirs = @("node_modules", ".git", "bin", "obj", "dist", ".forge", "vendor", "coverage")
 
     $rules = @(
-        @{ id = "empty-catch";     pattern = 'catch\s*\([^)]*\)\s*\{\s*\}';                                 severity = "high";     label = "Empty catch block" },
+        @{ id = "empty-catch";     pattern = 'catch\s*(?:\([^)]*\))?\s*\{\s*\}';                               severity = "high";     label = "Empty catch block" },
         @{ id = "any-type";        pattern = ':\s*any\b|<any>|as\s+any\b';                                  severity = "medium";   label = "Avoid 'any' type" },
         @{ id = "sync-over-async"; pattern = '\.(Result|Wait\(\))\b';                                       severity = "high";     label = "Sync-over-async (.Result/.Wait())" },
         @{ id = "sql-injection";   pattern = '`[^`]*\b(SELECT|INSERT|UPDATE|DELETE|WHERE)\b[^`]*\$\{';      severity = "critical"; label = "SQL string interpolation" },
@@ -1981,9 +1991,11 @@ function Invoke-Drift {
     )
 
     $violations = [System.Collections.Generic.List[object]]::new()
+    $frameworkViolations = [System.Collections.Generic.List[object]]::new()
     $filesScanned = 0
 
     $excludeFilter = "($($excludeDirs -join '|'))"
+    $frameworkFilter = '^(pforge-mcp[/\\]|pforge\.(ps1|sh)$|setup\.(ps1|sh)$|validate-setup\.(ps1|sh)$)'
 
     foreach ($ext in $extensions) {
         $files = Get-ChildItem -Path $RepoRoot -Filter $ext -Recurse -File -ErrorAction SilentlyContinue |
@@ -1992,17 +2004,26 @@ function Invoke-Drift {
             $filesScanned++
             try {
                 $content = Get-Content -Path $file.FullName -Raw -ErrorAction Stop
+                $relPath = $file.FullName.Substring($RepoRoot.Length).TrimStart('\', '/')
+                $isFramework = $relPath -match $frameworkFilter
                 foreach ($rule in $rules) {
+                    # Skip SQL injection rule for framework/dashboard code
+                    if ($isFramework -and $rule.id -eq 'sql-injection') { continue }
                     $matches = [regex]::Matches($content, $rule.pattern)
                     foreach ($m in $matches) {
                         $lineNum = ($content.Substring(0, $m.Index) -split "`n").Count
-                        $relPath = $file.FullName.Substring($RepoRoot.Length).TrimStart('\', '/')
-                        $violations.Add([PSCustomObject]@{
+                        $entry = [PSCustomObject]@{
                             file        = $relPath
                             rule        = $rule.id
                             severity    = $rule.severity
                             line        = $lineNum
                             description = $rule.label
+                        }
+                        if ($isFramework) {
+                            $frameworkViolations.Add($entry)
+                        } else {
+                            $violations.Add($entry)
+                        }
                         })
                     }
                 }
@@ -2014,7 +2035,10 @@ function Invoke-Drift {
     $score = [Math]::Max(0, 100 - ($violations.Count * $penaltyPerViolation))
 
     Write-Host "Files scanned:  $filesScanned" -ForegroundColor White
-    Write-Host "Violations:     $($violations.Count)" -ForegroundColor $(if ($violations.Count -eq 0) { 'Green' } elseif ($violations.Count -le 5) { 'Yellow' } else { 'Red' })
+    Write-Host "App violations: $($violations.Count)" -ForegroundColor $(if ($violations.Count -eq 0) { 'Green' } elseif ($violations.Count -le 5) { 'Yellow' } else { 'Red' })
+    if ($frameworkViolations.Count -gt 0) {
+        Write-Host "Framework:      $($frameworkViolations.Count) (informational, not scored)" -ForegroundColor DarkGray
+    }
     Write-Host "Score:          $score/100" -ForegroundColor $(if ($score -ge 80) { 'Green' } elseif ($score -ge $threshold) { 'Yellow' } else { 'Red' })
     Write-Host ""
 
@@ -2657,18 +2681,23 @@ function Invoke-Smith {
     $hooksDir = Join-Path $RepoRoot ".github/hooks"
     if (Test-Path $hooksDir) {
         Write-Host "Lifecycle Hooks:" -ForegroundColor Cyan
-        $expectedHooks = @("SessionStart", "PreToolUse", "PostToolUse", "Stop")
+        $coreHooks = @("SessionStart", "PreToolUse", "PostToolUse", "Stop")
+        $liveGuardHooks = @("PostSlice", "PreAgentHandoff", "PreDeploy")
+        $allExpectedHooks = $coreHooks + $liveGuardHooks
         $hookFiles = Get-ChildItem -Path $hooksDir -File | ForEach-Object { $_.BaseName }
         $hookCount = 0
-        foreach ($hook in $expectedHooks) {
+        foreach ($hook in $allExpectedHooks) {
             $hookFound = $hookFiles | Where-Object { $_ -match $hook }
             if ($hookFound) { $hookCount++ }
         }
-        if ($hookCount -eq $expectedHooks.Count) {
-            Doctor-Pass "$hookCount/$($expectedHooks.Count) lifecycle hooks present"
+        if ($hookCount -eq $allExpectedHooks.Count) {
+            Doctor-Pass "$hookCount/$($allExpectedHooks.Count) lifecycle hooks present (core + LiveGuard)"
         } elseif ($hookCount -gt 0) {
-            $hookMissing = $expectedHooks | Where-Object { $h = $_; -not ($hookFiles | Where-Object { $_ -match $h }) }
-            Doctor-Warn "$hookCount/$($expectedHooks.Count) hooks — missing: $($hookMissing -join ', ')" "Run 'pforge update' to install missing hooks"
+            $hookMissing = $allExpectedHooks | Where-Object { $h = $_; -not ($hookFiles | Where-Object { $_ -match $h }) }
+            Doctor-Pass "$hookCount/$($allExpectedHooks.Count) hooks present"
+            if ($hookMissing.Count -gt 0) {
+                Doctor-Warn "Missing hooks: $($hookMissing -join ', ')" "Run 'pforge update' to install missing hooks"
+            }
         } else {
             Doctor-Warn "No lifecycle hooks found" "Run 'pforge update' to install hooks"
         }

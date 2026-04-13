@@ -425,16 +425,26 @@ cmd_sweep() {
     echo "─────────────────────────────────────────────────────────"
 
     local total=0
+    local framework_total=0
     local pattern='TODO|FIXME|HACK|will be replaced|placeholder|stub|mock data|Simulate|Seed with sample'
+    local framework_pattern='^(pforge-mcp/|pforge\.(ps1|sh)$|setup\.(ps1|sh)$|validate-setup\.(ps1|sh)$)'
 
     while IFS= read -r -d '' file; do
         local results
         results="$(grep -niE "$pattern" "$file" 2>/dev/null || true)"
         if [ -n "$results" ]; then
             local rel_path="${file#"$REPO_ROOT/"}"
+            local is_framework=false
+            if echo "$rel_path" | grep -qE "$framework_pattern"; then
+                is_framework=true
+            fi
             while IFS= read -r line; do
-                echo "  $rel_path:$line"
-                total=$((total + 1))
+                if [ "$is_framework" = true ]; then
+                    framework_total=$((framework_total + 1))
+                else
+                    echo "  $rel_path:$line"
+                    total=$((total + 1))
+                fi
             done <<< "$results"
         fi
     done < <(find "$REPO_ROOT" -type f \( -name "*.cs" -o -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.py" -o -name "*.go" -o -name "*.java" -o -name "*.kt" -o -name "*.rs" -o -name "*.sql" -o -name "*.sh" -o -name "*.ps1" \) \
@@ -443,9 +453,12 @@ cmd_sweep() {
 
     echo ""
     if [ "$total" -eq 0 ]; then
-        echo "SWEEP CLEAN — zero deferred-work markers found."
+        echo "SWEEP CLEAN — zero deferred-work markers found in app code."
     else
-        echo "FOUND $total deferred-work marker(s). Resolve before Step 5 (Review Gate)."
+        echo "FOUND $total deferred-work marker(s) in app code. Resolve before Step 5 (Review Gate)."
+    fi
+    if [ "$framework_total" -gt 0 ]; then
+        echo "  ($framework_total marker(s) in framework code — informational)"
     fi
 }
 
@@ -1657,7 +1670,7 @@ cmd_drift() {
             done <<< "$content"
         }
 
-        check_rule "empty-catch"     'catch[[:space:]]*\([^)]*\)[[:space:]]*\{[[:space:]]*\}'   "high"     "Empty catch block"
+        check_rule "empty-catch"     'catch[[:space:]]*(\([^)]*\))?[[:space:]]*\{[[:space:]]*\}'   "high"     "Empty catch block"
         check_rule "any-type"        ':[[:space:]]*any[[:space:];|,>]|<any>|as[[:space:]]+any'  "medium"   "Avoid 'any' type"
         check_rule "sync-over-async" '\.(Result|Wait\(\))'                                      "high"     "Sync-over-async"
         check_rule "sql-injection"   'SELECT|INSERT|UPDATE|DELETE.*\$\{'                        "critical" "SQL string interpolation"

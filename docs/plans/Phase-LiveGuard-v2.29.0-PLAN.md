@@ -106,7 +106,7 @@ All created lazily on first use.
 
 ### Slice 1 — `generateFixPlan()` Helper [hard prerequisite]
 **Build command**: `node pforge-mcp/server.mjs --validate`  
-**Test command**: `node pforge-mcp/tests/orchestrator.test.mjs`
+**Test command**: `cd pforge-mcp && npx vitest run tests/orchestrator.test.mjs`
 
 **Goal**: Add the shared helper that all fix proposal logic depends on. Generates a valid Plan Forge plan file (2-slice structure: fix + verify) from a structured failure descriptor input.
 
@@ -130,7 +130,7 @@ All created lazily on first use.
 **Validation Gate**:
 ```bash
 node pforge-mcp/server.mjs --validate
-node pforge-mcp/tests/orchestrator.test.mjs
+cd pforge-mcp && npx vitest run tests/orchestrator.test.mjs
 # Verify generated plan has both mandatory slices
 node -e "
 const { generateFixPlan } = await import('./pforge-mcp/orchestrator.mjs');
@@ -155,7 +155,7 @@ console.log('ok — plan generated at', result.planFile);
 
 ### Slice 2 — `forge_fix_proposal` Tool [P, depends: Slice 1]
 **Build command**: `node pforge-mcp/server.mjs --validate`  
-**Test command**: `node pforge-mcp/tests/server.test.mjs`
+**Test command**: `cd pforge-mcp && npx vitest run tests/server.test.mjs`
 
 **Goal**: MCP tool and CLI command that triggers `generateFixPlan()` from a regression guard result or a drift report result. The primary integration path for the "detect → propose → approve → fix" loop.
 
@@ -191,7 +191,7 @@ console.log('ok — plan generated at', result.planFile);
 **Validation Gate**:
 ```bash
 node pforge-mcp/server.mjs --validate
-node pforge-mcp/tests/server.test.mjs
+cd pforge-mcp && npx vitest run tests/server.test.mjs
 # POST without auth returns 401
 curl -s -X POST http://localhost:3100/api/fix/propose -H "Content-Type: application/json" \
   -d '{"source":"regression"}' | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); if(d.status !== 401 && !d.error?.includes('auth')) throw new Error('expected 401')"
@@ -211,7 +211,7 @@ import('./pforge-mcp/server.mjs').then(async () => {
 
 ### Slice 3 — `forge_quorum_analyze` Tool [depends: Slice 2]
 **Build command**: `node pforge-mcp/server.mjs --validate`  
-**Test command**: `node pforge-mcp/tests/server.test.mjs`
+**Test command**: `cd pforge-mcp && npx vitest run tests/server.test.mjs`
 
 **Goal**: Accept a LiveGuard snapshot (or the name of a specific LiveGuard data source) and return a structured quorum prompt that the MCP client can run through `pforge run-plan --quorum`. The tool itself makes no LLM calls — it is a prompt architect, not an AI agent. Quorum happens at the client layer.
 
@@ -250,7 +250,7 @@ import('./pforge-mcp/server.mjs').then(async () => {
 **Validation Gate**:
 ```bash
 node pforge-mcp/server.mjs --validate
-node pforge-mcp/tests/server.test.mjs
+cd pforge-mcp && npx vitest run tests/server.test.mjs
 # Returns a string prompt with all 3 sections
 curl -s -X POST http://localhost:3100/api/quorum/prompt \
   -H "Content-Type: application/json" -d '{"source":"triage","analysisGoal":"risk-assess"}' | \
@@ -268,7 +268,7 @@ curl -s -X POST http://localhost:3100/api/quorum/prompt \
 
 ### Slice 4 — `PreDeploy` Hook Implementation [P, depends: Slice 2]
 **Build command**: `node pforge-mcp/server.mjs --validate`  
-**Test command**: `node pforge-mcp/tests/server.test.mjs`
+**Test command**: `cd pforge-mcp && npx vitest run tests/server.test.mjs`
 
 **Goal**: Wire the `PreDeploy` hook spec at `.github/hooks/PreDeploy.md` into the existing `PreToolUse` hook mechanism. Invoke `forge_secret_scan` and `forge_env_diff` cache reads before any deploy-pattern file writes or commands.
 
@@ -292,11 +292,11 @@ curl -s -X POST http://localhost:3100/api/quorum/prompt \
 **Validation Gate**:
 ```bash
 node pforge-mcp/server.mjs --validate
-node pforge-mcp/tests/server.test.mjs
+cd pforge-mcp && npx vitest run tests/server.test.mjs
 # Manual test: simulate deploy trigger with known finding
 echo '{"clean":false,"findings":[{"file":"src/config.js","line":5,"type":"api_key","entropyScore":4.8,"masked":"<REDACTED>","confidence":"high"}],"scannedAt":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}' > .forge/secret-scan-cache.json
 # Trigger hook via test harness — verify block response
-node pforge-mcp/tests/server.test.mjs --grep "PreDeploy"
+cd pforge-mcp && npx vitest run tests/server.test.mjs --grep "PreDeploy"
 # Clean up
 rm .forge/secret-scan-cache.json
 ```
@@ -307,7 +307,7 @@ rm .forge/secret-scan-cache.json
 
 ### Slice 5 — `PostSlice` + `PreAgentHandoff` Hook Implementation [P, depends: Slice 1]
 **Build command**: `node pforge-mcp/server.mjs --validate`  
-**Test command**: `node pforge-mcp/tests/server.test.mjs`
+**Test command**: `cd pforge-mcp && npx vitest run tests/server.test.mjs`
 
 **Goal**: Wire the `PostSlice` and `PreAgentHandoff` hook specs into the existing `PostToolUse` and `SessionStart` hook mechanisms. Add OpenClaw bridge POST to the `PreAgentHandoff` flow.
 
@@ -363,13 +363,13 @@ export async function postOpenClawSnapshot(endpoint, apiKey, snapshot) {
 **Validation Gate**:
 ```bash
 node pforge-mcp/server.mjs --validate
-node pforge-mcp/tests/server.test.mjs
+cd pforge-mcp && npx vitest run tests/server.test.mjs
 # Verify OpenClaw helper exists and is exported
 node -e "import('./pforge-mcp/orchestrator.mjs').then(m => { if(typeof m.postOpenClawSnapshot !== 'function') throw new Error('missing'); console.log('ok'); })"
 # Verify hook triggers do not crash when all .forge/ stores are absent
-node pforge-mcp/tests/server.test.mjs --grep "PreAgentHandoff.*empty"
+cd pforge-mcp && npx vitest run tests/server.test.mjs --grep "PreAgentHandoff.*empty"
 # Verify quorum turn guard skips injection
-PFORGE_QUORUM_TURN=1 node pforge-mcp/tests/server.test.mjs --grep "PreAgentHandoff.*quorum"
+PFORGE_QUORUM_TURN=1 cd pforge-mcp && npx vitest run tests/server.test.mjs --grep "PreAgentHandoff.*quorum"
 ```
 
 **Stop Condition**: If `SessionStart` hook mechanism does not support asynchronous context injection (hooks must be synchronous) → implement the LiveGuard context read synchronously using `readFileSync` calls; mark OpenClaw POST as fire-and-forget only (already is). Document in `PreAgentHandoff.md` if async is unsupported.
@@ -378,7 +378,7 @@ PFORGE_QUORUM_TURN=1 node pforge-mcp/tests/server.test.mjs --grep "PreAgentHando
 
 ### Slice 6 — `.gitignore` + `docs/plans/auto/` Setup [P, depends: Slice 2]
 **Build command**: `node pforge-mcp/server.mjs --validate`  
-**Test command**: `node pforge-mcp/tests/server.test.mjs`
+**Test command**: `cd pforge-mcp && npx vitest run tests/server.test.mjs`
 
 **Goal**: Ensure auto-generated fix plans don't accidentally land in version control, and the `docs/plans/auto/` directory is documented.
 
@@ -414,7 +414,7 @@ git ls-files docs/plans/auto/README.md | grep -c README.md  # must be 1 (tracked
 
 ### Slice 7 — Capabilities Surface + Doc Updates [depends: Slices 2, 3, 5, 6]
 **Build command**: `node pforge-mcp/server.mjs --validate`  
-**Test command**: `node pforge-mcp/tests/server.test.mjs`
+**Test command**: `cd pforge-mcp && npx vitest run tests/server.test.mjs`
 
 **Goal**: Update all machine-readable and human-readable surfaces to reflect 32 MCP tools, 4 new REST endpoints, 3 new hooks, and the OpenClaw bridge.
 
@@ -438,7 +438,7 @@ git ls-files docs/plans/auto/README.md | grep -c README.md  # must be 1 (tracked
 **Validation Gate**:
 ```bash
 node pforge-mcp/server.mjs --validate
-node pforge-mcp/tests/server.test.mjs
+cd pforge-mcp && npx vitest run tests/server.test.mjs
 curl http://localhost:3100/api/capabilities | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); if(d.tools.length!==32) throw new Error('Expected 32, got '+d.tools.length); console.log('ok — 32 tools')"
 grep -c "forge_fix_proposal" docs/capabilities.md  # must be >= 1
 grep -c "PreDeploy\|PostSlice\|PreAgentHandoff" docs/capabilities.md  # must be 3

@@ -134,7 +134,7 @@ LiveGuard tool call
 
 ### Slice 1 — Telemetry Retrofit Verification [hard prerequisite]
 **Build command**: `node pforge-mcp/server.mjs --validate`  
-**Test command**: `node pforge-mcp/tests/orchestrator.test.mjs`
+**Test command**: `cd pforge-mcp && npx vitest run tests/orchestrator.test.mjs`
 
 **Goal**: Verify — and if necessary repair — that all 9 v2.27 LiveGuard tool handlers correctly emit telemetry and hub events. This is the foundation for the dashboard tab. Slice 2, 3, and 4 must not start until this passes.
 
@@ -174,7 +174,7 @@ if (covered.length < 9) throw new Error('Only ' + covered.length + '/9 LiveGuard
 console.log('ok — all 9 handlers covered:', covered.length);
 "
 curl -s http://localhost:3100/api/liveguard/traces | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); if(!Array.isArray(d)) throw new Error('expected array')"
-node pforge-mcp/tests/orchestrator.test.mjs
+cd pforge-mcp && npx vitest run tests/orchestrator.test.mjs
 ```
 
 **Stop Condition**: If `emitToolTelemetry` is absent from `orchestrator.mjs` (v2.27 Slice 1 not fully implemented) → implement it now before continuing. This slice is the prerequisite gate.
@@ -183,7 +183,7 @@ node pforge-mcp/tests/orchestrator.test.mjs
 
 ### Slice 2 — `forge_secret_scan` [P, depends: Slice 1]
 **Build command**: `node pforge-mcp/server.mjs --validate`  
-**Test command**: `node pforge-mcp/tests/server.test.mjs`
+**Test command**: `cd pforge-mcp && npx vitest run tests/server.test.mjs`
 
 **Goal**: Detect secrets accidentally committed post-ship using Shannon entropy + heuristic regex on `git diff` output. Zero new npm dependencies. Never logs actual secret values.
 
@@ -238,7 +238,7 @@ function shannonEntropy(str) {
 **Validation Gate**:
 ```bash
 node pforge-mcp/server.mjs --validate
-node pforge-mcp/tests/server.test.mjs
+cd pforge-mcp && npx vitest run tests/server.test.mjs
 # Confirm no values in output — findings.masked must all be <REDACTED>
 pforge secret-scan --since HEAD~1 | node -e "
 const d = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
@@ -255,7 +255,7 @@ curl http://localhost:3100/api/secrets/scan | node -e "const d=JSON.parse(requir
 
 ### Slice 3 — `forge_env_diff` [depends: Slice 2]
 **Build command**: `node pforge-mcp/server.mjs --validate`  
-**Test command**: `node pforge-mcp/tests/server.test.mjs`
+**Test command**: `cd pforge-mcp && npx vitest run tests/server.test.mjs`
 
 **Goal**: Diff key presence between environment files. Surface missing, extra, and unexpected keys before a deploy promotes the discrepancy to a production outage. Values are never read, stored, or compared.
 
@@ -286,7 +286,7 @@ curl http://localhost:3100/api/secrets/scan | node -e "const d=JSON.parse(requir
 **Validation Gate**:
 ```bash
 node pforge-mcp/server.mjs --validate
-node pforge-mcp/tests/server.test.mjs
+cd pforge-mcp && npx vitest run tests/server.test.mjs
 # Create test env files and verify diff shape
 echo "A=1\nB=2\nC=3" > /tmp/test.env.baseline
 echo "A=x\nD=y" > /tmp/test.env.staging
@@ -308,7 +308,7 @@ curl http://localhost:3100/api/env/diff | node -e "const d=JSON.parse(require('f
 
 ### Slice 4 — Unified Dashboard: LiveGuard Section [depends: Slices 1, 2, 3]
 **Build command**: `node pforge-mcp/server.mjs --validate`  
-**Test command**: `node pforge-mcp/tests/server.test.mjs`
+**Test command**: `cd pforge-mcp && npx vitest run tests/server.test.mjs`
 
 **Goal**: Extend the single unified dashboard at `localhost:3100/dashboard` with a LiveGuard section. Rather than adding more flat tabs to an already 9-tab nav bar, introduce a **two-section nav bar**: FORGE (existing tabs) and LIVEGUARD (new operational tabs) separated by a visual divider. Single HTML file, single WebSocket, single REST base — zero infrastructure duplication.
 
@@ -428,7 +428,7 @@ AFTER (two-section nav, single page):
 **Validation Gate**:
 ```bash
 node pforge-mcp/server.mjs --validate
-node pforge-mcp/tests/server.test.mjs
+cd pforge-mcp && npx vitest run tests/server.test.mjs
 # Section divider present in HTML
 grep -c "section-divider" pforge-mcp/dashboard/index.html  # must be 1
 
@@ -459,7 +459,7 @@ grep -c "liveguard-dashboard.html" pforge-mcp/dashboard/index.html  # must be >=
 
 ### Slice 5 — Capabilities Surface + All Doc Updates [depends: Slices 2, 3, 4]
 **Build command**: `node pforge-mcp/server.mjs --validate`  
-**Test command**: `node pforge-mcp/tests/server.test.mjs`
+**Test command**: `cd pforge-mcp && npx vitest run tests/server.test.mjs`
 
 **Goal**: Update all machine-readable and human-readable surfaces to reflect 30 MCP tools, 4 new REST endpoints, 5 LiveGuard dashboard tabs, and fully flesh out the Act IV manual chapters seeded as stubs in v2.27 Slice 9.
 
@@ -503,7 +503,7 @@ grep -c "liveguard-dashboard.html" pforge-mcp/dashboard/index.html  # must be >=
 **Validation Gate**:
 ```bash
 node pforge-mcp/server.mjs --validate
-node pforge-mcp/tests/server.test.mjs
+cd pforge-mcp && npx vitest run tests/server.test.mjs
 node -e "import('./pforge-mcp/capabilities.mjs').then(m => m.buildCapabilitySurface([])).then(s => { const count = Object.keys(m.TOOL_METADATA || {}).length; console.log('TOOL_METADATA entries:', count); })"
 grep -c "forge_" docs/capabilities.md
 # Must be 30

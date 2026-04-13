@@ -77,6 +77,7 @@ function Show-Help {
     Write-Host "  org-rules export  Export org custom instructions from .github/instructions/ for GitHub org settings"
     Write-Host "  drift             Score codebase against architecture guardrail rules — track drift over time"
     Write-Host "  incident <desc>   Capture an incident — record description, severity, affected files, and optional resolvedAt for MTTR"
+    Write-Host "  deploy-log <ver>  Record a deployment — log version, deployer, optional notes, and optional slice reference"
     Write-Host "  triage            Triage open alerts — rank incidents and drift violations by priority"
     Write-Host "  regression-guard  Run validation gates from plan files — guard against regressions when files change"
     Write-Host "  runbook <plan>    Generate an operational runbook from a hardened plan file"
@@ -3163,6 +3164,66 @@ function Invoke-Incident {
     }
 }
 
+# ─── Command: deploy-log ──────────────────────────────────────────────
+function Invoke-DeployLog {
+    $version = if ($Arguments.Count -gt 0) { $Arguments[0] } else { $null }
+    if (-not $version) {
+        Write-Host "ERROR: version is required. Usage: pforge deploy-log `"<version>`" [--by CI] [--notes `"...`"] [--slice S]" -ForegroundColor Red
+        exit 1
+    }
+
+    $by    = "unknown"
+    $notes = $null
+    $slice = $null
+
+    for ($i = 1; $i -lt $Arguments.Count; $i++) {
+        switch ($Arguments[$i]) {
+            '--by' {
+                if (($i + 1) -lt $Arguments.Count) { $by = $Arguments[$i + 1]; $i++ }
+            }
+            '--notes' {
+                if (($i + 1) -lt $Arguments.Count) { $notes = $Arguments[$i + 1]; $i++ }
+            }
+            '--slice' {
+                if (($i + 1) -lt $Arguments.Count) { $slice = $Arguments[$i + 1]; $i++ }
+            }
+        }
+    }
+
+    Write-ManualSteps "deploy-log" @(
+        "Build deploy payload (version, by, notes, slice)"
+        "POST to /api/deploy-journal on the MCP server"
+        "Append record to .forge/deploy-journal.jsonl"
+    )
+
+    $port = 3100
+    $payload = @{ version = $version; by = $by }
+    if ($notes) { $payload.notes = $notes }
+    if ($slice) { $payload.slice = $slice }
+    $body = $payload | ConvertTo-Json -Compress
+
+    try {
+        $response = Invoke-RestMethod -Uri "http://localhost:$port/api/deploy-journal" -Method POST `
+            -ContentType "application/json" -Body $body -ErrorAction Stop
+        Write-Host ""
+        Write-Host "`u{1F680} Deploy Recorded" -ForegroundColor Cyan
+        Write-Host "   ID:          $($response.id)" -ForegroundColor White
+        Write-Host "   Version:     $($response.version)" -ForegroundColor White
+        Write-Host "   By:          $($response.by)" -ForegroundColor White
+        Write-Host "   Deployed at: $($response.deployedAt)" -ForegroundColor White
+        if ($response.notes) {
+            Write-Host "   Notes:       $($response.notes)" -ForegroundColor White
+        }
+        if ($response.slice) {
+            Write-Host "   Slice:       $($response.slice)" -ForegroundColor White
+        }
+        Write-Host "   Saved to:    .forge/deploy-journal.jsonl" -ForegroundColor DarkGray
+    } catch {
+        Write-Host "ERROR: MCP server not running on port $port. Start with: node pforge-mcp/server.mjs" -ForegroundColor Red
+        exit 1
+    }
+}
+
 # ─── Command: triage ──────────────────────────────────────────────────
 function Invoke-Triage {
     $minSeverity = "low"
@@ -3577,6 +3638,7 @@ switch ($Command) {
     'org-rules'    { Invoke-OrgRules }
     'drift'        { Invoke-Drift }
     'incident'     { Invoke-Incident }
+    'deploy-log'   { Invoke-DeployLog }
     'triage'       { Invoke-Triage }
     'regression-guard' { Invoke-RegressionGuard }
     'runbook'      { Invoke-Runbook }

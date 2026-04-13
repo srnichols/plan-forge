@@ -316,6 +316,140 @@ describe("incident JSONL persistence", () => {
   });
 });
 
+// ─── forge_deploy_journal metadata ──────────────────────────────────────
+
+describe("TOOL_METADATA forge_deploy_journal", () => {
+  it("is present in TOOL_METADATA", () => {
+    expect(TOOL_METADATA).toHaveProperty("forge_deploy_journal");
+  });
+
+  it("has correct addedIn version", () => {
+    expect(TOOL_METADATA.forge_deploy_journal.addedIn).toBe("2.27.0");
+  });
+
+  it("produces deploy-journal.jsonl", () => {
+    expect(TOOL_METADATA.forge_deploy_journal.produces).toContain(".forge/deploy-journal.jsonl");
+  });
+
+  it("has exactly one entry (no duplicates)", () => {
+    const keys = Object.keys(TOOL_METADATA).filter(k => k === "forge_deploy_journal");
+    expect(keys).toHaveLength(1);
+  });
+
+  it("has MISSING_VERSION error entry", () => {
+    const errors = TOOL_METADATA.forge_deploy_journal.errors;
+    expect(errors).toHaveProperty("MISSING_VERSION");
+  });
+
+  it("sideEffects mentions deploy-journal.jsonl", () => {
+    const effects = TOOL_METADATA.forge_deploy_journal.sideEffects.join(" ");
+    expect(effects).toMatch(/deploy-journal\.jsonl/);
+  });
+
+  it("sideEffects mentions deploy-recorded hub event", () => {
+    const effects = TOOL_METADATA.forge_deploy_journal.sideEffects.join(" ");
+    expect(effects).toMatch(/deploy-recorded/);
+  });
+
+  it("has cost low", () => {
+    expect(TOOL_METADATA.forge_deploy_journal.cost).toBe("low");
+  });
+});
+
+// ─── Deploy journal JSONL persistence ─────────────────────────────────────
+
+describe("deploy journal JSONL persistence", () => {
+  it("appends deploy records correctly", () => {
+    const rec1 = { id: "deploy-1", version: "v1.0.0", by: "CI", notes: null, slice: null, deployedAt: "2024-01-01T00:00:00.000Z" };
+    const rec2 = { id: "deploy-2", version: "v1.1.0", by: "alice", notes: "hotfix", slice: "S3", deployedAt: "2024-01-02T00:00:00.000Z" };
+    appendForgeJsonl("deploy-journal.jsonl", rec1, tempDir);
+    appendForgeJsonl("deploy-journal.jsonl", rec2, tempDir);
+
+    const deploys = readForgeJsonl("deploy-journal.jsonl", [], tempDir);
+    expect(deploys).toHaveLength(2);
+    expect(deploys[0].version).toBe("v1.0.0");
+    expect(deploys[1].by).toBe("alice");
+    expect(deploys[1].notes).toBe("hotfix");
+  });
+
+  it("returns empty array when no deploys exist", () => {
+    const deploys = readForgeJsonl("deploy-journal.jsonl", [], tempDir);
+    expect(deploys).toHaveLength(0);
+  });
+
+  it("deploy id uses deploy- prefix", () => {
+    const id = `deploy-${Date.now()}`;
+    expect(id.startsWith("deploy-")).toBe(true);
+  });
+});
+
+// ─── Incident → deploy correlation ───────────────────────────────────────
+
+describe("incident preceding deploy correlation", () => {
+  it("finds the most recent deploy before incident timestamp", () => {
+    const deploys = [
+      { id: "deploy-1", version: "v1.0.0", deployedAt: "2024-01-01T00:00:00.000Z" },
+      { id: "deploy-2", version: "v1.1.0", deployedAt: "2024-01-02T00:00:00.000Z" },
+      { id: "deploy-3", version: "v1.2.0", deployedAt: "2024-01-04T00:00:00.000Z" },
+    ];
+    const incidentTime = new Date("2024-01-03T12:00:00.000Z").getTime();
+    let preceding = null;
+    for (let i = deploys.length - 1; i >= 0; i--) {
+      if (new Date(deploys[i].deployedAt).getTime() <= incidentTime) {
+        preceding = deploys[i];
+        break;
+      }
+    }
+    expect(preceding).not.toBeNull();
+    expect(preceding.id).toBe("deploy-2");
+    expect(preceding.version).toBe("v1.1.0");
+  });
+
+  it("returns null when no deploys precede the incident", () => {
+    const deploys = [
+      { id: "deploy-1", version: "v2.0.0", deployedAt: "2024-06-01T00:00:00.000Z" },
+    ];
+    const incidentTime = new Date("2024-01-01T00:00:00.000Z").getTime();
+    let preceding = null;
+    for (let i = deploys.length - 1; i >= 0; i--) {
+      if (new Date(deploys[i].deployedAt).getTime() <= incidentTime) {
+        preceding = deploys[i];
+        break;
+      }
+    }
+    expect(preceding).toBeNull();
+  });
+
+  it("returns null when deploy journal is empty", () => {
+    const deploys = [];
+    let preceding = null;
+    for (let i = deploys.length - 1; i >= 0; i--) {
+      if (new Date(deploys[i].deployedAt).getTime() <= Date.now()) {
+        preceding = deploys[i];
+        break;
+      }
+    }
+    expect(preceding).toBeNull();
+  });
+
+  it("JSONL round-trip: write deploys, read back, find preceding", () => {
+    appendForgeJsonl("deploy-journal.jsonl", { id: "deploy-1", version: "v1.0.0", by: "CI", notes: null, slice: null, deployedAt: "2024-01-01T00:00:00.000Z" }, tempDir);
+    appendForgeJsonl("deploy-journal.jsonl", { id: "deploy-2", version: "v1.1.0", by: "CI", notes: null, slice: null, deployedAt: "2024-01-05T00:00:00.000Z" }, tempDir);
+
+    const deploys = readForgeJsonl("deploy-journal.jsonl", [], tempDir);
+    const incidentTime = new Date("2024-01-03T00:00:00.000Z").getTime();
+    let preceding = null;
+    for (let i = deploys.length - 1; i >= 0; i--) {
+      if (new Date(deploys[i].deployedAt).getTime() <= incidentTime) {
+        preceding = deploys[i];
+        break;
+      }
+    }
+    expect(preceding).not.toBeNull();
+    expect(preceding.id).toBe("deploy-1");
+  });
+});
+
 // ─── forge_regression_guard metadata ────────────────────────────────────
 
 describe("TOOL_METADATA forge_regression_guard", () => {

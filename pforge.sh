@@ -60,6 +60,7 @@ COMMANDS:
   org-rules export  Export org custom instructions from .github/instructions/ for GitHub org settings
   drift             Score codebase against architecture guardrail rules — track drift over time
   incident <desc>   Capture an incident — record description, severity, affected files, and optional resolvedAt for MTTR
+  deploy-log <ver>  Record a deployment — log version, deployer, optional notes, and optional slice reference
   triage            Triage open alerts — rank incidents and drift violations by priority
   regression-guard  Run validation gates from plan files — guard against regressions when files change
   runbook <plan>    Generate an operational runbook from a hardened plan file
@@ -2661,6 +2662,67 @@ cmd_incident() {
     "
 }
 
+# ─── Command: deploy-log ──────────────────────────────────────────────
+cmd_deploy_log() {
+    local version="${1:-}"
+    if [ -z "$version" ]; then
+        echo "ERROR: version is required. Usage: pforge deploy-log \"<version>\" [--by CI] [--notes \"...\"] [--slice S]" >&2
+        exit 1
+    fi
+    shift
+
+    local by="unknown"
+    local notes=""
+    local slice=""
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --by)    by="$2";    shift 2 ;;
+            --notes) notes="$2"; shift 2 ;;
+            --slice) slice="$2"; shift 2 ;;
+            *) shift ;;
+        esac
+    done
+
+    print_manual_steps "deploy-log" \
+        "Build deploy payload (version, by, notes, slice)" \
+        "POST to /api/deploy-journal on the MCP server" \
+        "Append record to .forge/deploy-journal.jsonl"
+
+    local port=3100
+
+    local payload
+    payload=$(node -e "
+      const p = {
+        version: process.env.DPL_VER,
+        by: process.env.DPL_BY || 'unknown',
+      };
+      if (process.env.DPL_NOTES) p.notes = process.env.DPL_NOTES;
+      if (process.env.DPL_SLICE) p.slice = process.env.DPL_SLICE;
+      console.log(JSON.stringify(p));
+    " DPL_VER="$version" DPL_BY="$by" DPL_NOTES="$notes" DPL_SLICE="$slice")
+
+    local response
+    response=$(curl -sf -X POST "http://localhost:${port}/api/deploy-journal" \
+        -H "Content-Type: application/json" \
+        -d "$payload") || {
+        echo "ERROR: MCP server not running on port ${port}. Start with: node pforge-mcp/server.mjs" >&2
+        exit 1
+    }
+
+    echo "$response" | node -e "
+      const d = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
+      console.log('\n\u{1F680} Deploy Recorded');
+      console.log('   ID:          ' + d.id);
+      console.log('   Version:     ' + d.version);
+      console.log('   By:          ' + d.by);
+      console.log('   Deployed at: ' + d.deployedAt);
+      if (d.notes) console.log('   Notes:       ' + d.notes);
+      if (d.slice) console.log('   Slice:       ' + d.slice);
+      console.log('   Saved to:    \x1b[90m.forge/deploy-journal.jsonl\x1b[0m');
+    "
+}
+
 # ─── Command: triage ───────────────────────────────────────────────────
 cmd_triage() {
     local min_severity="low"
@@ -3075,6 +3137,7 @@ case "$COMMAND" in
     org-rules)    cmd_org_rules "$@" ;;
     drift)        cmd_drift "$@" ;;
     incident)     cmd_incident "$@" ;;
+    deploy-log)   cmd_deploy_log "$@" ;;
     triage)       cmd_triage "$@" ;;
     regression-guard) cmd_regression_guard "$@" ;;
     runbook)      cmd_runbook "$@" ;;

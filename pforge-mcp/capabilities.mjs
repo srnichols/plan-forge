@@ -273,6 +273,24 @@ export const TOOL_METADATA = {
       output: { id: "inc-1700000000000", description: "API latency spike on /checkout", severity: "high", capturedAt: "2024-01-01T00:00:00.000Z", resolvedAt: null, mttr: null },
     },
   },
+  forge_deploy_journal: {
+    intent: ["record-deploy", "log-deployment", "deploy-tracking"],
+    aliases: ["deploy-journal", "deploy-log", "record-deployment"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "2.27.0",
+    prerequisites: [".forge directory exists or will be created"],
+    produces: [".forge/deploy-journal.jsonl"],
+    consumes: [],
+    sideEffects: ["appends to .forge/deploy-journal.jsonl", "may fire deploy-recorded hub event"],
+    errors: {
+      MISSING_VERSION: { message: "version is required", recovery: "Supply a version string (e.g., 'v2.31.0')" },
+    },
+    example: {
+      input: { version: "v2.31.0", by: "CI", notes: "hotfix for checkout timeout", slice: "S3" },
+      output: { id: "deploy-1700000000000", version: "v2.31.0", by: "CI", notes: "hotfix for checkout timeout", slice: "S3", deployedAt: "2024-01-01T00:00:00.000Z" },
+    },
+  },
   forge_regression_guard: {
     intent: ["regression-check", "gate-validation", "ci-guard"],
     aliases: ["regression-guard", "run-gates", "guard-regressions"],

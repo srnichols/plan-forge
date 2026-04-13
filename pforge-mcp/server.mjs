@@ -639,6 +639,21 @@ const TOOLS = [
       required: [],
     },
   },
+  {
+    name: "forge_deploy_journal",
+    description: "Record a deployment — log version, deployer, optional notes, and optional slice reference. Appends to .forge/deploy-journal.jsonl. Used by forge_incident_capture to correlate incidents with the most recent deploy.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        version: { type: "string", description: "Deployed version (e.g., 'v2.31.0', '1.0.0-rc.1')" },
+        by: { type: "string", description: "Who or what triggered the deploy (e.g., 'CI', 'alice'). Default: 'unknown'" },
+        notes: { type: "string", description: "Free-form deploy notes (e.g., 'hotfix for checkout timeout')" },
+        slice: { type: "string", description: "Plan slice reference (e.g., 'S3', 'Slice 7.2')" },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+      required: ["version"],
+    },
+  },
 ];
 // ─── Runbook helpers ──────────────────────────────────────────────────
 
@@ -1228,6 +1243,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         mttr,
       };
 
+      // Correlate with most recent deploy before the incident
+      try {
+        const deploys = readForgeJsonl("deploy-journal.jsonl", [], cwd);
+        const capturedMs = new Date(capturedAt).getTime();
+        let preceding = null;
+        for (let i = deploys.length - 1; i >= 0; i--) {
+          const d = deploys[i];
+          if (d.deployedAt && new Date(d.deployedAt).getTime() <= capturedMs) {
+            preceding = d;
+            break;
+          }
+        }
+        if (preceding) {
+          record.precedingDeploy = { journalId: preceding.id, version: preceding.version };
+        }
+      } catch { /* no deploy journal — skip */ }
+
       appendForgeJsonl("incidents.jsonl", record, cwd);
 
       // Notify hub
@@ -1252,6 +1284,36 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return { content: [{ type: "text", text: JSON.stringify(record, null, 2) }], isError: false };
     } catch (err) {
       return { content: [{ type: "text", text: `Incident capture error: ${err.message}` }], isError: true };
+    }
+  }
+
+  if (name === "forge_deploy_journal") {
+    try {
+      const t0 = Date.now();
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+
+      if (!args.version || typeof args.version !== "string" || !args.version.trim()) {
+        return { content: [{ type: "text", text: "version is required and must be a non-empty string" }], isError: true };
+      }
+
+      const record = {
+        id: `deploy-${Date.now()}`,
+        version: args.version.trim(),
+        by: (args.by || "unknown").trim(),
+        notes: args.notes ? args.notes.trim() : null,
+        slice: args.slice ? args.slice.trim() : null,
+        deployedAt: new Date().toISOString(),
+      };
+
+      appendForgeJsonl("deploy-journal.jsonl", record, cwd);
+
+      activeHub?.broadcast({ type: "deploy-recorded", data: record, timestamp: record.deployedAt });
+
+      emitToolTelemetry("forge_deploy_journal", args, record, Date.now() - t0, "OK", cwd);
+
+      return { content: [{ type: "text", text: JSON.stringify(record, null, 2) }], isError: false };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Deploy journal error: ${err.message}` }], isError: true };
     }
   }
 
@@ -1571,6 +1633,34 @@ function createExpressApp() {
   app.get("/api/incidents", (_req, res) => {
     try {
       res.json(readForgeJsonl("incidents.jsonl", [], PROJECT_DIR));
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // REST API: POST /api/deploy-journal — record a deployment
+  app.post("/api/deploy-journal", (req, res) => {
+    try {
+      const { version, by = "unknown", notes = null, slice = null } = req.body || {};
+      if (!version || typeof version !== "string" || !version.trim()) {
+        return res.status(400).json({ error: "version is required" });
+      }
+      const record = {
+        id: `deploy-${Date.now()}`,
+        version: version.trim(),
+        by: (by || "unknown").trim(),
+        notes: notes ? notes.trim() : null,
+        slice: slice ? slice.trim() : null,
+        deployedAt: new Date().toISOString(),
+      };
+      appendForgeJsonl("deploy-journal.jsonl", record, PROJECT_DIR);
+      activeHub?.broadcast({ type: "deploy-recorded", data: record, timestamp: record.deployedAt });
+      res.status(201).json(record);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // REST API: GET /api/deploy-journal — list all deploy journal entries
+  app.get("/api/deploy-journal", (_req, res) => {
+    try {
+      res.json(readForgeJsonl("deploy-journal.jsonl", [], PROJECT_DIR));
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 

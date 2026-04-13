@@ -3380,13 +3380,13 @@ function Invoke-HealthTrend {
         $response = Invoke-RestMethod -Uri $uri -Method GET -ErrorAction Stop
         Write-Host ""
         Write-Host "`u{1F3E5} Health Trend ($($response.days)-day window)" -ForegroundColor Cyan
-        Write-Host "   Health Score: $($response.healthScore ?? 'N/A')/100" -ForegroundColor $(if ($response.healthScore -ge 80) { 'Green' } elseif ($response.healthScore -ge 50) { 'Yellow' } else { 'Red' })
+        Write-Host "   Health Score: $(if ($null -ne $response.healthScore) { $response.healthScore } else { 'N/A' })/100" -ForegroundColor $(if ($response.healthScore -ge 80) { 'Green' } elseif ($response.healthScore -ge 50) { 'Yellow' } else { 'Red' })
         Write-Host "   Trend:        $($response.trend)" -ForegroundColor White
         Write-Host "   Data Points:  $($response.dataPoints)" -ForegroundColor White
         Write-Host ""
         if ($response.drift) {
             Write-Host "   Drift:" -ForegroundColor Yellow
-            Write-Host "     Snapshots: $($response.drift.snapshots)  Avg: $($response.drift.avg ?? 'N/A')  Trend: $($response.drift.trend)"
+            Write-Host "     Snapshots: $($response.drift.snapshots)  Avg: $(if ($null -ne $response.drift.avg) { $response.drift.avg } else { 'N/A' })  Trend: $($response.drift.trend)"
         }
         if ($response.cost) {
             Write-Host "   Cost:" -ForegroundColor Yellow

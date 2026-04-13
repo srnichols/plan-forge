@@ -731,6 +731,25 @@ Every LiveGuard tool call writes to `.forge/liveguard-events.jsonl` and broadcas
 
 Extensions marked `speckit_compatible: true` in their `extension.json` work in both tools. See `extensions/PUBLISHING.md` for the full dual-publish workflow.
 
+## File Outputs
+
+Directories and files written by Plan Forge at runtime. All paths relative to the project root.
+
+| Path | Written By | Gitignored | Purpose |
+|------|-----------|------------|---------|
+| `.forge/` | All tools | Yes (`**/.forge/`) | Runtime data — runs, cost, drift, incidents, caches |
+| `.forge/runs/<ts>/` | `forge_run_plan` | Yes | Per-run telemetry, traces, slice results |
+| `.forge/cost-history.json` | `forge_cost_report` | Yes | Aggregate cost across runs |
+| `.forge/drift-history.json` | `forge_drift_report` | Yes | Architecture drift score history |
+| `.forge/incidents/` | `forge_incident_capture` | Yes | Incident logs with MTTR tracking |
+| `.forge/runbooks/` | `forge_runbook` | Yes | Generated operational runbooks |
+| `.forge/liveguard-events.jsonl` | LiveGuard tools | Yes | LiveGuard telemetry event log |
+| `.forge/deploy-journal.jsonl` | `forge_deploy_journal` | Yes | Deploy history with health deltas |
+| `.forge/fix-proposals.json` | `forge_fix_proposal` | Yes | Auto-generated fix plan proposals |
+| `.forge/secret-scan-cache.json` | `forge_secret_scan` | Yes | Redacted secret scan results |
+| `docs/plans/auto/` | `forge_fix_proposal` | Yes (`docs/plans/auto/*`) | Auto-generated fix plans (runtime artifacts) |
+| `docs/plans/auto/README.md` | Committed | No (gitignore exception) | Explains the directory's purpose |
+
 ## Configuration (`.forge.json`)
 
 ```json

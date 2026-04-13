@@ -24,7 +24,7 @@ import { execSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, watchFile, unwatchFile, statSync, openSync, readSync, closeSync } from "node:fs";
 import { resolve, join, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parsePlan, runPlan, detectWorkers, getCostReport, analyzeWithQuorum, generateImage, runAnalyze, readForgeJson, readForgeJsonl, appendForgeJsonl, emitToolTelemetry, regressionGuard } from "./orchestrator.mjs";
+import { parsePlan, runPlan, detectWorkers, getCostReport, getHealthTrend, analyzeWithQuorum, generateImage, runAnalyze, readForgeJson, readForgeJsonl, appendForgeJsonl, emitToolTelemetry, regressionGuard } from "./orchestrator.mjs";
 import { isOpenBrainConfigured } from "./memory.mjs";
 import { createHub, readHubPort } from "./hub.mjs";
 import { createBridge } from "./bridge.mjs";
@@ -614,6 +614,18 @@ const TOOLS = [
       required: [],
     },
   },
+  {
+    name: "forge_health_trend",
+    description: "Health trend analysis — aggregates drift scores, cost history, incident frequency, and model performance over a configurable time window. Returns per-metric summaries, an overall health score (0–100), and trend direction. Data sourced from .forge/ operational files.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        days: { type: "number", description: "Number of days of history to analyze. Default: 30" },
+        metrics: { type: "string", description: "Comma-separated metric filter (drift,cost,incidents,models). Default: all" },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+    },
+  },
 ];
 // ─── Runbook helpers ──────────────────────────────────────────────────
 
@@ -740,6 +752,7 @@ function executeTool(name, args) {
     case "forge_abort":
     case "forge_plan_status":
     case "forge_cost_report":
+    case "forge_health_trend":
     case "forge_capabilities":
       return null; // Handled async in CallToolRequestSchema handler
     default:
@@ -868,9 +881,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
       const report = getCostReport(cwd);
+      try {
+        const ht = getHealthTrend(cwd, 30, ["drift", "cost"]);
+        report.healthTrend = { trend: ht.trend, dataPoints: ht.dataPoints };
+      } catch { /* backward-compatible — omit on failure */ }
       return { content: [{ type: "text", text: JSON.stringify(report, null, 2) }] };
     } catch (err) {
       return { content: [{ type: "text", text: `Cost report error: ${err.message}` }], isError: true };
+    }
+  }
+
+  if (name === "forge_health_trend") {
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const days = Math.max(1, Math.min(365, parseInt(args.days) || 30));
+      const metrics = args.metrics ? args.metrics.split(",").map(m => m.trim()) : null;
+      const report = getHealthTrend(cwd, days, metrics);
+      return { content: [{ type: "text", text: JSON.stringify(report, null, 2) }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Health trend error: ${err.message}` }], isError: true };
     }
   }
 
@@ -1371,6 +1400,15 @@ function createExpressApp() {
   app.get("/api/cost", (_req, res) => {
     try {
       res.json(getCostReport(PROJECT_DIR));
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // REST API: GET /api/health-trend — health trend analysis
+  app.get("/api/health-trend", (_req, res) => {
+    try {
+      const days = Math.max(1, Math.min(365, parseInt(_req.query.days) || 30));
+      const metrics = _req.query.metrics ? _req.query.metrics.split(",").map(m => m.trim()) : null;
+      res.json(getHealthTrend(PROJECT_DIR, days, metrics));
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 

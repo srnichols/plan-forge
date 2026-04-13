@@ -80,6 +80,7 @@ function Show-Help {
     Write-Host "  regression-guard  Run validation gates from plan files — guard against regressions when files change"
     Write-Host "  runbook <plan>    Generate an operational runbook from a hardened plan file"
     Write-Host "  hotspot           Identify git churn hotspots — most frequently changed files"
+    Write-Host "  health-trend      Health trend analysis — drift, cost, incidents, model performance over time"
     Write-Host "  tour              Guided walkthrough of your installed Plan Forge files"
     Write-Host "  help              Show this help message"
     Write-Host ""
@@ -3249,6 +3250,59 @@ function Invoke-Hotspot {
     }
 }
 
+# ─── Command: health-trend ─────────────────────────────────────────────
+function Invoke-HealthTrend {
+    $days = 30
+    $metrics = ""
+    for ($i = 0; $i -lt $Arguments.Count; $i++) {
+        switch ($Arguments[$i]) {
+            '--days'    { if (($i + 1) -lt $Arguments.Count) { $days = [int]$Arguments[$i + 1]; $i++ } }
+            '--metrics' { if (($i + 1) -lt $Arguments.Count) { $metrics = $Arguments[$i + 1]; $i++ } }
+        }
+    }
+
+    Write-ManualSteps "health-trend" @(
+        "Read .forge/ operational data (drift, cost, incidents, model performance)"
+        "Filter to requested time window ($days days)"
+        "Compute per-metric summaries and overall health score"
+        "Report trend direction"
+    )
+
+    $port = 3100
+    try {
+        $uri = "http://localhost:$port/api/health-trend?days=$days"
+        if ($metrics) { $uri += "&metrics=$metrics" }
+        $response = Invoke-RestMethod -Uri $uri -Method GET -ErrorAction Stop
+        Write-Host ""
+        Write-Host "`u{1F3E5} Health Trend ($($response.days)-day window)" -ForegroundColor Cyan
+        Write-Host "   Health Score: $($response.healthScore ?? 'N/A')/100" -ForegroundColor $(if ($response.healthScore -ge 80) { 'Green' } elseif ($response.healthScore -ge 50) { 'Yellow' } else { 'Red' })
+        Write-Host "   Trend:        $($response.trend)" -ForegroundColor White
+        Write-Host "   Data Points:  $($response.dataPoints)" -ForegroundColor White
+        Write-Host ""
+        if ($response.drift) {
+            Write-Host "   Drift:" -ForegroundColor Yellow
+            Write-Host "     Snapshots: $($response.drift.snapshots)  Avg: $($response.drift.avg ?? 'N/A')  Trend: $($response.drift.trend)"
+        }
+        if ($response.cost) {
+            Write-Host "   Cost:" -ForegroundColor Yellow
+            Write-Host "     Runs: $($response.cost.runs)  Total: `$$($response.cost.totalUsd)  Avg/run: `$$($response.cost.avgPerRun)"
+        }
+        if ($response.incidents) {
+            Write-Host "   Incidents:" -ForegroundColor Yellow
+            Write-Host "     Total: $($response.incidents.total)  Open: $($response.incidents.open)  Resolved: $($response.incidents.resolved)"
+        }
+        if ($response.models) {
+            Write-Host "   Models:" -ForegroundColor Yellow
+            Write-Host "     Total slices: $($response.models.totalSlices)"
+        }
+        Write-Host ""
+        Write-Host "   Generated: $($response.generatedAt)" -ForegroundColor DarkGray
+    } catch {
+        Write-Host "ERROR: MCP server not running on port $port. Start with: node pforge-mcp/server.mjs" -ForegroundColor Red
+        exit 1
+    }
+}
+
 # ─── Command: drift ────────────────────────────────────────────────────
 function Invoke-Drift {
     $threshold = 70
@@ -3482,6 +3536,7 @@ switch ($Command) {
     'regression-guard' { Invoke-RegressionGuard }
     'runbook'      { Invoke-Runbook }
     'hotspot'      { Invoke-Hotspot }
+    'health-trend' { Invoke-HealthTrend }
     'version-bump' { Invoke-VersionBump }
     'smith'        { Invoke-Smith }
     'tour'         { Invoke-Tour }

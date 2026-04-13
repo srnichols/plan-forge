@@ -63,6 +63,7 @@ COMMANDS:
   regression-guard  Run validation gates from plan files — guard against regressions when files change
   runbook <plan>    Generate an operational runbook from a hardened plan file
   hotspot           Identify git churn hotspots — most frequently changed files
+  health-trend      Health trend analysis — drift, cost, incidents, model performance over time
   smith             Inspect your forge — environment, VS Code config, setup health, and common problems
   tour              Guided walkthrough of your installed Plan Forge files
   help              Show this help message
@@ -2755,6 +2756,64 @@ cmd_hotspot() {
     "
 }
 
+# ─── Command: health-trend ─────────────────────────────────────────────
+cmd_health_trend() {
+    local days=30
+    local metrics=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --days)    days="$2";    shift 2 ;;
+            --metrics) metrics="$2"; shift 2 ;;
+            *) shift ;;
+        esac
+    done
+
+    print_manual_steps "health-trend" \
+        "Read .forge/ operational data (drift, cost, incidents, model performance)" \
+        "Filter to requested time window ($days days)" \
+        "Compute per-metric summaries and overall health score" \
+        "Report trend direction"
+
+    local port=3100
+    local uri="http://localhost:${port}/api/health-trend?days=${days}"
+    if [ -n "$metrics" ]; then
+        uri="${uri}&metrics=${metrics}"
+    fi
+    local response
+    response=$(curl -sf "$uri") || {
+        echo "ERROR: MCP server not running on port ${port}. Start with: node pforge-mcp/server.mjs" >&2
+        exit 1
+    }
+    echo "$response" | node -e "
+      const d = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
+      console.log('\n\u{1F3E5} Health Trend (' + d.days + '-day window)');
+      const sc = d.healthScore;
+      const color = sc >= 80 ? '\x1b[32m' : sc >= 50 ? '\x1b[33m' : '\x1b[31m';
+      console.log('   Health Score: ' + color + (sc != null ? sc + '/100' : 'N/A') + '\x1b[0m');
+      console.log('   Trend:        ' + d.trend);
+      console.log('   Data Points:  ' + d.dataPoints);
+      console.log('');
+      if (d.drift) {
+        console.log('   Drift:');
+        console.log('     Snapshots: ' + d.drift.snapshots + '  Avg: ' + (d.drift.avg != null ? d.drift.avg : 'N/A') + '  Trend: ' + d.drift.trend);
+      }
+      if (d.cost) {
+        console.log('   Cost:');
+        console.log('     Runs: ' + d.cost.runs + '  Total: \$' + d.cost.totalUsd + '  Avg/run: \$' + d.cost.avgPerRun);
+      }
+      if (d.incidents) {
+        console.log('   Incidents:');
+        console.log('     Total: ' + d.incidents.total + '  Open: ' + d.incidents.open + '  Resolved: ' + d.incidents.resolved);
+      }
+      if (d.models) {
+        console.log('   Models:');
+        console.log('     Total slices: ' + d.models.totalSlices);
+      }
+      console.log('');
+      console.log('   Generated: \x1b[90m' + d.generatedAt + '\x1b[0m');
+    "
+}
+
 # ─── Command: drift ────────────────────────────────────────────────────
 cmd_drift() {
     local threshold=70
@@ -2973,6 +3032,7 @@ case "$COMMAND" in
     regression-guard) cmd_regression_guard "$@" ;;
     runbook)      cmd_runbook "$@" ;;
     hotspot)      cmd_hotspot "$@" ;;
+    health-trend) cmd_health_trend "$@" ;;
     smith)        cmd_smith ;;
     tour)         cmd_tour ;;
     help|--help)  show_help ;;

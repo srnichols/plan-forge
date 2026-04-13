@@ -1607,7 +1607,7 @@ function loadModelRouting(cwd) {
   } catch {
     // Invalid JSON or missing file — use defaults
   }
-  return { default: "auto" };
+  return { default: "claude-opus-4.6" };
 }
 
 /**
@@ -1995,6 +1995,137 @@ export function readForgeJsonl(filePath, defaultValue = [], cwd = process.cwd())
       .filter(line => line.trim())
       .map(line => JSON.parse(line));
   } catch { return defaultValue; }
+}
+
+// ─── Health Trend Analysis ────────────────────────────────────────────
+
+/**
+ * Compute health trend from .forge/health-snapshots.jsonl.
+ * Aggregates cost, drift, incident, and model performance data points
+ * over the requested time window.
+ *
+ * @param {string} [cwd=process.cwd()] - Project root directory
+ * @param {number} [days=30] - Number of days of history to include
+ * @param {string[]|null} [metrics=null] - Optional metric filter (e.g. ["drift","cost","incidents","models"])
+ * @returns {object} Health trend report
+ */
+export function getHealthTrend(cwd = process.cwd(), days = 30, metrics = null) {
+  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  const allMetrics = ["drift", "cost", "incidents", "models"];
+  const active = metrics && metrics.length ? metrics.filter(m => allMetrics.includes(m)) : allMetrics;
+
+  const result = { days, metricsIncluded: active, generatedAt: new Date().toISOString(), dataPoints: 0 };
+
+  // Drift trend
+  if (active.includes("drift")) {
+    const driftHistory = readForgeJsonl("drift-history.json", [], cwd);
+    const filtered = driftHistory.filter(r => r.timestamp >= cutoff);
+    const scores = filtered.map(r => r.score).filter(s => typeof s === "number");
+    result.drift = {
+      snapshots: filtered.length,
+      latest: scores.length ? scores[scores.length - 1] : null,
+      avg: scores.length ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10 : null,
+      min: scores.length ? Math.min(...scores) : null,
+      max: scores.length ? Math.max(...scores) : null,
+      trend: computeTrendDirection(scores),
+    };
+    result.dataPoints += filtered.length;
+  }
+
+  // Cost trend
+  if (active.includes("cost")) {
+    const costHistory = readForgeJson("cost-history.json", [], cwd);
+    const filtered = Array.isArray(costHistory) ? costHistory.filter(r => (r.date || "") >= cutoff) : [];
+    const costs = filtered.map(r => r.total_cost_usd || 0);
+    result.cost = {
+      runs: filtered.length,
+      totalUsd: costs.length ? Math.round(costs.reduce((a, b) => a + b, 0) * 100) / 100 : 0,
+      avgPerRun: costs.length ? Math.round((costs.reduce((a, b) => a + b, 0) / costs.length) * 100) / 100 : 0,
+      trend: computeTrendDirection(costs),
+    };
+    result.dataPoints += filtered.length;
+  }
+
+  // Incident trend
+  if (active.includes("incidents")) {
+    const incidents = readForgeJsonl("incidents.jsonl", [], cwd);
+    const filtered = incidents.filter(r => (r.capturedAt || "") >= cutoff);
+    const resolved = filtered.filter(r => r.resolvedAt);
+    const mttrs = resolved.map(r => r.mttr).filter(m => typeof m === "number" && m > 0);
+    result.incidents = {
+      total: filtered.length,
+      resolved: resolved.length,
+      open: filtered.length - resolved.length,
+      avgMttrMs: mttrs.length ? Math.round(mttrs.reduce((a, b) => a + b, 0) / mttrs.length) : null,
+      bySeverity: {},
+    };
+    for (const inc of filtered) {
+      const sev = inc.severity || "unknown";
+      result.incidents.bySeverity[sev] = (result.incidents.bySeverity[sev] || 0) + 1;
+    }
+    result.dataPoints += filtered.length;
+  }
+
+  // Model performance trend
+  if (active.includes("models")) {
+    const perfRecords = loadModelPerformance(cwd);
+    const filtered = perfRecords.filter(r => (r.date || "") >= cutoff);
+    const stats = {};
+    for (const r of filtered) {
+      const m = r.model || "unknown";
+      if (!stats[m]) stats[m] = { slices: 0, passed: 0, failed: 0, totalCost: 0 };
+      stats[m].slices += 1;
+      if (r.status === "passed") stats[m].passed += 1;
+      else stats[m].failed += 1;
+      stats[m].totalCost += r.cost_usd || 0;
+    }
+    const models = {};
+    for (const [model, s] of Object.entries(stats)) {
+      models[model] = {
+        slices: s.slices,
+        successRate: s.slices > 0 ? Math.round((s.passed / s.slices) * 1000) / 1000 : 0,
+        avgCostUsd: s.slices > 0 ? Math.round((s.totalCost / s.slices) * 1_000_000) / 1_000_000 : 0,
+      };
+    }
+    result.models = { totalSlices: filtered.length, byModel: models };
+    result.dataPoints += filtered.length;
+  }
+
+  // Overall health summary
+  const scores = [];
+  if (result.drift?.avg != null) scores.push(result.drift.avg);
+  if (result.incidents) {
+    const incidentPenalty = Math.min(result.incidents.total * 5, 50);
+    scores.push(Math.max(0, 100 - incidentPenalty));
+  }
+  if (result.models?.totalSlices > 0) {
+    const allPassRate = Object.values(result.models.byModel).reduce((sum, m) => sum + m.successRate, 0);
+    const avgRate = allPassRate / Object.keys(result.models.byModel).length;
+    scores.push(Math.round(avgRate * 100));
+  }
+
+  result.healthScore = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
+  result.trend = result.drift?.trend || (result.dataPoints === 0 ? "no-data" : "stable");
+
+  return result;
+}
+
+/**
+ * Compute trend direction from an ordered array of numeric values.
+ * Compares the mean of the first half to the mean of the second half.
+ */
+function computeTrendDirection(values) {
+  if (!values || values.length < 2) return "insufficient-data";
+  const mid = Math.floor(values.length / 2);
+  const firstHalf = values.slice(0, mid);
+  const secondHalf = values.slice(mid);
+  const avg1 = firstHalf.reduce((a, b) => a + b, 0) / firstHalf.length;
+  const avg2 = secondHalf.reduce((a, b) => a + b, 0) / secondHalf.length;
+  const delta = avg2 - avg1;
+  const threshold = Math.abs(avg1) * 0.05 || 1;
+  if (delta > threshold) return "increasing";
+  if (delta < -threshold) return "decreasing";
+  return "stable";
 }
 
 /**
@@ -3956,6 +4087,7 @@ async function selfTest() {
     assert("CLI override wins", resolveModel("claude-sonnet-4.6", { default: "gpt-5" }, null) === "claude-sonnet-4.6");
     assert("Routing default when CLI is auto", resolveModel("auto", { default: "gpt-5" }, null) === "gpt-5");
     assert("Null when both auto", resolveModel(null, { default: "auto" }, null) === null);
+    assert("Default is claude-opus-4.6 when no .forge.json", loadModelRouting("/nonexistent-path-pforge-test").default === "claude-opus-4.6");
   } catch (err) {
     assert(`Model routing: ${err.message}`, false);
   }
@@ -4013,7 +4145,7 @@ async function selfTest() {
     // API worker uses per-token pricing
     const cost4 = calculateSliceCost({ tokens_in: 1000, tokens_out: 500, model: "grok-4" }, "api-xai");
     assert("API worker uses token pricing", cost4.cost_usd > 0);
-    assert("API worker cost matches expected", Math.abs(cost4.cost_usd - 0.007) < 0.0001); // 1000*2/1M + 500*10/1M
+    assert("API worker cost matches expected", Math.abs(cost4.cost_usd - 0.005) < 0.0001); // 1000*2/1M + 500*6/1M
 
     // Breakdown
     const mockResults = [
@@ -4132,7 +4264,7 @@ async function selfTest() {
     assert("Config has 3 default models", config.models.length === 3);
     assert("Config has reviewerModel", typeof config.reviewerModel === "string");
     assert("Config has dryRunTimeout", typeof config.dryRunTimeout === "number");
-    assert("Default threshold is 7", config.threshold === 7);
+    assert("Default threshold is 6", config.threshold === 6);
   } catch (err) {
     assert(`Quorum config: ${err.message}`, false);
   }

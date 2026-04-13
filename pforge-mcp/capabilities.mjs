@@ -329,6 +329,24 @@ export const TOOL_METADATA = {
       output: { generatedAt: "2024-01-01T00:00:00.000Z", since: "3 months ago", totalFiles: 42, showing: 5, hotspots: [{ file: "src/api.ts", commits: 28 }] },
     },
   },
+  forge_health_trend: {
+    intent: ["health", "trend", "monitoring"],
+    aliases: ["health-analysis", "system-health", "health-report"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "2.31.0",
+    prerequisites: [],
+    produces: [],
+    consumes: [".forge/drift-history.json", ".forge/cost-history.json", ".forge/incidents.jsonl", ".forge/model-performance.json"],
+    sideEffects: [],
+    errors: {
+      NO_DATA: { message: "No operational data found for the requested time window", recovery: "Run forge tools (drift, run-plan, incident) to generate data, or widen the --days window" },
+    },
+    example: {
+      input: { days: 30 },
+      output: { days: 30, healthScore: 87, trend: "stable", dataPoints: 15, drift: { snapshots: 5, avg: 85 }, cost: { runs: 3, totalUsd: 1.23 }, incidents: { total: 2, open: 0 }, models: { totalSlices: 10 } },
+    },
+  },
 };
 
 // ─── Workflow Graphs ──────────────────────────────────────────────────

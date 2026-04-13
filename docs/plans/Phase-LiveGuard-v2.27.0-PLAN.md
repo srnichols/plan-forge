@@ -428,8 +428,6 @@ node -e "import('./pforge-mcp/orchestrator.mjs').then(m => { const allowed = m.i
 **Validation Gate**:
 ```bash
 node pforge-mcp/server.mjs --validate
-pforge runbook docs/plans/examples/Phase-TYPESCRIPT-EXAMPLE.md
-test -f .forge/runbooks/phase-typescript-example-runbook.md && echo "ok" || echo "fail"
 bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
 ```
 

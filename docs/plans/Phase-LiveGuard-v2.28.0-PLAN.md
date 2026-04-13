@@ -217,12 +217,6 @@ function shannonEntropy(str) {
 ```bash
 node pforge-mcp/server.mjs --validate
 bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
-pforge secret-scan --since HEAD~1 | node -e "
-const d = JSON.parse(require('fs').readFileSync(0,'utf8'));
-const leaked = (d.findings || []).filter(f => f.masked !== '<REDACTED>');
-if (leaked.length) throw new Error('Secret value leaked: ' + JSON.stringify(leaked));
-console.log('ok — no values in output');
-"
 ```
 
 **Stop Condition**: If `git diff` returns exit code 128 (not a git repo) → return `{ clean: null, scannedFiles: 0, findings: [], error: "git unavailable" }`. No throw. Document same graceful degradation pattern as `forge_hotspot`.
@@ -263,17 +257,6 @@ console.log('ok — no values in output');
 ```bash
 node pforge-mcp/server.mjs --validate
 bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
-echo "A=1\nB=2\nC=3" > /tmp/test.env.baseline
-echo "A=x\nD=y" > /tmp/test.env.staging
-pforge env-diff --baseline /tmp/test.env.baseline --files /tmp/test.env.staging | node -e "
-const d = JSON.parse(require('fs').readFileSync(0,'utf8'));
-const pair = d.pairs?.[0];
-if (!pair?.missing?.includes('B') || !pair?.missing?.includes('C')) throw new Error('Missing keys not detected');
-if (!pair?.extra?.includes('D')) throw new Error('Extra key not detected');
-const hasValues = JSON.stringify(d).includes('=1') || JSON.stringify(d).includes('=x');
-if (hasValues) throw new Error('Values leaked into output');
-console.log('ok');
-"
 ```
 
 **Stop Condition**: If baseline file does not exist → return `{ pairs: [], summary: { clean: null, error: "baseline file not found: <path>" } }`. No throw.

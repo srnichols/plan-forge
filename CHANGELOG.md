@@ -5,6 +5,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.23.0] — 2026-04-12
+
+### Added
+- **`POST /api/runs/trigger`** — inbound HTTP trigger endpoint so OpenClaw (or any external orchestrator) can start a plan run on the MCP server without sitting at VS Code. Accepts `plan`, `quorum`, `model`, `resumeFrom`, `estimate`, and `dryRun`. Returns `{ ok, triggerId, message }` immediately; run executes in background with full dashboard + bridge notifications.
+- **`POST /api/runs/abort`** — companion endpoint to abort an in-progress triggered run. Auth: same `bridge.approvalSecret` Bearer token used by the approval gate.
+- **Blog index infographic link** — "🗺️ View System Infographic →" button added below hero image on blog index page.
+
+### Fixed
+- **Dashboard nested interactive control** — moved "Plan Browser →" anchor outside `<summary>` to resolve accessibility violation.
+- **Plan Browser inline style** — extracted `height: calc(100vh - 56px)` into `.layout-body` CSS class.
+- **Infographic CSS** — extracted all inline styles from feature cards into named classes; added `-webkit-backdrop-filter` Safari fallbacks throughout.
+
+---
+
 ## [2.22.0] — 2026-04-10
 
 ### Fixed

@@ -103,12 +103,12 @@
       </div>
 
       <!-- Plan Browser  -->
-      <details id="plan-browser" class="bg-gray-800 rounded-lg mb-4">
+      <details id="plan-browser" class="bg-gray-800 rounded-lg mb-4 relative">
         <summary class="px-4 py-3 cursor-pointer hover:bg-gray-700/50 flex items-center gap-2 text-sm font-semibold select-none">
           <span>📄</span> Available Plans
           <span id="plan-count" class="text-xs text-gray-500 ml-1"></span>
-          <a href="/ui" onclick="event.stopPropagation()" target="_blank" class="text-xs text-blue-400 hover:text-blue-300 ml-auto">Plan Browser →</a>
         </summary>
+        <a href="/ui" target="_blank" class="absolute top-3 right-4 text-xs text-blue-400 hover:text-blue-300">Plan Browser →</a>
         <div id="plan-list" class="px-4 pb-3">
           <p class="text-gray-500 text-sm py-2">Loading plans...</p>
         </div>

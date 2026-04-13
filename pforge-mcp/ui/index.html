@@ -17,6 +17,7 @@
     .task-item::before { content: "▸ "; color: #6366f1; }
     .scope-tag { background: rgba(99,102,241,0.1); color: #818cf8; }
     #detail-panel { min-height: calc(100vh - 64px); }
+    .layout-body { height: calc(100vh - 56px); }
     .spinner { animation: spin 1s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
     ::-webkit-scrollbar { width: 6px; }
@@ -43,7 +44,7 @@
   </header>
 
   <!-- Layout -->
-  <div class="flex" style="height: calc(100vh - 56px);">
+  <div class="flex layout-body">
 
     <!-- Sidebar: Plan List -->
     <aside class="w-72 bg-gray-900 border-r border-gray-800 overflow-y-auto flex-shrink-0">

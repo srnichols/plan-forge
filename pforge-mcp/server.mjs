@@ -1471,6 +1471,74 @@ function createExpressApp() {
     res.send(`<html><body><h2>${icon} ${label}</h2><p>Run <code>${runId}</code> has been <strong>${label.toLowerCase()}</strong>.</p></body></html>`);
   });
 
+  // POST /api/runs/trigger — inbound trigger for OpenClaw / external orchestrators
+  //   Auth: Authorization: Bearer <bridge.approvalSecret>  OR  ?token=<secret>
+  //   Body: { plan: "docs/plans/Phase-1.md", quorum?: "auto"|"power"|"speed"|true|false,
+  //           model?: string, resumeFrom?: number, estimate?: boolean, dryRun?: boolean }
+  //   Response: { ok: true, triggerId, message }  (run executes in background)
+  app.post("/api/runs/trigger", (req, res) => {
+    if (!checkApprovalSecret(req, res)) return;
+
+    const { plan, quorum: rawQuorum, model, resumeFrom, estimate, dryRun } = req.body || {};
+    if (!plan || typeof plan !== "string") {
+      return res.status(400).json({ error: "plan is required and must be a string path" });
+    }
+
+    // Prevent concurrent runs
+    if (activeAbortController) {
+      return res.status(409).json({ error: "A plan run is already in progress. Abort it first via POST /api/runs/abort" });
+    }
+
+    const cwd = findProjectRoot(PROJECT_DIR);
+    const planPath = resolve(cwd, plan);
+    if (!existsSync(planPath)) {
+      return res.status(404).json({ error: `Plan file not found: ${plan}` });
+    }
+
+    // Parse quorum parameter (mirrors forge_run_plan MCP handler)
+    let quorum = "auto";
+    let quorumPreset = null;
+    if (rawQuorum === "power") { quorum = true; quorumPreset = "power"; }
+    else if (rawQuorum === "speed") { quorum = true; quorumPreset = "speed"; }
+    else if (rawQuorum === "true" || rawQuorum === true) quorum = true;
+    else if (rawQuorum === "false" || rawQuorum === false) quorum = false;
+
+    const triggerId = `trigger-${Date.now()}`;
+
+    // Fire-and-forget — run executes in background; dashboard + bridge handle progress
+    activeAbortController = new AbortController();
+    const eventHandler = activeHub ? { handle: (event) => activeHub.broadcast(event) } : null;
+    runPlan(planPath, {
+      cwd,
+      model: model || null,
+      mode: "auto",
+      resumeFrom: resumeFrom != null ? Number(resumeFrom) : null,
+      estimate: estimate || false,
+      dryRun: dryRun || false,
+      quorum,
+      quorumPreset,
+      abortController: activeAbortController,
+      eventHandler,
+    }).then(() => {
+      activeAbortController = null;
+    }).catch((err) => {
+      activeAbortController = null;
+      console.error(`[trigger] Run failed: ${err.message}`);
+    });
+
+    res.json({ ok: true, triggerId, message: `Plan run started: ${plan}`, plan });
+  });
+
+  // POST /api/runs/abort — abort an in-progress triggered run
+  app.post("/api/runs/abort", (req, res) => {
+    if (!checkApprovalSecret(req, res)) return;
+    if (!activeAbortController) {
+      return res.status(404).json({ error: "No active run to abort" });
+    }
+    activeAbortController.abort();
+    res.json({ ok: true, message: "Abort signal sent. Current slice will finish, then execution stops." });
+  });
+
   // ─── Bridge REST API endpoints are registered above ─────────────────
 
   return app;

@@ -1778,7 +1778,7 @@ describe("dashboard tab structure", () => {
   });
 
   it("has LiveGuard section divider", () => {
-    expect(dashboardHtml).toContain("🛡️ LG");
+    expect(dashboardHtml).toContain("🛡️ LiveGuard");
   });
 
   it("LiveGuard tabs use amber hover style", () => {

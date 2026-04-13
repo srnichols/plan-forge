@@ -1487,7 +1487,7 @@ function createExpressApp() {
       const plans = [];
       for (const file of files) {
         try {
-          const parsed = parsePlan(resolve(plansDir, file));
+          const parsed = parsePlan(resolve(plansDir, file), PROJECT_DIR);
           plans.push({
             file: `docs/plans/${file}`,
             title: parsed.meta.title || file,

@@ -10,7 +10,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { tmpdir } from "node:os";
-import { runAnalyze, appendForgeJsonl, readForgeJsonl } from "../orchestrator.mjs";
+import { runAnalyze, appendForgeJsonl, readForgeJsonl, regressionGuard, isGateCommandAllowed } from "../orchestrator.mjs";
 import { TOOL_METADATA } from "../capabilities.mjs";
 
 let tempDir;
@@ -313,5 +313,199 @@ describe("incident JSONL persistence", () => {
   it("incident id uses inc- prefix", () => {
     const id = `inc-${Date.now()}`;
     expect(id.startsWith("inc-")).toBe(true);
+  });
+});
+
+// ─── forge_regression_guard metadata ────────────────────────────────────
+
+describe("TOOL_METADATA forge_regression_guard", () => {
+  it("is present in TOOL_METADATA", () => {
+    expect(TOOL_METADATA).toHaveProperty("forge_regression_guard");
+  });
+
+  it("has correct addedIn version", () => {
+    expect(TOOL_METADATA.forge_regression_guard.addedIn).toBe("2.29.0");
+  });
+
+  it("has exactly one entry (no duplicates)", () => {
+    const keys = Object.keys(TOOL_METADATA).filter(k => k === "forge_regression_guard");
+    expect(keys).toHaveLength(1);
+  });
+
+  it("has NO_PLANS_FOUND and GATE_FAILED error entries", () => {
+    const errors = TOOL_METADATA.forge_regression_guard.errors;
+    expect(errors).toHaveProperty("NO_PLANS_FOUND");
+    expect(errors).toHaveProperty("GATE_FAILED");
+  });
+
+  it("sideEffects mentions shell command execution", () => {
+    const effects = TOOL_METADATA.forge_regression_guard.sideEffects.join(" ");
+    expect(effects).toMatch(/shell/i);
+  });
+
+  it("produces telemetry/tool-calls.jsonl", () => {
+    const produces = TOOL_METADATA.forge_regression_guard.produces.join(" ");
+    expect(produces).toMatch(/tool-calls\.jsonl/);
+  });
+});
+
+// ─── isGateCommandAllowed ───────────────────────────────────────────────
+
+describe("isGateCommandAllowed", () => {
+  it("allows npm test", () => {
+    expect(isGateCommandAllowed("npm test")).toBe(true);
+  });
+
+  it("allows node -e command", () => {
+    expect(isGateCommandAllowed('node -e "console.log(1)"')).toBe(true);
+  });
+
+  it("allows env-var prefix (NODE_ENV=test npm test)", () => {
+    expect(isGateCommandAllowed("NODE_ENV=test npm test")).toBe(true);
+  });
+
+  it("blocks rm -rf /", () => {
+    expect(isGateCommandAllowed("rm -rf /")).toBe(false);
+  });
+
+  it("blocks unknown command", () => {
+    expect(isGateCommandAllowed("wget http://example.com")).toBe(false);
+  });
+
+  it("returns false for empty string", () => {
+    expect(isGateCommandAllowed("")).toBe(false);
+  });
+});
+
+// ─── regressionGuard ─────────────────────────────────────────────────────
+
+/** Write a minimal plan file with optional validation gate and testCommand. */
+function writePlan(dir, name, options = {}) {
+  const { gateCmds = null, testCommand = null } = options;
+  const gateBlock = gateCmds
+    ? `**Validation Gate**\n\`\`\`\n${gateCmds.join("\n")}\n\`\`\``
+    : "";
+  const testCmdLine = testCommand ? `**Test Command**: \`${testCommand}\`` : "";
+  const content = [
+    `# ${name}`,
+    "",
+    "## Scope Contract",
+    "### In Scope",
+    "- Test",
+    "",
+    "## Execution Slices",
+    "",
+    `### Slice 1: Build`,
+    "",
+    testCmdLine,
+    "",
+    gateBlock,
+    "",
+    "1. Build the thing",
+  ].join("\n");
+  writeFileSync(join(dir, name), content);
+}
+
+describe("regressionGuard — no plans directory", () => {
+  it("returns 0 gates and success when docs/plans/ does not exist", async () => {
+    const result = await regressionGuard([], { cwd: tempDir });
+    expect(result.gatesChecked).toBe(0);
+    expect(result.success).toBe(true);
+    expect(result.files).toEqual([]);
+  });
+});
+
+describe("regressionGuard — gate blocking", () => {
+  beforeEach(() => {
+    mkdirSync(join(tempDir, "docs", "plans"), { recursive: true });
+  });
+
+  it("marks disallowed commands as blocked", async () => {
+    writePlan(join(tempDir, "docs", "plans"), "Phase-1-PLAN.md", {
+      gateCmds: ["wget http://example.com"],
+    });
+    const result = await regressionGuard([], { cwd: tempDir });
+    expect(result.gatesChecked).toBe(1);
+    expect(result.blocked).toBe(1);
+    expect(result.failed).toBe(0);
+    expect(result.success).toBe(true); // blocked ≠ failed
+    expect(result.results[0].status).toBe("blocked");
+  });
+});
+
+describe("regressionGuard — gate execution", () => {
+  beforeEach(() => {
+    mkdirSync(join(tempDir, "docs", "plans"), { recursive: true });
+  });
+
+  it("reports passed when gate command succeeds", async () => {
+    writePlan(join(tempDir, "docs", "plans"), "Phase-1-PLAN.md", {
+      gateCmds: ['node -e "process.exit(0)"'],
+    });
+    const result = await regressionGuard(["src/main.js"], { cwd: tempDir });
+    expect(result.gatesChecked).toBe(1);
+    expect(result.passed).toBe(1);
+    expect(result.failed).toBe(0);
+    expect(result.success).toBe(true);
+    expect(result.files).toContain("src/main.js");
+  });
+
+  it("reports failed when gate command exits non-zero", async () => {
+    writePlan(join(tempDir, "docs", "plans"), "Phase-1-PLAN.md", {
+      gateCmds: ['node -e "process.exit(1)"'],
+    });
+    const result = await regressionGuard([], { cwd: tempDir });
+    expect(result.failed).toBe(1);
+    expect(result.success).toBe(false);
+    expect(result.results[0].status).toBe("failed");
+  });
+
+  it("stops and skips remaining gates when failFast is true", async () => {
+    writePlan(join(tempDir, "docs", "plans"), "Phase-1-PLAN.md", {
+      gateCmds: ['node -e "process.exit(1)"', 'node -e "process.exit(0)"'],
+    });
+    const result = await regressionGuard([], { failFast: true, cwd: tempDir });
+    expect(result.failed).toBe(1);
+    expect(result.skipped).toBe(1);
+    const statuses = result.results.map(r => r.status);
+    expect(statuses).toContain("failed");
+    expect(statuses).toContain("skipped");
+  });
+});
+
+describe("regressionGuard — testCommand fallback", () => {
+  beforeEach(() => {
+    mkdirSync(join(tempDir, "docs", "plans"), { recursive: true });
+  });
+
+  it("uses testCommand when no bash-block gates are present", async () => {
+    writePlan(join(tempDir, "docs", "plans"), "Phase-1-PLAN.md", {
+      testCommand: 'node -e "process.exit(0)"',
+    });
+    const result = await regressionGuard([], { cwd: tempDir });
+    // testCommand fallback: gate extracted from testCommand field
+    expect(result.gatesChecked).toBe(1);
+    const sources = result.results.map(r => r.source);
+    expect(sources).toContain("testCommand");
+  });
+});
+
+describe("regressionGuard — scoped to specific plan", () => {
+  it("only runs gates from the specified plan file", async () => {
+    mkdirSync(join(tempDir, "docs", "plans"), { recursive: true });
+    // Two plans — only the specified one should be used
+    writePlan(join(tempDir, "docs", "plans"), "Phase-1-PLAN.md", {
+      gateCmds: ['node -e "process.exit(0)"'],
+    });
+    writePlan(join(tempDir, "docs", "plans"), "Phase-2-PLAN.md", {
+      gateCmds: ['node -e "process.exit(1)"'],
+    });
+    const result = await regressionGuard([], {
+      plan: "docs/plans/Phase-1-PLAN.md",
+      cwd: tempDir,
+    });
+    expect(result.gatesChecked).toBe(1);
+    expect(result.passed).toBe(1);
+    expect(result.success).toBe(true);
   });
 });

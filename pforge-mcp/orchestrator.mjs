@@ -108,10 +108,10 @@ class OrchestratorEventBus extends EventEmitter {
  * @param {string} planPath - Path to the plan Markdown file
  * @returns {{ meta, scopeContract, slices, dag }}
  */
-export function parsePlan(planPath) {
+export function parsePlan(planPath, cwd = process.cwd()) {
   const fullPath = resolve(planPath);
   // C4: Validate path is within project to prevent traversal
-  const projectRoot = resolve(process.cwd());
+  const projectRoot = resolve(cwd);
   if (!fullPath.startsWith(projectRoot)) {
     throw new Error(`Plan path must be within project directory: ${planPath}`);
   }
@@ -1373,7 +1373,7 @@ export async function runPlan(planPath, options = {}) {
   const effectiveModel = model || modelRouting.default || null;
 
   // Parse plan
-  const plan = parsePlan(planPath);
+  const plan = parsePlan(planPath, cwd);
 
   // Estimation mode — return without executing
   if (estimate) {
@@ -2001,10 +2001,11 @@ export function readForgeJsonl(filePath, defaultValue = [], cwd = process.cwd())
  * Extract validation gates from a parsed plan file.
  * Delegates to parsePlan() — does not duplicate parsing logic.
  * @param {string} planFilePath - Absolute or project-relative path to a plan markdown file
+ * @param {string} [cwd=process.cwd()] - Project root (used for path-traversal check)
  * @returns {Array<{sliceNumber: string, sliceTitle: string, gates: string[]}>}
  */
-export function parseValidationGates(planFilePath) {
-  const plan = parsePlan(planFilePath);
+export function parseValidationGates(planFilePath, cwd = process.cwd()) {
+  const plan = parsePlan(planFilePath, cwd);
   return plan.slices
     .filter(s => s.validationGate)
     .map(s => ({
@@ -2029,8 +2030,8 @@ export function parseValidationGates(planFilePath) {
  * @param {string} planFilePath - Path to the plan Markdown file
  * @returns {{ warnings: Array, errors: Array, passed: boolean }}
  */
-export function lintGateCommands(planFilePath) {
-  const plan = parsePlan(planFilePath);
+export function lintGateCommands(planFilePath, cwd = process.cwd()) {
+  const plan = parsePlan(planFilePath, cwd);
   const warnings = [];
   const errors = [];
   const lastSliceNumber = plan.slices.length > 0
@@ -2188,7 +2189,7 @@ export async function regressionGuard(files, { plan, failFast = false, cwd = pro
   const gateItems = [];
   for (const planPath of planPaths) {
     try {
-      const sliceGates = parseValidationGates(planPath);
+      const sliceGates = parseValidationGates(planPath, cwd);
       let foundGates = false;
       for (const sg of sliceGates) {
         for (const cmd of sg.gates) {
@@ -2199,7 +2200,7 @@ export async function regressionGuard(files, { plan, failFast = false, cwd = pro
       // Stop-condition fallback: if no bash-block gates, use testCommand fields
       if (!foundGates) {
         try {
-          const parsed = parsePlan(planPath);
+          const parsed = parsePlan(planPath, cwd);
           for (const s of parsed.slices) {
             if (s.testCommand) {
               gateItems.push({ planFile: basename(planPath), sliceNumber: s.number, sliceTitle: s.title, cmd: s.testCommand, source: "testCommand" });

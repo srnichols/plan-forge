@@ -398,10 +398,15 @@ function renderSliceCards() {
         <p class="text-xs text-gray-600 mt-0.5">${(q.models || []).join(", ")}</p>`;
     }
 
+    // Quorum vs single-pass badge on card
+    const sliceModeBadge = s.quorum
+      ? `<span class="text-xs px-1.5 py-0.5 rounded bg-purple-900/50 text-purple-300 border border-purple-800" title="Quorum mode">Q</span>`
+      : (s.status !== "pending" ? `<span class="text-xs px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-400 border border-blue-800" title="Single-pass">S</span>` : "");
+
     return `
-      <div class="slice-card ${bgColor} rounded-lg p-3 border border-gray-700" data-slice-id="${s.id}">
+      <div class="slice-card ${bgColor} rounded-lg p-3 border border-gray-700 cursor-pointer hover:border-gray-500 transition-colors" data-slice-id="${s.id}" onclick="loadSliceLog('${s.id}')">
         <div class="flex items-center justify-between mb-1">
-          <span class="font-semibold text-sm">${statusIcon} Slice ${s.id}${escalatedMark}</span>
+          <span class="font-semibold text-sm">${statusIcon} Slice ${s.id} ${sliceModeBadge}${escalatedMark}</span>
           <span class="text-xs text-gray-500">${duration}${elapsed}</span>
         </div>
         <p class="text-xs text-gray-400 truncate">${s.title}</p>

@@ -223,7 +223,7 @@ Store API keys in the gitignored `.forge/` directory as an alternative to enviro
 | POST | `/api/tool/org-rules` | Generate org-rules instruction file via REST |
 | POST | `/api/image/generate` | Generate image via xAI Aurora or OpenAI DALL-E |
 
-**LiveGuard REST (v2.28–v2.29)** — Additional endpoints for secret-scan, env-diff, fix-proposals, and quorum-analyze. Documented in [Chapter 16 — LiveGuard Tools Reference](manual/liveguard-tools.html).
+**LiveGuard REST (v2.28)** — Secret-scan and env-diff endpoints (shipped). See also v2.29 endpoints below. Full reference in [Chapter 16 — LiveGuard Tools Reference](manual/liveguard-tools.html).
 
 **LiveGuard REST (v2.29):**
 
@@ -267,7 +267,7 @@ A second LIVEGUARD section appears in the tab bar after a visual divider. LIVEGU
 
 Standalone (no MCP client needed): `node pforge-mcp/server.mjs --dashboard-only`
 
-## LiveGuard MCP Tools (9 shipped in v2.27.0; 4 planned in v2.28.0–v2.29.0)
+## LiveGuard MCP Tools (11 shipped v2.27–v2.28; 2 planned v2.29.0)
 
 > Post-coding intelligence — watches gates after the forge ships. v2.27–v2.28 tools are included in the 30-tool count above. All available as MCP tools and REST endpoints.
 
@@ -648,7 +648,7 @@ Run `pforge update` to pull the latest release.
 
 ---
 
-## LiveGuard — Post-Coding Intelligence (coming v2.27.0–v2.28.0)
+## LiveGuard — Post-Coding Intelligence (v2.27.0–v2.28.0)
 
 LiveGuard is the operational intelligence layer that activates after the forge pipeline ships code. While the build pipeline (Chapters 1–14) focuses on writing correct, tested, guardrailed code, LiveGuard watches what happens after — catching drift, secrets, environment divergence, incidents, and regressions before they become production failures.
 

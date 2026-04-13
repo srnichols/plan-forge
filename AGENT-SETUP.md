@@ -408,3 +408,72 @@ After the pipeline is installed, recommend these optional steps to the user:
 3. **Install Extensions** — If the team has shared guardrail packages, install them via `pforge ext install <path>` or manually. See `docs/EXTENSIONS.md`.
 
 For VS Code Copilot-specific workflow details, see `docs/COPILOT-VSCODE-GUIDE.md`.
+
+---
+
+## Section 6: External Integration (OpenClaw, CI, Webhooks)
+
+The MCP server exposes a REST API at `http://localhost:3100` for external agents and orchestrators.
+Authenticated endpoints require: `Authorization: Bearer <bridge.approvalSecret>` (set in `.forge.json`).
+
+### Discovery — call this first
+```
+GET /.well-known/plan-forge.json
+GET /api/capabilities
+```
+Returns the full capability surface: MCP tools, CLI schema, REST endpoints, config schema, dashboard info.
+
+### Trigger a plan run remotely (OpenClaw → HomeBase)
+```
+POST /api/runs/trigger
+Authorization: Bearer <secret>
+Content-Type: application/json
+{ "plan": "docs/plans/Phase-1.md", "quorum": "auto" }
+→ { "ok": true, "triggerId": "trigger-...", "message": "Plan run started" }
+```
+Run executes in background. Dashboard and bridge send progress notifications.
+
+### Abort an in-progress run
+```
+POST /api/runs/abort
+Authorization: Bearer <secret>
+```
+
+### Search project memory (OpenBrain)
+```
+POST /api/memory/search
+Content-Type: application/json
+{ "query": "auth decisions", "project": "my-project" }
+```
+
+### Capture a thought (OpenBrain, via OpenClaw)
+```
+POST /api/memory/capture
+Authorization: Bearer <secret>
+{ "content": "Triggered auth plan from Telegram", "type": "lesson", "source": "openclaw" }
+→ Normalised thought payload — forward to OpenBrain capture_thought to persist.
+```
+
+### Approve / reject a completed run
+```
+POST /api/bridge/approve/:runId
+Authorization: Bearer <secret>
+{ "action": "approve", "approver": "openclaw" }
+```
+This is also triggered automatically when the user taps Telegram inline buttons.
+
+### `.forge.json` config for external access
+```json
+{
+  "bridge": {
+    "enabled": true,
+    "serverUrl": "http://homebase:3100",
+    "approvalSecret": "<your-secret>",
+    "channels": [
+      { "type": "telegram", "url": "...", "chatId": "...", "level": "important", "approvalRequired": true }
+    ]
+  }
+}
+```
+
+> **Security**: `approvalSecret` gates all write operations (trigger, abort, approve, memory capture). Read-only endpoints (status, runs, plans, capabilities) are unauthenticated by default.

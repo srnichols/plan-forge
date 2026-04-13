@@ -72,6 +72,36 @@ cd my-project-plans
 - From WhatsApp to Shipped PR: How I Automated My Entire Dev Workflow — https://planforge.software/blog/unified-system.html
 - One Framework, Seven AI Agents: Why We Stopped Picking Favorites — https://planforge.software/blog/seven-agents.html
 
+## REST API (MCP Server — localhost:3100)
+
+The MCP server exposes a REST API for external integrations (OpenClaw, CI pipelines, webhooks).
+All authenticated endpoints use: `Authorization: Bearer <bridge.approvalSecret>` or `?token=<secret>`.
+
+### Discovery
+- `GET /.well-known/plan-forge.json` — full machine-readable capability surface
+- `GET /api/capabilities` — same as forge_capabilities MCP tool
+
+### Runs
+- `GET /api/status` — current run status
+- `GET /api/runs` — run history
+- `POST /api/runs/trigger` — start a plan run remotely (auth required). Body: `{ plan, quorum?, model? }`
+- `POST /api/runs/abort` — abort in-progress run (auth required)
+
+### Memory (OpenBrain)
+- `GET /api/memory` — OpenBrain connection status
+- `POST /api/memory/search` — search project memory. Body: `{ query, project?, limit? }`
+- `POST /api/memory/capture` — capture a thought (auth required). Body: `{ content, type?, source?, created_by? }`
+
+### Bridge (Notifications + Approvals)
+- `GET /api/bridge/status` — channel status + pending approvals
+- `POST /api/bridge/approve/:runId` — approve/reject a run (auth required). Body: `{ action: "approve"|"reject" }`
+- `GET /api/bridge/approve/:runId` — browser-friendly approval link (Telegram buttons). Query: `?action=approve|reject`
+
+### Other
+- `GET /api/cost` — cost report
+- `GET /api/workers` — detected CLI workers
+- `GET /api/plans` — available plan files
+
 ## Related Projects
 
 - OpenBrain (persistent semantic memory): https://github.com/srnichols/OpenBrain

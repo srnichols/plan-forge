@@ -5,6 +5,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.25.0] — 2026-04-12
+
+### Added
+- **REST API discovery — all bases covered** — OpenClaw and any external agent can now discover the full Plan Forge REST surface via three complementary paths:
+  - `forge_capabilities` MCP tool — `restApi.endpoints` array now includes all 13 endpoints (trigger, abort, memory search/capture, bridge approve, well-known)
+  - `/.well-known/plan-forge.json` — already served; capability surface now includes the full endpoint list
+  - `docs/llms.txt` — new REST API section documents all endpoints with auth requirements and body shapes
+  - `AGENT-SETUP.md` Section 6 — new "External Integration" section with copy-pasteable curl examples for OpenClaw, CI, and webhook use cases
+
+---
+
 ## [2.24.0] — 2026-04-12
 
 ### Added

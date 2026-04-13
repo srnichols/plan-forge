@@ -2493,6 +2493,7 @@ const DEPLOY_COMMAND_PATTERNS = [
 
 /** Default configuration for the PreDeploy hook. */
 const PRE_DEPLOY_DEFAULTS = {
+  enabled: true,
   blockOnSecrets: true,
   warnOnEnvGaps: true,
   scanSince: "HEAD~1",
@@ -2563,6 +2564,11 @@ export function runPreDeployHook({ toolName, filePath = "", command = "", cwd = 
     }
   } catch { /* use defaults */ }
 
+  // When hook is explicitly disabled, return triggered but take no action
+  if (config.enabled === false) {
+    return { triggered: true, blocked: false, reason: null, advisory: null, secretFindings: [], envGaps: [] };
+  }
+
   const result = { triggered: true, blocked: false, reason: null, advisory: null, secretFindings: [], envGaps: [] };
 
   // 1. Check secret-scan cache
@@ -2582,6 +2588,12 @@ export function runPreDeployHook({ toolName, filePath = "", command = "", cwd = 
     }
   }
 
+  // Flag stale secret cache (advisory — does not block)
+  if (isCacheStale(secretCache)) {
+    const staleMsg = "Secret scan cache is stale or missing — run forge_secret_scan to refresh.";
+    result.advisory = result.advisory ? `${result.advisory}\n${staleMsg}` : staleMsg;
+  }
+
   // 2. Check env-diff cache
   const envDiffCache = readForgeJson("env-diff-cache.json", null, cwd);
   if (envDiffCache && envDiffCache.summary && envDiffCache.summary.totalMissing > 0) {
@@ -2594,11 +2606,12 @@ export function runPreDeployHook({ toolName, filePath = "", command = "", cwd = 
         const missing = [...(p.missingInTarget || []), ...(p.missingInBaseline || [])];
         return `${p.file || p.compareTo}: missing ${missing.join(", ")}`;
       });
-      result.advisory = `Environment key gaps detected:\n${lines.map(l => `• ${l}`).join("\n")}`;
+      const envMsg = `Environment key gaps detected:\n${lines.map(l => `• ${l}`).join("\n")}`;
+      result.advisory = result.advisory ? `${result.advisory}\n${envMsg}` : envMsg;
     }
   }
   // Also check totalGaps (used in some cache formats)
-  if (!result.advisory && envDiffCache && envDiffCache.summary && envDiffCache.summary.totalGaps > 0) {
+  if (!result.envGaps.length && envDiffCache && envDiffCache.summary && envDiffCache.summary.totalGaps > 0) {
     const gapPairs = (envDiffCache.pairs || []).filter(p =>
       (p.missingInTarget?.length || 0) + (p.missingInBaseline?.length || 0) > 0
     );
@@ -2609,7 +2622,8 @@ export function runPreDeployHook({ toolName, filePath = "", command = "", cwd = 
           const missing = [...(p.missingInTarget || []), ...(p.missingInBaseline || [])];
           return `${p.file || p.compareTo}: missing ${missing.join(", ")}`;
         });
-        result.advisory = `Environment key gaps detected:\n${lines.map(l => `• ${l}`).join("\n")}`;
+        const envMsg = `Environment key gaps detected:\n${lines.map(l => `• ${l}`).join("\n")}`;
+        result.advisory = result.advisory ? `${result.advisory}\n${envMsg}` : envMsg;
       }
     }
   }

@@ -47,6 +47,7 @@ if (-not $isDeployTrigger) {
 # ── Load config ──────────────────────────────────────────────────────
 $blockOnSecrets = $true
 $warnOnEnvGaps = $true
+$hookEnabled = $true
 
 $forgeConfigPath = Join-Path $repoRoot ".forge.json"
 if (Test-Path $forgeConfigPath) {
@@ -59,8 +60,17 @@ if (Test-Path $forgeConfigPath) {
             if ($null -ne $forgeConfig.hooks.preDeploy.warnOnEnvGaps) {
                 $warnOnEnvGaps = [bool]$forgeConfig.hooks.preDeploy.warnOnEnvGaps
             }
+            if ($null -ne $forgeConfig.hooks.preDeploy.enabled) {
+                $hookEnabled = [bool]$forgeConfig.hooks.preDeploy.enabled
+            }
         }
     } catch { }
+}
+
+# Exit early if hook is explicitly disabled
+if (-not $hookEnabled) {
+    Write-Output "{}"
+    exit 0
 }
 
 # ── Check secret-scan cache ──────────────────────────────────────────

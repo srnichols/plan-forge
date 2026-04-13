@@ -1,6 +1,6 @@
 # Hook: PreDeploy
 
-> **Status**: 🚧 WIP — Planned for v2.29.0  
+> **Status**: ✅ Implemented — v2.29.0  
 > **Lifecycle Event**: Before any deploy-related file write or deploy command  
 > **Depends On**: v2.27.0 (`forge_secret_scan`, `forge_env_diff` shipped)  
 > **Blocks**: Proceed with deploy only on clean scan results

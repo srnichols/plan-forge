@@ -40,6 +40,7 @@ fi
 # ── Load config ──────────────────────────────────────────────────────
 BLOCK_ON_SECRETS=true
 WARN_ON_ENV_GAPS=true
+HOOK_ENABLED=true
 
 if [[ -f "$REPO_ROOT/.forge.json" ]]; then
   BLOCK_ON_SECRETS=$(node -e "
@@ -54,6 +55,18 @@ if [[ -f "$REPO_ROOT/.forge.json" ]]; then
       console.log(c?.hooks?.preDeploy?.warnOnEnvGaps ?? true);
     } catch { console.log(true); }
   " 2>/dev/null || echo "true")
+  HOOK_ENABLED=$(node -e "
+    try {
+      const c = JSON.parse(require('fs').readFileSync('$REPO_ROOT/.forge.json','utf-8'));
+      console.log(c?.hooks?.preDeploy?.enabled ?? true);
+    } catch { console.log(true); }
+  " 2>/dev/null || echo "true")
+fi
+
+# Exit early if hook is explicitly disabled
+if [[ "$HOOK_ENABLED" == "false" ]]; then
+  echo "{}"
+  exit 0
 fi
 
 # ── Check secret-scan cache ──────────────────────────────────────────

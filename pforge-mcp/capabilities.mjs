@@ -809,6 +809,7 @@ export const CONFIG_SCHEMA = {
         preDeploy: {
           type: "object",
           properties: {
+            enabled: { type: "boolean", default: true, description: "Enable or disable the PreDeploy hook" },
             blockOnSecrets: { type: "boolean", default: true, description: "Block deploy when secrets detected" },
             warnOnEnvGaps: { type: "boolean", default: true, description: "Warn on env key gaps" },
             scanSince: { type: "string", default: "HEAD~1", description: "Git range for secret scan" },

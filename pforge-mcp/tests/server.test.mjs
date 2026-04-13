@@ -2026,6 +2026,11 @@ describe("PreDeploy hook advisory on env gaps", () => {
   it("returns advisory when env-diff-cache.json has missing keys", () => {
     const forgeDir = resolve(tempDir, ".forge");
     mkdirSync(forgeDir, { recursive: true });
+    writeFileSync(resolve(forgeDir, "secret-scan-cache.json"), JSON.stringify({
+      clean: true,
+      scannedAt: new Date().toISOString(),
+      findings: [],
+    }));
     writeFileSync(resolve(forgeDir, "env-diff-cache.json"), JSON.stringify({
       scannedAt: new Date().toISOString(),
       baseline: ".env",
@@ -2043,6 +2048,11 @@ describe("PreDeploy hook advisory on env gaps", () => {
   it("returns no advisory when warnOnEnvGaps is false", () => {
     const forgeDir = resolve(tempDir, ".forge");
     mkdirSync(forgeDir, { recursive: true });
+    writeFileSync(resolve(forgeDir, "secret-scan-cache.json"), JSON.stringify({
+      clean: true,
+      scannedAt: new Date().toISOString(),
+      findings: [],
+    }));
     writeFileSync(resolve(forgeDir, "env-diff-cache.json"), JSON.stringify({
       scannedAt: new Date().toISOString(),
       baseline: ".env",
@@ -2076,5 +2086,189 @@ describe("PreDeploy hook non-deploy triggers", () => {
     expect(result.triggered).toBe(true);
     expect(result.blocked).toBe(false);
     expect(result.secretFindings).toHaveLength(0);
+  });
+});
+
+// ─── PreDeploy hook: enabled config ────────────────────────────────────
+
+describe("PreDeploy hook enabled config", () => {
+  it("skips all checks when enabled is false", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    writeFileSync(resolve(forgeDir, "secret-scan-cache.json"), JSON.stringify({
+      clean: false,
+      scannedAt: new Date().toISOString(),
+      findings: [{ file: "src/config.js", line: 5, type: "api_key", entropyScore: 4.8, masked: "<REDACTED>", confidence: "high" }],
+    }));
+    writeFileSync(resolve(tempDir, ".forge.json"), JSON.stringify({
+      hooks: { preDeploy: { enabled: false } },
+    }));
+
+    const result = runPreDeployHook({ toolName: "editFiles", filePath: "Dockerfile", cwd: tempDir });
+    expect(result.triggered).toBe(true);
+    expect(result.blocked).toBe(false);
+    expect(result.secretFindings).toHaveLength(0);
+    expect(result.advisory).toBeNull();
+  });
+
+  it("runs checks when enabled is true (explicit)", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    writeFileSync(resolve(forgeDir, "secret-scan-cache.json"), JSON.stringify({
+      clean: false,
+      scannedAt: new Date().toISOString(),
+      findings: [{ file: "src/config.js", line: 5, type: "api_key", entropyScore: 4.8, masked: "<REDACTED>", confidence: "high" }],
+    }));
+    writeFileSync(resolve(tempDir, ".forge.json"), JSON.stringify({
+      hooks: { preDeploy: { enabled: true } },
+    }));
+
+    const result = runPreDeployHook({ toolName: "editFiles", filePath: "Dockerfile", cwd: tempDir });
+    expect(result.triggered).toBe(true);
+    expect(result.blocked).toBe(true);
+    expect(result.secretFindings).toHaveLength(1);
+  });
+
+  it("runs checks by default when enabled is not specified", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    writeFileSync(resolve(forgeDir, "secret-scan-cache.json"), JSON.stringify({
+      clean: false,
+      scannedAt: new Date().toISOString(),
+      findings: [{ file: "src/db.js", line: 12, type: "password", entropyScore: 5.1, masked: "<REDACTED>", confidence: "high" }],
+    }));
+
+    const result = runPreDeployHook({ toolName: "editFiles", filePath: "Dockerfile", cwd: tempDir });
+    expect(result.triggered).toBe(true);
+    expect(result.blocked).toBe(true);
+  });
+});
+
+// ─── PreDeploy hook: combined findings ─────────────────────────────────
+
+describe("PreDeploy hook combined secrets and env gaps", () => {
+  it("returns both secretFindings and envGaps when both caches have findings", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    writeFileSync(resolve(forgeDir, "secret-scan-cache.json"), JSON.stringify({
+      clean: false,
+      scannedAt: new Date().toISOString(),
+      findings: [
+        { file: "src/config.js", line: 5, type: "api_key", entropyScore: 4.8, masked: "<REDACTED>", confidence: "high" },
+        { file: "src/db.js", line: 12, type: "password", entropyScore: 5.1, masked: "<REDACTED>", confidence: "high" },
+      ],
+    }));
+    writeFileSync(resolve(forgeDir, "env-diff-cache.json"), JSON.stringify({
+      scannedAt: new Date().toISOString(),
+      baseline: ".env",
+      pairs: [{ file: ".env.staging", missingInTarget: ["DB_HOST"], missingInBaseline: [] }],
+      summary: { clean: false, totalMissing: 1, totalGaps: 1, baselineKeyCount: 10 },
+    }));
+
+    const result = runPreDeployHook({ toolName: "editFiles", filePath: "Dockerfile", cwd: tempDir });
+    expect(result.triggered).toBe(true);
+    expect(result.blocked).toBe(true);
+    expect(result.reason).toContain("2");
+    expect(result.secretFindings).toHaveLength(2);
+    expect(result.envGaps).toHaveLength(1);
+    expect(result.advisory).toContain("DB_HOST");
+  });
+
+  it("maps multiple secret findings correctly", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    writeFileSync(resolve(forgeDir, "secret-scan-cache.json"), JSON.stringify({
+      clean: false,
+      scannedAt: new Date().toISOString(),
+      findings: [
+        { file: "a.js", line: 1, type: "api_key", entropyScore: 4.5, confidence: "high" },
+        { file: "b.js", line: 2, type: "password", entropyScore: 5.0, confidence: "medium" },
+        { file: "c.js", line: 3, type: "token", entropyScore: 4.9, confidence: "high" },
+      ],
+    }));
+
+    const result = runPreDeployHook({ toolName: "editFiles", filePath: "Dockerfile", cwd: tempDir });
+    expect(result.secretFindings).toHaveLength(3);
+    expect(result.secretFindings[0].file).toBe("a.js");
+    expect(result.secretFindings[1].file).toBe("b.js");
+    expect(result.secretFindings[2].file).toBe("c.js");
+    expect(result.secretFindings[0].masked).toBe("<REDACTED>");
+    expect(result.reason).toContain("3");
+  });
+});
+
+// ─── PreDeploy hook: stale cache advisory ──────────────────────────────
+
+describe("PreDeploy hook stale cache advisory", () => {
+  it("advises when secret-scan cache is missing", () => {
+    const result = runPreDeployHook({ toolName: "editFiles", filePath: "Dockerfile", cwd: tempDir });
+    expect(result.triggered).toBe(true);
+    expect(result.advisory).toContain("stale or missing");
+  });
+
+  it("advises when secret-scan cache has no scannedAt timestamp", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    writeFileSync(resolve(forgeDir, "secret-scan-cache.json"), JSON.stringify({
+      clean: true,
+      findings: [],
+    }));
+
+    const result = runPreDeployHook({ toolName: "editFiles", filePath: "Dockerfile", cwd: tempDir });
+    expect(result.triggered).toBe(true);
+    expect(result.advisory).toContain("stale or missing");
+  });
+
+  it("does not advise when secret-scan cache is fresh", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    writeFileSync(resolve(forgeDir, "secret-scan-cache.json"), JSON.stringify({
+      clean: true,
+      scannedAt: new Date().toISOString(),
+      findings: [],
+    }));
+
+    const result = runPreDeployHook({ toolName: "editFiles", filePath: "Dockerfile", cwd: tempDir });
+    expect(result.triggered).toBe(true);
+    expect(result.advisory).toBeNull();
+  });
+});
+
+// ─── PreDeploy hook: corrupt / malformed cache resilience ──────────────
+
+describe("PreDeploy hook corrupt cache resilience", () => {
+  it("handles corrupt secret-scan-cache.json gracefully", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    writeFileSync(resolve(forgeDir, "secret-scan-cache.json"), "NOT VALID JSON {{{");
+
+    const result = runPreDeployHook({ toolName: "editFiles", filePath: "Dockerfile", cwd: tempDir });
+    expect(result.triggered).toBe(true);
+    expect(result.blocked).toBe(false);
+  });
+
+  it("handles corrupt env-diff-cache.json gracefully", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    writeFileSync(resolve(forgeDir, "env-diff-cache.json"), "<<< not json >>>");
+
+    const result = runPreDeployHook({ toolName: "editFiles", filePath: "Dockerfile", cwd: tempDir });
+    expect(result.triggered).toBe(true);
+    expect(result.blocked).toBe(false);
+  });
+
+  it("handles corrupt .forge.json gracefully (falls back to defaults)", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    writeFileSync(resolve(forgeDir, "secret-scan-cache.json"), JSON.stringify({
+      clean: false,
+      scannedAt: new Date().toISOString(),
+      findings: [{ file: "leak.js", line: 1, type: "api_key", entropyScore: 4.8, masked: "<REDACTED>", confidence: "high" }],
+    }));
+    writeFileSync(resolve(tempDir, ".forge.json"), "CORRUPT JSON!!!");
+
+    const result = runPreDeployHook({ toolName: "editFiles", filePath: "Dockerfile", cwd: tempDir });
+    expect(result.triggered).toBe(true);
+    expect(result.blocked).toBe(true);
   });
 });

@@ -944,7 +944,7 @@ const SYSTEM_REFERENCE = {
     "Analyze": "Cross-artifact consistency scoring (pforge analyze). Scores 0-100 across traceability, coverage, tests, gates",
     "Orchestrator": "The execution engine (pforge-mcp/orchestrator.mjs). Parses plans, schedules slices, spawns workers, validates gates",
     "Hub": "WebSocket event server (pforge-mcp/hub.mjs). Broadcasts slice lifecycle events to connected clients in real-time",
-    "Dashboard": "Web UI at localhost:3100/dashboard. 8 tabs: Progress, Runs, Cost, Actions, Replay, Extensions, Config, Traces",
+    "Dashboard": "Web UI at localhost:3100/dashboard. FORGE section (9 tabs: Progress, Runs, Cost, Actions, Replay, Extensions, Config, Traces, Skills) + LIVEGUARD section (5 tabs: Health, Incidents, Triage, Security, Env)",
 
     // Infrastructure
     "Guardrails": "Instruction files (.github/instructions/*.instructions.md) that auto-load based on the file being edited. 15-18 per preset",
@@ -1038,9 +1038,15 @@ export function buildCapabilitySurface(mcpTools, options = {}) {
         Extensions: "Visual extension catalog browser with search/filter",
         Config: "Visual .forge.json editor (agents, model routing) with save confirmation",
         Traces: "OTLP trace waterfall with span detail, severity filters, attributes viewer",
+        Skills: "Skill catalog and execution history with step-level detail",
+        "LG Health": "LiveGuard drift score gauge, drift history chart, hotspot analysis — monitors plan alignment over time",
+        "LG Incidents": "Open incidents feed and fix proposals from LiveGuard alerting pipeline",
+        "LG Triage": "Alert triage view — severity grouping, quorum analysis launch, actionable summaries",
+        "LG Security": "Secret scan results with Shannon entropy findings, confidence levels, and file locations",
+        "LG Env": "Environment key diff — key-name-only comparison across .env files (values never displayed)",
       },
       standalone: "node pforge-mcp/server.mjs --dashboard-only",
-      description: "Use --dashboard-only to run the dashboard without MCP stdio (for standalone monitoring, demos, or testing)",
+      description: "Use --dashboard-only to run the dashboard without MCP stdio (for standalone monitoring, demos, or testing). FORGE section covers plan execution; LIVEGUARD section covers runtime safety",
     },
     restApi: {
       baseUrl: `http://127.0.0.1:3100`,

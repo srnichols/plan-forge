@@ -36,8 +36,6 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
     if (tab) tab.classList.remove("hidden");
 
     // Load data for the tab
-    if (btn.dataset.tab === "runs") { loadRuns(); tabBadgeState.runsNew = 0; updateTabBadges(); }
-    if (btn.dataset.tab === "cost") { loadCost(); tabBadgeState.hasAnomaly = false; updateTabBadges(); }
     if (tabLoadHooks[btn.dataset.tab]) tabLoadHooks[btn.dataset.tab]();
   });
 });
@@ -83,6 +81,9 @@ function connectWebSocket() {
           } else if (data.type === "slice-failed") {
             const d = data.data || data;
             addNotification(`Slice ${d.sliceId} failed: ${d.error || ""}`, "error");
+          } else if (data.type === "liveguard-tool-completed") {
+            const d = data.data || data;
+            addNotification(`LiveGuard tool done: ${d.tool || d.name || 'unknown'}`, "amber");
           }
         } catch { /* ignore malformed */ }
       };
@@ -162,6 +163,12 @@ function handleEvent(event) {
       break;
     case "fix-proposal-ready":
       handleFixProposal(event.data || event);
+      break;
+    case "liveguard-tool-completed":
+      handleLGToolCompleted(event.data || event);
+      break;
+    case "liveguard-secret-scan":
+      handleLGSecretScan(event.data || event);
       break;
   }
 }
@@ -2192,7 +2199,7 @@ function renderDAGView(slices) {
 }
 
 // ─── Tab Badges ───────────────────────────────────────────────
-let tabBadgeState = { runsNew: 0, hasAnomaly: false, skillsActive: 0 };
+let tabBadgeState = { runsNew: 0, hasAnomaly: false, skillsActive: 0, lgHealthAlert: false, lgIncidentsNew: 0, lgCritical: false, lgSecurityAlert: false };
 
 function updateTabBadges() {
   const tabs = document.querySelectorAll(".tab-btn[data-tab]");
@@ -2208,6 +2215,14 @@ function updateTabBadges() {
       badgeText = "!";
     } else if (tab.dataset.tab === "skills" && tabBadgeState.skillsActive > 0) {
       badgeText = tabBadgeState.skillsActive;
+    } else if (tab.dataset.tab === "lg-health" && tabBadgeState.lgHealthAlert) {
+      badgeText = "!";
+    } else if (tab.dataset.tab === "lg-incidents" && tabBadgeState.lgIncidentsNew > 0) {
+      badgeText = tabBadgeState.lgIncidentsNew;
+    } else if (tab.dataset.tab === "lg-security" && tabBadgeState.lgSecurityAlert) {
+      badgeText = "!";
+    } else if (tab.dataset.tab === "lg-triage" && tabBadgeState.lgCritical) {
+      badgeText = "⚠";
     }
 
     if (badgeText !== null) {
@@ -2390,16 +2405,17 @@ loadPlans();
 // Tab load hooks
 const tabLoadHooks = {
   progress: loadPlans,
+  runs: () => { loadRuns(); tabBadgeState.runsNew = 0; updateTabBadges(); },
   replay: loadReplayRuns,
   extensions: loadExtensions,
   config: loadConfig,
   traces: loadTraces,
-  cost: () => { loadCost(); },
+  cost: () => { loadCost(); tabBadgeState.hasAnomaly = false; updateTabBadges(); },
   skills: loadSkillCatalog,
   'lg-health': loadLGHealth,
-  'lg-incidents': loadLGIncidents,
+  'lg-incidents': () => { loadLGIncidents(); tabBadgeState.lgIncidentsNew = 0; updateTabBadges(); },
   'lg-triage': loadLGTriage,
-  'lg-security': loadLGSecurity,
+  'lg-security': () => { loadLGSecurity(); tabBadgeState.lgSecurityAlert = false; updateTabBadges(); },
   'lg-env': loadLGEnv,
 };
 
@@ -2411,11 +2427,60 @@ async function loadLGHealth() {
     const res = await fetch(`${API_BASE}/api/capabilities`).then(r => r.ok ? r.json() : null).catch(() => null);
     if (res?.liveguard) {
       const el = document.getElementById('lg-drift-score');
-      if (el) el.textContent = res.liveguard.driftScore ?? '—';
+      const score = res.liveguard.driftScore ?? null;
+      if (el) el.textContent = score ?? '—';
       const inc = document.getElementById('lg-open-incidents');
       if (inc) inc.textContent = res.liveguard.openIncidents ?? '—';
       const scan = document.getElementById('lg-last-scan');
       if (scan) scan.textContent = res.liveguard.lastScan ? new Date(res.liveguard.lastScan).toLocaleString() : '—';
+      // Drift gauge
+      const gauge = document.getElementById('lg-drift-gauge');
+      if (gauge && score != null) {
+        gauge.value = score;
+        const color = score >= 80 ? 'text-green-400' : score >= 50 ? 'text-amber-400' : 'text-red-400';
+        if (el) el.className = `text-2xl font-bold ${color}`;
+      }
+    }
+    // Drift history chart
+    const driftData = await fetch(`${API_BASE}/api/liveguard/traces`).then(r => r.ok ? r.json() : []).catch(() => []);
+    const healthCanvas = document.getElementById('lg-health-chart');
+    if (healthCanvas && typeof Chart !== 'undefined') {
+      if (window._lgHealthChart) { window._lgHealthChart.destroy(); window._lgHealthChart = null; }
+      const driftEntries = driftData.filter(e => e.tool === 'forge_drift_report' && e.result?.score != null).slice(-20);
+      if (driftEntries.length > 0) {
+        window._lgHealthChart = new Chart(healthCanvas, {
+          type: 'line',
+          data: {
+            labels: driftEntries.map(e => new Date(e.timestamp || e.ts).toLocaleDateString()),
+            datasets: [{ label: 'Drift Score', data: driftEntries.map(e => e.result.score), borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.1)', fill: true, tension: 0.3 }]
+          },
+          options: { responsive: true, scales: { y: { min: 0, max: 100, ticks: { color: '#9ca3af' }, grid: { color: '#374151' } }, x: { ticks: { color: '#9ca3af' } } }, plugins: { legend: { display: false } } }
+        });
+      } else {
+        const ctx = healthCanvas.getContext('2d');
+        ctx.clearRect(0, 0, healthCanvas.width, healthCanvas.height);
+        document.getElementById('lg-health-trend').innerHTML = '<p class="text-gray-500 text-sm text-center py-8">No drift history yet. Run <code>pforge drift</code> to populate.</p>';
+      }
+    }
+    // Hotspot chart
+    const hotspotCanvas = document.getElementById('lg-hotspot-chart');
+    if (hotspotCanvas && typeof Chart !== 'undefined') {
+      if (window._lgHotspotChart) { window._lgHotspotChart.destroy(); window._lgHotspotChart = null; }
+      const toolCounts = {};
+      for (const e of driftData) { const t = e.tool || 'unknown'; toolCounts[t] = (toolCounts[t] || 0) + 1; }
+      const sorted = Object.entries(toolCounts).sort((a, b) => b[1] - a[1]).slice(0, 8);
+      if (sorted.length > 0) {
+        window._lgHotspotChart = new Chart(hotspotCanvas, {
+          type: 'bar',
+          data: {
+            labels: sorted.map(([k]) => k.replace('forge_', '')),
+            datasets: [{ label: 'Invocations', data: sorted.map(([, v]) => v), backgroundColor: '#f59e0b' }]
+          },
+          options: { responsive: true, indexAxis: 'y', scales: { x: { ticks: { color: '#9ca3af' }, grid: { color: '#374151' } }, y: { ticks: { color: '#9ca3af' } } }, plugins: { legend: { display: false } } }
+        });
+      } else {
+        document.getElementById('lg-hotspot-container').innerHTML = '<p class="text-gray-500 text-sm text-center py-8">No data yet — run <code>pforge drift</code></p>';
+      }
     }
   } catch { /* tab remains in placeholder state */ }
 }
@@ -2504,21 +2569,61 @@ function escHtml(str) {
 function handleLGDrift(data) {
   const el = document.getElementById('lg-drift-score');
   if (el && data.score != null) el.textContent = data.score;
+  // Update drift gauge
+  const gauge = document.getElementById('lg-drift-gauge');
+  if (gauge && data.score != null) {
+    gauge.value = data.score;
+    const color = data.score >= 80 ? 'text-green-400' : data.score >= 50 ? 'text-amber-400' : 'text-red-400';
+    el.className = `text-2xl font-bold ${color}`;
+  }
+  if (data.score != null && data.score < 50) {
+    tabBadgeState.lgHealthAlert = true;
+    updateTabBadges();
+  }
 }
 
 function handleLGIncident(data) {
-  // Refresh incident list on new incident
+  tabBadgeState.lgIncidentsNew++;
+  updateTabBadges();
   loadLGIncidents();
 }
 
 function handleLGTriage(data) {
+  if (data.severity === 'critical') {
+    tabBadgeState.lgCritical = true;
+    updateTabBadges();
+  }
   loadLGTriage();
 }
 
 function handleFixProposal(data) {
-  // Refresh fix proposals on new proposal event
   loadLGIncidents();
   addNotification(`Fix proposal ready: ${data.incidentId || 'new'}`, 'amber');
+}
+
+function handleLGToolCompleted(data) {
+  const tool = data.tool || data.name || '';
+  if (tool.includes('secret') || tool.includes('scan')) {
+    tabBadgeState.lgSecurityAlert = true;
+    updateTabBadges();
+    addNotification(`LiveGuard: ${tool} completed`, 'amber');
+  } else if (tool.includes('drift')) {
+    tabBadgeState.lgHealthAlert = true;
+    updateTabBadges();
+  }
+  // Refresh the active LG tab if one is showing
+  const activeTab = document.querySelector(".tab-btn.tab-active")?.dataset?.tab;
+  if (activeTab && activeTab.startsWith('lg-') && tabLoadHooks[activeTab]) {
+    tabLoadHooks[activeTab]();
+  }
+}
+
+function handleLGSecretScan(data) {
+  tabBadgeState.lgSecurityAlert = true;
+  updateTabBadges();
+  addNotification('LiveGuard: secret scan results available', 'amber');
+  const activeTab = document.querySelector(".tab-btn.tab-active")?.dataset?.tab;
+  if (activeTab === 'lg-security') loadLGSecurity();
 }
 
 // Dashboard quorum shortcut — copies quorum prompt to clipboard

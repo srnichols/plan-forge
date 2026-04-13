@@ -265,8 +265,8 @@ The hub event fired by `emitToolTelemetry` enables the v2.28 dashboard to update
 ```bash
 node pforge-mcp/server.mjs --validate
 bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
-curl -s http://localhost:3100/api/drift | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); if(typeof d.score !== 'number') throw new Error('bad shape')"
-curl -s http://localhost:3100/api/drift/history | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); if(!Array.isArray(d)) throw new Error('expected array')"
+curl -s http://localhost:3100/api/drift | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); if(typeof d.score !== 'number') throw new Error('bad shape')"
+curl -s http://localhost:3100/api/drift/history | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); if(!Array.isArray(d)) throw new Error('expected array')"
 ```
 
 **Stop Condition**: If `pforge analyze --mode file` subprocess interface doesn't support multi-file mode → run per-file and aggregate results.
@@ -312,7 +312,7 @@ curl -s http://localhost:3100/api/drift/history | node -e "const d=JSON.parse(re
 ```bash
 node pforge-mcp/server.mjs --validate
 bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
-curl -s http://localhost:3100/api/incidents | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); if(!Array.isArray(d)) throw new Error('expected array')"
+curl -s http://localhost:3100/api/incidents | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); if(!Array.isArray(d)) throw new Error('expected array')"
 ```
 
 ---
@@ -349,7 +349,7 @@ curl -s http://localhost:3100/api/incidents | node -e "const d=JSON.parse(requir
 ```bash
 node pforge-mcp/server.mjs --validate
 bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
-curl http://localhost:3100/api/deps/watch | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); console.log('capturedAt' in d || 'err' in d ? 'ok' : 'fail')"
+curl http://localhost:3100/api/deps/watch | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); console.log('capturedAt' in d || 'err' in d ? 'ok' : 'fail')"
 ```
 
 ---
@@ -476,7 +476,7 @@ bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
 ```bash
 node pforge-mcp/server.mjs --validate
 bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
-curl http://localhost:3100/api/hotspots | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); if(!Array.isArray(d.hotspots)) throw new Error('bad shape')"
+curl http://localhost:3100/api/hotspots | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); if(!Array.isArray(d.hotspots)) throw new Error('bad shape')"
 ```
 
 ---
@@ -515,8 +515,8 @@ curl http://localhost:3100/api/hotspots | node -e "const d=JSON.parse(require('f
 ```bash
 node pforge-mcp/server.mjs --validate
 bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
-curl "http://localhost:3100/api/health-trend?days=7" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); if(!d.period||!d.trend) throw new Error('bad shape')"
-curl http://localhost:3100/api/cost | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); if(typeof d.total !== 'number') throw new Error('cost report broken')"
+curl "http://localhost:3100/api/health-trend?days=7" | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); if(!d.period||!d.trend) throw new Error('bad shape')"
+curl http://localhost:3100/api/cost | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); if(typeof d.total !== 'number') throw new Error('cost report broken')"
 ```
 
 ---
@@ -556,7 +556,7 @@ curl http://localhost:3100/api/cost | node -e "const d=JSON.parse(require('fs').
 ```bash
 node pforge-mcp/server.mjs --validate
 bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
-curl http://localhost:3100/api/alerts/triage | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); if(!Array.isArray(d.items)||!d.summary) throw new Error('bad shape')"
+curl http://localhost:3100/api/alerts/triage | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); if(!Array.isArray(d.items)||!d.summary) throw new Error('bad shape')"
 ```
 
 **Stop Condition**: If priority formula produces ties that make ranking non-deterministic → add `timestamp` as secondary sort key (more recent = higher in list); document the tiebreak rule in TOOL_METADATA.
@@ -595,7 +595,7 @@ curl http://localhost:3100/api/alerts/triage | node -e "const d=JSON.parse(requi
 ```bash
 node pforge-mcp/server.mjs --validate
 bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
-curl -s http://localhost:3100/api/deploy/journal | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); if(!Array.isArray(d)) throw new Error('expected array')"
+curl -s http://localhost:3100/api/deploy/journal | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); if(!Array.isArray(d)) throw new Error('expected array')"
 curl -s "http://localhost:3100/api/deploy/journal" | node -e "process.stdin.resume()" # no error exit
 ```
 
@@ -709,7 +709,7 @@ grep -c "incidents" .gitignore  # must be >= 1
 npx vitest run
 cat VERSION  # must read 2.27.0
 git log --oneline -1  # confirms commit message
-curl http://localhost:3100/api/capabilities | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); const count=d.tools?.length; if(count!==28) throw new Error('expected 28 tools, got '+count); console.log('ok')"
+curl http://localhost:3100/api/capabilities | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); const count=d.tools?.length; if(count!==28) throw new Error('expected 28 tools, got '+count); console.log('ok')"
 ```
 
 ---
@@ -774,7 +774,7 @@ Tools that do NOT dispatch bridge notifications: `forge_runbook`, `forge_hotspot
 
 | Check | Command | Expected |
 |-------|---------|----------|
-| Tool count | `curl http://localhost:3100/api/capabilities \| node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));console.log(d.tools.length)"` | `28` |
+| Tool count | `curl http://localhost:3100/api/capabilities \| node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8'));console.log(d.tools.length)"` | `28` |
 | All tests pass | `npx vitest run` | 0 failures |
 | Server starts clean | `node pforge-mcp/server.mjs --validate` | no errors |
 | drift endpoint | `curl http://localhost:3100/api/drift` | `{ score, violations, trend }` |

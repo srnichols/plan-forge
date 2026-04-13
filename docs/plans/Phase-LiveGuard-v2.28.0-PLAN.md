@@ -172,7 +172,7 @@ const covered = lgTools.filter(t => {
 if (covered.length < 9) throw new Error('Only ' + covered.length + '/9 LiveGuard handlers have emitToolTelemetry. Missing: ' + lgTools.filter(t => !covered.includes(t)).join(', '));
 console.log('ok — all 9 handlers covered:', covered.length);
 "
-curl -s http://localhost:3100/api/liveguard/traces | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); if(!Array.isArray(d)) throw new Error('expected array')"
+curl -s http://localhost:3100/api/liveguard/traces | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); if(!Array.isArray(d)) throw new Error('expected array')"
 bash -c "cd pforge-mcp && npx vitest run tests/orchestrator.test.mjs"
 ```
 
@@ -239,12 +239,12 @@ function shannonEntropy(str) {
 node pforge-mcp/server.mjs --validate
 bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
 pforge secret-scan --since HEAD~1 | node -e "
-const d = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
+const d = JSON.parse(require('fs').readFileSync(0,'utf8'));
 const leaked = (d.findings || []).filter(f => f.masked !== '<REDACTED>');
 if (leaked.length) throw new Error('Secret value leaked: ' + JSON.stringify(leaked));
 console.log('ok — no values in output');
 "
-curl http://localhost:3100/api/secrets/scan | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); if(!('clean' in d)) throw new Error('bad shape')"
+curl http://localhost:3100/api/secrets/scan | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); if(!('clean' in d)) throw new Error('bad shape')"
 ```
 
 **Stop Condition**: If `git diff` returns exit code 128 (not a git repo) → return `{ clean: null, scannedFiles: 0, findings: [], error: "git unavailable" }`. No throw. Document same graceful degradation pattern as `forge_hotspot`.
@@ -288,7 +288,7 @@ bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
 echo "A=1\nB=2\nC=3" > /tmp/test.env.baseline
 echo "A=x\nD=y" > /tmp/test.env.staging
 pforge env-diff --baseline /tmp/test.env.baseline --files /tmp/test.env.staging | node -e "
-const d = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
+const d = JSON.parse(require('fs').readFileSync(0,'utf8'));
 const pair = d.pairs?.[0];
 if (!pair?.missing?.includes('B') || !pair?.missing?.includes('C')) throw new Error('Missing keys not detected');
 if (!pair?.extra?.includes('D')) throw new Error('Extra key not detected');
@@ -296,7 +296,7 @@ const hasValues = JSON.stringify(d).includes('=1') || JSON.stringify(d).includes
 if (hasValues) throw new Error('Values leaked into output');
 console.log('ok');
 "
-curl http://localhost:3100/api/env/diff | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); if(!d.summary) throw new Error('bad shape')"
+curl http://localhost:3100/api/env/diff | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); if(!d.summary) throw new Error('bad shape')"
 ```
 
 **Stop Condition**: If baseline file does not exist → return `{ pairs: [], summary: { clean: null, error: "baseline file not found: <path>" } }`. No throw.
@@ -496,7 +496,7 @@ node pforge-mcp/server.mjs --validate
 bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
 node -e "import('./pforge-mcp/capabilities.mjs').then(m => m.buildCapabilitySurface([])).then(s => { const count = Object.keys(m.TOOL_METADATA || {}).length; console.log('TOOL_METADATA entries:', count); })"
 grep -c "forge_" docs/capabilities.md
-curl http://localhost:3100/api/capabilities | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); if(d.tools.length!==30) throw new Error('Expected 30, got '+d.tools.length); console.log('ok')"
+curl http://localhost:3100/api/capabilities | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); if(d.tools.length!==30) throw new Error('Expected 30, got '+d.tools.length); console.log('ok')"
 ```
 
 **Stop Condition**: If tool count at `GET /api/capabilities` is not 30 → debug TOOL_METADATA vs TOOLS array discrepancy in server.mjs before proceeding to Slice 6.
@@ -558,7 +558,7 @@ curl http://localhost:3100/api/capabilities | node -e "const d=JSON.parse(requir
 npx vitest run
 cat VERSION  # must read 2.28.0
 git log --oneline -1
-curl http://localhost:3100/api/capabilities | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); if(d.tools.length!==30) throw new Error('tool count wrong'); console.log('ok — 30 tools')"
+curl http://localhost:3100/api/capabilities | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); if(d.tools.length!==30) throw new Error('tool count wrong'); console.log('ok — 30 tools')"
 node -e "
 const fs = require('fs'), path = require('path');
 const caches = ['.forge/secret-scan-cache.json', '.forge/env-diff-cache.json'];

@@ -679,6 +679,19 @@ const TOOLS = [
       required: [],
     },
   },
+  {
+    name: "forge_env_diff", // LiveGuard — emitToolTelemetry in handler
+    description: "Compare environment variable keys across .env files — detect missing keys between baseline and target environments. Compares key names only (never values). Caches results in .forge/env-diff-cache.json. Integrates with forge_runbook to surface environment key gaps.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        baseline: { type: "string", description: "Baseline .env file path (relative to project root). Default: .env" },
+        files: { type: "string", description: "Comma-separated target .env file paths to compare against baseline (e.g., '.env.staging,.env.production'). Default: auto-detect .env.* files" },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+      required: [],
+    },
+  },
 ];
 // ─── Runbook helpers ──────────────────────────────────────────────────
 
@@ -772,6 +785,37 @@ function generateRunbook(plan, cwd, options = {}) {
       lines.push("");
     }
   }
+
+  // Environment Key Gaps (from forge_env_diff cache)
+  try {
+    const envDiffPath = resolve(cwd, ".forge", "env-diff-cache.json");
+    if (existsSync(envDiffPath)) {
+      const envDiff = JSON.parse(readFileSync(envDiffPath, "utf-8"));
+      if (envDiff.summary && !envDiff.summary.clean) {
+        const gapPairs = (envDiff.pairs || []).filter(p => (p.missingInTarget?.length || 0) + (p.missingInBaseline?.length || 0) > 0);
+        if (gapPairs.length) {
+          lines.push("## Environment Key Gaps");
+          lines.push("");
+          lines.push(`Baseline: \`${envDiff.baseline || ".env"}\` (${envDiff.summary.baselineKeyCount || "?"} keys)`);
+          lines.push("");
+          for (const pair of gapPairs) {
+            lines.push(`### ${pair.file}`);
+            lines.push("");
+            if (pair.missingInTarget?.length) {
+              lines.push("**Missing in target (present in baseline):**");
+              pair.missingInTarget.forEach(k => lines.push(`- \`${k}\``));
+              lines.push("");
+            }
+            if (pair.missingInBaseline?.length) {
+              lines.push("**Missing in baseline (present in target):**");
+              pair.missingInBaseline.forEach(k => lines.push(`- \`${k}\``));
+              lines.push("");
+            }
+          }
+        }
+      }
+    }
+  } catch { /* env-diff cache unavailable — skip */ }
 
   return lines.join("\n");
 }
@@ -1680,6 +1724,83 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
   }
 
+  // ─── forge_env_diff — environment key comparison ───
+  if (name === "forge_env_diff") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const baselinePath = resolve(cwd, args.baseline || ".env");
+
+      // Stop condition: baseline not found → return error object, no throw
+      if (!existsSync(baselinePath)) {
+        const graceful = { pairs: [], summary: { clean: null, error: `baseline file not found: ${args.baseline || ".env"}` } };
+        emitToolTelemetry("forge_env_diff", args, graceful, Date.now() - t0, "DEGRADED", cwd);
+        return { content: [{ type: "text", text: JSON.stringify(graceful, null, 2) }], isError: false };
+      }
+
+      // Parse .env keys (key names only — never values)
+      function parseEnvKeys(filePath) {
+        const content = readFileSync(filePath, "utf-8");
+        const keys = new Set();
+        for (const line of content.split("\n")) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed.startsWith("#")) continue;
+          const eqIdx = trimmed.indexOf("=");
+          if (eqIdx > 0) keys.add(trimmed.slice(0, eqIdx).trim());
+        }
+        return keys;
+      }
+
+      const baselineKeys = parseEnvKeys(baselinePath);
+
+      // Resolve target files
+      let targetFiles = [];
+      if (args.files) {
+        targetFiles = args.files.split(",").map(f => f.trim()).filter(Boolean);
+      } else {
+        // Auto-detect .env.* files in project root
+        try {
+          const entries = readdirSync(cwd);
+          targetFiles = entries.filter(f => f.startsWith(".env.") && !f.endsWith(".example")).sort();
+        } catch { targetFiles = []; }
+      }
+
+      const pairs = [];
+      for (const targetFile of targetFiles) {
+        const targetPath = resolve(cwd, targetFile);
+        if (!existsSync(targetPath)) {
+          pairs.push({ file: targetFile, missingInTarget: [], missingInBaseline: [], error: `file not found: ${targetFile}` });
+          continue;
+        }
+        const targetKeys = parseEnvKeys(targetPath);
+        const missingInTarget = [...baselineKeys].filter(k => !targetKeys.has(k)).sort();
+        const missingInBaseline = [...targetKeys].filter(k => !baselineKeys.has(k)).sort();
+        pairs.push({ file: targetFile, missingInTarget, missingInBaseline });
+      }
+
+      const totalGaps = pairs.reduce((sum, p) => sum + (p.missingInTarget?.length || 0) + (p.missingInBaseline?.length || 0), 0);
+      const clean = totalGaps === 0;
+
+      const result = {
+        scannedAt: new Date().toISOString(),
+        baseline: args.baseline || ".env",
+        filesCompared: targetFiles.length,
+        pairs,
+        summary: { clean, totalGaps, baselineKeyCount: baselineKeys.size },
+      };
+
+      // Write cache (key names only, never values)
+      mkdirSync(resolve(cwd, ".forge"), { recursive: true });
+      writeFileSync(resolve(cwd, ".forge", "env-diff-cache.json"), JSON.stringify(result, null, 2), "utf-8");
+
+      emitToolTelemetry("forge_env_diff", args, { clean, totalGaps, filesCompared: targetFiles.length }, Date.now() - t0, "OK", cwd);
+      activeHub?.broadcast({ type: "liveguard-tool-completed", tool: "forge_env_diff", status: "OK", durationMs: Date.now() - t0 });
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Env diff error: ${err.message}` }], isError: true };
+    }
+  }
+
   // ─── forge_smith — onCall validation enhancement ───
   if (name === "forge_smith") {
     const result = executeTool(name, args || {});
@@ -2152,6 +2273,15 @@ function createExpressApp() {
       mkdirSync(resolve(PROJECT_DIR, ".forge"), { recursive: true });
       writeFileSync(resolve(PROJECT_DIR, ".forge", "secret-scan-cache.json"), JSON.stringify(result, null, 2), "utf-8");
       res.json(result);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // REST API: GET /api/env/diff — latest env diff cache
+  app.get("/api/env/diff", (_req, res) => {
+    try {
+      const cachePath = resolve(PROJECT_DIR, ".forge", "env-diff-cache.json");
+      if (!existsSync(cachePath)) return res.json({ cache: null, message: "No diff data yet — run forge_env_diff first" });
+      res.json(JSON.parse(readFileSync(cachePath, "utf-8")));
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 

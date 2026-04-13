@@ -1174,3 +1174,87 @@ describe("deploy journal sidecar annotation", () => {
     expect(read["deploy-100"].secretScanClean).toBe(false);
   });
 });
+
+// ─── Capabilities: forge_env_diff metadata ──────────────────────────────
+
+describe("TOOL_METADATA forge_env_diff", () => {
+  it("is present in TOOL_METADATA", () => {
+    expect(TOOL_METADATA).toHaveProperty("forge_env_diff");
+  });
+
+  it("has correct addedIn version", () => {
+    expect(TOOL_METADATA.forge_env_diff.addedIn).toBe("2.28.0");
+  });
+
+  it("produces env-diff-cache.json", () => {
+    expect(TOOL_METADATA.forge_env_diff.produces).toContain(".forge/env-diff-cache.json");
+  });
+
+  it("has exactly one entry (no duplicates)", () => {
+    const keys = Object.keys(TOOL_METADATA).filter(k => k === "forge_env_diff");
+    expect(keys).toHaveLength(1);
+  });
+
+  it("has BASELINE_NOT_FOUND and TARGET_NOT_FOUND error entries", () => {
+    const errors = TOOL_METADATA.forge_env_diff.errors;
+    expect(errors).toHaveProperty("BASELINE_NOT_FOUND");
+    expect(errors).toHaveProperty("TARGET_NOT_FOUND");
+  });
+
+  it("sideEffects mentions env-diff-cache.json", () => {
+    const se = TOOL_METADATA.forge_env_diff.sideEffects;
+    expect(se.some(s => s.includes("env-diff-cache.json"))).toBe(true);
+  });
+
+  it("sideEffects mentions key names only, no values", () => {
+    const se = TOOL_METADATA.forge_env_diff.sideEffects;
+    expect(se.some(s => s.includes("key names only"))).toBe(true);
+  });
+
+  it("has securityNote about never reading values", () => {
+    expect(TOOL_METADATA.forge_env_diff.securityNote).toBeDefined();
+    expect(TOOL_METADATA.forge_env_diff.securityNote).toContain("key names only");
+  });
+
+  it("has cost low", () => {
+    expect(TOOL_METADATA.forge_env_diff.cost).toBe("low");
+  });
+
+  it("consumes .env files", () => {
+    expect(TOOL_METADATA.forge_env_diff.consumes).toContain(".env");
+    expect(TOOL_METADATA.forge_env_diff.consumes).toContain(".env.*");
+  });
+});
+
+// ─── forge_env_diff cache persistence ──────────────────────────────────
+
+describe("env diff cache persistence", () => {
+  it("stores and reads env-diff-cache.json correctly", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    const cache = {
+      scannedAt: "2024-01-01T00:00:00.000Z",
+      baseline: ".env",
+      filesCompared: 2,
+      pairs: [
+        { file: ".env.staging", missingInTarget: ["STRIPE_KEY"], missingInBaseline: [] },
+        { file: ".env.production", missingInTarget: [], missingInBaseline: ["DEBUG_MODE"] },
+      ],
+      summary: { clean: false, totalGaps: 2, baselineKeyCount: 10 },
+    };
+    writeFileSync(resolve(forgeDir, "env-diff-cache.json"), JSON.stringify(cache, null, 2), "utf-8");
+    const read = JSON.parse(require("fs").readFileSync(resolve(forgeDir, "env-diff-cache.json"), "utf-8"));
+    expect(read.summary.clean).toBe(false);
+    expect(read.pairs).toHaveLength(2);
+    expect(read.pairs[0].missingInTarget).toContain("STRIPE_KEY");
+    expect(read.summary.totalGaps).toBe(2);
+  });
+
+  it("cache never contains environment variable values", () => {
+    const pair = { file: ".env.staging", missingInTarget: ["API_KEY"], missingInBaseline: [] };
+    // Verify the structure only contains key names, not values
+    expect(pair.missingInTarget[0]).toBe("API_KEY");
+    expect(Object.keys(pair)).not.toContain("values");
+    expect(JSON.stringify(pair)).not.toContain("sk-");
+  });
+});

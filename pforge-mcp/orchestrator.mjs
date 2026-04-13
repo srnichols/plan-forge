@@ -2432,7 +2432,7 @@ const LIVEGUARD_TOOLS = new Set([
   "forge_drift_report", "forge_incident_capture", "forge_dep_watch",
   "forge_regression_guard", "forge_runbook", "forge_hotspot",
   "forge_health_trend", "forge_alert_triage", "forge_deploy_journal",
-  "forge_secret_scan",
+  "forge_secret_scan", "forge_env_diff",
 ]);
 
 export function emitToolTelemetry(toolName, inputs, result, durationMs, status, cwd = process.cwd()) {

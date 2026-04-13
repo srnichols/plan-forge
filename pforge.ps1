@@ -83,6 +83,7 @@ function Show-Help {
     Write-Host "  runbook <plan>    Generate an operational runbook from a hardened plan file"
     Write-Host "  hotspot           Identify git churn hotspots — most frequently changed files"
     Write-Host "  secret-scan       Scan recent commits for leaked secrets using Shannon entropy analysis"
+    Write-Host "  env-diff          Compare environment variable keys across .env files — detect missing keys"
     Write-Host "  health-trend      Health trend analysis — drift, cost, incidents, model performance over time"
     Write-Host "  tour              Guided walkthrough of your installed Plan Forge files"
     Write-Host "  help              Show this help message"
@@ -3403,6 +3404,58 @@ function Invoke-SecretScan {
     }
 }
 
+# ─── Command: env-diff ─────────────────────────────────────────────────
+function Invoke-EnvDiff {
+    $baseline = ".env"
+    $files = ""
+    for ($i = 0; $i -lt $Arguments.Count; $i++) {
+        switch ($Arguments[$i]) {
+            '--baseline' { if (($i + 1) -lt $Arguments.Count) { $baseline = $Arguments[$i + 1]; $i++ } }
+            '--files'    { if (($i + 1) -lt $Arguments.Count) { $files = $Arguments[$i + 1]; $i++ } }
+        }
+    }
+
+    Write-ManualSteps "env-diff" @(
+        "Read baseline $baseline and compare key names"
+        "Detect missing keys across target .env files"
+        "Cache results in .forge/env-diff-cache.json (key names only, no values)"
+    )
+
+    $port = 3100
+    try {
+        $response = Invoke-RestMethod -Uri "http://localhost:$port/api/env/diff" -Method GET -ErrorAction Stop
+        Write-Host ""
+        Write-Host "`u{1F50E} Environment Key Diff" -ForegroundColor Cyan
+        if ($null -eq $response.cache) {
+            Write-Host "   No diff data yet. Run forge_env_diff to populate." -ForegroundColor DarkGray
+        } else {
+            Write-Host "   Baseline:       $($response.baseline)" -ForegroundColor White
+            Write-Host "   Files compared: $($response.filesCompared)" -ForegroundColor White
+            if ($response.summary.clean) {
+                Write-Host "   Status:         `u{2705} Clean — all keys aligned" -ForegroundColor Green
+            } else {
+                Write-Host "   Status:         `u{26A0} $($response.summary.totalGaps) gap(s) found" -ForegroundColor Yellow
+                foreach ($pair in $response.pairs) {
+                    if (($pair.missingInTarget -and $pair.missingInTarget.Count -gt 0) -or ($pair.missingInBaseline -and $pair.missingInBaseline.Count -gt 0)) {
+                        Write-Host "   --- $($pair.file) ---" -ForegroundColor White
+                        foreach ($k in $pair.missingInTarget) {
+                            Write-Host "      Missing in target: $k" -ForegroundColor Red
+                        }
+                        foreach ($k in $pair.missingInBaseline) {
+                            Write-Host "      Missing in baseline: $k" -ForegroundColor Yellow
+                        }
+                    }
+                }
+            }
+            Write-Host ""
+            Write-Host "   Scanned at: $($response.scannedAt)" -ForegroundColor DarkGray
+        }
+    } catch {
+        Write-Host "ERROR: MCP server not running on port $port. Start with: node pforge-mcp/server.mjs" -ForegroundColor Red
+        exit 1
+    }
+}
+
 # ─── Command: health-trend ─────────────────────────────────────────────
 function Invoke-HealthTrend {
     $days = 30
@@ -3692,6 +3745,7 @@ switch ($Command) {
     'runbook'      { Invoke-Runbook }
     'hotspot'      { Invoke-Hotspot }
     'secret-scan'  { Invoke-SecretScan }
+    'env-diff'     { Invoke-EnvDiff }
     'health-trend' { Invoke-HealthTrend }
     'version-bump' { Invoke-VersionBump }
     'smith'        { Invoke-Smith }

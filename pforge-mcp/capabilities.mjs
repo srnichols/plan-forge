@@ -509,6 +509,26 @@ export const TOOL_METADATA = {
       output: { scannedAt: "2024-01-01T00:00:00.000Z", since: "HEAD~1", threshold: 4.0, scannedFiles: 5, clean: false, findings: [{ file: "src/config.js", line: 5, type: "api_key", entropyScore: 4.8, masked: "<REDACTED>", confidence: "high" }] },
     },
   },
+  forge_env_diff: {
+    intent: ["env-diff", "environment-comparison", "env-key-gaps"],
+    aliases: ["env-diff", "compare-env", "env-check"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "2.28.0",
+    prerequisites: ["baseline .env file exists"],
+    produces: [".forge/env-diff-cache.json"],
+    consumes: [".env", ".env.*"],
+    sideEffects: ["writes .forge/env-diff-cache.json — key names only, no values"],
+    securityNote: "Compares key names only — never reads, logs, or caches environment variable values.",
+    errors: {
+      BASELINE_NOT_FOUND: { message: "baseline .env file does not exist", recovery: "Create the baseline file or pass --baseline pointing to an existing .env file" },
+      TARGET_NOT_FOUND: { message: "one or more target .env files not found", recovery: "Check the --files argument or ensure .env.* files exist in the project root" },
+    },
+    example: {
+      input: { baseline: ".env", files: ".env.staging,.env.production" },
+      output: { scannedAt: "2024-01-01T00:00:00.000Z", baseline: ".env", filesCompared: 2, pairs: [{ file: ".env.staging", missingInTarget: ["STRIPE_KEY"], missingInBaseline: [] }], summary: { clean: false, totalGaps: 1, baselineKeyCount: 12 } },
+    },
+  },
 };
 
 // ─── Workflow Graphs ──────────────────────────────────────────────────

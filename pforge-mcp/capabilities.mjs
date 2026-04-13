@@ -802,6 +802,45 @@ export const CONFIG_SCHEMA = {
       },
     },
     extensions: { type: "array", items: { type: "string" }, description: "Installed extensions" },
+    hooks: {
+      type: "object",
+      description: "LiveGuard hook configuration (v2.29)",
+      properties: {
+        preDeploy: {
+          type: "object",
+          properties: {
+            blockOnSecrets: { type: "boolean", default: true, description: "Block deploy when secrets detected" },
+            warnOnEnvGaps: { type: "boolean", default: true, description: "Warn on env key gaps" },
+            scanSince: { type: "string", default: "HEAD~1", description: "Git range for secret scan" },
+          },
+        },
+        postSlice: {
+          type: "object",
+          properties: {
+            silentDeltaThreshold: { type: "number", default: 5, description: "Drift delta below this is silent" },
+            warnDeltaThreshold: { type: "number", default: 10, description: "Drift delta above this is a warning" },
+            scoreFloor: { type: "number", default: 70, description: "Score below this triggers red warning" },
+          },
+        },
+        preAgentHandoff: {
+          type: "object",
+          properties: {
+            injectContext: { type: "boolean", default: true, description: "Inject LiveGuard context on session start" },
+            runRegressionGuard: { type: "boolean", default: true, description: "Run regression guard on handoff" },
+            cacheMaxAgeMinutes: { type: "number", default: 30, description: "Max cache age before re-running tools" },
+            minAlertSeverity: { type: "string", default: "medium", description: "Minimum severity for injected alerts" },
+          },
+        },
+      },
+    },
+    openclaw: {
+      type: "object",
+      description: "OpenClaw analytics bridge — optional POST on PreAgentHandoff (v2.29)",
+      properties: {
+        endpoint: { type: "string", description: "OpenClaw ingest endpoint URL" },
+        apiKey: { type: "string", description: "API key (or use .forge/secrets.json OPENCLAW_API_KEY)" },
+      },
+    },
   },
 };
 

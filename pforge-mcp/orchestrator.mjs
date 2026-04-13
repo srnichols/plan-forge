@@ -2874,6 +2874,128 @@ const QUORUM_PRESETS = {
   },
 };
 
+// ─── OpenClaw Integration (v2.29) ────────────────────────────────────
+
+/**
+ * Load OpenClaw configuration from .forge.json.
+ * @param {string} cwd
+ * @returns {{ endpoint: string|null, apiKey: string|null }}
+ */
+export function loadOpenClawConfig(cwd) {
+  const configPath = resolve(cwd, ".forge.json");
+  try {
+    if (existsSync(configPath)) {
+      const config = JSON.parse(readFileSync(configPath, "utf-8"));
+      if (config.openclaw && config.openclaw.endpoint) {
+        let apiKey = config.openclaw.apiKey || null;
+        // Fallback: .forge/secrets.json
+        if (!apiKey) {
+          const secretsPath = resolve(cwd, ".forge/secrets.json");
+          if (existsSync(secretsPath)) {
+            try {
+              const secrets = JSON.parse(readFileSync(secretsPath, "utf-8"));
+              apiKey = secrets.OPENCLAW_API_KEY || null;
+            } catch { /* skip */ }
+          }
+        }
+        return { endpoint: config.openclaw.endpoint, apiKey };
+      }
+    }
+  } catch { /* skip */ }
+  return { endpoint: null, apiKey: null };
+}
+
+/**
+ * Post a LiveGuard context snapshot to the configured OpenClaw endpoint.
+ * Fire-and-forget with a 5s hard timeout. Never throws.
+ *
+ * Payload includes: drift score, open incidents, last deploy, alert summary, secret scan status.
+ *
+ * @param {string} cwd - Project directory
+ * @param {object} [extraContext] - Additional context fields to include
+ * @returns {Promise<{ sent: boolean, endpoint?: string, error?: string }>}
+ */
+export async function postOpenClawSnapshot(cwd, extraContext = {}) {
+  const { endpoint, apiKey } = loadOpenClawConfig(cwd);
+  if (!endpoint) return { sent: false, error: "No openclaw.endpoint configured" };
+
+  try {
+    // Gather snapshot data
+    const snapshot = { timestamp: new Date().toISOString(), project: null, ...extraContext };
+
+    // Project name
+    try {
+      const config = JSON.parse(readFileSync(resolve(cwd, ".forge.json"), "utf-8"));
+      snapshot.project = config.projectName || null;
+    } catch { /* skip */ }
+
+    // Drift score
+    const driftPath = resolve(cwd, ".forge/drift-history.json");
+    if (existsSync(driftPath)) {
+      try {
+        const history = JSON.parse(readFileSync(driftPath, "utf-8"));
+        const latest = Array.isArray(history) ? history[history.length - 1] : history;
+        snapshot.driftScore = latest?.score ?? null;
+        snapshot.driftViolations = latest?.violations ?? null;
+      } catch { /* skip */ }
+    }
+
+    // Open incidents
+    const incidentsPath = resolve(cwd, ".forge/incidents.jsonl");
+    if (existsSync(incidentsPath)) {
+      try {
+        const lines = readFileSync(incidentsPath, "utf-8").trim().split("\n").filter(Boolean);
+        const incidents = lines.map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
+        snapshot.openIncidents = incidents.filter((i) => !i.resolvedAt).length;
+        snapshot.totalIncidents = incidents.length;
+      } catch { /* skip */ }
+    }
+
+    // Last deploy
+    const deployPath = resolve(cwd, ".forge/deploy-journal.jsonl");
+    if (existsSync(deployPath)) {
+      try {
+        const lines = readFileSync(deployPath, "utf-8").trim().split("\n").filter(Boolean);
+        const last = lines.length > 0 ? JSON.parse(lines[lines.length - 1]) : null;
+        if (last) {
+          snapshot.lastDeployVersion = last.version || null;
+          snapshot.lastDeployEnv = last.environment || null;
+          snapshot.lastDeployAt = last.timestamp || null;
+        }
+      } catch { /* skip */ }
+    }
+
+    // Secret scan status
+    const scanPath = resolve(cwd, ".forge/secret-scan-cache.json");
+    if (existsSync(scanPath)) {
+      try {
+        const scan = JSON.parse(readFileSync(scanPath, "utf-8"));
+        snapshot.secretScanClean = scan.clean ?? null;
+        snapshot.secretScanFindings = scan.findings?.length ?? 0;
+      } catch { /* skip */ }
+    }
+
+    // POST with 5s timeout
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const headers = { "Content-Type": "application/json" };
+    if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
+
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(snapshot),
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    return { sent: true, endpoint, status: response.status };
+  } catch (err) {
+    // Fire-and-forget — never throw
+    return { sent: false, endpoint, error: err.name === "AbortError" ? "timeout (5s)" : err.message };
+  }
+}
+
 export function loadQuorumConfig(cwd, presetOverride = null) {
   const defaults = {
     enabled: false,

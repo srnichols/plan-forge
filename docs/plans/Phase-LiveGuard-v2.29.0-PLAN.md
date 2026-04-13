@@ -177,7 +177,6 @@ node -e " const { generateFixPlan } = await import('./pforge-mcp/orchestrator.mj
 ```bash
 node pforge-mcp/server.mjs --validate
 bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
-node -e " import('./pforge-mcp/server.mjs').then(async () => { // Use REST or direct handler test via test harness console.log('see server.test.mjs for cap enforcement test'); })"
 ```
 
 **Stop Condition**: If `.forge/regression-gates.json` is absent or empty (no regression run yet) → return `{ error: 'no regression data — run pforge regression-guard first', planFile: null }`. No throw. Same pattern for drift, incident, and secret sources when their data stores are empty (`secret-scan-cache.json` absent → `{ error: 'no secret scan data — run pforge secret-scan first', planFile: null }`).
@@ -360,11 +359,10 @@ PFORGE_QUORUM_TURN=1 bash -c "cd pforge-mcp && npx vitest run tests/server.test.
 
 **Validation Gate**:
 ```bash
-grep -c "docs/plans/auto" .gitignore  # must be >= 1
-grep -c '!docs/plans/auto/README.md' .gitignore  # must be >= 1 (exception)
-test -d docs/plans/auto && echo "ok"
-git status --ignored docs/plans/auto/ | grep -c "Ignored" || echo "not ignored — check .gitignore"
-git ls-files docs/plans/auto/README.md | grep -c README.md  # must be 1 (tracked)
+node -e "const gi=require('fs').readFileSync('.gitignore','utf8');if(!gi.includes('docs/plans/auto'))throw new Error('missing gitignore entry');if(!gi.includes('!docs/plans/auto/README.md'))throw new Error('missing README exception');console.log('ok');"
+node -e "if(!require('fs').existsSync('docs/plans/auto'))throw new Error('dir missing');console.log('ok');"
+git status --ignored docs/plans/auto/ | grep -c "Ignored" || echo "not ignored"
+git ls-files docs/plans/auto/README.md | grep -c README.md
 ```
 
 ---
@@ -396,8 +394,8 @@ git ls-files docs/plans/auto/README.md | grep -c README.md  # must be 1 (tracked
 ```bash
 node pforge-mcp/server.mjs --validate
 bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
-grep -c "forge_fix_proposal" docs/capabilities.md
-grep -c "PreDeploy\|PostSlice\|PreAgentHandoff" docs/capabilities.md
+node -e "const c=require('fs').readFileSync('docs/capabilities.md','utf8');if(!c.includes('forge_fix_proposal'))throw new Error('missing forge_fix_proposal');console.log('ok');"
+node -e "const c=require('fs').readFileSync('docs/capabilities.md','utf8');const hooks=['PreDeploy','PostSlice','PreAgentHandoff'];const missing=hooks.filter(h=>!c.includes(h));if(missing.length)throw new Error('missing: '+missing.join(', '));console.log('ok');"
 ```
 
 **Stop Condition**: If tool count at `GET /api/capabilities` is not 32 → debug TOOL_METADATA vs TOOLS array discrepancy before proceeding to Slice 8.
@@ -453,10 +451,11 @@ grep -c "PreDeploy\|PostSlice\|PreAgentHandoff" docs/capabilities.md
 
 **Validation Gate**:
 ```bash
-npx vitest run
-cat VERSION
+bash -c "cd pforge-mcp && npx vitest run"
+node -e "const v=require('fs').readFileSync('VERSION','utf8').trim();if(!v.startsWith('2.29'))throw new Error('VERSION is '+v);console.log('ok - '+v);"
 git log --oneline -1
-git show --stat HEAD | grep "plans/auto" && echo "FAIL — auto plans committed" || echo "ok — auto plans not committed"
+git show --stat HEAD | grep "plans/auto" && echo "FAIL" || echo "ok"
+```
 node -e " const fs = require('fs'); // Seed a minimal regression failure const regDir = '.forge'; if (!fs.existsSync(regDir)) fs.mkdirSync(regDir, {recursive:true}); fs.writeFileSync('.forge/regression-gates.json', JSON.stringify([{sliceId:'S1',planFile:'test.md',command:'npm test',status:'failed',output:'FAIL',timestamp:new Date().toISOString()}])); " && \ pforge fix-proposal --source regression && \ ls docs/plans/auto/LIVEGUARD-FIX-* && echo "ok — vertical smoke: plan generated" || echo "FAIL — vertical smoke" && \ rm -rf docs/plans/auto/LIVEGUARD-FIX-* && \ node -e "const fs=require('fs'); const fp=JSON.parse(fs.readFileSync('.forge/fix-proposals.json','utf8')); fs.writeFileSync('.forge/fix-proposals.json','[]'); console.log('cleaned',fp.length,'proposals')" ```  ---  ## Rollback Plan  1. **`forge_fix_proposal`**: Comment out TOOLS entry and handler; delete `docs/plans/auto/`; remove `fix-proposals.json`. Server restarts cleanly. 2. **`forge_quorum_analyze`**: Comment out TOOLS entry and handler. No data stores affected — read-only. 3. **Hooks**: Each hook is independently wired in the hook mechanism. Disable via `.forge.json` `hooks.<name>.enabled: false`. No code revert needed for advisory-only hooks. 4. **OpenClaw bridge**: Remove `openclaw` block from `.forge.json`. `postOpenClawSnapshot()` is only called when the endpoint is configured — removing it silences the bridge without a code change. 5. **Git revert**: Single commit per slice. `git revert HEAD~N` reverts cleanly.  ---  ## Anti-Pattern Checks  ```bash grep -rn "exec(" pforge-mcp/orchestrator.mjs                  # no exec() — use execFile() or spawn() grep -rn "run-plan" pforge-mcp/server.mjs                     # forge_fix_proposal must NOT invoke run-plan grep -rn "require(" pforge-mcp/dashboard/app.js               # no Node.js require() in browser JS  node -e " const fs = require('fs'), path = require('path'); const autoDir = 'docs/plans/auto'; if (!fs.existsSync(autoDir)) { console.log('ok — no auto plans yet'); process.exit(0); } const plans = fs.readdirSync(autoDir).filter(f => f.endsWith('.md')); for (const p of plans) { const content = fs.readFileSync(path.join(autoDir, p), 'utf8'); // Plans must not contain exec/spawn/require calls (not runnable code) if (/\\bexec\\b|\\bspawn\\b|require\\(/.test(content)) throw new Error('Auto plan contains executable code: ' + p); } console.log('ok — ' + plans.length + ' auto plan(s) checked'); "
 
 node -e " const fs = require('fs'); const src = fs.readFileSync('pforge-mcp/server.mjs', 'utf8'); const newTools = ['forge_fix_proposal', 'forge_quorum_analyze']; const covered = newTools.filter(t => { const idx = src.indexOf(t); if (idx < 0) return false; return src.substring(idx, idx + 1500).includes('emitToolTelemetry'); }); if (covered.length < 2) throw new Error('Missing emitToolTelemetry in: ' + newTools.filter(t => !covered.includes(t)).join(', ')); console.log('ok — both new handlers have telemetry'); "

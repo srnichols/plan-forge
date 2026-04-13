@@ -5,6 +5,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.24.0] — 2026-04-12
+
+### Added
+- **`forge_memory_capture` MCP tool** — new MCP capability for OpenClaw and external agents to capture thoughts, decisions, lessons, and conventions into OpenBrain persistent memory. Accepts `content`, `project`, `type` (decision/lesson/convention/pattern/gotcha), `source`, and `created_by`. Returns a structured `capture_thought` payload ready for OpenBrain.
+- **`POST /api/memory/capture` REST endpoint** — companion HTTP endpoint so OpenClaw can POST memories directly without going through an AI worker. Validates, normalises, and broadcasts a `memory-captured` hub event. Secured with the same `bridge.approvalSecret` Bearer token. Returns the thought payload for OpenBrain persistence.
+
+---
+
 ## [2.23.0] — 2026-04-12
 
 ### Added

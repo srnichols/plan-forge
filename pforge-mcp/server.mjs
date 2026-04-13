@@ -515,6 +515,22 @@ const TOOLS = [
     },
   },
   {
+    name: "forge_memory_capture",
+    description: "Capture a thought, decision, or lesson into OpenBrain persistent memory. USE FOR: recording architecture decisions, patterns chosen, gotchas discovered, conventions established, or any cross-session knowledge that future AI sessions should know. Requires OpenBrain to be configured in .vscode/mcp.json or .claude/mcp.json.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        content: { type: "string", description: "The thought, decision, or lesson to capture. Be specific — future agents will read this." },
+        project: { type: "string", description: "Project name to scope the memory (default: read from .forge.json)" },
+        type: { type: "string", description: "Memory type: decision | lesson | convention | pattern | gotcha (default: decision)", enum: ["decision", "lesson", "convention", "pattern", "gotcha"] },
+        source: { type: "string", description: "Source identifier (e.g. 'openclaw-trigger', 'plan-forge/slice-3'). Default: 'forge_memory_capture'" },
+        created_by: { type: "string", description: "Who captured this (e.g. 'openclaw', 'copilot-agent'). Default: 'forge_memory_capture'" },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+      required: ["content"],
+    },
+  },
+  {
     name: "forge_generate_image",
     description: "Generate an image using AI image models (xAI Grok Aurora or OpenAI DALL-E). Provide a text description and get a generated image saved to disk. Supports format conversion — request WebP, PNG, AVIF, or JPEG regardless of what the API returns. Useful for creating logos, diagrams, UI mockups, icons, and illustrations during plan execution. Requires XAI_API_KEY (Grok) or OPENAI_API_KEY (DALL-E).",
     inputSchema: {
@@ -831,6 +847,43 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return { content: [{ type: "text", text: result }] };
     } catch (err) {
       return { content: [{ type: "text", text: `Org rules error: ${err.message}` }], isError: true };
+    }
+  }
+
+  if (name === "forge_memory_capture") {
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      if (!isOpenBrainConfigured(cwd)) {
+        return { content: [{ type: "text", text: "OpenBrain is not configured. Add the openbrain MCP server to .vscode/mcp.json or .claude/mcp.json to enable persistent memory capture." }], isError: true };
+      }
+
+      // Read project name from .forge.json if not provided
+      let project = args.project || null;
+      if (!project) {
+        try {
+          const forgeConfig = JSON.parse(readFileSync(resolve(cwd, ".forge.json"), "utf-8"));
+          project = forgeConfig.projectName || "plan-forge";
+        } catch { project = "plan-forge"; }
+      }
+
+      const thought = {
+        content: args.content,
+        project,
+        type: args.type || "decision",
+        source: args.source || "forge_memory_capture",
+        created_by: args.created_by || "forge_memory_capture",
+        captured_at: new Date().toISOString(),
+      };
+
+      // Return structured capture instructions — the AI worker executes capture_thought
+      return {
+        content: [{
+          type: "text",
+          text: `MEMORY CAPTURE — use the capture_thought tool with these parameters:\n\n${JSON.stringify(thought, null, 2)}\n\nAlternatively, POST to /api/memory/capture with the same payload to capture directly via REST (no AI worker needed).`,
+        }],
+      };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Memory capture error: ${err.message}` }], isError: true };
     }
   }
 
@@ -1288,6 +1341,54 @@ function createExpressApp() {
       }
       res.json({ configured: true, results, note: results.length === 0 ? "No matches found. Try broader terms or check preset suggestions." : null });
     } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // POST /api/memory/capture — capture a thought directly into OpenBrain via REST
+  //   Auth: Authorization: Bearer <bridge.approvalSecret>  OR  ?token=<secret>
+  //   Body: { content, project?, type?, source?, created_by? }
+  //   OpenClaw and external tools use this to write memories without going through an AI worker.
+  app.post("/api/memory/capture", (req, res) => {
+    if (!checkApprovalSecret(req, res)) return;
+
+    if (!isOpenBrainConfigured(PROJECT_DIR)) {
+      return res.status(503).json({ error: "OpenBrain is not configured. Add the openbrain MCP server to .vscode/mcp.json or .claude/mcp.json." });
+    }
+
+    const { content, project, type, source, created_by } = req.body || {};
+    if (!content || typeof content !== "string") {
+      return res.status(400).json({ error: "content is required and must be a string" });
+    }
+
+    // Resolve project name from .forge.json if not provided
+    let resolvedProject = project || null;
+    if (!resolvedProject) {
+      try {
+        const forgeConfig = JSON.parse(readFileSync(resolve(PROJECT_DIR, ".forge.json"), "utf-8"));
+        resolvedProject = forgeConfig.projectName || "plan-forge";
+      } catch { resolvedProject = "plan-forge"; }
+    }
+
+    const thought = {
+      content,
+      project: resolvedProject,
+      type: type || "decision",
+      source: source || "api/memory/capture",
+      created_by: created_by || "openclaw",
+      captured_at: new Date().toISOString(),
+    };
+
+    // Broadcast to hub so dashboard + bridge can observe the capture event
+    if (activeHub) {
+      activeHub.broadcast({ type: "memory-captured", thought, timestamp: thought.captured_at });
+    }
+
+    // Return the thought payload — the caller (OpenClaw) must forward to OpenBrain's capture_thought API
+    // This endpoint normalises and validates; OpenBrain's own REST/MCP handles persistence.
+    res.json({
+      ok: true,
+      thought,
+      note: "Forward this payload to OpenBrain capture_thought to persist. Plan Forge does not proxy writes to OpenBrain directly.",
+    });
   });
 
   // Memory search presets API

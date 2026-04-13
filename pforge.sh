@@ -68,6 +68,7 @@ COMMANDS:
   secret-scan       Scan recent commits for leaked secrets using Shannon entropy analysis
   env-diff          Compare environment variable keys across .env files — detect missing keys
   health-trend      Health trend analysis — drift, cost, incidents, model performance over time
+  quorum-analyze    Assemble a quorum analysis prompt from LiveGuard data for multi-model dispatch
   smith             Inspect your forge — environment, VS Code config, setup health, and common problems
   tour              Guided walkthrough of your installed Plan Forge files
   help              Show this help message
@@ -3012,6 +3013,66 @@ cmd_fix_proposal() {
     "
 }
 
+# ─── Command: quorum-analyze ───────────────────────────────────────────
+cmd_quorum_analyze() {
+    local source=""
+    local goal=""
+    local custom_question=""
+    local quorum_size=3
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --source)          source="$2";          shift 2 ;;
+            --goal)            goal="$2";             shift 2 ;;
+            --custom-question) custom_question="$2";  shift 2 ;;
+            --quorum-size)     quorum_size="$2";      shift 2 ;;
+            *) shift ;;
+        esac
+    done
+
+    print_manual_steps "quorum-analyze" \
+        "Read LiveGuard data from .forge/ (source: ${source:-all})" \
+        "Assemble 3-section prompt (context, question, voting instruction)" \
+        "Return structured prompt object for multi-model dispatch"
+
+    local port=3100
+    local body="{\"quorumSize\":${quorum_size}}"
+    if [ -n "$custom_question" ]; then
+        if [ -n "$source" ]; then
+            body="{\"source\":\"${source}\",\"customQuestion\":\"${custom_question}\",\"quorumSize\":${quorum_size}}"
+        else
+            body="{\"customQuestion\":\"${custom_question}\",\"quorumSize\":${quorum_size}}"
+        fi
+    elif [ -n "$goal" ]; then
+        if [ -n "$source" ]; then
+            body="{\"source\":\"${source}\",\"analysisGoal\":\"${goal}\",\"quorumSize\":${quorum_size}}"
+        else
+            body="{\"analysisGoal\":\"${goal}\",\"quorumSize\":${quorum_size}}"
+        fi
+    elif [ -n "$source" ]; then
+        body="{\"source\":\"${source}\",\"quorumSize\":${quorum_size}}"
+    fi
+
+    local response
+    response=$(curl -sf -X POST -H "Content-Type: application/json" -d "$body" "http://localhost:${port}/api/quorum/prompt") || {
+        echo "ERROR: MCP server not running on port ${port}. Start with: node pforge-mcp/server.mjs" >&2
+        exit 1
+    }
+    echo "$response" | node -e "
+      const d = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
+      console.log('\n\u{1F50E} Quorum Analyze');
+      if (d.error) {
+        console.log('   \x1b[33m' + d.error + '\x1b[0m');
+      } else {
+        console.log('   Question:  ' + d.questionUsed);
+        console.log('   Tokens:    ~' + d.promptTokenEstimate);
+        console.log('   Models:    ' + (d.suggestedModels || []).join(', '));
+        console.log('   Data age:  \x1b[90m' + d.dataSnapshotAge + '\x1b[0m');
+        console.log('');
+        console.log('   \x1b[32mPrompt assembled — pipe to quorum runner or copy from JSON output.\x1b[0m');
+      }
+    "
+}
+
 # ─── Command: health-trend ─────────────────────────────────────────────
 cmd_health_trend() {
     local days=30
@@ -3292,8 +3353,9 @@ case "$COMMAND" in
     hotspot)      cmd_hotspot "$@" ;;
     secret-scan)  cmd_secret_scan "$@" ;;
     env-diff)     cmd_env_diff "$@" ;;
-    fix-proposal) cmd_fix_proposal "$@" ;;
-    health-trend) cmd_health_trend "$@" ;;
+    fix-proposal)    cmd_fix_proposal "$@" ;;
+    quorum-analyze)  cmd_quorum_analyze "$@" ;;
+    health-trend)    cmd_health_trend "$@" ;;
     smith)        cmd_smith ;;
     tour)         cmd_tour ;;
     help|--help)  show_help ;;

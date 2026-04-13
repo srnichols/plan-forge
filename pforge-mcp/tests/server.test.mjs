@@ -1282,6 +1282,53 @@ describe("TOOL_METADATA forge_fix_proposal", () => {
   });
 });
 
+// ─── forge_quorum_analyze metadata ──────────────────────────────────────
+
+describe("TOOL_METADATA forge_quorum_analyze", () => {
+  it("is present in TOOL_METADATA", () => {
+    expect(TOOL_METADATA).toHaveProperty("forge_quorum_analyze");
+  });
+
+  it("has correct addedIn version", () => {
+    expect(TOOL_METADATA.forge_quorum_analyze.addedIn).toBe("2.29.0");
+  });
+
+  it("has exactly one entry (no duplicates)", () => {
+    const keys = Object.keys(TOOL_METADATA).filter(k => k === "forge_quorum_analyze");
+    expect(keys).toHaveLength(1);
+  });
+
+  it("has QUESTION_TOO_LONG and XSS_DETECTED error entries", () => {
+    const errors = TOOL_METADATA.forge_quorum_analyze.errors;
+    expect(errors).toHaveProperty("QUESTION_TOO_LONG");
+    expect(errors).toHaveProperty("XSS_DETECTED");
+  });
+
+  it("sideEffects declares read-only (no LLM calls)", () => {
+    const se = TOOL_METADATA.forge_quorum_analyze.sideEffects;
+    expect(se.some(s => s.includes("read-only") || s.includes("no LLM"))).toBe(true);
+  });
+
+  it("has securityNote about XSS validation and length cap", () => {
+    expect(TOOL_METADATA.forge_quorum_analyze.securityNote).toBeDefined();
+    expect(TOOL_METADATA.forge_quorum_analyze.securityNote).toContain("XSS");
+    expect(TOOL_METADATA.forge_quorum_analyze.securityNote).toContain("500");
+  });
+
+  it("has cost low", () => {
+    expect(TOOL_METADATA.forge_quorum_analyze.cost).toBe("low");
+  });
+
+  it("consumes LiveGuard data files", () => {
+    expect(TOOL_METADATA.forge_quorum_analyze.consumes).toContain(".forge/drift-history.json");
+    expect(TOOL_METADATA.forge_quorum_analyze.consumes).toContain(".forge/incidents.jsonl");
+  });
+
+  it("maxConcurrent is 10", () => {
+    expect(TOOL_METADATA.forge_quorum_analyze.maxConcurrent).toBe(10);
+  });
+});
+
 // ─── forge_env_diff cache persistence ──────────────────────────────────
 
 describe("env diff cache persistence", () => {
@@ -1671,6 +1718,7 @@ describe("emitToolTelemetry LIVEGUARD_TOOLS membership", () => {
     "forge_regression_guard", "forge_runbook", "forge_hotspot",
     "forge_health_trend", "forge_alert_triage", "forge_deploy_journal",
     "forge_secret_scan", "forge_env_diff", "forge_fix_proposal",
+    "forge_quorum_analyze",
   ];
 
   it("writes liveguard-events.jsonl for forge_secret_scan", () => {
@@ -1705,14 +1753,20 @@ describe("emitToolTelemetry LIVEGUARD_TOOLS membership", () => {
     expect(events.some(e => e.tool === "forge_fix_proposal")).toBe(true);
   });
 
-  it("LIVEGUARD_TOOLS set has exactly 12 entries", () => {
+  it("writes liveguard-events.jsonl for forge_quorum_analyze", () => {
+    emitToolTelemetry("forge_quorum_analyze", { source: "drift" }, { questionLength: 42 }, 15, "OK", tempDir);
+    const events = readForgeJsonl("liveguard-events.jsonl", [], tempDir);
+    expect(events.some(e => e.tool === "forge_quorum_analyze")).toBe(true);
+  });
+
+  it("LIVEGUARD_TOOLS set has exactly 13 entries", () => {
     for (const tool of EXPECTED_LIVEGUARD_TOOLS) {
       emitToolTelemetry(tool, {}, "test", 1, "OK", tempDir);
     }
     const events = readForgeJsonl("liveguard-events.jsonl", [], tempDir);
     const uniqueTools = [...new Set(events.map(e => e.tool))];
     expect(uniqueTools.sort()).toEqual(EXPECTED_LIVEGUARD_TOOLS.sort());
-    expect(uniqueTools).toHaveLength(12);
+    expect(uniqueTools).toHaveLength(13);
   });
 });
 

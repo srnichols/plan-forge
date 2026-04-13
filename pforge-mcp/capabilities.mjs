@@ -566,7 +566,7 @@ export const TOOL_METADATA = {
     },
     example: {
       input: { source: "drift", customQuestion: "Why did drift score drop 15 points?" },
-      output: { source: "drift", questionUsed: "Why did drift score drop 15 points?", prompt: { context: "...", question: "...", outputFormat: "..." }, generatedAt: "2026-04-13T00:00:00.000Z" },
+      output: { quorumPrompt: "## Context\n...\n\n## Question\nWhy did drift score drop 15 points?\n\n## Voting Instruction\n...", promptTokenEstimate: 250, suggestedModels: ["claude-opus-4.6", "grok-4.20", "gemini-3-pro-preview"], dataSnapshotAge: "12m ago", questionUsed: "Why did drift score drop 15 points?" },
     },
   },
 };

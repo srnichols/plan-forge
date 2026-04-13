@@ -242,10 +242,10 @@ async function main() {
   await page.waitForTimeout(1500);
   await page.screenshot({ path: resolve(OUTPUT_DIR, "runs.png"), fullPage: false });
 
-  // ─── 4. Cost tab + Model Comparison (v2.7) ──────────────────────────
-  console.log("Capturing Cost tab...");
+  // ─── 4. Cost tab — Section Screenshots ───────────────────────────────
+  console.log("Capturing Cost tab sections...");
   await clickTab(page, "cost");
-  await page.waitForTimeout(2000); // Charts need time to render
+  await page.waitForTimeout(2500); // Charts need time to render
   // Inject model comparison table
   await page.evaluate(() => {
     const el = document.getElementById("model-comparison");
@@ -273,24 +273,30 @@ async function main() {
       }).join("")}</tbody>
     </table>`;
   });
-  await page.waitForTimeout(300);
-  // v2.9: Inject duration chart data only if not already rendered by loadCost
-  await page.evaluate(() => {
-    const ctx = document.getElementById("chart-duration-trend");
-    if (!ctx || typeof Chart === "undefined") return;
-    // Skip if chart already exists from real data
-    const existingChart = Chart.getChart(ctx);
-    if (existingChart) return;
-    const labels = ["Mar 28", "Mar 29", "Mar 30", "Mar 31", "Apr 1", "Apr 2", "Apr 3", "Apr 4", "Apr 5", "Apr 6"];
-    const durations = [42, 65, 38, 124, 55, 89, 48, 33, 71, 52];
-    new Chart(ctx, {
-      type: "bar",
-      data: { labels, datasets: [{ label: "Duration (s)", data: durations, backgroundColor: durations.map(d => d > 300 ? "#ef4444" : d > 120 ? "#f59e0b" : "#3b82f6"), borderWidth: 0, borderRadius: 2 }] },
-      options: { responsive: true, plugins: { legend: { labels: { color: "#9ca3af" } } }, scales: { y: { ticks: { color: "#9ca3af" }, grid: { color: "#374151" } }, x: { ticks: { color: "#9ca3af" }, grid: { display: false } } } },
-    });
-  });
   await page.waitForTimeout(500);
+
+  // Full page screenshot (backward compat)
   await page.screenshot({ path: resolve(OUTPUT_DIR, "cost.png"), fullPage: true });
+
+  // Section screenshots
+  const costSections = [
+    { selector: "#tab-cost > .grid.md\\:grid-cols-3", name: "cost-overview.png" },
+    { selector: "#tab-cost > .grid.md\\:grid-cols-2", name: "cost-charts.png" },
+    { selector: "#chart-cost-trend", name: "cost-trend.png", parent: true },
+    { selector: "#chart-duration-trend", name: "cost-duration.png", parent: true },
+    { selector: "#chart-model-perf", name: "cost-models.png", parent: true },
+  ];
+  for (const sec of costSections) {
+    try {
+      const el = sec.parent
+        ? await page.$(`${sec.selector}`).then(async (e) => e ? await e.evaluateHandle((e) => e.closest(".bg-gray-800")) : null)
+        : await page.$(sec.selector);
+      if (el) {
+        await el.screenshot({ path: resolve(OUTPUT_DIR, sec.name) });
+        console.log(`  ✅ ${sec.name}`);
+      }
+    } catch { /* skip if section not found */ }
+  }
 
   // ─── 5. Actions tab ─────────────────────────────────────────────────
   console.log("Capturing Actions tab...");

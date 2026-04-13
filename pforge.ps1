@@ -85,6 +85,7 @@ function Show-Help {
     Write-Host "  secret-scan       Scan recent commits for leaked secrets using Shannon entropy analysis"
     Write-Host "  env-diff          Compare environment variable keys across .env files — detect missing keys"
     Write-Host "  health-trend      Health trend analysis — drift, cost, incidents, model performance over time"
+    Write-Host "  quorum-analyze    Assemble a quorum analysis prompt from LiveGuard data for multi-model dispatch"
     Write-Host "  tour              Guided walkthrough of your installed Plan Forge files"
     Write-Host "  help              Show this help message"
     Write-Host ""
@@ -3591,6 +3592,55 @@ function Invoke-FixProposal {
     }
 }
 
+# ─── Command: quorum-analyze ───────────────────────────────────────────
+function Invoke-QuorumAnalyze {
+    $source = ""
+    $goal = ""
+    $customQuestion = ""
+    $quorumSize = 3
+    for ($i = 0; $i -lt $Arguments.Count; $i++) {
+        switch ($Arguments[$i]) {
+            '--source'          { if (($i + 1) -lt $Arguments.Count) { $source = $Arguments[$i + 1]; $i++ } }
+            '--goal'            { if (($i + 1) -lt $Arguments.Count) { $goal = $Arguments[$i + 1]; $i++ } }
+            '--custom-question' { if (($i + 1) -lt $Arguments.Count) { $customQuestion = $Arguments[$i + 1]; $i++ } }
+            '--quorum-size'     { if (($i + 1) -lt $Arguments.Count) { $quorumSize = [int]$Arguments[$i + 1]; $i++ } }
+        }
+    }
+
+    Write-ManualSteps "quorum-analyze" @(
+        "Read LiveGuard data from .forge/ (source: $( if ($source) { $source } else { 'all' } ))"
+        "Assemble 3-section prompt (context, question, voting instruction)"
+        "Return structured prompt object for multi-model dispatch"
+    )
+
+    $port = 3100
+    try {
+        $body = @{ quorumSize = $quorumSize }
+        if ($source)         { $body["source"]         = $source }
+        if ($customQuestion) { $body["customQuestion"]  = $customQuestion }
+        elseif ($goal)       { $body["analysisGoal"]    = $goal }
+        $json = $body | ConvertTo-Json -Compress
+        $response = Invoke-RestMethod -Uri "http://localhost:$port/api/quorum/prompt" `
+            -Method POST -Body $json -ContentType "application/json" -ErrorAction Stop
+
+        Write-Host ""
+        Write-Host "`u{1F50E} Quorum Analyze" -ForegroundColor Cyan
+        if ($response.error) {
+            Write-Host "   $($response.error)" -ForegroundColor Yellow
+        } else {
+            Write-Host "   Question:  $($response.questionUsed)" -ForegroundColor White
+            Write-Host "   Tokens:    ~$($response.promptTokenEstimate)" -ForegroundColor White
+            Write-Host "   Models:    $($response.suggestedModels -join ', ')" -ForegroundColor White
+            Write-Host "   Data age:  $($response.dataSnapshotAge)" -ForegroundColor DarkGray
+            Write-Host ""
+            Write-Host "   Prompt assembled — pipe to quorum runner or copy from JSON output." -ForegroundColor Green
+        }
+    } catch {
+        Write-Host "ERROR: MCP server not running on port $port. Start with: node pforge-mcp/server.mjs" -ForegroundColor Red
+        exit 1
+    }
+}
+
 # ─── Command: health-trend ─────────────────────────────────────────────
 function Invoke-HealthTrend {
     $days = 30
@@ -3883,6 +3933,7 @@ switch ($Command) {
     'secret-scan'  { Invoke-SecretScan }
     'env-diff'        { Invoke-EnvDiff }
     'fix-proposal'    { Invoke-FixProposal }
+    'quorum-analyze'  { Invoke-QuorumAnalyze }
     'health-trend'    { Invoke-HealthTrend }
     'version-bump' { Invoke-VersionBump }
     'smith'        { Invoke-Smith }

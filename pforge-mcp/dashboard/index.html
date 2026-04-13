@@ -103,7 +103,12 @@
       <!-- Run summary bar -->
       <div id="run-summary" class="bg-gray-800 rounded-lg p-4 mb-4 flex items-center justify-between">
         <div>
-          <h2 id="run-plan-name" class="text-lg font-semibold">No active run</h2>
+          <div class="flex items-center gap-2 flex-wrap">
+            <h2 id="run-plan-name" class="text-lg font-semibold">No active run</h2>
+            <span id="run-mode-badge" class="hidden text-xs px-2 py-0.5 rounded-full"></span>
+            <span id="run-model-badge" class="hidden text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-300"></span>
+            <span id="run-exec-mode-badge" class="hidden text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-400"></span>
+          </div>
           <p id="run-progress-text" class="text-sm text-gray-400">Start a run with <code class="bg-gray-700 px-1 rounded">pforge run-plan</code></p>
         </div>
         <div id="run-progress-bar" class="w-48 h-2 bg-gray-700 rounded-full overflow-hidden hidden">

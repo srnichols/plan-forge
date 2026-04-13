@@ -120,6 +120,18 @@ function handleEvent(event) {
     case "slice-failed":
       handleSliceFailed(event.data || event);
       break;
+    case "slice-model-routed":
+      handleSliceModelRouted(event.data || event);
+      break;
+    case "quorum-dispatch-started":
+      handleQuorumDispatch(event.data || event);
+      break;
+    case "quorum-leg-completed":
+      handleQuorumLeg(event.data || event);
+      break;
+    case "quorum-review-completed":
+      handleQuorumReview(event.data || event);
+      break;
     case "run-completed":
       handleRunCompleted(event.data || event);
       loadRuns(); // Auto-refresh runs table
@@ -186,8 +198,84 @@ function handleRunStarted(data) {
   document.getElementById("run-progress-fill").style.width = "0%";
   document.getElementById("run-status").textContent = "Running...";
 
+  // Show run mode + model badges
+  updateRunBadges(data);
+
   renderSliceCards();
   updateProgress();
+}
+
+function updateRunBadges(data) {
+  const modeBadge = document.getElementById("run-mode-badge");
+  const modelBadge = document.getElementById("run-model-badge");
+  const execBadge = document.getElementById("run-exec-mode-badge");
+  if (!modeBadge || !modelBadge) return;
+
+  // Quorum vs single-pass
+  if (data.quorum && data.quorum.enabled) {
+    modeBadge.textContent = `\u26a1 Quorum${data.quorum.auto ? " (auto)" : ""}${data.quorum.threshold ? " T" + data.quorum.threshold : ""}`;
+    modeBadge.className = "text-xs px-2 py-0.5 rounded-full bg-purple-900/60 text-purple-300 border border-purple-700";
+    modeBadge.classList.remove("hidden");
+  } else {
+    modeBadge.textContent = "Single-pass";
+    modeBadge.className = "text-xs px-2 py-0.5 rounded-full bg-blue-900/60 text-blue-300 border border-blue-700";
+    modeBadge.classList.remove("hidden");
+  }
+
+  // Model
+  const model = data.model || "";
+  if (model) {
+    modelBadge.textContent = model;
+    modelBadge.className = "text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-300";
+    modelBadge.classList.remove("hidden");
+  } else {
+    modelBadge.classList.add("hidden");
+  }
+
+  // Execution mode (autonomous / assisted)
+  if (execBadge) {
+    const mode = data.mode || "";
+    if (mode) {
+      execBadge.textContent = mode === "assisted" ? "\ud83d\udc64 Assisted" : "\ud83e\udd16 Autonomous";
+      execBadge.classList.remove("hidden");
+    } else {
+      execBadge.classList.add("hidden");
+    }
+  }
+}
+
+function handleSliceModelRouted(data) {
+  const slice = state.slices.find((s) => s.id === String(data.sliceId));
+  if (slice) {
+    slice.model = data.model;
+    slice.sliceType = data.sliceType;
+  }
+  renderSliceCards();
+}
+
+function handleQuorumDispatch(data) {
+  const slice = state.slices.find((s) => s.id === String(data.sliceId));
+  if (slice) {
+    slice.quorum = { models: data.models, legs: [], status: "dispatched" };
+  }
+  renderSliceCards();
+}
+
+function handleQuorumLeg(data) {
+  const slice = state.slices.find((s) => s.id === String(data.sliceId));
+  if (slice && slice.quorum) {
+    slice.quorum.legs.push({ model: data.model, success: data.success, duration: data.duration });
+  }
+  renderSliceCards();
+}
+
+function handleQuorumReview(data) {
+  const slice = state.slices.find((s) => s.id === String(data.sliceId));
+  if (slice && slice.quorum) {
+    slice.quorum.status = "reviewed";
+    slice.quorum.winner = data.winner || data.selectedModel;
+  }
+  renderSliceCards();
 }
 
 function handleSliceStarted(data) {
@@ -283,6 +371,22 @@ function renderSliceCards() {
       ? `<span class="text-amber-400 text-xs ml-1" title="Awaiting bridge approval">🔔</span>`
       : "";
 
+    // Quorum leg indicators
+    let quorumHtml = "";
+    if (s.quorum) {
+      const q = s.quorum;
+      const legDots = (q.models || []).map((m) => {
+        const leg = (q.legs || []).find((l) => l.model === m);
+        if (!leg) return `<span class="inline-block w-2 h-2 rounded-full bg-gray-600" title="${m}: pending"></span>`;
+        return leg.success
+          ? `<span class="inline-block w-2 h-2 rounded-full bg-green-500" title="${m}: done ${leg.duration ? (leg.duration / 1000).toFixed(1) + 's' : ''}"></span>`
+          : `<span class="inline-block w-2 h-2 rounded-full bg-red-500" title="${m}: failed"></span>`;
+      }).join(" ");
+      const winnerLabel = q.winner ? `<span class="text-green-400 text-xs ml-1">→ ${q.winner}</span>` : "";
+      quorumHtml = `<div class="flex items-center gap-1 mt-1"><span class="text-xs text-purple-400">⚡ Quorum</span> ${legDots}${winnerLabel}</div>
+        <p class="text-xs text-gray-600 mt-0.5">${(q.models || []).join(", ")}</p>`;
+    }
+
     return `
       <div class="slice-card ${bgColor} rounded-lg p-3 border border-gray-700" data-slice-id="${s.id}">
         <div class="flex items-center justify-between mb-1">
@@ -291,6 +395,7 @@ function renderSliceCards() {
         </div>
         <p class="text-xs text-gray-400 truncate">${s.title}</p>
         ${model ? `<p class="text-xs text-gray-500 mt-1">${modelBadge} ${cost}</p>` : ""}
+        ${quorumHtml}
         ${s.error ? `<p class="text-xs text-red-400 mt-1 truncate">${s.error}</p>` : ""}
       </div>
     `;
@@ -2246,6 +2351,7 @@ fetch(`${API_BASE}/api/runs/latest`)
 
         document.getElementById("run-plan-name").textContent = shortName(run.plan);
         document.getElementById("run-progress-bar").classList.remove("hidden");
+        updateRunBadges(run);
         renderSliceCards();
         updateProgress();
       });
@@ -2804,10 +2910,21 @@ function appendEventLog(event) {
   const typeColors = {
     "run-started": "text-blue-400", "run-completed": "text-green-400", "run-aborted": "text-yellow-400",
     "slice-started": "text-cyan-400", "slice-completed": "text-green-300", "slice-failed": "text-red-400",
+    "slice-model-routed": "text-indigo-400",
+    "quorum-dispatch-started": "text-purple-400", "quorum-leg-completed": "text-purple-300", "quorum-review-completed": "text-purple-200",
     "skill-started": "text-purple-400", "skill-completed": "text-purple-300",
   };
   const color = typeColors[event.type] || "text-gray-400";
-  const summary = event.data?.sliceId ? ` slice ${event.data.sliceId}` : event.data?.plan ? ` ${shortName(event.data.plan)}` : event.data?.skillName ? ` /${event.data.skillName}` : "";
+  let summary = event.data?.sliceId ? ` slice ${event.data.sliceId}` : event.data?.plan ? ` ${shortName(event.data.plan)}` : event.data?.skillName ? ` /${event.data.skillName}` : "";
+  if (event.type === "slice-model-routed" && event.data?.model) {
+    summary += ` \u2192 ${event.data.model}`;
+  } else if (event.type === "quorum-dispatch-started" && event.data?.models) {
+    summary += ` [${event.data.models.join(", ")}]`;
+  } else if (event.type === "quorum-leg-completed" && event.data?.model) {
+    summary += ` ${event.data.model} ${event.data.success ? "\u2713" : "\u2717"}`;
+  } else if (event.type === "quorum-review-completed" && (event.data?.winner || event.data?.selectedModel)) {
+    summary += ` winner: ${event.data.winner || event.data.selectedModel}`;
+  }
 
   eventLogEntries.push({ time, type: event.type, summary, color });
   if (eventLogEntries.length > 200) eventLogEntries.shift();

@@ -254,6 +254,25 @@ export const TOOL_METADATA = {
     },
     example: { input: { threshold: 70 }, output: { score: 85, violations: [], trend: "stable", delta: 0, historyLength: 1 } },
   },
+  forge_incident_capture: {
+    intent: ["capture-incident", "record-outage", "track-mttr"],
+    aliases: ["incident-capture", "record-incident", "log-incident"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "2.27.0",
+    prerequisites: [".forge directory exists or will be created"],
+    produces: [".forge/incidents.jsonl"],
+    consumes: [".forge.json"],
+    sideEffects: ["appends to .forge/incidents.jsonl", "may fire incident-captured hub event", "may dispatch bridge notification to onCall target"],
+    errors: {
+      RESOLVED_BEFORE_CAPTURED: { message: "resolvedAt is earlier than capturedAt", recovery: "Check the resolvedAt timestamp — it must be after the incident was captured" },
+      INVALID_SEVERITY: { message: "severity must be low, medium, high, or critical", recovery: "Use one of: low, medium, high, critical" },
+    },
+    example: {
+      input: { description: "API latency spike on /checkout", severity: "high", files: ["src/api/checkout.ts"] },
+      output: { id: "inc-1700000000000", description: "API latency spike on /checkout", severity: "high", capturedAt: "2024-01-01T00:00:00.000Z", resolvedAt: null, mttr: null },
+    },
+  },
 };
 
 // ─── Workflow Graphs ──────────────────────────────────────────────────
@@ -398,6 +417,21 @@ export const CLI_SCHEMA = {
       args: [{ name: "source", type: "path", required: false, description: "Plan Forge source path" }],
       flags: { "--dry-run": { type: "boolean" } },
       examples: ["pforge update ../plan-forge", "pforge update --dry-run"],
+    },
+    incident: {
+      description: "Capture an incident — record description, severity, affected files, and optional resolution time for MTTR tracking",
+      args: [{ name: "description", type: "string", required: true, description: "Short description of the incident" }],
+      flags: {
+        "--severity": { type: "string", enum: ["low", "medium", "high", "critical"], description: "Incident severity (default: medium)" },
+        "--files": { type: "string", description: "Comma-separated list of affected file paths" },
+        "--resolved-at": { type: "string", description: "ISO 8601 resolution timestamp for MTTR calculation (e.g., 2024-01-01T02:30:00Z)" },
+      },
+      examples: [
+        'pforge incident "API latency spike on /checkout"',
+        'pforge incident "Database connection pool exhausted" --severity high',
+        'pforge incident "Deploy failed" --severity critical --files src/deploy.ts,infra/k8s.yaml',
+        'pforge incident "Resolved: API latency" --resolved-at 2024-01-01T02:30:00Z',
+      ],
     },
     help: { description: "Show help", args: [], flags: {}, examples: ["pforge help"] },
   },

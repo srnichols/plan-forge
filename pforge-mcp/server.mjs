@@ -560,6 +560,21 @@ const TOOLS = [
       required: [],
     },
   },
+  {
+    name: "forge_incident_capture",
+    description: "Capture an incident — record description, severity, affected files, and optional resolution timestamp for MTTR tracking. Appends to .forge/incidents.jsonl. Dispatches a bridge notification to the onCall target configured in .forge.json when an incident is captured.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        description: { type: "string", description: "Short description of the incident (e.g., 'API latency spike on /checkout')" },
+        severity: { type: "string", enum: ["low", "medium", "high", "critical"], description: "Incident severity level. Default: medium" },
+        files: { type: "array", items: { type: "string" }, description: "Affected file paths (optional, for traceability)" },
+        resolvedAt: { type: "string", description: "ISO 8601 resolution timestamp for MTTR calculation. Omit at capture time — supply via a second call when the incident is resolved." },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+      required: ["description"],
+    },
+  },
 ];
 function executeTool(name, args) {
   const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -941,6 +956,70 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
   }
 
+  if (name === "forge_incident_capture") {
+    try {
+      const t0 = Date.now();
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+
+      const VALID_SEVERITIES = ["low", "medium", "high", "critical"];
+      const severity = args.severity || "medium";
+      if (!VALID_SEVERITIES.includes(severity)) {
+        return { content: [{ type: "text", text: `Invalid severity '${severity}'. Must be one of: ${VALID_SEVERITIES.join(", ")}` }], isError: true };
+      }
+
+      const capturedAt = new Date().toISOString();
+      const resolvedAt = args.resolvedAt || null;
+      let mttr = null;
+
+      if (resolvedAt) {
+        const resolvedMs = new Date(resolvedAt).getTime();
+        const capturedMs = new Date(capturedAt).getTime();
+        if (isNaN(resolvedMs)) {
+          return { content: [{ type: "text", text: `Invalid resolvedAt timestamp: '${resolvedAt}'. Must be ISO 8601 (e.g., 2024-01-01T02:30:00Z)` }], isError: true };
+        }
+        if (resolvedMs < capturedMs) {
+          return { content: [{ type: "text", text: `resolvedAt (${resolvedAt}) is earlier than capturedAt (${capturedAt}). Check the timestamp.` }], isError: true };
+        }
+        mttr = resolvedMs - capturedMs;
+      }
+
+      const record = {
+        id: `inc-${Date.now()}`,
+        description: args.description,
+        severity,
+        files: args.files || [],
+        capturedAt,
+        resolvedAt,
+        mttr,
+      };
+
+      appendForgeJsonl("incidents.jsonl", record, cwd);
+
+      // Notify hub
+      activeHub?.broadcast({ type: "incident-captured", data: record, timestamp: capturedAt });
+
+      // Dispatch bridge notification to onCall if configured
+      let onCall = null;
+      try {
+        const forgeConfigPath = resolve(cwd, ".forge.json");
+        if (existsSync(forgeConfigPath)) {
+          const forgeConfig = JSON.parse(readFileSync(forgeConfigPath, "utf-8"));
+          onCall = forgeConfig.onCall || null;
+        }
+      } catch { /* ignore */ }
+
+      if (onCall) {
+        activeBridge?.dispatch?.({ type: "incident-captured", severity, description: args.description, onCall });
+      }
+
+      emitToolTelemetry("forge_incident_capture", args, record, Date.now() - t0, "OK", cwd);
+
+      return { content: [{ type: "text", text: JSON.stringify(record, null, 2) }], isError: false };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Incident capture error: ${err.message}` }], isError: true };
+    }
+  }
+
   if (name === "forge_drift_report") {
     try {
       const t0 = Date.now();
@@ -1109,6 +1188,45 @@ function createExpressApp() {
   app.get("/api/drift/history", (_req, res) => {
     try {
       res.json(readForgeJsonl("drift-history.json", [], PROJECT_DIR));
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // REST API: POST /api/incident — capture a new incident
+  app.post("/api/incident", (req, res) => {
+    try {
+      const { description, severity = "medium", files = [], resolvedAt = null } = req.body || {};
+      if (!description || typeof description !== "string" || !description.trim()) {
+        return res.status(400).json({ error: "description is required" });
+      }
+      const VALID_SEVERITIES = ["low", "medium", "high", "critical"];
+      if (!VALID_SEVERITIES.includes(severity)) {
+        return res.status(400).json({ error: `severity must be one of: ${VALID_SEVERITIES.join(", ")}` });
+      }
+      const capturedAt = new Date().toISOString();
+      let mttr = null;
+      if (resolvedAt) {
+        const resolvedMs = new Date(resolvedAt).getTime();
+        if (isNaN(resolvedMs)) return res.status(400).json({ error: `Invalid resolvedAt: '${resolvedAt}'` });
+        const capturedMs = new Date(capturedAt).getTime();
+        if (resolvedMs < capturedMs) return res.status(400).json({ error: "resolvedAt must be after capturedAt" });
+        mttr = resolvedMs - capturedMs;
+      }
+      const record = { id: `inc-${Date.now()}`, description: description.trim(), severity, files, capturedAt, resolvedAt, mttr };
+      appendForgeJsonl("incidents.jsonl", record, PROJECT_DIR);
+      activeHub?.broadcast({ type: "incident-captured", data: record, timestamp: capturedAt });
+      // Bridge dispatch to onCall if configured
+      try {
+        const forgeConfig = JSON.parse(readFileSync(resolve(PROJECT_DIR, ".forge.json"), "utf-8"));
+        if (forgeConfig.onCall) activeBridge?.dispatch?.({ type: "incident-captured", severity, description: record.description, onCall: forgeConfig.onCall });
+      } catch { /* no .forge.json or no onCall — skip */ }
+      res.status(201).json(record);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // REST API: GET /api/incidents — list all captured incidents
+  app.get("/api/incidents", (_req, res) => {
+    try {
+      res.json(readForgeJsonl("incidents.jsonl", [], PROJECT_DIR));
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 

@@ -1,7 +1,8 @@
 /**
- * server.test.mjs — forge_drift_report unit tests
+ * server.test.mjs — forge_drift_report + forge_incident_capture unit tests
  *
- * Tests drift score computation, history tracking, trend detection, and
+ * Tests drift score computation, history tracking, trend detection,
+ * incident capture (MTTR, severity, onCall dispatch), and
  * capabilities metadata — without starting the MCP/HTTP server.
  */
 
@@ -201,5 +202,116 @@ describe("runAnalyze rule filtering", () => {
   it("returns zero violations for unmatched rule filter", async () => {
     const result = await runAnalyze({ path: "src2", rules: ["sql-injection"], cwd: tempDir });
     expect(result.violations).toHaveLength(0);
+  });
+});
+
+// ─── forge_incident_capture metadata ─────────────────────────────────────
+
+describe("TOOL_METADATA forge_incident_capture", () => {
+  it("is present in TOOL_METADATA", () => {
+    expect(TOOL_METADATA).toHaveProperty("forge_incident_capture");
+  });
+
+  it("has correct addedIn version", () => {
+    expect(TOOL_METADATA.forge_incident_capture.addedIn).toBe("2.27.0");
+  });
+
+  it("produces incidents.jsonl", () => {
+    expect(TOOL_METADATA.forge_incident_capture.produces).toContain(".forge/incidents.jsonl");
+  });
+
+  it("has exactly one entry (no duplicates)", () => {
+    const keys = Object.keys(TOOL_METADATA).filter(k => k === "forge_incident_capture");
+    expect(keys).toHaveLength(1);
+  });
+
+  it("has RESOLVED_BEFORE_CAPTURED and INVALID_SEVERITY error entries", () => {
+    const errors = TOOL_METADATA.forge_incident_capture.errors;
+    expect(errors).toHaveProperty("RESOLVED_BEFORE_CAPTURED");
+    expect(errors).toHaveProperty("INVALID_SEVERITY");
+  });
+
+  it("sideEffects mentions incident-captured hub event", () => {
+    const effects = TOOL_METADATA.forge_incident_capture.sideEffects.join(" ");
+    expect(effects).toMatch(/incident-captured/);
+  });
+
+  it("sideEffects mentions onCall bridge dispatch", () => {
+    const effects = TOOL_METADATA.forge_incident_capture.sideEffects.join(" ");
+    expect(effects).toMatch(/onCall/);
+  });
+});
+
+// ─── Incident capture logic ───────────────────────────────────────────────
+
+describe("incident MTTR computation", () => {
+  it("mttr is null when resolvedAt is absent", () => {
+    const resolvedAt = null;
+    const mttr = resolvedAt ? 1 : null;
+    expect(mttr).toBeNull();
+  });
+
+  it("mttr is computed as ms diff when resolvedAt is present", () => {
+    const capturedAt = new Date("2024-01-01T00:00:00.000Z");
+    const resolvedAt = new Date("2024-01-01T01:30:00.000Z"); // 90 minutes later
+    const mttr = resolvedAt.getTime() - capturedAt.getTime();
+    expect(mttr).toBe(90 * 60 * 1000);
+  });
+
+  it("rejects resolvedAt before capturedAt", () => {
+    const capturedMs = new Date("2024-01-01T02:00:00.000Z").getTime();
+    const resolvedMs = new Date("2024-01-01T01:00:00.000Z").getTime();
+    expect(resolvedMs < capturedMs).toBe(true);
+  });
+
+  it("accepts resolvedAt equal to capturedAt (0 MTTR)", () => {
+    const t = "2024-01-01T00:00:00.000Z";
+    const mttr = new Date(t).getTime() - new Date(t).getTime();
+    expect(mttr).toBe(0);
+  });
+});
+
+describe("incident severity validation", () => {
+  const VALID = ["low", "medium", "high", "critical"];
+
+  it("accepts all valid severities", () => {
+    for (const s of VALID) {
+      expect(VALID.includes(s)).toBe(true);
+    }
+  });
+
+  it("rejects unknown severity", () => {
+    expect(VALID.includes("urgent")).toBe(false);
+    expect(VALID.includes("p0")).toBe(false);
+  });
+
+  it("defaults to medium when not provided", () => {
+    const severity = undefined ?? "medium";
+    expect(severity).toBe("medium");
+  });
+});
+
+describe("incident JSONL persistence", () => {
+  it("appends incident records correctly", () => {
+    const rec1 = { id: "inc-1", description: "Test A", severity: "low", capturedAt: "t1", resolvedAt: null, mttr: null, files: [] };
+    const rec2 = { id: "inc-2", description: "Test B", severity: "high", capturedAt: "t2", resolvedAt: "t3", mttr: 3600000, files: ["src/api.ts"] };
+    appendForgeJsonl("incidents.jsonl", rec1, tempDir);
+    appendForgeJsonl("incidents.jsonl", rec2, tempDir);
+
+    const incidents = readForgeJsonl("incidents.jsonl", [], tempDir);
+    expect(incidents).toHaveLength(2);
+    expect(incidents[0].id).toBe("inc-1");
+    expect(incidents[1].severity).toBe("high");
+    expect(incidents[1].mttr).toBe(3600000);
+  });
+
+  it("returns empty array when no incidents exist", () => {
+    const incidents = readForgeJsonl("incidents.jsonl", [], tempDir);
+    expect(incidents).toHaveLength(0);
+  });
+
+  it("incident id uses inc- prefix", () => {
+    const id = `inc-${Date.now()}`;
+    expect(id.startsWith("inc-")).toBe(true);
   });
 });

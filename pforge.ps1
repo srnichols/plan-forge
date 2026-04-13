@@ -76,6 +76,7 @@ function Show-Help {
     Write-Host "  smith             Inspect your forge — environment, VS Code config, setup health, and common problems"
     Write-Host "  org-rules export  Export org custom instructions from .github/instructions/ for GitHub org settings"
     Write-Host "  drift             Score codebase against architecture guardrail rules — track drift over time"
+    Write-Host "  incident <desc>   Capture an incident — record description, severity, affected files, and optional resolvedAt for MTTR"
     Write-Host "  tour              Guided walkthrough of your installed Plan Forge files"
     Write-Host "  help              Show this help message"
     Write-Host ""
@@ -3092,6 +3093,71 @@ else{process.stdout.write(out+'\n');}
     Remove-Item Env:ORG_RULES_OUTPUT  -ErrorAction SilentlyContinue
 }
 
+# ─── Command: incident ─────────────────────────────────────────────────
+function Invoke-Incident {
+    $description = if ($Arguments.Count -gt 0) { $Arguments[0] } else { $null }
+    if (-not $description) {
+        Write-Host "ERROR: description is required. Usage: pforge incident `"<description>`" [--severity S] [--files f1,f2] [--resolved-at ISO]" -ForegroundColor Red
+        exit 1
+    }
+
+    $severity   = "medium"
+    $files      = @()
+    $resolvedAt = $null
+
+    for ($i = 1; $i -lt $Arguments.Count; $i++) {
+        switch ($Arguments[$i]) {
+            '--severity' {
+                if (($i + 1) -lt $Arguments.Count) { $severity = $Arguments[$i + 1]; $i++ }
+            }
+            '--files' {
+                if (($i + 1) -lt $Arguments.Count) { $files = $Arguments[$i + 1] -split ','; $i++ }
+            }
+            '--resolved-at' {
+                if (($i + 1) -lt $Arguments.Count) { $resolvedAt = $Arguments[$i + 1]; $i++ }
+            }
+        }
+    }
+
+    Write-ManualSteps "incident" @(
+        "Build incident payload (description, severity, files, resolvedAt)"
+        "POST to /api/incident on the MCP server"
+        "Append record to .forge/incidents.jsonl"
+        "Dispatch bridge notification if onCall configured in .forge.json"
+    )
+
+    $port = 3100
+    $payload = @{ description = $description; severity = $severity; files = $files }
+    if ($resolvedAt) { $payload.resolvedAt = $resolvedAt }
+    $body = $payload | ConvertTo-Json -Compress
+
+    try {
+        $response = Invoke-RestMethod -Uri "http://localhost:$port/api/incident" -Method POST `
+            -ContentType "application/json" -Body $body -ErrorAction Stop
+        Write-Host ""
+        Write-Host "`u{1F6A8} Incident Captured" -ForegroundColor Red
+        Write-Host "   ID:          $($response.id)" -ForegroundColor White
+        Write-Host "   Description: $($response.description)" -ForegroundColor White
+        $severityColor = switch ($response.severity) { 'critical' { 'Red' } 'high' { 'DarkYellow' } 'medium' { 'Yellow' } default { 'White' } }
+        Write-Host "   Severity:    $($response.severity)" -ForegroundColor $severityColor
+        Write-Host "   Captured at: $($response.capturedAt)" -ForegroundColor White
+        if ($response.resolvedAt) {
+            $mttrMin = [math]::Round($response.mttr / 60000, 1)
+            Write-Host "   Resolved at: $($response.resolvedAt)" -ForegroundColor Green
+            Write-Host "   MTTR:        $mttrMin minutes" -ForegroundColor Green
+        } else {
+            Write-Host "   MTTR:        pending (supply --resolved-at when resolved)" -ForegroundColor DarkGray
+        }
+        if ($response.files -and $response.files.Count -gt 0) {
+            Write-Host "   Files:       $($response.files -join ', ')" -ForegroundColor White
+        }
+        Write-Host "   Saved to:    .forge/incidents.jsonl" -ForegroundColor DarkGray
+    } catch {
+        Write-Host "ERROR: MCP server not running on port $port. Start with: node pforge-mcp/server.mjs" -ForegroundColor Red
+        exit 1
+    }
+}
+
 # ─── Command: drift ────────────────────────────────────────────────────
 function Invoke-Drift {
     $threshold = 70
@@ -3259,6 +3325,7 @@ switch ($Command) {
     'run-plan'     { Invoke-RunPlan }
     'org-rules'    { Invoke-OrgRules }
     'drift'        { Invoke-Drift }
+    'incident'     { Invoke-Incident }
     'version-bump' { Invoke-VersionBump }
     'smith'        { Invoke-Smith }
     'tour'         { Invoke-Tour }

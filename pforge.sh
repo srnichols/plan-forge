@@ -59,6 +59,7 @@ COMMANDS:
   run-plan <plan>   Execute a hardened plan — spawn CLI workers, validate at every boundary, track tokens
   org-rules export  Export org custom instructions from .github/instructions/ for GitHub org settings
   drift             Score codebase against architecture guardrail rules — track drift over time
+  incident <desc>   Capture an incident — record description, severity, affected files, and optional resolvedAt for MTTR
   smith             Inspect your forge — environment, VS Code config, setup health, and common problems
   tour              Guided walkthrough of your installed Plan Forge files
   help              Show this help message
@@ -2584,6 +2585,77 @@ else{process.stdout.write(out+'\n');}
 "
 }
 
+# ─── Command: incident ─────────────────────────────────────────────────
+cmd_incident() {
+    local description="${1:-}"
+    if [ -z "$description" ]; then
+        echo "ERROR: description is required. Usage: pforge incident \"<description>\" [--severity S] [--files f1,f2] [--resolved-at ISO]" >&2
+        exit 1
+    fi
+    shift
+
+    local severity="medium"
+    local files=""
+    local resolved_at=""
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --severity)    severity="$2";    shift 2 ;;
+            --files)       files="$2";       shift 2 ;;
+            --resolved-at) resolved_at="$2"; shift 2 ;;
+            *) shift ;;
+        esac
+    done
+
+    print_manual_steps "incident" \
+        "Build incident payload (description, severity, files, resolvedAt)" \
+        "POST to /api/incident on the MCP server" \
+        "Append record to .forge/incidents.jsonl" \
+        "Dispatch bridge notification if onCall configured in .forge.json"
+
+    local port=3100
+
+    # Build JSON payload using node to avoid manual escaping
+    local payload
+    payload=$(node -e "
+      const p = {
+        description: process.env.INC_DESC,
+        severity: process.env.INC_SEV || 'medium',
+        files: process.env.INC_FILES ? process.env.INC_FILES.split(',').map(f => f.trim()).filter(Boolean) : [],
+      };
+      if (process.env.INC_RESOLVED) p.resolvedAt = process.env.INC_RESOLVED;
+      console.log(JSON.stringify(p));
+    " INC_DESC="$description" INC_SEV="$severity" INC_FILES="$files" INC_RESOLVED="$resolved_at")
+
+    local response
+    response=$(curl -sf -X POST "http://localhost:${port}/api/incident" \
+        -H "Content-Type: application/json" \
+        -d "$payload") || {
+        echo "ERROR: MCP server not running on port ${port}. Start with: node pforge-mcp/server.mjs" >&2
+        exit 1
+    }
+
+    echo "$response" | node -e "
+      const d = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
+      const sev_colors = { critical: '\x1b[31m', high: '\x1b[33m', medium: '\x1b[33m', low: '\x1b[37m' };
+      const sc = sev_colors[d.severity] || '\x1b[37m';
+      console.log('\n\u{1F6A8} Incident Captured');
+      console.log('   ID:          ' + d.id);
+      console.log('   Description: ' + d.description);
+      console.log('   Severity:    ' + sc + d.severity + '\x1b[0m');
+      console.log('   Captured at: ' + d.capturedAt);
+      if (d.resolvedAt) {
+        const mttrMin = Math.round(d.mttr / 60000 * 10) / 10;
+        console.log('   Resolved at: \x1b[32m' + d.resolvedAt + '\x1b[0m');
+        console.log('   MTTR:        \x1b[32m' + mttrMin + ' minutes\x1b[0m');
+      } else {
+        console.log('   MTTR:        \x1b[90mpending (supply --resolved-at when resolved)\x1b[0m');
+      }
+      if (d.files && d.files.length > 0) console.log('   Files:       ' + d.files.join(', '));
+      console.log('   Saved to:    \x1b[90m.forge/incidents.jsonl\x1b[0m');
+    "
+}
+
 # ─── Command: drift ────────────────────────────────────────────────────
 cmd_drift() {
     local threshold=70
@@ -2732,6 +2804,7 @@ case "$COMMAND" in
     run-plan)     cmd_run_plan "$@" ;;
     org-rules)    cmd_org_rules "$@" ;;
     drift)        cmd_drift "$@" ;;
+    incident)     cmd_incident "$@" ;;
     smith)        cmd_smith ;;
     tour)         cmd_tour ;;
     help|--help)  show_help ;;

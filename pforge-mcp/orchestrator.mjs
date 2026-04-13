@@ -1921,6 +1921,25 @@ export function appendForgeJsonl(filePath, record, cwd = process.cwd()) {
 }
 
 /**
+ * Read a JSONL file under .forge/ and return an array of parsed records.
+ * Returns defaultValue (default []) if the file is missing or unreadable.
+ * @param {string} filePath - Path relative to .forge/
+ * @param {Array} [defaultValue=[]] - Fallback when file is absent
+ * @param {string} [cwd=process.cwd()] - Project root directory
+ * @returns {Array}
+ */
+export function readForgeJsonl(filePath, defaultValue = [], cwd = process.cwd()) {
+  const fullPath = resolve(cwd, ".forge", filePath);
+  try {
+    if (!existsSync(fullPath)) return defaultValue;
+    return readFileSync(fullPath, "utf-8")
+      .split("\n")
+      .filter(line => line.trim())
+      .map(line => JSON.parse(line));
+  } catch { return defaultValue; }
+}
+
+/**
  * Extract validation gates from a parsed plan file.
  * Delegates to parsePlan() — does not duplicate parsing logic.
  * @param {string} planFilePath - Absolute or project-relative path to a plan markdown file

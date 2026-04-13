@@ -24,7 +24,7 @@ import { execSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, writeFileSync, watchFile, unwatchFile, statSync, openSync, readSync, closeSync } from "node:fs";
 import { resolve, join, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parsePlan, runPlan, detectWorkers, getCostReport, analyzeWithQuorum, generateImage, runAnalyze, readForgeJson, appendForgeJsonl, emitToolTelemetry } from "./orchestrator.mjs";
+import { parsePlan, runPlan, detectWorkers, getCostReport, analyzeWithQuorum, generateImage, runAnalyze, readForgeJson, readForgeJsonl, appendForgeJsonl, emitToolTelemetry } from "./orchestrator.mjs";
 import { isOpenBrainConfigured } from "./memory.mjs";
 import { createHub, readHubPort } from "./hub.mjs";
 import { createBridge } from "./bridge.mjs";
@@ -952,7 +952,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       const score = Math.max(0, 100 - (analysis.violations.length * penaltyPerViolation));
 
-      const history = readForgeJson("drift-history.json", [], cwd);
+      const history = readForgeJsonl("drift-history.json", [], cwd);
       const prev = history.length ? history[history.length - 1] : null;
       const delta = prev ? score - prev.score : 0;
       const trend = !prev ? "stable" : delta > 0 ? "improving" : delta < 0 ? "degrading" : "stable";
@@ -1092,7 +1092,7 @@ function createExpressApp() {
       const threshold = Math.max(0, Math.min(100, parseInt(_req.query.threshold) || 70));
       const analysis = await runAnalyze({ mode: "file", path: ".", cwd: PROJECT_DIR });
       const score = Math.max(0, 100 - (analysis.violations.length * 2));
-      const history = readForgeJson("drift-history.json", [], PROJECT_DIR);
+      const history = readForgeJsonl("drift-history.json", [], PROJECT_DIR);
       const prev = history.length ? history[history.length - 1] : null;
       const delta = prev ? score - prev.score : 0;
       const trend = !prev ? "stable" : delta > 0 ? "improving" : delta < 0 ? "degrading" : "stable";
@@ -1108,7 +1108,7 @@ function createExpressApp() {
   // REST API: GET /api/drift/history — drift history
   app.get("/api/drift/history", (_req, res) => {
     try {
-      res.json(readForgeJson("drift-history.json", [], PROJECT_DIR));
+      res.json(readForgeJsonl("drift-history.json", [], PROJECT_DIR));
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 

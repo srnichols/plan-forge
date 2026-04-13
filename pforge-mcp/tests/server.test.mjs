@@ -12,7 +12,7 @@ import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync, readdirSyn
 import { resolve, join, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { runAnalyze, appendForgeJsonl, readForgeJsonl, regressionGuard, isGateCommandAllowed, getHealthTrend, recordModelPerformance, emitToolTelemetry } from "../orchestrator.mjs";
+import { runAnalyze, appendForgeJsonl, readForgeJsonl, regressionGuard, isGateCommandAllowed, getHealthTrend, recordModelPerformance, emitToolTelemetry, isDeployTrigger, runPreDeployHook } from "../orchestrator.mjs";
 import { TOOL_METADATA } from "../capabilities.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -1896,5 +1896,185 @@ describe("forge_runbook backward compatibility — env-diff cache", () => {
     expect(gapPairs).toHaveLength(1);
     expect(gapPairs[0].missingInBaseline).toContain("DEBUG_MODE");
     expect(gapPairs[0].missingInBaseline).toContain("LOG_LEVEL");
+  });
+});
+
+// ─── PreDeploy hook: trigger detection ──────────────────────────────────
+
+describe("PreDeploy isDeployTrigger", () => {
+  it("triggers on Dockerfile write", () => {
+    expect(isDeployTrigger("editFiles", "Dockerfile", "")).toBe(true);
+  });
+
+  it("triggers on Dockerfile.production write", () => {
+    expect(isDeployTrigger("editFiles", "Dockerfile.production", "")).toBe(true);
+  });
+
+  it("triggers on deploy/ directory path", () => {
+    expect(isDeployTrigger("editFiles", "deploy/k8s-deployment.yaml", "")).toBe(true);
+  });
+
+  it("triggers on .bicep file", () => {
+    expect(isDeployTrigger("editFiles", "infra/main.bicep", "")).toBe(true);
+  });
+
+  it("triggers on .tf file", () => {
+    expect(isDeployTrigger("editFiles", "terraform/main.tf", "")).toBe(true);
+  });
+
+  it("triggers on k8s/ path", () => {
+    expect(isDeployTrigger("editFiles", "k8s/service.yml", "")).toBe(true);
+  });
+
+  it("triggers on docker-compose*.yml", () => {
+    expect(isDeployTrigger("editFiles", "docker-compose.prod.yml", "")).toBe(true);
+  });
+
+  it("triggers on git push command", () => {
+    expect(isDeployTrigger("runCommand", "", "git push origin main")).toBe(true);
+  });
+
+  it("triggers on docker push command", () => {
+    expect(isDeployTrigger("runCommand", "", "docker push myimage:latest")).toBe(true);
+  });
+
+  it("triggers on kubectl apply command", () => {
+    expect(isDeployTrigger("runCommand", "", "kubectl apply -f deployment.yaml")).toBe(true);
+  });
+
+  it("triggers on azd up command", () => {
+    expect(isDeployTrigger("runCommand", "", "azd up")).toBe(true);
+  });
+
+  it("triggers on az deploy command", () => {
+    expect(isDeployTrigger("runCommand", "", "az deploy --template main.bicep")).toBe(true);
+  });
+
+  it("triggers on pforge deploy-log command", () => {
+    expect(isDeployTrigger("runCommand", "", "pforge deploy-log")).toBe(true);
+  });
+
+  it("does NOT trigger on regular source file", () => {
+    expect(isDeployTrigger("editFiles", "src/index.js", "")).toBe(false);
+  });
+
+  it("does NOT trigger on npm test command", () => {
+    expect(isDeployTrigger("runCommand", "", "npm test")).toBe(false);
+  });
+
+  it("handles backslash paths (Windows)", () => {
+    expect(isDeployTrigger("editFiles", "deploy\\config.yaml", "")).toBe(true);
+  });
+});
+
+// ─── PreDeploy hook: runPreDeployHook ───────────────────────────────────
+
+describe("PreDeploy hook blocks on secret findings", () => {
+  it("blocks when secret-scan-cache.json has findings and blockOnSecrets is default (true)", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    writeFileSync(resolve(forgeDir, "secret-scan-cache.json"), JSON.stringify({
+      clean: false,
+      scannedAt: new Date().toISOString(),
+      findings: [{ file: "src/config.js", line: 5, type: "api_key", entropyScore: 4.8, masked: "<REDACTED>", confidence: "high" }],
+    }));
+
+    const result = runPreDeployHook({ toolName: "editFiles", filePath: "Dockerfile", cwd: tempDir });
+    expect(result.triggered).toBe(true);
+    expect(result.blocked).toBe(true);
+    expect(result.reason).toContain("secret-scan-found");
+    expect(result.reason).toContain("1");
+    expect(result.secretFindings).toHaveLength(1);
+    expect(result.secretFindings[0].masked).toBe("<REDACTED>");
+  });
+
+  it("does NOT block when secret-scan-cache.json has clean: true", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    writeFileSync(resolve(forgeDir, "secret-scan-cache.json"), JSON.stringify({
+      clean: true,
+      scannedAt: new Date().toISOString(),
+      findings: [],
+    }));
+
+    const result = runPreDeployHook({ toolName: "editFiles", filePath: "Dockerfile", cwd: tempDir });
+    expect(result.triggered).toBe(true);
+    expect(result.blocked).toBe(false);
+    expect(result.secretFindings).toHaveLength(0);
+  });
+
+  it("does NOT block when blockOnSecrets is false even with findings", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    writeFileSync(resolve(forgeDir, "secret-scan-cache.json"), JSON.stringify({
+      clean: false,
+      scannedAt: new Date().toISOString(),
+      findings: [{ file: "test/fixture.js", line: 1, type: "test_key", entropyScore: 3.5, masked: "<REDACTED>", confidence: "low" }],
+    }));
+    writeFileSync(resolve(tempDir, ".forge.json"), JSON.stringify({
+      hooks: { preDeploy: { blockOnSecrets: false } },
+    }));
+
+    const result = runPreDeployHook({ toolName: "editFiles", filePath: "Dockerfile", cwd: tempDir });
+    expect(result.triggered).toBe(true);
+    expect(result.blocked).toBe(false);
+    expect(result.secretFindings).toHaveLength(1);
+  });
+});
+
+describe("PreDeploy hook advisory on env gaps", () => {
+  it("returns advisory when env-diff-cache.json has missing keys", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    writeFileSync(resolve(forgeDir, "env-diff-cache.json"), JSON.stringify({
+      scannedAt: new Date().toISOString(),
+      baseline: ".env",
+      pairs: [{ file: ".env.staging", missingInTarget: ["STRIPE_KEY"], missingInBaseline: [] }],
+      summary: { clean: false, totalMissing: 1, totalGaps: 1, baselineKeyCount: 10 },
+    }));
+
+    const result = runPreDeployHook({ toolName: "editFiles", filePath: "Dockerfile", cwd: tempDir });
+    expect(result.triggered).toBe(true);
+    expect(result.blocked).toBe(false);
+    expect(result.advisory).toContain("STRIPE_KEY");
+    expect(result.envGaps).toHaveLength(1);
+  });
+
+  it("returns no advisory when warnOnEnvGaps is false", () => {
+    const forgeDir = resolve(tempDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    writeFileSync(resolve(forgeDir, "env-diff-cache.json"), JSON.stringify({
+      scannedAt: new Date().toISOString(),
+      baseline: ".env",
+      pairs: [{ file: ".env.staging", missingInTarget: ["STRIPE_KEY"], missingInBaseline: [] }],
+      summary: { clean: false, totalMissing: 1, totalGaps: 1, baselineKeyCount: 10 },
+    }));
+    writeFileSync(resolve(tempDir, ".forge.json"), JSON.stringify({
+      hooks: { preDeploy: { warnOnEnvGaps: false } },
+    }));
+
+    const result = runPreDeployHook({ toolName: "editFiles", filePath: "Dockerfile", cwd: tempDir });
+    expect(result.triggered).toBe(true);
+    expect(result.advisory).toBeNull();
+  });
+});
+
+describe("PreDeploy hook non-deploy triggers", () => {
+  it("returns triggered: false for non-deploy file edits", () => {
+    const result = runPreDeployHook({ toolName: "editFiles", filePath: "src/index.js", cwd: tempDir });
+    expect(result.triggered).toBe(false);
+    expect(result.blocked).toBeUndefined();
+  });
+
+  it("returns triggered: false for non-deploy commands", () => {
+    const result = runPreDeployHook({ toolName: "runCommand", command: "npm test", cwd: tempDir });
+    expect(result.triggered).toBe(false);
+  });
+
+  it("handles absent cache files gracefully (no crash)", () => {
+    const result = runPreDeployHook({ toolName: "editFiles", filePath: "Dockerfile", cwd: tempDir });
+    expect(result.triggered).toBe(true);
+    expect(result.blocked).toBe(false);
+    expect(result.secretFindings).toHaveLength(0);
   });
 });

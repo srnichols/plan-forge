@@ -2469,6 +2469,154 @@ export function emitToolTelemetry(toolName, inputs, result, durationMs, status, 
   return record;
 }
 
+// ─── PreDeploy Hook ───────────────────────────────────────────────────
+
+/** File-path glob patterns that indicate a deploy action. */
+const DEPLOY_FILE_PATTERNS = [
+  /^deploy\//,
+  /^Dockerfile/,
+  /\.bicep$/,
+  /\.tf$/,
+  /^k8s\//,
+  /^docker-compose.*\.yml$/,
+];
+
+/** Terminal commands that indicate a deploy action. */
+const DEPLOY_COMMAND_PATTERNS = [
+  /\bpforge\s+deploy-log\b/,
+  /\bdocker\s+push\b/,
+  /\baz\s+deploy\b/,
+  /\bkubectl\s+apply\b/,
+  /\bazd\s+up\b/,
+  /\bgit\s+push\b/,
+];
+
+/** Default configuration for the PreDeploy hook. */
+const PRE_DEPLOY_DEFAULTS = {
+  blockOnSecrets: true,
+  warnOnEnvGaps: true,
+  scanSince: "HEAD~1",
+};
+
+/** Maximum age in minutes before cache is considered stale. */
+const CACHE_MAX_AGE_MINUTES = 10;
+
+/**
+ * Check whether a tool invocation matches deploy trigger conditions.
+ * @param {string} toolName - The tool being invoked (e.g. "editFiles", "runCommand")
+ * @param {string} filePath - File path being written to (may be empty)
+ * @param {string} command  - Terminal command being executed (may be empty)
+ * @returns {boolean}
+ */
+export function isDeployTrigger(toolName, filePath, command) {
+  if (filePath) {
+    const normalized = filePath.replace(/\\/g, "/");
+    for (const pattern of DEPLOY_FILE_PATTERNS) {
+      if (pattern.test(normalized)) return true;
+    }
+  }
+  if (command) {
+    for (const pattern of DEPLOY_COMMAND_PATTERNS) {
+      if (pattern.test(command)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Determine if a cache file is stale (older than CACHE_MAX_AGE_MINUTES).
+ * @param {object|null} cache - Parsed cache with `scannedAt` ISO timestamp
+ * @returns {boolean} true if cache is missing, has no timestamp, or is stale
+ */
+function isCacheStale(cache) {
+  if (!cache || !cache.scannedAt) return true;
+  const age = Date.now() - new Date(cache.scannedAt).getTime();
+  return age > CACHE_MAX_AGE_MINUTES * 60 * 1000;
+}
+
+/**
+ * Run the PreDeploy hook logic. Reads secret-scan and env-diff caches,
+ * evaluates them against the hook configuration, and returns a result
+ * indicating whether the deploy should be blocked or an advisory issued.
+ *
+ * @param {object} params
+ * @param {string} params.toolName  - Tool being invoked
+ * @param {string} [params.filePath=""] - File path being written
+ * @param {string} [params.command=""]  - Command being executed
+ * @param {string} [params.cwd=process.cwd()] - Project root directory
+ * @returns {{ triggered: boolean, blocked?: boolean, reason?: string, advisory?: string, secretFindings?: Array, envGaps?: Array }}
+ */
+export function runPreDeployHook({ toolName, filePath = "", command = "", cwd = process.cwd() } = {}) {
+  if (!isDeployTrigger(toolName, filePath, command)) {
+    return { triggered: false };
+  }
+
+  // Load config from .forge.json hooks.preDeploy (defaults if absent)
+  let config = { ...PRE_DEPLOY_DEFAULTS };
+  try {
+    const configPath = resolve(cwd, ".forge.json");
+    if (existsSync(configPath)) {
+      const raw = JSON.parse(readFileSync(configPath, "utf-8"));
+      if (raw && raw.hooks && raw.hooks.preDeploy) {
+        config = { ...PRE_DEPLOY_DEFAULTS, ...raw.hooks.preDeploy };
+      }
+    }
+  } catch { /* use defaults */ }
+
+  const result = { triggered: true, blocked: false, reason: null, advisory: null, secretFindings: [], envGaps: [] };
+
+  // 1. Check secret-scan cache
+  const secretCache = readForgeJson("secret-scan-cache.json", null, cwd);
+  if (secretCache && !secretCache.clean && Array.isArray(secretCache.findings) && secretCache.findings.length > 0) {
+    result.secretFindings = secretCache.findings.map(f => ({
+      file: f.file,
+      line: f.line,
+      type: f.type,
+      entropyScore: f.entropyScore,
+      confidence: f.confidence,
+      masked: f.masked || "<REDACTED>",
+    }));
+    if (config.blockOnSecrets !== false) {
+      result.blocked = true;
+      result.reason = `secret-scan-found-${secretCache.findings.length}-findings`;
+    }
+  }
+
+  // 2. Check env-diff cache
+  const envDiffCache = readForgeJson("env-diff-cache.json", null, cwd);
+  if (envDiffCache && envDiffCache.summary && envDiffCache.summary.totalMissing > 0) {
+    const gapPairs = (envDiffCache.pairs || []).filter(p =>
+      (p.missingInTarget?.length || 0) + (p.missingInBaseline?.length || 0) > 0
+    );
+    result.envGaps = gapPairs;
+    if (config.warnOnEnvGaps !== false && gapPairs.length > 0) {
+      const lines = gapPairs.map(p => {
+        const missing = [...(p.missingInTarget || []), ...(p.missingInBaseline || [])];
+        return `${p.file || p.compareTo}: missing ${missing.join(", ")}`;
+      });
+      result.advisory = `Environment key gaps detected:\n${lines.map(l => `• ${l}`).join("\n")}`;
+    }
+  }
+  // Also check totalGaps (used in some cache formats)
+  if (!result.advisory && envDiffCache && envDiffCache.summary && envDiffCache.summary.totalGaps > 0) {
+    const gapPairs = (envDiffCache.pairs || []).filter(p =>
+      (p.missingInTarget?.length || 0) + (p.missingInBaseline?.length || 0) > 0
+    );
+    if (gapPairs.length > 0) {
+      result.envGaps = gapPairs;
+      if (config.warnOnEnvGaps !== false) {
+        const lines = gapPairs.map(p => {
+          const missing = [...(p.missingInTarget || []), ...(p.missingInBaseline || [])];
+          return `${p.file || p.compareTo}: missing ${missing.join(", ")}`;
+        });
+        result.advisory = `Environment key gaps detected:\n${lines.map(l => `• ${l}`).join("\n")}`;
+      }
+    }
+  }
+
+  return result;
+}
+
 /**
  * Infer the slice type from its title and tasks for model routing purposes.
  * Returns one of: "test" | "review" | "migration" | "execute"

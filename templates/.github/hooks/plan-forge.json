@@ -14,6 +14,12 @@
         "command": ".github/hooks/scripts/check-forbidden.sh",
         "windows": "powershell -ExecutionPolicy Bypass -File .github/hooks/scripts/check-forbidden.ps1",
         "timeout": 5
+      },
+      {
+        "type": "command",
+        "command": ".github/hooks/scripts/check-predeploy.sh",
+        "windows": "powershell -ExecutionPolicy Bypass -File .github/hooks/scripts/check-predeploy.ps1",
+        "timeout": 10
       }
     ],
     "PostToolUse": [

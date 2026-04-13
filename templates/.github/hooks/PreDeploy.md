@@ -122,3 +122,19 @@ If `hooks.preDeploy` is absent from `.forge.json`, the hook runs with defaults (
 - The scan results are already written to `.forge/` by the tool — this hook reads the cache, it does not re-invoke the tools unless cache is >10 minutes stale
 - Both tools respect `gitAvailable: false` graceful degradation — if git is unavailable, PreDeploy does not block (logs a warning only)
 - `blockOnSecrets` enforcement: return `{ "blocked": true, "reason": "secret-scan-found-{count}-findings" }` from the PreToolUse hook handler; the agent session sees this as a hard stop before the file write occurs
+
+### v2.29.0 Implementation (Slice 4)
+
+**Core logic**: `runPreDeployHook()` in `pforge-mcp/orchestrator.mjs` — pure function using `readForgeJson` for cache reads.
+
+**Hook scripts**: `check-predeploy.sh` / `check-predeploy.ps1` in `templates/.github/hooks/scripts/` — registered as a second `PreToolUse` entry in `plan-forge.json` (runs after `check-forbidden`).
+
+**Trigger detection**: `isDeployTrigger(toolName, filePath, command)` checks:
+- File paths: `deploy/**`, `Dockerfile*`, `*.bicep`, `*.tf`, `k8s/**`, `docker-compose*.yml`
+- Commands: `pforge deploy-log`, `docker push`, `az deploy`, `kubectl apply`, `azd up`, `git push`
+
+**Blocking mechanism**: The hook returns `permissionDecision: "deny"` via the Copilot extension's PreToolUse protocol — this is a hard block, not advisory-only. The existing hook API fully supports `{ blocked: true }` semantics via the `permissionDecision` field.
+
+**Config**: Reads `.forge.json` → `hooks.preDeploy`. Falls back to defaults (`blockOnSecrets: true`, `warnOnEnvGaps: true`) when absent.
+
+**Test coverage**: 24 tests in `server.test.mjs` covering trigger detection (16 tests), blocking on secrets (3 tests), env gap advisory (2 tests), and non-trigger / graceful degradation (3 tests).

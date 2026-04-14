@@ -1313,6 +1313,22 @@ print(v if isinstance(v, str) else ','.join(v))
 
     unset -f _pf_check
 
+    # ─── Core root files (CLI scripts + VERSION) ─────────────────
+    local core_file
+    for core_file in "pforge.ps1" "pforge.sh" "VERSION"; do
+        local src_core="$source_path/$core_file"
+        local dst_core="$REPO_ROOT/$core_file"
+        if [ -f "$src_core" ]; then
+            if [ -f "$dst_core" ]; then
+                if [ "$(_pf_sha256 "$src_core")" != "$(_pf_sha256 "$dst_core")" ]; then
+                    _updates+=("$src_core|$dst_core|$core_file")
+                fi
+            else
+                _new_files+=("$src_core|$dst_core|$core_file")
+            fi
+        fi
+    done
+
     # ─── MCP server files (auto-discover all files) ──────────────
     local src_mcp="$source_path/pforge-mcp"
     local dst_mcp="$REPO_ROOT/pforge-mcp"

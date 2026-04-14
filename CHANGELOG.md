@@ -5,6 +5,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.30.2] — 2026-04-13
+
+### Fixed — `pforge update` now copies core framework files
+- **`pforge update`** — Previously only copied templates (prompts, agents, instructions, hooks, dashboard UI). Now also copies core runtime files: `pforge.ps1`, `pforge.sh`, `VERSION`, and all `pforge-mcp/*.mjs` + `package.json` + `tools.json` + `cli-schema.json` + test files. This was the root cause of testbed users not receiving bug fixes or new features after running `pforge update`.
+- `pforge.sh` `cmd_update` already had MCP auto-discovery but was missing root CLI files (`pforge.ps1`, `pforge.sh`, `VERSION`) — added.
+
 ## [2.30.1] — 2026-04-13
 
 ### Fixed — v2.30.0 Verification: 6 Enhancements Not Working on Testbed

@@ -1451,6 +1451,49 @@ function Invoke-Update {
         }
     }
 
+    # ─── Core framework files (CLI + MCP server runtime) ─────────
+    $coreFiles = @(
+        "pforge.ps1", "pforge.sh", "VERSION",
+        "pforge-mcp/server.mjs", "pforge-mcp/orchestrator.mjs", "pforge-mcp/capabilities.mjs",
+        "pforge-mcp/bridge.mjs", "pforge-mcp/hub.mjs", "pforge-mcp/memory.mjs",
+        "pforge-mcp/skill-runner.mjs", "pforge-mcp/telemetry.mjs",
+        "pforge-mcp/package.json", "pforge-mcp/tools.json", "pforge-mcp/cli-schema.json",
+        "pforge-mcp/vitest.config.mjs"
+    )
+    foreach ($coreFile in $coreFiles) {
+        $srcFile = Join-Path $sourcePath $coreFile
+        $dstFile = Join-Path $RepoRoot $coreFile
+        if (Test-Path $srcFile) {
+            if (Test-Path $dstFile) {
+                $srcHash = (Get-FileHash $srcFile -Algorithm SHA256).Hash
+                $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
+                if ($srcHash -ne $dstHash) {
+                    $updates += @{ Src = $srcFile; Dst = $dstFile; Name = $coreFile }
+                }
+            } else {
+                $newFiles += @{ Src = $srcFile; Dst = $dstFile; Name = $coreFile }
+            }
+        }
+    }
+
+    # ─── MCP test files ──────────────────────────────────────────
+    $srcTests = Join-Path $sourcePath "pforge-mcp/tests"
+    $dstTests = Join-Path $RepoRoot "pforge-mcp/tests"
+    if (Test-Path $srcTests) {
+        Get-ChildItem -Path $srcTests -Filter "*.mjs" -File | ForEach-Object {
+            $dstFile = Join-Path $dstTests $_.Name
+            if (Test-Path $dstFile) {
+                $srcHash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
+                $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
+                if ($srcHash -ne $dstHash) {
+                    $updates += @{ Src = $_.FullName; Dst = $dstFile; Name = "pforge-mcp/tests/$($_.Name)" }
+                }
+            } else {
+                $newFiles += @{ Src = $_.FullName; Dst = $dstFile; Name = "pforge-mcp/tests/$($_.Name)" }
+            }
+        }
+    }
+
     # ─── MCP dashboard files ─────────────────────────────────────
     $srcDash = Join-Path $sourcePath "pforge-mcp/dashboard"
     $dstDash = Join-Path $RepoRoot "pforge-mcp/dashboard"

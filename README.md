@@ -229,6 +229,40 @@ flowchart LR
     style NEXT fill:#f59e0b,stroke:#d97706,color:#000
 ```
 
+> ⬇️ All phases emit events to the **Bridge**. You control the forge remotely ⬆️
+
+### 📡 Phase 4: Operate (Human-in-the-Loop Remote Orchestration)
+
+```mermaid
+flowchart LR
+    EXT["📱 You<br/>(Telegram / Slack)"] -->|"trigger plan"| API["POST<br/>/api/runs/trigger"]
+    API --> RUN["🔨 Plan<br/>Executes"]
+    RUN -->|"real-time events"| BRIDGE["🌉 Bridge"]
+    BRIDGE -->|notifications| TG["📱 Telegram"]
+    BRIDGE -->|notifications| SL["💬 Slack"]
+    BRIDGE -->|notifications| DC["🎮 Discord"]
+    RUN -->|"run-completed"| APPROVE["✅ Approve<br/>❌ Reject"]
+    APPROVE -->|"tap from phone"| DONE["Approved<br/>& Shipped"]
+    RUN -->|"health snapshot"| OC["🐾 OpenClaw<br/>(cross-project)"]
+
+    style EXT fill:#06b6d4,stroke:#0891b2,color:#fff
+    style API fill:#3b82f6,stroke:#2563eb,color:#fff
+    style RUN fill:#8b5cf6,stroke:#7c3aed,color:#fff
+    style BRIDGE fill:#f59e0b,stroke:#d97706,color:#000
+    style TG fill:#06b6d4,stroke:#0891b2,color:#fff
+    style SL fill:#06b6d4,stroke:#0891b2,color:#fff
+    style DC fill:#06b6d4,stroke:#0891b2,color:#fff
+    style APPROVE fill:#10b981,stroke:#059669,color:#fff
+    style DONE fill:#10b981,stroke:#059669,color:#fff
+    style OC fill:#f59e0b,stroke:#d97706,color:#000
+```
+
+- **Trigger remotely** — start plan runs from Telegram, Slack, CI/CD, OpenClaw, or Claude CoWork via `POST /api/runs/trigger`
+- **Real-time notifications** — slice progress, failures, and completion pushed to your phone
+- **Approve/reject from anywhere** — Telegram inline buttons or Slack action buttons — no VS Code needed
+- **OpenClaw bridge** — health snapshots POSTed to external analytics for cross-project monitoring
+- **Works with**: Copilot, Claude CoWork, Cursor, any tool that can call an HTTP endpoint
+
 ### How the Pieces Fit
 
 | Piece | What It Is | Count |

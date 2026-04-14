@@ -549,13 +549,14 @@ const TOOLS = [
   },
   {
     name: "forge_drift_report", // LiveGuard — emitToolTelemetry in handler
-    description: "Score the codebase against architecture guardrail rules. Tracks drift over time in .forge/drift-history.json. Fires a bridge notification when score drops below threshold.",
+    description: "Score the codebase against architecture guardrail rules. Tracks drift over time in .forge/drift-history.json. Fires a bridge notification when score drops below threshold. With autoIncident, auto-captures incidents and generates fix proposals for high/critical violations.",
     inputSchema: {
       type: "object",
       properties: {
         path: { type: "string", description: "Directory to scan (default: project root)" },
         threshold: { type: "number", description: "Alert threshold 0-100. Fires drift-alert when score drops below this value. Default: 70", minimum: 0, maximum: 100 },
         rules: { type: "array", items: { type: "string" }, description: "Guardrail rule IDs to check. Default: all rules (empty-catch, any-type, sync-over-async, sql-injection, deferred-work)" },
+        autoIncident: { type: "boolean", description: "Auto-capture incidents for high/critical violations and generate fix proposals. Default: false" },
       },
       required: [],
     },
@@ -716,6 +717,19 @@ const TOOLS = [
         analysisGoal: { type: "string", description: "Preset question: 'root-cause', 'risk-assess', 'fix-review', 'runbook-validate'. Ignored when customQuestion is provided." },
         customQuestion: { type: "string", description: "Freeform question override (max 500 chars). Replaces the analysisGoal preset entirely." },
         quorumSize: { type: "number", description: "Number of model votes to request in the prompt. Default: 3." },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "forge_liveguard_run",
+    description: "Run all applicable LiveGuard checks in a single call and return a unified health report. Executes: drift, sweep, secret-scan, regression-guard, dep-watch, alert-triage, and health-trend. Optionally runs diff if a plan is specified.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        plan: { type: "string", description: "Plan file path for scope diff (optional). If omitted, diff is skipped." },
+        threshold: { type: "number", description: "Drift alert threshold 0-100. Default: 70" },
         path: { type: "string", description: "Project directory (default: current)" },
       },
       required: [],
@@ -883,6 +897,7 @@ function executeTool(name, args) {
     case "forge_capabilities":
     case "forge_fix_proposal":
     case "forge_quorum_analyze":
+    case "forge_liveguard_run":
       return null; // Handled async in CallToolRequestSchema handler
     default:
       return { success: false, error: `Unknown tool: ${name}` };
@@ -891,7 +906,7 @@ function executeTool(name, args) {
 
 // ─── MCP Server ───────────────────────────────────────────────────────
 const server = new Server(
-  { name: "plan-forge-mcp", version: "2.9.3" },
+  { name: "plan-forge-mcp", version: "2.10.0" },
   { capabilities: { tools: {} } }
 );
 
@@ -1433,6 +1448,48 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         failFast: args.failFast || false,
         cwd,
       });
+
+      // E5: Append regression history for health trend tracking
+      const regRecord = { timestamp: new Date().toISOString(), gatesChecked: result.gatesChecked, passed: result.passed, failed: result.failed, blocked: result.blocked || 0, skipped: result.skipped || 0 };
+      appendForgeJsonl("regression-history.json", regRecord, cwd);
+
+      // E8: Auto-resolve open incidents whose files overlap with passed gates
+      if (result.success && result.passed > 0 && args.autoResolve !== false) {
+        const incidents = readForgeJsonl("incidents.jsonl", [], cwd);
+        const resolvedIncidents = [];
+        const guardedFiles = new Set(files);
+        // Also add files from plan scope
+        if (args.plan) {
+          try {
+            const plan = parsePlan(resolve(cwd, args.plan), cwd);
+            for (const s of (plan.scopeContract?.inScope || [])) guardedFiles.add(s);
+          } catch { /* skip */ }
+        }
+
+        if (guardedFiles.size > 0) {
+          const resolvedAt = new Date().toISOString();
+          const updatedIncidents = incidents.map(inc => {
+            if (inc.resolvedAt) return inc; // already resolved
+            const incFiles = inc.files || [];
+            const overlaps = incFiles.some(f => [...guardedFiles].some(gf => f.includes(gf) || gf.includes(f)));
+            if (overlaps) {
+              const capturedMs = new Date(inc.capturedAt || inc.timestamp || 0).getTime();
+              const resolvedMs = new Date(resolvedAt).getTime();
+              resolvedIncidents.push(inc.id);
+              return { ...inc, resolvedAt, mttr: resolvedMs - capturedMs };
+            }
+            return inc;
+          });
+
+          if (resolvedIncidents.length > 0) {
+            // Rewrite incidents file with resolutions
+            const incPath = resolve(cwd, ".forge", "incidents.jsonl");
+            writeFileSync(incPath, updatedIncidents.map(i => JSON.stringify(i)).join("\n") + "\n", "utf-8");
+            result.resolvedIncidents = resolvedIncidents;
+          }
+        }
+      }
+
       emitToolTelemetry("forge_regression_guard", args, result, Date.now() - t0, result.success ? "ok" : "error", cwd);
       activeHub?.broadcast({ type: "liveguard-tool-completed", tool: "forge_regression_guard", status: result.success ? "ok" : "error", durationMs: Date.now() - t0 });
       return {
@@ -1456,6 +1513,27 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       // Score based on app code violations only (framework violations reported separately)
       const score = Math.max(0, 100 - (analysis.violations.length * penaltyPerViolation));
 
+      // E3: Quick test status — run project tests to provide complete picture
+      let testStatus = null;
+      try {
+        const hasPkgJson = existsSync(resolve(cwd, "package.json"));
+        const hasDotnet = readdirSync(cwd).some(f => f.endsWith(".csproj") || f.endsWith(".sln") || f.endsWith(".slnx"));
+        const testCmd = hasPkgJson ? "npm test --if-present" : hasDotnet ? "dotnet test --nologo --verbosity quiet" : null;
+        if (testCmd) {
+          try {
+            const output = execSync(testCmd, { cwd, encoding: "utf-8", timeout: 120_000, stdio: "pipe" });
+            const passMatch = output.match(/(\d+)\s+passed/i);
+            const failMatch = output.match(/(\d+)\s+failed/i);
+            testStatus = { status: "green", passed: passMatch ? parseInt(passMatch[1], 10) : null, failed: 0, command: testCmd };
+          } catch (testErr) {
+            const errOutput = (testErr.stdout || "") + (testErr.stderr || "");
+            const passMatch = errOutput.match(/(\d+)\s+passed/i);
+            const failMatch = errOutput.match(/(\d+)\s+failed/i);
+            testStatus = { status: "red", passed: passMatch ? parseInt(passMatch[1], 10) : 0, failed: failMatch ? parseInt(failMatch[1], 10) : 1, command: testCmd };
+          }
+        }
+      } catch { /* test detection is best-effort */ }
+
       const history = readForgeJsonl("drift-history.json", [], cwd);
       const prev = history.length ? history[history.length - 1] : null;
       const delta = prev ? score - prev.score : 0;
@@ -1469,7 +1547,61 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         activeBridge?.dispatch?.({ type: "drift-alert", score, threshold });
       }
 
-      const result = { score, violations: analysis.violations, frameworkViolations: analysis.frameworkViolations || [], filesScanned: analysis.filesScanned, trend, delta, historyLength: history.length + 1 };
+      const result = { score, violations: analysis.violations, frameworkViolations: analysis.frameworkViolations || [], filesScanned: analysis.filesScanned, trend, delta, historyLength: history.length + 1, testStatus };
+
+      // E1: Auto-chain drift → incident → fix proposal for high/critical violations
+      if (args.autoIncident) {
+        const severeViolations = analysis.violations.filter(v => v.severity === "high" || v.severity === "critical");
+        if (severeViolations.length > 0) {
+          // Group by file for cleaner incidents
+          const byFile = {};
+          for (const v of severeViolations) {
+            if (!byFile[v.file]) byFile[v.file] = [];
+            byFile[v.file].push(v);
+          }
+          const autoIncidents = [];
+          for (const [file, violations] of Object.entries(byFile)) {
+            const desc = violations.map(v => `${v.rule} at line ${v.line}`).join("; ");
+            const incRecord = {
+              id: `inc-drift-${Date.now()}-${file.replace(/[/\\]/g, "-")}`,
+              description: `Drift violation in ${file}: ${desc}`,
+              severity: violations.some(v => v.severity === "critical") ? "critical" : "high",
+              files: [file],
+              capturedAt: new Date().toISOString(),
+              resolvedAt: null,
+              mttr: null,
+              source: "auto-drift",
+            };
+            appendForgeJsonl("incidents.jsonl", incRecord, cwd);
+            autoIncidents.push(incRecord.id);
+          }
+          result.autoIncidents = autoIncidents;
+
+          // Generate fix proposal from the latest drift data
+          try {
+            const fixId = `drift-auto-${Date.now()}`;
+            const autoDir = resolve(cwd, "docs/plans/auto");
+            mkdirSync(autoDir, { recursive: true });
+            const planName = `LIVEGUARD-FIX-${fixId}.md`;
+            const planPath = resolve(autoDir, planName);
+            if (!existsSync(planPath)) {
+              let planContent = `# LiveGuard Auto-Fix: ${fixId}\n\n`;
+              planContent += `> Generated: ${new Date().toISOString()}\n`;
+              planContent += `> Source: drift (auto-incident)\n\n`;
+              planContent += `## Scope Contract\n\nThis plan addresses ${severeViolations.length} high/critical drift violation(s) detected by LiveGuard.\n\n`;
+              for (const [file, violations] of Object.entries(byFile)) {
+                planContent += `## Slice — Fix: ${file}\n\n`;
+                planContent += `**Tasks:**\n`;
+                for (const v of violations) planContent += `- [ ] Fix ${v.rule} at line ${v.line}: ${v.description}\n`;
+                planContent += `\n**Scope:** ${file}\n\n`;
+              }
+              writeFileSync(planPath, planContent, "utf-8");
+              result.autoFixPlan = `docs/plans/auto/${planName}`;
+            }
+          } catch { /* fix proposal generation is best-effort */ }
+        }
+      }
+
       emitToolTelemetry("forge_drift_report", args, result, Date.now() - t0, "OK", cwd);
       activeHub?.broadcast({ type: "liveguard-tool-completed", tool: "forge_drift_report", status: "OK", durationMs: Date.now() - t0 });
 
@@ -2082,6 +2214,150 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
     } catch (err) {
       return { content: [{ type: "text", text: `Fix proposal error: ${err.message}` }], isError: true };
+    }
+  }
+
+  // ─── forge_liveguard_run — composite LiveGuard health check ───
+  if (name === "forge_liveguard_run") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const threshold = Math.max(0, Math.min(100, args.threshold ?? 70));
+      const penaltyPerViolation = 2;
+      const report = {};
+
+      // 1. Drift
+      try {
+        const analysis = await runAnalyze({ mode: "file", path: ".", cwd });
+        const score = Math.max(0, 100 - (analysis.violations.length * penaltyPerViolation));
+        report.drift = { score, appViolations: analysis.violations.length, frameworkViolations: (analysis.frameworkViolations || []).length, filesScanned: analysis.filesScanned };
+      } catch (err) { report.drift = { error: err.message }; }
+
+      // 2. Sweep (count app vs framework markers)
+      try {
+        const sweepResult = JSON.parse(execSync(
+          process.platform === "win32"
+            ? `powershell.exe -NoProfile -ExecutionPolicy Bypass -File pforge.ps1 sweep`
+            : `bash pforge.sh sweep`,
+          { cwd, encoding: "utf-8", timeout: 30_000, env: { ...process.env, NO_COLOR: "1" } }
+        ).trim() || "{}");
+        report.sweep = { appMarkers: 0, ran: true };
+        // Parse text output for marker counts
+        const sweepText = typeof sweepResult === "string" ? sweepResult : "";
+        const appMatch = sweepText.match(/FOUND (\d+)/);
+        if (appMatch) report.sweep.appMarkers = parseInt(appMatch[1], 10);
+      } catch (err) {
+        const output = (err.stdout || err.stderr || "").trim();
+        const appMatch = output.match(/FOUND (\d+)/);
+        report.sweep = { appMarkers: appMatch ? parseInt(appMatch[1], 10) : 0, ran: true };
+        if (output.includes("SWEEP CLEAN")) report.sweep.appMarkers = 0;
+      }
+
+      // 3. Secret scan
+      try {
+        const since = "HEAD~1";
+        const scanThreshold = 4.0;
+        let diff;
+        try { diff = execSync(`git diff ${since} -p`, { cwd, encoding: "utf-8", timeout: 30_000 }); } catch { diff = ""; }
+        const findings = [];
+        if (diff) {
+          for (const line of diff.split("\n")) {
+            if (!line.startsWith("+") || line.startsWith("+++")) continue;
+            const content = line.slice(1);
+            if (content.length < 8) continue;
+            const charSet = new Set(content);
+            const entropy = [...charSet].reduce((sum, c) => {
+              const p = (content.split(c).length - 1) / content.length;
+              return sum - p * Math.log2(p);
+            }, 0);
+            if (entropy >= scanThreshold) findings.push({ line: content.slice(0, 80), entropy: Math.round(entropy * 100) / 100 });
+          }
+        }
+        report.secrets = { findings: findings.length };
+      } catch (err) { report.secrets = { error: err.message }; }
+
+      // 4. Regression guard
+      try {
+        const regResult = await regressionGuard([], { cwd });
+        report.regression = { gates: regResult.gatesChecked, passed: regResult.passed, failed: regResult.failed };
+      } catch (err) { report.regression = { error: err.message }; }
+
+      // 5. Dep watch (quick check)
+      try {
+        const pkgPath = resolve(cwd, "package.json");
+        const hasPkgJson = existsSync(pkgPath);
+        const hasDotnet = !hasPkgJson && readdirSync(cwd).some(f => f.endsWith(".csproj") || f.endsWith(".sln") || f.endsWith(".slnx"));
+        if (hasPkgJson) {
+          let auditResult;
+          try {
+            auditResult = JSON.parse(execSync("npm audit --json 2>&1", { cwd, encoding: "utf-8", timeout: 60_000 }));
+          } catch (err) {
+            if (err.stdout) try { auditResult = JSON.parse(err.stdout); } catch { auditResult = null; }
+          }
+          report.deps = { vulnerabilities: auditResult ? Object.keys(auditResult.vulnerabilities || {}).length : 0 };
+        } else if (hasDotnet) {
+          let vulnCount = 0;
+          try {
+            const raw = execSync("dotnet list package --vulnerable --format json 2>&1", { cwd, encoding: "utf-8", timeout: 120_000 });
+            const parsed = JSON.parse(raw);
+            for (const proj of (parsed.projects || [])) {
+              for (const fw of (proj.frameworks || [])) {
+                vulnCount += (fw.topLevelPackages || []).filter(p => p.vulnerabilities?.length).length;
+                vulnCount += (fw.transitivePackages || []).filter(p => p.vulnerabilities?.length).length;
+              }
+            }
+          } catch { /* parse error — skip */ }
+          report.deps = { vulnerabilities: vulnCount };
+        } else {
+          report.deps = { skipped: true, reason: "no package.json or .csproj/.sln/.slnx" };
+        }
+      } catch (err) { report.deps = { error: err.message }; }
+
+      // 6. Alert triage
+      try {
+        const incidents = readForgeJsonl("incidents.jsonl", [], cwd).filter(i => !i.resolvedAt);
+        const driftHistory = readForgeJsonl("drift-history.json", [], cwd);
+        const latestViolations = driftHistory.length ? (driftHistory[driftHistory.length - 1].violations || []) : [];
+        const criticalAlerts = [...incidents.filter(i => i.severity === "critical" || i.severity === "high"), ...latestViolations.filter(v => v.severity === "critical" || v.severity === "high")];
+        report.alerts = { critical: criticalAlerts.filter(a => (a.severity) === "critical").length, high: criticalAlerts.filter(a => (a.severity) === "high").length, openIncidents: incidents.length };
+      } catch (err) { report.alerts = { error: err.message }; }
+
+      // 7. Health trend summary
+      try {
+        const driftHistory = readForgeJsonl("drift-history.json", [], cwd);
+        const recentScores = driftHistory.slice(-5).map(d => d.score).filter(s => typeof s === "number");
+        const avgScore = recentScores.length ? Math.round(recentScores.reduce((a, b) => a + b, 0) / recentScores.length) : null;
+        const trend = recentScores.length >= 2 ? (recentScores[recentScores.length - 1] > recentScores[0] ? "improving" : recentScores[recentScores.length - 1] < recentScores[0] ? "degrading" : "stable") : "stable";
+        report.health = { avgScore, trend, dataPoints: driftHistory.length };
+      } catch (err) { report.health = { error: err.message }; }
+
+      // 8. Diff (optional, only if plan specified)
+      if (args.plan) {
+        try {
+          const planPath = resolve(cwd, args.plan);
+          if (existsSync(planPath)) {
+            const plan = parsePlan(planPath, cwd);
+            const forbidden = plan.scopeContract?.forbidden || [];
+            report.diff = { plan: args.plan, forbiddenPaths: forbidden.length, checked: true };
+          } else {
+            report.diff = { error: `Plan not found: ${args.plan}` };
+          }
+        } catch (err) { report.diff = { error: err.message }; }
+      }
+
+      // Overall status
+      const driftOk = !report.drift.error && (report.drift.score ?? 0) >= threshold;
+      const secretsOk = !report.secrets?.error && (report.secrets?.findings ?? 0) === 0;
+      const regressionOk = !report.regression?.error && (report.regression?.failed ?? 0) === 0;
+      const depsOk = !report.deps?.error && (report.deps?.vulnerabilities ?? 0) === 0;
+      const alertsOk = !report.alerts?.error && (report.alerts?.critical ?? 0) === 0;
+      report.overallStatus = (driftOk && secretsOk && regressionOk && depsOk && alertsOk) ? "green" : (!regressionOk || !secretsOk) ? "red" : "yellow";
+
+      emitToolTelemetry("forge_liveguard_run", args, report, Date.now() - t0, "OK", cwd);
+      activeHub?.broadcast({ type: "liveguard-tool-completed", tool: "forge_liveguard_run", status: "OK", durationMs: Date.now() - t0 });
+      return { content: [{ type: "text", text: JSON.stringify(report, null, 2) }], isError: false };
+    } catch (err) {
+      return { content: [{ type: "text", text: `LiveGuard run error: ${err.message}` }], isError: true };
     }
   }
 

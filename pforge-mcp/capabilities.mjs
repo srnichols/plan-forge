@@ -569,6 +569,25 @@ export const TOOL_METADATA = {
       output: { quorumPrompt: "## Context\n...\n\n## Question\nWhy did drift score drop 15 points?\n\n## Voting Instruction\n...", promptTokenEstimate: 250, suggestedModels: ["claude-opus-4.6", "grok-4.20", "gemini-3-pro-preview"], dataSnapshotAge: "12m ago", questionUsed: "Why did drift score drop 15 points?" },
     },
   },
+  forge_liveguard_run: {
+    intent: ["liveguard-run", "health-check", "full-scan", "liveguard-all"],
+    aliases: ["liveguard-run", "lg-run", "full-check"],
+    cost: "medium",
+    maxConcurrent: 1,
+    addedIn: "2.30.0",
+    prerequisites: [],
+    produces: [],
+    consumes: [".forge/drift-history.json", ".forge/incidents.jsonl", ".forge/regression-history.json"],
+    sideEffects: ["runs drift scan, sweep, secret scan, regression guard, dep watch, alert triage, health trend in sequence", "broadcasts liveguard-tool-completed event"],
+    securityNote: "Composite tool — executes multiple LiveGuard tools. No data leaves the server.",
+    errors: {
+      PARTIAL_FAILURE: { message: "One or more sub-tools failed", recovery: "Check individual tool errors in the response" },
+    },
+    example: {
+      input: { plan: "docs/plans/Phase-1-AUTH-PLAN.md" },
+      output: { drift: { score: 100, appViolations: 0 }, sweep: { appMarkers: 0 }, secrets: { findings: 0 }, regression: { gates: 2, passed: 2, failed: 0 }, deps: { vulnerabilities: 0 }, alerts: { critical: 0, high: 0 }, health: { avgScore: 95, trend: "stable" }, overallStatus: "green" },
+    },
+  },
 };
 
 export const WORKFLOWS = {

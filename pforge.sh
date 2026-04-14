@@ -426,6 +426,7 @@ cmd_sweep() {
 
     local total=0
     local framework_total=0
+    local fw_todo=0 fw_fixme=0 fw_hack=0 fw_placeholder=0 fw_stub=0 fw_other=0
     local pattern='TODO|FIXME|HACK|will be replaced|placeholder|stub|mock data|Simulate|Seed with sample'
     local framework_pattern='^(pforge-mcp/|pforge\.(ps1|sh)$|setup\.(ps1|sh)$|validate-setup\.(ps1|sh)$)'
 
@@ -441,6 +442,14 @@ cmd_sweep() {
             while IFS= read -r line; do
                 if [ "$is_framework" = true ]; then
                     framework_total=$((framework_total + 1))
+                    case "$line" in
+                        *TODO*)        fw_todo=$((fw_todo + 1)) ;;
+                        *FIXME*)       fw_fixme=$((fw_fixme + 1)) ;;
+                        *HACK*)        fw_hack=$((fw_hack + 1)) ;;
+                        *placeholder*) fw_placeholder=$((fw_placeholder + 1)) ;;
+                        *stub*)        fw_stub=$((fw_stub + 1)) ;;
+                        *)             fw_other=$((fw_other + 1)) ;;
+                    esac
                 else
                     echo "  $rel_path:$line"
                     total=$((total + 1))
@@ -458,7 +467,15 @@ cmd_sweep() {
         echo "FOUND $total deferred-work marker(s) in app code. Resolve before Step 5 (Review Gate)."
     fi
     if [ "$framework_total" -gt 0 ]; then
-        echo "  ($framework_total marker(s) in framework code — informational)"
+        local breakdown=""
+        [ "$fw_todo" -gt 0 ] && breakdown="${breakdown}TODO: $fw_todo, "
+        [ "$fw_fixme" -gt 0 ] && breakdown="${breakdown}FIXME: $fw_fixme, "
+        [ "$fw_hack" -gt 0 ] && breakdown="${breakdown}HACK: $fw_hack, "
+        [ "$fw_placeholder" -gt 0 ] && breakdown="${breakdown}placeholder: $fw_placeholder, "
+        [ "$fw_stub" -gt 0 ] && breakdown="${breakdown}stub: $fw_stub, "
+        [ "$fw_other" -gt 0 ] && breakdown="${breakdown}other: $fw_other, "
+        breakdown="${breakdown%, }"
+        echo "  ($framework_total marker(s) in framework code — $breakdown)"
     fi
 }
 
@@ -556,6 +573,7 @@ cmd_diff() {
     echo ""
     if [ "$violations" -gt 0 ]; then
         echo "DRIFT DETECTED — $violations forbidden file(s) touched."
+        exit 1
     elif [ "$out_of_scope" -gt 0 ]; then
         echo "POTENTIAL DRIFT — $out_of_scope file(s) not in Scope Contract. May need amendment."
     else

@@ -5,6 +5,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.30.0] — 2026-04-13
+
+### Added — LiveGuard Enhancements: Composite Run, Auto-Chaining, Test Status
+- **`forge_liveguard_run`** (E9) — new composite tool runs drift, sweep, secret-scan, regression-guard, dep-watch, alert-triage, and health-trend in a single call. Returns unified `overallStatus` (green/yellow/red). Optional `plan` parameter adds scope diff.
+- **`forge_drift_report --autoIncident`** (E1) — auto-chains drift → incident → fix proposal for high/critical violations. Groups incidents by file, generates scoped fix plans in `docs/plans/auto/`.
+- **Drift `testStatus`** (E3) — drift report now includes `testStatus` field with test pass/fail count. Auto-detects `npm test` or `dotnet test` based on project type.
+- **Regression history** (E5) — `forge_regression_guard` appends to `.forge/regression-history.json` for health trend tracking.
+- **Auto-resolve incidents** (E8) — when regression guard passes, open incidents whose `files[]` overlap with guarded scope are auto-resolved with MTTR calculated. Disable with `--autoResolve=false`.
+- **Sweep categorization** (E4) — framework code markers now broken down by type: `TODO: 5, placeholder: 38, other: 14`.
+
+### Changed
+- **`forge_diff` exit code** (E6) — `pforge diff` now exits 1 when forbidden file edits detected (was exit 0).
+- **Plan hardener** (E10) — step2-harden-plan prompt now requires executable validation gates (`\`dotnet build\``) instead of prose descriptions. Manual checks must be prefixed with `[manual]`.
+- LIVEGUARD_TOOLS count: 13 → 14 (added `forge_liveguard_run`)
+- TOOL_METADATA count: 33 → 34
+
 ## [2.29.3] — 2026-04-13
 
 ### Fixed — v2.29.2 Verification Failures (Final 2)

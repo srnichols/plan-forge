@@ -1033,6 +1033,7 @@ function Invoke-Sweep {
     $codeExtensions = @('*.cs', '*.ts', '*.tsx', '*.js', '*.jsx', '*.py', '*.go', '*.java', '*.kt', '*.rb', '*.rs', '*.sql', '*.sh', '*.ps1')
     $total = 0
     $frameworkTotal = 0
+    $fwCategories = @{ TODO = 0; FIXME = 0; HACK = 0; placeholder = 0; stub = 0; other = 0 }
 
     foreach ($ext in $codeExtensions) {
         Get-ChildItem -Path $RepoRoot -Filter $ext -Recurse -File -ErrorAction SilentlyContinue |
@@ -1045,6 +1046,13 @@ function Invoke-Sweep {
                     $relDisplay = $m.Path.Substring($RepoRoot.Length + 1)
                     if ($isFramework) {
                         $frameworkTotal++
+                        $line = $m.Line
+                        if ($line -match '\bTODO\b') { $fwCategories['TODO']++ }
+                        elseif ($line -match '\bFIXME\b') { $fwCategories['FIXME']++ }
+                        elseif ($line -match '\bHACK\b') { $fwCategories['HACK']++ }
+                        elseif ($line -match 'placeholder') { $fwCategories['placeholder']++ }
+                        elseif ($line -match 'stub') { $fwCategories['stub']++ }
+                        else { $fwCategories['other']++ }
                     } else {
                         Write-Host "  $relDisplay`:$($m.LineNumber): $($m.Line.Trim())" -ForegroundColor Yellow
                         $total++
@@ -1061,7 +1069,8 @@ function Invoke-Sweep {
         Write-Host "FOUND $total deferred-work marker(s) in app code. Resolve before Step 5 (Review Gate)." -ForegroundColor Red
     }
     if ($frameworkTotal -gt 0) {
-        Write-Host "  ($frameworkTotal marker(s) in framework code — informational)" -ForegroundColor DarkGray
+        $breakdown = ($fwCategories.GetEnumerator() | Where-Object { $_.Value -gt 0 } | ForEach-Object { "$($_.Key): $($_.Value)" }) -join ', '
+        Write-Host "  ($frameworkTotal marker(s) in framework code — $breakdown)" -ForegroundColor DarkGray
     }
 }
 
@@ -1163,6 +1172,7 @@ function Invoke-Diff {
     Write-Host ""
     if ($violations -gt 0) {
         Write-Host "DRIFT DETECTED — $violations forbidden file(s) touched." -ForegroundColor Red
+        exit 1
     }
     elseif ($outOfScope -gt 0) {
         Write-Host "POTENTIAL DRIFT — $outOfScope file(s) not in Scope Contract. May need amendment." -ForegroundColor Yellow

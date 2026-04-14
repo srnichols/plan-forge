@@ -50,6 +50,11 @@ For each Execution Slice:
 - Include relevant .github/instructions/*.instructions.md files in Context Files
 - List only instruction files whose domain matches the slice (not all 17 — each consumes context budget)
 - Add a Parallel Merge Checkpoint after each parallel group
+- **Validation gates MUST be executable commands**, not prose descriptions:
+  - **Good**: `**Validation Gate**:\n\`\`\`bash\ndotnet test\n\`\`\``
+  - **Good**: `**Validation Gate**: \`dotnet build\``
+  - **Bad**: `**Validation Gate**: Files compile, DTOs have correct properties`
+  - For manual checks that can't be automated, prefix with `[manual]`: `**Validation Gate**: [manual] UI layout matches mockup`
 
 Do NOT add features or expand scope. Only structure what already exists.
 

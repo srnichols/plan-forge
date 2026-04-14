@@ -3247,19 +3247,19 @@ describe("emitToolTelemetry LIVEGUARD_TOOLS v2.29 count", () => {
     expect(events[0].tool).toBe("forge_quorum_analyze");
   });
 
-  it("all 13 LiveGuard tools produce liveguard-events.jsonl", () => {
+  it("all 14 LiveGuard tools produce liveguard-events.jsonl", () => {
     const lgTools = [
       "forge_drift_report", "forge_incident_capture", "forge_dep_watch",
       "forge_regression_guard", "forge_runbook", "forge_hotspot",
       "forge_health_trend", "forge_alert_triage", "forge_deploy_journal",
       "forge_secret_scan", "forge_env_diff", "forge_fix_proposal",
-      "forge_quorum_analyze",
+      "forge_quorum_analyze", "forge_liveguard_run",
     ];
     for (const tool of lgTools) {
       emitToolTelemetry(tool, {}, {}, 10, "OK", tempDir);
     }
     const events = readForgeJsonl("liveguard-events.jsonl", [], tempDir);
-    expect(events).toHaveLength(13);
+    expect(events).toHaveLength(14);
     const toolNames = events.map(e => e.tool);
     for (const tool of lgTools) {
       expect(toolNames).toContain(tool);
@@ -3342,16 +3342,17 @@ describe("hook integration: PreAgentHandoff with full LiveGuard state", () => {
   });
 });
 
-// ─── TOOL_METADATA: v2.29.0 total count ─────────────────────────────────
+// ─── TOOL_METADATA: v2.30.0 total count ─────────────────────────────────
 
-describe("TOOL_METADATA v2.29.0 total count", () => {
-  it("has at least 33 tool entries", () => {
+describe("TOOL_METADATA v2.30.0 total count", () => {
+  it("has at least 34 tool entries", () => {
     const count = Object.keys(TOOL_METADATA).length;
-    expect(count).toBeGreaterThanOrEqual(33);
+    expect(count).toBeGreaterThanOrEqual(34);
   });
 
-  it("includes both new v2.29.0 tools", () => {
+  it("includes v2.29.0 and v2.30.0 tools", () => {
     expect(TOOL_METADATA).toHaveProperty("forge_fix_proposal");
     expect(TOOL_METADATA).toHaveProperty("forge_quorum_analyze");
+    expect(TOOL_METADATA).toHaveProperty("forge_liveguard_run");
   });
 });

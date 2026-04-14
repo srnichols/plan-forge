@@ -970,7 +970,7 @@ function executeTool(name, args) {
 
 // ─── MCP Server ───────────────────────────────────────────────────────
 const server = new Server(
-  { name: "plan-forge-mcp", version: "2.12.1" },
+  { name: "plan-forge-mcp", version: "2.12.2" },
   { capabilities: { tools: {} } }
 );
 
@@ -2523,26 +2523,30 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       // 3. Secret scan (filtered to reduce false positives)
       try {
         const since = "HEAD~1";
-        const scanThreshold = 4.5; // Raised from 4.0 to reduce noise
+        const scanThreshold = 4.5;
         let diff;
-        // Exclude known noisy files from git diff
-        try { diff = execSync(`git diff ${since} -p -- . ":!package-lock.json" ":!*.min.js" ":!*.min.css" ":!*.map" ":!*.svg"`, { cwd, encoding: "utf-8", timeout: 30_000 }); } catch { diff = ""; }
+        // Exclude known noisy files and framework paths from git diff
+        try { diff = execSync(`git diff ${since} -p -- . ":!package-lock.json" ":!*.min.js" ":!*.min.css" ":!*.map" ":!*.svg" ":!pforge-mcp/" ":!.github/" ":!pforge.ps1" ":!pforge.sh"`, { cwd, encoding: "utf-8", timeout: 30_000 }); } catch { diff = ""; }
         const findings = [];
+        // Key patterns that indicate a real secret assignment
+        const SECRET_KEY_PATTERN = /(?:password|secret|token|api[_-]?key|auth|credential|private[_-]?key|connection[_-]?string|bearer)\s*[:=]/i;
         if (diff) {
           for (const line of diff.split("\n")) {
             if (!line.startsWith("+") || line.startsWith("+++")) continue;
             const content = line.slice(1);
-            if (content.length < 8 || content.length > 200) continue; // Skip very long lines (hashes, minified)
-            // Skip lines that look like lock files, hashes, or encoded data
-            if (/^[a-f0-9]{40,}$/i.test(content.trim())) continue; // git hashes
-            if (/^[A-Za-z0-9+/=]{50,}$/.test(content.trim())) continue; // base64 blobs
-            if (content.includes("integrity") && content.includes("sha")) continue; // npm integrity
+            if (content.length < 8 || content.length > 200) continue;
+            if (/^[a-f0-9]{40,}$/i.test(content.trim())) continue;
+            if (/^[A-Za-z0-9+/=]{50,}$/.test(content.trim())) continue;
+            if (content.includes("integrity") && content.includes("sha")) continue;
             const charSet = new Set(content);
             const entropy = [...charSet].reduce((sum, c) => {
               const p = (content.split(c).length - 1) / content.length;
               return sum - p * Math.log2(p);
             }, 0);
-            if (entropy >= scanThreshold) findings.push({ line: content.slice(0, 80), entropy: Math.round(entropy * 100) / 100 });
+            // Only flag if entropy is high AND line looks like a secret assignment
+            if (entropy >= scanThreshold && SECRET_KEY_PATTERN.test(content)) {
+              findings.push({ line: content.slice(0, 80), entropy: Math.round(entropy * 100) / 100 });
+            }
           }
         }
         report.secrets = { findings: findings.length };
@@ -3338,13 +3342,24 @@ function createExpressApp() {
     try {
       const toolName = req.params.name;
       if (MCP_ONLY_TOOLS.has(toolName)) {
-        // Route through internal MCP handler
-        const fakeRequest = { params: { name: toolName, arguments: req.body || {} } };
-        const mcpResult = await server.handleRequest?.({ method: "tools/call", params: { name: toolName, arguments: req.body || {} } });
-        if (mcpResult) return res.json(mcpResult);
-        // Fallback: try executeTool
-        const result = executeTool(toolName, req.body || {});
-        if (result !== null) return res.json(result);
+        // Dispatch through the MCP CallToolRequestSchema handler directly
+        try {
+          const fakeRequest = { params: { name: toolName, arguments: req.body || {} } };
+          const handlers = server._requestHandlers || server.requestHandlers;
+          const handler = handlers?.get?.("tools/call");
+          if (handler) {
+            const mcpResult = await handler(fakeRequest);
+            if (mcpResult?.content?.[0]?.text) {
+              try { return res.json(JSON.parse(mcpResult.content[0].text)); } catch { return res.json(mcpResult); }
+            }
+            return res.json(mcpResult || { error: "No result from tool handler" });
+          }
+        } catch (err) {
+          return res.status(500).json({ error: `Tool handler error: ${err.message}` });
+        }
+        // Fallback: try executeTool for CLI-delegated tools
+        const syncResult = executeTool(toolName, req.body || {});
+        if (syncResult !== null) return res.json(syncResult);
       }
       const toolArgs = req.body?.args || "";
       const result = runPforge(`${toolName} ${toolArgs}`.trim(), PROJECT_DIR);

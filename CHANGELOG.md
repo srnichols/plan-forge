@@ -5,6 +5,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.32.2] — 2026-04-14
+
+### Fixed — 3 Remaining Issues from v2.32.0 Validation
+- **Secrets scanner** (High, #4) — Now requires `SECRET_KEY_PATTERN` match (password, token, api_key, etc.) alongside entropy threshold. Excludes `pforge-mcp/`, `.github/`, `pforge.ps1`, `pforge.sh` from git diff. Should reduce 866 false positives to near-zero.
+- **REST proxy** (Medium, #3) — Fixed dead code: `/api/tool/:name` now accesses the MCP SDK’s internal request handler map to dispatch tool calls. Parses JSON result from tool response text.
+- **Update deduplication** (Medium, #1) — Added `Group-Object -Property Name` deduplication before report + copy. No more duplicate `UPDATE` lines or double file copies.
+
 ## [2.32.1] — 2026-04-14
 
 ### Fixed — 6 Issues from v2.32.0 Validation

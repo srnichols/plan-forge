@@ -1544,6 +1544,10 @@ function Invoke-Update {
         }
     }
 
+    # ─── Deduplicate (overlapping scans may add same file twice) ─
+    $updates = $updates | Group-Object -Property { $_.Name } | ForEach-Object { $_.Group[0] }
+    $newFiles = $newFiles | Group-Object -Property { $_.Name } | ForEach-Object { $_.Group[0] }
+
     # ─── Report ───────────────────────────────────────────────────
     if ($updates.Count -eq 0 -and $newFiles.Count -eq 0) {
         Write-Host "All framework files are up to date." -ForegroundColor Green

@@ -15,6 +15,10 @@ Replace `<YOUR-PLAN>` with your plan filename (without path or `.md` extension).
 
 Act as a PRE-FLIGHT CHECK AGENT for plan hardening.
 
+**Pre-flight context check:**
+- **Check OpenBrain** (if configured): `search_thoughts("<plan topic> blockers", project: "<YOUR PROJECT NAME>")` — load prior preflight failures and known blockers
+- **Check LiveGuard memories**: Read `.forge/liveguard-memories.jsonl` if present — recent incidents or drift violations may indicate unresolved issues
+
 Run these checks and report results. If any check fails, report the failure and do not proceed to Step 2.
 
 1. GIT STATE — Run `git pull origin main` and `git status`.

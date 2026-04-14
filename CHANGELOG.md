@@ -5,6 +5,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.31.1] — 2026-04-13
+
+### Added — Full OpenBrain Coverage Across All LiveGuard Tools
+- **9 additional auto-capture points:**
+  - `forge_deploy_journal` — captures deploy version + notes as decisions
+  - `forge_hotspot` — captures top churn files as patterns
+  - `forge_secret_scan` — captures findings count as gotchas (when findings > 0)
+  - `forge_env_diff` — captures missing key count as gotchas (when gaps > 0)
+  - `forge_fix_proposal` — captures fix plan ID and source as decisions
+  - `forge_health_trend` — captures health score and trend direction (when trend is not stable)
+  - `forge_alert_triage` — captures critical/high alert summaries as gotchas
+  - `forge_run_plan` — persists orchestrator’s `_memoryCapture` (run summary + cost anomaly) that was previously built but never written
+  - `step1-preflight-check.prompt.md` — now searches OpenBrain + liveguard-memories before preflight checks
+- **All 14 LiveGuard tools + run_plan + alert_triage now auto-capture to `.forge/liveguard-memories.jsonl`** (+ `.forge/openbrain-queue.jsonl` when OpenBrain configured)
+- **4 pipeline prompts now search memory before acting:** step0 (specify), step1 (preflight), step3 (execute), step5 (review)
+
 ## [2.31.0] — 2026-04-13
 
 ### Added — OpenBrain Auto-Capture in LiveGuard Tools

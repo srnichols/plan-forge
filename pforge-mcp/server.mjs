@@ -957,7 +957,7 @@ function executeTool(name, args) {
 
 // ─── MCP Server ───────────────────────────────────────────────────────
 const server = new Server(
-  { name: "plan-forge-mcp", version: "2.11.0" },
+  { name: "plan-forge-mcp", version: "2.11.1" },
   { capabilities: { tools: {} } }
 );
 
@@ -1004,6 +1004,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         eventHandler,
       });
       activeAbortController = null;
+
+      // Persist run summary + cost anomaly memories from orchestrator
+      if (result?._memoryCapture) {
+        if (result._memoryCapture.runSummary) {
+          captureMemory(result._memoryCapture.runSummary, "decision", "forge_run_plan", cwd);
+        }
+        if (result._memoryCapture.costAnomaly) {
+          captureMemory(result._memoryCapture.costAnomaly, "gotcha", "forge_run_plan/cost", cwd);
+        }
+      }
 
       // C3: Safe status check with fallback
       const isError = !result || result.status === "failed" || (result.results?.failed > 0);
@@ -1095,6 +1105,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const report = getHealthTrend(cwd, days, metrics);
       emitToolTelemetry("forge_health_trend", args, report, Date.now() - t0, "OK", cwd);
       broadcastLiveGuard("forge_health_trend", "OK", Date.now() - t0);
+
+      // Auto-capture significant health changes
+      if (report.healthScore != null && report.trend && report.trend !== "stable") {
+        captureMemory(
+          `Health trend: score ${report.healthScore}/100, trend ${report.trend}. Drift avg: ${report.drift?.avg ?? "?"}, incidents: ${report.incidents?.open ?? 0} open.`,
+          "decision", "forge_health_trend", cwd
+        );
+      }
       return { content: [{ type: "text", text: JSON.stringify(report, null, 2) }] };
     } catch (err) {
       return { content: [{ type: "text", text: `Health trend error: ${err.message}` }], isError: true };
@@ -1153,6 +1171,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const result = { total: alerts.length, showing: Math.min(maxResults, alerts.length), minSeverity, alerts: alerts.slice(0, maxResults), generatedAt: new Date().toISOString() };
       emitToolTelemetry("forge_alert_triage", args, result, Date.now() - t0, "OK", cwd);
       broadcastLiveGuard("forge_alert_triage", "OK", Date.now() - t0, { total: result.total, showing: result.showing });
+
+      // Auto-capture when critical/high alerts exist
+      const critHigh = alerts.filter(a => a.severity === "critical" || a.severity === "high");
+      if (critHigh.length > 0) {
+        captureMemory(
+          `Alert triage: ${critHigh.length} critical/high alert(s) of ${result.total} total. Top: ${critHigh.slice(0, 3).map(a => a.description).join("; ")}.`,
+          "gotcha", "forge_alert_triage", cwd
+        );
+      }
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
     } catch (err) {
       return { content: [{ type: "text", text: `Alert triage error: ${err.message}` }], isError: true };
@@ -1489,6 +1516,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       emitToolTelemetry("forge_deploy_journal", args, record, Date.now() - t0, "OK", cwd);
       broadcastLiveGuard("forge_deploy_journal", "OK", Date.now() - t0);
 
+      // Auto-capture deploy decision
+      captureMemory(
+        `Deploy v${record.version}: ${record.notes || "no notes"}. By: ${record.by}.`,
+        "decision", "forge_deploy_journal", cwd
+      );
+
       return { content: [{ type: "text", text: JSON.stringify(record, null, 2) }], isError: false };
     } catch (err) {
       return { content: [{ type: "text", text: `Deploy journal error: ${err.message}` }], isError: true };
@@ -1782,6 +1815,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const result = { ...cached, hotspots: cached.hotspots.slice(0, top), showing: Math.min(top, cached.hotspots.length) };
       emitToolTelemetry("forge_hotspot", args, result, Date.now() - t0, "OK", cwd);
       broadcastLiveGuard("forge_hotspot", "OK", Date.now() - t0);
+
+      // Auto-capture hotspot patterns
+      if (result.hotspots?.length > 0) {
+        const top3 = result.hotspots.slice(0, 3).map(h => h.file).join(", ");
+        captureMemory(
+          `Hotspots (top ${result.showing}): ${top3}. ${result.totalFiles} files analyzed.`,
+          "pattern", "forge_hotspot", cwd
+        );
+      }
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
     } catch (err) {
       return { content: [{ type: "text", text: `Hotspot analysis error: ${err.message}` }], isError: true };
@@ -2044,6 +2086,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       emitToolTelemetry("forge_secret_scan", args, { clean, findings: findings.length, scannedFiles: scannedFiles.size }, Date.now() - t0, "OK", cwd);
       broadcastLiveGuard("forge_secret_scan", "OK", Date.now() - t0);
+
+      // Auto-capture if secrets found
+      if (!clean) {
+        captureMemory(
+          `Secret scan: ${findings.length} high-entropy finding(s) in ${scannedFiles.size} file(s). Review and rotate if confirmed.`,
+          "gotcha", "forge_secret_scan", cwd
+        );
+      }
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
     } catch (err) {
       return { content: [{ type: "text", text: `Secret scan error: ${err.message}` }], isError: true };
@@ -2121,6 +2171,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       emitToolTelemetry("forge_env_diff", args, { clean, totalGaps, filesCompared: targetFiles.length }, Date.now() - t0, "OK", cwd);
       broadcastLiveGuard("forge_env_diff", "OK", Date.now() - t0);
+
+      // Auto-capture env gaps
+      if (totalGaps > 0) {
+        captureMemory(
+          `Env diff: ${totalGaps} missing key(s) across ${targetFiles.length} env file(s). Ensure all environments have required keys.`,
+          "gotcha", "forge_env_diff", cwd
+        );
+      }
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
     } catch (err) {
       return { content: [{ type: "text", text: `Env diff error: ${err.message}` }], isError: true };
@@ -2359,6 +2417,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       emitToolTelemetry("forge_fix_proposal", args, result, Date.now() - t0, "OK", cwd);
       activeHub?.broadcast({ type: "fix-proposal-ready", data: result });
       broadcastLiveGuard("forge_fix_proposal", "OK", Date.now() - t0);
+
+      // Auto-capture fix proposal
+      captureMemory(
+        `Fix proposal ${fixId}: ${sourceData.type} source, ${slices.length} slice(s). Plan: docs/plans/auto/${planName}.`,
+        "decision", "forge_fix_proposal", cwd
+      );
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
     } catch (err) {
       return { content: [{ type: "text", text: `Fix proposal error: ${err.message}` }], isError: true };

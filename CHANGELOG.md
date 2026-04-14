@@ -5,6 +5,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.29.3] — 2026-04-13
+
+### Fixed — v2.29.2 Verification Failures (Final 2)
+- **`orchestrator.mjs`** — Plan parser now strips `\r\n` before splitting lines; fixes ALL regex matching on Windows (validation gates, stop conditions, build/test commands)
+- **`forge_dep_watch`** — Fixed `auditResult is not defined` crash on .NET projects; snapshot `depCount` now uses `currentVulns.length` instead of npm-only variable
+
 ## [2.29.2] — 2026-04-13
 
 ### Fixed — v2.29.1 Verification Failures

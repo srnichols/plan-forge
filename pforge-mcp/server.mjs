@@ -891,7 +891,7 @@ function executeTool(name, args) {
 
 // ─── MCP Server ───────────────────────────────────────────────────────
 const server = new Server(
-  { name: "plan-forge-mcp", version: "2.9.2" },
+  { name: "plan-forge-mcp", version: "2.9.3" },
   { capabilities: { tools: {} } }
 );
 
@@ -1654,7 +1654,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       // Save new snapshot
       mkdirSync(resolve(cwd, ".forge"), { recursive: true });
-      const snapshot = { capturedAt: new Date().toISOString(), depCount: Object.keys(auditResult.vulnerabilities || {}).length, vulnerabilities: currentVulns };
+      const snapshot = { capturedAt: new Date().toISOString(), depCount: currentVulns.length, vulnerabilities: currentVulns };
       writeFileSync(snapshotPath, JSON.stringify(snapshot, null, 2), "utf-8");
 
       // Bridge notification for new vulnerabilities

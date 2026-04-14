@@ -116,7 +116,7 @@ export function parsePlan(planPath, cwd = process.cwd()) {
     throw new Error(`Plan path must be within project directory: ${planPath}`);
   }
   const content = readFileSync(fullPath, "utf-8");
-  const lines = content.split("\n");
+  const lines = content.replace(/\r\n/g, "\n").split("\n");
 
   const meta = parseMeta(lines);
   const scopeContract = parseScopeContract(lines);

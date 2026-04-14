@@ -161,13 +161,14 @@ pforge runbook add &lt;plan-file&gt;</code></pre>
         </div>
         <p class="text-sm text-slate-400 mb-6"><strong>Output</strong>: <code class="text-forge-400">{ hotspots[{ file, changeCount, lastChanged }], since, cachedUntil }</code>.</p>
 
-        <h2 id="forge-health-trend">forge_health_trend</h2>
-        <p>Aggregates drift scores, cost history, incident frequency, and model performance over a configurable time window. Returns an overall health score 0–100.</p>
+        <h2 id="forge-health-trend">forge_health_trend <span class="ml-2 px-1.5 py-0.5 text-[10px] rounded bg-teal-900/40 text-teal-500 border border-teal-700/30">+ Health DNA v2.32</span></h2>
+        <p>Aggregates drift scores, cost history, incident frequency, model performance, and test pass rates over a configurable time window. Returns an overall health score 0–100 plus a <strong>Health DNA</strong> fingerprint for decay detection.</p>
         <div class="cmd-block mb-4">
           <div class="cmd-block-header"><span>CLI</span></div>
           <pre><code>pforge health-trend [--window 30d]</code></pre>
         </div>
-        <p class="text-sm text-slate-400 mb-6"><strong>Output</strong>: <code class="text-forge-400">{ healthScore, driftTrend[], costTrend[], incidentTrend[], mttbf, window }</code>. Displayed on the dashboard Health tab as a line chart.</p>
+        <p class="text-sm text-slate-400 mb-2"><strong>Output</strong>: <code class="text-forge-400">{ healthScore, drift, cost, incidents, models, tests, healthDNA }</code>.</p>
+        <p class="text-sm text-slate-400 mb-6"><strong>Health DNA</strong> (<code class="text-teal-400">.forge/health-dna.json</code>): Composite fingerprint — <code class="text-slate-300">driftAvg</code>, <code class="text-slate-300">incidentRate</code>, <code class="text-slate-300">testPassRate</code>, <code class="text-slate-300">modelSuccessRate</code>, <code class="text-slate-300">costPerSlice</code>. Compare across time to detect project decay before it manifests as bugs.</p>
 
         <h2 id="forge-alert-triage">forge_alert_triage</h2>
         <p>Reads incidents and drift violations, ranks by priority (severity × recency), and returns a prioritized list. Read-only — never modifies data.</p>

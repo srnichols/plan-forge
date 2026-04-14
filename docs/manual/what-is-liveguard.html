@@ -44,6 +44,15 @@
         <p>But software doesn't stop when the build does. Secrets drift into environment variables. Dependencies acquire CVEs. Configuration diverges between environments. The regression gate you wrote last month no longer covers the new payment flow. None of these are build-time failures — they're post-coding failures. And without a watch on the gates, they grow silently until they become incidents.</p>
         <p><strong>LiveGuard is what watches after the forge stops.</strong></p>
 
+        <h2 id="intelligence">LiveGuard Intelligence (v2.32)</h2>
+        <p>LiveGuard doesn't just observe — it learns. Every finding feeds back into the system:</p>
+        <ul class="space-y-2 text-sm text-slate-400 mb-6 ml-4">
+          <li><strong class="text-amber-400">Recurring Incident Detection</strong> — When the same files trigger incidents 3+ times in 30 days, LiveGuard auto-escalates the severity and marks the pattern as systemic.</li>
+          <li><strong class="text-amber-400">Fix Proposal Outcome Tracking</strong> — When a regression guard passes after a fix proposal was generated, the proposal is marked as "effective." Over time, the system learns which fix patterns work.</li>
+          <li><strong class="text-amber-400">Hotspot Test Priority</strong> — High-churn files (from <code>forge_hotspot</code>) are tested first by the regression guard. Risk-based testing — test the code most likely to break.</li>
+          <li><strong class="text-amber-400">Project Health DNA</strong> — A composite fingerprint combining drift score, incident rate, test pass rate, model success rate, and cost per slice. Persisted to <code>.forge/health-dna.json</code> for cross-session decay detection.</li>
+        </ul>
+
         <h2 id="lifecycle">The Lifecycle Position</h2>
         <p>LiveGuard occupies the operational phase — after code is shipped but before (and alongside) production APM:</p>
 

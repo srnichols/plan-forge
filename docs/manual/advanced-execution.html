@@ -55,6 +55,10 @@
       </div>
       <p>Model A fails → Model B retries the same slice → Model C if B fails too. Emits <code>slice-escalated</code> WebSocket event at each step. No manual intervention required.</p>
 
+      <div class="callout callout-tip">
+        <strong>Forge Intelligence (v2.32)</strong> — Escalation chains auto-tune from history. After 5+ recorded slices, <code>loadEscalationChain()</code> reorders models by success rate × cost efficiency. The best-performing, cheapest model moves to position 1 automatically. No configuration needed — just run plans and the forge learns.
+      </div>
+
       <img src="assets/diagrams/escalation-chain.svg" alt="Escalation chain: grok-4 fails, escalates to claude-opus-4.6 which fails, escalates to gpt-5.2-codex which passes" class="diagram-img diagram-img-sm" />
 
       <h2 id="quorum">Quorum Mode</h2>
@@ -91,6 +95,16 @@ pforge run-plan docs/plans/Phase-7.md --quorum=speed</code></pre>
 
       <h2 id="cost-optimization">Cost Optimization</h2>
       <p>The orchestrator tracks model performance in <code>.forge/model-performance.json</code> — success rate, average cost, and duration per model. It auto-selects the cheapest model with &gt;80% historical pass rate.</p>
+
+      <div class="callout callout-tip">
+        <strong>Forge Intelligence (v2.32)</strong> — Three self-tuning systems reduce cost over time:
+        <ul class="mt-2 space-y-1 text-sm">
+          <li><strong>Cost Calibration</strong> — Estimates auto-correct using a historical estimate-vs-actual ratio (clamped 0.5×–3×). After 3+ runs, <code>--estimate</code> accuracy improves automatically.</li>
+          <li><strong>Adaptive Quorum Threshold</strong> — Reads <code>.forge/quorum-history.json</code> to learn which slices actually need quorum. If &lt;20% needed it, threshold rises (fewer quorum runs = lower cost). If &gt;60% needed it, threshold drops.</li>
+          <li><strong>Slice Auto-Split Advisory</strong> — <code>--estimate</code> flags slices with 2+ prior failures or &gt;6 tasks as candidates for splitting. Smaller slices cost less and succeed more often.</li>
+        </ul>
+      </div>
+
       <ul>
         <li><strong>Preview costs</strong>: <code>pforge run-plan --estimate docs/plans/Phase-7.md</code></li>
         <li><strong>Review spend</strong>: <code>pforge cost</code> or Dashboard Cost tab</li>

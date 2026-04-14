@@ -104,6 +104,9 @@
           <tr><td><strong>Quorum Mode</strong></td><td>Multi-model consensus where 2–3 models independently solve a slice, then a reviewer synthesizes the best output.</td></tr>
           <tr><td><strong>Secret Scan</strong></td><td>Entropy-based scan of recent commits for potential hardcoded credentials.</td></tr>
           <tr><td><strong>OpenClaw</strong></td><td>Optional external analytics service. Receives LiveGuard snapshots via POST for cross-project health monitoring.</td></tr>
+          <tr><td><strong>Health DNA</strong></td><td>Composite project health fingerprint: drift avg, incident rate, test pass rate, model success rate, cost per slice. Persisted to <code>.forge/health-dna.json</code>. Used for cross-session decay detection (v2.32).</td></tr>
+          <tr><td><strong>Forge Intelligence</strong></td><td>Build-time self-improvement: auto-tuning escalation chains, cost calibration, adaptive quorum thresholds, slice splitting advisories. The forge gets smarter every run (v2.32).</td></tr>
+          <tr><td><strong>Recurring Incident</strong></td><td>When 3+ incidents hit the same files in 30 days, LiveGuard auto-escalates severity and marks the pattern as systemic (v2.32).</td></tr>
         </tbody>
       </table>
 

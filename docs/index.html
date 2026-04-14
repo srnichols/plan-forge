@@ -749,9 +749,9 @@
         <div class="p-8 rounded-2xl bg-slate-800/60 border border-purple-700/30">
           <div class="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center text-2xl mb-4">🔌</div>
           <h3 class="text-xl font-bold text-white mb-2">MCP Server + Orchestrator</h3>
-          <p class="text-sm text-slate-400 mb-4">18 MCP tools — run plans autonomously with <code class="text-forge-400">forge_run_plan</code>, multi-model analysis with <code class="text-forge-400">forge_analyze --quorum</code> and <code class="text-forge-400">forge_diagnose</code>, generate images with <code class="text-forge-400">forge_generate_image</code>, track costs with <code class="text-forge-400">forge_cost_report</code>, monitor in real-time via WebSocket hub + dashboard at <code class="text-forge-400">localhost:3100/dashboard</code>. Full Auto, Assisted, and Quorum execution modes. xAI Grok + OpenAI support via API provider registry.</p>
+          <p class="text-sm text-slate-400 mb-4">34 MCP tools (20 core + 14 LiveGuard) — run plans autonomously with <code class="text-forge-400">forge_run_plan</code>, multi-model analysis with <code class="text-forge-400">forge_analyze --quorum</code> and <code class="text-forge-400">forge_diagnose</code>, full health check with <code class="text-forge-400">forge_liveguard_run</code>, generate images with <code class="text-forge-400">forge_generate_image</code>, track costs with <code class="text-forge-400">forge_cost_report</code>, monitor in real-time via WebSocket hub + dashboard at <code class="text-forge-400">localhost:3100/dashboard</code>. Full Auto, Assisted, and Quorum execution modes. xAI Grok + OpenAI support via API provider registry.</p>
           <div class="space-y-1 text-xs text-slate-500">
-            <div>18 tools · Dashboard · REST API · WebSocket · Traces · Parallel · Grok · Image Gen</div>
+            <div>34 tools · 14 LiveGuard · Dashboard · REST API · WebSocket · Traces · Parallel · Grok · Image Gen</div>
           </div>
         </div>
 
@@ -835,6 +835,100 @@
           </table>
         </div>
         <p class="text-xs text-slate-600 mt-4 text-center">Instructions = passive rules (auto-loaded). Prompts = recipes (you trigger). Agents = reviewers (you pick). Skills = workflows (you invoke).</p>
+      </div>
+
+    </div>
+  </section>
+
+
+  <!-- ================================================
+       LIVEGUARD — POST-CODING INTELLIGENCE
+  ================================================ -->
+  <section id="liveguard" class="py-24 bg-gradient-to-b from-slate-900 to-slate-950">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+
+      <!-- Hero -->
+      <div class="text-center mb-16 reveal">
+        <p class="text-amber-500 text-sm font-semibold tracking-widest uppercase mb-3">LiveGuard</p>
+        <h2 class="text-4xl md:text-5xl font-bold text-white mb-6">The Forge Stops. LiveGuard Watches.</h2>
+        <p class="text-xl text-slate-400 max-w-3xl mx-auto mb-10">
+          Plan Forge sessions end when the code ships. LiveGuard watches everything after — drift, secrets, dependencies, regressions, incidents. 14 post-coding tools that detect, respond, and learn automatically.
+        </p>
+        <img src="assets/liveguard-hero.webp" alt="Dark forge control room with three stations: magnifying glass detecting code violations, anvil with lightning shields for automatic response, golden brain absorbing knowledge" class="w-full max-w-4xl mx-auto rounded-2xl border border-slate-700/30 shadow-2xl shadow-amber-500/10" />
+      </div>
+
+      <!-- Detect / Respond / Learn -->
+      <div class="grid md:grid-cols-3 gap-8 mb-16">
+
+        <!-- Detect -->
+        <div class="p-8 rounded-2xl bg-slate-800/60 border border-amber-700/30 reveal">
+          <div class="w-14 h-14 rounded-xl bg-amber-500/20 flex items-center justify-center text-3xl mb-6">🔍</div>
+          <h3 class="text-2xl font-bold text-white mb-3">Detect</h3>
+          <p class="text-slate-400 mb-6">Continuously score your codebase against architecture guardrail rules. Catches empty-catch blocks, unsafe types, sync-over-async, SQL injection, and deferred work markers.</p>
+          <ul class="space-y-2 text-sm text-slate-400">
+            <li class="flex items-start gap-2"><span class="text-amber-400 mt-0.5">▸</span> Drift scoring (0–100) with trend tracking</li>
+            <li class="flex items-start gap-2"><span class="text-amber-400 mt-0.5">▸</span> App code vs framework code separation</li>
+            <li class="flex items-start gap-2"><span class="text-amber-400 mt-0.5">▸</span> Secret scanning via Shannon entropy</li>
+            <li class="flex items-start gap-2"><span class="text-amber-400 mt-0.5">▸</span> Dependency vulnerability monitoring (.NET + npm)</li>
+            <li class="flex items-start gap-2"><span class="text-amber-400 mt-0.5">▸</span> Environment config key divergence</li>
+          </ul>
+        </div>
+
+        <!-- Respond -->
+        <div class="p-8 rounded-2xl bg-slate-800/60 border border-red-700/30 reveal">
+          <div class="w-14 h-14 rounded-xl bg-red-500/20 flex items-center justify-center text-3xl mb-6">⚡</div>
+          <h3 class="text-2xl font-bold text-white mb-3">Respond</h3>
+          <p class="text-slate-400 mb-6">Violations don't just get reported — they trigger automatic incident capture, fix proposal generation, and regression verification. One call does it all.</p>
+          <ul class="space-y-2 text-sm text-slate-400">
+            <li class="flex items-start gap-2"><span class="text-red-400 mt-0.5">▸</span> Auto-chain: drift → incident → fix proposal</li>
+            <li class="flex items-start gap-2"><span class="text-red-400 mt-0.5">▸</span> Fix plans include code snippets with <code class="text-red-300">▸▸▸</code> violation markers</li>
+            <li class="flex items-start gap-2"><span class="text-red-400 mt-0.5">▸</span> Auto-resolve incidents when regression guard passes</li>
+            <li class="flex items-start gap-2"><span class="text-red-400 mt-0.5">▸</span> MTTR tracking from capture to resolution</li>
+            <li class="flex items-start gap-2"><span class="text-red-400 mt-0.5">▸</span> Forbidden file enforcement with exit code 1</li>
+          </ul>
+        </div>
+
+        <!-- Learn -->
+        <div class="p-8 rounded-2xl bg-slate-800/60 border border-teal-700/30 reveal">
+          <div class="w-14 h-14 rounded-xl bg-teal-500/20 flex items-center justify-center text-3xl mb-6">🧠</div>
+          <h3 class="text-2xl font-bold text-white mb-3">Learn</h3>
+          <p class="text-slate-400 mb-6">Every finding is automatically captured to persistent memory. Future sessions start with context, not blank. The system gets smarter with every run.</p>
+          <ul class="space-y-2 text-sm text-slate-400">
+            <li class="flex items-start gap-2"><span class="text-teal-400 mt-0.5">▸</span> Auto-capture to OpenBrain (13 tools)</li>
+            <li class="flex items-start gap-2"><span class="text-teal-400 mt-0.5">▸</span> Health trend with 5 metrics over time</li>
+            <li class="flex items-start gap-2"><span class="text-teal-400 mt-0.5">▸</span> Regression history for pass rate tracking</li>
+            <li class="flex items-start gap-2"><span class="text-teal-400 mt-0.5">▸</span> Cost anomaly detection across runs</li>
+            <li class="flex items-start gap-2"><span class="text-teal-400 mt-0.5">▸</span> Pipeline prompts search memory before acting</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- One Call Code Example -->
+      <div class="max-w-4xl mx-auto reveal">
+        <div class="p-8 rounded-2xl bg-gradient-to-br from-slate-800 to-slate-800/50 border border-amber-700/30">
+          <div class="flex items-center gap-3 mb-4">
+            <code class="text-forge-400 font-bold text-lg">forge_liveguard_run</code>
+            <span class="text-xs px-2 py-0.5 rounded-full bg-amber-900/40 text-amber-400 border border-amber-700/30">One call replaces 8</span>
+          </div>
+          <p class="text-slate-400 mb-6">Full health check in a single MCP tool call. Runs drift scan, sweep, secret scan, regression guard, dep watch, alert triage, and health trend — returns a unified status.</p>
+          <pre class="bg-slate-900/80 rounded-xl p-5 text-xs text-slate-300 overflow-x-auto leading-relaxed"><code>{
+  <span class="text-amber-400">"drift"</span>:      { "score": 100, "appViolations": 0 },
+  <span class="text-amber-400">"sweep"</span>:      { "appMarkers": 0 },
+  <span class="text-amber-400">"secrets"</span>:    { "findings": 0 },
+  <span class="text-amber-400">"regression"</span>: { "gates": 2, "passed": 2, "failed": 0 },
+  <span class="text-amber-400">"deps"</span>:       { "vulnerabilities": 0 },
+  <span class="text-amber-400">"alerts"</span>:     { "critical": 0, "high": 0, "openIncidents": 0 },
+  <span class="text-amber-400">"health"</span>:     { "avgScore": 100, "trend": "stable" },
+  <span class="text-green-400">"overallStatus"</span>: <span class="text-green-400">"green"</span>
+}</code></pre>
+        </div>
+      </div>
+
+      <!-- Link to manual -->
+      <div class="text-center mt-12">
+        <a href="manual/what-is-liveguard.html" class="text-forge-400 hover:text-forge-300 transition-colors font-semibold">
+          Read the LiveGuard Manual (4 chapters) →
+        </a>
       </div>
 
     </div>

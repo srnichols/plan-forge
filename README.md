@@ -115,37 +115,78 @@ Every LiveGuard finding is auto-captured to persistent memory. Pipeline prompts 
 
 ---
 
-## How the Pieces Fit Together
+## The Full Lifecycle
+
+From first idea to self-improving production system — everything connects.
 
 ```mermaid
-graph TD
-    A["🧭 Pipeline Prompts<br/><i>step0 → step6</i>"] -->|guide the workflow| B["📋 Instruction Files<br/><i>*.instructions.md<br/>+ Temper Guards</i>"]
-    A -->|use during execution| C["🧩 Scaffolding Prompts<br/><i>new-entity, new-service...</i>"]
-    A -->|trigger for review| D["🔍 Agent Definitions<br/><i>*.agent.md</i>"]
-    B -->|loaded automatically<br/>based on file type| E["Your Code"]
-    C -->|generate consistent| E
-    D -->|audit and review| E
-    E -->|shipped code| F["🛡️ LiveGuard<br/><i>14 post-coding tools</i>"]
-    F -->|findings + memory| A
+stateDiagram-v2
+    direction LR
 
-    style A fill:#4A90D9,stroke:#2C5F8A,color:#fff
-    style B fill:#7B68EE,stroke:#5A4CB5,color:#fff
-    style C fill:#50C878,stroke:#3A9A5C,color:#fff
-    style D fill:#FF8C42,stroke:#CC6F35,color:#fff
-    style E fill:#F5F5F5,stroke:#999,color:#333
-    style F fill:#f59e0b,stroke:#d97706,color:#000
+    state "🔨 BUILD" as Build {
+        [*] --> Specify: Step 0
+        Specify --> Preflight: Step 1
+        Preflight --> Harden: Step 2
+        Harden --> Execute: Step 3
+        Execute --> Sweep: Step 4
+        Sweep --> Review: Step 5
+        Review --> Ship: Step 6
+        Execute --> Execute: slice pass ✅
+        Execute --> Escalate: slice fail ❌
+        Escalate --> Execute: retry with next model
+    }
+
+    state "🛡️ GUARD" as Guard {
+        state "LiveGuard" as LG {
+            DriftScan --> IncidentCapture: violation found
+            IncidentCapture --> FixProposal: auto-chain
+            FixProposal --> NewPlan: auto-generated
+            SecretScan --> Alert
+            DepWatch --> Alert
+            RegressionGuard --> ResolveIncident: gates pass
+        }
+    }
+
+    state "🧠 LEARN" as Learn {
+        CaptureMemory --> HealthDNA
+        HealthDNA --> TuneEscalation: model performance
+        HealthDNA --> CalibrateCost: estimate vs actual
+        HealthDNA --> AdaptQuorum: quorum history
+        TuneEscalation --> NextRun
+        CalibrateCost --> NextRun
+        AdaptQuorum --> NextRun
+    }
+
+    Ship --> DriftScan: code deployed
+    NewPlan --> Harden: fix plan re-enters pipeline
+    ResolveIncident --> CaptureMemory
+    Alert --> CaptureMemory
+    NextRun --> Specify: smarter next session
 ```
+
+### How the Pieces Fit
 
 | Piece | What It Is | Count |
 |-------|-----------|-------|
-| **Pipeline Prompts** | Step-by-step workflow templates (Step 0–6) | 7 |
-| **Instruction Files** | Rules that auto-load when editing specific file types + Temper Guards | 17-18/preset |
-| **Scaffolding Prompts** | Templates for generating common code patterns | 15/preset |
-| **Agent Definitions** | Specialized AI reviewer personas | 19 |
-| **Skills** | Multi-step executable procedures via `/` slash commands | 12 |
-| **Lifecycle Hooks** | Automatic actions: 4 core + 3 LiveGuard | 7 |
-| **LiveGuard Tools** | Post-coding: drift, incidents, secrets, deps, health, triage | 14 |
-| **MCP Tools (total)** | All forge operations exposed as tool calls | 34 |
+| **Pipeline Steps** | Specify → Pre-flight → Harden → Execute → Sweep → Review → Ship | 7 |
+| **Instruction Files** | Rules that auto-load by file type + Temper Guards that prevent shortcuts | 17-18/preset |
+| **Scaffolding Prompts** | Templates for generating code patterns consistently | 15/preset |
+| **Agent Definitions** | Specialized AI reviewer personas (independent audit) | 19 |
+| **Skills** | Multi-step procedures via `/` slash commands | 12 |
+| **Lifecycle Hooks** | Automatic actions: 4 core (SessionStart, PreToolUse, PostToolUse, Stop) + 3 LiveGuard (PreDeploy, PostSlice, PreAgentHandoff) | 7 |
+| **LiveGuard Tools** | Post-coding intelligence: drift, incidents, secrets, deps, health, triage, fix proposals, composite health check | 14 |
+| **MCP Tools (total)** | All forge operations exposed as MCP tool calls | 34 |
+
+### The Feedback Loops
+
+```
+Escalation chain reorders by success rate ──────────────┐
+Cost estimates calibrate from actuals ──────────────────┤
+Quorum threshold adapts from history ───────────────────┤── The forge gets smarter
+Recurring incidents auto-escalate ──────────────────────┤
+Fix proposals track outcomes (effective/ineffective) ───┤
+Health DNA detects decay before it manifests ───────────┘
+```
 
 ---
 

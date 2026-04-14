@@ -2608,6 +2608,15 @@ function createExpressApp() {
   // Plan Browser static files
   app.use("/ui", express.static(resolve(__dirname, "ui")));
 
+  // REST API: GET /api/version — server + framework version
+  app.get("/api/version", (_req, res) => {
+    try {
+      const versionFile = resolve(PROJECT_DIR, "VERSION");
+      const frameworkVersion = existsSync(versionFile) ? readFileSync(versionFile, "utf-8").trim() : "unknown";
+      res.json({ server: "2.10.2", framework: frameworkVersion });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
   // REST API: GET /api/status — current run status
   app.get("/api/status", (_req, res) => {
     try {

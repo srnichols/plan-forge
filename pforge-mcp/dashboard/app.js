@@ -2620,6 +2620,39 @@ async function pollHubClients() {
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────
+// Bootstrap version check — detect stale core files and show upgrade banner
+// This code reaches existing users via `pforge update` which copies dashboard/app.js
+(function checkBootstrapVersion() {
+  const MIN_FRAMEWORK_VERSION = '2.30.2';
+  fetch(`${API_BASE}/api/version`)
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      if (!data || !data.framework) return;
+      // Simple semver compare: "2.30.2" > "2.29.3"
+      const current = data.framework.split('.').map(Number);
+      const required = MIN_FRAMEWORK_VERSION.split('.').map(Number);
+      const isStale = current[0] < required[0] ||
+        (current[0] === required[0] && current[1] < required[1]) ||
+        (current[0] === required[0] && current[1] === required[1] && current[2] < required[2]);
+      if (isStale) {
+        const banner = document.createElement('div');
+        banner.className = 'fixed top-0 left-0 right-0 z-[200] bg-amber-900/95 border-b-2 border-amber-500 px-6 py-3 text-center';
+        banner.innerHTML = `
+          <p class="text-amber-100 font-semibold">⚠️ Plan Forge core v${data.framework} is outdated (v${MIN_FRAMEWORK_VERSION}+ required)</p>
+          <p class="text-amber-200 text-sm mt-1">Your dashboard is updated but the CLI and MCP server are not. Run this one-time bootstrap:</p>
+          <code class="block bg-slate-900 text-amber-400 rounded px-4 py-2 mt-2 text-xs font-mono select-all max-w-2xl mx-auto">
+            ${navigator.platform.includes('Win')
+              ? 'Invoke-WebRequest -Uri "https://raw.githubusercontent.com/srnichols/plan-forge/master/pforge.ps1" -OutFile pforge.ps1; .\\pforge.ps1 update --force'
+              : 'curl -sO https://raw.githubusercontent.com/srnichols/plan-forge/master/pforge.sh && bash pforge.sh update --force'}
+          </code>
+          <button onclick="this.parentElement.remove()" class="text-amber-400 hover:text-white text-xs mt-2 underline block mx-auto">Dismiss</button>
+        `;
+        document.body.prepend(banner);
+      }
+    })
+    .catch(() => {}); // Server may not support /api/version yet — silently skip
+})();
+
 // Load initial status + reconstruct slice state from latest run
 fetch(`${API_BASE}/api/status`)
   .then((r) => r.json())

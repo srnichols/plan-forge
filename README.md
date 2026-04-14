@@ -142,51 +142,91 @@ graph TD
 
 ## The Full Lifecycle
 
-From first idea to self-improving production system — everything connects.
+Three phases, stacked. Each feeds into the next.
+
+### 🔨 Phase 1: Build
 
 ```mermaid
-stateDiagram-v2
-    direction LR
+flowchart LR
+    S0["Step 0<br/>Specify"] --> S1["Step 1<br/>Pre-flight"]
+    S1 --> S2["Step 2<br/>Harden"]
+    S2 --> S3["Step 3<br/>Execute"]
+    S3 --> S4["Step 4<br/>Sweep"]
+    S4 --> S5["Step 5<br/>Review"]
+    S5 --> S6["Step 6<br/>Ship"]
 
-    state "🔨 BUILD" as Build {
-        [*] --> Specify: Step 0
-        Specify --> Preflight: Step 1
-        Preflight --> Harden: Step 2
-        Harden --> Execute: Step 3
-        Execute --> Sweep: Step 4
-        Sweep --> Review: Step 5
-        Review --> Ship: Step 6
-        Execute --> Execute: slice pass ✅
-        Execute --> Escalate: slice fail ❌
-        Escalate --> Execute: retry with next model
-    }
+    S3 -->|"slice fail ❌"| ESC["🔄 Escalate<br/>next model"]
+    ESC -->|retry| S3
 
-    state "🛡️ GUARD" as Guard {
-        state "LiveGuard" as LG {
-            DriftScan --> IncidentCapture: violation found
-            IncidentCapture --> FixProposal: auto-chain
-            FixProposal --> NewPlan: auto-generated
-            SecretScan --> Alert
-            DepWatch --> Alert
-            RegressionGuard --> ResolveIncident: gates pass
-        }
-    }
+    style S0 fill:#f59e0b,stroke:#d97706,color:#000
+    style S1 fill:#06b6d4,stroke:#0891b2,color:#fff
+    style S2 fill:#3b82f6,stroke:#2563eb,color:#fff
+    style S3 fill:#8b5cf6,stroke:#7c3aed,color:#fff
+    style S4 fill:#10b981,stroke:#059669,color:#fff
+    style S5 fill:#ec4899,stroke:#db2777,color:#fff
+    style S6 fill:#6366f1,stroke:#4f46e5,color:#fff
+    style ESC fill:#ef4444,stroke:#dc2626,color:#fff
+```
 
-    state "🧠 LEARN" as Learn {
-        CaptureMemory --> HealthDNA
-        HealthDNA --> TuneEscalation: model performance
-        HealthDNA --> CalibrateCost: estimate vs actual
-        HealthDNA --> AdaptQuorum: quorum history
-        TuneEscalation --> NextRun
-        CalibrateCost --> NextRun
-        AdaptQuorum --> NextRun
-    }
+> ⬇️ **Ship** hands off to LiveGuard. Fix proposals re-enter at **Harden** ⬆️
 
-    Ship --> DriftScan: code deployed
-    NewPlan --> Harden: fix plan re-enters pipeline
-    ResolveIncident --> CaptureMemory
-    Alert --> CaptureMemory
-    NextRun --> Specify: smarter next session
+### 🛡️ Phase 2: Guard (LiveGuard)
+
+```mermaid
+flowchart LR
+    SHIP["📦 Shipped<br/>Code"] --> DRIFT["Drift<br/>Scan"]
+    SHIP --> SECRET["Secret<br/>Scan"]
+    SHIP --> DEP["Dep<br/>Watch"]
+
+    DRIFT -->|"violation"| INC["🚨 Incident<br/>Capture"]
+    INC -->|"auto-chain"| FIX["📋 Fix<br/>Proposal"]
+    FIX -->|"⬆️ re-enters pipeline<br/>at Step 2: Harden"| PLAN["New<br/>Plan"]
+
+    DRIFT --> REG["Regression<br/>Guard"]
+    REG -->|"gates pass ✅"| RESOLVE["✅ Auto-Resolve<br/>Incidents"]
+
+    SECRET --> ALERT["Alert<br/>Triage"]
+    DEP --> ALERT
+
+    style SHIP fill:#6366f1,stroke:#4f46e5,color:#fff
+    style DRIFT fill:#f59e0b,stroke:#d97706,color:#000
+    style SECRET fill:#f59e0b,stroke:#d97706,color:#000
+    style DEP fill:#f59e0b,stroke:#d97706,color:#000
+    style INC fill:#ef4444,stroke:#dc2626,color:#fff
+    style FIX fill:#f59e0b,stroke:#d97706,color:#000
+    style PLAN fill:#3b82f6,stroke:#2563eb,color:#fff
+    style REG fill:#10b981,stroke:#059669,color:#fff
+    style RESOLVE fill:#10b981,stroke:#059669,color:#fff
+    style ALERT fill:#f59e0b,stroke:#d97706,color:#000
+```
+
+> ⬇️ Every finding is captured to memory. Memory feeds back into **Build** ⬆️
+
+### 🧠 Phase 3: Learn (Self-Improving)
+
+```mermaid
+flowchart LR
+    FINDINGS["LiveGuard<br/>Findings"] --> MEM["📝 Capture<br/>Memory"]
+    MEM --> DNA["🧬 Health<br/>DNA"]
+
+    DNA --> TUNE["⚡ Tune<br/>Escalation Chain"]
+    DNA --> COST["💰 Calibrate<br/>Cost Estimates"]
+    DNA --> QUORUM["🎯 Adapt<br/>Quorum Threshold"]
+    DNA --> RECUR["🔁 Recurring<br/>Incident Detection"]
+
+    TUNE --> NEXT["⬆️ Next Run<br/>Starts Smarter"]
+    COST --> NEXT
+    QUORUM --> NEXT
+    RECUR --> NEXT
+
+    style FINDINGS fill:#f59e0b,stroke:#d97706,color:#000
+    style MEM fill:#06b6d4,stroke:#0891b2,color:#fff
+    style DNA fill:#8b5cf6,stroke:#7c3aed,color:#fff
+    style TUNE fill:#10b981,stroke:#059669,color:#fff
+    style COST fill:#10b981,stroke:#059669,color:#fff
+    style QUORUM fill:#10b981,stroke:#059669,color:#fff
+    style RECUR fill:#10b981,stroke:#059669,color:#fff
+    style NEXT fill:#f59e0b,stroke:#d97706,color:#000
 ```
 
 ### How the Pieces Fit

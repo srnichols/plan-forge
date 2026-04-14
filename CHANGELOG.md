@@ -5,6 +5,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.31.0] — 2026-04-13
+
+### Added — OpenBrain Auto-Capture in LiveGuard Tools
+- **`captureMemory()` helper** — LiveGuard tools now auto-capture findings to `.forge/liveguard-memories.jsonl` (always) and `.forge/openbrain-queue.jsonl` (when OpenBrain is configured). All captures are best-effort — never break tool execution.
+- **Auto-capture in 4 key tools:**
+  - `forge_drift_report` — captures violations with file names and rule IDs
+  - `forge_regression_guard` — captures auto-resolved incidents and gate failures
+  - `forge_incident_capture` — captures incident description, severity, affected files
+  - `forge_liveguard_run` — captures health snapshot (score, gates, incidents, status)
+- **Pipeline prompts now search OpenBrain before acting:**
+  - `step0-specify-feature.prompt.md` — searches for prior decisions and lessons before interviewing
+  - `step3-execute-slice.prompt.md` — searches for gotchas and patterns before first slice
+  - `step5-review-gate.prompt.md` — searches for prior review findings before reviewing
+  - All prompts also check `.forge/liveguard-memories.jsonl` for recent drift/incident context
+- OpenBrain is optional — all auto-capture calls check `isOpenBrainConfigured()` first and silently skip if not configured
+
 ## [2.30.5] — 2026-04-13
 
 ### Fixed — E7: Hub initialization race condition

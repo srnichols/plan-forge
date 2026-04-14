@@ -68,6 +68,40 @@ function broadcastLiveGuard(tool, status, durationMs, summary = {}) {
   console.error(`[liveguard] ${tool} → ${clientCount} client(s)`);
 }
 
+/**
+ * Auto-capture a LiveGuard finding to persistent memory.
+ * Writes to .forge/liveguard-memories.jsonl (always) and broadcasts a hub event.
+ * If OpenBrain is configured, the thought is also queued for OpenBrain ingestion
+ * via .forge/openbrain-queue.jsonl (read by SessionStart hook on next session).
+ *
+ * @param {string} content - Human-readable description of the finding
+ * @param {string} type - Thought type: 'decision', 'gotcha', 'lesson', 'pattern', 'convention'
+ * @param {string} source - Tool that generated this (e.g., 'forge_drift_report')
+ * @param {string} cwd - Project directory
+ */
+function captureMemory(content, type, source, cwd) {
+  try {
+    let project = "plan-forge";
+    try {
+      const forgeConfig = JSON.parse(readFileSync(resolve(cwd, ".forge.json"), "utf-8"));
+      project = forgeConfig.projectName || "plan-forge";
+    } catch { /* use default */ }
+
+    const thought = { content, project, type, source, created_by: "liveguard-auto", captured_at: new Date().toISOString() };
+
+    // Always persist locally
+    appendForgeJsonl("liveguard-memories.jsonl", thought, cwd);
+
+    // Queue for OpenBrain if configured
+    if (isOpenBrainConfigured(cwd)) {
+      appendForgeJsonl("openbrain-queue.jsonl", thought, cwd);
+    }
+
+    // Broadcast so dashboard/bridge can observe
+    activeHub?.broadcast({ type: "memory-captured", thought, timestamp: thought.captured_at });
+  } catch { /* memory capture is best-effort — never break tool execution */ }
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────
 
 /**
@@ -923,7 +957,7 @@ function executeTool(name, args) {
 
 // ─── MCP Server ───────────────────────────────────────────────────────
 const server = new Server(
-  { name: "plan-forge-mcp", version: "2.10.5" },
+  { name: "plan-forge-mcp", version: "2.11.0" },
   { capabilities: { tools: {} } }
 );
 
@@ -1418,6 +1452,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       emitToolTelemetry("forge_incident_capture", args, record, Date.now() - t0, "OK", cwd);
       broadcastLiveGuard("forge_incident_capture", "OK", Date.now() - t0);
 
+      // Auto-capture to memory
+      captureMemory(
+        `Incident ${record.id}: ${args.description}. Severity: ${severity}. Files: ${(args.files || []).join(", ") || "none"}.`,
+        "gotcha", "forge_incident_capture", cwd
+      );
+
       return { content: [{ type: "text", text: JSON.stringify(record, null, 2) }], isError: false };
     } catch (err) {
       return { content: [{ type: "text", text: `Incident capture error: ${err.message}` }], isError: true };
@@ -1521,6 +1561,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       emitToolTelemetry("forge_regression_guard", args, result, Date.now() - t0, result.success ? "ok" : "error", cwd);
       broadcastLiveGuard("forge_regression_guard", result.success ? "ok" : "error", Date.now() - t0, { gates: result.gatesChecked, passed: result.passed, failed: result.failed, resolved: (result.resolvedIncidents || []).length });
+
+      // Auto-capture to memory
+      if (result.resolvedIncidents?.length > 0) {
+        captureMemory(
+          `Regression guard passed (${result.passed}/${result.gatesChecked} gates). Auto-resolved ${result.resolvedIncidents.length} incident(s).`,
+          "lesson", "forge_regression_guard", cwd
+        );
+      } else if (result.failed > 0) {
+        captureMemory(
+          `Regression guard failed: ${result.failed}/${result.gatesChecked} gate(s) failed.`,
+          "gotcha", "forge_regression_guard", cwd
+        );
+      }
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         isError: !result.success,
@@ -1650,6 +1703,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       emitToolTelemetry("forge_drift_report", args, result, Date.now() - t0, "OK", cwd);
       broadcastLiveGuard("forge_drift_report", "OK", Date.now() - t0, { score, appViolations: analysis.violations.length, testStatus: testStatus?.status || null });
+
+      // Auto-capture to memory when violations found
+      if (analysis.violations.length > 0) {
+        captureMemory(
+          `Drift: ${analysis.violations.length} violation(s) — ${[...new Set(analysis.violations.map(v => v.rule))].join(", ")} in ${[...new Set(analysis.violations.map(v => v.file))].join(", ")}. Score: ${score}/100.`,
+          "gotcha", "forge_drift_report", cwd
+        );
+      }
 
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
     } catch (err) {
@@ -2442,6 +2503,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       emitToolTelemetry("forge_liveguard_run", args, report, Date.now() - t0, "OK", cwd);
       broadcastLiveGuard("forge_liveguard_run", "OK", Date.now() - t0, { overallStatus: report.overallStatus, driftScore: report.drift?.score, gates: report.regression?.gates, secrets: report.secrets?.findings });
+
+      // Auto-capture health snapshot to memory
+      captureMemory(
+        `LiveGuard health: drift ${report.drift?.score ?? "?"}/100, ${report.regression?.passed ?? 0}/${report.regression?.gates ?? 0} gates, ${report.alerts?.openIncidents ?? 0} open incidents, ${report.deps?.vulnerabilities ?? 0} vulnerabilities. Status: ${report.overallStatus}.`,
+        "decision", "forge_liveguard_run", cwd
+      );
       return { content: [{ type: "text", text: JSON.stringify(report, null, 2) }], isError: false };
     } catch (err) {
       return { content: [{ type: "text", text: `LiveGuard run error: ${err.message}` }], isError: true };

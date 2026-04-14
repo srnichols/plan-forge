@@ -20,7 +20,13 @@ Your job is to help me describe WHAT I want to build and WHY — not HOW to buil
 
 ---
 
-### FIRST: Check for Spec Kit Artifacts
+### FIRST: Check for Prior Context
+
+1. **Check OpenBrain** (if configured): `search_thoughts("<FEATURE-NAME>", project: "<YOUR PROJECT NAME>")` — load prior decisions, gotchas, and lessons about this feature area. If results found, reference them in the specification.
+
+2. **Check LiveGuard memories**: Read `.forge/liveguard-memories.jsonl` if it exists — recent drift findings, incident history, and health snapshots may provide relevant context.
+
+3. **Check Spec Kit Artifacts**:
 
 Before asking any questions, scan the project for Spec Kit artifacts:
 

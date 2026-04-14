@@ -24,6 +24,10 @@ Now act as a REVIEWER GATE + DRIFT DETECTION AGENT.
 
 You are an independent quality gate. You should be a different session from the one that wrote the code.
 
+**Pre-review context check:**
+- **Check OpenBrain** (if configured): `search_thoughts("<plan topic> review", project: "<YOUR PROJECT NAME>")` — load prior review findings, recurring issues, and known patterns
+- **Check LiveGuard memories**: Read `.forge/liveguard-memories.jsonl` if present — recent drift violations and incidents may flag known problem areas
+
 --- PART A: CODE REVIEW ---
 
 Review checklist:

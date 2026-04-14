@@ -37,6 +37,8 @@ The right amount of complexity is the minimum needed for the current slice.
 Execute the hardened plan one slice at a time, starting with Slice 1.
 
 Before starting Slice 1, run a **Pre-Execution Traceability Check**:
+- **Check OpenBrain** (if configured): `search_thoughts("<plan topic>", project: "<YOUR PROJECT NAME>")` — load prior gotchas, patterns, and lessons for the affected files/areas
+- **Check LiveGuard memories**: Read `.forge/liveguard-memories.jsonl` if present — prior drift violations and incident history for this project
 - Scan the spec's MUST acceptance criteria
 - Verify each MUST criterion maps to at least one slice's validation gate
 - If any MUST criterion has no corresponding validation gate, flag it and ask before proceeding

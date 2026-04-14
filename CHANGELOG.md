@@ -5,6 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.32.3] — 2026-04-14
+
+### Fixed
+- **REST proxy** (#3) — Added `method: "tools/call"` to fake request object, fixing Zod schema validation error. All MCP-only tools now invocable via `POST /api/tool/:name`.
+
 ## [2.32.2] — 2026-04-14
 
 ### Fixed — 3 Remaining Issues from v2.32.0 Validation

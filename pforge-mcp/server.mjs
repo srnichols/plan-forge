@@ -970,7 +970,7 @@ function executeTool(name, args) {
 
 // ─── MCP Server ───────────────────────────────────────────────────────
 const server = new Server(
-  { name: "plan-forge-mcp", version: "2.12.2" },
+  { name: "plan-forge-mcp", version: "2.12.3" },
   { capabilities: { tools: {} } }
 );
 
@@ -3344,7 +3344,7 @@ function createExpressApp() {
       if (MCP_ONLY_TOOLS.has(toolName)) {
         // Dispatch through the MCP CallToolRequestSchema handler directly
         try {
-          const fakeRequest = { params: { name: toolName, arguments: req.body || {} } };
+          const fakeRequest = { method: "tools/call", params: { name: toolName, arguments: req.body || {} } };
           const handlers = server._requestHandlers || server.requestHandlers;
           const handler = handlers?.get?.("tools/call");
           if (handler) {

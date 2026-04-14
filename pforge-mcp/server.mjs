@@ -58,8 +58,14 @@ const _approvedRunIds = new Set();
  */
 function broadcastLiveGuard(tool, status, durationMs, summary = {}) {
   const ts = new Date().toISOString();
-  activeHub?.broadcast({ type: "liveguard-tool-completed", tool, status, durationMs, timestamp: ts });
-  activeHub?.broadcast({ type: "liveguard", tool: tool.replace("forge_", "").replace(/_/g, "-"), status, ...summary, timestamp: ts });
+  const clientCount = activeHub?.clients?.size || 0;
+  if (!activeHub) {
+    console.error(`[liveguard] broadcastLiveGuard(${tool}) — hub not initialized, event dropped`);
+    return;
+  }
+  activeHub.broadcast({ type: "liveguard-tool-completed", tool, status, durationMs, timestamp: ts });
+  activeHub.broadcast({ type: "liveguard", tool: tool.replace("forge_", "").replace(/_/g, "-"), status, ...summary, timestamp: ts });
+  console.error(`[liveguard] ${tool} → ${clientCount} client(s)`);
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────
@@ -917,7 +923,7 @@ function executeTool(name, args) {
 
 // ─── MCP Server ───────────────────────────────────────────────────────
 const server = new Server(
-  { name: "plan-forge-mcp", version: "2.10.4" },
+  { name: "plan-forge-mcp", version: "2.10.5" },
   { capabilities: { tools: {} } }
 );
 
@@ -3958,15 +3964,6 @@ async function main() {
     }
   }
 
-  // MCP stdio transport (skip in dashboard-only mode)
-  if (!DASHBOARD_ONLY) {
-    const transport = new StdioServerTransport();
-    await server.connect(transport);
-    console.error("Plan Forge MCP server running (stdio transport)");
-  } else {
-    console.error("Plan Forge Dashboard-only mode (no MCP stdio)");
-  }
-
   // Auto-generate tools.json + cli-schema.json on startup
   try {
     writeToolsJson(TOOLS, __dirname);
@@ -3986,7 +3983,7 @@ async function main() {
     console.error(`[http] Express server failed to start: ${err.message} (non-fatal)`);
   }
 
-  // Start WebSocket hub alongside MCP server
+  // Start WebSocket hub BEFORE stdio transport — ensures activeHub is set before any tool calls arrive
   try {
     activeHub = await createHub({ cwd: PROJECT_DIR });
     console.error(`Plan Forge WebSocket hub running on port ${activeHub.port}`);
@@ -3995,6 +3992,15 @@ async function main() {
     activeEventWatcher = startEventFileWatcher(activeHub, PROJECT_DIR);
   } catch (err) {
     console.error(`[hub] WebSocket hub failed to start: ${err.message} (non-fatal)`);
+  }
+
+  // MCP stdio transport — AFTER hub so broadcastLiveGuard has a hub to send to
+  if (!DASHBOARD_ONLY) {
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
+    console.error("Plan Forge MCP server running (stdio transport)");
+  } else {
+    console.error("Plan Forge Dashboard-only mode (no MCP stdio)");
   }
 
   // Start Bridge (connects to hub as a WS client; activates if bridge config present)

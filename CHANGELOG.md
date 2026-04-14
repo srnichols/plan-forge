@@ -5,6 +5,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.30.5] — 2026-04-13
+
+### Fixed — E7: Hub initialization race condition
+- **Startup reorder** — WebSocket hub + Express now start BEFORE stdio transport connects. Previously stdio connected first, meaning tool calls could arrive before `activeHub` was set, causing `broadcastLiveGuard` to silently drop all events.
+- **Diagnostic logging** — `broadcastLiveGuard` now logs to stderr: `[liveguard] forge_drift_report → N client(s)` on success, or `[liveguard] ... hub not initialized, event dropped` when hub is null.
+- Startup order is now: capabilities → Express (:3100) → WebSocket hub (:3101+) → stdio transport. This guarantees `activeHub` is set before any MCP tool call can arrive.
+
 ## [2.30.4] — 2026-04-13
 
 ### Fixed — E7: LiveGuard Dashboard Events

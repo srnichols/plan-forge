@@ -1674,13 +1674,30 @@ Files in this directory (except this README) are gitignored — they are runtime
     Write-Host "Update complete: v$currentVersion → v$sourceVersion" -ForegroundColor Green
     Write-Host "Run 'pforge check' to validate the updated setup." -ForegroundColor DarkGray
 
-    # Check if MCP files were updated — remind to reinstall deps and restart
+    # Auto-install MCP dependencies if MCP files were updated
     $mcpUpdated = ($updates + $newFiles) | Where-Object { $_.Name -like "pforge-mcp/*" }
     if ($mcpUpdated) {
-        Write-Host ""
-        Write-Host "⚠️  MCP server files were updated:" -ForegroundColor Yellow
-        Write-Host "  1. Run: cd pforge-mcp && npm install" -ForegroundColor Yellow
-        Write-Host "  2. Restart the MCP server if it's running" -ForegroundColor Yellow
+        $mcpDir = Join-Path $RepoRoot "pforge-mcp"
+        if (Test-Path (Join-Path $mcpDir "package.json")) {
+            Write-Host ""
+            Write-Host "Installing MCP dependencies..." -ForegroundColor DarkCyan
+            try {
+                $npmOutput = & npm install --prefix $mcpDir 2>&1
+                Write-Host "  ✅ npm install complete" -ForegroundColor Green
+            } catch {
+                Write-Host "  ⚠️  npm install failed — run manually: cd pforge-mcp && npm install" -ForegroundColor Yellow
+            }
+        }
+
+        # Detect if MCP server is running and advise restart
+        try {
+            $null = Invoke-RestMethod -Uri "http://localhost:3100/api/status" -Method GET -TimeoutSec 2 -ErrorAction Stop
+            Write-Host ""
+            Write-Host "⚠️  MCP server is running on port 3100 — restart it to pick up changes." -ForegroundColor Yellow
+            Write-Host "  Stop the current server, then: node pforge-mcp/server.mjs" -ForegroundColor Yellow
+        } catch {
+            # Not running — no action needed
+        }
     }
 
     # Check if CLI itself was updated — inform user

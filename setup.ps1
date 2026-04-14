@@ -1561,7 +1561,17 @@ if (Test-Path $mcpSrcDir) {
         }
     }
 
-    Write-Host "  Run 'cd pforge-mcp && npm install' to install MCP dependencies" -ForegroundColor DarkGray
+    # Auto-install MCP dependencies
+    $mcpPkgJson = Join-Path $mcpDstDir "package.json"
+    if (Test-Path $mcpPkgJson) {
+        Write-Host "  Installing MCP dependencies..." -ForegroundColor DarkCyan
+        try {
+            $npmOutput = & npm install --prefix $mcpDstDir 2>&1
+            Write-Host "  ✅ npm install complete" -ForegroundColor Green
+        } catch {
+            Write-Host "  ⚠️  npm install failed — run manually: cd pforge-mcp && npm install" -ForegroundColor Yellow
+        }
+    }
 }
 
 # ─── Step 7c: Copy CLI Scripts + VERSION ──────────────────────────────

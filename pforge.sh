@@ -1437,10 +1437,24 @@ with open('$config_path', 'w') as f:
         fi
     done
     if [ "$mcp_updated" = true ]; then
-        echo ""
-        echo "⚠️  MCP server files were updated:"
-        echo "  1. Run: cd pforge-mcp && npm install"
-        echo "  2. Restart the MCP server if it's running"
+        # Auto-install MCP dependencies
+        local mcp_dir="$REPO_ROOT/pforge-mcp"
+        if [ -f "$mcp_dir/package.json" ]; then
+            echo ""
+            echo "Installing MCP dependencies..."
+            if (cd "$mcp_dir" && npm install --silent 2>/dev/null); then
+                echo "  ✅ npm install complete"
+            else
+                echo "  ⚠️  npm install failed — run manually: cd pforge-mcp && npm install"
+            fi
+        fi
+
+        # Detect if MCP server is running and advise restart
+        if curl -s --max-time 2 "http://localhost:3100/api/status" >/dev/null 2>&1; then
+            echo ""
+            echo "⚠️  MCP server is running on port 3100 — restart it to pick up changes."
+            echo "  Stop the current server, then: node pforge-mcp/server.mjs"
+        fi
     fi
 
     # Check if CLI itself was updated

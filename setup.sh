@@ -1438,7 +1438,15 @@ MCPEOF
         fi
     fi
 
-    echo "  Run 'cd pforge-mcp && npm install' to install MCP dependencies"
+    # Auto-install MCP dependencies
+    if [[ -f "$MCP_DST_DIR/package.json" ]]; then
+        echo "  Installing MCP dependencies..."
+        if (cd "$MCP_DST_DIR" && npm install --silent 2>/dev/null); then
+            green "  ✅ npm install complete"
+        else
+            yellow "  ⚠️  npm install failed — run manually: cd pforge-mcp && npm install"
+        fi
+    fi
 fi
 
 # ─── Step 7c: Copy CLI Scripts + VERSION ──────────────────────────────

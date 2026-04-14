@@ -3010,6 +3010,76 @@ function Invoke-Smith {
     }
 
     # ═══════════════════════════════════════════════════════════════
+    # 7. FORGE + LIVEGUARD INTELLIGENCE
+    # ═══════════════════════════════════════════════════════════════
+    $forgeDir = Join-Path $RepoRoot ".forge"
+    if (Test-Path $forgeDir) {
+        Write-Host ""
+        Write-Host "Intelligence:" -ForegroundColor Cyan
+
+        # Forge Intelligence: model performance → escalation tuning
+        $perfFile = Join-Path $forgeDir "model-performance.json"
+        if (Test-Path $perfFile) {
+            try {
+                $perf = Get-Content $perfFile -Raw | ConvertFrom-Json
+                $perfCount = if ($perf -is [System.Array]) { $perf.Count } else { 0 }
+                if ($perfCount -ge 5) {
+                    Doctor-Pass "Model performance: $perfCount records — escalation chain auto-tuning active"
+                } elseif ($perfCount -gt 0) {
+                    Doctor-Pass "Model performance: $perfCount record(s) — need 5+ for auto-tuning"
+                }
+            } catch { Doctor-Pass "Model performance file present" }
+        }
+
+        # Cost calibration
+        $costFile = Join-Path $forgeDir "cost-history.json"
+        if (Test-Path $costFile) {
+            Doctor-Pass "Cost history present — estimate calibration active"
+        }
+
+        # Quorum history → adaptive threshold
+        $quorumFile = Join-Path $forgeDir "quorum-history.json"
+        if (Test-Path $quorumFile) {
+            Doctor-Pass "Quorum history present — adaptive threshold active"
+        }
+
+        # LiveGuard Intelligence
+        $regHistory = Join-Path $forgeDir "regression-history.json"
+        if (Test-Path $regHistory) {
+            Doctor-Pass "Regression history present — test trend tracking active"
+        }
+
+        $healthDna = Join-Path $forgeDir "health-dna.json"
+        if (Test-Path $healthDna) {
+            Doctor-Pass "Health DNA present — decay detection active"
+        }
+
+        $lgMemories = Join-Path $forgeDir "liveguard-memories.jsonl"
+        if (Test-Path $lgMemories) {
+            $memCount = (Get-Content $lgMemories | Measure-Object).Count
+            Doctor-Pass "LiveGuard memories: $memCount captured finding(s)"
+        }
+
+        $obQueue = Join-Path $forgeDir "openbrain-queue.jsonl"
+        if (Test-Path $obQueue) {
+            $queueCount = (Get-Content $obQueue | Measure-Object).Count
+            Doctor-Pass "OpenBrain queue: $queueCount thought(s) pending ingestion"
+        }
+
+        # Tool count check
+        $toolsJson = Join-Path $RepoRoot "pforge-mcp/tools.json"
+        if (Test-Path $toolsJson) {
+            try {
+                $tools = Get-Content $toolsJson -Raw | ConvertFrom-Json
+                $toolCount = if ($tools -is [System.Array]) { $tools.Count } else { 0 }
+                $lgTools = $tools | Where-Object { $_.name -match 'drift|incident|dep_watch|regression|runbook|hotspot|health_trend|alert_triage|deploy_journal|secret_scan|env_diff|fix_proposal|quorum_analyze|liveguard_run' }
+                $lgCount = if ($lgTools) { @($lgTools).Count } else { 0 }
+                Doctor-Pass "$toolCount MCP tools ($lgCount LiveGuard) in tools.json"
+            } catch { }
+        }
+    }
+
+    # ═══════════════════════════════════════════════════════════════
     # SUMMARY
     # ═══════════════════════════════════════════════════════════════
     Write-Host ""

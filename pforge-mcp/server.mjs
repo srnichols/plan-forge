@@ -21,7 +21,7 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { execSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, watchFile, unwatchFile, statSync, openSync, readSync, closeSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, appendFileSync, watchFile, unwatchFile, statSync, openSync, readSync, closeSync } from "node:fs";
 import { resolve, join, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parsePlan, runPlan, detectWorkers, getCostReport, getHealthTrend, analyzeWithQuorum, generateImage, runAnalyze, readForgeJson, readForgeJsonl, appendForgeJsonl, emitToolTelemetry, regressionGuard, runPostSliceHook, resetPostSliceHookFired, runPreAgentHandoffHook, postOpenClawSnapshot, loadOpenClawConfig, loadQuorumConfig } from "./orchestrator.mjs";
@@ -55,10 +55,20 @@ const _approvedRunIds = new Set();
  * Broadcast a LiveGuard tool event to the WebSocket hub.
  * Emits both the detailed `liveguard-tool-completed` event and a simple
  * `liveguard` event for dashboard filtering.
+ * Returns a Promise — callers should await to ensure WS writes flush.
  */
-function broadcastLiveGuard(tool, status, durationMs, summary = {}) {
+async function broadcastLiveGuard(tool, status, durationMs, summary = {}) {
   const ts = new Date().toISOString();
   const clientCount = activeHub?.clients?.size || 0;
+
+  // File-based diagnostic log (stderr is captured by MCP stdio transport)
+  try {
+    const logDir = resolve(PROJECT_DIR, ".forge");
+    mkdirSync(logDir, { recursive: true });
+    appendFileSync(resolve(logDir, "liveguard-broadcast.log"),
+      `${ts} ${tool} hub=${!!activeHub} clients=${clientCount} status=${status}\n`);
+  } catch { /* best-effort logging */ }
+
   if (!activeHub) {
     console.error(`[liveguard] broadcastLiveGuard(${tool}) — hub not initialized, event dropped`);
     return;
@@ -66,6 +76,9 @@ function broadcastLiveGuard(tool, status, durationMs, summary = {}) {
   activeHub.broadcast({ type: "liveguard-tool-completed", tool, status, durationMs, timestamp: ts });
   activeHub.broadcast({ type: "liveguard", tool: tool.replace("forge_", "").replace(/_/g, "-"), status, ...summary, timestamp: ts });
   console.error(`[liveguard] ${tool} → ${clientCount} client(s)`);
+
+  // Force event loop tick so WebSocket writes flush before MCP returns the response
+  await new Promise(r => setImmediate(r));
 }
 
 /**
@@ -957,7 +970,7 @@ function executeTool(name, args) {
 
 // ─── MCP Server ───────────────────────────────────────────────────────
 const server = new Server(
-  { name: "plan-forge-mcp", version: "2.11.1" },
+  { name: "plan-forge-mcp", version: "2.11.2" },
   { capabilities: { tools: {} } }
 );
 
@@ -1104,7 +1117,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const metrics = args.metrics ? args.metrics.split(",").map(m => m.trim()) : null;
       const report = getHealthTrend(cwd, days, metrics);
       emitToolTelemetry("forge_health_trend", args, report, Date.now() - t0, "OK", cwd);
-      broadcastLiveGuard("forge_health_trend", "OK", Date.now() - t0);
+      await broadcastLiveGuard("forge_health_trend", "OK", Date.now() - t0);
 
       // Auto-capture significant health changes
       if (report.healthScore != null && report.trend && report.trend !== "stable") {
@@ -1170,7 +1183,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       const result = { total: alerts.length, showing: Math.min(maxResults, alerts.length), minSeverity, alerts: alerts.slice(0, maxResults), generatedAt: new Date().toISOString() };
       emitToolTelemetry("forge_alert_triage", args, result, Date.now() - t0, "OK", cwd);
-      broadcastLiveGuard("forge_alert_triage", "OK", Date.now() - t0, { total: result.total, showing: result.showing });
+      await broadcastLiveGuard("forge_alert_triage", "OK", Date.now() - t0, { total: result.total, showing: result.showing });
 
       // Auto-capture when critical/high alerts exist
       const critHigh = alerts.filter(a => a.severity === "critical" || a.severity === "high");
@@ -1477,7 +1490,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       emitToolTelemetry("forge_incident_capture", args, record, Date.now() - t0, "OK", cwd);
-      broadcastLiveGuard("forge_incident_capture", "OK", Date.now() - t0);
+      await broadcastLiveGuard("forge_incident_capture", "OK", Date.now() - t0);
 
       // Auto-capture to memory
       captureMemory(
@@ -1514,7 +1527,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       activeHub?.broadcast({ type: "deploy-recorded", data: record, timestamp: record.deployedAt });
 
       emitToolTelemetry("forge_deploy_journal", args, record, Date.now() - t0, "OK", cwd);
-      broadcastLiveGuard("forge_deploy_journal", "OK", Date.now() - t0);
+      await broadcastLiveGuard("forge_deploy_journal", "OK", Date.now() - t0);
 
       // Auto-capture deploy decision
       captureMemory(
@@ -1593,7 +1606,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       emitToolTelemetry("forge_regression_guard", args, result, Date.now() - t0, result.success ? "ok" : "error", cwd);
-      broadcastLiveGuard("forge_regression_guard", result.success ? "ok" : "error", Date.now() - t0, { gates: result.gatesChecked, passed: result.passed, failed: result.failed, resolved: (result.resolvedIncidents || []).length });
+      await broadcastLiveGuard("forge_regression_guard", result.success ? "ok" : "error", Date.now() - t0, { gates: result.gatesChecked, passed: result.passed, failed: result.failed, resolved: (result.resolvedIncidents || []).length });
 
       // Auto-capture to memory
       if (result.resolvedIncidents?.length > 0) {
@@ -1735,7 +1748,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       emitToolTelemetry("forge_drift_report", args, result, Date.now() - t0, "OK", cwd);
-      broadcastLiveGuard("forge_drift_report", "OK", Date.now() - t0, { score, appViolations: analysis.violations.length, testStatus: testStatus?.status || null });
+      await broadcastLiveGuard("forge_drift_report", "OK", Date.now() - t0, { score, appViolations: analysis.violations.length, testStatus: testStatus?.status || null });
 
       // Auto-capture to memory when violations found
       if (analysis.violations.length > 0) {
@@ -1772,7 +1785,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       const result = { runbook: `.forge/runbooks/${runbookName}`, slices: plan.slices.length, generatedAt: new Date().toISOString() };
       emitToolTelemetry("forge_runbook", args, result, Date.now() - t0, "OK", cwd);
-      broadcastLiveGuard("forge_runbook", "OK", Date.now() - t0);
+      await broadcastLiveGuard("forge_runbook", "OK", Date.now() - t0);
 
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
     } catch (err) {
@@ -1814,7 +1827,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       const result = { ...cached, hotspots: cached.hotspots.slice(0, top), showing: Math.min(top, cached.hotspots.length) };
       emitToolTelemetry("forge_hotspot", args, result, Date.now() - t0, "OK", cwd);
-      broadcastLiveGuard("forge_hotspot", "OK", Date.now() - t0);
+      await broadcastLiveGuard("forge_hotspot", "OK", Date.now() - t0);
 
       // Auto-capture hotspot patterns
       if (result.hotspots?.length > 0) {
@@ -1945,7 +1958,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       const result = { newVulnerabilities, resolvedVulnerabilities, unchanged, snapshot: { capturedAt: snapshot.capturedAt, depCount: snapshot.depCount } };
       emitToolTelemetry("forge_dep_watch", args, result, Date.now() - t0, "OK", cwd);
-      broadcastLiveGuard("forge_dep_watch", "OK", Date.now() - t0);
+      await broadcastLiveGuard("forge_dep_watch", "OK", Date.now() - t0);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
     } catch (err) {
       return { content: [{ type: "text", text: `Dependency watch error: ${err.message}` }], isError: true };
@@ -2085,7 +2098,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       } catch { /* best-effort sidecar annotation */ }
 
       emitToolTelemetry("forge_secret_scan", args, { clean, findings: findings.length, scannedFiles: scannedFiles.size }, Date.now() - t0, "OK", cwd);
-      broadcastLiveGuard("forge_secret_scan", "OK", Date.now() - t0);
+      await broadcastLiveGuard("forge_secret_scan", "OK", Date.now() - t0);
 
       // Auto-capture if secrets found
       if (!clean) {
@@ -2170,7 +2183,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       writeFileSync(resolve(cwd, ".forge", "env-diff-cache.json"), JSON.stringify(result, null, 2), "utf-8");
 
       emitToolTelemetry("forge_env_diff", args, { clean, totalGaps, filesCompared: targetFiles.length }, Date.now() - t0, "OK", cwd);
-      broadcastLiveGuard("forge_env_diff", "OK", Date.now() - t0);
+      await broadcastLiveGuard("forge_env_diff", "OK", Date.now() - t0);
 
       // Auto-capture env gaps
       if (totalGaps > 0) {
@@ -2416,7 +2429,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const result = { fixId, plan: `docs/plans/auto/${planName}`, source: sourceData.type, sliceCount: slices.length, alreadyExists: false };
       emitToolTelemetry("forge_fix_proposal", args, result, Date.now() - t0, "OK", cwd);
       activeHub?.broadcast({ type: "fix-proposal-ready", data: result });
-      broadcastLiveGuard("forge_fix_proposal", "OK", Date.now() - t0);
+      await broadcastLiveGuard("forge_fix_proposal", "OK", Date.now() - t0);
 
       // Auto-capture fix proposal
       captureMemory(
@@ -2566,7 +2579,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       report.overallStatus = (driftOk && secretsOk && regressionOk && depsOk && alertsOk) ? "green" : (!regressionOk || !secretsOk) ? "red" : "yellow";
 
       emitToolTelemetry("forge_liveguard_run", args, report, Date.now() - t0, "OK", cwd);
-      broadcastLiveGuard("forge_liveguard_run", "OK", Date.now() - t0, { overallStatus: report.overallStatus, driftScore: report.drift?.score, gates: report.regression?.gates, secrets: report.secrets?.findings });
+      await broadcastLiveGuard("forge_liveguard_run", "OK", Date.now() - t0, { overallStatus: report.overallStatus, driftScore: report.drift?.score, gates: report.regression?.gates, secrets: report.secrets?.findings });
 
       // Auto-capture health snapshot to memory
       captureMemory(
@@ -2712,7 +2725,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       const result = { quorumPrompt, promptTokenEstimate, suggestedModels, dataSnapshotAge, questionUsed };
       emitToolTelemetry("forge_quorum_analyze", args, { source, questionLength: questionUsed.length }, Date.now() - t0, "OK", cwd);
-      broadcastLiveGuard("forge_quorum_analyze", "OK", Date.now() - t0);
+      await broadcastLiveGuard("forge_quorum_analyze", "OK", Date.now() - t0);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
     } catch (err) {
       return { content: [{ type: "text", text: JSON.stringify({ quorumPrompt: null, error: `Quorum analyze error: ${err.message}` }) }], isError: true };

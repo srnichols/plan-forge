@@ -5,6 +5,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.31.2] — 2026-04-13
+
+### Fixed — E7: LiveGuard Events Now Flush Before MCP Response
+- **`broadcastLiveGuard` is now `async`** — all 16 call sites use `await`. After broadcasting, `setImmediate` forces an event loop tick so WebSocket `ws.send()` writes flush before the MCP stdio response is returned. This was the likely root cause: synchronous MCP handler returned before the event loop processed pending WS writes.
+- **File-based diagnostic log** — Every `broadcastLiveGuard` call writes to `.forge/liveguard-broadcast.log` with timestamp, tool name, hub status, and client count. Since MCP captures stderr, this is the only reliable way to observe broadcast behavior.
+- **Import fix** — Added `appendFileSync` to the `node:fs` import.
+
 ## [2.31.1] — 2026-04-13
 
 ### Added — Full OpenBrain Coverage Across All LiveGuard Tools

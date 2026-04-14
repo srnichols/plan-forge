@@ -5,6 +5,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.32.1] — 2026-04-14
+
+### Fixed — 6 Issues from v2.32.0 Validation
+- **Secrets false positives** (High, #4) — LiveGuard secrets scanner now excludes `package-lock.json`, `*.min.js`, `*.map`, `*.svg`; skips lines >200 chars, git hashes, base64 blobs, npm integrity values; threshold raised from 4.0 to 4.5
+- **Duplicate update entries** (Medium, #1) — Replaced 5 overlapping MCP file scans with single recursive scan + cli root files. No more duplicate `UPDATE` lines in `pforge update` output
+- **`package.json` version** (Medium, #2) — `pforge-mcp/package.json` now at 2.32.1 (was stuck at 2.22.1)
+- **REST proxy for MCP tools** (Medium, #3) — `/api/tool/:name` now routes server-side tools through internal handler instead of CLI proxy. Fixes `forge_liveguard_run` and other MCP-only tools via REST
+- **Timeout documentation** (Medium, #5) — `forge_liveguard_run` description now warns about 2-3 min runtime for .NET projects and recommends 300s timeout
+- **Auto plans dir** (Low, #6) — Already handled by existing `pforge update` code (creates README.md)
+
 ## [2.32.0] — 2026-04-14
 
 ### Added — Self-Recursive Improvement: The Forge Gets Smarter Every Run

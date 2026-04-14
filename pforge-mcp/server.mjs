@@ -788,7 +788,7 @@ const TOOLS = [
   },
   {
     name: "forge_liveguard_run",
-    description: "Run all applicable LiveGuard checks in a single call and return a unified health report. Executes: drift, sweep, secret-scan, regression-guard, dep-watch, alert-triage, and health-trend. Optionally runs diff if a plan is specified.",
+    description: "Run all applicable LiveGuard checks in a single call and return a unified health report. Executes: drift, sweep, secret-scan, regression-guard, dep-watch, alert-triage, and health-trend. Optionally runs diff if a plan is specified. NOTE: May take 2-3 minutes for .NET projects (dep-watch runs `dotnet list package --vulnerable`). Set client timeout to at least 300 seconds.",
     inputSchema: {
       type: "object",
       properties: {
@@ -970,7 +970,7 @@ function executeTool(name, args) {
 
 // ─── MCP Server ───────────────────────────────────────────────────────
 const server = new Server(
-  { name: "plan-forge-mcp", version: "2.12.0" },
+  { name: "plan-forge-mcp", version: "2.12.1" },
   { capabilities: { tools: {} } }
 );
 
@@ -2520,18 +2520,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (output.includes("SWEEP CLEAN")) report.sweep.appMarkers = 0;
       }
 
-      // 3. Secret scan
+      // 3. Secret scan (filtered to reduce false positives)
       try {
         const since = "HEAD~1";
-        const scanThreshold = 4.0;
+        const scanThreshold = 4.5; // Raised from 4.0 to reduce noise
         let diff;
-        try { diff = execSync(`git diff ${since} -p`, { cwd, encoding: "utf-8", timeout: 30_000 }); } catch { diff = ""; }
+        // Exclude known noisy files from git diff
+        try { diff = execSync(`git diff ${since} -p -- . ":!package-lock.json" ":!*.min.js" ":!*.min.css" ":!*.map" ":!*.svg"`, { cwd, encoding: "utf-8", timeout: 30_000 }); } catch { diff = ""; }
         const findings = [];
         if (diff) {
           for (const line of diff.split("\n")) {
             if (!line.startsWith("+") || line.startsWith("+++")) continue;
             const content = line.slice(1);
-            if (content.length < 8) continue;
+            if (content.length < 8 || content.length > 200) continue; // Skip very long lines (hashes, minified)
+            // Skip lines that look like lock files, hashes, or encoded data
+            if (/^[a-f0-9]{40,}$/i.test(content.trim())) continue; // git hashes
+            if (/^[A-Za-z0-9+/=]{50,}$/.test(content.trim())) continue; // base64 blobs
+            if (content.includes("integrity") && content.includes("sha")) continue; // npm integrity
             const charSet = new Set(content);
             const entropy = [...charSet].reduce((sum, c) => {
               const p = (content.split(c).length - 1) / content.length;
@@ -3319,10 +3324,28 @@ function createExpressApp() {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
-  // REST API: POST /api/tool/:name — invoke forge tool (proxy to pforge CLI)
-  app.post("/api/tool/:name", (req, res) => {
+  // REST API: POST /api/tool/:name — invoke forge tool
+  // MCP-only tools route through internal handler; CLI tools proxy through pforge.ps1
+  const MCP_ONLY_TOOLS = new Set([
+    "forge_liveguard_run", "forge_quorum_analyze", "forge_health_trend",
+    "forge_alert_triage", "forge_drift_report", "forge_regression_guard",
+    "forge_incident_capture", "forge_deploy_journal", "forge_dep_watch",
+    "forge_secret_scan", "forge_env_diff", "forge_fix_proposal",
+    "forge_hotspot", "forge_runbook", "forge_run_plan", "forge_cost_report",
+    "forge_capabilities", "forge_memory_capture",
+  ]);
+  app.post("/api/tool/:name", async (req, res) => {
     try {
       const toolName = req.params.name;
+      if (MCP_ONLY_TOOLS.has(toolName)) {
+        // Route through internal MCP handler
+        const fakeRequest = { params: { name: toolName, arguments: req.body || {} } };
+        const mcpResult = await server.handleRequest?.({ method: "tools/call", params: { name: toolName, arguments: req.body || {} } });
+        if (mcpResult) return res.json(mcpResult);
+        // Fallback: try executeTool
+        const result = executeTool(toolName, req.body || {});
+        if (result !== null) return res.json(result);
+      }
       const toolArgs = req.body?.args || "";
       const result = runPforge(`${toolName} ${toolArgs}`.trim(), PROJECT_DIR);
       res.json(result);

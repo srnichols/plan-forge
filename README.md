@@ -115,6 +115,31 @@ Every LiveGuard finding is auto-captured to persistent memory. Pipeline prompts 
 
 ---
 
+## How the Pieces Fit Together
+
+```mermaid
+graph TD
+    A["🧭 Pipeline Prompts<br/><i>step0 → step6</i>"] -->|guide the workflow| B["📋 Instruction Files<br/><i>*.instructions.md<br/>+ Temper Guards</i>"]
+    A -->|use during execution| C["🧩 Scaffolding Prompts<br/><i>new-entity, new-service...</i>"]
+    A -->|trigger for review| D["🔍 Agent Definitions<br/><i>*.agent.md</i>"]
+    B -->|loaded automatically<br/>based on file type| E["Your Code"]
+    C -->|generate consistent| E
+    D -->|audit and review| E
+    E -->|shipped code| F["🛡️ LiveGuard<br/><i>14 post-coding tools</i>"]
+    F -->|findings + memory| A
+
+    style A fill:#4A90D9,stroke:#2C5F8A,color:#fff
+    style B fill:#7B68EE,stroke:#5A4CB5,color:#fff
+    style C fill:#50C878,stroke:#3A9A5C,color:#fff
+    style D fill:#FF8C42,stroke:#CC6F35,color:#fff
+    style E fill:#F5F5F5,stroke:#999,color:#333
+    style F fill:#f59e0b,stroke:#d97706,color:#000
+```
+
+> Pipeline prompts drive the workflow. Instruction files protect the code. Agents review it. LiveGuard watches after it ships — and feeds findings back into the next session.
+
+---
+
 ## The Full Lifecycle
 
 From first idea to self-improving production system — everything connects.

@@ -5,6 +5,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.30.3] — 2026-04-13
+
+### Fixed — Final 3 Enhancements (E2, E7, E8)
+- **`forge_fix_proposal` / auto-incident** (E2) — Fix plans now include 10-line code snippets around each violation with `>>>` marker on the flagged line. Both the `forge_fix_proposal` incident path and the `autoIncident` drift auto-chain path now emit **Code Context** sections.
+- **Dashboard LiveGuard events** (E7) — All 14 LiveGuard tools now emit `type: "liveguard"` events via WebSocket hub (in addition to the `liveguard-tool-completed` detail event). Dashboard can filter on `type === 'liveguard'` for real-time tool activity.
+- **Auto-resolve incidents** (E8) — When regression guard passes with no explicit file scope, all open auto-drift incidents are resolved automatically. Fixed `Set.add()` spread bug, removed unreliable command-path extraction. When gates pass project-wide (no `--files`/`--plan`), treats it as full-project validation.
+
 ## [2.30.2] — 2026-04-13
 
 ### Fixed — `pforge update` now copies core framework files

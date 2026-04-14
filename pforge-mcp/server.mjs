@@ -51,6 +51,17 @@ let activeEventWatcher = null; // events.log file watcher
 // Set of runIds that have already received an approval decision (rate-limit: 1 per runId)
 const _approvedRunIds = new Set();
 
+/**
+ * Broadcast a LiveGuard tool event to the WebSocket hub.
+ * Emits both the detailed `liveguard-tool-completed` event and a simple
+ * `liveguard` event for dashboard filtering.
+ */
+function broadcastLiveGuard(tool, status, durationMs, summary = {}) {
+  const ts = new Date().toISOString();
+  activeHub?.broadcast({ type: "liveguard-tool-completed", tool, status, durationMs, timestamp: ts });
+  activeHub?.broadcast({ type: "liveguard", tool: tool.replace("forge_", "").replace(/_/g, "-"), status, ...summary, timestamp: ts });
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────
 
 /**
@@ -906,7 +917,7 @@ function executeTool(name, args) {
 
 // ─── MCP Server ───────────────────────────────────────────────────────
 const server = new Server(
-  { name: "plan-forge-mcp", version: "2.10.2" },
+  { name: "plan-forge-mcp", version: "2.10.3" },
   { capabilities: { tools: {} } }
 );
 
@@ -1043,7 +1054,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const metrics = args.metrics ? args.metrics.split(",").map(m => m.trim()) : null;
       const report = getHealthTrend(cwd, days, metrics);
       emitToolTelemetry("forge_health_trend", args, report, Date.now() - t0, "OK", cwd);
-      activeHub?.broadcast({ type: "liveguard-tool-completed", tool: "forge_health_trend", status: "OK", durationMs: Date.now() - t0 });
+      broadcastLiveGuard("forge_health_trend", "OK", Date.now() - t0);
       return { content: [{ type: "text", text: JSON.stringify(report, null, 2) }] };
     } catch (err) {
       return { content: [{ type: "text", text: `Health trend error: ${err.message}` }], isError: true };
@@ -1101,7 +1112,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       const result = { total: alerts.length, showing: Math.min(maxResults, alerts.length), minSeverity, alerts: alerts.slice(0, maxResults), generatedAt: new Date().toISOString() };
       emitToolTelemetry("forge_alert_triage", args, result, Date.now() - t0, "OK", cwd);
-      activeHub?.broadcast({ type: "liveguard-tool-completed", tool: "forge_alert_triage", status: "OK", durationMs: Date.now() - t0 });
+      broadcastLiveGuard("forge_alert_triage", "OK", Date.now() - t0);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
     } catch (err) {
       return { content: [{ type: "text", text: `Alert triage error: ${err.message}` }], isError: true };
@@ -1399,7 +1410,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       emitToolTelemetry("forge_incident_capture", args, record, Date.now() - t0, "OK", cwd);
-      activeHub?.broadcast({ type: "liveguard-tool-completed", tool: "forge_incident_capture", status: "OK", durationMs: Date.now() - t0 });
+      broadcastLiveGuard("forge_incident_capture", "OK", Date.now() - t0);
 
       return { content: [{ type: "text", text: JSON.stringify(record, null, 2) }], isError: false };
     } catch (err) {
@@ -1430,7 +1441,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       activeHub?.broadcast({ type: "deploy-recorded", data: record, timestamp: record.deployedAt });
 
       emitToolTelemetry("forge_deploy_journal", args, record, Date.now() - t0, "OK", cwd);
-      activeHub?.broadcast({ type: "liveguard-tool-completed", tool: "forge_deploy_journal", status: "OK", durationMs: Date.now() - t0 });
+      broadcastLiveGuard("forge_deploy_journal", "OK", Date.now() - t0);
 
       return { content: [{ type: "text", text: JSON.stringify(record, null, 2) }], isError: false };
     } catch (err) {
@@ -1465,52 +1476,45 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             for (const s of (plan.scopeContract?.inScope || [])) guardedFiles.add(s);
           } catch { /* skip */ }
         }
-        // Fallback: if no explicit files, use files referenced in gate results
-        if (guardedFiles.size === 0 && result.results) {
-          for (const r of result.results) {
-            if (r.cmd) {
-              // Extract file-like args from commands (e.g., "dotnet test --filter Foo" → no files, but "node src/foo.js" → "src/foo.js")
-              const parts = r.cmd.split(/\s+/).filter(p => p.includes("/") || p.includes("\\") || p.endsWith(".cs") || p.endsWith(".ts") || p.endsWith(".js"));
-              for (const p of parts) guardedFiles.add(p);
-            }
-            // Use plan file name to scope
-            if (r.planFile) guardedFiles.add(r.planFile);
-          }
-        }
-        // If still no explicit files but we have open incidents, resolve any that match source=auto-drift
-        if (guardedFiles.size === 0 && incidents.some(i => !i.resolvedAt && i.source === "auto-drift")) {
-          // Auto-drift incidents from the current drift run — resolve them since tests pass
+
+        // When tests pass with no explicit file scope, resolve all auto-drift incidents
+        // (the whole project was validated by the passing gates)
+        const hasOpenAutoDrift = incidents.some(i => !i.resolvedAt && i.source === "auto-drift");
+        if (guardedFiles.size === 0 && hasOpenAutoDrift) {
           for (const inc of incidents) {
-            if (!inc.resolvedAt && inc.source === "auto-drift") guardedFiles.add(...(inc.files || []));
+            if (!inc.resolvedAt && inc.source === "auto-drift") {
+              for (const f of (inc.files || [])) guardedFiles.add(f);
+            }
           }
         }
 
-        if (guardedFiles.size > 0) {
-          const resolvedAt = new Date().toISOString();
-          const updatedIncidents = incidents.map(inc => {
-            if (inc.resolvedAt) return inc; // already resolved
-            const incFiles = inc.files || [];
-            const overlaps = incFiles.some(f => [...guardedFiles].some(gf => f.includes(gf) || gf.includes(f)));
-            if (overlaps) {
-              const capturedMs = new Date(inc.capturedAt || inc.timestamp || 0).getTime();
-              const resolvedMs = new Date(resolvedAt).getTime();
-              resolvedIncidents.push(inc.id);
-              return { ...inc, resolvedAt, mttr: resolvedMs - capturedMs };
-            }
-            return inc;
-          });
+        // If still no guarded files but gates passed, treat it as project-wide pass
+        const resolveAll = guardedFiles.size === 0 && result.passed > 0;
 
-          if (resolvedIncidents.length > 0) {
-            // Rewrite incidents file with resolutions
-            const incPath = resolve(cwd, ".forge", "incidents.jsonl");
-            writeFileSync(incPath, updatedIncidents.map(i => JSON.stringify(i)).join("\n") + "\n", "utf-8");
-            result.resolvedIncidents = resolvedIncidents;
+        const resolvedAt = new Date().toISOString();
+        const updatedIncidents = incidents.map(inc => {
+          if (inc.resolvedAt) return inc; // already resolved
+          const incFiles = inc.files || [];
+          const shouldResolve = resolveAll ||
+            incFiles.some(f => [...guardedFiles].some(gf => f.includes(gf) || gf.includes(f)));
+          if (shouldResolve) {
+            const capturedMs = new Date(inc.capturedAt || inc.timestamp || 0).getTime();
+            const resolvedMs = new Date(resolvedAt).getTime();
+            resolvedIncidents.push(inc.id);
+            return { ...inc, resolvedAt, mttr: resolvedMs - capturedMs };
           }
+          return inc;
+        });
+
+        if (resolvedIncidents.length > 0) {
+          const incPath = resolve(cwd, ".forge", "incidents.jsonl");
+          writeFileSync(incPath, updatedIncidents.map(i => JSON.stringify(i)).join("\n") + "\n", "utf-8");
+          result.resolvedIncidents = resolvedIncidents;
         }
       }
 
       emitToolTelemetry("forge_regression_guard", args, result, Date.now() - t0, result.success ? "ok" : "error", cwd);
-      activeHub?.broadcast({ type: "liveguard-tool-completed", tool: "forge_regression_guard", status: result.success ? "ok" : "error", durationMs: Date.now() - t0 });
+      broadcastLiveGuard("forge_regression_guard", result.success ? "ok" : "error", Date.now() - t0);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         isError: !result.success,
@@ -1612,6 +1616,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 planContent += `## Slice — Fix: ${file}\n\n`;
                 planContent += `**Tasks:**\n`;
                 for (const v of violations) planContent += `- [ ] Fix ${v.rule} at line ${v.line}: ${v.description}\n`;
+                // E2: Include code snippet around each violation
+                try {
+                  const filePath = resolve(cwd, file);
+                  if (existsSync(filePath)) {
+                    const lines = readFileSync(filePath, "utf-8").split("\n");
+                    for (const v of violations.slice(0, 3)) {
+                      const start = Math.max(0, v.line - 6);
+                      const end = Math.min(lines.length, v.line + 5);
+                      const snippet = lines.slice(start, end).map((l, i) => {
+                        const num = start + i + 1;
+                        const marker = num === v.line ? " >>>" : "    ";
+                        return `${marker} ${String(num).padStart(4)}| ${l}`;
+                      }).join("\n");
+                      planContent += `\n**Code at violation (line ${v.line}):**\n\`\`\`\n${snippet}\n\`\`\`\n`;
+                    }
+                  }
+                } catch { /* file read error — skip snippet */ }
                 planContent += `\n**Scope:** ${file}\n\n`;
               }
               writeFileSync(planPath, planContent, "utf-8");
@@ -1622,7 +1643,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       emitToolTelemetry("forge_drift_report", args, result, Date.now() - t0, "OK", cwd);
-      activeHub?.broadcast({ type: "liveguard-tool-completed", tool: "forge_drift_report", status: "OK", durationMs: Date.now() - t0 });
+      broadcastLiveGuard("forge_drift_report", "OK", Date.now() - t0);
 
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
     } catch (err) {
@@ -1651,7 +1672,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       const result = { runbook: `.forge/runbooks/${runbookName}`, slices: plan.slices.length, generatedAt: new Date().toISOString() };
       emitToolTelemetry("forge_runbook", args, result, Date.now() - t0, "OK", cwd);
-      activeHub?.broadcast({ type: "liveguard-tool-completed", tool: "forge_runbook", status: "OK", durationMs: Date.now() - t0 });
+      broadcastLiveGuard("forge_runbook", "OK", Date.now() - t0);
 
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
     } catch (err) {
@@ -1693,7 +1714,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       const result = { ...cached, hotspots: cached.hotspots.slice(0, top), showing: Math.min(top, cached.hotspots.length) };
       emitToolTelemetry("forge_hotspot", args, result, Date.now() - t0, "OK", cwd);
-      activeHub?.broadcast({ type: "liveguard-tool-completed", tool: "forge_hotspot", status: "OK", durationMs: Date.now() - t0 });
+      broadcastLiveGuard("forge_hotspot", "OK", Date.now() - t0);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
     } catch (err) {
       return { content: [{ type: "text", text: `Hotspot analysis error: ${err.message}` }], isError: true };
@@ -1815,7 +1836,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       const result = { newVulnerabilities, resolvedVulnerabilities, unchanged, snapshot: { capturedAt: snapshot.capturedAt, depCount: snapshot.depCount } };
       emitToolTelemetry("forge_dep_watch", args, result, Date.now() - t0, "OK", cwd);
-      activeHub?.broadcast({ type: "liveguard-tool-completed", tool: "forge_dep_watch", status: "OK", durationMs: Date.now() - t0 });
+      broadcastLiveGuard("forge_dep_watch", "OK", Date.now() - t0);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
     } catch (err) {
       return { content: [{ type: "text", text: `Dependency watch error: ${err.message}` }], isError: true };
@@ -1955,7 +1976,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       } catch { /* best-effort sidecar annotation */ }
 
       emitToolTelemetry("forge_secret_scan", args, { clean, findings: findings.length, scannedFiles: scannedFiles.size }, Date.now() - t0, "OK", cwd);
-      activeHub?.broadcast({ type: "liveguard-tool-completed", tool: "forge_secret_scan", status: "OK", durationMs: Date.now() - t0 });
+      broadcastLiveGuard("forge_secret_scan", "OK", Date.now() - t0);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
     } catch (err) {
       return { content: [{ type: "text", text: `Secret scan error: ${err.message}` }], isError: true };
@@ -2032,7 +2053,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       writeFileSync(resolve(cwd, ".forge", "env-diff-cache.json"), JSON.stringify(result, null, 2), "utf-8");
 
       emitToolTelemetry("forge_env_diff", args, { clean, totalGaps, filesCompared: targetFiles.length }, Date.now() - t0, "OK", cwd);
-      activeHub?.broadcast({ type: "liveguard-tool-completed", tool: "forge_env_diff", status: "OK", durationMs: Date.now() - t0 });
+      broadcastLiveGuard("forge_env_diff", "OK", Date.now() - t0);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
     } catch (err) {
       return { content: [{ type: "text", text: `Env diff error: ${err.message}` }], isError: true };
@@ -2270,7 +2291,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const result = { fixId, plan: `docs/plans/auto/${planName}`, source: sourceData.type, sliceCount: slices.length, alreadyExists: false };
       emitToolTelemetry("forge_fix_proposal", args, result, Date.now() - t0, "OK", cwd);
       activeHub?.broadcast({ type: "fix-proposal-ready", data: result });
-      activeHub?.broadcast({ type: "liveguard-tool-completed", tool: "forge_fix_proposal", status: "OK", durationMs: Date.now() - t0 });
+      broadcastLiveGuard("forge_fix_proposal", "OK", Date.now() - t0);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
     } catch (err) {
       return { content: [{ type: "text", text: `Fix proposal error: ${err.message}` }], isError: true };
@@ -2414,7 +2435,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       report.overallStatus = (driftOk && secretsOk && regressionOk && depsOk && alertsOk) ? "green" : (!regressionOk || !secretsOk) ? "red" : "yellow";
 
       emitToolTelemetry("forge_liveguard_run", args, report, Date.now() - t0, "OK", cwd);
-      activeHub?.broadcast({ type: "liveguard-tool-completed", tool: "forge_liveguard_run", status: "OK", durationMs: Date.now() - t0 });
+      broadcastLiveGuard("forge_liveguard_run", "OK", Date.now() - t0);
       return { content: [{ type: "text", text: JSON.stringify(report, null, 2) }], isError: false };
     } catch (err) {
       return { content: [{ type: "text", text: `LiveGuard run error: ${err.message}` }], isError: true };
@@ -2554,7 +2575,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       const result = { quorumPrompt, promptTokenEstimate, suggestedModels, dataSnapshotAge, questionUsed };
       emitToolTelemetry("forge_quorum_analyze", args, { source, questionLength: questionUsed.length }, Date.now() - t0, "OK", cwd);
-      activeHub?.broadcast({ type: "liveguard-tool-completed", tool: "forge_quorum_analyze", status: "OK", durationMs: Date.now() - t0 });
+      broadcastLiveGuard("forge_quorum_analyze", "OK", Date.now() - t0);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
     } catch (err) {
       return { content: [{ type: "text", text: JSON.stringify({ quorumPrompt: null, error: `Quorum analyze error: ${err.message}` }) }], isError: true };

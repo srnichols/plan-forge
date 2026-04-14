@@ -60,7 +60,7 @@ Same app, same model (Claude Opus 4.6), same time (~7 min). Only difference: Run
 
 ## What Is This?
 
-Plan Forge is three things:
+Plan Forge is three things: a **build pipeline** that hardens plans into execution contracts, a **post-coding guard** that watches your codebase after you ship, and a **learning system** that gets smarter every run.
 
 <img src="docs/assets/readme-system-overview.webp" alt="Build → Guard → Learn: three forge stations connected in a cycle — anvil (build), watchtower (guard), golden brain (learn)" width="100%" />
 
@@ -175,7 +175,11 @@ cd my-project-plans
 ```
 
 ```powershell
+# Windows (PowerShell)
 .\setup.ps1 -Preset dotnet          # or: typescript, python, java, go, swift, rust, php, azure-iac
+
+# Mac / Linux
+./setup.sh --preset dotnet
 ```
 
 Setup copies all framework files, installs MCP dependencies, and generates config. Zero manual steps.
@@ -240,6 +244,27 @@ Key tools: `forge_run_plan` · `forge_liveguard_run` · `forge_analyze` · `forg
 | **[planforge.software/manual/](https://planforge.software/manual/)** | Interactive web manual (17 chapters + 6 appendices) |
 | **[planforge.software/faq.html](https://planforge.software/faq.html)** | FAQ |
 | **[AGENT-SETUP.md](AGENT-SETUP.md)** | AI agent entry point |
+
+---
+
+## When to Use the Full Pipeline
+
+| Change Size | Do This |
+|-------------|--------|
+| **Micro** (<30 min) | Just commit — no pipeline needed |
+| **Small** (30–120 min) | Optional — light hardening only |
+| **Medium** (2–8 hrs) | **Full pipeline — all steps** |
+| **Large** (1+ days) | **Full pipeline + branch-per-slice** |
+
+---
+
+## Git Workflow
+
+```bash
+git commit -m "<type>(<scope>): <description>"   # feat, fix, refactor, test, docs, chore
+```
+
+See [.github/instructions/git-workflow.instructions.md](.github/instructions/git-workflow.instructions.md) for conventions.
 
 ---
 

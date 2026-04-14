@@ -3,6 +3,8 @@
 > **Audience**: You are an AI coding agent (Copilot, Claude, Cursor, Aider, etc.) tasked with incorporating the Plan Forge framework into a target project.
 >
 > **This file is your entry point.** Read it top-to-bottom, then execute the appropriate path.
+>
+> **What you get**: 34 MCP tools (20 core + 14 LiveGuard), 19 reviewer agents, 12 skills, live dashboard, self-recursive intelligence (the system gets smarter every run), OpenBrain persistent memory integration. Call `forge_capabilities` for full discovery.
 
 ---
 

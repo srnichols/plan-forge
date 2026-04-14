@@ -917,7 +917,7 @@ function executeTool(name, args) {
 
 // ─── MCP Server ───────────────────────────────────────────────────────
 const server = new Server(
-  { name: "plan-forge-mcp", version: "2.10.3" },
+  { name: "plan-forge-mcp", version: "2.10.4" },
   { capabilities: { tools: {} } }
 );
 
@@ -1112,7 +1112,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       const result = { total: alerts.length, showing: Math.min(maxResults, alerts.length), minSeverity, alerts: alerts.slice(0, maxResults), generatedAt: new Date().toISOString() };
       emitToolTelemetry("forge_alert_triage", args, result, Date.now() - t0, "OK", cwd);
-      broadcastLiveGuard("forge_alert_triage", "OK", Date.now() - t0);
+      broadcastLiveGuard("forge_alert_triage", "OK", Date.now() - t0, { total: result.total, showing: result.showing });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
     } catch (err) {
       return { content: [{ type: "text", text: `Alert triage error: ${err.message}` }], isError: true };
@@ -1514,7 +1514,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       emitToolTelemetry("forge_regression_guard", args, result, Date.now() - t0, result.success ? "ok" : "error", cwd);
-      broadcastLiveGuard("forge_regression_guard", result.success ? "ok" : "error", Date.now() - t0);
+      broadcastLiveGuard("forge_regression_guard", result.success ? "ok" : "error", Date.now() - t0, { gates: result.gatesChecked, passed: result.passed, failed: result.failed, resolved: (result.resolvedIncidents || []).length });
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         isError: !result.success,
@@ -1643,7 +1643,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       emitToolTelemetry("forge_drift_report", args, result, Date.now() - t0, "OK", cwd);
-      broadcastLiveGuard("forge_drift_report", "OK", Date.now() - t0);
+      broadcastLiveGuard("forge_drift_report", "OK", Date.now() - t0, { score, appViolations: analysis.violations.length, testStatus: testStatus?.status || null });
 
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
     } catch (err) {
@@ -2435,7 +2435,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       report.overallStatus = (driftOk && secretsOk && regressionOk && depsOk && alertsOk) ? "green" : (!regressionOk || !secretsOk) ? "red" : "yellow";
 
       emitToolTelemetry("forge_liveguard_run", args, report, Date.now() - t0, "OK", cwd);
-      broadcastLiveGuard("forge_liveguard_run", "OK", Date.now() - t0);
+      broadcastLiveGuard("forge_liveguard_run", "OK", Date.now() - t0, { overallStatus: report.overallStatus, driftScore: report.drift?.score, gates: report.regression?.gates, secrets: report.secrets?.findings });
       return { content: [{ type: "text", text: JSON.stringify(report, null, 2) }], isError: false };
     } catch (err) {
       return { content: [{ type: "text", text: `LiveGuard run error: ${err.message}` }], isError: true };

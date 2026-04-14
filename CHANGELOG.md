@@ -5,6 +5,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.30.4] — 2026-04-13
+
+### Fixed — E7: LiveGuard Dashboard Events
+- **Dashboard events** (E7) — All 14 LiveGuard tools now broadcast `type: "liveguard"` events with tool-specific summary data (score, gates passed, violations, overallStatus). Dashboard handles both `liveguard-tool-completed` and `liveguard` event types. Notifications now show contextual detail (e.g., "LiveGuard: drift-report (score: 98)").
+- Key tool summaries: drift broadcasts `score` + `appViolations` + `testStatus`; regression-guard broadcasts `gates` + `passed` + `failed` + `resolved`; liveguard-run broadcasts `overallStatus` + `driftScore` + `gates` + `secrets`; alert-triage broadcasts `total` + `showing`.
+
+**All 10 bugs and all 10 enhancements are now closed.**
+
 ## [2.30.3] — 2026-04-13
 
 ### Fixed — Final 3 Enhancements (E2, E7, E8)

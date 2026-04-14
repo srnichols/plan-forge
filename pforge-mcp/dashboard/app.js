@@ -110,9 +110,10 @@ function connectWebSocket() {
           } else if (data.type === "slice-failed") {
             const d = data.data || data;
             addNotification(`Slice ${d.sliceId} failed: ${d.error || ""}`, "error");
-          } else if (data.type === "liveguard-tool-completed") {
+          } else if (data.type === "liveguard-tool-completed" || data.type === "liveguard") {
             const d = data.data || data;
-            addNotification(`LiveGuard tool done: ${d.tool || d.name || 'unknown'}`, "amber");
+            const detail = d.score != null ? ` (score: ${d.score})` : d.gates != null ? ` (${d.passed}/${d.gates} passed)` : d.overallStatus ? ` [${d.overallStatus}]` : '';
+            addNotification(`LiveGuard: ${d.tool || 'unknown'}${detail}`, d.status === "error" ? "error" : "amber");
           }
         } catch { /* ignore malformed */ }
       };
@@ -195,6 +196,9 @@ function handleEvent(event) {
       break;
     case "liveguard-tool-completed":
       handleLGToolCompleted(event.data || event);
+      break;
+    case "liveguard":
+      handleLGToolCompleted(event); // Use same handler — liveguard events include tool + status + summary
       break;
     case "liveguard-secret-scan":
       handleLGSecretScan(event.data || event);

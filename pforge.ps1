@@ -1114,14 +1114,14 @@ function Invoke-Diff {
 
     # Extract In Scope paths
     $inScopeSection = ""
-    if ($planContent -match '### In Scope(.*?)(?=^###?\s|\z)') {
+    if ($planContent -match '(?s)### In Scope(.*?)(?=^###?\s|\z)') {
         $inScopeSection = $Matches[1]
     }
     $inScopePaths = [regex]::Matches($inScopeSection, '`([^`]+)`') | ForEach-Object { $_.Groups[1].Value }
 
     # Extract Forbidden Actions paths
     $forbiddenSection = ""
-    if ($planContent -match '### Forbidden Actions(.*?)(?=^###?\s|\z)') {
+    if ($planContent -match '(?s)### Forbidden Actions(.*?)(?=^###?\s|\z)') {
         $forbiddenSection = $Matches[1]
     }
     $forbiddenPaths = [regex]::Matches($forbiddenSection, '`([^`]+)`') | ForEach-Object { $_.Groups[1].Value }

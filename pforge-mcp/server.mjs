@@ -906,7 +906,7 @@ function executeTool(name, args) {
 
 // ─── MCP Server ───────────────────────────────────────────────────────
 const server = new Server(
-  { name: "plan-forge-mcp", version: "2.10.0" },
+  { name: "plan-forge-mcp", version: "2.10.1" },
   { capabilities: { tools: {} } }
 );
 
@@ -1464,6 +1464,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             const plan = parsePlan(resolve(cwd, args.plan), cwd);
             for (const s of (plan.scopeContract?.inScope || [])) guardedFiles.add(s);
           } catch { /* skip */ }
+        }
+        // Fallback: if no explicit files, use files referenced in gate results
+        if (guardedFiles.size === 0 && result.results) {
+          for (const r of result.results) {
+            if (r.cmd) {
+              // Extract file-like args from commands (e.g., "dotnet test --filter Foo" → no files, but "node src/foo.js" → "src/foo.js")
+              const parts = r.cmd.split(/\s+/).filter(p => p.includes("/") || p.includes("\\") || p.endsWith(".cs") || p.endsWith(".ts") || p.endsWith(".js"));
+              for (const p of parts) guardedFiles.add(p);
+            }
+            // Use plan file name to scope
+            if (r.planFile) guardedFiles.add(r.planFile);
+          }
+        }
+        // If still no explicit files but we have open incidents, resolve any that match source=auto-drift
+        if (guardedFiles.size === 0 && incidents.some(i => !i.resolvedAt && i.source === "auto-drift")) {
+          // Auto-drift incidents from the current drift run — resolve them since tests pass
+          for (const inc of incidents) {
+            if (!inc.resolvedAt && inc.source === "auto-drift") guardedFiles.add(...(inc.files || []));
+          }
         }
 
         if (guardedFiles.size > 0) {
@@ -2120,10 +2139,45 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
         investTasks.push("Identify root cause — check for: empty catch blocks, inverted logic, missing validation, null references");
         investTasks.push("Document the exact code location and failure mechanism");
+
+        // E2: Read code snippets around flagged lines for actionable context
+        const codeSnippets = [];
+        for (const file of affectedFiles) {
+          try {
+            const filePath = resolve(cwd, file);
+            if (existsSync(filePath)) {
+              const lines = readFileSync(filePath, "utf-8").split("\n");
+              // Find line numbers from incident violations or drift data
+              const violationLines = (inc.violations || []).filter(v => v.file === file).map(v => v.line);
+              // Also check recent drift for this file
+              if (violationLines.length === 0) {
+                const driftHistory = readForgeJsonl("drift-history.json", [], cwd);
+                if (driftHistory.length) {
+                  const latest = driftHistory[driftHistory.length - 1];
+                  for (const v of (latest.violations || [])) {
+                    if (v.file === file) violationLines.push(v.line);
+                  }
+                }
+              }
+              for (const lineNum of violationLines.slice(0, 3)) { // Max 3 snippets per file
+                const start = Math.max(0, lineNum - 6);
+                const end = Math.min(lines.length, lineNum + 5);
+                const snippet = lines.slice(start, end).map((l, i) => {
+                  const num = start + i + 1;
+                  const marker = num === lineNum ? " >>>" : "    ";
+                  return `${marker} ${String(num).padStart(4)}| ${l}`;
+                }).join("\n");
+                codeSnippets.push({ file, line: lineNum, snippet });
+              }
+            }
+          } catch { /* file read error — skip snippet */ }
+        }
+
         slices.push({
           title: `Investigate: ${desc}`,
           tasks: investTasks,
           scope: affectedFiles,
+          codeSnippets,
         });
 
         // Slice 2: Apply fix with concrete validation
@@ -2192,6 +2246,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         planContent += `## Slice ${i + 1} — ${s.title}\n\n`;
         planContent += `**Tasks:**\n`;
         for (const t of s.tasks) planContent += `- [ ] ${t}\n`;
+        if (s.codeSnippets && s.codeSnippets.length > 0) {
+          planContent += `\n**Code Context:**\n`;
+          for (const cs of s.codeSnippets) {
+            planContent += `\n\`${cs.file}\` line ${cs.line}:\n\`\`\`\n${cs.snippet}\n\`\`\`\n`;
+          }
+        }
         if (s.scope && s.scope.length > 0) {
           planContent += `\n**Scope:** ${s.scope.join(", ")}\n`;
         }

@@ -2044,7 +2044,7 @@ export function readForgeJsonl(filePath, defaultValue = [], cwd = process.cwd())
  */
 export function getHealthTrend(cwd = process.cwd(), days = 30, metrics = null) {
   const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-  const allMetrics = ["drift", "cost", "incidents", "models"];
+  const allMetrics = ["drift", "cost", "incidents", "models", "tests"];
   const active = metrics && metrics.length ? metrics.filter(m => allMetrics.includes(m)) : allMetrics;
 
   const result = { days, metricsIncluded: active, generatedAt: new Date().toISOString(), dataPoints: 0 };
@@ -2124,6 +2124,23 @@ export function getHealthTrend(cwd = process.cwd(), days = 30, metrics = null) {
     result.dataPoints += filtered.length;
   }
 
+  // Test/regression trend (E5)
+  if (active.includes("tests")) {
+    const regHistory = readForgeJsonl("regression-history.json", [], cwd);
+    const filtered = regHistory.filter(r => (r.timestamp || "") >= cutoff);
+    const passRates = filtered.map(r => r.gatesChecked > 0 ? r.passed / r.gatesChecked : 1);
+    result.tests = {
+      runs: filtered.length,
+      totalGates: filtered.reduce((sum, r) => sum + (r.gatesChecked || 0), 0),
+      totalPassed: filtered.reduce((sum, r) => sum + (r.passed || 0), 0),
+      totalFailed: filtered.reduce((sum, r) => sum + (r.failed || 0), 0),
+      passRate: passRates.length ? Math.round((passRates.reduce((a, b) => a + b, 0) / passRates.length) * 1000) / 1000 : null,
+      lastFailure: filtered.filter(r => r.failed > 0).slice(-1)[0]?.timestamp || null,
+      trend: computeTrendDirection(passRates.map(r => r * 100)),
+    };
+    result.dataPoints += filtered.length;
+  }
+
   // Overall health summary
   const scores = [];
   if (result.drift?.avg != null) scores.push(result.drift.avg);
@@ -2135,6 +2152,9 @@ export function getHealthTrend(cwd = process.cwd(), days = 30, metrics = null) {
     const allPassRate = Object.values(result.models.byModel).reduce((sum, m) => sum + m.successRate, 0);
     const avgRate = allPassRate / Object.keys(result.models.byModel).length;
     scores.push(Math.round(avgRate * 100));
+  }
+  if (result.tests?.passRate != null) {
+    scores.push(Math.round(result.tests.passRate * 100));
   }
 
   result.healthScore = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;

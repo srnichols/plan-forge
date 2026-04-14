@@ -5,6 +5,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.30.1] — 2026-04-13
+
+### Fixed — v2.30.0 Verification: 6 Enhancements Not Working on Testbed
+- **`forge_diff`** (E6) — Added `(?s)` dotall flag to `Invoke-Diff` scope/forbidden regex in `pforge.ps1`; without it `(.*?)` didn't match across newlines so forbidden paths were never extracted
+- **`forge_regression_guard`** (E8) — Auto-resolve now falls back to gate result files and auto-drift incident files when no explicit `--files`/`--plan` provided
+- **`forge_health_trend`** (E5) — Added `tests` metric reading from `.forge/regression-history.json`; includes pass rate, total gates, last failure, trend
+- **`forge_fix_proposal`** (E2) — Reads 10-line code snippet around flagged violations and includes it in the fix plan under **Code Context** section
+- Health trend now tracks 5 metrics: drift, cost, incidents, models, tests
+- Health score calculation includes test pass rate
+
 ## [2.30.0] — 2026-04-13
 
 ### Added — LiveGuard Enhancements: Composite Run, Auto-Chaining, Test Status

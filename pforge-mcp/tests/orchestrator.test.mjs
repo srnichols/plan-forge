@@ -671,9 +671,9 @@ describe("getHealthTrend", () => {
     expect(typeof result.healthScore).toBe("number");
   });
 
-  it("includes all 4 metrics by default", () => {
+  it("includes all 5 metrics by default", () => {
     const result = getHealthTrend(tempDir, 30);
-    expect(result.metricsIncluded).toEqual(["drift", "cost", "incidents", "models"]);
+    expect(result.metricsIncluded).toEqual(["drift", "cost", "incidents", "models", "tests"]);
   });
 
   it("filters to requested metrics only", () => {

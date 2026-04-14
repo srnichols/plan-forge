@@ -1,27 +1,32 @@
 {
   "name": "Plan Forge",
-  "version": "2.13.1",
+  "version": "2.32.3",
   "tagline": "Forge the plan. Harden the scope. Ship with confidence.",
-  "description": "AI coding guardrails that convert rough ideas into hardened execution contracts — locked-down plans the AI can't deviate from. 7-step pipeline across 4 sessions with scope locking, validation gates, and independent review.",
+  "description": "AI coding guardrails that convert rough ideas into hardened execution contracts. 7-step pipeline, 34 MCP tools (20 core + 14 LiveGuard), self-recursive intelligence, OpenBrain persistent memory, 19 reviewer agents, live dashboard.",
   "homepage": "https://planforge.software",
   "repository": "https://github.com/srnichols/plan-forge",
   "license": "MIT",
   "author": {
     "name": "Scott Nichols",
     "github": "https://github.com/srnichols",
-    "role": "Director, Strategic Account Technology Strategist (Virtual CTO) @ Microsoft"
+    "role": "Principal Cloud Solution Architect @ Microsoft"
   },
   "capabilities": {
-    "mcp_tools": 18,
+    "mcp_tools": 34,
+    "mcp_tools_core": 20,
+    "mcp_tools_liveguard": 14,
     "agents": 19,
-    "skills": 11,
+    "skills": 12,
     "instruction_files": "15-18 per preset",
     "prompt_templates": "15 per app preset, 6 for azure-iac",
     "pipeline_steps": 7,
     "sessions": 4,
-    "dashboard_tabs": 9,
+    "dashboard_tabs": 14,
     "presets": 9,
-    "ai_models_supported": 23
+    "ai_models_supported": 23,
+    "forge_intelligence": ["auto-tune-escalation", "cost-calibration", "adaptive-quorum", "slice-split-advisory"],
+    "liveguard_intelligence": ["recurring-incidents", "fix-outcome-tracking", "hotspot-priority", "health-dna"],
+    "openbrain_auto_capture_tools": 13
   },
   "presets": [
     { "name": "dotnet", "label": ".NET / C# / ASP.NET Core", "detect": ["*.csproj", "*.sln"] },
@@ -52,7 +57,23 @@
     "forge_new_phase",
     "forge_skill_status",
     "forge_run_skill",
-    "forge_generate_image"
+    "forge_org_rules",
+    "forge_memory_capture",
+    "forge_generate_image",
+    "forge_drift_report",
+    "forge_incident_capture",
+    "forge_dep_watch",
+    "forge_regression_guard",
+    "forge_runbook",
+    "forge_hotspot",
+    "forge_health_trend",
+    "forge_alert_triage",
+    "forge_deploy_journal",
+    "forge_secret_scan",
+    "forge_env_diff",
+    "forge_fix_proposal",
+    "forge_quorum_analyze",
+    "forge_liveguard_run"
   ],
   "ai_agents_supported": [
     { "name": "copilot", "label": "GitHub Copilot / VS Code", "tier": "primary" },

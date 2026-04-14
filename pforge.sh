@@ -1438,7 +1438,24 @@ with open('$config_path', 'w') as f:
     done
     if [ "$mcp_updated" = true ]; then
         echo ""
-        echo "MCP server files were updated. Run: cd pforge-mcp && npm install"
+        echo "⚠️  MCP server files were updated:"
+        echo "  1. Run: cd pforge-mcp && npm install"
+        echo "  2. Restart the MCP server if it's running"
+    fi
+
+    # Check if CLI itself was updated
+    local cli_updated=false
+    for entry in "${_updates[@]}" "${_new_files[@]}"; do
+        local entry_name="${entry##*|}"
+        if [ "$entry_name" = "pforge.ps1" ] || [ "$entry_name" = "pforge.sh" ]; then
+            cli_updated=true
+            break
+        fi
+    done
+    if [ "$cli_updated" = true ]; then
+        echo ""
+        echo "ℹ️  CLI scripts (pforge.ps1/pforge.sh) were updated."
+        echo "  The new version is already on disk. No restart needed."
     fi
 }
 

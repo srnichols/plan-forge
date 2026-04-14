@@ -1674,11 +1674,21 @@ Files in this directory (except this README) are gitignored — they are runtime
     Write-Host "Update complete: v$currentVersion → v$sourceVersion" -ForegroundColor Green
     Write-Host "Run 'pforge check' to validate the updated setup." -ForegroundColor DarkGray
 
-    # Check if MCP files were updated — remind to reinstall deps
+    # Check if MCP files were updated — remind to reinstall deps and restart
     $mcpUpdated = ($updates + $newFiles) | Where-Object { $_.Name -like "pforge-mcp/*" }
     if ($mcpUpdated) {
         Write-Host ""
-        Write-Host "MCP server files were updated. Run: cd pforge-mcp && npm install" -ForegroundColor Yellow
+        Write-Host "⚠️  MCP server files were updated:" -ForegroundColor Yellow
+        Write-Host "  1. Run: cd pforge-mcp && npm install" -ForegroundColor Yellow
+        Write-Host "  2. Restart the MCP server if it's running" -ForegroundColor Yellow
+    }
+
+    # Check if CLI itself was updated — inform user
+    $cliUpdated = ($updates + $newFiles) | Where-Object { $_.Name -eq 'pforge.ps1' -or $_.Name -eq 'pforge.sh' }
+    if ($cliUpdated) {
+        Write-Host ""
+        Write-Host "ℹ️  CLI scripts (pforge.ps1/pforge.sh) were updated." -ForegroundColor Cyan
+        Write-Host "  The new version is already on disk. No restart needed." -ForegroundColor DarkGray
     }
 }
 

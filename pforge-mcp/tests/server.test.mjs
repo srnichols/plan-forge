@@ -972,7 +972,7 @@ describe("TOOL_METADATA forge_health_trend", () => {
   });
 
   it("has correct addedIn version", () => {
-    expect(TOOL_METADATA.forge_health_trend.addedIn).toBe("2.31.0");
+    expect(TOOL_METADATA.forge_health_trend.addedIn).toBe("2.32.0");
   });
 
   it("has exactly one entry (no duplicates)", () => {
@@ -991,8 +991,8 @@ describe("TOOL_METADATA forge_health_trend", () => {
     expect(TOOL_METADATA.forge_health_trend.errors).toHaveProperty("NO_DATA");
   });
 
-  it("has no sideEffects (read-only)", () => {
-    expect(TOOL_METADATA.forge_health_trend.sideEffects).toHaveLength(0);
+  it("has sideEffects (writes health-dna.json)", () => {
+    expect(TOOL_METADATA.forge_health_trend.sideEffects.length).toBeGreaterThanOrEqual(1);
   });
 
   it("has cost low", () => {

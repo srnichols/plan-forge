@@ -970,7 +970,7 @@ function executeTool(name, args) {
 
 // ─── MCP Server ───────────────────────────────────────────────────────
 const server = new Server(
-  { name: "plan-forge-mcp", version: "2.11.2" },
+  { name: "plan-forge-mcp", version: "2.12.0" },
   { capabilities: { tools: {} } }
 );
 
@@ -1472,6 +1472,31 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       appendForgeJsonl("incidents.jsonl", record, cwd);
 
+      // Recurring incident detection: check for prior incidents on same files
+      let recurring = null;
+      try {
+        const incFiles = args.files || [];
+        if (incFiles.length > 0) {
+          const allIncidents = readForgeJsonl("incidents.jsonl", [], cwd);
+          const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+          const priorOnSameFiles = allIncidents.filter(i =>
+            i.id !== record.id &&
+            new Date(i.capturedAt || 0).getTime() > thirtyDaysAgo &&
+            (i.files || []).some(f => incFiles.some(cf => f.includes(cf) || cf.includes(f)))
+          );
+          if (priorOnSameFiles.length >= 2) {
+            recurring = { count: priorOnSameFiles.length + 1, files: incFiles, pattern: "systemic" };
+            record.recurring = recurring;
+            // Auto-escalate severity for systemic issues
+            if (severity === "medium" || severity === "low") {
+              record.severity = "high";
+              record.autoEscalated = true;
+              record.escalationReason = `Recurring: ${priorOnSameFiles.length + 1} incidents on same file(s) in 30 days`;
+            }
+          }
+        }
+      } catch { /* best-effort recurring detection */ }
+
       // Notify hub
       activeHub?.broadcast({ type: "incident-captured", data: record, timestamp: capturedAt });
 
@@ -1602,6 +1627,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           const incPath = resolve(cwd, ".forge", "incidents.jsonl");
           writeFileSync(incPath, updatedIncidents.map(i => JSON.stringify(i)).join("\n") + "\n", "utf-8");
           result.resolvedIncidents = resolvedIncidents;
+
+          // Track fix proposal outcomes — mark proposals as effective when their incidents resolve
+          try {
+            const proposals = readForgeJsonl("fix-proposals.json", [], cwd);
+            for (const p of proposals) {
+              if (!p.outcome) {
+                // Check if any resolved incident matches the proposal's source/fixId
+                const matchesResolved = resolvedIncidents.some(rid => p.fixId && rid.includes(p.fixId.replace("drift-auto-", "")));
+                if (matchesResolved) {
+                  p.outcome = "effective";
+                  p.resolvedAt = new Date().toISOString();
+                }
+              }
+            }
+            const proposalPath = resolve(cwd, ".forge", "fix-proposals.json");
+            writeFileSync(proposalPath, proposals.map(p => JSON.stringify(p)).join("\n") + "\n", "utf-8");
+          } catch { /* best-effort outcome tracking */ }
         }
       }
 

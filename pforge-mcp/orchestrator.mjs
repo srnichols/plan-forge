@@ -1696,6 +1696,34 @@ function loadEscalationChain(cwd) {
       }
     }
   } catch { /* defaults */ }
+
+  // Auto-tune: reorder default chain by historical success rate × cost efficiency
+  try {
+    const perf = loadModelPerformance(cwd);
+    if (perf.length >= 5) {
+      const stats = {};
+      for (const p of perf) {
+        const m = p.model || "unknown";
+        if (!stats[m]) stats[m] = { passed: 0, total: 0, cost: 0 };
+        stats[m].total++;
+        if (p.status === "passed") stats[m].passed++;
+        stats[m].cost += p.cost_usd || 0;
+      }
+      const ranked = Object.entries(stats)
+        .filter(([, s]) => s.total >= 3)
+        .map(([model, s]) => ({
+          model,
+          successRate: s.passed / s.total,
+          avgCost: s.cost / s.total,
+          score: (s.passed / s.total) * 100 - (s.cost / s.total) * 1000, // success weighted, cost penalized
+        }))
+        .sort((a, b) => b.score - a.score);
+      if (ranked.length >= 2) {
+        return ["auto", ...ranked.slice(0, 3).map(r => r.model)];
+      }
+    }
+  } catch { /* fall through to static default */ }
+
   return ["auto", "claude-opus-4.6", "gpt-5.3-codex"];
 }
 
@@ -2160,6 +2188,25 @@ export function getHealthTrend(cwd = process.cwd(), days = 30, metrics = null) {
   result.healthScore = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
   result.trend = result.drift?.trend || (result.dataPoints === 0 ? "no-data" : "stable");
 
+  // Project Health DNA — composite fingerprint for decay detection
+  result.healthDNA = {
+    driftAvg: result.drift?.avg ?? null,
+    incidentRate: result.incidents ? Math.round((result.incidents.total / Math.max(days, 1)) * 100) / 100 : null,
+    testPassRate: result.tests?.passRate ?? null,
+    modelSuccessRate: result.models?.totalSlices > 0
+      ? Math.round(Object.values(result.models.byModel).reduce((s, m) => s + m.successRate, 0) / Object.keys(result.models.byModel).length * 1000) / 1000
+      : null,
+    costPerSlice: result.cost?.avgPerRun ?? null,
+    timestamp: new Date().toISOString(),
+  };
+
+  // Persist health DNA snapshot for cross-session trend analysis
+  try {
+    if (result.healthDNA.driftAvg != null || result.healthDNA.testPassRate != null) {
+      appendForgeJsonl("health-dna.json", { ...result.healthDNA, healthScore: result.healthScore }, cwd);
+    }
+  } catch { /* best-effort */ }
+
   return result;
 }
 
@@ -2461,6 +2508,22 @@ export async function regressionGuard(files, { plan, failFast = false, cwd = pro
       }
     } catch { /* unreadable plan — skip */ }
   }
+
+  // Hotspot-aware gate prioritization: run gates for high-churn files first
+  try {
+    const hotspotCache = resolve(cwd, ".forge", "hotspot-cache.json");
+    if (existsSync(hotspotCache)) {
+      const cached = JSON.parse(readFileSync(hotspotCache, "utf-8"));
+      const hotFiles = new Set((cached.hotspots || []).slice(0, 10).map(h => h.file));
+      if (hotFiles.size > 0) {
+        gateItems.sort((a, b) => {
+          const aHot = a.cmd && [...hotFiles].some(h => a.cmd.includes(h)) ? 1 : 0;
+          const bHot = b.cmd && [...hotFiles].some(h => b.cmd.includes(h)) ? 1 : 0;
+          return bHot - aHot; // Hot gates first
+        });
+      }
+    }
+  } catch { /* best-effort prioritization */ }
 
   const results = [];
   let passed = 0, failed = 0, blocked = 0, skipped = 0;
@@ -3372,6 +3435,22 @@ async function executeSlice(slice, options) {
     // Non-fatal — don't fail the slice over a tracking write error
   }
 
+  // Record quorum outcome for adaptive threshold tuning
+  if (quorumConfig?.enabled) {
+    try {
+      const initialFailed = sliceResult.attempts > 1;
+      appendForgeJsonl("quorum-history.json", {
+        timestamp: new Date().toISOString(),
+        sliceNumber: slice.number,
+        sliceTitle: slice.title,
+        complexityScore: complexityScore || null,
+        quorumUsed: useQuorum,
+        quorumNeeded: useQuorum && !initialFailed, // Needed = quorum used AND initial model would have failed
+        status: sliceResult.status,
+      }, cwd);
+    } catch { /* non-fatal */ }
+  }
+
   return sliceResult;
 }
 
@@ -3570,6 +3649,20 @@ export function loadQuorumConfig(cwd, presetOverride = null) {
     reviewerModel: "claude-opus-4.6",
     dryRunTimeout: 300_000, // 5 min per dry-run leg
   };
+
+  // Adaptive threshold: learn from quorum history which slices actually need quorum
+  try {
+    const qHistory = readForgeJsonl("quorum-history.json", [], cwd);
+    if (qHistory.length >= 5) {
+      const needed = qHistory.filter(q => q.quorumNeeded).length;
+      const total = qHistory.length;
+      const neededRate = needed / total;
+      // If <20% of slices needed quorum, raise threshold (fewer get quorum)
+      // If >60% needed quorum, lower threshold (more get quorum)
+      if (neededRate < 0.2 && defaults.threshold < 9) defaults.threshold = Math.min(9, defaults.threshold + 1);
+      else if (neededRate > 0.6 && defaults.threshold > 3) defaults.threshold = Math.max(3, defaults.threshold - 1);
+    }
+  } catch { /* use static default */ }
   const configPath = resolve(cwd, ".forge.json");
   let userConfig = {};
   try {
@@ -4311,7 +4404,23 @@ function buildEstimate(plan, model, cwd, quorumConfig = null) {
   const sliceCount = plan.slices.length;
   const totalInputTokens = sliceCount * tokensPerSlice.input;
   const totalOutputTokens = sliceCount * tokensPerSlice.output;
-  const estimatedCost = (totalInputTokens * pricing.input) + (totalOutputTokens * pricing.output);
+  let estimatedCost = (totalInputTokens * pricing.input) + (totalOutputTokens * pricing.output);
+
+  // Cost calibration: compare prior estimates vs actuals to compute correction factor
+  let costCalibration = null;
+  try {
+    if (historyPath && existsSync(historyPath)) {
+      const history = JSON.parse(readFileSync(historyPath, "utf-8"));
+      const withEstimates = Array.isArray(history) ? history.filter(h => h.estimated_cost_usd > 0 && h.total_cost_usd > 0) : [];
+      if (withEstimates.length >= 3) {
+        const ratios = withEstimates.slice(-10).map(h => h.total_cost_usd / h.estimated_cost_usd);
+        const avgRatio = ratios.reduce((a, b) => a + b, 0) / ratios.length;
+        const correctionFactor = Math.max(0.5, Math.min(3.0, avgRatio)); // Clamp to 0.5x–3x
+        estimatedCost *= correctionFactor;
+        costCalibration = { correctionFactor: Math.round(correctionFactor * 100) / 100, samplesUsed: withEstimates.length, source: "historical" };
+      }
+    }
+  } catch { /* fall through to uncalibrated estimate */ }
 
   // Quorum overhead estimation (v2.5)
   let quorumOverhead = null;
@@ -4384,18 +4493,45 @@ function buildEstimate(plan, model, cwd, quorumConfig = null) {
     }
   }
 
+  // Slice auto-split advisory: flag slices that have timed out or exceeded task count thresholds
+  let splitAdvisories = [];
+  try {
+    const perfRecords = loadModelPerformance(cwd);
+    for (const s of plan.slices) {
+      const priorFailures = perfRecords.filter(p =>
+        p.sliceTitle && s.title && p.sliceTitle.toLowerCase() === s.title.toLowerCase() && p.status !== "passed"
+      );
+      const taskCount = s.tasks?.length || 0;
+      const scopeCount = s.scope?.length || 0;
+      if (priorFailures.length >= 2 || (taskCount > 6 && scopeCount > 4)) {
+        splitAdvisories.push({
+          sliceNumber: s.number,
+          sliceTitle: s.title,
+          reason: priorFailures.length >= 2
+            ? `Failed ${priorFailures.length} time(s) historically — consider splitting`
+            : `${taskCount} tasks + ${scopeCount} scope files — may be too large`,
+          tasks: taskCount,
+          scope: scopeCount,
+          priorFailures: priorFailures.length,
+        });
+      }
+    }
+  } catch { /* best-effort */ }
+
   return {
     status: "estimate",
     sliceCount,
     executionOrder: plan.dag.order,
     model: model || "auto",
     ...(modelRecommendation && { modelRecommendation }),
+    ...(splitAdvisories.length > 0 && { splitAdvisories }),
     tokens: {
       estimatedInput: totalInputTokens,
       estimatedOutput: totalOutputTokens,
       source: tokensPerSlice.source,
     },
     estimatedCostUSD: Math.round(estimatedCost * 100) / 100,
+    ...(costCalibration && { costCalibration }),
     ...(quorumOverhead && {
       quorumOverhead,
       totalCostWithQuorumUSD: Math.round((estimatedCost + quorumOverhead.totalOverheadUSD) * 100) / 100,

@@ -5,6 +5,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.32.0] — 2026-04-14
+
+### Added — Self-Recursive Improvement: The Forge Gets Smarter Every Run
+
+#### Forge Intelligence (build-time learning)
+- **Auto-tune escalation chain** — `loadEscalationChain()` reorders models by success rate × cost efficiency from `model-performance.json`. Best model moves to position 1. Converges after 5 runs.
+- **Cost estimator calibration** — `buildEstimate()` compares prior estimates vs actuals, computes correction factor (0.5x–3x). Accuracy improves every run. Returns `costCalibration` in estimate.
+- **Adaptive quorum threshold** — `loadQuorumConfig()` reads `quorum-history.json` to auto-tune threshold: <20% quorum needed → raise threshold, >60% → lower. Self-tunes token spend.
+- **Quorum outcome tracking** — Every quorum slice appends to `.forge/quorum-history.json` with complexity score, quorum used/needed, pass/fail.
+- **Slice auto-split advisory** — `--estimate` flags slices with ≥2 prior failures or >6 tasks + >4 scope files as candidates for splitting.
+
+#### LiveGuard Intelligence (post-coding learning)
+- **Recurring incident detection** — `forge_incident_capture` searches 30-day history for prior incidents on same files. ≥3 occurrences auto-escalates severity to `high` with `recurring: { pattern: "systemic" }`.
+- **Fix proposal outcome tracking** — `forge_regression_guard` marks fix proposals as `"effective"` when their associated incidents resolve. Tracks which fix patterns work.
+- **Hotspot test priority** — `forge_regression_guard` reorders gates to run tests for high-churn files first (from `.forge/hotspot-cache.json`).
+- **Project Health DNA** — `forge_health_trend` computes a composite fingerprint: drift avg, incident rate, test pass rate, model success rate, cost per slice. Persisted to `.forge/health-dna.json` for cross-session decay detection.
+- **Empty-catch regex expanded** — Now catches comment-only blocks (`catch { // swallowed }`, `catch { /* ignored */ }`).
+
+### Branding
+- **Forge Intelligence**: escalation chain, cost calibration, quorum tuning, slice splitting (build-time)
+- **LiveGuard Intelligence**: recurring incidents, fix outcomes, hotspot priority, health DNA (post-coding)
+
 ## [2.31.2] — 2026-04-13
 
 ### Fixed — E7: LiveGuard Events Now Flush Before MCP Response

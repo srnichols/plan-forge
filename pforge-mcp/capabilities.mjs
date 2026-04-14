@@ -433,21 +433,21 @@ export const TOOL_METADATA = {
     },
   },
   forge_health_trend: {
-    intent: ["health", "trend", "monitoring"],
-    aliases: ["health-analysis", "system-health", "health-report"],
+    intent: ["health", "trend", "monitoring", "health-dna"],
+    aliases: ["health-analysis", "system-health", "health-report", "health-dna"],
     cost: "low",
     maxConcurrent: 10,
-    addedIn: "2.31.0",
+    addedIn: "2.32.0",
     prerequisites: [],
-    produces: [],
-    consumes: [".forge/drift-history.json", ".forge/cost-history.json", ".forge/incidents.jsonl", ".forge/model-performance.json"],
-    sideEffects: [],
+    produces: [".forge/health-dna.json"],
+    consumes: [".forge/drift-history.json", ".forge/cost-history.json", ".forge/incidents.jsonl", ".forge/model-performance.json", ".forge/regression-history.json"],
+    sideEffects: ["writes .forge/health-dna.json (project health fingerprint)"],
     errors: {
       NO_DATA: { message: "No operational data found for the requested time window", recovery: "Run forge tools (drift, run-plan, incident) to generate data, or widen the --days window" },
     },
     example: {
       input: { days: 30 },
-      output: { days: 30, healthScore: 87, trend: "stable", dataPoints: 15, drift: { snapshots: 5, avg: 85 }, cost: { runs: 3, totalUsd: 1.23 }, incidents: { total: 2, open: 0 }, models: { totalSlices: 10 } },
+      output: { days: 30, healthScore: 87, trend: "stable", dataPoints: 15, drift: { snapshots: 5, avg: 85 }, cost: { runs: 3, totalUsd: 1.23 }, incidents: { total: 2, open: 0 }, models: { totalSlices: 10 }, tests: { runs: 5, passRate: 1.0 }, healthDNA: { driftAvg: 85, testPassRate: 1.0, incidentRate: 0.07 } },
     },
   },
   forge_alert_triage: {

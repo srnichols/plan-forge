@@ -35,7 +35,7 @@
 | `forge_regression_guard` | regression-check | medium | Extract validation gates from plans, execute against codebase, report pass/fail |
 | `forge_runbook` | generate-runbook | low | Generate operational runbook from a hardened plan file |
 | `forge_hotspot` | churn-analysis | low | Identify git churn hotspots — files that change most frequently |
-| `forge_health_trend` | health | low | Aggregate drift, cost, incidents, model performance over time; health score 0–100 |
+| `forge_health_trend` | health, health-dna | low | Aggregate drift, cost, incidents, model performance, tests over time; health score 0–100; project health DNA fingerprint |
 | `forge_alert_triage` | triage-alerts | low | Read incidents and drift violations, rank by priority, return prioritized list |
 | `forge_deploy_journal` | record-deploy | low | Record deployments with version, deployer, notes; correlates with incident capture |
 | `forge_secret_scan` | secret-scan | low | High-entropy secret detection in diffs — values always redacted, findings masked before caching |

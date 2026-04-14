@@ -803,10 +803,11 @@ Operational intelligence commands for post-coding monitoring. Requires MCP serve
 
 ### `pforge drift`
 
-Score the codebase against architecture guardrail rules. Tracks drift over time in `.forge/drift-history.json`.
+Score the codebase against architecture guardrail rules. Tracks drift over time in `.forge/drift-history.json`. Separates app-code violations from framework code. Includes test status when `npm test` or `dotnet test` is available.
 
 ```powershell
 .\pforge.ps1 drift
+.\pforge.ps1 drift --threshold 80
 ```
 
 ### `pforge incident <description>`

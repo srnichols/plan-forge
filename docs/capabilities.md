@@ -1,12 +1,12 @@
 # Plan Forge — Capabilities Reference
 
-> **Tools**: 30 MCP (19 core + 11 LiveGuard v2.27–v2.28) + 2 LiveGuard planned (v2.29.0) | **Presets**: 9 | **Agents**: 19 | **Skills**: 12
+> **Tools**: 34 MCP (20 core + 14 LiveGuard v2.27–v2.30) | **Presets**: 9 | **Agents**: 19 | **Skills**: 12
 >
 > Machine-readable version: call `forge_capabilities` MCP tool or `GET https://planforge.software/.well-known/plan-forge.json`
 
 ---
 
-## MCP Tools (30)
+## MCP Tools (34)
 
 | Tool | Intent | Cost | Description |
 |------|--------|------|-------------|
@@ -267,16 +267,16 @@ A second LIVEGUARD section appears in the tab bar after a visual divider. LIVEGU
 
 Standalone (no MCP client needed): `node pforge-mcp/server.mjs --dashboard-only`
 
-## LiveGuard MCP Tools (11 shipped v2.27–v2.28; 2 planned v2.29.0)
+## LiveGuard MCP Tools (14 shipped v2.27–v2.30)
 
-> Post-coding intelligence — watches gates after the forge ships. v2.27–v2.28 tools are included in the 30-tool count above. All available as MCP tools and REST endpoints.
+> Post-coding intelligence — watches gates after the forge ships. All 14 tools are included in the 34-tool count above. Available as MCP tools and REST endpoints.
 
 | Tool | What It Guards | Since |
 |------|---------------|-------|
-| `forge_drift_report` | Architecture drift vs. plan baseline | v2.27 |
+| `forge_drift_report` | Architecture drift vs. plan baseline. `--autoIncident` auto-chains to incidents + fix proposals | v2.27 |
 | `forge_incident_capture` | Incident log + MTTR tracking | v2.27 |
-| `forge_dep_watch` | Dependency vulnerability changes | v2.27 |
-| `forge_regression_guard` | Regression gate pass/fail history | v2.27 |
+| `forge_dep_watch` | Dependency vulnerability changes (.NET + npm) | v2.27 |
+| `forge_regression_guard` | Regression gate pass/fail history. Auto-resolves overlapping incidents on pass | v2.27 |
 | `forge_runbook` | Operational runbook store | v2.27 |
 | `forge_hotspot` | High-churn / high-failure files | v2.27 |
 | `forge_health_trend` | Long-term health + MTTBF trending | v2.27 |
@@ -286,6 +286,7 @@ Standalone (no MCP client needed): `node pforge-mcp/server.mjs --dashboard-only`
 | `forge_env_diff` | Env variable key divergence across `.env` files — keys only, values never read | v2.28 |
 | `forge_fix_proposal` | Generates scoped 1-2 slice fix plan from regression/drift/incident/secret failure; loop-capped, human-approved | v2.29 |
 | `forge_quorum_analyze` | Assembles structured LiveGuard quorum prompt for multi-model analysis — no LLM calls in server | v2.29 |
+| `forge_liveguard_run` | Composite health check — runs all LiveGuard tools in one call, returns unified green/yellow/red status | v2.30 |
 
 ## Lifecycle Hooks (v2.29.0)
 

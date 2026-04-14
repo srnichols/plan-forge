@@ -37,7 +37,7 @@ AI coding tools make it easy to generate code fast. But fast isn't the same as g
 
 > *Vibe coding gets you a prototype. Plan Forge gets you a product.*
 
-**Verified**: 11 phases self-built, 103/103 self-tests, 18 MCP tools, zero manual rollbacks. See [docs/capabilities.md](docs/capabilities.md) for the full metrics table.
+**Verified**: 11 phases self-built, 577/577 self-tests, 34 MCP tools, zero manual rollbacks. See [docs/capabilities.md](docs/capabilities.md) for the full metrics table.
 
 ### A/B Test Results (April 2026)
 
@@ -159,9 +159,9 @@ Step 0: Specify → Step 1: Pre-flight → Step 2: Harden → Step 3: Execute �
 
 The executor doesn't self-audit — a fresh session reviews the work. See [docs/COPILOT-VSCODE-GUIDE.md](docs/COPILOT-VSCODE-GUIDE.md) for session management.
 
-### MCP Server (18 Tools)
+### MCP Server (34 Tools)
 
-`pforge-mcp/server.mjs` exposes forge operations as MCP tools: `forge_run_plan`, `forge_analyze`, `forge_sweep`, `forge_smith`, `forge_cost_report`, and more. Live dashboard at `localhost:3100/dashboard`.
+`pforge-mcp/server.mjs` exposes forge operations as MCP tools: `forge_run_plan`, `forge_analyze`, `forge_sweep`, `forge_smith`, `forge_cost_report`, `forge_liveguard_run`, and more. Live dashboard at `localhost:3100/dashboard`.
 
 ### When to Use the Full Pipeline
 

@@ -7,11 +7,9 @@
 
 ## Current Release
 
-**v2.28.0** (2026-04-13) — LiveGuard II: `forge_secret_scan` (Shannon entropy analysis, sidecar annotations, redacted output), `forge_env_diff` (key-name-only comparison, env-diff-cache), 4 new REST endpoints, LiveGuard dashboard tabs (Health, Incidents, Triage, Security, Env), manual chapters 15–17 + Appendix F full content.
+**v2.30.0** (2026-04-13) — LiveGuard IV: `forge_liveguard_run` composite health check, `--autoIncident` drift chaining, drift `testStatus`, regression history tracking, auto-resolve incidents, sweep categorization, diff exit-code enforcement, executable gate requirement in hardener.
 
-> **In development**: LiveGuard III (v2.29) — `forge_fix_proposal`, `forge_quorum_analyze`, 3 lifecycle hooks (PreDeploy, PostSlice, PreAgentHandoff), OpenClaw analytics bridge.
-
-Previous: v2.22.0 (2026-04-10) — Quorum power/speed presets, `.forge/secrets.json` API key fallback, updated Grok model IDs and pricing, 3-provider quorum default, dashboard preset toggles.
+Previous: v2.29.0–v2.29.3 (2026-04-13) — LiveGuard III: `forge_fix_proposal`, `forge_quorum_analyze`, 3 lifecycle hooks (PreDeploy, PostSlice, PreAgentHandoff), OpenClaw analytics bridge, plus 9 bug fixes (.NET scanning, CRLF, dep-watch, gate parsing, framework code separation).
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 
@@ -98,20 +96,23 @@ Temper Guards (anti-shortcut tables) and Warning Signs (behavioral anti-patterns
 
 ---
 
+## Shipped
+
+### v2.30.0 — LiveGuard IV: Composite Run, Auto-Chaining, Test Status ✅
+
+`forge_liveguard_run` composite tool (all checks in one call), drift `--autoIncident` auto-chains to incidents + fix proposals, drift `testStatus` field, regression history tracking, auto-resolve incidents on passing gates, sweep categorization, diff exit-code enforcement, executable gate requirement in hardener.
+
+### v2.29.0–v2.29.3 — LiveGuard III: Self-Healing Proposals, Hooks & OpenClaw Bridge ✅
+
+`forge_fix_proposal`, `forge_quorum_analyze`, PreDeploy/PostSlice/PreAgentHandoff hooks, OpenClaw bridge. Plus 9 bug fixes: C# empty-catch scanning, CRLF plan parsing on Windows, .NET dep-watch (.slnx support), prose validation gate parsing, framework code separation in drift/sweep scoring.
+
+### v2.28.0 — LiveGuard II ✅
+
+`forge_secret_scan` (Shannon entropy, sidecar annotations, redacted output) and `forge_env_diff` (key-name-only comparison). 4 new REST endpoints. Manual chapters 15–17 + Appendix F fully written. Dashboard Security + Env tabs.
+
+---
+
 ## Planned
-
-### v2.29.0 — LiveGuard III: Self-Healing Proposals, Hooks & OpenClaw Bridge
-
-- **`forge_fix_proposal`** — generate scoped 1-2 slice fix plan from any LiveGuard failure (regression, drift, incident, secret); capped at one proposal per incident; human approves and runs on branch
-- **`forge_quorum_analyze`** — assemble structured quorum prompt from LiveGuard snapshot for multi-model analysis; `customQuestion` override; `questionUsed` audit trail; no LLM calls in server
-- **PreDeploy hook** — blocks deploy file writes / push commands on secret scan findings; warns on env key gaps
-- **PostSlice hook** — silent drift advisory after every `feat|fix|refactor` commit; amber/red thresholds; never blocks
-- **PreAgentHandoff hook** — injects LiveGuard context at session start; skips during quorum turns (`PFORGE_QUORUM_TURN`); fires OpenClaw snapshot POST (5s timeout, fire-and-forget)
-- **OpenClaw analytics bridge** — optional `openclaw.endpoint` POST on `PreAgentHandoff`
-- **`docs/plans/auto/`** — gitignored directory for auto-generated fix plans; `README.md` committed
-- 4 new REST endpoints: `GET/POST /api/fix/proposals`, `GET/POST /api/quorum/prompt`
-- Hooks configurable via `.forge.json` `hooks.*` block; all config keys documented
-- Predecessor: v2.28.0 must ship first
 
 ### LiveGuard Complements
 

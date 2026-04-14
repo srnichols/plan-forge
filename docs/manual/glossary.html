@@ -88,7 +88,7 @@
           <tr><td><strong>Dashboard</strong></td><td>Web UI at <code>localhost:3100/dashboard</code>. 9 tabs for monitoring, cost, replay, skills, config.</td></tr>
           <tr><td><strong>Lifecycle Hook</strong></td><td>Automatic actions: SessionStart, PreToolUse, PostToolUse, Stop.</td></tr>
           <tr><td><strong>OpenBrain</strong></td><td>Optional companion MCP server for persistent semantic memory across sessions.</td></tr>
-          <tr><td><strong>MCP</strong></td><td>Model Context Protocol. A standard for AI agents to call functions. Plan Forge's MCP server exposes 31 tools (19 core + 11 LiveGuard + <code>forge_generate_image</code>).</td></tr>
+          <tr><td><strong>MCP</strong></td><td>Model Context Protocol. A standard for AI agents to call functions. Plan Forge's MCP server exposes 34 tools (20 core + 14 LiveGuard).</td></tr>
           <tr><td><strong>Bridge</strong></td><td>Notification dispatcher that forwards WebSocket hub events to external platforms (Slack, Discord, Telegram, generic webhooks).</td></tr>
         </tbody>
       </table>
@@ -99,7 +99,7 @@
         <tbody>
           <tr><td><strong>Drift Score</strong></td><td>Numeric score (0–100) measuring how closely code follows architecture guardrails. Lower = more violations.</td></tr>
           <tr><td><strong>Fix Proposal</strong></td><td>Auto-generated 1–2 slice plan from LiveGuard findings. Stored in <code>docs/plans/auto/</code>.</td></tr>
-          <tr><td><strong>LiveGuard</strong></td><td>Post-coding operational intelligence layer. 11 MCP tools for drift, incidents, deploys, secrets, dependencies.</td></tr>
+          <tr><td><strong>LiveGuard</strong></td><td>Post-coding operational intelligence layer. 14 MCP tools for drift, incidents, deploys, secrets, dependencies, and composite health checks.</td></tr>
           <tr><td><strong>MTTR</strong></td><td>Mean Time To Resolve. Computed from incident capture to <code>resolvedAt</code> timestamp.</td></tr>
           <tr><td><strong>Quorum Mode</strong></td><td>Multi-model consensus where 2–3 models independently solve a slice, then a reviewer synthesizes the best output.</td></tr>
           <tr><td><strong>Secret Scan</strong></td><td>Entropy-based scan of recent commits for potential hardcoded credentials.</td></tr>

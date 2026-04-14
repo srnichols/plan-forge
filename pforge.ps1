@@ -2069,7 +2069,7 @@ function Invoke-Drift {
     $excludeDirs = @("node_modules", ".git", "bin", "obj", "dist", ".forge", "vendor", "coverage")
 
     $rules = @(
-        @{ id = "empty-catch";     pattern = 'catch\s*(?:\([^)]*\))?\s*\{\s*\}';                               severity = "high";     label = "Empty catch block" },
+        @{ id = "empty-catch";     pattern = 'catch\s*(?:\([^)]*\))?\s*\{\s*(?://[^\n]*)?\s*\}|catch\s*(?:\([^)]*\))?\s*\{\s*/\*[^*]*\*/\s*\}'; severity = "high";     label = "Empty catch block" },
         @{ id = "any-type";        pattern = ':\s*any\b|<any>|as\s+any\b';                                  severity = "medium";   label = "Avoid 'any' type" },
         @{ id = "sync-over-async"; pattern = '\.(Result|Wait\(\))\b';                                       severity = "high";     label = "Sync-over-async (.Result/.Wait())" },
         @{ id = "sql-injection";   pattern = '`[^`]*\b(SELECT|INSERT|UPDATE|DELETE|WHERE)\b[^`]*\$\{';      severity = "critical"; label = "SQL string interpolation" },

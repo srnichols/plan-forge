@@ -1735,7 +1735,7 @@ cmd_drift() {
             done <<< "$content"
         }
 
-        check_rule "empty-catch"     'catch[[:space:]]*(\([^)]*\))?[[:space:]]*\{[[:space:]]*\}'   "high"     "Empty catch block"
+        check_rule "empty-catch"     'catch[[:space:]]*(\([^)]*\))?[[:space:]]*\{[[:space:]]*(//[^}]*)?[[:space:]]*\}'   "high"     "Empty catch block"
         check_rule "any-type"        ':[[:space:]]*any[[:space:];|,>]|<any>|as[[:space:]]+any'  "medium"   "Avoid 'any' type"
         check_rule "sync-over-async" '\.(Result|Wait\(\))'                                      "high"     "Sync-over-async"
         check_rule "sql-injection"   'SELECT|INSERT|UPDATE|DELETE.*\$\{'                        "critical" "SQL string interpolation"

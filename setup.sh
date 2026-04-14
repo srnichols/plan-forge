@@ -1380,9 +1380,17 @@ if [[ -d "$MCP_SRC_DIR" ]]; then
 
     MCP_DST_DIR="$PROJECT_PATH/pforge-mcp"
     mkdir -p "$MCP_DST_DIR"
-    cp "$MCP_SRC_DIR/server.mjs" "$MCP_DST_DIR/server.mjs"
-    cp "$MCP_SRC_DIR/package.json" "$MCP_DST_DIR/package.json"
-    green "  COPY  pforge-mcp/server.mjs + package.json"
+
+    # Copy all MCP runtime files (not node_modules or .forge)
+    local mcp_count=0
+    while IFS= read -r -d '' f; do
+        local rel_path="${f#"$MCP_SRC_DIR/"}"
+        local dst_file="$MCP_DST_DIR/$rel_path"
+        mkdir -p "$(dirname "$dst_file")"
+        cp "$f" "$dst_file"
+        mcp_count=$((mcp_count + 1))
+    done < <(find "$MCP_SRC_DIR" -type f ! -path '*/node_modules/*' ! -path '*/.forge/*' ! -path '*/coverage/*' -print0 2>/dev/null)
+    green "  COPY  pforge-mcp/ ($mcp_count files: server, orchestrator, capabilities, dashboard, tests)"
 
     # Generate .vscode/mcp.json for Copilot MCP integration
     VSCODE_MCP="$PROJECT_PATH/.vscode/mcp.json"
@@ -1432,6 +1440,19 @@ MCPEOF
 
     echo "  Run 'cd pforge-mcp && npm install' to install MCP dependencies"
 fi
+
+# ─── Step 7c: Copy CLI Scripts + VERSION ──────────────────────────────
+echo ""
+cyan "Step 7c: CLI scripts"
+
+for cli_file in "pforge.ps1" "pforge.sh" "VERSION"; do
+    local src_cli="$TEMPLATE_ROOT/$cli_file"
+    local dst_cli="$PROJECT_PATH/$cli_file"
+    if [[ -f "$src_cli" ]]; then
+        cp "$src_cli" "$dst_cli"
+        green "  COPY  $cli_file"
+    fi
+done
 
 # ─── Done ──────────────────────────────────────────────────────────────
 echo ""

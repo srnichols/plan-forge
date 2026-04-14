@@ -1504,9 +1504,20 @@ if (Test-Path $mcpSrcDir) {
     if (-not (Test-Path $mcpDstDir)) {
         New-Item -ItemType Directory -Path $mcpDstDir -Force | Out-Null
     }
-    Copy-Item -Path (Join-Path $mcpSrcDir "server.mjs") -Destination (Join-Path $mcpDstDir "server.mjs") -Force
-    Copy-Item -Path (Join-Path $mcpSrcDir "package.json") -Destination (Join-Path $mcpDstDir "package.json") -Force
-    Write-Host "  COPY  pforge-mcp/server.mjs + package.json" -ForegroundColor Green
+
+    # Copy all MCP runtime files (not node_modules or .forge)
+    $mcpFileCount = 0
+    Get-ChildItem -Path $mcpSrcDir -File -Recurse |
+        Where-Object { $_.FullName -notmatch '(node_modules|\.forge|coverage)' } |
+        ForEach-Object {
+            $relPath = $_.FullName.Substring($mcpSrcDir.Length + 1)
+            $dstFile = Join-Path $mcpDstDir $relPath
+            $dstParent = Split-Path $dstFile -Parent
+            if (-not (Test-Path $dstParent)) { New-Item -ItemType Directory -Path $dstParent -Force | Out-Null }
+            Copy-Item -Path $_.FullName -Destination $dstFile -Force
+            $mcpFileCount++
+        }
+    Write-Host "  COPY  pforge-mcp/ ($mcpFileCount files: server, orchestrator, capabilities, dashboard, tests)" -ForegroundColor Green
 
     # Generate .vscode/mcp.json for Copilot MCP integration
     $vscodeMcp = Join-Path $ProjectPath ".vscode/mcp.json"
@@ -1551,6 +1562,19 @@ if (Test-Path $mcpSrcDir) {
     }
 
     Write-Host "  Run 'cd pforge-mcp && npm install' to install MCP dependencies" -ForegroundColor DarkGray
+}
+
+# ─── Step 7c: Copy CLI Scripts + VERSION ──────────────────────────────
+Write-Host ""
+Write-Host "Step 7c: CLI scripts" -ForegroundColor Cyan
+
+foreach ($cliFile in @("pforge.ps1", "pforge.sh", "VERSION")) {
+    $cliSrc = Join-Path $templateRoot $cliFile
+    $cliDst = Join-Path $ProjectPath $cliFile
+    if (Test-Path $cliSrc) {
+        Copy-Item -Path $cliSrc -Destination $cliDst -Force
+        Write-Host "  COPY  $cliFile" -ForegroundColor Green
+    }
 }
 
 # ─── Done ──────────────────────────────────────────────────────────────

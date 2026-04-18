@@ -5,6 +5,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.35.0] — 2026-04-18
+
+### Added — Watcher v2 (Live Tail, Recommendations, History, Diff Cursor)
+
+- **`forge_watch_live`** — new MCP tool that streams events from a target project's pforge run for a fixed duration. Connects to the target's WebSocket hub (`.forge/server-ports.json`) when running; falls back to `events.log` polling otherwise. Read-only subscriber by design — never sends commands. Caps captured events at 500 per call to bound memory.
+- **`recommendations` field** in `forge_watch` reports — every detected anomaly is now mapped to a concrete next-step `pforge` command (e.g., `pforge run-plan --resume-from N`, `pforge fix-proposal`, `pforge abort`, `pforge run-plan --quorum=power`). Recommendations are deduplicated by anomaly code.
+- **`watch-history.jsonl`** — `forge_watch` now appends each snapshot to the **watcher's own** `.forge/watch-history.jsonl` (never the target's, preserving the read-only contract). Disable with `recordHistory: false`.
+- **`sinceTimestamp` diff cursor** — pass the previous report's `cursor` field to `forge_watch` to get `hasNewEvents` + `newEventsCount` flags. Enables continuous monitoring loops without re-processing the entire event log.
+- **Hub event emission** — when the watcher is run inside an active hub session, it emits `watch-snapshot-completed`, `watch-anomaly-detected`, and `watch-advice-generated` events for dashboard / multi-agent consumers.
+- **Quorum + skill event surfacing** — snapshot `counts` now includes `quorumDispatched`, `quorumLegsCompleted`, `quorumReviewed`, `skillsStarted`, `skillsCompleted`, `skillStepsFailed`.
+- **3 new anomaly codes** — `quorum-dissent` (quorum review reached but slice still failed), `quorum-leg-stalled` (dispatched but legs never returned), `skill-step-failed` (any skill step recorded a failure).
+
+### Changed
+
+- `forge_watch` report shape now includes `recommendations: []` and `cursor: <ISO>` fields. Existing consumers that destructure known fields are unaffected.
+- `runWatch` accepts new optional params: `sinceTimestamp`, `recordHistory` (default `true`), `eventBus`.
+
+### Tests
+
+- 22 new tests in `pforge-mcp/tests/orchestrator.test.mjs` covering quorum/skill counts, recommendations, history append, diff cursor, hub event emission, and runWatchLive polling fallback. Total: 654 passing (up from 632).
+
+---
+
 ## [2.34.1] — 2026-04-17
 
 ### Changed — Watcher API Polish

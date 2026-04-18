@@ -1,12 +1,12 @@
 # Plan Forge — Capabilities Reference
 
-> **Tools**: 34 MCP (20 core + 14 LiveGuard v2.27–v2.30) | **Presets**: 9 | **Agents**: 19 | **Skills**: 12
+> **Tools**: 36 MCP (20 core + 14 LiveGuard v2.27–v2.30 + 2 Watcher v2.34/v2.35) | **Presets**: 9 | **Agents**: 19 | **Skills**: 12
 >
 > Machine-readable version: call `forge_capabilities` MCP tool or `GET https://planforge.software/.well-known/plan-forge.json`
 
 ---
 
-## MCP Tools (34)
+## MCP Tools (36)
 
 | Tool | Intent | Cost | Description |
 |------|--------|------|-------------|
@@ -40,6 +40,11 @@
 | `forge_deploy_journal` | record-deploy | low | Record deployments with version, deployer, notes; correlates with incident capture |
 | `forge_secret_scan` | secret-scan | low | High-entropy secret detection in diffs — values always redacted, findings masked before caching |
 | `forge_env_diff` | env-diff | low | Environment variable key divergence across `.env` files — keys only, values never read |
+| `forge_fix_proposal` | propose-fix | medium | Generate actionable fix plans for regressions, drift, or incidents |
+| `forge_quorum_analyze` | quorum-analyze | low | Build XSS-validated quorum prompts from drift, incidents, deploy journal, or secret findings |
+| `forge_liveguard_run` | liveguard-all | medium | Composite LiveGuard scan: drift + sweep + secrets + regression + deps + alerts + health in one call |
+| `forge_watch` | observe | low | Watcher v2.34/v2.35 — read-only observer that tails another project's pforge run from a second VS Code session. Snapshot or analyze mode. Returns counts, anomalies, recommendations, diff cursor. Optionally appends to watcher's own `.forge/watch-history.jsonl`. |
+| `forge_watch_live` | stream | low | Watcher v2.35 live tail — streams events from a target project for a fixed duration via WebSocket subscription (preferred) or `events.log` polling (fallback). Read-only subscriber. |
 
 ## Execution Modes
 

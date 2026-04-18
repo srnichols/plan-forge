@@ -4,7 +4,7 @@
 >
 > **This file is your entry point.** Read it top-to-bottom, then execute the appropriate path.
 >
-> **What you get**: 34 MCP tools (20 core + 14 LiveGuard), 19 reviewer agents, 12 skills, live dashboard, self-recursive intelligence (the system gets smarter every run), OpenBrain persistent memory integration. Call `forge_capabilities` for full discovery.
+> **What you get**: 36 MCP tools (20 core + 14 LiveGuard + 2 Watcher), 19 reviewer agents, 12 skills, live dashboard, self-recursive intelligence (the system gets smarter every run), OpenBrain persistent memory integration. Call `forge_capabilities` for full discovery.
 
 ---
 
@@ -121,7 +121,7 @@ See [docs/plans/examples/plan-forge-validate.yml](docs/plans/examples/plan-forge
 ```bash
 cd pforge-mcp && npm install
 ```
-This enables 18 forge tools (`forge_smith`, `forge_sweep`, `forge_diff`, `forge_analyze`, `forge_diagnose`, `forge_run_plan`, `forge_cost_report`, `forge_capabilities`, etc.) as native MCP functions. The setup script already generated `.vscode/mcp.json` and `.claude/mcp.json` configs — `npm install` is the only manual step.
+This enables 36 forge tools (`forge_smith`, `forge_sweep`, `forge_diff`, `forge_analyze`, `forge_diagnose`, `forge_run_plan`, `forge_cost_report`, `forge_capabilities`, `forge_watch`, `forge_watch_live`, etc.) as native MCP functions. The setup script already generated `.vscode/mcp.json` and `.claude/mcp.json` configs — `npm install` is the only manual step.
 
 **Copilot cloud agent setup** — If the target project will be worked on by the Copilot cloud agent (GitHub Issues → automated PR), add the environment setup file:
 ```bash

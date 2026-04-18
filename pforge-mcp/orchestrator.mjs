@@ -3788,11 +3788,13 @@ export function normalizeRunState(eventType, hasStarted) {
  * @param {string|null} runId - Specific run dir, null for latest
  * @param {object} [opts]
  * @param {number} [opts.tailEvents=25] - Number of trailing events to include (1..200)
+ * @param {string|null} [opts.sinceTimestamp=null] - ISO timestamp; only events strictly after this are included in diff fields
  * @returns {object} Snapshot object
  */
 export function buildWatchSnapshot(targetPath, runId = null, opts = {}) {
   const tailEventsRaw = Number.isFinite(opts.tailEvents) ? opts.tailEvents : 25;
   const tailEvents = Math.min(200, Math.max(1, Math.floor(tailEventsRaw)));
+  const sinceTimestamp = opts.sinceTimestamp || null;
 
   const located = findLatestRun(targetPath, runId);
   if (!located) {
@@ -3815,9 +3817,30 @@ export function buildWatchSnapshot(targetPath, runId = null, opts = {}) {
   const sliceCompleted = events.filter((e) => e.type === "slice-completed");
   const sliceFailed = events.filter((e) => e.type === "slice-failed");
   const sliceEscalated = events.filter((e) => e.type === "slice-escalated");
+  // v2.35: surface quorum + skill activity
+  const quorumDispatched = events.filter((e) => e.type === "quorum-dispatch-started");
+  const quorumLegsCompleted = events.filter((e) => e.type === "quorum-leg-completed");
+  const quorumReviewed = events.filter((e) => e.type === "quorum-review-completed");
+  const skillsStarted = events.filter((e) => e.type === "skill-started");
+  const skillsCompleted = events.filter((e) => e.type === "skill-completed");
+  const skillStepsFailed = events.filter((e) =>
+    e.type === "skill-step-completed" && e.data?.status && e.data.status !== "passed" && e.data.status !== "completed"
+  );
+
   const lastEvent = events[events.length - 1] || null;
   const lastEventAgeMs = lastEvent ? Date.now() - new Date(lastEvent.ts).getTime() : null;
   const runState = normalizeRunState(runCompleted?.type || null, Boolean(runStarted));
+
+  // v2.35 diff support: events strictly after sinceTimestamp
+  let newEvents = [];
+  let hasNewEvents = false;
+  if (sinceTimestamp) {
+    const cutoffMs = new Date(sinceTimestamp).getTime();
+    if (Number.isFinite(cutoffMs)) {
+      newEvents = events.filter((e) => new Date(e.ts).getTime() > cutoffMs);
+      hasNewEvents = newEvents.length > 0;
+    }
+  }
 
   return {
     ok: true,
@@ -3834,11 +3857,23 @@ export function buildWatchSnapshot(targetPath, runId = null, opts = {}) {
       completed: sliceCompleted.length,
       failed: sliceFailed.length,
       escalated: sliceEscalated.length,
+      // v2.35
+      quorumDispatched: quorumDispatched.length,
+      quorumLegsCompleted: quorumLegsCompleted.length,
+      quorumReviewed: quorumReviewed.length,
+      skillsStarted: skillsStarted.length,
+      skillsCompleted: skillsCompleted.length,
+      skillStepsFailed: skillStepsFailed.length,
       events: events.length,
       artifacts: artifacts.length,
     },
     lastEvent,
     lastEventAgeMs,
+    // v2.35: cursor for stateful diff polling
+    cursor: lastEvent?.ts || null,
+    sinceTimestamp,
+    hasNewEvents,
+    newEventsCount: newEvents.length,
     summary,
     artifacts: artifacts.map((a) => ({
       sliceNumber: a.sliceNumber,
@@ -3941,7 +3976,170 @@ export function detectWatchAnomalies(snapshot) {
     }
   }
 
+  // 7. (v2.35) Quorum dissent — review completed but final slice failed
+  if (snapshot.counts?.quorumReviewed > 0 && snapshot.counts?.failed > 0) {
+    anomalies.push({
+      severity: "warn",
+      code: "quorum-dissent",
+      message: `Quorum review completed (${snapshot.counts.quorumReviewed}) but ${snapshot.counts.failed} slice(s) still failed — quorum legs may have disagreed or all proposed flawed plans`,
+    });
+  }
+
+  // 8. (v2.35) Quorum legs incomplete — dispatched but no review yet, run still in-progress
+  if (
+    snapshot.counts?.quorumDispatched > 0 &&
+    snapshot.counts?.quorumDispatched > snapshot.counts?.quorumReviewed &&
+    snapshot.runState === "in-progress" &&
+    snapshot.lastEventAgeMs && snapshot.lastEventAgeMs > 8 * 60_000
+  ) {
+    anomalies.push({
+      severity: "warn",
+      code: "quorum-leg-stalled",
+      message: `Quorum dispatched but review never completed (${snapshot.counts.quorumDispatched - snapshot.counts.quorumReviewed} pending, no events for ${Math.round(snapshot.lastEventAgeMs / 60_000)}min)`,
+    });
+  }
+
+  // 9. (v2.35) Skill steps failed
+  if (snapshot.counts?.skillStepsFailed > 0) {
+    anomalies.push({
+      severity: "error",
+      code: "skill-step-failed",
+      message: `${snapshot.counts.skillStepsFailed} skill step(s) failed — investigate skill execution log`,
+    });
+  }
+
   return anomalies;
+}
+
+/**
+ * (v2.35) Map anomaly codes to concrete corrective recommendations.
+ * Pure function — accepts anomalies + snapshot, returns ordered recommendations.
+ *
+ * @param {Array} anomalies - Output of detectWatchAnomalies
+ * @param {object} snapshot - Output of buildWatchSnapshot
+ * @returns {Array<{ code: string, action: string, command: string|null, severity: string }>}
+ */
+export function recommendFromAnomalies(anomalies, snapshot) {
+  const recs = [];
+  if (!Array.isArray(anomalies) || anomalies.length === 0) return recs;
+
+  // Group by code so we recommend once per anomaly type
+  const byCode = new Map();
+  for (const a of anomalies) {
+    if (!byCode.has(a.code)) byCode.set(a.code, a);
+  }
+
+  for (const [code, anomaly] of byCode) {
+    switch (code) {
+      case "stalled":
+        recs.push({
+          code,
+          severity: anomaly.severity,
+          action: "Run appears stuck. Check the worker process and consider aborting if no progress resumes.",
+          command: "pforge abort",
+        });
+        break;
+
+      case "tokens-zero": {
+        const slice = snapshot.artifacts?.find((a) => a.tokensOut === 0 && a.duration > 60_000);
+        recs.push({
+          code,
+          severity: anomaly.severity,
+          action: `Token parser may be broken for ${slice?.worker || "this worker"}. Verify CLI version and stderr encoding (Windows UTF-8 fix shipped in v2.33).`,
+          command: null,
+        });
+        break;
+      }
+
+      case "high-retries": {
+        const slice = snapshot.artifacts?.find((a) => a.attempts >= 3);
+        recs.push({
+          code,
+          severity: anomaly.severity,
+          action: `Slice ${slice?.sliceNumber ?? "?"} hit retry limit. Review the slice plan and consider splitting it or escalating to a stronger model.`,
+          command: slice ? `pforge fix-proposal slice-${slice.sliceNumber}` : null,
+        });
+        break;
+      }
+
+      case "slice-failed": {
+        const failed = snapshot.artifacts?.find((a) => a.status === "failed");
+        recs.push({
+          code,
+          severity: anomaly.severity,
+          action: `Slice ${failed?.sliceNumber ?? "?"} failed. Generate a fix proposal and resume from that slice.`,
+          command: failed ? `pforge run-plan --resume-from ${failed.sliceNumber} ${snapshot.plan ?? "<plan>"}` : null,
+        });
+        break;
+      }
+
+      case "model-escalated":
+        recs.push({
+          code,
+          severity: anomaly.severity,
+          action: "Initial model failed and a stronger model was used. Consider promoting the stronger model in escalation chain or reviewing the slice for unstated complexity.",
+          command: null,
+        });
+        break;
+
+      case "all-skipped":
+        recs.push({
+          code,
+          severity: anomaly.severity,
+          action: "All slices were skipped — plan was already complete. No action required; this was a no-op re-run.",
+          command: null,
+        });
+        break;
+
+      case "gate-on-prose": {
+        const slice = snapshot.artifacts?.find((a) => a.gateError && /'[\d]+\.'/.test(a.gateError));
+        recs.push({
+          code,
+          severity: anomaly.severity,
+          action: "Validation gate parsing rejected markdown prose as a shell command. Update Plan Forge to v2.33+ and re-run the slice.",
+          command: slice ? `pforge run-plan --resume-from ${slice.sliceNumber} ${snapshot.plan ?? "<plan>"}` : null,
+        });
+        break;
+      }
+
+      case "quorum-dissent":
+        recs.push({
+          code,
+          severity: anomaly.severity,
+          action: "Quorum agreed on a plan but execution still failed. Review individual leg outputs in events.log and consider running quorum analyze for a deeper merge.",
+          command: snapshot.plan ? `pforge analyze --quorum=power ${snapshot.plan}` : null,
+        });
+        break;
+
+      case "quorum-leg-stalled":
+        recs.push({
+          code,
+          severity: anomaly.severity,
+          action: "Quorum review never completed. One or more legs may have hung. Check worker processes and consider aborting.",
+          command: "pforge abort",
+        });
+        break;
+
+      case "skill-step-failed":
+        recs.push({
+          code,
+          severity: anomaly.severity,
+          action: "A skill step failed. Inspect the skill execution log and re-run the affected skill manually.",
+          command: "pforge skill-status",
+        });
+        break;
+
+      default:
+        recs.push({
+          code,
+          severity: anomaly.severity,
+          action: anomaly.message,
+          command: null,
+        });
+    }
+  }
+
+  return recs;
 }
 
 /**
@@ -3991,6 +4189,36 @@ function buildWatcherPrompt(snapshot, anomalies) {
 }
 
 /**
+ * (v2.35) Append a watcher observation to the watcher's OWN .forge/watch-history.jsonl.
+ * NEVER writes inside the target project — preserves the read-only contract.
+ *
+ * @param {object} report - Watcher report
+ * @param {string} watcherCwd - Watcher's own working directory
+ */
+export function appendWatchHistory(report, watcherCwd = process.cwd()) {
+  try {
+    const historyDir = resolve(watcherCwd, ".forge");
+    if (!existsSync(historyDir)) mkdirSync(historyDir, { recursive: true });
+    const historyPath = resolve(historyDir, "watch-history.jsonl");
+    const record = {
+      ts: report.timestamp || new Date().toISOString(),
+      targetPath: report.targetPath,
+      runId: report.runId,
+      runState: report.runState,
+      mode: report.mode,
+      anomalyCount: Array.isArray(report.anomalies) ? report.anomalies.length : 0,
+      anomalyCodes: Array.isArray(report.anomalies) ? report.anomalies.map((a) => a.code) : [],
+      counts: report.counts,
+      cursor: report.cursor || null,
+    };
+    appendFileSync(historyPath, JSON.stringify(record) + "\n");
+    return { ok: true, path: historyPath };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+/**
  * Watch another project's pforge execution. Read-only.
  *
  * Modes:
@@ -4003,6 +4231,10 @@ function buildWatcherPrompt(snapshot, anomalies) {
  * @param {"snapshot"|"analyze"} [options.mode="snapshot"]
  * @param {string} [options.model]     - Override watcher model (default: claude-opus-4.7)
  * @param {number} [options.timeout=300000] - Worker timeout for analyze mode
+ * @param {number} [options.tailEvents=25] - Trailing events (1-200)
+ * @param {string} [options.sinceTimestamp] - (v2.35) Only flag events newer than this ISO timestamp
+ * @param {boolean} [options.recordHistory=true] - (v2.35) Append to watcher's .forge/watch-history.jsonl
+ * @param {object} [options.eventBus] - (v2.35) Optional event bus to emit watch-* events
  * @returns {Promise<object>} Watcher report
  */
 export async function runWatch(options = {}) {
@@ -4013,6 +4245,9 @@ export async function runWatch(options = {}) {
     model = DEFAULT_WATCHER_MODEL,
     timeout = 300_000,
     tailEvents = 25,
+    sinceTimestamp = null,
+    recordHistory = true,
+    eventBus = null,
   } = options;
 
   if (!targetPath) {
@@ -4023,10 +4258,11 @@ export async function runWatch(options = {}) {
     return { ok: false, error: `Target path does not exist: ${resolved}` };
   }
 
-  const snapshot = buildWatchSnapshot(resolved, runId, { tailEvents });
+  const snapshot = buildWatchSnapshot(resolved, runId, { tailEvents, sinceTimestamp });
   if (!snapshot.ok) return snapshot;
 
   const anomalies = detectWatchAnomalies(snapshot);
+  const recommendations = recommendFromAnomalies(anomalies, snapshot);
 
   const report = {
     ok: true,
@@ -4040,6 +4276,11 @@ export async function runWatch(options = {}) {
     counts: snapshot.counts,
     lastEventAgeMs: snapshot.lastEventAgeMs,
     tailEvents: snapshot.tailEvents,
+    // v2.35: cursor for stateful polling
+    cursor: snapshot.cursor,
+    sinceTimestamp: snapshot.sinceTimestamp,
+    hasNewEvents: snapshot.hasNewEvents,
+    newEventsCount: snapshot.newEventsCount,
     summary: snapshot.summary
       ? {
           status: snapshot.summary.status,
@@ -4051,10 +4292,34 @@ export async function runWatch(options = {}) {
       : null,
     artifacts: snapshot.artifacts,
     anomalies,
+    recommendations,
     timestamp: new Date().toISOString(),
   };
 
-  if (mode === "snapshot") return report;
+  // v2.35: emit hub events (when watcher's hub is active)
+  if (eventBus && typeof eventBus.emit === "function") {
+    try {
+      eventBus.emit("watch-snapshot-completed", {
+        targetPath: report.targetPath,
+        runId: report.runId,
+        runState: report.runState,
+        anomalyCount: anomalies.length,
+        cursor: report.cursor,
+      });
+      for (const anomaly of anomalies) {
+        eventBus.emit("watch-anomaly-detected", {
+          targetPath: report.targetPath,
+          runId: report.runId,
+          ...anomaly,
+        });
+      }
+    } catch { /* never throw from event emission */ }
+  }
+
+  if (mode === "snapshot") {
+    if (recordHistory) appendWatchHistory(report);
+    return report;
+  }
 
   // Analyze mode: invoke frontier watcher model
   // CRITICAL: spawn the worker with cwd = watcher's own directory, NEVER the target's,
@@ -4066,10 +4331,156 @@ export async function runWatch(options = {}) {
     report.advice = result.output || "(no advice returned)";
     report.tokens = result.tokens || null;
     report.workerExitCode = result.exitCode;
+    if (eventBus && typeof eventBus.emit === "function") {
+      try {
+        eventBus.emit("watch-advice-generated", {
+          targetPath: report.targetPath,
+          runId: report.runId,
+          model,
+          tokensOut: result.tokens?.tokens_out || null,
+        });
+      } catch { /* never throw */ }
+    }
   } catch (err) {
     report.adviceError = err.message;
   }
+
+  if (recordHistory) appendWatchHistory(report);
   return report;
+}
+
+/**
+ * (v2.35) Connect to a target project's WebSocket hub for live event streaming.
+ * Falls back to polling buildWatchSnapshot if hub is not running.
+ *
+ * Read-only by design: only subscribes to events; never sends any messages
+ * to the target hub other than the initial label handshake.
+ *
+ * @param {object} options
+ * @param {string} options.targetPath - Absolute path to project being watched
+ * @param {(event: object) => void} options.onEvent - Callback per event received
+ * @param {(error: Error) => void} [options.onError] - Optional error callback
+ * @param {number} [options.durationMs=60000] - How long to listen (1-3600s window)
+ * @param {number} [options.pollIntervalMs=3000] - Polling interval if hub not available
+ * @returns {Promise<{ ok: boolean, mode: "websocket"|"polling", events: number, durationMs: number, error?: string }>}
+ */
+export async function runWatchLive(options = {}) {
+  const {
+    targetPath,
+    onEvent,
+    onError,
+    durationMs = 60_000,
+    pollIntervalMs = 3_000,
+  } = options;
+
+  if (!targetPath) return { ok: false, error: "targetPath is required" };
+  if (typeof onEvent !== "function") return { ok: false, error: "onEvent callback is required" };
+  const resolved = resolve(targetPath);
+  if (!existsSync(resolved)) return { ok: false, error: `Target path does not exist: ${resolved}` };
+
+  const cappedDuration = Math.min(3_600_000, Math.max(1_000, durationMs));
+
+  // Try WebSocket connection to target's hub
+  const portsPath = resolve(resolved, ".forge", "server-ports.json");
+  let hubInfo = null;
+  if (existsSync(portsPath)) {
+    try { hubInfo = JSON.parse(readFileSync(portsPath, "utf-8")); } catch { /* fall through */ }
+  }
+
+  if (hubInfo?.ws) {
+    // WebSocket mode
+    let ws;
+    let WSCtor;
+    try {
+      WSCtor = (await import("ws")).default;
+    } catch (err) {
+      // ws library not installed; fall through to polling
+      hubInfo = null;
+    }
+
+    if (WSCtor) {
+      return new Promise((resolveP) => {
+        let eventCount = 0;
+        let timer = null;
+        const url = `ws://127.0.0.1:${hubInfo.ws}?label=watcher-${Date.now()}`;
+        try {
+          ws = new WSCtor(url);
+        } catch (err) {
+          return resolveP({ ok: false, mode: "websocket", events: 0, durationMs: 0, error: err.message });
+        }
+
+        const cleanup = (result) => {
+          if (timer) clearTimeout(timer);
+          try { ws.close(); } catch { /* ignore */ }
+          resolveP(result);
+        };
+
+        ws.on("open", () => {
+          timer = setTimeout(() => cleanup({ ok: true, mode: "websocket", events: eventCount, durationMs: cappedDuration }), cappedDuration);
+        });
+
+        ws.on("message", (raw) => {
+          try {
+            const event = JSON.parse(raw.toString());
+            eventCount++;
+            onEvent(event);
+          } catch { /* skip malformed */ }
+        });
+
+        ws.on("error", (err) => {
+          if (typeof onError === "function") onError(err);
+        });
+
+        ws.on("close", () => {
+          if (timer) {
+            // Connection closed before duration expired — return what we got
+            cleanup({ ok: true, mode: "websocket", events: eventCount, durationMs: Date.now() % cappedDuration });
+          }
+        });
+      });
+    }
+  }
+
+  // Polling fallback — diff cursor pattern
+  return new Promise((resolveP) => {
+    let cursor = null;
+    let eventCount = 0;
+    const startTime = Date.now();
+
+    const poll = () => {
+      try {
+        const snap = buildWatchSnapshot(resolved, null, { tailEvents: 200, sinceTimestamp: cursor });
+        if (snap.ok) {
+          // Yield only events newer than cursor
+          if (cursor) {
+            const cutoffMs = new Date(cursor).getTime();
+            for (const ev of snap.events) {
+              if (new Date(ev.ts).getTime() > cutoffMs) {
+                eventCount++;
+                onEvent(ev);
+              }
+            }
+          } else {
+            // First poll — yield all in tail
+            for (const ev of snap.events) {
+              eventCount++;
+              onEvent(ev);
+            }
+          }
+          cursor = snap.cursor || cursor;
+        }
+      } catch (err) {
+        if (typeof onError === "function") onError(err);
+      }
+
+      if (Date.now() - startTime >= cappedDuration) {
+        return resolveP({ ok: true, mode: "polling", events: eventCount, durationMs: cappedDuration });
+      }
+      setTimeout(poll, pollIntervalMs);
+    };
+
+    poll();
+  });
 }
 
 export function loadQuorumConfig(cwd, presetOverride = null) {

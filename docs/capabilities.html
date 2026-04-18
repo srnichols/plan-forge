@@ -11,7 +11,7 @@
   <meta property="og:url" content="https://planforge.software/capabilities.html" />
   <meta property="og:image" content="https://planforge.software/assets/og-card.webp" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Plan Forge Capabilities — 30 MCP Tools + Autonomous Execution" />
+  <meta name="twitter:title" content="Plan Forge Capabilities — 36 MCP Tools + Watcher + Autonomous Execution" />
   <meta name="twitter:description" content="Complete capability reference: orchestrator, dashboard, telemetry, memory, 19 agents, 13 skills." />
   <link rel="canonical" href="https://planforge.software/capabilities.html" />
   <meta name="keywords" content="AI coding guardrails, MCP tools, plan execution, DAG scheduler, cost tracking, OTLP traces, OpenBrain, VS Code Copilot, Claude, GPT, autonomous development, quorum mode, multi-model consensus, A/B testing" />
@@ -195,8 +195,10 @@
           <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-amber-400 text-xs">forge_env_diff</code><p class="text-xs text-slate-500 mt-1">Env variable key divergence across .env files — keys only, values never read</p></div>
           <div class="bg-slate-800/40 rounded-lg p-3 border border-amber-700/20"><code class="text-amber-400 text-xs">forge_fix_proposal</code><span class="ml-2 px-1.5 py-0.5 text-[10px] rounded bg-amber-900/40 text-amber-500 border border-amber-700/30">v2.29</span><p class="text-xs text-slate-500 mt-1">Generates scoped 1-2 slice fix plan from regression/drift/incident/secret failure — capped, human-approved only</p></div>
           <div class="bg-slate-800/40 rounded-lg p-3 border border-amber-700/20"><code class="text-amber-400 text-xs">forge_quorum_analyze</code><span class="ml-2 px-1.5 py-0.5 text-[10px] rounded bg-amber-900/40 text-amber-500 border border-amber-700/30">v2.29</span><p class="text-xs text-slate-500 mt-1">Assembles structured quorum prompt from LiveGuard data for multi-model analysis — no LLM calls in server</p></div>
+          <div class="bg-slate-800/40 rounded-lg p-3 border border-sky-700/20"><code class="text-sky-300 text-xs">forge_watch</code><span class="ml-2 px-1.5 py-0.5 text-[10px] rounded bg-sky-900/40 text-sky-300 border border-sky-700/30">v2.34/v2.35</span><p class="text-xs text-slate-500 mt-1">Read-only watcher — tail another project's pforge run from a second VS Code session. Snapshot or analyze mode (claude-opus-4.7). Returns counts, anomalies, recommendations, diff cursor.</p></div>
+          <div class="bg-slate-800/40 rounded-lg p-3 border border-sky-700/20"><code class="text-sky-300 text-xs">forge_watch_live</code><span class="ml-2 px-1.5 py-0.5 text-[10px] rounded bg-sky-900/40 text-sky-300 border border-sky-700/30">v2.35</span><p class="text-xs text-slate-500 mt-1">Live tail — streams events for a fixed duration via target's WebSocket hub or events.log polling fallback. Read-only subscriber.</p></div>
         </div>
-        <p class="text-xs text-slate-500 mt-3">11 tools shipped, 2 more in v2.29. All available as MCP tools and REST endpoints. See <a href="manual/liveguard-tools.html" class="text-amber-400 hover:underline">Chapter 16 — LiveGuard Tools Reference</a> for full documentation.</p>
+        <p class="text-xs text-slate-500 mt-3">11 tools shipped, 2 more in v2.29, 2 watcher tools in v2.34/v2.35. All available as MCP tools and REST endpoints. See <a href="manual/liveguard-tools.html" class="text-amber-400 hover:underline">Chapter 16 — LiveGuard Tools Reference</a> for full documentation.</p>
       </div>
     </section>
 
@@ -214,7 +216,7 @@
         </div>
         <div class="bg-slate-800/60 rounded-xl p-6 border border-sky-700/30">
           <h3 class="text-lg font-bold text-white mb-2">Cloud Agent</h3>
-          <p class="text-sm text-slate-400">Copilot cloud agent provisions the environment via <code class="text-sky-300">copilot-setup-steps.yml</code>. Guardrails auto-load, all 30 MCP tools are available, and <code class="text-sky-300">forge_run_plan</code> executes slices autonomously on GitHub Issues.</p>
+          <p class="text-sm text-slate-400">Copilot cloud agent provisions the environment via <code class="text-sky-300">copilot-setup-steps.yml</code>. Guardrails auto-load, all 36 MCP tools are available, and <code class="text-sky-300">forge_run_plan</code> executes slices autonomously on GitHub Issues.</p>
         </div>
         <div class="bg-slate-800/60 rounded-xl p-6 border border-purple-700/30">
           <h3 class="text-lg font-bold text-white mb-2">Parallel</h3>

@@ -588,6 +588,60 @@ export const TOOL_METADATA = {
       output: { drift: { score: 100, appViolations: 0 }, sweep: { appMarkers: 0 }, secrets: { findings: 0 }, regression: { gates: 2, passed: 2, failed: 0 }, deps: { vulnerabilities: 0 }, alerts: { critical: 0, high: 0 }, health: { avgScore: 95, trend: "stable" }, overallStatus: "green" },
     },
   },
+  forge_watch: {
+    intent: ["observe", "watch", "monitor", "advise"],
+    aliases: ["watcher", "tail-run", "observe-run"],
+    cost: "low",
+    maxConcurrent: 5,
+    addedIn: "2.34.0",
+    prerequisites: ["<targetPath>/.forge/runs/ exists"],
+    produces: ["<watcherCwd>/.forge/watch-history.jsonl (when recordHistory=true)"],
+    consumes: [
+      "<targetPath>/.forge/runs/<runId>/events.log",
+      "<targetPath>/.forge/runs/<runId>/slice-*.json",
+      "<targetPath>/.forge/runs/<runId>/summary.json",
+    ],
+    sideEffects: [
+      "appends to watcher's own .forge/watch-history.jsonl (NEVER target's)",
+      "may emit watch-snapshot-completed/watch-anomaly-detected/watch-advice-generated hub events",
+      "in 'analyze' mode, invokes a frontier model (default claude-opus-4.7)",
+    ],
+    securityNote: "Read-only by design — cannot modify any files in the target project. History is written only to watcher's own cwd.",
+    errors: {
+      MISSING_TARGET: { message: "targetPath is required", recovery: "Pass an absolute path to the project being watched" },
+      NO_RUNS: { message: "No run directory found", recovery: "Verify the target has executed at least one pforge run" },
+    },
+    example: {
+      input: { targetPath: "E:/GitHub/Rummag", mode: "snapshot" },
+      output: { ok: true, runState: "in-progress", counts: { started: 5, completed: 4, failed: 0, escalated: 0 }, anomalies: [], recommendations: [], cursor: "2025-04-17T12:34:56.789Z" },
+    },
+  },
+  forge_watch_live: {
+    intent: ["observe", "stream", "tail", "monitor"],
+    aliases: ["watcher-live", "live-tail", "stream-events"],
+    cost: "low",
+    maxConcurrent: 5,
+    addedIn: "2.35.0",
+    prerequisites: ["<targetPath>/.forge/runs/ exists"],
+    produces: [],
+    consumes: [
+      "<targetPath>/.forge/server-ports.json (preferred — WebSocket subscription)",
+      "<targetPath>/.forge/runs/<latest>/events.log (polling fallback)",
+    ],
+    sideEffects: [
+      "opens read-only WebSocket subscription to target hub OR polls events.log",
+      "captures up to 500 events for the response payload",
+    ],
+    securityNote: "Read-only subscriber — never sends commands or modifies target files.",
+    errors: {
+      MISSING_TARGET: { message: "targetPath is required", recovery: "Pass an absolute path to the project being watched" },
+      TARGET_NOT_FOUND: { message: "Target path does not exist", recovery: "Verify path and try again" },
+    },
+    example: {
+      input: { targetPath: "E:/GitHub/Rummag", durationMs: 30000 },
+      output: { ok: true, mode: "websocket", events: 42, capturedEvents: 42 },
+    },
+  },
 };
 
 export const WORKFLOWS = {

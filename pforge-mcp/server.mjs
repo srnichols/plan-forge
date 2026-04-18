@@ -24,7 +24,7 @@ import { execSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, appendFileSync, watchFile, unwatchFile, statSync, openSync, readSync, closeSync } from "node:fs";
 import { resolve, join, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parsePlan, runPlan, detectWorkers, getCostReport, getHealthTrend, analyzeWithQuorum, generateImage, runAnalyze, readForgeJson, readForgeJsonl, appendForgeJsonl, emitToolTelemetry, regressionGuard, runPostSliceHook, resetPostSliceHookFired, runPreAgentHandoffHook, postOpenClawSnapshot, loadOpenClawConfig, loadQuorumConfig, runWatch } from "./orchestrator.mjs";
+import { parsePlan, runPlan, detectWorkers, getCostReport, getHealthTrend, analyzeWithQuorum, generateImage, runAnalyze, readForgeJson, readForgeJsonl, appendForgeJsonl, emitToolTelemetry, regressionGuard, runPostSliceHook, resetPostSliceHookFired, runPreAgentHandoffHook, postOpenClawSnapshot, loadOpenClawConfig, loadQuorumConfig, runWatch, runWatchLive } from "./orchestrator.mjs";
 import { isOpenBrainConfigured } from "./memory.mjs";
 import { createHub, readHubPort } from "./hub.mjs";
 import { createBridge } from "./bridge.mjs";
@@ -552,6 +552,21 @@ const TOOLS = [
         mode: { type: "string", enum: ["snapshot", "analyze"], description: "snapshot = file reads only, no AI cost. analyze = invokes watcher model for advice." },
         model: { type: "string", description: "Override watcher model (default: claude-opus-4.7)" },
         tailEvents: { type: "number", description: "Trailing events to include (1-200, default: 25). Lower = cheaper analyze prompts." },
+        sinceTimestamp: { type: "string", description: "(v2.35) ISO timestamp cursor — only flag events newer than this. Pass back the previous report's `cursor` field for continuous monitoring." },
+        recordHistory: { type: "boolean", description: "(v2.35) Append snapshot to watcher's own .forge/watch-history.jsonl (default: true)" },
+      },
+      required: ["targetPath"],
+    },
+  },
+  {
+    name: "forge_watch_live",
+    description: "WATCHER LIVE TAIL (v2.35) — stream events from another project's pforge run for a fixed duration. Connects to the target's WebSocket hub if running (`.forge/server-ports.json`); falls back to file polling otherwise. Read-only by design — only subscribes, never sends commands. Returns aggregate stats and the captured event stream.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        targetPath: { type: "string", description: "Absolute path to the project being watched" },
+        durationMs: { type: "number", description: "How long to listen, in ms (1000-3600000, default: 60000)" },
+        pollIntervalMs: { type: "number", description: "Polling interval if hub not running (default: 3000ms)" },
       },
       required: ["targetPath"],
     },
@@ -978,6 +993,7 @@ function executeTool(name, args) {
     case "forge_quorum_analyze":
     case "forge_liveguard_run":
     case "forge_watch":
+    case "forge_watch_live":
       return null; // Handled async in CallToolRequestSchema handler
     default:
       return { success: false, error: `Unknown tool: ${name}` };
@@ -1279,10 +1295,36 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         mode: args.mode || "snapshot",
         model: args.model || undefined,
         tailEvents: args.tailEvents || undefined,
+        sinceTimestamp: args.sinceTimestamp || undefined,
+        recordHistory: args.recordHistory !== false,
+        eventBus: activeHub
+          ? { emit: (type, data) => { try { activeHub.broadcast({ type, data, timestamp: new Date().toISOString() }); } catch { /* ignore */ } } }
+          : null,
       });
       return { content: [{ type: "text", text: JSON.stringify(report, null, 2) }] };
     } catch (err) {
       return { content: [{ type: "text", text: `Watcher error: ${err.message}` }], isError: true };
+    }
+  }
+
+  if (name === "forge_watch_live") {
+    try {
+      if (!args.targetPath) {
+        return { content: [{ type: "text", text: "forge_watch_live requires targetPath." }], isError: true };
+      }
+      const captured = [];
+      const result = await runWatchLive({
+        targetPath: args.targetPath,
+        durationMs: args.durationMs || 60_000,
+        pollIntervalMs: args.pollIntervalMs || 3_000,
+        onEvent: (event) => {
+          // Cap captured array at 500 to prevent runaway memory on chatty hubs
+          if (captured.length < 500) captured.push(event);
+        },
+      });
+      return { content: [{ type: "text", text: JSON.stringify({ ...result, capturedEvents: captured.length, events: captured }, null, 2) }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Watcher live error: ${err.message}` }], isError: true };
     }
   }
 

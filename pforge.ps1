@@ -2752,9 +2752,12 @@ function Invoke-Smith {
             Doctor-Warn "docs/assets/dashboard/ not found" "Run: node pforge-mcp/capture-screenshots.mjs to generate"
         }
 
-        # Site images
+        # Site images — only relevant inside the plan-forge dev repo itself.
+        # These are plan-forge's marketing assets (og-card, hero, etc.); downstream projects
+        # never need them. Detect dev-repo by presence of presets/ + pforge-mcp/server.mjs.
         $siteAssetsDir = Join-Path $RepoRoot "docs/assets"
-        if (Test-Path $siteAssetsDir) {
+        $isPlanForgeDevRepo = (Test-Path (Join-Path $RepoRoot "presets") -PathType Container) -and (Test-Path (Join-Path $RepoRoot "pforge-mcp/server.mjs") -PathType Leaf)
+        if ($isPlanForgeDevRepo -and (Test-Path $siteAssetsDir)) {
             $siteImages = @("og-card.webp", "hero-illustration.webp", "problem-80-20-wall.webp")
             $siteMissing = $siteImages | Where-Object { -not (Test-Path (Join-Path $siteAssetsDir $_)) }
             if ($siteMissing.Count -eq 0) {
@@ -2770,10 +2773,11 @@ function Invoke-Smith {
     # ═══════════════════════════════════════════════════════════════
     # 4f. LIFECYCLE HOOKS
     # ═══════════════════════════════════════════════════════════════
-    # Hooks can come from two sources:
-    #   1. Filesystem: .github/hooks/<HookName>.{ps1,sh,mjs,js}
-    #   2. Config: .forge.json -> hooks.{preDeploy,postSlice,preAgentHandoff,...}
-    # Smith now reconciles both — a hook is "present" if EITHER source defines it.
+    # Hooks can come from THREE sources:
+    #   1. Filesystem: .github/hooks/<HookName>.{ps1,sh,mjs,js,md}
+    #   2. Config: .forge.json -> hooks.{preDeploy,postSlice,preAgentHandoff,...} (camelCase)
+    #   3. Config: .github/hooks/plan-forge.json -> hooks.{SessionStart,PreToolUse,...} (PascalCase)
+    # Smith reconciles all three — a hook is "present" if ANY source defines it.
     $hooksDir = Join-Path $RepoRoot ".github/hooks"
     $hasHookFiles = Test-Path $hooksDir
     $hookConfig = $null
@@ -2784,7 +2788,17 @@ function Invoke-Smith {
         } catch { }
     }
 
-    if ($hasHookFiles -or $hookConfig) {
+    # Source 3: .github/hooks/plan-forge.json (shipped by `pforge update` from templates/)
+    $hooksJsonConfig = $null
+    $hooksJsonPath = Join-Path $hooksDir "plan-forge.json"
+    if (Test-Path $hooksJsonPath) {
+        try {
+            $hooksJsonRaw = Get-Content $hooksJsonPath -Raw | ConvertFrom-Json
+            if ($hooksJsonRaw.hooks) { $hooksJsonConfig = $hooksJsonRaw.hooks }
+        } catch { }
+    }
+
+    if ($hasHookFiles -or $hookConfig -or $hooksJsonConfig) {
         Write-Host "Lifecycle Hooks:" -ForegroundColor Cyan
         $coreHooks = @("SessionStart", "PreToolUse", "PostToolUse", "Stop")
         $liveGuardHooks = @("PostSlice", "PreAgentHandoff", "PreDeploy")
@@ -2819,11 +2833,18 @@ function Invoke-Smith {
                     if ($null -ne $cfgVal -and $cfgVal -ne $false) { $foundInConfig = $true }
                 }
             }
-            if ($foundInFiles -or $foundInConfig) {
+            $foundInHooksJson = $false
+            if ($hooksJsonConfig) {
+                # plan-forge.json uses PascalCase keys matching the hook name directly
+                $hjVal = $hooksJsonConfig.$hook
+                if ($null -ne $hjVal -and $hjVal -ne $false) { $foundInHooksJson = $true }
+            }
+            if ($foundInFiles -or $foundInConfig -or $foundInHooksJson) {
                 $hookCount++
                 $src = @()
-                if ($foundInFiles)  { $src += "file" }
-                if ($foundInConfig) { $src += ".forge.json" }
+                if ($foundInFiles)     { $src += "file" }
+                if ($foundInConfig)    { $src += ".forge.json" }
+                if ($foundInHooksJson) { $src += "hooks/plan-forge.json" }
                 $hookSources[$hook] = ($src -join "+")
             }
         }

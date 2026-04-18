@@ -5,10 +5,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [2.32.3] — 2026-04-14
+## [2.33.0] — 2026-04-17
 
-### Fixed
-- **REST proxy** (#3) — Added `method: "tools/call"` to fake request object, fixing Zod schema validation error. All MCP-only tools now invocable via `POST /api/tool/:name`.
+### Fixed — Orchestrator Reliability & Complexity Scoring (Rummag telemetry regressions)
+
+Five separate bugs surfaced while analyzing Rummag Phase-01 runs — all silently undermining execution reliability, token telemetry, and quorum escalation:
+
+- **`coalesceGateLines` false failures** — Gate allowlist rejected markdown numbered/bulleted list items (e.g. `1. Server generates CSRF token...`) as shell commands, marking successful slices as failed. Now skips lines matching `/^(\d+\.|[-*+])\s+/` before allowlist check. Rummag slice-7 (CI/CD) regression fixed.
+- **Windows token capture broken** — Worker child stdout/stderr used default platform encoding; Windows cp437 mangled gh copilot's `↑ ↓ •` arrows in the token summary line, silently breaking `parseStderrStats`. Force `setEncoding("utf8")` on both streams.
+- **ASCII fallback for `parseStderrStats`** — Regex extended to accept `^ * v` when terminals strip/replace Unicode (CI logs, restricted codepages). Exported for testability.
+- **`SECURITY_KEYWORDS` / `DATABASE_KEYWORDS` missing `/g` flag** — Without global flag, `.match()` returned max 2 elements (match + capture), capping `securityWeight` / `databaseWeight` at 0.33 regardless of actual hit count. Now correctly saturates with 3+ keyword hits.
+- **Slice metadata parser missed body-line formats** — `**Depends On:** Slice 1, Slice 2A` and `**Context Files:** \`path/to/file\`` in slice body were ignored; only the inline header tags `[depends: ...]` and `[scope: ...]` were extracted. Rummag plans (and most human-authored plans) use body-line format, leaving `depends[]` and `scope[]` empty → `dependencyWeight` and `scopeWeight` always 0 → complexity score stuck at 2 → **quorum never escalated for any Rummag slice**. Parser now merges body-line and header-tag entries, de-duplicated.
+
+### Added
+- 15 regression tests in `tests/orchestrator.test.mjs`: 5 for `coalesceGateLines`, 5 for `parseStderrStats`, 2 for `scoreSliceComplexity` signal detection, 5 for `parsePlan` body-line metadata (including end-to-end Rummag-style integration test).
+
+### Impact
+- Slices authored in standard markdown style (numbered CSRF flow descriptions, body-line deps) no longer false-fail the gate
+- Token / cost telemetry works on Windows for the first time — enables real model cost comparisons (e.g. Opus 4.6 vs 4.7)
+- Quorum escalation now actually triggers on security-heavy or cross-module slices — the feature works as designed
+
+### Migration
+No config changes required. Re-run your plan after upgrading; complexity scores will rise to their true values, which may cause slices that previously ran single-model to escalate to quorum. If you want to preserve old behaviour, raise `quorum.threshold` in `.forge.json`.
+
+
 
 ## [2.32.2] — 2026-04-14
 

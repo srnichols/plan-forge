@@ -295,6 +295,36 @@ function parseSlices(lines) {
     const stopMatch = line.match(/\*\*Stop Condition\*\*:\s*(.+)/);
     if (stopMatch) current.stopCondition = stopMatch[1].trim();
 
+    // Parse body-line **Depends On:** — merges with any [depends: ...] header tag.
+    // Formats supported (colon can be inside OR outside the bold markers):
+    //   **Depends On:** Slice 1, Slice 2A (auth required)
+    //   **Depends On**: Slice 0
+    const dependsBodyMatch = line.match(/\*\*Depends\s+On:?\*\*:?\s*(.+)/i);
+    if (dependsBodyMatch) {
+      // Strip trailing parenthetical notes, then split on commas
+      const rawDeps = dependsBodyMatch[1].replace(/\s*\([^)]*\)\s*$/, "").trim();
+      const bodyDeps = rawDeps
+        .split(/\s*,\s*/)
+        .map((d) => d.replace(/^slice\s+/i, "").trim())
+        .filter((d) => d.length > 0);
+      // Merge with header-tag deps, de-dup
+      for (const d of bodyDeps) {
+        if (!current.depends.includes(d)) current.depends.push(d);
+      }
+    }
+
+    // Parse body-line **Context Files:** — merges with any [scope: ...] header tag.
+    // Extracts backtick-wrapped paths. Colon may appear inside OR outside bold markers.
+    //   **Context Files:** `path/to/file.md`, `.github/instructions/auth.md`
+    const contextBodyMatch = line.match(/\*\*Context Files:?\*\*:?\s*(.+)/i);
+    if (contextBodyMatch) {
+      const backticks = contextBodyMatch[1].match(/`([^`]+)`/g) || [];
+      const files = backticks.map((s) => s.replace(/`/g, "").trim()).filter((s) => s.length > 0);
+      for (const f of files) {
+        if (!current.scope.includes(f)) current.scope.push(f);
+      }
+    }
+
     // Parse numbered tasks
     const taskMatch = line.match(/^\d+\.\s+(.+)/);
     if (taskMatch) current.tasks.push(taskMatch[1].trim());
@@ -3501,13 +3531,13 @@ function buildSlicePrompt(slice) {
  * Security-sensitive keywords that increase complexity score.
  * @type {RegExp}
  */
-const SECURITY_KEYWORDS = /\b(auth|token|rbac|encryption|secret|cors|jwt|oauth|password|credential|permission|role)\b/i;
+const SECURITY_KEYWORDS = /\b(auth|token|rbac|encryption|secret|cors|jwt|oauth|password|credential|permission|role)\b/gi;
 
 /**
  * Database/migration keywords that increase complexity score.
  * @type {RegExp}
  */
-const DATABASE_KEYWORDS = /\b(migration|schema|alter|create\s+table|drop|seed|index|foreign\s+key|constraint|ef\s+core|dbcontext|repository)\b/i;
+const DATABASE_KEYWORDS = /\b(migration|schema|alter|create\s+table|drop|seed|index|foreign\s+key|constraint|ef\s+core|dbcontext|repository)\b/gi;
 
 /**
  * Load quorum configuration from .forge.json.

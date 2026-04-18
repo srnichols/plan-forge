@@ -24,6 +24,7 @@ import {
   scoreSliceComplexity,
   coalesceGateLines,
   parseStderrStats,
+  parsePlan,
 } from "../orchestrator.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -1032,5 +1033,185 @@ describe("parseStderrStats", () => {
     const stats = parseStderrStats(stderr);
     expect(stats.tokens_in).toBe(3_200_000);
     expect(stats.tokens_out).toBe(1_500_000_000);
+  });
+});
+
+// ─── scoreSliceComplexity signal detection (Rummag regression) ───────
+
+describe("scoreSliceComplexity signal detection", () => {
+  function writePlanWithSlice(body) {
+    const planPath = resolve(tempDir, "signals-plan.md");
+    writeFileSync(planPath, [
+      "# Signals Plan",
+      "**Status**: draft",
+      "## Scope Contract",
+      "### In Scope",
+      "- Something",
+      "## Execution Slices",
+      body,
+    ].join("\n"));
+    return planPath;
+  }
+
+  it("SECURITY_KEYWORDS regex is global — counts ALL hits, not just one", () => {
+    // Regression: without /g flag, .match() returned max 2 elements (match + capture),
+    // so securityWeight could never exceed 0.67 even on heavily security-focused slices.
+    const planPath = writePlanWithSlice([
+      "### Slice 1: Auth — Tokens, OAuth, Password Hashing",
+      "1. Implement JWT token issuance with httpOnly cookies",
+      "2. Configure OAuth provider (Google) for SSO",
+      "3. Hash passwords with bcrypt, enforce RBAC via role claims",
+      "4. Add CORS middleware and rate-limit credential endpoints",
+      "5. Audit permission checks on every protected route",
+    ].join("\n"));
+    const origCwd = process.cwd();
+    process.chdir(tempDir);
+    try {
+      const plan = parsePlan(planPath, tempDir);
+      const { signals } = scoreSliceComplexity(plan.slices[0], tempDir);
+      // Slice text contains: auth, token, jwt, oauth, password, rbac, role, cors, credential, permission — 10+ hits
+      // With /g flag, securityWeight should saturate to 1.0 (3+ hits)
+      expect(signals.securityWeight).toBe(1);
+    } finally {
+      process.chdir(origCwd);
+    }
+  });
+
+  it("DATABASE_KEYWORDS regex is global", () => {
+    const planPath = writePlanWithSlice([
+      "### Slice 1: Schema Migration",
+      "1. Create migration to alter users table",
+      "2. Add index on email, foreign key constraint to tenant",
+      "3. Seed initial data via repository pattern",
+    ].join("\n"));
+    const origCwd = process.cwd();
+    process.chdir(tempDir);
+    try {
+      const plan = parsePlan(planPath, tempDir);
+      const { signals } = scoreSliceComplexity(plan.slices[0], tempDir);
+      expect(signals.databaseWeight).toBe(1);
+    } finally {
+      process.chdir(origCwd);
+    }
+  });
+});
+
+// ─── parsePlan body-line parsing (Rummag regression) ─────────────────
+
+describe("parsePlan body-line metadata", () => {
+  function writeBodyPlan(body) {
+    const planPath = resolve(tempDir, "body-plan.md");
+    writeFileSync(planPath, [
+      "# Body Plan",
+      "**Status**: draft",
+      "## Scope Contract",
+      "### In Scope",
+      "- Something",
+      "## Execution Slices",
+      body,
+    ].join("\n"));
+    return planPath;
+  }
+
+  it("parses **Depends On:** body line into depends[] (Rummag format)", () => {
+    // Regression: Rummag plan writes deps as body prose, not header tag.
+    // Previously depends[] was always [] → dependencyWeight always 0 → quorum never triggered.
+    const planPath = writeBodyPlan([
+      "### Slice 3: Campaigns",
+      "1. Build campaign CRUD",
+      "**Depends On:** Slice 1, Slice 2A (auth + items required)",
+    ].join("\n"));
+    const origCwd = process.cwd();
+    process.chdir(tempDir);
+    try {
+      const plan = parsePlan(planPath, tempDir);
+      expect(plan.slices[0].depends).toEqual(["1", "2A"]);
+    } finally {
+      process.chdir(origCwd);
+    }
+  });
+
+  it("merges body **Depends On:** with header [depends: ...] tag without duplicates", () => {
+    const planPath = writeBodyPlan([
+      "### Slice 3: Campaigns [depends: 1]",
+      "1. Do stuff",
+      "**Depends On:** Slice 1, Slice 2",
+    ].join("\n"));
+    const origCwd = process.cwd();
+    process.chdir(tempDir);
+    try {
+      const plan = parsePlan(planPath, tempDir);
+      expect(plan.slices[0].depends.sort()).toEqual(["1", "2"]);
+    } finally {
+      process.chdir(origCwd);
+    }
+  });
+
+  it("parses **Context Files:** body line into scope[] (Rummag format)", () => {
+    // Regression: Rummag plan declares context as backtick-wrapped paths in body,
+    // not header [scope:] tag. Previously scope[] was always [] → scopeWeight always 0.
+    const planPath = writeBodyPlan([
+      "### Slice 1: Auth",
+      "1. Implement Auth.js v5",
+      "**Context Files:** `.github/instructions/auth.instructions.md`, `Phase-01.md`, `apps/api/src/auth/`",
+    ].join("\n"));
+    const origCwd = process.cwd();
+    process.chdir(tempDir);
+    try {
+      const plan = parsePlan(planPath, tempDir);
+      expect(plan.slices[0].scope).toEqual([
+        ".github/instructions/auth.instructions.md",
+        "Phase-01.md",
+        "apps/api/src/auth/",
+      ]);
+    } finally {
+      process.chdir(origCwd);
+    }
+  });
+
+  it("body Context Files does not duplicate header [scope:] entries", () => {
+    const planPath = writeBodyPlan([
+      "### Slice 1: Auth [scope: src/auth/**]",
+      "1. Implement auth",
+      "**Context Files:** `src/auth/**`, `docs/auth.md`",
+    ].join("\n"));
+    const origCwd = process.cwd();
+    process.chdir(tempDir);
+    try {
+      const plan = parsePlan(planPath, tempDir);
+      expect(plan.slices[0].scope.sort()).toEqual(["docs/auth.md", "src/auth/**"]);
+    } finally {
+      process.chdir(origCwd);
+    }
+  });
+
+  it("integration: Rummag-style slice produces non-zero scope/dependency/security weights", () => {
+    // End-to-end regression: ensure complexity score rises above the previous
+    // stuck-at-2 baseline when the parser actually captures metadata.
+    const planPath = writeBodyPlan([
+      "### Slice 5: Payments — Stripe Standard Checkout",
+      "1. Implement PaymentIntent creation with auth-protected endpoints",
+      "2. Add webhook signature verification using Stripe secret",
+      "3. Enforce RBAC role checks on refund endpoints",
+      "4. Store payment credentials via encrypted token storage",
+      "5. Write migration for payment_intents schema with index on user_id",
+      "**Depends On:** Slice 1, Slice 2A",
+      "**Context Files:** `apps/api/src/payments/`, `apps/api/src/webhooks/`, `packages/db/migrations/`",
+    ].join("\n"));
+    const origCwd = process.cwd();
+    process.chdir(tempDir);
+    try {
+      const plan = parsePlan(planPath, tempDir);
+      const slice = plan.slices[0];
+      const { score, signals } = scoreSliceComplexity(slice, tempDir);
+      expect(slice.depends.length).toBe(2);
+      expect(slice.scope.length).toBe(3);
+      expect(signals.scopeWeight).toBeGreaterThan(0);
+      expect(signals.dependencyWeight).toBeGreaterThan(0);
+      expect(signals.securityWeight).toBeGreaterThan(0);
+      expect(score).toBeGreaterThanOrEqual(3); // Previously stuck at 2
+    } finally {
+      process.chdir(origCwd);
+    }
   });
 });

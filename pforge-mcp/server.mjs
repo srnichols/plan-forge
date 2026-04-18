@@ -551,6 +551,7 @@ const TOOLS = [
         runId: { type: "string", description: "Specific run directory under .forge/runs/ (default: latest)" },
         mode: { type: "string", enum: ["snapshot", "analyze"], description: "snapshot = file reads only, no AI cost. analyze = invokes watcher model for advice." },
         model: { type: "string", description: "Override watcher model (default: claude-opus-4.7)" },
+        tailEvents: { type: "number", description: "Trailing events to include (1-200, default: 25). Lower = cheaper analyze prompts." },
       },
       required: ["targetPath"],
     },
@@ -1277,6 +1278,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         runId: args.runId || null,
         mode: args.mode || "snapshot",
         model: args.model || undefined,
+        tailEvents: args.tailEvents || undefined,
       });
       return { content: [{ type: "text", text: JSON.stringify(report, null, 2) }] };
     } catch (err) {

@@ -3766,7 +3766,34 @@ export function readSliceArtifacts(runDir) {
  * @param {string|null} runId - Specific run dir, null for latest
  * @returns {object} Snapshot object
  */
-export function buildWatchSnapshot(targetPath, runId = null) {
+/**
+ * Map raw event types to a normalized runState taxonomy.
+ * Consumers should branch on these stable values, NOT on raw event types.
+ * @param {string|null} eventType - Raw event type from events.log (e.g. "run-completed")
+ * @param {boolean} hasStarted - Whether a run-started event was seen
+ * @returns {"completed"|"aborted"|"in-progress"|"unknown"}
+ */
+export function normalizeRunState(eventType, hasStarted) {
+  if (eventType === "run-completed") return "completed";
+  if (eventType === "run-aborted") return "aborted";
+  if (hasStarted) return "in-progress";
+  return "unknown";
+}
+
+/**
+ * Build a structured snapshot of the watched run's current state.
+ * Cheap to build — pure file reads, no AI calls.
+ *
+ * @param {string} targetPath - Absolute path to project being watched
+ * @param {string|null} runId - Specific run dir, null for latest
+ * @param {object} [opts]
+ * @param {number} [opts.tailEvents=25] - Number of trailing events to include (1..200)
+ * @returns {object} Snapshot object
+ */
+export function buildWatchSnapshot(targetPath, runId = null, opts = {}) {
+  const tailEventsRaw = Number.isFinite(opts.tailEvents) ? opts.tailEvents : 25;
+  const tailEvents = Math.min(200, Math.max(1, Math.floor(tailEventsRaw)));
+
   const located = findLatestRun(targetPath, runId);
   if (!located) {
     return { ok: false, error: `No run directory found under ${targetPath}/.forge/runs/`, targetPath };
@@ -3787,15 +3814,18 @@ export function buildWatchSnapshot(targetPath, runId = null) {
   const sliceStarted = events.filter((e) => e.type === "slice-started");
   const sliceCompleted = events.filter((e) => e.type === "slice-completed");
   const sliceFailed = events.filter((e) => e.type === "slice-failed");
+  const sliceEscalated = events.filter((e) => e.type === "slice-escalated");
   const lastEvent = events[events.length - 1] || null;
   const lastEventAgeMs = lastEvent ? Date.now() - new Date(lastEvent.ts).getTime() : null;
+  const runState = normalizeRunState(runCompleted?.type || null, Boolean(runStarted));
 
   return {
     ok: true,
     targetPath,
     runId: located.runId,
     runDir: located.runDir,
-    runState: runCompleted ? runCompleted.type : runStarted ? "in-progress" : "unknown",
+    runState,
+    lastEventType: runCompleted?.type || (runStarted ? "run-started" : null),
     plan: runStarted?.data?.plan || null,
     model: runStarted?.data?.model || null,
     sliceCount: runStarted?.data?.sliceCount || null,
@@ -3803,6 +3833,7 @@ export function buildWatchSnapshot(targetPath, runId = null) {
       started: sliceStarted.length,
       completed: sliceCompleted.length,
       failed: sliceFailed.length,
+      escalated: sliceEscalated.length,
       events: events.length,
       artifacts: artifacts.length,
     },
@@ -3821,7 +3852,8 @@ export function buildWatchSnapshot(targetPath, runId = null) {
       tokensOut: a.tokens?.tokens_out ?? null,
       gateError: a.gateError || null,
     })),
-    events: events.slice(-25), // last 25 events for compactness
+    tailEvents,
+    events: events.slice(-tailEvents),
   };
 }
 
@@ -3873,6 +3905,15 @@ export function detectWatchAnomalies(snapshot) {
       severity: "error",
       code: "slice-failed",
       message: `${snapshot.counts.failed} slice(s) failed`,
+    });
+  }
+
+  // 4b. Slice escalated to a stronger model (one or more retries triggered escalation)
+  if (snapshot.counts?.escalated > 0) {
+    anomalies.push({
+      severity: "warn",
+      code: "model-escalated",
+      message: `${snapshot.counts.escalated} slice(s) were escalated to a stronger model — investigate why initial model failed`,
     });
   }
 
@@ -3971,6 +4012,7 @@ export async function runWatch(options = {}) {
     mode = "snapshot",
     model = DEFAULT_WATCHER_MODEL,
     timeout = 300_000,
+    tailEvents = 25,
   } = options;
 
   if (!targetPath) {
@@ -3981,7 +4023,7 @@ export async function runWatch(options = {}) {
     return { ok: false, error: `Target path does not exist: ${resolved}` };
   }
 
-  const snapshot = buildWatchSnapshot(resolved, runId);
+  const snapshot = buildWatchSnapshot(resolved, runId, { tailEvents });
   if (!snapshot.ok) return snapshot;
 
   const anomalies = detectWatchAnomalies(snapshot);
@@ -3993,9 +4035,11 @@ export async function runWatch(options = {}) {
     targetPath: resolved,
     runId: snapshot.runId,
     runState: snapshot.runState,
+    lastEventType: snapshot.lastEventType,
     plan: snapshot.plan,
     counts: snapshot.counts,
     lastEventAgeMs: snapshot.lastEventAgeMs,
+    tailEvents: snapshot.tailEvents,
     summary: snapshot.summary
       ? {
           status: snapshot.summary.status,

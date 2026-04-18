@@ -31,6 +31,7 @@ import {
   buildWatchSnapshot,
   detectWatchAnomalies,
   runWatch,
+  normalizeRunState,
 } from "../orchestrator.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -1361,7 +1362,8 @@ describe("Watcher: buildWatchSnapshot", () => {
       `[2025-01-01T00:01:00.000Z] run-completed: {}`,
     ].join("\n"));
     const snap = buildWatchSnapshot(tempDir);
-    expect(snap.runState).toBe("run-completed");
+    expect(snap.runState).toBe("completed");
+    expect(snap.lastEventType).toBe("run-completed");
   });
 
   it("marks runState in-progress when no completion event yet", () => {
@@ -1464,5 +1466,109 @@ describe("Watcher: runWatch (snapshot mode)", () => {
     expect(result.runId).toBe("20250101-snap");
     expect(result.advice).toBeUndefined(); // no AI call in snapshot mode
     expect(Array.isArray(result.anomalies)).toBe(true);
+  });
+});
+
+// ─── Watcher v2.34.1: normalizeRunState + tailEvents + escalated ─────
+
+describe("Watcher v2.34.1: normalizeRunState", () => {
+  it("returns 'completed' for run-completed event", () => {
+    expect(normalizeRunState("run-completed", true)).toBe("completed");
+  });
+
+  it("returns 'aborted' for run-aborted event", () => {
+    expect(normalizeRunState("run-aborted", true)).toBe("aborted");
+  });
+
+  it("returns 'in-progress' when started but no completion", () => {
+    expect(normalizeRunState(null, true)).toBe("in-progress");
+  });
+
+  it("returns 'unknown' when no run-started seen", () => {
+    expect(normalizeRunState(null, false)).toBe("unknown");
+  });
+
+  it("ignores arbitrary event types", () => {
+    expect(normalizeRunState("slice-completed", true)).toBe("in-progress");
+  });
+});
+
+describe("Watcher v2.34.1: tailEvents control", () => {
+  it("clamps tailEvents to maximum 200", () => {
+    const runDir = resolve(tempDir, ".forge", "runs", "20250101-tail");
+    mkdirSync(runDir, { recursive: true });
+    const lines = Array.from({ length: 50 }, (_, i) =>
+      `[2025-01-01T00:00:${String(i).padStart(2, "0")}.000Z] slice-started: {"sliceNumber":${i}}`
+    );
+    writeFileSync(resolve(runDir, "events.log"), lines.join("\n"));
+    const snap = buildWatchSnapshot(tempDir, null, { tailEvents: 9999 });
+    expect(snap.tailEvents).toBe(200);
+  });
+
+  it("clamps tailEvents to minimum 1", () => {
+    const runDir = resolve(tempDir, ".forge", "runs", "20250101-tail2");
+    mkdirSync(runDir, { recursive: true });
+    writeFileSync(resolve(runDir, "events.log"), `[2025-01-01T00:00:00.000Z] run-started: {}`);
+    const snap = buildWatchSnapshot(tempDir, null, { tailEvents: 0 });
+    expect(snap.tailEvents).toBe(1);
+  });
+
+  it("respects tailEvents value within bounds", () => {
+    const runDir = resolve(tempDir, ".forge", "runs", "20250101-tail3");
+    mkdirSync(runDir, { recursive: true });
+    const lines = Array.from({ length: 30 }, (_, i) =>
+      `[2025-01-01T00:00:${String(i).padStart(2, "0")}.000Z] slice-started: {"sliceNumber":${i}}`
+    );
+    writeFileSync(resolve(runDir, "events.log"), lines.join("\n"));
+    const snap = buildWatchSnapshot(tempDir, null, { tailEvents: 5 });
+    expect(snap.tailEvents).toBe(5);
+    expect(snap.events.length).toBe(5);
+    // Last 5 should be slices 25-29
+    expect(snap.events[0].data.sliceNumber).toBe(25);
+    expect(snap.events[4].data.sliceNumber).toBe(29);
+  });
+
+  it("defaults to 25 when tailEvents not provided", () => {
+    const runDir = resolve(tempDir, ".forge", "runs", "20250101-tail4");
+    mkdirSync(runDir, { recursive: true });
+    writeFileSync(resolve(runDir, "events.log"), `[2025-01-01T00:00:00.000Z] run-started: {}`);
+    const snap = buildWatchSnapshot(tempDir);
+    expect(snap.tailEvents).toBe(25);
+  });
+});
+
+describe("Watcher v2.34.1: escalation tracking", () => {
+  it("counts slice-escalated events in counts.escalated", () => {
+    const runDir = resolve(tempDir, ".forge", "runs", "20250101-esc");
+    mkdirSync(runDir, { recursive: true });
+    writeFileSync(resolve(runDir, "events.log"), [
+      `[2025-01-01T00:00:00.000Z] run-started: {}`,
+      `[2025-01-01T00:00:10.000Z] slice-started: {"sliceNumber":1}`,
+      `[2025-01-01T00:01:00.000Z] slice-escalated: {"sliceNumber":1,"fromModel":"sonnet","toModel":"opus"}`,
+      `[2025-01-01T00:02:00.000Z] slice-completed: {"sliceNumber":1,"status":"passed"}`,
+    ].join("\n"));
+    const snap = buildWatchSnapshot(tempDir);
+    expect(snap.counts.escalated).toBe(1);
+  });
+
+  it("emits model-escalated anomaly when escalation count > 0", () => {
+    const snap = {
+      ok: true, runState: "in-progress", lastEventAgeMs: 1000,
+      counts: { failed: 0, escalated: 2 }, artifacts: [],
+    };
+    const anomalies = detectWatchAnomalies(snap);
+    const esc = anomalies.find((a) => a.code === "model-escalated");
+    expect(esc).toBeDefined();
+    expect(esc.severity).toBe("warn");
+    expect(esc.message).toMatch(/2 slice/);
+  });
+
+  it("no escalation anomaly when count is zero", () => {
+    const snap = {
+      ok: true, runState: "in-progress", lastEventAgeMs: 1000,
+      counts: { failed: 0, escalated: 0 }, artifacts: [],
+    };
+    const anomalies = detectWatchAnomalies(snap);
+    expect(anomalies.find((a) => a.code === "model-escalated")).toBeUndefined();
   });
 });

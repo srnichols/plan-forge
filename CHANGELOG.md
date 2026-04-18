@@ -5,6 +5,31 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.34.1] — 2026-04-17
+
+### Changed — Watcher API Polish
+
+- **`runState` normalized** — `forge_watch` now returns stable values `"completed"|"aborted"|"in-progress"|"unknown"` instead of leaking raw event types. Raw event type still available as `lastEventType` for power users. Existing branching code on `"run-completed"` should switch to `"completed"`.
+- **`tailEvents` parameter** — control how many trailing events the snapshot includes. Range 1-200 (default 25, clamped). Lower values reduce token cost in `analyze` mode against long-running targets.
+- **`counts.escalated`** — new snapshot field: number of `slice-escalated` events seen. Surfaces model-fallback behavior that was previously invisible.
+- **`model-escalated` anomaly** — new heuristic anomaly (severity `warn`) fires when any slice was escalated to a stronger model. Helps catch silent quality regressions.
+
+### Fixed
+- **`all-skipped` anomaly never fired** — depended on `runState === "completed"` but pre-fix `runState` was `"run-completed"`. Latent since v2.34.0; resolved by normalization.
+
+## [2.34.0] — 2026-04-17
+
+### Added — Watcher (`forge_watch`)
+
+- **New MCP tool `forge_watch`** — read-only observer that tails another project's pforge run from a separate VS Code Copilot session. Use to monitor Rummag-style cross-project executions without touching the target.
+- **Two modes**: `snapshot` (file reads + heuristic anomaly detection, no AI cost) and `analyze` (snapshot + invokes frontier model `claude-opus-4.7` for narrative advice).
+- **6 heuristic anomaly codes**: `stalled`, `tokens-zero`, `high-retries`, `slice-failed`, `all-skipped`, `gate-on-prose`.
+- **Quorum power preset upgraded** — `QUORUM_PRESETS.power.reviewerModel` bumped from `claude-opus-4.6` to `claude-opus-4.7`.
+- **Read-only enforcement** — watcher worker spawned with `cwd = watcher's own directory`, never the target's, so any tool calls cannot mutate the target project.
+- **26 new unit tests** covering `findLatestRun`, `parseEventsLog`, `readSliceArtifacts`, `buildWatchSnapshot`, `detectWatchAnomalies`, and `runWatch`.
+
+---
+
 ## [2.33.0] — 2026-04-17
 
 ### Fixed — Orchestrator Reliability & Complexity Scoring (Rummag telemetry regressions)

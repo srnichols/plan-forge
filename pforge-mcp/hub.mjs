@@ -14,7 +14,7 @@
  */
 
 import { WebSocketServer } from "ws";
-import { writeFileSync, mkdirSync, existsSync, readFileSync, unlinkSync } from "node:fs";
+import { writeFileSync, mkdirSync, existsSync, readFileSync, unlinkSync, appendFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
@@ -23,7 +23,12 @@ import { createServer } from "node:net";
 const DEFAULT_WS_PORT = 3101;
 const MAX_PORT_RETRIES = 10;
 const HEARTBEAT_INTERVAL_MS = 30_000;
-const EVENT_HISTORY_SIZE = 100;
+// G1.1 (v2.36): was 100 — a 20-slice plan burned through that in one run.
+// Raised to 500 so dashboards connecting mid-run see a representative history.
+const EVENT_HISTORY_SIZE = 500;
+// G1.1 (v2.36): on startup, rehydrate history from the last N runs' events.log
+// so late-connecting clients aren't limited to only the most-recent run.
+const REHYDRATE_RUN_COUNT = 3;
 
 // ─── Port Availability Check ──────────────────────────────────────────
 
@@ -84,6 +89,18 @@ export async function createHub(options = {}) {
   // Write port info to .forge/server-ports.json (M3)
   hub._writePortsFile();
 
+  // G1.1 (v2.36): rehydrate event history from the last N runs so
+  // dashboards connecting right after startup get context from more
+  // than just the most-recent run. Best-effort: never fail startup.
+  try {
+    const { runsScanned, eventsLoaded } = hub.rehydrateFromRuns();
+    if (eventsLoaded > 0) {
+      console.error(`[hub] rehydrated ${eventsLoaded} events from ${runsScanned} run(s)`);
+    }
+  } catch (err) {
+    console.error(`[hub] rehydrate skipped: ${err.message}`);
+  }
+
   console.error(`[hub] WebSocket server listening on ws://127.0.0.1:${actualPort}`);
 
   return hub;
@@ -91,8 +108,9 @@ export async function createHub(options = {}) {
 
 /**
  * Hub manages WebSocket connections, event broadcasting, and session registry.
+ * Exported so tests can construct it with a stub `wss` without binding a port.
  */
-class Hub {
+export class Hub {
   constructor(wss, port, cwd) {
     this.wss = wss;
     this.port = port;
@@ -167,7 +185,9 @@ class Hub {
   }
 
   /**
-   * Broadcast an event to all connected clients and add to history.
+   * Broadcast an event to all connected clients, add to history, and
+   * append a durable copy to `.forge/hub-events.jsonl` (G1.2).
+   *
    * All events include version: "1.0" per M4.
    *
    * @param {object} event - { type, ...data }
@@ -185,6 +205,15 @@ class Hub {
       this.eventHistory.shift();
     }
 
+    // G1.2 (v2.36): durable mirror. Every broadcast is persisted to
+    // `.forge/hub-events.jsonl` so dashboards, bridges, and post-mortems
+    // have a replayable source of truth independent of per-run events.log
+    // and independent of hub restarts. Best-effort: filesystem failure
+    // never breaks broadcasting.
+    try {
+      this._appendDurableEvent(enriched);
+    } catch { /* best-effort durability */ }
+
     // Send to all connected clients
     const payload = JSON.stringify(enriched);
     for (const [, client] of this.clients) {
@@ -192,6 +221,18 @@ class Hub {
         client.ws.send(payload);
       }
     }
+  }
+
+  /**
+   * G1.2: Append an enriched event to .forge/hub-events.jsonl.
+   * Kept as a method so tests can stub it and so the write path is named.
+   * @private
+   */
+  _appendDurableEvent(enriched) {
+    const dir = resolve(this.cwd, ".forge");
+    mkdirSync(dir, { recursive: true });
+    const logPath = resolve(dir, "hub-events.jsonl");
+    appendFileSync(logPath, JSON.stringify(enriched) + "\n");
   }
 
   /**
@@ -217,6 +258,61 @@ class Hub {
    */
   getHistory(count = EVENT_HISTORY_SIZE) {
     return this.eventHistory.slice(-count);
+  }
+
+  /**
+   * G1.1 (v2.36): Rehydrate `eventHistory` from the last N runs' events.log
+   * files so that dashboards connecting right after hub startup see context
+   * from more than just the most-recent run.
+   *
+   * Called once by the server during hub initialisation (after construct,
+   * before accepting the first connection).
+   *
+   * @param {number} [runCount=REHYDRATE_RUN_COUNT]
+   * @returns {{ runsScanned: number, eventsLoaded: number }}
+   */
+  rehydrateFromRuns(runCount = REHYDRATE_RUN_COUNT) {
+    const runsDir = resolve(this.cwd, ".forge", "runs");
+    if (!existsSync(runsDir)) return { runsScanned: 0, eventsLoaded: 0 };
+
+    let dirs;
+    try {
+      dirs = readdirSync(runsDir, { withFileTypes: true })
+        .filter((d) => d.isDirectory())
+        .map((d) => d.name)
+        .sort()
+        .reverse()
+        .slice(0, runCount);
+    } catch {
+      return { runsScanned: 0, eventsLoaded: 0 };
+    }
+
+    const loaded = [];
+    for (const dir of dirs.reverse()) { // oldest first so timestamps stay ordered
+      const logPath = resolve(runsDir, dir, "events.log");
+      if (!existsSync(logPath)) continue;
+      try {
+        const lines = readFileSync(logPath, "utf-8").split("\n").filter((l) => l.trim());
+        for (const line of lines) {
+          const match = line.match(/^\[([^\]]+)\]\s+(\S+):\s+(.*)$/);
+          if (!match) continue;
+          const [, timestamp, type, jsonStr] = match;
+          try {
+            const data = JSON.parse(jsonStr);
+            loaded.push({ version: "1.0", type, data, timestamp, source: "rehydrate" });
+          } catch { /* skip malformed */ }
+        }
+      } catch { /* skip unreadable runs */ }
+    }
+
+    // Keep only the most recent EVENT_HISTORY_SIZE entries if we overflowed
+    const tail = loaded.slice(-EVENT_HISTORY_SIZE);
+    this.eventHistory.push(...tail);
+    if (this.eventHistory.length > EVENT_HISTORY_SIZE) {
+      this.eventHistory = this.eventHistory.slice(-EVENT_HISTORY_SIZE);
+    }
+
+    return { runsScanned: dirs.length, eventsLoaded: tail.length };
   }
 
   /**

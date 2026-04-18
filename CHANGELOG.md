@@ -5,6 +5,63 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.36.0-beta.1] — 2026-04-18
+
+### Added — L1 Hub improvements (memory architecture gaps G1.1 – G1.4)
+
+This is the first of three beta drops on the path to v2.36.0. It tightens the
+**L1 Hub tier** of the memory architecture documented in `docs/MEMORY-ARCHITECTURE.md`.
+
+- **G1.1 — Hub history expanded + multi-run rehydration.** `EVENT_HISTORY_SIZE`
+  raised from 100 → **500** (a 20-slice plan burned through 100 in a single run,
+  so dashboards connecting mid-run only saw the tail). On startup the hub now
+  also replays events from the last 3 runs under `.forge/runs/*/events.log` via
+  a new `Hub.rehydrateFromRuns(runCount)` method — late-connecting clients get
+  context across runs, not just the most recent one. Rehydrated events are
+  tagged `source: "rehydrate"` so consumers can distinguish replay from live.
+
+- **G1.2 — Durable `.forge/hub-events.jsonl` mirror.** Every `hub.broadcast()`
+  call now appends the enriched event (with `version: "1.0"` + `timestamp`) to
+  `.forge/hub-events.jsonl` in addition to the in-memory ring buffer. Gives
+  dashboards, bridges, and post-mortems a replayable source of truth that
+  survives hub restarts and is independent of per-run `events.log` rotation.
+  Best-effort: filesystem errors are swallowed so a full disk can never break
+  live broadcasting.
+
+- **G1.3 — `forge_cost_report` now emits an L1 event.** The only dual-write
+  tool missing a hub broadcast; it now calls `broadcastLiveGuard("forge_cost_report", …)`
+  so dashboards can show "cost report generated" in real time, consistent with
+  the other 13 LiveGuard tools. (Audit confirmed the other four suspected gaps —
+  `forge_regression_guard`, `forge_alert_triage`, `forge_secret_scan`,
+  `forge_env_diff` — were already broadcasting; no changes needed there.)
+
+- **G1.4 — `forge_watch_live` dropped-event counter + configurable cap.** The
+  hardcoded `captured.length < 500` cap is now a configurable `maxCapturedEvents`
+  argument (default 500, max 10 000) and the response includes a new
+  **`droppedEvents`** field so callers can tell when the watcher produced more
+  events than the buffer could hold. Previously overflow was silent.
+
+### Testing
+
+- New `pforge-mcp/tests/hub.test.mjs` — 9 tests covering the durable append path,
+  best-effort failure handling, ring-buffer bounds, and multi-run rehydration
+  (happy path, missing directory, malformed lines, `runCount` selection,
+  overflow cap).
+- `Hub` class now exported from `hub.mjs` so tests can instantiate it with a stub
+  `wss` (EventEmitter) and avoid binding a real port.
+- Total test count: 671 → **680** passing.
+
+### Behaviour notes / compatibility
+
+- `hub-events.jsonl` is new — nothing reads it yet in this beta; G2.3 (planned
+  in `v2.36.0-beta.2`) will add a size cap and rotation policy. On long-running
+  projects the file will grow; a follow-up tool or `pforge prune` will land in
+  `v2.36.0-beta.2`.
+- `forge_watch_live` response shape gained two fields (`droppedEvents`,
+  `maxCapturedEvents`); existing callers that didn't read them are unaffected.
+
+---
+
 ## [2.35.1] — 2026-04-18
 
 ### Added — Memory Architecture doc + Watcher → L3 capture (G3.1)

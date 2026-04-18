@@ -1161,6 +1161,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 
   if (name === "forge_cost_report") {
+    const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
       const report = getCostReport(cwd);
@@ -1168,6 +1169,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const ht = getHealthTrend(cwd, 30, ["drift", "cost"]);
         report.healthTrend = { trend: ht.trend, dataPoints: ht.dataPoints };
       } catch { /* backward-compatible — omit on failure */ }
+      // G1.3 (v2.36): emit an L1 hub event so dashboards can show
+      // "cost report generated" in real time, consistent with every other
+      // dual-write tool. Best-effort — broadcastLiveGuard is no-op when
+      // the hub isn't running.
+      await broadcastLiveGuard("forge_cost_report", "OK", Date.now() - t0, {
+        totalRuns: report.runs ?? 0,
+        totalCost: report.total_cost_usd ?? 0,
+      });
       return { content: [{ type: "text", text: JSON.stringify(report, null, 2) }] };
     } catch (err) {
       return { content: [{ type: "text", text: `Cost report error: ${err.message}` }], isError: true };
@@ -1359,15 +1368,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       if (!args.targetPath) {
         return { content: [{ type: "text", text: "forge_watch_live requires targetPath." }], isError: true };
       }
+      // G1.4 (v2.36): configurable cap + dropped-event counter so callers
+      // know when the watcher ran hotter than the captured buffer could hold.
+      // Default 500 preserves pre-v2.36 behaviour; max 10_000 guards memory.
+      const rawMax = Number.isFinite(args.maxCapturedEvents) ? Number(args.maxCapturedEvents) : 500;
+      const maxCapturedEvents = Math.min(10_000, Math.max(1, Math.floor(rawMax)));
       const captured = [];
+      let droppedEvents = 0;
       const liveAnomalies = [];
       const result = await runWatchLive({
         targetPath: args.targetPath,
         durationMs: args.durationMs || 60_000,
         pollIntervalMs: args.pollIntervalMs || 3_000,
         onEvent: (event) => {
-          // Cap captured array at 500 to prevent runaway memory on chatty hubs
-          if (captured.length < 500) captured.push(event);
+          // G1.4 (v2.36): cap configurable, track drops
+          if (captured.length < maxCapturedEvents) {
+            captured.push(event);
+          } else {
+            droppedEvents++;
+          }
           // G3.1 (v2.35.1): collect anomaly events for L2/L3 capture after stream closes
           if (event?.type === "watch-anomaly-detected" && event?.data) {
             liveAnomalies.push(event.data);
@@ -1385,7 +1404,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
       const anomalyCaptureCount = uniqueAnomalies.length;
 
-      return { content: [{ type: "text", text: JSON.stringify({ ...result, capturedEvents: captured.length, capturedAnomalies: anomalyCaptureCount, events: captured }, null, 2) }] };
+      return { content: [{ type: "text", text: JSON.stringify({
+        ...result,
+        capturedEvents: captured.length,
+        droppedEvents,               // G1.4
+        maxCapturedEvents,           // G1.4
+        capturedAnomalies: anomalyCaptureCount,
+        events: captured,
+      }, null, 2) }] };
     } catch (err) {
       return { content: [{ type: "text", text: `Watcher live error: ${err.message}` }], isError: true };
     }

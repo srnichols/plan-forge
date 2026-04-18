@@ -1,8 +1,8 @@
 {
   "name": "Plan Forge",
-  "version": "2.32.3",
+  "version": "2.35.0",
   "tagline": "Forge the plan. Harden the scope. Ship with confidence.",
-  "description": "AI coding guardrails that convert rough ideas into hardened execution contracts. 7-step pipeline, 34 MCP tools (20 core + 14 LiveGuard), self-recursive intelligence, OpenBrain persistent memory, 19 reviewer agents, live dashboard.",
+  "description": "AI coding guardrails that convert rough ideas into hardened execution contracts. 7-step pipeline, 36 MCP tools (20 core + 14 LiveGuard + 2 Watcher), self-recursive intelligence, OpenBrain persistent memory, 19 reviewer agents, live dashboard.",
   "homepage": "https://planforge.software",
   "repository": "https://github.com/srnichols/plan-forge",
   "license": "MIT",
@@ -12,9 +12,10 @@
     "role": "Principal Cloud Solution Architect @ Microsoft"
   },
   "capabilities": {
-    "mcp_tools": 34,
+    "mcp_tools": 36,
     "mcp_tools_core": 20,
     "mcp_tools_liveguard": 14,
+    "mcp_tools_watcher": 2,
     "agents": 19,
     "skills": 12,
     "instruction_files": "15-18 per preset",

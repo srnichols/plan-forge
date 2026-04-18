@@ -24,7 +24,7 @@ import { execSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, appendFileSync, watchFile, unwatchFile, statSync, openSync, readSync, closeSync } from "node:fs";
 import { resolve, join, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parsePlan, runPlan, detectWorkers, getCostReport, getHealthTrend, analyzeWithQuorum, generateImage, runAnalyze, readForgeJson, readForgeJsonl, appendForgeJsonl, emitToolTelemetry, regressionGuard, runPostSliceHook, resetPostSliceHookFired, runPreAgentHandoffHook, postOpenClawSnapshot, loadOpenClawConfig, loadQuorumConfig } from "./orchestrator.mjs";
+import { parsePlan, runPlan, detectWorkers, getCostReport, getHealthTrend, analyzeWithQuorum, generateImage, runAnalyze, readForgeJson, readForgeJsonl, appendForgeJsonl, emitToolTelemetry, regressionGuard, runPostSliceHook, resetPostSliceHookFired, runPreAgentHandoffHook, postOpenClawSnapshot, loadOpenClawConfig, loadQuorumConfig, runWatch } from "./orchestrator.mjs";
 import { isOpenBrainConfigured } from "./memory.mjs";
 import { createHub, readHubPort } from "./hub.mjs";
 import { createBridge } from "./bridge.mjs";
@@ -542,6 +542,20 @@ const TOOLS = [
     },
   },
   {
+    name: "forge_watch",
+    description: "WATCHER (v2.34) — read-only observer that tails another project's pforge run. Run this from a SECOND VS Code Copilot session with Plan-Forge as the workspace, pointing targetPath at the project being executed. Returns snapshot of current run state (slices passed/failed/in-progress, token counts, gate errors) plus heuristic anomaly detection. Mode 'analyze' additionally invokes a frontier model (default: claude-opus-4.7) for narrative advice. The watcher CANNOT modify any files in the target project.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        targetPath: { type: "string", description: "Absolute path to the project being watched (e.g., E:/GitHub/Rummag)" },
+        runId: { type: "string", description: "Specific run directory under .forge/runs/ (default: latest)" },
+        mode: { type: "string", enum: ["snapshot", "analyze"], description: "snapshot = file reads only, no AI cost. analyze = invokes watcher model for advice." },
+        model: { type: "string", description: "Override watcher model (default: claude-opus-4.7)" },
+      },
+      required: ["targetPath"],
+    },
+  },
+  {
     name: "forge_skill_status",
     description: "Get recent skill execution events from the WebSocket hub history. Shows which skills were run, per-step results, and timing.",
     inputSchema: {
@@ -962,6 +976,7 @@ function executeTool(name, args) {
     case "forge_fix_proposal":
     case "forge_quorum_analyze":
     case "forge_liveguard_run":
+    case "forge_watch":
       return null; // Handled async in CallToolRequestSchema handler
     default:
       return { success: false, error: `Unknown tool: ${name}` };
@@ -1249,6 +1264,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return { content: [{ type: "text", text: JSON.stringify(surface, null, 2) }] };
     } catch (err) {
       return { content: [{ type: "text", text: `Capabilities error: ${err.message}` }], isError: true };
+    }
+  }
+
+  if (name === "forge_watch") {
+    try {
+      if (!args.targetPath) {
+        return { content: [{ type: "text", text: "forge_watch requires targetPath (absolute path to the project being watched)." }], isError: true };
+      }
+      const report = await runWatch({
+        targetPath: args.targetPath,
+        runId: args.runId || null,
+        mode: args.mode || "snapshot",
+        model: args.model || undefined,
+      });
+      return { content: [{ type: "text", text: JSON.stringify(report, null, 2) }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Watcher error: ${err.message}` }], isError: true };
     }
   }
 

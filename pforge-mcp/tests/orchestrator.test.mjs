@@ -25,6 +25,12 @@ import {
   coalesceGateLines,
   parseStderrStats,
   parsePlan,
+  findLatestRun,
+  parseEventsLog,
+  readSliceArtifacts,
+  buildWatchSnapshot,
+  detectWatchAnomalies,
+  runWatch,
 } from "../orchestrator.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -867,6 +873,11 @@ describe("loadQuorumConfig", () => {
     expect(config.preset).toBe("power");
   });
 
+  it("power preset uses claude-opus-4.7 as reviewer model (v2.34)", () => {
+    const config = loadQuorumConfig(tempDir, "power");
+    expect(config.reviewerModel).toBe("claude-opus-4.7");
+  });
+
   it("user config overrides preset values", () => {
     writeFileSync(resolve(tempDir, ".forge.json"), JSON.stringify({
       quorum: { threshold: 10, models: ["custom-model"] }
@@ -1213,5 +1224,245 @@ describe("parsePlan body-line metadata", () => {
     } finally {
       process.chdir(origCwd);
     }
+  });
+});
+
+// ─── Watcher (v2.34) ─────────────────────────────────────────────────
+
+describe("Watcher: findLatestRun", () => {
+  it("returns null when .forge/runs/ doesn't exist", () => {
+    expect(findLatestRun(tempDir)).toBeNull();
+  });
+
+  it("returns null when runs dir is empty", () => {
+    mkdirSync(resolve(tempDir, ".forge", "runs"), { recursive: true });
+    expect(findLatestRun(tempDir)).toBeNull();
+  });
+
+  it("returns the lexicographically last run dir", () => {
+    const runs = resolve(tempDir, ".forge", "runs");
+    mkdirSync(resolve(runs, "20250101-aaa"), { recursive: true });
+    mkdirSync(resolve(runs, "20250201-bbb"), { recursive: true });
+    mkdirSync(resolve(runs, "20250101-ccc"), { recursive: true });
+    const result = findLatestRun(tempDir);
+    expect(result.runId).toBe("20250201-bbb");
+  });
+
+  it("honors explicit runId", () => {
+    const runs = resolve(tempDir, ".forge", "runs");
+    mkdirSync(resolve(runs, "specific-run"), { recursive: true });
+    mkdirSync(resolve(runs, "newer-run"), { recursive: true });
+    const result = findLatestRun(tempDir, "specific-run");
+    expect(result.runId).toBe("specific-run");
+  });
+
+  it("returns null when explicit runId doesn't exist", () => {
+    mkdirSync(resolve(tempDir, ".forge", "runs", "real-run"), { recursive: true });
+    expect(findLatestRun(tempDir, "fake-run")).toBeNull();
+  });
+});
+
+describe("Watcher: parseEventsLog", () => {
+  it("returns empty array when events.log missing", () => {
+    expect(parseEventsLog(tempDir)).toEqual([]);
+  });
+
+  it("parses valid event lines", () => {
+    const log = [
+      `[2025-01-01T00:00:00.000Z] run-started: {"plan":"Phase-1.md","sliceCount":3}`,
+      `[2025-01-01T00:00:05.000Z] slice-started: {"sliceNumber":1}`,
+      `[2025-01-01T00:01:00.000Z] slice-completed: {"sliceNumber":1,"status":"passed"}`,
+    ].join("\n");
+    writeFileSync(resolve(tempDir, "events.log"), log);
+    const events = parseEventsLog(tempDir);
+    expect(events.length).toBe(3);
+    expect(events[0].type).toBe("run-started");
+    expect(events[0].data.plan).toBe("Phase-1.md");
+    expect(events[2].data.status).toBe("passed");
+  });
+
+  it("skips malformed lines without crashing", () => {
+    writeFileSync(resolve(tempDir, "events.log"), "not a real line\n[2025-01-01T00:00:00.000Z] run-started: {}\ngarbage");
+    const events = parseEventsLog(tempDir);
+    expect(events.length).toBe(1);
+    expect(events[0].type).toBe("run-started");
+  });
+});
+
+describe("Watcher: readSliceArtifacts", () => {
+  it("returns empty when no slice files present", () => {
+    expect(readSliceArtifacts(tempDir)).toEqual([]);
+  });
+
+  it("reads and sorts slice-N.json artifacts", () => {
+    writeFileSync(resolve(tempDir, "slice-3.json"), JSON.stringify({ status: "passed", title: "Three" }));
+    writeFileSync(resolve(tempDir, "slice-1.json"), JSON.stringify({ status: "passed", title: "One" }));
+    writeFileSync(resolve(tempDir, "slice-2.json"), JSON.stringify({ status: "failed", title: "Two" }));
+    writeFileSync(resolve(tempDir, "summary.json"), "{}"); // should be ignored
+    const arts = readSliceArtifacts(tempDir);
+    expect(arts.length).toBe(3);
+    expect(arts[0].sliceNumber).toBe(1);
+    expect(arts[1].sliceNumber).toBe(2);
+    expect(arts[2].sliceNumber).toBe(3);
+    expect(arts[1].status).toBe("failed");
+  });
+
+  it("skips malformed JSON files", () => {
+    writeFileSync(resolve(tempDir, "slice-1.json"), "{not valid json");
+    writeFileSync(resolve(tempDir, "slice-2.json"), JSON.stringify({ status: "passed" }));
+    const arts = readSliceArtifacts(tempDir);
+    expect(arts.length).toBe(1);
+    expect(arts[0].sliceNumber).toBe(2);
+  });
+});
+
+describe("Watcher: buildWatchSnapshot", () => {
+  it("returns ok=false when no run dir exists", () => {
+    const snap = buildWatchSnapshot(tempDir);
+    expect(snap.ok).toBe(false);
+    expect(snap.error).toMatch(/No run directory/);
+  });
+
+  it("builds full snapshot from events + artifacts + summary", () => {
+    const runDir = resolve(tempDir, ".forge", "runs", "20250101-test");
+    mkdirSync(runDir, { recursive: true });
+    writeFileSync(resolve(runDir, "events.log"), [
+      `[2025-01-01T00:00:00.000Z] run-started: {"plan":"P.md","sliceCount":2,"model":"claude-opus-4.7"}`,
+      `[2025-01-01T00:00:01.000Z] slice-started: {"sliceNumber":1}`,
+      `[2025-01-01T00:01:00.000Z] slice-completed: {"sliceNumber":1,"status":"passed"}`,
+      `[2025-01-01T00:01:01.000Z] slice-started: {"sliceNumber":2}`,
+      `[2025-01-01T00:02:00.000Z] slice-failed: {"sliceNumber":2}`,
+    ].join("\n"));
+    writeFileSync(resolve(runDir, "slice-1.json"), JSON.stringify({
+      status: "passed", title: "First", duration: 60000, attempts: 1,
+      tokens: { tokens_in: 1000, tokens_out: 500 },
+    }));
+    writeFileSync(resolve(runDir, "slice-2.json"), JSON.stringify({
+      status: "failed", title: "Second", duration: 59000, attempts: 3,
+      gateError: "exit 1",
+    }));
+    const snap = buildWatchSnapshot(tempDir);
+    expect(snap.ok).toBe(true);
+    expect(snap.runId).toBe("20250101-test");
+    expect(snap.plan).toBe("P.md");
+    expect(snap.model).toBe("claude-opus-4.7");
+    expect(snap.counts.completed).toBe(1);
+    expect(snap.counts.failed).toBe(1);
+    expect(snap.artifacts.length).toBe(2);
+    expect(snap.artifacts[0].tokensOut).toBe(500);
+    expect(snap.artifacts[1].attempts).toBe(3);
+  });
+
+  it("derives runState from completion event", () => {
+    const runDir = resolve(tempDir, ".forge", "runs", "20250101-done");
+    mkdirSync(runDir, { recursive: true });
+    writeFileSync(resolve(runDir, "events.log"), [
+      `[2025-01-01T00:00:00.000Z] run-started: {}`,
+      `[2025-01-01T00:01:00.000Z] run-completed: {}`,
+    ].join("\n"));
+    const snap = buildWatchSnapshot(tempDir);
+    expect(snap.runState).toBe("run-completed");
+  });
+
+  it("marks runState in-progress when no completion event yet", () => {
+    const runDir = resolve(tempDir, ".forge", "runs", "20250101-active");
+    mkdirSync(runDir, { recursive: true });
+    writeFileSync(resolve(runDir, "events.log"), `[2025-01-01T00:00:00.000Z] run-started: {}`);
+    const snap = buildWatchSnapshot(tempDir);
+    expect(snap.runState).toBe("in-progress");
+  });
+});
+
+describe("Watcher: detectWatchAnomalies", () => {
+  it("returns empty for clean snapshot", () => {
+    const snap = {
+      ok: true,
+      runState: "in-progress",
+      lastEventAgeMs: 30_000,
+      counts: { failed: 0 },
+      artifacts: [{ sliceNumber: 1, status: "passed", duration: 30_000, tokensOut: 5000, attempts: 1 }],
+    };
+    expect(detectWatchAnomalies(snap)).toEqual([]);
+  });
+
+  it("flags stalled runs (no events >5min)", () => {
+    const snap = {
+      ok: true, runState: "in-progress", lastEventAgeMs: 10 * 60_000,
+      counts: { failed: 0 }, artifacts: [],
+    };
+    const anomalies = detectWatchAnomalies(snap);
+    expect(anomalies.find((a) => a.code === "stalled")).toBeDefined();
+  });
+
+  it("flags zero-token completed slices that ran > 1min", () => {
+    const snap = {
+      ok: true, runState: "in-progress", lastEventAgeMs: 1000,
+      counts: { failed: 0 },
+      artifacts: [{ sliceNumber: 5, status: "passed", duration: 120_000, tokensOut: 0, attempts: 1 }],
+    };
+    const anomalies = detectWatchAnomalies(snap);
+    expect(anomalies.find((a) => a.code === "tokens-zero")).toBeDefined();
+  });
+
+  it("flags high retry attempts", () => {
+    const snap = {
+      ok: true, runState: "in-progress", lastEventAgeMs: 1000,
+      counts: { failed: 0 },
+      artifacts: [{ sliceNumber: 7, status: "passed", duration: 30_000, tokensOut: 1000, attempts: 3 }],
+    };
+    const anomalies = detectWatchAnomalies(snap);
+    expect(anomalies.find((a) => a.code === "high-retries")).toBeDefined();
+  });
+
+  it("flags failed slice count", () => {
+    const snap = {
+      ok: true, runState: "in-progress", lastEventAgeMs: 1000,
+      counts: { failed: 2 }, artifacts: [],
+    };
+    const anomalies = detectWatchAnomalies(snap);
+    const failed = anomalies.find((a) => a.code === "slice-failed");
+    expect(failed).toBeDefined();
+    expect(failed.severity).toBe("error");
+  });
+
+  it("flags gate-on-prose regression", () => {
+    const snap = {
+      ok: true, runState: "in-progress", lastEventAgeMs: 1000,
+      counts: { failed: 0 },
+      artifacts: [{ sliceNumber: 8, status: "failed", gateError: "command '1.' not found" }],
+    };
+    const anomalies = detectWatchAnomalies(snap);
+    expect(anomalies.find((a) => a.code === "gate-on-prose")).toBeDefined();
+  });
+
+  it("returns empty for ok=false snapshot", () => {
+    expect(detectWatchAnomalies({ ok: false })).toEqual([]);
+  });
+});
+
+describe("Watcher: runWatch (snapshot mode)", () => {
+  it("requires targetPath", async () => {
+    const result = await runWatch({});
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/targetPath/);
+  });
+
+  it("returns error when targetPath does not exist", async () => {
+    const result = await runWatch({ targetPath: resolve(tempDir, "nope") });
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/does not exist/);
+  });
+
+  it("returns snapshot report without invoking AI", async () => {
+    const runDir = resolve(tempDir, ".forge", "runs", "20250101-snap");
+    mkdirSync(runDir, { recursive: true });
+    writeFileSync(resolve(runDir, "events.log"), `[2025-01-01T00:00:00.000Z] run-started: {"plan":"X.md"}`);
+    const result = await runWatch({ targetPath: tempDir, mode: "snapshot" });
+    expect(result.ok).toBe(true);
+    expect(result.mode).toBe("snapshot");
+    expect(result.watcherModel).toBeNull();
+    expect(result.runId).toBe("20250101-snap");
+    expect(result.advice).toBeUndefined(); // no AI call in snapshot mode
+    expect(Array.isArray(result.anomalies)).toBe(true);
   });
 });

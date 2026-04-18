@@ -3548,7 +3548,7 @@ const DATABASE_KEYWORDS = /\b(migration|schema|alter|create\s+table|drop|seed|in
 const QUORUM_PRESETS = {
   power: {
     models: ["claude-opus-4.6", "gpt-5.3-codex", "grok-4.20-0309-reasoning"],
-    reviewerModel: "claude-opus-4.6",
+    reviewerModel: "claude-opus-4.7",
     dryRunTimeout: 300_000, // 5 min — reasoning models need more time
     threshold: 5,           // lower threshold = more slices get quorum treatment
   },
@@ -3680,6 +3680,352 @@ export async function postOpenClawSnapshot(cwd, extraContext = {}) {
     // Fire-and-forget — never throw
     return { sent: false, endpoint, error: err.name === "AbortError" ? "timeout (5s)" : err.message };
   }
+}
+
+// ─── Watcher (v2.34) ─────────────────────────────────────────────────
+// A read-only observer that watches another project's pforge run from a
+// separate VS Code Copilot session. Tails events.log + slice-*.json files,
+// optionally invokes a frontier model (default: claude-opus-4.7) to advise.
+// The watcher MUST NOT modify files in the target project.
+
+/**
+ * Default model for the watcher. Frontier-tier — needs strong reasoning to
+ * spot anomalies in another agent's output.
+ */
+const DEFAULT_WATCHER_MODEL = "claude-opus-4.7";
+
+/**
+ * Discover the most recent run directory under <targetPath>/.forge/runs/.
+ * @param {string} targetPath - Absolute path to the project being watched
+ * @param {string|null} [runId=null] - Specific run dir name; null = newest
+ * @returns {{ runDir: string, runId: string } | null}
+ */
+export function findLatestRun(targetPath, runId = null) {
+  const runsDir = resolve(targetPath, ".forge", "runs");
+  if (!existsSync(runsDir)) return null;
+  if (runId) {
+    const explicit = resolve(runsDir, runId);
+    return existsSync(explicit) ? { runDir: explicit, runId } : null;
+  }
+  let entries;
+  try { entries = readdirSync(runsDir, { withFileTypes: true }); } catch { return null; }
+  const dirs = entries.filter((e) => e.isDirectory()).map((e) => e.name).sort();
+  if (dirs.length === 0) return null;
+  const latest = dirs[dirs.length - 1];
+  return { runDir: resolve(runsDir, latest), runId: latest };
+}
+
+/**
+ * Parse events.log into structured entries.
+ * Format per line: "[ISO] eventType: {jsonData}"
+ * @param {string} runDir
+ * @returns {Array<{ ts: string, type: string, data: object }>}
+ */
+export function parseEventsLog(runDir) {
+  const logPath = resolve(runDir, "events.log");
+  if (!existsSync(logPath)) return [];
+  const events = [];
+  try {
+    const raw = readFileSync(logPath, "utf-8");
+    for (const line of raw.split("\n")) {
+      const m = line.match(/^\[([^\]]+)\]\s+([a-z-]+):\s*(.*)$/);
+      if (!m) continue;
+      let data = {};
+      try { data = JSON.parse(m[3] || "{}"); } catch { /* keep empty */ }
+      events.push({ ts: m[1], type: m[2], data });
+    }
+  } catch { /* ignore */ }
+  return events;
+}
+
+/**
+ * Read all slice-*.json artifacts in a run directory.
+ * @param {string} runDir
+ * @returns {Array<object>}
+ */
+export function readSliceArtifacts(runDir) {
+  const artifacts = [];
+  let entries;
+  try { entries = readdirSync(runDir); } catch { return artifacts; }
+  for (const name of entries) {
+    const m = name.match(/^slice-(\d+)\.json$/);
+    if (!m) continue;
+    try {
+      const data = JSON.parse(readFileSync(resolve(runDir, name), "utf-8"));
+      artifacts.push({ sliceNumber: parseInt(m[1], 10), ...data });
+    } catch { /* skip malformed */ }
+  }
+  return artifacts.sort((a, b) => a.sliceNumber - b.sliceNumber);
+}
+
+/**
+ * Build a structured snapshot of the watched run's current state.
+ * Cheap to build — pure file reads, no AI calls.
+ *
+ * @param {string} targetPath - Absolute path to project being watched
+ * @param {string|null} runId - Specific run dir, null for latest
+ * @returns {object} Snapshot object
+ */
+export function buildWatchSnapshot(targetPath, runId = null) {
+  const located = findLatestRun(targetPath, runId);
+  if (!located) {
+    return { ok: false, error: `No run directory found under ${targetPath}/.forge/runs/`, targetPath };
+  }
+  const events = parseEventsLog(located.runDir);
+  const artifacts = readSliceArtifacts(located.runDir);
+
+  // Read summary.json if present (means run completed)
+  let summary = null;
+  const summaryPath = resolve(located.runDir, "summary.json");
+  if (existsSync(summaryPath)) {
+    try { summary = JSON.parse(readFileSync(summaryPath, "utf-8")); } catch { /* ignore */ }
+  }
+
+  // Compute live status from events
+  const runStarted = events.find((e) => e.type === "run-started");
+  const runCompleted = events.find((e) => e.type === "run-completed" || e.type === "run-aborted");
+  const sliceStarted = events.filter((e) => e.type === "slice-started");
+  const sliceCompleted = events.filter((e) => e.type === "slice-completed");
+  const sliceFailed = events.filter((e) => e.type === "slice-failed");
+  const lastEvent = events[events.length - 1] || null;
+  const lastEventAgeMs = lastEvent ? Date.now() - new Date(lastEvent.ts).getTime() : null;
+
+  return {
+    ok: true,
+    targetPath,
+    runId: located.runId,
+    runDir: located.runDir,
+    runState: runCompleted ? runCompleted.type : runStarted ? "in-progress" : "unknown",
+    plan: runStarted?.data?.plan || null,
+    model: runStarted?.data?.model || null,
+    sliceCount: runStarted?.data?.sliceCount || null,
+    counts: {
+      started: sliceStarted.length,
+      completed: sliceCompleted.length,
+      failed: sliceFailed.length,
+      events: events.length,
+      artifacts: artifacts.length,
+    },
+    lastEvent,
+    lastEventAgeMs,
+    summary,
+    artifacts: artifacts.map((a) => ({
+      sliceNumber: a.sliceNumber,
+      title: a.title || a.slice?.title || null,
+      status: a.status || null,
+      attempts: a.attempts || null,
+      duration: a.duration || null,
+      worker: a.worker || null,
+      model: a.model || null,
+      tokensIn: a.tokens?.tokens_in ?? null,
+      tokensOut: a.tokens?.tokens_out ?? null,
+      gateError: a.gateError || null,
+    })),
+    events: events.slice(-25), // last 25 events for compactness
+  };
+}
+
+/**
+ * Detect anomalies in a snapshot without calling an AI model.
+ * Cheap heuristics — used both standalone and as input to the analyzer prompt.
+ *
+ * @param {object} snapshot - Output of buildWatchSnapshot()
+ * @returns {Array<{ severity: "info"|"warn"|"error", code: string, message: string }>}
+ */
+export function detectWatchAnomalies(snapshot) {
+  const anomalies = [];
+  if (!snapshot.ok) return anomalies;
+
+  // 1. Stalled run: in-progress but no events for >5 min
+  if (snapshot.runState === "in-progress" && snapshot.lastEventAgeMs && snapshot.lastEventAgeMs > 5 * 60_000) {
+    anomalies.push({
+      severity: "warn",
+      code: "stalled",
+      message: `No events for ${Math.round(snapshot.lastEventAgeMs / 60_000)}min — run may be stalled`,
+    });
+  }
+
+  // 2. Token-parsing regression: completed slices reporting 0 tokens
+  for (const a of snapshot.artifacts) {
+    if (a.status === "passed" && (a.tokensOut === 0 || a.tokensOut === null) && a.duration && a.duration > 60_000) {
+      anomalies.push({
+        severity: "warn",
+        code: "tokens-zero",
+        message: `Slice ${a.sliceNumber} ran ${Math.round(a.duration / 1000)}s but reports 0 output tokens — parser may be broken`,
+      });
+    }
+  }
+
+  // 3. High retry attempts
+  for (const a of snapshot.artifacts) {
+    if (a.attempts && a.attempts >= 3) {
+      anomalies.push({
+        severity: "warn",
+        code: "high-retries",
+        message: `Slice ${a.sliceNumber} took ${a.attempts} attempts (close to retry limit)`,
+      });
+    }
+  }
+
+  // 4. Failed slice present
+  if (snapshot.counts.failed > 0) {
+    anomalies.push({
+      severity: "error",
+      code: "slice-failed",
+      message: `${snapshot.counts.failed} slice(s) failed`,
+    });
+  }
+
+  // 5. All slices skipped (likely no-op detection)
+  if (
+    snapshot.runState === "completed" &&
+    snapshot.summary?.results?.skipped === snapshot.summary?.results?.total &&
+    snapshot.summary?.results?.total > 0
+  ) {
+    anomalies.push({
+      severity: "info",
+      code: "all-skipped",
+      message: "All slices were skipped — likely a no-op re-run of an already-executed plan",
+    });
+  }
+
+  // 6. Gate-on-prose failures
+  for (const a of snapshot.artifacts) {
+    if (a.gateError && /'[\d]+\.'/.test(a.gateError)) {
+      anomalies.push({
+        severity: "error",
+        code: "gate-on-prose",
+        message: `Slice ${a.sliceNumber} gate failed on markdown numbered-list prose — coalesceGateLines regression`,
+      });
+    }
+  }
+
+  return anomalies;
+}
+
+/**
+ * Build the watcher analyzer prompt for the frontier model.
+ */
+function buildWatcherPrompt(snapshot, anomalies) {
+  const lines = [
+    "You are the Plan Forge WATCHER — a read-only observer of another AI agent's plan execution.",
+    "You CANNOT modify any files. Your job is to:",
+    "  1. Summarize the watched run's current state in 2-3 sentences.",
+    "  2. Flag anomalies, regressions, or concerning patterns.",
+    "  3. Recommend specific corrective actions the executing agent should take.",
+    "",
+    "Be concise. Prefer concrete recommendations over generic observations.",
+    "When advising commands, format them as: `pforge <command>` or shell snippets.",
+    "",
+    "--- SNAPSHOT ---",
+    JSON.stringify({
+      targetPath: snapshot.targetPath,
+      runId: snapshot.runId,
+      runState: snapshot.runState,
+      plan: snapshot.plan,
+      model: snapshot.model,
+      counts: snapshot.counts,
+      lastEventAgeMs: snapshot.lastEventAgeMs,
+      summary: snapshot.summary
+        ? {
+            status: snapshot.summary.status,
+            results: snapshot.summary.results,
+            totalDuration: snapshot.summary.totalDuration,
+            totalTokensOut: snapshot.summary.totalTokensOut,
+            cost: snapshot.summary.cost?.total_cost_usd,
+          }
+        : null,
+      artifacts: snapshot.artifacts,
+    }, null, 2),
+    "",
+    "--- HEURISTIC ANOMALIES (already detected) ---",
+    anomalies.length === 0 ? "(none)" : JSON.stringify(anomalies, null, 2),
+    "",
+    "--- LAST 25 EVENTS ---",
+    JSON.stringify(snapshot.events, null, 2),
+    "",
+    "Produce your watcher report as Markdown with sections: ## Status / ## Anomalies / ## Recommendations.",
+  ];
+  return lines.join("\n");
+}
+
+/**
+ * Watch another project's pforge execution. Read-only.
+ *
+ * Modes:
+ *   - "snapshot": Return current state + heuristic anomalies. No AI call. Cheap.
+ *   - "analyze":  Snapshot + invoke frontier model for advice. Costs a worker call.
+ *
+ * @param {object} options
+ * @param {string} options.targetPath  - Absolute path to project being watched
+ * @param {string} [options.runId]     - Specific run dir; default = latest
+ * @param {"snapshot"|"analyze"} [options.mode="snapshot"]
+ * @param {string} [options.model]     - Override watcher model (default: claude-opus-4.7)
+ * @param {number} [options.timeout=300000] - Worker timeout for analyze mode
+ * @returns {Promise<object>} Watcher report
+ */
+export async function runWatch(options = {}) {
+  const {
+    targetPath,
+    runId = null,
+    mode = "snapshot",
+    model = DEFAULT_WATCHER_MODEL,
+    timeout = 300_000,
+  } = options;
+
+  if (!targetPath) {
+    return { ok: false, error: "targetPath is required" };
+  }
+  const resolved = resolve(targetPath);
+  if (!existsSync(resolved)) {
+    return { ok: false, error: `Target path does not exist: ${resolved}` };
+  }
+
+  const snapshot = buildWatchSnapshot(resolved, runId);
+  if (!snapshot.ok) return snapshot;
+
+  const anomalies = detectWatchAnomalies(snapshot);
+
+  const report = {
+    ok: true,
+    mode,
+    watcherModel: mode === "analyze" ? model : null,
+    targetPath: resolved,
+    runId: snapshot.runId,
+    runState: snapshot.runState,
+    plan: snapshot.plan,
+    counts: snapshot.counts,
+    lastEventAgeMs: snapshot.lastEventAgeMs,
+    summary: snapshot.summary
+      ? {
+          status: snapshot.summary.status,
+          results: snapshot.summary.results,
+          totalDuration: snapshot.summary.totalDuration,
+          totalTokensOut: snapshot.summary.totalTokensOut,
+          cost: snapshot.summary.cost?.total_cost_usd,
+        }
+      : null,
+    artifacts: snapshot.artifacts,
+    anomalies,
+    timestamp: new Date().toISOString(),
+  };
+
+  if (mode === "snapshot") return report;
+
+  // Analyze mode: invoke frontier watcher model
+  // CRITICAL: spawn the worker with cwd = watcher's own directory, NEVER the target's,
+  // so any tool calls the watcher might make cannot touch the target project.
+  const prompt = buildWatcherPrompt(snapshot, anomalies);
+  const watcherCwd = process.cwd(); // watcher's own working directory
+  try {
+    const result = await spawnWorker(prompt, { model, cwd: watcherCwd, timeout });
+    report.advice = result.output || "(no advice returned)";
+    report.tokens = result.tokens || null;
+    report.workerExitCode = result.exitCode;
+  } catch (err) {
+    report.adviceError = err.message;
+  }
+  return report;
 }
 
 export function loadQuorumConfig(cwd, presetOverride = null) {

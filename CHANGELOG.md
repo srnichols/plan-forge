@@ -5,6 +5,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.34.3] — 2026-04-17
+
+### Fixed — forge_smith remaining false-positives in downstream projects
+
+- **Site images check is now plan-forge–repo only** — `pforge.ps1` and `pforge.sh` smith no longer warn about missing `og-card.webp`, `hero-illustration.webp`, `problem-80-20-wall.webp` in downstream projects. These are plan-forge’s own marketing assets and have no meaning outside the dev repo. The check is now gated on the presence of `presets/` + `pforge-mcp/server.mjs` (markers unique to the source repo).
+- **Lifecycle hook detection now reads `.github/hooks/plan-forge.json`** — the four core hooks (`SessionStart`, `PreToolUse`, `PostToolUse`, `Stop`) are configured in `.github/hooks/plan-forge.json` (shipped by `pforge update` from `templates/`). Smith now treats those hooks as present when the JSON declares them, in addition to file-based and `.forge.json`-based detection. Resolves `4/7 hooks present — Missing: SessionStart, PreToolUse, PostToolUse` warning on freshly updated projects.
+
+### Notes
+
+No behavior change for the plan-forge dev repo itself. Downstream projects on v2.34.2 will see both warnings clear after `pforge update`.
+
+---
+
 ## [2.34.2] — 2026-04-17
 
 ### Fixed — forge_smith warning false-positives

@@ -2786,6 +2786,7 @@ const tabLoadHooks = {
   'lg-security': () => { loadLGSecurity(); tabBadgeState.lgSecurityAlert = false; updateTabBadges(); },
   'lg-env': loadLGEnv,
   watcher: () => { renderWatcherPanel(); tabBadgeState.watcherNew = 0; updateTabBadges(); },
+  memory: loadMemoryReport,
 };
 
 // ─── Theme Toggle ─────────────────────────────────────────────
@@ -3079,6 +3080,136 @@ function renderWatcherPanel() {
   }
 }
 window.renderWatcherPanel = renderWatcherPanel;
+
+// ─── Memory Tab Loader (GX.1 v2.36) ─────────────────────────────────────
+// Pulls /api/memory/report (backed by buildMemoryReport in memory.mjs / GX.3)
+// and renders KPI strip + L2 file table + by-tool/by-type breakdowns + drain
+// trend + orphan list. Defensive: every section degrades to a friendly placeholder
+// when its slice of the report is empty.
+async function loadMemoryReport() {
+  const setText = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+  const setHTML = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
+  let report;
+  try {
+    const r = await fetch(`${API_BASE}/api/memory/report`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    report = await r.json();
+  } catch (err) {
+    setText("mem-captures-total", "—");
+    setHTML("mem-l2-files", `<p class="text-red-400 py-2 text-center">Failed to load: ${err.message}</p>`);
+    return;
+  }
+
+  // KPI strip
+  const t = report.telemetry || { total: 0, dedupedCount: 0, byTool: {}, byType: {} };
+  const q = report.queue || { pending: 0, delivered: 0, failed: 0, deferred: 0, dlq: 0 };
+  const c = report.cache || { totalEntries: 0, uniqueKeys: 0, freshEntries: 0 };
+  setText("mem-captures-total", t.total);
+  setText("mem-captures-deduped", `${t.dedupedCount} deduped`);
+  setText("mem-queue-pending", q.pending);
+  setText("mem-queue-deferred", `${q.deferred} deferred`);
+  setText("mem-queue-delivered", q.delivered);
+  setText("mem-queue-dlq", q.failed + q.dlq);
+  setText("mem-cache-fresh", c.freshEntries);
+  setText("mem-cache-total", `${c.totalEntries} total entries`);
+
+  // L2 files table
+  const files = Array.isArray(report.l2Files) ? report.l2Files : [];
+  if (files.length === 0) {
+    setHTML("mem-l2-files", `<p class="text-gray-500 py-2 text-center">No L2 files yet.</p>`);
+  } else {
+    const fmtBytes = (n) => {
+      if (n < 1024) return `${n} B`;
+      if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+      return `${(n / 1024 / 1024).toFixed(1)} MB`;
+    };
+    const rows = files.map((f) => {
+      const status = f.exists
+        ? `<span class="text-green-400">✓</span>`
+        : `<span class="text-gray-600">·</span>`;
+      const versions = f.versions ? Object.entries(f.versions).map(([v, n]) => `_v:${v}=${n}`).join(" · ") : "—";
+      return `<tr class="border-b border-gray-700/50">
+        <td class="py-1 pr-2">${status}</td>
+        <td class="py-1 pr-2 font-mono text-gray-300">${f.name}</td>
+        <td class="py-1 pr-2 text-right text-gray-400">${f.exists ? f.records : "—"}</td>
+        <td class="py-1 pr-2 text-right text-gray-500">${f.exists ? fmtBytes(f.size) : "—"}</td>
+        <td class="py-1 text-gray-500">${f.exists ? versions : "—"}</td>
+      </tr>`;
+    }).join("");
+    setHTML("mem-l2-files", `<table class="w-full text-xs">
+      <thead><tr class="text-gray-500 border-b border-gray-700">
+        <th class="text-left py-1 pr-2"></th>
+        <th class="text-left py-1 pr-2">File</th>
+        <th class="text-right py-1 pr-2">Records</th>
+        <th class="text-right py-1 pr-2">Size</th>
+        <th class="text-left py-1">Versions</th>
+      </tr></thead><tbody>${rows}</tbody></table>`);
+  }
+
+  // By-tool breakdown
+  const byTool = t.byTool || {};
+  const toolEntries = Object.entries(byTool).sort(([, a], [, b]) => b - a);
+  if (toolEntries.length === 0) {
+    setHTML("mem-by-tool", `<p class="text-gray-500 py-2 text-center">No captures yet.</p>`);
+  } else {
+    const max = toolEntries[0][1] || 1;
+    setHTML("mem-by-tool", toolEntries.map(([tool, n]) => {
+      const pct = Math.round((n / max) * 100);
+      return `<div class="mb-1">
+        <div class="flex justify-between text-gray-400">
+          <span class="font-mono">${tool}</span><span>${n}</span>
+        </div>
+        <div class="h-1 bg-gray-700 rounded"><div class="h-1 bg-blue-500 rounded" style="width:${pct}%"></div></div>
+      </div>`;
+    }).join(""));
+  }
+
+  // By-type breakdown
+  const byType = t.byType || {};
+  const typeEntries = Object.entries(byType).sort(([, a], [, b]) => b - a);
+  if (typeEntries.length === 0) {
+    setHTML("mem-by-type", `<p class="text-gray-500 py-2 text-center">No captures yet.</p>`);
+  } else {
+    const max = typeEntries[0][1] || 1;
+    const colors = { gotcha: "bg-amber-500", lesson: "bg-green-500", decision: "bg-purple-500", pattern: "bg-blue-500", convention: "bg-cyan-500" };
+    setHTML("mem-by-type", typeEntries.map(([type, n]) => {
+      const pct = Math.round((n / max) * 100);
+      const color = colors[type] || "bg-gray-500";
+      return `<div class="mb-1">
+        <div class="flex justify-between text-gray-400">
+          <span class="font-mono">${type}</span><span>${n}</span>
+        </div>
+        <div class="h-1 bg-gray-700 rounded"><div class="h-1 ${color} rounded" style="width:${pct}%"></div></div>
+      </div>`;
+    }).join(""));
+  }
+
+  // Drain trend
+  const drain = report.drainTrend || { passes: 0 };
+  if (drain.passes === 0) {
+    setHTML("mem-drain-trend", `<p class="text-gray-500 py-2 text-center">No drain passes recorded yet.</p>`);
+  } else {
+    setHTML("mem-drain-trend", `<table class="w-full text-xs">
+      <tbody>
+        <tr><td class="text-gray-500 py-0.5">Passes</td><td class="text-right text-gray-300">${drain.passes}</td></tr>
+        <tr><td class="text-gray-500 py-0.5">Last attempted</td><td class="text-right text-gray-300">${drain.lastAttempted}</td></tr>
+        <tr><td class="text-gray-500 py-0.5">Last delivered</td><td class="text-right text-green-400">${drain.lastDelivered}</td></tr>
+        <tr><td class="text-gray-500 py-0.5">Total delivered</td><td class="text-right text-gray-300">${drain.totalDelivered}</td></tr>
+        <tr><td class="text-gray-500 py-0.5">Total deferred</td><td class="text-right text-gray-300">${drain.totalDeferred}</td></tr>
+      </tbody></table>`);
+  }
+
+  // Orphans
+  const orphans = Array.isArray(report.orphans) ? report.orphans : [];
+  if (orphans.length === 0) {
+    setHTML("mem-orphans", `<p class="text-green-400 py-2 text-center">✓ No orphan files.</p>`);
+  } else {
+    setHTML("mem-orphans", `<ul class="list-disc list-inside text-amber-400 font-mono">${
+      orphans.map((o) => `<li>${o}</li>`).join("")
+    }</ul>`);
+  }
+}
+window.loadMemoryReport = loadMemoryReport;
 
 async function copyWatchCommand(live) {
   const cmd = live ? "pforge watch-live <target-path>" : "pforge watch <target-path>";

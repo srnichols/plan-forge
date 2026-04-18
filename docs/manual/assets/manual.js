@@ -13,6 +13,7 @@
     { id: "your-first-plan",     file: "your-first-plan.html",     num: "4",  title: "Your First Plan",          act: "II" },
     { id: "writing-plans",       file: "writing-plans.html",       num: "5",  title: "Writing Plans That Work",  act: "II" },
     { id: "dashboard",           file: "dashboard.html",           num: "6",  title: "The Dashboard",            act: "II" },
+    { id: "memory-architecture", file: "memory-architecture.html", num: "6.5", title: "Memory Architecture",      act: "II" },
     { id: "cli-reference",       file: "cli-reference.html",       num: "7",  title: "CLI Reference",            act: "III" },
     { id: "customization",       file: "customization.html",       num: "8",  title: "Customization",            act: "III" },
     { id: "instructions-agents", file: "instructions-agents.html", num: "9",  title: "Instruction Files & Agents", act: "III" },

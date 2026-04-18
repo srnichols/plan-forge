@@ -890,3 +890,57 @@ export function buildMemoryReport(cwd = process.cwd()) {
   };
 }
 
+// ─── GX.2 — L3 → L1 preload on plan-start ──────────────────────────────
+
+/**
+ * GX.2 (v2.36): build a "plan boot context" — a small bundle of OpenBrain
+ * search hints derived from the plan itself. Emitted into the L1 hub at
+ * `run-started` time so the dashboard, watchers, and the first worker
+ * see prior decisions about *this plan* and *its slice domains* before
+ * the first slice starts (instead of waiting until mid-slice for the
+ * worker's own `search_thoughts` call).
+ *
+ * The hints are deterministic — the actual L3 lookup is still performed
+ * by the agent (we don't have OpenBrain credentials server-side). What
+ * GX.2 closes is the "no semantic context at boot" gap.
+ *
+ * Pure function. Returns an empty `hints` array when projectName/plan
+ * are absent — caller can broadcast unconditionally.
+ *
+ * @param {{slices?: Array<{title?: string, name?: string}>, name?: string}} plan
+ * @param {string} projectName
+ * @param {{maxHints?: number}} [opts]
+ * @returns {{_v: number, projectName: string, planName: string, hints: Array<{kind: string, query: string, limit: number}>}}
+ */
+export function buildPlanBootContext(plan, projectName, opts = {}) {
+  const maxHints = typeof opts.maxHints === "number" ? opts.maxHints : 8;
+  const planName = (plan && (plan.name || plan.planName)) || "";
+  const out = { _v: 1, projectName: projectName || "", planName, hints: [] };
+  if (!projectName || !plan) return out;
+
+  // 1) Plan-level hint — prior runs of this exact plan
+  if (planName) {
+    out.hints.push({ kind: "plan-history", query: `plan ${planName}`, limit: 5 });
+  }
+
+  // 2) Slice-keyword hints — dedup by query string
+  const map = loadKeywordSearchMap();
+  const seen = new Set();
+  const slices = Array.isArray(plan.slices) ? plan.slices : [];
+  for (const slice of slices) {
+    const title = (slice && (slice.title || slice.name)) || "";
+    if (!title) continue;
+    for (const { pattern, query } of map) {
+      if (seen.has(query)) continue;
+      if (pattern.test(title)) {
+        out.hints.push({ kind: "slice-keyword", query, limit: 5 });
+        seen.add(query);
+        if (out.hints.length >= maxHints) return out;
+      }
+    }
+  }
+
+  return out;
+}
+
+

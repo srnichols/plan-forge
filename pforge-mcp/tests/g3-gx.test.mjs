@@ -29,6 +29,7 @@ import {
   isCacheEntryFresh,
   buildMemoryReport,
   validateSourceFormat,
+  buildPlanBootContext,
 } from "../memory.mjs";
 
 function tmpProject() {
@@ -408,6 +409,52 @@ describe("GX.3 buildMemoryReport", () => {
       expect(r.orphans).not.toContain("drift-history.json.bak-2026-04-18");
     } finally {
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+
+// ─── GX.2 — Plan boot-context (L3 → L1 preload) ───────────────────────
+
+describe("GX.2 buildPlanBootContext", () => {
+  it("returns empty hints when projectName missing", () => {
+    const r = buildPlanBootContext({ slices: [{ title: "Add database migration" }] }, "");
+    expect(r._v).toBe(1);
+    expect(r.hints).toEqual([]);
+  });
+  it("returns empty hints when plan missing", () => {
+    const r = buildPlanBootContext(null, "demo");
+    expect(r.hints).toEqual([]);
+  });
+  it("emits a plan-history hint when plan name is present", () => {
+    const r = buildPlanBootContext({ name: "Phase-1-AUTH", slices: [] }, "demo");
+    expect(r.planName).toBe("Phase-1-AUTH");
+    expect(r.hints[0]).toMatchObject({ kind: "plan-history", query: "plan Phase-1-AUTH" });
+  });
+  it("derives slice-keyword hints, deduped by query", () => {
+    const r = buildPlanBootContext({
+      name: "x",
+      slices: [
+        { title: "Add database migration for users" },
+        { title: "Migrate database schema for orders" },
+        { title: "Wire up REST API endpoints" },
+      ],
+    }, "demo");
+    const queries = r.hints.map((h) => h.query);
+    expect(queries).toContain("plan x");
+    expect(queries.filter((q) => q === "database migration patterns").length).toBe(1);
+    expect(queries).toContain("API endpoint design patterns");
+  });
+  it("respects maxHints opt", () => {
+    const slices = Array.from({ length: 20 }, (_, i) => ({ title: `database api auth test deploy ui cache error openbrain slice ${i}` }));
+    const r = buildPlanBootContext({ name: "p", slices }, "demo", { maxHints: 3 });
+    expect(r.hints.length).toBeLessThanOrEqual(3);
+  });
+  it("each hint carries a numeric limit", () => {
+    const r = buildPlanBootContext({ name: "x", slices: [{ title: "auth jwt" }] }, "demo");
+    for (const h of r.hints) {
+      expect(typeof h.limit).toBe("number");
+      expect(h.limit).toBeGreaterThan(0);
     }
   });
 });

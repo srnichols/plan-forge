@@ -3266,6 +3266,14 @@ function createExpressApp() {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
+  // REST API: GET /api/memory/report — GX.3 (v2.36) memory health aggregator
+  // Backs the Memory tab in the dashboard (GX.1).
+  app.get("/api/memory/report", (_req, res) => {
+    try {
+      res.json(buildMemoryReport(PROJECT_DIR));
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
   // REST API: GET /api/health-trend — health trend analysis
   app.get("/api/health-trend", (_req, res) => {
     try {

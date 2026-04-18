@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<!-- verified: v2.36.0 -->
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chapter 6.5: Memory Architecture — Plan Forge Manual</title>
+  <meta name="description" content="The three-tier memory system: in-RAM hub (L1), local JSONL files (L2), and OpenBrain pgvector (L3). Dual-write capture, watcher integration, drain queue, and migration tooling." />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+
+    <main>
+      <div class="chapter-content">
+
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 6.5</div>
+        <h1>Memory Architecture</h1>
+        <p class="text-lg text-slate-400 mb-8">Three tiers, one capture path. How Plan Forge remembers what it learned — across slices, across sessions, across plans.</p>
+
+        <div class="callout callout-tip">
+          <strong>New in v2.36.0</strong>: This chapter consolidates the three-tier memory work shipped across PRs <code>v2.35.1</code> through <code>v2.36.0</code> — closing every gap from the memory-architecture audit (G1.1–G1.4, G2.1–G2.8, G3.1–G3.7, GX.1–GX.5).
+        </div>
+
+        <!-- ─── Overview ─── -->
+        <h2 id="overview">The Three Tiers</h2>
+        <p>Plan Forge separates <em>volatile working memory</em> from <em>durable project memory</em> from <em>cross-project semantic memory</em>. Every <code>captureMemory</code> call writes to all three in a single best-effort pass — no tier blocks the others, no failure aborts the calling tool.</p>
+
+        <table class="w-full text-sm border border-slate-700/40 rounded-lg overflow-hidden mb-6">
+          <thead class="bg-slate-900/60">
+            <tr>
+              <th class="text-left p-3 text-slate-400 font-semibold">Tier</th>
+              <th class="text-left p-3 text-slate-400 font-semibold">Storage</th>
+              <th class="text-left p-3 text-slate-400 font-semibold">Lifetime</th>
+              <th class="text-left p-3 text-slate-400 font-semibold">Read API</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800">
+            <tr><td class="p-3 font-bold text-emerald-400">L1 — Hub</td><td class="p-3"><code>EventEmitter</code> in <code>hub.mjs</code> + <code>.forge/hub-events.jsonl</code></td><td class="p-3">Process lifetime + replay file</td><td class="p-3">WebSocket subscribers, <code>forge_watch</code></td></tr>
+            <tr><td class="p-3 font-bold text-blue-400">L2 — Files</td><td class="p-3"><code>.forge/*.jsonl</code> (memory-captures, gotchas, lessons, decisions, patterns…)</td><td class="p-3">Repository lifetime</td><td class="p-3"><code>forge_memory_report</code>, manual file reads</td></tr>
+            <tr><td class="p-3 font-bold text-purple-400">L3 — OpenBrain</td><td class="p-3">pgvector via <code>.forge/openbrain-queue.jsonl</code> drain</td><td class="p-3">Cross-project, cross-session</td><td class="p-3"><code>search_thoughts</code>, semantic recall</td></tr>
+          </tbody>
+        </table>
+
+        <!-- ─── Diagram ─── -->
+        <h2 id="flow">Capture Flow</h2>
+        <p>One write, three destinations. The diagram below traces a single <code>captureMemory({tool, type, body})</code> call from any tool through the dual-write fan-out:</p>
+
+        <div class="bg-slate-900/40 border border-slate-800 rounded-xl p-6 my-6">
+          <pre class="text-xs leading-relaxed text-slate-300 overflow-x-auto"><code>┌──────────────────────────────────────────────────────────────────────┐
+│  Any forge tool, watcher, hook, or skill                             │
+│  └─► captureMemory({ tool, type, body, source })                     │
+└──────────────────────────────────┬───────────────────────────────────┘
+                                   │
+        ┌──────────────────────────┼──────────────────────────┐
+        ▼                          ▼                          ▼
+┌──────────────────┐    ┌─────────────────────┐    ┌────────────────────┐
+│  L1 — Hub        │    │  L2 — Files         │    │  L3 — OpenBrain    │
+│                  │    │                     │    │                    │
+│ EventEmitter     │    │ Append _v:1 record  │    │ Append to          │
+│   broadcast      │    │   to .forge/        │    │   openbrain-       │
+│                  │    │   memory-captures   │    │   queue.jsonl      │
+│ → WebSocket      │    │   .jsonl            │    │                    │
+│   subscribers    │    │                     │    │ Drain worker:      │
+│                  │    │ Tag-route to        │    │   batch → POST     │
+│ → hub-events     │    │   gotchas.jsonl,    │    │   → pgvector       │
+│   .jsonl replay  │    │   lessons.jsonl,    │    │                    │
+│                  │    │   decisions.jsonl…  │    │ Failures → DLQ     │
+│ Real-time UI     │    │                     │    │   .jsonl           │
+└──────────────────┘    └─────────────────────┘    └────────────────────┘
+                                                              │
+                                                              ▼
+                                                   ┌──────────────────────┐
+                                                   │ search_thoughts /    │
+                                                   │ buildPlanBootContext │
+                                                   │ → preload on plan-   │
+                                                   │   start (memory-     │
+                                                   │   preload event)     │
+                                                   └──────────────────────┘</code></pre>
+        </div>
+
+        <p class="text-sm text-slate-500">Every step is wrapped in <code>try/catch</code>. A failed L3 enqueue never blocks the L2 file append; a corrupt L2 file never blocks the L1 broadcast. This is the <strong>dual-write pattern</strong>: best-effort fan-out with structured telemetry on each branch.</p>
+
+        <!-- ─── L1 ─── -->
+        <h2 id="l1-hub">L1 — The Hub</h2>
+        <p>The hub is a single <code>EventEmitter</code> instance in <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/hub.mjs" rel="noopener"><code>pforge-mcp/hub.mjs</code></a>. Every event — slice start, model choice, tool result, memory capture — flows through it:</p>
+
+        <ul>
+          <li><strong>Subscribers</strong> — WebSocket clients (the dashboard), the watcher worker, the OpenBrain drain worker, anything listening for <code>memory-captured</code></li>
+          <li><strong>Replay file</strong> — every event also appends to <code>.forge/hub-events.jsonl</code> so a fresh dashboard can rebuild state on connect</li>
+          <li><strong>Worker capability probe</strong> (G1.4 / hotfix v2.36.0-beta.3) — workers announce which event types they handle so the hub can drop unhandled events early instead of fanning out garbage</li>
+        </ul>
+
+        <!-- ─── L2 ─── -->
+        <h2 id="l2-files">L2 — The Files</h2>
+        <p>Every memory file lives under <code>.forge/</code> as line-delimited JSON. Each record carries a schema version field <code>_v</code> so the format can evolve without breaking older data:</p>
+
+        <table class="w-full text-sm border border-slate-700/40 rounded-lg overflow-hidden mb-4">
+          <thead class="bg-slate-900/60"><tr><th class="text-left p-3 text-slate-400">File</th><th class="text-left p-3 text-slate-400">Contents</th></tr></thead>
+          <tbody class="divide-y divide-slate-800">
+            <tr><td class="p-3 font-mono text-xs">memory-captures.jsonl</td><td class="p-3">Raw capture log — every <code>captureMemory</code> call</td></tr>
+            <tr><td class="p-3 font-mono text-xs">gotchas.jsonl</td><td class="p-3">Type-routed: <code>type: "gotcha"</code></td></tr>
+            <tr><td class="p-3 font-mono text-xs">lessons.jsonl</td><td class="p-3">Type-routed: <code>type: "lesson"</code></td></tr>
+            <tr><td class="p-3 font-mono text-xs">decisions.jsonl</td><td class="p-3">Type-routed: <code>type: "decision"</code></td></tr>
+            <tr><td class="p-3 font-mono text-xs">patterns.jsonl</td><td class="p-3">Type-routed: <code>type: "pattern"</code></td></tr>
+            <tr><td class="p-3 font-mono text-xs">conventions.jsonl</td><td class="p-3">Type-routed: <code>type: "convention"</code></td></tr>
+            <tr><td class="p-3 font-mono text-xs">openbrain-queue.jsonl</td><td class="p-3">Pending L3 deliveries (drain worker source)</td></tr>
+            <tr><td class="p-3 font-mono text-xs">openbrain-dlq.jsonl</td><td class="p-3">Permanently failed L3 deliveries</td></tr>
+            <tr><td class="p-3 font-mono text-xs">hub-events.jsonl</td><td class="p-3">L1 replay log</td></tr>
+          </tbody>
+        </table>
+
+        <p>The <strong>Memory tab</strong> in the dashboard (new in v2.36.0) renders this exact set as a live KPI strip + per-file breakdown — see <a href="dashboard.html#memory">the dashboard chapter</a>. The data comes from <code>forge_memory_report</code>, also exposed at <code>GET /api/memory/report</code>.</p>
+
+        <!-- ─── L3 ─── -->
+        <h2 id="l3-openbrain">L3 — OpenBrain Bridge</h2>
+        <p>OpenBrain is the cross-project semantic store (pgvector + thought metadata). Plan Forge never writes to it directly during a tool call — that would couple every tool's latency to the OpenBrain endpoint. Instead:</p>
+
+        <ol>
+          <li><code>captureMemory</code> appends one line to <code>.forge/openbrain-queue.jsonl</code> (microseconds, local I/O)</li>
+          <li>The <strong>drain worker</strong> wakes on a timer or hub event, batches pending lines, and POSTs them to OpenBrain</li>
+          <li>Successes are removed from the queue. Failures retry up to N times, then move to <code>openbrain-dlq.jsonl</code></li>
+          <li>A <code>drain-trend</code> rolling window in <code>forge_memory_report</code> exposes pass/fail/deferred counts so the Memory tab can flag a stuck pipeline</li>
+        </ol>
+
+        <div class="callout callout-warning">
+          <strong>OpenBrain not configured?</strong> The queue still fills harmlessly. <code>captureMemory</code> never fails because of L3. When you later set <code>openbrain.endpoint</code> in <code>.forge.json</code>, the next drain pass ships the backlog.
+        </div>
+
+        <!-- ─── Boot Preload ─── -->
+        <h2 id="preload">L3 → L1 Preload (GX.2)</h2>
+        <p>When <code>forge_run_plan</code> emits <code>run-started</code>, the orchestrator calls <code>buildPlanBootContext(plan, projectName)</code> to derive a small set of semantic queries the agent should pre-fetch from L3 before slice 1:</p>
+
+        <ul>
+          <li><strong>plan-history hint</strong> — keyed off the plan name (<code>plan Phase-1-AUTH</code>), surfaces prior decisions on the same plan</li>
+          <li><strong>slice-keyword hints</strong> — derived from slice titles via the keyword search map (e.g. <em>"database"</em> → <code>database migration patterns</code>, <em>"api"</em> → <code>API endpoint design patterns</code>), deduped and capped at 8</li>
+        </ul>
+
+        <p>The hints are emitted as a <code>memory-preload</code> hub event. Any agent runtime listening (Copilot, Claude Code, Cursor) can resolve the hints via <code>search_thoughts</code> and seed its working context — eliminating the cold-start "what did we learn last time" gap.</p>
+
+        <!-- ─── Watcher ─── -->
+        <h2 id="watcher">Watcher → Memory (G3.1)</h2>
+        <p>The file watcher (chapter <a href="dashboard.html#watcher">6 — Watcher tab</a>) doesn't just emit FS events — it drives capture. When a file change matches a watcher rule, the watcher composes a <code>buildWatcherSearchPrompt</code> payload and pushes it through the same <code>captureMemory</code> path so the change becomes a first-class L2 record and an L3 query.</p>
+
+        <p>This closes the loop where edits made <em>between</em> plan slices used to vanish from memory. Now the watcher feeds L1/L2/L3 just like any tool would.</p>
+
+        <!-- ─── Source Format ─── -->
+        <h2 id="source-format">Source Attribution (GX.4)</h2>
+        <p>Every capture carries a <code>source</code> field with a strict format: <code>&lt;tool&gt;</code> or <code>&lt;tool&gt;/&lt;subsystem&gt;</code>. <code>validateSourceFormat</code> rejects anything else. This means the Memory tab's "by tool" breakdown is always accurate — no untagged drift.</p>
+
+        <div class="cmd-block">
+          <div class="cmd-block-header"><span>Examples</span><button class="cmd-copy-btn">Copy</button></div>
+          <pre><code>// Valid
+"forge_run_plan"
+"forge_run_plan/slice-executor"
+"watcher/fs-rule"
+"hook/pre-deploy"
+
+// Rejected (logged, capture still proceeds, source replaced with "unknown")
+"My Tool"
+"forge_run_plan / slice-executor"   // spaces around slash
+""</code></pre>
+        </div>
+
+        <!-- ─── Migration ─── -->
+        <h2 id="migration">Migration: pforge migrate-memory (GX.5)</h2>
+        <p>Schema changes (the <code>_v</code> field bumps) are handled by the migration switch in <code>pforge.ps1</code> / <code>pforge.sh</code>:</p>
+
+        <div class="cmd-block">
+          <div class="cmd-block-header"><span>Terminal</span><button class="cmd-copy-btn">Copy</button></div>
+          <pre><code># Inspect what would migrate (no writes)
+pforge migrate-memory --dry-run
+
+# Apply: rewrites every .forge/*.jsonl record to the latest _v
+pforge migrate-memory
+
+# Migration is idempotent — running twice is a no-op</code></pre>
+        </div>
+
+        <p>Originals are backed up to <code>.forge/.migration-backup-&lt;timestamp&gt;/</code> before any rewrite.</p>
+
+        <!-- ─── Telemetry ─── -->
+        <h2 id="telemetry">Telemetry & Reporting</h2>
+        <p>Three helpers in <code>memory.mjs</code> drive everything the dashboard shows:</p>
+
+        <ul>
+          <li><code>buildCaptureTelemetry()</code> — totals, deduped count, by-tool and by-type histograms (cosine-similarity dedup at write time)</li>
+          <li><code>buildCacheEntry()</code> + <code>isCacheEntryFresh()</code> — search-result cache with TTL stamping (<code>stampThoughtExpiry</code>) and read-time filtering (<code>filterUnexpiredThoughts</code>)</li>
+          <li><code>buildMemoryReport(projectDir)</code> — assembles the full payload behind <code>forge_memory_report</code> / <code>/api/memory/report</code>: file inventory, version distribution, queue depth, drain trend, orphan detection</li>
+        </ul>
+
+        <!-- ─── Reading List ─── -->
+        <h2 id="reading">Further Reading</h2>
+        <ul>
+          <li><a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/memory.mjs" rel="noopener"><code>pforge-mcp/memory.mjs</code></a> — every helper above, with inline section markers (<code>─── G3.x ───</code>, <code>─── GX.x ───</code>)</li>
+          <li><a href="https://github.com/srnichols/plan-forge/blob/master/docs/MEMORY-ARCHITECTURE.md" rel="noopener"><code>docs/MEMORY-ARCHITECTURE.md</code></a> — original audit document with gap IDs cross-referenced to PRs</li>
+          <li><a href="dashboard.html#memory">Dashboard → Memory tab</a> — the live view of everything in this chapter</li>
+          <li><a href="mcp-server.html"><code>forge_memory_report</code></a> — the underlying tool (chapter 10)</li>
+        </ul>
+
+        <p class="text-sm text-slate-500 mt-8">📄 v2.36.0 changelog: <a href="https://github.com/srnichols/plan-forge/blob/master/CHANGELOG.md" rel="noopener">CHANGELOG.md</a> — see the rollup entry covering G1.1–G1.4, G2.1–G2.8, G3.1–G3.7, GX.1–GX.5.</p>
+
+        <div id="chapter-prev-next" class="chapter-nav"></div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="assets/manual.js"></script>
+</body>
+</html>

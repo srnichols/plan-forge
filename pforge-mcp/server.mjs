@@ -58,7 +58,7 @@ try {
 }
 
 import { parsePlan, runPlan, detectWorkers, getCostReport, getHealthTrend, analyzeWithQuorum, generateImage, runAnalyze, readForgeJson, readForgeJsonl, appendForgeJsonl, emitToolTelemetry, regressionGuard, runPostSliceHook, resetPostSliceHookFired, runPreAgentHandoffHook, postOpenClawSnapshot, loadOpenClawConfig, loadQuorumConfig, runWatch, runWatchLive } from "./orchestrator.mjs";
-import { isOpenBrainConfigured } from "./memory.mjs";
+import { isOpenBrainConfigured, shapeWatcherAnomalyThought, dedupeWatcherAnomalies } from "./memory.mjs";
 import { createHub, readHubPort } from "./hub.mjs";
 import { createBridge } from "./bridge.mjs";
 import { buildCapabilitySurface, writeToolsJson, writeCliSchema } from "./capabilities.mjs";
@@ -1334,6 +1334,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           ? { emit: (type, data) => { try { activeHub.broadcast({ type, data, timestamp: new Date().toISOString() }); } catch { /* ignore */ } } }
           : null,
       });
+
+      // G3.1 (v2.35.1): capture watcher anomalies to L2/L3 memory.
+      // The watcher is the only cross-project observer — anomaly patterns are high-value
+      // semantic signals. Captures go to the WATCHER's .forge/ (PROJECT_DIR), NEVER the
+      // target's, preserving the watcher's read-only contract on the target project.
+      // Source attribution follows the GX.4 standard: "forge_watch/<anomaly-code>".
+      if (Array.isArray(report?.anomalies) && report.anomalies.length > 0) {
+        const meta = { targetPath: report.targetPath, runId: report.runId, runState: report.runState };
+        for (const anomaly of report.anomalies) {
+          const shaped = shapeWatcherAnomalyThought(anomaly, meta, "forge_watch");
+          captureMemory(shaped.content, shaped.type, shaped.source, PROJECT_DIR);
+        }
+      }
+
       return { content: [{ type: "text", text: JSON.stringify(report, null, 2) }] };
     } catch (err) {
       return { content: [{ type: "text", text: `Watcher error: ${err.message}` }], isError: true };
@@ -1346,6 +1360,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return { content: [{ type: "text", text: "forge_watch_live requires targetPath." }], isError: true };
       }
       const captured = [];
+      const liveAnomalies = [];
       const result = await runWatchLive({
         targetPath: args.targetPath,
         durationMs: args.durationMs || 60_000,
@@ -1353,9 +1368,24 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         onEvent: (event) => {
           // Cap captured array at 500 to prevent runaway memory on chatty hubs
           if (captured.length < 500) captured.push(event);
+          // G3.1 (v2.35.1): collect anomaly events for L2/L3 capture after stream closes
+          if (event?.type === "watch-anomaly-detected" && event?.data) {
+            liveAnomalies.push(event.data);
+          }
         },
       });
-      return { content: [{ type: "text", text: JSON.stringify({ ...result, capturedEvents: captured.length, events: captured }, null, 2) }] };
+
+      // G3.1 (v2.35.1): dedupe by code+message within this live session and capture.
+      // Writes land in the WATCHER's .forge/ — target project is never touched.
+      const uniqueAnomalies = dedupeWatcherAnomalies(liveAnomalies);
+      for (const a of uniqueAnomalies) {
+        const meta = { targetPath: a.targetPath || args.targetPath, runId: a.runId };
+        const shaped = shapeWatcherAnomalyThought(a, meta, "forge_watch_live");
+        captureMemory(shaped.content, shaped.type, shaped.source, PROJECT_DIR);
+      }
+      const anomalyCaptureCount = uniqueAnomalies.length;
+
+      return { content: [{ type: "text", text: JSON.stringify({ ...result, capturedEvents: captured.length, capturedAnomalies: anomalyCaptureCount, events: captured }, null, 2) }] };
     } catch (err) {
       return { content: [{ type: "text", text: `Watcher live error: ${err.message}` }], isError: true };
     }

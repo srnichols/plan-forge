@@ -642,6 +642,30 @@ export const TOOL_METADATA = {
       output: { ok: true, mode: "websocket", events: 42, capturedEvents: 42 },
     },
   },
+  forge_memory_report: {
+    intent: ["memory-report", "memory-health", "memory-audit"],
+    aliases: ["memory-report", "mem-report", "memory-health"],
+    cost: "low",
+    maxConcurrent: 4,
+    addedIn: "2.36.0-beta.4",
+    prerequisites: [],
+    produces: [],
+    consumes: [
+      ".forge/liveguard-memories.jsonl",
+      ".forge/openbrain-queue.jsonl",
+      ".forge/openbrain-dlq.jsonl",
+      ".forge/openbrain-stats.jsonl",
+      ".forge/telemetry/memory-captures.jsonl",
+      ".forge/memory-search-cache.jsonl",
+    ],
+    sideEffects: [],
+    securityNote: "Read-only aggregator. No data leaves the server.",
+    errors: {},
+    example: {
+      input: {},
+      output: { _v: 1, queue: { pending: 3, delivered: 42, failed: 0, deferred: 1, dlq: 0 }, telemetry: { total: 64, dedupedCount: 7 }, cache: { totalEntries: 12, uniqueKeys: 9, freshEntries: 5 }, orphans: [] },
+    },
+  },
 };
 
 export const WORKFLOWS = {

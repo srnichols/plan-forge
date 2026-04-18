@@ -4151,6 +4151,108 @@ function Invoke-RegressionGuard {
     }
 }
 
+# ─── Command: migrate-memory (GX.5 v2.36) ──────────────────────────────
+function Invoke-MigrateMemory {
+    # GX.5: one-shot merge of legacy `*-history.json` and other misnamed
+    # `.json` ledgers into their canonical `.jsonl` siblings. Idempotent;
+    # safe to re-run. Always backs up the legacy file as `<name>.json.bak-<date>`
+    # before removing it. Pass `-DryRun` to preview without touching files.
+    Write-Host ""
+    Write-Host "─── pforge migrate-memory (GX.5 v2.36) ───" -ForegroundColor Cyan
+    Write-Host ""
+
+    $repoRoot = $RepoRoot
+    if (-not $repoRoot) { $repoRoot = (Get-Location).Path }
+    $forgeDir = Join-Path $repoRoot ".forge"
+    if (-not (Test-Path $forgeDir)) {
+        Write-Host "  ℹ  No .forge/ directory found at $repoRoot — nothing to migrate." -ForegroundColor Yellow
+        return
+    }
+
+    # Look at remaining args for -DryRun flag
+    $dryRun = $false
+    if ($Arguments) {
+        foreach ($a in $Arguments) {
+            if ($a -eq '-DryRun' -or $a -eq '--dry-run') { $dryRun = $true }
+        }
+    }
+
+    # Pairs to migrate: legacy .json → canonical .jsonl
+    $pairs = @(
+        @{ Legacy = "drift-history.json";      Canonical = "drift-history.jsonl" },
+        @{ Legacy = "regression-history.json"; Canonical = "regression-history.jsonl" },
+        @{ Legacy = "fix-proposals.json";      Canonical = "fix-proposals.jsonl" }
+    )
+
+    $stamp = (Get-Date -Format "yyyy-MM-dd")
+    $migrated = 0; $skipped = 0; $merged = 0
+
+    foreach ($p in $pairs) {
+        $legacyPath    = Join-Path $forgeDir $p.Legacy
+        $canonicalPath = Join-Path $forgeDir $p.Canonical
+        $hasLegacy     = Test-Path $legacyPath
+        $hasCanonical  = Test-Path $canonicalPath
+
+        if (-not $hasLegacy) {
+            Write-Host "  · $($p.Legacy): not present, skipping." -ForegroundColor DarkGray
+            $skipped++
+            continue
+        }
+
+        $legacyLines = @()
+        try {
+            $legacyLines = Get-Content -LiteralPath $legacyPath -ErrorAction Stop |
+                Where-Object { $_ -and $_.Trim().Length -gt 0 }
+        } catch {
+            Write-Host "  ❌ Could not read $($p.Legacy): $_" -ForegroundColor Red
+            continue
+        }
+
+        $canonicalLines = @()
+        if ($hasCanonical) {
+            try {
+                $canonicalLines = Get-Content -LiteralPath $canonicalPath -ErrorAction Stop |
+                    Where-Object { $_ -and $_.Trim().Length -gt 0 }
+            } catch {}
+        }
+
+        # Dedupe by exact line text (records are JSON; equal text == equal record)
+        $seen = New-Object 'System.Collections.Generic.HashSet[string]'
+        $combined = New-Object 'System.Collections.Generic.List[string]'
+        foreach ($line in $canonicalLines) { if ($seen.Add($line)) { $combined.Add($line) | Out-Null } }
+        $newFromLegacy = 0
+        foreach ($line in $legacyLines) {
+            if ($seen.Add($line)) { $combined.Add($line) | Out-Null; $newFromLegacy++ }
+        }
+
+        if ($dryRun) {
+            Write-Host "  [dry-run] $($p.Legacy) -> $($p.Canonical): would merge $newFromLegacy new of $($legacyLines.Count) legacy line(s); total after = $($combined.Count)" -ForegroundColor Yellow
+            continue
+        }
+
+        # Write merged canonical
+        try {
+            Set-Content -LiteralPath $canonicalPath -Value ($combined -join "`n") -Encoding UTF8 -NoNewline:$false
+            # Rename legacy to .bak-<date>
+            $bakPath = "$legacyPath.bak-$stamp"
+            if (Test-Path $bakPath) { $bakPath = "$legacyPath.bak-$stamp-$([guid]::NewGuid().ToString('N').Substring(0,6))" }
+            Move-Item -LiteralPath $legacyPath -Destination $bakPath -Force
+            Write-Host "  ✅ $($p.Legacy) -> $($p.Canonical): merged $newFromLegacy new line(s); legacy backed up as $(Split-Path $bakPath -Leaf)" -ForegroundColor Green
+            $migrated++
+            $merged += $newFromLegacy
+        } catch {
+            Write-Host "  ❌ Failed to migrate $($p.Legacy): $_" -ForegroundColor Red
+        }
+    }
+
+    Write-Host ""
+    if ($dryRun) {
+        Write-Host "─── dry-run complete — no files modified ───" -ForegroundColor Yellow
+    } else {
+        Write-Host "─── migrate-memory complete: $migrated migrated, $skipped skipped, $merged new line(s) merged ───" -ForegroundColor Cyan
+    }
+}
+
 # ─── Command: tour ─────────────────────────────────────────────────────
 function Invoke-Tour {
     Write-Host ""
@@ -4296,6 +4398,7 @@ switch ($Command) {
     'health-trend'    { Invoke-HealthTrend }
     'version-bump' { Invoke-VersionBump }
     'smith'        { Invoke-Smith }
+    'migrate-memory' { Invoke-MigrateMemory }
     'tour'         { Invoke-Tour }
     'help'         { Show-Help }
     ''             { Show-Help }

@@ -5,6 +5,84 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.36.0-beta.3] — 2026-04-19
+
+### Fixed — Worker capability probe + runtime readiness matrix (closes #28)
+
+Third beta drop on the path to v2.36.0. This fixes a silent-failure class where
+`pforge run-plan` declared slices "passed" while the underlying worker CLI
+actually exited 0 after printing help text and writing zero lines of code. The
+canonical repro was `gh copilot` v1.2.x (a legacy `suggest`/`explain`-only build)
+receiving agentic flags it didn't understand, printing its usage banner, and
+terminating with status 0 — which the orchestrator recorded as success.
+
+- **New `pforge-mcp/worker-capabilities.json` matrix** is now the single source
+  of truth for worker + runtime minimums. Each entry declares: probe command,
+  version regex, minimum version, capability markers (flags that MUST appear
+  in `--help`), invocation template, and per-OS install hints. The matrix is
+  consumed by both `orchestrator.mjs` (Node) and `pforge.ps1 smith` (PowerShell)
+  so the two agree on what counts as a capable toolchain.
+
+- **`detectWorkers()` rewritten as a capability probe, not a presence check.**
+  Each CLI worker now runs its version probe, compares against the matrix
+  minimum, then runs a help probe and verifies every capability marker is
+  present in stdout. Returns a structured `{ name, available, capable, version,
+  minVersion, reason, installHint, type }` record per worker. API-provider
+  detection (`api-xai`, `api-openai`) is preserved and unified into the same
+  shape.
+
+- **`detectRuntimes()` (new export)** applies the same probe pipeline to the
+  runtime floor — `git`, `gh`, `node`, `pwsh` — with per-tool minimums
+  (gh ≥ 2.88, node ≥ 20, pwsh ≥ 7). Smith surfaces any runtime below floor
+  with a per-OS install/upgrade hint.
+
+- **`spawnWorker()` invocation now reads from the matrix.** The flag set for
+  `gh copilot` is now `-p @<promptFile> --yolo --no-ask-user --output-format text`
+  sourced from `worker-capabilities.json` with a `{PROMPT_FILE}` placeholder.
+  Changing flags no longer requires editing JavaScript.
+
+- **New `detectHelpTextOutput()` heuristic** runs on every worker completion:
+  if stdout/stderr contains ≥2 help-text signatures (`usage:`, `USAGE`,
+  `Commands:`, `Options:`, `Flags:`, `Run '… --help' for`, legacy
+  `gh copilot <command> [flags]` banner) AND the meaningful content is
+  < 4000 chars, the result is flagged `looksLikeHelpText: true`. Callers can
+  treat exit-0-with-help as a soft failure instead of a silent pass.
+
+- **New `suggestInstall()` / `detectPackageManager()` exports** resolve the
+  right per-OS install command for any matrix entry (winget on Windows, brew
+  on macOS, apt on Linux) plus a docs URL.
+
+- **`pforge smith` grew a "Runtime & Worker Readiness" section.** Uses the
+  same matrix — probes every runtime and every worker, reports
+  pass/fail/warn with the per-OS upgrade command. Missing agent workers
+  (claude, codex) now print the exact `winget install` / `brew install` /
+  `npm install -g` command rather than a generic "install X" sentence.
+
+- **Backward compatibility preserved.** The existing `{ name, available, type }`
+  shape returned by `detectWorkers()` is intact — new fields are additive.
+  Existing callers at `server.mjs:3943` (`GET /api/workers`) and the
+  orchestrator self-test continue to work unchanged.
+
+### Tests
+
+- Added `pforge-mcp/tests/worker-capability.test.mjs` — 20 tests covering
+  matrix load + cache, semver comparison (prefix/pre-release tolerance),
+  help-text detection (positive cases, real-output false-positives, empty
+  input, long-output guard), runtime/worker result shape, and install-hint
+  resolution.
+- Full suite: **725 tests passing** (705 baseline + 20 new).
+
+### Why it matters
+
+Issue #28 documented 13 commits produced by `pforge run-plan` that contained
+zero source-code changes — the orchestrator recorded every slice as "passed"
+because the gh-copilot CLI exited 0 after printing help. With this change, a
+worker that lacks the agentic capability set is detected **before** execution
+begins (`smith` fails loudly) and **during** execution (help-text output is
+flagged). `pforge run-plan` no longer trusts a zero exit code alone.
+
+---
+
 ## [2.36.0-beta.2] — 2026-04-18
 
 ### Added — L2 file tier improvements (memory architecture gaps G2.1 – G2.8)

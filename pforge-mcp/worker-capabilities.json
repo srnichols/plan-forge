@@ -1,0 +1,160 @@
+{
+  "_comment": "Single source of truth for worker + runtime capability checks. Consumed by orchestrator.mjs detectWorkers() and pforge.ps1 Invoke-Smith Runtime & Worker Readiness section. See issue #28 for the silent-failure mode this prevents.",
+  "_version": 1,
+  "_updated": "2026-04-18",
+
+  "workers": {
+    "gh-copilot": {
+      "description": "GitHub Copilot CLI (primary worker)",
+      "probe": {
+        "command": "gh",
+        "versionArgs": ["copilot", "--version"],
+        "helpArgs": ["copilot", "--", "--help"],
+        "capabilityMarkers": ["--yolo", "-p,", "--no-ask-user"],
+        "capabilityDescription": "Agentic prompt mode with --yolo / -p / --no-ask-user"
+      },
+      "minVersion": "1.0.32",
+      "versionRegex": "GitHub Copilot CLI\\s+v?(\\d+\\.\\d+\\.\\d+)",
+      "requires": { "gh": ">=2.88.0" },
+      "invocation": {
+        "cmd": "gh",
+        "baseArgs": ["copilot", "--", "-p", "@{PROMPT_FILE}", "--yolo", "--no-ask-user", "--output-format", "text"]
+      },
+      "install": {
+        "windows": "winget upgrade --id GitHub.cli",
+        "macos": "brew upgrade gh",
+        "linux": "Upgrade gh via your package manager (apt/dnf/pacman); Copilot CLI ships with gh >= 2.88",
+        "docs": "https://docs.github.com/en/copilot/github-copilot-in-the-cli"
+      },
+      "failureModes": [
+        "gh < 2.88 ships the legacy suggest/explain extension (v1.2.x) with no agentic mode — slices will silently pass producing zero code."
+      ]
+    },
+
+    "claude": {
+      "description": "Anthropic Claude Code CLI (fallback worker)",
+      "probe": {
+        "command": "claude",
+        "versionArgs": ["--version"],
+        "helpArgs": ["--help"],
+        "capabilityMarkers": ["-p", "--model"],
+        "capabilityDescription": "Prompt mode with -p and --model"
+      },
+      "minVersion": "2.0.0",
+      "versionRegex": "(\\d+\\.\\d+\\.\\d+)",
+      "invocation": {
+        "cmd": "claude",
+        "baseArgs": ["-p", "{PROMPT}"]
+      },
+      "install": {
+        "windows": "winget install Anthropic.Claude   (or npm install -g @anthropic-ai/claude-code)",
+        "macos": "brew install anthropic/tap/claude   (or npm install -g @anthropic-ai/claude-code)",
+        "linux": "npm install -g @anthropic-ai/claude-code",
+        "docs": "https://docs.anthropic.com/claude/docs/claude-code"
+      }
+    },
+
+    "codex": {
+      "description": "OpenAI Codex CLI (fallback worker)",
+      "probe": {
+        "command": "codex",
+        "versionArgs": ["--version"],
+        "helpArgs": ["--help"],
+        "capabilityMarkers": ["-p", "--model"],
+        "capabilityDescription": "Prompt mode with -p and --model"
+      },
+      "minVersion": "1.0.0",
+      "versionRegex": "(\\d+\\.\\d+\\.\\d+)",
+      "invocation": {
+        "cmd": "codex",
+        "baseArgs": ["-p", "{PROMPT}"]
+      },
+      "install": {
+        "windows": "npm install -g @openai/codex",
+        "macos": "npm install -g @openai/codex",
+        "linux": "npm install -g @openai/codex",
+        "docs": "https://platform.openai.com/docs/codex"
+      }
+    }
+  },
+
+  "runtimes": {
+    "git": {
+      "description": "Git version control (required)",
+      "required": true,
+      "probe": {
+        "command": "git",
+        "versionArgs": ["--version"]
+      },
+      "minVersion": "2.30.0",
+      "versionRegex": "git version\\s+(\\d+\\.\\d+\\.\\d+)",
+      "install": {
+        "windows": "winget install --id Git.Git",
+        "macos": "brew install git",
+        "linux": "Install via package manager (apt/dnf/pacman)",
+        "docs": "https://git-scm.com/downloads"
+      }
+    },
+
+    "gh": {
+      "description": "GitHub CLI (required for PR/branch-protection flows; v2.88+ required for Copilot CLI worker)",
+      "required": true,
+      "probe": {
+        "command": "gh",
+        "versionArgs": ["--version"]
+      },
+      "minVersion": "2.88.0",
+      "versionRegex": "gh version\\s+(\\d+\\.\\d+\\.\\d+)",
+      "install": {
+        "windows": "winget upgrade --id GitHub.cli",
+        "macos": "brew upgrade gh",
+        "linux": "Upgrade via package manager (apt/dnf/pacman/snap)",
+        "docs": "https://cli.github.com/"
+      },
+      "failureModes": [
+        "gh < 2.88 ships legacy gh-copilot extension v1.2.x (suggest/explain only) — run-plan slices will silently succeed with zero code changes."
+      ]
+    },
+
+    "node": {
+      "description": "Node.js (required for pforge-mcp server + orchestrator)",
+      "required": true,
+      "probe": {
+        "command": "node",
+        "versionArgs": ["--version"]
+      },
+      "minVersion": "20.0.0",
+      "versionRegex": "v?(\\d+\\.\\d+\\.\\d+)",
+      "install": {
+        "windows": "winget install OpenJS.NodeJS.LTS",
+        "macos": "brew install node",
+        "linux": "Install via package manager or nvm",
+        "docs": "https://nodejs.org/"
+      }
+    },
+
+    "pwsh": {
+      "description": "PowerShell 7.x (recommended for cross-platform; pforge.ps1 targets 5.1+ but 7+ is the supported baseline)",
+      "required": false,
+      "probe": {
+        "command": "pwsh",
+        "versionArgs": ["--version"]
+      },
+      "minVersion": "7.0.0",
+      "versionRegex": "PowerShell\\s+(\\d+\\.\\d+\\.\\d+)",
+      "install": {
+        "windows": "winget install Microsoft.PowerShell",
+        "macos": "brew install --cask powershell",
+        "linux": "See https://aka.ms/powershell",
+        "docs": "https://aka.ms/powershell"
+      }
+    }
+  },
+
+  "packageManagers": {
+    "_comment": "Detected at runtime to pick the right install hint. First found wins per OS.",
+    "windows": ["winget", "scoop", "choco"],
+    "macos": ["brew", "port"],
+    "linux": ["apt", "dnf", "pacman", "zypper", "apk"]
+  }
+}

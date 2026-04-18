@@ -5,6 +5,96 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.36.0-beta.2] — 2026-04-18
+
+### Added — L2 file tier improvements (memory architecture gaps G2.1 – G2.8)
+
+Second of three beta drops on the path to v2.36.0. This one tightens the
+**L2 (structured files on disk) tier** of the memory architecture.
+
+- **G2.1 — Misnamed `*-history.json` files renamed to `*-history.jsonl`**, with a
+  transparent backward-compat read shim. Affected files: `drift-history.jsonl`,
+  `regression-history.jsonl`, `health-dna.jsonl`, `quorum-history.jsonl`. All
+  four were JSONL-shaped (one record per line) but used the `.json` extension,
+  which broke standard JSON tooling. `readForgeJsonl()` now checks for the new
+  name first and falls back to the legacy `.json` variant so projects upgrading
+  from v2.35 keep working without migration. The `pforge smith` doctor probes
+  accept either extension. Also fixed a latent bug in the OpenClaw snapshot path
+  that was `JSON.parse`-ing `drift-history.json` as a single JSON array when it
+  was actually JSONL.
+
+- **G2.2 — Schema versioning (`_v: 1`) stamped on every L2 record.** `appendForgeJsonl()`
+  now auto-adds `_v: 1` to every record it writes. Future schema migrations can
+  branch on this field. Caller-supplied `_v` wins so specialised writers can
+  bump independently.
+
+- **G2.3 — `pruneForgeRuns(cwd, opts)` helper** in `orchestrator.mjs`. Prunes
+  `.forge/runs/<runId>/` directories by two retention dimensions — older than
+  `maxAgeDays` days (default 30) OR outside the newest `maxRuns` runs (default
+  50). Always keeps the newest run regardless of age. Supports `dryRun` for
+  preview. Best-effort: per-run errors accumulate in `result.errors` but never
+  throw. A follow-up PR will expose this as a CLI command; this beta ships the
+  helper and tests only.
+
+- **G2.4 — `correlationId` option on `appendForgeJsonl()`.** Writers can pass
+  `{ correlationId }` in a new fourth argument; the record gains a `_correlationId`
+  field. Lets analysts trace L1 hub events ↔ L2 structured records ↔ L3 semantic
+  captures back to the same originating run or slice.
+
+- **G2.5 — `auditOrphanForgeFiles(cwd)` helper** in `orchestrator.mjs`. Returns
+  `{ known, orphan, whitelist }` lists partitioning every file/dir under `.forge/`
+  against a hand-maintained whitelist of recognised artifacts. Catches stale
+  files from removed tools and typos in write paths. The whitelist intentionally
+  covers **both** the `.jsonl` and legacy `.json` variants of the renamed files,
+  so v2.35 projects don't flag them.
+
+- **G2.6 — OpenBrain queue bookkeeping + DLQ semantics.** Every thought enqueued
+  via `captureMemory()` when OpenBrain is configured is now shaped by
+  `shapeQueueRecord()` which adds `_status: "pending"`, `_attempts: 0`,
+  `_enqueuedAt`, `_nextAttemptAt` fields. New pure helpers land in `memory.mjs`:
+  - `nextBackoffTimestamp(attempts, now)` — exponential backoff with ±20% jitter
+    (30s / 60s / 120s / 240s / 480s).
+  - `applyDeliveryFailure(record, opts)` — decides retry vs DLQ after a failed
+    delivery attempt; truncates long error messages to 500 chars. After `maxAttempts`
+    failures (default 5) the record moves to `.forge/openbrain-dlq.jsonl`.
+  - `partitionByBackoff(records, now)` — splits eligible records from those still
+    waiting on backoff.
+  
+  These are the building blocks a drain worker (or the existing `SessionStart`
+  hook) will wire in a follow-up beta.
+
+- **G2.7 — `.forge/env-diff-history.jsonl`** — `forge_env_diff` now appends a
+  compact per-scan history record (scan timestamp, baseline name, gap counts per
+  env file, totals) in addition to the single-snapshot `env-diff-cache.json`.
+  Lets dashboards and the health-trend tool show env drift over time. Values are
+  never recorded — key-name counts only.
+
+- **G2.8 — `buildDrainStatsRecord()` helper** for the `.forge/openbrain-stats.jsonl`
+  ledger. Summarises each drain pass (attempted / delivered / deferred / dlq /
+  durationMs) so the dashboard can render queue health without rescanning the
+  queue file every tick.
+
+### Testing
+
+- New `pforge-mcp/tests/g2-files.test.mjs` — **25 tests** covering `_v` stamping,
+  `correlationId`, the `.jsonl ↔ .json` read shim, `pruneForgeRuns` (four
+  scenarios), orphan audit, and every new `memory.mjs` helper.
+- Existing assertions updated to match the new `.jsonl` filenames and the
+  `_v: 1` record shape (6 tests fixed; no behaviour change).
+- Total test count: 680 → **705 passing**.
+
+### Behaviour notes / compatibility
+
+- **Zero migration needed for upgraders.** Projects with existing
+  `drift-history.json` / `regression-history.json` / `health-dna.json` /
+  `quorum-history.json` files continue working via the read shim — you just
+  won't get new records appended to them; new records land in the `.jsonl`
+  sibling. A future `pforge migrate-memory` command (GX.5) will merge them.
+- `capabilities.mjs` tool-metadata `produces`/`consumes` strings updated to
+  reference the new `.jsonl` names.
+
+---
+
 ## [2.36.0-beta.1] — 2026-04-18
 
 ### Added — L1 Hub improvements (memory architecture gaps G1.1 – G1.4)

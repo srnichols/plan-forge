@@ -330,9 +330,9 @@ export const TOOL_METADATA = {
     maxConcurrent: 10,
     addedIn: "2.27.0",
     prerequisites: ["git initialized"],
-    produces: [".forge/drift-history.json"],
+    produces: [".forge/drift-history.jsonl"],
     consumes: [".github/instructions/*.instructions.md", "**/*.{js,ts,cs,py}"],
-    sideEffects: ["appends to .forge/drift-history.json", "may fire drift-alert hub event"],
+    sideEffects: ["appends to .forge/drift-history.jsonl", "may fire drift-alert hub event"],
     errors: {
       NO_SOURCE_FILES: { message: "No source files found to analyze", recovery: "Check path argument" },
       ANALYSIS_FAILED: { message: "Rule analysis failed", recovery: "Check file permissions and path" },
@@ -439,9 +439,9 @@ export const TOOL_METADATA = {
     maxConcurrent: 10,
     addedIn: "2.32.0",
     prerequisites: [],
-    produces: [".forge/health-dna.json"],
-    consumes: [".forge/drift-history.json", ".forge/cost-history.json", ".forge/incidents.jsonl", ".forge/model-performance.json", ".forge/regression-history.json"],
-    sideEffects: ["writes .forge/health-dna.json (project health fingerprint)"],
+    produces: [".forge/health-dna.jsonl"],
+    consumes: [".forge/drift-history.jsonl", ".forge/cost-history.json", ".forge/incidents.jsonl", ".forge/model-performance.json", ".forge/regression-history.jsonl"],
+    sideEffects: ["writes .forge/health-dna.jsonl (project health fingerprint)"],
     errors: {
       NO_DATA: { message: "No operational data found for the requested time window", recovery: "Run forge tools (drift, run-plan, incident) to generate data, or widen the --days window" },
     },
@@ -458,7 +458,7 @@ export const TOOL_METADATA = {
     addedIn: "2.31.0",
     prerequisites: [],
     produces: [],
-    consumes: [".forge/incidents.jsonl", ".forge/drift-history.json"],
+    consumes: [".forge/incidents.jsonl", ".forge/drift-history.jsonl"],
     sideEffects: [],
     errors: {
       NO_ALERTS: { message: "No open alerts found matching the filter criteria", recovery: "Lower --min-severity or check that incidents exist in .forge/incidents.jsonl" },
@@ -537,7 +537,7 @@ export const TOOL_METADATA = {
     addedIn: "2.29.0",
     prerequisites: ["LiveGuard data available (drift, incidents, secret scan)"],
     produces: ["docs/plans/auto/LIVEGUARD-FIX-<id>.md"],
-    consumes: [".forge/drift-history.json", ".forge/incidents.jsonl", ".forge/secret-scan-cache.json", ".forge/regression-gates.json"],
+    consumes: [".forge/drift-history.jsonl", ".forge/incidents.jsonl", ".forge/secret-scan-cache.json", ".forge/regression-gates.json"],
     sideEffects: ["writes docs/plans/auto/LIVEGUARD-FIX-{incidentId}.md", "appends .forge/fix-proposals.json", "broadcasts fix-proposal-ready event"],
     securityNote: "Plans are generated locally. One proposal per incidentId to prevent spam.",
     errors: {
@@ -557,7 +557,7 @@ export const TOOL_METADATA = {
     addedIn: "2.29.0",
     prerequisites: [],
     produces: [],
-    consumes: [".forge/drift-history.json", ".forge/incidents.jsonl", ".forge/deploy-journal.jsonl", ".forge/secret-scan-cache.json"],
+    consumes: [".forge/drift-history.jsonl", ".forge/incidents.jsonl", ".forge/deploy-journal.jsonl", ".forge/secret-scan-cache.json"],
     sideEffects: ["none — read-only prompt assembly, no LLM calls"],
     securityNote: "customQuestion is XSS-validated and length-capped at 500 chars. No data leaves the server.",
     errors: {
@@ -577,7 +577,7 @@ export const TOOL_METADATA = {
     addedIn: "2.30.0",
     prerequisites: [],
     produces: [],
-    consumes: [".forge/drift-history.json", ".forge/incidents.jsonl", ".forge/regression-history.json"],
+    consumes: [".forge/drift-history.jsonl", ".forge/incidents.jsonl", ".forge/regression-history.jsonl"],
     sideEffects: ["runs drift scan, sweep, secret scan, regression guard, dep watch, alert triage, health trend in sequence", "broadcasts liveguard-tool-completed event"],
     securityNote: "Composite tool — executes multiple LiveGuard tools. No data leaves the server.",
     errors: {
@@ -1224,7 +1224,7 @@ export function buildCapabilitySurface(mcpTools, options = {}) {
         { method: "GET", path: "/api/bridge/approve/:runId", description: "Browser-friendly approval link for Telegram inline buttons. Query: ?action=approve|reject&token=<secret>" },
         // LiveGuard REST endpoints (v2.27.0)
         { method: "GET", path: "/api/drift", description: "Run architecture drift check against guardrail rules. Returns score, violations, trend." },
-        { method: "GET", path: "/api/drift/history", description: "Drift score history from .forge/drift-history.json" },
+        { method: "GET", path: "/api/drift/history", description: "Drift score history from .forge/drift-history.jsonl" },
         { method: "POST", path: "/api/incident", description: "Capture an incident. Body: { description, severity?, files?, resolvedAt? }" },
         { method: "GET", path: "/api/incidents", description: "List all captured incidents from .forge/incidents.jsonl" },
         { method: "POST", path: "/api/regression-guard", description: "Run regression guard — execute validation gates from plan files. Body: { files?, plan?, failFast? }" },

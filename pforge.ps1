@@ -3112,18 +3112,21 @@ function Invoke-Smith {
         }
 
         # Quorum history → adaptive threshold
-        $quorumFile = Join-Path $forgeDir "quorum-history.json"
+        $quorumFile = Join-Path $forgeDir "quorum-history.jsonl"
+        if (-not (Test-Path $quorumFile)) { $quorumFile = Join-Path $forgeDir "quorum-history.json" } # G2.1 legacy
         if (Test-Path $quorumFile) {
             Doctor-Pass "Quorum history present — adaptive threshold active"
         }
 
         # LiveGuard Intelligence
-        $regHistory = Join-Path $forgeDir "regression-history.json"
+        $regHistory = Join-Path $forgeDir "regression-history.jsonl"
+        if (-not (Test-Path $regHistory)) { $regHistory = Join-Path $forgeDir "regression-history.json" } # G2.1 legacy
         if (Test-Path $regHistory) {
             Doctor-Pass "Regression history present — test trend tracking active"
         }
 
-        $healthDna = Join-Path $forgeDir "health-dna.json"
+        $healthDna = Join-Path $forgeDir "health-dna.jsonl"
+        if (-not (Test-Path $healthDna)) { $healthDna = Join-Path $forgeDir "health-dna.json" } # G2.1 legacy
         if (Test-Path $healthDna) {
             Doctor-Pass "Health DNA present — decay detection active"
         }

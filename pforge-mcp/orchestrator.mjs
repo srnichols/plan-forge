@@ -19,7 +19,7 @@
  * @module orchestrator
  */
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync, appendFileSync, readdirSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync, appendFileSync, readdirSync, statSync, rmSync } from "node:fs";
 import { spawn, execSync } from "node:child_process";
 import { resolve, basename, dirname, join, relative, extname } from "node:path";
 import { EventEmitter } from "node:events";
@@ -2071,19 +2071,38 @@ export function readForgeJson(filePath, defaultValue = null, cwd = process.cwd()
 /**
  * Append a JSON record as a single line to a JSONL file under .forge/.
  * Creates parent directories if absent.
+ *
+ * G2.2 (v2.36): every record is auto-stamped with `_v: 1` (schema version)
+ *   if not already present. Future schema migrations can branch on this.
+ * G2.4 (v2.36): when `opts.correlationId` is provided, the record gets a
+ *   `_correlationId` field — lets analysts trace L1 events ↔ L2 records ↔
+ *   L3 captures back to the same originating run/slice.
+ *
  * @param {string} filePath - Path relative to .forge/ (e.g. "telemetry/tool-calls.jsonl")
  * @param {object} record - JSON-serializable object to append
  * @param {string} [cwd=process.cwd()] - Project root directory
+ * @param {{correlationId?: string}} [opts] - Optional metadata
  */
-export function appendForgeJsonl(filePath, record, cwd = process.cwd()) {
+export function appendForgeJsonl(filePath, record, cwd = process.cwd(), opts = {}) {
   const fullPath = resolve(cwd, ".forge", filePath);
   mkdirSync(dirname(fullPath), { recursive: true });
-  appendFileSync(fullPath, JSON.stringify(record) + "\n");
+  const stamped = {
+    _v: 1,
+    ...(opts.correlationId ? { _correlationId: opts.correlationId } : {}),
+    ...record,
+  };
+  appendFileSync(fullPath, JSON.stringify(stamped) + "\n");
 }
 
 /**
  * Read a JSONL file under .forge/ and return an array of parsed records.
  * Returns defaultValue (default []) if the file is missing or unreadable.
+ *
+ * G2.1 (v2.36): backward-compat shim. When `filePath` ends with `.jsonl` and
+ *   the new file doesn't exist, transparently fall back to the legacy `.json`
+ *   variant. Lets us rename misnamed `*-history.json` → `*-history.jsonl`
+ *   without breaking projects upgrading from <2.36.
+ *
  * @param {string} filePath - Path relative to .forge/
  * @param {Array} [defaultValue=[]] - Fallback when file is absent
  * @param {string} [cwd=process.cwd()] - Project root directory
@@ -2092,12 +2111,143 @@ export function appendForgeJsonl(filePath, record, cwd = process.cwd()) {
 export function readForgeJsonl(filePath, defaultValue = [], cwd = process.cwd()) {
   const fullPath = resolve(cwd, ".forge", filePath);
   try {
-    if (!existsSync(fullPath)) return defaultValue;
-    return readFileSync(fullPath, "utf-8")
-      .split("\n")
-      .filter(line => line.trim())
-      .map(line => JSON.parse(line));
+    if (existsSync(fullPath)) {
+      return readFileSync(fullPath, "utf-8")
+        .split("\n")
+        .filter(line => line.trim())
+        .map(line => JSON.parse(line));
+    }
+    // G2.1 shim: try the legacy `.json` variant for newly-renamed files
+    if (filePath.endsWith(".jsonl")) {
+      const legacy = resolve(cwd, ".forge", filePath.slice(0, -1)); // .jsonl → .json
+      if (existsSync(legacy)) {
+        return readFileSync(legacy, "utf-8")
+          .split("\n")
+          .filter(line => line.trim())
+          .map(line => JSON.parse(line));
+      }
+    }
+    return defaultValue;
   } catch { return defaultValue; }
+}
+
+// ─── G2.3 — Run pruning ───────────────────────────────────────────────
+
+/**
+ * G2.3 (v2.36): prune `.forge/runs/<runId>/` directories. Two retention
+ * dimensions are checked; a run is removed if it fails EITHER:
+ *   - older than `maxAgeDays` days (default 30), OR
+ *   - falls outside the newest `maxRuns` runs (default 50)
+ *
+ * Best-effort: filesystem errors on individual runs are logged via the
+ * returned `errors[]` but never throw. The newest run is always kept.
+ *
+ * @param {string} [cwd=process.cwd()]
+ * @param {{maxAgeDays?: number, maxRuns?: number, dryRun?: boolean}} [opts]
+ * @returns {{kept: string[], pruned: string[], errors: Array<{runId: string, error: string}>, dryRun: boolean}}
+ */
+export function pruneForgeRuns(cwd = process.cwd(), opts = {}) {
+  const { maxAgeDays = 30, maxRuns = 50, dryRun = false } = opts;
+  const runsDir = resolve(cwd, ".forge", "runs");
+  const result = { kept: [], pruned: [], errors: [], dryRun };
+  if (!existsSync(runsDir)) return result;
+
+  let entries;
+  try {
+    entries = readdirSync(runsDir, { withFileTypes: true })
+      .filter((d) => d.isDirectory())
+      .map((d) => d.name)
+      .sort()         // ISO-like timestamps sort lexicographically
+      .reverse();     // newest first
+  } catch (err) {
+    result.errors.push({ runId: "<runs-dir>", error: err.message });
+    return result;
+  }
+
+  const cutoffMs = Date.now() - maxAgeDays * 24 * 60 * 60 * 1000;
+  for (let i = 0; i < entries.length; i++) {
+    const runId = entries[i];
+    const runPath = resolve(runsDir, runId);
+    let prune = false;
+    if (i >= maxRuns) prune = true;
+    if (!prune) {
+      try {
+        const stat = statSync(runPath);
+        if (stat.mtimeMs < cutoffMs) prune = true;
+      } catch (err) {
+        result.errors.push({ runId, error: err.message });
+        continue;
+      }
+    }
+    // Always keep the newest run regardless of age
+    if (i === 0) prune = false;
+
+    if (prune) {
+      if (!dryRun) {
+        try { rmSync(runPath, { recursive: true, force: true }); }
+        catch (err) { result.errors.push({ runId, error: err.message }); continue; }
+      }
+      result.pruned.push(runId);
+    } else {
+      result.kept.push(runId);
+    }
+  }
+  return result;
+}
+
+// ─── G2.5 — Orphan file audit ─────────────────────────────────────────
+
+/**
+ * G2.5 (v2.36): list files under `.forge/` that aren't recognised by any
+ * tool. Useful for catching stale artifacts from removed tools or typos in
+ * write paths. Returns `{ known, orphan }` lists relative to `.forge/`.
+ *
+ * The whitelist is intentionally hand-maintained — when a tool produces a
+ * new artifact, add it here so it stops showing up as orphan.
+ *
+ * @param {string} [cwd=process.cwd()]
+ * @returns {{known: string[], orphan: string[], whitelist: string[]}}
+ */
+export function auditOrphanForgeFiles(cwd = process.cwd()) {
+  // Patterns of recognised artifacts (substring or RegExp)
+  const WHITELIST = [
+    // Top-level state
+    "server-ports.json", "hub-events.jsonl", "watch-history.jsonl",
+    // L2 LiveGuard / dual-write
+    "drift-history.jsonl", "drift-history.json",
+    "regression-history.jsonl", "regression-history.json",
+    "health-dna.jsonl", "health-dna.json",
+    "quorum-history.jsonl", "quorum-history.json",
+    "incidents.jsonl", "deploy-journal.jsonl",
+    "liveguard-events.jsonl", "liveguard-memories.jsonl",
+    "openbrain-queue.jsonl", "openbrain-dlq.jsonl", "openbrain-stats.jsonl",
+    "env-diff-history.jsonl",
+    // Caches
+    "cost-history.json", "model-performance.json",
+    "secret-scan-cache.json", "regression-gates.json",
+    // Subdirectories handled separately
+  ];
+  const KNOWN_DIRS = new Set(["runs", "telemetry", "cache", "skills"]);
+
+  const dir = resolve(cwd, ".forge");
+  const known = [];
+  const orphan = [];
+  if (!existsSync(dir)) return { known, orphan, whitelist: WHITELIST };
+
+  let entries;
+  try { entries = readdirSync(dir, { withFileTypes: true }); }
+  catch { return { known, orphan, whitelist: WHITELIST }; }
+
+  for (const e of entries) {
+    if (e.isDirectory()) {
+      if (KNOWN_DIRS.has(e.name)) known.push(e.name + "/");
+      else orphan.push(e.name + "/");
+      continue;
+    }
+    if (WHITELIST.includes(e.name)) known.push(e.name);
+    else orphan.push(e.name);
+  }
+  return { known, orphan, whitelist: WHITELIST };
 }
 
 // ─── Health Trend Analysis ────────────────────────────────────────────
@@ -2121,7 +2271,7 @@ export function getHealthTrend(cwd = process.cwd(), days = 30, metrics = null) {
 
   // Drift trend
   if (active.includes("drift")) {
-    const driftHistory = readForgeJsonl("drift-history.json", [], cwd);
+    const driftHistory = readForgeJsonl("drift-history.jsonl", [], cwd); // G2.1: was .json
     const filtered = driftHistory.filter(r => r.timestamp >= cutoff);
     const scores = filtered.map(r => r.score).filter(s => typeof s === "number");
     result.drift = {
@@ -2196,7 +2346,7 @@ export function getHealthTrend(cwd = process.cwd(), days = 30, metrics = null) {
 
   // Test/regression trend (E5)
   if (active.includes("tests")) {
-    const regHistory = readForgeJsonl("regression-history.json", [], cwd);
+    const regHistory = readForgeJsonl("regression-history.jsonl", [], cwd); // G2.1: was .json
     const filtered = regHistory.filter(r => (r.timestamp || "") >= cutoff);
     const passRates = filtered.map(r => r.gatesChecked > 0 ? r.passed / r.gatesChecked : 1);
     result.tests = {
@@ -2245,7 +2395,7 @@ export function getHealthTrend(cwd = process.cwd(), days = 30, metrics = null) {
   // Persist health DNA snapshot for cross-session trend analysis
   try {
     if (result.healthDNA.driftAvg != null || result.healthDNA.testPassRate != null) {
-      appendForgeJsonl("health-dna.json", { ...result.healthDNA, healthScore: result.healthScore }, cwd);
+      appendForgeJsonl("health-dna.jsonl", { ...result.healthDNA, healthScore: result.healthScore }, cwd); // G2.1: was .json
     }
   } catch { /* best-effort */ }
 
@@ -2889,7 +3039,7 @@ export function runPostSliceHook({ commitMessage, cwd = process.cwd() } = {}) {
   }
 
   // Read drift history
-  const driftHistory = readForgeJsonl("drift-history.json", [], cwd);
+  const driftHistory = readForgeJsonl("drift-history.jsonl", [], cwd); // G2.1: was .json
   if (driftHistory.length < 2) {
     return { triggered: true, action: "skip", skippedReason: "insufficient-drift-history", message: null };
   }
@@ -3024,7 +3174,7 @@ export async function runPreAgentHandoffHook({
 
   // Read LiveGuard caches (all file reads, no subprocesses)
   const triageCache = readForgeJson("alert-triage-cache.json", null, cwd);
-  const driftHistory = readForgeJsonl("drift-history.json", [], cwd);
+  const driftHistory = readForgeJsonl("drift-history.jsonl", [], cwd); // G2.1: was .json
   const incidents = readForgeJsonl("incidents.jsonl", [], cwd);
   const secretScanCache = readForgeJson("secret-scan-cache.json", null, cwd);
   const deployJournal = readForgeJsonl("deploy-journal.jsonl", [], cwd);
@@ -3481,7 +3631,7 @@ async function executeSlice(slice, options) {
   if (quorumConfig?.enabled) {
     try {
       const initialFailed = sliceResult.attempts > 1;
-      appendForgeJsonl("quorum-history.json", {
+      appendForgeJsonl("quorum-history.jsonl", { // G2.1: was .json
         timestamp: new Date().toISOString(),
         sliceNumber: slice.number,
         sliceTitle: slice.title,
@@ -3615,16 +3765,13 @@ export async function postOpenClawSnapshot(cwd, extraContext = {}) {
       snapshot.project = config.projectName || null;
     } catch { /* skip */ }
 
-    // Drift score
-    const driftPath = resolve(cwd, ".forge/drift-history.json");
-    if (existsSync(driftPath)) {
-      try {
-        const history = JSON.parse(readFileSync(driftPath, "utf-8"));
-        const latest = Array.isArray(history) ? history[history.length - 1] : history;
-        snapshot.driftScore = latest?.score ?? null;
-        snapshot.driftViolations = latest?.violations ?? null;
-      } catch { /* skip */ }
-    }
+    // Drift score (G2.1: read via JSONL helper which transparently shims legacy .json)
+    try {
+      const history = readForgeJsonl("drift-history.jsonl", [], cwd);
+      const latest = history[history.length - 1];
+      snapshot.driftScore = latest?.score ?? null;
+      snapshot.driftViolations = latest?.violations ?? null;
+    } catch { /* skip */ }
 
     // Open incidents
     const incidentsPath = resolve(cwd, ".forge/incidents.jsonl");
@@ -4495,7 +4642,7 @@ export function loadQuorumConfig(cwd, presetOverride = null) {
 
   // Adaptive threshold: learn from quorum history which slices actually need quorum
   try {
-    const qHistory = readForgeJsonl("quorum-history.json", [], cwd);
+    const qHistory = readForgeJsonl("quorum-history.jsonl", [], cwd); // G2.1
     if (qHistory.length >= 5) {
       const needed = qHistory.filter(q => q.quorumNeeded).length;
       const total = qHistory.length;

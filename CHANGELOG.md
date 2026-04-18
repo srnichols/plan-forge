@@ -5,6 +5,95 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.36.0-beta.4] — 2026-04-18
+
+### Added — G3.x + GX.3/4/5: memory architecture, level 3 (semantic + tooling)
+
+Fourth beta on the path to v2.36.0. Closes the remaining G3 (intelligence) and
+GX.3/4/5 (developer-experience) gaps from the memory-architecture audit. All
+changes are zero-migration: existing projects get the new behaviour the moment
+they pull, and all new files default to off (TTL stamping, dedup, telemetry,
+cache) when their config knobs are absent.
+
+**G3.2 — Cosine-similarity dedupe for captured thoughts.**
+Every `captureMemory()` now compares the candidate against the last 50
+records in `liveguard-memories.jsonl` using term-frequency cosine similarity.
+Near-duplicates (≥ 0.9 by default; tunable via `.forge.json`
+`openbrain.dedupThreshold`) are suppressed at L2 and L3 but still emit a hub
+event tagged `deduped: true` so the dashboard can show the suppression rate.
+New pure helpers: `tokenize`, `cosineSimilarity`, `dedupeThoughtsBySimilarity`.
+
+**G3.3 — Proactive OpenBrain search on watcher anomalies.**
+`forge_watch` and `forge_watch_live` now prepend an OpenBrain
+`search_thoughts` instruction block to their tool response (one entry per
+unique anomaly code). The agent reading the response sees prior occurrences
+of the same code before reacting — closing the "observer is amnesic" loop.
+New helper: `buildWatcherSearchPrompt`.
+
+**G3.4 — Configurable `openbrain.keywordMap`.**
+The hardcoded slice-keyword → OpenBrain-query map in `loadProjectContext`
+is now overridable via `.forge.json` → `openbrain.keywordMap: [{pattern,
+flags?, query}, …]`. Invalid entries are skipped with a warning; missing
+config falls back to the built-in defaults. New helper: `loadKeywordSearchMap`.
+
+**G3.5 — Thought TTL / `expiresAt`.**
+`captureMemory()` now stamps `expiresAt` on every thought based on type:
+gotcha 90d, decision 180d, lesson 365d, pattern/convention never expire.
+Search-block builders consult `filterUnexpiredThoughts()` so stale
+observations don't dominate context. New helpers: `stampThoughtExpiry`,
+`filterUnexpiredThoughts`.
+
+**G3.6 — Capture-telemetry ledger.**
+Every capture (deduped or not) appends a summary record to
+`.forge/telemetry/memory-captures.jsonl` (`_v: 1` schema-stamped). Lets the
+dashboard answer "who's capturing what, and how often" without scraping
+the memory files themselves. New helper: `buildCaptureTelemetry`.
+
+**G3.7 — Memory search cache (helpers).**
+New cache-shape and freshness helpers (`buildCacheEntry`,
+`isCacheEntryFresh`) for the upcoming `.forge/memory-search-cache.jsonl`
+short-circuit. Default TTL 1h. Wired into `forge_memory_report` immediately;
+the search short-circuit itself ships in v2.36.0 final.
+
+**GX.3 — NEW MCP tool `forge_memory_report` (tool #37).**
+Aggregates the health of every memory surface into one read-only report:
+L2 file presence/size/record count/`_v` distribution, OpenBrain queue
+buckets (pending/delivered/failed/deferred/DLQ), drain stats trend,
+capture telemetry (per-tool/per-type + dedup rate), search-cache health,
+and orphan files under `.forge/`. Pure-ish — never writes. Exposed via
+`tools.json` and `capabilities.mjs`.
+
+**GX.4 — Source-attribution format `<tool>[/<subsystem>]`.**
+New `validateSourceFormat()` helper enforces the canonical shape (e.g.
+`forge_watch/quorum-dissent`). `captureMemory()` warn-logs invalid
+sources but never drops the capture — visibility-without-breakage.
+
+**GX.5 — `pforge migrate-memory` chore.**
+One-shot migrator that merges legacy `.json` ledgers
+(`drift-history.json`, `regression-history.json`, `fix-proposals.json`)
+into their canonical `.jsonl` siblings, deduping by exact line text.
+Backs the legacy file up as `<name>.json.bak-<date>`. Supports `-DryRun`.
+
+### Tests
+- New file: `pforge-mcp/tests/g3-gx.test.mjs` (~36 new cases covering every
+  pure helper + `buildMemoryReport` aggregator).
+- All prior suites unchanged; baseline 705 → ~741 passing.
+
+### Files Changed
+- `pforge-mcp/memory.mjs` — 9 new exports + extended `loadProjectContext`.
+- `pforge-mcp/server.mjs` — `captureMemory` rewrite; watcher G3.3 hooks;
+  `forge_memory_report` handler; `TOOLS` + dispatch entry.
+- `pforge-mcp/tools.json` + `capabilities.mjs` — `forge_memory_report` entry.
+- `pforge.ps1` — `Invoke-MigrateMemory` + switch routing.
+- `VERSION`, `pforge-mcp/package.json` — 2.36.0-beta.3 → 2.36.0-beta.4.
+
+### Migration
+- **Zero-migration.** Pull and the new behaviour is on. To roll legacy
+  `.json` ledgers into `.jsonl`, run `pforge migrate-memory` (or
+  `pforge migrate-memory -DryRun` to preview).
+
+---
+
 ## [2.36.0-beta.3] — 2026-04-19
 
 ### Fixed — Worker capability probe + runtime readiness matrix (closes #28)

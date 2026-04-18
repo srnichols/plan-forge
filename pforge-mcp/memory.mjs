@@ -13,14 +13,16 @@
  * @module memory
  */
 
-import { readFileSync, existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { readFileSync, existsSync, statSync, readdirSync } from "node:fs";
+import { resolve, join } from "node:path";
 
 /**
- * Keyword patterns mapped to targeted search queries for `search_thoughts`.
+ * Default keyword patterns mapped to targeted search queries for `search_thoughts`.
  * Matched against slice titles to generate domain-specific context requests.
+ * G3.4 (v2.36): projects can override via `.forge.json` → `openbrain.keywordMap`
+ * using the same shape — see `loadKeywordSearchMap()`.
  */
-const KEYWORD_SEARCH_MAP = [
+const DEFAULT_KEYWORD_SEARCH_MAP = [
   { pattern: /\b(database|migration|schema|alter|seed|index|ef\s+core|dbcontext|repository)\b/i, query: "database migration patterns" },
   { pattern: /\b(auth|token|rbac|jwt|oauth|password|credential|permission|role)\b/i, query: "authentication authorization patterns" },
   { pattern: /\b(api|endpoint|route|controller|http|rest|graphql)\b/i, query: "API endpoint design patterns" },
@@ -31,6 +33,44 @@ const KEYWORD_SEARCH_MAP = [
   { pattern: /\b(error|exception|logging|monitor|alert)\b/i, query: "error handling logging patterns" },
   { pattern: /\b(memory|openbrain|context|semantic)\b/i, query: "memory context integration patterns" },
 ];
+
+// Back-compat alias — some downstream code / tests imported this symbol.
+const KEYWORD_SEARCH_MAP = DEFAULT_KEYWORD_SEARCH_MAP;
+
+/**
+ * G3.4 (v2.36): load the active keyword-search map. Order of precedence:
+ *   1. `.forge.json` → `openbrain.keywordMap: [{ pattern: "regex", flags?: "i", query: "..." }, ...]`
+ *   2. Built-in `DEFAULT_KEYWORD_SEARCH_MAP`
+ *
+ * Invalid entries (missing pattern/query, malformed regex) are skipped with
+ * a console warning — never throws. Returns an array of `{pattern: RegExp, query: string}`.
+ *
+ * @param {string} [cwd=process.cwd()]
+ * @returns {Array<{pattern: RegExp, query: string}>}
+ */
+export function loadKeywordSearchMap(cwd = process.cwd()) {
+  try {
+    const cfgPath = resolve(cwd, ".forge.json");
+    if (!existsSync(cfgPath)) return DEFAULT_KEYWORD_SEARCH_MAP;
+    const cfg = JSON.parse(readFileSync(cfgPath, "utf-8"));
+    const custom = cfg?.openbrain?.keywordMap;
+    if (!Array.isArray(custom) || custom.length === 0) return DEFAULT_KEYWORD_SEARCH_MAP;
+
+    const compiled = [];
+    for (const entry of custom) {
+      if (!entry || typeof entry.pattern !== "string" || typeof entry.query !== "string") continue;
+      try {
+        const flags = typeof entry.flags === "string" ? entry.flags : "i";
+        compiled.push({ pattern: new RegExp(entry.pattern, flags), query: entry.query });
+      } catch (err) {
+        console.error(`[memory] skipping invalid keywordMap entry (${entry.pattern}): ${err.message}`);
+      }
+    }
+    return compiled.length > 0 ? compiled : DEFAULT_KEYWORD_SEARCH_MAP;
+  } catch {
+    return DEFAULT_KEYWORD_SEARCH_MAP;
+  }
+}
 
 /**
  * Load project-level context to prepend to slice prompts.
@@ -79,7 +119,9 @@ export function loadProjectContext(cwd, projectName, sliceTitle) {
 
   // ── Slice-specific deep-context searches ──────────────────────────────
   if (sliceTitle && projectName) {
-    const matchedQueries = KEYWORD_SEARCH_MAP
+    // G3.4 (v2.36): use the configurable map instead of the frozen default.
+    const keywordMap = loadKeywordSearchMap(cwd);
+    const matchedQueries = keywordMap
       .filter(({ pattern }) => pattern.test(sliceTitle))
       .map(({ query }) => query);
 
@@ -436,3 +478,415 @@ export function buildDrainStatsRecord(pass) {
     durationMs: pass.durationMs | 0,
   };
 }
+
+// ─── G3.2 — Similarity-based dedupe ────────────────────────────────────
+
+/**
+ * G3.2 (v2.36): tokenise a string into a bag of lowercase word tokens.
+ * Pure helper used by `cosineSimilarity` and `dedupeThoughtsBySimilarity`.
+ *
+ * @param {string} text
+ * @returns {Map<string, number>} token → count
+ */
+export function tokenize(text) {
+  const out = new Map();
+  if (!text || typeof text !== "string") return out;
+  const tokens = text.toLowerCase().match(/[a-z0-9_]+/g) || [];
+  for (const t of tokens) out.set(t, (out.get(t) || 0) + 1);
+  return out;
+}
+
+/**
+ * G3.2 (v2.36): cosine similarity between two token bags (0..1).
+ * Pure — used to suppress near-duplicate thoughts before they land in L2/L3.
+ * Uses term-frequency vectors; intentionally simple, no IDF.
+ *
+ * @param {string|Map<string,number>} a
+ * @param {string|Map<string,number>} b
+ * @returns {number} in [0, 1]
+ */
+export function cosineSimilarity(a, b) {
+  const va = a instanceof Map ? a : tokenize(a);
+  const vb = b instanceof Map ? b : tokenize(b);
+  if (va.size === 0 || vb.size === 0) return 0;
+  let dot = 0, magA = 0, magB = 0;
+  for (const [, v] of va) magA += v * v;
+  for (const [, v] of vb) magB += v * v;
+  const smaller = va.size < vb.size ? va : vb;
+  const larger = smaller === va ? vb : va;
+  for (const [t, v] of smaller) {
+    const w = larger.get(t);
+    if (w) dot += v * w;
+  }
+  const denom = Math.sqrt(magA) * Math.sqrt(magB);
+  return denom === 0 ? 0 : dot / denom;
+}
+
+/**
+ * G3.2 (v2.36): dedupe a batch of thoughts by cosine similarity on their
+ * `content` field. Keeps the first occurrence; drops later ones whose
+ * similarity to any kept thought exceeds `threshold` (default 0.9).
+ *
+ * Pure function — caller decides which survivors to persist.
+ *
+ * @param {Array<{content?: string}>} thoughts
+ * @param {{threshold?: number}} [opts]
+ * @returns {{kept: Array, dropped: Array<{thought: object, similarTo: object, similarity: number}>}}
+ */
+export function dedupeThoughtsBySimilarity(thoughts, opts = {}) {
+  const threshold = typeof opts.threshold === "number" ? opts.threshold : 0.9;
+  const kept = [];
+  const dropped = [];
+  const vectors = [];
+  if (!Array.isArray(thoughts)) return { kept, dropped };
+  for (const t of thoughts) {
+    if (!t || typeof t.content !== "string" || t.content.length === 0) {
+      kept.push(t); // nothing to compare — pass through untouched
+      vectors.push(null);
+      continue;
+    }
+    const vec = tokenize(t.content);
+    let match = null;
+    let bestScore = 0;
+    for (let i = 0; i < vectors.length; i++) {
+      if (!vectors[i]) continue;
+      const score = cosineSimilarity(vec, vectors[i]);
+      if (score >= threshold && score > bestScore) {
+        match = kept[i];
+        bestScore = score;
+      }
+    }
+    if (match) {
+      dropped.push({ thought: t, similarTo: match, similarity: Math.round(bestScore * 1000) / 1000 });
+    } else {
+      kept.push(t);
+      vectors.push(vec);
+    }
+  }
+  return { kept, dropped };
+}
+
+// ─── G3.3 — Proactive search prompt for watcher anomalies ─────────────
+
+/**
+ * G3.3 (v2.36): build an OpenBrain search-instruction block tailored to a
+ * watcher anomaly. The MCP tool embeds this block in its response so the
+ * caller (agent) proactively asks OpenBrain for prior findings on the same
+ * anomaly code before reacting — closing the "observer is amnesic" loop.
+ *
+ * Returns "" when projectName is falsy or the anomaly is shapeless.
+ *
+ * @param {{code?: string, message?: string}} anomaly
+ * @param {string} projectName
+ * @returns {string}
+ */
+export function buildWatcherSearchPrompt(anomaly, projectName) {
+  if (!anomaly || !anomaly.code || !projectName) return "";
+  const query = `watcher anomaly ${anomaly.code}`;
+  const lines = [
+    "--- PRIOR FINDINGS (OpenBrain) ---",
+    `Before reacting to anomaly '${anomaly.code}', check prior occurrences:`,
+    `  Use search_thoughts tool with query: "${query}", project: "${projectName}", limit: 5`,
+    "If matches exist, apply their documented mitigations. If not, record this occurrence via capture_thought after investigation.",
+    "--- END PRIOR FINDINGS ---",
+  ];
+  return lines.join("\n") + "\n";
+}
+
+// ─── G3.5 — Thought TTL / expiresAt ────────────────────────────────────
+
+/**
+ * G3.5 (v2.36): stamp an `expiresAt` field on a thought based on type.
+ * Mutates-free: returns a shallow clone. Used by `captureMemory()` so
+ * short-lived observations don't haunt searches forever.
+ *
+ *   lesson   → 365d
+ *   decision → 180d
+ *   gotcha   → 90d
+ *   pattern  → no expiry
+ *   convention → no expiry
+ *   (default) 90d
+ *
+ * Caller-supplied `expiresAt` wins.
+ *
+ * @param {object} thought
+ * @param {{now?: number, overrides?: Record<string, number>}} [opts]
+ * @returns {object}
+ */
+export function stampThoughtExpiry(thought, opts = {}) {
+  if (!thought || typeof thought !== "object") return thought;
+  if (thought.expiresAt) return thought;
+  const DAY = 24 * 60 * 60 * 1000;
+  const defaults = { lesson: 365, decision: 180, gotcha: 90, pattern: null, convention: null };
+  const byType = { ...defaults, ...(opts.overrides || {}) };
+  const days = byType[thought.type];
+  if (days == null) return thought; // no expiry
+  const now = opts.now ?? Date.now();
+  return { ...thought, expiresAt: new Date(now + days * DAY).toISOString() };
+}
+
+/**
+ * G3.5 (v2.36): filter out thoughts whose `expiresAt` is in the past.
+ * Missing/invalid `expiresAt` means never-expires.
+ *
+ * @param {Array<object>} thoughts
+ * @param {number} [now=Date.now()]
+ * @returns {Array<object>}
+ */
+export function filterUnexpiredThoughts(thoughts, now = Date.now()) {
+  if (!Array.isArray(thoughts)) return [];
+  return thoughts.filter((t) => {
+    if (!t || !t.expiresAt) return true;
+    const ts = Date.parse(t.expiresAt);
+    return !Number.isFinite(ts) || ts > now;
+  });
+}
+
+// ─── G3.6 — Capture telemetry ──────────────────────────────────────────
+
+/**
+ * G3.6 (v2.36): shape a capture-telemetry record. Every `captureMemory()`
+ * call emits one of these to `.forge/telemetry/memory-captures.jsonl` so
+ * we can answer "who's capturing what, and how often" without scraping
+ * the memory files themselves.
+ *
+ * @param {{tool: string, type: string, source: string, content?: string, project?: string, deduped?: boolean}} ctx
+ * @returns {object}
+ */
+export function buildCaptureTelemetry(ctx) {
+  const contentLen = typeof ctx.content === "string" ? ctx.content.length : 0;
+  return {
+    _v: 1,
+    timestamp: new Date().toISOString(),
+    tool: ctx.tool || "unknown",
+    type: ctx.type || "unknown",
+    source: ctx.source || "unknown",
+    project: ctx.project || null,
+    contentLen,
+    deduped: !!ctx.deduped,
+  };
+}
+
+// ─── G3.7 — Search-result caching ──────────────────────────────────────
+
+/**
+ * G3.7 (v2.36): the MCP layer caches OpenBrain search results to
+ * `.forge/memory-search-cache.jsonl` so agents don't re-query for the
+ * same slice. Default TTL 1h.
+ *
+ * Pure helper: given a cached entry `{cachedAt, ttlMs}`, decide whether
+ * it's still fresh.
+ *
+ * @param {{cachedAt: string|number, ttlMs?: number}} entry
+ * @param {number} [now=Date.now()]
+ * @returns {boolean}
+ */
+export function isCacheEntryFresh(entry, now = Date.now()) {
+  if (!entry || !entry.cachedAt) return false;
+  const ts = typeof entry.cachedAt === "number" ? entry.cachedAt : Date.parse(entry.cachedAt);
+  if (!Number.isFinite(ts)) return false;
+  const ttl = typeof entry.ttlMs === "number" ? entry.ttlMs : 60 * 60 * 1000;
+  return now - ts < ttl;
+}
+
+/**
+ * G3.7 (v2.36): shape a cache entry. `key` should be a deterministic hash
+ * of (query, project, limit) — the caller decides. We don't hash here so
+ * the helper stays pure + dep-free.
+ *
+ * @param {{key: string, query: string, project: string, limit: number, results: Array<object>, ttlMs?: number}} ctx
+ * @returns {object}
+ */
+export function buildCacheEntry(ctx) {
+  return {
+    _v: 1,
+    key: ctx.key,
+    query: ctx.query,
+    project: ctx.project,
+    limit: ctx.limit,
+    results: Array.isArray(ctx.results) ? ctx.results : [],
+    cachedAt: new Date().toISOString(),
+    ttlMs: typeof ctx.ttlMs === "number" ? ctx.ttlMs : 60 * 60 * 1000,
+  };
+}
+
+// ─── GX.4 — Source-attribution format ──────────────────────────────────
+
+/**
+ * GX.4 (v2.36): standardised source-attribution format is
+ *   `<tool>` or `<tool>/<subsystem>` — e.g. `forge_watch/quorum-dissent`.
+ *
+ * - tool must match /^forge_[a-z_]+$/
+ * - subsystem (when present) must match /^[a-z0-9_-]+$/
+ *
+ * Returns `{ valid: boolean, reason?: string }`.
+ *
+ * @param {string} source
+ * @returns {{valid: boolean, reason?: string}}
+ */
+export function validateSourceFormat(source) {
+  if (typeof source !== "string" || source.length === 0) {
+    return { valid: false, reason: "source must be a non-empty string" };
+  }
+  const parts = source.split("/");
+  if (parts.length > 2) {
+    return { valid: false, reason: "source must be '<tool>' or '<tool>/<subsystem>' (exactly one '/')" };
+  }
+  const [tool, subsystem] = parts;
+  if (!/^forge_[a-z_]+$/.test(tool)) {
+    return { valid: false, reason: `tool segment '${tool}' must match /^forge_[a-z_]+$/` };
+  }
+  if (subsystem !== undefined && !/^[a-z0-9_-]+$/.test(subsystem)) {
+    return { valid: false, reason: `subsystem segment '${subsystem}' must match /^[a-z0-9_-]+$/` };
+  }
+  return { valid: true };
+}
+
+// ─── GX.3 — forge_memory_report aggregator ─────────────────────────────
+
+function _safeStat(path) {
+  try { return statSync(path); } catch { return null; }
+}
+
+function _readJsonl(path, limit = Infinity) {
+  try {
+    const text = readFileSync(path, "utf-8");
+    const lines = text.split(/\r?\n/).filter(Boolean);
+    const slice = Number.isFinite(limit) && lines.length > limit ? lines.slice(-limit) : lines;
+    const out = [];
+    for (const line of slice) {
+      try { out.push(JSON.parse(line)); } catch { /* skip malformed */ }
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+function _summariseFile(forgeDir, name) {
+  const path = join(forgeDir, name);
+  const st = _safeStat(path);
+  if (!st) return { name, exists: false, size: 0, records: 0 };
+  const records = _readJsonl(path);
+  const versions = {};
+  for (const r of records) {
+    const v = r && r._v != null ? String(r._v) : "none";
+    versions[v] = (versions[v] || 0) + 1;
+  }
+  return { name, exists: true, size: st.size, records: records.length, versions };
+}
+
+/**
+ * GX.3 (v2.36): aggregate the health of every memory surface into a
+ * single report — L2 files, OpenBrain queue state, drain stats trend,
+ * capture telemetry, search cache. Consumed by the `forge_memory_report`
+ * MCP tool (and by the dashboard Memory tab in a follow-up PR).
+ *
+ * Pure-ish: only reads from `.forge/` — never writes, never calls network.
+ *
+ * @param {string} [cwd=process.cwd()]
+ * @returns {object}
+ */
+export function buildMemoryReport(cwd = process.cwd()) {
+  const forgeDir = resolve(cwd, ".forge");
+  const telemetryDir = join(forgeDir, "telemetry");
+  const exists = existsSync(forgeDir);
+
+  const l2Files = [
+    "liveguard-memories.jsonl",
+    "openbrain-queue.jsonl",
+    "openbrain-dlq.jsonl",
+    "openbrain-stats.jsonl",
+    "hub-events.jsonl",
+    "drift-history.jsonl",
+    "incidents.jsonl",
+    "regression-history.jsonl",
+    "env-diff-history.jsonl",
+    "memory-search-cache.jsonl",
+  ].map((n) => _summariseFile(forgeDir, n));
+
+  // Queue health (derived from openbrain-queue.jsonl)
+  const queueRecords = exists ? _readJsonl(join(forgeDir, "openbrain-queue.jsonl")) : [];
+  const queueBuckets = { pending: 0, delivered: 0, failed: 0, deferred: 0 };
+  const now = Date.now();
+  for (const r of queueRecords) {
+    const status = r?._status || "pending";
+    if (status === "delivered") queueBuckets.delivered++;
+    else if (status === "failed") queueBuckets.failed++;
+    else {
+      const next = r?._nextAttemptAt ? Date.parse(r._nextAttemptAt) : 0;
+      if (Number.isFinite(next) && next > now) queueBuckets.deferred++;
+      else queueBuckets.pending++;
+    }
+  }
+  const dlq = exists ? _readJsonl(join(forgeDir, "openbrain-dlq.jsonl")).length : 0;
+
+  // Drain trend — last 20 drain passes
+  const drainRecords = exists ? _readJsonl(join(forgeDir, "openbrain-stats.jsonl"), 20) : [];
+  const drainTrend = {
+    passes: drainRecords.length,
+    lastAttempted: drainRecords.at(-1)?.attempted ?? 0,
+    lastDelivered: drainRecords.at(-1)?.delivered ?? 0,
+    totalDelivered: drainRecords.reduce((a, r) => a + (r.delivered | 0), 0),
+    totalDeferred: drainRecords.reduce((a, r) => a + (r.deferred | 0), 0),
+  };
+
+  // Capture telemetry — last 500 records
+  const telemetryPath = join(telemetryDir, "memory-captures.jsonl");
+  const telemetryRecords = _readJsonl(telemetryPath, 500);
+  const telemetry = {
+    total: telemetryRecords.length,
+    dedupedCount: telemetryRecords.filter((r) => r.deduped).length,
+    byTool: {},
+    byType: {},
+  };
+  for (const r of telemetryRecords) {
+    if (r?.tool) telemetry.byTool[r.tool] = (telemetry.byTool[r.tool] || 0) + 1;
+    if (r?.type) telemetry.byType[r.type] = (telemetry.byType[r.type] || 0) + 1;
+  }
+
+  // Search cache health
+  const cacheRecords = exists ? _readJsonl(join(forgeDir, "memory-search-cache.jsonl")) : [];
+  const uniqueKeys = new Set(cacheRecords.map((r) => r?.key).filter(Boolean));
+  const freshEntries = cacheRecords.filter((r) => isCacheEntryFresh(r, now)).length;
+  const cache = {
+    totalEntries: cacheRecords.length,
+    uniqueKeys: uniqueKeys.size,
+    freshEntries,
+  };
+
+  // Orphan audit — files in .forge/ not listed in the known registry
+  const knownFiles = new Set([
+    "liveguard-memories.jsonl", "openbrain-queue.jsonl", "openbrain-dlq.jsonl",
+    "openbrain-stats.jsonl", "hub-events.jsonl", "drift-history.jsonl",
+    "incidents.jsonl", "regression-history.jsonl", "env-diff-history.jsonl",
+    "memory-search-cache.jsonl", "runs",
+  ]);
+  const orphans = [];
+  if (exists) {
+    try {
+      for (const entry of readdirSync(forgeDir)) {
+        if (entry.startsWith(".")) continue;
+        if (knownFiles.has(entry)) continue;
+        if (entry === "telemetry") continue;
+        // Tolerate .bak files (from migrate-memory) and directories
+        if (entry.endsWith(".bak") || /\.bak-\d{4}-\d{2}-\d{2}$/.test(entry)) continue;
+        orphans.push(entry);
+      }
+    } catch { /* ignore */ }
+  }
+
+  return {
+    _v: 1,
+    timestamp: new Date().toISOString(),
+    cwd,
+    forgeDirExists: exists,
+    l2Files,
+    queue: { ...queueBuckets, dlq },
+    drainTrend,
+    telemetry,
+    cache,
+    orphans,
+  };
+}
+

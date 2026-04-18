@@ -58,7 +58,18 @@ try {
 }
 
 import { parsePlan, runPlan, detectWorkers, getCostReport, getHealthTrend, analyzeWithQuorum, generateImage, runAnalyze, readForgeJson, readForgeJsonl, appendForgeJsonl, emitToolTelemetry, regressionGuard, runPostSliceHook, resetPostSliceHookFired, runPreAgentHandoffHook, postOpenClawSnapshot, loadOpenClawConfig, loadQuorumConfig, runWatch, runWatchLive } from "./orchestrator.mjs";
-import { isOpenBrainConfigured, shapeWatcherAnomalyThought, dedupeWatcherAnomalies, shapeQueueRecord } from "./memory.mjs";
+import {
+  isOpenBrainConfigured,
+  shapeWatcherAnomalyThought,
+  dedupeWatcherAnomalies,
+  shapeQueueRecord,
+  dedupeThoughtsBySimilarity,
+  stampThoughtExpiry,
+  buildCaptureTelemetry,
+  validateSourceFormat,
+  buildWatcherSearchPrompt,
+  buildMemoryReport,
+} from "./memory.mjs";
 import { createHub, readHubPort } from "./hub.mjs";
 import { createBridge } from "./bridge.mjs";
 import { buildCapabilitySurface, writeToolsJson, writeCliSchema } from "./capabilities.mjs";
@@ -133,20 +144,74 @@ function captureMemory(content, type, source, cwd) {
       project = forgeConfig.projectName || "plan-forge";
     } catch { /* use default */ }
 
-    const thought = { content, project, type, source, created_by: "liveguard-auto", captured_at: new Date().toISOString() };
-
-    // Always persist locally
-    appendForgeJsonl("liveguard-memories.jsonl", thought, cwd);
-
-    // G2.6 (v2.36): queue records carry delivery state (_status / _attempts /
-    // _enqueuedAt / _nextAttemptAt) so a drain worker can apply exponential
-    // backoff and DLQ semantics without re-deriving them from the payload.
-    if (isOpenBrainConfigured(cwd)) {
-      appendForgeJsonl("openbrain-queue.jsonl", shapeQueueRecord(thought), cwd);
+    // GX.4 (v2.36): standardise source attribution. Invalid sources are
+    // warn-logged but still persisted so callers see their mistake and
+    // capture is never dropped silently.
+    const sourceCheck = validateSourceFormat(source);
+    if (!sourceCheck.valid) {
+      console.error(`[memory] non-standard source '${source}': ${sourceCheck.reason}`);
     }
 
-    // Broadcast so dashboard/bridge can observe
-    activeHub?.broadcast({ type: "memory-captured", thought, timestamp: thought.captured_at });
+    let thought = {
+      content,
+      project,
+      type,
+      source,
+      created_by: "liveguard-auto",
+      captured_at: new Date().toISOString(),
+    };
+
+    // G3.5 (v2.36): stamp expiresAt based on thought type so short-lived
+    // observations don't dominate future searches.
+    thought = stampThoughtExpiry(thought);
+
+    // G3.2 (v2.36): suppress near-duplicates by cosine similarity against
+    // the last 50 captures. Threshold is configurable via .forge.json
+    // openbrain.dedupThreshold (default 0.9).
+    let deduped = false;
+    let threshold = 0.9;
+    try {
+      const cfg = JSON.parse(readFileSync(resolve(cwd, ".forge.json"), "utf-8"));
+      if (typeof cfg?.openbrain?.dedupThreshold === "number") {
+        threshold = cfg.openbrain.dedupThreshold;
+      }
+    } catch { /* use default */ }
+    try {
+      const recent = readForgeJsonl("liveguard-memories.jsonl", [], cwd);
+      const tail = recent.slice(-50);
+      const { dropped } = dedupeThoughtsBySimilarity([...tail, thought], { threshold });
+      deduped = dropped.some((d) => d.thought === thought);
+    } catch { /* best-effort */ }
+
+    if (!deduped) {
+      // Always persist locally
+      appendForgeJsonl("liveguard-memories.jsonl", thought, cwd);
+
+      // G2.6: queue records carry delivery state (_status / _attempts /
+      // _enqueuedAt / _nextAttemptAt) so a drain worker can apply
+      // exponential backoff and DLQ semantics.
+      if (isOpenBrainConfigured(cwd)) {
+        appendForgeJsonl("openbrain-queue.jsonl", shapeQueueRecord(thought), cwd);
+      }
+    }
+
+    // G3.6 (v2.36): emit a capture-telemetry record regardless — we want
+    // visibility into dedup rate, per-tool capture volume, etc.
+    try {
+      appendForgeJsonl(
+        "telemetry/memory-captures.jsonl",
+        buildCaptureTelemetry({ tool: source, type, source, content, project, deduped }),
+        cwd,
+      );
+    } catch { /* best-effort */ }
+
+    // Broadcast so dashboard/bridge can observe (include deduped flag)
+    activeHub?.broadcast({
+      type: "memory-captured",
+      thought,
+      deduped,
+      timestamp: thought.captured_at,
+    });
   } catch { /* memory capture is best-effort — never break tool execution */ }
 }
 
@@ -607,6 +672,16 @@ const TOOLS = [
     },
   },
   {
+    name: "forge_memory_report",
+    description: "GX.3 (v2.36): aggregate the health of every memory surface — L2 jsonl files (record counts, schema _v distribution), OpenBrain queue state (pending/delivered/failed/deferred/DLQ), drain stats trend, capture telemetry (per-tool/per-type volume + dedup rate), search cache health, and orphans under .forge/. Read-only — never mutates files.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+    },
+  },
+  {
     name: "forge_skill_status",
     description: "Get recent skill execution events from the WebSocket hub history. Shows which skills were run, per-step results, and timing.",
     inputSchema: {
@@ -1029,6 +1104,7 @@ function executeTool(name, args) {
     case "forge_liveguard_run":
     case "forge_watch":
     case "forge_watch_live":
+    case "forge_memory_report":
       return null; // Handled async in CallToolRequestSchema handler
     default:
       return { success: false, error: `Unknown tool: ${name}` };
@@ -1351,15 +1427,31 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       // semantic signals. Captures go to the WATCHER's .forge/ (PROJECT_DIR), NEVER the
       // target's, preserving the watcher's read-only contract on the target project.
       // Source attribution follows the GX.4 standard: "forge_watch/<anomaly-code>".
+      let searchHints = "";
       if (Array.isArray(report?.anomalies) && report.anomalies.length > 0) {
         const meta = { targetPath: report.targetPath, runId: report.runId, runState: report.runState };
+        // G3.3 (v2.36): build proactive OpenBrain search-prompt hints so the
+        // agent consulting forge_watch knows to look up prior occurrences of
+        // each anomaly code before reacting.
+        let projectName = "plan-forge";
+        try {
+          const forgeCfg = JSON.parse(readFileSync(resolve(PROJECT_DIR, ".forge.json"), "utf-8"));
+          projectName = forgeCfg.projectName || projectName;
+        } catch { /* use default */ }
+        const seenCodes = new Set();
         for (const anomaly of report.anomalies) {
           const shaped = shapeWatcherAnomalyThought(anomaly, meta, "forge_watch");
           captureMemory(shaped.content, shaped.type, shaped.source, PROJECT_DIR);
+          if (anomaly?.code && !seenCodes.has(anomaly.code)) {
+            seenCodes.add(anomaly.code);
+            searchHints += buildWatcherSearchPrompt(anomaly, projectName);
+          }
         }
       }
 
-      return { content: [{ type: "text", text: JSON.stringify(report, null, 2) }] };
+      const reportJson = JSON.stringify(report, null, 2);
+      const text = searchHints ? `${searchHints}\n${reportJson}` : reportJson;
+      return { content: [{ type: "text", text }] };
     } catch (err) {
       return { content: [{ type: "text", text: `Watcher error: ${err.message}` }], isError: true };
     }
@@ -1399,23 +1491,49 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       // G3.1 (v2.35.1): dedupe by code+message within this live session and capture.
       // Writes land in the WATCHER's .forge/ — target project is never touched.
       const uniqueAnomalies = dedupeWatcherAnomalies(liveAnomalies);
+      // G3.3 (v2.36): build proactive OpenBrain search hints, one per code.
+      let projectName = "plan-forge";
+      try {
+        const forgeCfg = JSON.parse(readFileSync(resolve(PROJECT_DIR, ".forge.json"), "utf-8"));
+        projectName = forgeCfg.projectName || projectName;
+      } catch { /* use default */ }
+      let searchHints = "";
+      const seenCodes = new Set();
       for (const a of uniqueAnomalies) {
         const meta = { targetPath: a.targetPath || args.targetPath, runId: a.runId };
         const shaped = shapeWatcherAnomalyThought(a, meta, "forge_watch_live");
         captureMemory(shaped.content, shaped.type, shaped.source, PROJECT_DIR);
+        if (a?.code && !seenCodes.has(a.code)) {
+          seenCodes.add(a.code);
+          searchHints += buildWatcherSearchPrompt(a, projectName);
+        }
       }
       const anomalyCaptureCount = uniqueAnomalies.length;
 
-      return { content: [{ type: "text", text: JSON.stringify({
+      const payload = JSON.stringify({
         ...result,
         capturedEvents: captured.length,
         droppedEvents,               // G1.4
         maxCapturedEvents,           // G1.4
         capturedAnomalies: anomalyCaptureCount,
         events: captured,
-      }, null, 2) }] };
+      }, null, 2);
+      const text = searchHints ? `${searchHints}\n${payload}` : payload;
+      return { content: [{ type: "text", text }] };
     } catch (err) {
       return { content: [{ type: "text", text: `Watcher live error: ${err.message}` }], isError: true };
+    }
+  }
+
+  if (name === "forge_memory_report") {
+    // GX.3 (v2.36): aggregate every memory surface (L2 files, OpenBrain queue
+    // state, drain stats trend, capture telemetry, search cache, orphans).
+    // Read-only — never mutates the forge dir.
+    try {
+      const report = buildMemoryReport(PROJECT_DIR);
+      return { content: [{ type: "text", text: JSON.stringify(report, null, 2) }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Memory report error: ${err.message}` }], isError: true };
     }
   }
 

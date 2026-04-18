@@ -17,6 +17,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - **Quorum + skill event surfacing** — snapshot `counts` now includes `quorumDispatched`, `quorumLegsCompleted`, `quorumReviewed`, `skillsStarted`, `skillsCompleted`, `skillStepsFailed`.
 - **3 new anomaly codes** — `quorum-dissent` (quorum review reached but slice still failed), `quorum-leg-stalled` (dispatched but legs never returned), `skill-step-failed` (any skill step recorded a failure).
 
+### Added — Dashboard Watcher parity
+
+- **New Watcher tab** in the FORGE section of `localhost:3100/dashboard` — three panels: Latest Snapshot (target, runState, runId, anomaly count, cursor), Advice History (model/tokens/time), and Anomalies (severity-coded codes with message + run ID). Red badge in the tab header counts unread snapshots.
+- **Three new WebSocket event handlers** in `dashboard/app.js`: `watch-snapshot-completed` → snapshot feed, `watch-anomaly-detected` → anomaly feed + notification, `watch-advice-generated` → advice feed + notification.
+- **Two new Actions cards** — "Live Watch" and "Watch Snapshot" copy the corresponding `pforge watch-live` / `pforge watch` invocations to the clipboard.
+- Dashboard tab count: 14 → **15** (10 FORGE tabs incl. Watcher + 5 LiveGuard tabs).
+
 ### Changed
 
 - `forge_watch` report shape now includes `recommendations: []` and `cursor: <ISO>` fields. Existing consumers that destructure known fields are unaffected.
@@ -24,7 +31,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Tests
 
-- 22 new tests in `pforge-mcp/tests/orchestrator.test.mjs` covering quorum/skill counts, recommendations, history append, diff cursor, hub event emission, and runWatchLive polling fallback. Total: 654 passing (up from 632).
+- 22 new tests in `pforge-mcp/tests/orchestrator.test.mjs` covering quorum/skill counts, recommendations, history append, diff cursor, hub event emission, and runWatchLive polling fallback.
+- Dashboard tab smoke test updated to assert 15 tabs (10 core + 5 LG).
+- Total: **654 passing** (up from 632).
 
 ---
 

@@ -73,9 +73,9 @@ pforge run-plan --quorum=speed <plan-file>    # Fast models, threshold 7
 pforge ext search
 pforge ext add <name>
 
-# MCP server (if installed): exposes 34 forge tools as native MCP operations
+# MCP server (if installed): exposes 36 forge tools as native MCP operations
 # Start here: call forge_capabilities to discover all tools, workflows, config, and memory
-# Key tools: forge_run_plan, forge_analyze, forge_diagnose, forge_cost_report, forge_plan_status, forge_capabilities, forge_liveguard_run
+# Key tools: forge_run_plan, forge_analyze, forge_diagnose, forge_cost_report, forge_plan_status, forge_capabilities, forge_liveguard_run, forge_watch, forge_watch_live
 # API providers: set XAI_API_KEY for Grok models (grok-4.20, grok-4, grok-3, grok-3-mini)
 # Or use .forge/secrets.json for local API key storage (gitignored)
 # Dashboard: localhost:3100/dashboard (live progress, cost, session replay, traces)

@@ -1095,7 +1095,7 @@ const SYSTEM_REFERENCE = {
     "Analyze": "Cross-artifact consistency scoring (pforge analyze). Scores 0-100 across traceability, coverage, tests, gates",
     "Orchestrator": "The execution engine (pforge-mcp/orchestrator.mjs). Parses plans, schedules slices, spawns workers, validates gates",
     "Hub": "WebSocket event server (pforge-mcp/hub.mjs). Broadcasts slice lifecycle events to connected clients in real-time",
-    "Dashboard": "Web UI at localhost:3100/dashboard. FORGE section (9 tabs: Progress, Runs, Cost, Actions, Replay, Extensions, Config, Traces, Skills) + LIVEGUARD section (5 tabs: Health, Incidents, Triage, Security, Env)",
+    "Dashboard": "Web UI at localhost:3100/dashboard. FORGE section (10 tabs: Progress, Runs, Cost, Actions, Replay, Extensions, Config, Traces, Skills, Watcher) + LIVEGUARD section (5 tabs: Health, Incidents, Triage, Security, Env)",
 
     // Infrastructure
     "Guardrails": "Instruction files (.github/instructions/*.instructions.md) that auto-load based on the file being edited. 15-18 per preset",

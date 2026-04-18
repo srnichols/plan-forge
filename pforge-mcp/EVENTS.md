@@ -353,6 +353,60 @@ Emitted when `forge_fix_proposal` generates a new fix plan.
 }
 ```
 
+### `watch-snapshot-completed`
+Emitted when `forge_watch` builds a snapshot of a target project. Consumed by the dashboard Watcher tab.
+
+```json
+{
+  "type": "watch-snapshot-completed",
+  "data": {
+    "target": "../Rummag",
+    "runState": "in-progress",
+    "runId": "run-2026-04-17-0930",
+    "anomalyCount": 2,
+    "cursor": "2026-04-17T09:30:45.123Z",
+    "counts": { "slicesStarted": 3, "slicesCompleted": 2, "slicesFailed": 0, "quorumDispatched": 1, "skillsStarted": 0 }
+  }
+}
+```
+
+### `watch-anomaly-detected`
+Emitted when `forge_watch` detects one or more anomalies. One event per watch invocation, not per anomaly.
+
+```json
+{
+  "type": "watch-anomaly-detected",
+  "data": {
+    "target": "../Rummag",
+    "runId": "run-2026-04-17-0930",
+    "anomalies": [
+      { "code": "slice-failed", "severity": "high", "message": "Slice 3 failed after 2 retries" },
+      { "code": "model-escalated", "severity": "warn", "message": "Slice 2 escalated to claude-opus-4.7" }
+    ]
+  }
+}
+```
+
+Anomaly codes: `stalled`, `tokens-zero`, `high-retries`, `slice-failed`, `all-skipped`, `gate-on-prose`, `model-escalated`, `quorum-dissent`, `quorum-leg-stalled`, `skill-step-failed`.
+
+### `watch-advice-generated`
+Emitted when `forge_watch` analyze-mode produces narrative advice from a frontier model.
+
+```json
+{
+  "type": "watch-advice-generated",
+  "data": {
+    "target": "../Rummag",
+    "runId": "run-2026-04-17-0930",
+    "model": "claude-opus-4.7",
+    "tokensIn": 8432,
+    "tokensOut": 512,
+    "durationMs": 4821,
+    "advicePreview": "The stalled slice appears to be waiting on..."
+  }
+}
+```
+
 ---
 
 ## Connection

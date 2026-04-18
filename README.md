@@ -291,7 +291,7 @@ Health DNA detects decay before it manifests ───────────�
 
 ## Dashboard
 
-`localhost:3100/dashboard` — 14 real-time tabs powered by WebSocket hub.
+`localhost:3100/dashboard` — 15 real-time tabs powered by WebSocket hub.
 
 <img src="docs/assets/readme-dashboard.webp" alt="Plan Forge dashboard showing drift score, health trends, incident list, and status cards" width="100%" />
 
@@ -354,7 +354,7 @@ GitHub Copilot (primary) · Claude Code · Cursor · Codex CLI · Gemini CLI · 
 
 ### MCP Server (36 Tools)
 
-`pforge-mcp/server.mjs` — 20 core tools + 14 LiveGuard tools. Live dashboard at `localhost:3100/dashboard`. REST API for external integrations.
+`pforge-mcp/server.mjs` — 20 core tools + 14 LiveGuard tools + 2 Watcher tools (v2.34/v2.35). Live dashboard at `localhost:3100/dashboard`. REST API for external integrations.
 
 Key tools: `forge_run_plan` · `forge_liveguard_run` · `forge_analyze` · `forge_capabilities` · `forge_smith` · `forge_cost_report`
 

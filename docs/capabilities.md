@@ -274,7 +274,7 @@ Standalone (no MCP client needed): `node pforge-mcp/server.mjs --dashboard-only`
 
 ## LiveGuard MCP Tools (14 shipped v2.27–v2.30)
 
-> Post-coding intelligence — watches gates after the forge ships. All 14 tools are included in the 34-tool count above. Available as MCP tools and REST endpoints.
+> Post-coding intelligence — watches gates after the forge ships. All 14 LiveGuard tools (plus 2 Watcher tools) are included in the 36-tool count above. Available as MCP tools and REST endpoints.
 
 | Tool | What It Guards | Since |
 |------|---------------|-------|
@@ -679,6 +679,26 @@ LiveGuard is the operational intelligence layer that activates after the forge p
 | `forge_secret_scan` | High-entropy string detection in `git diff` staged changes | Never logs values — redacts to `<REDACTED>` in all output |
 | `forge_env_diff` | Environment variable key divergence across `.env*` files | Keys-only parse — never reads values; excludes `.env.local` |
 
+### LiveGuard MCP Tools (v2.29.0 — 2 additional tools)
+
+| Tool | Guards | Data Store |
+|------|--------|------------|
+| `forge_fix_proposal` | Generates 1–2 slice fix plans from regression, drift, incident, or secret-scan failures | `docs/plans/auto/LIVEGUARD-FIX-<id>.md`, `.forge/fix-proposals.json` |
+| `forge_quorum_analyze` | Assembles a structured 3-section quorum prompt (Context, Question, Voting Instruction) from any LiveGuard data source for multi-model dispatch | (no persistence — returns prompt text) |
+
+### LiveGuard MCP Tools (v2.30.0 — 1 additional tool)
+
+| Tool | Guards | Data Store |
+|------|--------|------------|
+| `forge_liveguard_run` | Composite run — executes drift + sweep + secret-scan + regression-guard + dep-watch + alert-triage + health-trend in a single call; returns unified `overallStatus` (green / yellow / red) | Writes to each underlying tool's cache |
+
+### Watcher MCP Tools (v2.34.0 / v2.35.0 — 2 tools)
+
+| Tool | Guards | Data Store |
+|------|--------|------------|
+| `forge_watch` | Read-only snapshot watcher — tails another project's pforge run, detects anomalies (10 codes), maps them to concrete next-step recommendations, writes to the **watcher's** `.forge/watch-history.jsonl` | `<watcher>/.forge/watch-history.jsonl` |
+| `forge_watch_live` | Live tail — streams events from a target project for a fixed duration via the target's WebSocket hub (`.forge/server-ports.json`) when running, `events.log` polling otherwise | (ephemeral; caps at 500 events/call) |
+
 ### LiveGuard REST Endpoints (v2.27.0 — 14 new endpoints)
 
 | Method | Path | Tool |
@@ -709,13 +729,13 @@ LiveGuard is the operational intelligence layer that activates after the forge p
 
 ### LiveGuard Dashboard (v2.28.0)
 
-The existing unified dashboard at `localhost:3100/dashboard` gains a **LIVEGUARD section** (5 amber-accented tabs) separated by a visual divider from the existing FORGE section (9 blue-accented tabs). Single WebSocket, single Chart.js, no new server process.
+The existing unified dashboard at `localhost:3100/dashboard` gains a **LIVEGUARD section** (5 amber-accented tabs) separated by a visual divider from the existing FORGE section (10 blue-accented tabs, including the v2.35 **Watcher** tab). Single WebSocket, single Chart.js, no new server process.
 
-**Dashboard sections after v2.28.0 (14 tabs total)**:
+**Dashboard sections after v2.35.0 (15 tabs total)**:
 
 | Section | Tabs | Active Color |
 |---------|---------|--------------|
-| FORGE | Progress, Runs, Cost, Actions, Replay, Extensions, Config, Traces, Skills | Blue (`#3b82f6`) |
+| FORGE | Progress, Runs, Cost, Actions, Replay, Extensions, Config, Traces, Skills, **Watcher** | Blue (`#3b82f6`) |
 | LIVEGUARD | Health, Incidents, Triage, Security, Env | Amber (`#f59e0b`) |
 
 Each LiveGuard tab includes a `Docs ↗` link to the corresponding manual chapter.

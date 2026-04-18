@@ -80,6 +80,7 @@
       <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="config">Config</button>
       <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="traces">Traces</button>
       <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="skills">Skills</button>
+      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="watcher">Watcher</button>
     </div>
     <!-- Sub tabs: LiveGuard -->
     <div id="subtabs-liveguard" class="hidden flex gap-1 pt-1 pb-0.5 overflow-x-auto">
@@ -342,6 +343,14 @@
         <button onclick="openLaunchPanel()" class="action-btn bg-gray-800 hover:bg-gray-700 rounded-lg p-4 text-left transition border border-cyan-700/30">
           <div class="flex items-center gap-2 mb-1"><span>🚀</span><span class="font-semibold">Launch Plan</span></div>
           <p class="text-sm text-gray-400">Execute a plan with model &amp; mode selection</p>
+        </button>
+        <button onclick="copyWatchCommand(true)" class="action-btn bg-gray-800 hover:bg-gray-700 rounded-lg p-4 text-left transition border border-blue-700/30">
+          <div class="flex items-center gap-2 mb-1"><span>👁️</span><span class="font-semibold">Live Watch</span></div>
+          <p class="text-sm text-gray-400">Copy <code class="bg-gray-700 px-1 rounded">pforge watch-live</code> command</p>
+        </button>
+        <button onclick="copyWatchCommand(false)" class="action-btn bg-gray-800 hover:bg-gray-700 rounded-lg p-4 text-left transition border border-blue-700/30">
+          <div class="flex items-center gap-2 mb-1"><span>📸</span><span class="font-semibold">Watch Snapshot</span></div>
+          <p class="text-sm text-gray-400">Copy <code class="bg-gray-700 px-1 rounded">pforge watch</code> command</p>
         </button>
       </div>
       <!-- Action result -->
@@ -608,6 +617,40 @@
       </div>
       <div id="skill-timeline" class="space-y-2">
         <div class="text-gray-500 text-center py-8">No skill executions yet. Invoke a skill via <code>/skill-name</code> or <code>forge_run_skill</code>.</div>
+      </div>
+    </section>
+
+    <!-- Watcher Tab (v2.35) -->
+    <section id="tab-watcher" class="tab-content hidden">
+      <div class="mb-4 flex items-center justify-between">
+        <div>
+          <h2 class="text-lg font-semibold text-blue-400">👁️ Watcher</h2>
+          <p class="text-xs text-gray-500">Live feed from <code class="bg-gray-700 px-1 rounded">pforge watch-live</code> — read-only observer (v2.35)</p>
+        </div>
+        <div class="flex gap-2 items-center">
+          <button onclick="copyWatchCommand(true)" class="text-xs px-3 py-1 bg-blue-700/40 hover:bg-blue-700/70 text-blue-300 rounded">Copy watch-live cmd</button>
+          <button onclick="renderWatcherPanel()" class="text-xs px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded">Refresh</button>
+        </div>
+      </div>
+      <div class="grid gap-4 grid-cols-1 lg:grid-cols-2">
+        <div class="bg-gray-800 rounded-lg p-4">
+          <h3 class="text-sm font-semibold text-gray-300 mb-2">Latest Snapshot</h3>
+          <div id="watcher-snapshot">
+            <p class="text-gray-500 text-sm py-4 text-center">No watcher snapshots yet. Run <code class="bg-gray-700 px-1 rounded">pforge watch &lt;target&gt;</code> or <code class="bg-gray-700 px-1 rounded">pforge watch-live &lt;target&gt;</code>.</p>
+          </div>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-4">
+          <h3 class="text-sm font-semibold text-gray-300 mb-2">Advice History</h3>
+          <div id="watcher-advice">
+            <p class="text-gray-500 text-sm py-4 text-center">No advice generated yet.</p>
+          </div>
+        </div>
+      </div>
+      <div class="bg-gray-800 rounded-lg p-4 mt-4">
+        <h3 class="text-sm font-semibold text-gray-300 mb-2">Anomalies</h3>
+        <div id="watcher-anomalies" class="max-h-96 overflow-y-auto">
+          <p class="text-gray-500 text-sm py-4 text-center">No anomalies detected.</p>
+        </div>
       </div>
     </section>
 

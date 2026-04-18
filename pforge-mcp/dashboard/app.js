@@ -17,6 +17,11 @@ const state = {
   runMeta: null,    // Current run metadata
   charts: {},       // Chart.js instances
   pendingApprovals: [], // Pending bridge approval gates
+  watcher: {        // v2.35: watcher feed (snapshots, anomalies, advice)
+    snapshots: [],     // [{ targetPath, runId, runState, anomalyCount, cursor, ts }]
+    anomalies: [],     // [{ targetPath, runId, code, severity, message, ts }]
+    advice: [],        // [{ targetPath, runId, model, tokensOut, ts }]
+  },
 };
 
 const API_BASE = `${window.location.protocol}//${window.location.host}`;
@@ -202,6 +207,15 @@ function handleEvent(event) {
       break;
     case "liveguard-secret-scan":
       handleLGSecretScan(event.data || event);
+      break;
+    case "watch-snapshot-completed":
+      handleWatchSnapshot(event.data || event);
+      break;
+    case "watch-anomaly-detected":
+      handleWatchAnomaly(event.data || event);
+      break;
+    case "watch-advice-generated":
+      handleWatchAdvice(event.data || event);
       break;
   }
 }
@@ -2542,6 +2556,8 @@ function updateTabBadges() {
       badgeText = "!";
     } else if (tab.dataset.tab === "lg-triage" && tabBadgeState.lgCritical) {
       badgeText = "⚠";
+    } else if (tab.dataset.tab === "watcher" && tabBadgeState.watcherNew > 0) {
+      badgeText = tabBadgeState.watcherNew;
     }
 
     if (badgeText !== null) {
@@ -2769,6 +2785,7 @@ const tabLoadHooks = {
   'lg-triage': loadLGTriage,
   'lg-security': () => { loadLGSecurity(); tabBadgeState.lgSecurityAlert = false; updateTabBadges(); },
   'lg-env': loadLGEnv,
+  watcher: () => { renderWatcherPanel(); tabBadgeState.watcherNew = 0; updateTabBadges(); },
 };
 
 // ─── Theme Toggle ─────────────────────────────────────────────
@@ -2977,6 +2994,102 @@ function handleLGSecretScan(data) {
   const activeTab = document.querySelector(".tab-btn.tab-active")?.dataset?.tab;
   if (activeTab === 'lg-security') loadLGSecurity();
 }
+
+// ─── Watcher (v2.35) hub event handlers ──────────────────────
+function handleWatchSnapshot(data) {
+  const snap = { ...data, ts: new Date().toISOString() };
+  state.watcher.snapshots.unshift(snap);
+  if (state.watcher.snapshots.length > 50) state.watcher.snapshots.length = 50;
+  tabBadgeState.watcherNew = (tabBadgeState.watcherNew || 0) + 1;
+  updateTabBadges();
+  if (document.querySelector(".tab-btn.tab-active")?.dataset?.tab === "watcher") renderWatcherPanel();
+}
+
+function handleWatchAnomaly(data) {
+  const a = { ...data, ts: new Date().toISOString() };
+  state.watcher.anomalies.unshift(a);
+  if (state.watcher.anomalies.length > 100) state.watcher.anomalies.length = 100;
+  const sev = a.severity || "warn";
+  const type = sev === "error" ? "error" : "amber";
+  addNotification(`Watcher: ${a.code || "anomaly"} — ${a.message || ""}`, type);
+  if (document.querySelector(".tab-btn.tab-active")?.dataset?.tab === "watcher") renderWatcherPanel();
+}
+
+function handleWatchAdvice(data) {
+  const adv = { ...data, ts: new Date().toISOString() };
+  state.watcher.advice.unshift(adv);
+  if (state.watcher.advice.length > 50) state.watcher.advice.length = 50;
+  addNotification(`Watcher advice: ${adv.model || "model"} (${adv.tokensOut || 0} tokens out)`, "info");
+  if (document.querySelector(".tab-btn.tab-active")?.dataset?.tab === "watcher") renderWatcherPanel();
+}
+
+function renderWatcherPanel() {
+  const snapEl = document.getElementById("watcher-snapshot");
+  const anoEl = document.getElementById("watcher-anomalies");
+  const advEl = document.getElementById("watcher-advice");
+  if (!snapEl || !anoEl || !advEl) return;
+
+  const latest = state.watcher.snapshots[0];
+  if (!latest) {
+    snapEl.innerHTML = '<p class="text-gray-500 text-sm py-4 text-center">No watcher snapshots yet. Run <code class="bg-gray-700 px-1 rounded">pforge watch &lt;target&gt;</code> or <code class="bg-gray-700 px-1 rounded">pforge watch-live &lt;target&gt;</code>.</p>';
+  } else {
+    const stateColor = { "in-progress": "text-blue-400", "completed": "text-green-400", "failed": "text-red-400", "stalled": "text-yellow-400", "idle": "text-gray-400" }[latest.runState] || "text-gray-300";
+    snapEl.innerHTML = `
+      <div class="grid grid-cols-2 gap-3 text-sm">
+        <div><p class="text-gray-500 text-xs">Target</p><p class="text-gray-200 font-mono text-xs truncate">${escHtml(latest.targetPath || "—")}</p></div>
+        <div><p class="text-gray-500 text-xs">Run State</p><p class="${stateColor} font-semibold">${escHtml(latest.runState || "—")}</p></div>
+        <div><p class="text-gray-500 text-xs">Run ID</p><p class="text-gray-300 font-mono text-xs">${escHtml(latest.runId || "—")}</p></div>
+        <div><p class="text-gray-500 text-xs">Anomalies</p><p class="${latest.anomalyCount > 0 ? "text-amber-400" : "text-green-400"} font-semibold">${latest.anomalyCount ?? 0}</p></div>
+        <div class="col-span-2"><p class="text-gray-500 text-xs">Cursor</p><p class="text-gray-400 font-mono text-xs">${escHtml(latest.cursor || "—")}</p></div>
+      </div>
+      <p class="text-xs text-gray-600 mt-2">${state.watcher.snapshots.length} snapshot(s) received this session</p>`;
+  }
+
+  const anomalies = state.watcher.anomalies.slice(0, 20);
+  if (anomalies.length === 0) {
+    anoEl.innerHTML = '<p class="text-gray-500 text-sm py-4 text-center">No anomalies detected.</p>';
+  } else {
+    anoEl.innerHTML = anomalies.map((a) => {
+      const sev = a.severity || "warn";
+      const color = sev === "error" ? "red" : sev === "warn" ? "amber" : "blue";
+      const time = new Date(a.ts).toLocaleTimeString();
+      return `<div class="flex items-start gap-2 py-1.5 border-b border-gray-700/50 last:border-0">
+        <span class="text-xs px-1.5 py-0.5 rounded bg-${color}-500/20 text-${color}-400 shrink-0 font-mono">${escHtml(a.code || "anomaly")}</span>
+        <div class="flex-1 min-w-0">
+          <p class="text-xs text-gray-300">${escHtml(a.message || "")}</p>
+          <p class="text-xs text-gray-600">${escHtml(a.runId || "")} · ${time}</p>
+        </div>
+      </div>`;
+    }).join("");
+  }
+
+  const advice = state.watcher.advice.slice(0, 10);
+  if (advice.length === 0) {
+    advEl.innerHTML = '<p class="text-gray-500 text-sm py-4 text-center">No advice generated yet. Use <code class="bg-gray-700 px-1 rounded">pforge watch &lt;target&gt; --analyze</code>.</p>';
+  } else {
+    advEl.innerHTML = advice.map((a) => {
+      const time = new Date(a.ts).toLocaleTimeString();
+      return `<div class="flex items-center gap-2 py-1.5 border-b border-gray-700/50 last:border-0">
+        <span class="text-xs px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 shrink-0">${escHtml(a.model || "model")}</span>
+        <span class="text-xs text-gray-400 flex-1 truncate">${escHtml(a.runId || "")}</span>
+        <span class="text-xs text-gray-500">${a.tokensOut || 0} tok</span>
+        <span class="text-xs text-gray-600">${time}</span>
+      </div>`;
+    }).join("");
+  }
+}
+window.renderWatcherPanel = renderWatcherPanel;
+
+async function copyWatchCommand(live) {
+  const cmd = live ? "pforge watch-live <target-path>" : "pforge watch <target-path>";
+  try {
+    await navigator.clipboard.writeText(cmd);
+    addNotification(`Copied: ${cmd}`, "success");
+  } catch {
+    addNotification(`Command: ${cmd}`, "info");
+  }
+}
+window.copyWatchCommand = copyWatchCommand;
 
 // Dashboard quorum shortcut — copies quorum prompt to clipboard
 async function runQuorumFromDashboard(source) {

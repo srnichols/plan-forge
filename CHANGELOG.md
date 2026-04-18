@@ -5,6 +5,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.35.1] — 2026-04-18
+
+### Added — Memory Architecture doc + Watcher → L3 capture (G3.1)
+
+- **`docs/MEMORY-ARCHITECTURE.md`** — first-class reference for Plan Forge's three-tier operational memory system (L1 Hub / L2 Structured / L3 Semantic). Maps every `.forge/` artifact, OpenBrain capture site, and hub event to its tier; defines the dual-write pattern every new MCP tool must follow; includes the tool-coverage audit and roadmap implications.
+- **Watcher anomalies now persist to memory** (gap G3.1 closed) — both `forge_watch` and `forge_watch_live` route detected anomalies through `captureMemory()`, landing them in `.forge/liveguard-memories.jsonl` (L2) and — when OpenBrain is configured — `.forge/openbrain-queue.jsonl` (L3 bridge). The watcher was the only cross-project observer with no semantic memory; it now captures too.
+- **`shapeWatcherAnomalyThought(anomaly, meta, tool)`** and **`dedupeWatcherAnomalies(anomalies)`** exported from `pforge-mcp/memory.mjs` — pure helpers that shape anomalies into capturable thoughts and dedupe by `code|message` within a live session.
+
+### Design notes
+
+- Watcher captures land in the **watcher's own** `.forge/` (`PROJECT_DIR`), **never** the target's. The watcher's read-only contract on the target project is preserved.
+- Source attribution standardised on `forge_watch/<code>` and `forge_watch_live/<code>` — first step toward the GX.4 cross-tool standard that unlocks the upcoming `forge_memory_report` tool (scheduled for v2.36).
+- Severity → thought type mapping: `info` → `lesson`, `warn`/`error` → `gotcha`.
+
+### Tests
+
+- New `pforge-mcp/tests/memory.test.mjs` — 17 new unit tests covering the two new pure helpers (severity-to-type mapping, source-attribution format, content assembly, dedupe semantics, null-safety).
+- Total test count: 654 → **671** passing.
+
+---
+
 ## [2.35.0] — 2026-04-18
 
 ### Added — Watcher v2 (Live Tail, Recommendations, History, Diff Cursor)

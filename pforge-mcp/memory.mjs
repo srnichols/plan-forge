@@ -250,3 +250,56 @@ export function buildCostAnomalyThought(summary, costReport, projectName) {
 
   return null;
 }
+
+// ─── Watcher anomaly → thought shaping (v2.35.1 / G3.1) ─────────────────
+
+/**
+ * Shape a watcher anomaly into a capturable thought.
+ *
+ * Pure function: given an anomaly object + run metadata, returns the
+ * `{ content, type, source }` triple that callers pass to `captureMemory()`.
+ * Keeps the source attribution format consistent with GX.4: `<tool>/<code>`.
+ *
+ * Severity → type mapping:
+ *   - "info"        → "lesson" (e.g. all-skipped is a learning, not a gotcha)
+ *   - "warn"/"error"→ "gotcha" (recurring patterns worth remembering)
+ *
+ * @param {{ severity: string, code: string, message: string }} anomaly
+ * @param {{ targetPath?: string, runId?: string|null, runState?: string }} meta
+ * @param {"forge_watch"|"forge_watch_live"} [tool="forge_watch"]
+ * @returns {{ content: string, type: string, source: string }}
+ */
+export function shapeWatcherAnomalyThought(anomaly, meta = {}, tool = "forge_watch") {
+  const type = anomaly.severity === "info" ? "lesson" : "gotcha";
+  const prefix = tool === "forge_watch_live" ? "Live watcher anomaly" : "Watcher anomaly";
+  const parts = [`${prefix} [${anomaly.code}]: ${anomaly.message}`];
+  if (meta.targetPath) parts.push(`targetPath=${meta.targetPath}`);
+  parts.push(`runId=${meta.runId || "n/a"}`);
+  if (meta.runState) parts.push(`state=${meta.runState}`);
+  return {
+    content: parts.join(". "),
+    type,
+    source: `${tool}/${anomaly.code}`,
+  };
+}
+
+/**
+ * Deduplicate watcher anomalies within a single session by `code|message`.
+ * Pure function — the caller decides what to do with the result.
+ *
+ * @param {Array<{ code: string, message: string }>} anomalies
+ * @returns {Array} unique anomalies preserving first-seen order
+ */
+export function dedupeWatcherAnomalies(anomalies) {
+  if (!Array.isArray(anomalies)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const a of anomalies) {
+    if (!a || !a.code) continue;
+    const key = `${a.code}|${a.message || ""}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(a);
+  }
+  return out;
+}

@@ -26,7 +26,7 @@ import { EventEmitter } from "node:events";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { createTraceContext, createTelemetryHandler, writeManifest, appendRunIndex, pruneRunHistory, addLogSummary } from "./telemetry.mjs";
-import { isOpenBrainConfigured, buildMemorySearchBlock, buildMemoryCaptureBlock, buildRunSummaryThought, buildCostAnomalyThought, loadProjectContext } from "./memory.mjs";
+import { isOpenBrainConfigured, buildMemorySearchBlock, buildMemoryCaptureBlock, buildRunSummaryThought, buildCostAnomalyThought, loadProjectContext, buildPlanBootContext } from "./memory.mjs";
 
 // ─── Centralized Constants ────────────────────────────────────────────
 /** Canonical list of all supported agent adapters. Update here — consumed by dashboard, setup, and docs. */
@@ -1743,6 +1743,22 @@ export async function runPlan(planPath, options = {}) {
   }
 
   eventBus.emit("run-started", { ...runMeta, quorum: quorumConfig ? { enabled: true, auto: quorumConfig.auto, threshold: quorumConfig.threshold } : null });
+
+  // GX.2 (v2.36): L3 → L1 preload. Emit a `memory-preload` event right after
+  // run-started carrying the deterministic search-hints derived from the plan.
+  // The dashboard, watchers, and the first worker pick this up via hub history
+  // *before* the first slice runs — closing the "no semantic context at boot" gap.
+  if (memoryEnabled && projectName) {
+    try {
+      const boot = buildPlanBootContext(
+        { name: basename(planPath, ".md"), slices: plan.slices },
+        projectName,
+      );
+      if (boot.hints.length > 0) {
+        eventBus.emit("memory-preload", boot);
+      }
+    } catch { /* best-effort — never break run start */ }
+  }
 
   // Execute slices
   const maxRetries = loadMaxRetries(cwd);

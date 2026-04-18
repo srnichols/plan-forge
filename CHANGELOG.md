@@ -5,6 +5,74 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.36.0] — 2026-04-18
+
+### Memory Architecture Milestone — final rollup
+
+The fifth and final PR on the v2.36 train. Lands GX.1 (dashboard Memory tab)
+and GX.2 (L3 → L1 boot-context preload), promotes the four betas to a single
+stable release, and ships manual chapter 6.5 documenting the full three-tier
+system. Every gap from the original memory-architecture audit (G1.1–G1.4,
+G2.1–G2.8, G3.1–G3.7, GX.1–GX.5) is now closed.
+
+### Added — GX.1: Dashboard Memory tab
+
+- **`/api/memory/report`** REST endpoint in `pforge-mcp/server.mjs` — wraps
+  `buildMemoryReport(PROJECT_DIR)` so the dashboard can render a live view
+  without re-implementing report logic in JS.
+- **Memory tab** in `pforge-mcp/dashboard/index.html` + `app.js` — KPI strip
+  (captures total / deduped, queue pending / deferred, queue delivered, queue
+  DLQ, cache fresh / total), L2 file inventory table with byte-formatted size
+  and `_v` version distribution, by-tool / by-type horizontal-bar breakdowns
+  (color-coded: gotcha=amber, lesson=green, decision=purple, pattern=blue,
+  convention=cyan), drain-trend mini-table, and orphan-file detector.
+- Tab loader is defensive — every panel degrades gracefully when its slice
+  of the report is empty so a freshly-cloned repo doesn't render error states.
+
+### Added — GX.2: L3 → L1 boot-context preload
+
+- **`buildPlanBootContext(plan, projectName, opts)`** in `pforge-mcp/memory.mjs`
+  — pure helper. Returns `{ _v: 1, projectName, planName, hints: [...] }`.
+  Hints are deduped by query string and capped (default 8). Each hint carries
+  `{ kind: "plan-history" | "slice-keyword", query, limit }`.
+- **`memory-preload` hub event** emitted from `orchestrator.mjs` immediately
+  after `run-started`. Listening agent runtimes (Copilot, Claude Code, Cursor)
+  can resolve the hints via `search_thoughts` and seed working context before
+  slice 1 — eliminating the cold-start gap.
+- Best-effort try/catch around the preload — a missing project name or empty
+  plan never blocks `run-started` propagation.
+
+### Added — Manual chapter 6.5: Memory Architecture
+
+- New chapter `docs/manual/memory-architecture.html` — three-tier overview
+  table, ASCII capture-flow diagram, per-tier deep dive (L1 hub, L2 files,
+  L3 OpenBrain), GX.2 preload walkthrough, GX.3 telemetry, GX.4 source-format
+  rules, GX.5 migration, and a reading list cross-linked to the dashboard
+  Memory tab and `forge_memory_report`.
+- Chapter inserted as 6.5 between Dashboard (6) and CLI Reference (7) in
+  `docs/manual/assets/manual.js` and `docs/manual/index.html` to avoid
+  renumbering the Act III + Appendix chapters.
+
+### Tests
+
+- 6 new tests for `buildPlanBootContext` in `pforge-mcp/tests/g3-gx.test.mjs`
+  (empty/missing inputs, plan-history hint emission, slice-keyword dedup,
+  `maxHints` cap, hint shape).
+- Total suite: 773 passing across 11 files (was 767 in beta.4).
+
+### Rollup — what shipped across v2.35.1 → v2.36.0
+
+| PR | Tag | Gaps closed |
+|----|-----|-------------|
+| #27 | `v2.35.1` | G3.1 (watcher → L3 capture) |
+| #29 | `v2.36.0-beta.1` | G1.1–G1.4 (hub: replay file, subscribers, capability probe foundations) |
+| #30 | `v2.36.0-beta.2` | G2.1–G2.8 (file tier: dual-write, schema versioning, tag routing) |
+| #31 | `v2.36.0-beta.3` | hotfix — worker capability probe |
+| #32 | `v2.36.0-beta.4` | G3.2–G3.7 + GX.3/4/5 (intelligence + tooling) |
+| this | `v2.36.0` | GX.1 + GX.2 + manual ch. 6.5 |
+
+---
+
 ## [2.36.0-beta.4] — 2026-04-18
 
 ### Added — G3.x + GX.3/4/5: memory architecture, level 3 (semantic + tooling)

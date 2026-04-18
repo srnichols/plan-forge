@@ -81,6 +81,7 @@
       <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="traces">Traces</button>
       <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="skills">Skills</button>
       <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="watcher">Watcher</button>
+      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="memory">Memory</button>
     </div>
     <!-- Sub tabs: LiveGuard -->
     <div id="subtabs-liveguard" class="hidden flex gap-1 pt-1 pb-0.5 overflow-x-auto">
@@ -650,6 +651,83 @@
         <h3 class="text-sm font-semibold text-gray-300 mb-2">Anomalies</h3>
         <div id="watcher-anomalies" class="max-h-96 overflow-y-auto">
           <p class="text-gray-500 text-sm py-4 text-center">No anomalies detected.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Memory Tab (GX.1 v2.36) — three-tier memory health: L1 hub, L2 files, L3 OpenBrain bridge -->
+    <section id="tab-memory" class="tab-content hidden">
+      <div class="mb-4 flex items-center justify-between">
+        <div>
+          <h2 class="text-lg font-semibold text-blue-400">🧠 Memory</h2>
+          <p class="text-xs text-gray-500">Three-tier memory health — L1 hub events, L2 <code class="bg-gray-700 px-1 rounded">.forge/*.jsonl</code>, L3 OpenBrain bridge (v2.36)</p>
+        </div>
+        <div class="flex gap-2 items-center">
+          <a href="https://github.com/srnichols/plan-forge/blob/master/docs/MEMORY-ARCHITECTURE.md" target="_blank" class="text-xs text-blue-600/60 hover:text-blue-400">Docs ↗</a>
+          <button onclick="loadMemoryReport()" class="text-xs px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded">Refresh</button>
+        </div>
+      </div>
+
+      <!-- KPI strip -->
+      <div class="grid gap-4 grid-cols-2 lg:grid-cols-5 mb-4">
+        <div class="bg-gray-800 rounded-lg p-4">
+          <p class="text-xs text-gray-400">Captures</p>
+          <p id="mem-captures-total" class="text-2xl font-bold text-blue-400">—</p>
+          <p id="mem-captures-deduped" class="text-xs text-gray-500 mt-1">— deduped</p>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-4">
+          <p class="text-xs text-gray-400">Queue · Pending</p>
+          <p id="mem-queue-pending" class="text-2xl font-bold">—</p>
+          <p id="mem-queue-deferred" class="text-xs text-gray-500 mt-1">— deferred</p>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-4">
+          <p class="text-xs text-gray-400">Queue · Delivered</p>
+          <p id="mem-queue-delivered" class="text-2xl font-bold text-green-400">—</p>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-4">
+          <p class="text-xs text-gray-400">DLQ + Failed</p>
+          <p id="mem-queue-dlq" class="text-2xl font-bold text-red-400">—</p>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-4">
+          <p class="text-xs text-gray-400">Cache · Fresh</p>
+          <p id="mem-cache-fresh" class="text-2xl font-bold">—</p>
+          <p id="mem-cache-total" class="text-xs text-gray-500 mt-1">— total entries</p>
+        </div>
+      </div>
+
+      <!-- Detail panels -->
+      <div class="grid gap-4 grid-cols-1 lg:grid-cols-2">
+        <div class="bg-gray-800 rounded-lg p-4">
+          <h3 class="text-sm font-semibold text-gray-300 mb-2">L2 Files</h3>
+          <div id="mem-l2-files" class="text-xs">
+            <p class="text-gray-500 py-2 text-center">Loading…</p>
+          </div>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-4">
+          <h3 class="text-sm font-semibold text-gray-300 mb-2">Captures by Tool</h3>
+          <div id="mem-by-tool" class="text-xs">
+            <p class="text-gray-500 py-2 text-center">Loading…</p>
+          </div>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-4">
+          <h3 class="text-sm font-semibold text-gray-300 mb-2">Captures by Type</h3>
+          <div id="mem-by-type" class="text-xs">
+            <p class="text-gray-500 py-2 text-center">Loading…</p>
+          </div>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-4">
+          <h3 class="text-sm font-semibold text-gray-300 mb-2">Drain Trend (last 20 passes)</h3>
+          <div id="mem-drain-trend" class="text-xs">
+            <p class="text-gray-500 py-2 text-center">Loading…</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-gray-800 rounded-lg p-4 mt-4">
+        <h3 class="text-sm font-semibold text-gray-300 mb-2">Orphan Files</h3>
+        <p class="text-xs text-gray-500 mb-2">Files in <code class="bg-gray-700 px-1 rounded">.forge/</code> not registered in the memory schema. Run <code class="bg-gray-700 px-1 rounded">pforge migrate-memory</code> to roll legacy <code>.json</code> ledgers into <code>.jsonl</code>.</p>
+        <div id="mem-orphans" class="text-xs">
+          <p class="text-gray-500 py-2 text-center">Loading…</p>
         </div>
       </div>
     </section>

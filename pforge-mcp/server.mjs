@@ -24,6 +24,39 @@ import { execSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, appendFileSync, watchFile, unwatchFile, statSync, openSync, readSync, closeSync } from "node:fs";
 import { resolve, join, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
+
+// ─── Load .env from project root (cwd) at startup ──────────────────────
+// API keys (XAI_API_KEY, OPENAI_API_KEY, etc.) are commonly stored in a project-level
+// .env file. Load them into process.env BEFORE any tool is invoked so smith and the
+// generation tools can see them. Existing process.env values always win.
+// Lightweight parser — no external dotenv dependency. Lines starting with # are comments.
+try {
+  const envPath = resolve(process.cwd(), ".env");
+  if (existsSync(envPath)) {
+    const envContent = readFileSync(envPath, "utf8");
+    for (const rawLine of envContent.split(/\r?\n/)) {
+      const line = rawLine.trim();
+      if (!line || line.startsWith("#")) continue;
+      const eq = line.indexOf("=");
+      if (eq < 1) continue;
+      const key = line.slice(0, eq).trim();
+      let value = line.slice(eq + 1).trim();
+      if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
+        value = value.slice(1, -1);
+      }
+      // Existing process.env values (set by the parent shell) always take precedence.
+      if (key && process.env[key] === undefined) {
+        process.env[key] = value;
+      }
+    }
+  }
+} catch {
+  // .env loading is best-effort. Failure must never break server startup.
+}
+
 import { parsePlan, runPlan, detectWorkers, getCostReport, getHealthTrend, analyzeWithQuorum, generateImage, runAnalyze, readForgeJson, readForgeJsonl, appendForgeJsonl, emitToolTelemetry, regressionGuard, runPostSliceHook, resetPostSliceHookFired, runPreAgentHandoffHook, postOpenClawSnapshot, loadOpenClawConfig, loadQuorumConfig, runWatch } from "./orchestrator.mjs";
 import { isOpenBrainConfigured } from "./memory.mjs";
 import { createHub, readHubPort } from "./hub.mjs";

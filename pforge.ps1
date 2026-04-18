@@ -2207,16 +2207,43 @@ function Invoke-Smith {
         }
     }
 
-    # PowerShell version
-    $psVer = $PSVersionTable.PSVersion.ToString()
-    if ($PSVersionTable.PSVersion.Major -ge 7) {
-        Doctor-Pass "PowerShell $psVer"
+    # PowerShell version — prefer separately installed pwsh (7.x) over current shell.
+    # If pforge.ps1 is invoked via Windows PowerShell 5.1 (powershell.exe) on a system
+    # that also has pwsh installed, surface the pwsh version so the user sees the
+    # modern runtime they should be using, not the legacy one this script happens to run in.
+    $pwshCmd = Get-Command pwsh -ErrorAction SilentlyContinue
+    $pwshVer = $null
+    if ($pwshCmd) {
+        try {
+            $pwshVer = (& $pwshCmd.Source -NoProfile -NoLogo -Command '$PSVersionTable.PSVersion.ToString()' 2>$null).Trim()
+        } catch { $pwshVer = $null }
     }
-    elseif ($PSVersionTable.PSVersion.Major -ge 5) {
-        Doctor-Warn "PowerShell $psVer (7.x recommended)" "Install from https://aka.ms/powershell"
-    }
-    else {
-        Doctor-Fail "PowerShell $psVer (5.1+ required)" "Install from https://aka.ms/powershell"
+
+    $currentShellVer = $PSVersionTable.PSVersion.ToString()
+    $currentShellMajor = $PSVersionTable.PSVersion.Major
+
+    if ($pwshVer) {
+        $pwshMajor = 0
+        try { $pwshMajor = [int]($pwshVer -split '\.')[0] } catch { $pwshMajor = 0 }
+        $shellNote = ""
+        if ($currentShellMajor -lt 7) {
+            $shellNote = " — running shell is $currentShellVer; pwsh is preferred"
+        }
+        if ($pwshMajor -ge 7) {
+            Doctor-Pass "PowerShell $pwshVer (pwsh)$shellNote"
+        } elseif ($pwshMajor -ge 5) {
+            Doctor-Warn "PowerShell $pwshVer (pwsh, 7.x recommended)$shellNote" "Install latest from https://aka.ms/powershell"
+        } else {
+            Doctor-Fail "PowerShell $pwshVer (pwsh, 5.1+ required)" "Install from https://aka.ms/powershell"
+        }
+    } else {
+        if ($currentShellMajor -ge 7) {
+            Doctor-Pass "PowerShell $currentShellVer"
+        } elseif ($currentShellMajor -ge 5) {
+            Doctor-Warn "PowerShell $currentShellVer (7.x recommended — pwsh not detected on PATH)" "Install pwsh from https://aka.ms/powershell"
+        } else {
+            Doctor-Fail "PowerShell $currentShellVer (5.1+ required)" "Install from https://aka.ms/powershell"
+        }
     }
 
     # Optional: GitHub CLI
@@ -2569,11 +2596,11 @@ function Invoke-Smith {
             Doctor-Warn "sharp not installed — image format conversion disabled" "Run: cd pforge-mcp && npm install sharp"
         }
 
-        # Check for API keys (env vars + .forge/secrets.json fallback)
+        # Check for API keys (env vars + .forge/secrets.json + .env file fallback)
         $hasXai = -not [string]::IsNullOrEmpty($env:XAI_API_KEY)
         $hasOpenAi = -not [string]::IsNullOrEmpty($env:OPENAI_API_KEY)
 
-        # Fallback: check .forge/secrets.json
+        # Fallback 1: .forge/secrets.json
         $secretsPath = Join-Path $RepoRoot ".forge/secrets.json"
         $secretsSrc = ""
         if (-not $hasXai -or -not $hasOpenAi) {
@@ -2584,6 +2611,23 @@ function Invoke-Smith {
                     if (-not $hasOpenAi -and $secrets.OPENAI_API_KEY) { $hasOpenAi = $true; $secretsSrc = " (from .forge/secrets.json)" }
                 } catch { }
             }
+        }
+
+        # Fallback 2: .env file at repo root (KEY=value lines, # comments allowed)
+        $envFilePath = Join-Path $RepoRoot ".env"
+        if ((-not $hasXai -or -not $hasOpenAi) -and (Test-Path $envFilePath)) {
+            try {
+                Get-Content $envFilePath | ForEach-Object {
+                    $line = $_.Trim()
+                    if ($line -and -not $line.StartsWith('#') -and $line.Contains('=')) {
+                        $eq = $line.IndexOf('=')
+                        $k = $line.Substring(0, $eq).Trim()
+                        $v = $line.Substring($eq + 1).Trim().Trim('"').Trim("'")
+                        if (-not $hasXai -and $k -eq 'XAI_API_KEY' -and $v) { $script:_xaiFromEnv = $v; $hasXai = $true; $secretsSrc = " (from .env)" }
+                        if (-not $hasOpenAi -and $k -eq 'OPENAI_API_KEY' -and $v) { $script:_openAiFromEnv = $v; $hasOpenAi = $true; $secretsSrc = " (from .env)" }
+                    }
+                }
+            } catch { }
         }
 
         if ($hasXai -and $hasOpenAi) {
@@ -2726,28 +2770,74 @@ function Invoke-Smith {
     # ═══════════════════════════════════════════════════════════════
     # 4f. LIFECYCLE HOOKS
     # ═══════════════════════════════════════════════════════════════
+    # Hooks can come from two sources:
+    #   1. Filesystem: .github/hooks/<HookName>.{ps1,sh,mjs,js}
+    #   2. Config: .forge.json -> hooks.{preDeploy,postSlice,preAgentHandoff,...}
+    # Smith now reconciles both — a hook is "present" if EITHER source defines it.
     $hooksDir = Join-Path $RepoRoot ".github/hooks"
-    if (Test-Path $hooksDir) {
+    $hasHookFiles = Test-Path $hooksDir
+    $hookConfig = $null
+    if (Test-Path $configPath) {
+        try {
+            $cfgForHooks = Get-Content $configPath -Raw | ConvertFrom-Json
+            if ($cfgForHooks.hooks) { $hookConfig = $cfgForHooks.hooks }
+        } catch { }
+    }
+
+    if ($hasHookFiles -or $hookConfig) {
         Write-Host "Lifecycle Hooks:" -ForegroundColor Cyan
         $coreHooks = @("SessionStart", "PreToolUse", "PostToolUse", "Stop")
         $liveGuardHooks = @("PostSlice", "PreAgentHandoff", "PreDeploy")
         $allExpectedHooks = $coreHooks + $liveGuardHooks
-        $hookFiles = Get-ChildItem -Path $hooksDir -File | ForEach-Object { $_.BaseName }
-        $hookCount = 0
-        foreach ($hook in $allExpectedHooks) {
-            $hookFound = $hookFiles | Where-Object { $_ -match $hook }
-            if ($hookFound) { $hookCount++ }
+
+        # camelCase mapping for .forge.json config keys
+        $configKeyMap = @{
+            "SessionStart"     = "sessionStart"
+            "PreToolUse"       = "preToolUse"
+            "PostToolUse"      = "postToolUse"
+            "Stop"             = "stop"
+            "PostSlice"        = "postSlice"
+            "PreAgentHandoff"  = "preAgentHandoff"
+            "PreDeploy"        = "preDeploy"
         }
+
+        $hookFiles = @()
+        if ($hasHookFiles) {
+            $hookFiles = Get-ChildItem -Path $hooksDir -File -Recurse | ForEach-Object { $_.BaseName }
+        }
+
+        $hookCount = 0
+        $hookSources = @{}
+        foreach ($hook in $allExpectedHooks) {
+            $foundInFiles = ($hookFiles | Where-Object { $_ -match $hook }) -ne $null -and ($hookFiles | Where-Object { $_ -match $hook }).Count -gt 0
+            $foundInConfig = $false
+            if ($hookConfig) {
+                $cfgKey = $configKeyMap[$hook]
+                if ($cfgKey) {
+                    $cfgVal = $hookConfig.$cfgKey
+                    # Treat as "configured" if the property exists and is non-null/non-false
+                    if ($null -ne $cfgVal -and $cfgVal -ne $false) { $foundInConfig = $true }
+                }
+            }
+            if ($foundInFiles -or $foundInConfig) {
+                $hookCount++
+                $src = @()
+                if ($foundInFiles)  { $src += "file" }
+                if ($foundInConfig) { $src += ".forge.json" }
+                $hookSources[$hook] = ($src -join "+")
+            }
+        }
+
         if ($hookCount -eq $allExpectedHooks.Count) {
             Doctor-Pass "$hookCount/$($allExpectedHooks.Count) lifecycle hooks present (core + LiveGuard)"
         } elseif ($hookCount -gt 0) {
-            $hookMissing = $allExpectedHooks | Where-Object { $h = $_; -not ($hookFiles | Where-Object { $_ -match $h }) }
+            $hookMissing = $allExpectedHooks | Where-Object { -not $hookSources.ContainsKey($_) }
             Doctor-Pass "$hookCount/$($allExpectedHooks.Count) hooks present"
             if ($hookMissing.Count -gt 0) {
-                Doctor-Warn "Missing hooks: $($hookMissing -join ', ')" "Run 'pforge update' to install missing hooks"
+                Doctor-Warn "Missing hooks: $($hookMissing -join ', ')" "Run 'pforge update' to install missing hook files, or add entries under 'hooks' in .forge.json"
             }
         } else {
-            Doctor-Warn "No lifecycle hooks found" "Run 'pforge update' to install hooks"
+            Doctor-Warn "No lifecycle hooks found" "Run 'pforge update' to install hooks, or define them under 'hooks' in .forge.json"
         }
         Write-Host ""
     }

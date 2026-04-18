@@ -1810,11 +1810,11 @@ describe("dashboard tab structure", () => {
   const dashboardHtml = readFileSync(resolve(__dirname, "..", "dashboard", "index.html"), "utf-8");
   const dashboardJs = readFileSync(resolve(__dirname, "..", "dashboard", "app.js"), "utf-8");
 
-  const CORE_TABS = ["progress", "runs", "cost", "actions", "replay", "extensions", "config", "traces", "skills"];
+  const CORE_TABS = ["progress", "runs", "cost", "actions", "replay", "extensions", "config", "traces", "skills", "watcher"];
   const LG_TABS = ["lg-health", "lg-incidents", "lg-triage", "lg-security", "lg-env"];
   const ALL_TABS = [...CORE_TABS, ...LG_TABS];
 
-  it("has 9 core tab buttons", () => {
+  it("has 10 core tab buttons", () => {
     for (const tab of CORE_TABS) {
       expect(dashboardHtml).toContain(`data-tab="${tab}"`);
     }
@@ -1826,9 +1826,9 @@ describe("dashboard tab structure", () => {
     }
   });
 
-  it("total tab count is 14 (9 core + 5 LG)", () => {
+  it("total tab count is 15 (10 core + 5 LG)", () => {
     const tabMatches = dashboardHtml.match(/data-tab="[^"]+"/g) || [];
-    expect(tabMatches.length).toBe(14);
+    expect(tabMatches.length).toBe(15);
   });
 
   it("has LiveGuard section divider", () => {
@@ -3345,9 +3345,9 @@ describe("hook integration: PreAgentHandoff with full LiveGuard state", () => {
 // ─── TOOL_METADATA: v2.30.0 total count ─────────────────────────────────
 
 describe("TOOL_METADATA v2.30.0 total count", () => {
-  it("has at least 34 tool entries", () => {
+  it("has at least 36 tool entries", () => {
     const count = Object.keys(TOOL_METADATA).length;
-    expect(count).toBeGreaterThanOrEqual(34);
+    expect(count).toBeGreaterThanOrEqual(36);
   });
 
   it("includes v2.29.0 and v2.30.0 tools", () => {

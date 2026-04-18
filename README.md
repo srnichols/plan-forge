@@ -17,7 +17,7 @@
 **[Website](https://planforge.software/)** · **[Quick Start](https://planforge.software/#quickstart)** · **[Manual](https://planforge.software/manual/)** · **[Documentation](https://planforge.software/docs.html)** · **[FAQ](https://planforge.software/faq.html)** · **[Extensions](https://planforge.software/extensions.html)** · **[Spec Kit Interop](https://planforge.software/speckit-interop.html)**
 
 ```
-34 MCP Tools · 14 LiveGuard · 19 Agents · 12 Skills · 9 Presets · 7 Adapters · 577 Tests
+34 MCP Tools (+2 Watcher) · 14 LiveGuard · 19 Agents · 12 Skills · 9 Presets · 7 Adapters · 654 Tests
 ```
 
 ---
@@ -41,7 +41,7 @@ AI coding tools generate code fast — but without structure, that code is untes
 
 > *Vibe coding gets you a prototype. Plan Forge gets you a product — and keeps it healthy.*
 
-**Verified**: 11 phases self-built, 577/577 self-tests, 34 MCP tools, zero manual rollbacks. See [docs/capabilities.md](docs/capabilities.md).
+**Verified**: 11 phases self-built, 654/654 self-tests, 36 MCP tools, zero manual rollbacks. See [docs/capabilities.md](docs/capabilities.md).
 
 ### A/B Test Results (April 2026)
 
@@ -291,7 +291,7 @@ Health DNA detects decay before it manifests ───────────�
 
 ## Dashboard
 
-`localhost:3100/dashboard` — 14 real-time tabs powered by WebSocket hub.
+`localhost:3100/dashboard` — 15 real-time tabs powered by WebSocket hub.
 
 <img src="docs/assets/readme-dashboard.webp" alt="Plan Forge dashboard showing drift score, health trends, incident list, and status cards" width="100%" />
 
@@ -352,9 +352,9 @@ One setup command, every tool: `setup.ps1 -Agent all`
 
 GitHub Copilot (primary) · Claude Code · Cursor · Codex CLI · Gemini CLI · Windsurf · Generic
 
-### MCP Server (34 Tools)
+### MCP Server (36 Tools)
 
-`pforge-mcp/server.mjs` — 20 core tools + 14 LiveGuard tools. Live dashboard at `localhost:3100/dashboard`. REST API for external integrations.
+`pforge-mcp/server.mjs` — 20 core tools + 14 LiveGuard tools + 2 Watcher tools (v2.34/v2.35). Live dashboard at `localhost:3100/dashboard`. REST API for external integrations.
 
 Key tools: `forge_run_plan` · `forge_liveguard_run` · `forge_analyze` · `forge_capabilities` · `forge_smith` · `forge_cost_report`
 
@@ -379,7 +379,7 @@ Key tools: `forge_run_plan` · `forge_liveguard_run` · `forge_analyze` · `forg
 |----------|---------|
 | **[docs/COPILOT-VSCODE-GUIDE.md](docs/COPILOT-VSCODE-GUIDE.md)** | VS Code + Copilot walkthrough |
 | **[docs/CLI-GUIDE.md](docs/CLI-GUIDE.md)** | `pforge` CLI reference |
-| **[docs/capabilities.md](docs/capabilities.md)** | Full feature reference — all 34 tools, agents, skills |
+| **[docs/capabilities.md](docs/capabilities.md)** | Full feature reference — all 36 tools, agents, skills |
 | **[CUSTOMIZATION.md](CUSTOMIZATION.md)** | Adapt guardrails for your project |
 | **[planforge.software/manual/](https://planforge.software/manual/)** | Interactive web manual (17 chapters + 6 appendices) |
 | **[planforge.software/faq.html](https://planforge.software/faq.html)** | FAQ |

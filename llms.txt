@@ -16,7 +16,7 @@ Plan Forge is an open-source framework that gives AI coding agents (Copilot, Cla
 
 ## Capabilities
 
-- 34 MCP tools (20 core + 14 LiveGuard) — start with `forge_capabilities` for full discovery
+- 36 MCP tools (20 core + 14 LiveGuard + 2 Watcher) — start with `forge_capabilities` for full discovery
 - 14 LiveGuard tools — post-coding intelligence: drift scoring, incident tracking, secret scanning, dependency vulnerability monitoring, regression guard, health trend with Health DNA fingerprint, alert triage, environment diff, fix proposals with code snippets, quorum analysis, composite health check (`forge_liveguard_run`)
 - Forge Intelligence — self-recursive improvement: auto-tune escalation chains from model performance, cost estimate calibration from historical actuals, adaptive quorum thresholds, slice auto-split advisories
 - LiveGuard Intelligence — recurring incident detection (auto-escalate systemic), fix proposal outcome tracking, hotspot test priority, Project Health DNA for decay detection
@@ -25,7 +25,7 @@ Plan Forge is an open-source framework that gives AI coding agents (Copilot, Cla
 - 12 slash command skills
 - 15-18 auto-loading instruction files per preset
 - 15 scaffolding prompt templates per app preset
-- Live dashboard at localhost:3100/dashboard (14 tabs — FORGE section + LIVEGUARD section)
+- Live dashboard at localhost:3100/dashboard (15 tabs — FORGE section incl. Watcher + LIVEGUARD section)
 - Quorum mode: multi-model consensus for complex slices
 - Auto-escalation: automatic model promotion on slice failure (self-tuning from history)
 - Agent-per-slice routing: assign different models per role

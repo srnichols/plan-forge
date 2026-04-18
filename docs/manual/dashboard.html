@@ -5,7 +5,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Chapter 6: The Dashboard — Plan Forge Manual</title>
-  <meta name="description" content="Tour every dashboard tab: progress, runs, cost, actions, replay, extensions, config, traces. Real-time execution monitoring and cost tracking." />
+  <meta name="description" content="Tour every dashboard tab: progress, runs, cost, actions, replay, extensions, config, traces, skills, watcher, and LiveGuard. Real-time execution monitoring and cost tracking." />
   <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
@@ -30,7 +30,7 @@
 
         <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 6</div>
         <h1>The Dashboard</h1>
-        <p class="text-lg text-slate-400 mb-8">9 tabs. Real-time execution monitoring, cost tracking, session replay, and one-click actions.</p>
+        <p class="text-lg text-slate-400 mb-8">15 tabs. Real-time execution monitoring, cost tracking, session replay, one-click actions, watcher live feed, and LiveGuard health.</p>
 
         <!-- ─── Starting ─── -->
         <h2 id="starting">Starting the Dashboard</h2>
@@ -223,6 +223,63 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
         </ul>
 
         <img src="../assets/dashboard/skills.png" alt="Dashboard Skills tab showing recent skill runs with step-level detail and event log" class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
+
+        <!-- ─── Watcher Tab (v2.35) ─── -->
+        <h2 id="watcher">Watcher Tab <span style="color:#7dd3fc;font-size:0.6em;vertical-align:middle">v2.35</span></h2>
+        <p>Read-only view of <em>another</em> project's pforge run, consumed from a second VS Code / Copilot session. Subscribes to <code>watch-snapshot-completed</code>, <code>watch-anomaly-detected</code>, and <code>watch-advice-generated</code> hub events emitted by <code>forge_watch</code> / <code>forge_watch_live</code>. Shows:</p>
+        <ul>
+          <li><strong>Latest snapshot</strong> — target path, run state, run ID, anomaly count, diff cursor</li>
+          <li><strong>Anomalies feed</strong> — severity-coded codes (<code>stalled</code>, <code>slice-failed</code>, <code>quorum-dissent</code>, <code>quorum-leg-stalled</code>, <code>skill-step-failed</code>, <code>model-escalated</code>, etc.) with message + run ID</li>
+          <li><strong>Advice history</strong> — analyze-mode narratives from the frontier model, with token + timing metadata</li>
+          <li><strong>Live Watch</strong> + <strong>Watch Snapshot</strong> cards on the Actions tab copy the matching <code>pforge watch-live</code> / <code>pforge watch</code> invocations</li>
+        </ul>
+
+        <!-- ─── LiveGuard Section ─── -->
+        <h2 id="liveguard">LiveGuard Section <span style="color:#f59e0b;font-size:0.6em;vertical-align:middle">v2.28+</span></h2>
+        <p>Five amber-accented tabs separated by a visual divider from the FORGE section. LiveGuard tools (<code>forge_drift_report</code>, <code>forge_regression_guard</code>, <code>forge_incident_capture</code>, <code>forge_secret_scan</code>, <code>forge_env_diff</code>, <code>forge_liveguard_run</code>, etc.) broadcast <code>liveguard</code> + <code>liveguard-tool-completed</code> events that populate these tabs in real time.</p>
+
+        <h2 id="lg-health">Health Tab <span style="color:#f59e0b;font-size:0.6em;vertical-align:middle">LiveGuard</span></h2>
+        <p>Composite project health fingerprint produced by <code>forge_health_trend</code> and <code>forge_liveguard_run</code>:</p>
+        <ul>
+          <li><strong>Overall score</strong> (0–100) with trend direction (improving / stable / degrading)</li>
+          <li><strong>Component metrics</strong> — drift average, incident rate, test pass rate, model success rate, cost per slice</li>
+          <li><strong>Gate summary</strong> — drift / sweep / secret-scan / regression-guard / dep-watch / alert-triage pass/fail counts from the last <code>forge_liveguard_run</code></li>
+          <li><strong>Health DNA</strong> — persisted to <code>.forge/health-dna.json</code> for cross-session decay detection</li>
+        </ul>
+
+        <h2 id="lg-incidents">Incidents Tab <span style="color:#f59e0b;font-size:0.6em;vertical-align:middle">LiveGuard</span></h2>
+        <p>Open and recently resolved incidents captured by <code>forge_incident_capture</code> and auto-chained from drift:</p>
+        <ul>
+          <li><strong>Incident list</strong> — ID, severity, description, affected files, first seen, MTTR when resolved</li>
+          <li><strong>Recurring pattern flag</strong> — incidents on the same files ≥3 times in 30 days are auto-escalated to <code>high</code></li>
+          <li><strong>Auto-resolve</strong> — incidents close automatically when <code>forge_regression_guard</code> passes on overlapping scope</li>
+          <li><strong>Fix proposals</strong> — <code>forge_fix_proposal</code> plans linked to the originating incident are surfaced inline</li>
+        </ul>
+
+        <h2 id="lg-triage">Triage Tab <span style="color:#f59e0b;font-size:0.6em;vertical-align:middle">LiveGuard</span></h2>
+        <p>Prioritized alert stream from <code>forge_alert_triage</code>:</p>
+        <ul>
+          <li><strong>Severity-ordered alerts</strong> — critical / high / medium / low with source tool and timestamp</li>
+          <li><strong>Source breakdown</strong> — drift violations, secret-scan findings, env-diff gaps, dep-watch vulnerabilities</li>
+          <li><strong>Framework-code filtering</strong> — <code>pforge-mcp/</code>, <code>pforge.*</code>, <code>setup.*</code> paths are excluded from app-code scoring</li>
+        </ul>
+
+        <h2 id="lg-security">Security Tab <span style="color:#f59e0b;font-size:0.6em;vertical-align:middle">LiveGuard</span></h2>
+        <p>Secret hygiene and dependency vulnerability posture:</p>
+        <ul>
+          <li><strong>Secret scan results</strong> — entropy + key-name findings from <code>forge_secret_scan</code>, masked as <code>&lt;REDACTED&gt;</code>, confidence high / medium / low</li>
+          <li><strong>Vulnerable dependencies</strong> — <code>forge_dep_watch</code> output for npm (<code>npm audit</code>) and .NET (<code>dotnet list package --vulnerable</code>)</li>
+          <li><strong>PreDeploy gate status</strong> — blocks deploys on high-severity secret findings when <code>hooks.preDeploy</code> is enabled</li>
+        </ul>
+
+        <h2 id="lg-env">Env Tab <span style="color:#f59e0b;font-size:0.6em;vertical-align:middle">LiveGuard</span></h2>
+        <p>Environment-variable drift between local <code>.env</code>, example templates, and deploy targets via <code>forge_env_diff</code>:</p>
+        <ul>
+          <li><strong>Missing keys</strong> — present in <code>.env.example</code> / deploy config but absent from local <code>.env</code></li>
+          <li><strong>Extra keys</strong> — local-only values that are not in the shared template</li>
+          <li><strong>Cache freshness</strong> — stale-cache warning when the scan has not run since the last deploy</li>
+          <li><strong>Deploy journal link</strong> — correlates env gaps with the most recent <code>forge_deploy_journal</code> entry</li>
+        </ul>
 
         <!-- ─── Port Reference ─── -->
         <h2 id="ports">Port Reference</h2>

@@ -32,6 +32,9 @@ import {
   detectWatchAnomalies,
   runWatch,
   normalizeRunState,
+  recommendFromAnomalies,
+  appendWatchHistory,
+  runWatchLive,
 } from "../orchestrator.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -1571,4 +1574,290 @@ describe("Watcher v2.34.1: escalation tracking", () => {
     const anomalies = detectWatchAnomalies(snap);
     expect(anomalies.find((a) => a.code === "model-escalated")).toBeUndefined();
   });
+});
+
+// ─── Watcher v2.35: quorum + skill counts, recommendations, history, diff, live ─
+
+describe("Watcher v2.35: quorum/skill event surfacing", () => {
+  it("counts quorum dispatch/leg/review events", () => {
+    const runDir = resolve(tempDir, ".forge", "runs", "20250101-quorum");
+    mkdirSync(runDir, { recursive: true });
+    writeFileSync(resolve(runDir, "events.log"), [
+      `[2025-01-01T00:00:00.000Z] run-started: {}`,
+      `[2025-01-01T00:00:01.000Z] quorum-dispatch-started: {"sliceId":1,"models":["a","b","c"]}`,
+      `[2025-01-01T00:00:30.000Z] quorum-leg-completed: {"sliceId":1,"model":"a"}`,
+      `[2025-01-01T00:00:31.000Z] quorum-leg-completed: {"sliceId":1,"model":"b"}`,
+      `[2025-01-01T00:00:32.000Z] quorum-leg-completed: {"sliceId":1,"model":"c"}`,
+      `[2025-01-01T00:01:00.000Z] quorum-review-completed: {"sliceId":1}`,
+    ].join("\n"));
+    const snap = buildWatchSnapshot(tempDir);
+    expect(snap.counts.quorumDispatched).toBe(1);
+    expect(snap.counts.quorumLegsCompleted).toBe(3);
+    expect(snap.counts.quorumReviewed).toBe(1);
+  });
+
+  it("counts skill events and skill step failures", () => {
+    const runDir = resolve(tempDir, ".forge", "runs", "20250101-skills");
+    mkdirSync(runDir, { recursive: true });
+    writeFileSync(resolve(runDir, "events.log"), [
+      `[2025-01-01T00:00:00.000Z] run-started: {}`,
+      `[2025-01-01T00:00:01.000Z] skill-started: {"skillName":"db-migration"}`,
+      `[2025-01-01T00:00:30.000Z] skill-step-completed: {"step":"generate","status":"passed"}`,
+      `[2025-01-01T00:01:00.000Z] skill-step-completed: {"step":"apply","status":"failed"}`,
+      `[2025-01-01T00:01:30.000Z] skill-completed: {"skillName":"db-migration"}`,
+    ].join("\n"));
+    const snap = buildWatchSnapshot(tempDir);
+    expect(snap.counts.skillsStarted).toBe(1);
+    expect(snap.counts.skillsCompleted).toBe(1);
+    expect(snap.counts.skillStepsFailed).toBe(1);
+  });
+
+  it("emits quorum-dissent anomaly when reviewed but failed", () => {
+    const snap = {
+      ok: true, runState: "in-progress", lastEventAgeMs: 1000,
+      counts: { failed: 1, quorumReviewed: 1, quorumDispatched: 1, escalated: 0 },
+      artifacts: [],
+    };
+    const anomalies = detectWatchAnomalies(snap);
+    const dissent = anomalies.find((a) => a.code === "quorum-dissent");
+    expect(dissent).toBeDefined();
+    expect(dissent.severity).toBe("warn");
+  });
+
+  it("emits skill-step-failed anomaly", () => {
+    const snap = {
+      ok: true, runState: "in-progress", lastEventAgeMs: 1000,
+      counts: { failed: 0, escalated: 0, skillStepsFailed: 2 },
+      artifacts: [],
+    };
+    const anomalies = detectWatchAnomalies(snap);
+    const sf = anomalies.find((a) => a.code === "skill-step-failed");
+    expect(sf).toBeDefined();
+    expect(sf.severity).toBe("error");
+  });
+});
+
+describe("Watcher v2.35: recommendFromAnomalies", () => {
+  it("returns empty array for empty anomalies", () => {
+    expect(recommendFromAnomalies([], { artifacts: [] })).toEqual([]);
+  });
+
+  it("recommends pforge abort for stalled runs", () => {
+    const recs = recommendFromAnomalies(
+      [{ code: "stalled", severity: "warn", message: "..." }],
+      { artifacts: [] }
+    );
+    expect(recs.length).toBe(1);
+    expect(recs[0].command).toBe("pforge abort");
+  });
+
+  it("recommends fix-proposal + resume-from for failed slice", () => {
+    const recs = recommendFromAnomalies(
+      [{ code: "slice-failed", severity: "error", message: "..." }],
+      { artifacts: [{ sliceNumber: 7, status: "failed" }], plan: "docs/plans/Phase-1.md" }
+    );
+    expect(recs[0].command).toMatch(/--resume-from 7/);
+    expect(recs[0].command).toMatch(/Phase-1\.md/);
+  });
+
+  it("dedupes anomalies by code", () => {
+    const recs = recommendFromAnomalies(
+      [
+        { code: "high-retries", severity: "warn", message: "slice 5" },
+        { code: "high-retries", severity: "warn", message: "slice 9" },
+      ],
+      { artifacts: [{ sliceNumber: 5, attempts: 3 }] }
+    );
+    expect(recs.length).toBe(1);
+  });
+
+  it("handles unknown anomaly codes gracefully", () => {
+    const recs = recommendFromAnomalies(
+      [{ code: "alien-anomaly", severity: "info", message: "from outer space" }],
+      { artifacts: [] }
+    );
+    expect(recs.length).toBe(1);
+    expect(recs[0].command).toBeNull();
+    expect(recs[0].action).toBe("from outer space");
+  });
+
+  it("provides recommendation for quorum-dissent", () => {
+    const recs = recommendFromAnomalies(
+      [{ code: "quorum-dissent", severity: "warn", message: "..." }],
+      { artifacts: [], plan: "docs/plans/X.md" }
+    );
+    expect(recs[0].command).toMatch(/quorum=power/);
+  });
+});
+
+describe("Watcher v2.35: appendWatchHistory", () => {
+  it("creates .forge/watch-history.jsonl in watcher's own dir", () => {
+    const report = {
+      timestamp: "2025-01-01T00:00:00.000Z",
+      targetPath: "/some/target",
+      runId: "20250101-test",
+      runState: "completed",
+      mode: "snapshot",
+      counts: { failed: 0 },
+      anomalies: [],
+      cursor: "2025-01-01T00:01:00.000Z",
+    };
+    const result = appendWatchHistory(report, tempDir);
+    expect(result.ok).toBe(true);
+    const historyPath = resolve(tempDir, ".forge", "watch-history.jsonl");
+    expect(existsSync(historyPath)).toBe(true);
+    const content = readFileSync(historyPath, "utf-8").trim();
+    const record = JSON.parse(content);
+    expect(record.runId).toBe("20250101-test");
+    expect(record.cursor).toBe("2025-01-01T00:01:00.000Z");
+  });
+
+  it("appends multiple records on subsequent calls", () => {
+    appendWatchHistory({ timestamp: "t1", targetPath: "/a", runId: "r1", anomalies: [] }, tempDir);
+    appendWatchHistory({ timestamp: "t2", targetPath: "/a", runId: "r1", anomalies: [{ code: "x" }] }, tempDir);
+    const lines = readFileSync(resolve(tempDir, ".forge", "watch-history.jsonl"), "utf-8").trim().split("\n");
+    expect(lines.length).toBe(2);
+    expect(JSON.parse(lines[1]).anomalyCount).toBe(1);
+    expect(JSON.parse(lines[1]).anomalyCodes).toEqual(["x"]);
+  });
+});
+
+describe("Watcher v2.35: stateful diff (sinceTimestamp)", () => {
+  it("returns hasNewEvents=false when no new events since cursor", () => {
+    const runDir = resolve(tempDir, ".forge", "runs", "20250101-diff");
+    mkdirSync(runDir, { recursive: true });
+    writeFileSync(resolve(runDir, "events.log"), [
+      `[2025-01-01T00:00:00.000Z] run-started: {}`,
+      `[2025-01-01T00:01:00.000Z] slice-started: {"sliceNumber":1}`,
+    ].join("\n"));
+    const snap = buildWatchSnapshot(tempDir, null, { sinceTimestamp: "2025-01-01T00:02:00.000Z" });
+    expect(snap.hasNewEvents).toBe(false);
+    expect(snap.newEventsCount).toBe(0);
+  });
+
+  it("returns hasNewEvents=true with count when newer events exist", () => {
+    const runDir = resolve(tempDir, ".forge", "runs", "20250101-diff2");
+    mkdirSync(runDir, { recursive: true });
+    writeFileSync(resolve(runDir, "events.log"), [
+      `[2025-01-01T00:00:00.000Z] run-started: {}`,
+      `[2025-01-01T00:01:00.000Z] slice-started: {"sliceNumber":1}`,
+      `[2025-01-01T00:02:00.000Z] slice-completed: {"sliceNumber":1}`,
+      `[2025-01-01T00:03:00.000Z] slice-started: {"sliceNumber":2}`,
+    ].join("\n"));
+    const snap = buildWatchSnapshot(tempDir, null, { sinceTimestamp: "2025-01-01T00:01:30.000Z" });
+    expect(snap.hasNewEvents).toBe(true);
+    expect(snap.newEventsCount).toBe(2);
+  });
+
+  it("snapshot returns cursor pointing at last event timestamp", () => {
+    const runDir = resolve(tempDir, ".forge", "runs", "20250101-cursor");
+    mkdirSync(runDir, { recursive: true });
+    writeFileSync(resolve(runDir, "events.log"), [
+      `[2025-01-01T00:00:00.000Z] run-started: {}`,
+      `[2025-01-01T00:05:30.000Z] slice-started: {"sliceNumber":1}`,
+    ].join("\n"));
+    const snap = buildWatchSnapshot(tempDir);
+    expect(snap.cursor).toBe("2025-01-01T00:05:30.000Z");
+  });
+});
+
+describe("Watcher v2.35: runWatch integration", () => {
+  it("includes recommendations + cursor in report", async () => {
+    const runDir = resolve(tempDir, ".forge", "runs", "20250101-integration");
+    mkdirSync(runDir, { recursive: true });
+    writeFileSync(resolve(runDir, "events.log"), [
+      `[2025-01-01T00:00:00.000Z] run-started: {"plan":"X.md"}`,
+      `[2025-01-01T00:01:00.000Z] slice-failed: {"sliceNumber":3}`,
+    ].join("\n"));
+    writeFileSync(resolve(runDir, "slice-3.json"), JSON.stringify({ status: "failed" }));
+    const result = await runWatch({ targetPath: tempDir, mode: "snapshot", recordHistory: false });
+    expect(result.ok).toBe(true);
+    expect(Array.isArray(result.recommendations)).toBe(true);
+    expect(result.recommendations.length).toBeGreaterThan(0);
+    expect(result.cursor).toBeTruthy();
+  });
+
+  it("records history when recordHistory=true", async () => {
+    // Use a separate tempDir as the watcher's cwd so we can verify the file lands there
+    const watcherCwd = mkdtempSync(join(tmpdir(), "watcher-cwd-"));
+    const origCwd = process.cwd();
+    try {
+      process.chdir(watcherCwd);
+      const runDir = resolve(tempDir, ".forge", "runs", "20250101-rh");
+      mkdirSync(runDir, { recursive: true });
+      writeFileSync(resolve(runDir, "events.log"), `[2025-01-01T00:00:00.000Z] run-started: {}`);
+      await runWatch({ targetPath: tempDir, mode: "snapshot", recordHistory: true });
+      expect(existsSync(resolve(watcherCwd, ".forge", "watch-history.jsonl"))).toBe(true);
+    } finally {
+      process.chdir(origCwd);
+      rmSync(watcherCwd, { recursive: true, force: true });
+    }
+  });
+
+  it("skips history when recordHistory=false", async () => {
+    const watcherCwd = mkdtempSync(join(tmpdir(), "watcher-cwd2-"));
+    const origCwd = process.cwd();
+    try {
+      process.chdir(watcherCwd);
+      const runDir = resolve(tempDir, ".forge", "runs", "20250101-nohist");
+      mkdirSync(runDir, { recursive: true });
+      writeFileSync(resolve(runDir, "events.log"), `[2025-01-01T00:00:00.000Z] run-started: {}`);
+      await runWatch({ targetPath: tempDir, mode: "snapshot", recordHistory: false });
+      expect(existsSync(resolve(watcherCwd, ".forge", "watch-history.jsonl"))).toBe(false);
+    } finally {
+      process.chdir(origCwd);
+      rmSync(watcherCwd, { recursive: true, force: true });
+    }
+  });
+
+  it("emits hub events when eventBus is provided", async () => {
+    const runDir = resolve(tempDir, ".forge", "runs", "20250101-bus");
+    mkdirSync(runDir, { recursive: true });
+    writeFileSync(resolve(runDir, "events.log"), [
+      `[2025-01-01T00:00:00.000Z] run-started: {}`,
+      `[2025-01-01T00:01:00.000Z] slice-failed: {"sliceNumber":1}`,
+    ].join("\n"));
+    writeFileSync(resolve(runDir, "slice-1.json"), JSON.stringify({ status: "failed" }));
+    const emitted = [];
+    const eventBus = { emit: (type, data) => emitted.push({ type, data }) };
+    await runWatch({ targetPath: tempDir, mode: "snapshot", recordHistory: false, eventBus });
+    const types = emitted.map((e) => e.type);
+    expect(types).toContain("watch-snapshot-completed");
+    expect(types).toContain("watch-anomaly-detected");
+  });
+});
+
+describe("Watcher v2.35: runWatchLive (polling fallback)", () => {
+  it("requires targetPath and onEvent", async () => {
+    const r1 = await runWatchLive({});
+    expect(r1.ok).toBe(false);
+    expect(r1.error).toMatch(/targetPath/);
+    const r2 = await runWatchLive({ targetPath: tempDir });
+    expect(r2.ok).toBe(false);
+    expect(r2.error).toMatch(/onEvent/);
+  });
+
+  it("returns error for non-existent target", async () => {
+    const result = await runWatchLive({ targetPath: resolve(tempDir, "missing"), onEvent: () => {} });
+    expect(result.ok).toBe(false);
+  });
+
+  it("polls and yields events when no hub is running", async () => {
+    const runDir = resolve(tempDir, ".forge", "runs", "20250101-poll");
+    mkdirSync(runDir, { recursive: true });
+    writeFileSync(resolve(runDir, "events.log"), [
+      `[2025-01-01T00:00:00.000Z] run-started: {}`,
+      `[2025-01-01T00:01:00.000Z] slice-started: {"sliceNumber":1}`,
+    ].join("\n"));
+    const captured = [];
+    const result = await runWatchLive({
+      targetPath: tempDir,
+      durationMs: 1500, // short
+      pollIntervalMs: 5_000, // longer than duration so we only get the initial yield
+      onEvent: (e) => captured.push(e),
+    });
+    expect(result.ok).toBe(true);
+    expect(result.mode).toBe("polling");
+    expect(captured.length).toBeGreaterThanOrEqual(1);
+  }, 5000);
 });

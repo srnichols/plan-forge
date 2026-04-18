@@ -5,6 +5,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.34.2] — 2026-04-17
+
+### Fixed — forge_smith warning false-positives
+
+- **PowerShell version detection** — `pforge.ps1` smith now probes for a separately installed `pwsh` (7.x) via `Get-Command pwsh` and reports its version, instead of always reporting the version of the shell that happens to be running the script. Falls back to the current shell only when `pwsh` is not on PATH. Avoids reporting `5.1` when `pwsh 7.x` is installed.
+- **`XAI_API_KEY` / `OPENAI_API_KEY` from `.env`** — `pforge-mcp/server.mjs` now parses `.env` from `process.cwd()` at startup with a lightweight inline parser (no new dependency; existing `process.env` values always win; failure is best-effort and never breaks server boot). `pforge.ps1` smith also added `.env` as a third fallback source after env vars and `.forge/secrets.json`.
+- **Lifecycle hooks reconciliation** — smith hook detection now reads **both** `.github/hooks/<HookName>.{ps1,sh,mjs,js}` files (recursive) **and** the `hooks` block in `.forge.json` (`sessionStart`, `preToolUse`, `postToolUse`, `stop`, `postSlice`, `preAgentHandoff`, `preDeploy`). A hook counts as present if either source defines it.
+
+### Notes
+
+Downstream projects (e.g., consumers running `pforge update`) will pick up these fixes automatically on next update. The `forge_watch` watcher MCP tool added in 2.34.0 and polished in 2.34.1 is unchanged in this release.
+
+---
+
 ## [2.34.1] — 2026-04-17
 
 ### Changed — Watcher API Polish

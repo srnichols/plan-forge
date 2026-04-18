@@ -2256,9 +2256,14 @@ cmd_doctor() {
             doctor_warn "docs/assets/dashboard/ not found" "Run: node pforge-mcp/capture-screenshots.mjs to generate"
         fi
 
-        # Site images
+        # Site images — only relevant inside the plan-forge dev repo itself.
+        # These are plan-forge marketing assets; downstream projects don't need them.
         local site_assets="$REPO_ROOT/docs/assets"
-        if [ -d "$site_assets" ]; then
+        local is_planforge_dev=0
+        if [ -d "$REPO_ROOT/presets" ] && [ -f "$REPO_ROOT/pforge-mcp/server.mjs" ]; then
+            is_planforge_dev=1
+        fi
+        if [ $is_planforge_dev -eq 1 ] && [ -d "$site_assets" ]; then
             local site_images=("og-card.webp" "hero-illustration.webp" "problem-80-20-wall.webp")
             local si_missing=""
             for img in "${site_images[@]}"; do
@@ -2282,8 +2287,21 @@ cmd_doctor() {
         echo "Lifecycle Hooks:"
         local expected_hooks=("SessionStart" "PreToolUse" "PostToolUse" "Stop")
         local hook_count=0 hook_missing=""
+        # plan-forge.json (shipped by `pforge update` from templates/) declares core hooks in PascalCase.
+        local hooks_json="$hooks_dir/plan-forge.json"
         for hook in "${expected_hooks[@]}"; do
+            local found=0
+            # Source 1: hook file matching the name (e.g. SessionStart.md, SessionStart.ps1)
             if ls "$hooks_dir"/*"$hook"* >/dev/null 2>&1; then
+                found=1
+            fi
+            # Source 2: .github/hooks/plan-forge.json declares this hook
+            if [ $found -eq 0 ] && [ -f "$hooks_json" ] && command -v jq >/dev/null 2>&1; then
+                if jq -e ".hooks.\"$hook\"" "$hooks_json" >/dev/null 2>&1; then
+                    found=1
+                fi
+            fi
+            if [ $found -eq 1 ]; then
                 hook_count=$((hook_count + 1))
             else
                 [ -n "$hook_missing" ] && hook_missing="$hook_missing, "

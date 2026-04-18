@@ -2259,6 +2259,104 @@ function Invoke-Smith {
     Write-Host ""
 
     # ═══════════════════════════════════════════════════════════════
+    # 1b. RUNTIME & WORKER READINESS (issue #28)
+    # ═══════════════════════════════════════════════════════════════
+    # Reads pforge-mcp/worker-capabilities.json (single source of truth) and
+    # verifies each worker/runtime meets the minimum version AND exposes the
+    # agentic capability flags. Without this, gh-copilot v1.2.x silently printed
+    # help text and orchestrator recorded "passed" with zero code changes.
+    Write-Host "Runtime & Worker Readiness:" -ForegroundColor Cyan
+
+    $matrixPath = Join-Path $PSScriptRoot 'pforge-mcp/worker-capabilities.json'
+    if (-not (Test-Path $matrixPath)) {
+        Doctor-Warn "worker-capabilities.json not found — skipping capability probe" "Re-run setup to restore pforge-mcp/"
+    }
+    else {
+        try {
+            $matrix = Get-Content $matrixPath -Raw | ConvertFrom-Json
+        }
+        catch {
+            Doctor-Fail "worker-capabilities.json is malformed: $($_.Exception.Message)" "git checkout pforge-mcp/worker-capabilities.json"
+            $matrix = $null
+        }
+
+        if ($matrix) {
+            $pforgeOs = if ($IsWindows -or $env:OS -eq 'Windows_NT') { 'windows' }
+                        elseif ($IsMacOS) { 'macos' }
+                        else { 'linux' }
+
+            function Compare-SemVer([string]$a, [string]$b) {
+                $pa = ($a -replace '^v', '').Split('.-+')[0..2] | ForEach-Object { [int]($_ -replace '\D','') }
+                $pb = ($b -replace '^v', '').Split('.-+')[0..2] | ForEach-Object { [int]($_ -replace '\D','') }
+                for ($i = 0; $i -lt 3; $i++) {
+                    $av = if ($pa[$i]) { $pa[$i] } else { 0 }
+                    $bv = if ($pb[$i]) { $pb[$i] } else { 0 }
+                    if ($av -ne $bv) { return [Math]::Sign($av - $bv) }
+                }
+                return 0
+            }
+
+            function Probe-MatrixTool([string]$name, $spec, [bool]$isRuntime) {
+                $cmdName = $spec.probe.command
+                $cmd = Get-Command $cmdName -ErrorAction SilentlyContinue
+                $installHint = if ($spec.install.$pforgeOs) { $spec.install.$pforgeOs } else { $spec.install.docs }
+
+                if (-not $cmd) {
+                    if ($isRuntime -and $spec.required) {
+                        Doctor-Fail "$name not found on PATH (required runtime)" $installHint
+                    } elseif ($isRuntime) {
+                        Doctor-Warn "$name not found on PATH (optional)" $installHint
+                    } else {
+                        Doctor-Warn "$name not found on PATH (agent worker)" $installHint
+                    }
+                    return
+                }
+
+                # Version probe
+                $versionArgs = @($spec.probe.versionArgs)
+                $versionOut = try { & $cmdName @versionArgs 2>&1 | Out-String } catch { '' }
+                $version = $null
+                if ($spec.versionRegex -and $versionOut -match $spec.versionRegex) {
+                    $version = $Matches[1]
+                }
+
+                # Min-version check
+                if ($version -and $spec.minVersion -and (Compare-SemVer $version $spec.minVersion) -lt 0) {
+                    Doctor-Fail "$name v$version is older than required v$($spec.minVersion)" $installHint
+                    return
+                }
+
+                # Capability marker probe (workers only)
+                if (-not $isRuntime -and $spec.probe.capabilityMarkers -and $spec.probe.capabilityMarkers.Count -gt 0) {
+                    $helpArgs = @($spec.probe.helpArgs)
+                    $helpOut = try { & $cmdName @helpArgs 2>&1 | Out-String } catch { '' }
+                    $missing = @()
+                    foreach ($marker in $spec.probe.capabilityMarkers) {
+                        if ($helpOut -notmatch [regex]::Escape($marker)) { $missing += $marker }
+                    }
+                    if ($missing.Count -gt 0) {
+                        Doctor-Fail "$name v$version lacks agentic flags: $($missing -join ', ') (issue #28)" $installHint
+                        return
+                    }
+                }
+
+                $verDisplay = if ($version) { "v$version" } else { "(version unknown)" }
+                $suffix = if (-not $isRuntime) { " (agentic capable)" } else { "" }
+                Doctor-Pass "$name $verDisplay$suffix"
+            }
+
+            foreach ($rt in $matrix.runtimes.PSObject.Properties) {
+                Probe-MatrixTool -name $rt.Name -spec $rt.Value -isRuntime $true
+            }
+            foreach ($wk in $matrix.workers.PSObject.Properties) {
+                Probe-MatrixTool -name $wk.Name -spec $wk.Value -isRuntime $false
+            }
+        }
+    }
+
+    Write-Host ""
+
+    # ═══════════════════════════════════════════════════════════════
     # 2. VS CODE CONFIGURATION
     # ═══════════════════════════════════════════════════════════════
     Write-Host "VS Code Configuration:" -ForegroundColor Cyan

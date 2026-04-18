@@ -24,6 +24,7 @@ import { spawn, execSync } from "node:child_process";
 import { resolve, basename, dirname, join, relative, extname } from "node:path";
 import { EventEmitter } from "node:events";
 import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
 import { createTraceContext, createTelemetryHandler, writeManifest, appendRunIndex, pruneRunHistory, addLogSummary } from "./telemetry.mjs";
 import { isOpenBrainConfigured, buildMemorySearchBlock, buildMemoryCaptureBlock, buildRunSummaryThought, buildCostAnomalyThought, loadProjectContext } from "./memory.mjs";
 
@@ -768,28 +769,137 @@ export async function generateImage(prompt, options = {}) {
 // ─── Worker Spawning ──────────────────────────────────────────────────
 
 /**
- * Detect available workers (CLI + API providers).
- * @returns {{ name: string, available: boolean, type: "cli"|"api" }[]}
+ * Worker + runtime capability matrix. Single source of truth for version mins,
+ * agentic capability markers, and per-OS install hints. See issue #28.
  */
-export function detectWorkers() {
-  const cliWorkers = [
-    { name: "gh-copilot", command: "gh", args: ["copilot", "--", "--version"] },
-    { name: "claude", command: "claude", args: ["--version"] },
-    { name: "codex", command: "codex", args: ["--version"] },
-  ];
+let _workerCapabilitiesCache = null;
+export function loadWorkerCapabilities() {
+  if (_workerCapabilitiesCache) return _workerCapabilitiesCache;
+  try {
+    const path = resolve(dirname(fileURLToPath(import.meta.url)), "worker-capabilities.json");
+    _workerCapabilitiesCache = JSON.parse(readFileSync(path, "utf-8"));
+  } catch {
+    _workerCapabilitiesCache = { workers: {}, runtimes: {}, packageManagers: {} };
+  }
+  return _workerCapabilitiesCache;
+}
 
-  const results = cliWorkers.map((w) => {
+/**
+ * Compare semver-style versions. Returns -1/0/1.
+ * Tolerates "v" prefixes and 4-part versions.
+ */
+export function compareVersions(a, b) {
+  const parse = (s) => String(s || "0").replace(/^v/i, "").split(/[.\-+]/).slice(0, 3).map((p) => parseInt(p, 10) || 0);
+  const [a1, a2, a3] = parse(a);
+  const [b1, b2, b3] = parse(b);
+  if (a1 !== b1) return a1 < b1 ? -1 : 1;
+  if (a2 !== b2) return a2 < b2 ? -1 : 1;
+  if (a3 !== b3) return a3 < b3 ? -1 : 1;
+  return 0;
+}
+
+/**
+ * Detect the active OS family and preferred package manager.
+ * @returns {{ os: "windows"|"macos"|"linux", packageManager: string|null }}
+ */
+export function detectPackageManager() {
+  const matrix = loadWorkerCapabilities();
+  const platform = process.platform;
+  const os = platform === "win32" ? "windows" : platform === "darwin" ? "macos" : "linux";
+  const candidates = matrix.packageManagers?.[os] || [];
+  for (const pm of candidates) {
     try {
-      execSync(`${w.command} ${w.args.join(" ")}`, {
-        encoding: "utf-8",
-        timeout: 10_000,
-        stdio: "pipe",
+      execSync(`${pm} --version`, { encoding: "utf-8", timeout: 3_000, stdio: "pipe" });
+      return { os, packageManager: pm };
+    } catch { /* try next */ }
+  }
+  return { os, packageManager: null };
+}
+
+/**
+ * Get the best install/upgrade hint for a tool on the current OS.
+ * @param {string} toolName - e.g. "gh-copilot", "claude", "gh", "node"
+ * @returns {{ command: string|null, docs: string|null, os: string }}
+ */
+export function suggestInstall(toolName) {
+  const matrix = loadWorkerCapabilities();
+  const { os } = detectPackageManager();
+  const entry = matrix.workers?.[toolName] || matrix.runtimes?.[toolName];
+  if (!entry?.install) return { command: null, docs: null, os };
+  return { command: entry.install[os] || null, docs: entry.install.docs || null, os };
+}
+
+/**
+ * Probe a single CLI worker from the capability matrix.
+ * Returns a structured result — NEVER throws, always returns the shape so smith can report.
+ */
+function probeWorker(name, spec) {
+  const probe = spec.probe || {};
+  const result = {
+    name, type: "cli",
+    available: false, capable: false,
+    version: null, minVersion: spec.minVersion || null,
+    reason: null, installHint: null,
+  };
+  // Step 1: version probe
+  let versionOut = "";
+  try {
+    versionOut = execSync(`${probe.command} ${(probe.versionArgs || []).join(" ")}`, {
+      encoding: "utf-8", timeout: 10_000, stdio: "pipe",
+    });
+  } catch {
+    result.reason = `${probe.command} not found on PATH`;
+    result.installHint = suggestInstall(name).command;
+    return result;
+  }
+  // Parse version
+  if (spec.versionRegex) {
+    const m = versionOut.match(new RegExp(spec.versionRegex));
+    if (m) result.version = m[1];
+  }
+  // Step 2: min-version check
+  if (result.version && spec.minVersion && compareVersions(result.version, spec.minVersion) < 0) {
+    result.reason = `${name} v${result.version} is older than required v${spec.minVersion}`;
+    result.installHint = suggestInstall(name).command;
+    return result;
+  }
+  // Step 3: capability probe (agentic flag markers in --help)
+  if (probe.capabilityMarkers && probe.capabilityMarkers.length > 0) {
+    try {
+      const helpOut = execSync(`${probe.command} ${(probe.helpArgs || []).join(" ")}`, {
+        encoding: "utf-8", timeout: 10_000, stdio: "pipe",
       });
-      return { name: w.name, available: true, type: "cli" };
+      const missing = probe.capabilityMarkers.filter((m) => !helpOut.includes(m));
+      if (missing.length === 0) {
+        result.capable = true;
+      } else {
+        result.reason = `${name} lacks agentic flags: ${missing.join(", ")} — likely legacy build (see issue #28)`;
+        result.installHint = suggestInstall(name).command;
+        return result;
+      }
     } catch {
-      return { name: w.name, available: false, type: "cli" };
+      result.reason = `${name} help probe failed — cannot verify agentic capability`;
+      return result;
     }
-  });
+  } else {
+    // No markers declared — presence is sufficient (runtime-like worker)
+    result.capable = true;
+  }
+  result.available = result.capable;
+  return result;
+}
+
+/**
+ * Detect available workers (CLI + API providers) with capability probing.
+ * @param {string} [projectDir] - Project root (reserved for future per-project overrides)
+ * @returns {{ name: string, available: boolean, capable: boolean, version: string|null, reason: string|null, type: "cli"|"api", installHint?: string|null }[]}
+ */
+export function detectWorkers(_projectDir) {
+  const matrix = loadWorkerCapabilities();
+  const results = [];
+  for (const [name, spec] of Object.entries(matrix.workers || {})) {
+    results.push(probeWorker(name, spec));
+  }
 
   // Detect API providers (check env var + .forge/secrets.json fallback)
   for (const [name, provider] of Object.entries(API_PROVIDERS)) {
@@ -797,12 +907,38 @@ export function detectWorkers() {
     results.push({
       name: `api-${name}`,
       available: !!apiKey,
+      capable: !!apiKey,
       type: "api",
       label: provider.label,
       models: provider.pattern.toString(),
+      reason: apiKey ? null : `${provider.envKey} not set`,
     });
   }
 
+  return results;
+}
+
+/**
+ * Probe runtimes declared in worker-capabilities.json. Used by smith's
+ * Runtime & Worker Readiness section — does NOT gate worker selection.
+ * @returns {{ name: string, available: boolean, version: string|null, minVersion: string|null, required: boolean, reason: string|null, installHint: string|null }[]}
+ */
+export function detectRuntimes() {
+  const matrix = loadWorkerCapabilities();
+  const results = [];
+  for (const [name, spec] of Object.entries(matrix.runtimes || {})) {
+    const probed = probeWorker(name, spec);
+    results.push({
+      name,
+      required: !!spec.required,
+      available: probed.available,
+      version: probed.version,
+      minVersion: spec.minVersion || null,
+      reason: probed.reason,
+      installHint: probed.installHint,
+      description: spec.description || "",
+    });
+  }
   return results;
 }
 
@@ -847,26 +983,24 @@ export function spawnWorker(prompt, options = {}) {
     const promptFile = resolve(tmpdir(), `pforge-prompt-${suffix}.txt`);
     writeFileSync(promptFile, prompt);
 
-    switch (chosen.name) {
-      case "gh-copilot": {
-        // Pass prompt file directly via @filepath syntax — avoids PS variable expansion and newline splitting
-        cmd = "gh";
-        args = ["copilot", "--", "-p", `@${promptFile}`, "--allow-all", "--allow-all-paths", "--allow-all-tools", "--no-ask-user", ...(model ? ["--model", model] : [])];
-        break;
-      }
-      case "claude":
-        cmd = "claude";
-        args = ["-p", prompt];
-        if (model) args.push("--model", model);
-        break;
-      case "codex":
-        cmd = "codex";
-        args = ["-p", prompt];
-        if (model) args.push("--model", model);
-        break;
-      default:
-        workerReject(new Error(`Unknown worker: ${chosen.name}`));
-        return;
+    // Build invocation from the capability matrix (single source of truth — issue #28).
+    // Supports {PROMPT_FILE} and {PROMPT} placeholders in worker-capabilities.json.
+    const matrix = loadWorkerCapabilities();
+    const spec = matrix.workers?.[chosen.name];
+    if (spec?.invocation?.cmd) {
+      cmd = spec.invocation.cmd;
+      args = (spec.invocation.baseArgs || []).map((a) =>
+        String(a).replace("{PROMPT_FILE}", promptFile).replace("{PROMPT}", prompt)
+      );
+      if (model) args.push("--model", model);
+    } else if (chosen.name === "claude" || chosen.name === "codex") {
+      // Fallback if matrix missing entry (defensive)
+      cmd = chosen.name;
+      args = ["-p", prompt];
+      if (model) args.push("--model", model);
+    } else {
+      workerReject(new Error(`Unknown worker: ${chosen.name}`));
+      return;
     }
 
     const child = spawn(cmd, args, {
@@ -939,6 +1073,11 @@ export function spawnWorker(prompt, options = {}) {
         if (stderrStats.premiumRequests > 0) tokens.premiumRequests = stderrStats.premiumRequests;
       }
 
+      // Issue #28 guard: detect silent-failure where worker printed help text and exited 0.
+      // When the CLI doesn't understand our flags it often emits usage/help and succeeds —
+      // orchestrator then records "passed" with zero code changes. Surface it loudly instead.
+      const looksLikeHelpText = detectHelpTextOutput(stdout, stderr, chosen.name);
+
       workerResolve({
         output: stdout,
         stderr,
@@ -948,6 +1087,7 @@ export function spawnWorker(prompt, options = {}) {
         tokens,
         worker: chosen.name,
         model: tokens.model || model || "unknown",
+        looksLikeHelpText,
       });
     });
 
@@ -956,6 +1096,33 @@ export function spawnWorker(prompt, options = {}) {
       workerReject(new Error(`Failed to spawn ${cmd}: ${err.message} (code: ${err.code || "unknown"})`));
     });
   });
+}
+
+/**
+ * Heuristic: did the worker print its help/usage text instead of actually doing work?
+ * Issue #28: when the CLI doesn't understand our agentic flags, many versions print
+ * help and exit 0. Combined with no file changes, this looks like success to the
+ * orchestrator. Detect it so callers can treat as a soft failure.
+ */
+export function detectHelpTextOutput(stdout, stderr, workerName) {
+  const combined = `${stdout || ""}\n${stderr || ""}`;
+  if (!combined.trim()) return false;
+  // Common help-text signatures across CLIs (usage banners, flag listings)
+  const markers = [
+    /\busage:\s/i,
+    /^\s*USAGE\s*$/m,
+    /^Commands:\s*$/m,
+    /^Options:\s*$/m,
+    /^Flags:\s*$/m,
+    /Run '.+ --help' for/i,
+    /gh copilot <command> \[flags\]/i, // legacy gh-copilot v1.2.x suggest/explain banner
+  ];
+  const hits = markers.filter((re) => re.test(combined)).length;
+  // Require 2+ markers to avoid false positives on legit output that mentions "usage"
+  if (hits < 2) return false;
+  // And the output should be short (real work produces lots of tokens)
+  const meaningfulLen = combined.replace(/\s+/g, " ").trim().length;
+  return meaningfulLen < 4000;
 }
 
 /**

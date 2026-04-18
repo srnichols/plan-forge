@@ -22,6 +22,8 @@ import {
   loadQuorumConfig,
   loadOpenClawConfig,
   scoreSliceComplexity,
+  coalesceGateLines,
+  parseStderrStats,
 } from "../orchestrator.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -953,5 +955,82 @@ describe("scoreSliceComplexity", () => {
     const result = scoreSliceComplexity({ title: "Test slice", tasks: ["Task 1"], scope: [] }, tempDir);
     expect(result).toHaveProperty("signals");
     expect(typeof result.signals).toBe("object");
+  });
+});
+
+// ─── coalesceGateLines ───────────────────────────────────────────────
+
+describe("coalesceGateLines", () => {
+  it("extracts simple shell commands", () => {
+    const gate = `npm test\npnpm lint\necho ok`;
+    expect(coalesceGateLines(gate)).toEqual(["npm test", "pnpm lint", "echo ok"]);
+  });
+
+  it("skips markdown-style numbered list prose (regression: slice-7 false failure)", () => {
+    // Real-world case from Rummag Phase-01 CI/CD slice: plan authors described
+    // CSRF flow as numbered prose. Previously these were sent to runGate and
+    // rejected by the allowlist as "'1.' not in allowlist", failing the slice.
+    const gate = `1. Server generates CSRF token on session creation → sets as httpOnly cookie \`_csrf\`.\n2. Client reads cookie and mirrors value in X-CSRF-Token header.\nnpm test`;
+    const result = coalesceGateLines(gate);
+    expect(result).toEqual(["npm test"]);
+  });
+
+  it("skips bulleted prose lines", () => {
+    const gate = `- Install dependencies\n* Run migrations\n+ Verify connection\nnpm run build`;
+    expect(coalesceGateLines(gate)).toEqual(["npm run build"]);
+  });
+
+  it("does not strip commands whose args contain numbers", () => {
+    // Don't confuse "pytest -n 4" or "curl https://api/v1/thing" with a list item
+    const gate = `pytest -n 4\ncurl https://api/v1/health`;
+    expect(coalesceGateLines(gate)).toEqual(["pytest -n 4", "curl https://api/v1/health"]);
+  });
+
+  it("strips standalone comments but preserves commands", () => {
+    const gate = `# Run all validation\nnpm test\n# Then lint\npnpm lint`;
+    expect(coalesceGateLines(gate)).toEqual(["npm test", "pnpm lint"]);
+  });
+});
+
+// ─── parseStderrStats ───────────────────────────────────────────────
+
+describe("parseStderrStats", () => {
+  it("parses UTF-8 token summary from gh copilot (new format)", () => {
+    const stderr = `Model     claude-opus-4.6\nTokens    ↑ 476.0k • ↓ 3.1k • 430.1k (cached)\nRequests  3 Premium (1m 35s)`;
+    const stats = parseStderrStats(stderr);
+    expect(stats.model).toBe("claude-opus-4.6");
+    expect(stats.tokens_in).toBe(476_000);
+    expect(stats.tokens_out).toBe(3_100);
+    expect(stats.premiumRequests).toBe(3);
+  });
+
+  it("parses ASCII-fallback token summary (Windows cp437 / CI log strip)", () => {
+    // When Unicode arrows are stripped/replaced, we still want to capture counts.
+    const stderr = `Model     claude-opus-4.6\nTokens    ^ 3.2m * v 10.5k * 3.1m (cached)\nRequests  3 Premium (4m 41s)`;
+    const stats = parseStderrStats(stderr);
+    expect(stats.tokens_in).toBe(3_200_000);
+    expect(stats.tokens_out).toBe(10_500);
+    expect(stats.premiumRequests).toBe(3);
+  });
+
+  it("parses old per-model breakdown format", () => {
+    const stderr = ` claude-sonnet-4.6  639.4k in, 4.5k out, 552.1k cached\n1 Premium request`;
+    const stats = parseStderrStats(stderr);
+    expect(stats.model).toBe("claude-sonnet-4.6");
+    expect(stats.tokens_in).toBe(639_400);
+    expect(stats.tokens_out).toBe(4_500);
+    expect(stats.premiumRequests).toBe(1);
+  });
+
+  it("returns zero stats for empty input", () => {
+    expect(parseStderrStats("")).toEqual({ model: null, tokens_in: 0, tokens_out: 0, premiumRequests: 0 });
+    expect(parseStderrStats(null)).toEqual({ model: null, tokens_in: 0, tokens_out: 0, premiumRequests: 0 });
+  });
+
+  it("handles millions and billions suffixes", () => {
+    const stderr = `Tokens    ↑ 3.2m • ↓ 1.5b • 0 (cached)`;
+    const stats = parseStderrStats(stderr);
+    expect(stats.tokens_in).toBe(3_200_000);
+    expect(stats.tokens_out).toBe(1_500_000_000);
   });
 });

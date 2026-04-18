@@ -850,6 +850,12 @@ export function spawnWorker(prompt, options = {}) {
     global.__pforgeChildren.add(child);
     child.on("close", () => global.__pforgeChildren?.delete(child));
 
+    // Force UTF-8 decoding on both streams. On Windows, the default encoding
+    // is platform-dependent and can mangle Unicode chars (↑ ↓ •) that appear
+    // in gh copilot's token summary line — which silently breaks parseStderrStats.
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+
     // Close stdin immediately (no interactive input needed)
     child.stdin.end();
 
@@ -988,7 +994,7 @@ function extractTokens(events) {
  * Parse stats from gh copilot CLI stderr output.
  * Format: "Breakdown by AI model:\n claude-sonnet-4.6  11.7m in, 97.5k out, ..."
  */
-function parseStderrStats(stderr) {
+export function parseStderrStats(stderr) {
   const stats = { model: null, tokens_in: 0, tokens_out: 0, premiumRequests: 0 };
   if (!stderr) return stats;
 
@@ -998,10 +1004,12 @@ function parseStderrStats(stderr) {
   const premiumMatch = stderr.match(/(\d+)\s+Premium\s+request/i) || stderr.match(/Requests\s+(\d+)\s+Premium/i);
   if (premiumMatch) stats.premiumRequests = parseInt(premiumMatch[1], 10);
 
-  // Parse token counts — two formats:
+  // Parse token counts — three formats:
   //   Old: " claude-sonnet-4.6  639.4k in, 4.5k out, 552.1k cached"
-  //   New: "Tokens    ↑ 476.0k • ↓ 3.1k • 430.1k (cached)"
-  const newTokenMatch = stderr.match(/Tokens\s+[↑⬆]\s*([\d.]+[kmb]?)\s*[•·]\s*[↓⬇]\s*([\d.]+[kmb]?)/i);
+  //   New (UTF-8): "Tokens    ↑ 476.0k • ↓ 3.1k • 430.1k (cached)"
+  //   New (ASCII fallback): "Tokens    ^ 476.0k * v 3.1k * 430.1k (cached)"
+  //     — covers terminals that strip/replace Unicode (Windows cp437, CI logs, etc.)
+  const newTokenMatch = stderr.match(/Tokens\s+[↑⬆^]\s*([\d.]+[kmb]?)\s*[•·*]\s*[↓⬇v]\s*([\d.]+[kmb]?)/i);
   if (newTokenMatch) {
     stats.tokens_in = parseTokenCount(newTokenMatch[1]);
     stats.tokens_out = parseTokenCount(newTokenMatch[2]);
@@ -1071,6 +1079,10 @@ export function coalesceGateLines(gateText) {
     } else {
       const stripped = trimmed.replace(/\s{2,}#\s.*$/, "");
       if (!stripped || stripped.startsWith("#")) continue;
+      // Skip markdown-style numbered list items (e.g. "1. Server generates CSRF...")
+      // and bulleted prose (e.g. "- Install dependencies"). These are documentation,
+      // not shell commands, and would fail the allowlist check with a misleading error.
+      if (/^(\d+\.|[-*+])\s+\S/.test(stripped)) continue;
       const dblQuotes = (stripped.match(/"/g) || []).length;
       if (dblQuotes % 2 !== 0) {
         pending = stripped;

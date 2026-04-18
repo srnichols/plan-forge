@@ -58,7 +58,7 @@ try {
 }
 
 import { parsePlan, runPlan, detectWorkers, getCostReport, getHealthTrend, analyzeWithQuorum, generateImage, runAnalyze, readForgeJson, readForgeJsonl, appendForgeJsonl, emitToolTelemetry, regressionGuard, runPostSliceHook, resetPostSliceHookFired, runPreAgentHandoffHook, postOpenClawSnapshot, loadOpenClawConfig, loadQuorumConfig, runWatch, runWatchLive } from "./orchestrator.mjs";
-import { isOpenBrainConfigured, shapeWatcherAnomalyThought, dedupeWatcherAnomalies } from "./memory.mjs";
+import { isOpenBrainConfigured, shapeWatcherAnomalyThought, dedupeWatcherAnomalies, shapeQueueRecord } from "./memory.mjs";
 import { createHub, readHubPort } from "./hub.mjs";
 import { createBridge } from "./bridge.mjs";
 import { buildCapabilitySurface, writeToolsJson, writeCliSchema } from "./capabilities.mjs";
@@ -138,9 +138,11 @@ function captureMemory(content, type, source, cwd) {
     // Always persist locally
     appendForgeJsonl("liveguard-memories.jsonl", thought, cwd);
 
-    // Queue for OpenBrain if configured
+    // G2.6 (v2.36): queue records carry delivery state (_status / _attempts /
+    // _enqueuedAt / _nextAttemptAt) so a drain worker can apply exponential
+    // backoff and DLQ semantics without re-deriving them from the payload.
     if (isOpenBrainConfigured(cwd)) {
-      appendForgeJsonl("openbrain-queue.jsonl", thought, cwd);
+      appendForgeJsonl("openbrain-queue.jsonl", shapeQueueRecord(thought), cwd);
     }
 
     // Broadcast so dashboard/bridge can observe
@@ -676,7 +678,7 @@ const TOOLS = [
   },
   {
     name: "forge_drift_report", // LiveGuard — emitToolTelemetry in handler
-    description: "Score the codebase against architecture guardrail rules. Tracks drift over time in .forge/drift-history.json. Fires a bridge notification when score drops below threshold. With autoIncident, auto-captures incidents and generates fix proposals for high/critical violations.",
+    description: "Score the codebase against architecture guardrail rules. Tracks drift over time in .forge/drift-history.jsonl. Fires a bridge notification when score drops below threshold. With autoIncident, auto-captures incidents and generates fix proposals for high/critical violations.",
     inputSchema: {
       type: "object",
       properties: {
@@ -1744,7 +1746,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       // E5: Append regression history for health trend tracking
       const regRecord = { timestamp: new Date().toISOString(), gatesChecked: result.gatesChecked, passed: result.passed, failed: result.failed, blocked: result.blocked || 0, skipped: result.skipped || 0 };
-      appendForgeJsonl("regression-history.json", regRecord, cwd);
+      appendForgeJsonl("regression-history.jsonl", regRecord, cwd); // G2.1: was .json
 
       // E8: Auto-resolve open incidents whose files overlap with passed gates
       if (result.success && result.passed > 0 && args.autoResolve !== false) {
@@ -2388,6 +2390,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       // Write cache (key names only, never values)
       mkdirSync(resolve(cwd, ".forge"), { recursive: true });
       writeFileSync(resolve(cwd, ".forge", "env-diff-cache.json"), JSON.stringify(result, null, 2), "utf-8");
+
+      // G2.7 (v2.36): also append a compact history record so trend analysis
+      // and the dashboard can see env-drift over time without re-reading the
+      // single-snapshot cache. Keys only — values are never recorded.
+      try {
+        appendForgeJsonl("env-diff-history.jsonl", {
+          scannedAt: result.scannedAt,
+          baseline: result.baseline,
+          filesCompared: result.filesCompared,
+          totalGaps,
+          clean,
+          baselineKeyCount: baselineKeys.size,
+          pairs: pairs.map((p) => ({
+            file: p.file,
+            missingInTargetCount: p.missingInTarget?.length || 0,
+            missingInBaselineCount: p.missingInBaseline?.length || 0,
+          })),
+        }, cwd);
+      } catch { /* best-effort history */ }
 
       emitToolTelemetry("forge_env_diff", args, { clean, totalGaps, filesCompared: targetFiles.length }, Date.now() - t0, "OK", cwd);
       await broadcastLiveGuard("forge_env_diff", "OK", Date.now() - t0);

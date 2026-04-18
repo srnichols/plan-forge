@@ -39,8 +39,8 @@ describe("TOOL_METADATA forge_drift_report", () => {
     expect(TOOL_METADATA.forge_drift_report.addedIn).toBe("2.27.0");
   });
 
-  it("produces drift-history.json", () => {
-    expect(TOOL_METADATA.forge_drift_report.produces).toContain(".forge/drift-history.json");
+  it("produces drift-history.jsonl", () => {
+    expect(TOOL_METADATA.forge_drift_report.produces).toContain(".forge/drift-history.jsonl");
   });
 
   it("has exactly one entry (no duplicates)", () => {
@@ -100,17 +100,17 @@ describe("drift score computation", () => {
 
 describe("drift history and trend", () => {
   it("historyLength is 1 on first run", () => {
-    const history = readForgeJsonl("drift-history.json", [], tempDir);
+    const history = readForgeJsonl("drift-history.jsonl", [], tempDir);
     expect(history).toHaveLength(0);
     const historyLength = history.length + 1;
     expect(historyLength).toBe(1);
   });
 
   it("appends records correctly", () => {
-    appendForgeJsonl("drift-history.json", { score: 90, timestamp: "t1" }, tempDir);
-    appendForgeJsonl("drift-history.json", { score: 85, timestamp: "t2" }, tempDir);
+    appendForgeJsonl("drift-history.jsonl", { score: 90, timestamp: "t1" }, tempDir);
+    appendForgeJsonl("drift-history.jsonl", { score: 85, timestamp: "t2" }, tempDir);
 
-    const history = readForgeJsonl("drift-history.json", [], tempDir);
+    const history = readForgeJsonl("drift-history.jsonl", [], tempDir);
     expect(history).toHaveLength(2);
     expect(history[0].score).toBe(90);
     expect(history[1].score).toBe(85);
@@ -755,9 +755,9 @@ describe("TOOL_METADATA forge_alert_triage", () => {
     expect(TOOL_METADATA.forge_alert_triage.addedIn).toBe("2.31.0");
   });
 
-  it("consumes incidents.jsonl and drift-history.json", () => {
+  it("consumes incidents.jsonl and drift-history.jsonl", () => {
     expect(TOOL_METADATA.forge_alert_triage.consumes).toContain(".forge/incidents.jsonl");
-    expect(TOOL_METADATA.forge_alert_triage.consumes).toContain(".forge/drift-history.json");
+    expect(TOOL_METADATA.forge_alert_triage.consumes).toContain(".forge/drift-history.jsonl");
   });
 
   it("has exactly one entry (no duplicates)", () => {
@@ -982,7 +982,7 @@ describe("TOOL_METADATA forge_health_trend", () => {
 
   it("consumes operational data files", () => {
     const consumes = TOOL_METADATA.forge_health_trend.consumes;
-    expect(consumes).toContain(".forge/drift-history.json");
+    expect(consumes).toContain(".forge/drift-history.jsonl");
     expect(consumes).toContain(".forge/incidents.jsonl");
     expect(consumes).toContain(".forge/model-performance.json");
   });
@@ -1276,7 +1276,7 @@ describe("TOOL_METADATA forge_fix_proposal", () => {
   });
 
   it("consumes LiveGuard data files", () => {
-    expect(TOOL_METADATA.forge_fix_proposal.consumes).toContain(".forge/drift-history.json");
+    expect(TOOL_METADATA.forge_fix_proposal.consumes).toContain(".forge/drift-history.jsonl");
     expect(TOOL_METADATA.forge_fix_proposal.consumes).toContain(".forge/incidents.jsonl");
     expect(TOOL_METADATA.forge_fix_proposal.consumes).toContain(".forge/secret-scan-cache.json");
   });
@@ -1320,7 +1320,7 @@ describe("TOOL_METADATA forge_quorum_analyze", () => {
   });
 
   it("consumes LiveGuard data files", () => {
-    expect(TOOL_METADATA.forge_quorum_analyze.consumes).toContain(".forge/drift-history.json");
+    expect(TOOL_METADATA.forge_quorum_analyze.consumes).toContain(".forge/drift-history.jsonl");
     expect(TOOL_METADATA.forge_quorum_analyze.consumes).toContain(".forge/incidents.jsonl");
   });
 

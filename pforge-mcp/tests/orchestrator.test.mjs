@@ -111,7 +111,8 @@ describe("appendForgeJsonl", () => {
   it("creates file and writes first record", () => {
     appendForgeJsonl("events/log.jsonl", { event: "start" }, tempDir);
     const content = readFileSync(resolve(tempDir, ".forge", "events", "log.jsonl"), "utf-8");
-    expect(content).toBe('{"event":"start"}\n');
+    // G2.2: every record auto-stamped with _v: 1
+    expect(content).toBe('{"_v":1,"event":"start"}\n');
   });
 
   it("appends second record on new line", () => {
@@ -120,8 +121,9 @@ describe("appendForgeJsonl", () => {
     const lines = readFileSync(resolve(tempDir, ".forge", "log.jsonl"), "utf-8")
       .split("\n").filter(l => l);
     expect(lines).toHaveLength(2);
-    expect(JSON.parse(lines[0])).toEqual({ n: 1 });
-    expect(JSON.parse(lines[1])).toEqual({ n: 2 });
+    // G2.2: records carry _v:1 in addition to payload
+    expect(JSON.parse(lines[0])).toEqual({ _v: 1, n: 1 });
+    expect(JSON.parse(lines[1])).toEqual({ _v: 1, n: 2 });
   });
 
   it("creates parent directories if missing", () => {
@@ -702,10 +704,10 @@ describe("getHealthTrend", () => {
     expect(result.metricsIncluded).toEqual(["drift"]);
   });
 
-  it("computes drift stats from drift-history.json", () => {
+  it("computes drift stats from drift-history.jsonl", () => {
     const now = new Date().toISOString();
-    appendForgeJsonl("drift-history.json", { timestamp: now, score: 90, violations: [], filesScanned: 10 }, tempDir);
-    appendForgeJsonl("drift-history.json", { timestamp: now, score: 80, violations: [], filesScanned: 10 }, tempDir);
+    appendForgeJsonl("drift-history.jsonl", { timestamp: now, score: 90, violations: [], filesScanned: 10 }, tempDir);
+    appendForgeJsonl("drift-history.jsonl", { timestamp: now, score: 80, violations: [], filesScanned: 10 }, tempDir);
 
     const result = getHealthTrend(tempDir, 30, ["drift"]);
     expect(result.drift.snapshots).toBe(2);
@@ -719,8 +721,8 @@ describe("getHealthTrend", () => {
   it("excludes drift records outside the time window", () => {
     const old = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString(); // 60 days ago
     const recent = new Date().toISOString();
-    appendForgeJsonl("drift-history.json", { timestamp: old, score: 50 }, tempDir);
-    appendForgeJsonl("drift-history.json", { timestamp: recent, score: 90 }, tempDir);
+    appendForgeJsonl("drift-history.jsonl", { timestamp: old, score: 50 }, tempDir);
+    appendForgeJsonl("drift-history.jsonl", { timestamp: recent, score: 90 }, tempDir);
 
     const result = getHealthTrend(tempDir, 30, ["drift"]);
     expect(result.drift.snapshots).toBe(1);
@@ -756,7 +758,7 @@ describe("getHealthTrend", () => {
 
   it("computes healthScore as average of component scores", () => {
     const now = new Date().toISOString();
-    appendForgeJsonl("drift-history.json", { timestamp: now, score: 80 }, tempDir);
+    appendForgeJsonl("drift-history.jsonl", { timestamp: now, score: 80 }, tempDir);
 
     const result = getHealthTrend(tempDir, 30, ["drift"]);
     expect(result.healthScore).toBe(80);

@@ -303,3 +303,136 @@ export function dedupeWatcherAnomalies(anomalies) {
   }
   return out;
 }
+
+// ─── G2.6 — OpenBrain queue state + DLQ ────────────────────────────────
+
+/**
+ * G2.6 (v2.36): wrap an enqueued thought with bookkeeping fields so a worker
+ * (or the SessionStart drain hook) can track delivery state across attempts.
+ *
+ * Pure function — caller appends the result to `.forge/openbrain-queue.jsonl`.
+ *
+ *  _v             — schema version (G2.2)
+ *  _status        — "pending" | "processing" | "failed" | "delivered"
+ *  _attempts      — number of delivery attempts so far
+ *  _enqueuedAt    — ISO timestamp the thought was first queued
+ *  _nextAttemptAt — ISO timestamp the next delivery attempt is allowed
+ *
+ * @param {object} thought - The captured thought (content/type/source/etc.)
+ * @returns {object} enriched queue record
+ */
+export function shapeQueueRecord(thought) {
+  const now = new Date().toISOString();
+  return {
+    _v: 1,
+    _status: "pending",
+    _attempts: 0,
+    _enqueuedAt: now,
+    _nextAttemptAt: now,
+    ...thought,
+  };
+}
+
+/**
+ * G2.6 (v2.36): given a current attempt count, return the next-attempt
+ * timestamp using exponential backoff with jitter.
+ *
+ *   attempt 1 → 30s, 2 → 60s, 3 → 120s, 4 → 240s, 5 → 480s
+ *   jitter ±20% to avoid thundering herd
+ *
+ * @param {number} attempts - Current attempt count (after increment)
+ * @param {number} [now=Date.now()]
+ * @returns {string} ISO timestamp
+ */
+export function nextBackoffTimestamp(attempts, now = Date.now()) {
+  const base = 30_000 * Math.pow(2, Math.max(0, attempts - 1)); // ms
+  const jitter = base * (Math.random() * 0.4 - 0.2); // ±20%
+  return new Date(now + base + jitter).toISOString();
+}
+
+/**
+ * G2.6 (v2.36): decide what to do with a queue record after a failed
+ * delivery attempt. Pure function — returns either the updated record
+ * (still in queue) or a DLQ marker (move to .forge/openbrain-dlq.jsonl).
+ *
+ *   maxAttempts (default 5) — after this many failures, move to DLQ.
+ *
+ * @param {object} record - Queue record from shapeQueueRecord
+ * @param {{maxAttempts?: number, error?: string, now?: number}} [opts]
+ * @returns {{action: "retry"|"dlq", record: object}}
+ */
+export function applyDeliveryFailure(record, opts = {}) {
+  const { maxAttempts = 5, error = "unknown", now = Date.now() } = opts;
+  const attempts = (record._attempts || 0) + 1;
+  if (attempts >= maxAttempts) {
+    return {
+      action: "dlq",
+      record: {
+        ...record,
+        _status: "failed",
+        _attempts: attempts,
+        _failedAt: new Date(now).toISOString(),
+        _lastError: String(error).slice(0, 500),
+      },
+    };
+  }
+  return {
+    action: "retry",
+    record: {
+      ...record,
+      _status: "pending",
+      _attempts: attempts,
+      _lastError: String(error).slice(0, 500),
+      _nextAttemptAt: nextBackoffTimestamp(attempts, now),
+    },
+  };
+}
+
+/**
+ * G2.6 (v2.36): partition queue records into those eligible for delivery
+ * right now vs those still in backoff. Pure function — caller dispatches
+ * the eligible records to the actual ingestor.
+ *
+ * @param {Array<object>} records
+ * @param {number} [now=Date.now()]
+ * @returns {{ready: Array, deferred: Array}}
+ */
+export function partitionByBackoff(records, now = Date.now()) {
+  const ready = [];
+  const deferred = [];
+  if (!Array.isArray(records)) return { ready, deferred };
+  const cutoff = now;
+  for (const r of records) {
+    if (!r || r._status === "delivered" || r._status === "failed") continue;
+    const next = r._nextAttemptAt ? Date.parse(r._nextAttemptAt) : 0;
+    if (Number.isFinite(next) && next <= cutoff) ready.push(r);
+    else deferred.push(r);
+  }
+  return { ready, deferred };
+}
+
+// ─── G2.8 — Capture observability ──────────────────────────────────────
+
+/**
+ * G2.8 (v2.36): build a stats record summarising a drain pass for the
+ * `.forge/openbrain-stats.jsonl` ledger. Lets the dashboard show queue
+ * health (delivered vs deferred vs DLQ over time) without re-reading
+ * the queue file every render.
+ *
+ * Pure function — caller writes the result.
+ *
+ * @param {{attempted: number, delivered: number, deferred: number, dlq: number, durationMs: number, source?: string}} pass
+ * @returns {object}
+ */
+export function buildDrainStatsRecord(pass) {
+  return {
+    _v: 1,
+    timestamp: new Date().toISOString(),
+    source: pass.source || "drain",
+    attempted: pass.attempted | 0,
+    delivered: pass.delivered | 0,
+    deferred: pass.deferred | 0,
+    dlq: pass.dlq | 0,
+    durationMs: pass.durationMs | 0,
+  };
+}

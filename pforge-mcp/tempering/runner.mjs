@@ -31,6 +31,9 @@ import {
   ensureTemperingDirs,
 } from "../tempering.mjs";
 import { loadAdapter, validateAdapterEntry, SUPPORTED_STACKS_SLICE_02_1 } from "./adapters.mjs";
+// TEMPER-06 Slice 06.1 — Bug registry + classifier
+import { classify as realClassify } from "./bug-classifier.mjs";
+import { registerBug as realRegisterBug } from "./bug-registry.mjs";
 
 // ─── Constants ────────────────────────────────────────────────────────
 
@@ -296,6 +299,70 @@ export function runScannerIntegration(ctx) {
 
 // ─── Top-level dispatcher ─────────────────────────────────────────────
 
+// TEMPER-06 Slice 06.1 — Extract failures from a scanner result.
+// Per-scanner normalizer: each scanner shape may encode failures
+// differently. This function returns a uniform `{ evidence, severity }` array.
+function extractFailures(scannerResult) {
+  if (!scannerResult || scannerResult.skipped || scannerResult.verdict === "skipped" || scannerResult.verdict === "pass") return [];
+  const failures = [];
+
+  // If scanner already has a `failures` array, use it directly
+  if (Array.isArray(scannerResult.failures)) {
+    for (const f of scannerResult.failures) {
+      failures.push({
+        evidence: f.evidence || f,
+        severity: f.severity || (scannerResult.verdict === "error" ? "high" : "medium"),
+      });
+    }
+    return failures;
+  }
+
+  // Regressions array (visual-diff, perf-budget)
+  if (Array.isArray(scannerResult.regressions)) {
+    for (const r of scannerResult.regressions) {
+      failures.push({
+        evidence: {
+          testName: r.url || r.urlHash || r.name || `${scannerResult.scanner}-regression`,
+          assertionMessage: r.explanation || r.verdict || "regression detected",
+          visualDiffScore: r.diffScore || r.score || null,
+          quorumVerdict: r.quorumVerdict || null,
+        },
+        severity: r.severity || "medium",
+      });
+    }
+    return failures;
+  }
+
+  // Violations array (contract scanner)
+  if (Array.isArray(scannerResult.violations)) {
+    for (const v of scannerResult.violations) {
+      failures.push({
+        evidence: {
+          testName: v.path || v.endpoint || `${scannerResult.scanner}-violation`,
+          assertionMessage: v.message || v.description || "contract violation",
+          violation: true,
+        },
+        severity: v.severity || "medium",
+      });
+    }
+    return failures;
+  }
+
+  // Generic: scanner failed but no structured failures — synthesize one
+  if (scannerResult.fail > 0 || scannerResult.verdict === "fail" || scannerResult.verdict === "error") {
+    failures.push({
+      evidence: {
+        testName: `${scannerResult.scanner}-failure`,
+        assertionMessage: scannerResult.error || scannerResult.reason || `${scannerResult.scanner} ${scannerResult.verdict}`,
+        stackTrace: scannerResult.stderr || null,
+      },
+      severity: scannerResult.verdict === "error" ? "high" : "medium",
+    });
+  }
+
+  return failures;
+}
+
 /**
  * forge_tempering_run — execute enabled scanners, write a run record,
  * emit hub events per scanner. Slice 02.1 runs the **unit** scanner
@@ -345,6 +412,12 @@ export async function runTemperingRun(opts = {}) {
     loadStressScannerImpl = null,
     // TEMPER-05 Slice 05.2 — Mutation scanner dependency injection.
     mutationScannerImpl = null,
+    // TEMPER-06 Slice 06.1 — Bug registry + classifier DI.
+    // `classifyFn` and `registerBugFn` override the real classify/registerBug
+    // for tests. `callModel` is threaded to the classifier's LLM layer.
+    classifyFn = null,
+    registerBugFn = null,
+    callModel = null,
     env = process.env,
   } = opts;
 
@@ -903,6 +976,50 @@ export async function runTemperingRun(opts = {}) {
   const scanners = [unitResult, integrationResult, uiResult, contractResult, visualDiffResult, flakinessResult, perfBudgetResult, loadStressResult, mutationResult];
   const overallVerdict = deriveOverallVerdict(scanners);
 
+  // ── TEMPER-06 Slice 06.1 — Bug registration hook ──
+  // Iterate scanner failures, classify, and register bugs.
+  // DI: classifyFn/registerBugFn let tests bypass real classifier/registry.
+  const _classify = classifyFn || realClassify;
+  const _registerBug = registerBugFn || realRegisterBug;
+  const registeredBugs = [];
+  const infraFixes = [];
+
+  for (const scannerResult of scanners) {
+    const failures = extractFailures(scannerResult);
+    for (const failure of failures) {
+      try {
+        const classification = await _classify({
+          scanner: scannerResult.scanner,
+          evidence: failure.evidence,
+          flakinessData: null,  // loadFlakinessData called by higher-level caller when needed
+          callModel,
+          config,
+        });
+        const bugResult = await _registerBug({
+          cwd: projectDir,
+          scanner: scannerResult.scanner,
+          severity: failure.severity,
+          evidence: failure.evidence,
+          correlationId: corr,
+          sliceRef,
+          classification: classification.classification,
+          classifierMeta: classification,
+          hub,
+          captureMemory,
+        });
+        if (classification.classification === "infra") {
+          infraFixes.push({
+            scanner: scannerResult.scanner,
+            testName: failure.evidence.testName,
+            rule: classification.rule,
+          });
+        } else if (bugResult.ok) {
+          registeredBugs.push(bugResult.bugId);
+        }
+      } catch { /* bug registration is best-effort */ }
+    }
+  }
+
   const completedAt = new Date(now()).toISOString();
 
   const runRecord = {
@@ -916,8 +1033,10 @@ export async function runTemperingRun(opts = {}) {
     lastGreenSha,
     scanners,
     verdict: overallVerdict,
-    phase: "TEMPER-05",
-    slice: "05.2",
+    infraFixes,
+    registeredBugs,
+    phase: "TEMPER-06",
+    slice: "06.1",
   };
 
   // Persist — best-effort
@@ -960,6 +1079,159 @@ export async function runTemperingRun(opts = {}) {
     runRecordPath: outPath,
     configWritten,
     changedFilesCount: changedFiles.length,
+  };
+}
+
+// ─── Scanner name → dynamic import map ────────────────────────────────
+
+const SCANNER_IMPORT_MAP = {
+  "unit":               null,  // handled inline by runTemperingRun (spawn-based)
+  "integration":        null,  // handled inline by runTemperingRun (spawn-based)
+  "ui-playwright":      "./scanners/ui-playwright.mjs",
+  "contract":           "./scanners/contract.mjs",
+  "visual-diff":        "./scanners/visual-diff.mjs",
+  "flakiness":          "./scanners/flakiness.mjs",
+  "performance-budget": "./scanners/performance-budget.mjs",
+  "load-stress":        "./scanners/load-stress.mjs",
+  "mutation":           "./scanners/mutation.mjs",
+};
+
+const SCANNER_ENTRY_POINTS = {
+  "ui-playwright":      "runUiSweep",
+  "contract":           "runContractScan",
+  "visual-diff":        "runVisualDiffScan",
+  "flakiness":          "runFlakinessScan",
+  "performance-budget": "runPerformanceBudgetScan",
+  "load-stress":        "runLoadStressScan",
+  "mutation":           "runMutationScan",
+};
+
+/**
+ * Run a single scanner by name — narrow export for closed-loop validation
+ * (forge_bug_validate_fix). Does NOT register bugs or persist run records;
+ * that's the caller's responsibility.
+ *
+ * @param {string} name - Scanner name (one of the 9 registered scanners)
+ * @param {object} [opts]
+ * @param {string} [opts.cwd] - Project directory
+ * @param {string|null} [opts.testNameFilter] - Restrict to a single test name
+ * @param {number} [opts.timeoutMs=120000] - Per-scanner budget
+ * @param {Function} [opts.now] - Injectable clock
+ * @param {Function} [opts.scannerImpl] - DI override for tests
+ * @returns {Promise<{ scanner: string, startedAt: string, completedAt: string, failures: number, findings: Array, raw: object }>}
+ */
+export async function runSingleScanner(name, opts = {}) {
+  const {
+    cwd = process.cwd(),
+    testNameFilter = null,
+    timeoutMs = 120_000,
+    now = () => new Date(),
+    scannerImpl = null,
+  } = opts;
+
+  if (!name || !(name in SCANNER_IMPORT_MAP)) {
+    const err = new Error(`Scanner "${name}" is not registered`);
+    err.code = "SCANNER_UNAVAILABLE";
+    throw err;
+  }
+
+  const started = now();
+
+  // Allow DI override for tests
+  if (scannerImpl) {
+    const result = await scannerImpl({ cwd, filter: { testName: testNameFilter } });
+    const completed = now();
+    return {
+      scanner: name,
+      startedAt: started.toISOString(),
+      completedAt: completed.toISOString(),
+      failures: result.failures?.length ?? (result.fail ?? 0),
+      findings: result.findings ?? [],
+      raw: result,
+    };
+  }
+
+  // Unit/integration scanners are spawn-based; re-run via a minimal
+  // adapter-driven approach matching runTemperingRun's inline logic.
+  if (name === "unit" || name === "integration") {
+    const config = await readTemperingConfig(cwd);
+    const stack = detectStack(cwd);
+    const adapter = loadAdapter(stack);
+    if (!adapter) {
+      const err = new Error(`No adapter for stack "${stack}" — scanner "${name}" unavailable`);
+      err.code = "SCANNER_UNAVAILABLE";
+      throw err;
+    }
+    const cmd = name === "unit"
+      ? adapter.unitTestCommand(config, cwd)
+      : adapter.integrationTestCommand?.(config, cwd) ?? adapter.unitTestCommand(config, cwd);
+    if (!cmd) {
+      const err = new Error(`Adapter does not provide a ${name} command for stack "${stack}"`);
+      err.code = "SCANNER_UNAVAILABLE";
+      throw err;
+    }
+
+    const result = await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        try { child.kill("SIGTERM"); } catch { /* ignore */ }
+        setTimeout(() => { try { child.kill("SIGKILL"); } catch { /* ignore */ } }, KILL_GRACE_MS);
+        reject(Object.assign(new Error(`Scanner "${name}" timed out after ${timeoutMs}ms`), { code: "SCANNER_TIMEOUT" }));
+      }, timeoutMs);
+
+      let stdout = "", stderr = "";
+      const child = realSpawn(cmd.bin, cmd.args || [], { cwd, shell: true, env: { ...process.env, CI: "1" } });
+      child.stdout?.on("data", (d) => { stdout += d; });
+      child.stderr?.on("data", (d) => { stderr += d; });
+      child.on("close", (code) => {
+        clearTimeout(timer);
+        resolve({ code, stdout, stderr });
+      });
+      child.on("error", (err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+    });
+
+    const completed = now();
+    const failures = result.code !== 0 ? 1 : 0;
+    return {
+      scanner: name,
+      startedAt: started.toISOString(),
+      completedAt: completed.toISOString(),
+      failures,
+      findings: [],
+      raw: { exitCode: result.code, stdout: result.stdout.slice(0, 2000), stderr: result.stderr.slice(0, 2000) },
+    };
+  }
+
+  // Dynamic import-based scanners
+  const modulePath = SCANNER_IMPORT_MAP[name];
+  const entryPoint = SCANNER_ENTRY_POINTS[name];
+  const mod = await import(modulePath);
+  const runFn = mod[entryPoint];
+  if (typeof runFn !== "function") {
+    const err = new Error(`Scanner "${name}" module missing entry point "${entryPoint}"`);
+    err.code = "SCANNER_UNAVAILABLE";
+    throw err;
+  }
+
+  const config = await readTemperingConfig(cwd);
+  const runId = `validate-${started.toISOString().replace(/[:.]/g, "-")}`;
+  const result = await Promise.race([
+    runFn({ config, projectDir: cwd, runId, sliceRef: null, now: () => now().getTime(), env: process.env }),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(Object.assign(new Error(`Scanner "${name}" timed out after ${timeoutMs}ms`), { code: "SCANNER_TIMEOUT" })), timeoutMs)
+    ),
+  ]);
+
+  const completed = now();
+  return {
+    scanner: name,
+    startedAt: started.toISOString(),
+    completedAt: completed.toISOString(),
+    failures: result.fail ?? result.failures?.length ?? 0,
+    findings: result.findings ?? [],
+    raw: result,
   };
 }
 

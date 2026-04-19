@@ -782,7 +782,48 @@ export function readTemperingState(targetPath) {
     mutationBelowMinimum,
     flakyCount,
     perfRegressionCount,
+    // TEMPER-06 Slice 06.3 — open bug counts for watcher anomalies.
+    openBugCount: readOpenBugCount(targetPath),
   };
+}
+
+/**
+ * Read open bug counts from .forge/bugs/ — lightweight summary for watcher.
+ * @param {string} targetPath
+ * @returns {{ total: number, criticalOrHigh: number, unaddressed: Array<{ bugId: string, discoveredAt: string }> }}
+ */
+function readOpenBugCount(targetPath) {
+  const bugsDir = resolve(targetPath, ".forge", "bugs");
+  if (!existsSync(bugsDir)) return { total: 0, criticalOrHigh: 0, unaddressed: [] };
+
+  const now = Date.now();
+  const FOURTEEN_DAYS_MS = 14 * 24 * 60 * 60 * 1000;
+  let total = 0;
+  let criticalOrHigh = 0;
+  const unaddressed = [];
+
+  try {
+    const files = readdirSync(bugsDir).filter(f => f.endsWith(".json"));
+    for (const file of files) {
+      try {
+        const bug = JSON.parse(readFileSync(resolve(bugsDir, file), "utf-8"));
+        if (bug.status !== "open") continue;
+        total++;
+        if (bug.severity === "critical" || bug.severity === "high") criticalOrHigh++;
+        if (
+          bug.classification === "real-bug" &&
+          !bug.linkedFixPlan &&
+          bug.discoveredAt &&
+          (now - new Date(bug.discoveredAt).getTime()) > FOURTEEN_DAYS_MS
+        ) {
+          unaddressed.push({ bugId: bug.bugId, discoveredAt: bug.discoveredAt });
+        }
+      } catch { /* skip corrupt */ }
+    }
+  } catch { /* dir unreadable */ }
+
+  // Cap unaddressed payload at 10
+  return { total, criticalOrHigh, unaddressed: unaddressed.slice(0, 10) };
 }
 
 // ─── Hub event helper ─────────────────────────────────────────────────

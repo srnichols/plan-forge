@@ -45,6 +45,11 @@ const state = {
     loadResults: [],
     // TEMPER-05 Slice 05.2 — mutation scanner panel.
     mutationResults: [],
+    // TEMPER-06 Slice 06.1 — bug registry.
+    bugs: [],
+    bugsFetching: false,
+    bugsLastError: null,
+    bugsFilter: { status: null, severity: null, scanner: null },
   },
 };
 
@@ -253,6 +258,21 @@ function handleEvent(event) {
       break;
     case "tempering-mutation-below-minimum":
       handleMutationBelowMinimum(event.data || event);
+      break;
+    // TEMPER-06 Slice 06.1 — Bug Registry live updates
+    case "tempering-bug-registered":
+      if (event.data) {
+        state.tempering.bugs.unshift(event.data);
+        renderBugRegistry();
+        addNotification(`Bug registered: ${event.data.bugId || 'unknown'} (${event.data.scanner})`, "warning");
+      }
+      break;
+    case "tempering-bug-status-changed":
+      if (event.data) {
+        const idx = state.tempering.bugs.findIndex(b => b.bugId === event.data.bugId);
+        if (idx >= 0) state.tempering.bugs[idx].status = event.data.newStatus;
+        renderBugRegistry();
+      }
       break;
   }
 }
@@ -2929,6 +2949,7 @@ const tabLoadHooks = {
   'lg-env': loadLGEnv,
   watcher: () => { renderWatcherPanel(); tabBadgeState.watcherNew = 0; updateTabBadges(); },
   tempering: () => { loadTemperingStatus(); },
+  bugregistry: () => { loadBugRegistry(); },
   memory: loadMemoryReport,
 };
 
@@ -4673,4 +4694,85 @@ function renderMutationPanel() {
 
 window.handleMutationBelowMinimum = handleMutationBelowMinimum;
 window.renderMutationPanel = renderMutationPanel;
+
+// ─── Bug Registry Panel (Phase TEMPER-06 Slice 06.1) ─────────────────
+
+async function loadBugRegistry() {
+  if (state.tempering.bugsFetching) return;
+  state.tempering.bugsFetching = true;
+  state.tempering.bugsLastError = null;
+  try {
+    const statusEl = document.getElementById("bugregistry-filter-status");
+    const sevEl = document.getElementById("bugregistry-filter-severity");
+    const scanEl = document.getElementById("bugregistry-filter-scanner");
+    const params = new URLSearchParams();
+    if (statusEl?.value) params.set("status", statusEl.value);
+    if (sevEl?.value) params.set("severity", sevEl.value);
+    if (scanEl?.value) params.set("scanner", scanEl.value);
+    const url = `${API_BASE}/api/bugs/list${params.toString() ? "?" + params.toString() : ""}`;
+    const res = await fetch(url);
+    const data = await res.json().catch(() => null);
+    if (Array.isArray(data)) {
+      state.tempering.bugs = data;
+    } else {
+      state.tempering.bugsLastError = data?.error || "Failed to load bugs";
+    }
+  } catch (err) {
+    state.tempering.bugsLastError = err.message || String(err);
+  } finally {
+    state.tempering.bugsFetching = false;
+    renderBugRegistry();
+  }
+}
+
+function renderBugRegistry() {
+  const container = document.getElementById("bugregistry-table-container");
+  if (!container) return;
+
+  const bugs = state.tempering.bugs;
+  if (state.tempering.bugsLastError) {
+    container.innerHTML = `<p class="text-red-400 text-sm py-2">${escapeHtml(state.tempering.bugsLastError)}</p>`;
+    return;
+  }
+
+  if (!bugs || bugs.length === 0) {
+    container.innerHTML = '<p class="text-gray-500 text-sm py-4 text-center">No bugs found. Bugs are registered automatically when tempering scanners detect failures.</p>';
+    return;
+  }
+
+  const sevColor = { critical: "text-red-500", high: "text-orange-400", medium: "text-yellow-400", low: "text-gray-400" };
+  const statusBadge = { open: "bg-red-800 text-red-200", "in-fix": "bg-amber-800 text-amber-200", fixed: "bg-green-800 text-green-200", "wont-fix": "bg-gray-700 text-gray-300", duplicate: "bg-gray-700 text-gray-400" };
+
+  let rows = "";
+  for (const bug of bugs) {
+    const sev = escapeHtml(bug.severity || "—");
+    const scanner = escapeHtml(bug.scanner || "—");
+    const status = escapeHtml(bug.status || "—");
+    const discovered = bug.discoveredAt ? new Date(bug.discoveredAt).toLocaleString() : "—";
+    const testName = escapeHtml((bug.evidence?.testName || bug.bugId || "—").slice(0, 60));
+    rows += `<tr class="border-t border-gray-700 hover:bg-gray-800">
+      <td class="py-1.5 px-2 text-xs font-mono text-blue-300">${escapeHtml(bug.bugId || "—")}</td>
+      <td class="py-1.5 px-2 text-xs">${scanner}</td>
+      <td class="py-1.5 px-2 text-xs ${sevColor[bug.severity] || ""}">${sev}</td>
+      <td class="py-1.5 px-2 text-xs"><span class="px-1.5 py-0.5 rounded text-xs ${statusBadge[bug.status] || "bg-gray-700"}">${status}</span></td>
+      <td class="py-1.5 px-2 text-xs text-gray-400">${testName}</td>
+      <td class="py-1.5 px-2 text-xs text-gray-500">${discovered}</td>
+    </tr>`;
+  }
+
+  container.innerHTML = `<table class="w-full text-left">
+    <thead><tr class="text-gray-400 text-xs border-b border-gray-600">
+      <th class="py-1 px-2">Bug ID</th>
+      <th class="py-1 px-2">Scanner</th>
+      <th class="py-1 px-2">Severity</th>
+      <th class="py-1 px-2">Status</th>
+      <th class="py-1 px-2">Test</th>
+      <th class="py-1 px-2">Discovered</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+window.loadBugRegistry = loadBugRegistry;
+window.renderBugRegistry = renderBugRegistry;
 

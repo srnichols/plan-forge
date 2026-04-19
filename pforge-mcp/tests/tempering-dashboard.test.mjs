@@ -165,3 +165,56 @@ describe("dashboard — Flakiness / Perf-Budget / Load panels (TEMPER-05 Slice 0
     expect(appJs).toMatch(/handleLoadCompleted/);
   });
 });
+
+// ─── Phase TEMPER-06 Slice 06.1 — Bug Registry dashboard ────────────
+
+describe("dashboard — Bug Registry tab (TEMPER-06 Slice 06.1)", () => {
+  it("index.html registers a Bug Registry tab button", () => {
+    expect(indexHtml).toMatch(/data-tab="bugregistry"/);
+    expect(indexHtml).toMatch(/🐛 Bug Registry/);
+  });
+
+  it("index.html declares a <section id=\"tab-bugregistry\"> panel", () => {
+    expect(indexHtml).toMatch(/<section\s+id="tab-bugregistry"/);
+  });
+
+  it("index.html has filter controls for status/severity/scanner", () => {
+    expect(indexHtml).toMatch(/bugregistry-filter-status/);
+    expect(indexHtml).toMatch(/bugregistry-filter-severity/);
+    expect(indexHtml).toMatch(/bugregistry-filter-scanner/);
+  });
+
+  it("index.html has a bug table container", () => {
+    expect(indexHtml).toMatch(/bugregistry-table/);
+  });
+
+  it("app.js registers bugregistry tabLoadHook", () => {
+    expect(appJs).toMatch(/bugregistry:\s*\(\)\s*=>\s*\{\s*loadBugRegistry\(\)/);
+  });
+
+  it("app.js ships loadBugRegistry and renderBugRegistry", () => {
+    expect(appJs).toMatch(/async\s+function\s+loadBugRegistry/);
+    expect(appJs).toMatch(/function\s+renderBugRegistry/);
+  });
+
+  it("app.js handles tempering-bug-registered WS event", () => {
+    expect(appJs).toMatch(/tempering-bug-registered/);
+  });
+
+  it("app.js handles tempering-bug-status-changed WS event", () => {
+    expect(appJs).toMatch(/tempering-bug-status-changed/);
+  });
+
+  it("app.js initializes state.tempering.bugs array", () => {
+    expect(appJs).toMatch(/bugs:\s*\[\]/);
+  });
+
+  it("app.js uses /api/bugs/list endpoint", () => {
+    expect(appJs).toContain("/api/bugs/list");
+  });
+
+  it("app.js exposes render functions on window", () => {
+    expect(appJs).toMatch(/window\.loadBugRegistry\s*=/);
+    expect(appJs).toMatch(/window\.renderBugRegistry\s*=/);
+  });
+});

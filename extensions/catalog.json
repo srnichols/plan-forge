@@ -107,6 +107,41 @@
       "description": "AsyncAPI event contract scanner",
       "status": "stub",
       "tags": ["tempering", "asyncapi"]
+    },
+    {
+      "name": "tempering-bug-gitlab",
+      "category": "tempering-bug-adapter",
+      "description": "GitLab Issues bug adapter",
+      "status": "stub",
+      "tags": ["tempering", "gitlab", "bug-adapter"]
+    },
+    {
+      "name": "tempering-bug-azure-boards",
+      "category": "tempering-bug-adapter",
+      "description": "Azure DevOps Boards bug adapter",
+      "status": "stub",
+      "tags": ["tempering", "azure-devops", "bug-adapter"]
+    },
+    {
+      "name": "tempering-bug-jira-cloud",
+      "category": "tempering-bug-adapter",
+      "description": "Jira Cloud bug adapter",
+      "status": "stub",
+      "tags": ["tempering", "jira", "bug-adapter"]
+    },
+    {
+      "name": "tempering-bug-linear",
+      "category": "tempering-bug-adapter",
+      "description": "Linear bug adapter",
+      "status": "stub",
+      "tags": ["tempering", "linear", "bug-adapter"]
+    },
+    {
+      "name": "tempering-bug-jira-onprem",
+      "category": "tempering-bug-adapter",
+      "description": "On-prem Jira Server/DC bug adapter",
+      "status": "stub",
+      "tags": ["tempering", "jira", "on-prem", "bug-adapter"]
     }
   ]
 }

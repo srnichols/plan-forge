@@ -1,14 +1,14 @@
 ---
 crucibleId: 07be2f66-92fd-4412-8bb4-7c28a6684fb4
 source: self-hosted
-status: draft
+status: complete
 phase: TEMPER-06
 arc: TEMPER
 ---
 
 # Phase TEMPER-06: Bug Registry + GitHub Issues + closed-loop validator
 
-> **Status**: 📝 DRAFT (arc-prep, no code yet)
+> **Status**: ✅ COMPLETE — Slices 06.1 + 06.2 + 06.3 shipped (v2.47.0-dev) — closes TEMPER arc
 > **Estimated Effort**: 2–3 slices
 > **Risk Level**: High (external side effects — creates GitHub
 > issues; closing the automation loop demands strict guardrails)
@@ -186,7 +186,7 @@ trackers.
 
 ## Slices
 
-### Slice 06.1 — Registry core + classifier
+### Slice 06.1 — Registry core + classifier ✅
 
 **Files touched:**
 - `pforge-mcp/tempering/bug-registry.mjs` — new
@@ -197,7 +197,7 @@ trackers.
 - `pforge-mcp/dashboard/index.html` — tab DOM
 - `pforge-mcp/tests/tempering-bug-registry.test.mjs` — new, ~40 tests
 
-### Slice 06.2 — GitHub adapter + extension contract
+### Slice 06.2 — GitHub adapter + extension contract ✅
 
 **Files touched:**
 - `pforge-mcp/tempering/bug-adapters/github.mjs` — new
@@ -207,7 +207,7 @@ trackers.
 - `docs/EXTENSIONS.md` — tempering bug-adapter contract
 - `pforge-mcp/tests/tempering-github-adapter.test.mjs` — new, ~30 tests
 
-### Slice 06.3 — Fix-proposal + validator + liveguard wire-in
+### Slice 06.3 — Fix-proposal + validator + liveguard wire-in ✅
 
 **Files touched:**
 - `pforge-mcp/server.mjs` — `forge_fix_proposal` extension,

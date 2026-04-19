@@ -5,9 +5,35 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [Unreleased] — targeting 2.45.0
+## [Unreleased] — targeting 2.47.0
 
-### Added — Phase TEMPER-05 Slice 05.2 — Mutation + Scheduling
+### Added — Phase TEMPER-06 Slice 06.3 — Closed-loop fix validation
+
+Closed-loop bug fix validation: discover → classify → propose fix → validate → fixed.
+
+- New tool `forge_bug_validate_fix` — re-runs the scanner that discovered a bug
+  to verify the fix. On pass: transitions bug to `fixed`, dispatches
+  `commentValidatedFix` to bug-adapter, broadcasts `tempering-bug-validated-fixed`
+  hub event, and captures OpenBrain thought.
+- `forge_fix_proposal` gains `tempering-bug` source — generates 2–3 slice fix
+  plans from bug evidence. Automatically transitions bug to `in-fix` and links
+  the fix plan path.
+- `forge_liveguard_run` gains 9th tempering dimension — surfaces open bug counts,
+  critical/high severity, coverage vs minima, mutation score, and last run
+  timestamp. Red on critical/high open bugs; contributes to `overallStatus`.
+- `runSingleScanner` export from `tempering/runner.mjs` — runs any single
+  scanner type with DI support for testing.
+- `setLinkedFixPlan` and `appendValidationAttempt` helpers in `bug-registry.mjs`
+  — atomic bug record updates for fix plan linking and validation history.
+- `readOpenBugCount` in `tempering.mjs` — surfaces unaddressed bugs (>14 days,
+  no linked fix plan) for watcher anomaly detection.
+- Anomaly `tempering-bug-unaddressed` fires for open real-bugs older than 14 days
+  without a linked fix plan. Recommendation: `forge_fix_proposal source=tempering-bug`.
+- LIVEGUARD_TOOLS expanded to 18 entries.
+- Bug-adapter 4-function contract frozen at v2.47.0.
+- 45 new tests in `tempering-closed-loop.test.mjs`.
+
+### Added — Phase TEMPER-06 Slice 06.2 — Bug-adapter extension surface
 
 9th tempering scanner: mutation testing via stack-specific tools
 (Stryker, dotnet-stryker, mutmut, pitest, go-mutesting, cargo-mutants).

@@ -3096,6 +3096,10 @@ const LIVEGUARD_TOOLS = new Set([
   "forge_health_trend", "forge_alert_triage", "forge_deploy_journal",
   "forge_secret_scan", "forge_env_diff", "forge_fix_proposal",
   "forge_quorum_analyze", "forge_liveguard_run",
+  // Phase TEMPER-06 Slice 06.1 — Bug Registry tools
+  "forge_bug_register", "forge_bug_list", "forge_bug_update_status",
+  // Phase TEMPER-06 Slice 06.3 — Closed-loop fix validation
+  "forge_bug_validate_fix",
 ]);
 
 export function emitToolTelemetry(toolName, inputs, result, durationMs, status, cwd = process.cwd()) {
@@ -4804,6 +4808,18 @@ export function detectWatchAnomalies(snapshot) {
     });
   }
 
+  // 19. (Phase TEMPER-06 Slice 06.3) Unaddressed bugs — open real-bugs
+  // without a linked fix plan, older than 14 days.
+  if (snapshot.tempering && snapshot.tempering.openBugCount?.unaddressed?.length > 0) {
+    anomalies.push({
+      severity: "warn",
+      code: "tempering-bug-unaddressed",
+      count: snapshot.tempering.openBugCount.unaddressed.length,
+      bugIds: snapshot.tempering.openBugCount.unaddressed.map(b => b.bugId),
+      message: `${snapshot.tempering.openBugCount.unaddressed.length} open bug(s) older than 14 days without a linked fix plan — generate a fix proposal or close them`,
+    });
+  }
+
   return anomalies;
 }
 
@@ -5007,6 +5023,17 @@ export function recommendFromAnomalies(anomalies, snapshot) {
           command: "forge_tempering_run",
         });
         break;
+
+      case "tempering-bug-unaddressed": {
+        const bugId = anomaly.bugIds?.[0] || "unknown";
+        recs.push({
+          code,
+          severity: anomaly.severity,
+          action: `Run forge_fix_proposal source=tempering-bug bugId=${bugId} to generate a fix plan, or forge_bug_update_status bugId=${bugId} status=wont-fix with rationale.`,
+          command: `forge_fix_proposal --source tempering-bug --bugId ${bugId}`,
+        });
+        break;
+      }
 
       default:
         recs.push({

@@ -372,6 +372,6 @@ describe("runTemperingRun — two-scanner run (TEMPER-02 Slice 02.2)", () => {
     });
     const { readFileSync } = await import("node:fs");
     const rec = JSON.parse(readFileSync(r.runRecordPath, "utf-8"));
-    expect(rec.slice).toBe("05.2");
+    expect(rec.slice).toBe("06.1");
   });
 });

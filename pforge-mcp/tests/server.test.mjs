@@ -1826,9 +1826,9 @@ describe("dashboard tab structure", () => {
     }
   });
 
-  it("total tab count is 19 (14 core + 5 LG)", () => {
+  it("total tab count is 20 (15 core + 5 LG)", () => {
     const tabMatches = dashboardHtml.match(/data-tab="[^"]+"/g) || [];
-    expect(tabMatches.length).toBe(19);
+    expect(tabMatches.length).toBe(20);
   });
 
   it("has LiveGuard section divider", () => {
@@ -3354,5 +3354,68 @@ describe("TOOL_METADATA v2.30.0 total count", () => {
     expect(TOOL_METADATA).toHaveProperty("forge_fix_proposal");
     expect(TOOL_METADATA).toHaveProperty("forge_quorum_analyze");
     expect(TOOL_METADATA).toHaveProperty("forge_liveguard_run");
+  });
+});
+
+// ─── Phase TEMPER-06 Slice 06.1 — Bug Registry tools ─────────────────
+
+describe("TOOL_METADATA forge_bug_register", () => {
+  it("is present in TOOL_METADATA", () => {
+    expect(TOOL_METADATA).toHaveProperty("forge_bug_register");
+  });
+  it("has correct addedIn version", () => {
+    expect(TOOL_METADATA.forge_bug_register.addedIn).toBe("2.47.0");
+  });
+  it("produces .forge/bugs/<bugId>.json", () => {
+    expect(TOOL_METADATA.forge_bug_register.produces).toContain(".forge/bugs/<bugId>.json");
+  });
+  it("has MISSING_EVIDENCE and DUPLICATE_BUG errors", () => {
+    expect(TOOL_METADATA.forge_bug_register.errors).toHaveProperty("MISSING_EVIDENCE");
+    expect(TOOL_METADATA.forge_bug_register.errors).toHaveProperty("DUPLICATE_BUG");
+  });
+});
+
+describe("TOOL_METADATA forge_bug_list", () => {
+  it("is present in TOOL_METADATA", () => {
+    expect(TOOL_METADATA).toHaveProperty("forge_bug_list");
+  });
+  it("has correct addedIn version", () => {
+    expect(TOOL_METADATA.forge_bug_list.addedIn).toBe("2.47.0");
+  });
+  it("consumes .forge/bugs/*.json", () => {
+    expect(TOOL_METADATA.forge_bug_list.consumes).toContain(".forge/bugs/*.json");
+  });
+});
+
+describe("TOOL_METADATA forge_bug_update_status", () => {
+  it("is present in TOOL_METADATA", () => {
+    expect(TOOL_METADATA).toHaveProperty("forge_bug_update_status");
+  });
+  it("has correct addedIn version", () => {
+    expect(TOOL_METADATA.forge_bug_update_status.addedIn).toBe("2.47.0");
+  });
+  it("has INVALID_TRANSITION error", () => {
+    expect(TOOL_METADATA.forge_bug_update_status.errors).toHaveProperty("INVALID_TRANSITION");
+  });
+});
+
+describe("Bug Registry tools in server.mjs TOOLS array", () => {
+  const serverSrc = readFileSync(resolve(__dirname, "..", "server.mjs"), "utf-8");
+  it("registers forge_bug_register in TOOLS array", () => {
+    expect(serverSrc).toContain('"forge_bug_register"');
+  });
+  it("registers forge_bug_list in TOOLS array", () => {
+    expect(serverSrc).toContain('"forge_bug_list"');
+  });
+  it("registers forge_bug_update_status in TOOLS array", () => {
+    expect(serverSrc).toContain('"forge_bug_update_status"');
+  });
+  it("adds 3 bug tools to MCP_ONLY_TOOLS", () => {
+    expect(serverSrc).toMatch(/MCP_ONLY_TOOLS[\s\S]*forge_bug_register/);
+    expect(serverSrc).toMatch(/MCP_ONLY_TOOLS[\s\S]*forge_bug_list/);
+    expect(serverSrc).toMatch(/MCP_ONLY_TOOLS[\s\S]*forge_bug_update_status/);
+  });
+  it("has GET /api/bugs/list REST endpoint", () => {
+    expect(serverSrc).toContain('/api/bugs/list');
   });
 });

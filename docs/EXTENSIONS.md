@@ -253,3 +253,107 @@ The following scanner slots are defined in `extensions/catalog.json` under `oppo
 | `tempering-asyncapi` | AsyncAPI event contract scanner | Stub |
 
 These are not installable via `pforge ext add` — they exist as contribution placeholders for the community.
+
+---
+
+## Tempering Bug-Adapter Extensions
+
+The Tempering subsystem (TEMPER-06 Slice 06.2) introduced an extension surface for bug-tracking adapters. The built-in adapter covers GitHub Issues; additional provider adapters can be contributed as extensions.
+
+### Adapter Contract
+
+Every bug-adapter extension module must be placed at:
+
+```
+.forge/extensions/<provider>/tempering-bug-adapter.mjs
+```
+
+The module must export **4 async functions** — all must return `{ provider: string, ok: boolean, ... }` and **never throw**:
+
+```js
+export async function registerBug(bug, config, opts)
+  // → { provider, ok, issueNumber?, url?, error?, warnings? }
+
+export async function updateBugStatus(bug, config, opts)
+  // → { provider, ok, commentId?, url?, error? }
+
+export async function commentValidatedFix(bug, config, opts)
+  // → { provider, ok, commentId?, url?, error? }
+
+export async function syncStatusFromProvider(bugId, config, opts)
+  // → { provider, ok, status?, labels?, error? }
+```
+
+### Parameter Shapes
+
+**`bug`** — The full bug record from `.forge/bugs/<id>.json`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `bugId` | `string` | e.g. `bug-2026-04-19-001` |
+| `fingerprint` | `string` | SHA-1 dedup fingerprint |
+| `scanner` | `string` | Scanner that discovered the bug |
+| `severity` | `string` | `critical` \| `high` \| `medium` \| `low` |
+| `status` | `string` | `open` \| `in-fix` \| `fixed` \| `wont-fix` \| `duplicate` |
+| `classification` | `string` | `real-bug` \| `infra` \| `needs-human-review` \| `unknown` |
+| `evidence` | `object` | `{ testName, assertionMessage, stackTrace, ... }` |
+| `affectedFiles` | `string[]` | Source files affected |
+| `externalRef` | `object?` | `{ provider, issueNumber, url, syncedAt }` — set after first sync |
+
+**`config`** — Loaded from `.forge.json` or `.forge/tempering/config.json`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `bugRegistry.integration` | `string` | Provider name: `"github"`, `"jsonl"`, or extension name |
+| `bugRegistry.autoCreateIssues` | `boolean` | Must be `true` for `registerBug` to fire |
+| `bugRegistry.labelPrefix` | `string` | Label prefix (default: `"tempering"`) |
+| `bugRegistry.githubRepo` | `string?` | Explicit `owner/repo` override |
+
+**`opts`** — Dependency injection bag:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `cwd` | `string` | Project root directory |
+| `fetch` | `Function?` | Override for `globalThis.fetch` |
+| `execSync` | `Function?` | Override for `child_process.execSync` |
+
+### Return-Value Contract
+
+- Every function returns `{ provider: "<your-provider>", ok: boolean, ... }`.
+- On failure: `{ provider, ok: false, error: "<ERROR_CODE>" }`.
+- **Never throw.** Wrap all logic in try/catch and return error frames.
+
+### Forbidden Actions
+
+- **Never auto-close issues** — closing decisions belong to humans.
+- **Never rewrite issue body on update** — updates must append comments only.
+
+### Config Wiring
+
+Set the integration provider in `.forge.json`:
+
+```json
+{
+  "bugRegistry": {
+    "integration": "<provider>",
+    "autoCreateIssues": true,
+    "labelPrefix": "tempering"
+  }
+}
+```
+
+Where `<provider>` matches your extension folder name under `.forge/extensions/`.
+
+### Extension Opportunities
+
+The following bug-adapter slots are defined in `extensions/catalog.json` under `opportunities[]`:
+
+| Name | Provider | Status |
+|------|----------|--------|
+| `tempering-bug-gitlab` | GitLab Issues | Stub |
+| `tempering-bug-azure-boards` | Azure DevOps Boards | Stub |
+| `tempering-bug-jira-cloud` | Jira Cloud | Stub |
+| `tempering-bug-linear` | Linear | Stub |
+| `tempering-bug-jira-onprem` | On-prem Jira Server/DC | Stub |
+
+These are not installable via `pforge ext add` — they exist as contribution placeholders for the community.

@@ -995,7 +995,7 @@ export async function runTemperingRun(opts = {}) {
           callModel,
           config,
         });
-        const bugResult = _registerBug({
+        const bugResult = await _registerBug({
           cwd: projectDir,
           scanner: scannerResult.scanner,
           severity: failure.severity,

@@ -2036,7 +2036,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         evidence: args.evidence || {},
         callModel: null,  // LLM not wired in MCP direct-call; rules only
       });
-      const result = registerBug({
+      const result = await registerBug({
         cwd,
         scanner: args.scanner,
         severity: args.severity || "medium",
@@ -2079,7 +2079,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
-      const result = updateBugStatus(cwd, args.bugId, args.newStatus, { note: args.note || null });
+      const result = await updateBugStatus(cwd, args.bugId, args.newStatus, { note: args.note || null });
       if (result.ok && activeHub) {
         try {
           activeHub.broadcast({
@@ -4451,14 +4451,14 @@ export function createExpressApp() {
 
   // REST API: POST /api/tempering/bug-stub — compatibility wrapper (TEMPER-04 → TEMPER-06 bridge)
   // Delegates to real registerBug() for persistence, preserving the original response shape.
-  app.post("/api/tempering/bug-stub", (req, res) => {
+  app.post("/api/tempering/bug-stub", async (req, res) => {
     try {
       const { urlHash, url, verdict, explanation } = req.body || {};
       if (!urlHash || typeof urlHash !== "string") {
         return res.status(400).json({ error: "urlHash is required" });
       }
       const cwd = findProjectRoot(PROJECT_DIR);
-      const result = registerBug({
+      const result = await registerBug({
         cwd,
         scanner: "visual-diff",
         severity: "medium",

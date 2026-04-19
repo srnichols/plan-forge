@@ -16,6 +16,7 @@
 import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, renameSync } from "node:fs";
 import { resolve, basename, join } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
+import { dispatch } from "./bug-adapters/contract.mjs";
 
 // ─── Constants ────────────────────────────────────────────────────────
 
@@ -240,7 +241,7 @@ function emit(hub, type, data) {
  * @param {Function} [opts.nowFn]
  * @returns {{ ok: boolean, bugId?: string, classification: string, action?: string, error?: string, existingBugId?: string }}
  */
-export function registerBug(opts) {
+export async function registerBug(opts) {
   try {
     const {
       cwd,
@@ -330,7 +331,35 @@ export function registerBug(opts) {
       } catch { /* best-effort */ }
     }
 
-    return { ok: true, bugId, classification };
+    // 8. External adapter dispatch — only for real bugs
+    let external = null;
+    if (classification === "real-bug") {
+      try {
+        const dispatchConfig = opts?.config || {};
+        const dispatchResult = await dispatch("register", record, dispatchConfig, { cwd, ...opts });
+        external = dispatchResult?.external || null;
+
+        // Persist externalRef if adapter returned an issue reference
+        if (external?.ok && external?.issueNumber) {
+          record.externalRef = {
+            provider: external.provider,
+            issueNumber: external.issueNumber,
+            url: external.url || null,
+            syncedAt: new Date().toISOString(),
+          };
+          // Atomic re-write with externalRef
+          const tmpPath2 = resolve(dir, `.${bugId}.ext.tmp`);
+          writeFileSync(tmpPath2, JSON.stringify(record, null, 2) + "\n", "utf-8");
+          try {
+            renameSync(tmpPath2, finalPath);
+          } catch {
+            writeFileSync(finalPath, JSON.stringify(record, null, 2) + "\n", "utf-8");
+          }
+        }
+      } catch { /* external dispatch is advisory — never fail registration */ }
+    }
+
+    return { ok: true, bugId, classification, external };
   } catch (err) {
     return { ok: false, error: `REGISTER_FAILED: ${err.message}` };
   }
@@ -348,7 +377,7 @@ export function registerBug(opts) {
  * @param {string} [opts.note]
  * @returns {{ ok: boolean, error?: string }}
  */
-export function updateBugStatus(cwd, bugId, newStatus, opts = {}) {
+export async function updateBugStatus(cwd, bugId, newStatus, opts = {}) {
   try {
     const bug = loadBug(cwd, bugId);
     if (!bug) {
@@ -387,8 +416,50 @@ export function updateBugStatus(cwd, bugId, newStatus, opts = {}) {
       writeFileSync(finalPath, JSON.stringify(bug, null, 2) + "\n", "utf-8");
     }
 
-    return { ok: true, bugId, newStatus };
+    // External adapter dispatch (advisory)
+    let external = null;
+    try {
+      const dispatchConfig = opts?.config || {};
+      const dispatchResult = await dispatch("updateStatus", bug, dispatchConfig, { cwd, ...opts });
+      external = dispatchResult?.external || null;
+    } catch { /* external dispatch is advisory */ }
+
+    return { ok: true, bugId, newStatus, external };
   } catch (err) {
     return { ok: false, error: `UPDATE_FAILED: ${err.message}` };
+  }
+}
+
+// ─── External reference management ───────────────────────────────────
+
+/**
+ * Set or update the external reference on a bug (for reconciliation paths).
+ *
+ * @param {string} cwd
+ * @param {string} bugId
+ * @param {object} ref - { provider, issueNumber, url, syncedAt }
+ * @returns {{ ok: boolean, error?: string }}
+ */
+export function setExternalRef(cwd, bugId, ref) {
+  try {
+    const bug = loadBug(cwd, bugId);
+    if (!bug) return { ok: false, error: "BUG_NOT_FOUND" };
+
+    bug.externalRef = ref;
+    bug.updatedAt = new Date().toISOString();
+
+    const dir = resolve(cwd, ".forge", "bugs");
+    const finalPath = resolve(dir, `${bugId}.json`);
+    const tmpPath = resolve(dir, `.${bugId}.ext.tmp`);
+    writeFileSync(tmpPath, JSON.stringify(bug, null, 2) + "\n", "utf-8");
+    try {
+      renameSync(tmpPath, finalPath);
+    } catch {
+      writeFileSync(finalPath, JSON.stringify(bug, null, 2) + "\n", "utf-8");
+    }
+
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: `SET_REF_FAILED: ${err.message}` };
   }
 }

@@ -31,6 +31,7 @@ import {
   listBugs,
   registerBug,
   updateBugStatus,
+  setExternalRef,
 } from "../tempering/bug-registry.mjs";
 
 import {
@@ -106,8 +107,8 @@ describe("registerBug — happy path", () => {
   });
   afterEach(() => { try { rmSync(dir, { recursive: true }); } catch {} });
 
-  it("returns ok with bugId for real-bug classification", () => {
-    const result = registerBug({
+  it("returns ok with bugId for real-bug classification", async () => {
+    const result = await registerBug({
       cwd: dir,
       scanner: "unit",
       severity: "high",
@@ -122,8 +123,8 @@ describe("registerBug — happy path", () => {
     expect(result.classification).toBe("real-bug");
   });
 
-  it("writes bug JSON file to .forge/bugs/", () => {
-    const result = registerBug({
+  it("writes bug JSON file to .forge/bugs/", async () => {
+    const result = await registerBug({
       cwd: dir,
       scanner: "unit",
       severity: "high",
@@ -142,8 +143,8 @@ describe("registerBug — happy path", () => {
     expect(bug.correlationId).toBe("corr-2");
   });
 
-  it("emits tempering-bug-registered hub event", () => {
-    registerBug({
+  it("emits tempering-bug-registered hub event", async () => {
+    await registerBug({
       cwd: dir,
       scanner: "unit",
       severity: "high",
@@ -159,9 +160,9 @@ describe("registerBug — happy path", () => {
     expect(evt.data.severity).toBe("high");
   });
 
-  it("captures L3 memory for real-bug classification", () => {
+  it("captures L3 memory for real-bug classification", async () => {
     const captures = [];
-    registerBug({
+    await registerBug({
       cwd: dir,
       scanner: "unit",
       severity: "critical",
@@ -177,8 +178,8 @@ describe("registerBug — happy path", () => {
     expect(captures[0][1]).toBe("decision");
   });
 
-  it("includes correlationId and sliceRef in the record", () => {
-    const result = registerBug({
+  it("includes correlationId and sliceRef in the record", async () => {
+    const result = await registerBug({
       cwd: dir,
       scanner: "contract",
       severity: "medium",
@@ -202,18 +203,18 @@ describe("Deduplication", () => {
   beforeEach(() => { dir = makeTmpDir(); });
   afterEach(() => { try { rmSync(dir, { recursive: true }); } catch {} });
 
-  it("detects exact duplicate by fingerprint", () => {
+  it("detects exact duplicate by fingerprint", async () => {
     const evidence = makeEvidence();
-    registerBug({ cwd: dir, scanner: "unit", severity: "high", evidence, correlationId: "c1", classification: "real-bug", classifierMeta: {} });
-    const result = registerBug({ cwd: dir, scanner: "unit", severity: "high", evidence, correlationId: "c2", classification: "real-bug", classifierMeta: {} });
+    await registerBug({ cwd: dir, scanner: "unit", severity: "high", evidence, correlationId: "c1", classification: "real-bug", classifierMeta: {} });
+    const result = await registerBug({ cwd: dir, scanner: "unit", severity: "high", evidence, correlationId: "c2", classification: "real-bug", classifierMeta: {} });
     expect(result.ok).toBe(false);
     expect(result.error).toBe("DUPLICATE_BUG");
     expect(result.existingBugId).toMatch(/^bug-/);
   });
 
-  it("does not flag different tests as duplicates", () => {
-    registerBug({ cwd: dir, scanner: "unit", severity: "high", evidence: makeEvidence({ testName: "test-A" }), correlationId: "c1", classification: "real-bug", classifierMeta: {} });
-    const result = registerBug({ cwd: dir, scanner: "unit", severity: "high", evidence: makeEvidence({ testName: "test-B" }), correlationId: "c2", classification: "real-bug", classifierMeta: {} });
+  it("does not flag different tests as duplicates", async () => {
+    await registerBug({ cwd: dir, scanner: "unit", severity: "high", evidence: makeEvidence({ testName: "test-A" }), correlationId: "c1", classification: "real-bug", classifierMeta: {} });
+    const result = await registerBug({ cwd: dir, scanner: "unit", severity: "high", evidence: makeEvidence({ testName: "test-B" }), correlationId: "c2", classification: "real-bug", classifierMeta: {} });
     expect(result.ok).toBe(true);
   });
 
@@ -390,8 +391,8 @@ describe("Infra classification path", () => {
   beforeEach(() => { dir = makeTmpDir(); });
   afterEach(() => { try { rmSync(dir, { recursive: true }); } catch {} });
 
-  it("does not write a file for infra classification", () => {
-    const result = registerBug({
+  it("does not write a file for infra classification", async () => {
+    const result = await registerBug({
       cwd: dir,
       scanner: "unit",
       severity: "medium",
@@ -411,9 +412,9 @@ describe("Infra classification path", () => {
     }
   });
 
-  it("does not capture L3 memory for infra", () => {
+  it("does not capture L3 memory for infra", async () => {
     const captures = [];
-    registerBug({
+    await registerBug({
       cwd: dir,
       scanner: "unit",
       severity: "medium",
@@ -426,9 +427,9 @@ describe("Infra classification path", () => {
     expect(captures).toHaveLength(0);
   });
 
-  it("does not emit hub event for infra", () => {
+  it("does not emit hub event for infra", async () => {
     const hub = makeHub();
-    registerBug({
+    await registerBug({
       cwd: dir,
       scanner: "unit",
       severity: "medium",
@@ -449,8 +450,8 @@ describe("updateBugStatus", () => {
   beforeEach(() => { dir = makeTmpDir(); });
   afterEach(() => { try { rmSync(dir, { recursive: true }); } catch {} });
 
-  function createBug(status = "open") {
-    const result = registerBug({
+  async function createBug(status = "open") {
+    const result = await registerBug({
       cwd: dir,
       scanner: "unit",
       severity: "high",
@@ -468,35 +469,35 @@ describe("updateBugStatus", () => {
     return result.bugId;
   }
 
-  it("transitions open → in-fix successfully", () => {
-    const bugId = createBug();
-    const result = updateBugStatus(dir, bugId, "in-fix");
+  it("transitions open → in-fix successfully", async () => {
+    const bugId = await createBug();
+    const result = await updateBugStatus(dir, bugId, "in-fix");
     expect(result.ok).toBe(true);
     expect(result.newStatus).toBe("in-fix");
   });
 
-  it("transitions in-fix → fixed successfully", () => {
-    const bugId = createBug("in-fix");
-    const result = updateBugStatus(dir, bugId, "fixed");
+  it("transitions in-fix → fixed successfully", async () => {
+    const bugId = await createBug("in-fix");
+    const result = await updateBugStatus(dir, bugId, "fixed");
     expect(result.ok).toBe(true);
   });
 
-  it("transitions open → wont-fix successfully", () => {
-    const bugId = createBug();
-    const result = updateBugStatus(dir, bugId, "wont-fix");
+  it("transitions open → wont-fix successfully", async () => {
+    const bugId = await createBug();
+    const result = await updateBugStatus(dir, bugId, "wont-fix");
     expect(result.ok).toBe(true);
   });
 
-  it("rejects invalid transition: open → fixed", () => {
-    const bugId = createBug();
-    const result = updateBugStatus(dir, bugId, "fixed");
+  it("rejects invalid transition: open → fixed", async () => {
+    const bugId = await createBug();
+    const result = await updateBugStatus(dir, bugId, "fixed");
     expect(result.ok).toBe(false);
     expect(result.error).toBe("INVALID_TRANSITION");
   });
 
-  it("rejects transition from terminal state: fixed → open", () => {
-    const bugId = createBug("fixed");
-    const result = updateBugStatus(dir, bugId, "open");
+  it("rejects transition from terminal state: fixed → open", async () => {
+    const bugId = await createBug("fixed");
+    const result = await updateBugStatus(dir, bugId, "open");
     expect(result.ok).toBe(false);
     expect(result.error).toBe("INVALID_TRANSITION");
   });
@@ -506,12 +507,12 @@ describe("updateBugStatus", () => {
 
 describe("listBugs", () => {
   let dir;
-  beforeEach(() => {
+  beforeEach(async () => {
     dir = makeTmpDir();
     // Seed 3 bugs
-    registerBug({ cwd: dir, scanner: "unit", severity: "high", evidence: makeEvidence({ testName: "a" }), correlationId: "c1", classification: "real-bug", classifierMeta: {} });
-    registerBug({ cwd: dir, scanner: "contract", severity: "medium", evidence: makeEvidence({ testName: "b" }), correlationId: "c2", classification: "real-bug", classifierMeta: {} });
-    registerBug({ cwd: dir, scanner: "unit", severity: "low", evidence: makeEvidence({ testName: "c" }), correlationId: "c3", classification: "real-bug", classifierMeta: {} });
+    await registerBug({ cwd: dir, scanner: "unit", severity: "high", evidence: makeEvidence({ testName: "a" }), correlationId: "c1", classification: "real-bug", classifierMeta: {} });
+    await registerBug({ cwd: dir, scanner: "contract", severity: "medium", evidence: makeEvidence({ testName: "b" }), correlationId: "c2", classification: "real-bug", classifierMeta: {} });
+    await registerBug({ cwd: dir, scanner: "unit", severity: "low", evidence: makeEvidence({ testName: "c" }), correlationId: "c3", classification: "real-bug", classifierMeta: {} });
   });
   afterEach(() => { try { rmSync(dir, { recursive: true }); } catch {} });
 
@@ -546,10 +547,10 @@ describe("Edge cases", () => {
   beforeEach(() => { dir = makeTmpDir(); });
   afterEach(() => { try { rmSync(dir, { recursive: true }); } catch {} });
 
-  it("auto-creates .forge/bugs/ on first registration", () => {
+  it("auto-creates .forge/bugs/ on first registration", async () => {
     const bugsDir = resolve(dir, ".forge", "bugs");
     expect(existsSync(bugsDir)).toBe(false);
-    registerBug({
+    await registerBug({
       cwd: dir,
       scanner: "unit",
       severity: "medium",
@@ -561,8 +562,8 @@ describe("Edge cases", () => {
     expect(existsSync(bugsDir)).toBe(true);
   });
 
-  it("returns MISSING_EVIDENCE for malformed evidence", () => {
-    const result = registerBug({
+  it("returns MISSING_EVIDENCE for malformed evidence", async () => {
+    const result = await registerBug({
       cwd: dir,
       scanner: "unit",
       severity: "medium",
@@ -628,5 +629,134 @@ describe("loadFlakinessData", () => {
   it("returns zeros when testName is empty", () => {
     const data = loadFlakinessData(dir, "");
     expect(data.failureCount).toBe(0);
+  });
+});
+
+// ─── Dispatch Integration (Slice 06.2) ──────────────────────────────
+
+describe("registerBug — dispatch integration", () => {
+  let dir;
+  beforeEach(() => { dir = makeTmpDir(); });
+  afterEach(() => { try { rmSync(dir, { recursive: true }); } catch {} });
+
+  it("persists externalRef on successful GitHub dispatch", async () => {
+    const origToken = process.env.GITHUB_TOKEN;
+    process.env.GITHUB_TOKEN = "test-token";
+    try {
+      const mockFetch = async () => ({
+        ok: true, status: 201,
+        json: async () => ({ number: 42, html_url: "https://github.com/o/r/issues/42" }),
+        headers: { get: () => null },
+      });
+      const result = await registerBug({
+        cwd: dir,
+        scanner: "unit",
+        severity: "high",
+        evidence: makeEvidence(),
+        correlationId: "c1",
+        classification: "real-bug",
+        classifierMeta: {},
+        config: { bugRegistry: { integration: "github", autoCreateIssues: true, githubRepo: "o/r" } },
+        fetch: mockFetch,
+      });
+      expect(result.ok).toBe(true);
+      expect(result.external).not.toBeNull();
+      if (result.external?.ok) {
+        const bug = loadBug(dir, result.bugId);
+        expect(bug.externalRef).toBeDefined();
+        expect(bug.externalRef.provider).toBe("github");
+        expect(bug.externalRef.issueNumber).toBe(42);
+      }
+    } finally {
+      if (origToken !== undefined) process.env.GITHUB_TOKEN = origToken;
+      else delete process.env.GITHUB_TOKEN;
+    }
+  });
+
+  it("returns local success when external dispatch fails (non-fatal)", async () => {
+    const origToken = process.env.GITHUB_TOKEN;
+    delete process.env.GITHUB_TOKEN;
+    try {
+      const result = await registerBug({
+        cwd: dir,
+        scanner: "unit",
+        severity: "high",
+        evidence: makeEvidence(),
+        correlationId: "c2",
+        classification: "real-bug",
+        classifierMeta: {},
+        config: { bugRegistry: { integration: "github", autoCreateIssues: true, githubRepo: "o/r" } },
+      });
+      expect(result.ok).toBe(true);
+      expect(result.bugId).toMatch(/^bug-/);
+      // Bug file still written even though external failed
+      const bug = loadBug(dir, result.bugId);
+      expect(bug).not.toBeNull();
+    } finally {
+      if (origToken !== undefined) process.env.GITHUB_TOKEN = origToken;
+      else delete process.env.GITHUB_TOKEN;
+    }
+  });
+
+  it("skips external entirely when integration is jsonl", async () => {
+    const result = await registerBug({
+      cwd: dir,
+      scanner: "unit",
+      severity: "high",
+      evidence: makeEvidence(),
+      correlationId: "c3",
+      classification: "real-bug",
+      classifierMeta: {},
+      config: { bugRegistry: { integration: "jsonl" } },
+    });
+    expect(result.ok).toBe(true);
+    expect(result.external).toBeNull();
+  });
+
+  it("updateBugStatus triggers dispatch and surfaces external result", async () => {
+    const result = await registerBug({
+      cwd: dir,
+      scanner: "unit",
+      severity: "high",
+      evidence: makeEvidence(),
+      correlationId: "c4",
+      classification: "real-bug",
+      classifierMeta: {},
+    });
+    const updateResult = await updateBugStatus(dir, result.bugId, "in-fix");
+    expect(updateResult.ok).toBe(true);
+    expect(updateResult.newStatus).toBe("in-fix");
+    // external should be null when no config provided
+    expect(updateResult.external).toBeNull();
+  });
+
+  it("loadBug hydrates externalRef field when present", async () => {
+    const result = await registerBug({
+      cwd: dir,
+      scanner: "unit",
+      severity: "high",
+      evidence: makeEvidence(),
+      correlationId: "c5",
+      classification: "real-bug",
+      classifierMeta: {},
+    });
+    // Manually set externalRef via setExternalRef
+    setExternalRef(dir, result.bugId, { provider: "github", issueNumber: 99, url: "https://github.com/o/r/issues/99", syncedAt: "2026-04-19T12:00:00Z" });
+    const bug = loadBug(dir, result.bugId);
+    expect(bug.externalRef).toBeDefined();
+    expect(bug.externalRef.issueNumber).toBe(99);
+    expect(bug.externalRef.provider).toBe("github");
+  });
+
+  it("concurrent registerBug calls don't produce duplicate external issues", async () => {
+    const evidence1 = makeEvidence({ testName: "concurrent-test-A" });
+    const evidence2 = makeEvidence({ testName: "concurrent-test-B" });
+    const [r1, r2] = await Promise.all([
+      registerBug({ cwd: dir, scanner: "unit", severity: "high", evidence: evidence1, correlationId: "c6a", classification: "real-bug", classifierMeta: {} }),
+      registerBug({ cwd: dir, scanner: "unit", severity: "high", evidence: evidence2, correlationId: "c6b", classification: "real-bug", classifierMeta: {} }),
+    ]);
+    expect(r1.ok).toBe(true);
+    expect(r2.ok).toBe(true);
+    expect(r1.bugId).not.toBe(r2.bugId);
   });
 });

@@ -321,10 +321,21 @@ export async function runTemperingRun(opts = {}) {
     importFn,
     adapter: adapterOverride = null,
     now = () => Date.now(),
+    // TEMPER-03 Slice 03.1 — UI scanner dependency injection.
+    // Lets tests mock Playwright + axe-core without installing them.
+    // `uiScannerImpl` overrides the real scanner entirely, used in
+    // the tests that need to exercise runTemperingRun wiring without
+    // going through the full crawler logic.
+    uiImportFn = null,
+    uiScannerImpl = null,
+    env = process.env,
   } = opts;
 
   const corr = correlationId || `temper-run-${randomUUID()}`;
   const startedAt = new Date(now()).toISOString();
+  // Hoisted early so artifact-producing scanners can write under a
+  // stable `<runId>/` directory before the final record is persisted.
+  const runId = `run-${startedAt.replace(/[:.]/g, "-")}`;
 
   if (!projectDir || typeof projectDir !== "string") {
     return { ok: false, error: "projectDir required", code: "missing-projectDir", correlationId: corr };
@@ -436,12 +447,73 @@ export async function runTemperingRun(opts = {}) {
     durationMs: integrationResult.durationMs || 0,
   });
 
+  // ── UI sweep scanner (TEMPER-03 Slice 03.1) ──
+  // Cross-stack scanner — runs against a deployed app URL rather
+  // than source code. Loaded lazily so missing Playwright / axe-core
+  // installs don't force the unit+integration path to fail.
+  emit(hub, "tempering-run-scanner-started", { correlationId: corr, scanner: "ui-playwright", stack });
+
+  let uiResult;
+  try {
+    // Short-circuit when prior scanner exhausted the overall budget.
+    const priorBudgetExceeded = unitResult.verdict === "budget-exceeded"
+      || integrationResult.verdict === "budget-exceeded";
+    if (priorBudgetExceeded) {
+      uiResult = {
+        scanner: "ui-playwright",
+        sliceRef,
+        startedAt: new Date(now()).toISOString(),
+        completedAt: new Date(now()).toISOString(),
+        skipped: true,
+        reason: "prior-budget-exceeded",
+        verdict: "skipped",
+        pass: 0, fail: 0,
+        durationMs: 0,
+      };
+    } else if (uiScannerImpl) {
+      uiResult = await uiScannerImpl({
+        config, projectDir, runId, sliceRef, now, env, importFn: uiImportFn,
+      });
+    } else {
+      const { runUiSweep } = await import("./scanners/ui-playwright.mjs");
+      uiResult = await runUiSweep({
+        config, projectDir, runId, sliceRef, now, env,
+        importFn: uiImportFn || ((spec) => import(spec)),
+      });
+    }
+  } catch (err) {
+    // Absolute last-resort — the scanner module itself failed to load
+    // or blew up before returning its own error frame. Keep the run
+    // alive and surface the failure in the record.
+    uiResult = {
+      scanner: "ui-playwright",
+      sliceRef,
+      startedAt: new Date(now()).toISOString(),
+      completedAt: new Date(now()).toISOString(),
+      skipped: true,
+      reason: `scanner-load-failed:${err.message || err}`,
+      verdict: "skipped",
+      pass: 0, fail: 0,
+      durationMs: 0,
+    };
+  }
+
+  emit(hub, "tempering-run-scanner-completed", {
+    correlationId: corr,
+    scanner: "ui-playwright",
+    stack,
+    verdict: uiResult.verdict,
+    pass: uiResult.pass || 0,
+    fail: uiResult.fail || 0,
+    skipped: uiResult.skipped ? 1 : 0,
+    durationMs: uiResult.durationMs || 0,
+  });
+
   // Overall verdict: worst of the scanner verdicts
-  const scanners = [unitResult, integrationResult];
+  const scanners = [unitResult, integrationResult, uiResult];
   const overallVerdict = deriveOverallVerdict(scanners);
 
   const completedAt = new Date(now()).toISOString();
-  const runId = `run-${startedAt.replace(/[:.]/g, "-")}`;
 
   const runRecord = {
     runId,
@@ -454,8 +526,8 @@ export async function runTemperingRun(opts = {}) {
     lastGreenSha,
     scanners,
     verdict: overallVerdict,
-    phase: "TEMPER-02",
-    slice: "02.2",
+    phase: "TEMPER-03",
+    slice: "03.1",
   };
 
   // Persist — best-effort

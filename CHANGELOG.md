@@ -93,8 +93,6 @@ baselines, scanner logic, approve-baseline tool, and runner integration.
 
 ---
 
-## [Unreleased] — targeting 2.44.0
-
 ### Added — Phase TEMPER-03 Slice 03.2 — Contract scanner (OpenAPI/GraphQL)
 
 Fourth scanner in the Tempering arc. Validates live API responses

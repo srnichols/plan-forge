@@ -1,0 +1,13 @@
+{
+  "name": "notify-teams",
+  "version": "0.1.0",
+  "description": "Microsoft Teams notification adapter stub for Plan Forge",
+  "author": "srnichols",
+  "license": "MIT",
+  "type": "module",
+  "main": "index.mjs",
+  "pforge-extension": {
+    "kind": "notify-adapter",
+    "name": "teams"
+  }
+}

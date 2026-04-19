@@ -1,0 +1,13 @@
+{
+  "name": "notify-slack",
+  "version": "0.1.0",
+  "description": "Slack notification adapter stub for Plan Forge",
+  "author": "srnichols",
+  "license": "MIT",
+  "type": "module",
+  "main": "index.mjs",
+  "pforge-extension": {
+    "kind": "notify-adapter",
+    "name": "slack"
+  }
+}

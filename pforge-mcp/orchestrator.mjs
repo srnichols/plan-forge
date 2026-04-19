@@ -5460,6 +5460,37 @@ export function buildWatchSnapshot(targetPath, runId = null, opts = {}) {
         return { open: rqState.open ?? 0, blockerAgeMs: oldestBlockerAge || null };
       } catch { return null; }
     })(),
+    // Phase FORGE-SHOP-03 Slice 03.2 — notification delivery summary for watcher chip.
+    notifications: (() => {
+      try {
+        const nowMs = Date.now();
+        const hourAgo = nowMs - 3_600_000;
+        const todayStr = new Date().toISOString().slice(0, 10);
+        let sentToday = 0, failedToday = 0, failedLastHour = 0;
+        let failingAdapter = null;
+        const adapterFailCounts = {};
+        for (const ev of events) {
+          if (!ev.ts) continue;
+          const evMs = new Date(ev.ts).getTime();
+          const evDate = ev.ts.slice(0, 10);
+          if (ev.type === "notification-sent" && evDate === todayStr) sentToday++;
+          if (ev.type === "notification-send-failed") {
+            if (evDate === todayStr) failedToday++;
+            if (evMs >= hourAgo) {
+              failedLastHour++;
+              const adName = ev.data?.adapter || "unknown";
+              adapterFailCounts[adName] = (adapterFailCounts[adName] || 0) + 1;
+            }
+          }
+        }
+        // Find the adapter with most failures in the last hour
+        for (const [ad, count] of Object.entries(adapterFailCounts)) {
+          if (!failingAdapter || count > (adapterFailCounts[failingAdapter] || 0)) failingAdapter = ad;
+        }
+        if (sentToday === 0 && failedToday === 0 && failedLastHour === 0) return null;
+        return { sentToday, failedToday, failedLastHour, failingAdapter };
+      } catch { return null; }
+    })(),
   };
 }
 
@@ -5903,6 +5934,16 @@ export function detectWatchAnomalies(snapshot) {
     }
   }
 
+  // 21. (Phase FORGE-SHOP-03 Slice 03.2) Notification delivery failing —
+  // 3+ notification-send-failed events for one adapter in the last hour.
+  if (snapshot.notifications && snapshot.notifications.failedLastHour >= 3) {
+    anomalies.push({
+      severity: "warn",
+      code: "notification-delivery-failing",
+      message: `${snapshot.notifications.failedLastHour} notification delivery failure(s)${snapshot.notifications.failingAdapter ? ` for adapter "${snapshot.notifications.failingAdapter}"` : ""} in the last hour`,
+    });
+  }
+
   return anomalies;
 }
 
@@ -6124,6 +6165,15 @@ export function recommendFromAnomalies(anomalies, snapshot) {
           severity: anomaly.severity,
           action: "Open the Review tab and clear open items, prioritizing blockers",
           command: null,
+        });
+        break;
+
+      case "notification-delivery-failing":
+        recs.push({
+          code,
+          severity: anomaly.severity,
+          action: "Check adapter config and endpoint availability. Run forge_notify_test to validate.",
+          command: "forge_notify_test",
         });
         break;
 

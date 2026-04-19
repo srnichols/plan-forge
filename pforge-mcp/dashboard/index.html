@@ -592,6 +592,11 @@
     <section id="tab-config" class="tab-content hidden">
       <div class="bg-gray-800 rounded-lg p-6 max-w-2xl">
         <h2 class="text-lg font-semibold mb-4">Project Configuration</h2>
+        <!-- Config Subtabs (Phase FORGE-SHOP-03 Slice 03.2) -->
+        <div class="flex gap-2 mb-4 border-b border-gray-700 pb-2">
+          <button class="cfg-subtab cfg-subtab-active text-sm px-3 py-1 rounded-t text-white bg-gray-700" data-cfgtab="general">General</button>
+          <button class="cfg-subtab text-sm px-3 py-1 rounded-t text-gray-400 hover:text-gray-300" data-cfgtab="notifications">🔔 Notifications</button>
+        </div>
         <!-- Loading skeleton shown while config fetch is in-flight -->
         <div id="cfg-skeleton" class="hidden space-y-4 animate-pulse">
           <div class="h-4 bg-gray-700 rounded w-1/4"></div>
@@ -607,6 +612,7 @@
           <div class="h-4 bg-gray-700 rounded w-1/2"></div>
           <div class="h-8 bg-gray-700 rounded w-full"></div>
         </div>
+        <div id="cfg-general">
         <div id="cfg-form-body" class="space-y-4">
           <div>
             <label class="block text-sm text-gray-400 mb-1">Preset</label>
@@ -757,6 +763,55 @@
             <button onclick="loadConfig()" class="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm">Reload</button>
           </div>
         </div><!-- end cfg-form-body -->
+        </div><!-- end cfg-general -->
+        <!-- Notifications Subtab (Phase FORGE-SHOP-03 Slice 03.2) -->
+        <div id="cfg-notifications" class="hidden">
+          <div class="space-y-6">
+            <div>
+              <h3 class="text-sm font-semibold text-gray-300 mb-3">Adapters</h3>
+              <p class="text-xs text-gray-500 mb-3">Enable adapters and configure their connection settings. Secrets must use environment variable templates (<code class="text-gray-400">${env:VAR_NAME}</code>).</p>
+              <div id="notify-adapter-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="text-gray-500 text-center py-8">Loading adapter config...</div>
+              </div>
+            </div>
+            <div class="border-t border-gray-700 pt-4">
+              <h3 class="text-sm font-semibold text-gray-300 mb-3">Routes</h3>
+              <p class="text-xs text-gray-500 mb-3">Events matching a route are dispatched to the listed adapters. Event names support globs (e.g. <code class="text-gray-400">slice-*</code>).</p>
+              <div id="notify-routes-editor">
+                <table class="w-full text-sm">
+                  <thead>
+                    <tr class="text-gray-400 text-xs">
+                      <th class="text-left pb-1">Event</th>
+                      <th class="text-left pb-1">Severity</th>
+                      <th class="text-left pb-1">Via</th>
+                      <th class="pb-1 w-8"></th>
+                    </tr>
+                  </thead>
+                  <tbody id="notify-routes-tbody"></tbody>
+                </table>
+                <button onclick="addNotifyRoute()" class="text-xs text-blue-400 hover:text-blue-300 mt-2">+ Add route</button>
+              </div>
+            </div>
+            <div class="border-t border-gray-700 pt-4">
+              <h3 class="text-sm font-semibold text-gray-300 mb-3">Rate Limiting</h3>
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs text-gray-500 mb-1">Max per minute</label>
+                  <input id="notify-rate-per-minute" type="number" min="1" max="100" value="10" class="bg-gray-700 text-white text-sm rounded px-3 py-1.5 w-full">
+                </div>
+                <div>
+                  <label class="block text-xs text-gray-500 mb-1">Digest after (events)</label>
+                  <input id="notify-rate-digest-after" type="number" min="1" max="50" value="5" class="bg-gray-700 text-white text-sm rounded px-3 py-1.5 w-full">
+                </div>
+              </div>
+            </div>
+            <div class="flex gap-2 pt-2">
+              <button onclick="saveNotificationsConfig()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded text-sm">Save Notifications</button>
+              <button onclick="renderNotificationsSubtab()" class="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm">Reload</button>
+            </div>
+            <p id="notify-status" class="text-xs text-gray-500 mt-1"></p>
+          </div>
+        </div><!-- end cfg-notifications -->
         <p id="cfg-status" class="text-xs text-gray-500 mt-2"></p>
       </div>
 

@@ -84,6 +84,114 @@
       "verified": true,
       "created_at": "2026-04-01T00:00:00Z",
       "updated_at": "2026-04-03T00:00:00Z"
+    },
+    "notify-slack": {
+      "name": "Slack Notification Adapter",
+      "id": "notify-slack",
+      "description": "Slack Incoming Webhook notification adapter for Plan Forge. Delivers slice failures, run completions, and anomaly alerts to Slack channels.",
+      "author": "srnichols",
+      "version": "0.1.0",
+      "download_url": "https://github.com/srnichols/plan-forge/archive/refs/heads/master.zip",
+      "repository": "https://github.com/srnichols/plan-forge",
+      "path_in_repo": "extensions/notify-slack",
+      "license": "MIT",
+      "category": "integration",
+      "effect": "Read",
+      "requires": {
+        "planforge_version": ">=2.50.0"
+      },
+      "provides": {
+        "instructions": 0,
+        "agents": 0,
+        "prompts": 0,
+        "skills": 0
+      },
+      "tags": ["notifications", "slack", "notify-adapter"],
+      "speckit_compatible": false,
+      "verified": true,
+      "created_at": "2026-04-19T00:00:00Z",
+      "updated_at": "2026-04-19T00:00:00Z"
+    },
+    "notify-teams": {
+      "name": "Microsoft Teams Notification Adapter",
+      "id": "notify-teams",
+      "description": "Microsoft Teams Incoming Webhook notification adapter for Plan Forge. Delivers slice failures, run completions, and anomaly alerts to Teams channels.",
+      "author": "srnichols",
+      "version": "0.1.0",
+      "download_url": "https://github.com/srnichols/plan-forge/archive/refs/heads/master.zip",
+      "repository": "https://github.com/srnichols/plan-forge",
+      "path_in_repo": "extensions/notify-teams",
+      "license": "MIT",
+      "category": "integration",
+      "effect": "Read",
+      "requires": {
+        "planforge_version": ">=2.50.0"
+      },
+      "provides": {
+        "instructions": 0,
+        "agents": 0,
+        "prompts": 0,
+        "skills": 0
+      },
+      "tags": ["notifications", "teams", "notify-adapter"],
+      "speckit_compatible": false,
+      "verified": true,
+      "created_at": "2026-04-19T00:00:00Z",
+      "updated_at": "2026-04-19T00:00:00Z"
+    },
+    "notify-email": {
+      "name": "Email (SMTP) Notification Adapter",
+      "id": "notify-email",
+      "description": "SMTP email notification adapter for Plan Forge. Delivers slice failures, run completions, and anomaly alerts via email.",
+      "author": "srnichols",
+      "version": "0.1.0",
+      "download_url": "https://github.com/srnichols/plan-forge/archive/refs/heads/master.zip",
+      "repository": "https://github.com/srnichols/plan-forge",
+      "path_in_repo": "extensions/notify-email",
+      "license": "MIT",
+      "category": "integration",
+      "effect": "Read",
+      "requires": {
+        "planforge_version": ">=2.50.0"
+      },
+      "provides": {
+        "instructions": 0,
+        "agents": 0,
+        "prompts": 0,
+        "skills": 0
+      },
+      "tags": ["notifications", "email", "smtp", "notify-adapter"],
+      "speckit_compatible": false,
+      "verified": true,
+      "created_at": "2026-04-19T00:00:00Z",
+      "updated_at": "2026-04-19T00:00:00Z"
+    },
+    "notify-pagerduty": {
+      "name": "PagerDuty Notification Adapter",
+      "id": "notify-pagerduty",
+      "description": "PagerDuty Events API v2 notification adapter for Plan Forge. Triggers incidents on critical failures and anomaly alerts.",
+      "author": "srnichols",
+      "version": "0.1.0",
+      "download_url": "https://github.com/srnichols/plan-forge/archive/refs/heads/master.zip",
+      "repository": "https://github.com/srnichols/plan-forge",
+      "path_in_repo": "extensions/notify-pagerduty",
+      "license": "MIT",
+      "category": "integration",
+      "effect": "Read",
+      "requires": {
+        "planforge_version": ">=2.50.0"
+      },
+      "provides": {
+        "instructions": 0,
+        "agents": 0,
+        "prompts": 0,
+        "skills": 0
+      },
+      "tags": ["notifications", "pagerduty", "notify-adapter"],
+      "speckit_compatible": false,
+      "verified": true,
+      "created_at": "2026-04-19T00:00:00Z",
+      "updated_at": "2026-04-19T00:00:00Z"
     }
   },
   "opportunities": [

@@ -4265,6 +4265,32 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
     } catch { /* review queue read error — skip */ }
 
+    // Phase FORGE-SHOP-03 Slice 03.2 — Notifications row in smith output
+    try {
+      const smithCwd3 = args.path ? findProjectRoot(resolve(args.path)) : PROJECT_DIR;
+      const { loadNotificationsConfig } = await import("./notifications/core.mjs");
+      const nCfg = loadNotificationsConfig(smithCwd3);
+      const enabledAdapters = Object.entries(nCfg.adapters || {}).filter(([, v]) => v.enabled).map(([k]) => k);
+      const routeCount = (nCfg.routes || []).length;
+      // Count today's notification events from hub events log
+      const { parseEventsLog, findLatestRun } = await import("./orchestrator.mjs");
+      let sentToday = 0, failedToday = 0;
+      try {
+        const located = findLatestRun(smithCwd3);
+        if (located) {
+          const evts = parseEventsLog(located.runDir);
+          const today = new Date().toISOString().slice(0, 10);
+          for (const ev of evts) {
+            if (ev.ts?.startsWith(today)) {
+              if (ev.type === "notification-sent") sentToday++;
+              if (ev.type === "notification-send-failed") failedToday++;
+            }
+          }
+        }
+      } catch { /* events read error — skip */ }
+      output += `\n\nNotifications:\n  Enabled adapters: ${enabledAdapters.length}${enabledAdapters.length ? ` (${enabledAdapters.join(", ")})` : ""}\n  Routes configured: ${routeCount}\n  Events sent today: ${sentToday}\n  Failures today:    ${failedToday}`;
+    } catch { /* notifications not configured — skip */ }
+
     return { content: [{ type: "text", text: output }], isError: !result.success };
   }
 
@@ -5897,6 +5923,27 @@ export function createExpressApp() {
   app.get("/api/openclaw/config", (req, res) => {
     const config = loadOpenClawConfig(PROJECT_DIR);
     res.json({ configured: !!config.endpoint, endpoint: config.endpoint || null, hasApiKey: !!config.apiKey });
+  });
+
+  // Phase FORGE-SHOP-03 Slice 03.2 — Notifications config REST API
+  app.get("/api/notifications/config", async (_req, res) => {
+    try {
+      const { loadNotificationsConfig } = await import("./notifications/core.mjs");
+      res.json(loadNotificationsConfig(PROJECT_DIR));
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  app.post("/api/notifications/config", async (req, res) => {
+    try {
+      if (!req.body || typeof req.body !== "object") {
+        return res.status(400).json({ error: "body must be a JSON object" });
+      }
+      const { ensureNotificationsDirs } = await import("./orchestrator.mjs");
+      ensureNotificationsDirs(PROJECT_DIR);
+      const configPath = resolve(PROJECT_DIR, ".forge", "notifications", "config.json");
+      writeFileSync(configPath, JSON.stringify(req.body, null, 2));
+      res.json({ ok: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
   return app;

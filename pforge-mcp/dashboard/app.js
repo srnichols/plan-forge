@@ -2951,6 +2951,199 @@ loadPlans();
   }
 })();
 
+// ─── Phase FORGE-SHOP-03 Slice 03.2 — Notifications Config Subtab ─────
+
+const KNOWN_ADAPTERS = ["webhook", "slack", "teams", "email", "pagerduty"];
+
+function initConfigSubtabs() {
+  document.querySelectorAll(".cfg-subtab").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".cfg-subtab").forEach(b => {
+        b.classList.remove("cfg-subtab-active", "bg-gray-700", "text-white");
+        b.classList.add("text-gray-400");
+      });
+      btn.classList.add("cfg-subtab-active", "bg-gray-700", "text-white");
+      btn.classList.remove("text-gray-400");
+      const general = document.getElementById("cfg-general");
+      const notifications = document.getElementById("cfg-notifications");
+      if (btn.dataset.cfgtab === "notifications") {
+        if (general) general.classList.add("hidden");
+        if (notifications) notifications.classList.remove("hidden");
+        renderNotificationsSubtab();
+      } else {
+        if (general) general.classList.remove("hidden");
+        if (notifications) notifications.classList.add("hidden");
+      }
+    });
+  });
+}
+
+async function renderNotificationsSubtab() {
+  const grid = document.getElementById("notify-adapter-grid");
+  const tbody = document.getElementById("notify-routes-tbody");
+  if (!grid) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/notifications/config`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const cfg = await res.json();
+    renderAdapterGrid(grid, cfg);
+    renderRoutesEditor(tbody, cfg);
+    const perMin = document.getElementById("notify-rate-per-minute");
+    const digestAfter = document.getElementById("notify-rate-digest-after");
+    if (perMin) perMin.value = cfg.rateLimit?.perMinute ?? 10;
+    if (digestAfter) digestAfter.value = cfg.rateLimit?.digestAfter ?? 5;
+  } catch (err) {
+    grid.innerHTML = `<p class="text-red-400 col-span-2">${escHtml(err.message)}</p>`;
+  }
+}
+
+function renderAdapterGrid(grid, cfg) {
+  const adapters = cfg.adapters || {};
+  let html = "";
+  for (const name of KNOWN_ADAPTERS) {
+    const ac = adapters[name] || {};
+    const enabled = ac.enabled === true;
+    const statusCls = enabled ? "text-green-400" : "text-gray-500";
+    const statusText = enabled ? "enabled" : "disabled";
+    html += `<div class="bg-gray-700/50 rounded-lg p-3 border border-gray-600" data-adapter="${escHtml(name)}">
+      <div class="flex items-center justify-between mb-2">
+        <span class="font-semibold text-sm text-gray-200">${escHtml(name)}</span>
+        <label class="flex items-center gap-1.5 text-xs">
+          <input type="checkbox" class="notify-adapter-toggle rounded border-gray-500 bg-gray-600 text-purple-500 focus:ring-0" data-adapter="${escHtml(name)}" ${enabled ? "checked" : ""}>
+          <span class="${statusCls}">${statusText}</span>
+        </label>
+      </div>
+      ${renderAdapterFields(name, ac)}
+      <button class="text-xs text-blue-400 hover:text-blue-300 mt-2" onclick="testNotifyAdapter('${escHtml(name)}')">Test adapter</button>
+    </div>`;
+  }
+  grid.innerHTML = html;
+}
+
+function renderAdapterFields(name, config) {
+  if (name === "email") {
+    return `<div class="space-y-1.5 text-xs">
+      <div><label class="text-gray-500">SMTP Host</label><input class="notify-field bg-gray-600 text-white rounded px-2 py-1 w-full" data-field="smtpHost" value="${escHtml(config.smtpHost || "")}"></div>
+      <div><label class="text-gray-500">SMTP Port</label><input class="notify-field bg-gray-600 text-white rounded px-2 py-1 w-full" data-field="smtpPort" type="number" value="${config.smtpPort || 587}"></div>
+      <div><label class="text-gray-500">SMTP User</label><input class="notify-field bg-gray-600 text-white rounded px-2 py-1 w-full" data-field="smtpUser" value="${escHtml(config.smtpUser || "")}"></div>
+      <div><label class="text-gray-500">SMTP Pass</label><input class="notify-field bg-gray-600 text-white rounded px-2 py-1 w-full" data-field="smtpPass" value="${escHtml(config.smtpPass || "")}" placeholder="\${env:SMTP_PASSWORD}"></div>
+      <div><label class="text-gray-500">From</label><input class="notify-field bg-gray-600 text-white rounded px-2 py-1 w-full" data-field="from" value="${escHtml(config.from || "")}"></div>
+      <div><label class="text-gray-500">To</label><input class="notify-field bg-gray-600 text-white rounded px-2 py-1 w-full" data-field="to" value="${escHtml(config.to || "")}"></div>
+    </div>`;
+  }
+  if (name === "pagerduty") {
+    return `<div class="text-xs">
+      <label class="text-gray-500">Integration Key</label>
+      <input class="notify-field bg-gray-600 text-white rounded px-2 py-1 w-full" data-field="integrationKey" value="${escHtml(config.integrationKey || "")}" placeholder="\${env:PAGERDUTY_INTEGRATION_KEY}">
+    </div>`;
+  }
+  // webhook, slack, teams — all use webhookUrl
+  const placeholder = name === "slack" ? "${env:SLACK_WEBHOOK_URL}"
+    : name === "teams" ? "${env:TEAMS_WEBHOOK_URL}"
+    : "${env:WEBHOOK_URL}";
+  return `<div class="text-xs">
+    <label class="text-gray-500">Webhook URL</label>
+    <input class="notify-field bg-gray-600 text-white rounded px-2 py-1 w-full" data-field="${name === "webhook" ? "url" : "webhookUrl"}" value="${escHtml(config.url || config.webhookUrl || "")}" placeholder="${escHtml(placeholder)}">
+  </div>`;
+}
+
+function renderRoutesEditor(tbody, cfg) {
+  if (!tbody) return;
+  const routes = cfg.routes || [];
+  tbody.innerHTML = routes.map((r, i) => {
+    const event = r.when?.event || "";
+    const severity = r.when?.severity || "";
+    const via = (r.via || []).join(", ");
+    return `<tr class="border-b border-gray-700/30" data-route-idx="${i}">
+      <td class="py-1 pr-2"><input class="notify-route-field bg-gray-600 text-white text-xs rounded px-2 py-1 w-full" data-rfield="event" value="${escHtml(event)}"></td>
+      <td class="py-1 pr-2"><input class="notify-route-field bg-gray-600 text-white text-xs rounded px-2 py-1 w-full" data-rfield="severity" value="${escHtml(severity)}" placeholder="any"></td>
+      <td class="py-1 pr-2"><input class="notify-route-field bg-gray-600 text-white text-xs rounded px-2 py-1 w-full" data-rfield="via" value="${escHtml(via)}"></td>
+      <td class="py-1"><button class="text-red-400 text-xs hover:text-red-300" onclick="removeNotifyRoute(${i})">✕</button></td>
+    </tr>`;
+  }).join("");
+}
+
+function addNotifyRoute() {
+  const tbody = document.getElementById("notify-routes-tbody");
+  if (!tbody) return;
+  const idx = tbody.children.length;
+  const row = document.createElement("tr");
+  row.className = "border-b border-gray-700/30";
+  row.dataset.routeIdx = idx;
+  row.innerHTML = `
+    <td class="py-1 pr-2"><input class="notify-route-field bg-gray-600 text-white text-xs rounded px-2 py-1 w-full" data-rfield="event" value="" placeholder="slice-failed"></td>
+    <td class="py-1 pr-2"><input class="notify-route-field bg-gray-600 text-white text-xs rounded px-2 py-1 w-full" data-rfield="severity" value="" placeholder=">=high"></td>
+    <td class="py-1 pr-2"><input class="notify-route-field bg-gray-600 text-white text-xs rounded px-2 py-1 w-full" data-rfield="via" value="" placeholder="webhook"></td>
+    <td class="py-1"><button class="text-red-400 text-xs hover:text-red-300" onclick="removeNotifyRoute(${idx})">✕</button></td>`;
+  tbody.appendChild(row);
+}
+
+function removeNotifyRoute(idx) {
+  const tbody = document.getElementById("notify-routes-tbody");
+  if (!tbody) return;
+  const row = tbody.querySelector(`tr[data-route-idx="${idx}"]`);
+  if (row) row.remove();
+}
+
+function collectNotificationsConfig() {
+  const adapters = {};
+  document.querySelectorAll("[data-adapter]").forEach(card => {
+    if (card.tagName === "INPUT") return; // skip toggle inputs
+    const name = card.dataset.adapter;
+    const toggle = card.querySelector(".notify-adapter-toggle");
+    const cfg = { enabled: toggle?.checked ?? false };
+    card.querySelectorAll(".notify-field").forEach(input => {
+      const field = input.dataset.field;
+      if (field) cfg[field] = input.type === "number" ? Number(input.value) : input.value;
+    });
+    adapters[name] = cfg;
+  });
+  const routes = [];
+  document.querySelectorAll("#notify-routes-tbody tr").forEach(row => {
+    const event = row.querySelector('[data-rfield="event"]')?.value || "";
+    const severity = row.querySelector('[data-rfield="severity"]')?.value || "";
+    const via = (row.querySelector('[data-rfield="via"]')?.value || "").split(",").map(s => s.trim()).filter(Boolean);
+    if (event || via.length) {
+      routes.push({ when: { event, ...(severity ? { severity } : {}) }, via });
+    }
+  });
+  const perMinute = Number(document.getElementById("notify-rate-per-minute")?.value) || 10;
+  const digestAfter = Number(document.getElementById("notify-rate-digest-after")?.value) || 5;
+  return { enabled: Object.values(adapters).some(a => a.enabled), adapters, routes, rateLimit: { perMinute, digestAfter } };
+}
+
+async function saveNotificationsConfig() {
+  const statusEl = document.getElementById("notify-status");
+  try {
+    const cfg = collectNotificationsConfig();
+    const res = await fetch(`${API_BASE}/api/notifications/config`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(cfg),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (statusEl) statusEl.textContent = "✅ Saved";
+    setTimeout(() => { if (statusEl) statusEl.textContent = ""; }, 3000);
+  } catch (err) {
+    if (statusEl) statusEl.textContent = `❌ ${err.message}`;
+  }
+}
+
+async function testNotifyAdapter(adapterName) {
+  try {
+    const res = await fetch(`${API_BASE}/api/tool`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tool: "forge_notify_test", args: { adapter: adapterName, dryRun: true } }),
+    });
+    const data = await res.json();
+    const msg = data?.content?.[0]?.text || JSON.stringify(data);
+    alert(`${adapterName} test:\n${msg}`);
+  } catch (err) {
+    alert(`Test failed: ${err.message}`);
+  }
+}
+
 // Tab load hooks
 const tabLoadHooks = {
   home: loadHomeSnapshot,
@@ -2961,7 +3154,7 @@ const tabLoadHooks = {
   runs: () => { loadRuns(); tabBadgeState.runsNew = 0; updateTabBadges(); },
   replay: loadReplayRuns,
   extensions: loadExtensions,
-  config: () => { loadConfig(); loadCrucibleConfigUI(); },
+  config: () => { loadConfig(); loadCrucibleConfigUI(); initConfigSubtabs(); },
   traces: loadTraces,
   cost: () => { loadCost(); tabBadgeState.hasAnomaly = false; updateTabBadges(); },
   skills: loadSkillCatalog,
@@ -3302,6 +3495,7 @@ function renderActivityFeed(events, { groupByCorrelation } = {}) {
     "run-started": "🚀", "run-completed": "✅", "run-aborted": "❌",
     "slice-started": "▶", "slice-completed": "✓", "slice-failed": "✗",
     "liveguard": "🛡️", "tempering": "🛠", "crucible": "🔥",
+    "notification-sent": "📤", "notification-send-failed": "📤✗",
   };
 
   function relativeTime(ts) {
@@ -3317,9 +3511,13 @@ function renderActivityFeed(events, { groupByCorrelation } = {}) {
   function renderEvent(e) {
     const icon = typeIcons[e.type] || "•";
     const time = relativeTime(e.ts);
+    // Phase FORGE-SHOP-03 Slice 03.2 — notification event coloring
+    const textCls = e.type === "notification-sent" ? "text-green-300"
+      : e.type === "notification-send-failed" ? "text-red-400"
+      : "text-gray-300";
     return `<div class="flex items-center gap-2 py-1 border-b border-gray-700/30 last:border-0">
       <span>${icon}</span>
-      <span class="flex-1 text-gray-300">${escHtml(e.summary || e.type || "")}</span>
+      <span class="flex-1 ${textCls}">${escHtml(e.summary || e.type || "")}</span>
       <span class="text-gray-600 shrink-0">${escHtml(time)}</span>
     </div>`;
   }

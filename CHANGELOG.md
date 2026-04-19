@@ -7,13 +7,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased] — targeting 2.50.0
 
-### Planned — HOTFIX-2.49.1 critical bug bundle
-
-- Phase HOTFIX-2.49.1 drafted ([docs/plans/Phase-HOTFIX-2.49.1.md](docs/plans/Phase-HOTFIX-2.49.1.md)) — patch release bundling 5 field-reported bugs. Slices: (H.1) Teardown/Cleanup slice guard blocks silent branch deletion [#56]; (H.2) alphanumeric slice IDs `2A`/`2B` now parse correctly [#64]; (H.3) quorum worker probe drops unavailable models with a warn instead of hanging [#70]; (H.4) quorum leg failures now capture stderr + reason code [#65]; (H.5) LiveGuard detects prose (currency, markdown, diagram syntax) and soft-warns instead of hard-failing slices [#62]. Ships as v2.49.1 patch alongside FORGE-SHOP arc minor versions. Issue #71 closed as duplicate of #70.
-
 ### Planned — FORGE-SHOP-03 notification layer
 
 - Phase FORGE-SHOP-03 drafted ([docs/plans/Phase-FORGE-SHOP-03.md](docs/plans/Phase-FORGE-SHOP-03.md)) — notification core consumes hub events, routes by rule, rate-limits (token-bucket + digest coalesce), delivers via pluggable adapters. Webhook adapter in core. Slack/Teams/Email/PagerDuty as extension stubs (installable via `pforge ext add`). 2 new MCP tools (`forge_notify_send`, `forge_notify_test`) → 57 total. Secrets in env vars only (literal URL in config rejected with `ERR_LITERAL_SECRET`). Dashboard Config → Notifications subtab.
+
+---
+
+## [2.49.1] — 2026-04-19
+
+Patch release bundling 5 field-reported bugs, each shipped as a separate commit on the feature branch for per-issue attribution. All 5 slices executed under `--quorum=power` in 40m 54s. Tests 1748 → 1850 (+102). Tool count unchanged (56).
+
+### Fixed
+
+- **Teardown/Cleanup slice safety guard** ([#56](https://github.com/srnichols/plan-forge/issues/56)) — orchestrator now detects destructive-titled slices (`teardown`, `cleanup`, `rollback`, `postmortem`, `finalize`) and injects a worker pre-flight blocking branch-delete / reset-hard / phase-abandoned mutations. Post-slice reachability check fires critical `teardown-branch-loss` incident with reflog entry if the feature branch vanishes. Config-guarded via `orchestrator.teardownGuard.enabled` (default: `true`). Commit `6e469d0`.
+- **Alphanumeric slice IDs** ([#64](https://github.com/srnichols/plan-forge/issues/64)) — plan parser regex now accepts `### Slice 2A:`, `### Slice 2B:`, etc. Order resolution: `2A` after `2`, before `2B`, before `3`. Commit `45bed1b`.
+- **Quorum worker probe** ([#70](https://github.com/srnichols/plan-forge/issues/70)) — `probeWorkerAvailability(model)` runs once at run start; quorum candidates with missing CLI workers are dropped with a warn instead of hanging. Zero available = fast-fail with exit code 2; one available = degrade-and-continue. Config-guarded via `quorum.strictAvailability` (default: `false`). Silences the `Error: Model "grok-4.20-0309-reasoning" not available` spam on systems without grok installed. Commit `6c402b8`.
+- **Quorum leg error capture** ([#65](https://github.com/srnichols/plan-forge/issues/65)) — failed quorum legs now include `error: { code, reason, stderr }` on the result. Reason enum: `timeout | spawn-failed | rate-limit | context-overflow | unknown`. Synthesis report notes `legsFailed: N` and per-model reason. Commit `2b0d759`.
+- **LiveGuard prose false-positive** ([#62](https://github.com/srnichols/plan-forge/issues/62)) — orchestrator detects non-command prose patterns (decimal-numbered markdown list, currency `$N.NN`, markdown/diagram keywords `sequenceDiagram`/`flowchart`/table rows/bullets, formula-like `=` with arithmetic) before evaluating the allowlist. Prose emits `liveguard-prose-skipped` info event and does NOT fail the slice. Real commands still hard-fail. Commit `eedcaa7`.
+
+### Closed issues
+
+- [#71](https://github.com/srnichols/plan-forge/issues/71) closed as duplicate of [#70](https://github.com/srnichols/plan-forge/issues/70).
+
+---
 
 ### Planned — TEMPER-07 agent routing (v2.50.x, ships after SHOP-03)
 

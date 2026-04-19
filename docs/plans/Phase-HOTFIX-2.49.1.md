@@ -1,14 +1,14 @@
 ---
 crucibleId: 7c2f4a89-3b51-4e62-9d84-f17c8a3d5b42
 source: self-hosted
-status: draft
+status: complete
 phase: HOTFIX-2.49.1
 arc: HOTFIX
 ---
 
 # Phase HOTFIX-2.49.1: Critical bug bundle — Teardown guard + parser + quorum probe
 
-> **Status**: 📝 DRAFT — ready for Session 2 execution
+> **Status**: ✅ COMPLETE — all 5 slices shipped via PR #72 (bc4714b); v2.49.1 tagged
 > **Estimated Effort**: 5 slices (small)
 > **Risk Level**: Low (targeted fixes, each additive or defensive)
 > **Target Version**: v2.49.1 (patch release)

@@ -47,3 +47,8 @@ GEMINI.md
 # LiveGuard auto-generated fix plans (runtime artifacts, not source-controlled)
 docs/plans/auto/*
 !docs/plans/auto/README.md
+
+# Rummag poller artifacts (not part of Plan Forge)
+.issues.json
+.rummag-baseline.txt
+.rummag-poller.ps1

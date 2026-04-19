@@ -3291,7 +3291,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 });
 
 // ─── Express App + REST API  ─────────────────────────────
-function createExpressApp() {
+export function createExpressApp() {
   const app = express();
   app.use(express.json());
 
@@ -3655,6 +3655,95 @@ function createExpressApp() {
       const files = readdirSync(runbooksDir).filter((f) => f.endsWith(".md")).sort();
       res.json(files.map((f) => ({ file: `.forge/runbooks/${f}` })));
     } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // ─── v2.37 Crucible REST API (Slice 01.5) ──────────────────────────
+  // Back the dashboard Crucible tab. Thin HTTP wrappers around the
+  // crucible-server handlers that already power the MCP tools, so the
+  // dashboard and the agent share one code path.
+
+  // POST /api/crucible/submit — start a new smelt
+  app.post("/api/crucible/submit", (req, res) => {
+    try {
+      const { rawIdea, lane = null, source = "human", parentSmeltId = null } = req.body || {};
+      if (typeof rawIdea !== "string" || !rawIdea.trim()) {
+        return res.status(400).json({ error: "rawIdea is required" });
+      }
+      const result = crucibleHandleSubmit({
+        rawIdea,
+        lane,
+        source,
+        parentSmeltId,
+        projectDir: PROJECT_DIR,
+        hub: activeHub,
+      });
+      res.status(201).json(result);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // POST /api/crucible/ask — record an answer and fetch the next question
+  app.post("/api/crucible/ask", (req, res) => {
+    try {
+      const { id, answer } = req.body || {};
+      if (typeof id !== "string" || !id) {
+        return res.status(400).json({ error: "id is required" });
+      }
+      const result = crucibleHandleAsk({ id, answer, projectDir: PROJECT_DIR, hub: activeHub });
+      res.json(result);
+    } catch (err) {
+      const status = /not found/i.test(err.message) ? 404 : 500;
+      res.status(status).json({ error: err.message });
+    }
+  });
+
+  // GET /api/crucible/list — all smelts (optionally filtered by status)
+  app.get("/api/crucible/list", (req, res) => {
+    try {
+      const status = typeof req.query?.status === "string" ? req.query.status : null;
+      res.json(crucibleHandleList({ status, projectDir: PROJECT_DIR }));
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // GET /api/crucible/preview?id=… — live markdown preview + unresolved fields
+  app.get("/api/crucible/preview", (req, res) => {
+    try {
+      const id = typeof req.query?.id === "string" ? req.query.id : null;
+      if (!id) return res.status(400).json({ error: "id is required" });
+      res.json(crucibleHandlePreview({ id, projectDir: PROJECT_DIR }));
+    } catch (err) {
+      const status = /not found/i.test(err.message) ? 404 : 500;
+      res.status(status).json({ error: err.message });
+    }
+  });
+
+  // POST /api/crucible/finalize — emit docs/plans/Phase-NN.md
+  app.post("/api/crucible/finalize", (req, res) => {
+    try {
+      const { id } = req.body || {};
+      if (typeof id !== "string" || !id) {
+        return res.status(400).json({ error: "id is required" });
+      }
+      const result = crucibleHandleFinalize({ id, projectDir: PROJECT_DIR, hub: activeHub });
+      res.status(201).json(result);
+    } catch (err) {
+      const status = /not found/i.test(err.message) ? 404 : 500;
+      res.status(status).json({ error: err.message });
+    }
+  });
+
+  // POST /api/crucible/abandon — mark a smelt abandoned (no plan written)
+  app.post("/api/crucible/abandon", (req, res) => {
+    try {
+      const { id } = req.body || {};
+      if (typeof id !== "string" || !id) {
+        return res.status(400).json({ error: "id is required" });
+      }
+      const result = crucibleHandleAbandon({ id, projectDir: PROJECT_DIR });
+      res.json(result);
+    } catch (err) {
+      const status = /not found/i.test(err.message) ? 404 : 500;
+      res.status(status).json({ error: err.message });
+    }
   });
 
   // REST API: GET /api/hotspots — git churn hotspot analysis (cache TTL 24h)

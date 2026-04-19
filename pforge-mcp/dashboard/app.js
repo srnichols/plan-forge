@@ -2773,6 +2773,7 @@ loadPlans();
 // Tab load hooks
 const tabLoadHooks = {
   progress: loadPlans,
+  crucible: loadCrucible,
   runs: () => { loadRuns(); tabBadgeState.runsNew = 0; updateTabBadges(); },
   replay: loadReplayRuns,
   extensions: loadExtensions,
@@ -3210,6 +3211,285 @@ async function loadMemoryReport() {
   }
 }
 window.loadMemoryReport = loadMemoryReport;
+
+// ─── v2.37 Crucible Tab (Slice 01.5) ─────────────────────────
+// Client for the /api/crucible/* endpoints. Keeps a tiny module-scope
+// state object so the 3 panels (list, interview, preview) can update
+// each other without DOM scraping.
+
+const crucibleState = {
+  activeId: null,
+  currentQuestion: null,
+  done: false,
+  lastListAt: 0,
+};
+
+async function loadCrucible() {
+  try {
+    const res = await fetch(`${API_BASE}/api/crucible/list`);
+    if (!res.ok) {
+      setHTML("crucible-smelt-list", `<p class="text-red-400 py-2">Failed to load smelts (${res.status})</p>`);
+      return;
+    }
+    const { smelts = [] } = await res.json();
+    crucibleState.lastListAt = Date.now();
+    renderCrucibleList(smelts);
+    // Re-sync active smelt preview if one is selected
+    if (crucibleState.activeId && smelts.some((s) => s.id === crucibleState.activeId)) {
+      refreshCrucibleInterview();
+    }
+  } catch (err) {
+    setHTML("crucible-smelt-list", `<p class="text-red-400 py-2">Error: ${err.message}</p>`);
+  }
+}
+window.loadCrucible = loadCrucible;
+
+function renderCrucibleList(smelts) {
+  const listEl = document.getElementById("crucible-smelt-list");
+  if (!listEl) return;
+  if (!smelts.length) {
+    listEl.innerHTML = `<p class="text-gray-500 py-2">No smelts yet. Click <span class="text-orange-400">+ New Smelt</span>.</p>`;
+    return;
+  }
+  const statusColor = {
+    "in-progress": "text-orange-400",
+    "finalized": "text-green-400",
+    "abandoned": "text-gray-500",
+  };
+  listEl.innerHTML = smelts
+    .slice()
+    .sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""))
+    .map((s) => {
+      const active = s.id === crucibleState.activeId ? "bg-gray-700" : "hover:bg-gray-700/50";
+      const label = s.phaseName || (s.rawIdea ? s.rawIdea.slice(0, 40) : s.id.slice(0, 8));
+      const color = statusColor[s.status] || "text-gray-400";
+      return `<button class="w-full text-left ${active} rounded px-2 py-1.5 block" onclick="selectSmelt('${s.id}')">
+        <div class="truncate">${escapeHtml(label)}</div>
+        <div class="text-[10px] ${color}">${s.status} · ${s.lane}</div>
+      </button>`;
+    })
+    .join("");
+}
+
+async function startNewSmelt() {
+  const rawIdea = window.prompt("Describe the idea to smelt (one-paragraph summary is fine):");
+  if (!rawIdea || !rawIdea.trim()) return;
+  const lane = window.prompt("Lane (tweak / feature / full, or leave blank for auto-detection):", "") || null;
+  try {
+    const res = await fetch(`${API_BASE}/api/crucible/submit`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ rawIdea, lane: lane ? lane.trim() : null }),
+    });
+    if (!res.ok) {
+      const { error } = await res.json().catch(() => ({}));
+      alert(`Submit failed: ${error || res.status}`);
+      return;
+    }
+    const { id, firstQuestion } = await res.json();
+    crucibleState.activeId = id;
+    crucibleState.currentQuestion = firstQuestion;
+    crucibleState.done = firstQuestion === null;
+    await loadCrucible();
+    renderCrucibleInterview();
+    await refreshCrucibleInterview();
+  } catch (err) { alert(`Submit error: ${err.message}`); }
+}
+window.startNewSmelt = startNewSmelt;
+
+async function selectSmelt(id) {
+  crucibleState.activeId = id;
+  crucibleState.currentQuestion = null;
+  crucibleState.done = false;
+  renderCrucibleInterview();
+  await refreshCrucibleInterview();
+  await loadCrucible();
+}
+window.selectSmelt = selectSmelt;
+
+async function refreshCrucibleInterview() {
+  if (!crucibleState.activeId) return;
+  try {
+    // Use ask with no answer to fetch the next question + fresh preview
+    const askRes = await fetch(`${API_BASE}/api/crucible/ask`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: crucibleState.activeId }),
+    });
+    if (askRes.ok) {
+      const data = await askRes.json();
+      crucibleState.currentQuestion = data.nextQuestion || null;
+      crucibleState.done = Boolean(data.done);
+      updateInterviewPanel(data);
+    } else {
+      // Smelt is likely not in-progress (finalized/abandoned) — fall back to preview only
+      crucibleState.currentQuestion = null;
+      crucibleState.done = true;
+    }
+    // Preview is always available
+    const prevRes = await fetch(`${API_BASE}/api/crucible/preview?id=${encodeURIComponent(crucibleState.activeId)}`);
+    if (prevRes.ok) {
+      const preview = await prevRes.json();
+      updatePreviewPanel(preview);
+    }
+  } catch (err) {
+    console.error("[crucible] refresh failed", err);
+  }
+}
+
+function renderCrucibleInterview() {
+  const empty = document.getElementById("crucible-interview-empty");
+  const panel = document.getElementById("crucible-interview");
+  if (crucibleState.activeId) {
+    if (empty) empty.classList.add("hidden");
+    if (panel) panel.classList.remove("hidden");
+    const idEl = document.getElementById("crucible-active-id");
+    if (idEl) idEl.textContent = crucibleState.activeId.slice(0, 12) + "…";
+  } else {
+    if (empty) empty.classList.remove("hidden");
+    if (panel) panel.classList.add("hidden");
+  }
+}
+
+function updateInterviewPanel(data) {
+  const q = data.nextQuestion;
+  const qText = document.getElementById("crucible-question-text");
+  const answer = document.getElementById("crucible-answer");
+  const idx = document.getElementById("crucible-q-index");
+  const total = document.getElementById("crucible-q-total");
+  const recLabel = document.getElementById("crucible-recommendation-label");
+  const recVal = document.getElementById("crucible-recommendation-value");
+  const nextBtn = document.getElementById("crucible-next-btn");
+  const finalBtn = document.getElementById("crucible-finalize-btn");
+  const lane = document.getElementById("crucible-active-lane");
+
+  if (q) {
+    if (qText) qText.textContent = q.prompt || q.text || q.id || "(no prompt)";
+    if (answer) answer.value = q.recommendedDefault || "";
+    if (idx) idx.textContent = (q.index ?? "?");
+    if (total) total.textContent = (q.total ?? "?");
+    if (lane && q.lane) lane.textContent = q.lane;
+    if (q.recommendedDefault && recLabel && recVal) {
+      recVal.textContent = q.recommendedDefault;
+      recLabel.classList.remove("hidden");
+    } else if (recLabel) {
+      recLabel.classList.add("hidden");
+    }
+    if (nextBtn) nextBtn.classList.remove("hidden");
+    if (finalBtn) finalBtn.classList.add("hidden");
+  } else {
+    // Interview complete
+    if (qText) qText.textContent = "Interview complete — review the draft and finalize.";
+    if (answer) answer.value = "";
+    if (nextBtn) nextBtn.classList.add("hidden");
+    if (finalBtn) finalBtn.classList.remove("hidden");
+  }
+}
+
+function updatePreviewPanel(preview) {
+  const pre = document.getElementById("crucible-preview");
+  if (pre) pre.textContent = preview.markdown || "(empty)";
+  const unresolved = Array.isArray(preview.unresolvedFields) ? preview.unresolvedFields : [];
+  const badge = document.getElementById("crucible-unresolved-count");
+  if (badge) badge.textContent = unresolved.length > 0 ? `${unresolved.length} unresolved` : "✓ complete";
+}
+
+async function submitAnswer() {
+  if (!crucibleState.activeId) return;
+  const answerEl = document.getElementById("crucible-answer");
+  const answer = answerEl ? answerEl.value : "";
+  try {
+    const res = await fetch(`${API_BASE}/api/crucible/ask`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: crucibleState.activeId, answer }),
+    });
+    if (!res.ok) {
+      const { error } = await res.json().catch(() => ({}));
+      alert(`Ask failed: ${error || res.status}`);
+      return;
+    }
+    const data = await res.json();
+    crucibleState.currentQuestion = data.nextQuestion;
+    crucibleState.done = Boolean(data.done);
+    updateInterviewPanel(data);
+    if (data.draftPreview !== undefined) {
+      updatePreviewPanel({ markdown: data.draftPreview, unresolvedFields: extractUnresolvedFromMarkdown(data.draftPreview) });
+    }
+  } catch (err) { alert(`Ask error: ${err.message}`); }
+}
+window.submitAnswer = submitAnswer;
+
+function extractUnresolvedFromMarkdown(md) {
+  if (typeof md !== "string") return [];
+  const re = /\{\{TBD:[^}]+\}\}/g;
+  return md.match(re) || [];
+}
+
+async function finalizeSmelt() {
+  if (!crucibleState.activeId) return;
+  if (!confirm("Finalize this smelt? A Phase-NN.md will be written to docs/plans/.")) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/crucible/finalize`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: crucibleState.activeId }),
+    });
+    if (!res.ok) {
+      const { error } = await res.json().catch(() => ({}));
+      alert(`Finalize failed: ${error || res.status}`);
+      return;
+    }
+    const { phaseName, planPath } = await res.json();
+    alert(`✓ Finalized as ${phaseName}\n  ${planPath}\n\nNext: run the Plan Hardener on this plan.`);
+    await loadCrucible();
+  } catch (err) { alert(`Finalize error: ${err.message}`); }
+}
+window.finalizeSmelt = finalizeSmelt;
+
+async function abandonSmelt() {
+  if (!crucibleState.activeId) return;
+  if (!confirm("Abandon this smelt? This cannot be undone.")) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/crucible/abandon`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: crucibleState.activeId }),
+    });
+    if (!res.ok) {
+      const { error } = await res.json().catch(() => ({}));
+      alert(`Abandon failed: ${error || res.status}`);
+      return;
+    }
+    crucibleState.activeId = null;
+    renderCrucibleInterview();
+    await loadCrucible();
+  } catch (err) { alert(`Abandon error: ${err.message}`); }
+}
+window.abandonSmelt = abandonSmelt;
+
+function escapeHtml(s) {
+  if (typeof s !== "string") return "";
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+// Live-update hook — called from the existing hub subscriber when a
+// crucible-* event arrives.
+function onCrucibleHubEvent(event) {
+  const type = event && event.type;
+  if (typeof type !== "string" || !type.startsWith("crucible-")) return;
+  // Refresh list on every crucible event; if it's our active smelt, refresh the interview too
+  loadCrucible();
+  if (event.data && event.data.id === crucibleState.activeId) {
+    refreshCrucibleInterview();
+  }
+}
+window.onCrucibleHubEvent = onCrucibleHubEvent;
+
 
 async function copyWatchCommand(live) {
   const cmd = live ? "pforge watch-live <target-path>" : "pforge watch <target-path>";

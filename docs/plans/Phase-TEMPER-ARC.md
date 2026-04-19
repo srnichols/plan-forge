@@ -130,6 +130,68 @@ depends on a later one to function.
 These are the decisions that, once shipped, cannot be changed cheaply.
 They're called out here so every later phase has a stable target.
 
+### Correlation ID — the thread through the whole loop
+
+Every Tempering record carries a `correlationId` (UUID) that links it
+back to the originating idea all the way through the loop:
+
+```
+Crucible smelt.correlationId
+  └─► plan frontmatter.correlationId (set on hardening-handoff)
+       └─► run summary.correlationId (set by forge_run_plan)
+            └─► slice record.correlationId
+                 └─► tempering run.correlationId
+                      ├─► bug record.correlationId
+                      │    └─► fix plan frontmatter.correlationId
+                      │         └─► bug-validated fix record.correlationId
+                      └─► incident.correlationId (if LiveGuard opens one)
+```
+
+Rules:
+- Every L2 record MUST stamp `correlationId` when one is in context
+- Every L3 `captureMemory()` payload MUST include it as a tag
+  (`corr:<uuid>`) for cross-tier join
+- Every hub event payload MUST include it (additive field, does not
+  break existing consumers)
+- `forge_crucible_submit` mints the ID; everything downstream inherits
+- When a record has no upstream (e.g. `forge_tempering_scan` run
+  standalone, no plan context), it mints its own and stamps it
+
+TEMPER-01 adds the field to scan records + run records. TEMPER-02
+propagates to runs. TEMPER-06 propagates to bugs + fix plans +
+validations. The full thread is first observable end-to-end when
+TEMPER-06 ships.
+
+### Cost dimensions — beyond LLM tokens
+
+Tempering adds large non-LLM cost surfaces. The existing
+`forge_cost_report` gains a `dimension` field so operators can set
+per-dimension budgets without mixing apples and oranges:
+
+| Dimension | Unit | Writer |
+|-----------|------|--------|
+| `llm-quorum` | tokens × model × call | visual analyzer, bug classifier |
+| `visual-analyzer` | calls × pages × slices | TEMPER-04 scanner |
+| `mutation-runtime` | CPU seconds | TEMPER-05 mutation scanner |
+| `load-runtime` | wall seconds × concurrency | TEMPER-05 load scanner |
+| `embed` | embedding tokens | `captureMemory()` → OpenBrain |
+| `llm-arbitration` | tokens | TEMPER-06 classifier LLM layer |
+
+Each dimension supports a `softBudget` (warn via hub event
+`cost-budget-warn`) and `hardBudget` (abort + register infra bug).
+TEMPER-01 ships the schema + warn event wiring; TEMPER-02 through
+TEMPER-06 each populate the dimensions they own.
+
+### Manual chapter 8 "The closed loop in 10 minutes"
+
+TEMPER-06 ships the capstone manual chapter: a single worked example
+walking idea → Crucible smelt → plan hardening → Forge execution →
+Tempering run → real-bug discovery → GitHub issue filing → fix-plan
+generation → execution → validation → GitHub comment → incident
+absence. Uses the correlationId above to show one unbroken chain of
+L1/L2/L3 records. Replaces the current "N chapters per subsystem, no
+story" docs gap.
+
 ### `.forge/tempering/config.json` shape
 
 ```jsonc

@@ -110,6 +110,16 @@ enterprise defaults, they're table stakes.
 - New anomaly `tempering-flake-detected`
 - New anomaly `tempering-perf-regression`
 - Dashboard Tempering tab gets three new subsections
+- **L3 capture** via `captureMemory()` at three moments:
+  - Flake-confirmed (≥ 3 of N runs) — tags `tempering`, `flake`,
+    `<scanner>`, `<testName>`
+  - Perf regression confirmed (2 consecutive runs) — tags `tempering`,
+    `perf-regression`, `<endpoint-or-page>`
+  - Mutation score below minimum — tags `tempering`, `mutation-gap`,
+    `<layer>`
+  Cross-project recall is the point: "this test has been flaky
+  elsewhere too" informs classification in TEMPER-06. See arc doc
+  §"L3 semantic memory (OpenBrain) integration".
 - Tests — ~30 assertions
 
 ### Out of scope

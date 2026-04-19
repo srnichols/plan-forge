@@ -268,6 +268,42 @@ They're called out here so every later phase has a stable target.
 - `tempering-bug-validated-fixed` (TEMPER-06)
 - `tempering-visual-regression-detected` (TEMPER-04)
 
+### L3 semantic memory (OpenBrain) integration
+
+Tempering writes to all three tiers of Plan Forge's memory architecture
+(see [`docs/MEMORY-ARCHITECTURE.md`](../MEMORY-ARCHITECTURE.md)):
+
+| Tier | Surface | Writer |
+|------|---------|--------|
+| **L1** (hub) | `tempering-*` events (above) | every scanner, every MCP tool |
+| **L2** (files) | `.forge/tempering/<runId>.json`, `.forge/bugs/<bugId>.json`, `.forge/tempering/config.json`, `.forge/tempering/perf-history.jsonl`, `.forge/tempering/baselines/` | scanners + registry |
+| **L3** (semantic) | OpenBrain via `captureMemory()` (falls back to `.forge/openbrain-queue.jsonl` when offline) | see capture table below |
+
+**L3 capture sites** — each goes through the existing `captureMemory()`
+helper so OpenBrain outages never block a tempering run:
+
+| Capture site | Phase | Tags | Why L3 |
+|--------------|-------|------|--------|
+| Scan-completed summary (coverage gaps) | TEMPER-01 | `tempering`, `scan`, `<stack>`, `<status>` | "Has this project — or similar projects — had this coverage shape before?" |
+| Run-completed verdict | TEMPER-02 | `tempering`, `run`, `<stack>`, `<verdict>` | Cross-project recall of what scanner mixes produce green/amber/red |
+| Visual quorum decision | TEMPER-04 | `tempering`, `visual-regression`, `<verdict>`, `quorum:<n-of-m>` | Quorum disagreement patterns are valuable across projects (false-positive calibration) |
+| Flake-confirmed (≥ 3 of N runs) | TEMPER-05 | `tempering`, `flake`, `<scanner>`, `<testName>` | "This test has been flaky in other projects too" |
+| Perf regression confirmed (2 consecutive runs) | TEMPER-05 | `tempering`, `perf-regression`, `<endpoint-or-page>` | Cross-project p95 baselines |
+| Mutation score below minimum | TEMPER-05 | `tempering`, `mutation-gap`, `<layer>` | Weak-suite patterns by layer |
+| Bug-registered (real-bug only) | TEMPER-06 | `tempering-bug`, `<category>`, `<severity>`, `confidence-source:<rule\|llm>` | Cross-project bug pattern recall feeds future classifier confidence |
+| Fix-validated (fix → validation pair) | TEMPER-06 | `tempering-fix`, `<bugCategory>`, `<outcome>` | "What fixes have worked for this class of bug before?" |
+
+**Forbidden in L3:**
+
+- Do NOT capture screenshots or binary blobs — L3 stores the verdict
+  and metadata; the evidence stays in L2 under `.forge/bugs/<id>.json`
+- Do NOT capture GitHub issue tokens, PII, or repo-private URLs in
+  tags — `captureMemory()` already scrubs, but scanners must not
+  hand-roll payloads that bypass it
+- Do NOT capture test-infra-only bugs to L3 — only `real-bug`
+  classifications cross the L3 threshold (infra noise would pollute
+  cross-project search)
+
 ### Watcher anomalies introduced
 
 - `tempering-coverage-below-minimum` (TEMPER-01)

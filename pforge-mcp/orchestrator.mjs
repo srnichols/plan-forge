@@ -1030,15 +1030,26 @@ export function probeQuorumModelAvailability(model) {
     }
   }
 
-  // Path 2: CLI-routed models — reuse detectWorkers() (already cached)
-  const requiredCli = resolveRequiredCli(model);
+  // Path 2: CLI-routed models — mirror spawnWorker()'s actual behavior,
+  // which picks the FIRST available non-API worker and passes --model to it.
+  // Prefer the model-specific CLI (claude, codex) when present, but fall
+  // back to gh-copilot (which accepts --model for any model) to match
+  // real spawn behavior. This fixes the regression where claude-opus-*
+  // models were marked unavailable on systems where only `gh` is installed
+  // (the common case — every prior run in this repo used gh-copilot).
+  const preferredCli = resolveRequiredCli(model);
   const workers = detectWorkers();
-  const worker = workers.find((w) => w.name === requiredCli && w.available);
-  if (worker) return { model, available: true, via: "cli", worker: worker.name };
-  const hint = suggestInstall(requiredCli);
+  const preferred = workers.find((w) => w.name === preferredCli && w.available);
+  if (preferred) return { model, available: true, via: "cli", worker: preferred.name };
+  // Fallback: gh-copilot accepts --model <any> and drives the actual spawn
+  const ghCopilot = workers.find((w) => w.name === "gh-copilot" && w.available);
+  if (ghCopilot) {
+    return { model, available: true, via: "cli", worker: "gh-copilot", fallback: true };
+  }
+  const hint = suggestInstall(preferredCli);
   return {
     model, available: false, via: "cli",
-    reason: `CLI '${requiredCli}' not on PATH`,
+    reason: `CLI '${preferredCli}' not on PATH (and no gh-copilot fallback available)`,
     install: hint.command || hint.docs || null,
   };
 }

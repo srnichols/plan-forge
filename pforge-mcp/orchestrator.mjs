@@ -4719,6 +4719,126 @@ export function resolveReviewItem(targetPath, input, hub = null, captureMemoryFn
   return updated;
 }
 
+// ─── Phase FORGE-SHOP-02 Slice 02.2 — Review Queue Producer Hooks ────
+
+/**
+ * Shared producer hook pattern.  Each `maybeAdd*Review` helper:
+ *   1. Short-circuits in NODE_ENV=test (no side-effects)
+ *   2. Checks for an existing open item with the same correlationId+source (idempotence)
+ *   3. Creates a new review item if none exists
+ *   4. Catches all errors — never propagates to the caller
+ */
+
+export function maybeAddStallReview(root, args, hub, captureMemoryFn) {
+  if (process.env.NODE_ENV === "test") return null;
+  try {
+    const existing = listReviewItems(root, {
+      correlationId: args.correlationId,
+      source: "crucible-stall",
+      status: "open",
+    });
+    if (existing.length > 0) return existing[0];
+    return addReviewItem(root, {
+      source: "crucible-stall",
+      severity: "medium",
+      title: args.title || `Crucible smelt stalled — ${args.correlationId}`,
+      context: args.context || null,
+      correlationId: args.correlationId,
+    }, hub, captureMemoryFn);
+  } catch (err) {
+    try { console.warn(`[review-hook] maybeAddStallReview failed: ${err.message}`); } catch {}
+    return null;
+  }
+}
+
+export function maybeAddTemperingReview(root, args, hub, captureMemoryFn) {
+  if (process.env.NODE_ENV === "test") return null;
+  try {
+    const existing = listReviewItems(root, {
+      correlationId: args.correlationId,
+      source: "tempering-quorum-inconclusive",
+      status: "open",
+    });
+    if (existing.length > 0) return existing[0];
+    return addReviewItem(root, {
+      source: "tempering-quorum-inconclusive",
+      severity: "medium",
+      title: args.title || `Tempering quorum inconclusive — ${args.correlationId}`,
+      context: args.context || null,
+      correlationId: args.correlationId,
+    }, hub, captureMemoryFn);
+  } catch (err) {
+    try { console.warn(`[review-hook] maybeAddTemperingReview failed: ${err.message}`); } catch {}
+    return null;
+  }
+}
+
+export function maybeAddBugReview(root, args, hub, captureMemoryFn) {
+  if (process.env.NODE_ENV === "test") return null;
+  try {
+    const existing = listReviewItems(root, {
+      correlationId: args.correlationId,
+      source: "bug-classify",
+      status: "open",
+    });
+    if (existing.length > 0) return existing[0];
+    return addReviewItem(root, {
+      source: "bug-classify",
+      severity: args.severity || "blocker",
+      title: args.title || `Bug ${args.correlationId} needs human review (critical/functional)`,
+      context: args.context || null,
+      correlationId: args.correlationId,
+    }, hub, captureMemoryFn);
+  } catch (err) {
+    try { console.warn(`[review-hook] maybeAddBugReview failed: ${err.message}`); } catch {}
+    return null;
+  }
+}
+
+export function maybeAddVisualBaselineReview(root, args, hub, captureMemoryFn) {
+  if (process.env.NODE_ENV === "test") return null;
+  try {
+    const existing = listReviewItems(root, {
+      correlationId: args.correlationId,
+      source: "tempering-baseline",
+      status: "open",
+    });
+    if (existing.length > 0) return existing[0];
+    return addReviewItem(root, {
+      source: "tempering-baseline",
+      severity: "medium",
+      title: args.title || `Visual regression — review baseline update`,
+      context: args.context || null,
+      correlationId: args.correlationId,
+    }, hub, captureMemoryFn);
+  } catch (err) {
+    try { console.warn(`[review-hook] maybeAddVisualBaselineReview failed: ${err.message}`); } catch {}
+    return null;
+  }
+}
+
+export function maybeAddFixPlanReview(root, args, hub, captureMemoryFn) {
+  if (process.env.NODE_ENV === "test") return null;
+  try {
+    const existing = listReviewItems(root, {
+      correlationId: args.correlationId,
+      source: "fix-plan-approval",
+      status: "open",
+    });
+    if (existing.length > 0) return existing[0];
+    return addReviewItem(root, {
+      source: "fix-plan-approval",
+      severity: args.severity || "high",
+      title: args.title || `Fix proposal ${args.correlationId} pending approval`,
+      context: args.context || null,
+      correlationId: args.correlationId,
+    }, hub, captureMemoryFn);
+  } catch (err) {
+    try { console.warn(`[review-hook] maybeAddFixPlanReview failed: ${err.message}`); } catch {}
+    return null;
+  }
+}
+
 /**
  * Build a structured snapshot of the watched run's current state.
  * Cheap to build — pure file reads, no AI calls.
@@ -4848,6 +4968,19 @@ export function buildWatchSnapshot(targetPath, runId = null, opts = {}) {
         return { inFlightRuns, openIncidents, openBugs };
       } catch { return null; }
     })(),
+    // Phase FORGE-SHOP-02 Slice 02.2 — review queue summary for watcher anomaly.
+    reviewQueue: (() => {
+      try {
+        const rqState = readReviewQueueState(targetPath);
+        if (!rqState) return null;
+        const blockerItems = listReviewItems(targetPath, { status: "open", severity: "blocker", limit: 500 });
+        const oldestBlockerAge = blockerItems.reduce((max, it) => {
+          const age = Date.now() - new Date(it.createdAt).getTime();
+          return age > max ? age : max;
+        }, 0);
+        return { open: rqState.open ?? 0, blockerAgeMs: oldestBlockerAge || null };
+      } catch { return null; }
+    })(),
   };
 }
 
@@ -4908,12 +5041,20 @@ function buildActiveRunsQuadrant(root) {
     }
 
     const lastTs = new Date(events[events.length - 1].ts).getTime();
-    return {
+    const result = {
       inFlight: runState === "in-progress" ? 1 : 0,
       lastSliceOutcome,
       lastRunId: located.runId,
       lastRunAgeMs: Date.now() - lastTs,
     };
+
+    // Phase FORGE-SHOP-02 Slice 02.2 — Review queue sub-count
+    try {
+      const rqState = readReviewQueueState(root);
+      result.openReviews = rqState?.open ?? 0;
+    } catch { result.openReviews = 0; }
+
+    return result;
   } catch { return null; }
 }
 
@@ -5268,6 +5409,21 @@ export function detectWatchAnomalies(snapshot) {
     });
   }
 
+  // 20. (Phase FORGE-SHOP-02 Slice 02.2) Review queue backlog — open
+  // reviews exceed threshold or blocker items aging past 4 hours.
+  if (snapshot.reviewQueue) {
+    const rq = snapshot.reviewQueue;
+    if (rq.open > 10 || (rq.blockerAgeMs && rq.blockerAgeMs > 4 * 60 * 60 * 1000)) {
+      anomalies.push({
+        severity: "warn",
+        code: "review-queue-backlog",
+        message: rq.blockerAgeMs > 4 * 60 * 60 * 1000
+          ? `Blocker review open for ${Math.round(rq.blockerAgeMs / 3600000)}h — requires immediate attention`
+          : `${rq.open} open reviews in queue — consider clearing backlog`,
+      });
+    }
+  }
+
   return anomalies;
 }
 
@@ -5482,6 +5638,15 @@ export function recommendFromAnomalies(anomalies, snapshot) {
         });
         break;
       }
+
+      case "review-queue-backlog":
+        recs.push({
+          code,
+          severity: anomaly.severity,
+          action: "Open the Review tab and clear open items, prioritizing blockers",
+          command: null,
+        });
+        break;
 
       default:
         recs.push({

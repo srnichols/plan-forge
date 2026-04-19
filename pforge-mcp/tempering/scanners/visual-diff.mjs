@@ -426,6 +426,20 @@ export async function runVisualDiffScan(ctx) {
     if (llmVerdict === "regression") {
       failCount++;
       emit(hub, "tempering-visual-regression-detected", eventPayload);
+
+      // Phase FORGE-SHOP-02 Slice 02.2 — review queue hook for visual regressions
+      const vdConfig = config?.visualDiff || {};
+      if (vdConfig.autoQueueReview === true) {
+        try {
+          const { maybeAddVisualBaselineReview } = await import("../../orchestrator.mjs");
+          maybeAddVisualBaselineReview(projectDir, {
+            title: `Visual regression on ${entry.url} — review baseline update`,
+            severity: "medium",
+            context: { url: entry.url, diffPercent, quorumVerdict: llmVerdict },
+            correlationId: `visual-${urlHash}`,
+          }, hub, captureMemory);
+        } catch { /* review hook is advisory */ }
+      }
     } else if (llmVerdict === "acceptable") {
       passCount++;
       emit(hub, "tempering-visual-regression-detected", eventPayload);
@@ -433,6 +447,17 @@ export async function runVisualDiffScan(ctx) {
       // inconclusive — count as skipped (advisory, not pass or fail)
       skippedCount++;
       emit(hub, "tempering-visual-regression-detected", eventPayload);
+
+      // Phase FORGE-SHOP-02 Slice 02.2 — review queue hook for quorum-inconclusive
+      try {
+        const { maybeAddTemperingReview } = await import("../../orchestrator.mjs");
+        maybeAddTemperingReview(projectDir, {
+          title: `Visual-diff quorum inconclusive for ${entry.url}`,
+          severity: "medium",
+          context: { url: entry.url, diffPercent, quorum: quorumData, explanation },
+          correlationId: `quorum-${urlHash}`,
+        }, hub, captureMemory);
+      } catch { /* review hook is advisory */ }
     }
 
     // L3 capture — text only, never images

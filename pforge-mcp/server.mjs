@@ -57,7 +57,7 @@ try {
   // .env loading is best-effort. Failure must never break server startup.
 }
 
-import { parsePlan, runPlan, detectWorkers, getCostReport, getHealthTrend, analyzeWithQuorum, generateImage, runAnalyze, readForgeJson, readForgeJsonl, appendForgeJsonl, emitToolTelemetry, regressionGuard, runPostSliceHook, resetPostSliceHookFired, runPreAgentHandoffHook, postOpenClawSnapshot, loadOpenClawConfig, loadQuorumConfig, runWatch, runWatchLive, readCrucibleState, readHomeSnapshot, addReviewItem, resolveReviewItem, listReviewItems, readReviewQueueState } from "./orchestrator.mjs";
+import { parsePlan, runPlan, detectWorkers, getCostReport, getHealthTrend, analyzeWithQuorum, generateImage, runAnalyze, readForgeJson, readForgeJsonl, appendForgeJsonl, emitToolTelemetry, regressionGuard, runPostSliceHook, resetPostSliceHookFired, runPreAgentHandoffHook, postOpenClawSnapshot, loadOpenClawConfig, loadQuorumConfig, runWatch, runWatchLive, readCrucibleState, readHomeSnapshot, addReviewItem, resolveReviewItem, listReviewItems, readReviewQueueState, maybeAddFixPlanReview } from "./orchestrator.mjs";
 import {
   isOpenBrainConfigured,
   shapeWatcherAnomalyThought,
@@ -3651,6 +3651,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const proposalRecord = { fixId, plan: `docs/plans/auto/${planName}`, source: sourceData.type, sliceCount: slices.length, generatedAt: new Date().toISOString() };
       appendForgeJsonl("fix-proposals.json", proposalRecord, cwd);
 
+      // Phase FORGE-SHOP-02 Slice 02.2 — review queue hook for fix plans with code edits
+      if (Array.isArray(slices) && slices.some(s => (s.codeSnippets?.length > 0) || (s.scope?.length > 0))) {
+        try {
+          maybeAddFixPlanReview(cwd, {
+            title: `Fix proposal ${fixId} pending approval`,
+            severity: sourceData.type === "incident" ? "high" : "medium",
+            context: { proposalId: fixId, planPath: `docs/plans/auto/${planName}`, slices: slices.length },
+            correlationId: fixId,
+          }, activeHub, captureMemory);
+        } catch (err) { console.warn?.(`Fix-plan review hook failed: ${err.message}`); }
+      }
+
       const result = { fixId, plan: `docs/plans/auto/${planName}`, source: sourceData.type, sliceCount: slices.length, alreadyExists: false };
       emitToolTelemetry("forge_fix_proposal", args, result, Date.now() - t0, "OK", cwd);
       activeHub?.broadcast({ type: "fix-proposal-ready", data: result });
@@ -4101,6 +4113,29 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
       }
     } catch { /* .forge.json parse error — skip */ }
+
+    // Phase FORGE-SHOP-02 Slice 02.2 — Review queue row in smith output
+    try {
+      const smithCwd2 = args.path ? findProjectRoot(resolve(args.path)) : PROJECT_DIR;
+      const rqState = readReviewQueueState(smithCwd2);
+      if (rqState) {
+        const allItems = listReviewItems(smithCwd2, { limit: 500 });
+        const today = new Date().toISOString().slice(0, 10);
+        const resolvedToday = allItems.filter(i => i.resolvedAt?.startsWith(today)).length;
+        const openItems = allItems.filter(i => i.status === "open");
+        const oldestOpen = openItems.reduce((max, i) => {
+          const age = Date.now() - new Date(i.createdAt).getTime();
+          return age > max ? age : max;
+        }, 0);
+        const ageStr = oldestOpen > 0
+          ? oldestOpen > 86400000 ? `${Math.round(oldestOpen / 86400000)}d`
+            : oldestOpen > 3600000 ? `${Math.round(oldestOpen / 3600000)}h`
+            : `${Math.round(oldestOpen / 60000)}m`
+          : "—";
+        output += `\n\nReview queue:\n  Open:            ${rqState.open}\n  Resolved today:  ${resolvedToday}\n  Oldest open age: ${ageStr}`;
+      }
+    } catch { /* review queue read error — skip */ }
+
     return { content: [{ type: "text", text: output }], isError: !result.success };
   }
 

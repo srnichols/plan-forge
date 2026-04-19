@@ -78,6 +78,7 @@
     <!-- Sub tabs: Forge -->
     <div id="subtabs-forge" class="flex gap-1 pt-1 pb-0.5 overflow-x-auto">
       <button class="tab-btn tab-active px-3 py-1.5 rounded-t hover:text-blue-400 whitespace-nowrap text-xs" data-tab="home" data-testid="home-tab-btn">🏠 Home</button>
+      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-amber-400 text-gray-400 whitespace-nowrap text-xs" data-tab="review" data-testid="review-tab-btn">📋 Review</button>
       <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="progress">Progress</button>
       <button class="tab-btn px-3 py-1.5 rounded-t hover:text-orange-400 text-gray-400 whitespace-nowrap text-xs" data-tab="crucible">🔥 Crucible</button>
       <button class="tab-btn px-3 py-1.5 rounded-t hover:text-purple-400 text-gray-400 whitespace-nowrap text-xs" data-tab="governance">🛡 Governance</button>
@@ -161,6 +162,41 @@
         </div>
         <div id="home-activity-feed" role="log" aria-live="polite" data-testid="home-activity-feed" class="max-h-64 overflow-y-auto text-xs">
           <p class="text-gray-500 text-center py-4">Loading…</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Review Tab (Phase FORGE-SHOP-02 Slice 02.2) — review queue UI -->
+    <section id="tab-review" class="tab-content hidden">
+      <div class="mb-4">
+        <h2 class="text-lg font-semibold text-amber-400">📋 Review</h2>
+        <p class="text-xs text-gray-500">Pending human reviews from automated hooks.</p>
+      </div>
+      <!-- Filter chip bar -->
+      <div data-testid="review-filter-bar" class="flex flex-wrap gap-2 mb-4">
+        <span class="text-xs text-gray-500 self-center mr-1">Source:</span>
+        <button class="filter-chip text-xs px-2 py-0.5 rounded-full border border-gray-600 text-gray-400 hover:text-white" data-filter-type="source" data-filter-value="crucible-stall" data-testid="review-chip-source-crucible-stall">crucible-stall</button>
+        <button class="filter-chip text-xs px-2 py-0.5 rounded-full border border-gray-600 text-gray-400 hover:text-white" data-filter-type="source" data-filter-value="tempering-quorum-inconclusive" data-testid="review-chip-source-tempering-quorum-inconclusive">quorum-inconclusive</button>
+        <button class="filter-chip text-xs px-2 py-0.5 rounded-full border border-gray-600 text-gray-400 hover:text-white" data-filter-type="source" data-filter-value="tempering-baseline" data-testid="review-chip-source-tempering-baseline">baseline</button>
+        <button class="filter-chip text-xs px-2 py-0.5 rounded-full border border-gray-600 text-gray-400 hover:text-white" data-filter-type="source" data-filter-value="bug-classify" data-testid="review-chip-source-bug-classify">bug-classify</button>
+        <button class="filter-chip text-xs px-2 py-0.5 rounded-full border border-gray-600 text-gray-400 hover:text-white" data-filter-type="source" data-filter-value="fix-plan-approval" data-testid="review-chip-source-fix-plan-approval">fix-plan</button>
+        <span class="text-xs text-gray-500 self-center ml-2 mr-1">Severity:</span>
+        <button class="filter-chip text-xs px-2 py-0.5 rounded-full border border-gray-600 text-gray-400 hover:text-white" data-filter-type="severity" data-filter-value="blocker" data-testid="review-chip-severity-blocker">blocker</button>
+        <button class="filter-chip text-xs px-2 py-0.5 rounded-full border border-gray-600 text-gray-400 hover:text-white" data-filter-type="severity" data-filter-value="high" data-testid="review-chip-severity-high">high</button>
+        <button class="filter-chip text-xs px-2 py-0.5 rounded-full border border-gray-600 text-gray-400 hover:text-white" data-filter-type="severity" data-filter-value="medium" data-testid="review-chip-severity-medium">medium</button>
+        <button class="filter-chip text-xs px-2 py-0.5 rounded-full border border-gray-600 text-gray-400 hover:text-white" data-filter-type="severity" data-filter-value="low" data-testid="review-chip-severity-low">low</button>
+        <span class="text-xs text-gray-500 self-center ml-2 mr-1">Status:</span>
+        <button class="filter-chip tab-active text-xs px-2 py-0.5 rounded-full border border-blue-500 text-blue-400" data-filter-type="status" data-filter-value="open" data-testid="review-chip-status-open">open</button>
+        <button class="filter-chip text-xs px-2 py-0.5 rounded-full border border-gray-600 text-gray-400 hover:text-white" data-filter-type="status" data-filter-value="resolved" data-testid="review-chip-status-resolved">resolved</button>
+        <button class="filter-chip text-xs px-2 py-0.5 rounded-full border border-gray-600 text-gray-400 hover:text-white" data-filter-type="status" data-filter-value="deferred" data-testid="review-chip-status-deferred">deferred</button>
+      </div>
+      <!-- Two-pane layout -->
+      <div class="grid grid-cols-2 gap-4" style="grid-template-columns: 1fr 1fr;">
+        <div id="review-list-pane" class="bg-gray-800 rounded-lg p-4 max-h-96 overflow-y-auto">
+          <div data-testid="review-empty-state" class="text-gray-500 text-center py-8">🧹 Shop floor clear — no pending reviews</div>
+        </div>
+        <div id="review-detail-pane" class="bg-gray-800 rounded-lg p-4">
+          <p class="text-gray-500 text-sm text-center py-8">Select a review item to see details</p>
         </div>
       </div>
     </section>

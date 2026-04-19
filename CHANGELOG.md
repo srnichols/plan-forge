@@ -5,6 +5,41 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.39.0] — 2026-04-19
+
+### Added — Phase CRUCIBLE-02 Slice 02.1 — slice-card complexity + spend badges
+
+Live dashboard slice cards in the **Progress** tab now surface two at-a-glance
+signals that previously lived deep in logs or cost reports:
+
+- **Complexity score badge** — `⚙ N/10`, color-graded:
+  - 🟢 green for 1–3 (low-risk)
+  - 🟠 amber for 4–6 (medium)
+  - 🔴 red for 7–10 (high-risk, quorum candidate)
+- **Total-spend badge** — `💰 $0.xxxx`, shown once a cost is recorded.
+
+Both pills render in a dedicated row beneath the slice title and update live
+from hub events (`slice-started` → complexity, `slice-completed` → cost).
+
+### Changed — orchestrator event payloads
+
+`slice-started`, `slice-completed`, and `slice-failed` events now carry a
+`complexityScore` field (computed once up-front for every node in the DAG).
+This runs independently of quorum mode — previously the score was only
+computed when `quorumConfig.enabled === true`. Existing consumers that
+ignore unknown fields are unaffected.
+
+### Tests
+
+- **1003 passing** (was 997, +6 new)
+  - 4 in `tests/scheduler-complexity.test.mjs` — verifies both schedulers
+    emit `complexityScore` on start/complete/failed, and handles the
+    no-score case gracefully
+  - 2 in `tests/crucible-dashboard.test.mjs` — pins the render contract
+    (badge rendering, threshold breakpoints, hydration from event data)
+
+---
+
 ## [2.38.1] — 2026-04-19
 
 ### Fixed — Test-suite port flake (EADDRINUSE on 3103–3105)

@@ -337,6 +337,7 @@ function handleSliceStarted(data) {
   if (slice) {
     slice.status = "executing";
     slice.title = data.title || slice.title;
+    if (typeof data.complexityScore === "number") slice.complexityScore = data.complexityScore;
   }
   startSliceTimer(data.sliceId);
   updateProgress();
@@ -450,6 +451,26 @@ function renderSliceCards() {
       ? `<span class="text-xs px-1.5 py-0.5 rounded bg-purple-900/50 text-purple-300 border border-purple-800" title="Quorum mode">Q</span>`
       : (s.status !== "pending" ? `<span class="text-xs px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-400 border border-blue-800" title="Single-pass">S</span>` : "");
 
+    // Phase CRUCIBLE-02 Slice 02.1 — Complexity Score badge (⚙ 1-10)
+    // Color-graded: green 1-3 (low), amber 4-6 (medium), red 7-10 (high)
+    let complexityBadge = "";
+    if (typeof s.complexityScore === "number" && Number.isFinite(s.complexityScore)) {
+      const c = s.complexityScore;
+      const color = c >= 7
+        ? "bg-red-900/50 text-red-300 border-red-800"
+        : c >= 4
+        ? "bg-amber-900/50 text-amber-300 border-amber-800"
+        : "bg-green-900/40 text-green-400 border-green-800";
+      complexityBadge = `<span class="text-xs px-1.5 py-0.5 rounded ${color} border" title="Complexity score (1-10)">⚙ ${c}/10</span>`;
+    }
+
+    // Phase CRUCIBLE-02 Slice 02.1 — Total-Spend badge ($0.xxxx)
+    // Only shows once a cost has been recorded. Separate from the existing
+    // footer-level model+cost line so the spend is scannable at-a-glance.
+    const spendBadge = (typeof s.cost === "number" && s.cost > 0)
+      ? `<span class="text-xs px-1.5 py-0.5 rounded bg-gray-800 text-emerald-300 border border-gray-700" title="Model spend for this slice">💰 $${s.cost.toFixed(4)}</span>`
+      : "";
+
     // Gate status indicator
     let gateHtml = "";
     if (s.gateStatus === "passed") {
@@ -476,6 +497,7 @@ function renderSliceCards() {
           <span class="text-xs text-gray-500 flex items-center gap-1.5">${retryHtml}${gateHtml}${duration}${elapsed}</span>
         </div>
         <p class="text-xs text-gray-400 truncate">${s.title}</p>
+        ${(complexityBadge || spendBadge) ? `<div class="flex items-center gap-1.5 mt-1.5">${complexityBadge}${spendBadge}</div>` : ""}
         ${model ? `<p class="text-xs text-gray-500 mt-1">${modelBadge} ${cost}</p>` : ""}
         ${quorumHtml}
         ${s.error ? `<p class="text-xs text-red-400 mt-1 truncate">${s.error}</p>` : ""}

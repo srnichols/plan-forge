@@ -77,7 +77,8 @@
     </div>
     <!-- Sub tabs: Forge -->
     <div id="subtabs-forge" class="flex gap-1 pt-1 pb-0.5 overflow-x-auto">
-      <button class="tab-btn tab-active px-3 py-1.5 rounded-t hover:text-blue-400 whitespace-nowrap text-xs" data-tab="progress">Progress</button>
+      <button class="tab-btn tab-active px-3 py-1.5 rounded-t hover:text-blue-400 whitespace-nowrap text-xs" data-tab="home" data-testid="home-tab-btn">🏠 Home</button>
+      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="progress">Progress</button>
       <button class="tab-btn px-3 py-1.5 rounded-t hover:text-orange-400 text-gray-400 whitespace-nowrap text-xs" data-tab="crucible">🔥 Crucible</button>
       <button class="tab-btn px-3 py-1.5 rounded-t hover:text-purple-400 text-gray-400 whitespace-nowrap text-xs" data-tab="governance">🛡 Governance</button>
       <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="runs">Runs</button>
@@ -117,8 +118,55 @@
   <!-- Tab Content -->
   <main class="p-4 max-w-6xl mx-auto">
 
+    <!-- Home Tab (Phase FORGE-SHOP-01 Slice 01.2) — shop-floor overview -->
+    <section id="tab-home" class="tab-content">
+      <div class="mb-4">
+        <h2 class="text-lg font-semibold text-blue-400">🏠 Home</h2>
+        <p class="text-xs text-gray-500">Shop-floor overview — subsystem health at a glance.</p>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <!-- Crucible quadrant -->
+        <div id="home-q-crucible" role="region" aria-labelledby="home-q-crucible-label" data-testid="home-q-crucible" class="bg-gray-800 rounded-lg p-4">
+          <h3 id="home-q-crucible-label" class="text-sm font-semibold text-orange-400 mb-2">🔥 Crucible</h3>
+          <div id="home-q-crucible-stats" class="text-xs text-gray-400 mb-3">Loading…</div>
+          <button data-testid="home-drill-crucible" class="text-xs text-blue-400 hover:text-blue-300" onclick="applyFilter('crucible', 'source', 'home')">Drill through →</button>
+        </div>
+        <!-- Active Runs quadrant -->
+        <div id="home-q-runs" role="region" aria-labelledby="home-q-runs-label" data-testid="home-q-runs" class="bg-gray-800 rounded-lg p-4">
+          <h3 id="home-q-runs-label" class="text-sm font-semibold text-blue-400 mb-2">📊 Active Runs</h3>
+          <div id="home-q-runs-stats" class="text-xs text-gray-400 mb-3">Loading…</div>
+          <button data-testid="home-drill-runs" class="text-xs text-blue-400 hover:text-blue-300" onclick="applyFilter('runs', 'source', 'home')">Drill through →</button>
+        </div>
+        <!-- LiveGuard quadrant -->
+        <div id="home-q-liveguard" role="region" aria-labelledby="home-q-liveguard-label" data-testid="home-q-liveguard" class="bg-gray-800 rounded-lg p-4">
+          <h3 id="home-q-liveguard-label" class="text-sm font-semibold text-amber-400 mb-2">🛡️ LiveGuard</h3>
+          <div id="home-q-liveguard-stats" class="text-xs text-gray-400 mb-3">Loading…</div>
+          <button data-testid="home-drill-liveguard" class="text-xs text-blue-400 hover:text-blue-300" onclick="applyFilter('lg-health', 'source', 'home')">Drill through →</button>
+        </div>
+        <!-- Tempering quadrant -->
+        <div id="home-q-tempering" role="region" aria-labelledby="home-q-tempering-label" data-testid="home-q-tempering" class="bg-gray-800 rounded-lg p-4">
+          <h3 id="home-q-tempering-label" class="text-sm font-semibold text-emerald-400 mb-2">🛠 Tempering</h3>
+          <div id="home-q-tempering-stats" class="text-xs text-gray-400 mb-3">Loading…</div>
+          <button data-testid="home-drill-tempering" class="text-xs text-blue-400 hover:text-blue-300" onclick="applyFilter('tempering', 'source', 'home')">Drill through →</button>
+        </div>
+      </div>
+      <!-- Activity feed -->
+      <div class="mt-4 bg-gray-800 rounded-lg p-4">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-sm font-semibold text-gray-300">Activity Feed</h3>
+          <label class="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
+            <input type="checkbox" id="home-group-toggle" data-testid="home-group-toggle" class="rounded">
+            Group by correlation
+          </label>
+        </div>
+        <div id="home-activity-feed" role="log" aria-live="polite" data-testid="home-activity-feed" class="max-h-64 overflow-y-auto text-xs">
+          <p class="text-gray-500 text-center py-4">Loading…</p>
+        </div>
+      </div>
+    </section>
+
     <!-- Progress Tab -->
-    <section id="tab-progress" class="tab-content">
+    <section id="tab-progress" class="tab-content hidden">
       <!-- Run summary bar -->
       <div id="run-summary" class="bg-gray-800 rounded-lg p-4 mb-4 flex items-center justify-between">
         <div>

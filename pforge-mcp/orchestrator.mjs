@@ -4582,6 +4582,20 @@ export function buildWatchSnapshot(targetPath, runId = null, opts = {}) {
     // Mirrors the crucible contract exactly so the dashboard Watcher tab
     // can render both rows the same way.
     tempering: readTemperingState(targetPath),
+    // Phase FORGE-SHOP-01 Slice 01.2 — compact Home summary for watcher chip.
+    // Uses activityTail:0 to keep cost low (no feed needed in watcher context).
+    home: (() => {
+      try {
+        const snap = readHomeSnapshot(targetPath, { activityTail: 0 });
+        if (!snap.ok) return null;
+        const q = snap.quadrants;
+        const inFlightRuns    = q.activeRuns?.inFlight    ?? null;
+        const openIncidents   = q.liveguard?.openIncidents ?? null;
+        const openBugs        = q.tempering?.openBugs      ?? null;
+        if (inFlightRuns === null && openIncidents === null && openBugs === null) return null;
+        return { inFlightRuns, openIncidents, openBugs };
+      } catch { return null; }
+    })(),
   };
 }
 
@@ -5427,6 +5441,9 @@ export async function runWatch(options = {}) {
               staleCutoffDays: report.tempering.staleCutoffDays,
             }
           : null,
+        // Phase FORGE-SHOP-01 Slice 01.2 — Home chip data for watcher tab.
+        // Already extracted by buildWatchSnapshot; forward as-is.
+        home: snapshot.home || null,
       });
       for (const anomaly of anomalies) {
         eventBus.emit("watch-anomaly-detected", {

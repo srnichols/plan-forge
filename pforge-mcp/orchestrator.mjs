@@ -3169,6 +3169,104 @@ const CACHE_MAX_AGE_MINUTES = 10;
  * @param {string} command  - Terminal command being executed (may be empty)
  * @returns {boolean}
  */
+/**
+ * Check whether a slice title indicates a destructive operation
+ * (teardown, cleanup, rollback, postmortem, finalize).
+ * Prefix-anchored: "Setup teardown hooks" does NOT match.
+ * @param {string} title - Slice title to check
+ * @returns {boolean}
+ */
+export function isDestructiveSliceTitle(title) {
+  if (typeof title !== "string") return false;
+  return /^\s*(teardown|cleanup|rollback|postmortem|finalize)\b/i.test(title);
+}
+
+/** Default configuration for the Teardown Safety Guard. */
+const TEARDOWN_GUARD_DEFAULTS = {
+  enabled: true,
+  blockOnBranchLoss: true,
+  checkRemote: true,
+};
+
+/**
+ * Load teardown guard configuration from .forge.json.
+ * Falls back to TEARDOWN_GUARD_DEFAULTS if absent or malformed.
+ * @param {string} cwd - Project root directory
+ * @returns {{ enabled: boolean, blockOnBranchLoss: boolean, checkRemote: boolean }}
+ */
+export function loadTeardownGuardConfig(cwd) {
+  let config = { ...TEARDOWN_GUARD_DEFAULTS };
+  const configPath = resolve(cwd, ".forge.json");
+  if (existsSync(configPath)) {
+    try {
+      const raw = JSON.parse(readFileSync(configPath, "utf-8"));
+      if (raw?.orchestrator?.teardownGuard) {
+        config = { ...config, ...raw.orchestrator.teardownGuard };
+      }
+    } catch {
+      /* malformed config — use defaults */
+    }
+  }
+  return config;
+}
+
+/**
+ * Verify that git branch state was not destroyed during a slice.
+ * @param {{ branch: string, headSha: string, upstream: string|null }} baseline
+ * @param {{ checkRemote: boolean }} config
+ * @param {string} cwd
+ * @returns {{ ok: boolean, failures: string[], reflogTail: string[] }}
+ */
+function verifyBranchSafety(baseline, config, cwd) {
+  const failures = [];
+  let reflogTail = [];
+
+  // 1. Local branch ref still exists
+  try {
+    execSync(`git show-ref --verify refs/heads/${baseline.branch}`, {
+      cwd, encoding: "utf-8", timeout: 5000, stdio: "pipe",
+    });
+  } catch {
+    failures.push(`local branch ref 'refs/heads/${baseline.branch}' no longer exists`);
+  }
+
+  // 2. Baseline HEAD still reachable
+  try {
+    execSync(`git cat-file -e ${baseline.headSha}^{commit}`, {
+      cwd, encoding: "utf-8", timeout: 5000, stdio: "pipe",
+    });
+  } catch {
+    failures.push(`baseline HEAD ${baseline.headSha} is no longer reachable`);
+  }
+
+  // 3. Remote branch ref (when upstream was configured and checkRemote enabled)
+  if (baseline.upstream && config.checkRemote) {
+    try {
+      const remoteName = baseline.upstream.split("/")[0] || "origin";
+      const remoteBranch = baseline.upstream.split("/").slice(1).join("/") || baseline.branch;
+      const lsRemote = execSync(`git ls-remote --heads ${remoteName} ${remoteBranch}`, {
+        cwd, encoding: "utf-8", timeout: 10000, stdio: "pipe",
+      }).trim();
+      if (!lsRemote) {
+        failures.push(`remote branch '${baseline.upstream}' no longer exists on remote`);
+      }
+    } catch (err) {
+      failures.push(`remote check failed for '${baseline.upstream}': ${err.message || "unknown error"}`);
+    }
+  }
+
+  // On failure, capture reflog for recovery
+  if (failures.length > 0) {
+    try {
+      reflogTail = execSync("git reflog -n 20 --format=%H\\ %gs", {
+        cwd, encoding: "utf-8", timeout: 5000, stdio: "pipe",
+      }).trim().split("\n");
+    } catch { /* reflog unavailable */ }
+  }
+
+  return { ok: failures.length === 0, failures, reflogTail };
+}
+
 export function isDeployTrigger(toolName, filePath, command) {
   if (filePath) {
     const normalized = filePath.replace(/\\/g, "/");
@@ -3808,6 +3906,32 @@ async function executeSlice(slice, options) {
     }
   } catch { /* not a git repo or git not available — skip snapshot */ }
 
+  // ─── Teardown Safety Guard: capture git baseline ────────────────────
+  let teardownBaseline = null;
+  const teardownGuardConfig = isDestructiveSliceTitle(slice.title)
+    ? loadTeardownGuardConfig(cwd)
+    : { enabled: false };
+
+  if (teardownGuardConfig.enabled) {
+    try {
+      const branch = execSync("git rev-parse --abbrev-ref HEAD", {
+        cwd, encoding: "utf-8", timeout: 5000,
+      }).trim();
+      const headSha = execSync("git rev-parse HEAD", {
+        cwd, encoding: "utf-8", timeout: 5000,
+      }).trim();
+      let upstream = null;
+      try {
+        upstream = execSync("git rev-parse --abbrev-ref --symbolic-full-name @{u}", {
+          cwd, encoding: "utf-8", timeout: 5000, stdio: "pipe",
+        }).trim();
+      } catch { /* no upstream — local-only check */ }
+      teardownBaseline = { branch, headSha, upstream, capturedAt: new Date().toISOString() };
+    } catch {
+      teardownBaseline = null; // non-git context — skip verification
+    }
+  }
+
   // ─── Agent-Per-Slice Routing (Slice 1) ───────────────────────────────
   // When no explicit model is set, recommend one from historical performance data.
   let finalModel = resolvedModel;
@@ -3925,6 +4049,25 @@ async function executeSlice(slice, options) {
       sliceInstructions = buildMemorySearchBlock(projectName, slice) + "\n" + sliceInstructions;
       sliceInstructions += "\n" + buildMemoryCaptureBlock(projectName, slice, planName);
     }
+
+    // Teardown Safety Guard: inject pre-flight constraint
+    if (teardownGuardConfig.enabled && isDestructiveSliceTitle(slice.title)) {
+      const preFlightWarning = [
+        "",
+        "--- TEARDOWN SAFETY GUARD (v2.49.1) ---",
+        "This slice MUST NOT delete, reset, or rename local or remote git branches.",
+        "Forbidden commands: `git branch -d`, `git branch -D`, `git push --delete`,",
+        "`git reset --hard` against protected refs, `git update-ref -d`.",
+        "Forbidden mutations: setting status to `abandoned` in `.github/` or `docs/plans/`",
+        "without an explicit plan directive.",
+        "Cleanup applies ONLY to cloud resources or scratch files the plan explicitly names.",
+        "A post-slice branch-safety check will verify HEAD reachability and ref integrity.",
+        "--- END TEARDOWN SAFETY GUARD ---",
+        "",
+      ].join("\n");
+      sliceInstructions = preFlightWarning + sliceInstructions;
+    }
+
     if (attempt > 0 && lastError) {
       sliceInstructions += `\n\n--- RETRY (attempt ${attempt + 1}) ---\n` +
         `Previous attempt failed with this error:\n${lastError}\n` +
@@ -4006,6 +4149,53 @@ async function executeSlice(slice, options) {
     if (attempt <= maxRetries) {
       // Log the retry
       writeFileSync(logFile, `\n\n--- GATE FAILED, RETRYING (attempt ${attempt + 1}) ---\n${lastError}\n`, { flag: "a" });
+    }
+  }
+
+  // ─── Teardown Safety Guard: post-slice branch verification ──────────
+  if (teardownBaseline && teardownGuardConfig.enabled) {
+    const verification = verifyBranchSafety(teardownBaseline, teardownGuardConfig, cwd);
+    if (!verification.ok) {
+      const incident = {
+        id: `INC-teardown-${Date.now()}`,
+        capturedAt: new Date().toISOString(),
+        severity: "critical",
+        title: "teardown-branch-loss",
+        sliceNumber: slice.number,
+        sliceTitle: slice.title,
+        baseline: teardownBaseline,
+        failures: verification.failures,
+        reflogTail: verification.reflogTail,
+        tags: ["teardown", "branch-loss", "critical"],
+      };
+      appendForgeJsonl("incidents.jsonl", incident, cwd);
+
+      // L3 memory capture (LiveGuard)
+      appendForgeJsonl("liveguard-memories.jsonl", {
+        capturedAt: incident.capturedAt,
+        type: "gotcha",
+        source: "teardown-guard",
+        content: `Branch safety failure during slice "${slice.title}": ${verification.failures.join("; ")}. Reflog tip: ${verification.reflogTail?.[0] ?? "n/a"}.`,
+        tags: ["teardown", "branch-loss", "critical"],
+        sliceRef: `${planName}::${slice.number}`,
+      }, cwd);
+
+      if (eventBus) {
+        eventBus.emit("teardown-branch-loss", {
+          sliceNumber: slice.number,
+          failures: verification.failures,
+          blocked: teardownGuardConfig.blockOnBranchLoss,
+        });
+      }
+
+      if (teardownGuardConfig.blockOnBranchLoss) {
+        return {
+          ok: false,
+          sliceNumber: slice.number,
+          reason: "teardown-branch-loss",
+          incident,
+        };
+      }
     }
   }
 

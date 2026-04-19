@@ -52,6 +52,12 @@
       <span id="hub-clients" class="text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-400 hidden" title="Connected clients">0 clients</span>
     </div>
     <div class="flex items-center gap-4 text-sm text-gray-400">
+      <!-- Phase UPDATE-01: non-intrusive update banner (hidden by default) -->
+      <a id="update-banner" href="#" target="_blank" rel="noopener" class="hidden items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-blue-900/60 text-blue-200 border border-blue-700 hover:bg-blue-800/70 transition" title="A newer Plan Forge release is available">
+        <span>⬆</span>
+        <span id="update-banner-text">Update available</span>
+        <button onclick="event.preventDefault(); event.stopPropagation(); dismissUpdateBanner();" class="ml-1 text-blue-300 hover:text-white" title="Dismiss (until next release)" aria-label="Dismiss update notice">✕</button>
+      </a>
       <a href="/ui" target="_blank" class="hover:text-white transition-colors">Plan Browser →</a>
       <span id="run-status">Idle</span>
       <span id="ws-port"></span>

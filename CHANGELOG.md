@@ -5,6 +5,52 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.38.0] — 2026-04-19
+
+### Added — Non-intrusive update notifier (Phase UPDATE-01)
+
+Plan Forge now tells you when a newer release is available — without
+spamming GitHub, without delaying startup, and without nagging users
+who've already seen the notice.
+
+- **New module `pforge-mcp/update-check.mjs`** — checks
+  `https://api.github.com/repos/srnichols/plan-forge/releases/latest`
+  with a 4s timeout and semver comparison
+- **Cache** at `.forge/update-check.json` with a 24h TTL. The dashboard
+  serves from this cache; the boot-time refresh writes to it once per day
+- **Opt-out**: set `PFORGE_NO_UPDATE_CHECK=1` to suppress all checks
+- **Never blocks startup** — the check is scheduled with a 2s delay and
+  every failure path (network down, HTTP 5xx, malformed JSON, unusable
+  `tag_name`) silently returns `null`
+- **REST endpoint** `GET /api/update-status` returns
+  `{ available, current, latest, url, publishedAt, checkedAt, fromCache }`
+- **Dashboard banner** — small dismissible pill in the header (`⬆ v2.38.0
+  available (you have v2.37.0)`), linking to the release page. Dismissal
+  is remembered per-release in `localStorage` so users aren't nagged
+
+### Added — Roadmap drafts
+
+- `docs/plans/Phase-CRUCIBLE-02.md` — Complexity-Score badge, Total-Spend
+  badge, and Smith Crucible panel (scheduled)
+- `docs/plans/Phase-SMITH-01.md` — Crucible diagnostics in `forge_smith`
+  (likely absorbed into CRUCIBLE-02)
+
+### Tests
+
+- 19 new tests in `tests/update-check.test.mjs` covering semver
+  comparison, cache TTL, env-var opt-out, network-failure tolerance,
+  malformed-response tolerance, cache-write, force-bypass, and REST
+  endpoint shape
+- Total suite: 997 tests passing
+
+### Security
+
+- The check only issues a `GET` to the public GitHub Releases API. No
+  authentication, no user data transmitted, no telemetry. `User-Agent`
+  header identifies the client as `plan-forge-update-check`.
+
+---
+
 ## [2.37.0] — 2026-04-19
 
 ### Added — Crucible: the idea-smelting pipeline (Phase CRUCIBLE-01)

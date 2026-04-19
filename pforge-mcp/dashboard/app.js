@@ -3094,6 +3094,32 @@ function renderWatcherPanel() {
     snapEl.innerHTML = '<p class="text-gray-500 text-sm py-4 text-center">No watcher snapshots yet. Run <code class="bg-gray-700 px-1 rounded">pforge watch &lt;target&gt;</code> or <code class="bg-gray-700 px-1 rounded">pforge watch-live &lt;target&gt;</code>.</p>';
   } else {
     const stateColor = { "in-progress": "text-blue-400", "completed": "text-green-400", "failed": "text-red-400", "stalled": "text-yellow-400", "idle": "text-gray-400" }[latest.runState] || "text-gray-300";
+
+    // Phase CRUCIBLE-03 Slice 03.2 — dedicated Crucible funnel row.
+    // Renders counts + stall/orphan highlights when the watched project
+    // has a `.forge/crucible/` directory, otherwise stays hidden. This
+    // mirrors the Smith panel section and is driven by the `crucible`
+    // block on the `watch-snapshot-completed` hub event payload.
+    let crucibleRow = "";
+    if (latest.crucible) {
+      const c = latest.crucible;
+      const staleColor = c.staleInProgress > 0 ? "text-amber-400" : "text-gray-500";
+      const orphanColor = c.orphanHandoffs > 0 ? "text-red-400" : "text-gray-500";
+      const cutoff = c.stallCutoffDays || 7;
+      crucibleRow = `
+      <div class="col-span-2 mt-3 pt-3 border-t border-gray-700/50">
+        <p class="text-gray-500 text-xs mb-1.5">Crucible Funnel</p>
+        <div class="flex items-center gap-3 text-xs flex-wrap" data-testid="watcher-crucible-row">
+          <span class="px-1.5 py-0.5 rounded bg-gray-800 text-gray-300" title="Total smelts">Σ ${c.total}</span>
+          <span class="px-1.5 py-0.5 rounded bg-green-900/40 text-green-300" title="Finalized smelts">✓ ${c.finalized}</span>
+          <span class="px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300" title="In-progress smelts">⧗ ${c.in_progress}</span>
+          <span class="px-1.5 py-0.5 rounded bg-gray-800 text-gray-400" title="Abandoned smelts">✗ ${c.abandoned}</span>
+          <span class="px-1.5 py-0.5 rounded bg-gray-800 ${staleColor}" title="Idle ≥ ${cutoff} days">⚠ ${c.staleInProgress} stalled</span>
+          <span class="px-1.5 py-0.5 rounded bg-gray-800 ${orphanColor}" title="Hardener handoffs with missing plan files">⛓ ${c.orphanHandoffs} orphan</span>
+        </div>
+      </div>`;
+    }
+
     snapEl.innerHTML = `
       <div class="grid grid-cols-2 gap-3 text-sm">
         <div><p class="text-gray-500 text-xs">Target</p><p class="text-gray-200 font-mono text-xs truncate">${escHtml(latest.targetPath || "—")}</p></div>
@@ -3101,6 +3127,7 @@ function renderWatcherPanel() {
         <div><p class="text-gray-500 text-xs">Run ID</p><p class="text-gray-300 font-mono text-xs">${escHtml(latest.runId || "—")}</p></div>
         <div><p class="text-gray-500 text-xs">Anomalies</p><p class="${latest.anomalyCount > 0 ? "text-amber-400" : "text-green-400"} font-semibold">${latest.anomalyCount ?? 0}</p></div>
         <div class="col-span-2"><p class="text-gray-500 text-xs">Cursor</p><p class="text-gray-400 font-mono text-xs">${escHtml(latest.cursor || "—")}</p></div>
+        ${crucibleRow}
       </div>
       <p class="text-xs text-gray-600 mt-2">${state.watcher.snapshots.length} snapshot(s) received this session</p>`;
   }

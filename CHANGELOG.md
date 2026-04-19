@@ -5,6 +5,43 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.40.1] — 2026-04-19
+
+### Added — Phase CRUCIBLE-03 Slice 03.2 — Watcher-tab Crucible row
+
+Builds on Slice 03.1's Crucible-aware watcher snapshot. The dashboard
+Watcher tab now surfaces the funnel state directly in the snapshot pane
+(right below the existing Target / Run State / Run ID / Anomalies grid)
+so operators don't have to hop to the Crucible tab or run `pforge smith`
+to answer "is the funnel healthy?"
+
+**Event payload change.** `watch-snapshot-completed` hub events now carry
+a compact `crucible` block (primitives only — counts + stall/orphan
+numbers + cutoff). Kept flat so the WS payload stays small for
+bandwidth-constrained clients. Null when the watched project has no
+`.forge/crucible/` directory.
+
+**UI.** A six-chip row with a `data-testid="watcher-crucible-row"` anchor:
+
+- `Σ` total smelts
+- `✓` finalized (green)
+- `⧗` in-progress (blue)
+- `✗` abandoned
+- `⚠ N stalled` — amber when > 0 (idle ≥ 7 days)
+- `⛓ N orphan` — red when > 0 (handoff plan file missing)
+
+Row stays hidden cleanly for pre-Crucible projects.
+
+### Tests
+
+- **1036 passing** (was 1029, +7 new)
+  - `tests/crucible-watcher-row.test.mjs` — pins event shape (count vs
+    array for `orphanHandoffs`), null when Crucible inactive, all six
+    chip bindings, threshold-based coloring, and the `data-testid`
+    hook for E2E automation.
+
+---
+
 ## [2.40.0] — 2026-04-19
 
 ### Added — Phase CRUCIBLE-03 Slice 03.1 — Crucible-aware watcher

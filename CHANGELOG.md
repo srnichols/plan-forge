@@ -5,9 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [Unreleased]
+## [Unreleased] — targeting 2.48.0
 
-_No unreleased changes._
+### Planned — FORGE-SHOP arc opens
+
+- Phase FORGE-SHOP-01 drafted ([docs/plans/Phase-FORGE-SHOP-01.md](docs/plans/Phase-FORGE-SHOP-01.md)) — Home tab with 4-quadrant shop-floor view (Crucible funnel, active runs, LiveGuard health, Tempering status) + unified activity feed. Aggregates existing L2 readers; ships `forge_home_snapshot` MCP tool (52 tools total).
 
 ---
 

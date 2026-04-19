@@ -4926,8 +4926,23 @@ async function main() {
   });
 }
 
-main().catch((err) => {
-  console.error("Fatal:", err);
-  process.exit(1);
-});
+// Only boot the hub + stdio transport when this module is executed directly.
+// When imported (e.g. by tests that only need `createExpressApp`), skip main()
+// to avoid binding WebSocket ports and leaking server instances across tests.
+const isDirectRun = (() => {
+  try {
+    const entry = process.argv[1];
+    if (!entry) return false;
+    const self = fileURLToPath(import.meta.url);
+    // Normalize both sides: resolve to absolute paths with consistent separators.
+    return resolve(entry) === resolve(self);
+  } catch { return false; }
+})();
+
+if (isDirectRun) {
+  main().catch((err) => {
+    console.error("Fatal:", err);
+    process.exit(1);
+  });
+}
 

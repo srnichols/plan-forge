@@ -301,13 +301,19 @@ describe("runTemperingRun — two-scanner run (TEMPER-02 Slice 02.2)", () => {
     const r = await runTemperingRun({
       projectDir, hub, spawn, adapter: bothScannersAdapter,
     });
-    expect(r.scanners).toHaveLength(2);
+    // Slice 03.1 adds a third scanner (ui-playwright) that skips
+    // cleanly when no URL is configured. Still 3 entries on the
+    // record but only unit+integration contribute to pass/fail
+    // totals here.
+    expect(r.scanners).toHaveLength(3);
     expect(r.scanners[0].scanner).toBe("unit");
     expect(r.scanners[1].scanner).toBe("integration");
+    expect(r.scanners[2].scanner).toBe("ui-playwright");
+    expect(r.scanners[2].skipped).toBe(true);
     expect(r.verdict).toBe("pass");
 
     const completed = hub.events.find((e) => e.type === "tempering-run-completed");
-    expect(completed.data.scannerCount).toBe(2);
+    expect(completed.data.scannerCount).toBe(3);
     expect(completed.data.pass).toBe(8);
   });
 
@@ -327,7 +333,7 @@ describe("runTemperingRun — two-scanner run (TEMPER-02 Slice 02.2)", () => {
       resolve(projectDir, ".forge", "tempering", "config.json"),
       JSON.stringify({
         enabled: true,
-        scanners: { unit: true, integration: true },
+        scanners: { unit: true, integration: true, "ui-playwright": true },
         runtimeBudgets: { unitMaxMs: 1, integrationMaxMs: 60000 },
         execution: { regressionFirst: false, trigger: "post-slice" },
       }),
@@ -339,15 +345,19 @@ describe("runTemperingRun — two-scanner run (TEMPER-02 Slice 02.2)", () => {
     expect(r.scanners[0].verdict).toBe("budget-exceeded");
     expect(r.scanners[1].skipped).toBe(true);
     expect(r.scanners[1].reason).toBe("prior-budget-exceeded");
+    // UI scanner also short-circuits with prior-budget-exceeded so
+    // we don't try to launch Chromium after the run's already blown.
+    expect(r.scanners[2].skipped).toBe(true);
+    expect(r.scanners[2].reason).toBe("prior-budget-exceeded");
   });
 
-  it("records slice '02.2' on the run record", async () => {
+  it("records slice '03.1' on the run record", async () => {
     const spawn = makeFakeSpawn({ stdout: "", exitCode: 0 });
     const r = await runTemperingRun({
       projectDir, spawn, adapter: bothScannersAdapter,
     });
     const { readFileSync } = await import("node:fs");
     const rec = JSON.parse(readFileSync(r.runRecordPath, "utf-8"));
-    expect(rec.slice).toBe("02.2");
+    expect(rec.slice).toBe("03.1");
   });
 });

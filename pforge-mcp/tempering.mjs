@@ -92,6 +92,20 @@ export const TEMPERING_DEFAULT_CONFIG = Object.freeze({
     parallelism: "cpu-count",
     regressionFirst: true,
   },
+  // Per-scanner settings — TEMPER-03 Slice 03.1 introduces the
+  // `ui-playwright` block. Operators override specific keys in
+  // `.forge/tempering/config.json`; unset values pick up the scanner
+  // module's own UI_SCANNER_DEFAULTS.
+  "ui-playwright": {
+    url: null,
+    maxDepth: 5,
+    maxPages: 100,
+    allowProduction: false,
+    captureScreenshots: true,
+    runAccessibility: true,
+    a11yMinSeverity: "moderate",
+    a11yFailThreshold: 0,
+  },
   stackOverrides: {},
 });
 

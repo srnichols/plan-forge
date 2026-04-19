@@ -5,7 +5,83 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [Unreleased] — targeting 2.43.0
+## [Unreleased] — targeting 2.44.0
+
+### Added — Phase TEMPER-03 Slice 03.1 — UI sweep scanner (Playwright + a11y)
+
+Third scanner in the Tempering arc. Cross-stack (runs against a
+deployed app URL, not source code). Ships behind optional-dep
+guards so missing Playwright / axe-core installs skip cleanly rather
+than failing the run.
+
+**New module `pforge-mcp/tempering/scanners/ui-playwright.mjs`** —
+`runUiSweep(ctx)` mirrors the `runScannerUnit` / `runScannerIntegration`
+contract. BFS same-origin link crawler, per-page screenshot capture,
+per-page axe-core accessibility pass, aggregate `report.json` written
+under the scanner's artifact dir. All dependencies (Playwright,
+`@axe-core/playwright`) are loaded via injectable `importFn` so the
+MCP process never hard-depends on them and tests never spawn a real
+browser.
+
+**Forbidden actions (enforced)**:
+- External-origin links are never followed (`isAllowedOrigin`); extra
+  allow-list supported via `extraAllowedOrigins`.
+- Production URLs are blocked by default — `looksLikeProduction`
+  recognises `localhost`, `127.0.0.1`, `*.local`, and RFC-1918 private
+  ranges as non-prod; anything else requires `allowProduction: true`.
+- Budget enforcement via `runtimeBudgets.uiMaxMs` (default 600_000ms);
+  scanner short-circuits with `verdict: "budget-exceeded"` and closes
+  the browser cleanly.
+- Prior budget-exceeded from unit or integration cascades — UI scanner
+  is skipped with reason `prior-budget-exceeded` before Chromium is
+  launched.
+
+**New module `pforge-mcp/tempering/artifacts.mjs`** — `getArtifactDir`,
+`getScannerArtifactDir`, `ensureScannerArtifactDir`, `hashUrl`
+(sha1-truncated deterministic filenames), `gcArtifacts` (7-day
+retention GC), `seedArtifactsGitignore` (idempotent `.gitignore`
+append for `.forge/tempering/artifacts/`).
+
+**Runner wiring** — `runTemperingRun` now dispatches three scanners in
+order (unit → integration → ui-playwright). `runId` is hoisted early so
+artifact-producing scanners can write under a stable directory.
+New dependency-injection surface: `uiImportFn` and `uiScannerImpl`
+options for tests + future extension hooks. Run record now carries
+`phase: "TEMPER-03", slice: "03.1"`.
+
+**Config defaults extended** — `TEMPERING_DEFAULT_CONFIG` in
+`tempering.mjs` now includes a `"ui-playwright"` block with
+operator-facing overrides (url, maxDepth, maxPages, allowProduction,
+captureScreenshots, runAccessibility, a11yMinSeverity,
+a11yFailThreshold). Scanner-module `UI_SCANNER_DEFAULTS` stays the
+source-of-truth for the full shape.
+
+**Verdict rules**:
+- Any broken link (non-2xx/3xx) → `fail`
+- a11y violations of severity ≥ `a11yMinSeverity` exceeding
+  `a11yFailThreshold` → `fail`
+- Budget tripped → `budget-exceeded`
+- Otherwise → `pass`
+
+**Tests — +45 new, 1282/1282 green** —
+`tests/tempering-ui-sweep.test.mjs` covers:
+- Artifacts module: `hashUrl` determinism, `gcArtifacts` retention,
+  `seedArtifactsGitignore` idempotency, directory helpers
+- URL / origin helpers: `isAllowedOrigin`, `looksLikeProduction`,
+  `resolveAppUrl`, `normalizeUrl`
+- `runUiSweep` skip paths: disabled, url-not-configured,
+  production-url-without-opt-in (and allowProduction opt-in),
+  playwright-not-installed, playwright-api-missing
+- Crawler behaviour: link traversal, verdict=fail on broken links,
+  external-origin filter, `maxPages` cap, `maxDepth` cap, screenshot +
+  `report.json` artifact writing
+- A11y threshold: below-severity violations pass, serious/critical
+  exceeding threshold fail, missing axe module falls back to pass
+- Error containment: browser launch failure → `verdict: "error"`
+
+Existing `tempering-runner.test.mjs` + `tempering-integration.test.mjs`
+assertions updated for 3-scanner event order, `scannerCount: 3`,
+`slice: "03.1"`, and UI-scanner cascade of `prior-budget-exceeded`.
 
 ### Added — Phase TEMPER-02 Slice 02.2 — Integration scanner + post-slice hook
 

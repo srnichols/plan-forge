@@ -5,6 +5,49 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.41.0] — 2026-04-19
+
+### Added — Phase CRUCIBLE-04 Slice 04.1 — Crucible-aware fix proposals
+
+Closes the loop opened by CRUCIBLE-03. The watcher can now *detect*
+stalled smelts and orphan handoffs, and `forge_fix_proposal` can now
+*act* on them — generating an abandon-or-resume playbook per affected
+smelt and dropping it into `docs/plans/auto/` like every other LiveGuard
+fix.
+
+**New source: `"crucible"`** on `forge_fix_proposal`:
+
+- Optional `smeltId` input arg targets a specific smelt
+- Auto-selection order: stalled in-progress smelts first (oldest mtime
+  wins), then orphan hardener handoffs — mirrors watcher anomaly
+  priority from Slice 03.1
+- Plan IDs namespaced as `crucible-<smeltId>` to prevent collision with
+  drift / secret / incident IDs
+- Two-slice abandon-or-resume structure:
+  1. **Triage** — read the smelt journal, assess staleness vs. active
+  2. **Execute decision** — resume (reactivate + nextAction) OR abandon
+     (status + reason + supersededBy)
+- Validation gate for both generated slices is `pforge smith` — the
+  Smith panel is the authoritative truth surface for funnel health, so
+  the auto-fix plan closes against the same contract that opened it
+- Healthy funnel returns a non-error diagnostic with current counts (no
+  throw) so operators know *why* nothing was generated
+
+**Schema updates:**
+
+- `tools.json` — adds `smeltId`, mentions `crucible` in `source`
+  description + tool description, `consumes` extended with
+  `.forge/crucible/*.json` and `.forge/hub-events.jsonl`
+- `capabilities.mjs` `TOOL_METADATA` — new `CRUCIBLE_HEALTHY` error code,
+  `consumes` aligned, prerequisites updated
+
+### Tests
+
+- **1054 passing** (was 1036, +18 new)
+- `tests/crucible-fix-proposal.test.mjs` — pins schema contract (tools.json + TOOL_METADATA), handler branches (smeltId, stalled-before-orphan priority, namespaced fixId, two-slice titles, healthy-diagnostic non-error, `pforge smith` gate), and auto-selection behavior against a scaffolded `.forge/crucible/` fixture
+
+---
+
 ## [2.40.1] — 2026-04-19
 
 ### Added — Phase CRUCIBLE-03 Slice 03.2 — Watcher-tab Crucible row

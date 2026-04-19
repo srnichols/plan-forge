@@ -57,7 +57,7 @@ try {
   // .env loading is best-effort. Failure must never break server startup.
 }
 
-import { parsePlan, runPlan, detectWorkers, getCostReport, getHealthTrend, analyzeWithQuorum, generateImage, runAnalyze, readForgeJson, readForgeJsonl, appendForgeJsonl, emitToolTelemetry, regressionGuard, runPostSliceHook, resetPostSliceHookFired, runPreAgentHandoffHook, postOpenClawSnapshot, loadOpenClawConfig, loadQuorumConfig, runWatch, runWatchLive } from "./orchestrator.mjs";
+import { parsePlan, runPlan, detectWorkers, getCostReport, getHealthTrend, analyzeWithQuorum, generateImage, runAnalyze, readForgeJson, readForgeJsonl, appendForgeJsonl, emitToolTelemetry, regressionGuard, runPostSliceHook, resetPostSliceHookFired, runPreAgentHandoffHook, postOpenClawSnapshot, loadOpenClawConfig, loadQuorumConfig, runWatch, runWatchLive, readCrucibleState } from "./orchestrator.mjs";
 import {
   isOpenBrainConfigured,
   shapeWatcherAnomalyThought,
@@ -988,12 +988,13 @@ const TOOLS = [
   },
   {
     name: "forge_fix_proposal",
-    description: "Generate a 1-2 slice fix plan from regression, drift, incident, or secret-scan failure. Writes to docs/plans/auto/LIVEGUARD-FIX-<id>.md. Capped at one proposal per incidentId.",
+    description: "Generate a 1-2 slice fix plan from regression, drift, incident, secret-scan, or Crucible (stalled/orphan) failure. Writes to docs/plans/auto/LIVEGUARD-FIX-<id>.md. Capped at one proposal per id.",
     inputSchema: {
       type: "object",
       properties: {
-        source: { type: "string", description: "Data source: 'regression', 'drift', 'incident', or 'secret'. Default: auto-detect from latest data" },
+        source: { type: "string", description: "Data source: 'regression', 'drift', 'incident', 'secret', or 'crucible'. Default: auto-detect from latest data" },
         incidentId: { type: "string", description: "Incident ID to generate fix for (required for incident source)" },
+        smeltId: { type: "string", description: "Crucible smelt ID to target (optional for crucible source; auto-selects worst offender when omitted)" },
         path: { type: "string", description: "Project directory (default: current)" },
       },
       required: [],
@@ -2785,8 +2786,89 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
       }
 
+      // Phase CRUCIBLE-04 — Crucible-aware fix proposals.
+      // Picks the worst offender in this priority order:
+      //   1. Caller-specified `smeltId` (explicit targeting)
+      //   2. Stalled in-progress smelts (idle ≥ CRUCIBLE_STALL_CUTOFF_DAYS)
+      //   3. Orphan hardener handoffs (planPath missing on disk)
+      // In `auto` mode we only consider Crucible if no earlier source fired,
+      // matching the "signal of last resort" semantics of secret-scan.
+      if (source === "crucible" || (source === "auto" && !fixId)) {
+        const crucible = readCrucibleState(cwd);
+        if (!crucible) {
+          if (source === "crucible") {
+            return { content: [{ type: "text", text: JSON.stringify({ error: "no Crucible data — .forge/crucible/ does not exist", planFile: null }) }], isError: false };
+          }
+        } else {
+          const smeltIdArg = args.smeltId || null;
+          let targetKind = null; // "stalled" | "orphan" | "explicit"
+          let target = null;     // { id, smelt?, orphan? }
+
+          if (smeltIdArg) {
+            // Explicit — load the smelt record even if status != in_progress
+            const smeltPath = resolve(cwd, ".forge", "crucible", `${smeltIdArg}.json`);
+            if (!existsSync(smeltPath)) {
+              if (source === "crucible") {
+                return { content: [{ type: "text", text: JSON.stringify({ error: `smelt ${smeltIdArg} not found in .forge/crucible/`, planFile: null }) }], isError: false };
+              }
+            } else {
+              try {
+                const smelt = JSON.parse(readFileSync(smeltPath, "utf-8"));
+                targetKind = "explicit";
+                target = { id: smeltIdArg, smelt };
+              } catch {
+                if (source === "crucible") {
+                  return { content: [{ type: "text", text: JSON.stringify({ error: `smelt ${smeltIdArg} is unreadable`, planFile: null }) }], isError: false };
+                }
+              }
+            }
+          }
+
+          if (!target && crucible.staleInProgress > 0) {
+            // Pick the oldest stalled in-progress smelt
+            const crucibleDir = resolve(cwd, ".forge", "crucible");
+            const cutoffMs = Date.now() - crucible.stallCutoffDays * 24 * 60 * 60 * 1000;
+            let oldest = null;
+            try {
+              for (const entry of readdirSync(crucibleDir, { withFileTypes: true })) {
+                if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
+                if (entry.name === "config.json" || entry.name === "phase-claims.json") continue;
+                const full = resolve(crucibleDir, entry.name);
+                let smelt;
+                try { smelt = JSON.parse(readFileSync(full, "utf-8")); } catch { continue; }
+                if (smelt.status !== "in_progress") continue;
+                const mtime = statSync(full).mtimeMs;
+                if (mtime >= cutoffMs) continue;
+                if (!oldest || mtime < oldest.mtime) {
+                  oldest = { id: basename(entry.name, ".json"), smelt, mtime };
+                }
+              }
+            } catch { /* unreadable dir — fall through */ }
+            if (oldest) {
+              targetKind = "stalled";
+              target = { id: oldest.id, smelt: oldest.smelt };
+            }
+          }
+
+          if (!target && crucible.orphanHandoffs.length > 0) {
+            const orphan = crucible.orphanHandoffs[0];
+            targetKind = "orphan";
+            target = { id: orphan.crucibleId || `orphan-${Date.now()}`, orphan };
+          }
+
+          if (!target) {
+            if (source === "crucible") {
+              return { content: [{ type: "text", text: JSON.stringify({ error: "Crucible funnel is healthy — no stalled or orphan smelts to fix", planFile: null, counts: crucible.counts }) }], isError: false };
+            }
+          } else {
+            sourceData = { type: "crucible", kind: targetKind, target, cutoffDays: crucible.stallCutoffDays };
+            fixId = `crucible-${target.id}`;
+          }
+        }
+      }
+
       if (!fixId) {
-        return { content: [{ type: "text", text: JSON.stringify({ error: "no LiveGuard data found — run drift, incident-capture, regression-guard, or secret-scan first", planFile: null }) }], isError: false };
+        return { content: [{ type: "text", text: JSON.stringify({ error: "no LiveGuard data found — run drift, incident-capture, regression-guard, secret-scan, or start a Crucible smelt first", planFile: null }) }], isError: false };
       }
 
       // Check for duplicate
@@ -2902,6 +2984,67 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           tasks: ["Rotate any exposed credentials", "Update secret references to use environment variables or secret manager", "Remove hardcoded values from source"],
           gate: "pforge secret-scan --since HEAD~1",
         });
+      } else if (sourceData.type === "crucible") {
+        // Phase CRUCIBLE-04 — abandon-or-resume playbook. Two slices: the
+        // first is pure triage (read-only), the second forks based on the
+        // triage outcome. Human decides — we just lay out the checklist.
+        const kind = sourceData.kind;                 // "stalled" | "orphan" | "explicit"
+        const cutoff = sourceData.cutoffDays || 7;
+        const smeltId = sourceData.target.id;
+        const smeltPathRel = `.forge/crucible/${smeltId}.json`;
+
+        if (kind === "orphan") {
+          const orphan = sourceData.target.orphan;
+          const planPath = orphan?.planPath || "(unknown)";
+          const phaseName = orphan?.phaseName || "(unnamed phase)";
+          slices.push({
+            title: `Triage orphan handoff: ${phaseName}`,
+            tasks: [
+              `Inspect hub-events.jsonl entry for smelt ${smeltId}`,
+              `Check whether the hardener plan file ever existed: ${planPath}`,
+              `Decide: (a) re-generate the plan from the smelt journal, OR (b) record the handoff as abandoned and move on`,
+              "Document the decision rationale in the smelt's `notes` field",
+            ],
+            scope: [smeltPathRel, ".forge/hub-events.jsonl"],
+          });
+          slices.push({
+            title: `Resolve orphan: regenerate or archive`,
+            tasks: [
+              `If regenerating: run the hardener workflow against smelt ${smeltId} to produce ${planPath}`,
+              `If archiving: set smelt status to "abandoned" with reason "orphan handoff — plan unrecoverable"`,
+              "Verify: re-run forge_watch or pforge smith — orphan count should drop to 0",
+            ],
+            scope: [smeltPathRel, planPath],
+            gate: "pforge smith",
+          });
+        } else {
+          // stalled OR explicit — same structure; if explicit was pulled for
+          // a non-stalled smelt we still lay out the same fork since the
+          // operator presumably wants to make a deliberate call.
+          const phaseName = sourceData.target.smelt?.phaseName || sourceData.target.smelt?.title || "(untitled smelt)";
+          const status = sourceData.target.smelt?.status || "unknown";
+          slices.push({
+            title: `Triage stalled smelt: ${phaseName}`,
+            tasks: [
+              `Read the smelt journal at ${smeltPathRel} (current status: ${status})`,
+              `Check mtime — flagged stalled when idle ≥ ${cutoff} days`,
+              "Review the smelt's last recorded action and any open questions",
+              "Decide: (a) RESUME if the work is still relevant, OR (b) ABANDON if superseded / no longer needed",
+              "Document the decision rationale in the smelt's `notes` field",
+            ],
+            scope: [smeltPathRel],
+          });
+          slices.push({
+            title: `Execute decision: resume or abandon`,
+            tasks: [
+              `If RESUMING: touch the smelt journal, set a concrete "nextAction" field, resume normal Crucible workflow`,
+              `If ABANDONING: set smelt status to "abandoned" with reason and supersededBy (if applicable)`,
+              "Verify: re-run forge_watch or pforge smith — staleInProgress should drop by at least 1",
+            ],
+            scope: [smeltPathRel],
+            gate: "pforge smith",
+          });
+        }
       } else {
         slices.push({
           title: `Fix: ${source}`,

@@ -237,3 +237,11 @@ pass. Tool count unchanged (55).
 - H.5 prose detection: lean conservative — false-negatives (a prose
   line getting through) are fine; false-positives (a real command
   getting skipped) are dangerous. Prefer under-matching
+- **Commit granularity**: each slice MUST produce a **separate**
+  commit with a conventional-commit message referencing its issue
+  number (e.g., `fix(orchestrator): teardown branch-safety guard
+  (#56)`). Do NOT squash H.1–H.5 into one commit. The v2.49.1 release
+  notes attribute fixes per issue, and per-slice commits make the
+  attribution trivial. The PR merge can still be squash-merged; what
+  matters is that the branch history contains 5 distinct commits
+  before merge

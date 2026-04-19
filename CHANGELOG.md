@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased] — targeting 2.50.0
 
+### Planned — HOTFIX-2.49.1 critical bug bundle
+
+- Phase HOTFIX-2.49.1 drafted ([docs/plans/Phase-HOTFIX-2.49.1.md](docs/plans/Phase-HOTFIX-2.49.1.md)) — patch release bundling 5 field-reported bugs. Slices: (H.1) Teardown/Cleanup slice guard blocks silent branch deletion [#56]; (H.2) alphanumeric slice IDs `2A`/`2B` now parse correctly [#64]; (H.3) quorum worker probe drops unavailable models with a warn instead of hanging [#70]; (H.4) quorum leg failures now capture stderr + reason code [#65]; (H.5) LiveGuard detects prose (currency, markdown, diagram syntax) and soft-warns instead of hard-failing slices [#62]. Ships as v2.49.1 patch alongside FORGE-SHOP arc minor versions. Issue #71 closed as duplicate of #70.
+
 ### Planned — FORGE-SHOP-03 notification layer
 
 - Phase FORGE-SHOP-03 drafted ([docs/plans/Phase-FORGE-SHOP-03.md](docs/plans/Phase-FORGE-SHOP-03.md)) — notification core consumes hub events, routes by rule, rate-limits (token-bucket + digest coalesce), delivers via pluggable adapters. Webhook adapter in core. Slack/Teams/Email/PagerDuty as extension stubs (installable via `pforge ext add`). 2 new MCP tools (`forge_notify_send`, `forge_notify_test`) → 57 total. Secrets in env vars only (literal URL in config rejected with `ERR_LITERAL_SECRET`). Dashboard Config → Notifications subtab.

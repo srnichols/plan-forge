@@ -3102,6 +3102,8 @@ const LIVEGUARD_TOOLS = new Set([
   "forge_bug_validate_fix",
   // Phase FORGE-SHOP-02 Slice 02.1 — Review Queue tools
   "forge_review_add", "forge_review_list", "forge_review_resolve",
+  // Phase TEMPER-07 Slice 07.1 — Agent delegation
+  "forge_delegate_to_agent",
 ]);
 
 export function emitToolTelemetry(toolName, inputs, result, durationMs, status, cwd = process.cwd()) {

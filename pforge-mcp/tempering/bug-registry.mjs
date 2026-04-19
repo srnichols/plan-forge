@@ -336,6 +336,29 @@ export async function registerBug(opts) {
       } catch { /* review hook is advisory */ }
     }
 
+    // Phase TEMPER-07 Slice 07.1 — agent delegation for critical/major real bugs
+    if (classification === "real-bug" && (severity === "critical" || severity === "major")) {
+      try {
+        const { loadAgentRoutingConfig, resolveRoute, recordDelegation, deriveBugType } = await import("./agent-router.mjs");
+        const routingCfg = loadAgentRoutingConfig(cwd);
+        if (routingCfg.enabled) {
+          const route = resolveRoute({ ...record, type: deriveBugType(record) });
+          if (route) {
+            recordDelegation(cwd, bugId, route, "review-queue-item", null);
+            const { addReviewItem } = await import("../orchestrator.mjs");
+            const reviewResult = addReviewItem(cwd, {
+              source: "fix-plan-approval",
+              severity: severity === "critical" ? "blocker" : "high",
+              title: `Agent delegation: ${bugId} → ${route.agent}`,
+              context: { bugId, recordRef: `.forge/bugs/${bugId}.json`, suggestedAgent: route.agent, suggestedSkill: route.skill },
+              correlationId: bugId,
+            }, hub, captureMemory);
+            emit(hub, "tempering-bug-delegated", { bugId, agent: route.agent, skill: route.skill, mode: "review-queue-item", reviewItemId: reviewResult?.itemId || null });
+          }
+        }
+      } catch { /* advisory — never block registration */ }
+    }
+
     // 7. L3 memory capture — only for real bugs
     if (classification === "real-bug" && typeof captureMemory === "function") {
       try {

@@ -1225,6 +1225,21 @@ const TOOLS = [
       required: ["itemId", "resolution", "resolvedBy"],
     },
   },
+  // Phase TEMPER-07 Slice 07.1 — Agent delegation tool
+  {
+    name: "forge_delegate_to_agent",
+    description: "Route a tempering bug to the appropriate agent/skill for read-only analysis.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        bugId: { type: "string" },
+        targetPath: { type: "string" },
+        mode: { type: "string", enum: ["analyst", "review-queue-item"] },
+        dryRun: { type: "boolean" },
+      },
+      required: ["bugId", "mode"],
+    },
+  },
 ];
 
 function planNameToRunbookName(planPath) {
@@ -3956,6 +3971,57 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
   }
 
+  // ─── forge_delegate_to_agent — route bug to agent/skill for analysis ───
+  if (name === "forge_delegate_to_agent") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.targetPath ? findProjectRoot(resolve(args.targetPath)) : findProjectRoot(PROJECT_DIR);
+      const { loadBug } = await import("./tempering/bug-registry.mjs");
+      const { resolveRoute, buildAnalystPrompt, recordDelegation, deriveBugType } = await import("./tempering/agent-router.mjs");
+
+      const bug = loadBug(cwd, args.bugId);
+      if (!bug) {
+        const result = { ok: false, error: "BUG_NOT_FOUND", bugId: args.bugId };
+        emitToolTelemetry("forge_delegate_to_agent", args, result, Date.now() - t0, "ERROR", cwd);
+        return { content: [{ type: "text", text: JSON.stringify(result) }], isError: true };
+      }
+
+      const route = resolveRoute({ ...bug, type: deriveBugType(bug) });
+      if (!route) {
+        const result = { ok: true, routed: false, reason: "no-rule-matches", bugId: args.bugId };
+        emitToolTelemetry("forge_delegate_to_agent", args, result, Date.now() - t0, "OK", cwd);
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      }
+
+      const prompt = buildAnalystPrompt(bug, route);
+      let reviewItemId = null;
+
+      if (!args.dryRun) {
+        recordDelegation(cwd, args.bugId, route, args.mode, null);
+        if (args.mode === "review-queue-item") {
+          const reviewResult = addReviewItem(cwd, {
+            source: "fix-plan-approval",
+            severity: bug.severity === "critical" ? "blocker" : "high",
+            title: `Agent analysis needed: ${bug.bugId} (${route.agent})`,
+            context: { bugId: args.bugId, recordRef: `.forge/bugs/${args.bugId}.json`, suggestedAgent: route.agent, suggestedSkill: route.skill },
+            correlationId: args.bugId,
+          }, activeHub, captureMemory);
+          reviewItemId = reviewResult?.itemId || null;
+        }
+        activeHub?.broadcast({ type: "tempering-bug-delegated", bugId: args.bugId, agent: route.agent, skill: route.skill, mode: args.mode, reviewItemId, timestamp: new Date().toISOString() });
+        if (typeof captureMemory === "function") {
+          captureMemory(`Delegated bug ${args.bugId} to ${route.agent}`, "decision", `forge_delegate_to_agent/${route.agent}/${bug.severity}`, cwd);
+        }
+      }
+
+      const result = { ok: true, routed: true, bugId: args.bugId, agent: route.agent, skill: route.skill, mode: args.mode, dryRun: !!args.dryRun, reviewItemId, analystPrompt: prompt };
+      emitToolTelemetry("forge_delegate_to_agent", args, result, Date.now() - t0, "OK", cwd);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: JSON.stringify({ error: err.code || "ERR_DELEGATE", message: err.message }) }], isError: true };
+    }
+  }
+
   // ─── forge_quorum_analyze — assemble structured quorum prompt ───
   if (name === "forge_quorum_analyze") {
     const t0 = Date.now();
@@ -4938,6 +5004,8 @@ export function createExpressApp() {
     "forge_home_snapshot",
     // Phase FORGE-SHOP-02 Slice 02.1 — Review Queue tools are MCP-native.
     "forge_review_add", "forge_review_list", "forge_review_resolve",
+    // Phase TEMPER-07 Slice 07.1 — Agent delegation is MCP-native.
+    "forge_delegate_to_agent",
   ]);
   app.post("/api/tool/:name", async (req, res) => {
     try {

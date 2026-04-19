@@ -695,6 +695,33 @@ export const TOOL_METADATA = {
       output: { itemId: "review-2026-04-19-001", status: "resolved", resolution: "approve", resolvedBy: "engineer-1" },
     },
   },
+  // Phase TEMPER-07 Slice 07.1 — Agent delegation routing
+  forge_delegate_to_agent: {
+    intent: ["delegate", "route", "agent", "analyze", "triage"],
+    aliases: ["delegate-bug", "route-to-agent", "agent-delegate"],
+    cost: "low",
+    maxConcurrent: 5,
+    addedIn: "2.50.0",
+    writesFiles: true,
+    risk: "low",
+    prerequisites: ["Bug must exist in .forge/bugs/"],
+    produces: [".forge/tempering/findings/<bugId>.json", ".forge/tempering/delegations.jsonl", ".forge/review-queue/<itemId>.json"],
+    consumes: [".forge/bugs/<bugId>.json", ".forge/tempering/config.json"],
+    sideEffects: [
+      "appends delegation record to .forge/tempering/delegations.jsonl",
+      "creates review queue item when mode=review-queue-item",
+      "broadcasts tempering-bug-delegated hub event",
+      "captures L3 memory (metadata only — bugId, agent, severity)",
+    ],
+    errors: {
+      BUG_NOT_FOUND: { message: "Bug ID not found in .forge/bugs/", recovery: "Use forge_bug_list to find valid bug IDs" },
+      NO_ROUTE: { message: "No routing rule matches this bug type/severity", recovery: "Bug may need manual triage — check type and severity" },
+    },
+    example: {
+      input: { bugId: "BUG-20260419-001", mode: "analyst", dryRun: true },
+      output: { ok: true, routed: true, bugId: "BUG-20260419-001", agent: "security", skill: "security-audit", mode: "analyst", dryRun: true, reviewItemId: null, analystPrompt: "## Agent Analysis Request..." },
+    },
+  },
   forge_generate_image: {
     intent: ["create", "generate", "image"],
     aliases: ["image-gen", "generate-artwork", "create-image"],

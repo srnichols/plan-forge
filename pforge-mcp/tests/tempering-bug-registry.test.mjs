@@ -760,3 +760,119 @@ describe("registerBug — dispatch integration", () => {
     expect(r1.bugId).not.toBe(r2.bugId);
   });
 });
+
+// ─── Agent Delegation Wire-in (Phase TEMPER-07 Slice 07.1) ──────────
+
+describe("Agent delegation wire-in in registerBug", () => {
+  let dir;
+  beforeEach(() => { dir = makeTmpDir(); });
+  afterEach(() => { try { rmSync(dir, { recursive: true }); } catch {} });
+
+  function enableAgentRouting(cwd) {
+    const configDir = resolve(cwd, ".forge", "tempering");
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(resolve(configDir, "config.json"), JSON.stringify({
+      agentRouting: { enabled: true },
+    }), "utf-8");
+  }
+
+  it("delegates on critical real-bug when agentRouting.enabled = true", async () => {
+    enableAgentRouting(dir);
+    const hub = makeHub();
+    const result = await registerBug({
+      cwd: dir,
+      scanner: "unit",
+      severity: "critical",
+      evidence: makeEvidence(),
+      correlationId: "delegate-c1",
+      classification: "real-bug",
+      classifierMeta: {},
+      hub,
+    });
+    expect(result.ok).toBe(true);
+    // Should have a delegation JSONL record
+    const delegationPath = resolve(dir, ".forge", "tempering", "delegations.jsonl");
+    expect(existsSync(delegationPath)).toBe(true);
+    const lines = readFileSync(delegationPath, "utf-8").trim().split("\n");
+    expect(lines.length).toBeGreaterThanOrEqual(1);
+    const rec = JSON.parse(lines[lines.length - 1]);
+    expect(rec.bugId).toBe(result.bugId);
+    expect(rec.agent).toBe("test-runner");
+    // Should have emitted tempering-bug-delegated event
+    const delegatedEvents = hub.events.filter((e) => e.type === "tempering-bug-delegated");
+    expect(delegatedEvents.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("delegates on major real-bug when agentRouting.enabled = true", async () => {
+    enableAgentRouting(dir);
+    const hub = makeHub();
+    const result = await registerBug({
+      cwd: dir,
+      scanner: "unit",
+      severity: "major",
+      evidence: makeEvidence({ testName: "major-test-delegate" }),
+      correlationId: "delegate-c2",
+      classification: "real-bug",
+      classifierMeta: {},
+      hub,
+    });
+    expect(result.ok).toBe(true);
+    const delegationPath = resolve(dir, ".forge", "tempering", "delegations.jsonl");
+    expect(existsSync(delegationPath)).toBe(true);
+  });
+
+  it("does NOT delegate when agentRouting.enabled = false (default)", async () => {
+    // No config file = default disabled
+    const result = await registerBug({
+      cwd: dir,
+      scanner: "unit",
+      severity: "critical",
+      evidence: makeEvidence({ testName: "no-delegate-test" }),
+      correlationId: "delegate-c3",
+      classification: "real-bug",
+      classifierMeta: {},
+    });
+    expect(result.ok).toBe(true);
+    const delegationPath = resolve(dir, ".forge", "tempering", "delegations.jsonl");
+    expect(existsSync(delegationPath)).toBe(false);
+  });
+
+  it("does NOT delegate for medium/low severity", async () => {
+    enableAgentRouting(dir);
+    const result = await registerBug({
+      cwd: dir,
+      scanner: "unit",
+      severity: "medium",
+      evidence: makeEvidence({ testName: "medium-sev-test" }),
+      correlationId: "delegate-c4",
+      classification: "real-bug",
+      classifierMeta: {},
+    });
+    expect(result.ok).toBe(true);
+    const delegationPath = resolve(dir, ".forge", "tempering", "delegations.jsonl");
+    expect(existsSync(delegationPath)).toBe(false);
+  });
+
+  it("registration succeeds even if delegation fails (advisory)", async () => {
+    // Create config dir but write malformed config to trigger an error path
+    const configDir = resolve(dir, ".forge", "tempering");
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(resolve(configDir, "config.json"), JSON.stringify({
+      agentRouting: { enabled: true },
+    }), "utf-8");
+    // Make delegations.jsonl a directory to force appendFileSync to fail
+    mkdirSync(resolve(configDir, "delegations.jsonl"), { recursive: true });
+    const result = await registerBug({
+      cwd: dir,
+      scanner: "unit",
+      severity: "critical",
+      evidence: makeEvidence({ testName: "resilience-test" }),
+      correlationId: "delegate-c5",
+      classification: "real-bug",
+      classifierMeta: {},
+    });
+    // Registration must still succeed despite delegation failure
+    expect(result.ok).toBe(true);
+    expect(result.bugId).toMatch(/^bug-/);
+  });
+});

@@ -5,6 +5,37 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.39.1] — 2026-04-19
+
+### Added — Phase CRUCIBLE-02 Slice 02.2 — Smith panel + setup banner
+
+**`pforge smith` now reports Crucible health.** Both the PowerShell and bash
+implementations gained a new `Crucible:` section (right before the summary)
+that surfaces the state of the smelt funnel without requiring the dashboard:
+
+- Total smelt count, split by `finalized` / `in-progress` / `abandoned`
+- **Stall warning** — any smelt that has been idle in the `in-progress`
+  state for ≥ 7 days is flagged with a `forge_crucible_abandon` hint
+- Presence of `config.json` (governance overrides active)
+- Count of `manual-imports.jsonl` bypasses
+- Count of atomically-claimed phase numbers
+
+Smelt enumeration correctly skips `config.json` and `phase-claims.json`
+so they don't get double-counted as smelts.
+
+**Setup scripts carry a one-line Crucible onboarding hint.** Both
+`setup.ps1` and `setup.sh` print a nudge in the `Optional (recommended)`
+block pointing new operators at `forge_crucible_submit` so the very first
+plan they author gets a `crucibleId` baked in.
+
+### Tests
+
+- **1015 passing** (was 1003, +12 new)
+  - `tests/crucible-smith-panel.test.mjs` pins the output contract for
+    both shells, the stall-detection cutoff, and the banner location
+
+---
+
 ## [2.39.0] — 2026-04-19
 
 ### Added — Phase CRUCIBLE-02 Slice 02.1 — slice-card complexity + spend badges

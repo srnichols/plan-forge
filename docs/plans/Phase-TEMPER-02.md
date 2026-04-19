@@ -63,6 +63,10 @@ language-agnostic.
 - New MCP tool `forge_tempering_run` — executes enabled scanners per
   `config.scanners`, writes `.forge/tempering/<runId>.json`, emits
   `tempering-run-*` hub events per scanner
+- **L3 capture** on `tempering-run-completed` via `captureMemory()` —
+  tags `tempering`, `run`, `<stack>`, `<verdict>`; payload: scanner
+  mix + verdict + coverage-vs-minima deltas. See arc doc
+  §"L3 semantic memory (OpenBrain) integration".
 - Parallelism: respects `config.execution.parallelism` (`"cpu-count"` default)
 - **Regression-first ordering**: when `config.execution.regressionFirst`
   is true, run tests covering files changed since last green scan first

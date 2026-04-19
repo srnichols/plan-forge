@@ -130,6 +130,68 @@ depends on a later one to function.
 These are the decisions that, once shipped, cannot be changed cheaply.
 They're called out here so every later phase has a stable target.
 
+### Correlation ID — the thread through the whole loop
+
+Every Tempering record carries a `correlationId` (UUID) that links it
+back to the originating idea all the way through the loop:
+
+```
+Crucible smelt.correlationId
+  └─► plan frontmatter.correlationId (set on hardening-handoff)
+       └─► run summary.correlationId (set by forge_run_plan)
+            └─► slice record.correlationId
+                 └─► tempering run.correlationId
+                      ├─► bug record.correlationId
+                      │    └─► fix plan frontmatter.correlationId
+                      │         └─► bug-validated fix record.correlationId
+                      └─► incident.correlationId (if LiveGuard opens one)
+```
+
+Rules:
+- Every L2 record MUST stamp `correlationId` when one is in context
+- Every L3 `captureMemory()` payload MUST include it as a tag
+  (`corr:<uuid>`) for cross-tier join
+- Every hub event payload MUST include it (additive field, does not
+  break existing consumers)
+- `forge_crucible_submit` mints the ID; everything downstream inherits
+- When a record has no upstream (e.g. `forge_tempering_scan` run
+  standalone, no plan context), it mints its own and stamps it
+
+TEMPER-01 adds the field to scan records + run records. TEMPER-02
+propagates to runs. TEMPER-06 propagates to bugs + fix plans +
+validations. The full thread is first observable end-to-end when
+TEMPER-06 ships.
+
+### Cost dimensions — beyond LLM tokens
+
+Tempering adds large non-LLM cost surfaces. The existing
+`forge_cost_report` gains a `dimension` field so operators can set
+per-dimension budgets without mixing apples and oranges:
+
+| Dimension | Unit | Writer |
+|-----------|------|--------|
+| `llm-quorum` | tokens × model × call | visual analyzer, bug classifier |
+| `visual-analyzer` | calls × pages × slices | TEMPER-04 scanner |
+| `mutation-runtime` | CPU seconds | TEMPER-05 mutation scanner |
+| `load-runtime` | wall seconds × concurrency | TEMPER-05 load scanner |
+| `embed` | embedding tokens | `captureMemory()` → OpenBrain |
+| `llm-arbitration` | tokens | TEMPER-06 classifier LLM layer |
+
+Each dimension supports a `softBudget` (warn via hub event
+`cost-budget-warn`) and `hardBudget` (abort + register infra bug).
+TEMPER-01 ships the schema + warn event wiring; TEMPER-02 through
+TEMPER-06 each populate the dimensions they own.
+
+### Manual chapter 8 "The closed loop in 10 minutes"
+
+TEMPER-06 ships the capstone manual chapter: a single worked example
+walking idea → Crucible smelt → plan hardening → Forge execution →
+Tempering run → real-bug discovery → GitHub issue filing → fix-plan
+generation → execution → validation → GitHub comment → incident
+absence. Uses the correlationId above to show one unbroken chain of
+L1/L2/L3 records. Replaces the current "N chapters per subsystem, no
+story" docs gap.
+
 ### `.forge/tempering/config.json` shape
 
 ```jsonc
@@ -267,6 +329,42 @@ They're called out here so every later phase has a stable target.
 - `tempering-bug-registered` (TEMPER-06)
 - `tempering-bug-validated-fixed` (TEMPER-06)
 - `tempering-visual-regression-detected` (TEMPER-04)
+
+### L3 semantic memory (OpenBrain) integration
+
+Tempering writes to all three tiers of Plan Forge's memory architecture
+(see [`docs/MEMORY-ARCHITECTURE.md`](../MEMORY-ARCHITECTURE.md)):
+
+| Tier | Surface | Writer |
+|------|---------|--------|
+| **L1** (hub) | `tempering-*` events (above) | every scanner, every MCP tool |
+| **L2** (files) | `.forge/tempering/<runId>.json`, `.forge/bugs/<bugId>.json`, `.forge/tempering/config.json`, `.forge/tempering/perf-history.jsonl`, `.forge/tempering/baselines/` | scanners + registry |
+| **L3** (semantic) | OpenBrain via `captureMemory()` (falls back to `.forge/openbrain-queue.jsonl` when offline) | see capture table below |
+
+**L3 capture sites** — each goes through the existing `captureMemory()`
+helper so OpenBrain outages never block a tempering run:
+
+| Capture site | Phase | Tags | Why L3 |
+|--------------|-------|------|--------|
+| Scan-completed summary (coverage gaps) | TEMPER-01 | `tempering`, `scan`, `<stack>`, `<status>` | "Has this project — or similar projects — had this coverage shape before?" |
+| Run-completed verdict | TEMPER-02 | `tempering`, `run`, `<stack>`, `<verdict>` | Cross-project recall of what scanner mixes produce green/amber/red |
+| Visual quorum decision | TEMPER-04 | `tempering`, `visual-regression`, `<verdict>`, `quorum:<n-of-m>` | Quorum disagreement patterns are valuable across projects (false-positive calibration) |
+| Flake-confirmed (≥ 3 of N runs) | TEMPER-05 | `tempering`, `flake`, `<scanner>`, `<testName>` | "This test has been flaky in other projects too" |
+| Perf regression confirmed (2 consecutive runs) | TEMPER-05 | `tempering`, `perf-regression`, `<endpoint-or-page>` | Cross-project p95 baselines |
+| Mutation score below minimum | TEMPER-05 | `tempering`, `mutation-gap`, `<layer>` | Weak-suite patterns by layer |
+| Bug-registered (real-bug only) | TEMPER-06 | `tempering-bug`, `<category>`, `<severity>`, `confidence-source:<rule\|llm>` | Cross-project bug pattern recall feeds future classifier confidence |
+| Fix-validated (fix → validation pair) | TEMPER-06 | `tempering-fix`, `<bugCategory>`, `<outcome>` | "What fixes have worked for this class of bug before?" |
+
+**Forbidden in L3:**
+
+- Do NOT capture screenshots or binary blobs — L3 stores the verdict
+  and metadata; the evidence stays in L2 under `.forge/bugs/<id>.json`
+- Do NOT capture GitHub issue tokens, PII, or repo-private URLs in
+  tags — `captureMemory()` already scrubs, but scanners must not
+  hand-roll payloads that bypass it
+- Do NOT capture test-infra-only bugs to L3 — only `real-bug`
+  classifications cross the L3 threshold (infra noise would pollute
+  cross-project search)
 
 ### Watcher anomalies introduced
 

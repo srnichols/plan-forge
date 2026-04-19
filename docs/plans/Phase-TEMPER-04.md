@@ -80,6 +80,11 @@ This phase gives tempering that same glance — using vision-capable LLMs,
     TEMPER-06), ignore-once
 - Cost-aware scheduling: visual-analyzer only runs against pages in the
   investigate band, not the full baseline every run
+- **L3 capture** on every quorum decision (pass, fail, or inconclusive)
+  via `captureMemory()` — tags `tempering`, `visual-regression`,
+  `<verdict>`, `quorum:<n-of-m>`; payload: per-model verdict +
+  explanation snippet + page URL. **No images** — screenshots stay
+  in L2. See arc doc §"L3 semantic memory (OpenBrain) integration".
 - Tests — ~25 assertions
 
 ### Out of scope

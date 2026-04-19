@@ -73,6 +73,13 @@ trackers.
   `.forge/tempering/<runId>.json#infraFixes[]` with no external side
   effects.
 - Hub event `tempering-bug-registered`
+- **L3 capture** on `forge_bug_register` (real-bug only — infra
+  classifications are never captured) via `captureMemory()` — tags
+  `tempering-bug`, `<scanner>`, `<severity>`, `confidence-source:
+  <rule|llm>`; payload: classification rationale + affected-files
+  summary (no code, no screenshots). Feeds future classifier
+  confidence across projects. See arc doc §"L3 semantic memory
+  (OpenBrain) integration".
 - Dashboard **Bug Registry tab** — list view with filters, detail
   view with evidence / screenshots / repro / linked plan
 - Tests — ~40 assertions covering every rule branch + classifier
@@ -129,6 +136,12 @@ trackers.
     validation comment to external tracker (if configured)
   - On fail → appends to bug's `validationAttempts[]`, keeps open
 - Hub event `tempering-bug-validated-fixed`
+- **L3 capture** on `forge_bug_validate_fix` pass — tags
+  `tempering-fix`, `<bugCategory>`, `<outcome>`; payload: bug
+  classification + fix-plan slug + scanner(s) re-run + validation
+  verdict. Answers "what fixes have worked for this class of bug
+  before?" cross-project. See arc doc §"L3 semantic memory
+  (OpenBrain) integration".
 - New watcher anomaly `tempering-bug-unaddressed` (severity: warn) —
   any `real-bug` open > 14 days with no `linkedFixPlan`
 - **`forge_liveguard_run` integration** (the deferred wire-in

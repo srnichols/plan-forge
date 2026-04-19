@@ -68,6 +68,12 @@ load-bearing.
 - Hub events `tempering-scan-started` + `tempering-scan-completed`
   (consumed by dashboard)
 - Telemetry via existing `emitToolTelemetry`
+- **L3 capture** on `tempering-scan-completed` via existing
+  `captureMemory()` helper — tags `tempering`, `scan`, `<stack>`,
+  `<status>`; payload: gap summary (no file contents). Never blocks
+  the scanner; OpenBrain outages fall through to
+  `.forge/openbrain-queue.jsonl` as usual. See arc doc
+  §"L3 semantic memory (OpenBrain) integration".
 
 **Slice 01.2 — Dashboard surface + watcher anomalies**
 

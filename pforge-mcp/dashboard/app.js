@@ -22,6 +22,15 @@ const state = {
     anomalies: [],     // [{ targetPath, runId, code, severity, message, ts }]
     advice: [],        // [{ targetPath, runId, model, tokensOut, ts }]
   },
+  // Phase TEMPER-01 Slice 01.2 — local cache of the latest
+  // forge_tempering_status response for the Tempering tab.
+  tempering: {
+    initialized: false,
+    state: null,
+    scans: [],         // newest first — coverage-per-layer summaries
+    fetching: false,
+    lastError: null,
+  },
 };
 
 const API_BASE = `${window.location.protocol}//${window.location.host}`;
@@ -2845,6 +2854,7 @@ const tabLoadHooks = {
   'lg-security': () => { loadLGSecurity(); tabBadgeState.lgSecurityAlert = false; updateTabBadges(); },
   'lg-env': loadLGEnv,
   watcher: () => { renderWatcherPanel(); tabBadgeState.watcherNew = 0; updateTabBadges(); },
+  tempering: () => { loadTemperingStatus(); },
   memory: loadMemoryReport,
 };
 
@@ -3120,6 +3130,32 @@ function renderWatcherPanel() {
       </div>`;
     }
 
+    // Phase TEMPER-01 Slice 01.2 — Tempering row mirrors the Crucible row.
+    // Driven by the compact `tempering` block on watch-snapshot-completed
+    // payloads. Hidden when the subsystem hasn't been initialized.
+    let temperingRow = "";
+    if (latest.tempering) {
+      const t = latest.tempering;
+      const cutoff = t.staleCutoffDays || 7;
+      const ageDays = t.latestScanAgeMs ? Math.floor(t.latestScanAgeMs / (24 * 60 * 60 * 1000)) : null;
+      const staleColor = t.stale ? "text-amber-400" : "text-gray-500";
+      const belowColor = t.belowMinimum > 0 ? "text-amber-400" : "text-gray-500";
+      const statusMap = { green: "text-green-300 bg-green-900/40", amber: "text-amber-300 bg-amber-900/40", "no-data": "text-gray-400 bg-gray-800", error: "text-red-300 bg-red-900/40" };
+      const statusCls = statusMap[t.latestStatus] || "text-gray-400 bg-gray-800";
+      const statusLabel = t.latestStatus || "no-scan";
+      temperingRow = `
+      <div class="col-span-2 mt-3 pt-3 border-t border-gray-700/50">
+        <p class="text-gray-500 text-xs mb-1.5">Tempering</p>
+        <div class="flex items-center gap-3 text-xs flex-wrap" data-testid="watcher-tempering-row">
+          <span class="px-1.5 py-0.5 rounded bg-gray-800 text-gray-300" title="Total scans">Σ ${t.totalScans}</span>
+          <span class="px-1.5 py-0.5 rounded ${statusCls}" title="Latest scan status">● ${escHtml(statusLabel)}</span>
+          <span class="px-1.5 py-0.5 rounded bg-gray-800 ${belowColor}" title="Coverage layers ≥ 5 points below minimum">⚠ ${t.belowMinimum} below min</span>
+          <span class="px-1.5 py-0.5 rounded bg-gray-800 text-gray-400" title="Total gap records in latest scan">⌂ ${t.gaps} gaps</span>
+          <span class="px-1.5 py-0.5 rounded bg-gray-800 ${staleColor}" title="Latest scan age (cutoff ${cutoff}d)">⏱ ${ageDays !== null ? ageDays + "d" : "never"}${t.stale ? " stale" : ""}</span>
+        </div>
+      </div>`;
+    }
+
     snapEl.innerHTML = `
       <div class="grid grid-cols-2 gap-3 text-sm">
         <div><p class="text-gray-500 text-xs">Target</p><p class="text-gray-200 font-mono text-xs truncate">${escHtml(latest.targetPath || "—")}</p></div>
@@ -3128,6 +3164,7 @@ function renderWatcherPanel() {
         <div><p class="text-gray-500 text-xs">Anomalies</p><p class="${latest.anomalyCount > 0 ? "text-amber-400" : "text-green-400"} font-semibold">${latest.anomalyCount ?? 0}</p></div>
         <div class="col-span-2"><p class="text-gray-500 text-xs">Cursor</p><p class="text-gray-400 font-mono text-xs">${escHtml(latest.cursor || "—")}</p></div>
         ${crucibleRow}
+        ${temperingRow}
       </div>
       <p class="text-xs text-gray-600 mt-2">${state.watcher.snapshots.length} snapshot(s) received this session</p>`;
   }
@@ -4170,4 +4207,170 @@ function appendEventLog(event) {
   logEl.appendChild(entry);
   logEl.scrollTop = logEl.scrollHeight;
 }
+
+// ─── Tempering Panel (Phase TEMPER-01 Slice 01.2) ────────────────────
+// Read-only view over .forge/tempering/scan-*.json records surfaced by
+// forge_tempering_status. Never triggers a scan on its own — the "Run
+// scan" button calls forge_tempering_scan explicitly, per the one-slice
+// scope contract in Phase-TEMPER-01.md.
+
+async function loadTemperingStatus() {
+  if (state.tempering.fetching) return;
+  state.tempering.fetching = true;
+  state.tempering.lastError = null;
+  try {
+    const res = await fetch(`${API_BASE}/api/tool/forge_tempering_status`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ limit: 20 }),
+    });
+    const data = await res.json().catch(() => null);
+    if (data && data.ok) {
+      state.tempering.initialized = !!data.initialized;
+      state.tempering.state = data.state || null;
+      state.tempering.scans = Array.isArray(data.scans) ? data.scans : [];
+    } else {
+      state.tempering.lastError = data?.error || "Tempering status request failed";
+    }
+  } catch (err) {
+    state.tempering.lastError = err.message || String(err);
+  } finally {
+    state.tempering.fetching = false;
+    renderTemperingPanel();
+  }
+}
+
+async function runTemperingScan() {
+  const btn = document.getElementById("tempering-scan-btn");
+  if (btn) { btn.disabled = true; btn.textContent = "Scanning..."; }
+  try {
+    const res = await fetch(`${API_BASE}/api/tool/forge_tempering_scan`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    const data = await res.json().catch(() => null);
+    if (!data || !data.ok) {
+      state.tempering.lastError = data?.error || data?.reason || "Scan request failed";
+    } else {
+      state.tempering.lastError = null;
+    }
+  } catch (err) {
+    state.tempering.lastError = err.message || String(err);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "Run scan"; }
+    await loadTemperingStatus();
+  }
+}
+
+function renderTemperingPanel() {
+  const summaryEl = document.getElementById("tempering-summary-body");
+  const coverageEl = document.getElementById("tempering-coverage-body");
+  const gapsEl = document.getElementById("tempering-gaps-body");
+  const historyEl = document.getElementById("tempering-history-body");
+  if (!summaryEl || !coverageEl || !gapsEl || !historyEl) return;
+
+  const { initialized, state: tState, scans, lastError } = state.tempering;
+
+  if (lastError) {
+    summaryEl.innerHTML = `<p class="text-red-400 text-xs py-2">${escHtml(lastError)}</p>`;
+  } else if (!initialized) {
+    summaryEl.innerHTML = `
+      <p class="text-gray-400 text-xs">Tempering has not been initialized in this project.</p>
+      <p class="text-gray-500 text-xs mt-2">Click <span class="text-emerald-400">Run scan</span> above (or call <code class="bg-gray-700 px-1 rounded">forge_tempering_scan</code>) to seed <code class="bg-gray-700 px-1 rounded">.forge/tempering/</code> and record a baseline.</p>`;
+  } else if (!tState || tState.totalScans === 0) {
+    summaryEl.innerHTML = `
+      <p class="text-gray-400 text-xs">Subsystem ready. No scans recorded yet.</p>
+      <p class="text-gray-500 text-xs mt-2">Run a scan to evaluate coverage against the configured minima.</p>`;
+  } else {
+    const statusMap = { green: "text-green-400", amber: "text-amber-400", "no-data": "text-gray-400", error: "text-red-400" };
+    const statusCls = statusMap[tState.latestStatus] || "text-gray-300";
+    const ageDays = tState.latestScanAgeMs ? Math.floor(tState.latestScanAgeMs / (24 * 60 * 60 * 1000)) : null;
+    const staleBadge = tState.stale
+      ? `<span class="ml-2 px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300 text-xs">stale</span>`
+      : "";
+    summaryEl.innerHTML = `
+      <div class="grid grid-cols-2 gap-2 text-xs">
+        <div><p class="text-gray-500">Status</p><p class="${statusCls} font-semibold">${escHtml(tState.latestStatus || "—")}${staleBadge}</p></div>
+        <div><p class="text-gray-500">Total scans</p><p class="text-gray-200">${tState.totalScans}</p></div>
+        <div><p class="text-gray-500">Latest</p><p class="text-gray-300 font-mono">${tState.latestScanTs ? new Date(tState.latestScanTs).toLocaleString() : "—"}</p></div>
+        <div><p class="text-gray-500">Age</p><p class="text-gray-300">${ageDays !== null ? ageDays + " day(s)" : "—"}</p></div>
+        <div><p class="text-gray-500">Gaps</p><p class="text-gray-200">${tState.gaps}</p></div>
+        <div><p class="text-gray-500">Below min</p><p class="${tState.belowMinimum > 0 ? "text-amber-400" : "text-gray-200"} font-semibold">${tState.belowMinimum}</p></div>
+      </div>`;
+  }
+
+  // Coverage vs. minima — rendered from the newest scan's per-layer data.
+  const latest = scans[0] || null;
+  if (!latest || !latest.coverage) {
+    coverageEl.innerHTML = '<p class="text-gray-500 text-sm py-4 text-center">No coverage data.</p>';
+  } else {
+    const minima = latest.coverageMinima || { domain: 90, integration: 80, controller: 60, overall: 80 };
+    const rows = ["domain", "integration", "controller", "overall"].map((layer) => {
+      const actual = latest.coverage[layer];
+      const min = minima[layer] ?? 0;
+      if (actual === undefined || actual === null) return "";
+      const gap = min - actual;
+      const color = gap <= 0 ? "bg-green-500" : gap < 5 ? "bg-amber-500" : "bg-red-500";
+      const pct = Math.max(0, Math.min(100, actual));
+      return `
+        <div class="mb-2 last:mb-0" data-testid="tempering-coverage-row-${layer}">
+          <div class="flex justify-between text-xs mb-0.5">
+            <span class="text-gray-300 font-semibold">${escHtml(layer)}</span>
+            <span class="text-gray-400">${actual.toFixed(1)}% <span class="text-gray-600">/ min ${min}%</span></span>
+          </div>
+          <div class="h-2 bg-gray-900 rounded overflow-hidden relative">
+            <div class="h-full ${color}" style="width:${pct}%"></div>
+            <div class="absolute top-0 h-full border-r border-gray-400/70" style="left:${min}%"></div>
+          </div>
+        </div>`;
+    }).filter(Boolean).join("");
+    coverageEl.innerHTML = rows || '<p class="text-gray-500 text-sm py-4 text-center">No coverage rows.</p>';
+  }
+
+  // Gap list — worst-first files per layer.
+  if (!latest || !Array.isArray(latest.coverageVsMinima) || latest.coverageVsMinima.length === 0) {
+    gapsEl.innerHTML = '<p class="text-gray-500 text-sm py-4 text-center">No gaps.</p>';
+  } else {
+    gapsEl.innerHTML = latest.coverageVsMinima.map((g) => {
+      const files = Array.isArray(g.files) ? g.files.slice(0, 10) : [];
+      const fileRows = files.map((f) => {
+        const pct = f.linesTotal > 0 ? Math.round((f.linesHit / f.linesTotal) * 100) : 0;
+        return `<li class="text-xs text-gray-400 font-mono truncate"><span class="text-red-400">${pct}%</span> ${escHtml(f.file)} <span class="text-gray-600">(${f.linesHit}/${f.linesTotal})</span></li>`;
+      }).join("");
+      return `
+        <div class="mb-4 last:mb-0 pb-3 border-b border-gray-700/50 last:border-0">
+          <div class="flex items-center gap-3 text-xs mb-2">
+            <span class="px-2 py-0.5 rounded bg-red-900/40 text-red-300 font-semibold">${escHtml(g.layer)}</span>
+            <span class="text-gray-400">${g.actual}% / min ${g.minimum}%</span>
+            <span class="text-amber-400 font-semibold">− ${g.gap} pts</span>
+          </div>
+          <ul class="space-y-0.5">${fileRows || '<li class="text-xs text-gray-600">No file breakdown.</li>'}</ul>
+        </div>`;
+    }).join("");
+  }
+
+  // History — recent scans, newest first.
+  if (!scans.length) {
+    historyEl.innerHTML = '<p class="text-gray-500 text-sm py-4 text-center">No scan history.</p>';
+  } else {
+    const statusColors = { green: "text-green-400", amber: "text-amber-400", "no-data": "text-gray-500", error: "text-red-400" };
+    historyEl.innerHTML = scans.map((s) => {
+      const cls = statusColors[s.status] || "text-gray-300";
+      const ts = s.completedAt ? new Date(s.completedAt).toLocaleString() : "—";
+      return `<div class="flex items-center gap-3 py-1 text-xs border-b border-gray-700/50 last:border-0">
+        <span class="${cls} font-semibold w-16">${escHtml(s.status || "—")}</span>
+        <span class="text-gray-300 font-mono w-44">${escHtml(s.scanId || "—")}</span>
+        <span class="text-gray-500 flex-1">${escHtml(ts)}</span>
+        <span class="text-gray-400">${s.gaps ?? 0} gaps</span>
+        <span class="text-amber-400">${s.belowMinimum ?? 0} below-min</span>
+      </div>`;
+    }).join("");
+  }
+}
+
+window.renderTemperingPanel = renderTemperingPanel;
+window.loadTemperingStatus = loadTemperingStatus;
+window.runTemperingScan = runTemperingScan;
+
 

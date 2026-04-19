@@ -2555,6 +2555,68 @@ cmd_doctor() {
     fi
 
     # ═══════════════════════════════════════════════════════════════
+    # TEMPERING (Phase TEMPER-01 Slice 01.2)
+    # ═══════════════════════════════════════════════════════════════
+    # The Tempering subsystem (forge_tempering_scan → forge_tempering_status)
+    # parses existing coverage reports and flags layers below configured
+    # minima. Surfacing freshness + gap counts here gives the forge operator
+    # a one-glance answer to "is my test coverage honest?" without having
+    # to open the dashboard.
+    echo ""
+    echo "Tempering:"
+    tempering_dir="$REPO_ROOT/.forge/tempering"
+    if [ -d "$tempering_dir" ]; then
+        # Find the newest scan-*.json by mtime
+        latest_scan=""
+        scan_count=0
+        for f in "$tempering_dir"/scan-*.json; do
+            [ -e "$f" ] || continue
+            scan_count=$((scan_count + 1))
+            if [ -z "$latest_scan" ] || [ "$f" -nt "$latest_scan" ]; then
+                latest_scan="$f"
+            fi
+        done
+
+        if [ "$scan_count" -eq 0 ]; then
+            doctor_pass "No Tempering scans yet — run 'forge_tempering_scan' to establish a baseline"
+        else
+            # Extract status + gap count — best-effort grep, no jq dep.
+            status=$(grep -o '"status"[[:space:]]*:[[:space:]]*"[^"]*"' "$latest_scan" 2>/dev/null | head -n1 | sed 's/.*"\([^"]*\)"$/\1/')
+            [ -z "$status" ] && status="unknown"
+            gap_count=$(grep -o '"layer"[[:space:]]*:' "$latest_scan" 2>/dev/null | wc -l | tr -d ' ')
+
+            # Age in days from mtime — portable across GNU/BSD stat.
+            if stat -c %Y "$latest_scan" >/dev/null 2>&1; then
+                mtime=$(stat -c %Y "$latest_scan")
+            else
+                mtime=$(stat -f %m "$latest_scan" 2>/dev/null || echo "0")
+            fi
+            now=$(date +%s)
+            age_days=$(( (now - mtime) / 86400 ))
+
+            doctor_pass "$scan_count scan(s); latest: $status, ${gap_count:-0} gap(s), $age_days day(s) old"
+
+            # Stale-scan warning mirrors the `tempering-scan-stale` watcher rule.
+            if [ "$age_days" -ge 7 ]; then
+                doctor_warn "Latest scan is $age_days days old" "Re-run 'forge_tempering_scan' — coverage drifts fast"
+            fi
+
+            # Below-minimum warning — count gap records with gap ≥ 5.
+            # Walks the file line-by-line looking for the "gap" field.
+            below_min=$(awk '/"gap"[[:space:]]*:/ { gsub(/[^0-9.]/,"",$0); if ($0+0 >= 5) c++ } END { print c+0 }' "$latest_scan" 2>/dev/null)
+            if [ "${below_min:-0}" -gt 0 ]; then
+                doctor_warn "$below_min coverage layer(s) below minimum by ≥ 5 points" "Run 'forge_tempering_status' to inspect the gap report"
+            fi
+        fi
+
+        if [ -f "$tempering_dir/config.json" ]; then
+            doctor_pass "Tempering config present — enterprise minima active"
+        fi
+    else
+        doctor_pass "Tempering inactive — no .forge/tempering/ directory yet"
+    fi
+
+    # ═══════════════════════════════════════════════════════════════
     # SUMMARY
     # ═══════════════════════════════════════════════════════════════
     echo ""

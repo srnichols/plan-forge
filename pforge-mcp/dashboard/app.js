@@ -30,6 +30,12 @@ const state = {
     scans: [],         // newest first — coverage-per-layer summaries
     fetching: false,
     lastError: null,
+    // TEMPER-02 Slice 02.2 — per-slice run verdicts keyed by sliceRef.slice.
+    // Populated by the `tempering-run-completed` hub event; read by
+    // renderSliceCards to render a tiny 🔨 pill next to the gate/retry
+    // indicators. Kept separate from the scan cache to keep the
+    // Tempering tab free of per-run state it doesn't render.
+    slicePills: {},
   },
 };
 
@@ -226,6 +232,9 @@ function handleEvent(event) {
     case "watch-advice-generated":
       handleWatchAdvice(event.data || event);
       break;
+    case "tempering-run-completed":
+      handleTemperingRunCompleted(event.data || event);
+      break;
   }
 }
 
@@ -408,6 +417,28 @@ function handleRunAborted(data) {
   document.getElementById("run-progress-text").textContent = `Aborted at slice ${data.sliceId}: ${data.reason}`;
 }
 
+// ─── Tempering run pill (TEMPER-02 Slice 02.2) ────────────────────────
+//
+// The runner emits `tempering-run-completed` with a primitives-only
+// payload (verdict, pass/fail/skipped, durationMs, sliceRef). We bucket
+// it per-slice in `state.tempering.slicePills[sliceRef.slice]` and
+// re-render the slice cards so the new pill appears next to
+// gate/retry indicators. No network calls, no per-scanner detail — the
+// Tempering tab handles that.
+function handleTemperingRunCompleted(data) {
+  if (!data || !data.sliceRef || !data.sliceRef.slice) return;
+  state.tempering.slicePills[data.sliceRef.slice] = {
+    verdict: data.verdict || "unknown",
+    pass: data.pass || 0,
+    fail: data.fail || 0,
+    skipped: data.skipped || 0,
+    durationMs: data.durationMs || 0,
+    stack: data.stack || null,
+    ts: Date.now(),
+  };
+  renderSliceCards();
+}
+
 // ─── Rendering ────────────────────────────────────────────────────────
 function renderSliceCards() {
   const container = document.getElementById("slice-cards");
@@ -493,6 +524,23 @@ function renderSliceCards() {
       ? `<span class="text-xs text-yellow-400" title="${s.attempts} attempts">🔄${s.attempts}</span>`
       : "";
 
+    // TEMPER-02 Slice 02.2 — Tempering run pill. Keyed by slice id.
+    // Verdict colour-graded green/red/amber so operators can scan the
+    // grid and spot the failing slice without opening the Tempering
+    // tab. Tooltip shows pass/fail/skipped totals + stack.
+    let temperingPillHtml = "";
+    const pill = state.tempering?.slicePills?.[s.id];
+    if (pill) {
+      const pillColor = pill.verdict === "pass"
+        ? "text-green-400"
+        : pill.verdict === "skipped"
+        ? "text-gray-400"
+        : "text-red-400";
+      const pillIcon = pill.verdict === "pass" ? "✓" : pill.verdict === "skipped" ? "◌" : "✗";
+      const pillTitle = `Tempering ${pill.verdict} — ${pill.pass} pass / ${pill.fail} fail / ${pill.skipped} skipped${pill.stack ? " (" + pill.stack + ")" : ""}`;
+      temperingPillHtml = `<span class="text-xs ${pillColor}" title="${pillTitle}">🔨${pillIcon}</span>`;
+    }
+
     // Duration bar (proportional to max duration across all slices)
     const maxDuration = Math.max(...state.slices.map((x) => x.duration || 0), 1);
     const durationPct = s.duration ? Math.round((s.duration / maxDuration) * 100) : 0;
@@ -503,7 +551,7 @@ function renderSliceCards() {
       <div class="slice-card ${bgColor} rounded-lg p-3 border border-gray-700 cursor-pointer hover:border-gray-500 transition-colors" data-slice-id="${s.id}" onclick="loadSliceLog('${s.id}')">
         <div class="flex items-center justify-between mb-1">
           <span class="font-semibold text-sm">${statusIcon} Slice ${s.id} ${sliceModeBadge}${escalatedMark}</span>
-          <span class="text-xs text-gray-500 flex items-center gap-1.5">${retryHtml}${gateHtml}${duration}${elapsed}</span>
+          <span class="text-xs text-gray-500 flex items-center gap-1.5">${retryHtml}${temperingPillHtml}${gateHtml}${duration}${elapsed}</span>
         </div>
         <p class="text-xs text-gray-400 truncate">${s.title}</p>
         ${(complexityBadge || spendBadge) ? `<div class="flex items-center gap-1.5 mt-1.5">${complexityBadge}${spendBadge}</div>` : ""}

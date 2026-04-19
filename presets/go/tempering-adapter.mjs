@@ -32,7 +32,28 @@ export const temperingAdapter = {
     },
   },
   integration: {
-    supported: false,
-    reason: "lands-in-TEMPER-02-slice-02.2",
+    supported: true,
+    // Go convention: integration tests use the `//go:build integration`
+    // build tag so they're skipped during normal `go test`. We pass
+    // `-tags=integration` to opt in.
+    cmd: ["go", "test", "-json", "-tags=integration", "./..."],
+    parseOutput(stdout, stderr, exitCode) {
+      const result = { pass: 0, fail: 0, skipped: 0, coverage: null };
+      const lines = (stdout || "").split(/\r?\n/);
+      for (const raw of lines) {
+        const line = raw.trim();
+        if (!line || line.charAt(0) !== "{") continue;
+        let evt;
+        try { evt = JSON.parse(line); } catch { continue; }
+        if (!evt || typeof evt !== "object" || !evt.Test) continue;
+        if (evt.Action === "pass") result.pass++;
+        else if (evt.Action === "fail") result.fail++;
+        else if (evt.Action === "skip") result.skipped++;
+      }
+      if (result.pass === 0 && result.fail === 0 && result.skipped === 0 && exitCode !== 0) {
+        result.fail = 1;
+      }
+      return result;
+    },
   },
 };

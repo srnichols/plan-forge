@@ -160,21 +160,34 @@ export async function pickChangedFiles({ cwd, lastGreenSha, gitSpawn = realSpawn
 // ─── Per-scanner runners ──────────────────────────────────────────────
 
 /**
- * Run the unit scanner for a stack. Pure orchestration — all
- * stack-specific knowledge lives in `adapter.unit`.
+ * Budget-key map: scanner id → config.runtimeBudgets key.
+ * Keeps the generic runner free of scanner-specific branching.
+ */
+const SCANNER_BUDGET_KEYS = Object.freeze({
+  unit: "unitMaxMs",
+  integration: "integrationMaxMs",
+});
+
+/**
+ * Generic scanner runner — the same orchestration logic for any
+ * scanner whose adapter entry has `{ supported, cmd, parseOutput }`.
+ * Pure function of its inputs when `spawnFn`, `now`, `adapter` are
+ * injected.
  *
  * @param {object} ctx
+ * @param {string} ctx.scanner           - "unit" | "integration" (future: "ui-playwright" …)
  * @param {object} ctx.config            - loaded tempering config
- * @param {string} ctx.stack             - e.g. "typescript"
- * @param {object|null} ctx.adapter      - result of loadAdapter(stack)
+ * @param {string} ctx.stack
+ * @param {object|null} ctx.adapter
  * @param {{plan:string, slice:string}|null} ctx.sliceRef
  * @param {string} ctx.cwd
  * @param {Function} [ctx.spawn]
- * @param {Function} [ctx.now]           - () => number, injectable clock
+ * @param {Function} [ctx.now]
  * @returns {Promise<object>} scanner result record
  */
-export async function runScannerUnit(ctx) {
+export async function runScanner(ctx) {
   const {
+    scanner,
     config,
     stack,
     adapter,
@@ -186,48 +199,49 @@ export async function runScannerUnit(ctx) {
 
   const t0 = now();
   const base = {
-    scanner: "unit",
+    scanner,
     stack,
     sliceRef,
     startedAt: new Date(t0).toISOString(),
   };
+  const skippedFrame = (reason) => ({
+    ...base,
+    skipped: true,
+    reason,
+    verdict: "skipped",
+    durationMs: 0,
+    completedAt: new Date(now()).toISOString(),
+  });
+
+  if (!scanner) return skippedFrame("missing-scanner-id");
 
   // Scanner globally disabled
-  if (!config || !config.scanners || config.scanners.unit === false) {
-    return { ...base, skipped: true, reason: "scanner-disabled", verdict: "skipped", durationMs: 0, completedAt: new Date(now()).toISOString() };
+  if (!config || !config.scanners || config.scanners[scanner] === false) {
+    return skippedFrame("scanner-disabled");
   }
 
-  // No adapter for this stack (including loadAdapter failure)
-  if (!adapter || !adapter.unit) {
-    return { ...base, skipped: true, reason: "no-adapter", verdict: "skipped", durationMs: 0, completedAt: new Date(now()).toISOString() };
+  // No adapter for this stack
+  if (!adapter || !adapter[scanner]) {
+    return skippedFrame("no-adapter");
   }
 
-  const check = validateAdapterEntry(adapter.unit);
-  if (!check.ok) {
-    return { ...base, skipped: true, reason: `invalid-adapter:${check.reason}`, verdict: "skipped", durationMs: 0, completedAt: new Date(now()).toISOString() };
+  const check = validateAdapterEntry(adapter[scanner]);
+  if (!check.ok) return skippedFrame(`invalid-adapter:${check.reason}`);
+
+  // Explicit unsupported stub
+  if (adapter[scanner].supported === false) {
+    return skippedFrame(adapter[scanner].reason || "stack-not-supported");
   }
 
-  // Explicit unsupported stub (php / swift / azure-iac in this slice)
-  if (adapter.unit.supported === false) {
-    return {
-      ...base,
-      skipped: true,
-      reason: adapter.unit.reason || "stack-not-supported",
-      verdict: "skipped",
-      durationMs: 0,
-      completedAt: new Date(now()).toISOString(),
-    };
-  }
+  const budgetKey = SCANNER_BUDGET_KEYS[scanner] || `${scanner}MaxMs`;
+  const budgetMs = (config.runtimeBudgets && config.runtimeBudgets[budgetKey]) || DEFAULT_UNIT_BUDGET_MS;
 
-  const budgetMs = (config.runtimeBudgets && config.runtimeBudgets.unitMaxMs) || DEFAULT_UNIT_BUDGET_MS;
-
-  const proc = await runSubprocess(adapter.unit.cmd, { cwd, budgetMs, spawn: spawnFn });
+  const proc = await runSubprocess(adapter[scanner].cmd, { cwd, budgetMs, spawn: spawnFn });
 
   let parsed = { pass: 0, fail: 0, skipped: 0, coverage: null };
   try {
-    parsed = adapter.unit.parseOutput(proc.stdout, proc.stderr, proc.exitCode) || parsed;
+    parsed = adapter[scanner].parseOutput(proc.stdout, proc.stderr, proc.exitCode) || parsed;
   } catch (err) {
-    // Parser blew up — surface it but don't throw
     parsed = { pass: 0, fail: 0, skipped: 0, coverage: null, parseError: err.message };
   }
 
@@ -243,7 +257,7 @@ export async function runScannerUnit(ctx) {
   return {
     ...base,
     completedAt: new Date(now()).toISOString(),
-    cmd: adapter.unit.cmd,
+    cmd: adapter[scanner].cmd,
     exitCode: proc.exitCode,
     timedOut: proc.timedOut,
     error: proc.error || null,
@@ -255,6 +269,24 @@ export async function runScannerUnit(ctx) {
     durationMs,
     verdict,
   };
+}
+
+/**
+ * Back-compat wrapper — Slice 02.1 shipped `runScannerUnit` as the
+ * public API; Slice 02.2 generalises it to `runScanner`. The wrapper
+ * keeps any external callers that imported `runScannerUnit` working.
+ */
+export function runScannerUnit(ctx) {
+  return runScanner({ ...ctx, scanner: "unit" });
+}
+
+/**
+ * Integration-scanner entry point (TEMPER-02 Slice 02.2). Same
+ * contract as `runScannerUnit` — just routes through the generic
+ * runner with `scanner: "integration"`.
+ */
+export function runScannerIntegration(ctx) {
+  return runScanner({ ...ctx, scanner: "integration" });
 }
 
 // ─── Top-level dispatcher ─────────────────────────────────────────────
@@ -339,7 +371,8 @@ export async function runTemperingRun(opts = {}) {
   // ── Unit scanner ──
   emit(hub, "tempering-run-scanner-started", { correlationId: corr, scanner: "unit", stack });
 
-  const unitResult = await runScannerUnit({
+  const unitResult = await runScanner({
+    scanner: "unit",
     config,
     stack,
     adapter,
@@ -360,8 +393,51 @@ export async function runTemperingRun(opts = {}) {
     durationMs: unitResult.durationMs,
   });
 
+  // ── Integration scanner (TEMPER-02 Slice 02.2) ──
+  // Ordered after unit so a failing unit suite short-circuits the
+  // budget: if unit already blew the runtime budget, integration is
+  // skipped with reason "prior-budget-exceeded" rather than compounding.
+  emit(hub, "tempering-run-scanner-started", { correlationId: corr, scanner: "integration", stack });
+
+  let integrationResult;
+  if (unitResult.verdict === "budget-exceeded") {
+    integrationResult = {
+      scanner: "integration",
+      stack,
+      sliceRef,
+      startedAt: new Date(now()).toISOString(),
+      completedAt: new Date(now()).toISOString(),
+      skipped: true,
+      reason: "prior-budget-exceeded",
+      verdict: "skipped",
+      durationMs: 0,
+    };
+  } else {
+    integrationResult = await runScanner({
+      scanner: "integration",
+      config,
+      stack,
+      adapter,
+      sliceRef,
+      cwd: projectDir,
+      spawn: spawnFn,
+      now,
+    });
+  }
+
+  emit(hub, "tempering-run-scanner-completed", {
+    correlationId: corr,
+    scanner: "integration",
+    stack,
+    verdict: integrationResult.verdict,
+    pass: integrationResult.pass || 0,
+    fail: integrationResult.fail || 0,
+    skipped: integrationResult.skipped || 0,
+    durationMs: integrationResult.durationMs || 0,
+  });
+
   // Overall verdict: worst of the scanner verdicts
-  const scanners = [unitResult];
+  const scanners = [unitResult, integrationResult];
   const overallVerdict = deriveOverallVerdict(scanners);
 
   const completedAt = new Date(now()).toISOString();
@@ -379,7 +455,7 @@ export async function runTemperingRun(opts = {}) {
     scanners,
     verdict: overallVerdict,
     phase: "TEMPER-02",
-    slice: "02.1",
+    slice: "02.2",
   };
 
   // Persist — best-effort
@@ -389,17 +465,26 @@ export async function runTemperingRun(opts = {}) {
     writeFileSync(outPath, JSON.stringify(runRecord, null, 2) + "\n", "utf-8");
   } catch { /* best-effort */ }
 
-  // Compact completion event — primitives only, mirrors tempering-scan-completed
+  // Compact completion event — primitives only, mirrors tempering-scan-completed.
+  // `pass`/`fail`/`skipped` are cross-scanner totals so dashboards can
+  // render a single summary chip per run without loading the record.
+  const totals = scanners.reduce((acc, s) => ({
+    pass: acc.pass + (s.pass || 0),
+    fail: acc.fail + (s.fail || 0),
+    skipped: acc.skipped + (s.skipped || 0),
+    durationMs: acc.durationMs + (s.durationMs || 0),
+  }), { pass: 0, fail: 0, skipped: 0, durationMs: 0 });
+
   emit(hub, "tempering-run-completed", {
     correlationId: corr,
     runId,
     stack,
     verdict: overallVerdict,
     scannerCount: scanners.length,
-    pass: unitResult.pass,
-    fail: unitResult.fail,
-    skipped: unitResult.skipped,
-    durationMs: unitResult.durationMs,
+    pass: totals.pass,
+    fail: totals.fail,
+    skipped: totals.skipped,
+    durationMs: totals.durationMs,
     sliceRef,
   });
 

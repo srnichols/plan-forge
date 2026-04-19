@@ -1185,8 +1185,11 @@ if [[ "$IS_CUSTOM_ONLY" != true ]]; then
             skill_src="$skill_dir/SKILL.md"
             skill_dst="$PROJECT_PATH/.github/skills/$skill_name/SKILL.md"
             if [[ -f "$skill_src" ]]; then
-                # Don't overwrite — preset skills should win over shared fallbacks
-                local saved_force="$FORCE"
+                # Don't overwrite — preset skills should win over shared fallbacks.
+                # `local` is invalid here (we're at script scope, not inside a
+                # function) — a plain assignment does the same job and is
+                # portable across Bash 3/4/5.
+                saved_force="$FORCE"
                 FORCE=false
                 copy_with_create "$skill_src" "$skill_dst" || true
                 FORCE="$saved_force"
@@ -1381,11 +1384,13 @@ if [[ -d "$MCP_SRC_DIR" ]]; then
     MCP_DST_DIR="$PROJECT_PATH/pforge-mcp"
     mkdir -p "$MCP_DST_DIR"
 
-    # Copy all MCP runtime files (not node_modules or .forge)
-    local mcp_count=0
+    # Copy all MCP runtime files (not node_modules or .forge).
+    # `local` is invalid at script scope — these accumulators live at
+    # top-level inside the `if` block, so plain assignments are used.
+    mcp_count=0
     while IFS= read -r -d '' f; do
-        local rel_path="${f#"$MCP_SRC_DIR/"}"
-        local dst_file="$MCP_DST_DIR/$rel_path"
+        rel_path="${f#"$MCP_SRC_DIR/"}"
+        dst_file="$MCP_DST_DIR/$rel_path"
         mkdir -p "$(dirname "$dst_file")"
         cp "$f" "$dst_file"
         mcp_count=$((mcp_count + 1))
@@ -1454,8 +1459,8 @@ echo ""
 cyan "Step 7c: CLI scripts"
 
 for cli_file in "pforge.ps1" "pforge.sh" "VERSION"; do
-    local src_cli="$TEMPLATE_ROOT/$cli_file"
-    local dst_cli="$PROJECT_PATH/$cli_file"
+    src_cli="$TEMPLATE_ROOT/$cli_file"
+    dst_cli="$PROJECT_PATH/$cli_file"
     if [[ -f "$src_cli" ]]; then
         cp "$src_cli" "$dst_cli"
         green "  COPY  $cli_file"

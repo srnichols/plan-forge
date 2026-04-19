@@ -47,19 +47,19 @@ check_file() {
         size="$(wc -c < "$full_path" | tr -d ' ')"
         if [[ "$size" -eq 0 ]]; then
             red "  FAIL  $rel_path (empty file)"
-            if [[ "$required" == "true" ]]; then ((FAIL++)); else ((WARN++)); fi
+            if [[ "$required" == "true" ]]; then FAIL=$((FAIL+1)); else WARN=$((WARN+1)); fi
             return 1
         fi
         green "  PASS  $rel_path ($size bytes)"
-        ((PASS++))
+        PASS=$((PASS+1))
         return 0
     else
         if [[ "$required" == "true" ]]; then
             red "  FAIL  $rel_path (missing)"
-            ((FAIL++))
+            FAIL=$((FAIL+1))
         else
             yellow "  WARN  $rel_path (missing — optional)"
-            ((WARN++))
+            WARN=$((WARN+1))
         fi
         return 1
     fi
@@ -75,7 +75,7 @@ check_no_placeholders() {
     for ph in "${placeholders[@]}"; do
         if grep -qF "$ph" "$full_path"; then
             printf '\033[0;35m  TODO  %s contains placeholder to fill in: %s\033[0m\n' "$rel_path" "$ph"
-            ((WARN++))
+            WARN=$((WARN+1))
         fi
     done
 }
@@ -138,33 +138,33 @@ if [[ -f "$CONFIG_PATH" ]]; then
         if [[ -d "$PROMPTS_DIR" ]]; then
             PROMPT_COUNT=$(find "$PROMPTS_DIR" -name "*.prompt.md" -type f 2>/dev/null | wc -l | tr -d ' ')
             green "  PASS  .github/prompts/ ($PROMPT_COUNT prompt templates)"
-            ((PASS++))
+            PASS=$((PASS+1))
         else
             yellow "  WARN  .github/prompts/ (missing — optional)"
-            ((WARN++))
+            WARN=$((WARN+1))
         fi
 
         if [[ -d "$AGENTS_DIR" ]]; then
             AGENT_COUNT=$(find "$AGENTS_DIR" -name "*.agent.md" -type f 2>/dev/null | wc -l | tr -d ' ')
             green "  PASS  .github/agents/ ($AGENT_COUNT agent definitions)"
-            ((PASS++))
+            PASS=$((PASS+1))
         else
             yellow "  WARN  .github/agents/ (missing — optional)"
-            ((WARN++))
+            WARN=$((WARN+1))
         fi
 
         if [[ -d "$SKILLS_DIR" ]]; then
             SKILL_COUNT=$(find "$SKILLS_DIR" -name "SKILL.md" -type f 2>/dev/null | wc -l | tr -d ' ')
             green "  PASS  .github/skills/ ($SKILL_COUNT skills)"
-            ((PASS++))
+            PASS=$((PASS+1))
         else
             yellow "  WARN  .github/skills/ (missing — optional)"
-            ((WARN++))
+            WARN=$((WARN+1))
         fi
     fi
 else
     yellow "  WARN  .forge.json not found — skipping preset checks"
-    ((WARN++))
+    WARN=$((WARN+1))
 fi
 
 # ─── Agent-Specific Files ─────────────────────────────────────────────
@@ -189,10 +189,10 @@ if [ -f "$CONFIG_PATH" ]; then
                     local claude_count
                     claude_count=$(find "$PROJECT_PATH/.claude/skills" -name "SKILL.md" -type f 2>/dev/null | wc -l | tr -d ' ')
                     green "  PASS  .claude/skills/ ($claude_count Claude skills)"
-                    ((PASS++))
+                    PASS=$((PASS+1))
                 else
                     yellow "  WARN  .claude/skills/ (missing)"
-                    ((WARN++))
+                    WARN=$((WARN+1))
                 fi
                 ;;
             cursor)
@@ -201,10 +201,10 @@ if [ -f "$CONFIG_PATH" ]; then
                     local cursor_count
                     cursor_count=$(find "$PROJECT_PATH/.cursor/commands" -name "*.md" -type f 2>/dev/null | wc -l | tr -d ' ')
                     green "  PASS  .cursor/commands/ ($cursor_count Cursor commands)"
-                    ((PASS++))
+                    PASS=$((PASS+1))
                 else
                     yellow "  WARN  .cursor/commands/ (missing)"
-                    ((WARN++))
+                    WARN=$((WARN+1))
                 fi
                 ;;
             codex)
@@ -212,10 +212,10 @@ if [ -f "$CONFIG_PATH" ]; then
                     local codex_count
                     codex_count=$(find "$PROJECT_PATH/.agents/skills" -name "SKILL.md" -type f 2>/dev/null | wc -l | tr -d ' ')
                     green "  PASS  .agents/skills/ ($codex_count Codex skills)"
-                    ((PASS++))
+                    PASS=$((PASS+1))
                 else
                     yellow "  WARN  .agents/skills/ (missing)"
-                    ((WARN++))
+                    WARN=$((WARN+1))
                 fi
                 ;;
         esac
@@ -261,10 +261,10 @@ if [[ -f "$CONFIG_PATH" ]]; then
             local label="$1" actual="$2" min="$3" name="$4"
             if [[ "$actual" -ge "$min" ]]; then
                 green "  PASS  $label — $actual $name (min: $min)"
-                ((PASS++))
+                PASS=$((PASS+1))
             else
                 red "  FAIL  $label — $actual $name (expected ≥ $min for '$PRIMARY_PRESET' preset)"
-                ((FAIL++))
+                FAIL=$((FAIL+1))
             fi
         }
 
@@ -276,11 +276,11 @@ if [[ -f "$CONFIG_PATH" ]]; then
         cyan "  INFO  Custom preset — skipping minimum count checks"
     else
         yellow "  WARN  Unknown preset '$PRIMARY_PRESET' — skipping minimum count checks"
-        ((WARN++))
+        WARN=$((WARN+1))
     fi
 else
     yellow "  WARN  .forge.json not found — skipping minimum count checks"
-    ((WARN++))
+    WARN=$((WARN+1))
 fi
 
 # ─── Optional Files ───────────────────────────────────────────────────
@@ -300,10 +300,10 @@ PP_PATH="$PROJECT_PATH/docs/plans/PROJECT-PRINCIPLES.md"
 if [[ -f "$PP_PATH" ]]; then
     PP_COUNT=$(grep -cE '^\|\s*[0-9]+\s*\|' "$PP_PATH" 2>/dev/null || echo "0")
     green "  PASS  Project Principles: found ($PP_COUNT principles)"
-    ((PASS++))
+    PASS=$((PASS+1))
 else
     yellow "  WARN  Project Principles: not created (optional — run project-principles.prompt.md)"
-    ((WARN++))
+    WARN=$((WARN+1))
 fi
 
 # Extensions
@@ -312,23 +312,23 @@ if [[ -f "$EXT_JSON" ]]; then
     EXT_COUNT=$(python3 -c "import json; print(len(json.load(open('$EXT_JSON')).get('extensions',[])))" 2>/dev/null || echo "0")
     if [[ "$EXT_COUNT" -gt 0 ]]; then
         green "  PASS  Extensions: $EXT_COUNT installed"
-        ((PASS++))
+        PASS=$((PASS+1))
     else
         yellow "  WARN  Extensions: none installed (optional)"
-        ((WARN++))
+        WARN=$((WARN+1))
     fi
 else
     yellow "  WARN  Extensions: not configured (optional)"
-    ((WARN++))
+    WARN=$((WARN+1))
 fi
 
 # CLI
 if [[ -f "$PROJECT_PATH/pforge.sh" ]] || [[ -f "$PROJECT_PATH/pforge.ps1" ]]; then
     green "  PASS  CLI: pforge script found"
-    ((PASS++))
+    PASS=$((PASS+1))
 else
     yellow "  WARN  CLI: pforge not installed (optional)"
-    ((WARN++))
+    WARN=$((WARN+1))
 fi
 
 # ─── Placeholder Scan ─────────────────────────────────────────────────

@@ -2612,6 +2612,37 @@ cmd_doctor() {
         if [ -f "$tempering_dir/config.json" ]; then
             doctor_pass "Tempering config present — enterprise minima active"
         fi
+
+        # TEMPER-02 Slice 02.2 — summarise the latest Tempering run
+        # record (`run-*.json`). Mirrors the PowerShell equivalent.
+        latest_run=""
+        run_count=0
+        for f in "$tempering_dir"/run-*.json; do
+            [ -e "$f" ] || continue
+            run_count=$((run_count + 1))
+            if [ -z "$latest_run" ] || [ "$f" -nt "$latest_run" ]; then
+                latest_run="$f"
+            fi
+        done
+        if [ "$run_count" -gt 0 ]; then
+            run_verdict=$(grep -o '"verdict"[[:space:]]*:[[:space:]]*"[^"]*"' "$latest_run" 2>/dev/null | tail -n1 | sed 's/.*"\([^"]*\)"$/\1/')
+            [ -z "$run_verdict" ] && run_verdict="unknown"
+            scanner_count=$(grep -o '"scanner"[[:space:]]*:' "$latest_run" 2>/dev/null | wc -l | tr -d ' ')
+            run_pass=$(awk 'BEGIN{s=0} /"pass"[[:space:]]*:[[:space:]]*[0-9]+/ { match($0,/[0-9]+/); s+=substr($0,RSTART,RLENGTH) } END{print s}' "$latest_run" 2>/dev/null)
+            run_fail=$(awk 'BEGIN{s=0} /"fail"[[:space:]]*:[[:space:]]*[0-9]+/ { match($0,/[0-9]+/); s+=substr($0,RSTART,RLENGTH) } END{print s}' "$latest_run" 2>/dev/null)
+            if stat -c %Y "$latest_run" >/dev/null 2>&1; then
+                run_mtime=$(stat -c %Y "$latest_run")
+            else
+                run_mtime=$(stat -f %m "$latest_run" 2>/dev/null || echo "0")
+            fi
+            run_age_min=$(( ($(date +%s) - run_mtime) / 60 ))
+            doctor_pass "$run_count run(s); latest: $run_verdict, ${run_pass:-0} pass / ${run_fail:-0} fail across ${scanner_count:-0} scanner(s), $run_age_min min old"
+            case "$run_verdict" in
+                fail|error|budget-exceeded)
+                    doctor_warn "Latest Tempering run verdict=$run_verdict" "Open $(basename "$latest_run") for per-scanner detail"
+                    ;;
+            esac
+        fi
     else
         doctor_pass "Tempering inactive — no .forge/tempering/ directory yet"
     fi

@@ -1353,6 +1353,7 @@ export const CONFIG_SCHEMA = {
         models: { type: "array", items: { type: "string" }, default: ["claude-opus-4.6", "gpt-5.3-codex", "gemini-3.1-pro"], description: "Models for dry-run fan-out" },
         reviewerModel: { type: "string", default: "claude-opus-4.6", description: "Model for synthesis review" },
         dryRunTimeout: { type: "number", default: 300000, description: "Timeout per dry-run worker (ms)" },
+        strictAvailability: { type: "boolean", default: false, description: "When true, fast-fail (exit 2) if any configured model is unavailable. When false (default), drop unavailable models and continue if ≥1 remain" },
       },
     },
     extensions: { type: "array", items: { type: "string" }, description: "Installed extensions" },

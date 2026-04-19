@@ -234,8 +234,9 @@ function parseSlices(lines) {
     //   ### Slice N: Title
     //   ### slice N — Title
     //   ### SLICE N.N - Title
+    //   ### Slice 2A: Title (optional single trailing alpha)
     const sliceMatch = line.match(
-      /^###\s+slice\s+([\d.]+)\s*[:\u2014\u2013—–-]\s*(.+?)(?:\s*\[.+?\])*\s*$/ui
+      /^###\s+slice\s+([\d.]+[A-Za-z]?)\s*[:\u2014\u2013—–-]\s*(.+?)(?:\s*\[.+?\])*\s*$/ui
     );
     if (sliceMatch) {
       // Save previous slice
@@ -265,7 +266,7 @@ function parseSlices(lines) {
       if (dependsMatch) {
         current.depends = dependsMatch[1]
           .split(",")
-          .map((d) => d.trim().replace(/^slice\s+/i, ""));
+          .map((d) => normalizeSliceId(d));
       }
 
       // Fuzzy parallel: [P], [parallel], [parallel-safe]
@@ -336,7 +337,7 @@ function parseSlices(lines) {
       const rawDeps = dependsBodyMatch[1].replace(/\s*\([^)]*\)\s*$/, "").trim();
       const bodyDeps = rawDeps
         .split(/\s*,\s*/)
-        .map((d) => d.replace(/^slice\s+/i, "").trim())
+        .map((d) => normalizeSliceId(d))
         .filter((d) => d.length > 0);
       // Merge with header-tag deps, de-dup
       for (const d of bodyDeps) {
@@ -365,6 +366,35 @@ function parseSlices(lines) {
   if (current) slices.push(current);
 
   return slices;
+}
+
+/**
+ * Normalize a slice ID: strip "Slice " prefix, trim, uppercase trailing alpha.
+ * e.g. "Slice 2a" → "2A", " 3 " → "3", "2B" → "2B"
+ */
+export function normalizeSliceId(raw) {
+  const m = String(raw).trim().replace(/^slice\s+/i, "").match(/^([\d.]+)([A-Za-z]?)$/);
+  return m ? m[1] + m[2].toUpperCase() : String(raw).trim();
+}
+
+/**
+ * Compare two slice IDs for sorting. Numeric part first, then optional alpha suffix.
+ * Empty suffix sorts before any letter: 2 < 2A < 2B < 3.
+ */
+export function compareSliceIds(a, b) {
+  const re = /^([\d.]+)([A-Za-z]?)$/;
+  const ma = String(a).match(re);
+  const mb = String(b).match(re);
+  if (!ma || !mb) return String(a).localeCompare(String(b));
+  const na = parseFloat(ma[1]);
+  const nb = parseFloat(mb[1]);
+  if (na !== nb) return na - nb;
+  const sa = ma[2].toUpperCase();
+  const sb = mb[2].toUpperCase();
+  if (sa === sb) return 0;
+  if (sa === "") return -1;
+  if (sb === "") return 1;
+  return sa.localeCompare(sb);
 }
 
 /**
@@ -425,13 +455,23 @@ function topologicalSort(nodes) {
     if (node.inDegree === 0) queue.push(id);
   }
 
+  // Deterministic tiebreak: sort ready queue by slice ID
+  queue.sort(compareSliceIds);
+
   while (queue.length > 0) {
     const id = queue.shift();
     order.push(id);
     const node = nodes.get(id);
+    const newlyReady = [];
     for (const child of node.children) {
       inDegree.set(child, inDegree.get(child) - 1);
-      if (inDegree.get(child) === 0) queue.push(child);
+      if (inDegree.get(child) === 0) newlyReady.push(child);
+    }
+    // Insert newly ready nodes in sorted order
+    if (newlyReady.length > 0) {
+      newlyReady.sort(compareSliceIds);
+      queue.push(...newlyReady);
+      queue.sort(compareSliceIds);
     }
   }
 
@@ -948,6 +988,90 @@ export function detectWorkers(_projectDir) {
   return results;
 }
 
+// ─── Quorum Model Availability Probing (H.3) ─────────────────────────
+
+/**
+ * Map a model name to the CLI binary it requires when not API-routed.
+ * Mirrors the routing in spawnWorker(): claude-* → claude, codex → codex,
+ * everything else → gh (gh-copilot).
+ * @param {string} model
+ * @returns {string}
+ */
+export function resolveRequiredCli(model) {
+  if (/^claude-/.test(model)) return "claude";
+  if (/^codex-/.test(model)) return "codex";
+  return "gh-copilot";
+}
+
+/**
+ * Probe whether a single quorum model is available on this machine.
+ *
+ * Routing mirrors spawnWorker():
+ *   - API-routed models (grok-*, gpt-*, chatgpt-*) → detectApiProvider
+ *   - CLI-routed models (claude-*, codex-*, default) → detectWorkers cache
+ *
+ * @param {string} model
+ * @returns {{ model: string, available: boolean, via: "api"|"cli", provider?: string, worker?: string, reason?: string, install?: string }}
+ */
+export function probeQuorumModelAvailability(model) {
+  // Path 1: API-routed models — reuse detectApiProvider (checks env + secrets.json)
+  const apiProvider = detectApiProvider(model);
+  if (apiProvider) {
+    return { model, available: true, via: "api", provider: apiProvider.name };
+  }
+  // Pattern matched an API provider but env key missing → unavailable with reason
+  for (const [name, provider] of Object.entries(API_PROVIDERS)) {
+    if (provider.pattern.test(model)) {
+      return {
+        model, available: false, via: "api", provider: name,
+        reason: `${provider.envKey} not set`,
+        install: `Set ${provider.envKey} in env or .forge/secrets.json`,
+      };
+    }
+  }
+
+  // Path 2: CLI-routed models — reuse detectWorkers() (already cached)
+  const requiredCli = resolveRequiredCli(model);
+  const workers = detectWorkers();
+  const worker = workers.find((w) => w.name === requiredCli && w.available);
+  if (worker) return { model, available: true, via: "cli", worker: worker.name };
+  const hint = suggestInstall(requiredCli);
+  return {
+    model, available: false, via: "cli",
+    reason: `CLI '${requiredCli}' not on PATH`,
+    install: hint.command || hint.docs || null,
+  };
+}
+
+/**
+ * Filter a quorum config's model list to only available models.
+ * Dedupes, probes each unique model once, and returns available + dropped lists.
+ *
+ * @param {{ models: string[] }} config
+ * @param {{ probe?: (model: string) => object }} [options] - Inject probe for testing
+ * @returns {{ available: string[], dropped: { model: string, reason: string, install?: string }[] }}
+ */
+export function filterQuorumModels(config, { probe = probeQuorumModelAvailability } = {}) {
+  const seen = new Set();
+  const available = [];
+  const dropped = [];
+  for (const model of config.models) {
+    if (seen.has(model)) continue;
+    seen.add(model);
+    const result = probe(model);
+    if (result.available) {
+      available.push(model);
+    } else {
+      dropped.push(result);
+      console.error(
+        `[quorum] model ${model} unavailable: ${result.reason} — dropping from quorum` +
+        (result.install ? ` (install: ${result.install})` : ""),
+      );
+    }
+  }
+  return { available, dropped };
+}
+
 /**
  * Probe runtimes declared in worker-capabilities.json. Used by smith's
  * Runtime & Worker Readiness section — does NOT gate worker selection.
@@ -1310,6 +1434,7 @@ export function coalesceGateLines(gateText) {
       // and bulleted prose (e.g. "- Install dependencies"). These are documentation,
       // not shell commands, and would fail the allowlist check with a misleading error.
       if (/^(\d+\.|[-*+])\s+\S/.test(stripped)) continue;
+      if (looksLikeProse(stripped)) continue;
       const dblQuotes = (stripped.match(/"/g) || []).length;
       if (dblQuotes % 2 !== 0) {
         pending = stripped;
@@ -1866,6 +1991,48 @@ export async function runPlan(planPath, options = {}) {
     }
     if (quorumThreshold !== null && typeof quorumThreshold === "number") {
       quorumConfig.threshold = quorumThreshold;
+    }
+
+    // H.3: Probe model availability — drop unavailable models early with a single warning
+    const { available: availableModels, dropped: droppedModels } = filterQuorumModels(quorumConfig);
+
+    if (availableModels.length === 0) {
+      const err = new Error(
+        `[quorum] no available models. Dropped: ${droppedModels.map((d) => `${d.model} (${d.reason})`).join(", ")}. ` +
+        `Install hints: ${droppedModels.map((d) => d.install).filter(Boolean).join(" | ")}`,
+      );
+      err.exitCode = 2;
+      throw err;
+    }
+
+    if (quorumConfig.strictAvailability && droppedModels.length > 0) {
+      const err = new Error(
+        `[quorum] strictAvailability=true and ${droppedModels.length} model(s) unavailable: ` +
+        droppedModels.map((d) => `${d.model} (${d.reason})`).join(", "),
+      );
+      err.exitCode = 2;
+      throw err;
+    }
+
+    if (availableModels.length === 1) {
+      console.error(
+        `[quorum] only 1 of ${quorumConfig.models.length} models available — degrading to single-model ` +
+        `(no multi-perspective synthesis benefit); set quorum.strictAvailability=true to fail instead`,
+      );
+    }
+
+    quorumConfig.models = availableModels;
+    quorumConfig.droppedModels = droppedModels;
+
+    // Probe reviewerModel separately — warn but do not block (existing fallback handles it)
+    if (quorumConfig.reviewerModel) {
+      const reviewerResult = probeQuorumModelAvailability(quorumConfig.reviewerModel);
+      if (!reviewerResult.available) {
+        console.error(
+          `[quorum] reviewer model ${quorumConfig.reviewerModel} unavailable: ${reviewerResult.reason} — ` +
+          `existing reviewer fallback will be used`,
+        );
+      }
     }
   }
 
@@ -2817,6 +2984,17 @@ export function lintGateCommands(planFilePath, cwd = process.cwd()) {
       }
 
       // 3. Command not in allowlist
+      // Skip prose lines with a warning instead of an error
+      if (looksLikeProse(line)) {
+        warnings.push({
+          slice: slice.number,
+          command: line,
+          rule: "prose-detected",
+          severity: "warn",
+          message: `${loc}: Line looks like prose, not a command: '${line.slice(0, 60)}...' — will be skipped at runtime.`,
+        });
+        continue;
+      }
       // Skip leading env var assignments (VAR=val command ...) to find the real command
       const tokens = line.split(/\s+/);
       let cmdIdx = 0;
@@ -2913,6 +3091,53 @@ export function lintGateCommands(planFilePath, cwd = process.cwd()) {
 }
 
 /**
+ * Detect plan-prose lines that are not executable commands.
+ * Conservative — prefers under-matching to avoid false-positives on real commands.
+ * @param {string} line - A single gate line
+ * @returns {boolean} true if the line looks like documentation prose, not a command
+ */
+export function looksLikeProse(line) {
+  if (!line || typeof line !== "string") return false;
+  const trimmed = line.trim();
+  if (!trimmed) return false;
+
+  // 1. Numbered-list prose: "1. Server generates..." — decimal + period + space + letter
+  if (/^\d+\.\s+[a-zA-Z]/.test(trimmed)) return true;
+
+  // 2. Currency tokens: $10.00, $5 — "$" must be followed by a digit (NOT $PATH, $VAR)
+  if (/(?:^|[^A-Za-z_])\$\d/.test(trimmed) || /\\\$\d/.test(trimmed)) return true;
+
+  // 3. Mermaid / diagram keywords at start-of-line
+  if (/^(sequenceDiagram|graph\s|flowchart\s|classDiagram|erDiagram|gantt|pie\s)/i.test(trimmed)) return true;
+
+  // 4. Markdown table row
+  if (/^\|\s/.test(trimmed)) return true;
+
+  // 5. Formula-like assignment with arithmetic op (distinguishes from env-var NODE_ENV=test)
+  if (/^[a-z_]\w*\s*=\s*.*[+\-*/x×]/.test(trimmed)) return true;
+
+  return false;
+}
+
+/**
+ * Check whether a line would pass the gate allowlist (prefix-based) without the prose guard.
+ * Used by regressionGuard to implement the precedence rule: allowlisted commands win over prose heuristic.
+ * @param {string} cmd - The command line to check
+ * @returns {boolean} true if the command matches an allowlist prefix
+ */
+function wouldPassAllowlist(cmd) {
+  if (!cmd || typeof cmd !== "string") return false;
+  const trimmed = cmd.trim();
+  const tokens = trimmed.split(/\s+/);
+  let cmdIdx = 0;
+  while (cmdIdx < tokens.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[cmdIdx])) {
+    cmdIdx++;
+  }
+  const cmdToken = (tokens[cmdIdx] || tokens[0] || "").toLowerCase();
+  return GATE_ALLOWED_PREFIXES.some((p) => cmdToken === p || cmdToken.endsWith(`/${p}`));
+}
+
+/**
  * Check if a command string is permitted in validation gates.
  * Uses the same GATE_ALLOWED_PREFIXES allowlist as runGate() and lintGateCommands().
  * Skips leading env-var assignments (e.g., "NODE_ENV=test npm test").
@@ -2933,6 +3158,9 @@ export function isGateCommandAllowed(cmd) {
     /\b:>\s*\/dev\/(sda|hda)/i,                                           // truncate block device
   ];
   if (BLOCKED_PATTERNS.some((p) => p.test(trimmed))) return false;
+
+  // Skip prose lines — not commands
+  if (looksLikeProse(trimmed)) return false;
 
   const tokens = trimmed.split(/\s+/);
   let cmdIdx = 0;
@@ -3042,6 +3270,21 @@ export async function regressionGuard(files, { plan, failFast = false, cwd = pro
   let passed = 0, failed = 0, blocked = 0, skipped = 0;
 
   for (const gate of gateItems) {
+    // Prose lines are skipped unless they would pass the allowlist (command wins over heuristic)
+    if (looksLikeProse(gate.cmd) && !wouldPassAllowlist(gate.cmd)) {
+      results.push({ ...gate, status: "skipped", reason: "liveguard-prose-skipped" });
+      skipped++;
+      try {
+        appendForgeJsonl("liveguard-events.jsonl", {
+          timestamp: new Date().toISOString(),
+          type: "liveguard-prose-skipped",
+          severity: "info",
+          sliceNumber: gate.sliceNumber,
+          command: gate.cmd,
+        }, cwd);
+      } catch { /* best-effort telemetry */ }
+      continue;
+    }
     if (!isGateCommandAllowed(gate.cmd)) {
       results.push({ ...gate, status: "blocked", reason: `'${gate.cmd.split(/\s+/)[0]}' not in gate allowlist` });
       blocked++;
@@ -3169,6 +3412,104 @@ const CACHE_MAX_AGE_MINUTES = 10;
  * @param {string} command  - Terminal command being executed (may be empty)
  * @returns {boolean}
  */
+/**
+ * Check whether a slice title indicates a destructive operation
+ * (teardown, cleanup, rollback, postmortem, finalize).
+ * Prefix-anchored: "Setup teardown hooks" does NOT match.
+ * @param {string} title - Slice title to check
+ * @returns {boolean}
+ */
+export function isDestructiveSliceTitle(title) {
+  if (typeof title !== "string") return false;
+  return /^\s*(teardown|cleanup|rollback|postmortem|finalize)\b/i.test(title);
+}
+
+/** Default configuration for the Teardown Safety Guard. */
+const TEARDOWN_GUARD_DEFAULTS = {
+  enabled: true,
+  blockOnBranchLoss: true,
+  checkRemote: true,
+};
+
+/**
+ * Load teardown guard configuration from .forge.json.
+ * Falls back to TEARDOWN_GUARD_DEFAULTS if absent or malformed.
+ * @param {string} cwd - Project root directory
+ * @returns {{ enabled: boolean, blockOnBranchLoss: boolean, checkRemote: boolean }}
+ */
+export function loadTeardownGuardConfig(cwd) {
+  let config = { ...TEARDOWN_GUARD_DEFAULTS };
+  const configPath = resolve(cwd, ".forge.json");
+  if (existsSync(configPath)) {
+    try {
+      const raw = JSON.parse(readFileSync(configPath, "utf-8"));
+      if (raw?.orchestrator?.teardownGuard) {
+        config = { ...config, ...raw.orchestrator.teardownGuard };
+      }
+    } catch {
+      /* malformed config — use defaults */
+    }
+  }
+  return config;
+}
+
+/**
+ * Verify that git branch state was not destroyed during a slice.
+ * @param {{ branch: string, headSha: string, upstream: string|null }} baseline
+ * @param {{ checkRemote: boolean }} config
+ * @param {string} cwd
+ * @returns {{ ok: boolean, failures: string[], reflogTail: string[] }}
+ */
+function verifyBranchSafety(baseline, config, cwd) {
+  const failures = [];
+  let reflogTail = [];
+
+  // 1. Local branch ref still exists
+  try {
+    execSync(`git show-ref --verify refs/heads/${baseline.branch}`, {
+      cwd, encoding: "utf-8", timeout: 5000, stdio: "pipe",
+    });
+  } catch {
+    failures.push(`local branch ref 'refs/heads/${baseline.branch}' no longer exists`);
+  }
+
+  // 2. Baseline HEAD still reachable
+  try {
+    execSync(`git cat-file -e ${baseline.headSha}^{commit}`, {
+      cwd, encoding: "utf-8", timeout: 5000, stdio: "pipe",
+    });
+  } catch {
+    failures.push(`baseline HEAD ${baseline.headSha} is no longer reachable`);
+  }
+
+  // 3. Remote branch ref (when upstream was configured and checkRemote enabled)
+  if (baseline.upstream && config.checkRemote) {
+    try {
+      const remoteName = baseline.upstream.split("/")[0] || "origin";
+      const remoteBranch = baseline.upstream.split("/").slice(1).join("/") || baseline.branch;
+      const lsRemote = execSync(`git ls-remote --heads ${remoteName} ${remoteBranch}`, {
+        cwd, encoding: "utf-8", timeout: 10000, stdio: "pipe",
+      }).trim();
+      if (!lsRemote) {
+        failures.push(`remote branch '${baseline.upstream}' no longer exists on remote`);
+      }
+    } catch (err) {
+      failures.push(`remote check failed for '${baseline.upstream}': ${err.message || "unknown error"}`);
+    }
+  }
+
+  // On failure, capture reflog for recovery
+  if (failures.length > 0) {
+    try {
+      reflogTail = execSync("git reflog -n 20 --format=%H\\ %gs", {
+        cwd, encoding: "utf-8", timeout: 5000, stdio: "pipe",
+      }).trim().split("\n");
+    } catch { /* reflog unavailable */ }
+  }
+
+  return { ok: failures.length === 0, failures, reflogTail };
+}
+
 export function isDeployTrigger(toolName, filePath, command) {
   if (filePath) {
     const normalized = filePath.replace(/\\/g, "/");
@@ -3808,6 +4149,32 @@ async function executeSlice(slice, options) {
     }
   } catch { /* not a git repo or git not available — skip snapshot */ }
 
+  // ─── Teardown Safety Guard: capture git baseline ────────────────────
+  let teardownBaseline = null;
+  const teardownGuardConfig = isDestructiveSliceTitle(slice.title)
+    ? loadTeardownGuardConfig(cwd)
+    : { enabled: false };
+
+  if (teardownGuardConfig.enabled) {
+    try {
+      const branch = execSync("git rev-parse --abbrev-ref HEAD", {
+        cwd, encoding: "utf-8", timeout: 5000,
+      }).trim();
+      const headSha = execSync("git rev-parse HEAD", {
+        cwd, encoding: "utf-8", timeout: 5000,
+      }).trim();
+      let upstream = null;
+      try {
+        upstream = execSync("git rev-parse --abbrev-ref --symbolic-full-name @{u}", {
+          cwd, encoding: "utf-8", timeout: 5000, stdio: "pipe",
+        }).trim();
+      } catch { /* no upstream — local-only check */ }
+      teardownBaseline = { branch, headSha, upstream, capturedAt: new Date().toISOString() };
+    } catch {
+      teardownBaseline = null; // non-git context — skip verification
+    }
+  }
+
   // ─── Agent-Per-Slice Routing (Slice 1) ───────────────────────────────
   // When no explicit model is set, recommend one from historical performance data.
   let finalModel = resolvedModel;
@@ -3865,6 +4232,10 @@ async function executeSlice(slice, options) {
         models: quorumConfig.models,
         successfulLegs: dispatchResult.successful.length,
         totalLegs: dispatchResult.all.length,
+        legsFailed: dispatchResult.all.length - dispatchResult.successful.length,
+        legErrors: dispatchResult.all
+          .filter(r => !r.success && r.error)
+          .map(r => ({ model: r.model, reason: r.error.reason, code: r.error.code })),
         dispatchDuration: dispatchResult.totalDuration,
         reviewerFallback: quorumResult.fallback,
         reviewerCost: quorumResult.reviewerCost,
@@ -3925,6 +4296,25 @@ async function executeSlice(slice, options) {
       sliceInstructions = buildMemorySearchBlock(projectName, slice) + "\n" + sliceInstructions;
       sliceInstructions += "\n" + buildMemoryCaptureBlock(projectName, slice, planName);
     }
+
+    // Teardown Safety Guard: inject pre-flight constraint
+    if (teardownGuardConfig.enabled && isDestructiveSliceTitle(slice.title)) {
+      const preFlightWarning = [
+        "",
+        "--- TEARDOWN SAFETY GUARD (v2.49.1) ---",
+        "This slice MUST NOT delete, reset, or rename local or remote git branches.",
+        "Forbidden commands: `git branch -d`, `git branch -D`, `git push --delete`,",
+        "`git reset --hard` against protected refs, `git update-ref -d`.",
+        "Forbidden mutations: setting status to `abandoned` in `.github/` or `docs/plans/`",
+        "without an explicit plan directive.",
+        "Cleanup applies ONLY to cloud resources or scratch files the plan explicitly names.",
+        "A post-slice branch-safety check will verify HEAD reachability and ref integrity.",
+        "--- END TEARDOWN SAFETY GUARD ---",
+        "",
+      ].join("\n");
+      sliceInstructions = preFlightWarning + sliceInstructions;
+    }
+
     if (attempt > 0 && lastError) {
       sliceInstructions += `\n\n--- RETRY (attempt ${attempt + 1}) ---\n` +
         `Previous attempt failed with this error:\n${lastError}\n` +
@@ -4006,6 +4396,53 @@ async function executeSlice(slice, options) {
     if (attempt <= maxRetries) {
       // Log the retry
       writeFileSync(logFile, `\n\n--- GATE FAILED, RETRYING (attempt ${attempt + 1}) ---\n${lastError}\n`, { flag: "a" });
+    }
+  }
+
+  // ─── Teardown Safety Guard: post-slice branch verification ──────────
+  if (teardownBaseline && teardownGuardConfig.enabled) {
+    const verification = verifyBranchSafety(teardownBaseline, teardownGuardConfig, cwd);
+    if (!verification.ok) {
+      const incident = {
+        id: `INC-teardown-${Date.now()}`,
+        capturedAt: new Date().toISOString(),
+        severity: "critical",
+        title: "teardown-branch-loss",
+        sliceNumber: slice.number,
+        sliceTitle: slice.title,
+        baseline: teardownBaseline,
+        failures: verification.failures,
+        reflogTail: verification.reflogTail,
+        tags: ["teardown", "branch-loss", "critical"],
+      };
+      appendForgeJsonl("incidents.jsonl", incident, cwd);
+
+      // L3 memory capture (LiveGuard)
+      appendForgeJsonl("liveguard-memories.jsonl", {
+        capturedAt: incident.capturedAt,
+        type: "gotcha",
+        source: "teardown-guard",
+        content: `Branch safety failure during slice "${slice.title}": ${verification.failures.join("; ")}. Reflog tip: ${verification.reflogTail?.[0] ?? "n/a"}.`,
+        tags: ["teardown", "branch-loss", "critical"],
+        sliceRef: `${planName}::${slice.number}`,
+      }, cwd);
+
+      if (eventBus) {
+        eventBus.emit("teardown-branch-loss", {
+          sliceNumber: slice.number,
+          failures: verification.failures,
+          blocked: teardownGuardConfig.blockOnBranchLoss,
+        });
+      }
+
+      if (teardownGuardConfig.blockOnBranchLoss) {
+        return {
+          ok: false,
+          sliceNumber: slice.number,
+          reason: "teardown-branch-loss",
+          incident,
+        };
+      }
     }
   }
 
@@ -4335,14 +4772,14 @@ export function readSliceArtifacts(runDir) {
   let entries;
   try { entries = readdirSync(runDir); } catch { return artifacts; }
   for (const name of entries) {
-    const m = name.match(/^slice-(\d+)\.json$/);
+    const m = name.match(/^slice-([\d.]+[A-Za-z]?)\.json$/i);
     if (!m) continue;
     try {
       const data = JSON.parse(readFileSync(resolve(runDir, name), "utf-8"));
-      artifacts.push({ sliceNumber: parseInt(m[1], 10), ...data });
+      artifacts.push({ sliceNumber: m[1], ...data });
     } catch { /* skip malformed */ }
   }
-  return artifacts.sort((a, b) => a.sliceNumber - b.sliceNumber);
+  return artifacts.sort((a, b) => compareSliceIds(a.sliceNumber, b.sliceNumber));
 }
 
 /**
@@ -6049,6 +6486,7 @@ export function loadQuorumConfig(cwd, presetOverride = null) {
     models: ["claude-opus-4.6", "gpt-5.3-codex", "grok-4.20-0309-reasoning"],
     reviewerModel: "claude-opus-4.6",
     dryRunTimeout: 300_000, // 5 min per dry-run leg
+    strictAvailability: false, // H.3: true = fast-fail if any model unavailable
   };
 
   // Adaptive threshold: learn from quorum history which slices actually need quorum
@@ -6251,6 +6689,20 @@ function buildReviewerPrompt(dryRunResults, slice) {
   return parts.join("\n");
 }
 
+const LEG_ERROR_PATTERNS = [
+  [/timed?\s*out|ETIMEDOUT|SIGTERM/i, "timeout"],
+  [/rate[- ]?limit|429/i, "rate-limit"],
+  [/context|token limit|max tokens/i, "context-overflow"],
+  [/ENOENT|spawn\s+\w+\s+ENOENT|EACCES/i, "spawn-failed"],
+];
+export function classifyLegError(stderr) {
+  const text = String(stderr || "");
+  for (const [re, reason] of LEG_ERROR_PATTERNS) {
+    if (re.test(text)) return reason;
+  }
+  return "unknown";
+}
+
 /**
  * Dispatch a slice to multiple models for parallel dry-run analysis.
  * Returns array of dry-run results.
@@ -6298,19 +6750,31 @@ export async function quorumDispatch(slice, config, options = {}) {
       // Determine success: has meaningful output (stdout or stderr) regardless of exit code
       // gh copilot outputs text to stderr in non-TTY mode
       legResult.success = (legResult.output || "").trim().length > 50;
+      if (!legResult.success) {
+        const stderr = String(result?.stderr || "").slice(-2048);
+        legResult.error = {
+          code: legResult.exitCode ?? 1,
+          reason: classifyLegError(stderr),
+          stderr,
+        };
+      }
       if (eventBus) {
         eventBus.emit("quorum-leg-completed", { sliceId: slice.number, ...legResult });
       }
       return legResult;
     } catch (err) {
+      const rawStderr = err?.stderr ?? err?.message ?? String(err ?? "");
+      const stderr = rawStderr.slice(-2048);
+      const reason = classifyLegError(stderr);
+      const exitCode = Number.isInteger(err?.exitCode) ? err.exitCode : (err?.code ?? 1);
       const legResult = {
         model,
         output: "",
         tokens: { tokens_in: null, tokens_out: null, model },
         duration: Date.now() - legStart,
-        exitCode: 1,
+        exitCode,
         success: false,
-        error: err.message,
+        error: { code: exitCode, reason, stderr },
       };
       if (eventBus) {
         eventBus.emit("quorum-leg-completed", { sliceId: slice.number, ...legResult });
@@ -7721,7 +8185,7 @@ if (args.includes("--test")) {
     process.exit(result.status === "failed" ? 1 : 0);
   } catch (err) {
     console.error(`Orchestrator error: ${err.message}`);
-    process.exit(1);
+    process.exit(typeof err.exitCode === "number" ? err.exitCode : 1);
   }
 } else if (args.includes("--analyze")) {
   const target = getArg("--analyze");

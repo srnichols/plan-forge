@@ -491,6 +491,10 @@ Config (`.forge.json`):
 }
 ```
 
+- `strictAvailability: false` (default) — drop unavailable models with a warning, continue if ≥1 remain
+- `strictAvailability: true` — fast-fail (exit 2) if *any* configured model is unavailable
+- Zero available models always fast-fails regardless of this setting
+
 CLI: `--quorum` (all slices) | `--quorum=auto` (threshold) | `--quorum-threshold N` (override) | `--quorum=power` (flagship preset) | `--quorum=speed` (fast preset)
 
 ### Quorum Presets

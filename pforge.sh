@@ -2507,7 +2507,7 @@ cmd_doctor() {
 cmd_run_plan() {
     if [ $# -lt 1 ]; then
         echo "ERROR: Missing plan path" >&2
-        echo "Usage: pforge run-plan <plan-file> [--estimate] [--assisted] [--model <name>] [--resume-from <N>] [--dry-run] [--foreground] [--no-quorum] [--quorum] [--quorum=auto] [--quorum-threshold <N>]" >&2
+        echo "Usage: pforge run-plan <plan-file> [--estimate] [--assisted] [--model <name>] [--resume-from <N>] [--dry-run] [--foreground] [--no-quorum] [--quorum] [--quorum=auto] [--quorum-threshold <N>] [--manual-import [--manual-import-source <human|speckit|grandfather>] [--manual-import-reason <text>]]" >&2
         exit 1
     fi
 
@@ -2529,6 +2529,9 @@ cmd_run_plan() {
     local resume_from=""
     local quorum_arg=""
     local quorum_threshold=""
+    local manual_import=false
+    local manual_import_source=""
+    local manual_import_reason=""
 
     while [ $# -gt 0 ]; do
         case "$1" in
@@ -2539,6 +2542,15 @@ cmd_run_plan() {
             --no-quorum)    quorum_arg="--no-quorum" ;;
             --quorum=*)     quorum_arg="$1" ;;
             --quorum)       quorum_arg="--quorum" ;;
+            --manual-import) manual_import=true ;;
+            --manual-import-source)
+                shift
+                if [ -z "$1" ]; then echo "ERROR: --manual-import-source requires a value" >&2; exit 1; fi
+                manual_import_source="$1" ;;
+            --manual-import-reason)
+                shift
+                if [ -z "$1" ]; then echo "ERROR: --manual-import-reason requires a value" >&2; exit 1; fi
+                manual_import_reason="$1" ;;
             --model)
                 shift
                 if [ -z "$1" ] || [ "${1#-}" != "$1" ]; then
@@ -2578,6 +2590,9 @@ cmd_run_plan() {
     if [ -n "$resume_from" ]; then node_args+=("--resume-from" "$resume_from"); fi
     if [ -n "$quorum_arg" ]; then node_args+=("$quorum_arg"); fi
     if [ -n "$quorum_threshold" ]; then node_args+=("--quorum-threshold" "$quorum_threshold"); fi
+    if [ "$manual_import" = true ]; then node_args+=("--manual-import"); fi
+    if [ -n "$manual_import_source" ]; then node_args+=("--manual-import-source" "$manual_import_source"); fi
+    if [ -n "$manual_import_reason" ]; then node_args+=("--manual-import-reason" "$manual_import_reason"); fi
 
     echo ""
     if [ "$estimate" = true ]; then

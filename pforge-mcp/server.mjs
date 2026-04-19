@@ -603,6 +603,9 @@ const TOOLS = [
         dryRun: { type: "boolean", description: "If true, parse and validate plan without executing" },
         quorum: { type: "string", enum: ["false", "true", "auto", "power", "speed"], description: "Quorum mode: 'false' (off), 'true' (all slices), 'auto' (threshold-based), 'power' (flagship models: Opus + GPT-5.3 + Grok 4.20), 'speed' (fast models: Sonnet + GPT-5.4-mini + Grok 4.1-fast). Default: auto" },
         quorumThreshold: { type: "number", description: "Override complexity threshold for auto quorum (1-10). Default: 6" },
+        manualImport: { type: "boolean", description: "v2.37 Crucible — bypass the crucibleId frontmatter gate. Logged to .forge/crucible/manual-imports.jsonl." },
+        manualImportSource: { type: "string", enum: ["human", "speckit", "grandfather"], description: "v2.37 Crucible — audit tag for --manual-import bypass. Default: human." },
+        manualImportReason: { type: "string", description: "v2.37 Crucible — optional free-form note recorded in the manual-import audit log." },
         path: { type: "string", description: "Project directory (default: current)" },
       },
       required: ["plan"],
@@ -1241,6 +1244,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         quorumThreshold: args.quorumThreshold != null ? Number(args.quorumThreshold) : null,
         abortController: activeAbortController,
         eventHandler,
+        // v2.37 Crucible (Slice 01.4) — bypass + audit
+        manualImport: args.manualImport === true || args.manualImport === "true",
+        manualImportSource: args.manualImportSource || "human",
+        manualImportReason: args.manualImportReason || null,
       });
       activeAbortController = null;
 

@@ -62,6 +62,15 @@ Before asking any questions, scan the project for Spec Kit artifacts:
    - Plan source: `specs/<feature>/plan.md`
    - Constitution: `memory/constitution.md`
    ```
+6. **v2.37 Crucible requirement** — write a YAML frontmatter block as the very first lines of the new phase plan (before the `# Title`):
+   ```
+   ---
+   crucibleId: imported-speckit-<uuid>
+   lane: full
+   source: speckit
+   ---
+   ```
+   Use any valid UUID v4 (e.g. `imported-speckit-a1b2c3d4-...`). This lets `pforge run-plan` accept the imported plan without needing `--manual-import`. Without this frontmatter, execution will be blocked by the Crucible enforcement gate introduced in v2.37.
 
 **If no Spec Kit artifacts found** — continue to the document check below.
 

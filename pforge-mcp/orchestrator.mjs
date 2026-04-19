@@ -27,6 +27,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { createTraceContext, createTelemetryHandler, writeManifest, appendRunIndex, pruneRunHistory, addLogSummary } from "./telemetry.mjs";
 import { isOpenBrainConfigured, buildMemorySearchBlock, buildMemoryCaptureBlock, buildRunSummaryThought, buildCostAnomalyThought, loadProjectContext, buildPlanBootContext } from "./memory.mjs";
+import { enforceCrucibleId, CrucibleEnforcementError } from "./crucible-enforce.mjs";
 
 // ─── Centralized Constants ────────────────────────────────────────────
 /** Canonical list of all supported agent adapters. Update here — consumed by dashboard, setup, and docs. */
@@ -123,6 +124,25 @@ export function parsePlan(planPath, cwd = process.cwd()) {
   const scopeContract = parseScopeContract(lines);
   const slices = parseSlices(lines);
   const dag = buildDAG(slices);
+
+  // v2.37 Crucible (Slice 01.4): expose crucibleId + import source on
+  // plan.meta so downstream code (status, reporting, dashboard) can
+  // display provenance. Enforcement happens in runPlan(), not here —
+  // parsePlan() must stay side-effect-free for estimate/dry-run flows.
+  const fmMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n/);
+  if (fmMatch) {
+    for (const fmLine of fmMatch[1].split(/\r?\n/)) {
+      const kv = fmLine.match(/^\s*([A-Za-z_][A-Za-z0-9_-]*)\s*:\s*(.*?)\s*$/);
+      if (!kv) continue;
+      let v = kv[2];
+      if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+        v = v.slice(1, -1);
+      }
+      if (kv[1] === "crucibleId") meta.crucibleId = v;
+      else if (kv[1] === "lane") meta.lane = v;
+      else if (kv[1] === "source") meta.crucibleSource = v;
+    }
+  }
 
   return { meta, scopeContract, slices, dag };
 }
@@ -1676,11 +1696,40 @@ export async function runPlan(planPath, options = {}) {
     quorumThreshold = null, // override threshold from config
     quorumPreset = null,   // "power" | "speed" | null — selects model preset
     bridge = null,         // BridgeManager instance for approval gate
+    manualImport = false,   // v2.37 Crucible (Slice 01.4): bypass crucibleId gate
+    manualImportSource = "human", // audit tag: "human" | "speckit" | "grandfather"
+    manualImportReason = null,    // free-form note for audit log
   } = options;
 
   // Load model routing from .forge.json (Slice 5)
   const modelRouting = loadModelRouting(cwd);
   const effectiveModel = model || modelRouting.default || null;
+
+  // v2.37 Crucible (Slice 01.4) — enforce that the plan was smelted
+  // through the Crucible funnel or an explicit `--manual-import` bypass
+  // was provided. Runs BEFORE parsePlan / estimate / dryRun so nobody
+  // can sneak a plan in by claiming "I'm only estimating."
+  try {
+    enforceCrucibleId(planPath, {
+      cwd,
+      manualImport,
+      source: manualImportSource,
+      reason: manualImportReason,
+    });
+  } catch (err) {
+    if (err instanceof CrucibleEnforcementError) {
+      return {
+        status: "failed",
+        error: err.message,
+        code: err.code,
+        planPath: err.planPath,
+        hint:
+          "Run `forge_crucible_submit` to start a smelt, or re-invoke with " +
+          "--manual-import to bypass (audited in .forge/crucible/manual-imports.jsonl).",
+      };
+    }
+    throw err;
+  }
 
   // Parse plan
   const plan = parsePlan(planPath, cwd);
@@ -6536,6 +6585,12 @@ if (args.includes("--test")) {
   }
   const quorumThreshold = getArg("--quorum-threshold") ? Number(getArg("--quorum-threshold")) : null;
 
+  // v2.37 Crucible (Slice 01.4) — --manual-import bypass for legacy
+  // / Spec Kit-imported plans without a `crucibleId:` frontmatter.
+  const manualImport = args.includes("--manual-import");
+  const manualImportSource = getArg("--manual-import-source") || "human";
+  const manualImportReason = getArg("--manual-import-reason") || null;
+
   try {
     const result = await runPlan(planPath, {
       cwd: process.cwd(),
@@ -6547,6 +6602,9 @@ if (args.includes("--test")) {
       quorum,
       quorumThreshold,
       quorumPreset,
+      manualImport,
+      manualImportSource,
+      manualImportReason,
     });
     console.log(JSON.stringify(result, null, 2));
     process.exit(result.status === "failed" ? 1 : 0);

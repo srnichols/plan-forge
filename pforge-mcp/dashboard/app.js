@@ -51,6 +51,8 @@ const state = {
     bugsLastError: null,
     bugsFilter: { status: null, severity: null, scanner: null },
   },
+  // Phase FORGE-SHOP-01 Slice 01.2 — Home tab state.
+  home: { snapshot: null, groupByCorrelation: false, refreshTimer: null, lastError: null },
 };
 
 const API_BASE = `${window.location.protocol}//${window.location.host}`;
@@ -58,6 +60,12 @@ const API_BASE = `${window.location.protocol}//${window.location.host}`;
 // ─── Tab Switching ────────────────────────────────────────────────────
 document.querySelectorAll(".tab-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
+    // Phase FORGE-SHOP-01 Slice 01.2 — teardown Home refresh timer on tab switch
+    if (state.home.refreshTimer) {
+      clearInterval(state.home.refreshTimer);
+      state.home.refreshTimer = null;
+    }
+
     // Clear active from ALL tab-btn elements across all groups
     document.querySelectorAll(".tab-btn").forEach((b) => {
       b.classList.remove("tab-active");
@@ -2932,6 +2940,7 @@ loadPlans();
 
 // Tab load hooks
 const tabLoadHooks = {
+  home: loadHomeSnapshot,
   progress: loadPlans,
   crucible: loadCrucible,
   governance: loadGovernance,
@@ -3160,6 +3169,193 @@ function handleLGSecretScan(data) {
   if (activeTab === 'lg-security') loadLGSecurity();
 }
 
+// ─── Home Tab (Phase FORGE-SHOP-01 Slice 01.2) ───────────────
+
+async function loadHomeSnapshot() {
+  try {
+    const res = await fetch(`${API_BASE}/api/tool/forge_home_snapshot`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    });
+    const data = await res.json();
+    if (data.ok !== false) {
+      state.home.snapshot = data;
+      state.home.lastError = null;
+    } else {
+      state.home.lastError = data.error || "Unknown error";
+    }
+  } catch (err) {
+    state.home.lastError = err.message || "Failed to fetch home snapshot";
+  }
+  renderHomePanel(state.home.snapshot);
+  // Start 30s auto-refresh if on Home tab and no timer running
+  if (!state.home.refreshTimer) {
+    state.home.refreshTimer = setInterval(loadHomeSnapshot, 30_000);
+  }
+}
+
+function renderHomePanel(snapshot) {
+  const quadrantKeys = [
+    { key: "crucible", statsId: "home-q-crucible-stats", render: renderCrucibleQuadrant },
+    { key: "activeRuns", statsId: "home-q-runs-stats", render: renderActiveRunsQuadrant },
+    { key: "liveguard", statsId: "home-q-liveguard-stats", render: renderLiveguardQuadrant },
+    { key: "tempering", statsId: "home-q-tempering-stats", render: renderTemperingQuadrant },
+  ];
+
+  if (!snapshot || snapshot.ok === false) {
+    const errMsg = state.home.lastError || (snapshot && snapshot.error) || "Unable to load home snapshot";
+    for (const q of quadrantKeys) {
+      const el = document.getElementById(q.statsId);
+      if (el) el.innerHTML = `<p class="text-red-400">${escHtml(errMsg)}</p>`;
+    }
+    const feedEl = document.getElementById("home-activity-feed");
+    if (feedEl) feedEl.innerHTML = `<p class="text-red-400 text-center py-4">${escHtml(errMsg)}</p>`;
+    return;
+  }
+
+  const quadrants = snapshot.quadrants || {};
+  for (const q of quadrantKeys) {
+    const el = document.getElementById(q.statsId);
+    if (!el) continue;
+    const data = quadrants[q.key];
+    if (data == null) {
+      el.innerHTML = '<p class="text-gray-500">Subsystem not initialized</p>';
+    } else {
+      el.innerHTML = q.render(data);
+    }
+  }
+
+  renderActivityFeed(snapshot.activityFeed || [], { groupByCorrelation: state.home.groupByCorrelation });
+}
+
+function renderCrucibleQuadrant(data) {
+  return `<div class="flex items-center gap-3 flex-wrap">
+    <span class="px-1.5 py-0.5 rounded bg-gray-700 text-gray-300">Σ ${data.total ?? 0}</span>
+    <span class="px-1.5 py-0.5 rounded bg-green-900/40 text-green-300">✓ ${data.finalized ?? 0}</span>
+    <span class="px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300">⧗ ${data.inProgress ?? 0}</span>
+    <span class="px-1.5 py-0.5 rounded bg-gray-700 text-gray-400">✗ ${data.abandoned ?? 0}</span>
+  </div>`;
+}
+
+function renderActiveRunsQuadrant(data) {
+  const inFlight = data.inFlight ?? 0;
+  const completed = data.completed ?? 0;
+  const failed = data.failed ?? 0;
+  return `<div class="flex items-center gap-3 flex-wrap">
+    <span class="px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300">🔄 ${inFlight} in-flight</span>
+    <span class="px-1.5 py-0.5 rounded bg-green-900/40 text-green-300">✓ ${completed} completed</span>
+    <span class="px-1.5 py-0.5 rounded bg-red-900/40 text-red-300">✗ ${failed} failed</span>
+  </div>`;
+}
+
+function renderLiveguardQuadrant(data) {
+  const incidents = data.openIncidents ?? 0;
+  const driftScore = data.driftScore ?? "—";
+  const color = incidents > 0 ? "text-amber-400" : "text-green-400";
+  return `<div class="flex items-center gap-3 flex-wrap">
+    <span class="px-1.5 py-0.5 rounded bg-gray-700 ${color}">⚠ ${incidents} open</span>
+    <span class="px-1.5 py-0.5 rounded bg-gray-700 text-gray-300">Drift: ${driftScore}</span>
+  </div>`;
+}
+
+function renderTemperingQuadrant(data) {
+  const openBugs = data.openBugs ?? 0;
+  const status = data.latestStatus || "no-scan";
+  const statusMap = { green: "text-green-300", amber: "text-amber-300", "no-data": "text-gray-400", error: "text-red-300" };
+  const statusCls = statusMap[status] || "text-gray-400";
+  return `<div class="flex items-center gap-3 flex-wrap">
+    <span class="px-1.5 py-0.5 rounded bg-gray-700 ${statusCls}">● ${escHtml(status)}</span>
+    <span class="px-1.5 py-0.5 rounded bg-gray-700 text-gray-300">🐛 ${openBugs} open bugs</span>
+  </div>`;
+}
+
+function renderActivityFeed(events, { groupByCorrelation } = {}) {
+  const feedEl = document.getElementById("home-activity-feed");
+  if (!feedEl) return;
+
+  if (!events || events.length === 0) {
+    feedEl.innerHTML = '<p class="text-gray-500 text-center py-4">No recent activity</p>';
+    return;
+  }
+
+  const typeIcons = {
+    "run-started": "🚀", "run-completed": "✅", "run-aborted": "❌",
+    "slice-started": "▶", "slice-completed": "✓", "slice-failed": "✗",
+    "liveguard": "🛡️", "tempering": "🛠", "crucible": "🔥",
+  };
+
+  function relativeTime(ts) {
+    try {
+      const ms = Date.now() - new Date(ts).getTime();
+      if (!Number.isFinite(ms) || ms < 0) return "";
+      if (ms < 60_000) return `${Math.floor(ms / 1000)}s ago`;
+      if (ms < 3_600_000) return `${Math.floor(ms / 60_000)}m ago`;
+      return `${Math.floor(ms / 3_600_000)}h ago`;
+    } catch { return ""; }
+  }
+
+  function renderEvent(e) {
+    const icon = typeIcons[e.type] || "•";
+    const time = relativeTime(e.ts);
+    return `<div class="flex items-center gap-2 py-1 border-b border-gray-700/30 last:border-0">
+      <span>${icon}</span>
+      <span class="flex-1 text-gray-300">${escHtml(e.summary || e.type || "")}</span>
+      <span class="text-gray-600 shrink-0">${escHtml(time)}</span>
+    </div>`;
+  }
+
+  if (!groupByCorrelation) {
+    feedEl.innerHTML = events.map(renderEvent).join("");
+    return;
+  }
+
+  // Group by correlationId
+  const groups = new Map();
+  const ungrouped = [];
+  for (const e of events) {
+    if (e.correlationId) {
+      if (!groups.has(e.correlationId)) groups.set(e.correlationId, []);
+      groups.get(e.correlationId).push(e);
+    } else {
+      ungrouped.push(e);
+    }
+  }
+
+  let html = "";
+  for (const [corrId, items] of groups) {
+    const newest = items[0];
+    const icon = typeIcons[newest.type] || "•";
+    html += `<details class="border-b border-gray-700/30 py-1">
+      <summary class="cursor-pointer text-gray-300">${icon} ${escHtml(newest.summary || newest.type || "")} <span class="text-gray-600">(${items.length} events)</span></summary>
+      <div class="pl-4">${items.map(renderEvent).join("")}</div>
+    </details>`;
+  }
+  html += ungrouped.map(renderEvent).join("");
+  feedEl.innerHTML = html;
+}
+
+function applyFilter(tab, filterKey, filterValue) {
+  const params = new URLSearchParams(window.location.search);
+  params.set(filterKey, filterValue);
+  history.replaceState(null, "", `${window.location.pathname}?${params.toString()}`);
+  const btn = document.querySelector(`.tab-btn[data-tab="${tab}"]`);
+  if (btn) btn.click();
+}
+
+// Wire the group-by toggle
+document.getElementById("home-group-toggle")?.addEventListener("change", (e) => {
+  state.home.groupByCorrelation = e.target.checked;
+  if (state.home.snapshot) {
+    renderActivityFeed(state.home.snapshot.activityFeed || [], { groupByCorrelation: state.home.groupByCorrelation });
+  }
+});
+
+window.loadHomeSnapshot = loadHomeSnapshot;
+window.renderHomePanel = renderHomePanel;
+window.renderActivityFeed = renderActivityFeed;
+window.applyFilter = applyFilter;
+
 // ─── Watcher (v2.35) hub event handlers ──────────────────────
 function handleWatchSnapshot(data) {
   const snap = { ...data, ts: new Date().toISOString() };
@@ -3199,6 +3395,27 @@ function renderWatcherPanel() {
     snapEl.innerHTML = '<p class="text-gray-500 text-sm py-4 text-center">No watcher snapshots yet. Run <code class="bg-gray-700 px-1 rounded">pforge watch &lt;target&gt;</code> or <code class="bg-gray-700 px-1 rounded">pforge watch-live &lt;target&gt;</code>.</p>';
   } else {
     const stateColor = { "in-progress": "text-blue-400", "completed": "text-green-400", "failed": "text-red-400", "stalled": "text-yellow-400", "idle": "text-gray-400" }[latest.runState] || "text-gray-300";
+
+    // Phase FORGE-SHOP-01 Slice 01.2 — Home chip row (leftmost, before Crucible/Tempering).
+    // Sourced from the `home` field on the watcher WS snapshot (set by buildWatchSnapshot)
+    // or from state.home.snapshot. Hidden when all three values are null.
+    let homeChipRow = "";
+    const homeData = latest.home || (state.home.snapshot?.quadrants ? {
+      inFlightRuns: state.home.snapshot.quadrants.activeRuns?.inFlight ?? null,
+      openIncidents: state.home.snapshot.quadrants.liveguard?.openIncidents ?? null,
+      openBugs: state.home.snapshot.quadrants.tempering?.openBugs ?? null,
+    } : null);
+    if (homeData && (homeData.inFlightRuns !== null || homeData.openIncidents !== null || homeData.openBugs !== null)) {
+      homeChipRow = `
+      <div class="col-span-2 mt-3 pt-3 border-t border-gray-700/50">
+        <p class="text-gray-500 text-xs mb-1.5">Home</p>
+        <div class="flex items-center gap-3 text-xs flex-wrap" data-testid="watcher-home-chip">
+          <span class="px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300" title="In-flight runs">🔄 ${homeData.inFlightRuns ?? "—"} runs</span>
+          <span class="px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300" title="Open incidents">⚠ ${homeData.openIncidents ?? "—"} incidents</span>
+          <span class="px-1.5 py-0.5 rounded bg-red-900/40 text-red-300" title="Open bugs">🐛 ${homeData.openBugs ?? "—"} bugs</span>
+        </div>
+      </div>`;
+    }
 
     // Phase CRUCIBLE-03 Slice 03.2 — dedicated Crucible funnel row.
     // Renders counts + stall/orphan highlights when the watched project
@@ -3258,6 +3475,7 @@ function renderWatcherPanel() {
         <div><p class="text-gray-500 text-xs">Run ID</p><p class="text-gray-300 font-mono text-xs">${escHtml(latest.runId || "—")}</p></div>
         <div><p class="text-gray-500 text-xs">Anomalies</p><p class="${latest.anomalyCount > 0 ? "text-amber-400" : "text-green-400"} font-semibold">${latest.anomalyCount ?? 0}</p></div>
         <div class="col-span-2"><p class="text-gray-500 text-xs">Cursor</p><p class="text-gray-400 font-mono text-xs">${escHtml(latest.cursor || "—")}</p></div>
+        ${homeChipRow}
         ${crucibleRow}
         ${temperingRow}
       </div>

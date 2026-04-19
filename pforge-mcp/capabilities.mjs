@@ -985,6 +985,45 @@ export const TOOL_METADATA = {
       output: { _v: 1, queue: { pending: 3, delivered: 42, failed: 0, deferred: 1, dlq: 0 }, telemetry: { total: 64, dedupedCount: 7 }, cache: { totalEntries: 12, uniqueKeys: 9, freshEntries: 5 }, orphans: [] },
     },
   },
+  forge_home_snapshot: {
+    intent: ["shop-floor-overview", "health-summary", "home-tab-data"],
+    aliases: ["home-snapshot", "shop-overview", "project-health"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "2.48.0",
+    prerequisites: [],
+    produces: [],
+    consumes: [
+      ".forge/crucible/**/*.json",
+      ".forge/runs/**/events.log",
+      ".forge/drift-history.jsonl",
+      ".forge/incidents.jsonl",
+      ".forge/fix-proposals.jsonl",
+      ".forge/tempering/**/*.json",
+      ".forge/hub-events.jsonl",
+    ],
+    sideEffects: [],
+    securityNote: "Read-only aggregator. No data leaves the server.",
+    errors: {
+      IO_FAILURE: {
+        message: "Failed to read project state",
+        recovery: "Check file permissions and .forge directory integrity",
+      },
+    },
+    example: {
+      input: { activityTail: 25 },
+      output: {
+        ok: true,
+        quadrants: {
+          crucible: { total: 42, finalized: 30, stalled: 2, lastActivity: null },
+          activeRuns: { inFlight: 1, lastSliceOutcome: "pass", lastRunId: "run_001", lastRunAgeMs: 12000 },
+          liveguard: { driftScore: 87, openIncidents: 0, openFixProposals: 1, lastDriftAgeMs: 300000 },
+          tempering: { coverageStatus: "ok", openBugs: 3, lastScanAgeMs: 60000 },
+        },
+        activityFeed: [],
+      },
+    },
+  },
 };
 
 export const WORKFLOWS = {

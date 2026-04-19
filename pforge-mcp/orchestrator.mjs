@@ -4582,7 +4582,203 @@ export function buildWatchSnapshot(targetPath, runId = null, opts = {}) {
     // Mirrors the crucible contract exactly so the dashboard Watcher tab
     // can render both rows the same way.
     tempering: readTemperingState(targetPath),
+    // Phase FORGE-SHOP-01 Slice 01.2 — compact Home summary for watcher chip.
+    // Uses activityTail:0 to keep cost low (no feed needed in watcher context).
+    home: (() => {
+      try {
+        const snap = readHomeSnapshot(targetPath, { activityTail: 0 });
+        if (!snap.ok) return null;
+        const q = snap.quadrants;
+        const inFlightRuns    = q.activeRuns?.inFlight    ?? null;
+        const openIncidents   = q.liveguard?.openIncidents ?? null;
+        const openBugs        = q.tempering?.openBugs      ?? null;
+        if (inFlightRuns === null && openIncidents === null && openBugs === null) return null;
+        return { inFlightRuns, openIncidents, openBugs };
+      } catch { return null; }
+    })(),
   };
+}
+
+// ─── Phase FORGE-SHOP-01 Slice 01.1 — Shop-floor home snapshot ────────
+
+/**
+ * Clamp activityTail to [1..200], default 25.
+ * @param {*} v - Raw input (may be non-numeric)
+ * @returns {number}
+ */
+function clampActivityTail(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 25;
+  return Math.min(200, Math.max(1, Math.floor(n)));
+}
+
+/**
+ * Build the Crucible quadrant for the home snapshot.
+ * @param {string} root - Project root
+ * @returns {object|null}
+ */
+function buildCrucibleQuadrant(root) {
+  try {
+    const state = readCrucibleState(root);
+    if (!state) return null;
+    return {
+      total: state.counts.total ?? 0,
+      finalized: state.counts.finalized ?? 0,
+      stalled: state.staleInProgress ?? 0,
+      lastActivity: null,
+    };
+  } catch { return null; }
+}
+
+/**
+ * Build the Active Runs quadrant for the home snapshot.
+ * @param {string} root - Project root
+ * @returns {object|null}
+ */
+function buildActiveRunsQuadrant(root) {
+  try {
+    const located = findLatestRun(root);
+    if (!located) return null;
+    const events = parseEventsLog(located.runDir);
+    if (events.length === 0) return null;
+
+    let runState = "pending";
+    let hasStarted = false;
+    for (const ev of events) {
+      if (ev.type === "run-started") hasStarted = true;
+      runState = normalizeRunState(ev.type, hasStarted);
+    }
+
+    let lastSliceOutcome = null;
+    for (let i = events.length - 1; i >= 0; i--) {
+      if (events[i].type === "slice-completed") { lastSliceOutcome = "pass"; break; }
+      if (events[i].type === "slice-failed") { lastSliceOutcome = "fail"; break; }
+    }
+
+    const lastTs = new Date(events[events.length - 1].ts).getTime();
+    return {
+      inFlight: runState === "in-progress" ? 1 : 0,
+      lastSliceOutcome,
+      lastRunId: located.runId,
+      lastRunAgeMs: Date.now() - lastTs,
+    };
+  } catch { return null; }
+}
+
+/**
+ * Build the LiveGuard quadrant from JSONL readers.
+ * Mirrors the PreAgentHandoff pattern — no single readLiveguardState() exists.
+ * @param {string} root - Project root
+ * @returns {object|null}
+ */
+function buildLiveguardQuadrant(root) {
+  try {
+    const driftHistory = readForgeJsonl("drift-history.jsonl", [], root);
+    const incidents = readForgeJsonl("incidents.jsonl", [], root);
+    const fixProposals = readForgeJsonl("fix-proposals.jsonl", [], root);
+
+    const lastDrift = driftHistory.length > 0 ? driftHistory[driftHistory.length - 1] : null;
+    const driftScore = lastDrift?.score ?? null;
+    const openIncidents = incidents.filter(i => !i.resolvedAt).length;
+    const openFixProposals = fixProposals.filter(
+      fp => fp.status !== "validated" && fp.status !== "rejected"
+    ).length;
+    const lastDriftAgeMs = lastDrift?.timestamp
+      ? Date.now() - new Date(lastDrift.timestamp).getTime()
+      : null;
+
+    // If all subfields are absent, return null
+    if (driftScore === null && openIncidents === 0 && openFixProposals === 0 && lastDriftAgeMs === null) {
+      return null;
+    }
+
+    return { driftScore, openIncidents, openFixProposals, lastDriftAgeMs };
+  } catch { return null; }
+}
+
+/**
+ * Build the Tempering quadrant for the home snapshot.
+ * @param {string} root - Project root
+ * @returns {object|null}
+ */
+function buildTemperingQuadrant(root) {
+  try {
+    const state = readTemperingState(root);
+    if (!state) return null;
+    const coverageStatus = state.stale
+      ? "stale"
+      : state.latestRunVerdict === "fail" ? "failing" : "ok";
+    return {
+      coverageStatus,
+      openBugs: state.openBugCount?.total ?? 0,
+      lastScanAgeMs: state.latestScanAgeMs ?? null,
+    };
+  } catch { return null; }
+}
+
+/**
+ * Build the activity feed from hub-events.jsonl.
+ * Returns newest-first, primitives-only projection.
+ * @param {string} root - Project root
+ * @param {number} tail - Max entries to return
+ * @returns {Array<{type: string, timestamp: string, correlationId: string|null, summary: string|null}>}
+ */
+function buildActivityFeed(root, tail) {
+  const hubPath = resolve(root, ".forge", "hub-events.jsonl");
+  if (!existsSync(hubPath)) return [];
+
+  let lines;
+  try {
+    lines = readFileSync(hubPath, "utf-8").split("\n").filter(Boolean);
+  } catch { return []; }
+
+  return lines
+    .slice(-tail)
+    .reverse()
+    .map(line => {
+      try {
+        const ev = JSON.parse(line);
+        return {
+          type: ev.type ?? null,
+          timestamp: ev.ts ?? ev.timestamp ?? null,
+          correlationId: ev.correlationId ?? ev.data?.correlationId ?? null,
+          summary: ev.summary ?? ev.data?.summary ?? null,
+        };
+      } catch { return null; }
+    })
+    .filter(Boolean);
+}
+
+/**
+ * Read-only aggregated snapshot of the four shop-floor subsystems
+ * (Crucible, active runs, LiveGuard, Tempering) plus a trimmed activity feed.
+ *
+ * Each quadrant reader is independently try/catch-guarded — one bad quadrant
+ * must NOT fail the whole snapshot.
+ *
+ * @param {string} targetPath - Project root (absolute)
+ * @param {object} [opts]
+ * @param {number} [opts.activityTail=25] - Recent hub events to include (clamped 1..200)
+ * @returns {object} Snapshot with { ok, targetPath, generatedAt, quadrants, activityFeed }
+ */
+export function readHomeSnapshot(targetPath, opts = {}) {
+  const activityTail = clampActivityTail(opts.activityTail);
+  try {
+    return {
+      ok: true,
+      targetPath,
+      generatedAt: new Date().toISOString(),
+      quadrants: {
+        crucible: buildCrucibleQuadrant(targetPath),
+        activeRuns: buildActiveRunsQuadrant(targetPath),
+        liveguard: buildLiveguardQuadrant(targetPath),
+        tempering: buildTemperingQuadrant(targetPath),
+      },
+      activityFeed: buildActivityFeed(targetPath, activityTail),
+    };
+  } catch (err) {
+    return { ok: false, error: err.message, targetPath };
+  }
 }
 
 /**
@@ -5245,6 +5441,9 @@ export async function runWatch(options = {}) {
               staleCutoffDays: report.tempering.staleCutoffDays,
             }
           : null,
+        // Phase FORGE-SHOP-01 Slice 01.2 — Home chip data for watcher tab.
+        // Already extracted by buildWatchSnapshot; forward as-is.
+        home: snapshot.home || null,
       });
       for (const anomaly of anomalies) {
         eventBus.emit("watch-anomaly-detected", {

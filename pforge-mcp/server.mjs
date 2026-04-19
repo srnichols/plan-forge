@@ -57,7 +57,7 @@ try {
   // .env loading is best-effort. Failure must never break server startup.
 }
 
-import { parsePlan, runPlan, detectWorkers, getCostReport, getHealthTrend, analyzeWithQuorum, generateImage, runAnalyze, readForgeJson, readForgeJsonl, appendForgeJsonl, emitToolTelemetry, regressionGuard, runPostSliceHook, resetPostSliceHookFired, runPreAgentHandoffHook, postOpenClawSnapshot, loadOpenClawConfig, loadQuorumConfig, runWatch, runWatchLive, readCrucibleState, readHomeSnapshot } from "./orchestrator.mjs";
+import { parsePlan, runPlan, detectWorkers, getCostReport, getHealthTrend, analyzeWithQuorum, generateImage, runAnalyze, readForgeJson, readForgeJsonl, appendForgeJsonl, emitToolTelemetry, regressionGuard, runPostSliceHook, resetPostSliceHookFired, runPreAgentHandoffHook, postOpenClawSnapshot, loadOpenClawConfig, loadQuorumConfig, runWatch, runWatchLive, readCrucibleState, readHomeSnapshot, addReviewItem, resolveReviewItem, listReviewItems, readReviewQueueState } from "./orchestrator.mjs";
 import {
   isOpenBrainConfigured,
   shapeWatcherAnomalyThought,
@@ -1177,8 +1177,55 @@ const TOOLS = [
       required: [],
     },
   },
+  // Phase FORGE-SHOP-02 Slice 02.1 — Review Queue tools
+  {
+    name: "forge_review_add",
+    description: "Add an item to the review queue. Used by producers (crucible/tempering/bug classifier) when human judgment is required.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        source: { type: "string", enum: ["crucible-stall", "tempering-quorum-inconclusive", "tempering-baseline", "bug-classify", "fix-plan-approval"] },
+        severity: { type: "string", enum: ["blocker", "high", "medium", "low"] },
+        title: { type: "string" },
+        context: { type: "object" },
+        correlationId: { type: "string" },
+        path: { type: "string" },
+      },
+      required: ["source", "severity", "title"],
+    },
+  },
+  {
+    name: "forge_review_list",
+    description: "List review queue items with optional filters and pagination.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        status: { type: "string", enum: ["open", "resolved", "deferred"] },
+        source: { type: "string" },
+        severity: { type: "string" },
+        correlationId: { type: "string" },
+        limit: { type: "number" },
+        cursor: { type: "number" },
+        path: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "forge_review_resolve",
+    description: "Resolve an open review queue item (approve/reject/defer). Emits hub event and captures L3 memory.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        itemId: { type: "string" },
+        resolution: { type: "string", enum: ["approve", "reject", "defer"] },
+        resolvedBy: { type: "string" },
+        note: { type: "string" },
+        path: { type: "string" },
+      },
+      required: ["itemId", "resolution", "resolvedBy"],
+    },
+  },
 ];
-// ─── Runbook helpers ──────────────────────────────────────────────────
 
 function planNameToRunbookName(planPath) {
   const base = basename(planPath, ".md");
@@ -3840,6 +3887,63 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     };
   }
 
+  // ─── forge_review_add — add item to review queue ───
+  if (name === "forge_review_add") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const result = addReviewItem(cwd, {
+        source: args.source,
+        severity: args.severity,
+        title: args.title,
+        context: args.context || null,
+        correlationId: args.correlationId || null,
+      }, activeHub, captureMemory);
+      emitToolTelemetry("forge_review_add", args, result, Date.now() - t0, "OK", cwd);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: JSON.stringify({ error: err.code || "ERR_UNKNOWN", message: err.message }) }], isError: true };
+    }
+  }
+
+  // ─── forge_review_list — list review queue items ───
+  if (name === "forge_review_list") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const filters = {};
+      if (args.status) filters.status = args.status;
+      if (args.source) filters.source = args.source;
+      if (args.severity) filters.severity = args.severity;
+      if (args.correlationId) filters.correlationId = args.correlationId;
+      if (args.limit !== undefined) filters.limit = args.limit;
+      if (args.cursor !== undefined) filters.cursor = args.cursor;
+      const items = listReviewItems(cwd, filters);
+      emitToolTelemetry("forge_review_list", args, { count: items.length }, Date.now() - t0, "OK", cwd);
+      return { content: [{ type: "text", text: JSON.stringify({ ok: true, count: items.length, items }, null, 2) }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: JSON.stringify({ error: err.code || "ERR_UNKNOWN", message: err.message }) }], isError: true };
+    }
+  }
+
+  // ─── forge_review_resolve — resolve a review queue item ───
+  if (name === "forge_review_resolve") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const result = resolveReviewItem(cwd, {
+        itemId: args.itemId,
+        resolution: args.resolution,
+        resolvedBy: args.resolvedBy,
+        note: args.note || null,
+      }, activeHub, captureMemory);
+      emitToolTelemetry("forge_review_resolve", args, result, Date.now() - t0, "OK", cwd);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: JSON.stringify({ error: err.code || "ERR_UNKNOWN", message: err.message }) }], isError: true };
+    }
+  }
+
   // ─── forge_quorum_analyze — assemble structured quorum prompt ───
   if (name === "forge_quorum_analyze") {
     const t0 = Date.now();
@@ -4797,6 +4901,8 @@ export function createExpressApp() {
     "forge_bug_validate_fix",
     // Phase FORGE-SHOP-01 Slice 01.1 — Home snapshot is MCP-native read-only.
     "forge_home_snapshot",
+    // Phase FORGE-SHOP-02 Slice 02.1 — Review Queue tools are MCP-native.
+    "forge_review_add", "forge_review_list", "forge_review_resolve",
   ]);
   app.post("/api/tool/:name", async (req, res) => {
     try {

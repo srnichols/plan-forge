@@ -3100,6 +3100,8 @@ const LIVEGUARD_TOOLS = new Set([
   "forge_bug_register", "forge_bug_list", "forge_bug_update_status",
   // Phase TEMPER-06 Slice 06.3 — Closed-loop fix validation
   "forge_bug_validate_fix",
+  // Phase FORGE-SHOP-02 Slice 02.1 — Review Queue tools
+  "forge_review_add", "forge_review_list", "forge_review_resolve",
 ]);
 
 export function emitToolTelemetry(toolName, inputs, result, durationMs, status, cwd = process.cwd()) {
@@ -4465,6 +4467,256 @@ export function readCrucibleState(targetPath) {
     stallCutoffDays: CRUCIBLE_STALL_CUTOFF_DAYS,
     orphanHandoffs,
   };
+}
+
+// ─── Phase FORGE-SHOP-02 Slice 02.1 — Review Queue Storage ───────────
+
+export const REVIEW_SOURCES = Object.freeze(new Set([
+  "crucible-stall", "tempering-quorum-inconclusive",
+  "tempering-baseline", "bug-classify", "fix-plan-approval",
+]));
+export const REVIEW_SEVERITIES = Object.freeze(new Set(["blocker", "high", "medium", "low"]));
+export const REVIEW_STATUSES = Object.freeze(new Set(["open", "resolved", "deferred"]));
+export const REVIEW_RESOLUTIONS = Object.freeze(new Set(["approve", "reject", "defer"]));
+
+export function ensureReviewQueueDirs(projectRoot) {
+  return ensureForgeDir("review-queue", projectRoot);
+}
+
+export function generateReviewItemId(projectRoot, nowFn = () => new Date()) {
+  const dir = ensureReviewQueueDirs(projectRoot);
+  const date = nowFn().toISOString().slice(0, 10);
+  const prefix = `review-${date}-`;
+
+  let existing = [];
+  try {
+    existing = readdirSync(dir)
+      .filter((f) => f.startsWith(prefix) && f.endsWith(".json"))
+      .map((f) => {
+        const numStr = f.slice(prefix.length, -5);
+        return parseInt(numStr, 10);
+      })
+      .filter((n) => !isNaN(n));
+  } catch { /* empty dir or unreadable */ }
+
+  const next = existing.length > 0 ? Math.max(...existing) + 1 : 1;
+  return `${prefix}${String(next).padStart(3, "0")}`;
+}
+
+export function readReviewItem(targetPath, itemId) {
+  const filePath = resolve(targetPath, ".forge", "review-queue", `${itemId}.json`);
+  try {
+    return JSON.parse(readFileSync(filePath, "utf-8"));
+  } catch {
+    return null;
+  }
+}
+
+export function listReviewItems(targetPath, filters = {}) {
+  const dir = resolve(targetPath, ".forge", "review-queue");
+  if (!existsSync(dir)) return [];
+
+  let entries = [];
+  try {
+    entries = readdirSync(dir).filter((f) => f.endsWith(".json"));
+  } catch { return []; }
+
+  const items = [];
+  for (const file of entries) {
+    try {
+      const raw = readFileSync(resolve(dir, file), "utf-8");
+      const item = JSON.parse(raw);
+      if (filters.status && item.status !== filters.status) continue;
+      if (filters.source && item.source !== filters.source) continue;
+      if (filters.severity && item.severity !== filters.severity) continue;
+      if (filters.correlationId && item.correlationId !== filters.correlationId) continue;
+      items.push(item);
+    } catch {
+      console.warn(`[review-queue] skipping corrupt file: ${file}`);
+    }
+  }
+
+  items.sort((a, b) => {
+    const ta = a.createdAt || "";
+    const tb = b.createdAt || "";
+    return tb.localeCompare(ta);
+  });
+
+  const cursor = typeof filters.cursor === "number" && filters.cursor > 0 ? filters.cursor : 0;
+  const limit = Math.min(Math.max(typeof filters.limit === "number" ? filters.limit : 50, 1), 500);
+  return items.slice(cursor, cursor + limit);
+}
+
+export function readReviewQueueState(targetPath) {
+  const dir = resolve(targetPath, ".forge", "review-queue");
+  if (!existsSync(dir)) return null;
+
+  let entries = [];
+  try {
+    entries = readdirSync(dir).filter((f) => f.endsWith(".json"));
+  } catch { return null; }
+
+  const state = {
+    total: 0, open: 0, resolved: 0, deferred: 0,
+    lastActivityTs: null,
+    bySeverity: { blocker: 0, high: 0, medium: 0, low: 0 },
+    bySource: {},
+  };
+
+  for (const file of entries) {
+    try {
+      const raw = readFileSync(resolve(dir, file), "utf-8");
+      const item = JSON.parse(raw);
+      state.total++;
+      if (item.status === "open") state.open++;
+      else if (item.status === "resolved") state.resolved++;
+      else if (item.status === "deferred") state.deferred++;
+
+      if (item.severity && state.bySeverity[item.severity] !== undefined) {
+        state.bySeverity[item.severity]++;
+      }
+      if (item.source) {
+        state.bySource[item.source] = (state.bySource[item.source] || 0) + 1;
+      }
+
+      const ts = item.resolvedAt || item.createdAt;
+      if (ts && (!state.lastActivityTs || ts > state.lastActivityTs)) {
+        state.lastActivityTs = ts;
+      }
+    } catch {
+      console.warn(`[review-queue] skipping corrupt file in state reader: ${file}`);
+    }
+  }
+
+  return state;
+}
+
+export function addReviewItem(targetPath, input, hub = null, captureMemoryFn = null) {
+  if (!REVIEW_SOURCES.has(input.source)) {
+    const err = new Error(`Invalid source: ${input.source}. Must be one of: ${[...REVIEW_SOURCES].join(", ")}`);
+    err.code = "ERR_INVALID_SOURCE";
+    throw err;
+  }
+  if (!REVIEW_SEVERITIES.has(input.severity)) {
+    const err = new Error(`Invalid severity: ${input.severity}. Must be one of: ${[...REVIEW_SEVERITIES].join(", ")}`);
+    err.code = "ERR_INVALID_SEVERITY";
+    throw err;
+  }
+  if (!input.title || typeof input.title !== "string" || !input.title.trim()) {
+    const err = new Error("Title is required and must be a non-empty string");
+    err.code = "ERR_INVALID_TITLE";
+    throw err;
+  }
+  if (input.context !== undefined && input.context !== null && typeof input.context !== "object") {
+    const err = new Error("Context must be an object, not a string or primitive");
+    err.code = "ERR_INVALID_CONTEXT";
+    throw err;
+  }
+
+  const itemId = generateReviewItemId(targetPath, input._nowFn);
+  const now = (input._nowFn || (() => new Date()))().toISOString();
+  const record = {
+    _v: 1,
+    itemId,
+    source: input.source,
+    severity: input.severity,
+    title: input.title.trim(),
+    context: input.context || null,
+    correlationId: input.correlationId || null,
+    status: "open",
+    createdAt: now,
+    resolvedAt: null,
+    resolvedBy: null,
+    resolution: null,
+    note: null,
+  };
+
+  const dir = ensureReviewQueueDirs(targetPath);
+  const filePath = resolve(dir, `${itemId}.json`);
+  try {
+    writeFileSync(filePath, JSON.stringify(record, null, 2), { flag: "wx" });
+  } catch (wxErr) {
+    if (wxErr.code === "EEXIST") {
+      // Collision: retry with next sequence
+      const retryId = generateReviewItemId(targetPath, input._nowFn);
+      record.itemId = retryId;
+      const retryPath = resolve(dir, `${retryId}.json`);
+      writeFileSync(retryPath, JSON.stringify(record, null, 2), { flag: "wx" });
+    } else {
+      throw wxErr;
+    }
+  }
+
+  try {
+    hub?.broadcast({
+      type: "review-queue-item-added",
+      itemId: record.itemId,
+      source: record.source,
+      severity: record.severity,
+      correlationId: record.correlationId,
+      timestamp: now,
+    });
+  } catch { /* hub broadcast is best-effort */ }
+
+  return record;
+}
+
+export function resolveReviewItem(targetPath, input, hub = null, captureMemoryFn = null) {
+  const existing = readReviewItem(targetPath, input.itemId);
+  if (!existing) {
+    const err = new Error(`Review item not found: ${input.itemId}`);
+    err.code = "ERR_ITEM_NOT_FOUND";
+    throw err;
+  }
+  if (!REVIEW_RESOLUTIONS.has(input.resolution)) {
+    const err = new Error(`Invalid resolution: ${input.resolution}. Must be one of: ${[...REVIEW_RESOLUTIONS].join(", ")}`);
+    err.code = "ERR_INVALID_RESOLUTION";
+    throw err;
+  }
+  if (!input.resolvedBy || typeof input.resolvedBy !== "string" || !input.resolvedBy.trim()) {
+    const err = new Error("resolvedBy is required and must be a non-empty string");
+    err.code = "ERR_INVALID_RESOLVED_BY";
+    throw err;
+  }
+  if (existing.status !== "open") {
+    const err = new Error(`Item ${input.itemId} is already ${existing.status}`);
+    err.code = "ERR_ALREADY_RESOLVED";
+    throw err;
+  }
+
+  const now = new Date().toISOString();
+  const updated = {
+    ...existing,
+    status: input.resolution === "defer" ? "deferred" : "resolved",
+    resolution: input.resolution,
+    resolvedBy: input.resolvedBy.trim(),
+    resolvedAt: now,
+    note: input.note || null,
+  };
+
+  const filePath = resolve(targetPath, ".forge", "review-queue", `${input.itemId}.json`);
+  writeFileSync(filePath, JSON.stringify(updated, null, 2));
+
+  try {
+    hub?.broadcast({
+      type: "review-queue-item-resolved",
+      itemId: input.itemId,
+      resolution: input.resolution,
+      resolvedBy: input.resolvedBy.trim(),
+      timestamp: now,
+    });
+  } catch { /* hub broadcast is best-effort */ }
+
+  try {
+    captureMemoryFn?.(
+      `Review ${input.itemId} ${input.resolution} by ${input.resolvedBy}`,
+      "decision",
+      "forge_review_resolve",
+      targetPath
+    );
+  } catch { /* L3 capture is best-effort */ }
+
+  return updated;
 }
 
 /**

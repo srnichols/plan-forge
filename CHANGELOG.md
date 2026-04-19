@@ -5,6 +5,32 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.38.1] — 2026-04-19
+
+### Fixed — Test-suite port flake (EADDRINUSE on 3103–3105)
+
+`pforge-mcp/server.mjs` called `main()` unconditionally at module load, so
+every test file that imported it only to call `createExpressApp()` also
+booted the full WebSocket hub. When multiple test files ran in the same
+vitest pool, the hub tried to bind 3103, 3104, 3105 in succession and
+occasionally hit `EADDRINUSE` during teardown.
+
+Now `main()` runs **only** when the module is executed directly:
+
+```js
+const isDirectRun = resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url));
+if (isDirectRun) main().catch(...);
+```
+
+Behavior outside tests is unchanged — `node pforge-mcp/server.mjs` still
+boots everything exactly as before.
+
+### Tests
+
+- 997 tests passing, zero errors (was `997 passing, 1 error` on intermittent runs)
+
+---
+
 ## [2.38.0] — 2026-04-19
 
 ### Added — Non-intrusive update notifier (Phase UPDATE-01)

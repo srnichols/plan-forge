@@ -92,6 +92,8 @@ import {
 } from "./tempering.mjs";
 // Phase TEMPER-02 Slice 02.1 — Tempering execution harness (unit scanner)
 import { runTemperingRun } from "./tempering/runner.mjs";
+// Phase TEMPER-04 Slice 04.1 — Visual-diff baseline promotion
+import { promoteBaseline } from "./tempering/baselines.mjs";
 import { checkForUpdate } from "./update-check.mjs";
 import express from "express";
 
@@ -853,6 +855,19 @@ const TOOLS = [
           },
         },
         lastGreenSha: { type: "string", description: "Git SHA of the most recent green run; when present and config.execution.regressionFirst is true, the adapter is hinted to run tests covering changed files first." },
+      },
+    },
+  },
+  {
+    name: "forge_tempering_approve_baseline",
+    description: "Promote the current screenshot for a URL to the visual-diff baseline. Copies the latest screenshot to .forge/tempering/baselines/ and writes a JSON sidecar with promotion metadata. Idempotent — re-promoting overwrites. USE FOR: accepting intentional visual changes after a visual regression is flagged by forge_tempering_run.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        urlHash: { type: "string", description: "Hash of the URL to approve (from visual-diff scanner output)" },
+        url: { type: "string", description: "Full URL to approve (alternative to urlHash — hash will be derived)" },
+        runId: { type: "string", description: "Specific run ID to promote from (optional — defaults to most recent)" },
+        path: { type: "string", description: "Project directory (default: current)" },
       },
     },
   },
@@ -1926,6 +1941,35 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
       return { content: [{ type: "text", text: `Tempering run error: ${err.message}` }], isError: true };
+    }
+  }
+
+  // Phase TEMPER-04 Slice 04.1 — approve visual-diff baseline
+  if (name === "forge_tempering_approve_baseline") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const result = promoteBaseline({
+        urlHash: args.urlHash || null,
+        url: args.url || null,
+        runId: args.runId || null,
+      }, cwd);
+
+      // Emit hub event
+      if (activeHub) {
+        try {
+          activeHub.broadcast({
+            type: "tempering-baseline-promoted",
+            data: { urlHash: result.urlHash, url: args.url || null, baselinePath: result.baselinePath },
+            timestamp: new Date().toISOString(),
+          });
+        } catch { /* best-effort */ }
+      }
+
+      emitToolTelemetry("forge_tempering_approve_baseline", args, result, Date.now() - t0, "OK", cwd);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Baseline approval error: ${err.message}` }], isError: true };
     }
   }
 
@@ -4278,6 +4322,8 @@ export function createExpressApp() {
     // Phase TEMPER-02 Slice 02.1 — execution harness owns its own
     // subprocess boundary; must not shell through pforge.ps1.
     "forge_tempering_run",
+    // Phase TEMPER-04 Slice 04.1 — baseline promotion is MCP-native.
+    "forge_tempering_approve_baseline",
   ]);
   app.post("/api/tool/:name", async (req, res) => {
     try {

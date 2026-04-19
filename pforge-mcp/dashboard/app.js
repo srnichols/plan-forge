@@ -235,6 +235,12 @@ function handleEvent(event) {
     case "tempering-run-completed":
       handleTemperingRunCompleted(event.data || event);
       break;
+    case "tempering-visual-regression-detected":
+      handleTemperingVisualRegression(event.data || event);
+      break;
+    case "tempering-baseline-promoted":
+      addNotification(`Baseline promoted: ${(event.data || event).url || (event.data || event).urlHash}`, "success");
+      break;
   }
 }
 
@@ -437,6 +443,13 @@ function handleTemperingRunCompleted(data) {
     ts: Date.now(),
   };
   renderSliceCards();
+}
+
+// TEMPER-04 Slice 04.1 — visual regression detected toast + action
+function handleTemperingVisualRegression(data) {
+  const pct = data.diffPercent != null ? `${(data.diffPercent * 100).toFixed(2)}%` : "unknown";
+  const sev = data.severity || data.band || "unknown";
+  addNotification(`Visual regression: ${data.url || data.urlHash} (${pct}) – ${sev}`, "error");
 }
 
 // ─── Rendering ────────────────────────────────────────────────────────

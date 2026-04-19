@@ -5,13 +5,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [Unreleased] — targeting 2.49.0
+## [Unreleased] — targeting 2.50.0
 
-### Planned — FORGE-SHOP-02 review queue
+### Planned — FORGE-SHOP-03 notification layer
 
-- Phase FORGE-SHOP-02 drafted ([docs/plans/Phase-FORGE-SHOP-02.md](docs/plans/Phase-FORGE-SHOP-02.md)) — unified review queue primitive. New L2 family `.forge/review-queue/<itemId>.json`. 3 new MCP tools (`forge_review_add`, `forge_review_list`, `forge_review_resolve`) → 55 total. 5 producer hooks (Crucible stalls, Tempering quorum-inconclusive, visual baselines, bug classifier, fix-plan approval) wire into the queue idempotently. New Review dashboard tab. Home-tab `activeRuns` quadrant surfaces `openReviews` sub-count.
+- Phase FORGE-SHOP-03 drafted ([docs/plans/Phase-FORGE-SHOP-03.md](docs/plans/Phase-FORGE-SHOP-03.md)) — notification core consumes hub events, routes by rule, rate-limits (token-bucket + digest coalesce), delivers via pluggable adapters. Webhook adapter in core. Slack/Teams/Email/PagerDuty as extension stubs (installable via `pforge ext add`). 2 new MCP tools (`forge_notify_send`, `forge_notify_test`) → 57 total. Secrets in env vars only (literal URL in config rejected with `ERR_LITERAL_SECRET`). Dashboard Config → Notifications subtab.
 
-### Planned — TEMPER-07 agent routing (v2.50.x)
+### Planned — TEMPER-07 agent routing (v2.50.x, ships after SHOP-03)
 
 - Phase TEMPER-07 drafted ([docs/plans/Phase-TEMPER-07.md](docs/plans/Phase-TEMPER-07.md)) — deterministic `(bug.type, bug.severity) → agent|skill` router. New MCP tool `forge_delegate_to_agent` invokes agent personas in read-only analyst mode; analyst findings persist to `.forge/tempering/findings/<bugId>.json`. Critical/major bugs auto-surface as `fix-plan-approval` review items (config-guarded OFF by default). Wires the 13 agent personas and 12 skills into the tempering feedback loop for the first time.
 
@@ -22,6 +22,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 ### Planned — FORGE-SHOP-06 Ask-bus (v2.53.x, final unification)
 
 - Phase FORGE-SHOP-06 drafted ([docs/plans/Phase-FORGE-SHOP-06.md](docs/plans/Phase-FORGE-SHOP-06.md)) — `hub.ask()` + `onAsk()` request/reply RPC on top of the existing WebSocket hub. Three initial responders: `brain.gate-check`, `brain.correlation-thread`, `tempering.delegate-sync`. Executor gate-check wire-in between slices (config-guarded, fail-open on timeout). No new broker — extends existing hub.
+
+### Shipped — FORGE-SHOP-02 review queue (v2.49.0 target, PRs: a02578a + #69)
+
+- 3 MCP tools: `forge_review_add`, `forge_review_list`, `forge_review_resolve` → 55 total
+- New L2 family `.forge/review-queue/<itemId>.json` with atomic writes, enum-validated sources, date-scoped sequential itemIds
+- 5 idempotent producer hooks (Crucible stalls, Tempering quorum-inconclusive, visual baselines, bug classifier, fix-plan approval)
+- Dashboard Review tab (two-pane filter/detail, action buttons)
+- Home tab `activeRuns` quadrant surfaces `openReviews` sub-count
+- Watcher anomaly `review-queue-backlog`, forge_smith Review row
+- Hub events `review-queue-item-added`, `review-queue-item-resolved`; L3 capture on resolve
+- Test count 1649 → 1748 (+99)
 
 ### Shipped — FORGE-SHOP-01 Home tab (v2.48.0 target)
 

@@ -52,3 +52,5 @@ docs/plans/auto/*
 .issues.json
 .rummag-baseline.txt
 .rummag-poller.ps1
+
+.pr-body-*.md

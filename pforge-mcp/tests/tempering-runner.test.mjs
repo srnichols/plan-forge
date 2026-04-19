@@ -608,7 +608,7 @@ describe("tempering-runner — MCP wiring", () => {
   const capSrc = readFileSync(resolve(MCP_ROOT, "capabilities.mjs"), "utf-8");
 
   it("server.mjs imports runTemperingRun from tempering/runner.mjs", () => {
-    expect(serverSrc).toMatch(/import\s*\{\s*runTemperingRun\s*\}\s*from\s*"\.\/tempering\/runner\.mjs"/);
+    expect(serverSrc).toMatch(/import\s*\{[^}]*runTemperingRun[^}]*\}\s*from\s*"\.\/tempering\/runner\.mjs"/);
   });
 
   it("server.mjs registers forge_tempering_run handler", () => {

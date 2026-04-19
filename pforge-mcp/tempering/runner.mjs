@@ -1082,6 +1082,159 @@ export async function runTemperingRun(opts = {}) {
   };
 }
 
+// ─── Scanner name → dynamic import map ────────────────────────────────
+
+const SCANNER_IMPORT_MAP = {
+  "unit":               null,  // handled inline by runTemperingRun (spawn-based)
+  "integration":        null,  // handled inline by runTemperingRun (spawn-based)
+  "ui-playwright":      "./scanners/ui-playwright.mjs",
+  "contract":           "./scanners/contract.mjs",
+  "visual-diff":        "./scanners/visual-diff.mjs",
+  "flakiness":          "./scanners/flakiness.mjs",
+  "performance-budget": "./scanners/performance-budget.mjs",
+  "load-stress":        "./scanners/load-stress.mjs",
+  "mutation":           "./scanners/mutation.mjs",
+};
+
+const SCANNER_ENTRY_POINTS = {
+  "ui-playwright":      "runUiSweep",
+  "contract":           "runContractScan",
+  "visual-diff":        "runVisualDiffScan",
+  "flakiness":          "runFlakinessScan",
+  "performance-budget": "runPerformanceBudgetScan",
+  "load-stress":        "runLoadStressScan",
+  "mutation":           "runMutationScan",
+};
+
+/**
+ * Run a single scanner by name — narrow export for closed-loop validation
+ * (forge_bug_validate_fix). Does NOT register bugs or persist run records;
+ * that's the caller's responsibility.
+ *
+ * @param {string} name - Scanner name (one of the 9 registered scanners)
+ * @param {object} [opts]
+ * @param {string} [opts.cwd] - Project directory
+ * @param {string|null} [opts.testNameFilter] - Restrict to a single test name
+ * @param {number} [opts.timeoutMs=120000] - Per-scanner budget
+ * @param {Function} [opts.now] - Injectable clock
+ * @param {Function} [opts.scannerImpl] - DI override for tests
+ * @returns {Promise<{ scanner: string, startedAt: string, completedAt: string, failures: number, findings: Array, raw: object }>}
+ */
+export async function runSingleScanner(name, opts = {}) {
+  const {
+    cwd = process.cwd(),
+    testNameFilter = null,
+    timeoutMs = 120_000,
+    now = () => new Date(),
+    scannerImpl = null,
+  } = opts;
+
+  if (!name || !(name in SCANNER_IMPORT_MAP)) {
+    const err = new Error(`Scanner "${name}" is not registered`);
+    err.code = "SCANNER_UNAVAILABLE";
+    throw err;
+  }
+
+  const started = now();
+
+  // Allow DI override for tests
+  if (scannerImpl) {
+    const result = await scannerImpl({ cwd, filter: { testName: testNameFilter } });
+    const completed = now();
+    return {
+      scanner: name,
+      startedAt: started.toISOString(),
+      completedAt: completed.toISOString(),
+      failures: result.failures?.length ?? (result.fail ?? 0),
+      findings: result.findings ?? [],
+      raw: result,
+    };
+  }
+
+  // Unit/integration scanners are spawn-based; re-run via a minimal
+  // adapter-driven approach matching runTemperingRun's inline logic.
+  if (name === "unit" || name === "integration") {
+    const config = await readTemperingConfig(cwd);
+    const stack = detectStack(cwd);
+    const adapter = loadAdapter(stack);
+    if (!adapter) {
+      const err = new Error(`No adapter for stack "${stack}" — scanner "${name}" unavailable`);
+      err.code = "SCANNER_UNAVAILABLE";
+      throw err;
+    }
+    const cmd = name === "unit"
+      ? adapter.unitTestCommand(config, cwd)
+      : adapter.integrationTestCommand?.(config, cwd) ?? adapter.unitTestCommand(config, cwd);
+    if (!cmd) {
+      const err = new Error(`Adapter does not provide a ${name} command for stack "${stack}"`);
+      err.code = "SCANNER_UNAVAILABLE";
+      throw err;
+    }
+
+    const result = await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        try { child.kill("SIGTERM"); } catch { /* ignore */ }
+        setTimeout(() => { try { child.kill("SIGKILL"); } catch { /* ignore */ } }, KILL_GRACE_MS);
+        reject(Object.assign(new Error(`Scanner "${name}" timed out after ${timeoutMs}ms`), { code: "SCANNER_TIMEOUT" }));
+      }, timeoutMs);
+
+      let stdout = "", stderr = "";
+      const child = realSpawn(cmd.bin, cmd.args || [], { cwd, shell: true, env: { ...process.env, CI: "1" } });
+      child.stdout?.on("data", (d) => { stdout += d; });
+      child.stderr?.on("data", (d) => { stderr += d; });
+      child.on("close", (code) => {
+        clearTimeout(timer);
+        resolve({ code, stdout, stderr });
+      });
+      child.on("error", (err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+    });
+
+    const completed = now();
+    const failures = result.code !== 0 ? 1 : 0;
+    return {
+      scanner: name,
+      startedAt: started.toISOString(),
+      completedAt: completed.toISOString(),
+      failures,
+      findings: [],
+      raw: { exitCode: result.code, stdout: result.stdout.slice(0, 2000), stderr: result.stderr.slice(0, 2000) },
+    };
+  }
+
+  // Dynamic import-based scanners
+  const modulePath = SCANNER_IMPORT_MAP[name];
+  const entryPoint = SCANNER_ENTRY_POINTS[name];
+  const mod = await import(modulePath);
+  const runFn = mod[entryPoint];
+  if (typeof runFn !== "function") {
+    const err = new Error(`Scanner "${name}" module missing entry point "${entryPoint}"`);
+    err.code = "SCANNER_UNAVAILABLE";
+    throw err;
+  }
+
+  const config = await readTemperingConfig(cwd);
+  const runId = `validate-${started.toISOString().replace(/[:.]/g, "-")}`;
+  const result = await Promise.race([
+    runFn({ config, projectDir: cwd, runId, sliceRef: null, now: () => now().getTime(), env: process.env }),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(Object.assign(new Error(`Scanner "${name}" timed out after ${timeoutMs}ms`), { code: "SCANNER_TIMEOUT" })), timeoutMs)
+    ),
+  ]);
+
+  const completed = now();
+  return {
+    scanner: name,
+    startedAt: started.toISOString(),
+    completedAt: completed.toISOString(),
+    failures: result.fail ?? result.failures?.length ?? 0,
+    findings: result.findings ?? [],
+    raw: result,
+  };
+}
+
 /**
  * Derive a single run-level verdict from scanner verdicts.
  * Priority: error > budget-exceeded > fail > pass > skipped.

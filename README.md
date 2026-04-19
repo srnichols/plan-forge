@@ -94,9 +94,12 @@ Specify → Pre-flight → Harden → Execute → Sweep → Review → Ship
   "secrets":    { "findings": 0 },
   "regression": { "gates": 24, "passed": 24 },
   "deps":       { "vulnerabilities": 0 },
+  "tempering":  { "openBugs": 0, "status": "green" },
   "overallStatus": "green"
 }
 ```
+
+- **Tempering** — closed-loop bug validation: discovers bugs → classifies → generates fix plans → re-runs scanners to verify → marks fixed. 9 scanner types, mutation testing, and anomaly detection for unaddressed bugs.
 
 ### 🧠 Learn — Self-Recursive Intelligence
 

@@ -89,14 +89,17 @@ import { readManualImports } from "./crucible-enforce.mjs";
 import {
   handleScan as temperingHandleScan,
   handleStatus as temperingHandleStatus,
+  readTemperingConfig as readTemperingConfigForLg,
+  listRunRecords,
 } from "./tempering.mjs";
 // Phase TEMPER-02 Slice 02.1 — Tempering execution harness (unit scanner)
-import { runTemperingRun } from "./tempering/runner.mjs";
+import { runTemperingRun, runSingleScanner } from "./tempering/runner.mjs";
 // Phase TEMPER-04 Slice 04.1 — Visual-diff baseline promotion
 import { promoteBaseline } from "./tempering/baselines.mjs";
 // Phase TEMPER-06 Slice 06.1 — Bug Registry + Classifier
-import { registerBug, listBugs, updateBugStatus } from "./tempering/bug-registry.mjs";
+import { registerBug, listBugs, updateBugStatus, loadBug, setLinkedFixPlan, appendValidationAttempt } from "./tempering/bug-registry.mjs";
 import { classify as classifyBug } from "./tempering/bug-classifier.mjs";
+import { dispatch as dispatchBugAdapter } from "./tempering/bug-adapters/contract.mjs";
 import { checkForUpdate } from "./update-check.mjs";
 import express from "express";
 
@@ -924,6 +927,21 @@ const TOOLS = [
       },
     },
   },
+  // Phase TEMPER-06 Slice 06.3 — Closed-loop fix validation
+  {
+    name: "forge_bug_validate_fix",
+    description: "Re-run the scanner(s) that discovered a bug to verify the fix. On pass: marks bug as 'fixed', dispatches commentValidatedFix to bug-adapter, broadcasts tempering-bug-validated-fixed event. On fail: appends attempt to bug.validationAttempts[], status unchanged.",
+    inputSchema: {
+      type: "object",
+      required: ["bugId"],
+      properties: {
+        bugId: { type: "string", description: "Bug registry ID to validate" },
+        scannerOverride: { type: "array", items: { type: "string" }, description: "Override scanner list (default: uses bug.scanner)" },
+        testNameOverride: { type: "string", description: "Override test name filter (default: uses bug.evidence.testName)" },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+    },
+  },
   {
     name: "forge_memory_capture",
     description: "Capture a thought, decision, or lesson into OpenBrain persistent memory. USE FOR: recording architecture decisions, patterns chosen, gotchas discovered, conventions established, or any cross-session knowledge that future AI sessions should know. Requires OpenBrain to be configured in .vscode/mcp.json or .claude/mcp.json.",
@@ -1105,13 +1123,14 @@ const TOOLS = [
   },
   {
     name: "forge_fix_proposal",
-    description: "Generate a 1-2 slice fix plan from regression, drift, incident, secret-scan, or Crucible (stalled/orphan) failure. Writes to docs/plans/auto/LIVEGUARD-FIX-<id>.md. Capped at one proposal per id.",
+    description: "Generate a 1-3 slice fix plan from regression, drift, incident, secret-scan, Crucible (stalled/orphan), or tempering-bug failure. Writes to docs/plans/auto/LIVEGUARD-FIX-<id>.md. Capped at one proposal per id.",
     inputSchema: {
       type: "object",
       properties: {
-        source: { type: "string", description: "Data source: 'regression', 'drift', 'incident', 'secret', or 'crucible'. Default: auto-detect from latest data" },
+        source: { type: "string", description: "Data source: 'regression', 'drift', 'incident', 'secret', 'crucible', or 'tempering-bug'. Default: auto-detect from latest data" },
         incidentId: { type: "string", description: "Incident ID to generate fix for (required for incident source)" },
         smeltId: { type: "string", description: "Crucible smelt ID to target (optional for crucible source; auto-selects worst offender when omitted)" },
+        bugId: { type: "string", description: "Bug registry ID (required when source is 'tempering-bug')" },
         path: { type: "string", description: "Project directory (default: current)" },
       },
       required: [],
@@ -2093,6 +2112,102 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
       return { content: [{ type: "text", text: `Bug status update error: ${err.message}` }], isError: true };
+    }
+  }
+
+  // ─── forge_bug_validate_fix — closed-loop fix validation (TEMPER-06 Slice 06.3) ───
+  if (name === "forge_bug_validate_fix") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const bug = loadBug(cwd, args.bugId);
+      if (!bug) {
+        return { content: [{ type: "text", text: JSON.stringify({ error: "BUG_NOT_FOUND", bugId: args.bugId }) }], isError: true };
+      }
+
+      // Reject terminal statuses
+      if (bug.status === "fixed" || bug.status === "wont-fix" || bug.status === "duplicate") {
+        return { content: [{ type: "text", text: JSON.stringify({ error: "ALREADY_FIXED", bugId: args.bugId, currentStatus: bug.status }) }], isError: true };
+      }
+
+      // Advisory warning if open with no linkedFixPlan (manual fix is valid)
+      const advisory = (bug.status === "open" && !bug.linkedFixPlan)
+        ? "Bug is 'open' with no linked fix plan — proceeding with validation (manual fix assumed)"
+        : null;
+
+      const scanners = args.scannerOverride ?? (Array.isArray(bug.scanner) ? bug.scanner : [bug.scanner]);
+      const testFilter = args.testNameOverride ?? bug.evidence?.testName ?? null;
+
+      const nowFn = () => new Date();
+      const attempt = { at: nowFn().toISOString(), scanners, result: null, details: null };
+      const results = [];
+
+      for (const s of scanners) {
+        try {
+          const r = await runSingleScanner(s, { cwd, testNameFilter: testFilter, timeoutMs: 120_000, now: nowFn });
+          results.push({ scanner: s, passed: r.failures === 0, details: r });
+        } catch (e) {
+          if (e.code === "SCANNER_UNAVAILABLE") {
+            return { content: [{ type: "text", text: JSON.stringify({ error: "SCANNER_UNAVAILABLE", scanner: s, message: e.message }) }], isError: true };
+          }
+          results.push({ scanner: s, passed: false, error: e.message });
+        }
+      }
+
+      const allPassed = results.every(r => r.passed);
+      attempt.result = allPassed ? "pass" : "fail";
+      attempt.details = results;
+
+      // Persist attempt
+      appendValidationAttempt(cwd, args.bugId, attempt);
+
+      if (allPassed) {
+        await updateBugStatus(cwd, args.bugId, "fixed", {
+          note: "Validated by forge_bug_validate_fix",
+          validatedAt: nowFn().toISOString(),
+          validationMethod: "scanner-rerun",
+        });
+
+        // Dispatch to bug-adapter (advisory — never roll back)
+        try {
+          const updatedBug = loadBug(cwd, args.bugId);
+          await dispatchBugAdapter("commentValidatedFix", updatedBug || bug, {}, { cwd });
+        } catch { /* adapter dispatch is advisory */ }
+
+        // Broadcast hub event
+        if (activeHub) {
+          try {
+            activeHub.broadcast({
+              type: "tempering-bug-validated-fixed",
+              data: { bugId: args.bugId, scanners, attempt },
+              timestamp: new Date().toISOString(),
+            });
+          } catch { /* best-effort */ }
+        }
+
+        // OpenBrain L3 capture (silent if not configured)
+        try {
+          if (isOpenBrainConfigured(cwd)) {
+            captureMemory(
+              `Bug ${args.bugId} validated fixed by scanner rerun (${scanners.join(", ")}). Classification: ${bug.classification}. Fix plan: ${bug.linkedFixPlan || "manual"}.`,
+              "decision", "forge_bug_validate_fix", cwd
+            );
+          }
+        } catch { /* silent */ }
+      }
+
+      const result = {
+        bugId: args.bugId,
+        verdict: allPassed ? "fixed" : "still-failing",
+        scanners,
+        attempt,
+        validationDetails: results,
+        ...(advisory ? { advisory } : {}),
+      };
+      emitToolTelemetry("forge_bug_validate_fix", args, result, Date.now() - t0, "OK", cwd);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Bug validation error: ${err.message}` }], isError: true };
     }
   }
 
@@ -3169,8 +3284,43 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
       }
 
+      // Phase TEMPER-06 Slice 06.3 — Tempering-bug fix proposals.
+      // Last in the cascade: real bugs are already persisted; more urgent
+      // signals (incident, regression, drift, secret, crucible) should win.
+      if (source === "tempering-bug" || (source === "auto" && !fixId)) {
+        const bugId = args.bugId || null;
+        if (source === "tempering-bug" && !bugId) {
+          return { content: [{ type: "text", text: JSON.stringify({ error: "MISSING_BUG_ID", message: "bugId is required when source is tempering-bug" }) }], isError: true };
+        }
+
+        if (bugId) {
+          const bug = loadBug(cwd, bugId);
+          if (!bug) {
+            if (source === "tempering-bug") {
+              return { content: [{ type: "text", text: JSON.stringify({ error: "BUG_NOT_FOUND", bugId }) }], isError: true };
+            }
+          } else if (bug.status === "fixed" || bug.status === "wont-fix" || bug.status === "duplicate") {
+            if (source === "tempering-bug") {
+              return { content: [{ type: "text", text: JSON.stringify({ error: "BUG_TERMINAL_STATUS", bugId, currentStatus: bug.status }) }], isError: true };
+            }
+          } else {
+            sourceData = { type: "tempering-bug", bug };
+            fixId = `tempering-bug-${bugId}`;
+          }
+        } else if (source === "auto") {
+          // Auto mode: find first open bug without a linked fix plan
+          const openBugs = listBugs(cwd, { status: "open" })
+            .filter(b => b.classification === "real-bug" && !b.linkedFixPlan);
+          if (openBugs.length > 0) {
+            sourceData = { type: "tempering-bug", bug: openBugs[0] };
+            fixId = `tempering-bug-${openBugs[0].bugId}`;
+          }
+          // else: fall through — no open bugs, next check will fire
+        }
+      }
+
       if (!fixId) {
-        return { content: [{ type: "text", text: JSON.stringify({ error: "no LiveGuard data found — run drift, incident-capture, regression-guard, secret-scan, or start a Crucible smelt first", planFile: null }) }], isError: false };
+        return { content: [{ type: "text", text: JSON.stringify({ error: "no LiveGuard data found — run drift, incident-capture, regression-guard, secret-scan, start a Crucible smelt, or register a tempering bug first", planFile: null }) }], isError: false };
       }
 
       // Check for duplicate
@@ -3347,6 +3497,61 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             gate: "pforge smith",
           });
         }
+      } else if (sourceData.type === "tempering-bug") {
+        // Phase TEMPER-06 Slice 06.3 — Bug-sourced fix proposals.
+        // 1–3 slices depending on severity.
+        const bug = sourceData.bug;
+        const bugId = bug.bugId;
+        const severity = bug.severity || "medium";
+        const affectedFiles = bug.affectedFiles && bug.affectedFiles.length > 0
+          ? bug.affectedFiles
+          : (bug.evidence?.stackTrace
+            ? [...bug.evidence.stackTrace.matchAll(/(?:at\s+\S+\s+\(?|\/)([\w./-]+\.[a-z]{1,5})/gi)].map(m => m[1]).filter(f => !f.includes("node_modules")).slice(0, 5)
+            : []);
+
+        // Slice 1: Triage
+        slices.push({
+          title: `Triage: ${bug.evidence?.testName || bug.evidence?.assertionMessage?.slice(0, 50) || bugId}`,
+          tasks: [
+            `Review bug ${bugId} (${bug.scanner} scanner, ${severity} severity)`,
+            bug.evidence?.assertionMessage ? `Assertion: ${bug.evidence.assertionMessage.slice(0, 200)}` : "Investigate the failure evidence",
+            bug.evidence?.stackTrace ? `Stack trace starts at: ${bug.evidence.stackTrace.split("\\n")[0]?.slice(0, 120)}` : "Reproduce the failure",
+            `Classification: ${bug.classification || "unknown"}`,
+            ...(bug.reproSteps?.length ? [`Repro steps: ${bug.reproSteps.join(" → ")}`] : []),
+            "Identify root cause and document the fix approach",
+          ],
+          scope: affectedFiles.length > 0 ? affectedFiles : [".forge/bugs/"],
+        });
+
+        // Slice 2: Apply fix
+        slices.push({
+          title: `Apply fix for ${bugId}`,
+          tasks: [
+            "Implement the fix in the identified file(s)",
+            ...(affectedFiles.length > 0 ? [`Affected files: ${affectedFiles.join(", ")}`] : []),
+            "Add or update tests covering the fixed behavior",
+            `Validate: run forge_bug_validate_fix --bugId ${bugId}`,
+          ],
+          scope: affectedFiles,
+          gate: `forge_bug_validate_fix --bugId ${bugId}`,
+        });
+
+        // Slice 3 (conditional): Regression guard for critical/high
+        if (severity === "critical" || severity === "high") {
+          slices.push({
+            title: `Regression guard (${severity} severity)`,
+            tasks: [
+              "Run full regression guard to verify no side effects",
+              "Verify no new tempering findings introduced",
+            ],
+            gate: "forge_regression_guard",
+          });
+        }
+
+        // Transition bug to in-fix and link the plan
+        const relPlanPath = `docs/plans/auto/LIVEGUARD-FIX-tempering-bug-${bugId}.md`;
+        await updateBugStatus(cwd, bugId, "in-fix", { note: `Linked fix plan: ${relPlanPath}` });
+        setLinkedFixPlan(cwd, bugId, relPlanPath);
       } else {
         slices.push({
           title: `Fix: ${source}`,
@@ -3546,7 +3751,51 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const regressionOk = !report.regression?.error && (report.regression?.failed ?? 0) === 0;
       const depsOk = !report.deps?.error && (report.deps?.vulnerabilities ?? 0) === 0;
       const alertsOk = !report.alerts?.error && (report.alerts?.critical ?? 0) === 0;
-      report.overallStatus = (driftOk && secretsOk && regressionOk && depsOk && alertsOk) ? "green" : (!regressionOk || !secretsOk) ? "red" : "yellow";
+
+      // 9. Tempering dimension (TEMPER-06 Slice 06.3)
+      try {
+        const openBugs = listBugs(cwd, { status: "open" });
+        const criticalOrHigh = openBugs.filter(b => b.severity === "critical" || b.severity === "high");
+        const temperingConfig = readTemperingConfigForLg(cwd);
+        const runRecords = listRunRecords(cwd);
+        const lastRun = runRecords.length > 0 ? runRecords[runRecords.length - 1] : null;
+
+        // Coverage vs minima
+        const coverageMinima = temperingConfig?.coverageMinima || {};
+        let coverageVsMinima = { met: 0, total: 0 };
+        if (lastRun && lastRun.scanners && Object.keys(coverageMinima).length > 0) {
+          for (const [layer, min] of Object.entries(coverageMinima)) {
+            coverageVsMinima.total++;
+            const scannerResult = lastRun.scanners.find(s => s.scanner === layer);
+            if (scannerResult && (scannerResult.pass > 0 || scannerResult.verdict === "pass")) {
+              coverageVsMinima.met++;
+            }
+          }
+        }
+
+        const mutationScore = lastRun?.scanners?.find(s => s.scanner === "mutation")?.score ?? null;
+
+        let temperingStatus;
+        if (criticalOrHigh.length > 0) temperingStatus = "red";
+        else if (openBugs.length > 0 || (coverageVsMinima.total > 0 && coverageVsMinima.met < coverageVsMinima.total)) temperingStatus = "yellow";
+        else temperingStatus = "green";
+
+        report.tempering = {
+          openBugs: openBugs.length,
+          criticalOrHighOpen: criticalOrHigh.length,
+          coverageVsMinima,
+          mutationScore,
+          lastRunAt: lastRun?.completedAt ?? null,
+          status: temperingStatus,
+        };
+      } catch (err) {
+        report.tempering = { openBugs: 0, criticalOrHighOpen: 0, coverageVsMinima: { met: 0, total: 0 }, mutationScore: null, lastRunAt: null, status: "unknown", error: err.message };
+      }
+
+      const temperingOk = !report.tempering?.error && report.tempering?.status !== "red";
+      report.overallStatus =
+        (driftOk && secretsOk && regressionOk && depsOk && alertsOk && temperingOk) ? "green" :
+        (!regressionOk || !secretsOk || !temperingOk) ? "red" : "yellow";
 
       emitToolTelemetry("forge_liveguard_run", args, report, Date.now() - t0, "OK", cwd);
       await broadcastLiveGuard("forge_liveguard_run", "OK", Date.now() - t0, { overallStatus: report.overallStatus, driftScore: report.drift?.score, gates: report.regression?.gates, secrets: report.secrets?.findings });
@@ -4515,6 +4764,8 @@ export function createExpressApp() {
     "forge_tempering_approve_baseline",
     // Phase TEMPER-06 Slice 06.1 — Bug registry tools are MCP-native.
     "forge_bug_register", "forge_bug_list", "forge_bug_update_status",
+    // Phase TEMPER-06 Slice 06.3 — Closed-loop validation is MCP-native.
+    "forge_bug_validate_fix",
   ]);
   app.post("/api/tool/:name", async (req, res) => {
     try {

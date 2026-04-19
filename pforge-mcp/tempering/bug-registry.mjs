@@ -463,3 +463,72 @@ export function setExternalRef(cwd, bugId, ref) {
     return { ok: false, error: `SET_REF_FAILED: ${err.message}` };
   }
 }
+
+// ─── Closed-loop helpers (Phase TEMPER-06 Slice 06.3) ─────────────────
+
+/**
+ * Set the linked fix-plan path on a bug record.
+ *
+ * @param {string} cwd
+ * @param {string} bugId
+ * @param {string} planPath - relative plan file path
+ * @returns {{ ok: boolean, error?: string }}
+ */
+export function setLinkedFixPlan(cwd, bugId, planPath) {
+  try {
+    const bug = loadBug(cwd, bugId);
+    if (!bug) return { ok: false, error: "BUG_NOT_FOUND" };
+
+    bug.linkedFixPlan = planPath;
+    bug.updatedAt = new Date().toISOString();
+
+    const dir = resolve(cwd, ".forge", "bugs");
+    const finalPath = resolve(dir, `${bugId}.json`);
+    const tmpPath = resolve(dir, `.${bugId}.lfp.tmp`);
+    writeFileSync(tmpPath, JSON.stringify(bug, null, 2) + "\n", "utf-8");
+    try {
+      renameSync(tmpPath, finalPath);
+    } catch {
+      writeFileSync(finalPath, JSON.stringify(bug, null, 2) + "\n", "utf-8");
+    }
+
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: `SET_LINKED_FIX_PLAN_FAILED: ${err.message}` };
+  }
+}
+
+/**
+ * Append a validation attempt to a bug's validationAttempts array.
+ *
+ * @param {string} cwd
+ * @param {string} bugId
+ * @param {object} attempt - { at, scanners, result, details }
+ * @returns {{ ok: boolean, error?: string }}
+ */
+export function appendValidationAttempt(cwd, bugId, attempt) {
+  try {
+    const bug = loadBug(cwd, bugId);
+    if (!bug) return { ok: false, error: "BUG_NOT_FOUND" };
+
+    if (!Array.isArray(bug.validationAttempts)) {
+      bug.validationAttempts = [];
+    }
+    bug.validationAttempts.push(attempt);
+    bug.updatedAt = new Date().toISOString();
+
+    const dir = resolve(cwd, ".forge", "bugs");
+    const finalPath = resolve(dir, `${bugId}.json`);
+    const tmpPath = resolve(dir, `.${bugId}.va.tmp`);
+    writeFileSync(tmpPath, JSON.stringify(bug, null, 2) + "\n", "utf-8");
+    try {
+      renameSync(tmpPath, finalPath);
+    } catch {
+      writeFileSync(finalPath, JSON.stringify(bug, null, 2) + "\n", "utf-8");
+    }
+
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: `APPEND_VALIDATION_FAILED: ${err.message}` };
+  }
+}

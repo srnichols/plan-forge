@@ -260,6 +260,8 @@ These are not installable via `pforge ext add` — they exist as contribution pl
 
 The Tempering subsystem (TEMPER-06 Slice 06.2) introduced an extension surface for bug-tracking adapters. The built-in adapter covers GitHub Issues; additional provider adapters can be contributed as extensions.
 
+> **Contract frozen at v2.47.0.** The 4-function adapter signature (`registerBug`, `updateBugStatus`, `commentValidatedFix`, `syncStatusFromProvider`) is now considered stable. New optional fields (`linkedFixPlan`, `validationAttempts[]`) added in v2.47.0 may appear on the `bug` parameter but do not change the function signatures.
+
 ### Adapter Contract
 
 Every bug-adapter extension module must be placed at:
@@ -299,6 +301,8 @@ export async function syncStatusFromProvider(bugId, config, opts)
 | `evidence` | `object` | `{ testName, assertionMessage, stackTrace, ... }` |
 | `affectedFiles` | `string[]` | Source files affected |
 | `externalRef` | `object?` | `{ provider, issueNumber, url, syncedAt }` — set after first sync |
+| `linkedFixPlan` | `string?` | Relative path to auto-generated fix plan (v2.47.0+) |
+| `validationAttempts` | `array?` | `[{ at, scanners, result, details }]` — validation history (v2.47.0+) |
 
 **`config`** — Loaded from `.forge.json` or `.forge/tempering/config.json`:
 

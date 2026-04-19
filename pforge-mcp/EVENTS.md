@@ -465,6 +465,25 @@ Emitted when `forge_watch` analyze-mode produces narrative advice from a frontie
 }
 ```
 
+### `tempering-bug-validated-fixed`
+Emitted when `forge_bug_validate_fix` confirms a bug is fixed — all scanners pass re-run.
+
+```json
+{
+  "type": "tempering-bug-validated-fixed",
+  "data": {
+    "bugId": "bug-2026-04-19-001",
+    "scanner": "unit",
+    "verdict": "fixed",
+    "attempt": {
+      "at": "2026-04-19T12:00:00.000Z",
+      "scanners": ["unit"],
+      "result": "pass"
+    }
+  }
+}
+```
+
 ---
 
 ## Connection

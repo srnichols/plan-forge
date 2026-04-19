@@ -3284,7 +3284,7 @@ function Invoke-Smith {
 function Invoke-RunPlan {
     if ($Arguments.Count -lt 1) {
         Write-Host "ERROR: Missing plan path" -ForegroundColor Red
-        Write-Host "Usage: pforge run-plan <plan-file> [--estimate] [--assisted] [--model <name>] [--resume-from <N>] [--dry-run] [--foreground] [--no-quorum] [--quorum] [--quorum=auto] [--quorum-threshold <N>]" -ForegroundColor Yellow
+        Write-Host "Usage: pforge run-plan <plan-file> [--estimate] [--assisted] [--model <name>] [--resume-from <N>] [--dry-run] [--foreground] [--no-quorum] [--quorum] [--quorum=auto] [--quorum-threshold <N>] [--manual-import [--manual-import-source <human|speckit|grandfather>] [--manual-import-reason <text>]]" -ForegroundColor Yellow
         exit 1
     }
 
@@ -3301,10 +3301,13 @@ function Invoke-RunPlan {
     $dryRun      = $Arguments -contains '--dry-run'
     $foreground  = $Arguments -contains '--foreground'
     $noQuorum    = $Arguments -contains '--no-quorum'
+    $manualImport = $Arguments -contains '--manual-import'
     $model       = $null
     $resumeFrom  = $null
     $quorumArg   = $null
     $quorumThreshold = $null
+    $manualImportSource = $null
+    $manualImportReason = $null
 
     for ($i = 1; $i -lt $Arguments.Count; $i++) {
         if ($Arguments[$i] -eq '--model' -and ($i + 1) -lt $Arguments.Count) {
@@ -3318,6 +3321,12 @@ function Invoke-RunPlan {
         }
         if ($Arguments[$i] -eq '--quorum-threshold' -and ($i + 1) -lt $Arguments.Count) {
             $quorumThreshold = $Arguments[$i + 1]
+        }
+        if ($Arguments[$i] -eq '--manual-import-source' -and ($i + 1) -lt $Arguments.Count) {
+            $manualImportSource = $Arguments[$i + 1]
+        }
+        if ($Arguments[$i] -eq '--manual-import-reason' -and ($i + 1) -lt $Arguments.Count) {
+            $manualImportReason = $Arguments[$i + 1]
         }
     }
 
@@ -3343,6 +3352,9 @@ function Invoke-RunPlan {
     if ($noQuorum)        { $nodeArgs += '--no-quorum' }
     elseif ($quorumArg)   { $nodeArgs += $quorumArg }
     if ($quorumThreshold) { $nodeArgs += '--quorum-threshold'; $nodeArgs += $quorumThreshold }
+    if ($manualImport)    { $nodeArgs += '--manual-import' }
+    if ($manualImportSource) { $nodeArgs += '--manual-import-source'; $nodeArgs += $manualImportSource }
+    if ($manualImportReason) { $nodeArgs += '--manual-import-reason'; $nodeArgs += $manualImportReason }
 
     # Delegate to orchestrator
     Write-Host ""

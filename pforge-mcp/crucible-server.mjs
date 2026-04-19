@@ -13,8 +13,10 @@
  *                   for backwards-compatible imports in tests.
  */
 
-import { mkdirSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { resolve, join } from "node:path";
+
+import { loadCrucibleConfig } from "./crucible-config.mjs";
 
 import {
   claimPhaseNumber,
@@ -37,6 +39,47 @@ import {
   renderDraft,
   extractUnresolvedFields,
 } from "./crucible-draft.mjs";
+
+/**
+ * Compute "stale defaults" warnings for a smelt. Fires when the files
+ * the recommendation engine reads (Project Principles, project profile)
+ * are newer than the smelt's own updatedAt by more than the configured
+ * threshold — which means the smelt's pre-filled defaults may reflect
+ * out-of-date project state.
+ *
+ * @param {object} smelt
+ * @param {string} projectDir
+ * @returns {Array<{code: string, message: string, file: string, mtime: string}>}
+ */
+export function computeStaleDefaultsWarnings(smelt, projectDir) {
+  if (!smelt || !smelt.updatedAt) return [];
+  const cfg = loadCrucibleConfig(projectDir);
+  const thresholdMs = Math.max(1, cfg.staleDefaultsHours) * 60 * 60 * 1000;
+  const smeltTs = Date.parse(smelt.updatedAt);
+  if (!Number.isFinite(smeltTs)) return [];
+
+  const candidates = [
+    { path: "docs/plans/PROJECT-PRINCIPLES.md", code: "STALE_PRINCIPLES" },
+    { path: ".github/instructions/project-profile.instructions.md", code: "STALE_PROFILE" },
+  ];
+  const warnings = [];
+  for (const c of candidates) {
+    const abs = resolve(projectDir, c.path);
+    if (!existsSync(abs)) continue;
+    let stat;
+    try { stat = statSync(abs); } catch { continue; }
+    const fileTs = stat.mtime.getTime();
+    if (fileTs - smeltTs <= thresholdMs) continue;
+    const hoursAhead = Math.round((fileTs - smeltTs) / (60 * 60 * 1000));
+    warnings.push({
+      code: c.code,
+      message: `${c.path} was updated ${hoursAhead}h after this smelt started — recommended defaults may be out of date.`,
+      file: c.path,
+      mtime: stat.mtime.toISOString(),
+    });
+  }
+  return warnings;
+}
 
 // ─── Lane inference ──────────────────────────────────────────────────
 
@@ -193,6 +236,7 @@ export function handleAsk({ id, answer, projectDir, hub }) {
     done: nextQuestion === null,
     nextQuestion,
     draftPreview: markdown,
+    warnings: computeStaleDefaultsWarnings(current, projectDir),
   };
 }
 
@@ -251,10 +295,28 @@ export function handleFinalize({ id, projectDir, hub }) {
     planPath,
   });
 
+  // v2.37 Slice 01.6 — emit the Hardener handoff event. The dashboard
+  // listens for this and shows a "Hardener ready" action; the MCP
+  // agent can subscribe and auto-invoke `step2-harden-plan.prompt.md`.
+  // We do not block finalize on hardening — the plan is already on
+  // disk and enforcement-compatible by virtue of the frontmatter
+  // written above.
+  emit(hub, "crucible-handoff-to-hardener", {
+    id,
+    phaseName,
+    planPath,
+    nextStep: "step2-harden-plan.prompt.md",
+  });
+
   return {
     phaseName,
     planPath,
     hardenerInvoked: false, // Slice 6 wires the Plan Hardener handoff
+    hardenerHandoff: {
+      event: "crucible-handoff-to-hardener",
+      nextStep: "step2-harden-plan.prompt.md",
+      hint: "Run `/step2-harden-plan` against this plan, or attach it to the Plan Hardener agent.",
+    },
   };
 }
 

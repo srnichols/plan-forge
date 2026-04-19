@@ -5,6 +5,72 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.37.0] — 2026-04-19
+
+### Added — Crucible: the idea-smelting pipeline (Phase CRUCIBLE-01)
+
+A new mandatory pre-hardening stage that turns raw ideas into well-specified
+Phase plans via a short, structured interview. Every `docs/plans/Phase-*.md`
+plan now carries a `crucibleId` in its frontmatter — either from a smelt, from
+a `--manual-import` bypass, or from the grandfather migration.
+
+This release rolls up six merged slices.
+
+#### Slice 01.1 — Atomic phase-name claim + naming authority
+- New `crucible.mjs`: `nextPhaseNumber(existingNames, parent)`, `claimPhaseNumber(projectDir, phaseName, smeltId)`
+- File-lock-based claim at `.forge/crucible/claims/<phaseName>.lock` so two parallel agents can never both stamp "Phase 17"
+- Synthetic id prefixes: `grandfathered-<uuid>` (legacy migration), `imported-<source>-<uuid>` (manual import)
+
+#### Slice 01.2 — MCP tools + hub events
+- `forge_crucible_submit` / `forge_crucible_ask` / `forge_crucible_preview` / `forge_crucible_finalize` / `forge_crucible_list` / `forge_crucible_abandon`
+- Hub events: `crucible-smelt-submitted`, `crucible-answer-recorded`, `crucible-smelt-finalized`, `crucible-smelt-abandoned`, `crucible-handoff-to-hardener`
+
+#### Slice 01.3 — Interview loop
+- Three lanes (`tweak` ~3 questions / `feature` ~6 / `full` ~12) with `inferLane()` heuristic
+- `getNextQuestion()` drives the question stream, answers persist to JSONL
+- `renderDraft()` / `extractUnresolvedFields()` produce the plan body from recorded answers
+- Recursion guardrail: `recursionDepth` cap (0–3, default 1) on child smelts
+
+#### Slice 01.4 — Enforcement gate + grandfather migration
+- `crucible-enforce.mjs` rejects plans missing `crucibleId:` unless `--manual-import` is supplied
+- First-run grandfather migration stamps existing phase files with synthetic ids and writes audit rows
+- `--manual-import path --source {human|speckit} --reason "..."` flow with full audit trail at `.forge/crucible/manual-imports.jsonl`
+- **Spec Kit coexistence preserved** — Spec Kit imports are a first-class `source: speckit` path
+
+#### Slice 01.5 — Dashboard tab + REST
+- New 🔥 Crucible tab: live smelts list, active interview prompt, draft preview, abandon/finalize actions
+- REST: `GET/POST /api/crucible/submit`, `/ask`, `/preview`, `/finalize`, `/list`, `/abandon`
+- Hub subscription auto-refreshes the UI on every `crucible-*` event
+
+#### Slice 01.6 — Config, Governance, Hardener handoff, manual chapter, self-host
+- New `crucible-config.mjs` with sanitizer — persists to `.forge/crucible/config.json`
+  - Fields: `defaultLane`, `recursionDepth` (0–3), `autoApproveAgent`, `sourceWeights {memory, principles, plans}` (normalized to sum 100), `staleDefaultsHours` (1–168)
+- Dashboard Config tab: Crucible section with all five fields, weight normalization preview, save/reload
+- Dashboard Governance tab (🛡, read-only): file viewer for `PROJECT-PRINCIPLES.md`, `project-profile.instructions.md`, `project-principles.instructions.md`, plus full `manual-imports.jsonl` audit table with `vscode://file/` deep-links
+- REST: `GET/POST /api/crucible/config`, `GET /api/crucible/manual-imports` (capped 500, newest-first), `GET /api/crucible/governance` (returns `{files, readOnly: true}`)
+- `computeStaleDefaultsWarnings()` wired into `handleAsk` — returns `STALE_PRINCIPLES` / `STALE_PROFILE` warnings when governance files are newer than the smelt by `staleDefaultsHours`
+- `handleFinalize` emits `crucible-handoff-to-hardener` hub event and returns `hardenerHandoff: {event, nextStep, hint}` pointing at `step2-harden-plan.prompt.md`
+- Manual chapter 6.6 (`docs/manual/crucible.html`) — philosophy, lanes, interview loop, recursion, enforcement, Spec Kit path, dashboard, config fields, troubleshooting
+- **Self-hosting**: `docs/plans/Phase-CRUCIBLE-01.md` now carries its own `crucibleId` — the plan that defines Crucible is itself a Crucible citizen
+
+### Changed
+
+- Dashboard tab count: 12 core → 13 core (added Governance). Total 17 → 18.
+- Every `docs/plans/Phase-*.md` plan now requires frontmatter with `crucibleId`. Existing plans are auto-migrated on first run after upgrade.
+
+### Security
+
+- Governance tab is **strictly read-only**. No `contentEditable`, no `<textarea>`, no edit endpoints. Principles live in the editor, not the browser.
+- Every `--manual-import` bypass is audited with timestamp, plan path, source, reason, and synthetic id.
+
+### Migration notes for existing users
+
+- **No action required for Crucible to work** — `.forge/crucible/` auto-creates on first write and is already gitignored.
+- On first run after upgrade, `crucible-enforce` scans `docs/plans/Phase-*.md` and stamps any plan missing frontmatter with `crucibleId: grandfathered-<uuid>`. A row is written to `.forge/crucible/manual-imports.jsonl` for each — visible in the Governance tab.
+- **Spec Kit users**: continue as before. Use `pforge run-plan --manual-import <path> --source speckit --reason "..."` for imported specs.
+
+---
+
 ## [2.36.1] — 2026-04-18
 
 ### Fixed — validation gate allowlist hints

@@ -43,6 +43,7 @@ GEMINI.md
 .forge/deploy-journal.jsonl
 .forge/deploy-journal-meta.json
 .forge/liveguard-events.jsonl
+.forge/notifications/
 
 # LiveGuard auto-generated fix plans (runtime artifacts, not source-controlled)
 docs/plans/auto/*

@@ -115,12 +115,12 @@ describe("Schema/Contract (Slice 06.3)", () => {
     expect(entry.consumes).toContain(".forge/bugs/*.json");
   });
 
-  it("LIVEGUARD_TOOLS contains forge_bug_validate_fix (size 22)", () => {
+  it("LIVEGUARD_TOOLS contains forge_bug_validate_fix (size 24)", () => {
     const match = orchestratorSrc.match(/const LIVEGUARD_TOOLS = new Set\(\[([\s\S]*?)\]\)/);
     expect(match).toBeTruthy();
     expect(match[1]).toContain("forge_bug_validate_fix");
     const entries = match[1].match(/"forge_\w+"/g);
-    expect(entries.length).toBe(22);
+    expect(entries.length).toBe(24);
   });
 
   it("EVENTS.md documents tempering-bug-validated-fixed", () => {

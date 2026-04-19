@@ -1240,6 +1240,33 @@ const TOOLS = [
       required: ["bugId", "mode"],
     },
   },
+  // Phase FORGE-SHOP-03 Slice 03.1 — Notification tools
+  {
+    name: "forge_notify_send",
+    description: "Send a notification directly via a named adapter, bypassing routing rules. Use for ad-hoc agent dispatches.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        via: { type: "string", description: "Adapter name (webhook, slack, teams, etc.)" },
+        payload: { type: "object", description: "Event payload to send" },
+        formattedMessage: { type: "string", description: "Pre-formatted message text (optional)" },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+      required: ["via", "payload"],
+    },
+  },
+  {
+    name: "forge_notify_test",
+    description: "Test notification adapter configuration. Validates config and optionally sends a test payload.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        adapter: { type: "string", description: "Adapter name to test (default: all)" },
+        dryRun: { type: "boolean", description: "If true, only validate config without sending (default: true)" },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+    },
+  },
 ];
 
 function planNameToRunbookName(planPath) {
@@ -1405,6 +1432,8 @@ function executeTool(name, args) {
     case "forge_watch":
     case "forge_watch_live":
     case "forge_memory_report":
+    case "forge_notify_send":
+    case "forge_notify_test":
       return null; // Handled async in CallToolRequestSchema handler
     default:
       return { success: false, error: `Unknown tool: ${name}` };
@@ -4022,6 +4051,40 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
   }
 
+  // ─── forge_notify_send — direct notification dispatch ───
+  if (name === "forge_notify_send") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const { createNotificationCore } = await import("./notifications/core.mjs");
+      const { webhookAdapter } = await import("./notifications/webhook-adapter.mjs");
+      const core = createNotificationCore({ hub: activeHub, projectRoot: cwd, adapters: { webhook: webhookAdapter }, captureMemoryFn: captureMemory });
+      const result = await core.directSend({ via: args.via, payload: args.payload, formattedMessage: args.formattedMessage });
+      core.shutdown();
+      emitToolTelemetry("forge_notify_send", args, result, Date.now() - t0, result.ok ? "OK" : "ERROR", cwd);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: !result.ok };
+    } catch (err) {
+      return { content: [{ type: "text", text: JSON.stringify({ error: err.code || "ERR_NOTIFY", message: err.message }) }], isError: true };
+    }
+  }
+
+  // ─── forge_notify_test — test notification adapter config ───
+  if (name === "forge_notify_test") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const { createNotificationCore } = await import("./notifications/core.mjs");
+      const { webhookAdapter } = await import("./notifications/webhook-adapter.mjs");
+      const core = createNotificationCore({ hub: activeHub, projectRoot: cwd, adapters: { webhook: webhookAdapter }, captureMemoryFn: captureMemory });
+      const result = core.testAdapter({ adapter: args.adapter });
+      core.shutdown();
+      emitToolTelemetry("forge_notify_test", args, result, Date.now() - t0, "OK", cwd);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: JSON.stringify({ error: err.code || "ERR_NOTIFY_TEST", message: err.message }) }], isError: true };
+    }
+  }
+
   // ─── forge_quorum_analyze — assemble structured quorum prompt ───
   if (name === "forge_quorum_analyze") {
     const t0 = Date.now();
@@ -5006,6 +5069,8 @@ export function createExpressApp() {
     "forge_review_add", "forge_review_list", "forge_review_resolve",
     // Phase TEMPER-07 Slice 07.1 — Agent delegation is MCP-native.
     "forge_delegate_to_agent",
+    // Phase FORGE-SHOP-03 Slice 03.1 — Notification tools are MCP-native.
+    "forge_notify_send", "forge_notify_test",
   ]);
   app.post("/api/tool/:name", async (req, res) => {
     try {

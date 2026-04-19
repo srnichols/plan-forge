@@ -1123,6 +1123,43 @@ export const TOOL_METADATA = {
       },
     },
   },
+  // Phase FORGE-SHOP-03 Slice 03.1 — Notification tools
+  forge_notify_send: {
+    intent: ["notify", "send", "webhook", "alert"],
+    aliases: ["send-notification", "notify-send"],
+    cost: "low",
+    maxConcurrent: 5,
+    addedIn: "2.50.0",
+    prerequisites: [".forge/notifications/config.json exists with adapter configured"],
+    produces: [],
+    consumes: [".forge/notifications/config.json"],
+    sideEffects: ["sends HTTP request to configured adapter endpoint", "emits notification-sent or notification-send-failed hub event"],
+    errors: {
+      ERR_ADAPTER_NOT_FOUND: { message: "Adapter not registered", recovery: "Check adapter name; available: webhook" },
+      ERR_LITERAL_SECRET: { message: "URL contains literal secret", recovery: "Use ${env:VAR_NAME} template instead of literal URLs" },
+      ERR_SEND_TIMEOUT: { message: "Adapter send timed out (5s)", recovery: "Check endpoint responsiveness" },
+    },
+    example: {
+      input: { via: "webhook", payload: { type: "incident-opened", severity: "high" }, formattedMessage: "Critical incident opened" },
+      output: { ok: true, adapter: "webhook", statusCode: 200, deliveryMs: 142 },
+    },
+  },
+  forge_notify_test: {
+    intent: ["notify", "test", "validate", "check"],
+    aliases: ["test-notification", "notify-test"],
+    cost: "low",
+    maxConcurrent: 5,
+    addedIn: "2.50.0",
+    prerequisites: [],
+    produces: [],
+    consumes: [".forge/notifications/config.json"],
+    sideEffects: ["optionally sends test HTTP request when dryRun=false"],
+    errors: {},
+    example: {
+      input: { adapter: "webhook" },
+      output: { ok: true, adapters: [{ name: "webhook", configValid: true }] },
+    },
+  },
 };
 
 export const WORKFLOWS = {

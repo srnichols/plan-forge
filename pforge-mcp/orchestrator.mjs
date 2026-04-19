@@ -3358,6 +3358,8 @@ const LIVEGUARD_TOOLS = new Set([
   "forge_review_add", "forge_review_list", "forge_review_resolve",
   // Phase TEMPER-07 Slice 07.1 — Agent delegation
   "forge_delegate_to_agent",
+  // Phase FORGE-SHOP-03 Slice 03.1 — Notification tools
+  "forge_notify_send", "forge_notify_test",
 ]);
 
 export function emitToolTelemetry(toolName, inputs, result, durationMs, status, cwd = process.cwd()) {
@@ -4932,6 +4934,33 @@ export const REVIEW_RESOLUTIONS = Object.freeze(new Set(["approve", "reject", "d
 export function ensureReviewQueueDirs(projectRoot) {
   return ensureForgeDir("review-queue", projectRoot);
 }
+
+// Phase FORGE-SHOP-03 Slice 03.1 — Notification system
+export function ensureNotificationsDirs(projectRoot) {
+  return ensureForgeDir("notifications", projectRoot);
+}
+
+export function ensureNotificationsConfig(projectRoot) {
+  const dir = ensureNotificationsDirs(projectRoot);
+  const configPath = resolve(dir, "config.json");
+  if (!existsSync(configPath)) {
+    const seed = {
+      enabled: false,
+      adapters: { webhook: { enabled: false, url: "${env:PFORGE_WEBHOOK_URL}" } },
+      routes: [
+        { when: { event: "slice-failed" }, via: ["webhook"] },
+        { when: { event: "run-aborted" }, via: ["webhook"] },
+        { when: { event: "run-completed" }, via: ["webhook"] },
+      ],
+      rateLimit: { perMinute: 10, digestAfter: 5 },
+    };
+    try {
+      writeFileSync(configPath, JSON.stringify(seed, null, 2) + "\n", { flag: "wx" });
+    } catch { /* race-safe: another process created it first */ }
+  }
+  return configPath;
+}
+
 
 export function generateReviewItemId(projectRoot, nowFn = () => new Date()) {
   const dir = ensureReviewQueueDirs(projectRoot);

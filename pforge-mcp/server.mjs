@@ -90,6 +90,8 @@ import {
   handleScan as temperingHandleScan,
   handleStatus as temperingHandleStatus,
 } from "./tempering.mjs";
+// Phase TEMPER-02 Slice 02.1 — Tempering execution harness (unit scanner)
+import { runTemperingRun } from "./tempering/runner.mjs";
 import { checkForUpdate } from "./update-check.mjs";
 import express from "express";
 
@@ -831,6 +833,26 @@ const TOOLS = [
       properties: {
         path: { type: "string", description: "Project directory (default: current)" },
         limit: { type: "number", description: "Max scans to return (1..100, default 10)." },
+      },
+    },
+  },
+  {
+    name: "forge_tempering_run",
+    description: "Tempering execution harness — runs the enabled test scanners (Slice 02.1: unit only) through each stack's preset adapter (typescript/dotnet/python/go/java/rust; php/swift/azure-iac stub until extension). Enforces config.runtimeBudgets.unitMaxMs with SIGTERM→SIGKILL, writes .forge/tempering/run-<ts>.json, emits tempering-run-started / tempering-run-scanner-started / tempering-run-scanner-completed / tempering-run-completed hub events. USE FOR: post-slice verification, pre-deploy gates, CI adapters. Forbidden: does NOT edit source, does NOT create bugs (that lands in TEMPER-06), does NOT recurse into plan-forge itself.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Project directory (default: current)" },
+        correlationId: { type: "string", description: "Optional correlation id to thread this run to an upstream smelt / plan / slice. When omitted, one is minted." },
+        sliceRef: {
+          type: "object",
+          description: "Optional plan+slice context. Surfaced in the run record and hub events so dashboards can group runs by slice.",
+          properties: {
+            plan: { type: "string" },
+            slice: { type: "string" },
+          },
+        },
+        lastGreenSha: { type: "string", description: "Git SHA of the most recent green run; when present and config.execution.regressionFirst is true, the adapter is hinted to run tests covering changed files first." },
       },
     },
   },
@@ -1868,6 +1890,42 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
       return { content: [{ type: "text", text: `Tempering status error: ${err.message}` }], isError: true };
+    }
+  }
+
+  // Phase TEMPER-02 Slice 02.1 — execution harness (unit scanner)
+  if (name === "forge_tempering_run") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const result = await runTemperingRun({
+        projectDir: cwd,
+        hub: activeHub,
+        correlationId: args.correlationId || null,
+        sliceRef: args.sliceRef || null,
+        lastGreenSha: typeof args.lastGreenSha === "string" ? args.lastGreenSha : null,
+      });
+      emitToolTelemetry("forge_tempering_run", args, result, Date.now() - t0, result.ok ? "OK" : "ERROR", cwd);
+
+      // L3 capture on completion — tags `tempering`, `run`, `<stack>`,
+      // `<verdict>`; payload is scanner mix + verdict + pass/fail count.
+      // Best-effort; OpenBrain outages fall through to the queue.
+      try {
+        if (result.ok && result.scanners) {
+          const unit = result.scanners.find((s) => s.scanner === "unit") || {};
+          const summary = [
+            `Tempering run ${result.runId} on ${result.stack}: verdict=${result.verdict}`,
+            `unit: ${unit.pass || 0} pass / ${unit.fail || 0} fail / ${unit.skipped || 0} skip`,
+            unit.timedOut ? "(budget-exceeded)" : "",
+            `corr=${result.correlationId}`,
+          ].filter(Boolean).join(" — ");
+          captureMemory(summary, "lesson", `forge_tempering_run/${result.stack}/${result.verdict}`, cwd);
+        }
+      } catch { /* best-effort */ }
+
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Tempering run error: ${err.message}` }], isError: true };
     }
   }
 
@@ -4217,6 +4275,9 @@ export function createExpressApp() {
     // via tempering.mjs; they are MCP-native and must not be shelled
     // through pforge.ps1 (which has no Tempering command).
     "forge_tempering_scan", "forge_tempering_status",
+    // Phase TEMPER-02 Slice 02.1 — execution harness owns its own
+    // subprocess boundary; must not shell through pforge.ps1.
+    "forge_tempering_run",
   ]);
   app.post("/api/tool/:name", async (req, res) => {
     try {

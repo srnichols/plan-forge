@@ -5,6 +5,72 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [Unreleased] — targeting 2.43.0
+
+### Added — Phase TEMPER-02 Slice 02.1 — Execution harness (unit scanner)
+
+First phase of the Tempering arc that actually **runs** code. TEMPER-01
+observed pre-existing coverage reports; TEMPER-02 Slice 02.1 introduces
+the subprocess boundary that executes unit test suites through
+language-agnostic preset adapters.
+
+**New module `pforge-mcp/tempering/runner.mjs`** —
+`runSubprocess` (spawn + stdout/stderr capture + SIGTERM→SIGKILL budget
+enforcement), `runScannerUnit` (per-scanner orchestration), `pickChangedFiles`
+(regression-first hint via `git diff --name-only`), `runTemperingRun`
+(top-level dispatcher), `deriveOverallVerdict` (worst-wins aggregation).
+All functions accept injectable `spawn`, `now`, and `adapter` overrides
+so the entire module is testable without shelling out to a real runner.
+
+**New module `pforge-mcp/tempering/adapters.mjs`** —
+`STACK_ADAPTER_PATHS` registry, `SUPPORTED_STACKS_SLICE_02_1`,
+`validateAdapterEntry`, `loadAdapter` (with injectable `importFn`).
+
+**Six first-class preset adapters** — `presets/{typescript,dotnet,python,go,java,rust}/tempering-adapter.mjs`
+each export a `temperingAdapter` with a working `unit` scanner:
+- **typescript**: `npx vitest run --reporter=json` + JSON reporter parser
+- **dotnet**: `dotnet test --nologo --no-restore` + Microsoft summary line parser
+- **python**: `pytest --tb=short -q` + summary-line parser (`N passed, M failed, K skipped`)
+- **go**: `go test -json ./...` + event-stream parser
+- **java**: `mvn test -q -Dsurefire.useFile=false` + Surefire aggregate parser
+- **rust**: `cargo test --quiet` + `test result:` summary parser
+
+**Three stub adapters** — `presets/{php,swift,azure-iac}/tempering-adapter.mjs`
+ship with `supported: false` and an extension-opportunity reason. The
+runner skips them cleanly with the reason surfaced in the run record.
+
+**New MCP tool `forge_tempering_run`** — registered in `server.mjs` with
+L3 memory capture on completion, added to `MCP_ONLY_TOOLS` (handles its
+own subprocess boundary; never shelled through `pforge.ps1`).
+`capabilities.mjs` + `tools.json` entries declare `addedIn: 2.43.0`,
+`maxConcurrent: 1`, cost `medium`, prerequisites (`npx`/`dotnet`/`pytest`/
+`go`/`mvn`/`cargo` on PATH).
+
+**Hub events** — `tempering-run-started`, `tempering-run-scanner-started`,
+`tempering-run-scanner-completed`, `tempering-run-completed`. The final
+event carries primitives-only (correlationId, runId, stack, verdict,
+pass/fail/skipped, durationMs, sliceRef) — no source content ever.
+
+**Scope contract held** — MUST NOT edit source during a run, MUST NOT
+create bugs (TEMPER-06), MUST NOT recurse. All three enforced by code
+structure, not runtime checks.
+
+**Testing** — new `pforge-mcp/tests/tempering-runner.test.mjs` with ~45
+assertions across adapter registry, adapter shape, per-stack parseOutput,
+subprocess boundary, scanner + dispatcher behaviour, event ordering,
+event payload shape, MCP wiring (server.mjs / tools.json / capabilities.mjs).
+Fake `spawn` + fake `importFn` injected throughout; no real test runners
+invoked.
+
+**Fixture** — `pforge-mcp/tests/fixtures/temper/typescript-basic/` —
+minimal package.json for integration smoke tests in later slices.
+
+**Phase-TEMPER-02.md** — frontmatter `status: draft → in_progress`.
+Slice 02.2 (integration adapters + post-slice wire-in + slice-card pill)
+is the next slice.
+
+---
+
 ## [2.42.0] — 2026-04-19
 
 ### Added — Phase TEMPER-01 Slice 01.2 — Tempering dashboard + watcher awareness

@@ -481,6 +481,33 @@ export const TOOL_METADATA = {
       },
     },
   },
+  forge_tempering_run: {
+    intent: ["tempering", "run", "execute", "unit-tests"],
+    aliases: ["tempering-run", "run-tempering", "run-tests"],
+    cost: "medium",
+    maxConcurrent: 1,
+    addedIn: "2.43.0",
+    prerequisites: [
+      "project stack is one of: typescript, dotnet, python, go, java, rust",
+      "test runner available on PATH (npx/dotnet/pytest/go/mvn/cargo)",
+    ],
+    produces: [".forge/tempering/run-<ts>.json"],
+    consumes: [".forge/tempering/config.json", "presets/<stack>/tempering-adapter.mjs"],
+    sideEffects: [
+      "spawns a test-runner subprocess",
+      "enforces config.runtimeBudgets.unitMaxMs (SIGTERM then SIGKILL)",
+      "broadcasts tempering-run-started / tempering-run-scanner-started / tempering-run-scanner-completed / tempering-run-completed hub events",
+      "captures an L3 memory entry on completion",
+    ],
+    errors: {
+      MISSING_PROJECTDIR: { message: "projectDir required", recovery: "Pass `path` or invoke from a project directory" },
+      NO_ADAPTER: { message: "No preset adapter for detected stack", recovery: "Install the matching preset or extend presets/<stack>/tempering-adapter.mjs" },
+    },
+    example: {
+      input: { sliceRef: { plan: "Phase-FOO.md", slice: "03.2" } },
+      output: { ok: true, runId: "run-2026-04-19T...", stack: "typescript", verdict: "pass", scanners: [{ scanner: "unit", pass: 412, fail: 0, skipped: 1 }] },
+    },
+  },
   forge_generate_image: {
     intent: ["create", "generate", "image"],
     aliases: ["image-gen", "generate-artwork", "create-image"],

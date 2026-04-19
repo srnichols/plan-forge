@@ -167,6 +167,9 @@ const SCANNER_BUDGET_KEYS = Object.freeze({
   unit: "unitMaxMs",
   integration: "integrationMaxMs",
   "visual-diff": "visualDiffMaxMs",
+  flakiness: "flakinessMaxMs",
+  "performance-budget": "perfBudgetMaxMs",
+  "load-stress": "loadStressMaxMs",
 });
 
 /**
@@ -335,6 +338,10 @@ export async function runTemperingRun(opts = {}) {
     visualDiffScannerImpl = null,
     // TEMPER-04 Slice 04.2 — L3 capture callback for visual-diff quorum.
     captureMemory = null,
+    // TEMPER-05 Slice 05.1 — Flakiness, perf-budget, load-stress DI.
+    flakinessScannerImpl = null,
+    perfBudgetScannerImpl = null,
+    loadStressScannerImpl = null,
     env = process.env,
   } = opts;
 
@@ -647,8 +654,189 @@ export async function runTemperingRun(opts = {}) {
     durationMs: visualDiffResult.durationMs || 0,
   });
 
+  // ── Flakiness scanner (TEMPER-05 Slice 05.1) ──
+  // Cross-stack scanner — analyzes run history for flaky tests.
+  emit(hub, "tempering-run-scanner-started", { correlationId: corr, scanner: "flakiness", stack });
+
+  let flakinessResult;
+  try {
+    const priorBudgetExceeded = unitResult.verdict === "budget-exceeded"
+      || integrationResult.verdict === "budget-exceeded"
+      || uiResult.verdict === "budget-exceeded"
+      || contractResult.verdict === "budget-exceeded"
+      || visualDiffResult.verdict === "budget-exceeded";
+    if (priorBudgetExceeded) {
+      flakinessResult = {
+        scanner: "flakiness",
+        sliceRef,
+        startedAt: new Date(now()).toISOString(),
+        completedAt: new Date(now()).toISOString(),
+        skipped: true,
+        reason: "prior-budget-exceeded",
+        verdict: "skipped",
+        pass: 0, fail: 0,
+        durationMs: 0,
+      };
+    } else if (flakinessScannerImpl) {
+      flakinessResult = await flakinessScannerImpl({
+        config, projectDir, runId, sliceRef, now, env, hub, captureMemory,
+      });
+    } else {
+      const { runFlakinessScan } = await import("./scanners/flakiness.mjs");
+      flakinessResult = await runFlakinessScan({
+        config, projectDir, runId, sliceRef, now, env, hub, captureMemory,
+      });
+    }
+  } catch (err) {
+    flakinessResult = {
+      scanner: "flakiness",
+      sliceRef,
+      startedAt: new Date(now()).toISOString(),
+      completedAt: new Date(now()).toISOString(),
+      skipped: true,
+      reason: `scanner-load-failed:${err.message || err}`,
+      verdict: "skipped",
+      pass: 0, fail: 0,
+      durationMs: 0,
+    };
+  }
+
+  emit(hub, "tempering-run-scanner-completed", {
+    correlationId: corr,
+    scanner: "flakiness",
+    stack,
+    verdict: flakinessResult.verdict,
+    pass: flakinessResult.pass || 0,
+    fail: flakinessResult.fail || 0,
+    skipped: flakinessResult.skipped ? 1 : 0,
+    durationMs: flakinessResult.durationMs || 0,
+  });
+
+  // ── Performance Budget scanner (TEMPER-05 Slice 05.1) ──
+  // Cross-stack scanner — compares p95 latencies against baselines.
+  emit(hub, "tempering-run-scanner-started", { correlationId: corr, scanner: "performance-budget", stack });
+
+  let perfBudgetResult;
+  try {
+    const priorBudgetExceeded = unitResult.verdict === "budget-exceeded"
+      || integrationResult.verdict === "budget-exceeded"
+      || uiResult.verdict === "budget-exceeded"
+      || contractResult.verdict === "budget-exceeded"
+      || visualDiffResult.verdict === "budget-exceeded"
+      || flakinessResult.verdict === "budget-exceeded";
+    if (priorBudgetExceeded) {
+      perfBudgetResult = {
+        scanner: "performance-budget",
+        sliceRef,
+        startedAt: new Date(now()).toISOString(),
+        completedAt: new Date(now()).toISOString(),
+        skipped: true,
+        reason: "prior-budget-exceeded",
+        verdict: "skipped",
+        pass: 0, fail: 0,
+        durationMs: 0,
+      };
+    } else if (perfBudgetScannerImpl) {
+      perfBudgetResult = await perfBudgetScannerImpl({
+        config, projectDir, runId, sliceRef, now, env, hub, captureMemory,
+        importFn: importFn || ((spec) => import(spec)),
+      });
+    } else {
+      const { runPerformanceBudgetScan } = await import("./scanners/performance-budget.mjs");
+      perfBudgetResult = await runPerformanceBudgetScan({
+        config, projectDir, runId, sliceRef, now, env, hub, captureMemory,
+        importFn: importFn || ((spec) => import(spec)),
+      });
+    }
+  } catch (err) {
+    perfBudgetResult = {
+      scanner: "performance-budget",
+      sliceRef,
+      startedAt: new Date(now()).toISOString(),
+      completedAt: new Date(now()).toISOString(),
+      skipped: true,
+      reason: `scanner-load-failed:${err.message || err}`,
+      verdict: "skipped",
+      pass: 0, fail: 0,
+      durationMs: 0,
+    };
+  }
+
+  emit(hub, "tempering-run-scanner-completed", {
+    correlationId: corr,
+    scanner: "performance-budget",
+    stack,
+    verdict: perfBudgetResult.verdict,
+    pass: perfBudgetResult.pass || 0,
+    fail: perfBudgetResult.fail || 0,
+    skipped: perfBudgetResult.skipped ? 1 : 0,
+    durationMs: perfBudgetResult.durationMs || 0,
+  });
+
+  // ── Load / Stress scanner (TEMPER-05 Slice 05.1) ──
+  // Cross-stack scanner — drives HTTP load via autocannon.
+  emit(hub, "tempering-run-scanner-started", { correlationId: corr, scanner: "load-stress", stack });
+
+  let loadStressResult;
+  try {
+    const priorBudgetExceeded = unitResult.verdict === "budget-exceeded"
+      || integrationResult.verdict === "budget-exceeded"
+      || uiResult.verdict === "budget-exceeded"
+      || contractResult.verdict === "budget-exceeded"
+      || visualDiffResult.verdict === "budget-exceeded"
+      || flakinessResult.verdict === "budget-exceeded"
+      || perfBudgetResult.verdict === "budget-exceeded";
+    if (priorBudgetExceeded) {
+      loadStressResult = {
+        scanner: "load-stress",
+        sliceRef,
+        startedAt: new Date(now()).toISOString(),
+        completedAt: new Date(now()).toISOString(),
+        skipped: true,
+        reason: "prior-budget-exceeded",
+        verdict: "skipped",
+        pass: 0, fail: 0,
+        durationMs: 0,
+      };
+    } else if (loadStressScannerImpl) {
+      loadStressResult = await loadStressScannerImpl({
+        config, projectDir, runId, sliceRef, now, env, hub,
+        importFn: importFn || ((spec) => import(spec)),
+      });
+    } else {
+      const { runLoadStressScan } = await import("./scanners/load-stress.mjs");
+      loadStressResult = await runLoadStressScan({
+        config, projectDir, runId, sliceRef, now, env, hub,
+        importFn: importFn || ((spec) => import(spec)),
+      });
+    }
+  } catch (err) {
+    loadStressResult = {
+      scanner: "load-stress",
+      sliceRef,
+      startedAt: new Date(now()).toISOString(),
+      completedAt: new Date(now()).toISOString(),
+      skipped: true,
+      reason: `scanner-load-failed:${err.message || err}`,
+      verdict: "skipped",
+      pass: 0, fail: 0,
+      durationMs: 0,
+    };
+  }
+
+  emit(hub, "tempering-run-scanner-completed", {
+    correlationId: corr,
+    scanner: "load-stress",
+    stack,
+    verdict: loadStressResult.verdict,
+    pass: loadStressResult.pass || 0,
+    fail: loadStressResult.fail || 0,
+    skipped: loadStressResult.skipped ? 1 : 0,
+    durationMs: loadStressResult.durationMs || 0,
+  });
+
   // Overall verdict: worst of the scanner verdicts
-  const scanners = [unitResult, integrationResult, uiResult, contractResult, visualDiffResult];
+  const scanners = [unitResult, integrationResult, uiResult, contractResult, visualDiffResult, flakinessResult, perfBudgetResult, loadStressResult];
   const overallVerdict = deriveOverallVerdict(scanners);
 
   const completedAt = new Date(now()).toISOString();
@@ -664,8 +852,8 @@ export async function runTemperingRun(opts = {}) {
     lastGreenSha,
     scanners,
     verdict: overallVerdict,
-    phase: "TEMPER-04",
-    slice: "04.1",
+    phase: "TEMPER-05",
+    slice: "05.1",
   };
 
   // Persist — best-effort

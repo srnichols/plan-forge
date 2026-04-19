@@ -63,6 +63,9 @@ export const TEMPERING_DEFAULT_CONFIG = Object.freeze({
     integrationMaxMs: 300000,
     uiMaxMs: 600000,
     visualDiffMaxMs: 300000,
+    flakinessMaxMs: 60000,
+    perfBudgetMaxMs: 120000,
+    loadStressMaxMs: 300000,
   },
   scanners: {
     unit: true,
@@ -708,12 +711,26 @@ export function readTemperingState(targetPath) {
   // Counts violations from the contract scanner frame so the watcher
   // anomaly can fire without reading the full artifact report.
   let contractMismatch = 0;
+  // TEMPER-05 Slice 05.1 — per-scanner summary map for dashboard.
+  const latestScanners = {};
   if (latestRun && Array.isArray(latestRun.scanners)) {
     const contractFrame = latestRun.scanners.find((s) => s && s.scanner === "contract");
     if (contractFrame) {
       contractMismatch = Array.isArray(contractFrame.violations)
         ? contractFrame.violations.length
         : (contractFrame.violationCount || 0);
+    }
+    for (const frame of latestRun.scanners) {
+      if (frame && frame.scanner) {
+        latestScanners[frame.scanner] = {
+          verdict: frame.verdict || "skipped",
+          pass: frame.pass || 0,
+          fail: frame.fail || 0,
+          durationMs: frame.durationMs || 0,
+          violationCount: frame.violationCount || 0,
+          reason: frame.reason || null,
+        };
+      }
     }
   }
 
@@ -736,6 +753,8 @@ export function readTemperingState(targetPath) {
     runFailed,
     // TEMPER-03 Slice 03.2 — contract violations from latest run.
     contractMismatch,
+    // TEMPER-05 Slice 05.1 — per-scanner summary for dashboard.
+    latestScanners,
   };
 }
 

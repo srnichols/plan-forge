@@ -39,6 +39,10 @@ const state = {
     // TEMPER-04 Slice 04.2 — visual regression viewer cards keyed by urlHash.
     visualRegressions: [],
     visualIgnoredOnce: new Set(),
+    // TEMPER-05 Slice 05.1 — flakiness, perf-budget, load-stress panels.
+    flakyTests: [],
+    perfRegressions: [],
+    loadResults: [],
   },
 };
 
@@ -4573,4 +4577,66 @@ window.ignoreOnce = ignoreOnce;
 window.upsertVisualRegressionCard = upsertVisualRegressionCard;
 window.renderVisualDiffViewer = renderVisualDiffViewer;
 
+// ─── TEMPER-05 Slice 05.1: Flakiness / Perf-Budget / Load panels ────
+
+function handleFlakinessDetected(data) {
+  if (!data) return;
+  state.tempering.flakyTests.push(data);
+  renderFlakinessPanel();
+}
+
+function handlePerfRegression(data) {
+  if (!data) return;
+  state.tempering.perfRegressions.push(data);
+  addNotification(`Perf regression: ${data.endpoint || "unknown"} (+${((data.deltaPercent || 0) * 100).toFixed(1)}%)`, "error");
+  renderPerfBudgetPanel();
+}
+
+function handleLoadCompleted(data) {
+  if (!data) return;
+  state.tempering.loadResults.push(data);
+  renderLoadStressPanel();
+}
+
+function renderFlakinessPanel() {
+  const body = document.getElementById("tempering-flakiness-body");
+  if (!body) return;
+  const items = state.tempering.flakyTests;
+  if (items.length === 0) {
+    body.innerHTML = '<p class="text-gray-400 text-xs">No flaky tests detected.</p>';
+    return;
+  }
+  const sorted = [...items].sort((a, b) => (b.failureRate || 0) - (a.failureRate || 0));
+  body.innerHTML = `<table class="w-full text-xs"><thead><tr class="text-gray-400"><th class="text-left pb-1">Test</th><th class="text-right pb-1">Failure Rate</th><th class="text-right pb-1">Window</th></tr></thead><tbody>${sorted.map(f => `<tr class="border-t border-gray-700"><td class="py-1 text-white">${escHtml(f.testId || "—")}</td><td class="py-1 text-right text-red-400">${((f.failureRate || 0) * 100).toFixed(1)}%</td><td class="py-1 text-right text-gray-400">${f.window || "—"}</td></tr>`).join("")}</tbody></table>`;
+}
+
+function renderPerfBudgetPanel() {
+  const body = document.getElementById("tempering-perf-budget-body");
+  if (!body) return;
+  const items = state.tempering.perfRegressions;
+  if (items.length === 0) {
+    body.innerHTML = '<p class="text-gray-400 text-xs">No performance regressions.</p>';
+    return;
+  }
+  body.innerHTML = `<table class="w-full text-xs"><thead><tr class="text-gray-400"><th class="text-left pb-1">Endpoint</th><th class="text-right pb-1">Baseline p95</th><th class="text-right pb-1">Current p95</th><th class="text-right pb-1">Delta</th></tr></thead><tbody>${items.map(r => `<tr class="border-t border-gray-700"><td class="py-1 text-white">${escHtml(r.endpoint || "—")}</td><td class="py-1 text-right text-gray-400">${r.baselineP95 != null ? r.baselineP95 + "ms" : "—"}</td><td class="py-1 text-right text-red-400">${r.currentP95 != null ? r.currentP95 + "ms" : "—"}</td><td class="py-1 text-right text-red-400">+${((r.deltaPercent || 0) * 100).toFixed(1)}%</td></tr>`).join("")}</tbody></table>`;
+}
+
+function renderLoadStressPanel() {
+  const body = document.getElementById("tempering-load-stress-body");
+  if (!body) return;
+  const items = state.tempering.loadResults;
+  if (items.length === 0) {
+    body.innerHTML = '<p class="text-gray-400 text-xs">No load test results.</p>';
+    return;
+  }
+  const latest = items[items.length - 1];
+  body.innerHTML = `<div class="text-xs"><p class="text-gray-300">Endpoints tested: <span class="text-white">${latest.endpointCount || 0}</span></p><p class="text-gray-300">Passed: <span class="text-emerald-400">${latest.passCount || 0}</span> · Failed: <span class="text-red-400">${latest.failCount || 0}</span></p><p class="text-gray-300">Verdict: <span class="${latest.verdict === "pass" ? "text-emerald-400" : "text-red-400"}">${escHtml(latest.verdict || "—")}</span></p></div>`;
+}
+
+window.handleFlakinessDetected = handleFlakinessDetected;
+window.handlePerfRegression = handlePerfRegression;
+window.handleLoadCompleted = handleLoadCompleted;
+window.renderFlakinessPanel = renderFlakinessPanel;
+window.renderPerfBudgetPanel = renderPerfBudgetPanel;
+window.renderLoadStressPanel = renderLoadStressPanel;
 

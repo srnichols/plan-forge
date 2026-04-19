@@ -1,0 +1,4 @@
+{"_v":1,"timestamp":"2026-04-17T10:00:00.000Z","runId":"run-1","endpoint":"/api/users","method":"GET","p50":10,"p95":50,"p99":80,"errorRate":0,"source":"performance-budget"}
+{"_v":1,"timestamp":"2026-04-17T11:00:00.000Z","runId":"run-2","endpoint":"/api/users","method":"GET","p50":12,"p95":55,"p99":85,"errorRate":0,"source":"performance-budget"}
+{"_v":1,"timestamp":"2026-04-17T12:00:00.000Z","runId":"run-3","endpoint":"/api/users","method":"GET","p50":15,"p95":70,"p99":100,"errorRate":0,"source":"performance-budget"}
+{"_v":1,"timestamp":"2026-04-17T13:00:00.000Z","runId":"run-4","endpoint":"/api/health","method":"GET","p50":5,"p95":15,"p99":25,"errorRate":0,"source":"performance-budget"}

@@ -88,6 +88,17 @@ describe("TEMPERING_DEFAULT_CONFIG — enterprise defaults", () => {
     expect(Object.isFrozen(TEMPERING_DEFAULT_CONFIG)).toBe(true);
   });
 
+  it("runtimeBudgets includes keys for all 8 scanners (TEMPER-05 Slice 05.1)", () => {
+    const budgets = TEMPERING_DEFAULT_CONFIG.runtimeBudgets;
+    expect(budgets.unitMaxMs).toBe(120000);
+    expect(budgets.integrationMaxMs).toBe(300000);
+    expect(budgets.uiMaxMs).toBe(600000);
+    expect(budgets.visualDiffMaxMs).toBe(300000);
+    expect(budgets.flakinessMaxMs).toBe(60000);
+    expect(budgets.perfBudgetMaxMs).toBe(120000);
+    expect(budgets.loadStressMaxMs).toBe(300000);
+  });
+
   it("TEMPERING_SCAN_STALE_DAYS is 7 (matches CRUCIBLE_STALL_CUTOFF_DAYS contract)", () => {
     expect(TEMPERING_SCAN_STALE_DAYS).toBe(7);
   });

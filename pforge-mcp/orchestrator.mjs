@@ -4917,6 +4917,21 @@ export async function runWatch(options = {}) {
         runState: report.runState,
         anomalyCount: anomalies.length,
         cursor: report.cursor,
+        // Phase CRUCIBLE-03 Slice 03.2 — compact Crucible summary so the
+        // dashboard Watcher tab can render the funnel row without a
+        // follow-up REST call. Kept to primitives so the WS payload
+        // stays small for clients on bandwidth-constrained links.
+        crucible: report.crucible
+          ? {
+              total: report.crucible.counts.total,
+              finalized: report.crucible.counts.finalized,
+              in_progress: report.crucible.counts.in_progress,
+              abandoned: report.crucible.counts.abandoned,
+              staleInProgress: report.crucible.staleInProgress,
+              orphanHandoffs: report.crucible.orphanHandoffs.length,
+              stallCutoffDays: report.crucible.stallCutoffDays,
+            }
+          : null,
       });
       for (const anomaly of anomalies) {
         eventBus.emit("watch-anomaly-detected", {

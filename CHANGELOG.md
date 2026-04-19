@@ -7,6 +7,32 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased] — targeting 2.45.0
 
+### Added — Phase TEMPER-05 Slice 05.2 — Mutation + Scheduling
+
+9th tempering scanner: mutation testing via stack-specific tools
+(Stryker, dotnet-stryker, mutmut, pitest, go-mutesting, cargo-mutants).
+
+- Mutation scanner (`tempering/scanners/mutation.mjs`) with per-layer
+  minima, budget enforcement, and `captureMemory` on failure.
+- Scheduling decision helper (`tempering/scheduling.mjs`) — pure functions
+  gating mutation runs by trigger type, critical paths, and fullMutation
+  override. Post-slice runs skip mutation unless a critical path is touched.
+- Preset adapters: mutation entry added to all 6 supported stacks
+  (typescript, dotnet, python, java, go, rust) with `parseOutput` and
+  exit-code fallback. PHP/Swift/Azure-IaC remain stubs.
+- Runner phase 9 block with `mutationScannerImpl` DI hook, budget cascade,
+  and `scannerCount` bumped 8→9.
+- `tempering.mjs`: `mutationMaxMs` runtime budget (600s),
+  `mutationBelowMinimum` / `flakyCount` / `perfRegressionCount` watcher
+  state derivations.
+- `orchestrator.mjs`: 3 new anomaly codes (`tempering-mutation-below-minimum`,
+  `tempering-flake-detected`, `tempering-perf-regression`) with corresponding
+  recommendations.
+- `server.mjs`: `fullMutation` (bool) and `trigger` (enum) inputs on
+  `forge_tempering_run` schema.
+- Dashboard: mutation results panel (`🧬 Mutation Testing`) subscribing to
+  `tempering-mutation-below-minimum` hub events.
+
 ### Added — Phase TEMPER-04 Slice 04.2 — Visual-diff quorum mode + dashboard viewer
 
 Multi-model quorum voting for the visual-diff investigate band and a
@@ -66,8 +92,6 @@ extended with `ignorableDiff`, `failureDiff`, `maxCostUsd`,
 baselines, scanner logic, approve-baseline tool, and runner integration.
 
 ---
-
-## [Unreleased] — targeting 2.44.0
 
 ### Added — Phase TEMPER-03 Slice 03.2 — Contract scanner (OpenAPI/GraphQL)
 

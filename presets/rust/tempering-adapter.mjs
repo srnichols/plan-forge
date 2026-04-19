@@ -47,4 +47,31 @@ export const temperingAdapter = {
       return result;
     },
   },
+  mutation: {
+    supported: true,
+    cmd: ["cargo", "mutants", "--json"],
+    parseOutput(stdout, stderr, exitCode) {
+      const result = { mutationScore: null, killed: 0, survived: 0, timeout: 0, noCoverage: 0, layers: null };
+      try {
+        // cargo-mutants JSON: array of outcome objects
+        const lines = (stdout || "").split(/\r?\n/);
+        for (const raw of lines) {
+          const line = raw.trim();
+          if (!line || line.charAt(0) !== "{") continue;
+          let evt;
+          try { evt = JSON.parse(line); } catch { continue; }
+          if (!evt || typeof evt !== "object") continue;
+          const outcome = (evt.outcome || evt.status || "").toLowerCase();
+          if (outcome === "killed" || outcome === "caught") result.killed++;
+          else if (outcome === "survived" || outcome === "missed") result.survived++;
+          else if (outcome === "timeout") result.timeout++;
+          else if (outcome === "unviable") result.noCoverage++;
+        }
+      } catch { /* fall through */ }
+      const total = result.killed + result.survived + result.timeout + result.noCoverage;
+      result.mutationScore = total > 0 ? (result.killed / total) * 100 : null;
+      if (result.mutationScore == null && exitCode === 0) result.mutationScore = 100;
+      return result;
+    },
+  },
 };

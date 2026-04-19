@@ -134,3 +134,34 @@ describe("server.mjs — artifact and bug-stub endpoints (TEMPER-04 Slice 04.2)"
     expect(serverMjs).toMatch(/\.forge.*tempering/);
   });
 });
+
+// ─── TEMPER-05 Slice 05.1: Flakiness / Perf-Budget / Load panels ────
+
+describe("dashboard — Flakiness / Perf-Budget / Load panels (TEMPER-05 Slice 05.1)", () => {
+  it("index.html has tempering-flakiness section with data-testid", () => {
+    expect(indexHtml).toMatch(/data-testid="tempering-flakiness"/);
+    expect(indexHtml).toMatch(/id="tempering-flakiness-body"/);
+  });
+
+  it("index.html has tempering-perf-budget section with data-testid", () => {
+    expect(indexHtml).toMatch(/data-testid="tempering-perf-budget"/);
+    expect(indexHtml).toMatch(/id="tempering-perf-budget-body"/);
+  });
+
+  it("index.html has tempering-load-stress section with data-testid", () => {
+    expect(indexHtml).toMatch(/data-testid="tempering-load-stress"/);
+    expect(indexHtml).toMatch(/id="tempering-load-stress-body"/);
+  });
+
+  it("app.js exposes render functions for the 3 new panels", () => {
+    expect(appJs).toMatch(/window\.renderFlakinessPanel\s*=/);
+    expect(appJs).toMatch(/window\.renderPerfBudgetPanel\s*=/);
+    expect(appJs).toMatch(/window\.renderLoadStressPanel\s*=/);
+  });
+
+  it("app.js defines hub handlers for the 3 new scanner events", () => {
+    expect(appJs).toMatch(/handleFlakinessDetected/);
+    expect(appJs).toMatch(/handlePerfRegression/);
+    expect(appJs).toMatch(/handleLoadCompleted/);
+  });
+});

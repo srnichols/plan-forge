@@ -63,6 +63,10 @@ export const TEMPERING_DEFAULT_CONFIG = Object.freeze({
     integrationMaxMs: 300000,
     uiMaxMs: 600000,
     visualDiffMaxMs: 300000,
+    flakinessMaxMs: 60000,
+    perfBudgetMaxMs: 120000,
+    loadStressMaxMs: 300000,
+    mutationMaxMs: 600000,
   },
   scanners: {
     unit: true,
@@ -708,12 +712,48 @@ export function readTemperingState(targetPath) {
   // Counts violations from the contract scanner frame so the watcher
   // anomaly can fire without reading the full artifact report.
   let contractMismatch = 0;
+  // TEMPER-05 Slice 05.1 — per-scanner summary map for dashboard.
+  const latestScanners = {};
   if (latestRun && Array.isArray(latestRun.scanners)) {
     const contractFrame = latestRun.scanners.find((s) => s && s.scanner === "contract");
     if (contractFrame) {
       contractMismatch = Array.isArray(contractFrame.violations)
         ? contractFrame.violations.length
         : (contractFrame.violationCount || 0);
+    }
+    for (const frame of latestRun.scanners) {
+      if (frame && frame.scanner) {
+        latestScanners[frame.scanner] = {
+          verdict: frame.verdict || "skipped",
+          pass: frame.pass || 0,
+          fail: frame.fail || 0,
+          durationMs: frame.durationMs || 0,
+          violationCount: frame.violationCount || 0,
+          reason: frame.reason || null,
+        };
+      }
+    }
+  }
+
+  // TEMPER-05 Slice 05.2 — watcher state derivations for mutation,
+  // flakiness, and performance regression counts.
+  let mutationBelowMinimum = 0;
+  let flakyCount = 0;
+  let perfRegressionCount = 0;
+  if (latestRun && Array.isArray(latestRun.scanners)) {
+    const mutationFrame = latestRun.scanners.find((s) => s && s.scanner === "mutation");
+    if (mutationFrame && mutationFrame.verdict === "fail") {
+      mutationBelowMinimum = Array.isArray(mutationFrame.layers)
+        ? mutationFrame.layers.filter((l) => !l.pass).length
+        : 1;
+    }
+    const flakinessFrame = latestRun.scanners.find((s) => s && s.scanner === "flakiness");
+    if (flakinessFrame && flakinessFrame.fail > 0) {
+      flakyCount = flakinessFrame.fail;
+    }
+    const perfFrame = latestRun.scanners.find((s) => s && s.scanner === "performance-budget");
+    if (perfFrame && perfFrame.verdict === "fail") {
+      perfRegressionCount = perfFrame.fail || 1;
     }
   }
 
@@ -736,6 +776,12 @@ export function readTemperingState(targetPath) {
     runFailed,
     // TEMPER-03 Slice 03.2 — contract violations from latest run.
     contractMismatch,
+    // TEMPER-05 Slice 05.1 — per-scanner summary for dashboard.
+    latestScanners,
+    // TEMPER-05 Slice 05.2 — mutation + scheduling watcher fields.
+    mutationBelowMinimum,
+    flakyCount,
+    perfRegressionCount,
   };
 }
 

@@ -1,14 +1,14 @@
 ---
 crucibleId: 6de31a56-4341-45dc-bf91-eab3993b6078
 source: self-hosted
-status: draft
+status: complete
 phase: TEMPER-05
 arc: TEMPER
 ---
 
 # Phase TEMPER-05: Performance, mutation, and flakiness
 
-> **Status**: 📝 DRAFT (arc-prep, no code yet)
+> **Status**: ✅ COMPLETE — Slices 05.1 + 05.2 shipped (v2.46.0-dev)
 > **Estimated Effort**: 2 slices
 > **Risk Level**: Medium (mutation is runtime-expensive; scheduling
 > decisions are the risk surface)
@@ -146,7 +146,7 @@ enterprise defaults, they're table stakes.
 
 ## Slices
 
-### Slice 05.1 — Flake + perf budget + load
+### Slice 05.1 — Flake + perf budget + load ✅
 
 **Files touched:**
 - `pforge-mcp/tempering/scanners/flakiness.mjs` — new
@@ -160,7 +160,7 @@ enterprise defaults, they're table stakes.
 - `pforge-mcp/tests/tempering-load.test.mjs` — new
 - `package.json` deps — `autocannon`
 
-### Slice 05.2 — Mutation + scheduling
+### Slice 05.2 — Mutation + scheduling ✅
 
 **Files touched:**
 - `pforge-mcp/tempering/scanners/mutation.mjs` — new

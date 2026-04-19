@@ -54,4 +54,38 @@ export const temperingAdapter = {
       return result;
     },
   },
+  mutation: {
+    supported: true,
+    cmd: ["dotnet", "stryker", "--reporter", "json"],
+    parseOutput(stdout, stderr, exitCode) {
+      const result = { mutationScore: null, killed: 0, survived: 0, timeout: 0, noCoverage: 0, layers: null };
+      try {
+        const combined = (stdout || "") + "\n" + (stderr || "");
+        const start = combined.indexOf("{");
+        if (start !== -1) {
+          const data = JSON.parse(combined.slice(start));
+          if (data && data.files) {
+            let totalKilled = 0, totalSurvived = 0, totalTimeout = 0, totalNoCoverage = 0;
+            for (const [, fileData] of Object.entries(data.files)) {
+              for (const m of (fileData.mutants || [])) {
+                if (m.status === "Killed") totalKilled++;
+                else if (m.status === "Survived") totalSurvived++;
+                else if (m.status === "Timeout") totalTimeout++;
+                else if (m.status === "NoCoverage") totalNoCoverage++;
+              }
+            }
+            result.killed = totalKilled;
+            result.survived = totalSurvived;
+            result.timeout = totalTimeout;
+            result.noCoverage = totalNoCoverage;
+            const total = totalKilled + totalSurvived + totalTimeout + totalNoCoverage;
+            result.mutationScore = total > 0 ? (totalKilled / total) * 100 : 0;
+            return result;
+          }
+        }
+      } catch { /* fall through */ }
+      if (exitCode === 0) result.mutationScore = 100;
+      return result;
+    },
+  },
 };

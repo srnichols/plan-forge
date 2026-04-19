@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
+    "autocannon": "^8.0.0",
     "express": "^5.2.1",
     "pixelmatch": "^6.0.0",
     "playwright": "^1.59.1",

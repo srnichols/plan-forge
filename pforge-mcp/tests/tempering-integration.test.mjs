@@ -301,11 +301,10 @@ describe("runTemperingRun — two-scanner run (TEMPER-02 Slice 02.2)", () => {
     const r = await runTemperingRun({
       projectDir, hub, spawn, adapter: bothScannersAdapter,
     });
-    // Slice 04.1 adds a fifth scanner (visual-diff) that skips
-    // cleanly when no screenshot manifest exists. 5 entries on the
-    // record but only unit+integration contribute to pass/fail
-    // totals here.
-    expect(r.scanners).toHaveLength(5);
+    // Slice 05.2 adds mutation scanner.
+    // 9 entries on the record but only unit+integration contribute to
+    // pass/fail totals here.
+    expect(r.scanners).toHaveLength(9);
     expect(r.scanners[0].scanner).toBe("unit");
     expect(r.scanners[1].scanner).toBe("integration");
     expect(r.scanners[2].scanner).toBe("ui-playwright");
@@ -313,10 +312,14 @@ describe("runTemperingRun — two-scanner run (TEMPER-02 Slice 02.2)", () => {
     expect(r.scanners[3].scanner).toBe("contract");
     expect(r.scanners[3].skipped).toBe(true);
     expect(r.scanners[4].scanner).toBe("visual-diff");
+    expect(r.scanners[5].scanner).toBe("flakiness");
+    expect(r.scanners[6].scanner).toBe("performance-budget");
+    expect(r.scanners[7].scanner).toBe("load-stress");
+    expect(r.scanners[8].scanner).toBe("mutation");
     expect(r.verdict).toBe("pass");
 
     const completed = hub.events.find((e) => e.type === "tempering-run-completed");
-    expect(completed.data.scannerCount).toBe(5);
+    expect(completed.data.scannerCount).toBe(9);
     expect(completed.data.pass).toBe(8);
   });
 
@@ -362,13 +365,13 @@ describe("runTemperingRun — two-scanner run (TEMPER-02 Slice 02.2)", () => {
     expect(r.scanners[4].reason).toBe("prior-budget-exceeded");
   });
 
-  it("records slice '04.1' on the run record", async () => {
+  it("records slice '05.2' on the run record", async () => {
     const spawn = makeFakeSpawn({ stdout: "", exitCode: 0 });
     const r = await runTemperingRun({
       projectDir, spawn, adapter: bothScannersAdapter,
     });
     const { readFileSync } = await import("node:fs");
     const rec = JSON.parse(readFileSync(r.runRecordPath, "utf-8"));
-    expect(rec.slice).toBe("04.1");
+    expect(rec.slice).toBe("05.2");
   });
 });

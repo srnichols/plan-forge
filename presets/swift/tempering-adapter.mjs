@@ -8,4 +8,5 @@
 export const temperingAdapter = {
   unit: { supported: false, reason: "extension-opportunity-see-EXTENSIONS.md" },
   integration: { supported: false, reason: "extension-opportunity-see-EXTENSIONS.md" },
+  mutation: { supported: false, reason: "extension-opportunity-see-EXTENSIONS.md" },
 };

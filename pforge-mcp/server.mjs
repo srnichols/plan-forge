@@ -855,6 +855,8 @@ const TOOLS = [
           },
         },
         lastGreenSha: { type: "string", description: "Git SHA of the most recent green run; when present and config.execution.regressionFirst is true, the adapter is hinted to run tests covering changed files first." },
+        fullMutation: { type: "boolean", description: "Force mutation scanner regardless of scheduling gate. Default: false." },
+        trigger: { type: "string", enum: ["post-slice", "nightly", "manual"], description: "Trigger context for scheduling decisions (mutation scanner gating). Default: manual." },
       },
     },
   },

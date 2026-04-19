@@ -1,0 +1,13 @@
+{
+  "openapi": "3.0.3",
+  "info": { "title": "Test API", "version": "1.0.0" },
+  "paths": {
+    "/api/users": {
+      "get": { "summary": "List users", "responses": { "200": { "description": "OK" } } },
+      "post": { "summary": "Create user", "responses": { "201": { "description": "Created" } } }
+    },
+    "/api/health": {
+      "get": { "summary": "Health check", "responses": { "200": { "description": "OK" } } }
+    }
+  }
+}

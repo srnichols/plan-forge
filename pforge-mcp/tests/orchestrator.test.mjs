@@ -1703,6 +1703,44 @@ describe("Watcher v2.35: quorum/skill event surfacing", () => {
     expect(sf).toBeDefined();
     expect(sf.severity).toBe("error");
   });
+
+  it("emits tempering-contract-mismatch at warn severity for < 5 mismatches", () => {
+    const snap = {
+      ok: true, runState: "in-progress", lastEventAgeMs: 1000,
+      counts: { failed: 0, escalated: 0 },
+      artifacts: [],
+      tempering: { contractMismatch: 2 },
+    };
+    const anomalies = detectWatchAnomalies(snap);
+    const cm = anomalies.find((a) => a.code === "tempering-contract-mismatch");
+    expect(cm).toBeDefined();
+    expect(cm.severity).toBe("warn");
+    expect(cm.message).toContain("2 API contract");
+  });
+
+  it("escalates tempering-contract-mismatch to error at >= 5", () => {
+    const snap = {
+      ok: true, runState: "in-progress", lastEventAgeMs: 1000,
+      counts: { failed: 0, escalated: 0 },
+      artifacts: [],
+      tempering: { contractMismatch: 7 },
+    };
+    const anomalies = detectWatchAnomalies(snap);
+    const cm = anomalies.find((a) => a.code === "tempering-contract-mismatch");
+    expect(cm).toBeDefined();
+    expect(cm.severity).toBe("error");
+  });
+
+  it("does not emit tempering-contract-mismatch when count is 0", () => {
+    const snap = {
+      ok: true, runState: "in-progress", lastEventAgeMs: 1000,
+      counts: { failed: 0, escalated: 0 },
+      artifacts: [],
+      tempering: { contractMismatch: 0 },
+    };
+    const anomalies = detectWatchAnomalies(snap);
+    expect(anomalies.find((a) => a.code === "tempering-contract-mismatch")).toBeUndefined();
+  });
 });
 
 describe("Watcher v2.35: recommendFromAnomalies", () => {
@@ -1755,6 +1793,17 @@ describe("Watcher v2.35: recommendFromAnomalies", () => {
       { artifacts: [], plan: "docs/plans/X.md" }
     );
     expect(recs[0].command).toMatch(/quorum=power/);
+  });
+
+  it("provides recommendation for tempering-contract-mismatch", () => {
+    const recs = recommendFromAnomalies(
+      [{ code: "tempering-contract-mismatch", severity: "warn", message: "3 API contract..." }],
+      { artifacts: [], tempering: { contractMismatch: 3 } }
+    );
+    expect(recs.length).toBe(1);
+    expect(recs[0].code).toBe("tempering-contract-mismatch");
+    expect(recs[0].action).toContain("contract mismatch");
+    expect(recs[0].command).toBe("forge_tempering_run");
   });
 });
 

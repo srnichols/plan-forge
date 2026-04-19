@@ -482,7 +482,7 @@ export const TOOL_METADATA = {
     },
   },
   forge_tempering_run: {
-    intent: ["tempering", "run", "execute", "unit-tests"],
+    intent: ["tempering", "run", "execute", "unit-tests", "contract"],
     aliases: ["tempering-run", "run-tempering", "run-tests"],
     cost: "medium",
     maxConcurrent: 1,
@@ -491,7 +491,7 @@ export const TOOL_METADATA = {
       "project stack is one of: typescript, dotnet, python, go, java, rust",
       "test runner available on PATH (npx/dotnet/pytest/go/mvn/cargo)",
     ],
-    produces: [".forge/tempering/run-<ts>.json"],
+    produces: [".forge/tempering/run-<ts>.json", ".forge/tempering/artifacts/<runId>/contract/report.json"],
     consumes: [".forge/tempering/config.json", "presets/<stack>/tempering-adapter.mjs"],
     sideEffects: [
       "spawns a test-runner subprocess",
@@ -505,7 +505,7 @@ export const TOOL_METADATA = {
     },
     example: {
       input: { sliceRef: { plan: "Phase-FOO.md", slice: "03.2" } },
-      output: { ok: true, runId: "run-2026-04-19T...", stack: "typescript", verdict: "pass", scanners: [{ scanner: "unit", pass: 412, fail: 0, skipped: 1 }] },
+      output: { ok: true, runId: "run-2026-04-19T...", stack: "typescript", verdict: "pass", scanners: [{ scanner: "unit", pass: 412, fail: 0, skipped: 1 }, { scanner: "contract", pass: 8, fail: 0, violations: [] }] },
     },
   },
   forge_generate_image: {

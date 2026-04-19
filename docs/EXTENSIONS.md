@@ -172,3 +172,84 @@ or CLI, or you can edit it manually.
   ]
 }
 ```
+
+---
+
+## Tempering Scanner Extensions
+
+The Tempering subsystem (TEMPER-03 Slice 03.2) introduced an extension surface for API contract scanners. The built-in scanner covers OpenAPI 3.x and GraphQL introspection; additional protocol scanners can be contributed as extensions.
+
+### Scanner Contract
+
+Every scanner extension module must export a single async function:
+
+```js
+export async function runScan(ctx) → ScannerResult
+```
+
+**`ctx` shape:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `config` | `object` | Loaded tempering config (from `.forge/tempering/config.json`) |
+| `projectDir` | `string` | Absolute path to the project root |
+| `runId` | `string` | Current run ID (e.g. `run-2026-04-19T…`) |
+| `sliceRef` | `{plan, slice} \| null` | Optional plan+slice context |
+| `importFn` | `Function` | Dynamic import for optional dependencies |
+| `now` | `Function` | Monotonic clock (`() → number`) |
+| `env` | `object` | `process.env`-shaped environment map |
+
+**Return value (`ScannerResult`):**
+
+```js
+{
+  scanner: string,      // e.g. "grpc-proto"
+  verdict: "pass" | "fail" | "error" | "skipped" | "budget-exceeded",
+  pass: number,
+  fail: number,
+  skipped: number,
+  durationMs: number,
+  violations?: Array<{ path?, method?, expected?, actual?, reason: string }>,
+  reason?: string,      // when verdict is "skipped"
+  details?: object,     // scanner-specific metadata
+}
+```
+
+### Config Namespace
+
+Each scanner extension should register its config under `config.scanners.<name>`:
+
+```json
+{
+  "scanners": {
+    "grpc-proto": {
+      "enabled": true,
+      "protoPath": "proto/",
+      "baseUrl": "localhost:50051"
+    }
+  }
+}
+```
+
+### Artifact Directory
+
+Scanners write artifacts to `.forge/tempering/artifacts/<runId>/<scanner-name>/`. Use the `ensureScannerArtifactDir()` helper from `tempering/artifacts.mjs`.
+
+### Requirements
+
+- **Production guard**: Never fire requests against production URLs unless `config.scanners.<name>.allowProduction === true`. Use `looksLikeProduction()` from `ui-playwright.mjs`.
+- **`X-Tempering-Scan: true` header**: All HTTP requests must include this header so servers can identify scanner traffic.
+- **Never throw**: Return error frames instead of propagating exceptions.
+- **Budget awareness**: Check `hardDeadline` between operations and return `verdict: "budget-exceeded"` if exceeded.
+
+### Extension Opportunities
+
+The following scanner slots are defined in `extensions/catalog.json` under `opportunities[]`:
+
+| Name | Protocol | Status |
+|------|----------|--------|
+| `tempering-grpc` | gRPC proto contract scanner | Stub |
+| `tempering-trpc` | tRPC router type-check scanner | Stub |
+| `tempering-asyncapi` | AsyncAPI event contract scanner | Stub |
+
+These are not installable via `pforge ext add` — they exist as contribution placeholders for the community.

@@ -1,14 +1,14 @@
 ---
 crucibleId: 8c375e4f-16b7-421f-8756-1a7f81fa0373
 source: self-hosted
-status: in_progress
+status: complete
 phase: TEMPER-03
 arc: TEMPER
 ---
 
 # Phase TEMPER-03: UI sweep — Playwright, accessibility, API contract
 
-> **Status**: 🟡 IN PROGRESS — Slice 03.1 MVP shipped (v2.44.0-dev); dashboard gallery + contract scanner (03.2) pending
+> **Status**: ✅ COMPLETE — Slices 03.1 + 03.2 shipped (v2.44.0-dev)
 > **Estimated Effort**: 2 slices
 > **Risk Level**: Medium (browser automation subprocess, first
 > artifact-producing scanners — screenshots + HAR files)
@@ -136,7 +136,7 @@ link, every button, and every API fires, does the system still work?"*
   fixture
 - `.gitignore` — `.forge/tempering/artifacts/`
 
-### Slice 03.2 — Contract scanner + extension surface
+### Slice 03.2 — Contract scanner + extension surface ✅
 
 **Files touched:**
 - `pforge-mcp/tempering/scanners/contract.mjs` — new

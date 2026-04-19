@@ -4762,6 +4762,17 @@ export function detectWatchAnomalies(snapshot) {
     });
   }
 
+  // 15. (Phase TEMPER-03 Slice 03.2) Contract mismatch — the latest
+  // Tempering run's contract scanner detected API response mismatches
+  // against the OpenAPI/GraphQL spec. Escalates to error at ≥ 5.
+  if (snapshot.tempering && snapshot.tempering.contractMismatch > 0) {
+    anomalies.push({
+      severity: snapshot.tempering.contractMismatch >= 5 ? "error" : "warn",
+      code: "tempering-contract-mismatch",
+      message: `${snapshot.tempering.contractMismatch} API contract mismatch(es) detected — run forge_tempering_run for details`,
+    });
+  }
+
   return anomalies;
 }
 
@@ -4926,6 +4937,15 @@ export function recommendFromAnomalies(anomalies, snapshot) {
           code,
           severity: anomaly.severity,
           action: `Latest Tempering run verdict=${snapshot.tempering?.latestRunVerdict ?? "unknown"}. Open the most recent .forge/tempering/run-*.json to see per-scanner stdout, then either fix the failing tests or (if this is an infra flake) re-run forge_tempering_run.`,
+          command: "forge_tempering_run",
+        });
+        break;
+
+      case "tempering-contract-mismatch":
+        recs.push({
+          code,
+          severity: anomaly.severity,
+          action: `${snapshot.tempering?.contractMismatch ?? "One or more"} API contract mismatch(es) detected. Inspect .forge/tempering/artifacts/<runId>/contract/report.json for violation details, then fix API response shapes or update the spec.`,
           command: "forge_tempering_run",
         });
         break;

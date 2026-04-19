@@ -643,14 +643,15 @@ export const TOOL_METADATA = {
     cost: "low",
     maxConcurrent: 3,
     addedIn: "2.29.0",
-    prerequisites: ["LiveGuard data available (drift, incidents, secret scan)"],
+    prerequisites: ["LiveGuard data available (drift, incidents, secret scan, or Crucible funnel)"],
     produces: ["docs/plans/auto/LIVEGUARD-FIX-<id>.md"],
-    consumes: [".forge/drift-history.jsonl", ".forge/incidents.jsonl", ".forge/secret-scan-cache.json", ".forge/regression-gates.json"],
+    consumes: [".forge/drift-history.jsonl", ".forge/incidents.jsonl", ".forge/secret-scan-cache.json", ".forge/regression-gates.json", ".forge/crucible/*.json", ".forge/hub-events.jsonl"],
     sideEffects: ["writes docs/plans/auto/LIVEGUARD-FIX-{incidentId}.md", "appends .forge/fix-proposals.json", "broadcasts fix-proposal-ready event"],
     securityNote: "Plans are generated locally. One proposal per incidentId to prevent spam.",
     errors: {
-      NO_DATA: { message: "No LiveGuard data found", recovery: "Run drift, incident-capture, regression-guard, or secret-scan first" },
+      NO_DATA: { message: "No LiveGuard data found", recovery: "Run drift, incident-capture, regression-guard, secret-scan, or start a Crucible smelt first" },
       ALREADY_EXISTS: { message: "Fix proposal already exists for this ID", recovery: "Check docs/plans/auto/ for existing plan" },
+      CRUCIBLE_HEALTHY: { message: "Crucible funnel is healthy — no stalled or orphan smelts to fix", recovery: "Wait for the watcher to flag a smelt, or pass a specific smeltId to force a proposal" },
     },
     example: {
       input: { source: "incident", incidentId: "INC-001" },

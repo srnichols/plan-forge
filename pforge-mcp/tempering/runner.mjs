@@ -333,6 +333,8 @@ export async function runTemperingRun(opts = {}) {
     contractScannerImpl = null,
     // TEMPER-04 Slice 04.1 — Visual-diff scanner dependency injection.
     visualDiffScannerImpl = null,
+    // TEMPER-04 Slice 04.2 — L3 capture callback for visual-diff quorum.
+    captureMemory = null,
     env = process.env,
   } = opts;
 
@@ -612,12 +614,12 @@ export async function runTemperingRun(opts = {}) {
       };
     } else if (visualDiffScannerImpl) {
       visualDiffResult = await visualDiffScannerImpl({
-        config, projectDir, runId, sliceRef, now, env, hub,
+        config, projectDir, runId, sliceRef, now, env, hub, captureMemory,
       });
     } else {
       const { runVisualDiffScan } = await import("./scanners/visual-diff.mjs");
       visualDiffResult = await runVisualDiffScan({
-        config, projectDir, runId, sliceRef, now, env, hub,
+        config, projectDir, runId, sliceRef, now, env, hub, captureMemory,
       });
     }
   } catch (err) {

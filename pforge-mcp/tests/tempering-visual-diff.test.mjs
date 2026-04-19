@@ -197,7 +197,7 @@ describe("visual-diff scanner", () => {
   afterEach(() => { try { rmSync(tmp, { recursive: true, force: true }); } catch {} });
 
   const baseConfig = {
-    visualAnalyzer: { enabled: true, ignorableDiff: 0.001, failureDiff: 0.02 },
+    visualAnalyzer: { enabled: true, ignorableDiff: 0.001, failureDiff: 0.02, mode: "single", models: ["claude-opus-4.7"] },
     scanners: { "visual-diff": true },
   };
 

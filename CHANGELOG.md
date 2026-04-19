@@ -7,6 +7,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased] — targeting 2.45.0
 
+### Added — Phase TEMPER-04 Slice 04.2 — Visual-diff quorum mode + dashboard viewer
+
+Multi-model quorum voting for the visual-diff investigate band and a
+dashboard visual regression viewer with approve/bug/ignore actions.
+
+- Visual-diff quorum mode (2-of-3 default) with configurable models,
+  agreement threshold, and per-leg timeout/cost cap sharing.
+- Dashboard visual regression viewer: baseline/current/diff image trio,
+  per-model vote badges (✓/✗/?/⏱), verdict banner with "Human Review
+  Needed" for inconclusive, approve-as-baseline/open-bug/ignore-once
+  action buttons.
+- L3 decision capture for quorum verdicts (text only, never images).
+- Server endpoints: `GET /api/tempering/artifact` (path-traversal safe),
+  `POST /api/tempering/bug-stub` (TEMPER-06 placeholder).
+
+### Changed
+- `tempering-visual-regression-detected` event now carries `verdict`,
+  `quorum`, and `artifacts` fields.
+- Default visual analyzer mode changed to `"quorum"` with 3 models.
+
 ### Added — Phase TEMPER-04 Slice 04.1 — Visual-diff scanner (pixel diff + single-model analyzer)
 
 Fifth scanner in the Tempering arc. Compares screenshots against

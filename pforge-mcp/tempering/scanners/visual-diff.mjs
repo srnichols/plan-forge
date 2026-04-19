@@ -25,7 +25,9 @@ const VISUAL_ANALYZER_DEFAULTS = {
   ignorableDiff: 0.001,     // 0.1%
   failureDiff: 0.02,        // 2.0%
   maxCostUsd: 2.0,
-  models: ["claude-opus-4.7"],
+  mode: "quorum",           // "quorum" | "single"; default "quorum" when models.length >= 2
+  models: ["claude-opus-4.7", "gpt-5.3-codex", "grok-4.20"],
+  agreementThreshold: 2,    // N-of-M majority
   analyzerTimeoutMs: 60_000,
   maxImageWidth: 1920,
 };
@@ -65,6 +67,7 @@ export async function runVisualDiffScan(ctx) {
     env = process.env,
     spawnWorker = null,
     hub = null,
+    captureMemory = null,
   } = ctx || {};
 
   const t0 = now();
@@ -203,12 +206,24 @@ export async function runVisualDiffScan(ctx) {
       };
       regressions.push(regression);
 
+      // Write baseline + current for dashboard viewer (fail band)
+      if (artifactDir) {
+        try { writeFileSync(resolve(artifactDir, `${urlHash}-baseline.png`), baselineBuf); } catch { /* best-effort */ }
+        try { writeFileSync(resolve(artifactDir, `${urlHash}-current.png`), currentBuf); } catch { /* best-effort */ }
+      }
+
       emit(hub, "tempering-visual-regression-detected", {
         url: entry.url,
         urlHash,
         diffPercent,
         band: "fail",
+        verdict: "regression",
         sliceRef,
+        artifacts: {
+          baseline: artifactDir ? resolve(artifactDir, `${urlHash}-baseline.png`) : null,
+          current: artifactDir ? resolve(artifactDir, `${urlHash}-current.png`) : null,
+          diff: artifactDir ? resolve(artifactDir, `${urlHash}-diff.png`) : null,
+        },
       });
       continue;
     }
@@ -227,13 +242,99 @@ export async function runVisualDiffScan(ctx) {
       continue;
     }
 
+    // Resolve quorum vs single mode
+    const quorumModels = analyzerConfig.models || ["claude-opus-4.7"];
+    const useQuorum = analyzerConfig.mode !== "single" && quorumModels.length >= 2;
+    const threshold = analyzerConfig.agreementThreshold || 2;
+
     let llmVerdict = null;
     let severity = null;
     let explanation = null;
+    let quorumData = null;
 
-    if (spawnWorker) {
+    const baselinePath = artifactDir ? resolve(artifactDir, `${urlHash}-baseline.png`) : null;
+    const currentPath = artifactDir ? resolve(artifactDir, `${urlHash}-current.png`) : null;
+    const diffPath = artifactDir ? resolve(artifactDir, `${urlHash}-diff.png`) : null;
+
+    // Write baseline + current artifacts for dashboard viewer
+    if (artifactDir) {
+      try { writeFileSync(resolve(artifactDir, `${urlHash}-baseline.png`), baselineBuf); } catch { /* best-effort */ }
+      try { writeFileSync(resolve(artifactDir, `${urlHash}-current.png`), currentBuf); } catch { /* best-effort */ }
+    }
+
+    if (spawnWorker && useQuorum) {
+      // ── Quorum dispatch ──
+      const prompt = buildAnalyzerPrompt(entry.url, sliceRef, diffPercent);
+      const baselineB64 = baselineBuf.toString("base64");
+      const currentB64 = currentBuf.toString("base64");
+      const diffB64 = diffResult.diffBuffer ? diffResult.diffBuffer.toString("base64") : null;
+      const images = [
+        { type: "baseline", data: baselineB64 },
+        { type: "current", data: currentB64 },
+      ];
+      if (diffB64) images.push({ type: "diff", data: diffB64 });
+
+      const legs = await Promise.allSettled(
+        quorumModels.map(model => runLegWithBudget({
+          model, prompt, images,
+          timeoutMs: analyzerConfig.analyzerTimeoutMs,
+          spawnWorker, estimateCost,
+          budget: { cap: analyzerConfig.maxCostUsd, used: () => cumulativeCostUsd },
+        }))
+      );
+
+      const votes = legs.map((leg, i) => {
+        const model = quorumModels[i];
+        if (leg.status === "rejected") {
+          return { model, ok: false, error: leg.reason?.message || String(leg.reason) };
+        }
+        const v = leg.value;
+        // Track cost
+        if (v.costUsd) {
+          cumulativeCostUsd += v.costUsd;
+          if (cumulativeCostUsd >= analyzerConfig.maxCostUsd) budgetExceeded = true;
+        }
+        return v;
+      });
+
+      const valid = votes.filter(v => v.ok);
+      const yes = valid.filter(v => v.regression).length;
+      const no = valid.length - yes;
+      const agreementMet = yes >= threshold || no >= threshold;
+
+      llmVerdict =
+        !agreementMet ? "inconclusive" :
+        yes >= threshold ? "regression" :
+        "acceptable";
+
+      // Severity = highest among winning majority
+      if (llmVerdict === "regression") {
+        const winners = valid.filter(v => v.regression);
+        severity = resolveHighestSeverity(winners);
+        explanation = winners.map(v => `${v.model}: ${v.explanation || "regression"}`).join("; ");
+      } else if (llmVerdict === "acceptable") {
+        const winners = valid.filter(v => !v.regression);
+        explanation = winners.map(v => `${v.model}: ${v.explanation || "acceptable"}`).join("; ");
+      } else {
+        explanation = `Insufficient agreement: ${yes} regression, ${no} acceptable out of ${valid.length} valid legs (threshold: ${threshold})`;
+      }
+
+      quorumData = {
+        models: quorumModels,
+        votes: votes.map(v => ({
+          model: v.model,
+          regression: v.regression ?? null,
+          severity: v.severity ?? null,
+          explanation: v.explanation ?? null,
+          ok: !!v.ok,
+        })),
+        agreement: `${Math.max(yes, no)}-of-${valid.length}`,
+        threshold,
+      };
+    } else if (spawnWorker) {
+      // ── Single-model path (backward compat) ──
       try {
-        const model = analyzerConfig.models?.[0] || "claude-opus-4.7";
+        const model = quorumModels[0] || "claude-opus-4.7";
         const prompt = buildAnalyzerPrompt(entry.url, sliceRef, diffPercent);
         const images = [
           { type: "baseline", data: baselineBuf.toString("base64") },
@@ -255,7 +356,6 @@ export async function runVisualDiffScan(ctx) {
           ),
         ]);
 
-        // Parse response
         if (workerResult && typeof workerResult === "object") {
           const parsed = typeof workerResult.text === "string"
             ? tryParseJson(workerResult.text)
@@ -270,7 +370,6 @@ export async function runVisualDiffScan(ctx) {
             explanation = "LLM response did not match expected schema";
           }
 
-          // Track cost
           if (workerResult.usage) {
             const tokens = (workerResult.usage.inputTokens || 0) + (workerResult.usage.outputTokens || 0);
             cumulativeCostUsd += estimateCost(tokens, model);
@@ -287,7 +386,6 @@ export async function runVisualDiffScan(ctx) {
         explanation = err.message || String(err);
       }
     } else {
-      // No spawnWorker — can't analyze, mark inconclusive
       const hasKey = env?.ANTHROPIC_API_KEY || env?.OPENAI_API_KEY || env?.XAI_API_KEY;
       if (!hasKey) {
         llmVerdict = "inconclusive";
@@ -306,26 +404,50 @@ export async function runVisualDiffScan(ctx) {
       llmVerdict,
       severity,
       explanation,
-      diffPath: artifactDir ? resolve(artifactDir, `${urlHash}-diff.png`) : null,
+      diffPath,
+      ...(quorumData ? { quorum: quorumData } : {}),
     };
     regressions.push(regression);
 
+    // Build event payload with artifacts + quorum
+    const eventPayload = {
+      url: entry.url,
+      urlHash,
+      diffPercent,
+      band: "investigate",
+      verdict: llmVerdict,
+      severity,
+      explanation,
+      sliceRef,
+      ...(quorumData ? { quorum: quorumData } : {}),
+      artifacts: { baseline: baselinePath, current: currentPath, diff: diffPath },
+    };
+
     if (llmVerdict === "regression") {
       failCount++;
-      emit(hub, "tempering-visual-regression-detected", {
-        url: entry.url,
-        urlHash,
-        diffPercent,
-        band: "investigate",
-        severity,
-        explanation,
-        sliceRef,
-      });
+      emit(hub, "tempering-visual-regression-detected", eventPayload);
     } else if (llmVerdict === "acceptable") {
       passCount++;
+      emit(hub, "tempering-visual-regression-detected", eventPayload);
     } else {
       // inconclusive — count as skipped (advisory, not pass or fail)
       skippedCount++;
+      emit(hub, "tempering-visual-regression-detected", eventPayload);
+    }
+
+    // L3 capture — text only, never images
+    if (captureMemory) {
+      try {
+        captureMemory(
+          `Visual quorum ${llmVerdict}: ${entry.url} (${(diffPercent * 100).toFixed(2)}% diff). ` +
+          (quorumData
+            ? quorumData.votes.filter(v => v.ok).map(v => `${v.model}:${v.regression ? "reg" : "ok"}`).join(", ")
+            : `single-model: ${llmVerdict}`),
+          llmVerdict === "inconclusive" ? "gotcha" : "decision",
+          `forge_tempering_scan/visual-diff/${llmVerdict}`,
+          projectDir,
+        );
+      } catch { /* best-effort */ }
     }
   }
 
@@ -391,11 +513,74 @@ function tryParseJson(text) {
 }
 
 function estimateCost(tokens, model) {
-  // Conservative per-token cost estimates (USD per token)
   const rates = {
     "claude-opus-4.7": 0.000075,
     "claude-sonnet-4.5": 0.000015,
     "gpt-4o": 0.00005,
+    "gpt-5.3-codex": 0.00005,
+    "grok-4.20": 0.00005,
   };
   return tokens * (rates[model] || 0.00005);
+}
+
+// ─── Quorum helpers ──────────────────────────────────────────────────
+
+const SEVERITY_ORDER = ["critical", "high", "medium", "low"];
+
+function resolveHighestSeverity(votes) {
+  let best = null;
+  let bestIdx = SEVERITY_ORDER.length;
+  for (const v of votes) {
+    if (!v.severity) continue;
+    const idx = SEVERITY_ORDER.indexOf(v.severity);
+    if (idx >= 0 && idx < bestIdx) {
+      bestIdx = idx;
+      best = v.severity;
+    }
+  }
+  return best;
+}
+
+async function runLegWithBudget({ model, prompt, images, timeoutMs, spawnWorker, estimateCost: estCost, budget }) {
+  // Skip if budget already exhausted
+  if (budget.used() >= budget.cap) {
+    return { model, ok: false, error: "budget-exceeded" };
+  }
+
+  try {
+    const workerResult = await Promise.race([
+      spawnWorker({ model, prompt, images, responseFormat: "json" }),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("analyzer-timeout")), timeoutMs),
+      ),
+    ]);
+
+    if (!workerResult || typeof workerResult !== "object") {
+      return { model, ok: false, error: "empty worker response" };
+    }
+
+    const parsed = typeof workerResult.text === "string"
+      ? tryParseJson(workerResult.text)
+      : workerResult;
+
+    let costUsd = 0;
+    if (workerResult.usage) {
+      const tokens = (workerResult.usage.inputTokens || 0) + (workerResult.usage.outputTokens || 0);
+      costUsd = estCost(tokens, model);
+    }
+
+    if (parsed && typeof parsed.regression === "boolean") {
+      return {
+        model,
+        ok: true,
+        regression: parsed.regression,
+        severity: parsed.severity || null,
+        explanation: parsed.explanation || null,
+        costUsd,
+      };
+    }
+    return { model, ok: false, error: "malformed-response", costUsd };
+  } catch (err) {
+    return { model, ok: false, error: err.message || String(err) };
+  }
 }

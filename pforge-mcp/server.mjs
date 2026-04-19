@@ -4306,6 +4306,54 @@ export function createExpressApp() {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
+  // REST API: GET /api/tempering/artifact — serve visual-diff PNG artifacts (TEMPER-04 Slice 04.2)
+  app.get("/api/tempering/artifact", (req, res) => {
+    try {
+      const reqPath = req.query.path;
+      if (!reqPath || typeof reqPath !== "string") {
+        return res.status(400).json({ error: "path query parameter is required" });
+      }
+      const resolved = resolve(reqPath);
+      const temperingRoot = resolve(PROJECT_DIR, ".forge", "tempering");
+      // Path-traversal safety: must be under .forge/tempering/
+      if (!resolved.startsWith(temperingRoot)) {
+        return res.status(403).json({ error: "Access denied: path must be under .forge/tempering/" });
+      }
+      if (!existsSync(resolved)) {
+        return res.status(404).json({ error: "Artifact not found" });
+      }
+      res.type("image/png").sendFile(resolved);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // REST API: POST /api/tempering/bug-stub — placeholder for TEMPER-06 bridge (TEMPER-04 Slice 04.2)
+  app.post("/api/tempering/bug-stub", (req, res) => {
+    try {
+      const { urlHash, url, verdict, explanation } = req.body || {};
+      if (!urlHash || typeof urlHash !== "string") {
+        return res.status(400).json({ error: "urlHash is required" });
+      }
+      const record = {
+        id: `bug-${Date.now()}`,
+        urlHash,
+        url: url || null,
+        verdict: verdict || null,
+        explanation: explanation || null,
+        createdAt: new Date().toISOString(),
+      };
+      if (activeHub) {
+        try {
+          activeHub.broadcast({
+            type: "tempering-bug-opened",
+            data: record,
+            timestamp: record.createdAt,
+          });
+        } catch { /* best-effort */ }
+      }
+      res.status(201).json(record);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
   // REST API: POST /api/tool/:name — invoke forge tool
   // MCP-only tools route through internal handler; CLI tools proxy through pforge.ps1
   const MCP_ONLY_TOOLS = new Set([

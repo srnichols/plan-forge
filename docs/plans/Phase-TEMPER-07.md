@@ -1,14 +1,14 @@
 ---
 crucibleId: c9f3a582-1e74-4d26-b831-55bc4f8a2901
 source: self-hosted
-status: draft
+status: complete
 phase: TEMPER-07
 arc: TEMPER
 ---
 
 # Phase TEMPER-07: Agent routing — wire scanner verdicts into the agent/skill stack
 
-> **Status**: 📝 DRAFT — post-FORGE-SHOP-02 phase
+> **Status**: ✅ COMPLETE — Slice 07.1 shipped (53a20ae, pushed to master)
 > **Estimated Effort**: 1 slice (single-ship; no UI)
 > **Risk Level**: Low (additive routing layer; no scanner / agent / skill
 > internals change)

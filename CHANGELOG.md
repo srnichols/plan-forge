@@ -11,6 +11,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 - Phase FORGE-SHOP-02 drafted ([docs/plans/Phase-FORGE-SHOP-02.md](docs/plans/Phase-FORGE-SHOP-02.md)) — unified review queue primitive. New L2 family `.forge/review-queue/<itemId>.json`. 3 new MCP tools (`forge_review_add`, `forge_review_list`, `forge_review_resolve`) → 55 total. 5 producer hooks (Crucible stalls, Tempering quorum-inconclusive, visual baselines, bug classifier, fix-plan approval) wire into the queue idempotently. New Review dashboard tab. Home-tab `activeRuns` quadrant surfaces `openReviews` sub-count.
 
+### Planned — TEMPER-07 agent routing (v2.50.x)
+
+- Phase TEMPER-07 drafted ([docs/plans/Phase-TEMPER-07.md](docs/plans/Phase-TEMPER-07.md)) — deterministic `(bug.type, bug.severity) → agent|skill` router. New MCP tool `forge_delegate_to_agent` invokes agent personas in read-only analyst mode; analyst findings persist to `.forge/tempering/findings/<bugId>.json`. Critical/major bugs auto-surface as `fix-plan-approval` review items (config-guarded OFF by default). Wires the 13 agent personas and 12 skills into the tempering feedback loop for the first time.
+
+### Planned — FORGE-SHOP-07 Brain facade (v2.52.x, ships before ask-bus)
+
+- Phase FORGE-SHOP-07 drafted ([docs/plans/Phase-FORGE-SHOP-07.md](docs/plans/Phase-FORGE-SHOP-07.md)) — `pforge-mcp/brain.mjs` facade with `recall/remember/forget` routing over L1 (session), L2 (durable files), L3 (OpenBrain semantic). Dumb router with tier-selection rules — no caching, no intelligence. Strategic adoption in 4 call-sites (home-snapshot, review counts, liveguard state, perf-budget history). Existing direct readers remain — facade wraps, does not replace. Hard dependency for FORGE-SHOP-06.
+
+### Planned — FORGE-SHOP-06 Ask-bus (v2.53.x, final unification)
+
+- Phase FORGE-SHOP-06 drafted ([docs/plans/Phase-FORGE-SHOP-06.md](docs/plans/Phase-FORGE-SHOP-06.md)) — `hub.ask()` + `onAsk()` request/reply RPC on top of the existing WebSocket hub. Three initial responders: `brain.gate-check`, `brain.correlation-thread`, `tempering.delegate-sync`. Executor gate-check wire-in between slices (config-guarded, fail-open on timeout). No new broker — extends existing hub.
+
 ### Shipped — FORGE-SHOP-01 Home tab (v2.48.0 target)
 
 - `forge_home_snapshot` MCP tool + `readHomeSnapshot` helper — aggregates the 4 existing L2 readers (`readCrucibleState`, `readLiveguardState`, `readTemperingState`, `findLatestRun`) into a single shop-floor payload. Budget: ≤250ms on 1 000 L2 records.

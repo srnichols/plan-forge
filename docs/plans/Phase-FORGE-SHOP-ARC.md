@@ -63,9 +63,19 @@ Five unification gaps, from the post-TEMPER system audit:
 | [FORGE-SHOP-03](Phase-FORGE-SHOP-03.md) | Notification layer — webhook core + Slack/Teams/Email/PagerDuty extension stubs | 2 | v2.50.x |
 | [FORGE-SHOP-04](Phase-FORGE-SHOP-04.md) | Global search — `forge_search` MCP + dashboard header bar | 1 | v2.51.x |
 | [FORGE-SHOP-05](Phase-FORGE-SHOP-05.md) | Unified timeline — `forge_timeline` MCP + Timeline tab | 1–2 | v2.52.x |
+| [FORGE-SHOP-07](Phase-FORGE-SHOP-07.md) | Brain facade — `brain.recall/remember/forget` over L1/L2/L3 | 2 | v2.52.x |
+| [FORGE-SHOP-06](Phase-FORGE-SHOP-06.md) | Ask-bus — `hub.ask/onAsk` RPC + executor gate-check | 2 | v2.53.x |
 
 Each phase is **independently shippable**. Dashboards, CLIs, and MCP
 tools keep working as each lands.
+
+> **Ordering note:** FORGE-SHOP-07 (Brain facade) ships **before**
+> FORGE-SHOP-06 (Ask-bus). The gate-check responder in 06 is
+> specified to call `brain.recall()` only — never raw L2 readers —
+> so 07 is a hard dependency of 06. Also see
+> [Phase-TEMPER-07.md](Phase-TEMPER-07.md) — agent routing ships
+> between FORGE-SHOP-02 and FORGE-SHOP-03; it has no dependency on
+> the ask-bus and is independently shippable.
 
 ## Cross-cutting contracts
 

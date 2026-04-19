@@ -988,6 +988,90 @@ export function detectWorkers(_projectDir) {
   return results;
 }
 
+// ─── Quorum Model Availability Probing (H.3) ─────────────────────────
+
+/**
+ * Map a model name to the CLI binary it requires when not API-routed.
+ * Mirrors the routing in spawnWorker(): claude-* → claude, codex → codex,
+ * everything else → gh (gh-copilot).
+ * @param {string} model
+ * @returns {string}
+ */
+export function resolveRequiredCli(model) {
+  if (/^claude-/.test(model)) return "claude";
+  if (/^codex-/.test(model)) return "codex";
+  return "gh-copilot";
+}
+
+/**
+ * Probe whether a single quorum model is available on this machine.
+ *
+ * Routing mirrors spawnWorker():
+ *   - API-routed models (grok-*, gpt-*, chatgpt-*) → detectApiProvider
+ *   - CLI-routed models (claude-*, codex-*, default) → detectWorkers cache
+ *
+ * @param {string} model
+ * @returns {{ model: string, available: boolean, via: "api"|"cli", provider?: string, worker?: string, reason?: string, install?: string }}
+ */
+export function probeQuorumModelAvailability(model) {
+  // Path 1: API-routed models — reuse detectApiProvider (checks env + secrets.json)
+  const apiProvider = detectApiProvider(model);
+  if (apiProvider) {
+    return { model, available: true, via: "api", provider: apiProvider.name };
+  }
+  // Pattern matched an API provider but env key missing → unavailable with reason
+  for (const [name, provider] of Object.entries(API_PROVIDERS)) {
+    if (provider.pattern.test(model)) {
+      return {
+        model, available: false, via: "api", provider: name,
+        reason: `${provider.envKey} not set`,
+        install: `Set ${provider.envKey} in env or .forge/secrets.json`,
+      };
+    }
+  }
+
+  // Path 2: CLI-routed models — reuse detectWorkers() (already cached)
+  const requiredCli = resolveRequiredCli(model);
+  const workers = detectWorkers();
+  const worker = workers.find((w) => w.name === requiredCli && w.available);
+  if (worker) return { model, available: true, via: "cli", worker: worker.name };
+  const hint = suggestInstall(requiredCli);
+  return {
+    model, available: false, via: "cli",
+    reason: `CLI '${requiredCli}' not on PATH`,
+    install: hint.command || hint.docs || null,
+  };
+}
+
+/**
+ * Filter a quorum config's model list to only available models.
+ * Dedupes, probes each unique model once, and returns available + dropped lists.
+ *
+ * @param {{ models: string[] }} config
+ * @param {{ probe?: (model: string) => object }} [options] - Inject probe for testing
+ * @returns {{ available: string[], dropped: { model: string, reason: string, install?: string }[] }}
+ */
+export function filterQuorumModels(config, { probe = probeQuorumModelAvailability } = {}) {
+  const seen = new Set();
+  const available = [];
+  const dropped = [];
+  for (const model of config.models) {
+    if (seen.has(model)) continue;
+    seen.add(model);
+    const result = probe(model);
+    if (result.available) {
+      available.push(model);
+    } else {
+      dropped.push(result);
+      console.error(
+        `[quorum] model ${model} unavailable: ${result.reason} — dropping from quorum` +
+        (result.install ? ` (install: ${result.install})` : ""),
+      );
+    }
+  }
+  return { available, dropped };
+}
+
 /**
  * Probe runtimes declared in worker-capabilities.json. Used by smith's
  * Runtime & Worker Readiness section — does NOT gate worker selection.
@@ -1906,6 +1990,48 @@ export async function runPlan(planPath, options = {}) {
     }
     if (quorumThreshold !== null && typeof quorumThreshold === "number") {
       quorumConfig.threshold = quorumThreshold;
+    }
+
+    // H.3: Probe model availability — drop unavailable models early with a single warning
+    const { available: availableModels, dropped: droppedModels } = filterQuorumModels(quorumConfig);
+
+    if (availableModels.length === 0) {
+      const err = new Error(
+        `[quorum] no available models. Dropped: ${droppedModels.map((d) => `${d.model} (${d.reason})`).join(", ")}. ` +
+        `Install hints: ${droppedModels.map((d) => d.install).filter(Boolean).join(" | ")}`,
+      );
+      err.exitCode = 2;
+      throw err;
+    }
+
+    if (quorumConfig.strictAvailability && droppedModels.length > 0) {
+      const err = new Error(
+        `[quorum] strictAvailability=true and ${droppedModels.length} model(s) unavailable: ` +
+        droppedModels.map((d) => `${d.model} (${d.reason})`).join(", "),
+      );
+      err.exitCode = 2;
+      throw err;
+    }
+
+    if (availableModels.length === 1) {
+      console.error(
+        `[quorum] only 1 of ${quorumConfig.models.length} models available — degrading to single-model ` +
+        `(no multi-perspective synthesis benefit); set quorum.strictAvailability=true to fail instead`,
+      );
+    }
+
+    quorumConfig.models = availableModels;
+    quorumConfig.droppedModels = droppedModels;
+
+    // Probe reviewerModel separately — warn but do not block (existing fallback handles it)
+    if (quorumConfig.reviewerModel) {
+      const reviewerResult = probeQuorumModelAvailability(quorumConfig.reviewerModel);
+      if (!reviewerResult.available) {
+        console.error(
+          `[quorum] reviewer model ${quorumConfig.reviewerModel} unavailable: ${reviewerResult.reason} — ` +
+          `existing reviewer fallback will be used`,
+        );
+      }
     }
   }
 
@@ -6279,6 +6405,7 @@ export function loadQuorumConfig(cwd, presetOverride = null) {
     models: ["claude-opus-4.6", "gpt-5.3-codex", "grok-4.20-0309-reasoning"],
     reviewerModel: "claude-opus-4.6",
     dryRunTimeout: 300_000, // 5 min per dry-run leg
+    strictAvailability: false, // H.3: true = fast-fail if any model unavailable
   };
 
   // Adaptive threshold: learn from quorum history which slices actually need quorum
@@ -7951,7 +8078,7 @@ if (args.includes("--test")) {
     process.exit(result.status === "failed" ? 1 : 0);
   } catch (err) {
     console.error(`Orchestrator error: ${err.message}`);
-    process.exit(1);
+    process.exit(typeof err.exitCode === "number" ? err.exitCode : 1);
   }
 } else if (args.includes("--analyze")) {
   const target = getArg("--analyze");

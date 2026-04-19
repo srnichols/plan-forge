@@ -959,6 +959,19 @@ describe("loadQuorumConfig", () => {
     expect(config.models).toEqual(["custom-model"]);
     expect(config.preset).toBe("speed");
   });
+
+  it("returns strictAvailability false by default", () => {
+    const config = loadQuorumConfig(tempDir);
+    expect(config.strictAvailability).toBe(false);
+  });
+
+  it("merges strictAvailability true from .forge.json", () => {
+    writeFileSync(resolve(tempDir, ".forge.json"), JSON.stringify({
+      quorum: { strictAvailability: true }
+    }));
+    const config = loadQuorumConfig(tempDir);
+    expect(config.strictAvailability).toBe(true);
+  });
 });
 
 // ─── loadOpenClawConfig ─────────────────────────────────────────────────

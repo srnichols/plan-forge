@@ -1373,9 +1373,9 @@ describe("Watcher: readSliceArtifacts", () => {
     writeFileSync(resolve(tempDir, "summary.json"), "{}"); // should be ignored
     const arts = readSliceArtifacts(tempDir);
     expect(arts.length).toBe(3);
-    expect(arts[0].sliceNumber).toBe(1);
-    expect(arts[1].sliceNumber).toBe(2);
-    expect(arts[2].sliceNumber).toBe(3);
+    expect(arts[0].sliceNumber).toBe("1");
+    expect(arts[1].sliceNumber).toBe("2");
+    expect(arts[2].sliceNumber).toBe("3");
     expect(arts[1].status).toBe("failed");
   });
 
@@ -1384,8 +1384,7 @@ describe("Watcher: readSliceArtifacts", () => {
     writeFileSync(resolve(tempDir, "slice-2.json"), JSON.stringify({ status: "passed" }));
     const arts = readSliceArtifacts(tempDir);
     expect(arts.length).toBe(1);
-    expect(arts[0].sliceNumber).toBe(2);
-  });
+    expect(arts[0].sliceNumber).toBe("2");  });
 });
 
 describe("Watcher: buildWatchSnapshot", () => {

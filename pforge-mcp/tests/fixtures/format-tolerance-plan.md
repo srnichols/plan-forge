@@ -31,3 +31,15 @@
 ### Slice 4 - Dash Title [needs: Slice 1, Slice 2] [parallel-safe]
 
 1. Task with dash separator
+
+### Slice 5A: Alpha variant A [depends: 4]
+
+1. Task in alpha variant A
+
+### Slice 5B: Alpha variant B [depends: 5a]
+
+1. Task in alpha variant B
+
+### Slice 6: After alphas [depends: 5B]
+
+1. Task after alpha variants

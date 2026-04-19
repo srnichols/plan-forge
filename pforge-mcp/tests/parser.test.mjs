@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parsePlan, SUPPORTED_AGENTS } from "../orchestrator.mjs";
+import { parsePlan, SUPPORTED_AGENTS, compareSliceIds, normalizeSliceId } from "../orchestrator.mjs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -160,6 +160,71 @@ describe("parsePlan format tolerance", () => {
   it("parses [parallel-safe] fuzzy parallel tag", () => {
     const result = parsePlan(tolerancePlan);
     expect(result.slices[3].parallel).toBe(true);
+  });
+});
+
+describe("alphanumeric slice IDs", () => {
+  const tolerancePlan = fixture("format-tolerance-plan.md");
+
+  it("parses ### Slice 5A: header with alpha suffix", () => {
+    const result = parsePlan(tolerancePlan);
+    const s5a = result.slices.find((s) => s.number === "5A");
+    expect(s5a).toBeDefined();
+    expect(s5a.title).toBe("Alpha variant A");
+  });
+
+  it("parses mixed numeric + alpha plan", () => {
+    const result = parsePlan(tolerancePlan);
+    const ids = result.slices.map((s) => s.number);
+    expect(ids).toContain("1");
+    expect(ids).toContain("5A");
+    expect(ids).toContain("5B");
+    expect(ids).toContain("6");
+  });
+
+  it("compareSliceIds: bare numeric before suffixed", () => {
+    expect(compareSliceIds("2", "2A")).toBeLessThan(0);
+  });
+
+  it("compareSliceIds: lexicographic suffix order", () => {
+    expect(compareSliceIds("2A", "2B")).toBeLessThan(0);
+  });
+
+  it("compareSliceIds: suffixed before next integer", () => {
+    expect(compareSliceIds("2B", "3")).toBeLessThan(0);
+  });
+
+  it("normalizeSliceId: case-insensitive dependency resolves", () => {
+    expect(normalizeSliceId("2a")).toBe("2A");
+    expect(normalizeSliceId("Slice 2b")).toBe("2B");
+    expect(normalizeSliceId(" 3 ")).toBe("3");
+  });
+
+  it("dependency [depends: 5a] resolves to node 5A in DAG", () => {
+    const result = parsePlan(tolerancePlan);
+    const s5b = result.slices.find((s) => s.number === "5B");
+    expect(s5b.depends).toContain("5A");
+    // Verify edge exists in DAG
+    const node5A = result.dag.nodes.get("5A");
+    expect(node5A.children).toContain("5B");
+  });
+
+  it("DAG order preserves correct alpha ordering", () => {
+    const result = parsePlan(tolerancePlan);
+    const order = result.dag.order;
+    const i5A = order.indexOf("5A");
+    const i5B = order.indexOf("5B");
+    const i6 = order.indexOf("6");
+    expect(i5A).toBeLessThan(i5B);
+    expect(i5B).toBeLessThan(i6);
+  });
+
+  it("existing numeric/dotted fixture still passes (regression)", () => {
+    const result = parsePlan(fixture("sample-plan.md"));
+    expect(result.slices).toHaveLength(3);
+    expect(result.slices[0].number).toBe("1");
+    expect(result.dag.order).toBeInstanceOf(Array);
+    expect(result.dag.order).toHaveLength(3);
   });
 });
 

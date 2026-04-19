@@ -234,8 +234,9 @@ function parseSlices(lines) {
     //   ### Slice N: Title
     //   ### slice N — Title
     //   ### SLICE N.N - Title
+    //   ### Slice 2A: Title (optional single trailing alpha)
     const sliceMatch = line.match(
-      /^###\s+slice\s+([\d.]+)\s*[:\u2014\u2013—–-]\s*(.+?)(?:\s*\[.+?\])*\s*$/ui
+      /^###\s+slice\s+([\d.]+[A-Za-z]?)\s*[:\u2014\u2013—–-]\s*(.+?)(?:\s*\[.+?\])*\s*$/ui
     );
     if (sliceMatch) {
       // Save previous slice
@@ -265,7 +266,7 @@ function parseSlices(lines) {
       if (dependsMatch) {
         current.depends = dependsMatch[1]
           .split(",")
-          .map((d) => d.trim().replace(/^slice\s+/i, ""));
+          .map((d) => normalizeSliceId(d));
       }
 
       // Fuzzy parallel: [P], [parallel], [parallel-safe]
@@ -336,7 +337,7 @@ function parseSlices(lines) {
       const rawDeps = dependsBodyMatch[1].replace(/\s*\([^)]*\)\s*$/, "").trim();
       const bodyDeps = rawDeps
         .split(/\s*,\s*/)
-        .map((d) => d.replace(/^slice\s+/i, "").trim())
+        .map((d) => normalizeSliceId(d))
         .filter((d) => d.length > 0);
       // Merge with header-tag deps, de-dup
       for (const d of bodyDeps) {
@@ -365,6 +366,35 @@ function parseSlices(lines) {
   if (current) slices.push(current);
 
   return slices;
+}
+
+/**
+ * Normalize a slice ID: strip "Slice " prefix, trim, uppercase trailing alpha.
+ * e.g. "Slice 2a" → "2A", " 3 " → "3", "2B" → "2B"
+ */
+export function normalizeSliceId(raw) {
+  const m = String(raw).trim().replace(/^slice\s+/i, "").match(/^([\d.]+)([A-Za-z]?)$/);
+  return m ? m[1] + m[2].toUpperCase() : String(raw).trim();
+}
+
+/**
+ * Compare two slice IDs for sorting. Numeric part first, then optional alpha suffix.
+ * Empty suffix sorts before any letter: 2 < 2A < 2B < 3.
+ */
+export function compareSliceIds(a, b) {
+  const re = /^([\d.]+)([A-Za-z]?)$/;
+  const ma = String(a).match(re);
+  const mb = String(b).match(re);
+  if (!ma || !mb) return String(a).localeCompare(String(b));
+  const na = parseFloat(ma[1]);
+  const nb = parseFloat(mb[1]);
+  if (na !== nb) return na - nb;
+  const sa = ma[2].toUpperCase();
+  const sb = mb[2].toUpperCase();
+  if (sa === sb) return 0;
+  if (sa === "") return -1;
+  if (sb === "") return 1;
+  return sa.localeCompare(sb);
 }
 
 /**
@@ -425,13 +455,23 @@ function topologicalSort(nodes) {
     if (node.inDegree === 0) queue.push(id);
   }
 
+  // Deterministic tiebreak: sort ready queue by slice ID
+  queue.sort(compareSliceIds);
+
   while (queue.length > 0) {
     const id = queue.shift();
     order.push(id);
     const node = nodes.get(id);
+    const newlyReady = [];
     for (const child of node.children) {
       inDegree.set(child, inDegree.get(child) - 1);
-      if (inDegree.get(child) === 0) queue.push(child);
+      if (inDegree.get(child) === 0) newlyReady.push(child);
+    }
+    // Insert newly ready nodes in sorted order
+    if (newlyReady.length > 0) {
+      newlyReady.sort(compareSliceIds);
+      queue.push(...newlyReady);
+      queue.sort(compareSliceIds);
     }
   }
 
@@ -4525,14 +4565,14 @@ export function readSliceArtifacts(runDir) {
   let entries;
   try { entries = readdirSync(runDir); } catch { return artifacts; }
   for (const name of entries) {
-    const m = name.match(/^slice-(\d+)\.json$/);
+    const m = name.match(/^slice-([\d.]+[A-Za-z]?)\.json$/i);
     if (!m) continue;
     try {
       const data = JSON.parse(readFileSync(resolve(runDir, name), "utf-8"));
-      artifacts.push({ sliceNumber: parseInt(m[1], 10), ...data });
+      artifacts.push({ sliceNumber: m[1], ...data });
     } catch { /* skip malformed */ }
   }
-  return artifacts.sort((a, b) => a.sliceNumber - b.sliceNumber);
+  return artifacts.sort((a, b) => compareSliceIds(a.sliceNumber, b.sliceNumber));
 }
 
 /**

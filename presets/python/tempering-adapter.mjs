@@ -50,4 +50,25 @@ export const temperingAdapter = {
       return result;
     },
   },
+  mutation: {
+    supported: true,
+    cmd: ["mutmut", "run", "--runner", "pytest"],
+    parseOutput(stdout, stderr, exitCode) {
+      const result = { mutationScore: null, killed: 0, survived: 0, timeout: 0, noCoverage: 0, layers: null };
+      const combined = (stdout || "") + "\n" + (stderr || "");
+      // mutmut summary: "X killed, Y survived, Z suspicious, W skipped, T timed out"
+      const killed = combined.match(/(\d+)\s+killed/i);
+      const survived = combined.match(/(\d+)\s+survived/i);
+      const timedOut = combined.match(/(\d+)\s+timed?\s*out/i);
+      const noCov = combined.match(/(\d+)\s+(?:suspicious|no\s*coverage)/i);
+      if (killed) result.killed = parseInt(killed[1], 10) || 0;
+      if (survived) result.survived = parseInt(survived[1], 10) || 0;
+      if (timedOut) result.timeout = parseInt(timedOut[1], 10) || 0;
+      if (noCov) result.noCoverage = parseInt(noCov[1], 10) || 0;
+      const total = result.killed + result.survived + result.timeout + result.noCoverage;
+      result.mutationScore = total > 0 ? (result.killed / total) * 100 : null;
+      if (result.mutationScore == null && exitCode === 0) result.mutationScore = 100;
+      return result;
+    },
+  },
 };

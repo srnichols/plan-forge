@@ -445,7 +445,7 @@ describe("runTemperingRun", () => {
     expect(existsSync(r.runRecordPath)).toBe(true);
     const rec = JSON.parse(readFileSync(r.runRecordPath, "utf-8"));
     expect(rec.phase).toBe("TEMPER-05");
-    expect(rec.slice).toBe("05.1");
+    expect(rec.slice).toBe("05.2");
     expect(rec.scanners[0].scanner).toBe("unit");
     // Slice 02.2 — integration runs alongside unit. With no integration
     // entry on fakeAdapter it short-circuits as skipped:no-adapter,
@@ -467,6 +467,8 @@ describe("runTemperingRun", () => {
     expect(rec.scanners[5].scanner).toBe("flakiness");
     expect(rec.scanners[6].scanner).toBe("performance-budget");
     expect(rec.scanners[7].scanner).toBe("load-stress");
+    // Slice 05.2 — mutation scanner fires ninth.
+    expect(rec.scanners[8].scanner).toBe("mutation");
   });
 
   it("emits start / scanner-started / scanner-completed / completed events in order", async () => {
@@ -474,11 +476,13 @@ describe("runTemperingRun", () => {
     const spawn = makeFakeSpawn({ stdout: "", exitCode: 0 });
     await runTemperingRun({ projectDir, hub, spawn, adapter: fakeAdapter });
     const types = hub.events.map((e) => e.type);
-    // Slice 05.1 — eight scanners fire in order (unit, integration,
+    // Slice 05.2 — nine scanners fire in order (unit, integration,
     // ui-playwright, contract, visual-diff, flakiness, perf-budget,
-    // load-stress), each bracketed by started/completed.
+    // load-stress, mutation), each bracketed by started/completed.
     expect(types).toEqual([
       "tempering-run-started",
+      "tempering-run-scanner-started",
+      "tempering-run-scanner-completed",
       "tempering-run-scanner-started",
       "tempering-run-scanner-completed",
       "tempering-run-scanner-started",

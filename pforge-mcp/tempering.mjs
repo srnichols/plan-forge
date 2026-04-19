@@ -66,6 +66,7 @@ export const TEMPERING_DEFAULT_CONFIG = Object.freeze({
     flakinessMaxMs: 60000,
     perfBudgetMaxMs: 120000,
     loadStressMaxMs: 300000,
+    mutationMaxMs: 600000,
   },
   scanners: {
     unit: true,
@@ -734,6 +735,28 @@ export function readTemperingState(targetPath) {
     }
   }
 
+  // TEMPER-05 Slice 05.2 — watcher state derivations for mutation,
+  // flakiness, and performance regression counts.
+  let mutationBelowMinimum = 0;
+  let flakyCount = 0;
+  let perfRegressionCount = 0;
+  if (latestRun && Array.isArray(latestRun.scanners)) {
+    const mutationFrame = latestRun.scanners.find((s) => s && s.scanner === "mutation");
+    if (mutationFrame && mutationFrame.verdict === "fail") {
+      mutationBelowMinimum = Array.isArray(mutationFrame.layers)
+        ? mutationFrame.layers.filter((l) => !l.pass).length
+        : 1;
+    }
+    const flakinessFrame = latestRun.scanners.find((s) => s && s.scanner === "flakiness");
+    if (flakinessFrame && flakinessFrame.fail > 0) {
+      flakyCount = flakinessFrame.fail;
+    }
+    const perfFrame = latestRun.scanners.find((s) => s && s.scanner === "performance-budget");
+    if (perfFrame && perfFrame.verdict === "fail") {
+      perfRegressionCount = perfFrame.fail || 1;
+    }
+  }
+
   return {
     initialized: true,
     totalScans,
@@ -755,6 +778,10 @@ export function readTemperingState(targetPath) {
     contractMismatch,
     // TEMPER-05 Slice 05.1 — per-scanner summary for dashboard.
     latestScanners,
+    // TEMPER-05 Slice 05.2 — mutation + scheduling watcher fields.
+    mutationBelowMinimum,
+    flakyCount,
+    perfRegressionCount,
   };
 }
 

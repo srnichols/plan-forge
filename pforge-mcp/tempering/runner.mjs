@@ -170,6 +170,7 @@ const SCANNER_BUDGET_KEYS = Object.freeze({
   flakiness: "flakinessMaxMs",
   "performance-budget": "perfBudgetMaxMs",
   "load-stress": "loadStressMaxMs",
+  mutation: "mutationMaxMs",
 });
 
 /**
@@ -342,6 +343,8 @@ export async function runTemperingRun(opts = {}) {
     flakinessScannerImpl = null,
     perfBudgetScannerImpl = null,
     loadStressScannerImpl = null,
+    // TEMPER-05 Slice 05.2 — Mutation scanner dependency injection.
+    mutationScannerImpl = null,
     env = process.env,
   } = opts;
 
@@ -835,8 +838,69 @@ export async function runTemperingRun(opts = {}) {
     durationMs: loadStressResult.durationMs || 0,
   });
 
+  // ── Mutation scanner (TEMPER-05 Slice 05.2) ──
+  // 9th scanner — drives mutation testing via stack adapter.
+  emit(hub, "tempering-run-scanner-started", { correlationId: corr, scanner: "mutation", stack });
+
+  let mutationResult;
+  try {
+    const priorBudgetExceeded = unitResult.verdict === "budget-exceeded"
+      || integrationResult.verdict === "budget-exceeded"
+      || uiResult.verdict === "budget-exceeded"
+      || contractResult.verdict === "budget-exceeded"
+      || visualDiffResult.verdict === "budget-exceeded"
+      || flakinessResult.verdict === "budget-exceeded"
+      || perfBudgetResult.verdict === "budget-exceeded"
+      || loadStressResult.verdict === "budget-exceeded";
+    if (priorBudgetExceeded) {
+      mutationResult = {
+        scanner: "mutation",
+        sliceRef,
+        startedAt: new Date(now()).toISOString(),
+        completedAt: new Date(now()).toISOString(),
+        skipped: true,
+        reason: "prior-budget-exceeded",
+        verdict: "skipped",
+        pass: 0, fail: 0,
+        durationMs: 0,
+      };
+    } else if (mutationScannerImpl) {
+      mutationResult = await mutationScannerImpl({
+        config, projectDir, runId, sliceRef, now, env, hub, captureMemory,
+      });
+    } else {
+      const { runMutationScan } = await import("./scanners/mutation.mjs");
+      mutationResult = await runMutationScan({
+        config, projectDir, runId, sliceRef, now, env, hub, captureMemory,
+      });
+    }
+  } catch (err) {
+    mutationResult = {
+      scanner: "mutation",
+      sliceRef,
+      startedAt: new Date(now()).toISOString(),
+      completedAt: new Date(now()).toISOString(),
+      skipped: true,
+      reason: `scanner-load-failed:${err.message || err}`,
+      verdict: "skipped",
+      pass: 0, fail: 0,
+      durationMs: 0,
+    };
+  }
+
+  emit(hub, "tempering-run-scanner-completed", {
+    correlationId: corr,
+    scanner: "mutation",
+    stack,
+    verdict: mutationResult.verdict,
+    pass: mutationResult.pass || 0,
+    fail: mutationResult.fail || 0,
+    skipped: mutationResult.skipped ? 1 : 0,
+    durationMs: mutationResult.durationMs || 0,
+  });
+
   // Overall verdict: worst of the scanner verdicts
-  const scanners = [unitResult, integrationResult, uiResult, contractResult, visualDiffResult, flakinessResult, perfBudgetResult, loadStressResult];
+  const scanners = [unitResult, integrationResult, uiResult, contractResult, visualDiffResult, flakinessResult, perfBudgetResult, loadStressResult, mutationResult];
   const overallVerdict = deriveOverallVerdict(scanners);
 
   const completedAt = new Date(now()).toISOString();
@@ -853,7 +917,7 @@ export async function runTemperingRun(opts = {}) {
     scanners,
     verdict: overallVerdict,
     phase: "TEMPER-05",
-    slice: "05.1",
+    slice: "05.2",
   };
 
   // Persist — best-effort

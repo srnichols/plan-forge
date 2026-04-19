@@ -43,6 +43,8 @@ const state = {
     flakyTests: [],
     perfRegressions: [],
     loadResults: [],
+    // TEMPER-05 Slice 05.2 — mutation scanner panel.
+    mutationResults: [],
   },
 };
 
@@ -248,6 +250,9 @@ function handleEvent(event) {
       break;
     case "tempering-baseline-promoted":
       addNotification(`Baseline promoted: ${(event.data || event).url || (event.data || event).urlHash}`, "success");
+      break;
+    case "tempering-mutation-below-minimum":
+      handleMutationBelowMinimum(event.data || event);
       break;
   }
 }
@@ -4639,4 +4644,33 @@ window.handleLoadCompleted = handleLoadCompleted;
 window.renderFlakinessPanel = renderFlakinessPanel;
 window.renderPerfBudgetPanel = renderPerfBudgetPanel;
 window.renderLoadStressPanel = renderLoadStressPanel;
+
+// ─── TEMPER-05 Slice 05.2: Mutation scanner panel ────────────────────
+
+function handleMutationBelowMinimum(data) {
+  if (!data) return;
+  state.tempering.mutationResults.push(data);
+  addNotification(`Mutation score below minimum: ${(data.overallScore || 0).toFixed(1)}% (min ${data.overallMinimum || 60}%)`, "error");
+  renderMutationPanel();
+}
+
+function renderMutationPanel() {
+  const body = document.getElementById("tempering-mutation-body");
+  if (!body) return;
+  const items = state.tempering.mutationResults;
+  if (items.length === 0) {
+    body.innerHTML = '<p class="text-gray-400 text-xs">No mutation results.</p>';
+    return;
+  }
+  const latest = items[items.length - 1];
+  const layers = Array.isArray(latest.layersBelowMinimum) ? latest.layersBelowMinimum : [];
+  let layerRows = "";
+  if (layers.length > 0) {
+    layerRows = `<table class="w-full text-xs mt-2"><thead><tr class="text-gray-400"><th class="text-left pb-1">Layer</th><th class="text-right pb-1">Score</th><th class="text-right pb-1">Minimum</th><th class="text-right pb-1">Verdict</th></tr></thead><tbody>${layers.map(l => `<tr class="border-t border-gray-700"><td class="py-1 text-white">${escHtml(l.layer || "—")}</td><td class="py-1 text-right ${l.pass ? "text-emerald-400" : "text-red-400"}">${(l.score || 0).toFixed(1)}%</td><td class="py-1 text-right text-gray-400">${l.minimum || 0}%</td><td class="py-1 text-right ${l.pass ? "text-emerald-400" : "text-red-400"}">${l.pass ? "✓" : "✗"}</td></tr>`).join("")}</tbody></table>`;
+  }
+  body.innerHTML = `<div class="text-xs"><p class="text-gray-300">Overall Score: <span class="${(latest.overallScore || 0) >= (latest.overallMinimum || 60) ? "text-emerald-400" : "text-red-400"}">${(latest.overallScore || 0).toFixed(1)}%</span> (min ${latest.overallMinimum || 60}%)</p>${layerRows}</div>`;
+}
+
+window.handleMutationBelowMinimum = handleMutationBelowMinimum;
+window.renderMutationPanel = renderMutationPanel;
 

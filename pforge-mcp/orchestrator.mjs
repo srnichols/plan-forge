@@ -4773,6 +4773,37 @@ export function detectWatchAnomalies(snapshot) {
     });
   }
 
+  // 16. (Phase TEMPER-05 Slice 05.2) Mutation score below minimum —
+  // the latest Tempering run's mutation scanner detected layers or
+  // overall mutation score below configured minima.
+  if (snapshot.tempering && snapshot.tempering.mutationBelowMinimum > 0) {
+    anomalies.push({
+      severity: snapshot.tempering.mutationBelowMinimum >= 3 ? "error" : "warn",
+      code: "tempering-mutation-below-minimum",
+      message: `${snapshot.tempering.mutationBelowMinimum} mutation layer(s) below minimum — run forge_tempering_run --full-mutation for details`,
+    });
+  }
+
+  // 17. (Phase TEMPER-05 Slice 05.2) Flaky tests detected — the latest
+  // Tempering run's flakiness scanner found unreliable tests.
+  if (snapshot.tempering && snapshot.tempering.flakyCount > 0) {
+    anomalies.push({
+      severity: "warn",
+      code: "tempering-flake-detected",
+      message: `${snapshot.tempering.flakyCount} flaky test(s) detected — quarantine or fix to stabilize the suite`,
+    });
+  }
+
+  // 18. (Phase TEMPER-05 Slice 05.2) Performance regression — the latest
+  // Tempering run's performance-budget scanner flagged regressions.
+  if (snapshot.tempering && snapshot.tempering.perfRegressionCount > 0) {
+    anomalies.push({
+      severity: snapshot.tempering.perfRegressionCount >= 3 ? "error" : "warn",
+      code: "tempering-perf-regression",
+      message: `${snapshot.tempering.perfRegressionCount} performance regression(s) detected — investigate perf-budget scanner report`,
+    });
+  }
+
   return anomalies;
 }
 
@@ -4946,6 +4977,33 @@ export function recommendFromAnomalies(anomalies, snapshot) {
           code,
           severity: anomaly.severity,
           action: `${snapshot.tempering?.contractMismatch ?? "One or more"} API contract mismatch(es) detected. Inspect .forge/tempering/artifacts/<runId>/contract/report.json for violation details, then fix API response shapes or update the spec.`,
+          command: "forge_tempering_run",
+        });
+        break;
+
+      case "tempering-mutation-below-minimum":
+        recs.push({
+          code,
+          severity: anomaly.severity,
+          action: `${snapshot.tempering?.mutationBelowMinimum ?? "One or more"} mutation layer(s) scored below the configured minimum. Run a full mutation scan to identify survived mutants, then add targeted test cases for the weakest layers.`,
+          command: "pforge tempering run --full-mutation",
+        });
+        break;
+
+      case "tempering-flake-detected":
+        recs.push({
+          code,
+          severity: anomaly.severity,
+          action: `${snapshot.tempering?.flakyCount ?? "One or more"} flaky test(s) detected. Quarantine unreliable tests or fix their root cause (race conditions, shared state, network dependencies) to stabilize the suite.`,
+          command: "pforge tempering quarantine",
+        });
+        break;
+
+      case "tempering-perf-regression":
+        recs.push({
+          code,
+          severity: anomaly.severity,
+          action: `${snapshot.tempering?.perfRegressionCount ?? "One or more"} performance regression(s) detected. Compare p95 latencies against baselines in .forge/tempering/perf-history.jsonl and investigate the endpoints with the largest delta.`,
           command: "forge_tempering_run",
         });
         break;

@@ -63,4 +63,41 @@ export const temperingAdapter = {
       return result;
     },
   },
+  mutation: {
+    supported: true,
+    cmd: ["mvn", "org.pitest:pitest-maven:mutationCoverage", "-DoutputFormats=JSON"],
+    parseOutput(stdout, stderr, exitCode) {
+      const result = { mutationScore: null, killed: 0, survived: 0, timeout: 0, noCoverage: 0, layers: null };
+      try {
+        const combined = (stdout || "") + "\n" + (stderr || "");
+        // PIT summary: ">> Generated N mutations Killed N (XX%)"
+        const pitSummary = combined.match(/Generated\s+(\d+)\s+mutations.*?Killed\s+(\d+)\s*\((\d+)%\)/i);
+        if (pitSummary) {
+          const total = parseInt(pitSummary[1], 10) || 0;
+          result.killed = parseInt(pitSummary[2], 10) || 0;
+          result.mutationScore = parseInt(pitSummary[3], 10) || 0;
+          result.survived = total - result.killed;
+          return result;
+        }
+        // Try JSON parse
+        const start = combined.indexOf("[");
+        if (start !== -1) {
+          const data = JSON.parse(combined.slice(start));
+          if (Array.isArray(data)) {
+            for (const m of data) {
+              if (m.status === "KILLED") result.killed++;
+              else if (m.status === "SURVIVED") result.survived++;
+              else if (m.status === "TIMED_OUT") result.timeout++;
+              else if (m.status === "NO_COVERAGE") result.noCoverage++;
+            }
+            const total = result.killed + result.survived + result.timeout + result.noCoverage;
+            result.mutationScore = total > 0 ? (result.killed / total) * 100 : 0;
+            return result;
+          }
+        }
+      } catch { /* fall through */ }
+      if (exitCode === 0) result.mutationScore = 100;
+      return result;
+    },
+  },
 };

@@ -482,7 +482,7 @@ export const TOOL_METADATA = {
     },
   },
   forge_tempering_run: {
-    intent: ["tempering", "run", "execute", "unit-tests", "contract", "visual-diff"],
+    intent: ["tempering", "run", "execute", "unit-tests", "contract", "visual-diff", "mutation"],
     aliases: ["tempering-run", "run-tempering", "run-tests"],
     cost: "medium",
     maxConcurrent: 1,

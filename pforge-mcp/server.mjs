@@ -57,7 +57,7 @@ try {
   // .env loading is best-effort. Failure must never break server startup.
 }
 
-import { parsePlan, runPlan, detectWorkers, getCostReport, getHealthTrend, analyzeWithQuorum, generateImage, runAnalyze, readForgeJson, readForgeJsonl, appendForgeJsonl, emitToolTelemetry, regressionGuard, runPostSliceHook, resetPostSliceHookFired, runPreAgentHandoffHook, postOpenClawSnapshot, loadOpenClawConfig, loadQuorumConfig, runWatch, runWatchLive, readCrucibleState } from "./orchestrator.mjs";
+import { parsePlan, runPlan, detectWorkers, getCostReport, getHealthTrend, analyzeWithQuorum, generateImage, runAnalyze, readForgeJson, readForgeJsonl, appendForgeJsonl, emitToolTelemetry, regressionGuard, runPostSliceHook, resetPostSliceHookFired, runPreAgentHandoffHook, postOpenClawSnapshot, loadOpenClawConfig, loadQuorumConfig, runWatch, runWatchLive, readCrucibleState, readHomeSnapshot } from "./orchestrator.mjs";
 import {
   isOpenBrainConfigured,
   shapeWatcherAnomalyThought,
@@ -1161,6 +1161,18 @@ const TOOLS = [
         plan: { type: "string", description: "Plan file path for scope diff (optional). If omitted, diff is skipped." },
         threshold: { type: "number", description: "Drift alert threshold 0-100. Default: 70" },
         path: { type: "string", description: "Project directory (default: current)" },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "forge_home_snapshot",
+    description: "Read-only aggregated snapshot of the four shop-floor subsystems (Crucible, active runs, LiveGuard, Tempering) plus a trimmed activity feed. Use as a one-call health overview.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        targetPath: { type: "string", description: "Project directory (default: current)" },
+        activityTail: { type: "number", description: "Recent hub events to include (default: 25, clamped 1..200)" },
       },
       required: [],
     },
@@ -3811,6 +3823,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
   }
 
+  // ─── forge_home_snapshot — shop-floor health overview ───
+  if (name === "forge_home_snapshot") {
+    const t0 = Date.now();
+    const cwd = args.targetPath
+      ? findProjectRoot(resolve(args.targetPath))
+      : findProjectRoot(PROJECT_DIR);
+    const result = readHomeSnapshot(cwd, { activityTail: args.activityTail });
+    emitToolTelemetry(
+      "forge_home_snapshot", args, result, Date.now() - t0,
+      result.ok ? "OK" : "ERROR", cwd
+    );
+    return {
+      content: [{ type: "text", text: JSON.stringify(result) }],
+      isError: !result.ok,
+    };
+  }
+
   // ─── forge_quorum_analyze — assemble structured quorum prompt ───
   if (name === "forge_quorum_analyze") {
     const t0 = Date.now();
@@ -4766,6 +4795,8 @@ export function createExpressApp() {
     "forge_bug_register", "forge_bug_list", "forge_bug_update_status",
     // Phase TEMPER-06 Slice 06.3 — Closed-loop validation is MCP-native.
     "forge_bug_validate_fix",
+    // Phase FORGE-SHOP-01 Slice 01.1 — Home snapshot is MCP-native read-only.
+    "forge_home_snapshot",
   ]);
   app.post("/api/tool/:name", async (req, res) => {
     try {

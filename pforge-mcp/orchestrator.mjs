@@ -1434,6 +1434,7 @@ export function coalesceGateLines(gateText) {
       // and bulleted prose (e.g. "- Install dependencies"). These are documentation,
       // not shell commands, and would fail the allowlist check with a misleading error.
       if (/^(\d+\.|[-*+])\s+\S/.test(stripped)) continue;
+      if (looksLikeProse(stripped)) continue;
       const dblQuotes = (stripped.match(/"/g) || []).length;
       if (dblQuotes % 2 !== 0) {
         pending = stripped;
@@ -2983,6 +2984,17 @@ export function lintGateCommands(planFilePath, cwd = process.cwd()) {
       }
 
       // 3. Command not in allowlist
+      // Skip prose lines with a warning instead of an error
+      if (looksLikeProse(line)) {
+        warnings.push({
+          slice: slice.number,
+          command: line,
+          rule: "prose-detected",
+          severity: "warn",
+          message: `${loc}: Line looks like prose, not a command: '${line.slice(0, 60)}...' — will be skipped at runtime.`,
+        });
+        continue;
+      }
       // Skip leading env var assignments (VAR=val command ...) to find the real command
       const tokens = line.split(/\s+/);
       let cmdIdx = 0;
@@ -3079,6 +3091,53 @@ export function lintGateCommands(planFilePath, cwd = process.cwd()) {
 }
 
 /**
+ * Detect plan-prose lines that are not executable commands.
+ * Conservative — prefers under-matching to avoid false-positives on real commands.
+ * @param {string} line - A single gate line
+ * @returns {boolean} true if the line looks like documentation prose, not a command
+ */
+export function looksLikeProse(line) {
+  if (!line || typeof line !== "string") return false;
+  const trimmed = line.trim();
+  if (!trimmed) return false;
+
+  // 1. Numbered-list prose: "1. Server generates..." — decimal + period + space + letter
+  if (/^\d+\.\s+[a-zA-Z]/.test(trimmed)) return true;
+
+  // 2. Currency tokens: $10.00, $5 — "$" must be followed by a digit (NOT $PATH, $VAR)
+  if (/(?:^|[^A-Za-z_])\$\d/.test(trimmed) || /\\\$\d/.test(trimmed)) return true;
+
+  // 3. Mermaid / diagram keywords at start-of-line
+  if (/^(sequenceDiagram|graph\s|flowchart\s|classDiagram|erDiagram|gantt|pie\s)/i.test(trimmed)) return true;
+
+  // 4. Markdown table row
+  if (/^\|\s/.test(trimmed)) return true;
+
+  // 5. Formula-like assignment with arithmetic op (distinguishes from env-var NODE_ENV=test)
+  if (/^[a-z_]\w*\s*=\s*.*[+\-*/x×]/.test(trimmed)) return true;
+
+  return false;
+}
+
+/**
+ * Check whether a line would pass the gate allowlist (prefix-based) without the prose guard.
+ * Used by regressionGuard to implement the precedence rule: allowlisted commands win over prose heuristic.
+ * @param {string} cmd - The command line to check
+ * @returns {boolean} true if the command matches an allowlist prefix
+ */
+function wouldPassAllowlist(cmd) {
+  if (!cmd || typeof cmd !== "string") return false;
+  const trimmed = cmd.trim();
+  const tokens = trimmed.split(/\s+/);
+  let cmdIdx = 0;
+  while (cmdIdx < tokens.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[cmdIdx])) {
+    cmdIdx++;
+  }
+  const cmdToken = (tokens[cmdIdx] || tokens[0] || "").toLowerCase();
+  return GATE_ALLOWED_PREFIXES.some((p) => cmdToken === p || cmdToken.endsWith(`/${p}`));
+}
+
+/**
  * Check if a command string is permitted in validation gates.
  * Uses the same GATE_ALLOWED_PREFIXES allowlist as runGate() and lintGateCommands().
  * Skips leading env-var assignments (e.g., "NODE_ENV=test npm test").
@@ -3099,6 +3158,9 @@ export function isGateCommandAllowed(cmd) {
     /\b:>\s*\/dev\/(sda|hda)/i,                                           // truncate block device
   ];
   if (BLOCKED_PATTERNS.some((p) => p.test(trimmed))) return false;
+
+  // Skip prose lines — not commands
+  if (looksLikeProse(trimmed)) return false;
 
   const tokens = trimmed.split(/\s+/);
   let cmdIdx = 0;
@@ -3208,6 +3270,21 @@ export async function regressionGuard(files, { plan, failFast = false, cwd = pro
   let passed = 0, failed = 0, blocked = 0, skipped = 0;
 
   for (const gate of gateItems) {
+    // Prose lines are skipped unless they would pass the allowlist (command wins over heuristic)
+    if (looksLikeProse(gate.cmd) && !wouldPassAllowlist(gate.cmd)) {
+      results.push({ ...gate, status: "skipped", reason: "liveguard-prose-skipped" });
+      skipped++;
+      try {
+        appendForgeJsonl("liveguard-events.jsonl", {
+          timestamp: new Date().toISOString(),
+          type: "liveguard-prose-skipped",
+          severity: "info",
+          sliceNumber: gate.sliceNumber,
+          command: gate.cmd,
+        }, cwd);
+      } catch { /* best-effort telemetry */ }
+      continue;
+    }
     if (!isGateCommandAllowed(gate.cmd)) {
       results.push({ ...gate, status: "blocked", reason: `'${gate.cmd.split(/\s+/)[0]}' not in gate allowlist` });
       blocked++;

@@ -149,7 +149,7 @@ grok-4.20 "not available" spam)**
 
 ## Slices
 
-### Slice H.1 — Teardown safety guard
+### Slice 1 — Teardown safety guard (H.1)
 
 **Files touched:**
 - `pforge-mcp/orchestrator.mjs` — `isDestructiveSliceTitle`,
@@ -161,14 +161,14 @@ grok-4.20 "not available" spam)**
 **Validation gate:**
 `cd pforge-mcp; node server.mjs --validate; npm test -- --run` — pass.
 
-### Slice H.2 — Alphanumeric slice IDs
+### Slice 2 — Alphanumeric slice IDs (H.2)
 
 **Files touched:**
 - `pforge-mcp/orchestrator.mjs` — regex + `compareSliceIds` (~20 LOC)
 - `pforge-mcp/tests/slice-parser.test.mjs` — new test cases for
   `2A`/`2B` ordering (~6 tests added)
 
-### Slice H.3 — Quorum worker probe
+### Slice 3 — Quorum worker probe (H.3)
 
 **Files touched:**
 - `pforge-mcp/orchestrator.mjs` — `probeWorkerAvailability`,
@@ -176,14 +176,14 @@ grok-4.20 "not available" spam)**
 - `pforge-mcp/tests/quorum-probe.test.mjs` — **new**, ~12 tests
   (mock `which`/`Get-Command`, assert drop/warn/fast-fail paths)
 
-### Slice H.4 — Quorum leg error capture
+### Slice 4 — Quorum leg error capture (H.4)
 
 **Files touched:**
 - `pforge-mcp/orchestrator.mjs` — leg result shape + reason detection
   (~40 LOC)
 - `pforge-mcp/tests/quorum-error.test.mjs` — **new**, ~8 tests
 
-### Slice H.5 — LiveGuard prose false-positive
+### Slice 5 — LiveGuard prose false-positive (H.5)
 
 **Files touched:**
 - `pforge-mcp/orchestrator.mjs` — `looksLikeProse()` detector (~50 LOC)

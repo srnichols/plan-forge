@@ -5,6 +5,39 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.36.1] — 2026-04-18
+
+### Fixed — validation gate allowlist hints
+
+When `runGate()` blocks a command that isn't in the allowlist, the error now
+includes actionable hints so plan authors can fix typos and unfilled template
+placeholders without guessing.
+
+- **`editDistance(a, b)`** — Levenshtein helper exported from `orchestrator.mjs`
+- **`isPlaceholderToken(token)`** — detects `{{cmd}}`, `<cmd>`, `$cmd`, and
+  literal leak-through words (`item`, `command`, `cmd`, `tool`, `runner`,
+  `your-tool`, `your_cmd`, `todo`)
+- **`suggestAllowedCommand(token)`** — returns the closest allowlist entry
+  within edit distance ≤ 2, or `null`
+- **`runGate()` error message** — now appends:
+  - `'<token>' looks like an unfilled template placeholder — edit your plan file…`
+    when the token matches `isPlaceholderToken()`
+  - `Did you mean '<suggestion>'?` when a close allowlist entry exists
+
+Motivation: the Rummag Phase-01 plan tripped slice 7 three runs in a row on a
+literal `item` typo (`item install …` where `pnpm` was meant). The block was
+correct but the error gave no hint this was a template placeholder. Now it
+does.
+
+### Tests
+
+- +11 new tests across 4 describe blocks in `tests/orchestrator.test.mjs`
+  (`editDistance`, `isPlaceholderToken`, `suggestAllowedCommand`,
+  `runGate allowlist error message`)
+- Total: 784/784 passing (up from 773)
+
+---
+
 ## [2.36.0] — 2026-04-18
 
 ### Memory Architecture Milestone — final rollup

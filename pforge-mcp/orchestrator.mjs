@@ -1293,6 +1293,67 @@ export function coalesceGateLines(gateText) {
 }
 
 /**
+ * Compute Levenshtein edit distance between two short strings.
+ * Used by runGate() to surface "did you mean X?" suggestions on allowlist misses.
+ * Small inputs only (command base tokens) — O(m*n) is fine.
+ *
+ * @param {string} a
+ * @param {string} b
+ * @returns {number}
+ */
+export function editDistance(a, b) {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+  const rows = a.length + 1;
+  const cols = b.length + 1;
+  let prev = new Array(cols);
+  let curr = new Array(cols);
+  for (let j = 0; j < cols; j++) prev[j] = j;
+  for (let i = 1; i < rows; i++) {
+    curr[0] = i;
+    for (let j = 1; j < cols; j++) {
+      const cost = a.charCodeAt(i - 1) === b.charCodeAt(j - 1) ? 0 : 1;
+      curr[j] = Math.min(curr[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost);
+    }
+    [prev, curr] = [curr, prev];
+  }
+  return prev[cols - 1];
+}
+
+/**
+ * Detect obvious template-placeholder tokens in gate commands
+ * (e.g. "{{cmd}}", "<CMD>", "$CMD", or literal words like "item"/"command"
+ * that typically leak in from plan templates that weren't filled in).
+ *
+ * @param {string} token
+ * @returns {boolean}
+ */
+export function isPlaceholderToken(token) {
+  if (!token) return false;
+  if (/^[{<$].+[}>]?$/.test(token)) return true;
+  return ["item", "command", "cmd", "tool", "runner", "your-tool", "your_cmd", "todo"].includes(token);
+}
+
+/**
+ * Suggest the closest allowlisted command to an unrecognized token.
+ * Returns null when no reasonable match exists (distance > 2).
+ *
+ * @param {string} token
+ * @returns {string|null}
+ */
+export function suggestAllowedCommand(token) {
+  if (!token) return null;
+  let best = null;
+  let bestDist = Infinity;
+  for (const cmd of GATE_ALLOWED_PREFIXES) {
+    const d = editDistance(token, cmd);
+    if (d < bestDist) { bestDist = d; best = cmd; }
+  }
+  return bestDist <= 2 ? best : null;
+}
+
+/**
  * Run a validation gate command directly (no AI worker needed).
  * Commands are validated against an allowlist of common build/test tools.
  *
@@ -1305,10 +1366,17 @@ export function runGate(command, cwd) {
   const cmdBase = command.trim().split(/\s+/)[0].toLowerCase();
   const isAllowed = GATE_ALLOWED_PREFIXES.some((p) => cmdBase === p || cmdBase.endsWith(`/${p}`));
   if (!isAllowed) {
+    const hints = [];
+    if (isPlaceholderToken(cmdBase)) {
+      hints.push(`'${cmdBase}' looks like an unfilled template placeholder — edit your plan file and replace it with a real build/test command.`);
+    }
+    const suggestion = suggestAllowedCommand(cmdBase);
+    if (suggestion) hints.push(`Did you mean '${suggestion}'?`);
+    const hintSuffix = hints.length ? ` ${hints.join(" ")}` : "";
     return {
       success: false,
       output: "",
-      error: `Validation gate blocked: '${cmdBase}' not in allowlist. Allowed: ${GATE_ALLOWED_PREFIXES.join(", ")}`,
+      error: `Validation gate blocked: '${cmdBase}' not in allowlist.${hintSuffix} Allowed: ${GATE_ALLOWED_PREFIXES.join(", ")}`,
     };
   }
 

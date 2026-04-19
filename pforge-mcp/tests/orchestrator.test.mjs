@@ -35,6 +35,10 @@ import {
   recommendFromAnomalies,
   appendWatchHistory,
   runWatchLive,
+  editDistance,
+  isPlaceholderToken,
+  suggestAllowedCommand,
+  runGate,
 } from "../orchestrator.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -611,6 +615,68 @@ describe("isGateCommandAllowed", () => {
     for (const prefix of expected) {
       expect(GATE_ALLOWED_PREFIXES).toContain(prefix);
     }
+  });
+});
+
+// ─── allowlist suggestion hints (v2.36.1) ─────────────────────────────
+
+describe("editDistance", () => {
+  it("returns 0 for identical strings", () => {
+    expect(editDistance("npm", "npm")).toBe(0);
+  });
+  it("returns length for empty input", () => {
+    expect(editDistance("", "npm")).toBe(3);
+    expect(editDistance("npm", "")).toBe(3);
+  });
+  it("computes single-edit distance", () => {
+    expect(editDistance("npm", "npn")).toBe(1);
+    expect(editDistance("pnpm", "npm")).toBe(1);
+  });
+});
+
+describe("isPlaceholderToken", () => {
+  it("detects angle/brace/dollar wrappers", () => {
+    expect(isPlaceholderToken("{{cmd}}")).toBe(true);
+    expect(isPlaceholderToken("<cmd>")).toBe(true);
+    expect(isPlaceholderToken("$cmd")).toBe(true);
+  });
+  it("detects literal placeholder words", () => {
+    expect(isPlaceholderToken("item")).toBe(true);
+    expect(isPlaceholderToken("command")).toBe(true);
+    expect(isPlaceholderToken("todo")).toBe(true);
+  });
+  it("returns false for real tools and empty", () => {
+    expect(isPlaceholderToken("npm")).toBe(false);
+    expect(isPlaceholderToken("")).toBe(false);
+  });
+});
+
+describe("suggestAllowedCommand", () => {
+  it("suggests close matches (distance <= 2)", () => {
+    expect(suggestAllowedCommand("npn")).toBe("npm");
+    expect(suggestAllowedCommand("pyton")).toBe("python");
+  });
+  it("returns null for far misses", () => {
+    expect(suggestAllowedCommand("itemquery")).toBe(null);
+    expect(suggestAllowedCommand("")).toBe(null);
+  });
+});
+
+describe("runGate allowlist error message", () => {
+  it("annotates placeholder tokens with a hint", () => {
+    const r = runGate("item install", tmpdir());
+    expect(r.success).toBe(false);
+    expect(r.error).toContain("'item'");
+    expect(r.error).toContain("template placeholder");
+  });
+  it("adds 'Did you mean' for close misses", () => {
+    const r = runGate("npn test", tmpdir());
+    expect(r.success).toBe(false);
+    expect(r.error).toContain("Did you mean 'npm'");
+  });
+  it("still lists the full allowlist", () => {
+    const r = runGate("nope-unknown", tmpdir());
+    expect(r.error).toContain("Allowed:");
   });
 });
 

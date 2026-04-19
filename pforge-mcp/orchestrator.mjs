@@ -1464,16 +1464,16 @@ export class SequentialScheduler {
         continue;
       }
 
-      this.eventBus.emit("slice-started", { sliceId: id, title: slice.title });
+      this.eventBus.emit("slice-started", { sliceId: id, title: slice.title, complexityScore: slice.complexityScore });
 
       try {
         const result = await executeFn(slice);
         results.push({ sliceId: id, ...result });
 
         if (result.status === "passed") {
-          this.eventBus.emit("slice-completed", { sliceId: id, ...result });
+          this.eventBus.emit("slice-completed", { sliceId: id, complexityScore: slice.complexityScore, ...result });
         } else {
-          this.eventBus.emit("slice-failed", { sliceId: id, ...result });
+          this.eventBus.emit("slice-failed", { sliceId: id, complexityScore: slice.complexityScore, ...result });
           break; // Sequential: stop on first failure
         }
       } catch (err) {
@@ -1556,14 +1556,14 @@ export class ParallelScheduler {
         const batch = parallelReady.slice(0, this.maxParallelism);
         const promises = batch.map(async (id) => {
           const slice = nodes.get(id);
-          this.eventBus.emit("slice-started", { sliceId: id, title: slice.title, parallel: true });
+          this.eventBus.emit("slice-started", { sliceId: id, title: slice.title, parallel: true, complexityScore: slice.complexityScore });
           try {
             const result = await executeFn(slice);
             const r = { sliceId: id, ...result };
             if (result.status === "passed") {
-              this.eventBus.emit("slice-completed", { sliceId: id, ...result, parallel: true });
+              this.eventBus.emit("slice-completed", { sliceId: id, complexityScore: slice.complexityScore, ...result, parallel: true });
             } else {
-              this.eventBus.emit("slice-failed", { sliceId: id, ...result, parallel: true });
+              this.eventBus.emit("slice-failed", { sliceId: id, complexityScore: slice.complexityScore, ...result, parallel: true });
             }
             return r;
           } catch (err) {
@@ -1593,7 +1593,7 @@ export class ParallelScheduler {
           continue;
         }
 
-        this.eventBus.emit("slice-started", { sliceId: id, title: slice.title });
+        this.eventBus.emit("slice-started", { sliceId: id, title: slice.title, complexityScore: slice.complexityScore });
         try {
           const result = await executeFn(slice);
           const r = { sliceId: id, ...result };
@@ -1602,9 +1602,9 @@ export class ParallelScheduler {
           completed.add(id);
 
           if (result.status === "passed") {
-            this.eventBus.emit("slice-completed", { sliceId: id, ...result });
+            this.eventBus.emit("slice-completed", { sliceId: id, complexityScore: slice.complexityScore, ...result });
           } else {
-            this.eventBus.emit("slice-failed", { sliceId: id, ...result });
+            this.eventBus.emit("slice-failed", { sliceId: id, complexityScore: slice.complexityScore, ...result });
             // Don't break — parallel scheduler checks deps, not sequence
           }
         } catch (err) {
@@ -1880,6 +1880,17 @@ export async function runPlan(planPath, options = {}) {
   // Execute slices
   const maxRetries = loadMaxRetries(cwd);
   const escalationChain = loadEscalationChain(cwd);
+
+  // Phase CRUCIBLE-02 Slice 02.1 — pre-compute complexity for every slice so
+  // slice-started events (emitted by the scheduler) can carry the score.
+  // Best-effort: a scoring failure on one slice should not block the run.
+  for (const [sliceId, sliceNode] of plan.dag.nodes) {
+    try {
+      const { score } = scoreSliceComplexity(sliceNode, cwd);
+      sliceNode.complexityScore = score;
+    } catch { /* leave undefined — UI will render a neutral '—' */ }
+  }
+
   const results = await scheduler.execute(
     plan.dag.nodes,
     plan.dag.order,

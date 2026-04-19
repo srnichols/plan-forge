@@ -180,4 +180,22 @@ describe("Dashboard Crucible tab wiring", () => {
     expect(js).toContain("window.loadCrucible = loadCrucible");
     expect(js).toContain("window.onCrucibleHubEvent = onCrucibleHubEvent");
   });
+
+  // ─── Phase CRUCIBLE-02 Slice 02.1 — slice-card badges ──────────────
+  it("app.js renderSliceCards defines complexity + total-spend badges", () => {
+    expect(js).toContain("complexityBadge");
+    expect(js).toContain("spendBadge");
+    // Complexity thresholds — green 1-3, amber 4-6, red 7-10
+    expect(js).toMatch(/c\s*>=\s*7/);
+    expect(js).toMatch(/c\s*>=\s*4/);
+    // Badge titles for accessibility/tooltips
+    expect(js).toContain('Complexity score (1-10)');
+    expect(js).toContain('Model spend for this slice');
+  });
+
+  it("app.js handleSliceStarted hydrates complexityScore from event data", () => {
+    // The handler must assign data.complexityScore onto the slice record so
+    // renderSliceCards can render the pill before the slice completes.
+    expect(js).toMatch(/slice\.complexityScore\s*=\s*data\.complexityScore/);
+  });
 });

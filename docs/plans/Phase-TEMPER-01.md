@@ -1,14 +1,14 @@
 ---
 crucibleId: 0f412001-9658-4b46-bc27-14b02d47963c
 source: self-hosted
-status: draft
+status: in_progress
 phase: TEMPER-01
 arc: TEMPER
 ---
 
 # Phase TEMPER-01: Foundation — config, storage contract, read-only scan
 
-> **Status**: 📝 DRAFT (arc-prep, no code yet)
+> **Status**: 🟡 IN PROGRESS — Slice 01.1 shipped (v2.42.0); Slice 01.2 pending
 > **Estimated Effort**: 2 slices
 > **Risk Level**: Low (purely additive subsystem; no existing surfaces change)
 > **Target Version**: v2.42.0

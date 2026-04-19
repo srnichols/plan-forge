@@ -5,6 +5,103 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.42.0] — 2026-04-19
+
+### Added — Phase TEMPER-01 Slice 01.1 — Tempering foundation (read-only coverage scan)
+
+First slice of the Tempering arc — the automated test-intelligence
+subsystem that sits between the Forge and LiveGuard in the closed loop.
+This slice ships the **storage contract + read-only MCP surface only**;
+no test runs, no bug creation, no production-source edits. Those land
+in later TEMPER phases.
+
+**New module `pforge-mcp/tempering.mjs`** — self-contained, no
+orchestrator coupling except for the re-export of `readTemperingState`
+to mirror the `readCrucibleState` contract consumed by the watcher.
+
+**Enterprise defaults** (frozen in `TEMPERING_DEFAULT_CONFIG`) seed
+`.forge/tempering/config.json` on first scan. Per-layer coverage minima
+match the arc doc: domain 90 / integration 80 / controller 60 /
+overall 80. All 10 scanners enabled by default; dial down in config if
+you must. Visual analyzer is quorum-mode 2-of-3 by default.
+
+**Two new MCP tools:**
+
+- `forge_tempering_scan` — detects stack, locates existing coverage
+  report (lcov.info, coverage-final.json, cobertura.xml,
+  jacoco.xml, go cover.out, coverage.py JSON, tarpaulin JSON), parses
+  it, rolls up by layer (domain / integration / controller / overall),
+  computes gaps vs. minima, writes `.forge/tempering/scan-<ts>.json`.
+  Read-only — never runs tests.
+- `forge_tempering_status` — returns latest N scan summaries for the
+  dashboard feed and `forge_smith` panel.
+
+**Supported stacks**: typescript, dotnet, python, go, java, rust.
+Detection is cheap (existsSync-only); `node_modules`, `.git`, and
+vendor dirs are not scanned.
+
+**Coverage parsers shipped**:
+
+- lcov (Jest, Vitest, c8, nyc)
+- Istanbul coverage-final.json
+- Cobertura XML (Coverlet, coverage.py XML)
+- JaCoCo XML (Maven, Gradle)
+- Go cover.out (set/count/atomic modes)
+- coverage.py JSON
+- cargo-tarpaulin JSON
+
+**Layer classification** is path-heuristic for TEMPER-01 (promotes to
+config-driven `layerGlobs` in TEMPER-02). Controllers, routes,
+handlers, api → controller; repositories, db, data, dal, persistence
+→ integration; services, domain, models, entities, logic → domain;
+everything else → overall.
+
+**Correlation ID thread** (per TEMPER-ARC cross-cutting contract):
+every scan record stamps a `correlationId`. Callers may pass one to
+thread upstream (smelt → plan → run → scan); when absent a
+`temper-scan-<uuid>` is minted.
+
+**Hub events** (new):
+
+- `tempering-scan-started` — payload: `{ correlationId, projectDir, configWritten }`
+- `tempering-scan-completed` — payload: `{ correlationId, scanId, stack, status, gaps, belowMinimum, reportPath }`
+
+**L3 semantic memory capture** on `tempering-scan-completed` via the
+existing `captureMemory()` helper. Tags: `tempering`, `scan`,
+`<stack>`, `<status>`. Payload is the gap summary only — never source
+content. Best-effort; OpenBrain outages fall through to
+`.forge/openbrain-queue.jsonl` as usual.
+
+**Constants**:
+
+- `TEMPERING_SCAN_STALE_DAYS = 7` (matches `CRUCIBLE_STALL_CUTOFF_DAYS`)
+
+**Status codes** emitted:
+
+- `green` — every layer meets its minimum
+- `amber` — at least one layer below minimum by ≥ 5 points
+- `no-data` — no coverage report found (returns generator hint) or
+  unknown stack (returns marker-file guidance)
+- `error` — report located but parse returned zero records
+
+**Scope contract** (unchanged from Phase-TEMPER-01 Slice 01.1): no
+test execution, no bug creation, no production-source edits, no
+`forge_liveguard_run` wire-in, no dashboard surface (that's Slice 01.2).
+
+**Testing**: +62 tests in `tests/tempering-foundation.test.mjs` covering
+config defaults, storage helpers, stack detection across all 6 stacks,
+all 7 parsers, layer classification, rollup, gap computation, handler
+happy paths + failure branches, correlationId threading, hub event
+emission, and TOOL_METADATA / tools.json wiring. Full suite: 1116/1116.
+
+### Next
+
+Slice 01.2 ships the Tempering dashboard tab + watcher-row chip + two
+anomaly rules (`tempering-coverage-below-minimum`,
+`tempering-scan-stale`). See [docs/plans/Phase-TEMPER-01.md](docs/plans/Phase-TEMPER-01.md).
+
+---
+
 ## [2.41.0] — 2026-04-19
 
 ### Added — Phase CRUCIBLE-04 Slice 04.1 — Crucible-aware fix proposals

@@ -2,49 +2,62 @@
 crucibleId: ea5e6db2-95c8-40c2-b04d-ee4c0685e4b2
 lane: tweak
 source: selfhost
+status: absorbed
+absorbedBy: docs/plans/Phase-CRUCIBLE-02.md
+absorbedIn: v2.39.1
 ---
 
-# Phase SMITH-01: Crucible Diagnostics in forge_smith
+# Phase SMITH-01: Crucible Diagnostics in `forge_smith` — **ABSORBED**
 
-> **Status**: 🟡 DRAFT (likely absorbed into CRUCIBLE-02 Slice 02.2)
-> **Estimated Effort**: 1 execution slice
-> **Risk Level**: Low
-> **Target Version**: v2.38.x
+> **Status**: ✅ ABSORBED — no standalone PR.
+> **Shipped as**: [Phase-CRUCIBLE-02.md](Phase-CRUCIBLE-02.md) Slice 02.2
+> **Released**: v2.39.1 (PR #46)
+> **Draft date**: pre-CRUCIBLE-02
 
 ---
 
-## Overview
+## Why this file still exists
 
-Surface Crucible health signals in `pforge smith` / `forge_smith` so
-operators can see at a glance: are smelts stuck in progress? When was
-the last manual-import bypass? Are any phase plans still missing
-`crucibleId`?
+This phase was drafted before CRUCIBLE-02 absorbed its scope. The draft
+is retained as a tombstone so:
 
-This phase overlaps with CRUCIBLE-02 Slice 02.2. If CRUCIBLE-02 ships
-first with the Smith panel included, this phase can be marked as
-absorbed and closed without a dedicated PR.
+- The `crucibleId` stays reachable for any audit trail that referenced it
+- Future agents reading the phase history don't mistake "no file" for
+  "forgotten work"
+- The scope notes below stay discoverable for anyone extending the Smith
+  panel further
 
-## Scope Contract
+## Scope that actually shipped (in CRUCIBLE-02 Slice 02.2)
 
-### In-Scope
+All three diagnostic fields originally proposed here landed in the
+Smith panel:
 
-- New diagnostic panel in `forge_smith`:
-  - `smeltsInProgress`: count + list of `{id, lane, ageMinutes}`
-  - `lastManualImport`: `{timestamp, planPath, source, reason}` from audit log
-  - `phasesMissingCrucibleId`: array of `docs/plans/Phase-*.md` paths without the frontmatter field
+- `smeltsInProgress` → funnel counts + stall detection
+- `lastManualImport` → surfaced via audit-log tail
+- `phasesMissingCrucibleId` → enforcement check in `pforge smith`
 
-### Out-of-Scope
+See [Phase-CRUCIBLE-02.md](Phase-CRUCIBLE-02.md) Slice 02.2 for the
+hardened spec and [CHANGELOG.md](../../CHANGELOG.md) v2.39.1 for the
+shipped implementation.
 
-- Any change to enforcement behavior — smith is read-only, reports only
-- Any new persistent storage
+## Follow-on work built on top
 
-### Forbidden Actions
+- **v2.40.0** — Phase CRUCIBLE-03: watcher-side awareness of the same signals
+- **v2.40.1** — Dashboard Watcher tab Crucible row (same contract)
+- **v2.41.0** — Phase CRUCIBLE-04: `forge_fix_proposal` `source=crucible`
+  generates abandon-or-resume playbooks from the same signals
 
-- Don't emit warnings in a way that breaks `smith`'s existing exit-code contract
-- Don't scan outside `docs/plans/` or `.forge/crucible/`
+## Do not re-open
 
-## Success Criteria
+If additional Smith-panel diagnostics are needed, create a new phase
+(e.g. `Phase-SMITH-02.md`) with a fresh `crucibleId`. This file is a
+historical record only.
 
-- `pforge smith` output contains a `Crucible` section when any smelts exist or any audit rows exist
-- Graceful no-op when the project has no Crucible data yet
-- Unit tests for each of the three reported fields
+---
+
+## Original draft scope (historical)
+
+The original draft proposed surfacing Crucible health in `pforge smith`:
+`smeltsInProgress`, `lastManualImport`, `phasesMissingCrucibleId`. All
+three items were built and shipped as part of CRUCIBLE-02 Slice 02.2 —
+see that phase document for the authoritative contract.

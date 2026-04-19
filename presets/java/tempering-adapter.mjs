@@ -36,7 +36,31 @@ export const temperingAdapter = {
     },
   },
   integration: {
-    supported: false,
-    reason: "lands-in-TEMPER-02-slice-02.2",
+    supported: true,
+    // Maven convention for integration tests is the `verify` phase
+    // which runs failsafe (integration) after surefire (unit). We
+    // invoke failsafe directly so we don't re-run unit tests.
+    cmd: ["mvn", "failsafe:integration-test", "failsafe:verify", "-q"],
+    parseOutput(stdout, stderr, exitCode) {
+      const result = { pass: 0, fail: 0, skipped: 0, coverage: null };
+      const combined = (stdout || "") + "\n" + (stderr || "");
+      // Failsafe uses the same "Tests run" summary format as Surefire.
+      const re = /Tests run:\s*(\d+),\s*Failures:\s*(\d+),\s*Errors:\s*(\d+),\s*Skipped:\s*(\d+)/gi;
+      let match;
+      let last = null;
+      while ((match = re.exec(combined)) !== null) last = match;
+      if (last) {
+        const total = parseInt(last[1], 10) || 0;
+        const failures = parseInt(last[2], 10) || 0;
+        const errors = parseInt(last[3], 10) || 0;
+        const skipped = parseInt(last[4], 10) || 0;
+        result.fail = failures + errors;
+        result.skipped = skipped;
+        result.pass = Math.max(0, total - failures - errors - skipped);
+        return result;
+      }
+      if (exitCode !== 0) result.fail = 1;
+      return result;
+    },
   },
 };

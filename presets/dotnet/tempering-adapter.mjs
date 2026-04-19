@@ -33,7 +33,25 @@ export const temperingAdapter = {
     },
   },
   integration: {
-    supported: false,
-    reason: "lands-in-TEMPER-02-slice-02.2",
+    supported: true,
+    // Integration suites are typically separate projects filtered by
+    // category or namespace. We pass --filter so xUnit / NUnit /
+    // MSTest projects that tag integration tests can be selected.
+    cmd: ["dotnet", "test", "--nologo", "--no-restore", "--filter", "Category=Integration|FullyQualifiedName~Integration"],
+    parseOutput(stdout, stderr, exitCode) {
+      const result = { pass: 0, fail: 0, skipped: 0, coverage: null };
+      const combined = (stdout || "") + "\n" + (stderr || "");
+      const m = combined.match(
+        /Failed:\s*(\d+)[\s,|]+Passed:\s*(\d+)[\s,|]+Skipped:\s*(\d+)/i,
+      );
+      if (m) {
+        result.fail = parseInt(m[1], 10) || 0;
+        result.pass = parseInt(m[2], 10) || 0;
+        result.skipped = parseInt(m[3], 10) || 0;
+        return result;
+      }
+      if (exitCode !== 0) result.fail = 1;
+      return result;
+    },
   },
 };

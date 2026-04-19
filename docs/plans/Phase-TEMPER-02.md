@@ -1,14 +1,14 @@
 ---
 crucibleId: 2e20ae07-526c-4d6e-af36-9535bc09a80c
 source: self-hosted
-status: in_progress
+status: finalized
 phase: TEMPER-02
 arc: TEMPER
 ---
 
 # Phase TEMPER-02: Execution harness — unit + integration
 
-> **Status**: 🟡 IN PROGRESS — Slice 02.1 shipped (v2.43.0-dev); Slice 02.2 pending
+> **Status**: ✅ FINALIZED — Slice 02.1 + Slice 02.2 shipped (v2.43.0)
 > **Estimated Effort**: 2 slices
 > **Risk Level**: Medium (first phase that *runs* code; subprocess
 > boundary + language detection are the risk surface)

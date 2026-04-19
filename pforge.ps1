@@ -3377,6 +3377,35 @@ function Invoke-Smith {
         if (Test-Path $tempCfg) {
             Doctor-Pass "Tempering config present — enterprise minima active"
         }
+
+        # TEMPER-02 Slice 02.2 — run record summary. Each
+        # `run-*.json` is produced by forge_tempering_run (post-slice hook
+        # or manual). We report the latest verdict so operators spot a
+        # failing slice without digging into the dashboard.
+        $runFiles = @(Get-ChildItem -Path $temperingDir -Filter "run-*.json" -File -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime -Descending)
+        if ($runFiles.Count -gt 0) {
+            $latestRun = $runFiles[0]
+            try {
+                $run = Get-Content $latestRun.FullName -Raw | ConvertFrom-Json
+                $verdict = if ($run.verdict) { "$($run.verdict)" } else { "unknown" }
+                $runAgeMin = [Math]::Floor(((Get-Date) - $latestRun.LastWriteTime).TotalMinutes)
+                $scannerCount = if ($run.scanners) { @($run.scanners).Count } else { 0 }
+                $totalPass = 0; $totalFail = 0
+                if ($run.scanners) {
+                    foreach ($sc in $run.scanners) {
+                        if ($sc.pass) { $totalPass += $sc.pass }
+                        if ($sc.fail) { $totalFail += $sc.fail }
+                    }
+                }
+                Doctor-Pass "$($runFiles.Count) run(s); latest: $verdict, $totalPass pass / $totalFail fail across $scannerCount scanner(s), $runAgeMin min old"
+                if ($verdict -eq "fail" -or $verdict -eq "error" -or $verdict -eq "budget-exceeded") {
+                    Doctor-Warn "Latest Tempering run verdict=$verdict" "Open $($latestRun.Name) for per-scanner detail"
+                }
+            } catch {
+                Doctor-Warn "Latest run record could not be parsed" "File: $($latestRun.Name)"
+            }
+        }
     } else {
         Doctor-Pass "Tempering inactive — no .forge/tempering/ directory yet"
     }

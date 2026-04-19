@@ -3400,6 +3400,117 @@ export function runPostSliceHook({ commitMessage, cwd = process.cwd() } = {}) {
   return { triggered: true, action: "advisory", message, priorScore, newScore, delta };
 }
 
+// ─── PostSlice Tempering Hook (TEMPER-02 Slice 02.2) ──────────────────
+
+/**
+ * Module-level guard: one tempering run per slice commit, not per
+ * attempt. Exposed as `resetPostSliceTemperingFired` for tests and for
+ * `pforge run-plan` to reset when starting a new slice.
+ */
+let _postSliceTemperingFired = new Set();
+
+/** Reset the fired guard. Exposed for testing + CLI reuse. */
+export function resetPostSliceTemperingFired() {
+  _postSliceTemperingFired = new Set();
+}
+
+/**
+ * PostSlice Tempering hook — invokes `forge_tempering_run` after a
+ * slice commit when the user has opted in via
+ * `.forge/tempering/config.json` → `execution.trigger: "post-slice"`.
+ *
+ * Scope contract (from Phase-TEMPER-02.md):
+ *   - Fires exactly once per committed slice (not per failed attempt)
+ *   - Respects the same skip patterns as the drift PostSlice hook
+ *     (docs/ci/merge commits are skipped)
+ *   - Never throws; returns `{ triggered, skippedReason?, result? }`
+ *   - The caller (pforge run-plan / CLI) is responsible for providing
+ *     a `runTemperingRun` implementation via dependency injection so
+ *     this module doesn't import the runner (avoids a cycle with
+ *     tempering/runner.mjs, which imports from tempering.mjs).
+ *
+ * @param {object} params
+ * @param {string} params.commitMessage
+ * @param {{plan:string, slice:string}} [params.sliceRef]
+ * @param {string} [params.cwd=process.cwd()]
+ * @param {Function} params.runTemperingRun - injected runner (async)
+ * @param {object} [params.hub]
+ * @param {string} [params.correlationId]
+ * @param {string} [params.lastGreenSha]
+ * @returns {Promise<{triggered:boolean, skippedReason?:string, result?:object}>}
+ */
+export async function runPostSliceTemperingHook({
+  commitMessage,
+  sliceRef = null,
+  cwd = process.cwd(),
+  runTemperingRun,
+  hub = null,
+  correlationId = null,
+  lastGreenSha = null,
+} = {}) {
+  if (!commitMessage) return { triggered: false, skippedReason: "no-commit-message" };
+  if (typeof runTemperingRun !== "function") {
+    return { triggered: false, skippedReason: "no-runner-injected" };
+  }
+
+  // Skip non-code commits using the same patterns as the drift hook.
+  for (const pattern of POSTSLICE_SKIP_PATTERNS) {
+    if (pattern.test(commitMessage)) {
+      return { triggered: false, skippedReason: `skip-pattern:${pattern.source}` };
+    }
+  }
+  if (!POSTSLICE_COMMIT_PATTERN.test(commitMessage)) {
+    return { triggered: false, skippedReason: "not-conventional-commit" };
+  }
+
+  // Per-slice fired guard — keyed by `<plan>::<slice>` so multiple
+  // slices in the same session each fire exactly once. When no
+  // sliceRef is provided we fall back to the commit message so at
+  // least the same commit doesn't re-fire.
+  const fireKey = sliceRef
+    ? `${sliceRef.plan}::${sliceRef.slice}`
+    : `commit::${commitMessage.slice(0, 80)}`;
+  if (_postSliceTemperingFired.has(fireKey)) {
+    return { triggered: false, skippedReason: "already-fired-for-slice" };
+  }
+
+  // Read config gating — only fire when `execution.trigger` is
+  // `"post-slice"`. Users who want a CI-trigger (`"on-demand"`) get a
+  // no-op here without us touching disk or subprocess.
+  let triggerMode = "post-slice"; // default matches TEMPERING_DEFAULT_CONFIG
+  try {
+    const configPath = resolve(cwd, ".forge", "tempering", "config.json");
+    if (existsSync(configPath)) {
+      const cfg = JSON.parse(readFileSync(configPath, "utf-8"));
+      if (cfg?.execution?.trigger) triggerMode = cfg.execution.trigger;
+      if (cfg?.enabled === false) {
+        return { triggered: false, skippedReason: "tempering-disabled" };
+      }
+    }
+  } catch { /* fall through to default */ }
+
+  if (triggerMode !== "post-slice") {
+    return { triggered: false, skippedReason: `trigger-mode:${triggerMode}` };
+  }
+
+  _postSliceTemperingFired.add(fireKey);
+
+  let result;
+  try {
+    result = await runTemperingRun({
+      projectDir: cwd,
+      hub,
+      correlationId,
+      sliceRef,
+      lastGreenSha,
+    });
+  } catch (err) {
+    return { triggered: true, action: "error", skippedReason: `runner-threw:${err.message}` };
+  }
+
+  return { triggered: true, action: "ran", result };
+}
+
 // ─── PreAgentHandoff Hook ─────────────────────────────────────────────
 
 /** Default configuration for the PreAgentHandoff hook. */
@@ -4637,6 +4748,20 @@ export function detectWatchAnomalies(snapshot) {
     });
   }
 
+  // 14. (Phase TEMPER-02 Slice 02.2) Run failed — the most recent
+  // Tempering run (unit + integration) finished with verdict
+  // fail / budget-exceeded / error. Elevated to `error` because a
+  // failing test run post-slice means the slice's commit is not
+  // green and every downstream anomaly that reads run records will
+  // compound if this stays unresolved.
+  if (snapshot.tempering && snapshot.tempering.runFailed) {
+    anomalies.push({
+      severity: "error",
+      code: "tempering-run-failed",
+      message: `Latest Tempering run verdict=${snapshot.tempering.latestRunVerdict} on ${snapshot.tempering.latestRunStack || "unknown stack"} — investigate the run record before the next slice`,
+    });
+  }
+
   return anomalies;
 }
 
@@ -4793,6 +4918,15 @@ export function recommendFromAnomalies(anomalies, snapshot) {
           severity: anomaly.severity,
           action: "The latest Tempering scan is older than the staleness cutoff. Re-run the scan so downstream dashboards and anomaly rules work against current coverage.",
           command: "forge_tempering_scan",
+        });
+        break;
+
+      case "tempering-run-failed":
+        recs.push({
+          code,
+          severity: anomaly.severity,
+          action: `Latest Tempering run verdict=${snapshot.tempering?.latestRunVerdict ?? "unknown"}. Open the most recent .forge/tempering/run-*.json to see per-scanner stdout, then either fix the failing tests or (if this is an infra flake) re-run forge_tempering_run.`,
+          command: "forge_tempering_run",
         });
         break;
 

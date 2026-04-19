@@ -590,6 +590,51 @@ export function readScanRecord(absPath) {
   }
 }
 
+// ─── Run record helpers (TEMPER-02) ───────────────────────────────────
+
+/**
+ * List all Tempering run records (`run-<ts>.json`), newest first.
+ * Same contract as `listScanRecords` — used by the dashboard's slice-card
+ * pill, the watcher, and `forge_smith` Tempering section.
+ *
+ * @param {string} projectDir
+ * @returns {Array<{ name, absPath, mtimeMs }>}
+ */
+export function listRunRecords(projectDir) {
+  const dir = resolve(projectDir, ".forge", "tempering");
+  if (!existsSync(dir)) return [];
+  let entries;
+  try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return []; }
+  const out = [];
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    if (!entry.name.startsWith("run-")) continue;
+    if (!entry.name.endsWith(".json")) continue;
+    const absPath = resolve(dir, entry.name);
+    try {
+      const mtimeMs = statSync(absPath).mtimeMs;
+      out.push({ name: entry.name, absPath, mtimeMs });
+    } catch { /* ignore */ }
+  }
+  out.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  return out;
+}
+
+/**
+ * Read and parse a single run record. Returns null on any error —
+ * same contract as `readScanRecord`.
+ *
+ * @param {string} absPath
+ * @returns {object|null}
+ */
+export function readRunRecord(absPath) {
+  try {
+    return JSON.parse(readFileSync(absPath, "utf-8"));
+  } catch {
+    return null;
+  }
+}
+
 // ─── Watcher snapshot helper ──────────────────────────────────────────
 
 /**
@@ -625,6 +670,17 @@ export function readTemperingState(targetPath) {
     ? latestScanAgeMs > TEMPERING_SCAN_STALE_DAYS * 24 * 60 * 60 * 1000
     : false;
 
+  // Run records (TEMPER-02) — primitives only, no scanner detail.
+  // Exposed so watcher anomalies + dashboard slice-card pill can read
+  // the single most recent run without touching the full record.
+  const runRecords = listRunRecords(targetPath);
+  const latestRunFile = runRecords[0] || null;
+  const latestRun = latestRunFile ? readRunRecord(latestRunFile.absPath) : null;
+  const latestRunVerdict = latestRun?.verdict || null;
+  const latestRunAgeMs = latestRunFile ? Date.now() - latestRunFile.mtimeMs : null;
+  const latestRunStack = latestRun?.stack || null;
+  const runFailed = latestRunVerdict === "fail" || latestRunVerdict === "budget-exceeded" || latestRunVerdict === "error";
+
   return {
     initialized: true,
     totalScans,
@@ -635,6 +691,13 @@ export function readTemperingState(targetPath) {
     belowMinimum,
     stale,
     staleCutoffDays: TEMPERING_SCAN_STALE_DAYS,
+    // TEMPER-02 Slice 02.2 — run-record summary (primitives only).
+    totalRuns: runRecords.length,
+    latestRunTs: latestRunFile ? new Date(latestRunFile.mtimeMs).toISOString() : null,
+    latestRunAgeMs,
+    latestRunVerdict,
+    latestRunStack,
+    runFailed,
   };
 }
 

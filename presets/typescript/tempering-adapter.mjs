@@ -47,7 +47,28 @@ export const temperingAdapter = {
     },
   },
   integration: {
-    supported: false,
-    reason: "lands-in-TEMPER-02-slice-02.2",
+    supported: true,
+    // Integration tests are typically Vitest runs against a different
+    // glob; projects that use Jest/Playwright/Cypress for integration
+    // should override via stackOverrides in a later phase.
+    cmd: ["npx", "--no-install", "vitest", "run", "--reporter=json", "--dir", "tests/integration"],
+    parseOutput(stdout, stderr, exitCode) {
+      const result = { pass: 0, fail: 0, skipped: 0, coverage: null };
+      try {
+        const start = stdout.indexOf("{");
+        if (start !== -1) {
+          const data = JSON.parse(stdout.slice(start));
+          if (data && typeof data === "object") {
+            result.pass = Number.isFinite(data.numPassedTests) ? data.numPassedTests : 0;
+            result.fail = Number.isFinite(data.numFailedTests) ? data.numFailedTests : 0;
+            result.skipped = (Number.isFinite(data.numPendingTests) ? data.numPendingTests : 0)
+              + (Number.isFinite(data.numTodoTests) ? data.numTodoTests : 0);
+            return result;
+          }
+        }
+      } catch { /* fall through */ }
+      if (exitCode !== 0) result.fail = 1;
+      return result;
+    },
   },
 };

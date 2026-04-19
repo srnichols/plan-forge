@@ -445,8 +445,13 @@ describe("runTemperingRun", () => {
     expect(existsSync(r.runRecordPath)).toBe(true);
     const rec = JSON.parse(readFileSync(r.runRecordPath, "utf-8"));
     expect(rec.phase).toBe("TEMPER-02");
-    expect(rec.slice).toBe("02.1");
+    expect(rec.slice).toBe("02.2");
     expect(rec.scanners[0].scanner).toBe("unit");
+    // Slice 02.2 — integration runs alongside unit. With no integration
+    // entry on fakeAdapter it short-circuits as skipped:no-adapter,
+    // which is the documented fallback for partial adapter coverage.
+    expect(rec.scanners[1].scanner).toBe("integration");
+    expect(rec.scanners[1].skipped).toBe(true);
   });
 
   it("emits start / scanner-started / scanner-completed / completed events in order", async () => {
@@ -454,8 +459,12 @@ describe("runTemperingRun", () => {
     const spawn = makeFakeSpawn({ stdout: "", exitCode: 0 });
     await runTemperingRun({ projectDir, hub, spawn, adapter: fakeAdapter });
     const types = hub.events.map((e) => e.type);
+    // Slice 02.2 — two scanners fire in order (unit, then integration),
+    // each bracketed by started/completed.
     expect(types).toEqual([
       "tempering-run-started",
+      "tempering-run-scanner-started",
+      "tempering-run-scanner-completed",
       "tempering-run-scanner-started",
       "tempering-run-scanner-completed",
       "tempering-run-completed",

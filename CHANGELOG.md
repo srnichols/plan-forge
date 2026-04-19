@@ -7,6 +7,87 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased] — targeting 2.43.0
 
+### Added — Phase TEMPER-02 Slice 02.2 — Integration scanner + post-slice hook
+
+Closes Phase TEMPER-02. Slice 02.1 shipped the unit execution harness;
+Slice 02.2 adds the integration scanner, a post-slice hook, watcher +
+dashboard surfacing, and the `forge_smith` run-record summary.
+
+**Generic `runScanner(ctx)`** — `pforge-mcp/tempering/runner.mjs` now
+exposes a scanner-agnostic runner keyed by `ctx.scanner` ("unit" |
+"integration"). The previous `runScannerUnit` remains as a back-compat
+wrapper; a new `runScannerIntegration` mirror is also exported. Budget
+keys are resolved through a frozen `SCANNER_BUDGET_KEYS` map so future
+scanners (ui-playwright, load, mutation) slot in without touching the
+orchestration body.
+
+**`runTemperingRun` now dispatches both scanners** — unit first,
+integration second. If unit hits `budget-exceeded`, integration is
+skipped with reason `prior-budget-exceeded` to keep total runtime
+bounded. The emitted `tempering-run-completed` event now carries
+cross-scanner totals (`pass`/`fail`/`skipped`/`durationMs`), and run
+records are persisted with `slice: "02.2"`.
+
+**Six preset adapters extended with integration entries** —
+`presets/{typescript,dotnet,python,go,java,rust}/tempering-adapter.mjs`
+now each export an `integration` scanner:
+
+- **typescript** — `npx vitest run --dir tests/integration --reporter=json`; JSON totals parser
+- **dotnet** — `dotnet test --filter "Category=Integration|FullyQualifiedName~Integration"`; Microsoft summary parser
+- **python** — `pytest tests/integration`; pytest summary-line parser
+- **go** — `go test -json -tags=integration ./...`; `-json` action-event parser
+- **java** — `mvn failsafe:integration-test failsafe:verify`; Surefire totals parser
+- **rust** — `cargo test --quiet --tests`; `test result:` line parser
+
+**PostSlice Tempering hook** — `runPostSliceTemperingHook` in
+`pforge-mcp/orchestrator.mjs` fires `forge_tempering_run` after a
+slice commit when the user has opted in via
+`.forge/tempering/config.json` → `execution.trigger: "post-slice"`.
+Honours the same skip patterns as the drift PostSlice hook (docs,
+merge, chore(release) are skipped), fires exactly once per `sliceRef`
+across repeated invocations, and never throws — runner errors are
+surfaced as `{ action: "error", skippedReason: "runner-threw:<msg>" }`.
+`resetPostSliceTemperingFired()` is exposed for tests and for
+`pforge run-plan` to reset when starting a new slice. Runner is
+dependency-injected to avoid a circular import with
+`tempering/runner.mjs`.
+
+**Watcher anomaly rule #14 — `tempering-run-failed`** —
+`detectAnomalies` in `orchestrator.mjs` now flags the most recent
+Tempering run when its verdict is `fail | error | budget-exceeded`, at
+severity `error` (failing runs aren't advisory). `recommendFromAnomalies`
+maps the code to `forge_tempering_run` with a pointer to open the
+latest `run-*.json` for per-scanner detail.
+
+**`readTemperingState` extended** — surfaces `totalRuns`, `latestRunTs`,
+`latestRunAgeMs`, `latestRunVerdict`, `latestRunStack`, and a boolean
+`runFailed`, sourced from a new `listRunRecords` / `readRunRecord` pair
+in `tempering.mjs`. The snapshot block stays primitives-only.
+
+**Dashboard — per-slice Tempering pill** — `pforge-mcp/dashboard/app.js`
+subscribes to `tempering-run-completed` and buckets the verdict in
+`state.tempering.slicePills` keyed by `sliceRef.slice`. `renderSliceCards`
+now renders a tiny `🔨✓` / `🔨✗` / `🔨◌` pill next to the gate and
+retry indicators, colour-graded green/red/gray. Tooltip shows the
+pass/fail/skipped totals and stack. No new HTTP endpoints and no
+index.html changes — the pill is pure `app.js` + WebSocket wiring.
+
+**`pforge smith` / `pforge.sh` Tempering section extended** — both the
+PowerShell and Bash doctor scripts now read `.forge/tempering/run-*.json`
+in addition to `scan-*.json`, reporting `N run(s); latest: <verdict>,
+<pass>/<fail>, <age>` and warning when the latest run verdict is
+`fail | error | budget-exceeded`.
+
+**Tests — +32 new, 1237/1237 green** — `tests/tempering-integration.test.mjs`
+(16 tests: generic `runScanner` with integration scanner, all six
+adapter integration parsers, end-to-end `runTemperingRun` two-scanner
+run + prior-budget-exceeded short-circuit) and
+`tests/tempering-post-slice-hook.test.mjs` (12 tests: skip patterns,
+config gating, per-sliceRef fired-once guard, runner error containment,
+`resetPostSliceTemperingFired` regression). Existing `runTemperingRun`
+assertions updated to expect 2-scanner event order and `slice: "02.2"`
+on run records.
+
 ### Added — Phase TEMPER-02 Slice 02.1 — Execution harness (unit scanner)
 
 First phase of the Tempering arc that actually **runs** code. TEMPER-01

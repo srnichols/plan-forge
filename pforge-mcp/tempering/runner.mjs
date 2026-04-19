@@ -328,6 +328,8 @@ export async function runTemperingRun(opts = {}) {
     // going through the full crawler logic.
     uiImportFn = null,
     uiScannerImpl = null,
+    // TEMPER-03 Slice 03.2 — Contract scanner dependency injection.
+    contractScannerImpl = null,
     env = process.env,
   } = opts;
 
@@ -509,8 +511,67 @@ export async function runTemperingRun(opts = {}) {
     durationMs: uiResult.durationMs || 0,
   });
 
+  // ── Contract scanner (TEMPER-03 Slice 03.2) ──
+  // Cross-stack scanner — validates live API against OpenAPI / GraphQL
+  // specs. Loaded lazily so missing js-yaml doesn't affect the other
+  // scanners. Modeled exactly on the UI phase above.
+  emit(hub, "tempering-run-scanner-started", { correlationId: corr, scanner: "contract", stack });
+
+  let contractResult;
+  try {
+    const priorBudgetExceeded = unitResult.verdict === "budget-exceeded"
+      || integrationResult.verdict === "budget-exceeded"
+      || uiResult.verdict === "budget-exceeded";
+    if (priorBudgetExceeded) {
+      contractResult = {
+        scanner: "contract",
+        sliceRef,
+        startedAt: new Date(now()).toISOString(),
+        completedAt: new Date(now()).toISOString(),
+        skipped: true,
+        reason: "prior-budget-exceeded",
+        verdict: "skipped",
+        pass: 0, fail: 0,
+        durationMs: 0,
+      };
+    } else if (contractScannerImpl) {
+      contractResult = await contractScannerImpl({
+        config, projectDir, runId, sliceRef, now, env, importFn,
+      });
+    } else {
+      const { runContractScan } = await import("./scanners/contract.mjs");
+      contractResult = await runContractScan({
+        config, projectDir, runId, sliceRef, now, env,
+        importFn: importFn || ((spec) => import(spec)),
+      });
+    }
+  } catch (err) {
+    contractResult = {
+      scanner: "contract",
+      sliceRef,
+      startedAt: new Date(now()).toISOString(),
+      completedAt: new Date(now()).toISOString(),
+      skipped: true,
+      reason: `scanner-load-failed:${err.message || err}`,
+      verdict: "skipped",
+      pass: 0, fail: 0,
+      durationMs: 0,
+    };
+  }
+
+  emit(hub, "tempering-run-scanner-completed", {
+    correlationId: corr,
+    scanner: "contract",
+    stack,
+    verdict: contractResult.verdict,
+    pass: contractResult.pass || 0,
+    fail: contractResult.fail || 0,
+    skipped: contractResult.skipped ? 1 : 0,
+    durationMs: contractResult.durationMs || 0,
+  });
+
   // Overall verdict: worst of the scanner verdicts
-  const scanners = [unitResult, integrationResult, uiResult];
+  const scanners = [unitResult, integrationResult, uiResult, contractResult];
   const overallVerdict = deriveOverallVerdict(scanners);
 
   const completedAt = new Date(now()).toISOString();
@@ -527,7 +588,7 @@ export async function runTemperingRun(opts = {}) {
     scanners,
     verdict: overallVerdict,
     phase: "TEMPER-03",
-    slice: "03.1",
+    slice: "03.2",
   };
 
   // Persist — best-effort

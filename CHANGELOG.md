@@ -7,6 +7,48 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased] — targeting 2.44.0
 
+### Added — Phase TEMPER-03 Slice 03.2 — Contract scanner (OpenAPI/GraphQL)
+
+Fourth scanner in the Tempering arc. Validates live API responses
+against OpenAPI 3.x specs and GraphQL schemas. Ships behind the same
+optional-dep guards as the UI scanner — `js-yaml` is loaded via
+dynamic `importFn` and JSON-only specs work without it.
+
+**New modules:**
+- `pforge-mcp/tempering/scanners/contract.mjs` — Dispatcher that
+  auto-detects spec files (openapi.yaml/json, schema.graphql) and
+  routes to the appropriate sub-validator.
+- `pforge-mcp/tempering/scanners/contract-openapi.mjs` — OpenAPI
+  validator: enumerates paths × methods, fires requests with
+  `X-Tempering-Scan: true`, validates response status against spec
+  `responses` keys, shallow key+type shape check on JSON bodies.
+- `pforge-mcp/tempering/scanners/contract-graphql.mjs` — GraphQL
+  validator: regex-parses root Query/Mutation fields from schema file,
+  fetches introspection, diffs fields, fires sample queries.
+
+**Runner wiring:** Contract scanner added as 4th phase in
+`runner.mjs` after ui-playwright. Supports `contractScannerImpl`
+test injection hook. Budget short-circuit from prior scanners applies.
+
+**Anomaly rule #15:** `tempering-contract-mismatch` fires when the
+contract scanner detects violations. Severity escalates from `warn`
+to `error` at ≥ 5 mismatches. Recommendation directs users to
+inspect `.forge/tempering/artifacts/<runId>/contract/report.json`.
+
+**Extension surface:** `extensions/catalog.json` gains an
+`opportunities[]` array with stub entries for gRPC, tRPC, and
+AsyncAPI contract scanners. `docs/EXTENSIONS.md` documents the
+scanner extension contract (ctx shape, return type, config namespace,
+artifact directory, production guard requirements).
+
+**Tool metadata:** `forge_tempering_run` description updated in
+`capabilities.mjs` and `server.mjs` to reflect all four scanners.
+
+**Tests:** 25 new tests in `tempering-contract.test.mjs` covering
+dispatcher (11), OpenAPI validator (9), and GraphQL validator (5).
+Existing runner and integration tests updated for 4-scanner order.
+Orchestrator tests extended for anomaly #15 + recommendation.
+
 ### Added — Phase TEMPER-03 Slice 03.1 — UI sweep scanner (Playwright + a11y)
 
 Third scanner in the Tempering arc. Cross-stack (runs against a

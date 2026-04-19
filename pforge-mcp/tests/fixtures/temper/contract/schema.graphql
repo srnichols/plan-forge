@@ -1,0 +1,21 @@
+type Query {
+  pets: [Pet!]!
+  pet(id: ID!): Pet
+  health: Health!
+}
+
+type Mutation {
+  createPet(name: String!): Pet!
+  deletePet(id: ID!): Boolean!
+}
+
+type Pet {
+  id: ID!
+  name: String!
+  species: String
+}
+
+type Health {
+  status: String!
+  uptime: Int!
+}

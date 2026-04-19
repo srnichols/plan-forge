@@ -695,6 +695,19 @@ export function readTemperingState(targetPath) {
   const latestRunStack = latestRun?.stack || null;
   const runFailed = latestRunVerdict === "fail" || latestRunVerdict === "budget-exceeded" || latestRunVerdict === "error";
 
+  // TEMPER-03 Slice 03.2 — contract mismatch count from latest run.
+  // Counts violations from the contract scanner frame so the watcher
+  // anomaly can fire without reading the full artifact report.
+  let contractMismatch = 0;
+  if (latestRun && Array.isArray(latestRun.scanners)) {
+    const contractFrame = latestRun.scanners.find((s) => s && s.scanner === "contract");
+    if (contractFrame) {
+      contractMismatch = Array.isArray(contractFrame.violations)
+        ? contractFrame.violations.length
+        : (contractFrame.violationCount || 0);
+    }
+  }
+
   return {
     initialized: true,
     totalScans,
@@ -712,6 +725,8 @@ export function readTemperingState(targetPath) {
     latestRunVerdict,
     latestRunStack,
     runFailed,
+    // TEMPER-03 Slice 03.2 — contract violations from latest run.
+    contractMismatch,
   };
 }
 

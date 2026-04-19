@@ -73,6 +73,7 @@
     <div id="subtabs-forge" class="flex gap-1 pt-1 pb-0.5 overflow-x-auto">
       <button class="tab-btn tab-active px-3 py-1.5 rounded-t hover:text-blue-400 whitespace-nowrap text-xs" data-tab="progress">Progress</button>
       <button class="tab-btn px-3 py-1.5 rounded-t hover:text-orange-400 text-gray-400 whitespace-nowrap text-xs" data-tab="crucible">🔥 Crucible</button>
+      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-purple-400 text-gray-400 whitespace-nowrap text-xs" data-tab="governance">🛡 Governance</button>
       <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="runs">Runs</button>
       <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="cost">Cost</button>
       <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="actions">Actions</button>
@@ -238,6 +239,34 @@
             <span id="crucible-unresolved-count" class="text-xs text-yellow-400"></span>
           </div>
           <pre id="crucible-preview" class="text-xs text-gray-300 whitespace-pre-wrap font-mono max-h-[70vh] overflow-y-auto bg-gray-900 rounded p-2">No active smelt</pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- Governance Tab (v2.37) — read-only view of Principles + profile -->
+    <section id="tab-governance" class="tab-content hidden">
+      <div class="bg-gray-800 rounded-lg p-4 mb-4">
+        <h2 class="text-lg font-semibold">🛡 Governance</h2>
+        <p class="text-sm text-gray-400">Read-only view of your Project Principles and profile files. Editing happens in your editor — this tab is intentionally non-editable.</p>
+      </div>
+
+      <div class="grid gap-4 lg:grid-cols-2">
+        <div class="bg-gray-800 rounded-lg p-4">
+          <h3 class="text-sm font-semibold mb-2 text-gray-300">Principles &amp; Profile</h3>
+          <div id="governance-files" class="space-y-3">
+            <p class="text-gray-500 py-2">Loading…</p>
+          </div>
+        </div>
+
+        <div class="bg-gray-800 rounded-lg p-4">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-semibold text-gray-300">Manual-Import Audit</h3>
+            <span id="governance-audit-count" class="text-xs text-gray-500"></span>
+          </div>
+          <p class="text-xs text-gray-500 mb-2">Every <code>--manual-import</code> bypass and every grandfather-stamped plan.</p>
+          <div id="governance-audit" class="space-y-1 text-xs max-h-[60vh] overflow-y-auto">
+            <p class="text-gray-500 py-2">Loading…</p>
+          </div>
         </div>
       </div>
     </section>
@@ -637,6 +666,61 @@
           </div>
         </div><!-- end cfg-form-body -->
         <p id="cfg-status" class="text-xs text-gray-500 mt-2"></p>
+      </div>
+
+      <!-- Crucible config (v2.37) -->
+      <div class="bg-gray-800 rounded-lg p-6 max-w-2xl mt-4">
+        <h2 class="text-lg font-semibold mb-4">🔥 Crucible</h2>
+        <p class="text-xs text-gray-500 mb-4">Controls the idea-smelting pipeline. Persisted to <code class="text-gray-400">.forge/crucible/config.json</code>.</p>
+        <div class="space-y-4">
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Default Lane</label>
+            <select id="crucible-cfg-lane" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full" title="Default lane">
+              <option value="tweak">Tweak (3 questions)</option>
+              <option value="feature" selected>Feature (6 questions)</option>
+              <option value="full">Full (12 questions)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Self-Referral Depth (0–3)</label>
+            <input id="crucible-cfg-depth" type="number" min="0" max="3" value="1" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full" title="Max recursion depth">
+            <p class="text-xs text-gray-600 mt-1">How many times a smelt can spawn a child smelt before hardening.</p>
+          </div>
+          <div>
+            <label class="flex items-center gap-2 text-sm text-gray-400">
+              <input id="crucible-cfg-auto-approve" type="checkbox" class="bg-gray-700 rounded" title="Auto-approve agent smelts">
+              <span>Auto-approve agent-submitted smelts</span>
+            </label>
+          </div>
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Default-Source Weights (sum to 100)</label>
+            <div class="grid grid-cols-3 gap-2">
+              <div>
+                <span class="text-xs text-gray-500">Memory</span>
+                <input id="crucible-cfg-w-memory" type="number" min="0" max="100" value="34" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full" title="Memory weight">
+              </div>
+              <div>
+                <span class="text-xs text-gray-500">Principles</span>
+                <input id="crucible-cfg-w-principles" type="number" min="0" max="100" value="33" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full" title="Principles weight">
+              </div>
+              <div>
+                <span class="text-xs text-gray-500">Plans</span>
+                <input id="crucible-cfg-w-plans" type="number" min="0" max="100" value="33" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full" title="Plans weight">
+              </div>
+            </div>
+            <p class="text-xs text-gray-600 mt-1">Values are normalized server-side if they don't sum to 100.</p>
+          </div>
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Stale Defaults Warning (hours)</label>
+            <input id="crucible-cfg-stale" type="number" min="1" max="168" value="24" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full" title="Stale defaults threshold">
+            <p class="text-xs text-gray-600 mt-1">Warn when Project Principles or profile files are newer than the smelt by this many hours.</p>
+          </div>
+          <div class="flex gap-2 pt-2">
+            <button onclick="saveCrucibleConfig()" class="bg-orange-600 hover:bg-orange-500 text-white px-4 py-2 rounded text-sm">Save Crucible Config</button>
+            <button onclick="loadCrucibleConfigUI()" class="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm">Reload</button>
+          </div>
+          <p id="crucible-cfg-status" class="text-xs text-gray-500"></p>
+        </div>
       </div>
     </section>
 

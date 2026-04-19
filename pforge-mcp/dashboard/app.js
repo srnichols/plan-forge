@@ -2774,10 +2774,11 @@ loadPlans();
 const tabLoadHooks = {
   progress: loadPlans,
   crucible: loadCrucible,
+  governance: loadGovernance,
   runs: () => { loadRuns(); tabBadgeState.runsNew = 0; updateTabBadges(); },
   replay: loadReplayRuns,
   extensions: loadExtensions,
-  config: loadConfig,
+  config: () => { loadConfig(); loadCrucibleConfigUI(); },
   traces: loadTraces,
   cost: () => { loadCost(); tabBadgeState.hasAnomaly = false; updateTabBadges(); },
   skills: loadSkillCatalog,
@@ -3487,8 +3488,151 @@ function onCrucibleHubEvent(event) {
   if (event.data && event.data.id === crucibleState.activeId) {
     refreshCrucibleInterview();
   }
+  // Show a Hardener-ready toast when the handoff event fires
+  if (type === "crucible-handoff-to-hardener" && event.data) {
+    const { phaseName, planPath } = event.data;
+    // Use alert as a deliberate user-visible nudge — the reviewer must
+    // take an action before the plan runs through the gate.
+    try {
+      console.log(`[crucible] Hardener ready for ${phaseName} (${planPath})`);
+      if (typeof window !== "undefined" && window.alert) {
+        // Non-blocking: only alert if the Crucible tab is active
+        const activeTab = document.querySelector(".tab-btn.tab-active");
+        if (activeTab && activeTab.dataset.tab === "crucible") {
+          window.alert(`✓ ${phaseName} finalized. Next step: run /step2-harden-plan against ${planPath}`);
+        }
+      }
+    } catch { /* ignore */ }
+  }
 }
 window.onCrucibleHubEvent = onCrucibleHubEvent;
+
+// ─── v2.37 Crucible Config (Slice 01.6) ─────────────────────
+async function loadCrucibleConfigUI() {
+  try {
+    const res = await fetch(`${API_BASE}/api/crucible/config`);
+    if (!res.ok) {
+      const el = document.getElementById("crucible-cfg-status");
+      if (el) el.textContent = `Failed to load config (${res.status})`;
+      return;
+    }
+    const cfg = await res.json();
+    const lane = document.getElementById("crucible-cfg-lane");
+    if (lane) lane.value = cfg.defaultLane;
+    const depth = document.getElementById("crucible-cfg-depth");
+    if (depth) depth.value = String(cfg.recursionDepth);
+    const auto = document.getElementById("crucible-cfg-auto-approve");
+    if (auto) auto.checked = Boolean(cfg.autoApproveAgent);
+    const wm = document.getElementById("crucible-cfg-w-memory");
+    const wp = document.getElementById("crucible-cfg-w-principles");
+    const wpl = document.getElementById("crucible-cfg-w-plans");
+    if (wm) wm.value = String(cfg.sourceWeights?.memory ?? 34);
+    if (wp) wp.value = String(cfg.sourceWeights?.principles ?? 33);
+    if (wpl) wpl.value = String(cfg.sourceWeights?.plans ?? 33);
+    const stale = document.getElementById("crucible-cfg-stale");
+    if (stale) stale.value = String(cfg.staleDefaultsHours ?? 24);
+    const status = document.getElementById("crucible-cfg-status");
+    if (status) status.textContent = "Loaded.";
+  } catch (err) {
+    const status = document.getElementById("crucible-cfg-status");
+    if (status) status.textContent = `Error: ${err.message}`;
+  }
+}
+window.loadCrucibleConfigUI = loadCrucibleConfigUI;
+
+async function saveCrucibleConfig() {
+  const body = {
+    defaultLane: document.getElementById("crucible-cfg-lane")?.value || "feature",
+    recursionDepth: Number(document.getElementById("crucible-cfg-depth")?.value ?? 1),
+    autoApproveAgent: Boolean(document.getElementById("crucible-cfg-auto-approve")?.checked),
+    sourceWeights: {
+      memory: Number(document.getElementById("crucible-cfg-w-memory")?.value ?? 34),
+      principles: Number(document.getElementById("crucible-cfg-w-principles")?.value ?? 33),
+      plans: Number(document.getElementById("crucible-cfg-w-plans")?.value ?? 33),
+    },
+    staleDefaultsHours: Number(document.getElementById("crucible-cfg-stale")?.value ?? 24),
+  };
+  const status = document.getElementById("crucible-cfg-status");
+  try {
+    const res = await fetch(`${API_BASE}/api/crucible/config`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      if (status) status.textContent = `Save failed (${res.status})`;
+      return;
+    }
+    const saved = await res.json();
+    if (status) status.textContent = `✓ Saved. Weights normalized to ${saved.sourceWeights.memory}/${saved.sourceWeights.principles}/${saved.sourceWeights.plans}.`;
+    await loadCrucibleConfigUI();
+  } catch (err) {
+    if (status) status.textContent = `Error: ${err.message}`;
+  }
+}
+window.saveCrucibleConfig = saveCrucibleConfig;
+
+// ─── v2.37 Governance Tab (Slice 01.6, read-only) ───────────
+async function loadGovernance() {
+  try {
+    const [govRes, auditRes] = await Promise.all([
+      fetch(`${API_BASE}/api/crucible/governance`),
+      fetch(`${API_BASE}/api/crucible/manual-imports`),
+    ]);
+    const filesEl = document.getElementById("governance-files");
+    if (govRes.ok) {
+      const { files = [] } = await govRes.json();
+      if (!files.length) {
+        if (filesEl) filesEl.innerHTML = `<p class="text-gray-500 py-2">No principles or profile files found. Create <code>docs/plans/PROJECT-PRINCIPLES.md</code> to start.</p>`;
+      } else {
+        if (filesEl) filesEl.innerHTML = files.map((f) => `
+          <details class="bg-gray-900 rounded">
+            <summary class="cursor-pointer px-3 py-2 text-sm flex items-center justify-between">
+              <span><span class="text-gray-400">${f.role}</span> — <code class="text-orange-300">${escapeHtml(f.path)}</code></span>
+              <span class="text-xs text-gray-500">${new Date(f.mtime).toLocaleString()}</span>
+            </summary>
+            <div class="px-3 pb-3">
+              <div class="flex justify-end mb-2">
+                <a href="vscode://file/${encodeURI(f.absolutePath.replace(/\\/g, "/"))}" class="text-xs text-blue-400 hover:text-blue-300">Open in VS Code →</a>
+              </div>
+              <pre class="text-xs text-gray-300 whitespace-pre-wrap font-mono max-h-72 overflow-y-auto bg-black/40 rounded p-2">${escapeHtml(f.content)}</pre>
+            </div>
+          </details>
+        `).join("");
+      }
+    } else if (filesEl) {
+      filesEl.innerHTML = `<p class="text-red-400">Failed to load governance (${govRes.status})</p>`;
+    }
+
+    const auditEl = document.getElementById("governance-audit");
+    const countEl = document.getElementById("governance-audit-count");
+    if (auditRes.ok) {
+      const { total, showing, entries } = await auditRes.json();
+      if (countEl) countEl.textContent = `${showing}/${total}`;
+      if (!entries.length) {
+        if (auditEl) auditEl.innerHTML = `<p class="text-gray-500 py-2">No manual imports recorded.</p>`;
+      } else {
+        const sourceColor = { human: "text-blue-300", speckit: "text-green-300", grandfather: "text-gray-400" };
+        if (auditEl) auditEl.innerHTML = entries.map((e) => `
+          <div class="bg-gray-900 rounded px-2 py-1.5">
+            <div class="flex items-center justify-between">
+              <span class="${sourceColor[e.source] || "text-gray-300"} font-semibold">${escapeHtml(e.source || "?")}</span>
+              <span class="text-gray-500">${new Date(e.timestamp).toLocaleString()}</span>
+            </div>
+            <div class="text-gray-400 truncate" title="${escapeHtml(e.planPath || "")}">${escapeHtml(e.planPath || "(no path)")}</div>
+            ${e.crucibleId ? `<div class="text-orange-300 text-[10px]">${escapeHtml(e.crucibleId)}</div>` : ""}
+            ${e.reason ? `<div class="text-gray-500 text-[10px] italic">${escapeHtml(e.reason)}</div>` : ""}
+          </div>
+        `).join("");
+      }
+    } else if (auditEl) {
+      auditEl.innerHTML = `<p class="text-red-400">Failed to load audit log (${auditRes.status})</p>`;
+    }
+  } catch (err) {
+    console.error("[governance] load failed", err);
+  }
+}
+window.loadGovernance = loadGovernance;
 
 
 async function copyWatchCommand(live) {

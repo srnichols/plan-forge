@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<!-- verified: v2.37.0 -->
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chapter 6.6: Crucible — Plan Forge Manual</title>
+  <meta name="description" content="The idea-smelting pipeline: lanes (tweak/feature/full), interview questions, recursion guardrails, grandfather migration, Spec Kit coexistence, bypass enforcement, dashboard Config, and Governance tab." />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+
+    <main>
+      <div class="chapter-content">
+
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 6.6</div>
+        <h1>Crucible — The Idea Smelter</h1>
+        <p class="text-lg text-slate-400 mb-8">Before a plan can be hardened, the raw ore has to be smelted. Crucible is the stage that happens <em>before</em> Plan Hardening — where an idea becomes a well-specified Phase plan through a short, structured interview.</p>
+
+        <div class="callout callout-tip">
+          <strong>New in v2.37.0</strong>: Crucible is the first mandatory pre-hardening stage. Every plan under <code>docs/plans/Phase-*.md</code> must now carry a <code>crucibleId</code> in its frontmatter — either from a smelt, from the <code>--manual-import</code> bypass, or from the grandfather migration.
+        </div>
+
+        <h2 id="why">Why Smelt Before Hardening?</h2>
+        <p>Plan Hardening (Step 2) assumes you already know what you want to build. Crucible exists because, most of the time, you don't — not precisely enough for a hardened plan. The smelter forces three things:</p>
+        <ul>
+          <li><strong>A stable phase name</strong> — atomic claim prevents two parallel agents from both creating "Phase 17".</li>
+          <li><strong>A minimum set of answered questions</strong> — lane-scaled (3/6/12) so trivial tweaks don't get full-feature ceremony.</li>
+          <li><strong>A provenance stamp</strong> — every plan carries <code>crucibleId</code>, <code>lane</code>, <code>source</code> in frontmatter so later gates can audit how it got here.</li>
+        </ul>
+
+        <h2 id="lanes">The Three Lanes</h2>
+        <p>Crucible scales its interview to the size of the change. Pick (or let the server infer) one of:</p>
+        <div class="grid md:grid-cols-3 gap-4 my-6">
+          <div class="p-4 bg-slate-900 border border-slate-800 rounded-lg">
+            <div class="text-forge-400 font-semibold mb-1">tweak</div>
+            <div class="text-xs text-slate-400 mb-2">~3 questions</div>
+            <p class="text-sm">Version bumps, config flag flips, doc edits, small bug fixes. Inferred when the raw idea mentions "bump", "fix typo", "update dep".</p>
+          </div>
+          <div class="p-4 bg-slate-900 border border-slate-800 rounded-lg">
+            <div class="text-forge-400 font-semibold mb-1">feature</div>
+            <div class="text-xs text-slate-400 mb-2">~6 questions</div>
+            <p class="text-sm">Default lane. New endpoint, new tool, new UI section, new service with a handful of slices.</p>
+          </div>
+          <div class="p-4 bg-slate-900 border border-slate-800 rounded-lg">
+            <div class="text-forge-400 font-semibold mb-1">full</div>
+            <div class="text-xs text-slate-400 mb-2">~12 questions</div>
+            <p class="text-sm">Architectural shifts, subsystem introductions, anything that touches three or more top-level modules.</p>
+          </div>
+        </div>
+
+        <h2 id="interview">The Interview Loop</h2>
+        <p>Crucible streams one question at a time. You answer, it writes the answer to the smelt's JSONL record, then it computes the next question. Three MCP tools drive the loop:</p>
+        <pre><code>forge_crucible_submit { rawIdea, lane?, source? }   → { id, firstQuestion }
+forge_crucible_ask    { id, answer }                 → { nextQuestion | done: true }
+forge_crucible_finalize { id }                        → { phaseName, planPath, hardenerHandoff }</code></pre>
+        <p>Finalize writes <code>docs/plans/&lt;phaseName&gt;.md</code> with the answer-derived draft and emits <code>crucible-handoff-to-hardener</code> on the hub so the dashboard (and downstream agents) can pick up the plan for Step 2.</p>
+
+        <h2 id="recursion">Recursion Guardrails</h2>
+        <p>A smelt can spawn a child smelt — useful when answering a question reveals a sub-feature that itself needs its own phase. The server enforces a <strong>maximum recursion depth</strong> (default <code>1</code>, configurable up to <code>3</code>) so a runaway agent cannot chain smelts indefinitely.</p>
+        <p>Child smelts inherit <code>parentSmeltId</code> and appear linked in the dashboard. The parent can reference the child's <code>crucibleId</code> in its frontmatter so the audit chain stays intact.</p>
+
+        <h2 id="enforcement">Enforcement Gate</h2>
+        <p>The <code>crucible-enforce</code> gate refuses to accept any plan under <code>docs/plans/Phase-*.md</code> without a <code>crucibleId</code>. There are exactly three legitimate ways to satisfy it:</p>
+        <ol>
+          <li><strong>Finalize a smelt</strong> — the normal path. Frontmatter is written automatically.</li>
+          <li><strong>Grandfather migration</strong> — on first run after upgrade, existing phase files get a synthetic <code>crucibleId: grandfathered-&lt;uuid&gt;</code> and a row in <code>.forge/crucible/manual-imports.jsonl</code>.</li>
+          <li><strong>Manual import</strong> — <code>pforge run-plan --manual-import path/to/plan.md</code> stamps a synthetic <code>imported-&lt;source&gt;-&lt;uuid&gt;</code> id and logs the bypass. Reserved for Spec Kit imports, offline drafts, and genuine emergencies.</li>
+        </ol>
+        <div class="callout callout-warning">
+          <strong>Every manual import is audited.</strong> The Governance tab surfaces every row in the audit log. If a reviewer sees an unexplained import, the gate did its job — investigate.
+        </div>
+
+        <h2 id="speckit">Spec Kit Coexistence</h2>
+        <p>Spec Kit users import external specs regularly. Crucible treats those imports as a first-class path:</p>
+        <pre><code>pforge run-plan --manual-import docs/plans/imported/Phase-from-speckit.md \
+                 --source speckit \
+                 --reason "Imported from Spec Kit session 2026-04-15"</code></pre>
+        <p>The gate writes frontmatter with <code>source: speckit</code> and appends an audit row. The Spec Kit importer does not require a full interview — it trusts that the external spec already carried equivalent structure.</p>
+
+        <h2 id="dashboard">Dashboard Integration</h2>
+        <p>Two tabs expose Crucible's state:</p>
+        <ul>
+          <li><strong>🔥 Crucible tab</strong> — live list of in-progress smelts, the active interview prompt, and a draft preview that updates as answers are recorded. A "Hardener ready" notice appears after finalize.</li>
+          <li><strong>🛡 Governance tab</strong> — <em>read-only</em> view of <code>docs/plans/PROJECT-PRINCIPLES.md</code>, <code>.github/instructions/project-profile.instructions.md</code>, and <code>.github/instructions/project-principles.instructions.md</code>, plus the full manual-import audit log. Edits happen in your editor; this tab is intentionally non-editable.</li>
+        </ul>
+
+        <h2 id="config">Config Tab Fields</h2>
+        <p>The Config tab's Crucible section persists to <code>.forge/crucible/config.json</code>. All writes go through a sanitizer that drops unknown fields and snaps numbers to safe bounds, so no UI bug can corrupt the file.</p>
+        <table class="manual-table my-4">
+          <thead><tr><th>Field</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>defaultLane</code></td><td>tweak / feature / full</td><td>feature</td><td>Lane used when <code>forge_crucible_submit</code> is called without one.</td></tr>
+            <tr><td><code>recursionDepth</code></td><td>0–3</td><td>1</td><td>Max child-smelt depth before the server refuses to spawn another.</td></tr>
+            <tr><td><code>autoApproveAgent</code></td><td>boolean</td><td>false</td><td>When true, smelts with <code>source: agent</code> auto-finalize after the interview completes. Use with care.</td></tr>
+            <tr><td><code>sourceWeights</code></td><td>sum 100</td><td>34/33/33</td><td>Weighting for how Memory / Principles / Plans contribute to default answers in the interview. Server normalizes any sum to 100.</td></tr>
+            <tr><td><code>staleDefaultsHours</code></td><td>1–168</td><td>24</td><td>If your Principles or profile file is newer than the smelt by this many hours, the interview flags a <code>STALE_PRINCIPLES</code> / <code>STALE_PROFILE</code> warning so you re-read before finalizing.</td></tr>
+          </tbody>
+        </table>
+
+        <h2 id="troubleshooting">Troubleshooting</h2>
+        <dl class="space-y-3 my-4">
+          <dt class="font-semibold text-slate-100">"Plan rejected: missing crucibleId"</dt>
+          <dd class="text-slate-400 text-sm">Expected. Either finalize a smelt, re-run setup to trigger grandfather migration, or use <code>--manual-import</code> with a <code>--reason</code>.</dd>
+
+          <dt class="font-semibold text-slate-100">"STALE_PRINCIPLES" warning on every smelt</dt>
+          <dd class="text-slate-400 text-sm">Your Principles file changed after the smelt started. Read it, then resume or abandon. If you consistently hit this, raise <code>staleDefaultsHours</code> in Config.</dd>
+
+          <dt class="font-semibold text-slate-100">Recursion blocked at depth 1</dt>
+          <dd class="text-slate-400 text-sm">By design. If you genuinely need deeper chains, bump <code>recursionDepth</code> in Config. Three is the hard ceiling — beyond that, extract a separate Phase.</dd>
+
+          <dt class="font-semibold text-slate-100">Governance tab shows empty file list</dt>
+          <dd class="text-slate-400 text-sm">You haven't created <code>docs/plans/PROJECT-PRINCIPLES.md</code> yet. Run <code>/project-principles</code> in Copilot chat, or create the file manually.</dd>
+        </dl>
+
+        <h2 id="further">Further Reading</h2>
+        <ul>
+          <li><a href="how-it-works.html">Chapter 2 — How It Works</a> (Crucible's place in the 6-stage pipeline)</li>
+          <li><a href="writing-plans.html">Chapter 5 — Writing Plans That Work</a> (what a hardened plan looks like after smelt → harden)</li>
+          <li><a href="mcp-server.html">Chapter 10 — MCP Server & Tools</a> (the <code>forge_crucible_*</code> tool surface)</li>
+        </ul>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="assets/manual.js"></script>
+</body>
+</html>

@@ -315,9 +315,12 @@ describe("handleFinalize", () => {
 
     expect(listClaims(projectDir).map((c) => c.phaseName)).toContain("Phase-01");
 
-    expect(fakeHub.broadcasts).toHaveLength(1);
+    // v2.37 Slice 01.6: finalize emits BOTH the finalized event and the Hardener handoff
+    expect(fakeHub.broadcasts).toHaveLength(2);
     expect(fakeHub.broadcasts[0].type).toBe("crucible-smelt-finalized");
     expect(fakeHub.broadcasts[0].data.phaseName).toBe("Phase-01");
+    expect(fakeHub.broadcasts[1].type).toBe("crucible-handoff-to-hardener");
+    expect(fakeHub.broadcasts[1].data.phaseName).toBe("Phase-01");
   });
   it("picks Phase-02 when Phase-01 already exists in docs/plans/", () => {
     const plansDir = resolve(projectDir, "docs", "plans");

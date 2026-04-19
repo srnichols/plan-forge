@@ -83,6 +83,8 @@ import {
   handleList as crucibleHandleList,
   handleAbandon as crucibleHandleAbandon,
 } from "./crucible-server.mjs";
+import { loadCrucibleConfig, saveCrucibleConfig } from "./crucible-config.mjs";
+import { readManualImports } from "./crucible-enforce.mjs";
 import express from "express";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -3744,6 +3746,68 @@ export function createExpressApp() {
       const status = /not found/i.test(err.message) ? 404 : 500;
       res.status(status).json({ error: err.message });
     }
+  });
+
+  // GET /api/crucible/config — load Crucible config (defaults if absent)
+  app.get("/api/crucible/config", (_req, res) => {
+    try {
+      res.json(loadCrucibleConfig(PROJECT_DIR));
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // POST /api/crucible/config — persist Crucible config (sanitized)
+  app.post("/api/crucible/config", (req, res) => {
+    try {
+      if (!req.body || typeof req.body !== "object") {
+        return res.status(400).json({ error: "body must be a JSON object" });
+      }
+      res.json(saveCrucibleConfig(PROJECT_DIR, req.body));
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // GET /api/crucible/manual-imports — read-only audit log for the
+  // Governance tab. Newest first, capped at 500 so we never leak a
+  // runaway log into the browser.
+  app.get("/api/crucible/manual-imports", (_req, res) => {
+    try {
+      const entries = readManualImports(PROJECT_DIR);
+      const capped = entries
+        .slice()
+        .reverse()
+        .slice(0, 500);
+      res.json({ total: entries.length, showing: capped.length, entries: capped });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // GET /api/crucible/governance — read-only view of PROJECT-PRINCIPLES.md
+  // and any project-profile files. Returns file content + mtime so the
+  // Governance tab can render it and offer an "open in VS Code" deep link.
+  app.get("/api/crucible/governance", (_req, res) => {
+    try {
+      const files = [
+        { path: "docs/plans/PROJECT-PRINCIPLES.md", role: "principles" },
+        { path: ".github/instructions/project-profile.instructions.md", role: "project-profile" },
+        { path: ".github/instructions/project-principles.instructions.md", role: "principles-instruction" },
+      ];
+      const out = [];
+      for (const f of files) {
+        const abs = resolve(PROJECT_DIR, f.path);
+        if (!existsSync(abs)) continue;
+        try {
+          const stat = statSync(abs);
+          const content = readFileSync(abs, "utf-8");
+          out.push({
+            path: f.path,
+            absolutePath: abs,
+            role: f.role,
+            mtime: stat.mtime.toISOString(),
+            bytes: stat.size,
+            content,
+          });
+        } catch { /* skip unreadable */ }
+      }
+      res.json({ files: out, readOnly: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
   // REST API: GET /api/hotspots — git churn hotspot analysis (cache TTL 24h)

@@ -1,3 +1,9 @@
+---
+crucibleId: 4af20577-6611-4b22-9e24-752c11ec330e
+lane: full
+source: selfhost
+---
+
 # Phase CRUCIBLE-01: Raw Ideas → Hardened Specs — Interactive Smelter
 
 > **Status**: 🟡 DRAFT — to be hardened by Plan Hardener

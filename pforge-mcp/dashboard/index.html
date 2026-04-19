@@ -72,6 +72,7 @@
     <!-- Sub tabs: Forge -->
     <div id="subtabs-forge" class="flex gap-1 pt-1 pb-0.5 overflow-x-auto">
       <button class="tab-btn tab-active px-3 py-1.5 rounded-t hover:text-blue-400 whitespace-nowrap text-xs" data-tab="progress">Progress</button>
+      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-orange-400 text-gray-400 whitespace-nowrap text-xs" data-tab="crucible">🔥 Crucible</button>
       <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="runs">Runs</button>
       <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="cost">Cost</button>
       <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="actions">Actions</button>
@@ -169,6 +170,76 @@
           </div>
         </div>
       </details>
+    </section>
+
+    <!-- Crucible Tab (v2.37) — 3-panel smelt workspace -->
+    <section id="tab-crucible" class="tab-content hidden">
+      <div class="bg-gray-800 rounded-lg p-4 mb-4 flex items-center justify-between">
+        <div>
+          <h2 class="text-lg font-semibold">🔥 Crucible — Idea Smelting</h2>
+          <p class="text-sm text-gray-400">Turn a raw idea into a hardened phase plan. Every plan must be smelted here before execution.</p>
+        </div>
+        <button id="crucible-new-btn" class="bg-orange-600 hover:bg-orange-500 text-white text-sm font-semibold px-4 py-2 rounded" onclick="startNewSmelt()">+ New Smelt</button>
+      </div>
+
+      <div class="grid gap-4" style="grid-template-columns: 25% 45% 30%;">
+        <!-- Left: smelt list -->
+        <div class="bg-gray-800 rounded-lg p-3">
+          <h3 class="text-sm font-semibold mb-2 text-gray-300">Smelts</h3>
+          <div id="crucible-smelt-list" class="space-y-1 text-xs">
+            <p class="text-gray-500 py-2">Loading…</p>
+          </div>
+        </div>
+
+        <!-- Center: active interview -->
+        <div class="bg-gray-800 rounded-lg p-4">
+          <div id="crucible-interview-empty" class="text-center text-gray-500 py-16">
+            <p class="text-sm">Select a smelt on the left, or click <span class="text-orange-400">+ New Smelt</span> to start one.</p>
+          </div>
+          <div id="crucible-interview" class="hidden">
+            <div class="flex items-center justify-between mb-3">
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-gray-500">Smelt</span>
+                <code id="crucible-active-id" class="text-xs bg-gray-700 px-2 py-0.5 rounded text-gray-300"></code>
+                <span id="crucible-active-lane" class="text-xs px-2 py-0.5 rounded-full bg-orange-900 text-orange-200"></span>
+              </div>
+              <div class="text-xs text-gray-400">
+                <span id="crucible-q-index">0</span> / <span id="crucible-q-total">0</span>
+              </div>
+            </div>
+            <div id="crucible-question-block" class="mb-4">
+              <p class="text-xs uppercase tracking-wide text-gray-500 mb-1">Question</p>
+              <p id="crucible-question-text" class="text-sm text-gray-200"></p>
+            </div>
+            <div class="mb-3">
+              <label class="text-xs uppercase tracking-wide text-gray-500">Your answer</label>
+              <textarea id="crucible-answer" rows="4" class="w-full bg-gray-900 border border-gray-700 rounded text-sm text-gray-200 p-2 mt-1 focus:outline-none focus:ring-1 focus:ring-orange-500" placeholder="Answer here. The recommended default (if any) is pre-filled."></textarea>
+            </div>
+            <div class="flex items-center justify-between">
+              <div class="text-xs text-gray-500">
+                <span id="crucible-recommendation-label" class="hidden">
+                  <span class="text-gray-400">Recommended:</span>
+                  <span id="crucible-recommendation-value" class="text-orange-300"></span>
+                </span>
+              </div>
+              <div class="flex gap-2">
+                <button onclick="abandonSmelt()" class="text-xs text-gray-400 hover:text-red-400 px-2 py-1">Abandon</button>
+                <button id="crucible-finalize-btn" class="hidden bg-green-700 hover:bg-green-600 text-white text-sm px-3 py-1 rounded" onclick="finalizeSmelt()">Finalize → Hardener</button>
+                <button id="crucible-next-btn" class="bg-orange-600 hover:bg-orange-500 text-white text-sm px-3 py-1 rounded" onclick="submitAnswer()">Next →</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: live draft preview -->
+        <div class="bg-gray-800 rounded-lg p-3">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-semibold text-gray-300">Draft Preview</h3>
+            <span id="crucible-unresolved-count" class="text-xs text-yellow-400"></span>
+          </div>
+          <pre id="crucible-preview" class="text-xs text-gray-300 whitespace-pre-wrap font-mono max-h-[70vh] overflow-y-auto bg-gray-900 rounded p-2">No active smelt</pre>
+        </div>
+      </div>
     </section>
 
     <!-- Runs Tab -->

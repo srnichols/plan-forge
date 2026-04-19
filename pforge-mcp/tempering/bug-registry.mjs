@@ -323,6 +323,19 @@ export async function registerBug(opts) {
       timestamp: discoveredAt,
     });
 
+    // Phase FORGE-SHOP-02 Slice 02.2 — review queue hook for critical functional bugs
+    if (classification === "real-bug" && severity === "critical") {
+      try {
+        const { maybeAddBugReview } = await import("../orchestrator.mjs");
+        maybeAddBugReview(cwd, {
+          title: `Bug ${bugId} needs human review (critical/functional)`,
+          severity: "blocker",
+          context: { bugId, classification, scanner, evidence: evidence ?? null },
+          correlationId: bugId,
+        }, hub, captureMemory);
+      } catch { /* review hook is advisory */ }
+    }
+
     // 7. L3 memory capture — only for real bugs
     if (classification === "real-bug" && typeof captureMemory === "function") {
       try {

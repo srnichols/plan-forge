@@ -101,3 +101,23 @@ describe("dashboard/app.js — Home tab wiring", () => {
     expect(feedFn[0]).toMatch(/escHtml/);
   });
 });
+
+// ─── Phase FORGE-SHOP-02 Slice 02.2 — openReviews sub-count ─────────
+
+describe("dashboard/app.js — openReviews sub-count in Active Runs quadrant", () => {
+  it("renderActiveRunsQuadrant references openReviews", () => {
+    const fn = appJs.match(/function\s+renderActiveRunsQuadrant[\s\S]*?^}/m);
+    expect(fn).toBeTruthy();
+    expect(fn[0]).toContain("openReviews");
+  });
+
+  it("home-open-reviews testid exists in renderActiveRunsQuadrant", () => {
+    expect(appJs).toMatch(/data-testid="home-open-reviews"/);
+  });
+
+  it("clicking sub-count calls switchToReviewTab", () => {
+    const fn = appJs.match(/function\s+renderActiveRunsQuadrant[\s\S]*?^}/m);
+    expect(fn).toBeTruthy();
+    expect(fn[0]).toContain("switchToReviewTab");
+  });
+});

@@ -53,6 +53,14 @@ const state = {
   },
   // Phase FORGE-SHOP-01 Slice 01.2 — Home tab state.
   home: { snapshot: null, groupByCorrelation: false, refreshTimer: null, lastError: null },
+  // Phase FORGE-SHOP-02 Slice 02.2 — Review tab state.
+  review: {
+    items: [],
+    filters: { source: [], severity: [], status: ["open"] },
+    selectedItemId: null,
+    refreshTimer: null,
+    lastError: null,
+  },
 };
 
 const API_BASE = `${window.location.protocol}//${window.location.host}`;
@@ -64,6 +72,11 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
     if (state.home.refreshTimer) {
       clearInterval(state.home.refreshTimer);
       state.home.refreshTimer = null;
+    }
+    // Phase FORGE-SHOP-02 Slice 02.2 — teardown Review refresh timer on tab switch
+    if (state.review.refreshTimer) {
+      clearInterval(state.review.refreshTimer);
+      state.review.refreshTimer = null;
     }
 
     // Clear active from ALL tab-btn elements across all groups
@@ -2941,6 +2954,7 @@ loadPlans();
 // Tab load hooks
 const tabLoadHooks = {
   home: loadHomeSnapshot,
+  review: loadReviewQueue,
   progress: loadPlans,
   crucible: loadCrucible,
   governance: loadGovernance,
@@ -3242,11 +3256,16 @@ function renderActiveRunsQuadrant(data) {
   const inFlight = data.inFlight ?? 0;
   const completed = data.completed ?? 0;
   const failed = data.failed ?? 0;
-  return `<div class="flex items-center gap-3 flex-wrap">
+  const openReviews = data.openReviews ?? 0;
+  let html = `<div class="flex items-center gap-3 flex-wrap">
     <span class="px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300">🔄 ${inFlight} in-flight</span>
     <span class="px-1.5 py-0.5 rounded bg-green-900/40 text-green-300">✓ ${completed} completed</span>
     <span class="px-1.5 py-0.5 rounded bg-red-900/40 text-red-300">✗ ${failed} failed</span>
   </div>`;
+  if (openReviews > 0) {
+    html += `<div class="mt-1"><a href="#" class="text-xs text-amber-400 hover:underline" data-testid="home-open-reviews" onclick="switchToReviewTab({status:['open']});return false;">${openReviews} pending review${openReviews === 1 ? '' : 's'}</a></div>`;
+  }
+  return html;
 }
 
 function renderLiveguardQuadrant(data) {
@@ -4993,4 +5012,188 @@ function renderBugRegistry() {
 
 window.loadBugRegistry = loadBugRegistry;
 window.renderBugRegistry = renderBugRegistry;
+
+// ─── Phase FORGE-SHOP-02 Slice 02.2 — Review Queue UI ────────────────
+
+async function loadReviewQueue() {
+  if (document.hidden) return;
+  try {
+    const body = {};
+    const f = state.review.filters;
+    if (f.source.length) body.source = f.source;
+    if (f.severity.length) body.severity = f.severity;
+    if (f.status.length) body.status = f.status;
+
+    const res = await fetch(`${API_BASE}/api/tool/forge_review_list`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const items = Array.isArray(data) ? data : (data.items || []);
+      state.review.items = items;
+      state.review.lastError = null;
+    } else {
+      state.review.lastError = `HTTP ${res.status}`;
+    }
+  } catch (err) {
+    state.review.lastError = err.message;
+  }
+  renderReviewPanel();
+  if (!state.review.refreshTimer) {
+    state.review.refreshTimer = setInterval(loadReviewQueue, 15_000);
+  }
+}
+
+function renderReviewPanel() {
+  const items = state.review.items || [];
+  renderReviewList(items);
+  const selected = items.find(i => i.itemId === state.review.selectedItemId);
+  renderReviewDetail(selected || null);
+}
+
+function renderReviewList(items) {
+  const pane = document.getElementById("review-list-pane");
+  if (!pane) return;
+
+  if (items.length === 0) {
+    pane.innerHTML = '<div data-testid="review-empty-state" class="text-gray-500 text-center py-8">🧹 Shop floor clear — no pending reviews</div>';
+    return;
+  }
+
+  const severityColors = {
+    blocker: "bg-red-900/40 text-red-300",
+    high: "bg-orange-900/40 text-orange-300",
+    medium: "bg-yellow-900/40 text-yellow-300",
+    low: "bg-gray-700 text-gray-300",
+  };
+
+  const html = items.map(item => {
+    const age = item.createdAt
+      ? (() => {
+          const ms = Date.now() - new Date(item.createdAt).getTime();
+          if (ms > 86400000) return `${Math.round(ms / 86400000)}d`;
+          if (ms > 3600000) return `${Math.round(ms / 3600000)}h`;
+          return `${Math.round(ms / 60000)}m`;
+        })()
+      : "—";
+    const sevCls = severityColors[item.severity] || severityColors.low;
+    const selected = item.itemId === state.review.selectedItemId ? "border-blue-500" : "border-gray-700";
+    return `<div class="review-item p-2 mb-2 rounded border ${selected} cursor-pointer hover:border-blue-400" data-testid="review-item-${item.itemId}" onclick="selectReviewItem('${escHtml(item.itemId)}')">
+      <div class="flex items-center gap-2 text-xs mb-1">
+        <span class="px-1.5 py-0.5 rounded ${sevCls}">${escHtml(item.severity)}</span>
+        <span class="px-1.5 py-0.5 rounded bg-gray-700 text-gray-400">${escHtml(item.source)}</span>
+        <span class="ml-auto text-gray-500">${age}</span>
+      </div>
+      <div class="text-sm text-gray-200 truncate">${escHtml(item.title)}</div>
+    </div>`;
+  }).join("");
+  pane.innerHTML = html;
+}
+
+function renderReviewDetail(item) {
+  const pane = document.getElementById("review-detail-pane");
+  if (!pane) return;
+
+  if (!item) {
+    pane.innerHTML = '<p class="text-gray-500 text-sm text-center py-8">Select a review item to see details</p>';
+    return;
+  }
+
+  const contextJson = item.context ? JSON.stringify(item.context, null, 2) : "null";
+  const isOpen = item.status === "open";
+
+  // Preserve note text if refreshing the same item
+  const existingNote = pane.querySelector('[data-testid="review-note"]');
+  const preservedNote = existingNote && state.review.selectedItemId === item.itemId ? existingNote.value : "";
+
+  pane.innerHTML = `
+    <h3 class="text-sm font-semibold text-gray-200 mb-2">${escHtml(item.title)}</h3>
+    <div class="text-xs text-gray-500 mb-3">
+      <span>${escHtml(item.source)}</span> · <span>${escHtml(item.severity)}</span> · <span>${escHtml(item.status)}</span>
+      ${item.correlationId ? ` · <span class="text-gray-600">${escHtml(item.correlationId)}</span>` : ""}
+    </div>
+    <div class="mb-3">
+      <p class="text-xs text-gray-500 mb-1">Context:</p>
+      <pre class="text-xs bg-gray-900 p-2 rounded overflow-auto max-h-40 text-gray-300">${escHtml(contextJson)}</pre>
+    </div>
+    ${isOpen ? `
+      <div class="mb-3">
+        <textarea data-testid="review-note" class="w-full text-xs bg-gray-900 border border-gray-700 rounded p-2 text-gray-300" rows="2" placeholder="Optional note…">${escHtml(preservedNote)}</textarea>
+      </div>
+      <div class="flex gap-2">
+        <button data-testid="review-action-approve" class="text-xs px-3 py-1 rounded bg-green-700 text-white hover:bg-green-600" onclick="handleReviewAction('${escHtml(item.itemId)}', 'approve')">✓ Approve</button>
+        <button data-testid="review-action-reject" class="text-xs px-3 py-1 rounded bg-red-700 text-white hover:bg-red-600" onclick="handleReviewAction('${escHtml(item.itemId)}', 'reject')">✗ Reject</button>
+        <button data-testid="review-action-defer" class="text-xs px-3 py-1 rounded bg-gray-600 text-white hover:bg-gray-500" onclick="handleReviewAction('${escHtml(item.itemId)}', 'defer')">⏸ Defer</button>
+      </div>
+    ` : `<p class="text-xs text-gray-500">Resolved: ${escHtml(item.resolution || "—")} by ${escHtml(item.resolvedBy || "—")}</p>`}
+  `;
+}
+
+function selectReviewItem(itemId) {
+  state.review.selectedItemId = itemId;
+  renderReviewPanel();
+}
+
+async function handleReviewAction(itemId, resolution) {
+  const noteEl = document.querySelector('[data-testid="review-note"]');
+  const note = noteEl?.value || null;
+  try {
+    const res = await fetch(`${API_BASE}/api/tool/forge_review_resolve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ itemId, resolution, resolvedBy: "dashboard", note }),
+    });
+    if (res.ok) {
+      state.review.items = state.review.items.filter(i => i.itemId !== itemId);
+      state.review.selectedItemId = null;
+      renderReviewPanel();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      if (data.code === "ERR_ALREADY_RESOLVED") {
+        showToast?.("Item already resolved");
+      }
+    }
+  } catch (err) {
+    showToast?.(`Review action failed: ${err.message}`);
+  }
+}
+
+function switchToReviewTab(preset) {
+  if (preset?.status) {
+    state.review.filters.status = Array.isArray(preset.status) ? preset.status : [preset.status];
+  }
+  const reviewBtn = document.querySelector('[data-tab="review"]');
+  if (reviewBtn) reviewBtn.click();
+}
+
+// Wire filter chip clicks
+document.addEventListener("click", (e) => {
+  const chip = e.target.closest("[data-filter-type][data-filter-value]");
+  if (!chip || !chip.closest("#tab-review")) return;
+
+  const type = chip.dataset.filterType;
+  const value = chip.dataset.filterValue;
+  if (!type || !value) return;
+
+  const arr = state.review.filters[type];
+  if (!arr) return;
+
+  const idx = arr.indexOf(value);
+  if (idx >= 0) {
+    arr.splice(idx, 1);
+    chip.classList.remove("tab-active", "border-blue-500", "text-blue-400");
+    chip.classList.add("border-gray-600", "text-gray-400");
+  } else {
+    arr.push(value);
+    chip.classList.add("tab-active", "border-blue-500", "text-blue-400");
+    chip.classList.remove("border-gray-600", "text-gray-400");
+  }
+  loadReviewQueue();
+});
+
+window.selectReviewItem = selectReviewItem;
+window.handleReviewAction = handleReviewAction;
+window.switchToReviewTab = switchToReviewTab;
 

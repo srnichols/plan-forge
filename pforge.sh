@@ -2481,6 +2481,80 @@ cmd_doctor() {
     fi
 
     # ═══════════════════════════════════════════════════════════════
+    # CRUCIBLE (v2.37 / Phase CRUCIBLE-02 Slice 02.2)
+    # ═══════════════════════════════════════════════════════════════
+    # The Crucible funnel (forge_crucible_submit → ask → preview → finalize)
+    # persists every smelt under .forge/crucible/ and every manual-import
+    # bypass into .forge/crucible/manual-imports.jsonl. Surfacing the counts
+    # here gives the forge operator a one-glance answer to "is the Crucible
+    # gate healthy?" without having to open the dashboard.
+    echo ""
+    echo "Crucible:"
+    crucible_dir="$REPO_ROOT/.forge/crucible"
+    if [ -d "$crucible_dir" ]; then
+        smelt_count=0
+        in_progress=0
+        finalized=0
+        abandoned=0
+        stale_in_progress=0
+        stale_cutoff=$(( $(date +%s) - 7*24*60*60 ))
+
+        for f in "$crucible_dir"/*.json; do
+            [ -e "$f" ] || continue
+            base=$(basename "$f")
+            # Skip non-smelt files
+            case "$base" in
+                config.json|phase-claims.json) continue ;;
+            esac
+            smelt_count=$((smelt_count + 1))
+            # Best-effort status read via grep — avoids a jq dependency
+            status=$(grep -o '"status"[[:space:]]*:[[:space:]]*"[^"]*"' "$f" 2>/dev/null | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
+            case "$status" in
+                in_progress) in_progress=$((in_progress + 1))
+                    # Stat portably: mtime in seconds
+                    mtime=$(stat -c %Y "$f" 2>/dev/null || stat -f %m "$f" 2>/dev/null || echo 0)
+                    if [ "$mtime" -gt 0 ] && [ "$mtime" -lt "$stale_cutoff" ]; then
+                        stale_in_progress=$((stale_in_progress + 1))
+                    fi
+                    ;;
+                finalized) finalized=$((finalized + 1)) ;;
+                abandoned) abandoned=$((abandoned + 1)) ;;
+            esac
+        done
+
+        if [ "$smelt_count" -eq 0 ]; then
+            doctor_pass "No smelts yet — run 'forge_crucible_submit' to start the funnel"
+        else
+            doctor_pass "$smelt_count smelt(s): $finalized finalized, $in_progress in-progress, $abandoned abandoned"
+            if [ "$stale_in_progress" -gt 0 ]; then
+                doctor_warn "$stale_in_progress in-progress smelt(s) idle for 7+ days" "Abandon them with 'forge_crucible_abandon' or resume via the dashboard"
+            fi
+        fi
+
+        # Config file — Slice 01.5
+        if [ -f "$crucible_dir/config.json" ]; then
+            doctor_pass "Crucible config present — governance overrides active"
+        fi
+
+        # Manual-import audit trail — Slice 01.4
+        if [ -f "$crucible_dir/manual-imports.jsonl" ]; then
+            mi_count=$(wc -l < "$crucible_dir/manual-imports.jsonl" 2>/dev/null | tr -d ' ')
+            if [ "${mi_count:-0}" -gt 0 ]; then
+                doctor_pass "$mi_count manual-import bypass(es) recorded"
+            fi
+        fi
+
+        # Phase claims — atomic phase-number allocation
+        if [ -f "$crucible_dir/phase-claims.json" ]; then
+            # Count unique phase IDs in claims array — grep is sufficient
+            claim_count=$(grep -o '"phaseNumber"[[:space:]]*:' "$crucible_dir/phase-claims.json" 2>/dev/null | wc -l | tr -d ' ')
+            doctor_pass "${claim_count:-0} phase number(s) claimed atomically"
+        fi
+    else
+        doctor_pass "Crucible inactive — no .forge/crucible/ directory yet"
+    fi
+
+    # ═══════════════════════════════════════════════════════════════
     # SUMMARY
     # ═══════════════════════════════════════════════════════════════
     echo ""

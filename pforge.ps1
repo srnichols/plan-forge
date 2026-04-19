@@ -3255,6 +3255,78 @@ function Invoke-Smith {
     }
 
     # ═══════════════════════════════════════════════════════════════
+    # 8. CRUCIBLE (v2.37 / Phase CRUCIBLE-02 Slice 02.2)
+    # ═══════════════════════════════════════════════════════════════
+    # The Crucible funnel (forge_crucible_submit → ask → preview → finalize)
+    # persists every smelt under .forge/crucible/ and every manual-import
+    # bypass into .forge/crucible/manual-imports.jsonl. Surfacing the counts
+    # here gives the forge operator a one-glance answer to "is the Crucible
+    # gate healthy?" without having to open the dashboard.
+    $crucibleDir = Join-Path $RepoRoot ".forge/crucible"
+    Write-Host ""
+    Write-Host "Crucible:" -ForegroundColor Cyan
+
+    if (Test-Path $crucibleDir) {
+        $smeltFiles = @(Get-ChildItem -Path $crucibleDir -Filter "*.json" -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -notin @("config.json", "phase-claims.json") })
+
+        if ($smeltFiles.Count -eq 0) {
+            Doctor-Pass "No smelts yet — run 'forge_crucible_submit' to start the funnel"
+        } else {
+            $counts = @{ in_progress = 0; finalized = 0; abandoned = 0; other = 0 }
+            foreach ($f in $smeltFiles) {
+                try {
+                    $smelt = Get-Content $f.FullName -Raw | ConvertFrom-Json
+                    $st = if ($smelt.status) { "$($smelt.status)" } else { "other" }
+                    if ($counts.ContainsKey($st)) { $counts[$st]++ } else { $counts.other++ }
+                } catch { $counts.other++ }
+            }
+            Doctor-Pass "$($smeltFiles.Count) smelt(s): $($counts.finalized) finalized, $($counts.in_progress) in-progress, $($counts.abandoned) abandoned"
+
+            # Stalled in-progress smelts ≥ 7 days old are worth surfacing — likely
+            # abandoned but never explicitly closed, which clutters the dashboard.
+            $staleCutoff = (Get-Date).AddDays(-7)
+            $stale = @($smeltFiles | Where-Object { $_.LastWriteTime -lt $staleCutoff } |
+                ForEach-Object {
+                    try {
+                        $s = Get-Content $_.FullName -Raw | ConvertFrom-Json
+                        if ($s.status -eq "in_progress") { $_ }
+                    } catch { }
+                })
+            if ($stale.Count -gt 0) {
+                Doctor-Warn "$($stale.Count) in-progress smelt(s) idle for 7+ days" "Abandon them with 'forge_crucible_abandon' or resume via the dashboard"
+            }
+        }
+
+        # Config file — Slice 01.5
+        $cfgFile = Join-Path $crucibleDir "config.json"
+        if (Test-Path $cfgFile) {
+            Doctor-Pass "Crucible config present — governance overrides active"
+        }
+
+        # Manual-import audit trail — Slice 01.4
+        $manualLog = Join-Path $crucibleDir "manual-imports.jsonl"
+        if (Test-Path $manualLog) {
+            $mImports = @(Get-Content $manualLog -ErrorAction SilentlyContinue)
+            if ($mImports.Count -gt 0) {
+                Doctor-Pass "$($mImports.Count) manual-import bypass(es) recorded"
+            }
+        }
+
+        # Phase claims — atomic phase-number allocation
+        $phaseClaims = Join-Path $crucibleDir "phase-claims.json"
+        if (Test-Path $phaseClaims) {
+            try {
+                $claims = Get-Content $phaseClaims -Raw | ConvertFrom-Json
+                $claimCount = if ($claims.claims) { @($claims.claims).Count } else { 0 }
+                Doctor-Pass "$claimCount phase number(s) claimed atomically"
+            } catch { }
+        }
+    } else {
+        Doctor-Pass "Crucible inactive — no .forge/crucible/ directory yet"
+    }
+
+    # ═══════════════════════════════════════════════════════════════
     # SUMMARY
     # ═══════════════════════════════════════════════════════════════
     Write-Host ""

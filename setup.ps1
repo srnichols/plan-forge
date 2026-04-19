@@ -1610,6 +1610,7 @@ Write-Host "Optional (recommended):" -ForegroundColor Yellow
 Write-Host "  - Run .github/prompts/project-profile.prompt.md to generate project-specific guardrails"
 Write-Host "  - Run .github/prompts/project-principles.prompt.md to define project principles"
 Write-Host "  - Use .github/prompts/step0-specify-feature.prompt.md to define your first feature"
+Write-Host "  - Start your first plan the Crucible way: call forge_crucible_submit (MCP) — every plan ships with a crucibleId for full traceability" -ForegroundColor DarkCyan
 Write-Host ""
 
 # ─── Step 8: Auto-validate ─────────────────────────────────────────────

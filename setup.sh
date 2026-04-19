@@ -1185,8 +1185,11 @@ if [[ "$IS_CUSTOM_ONLY" != true ]]; then
             skill_src="$skill_dir/SKILL.md"
             skill_dst="$PROJECT_PATH/.github/skills/$skill_name/SKILL.md"
             if [[ -f "$skill_src" ]]; then
-                # Don't overwrite — preset skills should win over shared fallbacks
-                local saved_force="$FORCE"
+                # Don't overwrite — preset skills should win over shared fallbacks.
+                # `local` is invalid here (we're at script scope, not inside a
+                # function) — a plain assignment does the same job and is
+                # portable across Bash 3/4/5.
+                saved_force="$FORCE"
                 FORCE=false
                 copy_with_create "$skill_src" "$skill_dst" || true
                 FORCE="$saved_force"

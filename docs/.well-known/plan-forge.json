@@ -2,7 +2,7 @@
   "name": "Plan Forge",
   "version": "2.35.0",
   "tagline": "Forge the plan. Harden the scope. Ship with confidence.",
-  "description": "AI coding guardrails that convert rough ideas into hardened execution contracts. 7-step pipeline, 36 MCP tools (20 core + 14 LiveGuard + 2 Watcher), self-recursive intelligence, OpenBrain persistent memory, 19 reviewer agents, live dashboard.",
+  "description": "AI coding guardrails that convert rough ideas into hardened execution contracts. 7-step pipeline, 43 MCP tools (21 core + 14 LiveGuard + 2 Watcher + 6 Crucible v2.37-dev), self-recursive intelligence, OpenBrain persistent memory, 19 reviewer agents, live dashboard.",
   "homepage": "https://planforge.software",
   "repository": "https://github.com/srnichols/plan-forge",
   "license": "MIT",
@@ -12,10 +12,11 @@
     "role": "Principal Cloud Solution Architect @ Microsoft"
   },
   "capabilities": {
-    "mcp_tools": 36,
-    "mcp_tools_core": 20,
+    "mcp_tools": 43,
+    "mcp_tools_core": 21,
     "mcp_tools_liveguard": 14,
     "mcp_tools_watcher": 2,
+    "mcp_tools_crucible": 6,
     "agents": 19,
     "skills": 12,
     "instruction_files": "15-18 per preset",
@@ -74,7 +75,16 @@
     "forge_env_diff",
     "forge_fix_proposal",
     "forge_quorum_analyze",
-    "forge_liveguard_run"
+    "forge_liveguard_run",
+    "forge_watch",
+    "forge_watch_live",
+    "forge_memory_report",
+    "forge_crucible_submit",
+    "forge_crucible_ask",
+    "forge_crucible_preview",
+    "forge_crucible_finalize",
+    "forge_crucible_list",
+    "forge_crucible_abandon"
   ],
   "ai_agents_supported": [
     { "name": "copilot", "label": "GitHub Copilot / VS Code", "tier": "primary" },

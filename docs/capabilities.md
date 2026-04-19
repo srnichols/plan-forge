@@ -1,12 +1,12 @@
 # Plan Forge — Capabilities Reference
 
-> **Tools**: 36 MCP (20 core + 14 LiveGuard v2.27–v2.30 + 2 Watcher v2.34/v2.35) | **Presets**: 9 | **Agents**: 19 | **Skills**: 12
+> **Tools**: 43 MCP (20 core + 14 LiveGuard v2.27–v2.30 + 2 Watcher v2.34/v2.35 + 6 Crucible v2.37-dev) | **Presets**: 9 | **Agents**: 19 | **Skills**: 12
 >
 > Machine-readable version: call `forge_capabilities` MCP tool or `GET https://planforge.software/.well-known/plan-forge.json`
 
 ---
 
-## MCP Tools (36)
+## MCP Tools (43)
 
 | Tool | Intent | Cost | Description |
 |------|--------|------|-------------|
@@ -45,6 +45,12 @@
 | `forge_liveguard_run` | liveguard-all | medium | Composite LiveGuard scan: drift + sweep + secrets + regression + deps + alerts + health in one call |
 | `forge_watch` | observe | low | Watcher v2.34/v2.35 — read-only observer that tails another project's pforge run from a second VS Code session. Snapshot or analyze mode. Returns counts, anomalies, recommendations, diff cursor. Optionally appends to watcher's own `.forge/watch-history.jsonl`. |
 | `forge_watch_live` | stream | low | Watcher v2.35 live tail — streams events from a target project for a fixed duration via WebSocket subscription (preferred) or `events.log` polling (fallback). Read-only subscriber. |
+| `forge_crucible_submit` | crucible | low | **v2.37-dev** — Start a smelt (raw idea) in the Crucible interview funnel; infers lane (tweak/feature/full); emits `crucible-smelt-started`. |
+| `forge_crucible_ask` | crucible | low | **v2.37-dev** — Return next interview question (lane-scoped) with optional recommended default sourced from L3 memory / principles / prior phases. |
+| `forge_crucible_preview` | crucible | low | **v2.37-dev** — Render current draft + list unresolved `{{TBD:}}` fields before finalization. |
+| `forge_crucible_finalize` | crucible | medium | **v2.37-dev** — Atomically claim next phase number, write `docs/plans/<phase>.md` with `crucibleId:` frontmatter, mark smelt finalized, emit `crucible-smelt-finalized`. |
+| `forge_crucible_list` | crucible | low | **v2.37-dev** — List all smelts with status filter (in-progress / finalized / abandoned). |
+| `forge_crucible_abandon` | crucible | low | **v2.37-dev** — Mark smelt abandoned, release any claimed phase number. |
 
 ## Execution Modes
 

@@ -5,6 +5,51 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.40.0] — 2026-04-19
+
+### Added — Phase CRUCIBLE-03 Slice 03.1 — Crucible-aware watcher
+
+`forge_watch` (snapshot + polling mode) now reads `.forge/crucible/` and
+surfaces funnel health alongside run health. Until this slice, watcher
+snapshots saw **only** run events under `.forge/runs/<id>/events.jsonl`
+— stalled smelts, abandoned funnels, and orphan handoffs were invisible
+to it. `forge_watch_live` already forwards every `crucible-*` hub event;
+this closes the gap for the snapshot watcher that powers dashboards,
+polling clients, and one-shot CLI invocations.
+
+**New on `buildWatchSnapshot(...)`:** a `crucible` block containing
+
+- smelt counts split by `finalized` / `in_progress` / `abandoned` / `other`
+- `oldestInProgressAgeMs` — ms since the oldest in-progress smelt was touched
+- `staleInProgress` — count above the 7-day cutoff (shared with Smith)
+- `orphanHandoffs[]` — `crucible-handoff-to-hardener` hub events whose
+  `planPath` no longer exists on disk
+
+**Two new anomaly codes** emitted by `detectWatchAnomalies`:
+
+| Code | Severity | When |
+|------|----------|------|
+| `crucible-stalled` | `warn` | One or more smelts idle `≥ 7 days` in `in_progress` |
+| `crucible-orphan-handoff` | `error` | Hardener handoff event references a missing plan file |
+
+Both carry concrete recommendations (`forge_crucible_list` /
+`forge_crucible_preview <id>`) so the dashboard Watcher tab can surface
+them with click-through actions.
+
+The `CRUCIBLE_STALL_CUTOFF_DAYS` constant is exported so the PowerShell
+and bash Smith implementations stay in sync with the watcher.
+
+### Tests
+
+- **1029 passing** (was 1015, +14 new)
+  - `tests/crucible-watcher.test.mjs` pins: null-on-inactive, empty-dir
+    graceful skip, status counting (incl. skipping `config.json` /
+    `phase-claims.json`), stale-cutoff accuracy, corrupt-JSON tolerance,
+    orphan detection positive + negative, snapshot shape, and both
+    anomaly rules end-to-end plus their recommendations.
+
+---
+
 ## [2.39.1] — 2026-04-19
 
 ### Added — Phase CRUCIBLE-02 Slice 02.2 — Smith panel + setup banner

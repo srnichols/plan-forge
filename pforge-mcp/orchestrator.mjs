@@ -21,7 +21,7 @@
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync, appendFileSync, readdirSync, statSync, rmSync } from "node:fs";
 import { spawn, execSync } from "node:child_process";
-import { resolve, basename, dirname, join, relative, extname } from "node:path";
+import { resolve, basename, dirname, join, relative, extname, isAbsolute } from "node:path";
 import { EventEmitter } from "node:events";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -4239,6 +4239,110 @@ export function normalizeRunState(eventType, hasStarted) {
 }
 
 /**
+ * Phase CRUCIBLE-03 Slice 03.1 — Stall cutoff shared with `pforge smith`.
+ * Kept in sync with the 7-day threshold used by the PowerShell/bash
+ * implementations in pforge.ps1/pforge.sh so the dashboard, CLI, and
+ * watcher all flag the same smelts.
+ */
+export const CRUCIBLE_STALL_CUTOFF_DAYS = 7;
+
+/**
+ * Phase CRUCIBLE-03 Slice 03.1 — Read the Crucible funnel state for a
+ * watched project. Returns null when `.forge/crucible/` doesn't exist so
+ * callers can cheaply branch. Never throws: a corrupt smelt record counts
+ * as "other" rather than blocking the snapshot.
+ *
+ * @param {string} targetPath - Absolute path to project being watched
+ * @returns {object|null} Crucible state block, or null if inactive
+ */
+export function readCrucibleState(targetPath) {
+  const dir = resolve(targetPath, ".forge", "crucible");
+  if (!existsSync(dir)) return null;
+
+  const counts = { total: 0, in_progress: 0, finalized: 0, abandoned: 0, other: 0 };
+  let oldestInProgressMs = null;
+  let staleInProgress = 0;
+  const cutoffMs = Date.now() - CRUCIBLE_STALL_CUTOFF_DAYS * 24 * 60 * 60 * 1000;
+
+  let entries = [];
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch { return null; }
+
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
+    // Non-smelt files in the directory — must match the Smith skip list
+    if (entry.name === "config.json" || entry.name === "phase-claims.json") continue;
+
+    const fullPath = resolve(dir, entry.name);
+    counts.total++;
+    let status = "other";
+    let mtime = 0;
+    try {
+      const raw = readFileSync(fullPath, "utf-8");
+      const smelt = JSON.parse(raw);
+      status = typeof smelt.status === "string" ? smelt.status : "other";
+      mtime = statSync(fullPath).mtimeMs;
+    } catch {
+      counts.other++;
+      continue;
+    }
+
+    if (status === "in_progress") {
+      counts.in_progress++;
+      if (oldestInProgressMs === null || mtime < oldestInProgressMs) {
+        oldestInProgressMs = mtime;
+      }
+      if (mtime < cutoffMs) staleInProgress++;
+    } else if (status === "finalized") {
+      counts.finalized++;
+    } else if (status === "abandoned") {
+      counts.abandoned++;
+    } else {
+      counts.other++;
+    }
+  }
+
+  // Orphan-handoff detection: scan hub-events.jsonl for
+  // `crucible-handoff-to-hardener` events whose `planPath` is now missing
+  // on disk. This catches finalize-then-delete, finalize-then-rename, and
+  // handoffs that never produced a real plan file (crash mid-finalize).
+  const orphanHandoffs = [];
+  const hubEventsPath = resolve(targetPath, ".forge", "hub-events.jsonl");
+  if (existsSync(hubEventsPath)) {
+    try {
+      const lines = readFileSync(hubEventsPath, "utf-8").trim().split("\n");
+      for (const line of lines) {
+        if (!line || !line.includes("crucible-handoff-to-hardener")) continue;
+        try {
+          const ev = JSON.parse(line);
+          if (ev.type !== "crucible-handoff-to-hardener") continue;
+          const planPath = ev.data?.planPath;
+          if (!planPath) continue;
+          const abs = isAbsolute(planPath) ? planPath : resolve(targetPath, planPath);
+          if (!existsSync(abs)) {
+            orphanHandoffs.push({
+              crucibleId: ev.data?.id || null,
+              phaseName: ev.data?.phaseName || null,
+              planPath,
+              ts: ev.ts || null,
+            });
+          }
+        } catch { /* skip malformed line */ }
+      }
+    } catch { /* unreadable hub log — treat as no data */ }
+  }
+
+  return {
+    counts,
+    oldestInProgressAgeMs: oldestInProgressMs !== null ? Date.now() - oldestInProgressMs : null,
+    staleInProgress,
+    stallCutoffDays: CRUCIBLE_STALL_CUTOFF_DAYS,
+    orphanHandoffs,
+  };
+}
+
+/**
  * Build a structured snapshot of the watched run's current state.
  * Cheap to build — pure file reads, no AI calls.
  *
@@ -4347,6 +4451,8 @@ export function buildWatchSnapshot(targetPath, runId = null, opts = {}) {
     })),
     tailEvents,
     events: events.slice(-tailEvents),
+    // Phase CRUCIBLE-03 Slice 03.1 — always present; null when inactive
+    crucible: readCrucibleState(targetPath),
   };
 }
 
@@ -4463,6 +4569,32 @@ export function detectWatchAnomalies(snapshot) {
       severity: "error",
       code: "skill-step-failed",
       message: `${snapshot.counts.skillStepsFailed} skill step(s) failed — investigate skill execution log`,
+    });
+  }
+
+  // 10. (Phase CRUCIBLE-03 Slice 03.1) Stalled Crucible smelt — in_progress
+  // for ≥ CRUCIBLE_STALL_CUTOFF_DAYS (7). Mirrors the Smith panel rule so
+  // the dashboard Watcher tab and `pforge smith` agree on what's stale.
+  if (snapshot.crucible && snapshot.crucible.staleInProgress > 0) {
+    const ageDays = snapshot.crucible.oldestInProgressAgeMs
+      ? Math.floor(snapshot.crucible.oldestInProgressAgeMs / (24 * 60 * 60 * 1000))
+      : snapshot.crucible.stallCutoffDays;
+    anomalies.push({
+      severity: "warn",
+      code: "crucible-stalled",
+      message: `${snapshot.crucible.staleInProgress} Crucible smelt(s) idle ≥ ${snapshot.crucible.stallCutoffDays} days (oldest: ${ageDays}d) — abandon via forge_crucible_abandon or resume the interview`,
+    });
+  }
+
+  // 11. (Phase CRUCIBLE-03 Slice 03.1) Orphan handoff — a Hardener handoff
+  // event was broadcast but its planPath is no longer on disk. Usually
+  // means finalize succeeded, the plan was then deleted/renamed, and the
+  // enforcement chain lost its anchor.
+  if (snapshot.crucible && snapshot.crucible.orphanHandoffs.length > 0) {
+    anomalies.push({
+      severity: "error",
+      code: "crucible-orphan-handoff",
+      message: `${snapshot.crucible.orphanHandoffs.length} Crucible handoff(s) reference a plan file that no longer exists — Hardener chain is broken`,
     });
   }
 
@@ -4586,6 +4718,26 @@ export function recommendFromAnomalies(anomalies, snapshot) {
           command: "pforge skill-status",
         });
         break;
+
+      case "crucible-stalled":
+        recs.push({
+          code,
+          severity: anomaly.severity,
+          action: `${snapshot.crucible?.staleInProgress ?? "One or more"} Crucible smelt(s) have been idle for 7+ days. Abandon them (if truly stuck) or resume the interview to keep the funnel clean.`,
+          command: "forge_crucible_list",
+        });
+        break;
+
+      case "crucible-orphan-handoff": {
+        const orphan = snapshot.crucible?.orphanHandoffs?.[0];
+        recs.push({
+          code,
+          severity: anomaly.severity,
+          action: `Hardener handoff for ${orphan?.phaseName || "a finalized smelt"} points at a missing plan file (${orphan?.planPath || "unknown"}). Either restore the plan from git history or re-run the smelt (the crucibleId in .forge/crucible/ can be re-finalized).`,
+          command: orphan?.crucibleId ? `forge_crucible_preview ${orphan.crucibleId}` : null,
+        });
+        break;
+      }
 
       default:
         recs.push({
@@ -4751,6 +4903,8 @@ export async function runWatch(options = {}) {
     artifacts: snapshot.artifacts,
     anomalies,
     recommendations,
+    // Phase CRUCIBLE-03 Slice 03.1 — funnel health alongside run health
+    crucible: snapshot.crucible,
     timestamp: new Date().toISOString(),
   };
 

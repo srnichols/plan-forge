@@ -182,6 +182,64 @@ Emitted when all skill steps finish.
 
 ---
 
+## Crucible Events (v2.37+)
+
+Emitted by the Crucible subsystem (`forge_crucible_*` tools) as smelts progress
+through the idea → hardened-spec funnel. Payload is wrapped in a `data` object,
+consistent with LiveGuard event conventions.
+
+### `crucible-smelt-started`
+Emitted when `forge_crucible_submit` creates a new smelt.
+
+```json
+{
+  "type": "crucible-smelt-started",
+  "version": "1.0",
+  "data": {
+    "id": "uuid",
+    "lane": "feature",
+    "source": "human"
+  },
+  "timestamp": "..."
+}
+```
+
+### `crucible-smelt-updated`
+Emitted when `forge_crucible_ask` records an answer and advances the interview.
+`totalQuestions` is `null` until Slice 01.3 wires the interview engine.
+
+```json
+{
+  "type": "crucible-smelt-updated",
+  "version": "1.0",
+  "data": {
+    "id": "uuid",
+    "questionIndex": 2,
+    "totalQuestions": null
+  },
+  "timestamp": "..."
+}
+```
+
+### `crucible-smelt-finalized`
+Emitted when `forge_crucible_finalize` claims a phase number and writes
+`docs/plans/Phase-NN.md`.
+
+```json
+{
+  "type": "crucible-smelt-finalized",
+  "version": "1.0",
+  "data": {
+    "id": "uuid",
+    "phaseName": "Phase-07",
+    "planPath": "/abs/path/to/docs/plans/Phase-07.md"
+  },
+  "timestamp": "..."
+}
+```
+
+---
+
 ## Bridge Events
 
 ### `approval-requested`

@@ -75,6 +75,14 @@ import { createBridge } from "./bridge.mjs";
 import { buildCapabilitySurface, writeToolsJson, writeCliSchema } from "./capabilities.mjs";
 import { readRunIndex } from "./telemetry.mjs";
 import { parseSkill, executeSkill } from "./skill-runner.mjs";
+import {
+  handleSubmit as crucibleHandleSubmit,
+  handleAsk as crucibleHandleAsk,
+  handlePreview as crucibleHandlePreview,
+  handleFinalize as crucibleHandleFinalize,
+  handleList as crucibleHandleList,
+  handleAbandon as crucibleHandleAbandon,
+} from "./crucible-server.mjs";
 import express from "express";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -716,6 +724,81 @@ const TOOLS = [
         format: { type: "string", description: "Output format: github (default, plain text for org settings), markdown (formatted with headers), or json (structured)", enum: ["github", "markdown", "json"] },
         output: { type: "string", description: "File path to write output relative to project dir (optional — returns content if omitted)" },
       },
+    },
+  },
+  {
+    name: "forge_crucible_submit",
+    description: "Submit a raw idea to the Crucible — starts a new smelt (idea → spec workflow). Returns a smelt id, a recommended lane (tweak / feature / full), and the first interview question. USE FOR: kicking off Crucible from an AI agent or CLI with a one-line description of a change, bug, or feature. Agent-submitted smelts are subject to the recursion guardrail (default depth=1, set source='agent').",
+    inputSchema: {
+      type: "object",
+      properties: {
+        rawIdea: { type: "string", description: "The raw idea text — a sentence or short paragraph describing the change." },
+        lane: { type: "string", enum: ["tweak", "feature", "full"], description: "Override the recommended lane. Omit to accept the heuristic's choice." },
+        source: { type: "string", enum: ["human", "agent"], description: "Who submitted the smelt. Default: human." },
+        parentSmeltId: { type: "string", description: "Parent smelt id if this was spawned from another smelt (used for recursion depth tracking)." },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+      required: ["rawIdea"],
+    },
+  },
+  {
+    name: "forge_crucible_ask",
+    description: "Advance the Crucible interview — supply an answer and get the next question, or mark the smelt ready for preview/finalize when the interview is complete. Call without `answer` to fetch the current question. USE FOR: the interactive Q&A loop that turns a raw idea into a hardened spec.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Smelt id returned by forge_crucible_submit." },
+        answer: { type: "string", description: "Answer to the current question. Omit to fetch the current question without advancing." },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+      required: ["id"],
+    },
+  },
+  {
+    name: "forge_crucible_preview",
+    description: "Render the current draft of a smelt as a Markdown plan. Returns the draft, the tentative phase name (null until finalized), and a list of unresolved fields (slots still awaiting an answer). USE FOR: reviewing before finalize, or for the dashboard's live-preview pane.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Smelt id." },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+      required: ["id"],
+    },
+  },
+  {
+    name: "forge_crucible_finalize",
+    description: "Finalize a smelt — atomically claim the next phase number, write docs/plans/Phase-NN.md with a `crucibleId:` frontmatter stamp, and mark the smelt finalized. Returns the chosen phase name and the plan path. Plan Hardener handoff lands in Slice 01.6. USE FOR: closing the idea→spec workflow when the interview is done.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Smelt id. Must be status=in-progress." },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+      required: ["id"],
+    },
+  },
+  {
+    name: "forge_crucible_list",
+    description: "List Crucible smelts, newest-first, optionally filtered by status. USE FOR: dashboard smelt-list panel, resuming in-progress smelts across sessions, auditing recently finalized smelts.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        status: { type: "string", enum: ["in-progress", "finalized", "abandoned"], description: "Filter by smelt status. Omit to return all." },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+    },
+  },
+  {
+    name: "forge_crucible_abandon",
+    description: "Abandon a smelt — marks it status=abandoned and releases any phase-number claim it held. Idempotent: re-abandoning a smelt is a no-op. USE FOR: discarding a smelt that was started by mistake or superseded by another idea.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Smelt id to abandon." },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+      required: ["id"],
     },
   },
   {
@@ -1620,6 +1703,83 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return { content: [{ type: "text", text: result }] };
     } catch (err) {
       return { content: [{ type: "text", text: `Org rules error: ${err.message}` }], isError: true };
+    }
+  }
+
+  // ─── Crucible (v2.37) — raw idea → hardened spec workflow ─────────
+  if (name === "forge_crucible_submit") {
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const result = crucibleHandleSubmit({
+        rawIdea: args.rawIdea,
+        lane: args.lane,
+        source: args.source,
+        parentSmeltId: args.parentSmeltId,
+        projectDir: cwd,
+        hub: activeHub,
+      });
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Crucible submit error: ${err.message}` }], isError: true };
+    }
+  }
+
+  if (name === "forge_crucible_ask") {
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const result = crucibleHandleAsk({
+        id: args.id,
+        answer: args.answer,
+        projectDir: cwd,
+        hub: activeHub,
+      });
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Crucible ask error: ${err.message}` }], isError: true };
+    }
+  }
+
+  if (name === "forge_crucible_preview") {
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const result = crucibleHandlePreview({ id: args.id, projectDir: cwd });
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Crucible preview error: ${err.message}` }], isError: true };
+    }
+  }
+
+  if (name === "forge_crucible_finalize") {
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const result = crucibleHandleFinalize({
+        id: args.id,
+        projectDir: cwd,
+        hub: activeHub,
+      });
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Crucible finalize error: ${err.message}` }], isError: true };
+    }
+  }
+
+  if (name === "forge_crucible_list") {
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const result = crucibleHandleList({ status: args.status || null, projectDir: cwd });
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Crucible list error: ${err.message}` }], isError: true };
+    }
+  }
+
+  if (name === "forge_crucible_abandon") {
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const result = crucibleHandleAbandon({ id: args.id, projectDir: cwd });
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Crucible abandon error: ${err.message}` }], isError: true };
     }
   }
 

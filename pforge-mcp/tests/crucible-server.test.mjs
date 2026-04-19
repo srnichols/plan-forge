@@ -87,8 +87,23 @@ describe("inferLane", () => {
 // ─── getNextQuestion / renderDraftStub ───────────────────────────────
 
 describe("getNextQuestion", () => {
-  it("returns null in Slice 2 (Slice 3 replaces)", () => {
-    expect(getNextQuestion({ answers: [] })).toBeNull();
+  it("returns the first feature question for an empty feature smelt", () => {
+    const q = getNextQuestion({ lane: "feature", answers: [] });
+    expect(q).not.toBeNull();
+    expect(q.id).toBe("goal");
+    expect(q.questionIndex).toBe(1);
+    expect(q.totalQuestions).toBe(6);
+  });
+  it("returns null once every question is answered", () => {
+    const smelt = {
+      lane: "tweak",
+      answers: [
+        { questionId: "scope-file", answer: "x" },
+        { questionId: "validation", answer: "y" },
+        { questionId: "rollback", answer: "z" },
+      ],
+    };
+    expect(getNextQuestion(smelt)).toBeNull();
   });
 });
 
@@ -107,17 +122,17 @@ describe("renderDraftStub", () => {
     expect(out).toContain("**Source**: human");
     expect(out).toContain("## Raw Idea");
   });
-  it("renders answers section when present", () => {
+  it("renders interview log section when answers are present", () => {
     const out = renderDraftStub({
       rawIdea: "x",
       lane: "tweak",
       source: "human",
       status: "in-progress",
-      answers: [{ questionId: "1", answer: "yes" }],
+      answers: [{ questionId: "scope-file", answer: "yes" }],
       phaseName: null,
     });
-    expect(out).toContain("## Interview Answers");
-    expect(out).toContain("**1**: yes");
+    expect(out).toContain("## Interview Log");
+    expect(out).toContain("**scope-file** — yes");
   });
 });
 
@@ -154,7 +169,8 @@ describe("handleSubmit", () => {
     });
     expect(r.id).toMatch(/^[0-9a-f-]{36}$/);
     expect(r.recommendedLane).toBe("feature");
-    expect(r.firstQuestion).toBeNull();
+    expect(r.firstQuestion).not.toBeNull();
+    expect(r.firstQuestion.id).toBe("goal");
 
     const smelt = loadSmelt(r.id, projectDir);
     expect(smelt.lane).toBe("feature");
@@ -209,8 +225,8 @@ describe("handleAsk", () => {
     const { id } = handleSubmit({ rawIdea: "x", projectDir, hub: fakeHub });
     fakeHub.broadcasts.length = 0;
     const r = handleAsk({ id, projectDir, hub: fakeHub });
-    expect(r.done).toBe(true); // Slice 2 has no questions yet
-    expect(r.nextQuestion).toBeNull();
+    expect(r.done).toBe(false); // real banks now return questions
+    expect(r.nextQuestion).not.toBeNull();
     expect(typeof r.draftPreview).toBe("string");
     // No update event because nothing changed
     expect(fakeHub.broadcasts).toHaveLength(0);
@@ -223,9 +239,15 @@ describe("handleAsk", () => {
     expect(smelt.answers).toHaveLength(1);
     expect(smelt.answers[0].answer).toBe("first answer");
     expect(smelt.answers[0].recordedAt).toMatch(/^\d{4}-/);
+    // Slice 01.3: questionId is the real bank id, not a counter
+    expect(smelt.answers[0].questionId).toBe("goal");
     expect(fakeHub.broadcasts).toHaveLength(1);
     expect(fakeHub.broadcasts[0].type).toBe("crucible-smelt-updated");
-    expect(fakeHub.broadcasts[0].data).toMatchObject({ id, questionIndex: 1 });
+    expect(fakeHub.broadcasts[0].data).toMatchObject({
+      id,
+      questionIndex: 1,
+      totalQuestions: 6,
+    });
   });
   it("advances question counter across multiple answers", () => {
     const { id } = handleSubmit({ rawIdea: "x", projectDir, hub: fakeHub });
@@ -254,7 +276,9 @@ describe("handlePreview", () => {
     const r = handlePreview({ id, projectDir });
     expect(r.markdown).toContain("add a widget");
     expect(r.phaseName).toBeNull();
-    expect(r.unresolvedFields).toEqual([]);
+    // Slice 01.3: preview now surfaces {{TBD:}} question ids
+    expect(Array.isArray(r.unresolvedFields)).toBe(true);
+    expect(r.unresolvedFields.length).toBeGreaterThan(0);
   });
   it("throws structured error on unknown id", () => {
     expect(() => handlePreview({ id: "nope", projectDir }))

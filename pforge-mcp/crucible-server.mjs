@@ -4,14 +4,13 @@
  * Pure module used by server.mjs to dispatch the six crucible tools.
  * Keeps server.mjs slim and makes handlers unit-testable without MCP plumbing.
  *
- * Slice 01.2 scope:
- *   - inferLane: keyword heuristic for recommended lane
- *   - submit / ask / preview / finalize / list / abandon handlers
- *   - Emits three hub events: crucible-smelt-started/updated/finalized
- *
- * The interview engine and full draft template land in Slice 01.3.
- * Until then, ask() is a no-op shell and preview/finalize render a stub
- * document from the raw idea + any answers supplied.
+ * Slice 01.2 added: lane inference, submit/ask/preview/finalize/list/abandon,
+ *                   three hub events (crucible-smelt-started/updated/finalized).
+ * Slice 01.3 added: real interview engine (crucible-interview.mjs) and
+ *                   six-block draft renderer (crucible-draft.mjs). The
+ *                   Slice-2 stubs `getNextQuestion`/`renderDraftStub` are
+ *                   replaced with real implementations re-exported here
+ *                   for backwards-compatible imports in tests.
  */
 
 import { mkdirSync, readdirSync, writeFileSync } from "node:fs";
@@ -30,6 +29,14 @@ import {
   loadSmelt,
   updateSmelt,
 } from "./crucible-store.mjs";
+import {
+  getNextQuestion as interviewGetNextQuestion,
+  totalQuestions as interviewTotalQuestions,
+} from "./crucible-interview.mjs";
+import {
+  renderDraft,
+  extractUnresolvedFields,
+} from "./crucible-draft.mjs";
 
 // ─── Lane inference ──────────────────────────────────────────────────
 
@@ -55,44 +62,30 @@ export function inferLane(rawIdea) {
   return "feature";
 }
 
-// ─── Interview stub (Slice 3 replaces) ───────────────────────────────
+// ─── Interview (Slice 01.3 — real engine) ────────────────────────────
 
 /**
- * Placeholder for the Slice 3 interview engine. Returns null to signal
- * "no more questions" so Slice 2 end-to-end flows terminate cleanly.
- * @returns {null}
+ * Return the next unanswered question for a smelt, or null if done.
+ * Thin wrapper so existing callers keep importing from crucible-server.
+ * @param {object} smelt
+ * @param {{projectDir?: string}} [context]
  */
-export function getNextQuestion(_smelt) {
-  return null;
+export function getNextQuestion(smelt, context = {}) {
+  return interviewGetNextQuestion(smelt, context);
 }
 
 /**
- * Render a minimal draft for preview/finalize until Slice 3 ships the
- * proper template. Kept intentionally small so it is unambiguous what
- * Slice 3 will replace.
+ * Slice-01.2 compatibility alias — was the stub draft renderer, now
+ * just delegates to renderDraft. Kept for legacy imports until callers
+ * are migrated.
+ * @deprecated use renderDraft from crucible-draft.mjs
  */
 export function renderDraftStub(smelt) {
-  const firstLine = (smelt.rawIdea || "").split("\n")[0].slice(0, 80).trim();
-  const title = firstLine || "Untitled smelt";
-  const lines = [
-    `# ${smelt.phaseName ? `${smelt.phaseName}: ` : ""}${title}`,
-    "",
-    `> **Lane**: ${smelt.lane}`,
-    `> **Source**: ${smelt.source}`,
-    `> **Status**: ${smelt.status}`,
-    "",
-    "## Raw Idea",
-    "",
-    smelt.rawIdea || "",
-  ];
-  if (Array.isArray(smelt.answers) && smelt.answers.length > 0) {
-    lines.push("", "## Interview Answers", "");
-    smelt.answers.forEach((a, i) => {
-      lines.push(`${i + 1}. **${a.questionId}**: ${a.answer}`);
-    });
-  }
-  return lines.join("\n") + "\n";
+  return renderDraft(smelt);
 }
+
+// Re-export the real renderer for convenience.
+export { renderDraft, extractUnresolvedFields };
 
 // ─── Hub event helper ────────────────────────────────────────────────
 
@@ -151,16 +144,23 @@ export function handleSubmit({ rawIdea, lane, source, parentSmeltId, projectDir,
     id: smelt.id,
     lane: smelt.lane,
     source: smelt.source,
+    totalQuestions: interviewTotalQuestions(smelt.lane),
   });
   return {
     id: smelt.id,
     recommendedLane,
-    firstQuestion: getNextQuestion(smelt),
+    firstQuestion: interviewGetNextQuestion(smelt, { projectDir }),
   };
 }
 
 /**
  * forge_crucible_ask
+ *
+ * The caller sends the answer to whatever question was last returned by
+ * getNextQuestion. We look up that "pending" question on the server so
+ * the questionId recorded in the smelt matches the bank id exactly —
+ * not a client-supplied string — and so the interview cannot record
+ * answers for nonexistent questions.
  */
 export function handleAsk({ id, answer, projectDir, hub }) {
   const smelt = loadSmelt(id, projectDir);
@@ -170,27 +170,29 @@ export function handleAsk({ id, answer, projectDir, hub }) {
   }
 
   let current = smelt;
-  if (answer !== undefined && answer !== null && `${answer}`.length > 0) {
-    const questionId = String(smelt.answers.length + 1);
+  const pending = interviewGetNextQuestion(smelt, { projectDir });
+
+  if (answer !== undefined && answer !== null && `${answer}`.length > 0 && pending) {
     const patch = {
       answers: [
         ...smelt.answers,
-        { questionId, answer: String(answer), recordedAt: new Date().toISOString() },
+        { questionId: pending.id, answer: String(answer), recordedAt: new Date().toISOString() },
       ],
     };
     current = updateSmelt(id, patch, projectDir);
     emit(hub, "crucible-smelt-updated", {
       id: current.id,
       questionIndex: current.answers.length,
-      totalQuestions: null, // Slice 3 supplies total
+      totalQuestions: interviewTotalQuestions(current.lane),
     });
   }
 
-  const nextQuestion = getNextQuestion(current);
+  const nextQuestion = interviewGetNextQuestion(current, { projectDir });
+  const markdown = renderDraft(current);
   return {
     done: nextQuestion === null,
     nextQuestion,
-    draftPreview: renderDraftStub(current),
+    draftPreview: markdown,
   };
 }
 
@@ -200,10 +202,11 @@ export function handleAsk({ id, answer, projectDir, hub }) {
 export function handlePreview({ id, projectDir }) {
   const smelt = loadSmelt(id, projectDir);
   if (!smelt) throw new Error(`smelt not found: ${id}`);
+  const markdown = renderDraft(smelt);
   return {
-    markdown: renderDraftStub(smelt),
+    markdown,
     phaseName: smelt.phaseName,
-    unresolvedFields: [], // Slice 3 fills in from {{TBD:...}} placeholders
+    unresolvedFields: extractUnresolvedFields(markdown),
   };
 }
 
@@ -232,7 +235,7 @@ export function handleFinalize({ id, projectDir, hub }) {
     `source: ${smelt.source}\n` +
     `---\n\n`;
   const bodySmelt = { ...smelt, phaseName };
-  const body = renderDraftStub(bodySmelt);
+  const body = renderDraft(bodySmelt);
   const markdown = frontmatter + body;
   writeFileSync(planPath, markdown, "utf-8");
 

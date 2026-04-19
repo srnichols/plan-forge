@@ -85,6 +85,7 @@ import {
 } from "./crucible-server.mjs";
 import { loadCrucibleConfig, saveCrucibleConfig } from "./crucible-config.mjs";
 import { readManualImports } from "./crucible-enforce.mjs";
+import { checkForUpdate } from "./update-check.mjs";
 import express from "express";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -3312,6 +3313,29 @@ export function createExpressApp() {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
+  // REST API: GET /api/update-status — is there a newer Plan Forge release?
+  // Returns the last cached check (may be null when suppressed / unavailable).
+  // See `kickoffUpdateCheck()` below for the boot-time refresh.
+  app.get("/api/update-status", async (_req, res) => {
+    try {
+      const versionFile = resolve(PROJECT_DIR, "VERSION");
+      const current = existsSync(versionFile) ? readFileSync(versionFile, "utf-8").trim() : null;
+      if (!current) return res.json({ available: false, reason: "no-version-file" });
+      // Serve from cache — never hit the network on a dashboard request.
+      const result = await checkForUpdate({ currentVersion: current, projectDir: PROJECT_DIR });
+      if (!result) return res.json({ available: false, current });
+      return res.json({
+        available: Boolean(result.isNewer),
+        current: result.current,
+        latest: result.latest,
+        url: result.url,
+        publishedAt: result.publishedAt,
+        checkedAt: result.checkedAt,
+        fromCache: result.fromCache,
+      });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
   // REST API: GET /api/status — current run status
   app.get("/api/status", (_req, res) => {
     try {
@@ -4838,6 +4862,26 @@ async function main() {
   } catch (err) {
     console.error(`[http] Express server failed to start: ${err.message} (non-fatal)`);
   }
+
+  // Phase UPDATE-01 — non-blocking, best-effort update check.
+  // Runs once per boot, cached 24h. Honors PFORGE_NO_UPDATE_CHECK=1.
+  // Failures are silent so a bad network never impedes startup.
+  try {
+    const versionFile = resolve(PROJECT_DIR, "VERSION");
+    const current = existsSync(versionFile) ? readFileSync(versionFile, "utf-8").trim() : null;
+    if (current) {
+      // Delay 2s so startup logs stay clean and we don't race the hub.
+      setTimeout(() => {
+        checkForUpdate({ currentVersion: current, projectDir: PROJECT_DIR })
+          .then((r) => {
+            if (r && r.isNewer) {
+              console.error(`[update-check] A newer Plan Forge release is available: v${r.latest} (you are on v${r.current}). ${r.url}`);
+            }
+          })
+          .catch(() => { /* silent */ });
+      }, 2000).unref?.();
+    }
+  } catch { /* silent */ }
 
   // Start WebSocket hub BEFORE stdio transport — ensures activeHub is set before any tool calls arrive
   try {

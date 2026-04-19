@@ -2754,6 +2754,41 @@ fetch(`${API_BASE}/api/capabilities`)
   })
   .catch(() => {});
 
+// ─── Phase UPDATE-01 — update-available banner ─────────────
+// Dashboard asks the server (which caches 24h) whether a newer release
+// exists. If so, show a small dismissible banner in the header that
+// links to the release. Dismissal is remembered per-release via
+// localStorage so we don't nag after the user clicked "later".
+function dismissUpdateBanner() {
+  const banner = document.getElementById("update-banner");
+  if (!banner) return;
+  banner.classList.add("hidden");
+  banner.classList.remove("flex");
+  const latest = banner.dataset.latest;
+  if (latest) {
+    try { localStorage.setItem("pforge-update-dismissed", latest); } catch { /* ignore */ }
+  }
+}
+window.dismissUpdateBanner = dismissUpdateBanner;
+
+fetch(`${API_BASE}/api/update-status`)
+  .then((r) => (r.ok ? r.json() : null))
+  .then((data) => {
+    if (!data || !data.available || !data.latest) return;
+    let dismissed = null;
+    try { dismissed = localStorage.getItem("pforge-update-dismissed"); } catch { /* ignore */ }
+    if (dismissed === data.latest) return;
+    const banner = document.getElementById("update-banner");
+    const text = document.getElementById("update-banner-text");
+    if (!banner || !text) return;
+    banner.href = data.url || "https://github.com/srnichols/plan-forge/releases/latest";
+    banner.dataset.latest = data.latest;
+    text.textContent = `v${data.latest} available (you have v${data.current})`;
+    banner.classList.remove("hidden");
+    banner.classList.add("inline-flex");
+  })
+  .catch(() => {});
+
 // Load notifications from localStorage
 renderNotifications();
 

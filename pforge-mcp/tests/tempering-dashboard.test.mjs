@@ -93,3 +93,44 @@ describe("server.mjs — REST routing for Tempering tools", () => {
     expect(serverMjs).toMatch(/"forge_tempering_scan".*"forge_tempering_status"|"forge_tempering_status".*"forge_tempering_scan"/s);
   });
 });
+
+// ─── TEMPER-04 Slice 04.2: Visual Regression Viewer ──────────────────
+
+describe("dashboard — Visual Regression Viewer (TEMPER-04 Slice 04.2)", () => {
+  it("index.html has visual-diff-viewer section with data-testid", () => {
+    expect(indexHtml).toMatch(/data-testid="visual-diff-viewer"/);
+    expect(indexHtml).toMatch(/id="visual-diff-list"/);
+  });
+
+  it("app.js wires upsertVisualRegressionCard in the event switch", () => {
+    expect(appJs).toMatch(/upsertVisualRegressionCard\(/);
+  });
+
+  it("app.js exposes approve/bug/ignore actions on window", () => {
+    expect(appJs).toMatch(/window\.approveBaseline\s*=/);
+    expect(appJs).toMatch(/window\.openBugStub\s*=/);
+    expect(appJs).toMatch(/window\.ignoreOnce\s*=/);
+  });
+
+  it("app.js approveBaseline POSTs to forge_tempering_approve_baseline", () => {
+    expect(appJs).toMatch(/\/api\/tool\/forge_tempering_approve_baseline/);
+  });
+
+  it("app.js openBugStub POSTs to /api/tempering/bug-stub", () => {
+    expect(appJs).toMatch(/\/api\/tempering\/bug-stub/);
+  });
+});
+
+describe("server.mjs — artifact and bug-stub endpoints (TEMPER-04 Slice 04.2)", () => {
+  it("registers GET /api/tempering/artifact endpoint", () => {
+    expect(serverMjs).toMatch(/\/api\/tempering\/artifact/);
+  });
+
+  it("registers POST /api/tempering/bug-stub endpoint", () => {
+    expect(serverMjs).toMatch(/\/api\/tempering\/bug-stub/);
+  });
+
+  it("artifact endpoint enforces .forge/tempering/ prefix", () => {
+    expect(serverMjs).toMatch(/\.forge.*tempering/);
+  });
+});

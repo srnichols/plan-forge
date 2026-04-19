@@ -301,21 +301,22 @@ describe("runTemperingRun — two-scanner run (TEMPER-02 Slice 02.2)", () => {
     const r = await runTemperingRun({
       projectDir, hub, spawn, adapter: bothScannersAdapter,
     });
-    // Slice 03.1 adds a third scanner (ui-playwright) that skips
-    // cleanly when no URL is configured. Still 3 entries on the
+    // Slice 04.1 adds a fifth scanner (visual-diff) that skips
+    // cleanly when no screenshot manifest exists. 5 entries on the
     // record but only unit+integration contribute to pass/fail
     // totals here.
-    expect(r.scanners).toHaveLength(4);
+    expect(r.scanners).toHaveLength(5);
     expect(r.scanners[0].scanner).toBe("unit");
     expect(r.scanners[1].scanner).toBe("integration");
     expect(r.scanners[2].scanner).toBe("ui-playwright");
     expect(r.scanners[2].skipped).toBe(true);
     expect(r.scanners[3].scanner).toBe("contract");
     expect(r.scanners[3].skipped).toBe(true);
+    expect(r.scanners[4].scanner).toBe("visual-diff");
     expect(r.verdict).toBe("pass");
 
     const completed = hub.events.find((e) => e.type === "tempering-run-completed");
-    expect(completed.data.scannerCount).toBe(4);
+    expect(completed.data.scannerCount).toBe(5);
     expect(completed.data.pass).toBe(8);
   });
 
@@ -355,15 +356,19 @@ describe("runTemperingRun — two-scanner run (TEMPER-02 Slice 02.2)", () => {
     expect(r.scanners[3].scanner).toBe("contract");
     expect(r.scanners[3].skipped).toBe(true);
     expect(r.scanners[3].reason).toBe("prior-budget-exceeded");
+    // Visual-diff scanner also short-circuits with prior-budget-exceeded.
+    expect(r.scanners[4].scanner).toBe("visual-diff");
+    expect(r.scanners[4].skipped).toBe(true);
+    expect(r.scanners[4].reason).toBe("prior-budget-exceeded");
   });
 
-  it("records slice '03.2' on the run record", async () => {
+  it("records slice '04.1' on the run record", async () => {
     const spawn = makeFakeSpawn({ stdout: "", exitCode: 0 });
     const r = await runTemperingRun({
       projectDir, spawn, adapter: bothScannersAdapter,
     });
     const { readFileSync } = await import("node:fs");
     const rec = JSON.parse(readFileSync(r.runRecordPath, "utf-8"));
-    expect(rec.slice).toBe("03.2");
+    expect(rec.slice).toBe("04.1");
   });
 });

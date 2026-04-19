@@ -62,6 +62,7 @@ export const TEMPERING_DEFAULT_CONFIG = Object.freeze({
     unitMaxMs: 120000,
     integrationMaxMs: 300000,
     uiMaxMs: 600000,
+    visualDiffMaxMs: 300000,
   },
   scanners: {
     unit: true,
@@ -69,6 +70,7 @@ export const TEMPERING_DEFAULT_CONFIG = Object.freeze({
     "ui-playwright": true,
     "ui-visual": true,
     "ui-accessibility": true,
+    "visual-diff": true,
     "load-stress": true,
     mutation: true,
     flakiness: true,
@@ -79,6 +81,13 @@ export const TEMPERING_DEFAULT_CONFIG = Object.freeze({
     mode: "quorum",
     models: ["claude-opus-4.7", "grok-4.20", "gemini-3-pro-preview"],
     agreement: 2,
+    // TEMPER-04 Slice 04.1 — single-model analyzer thresholds
+    enabled: true,
+    ignorableDiff: 0.001,     // 0.1%
+    failureDiff: 0.02,        // 2.0%
+    maxCostUsd: 2.0,
+    analyzerTimeoutMs: 60000,
+    maxImageWidth: 1920,
   },
   bugRegistry: {
     integration: "github",

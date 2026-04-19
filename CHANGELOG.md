@@ -5,6 +5,68 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [Unreleased] — targeting 2.45.0
+
+### Added — Phase TEMPER-04 Slice 04.2 — Visual-diff quorum mode + dashboard viewer
+
+Multi-model quorum voting for the visual-diff investigate band and a
+dashboard visual regression viewer with approve/bug/ignore actions.
+
+- Visual-diff quorum mode (2-of-3 default) with configurable models,
+  agreement threshold, and per-leg timeout/cost cap sharing.
+- Dashboard visual regression viewer: baseline/current/diff image trio,
+  per-model vote badges (✓/✗/?/⏱), verdict banner with "Human Review
+  Needed" for inconclusive, approve-as-baseline/open-bug/ignore-once
+  action buttons.
+- L3 decision capture for quorum verdicts (text only, never images).
+- Server endpoints: `GET /api/tempering/artifact` (path-traversal safe),
+  `POST /api/tempering/bug-stub` (TEMPER-06 placeholder).
+
+### Changed
+- `tempering-visual-regression-detected` event now carries `verdict`,
+  `quorum`, and `artifacts` fields.
+- Default visual analyzer mode changed to `"quorum"` with 3 models.
+
+### Added — Phase TEMPER-04 Slice 04.1 — Visual-diff scanner (pixel diff + single-model analyzer)
+
+Fifth scanner in the Tempering arc. Compares screenshots against
+baselines using `pixelmatch` pixel-level diffing and a 3-band
+classification system: ignorable (<0.1%), investigate (0.1–2%),
+and automatic fail (>2%). The investigate band invokes a single
+LLM model to determine if the diff is a true regression.
+
+**New modules:**
+- `pforge-mcp/tempering/baselines.mjs` — Baseline storage, promotion,
+  diff helpers. Manages `.forge/tempering/baselines/` with PNG files
+  and JSON sidecars for promotion metadata.
+- `pforge-mcp/tempering/scanners/visual-diff.mjs` — Visual-diff
+  scanner with 3-band pixel diff, LLM analyzer for investigate band,
+  cost cap, and hub event emission.
+
+**New tool:**
+- `forge_tempering_approve_baseline` — Promotes the current screenshot
+  for a URL to the visual-diff baseline. Idempotent. Added to
+  `MCP_ONLY_TOOLS` and `TOOL_METADATA`.
+
+**Runner wiring:** Visual-diff scanner added as 5th phase in
+`runner.mjs` after contract. Supports `visualDiffScannerImpl`
+dependency injection for test mocking. `scannerCount` bumped 4→5.
+
+**Dashboard:** Handlers for `tempering-visual-regression-detected`
+and `tempering-baseline-promoted` hub events with toast notifications.
+
+**Dependencies:** Added `pixelmatch ^6.0.0` and `pngjs ^7.0.0`.
+
+**Config:** `visualAnalyzer` section in `TEMPERING_DEFAULT_CONFIG`
+extended with `ignorableDiff`, `failureDiff`, `maxCostUsd`,
+`analyzerTimeoutMs`, `maxImageWidth` keys.
+`runtimeBudgets.visualDiffMaxMs` added (300s default).
+
+**Tests:** ~30 new tests in `tempering-visual-diff.test.mjs` covering
+baselines, scanner logic, approve-baseline tool, and runner integration.
+
+---
+
 ## [Unreleased] — targeting 2.44.0
 
 ### Added — Phase TEMPER-03 Slice 03.2 — Contract scanner (OpenAPI/GraphQL)

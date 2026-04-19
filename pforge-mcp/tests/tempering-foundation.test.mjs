@@ -67,10 +67,10 @@ describe("TEMPERING_DEFAULT_CONFIG — enterprise defaults", () => {
     });
   });
 
-  it("all 10 scanners are enabled by default (enterprise posture)", () => {
+  it("all 11 scanners are enabled by default (enterprise posture)", () => {
     const scanners = TEMPERING_DEFAULT_CONFIG.scanners;
     expect(Object.values(scanners).every((v) => v === true)).toBe(true);
-    expect(Object.keys(scanners).length).toBe(10);
+    expect(Object.keys(scanners).length).toBe(11);
   });
 
   it("visual analyzer is quorum-mode 2-of-3 by default", () => {

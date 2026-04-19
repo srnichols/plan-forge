@@ -36,6 +36,9 @@ const state = {
     // indicators. Kept separate from the scan cache to keep the
     // Tempering tab free of per-run state it doesn't render.
     slicePills: {},
+    // TEMPER-04 Slice 04.2 — visual regression viewer cards keyed by urlHash.
+    visualRegressions: [],
+    visualIgnoredOnce: new Set(),
   },
 };
 
@@ -234,6 +237,13 @@ function handleEvent(event) {
       break;
     case "tempering-run-completed":
       handleTemperingRunCompleted(event.data || event);
+      break;
+    case "tempering-visual-regression-detected":
+      handleTemperingVisualRegression(event.data || event);
+      upsertVisualRegressionCard(event.data || event);
+      break;
+    case "tempering-baseline-promoted":
+      addNotification(`Baseline promoted: ${(event.data || event).url || (event.data || event).urlHash}`, "success");
       break;
   }
 }
@@ -437,6 +447,13 @@ function handleTemperingRunCompleted(data) {
     ts: Date.now(),
   };
   renderSliceCards();
+}
+
+// TEMPER-04 Slice 04.1 — visual regression detected toast + action
+function handleTemperingVisualRegression(data) {
+  const pct = data.diffPercent != null ? `${(data.diffPercent * 100).toFixed(2)}%` : "unknown";
+  const sev = data.severity || data.band || "unknown";
+  addNotification(`Visual regression: ${data.url || data.urlHash} (${pct}) – ${sev}`, "error");
 }
 
 // ─── Rendering ────────────────────────────────────────────────────────
@@ -4420,5 +4437,140 @@ function renderTemperingPanel() {
 window.renderTemperingPanel = renderTemperingPanel;
 window.loadTemperingStatus = loadTemperingStatus;
 window.runTemperingScan = runTemperingScan;
+
+// ─── Visual Regression Viewer (TEMPER-04 Slice 04.2) ─────────────────
+// Cards upserted by urlHash from hub events. Images served via
+// /api/tempering/artifact?path=… (path-traversal enforced server-side).
+
+function upsertVisualRegressionCard(data) {
+  if (!data || !data.urlHash) return;
+  if (state.tempering.visualIgnoredOnce.has(data.urlHash)) return;
+
+  const idx = state.tempering.visualRegressions.findIndex(r => r.urlHash === data.urlHash);
+  if (idx >= 0) {
+    state.tempering.visualRegressions[idx] = data;
+  } else {
+    state.tempering.visualRegressions.push(data);
+  }
+  renderVisualDiffViewer();
+}
+
+function renderVisualDiffViewer() {
+  const viewer = document.getElementById("visual-diff-viewer");
+  const list = document.getElementById("visual-diff-list");
+  if (!viewer || !list) return;
+
+  const cards = state.tempering.visualRegressions;
+  if (cards.length === 0) {
+    viewer.classList.add("hidden");
+    return;
+  }
+  viewer.classList.remove("hidden");
+
+  list.innerHTML = cards.map(card => {
+    const pct = card.diffPercent != null ? `${(card.diffPercent * 100).toFixed(2)}%` : "—";
+    const verdict = card.verdict || card.llmVerdict || card.band || "unknown";
+
+    // Verdict banner color
+    let bannerCls, bannerLabel;
+    if (verdict === "regression") {
+      bannerCls = "bg-red-900/60 text-red-300";
+      bannerLabel = "Regression";
+    } else if (verdict === "acceptable") {
+      bannerCls = "bg-green-900/60 text-green-300";
+      bannerLabel = "Acceptable";
+    } else if (verdict === "inconclusive") {
+      bannerCls = "bg-amber-900/60 text-amber-300";
+      bannerLabel = "Human Review Needed";
+    } else {
+      bannerCls = "bg-gray-700 text-gray-300";
+      bannerLabel = escHtml(verdict);
+    }
+
+    // Quorum vote badges
+    let voteBadges = "";
+    if (card.quorum && Array.isArray(card.quorum.votes)) {
+      voteBadges = card.quorum.votes.map(v => {
+        if (!v.ok && v.error === "analyzer-timeout") return `<span class="px-1.5 py-0.5 rounded text-xs bg-amber-800 text-amber-200" title="Timeout">⏱ ${escHtml(v.model)}</span>`;
+        if (!v.ok) return `<span class="px-1.5 py-0.5 rounded text-xs bg-gray-700 text-gray-400" title="${escHtml(v.error || "failed")}">? ${escHtml(v.model)}</span>`;
+        if (v.regression) return `<span class="px-1.5 py-0.5 rounded text-xs bg-red-900/60 text-red-300" title="${escHtml(v.explanation || "")}">✗ ${escHtml(v.model)}</span>`;
+        return `<span class="px-1.5 py-0.5 rounded text-xs bg-green-900/60 text-green-300" title="${escHtml(v.explanation || "")}">✓ ${escHtml(v.model)}</span>`;
+      }).join(" ");
+    }
+
+    // Image trio
+    let imageTrio = "";
+    if (card.artifacts) {
+      const artifactBase = `${API_BASE}/api/tempering/artifact?path=`;
+      const baselineImg = card.artifacts.baseline ? `<img src="${artifactBase}${encodeURIComponent(card.artifacts.baseline)}" alt="Baseline" class="max-w-full rounded border border-gray-700" onerror="this.style.display='none'">` : "";
+      const currentImg = card.artifacts.current ? `<img src="${artifactBase}${encodeURIComponent(card.artifacts.current)}" alt="Current" class="max-w-full rounded border border-gray-700" onerror="this.style.display='none'">` : "";
+      const diffImg = card.artifacts.diff ? `<img src="${artifactBase}${encodeURIComponent(card.artifacts.diff)}" alt="Diff" class="max-w-full rounded border border-gray-700" onerror="this.style.display='none'">` : "";
+      imageTrio = `
+        <div class="grid grid-cols-3 gap-2 mt-2">
+          <div><p class="text-xs text-gray-500 mb-1">Baseline</p>${baselineImg}</div>
+          <div><p class="text-xs text-gray-500 mb-1">Current</p>${currentImg}</div>
+          <div><p class="text-xs text-gray-500 mb-1">Diff</p>${diffImg}</div>
+        </div>`;
+    }
+
+    return `
+      <div class="bg-gray-800 rounded-lg p-4" data-testid="visual-diff-card" data-urlhash="${escHtml(card.urlHash)}">
+        <div class="flex items-center justify-between mb-2">
+          <div>
+            <span class="text-sm font-semibold text-white">${escHtml(card.url || card.urlHash)}</span>
+            <span class="text-xs text-gray-500 ml-2">${pct} diff</span>
+          </div>
+          <span class="px-2 py-0.5 rounded text-xs font-semibold ${bannerCls}">${bannerLabel}</span>
+        </div>
+        ${voteBadges ? `<div class="flex gap-1 flex-wrap mb-2" data-testid="quorum-votes">${voteBadges}</div>` : ""}
+        ${imageTrio}
+        <div class="flex gap-2 mt-3">
+          <button class="text-xs px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 rounded text-white" onclick="approveBaseline('${escHtml(card.urlHash)}', '${escHtml(card.url || "")}')" data-testid="approve-baseline-btn">Approve as Baseline</button>
+          <button class="text-xs px-3 py-1.5 bg-red-800 hover:bg-red-700 rounded text-white" onclick="openBugStub('${escHtml(card.urlHash)}', '${escHtml(card.url || "")}', '${escHtml(verdict)}', '${escHtml(card.explanation || "")}')" data-testid="open-bug-btn">Open Bug</button>
+          <button class="text-xs px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-gray-300" onclick="ignoreOnce('${escHtml(card.urlHash)}')" data-testid="ignore-once-btn">Ignore Once</button>
+        </div>
+      </div>`;
+  }).join("");
+}
+
+async function approveBaseline(urlHash, url) {
+  try {
+    await fetch(`${API_BASE}/api/tool/forge_tempering_approve_baseline`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ urlHash, url }),
+    });
+    state.tempering.visualRegressions = state.tempering.visualRegressions.filter(r => r.urlHash !== urlHash);
+    renderVisualDiffViewer();
+    addNotification(`Baseline approved: ${url || urlHash}`, "success");
+  } catch (err) {
+    addNotification(`Approve failed: ${err.message}`, "error");
+  }
+}
+
+async function openBugStub(urlHash, url, verdict, explanation) {
+  try {
+    await fetch(`${API_BASE}/api/tempering/bug-stub`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ urlHash, url, verdict, explanation }),
+    });
+    addNotification(`Bug stub created: ${url || urlHash}`, "success");
+  } catch (err) {
+    addNotification(`Bug stub failed: ${err.message}`, "error");
+  }
+}
+
+function ignoreOnce(urlHash) {
+  state.tempering.visualIgnoredOnce.add(urlHash);
+  state.tempering.visualRegressions = state.tempering.visualRegressions.filter(r => r.urlHash !== urlHash);
+  renderVisualDiffViewer();
+}
+
+window.approveBaseline = approveBaseline;
+window.openBugStub = openBugStub;
+window.ignoreOnce = ignoreOnce;
+window.upsertVisualRegressionCard = upsertVisualRegressionCard;
+window.renderVisualDiffViewer = renderVisualDiffViewer;
 
 

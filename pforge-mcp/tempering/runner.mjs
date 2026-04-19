@@ -166,6 +166,7 @@ export async function pickChangedFiles({ cwd, lastGreenSha, gitSpawn = realSpawn
 const SCANNER_BUDGET_KEYS = Object.freeze({
   unit: "unitMaxMs",
   integration: "integrationMaxMs",
+  "visual-diff": "visualDiffMaxMs",
 });
 
 /**
@@ -330,6 +331,10 @@ export async function runTemperingRun(opts = {}) {
     uiScannerImpl = null,
     // TEMPER-03 Slice 03.2 — Contract scanner dependency injection.
     contractScannerImpl = null,
+    // TEMPER-04 Slice 04.1 — Visual-diff scanner dependency injection.
+    visualDiffScannerImpl = null,
+    // TEMPER-04 Slice 04.2 — L3 capture callback for visual-diff quorum.
+    captureMemory = null,
     env = process.env,
   } = opts;
 
@@ -570,8 +575,80 @@ export async function runTemperingRun(opts = {}) {
     durationMs: contractResult.durationMs || 0,
   });
 
+  // ── Visual-diff scanner (TEMPER-04 Slice 04.1) ──
+  // Cross-stack scanner — pixel-diffs screenshots against baselines.
+  // Loaded lazily so missing pixelmatch/pngjs doesn't affect other scanners.
+  emit(hub, "tempering-run-scanner-started", { correlationId: corr, scanner: "visual-diff", stack });
+
+  let visualDiffResult;
+  try {
+    const priorBudgetExceeded = unitResult.verdict === "budget-exceeded"
+      || integrationResult.verdict === "budget-exceeded"
+      || uiResult.verdict === "budget-exceeded"
+      || contractResult.verdict === "budget-exceeded";
+    const visualDiffEnabled = config.scanners?.["visual-diff"] !== false
+      && config.visualAnalyzer?.enabled !== false;
+    if (priorBudgetExceeded) {
+      visualDiffResult = {
+        scanner: "visual-diff",
+        sliceRef,
+        startedAt: new Date(now()).toISOString(),
+        completedAt: new Date(now()).toISOString(),
+        skipped: true,
+        reason: "prior-budget-exceeded",
+        verdict: "skipped",
+        pass: 0, fail: 0,
+        durationMs: 0,
+      };
+    } else if (!visualDiffEnabled) {
+      visualDiffResult = {
+        scanner: "visual-diff",
+        sliceRef,
+        startedAt: new Date(now()).toISOString(),
+        completedAt: new Date(now()).toISOString(),
+        skipped: true,
+        reason: "scanner-disabled",
+        verdict: "skipped",
+        pass: 0, fail: 0,
+        durationMs: 0,
+      };
+    } else if (visualDiffScannerImpl) {
+      visualDiffResult = await visualDiffScannerImpl({
+        config, projectDir, runId, sliceRef, now, env, hub, captureMemory,
+      });
+    } else {
+      const { runVisualDiffScan } = await import("./scanners/visual-diff.mjs");
+      visualDiffResult = await runVisualDiffScan({
+        config, projectDir, runId, sliceRef, now, env, hub, captureMemory,
+      });
+    }
+  } catch (err) {
+    visualDiffResult = {
+      scanner: "visual-diff",
+      sliceRef,
+      startedAt: new Date(now()).toISOString(),
+      completedAt: new Date(now()).toISOString(),
+      skipped: true,
+      reason: `scanner-load-failed:${err.message || err}`,
+      verdict: "skipped",
+      pass: 0, fail: 0,
+      durationMs: 0,
+    };
+  }
+
+  emit(hub, "tempering-run-scanner-completed", {
+    correlationId: corr,
+    scanner: "visual-diff",
+    stack,
+    verdict: visualDiffResult.verdict,
+    pass: visualDiffResult.pass || 0,
+    fail: visualDiffResult.fail || 0,
+    skipped: visualDiffResult.skipped ? 1 : 0,
+    durationMs: visualDiffResult.durationMs || 0,
+  });
+
   // Overall verdict: worst of the scanner verdicts
-  const scanners = [unitResult, integrationResult, uiResult, contractResult];
+  const scanners = [unitResult, integrationResult, uiResult, contractResult, visualDiffResult];
   const overallVerdict = deriveOverallVerdict(scanners);
 
   const completedAt = new Date(now()).toISOString();
@@ -587,8 +664,8 @@ export async function runTemperingRun(opts = {}) {
     lastGreenSha,
     scanners,
     verdict: overallVerdict,
-    phase: "TEMPER-03",
-    slice: "03.2",
+    phase: "TEMPER-04",
+    slice: "04.1",
   };
 
   // Persist — best-effort

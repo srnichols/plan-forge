@@ -1,14 +1,14 @@
 ---
 crucibleId: 6435440a-19bf-421d-ba19-ab57758c5ba2
 source: self-hosted
-status: draft
+status: complete
 phase: TEMPER-04
 arc: TEMPER
 ---
 
 # Phase TEMPER-04: Visual analyzer — quorum-mode vision + diff
 
-> **Status**: 📝 DRAFT (arc-prep, no code yet)
+> **Status**: ✅ COMPLETE — Slices 04.1 + 04.2 shipped (v2.45.0-dev)
 > **Estimated Effort**: 2 slices
 > **Risk Level**: Medium-high (LLM cost surface; false-positive risk
 > managed via quorum)
@@ -111,7 +111,7 @@ This phase gives tempering that same glance — using vision-capable LLMs,
 
 ## Slices
 
-### Slice 04.1 — Pixel diff + single-model analyzer
+### Slice 04.1 — Pixel diff + single-model analyzer ✅
 
 **Files touched:**
 - `pforge-mcp/tempering/scanners/visual-diff.mjs` — new
@@ -124,7 +124,7 @@ This phase gives tempering that same glance — using vision-capable LLMs,
   pair fixtures
 - `package.json` deps — `pixelmatch`, `pngjs`
 
-### Slice 04.2 — Quorum + dashboard viewer
+### Slice 04.2 — Quorum + dashboard viewer ✅
 
 **Files touched:**
 - `pforge-mcp/tempering/scanners/visual-diff.mjs` — quorum mode branch

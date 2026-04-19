@@ -444,8 +444,8 @@ describe("runTemperingRun", () => {
     expect(r.verdict).toBe("pass");
     expect(existsSync(r.runRecordPath)).toBe(true);
     const rec = JSON.parse(readFileSync(r.runRecordPath, "utf-8"));
-    expect(rec.phase).toBe("TEMPER-03");
-    expect(rec.slice).toBe("03.2");
+    expect(rec.phase).toBe("TEMPER-04");
+    expect(rec.slice).toBe("04.1");
     expect(rec.scanners[0].scanner).toBe("unit");
     // Slice 02.2 — integration runs alongside unit. With no integration
     // entry on fakeAdapter it short-circuits as skipped:no-adapter,
@@ -460,6 +460,9 @@ describe("runTemperingRun", () => {
     // skips as "no-spec-found".
     expect(rec.scanners[3].scanner).toBe("contract");
     expect(rec.scanners[3].skipped).toBe(true);
+    // Slice 04.1 — visual-diff scanner fires fifth; with no manifest
+    // it skips as "no-screenshot-manifest" or "scanner-load-failed".
+    expect(rec.scanners[4].scanner).toBe("visual-diff");
   });
 
   it("emits start / scanner-started / scanner-completed / completed events in order", async () => {
@@ -467,10 +470,12 @@ describe("runTemperingRun", () => {
     const spawn = makeFakeSpawn({ stdout: "", exitCode: 0 });
     await runTemperingRun({ projectDir, hub, spawn, adapter: fakeAdapter });
     const types = hub.events.map((e) => e.type);
-    // Slice 03.2 — four scanners fire in order (unit, integration,
-    // ui-playwright, contract), each bracketed by started/completed.
+    // Slice 04.1 — five scanners fire in order (unit, integration,
+    // ui-playwright, contract, visual-diff), each bracketed by started/completed.
     expect(types).toEqual([
       "tempering-run-started",
+      "tempering-run-scanner-started",
+      "tempering-run-scanner-completed",
       "tempering-run-scanner-started",
       "tempering-run-scanner-completed",
       "tempering-run-scanner-started",

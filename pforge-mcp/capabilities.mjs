@@ -482,7 +482,7 @@ export const TOOL_METADATA = {
     },
   },
   forge_tempering_run: {
-    intent: ["tempering", "run", "execute", "unit-tests", "contract"],
+    intent: ["tempering", "run", "execute", "unit-tests", "contract", "visual-diff"],
     aliases: ["tempering-run", "run-tempering", "run-tests"],
     cost: "medium",
     maxConcurrent: 1,
@@ -491,7 +491,7 @@ export const TOOL_METADATA = {
       "project stack is one of: typescript, dotnet, python, go, java, rust",
       "test runner available on PATH (npx/dotnet/pytest/go/mvn/cargo)",
     ],
-    produces: [".forge/tempering/run-<ts>.json", ".forge/tempering/artifacts/<runId>/contract/report.json"],
+    produces: [".forge/tempering/run-<ts>.json", ".forge/tempering/artifacts/<runId>/contract/report.json", ".forge/tempering/artifacts/<runId>/visual-diff/report.json"],
     consumes: [".forge/tempering/config.json", "presets/<stack>/tempering-adapter.mjs"],
     sideEffects: [
       "spawns a test-runner subprocess",
@@ -504,8 +504,28 @@ export const TOOL_METADATA = {
       NO_ADAPTER: { message: "No preset adapter for detected stack", recovery: "Install the matching preset or extend presets/<stack>/tempering-adapter.mjs" },
     },
     example: {
-      input: { sliceRef: { plan: "Phase-FOO.md", slice: "03.2" } },
-      output: { ok: true, runId: "run-2026-04-19T...", stack: "typescript", verdict: "pass", scanners: [{ scanner: "unit", pass: 412, fail: 0, skipped: 1 }, { scanner: "contract", pass: 8, fail: 0, violations: [] }] },
+      input: { sliceRef: { plan: "Phase-FOO.md", slice: "04.1" } },
+      output: { ok: true, runId: "run-2026-04-19T...", stack: "typescript", verdict: "pass", scanners: [{ scanner: "unit", pass: 412, fail: 0, skipped: 1 }, { scanner: "contract", pass: 8, fail: 0, violations: [] }, { scanner: "visual-diff", verdict: "pass", pass: 3, fail: 0 }] },
+    },
+  },
+  forge_tempering_approve_baseline: {
+    intent: ["approve", "baseline", "visual"],
+    aliases: ["approve-baseline", "promote-baseline", "accept-visual"],
+    cost: "low",
+    maxConcurrent: 5,
+    addedIn: "2.45.0",
+    prerequisites: [],
+    produces: [".forge/tempering/baselines/"],
+    consumes: [".forge/tempering/screenshots/", ".forge/tempering/baselines/", ".forge/tempering/artifacts/"],
+    sideEffects: ["filesystem-write", "broadcasts tempering-baseline-promoted hub event"],
+    errors: {
+      NO_SCREENSHOT: { message: "No screenshot found for the given hash", recovery: "Run forge_tempering_run first to capture screenshots, then approve" },
+      ALREADY_BASELINE: { message: "Baseline already exists (will be overwritten)", recovery: "This is informational — promotion is idempotent" },
+      INVALID_URL_HASH: { message: "urlHash or url is required", recovery: "Provide either urlHash from the visual-diff scanner output or the full URL" },
+    },
+    example: {
+      input: { urlHash: "a1b2c3d4e5f67890" },
+      output: { ok: true, urlHash: "a1b2c3d4e5f67890", baselinePath: ".forge/tempering/baselines/a1b2c3d4e5f67890.png" },
     },
   },
   forge_generate_image: {

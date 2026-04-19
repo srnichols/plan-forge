@@ -7,7 +7,7 @@
 
 ## Current Release
 
-**v2.32.0** (2026-04-14) — Self-Recursive Improvement: auto-tune escalation chains from model performance, cost estimate calibration from actuals, adaptive quorum thresholds, recurring incident detection, fix proposal outcome tracking, hotspot test priority, project health DNA fingerprint, slice auto-split advisories.
+**v2.47.0** (2026-04-19) — Self-Recursive Improvement: auto-tune escalation chains from model performance, cost estimate calibration from actuals, adaptive quorum thresholds, recurring incident detection, fix proposal outcome tracking, hotspot test priority, project health DNA fingerprint, slice auto-split advisories.
 
 Previous: v2.29.0–v2.29.3 (2026-04-13) — LiveGuard III: `forge_fix_proposal`, `forge_quorum_analyze`, 3 lifecycle hooks (PreDeploy, PostSlice, PreAgentHandoff), OpenClaw analytics bridge, plus 9 bug fixes (.NET scanning, CRLF, dep-watch, gate parsing, framework code separation).
 

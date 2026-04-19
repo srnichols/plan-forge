@@ -5,7 +5,62 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [Unreleased] — targeting 2.47.0
+## [Unreleased]
+
+_No unreleased changes._
+
+---
+
+## [2.47.0] — 2026-04-19 — TEMPER arc complete
+
+Closes the 6-phase TEMPER arc (tempering = "strengthen by repeated
+stress" in metallurgy). Adds five new tempering scanners, a bug
+registry with GitHub sync, and a closed-loop fix validator. Phases
+03.2 / 04 / 05 / 06 were executed autonomously via `pforge run-plan
+--quorum=power`.
+
+**Phases shipped:** TEMPER-02 (unit + integration scanners, post-slice
+hook) · TEMPER-03 (UI sweep with Playwright + a11y, contract scanner
+OpenAPI + GraphQL) · TEMPER-04 (visual-diff scanner with pixel diff +
+quorum vision mode + dashboard viewer) · TEMPER-05 (flakiness, perf
+budgets, load-stress, mutation testing, scheduling) · TEMPER-06 (bug
+registry, GitHub issue adapter, closed-loop fix validator).
+
+**Totals:** 5 new scanners · 5 new MCP tools (`forge_tempering_run`,
+`forge_tempering_approve_baseline`, `forge_bug_register`,
+`forge_bug_list`, `forge_bug_validate_fix`) · 51 tools registered
+(from 46 at start of arc) · 1610 tests across 41 test files · new
+hub events: `tempering-run-*`, `tempering-visual-regression-detected`,
+`tempering-baseline-promoted`, `tempering-bug-registered`,
+`tempering-bug-validated-fixed`, `tempering-contract-mismatch`.
+
+**Full-auto execution stats:** ~2h 23m total worker time across 8
+autonomous slices, ~$0.24 run cost + quorum reviewer overhead.
+Every PR merged on first CI pass.
+
+### Added — Phase TEMPER-05 — Flakiness + perf budgets + load-stress + mutation (Slices 05.1 + 05.2)
+
+- Flakiness scanner: detects intermittent test failures via repeated
+  execution; emits `tempering-flaky-test-detected` hub event.
+- Performance-budget scanner: compares current run against historical
+  P95 baselines stored in `.forge/tempering/perf-history.jsonl`.
+- Load-stress scanner: concurrency-ramp HTTP stress runner with
+  configurable RPS + duration; enforces `runtimeBudgets.loadMaxMs`.
+- Mutation scanner: source-level mutation testing with kill-rate gate.
+- Scheduling module: staggered scanner execution to avoid resource
+  contention; budget cascade respected.
+- All scanners ship behind optional-dep guards; all support the
+  production-guard + `allowProduction: true` opt-in.
+
+### Added — Phase TEMPER-06 Slice 06.1 — Bug registry core + classifier
+
+- Bug registry (`.forge/bugs/<bugId>.json`) with atomic
+  read-modify-write, idempotent fingerprinting, and fix-plan linking.
+- Classifier: rules-based severity (critical/major/minor) + type
+  (functional/performance/visual/contract/security) inference from
+  scanner verdicts.
+- `forge_bug_register` + `forge_bug_list` MCP tools; `readOpenBugCount`
+  surfaced in `readTemperingState` for watcher anomaly awareness.
 
 ### Added — Phase TEMPER-06 Slice 06.3 — Closed-loop fix validation
 

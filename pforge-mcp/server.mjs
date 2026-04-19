@@ -85,6 +85,11 @@ import {
 } from "./crucible-server.mjs";
 import { loadCrucibleConfig, saveCrucibleConfig } from "./crucible-config.mjs";
 import { readManualImports } from "./crucible-enforce.mjs";
+// Phase TEMPER-01 Slice 01.1 — Tempering foundation (read-only scan)
+import {
+  handleScan as temperingHandleScan,
+  handleStatus as temperingHandleStatus,
+} from "./tempering.mjs";
 import { checkForUpdate } from "./update-check.mjs";
 import express from "express";
 
@@ -805,6 +810,28 @@ const TOOLS = [
         path: { type: "string", description: "Project directory (default: current)" },
       },
       required: ["id"],
+    },
+  },
+  {
+    name: "forge_tempering_scan",
+    description: "Tempering (read-only) — scan an existing coverage report (lcov.info / coverage-final.json / cobertura.xml / jacoco.xml / go cover.out / tarpaulin JSON) and report per-layer coverage vs. configured minima. On first run, seeds .forge/tempering/config.json with enterprise defaults. Does NOT execute any tests. USE FOR: diagnosing coverage gaps, pre-deploy readiness checks, dashboard feeds. Writes .forge/tempering/scan-<ts>.json.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Project directory (default: current)" },
+        correlationId: { type: "string", description: "Optional correlation id to thread this scan to an upstream smelt / plan / run. When omitted, one is minted." },
+      },
+    },
+  },
+  {
+    name: "forge_tempering_status",
+    description: "Return the latest N Tempering scan summaries — used by the dashboard feed and `forge_smith` panel. Read-only; never triggers a scan. USE FOR: checking freshness, listing recent coverage status, wiring Tempering into other tools.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Project directory (default: current)" },
+        limit: { type: "number", description: "Max scans to return (1..100, default 10)." },
+      },
     },
   },
   {
@@ -1791,6 +1818,56 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
       return { content: [{ type: "text", text: `Crucible abandon error: ${err.message}` }], isError: true };
+    }
+  }
+
+  // ─── Tempering (TEMPER-01) — read-only coverage scan ──────────────
+  if (name === "forge_tempering_scan") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const result = temperingHandleScan({
+        projectDir: cwd,
+        hub: activeHub,
+        correlationId: args.correlationId || null,
+      });
+      emitToolTelemetry("forge_tempering_scan", args, result, Date.now() - t0, result.ok ? "OK" : "ERROR", cwd);
+
+      // L3 capture on completion — tags `tempering`, `scan`, `<stack>`,
+      // `<status>`; payload is the gap summary only (never source
+      // content). Best-effort; OpenBrain outages fall through to
+      // .forge/openbrain-queue.jsonl.
+      try {
+        const belowMin = Array.isArray(result.coverageVsMinima)
+          ? result.coverageVsMinima.filter((g) => g.gap >= 5).length
+          : 0;
+        const summary = [
+          `Tempering scan ${result.scanId} on ${result.stack}: status=${result.status}`,
+          result.reason ? `(${result.reason})` : "",
+          `gaps=${Array.isArray(result.coverageVsMinima) ? result.coverageVsMinima.length : 0} belowMin=${belowMin}`,
+          `corr=${result.correlationId || "none"}`,
+        ].filter(Boolean).join(" — ");
+        captureMemory(summary, "lesson", `forge_tempering_scan/${result.stack}/${result.status}`, cwd);
+      } catch { /* best-effort */ }
+
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Tempering scan error: ${err.message}` }], isError: true };
+    }
+  }
+
+  if (name === "forge_tempering_status") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const result = temperingHandleStatus({
+        projectDir: cwd,
+        limit: typeof args.limit === "number" ? args.limit : 10,
+      });
+      emitToolTelemetry("forge_tempering_status", args, result, Date.now() - t0, "OK", cwd);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Tempering status error: ${err.message}` }], isError: true };
     }
   }
 

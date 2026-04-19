@@ -1,14 +1,14 @@
 ---
 crucibleId: 7a3c2e18-5b91-4f27-a6d4-e82fc91a0d45
 source: self-hosted
-status: draft
+status: complete
 phase: FORGE-SHOP-01
 arc: FORGE-SHOP
 ---
 
 # Phase FORGE-SHOP-01: Home tab — unified shop-floor view
 
-> **Status**: 📝 DRAFT — ready for Session 2 execution
+> **Status**: ✅ COMPLETE — Slice 01.1 + Slice 01.2 shipped via PR #68 (v2.48.0 in-flight)
 > **Estimated Effort**: 2 slices
 > **Risk Level**: Low (purely additive aggregation — reads from existing
 > L2 readers only; no writers touched)

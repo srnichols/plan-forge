@@ -5,11 +5,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [Unreleased] — targeting 2.48.0
+## [Unreleased] — targeting 2.49.0
 
-### Planned — FORGE-SHOP arc opens
+### Planned — FORGE-SHOP-02 review queue
 
-- Phase FORGE-SHOP-01 drafted ([docs/plans/Phase-FORGE-SHOP-01.md](docs/plans/Phase-FORGE-SHOP-01.md)) — Home tab with 4-quadrant shop-floor view (Crucible funnel, active runs, LiveGuard health, Tempering status) + unified activity feed. Aggregates existing L2 readers; ships `forge_home_snapshot` MCP tool (52 tools total).
+- Phase FORGE-SHOP-02 drafted ([docs/plans/Phase-FORGE-SHOP-02.md](docs/plans/Phase-FORGE-SHOP-02.md)) — unified review queue primitive. New L2 family `.forge/review-queue/<itemId>.json`. 3 new MCP tools (`forge_review_add`, `forge_review_list`, `forge_review_resolve`) → 55 total. 5 producer hooks (Crucible stalls, Tempering quorum-inconclusive, visual baselines, bug classifier, fix-plan approval) wire into the queue idempotently. New Review dashboard tab. Home-tab `activeRuns` quadrant surfaces `openReviews` sub-count.
+
+### Shipped — FORGE-SHOP-01 Home tab (v2.48.0 target)
+
+- `forge_home_snapshot` MCP tool + `readHomeSnapshot` helper — aggregates the 4 existing L2 readers (`readCrucibleState`, `readLiveguardState`, `readTemperingState`, `findLatestRun`) into a single shop-floor payload. Budget: ≤250ms on 1 000 L2 records.
+- Dashboard Home tab — 4-quadrant view (Crucible funnel, active runs, LiveGuard health, Tempering status) + unified activity feed with correlationId group-by toggle. Drill-through buttons to owning tabs with filters pre-applied.
+- Watcher chip row: leftmost `Home` chip showing in-flight runs / open incidents / open bugs.
+- Tool count: 51 → 52. Test count: 1610 → 1649 (+39).
 
 ---
 

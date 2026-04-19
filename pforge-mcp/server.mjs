@@ -94,6 +94,9 @@ import {
 import { runTemperingRun } from "./tempering/runner.mjs";
 // Phase TEMPER-04 Slice 04.1 — Visual-diff baseline promotion
 import { promoteBaseline } from "./tempering/baselines.mjs";
+// Phase TEMPER-06 Slice 06.1 — Bug Registry + Classifier
+import { registerBug, listBugs, updateBugStatus } from "./tempering/bug-registry.mjs";
+import { classify as classifyBug } from "./tempering/bug-classifier.mjs";
 import { checkForUpdate } from "./update-check.mjs";
 import express from "express";
 
@@ -870,6 +873,54 @@ const TOOLS = [
         url: { type: "string", description: "Full URL to approve (alternative to urlHash — hash will be derived)" },
         runId: { type: "string", description: "Specific run ID to promote from (optional — defaults to most recent)" },
         path: { type: "string", description: "Project directory (default: current)" },
+      },
+    },
+  },
+  // Phase TEMPER-06 Slice 06.1 — Bug Registry MCP tools
+  {
+    name: "forge_bug_register",
+    description: "Register a bug discovered by a tempering scanner. Classifies real-bug vs infra and writes .forge/bugs/<bugId>.json for real bugs. Infra-classified failures are not written to disk — they are only tracked in the run record.",
+    inputSchema: {
+      type: "object",
+      required: ["scanner", "evidence"],
+      properties: {
+        path: { type: "string", description: "Project directory (default: current)" },
+        scanner: { type: "string", enum: ["unit", "integration", "ui-playwright", "visual-diff", "flakiness", "mutation", "load-stress", "contract", "performance-budget"], description: "Scanner that discovered the bug" },
+        severity: { type: "string", enum: ["critical", "high", "medium", "low"], description: "Bug severity (default: medium)" },
+        evidence: { type: "object", description: "Bug evidence: { testName, assertionMessage, stackTrace, ... }" },
+        affectedFiles: { type: "array", items: { type: "string" }, description: "Files affected by this bug" },
+        reproSteps: { type: "array", items: { type: "string" }, description: "Steps to reproduce" },
+        correlationId: { type: "string", description: "Correlation ID to thread to run/plan" },
+        sliceRef: { type: "object", description: "Plan+slice context", properties: { plan: { type: "string" }, slice: { type: "string" } } },
+      },
+    },
+  },
+  {
+    name: "forge_bug_list",
+    description: "List bugs from the registry with optional filters. Returns all bugs matching the given criteria from .forge/bugs/.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Project directory (default: current)" },
+        status: { type: "string", description: "Filter by status: open|in-fix|fixed|wont-fix|duplicate" },
+        severity: { type: "string", description: "Filter by severity: critical|high|medium|low" },
+        scanner: { type: "string", description: "Filter by scanner name" },
+        since: { type: "string", description: "Only bugs after this ISO date" },
+        until: { type: "string", description: "Only bugs before this ISO date" },
+      },
+    },
+  },
+  {
+    name: "forge_bug_update_status",
+    description: "Transition a bug's status (open → in-fix → fixed, or open → wont-fix/duplicate) with transition validation. Terminal states (fixed, wont-fix, duplicate) cannot be changed.",
+    inputSchema: {
+      type: "object",
+      required: ["bugId", "newStatus"],
+      properties: {
+        path: { type: "string", description: "Project directory (default: current)" },
+        bugId: { type: "string", description: "Bug ID to update" },
+        newStatus: { type: "string", description: "New status: open|in-fix|fixed|wont-fix|duplicate" },
+        note: { type: "string", description: "Optional note about the transition" },
       },
     },
   },
@@ -1972,6 +2023,76 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
       return { content: [{ type: "text", text: `Baseline approval error: ${err.message}` }], isError: true };
+    }
+  }
+
+  // ─── Bug Registry (TEMPER-06 Slice 06.1) ─────────────────────────
+  if (name === "forge_bug_register") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const classification = await classifyBug({
+        scanner: args.scanner,
+        evidence: args.evidence || {},
+        callModel: null,  // LLM not wired in MCP direct-call; rules only
+      });
+      const result = registerBug({
+        cwd,
+        scanner: args.scanner,
+        severity: args.severity || "medium",
+        evidence: args.evidence || {},
+        affectedFiles: args.affectedFiles || [],
+        reproSteps: args.reproSteps || [],
+        correlationId: args.correlationId || `bug-${Date.now()}`,
+        sliceRef: args.sliceRef || null,
+        classification: classification.classification,
+        classifierMeta: classification,
+        hub: activeHub,
+        captureMemory,
+      });
+      emitToolTelemetry("forge_bug_register", args, result, Date.now() - t0, result.ok ? "OK" : "ERROR", cwd);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Bug registration error: ${err.message}` }], isError: true };
+    }
+  }
+
+  if (name === "forge_bug_list") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const filters = {};
+      if (args.status) filters.status = args.status;
+      if (args.severity) filters.severity = args.severity;
+      if (args.scanner) filters.scanner = args.scanner;
+      if (args.since) filters.since = args.since;
+      if (args.until) filters.until = args.until;
+      const bugs = listBugs(cwd, filters);
+      emitToolTelemetry("forge_bug_list", args, { count: bugs.length }, Date.now() - t0, "OK", cwd);
+      return { content: [{ type: "text", text: JSON.stringify({ ok: true, count: bugs.length, bugs }, null, 2) }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Bug list error: ${err.message}` }], isError: true };
+    }
+  }
+
+  if (name === "forge_bug_update_status") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const result = updateBugStatus(cwd, args.bugId, args.newStatus, { note: args.note || null });
+      if (result.ok && activeHub) {
+        try {
+          activeHub.broadcast({
+            type: "tempering-bug-status-changed",
+            data: { bugId: args.bugId, newStatus: args.newStatus, note: args.note || null },
+            timestamp: new Date().toISOString(),
+          });
+        } catch { /* best-effort */ }
+      }
+      emitToolTelemetry("forge_bug_update_status", args, result, Date.now() - t0, result.ok ? "OK" : "ERROR", cwd);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Bug status update error: ${err.message}` }], isError: true };
     }
   }
 
@@ -4328,31 +4449,49 @@ export function createExpressApp() {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
-  // REST API: POST /api/tempering/bug-stub — placeholder for TEMPER-06 bridge (TEMPER-04 Slice 04.2)
+  // REST API: POST /api/tempering/bug-stub — compatibility wrapper (TEMPER-04 → TEMPER-06 bridge)
+  // Delegates to real registerBug() for persistence, preserving the original response shape.
   app.post("/api/tempering/bug-stub", (req, res) => {
     try {
       const { urlHash, url, verdict, explanation } = req.body || {};
       if (!urlHash || typeof urlHash !== "string") {
         return res.status(400).json({ error: "urlHash is required" });
       }
+      const cwd = findProjectRoot(PROJECT_DIR);
+      const result = registerBug({
+        cwd,
+        scanner: "visual-diff",
+        severity: "medium",
+        evidence: { testName: urlHash, assertionMessage: explanation || verdict || "visual regression", visualDiffScore: null },
+        correlationId: `bug-stub-${Date.now()}`,
+        classification: "real-bug",
+        classifierMeta: { rule: "bug-stub-compat", reason: "filed via legacy bug-stub endpoint", confidence: 1.0, source: "rule" },
+        hub: activeHub,
+      });
+      // Preserve legacy response shape for backward compatibility
       const record = {
-        id: `bug-${Date.now()}`,
+        id: result.bugId || `bug-${Date.now()}`,
         urlHash,
         url: url || null,
         verdict: verdict || null,
         explanation: explanation || null,
         createdAt: new Date().toISOString(),
       };
-      if (activeHub) {
-        try {
-          activeHub.broadcast({
-            type: "tempering-bug-opened",
-            data: record,
-            timestamp: record.createdAt,
-          });
-        } catch { /* best-effort */ }
-      }
       res.status(201).json(record);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // REST API: GET /api/bugs/list — dashboard endpoint for Bug Registry tab
+  app.get("/api/bugs/list", (req, res) => {
+    try {
+      const cwd = findProjectRoot(PROJECT_DIR);
+      const filters = {};
+      if (req.query.status) filters.status = req.query.status;
+      if (req.query.severity) filters.severity = req.query.severity;
+      if (req.query.scanner) filters.scanner = req.query.scanner;
+      if (req.query.since) filters.since = req.query.since;
+      if (req.query.until) filters.until = req.query.until;
+      res.json(listBugs(cwd, filters));
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
@@ -4374,6 +4513,8 @@ export function createExpressApp() {
     "forge_tempering_run",
     // Phase TEMPER-04 Slice 04.1 — baseline promotion is MCP-native.
     "forge_tempering_approve_baseline",
+    // Phase TEMPER-06 Slice 06.1 — Bug registry tools are MCP-native.
+    "forge_bug_register", "forge_bug_list", "forge_bug_update_status",
   ]);
   app.post("/api/tool/:name", async (req, res) => {
     try {

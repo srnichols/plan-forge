@@ -3096,6 +3096,8 @@ const LIVEGUARD_TOOLS = new Set([
   "forge_health_trend", "forge_alert_triage", "forge_deploy_journal",
   "forge_secret_scan", "forge_env_diff", "forge_fix_proposal",
   "forge_quorum_analyze", "forge_liveguard_run",
+  // Phase TEMPER-06 Slice 06.1 — Bug Registry tools
+  "forge_bug_register", "forge_bug_list", "forge_bug_update_status",
 ]);
 
 export function emitToolTelemetry(toolName, inputs, result, durationMs, status, cwd = process.cwd()) {

@@ -31,6 +31,9 @@ import {
   ensureTemperingDirs,
 } from "../tempering.mjs";
 import { loadAdapter, validateAdapterEntry, SUPPORTED_STACKS_SLICE_02_1 } from "./adapters.mjs";
+// TEMPER-06 Slice 06.1 — Bug registry + classifier
+import { classify as realClassify } from "./bug-classifier.mjs";
+import { registerBug as realRegisterBug } from "./bug-registry.mjs";
 
 // ─── Constants ────────────────────────────────────────────────────────
 
@@ -296,6 +299,70 @@ export function runScannerIntegration(ctx) {
 
 // ─── Top-level dispatcher ─────────────────────────────────────────────
 
+// TEMPER-06 Slice 06.1 — Extract failures from a scanner result.
+// Per-scanner normalizer: each scanner shape may encode failures
+// differently. This function returns a uniform `{ evidence, severity }` array.
+function extractFailures(scannerResult) {
+  if (!scannerResult || scannerResult.skipped || scannerResult.verdict === "skipped" || scannerResult.verdict === "pass") return [];
+  const failures = [];
+
+  // If scanner already has a `failures` array, use it directly
+  if (Array.isArray(scannerResult.failures)) {
+    for (const f of scannerResult.failures) {
+      failures.push({
+        evidence: f.evidence || f,
+        severity: f.severity || (scannerResult.verdict === "error" ? "high" : "medium"),
+      });
+    }
+    return failures;
+  }
+
+  // Regressions array (visual-diff, perf-budget)
+  if (Array.isArray(scannerResult.regressions)) {
+    for (const r of scannerResult.regressions) {
+      failures.push({
+        evidence: {
+          testName: r.url || r.urlHash || r.name || `${scannerResult.scanner}-regression`,
+          assertionMessage: r.explanation || r.verdict || "regression detected",
+          visualDiffScore: r.diffScore || r.score || null,
+          quorumVerdict: r.quorumVerdict || null,
+        },
+        severity: r.severity || "medium",
+      });
+    }
+    return failures;
+  }
+
+  // Violations array (contract scanner)
+  if (Array.isArray(scannerResult.violations)) {
+    for (const v of scannerResult.violations) {
+      failures.push({
+        evidence: {
+          testName: v.path || v.endpoint || `${scannerResult.scanner}-violation`,
+          assertionMessage: v.message || v.description || "contract violation",
+          violation: true,
+        },
+        severity: v.severity || "medium",
+      });
+    }
+    return failures;
+  }
+
+  // Generic: scanner failed but no structured failures — synthesize one
+  if (scannerResult.fail > 0 || scannerResult.verdict === "fail" || scannerResult.verdict === "error") {
+    failures.push({
+      evidence: {
+        testName: `${scannerResult.scanner}-failure`,
+        assertionMessage: scannerResult.error || scannerResult.reason || `${scannerResult.scanner} ${scannerResult.verdict}`,
+        stackTrace: scannerResult.stderr || null,
+      },
+      severity: scannerResult.verdict === "error" ? "high" : "medium",
+    });
+  }
+
+  return failures;
+}
+
 /**
  * forge_tempering_run — execute enabled scanners, write a run record,
  * emit hub events per scanner. Slice 02.1 runs the **unit** scanner
@@ -345,6 +412,12 @@ export async function runTemperingRun(opts = {}) {
     loadStressScannerImpl = null,
     // TEMPER-05 Slice 05.2 — Mutation scanner dependency injection.
     mutationScannerImpl = null,
+    // TEMPER-06 Slice 06.1 — Bug registry + classifier DI.
+    // `classifyFn` and `registerBugFn` override the real classify/registerBug
+    // for tests. `callModel` is threaded to the classifier's LLM layer.
+    classifyFn = null,
+    registerBugFn = null,
+    callModel = null,
     env = process.env,
   } = opts;
 
@@ -903,6 +976,50 @@ export async function runTemperingRun(opts = {}) {
   const scanners = [unitResult, integrationResult, uiResult, contractResult, visualDiffResult, flakinessResult, perfBudgetResult, loadStressResult, mutationResult];
   const overallVerdict = deriveOverallVerdict(scanners);
 
+  // ── TEMPER-06 Slice 06.1 — Bug registration hook ──
+  // Iterate scanner failures, classify, and register bugs.
+  // DI: classifyFn/registerBugFn let tests bypass real classifier/registry.
+  const _classify = classifyFn || realClassify;
+  const _registerBug = registerBugFn || realRegisterBug;
+  const registeredBugs = [];
+  const infraFixes = [];
+
+  for (const scannerResult of scanners) {
+    const failures = extractFailures(scannerResult);
+    for (const failure of failures) {
+      try {
+        const classification = await _classify({
+          scanner: scannerResult.scanner,
+          evidence: failure.evidence,
+          flakinessData: null,  // loadFlakinessData called by higher-level caller when needed
+          callModel,
+          config,
+        });
+        const bugResult = _registerBug({
+          cwd: projectDir,
+          scanner: scannerResult.scanner,
+          severity: failure.severity,
+          evidence: failure.evidence,
+          correlationId: corr,
+          sliceRef,
+          classification: classification.classification,
+          classifierMeta: classification,
+          hub,
+          captureMemory,
+        });
+        if (classification.classification === "infra") {
+          infraFixes.push({
+            scanner: scannerResult.scanner,
+            testName: failure.evidence.testName,
+            rule: classification.rule,
+          });
+        } else if (bugResult.ok) {
+          registeredBugs.push(bugResult.bugId);
+        }
+      } catch { /* bug registration is best-effort */ }
+    }
+  }
+
   const completedAt = new Date(now()).toISOString();
 
   const runRecord = {
@@ -916,8 +1033,10 @@ export async function runTemperingRun(opts = {}) {
     lastGreenSha,
     scanners,
     verdict: overallVerdict,
-    phase: "TEMPER-05",
-    slice: "05.2",
+    infraFixes,
+    registeredBugs,
+    phase: "TEMPER-06",
+    slice: "06.1",
   };
 
   // Persist — best-effort

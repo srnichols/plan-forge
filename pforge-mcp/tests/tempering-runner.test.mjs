@@ -444,8 +444,8 @@ describe("runTemperingRun", () => {
     expect(r.verdict).toBe("pass");
     expect(existsSync(r.runRecordPath)).toBe(true);
     const rec = JSON.parse(readFileSync(r.runRecordPath, "utf-8"));
-    expect(rec.phase).toBe("TEMPER-05");
-    expect(rec.slice).toBe("05.2");
+    expect(rec.phase).toBe("TEMPER-06");
+    expect(rec.slice).toBe("06.1");
     expect(rec.scanners[0].scanner).toBe("unit");
     // Slice 02.2 — integration runs alongside unit. With no integration
     // entry on fakeAdapter it short-circuits as skipped:no-adapter,
@@ -629,5 +629,81 @@ describe("tempering-runner — MCP wiring", () => {
     expect(capSrc).toMatch(/forge_tempering_run:\s*\{/);
     expect(capSrc).toMatch(/addedIn:\s*"2\.43\.0"/);
     expect(capSrc).toMatch(/intent:\s*\[[^\]]*"tempering"/);
+  });
+});
+
+// ─── TEMPER-06 Slice 06.1: Bug registration wiring ──────────────────
+
+describe("runTemperingRun — bug registration hook (TEMPER-06 Slice 06.1)", () => {
+  let projectDir;
+  beforeEach(() => {
+    projectDir = resolve(tmpdir(), `temper-06-runner-${randomUUID()}`);
+    mkdirSync(projectDir, { recursive: true });
+    writeFileSync(resolve(projectDir, "package.json"), '{"name":"t"}', "utf-8");
+  });
+  afterEach(() => { try { rmSync(projectDir, { recursive: true }); } catch {} });
+
+  it("calls classifyFn and registerBugFn for failing scanners", async () => {
+    const classifyCalls = [];
+    const registerCalls = [];
+    const spawn = makeFakeSpawn({ stdout: "", exitCode: 1 });
+    const fakeAdapter = { unit: { cmd: ["npx", "vitest", "run"], parseOutput: () => ({ pass: 0, fail: 1, skipped: 0 }) } };
+
+    const r = await runTemperingRun({
+      projectDir,
+      spawn,
+      adapter: fakeAdapter,
+      classifyFn: async (opts) => {
+        classifyCalls.push(opts);
+        return { classification: "real-bug", rule: "src-assertion", reason: "test", confidence: 0.9, source: "rule" };
+      },
+      registerBugFn: (opts) => {
+        registerCalls.push(opts);
+        return { ok: true, bugId: "bug-test-001", classification: "real-bug" };
+      },
+    });
+
+    expect(r.ok).toBe(true);
+    // At least one classify call for the failing unit scanner
+    expect(classifyCalls.length).toBeGreaterThanOrEqual(1);
+    expect(registerCalls.length).toBeGreaterThanOrEqual(1);
+    expect(registerCalls[0].scanner).toBe("unit");
+  });
+
+  it("populates infraFixes for infra-classified failures", async () => {
+    const spawn = makeFakeSpawn({ stdout: "", exitCode: 1 });
+    const fakeAdapter = { unit: { cmd: ["npx", "vitest", "run"], parseOutput: () => ({ pass: 0, fail: 1, skipped: 0 }) } };
+
+    const r = await runTemperingRun({
+      projectDir,
+      spawn,
+      adapter: fakeAdapter,
+      classifyFn: async () => ({ classification: "infra", rule: "test-frame-top", reason: "test code", confidence: 0.95, source: "rule" }),
+      registerBugFn: (opts) => ({ ok: true, classification: "infra", action: "recorded-in-run" }),
+    });
+
+    expect(r.ok).toBe(true);
+    const rec = JSON.parse(readFileSync(r.runRecordPath, "utf-8"));
+    expect(Array.isArray(rec.infraFixes)).toBe(true);
+    expect(rec.infraFixes.length).toBeGreaterThanOrEqual(1);
+    expect(rec.infraFixes[0].rule).toBe("test-frame-top");
+  });
+
+  it("threads correlationId from run to registerBug", async () => {
+    const registerCalls = [];
+    const spawn = makeFakeSpawn({ stdout: "", exitCode: 1 });
+    const fakeAdapter = { unit: { cmd: ["npx", "vitest", "run"], parseOutput: () => ({ pass: 0, fail: 1, skipped: 0 }) } };
+
+    await runTemperingRun({
+      projectDir,
+      spawn,
+      adapter: fakeAdapter,
+      correlationId: "test-corr-123",
+      classifyFn: async () => ({ classification: "real-bug", rule: "r", reason: "t", confidence: 0.9, source: "rule" }),
+      registerBugFn: (opts) => { registerCalls.push(opts); return { ok: true, bugId: "b", classification: "real-bug" }; },
+    });
+
+    expect(registerCalls.length).toBeGreaterThanOrEqual(1);
+    expect(registerCalls[0].correlationId).toBe("test-corr-123");
   });
 });

@@ -90,6 +90,7 @@
       <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="skills">Skills</button>
       <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="watcher">Watcher</button>
       <button class="tab-btn px-3 py-1.5 rounded-t hover:text-emerald-400 text-gray-400 whitespace-nowrap text-xs" data-tab="tempering">🛠 Tempering</button>
+      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-red-400 text-gray-400 whitespace-nowrap text-xs" data-tab="bugregistry">🐛 Bug Registry</button>
       <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="memory">Memory</button>
     </div>
     <!-- Sub tabs: LiveGuard -->
@@ -886,6 +887,53 @@
       <div class="bg-gray-800 rounded-lg p-4 lg:col-span-3 mt-4" data-testid="tempering-mutation">
         <h3 class="text-lg font-semibold mb-2">🧬 Mutation Testing</h3>
         <div id="tempering-mutation-body"></div>
+      </div>
+    </section>
+
+    <!-- Bug Registry Tab (TEMPER-06 Slice 06.1) -->
+    <section id="tab-bugregistry" class="tab-content hidden">
+      <div class="mb-4 flex items-center justify-between">
+        <div>
+          <h2 class="text-lg font-semibold text-red-400">🐛 Bug Registry</h2>
+          <p class="text-xs text-gray-500">Bugs discovered by tempering scanners — classified, deduplicated, tracked</p>
+        </div>
+        <div class="flex gap-2 items-center">
+          <button onclick="loadBugRegistry()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1 rounded" data-testid="bugregistry-refresh-btn">Refresh</button>
+        </div>
+      </div>
+      <!-- Filters -->
+      <div class="flex gap-2 mb-3 flex-wrap" data-testid="bugregistry-filters">
+        <select id="bugregistry-filter-status" class="bg-gray-700 text-gray-200 text-xs rounded px-2 py-1" onchange="loadBugRegistry()">
+          <option value="">All Statuses</option>
+          <option value="open">Open</option>
+          <option value="in-fix">In Fix</option>
+          <option value="fixed">Fixed</option>
+          <option value="wont-fix">Won't Fix</option>
+          <option value="duplicate">Duplicate</option>
+        </select>
+        <select id="bugregistry-filter-severity" class="bg-gray-700 text-gray-200 text-xs rounded px-2 py-1" onchange="loadBugRegistry()">
+          <option value="">All Severities</option>
+          <option value="critical">Critical</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+        </select>
+        <select id="bugregistry-filter-scanner" class="bg-gray-700 text-gray-200 text-xs rounded px-2 py-1" onchange="loadBugRegistry()">
+          <option value="">All Scanners</option>
+          <option value="unit">Unit</option>
+          <option value="integration">Integration</option>
+          <option value="ui-playwright">UI/Playwright</option>
+          <option value="contract">Contract</option>
+          <option value="visual-diff">Visual Diff</option>
+          <option value="flakiness">Flakiness</option>
+          <option value="performance-budget">Perf Budget</option>
+          <option value="load-stress">Load Stress</option>
+          <option value="mutation">Mutation</option>
+        </select>
+      </div>
+      <!-- Bug table -->
+      <div id="bugregistry-table-container" data-testid="bugregistry-table">
+        <p class="text-gray-500 text-sm py-4 text-center">Loading...</p>
       </div>
     </section>
 

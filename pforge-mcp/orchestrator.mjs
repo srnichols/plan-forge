@@ -4155,6 +4155,10 @@ async function executeSlice(slice, options) {
         models: quorumConfig.models,
         successfulLegs: dispatchResult.successful.length,
         totalLegs: dispatchResult.all.length,
+        legsFailed: dispatchResult.all.length - dispatchResult.successful.length,
+        legErrors: dispatchResult.all
+          .filter(r => !r.success && r.error)
+          .map(r => ({ model: r.model, reason: r.error.reason, code: r.error.code })),
         dispatchDuration: dispatchResult.totalDuration,
         reviewerFallback: quorumResult.fallback,
         reviewerCost: quorumResult.reviewerCost,
@@ -6608,6 +6612,20 @@ function buildReviewerPrompt(dryRunResults, slice) {
   return parts.join("\n");
 }
 
+const LEG_ERROR_PATTERNS = [
+  [/timed?\s*out|ETIMEDOUT|SIGTERM/i, "timeout"],
+  [/rate[- ]?limit|429/i, "rate-limit"],
+  [/context|token limit|max tokens/i, "context-overflow"],
+  [/ENOENT|spawn\s+\w+\s+ENOENT|EACCES/i, "spawn-failed"],
+];
+export function classifyLegError(stderr) {
+  const text = String(stderr || "");
+  for (const [re, reason] of LEG_ERROR_PATTERNS) {
+    if (re.test(text)) return reason;
+  }
+  return "unknown";
+}
+
 /**
  * Dispatch a slice to multiple models for parallel dry-run analysis.
  * Returns array of dry-run results.
@@ -6655,19 +6673,31 @@ export async function quorumDispatch(slice, config, options = {}) {
       // Determine success: has meaningful output (stdout or stderr) regardless of exit code
       // gh copilot outputs text to stderr in non-TTY mode
       legResult.success = (legResult.output || "").trim().length > 50;
+      if (!legResult.success) {
+        const stderr = String(result?.stderr || "").slice(-2048);
+        legResult.error = {
+          code: legResult.exitCode ?? 1,
+          reason: classifyLegError(stderr),
+          stderr,
+        };
+      }
       if (eventBus) {
         eventBus.emit("quorum-leg-completed", { sliceId: slice.number, ...legResult });
       }
       return legResult;
     } catch (err) {
+      const rawStderr = err?.stderr ?? err?.message ?? String(err ?? "");
+      const stderr = rawStderr.slice(-2048);
+      const reason = classifyLegError(stderr);
+      const exitCode = Number.isInteger(err?.exitCode) ? err.exitCode : (err?.code ?? 1);
       const legResult = {
         model,
         output: "",
         tokens: { tokens_in: null, tokens_out: null, model },
         duration: Date.now() - legStart,
-        exitCode: 1,
+        exitCode,
         success: false,
-        error: err.message,
+        error: { code: exitCode, reason, stderr },
       };
       if (eventBus) {
         eventBus.emit("quorum-leg-completed", { sliceId: slice.number, ...legResult });

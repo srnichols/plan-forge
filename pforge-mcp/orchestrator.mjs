@@ -28,6 +28,16 @@ import { fileURLToPath } from "node:url";
 import { createTraceContext, createTelemetryHandler, writeManifest, appendRunIndex, pruneRunHistory, addLogSummary } from "./telemetry.mjs";
 import { isOpenBrainConfigured, buildMemorySearchBlock, buildMemoryCaptureBlock, buildRunSummaryThought, buildCostAnomalyThought, loadProjectContext, buildPlanBootContext } from "./memory.mjs";
 import { enforceCrucibleId, CrucibleEnforcementError } from "./crucible-enforce.mjs";
+// Phase TEMPER-01 Slice 01.1 — re-export tempering state reader so the
+// watcher-snapshot contract mirrors readCrucibleState exactly.
+import {
+  readTemperingState as _readTemperingState,
+  readTemperingConfig as _readTemperingConfig,
+  TEMPERING_SCAN_STALE_DAYS,
+} from "./tempering.mjs";
+export const readTemperingState = _readTemperingState;
+export const readTemperingConfig = _readTemperingConfig;
+export { TEMPERING_SCAN_STALE_DAYS };
 
 // ─── Centralized Constants ────────────────────────────────────────────
 /** Canonical list of all supported agent adapters. Update here — consumed by dashboard, setup, and docs. */

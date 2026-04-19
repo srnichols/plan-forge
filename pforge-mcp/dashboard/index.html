@@ -89,6 +89,7 @@
       <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="traces">Traces</button>
       <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="skills">Skills</button>
       <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="watcher">Watcher</button>
+      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-emerald-400 text-gray-400 whitespace-nowrap text-xs" data-tab="tempering">🛠 Tempering</button>
       <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="memory">Memory</button>
     </div>
     <!-- Sub tabs: LiveGuard -->
@@ -812,6 +813,56 @@
         <h3 class="text-sm font-semibold text-gray-300 mb-2">Anomalies</h3>
         <div id="watcher-anomalies" class="max-h-96 overflow-y-auto">
           <p class="text-gray-500 text-sm py-4 text-center">No anomalies detected.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tempering Tab (Phase TEMPER-01 Slice 01.2) — coverage-vs-minima view
+         Read-only; reads the latest scan-*.json records from .forge/tempering/
+         via forge_tempering_status. Never triggers a test run. -->
+    <section id="tab-tempering" class="tab-content hidden">
+      <div class="mb-4 flex items-center justify-between">
+        <div>
+          <h2 class="text-lg font-semibold text-emerald-400">🛠 Tempering</h2>
+          <p class="text-xs text-gray-500">Coverage vs. minima from the latest <code class="bg-gray-700 px-1 rounded">forge_tempering_scan</code>. Read-only — no tests are executed.</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="tempering-scan-btn" class="text-xs px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 rounded text-white" onclick="runTemperingScan()" data-testid="tempering-scan-btn">Run scan</button>
+          <button onclick="renderTemperingPanel()" class="text-xs px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded">Refresh</button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <!-- Latest scan summary -->
+        <div class="bg-gray-800 rounded-lg p-4 lg:col-span-1" data-testid="tempering-summary">
+          <h3 class="text-sm font-semibold text-gray-300 mb-3">Latest scan</h3>
+          <div id="tempering-summary-body">
+            <p class="text-gray-500 text-sm py-4 text-center">No Tempering scans yet.</p>
+          </div>
+        </div>
+
+        <!-- Coverage vs. minima -->
+        <div class="bg-gray-800 rounded-lg p-4 lg:col-span-2" data-testid="tempering-coverage">
+          <h3 class="text-sm font-semibold text-gray-300 mb-3">Coverage vs. minima</h3>
+          <div id="tempering-coverage-body">
+            <p class="text-gray-500 text-sm py-4 text-center">No coverage data.</p>
+          </div>
+        </div>
+
+        <!-- Gap list -->
+        <div class="bg-gray-800 rounded-lg p-4 lg:col-span-3" data-testid="tempering-gaps">
+          <h3 class="text-sm font-semibold text-gray-300 mb-3">Gap report (worst-first, top 10 per layer)</h3>
+          <div id="tempering-gaps-body">
+            <p class="text-gray-500 text-sm py-4 text-center">No gaps — every layer meets its minimum, or no scans yet.</p>
+          </div>
+        </div>
+
+        <!-- History -->
+        <div class="bg-gray-800 rounded-lg p-4 lg:col-span-3" data-testid="tempering-history">
+          <h3 class="text-sm font-semibold text-gray-300 mb-3">Recent scans</h3>
+          <div id="tempering-history-body">
+            <p class="text-gray-500 text-sm py-4 text-center">No scan history.</p>
+          </div>
         </div>
       </div>
     </section>

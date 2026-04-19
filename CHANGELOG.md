@@ -7,6 +7,73 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [2.42.0] — 2026-04-19
 
+### Added — Phase TEMPER-01 Slice 01.2 — Tempering dashboard + watcher awareness
+
+Closes the TEMPER-01 phase. The foundation shipped in Slice 01.1 is now
+visible in three operator surfaces — still zero writes to production
+source, still no test runs.
+
+**Dashboard (`pforge-mcp/dashboard/`)**
+
+- New **Tempering tab** (`🛠 Tempering`) — read-only pane with four
+  sections:
+  1. Latest scan summary (status / age / gap / below-min counts)
+  2. Coverage vs. minima progress bars (per layer, with minimum markers)
+  3. Gap report — worst-first files per below-minimum layer (top 10)
+  4. Scan history (newest first)
+- "Run scan" button wires to `forge_tempering_scan` via
+  `POST /api/tool/forge_tempering_scan`
+- Refresh wires to `POST /api/tool/forge_tempering_status`
+- `state.tempering` added to the dashboard-side client state
+
+**Watcher tab — Tempering chip row**
+
+Mirrors the Slice 03.2 Crucible row. Renders only when the watched
+project has initialized the subsystem (`.forge/tempering/` present).
+Chips: total scans, latest status, below-min count, total gaps, scan
+age / stale indicator. `data-testid="watcher-tempering-row"`.
+
+**Watcher snapshot / hub event**
+
+- `buildWatchSnapshot` now includes a `tempering` block (mirrors the
+  `crucible` contract; null when uninitialized)
+- `watch-snapshot-completed` payloads carry a compact `tempering`
+  summary (primitives only — safe for bandwidth-constrained WS clients)
+
+**Two new anomaly rules in `detectWatchAnomalies`**
+
+- `tempering-coverage-below-minimum` (severity: warn) — any layer
+  below its minimum by ≥ 5 points → `recommendFromAnomalies` suggests
+  `forge_tempering_status`
+- `tempering-scan-stale` (severity: warn) — latest scan older than
+  `TEMPERING_SCAN_STALE_DAYS` (7) → suggests `forge_tempering_scan`
+
+**`pforge smith` (PowerShell + bash)**
+
+New "Tempering:" section surfaces the same information as the
+dashboard row:
+
+- Scan count + latest status + age
+- Stale warning (≥ 7 days — mirrors the watcher rule)
+- Below-minimum warning (≥ 5 points — mirrors the watcher rule)
+- Config presence indicator
+
+**Scan record enrichment**
+
+- `coverageMinima` snapshot now persisted on every scan record so
+  downstream tooling can render coverage-vs-minima without re-reading
+  `config.json`
+- `forge_tempering_status` response now includes `coverageMinima` and
+  the full `coverageVsMinima` gap report (`files` arrays are already
+  bounded top-10 by `computeGaps`)
+
+**Testing**: +29 tests across `tests/tempering-watcher.test.mjs` (20)
+and `tests/tempering-dashboard.test.mjs` (9). Total: 1145/1145 passing
+(up from 1116).
+
+**Scope held**: no test execution, no bug creation, no production
+source edits. TEMPER-02..06 still own their respective surfaces.
+
 ### Added — Phase TEMPER-01 Slice 01.1 — Tempering foundation (read-only coverage scan)
 
 First slice of the Tempering arc — the automated test-intelligence

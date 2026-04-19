@@ -4463,6 +4463,10 @@ export function buildWatchSnapshot(targetPath, runId = null, opts = {}) {
     events: events.slice(-tailEvents),
     // Phase CRUCIBLE-03 Slice 03.1 — always present; null when inactive
     crucible: readCrucibleState(targetPath),
+    // Phase TEMPER-01 Slice 01.2 — always present; null when inactive.
+    // Mirrors the crucible contract exactly so the dashboard Watcher tab
+    // can render both rows the same way.
+    tempering: readTemperingState(targetPath),
   };
 }
 
@@ -4608,6 +4612,31 @@ export function detectWatchAnomalies(snapshot) {
     });
   }
 
+  // 12. (Phase TEMPER-01 Slice 01.2) Coverage below minimum — latest
+  // Tempering scan reports at least one layer under its config minimum
+  // by ≥ 5 points. Mirrors the scan-record status=amber heuristic.
+  if (snapshot.tempering && snapshot.tempering.belowMinimum > 0) {
+    anomalies.push({
+      severity: "warn",
+      code: "tempering-coverage-below-minimum",
+      message: `${snapshot.tempering.belowMinimum} coverage layer(s) below minimum by ≥ 5 points — run forge_tempering_scan for details`,
+    });
+  }
+
+  // 13. (Phase TEMPER-01 Slice 01.2) Scan stale — no Tempering scan in
+  // ≥ TEMPERING_SCAN_STALE_DAYS (7). Coverage data drifts fast; an old
+  // scan is worse than no scan because it lies.
+  if (snapshot.tempering && snapshot.tempering.stale) {
+    const days = snapshot.tempering.latestScanAgeMs
+      ? Math.floor(snapshot.tempering.latestScanAgeMs / (24 * 60 * 60 * 1000))
+      : snapshot.tempering.staleCutoffDays;
+    anomalies.push({
+      severity: "warn",
+      code: "tempering-scan-stale",
+      message: `Latest Tempering scan is ${days} days old (cutoff: ${snapshot.tempering.staleCutoffDays}d) — re-run forge_tempering_scan`,
+    });
+  }
+
   return anomalies;
 }
 
@@ -4748,6 +4777,24 @@ export function recommendFromAnomalies(anomalies, snapshot) {
         });
         break;
       }
+
+      case "tempering-coverage-below-minimum":
+        recs.push({
+          code,
+          severity: anomaly.severity,
+          action: `${snapshot.tempering?.belowMinimum ?? "One or more"} coverage layer(s) fell below their configured minimum. Inspect the gap report and add targeted tests to the worst-first files listed in the latest scan record.`,
+          command: "forge_tempering_status",
+        });
+        break;
+
+      case "tempering-scan-stale":
+        recs.push({
+          code,
+          severity: anomaly.severity,
+          action: "The latest Tempering scan is older than the staleness cutoff. Re-run the scan so downstream dashboards and anomaly rules work against current coverage.",
+          command: "forge_tempering_scan",
+        });
+        break;
 
       default:
         recs.push({
@@ -4915,6 +4962,8 @@ export async function runWatch(options = {}) {
     recommendations,
     // Phase CRUCIBLE-03 Slice 03.1 — funnel health alongside run health
     crucible: snapshot.crucible,
+    // Phase TEMPER-01 Slice 01.2 — test-coverage health alongside run + funnel
+    tempering: snapshot.tempering,
     timestamp: new Date().toISOString(),
   };
 
@@ -4940,6 +4989,21 @@ export async function runWatch(options = {}) {
               staleInProgress: report.crucible.staleInProgress,
               orphanHandoffs: report.crucible.orphanHandoffs.length,
               stallCutoffDays: report.crucible.stallCutoffDays,
+            }
+          : null,
+        // Phase TEMPER-01 Slice 01.2 — compact Tempering summary for the
+        // Watcher tab row. Already primitives (readTemperingState returns
+        // a flat shape), so we just forward a whitelist of fields.
+        tempering: report.tempering
+          ? {
+              totalScans: report.tempering.totalScans,
+              latestStatus: report.tempering.latestStatus,
+              latestScanAgeMs: report.tempering.latestScanAgeMs,
+              latestScanTs: report.tempering.latestScanTs,
+              gaps: report.tempering.gaps,
+              belowMinimum: report.tempering.belowMinimum,
+              stale: report.tempering.stale,
+              staleCutoffDays: report.tempering.staleCutoffDays,
             }
           : null,
       });

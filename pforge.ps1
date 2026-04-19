@@ -3327,6 +3327,61 @@ function Invoke-Smith {
     }
 
     # ═══════════════════════════════════════════════════════════════
+    # 9. TEMPERING (Phase TEMPER-01 Slice 01.2)
+    # ═══════════════════════════════════════════════════════════════
+    # The Tempering subsystem (forge_tempering_scan → forge_tempering_status)
+    # parses existing coverage reports and flags layers below configured
+    # minima. Surfacing freshness + gap counts here gives the forge operator
+    # a one-glance answer to "is my test coverage honest?" without having
+    # to open the dashboard.
+    $temperingDir = Join-Path $RepoRoot ".forge/tempering"
+    Write-Host ""
+    Write-Host "Tempering:" -ForegroundColor Cyan
+
+    if (Test-Path $temperingDir) {
+        $scanFiles = @(Get-ChildItem -Path $temperingDir -Filter "scan-*.json" -File -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime -Descending)
+
+        if ($scanFiles.Count -eq 0) {
+            Doctor-Pass "No Tempering scans yet — run 'forge_tempering_scan' to establish a baseline"
+        } else {
+            $latest = $scanFiles[0]
+            try {
+                $scan = Get-Content $latest.FullName -Raw | ConvertFrom-Json
+                $status = if ($scan.status) { "$($scan.status)" } else { "unknown" }
+                $ageDays = [Math]::Floor(((Get-Date) - $latest.LastWriteTime).TotalDays)
+                $gapCount = if ($scan.coverageVsMinima) { @($scan.coverageVsMinima).Count } else { 0 }
+                Doctor-Pass "$($scanFiles.Count) scan(s); latest: $status, $gapCount gap(s), $ageDays day(s) old"
+
+                # Stale-scan warning mirrors the watcher anomaly rule
+                # `tempering-scan-stale` (7-day cutoff).
+                if ($ageDays -ge 7) {
+                    Doctor-Warn "Latest scan is $ageDays days old" "Re-run 'forge_tempering_scan' — coverage drifts fast"
+                }
+
+                # Below-minimum warning mirrors the `tempering-coverage-below-minimum`
+                # watcher rule (≥ 5-point gap).
+                if ($scan.coverageVsMinima) {
+                    $belowMin = @($scan.coverageVsMinima | Where-Object { $_.gap -ge 5 })
+                    if ($belowMin.Count -gt 0) {
+                        Doctor-Warn "$($belowMin.Count) coverage layer(s) below minimum by ≥ 5 points" "Run 'forge_tempering_status' to inspect the gap report"
+                    }
+                }
+            } catch {
+                Doctor-Warn "Latest scan record could not be parsed" "File: $($latest.Name)"
+            }
+        }
+
+        # Config file — seeded on first scan, never overwritten.
+        $tempCfg = Join-Path $temperingDir "config.json"
+        if (Test-Path $tempCfg) {
+            Doctor-Pass "Tempering config present — enterprise minima active"
+        }
+    } else {
+        Doctor-Pass "Tempering inactive — no .forge/tempering/ directory yet"
+    }
+
+    # ═══════════════════════════════════════════════════════════════
     # SUMMARY
     # ═══════════════════════════════════════════════════════════════
     Write-Host ""

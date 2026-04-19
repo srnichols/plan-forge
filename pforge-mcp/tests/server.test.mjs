@@ -1826,9 +1826,9 @@ describe("dashboard tab structure", () => {
     }
   });
 
-  it("total tab count is 18 (13 core + 5 LG)", () => {
+  it("total tab count is 19 (14 core + 5 LG)", () => {
     const tabMatches = dashboardHtml.match(/data-tab="[^"]+"/g) || [];
-    expect(tabMatches.length).toBe(18);
+    expect(tabMatches.length).toBe(19);
   });
 
   it("has LiveGuard section divider", () => {

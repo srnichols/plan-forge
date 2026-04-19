@@ -732,6 +732,10 @@ export function handleScan({ projectDir, hub = null, correlationId = null }) {
       ? { path: reportPath, format: reportFormat, fileCount, mtimeMs: report.mtimeMs }
       : null,
     coverage: coverageRollup,
+    // Phase TEMPER-01 Slice 01.2 — persist the minima snapshot alongside
+    // the rollup so dashboards + downstream tooling can render a
+    // coverage-vs-minima bar without re-reading config.json.
+    coverageMinima: config.coverageMinima || null,
     coverageVsMinima: coverageGaps,
     status,
     reason,
@@ -801,6 +805,11 @@ export function handleStatus({ projectDir, limit = 10 }) {
               overall: rec.coverage.overall?.percent ?? 0,
             }
           : null,
+        // Phase TEMPER-01 Slice 01.2 — surface the minima + the gap
+        // report to the dashboard without needing a second tool call.
+        // `files` arrays are already bounded top-10 by computeGaps.
+        coverageMinima: rec.coverageMinima || null,
+        coverageVsMinima: Array.isArray(rec.coverageVsMinima) ? rec.coverageVsMinima : [],
       };
     })
     .filter(Boolean);

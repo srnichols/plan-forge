@@ -4213,6 +4213,10 @@ export function createExpressApp() {
     "forge_secret_scan", "forge_env_diff", "forge_fix_proposal",
     "forge_hotspot", "forge_runbook", "forge_run_plan", "forge_cost_report",
     "forge_capabilities", "forge_memory_capture",
+    // Phase TEMPER-01 Slice 01.2 — Tempering tools handle their own IO
+    // via tempering.mjs; they are MCP-native and must not be shelled
+    // through pforge.ps1 (which has no Tempering command).
+    "forge_tempering_scan", "forge_tempering_status",
   ]);
   app.post("/api/tool/:name", async (req, res) => {
     try {

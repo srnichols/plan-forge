@@ -11,7 +11,7 @@
  * @module brain
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync, renameSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync, renameSync, readdirSync, statSync } from "node:fs";
 import { resolve, basename, dirname } from "node:path";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
@@ -383,6 +383,91 @@ export function validateFederationConfig(cwd = process.cwd()) {
     if (!v.ok) errors.push({ repo, reason: v.reason });
   }
   return errors;
+}
+
+// ─── Phase-26 Slice 11: Trajectory federation (extension of L4-lite) ────────
+
+/** Hard ceiling on trajectory files returned per federationReadTrajectories call. */
+export const TRAJECTORY_FEDERATION_LIMIT = 100;
+
+/**
+ * Read trajectory notes (`.forge/trajectories/<plan>/slice-<id>.md`) across
+ * allowlisted sibling repos. READ-ONLY — never writes to federated repos.
+ *
+ * Behaviour (Phase-26 MUST §Slice 11):
+ *   - Enumerate each repo passing `validateFederationRepo()`
+ *   - For each repo: walk `.forge/trajectories/*\/slice-*.md` (depth 2)
+ *   - Cap at `limit` files total across all repos (default 100)
+ *   - Sort by `mtimeMs` descending — newest wins
+ *   - Tag each entry with source repo path
+ *
+ * @param {object} [opts]
+ * @param {string} [opts.cwd=process.cwd()] — project root whose `.forge.json` holds the allowlist
+ * @param {number} [opts.limit=100] — max files returned
+ * @param {object} [opts.config] — pre-loaded federation config (test injection)
+ * @returns {Array<{ repo, planBasename, sliceId, path, mtimeMs, content }>}
+ */
+export function federationReadTrajectories(opts = {}) {
+  const cwd = opts.cwd || process.cwd();
+  const cfg = opts.config || loadFederationConfig(cwd);
+  if (!cfg.enabled) return [];
+  if (!Array.isArray(cfg.repos) || cfg.repos.length === 0) return [];
+
+  const rawLimit = opts.limit;
+  const limit = Number.isFinite(rawLimit) && rawLimit > 0
+    ? Math.min(Math.floor(rawLimit), TRAJECTORY_FEDERATION_LIMIT)
+    : TRAJECTORY_FEDERATION_LIMIT;
+
+  const collected = [];
+  for (const repo of cfg.repos) {
+    const v = validateFederationRepo(repo);
+    if (!v.ok) continue;
+    const trajRoot = resolve(repo, ".forge", "trajectories");
+    if (!existsSync(trajRoot)) continue;
+
+    // Depth-2 walk: trajRoot/<planBasename>/slice-<id>.md
+    let planDirs;
+    try { planDirs = readdirSync(trajRoot, { withFileTypes: true }); }
+    catch { continue; }
+
+    for (const pd of planDirs) {
+      if (!pd.isDirectory()) continue;
+      const planBasename = pd.name;
+      const planDir = resolve(trajRoot, planBasename);
+      // Confinement: resolved path must stay inside trajRoot (symlink guard)
+      if (!planDir.startsWith(trajRoot)) continue;
+
+      let files;
+      try { files = readdirSync(planDir); }
+      catch { continue; }
+
+      for (const f of files) {
+        const m = /^slice-(.+)\.md$/.exec(f);
+        if (!m) continue;
+        const filePath = resolve(planDir, f);
+        if (!filePath.startsWith(planDir)) continue;
+        let st;
+        try { st = statSync(filePath); }
+        catch { continue; }
+        if (!st.isFile()) continue;
+        let content = "";
+        try { content = readFileSync(filePath, "utf-8"); }
+        catch { continue; }
+        collected.push({
+          repo,
+          planBasename,
+          sliceId: m[1],
+          path: filePath,
+          mtimeMs: st.mtimeMs,
+          content,
+        });
+      }
+    }
+  }
+
+  // Sort by mtime desc, cap at limit.
+  collected.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  return collected.slice(0, limit);
 }
 
 // ─── Phase-25 Slice 7: Reviewer-agent in-loop (L4) ───────────────────────────

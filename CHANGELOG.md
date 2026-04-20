@@ -15,9 +15,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 - Phase AUTO-UPDATE-01 drafted ([docs/plans/Phase-AUTO-UPDATE-01.md](docs/plans/Phase-AUTO-UPDATE-01.md)) — `pforge update --from-github [--tag <tag>]` fetches release tarball from GitHub API, extracts to `.forge/cache/`, runs existing file-copy logic; no local Plan Forge clone required. `pforge self-update [--yes]` wraps detection + install. `pforge smith --refresh-version-cache` bypasses 24h cache. Dashboard banner becomes actionable with SSE progress stream (`POST /api/self-update`). 50 MB tarball cap, SHA-256 audit log, `ERR_UPDATE_DURING_RUN` guard. Opt-in background polling via `autoUpdate.enabled`. Closes [#75](https://github.com/srnichols/plan-forge/issues/75). Test count +42.
 
-### Planned — HOTFIX-2.50.1 orchestrator plumbing bundle
+### Shipped — HOTFIX-2.50.1 orchestrator plumbing (2026-04-20)
 
-- Phase HOTFIX-2.50.1 drafted ([docs/plans/Phase-HOTFIX-2.50.1.md](docs/plans/Phase-HOTFIX-2.50.1.md)) — 3 field bugs: cost/token model attribution for gh-copilot worker ([#63](https://github.com/srnichols/plan-forge/issues/63)), runtime-aware `model-performance.json` tier validation ([#73](https://github.com/srnichols/plan-forge/issues/73)), PreCommit hook rejects direct-to-master during `run-plan` execution ([#74](https://github.com/srnichols/plan-forge/issues/74)). Test count +28. No new MCP tools.
+- **#63 fix** — cost/token model attribution for `gh-copilot` worker: `parseTokenUsage()` now reads `--model` arg and strips trailing `\r\n\` from `premiumRequests`. Cost reports no longer show `model: "unknown"`.
+- **#73 fix** — runtime-aware `model-performance.json` tier validation: `validatePerformanceTier()` + `performance.strictValidation` config + `performance-tier-degraded` event emitted on mismatch.
+- **#74 fix** — PreCommit hook rejects direct-to-master during `run-plan`: `PFORGE_RUN_PLAN_ACTIVE=1` env var + `hooks.preCommit.rejectMasterDuringRun` config + `PFORGE_ALLOW_MASTER_COMMIT` bypass.
+- Plan: [docs/plans/Phase-HOTFIX-2.50.1.md](docs/plans/Phase-HOTFIX-2.50.1.md). Commits: `25ea803` (Slice 1 #63), `3672cb1` (Slice 2 #73), `137060a` (Slice 3 #74).
 
 ### Shipped — FORGE-SHOP-05 unified timeline (2026-04-20)
 

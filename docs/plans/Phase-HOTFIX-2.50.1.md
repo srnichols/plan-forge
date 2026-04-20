@@ -1,13 +1,13 @@
 ---
 crucibleId: 9b3d5e72-ac48-4f61-b925-e8d4f2a6c107
 source: self-hosted
-status: draft
+status: complete
 phase: HOTFIX-2.50.1
 ---
 
 # Phase HOTFIX-2.50.1: Orchestrator plumbing bundle
 
-> **Status**: 📝 DRAFT — ready for Session 2 execution
+> **Status**: ✅ COMPLETE — shipped 2026-04-20 (commits 25ea803, 3672cb1, 137060a)
 > **Estimated Effort**: 3 slices (one per field bug)
 > **Risk Level**: Low-medium (each slice narrowly scoped; no new
 > surfaces; tests prove the fix)

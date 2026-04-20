@@ -7,7 +7,61 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased] — targeting 2.53.0
 
-_(No changes yet.)_
+### Setup + CLI + Smith audit remediation (2026-04-20)
+
+Post-v2.52.1 retrospective surfaced gaps across the setup, CLI, and
+diagnostic surfaces accumulated over recent releases. Fixed in four
+focused commits:
+
+- **`f263cba` — Bash CLI parity + audit aliases.** `pforge.sh` gains
+  `cmd_version_bump` + `cmd_migrate_memory` (full ports of the PS1
+  handlers, including inline-node regex updates and `--dry-run`
+  support). `scripts/audit-cli-parity.mjs` adds a `CLI_ALIASES` map
+  so tools whose CLI names differ from `mcpToCli()` convention
+  (`forge_validate→check`, `forge_drift_report→drift`,
+  `forge_incident_capture→incident`, `forge_deploy_journal→deploy-log`,
+  `forge_alert_triage→triage`, `forge_ext_search→"ext search"`,
+  `forge_ext_info→"ext info"`) are correctly matched. Truly internal
+  tools (`forge_abort`, `forge_diagnose`, `forge_memory_capture`,
+  `forge_memory_report`, `forge_skill_status`) added to
+  `KNOWN_MCP_ONLY`.
+
+- **`570aa40` — validate-setup MCP/VERSION/dashboard coverage.** Both
+  `validate-setup.ps1` and `validate-setup.sh` now surface a Plan Forge
+  runtime section checking `VERSION`, `pforge.sh` (bash companion
+  from PS1), `pforge-mcp/server.mjs` + `package.json` + `node_modules`
+  (with install hint), `.vscode/mcp.json` `plan-forge` server entry,
+  and `pforge-mcp/dashboard/index.html` presence. All entries are
+  WARN-not-FAIL so downstream projects without Plan Forge runtime
+  files aren't broken.
+
+- **`60f5e57` — Smith Bug/Notifications/L2 rows + bash set-e hardening.**
+  `Invoke-Smith` and `cmd_doctor` both emit three new sections:
+  Bug Registry (counts total/open/resolved + critical/high breakdown
+  from `.forge/bugs/`), Notifications (`.forge.json` adapter list),
+  and Timeline/Search sources (count of indexable L2 stores among
+  runs/memory/crucible/tempering/bugs/incidents). Same commit also
+  fixes pre-existing `set -euo pipefail` aborts in `pforge.sh smith`
+  that killed the script before Crucible/Tempering on installs
+  without `jq`: new `_json_field()` helper with jq→node fallback,
+  `|| echo <default>` safety on 6 other jq calls, and `|| true`
+  wrap on the tempering `grep -o` pipeline that used to exit 1 on
+  zero matches.
+
+- **`2eb598e` — Generic `mcp-call` proxy closes the parity backlog.**
+  Rather than hand-write 16 bespoke wrappers (crucible-* ×6,
+  tempering-* ×4, bug-* ×4, `generate-image`, `run-skill`) across
+  both shells, add one generic command:
+  `pforge mcp-call <tool> [--arg=value ...] [--json '{...}']`. PS1
+  uses `Invoke-RestMethod`; bash uses `curl`. Accepts either
+  `forge_crucible_list` or `crucible-list` naming. Returns raw JSON
+  or passthrough; hints on 404/refused. Audit now reports **"All
+  unexpected gaps accounted for"** — zero unexpected MCP-only gaps
+  from the 65-tool surface.
+
+All 2470 tests remain green across each commit.
+
+_(No additional changes yet.)_
 
 ---
 

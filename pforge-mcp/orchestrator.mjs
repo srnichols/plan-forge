@@ -4351,7 +4351,40 @@ const TEARDOWN_GUARD_DEFAULTS = {
   enabled: true,
   blockOnBranchLoss: true,
   checkRemote: true,
+  // Phase-26 Slice 4 — paths exempt from branch-loss detection.
+  // When a missing-branch failure resolves to a worktree living under one
+  // of these prefixes, the guard filters the failure instead of opening an
+  // incident. Prevents competitive worktree archival from tripping the guard.
+  exemptPathPrefixes: [".forge/worktrees", ".forge/worktrees-archive"],
 };
+
+/**
+ * Phase-26 Slice 4 — pure path predicate.
+ * Returns true when `candidatePath` (absolute or relative) resolves under
+ * any of the exempt prefixes. Comparison is performed with forward-slash
+ * normalization so Windows paths behave the same as POSIX.
+ *
+ * @param {string} candidatePath - Path to test.
+ * @param {string[]} [prefixes] - Optional prefix list (defaults to the guard defaults).
+ * @returns {boolean}
+ */
+export function isWorktreeExemptPath(candidatePath, prefixes = TEARDOWN_GUARD_DEFAULTS.exemptPathPrefixes) {
+  if (typeof candidatePath !== "string" || candidatePath.length === 0) return false;
+  if (!Array.isArray(prefixes) || prefixes.length === 0) return false;
+  const normalized = candidatePath.replace(/\\/g, "/");
+  for (const prefix of prefixes) {
+    if (typeof prefix !== "string" || prefix.length === 0) continue;
+    const normPrefix = prefix.replace(/\\/g, "/").replace(/\/$/, "");
+    // Match segment boundary: `.forge/worktrees` matches
+    // `.forge/worktrees/...` or `path/to/.forge/worktrees/...`
+    // but not `.forge/worktrees-other`.
+    const idx = normalized.indexOf(normPrefix);
+    if (idx < 0) continue;
+    const after = normalized[idx + normPrefix.length];
+    if (after === undefined || after === "/") return true;
+  }
+  return false;
+}
 
 /**
  * Load teardown guard configuration from .forge.json.
@@ -4556,26 +4589,30 @@ export function registerCorrelationThreadResponder(hub, cwd, deps = {}) {
 /**
  * Verify that git branch state was not destroyed during a slice.
  * @param {{ branch: string, headSha: string, upstream: string|null }} baseline
- * @param {{ checkRemote: boolean }} config
+ * @param {{ checkRemote: boolean, exemptPathPrefixes?: string[] }} config
  * @param {string} cwd
+ * @param {{ exec?: (cmd: string, opts: object) => string }} [deps] - DI for tests.
  * @returns {{ ok: boolean, failures: string[], reflogTail: string[] }}
  */
-function verifyBranchSafety(baseline, config, cwd) {
+export function verifyBranchSafety(baseline, config, cwd, deps = {}) {
+  const exec = deps.exec || ((cmd, opts) => execSync(cmd, opts));
   const failures = [];
   let reflogTail = [];
+  let localBranchMissing = false;
 
   // 1. Local branch ref still exists
   try {
-    execSync(`git show-ref --verify refs/heads/${baseline.branch}`, {
+    exec(`git show-ref --verify refs/heads/${baseline.branch}`, {
       cwd, encoding: "utf-8", timeout: 5000, stdio: "pipe",
     });
   } catch {
+    localBranchMissing = true;
     failures.push(`local branch ref 'refs/heads/${baseline.branch}' no longer exists`);
   }
 
   // 2. Baseline HEAD still reachable
   try {
-    execSync(`git cat-file -e ${baseline.headSha}^{commit}`, {
+    exec(`git cat-file -e ${baseline.headSha}^{commit}`, {
       cwd, encoding: "utf-8", timeout: 5000, stdio: "pipe",
     });
   } catch {
@@ -4587,7 +4624,7 @@ function verifyBranchSafety(baseline, config, cwd) {
     try {
       const remoteName = baseline.upstream.split("/")[0] || "origin";
       const remoteBranch = baseline.upstream.split("/").slice(1).join("/") || baseline.branch;
-      const lsRemote = execSync(`git ls-remote --heads ${remoteName} ${remoteBranch}`, {
+      const lsRemote = exec(`git ls-remote --heads ${remoteName} ${remoteBranch}`, {
         cwd, encoding: "utf-8", timeout: 10000, stdio: "pipe",
       }).trim();
       if (!lsRemote) {
@@ -4598,16 +4635,61 @@ function verifyBranchSafety(baseline, config, cwd) {
     }
   }
 
+  // Phase-26 Slice 4 — filter branch-loss failures whose underlying
+  // worktree path lives under an exempt prefix (competitive worktrees).
+  const exemptPrefixes = Array.isArray(config.exemptPathPrefixes)
+    ? config.exemptPathPrefixes
+    : TEARDOWN_GUARD_DEFAULTS.exemptPathPrefixes;
+  if (localBranchMissing && exemptPrefixes.length > 0) {
+    const worktreePath = resolveBranchWorktreePath(baseline.branch, cwd, exec);
+    if (worktreePath && isWorktreeExemptPath(worktreePath, exemptPrefixes)) {
+      // Drop the local-branch-ref failure — the worktree was intentionally torn down.
+      const idx = failures.indexOf(`local branch ref 'refs/heads/${baseline.branch}' no longer exists`);
+      if (idx >= 0) failures.splice(idx, 1);
+    }
+  }
+
   // On failure, capture reflog for recovery
   if (failures.length > 0) {
     try {
-      reflogTail = execSync("git reflog -n 20 --format=%H\\ %gs", {
+      reflogTail = exec("git reflog -n 20 --format=%H\\ %gs", {
         cwd, encoding: "utf-8", timeout: 5000, stdio: "pipe",
       }).trim().split("\n");
     } catch { /* reflog unavailable */ }
   }
 
   return { ok: failures.length === 0, failures, reflogTail };
+}
+
+/**
+ * Phase-26 Slice 4 — look up the worktree path for a given branch by
+ * parsing `git worktree list --porcelain`. Returns null when the branch
+ * has no associated worktree (e.g. already deleted) or when git fails.
+ *
+ * @param {string} branch
+ * @param {string} cwd
+ * @param {(cmd: string, opts: object) => string} exec
+ * @returns {string|null}
+ */
+function resolveBranchWorktreePath(branch, cwd, exec) {
+  try {
+    const porcelain = exec("git worktree list --porcelain", {
+      cwd, encoding: "utf-8", timeout: 5000, stdio: "pipe",
+    });
+    // Porcelain format: blocks separated by blank lines.
+    //   worktree <path>
+    //   HEAD <sha>
+    //   branch refs/heads/<name>
+    const blocks = String(porcelain).split(/\r?\n\r?\n/);
+    for (const block of blocks) {
+      if (!block.includes(`branch refs/heads/${branch}`)) continue;
+      const m = block.match(/^worktree\s+(.+)$/m);
+      if (m) return m[1].trim();
+    }
+  } catch {
+    /* git unavailable or no worktrees — fall through */
+  }
+  return null;
 }
 
 export function isDeployTrigger(toolName, filePath, command) {

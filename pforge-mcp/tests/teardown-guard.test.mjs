@@ -77,6 +77,7 @@ describe("loadTeardownGuardConfig", () => {
       enabled: true,
       blockOnBranchLoss: true,
       checkRemote: true,
+      exemptPathPrefixes: [".forge/worktrees", ".forge/worktrees-archive"],
     });
   });
 
@@ -98,6 +99,7 @@ describe("loadTeardownGuardConfig", () => {
       enabled: true,
       blockOnBranchLoss: true,
       checkRemote: true,
+      exemptPathPrefixes: [".forge/worktrees", ".forge/worktrees-archive"],
     });
   });
 

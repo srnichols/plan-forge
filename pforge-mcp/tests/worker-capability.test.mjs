@@ -12,6 +12,7 @@ import {
   detectWorkers,
   suggestInstall,
   detectPackageManager,
+  detectSilentWorkerFailure,
 } from "../orchestrator.mjs";
 
 describe("worker-capabilities matrix", () => {
@@ -103,6 +104,70 @@ Run 'foo --help' for more info
     // 5000+ chars of real-looking content with one "usage:" mention
     const long = "Here is the analysis.\n".repeat(300) + "\nThe usage: of this API is deprecated.\n";
     expect(detectHelpTextOutput(long, "", "claude")).toBe(false);
+  });
+});
+
+describe("detectSilentWorkerFailure (issue #77)", () => {
+  it("flags exit-0 with empty stdout as a silent failure", () => {
+    const result = detectSilentWorkerFailure(
+      { output: "", worker: "gh-copilot", exitCode: 0, looksLikeHelpText: false },
+      "autonomous",
+      "1",
+    );
+    expect(result).toMatch(/exited 0 but produced only 0 bytes/);
+    expect(result).toMatch(/gh-copilot/);
+  });
+
+  it("flags exit-0 with under-50-byte stdout as a silent failure", () => {
+    const result = detectSilentWorkerFailure(
+      { output: "error: unknown option\n", worker: "gh-copilot", exitCode: 0, looksLikeHelpText: false },
+      "autonomous",
+      "2",
+    );
+    expect(result).toMatch(/bytes of stdout/);
+  });
+
+  it("flags help-text output as a silent failure even when stdout is long enough", () => {
+    const longHelp = "x".repeat(80); // >= MIN_WORKER_STDOUT
+    const result = detectSilentWorkerFailure(
+      { output: longHelp, worker: "gh-copilot", exitCode: 0, looksLikeHelpText: true },
+      "autonomous",
+      "3",
+    );
+    expect(result).toMatch(/help\/usage text/);
+  });
+
+  it("does NOT flag healthy worker output", () => {
+    const healthy = "I analyzed the slice and updated 3 files.\n".repeat(20);
+    const result = detectSilentWorkerFailure(
+      { output: healthy, worker: "gh-copilot", exitCode: 0, looksLikeHelpText: false },
+      "autonomous",
+      "4",
+    );
+    expect(result).toBeNull();
+  });
+
+  it("does NOT flag non-zero exit (those fail via the normal path)", () => {
+    const result = detectSilentWorkerFailure(
+      { output: "", worker: "gh-copilot", exitCode: 1, looksLikeHelpText: false },
+      "autonomous",
+      "5",
+    );
+    expect(result).toBeNull();
+  });
+
+  it("does NOT flag the human assisted-mode sentinel", () => {
+    const result = detectSilentWorkerFailure(
+      { output: "Assisted mode", worker: "human", exitCode: 0, looksLikeHelpText: false },
+      "assisted",
+      "6",
+    );
+    expect(result).toBeNull();
+  });
+
+  it("returns null when workerResult is missing", () => {
+    expect(detectSilentWorkerFailure(null, "autonomous", "7")).toBeNull();
+    expect(detectSilentWorkerFailure(undefined, "autonomous", "8")).toBeNull();
   });
 });
 

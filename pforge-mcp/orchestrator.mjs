@@ -1392,6 +1392,42 @@ export function detectHelpTextOutput(stdout, stderr, workerName) {
 }
 
 /**
+ * Issue #77: detect silent worker failures.
+ *
+ * A worker that exits 0 with empty/trivial stdout did not actually do work —
+ * this happens when the CLI rejects a flag (e.g. unrecognized --output-format value)
+ * and prints a short error to stderr before exiting "successfully". Previously such
+ * slices were recorded as "passed" because the validation gate (if any) ran against
+ * unchanged files.
+ *
+ * Returns a string describing the failure, or null if the worker output looks fine.
+ *
+ * @param {{ output?: string, worker?: string, exitCode?: number, looksLikeHelpText?: boolean }} workerResult
+ * @param {string} mode
+ * @param {string|number} sliceNumber
+ * @returns {string|null}
+ */
+export function detectSilentWorkerFailure(workerResult, mode, sliceNumber) {
+  if (!workerResult) return null;
+  if (mode === "assisted") return null;
+  if (workerResult.worker === "human") return null;
+  if (workerResult.exitCode !== 0) return null;
+
+  const stdoutLen = (workerResult.output || "").trim().length;
+  const MIN_WORKER_STDOUT = 50;
+
+  if (stdoutLen < MIN_WORKER_STDOUT) {
+    return `Worker '${workerResult.worker || "unknown"}' exited 0 but produced only ${stdoutLen} bytes of stdout — ` +
+      `likely a CLI misconfiguration (e.g. unrecognized flag). See slice-${sliceNumber}-log.txt for stderr.`;
+  }
+  if (workerResult.looksLikeHelpText) {
+    return `Worker '${workerResult.worker || "unknown"}' printed help/usage text instead of doing work — ` +
+      `check worker-capabilities.json baseArgs for unsupported flags.`;
+  }
+  return null;
+}
+
+/**
  * Parse JSONL output from CLI worker.
  */
 function parseJSONL(output) {
@@ -4761,9 +4797,16 @@ async function executeSlice(slice, options) {
   }
 
   const duration = Date.now() - startTime;
+
+  // Issue #77: silent-failure guard. A worker that exits 0 with empty/trivial stdout
+  // did not actually do any work — previously this slipped through as "passed" because
+  // the gate (if any) ran against unchanged files. Treat as a failure so operators see it.
+  const silentFailure = detectSilentWorkerFailure(workerResult, mode, slice.number);
+
   // Status: gate is the authority. Worker exit code may be non-zero from shell wrappers
   // even when the work succeeded. If gates pass, the slice passed.
-  const status = gateResult.success ? "passed" : "failed";
+  // Issue #77: silent worker failures override gate success.
+  const status = silentFailure ? "failed" : (gateResult.success ? "passed" : "failed");
 
   const sliceResult = {
     number: slice.number,
@@ -4775,6 +4818,7 @@ async function executeSlice(slice, options) {
     gateOutput: gateResult.output,
     gateError: gateResult.error || null,
     failedCommand: gateResult.failedCommand || null,
+    ...(silentFailure && { silentFailure }),
     tokens: workerResult.tokens || { tokens_in: null, tokens_out: null, model: "unknown" },
     worker: workerResult.worker,
     model: workerResult.model,

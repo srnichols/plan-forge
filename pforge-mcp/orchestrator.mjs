@@ -26,7 +26,7 @@ import { EventEmitter } from "node:events";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { createTraceContext, createTelemetryHandler, writeManifest, appendRunIndex, pruneRunHistory, addLogSummary } from "./telemetry.mjs";
-import { isOpenBrainConfigured, buildMemorySearchBlock, buildMemoryCaptureBlock, buildReflexionBlock, buildTrajectorySuffix, extractTrajectory, writeTrajectory, buildRunSummaryThought, buildCostAnomalyThought, loadProjectContext, buildPlanBootContext } from "./memory.mjs";
+import { isOpenBrainConfigured, buildMemorySearchBlock, buildMemoryCaptureBlock, buildReflexionBlock, buildTrajectorySuffix, extractTrajectory, writeTrajectory, retrieveAutoSkills, buildAutoSkillContext, extractAutoSkill, writeAutoSkill, incrementAutoSkillReuse, buildRunSummaryThought, buildCostAnomalyThought, loadProjectContext, buildPlanBootContext } from "./memory.mjs";
 import { enforceCrucibleId, CrucibleEnforcementError } from "./crucible-enforce.mjs";
 // Phase FORGE-SHOP-07 Slice 07.2 — brain facade for unified recall
 import { recall as brainRecall } from "./brain.mjs";
@@ -4607,6 +4607,18 @@ async function executeSlice(slice, options) {
   let lastFailureContext = null;
   let currentModel = finalModel;
 
+  // Phase-25 Slice 3 (L2 Voyager): retrieve auto-skills matching this slice's
+  // domain keywords once per slice so every retry sees the same context.
+  // reuseCount is only bumped after the slice ultimately passes — skills that
+  // did not help an eventually-failing slice should not promote.
+  let injectedAutoSkills = [];
+  try {
+    injectedAutoSkills = retrieveAutoSkills({ cwd, slice, limit: 3 }) || [];
+  } catch {
+    injectedAutoSkills = [];
+  }
+  const autoSkillContextBlock = buildAutoSkillContext(injectedAutoSkills);
+
   while (attempt <= maxRetries) {
     const attemptStartTime = Date.now();
     // Auto-escalate model on retries — skip past the current model in chain
@@ -4650,6 +4662,13 @@ async function executeSlice(slice, options) {
     if (memoryEnabled) {
       sliceInstructions = buildMemorySearchBlock(projectName, slice) + "\n" + sliceInstructions;
       sliceInstructions += "\n" + buildMemoryCaptureBlock(projectName, slice, planName);
+    }
+
+    // Phase-25 Slice 3 (L2 Voyager): inject auto-skill recipes that matched
+    // this slice's domain keywords. Injected once per attempt so retries also
+    // see the prior-knowledge cues.
+    if (autoSkillContextBlock) {
+      sliceInstructions += autoSkillContextBlock;
     }
 
     // Phase-25 Slice 2 (L8 Trajectory): ask the worker to emit a first-person
@@ -4903,6 +4922,40 @@ async function executeSlice(slice, options) {
       }
     } catch {
       // Non-fatal — trajectory persistence must never fail a passing slice
+    }
+  }
+
+  // Phase-25 Slice 3 (L2 Voyager): on successful slices, (a) bump reuseCount
+  // for every auto-skill that was injected into this slice's context, so skills
+  // that helped produce passing work accrue toward the promotion threshold
+  // (MUST #4 / D3), and (b) capture this slice itself as a new auto-skill
+  // candidate (MUST #3). Non-fatal on failure.
+  if (status === "passed") {
+    try {
+      for (const injected of injectedAutoSkills) {
+        if (injected && injected.sha256Prefix) {
+          incrementAutoSkillReuse({ cwd, sha256Prefix: injected.sha256Prefix });
+        }
+      }
+    } catch {
+      // Non-fatal — reuse-count bookkeeping must never fail a passing slice
+    }
+    try {
+      const record = extractAutoSkill({ slice, planBasename: planName, cwd });
+      if (record) {
+        const path = writeAutoSkill({ cwd, record });
+        sliceResult.autoSkillPath = relative(cwd, path);
+        sliceResult.autoSkillPrefix = record.sha256Prefix;
+        if (eventBus) {
+          eventBus.emit("auto-skill-captured", {
+            sliceNumber: slice.number,
+            prefix: record.sha256Prefix,
+            path: sliceResult.autoSkillPath,
+          });
+        }
+      }
+    } catch {
+      // Non-fatal — auto-skill capture must never fail a passing slice
     }
   }
 

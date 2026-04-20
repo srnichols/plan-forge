@@ -15,6 +15,7 @@
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync, readdirSync } from "node:fs";
 import { resolve, join } from "node:path";
+import { createHash } from "node:crypto";
 
 /**
  * Default keyword patterns mapped to targeted search queries for `search_thoughts`.
@@ -480,6 +481,323 @@ export function listTrajectories({ cwd = process.cwd(), planBasename }) {
     return a.sliceId.localeCompare(b.sliceId);
   });
   return entries;
+}
+
+// ─── Phase-25 Slice 3: Auto-skill library (L2 — Voyager) ──────────────
+
+/** Subdirectory under `.forge/` where auto-skill candidates are stored. */
+const AUTOSKILL_DIR = "skills-auto";
+
+/** SHA-256 prefix length used in auto-skill file names (Phase-25 D4). */
+export const AUTOSKILL_SHA_PREFIX_LEN = 12;
+
+/** Default promotion threshold for auto-skill reuses (Phase-25 D3). */
+export const AUTOSKILL_DEFAULT_THRESHOLD = 3;
+
+/**
+ * Derive domain keywords for a slice by matching its title (and, if present,
+ * its file list) against the keyword search map. Returns canonical query
+ * strings (e.g. "database migration patterns") — the same vocabulary used by
+ * `buildMemorySearchBlock`, so auto-skills and memory search share indexing.
+ *
+ * @param {object} slice
+ * @param {string} [cwd=process.cwd()]
+ * @returns {string[]} Unique list of matched domain query strings.
+ */
+export function extractDomainKeywords(slice, cwd = process.cwd()) {
+  if (!slice) return [];
+  const fileList = Array.isArray(slice.files) ? slice.files : [];
+  const haystack = [slice.title || "", ...fileList].join(" ").toLowerCase();
+  const map = loadKeywordSearchMap(cwd);
+  const hits = [];
+  for (const entry of map) {
+    if (entry.pattern.test(haystack) && !hits.includes(entry.query)) {
+      hits.push(entry.query);
+    }
+  }
+  return hits;
+}
+
+function inferAutoSkillSliceType(slice) {
+  const t = String(slice?.title || "").toLowerCase();
+  if (/\btest|spec\b/.test(t)) return "test";
+  if (/\bdoc|readme|changelog|manual\b/.test(t)) return "doc";
+  if (/\bdeploy|ship|release\b/.test(t)) return "deploy";
+  if (/\bfix|bug|hotfix\b/.test(t)) return "fix";
+  return "execute";
+}
+
+function autoSkillPrefix(summary, commands) {
+  const h = createHash("sha256");
+  h.update(String(summary || ""));
+  h.update("\n");
+  h.update((Array.isArray(commands) ? commands : []).join("\n"));
+  return h.digest("hex").slice(0, AUTOSKILL_SHA_PREFIX_LEN);
+}
+
+/**
+ * Parse a slice's validationGate (string or string[]) into an array of
+ * runnable shell commands, dropping blank lines and `#` comments.
+ */
+function parseGateCommands(rawGate) {
+  let lines = [];
+  if (Array.isArray(rawGate)) {
+    lines = rawGate;
+  } else if (typeof rawGate === "string") {
+    lines = rawGate.split("\n");
+  } else {
+    return [];
+  }
+  return lines
+    .map((s) => (typeof s === "string" ? s.trim() : ""))
+    .filter((s) => s.length > 0 && !s.startsWith("#"));
+}
+
+/**
+ * Build an auto-skill record from a passing slice. Pure function — no fs.
+ * Returns `null` when the slice has no validation-gate commands to capture.
+ *
+ * MUST #3 schema: { sha256Prefix, summary, commands[], contextSignature,
+ *                   reuseCount: 0, createdAt }.
+ *
+ * @param {object} args
+ * @param {object} args.slice
+ * @param {string} [args.planBasename]
+ * @param {string} [args.cwd]
+ * @param {string} [args.now] ISO timestamp override (for deterministic tests).
+ * @returns {object|null}
+ */
+export function extractAutoSkill({ slice, planBasename = "", cwd = process.cwd(), now } = {}) {
+  if (!slice || typeof slice !== "object") return null;
+  const commands = parseGateCommands(slice.validationGate);
+  if (commands.length === 0) return null;
+
+  const domainKeywords = extractDomainKeywords(slice, cwd);
+  const titleHash = createHash("sha256")
+    .update(String(slice.title || ""))
+    .digest("hex")
+    .slice(0, 8);
+  const summary = String(slice.title || `slice-${slice.number ?? "unknown"}`).slice(0, 200);
+  const sha256Prefix = autoSkillPrefix(summary, commands);
+  const createdAt = typeof now === "string" && now.length > 0 ? now : new Date().toISOString();
+
+  return {
+    sha256Prefix,
+    summary,
+    commands,
+    contextSignature: {
+      sliceType: inferAutoSkillSliceType(slice),
+      domainKeywords,
+      titleHash,
+      planBasename: typeof planBasename === "string" ? planBasename : "",
+    },
+    reuseCount: 0,
+    createdAt,
+  };
+}
+
+/**
+ * Serialize an auto-skill record to its Markdown-on-disk form. Frontmatter
+ * uses JSON-encoded scalars where quoting matters, so the parser round-trips
+ * exotic characters in commands and summaries.
+ */
+export function renderAutoSkillMarkdown(record) {
+  if (!record) throw new Error("renderAutoSkillMarkdown: record required");
+  const cs = record.contextSignature || {};
+  const domainKeywords = Array.isArray(cs.domainKeywords) ? cs.domainKeywords : [];
+  const lines = [
+    "---",
+    `sha256Prefix: ${record.sha256Prefix}`,
+    `summary: ${JSON.stringify(String(record.summary || ""))}`,
+    `createdAt: ${record.createdAt}`,
+    `reuseCount: ${Number(record.reuseCount || 0)}`,
+    "contextSignature:",
+    `  sliceType: ${cs.sliceType || "execute"}`,
+    `  titleHash: ${cs.titleHash || ""}`,
+    `  planBasename: ${cs.planBasename || ""}`,
+    `  domainKeywords: [${domainKeywords.map((k) => JSON.stringify(k)).join(", ")}]`,
+    "commands:",
+    ...record.commands.map((c) => `  - ${JSON.stringify(String(c))}`),
+    "---",
+    "",
+    `# Auto-skill: ${record.summary}`,
+    "",
+    "Captured by Plan-Forge Phase-25 auto-skill library (L2).",
+    "Reuse this recipe when a future slice matches the domain keywords above.",
+    "",
+    "## Commands that worked",
+    "",
+    ...record.commands.flatMap((c) => ["```", c, "```", ""]),
+  ];
+  return lines.join("\n");
+}
+
+/**
+ * Parse an auto-skill record from its Markdown-on-disk form. Tolerant of
+ * hand-edits — returns `null` on clearly malformed files.
+ */
+export function parseAutoSkillMarkdown(text) {
+  if (typeof text !== "string") return null;
+  const fmMatch = /^---\n([\s\S]*?)\n---/.exec(text);
+  if (!fmMatch) return null;
+  const fm = fmMatch[1];
+
+  const sha256Prefix = (/^sha256Prefix:\s*(\S+)$/m.exec(fm) || [])[1];
+  if (!sha256Prefix) return null;
+
+  const summaryLine = (/^summary:\s*(.+)$/m.exec(fm) || [])[1] || "";
+  let summary = summaryLine;
+  try { summary = JSON.parse(summaryLine); } catch { /* keep raw */ }
+
+  const createdAt = (/^createdAt:\s*(\S+)$/m.exec(fm) || [])[1] || "";
+  const reuseCount = Number((/^reuseCount:\s*(\S+)$/m.exec(fm) || [])[1] || 0) || 0;
+
+  const cs = {
+    sliceType: (/^\s*sliceType:\s*(\S+)$/m.exec(fm) || [])[1] || "execute",
+    titleHash: (/^\s*titleHash:\s*(\S+)$/m.exec(fm) || [])[1] || "",
+    planBasename: (/^\s*planBasename:\s*(\S+)$/m.exec(fm) || [])[1] || "",
+    domainKeywords: [],
+  };
+  const kwMatch = /^\s*domainKeywords:\s*\[([^\]]*)\]$/m.exec(fm);
+  if (kwMatch) {
+    try {
+      const parsed = JSON.parse("[" + kwMatch[1] + "]");
+      if (Array.isArray(parsed)) cs.domainKeywords = parsed.filter((s) => typeof s === "string");
+    } catch { /* leave empty */ }
+  }
+
+  const commands = [];
+  // `commands` is always serialized as the last frontmatter key (see
+  // renderAutoSkillMarkdown), so we can safely read from the `commands:` line
+  // through the end of the frontmatter block.
+  const cmdSectionMatch = /\ncommands:\n([\s\S]*)$/.exec(fm);
+  if (cmdSectionMatch) {
+    for (const raw of cmdSectionMatch[1].split("\n")) {
+      const m = /^\s*-\s*(.+)$/.exec(raw);
+      if (!m) continue;
+      let v = m[1].trim();
+      try { v = JSON.parse(v); } catch { /* keep raw */ }
+      if (typeof v === "string" && v.length > 0) commands.push(v);
+    }
+  }
+
+  return { sha256Prefix, summary, commands, contextSignature: cs, reuseCount, createdAt };
+}
+
+/**
+ * Persist an auto-skill record to `.forge/skills-auto/<sha256Prefix>.md`.
+ * Idempotent by prefix — overwrites an existing file to support reuseCount updates.
+ *
+ * @returns {string} Absolute path of the written file.
+ */
+export function writeAutoSkill({ cwd = process.cwd(), record }) {
+  if (!record || !record.sha256Prefix) {
+    throw new Error("writeAutoSkill: record.sha256Prefix required");
+  }
+  const dir = resolve(cwd, ".forge", AUTOSKILL_DIR);
+  mkdirSync(dir, { recursive: true });
+  const path = resolve(dir, `${record.sha256Prefix}.md`);
+  writeFileSync(path, renderAutoSkillMarkdown(record), "utf-8");
+  return path;
+}
+
+/** Read a single auto-skill by prefix. Returns `null` when missing or malformed. */
+export function readAutoSkill({ cwd = process.cwd(), sha256Prefix }) {
+  if (!sha256Prefix) return null;
+  const path = resolve(cwd, ".forge", AUTOSKILL_DIR, `${sha256Prefix}.md`);
+  if (!existsSync(path)) return null;
+  try {
+    return parseAutoSkillMarkdown(readFileSync(path, "utf-8"));
+  } catch {
+    return null;
+  }
+}
+
+/** List every auto-skill candidate. Returns `[]` when the directory does not exist. */
+export function listAutoSkills({ cwd = process.cwd() } = {}) {
+  const dir = resolve(cwd, ".forge", AUTOSKILL_DIR);
+  if (!existsSync(dir)) return [];
+  let files;
+  try { files = readdirSync(dir); } catch { return []; }
+  const out = [];
+  for (const f of files) {
+    if (!f.endsWith(".md")) continue;
+    const rec = readAutoSkill({ cwd, sha256Prefix: f.slice(0, -3) });
+    if (rec) out.push(rec);
+  }
+  return out;
+}
+
+/**
+ * Retrieve auto-skills whose `contextSignature.domainKeywords` overlap the
+ * given slice's domain keywords. Ranked by `reuseCount` desc, then `createdAt`
+ * desc. Returns up to `limit` records (default 3).
+ */
+export function retrieveAutoSkills({ cwd = process.cwd(), slice, limit = 3 } = {}) {
+  if (!slice) return [];
+  const keywords = extractDomainKeywords(slice, cwd);
+  if (keywords.length === 0) return [];
+  const all = listAutoSkills({ cwd });
+  const matches = all.filter((s) => {
+    const kw = s.contextSignature?.domainKeywords || [];
+    return kw.some((k) => keywords.includes(k));
+  });
+  matches.sort((a, b) => {
+    const dr = (b.reuseCount || 0) - (a.reuseCount || 0);
+    if (dr !== 0) return dr;
+    return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
+  });
+  const cap = Number.isFinite(limit) && limit > 0 ? limit : 3;
+  return matches.slice(0, cap);
+}
+
+/**
+ * Atomically bump `reuseCount` for a given skill. Returns the new count, or
+ * `null` when the skill is missing.
+ */
+export function incrementAutoSkillReuse({ cwd = process.cwd(), sha256Prefix }) {
+  const rec = readAutoSkill({ cwd, sha256Prefix });
+  if (!rec) return null;
+  rec.reuseCount = (Number(rec.reuseCount) || 0) + 1;
+  writeAutoSkill({ cwd, record: rec });
+  return rec.reuseCount;
+}
+
+/**
+ * MUST #4 promotion gate. Returns `true` when a skill is eligible for
+ * promotion to `.github/skills/auto-<name>/SKILL.md`. Default threshold = 3
+ * (Phase-25 D3); callers override via `runtime.autoSkill.promoteThreshold`.
+ */
+export function shouldPromoteAutoSkill(skill, threshold = AUTOSKILL_DEFAULT_THRESHOLD) {
+  if (!skill) return false;
+  const n = Number(skill.reuseCount || 0);
+  const t = Number.isFinite(threshold) && threshold > 0 ? threshold : AUTOSKILL_DEFAULT_THRESHOLD;
+  return n >= t;
+}
+
+/**
+ * Build a prompt block listing retrieved auto-skills for worker injection.
+ * Returns `""` when no skills are provided.
+ */
+export function buildAutoSkillContext(skills) {
+  if (!Array.isArray(skills) || skills.length === 0) return "";
+  const lines = [
+    "",
+    "--- AUTO-SKILL CONTEXT (Phase-25 L2) ---",
+    "These recipes worked on past slices matching your domain keywords.",
+    "Consider their commands when deciding your approach — but you remain",
+    "responsible for the current slice's validation gate.",
+    "",
+  ];
+  for (const s of skills) {
+    lines.push(`### ${s.summary} (reused ${s.reuseCount}×)`);
+    lines.push("");
+    for (const c of s.commands) lines.push("- `" + c + "`");
+    lines.push("");
+  }
+  lines.push("--- END AUTO-SKILL CONTEXT ---");
+  lines.push("");
+  return lines.join("\n");
 }
 
 /**

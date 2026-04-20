@@ -235,11 +235,12 @@ function parseSlices(lines) {
 
     // Match slice headers (case-insensitive, flexible separators):
     //   ### Slice N: Title
+    //   #### Slice N: Title (nested under Session/Group subheadings)
     //   ### slice N — Title
     //   ### SLICE N.N - Title
     //   ### Slice 2A: Title (optional single trailing alpha)
     const sliceMatch = line.match(
-      /^###\s+slice\s+([\d.]+[A-Za-z]?)\s*[:\u2014\u2013—–-]\s*(.+?)(?:\s*\[.+?\])*\s*$/ui
+      /^#{3,4}\s+slice\s+([\d.]+[A-Za-z]?)\s*[:\u2014\u2013—–-]\s*(.+?)(?:\s*\[.+?\])*\s*$/ui
     );
     if (sliceMatch) {
       // Save previous slice

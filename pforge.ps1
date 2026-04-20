@@ -3585,6 +3585,97 @@ function Invoke-Smith {
     }
 
     # ═══════════════════════════════════════════════════════════════
+    # BUG REGISTRY (Phase BUG-01+)
+    # ═══════════════════════════════════════════════════════════════
+    Write-Host ""
+    Write-Host "Bug Registry:" -ForegroundColor Cyan
+
+    $bugsDir = Join-Path $RepoRoot ".forge/bugs"
+    if (Test-Path $bugsDir) {
+        $bugFiles = @(Get-ChildItem -Path $bugsDir -Filter "*.json" -File -ErrorAction SilentlyContinue)
+        if ($bugFiles.Count -eq 0) {
+            Doctor-Pass "Bug registry empty — no open bugs tracked"
+        } else {
+            $open = 0; $resolved = 0; $critical = 0; $high = 0
+            foreach ($bf in $bugFiles) {
+                try {
+                    $bug = Get-Content $bf.FullName -Raw | ConvertFrom-Json
+                    $status = if ($bug.status) { "$($bug.status)".ToLower() } else { "open" }
+                    if ($status -eq "resolved" -or $status -eq "closed" -or $status -eq "fixed") { $resolved++ } else { $open++ }
+                    $sev = if ($bug.severity) { "$($bug.severity)".ToLower() } else { "" }
+                    if ($sev -eq "critical") { $critical++ }
+                    elseif ($sev -eq "high") { $high++ }
+                } catch { }
+            }
+            Doctor-Pass "$($bugFiles.Count) total; $open open, $resolved resolved ($critical critical, $high high)"
+            if ($critical -gt 0) {
+                Doctor-Warn "$critical critical bug(s) open" "Run 'forge_bug_list --severity=critical' via MCP to triage"
+            }
+        }
+    } else {
+        Doctor-Pass "Bug registry inactive — no .forge/bugs/ directory yet"
+    }
+
+    # ═══════════════════════════════════════════════════════════════
+    # NOTIFICATIONS (Phase NOTIFY-01+)
+    # ═══════════════════════════════════════════════════════════════
+    Write-Host ""
+    Write-Host "Notifications:" -ForegroundColor Cyan
+
+    $forgeCfg = Join-Path $RepoRoot ".forge.json"
+    if (Test-Path $forgeCfg) {
+        try {
+            $cfg = Get-Content $forgeCfg -Raw | ConvertFrom-Json
+            if ($cfg.notifications) {
+                $adapterNames = @()
+                foreach ($prop in $cfg.notifications.PSObject.Properties) {
+                    if ($prop.Name -ne 'enabled' -and $prop.Value) {
+                        $adapterNames += $prop.Name
+                    }
+                }
+                if ($adapterNames.Count -gt 0) {
+                    Doctor-Pass "Configured: $($adapterNames -join ', ')"
+                } else {
+                    Doctor-Pass "notifications block present — no adapters configured"
+                }
+            } else {
+                Doctor-Pass "No notifications block — adapters inactive (optional)"
+            }
+        } catch {
+            Doctor-Warn ".forge.json invalid JSON — notifications check skipped" "Validate the file with a JSON parser"
+        }
+    } else {
+        Doctor-Pass "No .forge.json — notifications inactive (optional)"
+    }
+
+    # ═══════════════════════════════════════════════════════════════
+    # L2 TIMELINE / SEARCH SOURCES (Phase SEARCH-01+)
+    # ═══════════════════════════════════════════════════════════════
+    # The unified timeline+search surface indexes events from these L2
+    # stores. Missing directories don't fail the smith — they just mean
+    # that source contributes no events yet.
+    Write-Host ""
+    Write-Host "Timeline / Search sources:" -ForegroundColor Cyan
+
+    $l2Sources = @(
+        @{ Path = ".forge/runs";         Label = "runs" },
+        @{ Path = ".forge/memory";       Label = "memories" },
+        @{ Path = ".forge/crucible";     Label = "crucible" },
+        @{ Path = ".forge/tempering";    Label = "tempering" },
+        @{ Path = ".forge/bugs";         Label = "bugs" },
+        @{ Path = ".forge/incidents";    Label = "incidents" }
+    )
+    $activeCount = 0
+    foreach ($src in $l2Sources) {
+        $p = Join-Path $RepoRoot $src.Path
+        if (Test-Path $p) {
+            $n = @(Get-ChildItem -Path $p -File -Recurse -ErrorAction SilentlyContinue).Count
+            if ($n -gt 0) { $activeCount++ }
+        }
+    }
+    Doctor-Pass "$activeCount of $($l2Sources.Count) L2 source(s) with indexable events"
+
+    # ═══════════════════════════════════════════════════════════════
     # SUMMARY
     # ═══════════════════════════════════════════════════════════════
     Write-Host ""

@@ -2033,6 +2033,25 @@ cmd_doctor() {
     doctor_fail()  { echo "  ❌ $1"; [ -n "${2:-}" ] && echo "     FIX: $2"; d_fail=$((d_fail + 1)); }
     doctor_warn()  { echo "  ⚠️  $1"; [ -n "${2:-}" ] && echo "     FIX: $2"; d_warn=$((d_warn + 1)); }
 
+    # JSON field reader with graceful fallback: prefers jq, falls back to
+    # node -p (always available since Plan Forge requires Node). Never
+    # fails under `set -e` even if the field is missing.
+    _json_field() {
+        local file="$1" field="$2"
+        if [ ! -f "$file" ]; then return 0; fi
+        if command -v jq >/dev/null 2>&1; then
+            jq -r ".${field} // \"\"" "$file" 2>/dev/null || true
+        else
+            FIELD="$field" FILE="$file" node -e '
+              try{const c=JSON.parse(require("fs").readFileSync(process.env.FILE,"utf8"));
+                  const keys=process.env.FIELD.split(".");
+                  let v=c; for(const k of keys){if(v==null)break; v=v[k];}
+                  process.stdout.write(v==null?"":String(v));}
+              catch(e){process.stdout.write("");}
+            ' 2>/dev/null || true
+        fi
+    }
+
     echo ""
     echo "╔══════════════════════════════════════════════════════════════╗"
     echo "║       Plan Forge — The Smith                                  ║"
@@ -2430,7 +2449,8 @@ cmd_doctor() {
                     local dep_pkg="$dep_path/package.json"
                     if [ -f "$dep_pkg" ]; then
                         local dep_ver
-                        dep_ver=$(jq -r '.version // "?"' "$dep_pkg" 2>/dev/null)
+                        dep_ver=$(_json_field "$dep_pkg" version)
+                        [ -z "$dep_ver" ] && dep_ver="?"
                         doctor_pass "$dep_label v$dep_ver"
                     else
                         doctor_pass "$dep_label installed"
@@ -2453,7 +2473,7 @@ cmd_doctor() {
         local version_path="$REPO_ROOT/VERSION"
         if [ -f "$mcp_pkg_path" ] && [ -f "$version_path" ]; then
             local mcp_ver repo_ver
-            mcp_ver=$(jq -r '.version // ""' "$mcp_pkg_path" 2>/dev/null)
+            mcp_ver=$(_json_field "$mcp_pkg_path" version)
             repo_ver=$(cat "$version_path" | tr -d '[:space:]')
             if [ "$mcp_ver" = "$repo_ver" ]; then
                 doctor_pass "MCP server version v$mcp_ver matches VERSION file"
@@ -2571,11 +2591,11 @@ cmd_doctor() {
     if [ -f "$catalog_path" ]; then
         echo "Extensions:"
         local ext_count
-        ext_count=$(jq -r '.extensions | length // 0' "$catalog_path" 2>/dev/null)
+        ext_count=$(jq -r '.extensions | length // 0' "$catalog_path" 2>/dev/null || echo 0)
         if [ $? -eq 0 ]; then
             doctor_pass "Extension catalog valid ($ext_count extension(s))"
             local speckit_compat
-            speckit_compat=$(jq -r '.speckit_compatible // false' "$catalog_path" 2>/dev/null)
+            speckit_compat=$(jq -r '.speckit_compatible // false' "$catalog_path" 2>/dev/null || echo false)
             if [ "$speckit_compat" = "true" ]; then
                 doctor_pass "Spec Kit compatible"
             fi
@@ -2619,14 +2639,14 @@ cmd_doctor() {
     local config_path="$REPO_ROOT/.forge.json"
     if [ -f "$config_path" ]; then
         local quorum_enabled quorum_auto quorum_threshold quorum_models quorum_reviewer
-        quorum_enabled=$(jq -r '.quorum.enabled // false' "$config_path" 2>/dev/null)
+        quorum_enabled=$(jq -r '.quorum.enabled // false' "$config_path" 2>/dev/null || echo false)
         if [ "$quorum_enabled" != "null" ] && [ "$quorum_enabled" != "false" ] || jq -e '.quorum' "$config_path" >/dev/null 2>&1; then
             echo "Quorum Mode:"
-            quorum_enabled=$(jq -r '.quorum.enabled // false' "$config_path" 2>/dev/null)
-            quorum_auto=$(jq -r '.quorum.auto // true' "$config_path" 2>/dev/null)
-            quorum_threshold=$(jq -r '.quorum.threshold // 7' "$config_path" 2>/dev/null)
-            quorum_models=$(jq -r '.quorum.models // [] | join(", ")' "$config_path" 2>/dev/null)
-            quorum_reviewer=$(jq -r '.quorum.reviewerModel // "claude-opus-4.6"' "$config_path" 2>/dev/null)
+            quorum_enabled=$(jq -r '.quorum.enabled // false' "$config_path" 2>/dev/null || echo false)
+            quorum_auto=$(jq -r '.quorum.auto // true' "$config_path" 2>/dev/null || echo true)
+            quorum_threshold=$(jq -r '.quorum.threshold // 7' "$config_path" 2>/dev/null || echo 7)
+            quorum_models=$(jq -r '.quorum.models // [] | join(", ")' "$config_path" 2>/dev/null || echo "")
+            quorum_reviewer=$(jq -r '.quorum.reviewerModel // "claude-opus-4.6"' "$config_path" 2>/dev/null || echo "claude-opus-4.6")
 
             if [ "$quorum_enabled" = "true" ]; then
                 if [ "$quorum_auto" = "true" ]; then
@@ -2827,9 +2847,9 @@ cmd_doctor() {
             doctor_pass "No Tempering scans yet — run 'forge_tempering_scan' to establish a baseline"
         else
             # Extract status + gap count — best-effort grep, no jq dep.
-            status=$(grep -o '"status"[[:space:]]*:[[:space:]]*"[^"]*"' "$latest_scan" 2>/dev/null | head -n1 | sed 's/.*"\([^"]*\)"$/\1/')
+            status=$(grep -o '"status"[[:space:]]*:[[:space:]]*"[^"]*"' "$latest_scan" 2>/dev/null | head -n1 | sed 's/.*"\([^"]*\)"$/\1/' || echo "")
             [ -z "$status" ] && status="unknown"
-            gap_count=$(grep -o '"layer"[[:space:]]*:' "$latest_scan" 2>/dev/null | wc -l | tr -d ' ')
+            gap_count=$({ grep -o '"layer"[[:space:]]*:' "$latest_scan" 2>/dev/null || true; } | wc -l | tr -d ' ')
 
             # Age in days from mtime — portable across GNU/BSD stat.
             if stat -c %Y "$latest_scan" >/dev/null 2>&1; then
@@ -2892,6 +2912,90 @@ cmd_doctor() {
     else
         doctor_pass "Tempering inactive — no .forge/tempering/ directory yet"
     fi
+
+    # ═══════════════════════════════════════════════════════════════
+    # BUG REGISTRY (Phase BUG-01+)
+    # ═══════════════════════════════════════════════════════════════
+    echo ""
+    printf "\033[36mBug Registry:\033[0m\n"
+
+    local bugs_dir="$REPO_ROOT/.forge/bugs"
+    if [ -d "$bugs_dir" ]; then
+        local bug_files=()
+        while IFS= read -r -d '' f; do bug_files+=("$f"); done < <(find "$bugs_dir" -maxdepth 1 -type f -name '*.json' -print0 2>/dev/null)
+        if [ ${#bug_files[@]} -eq 0 ]; then
+            doctor_pass "Bug registry empty — no open bugs tracked"
+        else
+            local total=${#bug_files[@]} open=0 resolved=0 critical=0 high=0
+            for bf in "${bug_files[@]}"; do
+                local status sev
+                status=$(grep -oE '"status"[[:space:]]*:[[:space:]]*"[^"]+"' "$bf" 2>/dev/null | head -1 | sed -E 's/.*"([^"]+)"$/\1/' | tr '[:upper:]' '[:lower:]')
+                sev=$(grep -oE '"severity"[[:space:]]*:[[:space:]]*"[^"]+"' "$bf" 2>/dev/null | head -1 | sed -E 's/.*"([^"]+)"$/\1/' | tr '[:upper:]' '[:lower:]')
+                case "$status" in
+                    resolved|closed|fixed) resolved=$((resolved+1)) ;;
+                    *) open=$((open+1)) ;;
+                esac
+                case "$sev" in
+                    critical) critical=$((critical+1)) ;;
+                    high) high=$((high+1)) ;;
+                esac
+            done
+            doctor_pass "$total total; $open open, $resolved resolved ($critical critical, $high high)"
+            if [ "$critical" -gt 0 ]; then
+                doctor_warn "$critical critical bug(s) open" "Run 'forge_bug_list --severity=critical' via MCP to triage"
+            fi
+        fi
+    else
+        doctor_pass "Bug registry inactive — no .forge/bugs/ directory yet"
+    fi
+
+    # ═══════════════════════════════════════════════════════════════
+    # NOTIFICATIONS (Phase NOTIFY-01+)
+    # ═══════════════════════════════════════════════════════════════
+    echo ""
+    printf "\033[36mNotifications:\033[0m\n"
+
+    local forge_cfg="$REPO_ROOT/.forge.json"
+    if [ -f "$forge_cfg" ]; then
+        if grep -q '"notifications"' "$forge_cfg"; then
+            # Extract adapter keys under notifications (best-effort, no jq dependency)
+            local adapters
+            adapters=$(NOTIFY_FILE="$forge_cfg" node -e '
+              try { const c=JSON.parse(require("fs").readFileSync(process.env.NOTIFY_FILE,"utf8"));
+                    const n=c.notifications||{};
+                    const keys=Object.keys(n).filter(k=>k!=="enabled"&&n[k]);
+                    process.stdout.write(keys.join(", "));
+              } catch(e){ process.stdout.write(""); }
+            ' 2>/dev/null)
+            if [ -n "$adapters" ]; then
+                doctor_pass "Configured: $adapters"
+            else
+                doctor_pass "notifications block present — no adapters configured"
+            fi
+        else
+            doctor_pass "No notifications block — adapters inactive (optional)"
+        fi
+    else
+        doctor_pass "No .forge.json — notifications inactive (optional)"
+    fi
+
+    # ═══════════════════════════════════════════════════════════════
+    # L2 TIMELINE / SEARCH SOURCES (Phase SEARCH-01+)
+    # ═══════════════════════════════════════════════════════════════
+    echo ""
+    printf "\033[36mTimeline / Search sources:\033[0m\n"
+
+    local l2_paths=(".forge/runs" ".forge/memory" ".forge/crucible" ".forge/tempering" ".forge/bugs" ".forge/incidents")
+    local l2_total=${#l2_paths[@]} l2_active=0
+    for rel in "${l2_paths[@]}"; do
+        local p="$REPO_ROOT/$rel"
+        if [ -d "$p" ]; then
+            local n
+            n=$(find "$p" -type f 2>/dev/null | head -1)
+            if [ -n "$n" ]; then l2_active=$((l2_active+1)); fi
+        fi
+    done
+    doctor_pass "$l2_active of $l2_total L2 source(s) with indexable events"
 
     # ═══════════════════════════════════════════════════════════════
     # SUMMARY

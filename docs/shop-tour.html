@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Shop Tour — Plan Forge | Smelt, Forge, Guard, Learn. The AI-Native SDLC Forge Shop.</title>
+  <meta name="description" content="Take the Shop Tour. Plan Forge is one workshop with four stations covering every phase of the software lifecycle — Smelt (refine idea → scope contract), Forge (execute slices with gates), Guard (LiveGuard scans), Learn (memory, bug registry, testbed findings). AI-run, human-supervised." />
+  <meta property="og:title" content="Plan Forge Shop Tour — Four Stations, One Workshop, Every SDLC Phase" />
+  <meta property="og:description" content="Take the Shop Tour. Smelt → Forge → Guard → Learn. The AI-Native SDLC Forge Shop." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://planforge.software/shop-tour.html" />
+  <meta property="og:image" content="https://planforge.software/assets/brand/og-card-v2.webp" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Plan Forge Shop Tour — The AI-Native SDLC Forge Shop" />
+  <meta name="twitter:description" content="Four stations. One workshop. Every SDLC phase — Smelt, Forge, Guard, Learn." />
+  <link rel="canonical" href="https://planforge.software/shop-tour.html" />
+  <meta name="keywords" content="AI-Native SDLC, four stations, forge shop, Smelt, Forge, Guard, Learn, Plan Forge tour, LiveGuard, OpenBrain, bug registry, testbed" />
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@type":"WebPage","name":"Plan Forge Shop Tour","url":"https://planforge.software/shop-tour.html","description":"Guided tour of the Plan Forge four-station AI-Native SDLC workshop.","isPartOf":{"@type":"WebSite","name":"Plan Forge","url":"https://planforge.software"}}
+  </script>
+  <link rel="icon" type="image/svg+xml" href="assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="stylesheet" href="assets/shared.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+
+  <!-- Shared nav (mirrors capabilities.html) -->
+  <nav class="sticky top-0 z-50 bg-slate-950/92 backdrop-blur-md border-b border-slate-800/60">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <a href="index.html" class="flex items-center gap-3 shrink-0">
+          <img src="assets/plan-forge-logo.svg" alt="Plan Forge" class="h-7 w-auto" />
+        </a>
+        <div class="hidden md:flex items-center gap-7">
+          <a href="shop-tour.html" class="text-sm text-amber-400 font-semibold transition-colors">Shop Tour</a>
+          <a href="index.html#solution" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">How It Works</a>
+          <a href="index.html#features" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">Features</a>
+          <a href="index.html#quickstart" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">Quick Start</a>
+          <a href="examples.html" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">Examples</a>
+          <a href="blog/" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">Blog</a>
+          <div class="nav-dropdown-trigger relative">
+            <button class="text-sm text-slate-400 hover:text-slate-100 transition-colors flex items-center gap-1">Resources <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg></button>
+            <div class="nav-dropdown absolute top-full right-0 w-52 py-2 bg-slate-900 border border-slate-700/60 rounded-xl shadow-2xl">
+              <a href="manual/" class="block px-4 py-2 text-sm text-forge-400 hover:bg-slate-800 transition-colors font-semibold">Manual</a>
+              <a href="problem.html" class="block px-4 py-2 text-sm text-slate-400 hover:bg-slate-800 transition-colors">The 80/20 Wall</a>
+              <a href="extensions.html" class="block px-4 py-2 text-sm text-slate-400 hover:bg-slate-800 transition-colors">Extensions</a>
+              <a href="speckit-interop.html" class="block px-4 py-2 text-sm text-slate-400 hover:bg-slate-800 transition-colors">Spec Kit Interop</a>
+              <a href="docs.html" class="block px-4 py-2 text-sm text-slate-400 hover:bg-slate-800 transition-colors">Documentation</a>
+              <a href="dashboard.html" class="block px-4 py-2 text-sm text-slate-400 hover:bg-slate-800 transition-colors">Dashboard</a>
+              <a href="faq.html" class="block px-4 py-2 text-sm text-slate-400 hover:bg-slate-800 transition-colors">FAQ</a>
+              <a href="capabilities.html" class="block px-4 py-2 text-sm text-slate-400 hover:bg-slate-800 transition-colors">Capabilities</a>
+            </div>
+          </div>
+        </div>
+        <div class="hidden md:flex items-center gap-3">
+          <a href="https://github.com/srnichols/plan-forge" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">GitHub</a>
+          <a href="index.html#quickstart" class="px-4 py-2 text-sm font-semibold bg-forge-500 hover:bg-forge-400 text-slate-900 rounded-lg transition-colors">Get Started</a>
+        </div>
+        <button id="mobile-btn" class="md:hidden p-2 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors" aria-label="Open menu">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+      </div>
+    </div>
+    <div id="mobile-menu" class="hidden md:hidden border-t border-slate-800/60 bg-slate-950/98">
+      <div class="px-4 py-3 space-y-1">
+        <a href="shop-tour.html" class="block py-2 text-sm text-amber-400 font-semibold">Shop Tour</a>
+        <a href="index.html" class="block py-2 text-sm text-slate-400 hover:text-slate-100">Home</a>
+        <a href="examples.html" class="block py-2 text-sm text-slate-400 hover:text-slate-100">Examples</a>
+        <a href="blog/" class="block py-2 text-sm text-slate-400 hover:text-slate-100">Blog</a>
+        <a href="manual/" class="block py-2 text-sm text-forge-400 hover:text-slate-100 font-semibold">Manual</a>
+        <a href="problem.html" class="block py-2 text-sm text-slate-400 hover:text-slate-100">The 80/20 Wall</a>
+        <a href="extensions.html" class="block py-2 text-sm text-slate-400 hover:text-slate-100">Extensions</a>
+        <a href="docs.html" class="block py-2 text-sm text-slate-400 hover:text-slate-100">Docs</a>
+        <a href="dashboard.html" class="block py-2 text-sm text-slate-400 hover:text-slate-100">Dashboard</a>
+        <a href="faq.html" class="block py-2 text-sm text-slate-400 hover:text-slate-100">FAQ</a>
+        <a href="capabilities.html" class="block py-2 text-sm text-slate-400 hover:text-slate-100">Capabilities</a>
+        <a href="https://github.com/srnichols/plan-forge" rel="noopener" class="block py-2 text-sm text-forge-400 font-semibold">GitHub →</a>
+      </div>
+    </div>
+  </nav>
+
+  <main>
+    <!-- Hero -->
+    <section class="relative overflow-hidden">
+      <div class="absolute top-16 left-1/3 w-[500px] h-[500px] bg-amber-500/8 rounded-full blur-3xl pointer-events-none"></div>
+      <div class="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-16 text-center">
+        <p class="text-forge-500 text-sm font-semibold tracking-widest uppercase mb-3">The Shop Tour</p>
+        <h1 class="text-4xl md:text-6xl font-black tracking-tight text-white mb-6 leading-[1.05]">
+          Four stations. One workshop.<br />
+          <span class="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-500">Every SDLC phase.</span>
+        </h1>
+        <p class="text-lg md:text-xl text-slate-400 max-w-3xl mx-auto leading-relaxed mb-10">
+          Plan Forge isn't a code generator. It's <strong class="text-slate-200">a whole shop</strong> — a complete AI-native SDLC workshop where every phase of the lifecycle has its own station, its own agents, its own gates. Walk through it with us.
+        </p>
+        <div class="max-w-5xl mx-auto">
+          <img src="assets/brand/forge-shop-panorama.webp" alt="Panorama of the Plan Forge workshop — crucible pouring molten iron on the left, anvil with hammer mid-strike center, rune-inscribed watchtower right-of-center, golden brain absorbing event streams on the far right." class="w-full rounded-2xl border border-slate-700/40 shadow-2xl shadow-amber-500/10" />
+        </div>
+        <div class="flex flex-wrap justify-center gap-3 mt-8 text-sm">
+          <a href="#smelt" class="px-4 py-2 rounded-full bg-slate-800/70 border border-slate-700/60 text-slate-200 hover:border-amber-500/40 transition-colors">Smelt</a>
+          <a href="#forge-station" class="px-4 py-2 rounded-full bg-slate-800/70 border border-slate-700/60 text-slate-200 hover:border-amber-500/40 transition-colors">Forge</a>
+          <a href="#guard" class="px-4 py-2 rounded-full bg-slate-800/70 border border-slate-700/60 text-slate-200 hover:border-cyan-500/40 transition-colors">Guard</a>
+          <a href="#learn" class="px-4 py-2 rounded-full bg-slate-800/70 border border-slate-700/60 text-slate-200 hover:border-amber-500/40 transition-colors">Learn</a>
+          <a href="#command" class="px-4 py-2 rounded-full bg-slate-800/70 border border-slate-700/60 text-slate-200 hover:border-amber-500/40 transition-colors">Command Desk</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Station 1: Smelt -->
+    <section id="smelt" class="py-20 bg-slate-900 border-t border-slate-800/60">
+      <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 grid md:grid-cols-2 gap-12 items-center">
+        <div class="order-2 md:order-1">
+          <p class="text-amber-400 text-xs font-bold tracking-widest uppercase mb-3">Station 1 · Smelt</p>
+          <h2 class="text-3xl md:text-4xl font-bold text-white mb-5">Raw idea → refined scope contract.</h2>
+          <p class="text-slate-400 leading-relaxed mb-5">
+            Every plan begins as ore — an idea in Slack, a half-written ticket, a demand from leadership. The Smelt station interviews you with the <code class="text-slate-300 bg-slate-800 px-1.5 py-0.5 rounded text-sm">Specifier</code> agent, extracts the real requirements, surfaces hidden assumptions, and pours out a <strong class="text-slate-200">Scope Contract</strong> that the downstream stations can't argue with.
+          </p>
+          <h3 class="text-lg font-semibold text-white mb-3">What runs here</h3>
+          <ul class="space-y-2 text-slate-400 text-sm mb-6">
+            <li class="flex gap-2"><span class="text-amber-400">▸</span> Specifier agent (Session 1) — structured interview, requirements extraction</li>
+            <li class="flex gap-2"><span class="text-amber-400">▸</span> AI Plan Hardening Runbook — 7 pre-flight checks, forbidden-action declaration</li>
+            <li class="flex gap-2"><span class="text-amber-400">▸</span> <code class="text-slate-300 bg-slate-800 px-1.5 py-0.5 rounded text-sm">/specify</code> slash command + <code class="text-slate-300 bg-slate-800 px-1.5 py-0.5 rounded text-sm">/harden-plan</code></li>
+            <li class="flex gap-2"><span class="text-amber-400">▸</span> Project Principles + Scope Contract templates</li>
+          </ul>
+          <h3 class="text-lg font-semibold text-white mb-3">What comes out</h3>
+          <p class="text-slate-400 text-sm">A plan file the Forge station can execute slice-by-slice without follow-up questions. No ambiguity, no open-ended "I'll decide later."</p>
+        </div>
+        <div class="order-1 md:order-2">
+          <img src="assets/brand/station-smelt.webp" alt="The Smelt station — stone crucible pouring molten iron, blacksmith tongs, parchment checklist being inscribed in warm ember light." class="w-full rounded-2xl border border-slate-700/40 shadow-xl shadow-amber-500/5" loading="lazy" />
+        </div>
+      </div>
+    </section>
+
+    <!-- Station 2: Forge -->
+    <section id="forge-station" class="py-20 bg-slate-950 border-t border-slate-800/60">
+      <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 grid md:grid-cols-2 gap-12 items-center">
+        <div>
+          <img src="assets/brand/station-forge.webp" alt="The Forge station — anvil with hammer mid-strike, sparks forming slice-blocks, a holographic execution graph glowing in the shower." class="w-full rounded-2xl border border-slate-700/40 shadow-xl shadow-amber-500/5" loading="lazy" />
+        </div>
+        <div>
+          <p class="text-amber-400 text-xs font-bold tracking-widest uppercase mb-3">Station 2 · Forge</p>
+          <h2 class="text-3xl md:text-4xl font-bold text-white mb-5">Scope contract → shipped code, slice by slice.</h2>
+          <p class="text-slate-400 leading-relaxed mb-5">
+            The anvil. Plans are broken into <strong class="text-slate-200">slices</strong> and struck one at a time. Each slice is a commit, each commit has its own gate: <em class="text-slate-300">build + tests + review</em>. The hammer doesn't swing twice on the same slice unless the gate is green.
+          </p>
+          <h3 class="text-lg font-semibold text-white mb-3">What runs here</h3>
+          <ul class="space-y-2 text-slate-400 text-sm mb-6">
+            <li class="flex gap-2"><span class="text-amber-400">▸</span> <code class="text-slate-300 bg-slate-800 px-1.5 py-0.5 rounded text-sm">pforge run-plan</code> — autonomous slice execution</li>
+            <li class="flex gap-2"><span class="text-amber-400">▸</span> Quorum mode — multi-model consensus for complex slices</li>
+            <li class="flex gap-2"><span class="text-amber-400">▸</span> Slice gates — build, test, lint, architecture review before each commit</li>
+            <li class="flex gap-2"><span class="text-amber-400">▸</span> Cost ledger — multi-model pricing, self-calibrating estimates</li>
+            <li class="flex gap-2"><span class="text-amber-400">▸</span> Auto-escalation — model promotion on slice failure</li>
+          </ul>
+          <h3 class="text-lg font-semibold text-white mb-3">What comes out</h3>
+          <p class="text-slate-400 text-sm">Green tests, green CI, green cost ledger — or an honest stop with a fix-proposal. Never a silent "it compiled, ship it."</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Station 3: Guard -->
+    <section id="guard" class="py-20 bg-slate-900 border-t border-slate-800/60">
+      <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 grid md:grid-cols-2 gap-12 items-center">
+        <div class="order-2 md:order-1">
+          <p class="text-cyan-400 text-xs font-bold tracking-widest uppercase mb-3">Station 3 · Guard</p>
+          <h2 class="text-3xl md:text-4xl font-bold text-white mb-5">Standing watch over the workshop floor.</h2>
+          <p class="text-slate-400 leading-relaxed mb-5">
+            The watchtower. <strong class="text-slate-200">LiveGuard</strong> scans secrets, env drift, CVE surface, and regression risk — before deploy, after every slice, every hour. Incidents become triaged fix-plans. The pager stays quiet because the tower sees what's coming.
+          </p>
+          <h3 class="text-lg font-semibold text-white mb-3">What runs here</h3>
+          <ul class="space-y-2 text-slate-400 text-sm mb-6">
+            <li class="flex gap-2"><span class="text-cyan-400">▸</span> <code class="text-slate-300 bg-slate-800 px-1.5 py-0.5 rounded text-sm">forge_secret_scan</code> — gitleaks-grade, local, pre-deploy blocking</li>
+            <li class="flex gap-2"><span class="text-cyan-400">▸</span> <code class="text-slate-300 bg-slate-800 px-1.5 py-0.5 rounded text-sm">forge_drift_report</code> — code-vs-plan drift scoring post-slice</li>
+            <li class="flex gap-2"><span class="text-cyan-400">▸</span> <code class="text-slate-300 bg-slate-800 px-1.5 py-0.5 rounded text-sm">forge_regression_guard</code> — prevents reintroducing closed bugs</li>
+            <li class="flex gap-2"><span class="text-cyan-400">▸</span> <code class="text-slate-300 bg-slate-800 px-1.5 py-0.5 rounded text-sm">forge_env_diff</code> — environment variable gap detection</li>
+            <li class="flex gap-2"><span class="text-cyan-400">▸</span> <code class="text-slate-300 bg-slate-800 px-1.5 py-0.5 rounded text-sm">forge_liveguard_run</code> — composite health check</li>
+          </ul>
+          <h3 class="text-lg font-semibold text-white mb-3">What comes out</h3>
+          <p class="text-slate-400 text-sm">Pre-deploy block on secrets ≥ high, post-slice advisory on drift, recurring-incident escalation, and a fix-proposal attached to every alert — not just "something broke."</p>
+        </div>
+        <div class="order-1 md:order-2">
+          <img src="assets/brand/station-guard.webp" alt="The Guard station — stone watchtower at the edge of the forge floor, glowing cyan rune-shield, sentry silhouettes patrolling, a CVE-labeled scroll intercepted mid-air." class="w-full rounded-2xl border border-slate-700/40 shadow-xl shadow-cyan-500/5" loading="lazy" />
+        </div>
+      </div>
+    </section>
+
+    <!-- Station 4: Learn -->
+    <section id="learn" class="py-20 bg-slate-950 border-t border-slate-800/60">
+      <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 grid md:grid-cols-2 gap-12 items-center">
+        <div>
+          <img src="assets/brand/station-learn.webp" alt="The Learn station — a golden brain-shaped crystal suspended over an anvil, tendrils of light absorbing event motes, runic memory inscriptions floating upward." class="w-full rounded-2xl border border-slate-700/40 shadow-xl shadow-amber-500/5" loading="lazy" />
+        </div>
+        <div>
+          <p class="text-amber-400 text-xs font-bold tracking-widest uppercase mb-3">Station 4 · Learn</p>
+          <h2 class="text-3xl md:text-4xl font-bold text-white mb-5">Every strike teaches the next one.</h2>
+          <p class="text-slate-400 leading-relaxed mb-5">
+            The brain above the bench. Plan Forge remembers every incident, every fix, every review — and feeds it back into the next session as <strong class="text-slate-200">OpenBrain memories</strong>, bug-registry entries, testbed findings, and health-DNA trends. The shop gets sharper the longer you run it.
+          </p>
+          <h3 class="text-lg font-semibold text-white mb-3">What runs here</h3>
+          <ul class="space-y-2 text-slate-400 text-sm mb-6">
+            <li class="flex gap-2"><span class="text-amber-400">▸</span> OpenBrain — persistent memory across sessions, auto-queried by pipeline prompts</li>
+            <li class="flex gap-2"><span class="text-amber-400">▸</span> Bug Registry — native tracking with dashboard timeline + regression-guard hooks</li>
+            <li class="flex gap-2"><span class="text-amber-400">▸</span> Testbed — happy-path scenario runner for release validation</li>
+            <li class="flex gap-2"><span class="text-amber-400">▸</span> Health DNA — long-horizon project-decay fingerprint</li>
+            <li class="flex gap-2"><span class="text-amber-400">▸</span> Forge Intelligence — escalation-chain auto-tuning from historical model performance</li>
+          </ul>
+          <h3 class="text-lg font-semibold text-white mb-3">What comes out</h3>
+          <p class="text-slate-400 text-sm">Tomorrow's plan is colder, faster, and less wrong. Your repo gains institutional memory — one that doesn't quit, forget, or argue.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Command Desk -->
+    <section id="command" class="py-20 bg-slate-900 border-t border-slate-800/60">
+      <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 grid md:grid-cols-2 gap-12 items-center">
+        <div class="order-2 md:order-1">
+          <p class="text-amber-400 text-xs font-bold tracking-widest uppercase mb-3">The Command Desk</p>
+          <h2 class="text-3xl md:text-4xl font-bold text-white mb-5">One view over the whole shop.</h2>
+          <p class="text-slate-400 leading-relaxed mb-5">
+            The smith's command desk. The live dashboard at <code class="text-slate-300 bg-slate-800 px-1.5 py-0.5 rounded text-sm">localhost:3100/dashboard</code> gives you every station in one view: slice progress, cost ledger, LiveGuard incidents, memory queue, CI triggers. Telegram, Slack, and Discord all run up the same speaking tube.
+          </p>
+          <h3 class="text-lg font-semibold text-white mb-3">What you see</h3>
+          <ul class="space-y-2 text-slate-400 text-sm mb-6">
+            <li class="flex gap-2"><span class="text-amber-400">▸</span> FORGE — live slice execution, cost trend, plan status</li>
+            <li class="flex gap-2"><span class="text-amber-400">▸</span> LIVEGUARD — drift, incidents, secret scans, health trend</li>
+            <li class="flex gap-2"><span class="text-amber-400">▸</span> CRUCIBLE — community extensions, tempering scores</li>
+            <li class="flex gap-2"><span class="text-amber-400">▸</span> BUG REGISTRY — open/closed/linked bugs, regression stats</li>
+            <li class="flex gap-2"><span class="text-amber-400">▸</span> TIMELINE / SEARCH / NOTIFICATIONS / WATCHER — system-wide event stream</li>
+          </ul>
+          <div class="flex flex-wrap gap-3 mt-6">
+            <a href="dashboard.html" class="px-5 py-2.5 text-sm font-semibold bg-forge-500 hover:bg-forge-400 text-slate-900 rounded-lg transition-colors">Dashboard Preview →</a>
+            <a href="capabilities.html" class="px-5 py-2.5 text-sm font-semibold bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-700 rounded-lg transition-colors">Full Capability Reference</a>
+          </div>
+        </div>
+        <div class="order-1 md:order-2">
+          <img src="assets/brand/control-room.webp" alt="The Command Desk — a blacksmith's command desk overlooking the workshop, multi-screen dashboard, chalk kanban boards, a speaking tube to the ceiling." class="w-full rounded-2xl border border-slate-700/40 shadow-xl shadow-amber-500/5" loading="lazy" />
+        </div>
+      </div>
+    </section>
+
+    <!-- Ship CTA -->
+    <section class="py-24 bg-gradient-to-b from-slate-900 to-slate-950">
+      <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+        <h2 class="text-3xl md:text-5xl font-bold text-white mb-6">Ready to run the shop?</h2>
+        <p class="text-xl text-slate-400 mb-10 max-w-2xl mx-auto">
+          Open source. MIT licensed. Works with Copilot, Claude, Cursor, Codex, Gemini, and Windsurf. Install in five minutes, ship your first slice today.
+        </p>
+        <div class="flex flex-col sm:flex-row gap-4 justify-center">
+          <a href="index.html#quickstart" class="inline-flex items-center justify-center gap-2 px-8 py-4 text-base font-bold bg-forge-500 hover:bg-forge-400 text-slate-900 rounded-xl transition-all forge-glow">
+            Start the 5-Minute Quick Forge
+          </a>
+          <a href="https://github.com/srnichols/plan-forge" rel="noopener" class="inline-flex items-center justify-center gap-2 px-8 py-4 text-base font-semibold bg-slate-800 hover:bg-slate-700 text-slate-100 rounded-xl border border-slate-700 transition-all">
+            View on GitHub
+          </a>
+        </div>
+        <p class="text-xs text-slate-600 mt-6 italic">"A blacksmith without a shop is just a man with a hammer."</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- Shared footer script (matches other pages) -->
+  <script src="assets/shared.js" defer></script>
+</body>
+</html>

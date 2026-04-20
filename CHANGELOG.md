@@ -7,9 +7,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased] — targeting 2.50.0
 
-### Planned — FORGE-SHOP-03 notification layer
+### Shipped — FORGE-SHOP-03 notification layer (2026-04-19)
 
-- Phase FORGE-SHOP-03 drafted ([docs/plans/Phase-FORGE-SHOP-03.md](docs/plans/Phase-FORGE-SHOP-03.md)) — notification core consumes hub events, routes by rule, rate-limits (token-bucket + digest coalesce), delivers via pluggable adapters. Webhook adapter in core. Slack/Teams/Email/PagerDuty as extension stubs (installable via `pforge ext add`). 2 new MCP tools (`forge_notify_send`, `forge_notify_test`) → 57 total. Secrets in env vars only (literal URL in config rejected with `ERR_LITERAL_SECRET`). Dashboard Config → Notifications subtab.
+- **Notification core** — consumes hub events, routes by rule, rate-limits (token-bucket + digest coalesce), delivers via pluggable adapters. Webhook adapter in core. Slack/Teams/Email/PagerDuty as extension stubs installable via `pforge ext add`.
+- **2 new MCP tools** — `forge_notify_send`, `forge_notify_test` (57 total).
+- **Secret hygiene** — webhook URLs/tokens only via env vars; literal secret in config rejected with `ERR_LITERAL_SECRET`.
+- **Dashboard** — Config → Notifications subtab with live config watcher.
+- Plan: [docs/plans/Phase-FORGE-SHOP-03.md](docs/plans/Phase-FORGE-SHOP-03.md). Commits: `551b850` (core + routing + webhook + rate limiter), `5b5a8e7` (4 stubs + Config subtab + watcher).
 
 ---
 

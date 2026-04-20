@@ -1,14 +1,14 @@
 ---
 crucibleId: 3f8d7a91-2e45-4c68-9b13-d2f41a8e6b07
 source: self-hosted
-status: draft
+status: complete
 phase: FORGE-SHOP-03
 arc: FORGE-SHOP
 ---
 
 # Phase FORGE-SHOP-03: Notification layer — webhook core + extension stubs
 
-> **Status**: 📝 DRAFT — ready for Session 2 execution
+> **Status**: ✅ COMPLETE — shipped 2026-04-19 (commits 551b850, 5b5a8e7)
 > **Estimated Effort**: 2 slices
 > **Risk Level**: Medium (external I/O, auth credentials, rate
 > limiting — test-guards non-negotiable)

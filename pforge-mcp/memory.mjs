@@ -13,7 +13,7 @@
  * @module memory
  */
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync, readdirSync } from "node:fs";
+import { readFileSync, writeFileSync, appendFileSync, mkdirSync, existsSync, statSync, readdirSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { createHash } from "node:crypto";
 
@@ -1522,6 +1522,87 @@ export function buildPlanBootContext(plan, projectName, opts = {}) {
   }
 
   return out;
+}
+
+// ─── Phase-26 Slice 7: Gate-suggestion accept counter (C4) ───────────────────
+
+/**
+ * Path to the gate-suggestions event ledger. Append-only JSONL.
+ * One record per user action (accept / reject / defer).
+ */
+const GATE_SUGGESTIONS_PATH = ".forge/gate-suggestions.jsonl";
+
+/**
+ * Derive a stable per-suggestion key from its domain and suggested command.
+ * Same `(domain, suggestedCommand)` tuple across plans yields the same key
+ * so accept counts aggregate. Truncated SHA-256 (12 hex chars) keeps the key
+ * short but collision-resistant at this cardinality.
+ *
+ * @param {{ domain: string, suggestedCommand: string }} suggestion
+ * @returns {string}
+ */
+export function computeGateSuggestionKey(suggestion) {
+  const domain = String(suggestion?.domain || "");
+  const command = String(suggestion?.suggestedCommand || "");
+  return createHash("sha256").update(`${domain}\u0000${command}`).digest("hex").slice(0, 12);
+}
+
+/**
+ * Append an `accept` event for a gate suggestion to `.forge/gate-suggestions.jsonl`.
+ * Returns the suggestion's current `acceptCount` after this record is persisted.
+ *
+ * Schema:
+ *   { type: "accept", suggestionKey, sliceNumber, sliceTitle, domain,
+ *     suggestedCommand, at: ISO-timestamp }
+ *
+ * Phase-26 MUST #C4 / D8: per-suggestion counter, not global; used by
+ * `synthesizeGateSuggestions` in `enforce` mode to decide when to auto-inject
+ * (threshold: 5 accepts).
+ *
+ * @param {object} suggestion - a suggestion object from `synthesizeGateSuggestions`
+ * @param {string} [cwd=process.cwd()]
+ * @returns {{ suggestionKey: string, acceptCount: number }}
+ */
+export function recordGateAccept(suggestion, cwd = process.cwd()) {
+  if (!suggestion || typeof suggestion !== "object") {
+    throw new Error("recordGateAccept: suggestion object required");
+  }
+  const suggestionKey = computeGateSuggestionKey(suggestion);
+  const record = {
+    type: "accept",
+    suggestionKey,
+    sliceNumber: suggestion.sliceNumber ?? null,
+    sliceTitle: suggestion.sliceTitle || "",
+    domain: suggestion.domain || "",
+    suggestedCommand: suggestion.suggestedCommand || "",
+    at: new Date().toISOString(),
+  };
+  const path = resolve(cwd, GATE_SUGGESTIONS_PATH);
+  mkdirSync(resolve(cwd, ".forge"), { recursive: true });
+  appendFileSync(path, `${JSON.stringify(record)}\n`, "utf-8");
+  return { suggestionKey, acceptCount: getGateSuggestionCounter(suggestionKey, cwd) };
+}
+
+/**
+ * Count `accept` events recorded for a given suggestion key.
+ * Reads `.forge/gate-suggestions.jsonl` and returns 0 when the ledger is
+ * missing, empty, or malformed.
+ *
+ * @param {string} suggestionKey
+ * @param {string} [cwd=process.cwd()]
+ * @returns {number}
+ */
+export function getGateSuggestionCounter(suggestionKey, cwd = process.cwd()) {
+  if (!suggestionKey) return 0;
+  const path = resolve(cwd, GATE_SUGGESTIONS_PATH);
+  if (!existsSync(path)) return 0;
+  let count = 0;
+  for (const record of _readJsonl(path)) {
+    if (record && record.type === "accept" && record.suggestionKey === suggestionKey) {
+      count += 1;
+    }
+  }
+  return count;
 }
 
 

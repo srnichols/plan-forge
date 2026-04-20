@@ -26,7 +26,7 @@ import { EventEmitter } from "node:events";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { createTraceContext, createTelemetryHandler, writeManifest, appendRunIndex, pruneRunHistory, addLogSummary } from "./telemetry.mjs";
-import { isOpenBrainConfigured, buildMemorySearchBlock, buildMemoryCaptureBlock, buildReflexionBlock, buildTrajectorySuffix, extractTrajectory, writeTrajectory, retrieveAutoSkills, buildAutoSkillContext, extractAutoSkill, writeAutoSkill, incrementAutoSkillReuse, buildRunSummaryThought, buildCostAnomalyThought, loadProjectContext, buildPlanBootContext } from "./memory.mjs";
+import { isOpenBrainConfigured, buildMemorySearchBlock, buildMemoryCaptureBlock, buildReflexionBlock, buildTrajectorySuffix, extractTrajectory, writeTrajectory, retrieveAutoSkills, buildAutoSkillContext, extractAutoSkill, writeAutoSkill, incrementAutoSkillReuse, buildRunSummaryThought, buildCostAnomalyThought, loadProjectContext, buildPlanBootContext, computeGateSuggestionKey, getGateSuggestionCounter } from "./memory.mjs";
 import { enforceCrucibleId, CrucibleEnforcementError } from "./crucible-enforce.mjs";
 // Phase FORGE-SHOP-07 Slice 07.2 — brain facade for unified recall
 import { recall as brainRecall, loadReviewerConfig, invokeReviewer } from "./brain.mjs";
@@ -2920,6 +2920,13 @@ const GATE_SYNTH_TEMPLATES = {
 };
 
 /**
+ * Phase-26 Slice 7 (C4 / D8): a gate suggestion auto-injects into enforce-mode
+ * output after this many user accepts have been recorded for the same
+ * `(domain, suggestedCommand)` tuple in `.forge/gate-suggestions.jsonl`.
+ */
+export const GATE_SUGGESTION_AUTO_INJECT_THRESHOLD = 5;
+
+/**
  * Load the `runtime.gateSynthesis` config block with defaults.
  * Schema: { mode: "off" | "suggest" | "enforce", domains: string[] }
  * Default: { mode: "suggest", domains: ["domain","integration","controller"] }
@@ -2997,16 +3004,36 @@ export function synthesizeGateSuggestions({ slices, cwd = process.cwd(), config 
       : (Array.isArray(slice.validationGate) ? slice.validationGate.join("\n").trim() : "");
     if (gateText.length > 0) continue;
     const minima = getMinimaForDomain(cwd, domain);
-    out.push({
+    const suggestion = {
       sliceNumber: slice.number ?? "?",
       sliceTitle: slice.title || "",
       domain,
       reason: `Slice matches '${domain}' profile but declares no validation gate. Tempering coverage-min ${minima.coverageMin ?? "n/a"}%, runtime-budget ${minima.runtimeBudgetMs ?? "n/a"}ms apply.`,
       suggestedCommand: GATE_SYNTH_TEMPLATES[domain] || GATE_SYNTH_TEMPLATES.domain,
       minima: { coverageMin: minima.coverageMin, runtimeBudgetMs: minima.runtimeBudgetMs },
-    });
+    };
+    // Phase-26 Slice 7 (C4): attach per-suggestion accept counter + auto-inject
+    // flag in `enforce` mode. The key is derived from `(domain, suggestedCommand)`
+    // so accepts aggregate across plans. Auto-inject threshold: 5.
+    const suggestionKey = computeGateSuggestionKey(suggestion);
+    const acceptCount = getGateSuggestionCounter(suggestionKey, cwd);
+    suggestion.suggestionKey = suggestionKey;
+    suggestion.acceptCount = acceptCount;
+    suggestion.autoInjected = cfg.mode === "enforce" && acceptCount >= GATE_SUGGESTION_AUTO_INJECT_THRESHOLD;
+    out.push(suggestion);
   }
-  return { mode: cfg.mode, suggestions: out };
+  return {
+    mode: cfg.mode,
+    suggestions: out,
+    autoInjected: out.filter((s) => s.autoInjected).map((s) => ({
+      suggestionKey: s.suggestionKey,
+      sliceNumber: s.sliceNumber,
+      sliceTitle: s.sliceTitle,
+      domain: s.domain,
+      suggestedCommand: s.suggestedCommand,
+      acceptCount: s.acceptCount,
+    })),
+  };
 }
 
 /**

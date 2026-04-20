@@ -254,6 +254,8 @@ function parseSlices(lines) {
         title: rawTitle,
         depends: [],
         parallel: false,
+        competitive: false,
+        competitiveVariants: null,
         scope: [],
         buildCommand: null,
         testCommand: null,
@@ -275,6 +277,18 @@ function parseSlices(lines) {
       // Fuzzy parallel: [P], [parallel], [parallel-safe]
       const parallelMatch = rawTags.match(/\[(?:P|parallel(?:-safe)?)\]/i);
       if (parallelMatch) current.parallel = true;
+
+      // Phase-26 Slice 2 — [competitive] tag triggers CompetitiveScheduler.
+      // Same-slice best-of-N via isolated worktrees. Opt-in per slice.
+      const competitiveMatch = rawTags.match(/\[competitive(?::\s*(\d+))?\]/i);
+      if (competitiveMatch) {
+        current.competitive = true;
+        if (competitiveMatch[1]) {
+          current.competitiveVariants = parseInt(competitiveMatch[1], 10);
+        }
+      } else {
+        current.competitive = false;
+      }
 
       const scopeMatch = rawTags.match(/\[scope:\s*([^\]]+)\]/i);
       if (scopeMatch) {
@@ -1954,6 +1968,230 @@ export class ParallelScheduler {
 }
 
 /**
+ * Competitive scheduler (Phase-26 Slice 2) — for slices tagged `[competitive]`,
+ * spawn N worktree variants under `.forge/worktrees/<plan>/<slice>/variant-<n>`
+ * and run each through the standard slice executor in parallel. All other
+ * slices (no `[competitive]` tag) execute sequentially in DAG order — this
+ * scheduler is a superset of `SequentialScheduler` for non-competitive slices.
+ *
+ * Winner selection and loser archival are Slice 3 of this phase; Slice 2 only
+ * produces a result with the shape:
+ *   { sliceId, status: "competitive-pending", variants: [...], winningVariant: null }
+ *
+ * Opt-in: when no slice has the `[competitive]` tag, `runPlan` picks a
+ * different scheduler and this class is never instantiated.
+ */
+export class CompetitiveScheduler {
+  /**
+   * @param {object} eventBus
+   * @param {object} [config]
+   * @param {number} [config.maxVariants=3]
+   * @param {string} [config.projectDir] absolute project dir for worktrees
+   * @param {string} [config.planBasename]
+   * @param {object} [config.worktreeManager] injected module exports (testing)
+   */
+  constructor(eventBus, config = {}) {
+    this.eventBus = eventBus;
+    this.maxVariants = config.maxVariants ?? 3;
+    this.projectDir = config.projectDir ?? null;
+    this.planBasename = config.planBasename ?? null;
+    this.worktreeManager = config.worktreeManager ?? null;
+  }
+
+  /**
+   * Execute slices respecting DAG order. `[competitive]`-tagged slices
+   * spawn N variant worktrees and run each through executeFn in parallel.
+   *
+   * @param {Map} nodes
+   * @param {string[]} order topological order
+   * @param {(slice: object) => Promise<object>} executeFn
+   * @param {object} [options] { abortSignal, resumeFrom }
+   * @returns {Promise<object[]>}
+   */
+  async execute(nodes, order, executeFn, options = {}) {
+    const { abortSignal, resumeFrom = null } = options;
+    const results = [];
+    let skipping = resumeFrom !== null;
+
+    for (const id of order) {
+      if (abortSignal?.aborted) {
+        this.eventBus.emit("run-aborted", { sliceId: id, reason: "User abort" });
+        break;
+      }
+
+      const slice = nodes.get(id);
+
+      if (skipping) {
+        if (id === String(resumeFrom)) {
+          skipping = false;
+        } else {
+          results.push({ sliceId: id, status: "skipped" });
+          continue;
+        }
+      }
+
+      if (slice.status === "completed") {
+        results.push({ sliceId: id, status: "skipped" });
+        continue;
+      }
+
+      if (slice.competitive) {
+        const result = await this._executeCompetitiveSlice(slice, executeFn, abortSignal);
+        results.push(result);
+        // Slice 2 contract: we never consider a competitive slice "failed" here —
+        // Slice 3 adds winner selection that can mark it failed/passed. Until
+        // then, `competitive-pending` flows through and the run continues.
+        if (result.status === "error" || result.status === "failed") break;
+      } else {
+        // Non-competitive path: same shape as SequentialScheduler.
+        this.eventBus.emit("slice-started", {
+          sliceId: id,
+          title: slice.title,
+          complexityScore: slice.complexityScore,
+        });
+        try {
+          const r = await executeFn(slice);
+          const entry = { sliceId: id, ...r };
+          results.push(entry);
+          if (r.status === "passed") {
+            this.eventBus.emit("slice-completed", { sliceId: id, ...r });
+          } else {
+            this.eventBus.emit("slice-failed", { sliceId: id, ...r });
+            break;
+          }
+        } catch (err) {
+          const fail = { sliceId: id, status: "error", error: err.message };
+          results.push(fail);
+          this.eventBus.emit("slice-failed", fail);
+          break;
+        }
+      }
+    }
+
+    return results;
+  }
+
+  async _executeCompetitiveSlice(slice, executeFn, abortSignal) {
+    const declaredVariants = Number.isInteger(slice.competitiveVariants)
+      ? slice.competitiveVariants
+      : this.maxVariants;
+    // Clamp to [2, 5] at the scheduler boundary too (defense-in-depth).
+    const n = Math.min(5, Math.max(2, declaredVariants));
+
+    this.eventBus.emit("competitive-slice-started", {
+      sliceId: slice.number,
+      title: slice.title,
+      variants: n,
+    });
+
+    const created = [];
+    const manager = this.worktreeManager;
+    // Create N worktrees up front (best-effort — failures abort the whole slice).
+    if (manager && this.projectDir && this.planBasename) {
+      for (let v = 1; v <= n; v++) {
+        try {
+          const wt = manager.createWorktree({
+            projectDir: this.projectDir,
+            planBasename: this.planBasename,
+            sliceId: slice.number,
+            variant: v,
+          });
+          created.push({ variant: v, path: wt.path });
+        } catch (err) {
+          // Tear down anything we already created so we don't leak variants.
+          for (const c of created) {
+            try {
+              manager.archiveWorktree({
+                projectDir: this.projectDir,
+                planBasename: this.planBasename,
+                sliceId: slice.number,
+                variant: c.variant,
+              });
+            } catch { /* swallow */ }
+          }
+          return {
+            sliceId: slice.number,
+            status: "error",
+            error: `competitive: worktree creation failed for variant ${v}: ${err.message}`,
+            variants: [],
+            winningVariant: null,
+          };
+        }
+      }
+    }
+
+    if (abortSignal?.aborted) {
+      return {
+        sliceId: slice.number,
+        status: "error",
+        error: "aborted before competitive variants started",
+        variants: [],
+        winningVariant: null,
+      };
+    }
+
+    // Execute all variants in parallel. Each gets a cloned slice with
+    // variantContext so executeFn knows which worktree to operate in.
+    const runs = created.length > 0
+      ? created
+      : Array.from({ length: n }, (_, i) => ({ variant: i + 1, path: null }));
+
+    const promises = runs.map(async ({ variant, path }) => {
+      const startedAt = Date.now();
+      this.eventBus.emit("variant-started", {
+        sliceId: slice.number,
+        variant,
+        worktreePath: path,
+      });
+      try {
+        const variantSlice = {
+          ...slice,
+          variantContext: { variant, worktreePath: path },
+        };
+        const r = await executeFn(variantSlice);
+        const durationMs = Date.now() - startedAt;
+        this.eventBus.emit("variant-completed", {
+          sliceId: slice.number,
+          variant,
+          status: r.status,
+          durationMs,
+        });
+        return { variant, worktreePath: path, durationMs, ...r };
+      } catch (err) {
+        const durationMs = Date.now() - startedAt;
+        this.eventBus.emit("variant-completed", {
+          sliceId: slice.number,
+          variant,
+          status: "error",
+          durationMs,
+        });
+        return {
+          variant,
+          worktreePath: path,
+          durationMs,
+          status: "error",
+          error: err.message,
+        };
+      }
+    });
+
+    const variants = await Promise.all(promises);
+
+    this.eventBus.emit("competitive-slice-variants-completed", {
+      sliceId: slice.number,
+      variants: variants.map((v) => ({ variant: v.variant, status: v.status })),
+    });
+
+    return {
+      sliceId: slice.number,
+      status: "competitive-pending", // Slice 3 replaces with passed/failed after selectWinner
+      variants,
+      winningVariant: null,
+    };
+  }
+}
+
+/**
  * Detect scope conflicts among parallel-eligible slices (M6).
  * If two [P] slices have overlapping file scopes, they can't run in parallel.
  * @returns {Set<string>} IDs of slices that have conflicts (forced sequential)
@@ -2180,10 +2418,25 @@ export async function runPlan(planPath, options = {}) {
 
   // Select scheduler — use ParallelScheduler if plan has [P] tags
   const hasParallelSlices = plan.slices.some((s) => s.parallel);
+  const hasCompetitiveSlices = plan.slices.some((s) => s.competitive);
   const maxParallelism = loadMaxParallelism(cwd);
-  const scheduler = hasParallelSlices
-    ? new ParallelScheduler(eventBus, maxParallelism)
-    : new SequentialScheduler(eventBus);
+  let scheduler;
+  if (hasCompetitiveSlices) {
+    const compConfig = loadCompetitiveConfig(cwd);
+    // Lazy-load worktree manager so projects without competitive slices don't
+    // pay the import cost.
+    const worktreeManager = await import("./worktree-manager.mjs");
+    scheduler = new CompetitiveScheduler(eventBus, {
+      maxVariants: compConfig.maxVariants,
+      projectDir: resolve(cwd),
+      planBasename: basename(planPath, ".md"),
+      worktreeManager,
+    });
+  } else if (hasParallelSlices) {
+    scheduler = new ParallelScheduler(eventBus, maxParallelism);
+  } else {
+    scheduler = new SequentialScheduler(eventBus);
+  }
   const abortSignal = abortController?.signal || null;
 
   // OpenBrain memory integration
@@ -2418,6 +2671,35 @@ function loadMaxParallelism(cwd) {
     }
   } catch { /* defaults */ }
   return 3; // Default: 3 concurrent workers
+}
+
+/**
+ * Phase-26 Slice 2 — load runtime.competitive configuration.
+ * Schema:
+ *   { "runtime": { "competitive": { "maxVariants": 3, "archiveDays": 7 } } }
+ * Defaults: maxVariants=3 (clamped [2,5]); archiveDays=7.
+ * @param {string} cwd
+ * @returns {{ maxVariants: number, archiveDays: number }}
+ */
+export function loadCompetitiveConfig(cwd) {
+  const defaults = { maxVariants: 3, archiveDays: 7 };
+  const configPath = resolve(cwd, ".forge.json");
+  try {
+    if (!existsSync(configPath)) return defaults;
+    const config = JSON.parse(readFileSync(configPath, "utf-8"));
+    const raw = config?.runtime?.competitive ?? {};
+    const out = { ...defaults };
+    if (Number.isFinite(raw.maxVariants)) {
+      const n = Math.trunc(raw.maxVariants);
+      out.maxVariants = Math.min(5, Math.max(2, n));
+    }
+    if (Number.isFinite(raw.archiveDays) && raw.archiveDays > 0) {
+      out.archiveDays = Math.trunc(raw.archiveDays);
+    }
+    return out;
+  } catch {
+    return defaults;
+  }
 }
 
 /**

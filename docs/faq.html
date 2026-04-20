@@ -4,9 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>FAQ — Plan Forge</title>
-  <meta name="description" content="Frequently asked questions about Plan Forge — AI coding guardrails, the hardening pipeline, tech presets, memory integration, and more." />
+  <meta name="description" content="Frequently asked questions about Plan Forge — the AI-Native SDLC Forge Shop. Four stations (Smelt, Forge, Guard, Learn), the hardening pipeline, tech presets, memory integration, and more." />
     <meta property="og:title" content="FAQ — Plan Forge" />
-  <meta property="og:description" content="Frequently asked questions about Plan Forge — AI coding guardrails, the hardening pipeline, tech presets, memory integration, and more." />
+  <meta property="og:description" content="Frequently asked questions about Plan Forge — the AI-Native SDLC Forge Shop. Four stations (Smelt, Forge, Guard, Learn), the hardening pipeline, tech presets, memory integration, and more." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://planforge.software/faq.html" />
   <meta property="og:image" content="https://planforge.software/assets/og-card.webp" />
@@ -24,7 +24,7 @@
         "name": "What is Plan Forge?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Plan Forge is a specification-driven framework that converts rough feature ideas into hardened execution contracts for AI coding agents. It adds guardrails, validation gates, and independent review to prevent scope creep, skipped tests, and architecture drift. It's a GitHub template — clone it, run the setup wizard, and you're ready."
+          "text": "Plan Forge is the AI-Native SDLC Forge Shop — one workshop, four stations (Smelt, Forge, Guard, Learn) that together cover every phase of the software lifecycle. Smelt turns a raw idea into a Scope Contract; Forge executes slice-by-slice with validation gates and independent review; Guard is LiveGuard post-deploy defense (secrets, drift, regressions, incidents); Learn is the memory layer (bug registry, testbed, Health DNA, OpenBrain). Install it as a GitHub template."
         }
       },
       {
@@ -32,7 +32,7 @@
         "name": "How is this different from just using Copilot / Cursor / Claude directly?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Those tools are great at generating code. Plan Forge makes them great at generating the right code. Without guardrails, agents silently expand scope, pick their own architecture, skip validation, and forget context across sessions. Plan Forge adds a 7-step pipeline, auto-loading instruction files, and independent review — so the agent works within your standards."
+          "text": "Those tools are great at generating code — that's one hammer. Plan Forge gives you the whole shop. Smelt locks scope before the agent writes a line. Forge runs slice-by-slice with validation gates and independent review. Guard (LiveGuard) defends post-deploy against secrets, drift, and regressions. Learn captures every bug, every fix, every incident into OpenBrain memory so tomorrow's plan is colder and less wrong. One hammer is not a workshop."
         }
       },
       {
@@ -218,7 +218,14 @@
               <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
             </summary>
             <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
-              Plan Forge is a specification-driven framework that converts rough feature ideas into hardened execution contracts for AI coding agents. It adds guardrails, validation gates, and independent review to prevent the scope creep, skipped tests, and architecture drift that plague unstructured AI-assisted development. It's a GitHub template — clone it, run the setup wizard, and you're ready.
+              Plan Forge is the <strong>AI-Native SDLC Forge Shop</strong> — one workshop, four stations covering every phase of the software lifecycle:
+              <ul class="mt-3 space-y-1.5 list-disc list-inside">
+                <li><strong class="text-amber-400">🪨 Smelt</strong> — raw idea → Scope Contract (specifier + hardener)</li>
+                <li><strong class="text-amber-400">🔨 Forge</strong> — Scope Contract → shipped code (slice gates, quorum, fresh-session review)</li>
+                <li><strong class="text-cyan-400">🛡️ Guard</strong> — post-deploy defense (LiveGuard: secrets, drift, regressions, incidents)</li>
+                <li><strong class="text-amber-400">🧠 Learn</strong> — memory &amp; retrospectives (bug registry, testbed, Health DNA, OpenBrain)</li>
+              </ul>
+              <p class="mt-3">Install it as a GitHub template — clone, run the setup wizard, and you're inside the shop. <a href="shop-tour.html" class="text-forge-400 hover:text-forge-300">Full Shop Tour →</a></p>
             </div>
           </details>
 
@@ -228,7 +235,14 @@
               <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
             </summary>
             <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
-              Those tools are great at <em>generating</em> code. Plan Forge makes them great at generating the <em>right</em> code. Without guardrails, agents silently expand scope, pick their own architecture, skip validation, and forget context across sessions. Plan Forge adds a 7-step pipeline, auto-loading instruction files (security, testing, architecture, etc.), and independent review — so the agent works within your standards, not its own improvisation.
+              Those tools are great at <em>generating</em> code — that's one hammer. Plan Forge gives you the whole shop:
+              <ul class="mt-3 space-y-1 list-disc list-inside">
+                <li><strong>Smelt</strong> locks scope <em>before</em> the agent writes a line.</li>
+                <li><strong>Forge</strong> runs slice-by-slice with validation gates and a fresh-session independent review.</li>
+                <li><strong>Guard</strong> (LiveGuard) defends post-deploy against secrets, drift, and regressions.</li>
+                <li><strong>Learn</strong> captures every bug, fix, and incident into OpenBrain so tomorrow's plan is colder and less wrong.</li>
+              </ul>
+              <p class="mt-3"><em>One hammer is not a workshop.</em></p>
             </div>
           </details>
 

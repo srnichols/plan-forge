@@ -70,6 +70,7 @@ function Show-Help {
     Write-Host "  ext list          List installed extensions"
     Write-Host "  ext remove <name> Remove an installed extension"
     Write-Host "  update [source]   Update framework files from Plan Forge source (preserves customizations)"
+    Write-Host "  self-update       Check for and install the latest Plan Forge release from GitHub"
     Write-Host "  analyze <plan>    Cross-artifact analysis — requirement traceability, test coverage, scope compliance"
     Write-Host "  run-plan <plan>   Execute a hardened plan — spawn CLI workers, validate at every boundary, track tokens"
     Write-Host "  version-bump <v>  Update version across all files (VERSION, package.json, docs, README)"
@@ -2257,6 +2258,21 @@ function Invoke-Drift {
 
 # ─── Command: smith ────────────────────────────────────────────────────
 function Invoke-Smith {
+    # Phase AUTO-UPDATE-01 Slice 2 — --refresh-version-cache flag
+    if ($Arguments -contains '--refresh-version-cache') {
+        $cleared = 0
+        $vcFile = Join-Path $RepoRoot ".forge/version-check.json"
+        $ucFile = Join-Path $RepoRoot ".forge/update-check.json"
+        if (Test-Path $vcFile) { Remove-Item $vcFile -Force; $cleared++ }
+        if (Test-Path $ucFile) { Remove-Item $ucFile -Force; $cleared++ }
+        if ($cleared -gt 0) {
+            Write-Host "  ✅ Version cache cleared ($cleared file(s) deleted) — next check will hit GitHub API." -ForegroundColor Green
+        } else {
+            Write-Host "  ℹ No cache to clear." -ForegroundColor DarkGray
+        }
+        return
+    }
+
     Write-ManualSteps "smith" @(
         "Check that required tools are installed (git, VS Code, PowerShell)"
         "Verify VS Code settings for Copilot agent mode"
@@ -2755,6 +2771,45 @@ function Invoke-Smith {
     else {
         Doctor-Pass "Installed v$templateVersion (GitHub unreachable and no local source — skipping currency check)"
     }
+
+    Write-Host ""
+
+    # ═══════════════════════════════════════════════════════════════
+    # 4a. AUTO-UPDATE STATUS (Phase AUTO-UPDATE-01 Slice 2)
+    # ═══════════════════════════════════════════════════════════════
+    Write-Host "Auto-update:" -ForegroundColor Cyan
+
+    $auEnabled = $false
+    $forgeJsonPath = Join-Path $RepoRoot ".forge.json"
+    if (Test-Path $forgeJsonPath) {
+        try {
+            $fj = Get-Content $forgeJsonPath -Raw | ConvertFrom-Json
+            if ($fj.autoUpdate -and $fj.autoUpdate.enabled -eq $true) { $auEnabled = $true }
+        } catch { }
+    }
+
+    $updateCacheFile = Join-Path $RepoRoot ".forge/update-check.json"
+    $auCacheAge = $null
+    $auLastTag = $null
+    $auCheckedAt = $null
+    if (Test-Path $updateCacheFile) {
+        try {
+            $auCache = Get-Content $updateCacheFile -Raw | ConvertFrom-Json
+            $auCheckedAt = $auCache.checkedAt
+            $auLastTag = $auCache.latestVersion
+            if ($auCheckedAt) {
+                $auCacheAge = [math]::Round(((Get-Date) - [datetime]$auCheckedAt).TotalMinutes)
+            }
+        } catch { }
+    }
+
+    $enabledLabel = if ($auEnabled) { "enabled" } else { "disabled (opt-in)" }
+    $cacheLabel = if ($auCacheAge -ne $null) { "${auCacheAge}m" } else { "no cache" }
+    $tagLabel = if ($auLastTag) { "v$auLastTag" } else { "unknown" }
+    $tsLabel = if ($auCheckedAt) { $auCheckedAt } else { "never" }
+
+    Doctor-Pass "Auto-update: $enabledLabel | Cache age: $cacheLabel | Last tag: $tagLabel | Last check: $tsLabel"
+    Write-Host "     Tip: Run 'pforge self-update' to check + install, or 'pforge smith --refresh-version-cache' to clear cache" -ForegroundColor DarkGray
 
     Write-Host ""
 
@@ -4652,6 +4707,83 @@ function Invoke-Tour {
     Write-Host ""
 }
 
+# ─── Command: self-update ──────────────────────────────────────────────
+function Invoke-SelfUpdate {
+    Write-ManualSteps "self-update" @(
+        "Force-refresh the update check (bypass 24h cache)"
+        "If a newer version exists, prompt for confirmation"
+        "Delegate to 'pforge update --from-github --tag <latest>'"
+    )
+
+    $autoYes = $Arguments -contains '--yes' -or $Arguments -contains '-y'
+    $dryRun = $Arguments -contains '--dry-run'
+
+    # Read autoUpdate.enabled from .forge.json (default false)
+    $autoUpdateEnabled = $false
+    $forgeJson = Join-Path $RepoRoot ".forge.json"
+    if (Test-Path $forgeJson) {
+        try {
+            $cfg = Get-Content $forgeJson -Raw | ConvertFrom-Json
+            if ($cfg.autoUpdate -and $cfg.autoUpdate.enabled -eq $true) {
+                $autoUpdateEnabled = $true
+            }
+        } catch { }
+    }
+    if (-not $autoUpdateEnabled) {
+        Write-Host "  ℹ Auto-update is opt-in; this is a manual invocation." -ForegroundColor DarkGray
+        Write-Host "    Set autoUpdate.enabled = true in .forge.json to suppress this notice." -ForegroundColor DarkGray
+    }
+
+    # Force-refresh update check via node helper
+    $nodeHelper = Join-Path $RepoRoot "pforge-mcp/update-check.mjs"
+    if (-not (Test-Path $nodeHelper)) {
+        Write-Host "ERROR: update-check.mjs not found at $nodeHelper" -ForegroundColor Red
+        exit 1
+    }
+
+    Write-Host "Checking for updates (force refresh)..." -ForegroundColor DarkCyan
+    $checkScript = @"
+import { checkForUpdate } from './pforge-mcp/update-check.mjs';
+const r = await checkForUpdate({ currentVersion: process.argv[1], projectDir: process.argv[2], force: true });
+console.log(JSON.stringify(r || { isNewer: false }));
+"@
+    $currentVersion = (Get-Content (Join-Path $RepoRoot "VERSION") -Raw).Trim()
+    $checkResult = & node --input-type=module -e $checkScript $currentVersion $RepoRoot 2>&1 | Select-Object -Last 1
+    try {
+        $checkJson = $checkResult | ConvertFrom-Json
+    } catch {
+        Write-Host "ERROR: Failed to parse update check output: $checkResult" -ForegroundColor Red
+        exit 1
+    }
+
+    if (-not $checkJson.isNewer) {
+        Write-Host "  ✅ Already current (v$currentVersion)" -ForegroundColor Green
+        exit 0
+    }
+
+    $latestTag = "v$($checkJson.latest)"
+    Write-Host "  ⬆ New release available: $latestTag (you have v$currentVersion)" -ForegroundColor Yellow
+
+    if ($dryRun) {
+        Write-Host "  [dry-run] Would run: pforge update --from-github --tag $latestTag" -ForegroundColor DarkGray
+        exit 0
+    }
+
+    # Prompt unless --yes
+    if (-not $autoYes) {
+        $answer = Read-Host "  Install $latestTag now? [Y/n]"
+        if ($answer -and $answer -notmatch '^[Yy]') {
+            Write-Host "  Cancelled." -ForegroundColor Gray
+            exit 0
+        }
+    }
+
+    # Delegate to existing update --from-github
+    Write-Host "" -ForegroundColor White
+    $script:Arguments = @('--from-github', '--tag', $latestTag)
+    Invoke-Update
+}
+
 # ─── Command Router ────────────────────────────────────────────────────
 switch ($Command) {
     'init'         { Invoke-Init }
@@ -4665,6 +4797,7 @@ switch ($Command) {
     'diff'         { Invoke-Diff }
     'ext'          { Invoke-Ext }
     'update'       { Invoke-Update }
+    'self-update'  { Invoke-SelfUpdate }
     'analyze'      { Invoke-Analyze }
     'run-plan'     { Invoke-RunPlan }
     'org-rules'    { Invoke-OrgRules }

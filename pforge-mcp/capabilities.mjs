@@ -1243,6 +1243,29 @@ export const TOOL_METADATA = {
       output: { runtime: "cli-gh", presets: [{ preset: "power", declared: 3, effective: 1, synthesisViable: false, recommendation: { preset: "speed", reason: "..." } }] },
     },
   },
+  // Phase AUTO-UPDATE-01 Slice 2 — self-update from CLI/dashboard
+  forge_self_update: {
+    intent: ["update", "upgrade", "self-update", "install-latest"],
+    aliases: ["auto-update", "update-now", "self-update"],
+    cost: "high",
+    maxConcurrent: 1,
+    addedIn: "2.55.0",
+    prerequisites: ["network connectivity", "VERSION file"],
+    produces: ["updated framework files", ".forge/update-audit.log entry"],
+    consumes: ["VERSION", ".forge.json", ".forge/update-check.json"],
+    sideEffects: ["modifies framework files", "writes audit log"],
+    writesFiles: true,
+    network: true,
+    risk: "high",
+    errors: {
+      ERR_UPDATE_DURING_RUN: { message: "Cannot update during active plan run", recovery: "Wait for run to finish" },
+      ERR_RATE_LIMITED: { message: "Update rate limited (1 per 5 min)", recovery: "Wait and retry" },
+    },
+    example: {
+      input: {},
+      output: { state: "done", detail: "Updated to v2.55.0" },
+    },
+  },
 };
 
 export const WORKFLOWS = {

@@ -55,6 +55,7 @@ COMMANDS:
   ext remove <name> Remove an installed extension
   ext publish <p>   Validate and generate catalog entry for publishing
   update [source]   Update framework files from Plan Forge source (preserves customizations)
+  self-update       Check for and install the latest Plan Forge release from GitHub
   analyze <plan>    Cross-artifact analysis — requirement traceability, test coverage, scope compliance
   run-plan <plan>   Execute a hardened plan — spawn CLI workers, validate at every boundary, track tokens
   org-rules export  Export org custom instructions from .github/instructions/ for GitHub org settings
@@ -1922,8 +1923,100 @@ cmd_drift() {
     fi
 }
 
+# ─── Command: self-update (Phase AUTO-UPDATE-01 Slice 2) ──────────────
+cmd_self_update() {
+    print_manual_steps "self-update" \
+        "Force-refresh the update check (bypass 24h cache)" \
+        "If a newer version exists, prompt for confirmation" \
+        "Delegate to 'pforge update --from-github --tag <latest>'"
+
+    local auto_yes=false dry_run=false
+    for arg in "$@"; do
+        case "$arg" in
+            --yes|-y) auto_yes=true ;;
+            --dry-run) dry_run=true ;;
+        esac
+    done
+
+    # Read autoUpdate.enabled from .forge.json (default false)
+    local au_enabled=false
+    if [ -f "$REPO_ROOT/.forge.json" ]; then
+        local au_val
+        au_val="$(python3 -c "import json; print(json.load(open('$REPO_ROOT/.forge.json')).get('autoUpdate',{}).get('enabled',False))" 2>/dev/null \
+                  || echo "false")"
+        [ "$au_val" = "True" ] || [ "$au_val" = "true" ] && au_enabled=true
+    fi
+    if [ "$au_enabled" = false ]; then
+        echo "  ℹ Auto-update is opt-in; this is a manual invocation."
+        echo "    Set autoUpdate.enabled = true in .forge.json to suppress this notice."
+    fi
+
+    # Force-refresh update check via node helper
+    local node_helper="$REPO_ROOT/pforge-mcp/update-check.mjs"
+    if [ ! -f "$node_helper" ]; then
+        echo "ERROR: update-check.mjs not found at $node_helper" >&2
+        exit 1
+    fi
+
+    echo "Checking for updates (force refresh)..."
+    local current_version
+    current_version="$(cat "$REPO_ROOT/VERSION" | tr -d '[:space:]')"
+
+    local check_script="import { checkForUpdate } from './pforge-mcp/update-check.mjs'; const r = await checkForUpdate({ currentVersion: process.argv[1], projectDir: process.argv[2], force: true }); console.log(JSON.stringify(r || { isNewer: false }));"
+    local check_result
+    check_result="$(node --input-type=module -e "$check_script" "$current_version" "$REPO_ROOT" 2>&1 | tail -1)"
+
+    local is_newer
+    is_newer="$(echo "$check_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('isNewer',False))" 2>/dev/null || echo "false")"
+
+    if [ "$is_newer" != "True" ] && [ "$is_newer" != "true" ]; then
+        echo "  ✅ Already current (v$current_version)"
+        exit 0
+    fi
+
+    local latest_ver
+    latest_ver="$(echo "$check_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('latest',''))" 2>/dev/null || echo "")"
+    local latest_tag="v$latest_ver"
+    echo "  ⬆ New release available: $latest_tag (you have v$current_version)"
+
+    if $dry_run; then
+        echo "  [dry-run] Would run: pforge update --from-github --tag $latest_tag"
+        exit 0
+    fi
+
+    # Prompt unless --yes
+    if [ "$auto_yes" = false ]; then
+        printf "  Install %s now? [Y/n] " "$latest_tag"
+        read -r answer
+        if [ -n "$answer" ] && echo "$answer" | grep -qvi '^y'; then
+            echo "  Cancelled."
+            exit 0
+        fi
+    fi
+
+    echo ""
+    cmd_update --from-github --tag "$latest_tag"
+}
+
 # ─── Command: doctor ───────────────────────────────────────────────────
 cmd_doctor() {
+    # Phase AUTO-UPDATE-01 Slice 2 — --refresh-version-cache flag
+    for arg in "$@"; do
+        if [ "$arg" = "--refresh-version-cache" ]; then
+            local cleared=0
+            local vc_file="$REPO_ROOT/.forge/version-check.json"
+            local uc_file="$REPO_ROOT/.forge/update-check.json"
+            [ -f "$vc_file" ] && rm -f "$vc_file" && cleared=$((cleared + 1))
+            [ -f "$uc_file" ] && rm -f "$uc_file" && cleared=$((cleared + 1))
+            if [ "$cleared" -gt 0 ]; then
+                echo "  ✅ Version cache cleared ($cleared file(s) deleted) — next check will hit GitHub API."
+            else
+                echo "  ℹ No cache to clear."
+            fi
+            return 0
+        fi
+    done
+
     print_manual_steps "smith" \
         "Check that required tools are installed (git, VS Code, bash)" \
         "Verify VS Code settings for Copilot agent mode" \
@@ -2186,6 +2279,40 @@ cmd_doctor() {
     else
         doctor_pass "Installed v$template_version (GitHub unreachable and no local source — skipping currency check)"
     fi
+
+    echo ""
+
+    # ═══════════════════════════════════════════════════════════════
+    # 4a. AUTO-UPDATE STATUS (Phase AUTO-UPDATE-01 Slice 2)
+    # ═══════════════════════════════════════════════════════════════
+    echo "Auto-update:"
+
+    local au_enabled=false
+    if [ -f "$REPO_ROOT/.forge.json" ]; then
+        local au_val
+        au_val="$(python3 -c "import json; print(json.load(open('$REPO_ROOT/.forge.json')).get('autoUpdate',{}).get('enabled',False))" 2>/dev/null \
+                  || echo "false")"
+        [ "$au_val" = "True" ] || [ "$au_val" = "true" ] && au_enabled=true
+    fi
+
+    local au_cache_age="no cache" au_last_tag="unknown" au_checked_at="never"
+    local update_cache_file="$REPO_ROOT/.forge/update-check.json"
+    if [ -f "$update_cache_file" ]; then
+        au_last_tag="$(python3 -c "import json; print(json.load(open('$update_cache_file')).get('latestVersion',''))" 2>/dev/null || echo "")"
+        au_checked_at="$(python3 -c "import json; print(json.load(open('$update_cache_file')).get('checkedAt',''))" 2>/dev/null || echo "")"
+        if [ -n "$au_checked_at" ]; then
+            local au_age_s=$(( $(date +%s) - $(date -d "$au_checked_at" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%S" "${au_checked_at%%.*}" +%s 2>/dev/null || echo 0) ))
+            au_cache_age="$(( au_age_s / 60 ))m"
+        fi
+        [ -n "$au_last_tag" ] && au_last_tag="v$au_last_tag" || au_last_tag="unknown"
+        [ -z "$au_checked_at" ] && au_checked_at="never"
+    fi
+
+    local enabled_label="disabled (opt-in)"
+    $au_enabled && enabled_label="enabled"
+
+    doctor_pass "Auto-update: $enabled_label | Cache age: $au_cache_age | Last tag: $au_last_tag | Last check: $au_checked_at"
+    echo "     Tip: Run 'pforge self-update' to check + install, or 'pforge smith --refresh-version-cache' to clear cache"
 
     echo ""
 
@@ -3750,7 +3877,8 @@ case "$COMMAND" in
     fix-proposal)    cmd_fix_proposal "$@" ;;
     quorum-analyze)  cmd_quorum_analyze "$@" ;;
     health-trend)    cmd_health_trend "$@" ;;
-    smith)        cmd_smith ;;
+    smith)        cmd_doctor "$@" ;;
+    self-update)  cmd_self_update "$@" ;;
     tour)         cmd_tour ;;
     help|--help)  show_help ;;
     *)

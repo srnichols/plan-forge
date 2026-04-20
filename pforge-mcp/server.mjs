@@ -4541,6 +4541,120 @@ export function createExpressApp() {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
+  // REST API: POST /api/self-update — trigger self-update with SSE progress
+  // Phase AUTO-UPDATE-01 Slice 2
+  let _lastSelfUpdateTs = 0;
+  const _SELF_UPDATE_COOLDOWN_MS = 5 * 60 * 1000; // 5 min
+
+  app.post("/api/self-update", async (_req, res) => {
+    try {
+      // Rate limit
+      const now = Date.now();
+      if (now - _lastSelfUpdateTs < _SELF_UPDATE_COOLDOWN_MS) {
+        const retryAfterMs = _SELF_UPDATE_COOLDOWN_MS - (now - _lastSelfUpdateTs);
+        return res.status(429).json({ error: "Rate limited", retryAfterMs });
+      }
+
+      // Guard: reject if a plan run is active
+      if (activeAbortController) {
+        return res.status(409).json({ error: "Cannot update during active plan run", code: "ERR_UPDATE_DURING_RUN" });
+      }
+
+      // SSE headers
+      res.writeHead(200, {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+      });
+
+      _lastSelfUpdateTs = now;
+      const runId = `self-update-${now}`;
+      const send = (state, detail) =>
+        res.write(`data: ${JSON.stringify({ runId, state, detail, ts: new Date().toISOString() })}\n\n`);
+
+      // 1. Check for updates (force refresh)
+      send("checking", "Checking for updates...");
+      const versionFile = resolve(PROJECT_DIR, "VERSION");
+      const currentVersion = existsSync(versionFile) ? readFileSync(versionFile, "utf-8").trim() : null;
+      if (!currentVersion) {
+        send("failed", "VERSION file not found");
+        return res.end();
+      }
+      const result = await checkForUpdate({ currentVersion, projectDir: PROJECT_DIR, force: true });
+      if (!result || !result.isNewer) {
+        send("done", `Already current (v${currentVersion})`);
+        return res.end();
+      }
+
+      // 2. Spawn pforge self-update --yes as child process
+      const latestTag = `v${result.latest}`;
+      send("downloading", `Downloading ${latestTag}...`);
+
+      const { spawn } = await import("node:child_process");
+      const isWin = process.platform === "win32";
+      const pforgeScript = isWin
+        ? resolve(PROJECT_DIR, "pforge.ps1")
+        : resolve(PROJECT_DIR, "pforge.sh");
+      const args = isWin
+        ? ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", pforgeScript, "update", "--from-github", "--tag", latestTag]
+        : [pforgeScript, "update", "--from-github", "--tag", latestTag];
+      const cmd = isWin ? "pwsh" : "bash";
+
+      const child = spawn(cmd, args, {
+        cwd: PROJECT_DIR,
+        env: { ...process.env, PFORGE_SELF_UPDATE: "1" },
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+
+      let lastState = "downloading";
+      child.stdout.on("data", (chunk) => {
+        const line = chunk.toString().trim();
+        if (!line) return;
+        if (line.includes("Extracting") || line.includes("extracting")) {
+          lastState = "extracting";
+          send("extracting", line);
+        } else if (line.includes("Applying") || line.includes("applying") || line.includes("Copying")) {
+          lastState = "applying";
+          send("applying", line);
+        } else {
+          send(lastState, line);
+        }
+      });
+
+      child.stderr.on("data", (chunk) => {
+        const line = chunk.toString().trim();
+        if (line) send(lastState, line);
+      });
+
+      child.on("close", (code) => {
+        if (code === 0) {
+          send("done", `Updated to ${latestTag}`);
+        } else {
+          send("failed", `Update process exited with code ${code}`);
+        }
+        res.end();
+      });
+
+      child.on("error", (err) => {
+        send("failed", `Failed to spawn update process: ${err.message}`);
+        res.end();
+      });
+
+      // Clean up if client disconnects
+      _req.on("close", () => {
+        // Don't kill the child — let the update finish
+      });
+    } catch (err) {
+      // If headers already sent, try SSE error frame
+      if (res.headersSent) {
+        try { res.write(`data: ${JSON.stringify({ state: "failed", detail: err.message, ts: new Date().toISOString() })}\n\n`); } catch {}
+        res.end();
+      } else {
+        res.status(500).json({ error: err.message });
+      }
+    }
+  });
+
   // REST API: GET /api/status — current run status
   app.get("/api/status", (_req, res) => {
     try {

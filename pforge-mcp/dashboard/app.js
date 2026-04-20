@@ -3253,6 +3253,83 @@ fetch(`${API_BASE}/api/update-status`)
   })
   .catch(() => {});
 
+// Phase AUTO-UPDATE-01 Slice 2 — self-update from dashboard
+function triggerSelfUpdate() {
+  const btn = document.getElementById("update-now-btn");
+  const progress = document.getElementById("update-progress");
+  if (!btn || !progress) return;
+
+  btn.disabled = true;
+  btn.textContent = "Updating…";
+  progress.classList.remove("hidden");
+  progress.textContent = "Checking…";
+
+  fetch(`${API_BASE}/api/self-update`, { method: "POST" })
+    .then((r) => {
+      if (r.status === 429) {
+        progress.textContent = "Rate limited — try again later";
+        btn.disabled = false;
+        btn.textContent = "Update now";
+        return;
+      }
+      if (r.status === 409) {
+        progress.textContent = "Cannot update during active run";
+        btn.disabled = false;
+        btn.textContent = "Update now";
+        return;
+      }
+      if (!r.ok && !r.body) {
+        progress.textContent = `Error: HTTP ${r.status}`;
+        btn.disabled = false;
+        btn.textContent = "Retry";
+        return;
+      }
+
+      const reader = r.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      function read() {
+        reader.read().then(({ done, value }) => {
+          if (done) return;
+          buffer += decoder.decode(value, { stream: true });
+          const frames = buffer.split("\n\n");
+          buffer = frames.pop();
+          for (const frame of frames) {
+            const match = frame.match(/^data:\s*(.+)/);
+            if (!match) continue;
+            try {
+              const msg = JSON.parse(match[1]);
+              progress.textContent = `${msg.state}: ${escapeHtml(msg.detail || "")}`;
+              if (msg.state === "done") {
+                btn.textContent = "✓ Updated";
+                btn.disabled = true;
+                progress.textContent = escapeHtml(msg.detail || "Update complete");
+              }
+              if (msg.state === "failed") {
+                btn.disabled = false;
+                btn.textContent = "Retry";
+                progress.textContent = `❌ ${escapeHtml(msg.detail || "Update failed")}`;
+              }
+            } catch { /* ignore malformed frame */ }
+          }
+          read();
+        }).catch(() => {
+          progress.textContent = "Connection lost";
+          btn.disabled = false;
+          btn.textContent = "Retry";
+        });
+      }
+      read();
+    })
+    .catch((err) => {
+      progress.textContent = `Error: ${err.message}`;
+      btn.disabled = false;
+      btn.textContent = "Retry";
+    });
+}
+window.triggerSelfUpdate = triggerSelfUpdate;
+
 // Load notifications from localStorage
 renderNotifications();
 

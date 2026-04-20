@@ -1,14 +1,14 @@
 ---
 crucibleId: 4e8a1f23-6c75-4d89-bf42-a3e6c9d1b5f8
 source: self-hosted
-status: draft
+status: complete
 phase: FORGE-SHOP-05
 arc: FORGE-SHOP
 ---
 
 # Phase FORGE-SHOP-05: Unified timeline — `forge_timeline` MCP + Timeline tab
 
-> **Status**: 📝 DRAFT — ready for Session 2 execution
+> **Status**: ✅ COMPLETE — shipped 2026-04-20 (commits 6a43dd3, d429dc5)
 > **Estimated Effort**: 2 slices
 > **Risk Level**: Low (read-only merge over existing L2 records;
 > correlationId group-by is the only new algorithm)

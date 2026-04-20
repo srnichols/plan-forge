@@ -19,9 +19,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 - Phase HOTFIX-2.50.1 drafted ([docs/plans/Phase-HOTFIX-2.50.1.md](docs/plans/Phase-HOTFIX-2.50.1.md)) — 3 field bugs: cost/token model attribution for gh-copilot worker ([#63](https://github.com/srnichols/plan-forge/issues/63)), runtime-aware `model-performance.json` tier validation ([#73](https://github.com/srnichols/plan-forge/issues/73)), PreCommit hook rejects direct-to-master during `run-plan` execution ([#74](https://github.com/srnichols/plan-forge/issues/74)). Test count +28. No new MCP tools.
 
-### Planned — FORGE-SHOP-05 unified timeline
+### Shipped — FORGE-SHOP-05 unified timeline (2026-04-20)
 
-- Phase FORGE-SHOP-05 drafted ([docs/plans/Phase-FORGE-SHOP-05.md](docs/plans/Phase-FORGE-SHOP-05.md)) — merged chronological view across 7 L2 sources (hub-events, run events, memories, openbrain, watch, tempering, bugs, incidents). 1 new MCP tool `forge_timeline` → 59 total. Dashboard Timeline tab with time-window presets, flat vs correlationId-threaded views, URL hash router, 10s auto-refresh with pause-on-scroll. Streaming JSONL reader. p95 < 400 ms on 10k-event fixture. No new stores, no new writers.
+- **`forge_timeline` MCP tool** — merged chronological view across 7 L2 sources (hub-events, run events, memories, openbrain, watch, tempering, bugs, incidents). Tool count 58 → 59.
+- **correlationId grouping** — flat vs threaded views; group-by algorithm threads events across subsystems for end-to-end workflow visualization.
+- **Dashboard Timeline tab** — time-window presets, URL hash router, 10s auto-refresh with pause-on-scroll, filter UI.
+- **Streaming JSONL reader** — p95 < 400 ms on 10k-event fixture; no new stores, no new writers.
+- Plan: [docs/plans/Phase-FORGE-SHOP-05.md](docs/plans/Phase-FORGE-SHOP-05.md). Commits: `6a43dd3` (Slice 05.1 forge_timeline + MCP), `d429dc5` (Slice 05.2 Timeline tab + correlationId filter).
 
 ### Shipped — FORGE-SHOP-04 global search (2026-04-19)
 

@@ -25,6 +25,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - `INNER_LOOP_SURFACE` schemaVersion `1.0` → `1.1`; now declares ten subsystems (seven Phase-25 + three Phase-26).
 - Setup scripts no longer overwrite an existing `.forge.json`. On upgrade, operators retain their customized config and see the welcome card to discover new subsystems.
 
+### Fixed
+
+- **Bug #81 — `--resume-from` ignored in estimate.** `pforge run-plan --estimate --resume-from N` previously returned totals for the full plan (sliceCount, executionOrder, tokens, cost, and slices[] all covered shipped slices). `buildEstimate` now walks the DAG order from `resumeFrom` forward; output adds `resumeFrom` and `fullSliceCount` fields. Falls back to the full plan when `resumeFrom` doesn't match any slice. Regression tests: `tests/estimate-resume-from.test.mjs`.
+- **Bug #79 — `tokens_in` inflated up to ~100× in `cost-history.json`.** When `gh copilot` stderr contained both the aggregate `Tokens ↑ X • ↓ Y` summary AND the per-model breakdown block, `parseStderrStats` assigned from the aggregate and then re-accumulated each breakdown line on top. The aggregate is now authoritative; breakdown lines only identify the dominant model when the aggregate is present. Old format (breakdown only, no aggregate) still sums correctly. Regression tests added in `tests/orchestrator.test.mjs`.
+- **Bug #78 — `spawnWorker` ignored explicit `worker` override when model matched an API provider.** Callers passing `worker: "..."` to force a CLI still got HTTP-routed if the model name matched a provider pattern. `spawnWorker` now respects the explicit override (`!worker && model ? detectApiProvider(...) : null`). Also adds an optional `role` parameter (`"quorum-dry-run" | "reviewer" | "analysis"`) that threads through to the API path.
+- **Bug #80 — xAI Grok refused quorum dry-run and reviewer prompts as core-instruction overrides.** API-routed Grok read "simulate pforge running slice N" as an instruction-override attempt. The new `buildApiMessages(prompt, role)` helper wraps analysis-style prompts in a system message explicitly framing the payload as data to evaluate (not instructions to follow), unblocking Grok without per-call-site prompt rewrites. `quorumDispatch`, `quorumReview`, and `analyzeWithQuorum` now declare their roles. Regression tests: `tests/spawn-worker-role.test.mjs`.
+
 ### Security
 
 - All new subsystems ship in advisory posture. `autoFix` never writes outside `.forge/proposed-fixes/`; applying a patch is an explicit opt-in (`applyWithoutReview: true`) and can be rolled back.

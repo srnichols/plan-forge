@@ -1,11 +1,13 @@
 ---
 crucibleId: 1127133b-58ae-4a2a-af9c-6ef6e56caba7
 source: self-hosted
-status: in_progress
+status: complete
 phase: CRUCIBLE-03
 ---
 
 # Phase CRUCIBLE-03: Crucible-aware watcher
+
+> **Status**: ✅ COMPLETE — shipped via PR #47 (Slice 03.1 `1497404`) + PR #48 (Slice 03.2 `cee6017`)
 
 ## Why
 

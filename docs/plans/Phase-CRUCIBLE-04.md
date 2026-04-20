@@ -1,11 +1,13 @@
 ---
 crucibleId: 7a4c8e5d-9f13-4b2a-b7f8-c3d2a5e9f7b1
 source: self-hosted
-status: in_progress
+status: complete
 phase: CRUCIBLE-04
 ---
 
 # Phase CRUCIBLE-04: Crucible-aware fix proposals
+
+> **Status**: ✅ COMPLETE — shipped via PR #49 (Slice 04.1 `d3556be`)
 
 ## Why
 

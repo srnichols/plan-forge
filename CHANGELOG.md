@@ -5,7 +5,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [Unreleased] — targeting 2.50.0 / 2.51.0
+## [Unreleased] — targeting 2.50.0 / 2.50.1 / 2.51.0 / 2.52.0
+
+### Planned — HOTFIX-2.50.1 orchestrator plumbing bundle
+
+- Phase HOTFIX-2.50.1 drafted ([docs/plans/Phase-HOTFIX-2.50.1.md](docs/plans/Phase-HOTFIX-2.50.1.md)) — 3 field bugs: cost/token model attribution for gh-copilot worker ([#63](https://github.com/srnichols/plan-forge/issues/63)), runtime-aware `model-performance.json` tier validation ([#73](https://github.com/srnichols/plan-forge/issues/73)), PreCommit hook rejects direct-to-master during `run-plan` execution ([#74](https://github.com/srnichols/plan-forge/issues/74)). Test count +28. No new MCP tools.
+
+### Planned — FORGE-SHOP-05 unified timeline
+
+- Phase FORGE-SHOP-05 drafted ([docs/plans/Phase-FORGE-SHOP-05.md](docs/plans/Phase-FORGE-SHOP-05.md)) — merged chronological view across 7 L2 sources (hub-events, run events, memories, openbrain, watch, tempering, bugs, incidents). 1 new MCP tool `forge_timeline` → 59 total. Dashboard Timeline tab with time-window presets, flat vs correlationId-threaded views, URL hash router, 10s auto-refresh with pause-on-scroll. Streaming JSONL reader. p95 < 400 ms on 10k-event fixture. No new stores, no new writers.
 
 ### Planned — FORGE-SHOP-04 global search
 

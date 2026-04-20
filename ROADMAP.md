@@ -7,9 +7,11 @@
 
 ## Current Release
 
-**v2.47.0** (2026-04-19) — Self-Recursive Improvement: auto-tune escalation chains from model performance, cost estimate calibration from actuals, adaptive quorum thresholds, recurring incident detection, fix proposal outcome tracking, hotspot test priority, project health DNA fingerprint, slice auto-split advisories.
+**v2.49.1** (2026-04-19) — Hotfix bundle: teardown/cleanup slice safety guard, alphanumeric slice IDs, quorum worker probe (drops unavailable models upfront), quorum leg error capture, LiveGuard prose false-positive fix. 5 field bugs in one patch release.
 
-Previous: v2.29.0–v2.29.3 (2026-04-13) — LiveGuard III: `forge_fix_proposal`, `forge_quorum_analyze`, 3 lifecycle hooks (PreDeploy, PostSlice, PreAgentHandoff), OpenClaw analytics bridge, plus 9 bug fixes (.NET scanning, CRLF, dep-watch, gate parsing, framework code separation).
+**In flight (targeting 2.50.0)**: FORGE-SHOP arc — unified operator UX. SHOP-01 Home tab (shipped), SHOP-02 review queue (shipped), SHOP-03 notification layer (shipped). SHOP-04 global search currently executing.
+
+Previous: v2.47.0 (2026-04-19) — Self-Recursive Improvement: auto-tune escalation chains from model performance, cost estimate calibration from actuals, adaptive quorum thresholds, recurring incident detection, fix proposal outcome tracking, hotspot test priority, project health DNA fingerprint, slice auto-split advisories.
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 
@@ -102,6 +104,22 @@ Temper Guards (anti-shortcut tables) and Warning Signs (behavioral anti-patterns
 
 `forge_liveguard_run` composite tool (all checks in one call), drift `--autoIncident` auto-chains to incidents + fix proposals, drift `testStatus` field, regression history tracking, auto-resolve incidents on passing gates, sweep categorization, diff exit-code enforcement, executable gate requirement in hardener.
 
+### v2.31–v2.39 — Crucible Arc ✅
+
+Crucible lane model: smelt (experiment) → funnel (consolidation) → harden (ship). `forge_smelt`, `forge_funnel`, `forge_crucible_abandon`, crucible-aware `forge_smith` diagnostics, crucible-aware watcher with stalled-smelt detection, crucible-aware fix proposals (abandon-or-resume). `.forge/crucible/` store.
+
+### v2.40–v2.45 — Tempering & Agent Orchestration ✅
+
+TEMPER arc: visual-regression detection, baseline management, tempering-run lifecycle, agent model-routing improvements, runtime-aware escalation chains, TEMPER dashboard tab.
+
+### v2.46–v2.48 — Self-Recursive + FORGE-SHOP kickoff ✅
+
+v2.47.0 Self-Recursive Improvement. v2.48.0 FORGE-SHOP-01 Home tab (4-quadrant operator dashboard + activity feed).
+
+### v2.49.0–v2.49.1 — Review queue + hotfix bundle ✅
+
+v2.49.0 FORGE-SHOP-02 review queue (`forge_review_add/list/resolve`, Review tab, blocker notifications). v2.49.1 hotfix bundle: 5 field bugs (#56, #62, #64, #65, #70).
+
 ### v2.29.0–v2.29.3 — LiveGuard III: Self-Healing Proposals, Hooks & OpenClaw Bridge ✅
 
 `forge_fix_proposal`, `forge_quorum_analyze`, PreDeploy/PostSlice/PreAgentHandoff hooks, OpenClaw bridge. Plus 9 bug fixes: C# empty-catch scanning, CRLF plan parsing on Windows, .NET dep-watch (.slnx support), prose validation gate parsing, framework code separation in drift/sweep scoring.
@@ -156,32 +174,9 @@ Classify MCP tools by risk level (auto-approvable vs require confirmation). Depe
 
 ---
 
-### v2.21 — Forge Anneal (Documentation Consolidation)
+### v2.21 — Forge Anneal (Documentation Consolidation) ✅
 
-> **IN PROGRESS**: Full documentation audit and consolidation pass.
-
-**The Problem**: 519 .md files, 10,910 total lines across 14 human-facing docs. Additive growth over 20 versions without pruning.
-
-**The Goal**: Human-facing docs under 6,000 lines. README under 250 lines. Every concept has one canonical home. No content duplicated in 2+ files.
-
-**Approach**:
-- D1: README thinning (1082 → ~216 lines) — detailed tables moved to capabilities.md/CUSTOMIZATION.md
-- D2: ROADMAP compression — shipped versions to 2-3 line summaries
-- D3: Overlap audit — deduplicate pipeline descriptions, preset tables, guardrail explanations
-- D4: Runbook consolidation — prompt files ARE the runbook; trim the copy-paste version
-- D5: Website ↔ repo boundary — evaluator content to planforge.software, repo .md for developer reference
-- D6: Fresh look at every remaining file
-
-### v2.21 Release Gate
-
-- [ ] Human-facing docs total under 6,000 lines
-- [ ] README.md ≤ 250 lines
-- [ ] ROADMAP.md shipped sections compressed
-- [ ] No content in 2+ places (every concept has one home)
-- [ ] All inter-doc links verified
-- [ ] `pforge smith` / `pforge check` still pass
-- [ ] `VERSION` bumped to `2.21.0`
-- [ ] `CHANGELOG.md` updated
+Shipped v2.21.0 (2026-04-10). Documentation audit: README thinning, ROADMAP compression, overlap dedup, runbook consolidation.
 
 ---
 
@@ -197,11 +192,22 @@ Coordinate multiple orchestrators across developers.
 
 ## Backlog
 
+### Operator UX (FORGE-SHOP arc)
+- FORGE-SHOP-04 global search — `forge_search` + dashboard header bar (in execution, targeting v2.51.0)
+- FORGE-SHOP-05 unified timeline — `forge_timeline` + Timeline tab (drafted, targeting v2.52.0)
+- FORGE-SHOP-06 ask-bus pub/sub — bidirectional hub (drafted, targeting v2.53.0; hard dep on SHOP-07)
+- FORGE-SHOP-07 Brain facade — unified L3 memory API (drafted, targeting v2.53.0)
+
+### Auto-update
+- `pforge update --from-github` — true auto-install without requiring local clone ([#75](https://github.com/srnichols/plan-forge/issues/75))
+
+### Orchestrator plumbing
+- PreCommit hook rejecting direct-to-master during run-plan execution ([#74](https://github.com/srnichols/plan-forge/issues/74))
+- Runtime-aware `model-performance.json` validation at config time ([#73](https://github.com/srnichols/plan-forge/issues/73))
+- Cost/token tracking model resolution for gh-copilot worker ([#63](https://github.com/srnichols/plan-forge/issues/63))
+
 ### Security & Compliance
 - Preset-specific validation minimum count checks in `validate-setup`
-
-### Extension Ecosystem
-- Auto-update notification when source version is newer
 
 ### Community & Docs
 - `specify init` detection — auto-detect Spec Kit project and layer Plan Forge guardrails

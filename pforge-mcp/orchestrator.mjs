@@ -2448,7 +2448,7 @@ export async function runPlan(planPath, options = {}) {
         estimateQuorumConfig.threshold = quorumThreshold;
       }
     }
-    return buildEstimate(plan, effectiveModel, cwd, estimateQuorumConfig);
+    return buildEstimate(plan, effectiveModel, cwd, estimateQuorumConfig, resumeFrom);
   }
 
   // Dry run — parse and validate only
@@ -8982,7 +8982,24 @@ export function buildCostBreakdown(sliceResults) {
   };
 }
 
-function buildEstimate(plan, model, cwd, quorumConfig = null) {
+export function buildEstimate(plan, model, cwd, quorumConfig = null, resumeFrom = null) {
+  // Bug #81: When --resume-from is specified, exclude shipped slices from
+  // the estimate. Mirror SequentialScheduler.execute() skip logic: walk the
+  // topological execution order, start including once we hit resumeFrom.
+  // If resumeFrom is null or doesn't match any slice, we fall through to the
+  // full plan (existing behaviour).
+  let effectiveSlices = plan.slices;
+  let effectiveOrder = plan.dag.order;
+  if (resumeFrom !== null && resumeFrom !== undefined) {
+    const target = String(resumeFrom);
+    const startIdx = plan.dag.order.findIndex((id) => id === target);
+    if (startIdx >= 0) {
+      effectiveOrder = plan.dag.order.slice(startIdx);
+      const includeIds = new Set(effectiveOrder);
+      effectiveSlices = plan.slices.filter((s) => includeIds.has(String(s.number)));
+    }
+  }
+
   // Phase 2 Slice 4: Use historical data if available
   const historyPath = cwd ? resolve(cwd, ".forge", "cost-history.json") : null;
   let avgTokensPerSlice = null;
@@ -9009,7 +9026,7 @@ function buildEstimate(plan, model, cwd, quorumConfig = null) {
 
   const tokensPerSlice = avgTokensPerSlice || { input: 2000, output: 5000, source: "heuristic" };
   const pricing = MODEL_PRICING[model] || MODEL_PRICING.default;
-  const sliceCount = plan.slices.length;
+  const sliceCount = effectiveSlices.length;
   const totalInputTokens = sliceCount * tokensPerSlice.input;
   const totalOutputTokens = sliceCount * tokensPerSlice.output;
   let estimatedCost = (totalInputTokens * pricing.input) + (totalOutputTokens * pricing.output);
@@ -9034,8 +9051,8 @@ function buildEstimate(plan, model, cwd, quorumConfig = null) {
   let quorumOverhead = null;
   if (quorumConfig && quorumConfig.enabled) {
     const quorumSlices = quorumConfig.auto
-      ? plan.slices.filter((s) => scoreSliceComplexity(s, cwd).score >= quorumConfig.threshold)
-      : plan.slices;
+      ? effectiveSlices.filter((s) => scoreSliceComplexity(s, cwd).score >= quorumConfig.threshold)
+      : effectiveSlices;
     const modelCount = quorumConfig.models.length;
     // Each quorum slice: N dry-run prompt+response + 1 reviewer
     const dryRunInputPerLeg = tokensPerSlice.input * 1.5; // Dry-run prompt is larger
@@ -9114,7 +9131,7 @@ function buildEstimate(plan, model, cwd, quorumConfig = null) {
   let splitAdvisories = [];
   try {
     const perfRecords = loadModelPerformance(cwd);
-    for (const s of plan.slices) {
+    for (const s of effectiveSlices) {
       const priorFailures = perfRecords.filter(p =>
         p.sliceTitle && s.title && p.sliceTitle.toLowerCase() === s.title.toLowerCase() && p.status !== "passed"
       );
@@ -9138,7 +9155,8 @@ function buildEstimate(plan, model, cwd, quorumConfig = null) {
   return {
     status: "estimate",
     sliceCount,
-    executionOrder: plan.dag.order,
+    executionOrder: effectiveOrder,
+    ...(resumeFrom !== null && resumeFrom !== undefined && { resumeFrom: String(resumeFrom), fullSliceCount: plan.slices.length }),
     model: model || "auto",
     ...(modelRecommendation && { modelRecommendation }),
     ...(splitAdvisories.length > 0 && { splitAdvisories }),
@@ -9155,7 +9173,7 @@ function buildEstimate(plan, model, cwd, quorumConfig = null) {
     }),
     ...(quorumViability && { quorumViability }),
     confidence: avgTokensPerSlice ? "historical" : "heuristic",
-    slices: plan.slices.map((s) => {
+    slices: effectiveSlices.map((s) => {
       const sliceType = inferSliceType(s);
       const rec = cwd ? recommendModel(cwd, sliceType) : null;
       return {

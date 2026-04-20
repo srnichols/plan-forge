@@ -7,25 +7,30 @@
   // ─── Chapter registry ───
   const CHAPTERS = [
     { id: "index",               file: "index.html",               num: "",   title: "Manual Home",              act: "" },
+    // ─── Act I — Smelt (intake → scope contract) ───
     { id: "what-is-plan-forge",  file: "what-is-plan-forge.html",  num: "1",  title: "What Is Plan Forge?",      act: "I" },
     { id: "how-it-works",        file: "how-it-works.html",        num: "2",  title: "How It Works",             act: "I" },
     { id: "installation",        file: "installation.html",        num: "3",  title: "Installation",             act: "I" },
-    { id: "your-first-plan",     file: "your-first-plan.html",     num: "4",  title: "Your First Plan",          act: "II" },
-    { id: "writing-plans",       file: "writing-plans.html",       num: "5",  title: "Writing Plans That Work",  act: "II" },
-    { id: "dashboard",           file: "dashboard.html",           num: "6",  title: "The Dashboard",            act: "II" },
-    { id: "memory-architecture", file: "memory-architecture.html", num: "6.5", title: "Memory Architecture",      act: "II" },
-    { id: "crucible",            file: "crucible.html",            num: "6.6", title: "Crucible (Idea Smelting)", act: "II" },
-    { id: "cli-reference",       file: "cli-reference.html",       num: "7",  title: "CLI Reference",            act: "III" },
-    { id: "customization",       file: "customization.html",       num: "8",  title: "Customization",            act: "III" },
-    { id: "instructions-agents", file: "instructions-agents.html", num: "9",  title: "Instruction Files & Agents", act: "III" },
-    { id: "mcp-server",          file: "mcp-server.html",          num: "10", title: "MCP Server & Tools",       act: "III" },
-    { id: "extensions",          file: "extensions.html",          num: "11", title: "Extensions",               act: "III" },
-    { id: "multi-agent",         file: "multi-agent.html",         num: "12", title: "Multi-Agent Setup",        act: "III" },
-    { id: "advanced-execution",  file: "advanced-execution.html",  num: "13", title: "Advanced Execution",       act: "III" },
-    { id: "troubleshooting",     file: "troubleshooting.html",     num: "14", title: "Troubleshooting",          act: "III" },
-    { id: "what-is-liveguard",   file: "what-is-liveguard.html",   num: "15", title: "What Is LiveGuard?",        act: "IV" },
-    { id: "liveguard-tools",     file: "liveguard-tools.html",     num: "16", title: "LiveGuard Tools Reference", act: "IV" },
-    { id: "liveguard-dashboard", file: "liveguard-dashboard.html", num: "17", title: "The LiveGuard Dashboard",    act: "IV" },
+    { id: "writing-plans",       file: "writing-plans.html",       num: "4",  title: "Writing Plans That Work",  act: "I" },
+    { id: "crucible",            file: "crucible.html",            num: "5",  title: "Crucible (Idea Smelting)", act: "I" },
+    // ─── Act II — Forge (execute → ship) ───
+    { id: "your-first-plan",     file: "your-first-plan.html",     num: "6",  title: "Your First Plan",          act: "II" },
+    { id: "dashboard",           file: "dashboard.html",           num: "7",  title: "The Dashboard",            act: "II" },
+    { id: "cli-reference",       file: "cli-reference.html",       num: "8",  title: "CLI Reference",            act: "II" },
+    { id: "customization",       file: "customization.html",       num: "9",  title: "Customization",            act: "II" },
+    { id: "instructions-agents", file: "instructions-agents.html", num: "10", title: "Instruction Files & Agents", act: "II" },
+    { id: "mcp-server",          file: "mcp-server.html",          num: "11", title: "MCP Server & Tools",       act: "II" },
+    { id: "extensions",          file: "extensions.html",          num: "12", title: "Extensions",               act: "II" },
+    { id: "multi-agent",         file: "multi-agent.html",         num: "13", title: "Multi-Agent Setup",        act: "II" },
+    { id: "advanced-execution",  file: "advanced-execution.html",  num: "14", title: "Advanced Execution",       act: "II" },
+    { id: "troubleshooting",     file: "troubleshooting.html",     num: "15", title: "Troubleshooting",          act: "II" },
+    // ─── Act III — Guard (post-deploy defense) ───
+    { id: "what-is-liveguard",   file: "what-is-liveguard.html",   num: "16", title: "What Is LiveGuard?",        act: "III" },
+    { id: "liveguard-tools",     file: "liveguard-tools.html",     num: "17", title: "LiveGuard Tools Reference", act: "III" },
+    { id: "liveguard-dashboard", file: "liveguard-dashboard.html", num: "18", title: "The LiveGuard Dashboard",    act: "III" },
+    // ─── Act IV — Learn (memory & retrospectives) ───
+    { id: "memory-architecture", file: "memory-architecture.html", num: "19", title: "Memory Architecture",       act: "IV" },
+    // ─── Appendices ───
     { id: "glossary",            file: "glossary.html",            num: "A",  title: "Glossary",                 act: "Appendix" },
     { id: "quick-reference",     file: "quick-reference.html",     num: "B",  title: "Quick Reference Card",     act: "Appendix" },
     { id: "stack-notes",         file: "stack-notes.html",         num: "C",  title: "Stack-Specific Notes",     act: "Appendix" },
@@ -69,7 +74,7 @@
       // Act header
       if (ch.act && ch.act !== lastAct) {
         lastAct = ch.act;
-        const actLabels = { I: "Act I — Learn", II: "Act II — Build", III: "Act III — Master", Appendix: "Appendices" };
+        const actLabels = { I: "Act I — Smelt", II: "Act II — Forge", III: "Act III — Guard", IV: "Act IV — Learn", Appendix: "Appendices" };
         const actEl = document.createElement("div");
         actEl.className = "sidebar-act";
         actEl.textContent = actLabels[ch.act] || ch.act;

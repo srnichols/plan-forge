@@ -45,6 +45,10 @@ GEMINI.md
 .forge/liveguard-events.jsonl
 .forge/notifications/
 
+# Phase-26 competitive worktrees (transient per-variant workspaces + archives)
+.forge/worktrees/
+.forge/worktrees-archive/
+
 # LiveGuard auto-generated fix plans (runtime artifacts, not source-controlled)
 docs/plans/auto/*
 !docs/plans/auto/README.md

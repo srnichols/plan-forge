@@ -7,7 +7,7 @@ source: human
 # Phase-26 — Competitive Loop + Promotion + Continuous-Learning Inner Loop
 
 > **Target release**: v2.58.0
-> **Status**: Hardened (Step 2 complete) — ready for Step 3 execution **after Phase-25 ships**
+> **Status**: Shipped — released as v2.58.0 on 2026-04-20 (see CHANGELOG).
 > **Depends on**: Phase-25 (v2.57.0) — Reflexion, trajectories, auto-skill capture, postmortems, reviewer advisory, gate synthesis, federation must be in place
 > **Branch strategy**: Feature branch `feat/phase-26-competitive` for C1 slices (Slices 1–5); merge to `master` after parallel merge checkpoint. Non-C1 slices (6–17) commit directly to `master`.
 > **Source**: `docs/research/karpathy-autoresearcher-comparison.md` (April 2026), Phase-25 deferrals list

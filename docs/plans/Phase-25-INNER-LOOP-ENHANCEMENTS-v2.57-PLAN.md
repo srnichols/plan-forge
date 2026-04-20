@@ -7,7 +7,7 @@ source: human
 # Phase-25 — Inner-Loop Enhancements (Reflexion / Voyager / Closed-Research)
 
 > **Target release**: v2.57.0
-> **Status**: Hardened (Step 2 complete) — ready for Step 3 execution
+> **Status**: Shipped — released as v2.57.0 on 2026-04-27 (see CHANGELOG).
 > **Branch strategy**: `master` direct (small/medium slices, each ≤2h, commit-per-slice)
 > **Source**: `docs/research/karpathy-autoresearcher-comparison.md` (April 2026)
 > **Session budget**: 11 slices — **plan a session break after Slice 7** (commit, new session, `--resume-from Slice-8`)

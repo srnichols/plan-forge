@@ -3061,6 +3061,183 @@ export function formatGateSuggestions(result) {
   return lines.join("\n");
 }
 
+// ─── Phase-26 Slice 9: Incident → fix-proposal auto-retry (C5) ────────
+//
+// Pure-ish helpers for applying LiveGuard-authored fix proposals against
+// slice-level incidents. Keeps the 6900-line executeSlice untouched —
+// callers wire these helpers into the retry path once Slice 12 surfaces
+// them via `/api/innerloop/proposed-fixes`.
+//
+// MUST (Phase-26 plan §Slice 9):
+//   - dry-run is the default (write patch file only, never touch the tree)
+//   - apply mode re-runs the gate; any failure triggers rollback
+//   - 1-attempt cap per incident, tracked via `autoFixAttempted: true`
+
+/** Subdirectory under `.forge/` for dry-run patches ready for reviewer. */
+export const PROPOSED_FIX_DIR = "proposed-fixes";
+
+/**
+ * Default runner for `git apply` / `git apply -R` invocations. Callers may
+ * substitute a stub in tests. Returns `{ ok: boolean, stderr?: string }`.
+ * Never throws — converts spawn failures into structured results so the
+ * state machine above remains deterministic.
+ */
+export function defaultRunGitApply({ cwd, args, stdin }) {
+  try {
+    execSync(`git ${args.join(" ")}`, {
+      cwd,
+      input: stdin,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      stderr: err.stderr ? String(err.stderr) : err.message,
+    };
+  }
+}
+
+/**
+ * Locate the most recent fix-proposal matching a given incident. Matching
+ * order (most → least specific):
+ *   1. `proposal.correlationId === incident.id`
+ *   2. `proposal.incidentId === incident.id`
+ *   3. same `sliceNumber` (proposals whose generatedAt is newest wins)
+ *
+ * Pure function. Returns the matching record or `null`.
+ */
+export function findMatchingFixProposal({ incident, proposals } = {}) {
+  if (!incident || !Array.isArray(proposals) || proposals.length === 0) return null;
+  const incidentId = incident.id || incident.incidentId || null;
+  const sliceNumber = incident.sliceNumber ?? null;
+
+  const byCorrelation = proposals.filter((p) => p && incidentId && p.correlationId === incidentId);
+  if (byCorrelation.length > 0) return pickNewest(byCorrelation);
+
+  const byIncidentId = proposals.filter((p) => p && incidentId && p.incidentId === incidentId);
+  if (byIncidentId.length > 0) return pickNewest(byIncidentId);
+
+  if (sliceNumber !== null) {
+    const bySlice = proposals.filter((p) => p && p.sliceNumber === sliceNumber);
+    if (bySlice.length > 0) return pickNewest(bySlice);
+  }
+  return null;
+}
+
+function pickNewest(list) {
+  const sorted = [...list].sort((a, b) => {
+    const ta = Date.parse(a.generatedAt || "") || 0;
+    const tb = Date.parse(b.generatedAt || "") || 0;
+    return tb - ta;
+  });
+  return sorted[0] || null;
+}
+
+/**
+ * Gate for the 1-attempt cap. Returns `false` when the incident already has
+ * `autoFixAttempted: true` (regardless of outcome). Pure function.
+ */
+export function shouldAutoRetryFix(incident) {
+  if (!incident || typeof incident !== "object") return false;
+  if (incident.autoFixAttempted === true) return false;
+  return true;
+}
+
+/**
+ * Mark an incident record as having consumed its single auto-fix attempt.
+ * Returns a new object — does not mutate the input.
+ */
+export function markFixAttempted(incident, { now = new Date() } = {}) {
+  const ts = now instanceof Date ? now.toISOString() : String(now);
+  return {
+    ...incident,
+    autoFixAttempted: true,
+    autoFixAttemptedAt: ts,
+  };
+}
+
+/**
+ * Persist a proposed fix as `.forge/proposed-fixes/<fixId>.patch`. Creates
+ * the directory if needed. Returns the absolute patch path.
+ */
+export function writeProposedFixPatch({ cwd = process.cwd(), fixId, patch } = {}) {
+  if (!fixId || typeof fixId !== "string") {
+    throw new Error("writeProposedFixPatch: fixId (string) required");
+  }
+  if (typeof patch !== "string") {
+    throw new Error("writeProposedFixPatch: patch (string) required");
+  }
+  const dir = resolve(cwd, ".forge", PROPOSED_FIX_DIR);
+  mkdirSync(dir, { recursive: true });
+  let safeId = fixId.replace(/[^A-Za-z0-9._-]/g, "_");
+  while (safeId.includes("..")) safeId = safeId.replace(/\.\./g, "_");
+  const path = resolve(dir, `${safeId}.patch`);
+  writeFileSync(path, patch, "utf-8");
+  return path;
+}
+
+/**
+ * Apply (or dry-run write) a fix proposal. Three outcomes:
+ *   - `mode = "dry-run"` (default): writes patch, does NOT modify the tree.
+ *     Returns `{ ok: true, mode: "dry-run", patchPath }`.
+ *   - `mode = "apply"`: writes patch, runs `git apply`. On success returns
+ *     `{ ok: true, mode: "apply", patchPath, applied: true }`. On failure
+ *     returns `{ ok: false, mode: "apply", patchPath, applied: false, error }`.
+ *
+ * Never throws on git failures — surfaces them via the return shape. Callers
+ * decide whether to invoke `rollbackFixProposal` or propagate the failure.
+ *
+ * @param {object} opts
+ * @param {string} opts.cwd — project root
+ * @param {string} opts.fixId — proposal identifier
+ * @param {string} opts.patch — unified-diff text
+ * @param {"dry-run"|"apply"} [opts.mode="dry-run"]
+ * @param {Function} [opts.runGit=defaultRunGitApply] — injectable for tests
+ */
+export function applyFixProposal({ cwd = process.cwd(), fixId, patch, mode = "dry-run", runGit = defaultRunGitApply } = {}) {
+  if (mode !== "dry-run" && mode !== "apply") {
+    return { ok: false, mode, error: `invalid mode '${mode}' — expected 'dry-run' or 'apply'` };
+  }
+  let patchPath;
+  try {
+    patchPath = writeProposedFixPatch({ cwd, fixId, patch });
+  } catch (err) {
+    return { ok: false, mode, error: err.message };
+  }
+  if (mode === "dry-run") {
+    return { ok: true, mode, patchPath, applied: false };
+  }
+  // apply mode
+  const res = runGit({ cwd, args: ["apply", "--whitespace=nowarn", patchPath], stdin: null });
+  if (res.ok) {
+    return { ok: true, mode, patchPath, applied: true };
+  }
+  return {
+    ok: false,
+    mode,
+    patchPath,
+    applied: false,
+    error: res.stderr || "git apply failed",
+  };
+}
+
+/**
+ * Reverse an applied fix proposal using `git apply -R`. Returns
+ * `{ ok, error? }`. Safe to call when the patch file is missing — returns
+ * `{ ok: false, error: "patch not found" }`.
+ */
+export function rollbackFixProposal({ cwd = process.cwd(), fixId, runGit = defaultRunGitApply } = {}) {
+  if (!fixId) return { ok: false, error: "fixId required" };
+  let safeId = String(fixId).replace(/[^A-Za-z0-9._-]/g, "_");
+  while (safeId.includes("..")) safeId = safeId.replace(/\.\./g, "_");
+  const patchPath = resolve(cwd, ".forge", PROPOSED_FIX_DIR, `${safeId}.patch`);
+  if (!existsSync(patchPath)) return { ok: false, error: "patch not found" };
+  const res = runGit({ cwd, args: ["apply", "-R", "--whitespace=nowarn", patchPath], stdin: null });
+  if (res.ok) return { ok: true };
+  return { ok: false, error: res.stderr || "git apply -R failed" };
+}
+
 // ─── Phase-25 Slice 5: Plan postmortem (L5 closed research loop) ──────
 
 /** Subdirectory under `.forge/` where postmortems are stored per-plan. */

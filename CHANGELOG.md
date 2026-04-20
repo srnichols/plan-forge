@@ -5,7 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [Unreleased] — targeting 2.50.0 / 2.50.1 / 2.51.0 / 2.52.0
+## [Unreleased] — targeting 2.50.0 / 2.50.1 / 2.51.0 / 2.52.0 / 2.53.0
+
+### Planned — AUTO-UPDATE-01 true auto-install from GitHub
+
+- Phase AUTO-UPDATE-01 drafted ([docs/plans/Phase-AUTO-UPDATE-01.md](docs/plans/Phase-AUTO-UPDATE-01.md)) — `pforge update --from-github [--tag <tag>]` fetches release tarball from GitHub API, extracts to `.forge/cache/`, runs existing file-copy logic; no local Plan Forge clone required. `pforge self-update [--yes]` wraps detection + install. `pforge smith --refresh-version-cache` bypasses 24h cache. Dashboard banner becomes actionable with SSE progress stream (`POST /api/self-update`). 50 MB tarball cap, SHA-256 audit log, `ERR_UPDATE_DURING_RUN` guard. Opt-in background polling via `autoUpdate.enabled`. Closes [#75](https://github.com/srnichols/plan-forge/issues/75). Test count +42.
 
 ### Planned — HOTFIX-2.50.1 orchestrator plumbing bundle
 

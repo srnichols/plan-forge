@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-<!-- verified: v2.21.0 -->
 <html lang="en" class="scroll-smooth">
 <head>
   <meta charset="UTF-8" />
@@ -128,7 +127,7 @@
           </div>
         </div>
 
-        <p>You describe what you want (Step 0 — Smelt). The AI creates a spec. A pre-flight check verifies your setup (Step 1). The plan gets hardened into a binding scope contract with slices, gates, and forbidden actions (Step 2) — this is when Smelt hands off to Forge. The AI builds it slice by slice, validated at every boundary (Step 3). A completeness sweep eliminates stubs and TODOs (Step 4). A <em>fresh</em> session audits everything (Step 5). The shipper commits, LiveGuard runs its pre-deploy scan (Guard), and OpenBrain captures lessons (Learn). That's Step 6.</p>
+        <p>You describe what you want (Step 0 — Smelt). The AI creates a spec. A pre-flight check verifies your setup (Step 1 — Smelt). The plan gets hardened into a binding scope contract with slices, gates, and forbidden actions (Step 2 — Smelt) — this is when Smelt hands off to Forge. The AI builds it slice by slice, validated at every boundary (Step 3 — Forge). A completeness sweep eliminates stubs and TODOs (Step 4 — Forge). A <em>fresh</em> session audits everything (Step 5 — Forge). The shipper commits, LiveGuard runs its pre-deploy scan (Step 6 — Guard), and OpenBrain captures lessons (Step 6 — Learn).</p>
 
         <!-- ─── Sessions ─── -->
         <h2 id="sessions">Sessions and Why They Matter</h2>
@@ -229,13 +228,12 @@ applyTo: "**/auth/**,**/security/**,**/middleware/**"
           <div class="cmd-block-header"><span>.forge.json</span></div>
           <pre><code>{
   "preset": "dotnet",
-  "templateVersion": "2.17.0",
   "modelRouting": {
     "default": "claude-sonnet-4.6",
     "execute": "grok-4",
-    "review": "claude-opus-4.6"
+    "review": "claude-opus-4.7"
   },
-  "escalationChain": ["grok-4", "claude-opus-4.6", "gpt-5.2-codex"],
+  "escalationChain": ["grok-4", "claude-opus-4.7", "gpt-5.2-codex"],
   "quorumThreshold": 6
 }</code></pre>
         </div>

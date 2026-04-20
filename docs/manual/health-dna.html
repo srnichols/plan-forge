@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-<!-- verified: v2.54.0-dev -->
 <html lang="en" class="scroll-smooth">
 <head>
   <meta charset="UTF-8" />
@@ -87,10 +86,7 @@
           <strong>Why JSONL, not JSON?</strong> Health DNA is append-only by design — every run writes one line. Trimming happens on explicit request (<code>forge_health_trim</code>), not automatically. That way a rolled-back slice doesn't also roll back the memory of how sick the project was before the rollback.
         </div>
 
-        <div class="chapter-nav mt-12">
-          <a class="chapter-nav-prev" href="testbed.html">← Chapter 22: The Testbed</a>
-          <a class="chapter-nav-next" href="memory-architecture.html">Chapter 24: Memory Architecture →</a>
-        </div>
+        <div id="chapter-prev-next" class="chapter-nav"></div>
 
       </div>
     </main>

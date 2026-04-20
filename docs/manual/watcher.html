@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-<!-- verified: v2.54.0-dev -->
 <html lang="en" class="scroll-smooth">
 <head>
   <meta charset="UTF-8" />
@@ -47,7 +46,7 @@
         </ul>
 
         <h2 id="live-tail">Live Tail — <code>forge_watch_live</code></h2>
-        <p>For continuous observation, <code>forge_watch_live</code> streams events for a fixed duration:</p>
+        <p>For near-live observation, <code>forge_watch_live</code> tails the event stream for a bounded window:</p>
         <ul>
           <li><strong>WebSocket mode</strong> — connects to the target's hub if running (<code>.forge/server-ports.json</code>).</li>
           <li><strong>Polling fallback</strong> — tails <code>events.log</code> when the hub isn't up.</li>
@@ -97,10 +96,7 @@ forge_watch_live {
         <h2 id="pairing">Pairing the Watcher With the Remote Bridge</h2>
         <p>A natural pairing: the Watcher runs headless on a long run, and the <a href="remote-bridge.html">Remote Bridge</a> (Chapter 20) forwards hub events to Telegram, Slack, Discord, or OpenClaw so you can check progress from your phone. The Watcher never pushes — it just observes; the Remote Bridge decides what to surface.</p>
 
-        <div class="chapter-nav mt-12">
-          <a class="chapter-nav-prev" href="liveguard-dashboard.html">← Chapter 18: LiveGuard Dashboard</a>
-          <a class="chapter-nav-next" href="remote-bridge.html">Chapter 20: Remote Bridge →</a>
-        </div>
+        <div id="chapter-prev-next" class="chapter-nav"></div>
 
       </div>
     </main>

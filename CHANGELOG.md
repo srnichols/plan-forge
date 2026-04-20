@@ -5,7 +5,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [2.59.0] — Unreleased — Housekeeping
+## [2.59.0] — 2026-04-20 — Housekeeping
 
 > **Small, targeted cleanup.** One real bug fix (libuv teardown crash on Windows), one version-drift correction, and a ROADMAP prune that closes six stale backlog entries representing work that was already shipped.
 

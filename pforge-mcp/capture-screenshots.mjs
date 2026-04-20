@@ -229,12 +229,11 @@ async function main() {
     if (details) details.open = true;
   });
 
-  // v2.9: Show hub clients badge and version footer
+  // v2.9: Show hub clients badge — leave footer version alone so the
+  // dashboard's real /api/capabilities fetch populates it from VERSION.
   await page.evaluate(() => {
     const hubEl = document.getElementById("hub-clients");
     if (hubEl) { hubEl.textContent = "2 clients"; hubEl.classList.remove("hidden"); }
-    const verEl = document.getElementById("footer-version");
-    if (verEl) verEl.textContent = "v2.9.0";
   });
   await page.waitForTimeout(300);
 

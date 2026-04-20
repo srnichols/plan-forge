@@ -75,3 +75,24 @@ flowchart LR
 > **First time?** See [QUICKSTART-WALKTHROUGH.md](../QUICKSTART-WALKTHROUGH.md) for a hands-on tutorial.
 
 See the [Instructions file](./AI-Plan-Hardening-Runbook-Instructions.md) for detailed copy-paste prompts.
+
+---
+
+## Historical Phase Archives
+
+Plan Forge's own development is built using the pipeline it ships. Completed
+`Phase-*.md` files from prior release cycles are kept on archive branches so
+this template project's `docs/plans/` stays clean for downstream users:
+
+| Branch | Contents | Cycle |
+|--------|----------|-------|
+| [`archive/plans-v2.52.x`](https://github.com/srnichols/plan-forge/tree/archive/plans-v2.52.x/docs/plans) | 28 Phase files: CRUCIBLE-01..04, FORGE-SHOP-01..07 + ARC, TEMPER-01..07 + ARC, TESTBED-01..02 + ARC, HOTFIX-2.49.1 / 2.50.1, AUTO-UPDATE-01, SMITH-01 | v2.33 → v2.52.x |
+
+To view a historical plan:
+
+```bash
+git show archive/plans-v2.52.x:docs/plans/Phase-CRUCIBLE-01.md
+# or
+git checkout archive/plans-v2.52.x -- docs/plans/Phase-TEMPER-01.md
+```
+

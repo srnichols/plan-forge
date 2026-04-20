@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Competitive Loop — Worktree Races, Winner Election, Auto-Fix</title>
+  <meta name="description" content="How the Plan Forge Competitive Loop works: opt-in worktree-based slice execution, winner election by gate + reviewer + token-cost tie-breaker, auto-fix patch proposals, and cost-anomaly detection." />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({ startOnLoad: true, theme: "dark", themeVariables: { fontFamily: "Inter, ui-sans-serif", primaryColor: "#f59e0b", primaryTextColor: "#f1f5f9", lineColor: "#64748b" } });
+  </script>
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+
+    <main>
+      <div class="chapter-content">
+
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Deep Dive · Act II — Forge</div>
+        <h1>The Competitive Loop</h1>
+        <p class="text-lg text-slate-400 mb-8">Opt-in worktree races, winner election, auto-fix proposals, and cost-anomaly detection — three new inner-loop subsystems added in v2.58.0.</p>
+
+        <div class="callout callout-info">
+          <strong>Added in v2.58.0.</strong> Every subsystem on this page is opt-in and ships in advisory posture. Competitive execution is <em>off</em> by default; auto-fix drafts patches but never auto-applies; cost-anomaly detection never halts a run. See also <a href="inner-loop.html">The Inner Loop</a> for the Phase-25 subsystems this chapter builds on.
+        </div>
+
+        <!-- ─── Worktree race flow ─── -->
+        <h2 id="worktree-race">Worktree race → winner election</h2>
+        <p>When a slice is marked for competitive execution, the orchestrator spawns a worktree per strategy, runs each in isolation, and elects a single winner. Losing worktrees are cleaned up; only the winner's changes enter the working tree.</p>
+
+        <div class="my-8 p-6 bg-slate-900/50 border border-slate-800/60 rounded-xl overflow-x-auto">
+          <pre class="mermaid">
+flowchart TD
+    Start([Slice marked competitive]) --> Spawn{Spawn worktrees}
+    Spawn -->|Strategy A| WTA[.forge/worktrees/A/]
+    Spawn -->|Strategy B| WTB[.forge/worktrees/B/]
+    WTA --> GateA[Run validation gate]
+    WTB --> GateB[Run validation gate]
+    GateA --> RevA[Invoke reviewer\nif innerLoop.reviewer.enabled]
+    GateB --> RevB[Invoke reviewer\nif innerLoop.reviewer.enabled]
+    RevA --> Elect{Winner election}
+    RevB --> Elect
+    Elect -->|Gate pass + best reviewer score| Winner[Promote winner → working tree]
+    Elect -->|Tie on gate + reviewer| Cost[Token-cost tie-breaker]
+    Cost --> Winner
+    Winner --> Cleanup[Clean up losing worktrees]
+    Cleanup --> Done([Slice committed])
+    GateA -.gate fail.-> AutoFix{Auto-fix proposal?}
+    GateB -.gate fail.-> AutoFix
+    AutoFix -->|Small, local diff| Patch[Write .forge/proposed-fixes/*.patch]
+    AutoFix -->|Complex| Skip[Record in postmortem]
+          </pre>
+        </div>
+
+        <!-- ─── Winner election rules ─── -->
+        <h2 id="election">Winner election rules</h2>
+        <p>Election is deterministic. The orchestrator walks the rules in order and stops at the first one that produces a unique winner.</p>
+        <ol>
+          <li><strong>Gate result.</strong> Strategies whose validation gate failed are eliminated first. If only one strategy passes, it wins.</li>
+          <li><strong>Reviewer score.</strong> If <code>innerLoop.reviewer.enabled</code> is true, the highest reviewer score among remaining strategies wins.</li>
+          <li><strong>Token-cost tie-breaker.</strong> If reviewer is off or the top score is tied, the lowest total token cost wins. This keeps the loop cost-sensitive even under competitive execution.</li>
+          <li><strong>Deterministic fallback.</strong> On a true tie across all three, the orchestrator picks the lexicographically first strategy name so reruns elect the same winner.</li>
+        </ol>
+
+        <!-- ─── Auto-fix proposals ─── -->
+        <h2 id="auto-fix">Auto-fix patch proposals</h2>
+        <p>When a slice's validation gate fails and the trajectory suggests a small local correction (single file, under a few hundred lines of diff), the orchestrator drafts a patch file instead of retrying blindly.</p>
+
+        <ul>
+          <li>Patches are written to <code>.forge/proposed-fixes/&lt;fixId&gt;.patch</code> with metadata in <code>.forge/fix-proposals.json</code>.</li>
+          <li>Nothing is applied automatically. The operator (or a reviewer agent) must invoke <code>applyFixProposal</code>; the patch is git-apply-style so <code>rollbackFixProposal</code> can undo it cleanly.</li>
+          <li>To allow the orchestrator to apply patches itself on gate-fail retries, set <code>innerLoop.autoFix.applyWithoutReview: true</code>. This is off by default for a reason — review the patch first.</li>
+        </ul>
+
+        <!-- ─── Cost-anomaly detection ─── -->
+        <h2 id="cost-anomaly">Cost-anomaly detection</h2>
+        <p>Every slice's total token cost is compared against the rolling per-model median (default window: 20 runs). Ratios above <code>innerLoop.costAnomaly.ratio</code> (default 2.0) are logged to <code>.forge/cost-anomalies.jsonl</code> and surfaced in the Dashboard's <em>Inner Loop</em> tab.</p>
+        <p>Detection is <em>advisory</em>: anomalies never halt a run. The signal is there so you can investigate why a slice drifted — stale prompts, model degradation, a gate that's suddenly looping — before it shows up as a surprise on the month's bill.</p>
+
+        <!-- ─── Configuration ─── -->
+        <h2 id="config">Configuration summary</h2>
+        <p>All three subsystems live under a single <code>innerLoop</code> key in <code>.forge.json</code>. New installs receive these defaults via the v2.58 best-defaults preset; existing projects opt in per-subsystem.</p>
+        <pre class="bg-slate-950 border border-slate-800/60 rounded-xl p-4 overflow-x-auto text-sm"><code>{
+  "innerLoop": {
+    "competitive": { "enabled": false, "maxParallel": 2, "timeoutSec": 1800 },
+    "autoFix":     { "enabled": true, "applyWithoutReview": false },
+    "costAnomaly": { "enabled": true, "ratio": 2.0, "medianWindow": 20 }
+  }
+}</code></pre>
+
+        <div class="callout callout-info mt-8">
+          <strong>See also:</strong> <a href="inner-loop.html">The Inner Loop</a> covers the seven Phase-25 subsystems this chapter builds on. The Dashboard <em>Inner Loop</em> tab shows live state for all ten subsystems in one place.
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="assets/manual.js"></script>
+</body>
+</html>

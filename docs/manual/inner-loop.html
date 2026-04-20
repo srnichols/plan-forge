@@ -153,8 +153,29 @@ stateDiagram-v2
   }
 }</code></pre>
 
+        <!-- ─── Phase-26 additions ─────────────────────────────────────── -->
+        <h2 id="phase-26">Phase-26 additions (v2.58.0)</h2>
+        <p>Three more subsystems close the loop further — the slice executor can now race strategies, draft its own patches when a gate fails, and flag token-cost drift without halting a run.</p>
+
+        <ul>
+          <li><strong>Competitive execution (L9)</strong> — Opt-in worktree race. Two or more strategies run the same slice under isolated git worktrees; the winner is elected by gate result, reviewer verdict, and token-cost tie-breaker. Off by default. Config: <code>innerLoop.competitive</code>. See <a href="competitive-loop.html">The Competitive Loop</a> for the full flow.</li>
+          <li><strong>Auto-fix patch proposals (L6)</strong> — When a gate-fail trajectory suggests a small local correction, the orchestrator drafts a <code>.patch</code> file under <code>.forge/proposed-fixes/</code>. Advisory — nothing auto-applies unless <code>applyWithoutReview: true</code>.</li>
+          <li><strong>Cost-anomaly detection (L5)</strong> — Slices whose token cost drifts above the per-model median by more than <code>ratio</code> (default 2.0) are recorded in <code>.forge/cost-anomalies.jsonl</code>. Detection only; never halts a run.</li>
+        </ul>
+
+        <p>Additional config block (added by the v2.58 best-defaults preset for new installs; existing projects opt in):</p>
+        <pre class="bg-slate-950 border border-slate-800/60 rounded-xl p-4 overflow-x-auto text-sm"><code>{
+  "innerLoop": {
+    "competitive": { "enabled": false, "maxParallel": 2, "timeoutSec": 1800 },
+    "autoFix":     { "enabled": true, "applyWithoutReview": false },
+    "costAnomaly": { "enabled": true, "ratio": 2.0, "medianWindow": 20 }
+  }
+}</code></pre>
+
+        <p>All three are surfaced in the Dashboard's new <em>Inner Loop</em> tab alongside the Phase-25 subsystems.</p>
+
         <div class="callout callout-info mt-8">
-          <strong>See also:</strong> <a href="how-it-works.html">Chapter 2 — How It Works</a> describes the Forge spine; this page describes the reflective layers the Inner Loop adds on top.
+          <strong>See also:</strong> <a href="how-it-works.html">Chapter 2 — How It Works</a> describes the Forge spine; this page describes the reflective layers the Inner Loop adds on top. <a href="competitive-loop.html">The Competitive Loop</a> covers the worktree-race mechanics in depth.
         </div>
 
       </div>

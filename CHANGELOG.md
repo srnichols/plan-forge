@@ -5,6 +5,34 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.58.0] — Unreleased — Phase-26 Competitive & Self-Deterministic Loop
+
+> **The inner loop gains competitive execution and self-correction.** Building on the Phase-25 reflective layer, this release adds three new opt-in subsystems — competitive worktree execution, auto-fix patch proposals, and cost-anomaly detection — a dedicated Dashboard "Inner Loop" tab that surfaces all ten subsystems in one place, and a best-defaults preset so new projects start with advisory-posture defaults out of the box. Every addition is opt-in; nothing in existing workflows changes.
+
+### Added — Competitive & Self-Deterministic Loop (v2.58.0)
+
+- **Competitive slice execution (L9)** — Opt-in worktree race. Two or more strategies execute the same slice under isolated worktrees; the winner is elected by gate result, reviewer verdict, and token-cost tie-breaker. Losing worktrees are cleaned up. Off by default. Config: `innerLoop.competitive: { enabled, maxParallel, timeoutSec }`. Implemented in `pforge-mcp/orchestrator.mjs → runCompetitiveSlice()`.
+- **Auto-fix patch proposals (L6)** — When a gate-fail trajectory suggests a small local correction, the orchestrator drafts a `.patch` file under `.forge/proposed-fixes/<fixId>.patch` and records metadata in `.forge/fix-proposals.json`. Advisory-only — nothing auto-applies unless operators set `applyWithoutReview: true`. Config: `innerLoop.autoFix: { enabled, applyWithoutReview }`.
+- **Cost-anomaly detection (L5)** — On every slice, the orchestrator compares the slice's token cost against the per-model median (window 20) and records any ratio above `innerLoop.costAnomaly.ratio` (default 2.0) in `.forge/cost-anomalies.jsonl`. Advisory only; runs are never halted. Surfaced in the Dashboard's new Inner Loop tab.
+- **Dashboard "Inner Loop" tab** — New top-level tab with a four-cell summary grid (reviewer calibration, pending auto-skills, federation status, open fix proposals) and six collapsible panels. Six new read-only endpoints power it: `/api/innerloop/{status,reviewer-calibration,gate-suggestions,cost-anomalies,proposed-fixes,federation}`.
+- **Welcome card (one-time)** — On first dashboard visit after upgrade to v2.58, a dismissible card announces the inner-loop features. Dismissal is persisted in `.forge/dashboard-state.json#seenInnerLoop258` via the new `/api/dashboard-state` GET/POST endpoints (partial-merge semantics).
+- **Best-defaults preset** — `setup.ps1` and `setup.sh` now write `.forge.json` only when it is absent (upgrades are preserved) and ship with `innerLoop` + `brain.federation` blocks in advisory-posture defaults: `competitive` off, `autoFix` advisory, `costAnomaly` advisory, federation off.
+- **Capabilities surface extension** — `INNER_LOOP_SURFACE.schemaVersion` bumped `1.0` → `1.1`; `worker-capabilities.json` flags all ten subsystems; `docs/capabilities.md` and `llms.txt` updated.
+- **User manual: "Competitive Loop" chapter** — New `docs/manual/competitive-loop.html` with a Mermaid worktree-spawn → winner-election flow. `docs/manual/inner-loop.html` gains a Phase-26 additions section and cross-link.
+
+### Changed
+
+- `INNER_LOOP_SURFACE` schemaVersion `1.0` → `1.1`; now declares ten subsystems (seven Phase-25 + three Phase-26).
+- Setup scripts no longer overwrite an existing `.forge.json`. On upgrade, operators retain their customized config and see the welcome card to discover new subsystems.
+
+### Security
+
+- All new subsystems ship in advisory posture. `autoFix` never writes outside `.forge/proposed-fixes/`; applying a patch is an explicit opt-in (`applyWithoutReview: true`) and can be rolled back.
+- `costAnomaly` is detection-only and cannot halt a run.
+- `competitive` worktrees are created under `.forge/worktrees/` and cleaned up after election; losing-worktree paths never enter the working tree.
+
+---
+
 ## [2.57.0] — 2026-04-27 — Phase-25 Inner-Loop Enhancements
 
 > **The Forge gains a reflective layer.** Seven opt-in subsystems turn deterministic slice execution into a closed research loop: every slice can teach the next one, every run can teach the next plan, every project can teach the next project. Nothing in existing workflows breaks — all new behavior defaults to *off*, *suggest*, or *advisory*.

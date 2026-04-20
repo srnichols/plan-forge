@@ -24,6 +24,24 @@ Also check for prior phase lessons (if they exist — skip if not found):
 - `/memories/repo/lessons-learned.md` — past mistakes to avoid
 - `/memories/repo/forbidden-patterns.md` — patterns that caused regressions
 
+**Prior plan postmortems (Phase-25 L5 closed loop)**:
+Before hardening, also scan `.forge/plans/<plan-basename>/postmortem-*.json` for
+the plan you are hardening (same basename as the draft). If any exist, read the
+newest 3 and factor them into the Scope Contract:
+
+- If `retriesPerSlice` shows a slice that flapped 3+ times, strengthen its
+  validation gate or split it into smaller slices.
+- If `gateFlaps > 0` on multiple prior runs, your gate commands are unstable —
+  replace grep/pipe-based gates with allowlisted node assertions.
+- If `topFailureReason` repeats across postmortems, add a mitigation in the
+  current plan's Risks section and reference the prior failure.
+- If `costDelta.delta` trends upward across runs, flag a budget risk in the
+  plan's Budget section.
+- If no postmortems exist, note "No prior postmortems — first execution."
+
+This is a READ of the postmortems — do NOT modify them. Pure signal for the
+hardener.
+
 Now act as a PLAN HARDENING AGENT (see the Plan Hardening Prompt in the runbook).
 
 **CLARIFICATION CHECK**: Before hardening, scan the plan for `[NEEDS CLARIFICATION]` markers.

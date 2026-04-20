@@ -1,14 +1,18 @@
 ---
 crucibleId: 6c1e4a82-5d93-4b76-a284-f3c8b9e5d107
 source: self-hosted
-status: draft
+status: complete
 phase: TESTBED-01
 arc: TESTBED-RECURSIVE
+shippedAt: 2026-04-20
+commits:
+  - 898bfd1  # Slice 01 — forge_testbed_run core + defect-log + scenarios
+  - 869b7be  # Slice 02 — forge_testbed_findings + scheduling templates + CLI-parity audit
 ---
 
 # Phase TESTBED-01: Testbed harness — runner, logger, defect-log schema
 
-> **Status**: 📝 DRAFT — ready for Session 2 execution
+> **Status**: ✅ COMPLETE — shipped 2026-04-20 (targeting v2.51.0)
 > **Estimated Effort**: 2 slices
 > **Risk Level**: Low-medium (new harness code; no changes to
 > existing subsystems; testbed repo is the only external

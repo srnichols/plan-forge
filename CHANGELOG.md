@@ -7,15 +7,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased] — targeting 2.51.0
 
-### Shipped — TESTBED-01 Slice 01: `forge_testbed_run` core (2026-04-19)
+### Shipped — TESTBED-01 recursive validation harness (2026-04-20)
 
 - **`forge_testbed_run`** — new MCP tool: run testbed scenarios against an external testbed repository. Preflight checks (repo exists, clean tree, HEAD match), file lock, step execution, 7 assertion kinds, defect-log writer, hub events, L3 memory capture.
+- **`forge_testbed_findings`** — new MCP tool: list/update findings with severity/surface/status filters and redacted observed fields.
 - **`pforge-mcp/testbed/runner.mjs`** — scenario runner with DI-based deps, lock management, assertion dispatch table.
 - **`pforge-mcp/testbed/defect-log.mjs`** — finding CRUD: `logFinding`, `listFindings`, `updateFindingStatus`. Frozen enums for severity/surface/status. Secret redaction on observed fields.
 - **`pforge-mcp/testbed/scenarios.mjs`** — scenario loader/validator: `loadScenario`, `listScenarios`, `validateScenarioFixture`, `resolveTestbedPath`.
 - **Assertion kinds**: `file-exists`, `file-contains`, `event-emitted`, `correlationId-thread`, `exit-code`, `duration-under`, `artefact-count`.
 - **Scenario fixture format**: JSON files in `docs/plans/testbed-scenarios/` with `kind` enum (`happy-path`, `chaos`, `perf`, `long-horizon`).
-- Plan: [docs/plans/Phase-TESTBED-ARC.md](docs/plans/Phase-TESTBED-ARC.md). Test count +36.
+- **Scheduling templates** (G6 audit): 3 GitHub Actions workflows under `templates/schedules/` — nightly mutation, weekly drift, daily sweep.
+- **CLI-parity audit** (G8): `scripts/audit-cli-parity.mjs` — verifies PowerShell and bash CLI entry points accept identical flag surfaces.
+- Plan: [docs/plans/Phase-TESTBED-01.md](docs/plans/Phase-TESTBED-01.md). Commits: `898bfd1` (Slice 01 runner + defect-log + scenarios), `869b7be` (Slice 02 findings tool + schedules + parity audit). Test count +54.
 
 ### Shipped — AUTO-UPDATE-01 true auto-install from GitHub (2026-04-20)
 
@@ -37,17 +40,6 @@ Closes [#75](https://github.com/srnichols/plan-forge/issues/75).
 - **Slice 06.1 — Hub ask/respond transport** — `hub.ask(topic, payload, opts)` request/reply RPC with timeout, `hub.onAsk(topic, handler)` single-responder registration, `removeAskHandler()`, `listResponders()`. Timeout eviction (`ErrAskTimeout`), no-responder immediate `ok:false`, responder-error wrapping, late-respond drop with warn log. OTEL-style telemetry spans (`ask-telemetry` events). `close()` rejects pending asks. Purely additive — no changes to existing event frames.
 - **Slice 06.2 — Responders + executor gate wire-in + dashboard** — 3 initial responders (`brain.gate-check`, `brain.correlation-thread`, `tempering.delegate-sync`). Executor gate-check wire-in between slices (config-guarded via `orchestrator.askBusGate.enabled`, fail-open on timeout). Dashboard Hub subtab surfaces ask/respond metrics + responder registry.
 - Plan: [docs/plans/Phase-FORGE-SHOP-06.md](docs/plans/Phase-FORGE-SHOP-06.md). Commits: `e221555` (Slice 06.1), `0a43d22` (Slice 06.2). Test count +22.
-
-### Shipped — TESTBED-01 Slice 02: Scheduling templates + CLI-parity audit + `forge_testbed_findings` (2026-04-19)
-
-- **`forge_testbed_findings`** — new MCP tool (#63): query testbed defect-log findings filtered by `status`, `severity`, `since`, with `limit` and `truncated` flag. Read-only, wraps `listFindings()` from `testbed/defect-log.mjs`.
-- **`forge_smith` Testbed row** — smith output now includes scenario count and open findings by severity.
-- **`templates/schedules/`** — 3 GitHub Actions workflow templates: `plan-forge-nightly-mutation.yml` (daily Tempering scan), `plan-forge-weekly-drift.yml` (Monday LiveGuard drift), `plan-forge-daily-sweep.yml` (daily TODO/FIXME sweep). All with `workflow_dispatch` manual trigger. README with cron and Windows Task Scheduler equivalents.
-- **`scripts/audit-cli-parity.mjs`** — CLI-parity audit: compares TOOL_METADATA tool names against `pforge.ps1`/`pforge.sh` command routing. Mapping convention `forge_run_plan` → `run-plan`. Reports `matched`, `mcpOnly` (with `knownException` flag), `cliOnly`. Informational only — exit code 0 always.
-- **TOOL_METADATA** — `forge_testbed_findings` entry in `capabilities.mjs` (`cost: "low"`, `writesFiles: false`).
-- Plan: [docs/plans/Phase-TESTBED-01.md](docs/plans/Phase-TESTBED-01.md). Test count +22.
-
-### Planned — TESTBED-01 recursive validation harness
 
 ---
 

@@ -24,6 +24,8 @@ import {
   scoreSliceComplexity,
   coalesceGateLines,
   parseStderrStats,
+  extractTokens,
+  calculateSliceCost,
   parsePlan,
   findLatestRun,
   parseEventsLog,
@@ -1129,6 +1131,112 @@ describe("parseStderrStats", () => {
     const stats = parseStderrStats(stderr);
     expect(stats.tokens_in).toBe(3_200_000);
     expect(stats.tokens_out).toBe(1_500_000_000);
+  });
+
+  it("parses compact single-line format", () => {
+    const stderr = `1 request • claude-sonnet-4.6 • 476.0k in, 3.1k out`;
+    const stats = parseStderrStats(stderr);
+    expect(stats.premiumRequests).toBe(1);
+    expect(stats.model).toBe("claude-sonnet-4.6");
+    expect(stats.tokens_in).toBe(476_000);
+    expect(stats.tokens_out).toBe(3_100);
+  });
+
+  it("parses compact format with plural requests", () => {
+    const stderr = `5 requests • gpt-5.4-mini • 1.2m in, 8.5k out`;
+    const stats = parseStderrStats(stderr);
+    expect(stats.premiumRequests).toBe(5);
+    expect(stats.model).toBe("gpt-5.4-mini");
+    expect(stats.tokens_in).toBe(1_200_000);
+    expect(stats.tokens_out).toBe(8_500);
+  });
+});
+
+// ─── extractTokens ──────────────────────────────────────────────────
+
+describe("extractTokens", () => {
+  it("extracts model from session.tools_updated event", () => {
+    const events = [
+      { type: "session.tools_updated", data: { model: "claude-sonnet-4.6", tools: [] } },
+    ];
+    const tokens = extractTokens(events);
+    expect(tokens.model).toBe("claude-sonnet-4.6");
+  });
+
+  it("extracts premiumRequests and durations from result event", () => {
+    const events = [
+      { type: "session.tools_updated", data: { model: "claude-sonnet-4.6", tools: [] } },
+      { type: "assistant.message", data: { outputTokens: 1500 } },
+      { type: "result", usage: { premiumRequests: 3, totalApiDurationMs: 45000, sessionDurationMs: 95000, codeChanges: 7 }, model: "claude-sonnet-4.6" },
+    ];
+    const tokens = extractTokens(events);
+    expect(tokens.model).toBe("claude-sonnet-4.6");
+    expect(tokens.tokens_out).toBe(1500);
+    expect(tokens.premiumRequests).toBe(3);
+    expect(tokens.apiDurationMs).toBe(45000);
+    expect(tokens.sessionDurationMs).toBe(95000);
+    expect(tokens.codeChanges).toBe(7);
+  });
+
+  it("returns empty stats for no events", () => {
+    const tokens = extractTokens([]);
+    expect(tokens.model).toBeNull();
+    expect(tokens.tokens_out).toBe(0);
+    expect(tokens.premiumRequests).toBe(0);
+  });
+
+  it("accumulates outputTokens across multiple assistant.message events", () => {
+    const events = [
+      { type: "assistant.message", data: { outputTokens: 500 } },
+      { type: "assistant.message", data: { outputTokens: 300 } },
+    ];
+    const tokens = extractTokens(events);
+    expect(tokens.tokens_out).toBe(800);
+  });
+
+  it("falls back to result.model when session.tools_updated has no model", () => {
+    const events = [
+      { type: "result", model: "gpt-5.4-mini", usage: { premiumRequests: 1 } },
+    ];
+    const tokens = extractTokens(events);
+    expect(tokens.model).toBe("gpt-5.4-mini");
+  });
+});
+
+// ─── calculateSliceCost ─────────────────────────────────────────────
+
+describe("calculateSliceCost", () => {
+  it("calculates cost from premium requests for CLI workers", () => {
+    const tokens = { model: "claude-sonnet-4.6", tokens_in: 476000, tokens_out: 3100, premiumRequests: 3 };
+    const result = calculateSliceCost(tokens, "gh-copilot");
+    expect(result.cost_usd).toBe(0.03);
+    expect(result.model).toBe("claude-sonnet-4.6");
+  });
+
+  it("returns zero cost when premiumRequests is 0 for CLI workers", () => {
+    const tokens = { model: "claude-sonnet-4.6", tokens_in: 0, tokens_out: 0, premiumRequests: 0 };
+    const result = calculateSliceCost(tokens, "gh-copilot");
+    expect(result.cost_usd).toBe(0);
+  });
+
+  it("uses per-token pricing for API workers", () => {
+    const tokens = { model: "grok-3-mini", tokens_in: 1_000_000, tokens_out: 500_000 };
+    const result = calculateSliceCost(tokens, "api-xai");
+    // grok-3-mini: input 0.30/1M, output 0.50/1M → 0.30 + 0.25 = 0.55
+    expect(result.cost_usd).toBeCloseTo(0.55, 4);
+  });
+
+  it("uses default pricing for unknown model in API workers", () => {
+    const tokens = { model: "unknown", tokens_in: 1_000_000, tokens_out: 100_000 };
+    const result = calculateSliceCost(tokens, "api-custom");
+    // default: input 3/1M, output 15/1M → 3.0 + 1.5 = 4.5
+    expect(result.cost_usd).toBeCloseTo(4.5, 4);
+  });
+
+  it("handles null tokens gracefully", () => {
+    const result = calculateSliceCost(null, "gh-copilot");
+    expect(result.cost_usd).toBe(0);
+    expect(result.model).toBe("unknown");
   });
 });
 

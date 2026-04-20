@@ -1238,6 +1238,18 @@ export function spawnWorker(prompt, options = {}) {
         if (stderrStats.premiumRequests > 0) tokens.premiumRequests = stderrStats.premiumRequests;
       }
 
+      // Issue #63: When both extractTokens and parseStderrStats fail to find a model,
+      // infer a reasonable default from the worker's capability matrix instead of "unknown".
+      if (!tokens.model) {
+        tokens.model = spec?.defaultModel || null;
+      }
+
+      // Issue #63: When CLI exits 0 with non-trivial output but reports 0 premium requests,
+      // default to 1 — at least one request was made to produce the output.
+      if (tokens.premiumRequests === 0 && !timedOut && code === 0 && stdout.length > 200) {
+        tokens.premiumRequests = 1;
+      }
+
       // Issue #28 guard: detect silent-failure where worker printed help text and exited 0.
       // When the CLI doesn't understand our flags it often emits usage/help and succeeds —
       // orchestrator then records "passed" with zero code changes. Surface it loudly instead.
@@ -1310,7 +1322,7 @@ function parseJSONL(output) {
 /**
  * Extract token usage from JSONL events.
  */
-function extractTokens(events) {
+export function extractTokens(events) {
   let outputTokens = 0;
   let model = null;
   let premiumRequests = 0;
@@ -1398,6 +1410,17 @@ export function parseStderrStats(stderr) {
         maxTokens = tokOut;
         stats.model = model;
       }
+    }
+  }
+
+  // Compact single-line format: "1 request • claude-sonnet-4.6 • 476.0k in, 3.1k out"
+  if (!stats.model) {
+    const compactMatch = stderr.match(/(\d+)\s+requests?\s*[•·]\s*([\w.-]+)\s*[•·]\s*([\d.]+[kmb]?)\s+in,\s*([\d.]+[kmb]?)\s+out/i);
+    if (compactMatch) {
+      stats.premiumRequests = parseInt(compactMatch[1], 10);
+      stats.model = compactMatch[2];
+      stats.tokens_in = parseTokenCount(compactMatch[3]);
+      stats.tokens_out = parseTokenCount(compactMatch[4]);
     }
   }
 

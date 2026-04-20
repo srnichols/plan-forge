@@ -16,9 +16,10 @@
       "minVersion": "1.0.32",
       "versionRegex": "GitHub Copilot CLI\\s+v?(\\d+\\.\\d+\\.\\d+)",
       "requires": { "gh": ">=2.88.0" },
+      "defaultModel": "claude-sonnet-4.6",
       "invocation": {
         "cmd": "gh",
-        "baseArgs": ["copilot", "--", "-p", "@{PROMPT_FILE}", "--yolo", "--no-ask-user", "--output-format", "text"]
+        "baseArgs": ["copilot", "--", "-p", "@{PROMPT_FILE}", "--yolo", "--no-ask-user", "--output-format", "jsonl"]
       },
       "install": {
         "windows": "winget upgrade --id GitHub.cli",

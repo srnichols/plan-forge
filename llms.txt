@@ -1,15 +1,17 @@
 # Plan Forge
 
-> AI coding guardrails that convert rough ideas into hardened execution contracts.
+> The AI-Native SDLC Forge Shop. One workshop, four stations — Smelt, Forge, Guard, Learn — covering every phase of the software lifecycle.
 
 ## What It Does
 
-Plan Forge is an open-source framework that gives AI coding agents (Copilot, Claude, Cursor, Codex, Gemini, Windsurf, and others) structure, guardrails, and accountability. It prevents scope creep, skipped tests, and silent architecture decisions through a 7-step hardening pipeline across 4 isolated sessions.
+Plan Forge is an open-source framework that gives AI coding agents (Copilot, Claude, Cursor, Codex, Gemini, Windsurf, and others) a complete AI-native SDLC workshop. Instead of a single code-generation step, it runs the whole lifecycle across four stations: **Smelt** (refine idea into scope contract), **Forge** (execute slices with gates), **Guard** (LiveGuard scans secrets, drift, regression risk), and **Learn** (memory, bug registry, testbed findings feed the next plan). Drift, skipped tests, and silent architecture decisions become structurally impossible.
 
 ## Key Concepts
 
+- **Four Stations**: Smelt → Forge → Guard → Learn. Every SDLC phase, one shop, AI-run and human-supervised.
+- **AI-Native SDLC**: The lifecycle is designed for AI agents from day one — scope contracts, slice gates, quorum consensus, and post-deploy LiveGuard are all first-class citizens, not bolted on.
 - **Hardened Execution Contract**: A locked-down plan with scope boundaries, validation gates, and forbidden actions that the AI must follow without deviation.
-- **7-Step Pipeline**: Specify → Pre-flight → Harden → Execute → Sweep → Review → Ship
+- **7-Step Pipeline** (inside the Forge station): Specify → Pre-flight → Harden → Execute → Sweep → Review → Ship
 - **4 Sessions**: Session isolation prevents self-auditing. The builder and reviewer are always different AI instances.
 - **Validation Gates**: Build + test must pass at every slice boundary before proceeding.
 - **Scope Contract**: Defines what's in scope, out of scope, and forbidden. Drift is structurally impossible.

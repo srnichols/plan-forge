@@ -1215,7 +1215,9 @@ function Invoke-Update {
     $ghExtractDir = $null
     $ghTarball = $null
 
-    if ($fromGitHub) {
+    # Helper: fetch + extract tarball for a resolved tag, returns source path.
+    function Fetch-GitHubSource {
+        param([string]$RequestedTag)
         $nodeHelper = Join-Path $RepoRoot "pforge-mcp/update-from-github.mjs"
         if (-not (Test-Path $nodeHelper)) {
             Write-Host "ERROR: Node helper not found at $nodeHelper" -ForegroundColor Red
@@ -1223,14 +1225,11 @@ function Invoke-Update {
             exit 1
         }
 
-        # Resolve tag
         Write-Host "Resolving release tag from GitHub..." -ForegroundColor DarkCyan
         $tagArgs = @("resolve-tag")
-        if ($ghTag) { $tagArgs += @("--tag", $ghTag) }
+        if ($RequestedTag) { $tagArgs += @("--tag", $RequestedTag) }
         $tagResult = & node $nodeHelper @tagArgs 2>&1 | Select-Object -Last 1
-        try {
-            $tagJson = $tagResult | ConvertFrom-Json
-        } catch {
+        try { $tagJson = $tagResult | ConvertFrom-Json } catch {
             Write-Host "ERROR: Failed to parse tag resolution output: $tagResult" -ForegroundColor Red
             exit 1
         }
@@ -1241,13 +1240,10 @@ function Invoke-Update {
         $resolvedTag = $tagJson.tag
         Write-Host "  Tag: $resolvedTag" -ForegroundColor White
 
-        # Download tarball
         Write-Host "Downloading release tarball..." -ForegroundColor DarkCyan
         $dlArgs = @("download", "--tag", $resolvedTag, "--project-dir", $RepoRoot)
         $dlResult = & node $nodeHelper @dlArgs 2>&1 | Select-Object -Last 1
-        try {
-            $dlJson = $dlResult | ConvertFrom-Json
-        } catch {
+        try { $dlJson = $dlResult | ConvertFrom-Json } catch {
             Write-Host "ERROR: Failed to parse download output: $dlResult" -ForegroundColor Red
             exit 1
         }
@@ -1255,21 +1251,18 @@ function Invoke-Update {
             Write-Host "ERROR: $($dlJson.code) — $($dlJson.message)" -ForegroundColor Red
             exit 1
         }
-        $ghTarball = $dlJson.path
-        $ghSha256 = $dlJson.sha256
-        $ghSizeBytes = $dlJson.sizeBytes
-        Write-Host "  Downloaded: $ghTarball ($ghSizeBytes bytes)" -ForegroundColor White
-        Write-Host "  SHA-256: $ghSha256" -ForegroundColor DarkGray
+        $script:ghTarball = $dlJson.path
+        Write-Host "  Downloaded: $($dlJson.path) ($($dlJson.sizeBytes) bytes)" -ForegroundColor White
+        Write-Host "  SHA-256: $($dlJson.sha256)" -ForegroundColor DarkGray
 
-        # Extract tarball
         $safeName = $resolvedTag -replace '[^a-zA-Z0-9._-]', '_'
-        $ghExtractDir = Join-Path (Split-Path $ghTarball -Parent) "update-$safeName"
-        if (Test-Path $ghExtractDir) { Remove-Item -Recurse -Force $ghExtractDir }
-        New-Item -ItemType Directory -Path $ghExtractDir -Force | Out-Null
+        $script:ghExtractDir = Join-Path (Split-Path $script:ghTarball -Parent) "update-$safeName"
+        if (Test-Path $script:ghExtractDir) { Remove-Item -Recurse -Force $script:ghExtractDir }
+        New-Item -ItemType Directory -Path $script:ghExtractDir -Force | Out-Null
 
         Write-Host "Extracting tarball..." -ForegroundColor DarkCyan
         try {
-            & tar xzf $ghTarball -C $ghExtractDir 2>&1
+            & tar xzf $script:ghTarball -C $script:ghExtractDir 2>&1
             if ($LASTEXITCODE -ne 0) {
                 Write-Host "ERROR: tar extraction failed (exit code $LASTEXITCODE)." -ForegroundColor Red
                 Write-Host "  Ensure 'tar' is available (Windows 10+ includes tar.exe)." -ForegroundColor Yellow
@@ -1281,20 +1274,21 @@ function Invoke-Update {
             exit 1
         }
 
-        # Find the single top-level directory (GitHub tarballs: srnichols-plan-forge-<sha>/)
-        $topDirs = Get-ChildItem -Path $ghExtractDir -Directory
-        if ($topDirs.Count -eq 1) {
-            $sourcePath = $topDirs[0].FullName
-        } elseif ($topDirs.Count -eq 0) {
-            $sourcePath = $ghExtractDir
+        $topDirs = Get-ChildItem -Path $script:ghExtractDir -Directory
+        if ($topDirs.Count -ge 1) {
+            $result = $topDirs[0].FullName
         } else {
-            $sourcePath = $topDirs[0].FullName
+            $result = $script:ghExtractDir
         }
-        Write-Host "  Extracted to: $sourcePath" -ForegroundColor White
+        Write-Host "  Extracted to: $result" -ForegroundColor White
         Write-Host ""
+        return $result
+    }
 
+    if ($fromGitHub) {
+        $sourcePath = Fetch-GitHubSource -RequestedTag $ghTag
     } else {
-        # ─── Locate source (existing local path logic) ──────────────
+        # ─── Locate source (positional path → preference → sibling → github fallback) ──
         foreach ($arg in $Arguments) {
             if ($arg -notlike '--*' -and (Test-Path $arg)) {
                 $sourcePath = (Resolve-Path $arg).Path
@@ -1302,18 +1296,112 @@ function Invoke-Update {
             }
         }
 
+        # v2.56.0 — read updateSource preference from .forge.json (auto | github-tags | local-sibling)
+        $updateSourcePref = "auto"
+        $prefConfigPath = Join-Path $RepoRoot ".forge.json"
+        if (Test-Path $prefConfigPath) {
+            try {
+                $prefConfig = Get-Content $prefConfigPath -Raw | ConvertFrom-Json
+                if ($prefConfig.updateSource) {
+                    $prefVal = [string]$prefConfig.updateSource
+                    if ($prefVal -in @("auto", "github-tags", "local-sibling")) {
+                        $updateSourcePref = $prefVal
+                    }
+                }
+            } catch { /* malformed config → default to auto */ }
+        }
+
+        # Find sibling clone (if any)
+        $siblingPath = $null
         if (-not $sourcePath) {
-            # Try to find plan-forge source as a sibling directory or parent
             $candidates = @(
                 (Join-Path (Split-Path $RepoRoot -Parent) "plan-forge"),
                 (Join-Path (Split-Path $RepoRoot -Parent) "Plan-Forge")
             )
             foreach ($c in $candidates) {
-                if (Test-Path (Join-Path $c "VERSION")) {
-                    $sourcePath = $c
-                    break
+                if (Test-Path (Join-Path $c "VERSION")) { $siblingPath = $c; break }
+            }
+        }
+
+        if (-not $sourcePath) {
+            switch ($updateSourcePref) {
+                "github-tags" {
+                    # Team-pinned: always use GitHub, ignore sibling
+                    if ($siblingPath) {
+                        Write-Host "  Note: updateSource='github-tags' — ignoring sibling clone at $siblingPath" -ForegroundColor DarkGray
+                    }
+                    Write-Host "  Using GitHub tagged release (updateSource='github-tags')" -ForegroundColor DarkCyan
+                    $fromGitHub = $true
+                }
+                "local-sibling" {
+                    # Contributor-pinned: sibling or bust
+                    if ($siblingPath) {
+                        $sourcePath = $siblingPath
+                    } else {
+                        Write-Host "ERROR: updateSource='local-sibling' but no sibling clone found." -ForegroundColor Red
+                        Write-Host "  Change '.forge.json' updateSource to 'auto' or 'github-tags', or clone:" -ForegroundColor Yellow
+                        Write-Host "    git clone https://github.com/srnichols/plan-forge.git ../plan-forge" -ForegroundColor Yellow
+                        exit 1
+                    }
+                }
+                default {
+                    # Auto mode — prefer the source with the newer STABLE release
+                    if ($siblingPath) {
+                        $siblingVer = $null
+                        try { $siblingVer = (Get-Content (Join-Path $siblingPath "VERSION") -Raw).Trim() } catch {}
+                        $siblingIsDev = $siblingVer -match '-dev\b'
+
+                        # Fetch latest tag via node helper (cached 24h in .forge/update-check.json)
+                        $latestTagVer = $null
+                        $nodeHelperProbe = Join-Path $RepoRoot "pforge-mcp/update-from-github.mjs"
+                        if (Test-Path $nodeHelperProbe) {
+                            try {
+                                $tagProbe = & node $nodeHelperProbe resolve-tag 2>&1 | Select-Object -Last 1
+                                $tagProbeJson = $tagProbe | ConvertFrom-Json
+                                if ($tagProbeJson.ok -and $tagProbeJson.tag) {
+                                    $latestTagVer = ($tagProbeJson.tag -replace '^v', '').Trim()
+                                }
+                            } catch { /* network down or helper missing → fall back to sibling */ }
+                        }
+
+                        if ($latestTagVer -and $siblingIsDev) {
+                            # Sibling is on master (-dev). If the latest tag is a clean release, prefer it.
+                            Write-Host "  Note: sibling clone is on -dev ($siblingVer); latest tagged release is v$latestTagVer" -ForegroundColor DarkGray
+                            Write-Host "  Using GitHub tagged release (set updateSource='local-sibling' in .forge.json to always use sibling)" -ForegroundColor DarkCyan
+                            $fromGitHub = $true
+                        } elseif ($latestTagVer -and $siblingVer) {
+                            # Both clean. Compare — use whichever is newer (ties go to sibling for speed).
+                            $nodeCmp = Join-Path $RepoRoot "pforge-mcp/update-check.mjs"
+                            $cmpResult = 0
+                            if (Test-Path $nodeCmp) {
+                                try {
+                                    $cmpStr = & node -e "import('$($nodeCmp -replace '\\', '/')').then(m=>{console.log(m.compareVersions('$siblingVer','$latestTagVer'))})" 2>&1 | Select-Object -Last 1
+                                    $cmpResult = [int]$cmpStr
+                                } catch { $cmpResult = 0 }
+                            }
+                            if ($cmpResult -lt 0) {
+                                Write-Host "  Note: sibling clone (v$siblingVer) is behind latest tag (v$latestTagVer)" -ForegroundColor DarkGray
+                                Write-Host "  Using GitHub tagged release (run 'git pull' in $siblingPath to dogfood master)" -ForegroundColor DarkCyan
+                                $fromGitHub = $true
+                            } else {
+                                $sourcePath = $siblingPath
+                            }
+                        } else {
+                            # No network / helper missing → use sibling
+                            $sourcePath = $siblingPath
+                        }
+                    } else {
+                        # No sibling at all → auto-fallback to GitHub (v2.56.0: was an error before)
+                        Write-Host "  No sibling clone found — using GitHub tagged release" -ForegroundColor DarkCyan
+                        $fromGitHub = $true
+                    }
                 }
             }
+        }
+
+        # If auto mode flipped us to GitHub, fetch + extract the tarball now.
+        if (-not $sourcePath -and $fromGitHub) {
+            $sourcePath = Fetch-GitHubSource -RequestedTag $ghTag
         }
 
         if (-not $sourcePath) {

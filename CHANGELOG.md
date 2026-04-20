@@ -5,6 +5,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.53.2] — 2026-04-20 — Refuse '-dev' source over clean install
+
+### Fixed
+
+- **`pforge update` now refuses to install a `-dev` source onto a clean
+  release install.** Closes the last self-heal gap: when a consumer project
+  has a sibling `plan-forge/` clone on master, plain `pforge update`
+  (without `--from-github`) would copy master's `VERSION=X.Y.Z-dev` onto
+  their clean install, leaving them on an unreleased dev build. This
+  happened to at least one known client (observed landing on
+  `v2.54.0-dev`). The update now exits with a clear error pointing users
+  to `pforge self-update` (which always fetches the latest tagged
+  release). Override flag: `--allow-dev` (not recommended). Both
+  `pforge.ps1` and `pforge.sh` carry the guard.
+
+### Tests
+
+- 2478/2478 vitest passing (no changes to JS surfaces).
+
+---
+
 ## [2.53.1] — 2026-04-20 — Corrupt-install self-heal + release guard
 
 ### 🛡️ Self-heal for stuck clients (v2.50.0/v2.51.0/v2.52.0 broken tarballs)

@@ -1340,6 +1340,26 @@ function Invoke-Update {
         $currentPreset = $config.preset
     }
 
+    # v2.53.1 — refuse to install a '-dev' source over a clean install.
+    # Catches the "local sibling clone on master" case where `pforge update`
+    # would otherwise drag a consumer onto unreleased dev bytes.
+    $allowDev = $Arguments -contains '--allow-dev'
+    $sourceIsDev = $sourceVersion -match '-dev\b'
+    $currentIsDev = ($currentVersion -match '-dev\b') -or ($currentVersion -eq 'unknown')
+    if ($sourceIsDev -and -not $currentIsDev -and -not $allowDev) {
+        Write-Host ""
+        Write-Host "REFUSED: source VERSION '$sourceVersion' is a '-dev' build." -ForegroundColor Red
+        Write-Host "  Your current install (v$currentVersion) is a clean release —" -ForegroundColor Yellow
+        Write-Host "  installing this source would downgrade you into unreleased code." -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "  Most likely cause: your source path points to a local clone" -ForegroundColor DarkGray
+        Write-Host "    on master. Use 'pforge self-update' instead — it always" -ForegroundColor DarkGray
+        Write-Host "    pulls the latest tagged release from GitHub." -ForegroundColor DarkGray
+        Write-Host ""
+        Write-Host "  Override (not recommended): re-run with --allow-dev" -ForegroundColor DarkGray
+        exit 1
+    }
+
     Write-Host ""
     Write-Host "Plan Forge Update" -ForegroundColor Cyan
     Write-Host "─────────────────────────────────────────────" -ForegroundColor DarkGray

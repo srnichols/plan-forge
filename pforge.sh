@@ -1113,7 +1113,7 @@ _pf_sha256() {
 }
 
 cmd_update() {
-    local dry_run=false force=false source_path="" from_github=false keep_cache=false gh_tag=""
+    local dry_run=false force=false source_path="" from_github=false keep_cache=false gh_tag="" allow_dev=false
 
     for arg in "$@"; do
         case "$arg" in
@@ -1121,6 +1121,7 @@ cmd_update() {
             --force)   force=true ;;
             --from-github) from_github=true ;;
             --keep-cache) keep_cache=true ;;
+            --allow-dev) allow_dev=true ;;
             --tag) ;; # value consumed below
             --*) ;;
             *)
@@ -1283,6 +1284,25 @@ print(v if isinstance(v, str) else ','.join(v))
     echo "  Latest:   v$source_version"
     echo "  Preset:   $current_preset_raw"
     echo ""
+
+    # v2.53.1 — refuse to install a '-dev' source over a clean install.
+    # Catches the "local sibling clone on master" case where `pforge update`
+    # would otherwise drag a consumer onto unreleased dev bytes.
+    local source_is_dev=false current_is_dev=false
+    if echo "$source_version" | grep -qE -- '-dev\b'; then source_is_dev=true; fi
+    if [ "$current_version" = "unknown" ] || echo "$current_version" | grep -qE -- '-dev\b'; then current_is_dev=true; fi
+    if $source_is_dev && ! $current_is_dev && ! $allow_dev; then
+        echo "REFUSED: source VERSION '$source_version' is a '-dev' build."
+        echo "  Your current install (v$current_version) is a clean release —"
+        echo "  installing this source would downgrade you into unreleased code."
+        echo ""
+        echo "  Most likely cause: your source path points to a local clone"
+        echo "    on master. Use 'pforge self-update' instead — it always"
+        echo "    pulls the latest tagged release from GitHub."
+        echo ""
+        echo "  Override (not recommended): re-run with --allow-dev"
+        return 1
+    fi
 
     if [ "$current_version" = "$source_version" ] && ! $force; then
         echo "Already up to date (v$current_version). Use --force to re-apply."

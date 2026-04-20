@@ -1259,7 +1259,7 @@ export const TOOL_METADATA = {
       "git pull in a sibling ../plan-forge clone  (master carries -dev suffix; self-update pulls clean release tags)",
       "Manually downloading a tarball",
     ],
-    agentGuidance: "If a user asks you to 'update Plan Forge' or 'upgrade to v<X.Y.Z>', run `pforge self-update --force` from the project root. Do not clone the repo. Do not use `git pull` on any sibling clone. After it runs, verify with `Get-Content VERSION`.",
+    agentGuidance: "If a user asks you to 'update Plan Forge' or 'upgrade to v<X.Y.Z>', run `pforge self-update --force` from the project root. Do not clone the repo. Do not use `git pull` on any sibling clone. After it runs: (1) verify VERSION with `Get-Content VERSION`; (2) run `pforge smith` to confirm all expected framework files landed — smith will name-check pipeline prompts, hooks, and instructions and tell you exactly what (if anything) is still missing. If smith reports missing pipeline prompts, run `pforge update` a second time (self-update's first pass uses the in-progress CLI's older copy logic; the second pass uses the just-installed v2.59.1+ logic that handles `project-profile.prompt.md`).",
     prerequisites: ["network connectivity", "VERSION file"],
     produces: ["updated framework files", ".forge/update-audit.log entry"],
     consumes: ["VERSION", ".forge.json", ".forge/update-check.json"],

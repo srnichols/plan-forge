@@ -1194,38 +1194,134 @@ function Invoke-Update {
 
     $dryRun = $Arguments -contains '--dry-run' -or $Arguments -contains '--check'
     $forceUpdate = $Arguments -contains '--force'
+    $fromGitHub = $Arguments -contains '--from-github'
+    $keepCache = $Arguments -contains '--keep-cache'
 
-    # ─── Locate source ───────────────────────────────────────────
-    # Source can be: a local path (argument), or auto-detect from .forge.json
-    $sourcePath = $null
-    foreach ($arg in $Arguments) {
-        if ($arg -notlike '--*' -and (Test-Path $arg)) {
-            $sourcePath = (Resolve-Path $arg).Path
+    # Parse --tag <value>
+    $ghTag = $null
+    for ($i = 0; $i -lt $Arguments.Count; $i++) {
+        if ($Arguments[$i] -eq '--tag' -and ($i + 1) -lt $Arguments.Count) {
+            $ghTag = $Arguments[$i + 1]
             break
         }
     }
 
-    if (-not $sourcePath) {
-        # Try to find plan-forge source as a sibling directory or parent
-        $candidates = @(
-            (Join-Path (Split-Path $RepoRoot -Parent) "plan-forge"),
-            (Join-Path (Split-Path $RepoRoot -Parent) "Plan-Forge")
-        )
-        foreach ($c in $candidates) {
-            if (Test-Path (Join-Path $c "VERSION")) {
-                $sourcePath = $c
+    # ─── --from-github path ──────────────────────────────────────
+    $sourcePath = $null
+    $ghExtractDir = $null
+    $ghTarball = $null
+
+    if ($fromGitHub) {
+        $nodeHelper = Join-Path $RepoRoot "pforge-mcp/update-from-github.mjs"
+        if (-not (Test-Path $nodeHelper)) {
+            Write-Host "ERROR: Node helper not found at $nodeHelper" -ForegroundColor Red
+            Write-Host "  Ensure pforge-mcp/update-from-github.mjs exists." -ForegroundColor Yellow
+            exit 1
+        }
+
+        # Resolve tag
+        Write-Host "Resolving release tag from GitHub..." -ForegroundColor DarkCyan
+        $tagArgs = @("resolve-tag")
+        if ($ghTag) { $tagArgs += @("--tag", $ghTag) }
+        $tagResult = & node $nodeHelper @tagArgs 2>&1 | Select-Object -Last 1
+        try {
+            $tagJson = $tagResult | ConvertFrom-Json
+        } catch {
+            Write-Host "ERROR: Failed to parse tag resolution output: $tagResult" -ForegroundColor Red
+            exit 1
+        }
+        if (-not $tagJson.ok) {
+            Write-Host "ERROR: $($tagJson.code) — $($tagJson.message)" -ForegroundColor Red
+            exit 1
+        }
+        $resolvedTag = $tagJson.tag
+        Write-Host "  Tag: $resolvedTag" -ForegroundColor White
+
+        # Download tarball
+        Write-Host "Downloading release tarball..." -ForegroundColor DarkCyan
+        $dlArgs = @("download", "--tag", $resolvedTag, "--project-dir", $RepoRoot)
+        $dlResult = & node $nodeHelper @dlArgs 2>&1 | Select-Object -Last 1
+        try {
+            $dlJson = $dlResult | ConvertFrom-Json
+        } catch {
+            Write-Host "ERROR: Failed to parse download output: $dlResult" -ForegroundColor Red
+            exit 1
+        }
+        if (-not $dlJson.ok) {
+            Write-Host "ERROR: $($dlJson.code) — $($dlJson.message)" -ForegroundColor Red
+            exit 1
+        }
+        $ghTarball = $dlJson.path
+        $ghSha256 = $dlJson.sha256
+        $ghSizeBytes = $dlJson.sizeBytes
+        Write-Host "  Downloaded: $ghTarball ($ghSizeBytes bytes)" -ForegroundColor White
+        Write-Host "  SHA-256: $ghSha256" -ForegroundColor DarkGray
+
+        # Extract tarball
+        $safeName = $resolvedTag -replace '[^a-zA-Z0-9._-]', '_'
+        $ghExtractDir = Join-Path (Split-Path $ghTarball -Parent) "update-$safeName"
+        if (Test-Path $ghExtractDir) { Remove-Item -Recurse -Force $ghExtractDir }
+        New-Item -ItemType Directory -Path $ghExtractDir -Force | Out-Null
+
+        Write-Host "Extracting tarball..." -ForegroundColor DarkCyan
+        try {
+            & tar xzf $ghTarball -C $ghExtractDir 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host "ERROR: tar extraction failed (exit code $LASTEXITCODE)." -ForegroundColor Red
+                Write-Host "  Ensure 'tar' is available (Windows 10+ includes tar.exe)." -ForegroundColor Yellow
+                exit 1
+            }
+        } catch {
+            Write-Host "ERROR: ERR_NO_TAR — tar not found." -ForegroundColor Red
+            Write-Host "  Windows 10+ ships tar.exe. Ensure it is on your PATH." -ForegroundColor Yellow
+            exit 1
+        }
+
+        # Find the single top-level directory (GitHub tarballs: srnichols-plan-forge-<sha>/)
+        $topDirs = Get-ChildItem -Path $ghExtractDir -Directory
+        if ($topDirs.Count -eq 1) {
+            $sourcePath = $topDirs[0].FullName
+        } elseif ($topDirs.Count -eq 0) {
+            $sourcePath = $ghExtractDir
+        } else {
+            $sourcePath = $topDirs[0].FullName
+        }
+        Write-Host "  Extracted to: $sourcePath" -ForegroundColor White
+        Write-Host ""
+
+    } else {
+        # ─── Locate source (existing local path logic) ──────────────
+        foreach ($arg in $Arguments) {
+            if ($arg -notlike '--*' -and (Test-Path $arg)) {
+                $sourcePath = (Resolve-Path $arg).Path
                 break
             }
         }
-    }
 
-    if (-not $sourcePath) {
-        Write-Host "ERROR: Plan Forge source not found." -ForegroundColor Red
-        Write-Host "  Provide the path to your Plan Forge clone:" -ForegroundColor Yellow
-        Write-Host "    .\pforge.ps1 update C:\path\to\plan-forge" -ForegroundColor Yellow
-        Write-Host "  Or clone it next to your project:" -ForegroundColor Yellow
-        Write-Host "    git clone https://github.com/srnichols/plan-forge.git ../plan-forge" -ForegroundColor Yellow
-        exit 1
+        if (-not $sourcePath) {
+            # Try to find plan-forge source as a sibling directory or parent
+            $candidates = @(
+                (Join-Path (Split-Path $RepoRoot -Parent) "plan-forge"),
+                (Join-Path (Split-Path $RepoRoot -Parent) "Plan-Forge")
+            )
+            foreach ($c in $candidates) {
+                if (Test-Path (Join-Path $c "VERSION")) {
+                    $sourcePath = $c
+                    break
+                }
+            }
+        }
+
+        if (-not $sourcePath) {
+            Write-Host "ERROR: Plan Forge source not found." -ForegroundColor Red
+            Write-Host "  Provide the path to your Plan Forge clone:" -ForegroundColor Yellow
+            Write-Host "    .\pforge.ps1 update C:\path\to\plan-forge" -ForegroundColor Yellow
+            Write-Host "  Or use --from-github to download from GitHub:" -ForegroundColor Yellow
+            Write-Host "    .\pforge.ps1 update --from-github" -ForegroundColor Yellow
+            Write-Host "  Or clone it next to your project:" -ForegroundColor Yellow
+            Write-Host "    git clone https://github.com/srnichols/plan-forge.git ../plan-forge" -ForegroundColor Yellow
+            exit 1
+        }
     }
 
     # ─── Read versions ───────────────────────────────────────────
@@ -1669,6 +1765,27 @@ Files in this directory (except this README) are gitignored — they are runtime
         Write-Host ""
         Write-Host "ℹ️  CLI scripts (pforge.ps1/pforge.sh) were updated." -ForegroundColor Cyan
         Write-Host "  The new version is already on disk. No restart needed." -ForegroundColor DarkGray
+    }
+
+    # ─── --from-github: audit log + cleanup ──────────────────────
+    if ($fromGitHub -and -not $dryRun) {
+        $filesChanged = ($updates.Count + $newFiles.Count)
+        $auditEntry = @{
+            tag = $resolvedTag
+            sha256 = $ghSha256
+            sizeBytes = $ghSizeBytes
+            source = "manual"
+            filesChanged = $filesChanged
+            outcome = "success"
+        } | ConvertTo-Json -Compress
+        $auditEntry | & node (Join-Path $RepoRoot "pforge-mcp/update-from-github.mjs") audit --project-dir $RepoRoot 2>&1 | Out-Null
+    }
+    if ($fromGitHub -and -not $keepCache) {
+        if ($ghTarball -and (Test-Path $ghTarball)) { Remove-Item -Force $ghTarball }
+        if ($ghExtractDir -and (Test-Path $ghExtractDir)) { Remove-Item -Recurse -Force $ghExtractDir }
+        Write-Host "  Cleaned up cache files." -ForegroundColor DarkGray
+    } elseif ($fromGitHub -and $keepCache) {
+        Write-Host "  Cache preserved (--keep-cache): $ghTarball" -ForegroundColor DarkGray
     }
 }
 

@@ -7,6 +7,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased] — targeting 2.51.0
 
+### Shipped — AUTO-UPDATE-01 Slice 1: `pforge update --from-github` (2026-04-19)
+
+- **`pforge update --from-github [--tag <tag>]`** — download release tarball directly from GitHub, extract, and run existing file-copy logic. No local Plan Forge clone required.
+- **`pforge-mcp/update-from-github.mjs`** — shared Node.js helper: tag resolution (`resolveTag`), tarball download with 50 MB size cap + gzip verification + SHA-256 audit, config loading from `.forge.json` `update.fromGitHub.*`. CLI entry point for shell scripts.
+- **Flags**: `--from-github` (download from GitHub), `--tag <tag>` (pin version), `--keep-cache` (preserve tarball for rollback). `--dry-run` and `--force` work with `--from-github`.
+- **Error handling**: `ERR_NO_HEAD_TAG` (rejects `--tag HEAD`), `ERR_TAG_NOT_FOUND`, `ERR_RATE_LIMITED`, `ERR_TARBALL_TOO_LARGE`, `ERR_INVALID_GZIP`, `ERR_NETWORK_TIMEOUT`, `ERR_NO_TAR`, `ERR_EXTRACT_FAILED`.
+- **Audit log**: Every `--from-github` install appends a JSONL entry to `.forge/update-audit.log` with `{ts, from, tag, sha256, sizeBytes, source, filesChanged, outcome}`.
+- **Back-compat**: Existing `pforge update <path>` behavior unchanged. Error message now suggests `--from-github` as an alternative.
+- Tests: `update-from-github.test.mjs` (16 tests), `update-from-github-shell.test.mjs` (6 tests). Test count +22.
+- Plan: [docs/plans/Phase-AUTO-UPDATE-01.md](docs/plans/Phase-AUTO-UPDATE-01.md). Closes [#75](https://github.com/srnichols/plan-forge/issues/75) (partial — Slice 2 pending).
+
 ### Shipped — FORGE-SHOP-06 Ask-bus RPC over the hub (2026-04-20)
 
 - **Slice 06.1 — Hub ask/respond transport** — `hub.ask(topic, payload, opts)` request/reply RPC with timeout, `hub.onAsk(topic, handler)` single-responder registration, `removeAskHandler()`, `listResponders()`. Timeout eviction (`ErrAskTimeout`), no-responder immediate `ok:false`, responder-error wrapping, late-respond drop with warn log. OTEL-style telemetry spans (`ask-telemetry` events). `close()` rejects pending asks. Purely additive — no changes to existing event frames.

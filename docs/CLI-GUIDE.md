@@ -589,20 +589,36 @@ Update framework files from a Plan Forge source without re-running the full setu
 # Specify source path explicitly
 .\pforge.ps1 update C:\path\to\plan-forge
 
+# Download from GitHub (no local clone needed)
+.\pforge.ps1 update --from-github
+
+# Download a specific release tag
+.\pforge.ps1 update --from-github --tag v2.50.0
+
 # Preview changes without applying
 .\pforge.ps1 update --dry-run
+.\pforge.ps1 update --from-github --dry-run
 
 # Skip confirmation prompt
 .\pforge.ps1 update --force
+
+# Keep downloaded tarball for rollback
+.\pforge.ps1 update --from-github --keep-cache
 ```
 
 ```bash
 # Bash
 ./pforge.sh update
 ./pforge.sh update /path/to/plan-forge
+./pforge.sh update --from-github
+./pforge.sh update --from-github --tag v2.50.0
 ./pforge.sh update --dry-run
+./pforge.sh update --from-github --dry-run
 ./pforge.sh update --force
+./pforge.sh update --from-github --keep-cache
 ```
+
+**`--from-github` flag** (new in v2.51.0): Downloads the release tarball directly from GitHub — no local Plan Forge clone required. Resolves the latest release tag automatically, or use `--tag <tag>` to pin a specific version. The tarball is verified (gzip magic bytes + SHA-256 audit log) and size-capped at 50 MB (configurable via `.forge.json` `update.fromGitHub.maxTarballBytes`). Honors `GITHUB_TOKEN` env var for higher API rate limits.
 
 **Bootstrapping from an older version**: If your `pforge.ps1` / `pforge.sh` doesn't have the `update` command yet (pre-v1.2.1), replace it first:
 

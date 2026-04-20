@@ -1108,12 +1108,15 @@ _pf_sha256() {
 }
 
 cmd_update() {
-    local dry_run=false force=false source_path=""
+    local dry_run=false force=false source_path="" from_github=false keep_cache=false gh_tag=""
 
     for arg in "$@"; do
         case "$arg" in
             --dry-run|--check) dry_run=true ;;
             --force)   force=true ;;
+            --from-github) from_github=true ;;
+            --keep-cache) keep_cache=true ;;
+            --tag) ;; # value consumed below
             --*) ;;
             *)
                 if [ -z "$source_path" ] && [ -d "$arg" ]; then
@@ -1123,25 +1126,124 @@ cmd_update() {
         esac
     done
 
-    # Auto-detect source: sibling directories ../plan-forge or ../Plan-Forge
-    if [ -z "$source_path" ]; then
-        local parent
-        parent="$(dirname "$REPO_ROOT")"
-        for candidate in "$parent/plan-forge" "$parent/Plan-Forge"; do
-            if [ -f "$candidate/VERSION" ]; then
-                source_path="$(cd "$candidate" && pwd)"
-                break
-            fi
-        done
-    fi
+    # Parse --tag <value>
+    local prev=""
+    for arg in "$@"; do
+        if [ "$prev" = "--tag" ]; then
+            gh_tag="$arg"
+        fi
+        prev="$arg"
+    done
 
-    if [ -z "$source_path" ]; then
-        echo "ERROR: Plan Forge source not found." >&2
-        echo "  Provide the path to your Plan Forge clone:" >&2
-        echo "    ./pforge.sh update /path/to/plan-forge" >&2
-        echo "  Or clone it next to your project:" >&2
-        echo "    git clone https://github.com/srnichols/plan-forge.git ../plan-forge" >&2
-        exit 1
+    local gh_extract_dir="" gh_tarball="" gh_sha256="" gh_size_bytes="" resolved_tag=""
+
+    if $from_github; then
+        local node_helper="$REPO_ROOT/pforge-mcp/update-from-github.mjs"
+        if [ ! -f "$node_helper" ]; then
+            echo "ERROR: Node helper not found at $node_helper" >&2
+            echo "  Ensure pforge-mcp/update-from-github.mjs exists." >&2
+            exit 1
+        fi
+
+        # Resolve tag
+        echo "Resolving release tag from GitHub..."
+        local tag_args=("resolve-tag")
+        if [ -n "$gh_tag" ]; then tag_args+=("--tag" "$gh_tag"); fi
+        local tag_result
+        tag_result="$(node "$node_helper" "${tag_args[@]}" 2>&1 | tail -1)"
+        local tag_ok
+        tag_ok="$(echo "$tag_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('ok',''))" 2>/dev/null || echo "")"
+        if [ "$tag_ok" != "True" ] && [ "$tag_ok" != "true" ]; then
+            local err_code err_msg
+            err_code="$(echo "$tag_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('code',''))" 2>/dev/null || echo "ERR_UNKNOWN")"
+            err_msg="$(echo "$tag_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('message',''))" 2>/dev/null || echo "$tag_result")"
+            echo "ERROR: $err_code — $err_msg" >&2
+            exit 1
+        fi
+        resolved_tag="$(echo "$tag_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('tag',''))" 2>/dev/null)"
+        echo "  Tag: $resolved_tag"
+
+        # Download tarball
+        echo "Downloading release tarball..."
+        local dl_result
+        dl_result="$(node "$node_helper" download --tag "$resolved_tag" --project-dir "$REPO_ROOT" 2>&1 | tail -1)"
+        local dl_ok
+        dl_ok="$(echo "$dl_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('ok',''))" 2>/dev/null || echo "")"
+        if [ "$dl_ok" != "True" ] && [ "$dl_ok" != "true" ]; then
+            local err_code err_msg
+            err_code="$(echo "$dl_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('code',''))" 2>/dev/null || echo "ERR_UNKNOWN")"
+            err_msg="$(echo "$dl_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('message',''))" 2>/dev/null || echo "$dl_result")"
+            echo "ERROR: $err_code — $err_msg" >&2
+            exit 1
+        fi
+        gh_tarball="$(echo "$dl_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('path',''))" 2>/dev/null)"
+        gh_sha256="$(echo "$dl_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('sha256',''))" 2>/dev/null)"
+        gh_size_bytes="$(echo "$dl_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('sizeBytes',''))" 2>/dev/null)"
+        echo "  Downloaded: $gh_tarball ($gh_size_bytes bytes)"
+        echo "  SHA-256: $gh_sha256"
+
+        # Extract tarball
+        command -v tar >/dev/null 2>&1 || { echo "ERROR: ERR_NO_TAR — tar not found. Install tar for your platform." >&2; exit 1; }
+        local safe_name
+        safe_name="$(echo "$resolved_tag" | sed 's/[^a-zA-Z0-9._-]/_/g')"
+        gh_extract_dir="$(dirname "$gh_tarball")/update-$safe_name"
+        rm -rf "$gh_extract_dir"
+        mkdir -p "$gh_extract_dir"
+
+        echo "Extracting tarball..."
+        if ! tar xzf "$gh_tarball" -C "$gh_extract_dir" 2>&1; then
+            echo "ERROR: ERR_EXTRACT_FAILED — tar extraction failed." >&2
+            exit 1
+        fi
+
+        # Find top-level directory
+        local top_dirs
+        top_dirs="$(find "$gh_extract_dir" -mindepth 1 -maxdepth 1 -type d 2>/dev/null)"
+        local dir_count
+        dir_count="$(echo "$top_dirs" | grep -c . 2>/dev/null || echo 0)"
+        if [ "$dir_count" -eq 1 ]; then
+            source_path="$(echo "$top_dirs" | head -1)"
+        else
+            source_path="$gh_extract_dir"
+        fi
+        echo "  Extracted to: $source_path"
+        echo ""
+
+    else
+        # ─── Existing local source detection ──────────────────────
+        for arg in "$@"; do
+            case "$arg" in
+                --*) ;;
+                *)
+                    if [ -z "$source_path" ] && [ -d "$arg" ]; then
+                        source_path="$(cd "$arg" && pwd)"
+                    fi
+                    ;;
+            esac
+        done
+
+        # Auto-detect source: sibling directories ../plan-forge or ../Plan-Forge
+        if [ -z "$source_path" ]; then
+            local parent
+            parent="$(dirname "$REPO_ROOT")"
+            for candidate in "$parent/plan-forge" "$parent/Plan-Forge"; do
+                if [ -f "$candidate/VERSION" ]; then
+                    source_path="$(cd "$candidate" && pwd)"
+                    break
+                fi
+            done
+        fi
+
+        if [ -z "$source_path" ]; then
+            echo "ERROR: Plan Forge source not found." >&2
+            echo "  Provide the path to your Plan Forge clone:" >&2
+            echo "    ./pforge.sh update /path/to/plan-forge" >&2
+            echo "  Or use --from-github to download from GitHub:" >&2
+            echo "    ./pforge.sh update --from-github" >&2
+            echo "  Or clone it next to your project:" >&2
+            echo "    git clone https://github.com/srnichols/plan-forge.git ../plan-forge" >&2
+            exit 1
+        fi
     fi
 
     print_manual_steps "update" \
@@ -1470,6 +1572,20 @@ with open('$config_path', 'w') as f:
         echo ""
         echo "ℹ️  CLI scripts (pforge.ps1/pforge.sh) were updated."
         echo "  The new version is already on disk. No restart needed."
+    fi
+
+    # ─── --from-github: audit log + cleanup ──────────────────────
+    if $from_github && ! $dry_run; then
+        local files_changed=$(( ${#_updates[@]} + ${#_new_files[@]} ))
+        local audit_json="{\"tag\":\"$resolved_tag\",\"sha256\":\"$gh_sha256\",\"sizeBytes\":$gh_size_bytes,\"source\":\"manual\",\"filesChanged\":$files_changed,\"outcome\":\"success\"}"
+        echo "$audit_json" | node "$REPO_ROOT/pforge-mcp/update-from-github.mjs" audit --project-dir "$REPO_ROOT" >/dev/null 2>&1 || true
+    fi
+    if $from_github && ! $keep_cache; then
+        [ -n "$gh_tarball" ] && [ -f "$gh_tarball" ] && rm -f "$gh_tarball"
+        [ -n "$gh_extract_dir" ] && [ -d "$gh_extract_dir" ] && rm -rf "$gh_extract_dir"
+        echo "  Cleaned up cache files."
+    elif $from_github && $keep_cache; then
+        echo "  Cache preserved (--keep-cache): $gh_tarball"
     fi
 }
 

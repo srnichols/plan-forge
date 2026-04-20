@@ -11,7 +11,7 @@
  * @module brain
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync, renameSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync, renameSync, readdirSync } from "node:fs";
 import { resolve, basename, dirname } from "node:path";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
@@ -398,6 +398,7 @@ export const REVIEWER_DEFAULTS = Object.freeze({
   quorumPreset: "speed",
   blockOnCritical: false,
   timeoutMs: 30000,
+  calibrationThreshold: 50,
 });
 
 /**
@@ -418,9 +419,47 @@ export function loadReviewerConfig(cwd = process.cwd()) {
       }
       if (typeof block.blockOnCritical === "boolean") out.blockOnCritical = block.blockOnCritical;
       if (typeof block.timeoutMs === "number" && block.timeoutMs > 0) out.timeoutMs = Math.floor(block.timeoutMs);
+      if (typeof block.calibrationThreshold === "number" && block.calibrationThreshold > 0) {
+        out.calibrationThreshold = Math.floor(block.calibrationThreshold);
+      }
     }
   } catch { /* malformed — keep defaults */ }
   return out;
+}
+
+// ─── Phase-26 Slice 6: Reviewer calibration (C2) ─────────────────────────────
+
+/**
+ * Derive reviewer calibration at read-time from `.forge/reviews/*.json`.
+ *
+ * Phase-26 MUST #C2 / D5: the review count is NEVER stored as a mutable scalar.
+ * It is always derived at read-time by counting `.json` files in the directory.
+ * This guarantees the counter cannot drift from the on-disk reality.
+ *
+ * Returns `{ count, threshold, eligible }` where `eligible` is true when the
+ * accumulated review count has met the `calibrationThreshold` (default 50,
+ * overridable via `runtime.reviewer.calibrationThreshold` in `.forge.json`).
+ *
+ * Used by the `blockOnCritical` activation path: blocking stays advisory-only
+ * until `eligible === true`.
+ *
+ * @param {string} [cwd] - Project working directory (default `process.cwd()`)
+ * @returns {{ count: number, threshold: number, eligible: boolean }}
+ */
+export function getReviewerCalibration(cwd = process.cwd()) {
+  const config = loadReviewerConfig(cwd);
+  const threshold = config.calibrationThreshold;
+  const reviewsDir = resolve(cwd, ".forge", "reviews");
+  let count = 0;
+  if (existsSync(reviewsDir)) {
+    try {
+      const entries = readdirSync(reviewsDir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isFile() && entry.name.endsWith(".json")) count += 1;
+      }
+    } catch { /* unreadable — count stays 0 */ }
+  }
+  return { count, threshold, eligible: count >= threshold };
 }
 
 /**

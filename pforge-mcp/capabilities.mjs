@@ -1160,6 +1160,27 @@ export const TOOL_METADATA = {
       output: { ok: true, adapters: [{ name: "webhook", configValid: true }] },
     },
   },
+  forge_search: {
+    intent: ["search", "find", "query", "lookup"],
+    aliases: ["search-forge", "find-artifact"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "2.51.0",
+    prerequisites: [],
+    produces: [],
+    consumes: [".forge/runs/", ".forge/bugs/", ".forge/incidents/", ".forge/tempering/", ".forge/hub-events.jsonl", ".forge/review-queue.json", ".forge/liveguard-memories.jsonl", "docs/plans/"],
+    sideEffects: [],
+    writesFiles: false,
+    network: false,
+    risk: "low",
+    errors: {
+      ERR_BAD_SINCE: { message: "Invalid since value", recovery: "Use ISO timestamp or relative: 24h, 7d, 2w, 30m" },
+    },
+    example: {
+      input: { query: "blocker", tags: ["review"], limit: 10 },
+      output: { hits: [{ source: "bug", recordRef: "BUG-42", snippet: "…critical blocker in auth…", score: 2.1 }], total: 1, truncated: false, durationMs: 45 },
+    },
+  },
 };
 
 export const WORKFLOWS = {

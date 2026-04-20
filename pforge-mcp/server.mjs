@@ -101,6 +101,8 @@ import { registerBug, listBugs, updateBugStatus, loadBug, setLinkedFixPlan, appe
 import { classify as classifyBug } from "./tempering/bug-classifier.mjs";
 import { dispatch as dispatchBugAdapter } from "./tempering/bug-adapters/contract.mjs";
 import { checkForUpdate } from "./update-check.mjs";
+// Phase FORGE-SHOP-04 Slice 04.1 — Global search
+import { search as forgeSearch } from "./search/core.mjs";
 import express from "express";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -1267,6 +1269,23 @@ const TOOLS = [
       },
     },
   },
+  // Phase FORGE-SHOP-04 Slice 04.1 — Global search
+  {
+    name: "forge_search",
+    description: "Search across forge artifacts — runs, bugs, incidents, tempering, hub events, review queue, memories, and plans. Reads existing L2 files and optional L3 OpenBrain index. Returns ranked results with snippets.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Free-text search (case-insensitive, whitespace-tokenized)" },
+        tags: { type: "array", items: { type: "string" }, description: "Filter: hit must have ALL listed tags" },
+        since: { type: "string", description: "ISO timestamp or relative (24h, 7d, 2w, 30m)" },
+        correlationId: { type: "string", description: "Filter + score boost on exact match" },
+        sources: { type: "array", items: { type: "string" }, description: "Limit to source types (run, bug, incident, tempering, hub-event, review, memory, plan)" },
+        limit: { type: "number", description: "Max results (default 50, max 200)" },
+      },
+      required: ["query"],
+    },
+  },
 ];
 
 function planNameToRunbookName(planPath) {
@@ -1434,6 +1453,7 @@ function executeTool(name, args) {
     case "forge_memory_report":
     case "forge_notify_send":
     case "forge_notify_test":
+    case "forge_search":
       return null; // Handled async in CallToolRequestSchema handler
     default:
       return { success: false, error: `Unknown tool: ${name}` };
@@ -4082,6 +4102,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
       return { content: [{ type: "text", text: JSON.stringify({ error: err.code || "ERR_NOTIFY_TEST", message: err.message }) }], isError: true };
+    }
+  }
+
+  // ─── forge_search — cross-artifact search with L2/L3 merge ───
+  if (name === "forge_search") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const openBrainSearchFn = isOpenBrainConfigured(cwd) ? null : null; // L3 merge is opt-in via OpenBrain MCP; no direct call available yet
+      const result = forgeSearch(args, { cwd, openBrainSearchFn });
+      emitToolTelemetry("forge_search", args, result, Date.now() - t0, "OK", cwd);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      const durationMs = Date.now() - t0;
+      emitToolTelemetry("forge_search", args, { error: err.message }, durationMs, "ERROR", findProjectRoot(PROJECT_DIR));
+      return { content: [{ type: "text", text: `Search error: ${err.message}` }], isError: true };
     }
   }
 

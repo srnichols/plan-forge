@@ -331,6 +331,58 @@ else
     WARN=$((WARN+1))
 fi
 
+# ─── Plan Forge Runtime (Optional) ────────────────────────────────────
+echo ""
+cyan "Plan Forge runtime:"
+
+# VERSION file
+if [[ -f "$PROJECT_PATH/VERSION" ]]; then
+    VER="$(tr -d ' \t\r\n' < "$PROJECT_PATH/VERSION")"
+    green "  PASS  VERSION: v$VER"
+    PASS=$((PASS+1))
+else
+    yellow "  WARN  VERSION: not found (optional — only required in Plan Forge source repo)"
+    WARN=$((WARN+1))
+fi
+
+# MCP server
+if [[ -f "$PROJECT_PATH/pforge-mcp/server.mjs" ]] && [[ -f "$PROJECT_PATH/pforge-mcp/package.json" ]]; then
+    MCP_VER="$(grep -oE '"version"[[:space:]]*:[[:space:]]*"[^"]+"' "$PROJECT_PATH/pforge-mcp/package.json" | head -1 | sed -E 's/.*"([^"]+)"$/\1/')"
+    if [[ -d "$PROJECT_PATH/pforge-mcp/node_modules" ]]; then
+        green "  PASS  MCP server: pforge-mcp v${MCP_VER} (deps installed)"
+    else
+        yellow "  WARN  MCP server: pforge-mcp v${MCP_VER} — run 'npm install' in pforge-mcp/"
+        WARN=$((WARN+1))
+    fi
+    PASS=$((PASS+1))
+else
+    yellow "  WARN  MCP server: pforge-mcp/ not found (optional — only required in Plan Forge source repo)"
+    WARN=$((WARN+1))
+fi
+
+# .vscode/mcp.json with plan-forge entry
+if [[ -f "$PROJECT_PATH/.vscode/mcp.json" ]]; then
+    if grep -qE '"(plan-forge|pforge)"' "$PROJECT_PATH/.vscode/mcp.json"; then
+        green "  PASS  .vscode/mcp.json: plan-forge server configured"
+        PASS=$((PASS+1))
+    else
+        yellow "  WARN  .vscode/mcp.json: no plan-forge server entry (run setup.sh to wire)"
+        WARN=$((WARN+1))
+    fi
+else
+    yellow "  WARN  .vscode/mcp.json: not configured (optional)"
+    WARN=$((WARN+1))
+fi
+
+# Dashboard (served by MCP server on :3100/dashboard)
+if [[ -f "$PROJECT_PATH/pforge-mcp/dashboard/index.html" ]]; then
+    green "  PASS  Dashboard: pforge-mcp/dashboard/ found"
+    PASS=$((PASS+1))
+else
+    yellow "  WARN  Dashboard: pforge-mcp/dashboard/ not found (optional)"
+    WARN=$((WARN+1))
+fi
+
 # ─── Placeholder Scan ─────────────────────────────────────────────────
 echo ""
 cyan "Placeholder scan:"

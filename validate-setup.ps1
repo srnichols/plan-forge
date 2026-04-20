@@ -330,6 +330,93 @@ else {
     $warn++
 }
 
+# ─── Plan Forge Runtime (Optional) ────────────────────────────────────
+Write-Host ""
+Write-Host "Plan Forge runtime:" -ForegroundColor Cyan
+
+# VERSION file
+$versionPath = Join-Path $ProjectPath "VERSION"
+if (Test-Path $versionPath) {
+    $verStr = (Get-Content $versionPath -Raw).Trim()
+    Write-Host "  PASS  VERSION: v$verStr" -ForegroundColor Green
+    $pass++
+}
+else {
+    Write-Host "  WARN  VERSION: not found (optional — only required in Plan Forge source repo)" -ForegroundColor Yellow
+    $warn++
+}
+
+# Bash CLI companion
+$shCliPath = Join-Path $ProjectPath "pforge.sh"
+if (Test-Path $shCliPath) {
+    Write-Host "  PASS  CLI: pforge.sh found (bash companion)" -ForegroundColor Green
+    $pass++
+}
+else {
+    Write-Host "  WARN  CLI: pforge.sh not installed (optional — needed for macOS/Linux/WSL)" -ForegroundColor Yellow
+    $warn++
+}
+
+# MCP server
+$mcpServerPath  = Join-Path $ProjectPath "pforge-mcp/server.mjs"
+$mcpPackagePath = Join-Path $ProjectPath "pforge-mcp/package.json"
+if ((Test-Path $mcpServerPath) -and (Test-Path $mcpPackagePath)) {
+    $mcpPkg = Get-Content $mcpPackagePath -Raw | ConvertFrom-Json
+    $mcpModules = Join-Path $ProjectPath "pforge-mcp/node_modules"
+    if (Test-Path $mcpModules) {
+        Write-Host "  PASS  MCP server: pforge-mcp v$($mcpPkg.version) (deps installed)" -ForegroundColor Green
+    } else {
+        Write-Host "  WARN  MCP server: pforge-mcp v$($mcpPkg.version) — run 'npm install' in pforge-mcp/" -ForegroundColor Yellow
+        $warn++
+    }
+    $pass++
+}
+else {
+    Write-Host "  WARN  MCP server: pforge-mcp/ not found (optional — only required in Plan Forge source repo)" -ForegroundColor Yellow
+    $warn++
+}
+
+# .vscode/mcp.json with plan-forge entry
+$vscodeMcpPath = Join-Path $ProjectPath ".vscode/mcp.json"
+if (Test-Path $vscodeMcpPath) {
+    try {
+        $mcpConfig = Get-Content $vscodeMcpPath -Raw | ConvertFrom-Json
+        $hasEntry = $false
+        if ($mcpConfig.servers) {
+            foreach ($key in $mcpConfig.servers.PSObject.Properties.Name) {
+                if ($key -match 'plan-forge|pforge') { $hasEntry = $true; break }
+            }
+        }
+        if ($hasEntry) {
+            Write-Host "  PASS  .vscode/mcp.json: plan-forge server configured" -ForegroundColor Green
+            $pass++
+        }
+        else {
+            Write-Host "  WARN  .vscode/mcp.json: no plan-forge server entry (run setup.ps1 to wire)" -ForegroundColor Yellow
+            $warn++
+        }
+    }
+    catch {
+        Write-Host "  WARN  .vscode/mcp.json: invalid JSON" -ForegroundColor Yellow
+        $warn++
+    }
+}
+else {
+    Write-Host "  WARN  .vscode/mcp.json: not configured (optional)" -ForegroundColor Yellow
+    $warn++
+}
+
+# Dashboard (served by MCP server on :3100/dashboard)
+$dashboardPath = Join-Path $ProjectPath "pforge-mcp/dashboard/index.html"
+if (Test-Path $dashboardPath) {
+    Write-Host "  PASS  Dashboard: pforge-mcp/dashboard/ found" -ForegroundColor Green
+    $pass++
+}
+else {
+    Write-Host "  WARN  Dashboard: pforge-mcp/dashboard/ not found (optional)" -ForegroundColor Yellow
+    $warn++
+}
+
 # ─── Placeholder Scan ─────────────────────────────────────────────────
 Write-Host ""
 Write-Host "Placeholder scan:" -ForegroundColor Cyan

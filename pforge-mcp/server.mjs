@@ -103,6 +103,8 @@ import { dispatch as dispatchBugAdapter } from "./tempering/bug-adapters/contrac
 import { checkForUpdate } from "./update-check.mjs";
 // Phase FORGE-SHOP-04 Slice 04.1 — Global search
 import { search as forgeSearch } from "./search/core.mjs";
+// Phase FORGE-SHOP-05 Slice 05.1 — Unified timeline
+import { timeline as forgeTimeline } from "./timeline/core.mjs";
 import express from "express";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -1284,6 +1286,24 @@ const TOOLS = [
         limit: { type: "number", description: "Max results (default 50, max 200)" },
       },
       required: ["query"],
+    },
+  },
+  // Phase FORGE-SHOP-05 Slice 05.1 — Unified timeline
+  {
+    name: "forge_timeline",
+    description: "Unified chronological view across all forge event sources with correlationId grouping. Merges hub-events, runs, memories, openbrain, watch, tempering, bugs, and incidents into a single timeline.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        from: { type: "string", description: "Start of window: ISO timestamp or relative (24h, 7d, 30m). Default: now - 24h" },
+        to: { type: "string", description: "End of window: ISO timestamp or relative. Default: now" },
+        correlationId: { type: "string", description: "Filter to a single correlation thread" },
+        sources: { type: "array", items: { type: "string" }, description: "Limit to source types: hub-event, run, memory, openbrain, watch, tempering, bug, incident" },
+        events: { type: "array", items: { type: "string" }, description: "Filter by event type (glob supported: slice-*, tempering-*)" },
+        groupBy: { type: "string", enum: ["time", "correlation"], description: "Default: time (flat chronological). correlation: group by correlationId" },
+        limit: { type: "number", description: "Max results (default 500, max 2000)" },
+      },
+      required: [],
     },
   },
 ];
@@ -4121,6 +4141,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
   }
 
+  // ─── forge_timeline — unified chronological event view ───
+  if (name === "forge_timeline") {
+    const t0 = Date.now();
+    try {
+      const cwd = findProjectRoot(PROJECT_DIR);
+      const result = await forgeTimeline(args, { cwd });
+      emitToolTelemetry("forge_timeline", args, result, Date.now() - t0, "OK", cwd);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      const durationMs = Date.now() - t0;
+      emitToolTelemetry("forge_timeline", args, { error: err.message }, durationMs, "ERROR", findProjectRoot(PROJECT_DIR));
+      return { content: [{ type: "text", text: `Timeline error: ${err.message}` }], isError: true };
+    }
+  }
+
   // ─── forge_quorum_analyze — assemble structured quorum prompt ───
   if (name === "forge_quorum_analyze") {
     const t0 = Date.now();
@@ -5152,6 +5187,10 @@ export function createExpressApp() {
     "forge_delegate_to_agent",
     // Phase FORGE-SHOP-03 Slice 03.1 — Notification tools are MCP-native.
     "forge_notify_send", "forge_notify_test",
+    // Phase FORGE-SHOP-04 Slice 04.1 — Search is MCP-native read-only.
+    "forge_search",
+    // Phase FORGE-SHOP-05 Slice 05.1 — Timeline is MCP-native read-only.
+    "forge_timeline",
   ]);
   app.post("/api/tool/:name", async (req, res) => {
     try {

@@ -1181,6 +1181,31 @@ export const TOOL_METADATA = {
       output: { hits: [{ source: "bug", recordRef: "BUG-42", snippet: "…critical blocker in auth…", score: 2.1 }], total: 1, truncated: false, durationMs: 45 },
     },
   },
+  // Phase FORGE-SHOP-05 Slice 05.1 — Unified timeline
+  forge_timeline: {
+    intent: ["timeline", "history", "chronological", "events", "what-happened"],
+    aliases: ["timeline", "event-history", "forge-timeline"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "2.53.0",
+    prerequisites: [],
+    produces: [],
+    consumes: [".forge/hub-events.jsonl", ".forge/runs/", ".forge/liveguard-memories.jsonl",
+               ".forge/openbrain-queue.jsonl", ".forge/watch-history.jsonl",
+               ".forge/tempering/", ".forge/bugs/", ".forge/incidents/"],
+    sideEffects: [],
+    writesFiles: false,
+    network: false,
+    risk: "low",
+    errors: {
+      ERR_BAD_SINCE: { message: "Invalid from/to value", recovery: "Use ISO timestamp or relative: 24h, 7d, 30m" },
+      ERR_LIMIT_EXCEEDED: { message: "Limit exceeds max 2000", recovery: "Reduce limit to 2000 or less" },
+    },
+    example: {
+      input: { from: "24h", sources: ["run", "bug"], groupBy: "correlation", limit: 100 },
+      output: { threads: [{ correlationId: "abc-123", events: ["..."], firstTs: "...", lastTs: "...", sources: ["run"] }], total: 1, truncated: false, durationMs: 42 },
+    },
+  },
 };
 
 export const WORKFLOWS = {

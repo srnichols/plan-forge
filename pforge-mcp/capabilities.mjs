@@ -1291,6 +1291,25 @@ export const TOOL_METADATA = {
       output: { scenarioId: "happy-path-01", status: "passed", durationMs: 60000 },
     },
   },
+  forge_testbed_findings: {
+    intent: ["query", "findings", "defect-log", "testbed"],
+    aliases: ["testbed-findings", "list-findings"],
+    cost: "low",
+    maxConcurrent: 5,
+    addedIn: "2.56.0",
+    prerequisites: [],
+    produces: ["findings list"],
+    consumes: ["docs/plans/testbed-findings/*.json"],
+    sideEffects: [],
+    writesFiles: false,
+    network: false,
+    risk: "low",
+    errors: {},
+    example: {
+      input: { status: "open", severity: "high" },
+      output: { findings: [], total: 0, truncated: false },
+    },
+  },
 };
 
 export const WORKFLOWS = {

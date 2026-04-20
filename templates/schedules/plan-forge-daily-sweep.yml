@@ -1,0 +1,31 @@
+# Plan Forge — Daily Sweep
+# Copy to .github/workflows/ and adjust cron schedule as needed.
+#
+# Runs pforge sweep to detect TODO/FIXME/stub markers across the codebase.
+
+name: Plan Forge Daily Sweep
+
+on:
+  schedule:
+    - cron: '0 5 * * *'   # 05:00 UTC daily
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run sweep
+        run: ./pforge.sh sweep
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sweep-results-${{ github.run_id }}
+          path: .forge/sweep/
+          retention-days: 7

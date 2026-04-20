@@ -38,9 +38,16 @@ Closes [#75](https://github.com/srnichols/plan-forge/issues/75).
 - **Slice 06.2 — Responders + executor gate wire-in + dashboard** — 3 initial responders (`brain.gate-check`, `brain.correlation-thread`, `tempering.delegate-sync`). Executor gate-check wire-in between slices (config-guarded via `orchestrator.askBusGate.enabled`, fail-open on timeout). Dashboard Hub subtab surfaces ask/respond metrics + responder registry.
 - Plan: [docs/plans/Phase-FORGE-SHOP-06.md](docs/plans/Phase-FORGE-SHOP-06.md). Commits: `e221555` (Slice 06.1), `0a43d22` (Slice 06.2). Test count +22.
 
-### Planned — TESTBED-01 recursive validation harness
+### Shipped — TESTBED-01 Slice 02: Scheduling templates + CLI-parity audit + `forge_testbed_findings` (2026-04-19)
 
-- Phase TESTBED-01 drafted ([docs/plans/Phase-TESTBED-01.md](docs/plans/Phase-TESTBED-01.md)) — harness that drives `pforge run-plan` against fixture scenarios in `E:\GitHub\plan-forge-testbed`, captures L1/L2/L3 artefacts, writes defect-log entries. 2 new MCP tools (`forge_testbed_run`, `forge_testbed_findings`). 7 assertion kinds. Frozen defect-log schema. File-lock prevents parallel runs. Plus 3 GitHub Actions workflow templates under `templates/schedules/` and `scripts/audit-cli-parity.mjs`. Test count +54.
+- **`forge_testbed_findings`** — new MCP tool (#63): query testbed defect-log findings filtered by `status`, `severity`, `since`, with `limit` and `truncated` flag. Read-only, wraps `listFindings()` from `testbed/defect-log.mjs`.
+- **`forge_smith` Testbed row** — smith output now includes scenario count and open findings by severity.
+- **`templates/schedules/`** — 3 GitHub Actions workflow templates: `plan-forge-nightly-mutation.yml` (daily Tempering scan), `plan-forge-weekly-drift.yml` (Monday LiveGuard drift), `plan-forge-daily-sweep.yml` (daily TODO/FIXME sweep). All with `workflow_dispatch` manual trigger. README with cron and Windows Task Scheduler equivalents.
+- **`scripts/audit-cli-parity.mjs`** — CLI-parity audit: compares TOOL_METADATA tool names against `pforge.ps1`/`pforge.sh` command routing. Mapping convention `forge_run_plan` → `run-plan`. Reports `matched`, `mcpOnly` (with `knownException` flag), `cliOnly`. Informational only — exit code 0 always.
+- **TOOL_METADATA** — `forge_testbed_findings` entry in `capabilities.mjs` (`cost: "low"`, `writesFiles: false`).
+- Plan: [docs/plans/Phase-TESTBED-01.md](docs/plans/Phase-TESTBED-01.md). Test count +22.
+
+### Planned — TESTBED-01 recursive validation harness
 
 ---
 

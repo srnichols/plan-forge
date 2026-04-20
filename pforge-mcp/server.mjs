@@ -1334,6 +1334,21 @@ const TOOLS = [
       required: ["scenarioId"],
     },
   },
+  {
+    name: "forge_testbed_findings",
+    description: "Query testbed defect-log findings. Returns findings filtered by status, severity, or date. Read-only — does not modify any files.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        status: { type: "string", description: "Filter by status (open, fixed, wontfix, duplicate)" },
+        severity: { type: "string", description: "Filter by severity (blocker, high, medium, low, polish)" },
+        since: { type: "string", description: "Filter by date — only findings on or after this ISO 8601 date (e.g. 2026-04-01)" },
+        limit: { type: "number", description: "Max findings to return (default: 50)" },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+      required: [],
+    },
+  },
 ];
 
 function planNameToRunbookName(planPath) {
@@ -4454,6 +4469,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       output += `\n\nMemory:\n  L1 keys:         (session-scoped)\n  L2 store size:   ${l2DirCount} dirs\n  L3 queue depth:  ${l3QueueDepth}\n  L3 last sync:    ${l3LastSync}`;
     } catch { /* memory stats not available — skip */ }
 
+    // Phase TESTBED-01 Slice 02 — Testbed row in smith output
+    try {
+      const smithCwdTb = args.path ? findProjectRoot(resolve(args.path)) : PROJECT_DIR;
+      const { listScenarios } = await import("./testbed/scenarios.mjs");
+      const { listFindings } = await import("./testbed/defect-log.mjs");
+      let scenarioCount = 0;
+      try { scenarioCount = listScenarios({ projectRoot: smithCwdTb }).length; } catch { /* no scenarios dir */ }
+      let openFindings = [];
+      try { openFindings = listFindings({ status: "open" }, { projectRoot: smithCwdTb }); } catch { /* no findings dir */ }
+      const bySev = {};
+      for (const f of openFindings) {
+        bySev[f.severity] = (bySev[f.severity] || 0) + 1;
+      }
+      const sevStr = Object.keys(bySev).length
+        ? Object.entries(bySev).map(([k, v]) => `${v} ${k}`).join(", ")
+        : "none";
+      output += `\n\nTestbed:\n  Scenarios:       ${scenarioCount}\n  Open findings:   ${openFindings.length} (${sevStr})`;
+    } catch { /* testbed not configured — skip */ }
+
     return { content: [{ type: "text", text: output }], isError: !result.success };
   }
 
@@ -4479,6 +4513,28 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const durationMs = Date.now() - t0;
       emitToolTelemetry("forge_testbed_run", args, { error: err.message, code: err.code }, durationMs, "ERROR", findProjectRoot(PROJECT_DIR));
       return { content: [{ type: "text", text: JSON.stringify({ error: err.code || "ERR_TESTBED", message: err.message }) }], isError: true };
+    }
+  }
+
+  // ─── forge_testbed_findings — query defect-log (TESTBED-01 Slice 02) ───
+  if (name === "forge_testbed_findings") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const { listFindings } = await import("./testbed/defect-log.mjs");
+      const filter = {};
+      if (args.status) filter.status = args.status;
+      if (args.severity) filter.severity = args.severity;
+      if (args.since) filter.since = args.since;
+      const all = listFindings(filter, { projectRoot: cwd });
+      const limit = Math.max(1, args.limit || 50);
+      const findings = all.slice(0, limit);
+      const result = { findings, total: all.length, truncated: all.length > limit };
+      emitToolTelemetry("forge_testbed_findings", args, result, Date.now() - t0, "OK", cwd);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      emitToolTelemetry("forge_testbed_findings", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
+      return { content: [{ type: "text", text: `Tool error: ${err.message}` }], isError: true };
     }
   }
 

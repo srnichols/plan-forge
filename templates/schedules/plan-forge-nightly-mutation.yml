@@ -1,0 +1,39 @@
+# Plan Forge — Nightly Mutation Scan
+# Copy to .github/workflows/ and adjust cron schedule as needed.
+#
+# Runs Tempering full-mutation analysis daily. Results upload as artifacts.
+
+name: Plan Forge Nightly Mutation
+
+on:
+  schedule:
+    - cron: '0 6 * * *'   # 06:00 UTC daily
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mutation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: pforge-mcp
+
+      - name: Run full mutation scan
+        run: ./pforge.sh tempering run --full-mutation
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tempering-mutation-${{ github.run_id }}
+          path: .forge/tempering/
+          retention-days: 14

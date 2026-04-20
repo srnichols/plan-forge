@@ -3192,13 +3192,29 @@ connectWebSocket();
 // Phase FORGE-SHOP-04 Slice 04.2 — bind global search bar
 bindGlobalSearch();
 
-// Load version in footer
+// Load version in footer + header badge
 fetch(`${API_BASE}/api/capabilities`)
   .then((r) => r.json())
   .then((data) => {
     const ver = data.version || data.serverVersion || "";
-    const el = document.getElementById("footer-version");
-    if (el && ver) el.textContent = `v${ver}`;
+    const footerEl = document.getElementById("footer-version");
+    if (footerEl && ver) footerEl.textContent = `v${ver}`;
+    const badgeEl = document.getElementById("version-badge");
+    if (badgeEl && ver) {
+      badgeEl.textContent = `v${ver}`;
+      // Link to the matching tag if it looks like a release version (not *-dev)
+      const isDev = /-dev$/i.test(ver);
+      badgeEl.href = isDev
+        ? "https://github.com/srnichols/plan-forge/releases"
+        : `https://github.com/srnichols/plan-forge/releases/tag/v${ver}`;
+      badgeEl.title = isDev
+        ? `Plan Forge v${ver} (development build) — click to view all releases`
+        : `Plan Forge v${ver} — click to view release on GitHub`;
+      if (isDev) {
+        badgeEl.classList.remove("bg-gray-700", "text-gray-400");
+        badgeEl.classList.add("bg-amber-900/60", "text-amber-200", "border-amber-700");
+      }
+    }
   })
   .catch(() => {});
 
@@ -4285,30 +4301,90 @@ function renderCrucibleList(smelts) {
 }
 
 async function startNewSmelt() {
-  const rawIdea = window.prompt("Describe the idea to smelt (one-paragraph summary is fine):");
-  if (!rawIdea || !rawIdea.trim()) return;
-  const lane = window.prompt("Lane (tweak / feature / full, or leave blank for auto-detection):", "") || null;
-  try {
-    const res = await fetch(`${API_BASE}/api/crucible/submit`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ rawIdea, lane: lane ? lane.trim() : null }),
-    });
-    if (!res.ok) {
-      const { error } = await res.json().catch(() => ({}));
-      alert(`Submit failed: ${error || res.status}`);
-      return;
-    }
-    const { id, firstQuestion } = await res.json();
-    crucibleState.activeId = id;
-    crucibleState.currentQuestion = firstQuestion;
-    crucibleState.done = firstQuestion === null;
-    await loadCrucible();
-    renderCrucibleInterview();
-    await refreshCrucibleInterview();
-  } catch (err) { alert(`Submit error: ${err.message}`); }
+  // Open the modal form (multi-line textarea + lane select) instead of window.prompt
+  const modal = document.getElementById("new-smelt-modal");
+  const textarea = document.getElementById("new-smelt-idea");
+  const laneSelect = document.getElementById("new-smelt-lane");
+  const errBox = document.getElementById("new-smelt-error");
+  const charCount = document.getElementById("new-smelt-char-count");
+  if (!modal || !textarea) {
+    // Fallback if modal markup is missing
+    const rawIdea = window.prompt("Describe the idea to smelt:");
+    if (rawIdea && rawIdea.trim()) return _submitSmelt(rawIdea, null);
+    return;
+  }
+  textarea.value = "";
+  if (laneSelect) laneSelect.value = "";
+  if (errBox) { errBox.classList.add("hidden"); errBox.textContent = ""; }
+  if (charCount) charCount.textContent = "0 chars";
+  modal.classList.remove("hidden");
+  setTimeout(() => textarea.focus(), 50);
 }
 window.startNewSmelt = startNewSmelt;
+
+function closeNewSmeltModal() {
+  const modal = document.getElementById("new-smelt-modal");
+  if (modal) modal.classList.add("hidden");
+}
+window.closeNewSmeltModal = closeNewSmeltModal;
+
+async function submitNewSmelt() {
+  const textarea = document.getElementById("new-smelt-idea");
+  const laneSelect = document.getElementById("new-smelt-lane");
+  const errBox = document.getElementById("new-smelt-error");
+  const submitBtn = document.getElementById("new-smelt-submit-btn");
+  const rawIdea = (textarea?.value || "").trim();
+  const lane = (laneSelect?.value || "").trim() || null;
+  if (!rawIdea) {
+    if (errBox) { errBox.textContent = "Please describe the idea before submitting."; errBox.classList.remove("hidden"); }
+    textarea?.focus();
+    return;
+  }
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Submitting…"; }
+  try {
+    await _submitSmelt(rawIdea, lane);
+    closeNewSmeltModal();
+  } catch (err) {
+    if (errBox) { errBox.textContent = `Submit error: ${err.message}`; errBox.classList.remove("hidden"); }
+  } finally {
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Start smelting →"; }
+  }
+}
+window.submitNewSmelt = submitNewSmelt;
+
+async function _submitSmelt(rawIdea, lane) {
+  const res = await fetch(`${API_BASE}/api/crucible/submit`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ rawIdea, lane }),
+  });
+  if (!res.ok) {
+    const { error } = await res.json().catch(() => ({}));
+    throw new Error(error || `HTTP ${res.status}`);
+  }
+  const { id, firstQuestion } = await res.json();
+  crucibleState.activeId = id;
+  crucibleState.currentQuestion = firstQuestion;
+  crucibleState.done = firstQuestion === null;
+  await loadCrucible();
+  renderCrucibleInterview();
+  await refreshCrucibleInterview();
+}
+
+// Keyboard handling inside the New Smelt modal — Ctrl/Cmd+Enter submit, Esc cancel, live char count.
+document.addEventListener("DOMContentLoaded", () => {
+  const textarea = document.getElementById("new-smelt-idea");
+  const charCount = document.getElementById("new-smelt-char-count");
+  if (textarea) {
+    textarea.addEventListener("input", () => {
+      if (charCount) charCount.textContent = `${textarea.value.length} chars`;
+    });
+    textarea.addEventListener("keydown", (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); submitNewSmelt(); }
+      else if (e.key === "Escape") { e.preventDefault(); closeNewSmeltModal(); }
+    });
+  }
+});
 
 async function selectSmelt(id) {
   crucibleState.activeId = id;

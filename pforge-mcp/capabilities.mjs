@@ -13,11 +13,26 @@
  */
 
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { resolve, dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
 import { isOpenBrainConfigured } from "./memory.mjs";
 
-const VERSION = "2.3.0";
+const VERSION = "2.3.0"; // capability-surface schema version (not the app version)
+
+// App version — read from the repo's VERSION file at module load.
+// Falls back gracefully if the file is missing (e.g. when Plan Forge is installed as a dependency).
+const APP_VERSION = (() => {
+  try {
+    const here = dirname(fileURLToPath(import.meta.url));
+    // pforge-mcp/capabilities.mjs → repo root is one level up
+    const versionPath = join(here, "..", "VERSION");
+    if (existsSync(versionPath)) {
+      return readFileSync(versionPath, "utf-8").trim();
+    }
+  } catch { /* ignore */ }
+  return "unknown";
+})();
 
 // ─── Enriched Tool Metadata ───────────────────────────────────────────
 
@@ -1756,7 +1771,8 @@ export function buildCapabilitySurface(mcpTools, options = {}) {
 
   return {
     schemaVersion: VERSION,
-    serverVersion: "2.3.0",
+    version: APP_VERSION,
+    serverVersion: APP_VERSION,
     generatedAt: new Date().toISOString(),
     tools: enrichedTools,
     cli: CLI_SCHEMA,

@@ -4513,7 +4513,8 @@ export function createExpressApp() {
     try {
       const versionFile = resolve(PROJECT_DIR, "VERSION");
       const frameworkVersion = existsSync(versionFile) ? readFileSync(versionFile, "utf-8").trim() : "unknown";
-      res.json({ server: "2.10.2", framework: frameworkVersion });
+      // Server and framework ship together — use the repo VERSION for both.
+      res.json({ server: frameworkVersion, framework: frameworkVersion });
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 

@@ -11,6 +11,16 @@ _(No changes yet.)_
 
 ---
 
+## [2.52.1] — 2026-04-20 — Release packaging hotfix
+
+**Impact**: v2.50.0, v2.51.0, and v2.52.0 tarballs shipped with `VERSION=x.y.z-dev` because the tag was placed on the plan-closeout commit (still `-dev`) before VERSION was cleaned. Users running `pforge self-update` saw `-dev` badges on their installs. No functional regressions — only the version string is affected.
+
+**Fix**: VERSION set to a clean `2.52.1` **before** tagging; tag placed at that exact commit; `-dev` bump moved to a separate follow-up commit. Release procedure hardened to prevent recurrence (see `/memories/repo/release-procedure.md`).
+
+Self-update: existing `x.y.z-dev` installs will see `2.52.1` as an available update and converge on the next check.
+
+---
+
 ## [2.52.0] — 2026-04-20 — Orchestrator silent-failure guard + Testbed happy-path harness + Dashboard polish
 
 Three shipments in one release (3 commits). Tests 1990 → 2470 across full MCP suite. Tools 62 → 63.

@@ -121,6 +121,10 @@ async function main() {
   // ─── 2. Progress tab — inject plan browser + simulated run events ───
   console.log("Capturing Progress tab (plan browser + simulated live run)...");
 
+  // Dashboard now defaults to Home — click Progress first so injection targets exist.
+  await clickTab(page, "progress");
+  await page.waitForTimeout(500);
+
   // Inject plan browser data (v2.7)
   await page.evaluate(() => {
     const listEl = document.getElementById("plan-list");

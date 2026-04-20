@@ -5,12 +5,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [Unreleased] — targeting 2.50.0 / 2.50.1 / 2.51.0 / 2.52.0 / 2.53.0
+## [Unreleased] — targeting 2.51.0
 
 ### In-progress — FORGE-SHOP-06 Ask-bus RPC over the hub
 
-- **Slice 06.1 — Hub ask/respond transport** — `hub.ask(topic, payload, opts)` request/reply RPC with timeout, `hub.onAsk(topic, handler)` single-responder registration, `removeAskHandler()`, `listResponders()`. Timeout eviction (`ErrAskTimeout`), no-responder immediate `ok:false`, responder-error wrapping, late-respond drop with warn log. OTEL-style telemetry spans (`ask-telemetry` events). `close()` rejects pending asks. Purely additive — no changes to existing event frames.
+- **Slice 06.1 — Hub ask/respond transport** — `hub.ask(topic, payload, opts)` request/reply RPC with timeout, `hub.onAsk(topic, handler)` single-responder registration, `removeAskHandler()`, `listResponders()`. Timeout eviction (`ErrAskTimeout`), no-responder immediate `ok:false`, responder-error wrapping, late-respond drop with warn log. OTEL-style telemetry spans (`ask-telemetry` events). `close()` rejects pending asks. Purely additive — no changes to existing event frames. Commit `e221555`.
 - Plan: [docs/plans/Phase-FORGE-SHOP-06.md](docs/plans/Phase-FORGE-SHOP-06.md). Test count +22.
+
+### Planned — TESTBED-01 recursive validation harness
+
+- Phase TESTBED-01 drafted ([docs/plans/Phase-TESTBED-01.md](docs/plans/Phase-TESTBED-01.md)) — harness that drives `pforge run-plan` against fixture scenarios in `E:\GitHub\plan-forge-testbed`, captures L1/L2/L3 artefacts, writes defect-log entries. 2 new MCP tools (`forge_testbed_run`, `forge_testbed_findings`). 7 assertion kinds. Frozen defect-log schema. File-lock prevents parallel runs. Plus 3 GitHub Actions workflow templates under `templates/schedules/` and `scripts/audit-cli-parity.mjs`. Test count +54.
+
+### Planned — AUTO-UPDATE-01 true auto-install from GitHub
+
+- Phase AUTO-UPDATE-01 drafted ([docs/plans/Phase-AUTO-UPDATE-01.md](docs/plans/Phase-AUTO-UPDATE-01.md)) — `pforge update --from-github [--tag <tag>]` fetches release tarball from GitHub API, extracts to `.forge/cache/`, runs existing file-copy logic; no local Plan Forge clone required. `pforge self-update [--yes]` wraps detection + install. Dashboard banner becomes actionable with SSE progress stream. 50 MB tarball cap, SHA-256 audit log, `ERR_UPDATE_DURING_RUN` guard. Closes [#75](https://github.com/srnichols/plan-forge/issues/75). Test count +42.
+
+---
+
+## [2.50.0] — 2026-04-20 — Forge Shop unified surfaces + HOTFIX bundle
+
+Five phases shipped since v2.49.1 (25 commits). Tests 1850 → 1872 (+22). Tools 56 → 59. Release: https://github.com/srnichols/plan-forge/releases/tag/v2.50.0
 
 ### Shipped — FORGE-SHOP-07 Brain facade (2026-04-20)
 
@@ -22,14 +36,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - **forge_smith Memory row** — new diagnostic section showing L1 keys, L2 store size, L3 queue depth, L3 last sync age.
 - **Dashboard Brain subtab** — new read-only Config subtab (🧠 Brain) with per-tier counters, top 10 keys by hit rate, and recent recall misses. New `GET /api/brain/stats` route.
 - Plan: [docs/plans/Phase-FORGE-SHOP-07.md](docs/plans/Phase-FORGE-SHOP-07.md). Commits: `297a3e7` (Slice 07.1 facade + tier backends), `c6cbc66` (async test fix), `a83b72c` (Slice 07.2 strategic adoption + Brain subtab). Test count +22.
-
-### Planned — TESTBED-01 recursive validation harness
-
-- Phase TESTBED-01 drafted ([docs/plans/Phase-TESTBED-01.md](docs/plans/Phase-TESTBED-01.md)) — harness that drives `pforge run-plan` against fixture scenarios in `E:\GitHub\plan-forge-testbed`, captures L1/L2/L3 artefacts, writes defect-log entries. 2 new MCP tools (`forge_testbed_run`, `forge_testbed_findings`). 7 assertion kinds (file-exists, file-contains, event-emitted, correlationId-thread, exit-code, duration-under, artefact-count). Frozen defect-log schema. File-lock prevents parallel runs. Plus sub-deliverables: 3 GitHub Actions workflow templates under `templates/schedules/` (nightly mutation, weekly drift, daily sweep — G6 audit), and `scripts/audit-cli-parity.mjs` (G8 audit). Scenarios land in TESTBED-02/03. Test count +54.
-
-### Planned — AUTO-UPDATE-01 true auto-install from GitHub
-
-- Phase AUTO-UPDATE-01 drafted ([docs/plans/Phase-AUTO-UPDATE-01.md](docs/plans/Phase-AUTO-UPDATE-01.md)) — `pforge update --from-github [--tag <tag>]` fetches release tarball from GitHub API, extracts to `.forge/cache/`, runs existing file-copy logic; no local Plan Forge clone required. `pforge self-update [--yes]` wraps detection + install. `pforge smith --refresh-version-cache` bypasses 24h cache. Dashboard banner becomes actionable with SSE progress stream (`POST /api/self-update`). 50 MB tarball cap, SHA-256 audit log, `ERR_UPDATE_DURING_RUN` guard. Opt-in background polling via `autoUpdate.enabled`. Closes [#75](https://github.com/srnichols/plan-forge/issues/75). Test count +42.
 
 ### Shipped — HOTFIX-2.50.1 orchestrator plumbing (2026-04-20)
 

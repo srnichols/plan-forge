@@ -28,6 +28,8 @@ import { fileURLToPath } from "node:url";
 import { createTraceContext, createTelemetryHandler, writeManifest, appendRunIndex, pruneRunHistory, addLogSummary } from "./telemetry.mjs";
 import { isOpenBrainConfigured, buildMemorySearchBlock, buildMemoryCaptureBlock, buildRunSummaryThought, buildCostAnomalyThought, loadProjectContext, buildPlanBootContext } from "./memory.mjs";
 import { enforceCrucibleId, CrucibleEnforcementError } from "./crucible-enforce.mjs";
+// Phase FORGE-SHOP-07 Slice 07.2 — brain facade for unified recall
+import { recall as brainRecall } from "./brain.mjs";
 // Phase TEMPER-01 Slice 01.1 — re-export tempering state reader so the
 // watcher-snapshot contract mirrors readCrucibleState exactly.
 import {
@@ -5457,7 +5459,7 @@ export function maybeAddFixPlanReview(root, args, hub, captureMemoryFn) {
  * @param {string|null} [opts.sinceTimestamp=null] - ISO timestamp; only events strictly after this are included in diff fields
  * @returns {object} Snapshot object
  */
-export function buildWatchSnapshot(targetPath, runId = null, opts = {}) {
+export async function buildWatchSnapshot(targetPath, runId = null, opts = {}) {
   const tailEventsRaw = Number.isFinite(opts.tailEvents) ? opts.tailEvents : 25;
   const tailEvents = Math.min(200, Math.max(1, Math.floor(tailEventsRaw)));
   const sinceTimestamp = opts.sinceTimestamp || null;
@@ -5563,9 +5565,9 @@ export function buildWatchSnapshot(targetPath, runId = null, opts = {}) {
     tempering: readTemperingState(targetPath),
     // Phase FORGE-SHOP-01 Slice 01.2 — compact Home summary for watcher chip.
     // Uses activityTail:0 to keep cost low (no feed needed in watcher context).
-    home: (() => {
+    home: await (async () => {
       try {
-        const snap = readHomeSnapshot(targetPath, { activityTail: 0 });
+        const snap = await readHomeSnapshot(targetPath, { activityTail: 0 });
         if (!snap.ok) return null;
         const q = snap.quadrants;
         const inFlightRuns    = q.activeRuns?.inFlight    ?? null;
@@ -5637,12 +5639,15 @@ function clampActivityTail(v) {
 
 /**
  * Build the Crucible quadrant for the home snapshot.
+ * Phase FORGE-SHOP-07 Slice 07.2 — routed through brain facade.
  * @param {string} root - Project root
- * @returns {object|null}
+ * @returns {Promise<object|null>}
  */
-function buildCrucibleQuadrant(root) {
+async function buildCrucibleQuadrant(root) {
   try {
-    const state = readCrucibleState(root);
+    const state = await brainRecall("project.crucible.state", {}, {
+      cwd: root, readCrucibleState,
+    });
     if (!state) return null;
     return {
       total: state.counts.total ?? 0,
@@ -5655,12 +5660,15 @@ function buildCrucibleQuadrant(root) {
 
 /**
  * Build the Active Runs quadrant for the home snapshot.
+ * Phase FORGE-SHOP-07 Slice 07.2 — routed through brain facade.
  * @param {string} root - Project root
- * @returns {object|null}
+ * @returns {Promise<object|null>}
  */
-function buildActiveRunsQuadrant(root) {
+async function buildActiveRunsQuadrant(root) {
   try {
-    const located = findLatestRun(root);
+    const located = await brainRecall("project.run.latest", {}, {
+      cwd: root, findLatestRun,
+    });
     if (!located) return null;
     const events = parseEventsLog(located.runDir);
     if (events.length === 0) return null;
@@ -5686,9 +5694,11 @@ function buildActiveRunsQuadrant(root) {
       lastRunAgeMs: Date.now() - lastTs,
     };
 
-    // Phase FORGE-SHOP-02 Slice 02.2 — Review queue sub-count
+    // Phase FORGE-SHOP-02 Slice 02.2 — Review queue sub-count (via facade)
     try {
-      const rqState = readReviewQueueState(root);
+      const rqState = await brainRecall("project.review.counts", {}, {
+        cwd: root, readReviewQueueState,
+      });
       result.openReviews = rqState?.open ?? 0;
     } catch { result.openReviews = 0; }
 
@@ -5698,15 +5708,17 @@ function buildActiveRunsQuadrant(root) {
 
 /**
  * Build the LiveGuard quadrant from JSONL readers.
+ * Phase FORGE-SHOP-07 Slice 07.2 — routed through brain facade.
  * Mirrors the PreAgentHandoff pattern — no single readLiveguardState() exists.
  * @param {string} root - Project root
- * @returns {object|null}
+ * @returns {Promise<object|null>}
  */
-function buildLiveguardQuadrant(root) {
+async function buildLiveguardQuadrant(root) {
   try {
-    const driftHistory = readForgeJsonl("drift-history.jsonl", [], root);
-    const incidents = readForgeJsonl("incidents.jsonl", [], root);
-    const fixProposals = readForgeJsonl("fix-proposals.jsonl", [], root);
+    const brainDeps = { cwd: root, readForgeJsonl };
+    const driftHistory = await brainRecall("project.liveguard.drift", {}, brainDeps) || [];
+    const incidents = await brainRecall("project.liveguard.incidents", {}, brainDeps) || [];
+    const fixProposals = await brainRecall("project.liveguard.fix-proposals", {}, brainDeps) || [];
 
     const lastDrift = driftHistory.length > 0 ? driftHistory[driftHistory.length - 1] : null;
     const driftScore = lastDrift?.score ?? null;
@@ -5729,12 +5741,15 @@ function buildLiveguardQuadrant(root) {
 
 /**
  * Build the Tempering quadrant for the home snapshot.
+ * Phase FORGE-SHOP-07 Slice 07.2 — routed through brain facade.
  * @param {string} root - Project root
- * @returns {object|null}
+ * @returns {Promise<object|null>}
  */
-function buildTemperingQuadrant(root) {
+async function buildTemperingQuadrant(root) {
   try {
-    const state = readTemperingState(root);
+    const state = await brainRecall("project.tempering.state", {}, {
+      cwd: root, readTemperingState,
+    });
     if (!state) return null;
     const coverageStatus = state.stale
       ? "stale"
@@ -5790,9 +5805,9 @@ function buildActivityFeed(root, tail) {
  * @param {string} targetPath - Project root (absolute)
  * @param {object} [opts]
  * @param {number} [opts.activityTail=25] - Recent hub events to include (clamped 1..200)
- * @returns {object} Snapshot with { ok, targetPath, generatedAt, quadrants, activityFeed }
+ * @returns {Promise<object>} Snapshot with { ok, targetPath, generatedAt, quadrants, activityFeed }
  */
-export function readHomeSnapshot(targetPath, opts = {}) {
+export async function readHomeSnapshot(targetPath, opts = {}) {
   const activityTail = clampActivityTail(opts.activityTail);
   try {
     return {
@@ -5800,10 +5815,10 @@ export function readHomeSnapshot(targetPath, opts = {}) {
       targetPath,
       generatedAt: new Date().toISOString(),
       quadrants: {
-        crucible: buildCrucibleQuadrant(targetPath),
-        activeRuns: buildActiveRunsQuadrant(targetPath),
-        liveguard: buildLiveguardQuadrant(targetPath),
-        tempering: buildTemperingQuadrant(targetPath),
+        crucible: await buildCrucibleQuadrant(targetPath),
+        activeRuns: await buildActiveRunsQuadrant(targetPath),
+        liveguard: await buildLiveguardQuadrant(targetPath),
+        tempering: await buildTemperingQuadrant(targetPath),
       },
       activityFeed: buildActivityFeed(targetPath, activityTail),
     };
@@ -6434,7 +6449,7 @@ export async function runWatch(options = {}) {
     return { ok: false, error: `Target path does not exist: ${resolved}` };
   }
 
-  const snapshot = buildWatchSnapshot(resolved, runId, { tailEvents, sinceTimestamp });
+  const snapshot = await buildWatchSnapshot(resolved, runId, { tailEvents, sinceTimestamp });
   if (!snapshot.ok) return snapshot;
 
   const anomalies = detectWatchAnomalies(snapshot);
@@ -6660,9 +6675,9 @@ export async function runWatchLive(options = {}) {
     let eventCount = 0;
     const startTime = Date.now();
 
-    const poll = () => {
+    const poll = async () => {
       try {
-        const snap = buildWatchSnapshot(resolved, null, { tailEvents: 200, sinceTimestamp: cursor });
+        const snap = await buildWatchSnapshot(resolved, null, { tailEvents: 200, sinceTimestamp: cursor });
         if (snap.ok) {
           // Yield only events newer than cursor
           if (cursor) {

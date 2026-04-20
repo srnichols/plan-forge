@@ -172,10 +172,47 @@ export function _resetL1() {
  */
 const L2_ROUTES = {
   bug: (deps, id) => deps.loadBug(deps.cwd, id),
-  review: (deps, id) => deps.readReviewItem(deps.cwd, id),
-  tempering: (deps) => deps.readTemperingState(deps.cwd),
-  run: (deps, id) => deps.findLatestRun(deps.cwd, id),
+  review: (deps, id) => {
+    // Synthetic key: project.review.counts → aggregate counts from readReviewQueueState
+    if (id === "counts" || id?.startsWith("counts.")) {
+      if (deps.readReviewQueueState) return deps.readReviewQueueState(deps.cwd);
+      return null;
+    }
+    return deps.readReviewItem(deps.cwd, id);
+  },
+  tempering: (deps, id) => {
+    // project.tempering.perf-history → delegate to readPerfHistory
+    if (id === "perf-history") {
+      if (deps.readPerfHistory) return deps.readPerfHistory(deps.cwd);
+      return null;
+    }
+    return deps.readTemperingState(deps.cwd);
+  },
+  run: (deps, id) => deps.findLatestRun(deps.cwd, id === "latest" ? null : id),
   "hub-events": (deps) => deps.readHubEvents(deps.cwd, {}),
+  crucible: (deps) => {
+    if (deps.readCrucibleState) return deps.readCrucibleState(deps.cwd);
+    return null;
+  },
+  liveguard: (deps, id) => {
+    // project.liveguard.drift → drift-history.jsonl
+    // project.liveguard.incidents → incidents.jsonl
+    // project.liveguard.fix-proposals → fix-proposals.jsonl
+    // project.liveguard.state → all three combined
+    if (deps.readForgeJsonl) {
+      if (id === "drift") return deps.readForgeJsonl("drift-history.jsonl", [], deps.cwd);
+      if (id === "incidents") return deps.readForgeJsonl("incidents.jsonl", [], deps.cwd);
+      if (id === "fix-proposals") return deps.readForgeJsonl("fix-proposals.jsonl", [], deps.cwd);
+      if (id === "state" || !id) {
+        return {
+          drift: deps.readForgeJsonl("drift-history.jsonl", [], deps.cwd),
+          incidents: deps.readForgeJsonl("incidents.jsonl", [], deps.cwd),
+          fixProposals: deps.readForgeJsonl("fix-proposals.jsonl", [], deps.cwd),
+        };
+      }
+    }
+    return null;
+  },
 };
 
 function l2Recall(key, deps) {
@@ -308,9 +345,13 @@ function buildDefaultDeps(overrides = {}) {
     cwd: overrides.cwd || process.cwd(),
     loadBug: () => null,
     readReviewItem: () => null,
+    readReviewQueueState: () => null,
     readTemperingState: () => null,
+    readPerfHistory: null,
     findLatestRun: () => null,
     readHubEvents: () => [],
+    readCrucibleState: null,
+    readForgeJsonl: null,
     searchMemory: null,
     appendForgeJsonl: () => {},
   };

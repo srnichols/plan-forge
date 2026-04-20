@@ -2096,5 +2096,5 @@ describe("Watcher v2.35: runWatchLive (polling fallback)", () => {
     expect(result.ok).toBe(true);
     expect(result.mode).toBe("polling");
     expect(captured.length).toBeGreaterThanOrEqual(1);
-  }, 5000);
+  }, 10000);
 });

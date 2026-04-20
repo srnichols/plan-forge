@@ -3250,16 +3250,69 @@ function initConfigSubtabs() {
       btn.classList.remove("text-gray-400");
       const general = document.getElementById("cfg-general");
       const notifications = document.getElementById("cfg-notifications");
+      const brain = document.getElementById("cfg-brain");
       if (btn.dataset.cfgtab === "notifications") {
         if (general) general.classList.add("hidden");
         if (notifications) notifications.classList.remove("hidden");
+        if (brain) brain.classList.add("hidden");
         renderNotificationsSubtab();
+      } else if (btn.dataset.cfgtab === "brain") {
+        if (general) general.classList.add("hidden");
+        if (notifications) notifications.classList.add("hidden");
+        if (brain) brain.classList.remove("hidden");
+        loadBrainSubtab();
       } else {
         if (general) general.classList.remove("hidden");
         if (notifications) notifications.classList.add("hidden");
+        if (brain) brain.classList.add("hidden");
       }
     });
   });
+}
+
+// Phase FORGE-SHOP-07 Slice 07.2 — Brain subtab data loader
+async function loadBrainSubtab() {
+  const tierTbody = document.getElementById("brain-tier-tbody");
+  const topKeysTbody = document.getElementById("brain-topkeys-tbody");
+  const missesList = document.getElementById("brain-misses-list");
+  if (!tierTbody) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/brain/stats`);
+    const data = await res.json();
+    // Tier counters
+    const tiers = data.tiers || { l1: { recalls: 0, misses: 0 }, l2: { recalls: 0, misses: 0 }, l3: { recalls: 0, misses: 0 } };
+    tierTbody.innerHTML = Object.entries(tiers).map(([tier, counts]) => {
+      const desc = tier === "l1" ? "Session (in-process)" : tier === "l2" ? "Durable (.forge/)" : "Semantic (OpenBrain)";
+      return `<tr class="border-t border-gray-700">
+        <td class="py-1 text-gray-300 font-mono">${tier.toUpperCase()}</td>
+        <td class="py-1 text-gray-400">${desc}</td>
+        <td class="py-1 text-right text-gray-300">${counts.recalls ?? 0}</td>
+        <td class="py-1 text-right text-gray-400">${counts.misses ?? 0}</td>
+      </tr>`;
+    }).join("");
+    // Top keys
+    const topKeys = data.topKeys || [];
+    if (topKeys.length === 0) {
+      topKeysTbody.innerHTML = '<tr class="text-gray-500 text-center"><td colspan="3" class="py-4">No recall data yet</td></tr>';
+    } else {
+      topKeysTbody.innerHTML = topKeys.map(k => `<tr class="border-t border-gray-700">
+        <td class="py-1 text-gray-300 font-mono text-xs">${k.key}</td>
+        <td class="py-1 text-right text-gray-300">${k.hits}</td>
+        <td class="py-1 text-right text-gray-400">${k.tier}</td>
+      </tr>`).join("");
+    }
+    // Misses
+    const misses = data.misses || [];
+    if (misses.length === 0) {
+      missesList.innerHTML = '<li class="text-gray-500">No recent misses</li>';
+    } else {
+      missesList.innerHTML = misses.map(m =>
+        `<li class="font-mono text-xs"><span class="text-red-400">MISS</span> ${m.key} <span class="text-gray-600">${m.timestamp || ""}</span></li>`
+      ).join("");
+    }
+  } catch (err) {
+    tierTbody.innerHTML = `<tr class="text-red-400"><td colspan="4" class="py-4">Error loading brain stats: ${err.message}</td></tr>`;
+  }
 }
 
 async function renderNotificationsSubtab() {

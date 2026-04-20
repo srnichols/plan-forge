@@ -14,9 +14,10 @@ import { existsSync, readFileSync } from "node:fs";
 import {
   appendPerfEntry,
   readPerfHistory,
-  getBaselineP95,
   isConsecutiveRegression,
 } from "../perf-history.mjs";
+// Phase FORGE-SHOP-07 Slice 07.2 — brain facade for perf-history reads
+import { recall as brainRecall } from "../../brain.mjs";
 
 // ─── Defaults ─────────────────────────────────────────────────────────
 
@@ -136,8 +137,22 @@ export async function runPerformanceBudgetScan(ctx) {
       } catch { /* best-effort */ }
     }
 
-    // Check for consecutive regression
-    const baselineP95 = getBaselineP95(endpoint, method, projectDir);
+    // Check for consecutive regression (Phase FORGE-SHOP-07 Slice 07.2 — via brain facade)
+    let baselineP95 = null;
+    try {
+      const history = await brainRecall("project.tempering.perf-history", { fallback: "none" }, {
+        cwd: projectDir, readPerfHistory,
+      });
+      if (Array.isArray(history)) {
+        for (let i = history.length - 1; i >= 0; i--) {
+          const e = history[i];
+          if (e.endpoint === endpoint && e.method === method && e.p95 != null) {
+            baselineP95 = e.p95;
+            break;
+          }
+        }
+      }
+    } catch { /* facade failure — treat as no baseline */ }
     if (baselineP95 != null && currentP95 != null) {
       const deltaPercent = (currentP95 - baselineP95) / baselineP95;
       const isRegression = isConsecutiveRegression(

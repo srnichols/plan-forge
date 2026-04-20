@@ -58,6 +58,8 @@ try {
 }
 
 import { parsePlan, runPlan, detectWorkers, getCostReport, getHealthTrend, analyzeWithQuorum, generateImage, runAnalyze, readForgeJson, readForgeJsonl, appendForgeJsonl, emitToolTelemetry, regressionGuard, runPostSliceHook, resetPostSliceHookFired, runPreAgentHandoffHook, postOpenClawSnapshot, loadOpenClawConfig, loadQuorumConfig, runWatch, runWatchLive, readCrucibleState, readHomeSnapshot, addReviewItem, resolveReviewItem, listReviewItems, readReviewQueueState, maybeAddFixPlanReview, assessQuorumViability, detectExecutionRuntime } from "./orchestrator.mjs";
+// Phase FORGE-SHOP-07 Slice 07.2 — brain facade for unified recall
+import { recall as brainRecall } from "./brain.mjs";
 import {
   isOpenBrainConfigured,
   shapeWatcherAnomalyThought,
@@ -3881,18 +3883,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
       } catch (err) { report.deps = { error: err.message }; }
 
-      // 6. Alert triage
+      // 6. Alert triage (Phase FORGE-SHOP-07 Slice 07.2 — via brain facade)
       try {
-        const incidents = readForgeJsonl("incidents.jsonl", [], cwd).filter(i => !i.resolvedAt);
-        const driftHistory = readForgeJsonl("drift-history.json", [], cwd);
+        const brainDeps = { cwd, readForgeJsonl };
+        const incidents = ((await brainRecall("project.liveguard.incidents", { freshnessMs: 60_000 }, brainDeps)) || []).filter(i => !i.resolvedAt);
+        const driftHistory = (await brainRecall("project.liveguard.drift", { freshnessMs: 60_000 }, brainDeps)) || [];
         const latestViolations = driftHistory.length ? (driftHistory[driftHistory.length - 1].violations || []) : [];
         const criticalAlerts = [...incidents.filter(i => i.severity === "critical" || i.severity === "high"), ...latestViolations.filter(v => v.severity === "critical" || v.severity === "high")];
         report.alerts = { critical: criticalAlerts.filter(a => (a.severity) === "critical").length, high: criticalAlerts.filter(a => (a.severity) === "high").length, openIncidents: incidents.length };
       } catch (err) { report.alerts = { error: err.message }; }
 
-      // 7. Health trend summary
+      // 7. Health trend summary (Phase FORGE-SHOP-07 Slice 07.2 — via brain facade)
       try {
-        const driftHistory = readForgeJsonl("drift-history.json", [], cwd);
+        const brainDeps7 = { cwd, readForgeJsonl };
+        const driftHistory = (await brainRecall("project.liveguard.drift", { freshnessMs: 60_000 }, brainDeps7)) || [];
         const recentScores = driftHistory.slice(-5).map(d => d.score).filter(s => typeof s === "number");
         const avgScore = recentScores.length ? Math.round(recentScores.reduce((a, b) => a + b, 0) / recentScores.length) : null;
         const trend = recentScores.length >= 2 ? (recentScores[recentScores.length - 1] > recentScores[0] ? "improving" : recentScores[recentScores.length - 1] < recentScores[0] ? "degrading" : "stable") : "stable";
@@ -3985,7 +3989,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const cwd = args.targetPath
       ? findProjectRoot(resolve(args.targetPath))
       : findProjectRoot(PROJECT_DIR);
-    const result = readHomeSnapshot(cwd, { activityTail: args.activityTail });
+    const result = await readHomeSnapshot(cwd, { activityTail: args.activityTail });
     emitToolTelemetry(
       "forge_home_snapshot", args, result, Date.now() - t0,
       result.ok ? "OK" : "ERROR", cwd
@@ -4392,6 +4396,49 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       output += `\n\nNotifications:\n  Enabled adapters: ${enabledAdapters.length}${enabledAdapters.length ? ` (${enabledAdapters.join(", ")})` : ""}\n  Routes configured: ${routeCount}\n  Events sent today: ${sentToday}\n  Failures today:    ${failedToday}`;
     } catch { /* notifications not configured — skip */ }
 
+    // Phase FORGE-SHOP-07 Slice 07.2 — Memory row in smith output
+    try {
+      const smithCwd7 = args.path ? findProjectRoot(resolve(args.path)) : PROJECT_DIR;
+      const forgeDir = resolve(smithCwd7, ".forge");
+      let l2DirCount = 0;
+      try {
+        if (existsSync(forgeDir)) {
+          l2DirCount = readdirSync(forgeDir, { withFileTypes: true })
+            .filter(d => d.isDirectory()).length;
+        }
+      } catch { /* best-effort */ }
+      let l3QueueDepth = 0;
+      let l3LastSync = "—";
+      try {
+        const queuePath = resolve(forgeDir, "openbrain-queue.jsonl");
+        if (existsSync(queuePath)) {
+          const lines = readFileSync(queuePath, "utf-8").split("\n").filter(Boolean);
+          l3QueueDepth = lines.filter(l => {
+            try { return JSON.parse(l)._status === "pending"; } catch { return false; }
+          }).length;
+        }
+      } catch { /* best-effort */ }
+      try {
+        const hubPath = resolve(forgeDir, "hub-events.jsonl");
+        if (existsSync(hubPath)) {
+          const hubLines = readFileSync(hubPath, "utf-8").split("\n").filter(Boolean).reverse();
+          for (const line of hubLines) {
+            try {
+              const ev = JSON.parse(line);
+              if (ev.type === "openbrain-sync" || ev.type === "openbrain-flush") {
+                const age = Date.now() - new Date(ev.ts).getTime();
+                l3LastSync = age > 86400000 ? `${Math.round(age / 86400000)}d ago`
+                  : age > 3600000 ? `${Math.round(age / 3600000)}h ago`
+                  : `${Math.round(age / 60000)}m ago`;
+                break;
+              }
+            } catch { /* skip line */ }
+          }
+        }
+      } catch { /* best-effort */ }
+      output += `\n\nMemory:\n  L1 keys:         (session-scoped)\n  L2 store size:   ${l2DirCount} dirs\n  L3 queue depth:  ${l3QueueDepth}\n  L3 last sync:    ${l3LastSync}`;
+    } catch { /* memory stats not available — skip */ }
+
     return { content: [{ type: "text", text: output }], isError: !result.success };
   }
 
@@ -4510,6 +4557,51 @@ export function createExpressApp() {
         return res.json({ status: "running", ...JSON.parse(readFileSync(runPath, "utf-8")) });
       }
       res.json({ status: "unknown" });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // REST API: GET /api/brain/stats — Phase FORGE-SHOP-07 Slice 07.2
+  app.get("/api/brain/stats", (_req, res) => {
+    try {
+      const forgeDir = resolve(PROJECT_DIR, ".forge");
+      // Tier counters from OTEL spans if available, otherwise zeroed
+      const tiers = {
+        l1: { recalls: 0, misses: 0 },
+        l2: { recalls: 0, misses: 0 },
+        l3: { recalls: 0, misses: 0 },
+      };
+      // Scan hub-events for brain.recall spans
+      const topKeysMap = {};
+      const misses = [];
+      try {
+        const hubPath = resolve(forgeDir, "hub-events.jsonl");
+        if (existsSync(hubPath)) {
+          const lines = readFileSync(hubPath, "utf-8").split("\n").filter(Boolean).slice(-500);
+          for (const line of lines) {
+            try {
+              const ev = JSON.parse(line);
+              if (ev.type === "brain-recall" || ev.data?.operation === "brain.recall") {
+                const tier = ev.data?.tierServed || ev.data?.["tier-served"] || "l2";
+                const key = ev.data?.key || "unknown";
+                const hit = ev.data?.tierServed !== "miss";
+                if (hit) {
+                  tiers[tier] = tiers[tier] || { recalls: 0, misses: 0 };
+                  tiers[tier].recalls++;
+                  topKeysMap[key] = topKeysMap[key] || { key, hits: 0, tier };
+                  topKeysMap[key].hits++;
+                } else {
+                  tiers.l2.misses++;
+                  misses.push({ key, timestamp: ev.ts || null });
+                }
+              }
+            } catch { /* skip line */ }
+          }
+        }
+      } catch { /* no hub events — zeroed counters */ }
+      const topKeys = Object.values(topKeysMap)
+        .sort((a, b) => b.hits - a.hits)
+        .slice(0, 10);
+      res.json({ tiers, topKeys, misses: misses.slice(-20).reverse() });
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 

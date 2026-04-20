@@ -895,6 +895,17 @@
             </div>
             <div id="cfg-api-providers" class="text-sm text-gray-300 mt-2"></div>
           </div>
+          <!-- Update Source (v2.56.0) -->
+          <div>
+            <label for="cfg-update-source" class="block text-sm text-gray-400 mb-1">Update Source</label>
+            <p class="text-xs text-gray-600 mb-2">Where <code class="text-gray-500">pforge update</code> pulls template bytes from.</p>
+            <select id="cfg-update-source" title="Update source" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full border border-gray-600 focus:border-blue-500 outline-none">
+              <option value="auto">Auto — prefer newer tagged release over <code>-dev</code> sibling (recommended)</option>
+              <option value="github-tags">GitHub tags only — ignore any local sibling clone</option>
+              <option value="local-sibling">Local sibling only — contributor workflow (always use ../plan-forge)</option>
+            </select>
+            <p id="cfg-update-source-hint" class="text-xs text-gray-500 mt-1">Loading…</p>
+          </div>
           <div>
             <label class="block text-sm text-gray-400 mb-1">OpenBrain Memory</label>
             <div id="cfg-openbrain" class="text-sm text-gray-300 bg-gray-700 rounded px-3 py-2">Checking...</div>

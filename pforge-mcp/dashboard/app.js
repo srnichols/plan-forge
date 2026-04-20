@@ -2361,6 +2361,18 @@ async function loadConfig() {
     if (qModels) qModels.value = (currentConfig.quorum?.models || []).join(", ");
     if (qPreset) qPreset.value = currentConfig.quorum?.preset || "";
 
+    // Update source preference (v2.56.0)
+    const updSrcSel = document.getElementById("cfg-update-source");
+    if (updSrcSel) {
+      updSrcSel.value = currentConfig.updateSource || "auto";
+      updateUpdateSourceHint(updSrcSel.value);
+      // Bind change handler once (idempotent)
+      if (!updSrcSel.dataset.bound) {
+        updSrcSel.addEventListener("change", onUpdateSourceChange);
+        updSrcSel.dataset.bound = "1";
+      }
+    }
+
     // Check API provider availability
     loadApiProviderStatus();
     loadApiKeys();
@@ -2577,6 +2589,53 @@ async function saveConfig() {
 
 window.loadConfig = loadConfig;
 window.saveConfig = saveConfig;
+
+// ─── Update Source preference (v2.56.0) ──────────────────────────────
+const UPDATE_SOURCE_HINTS = {
+  "auto": "Picks the newer of your sibling clone (../plan-forge) and the latest GitHub tag. If the sibling is on a -dev build, GitHub tags win. This is the right default for most users.",
+  "github-tags": "Always downloads the latest tagged release from GitHub and ignores any sibling clone. Best for teams that want reproducible, pinned updates.",
+  "local-sibling": "Always uses the sibling clone at ../plan-forge. Preserves the contributor workflow where master may be on -dev. You are responsible for keeping the sibling current with 'git pull'.",
+};
+
+function updateUpdateSourceHint(value) {
+  const hintEl = document.getElementById("cfg-update-source-hint");
+  if (hintEl) hintEl.textContent = UPDATE_SOURCE_HINTS[value] || "";
+}
+
+async function onUpdateSourceChange(e) {
+  const newValue = e.target.value;
+  const oldValue = currentConfig.updateSource || "auto";
+  if (newValue === oldValue) return;
+  updateUpdateSourceHint(newValue);
+  try {
+    const updated = { ...currentConfig, updateSource: newValue };
+    const res = await fetch(`${API_BASE}/api/config`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updated),
+    });
+    const result = await res.json();
+    if (result.success) {
+      currentConfig.updateSource = newValue;
+      if (typeof addNotification === "function") {
+        addNotification(`Update source → ${newValue}`, "success");
+      }
+    } else {
+      // Revert on failure
+      e.target.value = oldValue;
+      updateUpdateSourceHint(oldValue);
+      if (typeof addNotification === "function") {
+        addNotification(`Error: ${result.error || "save failed"}`, "error");
+      }
+    }
+  } catch (err) {
+    e.target.value = oldValue;
+    updateUpdateSourceHint(oldValue);
+    if (typeof addNotification === "function") {
+      addNotification(`Error: ${err.message}`, "error");
+    }
+  }
+}
 
 // ─── Bridge Status & Escalation ───────────────────────────────────────
 async function checkBridgeEscalation() {

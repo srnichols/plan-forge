@@ -4921,6 +4921,13 @@ export function createExpressApp() {
       if (config.preset && typeof config.preset !== "string") {
         return res.status(400).json({ error: "preset must be a string" });
       }
+      // v2.56.0 — validate updateSource enum
+      if (config.updateSource !== undefined) {
+        const allowed = ["auto", "github-tags", "local-sibling"];
+        if (typeof config.updateSource !== "string" || !allowed.includes(config.updateSource)) {
+          return res.status(400).json({ error: `updateSource must be one of: ${allowed.join(", ")}` });
+        }
+      }
       writeFileSync(configPath, JSON.stringify(config, null, 2));
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }

@@ -7,10 +7,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased] — targeting 2.51.0
 
-### In-progress — FORGE-SHOP-06 Ask-bus RPC over the hub
+### Shipped — FORGE-SHOP-06 Ask-bus RPC over the hub (2026-04-20)
 
-- **Slice 06.1 — Hub ask/respond transport** — `hub.ask(topic, payload, opts)` request/reply RPC with timeout, `hub.onAsk(topic, handler)` single-responder registration, `removeAskHandler()`, `listResponders()`. Timeout eviction (`ErrAskTimeout`), no-responder immediate `ok:false`, responder-error wrapping, late-respond drop with warn log. OTEL-style telemetry spans (`ask-telemetry` events). `close()` rejects pending asks. Purely additive — no changes to existing event frames. Commit `e221555`.
-- Plan: [docs/plans/Phase-FORGE-SHOP-06.md](docs/plans/Phase-FORGE-SHOP-06.md). Test count +22.
+- **Slice 06.1 — Hub ask/respond transport** — `hub.ask(topic, payload, opts)` request/reply RPC with timeout, `hub.onAsk(topic, handler)` single-responder registration, `removeAskHandler()`, `listResponders()`. Timeout eviction (`ErrAskTimeout`), no-responder immediate `ok:false`, responder-error wrapping, late-respond drop with warn log. OTEL-style telemetry spans (`ask-telemetry` events). `close()` rejects pending asks. Purely additive — no changes to existing event frames.
+- **Slice 06.2 — Responders + executor gate wire-in + dashboard** — 3 initial responders (`brain.gate-check`, `brain.correlation-thread`, `tempering.delegate-sync`). Executor gate-check wire-in between slices (config-guarded via `orchestrator.askBusGate.enabled`, fail-open on timeout). Dashboard Hub subtab surfaces ask/respond metrics + responder registry.
+- Plan: [docs/plans/Phase-FORGE-SHOP-06.md](docs/plans/Phase-FORGE-SHOP-06.md). Commits: `e221555` (Slice 06.1), `0a43d22` (Slice 06.2). Test count +22.
 
 ### Planned — TESTBED-01 recursive validation harness
 

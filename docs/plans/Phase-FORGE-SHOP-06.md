@@ -1,15 +1,18 @@
 ---
 crucibleId: e4a1c782-9358-4b1e-82d9-615a47cf9e04
 source: self-hosted
-status: in_progress
+status: complete
 phase: FORGE-SHOP-06
 arc: FORGE-SHOP
+shippedAt: 2026-04-20
+commits:
+  - e221555  # Slice 06.1 — Hub ask/respond transport
+  - 0a43d22  # Slice 06.2 — 3 responders + executor gate + dashboard
 ---
 
 # Phase FORGE-SHOP-06: Ask-bus — request/reply RPC over the hub
 
-> **Status**: 📝 DRAFT — drafted mid-arc; executes AFTER FORGE-SHOP-05
-> (unified timeline) so the bus adoption has maximum coverage
+> **Status**: ✅ COMPLETE — shipped 2026-04-20 (targeting v2.51.0)
 > **Estimated Effort**: 2 slices
 > **Risk Level**: Medium (new transport semantic on a live
 > subsystem; must be strictly additive — existing push-only

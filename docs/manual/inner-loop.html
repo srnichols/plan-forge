@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Inner Loop — Reflexion, Trajectories, Auto-Skills, Reviewer</title>
+  <meta name="description" content="How the Plan Forge Inner Loop works: deterministic slice execution plus reflective retry, trajectory capture, auto-skill promotion, adaptive gate synthesis, cross-project federation, postmortems, and the opt-in speed-quorum reviewer." />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({ startOnLoad: true, theme: "dark", themeVariables: { fontFamily: "Inter, ui-sans-serif", primaryColor: "#f59e0b", primaryTextColor: "#f1f5f9", lineColor: "#64748b" } });
+  </script>
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+
+    <main>
+      <div class="chapter-content">
+
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Deep Dive · Act II — Forge</div>
+        <h1>The Inner Loop</h1>
+        <p class="text-lg text-slate-400 mb-8">Seven subsystems — reflexion, trajectories, auto-skills, gate synthesis, postmortems, federation, and the opt-in reviewer — that turn every slice into a research step.</p>
+
+        <div class="callout callout-info">
+          <strong>Added in v2.57.0.</strong> All seven subsystems default to <em>off / suggest / read-only</em> for existing projects. New installs get best-defaults. Toggle everything from the Dashboard → <em>Config</em> tab. Nothing in your current workflow breaks.
+        </div>
+
+        <!-- ─── The State-Flow Diagram ─── -->
+        <h2 id="state-flow">The Inner Loop — State Flow</h2>
+        <p>The deterministic slice executor (Phase-1 through Phase-24) is the spine. The Phase-25 subsystems bolt on reflective behavior at specific transitions — they never replace the spine, they only enrich it.</p>
+
+        <div class="my-8 p-6 bg-slate-900/50 border border-slate-800/60 rounded-xl overflow-x-auto">
+          <pre class="mermaid">
+stateDiagram-v2
+    [*] --> PlanParsed : runPlan(plan)
+    PlanParsed --> GateSynthesis : pre-flight
+    GateSynthesis --> SliceReady : advisory printed (L6)
+    SliceReady --> BuildPrompt
+    BuildPrompt --> AutoSkillLookup : retrieve matching skills (L2)
+    AutoSkillLookup --> WorkerInvoke : inject skill context + trajectory sentinel
+    WorkerInvoke --> GateRun
+    GateRun --> GatePassed : exit 0
+    GateRun --> ReflexionBuild : exit != 0 (L7)
+    ReflexionBuild --> BuildPrompt : retry with reflexion block
+    GatePassed --> TrajectoryWrite : extract sentinel-wrapped note (L8)
+    TrajectoryWrite --> AutoSkillCapture : save slice pattern (L2)
+    AutoSkillCapture --> ReviewerCheck : brain.gate-check
+    ReviewerCheck --> ReviewerInvoke : runtime.reviewer.enabled (L4, opt-in)
+    ReviewerCheck --> NextSlice : reviewer disabled
+    ReviewerInvoke --> NextSlice : advisory verdict (D6)
+    ReviewerInvoke --> BlockedCritical : critical + blockOnCritical=true
+    BlockedCritical --> [*]
+    NextSlice --> SliceReady : more slices
+    NextSlice --> RunComplete : last slice
+    RunComplete --> PostmortemWrite : retries, gateFlaps, costDelta, driftDelta (L5)
+    PostmortemWrite --> FederationPublish : brain.federation.enabled (L4-lite)
+    FederationPublish --> [*]
+    PostmortemWrite --> [*]
+          </pre>
+        </div>
+
+        <!-- ─── Subsystem Anchors ─── -->
+        <h2 id="subsystems">The Seven Subsystems</h2>
+        <p>Each subsystem has a single job, a single config key (if any), and a single storage artifact. Add them up and you get a closed research loop where every run teaches the next.</p>
+
+        <!-- Reflexion -->
+        <h3 id="reflexion">1. Reflexion (L7) — the retry gets context</h3>
+        <p>When a slice's validation gate fails, the orchestrator builds a compact Markdown block with the gate command, model, duration, and the stderr tail (≤2KB). That block is injected into the <em>next</em> attempt's prompt so the worker reasons about its prior failure instead of blindly trying the same thing.</p>
+        <ul>
+          <li><strong>Module:</strong> <code>pforge-mcp/memory.mjs → buildReflexionBlock()</code></li>
+          <li><strong>Config:</strong> none — always on</li>
+          <li><strong>Storage:</strong> in-memory per attempt</li>
+        </ul>
+
+        <!-- Trajectories -->
+        <h3 id="trajectory">2. Trajectories (L8) — what actually happened</h3>
+        <p>On slice pass, Plan Forge extracts the sentinel-wrapped note the worker produced (<code>&lt;!-- PFORGE_TRAJECTORY:BEGIN --&gt;…&lt;!-- PFORGE_TRAJECTORY:END --&gt;</code>), word-caps it at 500, and writes it to disk. Postmortems and federation consumers read these for compact run narratives.</p>
+        <ul>
+          <li><strong>Module:</strong> <code>pforge-mcp/memory.mjs → writeTrajectory()</code></li>
+          <li><strong>Config:</strong> none — always on</li>
+          <li><strong>Storage:</strong> <code>.forge/trajectories/&lt;slice&gt;/&lt;iso&gt;.md</code></li>
+        </ul>
+
+        <!-- Auto-skills -->
+        <h3 id="auto-skills">3. Auto-skills (L2) — patterns that earn promotion</h3>
+        <p>A slice that passes gets captured as a candidate auto-skill with its domain keywords, gate commands, and a SHA prefix. Before the next slice, the orchestrator retrieves matching skills (ranked by reuse count) and injects them into the prompt. A skill promotes to "stable" once its reuse count hits the threshold (default <strong>3</strong>).</p>
+        <ul>
+          <li><strong>Module:</strong> <code>pforge-mcp/memory.mjs → retrieveAutoSkills() / writeAutoSkill()</code></li>
+          <li><strong>Config:</strong> none in v2.57 — defaults are Dashboard-editable in Phase-26</li>
+          <li><strong>Storage:</strong> <code>.forge/auto-skills/*.md</code></li>
+        </ul>
+
+        <!-- Gate synthesis -->
+        <h3 id="gate-synthesis">4. Adaptive gate synthesis (L6) — Tempering advises your plans</h3>
+        <p>During plan pre-flight the orchestrator scans every slice. If a slice's title or file list matches a Tempering domain profile (<em>domain / integration / controller</em>) but declares no validation gate, it prints a suggested command using the project's Tempering coverage minimum and runtime budget. Default mode is <strong>suggest</strong>; set <code>mode: "off"</code> to silence it.</p>
+        <ul>
+          <li><strong>Module:</strong> <code>pforge-mcp/orchestrator.mjs → synthesizeGateSuggestions()</code></li>
+          <li><strong>Config:</strong> <code>runtime.gateSynthesis: { mode, domains }</code></li>
+          <li><strong>Storage:</strong> stdout only (never mutates your plan)</li>
+        </ul>
+
+        <!-- Postmortems -->
+        <h3 id="postmortem">5. Plan postmortems (L5) — the hardener learns from you</h3>
+        <p>After every run — pass or fail — Plan Forge writes a JSON postmortem with <code>retriesPerSlice</code>, <code>gateFlaps</code>, <code>topFailureReason</code>, <code>costDelta</code>, and <code>driftDelta</code> (deltas vs the prior run). Retention is 10 per plan. The Step-2 hardener now reads the newest 3 postmortems and folds their signals into the Scope Contract — closing the loop from execution back into planning.</p>
+        <ul>
+          <li><strong>Module:</strong> <code>pforge-mcp/orchestrator.mjs → buildPlanPostmortem() / writePlanPostmortem()</code></li>
+          <li><strong>Config:</strong> retention count via <code>maxRunHistory</code>-style defaults</li>
+          <li><strong>Storage:</strong> <code>.forge/plans/&lt;plan-basename&gt;/postmortem-*.json</code></li>
+        </ul>
+
+        <!-- Federation -->
+        <h3 id="federation">6. Cross-project federation (L4-lite) — one project's memory helps another</h3>
+        <p>Opt-in. When a <code>cross.*</code> brain recall misses L3 (OpenBrain), the facade fans out to the repos listed in <code>brain.federation.repos[]</code> and reads their <code>.forge/brain/&lt;entity&gt;/&lt;id&gt;.json</code> — read-only, absolute local paths only. URLs and relative paths are rejected by contract.</p>
+        <ul>
+          <li><strong>Module:</strong> <code>pforge-mcp/brain.mjs → federationRead()</code></li>
+          <li><strong>Config:</strong> <code>brain.federation: { enabled, repos: [] }</code> — defaults off</li>
+          <li><strong>Security:</strong> absolute-local-paths-only (D9); <code>..</code> rejected; defense-in-depth path containment check</li>
+        </ul>
+
+        <!-- Reviewer -->
+        <h3 id="reviewer">7. Reviewer-agent in-loop (L4) — cheap second pair of eyes</h3>
+        <p>Opt-in. When enabled, the <code>brain.gate-check</code> responder invokes a speed-quorum reviewer on each slice's diff summary and attaches a verdict to the response (<code>score</code>, <code>critical</code>, <code>summary</code>, <code>durationMs</code>). <strong>Advisory-only in v2.57</strong>: critical verdicts do not block the next slice unless operators explicitly set <code>blockOnCritical: true</code>. Blocking mode enters Phase-26 after calibration data exists.</p>
+        <ul>
+          <li><strong>Module:</strong> <code>pforge-mcp/brain.mjs → invokeReviewer()</code></li>
+          <li><strong>Config:</strong> <code>runtime.reviewer: { enabled, quorumPreset, blockOnCritical, timeoutMs }</code></li>
+          <li><strong>Defaults:</strong> <code>enabled=false</code>, <code>quorumPreset="speed"</code> (D5), <code>blockOnCritical=false</code> (D6), <code>timeoutMs=30000</code></li>
+        </ul>
+
+        <!-- ─── Configuration summary ─── -->
+        <h2 id="config">Configuration Summary</h2>
+        <p>Everything the Inner Loop exposes lives under two keys in <code>.forge.json</code>, and every key has a toggle in the Dashboard → Config tab.</p>
+        <pre class="bg-slate-950 border border-slate-800/60 rounded-xl p-4 overflow-x-auto text-sm"><code>{
+  "runtime": {
+    "gateSynthesis": { "mode": "suggest", "domains": ["domain", "integration", "controller"] },
+    "reviewer":      { "enabled": false, "quorumPreset": "speed", "blockOnCritical": false, "timeoutMs": 30000 }
+  },
+  "brain": {
+    "federation":    { "enabled": false, "repos": [] }
+  }
+}</code></pre>
+
+        <div class="callout callout-info mt-8">
+          <strong>See also:</strong> <a href="how-it-works.html">Chapter 2 — How It Works</a> describes the Forge spine; this page describes the reflective layers the Inner Loop adds on top.
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="assets/manual.js"></script>
+</body>
+</html>

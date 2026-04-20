@@ -1,0 +1,92 @@
+HERO IMAGE: docs/blog/assets/nine-phases-one-day-hero.jpg (1280x720, 16:9) — suggest a shipyard/forge montage with "v2.50.0 + v2.51.0" prominent
+
+TITLE: 9 Phases, 2 Releases, 1 Day — What Autonomous Plan Execution Actually Looks Like
+
+NETWORK TEASER (paste into "Tell your network what this article is about"):
+In one day Plan Forge shipped 9 phases across 2 releases — features, hotfixes, a new Forge Shop module, an auto-update subsystem, a testbed harness, and a dashboard polish pass. The kicker: a silent worker regression almost let one phase "pass" in 32 seconds doing zero work. Here's how autonomous execution handled it — and the guard we added so it never happens again. #AIDevelopment #AutonomousAgents #DevTools #PlanForge #OpenSource
+
+HASHTAGS: #AIDevelopment #AutonomousAgents #DevTools #PlanForge #OpenSource #EngineeringProductivity #GitHubCopilot
+
+FORMATTING NOTES:
+- ALL CAPS headers below must be formatted as H2 in LinkedIn's editor
+- Bold text marked with ** must be applied manually after pasting
+- [IMAGE] markers indicate where to insert inline images
+- ⚠️ DRAFT: Sections marked [PERSONAL] need Scott's input before publishing
+
+--- ARTICLE BODY (paste below into the editor) ---
+
+On April 19 I kicked off an autonomous Plan Forge run with one prompt: **"kick the next phase on completion, run them all until you are done."**
+
+Six plans in the queue. Eight hours later: 9 phases shipped, 2 releases cut, 36 commits on master, test suite up to ~1990 tests, zero manual slice executions. The agent closed each plan, consolidated the CHANGELOG, bumped VERSION, cut the tag, published the GitHub release, and moved on to the next phase without asking.
+
+This post is what that actually looks like — including the part where I almost shipped a release that silently did nothing.
+
+WHAT SHIPPED
+
+**v2.50.0 — Forge Shop + HOTFIX bundle** (5 phases)
+- FORGE-SHOP-03, 04, 05, 07 — unified surfaces for the Forge Shop extension catalog
+- HOTFIX-2.50.1 — three field bugs rolled into the same release train
+
+**v2.51.0 — Ask-bus + Auto-update + Testbed** (3 phases + dashboard polish)
+- FORGE-SHOP-06 — ask-bus routing for cross-agent queries
+- AUTO-UPDATE-01 — `pforge self-update` with GitHub releases polling, 24h cache, SSE progress stream
+- TESTBED-01 — fixture harness for orchestrator integration tests
+
+**Bonus polish** (landed between releases)
+- Dashboard "New Smelt" upgraded from `window.prompt` to a proper textarea modal with char counter, Ctrl+Enter submit, Escape to cancel
+- Header version badge that reads the VERSION file and links to the matching GitHub release tag (amber when you're on a `-dev` build, green on a tagged release)
+- Fixed three hardcoded version strings that had been lying to users for months
+
+[IMAGE: dashboard screenshot showing version badge + new smelt modal]
+
+THE REGRESSION THAT ALMOST SHIPPED
+
+Halfway through the queue, FORGE-SHOP-07 completed in 32 seconds. Zero code changes. Zero tokens. Exit code 0. Orchestrator marked it "passed."
+
+**That should be impossible.** A real slice takes 3–15 minutes.
+
+The cause: HOTFIX-2.50.1 Slice 1 had changed the worker CLI config from `--output-format text` to `--output-format jsonl`. But `gh copilot` only accepts `text|json`. The worker was rejecting the flag, emitting a two-line error to stderr, and exiting 0. The orchestrator then ran the validation gate against unchanged files, saw it pass, and recorded the slice as successful.
+
+This is the silent failure pattern that keeps every autonomous system operator up at night: **the code says "passed" but nothing happened.**
+
+I caught it because the timing was wrong. 32 seconds for a plan that normally takes 10 minutes is a smell strong enough to override "all green." Reverted the flag in one commit, re-ran SHOP-07, watched it actually do 12 minutes of work this time.
+
+THE GUARD THAT STOPS THIS FROM RECURRING
+
+The regression was a config error. The real bug was the orchestrator trusting exit code 0 + gate pass without verifying the worker actually *did anything*.
+
+Today's follow-up fix (commit b0ab2ac) adds `detectSilentWorkerFailure()` to the orchestrator's post-slice logic:
+
+- Worker exits 0 with < 50 bytes of stdout → status = failed, diagnostic points at the per-slice stderr log
+- Worker prints help/usage text (already had a detector, wasn't wired to status) → status = failed
+- Human assisted-mode sentinel and non-zero exits are unaffected — those already fail the right way
+
+7 new unit tests cover every branch. All 212 orchestrator tests + 27 worker-capability tests green. The next time someone mistypes a CLI flag, the run will fail loudly on slice 1 instead of cheerfully burning through six phases.
+
+[IMAGE: diff snippet of detectSilentWorkerFailure function]
+
+WHAT THIS TELLS ME ABOUT AUTONOMOUS EXECUTION
+
+Three lessons from the day:
+
+**1. The closeout pattern matters as much as the execution.** Each phase had a deterministic handoff: plan status draft→complete with commit SHAs, CHANGELOG Planned→Shipped with dates, VERSION bump, tag, release. The agent ran that protocol nine times without drift. That's only possible because the closeout is scripted, not improvised.
+
+**2. Timing is a signal.** Token counts can be spoofed by bad instrumentation. Exit codes can be spoofed by bad flags. But a slice that finishes in 1/20th of its normal time is almost always broken. Add timing sanity checks to your agents' gates.
+
+**3. "Silent success" is the most expensive bug class in autonomous systems.** A loud failure costs you one retry. A silent failure costs you trust in every subsequent green build. The guard we added today isn't the last one we'll need — it's the pattern template for the next six.
+
+THE BOTTOM LINE
+
+9 phases in a day is not a demo. It's what happens when the planning surface, the execution surface, and the release surface are all the same system — and when every failure mode you find gets a permanent test the next hour.
+
+Try it: `pforge run-plan <your-plan>.md --quorum=power`
+
+[PERSONAL: Scott — want to add a note about what's next? TESTBED-01 unlocks a bunch of integration tests we've been deferring; that's probably the theme for v2.52.0.]
+
+---
+
+Source:
+- v2.50.0 release: https://github.com/srnichols/plan-forge/releases/tag/v2.50.0
+- v2.51.0 release: https://github.com/srnichols/plan-forge/releases/tag/v2.51.0
+- Silent-failure fix: https://github.com/srnichols/plan-forge/commit/b0ab2ac
+- Issue #77: https://github.com/srnichols/plan-forge/issues/77

@@ -1,20 +1,25 @@
 ---
 crucibleId: 5e2a7b94-8c15-4d62-a3f7-9b8e4c2a1d58
 source: self-hosted
-status: draft
+status: complete
 phase: TESTBED-02
 arc: TESTBED-RECURSIVE
+shippedAt: 2026-04-20
+commits:
+  - 10c8779  # Slice 1 — 5 happy-path scenarios + forge_testbed_happypath tool + 25 tests
+slice2Deferred: true
+slice2DeferralReason: "Live evidence run against E:\\GitHub\\plan-forge-testbed is an open-ended integration run that should be executed manually when the testbed repo is confirmed ready. Tracked as a follow-up; will be rolled into TESTBED-03 or a dedicated evidence phase."
 ---
 
 # Phase TESTBED-02: Happy-path recursive run — manual ch8 + 5 seeded scenarios
 
-> **Status**: 📝 DRAFT — ready for Session 1 hardening
-> **Estimated Effort**: 2 slices
-> **Risk Level**: Medium (drives real `pforge run-plan` invocations
-> against the testbed repo; each scenario costs real LLM tokens;
-> failing scenarios are the *point* — they become defect-log entries,
-> not build breaks)
-> **Target Version**: v2.53.x → v2.54.0
+> **Status**: ✅ COMPLETE (Slice 1 only) — shipped 2026-04-20 as part of v2.52.0
+> **Slice 2 deferred**: live evidence run requires manual kickoff against
+> the testbed repo; see frontmatter for rationale.
+> **Estimated Effort**: 2 slices (1 shipped, 1 deferred)
+> **Risk Level**: Medium (Slice 1 delivered pure harness code with 25
+> new unit tests; no production risk)
+> **Target Version**: v2.52.0
 
 See arc overview: [Phase-TESTBED-ARC.md](Phase-TESTBED-ARC.md)
 Depends on: TESTBED-01 ✅ (harness + `forge_testbed_run` + defect-log schema)

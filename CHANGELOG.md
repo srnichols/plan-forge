@@ -7,7 +7,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased] — targeting 2.52.0
 
-_(No changes yet.)_
+### Shipped — Orchestrator silent-failure guard (2026-04-20)
+
+- **`detectSilentWorkerFailure()`** in `pforge-mcp/orchestrator.mjs`: worker exits 0 with stdout < 50 bytes or help-text output now marks the slice as `failed` instead of silently passing. Closes follow-up for #77 (the `--output-format jsonl` regression that let SHOP-07 appear to pass in 32 seconds).
+- 7 new unit tests in `pforge-mcp/tests/worker-capability.test.mjs` covering empty stdout, short stdout, help-text, healthy output, non-zero exits, human sentinel, and missing result. All 27 worker-capability + 212 orchestrator tests green.
+- Commit: `b0ab2ac`.
+
+### Shipped — TESTBED-02 Slice 1: happy-path scenario harness (2026-04-20)
+
+- **5 happy-path scenario fixtures** in `docs/plans/testbed-scenarios/` covering manual-ch8 replay, new REST endpoint, bug-to-fix loop, coverage-gap loop, and visual-regression loop.
+- **`forge_testbed_happypath`** — new MCP tool that runs all happy-path scenarios sequentially with aggregated pass/fail summary. Registered in `capabilities.mjs` (addedIn: 2.57.0) with `server.mjs` REST wiring.
+- **`pforge testbed-happypath`** CLI command (symmetric PowerShell + bash) via `pforge-mcp/testbed/cli-happypath.mjs` helper.
+- **25 new unit tests** in `pforge-mcp/tests/testbed-happypath.test.mjs` covering fixture validation, tool handler logic, integration dry-run, CLI parity, and capabilities metadata.
+- **Slice 2 (live evidence run) deferred** — requires manual kickoff against `E:\GitHub\plan-forge-testbed`; will roll into TESTBED-03 or a dedicated evidence phase.
+- Plan: [docs/plans/Phase-TESTBED-02.md](docs/plans/Phase-TESTBED-02.md). Commit: `10c8779`.
+
+### Shipped — Dashboard polish (2026-04-20)
+
+- **New Smelt modal**: Crucible "New Smelt" upgraded from `window.prompt` to a textarea modal with char counter, Ctrl/Cmd+Enter submit, Escape to cancel, and lane selector.
+- **Header version badge** reads the VERSION file and links to the matching GitHub release tag. Amber class for `-dev` builds, green on tagged releases.
+- **Fixed hardcoded version strings** in `pforge-mcp/capabilities.mjs` (was `"2.3.0"`) and `pforge-mcp/server.mjs` `/api/version` (was `"2.10.2"`) — both now read the VERSION file at startup.
+- Commit: `697b682`.
 
 ---
 

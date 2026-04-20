@@ -5,6 +5,44 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.57.0] — Unreleased — Phase-25 Inner-Loop Enhancements
+
+> **The Forge gains a reflective layer.** Seven opt-in subsystems turn deterministic slice execution into a closed research loop: every slice can teach the next one, every run can teach the next plan, every project can teach the next project. Nothing in existing workflows breaks — all new behavior defaults to *off*, *suggest*, or *advisory*.
+
+### Added — Inner Loop (v2.57.0)
+
+- **Reflexion retry context (L7)** — When a slice's validation gate fails, the next attempt's prompt now includes a compact block with the failing command, model, duration, and a 2KB stderr tail. The worker reasons about the prior failure instead of blindly retrying. `buildReflexionBlock()` in `pforge-mcp/memory.mjs`.
+- **Trajectory capture (L8)** — On slice pass, sentinel-wrapped (`<!-- PFORGE_TRAJECTORY:BEGIN --> … <!-- PFORGE_TRAJECTORY:END -->`) worker notes are extracted, word-capped at 500, and written to `.forge/trajectories/<slice>/<iso>.md`. Path-traversal-safe. Postmortem and federation consumers read these for compact run narratives.
+- **Auto-skill library (L2)** — Passed slices are captured as candidate skills (domain keywords + gate commands + SHA prefix). On the next slice, `retrieveAutoSkills()` injects matching skills into the prompt ranked by reuse count. Skills promote to "stable" at 3 reuses. Storage: `.forge/auto-skills/*.md`.
+- **Adaptive gate synthesis (L6)** — During plan pre-flight, Tempering-domain-matching slices with no validation gate get a suggested command printed using the project's Tempering coverage minimum and runtime budget. Default mode `suggest` (never mutates your plan). Config: `runtime.gateSynthesis: { mode, domains }`.
+- **Plan postmortems + hardener feedback (L5)** — Every run writes a JSON postmortem (`retriesPerSlice`, `gateFlaps`, `topFailureReason`, `costDelta`, `driftDelta`) to `.forge/plans/<plan-basename>/postmortem-*.json`. Retention 10 per plan. Step-2 hardener now reads the newest postmortems and folds signals into the Scope Contract — closing the loop from execution back into planning.
+- **Cross-project federation (L4-lite)** — When `cross.*` brain recall misses L3 (OpenBrain), the facade fans out to read-only absolute-local-paths listed in `brain.federation.repos[]`. URLs and relative paths are rejected by contract (defense-in-depth path containment). Opt-in. Config: `brain.federation: { enabled, repos: [] }`.
+- **Reviewer-agent in-loop (L4)** — Opt-in. `brain.gate-check` responder can invoke a speed-quorum reviewer on each slice's diff summary and attach `{ score, critical, summary, durationMs }` to the response. **Advisory-only in v2.57** — critical verdicts do not block unless operators set `blockOnCritical: true`. Blocking mode enters Phase-26 after calibration data exists. Config: `runtime.reviewer: { enabled, quorumPreset: "speed", blockOnCritical: false, timeoutMs: 30000 }`.
+- **Inner-loop capability surface** — New `innerLoop` block in `forge_capabilities` output and `worker-capabilities.json` advertising all 7 subsystems (level, addedIn, enabledByDefault, configKey, configDefaults, dashboardTab, module). IDEs, MCP consumers, and the Dashboard Config tab auto-discover subsystem state.
+- **User manual: "The Inner Loop" chapter** — New `docs/manual/inner-loop.html` with a Mermaid state-flow diagram covering plan → slice → reflexion retry → trajectory → skill capture → reviewer → postmortem → federation. Cross-linked from `how-it-works.html` and `manual/index.html` nav.
+- **Dashboard Config tab editors** — Toggles, selects, and repo lists for `runtime.gateSynthesis`, `runtime.reviewer`, and `brain.federation`. Every new subsystem is user-configurable without editing JSON.
+
+### Changed
+
+- `CONFIG_SCHEMA` in `pforge-mcp/capabilities.mjs` gained `runtime.gateSynthesis`, `runtime.reviewer`, and `brain.federation` blocks so the Dashboard Config tab renders editors automatically.
+- Step-2 Harden-Plan prompt (`.github/prompts/step2-harden-plan.prompt.md`) now directs the hardener to read prior plan postmortems before finalizing the Scope Contract.
+
+### Security
+
+- Federation reader enforces absolute-local-paths-only (D9): rejects URLs (`http://`, `https://`, `ftp://`, `file://`), rejects relative paths, strips `..` components, and applies a defense-in-depth containment check against the resolved base directory.
+- Trajectory writer sanitizes slice names and timestamps before building paths (no `..`, no path separators, no control characters).
+
+### Migration
+
+- **No action required.** All seven subsystems default to `off` / `suggest` / `advisory` for existing projects. To opt in, set the relevant key in `.forge.json` or flip the toggle in the Dashboard → Config tab. New installs ship with best-defaults.
+
+### Tests
+
+- 9 reflexion tests, 22 trajectory tests, 26 auto-skill tests, 23 gate-synthesis tests, 13 postmortem tests, 23 federation tests, 25 reviewer tests, 15 capability-surface tests.
+- Full-suite regression after each slice: green (2627/2627 across 96 files at Slice 7 checkpoint).
+
+---
+
 ## [2.56.0] — 2026-04-20 — Update Source preference
 
 ### Added

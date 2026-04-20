@@ -89,6 +89,22 @@
 | **Dry Run** | `--dry-run` | None | Parses and validates plan structure |
 | **Resume** | `--resume-from N` | Same as auto | Skips completed slices |
 
+## Inner Loop (v2.57.0)
+
+Seven opt-in subsystems that turn deterministic slice execution into a closed research loop. All default to *off*, *suggest*, or *advisory* — nothing in existing workflows breaks. See `docs/manual/inner-loop.html` for the full state-flow diagram.
+
+| Subsystem | Level | Default | Config Key | Storage |
+|-----------|-------|---------|------------|---------|
+| **Reflexion retry context** | L7 | always on | *(none)* | in-memory |
+| **Trajectories** | L8 | always on | *(none)* | `.forge/trajectories/<slice>/*.md` |
+| **Auto-skill library** | L2 | always on | *(none, Phase-26 toggles)* | `.forge/auto-skills/*.md` |
+| **Adaptive gate synthesis** | L6 | suggest | `runtime.gateSynthesis.mode` | stdout only (never mutates plans) |
+| **Plan postmortems** | L5 | always on | *(retention=10)* | `.forge/plans/<basename>/postmortem-*.json` |
+| **Cross-project federation** | L4-lite | off | `brain.federation.enabled` | read-only, absolute local paths only |
+| **Reviewer-agent in-loop** | L4 | off, advisory | `runtime.reviewer.enabled` | verdict attached to gate-check response |
+
+Discover at runtime via `forge_capabilities` → `innerLoop`. Configure via Dashboard → Config tab or `.forge.json`.
+
 ## Agent-Per-Slice Routing
 
 Assign a different AI model to each execution role via `modelRouting` in `.forge.json`. The orchestrator selects the appropriate model automatically based on the current operation:

@@ -1535,18 +1535,31 @@ export function parseStderrStats(stderr) {
   if (newModelMatch) stats.model = newModelMatch[1];
 
   // Old format: model breakdown lines "claude-sonnet-4.6  11.7m in, 97.5k out, ..."
+  //
+  // Bug #79: the "Tokens ↑ X • ↓ Y" header is already a cross-model aggregate.
+  // When BOTH that header AND per-model breakdown lines appear in the same
+  // stderr (common when gh copilot prints both the summary and the detail
+  // block), summing the breakdown on top of the aggregate inflated tokens_in
+  // by the number of breakdown lines — up to ~100× on long sessions.
+  //
+  // Fix: if `newTokenMatch` already captured the aggregate, treat the
+  // breakdown lines as identification-only (pick the dominant model by
+  // output-token count) and do NOT re-accumulate tokens.
   const modelLines = stderr.match(/^\s+([\w.-]+)\s+([\d.]+[kmb]?)\s+in,\s+([\d.]+[kmb]?)\s+out/gm);
   if (modelLines) {
     let maxTokens = 0;
+    const haveAggregate = Boolean(newTokenMatch);
     for (const line of modelLines) {
       const m = line.match(/^\s+([\w.-]+)\s+([\d.]+[kmb]?)\s+in,\s+([\d.]+[kmb]?)\s+out/);
       if (!m) continue;
       const model = m[1];
       const tokIn = parseTokenCount(m[2]);
       const tokOut = parseTokenCount(m[3]);
-      stats.tokens_in += tokIn;
-      stats.tokens_out += tokOut;
-      // Primary model = the one with most output tokens
+      if (!haveAggregate) {
+        stats.tokens_in += tokIn;
+        stats.tokens_out += tokOut;
+      }
+      // Primary model = the one with most output tokens (works either way).
       if (tokOut > maxTokens) {
         maxTokens = tokOut;
         stats.model = model;

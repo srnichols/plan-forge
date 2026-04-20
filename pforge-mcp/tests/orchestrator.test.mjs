@@ -1150,6 +1150,40 @@ describe("parseStderrStats", () => {
     expect(stats.tokens_in).toBe(1_200_000);
     expect(stats.tokens_out).toBe(8_500);
   });
+
+  // Bug #79 — when gh copilot prints BOTH the aggregate "Tokens ↑ X • ↓ Y"
+  // header AND the per-model breakdown block, tokens_in was being summed
+  // twice, inflating cost-history.json. The aggregate must win; breakdown
+  // lines are identification-only when the aggregate is present.
+  it("does not double-count when aggregate header + per-model breakdown both appear (bug #79)", () => {
+    const stderr = [
+      "Model     claude-sonnet-4.6",
+      "Tokens    ↑ 639.4k • ↓ 4.5k • 552.1k (cached)",
+      "Requests  1 Premium (35s)",
+      "",
+      "Breakdown by AI model:",
+      " claude-sonnet-4.6  639.4k in, 4.5k out, 552.1k cached",
+    ].join("\n");
+    const stats = parseStderrStats(stderr);
+    expect(stats.model).toBe("claude-sonnet-4.6");
+    expect(stats.tokens_in).toBe(639_400);   // NOT 1_278_800 (pre-fix double-count)
+    expect(stats.tokens_out).toBe(4_500);    // NOT 9_000
+    expect(stats.premiumRequests).toBe(1);
+  });
+
+  it("still sums per-model breakdown when aggregate header is absent (bug #79 — old format preserved)", () => {
+    const stderr = [
+      " claude-sonnet-4.6  639.4k in, 4.5k out, 552.1k cached",
+      " claude-opus-4.6  100k in, 2k out, 50k cached",
+      "1 Premium request",
+    ].join("\n");
+    const stats = parseStderrStats(stderr);
+    // Still summing across two distinct models when no aggregate is present.
+    expect(stats.tokens_in).toBe(739_400);
+    expect(stats.tokens_out).toBe(6_500);
+    // Primary = one with most output tokens.
+    expect(stats.model).toBe("claude-sonnet-4.6");
+  });
 });
 
 // ─── extractTokens ──────────────────────────────────────────────────

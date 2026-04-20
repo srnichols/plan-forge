@@ -143,7 +143,14 @@ function Invoke-Check {
         Write-Host "ERROR: validate-setup.ps1 not found at $validateScript" -ForegroundColor Red
         exit 1
     }
-    & $validateScript @Arguments
+    # Bug A fix: $Arguments is null when no extra args are supplied. Splatting
+    # `@$null` binds empty string to `[string]$ProjectPath`, clobbering its
+    # `(Get-Location).Path` default. Only splat when Arguments actually exist.
+    if ($Arguments -and $Arguments.Count -gt 0) {
+        & $validateScript @Arguments
+    } else {
+        & $validateScript -ProjectPath $RepoRoot
+    }
 }
 
 # ─── Command: status ───────────────────────────────────────────────────
@@ -1784,7 +1791,7 @@ function Invoke-Update {
 
     # ─── Confirm ──────────────────────────────────────────────────
     if (-not $forceUpdate) {
-        $confirm = Read-Host "Apply $($updates.Count) updates and $($newFiles.Count) new files? [y/N]"
+        $confirm = Read-Host "Apply $($updates.Count) updates and $($newFiles.Count) new files? [y/N] (use --force to skip this prompt)"
         if ($confirm -notin @('y', 'Y', 'yes', 'Yes')) {
             Write-Host "Cancelled." -ForegroundColor Yellow
             return
@@ -1856,8 +1863,12 @@ Files in this directory (except this README) are gitignored — they are runtime
         }
     }
 
-    # Auto-install MCP dependencies if MCP files were updated
-    $mcpUpdated = ($updates + $newFiles) | Where-Object { $_.Name -like "pforge-mcp/*" }
+    # Auto-install MCP dependencies if MCP files were updated.
+    # Bugs B & C fix: wrap both in @() so a single-hashtable $updates or
+    # $newFiles doesn't unwrap into a bare hashtable (which triggers either
+    # "hash table can only be added to another hash table" or, worse, a
+    # hashtable-merge with a 'Name' key collision).
+    $mcpUpdated = @(@($updates) + @($newFiles) | Where-Object { $_.Name -like "pforge-mcp/*" })
     if ($mcpUpdated) {
         $mcpDir = Join-Path $RepoRoot "pforge-mcp"
         if (Test-Path (Join-Path $mcpDir "package.json")) {
@@ -1883,7 +1894,7 @@ Files in this directory (except this README) are gitignored — they are runtime
     }
 
     # Check if CLI itself was updated — inform user
-    $cliUpdated = ($updates + $newFiles) | Where-Object { $_.Name -eq 'pforge.ps1' -or $_.Name -eq 'pforge.sh' }
+    $cliUpdated = @(@($updates) + @($newFiles) | Where-Object { $_.Name -eq 'pforge.ps1' -or $_.Name -eq 'pforge.sh' })
     if ($cliUpdated) {
         Write-Host ""
         Write-Host "ℹ️  CLI scripts (pforge.ps1/pforge.sh) were updated." -ForegroundColor Cyan
@@ -2426,6 +2437,14 @@ function Invoke-Smith {
     Write-Host "╚══════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
     Write-Host ""
 
+    # Detect whether this is the plan-forge dev repo itself (has presets/ and
+    # pforge-mcp/server.mjs). Several checks below only make sense in the dev
+    # repo — e.g. dashboard screenshots for the marketing site, CHANGELOG
+    # entries for every framework version bump, and tempering coverage minima
+    # seeded from plan-forge's own `.forge/tempering/` state. Downstream
+    # consumer projects carry VERSION/.forge/ but shouldn't be graded on them.
+    $isPlanForgeDevRepo = (Test-Path (Join-Path $RepoRoot "presets") -PathType Container) -and (Test-Path (Join-Path $RepoRoot "pforge-mcp/server.mjs") -PathType Leaf)
+
     # ═══════════════════════════════════════════════════════════════
     # 1. ENVIRONMENT
     # ═══════════════════════════════════════════════════════════════
@@ -2765,7 +2784,10 @@ function Invoke-Smith {
         $presetKey = ($preset -split ',')[0].Trim()
     }
 
-    if ($expectedCounts.ContainsKey($presetKey)) {
+    # Guard: ContainsKey($null) throws "Value cannot be null. (Parameter 'key')".
+    # A .forge.json without a `preset` field (e.g., the plan-forge dev repo's
+    # own minimal config) leaves $preset null.
+    if ($presetKey -and $expectedCounts.ContainsKey($presetKey)) {
         $expected = $expectedCounts[$presetKey]
 
         $instrDir = Join-Path $RepoRoot ".github/instructions"
@@ -3165,26 +3187,28 @@ function Invoke-Smith {
         if (Test-Path $dashboardJs) { Doctor-Pass "dashboard/app.js" }
         else { Doctor-Warn "dashboard/app.js missing" "MCP dashboard has no frontend logic" }
 
-        # Dashboard screenshots for docs
-        $screenshotDir = Join-Path $RepoRoot "docs/assets/dashboard"
-        if (Test-Path $screenshotDir) {
-            $expectedScreenshots = @("progress.png", "runs.png", "cost.png", "actions.png", "config.png", "traces.png", "skills.png", "replay.png", "extensions.png")
-            $found = (Get-ChildItem -Path $screenshotDir -Filter "*.png" -File).Name
-            $missing = $expectedScreenshots | Where-Object { $_ -notin $found }
-            if ($missing.Count -eq 0) {
-                Doctor-Pass "$($expectedScreenshots.Count) dashboard screenshots in docs/assets/dashboard/"
+        # Dashboard screenshots for docs — only inside the plan-forge dev repo.
+        # Downstream consumers don't need to populate docs/assets/dashboard/.
+        if ($isPlanForgeDevRepo) {
+            $screenshotDir = Join-Path $RepoRoot "docs/assets/dashboard"
+            if (Test-Path $screenshotDir) {
+                $expectedScreenshots = @("progress.png", "runs.png", "cost.png", "actions.png", "config.png", "traces.png", "skills.png", "replay.png", "extensions.png")
+                $found = (Get-ChildItem -Path $screenshotDir -Filter "*.png" -File).Name
+                $missing = $expectedScreenshots | Where-Object { $_ -notin $found }
+                if ($missing.Count -eq 0) {
+                    Doctor-Pass "$($expectedScreenshots.Count) dashboard screenshots in docs/assets/dashboard/"
+                } else {
+                    Doctor-Warn "Missing $($missing.Count) screenshot(s): $($missing -join ', ')" "Run: node pforge-mcp/capture-screenshots.mjs"
+                }
             } else {
-                Doctor-Warn "Missing $($missing.Count) screenshot(s): $($missing -join ', ')" "Run: node pforge-mcp/capture-screenshots.mjs"
+                Doctor-Warn "docs/assets/dashboard/ not found" "Run: node pforge-mcp/capture-screenshots.mjs to generate"
             }
-        } else {
-            Doctor-Warn "docs/assets/dashboard/ not found" "Run: node pforge-mcp/capture-screenshots.mjs to generate"
         }
 
         # Site images — only relevant inside the plan-forge dev repo itself.
         # These are plan-forge's marketing assets (og-card, hero, etc.); downstream projects
         # never need them. Detect dev-repo by presence of presets/ + pforge-mcp/server.mjs.
         $siteAssetsDir = Join-Path $RepoRoot "docs/assets"
-        $isPlanForgeDevRepo = (Test-Path (Join-Path $RepoRoot "presets") -PathType Container) -and (Test-Path (Join-Path $RepoRoot "pforge-mcp/server.mjs") -PathType Leaf)
         if ($isPlanForgeDevRepo -and (Test-Path $siteAssetsDir)) {
             $siteImages = @("og-card.webp", "hero-illustration.webp", "problem-80-20-wall.webp")
             $siteMissing = $siteImages | Where-Object { -not (Test-Path (Join-Path $siteAssetsDir $_)) }
@@ -3331,8 +3355,13 @@ function Invoke-Smith {
         $clContent = Get-Content $changelogPath -Raw
         if ($clContent -match "\[v?$([regex]::Escape($currentVer))\]|## v?$([regex]::Escape($currentVer))") {
             Doctor-Pass "CHANGELOG.md has entry for v$currentVer"
+        } elseif ($isPlanForgeDevRepo) {
+            # Framework repo: VERSION == release cadence, so every bump needs a CHANGELOG line.
+            Doctor-Warn "CHANGELOG.md missing entry for v$currentVer" "Add a '## [$currentVer] — <date>' section with release notes"
         } else {
-            Doctor-Warn "CHANGELOG.md missing entry for v$currentVer" "Add release notes for the current version"
+            # Downstream consumer: VERSION tracks the pforge framework, not the app's own version.
+            # Don't grade consumer CHANGELOGs by framework version — just note the framework version.
+            Doctor-Pass "CHANGELOG.md present (framework v$currentVer — downstream CHANGELOG tracks your app, not pforge)"
         }
     } else {
         Doctor-Warn "CHANGELOG.md not found"
@@ -3690,8 +3719,10 @@ function Invoke-Smith {
                 }
 
                 # Below-minimum warning mirrors the `tempering-coverage-below-minimum`
-                # watcher rule (≥ 5-point gap).
-                if ($scan.coverageVsMinima) {
+                # watcher rule (≥ 5-point gap). Only surface inside the plan-forge
+                # dev repo — downstream projects may have `.forge/tempering/`
+                # state seeded from pforge but unrelated to their own coverage.
+                if ($scan.coverageVsMinima -and $isPlanForgeDevRepo) {
                     $belowMin = @($scan.coverageVsMinima | Where-Object { $_.gap -ge 5 })
                     if ($belowMin.Count -gt 0) {
                         Doctor-Warn "$($belowMin.Count) coverage layer(s) below minimum by ≥ 5 points" "Run 'forge_tempering_status' to inspect the gap report"
@@ -3729,7 +3760,7 @@ function Invoke-Smith {
                     }
                 }
                 Doctor-Pass "$($runFiles.Count) run(s); latest: $verdict, $totalPass pass / $totalFail fail across $scannerCount scanner(s), $runAgeMin min old"
-                if ($verdict -eq "fail" -or $verdict -eq "error" -or $verdict -eq "budget-exceeded") {
+                if (($verdict -eq "fail" -or $verdict -eq "error" -or $verdict -eq "budget-exceeded") -and $isPlanForgeDevRepo) {
                     Doctor-Warn "Latest Tempering run verdict=$verdict" "Open $($latestRun.Name) for per-scanner detail"
                 }
             } catch {

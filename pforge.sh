@@ -1569,7 +1569,7 @@ print(v if isinstance(v, str) else ','.join(v))
 
     # ─── Confirm ──────────────────────────────────────────────────
     if ! $force; then
-        read -rp "Apply ${#_updates[@]} updates and ${#_new_files[@]} new files? [y/N] " confirm
+        read -rp "Apply ${#_updates[@]} updates and ${#_new_files[@]} new files? [y/N] (use --force to skip this prompt) " confirm
         case "$confirm" in
             y|Y|yes|Yes) ;;
             *) echo "Cancelled."; return 0 ;;
@@ -2166,6 +2166,15 @@ cmd_doctor() {
     echo "╚══════════════════════════════════════════════════════════════╝"
     echo ""
 
+    # Detect whether this is the plan-forge dev repo itself. Several checks
+    # only make sense in the dev repo — dashboard screenshots, site images,
+    # CHANGELOG entries per framework bump, tempering coverage minima.
+    # Downstream projects carry VERSION/.forge/ but shouldn't be graded on them.
+    local is_planforge_dev=0
+    if [ -d "$REPO_ROOT/presets" ] && [ -f "$REPO_ROOT/pforge-mcp/server.mjs" ]; then
+        is_planforge_dev=1
+    fi
+
     # ═══════════════════════════════════════════════════════════════
     # 1. ENVIRONMENT
     # ═══════════════════════════════════════════════════════════════
@@ -2638,36 +2647,34 @@ cmd_doctor() {
         if [ -f "$dashboard_js" ]; then doctor_pass "dashboard/app.js"
         else doctor_warn "dashboard/app.js missing" "MCP dashboard has no frontend logic"; fi
 
-        # Dashboard screenshots for docs
-        local screenshot_dir="$REPO_ROOT/docs/assets/dashboard"
-        if [ -d "$screenshot_dir" ]; then
-            local expected_screenshots=("progress.png" "runs.png" "cost.png" "actions.png" "config.png" "traces.png" "skills.png" "replay.png" "extensions.png")
-            local found_count=0 missing_names=""
-            for ss in "${expected_screenshots[@]}"; do
-                if [ -f "$screenshot_dir/$ss" ]; then
-                    found_count=$((found_count + 1))
+        # Dashboard screenshots for docs — only inside the plan-forge dev repo.
+        if [ $is_planforge_dev -eq 1 ]; then
+            local screenshot_dir="$REPO_ROOT/docs/assets/dashboard"
+            if [ -d "$screenshot_dir" ]; then
+                local expected_screenshots=("progress.png" "runs.png" "cost.png" "actions.png" "config.png" "traces.png" "skills.png" "replay.png" "extensions.png")
+                local found_count=0 missing_names=""
+                for ss in "${expected_screenshots[@]}"; do
+                    if [ -f "$screenshot_dir/$ss" ]; then
+                        found_count=$((found_count + 1))
+                    else
+                        [ -n "$missing_names" ] && missing_names="$missing_names, "
+                        missing_names="$missing_names$ss"
+                    fi
+                done
+                if [ $found_count -eq ${#expected_screenshots[@]} ]; then
+                    doctor_pass "$found_count dashboard screenshots in docs/assets/dashboard/"
                 else
-                    [ -n "$missing_names" ] && missing_names="$missing_names, "
-                    missing_names="$missing_names$ss"
+                    local missing_count=$(( ${#expected_screenshots[@]} - found_count ))
+                    doctor_warn "Missing $missing_count screenshot(s): $missing_names" "Run: node pforge-mcp/capture-screenshots.mjs"
                 fi
-            done
-            if [ $found_count -eq ${#expected_screenshots[@]} ]; then
-                doctor_pass "$found_count dashboard screenshots in docs/assets/dashboard/"
             else
-                local missing_count=$(( ${#expected_screenshots[@]} - found_count ))
-                doctor_warn "Missing $missing_count screenshot(s): $missing_names" "Run: node pforge-mcp/capture-screenshots.mjs"
+                doctor_warn "docs/assets/dashboard/ not found" "Run: node pforge-mcp/capture-screenshots.mjs to generate"
             fi
-        else
-            doctor_warn "docs/assets/dashboard/ not found" "Run: node pforge-mcp/capture-screenshots.mjs to generate"
         fi
 
         # Site images — only relevant inside the plan-forge dev repo itself.
         # These are plan-forge marketing assets; downstream projects don't need them.
         local site_assets="$REPO_ROOT/docs/assets"
-        local is_planforge_dev=0
-        if [ -d "$REPO_ROOT/presets" ] && [ -f "$REPO_ROOT/pforge-mcp/server.mjs" ]; then
-            is_planforge_dev=1
-        fi
         if [ $is_planforge_dev -eq 1 ] && [ -d "$site_assets" ]; then
             local site_images=("og-card.webp" "hero-illustration.webp" "problem-80-20-wall.webp")
             local si_missing=""
@@ -2763,8 +2770,12 @@ cmd_doctor() {
     if [ -f "$changelog_path" ]; then
         if grep -qiE "\[v?${current_ver}\]|## v?${current_ver}" "$changelog_path" 2>/dev/null; then
             doctor_pass "CHANGELOG.md has entry for v$current_ver"
+        elif [ $is_planforge_dev -eq 1 ]; then
+            # Framework repo: VERSION == release cadence, so every bump needs a CHANGELOG line.
+            doctor_warn "CHANGELOG.md missing entry for v$current_ver" "Add a '## [$current_ver] — <date>' section with release notes"
         else
-            doctor_warn "CHANGELOG.md missing entry for v$current_ver" "Add release notes for the current version"
+            # Downstream consumer: VERSION tracks the pforge framework, not the app's own version.
+            doctor_pass "CHANGELOG.md present (framework v$current_ver — downstream CHANGELOG tracks your app, not pforge)"
         fi
     else
         doctor_warn "CHANGELOG.md not found"
@@ -3007,9 +3018,11 @@ cmd_doctor() {
             fi
 
             # Below-minimum warning — count gap records with gap ≥ 5.
-            # Walks the file line-by-line looking for the "gap" field.
+            # Only surface inside the plan-forge dev repo — downstream projects may
+            # have `.forge/tempering/` state seeded from pforge but unrelated to
+            # their own coverage.
             below_min=$(awk '/"gap"[[:space:]]*:/ { gsub(/[^0-9.]/,"",$0); if ($0+0 >= 5) c++ } END { print c+0 }' "$latest_scan" 2>/dev/null)
-            if [ "${below_min:-0}" -gt 0 ]; then
+            if [ "${below_min:-0}" -gt 0 ] && [ $is_planforge_dev -eq 1 ]; then
                 doctor_warn "$below_min coverage layer(s) below minimum by ≥ 5 points" "Run 'forge_tempering_status' to inspect the gap report"
             fi
         fi
@@ -3044,7 +3057,9 @@ cmd_doctor() {
             doctor_pass "$run_count run(s); latest: $run_verdict, ${run_pass:-0} pass / ${run_fail:-0} fail across ${scanner_count:-0} scanner(s), $run_age_min min old"
             case "$run_verdict" in
                 fail|error|budget-exceeded)
-                    doctor_warn "Latest Tempering run verdict=$run_verdict" "Open $(basename "$latest_run") for per-scanner detail"
+                    if [ $is_planforge_dev -eq 1 ]; then
+                        doctor_warn "Latest Tempering run verdict=$run_verdict" "Open $(basename "$latest_run") for per-scanner detail"
+                    fi
                     ;;
             esac
         fi

@@ -7,6 +7,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.59.2] — 2026-04-20 — CLI Papercuts & Smith Downstream Noise
+
+> **Patch release — follow-up to v2.59.1 based on field feedback.** Fixes three cosmetic-but-noisy PowerShell `pforge` bugs that emitted non-zero exit codes on successful operations, one UX gap on the update prompt, four smith warnings that fired spuriously on downstream consumer projects, and one latent `ContainsKey($null)` crash when `.forge.json` omits the `preset` field. No functional changes to orchestrator, MCP tools, setup, or runtime behavior.
+
+### Fixed
+
+- **`pforge check` — empty `-ProjectPath` binding.** `Invoke-Check` splatted `$Arguments` directly into `validate-setup.ps1`. When no extra args were supplied, `ValueFromRemainingArguments` left `$Arguments` null; splatting `@$null` bound an empty string to `[string]$ProjectPath`, overriding its `(Get-Location).Path` default and throwing "Cannot bind argument to parameter 'Path' because it is an empty string." Now only splats when `$Arguments` is non-empty, else passes `-ProjectPath $RepoRoot` explicitly.
+- **`pforge update` — hashtable-merge errors in post-update summary.** `$updates + $newFiles` worked when both arrays had ≠ 1 element, but with single-element arrays PowerShell unwrapped each to a bare hashtable. `hashtable + hashtable` triggers merge semantics → duplicate-`Name`-key collisions ("Item has already been added. Key in dictionary: 'Name'"). With empty + hashtable → "A hash table can only be added to another hash table." Both paths now wrap both sides in `@(...)` to force array context. Files were always written correctly; this error was cosmetic but returned non-zero exit.
+- **Smith — `ContainsKey($null)` crash on minimal `.forge.json`.** A `.forge.json` without a `preset` field (e.g., the plan-forge dev repo's own config) left `$preset` null. `$expectedCounts.ContainsKey($null)` threw "Value cannot be null. (Parameter 'key')" and aborted smith before the summary line printed. Now guards with `$presetKey -and ...`.
+
+### Changed
+
+- **Smith — downstream-repo warnings suppressed.** Four checks that only make sense inside the plan-forge dev repo itself now guard on the `isPlanForgeDevRepo` detector (`presets/` directory + `pforge-mcp/server.mjs`): (1) dashboard screenshots in `docs/assets/dashboard/` (plan-forge marketing site asset), (2) tempering coverage-below-minimum warning (downstream `.forge/tempering/` may be seeded from pforge and unrelated to consumer coverage), (3) latest tempering run verdict=fail warning (same rationale), (4) CHANGELOG-missing-entry-for-VERSION warning (consumer CHANGELOG tracks the consumer's app, not the pforge framework version carried in `VERSION`). Downstream projects now see a friendlier pass line noting VERSION is the framework version.
+- **`pforge update` — prompt now mentions `--force`.** The confirmation prompt "Apply N updates and M new files? [y/N]" now appends "(use --force to skip this prompt)" so users can discover the non-interactive path.
+
+### Known issues (deferred)
+
+- **`pforge update --tag vX.Y.Z` not authoritative when sibling clone exists.** Flag is honored under `--from-github`, but auto-detection can still route through sibling when `--from-github` is not passed. Explicit `--tag` should win over source auto-detection; scheduled for v2.60.0 alongside the broader `updateSource` precedence refactor.
+
 ## [2.59.1] — 2026-04-20 — Setup/Update Distribution Fixes
 
 > **Patch release — fixes a class of silent setup/update gaps.** An audit of `setup.ps1`, `setup.sh`, and `pforge update` against the repo's actual content found four distribution gaps: pipeline prompts were never copied to fresh projects, the `PreCommit.mjs` guard hook (#74) never reached downstream projects, `pforge update` missed `project-profile.prompt.md` and two shared instruction files on Unix, and `pforge smith` counted prompts without verifying pipeline prompts were among them — which masked the first gap. All four fixed. No functional changes to orchestrator, MCP tools, or runtime behavior.

@@ -1320,6 +1320,20 @@ const TOOLS = [
       required: [],
     },
   },
+  {
+    name: "forge_testbed_run",
+    description: "Run a testbed scenario against an external testbed repository. Executes preflight checks, setup, execution steps, and assertions, then writes defect findings. Use dryRun to validate without executing.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        scenarioId: { type: "string", description: "Scenario fixture ID (filename stem under docs/plans/testbed-scenarios/)" },
+        testbedPath: { type: "string", description: "Path to testbed repository (default: from .forge.json testbed.path)" },
+        dryRun: { type: "boolean", description: "If true, skip execute and teardown steps (default: false)" },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+      required: ["scenarioId"],
+    },
+  },
 ];
 
 function planNameToRunbookName(planPath) {
@@ -1489,6 +1503,7 @@ function executeTool(name, args) {
     case "forge_notify_test":
     case "forge_search":
     case "forge_doctor_quorum":
+    case "forge_testbed_run":
       return null; // Handled async in CallToolRequestSchema handler
     default:
       return { success: false, error: `Unknown tool: ${name}` };
@@ -4442,6 +4457,31 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     return { content: [{ type: "text", text: output }], isError: !result.success };
   }
 
+  // ─── forge_testbed_run — testbed scenario execution (TESTBED-01) ───
+  if (name === "forge_testbed_run") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const { loadScenario, resolveTestbedPath } = await import("./testbed/scenarios.mjs");
+      const { runScenario } = await import("./testbed/runner.mjs");
+      const scenario = loadScenario(args.scenarioId, { projectRoot: cwd });
+      const testbedPath = resolveTestbedPath({ testbedPath: args.testbedPath }, { projectRoot: cwd });
+      const result = await runScenario(scenario, {
+        hub: activeHub,
+        projectRoot: cwd,
+        captureMemoryFn: captureMemory,
+        testbedPath,
+        dryRun: args.dryRun || false,
+      });
+      emitToolTelemetry("forge_testbed_run", args, result, Date.now() - t0, result.status === "passed" ? "OK" : "FAIL", cwd);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: result.status !== "passed" };
+    } catch (err) {
+      const durationMs = Date.now() - t0;
+      emitToolTelemetry("forge_testbed_run", args, { error: err.message, code: err.code }, durationMs, "ERROR", findProjectRoot(PROJECT_DIR));
+      return { content: [{ type: "text", text: JSON.stringify({ error: err.code || "ERR_TESTBED", message: err.message }) }], isError: true };
+    }
+  }
+
   // ─── Sync pforge tools ───
   const result = executeTool(name, args || {});
 
@@ -5450,6 +5490,8 @@ export function createExpressApp() {
     "forge_timeline",
     // Issue #73 — Doctor quorum is MCP-native read-only.
     "forge_doctor_quorum",
+    // Phase TESTBED-01 Slice 01 — Testbed runner is MCP-native.
+    "forge_testbed_run",
   ]);
   app.post("/api/tool/:name", async (req, res) => {
     try {

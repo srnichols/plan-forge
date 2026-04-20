@@ -7,6 +7,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased] — targeting 2.51.0
 
+### Shipped — TESTBED-01 Slice 01: `forge_testbed_run` core (2026-04-19)
+
+- **`forge_testbed_run`** — new MCP tool: run testbed scenarios against an external testbed repository. Preflight checks (repo exists, clean tree, HEAD match), file lock, step execution, 7 assertion kinds, defect-log writer, hub events, L3 memory capture.
+- **`pforge-mcp/testbed/runner.mjs`** — scenario runner with DI-based deps, lock management, assertion dispatch table.
+- **`pforge-mcp/testbed/defect-log.mjs`** — finding CRUD: `logFinding`, `listFindings`, `updateFindingStatus`. Frozen enums for severity/surface/status. Secret redaction on observed fields.
+- **`pforge-mcp/testbed/scenarios.mjs`** — scenario loader/validator: `loadScenario`, `listScenarios`, `validateScenarioFixture`, `resolveTestbedPath`.
+- **Assertion kinds**: `file-exists`, `file-contains`, `event-emitted`, `correlationId-thread`, `exit-code`, `duration-under`, `artefact-count`.
+- **Scenario fixture format**: JSON files in `docs/plans/testbed-scenarios/` with `kind` enum (`happy-path`, `chaos`, `perf`, `long-horizon`).
+- Plan: [docs/plans/Phase-TESTBED-ARC.md](docs/plans/Phase-TESTBED-ARC.md). Test count +36.
+
 ### Shipped — AUTO-UPDATE-01 true auto-install from GitHub (2026-04-20)
 
 Closes [#75](https://github.com/srnichols/plan-forge/issues/75).

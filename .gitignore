@@ -49,6 +49,9 @@ GEMINI.md
 docs/plans/auto/*
 !docs/plans/auto/README.md
 
+# Testbed findings (local audit trail, not repo history)
+docs/plans/testbed-findings/*.json
+
 # Rummag poller artifacts (not part of Plan Forge)
 .issues.json
 .rummag-baseline.txt

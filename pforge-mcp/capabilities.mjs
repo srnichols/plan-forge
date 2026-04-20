@@ -1266,6 +1266,31 @@ export const TOOL_METADATA = {
       output: { state: "done", detail: "Updated to v2.55.0" },
     },
   },
+  forge_testbed_run: {
+    intent: ["test", "validate", "testbed", "scenario", "end-to-end"],
+    aliases: ["run-testbed", "testbed-scenario", "testbed-run"],
+    cost: "high",
+    maxConcurrent: 1,
+    addedIn: "2.56.0",
+    prerequisites: ["testbed repo exists", "scenario fixture in docs/plans/testbed-scenarios/"],
+    produces: ["docs/plans/testbed-findings/*.json"],
+    consumes: ["docs/plans/testbed-scenarios/*.json", ".forge.json"],
+    sideEffects: ["writes defect log", "emits hub events", "acquires testbed lock"],
+    writesFiles: true,
+    network: false,
+    risk: "medium",
+    errors: {
+      ERR_TESTBED_NOT_FOUND: { message: "Testbed repo not found", recovery: "Set testbed.path in .forge.json" },
+      ERR_TESTBED_DIRTY: { message: "Testbed has uncommitted changes", recovery: "Commit or stash changes in testbed" },
+      ERR_TESTBED_LOCKED: { message: "Another scenario is running", recovery: "Wait or remove stale .forge/testbed.lock" },
+      ERR_SCENARIO_NOT_FOUND: { message: "Scenario fixture not found", recovery: "Check docs/plans/testbed-scenarios/" },
+      ERR_TESTBED_HEAD_MISMATCH: { message: "Testbed HEAD does not match expected commit", recovery: "Check expectedHead in scenario fixture" },
+    },
+    example: {
+      input: { scenarioId: "happy-path-01" },
+      output: { scenarioId: "happy-path-01", status: "passed", durationMs: 60000 },
+    },
+  },
 };
 
 export const WORKFLOWS = {

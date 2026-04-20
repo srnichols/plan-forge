@@ -7,16 +7,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased] — targeting 2.51.0
 
-### Shipped — AUTO-UPDATE-01 Slice 1: `pforge update --from-github` (2026-04-19)
+### Shipped — AUTO-UPDATE-01 true auto-install from GitHub (2026-04-20)
+
+Closes [#75](https://github.com/srnichols/plan-forge/issues/75).
 
 - **`pforge update --from-github [--tag <tag>]`** — download release tarball directly from GitHub, extract, and run existing file-copy logic. No local Plan Forge clone required.
-- **`pforge-mcp/update-from-github.mjs`** — shared Node.js helper: tag resolution (`resolveTag`), tarball download with 50 MB size cap + gzip verification + SHA-256 audit, config loading from `.forge.json` `update.fromGitHub.*`. CLI entry point for shell scripts.
-- **Flags**: `--from-github` (download from GitHub), `--tag <tag>` (pin version), `--keep-cache` (preserve tarball for rollback). `--dry-run` and `--force` work with `--from-github`.
-- **Error handling**: `ERR_NO_HEAD_TAG` (rejects `--tag HEAD`), `ERR_TAG_NOT_FOUND`, `ERR_RATE_LIMITED`, `ERR_TARBALL_TOO_LARGE`, `ERR_INVALID_GZIP`, `ERR_NETWORK_TIMEOUT`, `ERR_NO_TAR`, `ERR_EXTRACT_FAILED`.
+- **`pforge-mcp/update-from-github.mjs`** — shared Node.js helper: tag resolution (`resolveTag`), tarball download with 50 MB size cap + gzip verification + SHA-256 audit, config loading from `.forge.json` `update.fromGitHub.*`.
+- **Flags**: `--from-github`, `--tag <tag>`, `--keep-cache`. Existing `--dry-run` and `--force` still work.
+- **`pforge self-update [--yes]`** — wraps detection + install into a single command. Non-interactive with `--yes`.
+- **Dashboard Update Now button** — the existing update banner is now actionable. `POST /api/self-update` streams progress via SSE (`download` → `extract` → `copy` → `done`).
+- **`pforge smith --refresh-version-cache`** — bypass the 24-hour GitHub release cache for immediate re-check.
+- **Error codes**: `ERR_NO_HEAD_TAG`, `ERR_TAG_NOT_FOUND`, `ERR_RATE_LIMITED`, `ERR_TARBALL_TOO_LARGE`, `ERR_INVALID_GZIP`, `ERR_NETWORK_TIMEOUT`, `ERR_NO_TAR`, `ERR_EXTRACT_FAILED`, `ERR_UPDATE_DURING_RUN` (blocks self-update while `pforge run-plan` is active).
 - **Audit log**: Every `--from-github` install appends a JSONL entry to `.forge/update-audit.log` with `{ts, from, tag, sha256, sizeBytes, source, filesChanged, outcome}`.
-- **Back-compat**: Existing `pforge update <path>` behavior unchanged. Error message now suggests `--from-github` as an alternative.
-- Tests: `update-from-github.test.mjs` (16 tests), `update-from-github-shell.test.mjs` (6 tests). Test count +22.
-- Plan: [docs/plans/Phase-AUTO-UPDATE-01.md](docs/plans/Phase-AUTO-UPDATE-01.md). Closes [#75](https://github.com/srnichols/plan-forge/issues/75) (partial — Slice 2 pending).
+- **Back-compat**: Existing `pforge update <path>` behavior unchanged.
+- Plan: [docs/plans/Phase-AUTO-UPDATE-01.md](docs/plans/Phase-AUTO-UPDATE-01.md). Commits: `6eb48f8` (Slice 1 core), `9c26f7e` (Slice 2 self-update + dashboard + smith refresh). Test count +42.
 
 ### Shipped — FORGE-SHOP-06 Ask-bus RPC over the hub (2026-04-20)
 
@@ -27,10 +31,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 ### Planned — TESTBED-01 recursive validation harness
 
 - Phase TESTBED-01 drafted ([docs/plans/Phase-TESTBED-01.md](docs/plans/Phase-TESTBED-01.md)) — harness that drives `pforge run-plan` against fixture scenarios in `E:\GitHub\plan-forge-testbed`, captures L1/L2/L3 artefacts, writes defect-log entries. 2 new MCP tools (`forge_testbed_run`, `forge_testbed_findings`). 7 assertion kinds. Frozen defect-log schema. File-lock prevents parallel runs. Plus 3 GitHub Actions workflow templates under `templates/schedules/` and `scripts/audit-cli-parity.mjs`. Test count +54.
-
-### Planned — AUTO-UPDATE-01 true auto-install from GitHub
-
-- Phase AUTO-UPDATE-01 drafted ([docs/plans/Phase-AUTO-UPDATE-01.md](docs/plans/Phase-AUTO-UPDATE-01.md)) — `pforge update --from-github [--tag <tag>]` fetches release tarball from GitHub API, extracts to `.forge/cache/`, runs existing file-copy logic; no local Plan Forge clone required. `pforge self-update [--yes]` wraps detection + install. Dashboard banner becomes actionable with SSE progress stream. 50 MB tarball cap, SHA-256 audit log, `ERR_UPDATE_DURING_RUN` guard. Closes [#75](https://github.com/srnichols/plan-forge/issues/75). Test count +42.
 
 ---
 

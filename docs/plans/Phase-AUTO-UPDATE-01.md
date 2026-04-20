@@ -1,13 +1,18 @@
 ---
 crucibleId: 2d8f5a41-7b36-4e92-c18d-f5a3b6e2c9d4
 source: self-hosted
-status: draft
+status: complete
 phase: AUTO-UPDATE-01
+shippedAt: 2026-04-20
+closes: 75
+commits:
+  - 6eb48f8  # Slice 1 — `pforge update --from-github` core
+  - 9c26f7e  # Slice 2 — `pforge self-update` + dashboard Update Now + smith refresh
 ---
 
 # Phase AUTO-UPDATE-01: True auto-install with `pforge update --from-github`
 
-> **Status**: 📝 DRAFT — ready for Session 2 execution
+> **Status**: ✅ COMPLETE — shipped 2026-04-20 (targeting v2.51.0)
 > **Estimated Effort**: 2 slices
 > **Risk Level**: Medium (fetches+extracts remote tarball; touches
 > framework files on user systems — never-update list + dry-run are

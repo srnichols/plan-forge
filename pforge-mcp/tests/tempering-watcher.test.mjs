@@ -71,15 +71,15 @@ describe("buildWatchSnapshot — tempering block", () => {
   beforeEach(() => { project = makeProject(); });
   afterEach(() => cleanup(project.dir));
 
-  it("returns tempering: null when subsystem is uninitialized", () => {
-    const snap = buildWatchSnapshot(project.dir);
+  it("returns tempering: null when subsystem is uninitialized", async () => {
+    const snap = await buildWatchSnapshot(project.dir);
     expect(snap.ok).toBe(true);
     expect(snap.tempering).toBeNull();
   });
 
-  it("returns a populated tempering block after initialization", () => {
+  it("returns a populated tempering block after initialization", async () => {
     seedTemperingScan(project.dir, { status: "green" });
-    const snap = buildWatchSnapshot(project.dir);
+    const snap = await buildWatchSnapshot(project.dir);
     expect(snap.tempering).not.toBeNull();
     expect(snap.tempering.initialized).toBe(true);
     expect(snap.tempering.totalScans).toBe(1);
@@ -87,16 +87,16 @@ describe("buildWatchSnapshot — tempering block", () => {
     expect(snap.tempering.belowMinimum).toBe(0);
   });
 
-  it("surfaces belowMinimum count from the latest scan", () => {
+  it("surfaces belowMinimum count from the latest scan", async () => {
     seedTemperingScan(project.dir, { status: "amber", belowMinimum: 1 });
-    const snap = buildWatchSnapshot(project.dir);
+    const snap = await buildWatchSnapshot(project.dir);
     expect(snap.tempering.latestStatus).toBe("amber");
     expect(snap.tempering.belowMinimum).toBe(1);
   });
 
-  it("flags stale=true when the latest scan is older than the cutoff", () => {
+  it("flags stale=true when the latest scan is older than the cutoff", async () => {
     seedTemperingScan(project.dir, { status: "green", ageDays: 10 });
-    const snap = buildWatchSnapshot(project.dir);
+    const snap = await buildWatchSnapshot(project.dir);
     expect(snap.tempering.stale).toBe(true);
   });
 });

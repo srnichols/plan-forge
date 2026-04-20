@@ -154,25 +154,25 @@ describe("readCrucibleState (Slice 03.1)", () => {
 // ─── buildWatchSnapshot integration ─────────────────────────────────
 
 describe("buildWatchSnapshot.crucible (Slice 03.1)", () => {
-  it("always emits a `crucible` field on the snapshot shape — null when inactive", () => {
+  it("always emits a `crucible` field on the snapshot shape — null when inactive", async () => {
     // Minimum viable target: one run dir so buildWatchSnapshot returns ok
     const runsDir = resolve(tempDir, ".forge", "runs", "run-1");
     mkdirSync(runsDir, { recursive: true });
     writeFileSync(resolve(runsDir, "events.jsonl"), "");
 
-    const snap = buildWatchSnapshot(tempDir);
+    const snap = await buildWatchSnapshot(tempDir);
     expect(snap.ok).toBe(true);
     expect("crucible" in snap).toBe(true);
     expect(snap.crucible).toBeNull();
   });
 
-  it("hydrates `crucible` when the directory exists", () => {
+  it("hydrates `crucible` when the directory exists", async () => {
     const runsDir = resolve(tempDir, ".forge", "runs", "run-1");
     mkdirSync(runsDir, { recursive: true });
     writeFileSync(resolve(runsDir, "events.jsonl"), "");
     writeSmelt(tempDir, "s1", { id: "s1", status: "finalized" });
 
-    const snap = buildWatchSnapshot(tempDir);
+    const snap = await buildWatchSnapshot(tempDir);
     expect(snap.crucible).not.toBeNull();
     expect(snap.crucible.counts.finalized).toBe(1);
   });
@@ -181,14 +181,14 @@ describe("buildWatchSnapshot.crucible (Slice 03.1)", () => {
 // ─── anomaly + recommendation wiring ────────────────────────────────
 
 describe("detectWatchAnomalies — Crucible rules (Slice 03.1)", () => {
-  it("emits `crucible-stalled` when a smelt has been idle ≥ cutoff", () => {
+  it("emits `crucible-stalled` when a smelt has been idle ≥ cutoff", async () => {
     const stale = writeSmelt(tempDir, "stale", { id: "stale", status: "in_progress" });
     agePath(stale, CRUCIBLE_STALL_CUTOFF_DAYS + 3);
     const runsDir = resolve(tempDir, ".forge", "runs", "run-1");
     mkdirSync(runsDir, { recursive: true });
     writeFileSync(resolve(runsDir, "events.jsonl"), "");
 
-    const snap = buildWatchSnapshot(tempDir);
+    const snap = await buildWatchSnapshot(tempDir);
     const anoms = detectWatchAnomalies(snap);
     const stalled = anoms.find((a) => a.code === "crucible-stalled");
     expect(stalled).toBeDefined();
@@ -196,18 +196,18 @@ describe("detectWatchAnomalies — Crucible rules (Slice 03.1)", () => {
     expect(stalled.message).toMatch(/idle ≥ 7 days/);
   });
 
-  it("does NOT emit `crucible-stalled` when all smelts are fresh", () => {
+  it("does NOT emit `crucible-stalled` when all smelts are fresh", async () => {
     writeSmelt(tempDir, "fresh", { id: "fresh", status: "in_progress" });
     const runsDir = resolve(tempDir, ".forge", "runs", "run-1");
     mkdirSync(runsDir, { recursive: true });
     writeFileSync(resolve(runsDir, "events.jsonl"), "");
 
-    const snap = buildWatchSnapshot(tempDir);
+    const snap = await buildWatchSnapshot(tempDir);
     const anoms = detectWatchAnomalies(snap);
     expect(anoms.find((a) => a.code === "crucible-stalled")).toBeUndefined();
   });
 
-  it("emits `crucible-orphan-handoff` when planPath is missing", () => {
+  it("emits `crucible-orphan-handoff` when planPath is missing", async () => {
     mkdirSync(resolve(tempDir, ".forge", "crucible"), { recursive: true });
     writeHubEvent(tempDir, {
       ts: new Date().toISOString(),
@@ -218,7 +218,7 @@ describe("detectWatchAnomalies — Crucible rules (Slice 03.1)", () => {
     mkdirSync(runsDir, { recursive: true });
     writeFileSync(resolve(runsDir, "events.jsonl"), "");
 
-    const snap = buildWatchSnapshot(tempDir);
+    const snap = await buildWatchSnapshot(tempDir);
     const anoms = detectWatchAnomalies(snap);
     const orphan = anoms.find((a) => a.code === "crucible-orphan-handoff");
     expect(orphan).toBeDefined();

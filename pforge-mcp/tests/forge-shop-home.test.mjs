@@ -94,8 +94,8 @@ function seedHubEvents(root, count = 50) {
 // ─── Tests ────────────────────────────────────────────────────────────
 
 describe("readHomeSnapshot", () => {
-  it("1 — empty project (no .forge/) returns all quadrants null, activityFeed [], ok true", () => {
-    const result = readHomeSnapshot(tempDir);
+  it("1 — empty project (no .forge/) returns all quadrants null, activityFeed [], ok true", async () => {
+    const result = await readHomeSnapshot(tempDir);
     expect(result.ok).toBe(true);
     expect(result.quadrants.crucible).toBeNull();
     expect(result.quadrants.activeRuns).toBeNull();
@@ -104,9 +104,9 @@ describe("readHomeSnapshot", () => {
     expect(result.activityFeed).toEqual([]);
   });
 
-  it("2 — crucible populated returns quadrant shape { total, finalized, stalled, lastActivity }", () => {
+  it("2 — crucible populated returns quadrant shape { total, finalized, stalled, lastActivity }", async () => {
     seedCrucible(tempDir, { finalized: 5, inProgress: 2 });
-    const result = readHomeSnapshot(tempDir);
+    const result = await readHomeSnapshot(tempDir);
     expect(result.ok).toBe(true);
     const c = result.quadrants.crucible;
     expect(c).not.toBeNull();
@@ -118,13 +118,13 @@ describe("readHomeSnapshot", () => {
     expect(c.finalized).toBe(5);
   });
 
-  it("3 — active run seeded returns quadrant with inFlight, lastSliceOutcome, lastRunId, lastRunAgeMs", () => {
+  it("3 — active run seeded returns quadrant with inFlight, lastSliceOutcome, lastRunId, lastRunAgeMs", async () => {
     const now = new Date().toISOString();
     seedRun(tempDir, "run_001", [
       { ts: now, type: "run-started", data: {} },
       { ts: now, type: "slice-completed", data: { sliceNumber: 1 } },
     ]);
-    const result = readHomeSnapshot(tempDir);
+    const result = await readHomeSnapshot(tempDir);
     expect(result.ok).toBe(true);
     const ar = result.quadrants.activeRuns;
     expect(ar).not.toBeNull();
@@ -136,7 +136,7 @@ describe("readHomeSnapshot", () => {
     expect(ar.lastSliceOutcome).toBe("pass");
   });
 
-  it("4 — liveguard JSONLs seeded returns quadrant with driftScore, openIncidents, openFixProposals, lastDriftAgeMs", () => {
+  it("4 — liveguard JSONLs seeded returns quadrant with driftScore, openIncidents, openFixProposals, lastDriftAgeMs", async () => {
     const ts = new Date(Date.now() - 5000).toISOString();
     seedDriftHistory(tempDir, [{ score: 87, timestamp: ts }]);
     seedIncidents(tempDir, [
@@ -147,7 +147,7 @@ describe("readHomeSnapshot", () => {
       { id: "fp-1", status: "pending" },
       { id: "fp-2", status: "validated" },
     ]);
-    const result = readHomeSnapshot(tempDir);
+    const result = await readHomeSnapshot(tempDir);
     expect(result.ok).toBe(true);
     const lg = result.quadrants.liveguard;
     expect(lg).not.toBeNull();
@@ -158,9 +158,9 @@ describe("readHomeSnapshot", () => {
     expect(lg.lastDriftAgeMs).toBeGreaterThanOrEqual(0);
   });
 
-  it("5 — tempering state seeded returns coverageStatus, openBugs, lastScanAgeMs", () => {
+  it("5 — tempering state seeded returns coverageStatus, openBugs, lastScanAgeMs", async () => {
     seedTempering(tempDir);
-    const result = readHomeSnapshot(tempDir);
+    const result = await readHomeSnapshot(tempDir);
     expect(result.ok).toBe(true);
     const t = result.quadrants.tempering;
     expect(t).not.toBeNull();
@@ -170,41 +170,41 @@ describe("readHomeSnapshot", () => {
     expect(t.coverageStatus).toBe("ok");
   });
 
-  it("6 — 50 hub events, default tail → activityFeed.length === 25", () => {
+  it("6 — 50 hub events, default tail → activityFeed.length === 25", async () => {
     seedHubEvents(tempDir, 50);
-    const result = readHomeSnapshot(tempDir);
+    const result = await readHomeSnapshot(tempDir);
     expect(result.activityFeed).toHaveLength(25);
   });
 
-  it("7 — custom activityTail: 10 → length 10", () => {
+  it("7 — custom activityTail: 10 → length 10", async () => {
     seedHubEvents(tempDir, 50);
-    const result = readHomeSnapshot(tempDir, { activityTail: 10 });
+    const result = await readHomeSnapshot(tempDir, { activityTail: 10 });
     expect(result.activityFeed).toHaveLength(10);
   });
 
-  it("8 — activityTail: 999 → clamped to 200 (returns all 50)", () => {
+  it("8 — activityTail: 999 → clamped to 200 (returns all 50)", async () => {
     seedHubEvents(tempDir, 50);
-    const result = readHomeSnapshot(tempDir, { activityTail: 999 });
+    const result = await readHomeSnapshot(tempDir, { activityTail: 999 });
     // Clamped to 200 but only 50 events exist
     expect(result.activityFeed).toHaveLength(50);
   });
 
-  it("9 — activityTail edge cases: -5, 0, 'abc' → coerced to defaults/min", () => {
+  it("9 — activityTail edge cases: -5, 0, 'abc' → coerced to defaults/min", async () => {
     seedHubEvents(tempDir, 50);
 
-    const r1 = readHomeSnapshot(tempDir, { activityTail: -5 });
+    const r1 = await readHomeSnapshot(tempDir, { activityTail: -5 });
     expect(r1.activityFeed.length).toBe(1); // clamped to 1
 
-    const r2 = readHomeSnapshot(tempDir, { activityTail: 0 });
+    const r2 = await readHomeSnapshot(tempDir, { activityTail: 0 });
     expect(r2.activityFeed.length).toBe(1); // clamped to 1
 
-    const r3 = readHomeSnapshot(tempDir, { activityTail: "abc" });
+    const r3 = await readHomeSnapshot(tempDir, { activityTail: "abc" });
     expect(r3.activityFeed.length).toBe(25); // non-finite → default 25
   });
 
-  it("10 — newest-first ordering: first entry's ts > last entry's ts", () => {
+  it("10 — newest-first ordering: first entry's ts > last entry's ts", async () => {
     seedHubEvents(tempDir, 10);
-    const result = readHomeSnapshot(tempDir);
+    const result = await readHomeSnapshot(tempDir);
     const feed = result.activityFeed;
     expect(feed.length).toBeGreaterThan(1);
     const firstTs = new Date(feed[0].timestamp).getTime();
@@ -212,7 +212,7 @@ describe("readHomeSnapshot", () => {
     expect(firstTs).toBeGreaterThan(lastTs);
   });
 
-  it("11 — primitives-only feed projection: no raw-log fields leak", () => {
+  it("11 — primitives-only feed projection: no raw-log fields leak", async () => {
     mkdirSync(resolve(tempDir, ".forge"), { recursive: true });
     writeFileSync(resolve(tempDir, ".forge", "hub-events.jsonl"),
       JSON.stringify({
@@ -224,7 +224,7 @@ describe("readHomeSnapshot", () => {
         deepPayload: { nested: { data: true } },
       })
     );
-    const result = readHomeSnapshot(tempDir);
+    const result = await readHomeSnapshot(tempDir);
     const entry = result.activityFeed[0];
     expect(entry).toHaveProperty("type");
     expect(entry).toHaveProperty("timestamp");
@@ -235,19 +235,19 @@ describe("readHomeSnapshot", () => {
     expect(Object.keys(entry)).toHaveLength(4);
   });
 
-  it("12 — corrupt .forge/crucible/ → crucible: null, other quadrants still populate, ok: true", () => {
+  it("12 — corrupt .forge/crucible/ → crucible: null, other quadrants still populate, ok: true", async () => {
     const crucibleDir = resolve(tempDir, ".forge", "crucible");
     mkdirSync(crucibleDir, { recursive: true });
     writeFileSync(resolve(crucibleDir, "bad.json"), "NOT VALID JSON{{{");
     seedDriftHistory(tempDir, [{ score: 90, timestamp: new Date().toISOString() }]);
-    const result = readHomeSnapshot(tempDir);
+    const result = await readHomeSnapshot(tempDir);
     expect(result.ok).toBe(true);
     // crucible may be null or have counts — it depends on parse behavior
     // The important thing: snapshot is still ok and liveguard populates
     expect(result.quadrants.liveguard).not.toBeNull();
   });
 
-  it("13 — corrupt hub-events.jsonl lines: bad lines skipped, good lines returned", () => {
+  it("13 — corrupt hub-events.jsonl lines: bad lines skipped, good lines returned", async () => {
     mkdirSync(resolve(tempDir, ".forge"), { recursive: true });
     const lines = [
       JSON.stringify({ type: "good-1", ts: new Date().toISOString() }),
@@ -256,15 +256,15 @@ describe("readHomeSnapshot", () => {
       "{broken",
     ];
     writeFileSync(resolve(tempDir, ".forge", "hub-events.jsonl"), lines.join("\n"));
-    const result = readHomeSnapshot(tempDir);
+    const result = await readHomeSnapshot(tempDir);
     expect(result.activityFeed).toHaveLength(2);
     expect(result.activityFeed[0].type).toBe("good-2"); // newest first
     expect(result.activityFeed[1].type).toBe("good-1");
   });
 
-  it("14 — invalid targetPath → { ok: false, error, targetPath }", () => {
+  it("14 — invalid targetPath → { ok: false, error, targetPath }", async () => {
     const bogus = resolve(tempDir, "does-not-exist-xyz");
-    const result = readHomeSnapshot(bogus);
+    const result = await readHomeSnapshot(bogus);
     // Should still be ok: true with all null quadrants since no .forge/ exists
     // readHomeSnapshot doesn't call findProjectRoot; it's a direct path
     expect(result.ok).toBe(true);
@@ -274,8 +274,8 @@ describe("readHomeSnapshot", () => {
     expect(result.quadrants.tempering).toBeNull();
   });
 
-  it("15 — generatedAt is valid ISO 8601", () => {
-    const result = readHomeSnapshot(tempDir);
+  it("15 — generatedAt is valid ISO 8601", async () => {
+    const result = await readHomeSnapshot(tempDir);
     expect(result.generatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
     expect(new Date(result.generatedAt).toISOString()).toBe(result.generatedAt);
   });
@@ -294,7 +294,7 @@ describe("readHomeSnapshot", () => {
     // Simulate what the MCP handler does: call readHomeSnapshot and verify shape
     seedCrucible(tempDir, { finalized: 3 });
     seedHubEvents(tempDir, 5);
-    const result = readHomeSnapshot(tempDir, { activityTail: 5 });
+    const result = await readHomeSnapshot(tempDir, { activityTail: 5 });
     const json = JSON.stringify(result);
     const parsed = JSON.parse(json);
     expect(parsed.ok).toBe(true);

@@ -1509,13 +1509,13 @@ describe("Watcher: readSliceArtifacts", () => {
 });
 
 describe("Watcher: buildWatchSnapshot", () => {
-  it("returns ok=false when no run dir exists", () => {
-    const snap = buildWatchSnapshot(tempDir);
+  it("returns ok=false when no run dir exists", async () => {
+    const snap = await buildWatchSnapshot(tempDir);
     expect(snap.ok).toBe(false);
     expect(snap.error).toMatch(/No run directory/);
   });
 
-  it("builds full snapshot from events + artifacts + summary", () => {
+  it("builds full snapshot from events + artifacts + summary", async () => {
     const runDir = resolve(tempDir, ".forge", "runs", "20250101-test");
     mkdirSync(runDir, { recursive: true });
     writeFileSync(resolve(runDir, "events.log"), [
@@ -1533,7 +1533,7 @@ describe("Watcher: buildWatchSnapshot", () => {
       status: "failed", title: "Second", duration: 59000, attempts: 3,
       gateError: "exit 1",
     }));
-    const snap = buildWatchSnapshot(tempDir);
+    const snap = await buildWatchSnapshot(tempDir);
     expect(snap.ok).toBe(true);
     expect(snap.runId).toBe("20250101-test");
     expect(snap.plan).toBe("P.md");
@@ -1545,23 +1545,23 @@ describe("Watcher: buildWatchSnapshot", () => {
     expect(snap.artifacts[1].attempts).toBe(3);
   });
 
-  it("derives runState from completion event", () => {
+  it("derives runState from completion event", async () => {
     const runDir = resolve(tempDir, ".forge", "runs", "20250101-done");
     mkdirSync(runDir, { recursive: true });
     writeFileSync(resolve(runDir, "events.log"), [
       `[2025-01-01T00:00:00.000Z] run-started: {}`,
       `[2025-01-01T00:01:00.000Z] run-completed: {}`,
     ].join("\n"));
-    const snap = buildWatchSnapshot(tempDir);
+    const snap = await buildWatchSnapshot(tempDir);
     expect(snap.runState).toBe("completed");
     expect(snap.lastEventType).toBe("run-completed");
   });
 
-  it("marks runState in-progress when no completion event yet", () => {
+  it("marks runState in-progress when no completion event yet", async () => {
     const runDir = resolve(tempDir, ".forge", "runs", "20250101-active");
     mkdirSync(runDir, { recursive: true });
     writeFileSync(resolve(runDir, "events.log"), `[2025-01-01T00:00:00.000Z] run-started: {}`);
-    const snap = buildWatchSnapshot(tempDir);
+    const snap = await buildWatchSnapshot(tempDir);
     expect(snap.runState).toBe("in-progress");
   });
 });
@@ -1685,33 +1685,33 @@ describe("Watcher v2.34.1: normalizeRunState", () => {
 });
 
 describe("Watcher v2.34.1: tailEvents control", () => {
-  it("clamps tailEvents to maximum 200", () => {
+  it("clamps tailEvents to maximum 200", async () => {
     const runDir = resolve(tempDir, ".forge", "runs", "20250101-tail");
     mkdirSync(runDir, { recursive: true });
     const lines = Array.from({ length: 50 }, (_, i) =>
       `[2025-01-01T00:00:${String(i).padStart(2, "0")}.000Z] slice-started: {"sliceNumber":${i}}`
     );
     writeFileSync(resolve(runDir, "events.log"), lines.join("\n"));
-    const snap = buildWatchSnapshot(tempDir, null, { tailEvents: 9999 });
+    const snap = await buildWatchSnapshot(tempDir, null, { tailEvents: 9999 });
     expect(snap.tailEvents).toBe(200);
   });
 
-  it("clamps tailEvents to minimum 1", () => {
+  it("clamps tailEvents to minimum 1", async () => {
     const runDir = resolve(tempDir, ".forge", "runs", "20250101-tail2");
     mkdirSync(runDir, { recursive: true });
     writeFileSync(resolve(runDir, "events.log"), `[2025-01-01T00:00:00.000Z] run-started: {}`);
-    const snap = buildWatchSnapshot(tempDir, null, { tailEvents: 0 });
+    const snap = await buildWatchSnapshot(tempDir, null, { tailEvents: 0 });
     expect(snap.tailEvents).toBe(1);
   });
 
-  it("respects tailEvents value within bounds", () => {
+  it("respects tailEvents value within bounds", async () => {
     const runDir = resolve(tempDir, ".forge", "runs", "20250101-tail3");
     mkdirSync(runDir, { recursive: true });
     const lines = Array.from({ length: 30 }, (_, i) =>
       `[2025-01-01T00:00:${String(i).padStart(2, "0")}.000Z] slice-started: {"sliceNumber":${i}}`
     );
     writeFileSync(resolve(runDir, "events.log"), lines.join("\n"));
-    const snap = buildWatchSnapshot(tempDir, null, { tailEvents: 5 });
+    const snap = await buildWatchSnapshot(tempDir, null, { tailEvents: 5 });
     expect(snap.tailEvents).toBe(5);
     expect(snap.events.length).toBe(5);
     // Last 5 should be slices 25-29
@@ -1719,17 +1719,17 @@ describe("Watcher v2.34.1: tailEvents control", () => {
     expect(snap.events[4].data.sliceNumber).toBe(29);
   });
 
-  it("defaults to 25 when tailEvents not provided", () => {
+  it("defaults to 25 when tailEvents not provided", async () => {
     const runDir = resolve(tempDir, ".forge", "runs", "20250101-tail4");
     mkdirSync(runDir, { recursive: true });
     writeFileSync(resolve(runDir, "events.log"), `[2025-01-01T00:00:00.000Z] run-started: {}`);
-    const snap = buildWatchSnapshot(tempDir);
+    const snap = await buildWatchSnapshot(tempDir);
     expect(snap.tailEvents).toBe(25);
   });
 });
 
 describe("Watcher v2.34.1: escalation tracking", () => {
-  it("counts slice-escalated events in counts.escalated", () => {
+  it("counts slice-escalated events in counts.escalated", async () => {
     const runDir = resolve(tempDir, ".forge", "runs", "20250101-esc");
     mkdirSync(runDir, { recursive: true });
     writeFileSync(resolve(runDir, "events.log"), [
@@ -1738,7 +1738,7 @@ describe("Watcher v2.34.1: escalation tracking", () => {
       `[2025-01-01T00:01:00.000Z] slice-escalated: {"sliceNumber":1,"fromModel":"sonnet","toModel":"opus"}`,
       `[2025-01-01T00:02:00.000Z] slice-completed: {"sliceNumber":1,"status":"passed"}`,
     ].join("\n"));
-    const snap = buildWatchSnapshot(tempDir);
+    const snap = await buildWatchSnapshot(tempDir);
     expect(snap.counts.escalated).toBe(1);
   });
 
@@ -1767,7 +1767,7 @@ describe("Watcher v2.34.1: escalation tracking", () => {
 // ─── Watcher v2.35: quorum + skill counts, recommendations, history, diff, live ─
 
 describe("Watcher v2.35: quorum/skill event surfacing", () => {
-  it("counts quorum dispatch/leg/review events", () => {
+  it("counts quorum dispatch/leg/review events", async () => {
     const runDir = resolve(tempDir, ".forge", "runs", "20250101-quorum");
     mkdirSync(runDir, { recursive: true });
     writeFileSync(resolve(runDir, "events.log"), [
@@ -1778,13 +1778,13 @@ describe("Watcher v2.35: quorum/skill event surfacing", () => {
       `[2025-01-01T00:00:32.000Z] quorum-leg-completed: {"sliceId":1,"model":"c"}`,
       `[2025-01-01T00:01:00.000Z] quorum-review-completed: {"sliceId":1}`,
     ].join("\n"));
-    const snap = buildWatchSnapshot(tempDir);
+    const snap = await buildWatchSnapshot(tempDir);
     expect(snap.counts.quorumDispatched).toBe(1);
     expect(snap.counts.quorumLegsCompleted).toBe(3);
     expect(snap.counts.quorumReviewed).toBe(1);
   });
 
-  it("counts skill events and skill step failures", () => {
+  it("counts skill events and skill step failures", async () => {
     const runDir = resolve(tempDir, ".forge", "runs", "20250101-skills");
     mkdirSync(runDir, { recursive: true });
     writeFileSync(resolve(runDir, "events.log"), [
@@ -1794,7 +1794,7 @@ describe("Watcher v2.35: quorum/skill event surfacing", () => {
       `[2025-01-01T00:01:00.000Z] skill-step-completed: {"step":"apply","status":"failed"}`,
       `[2025-01-01T00:01:30.000Z] skill-completed: {"skillName":"db-migration"}`,
     ].join("\n"));
-    const snap = buildWatchSnapshot(tempDir);
+    const snap = await buildWatchSnapshot(tempDir);
     expect(snap.counts.skillsStarted).toBe(1);
     expect(snap.counts.skillsCompleted).toBe(1);
     expect(snap.counts.skillStepsFailed).toBe(1);
@@ -1960,19 +1960,19 @@ describe("Watcher v2.35: appendWatchHistory", () => {
 });
 
 describe("Watcher v2.35: stateful diff (sinceTimestamp)", () => {
-  it("returns hasNewEvents=false when no new events since cursor", () => {
+  it("returns hasNewEvents=false when no new events since cursor", async () => {
     const runDir = resolve(tempDir, ".forge", "runs", "20250101-diff");
     mkdirSync(runDir, { recursive: true });
     writeFileSync(resolve(runDir, "events.log"), [
       `[2025-01-01T00:00:00.000Z] run-started: {}`,
       `[2025-01-01T00:01:00.000Z] slice-started: {"sliceNumber":1}`,
     ].join("\n"));
-    const snap = buildWatchSnapshot(tempDir, null, { sinceTimestamp: "2025-01-01T00:02:00.000Z" });
+    const snap = await buildWatchSnapshot(tempDir, null, { sinceTimestamp: "2025-01-01T00:02:00.000Z" });
     expect(snap.hasNewEvents).toBe(false);
     expect(snap.newEventsCount).toBe(0);
   });
 
-  it("returns hasNewEvents=true with count when newer events exist", () => {
+  it("returns hasNewEvents=true with count when newer events exist", async () => {
     const runDir = resolve(tempDir, ".forge", "runs", "20250101-diff2");
     mkdirSync(runDir, { recursive: true });
     writeFileSync(resolve(runDir, "events.log"), [
@@ -1981,19 +1981,19 @@ describe("Watcher v2.35: stateful diff (sinceTimestamp)", () => {
       `[2025-01-01T00:02:00.000Z] slice-completed: {"sliceNumber":1}`,
       `[2025-01-01T00:03:00.000Z] slice-started: {"sliceNumber":2}`,
     ].join("\n"));
-    const snap = buildWatchSnapshot(tempDir, null, { sinceTimestamp: "2025-01-01T00:01:30.000Z" });
+    const snap = await buildWatchSnapshot(tempDir, null, { sinceTimestamp: "2025-01-01T00:01:30.000Z" });
     expect(snap.hasNewEvents).toBe(true);
     expect(snap.newEventsCount).toBe(2);
   });
 
-  it("snapshot returns cursor pointing at last event timestamp", () => {
+  it("snapshot returns cursor pointing at last event timestamp", async () => {
     const runDir = resolve(tempDir, ".forge", "runs", "20250101-cursor");
     mkdirSync(runDir, { recursive: true });
     writeFileSync(resolve(runDir, "events.log"), [
       `[2025-01-01T00:00:00.000Z] run-started: {}`,
       `[2025-01-01T00:05:30.000Z] slice-started: {"sliceNumber":1}`,
     ].join("\n"));
-    const snap = buildWatchSnapshot(tempDir);
+    const snap = await buildWatchSnapshot(tempDir);
     expect(snap.cursor).toBe("2025-01-01T00:05:30.000Z");
   });
 });

@@ -75,25 +75,25 @@ function seedBugRegistry(root, bugs = []) {
 // ─── Tests ────────────────────────────────────────────────────────────
 
 describe("buildWatchSnapshot — home field", () => {
-  it("includes home field when crucible has data", () => {
+  it("includes home field when crucible has data", async () => {
     seedRun(tempDir, "run_001", [
       { ts: new Date().toISOString(), type: "run-started", data: { plan: "test", model: "test", sliceCount: 1 } },
     ]);
     seedCrucible(tempDir, { finalized: 3, inProgress: 1 });
-    const snap = buildWatchSnapshot(tempDir);
+    const snap = await buildWatchSnapshot(tempDir);
     expect(snap.ok).toBe(true);
     // home may or may not be null depending on whether activeRuns/liveguard/tempering have data
     // but it should exist as a property
     expect(snap).toHaveProperty("home");
   });
 
-  it("home is null when all three values are null (no subsystems)", () => {
+  it("home is null when all three values are null (no subsystems)", async () => {
     // Create a run that has completed so inFlightRuns = 0
     seedRun(tempDir, "run_001", [
       { ts: new Date().toISOString(), type: "run-started", data: { plan: "test", model: "test", sliceCount: 1 } },
       { ts: new Date().toISOString(), type: "run-completed", data: { status: "completed" } },
     ]);
-    const snap = buildWatchSnapshot(tempDir);
+    const snap = await buildWatchSnapshot(tempDir);
     expect(snap.ok).toBe(true);
     // With no crucible, no tempering, no open incidents — home should still
     // include inFlightRuns:0 which is non-null. The contract says home is
@@ -106,18 +106,18 @@ describe("buildWatchSnapshot — home field", () => {
     }
   });
 
-  it("inFlightRuns reflects active runs state", () => {
+  it("inFlightRuns reflects active runs state", async () => {
     seedRun(tempDir, "run_001", [
       { ts: new Date().toISOString(), type: "run-started", data: { plan: "test", model: "test", sliceCount: 1 } },
     ]);
     // The run is in-progress (started but not completed), so inFlight should be >= 0
-    const snap = buildWatchSnapshot(tempDir);
+    const snap = await buildWatchSnapshot(tempDir);
     expect(snap.ok).toBe(true);
     // home may still be null if all subsystems report null
     expect(snap).toHaveProperty("home");
   });
 
-  it("openIncidents reflects LiveGuard incidents", () => {
+  it("openIncidents reflects LiveGuard incidents", async () => {
     seedRun(tempDir, "run_001", [
       { ts: new Date().toISOString(), type: "run-started", data: { plan: "test", model: "test", sliceCount: 1 } },
     ]);
@@ -125,14 +125,14 @@ describe("buildWatchSnapshot — home field", () => {
       { id: "inc-1", status: "open", severity: "high", ts: new Date().toISOString() },
       { id: "inc-2", status: "open", severity: "medium", ts: new Date().toISOString() },
     ]);
-    const snap = buildWatchSnapshot(tempDir);
+    const snap = await buildWatchSnapshot(tempDir);
     expect(snap.ok).toBe(true);
     if (snap.home) {
       expect(snap.home.openIncidents).toBeGreaterThanOrEqual(0);
     }
   });
 
-  it("openBugs reflects tempering open bugs", () => {
+  it("openBugs reflects tempering open bugs", async () => {
     seedRun(tempDir, "run_001", [
       { ts: new Date().toISOString(), type: "run-started", data: { plan: "test", model: "test", sliceCount: 1 } },
     ]);
@@ -140,19 +140,19 @@ describe("buildWatchSnapshot — home field", () => {
     seedBugRegistry(tempDir, [
       { id: "bug-1", status: "open", severity: "high" },
     ]);
-    const snap = buildWatchSnapshot(tempDir);
+    const snap = await buildWatchSnapshot(tempDir);
     expect(snap.ok).toBe(true);
     if (snap.home) {
       expect(snap.home).toHaveProperty("openBugs");
     }
   });
 
-  it("partial population works (only tempering)", () => {
+  it("partial population works (only tempering)", async () => {
     seedRun(tempDir, "run_001", [
       { ts: new Date().toISOString(), type: "run-started", data: { plan: "test", model: "test", sliceCount: 1 } },
     ]);
     seedTempering(tempDir);
-    const snap = buildWatchSnapshot(tempDir);
+    const snap = await buildWatchSnapshot(tempDir);
     expect(snap.ok).toBe(true);
     // May or may not produce a home block depending on whether tempering reports openBugs
     expect(snap).toHaveProperty("home");

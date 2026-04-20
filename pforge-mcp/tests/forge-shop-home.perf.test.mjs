@@ -91,12 +91,12 @@ describe("readHomeSnapshot performance", () => {
     if (perfDir) rmSync(perfDir, { recursive: true, force: true });
   });
 
-  it("completes in ≤ 250ms with 1000 L2 records across all subsystems", () => {
+  it("completes in ≤ 250ms with 1000 L2 records across all subsystems", async () => {
     perfDir = mkdtempSync(join(tmpdir(), "pforge-home-perf-"));
     seedHomeFixture(perfDir, { perQuadrant: 1000, hubEvents: 1000 });
 
     const t0 = performance.now();
-    const result = readHomeSnapshot(perfDir);
+    const result = await readHomeSnapshot(perfDir);
     const elapsed = performance.now() - t0;
 
     expect(result.ok).toBe(true);

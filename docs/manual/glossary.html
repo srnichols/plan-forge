@@ -31,7 +31,7 @@
       <table>
         <thead><tr><th>Term</th><th>Definition</th></tr></thead>
         <tbody>
-          <tr><td><strong>Plan Forge</strong></td><td>The framework itself — AI coding guardrails that enforce spec-driven development.</td></tr>
+          <tr><td><strong>Plan Forge</strong></td><td>The AI-Native SDLC Forge Shop. One workshop with four stations — Smelt, Forge, Guard, Learn — connected by gates, telemetry, and persistent memory. Covers every phase of the software lifecycle.</td></tr>
           <tr><td><strong>Forge</strong></td><td>Shorthand for Plan Forge. Also: <code>.forge/</code> directory (project data), <code>.forge.json</code> (config).</td></tr>
           <tr><td><strong>Plan</strong></td><td>A Markdown file in <code>docs/plans/</code> describing a feature. Contains slices, scope contract, and gates.</td></tr>
           <tr><td><strong>Hardened Plan</strong></td><td>A plan that passed Step 2 — locked-down execution contract with scope, slices, gates, forbidden actions.</td></tr>
@@ -43,6 +43,29 @@
           <tr><td><strong>Guardrails</strong></td><td>Instruction files that auto-load based on the file being edited. 15–18 per preset.</td></tr>
           <tr><td><strong>Preset</strong></td><td>Stack-specific configuration (dotnet, typescript, python, etc.). Determines which files are installed.</td></tr>
           <tr><td><strong>Extension</strong></td><td>Community add-on providing instructions, agents, or prompts for a specific domain.</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="stations">The Four Stations</h2>
+      <p class="text-sm text-slate-500 mb-4">The Forge Shop's organizing taxonomy — every Plan Forge feature lives at one of these four stations.</p>
+      <table>
+        <thead><tr><th>Term</th><th>Definition</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Forge Shop</strong></td><td>The whole workshop. The collective name for the four stations and the connective tissue (gates, telemetry, memory) that ties them together.</td></tr>
+          <tr><td><strong>Station</strong></td><td>One of the four phase-specific zones in the Forge Shop. Each station has its own tools, agents, artifacts, and gate to the next station.</td></tr>
+          <tr><td><strong>Act</strong></td><td>The Manual's organizational unit. Each Act covers one station's chapters. Act I = Smelt (Ch 1–5), Act II = Forge (Ch 6–15), Act III = Guard (Ch 16–20), Act IV = Learn (Ch 21–24).</td></tr>
+          <tr><td>🪨 <strong>Smelt</strong></td><td>Station 1 — Intake → Scope Contract. Where rough ideas become hardened plans the Forge can execute. Houses the Specifier agent, the AI Plan Hardening Runbook, the Crucible, and Project Principles.</td></tr>
+          <tr><td>🔨 <strong>Forge</strong> (station)</td><td>Station 2 — Scope Contract → shipped code. Where slices are struck against the anvil. Houses <code>pforge run-plan</code>, slice gates, quorum mode, auto-escalation, and the cost ledger.</td></tr>
+          <tr><td>🛡️ <strong>Guard</strong></td><td>Station 3 — Post-deploy defense. The watchtower. Houses LiveGuard (secret scan, drift, regression guard, env diff, incident capture), the Watcher, and the Remote Bridge.</td></tr>
+          <tr><td>🧠 <strong>Learn</strong></td><td>Station 4 — Memory and retrospectives. The brain above the bench. Houses OpenBrain, the Bug Registry, the Testbed, Health DNA, and Forge Intelligence.</td></tr>
+          <tr><td><strong>Watcher</strong></td><td>Tool (<code>forge_watch</code>, <code>forge_watch_live</code>) that tails another project's <code>pforge run</code> from a separate VS Code session. Read-only by contract — cannot modify the target.</td></tr>
+          <tr><td><strong>Remote Bridge</strong></td><td>Notification dispatcher that forwards hub events to Telegram, Slack, Discord, OpenClaw, or a generic webhook. Used for phone-friendly progress updates and approval prompts.</td></tr>
+          <tr><td><strong>Bug Registry</strong></td><td>Closed-loop scanner-bug tracker (v2.47+). Four tools — <code>forge_bug_register</code>, <code>forge_bug_list</code>, <code>forge_bug_update_status</code>, <code>forge_bug_validate_fix</code>. Records live in <code>.forge/bugs/&lt;bugId&gt;.json</code>.</td></tr>
+          <tr><td><strong>Bug Fingerprint</strong></td><td>Hash of scanner name + test name + assertion message + normalized stack trace. Re-registering a duplicate fingerprint returns <code>DUPLICATE_BUG</code> with the existing <code>bugId</code>.</td></tr>
+          <tr><td><strong>Bug Status</strong></td><td>State machine: <code>open → in-fix → validating → fixed</code>, with side branches to <code>wont-fix</code>, <code>duplicate</code>, and <code>noise</code>. Illegal transitions return <code>INVALID_TRANSITION</code>.</td></tr>
+          <tr><td><strong>Bug Classifier</strong></td><td>Heuristic that labels evidence as <code>real-bug</code> (persisted), <code>flaky</code> (ignored), or <code>noise</code> (discarded). Only <code>real-bug</code> writes to <code>.forge/bugs/</code>.</td></tr>
+          <tr><td><strong>Testbed</strong></td><td>Tool (<code>forge_testbed_run</code>) that replays scenario fixtures against a dedicated repo. Scenarios in <code>docs/plans/testbed-scenarios/*.json</code>; findings in <code>docs/plans/testbed-findings/*.json</code>. Feeds the Bug Registry and Health DNA.</td></tr>
+          <tr><td><strong>Crucible</strong></td><td>Smelt-station idea funnel for community extensions. Lifecycle: <em>Submitted → Crystallized → Tempered → Hardened</em>. Stalled <em>Crystallized</em> ideas surface as Watcher anomalies.</td></tr>
         </tbody>
       </table>
 
@@ -101,7 +124,6 @@
           <tr><td><strong>Fix Proposal</strong></td><td>Auto-generated 1–2 slice plan from LiveGuard findings. Stored in <code>docs/plans/auto/</code>.</td></tr>
           <tr><td><strong>LiveGuard</strong></td><td>Post-coding operational intelligence layer. 14 MCP tools for drift, incidents, deploys, secrets, dependencies, and composite health checks.</td></tr>
           <tr><td><strong>MTTR</strong></td><td>Mean Time To Resolve. Computed from incident capture to <code>resolvedAt</code> timestamp.</td></tr>
-          <tr><td><strong>Quorum Mode</strong></td><td>Multi-model consensus where 2–3 models independently solve a slice, then a reviewer synthesizes the best output.</td></tr>
           <tr><td><strong>Secret Scan</strong></td><td>Entropy-based scan of recent commits for potential hardcoded credentials.</td></tr>
           <tr><td><strong>OpenClaw</strong></td><td>Optional external analytics service. Receives LiveGuard snapshots via POST for cross-project health monitoring.</td></tr>
           <tr><td><strong>Health DNA</strong></td><td>Composite project health fingerprint: drift avg, incident rate, test pass rate, model success rate, cost per slice. Persisted to <code>.forge/health-dna.json</code>. Used for cross-session decay detection (v2.32).</td></tr>

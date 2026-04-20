@@ -783,7 +783,7 @@ LiveGuard is the operational intelligence layer that activates after the forge p
 
 The existing unified dashboard at `localhost:3100/dashboard` gains a **LIVEGUARD section** (5 amber-accented tabs) separated by a visual divider from the existing FORGE section (10 blue-accented tabs, including the v2.35 **Watcher** tab). Single WebSocket, single Chart.js, no new server process.
 
-**Dashboard sections after v2.35.0 (15 tabs total)**:
+**Dashboard sections after v2.35.0 (25 tabs total)**:
 
 | Section | Tabs | Active Color |
 |---------|---------|--------------|

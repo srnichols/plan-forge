@@ -1,0 +1,61 @@
+{
+  "_comment": "Single source of truth for Plan Forge statistics cited across the docs. Update this first, then run scripts/check-metrics.ps1 (or .sh) to find any surface that still shows stale numbers. DO NOT template-inject this file into HTML — the goal is detection, not generation. Bump values here whenever a release changes them.",
+  "_updated": "2026-04-20",
+  "_updatedFor": "v2.55.0",
+
+  "version": "2.55.0",
+  "testsPassing": 2478,
+  "testsTotal": 2478,
+  "phasesSelfBuilt": "12+",
+  "manualRollbacks": 0,
+
+  "mcpTools": {
+    "total": 65,
+    "breakdown": {
+      "core": 20,
+      "liveguard": 14,
+      "watcher": 2,
+      "crucible": 6,
+      "tempering": 4,
+      "bugRegistry": 4,
+      "testbed": 3,
+      "review": 3,
+      "notifyHomeDelegate": 3,
+      "misc": 6
+    }
+  },
+
+  "cliCommands": "45+",
+  "agents": 19,
+  "skills": 13,
+  "presets": 9,
+  "agentAdapters": 7,
+  "pipelineSteps": 7,
+  "instructionFiles": "21+",
+  "scaffoldingPrompts": 15,
+  "lifecycleHooks": 7,
+
+  "dashboardTabs": 25,
+  "dashboardTabsBreakdown": "Forge: Home, Runs, Progress, Crucible, Governance, Cost, Actions, Replay, Extensions, Config, Traces, Skills, Watcher, Tempering, Bug Registry, Memory, Timeline, Review (18) + LiveGuard: Health, Incidents, Triage, Security, Env (5) + others (2)",
+
+  "manualChapters": 24,
+  "manualAppendices": 6,
+
+  "abTestApril2026": {
+    "tests": { "planForge": 60, "vibeCoding": 13 },
+    "interfaces": { "planForge": 6, "vibeCoding": 0 },
+    "dtos": { "planForge": 9, "vibeCoding": 0 },
+    "qualityScore": { "planForge": "99/100", "vibeCoding": "44/100" }
+  },
+
+  "_knownStaleAliases": {
+    "_comment": "Numbers that appeared in prior versions and should NEVER appear in current docs. The checker flags any of these found outside of CHANGELOG.md or /memories/.",
+    "mcpTools": [18, 34, 36, 43, 52],
+    "dashboardTabs": [15],
+    "testsPassing": [103, 2470],
+    "agents": [17, 18],
+    "skills": [11, 12],
+    "manualChapters": [17, 18, 19],
+    "versionBadges": ["v2.53.3", "v2.54.0"]
+  }
+}

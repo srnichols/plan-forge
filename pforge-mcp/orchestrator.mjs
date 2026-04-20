@@ -26,7 +26,7 @@ import { EventEmitter } from "node:events";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { createTraceContext, createTelemetryHandler, writeManifest, appendRunIndex, pruneRunHistory, addLogSummary } from "./telemetry.mjs";
-import { isOpenBrainConfigured, buildMemorySearchBlock, buildMemoryCaptureBlock, buildRunSummaryThought, buildCostAnomalyThought, loadProjectContext, buildPlanBootContext } from "./memory.mjs";
+import { isOpenBrainConfigured, buildMemorySearchBlock, buildMemoryCaptureBlock, buildReflexionBlock, buildRunSummaryThought, buildCostAnomalyThought, loadProjectContext, buildPlanBootContext } from "./memory.mjs";
 import { enforceCrucibleId, CrucibleEnforcementError } from "./crucible-enforce.mjs";
 // Phase FORGE-SHOP-07 Slice 07.2 — brain facade for unified recall
 import { recall as brainRecall } from "./brain.mjs";
@@ -4601,9 +4601,14 @@ async function executeSlice(slice, options) {
   let workerResult = null;
   let gateResult = { success: true, output: "No validation gate defined" };
   let lastError = null;
+  // Phase-25 Slice 1 (L1 Reflexion): per-attempt context used to build the
+  // "## Previous attempt (N-1) summary" block on retry. Contains the fields
+  // mandated by Phase-25 MUST #1: gateName, model, durationMs, stderrTail.
+  let lastFailureContext = null;
   let currentModel = finalModel;
 
   while (attempt <= maxRetries) {
+    const attemptStartTime = Date.now();
     // Auto-escalate model on retries — skip past the current model in chain
     if (attempt > 0 && escalationChain.length > 1) {
       let nextModel = currentModel;
@@ -4666,9 +4671,19 @@ async function executeSlice(slice, options) {
     }
 
     if (attempt > 0 && lastError) {
-      sliceInstructions += `\n\n--- RETRY (attempt ${attempt + 1}) ---\n` +
-        `Previous attempt failed with this error:\n${lastError}\n` +
-        `Fix the error and ensure the build/test gates pass.`;
+      // Phase-25 Slice 1 (L1 Reflexion): prepend a "## Previous attempt (N-1) summary"
+      // Markdown block with gate name, chosen model, duration, and stderr tail (≤2KB)
+      // so the worker can learn from the previous failure instead of repeating it.
+      const reflexionBlock = buildReflexionBlock(
+        lastFailureContext || {
+          previousAttempt: attempt,
+          gateName: "unknown",
+          model: currentModel || "auto",
+          durationMs: 0,
+          stderrTail: lastError,
+        },
+      );
+      sliceInstructions += `\n\n${reflexionBlock}`;
     }
 
     if (mode === "assisted") {
@@ -4729,6 +4744,14 @@ async function executeSlice(slice, options) {
     // Worker timed out — retry with timeout context
     if (workerResult.timedOut) {
       lastError = `Worker timed out after ${Math.round((Date.now() - startTime) / 1000)}s. The task may be too complex for a single slice — consider splitting it.`;
+      // Phase-25 Slice 1: capture reflexion context for next attempt's prompt
+      lastFailureContext = {
+        previousAttempt: attempt + 1,
+        gateName: "(worker timed out before gate)",
+        model: workerResult.model || currentModel || "auto",
+        durationMs: Date.now() - attemptStartTime,
+        stderrTail: [lastError, workerResult.stderr].filter(Boolean).join("\n\n"),
+      };
       attempt++;
       if (attempt <= maxRetries) {
         writeFileSync(logFile, `\n\n--- WORKER TIMED OUT, RETRYING (attempt ${attempt + 1}) ---\n${lastError}\n`, { flag: "a" });
@@ -4741,6 +4764,14 @@ async function executeSlice(slice, options) {
 
     // Gate failed — set error for retry prompt
     lastError = `Gate command '${gateResult.failedCommand || "unknown"}' failed:\n${gateResult.error || gateResult.output}`;
+    // Phase-25 Slice 1: capture reflexion context for next attempt's prompt
+    lastFailureContext = {
+      previousAttempt: attempt + 1,
+      gateName: gateResult.failedCommand || "unknown",
+      model: workerResult.model || currentModel || "auto",
+      durationMs: Date.now() - attemptStartTime,
+      stderrTail: [gateResult.error, gateResult.output, workerResult.stderr].filter(Boolean).join("\n\n"),
+    };
     attempt++;
 
     if (attempt <= maxRetries) {

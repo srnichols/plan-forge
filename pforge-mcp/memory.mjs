@@ -220,6 +220,73 @@ Do NOT capture trivial facts. Focus on decisions that would save time in future 
 }
 
 /**
+ * Build a Reflexion-style "previous attempt summary" prompt block for retries.
+ *
+ * Phase-25 Slice 1 (L1 — Reflexion). On retry attempt N ≥ 2, `executeSlice`
+ * prepends this Markdown block to the worker prompt so the worker can learn
+ * from the previous failure instead of repeating it.
+ *
+ * Contract (Phase-25 MUST #1):
+ *   - Header: `## Previous attempt (N-1) summary`
+ *   - Contains: gate name, chosen model, duration, stderr tail (≤2KB)
+ *   - Markdown prose format (D1) — workers consume prose well
+ *
+ * Pure function: no fs, no network, deterministic. Safe to test in isolation.
+ *
+ * @param {object} ctx
+ * @param {number} ctx.previousAttempt - The 1-based attempt number that failed (the one being summarized).
+ * @param {string} [ctx.gateName] - Gate command that failed (e.g. "npx vitest run"). Defaults to "unknown".
+ * @param {string} [ctx.model] - Model used for the failed attempt (e.g. "claude-sonnet-4.5"). Defaults to "auto".
+ * @param {number} [ctx.durationMs] - Duration of the failed attempt in milliseconds. Defaults to 0.
+ * @param {string} [ctx.stderrTail] - Stderr / gate-error text from the failed attempt. Truncated to last 2KB.
+ * @returns {string} Markdown block ready to prepend to the worker prompt.
+ */
+export function buildReflexionBlock(ctx = {}) {
+  const MAX_STDERR_BYTES = 2048;
+  const previousAttempt = Number.isFinite(ctx.previousAttempt) && ctx.previousAttempt > 0
+    ? ctx.previousAttempt
+    : 1;
+  const gateName = typeof ctx.gateName === "string" && ctx.gateName.length > 0
+    ? ctx.gateName
+    : "unknown";
+  const model = typeof ctx.model === "string" && ctx.model.length > 0
+    ? ctx.model
+    : "auto";
+  const durationMs = Number.isFinite(ctx.durationMs) && ctx.durationMs >= 0
+    ? Math.round(ctx.durationMs)
+    : 0;
+
+  const rawStderr = typeof ctx.stderrTail === "string" ? ctx.stderrTail : "";
+  let stderrTail = rawStderr;
+  let truncated = false;
+  if (rawStderr.length > MAX_STDERR_BYTES) {
+    stderrTail = rawStderr.slice(-MAX_STDERR_BYTES);
+    truncated = true;
+  }
+
+  const tailBody = stderrTail.length > 0 ? stderrTail : "(no stderr captured)";
+
+  return [
+    `## Previous attempt (${previousAttempt}) summary`,
+    "",
+    `- **Gate that failed**: \`${gateName}\``,
+    `- **Model used**: \`${model}\``,
+    `- **Duration**: ${durationMs}ms`,
+    "",
+    truncated
+      ? `**Failure output (stderr tail, truncated to last ${MAX_STDERR_BYTES} bytes):**`
+      : "**Failure output (stderr tail, ≤2KB):**",
+    "",
+    "```",
+    tailBody,
+    "```",
+    "",
+    "Use this summary to avoid repeating the same mistake. Address the specific error above before the next gate run.",
+    "",
+  ].join("\n");
+}
+
+/**
  * Build a run summary thought for capture after completion.
  *
  * @param {object} summary - Run summary object

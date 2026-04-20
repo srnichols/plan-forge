@@ -5,7 +5,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [Unreleased] — targeting 2.51.0
+## [Unreleased] — targeting 2.52.0
+
+_(No changes yet.)_
+
+---
+
+## [2.51.0] — 2026-04-20 — Ask-bus + Auto-update + Testbed harness
+
+Three phases shipped since v2.50.0 (11 commits). Tests 1872 → 1990 (+118). Tools 59 → 62.
+Release: https://github.com/srnichols/plan-forge/releases/tag/v2.51.0
 
 ### Shipped — TESTBED-01 recursive validation harness (2026-04-20)
 

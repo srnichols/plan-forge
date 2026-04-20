@@ -8,138 +8,265 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='28' font-size='28'>🔨</text></svg>">
   <style>
-    body { font-family: system-ui, -apple-system, sans-serif; }
-    .slice-card { transition: all 0.3s ease; }
+    /* ─── Design Tokens ──────────────────────────────────────────── */
+    :root {
+      --bg-0: #0b1220;          /* page bg (deepest)   */
+      --bg-1: #111827;          /* primary surface     */
+      --bg-2: #1f2937;          /* raised surface      */
+      --bg-3: #374151;          /* hover / input       */
+      --line: #2b3648;          /* dividers            */
+      --line-strong: #374151;
+      --fg-0: #f1f5f9;          /* primary text        */
+      --fg-1: #cbd5e1;          /* secondary text      */
+      --fg-2: #94a3b8;          /* tertiary text       */
+      --fg-3: #64748b;          /* muted               */
+      --accent: #60a5fa;        /* Forge (blue-400)    */
+      --accent-strong: #3b82f6;
+      --guard: #fbbf24;         /* LiveGuard (amber)   */
+      --success: #34d399;
+      --warning: #f59e0b;
+      --danger: #f87171;
+      --ring: 0 0 0 2px rgba(96,165,250,0.45);
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.25);
+      --shadow-md: 0 4px 10px -2px rgba(0,0,0,0.4);
+      --shadow-lg: 0 20px 40px -10px rgba(0,0,0,0.55);
+    }
+    html.light {
+      --bg-0: #f8fafc;
+      --bg-1: #ffffff;
+      --bg-2: #f1f5f9;
+      --bg-3: #e2e8f0;
+      --line: #e2e8f0;
+      --line-strong: #cbd5e1;
+      --fg-0: #0f172a;
+      --fg-1: #334155;
+      --fg-2: #64748b;
+      --fg-3: #94a3b8;
+      --accent: #2563eb;
+      --accent-strong: #1d4ed8;
+      --shadow-sm: 0 1px 2px rgba(15,23,42,0.06);
+      --shadow-md: 0 4px 10px -2px rgba(15,23,42,0.08);
+      --shadow-lg: 0 20px 40px -10px rgba(15,23,42,0.15);
+    }
+
+    /* ─── Base ───────────────────────────────────────────────────── */
+    body {
+      font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+
+    /* Skip link (a11y) */
+    .skip-link {
+      position: absolute; left: -9999px; top: auto;
+      width: 1px; height: 1px; overflow: hidden;
+    }
+    .skip-link:focus {
+      left: 0.5rem; top: 0.5rem; width: auto; height: auto;
+      background: var(--accent-strong); color: #fff;
+      padding: 0.5rem 0.75rem; border-radius: var(--radius-sm);
+      z-index: 100; font-size: 0.85rem;
+    }
+
+    /* Focus-visible ring for every interactive element */
+    button:focus-visible, a:focus-visible, input:focus-visible,
+    select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
+      outline: none;
+      box-shadow: var(--ring);
+      border-radius: var(--radius-sm);
+    }
+
+    /* ─── Animations ─────────────────────────────────────────────── */
+    .slice-card { transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease; }
+    .slice-card:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
     .slice-executing { animation: pulse 2s infinite; }
-    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.7; } }
-    .tab-active { border-bottom: 2px solid #3b82f6; color: #3b82f6; }
-    /* Run detail drawer */
-    #run-detail-drawer { transform: translateX(100%); transition: transform 0.3s ease; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.65; } }
+    .tab-content { animation: fadeIn 0.18s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+    }
+
+    /* ─── Tabs ───────────────────────────────────────────────────── */
+    .tab-active {
+      color: var(--accent) !important;
+      border-bottom: 2px solid var(--accent) !important;
+    }
+    /* LiveGuard sub-tabs inherit the LiveGuard accent when active */
+    #subtabs-liveguard .tab-active {
+      color: var(--guard) !important;
+      border-bottom-color: var(--guard) !important;
+    }
+    .tab-btn {
+      border-bottom: 2px solid transparent;
+      transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+    }
+    .tab-btn:hover { color: var(--fg-0); }
+    .group-tab { transition: color 0.15s ease, border-color 0.15s ease; }
+
+    /* ─── Drawer ─────────────────────────────────────────────────── */
+    #run-detail-drawer {
+      transform: translateX(100%);
+      transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+      box-shadow: var(--shadow-lg);
+    }
     #run-detail-drawer.open { transform: translateX(0); }
-    #drawer-overlay { opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+    #drawer-overlay {
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.25s ease;
+      backdrop-filter: blur(2px);
+    }
     #drawer-overlay.open { opacity: 1; pointer-events: auto; }
-    /* Sortable columns */
-    th.sortable { cursor: pointer; -webkit-user-select: none; user-select: none; }
-    th.sortable:hover { color: #3b82f6; }
-    /* Keyboard selection */
-    tr.row-selected { outline: 2px solid #3b82f6; outline-offset: -2px; }
-    tr.row-compare { outline: 2px solid #f59e0b; outline-offset: -2px; background: rgba(245,158,11,0.08); }
-    /* Theme toggle */
-    .light body, .light { background: #f1f5f9 !important; color: #1e293b !important; }
-    .light .bg-gray-800 { background: #fff !important; }
-    .light .bg-gray-900 { background: #f1f5f9 !important; }
-    .light .bg-gray-700 { background: #e2e8f0 !important; }
-    .light .text-gray-100 { color: #1e293b !important; }
-    .light .text-gray-400 { color: #64748b !important; }
-    .light .text-gray-500 { color: #94a3b8 !important; }
-    .light .text-white { color: #0f172a !important; }
-    .light .border-gray-700 { border-color: #cbd5e1 !important; }
-    /* Phase FORGE-SHOP-04 Slice 04.2 — Search bar */
+
+    /* ─── Tables ─────────────────────────────────────────────────── */
+    th.sortable { cursor: pointer; user-select: none; }
+    th.sortable:hover { color: var(--accent); }
+    tr.row-selected { outline: 2px solid var(--accent); outline-offset: -2px; }
+    tr.row-compare  { outline: 2px solid var(--warning); outline-offset: -2px; background: rgba(245,158,11,0.08); }
+
+    /* ─── Legacy dark-class overrides (preserved for light theme) ── */
+    html.light body { background: var(--bg-0); color: var(--fg-0); }
+    html.light .bg-gray-800 { background: var(--bg-1); border-color: var(--line); }
+    html.light .bg-gray-900 { background: var(--bg-0); }
+    html.light .bg-gray-700 { background: var(--bg-2); }
+    html.light .text-gray-100 { color: var(--fg-0); }
+    html.light .text-gray-300 { color: var(--fg-1); }
+    html.light .text-gray-400 { color: var(--fg-2); }
+    html.light .text-gray-500 { color: var(--fg-3); }
+    html.light .text-white { color: var(--fg-0); }
+    html.light .border-gray-700, html.light .border-gray-600 { border-color: var(--line); }
+    html.light kbd { background: var(--bg-3) !important; color: var(--fg-0) !important; border: 1px solid var(--line-strong); }
+
+    /* ─── Global search — FORGE-SHOP-04 Slice 04.2 ───────────────── */
     .search-result-item { cursor: pointer; transition: background 0.15s; }
     .search-result-item:hover, .search-result-item.search-active { background: rgba(59,130,246,0.15); }
-    .search-source-badge { display: inline-block; font-size: 0.65rem; padding: 1px 6px; border-radius: 9999px; font-weight: 600; }
-    .search-source-badge[data-source="run"] { background: #1e3a5f; color: #93c5fd; }
-    .search-source-badge[data-source="bug"] { background: #5c1a1a; color: #fca5a5; }
-    .search-source-badge[data-source="incident"] { background: #5c3a0a; color: #fdba74; }
-    .search-source-badge[data-source="review"] { background: #1a3a1a; color: #86efac; }
-    .search-source-badge[data-source="plan"] { background: #2e1a5c; color: #c4b5fd; }
+    .search-source-badge {
+      display: inline-block; font-size: 0.65rem;
+      padding: 1px 6px; border-radius: 9999px; font-weight: 600; letter-spacing: 0.02em;
+    }
+    .search-source-badge[data-source="run"]       { background: #1e3a5f; color: #93c5fd; }
+    .search-source-badge[data-source="bug"]       { background: #5c1a1a; color: #fca5a5; }
+    .search-source-badge[data-source="incident"]  { background: #5c3a0a; color: #fdba74; }
+    .search-source-badge[data-source="review"]    { background: #1a3a1a; color: #86efac; }
+    .search-source-badge[data-source="plan"]      { background: #2e1a5c; color: #c4b5fd; }
     .search-source-badge[data-source="tempering"] { background: #1a3a3a; color: #5eead4; }
-    .search-source-badge[data-source="memory"] { background: #3a3a1a; color: #fde68a; }
+    .search-source-badge[data-source="memory"]    { background: #3a3a1a; color: #fde68a; }
     .search-source-badge[data-source="hub-event"] { background: #2a2a3a; color: #a5b4fc; }
     .search-snippet mark { background: rgba(250,204,21,0.3); color: inherit; border-radius: 2px; padding: 0 1px; }
-    .search-loading { display: flex; align-items: center; justify-content: center; padding: 1rem; color: #9ca3af; }
-    .search-error { padding: 0.75rem; color: #fca5a5; font-size: 0.8rem; text-align: center; }
-    /* Responsive */
+    .search-loading { display: flex; align-items: center; justify-content: center; padding: 1rem; color: var(--fg-2); }
+    .search-error { padding: 0.75rem; color: var(--danger); font-size: 0.8rem; text-align: center; }
+
+    /* ─── Scrollbar polish (webkit) ──────────────────────────────── */
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 8px; border: 2px solid transparent; background-clip: content-box; }
+    ::-webkit-scrollbar-thumb:hover { background-color: var(--fg-3); background-clip: content-box; }
+
+    /* ─── Responsive ─────────────────────────────────────────────── */
     @media (max-width: 1024px) { .hide-tablet { display: none; } }
     @media (max-width: 768px) {
       .hide-mobile { display: none; }
       #run-detail-drawer { width: 100% !important; }
+      header h1 { font-size: 1rem; }
     }
   </style>
 </head>
 <body class="bg-gray-900 text-gray-100 min-h-screen">
+  <a href="#main-content" class="skip-link">Skip to main content</a>
   <!-- Header -->
-  <header class="bg-gray-800 border-b border-gray-700 px-4 py-3 flex items-center justify-between">
-    <div class="flex items-center gap-3">
-      <span class="text-2xl">🔨</span>
-      <h1 class="text-xl font-bold text-white">Plan Forge</h1>
-      <span id="connection-badge" class="text-xs px-2 py-0.5 rounded-full bg-red-900 text-red-300">disconnected</span>
+  <header class="bg-gray-800 border-b border-gray-700 px-4 py-2.5 flex items-center gap-3" role="banner">
+    <div class="flex items-center gap-2.5 shrink-0">
+      <span class="text-2xl" aria-hidden="true">🔨</span>
+      <h1 class="text-base font-bold text-white tracking-tight">Plan Forge</h1>
+      <span id="connection-badge" class="text-[10px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded-full bg-red-900/70 text-red-300 border border-red-800/50" title="WebSocket connection to hub">disconnected</span>
       <a id="version-badge" href="https://github.com/srnichols/plan-forge/releases" target="_blank" rel="noopener"
-         class="text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-400 hover:bg-gray-600 hover:text-white transition border border-gray-600"
+         class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-gray-700/70 text-gray-300 hover:bg-gray-600 hover:text-white transition border border-gray-600/60"
          title="Plan Forge version — click to view releases on GitHub">v…</a>
-      <span id="hub-clients" class="text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-400 hidden" title="Connected clients">0 clients</span>
+      <span id="hub-clients" class="text-[11px] px-2 py-0.5 rounded-full bg-gray-700/60 text-gray-400 hidden border border-gray-600/40" title="Connected clients">0 clients</span>
     </div>
     <!-- Phase FORGE-SHOP-04 Slice 04.2 — Global search bar -->
-    <div class="relative flex-1 max-w-md mx-4" id="search-container" data-testid="search-container">
+    <div class="relative flex-1 max-w-xl mx-2" id="search-container" data-testid="search-container">
+      <label for="global-search" class="sr-only">Search</label>
       <input type="search" id="global-search" data-testid="global-search"
-        class="w-full bg-gray-700 border border-gray-600 text-gray-100 text-sm rounded px-3 py-1.5 pl-8
-               placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-        placeholder="Search runs, bugs, incidents… (press /)" autocomplete="off" />
-      <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 text-xs pointer-events-none">🔍</span>
-      <kbd id="search-hint" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-500
-           bg-gray-600 px-1.5 py-0.5 rounded border border-gray-500 pointer-events-none">/</kbd>
+        class="w-full bg-gray-700/60 border border-gray-600/70 text-gray-100 text-sm rounded-lg px-3 py-1.5 pl-9
+               placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:bg-gray-700 transition"
+        placeholder="Search runs, bugs, incidents, plans…" autocomplete="off"
+        aria-controls="search-results" aria-expanded="false" role="combobox" />
+      <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" aria-hidden="true">🔍</span>
+      <kbd id="search-hint" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-mono text-gray-400
+           bg-gray-800/80 px-1.5 py-0.5 rounded border border-gray-600 pointer-events-none" aria-hidden="true">/</kbd>
       <div id="search-results" role="listbox" data-testid="search-results"
         class="hidden absolute top-full left-0 right-0 mt-1 bg-gray-800 border border-gray-600
                rounded-lg shadow-xl max-h-96 overflow-y-auto z-50">
       </div>
     </div>
-    <div class="flex items-center gap-4 text-sm text-gray-400">
+    <div class="flex items-center gap-3 text-sm text-gray-400 shrink-0">
       <!-- Phase UPDATE-01: non-intrusive update banner (hidden by default) -->
-      <a id="update-banner" href="#" target="_blank" rel="noopener" class="hidden items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-blue-900/60 text-blue-200 border border-blue-700 hover:bg-blue-800/70 transition" title="A newer Plan Forge release is available">
-        <span>⬆</span>
+      <a id="update-banner" href="#" target="_blank" rel="noopener" class="hidden items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full bg-blue-900/60 text-blue-200 border border-blue-700/60 hover:bg-blue-800/70 transition" title="A newer Plan Forge release is available">
+        <span aria-hidden="true">⬆</span>
         <span id="update-banner-text">Update available</span>
         <button id="update-now-btn" onclick="event.preventDefault(); event.stopPropagation(); triggerSelfUpdate();"
-          class="ml-1 text-xs px-2 py-0.5 rounded bg-blue-600 hover:bg-blue-500 text-white" title="Install update now">Update now</button>
-        <span id="update-progress" class="hidden ml-1 text-xs text-blue-300"></span>
-        <button onclick="event.preventDefault(); event.stopPropagation(); dismissUpdateBanner();" class="ml-1 text-blue-300 hover:text-white" title="Dismiss (until next release)" aria-label="Dismiss update notice">✕</button>
+          class="ml-1 text-[11px] font-medium px-2 py-0.5 rounded bg-blue-600 hover:bg-blue-500 text-white transition" title="Install update now">Update now</button>
+        <span id="update-progress" class="hidden ml-1 text-[11px] text-blue-300"></span>
+        <button onclick="event.preventDefault(); event.stopPropagation(); dismissUpdateBanner();" class="ml-1 text-blue-300 hover:text-white transition" title="Dismiss (until next release)" aria-label="Dismiss update notice">✕</button>
       </a>
-      <a href="/ui" target="_blank" class="hover:text-white transition-colors">Plan Browser →</a>
-      <span id="run-status">Idle</span>
-      <span id="ws-port"></span>
-      <button id="theme-toggle" onclick="toggleTheme()" title="Toggle theme" class="hover:text-white transition">🌙</button>
+      <a href="/ui" target="_blank" rel="noopener" class="hover:text-white transition-colors text-xs hide-mobile" title="Open Plan Browser">Plan Browser ↗</a>
+      <span id="run-status" class="text-xs font-medium text-gray-300 px-2 py-0.5 rounded bg-gray-700/50 border border-gray-700" title="Current run status">Idle</span>
+      <span id="ws-port" class="text-[10px] text-gray-500 font-mono hide-tablet"></span>
+      <button id="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark theme" aria-label="Toggle theme" class="text-base leading-none hover:text-white transition w-7 h-7 flex items-center justify-center rounded hover:bg-gray-700/60">🌙</button>
     </div>
   </header>
 
   <!-- Tabs — Two-level: Group tabs + Sub tabs -->
-  <nav class="bg-gray-800 border-b border-gray-700 px-4 text-sm">
+  <nav class="bg-gray-800 border-b border-gray-700 px-4 text-sm" aria-label="Primary navigation">
     <!-- Group tabs -->
-    <div class="flex gap-1 items-center">
-      <button class="group-tab group-active px-4 py-2 font-semibold text-blue-400 border-b-2 border-blue-400 whitespace-nowrap" data-group="forge" onclick="switchGroup('forge')">🔨 Forge</button>
-      <button class="group-tab px-4 py-2 font-semibold text-gray-500 hover:text-amber-400 border-b-2 border-transparent whitespace-nowrap" data-group="liveguard" onclick="switchGroup('liveguard')">🛡️ LiveGuard</button>
-      <button id="notif-bell" class="ml-auto px-3 py-2 relative hover:text-yellow-400 text-gray-400" onclick="toggleNotifications()">
-        🔔<span id="notif-count" class="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center hidden">0</span>
+    <div class="flex gap-1 items-center" role="tablist" aria-label="Dashboard sections">
+      <button class="group-tab group-active px-4 py-2 font-semibold text-blue-400 border-b-2 border-blue-400 whitespace-nowrap flex items-center gap-1.5" data-group="forge" onclick="switchGroup('forge')" role="tab" aria-selected="true" aria-controls="subtabs-forge">
+        <span aria-hidden="true">🔨</span><span>Forge</span>
+      </button>
+      <button class="group-tab px-4 py-2 font-semibold text-gray-500 hover:text-amber-400 border-b-2 border-transparent whitespace-nowrap flex items-center gap-1.5" data-group="liveguard" onclick="switchGroup('liveguard')" role="tab" aria-selected="false" aria-controls="subtabs-liveguard">
+        <span aria-hidden="true">🛡️</span><span>LiveGuard</span>
+      </button>
+      <button id="notif-bell" class="ml-auto px-3 py-2 relative hover:text-yellow-400 text-gray-400 transition" onclick="toggleNotifications()" aria-label="Toggle notifications" title="Notifications">
+        <span aria-hidden="true">🔔</span><span id="notif-count" class="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[1.1rem] h-[1.1rem] px-1 flex items-center justify-center hidden" aria-live="polite">0</span>
       </button>
     </div>
     <!-- Sub tabs: Forge -->
-    <div id="subtabs-forge" class="flex gap-1 pt-1 pb-0.5 overflow-x-auto">
-      <button class="tab-btn tab-active px-3 py-1.5 rounded-t hover:text-blue-400 whitespace-nowrap text-xs" data-tab="home" data-testid="home-tab-btn">🏠 Home</button>
-      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-amber-400 text-gray-400 whitespace-nowrap text-xs" data-tab="review" data-testid="review-tab-btn">📋 Review</button>
-      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="progress">Progress</button>
-      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-orange-400 text-gray-400 whitespace-nowrap text-xs" data-tab="crucible">🔥 Crucible</button>
-      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-purple-400 text-gray-400 whitespace-nowrap text-xs" data-tab="governance">🛡 Governance</button>
-      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="runs">Runs</button>
-      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="cost">Cost</button>
-      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="actions">Actions</button>
-      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="replay">Replay</button>
-      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="extensions">Extensions</button>
-      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="config">Config</button>
-      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="traces">Traces</button>
-      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="skills">Skills</button>
-      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="watcher">Watcher</button>
-      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-emerald-400 text-gray-400 whitespace-nowrap text-xs" data-tab="tempering">🛠 Tempering</button>
-      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-red-400 text-gray-400 whitespace-nowrap text-xs" data-tab="bugregistry">🐛 Bug Registry</button>
-      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="memory">Memory</button>
-      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-cyan-400 text-gray-400 whitespace-nowrap text-xs" data-tab="timeline" data-testid="timeline-tab-btn">📅 Timeline</button>
+    <div id="subtabs-forge" class="flex gap-0.5 pt-1 pb-0 overflow-x-auto" role="tablist" aria-label="Forge sections">
+      <button class="tab-btn tab-active px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="home" data-testid="home-tab-btn" role="tab">🏠 Home</button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="review" data-testid="review-tab-btn" role="tab">📋 Review</button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="progress" role="tab">Progress</button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="crucible" role="tab">🔥 Crucible</button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="governance" role="tab">🛡 Governance</button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="runs" role="tab">Runs</button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="cost" role="tab">Cost</button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="actions" role="tab">Actions</button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="replay" role="tab">Replay</button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="extensions" role="tab">Extensions</button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="config" role="tab">Config</button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="traces" role="tab">Traces</button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="skills" role="tab">Skills</button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="watcher" role="tab">Watcher</button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="tempering" role="tab">🛠 Tempering</button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="bugregistry" role="tab">🐛 Bug Registry</button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="memory" role="tab">Memory</button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="timeline" data-testid="timeline-tab-btn" role="tab">📅 Timeline</button>
     </div>
     <!-- Sub tabs: LiveGuard -->
-    <div id="subtabs-liveguard" class="hidden flex gap-1 pt-1 pb-0.5 overflow-x-auto">
-      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-amber-400 text-gray-400 whitespace-nowrap text-xs" data-tab="lg-health">Health</button>
-      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-amber-400 text-gray-400 whitespace-nowrap text-xs" data-tab="lg-incidents">Incidents</button>
-      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-amber-400 text-gray-400 whitespace-nowrap text-xs" data-tab="lg-triage">Triage</button>
-      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-amber-400 text-gray-400 whitespace-nowrap text-xs" data-tab="lg-security">Security</button>
-      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-amber-400 text-gray-400 whitespace-nowrap text-xs" data-tab="lg-env">Env</button>
+    <div id="subtabs-liveguard" class="hidden flex gap-0.5 pt-1 pb-0 overflow-x-auto" role="tablist" aria-label="LiveGuard sections">
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400 hover:text-amber-400" data-tab="lg-health" role="tab">Health</button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400 hover:text-amber-400" data-tab="lg-incidents" role="tab">Incidents</button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400 hover:text-amber-400" data-tab="lg-triage" role="tab">Triage</button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400 hover:text-amber-400" data-tab="lg-security" role="tab">Security</button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400 hover:text-amber-400" data-tab="lg-env" role="tab">Env</button>
     </div>
   </nav>
+
+  <main id="main-content" role="main">
 
   <!-- Notification dropdown -->
   <div id="notif-panel" class="hidden absolute right-4 top-24 w-80 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50 max-h-80 overflow-y-auto">
@@ -153,7 +280,7 @@
   </div>
 
   <!-- Tab Content -->
-  <main class="p-4 max-w-6xl mx-auto">
+  <div class="p-4 max-w-6xl mx-auto">
 
     <!-- Home Tab (Phase FORGE-SHOP-01 Slice 01.2) — shop-floor overview -->
     <section id="tab-home" class="tab-content">
@@ -1439,7 +1566,7 @@
         </div>
       </div>
     </section>
-  </main>
+  </div>
 
   <!-- New Smelt Modal — Crucible idea capture -->
   <div id="new-smelt-modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center" onclick="if(event.target===this)closeNewSmeltModal()">
@@ -1561,7 +1688,10 @@
     </div>
   </div>
 
-  <footer class="text-center text-xs text-gray-600 py-2">Plan Forge <span id="footer-version"></span> · Press <kbd class="bg-gray-700 px-1 rounded">?</kbd> for keyboard shortcuts</footer>
+  <footer class="text-center text-[11px] text-gray-500 py-3 border-t border-gray-800/60 mt-2" role="contentinfo">
+    Plan Forge <span id="footer-version"></span> · Press <kbd class="bg-gray-700 text-gray-300 px-1.5 py-0.5 rounded text-[10px] font-mono border border-gray-600">?</kbd> for keyboard shortcuts
+  </footer>
+  </main>
 
   <script src="app.js"></script>
 </body>

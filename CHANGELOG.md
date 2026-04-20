@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.59.1] — 2026-04-20 — Setup/Update Distribution Fixes
+
+> **Patch release — fixes a class of silent setup/update gaps.** An audit of `setup.ps1`, `setup.sh`, and `pforge update` against the repo's actual content found four distribution gaps: pipeline prompts were never copied to fresh projects, the `PreCommit.mjs` guard hook (#74) never reached downstream projects, `pforge update` missed `project-profile.prompt.md` and two shared instruction files on Unix, and `pforge smith` counted prompts without verifying pipeline prompts were among them — which masked the first gap. All four fixed. No functional changes to orchestrator, MCP tools, or runtime behavior.
+
 ### Fixed
 
 - **Setup/update distribution gap — pipeline prompts never shipped.** `setup.ps1` and `setup.sh` only copied `templates/.github/prompts/project-principles.prompt.md`, never the eight pipeline prompts (`step0-specify-feature`…`step6-ship` + `project-profile`) that live in the repo's `.github/prompts/`. Fresh installs lacked the core runbook scaffolding despite setup's closing output telling users to run `step0-specify-feature.prompt.md`. Both setup scripts now copy every `*.prompt.md` from `.github/prompts/` in Step 3c (excluding `project-principles.prompt.md`, which remains sourced from `templates/`).

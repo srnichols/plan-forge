@@ -7,11 +7,11 @@
 
 ## Current Release
 
-**v2.58.0** (2026-04-20) — Phase-26 Competitive & Self-Deterministic Loop. Three new opt-in subsystems (competitive worktree execution, auto-fix patch proposals, cost-anomaly detection), Dashboard "Inner Loop" tab surfacing all ten subsystems, best-defaults preset for new projects, and four CLI orchestrator bug fixes (#78/#79/#80/#81). 2893/2893 tests.
+**v2.59.1** (2026-04-20) — Setup/update distribution fixes. Four silent gaps closed: pipeline prompts now ship via setup, `PreCommit.mjs` hook mirrored to templates, `pforge update` prompt glob and Unix shared-instructions list broadened, and `pforge smith` now name-checks pipeline prompts. No runtime changes. 2893/2893 tests.
 
-Previous: v2.57.0 (2026-04-27) Phase-25 Inner-Loop Enhancements — seven opt-in reflective subsystems (reflexion retry context, trajectory capture, auto-skill library, adaptive gate synthesis, plan postmortems, cross-project federation, reviewer-agent in-loop).
+Previous: v2.59.0 (2026-04-20) Housekeeping — Bug #82 Windows libuv teardown fix, version-drift correction for `pforge-mcp/package.json`, ROADMAP prune. v2.58.0 (2026-04-20) Phase-26 Competitive & Self-Deterministic Loop. v2.57.0 (2026-04-27) Phase-25 Inner-Loop Enhancements.
 
-**In flight (targeting 2.59.0)**: TBD — Phase-27 planning open. Candidates include advisory-to-enforcement calibration for Phase-25/26 subsystems, Team Mode (v3.1), and backlog items below.
+**In flight (targeting 2.60.0)**: TBD — Phase-27 planning open. Candidates include advisory-to-enforcement calibration for Phase-25/26 subsystems, Team Mode (v3.1), and backlog items below.
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 

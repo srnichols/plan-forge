@@ -1228,16 +1228,76 @@ cmd_update() {
             esac
         done
 
-        # Auto-detect source: sibling directories ../plan-forge or ../Plan-Forge
+        # v2.56.0 — read updateSource preference from .forge.json
+        local update_source_pref="auto"
+        local pref_config_path="$REPO_ROOT/.forge.json"
+        if [ -f "$pref_config_path" ]; then
+            local pref_raw
+            pref_raw="$(python3 -c "import json; v=json.load(open('$pref_config_path')).get('updateSource',''); print(v if v in ('auto','github-tags','local-sibling') else '')" 2>/dev/null || echo "")"
+            if [ -n "$pref_raw" ]; then update_source_pref="$pref_raw"; fi
+        fi
+
+        # Find sibling clone (if any)
+        local sibling_path=""
         if [ -z "$source_path" ]; then
             local parent
             parent="$(dirname "$REPO_ROOT")"
             for candidate in "$parent/plan-forge" "$parent/Plan-Forge"; do
                 if [ -f "$candidate/VERSION" ]; then
-                    source_path="$(cd "$candidate" && pwd)"
+                    sibling_path="$(cd "$candidate" && pwd)"
                     break
                 fi
             done
+        fi
+
+        if [ -z "$source_path" ]; then
+            case "$update_source_pref" in
+                github-tags)
+                    if [ -n "$sibling_path" ]; then
+                        echo "  Note: updateSource='github-tags' — ignoring sibling clone at $sibling_path"
+                    fi
+                    echo "  Using GitHub tagged release (updateSource='github-tags')"
+                    from_github=true
+                    ;;
+                local-sibling)
+                    if [ -n "$sibling_path" ]; then
+                        source_path="$sibling_path"
+                    else
+                        echo "ERROR: updateSource='local-sibling' but no sibling clone found." >&2
+                        echo "  Change '.forge.json' updateSource to 'auto' or 'github-tags', or clone:" >&2
+                        echo "    git clone https://github.com/srnichols/plan-forge.git ../plan-forge" >&2
+                        exit 1
+                    fi
+                    ;;
+                *)
+                    # auto — prefer GitHub tags if sibling is on -dev
+                    if [ -n "$sibling_path" ]; then
+                        local sibling_ver=""
+                        sibling_ver="$(tr -d '[:space:]' < "$sibling_path/VERSION" 2>/dev/null || echo "")"
+                        if echo "$sibling_ver" | grep -qE -- '-dev\b'; then
+                            echo "  Note: sibling clone is on -dev ($sibling_ver); using GitHub tagged release instead"
+                            echo "  (set updateSource='local-sibling' in .forge.json to always use sibling)"
+                            from_github=true
+                        else
+                            source_path="$sibling_path"
+                        fi
+                    else
+                        echo "  No sibling clone found — using GitHub tagged release"
+                        from_github=true
+                    fi
+                    ;;
+            esac
+
+            # If auto/github-tags flipped us, recurse back into the --from-github branch logic.
+            if [ -z "$source_path" ] && $from_github; then
+                # Remove any existing --from-github to avoid duplicates, then append once.
+                local filtered_args=()
+                for arg in "$@"; do
+                    [ "$arg" = "--from-github" ] || filtered_args+=("$arg")
+                done
+                cmd_update "${filtered_args[@]}" "--from-github"
+                return $?
+            fi
         fi
 
         if [ -z "$source_path" ]; then
@@ -4237,6 +4297,103 @@ cmd_testbed_happypath() {
     fi
 }
 
+# ─── pforge config (v2.56.0) ──────────────────────────────────────────
+# Minimal CLI for reading/writing `.forge.json` enum keys.
+# Supported keys: update-source (jsonKey: updateSource; values: auto|github-tags|local-sibling)
+cmd_config() {
+    local action="${1:-}"
+    local key="${2:-}"
+    local value="${3:-}"
+    local config_path="$REPO_ROOT/.forge.json"
+
+    if [ -z "$action" ] || [ "$action" = "help" ] || [ "$action" = "--help" ]; then
+        echo ""
+        echo "pforge config"
+        echo "─────────────────────────────────────────────"
+        echo "  pforge config get <key>          Read a value from .forge.json"
+        echo "  pforge config set <key> <value>  Write a value to .forge.json"
+        echo "  pforge config list               Show all settable keys"
+        echo ""
+        echo "Settable keys:"
+        echo "  update-source"
+        echo "    Where pforge update pulls template bytes from."
+        echo "    Values: auto, github-tags, local-sibling  (default: auto)"
+        return 0
+    fi
+
+    # Map CLI key → JSON key + allowed values
+    local json_key="" allowed="" default_value=""
+    case "$key" in
+        update-source) json_key="updateSource"; allowed="auto github-tags local-sibling"; default_value="auto" ;;
+        "")            : ;;
+        *)
+            if [ "$action" != "list" ]; then
+                echo "ERROR: unknown config key '$key'" >&2
+                echo "  Run 'pforge config' to see available keys." >&2
+                exit 1
+            fi
+            ;;
+    esac
+
+    case "$action" in
+        list)
+            local cur_val=""
+            if [ -f "$config_path" ]; then
+                cur_val="$(python3 -c "import json; print(json.load(open('$config_path')).get('updateSource',''))" 2>/dev/null || echo "")"
+            fi
+            if [ -z "$cur_val" ]; then cur_val="(unset → auto)"; fi
+            printf "  %-18s  %s\n" "update-source" "$cur_val"
+            ;;
+        get)
+            if [ -z "$json_key" ]; then
+                echo "ERROR: missing key — usage: pforge config get <key>" >&2; exit 1
+            fi
+            local val=""
+            if [ -f "$config_path" ]; then
+                val="$(python3 -c "import json; print(json.load(open('$config_path')).get('$json_key',''))" 2>/dev/null || echo "")"
+            fi
+            if [ -z "$val" ]; then val="$default_value"; fi
+            echo "$val"
+            ;;
+        set)
+            if [ -z "$json_key" ]; then
+                echo "ERROR: missing key — usage: pforge config set <key> <value>" >&2; exit 1
+            fi
+            if [ -z "$value" ]; then
+                echo "ERROR: missing value — usage: pforge config set $key <value>" >&2
+                echo "  Allowed: $allowed" >&2
+                exit 1
+            fi
+            local ok=false
+            for a in $allowed; do [ "$a" = "$value" ] && ok=true; done
+            if ! $ok; then
+                echo "ERROR: '$value' is not a valid value for '$key'" >&2
+                echo "  Allowed: $allowed" >&2
+                exit 1
+            fi
+            # Merge into existing JSON atomically
+            local tmp="$config_path.tmp"
+            python3 -c "
+import json, os, sys
+path = '$config_path'
+data = {}
+if os.path.exists(path):
+    try: data = json.load(open(path))
+    except Exception as e:
+        print(f'ERROR: .forge.json is malformed: {e}', file=sys.stderr); sys.exit(1)
+data['$json_key'] = '$value'
+with open('$tmp','w') as f:
+    json.dump(data, f, indent=2)
+" || exit 1
+            mv "$tmp" "$config_path"
+            echo "  ✅ $json_key = $value"
+            ;;
+        *)
+            echo "ERROR: unknown action '$action' — expected get|set|list" >&2; exit 1
+            ;;
+    esac
+}
+
 # ─── Command Router ────────────────────────────────────────────────────
 COMMAND="${1:-help}"
 shift 2>/dev/null || true
@@ -4275,6 +4432,7 @@ case "$COMMAND" in
     migrate-memory) cmd_migrate_memory "$@" ;;
     mcp-call)     cmd_mcp_call "$@" ;;
     tour)         cmd_tour ;;
+    config)       cmd_config "$@" ;;
     help|--help)  show_help ;;
     *)
         echo "ERROR: Unknown command '$COMMAND'" >&2

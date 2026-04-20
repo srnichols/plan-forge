@@ -5119,6 +5119,112 @@ function Invoke-TestbedHappypath {
     Write-Host "All happy-path scenarios passed." -ForegroundColor Green
 }
 
+# ─── pforge config (v2.56.0) ──────────────────────────────────────────
+# Minimal CLI for reading/writing `.forge.json` keys that have enum schemas.
+# Current supported keys: updateSource (auto|github-tags|local-sibling).
+function Invoke-Config {
+    $action = if ($Arguments.Count -ge 1) { $Arguments[0] } else { '' }
+    $key    = if ($Arguments.Count -ge 2) { $Arguments[1] } else { '' }
+    $value  = if ($Arguments.Count -ge 3) { $Arguments[2] } else { '' }
+
+    $configPath = Join-Path $RepoRoot ".forge.json"
+
+    # Schema of settable keys (extend here when adding new enum keys)
+    $schema = @{
+        'update-source' = @{
+            jsonKey = 'updateSource'
+            allowed = @('auto', 'github-tags', 'local-sibling')
+            default = 'auto'
+            summary = 'Where pforge update pulls template bytes from.'
+        }
+    }
+
+    if ($action -eq '' -or $action -eq 'help' -or $action -eq '--help') {
+        Write-Host ""
+        Write-Host "pforge config" -ForegroundColor Cyan
+        Write-Host "─────────────────────────────────────────────" -ForegroundColor DarkGray
+        Write-Host "  pforge config get <key>          Read a value from .forge.json"
+        Write-Host "  pforge config set <key> <value>  Write a value to .forge.json"
+        Write-Host "  pforge config list               Show all settable keys"
+        Write-Host ""
+        Write-Host "Settable keys:" -ForegroundColor White
+        foreach ($k in $schema.Keys) {
+            Write-Host "  $k" -ForegroundColor Yellow
+            Write-Host "    $($schema[$k].summary)" -ForegroundColor DarkGray
+            Write-Host "    Values: $($schema[$k].allowed -join ', ')  (default: $($schema[$k].default))" -ForegroundColor DarkGray
+        }
+        return
+    }
+
+    if ($action -eq 'list') {
+        $current = @{}
+        if (Test-Path $configPath) {
+            try { $current = Get-Content $configPath -Raw | ConvertFrom-Json } catch {}
+        }
+        foreach ($k in $schema.Keys) {
+            $jk = $schema[$k].jsonKey
+            $val = if ($current.$jk) { $current.$jk } else { "(unset → $($schema[$k].default))" }
+            Write-Host ("  {0,-18}  {1}" -f $k, $val)
+        }
+        return
+    }
+
+    if (-not $schema.ContainsKey($key)) {
+        Write-Host "ERROR: unknown config key '$key'" -ForegroundColor Red
+        Write-Host "  Run 'pforge config' to see available keys." -ForegroundColor Yellow
+        exit 1
+    }
+    $spec = $schema[$key]
+
+    # Load current config
+    $current = [ordered]@{}
+    if (Test-Path $configPath) {
+        try {
+            $parsed = Get-Content $configPath -Raw | ConvertFrom-Json
+            foreach ($p in $parsed.PSObject.Properties) { $current[$p.Name] = $p.Value }
+        } catch {
+            Write-Host "ERROR: .forge.json is malformed: $($_.Exception.Message)" -ForegroundColor Red
+            exit 1
+        }
+    }
+
+    switch ($action) {
+        'get' {
+            $val = if ($current.Contains($spec.jsonKey)) { $current[$spec.jsonKey] } else { $spec.default }
+            Write-Host $val
+        }
+        'set' {
+            if ($value -eq '') {
+                Write-Host "ERROR: missing value — usage: pforge config set $key <value>" -ForegroundColor Red
+                Write-Host "  Allowed: $($spec.allowed -join ', ')" -ForegroundColor Yellow
+                exit 1
+            }
+            if ($value -notin $spec.allowed) {
+                Write-Host "ERROR: '$value' is not a valid value for '$key'" -ForegroundColor Red
+                Write-Host "  Allowed: $($spec.allowed -join ', ')" -ForegroundColor Yellow
+                exit 1
+            }
+            $current[$spec.jsonKey] = $value
+
+            # Write atomically: temp file → rename
+            $tmpPath = "$configPath.tmp"
+            try {
+                ([pscustomobject]$current) | ConvertTo-Json -Depth 10 | Set-Content -Path $tmpPath -Encoding UTF8 -NoNewline
+                Move-Item -Path $tmpPath -Destination $configPath -Force
+            } catch {
+                if (Test-Path $tmpPath) { Remove-Item $tmpPath -Force -ErrorAction SilentlyContinue }
+                Write-Host "ERROR: failed to write .forge.json: $($_.Exception.Message)" -ForegroundColor Red
+                exit 1
+            }
+            Write-Host "  ✅ $($spec.jsonKey) = $value" -ForegroundColor Green
+        }
+        default {
+            Write-Host "ERROR: unknown action '$action' — expected get|set|list" -ForegroundColor Red
+            exit 1
+        }
+    }
+}
+
 # ─── Command Router ────────────────────────────────────────────────────
 switch ($Command) {
     'init'         { Invoke-Init }
@@ -5155,6 +5261,7 @@ switch ($Command) {
     'migrate-memory' { Invoke-MigrateMemory }
     'mcp-call'     { Invoke-McpCall }
     'tour'         { Invoke-Tour }
+    'config'       { Invoke-Config }
     'help'         { Show-Help }
     ''             { Show-Help }
     '--help'       { Show-Help }

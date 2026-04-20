@@ -5,6 +5,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **Setup/update distribution gap — pipeline prompts never shipped.** `setup.ps1` and `setup.sh` only copied `templates/.github/prompts/project-principles.prompt.md`, never the eight pipeline prompts (`step0-specify-feature`…`step6-ship` + `project-profile`) that live in the repo's `.github/prompts/`. Fresh installs lacked the core runbook scaffolding despite setup's closing output telling users to run `step0-specify-feature.prompt.md`. Both setup scripts now copy every `*.prompt.md` from `.github/prompts/` in Step 3c (excluding `project-principles.prompt.md`, which remains sourced from `templates/`).
+- **Setup/update distribution gap — `PreCommit.mjs` (#74 hook) missing from downstream projects.** Added in v2.50.1 only to `.github/hooks/`, but both setup and `pforge update` source hooks from `templates/.github/hooks/`. The hook is now mirrored in both locations so downstream projects receive it.
+- **`pforge update` prompt glob too narrow.** The glob `step*.prompt.md` missed `project-profile.prompt.md`. Broadened to `*.prompt.md` with an explicit skip for `project-principles.prompt.md`.
+- **`pforge update` shared-instructions list incomplete (Unix).** `pforge.sh` update-from-source only enumerated 3 of the 5 shared instruction files; `status-reporting.instructions.md` and `context-fuel.instructions.md` never refreshed. Now enumerates all five, matching `pforge.ps1`.
+- **Smith pipeline-prompt blind spot.** Smith counted `*.prompt.md >= 9` but never verified the runbook's pipeline prompts by name — a project with only `new-*` scaffolding prompts could pass the count check while lacking every pipeline prompt. Smith now performs an explicit name presence check for `step0`…`step6` and `project-profile`, surfacing any missing ones with a `pforge update` fix hint.
+
+---
+
 ## [2.59.0] — 2026-04-20 — Housekeeping
 
 > **Small, targeted cleanup.** One real bug fix (libuv teardown crash on Windows), one version-drift correction, and a ROADMAP prune that closes six stale backlog entries representing work that was already shipped.

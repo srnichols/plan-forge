@@ -1482,7 +1482,9 @@ function Invoke-Update {
     $srcPrompts = Join-Path $sourcePath ".github/prompts"
     $dstPrompts = Join-Path $RepoRoot ".github/prompts"
     if (Test-Path $srcPrompts) {
-        Get-ChildItem -Path $srcPrompts -Filter "step*.prompt.md" -File | ForEach-Object {
+        Get-ChildItem -Path $srcPrompts -Filter "*.prompt.md" -File | ForEach-Object {
+            # project-principles.prompt.md is user-customized (lives in templates/ source) — never auto-update
+            if ($_.Name -eq 'project-principles.prompt.md') { return }
             $dstFile = Join-Path $dstPrompts $_.Name
             if (Test-Path $dstFile) {
                 $srcHash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
@@ -2805,6 +2807,28 @@ function Invoke-Smith {
         }
         else {
             Doctor-Warn "$promptCount prompt templates (expected: >=$($expected.prompts) for $presetKey)" "Run 'pforge update' to get missing prompts"
+        }
+
+        # Pipeline prompts — presence check by name (the count alone can pass with
+        # only scaffolding prompts present; pipeline prompts power the runbook).
+        if (Test-Path $promptsDir) {
+            $requiredPipeline = @(
+                'step0-specify-feature.prompt.md',
+                'step1-preflight-check.prompt.md',
+                'step2-harden-plan.prompt.md',
+                'step3-execute-slice.prompt.md',
+                'step4-completeness-sweep.prompt.md',
+                'step5-review-gate.prompt.md',
+                'step6-ship.prompt.md',
+                'project-profile.prompt.md'
+            )
+            $presentPipeline = Get-ChildItem -Path $promptsDir -Filter "*.prompt.md" -File | Select-Object -ExpandProperty Name
+            $missingPipeline = $requiredPipeline | Where-Object { $_ -notin $presentPipeline }
+            if ($missingPipeline.Count -eq 0) {
+                Doctor-Pass "Pipeline prompts present (step0-step6 + project-profile)"
+            } else {
+                Doctor-Warn "Missing pipeline prompts: $($missingPipeline -join ', ')" "Run 'pforge update' to install missing pipeline prompts"
+            }
         }
 
         # Skills

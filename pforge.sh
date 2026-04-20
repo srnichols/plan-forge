@@ -1406,8 +1406,10 @@ print(v if isinstance(v, str) else ','.join(v))
         while IFS= read -r -d '' f; do
             local fname_p
             fname_p="$(basename "$f")"
+            # project-principles.prompt.md is user-customized (sourced from templates/) — never auto-update
+            if [ "$fname_p" = "project-principles.prompt.md" ]; then continue; fi
             _pf_check "$f" "$REPO_ROOT/.github/prompts/$fname_p" ".github/prompts/$fname_p"
-        done < <(find "$src_prompts" -maxdepth 1 -name "step*.prompt.md" -type f -print0 2>/dev/null)
+        done < <(find "$src_prompts" -maxdepth 1 -name "*.prompt.md" -type f -print0 2>/dev/null)
     fi
 
     # ─── Pipeline agents ──────────────────────────────────────────
@@ -1423,7 +1425,7 @@ print(v if isinstance(v, str) else ','.join(v))
     local src_instr="$source_path/.github/instructions"
     if [ -d "$src_instr" ]; then
         local instr_name
-        for instr_name in "architecture-principles.instructions.md" "git-workflow.instructions.md" "ai-plan-hardening-runbook.instructions.md"; do
+        for instr_name in "architecture-principles.instructions.md" "git-workflow.instructions.md" "ai-plan-hardening-runbook.instructions.md" "status-reporting.instructions.md" "context-fuel.instructions.md"; do
             _pf_check "$src_instr/$instr_name" "$REPO_ROOT/.github/instructions/$instr_name" ".github/instructions/$instr_name"
         done
     fi
@@ -2333,6 +2335,23 @@ cmd_doctor() {
         [ "$prompt_count" -ge "$exp_prompts" ] \
             && doctor_pass "$prompt_count prompt templates (expected: >=$exp_prompts for $preset_key)" \
             || doctor_warn "$prompt_count prompt templates (expected: >=$exp_prompts for $preset_key)" "Run 'pforge update' to get missing prompts"
+
+        # Pipeline prompts — presence check by name (count alone can pass with
+        # only scaffolding prompts; pipeline prompts power the runbook).
+        if [ -d "$REPO_ROOT/.github/prompts" ]; then
+            local missing_pipeline=""
+            local _p
+            for _p in "step0-specify-feature.prompt.md" "step1-preflight-check.prompt.md" "step2-harden-plan.prompt.md" "step3-execute-slice.prompt.md" "step4-completeness-sweep.prompt.md" "step5-review-gate.prompt.md" "step6-ship.prompt.md" "project-profile.prompt.md"; do
+                if [ ! -f "$REPO_ROOT/.github/prompts/$_p" ]; then
+                    missing_pipeline="${missing_pipeline}${_p} "
+                fi
+            done
+            if [ -z "$missing_pipeline" ]; then
+                doctor_pass "Pipeline prompts present (step0-step6 + project-profile)"
+            else
+                doctor_warn "Missing pipeline prompts: ${missing_pipeline}" "Run 'pforge update' to install missing pipeline prompts"
+            fi
+        fi
 
         [ "$skill_count" -ge "$exp_skills" ] \
             && doctor_pass "$skill_count skills (expected: >=$exp_skills for $preset_key)" \

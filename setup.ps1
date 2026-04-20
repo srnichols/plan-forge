@@ -1276,6 +1276,17 @@ if (-not $isCustomOnly) {
         Copy-WithCreate $ppPromptSrc $ppPromptDst $Force.IsPresent
     }
 
+    # Pipeline prompts (step0-step6 + project-profile) from repo .github/prompts/
+    $pipelinePromptsSrc = Join-Path $templateRoot ".github/prompts"
+    if (Test-Path $pipelinePromptsSrc) {
+        Get-ChildItem -Path $pipelinePromptsSrc -Filter "*.prompt.md" -File | ForEach-Object {
+            # Skip project-principles.prompt.md — already handled from templates/ above
+            if ($_.Name -eq 'project-principles.prompt.md') { return }
+            $dst = Join-Path $ProjectPath ".github/prompts/$($_.Name)"
+            Copy-WithCreate $_.FullName $dst $Force.IsPresent
+        }
+    }
+
     # Extension template directory
     $extTemplateSrc = Join-Path $templateRoot "templates/.forge"
     if (Test-Path $extTemplateSrc) {

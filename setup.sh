@@ -1210,6 +1210,18 @@ if [[ "$IS_CUSTOM_ONLY" != true ]]; then
         copy_with_create "$pp_prompt_src" "$pp_prompt_dst" || true
     fi
 
+    # Pipeline prompts (step0-step6 + project-profile) from repo .github/prompts/
+    pipeline_prompts_src="$TEMPLATE_ROOT/.github/prompts"
+    if [[ -d "$pipeline_prompts_src" ]]; then
+        while IFS= read -r -d '' file; do
+            base_name="$(basename "$file")"
+            # Skip project-principles.prompt.md — already handled from templates/ above
+            if [[ "$base_name" == "project-principles.prompt.md" ]]; then continue; fi
+            dst="$PROJECT_PATH/.github/prompts/$base_name"
+            copy_with_create "$file" "$dst" || true
+        done < <(find "$pipeline_prompts_src" -maxdepth 1 -name "*.prompt.md" -type f -print0)
+    fi
+
     # Extension template directory
     ext_template_src="$TEMPLATE_ROOT/templates/.forge"
     if [[ -d "$ext_template_src" ]]; then

@@ -7,11 +7,11 @@
 
 ## Current Release
 
-**v2.49.1** (2026-04-19) — Hotfix bundle: teardown/cleanup slice safety guard, alphanumeric slice IDs, quorum worker probe (drops unavailable models upfront), quorum leg error capture, LiveGuard prose false-positive fix. 5 field bugs in one patch release.
+**v2.58.0** (2026-04-20) — Phase-26 Competitive & Self-Deterministic Loop. Three new opt-in subsystems (competitive worktree execution, auto-fix patch proposals, cost-anomaly detection), Dashboard "Inner Loop" tab surfacing all ten subsystems, best-defaults preset for new projects, and four CLI orchestrator bug fixes (#78/#79/#80/#81). 2893/2893 tests.
 
-**In flight (targeting 2.50.0)**: FORGE-SHOP arc — unified operator UX. SHOP-01 Home tab (shipped), SHOP-02 review queue (shipped), SHOP-03 notification layer (shipped). SHOP-04 global search currently executing.
+Previous: v2.57.0 (2026-04-27) Phase-25 Inner-Loop Enhancements — seven opt-in reflective subsystems (reflexion retry context, trajectory capture, auto-skill library, adaptive gate synthesis, plan postmortems, cross-project federation, reviewer-agent in-loop).
 
-Previous: v2.47.0 (2026-04-19) — Self-Recursive Improvement: auto-tune escalation chains from model performance, cost estimate calibration from actuals, adaptive quorum thresholds, recurring incident detection, fix proposal outcome tracking, hotspot test priority, project health DNA fingerprint, slice auto-split advisories.
+**In flight (targeting 2.59.0)**: TBD — Phase-27 planning open. Candidates include advisory-to-enforcement calibration for Phase-25/26 subsystems, Team Mode (v3.1), and backlog items below.
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 
@@ -99,6 +99,18 @@ Temper Guards (anti-shortcut tables) and Warning Signs (behavioral anti-patterns
 ---
 
 ## Shipped
+
+### v2.58.0 — Phase-26 Competitive & Self-Deterministic Loop ✅
+
+Three new opt-in subsystems: competitive slice execution (L9, worktree race), auto-fix patch proposals (L6, advisory `.patch` drafts), cost-anomaly detection (L5, per-model median window). New Dashboard "Inner Loop" tab with six panels + six read-only API endpoints. Best-defaults preset in `setup.ps1`/`setup.sh`. Four CLI orchestrator bug fixes: `--resume-from` honored in estimate (#81), `tokens_in` no longer double-counts on `gh copilot` breakdown+aggregate (#79), `spawnWorker` honors explicit `worker` override + adds `role` parameter (#78), xAI Grok no longer refuses analysis prompts via new `buildApiMessages` system wrap (#80).
+
+### v2.57.0 — Phase-25 Inner-Loop Enhancements ✅
+
+Seven opt-in reflective subsystems forming a closed research loop: reflexion retry context (L7), trajectory capture (L8), auto-skill library (L2), adaptive gate synthesis (L6), plan postmortems with hardener feedback (L5), cross-project federation (L4-lite), reviewer-agent in-loop (L4, advisory). Every new behavior defaults to off/suggest/advisory.
+
+### v2.50.0–v2.56.0 — FORGE-SHOP arc + packaging hardening ✅
+
+v2.50.0 Forge Shop unified surfaces. v2.51.0 ask-bus pub/sub + `pforge update --from-github` + testbed harness. v2.52.0 orchestrator silent-failure guard + testbed happy-path + dashboard polish (v2.52.1 packaging hotfix). v2.53.0 Dashboard UX modernization + Capability-surface sync + Setup/Smith audit remediation (v2.53.1–v2.53.3 corrupt-install self-heal, dev-source refusal, `self-update --force`). v2.55.0 "The Forge Shop" rebrand. v2.56.0 Update Source preference.
 
 ### v2.30.0 — LiveGuard IV: Composite Run, Auto-Chaining, Test Status ✅
 
@@ -192,11 +204,9 @@ Coordinate multiple orchestrators across developers.
 
 ## Backlog
 
-### Operator UX (FORGE-SHOP arc)
-- FORGE-SHOP-04 global search — `forge_search` + dashboard header bar (in execution, targeting v2.51.0)
-- FORGE-SHOP-05 unified timeline — `forge_timeline` + Timeline tab (drafted, targeting v2.52.0)
-- FORGE-SHOP-06 ask-bus pub/sub — bidirectional hub (drafted, targeting v2.53.0; hard dep on SHOP-07)
-- FORGE-SHOP-07 Brain facade — unified L3 memory API (drafted, targeting v2.53.0)
+### Phase-27 candidates
+- Advisory-to-enforcement calibration — graduate Phase-25/26 subsystems (reviewer-agent, auto-fix, cost-anomaly, competitive) from advisory to blocking/auto-apply once field data justifies thresholds
+- Libuv/Windows teardown crash in `node pforge-mcp/orchestrator.mjs --analyze` — cosmetic exit-code 1 after success path completes; investigate async handle cleanup
 
 ### Auto-update
 - `pforge update --from-github` — true auto-install without requiring local clone ([#75](https://github.com/srnichols/plan-forge/issues/75))

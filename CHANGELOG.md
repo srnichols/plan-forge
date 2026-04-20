@@ -5,6 +5,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.55.0] — 2026-04-21 — The Forge Shop rebrand
+
+### Changed
+- **Positioning**: Plan Forge is now framed as the **AI-Native SDLC Forge Shop** — one workshop with four stations: **Smelt** (Specify & Plan), **Forge** (Execute), **Guard** (Review, Watch, Bridge), **Learn** (Ship, Bug Registry, Testbed, Health DNA).
+- **Brand assets**: New xAI Grok-generated hero art in `docs/assets/brand/` (panorama + four station portraits + control room + OG card v2).
+- **Landing page** (`docs/index.html`): Hero, station grid, and all meta/OG/Twitter/JSON-LD descriptions updated to four-station taxonomy.
+- **Shop Tour** (`docs/shop-tour.html`): New canonical tour of the four stations.
+- **Capabilities** (`docs/capabilities.html`): `#stations` four-column reference added before MCP tool listing.
+- **FAQ** (`docs/faq.html`): Top Q/A rewritten with four-station bullets and blacksmith framing; JSON-LD FAQPage updated.
+- **Manual** restructured into four Acts with 24 chapters + 6 appendices:
+  - Act I — Smelt (Ch 1–5)
+  - Act II — Forge (Ch 6–15)
+  - Act III — Guard (Ch 16–20, incl. new **Watcher** and **Remote Bridge** chapters)
+  - Act IV — Learn (Ch 21–24, incl. new **Bug Registry**, **Testbed**, **Health DNA** chapters; Memory Architecture renumbered to Ch 24)
+- **Manual covers** (`docs/manual/index.html`, `what-is-plan-forge.html`, `how-it-works.html`): Rewritten around the Forge Shop metaphor; panorama hero.
+- **OG cards site-wide**: 16 pages swapped from `og-card.webp` to `og-card-v2.webp`.
+- **Blog archive** (8 posts under `docs/blog/`): v1.x-positioning banner added atop each article linking to the current Shop Tour.
+
+### Notes
+- **No behavioral changes.** CLI, MCP tools, hooks, and test suite are unchanged. Tests: 2478/2478 green.
+- Plan of record: `docs/plans/REBRAND-Forge-Shop.md` (slices R0–R12).
+
+---
+
 ## [2.53.3] — 2026-04-20 — `self-update --force` heals dev-stuck installs
 
 ### Fixed

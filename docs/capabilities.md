@@ -1,12 +1,12 @@
 # Plan Forge — Capabilities Reference
 
-> **Tools**: 43 MCP (20 core + 14 LiveGuard v2.27–v2.30 + 2 Watcher v2.34/v2.35 + 6 Crucible v2.37-dev) | **Presets**: 9 | **Agents**: 19 | **Skills**: 12
+> **Tools**: 65 MCP (20 core + 14 LiveGuard + 2 Watcher + 6 Crucible + 4 Tempering + 4 Bug Registry + 3 Testbed + 3 Review + 3 Notify/Home/Delegate + additional doctor/memory/search/timeline/org) | **CLI**: 45+ commands | **Presets**: 9 | **Agents**: 19 | **Skills**: 13
 >
-> Machine-readable version: call `forge_capabilities` MCP tool or `GET https://planforge.software/.well-known/plan-forge.json`
+> Machine-readable version: call `forge_capabilities` MCP tool, `GET https://planforge.software/.well-known/plan-forge.json`, or read `pforge-mcp/tools.json` (auto-generated on every MCP server start).
 
 ---
 
-## MCP Tools (43)
+## MCP Tools (65)
 
 | Tool | Intent | Cost | Description |
 |------|--------|------|-------------|
@@ -51,6 +51,30 @@
 | `forge_crucible_finalize` | crucible | medium | **v2.37-dev** — Atomically claim next phase number, write `docs/plans/<phase>.md` with `crucibleId:` frontmatter, mark smelt finalized, emit `crucible-smelt-finalized`. |
 | `forge_crucible_list` | crucible | low | **v2.37-dev** — List all smelts with status filter (in-progress / finalized / abandoned). |
 | `forge_crucible_abandon` | crucible | low | **v2.37-dev** — Mark smelt abandoned, release any claimed phase number. |
+| `forge_tempering_run` | tempering | medium | **v2.40+** — Run full tempering pipeline (scan + score) against a Crucible-finalized plan. Writes temper-score snapshot. |
+| `forge_tempering_scan` | tempering | low | **v2.40+** — Scan for temper-quality signals (Scope Contract clarity, validation gates, slice sizing, forbidden actions). |
+| `forge_tempering_status` | tempering | low | **v2.40+** — Read latest tempering results per plan. |
+| `forge_tempering_approve_baseline` | tempering | low | **v2.40+** — Approve current tempering score as the new baseline threshold. |
+| `forge_bug_register` | bug-registry | low | **v2.45+** — Register a bug with severity, title, description, affected files, linked plan/slice. |
+| `forge_bug_list` | bug-registry | low | **v2.45+** — List bugs with status/severity/plan filters. |
+| `forge_bug_update_status` | bug-registry | low | **v2.45+** — Update bug status (open → investigating → in-progress → resolved → closed). |
+| `forge_bug_validate_fix` | bug-registry | medium | **v2.45+** — Verify proposed fix against bug description + linked slice gates. |
+| `forge_testbed_run` | testbed | medium | **v2.50+** — Execute a single testbed scenario by ID against a target project. |
+| `forge_testbed_happypath` | testbed | high | **v2.52+** — Run all happy-path scenarios sequentially, aggregate results, return pass/fail summary. |
+| `forge_testbed_findings` | testbed | low | **v2.50+** — Read cumulative testbed findings (failures, flaky scenarios, runtime trends). |
+| `forge_review_add` | review | low | Capture a review thread (audit, gate failure, drift finding) linked to a plan/slice. |
+| `forge_review_list` | review | low | List open/resolved review threads. |
+| `forge_review_resolve` | review | low | Mark a review thread resolved with outcome + rationale. |
+| `forge_notify_send` | notify | low | Emit a notification through configured channels (Telegram, Slack, webhook, email). |
+| `forge_notify_test` | notify | low | Smoke-test each notification channel and return success/failure per channel. |
+| `forge_home_snapshot` | dashboard | low | Build the dashboard **Home** tab payload (run state, drift, incidents, cost, health DNA, notifications). |
+| `forge_timeline` | timeline | low | Unified event timeline across runs, incidents, deploys, bugs, Crucible, Tempering (cursor-paged). |
+| `forge_search` | search | low | Cross-surface search over plans, events, bugs, incidents, memory (filters by type/date/severity). |
+| `forge_memory_report` | memory | low | Summarize OpenBrain memory usage — captures per day, hit rate on searches, top-recalled thoughts. |
+| `forge_org_rules` | org-rules | low | Export aggregated `.github/instructions/*.md` as a single org-rules document (for GitHub org custom instructions). |
+| `forge_doctor_quorum` | diagnostics | low | Health-check every quorum participant model — auth, latency, rate-limit headers, per-model availability. |
+| `forge_delegate_to_agent` | agent-routing | medium | Delegate a prompt/slice to a specialized reviewer agent (database, security, performance, etc.) and return the agent's report. |
+| `forge_self_update` | release | low | Check for the latest Plan Forge release, fetch release notes, and (optionally) trigger install. |
 
 ## Execution Modes
 
@@ -121,13 +145,14 @@ Per-slice performance data is appended to `.forge/model-performance.json` after 
 - Dashboard **Cost tab** shows a **Model Performance** table: run count, pass rate (color-coded), average duration, cost per run, total tokens
 - `forge_cost_report` MCP tool includes `forge_model_stats` (aggregated per-model stats)
 
-## CLI Commands (16)
+## CLI Commands (45+)
 
 ```
-pforge smith                          # Environment diagnostics
-pforge check                          # Validate setup
+pforge smith                          # Environment diagnostics (+ Bug Registry, Notifications, Timeline/Search sources)
+pforge check                          # Validate setup (MCP server, VERSION, dashboard, secrets)
 pforge status                         # Phase status from roadmap
 pforge sweep                          # Find deferred-work markers
+pforge tour                           # Guided walkthrough of installed files
 pforge new-phase <name>               # Create plan + roadmap entry
 pforge branch <plan>                  # Git branch from plan's Branch Strategy
 pforge commit <plan> <N>              # Conventional commit from slice goal
@@ -149,24 +174,41 @@ pforge run-plan <plan> --quorum=speed # Fast models, threshold 7, 2min timeout
 pforge ext search|add|info|list       # Extension management
 
 # LiveGuard CLI (v2.27.0+)
-pforge drift [--since <ref>]          # Architecture drift score
+pforge drift [--threshold N]          # Architecture drift score
 pforge incident list                   # Open incidents
 pforge incident capture                # Capture a new incident
 pforge dep-watch                       # Dependency vulnerability scan
 pforge regression-guard [--plan <plan>] # Validate regression gates
-pforge hotspot                         # High-churn / high-failure files
-pforge health-trend                    # 30-day MTTBF trend
-pforge alert-triage                    # Ranked cross-signal alert list
-pforge deploy-log [--tag <tag>]        # Append deploy journal entry
-pforge runbook list|get|add            # Operational runbook management
+pforge hotspot [--top N]              # High-churn / high-failure files
+pforge health-trend [--window 7d|30d|90d] # MTTBF + drift + cost trend
+pforge triage                         # Ranked cross-signal alert list
+pforge deploy-log <version> [--notes …] [--slice …] # Deployment journal entry
+pforge runbook <plan>                 # Generate plan runbook
 
 # LiveGuard CLI (v2.28.0+)
-pforge secret-scan [--since HEAD~1]    # High-entropy secret detection in diffs
-pforge env-diff                        # Env variable key divergence
+pforge secret-scan [--depth N]        # High-entropy secret detection
+pforge env-diff                       # Env variable key divergence across .env files
 
 # LiveGuard CLI (v2.29.0+)
-pforge fix-proposal --source regression|drift|incident|secret [--incident-id ID]  # Generate scoped fix plan
-pforge quorum-analyze --source drift|triage|incident [--goal root-cause|risk-assess|fix-review|runbook-validate] [--custom-question "..."] [--quorum-size 3]  # Assemble quorum prompt from LiveGuard data
+pforge fix-proposal <finding-id>      # Generate scoped fix plan for drift / incident
+pforge quorum-analyze                 # Assemble quorum prompt from LiveGuard data
+
+# Release + version CLI (v2.33+)
+pforge self-update [--force|--dry-run] # Install latest Plan Forge release
+pforge version-bump <version>          # Update VERSION, package.json, docs
+pforge migrate-memory [--dry-run]      # Merge legacy *-history.json into .jsonl siblings
+
+# Org + export CLI (v2.40+)
+pforge org-rules export [--format github] [--output <file>]  # Export org custom instructions
+
+# Testbed CLI (v2.52+)
+pforge testbed-happypath [--dry-run]  # Run all happy-path scenarios sequentially
+
+# Generic MCP proxy (v2.53+)
+pforge mcp-call <tool> [--json '{…}']  # Call any MCP tool by name (covers tools without a dedicated CLI wrapper)
+
+# Agent installers
+pforge claude | pforge codex | pforge cursor | pforge copilot  # Install native agent files
 ```
 
 ## API Providers
@@ -278,7 +320,7 @@ A second LIVEGUARD section appears in the tab bar after a visual divider. LIVEGU
 
 Standalone (no MCP client needed): `node pforge-mcp/server.mjs --dashboard-only`
 
-## LiveGuard MCP Tools (14 shipped v2.27–v2.30)
+## LiveGuard MCP Tools (14 shipped v2.27–v2.30, extended through v2.53)
 
 > Post-coding intelligence — watches gates after the forge ships. All 14 LiveGuard tools (plus 2 Watcher tools) are included in the 36-tool count above. Available as MCP tools and REST endpoints.
 

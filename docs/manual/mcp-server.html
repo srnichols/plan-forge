@@ -45,7 +45,7 @@
         <div class="flex gap-3 min-w-[500px] py-2">
           <div class="flex-1 rounded-xl border border-amber-800/30 bg-amber-950/15 p-4 text-center">
             <div class="text-sm font-bold text-amber-400 mb-1">MCP (stdio)</div>
-            <p class="text-xs text-slate-500">20 core tools + 14 LiveGuard tools + 2 Watcher tools (v2.34/v2.35) exposed via Model Context Protocol. Copilot, Claude, Cursor call these as function calls.</p>
+            <p class="text-xs text-slate-500">65 MCP tools (core + LiveGuard + Watcher + Crucible + Tempering + Bug Registry + Testbed) exposed via Model Context Protocol. Copilot, Claude, Cursor call these as function calls.</p>
           </div>
           <div class="flex-1 rounded-xl border border-sky-800/30 bg-sky-950/15 p-4 text-center">
             <div class="text-sm font-bold text-sky-400 mb-1">Express (HTTP :3100)</div>
@@ -77,7 +77,7 @@ node pforge-mcp/server.mjs --project /path/to/project</code></pre>
       <p>With <code>.vscode/mcp.json</code> configured (created by setup), the server auto-starts when Copilot calls any forge tool.</p>
 
       <!-- ─── MCP Tools ─── -->
-      <h2 id="tools">MCP Tools (36)</h2>
+      <h2 id="tools">MCP Tools (65)</h2>
       <p>Every tool is callable from Copilot Chat, Claude Code, Cursor, or any MCP-compatible client:</p>
 
       <table>

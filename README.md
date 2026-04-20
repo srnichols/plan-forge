@@ -41,7 +41,7 @@ AI coding tools generate code fast — but without structure, that code is untes
 
 > *Vibe coding gets you a prototype. Plan Forge gets you a product — and keeps it healthy.*
 
-**Verified**: 12 phases self-built, 864/864 self-tests, 43 MCP tools, zero manual rollbacks. See [docs/capabilities.md](docs/capabilities.md).
+**Verified**: 12 phases self-built, 864/864 self-tests, 65 MCP tools, zero manual rollbacks. See [docs/capabilities.md](docs/capabilities.md).
 
 ### A/B Test Results (April 2026)
 

@@ -93,7 +93,7 @@ This isn't a reference dump. It's a **learning journey** — a reader picks it u
 1. **Prerequisites** — VS Code, Copilot subscription, Node.js (for MCP), git. Version requirements table.
 2. **Option A: One-click install** — `vscode://chat-plugin/install` link (VS Code 1.113+)
 3. **Option B: Setup wizard** — `setup.ps1 -Preset dotnet` / `setup.sh --preset typescript` with full output
-4. **Choosing your preset** — 9-card grid with stack logos, what each installs (~18 instructions, ~19 agents, ~12 skills per preset)
+4. **Choosing your preset** — 9-card grid with stack logos, what each installs (~18 instructions, ~19 agents, ~13 skills per preset)
 5. **Multi-preset setup** — `setup.ps1 -Preset dotnet,typescript` for polyglot projects
 6. **What just happened?** — tour of the files created, with a file tree
 7. **Verify with `pforge smith`** — run smith, read the output, understand each section

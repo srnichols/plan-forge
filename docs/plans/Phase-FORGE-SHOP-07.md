@@ -1,15 +1,14 @@
 ---
 crucibleId: 2a8c45f1-7b63-4e92-9af4-d1ed87f02736
 source: self-hosted
-status: in_progress
+status: complete
 phase: FORGE-SHOP-07
 arc: FORGE-SHOP
 ---
 
 # Phase FORGE-SHOP-07: Brain facade — unified L1/L2/L3 recall/remember API
 
-> **Status**: 📝 DRAFT — ships AFTER FORGE-SHOP-05, BEFORE
-> FORGE-SHOP-06 (ask-bus depends on this API)
+> **Status**: ✅ COMPLETE — shipped 2026-04-20 (commits 297a3e7, c6cbc66, a83b72c)
 > **Estimated Effort**: 2 slices
 > **Risk Level**: Medium-high (touches memory layer used by every
 > subsystem; must ship with **migration-free backwards compat** —

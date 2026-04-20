@@ -7,15 +7,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased] — targeting 2.50.0 / 2.50.1 / 2.51.0 / 2.52.0 / 2.53.0
 
-### Shipped — FORGE-SHOP-07 Slice 07.2 brain facade strategic adoption (2026-04-19)
+### Shipped — FORGE-SHOP-07 Brain facade (2026-04-20)
 
-- **Brain facade L2_ROUTES expansion** — added 5 new L2 route entries (`crucible`, `liveguard`, `review.counts`, `tempering.perf-history`, `run.latest`) enabling `brain.recall()` for all home-snapshot subsystems.
+- **`pforge-mcp/brain.mjs` facade** — `recall/remember/forget` API routing over L1 (session), L2 (durable files), L3 (OpenBrain semantic). Dumb router with tier-selection rules — no caching, no intelligence.
+- **L2_ROUTES expansion** — added 5 new route entries (`crucible`, `liveguard`, `review.counts`, `tempering.perf-history`, `run.latest`) enabling `brain.recall()` for all home-snapshot subsystems.
 - **readHomeSnapshot rewired via facade** — 4 quadrant builders (`buildCrucibleQuadrant`, `buildActiveRunsQuadrant`, `buildLiveguardQuadrant`, `buildTemperingQuadrant`) now route reads through `brain.recall()`. Function made `async`; all callers updated.
 - **forge_liveguard_run rewired** — alert triage and health trend reads use `brain.recall('project.liveguard.*', { freshnessMs: 60_000 })` instead of direct `readForgeJsonl` calls.
 - **perf-budget scanner rewired** — `getBaselineP95()` replaced with `brain.recall('project.tempering.perf-history', { fallback: 'none' })` + inline derivation. Write path (`appendPerfEntry`) unchanged.
 - **forge_smith Memory row** — new diagnostic section showing L1 keys, L2 store size, L3 queue depth, L3 last sync age.
 - **Dashboard Brain subtab** — new read-only Config subtab (🧠 Brain) with per-tier counters, top 10 keys by hit rate, and recent recall misses. New `GET /api/brain/stats` route.
-- Plan: [docs/plans/Phase-FORGE-SHOP-07.md](docs/plans/Phase-FORGE-SHOP-07.md). Test count +22 (2 new files: `home-snapshot-behavior.test.mjs`, `brain-adoption.test.mjs`). Tab count unchanged (Brain is a Config subtab, not a new tab).
+- Plan: [docs/plans/Phase-FORGE-SHOP-07.md](docs/plans/Phase-FORGE-SHOP-07.md). Commits: `297a3e7` (Slice 07.1 facade + tier backends), `c6cbc66` (async test fix), `a83b72c` (Slice 07.2 strategic adoption + Brain subtab). Test count +22.
 
 ### Planned — TESTBED-01 recursive validation harness
 
@@ -83,10 +84,6 @@ Patch release bundling 5 field-reported bugs, each shipped as a separate commit 
 ### Planned — TEMPER-07 agent routing (v2.50.x, ships after SHOP-03)
 
 - Phase TEMPER-07 drafted ([docs/plans/Phase-TEMPER-07.md](docs/plans/Phase-TEMPER-07.md)) — deterministic `(bug.type, bug.severity) → agent|skill` router. New MCP tool `forge_delegate_to_agent` invokes agent personas in read-only analyst mode; analyst findings persist to `.forge/tempering/findings/<bugId>.json`. Critical/major bugs auto-surface as `fix-plan-approval` review items (config-guarded OFF by default). Wires the 13 agent personas and 12 skills into the tempering feedback loop for the first time.
-
-### Planned — FORGE-SHOP-07 Brain facade (v2.52.x, ships before ask-bus)
-
-- Phase FORGE-SHOP-07 drafted ([docs/plans/Phase-FORGE-SHOP-07.md](docs/plans/Phase-FORGE-SHOP-07.md)) — `pforge-mcp/brain.mjs` facade with `recall/remember/forget` routing over L1 (session), L2 (durable files), L3 (OpenBrain semantic). Dumb router with tier-selection rules — no caching, no intelligence. Strategic adoption in 4 call-sites (home-snapshot, review counts, liveguard state, perf-budget history). Existing direct readers remain — facade wraps, does not replace. Hard dependency for FORGE-SHOP-06.
 
 ### Planned — FORGE-SHOP-06 Ask-bus (v2.53.x, final unification)
 

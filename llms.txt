@@ -15,7 +15,7 @@ Plan Forge is an open-source framework that gives AI coding agents (Copilot, Cla
 - **4 Sessions**: Session isolation prevents self-auditing. The builder and reviewer are always different AI instances.
 - **Validation Gates**: Build + test must pass at every slice boundary before proceeding.
 - **Scope Contract**: Defines what's in scope, out of scope, and forbidden. Drift is structurally impossible.
-- **Inner Loop (v2.57.0)**: A reflective layer on top of the deterministic slice executor. Seven opt-in subsystems — reflexion retry context, trajectories, auto-skill library, adaptive gate synthesis, plan postmortems, cross-project federation, and the advisory reviewer agent — turn every slice into a research step that teaches the next one. All default to off/suggest/advisory; nothing in existing workflows breaks.
+- **Inner Loop (v2.57.0, extended in v2.58.0)**: A reflective layer on top of the deterministic slice executor. Ten opt-in subsystems — reflexion retry context, trajectories, auto-skill library, adaptive gate synthesis, plan postmortems, cross-project federation, the advisory reviewer agent, and (v2.58) competitive worktree execution, auto-fix patch proposals, and cost-anomaly detection — turn every slice into a research step that teaches the next one. All default to off/suggest/advisory; nothing in existing workflows breaks.
 
 ## Capabilities
 

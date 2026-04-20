@@ -2040,8 +2040,8 @@ const SYSTEM_REFERENCE = {
  * invariant — existing users see zero behavior change.
  */
 export const INNER_LOOP_SURFACE = Object.freeze({
-  schemaVersion: "1.0",
-  description: "Phase-25 v2.57 inner-loop enhancements — closed-loop research patterns. All subsystems are opt-in for existing users; new projects can enable defaults via the Dashboard Config tab.",
+  schemaVersion: "1.1",
+  description: "Inner-loop feedback subsystems. Phase-25 (v2.57) shipped reflexion/trajectory/autoSkills/gateSynthesis/postmortem/federation/reviewer. Phase-26 (v2.58) adds competitive/autoFix/costAnomaly. All subsystems are opt-in for existing users; new projects receive the best-defaults preset via setup.ps1/setup.sh.",
   subsystems: {
     reflexion: {
       level: "L7",
@@ -2115,6 +2115,44 @@ export const INNER_LOOP_SURFACE = Object.freeze({
       configDefaults: { enabled: false, quorumPreset: "speed", blockOnCritical: false, timeoutMs: 30000 },
       dashboardTab: "Config",
       module: "pforge-mcp/brain.mjs → invokeReviewer()",
+    },
+
+    // ─── Phase-26 v2.58 additions ────────────────────────────────
+    // Each subsystem ships in advisory posture by default. None take a
+    // destructive action without an explicit opt-in.
+    competitive: {
+      level: "L9",
+      addedIn: "2.58.0",
+      enabledByDefault: false,
+      description: "Opt-in worktree-based competitive execution. Two or more strategies race to complete a slice under isolated worktrees; the winner is elected by gate + reviewer verdict + token-cost tie-breaker. Other worktrees are cleaned up. Off by default — opt in via innerLoop.competitive.enabled.",
+      configKey: "innerLoop.competitive",
+      configDefaults: { enabled: false, maxParallel: 2, timeoutSec: 1800 },
+      dashboardTab: "Inner Loop",
+      module: "pforge-mcp/orchestrator.mjs → runCompetitiveSlice()",
+    },
+    autoFix: {
+      level: "L6",
+      addedIn: "2.58.0",
+      enabledByDefault: true,
+      advisoryOnly: true,
+      description: "Drafts patch files under .forge/proposed-fixes/*.patch when a gate-fail trajectory suggests a small, local correction. Never auto-applies without applyWithoutReview=true.",
+      configKey: "innerLoop.autoFix",
+      configDefaults: { enabled: true, applyWithoutReview: false },
+      storage: ".forge/proposed-fixes/",
+      dashboardTab: "Inner Loop",
+      module: "pforge-mcp/orchestrator.mjs → applyFixProposal() / rollbackFixProposal()",
+    },
+    costAnomaly: {
+      level: "L5",
+      addedIn: "2.58.0",
+      enabledByDefault: true,
+      advisoryOnly: true,
+      description: "Detects slices whose token cost drifts above the per-model median by more than the configured ratio. Advisory only — surfaces on Dashboard → Inner Loop → Cost anomalies; never halts a run.",
+      configKey: "innerLoop.costAnomaly",
+      configDefaults: { enabled: true, ratio: 2.0, medianWindow: 20 },
+      storage: ".forge/cost-anomalies.jsonl",
+      dashboardTab: "Inner Loop",
+      module: "pforge-mcp/orchestrator.mjs → detectCostAnomaly() / computeMedian()",
     },
   },
 });

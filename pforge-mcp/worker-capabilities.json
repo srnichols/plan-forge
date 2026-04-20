@@ -160,8 +160,8 @@
   },
 
   "innerLoop": {
-    "_comment": "Phase-25 v2.57 inner-loop subsystem capability flags. Advertised via forge_capabilities so MCP consumers + agent adapters can auto-discover feature availability on this node. See INNER_LOOP_SURFACE in capabilities.mjs for the full schema.",
-    "schemaVersion": "1.0",
+    "_comment": "Inner-loop subsystem capability flags. Advertised via forge_capabilities so MCP consumers + agent adapters can auto-discover feature availability on this node. See INNER_LOOP_SURFACE in capabilities.mjs for the full schema. Phase-25 (v2.57) shipped the first 7; Phase-26 (v2.58) added competitive/autoFix/costAnomaly.",
+    "schemaVersion": "1.1",
     "addedIn": "2.57.0",
     "subsystems": {
       "reflexion": true,
@@ -170,7 +170,10 @@
       "gateSynthesis": true,
       "postmortem": true,
       "federation": true,
-      "reviewer": true
+      "reviewer": true,
+      "competitive": true,
+      "autoFix": true,
+      "costAnomaly": true
     }
   }
 }

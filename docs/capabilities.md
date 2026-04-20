@@ -89,9 +89,9 @@
 | **Dry Run** | `--dry-run` | None | Parses and validates plan structure |
 | **Resume** | `--resume-from N` | Same as auto | Skips completed slices |
 
-## Inner Loop (v2.57.0)
+## Inner Loop (v2.57.0, extended in v2.58.0)
 
-Seven opt-in subsystems that turn deterministic slice execution into a closed research loop. All default to *off*, *suggest*, or *advisory* — nothing in existing workflows breaks. See `docs/manual/inner-loop.html` for the full state-flow diagram.
+Ten opt-in subsystems that turn deterministic slice execution into a closed research loop. All default to *off*, *suggest*, or *advisory* — nothing in existing workflows breaks. See `docs/manual/inner-loop.html` and `docs/manual/competitive-loop.html` for the full state-flow diagrams.
 
 | Subsystem | Level | Default | Config Key | Storage |
 |-----------|-------|---------|------------|---------|
@@ -102,8 +102,11 @@ Seven opt-in subsystems that turn deterministic slice execution into a closed re
 | **Plan postmortems** | L5 | always on | *(retention=10)* | `.forge/plans/<basename>/postmortem-*.json` |
 | **Cross-project federation** | L4-lite | off | `brain.federation.enabled` | read-only, absolute local paths only |
 | **Reviewer-agent in-loop** | L4 | off, advisory | `runtime.reviewer.enabled` | verdict attached to gate-check response |
+| **Competitive execution** (v2.58) | L9 | off | `innerLoop.competitive.enabled` | worktrees under `.forge/worktrees/`; losers cleaned up |
+| **Auto-fix proposals** (v2.58) | L6 | advisory | `innerLoop.autoFix.applyWithoutReview` | `.forge/proposed-fixes/*.patch` |
+| **Cost-anomaly detection** (v2.58) | L5 | advisory | `innerLoop.costAnomaly.ratio` | `.forge/cost-anomalies.jsonl` |
 
-Discover at runtime via `forge_capabilities` → `innerLoop`. Configure via Dashboard → Config tab or `.forge.json`.
+Discover at runtime via `forge_capabilities` → `innerLoop`. Configure via Dashboard → Config tab, Dashboard → Inner Loop tab (v2.58+), or `.forge.json`.
 
 ## Agent-Per-Slice Routing
 

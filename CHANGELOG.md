@@ -5,6 +5,33 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.56.0] — 2026-04-20 — Update Source preference
+
+### Added
+- **`updateSource` config preference** in `.forge.json` — tells `pforge update` where to pull template bytes from. Three modes:
+  - `auto` *(new default)* — picks the newer of your sibling clone and the latest GitHub tag. If the sibling is on a `-dev` build, GitHub tags win.
+  - `github-tags` — always downloads the latest tagged release; ignores sibling clones. Good for teams and CI.
+  - `local-sibling` — always uses `../plan-forge`; contributor workflow. Errors if the sibling is missing.
+- **`pforge config` CLI** (PowerShell + Bash): `pforge config get/set/list` for managing settable `.forge.json` keys. First key: `update-source`. Writes atomically (tmp + rename).
+- **Dashboard Config tab**: new *Update Source* panel with a 3-option select and live hint text. Saves immediately on change via `POST /api/config`. Server-side enum validation.
+- **Appendix G — Update Source Modes** in the manual: explains the problem, the three modes, how to change via CLI/dashboard/hand-edit, and FAQ (offline behavior, `self-update` separation, CI guidance).
+
+### Changed
+- **`pforge update` default source selection** now runs through the auto-mode algorithm. Previously: "use sibling if it exists, else fail". New: "pick the newer stable source". The v2.53.2 `-dev`-over-clean refusal is still in place as a safety net.
+- `pforge update` no longer errors when no sibling is found — it auto-falls-back to GitHub tags.
+
+### Fixed
+- Dashboard footer/badge no longer shows hardcoded `v2.9.0` (was a leftover from a screenshot capture script). Version now tracks the `VERSION` file.
+- Zombie node servers holding ports 3100/3101 from stale sessions no longer silently render a stale VERSION on the dashboard.
+
+### Migration
+- **No action required.** Projects without `updateSource` default to `auto`, which is the safe recommended behavior. Contributors who want the historic sibling-preferred flow can set `updateSource: "local-sibling"` via `pforge config set update-source local-sibling`.
+
+### Tests
+- 2486/2486 green. New: `pforge-mcp/tests/config-api.test.mjs` (8 tests covering GET/POST `/api/config` and `updateSource` enum validation).
+
+---
+
 ## [2.55.0] — 2026-04-21 — The Forge Shop rebrand
 
 ### Changed

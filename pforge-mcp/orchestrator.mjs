@@ -3238,6 +3238,122 @@ export function rollbackFixProposal({ cwd = process.cwd(), fixId, runGit = defau
   return { ok: false, error: res.stderr || "git apply -R failed" };
 }
 
+// ─── Phase-26 Slice 10: Cost-anomaly detector + escalation re-ranking ─
+//
+// Pure helpers. When a slice attempt costs > `threshold` × the plan median,
+// the NEXT retry's escalation chain is re-ranked by `avg_cost_usd` ascending
+// so cheaper-proven models are tried first. Scoped per-plan; callers reset
+// at plan start by dropping the `sliceCosts` collector.
+
+/** Default multiplier — a slice ≥ 2× median is an anomaly. */
+export const COST_ANOMALY_MULTIPLIER = 2;
+
+/**
+ * Compute the median of a numeric array. Returns 0 for empty input.
+ * Skips non-finite values.
+ */
+export function computeMedian(values) {
+  if (!Array.isArray(values)) return 0;
+  const nums = values
+    .map((v) => Number(v))
+    .filter((n) => Number.isFinite(n));
+  if (nums.length === 0) return 0;
+  const sorted = [...nums].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 0) return (sorted[mid - 1] + sorted[mid]) / 2;
+  return sorted[mid];
+}
+
+/**
+ * Detect whether a slice attempt is a cost outlier relative to the plan's
+ * running median. Returns a deterministic report (never throws):
+ *
+ *   {
+ *     isAnomaly: boolean,
+ *     median: number,
+ *     currentCost: number,
+ *     ratio: number | null,        // currentCost / median, null when median=0
+ *     threshold: number,
+ *   }
+ *
+ * MUST (Phase-26 §Slice 10):
+ *   - Compute median of the plan's observed slice costs so far.
+ *   - Flag when `currentCost > multiplier * median`.
+ *   - Never flag when the sample is empty — no signal yet.
+ */
+export function detectCostAnomaly({
+  sliceCosts = [],
+  currentCost = 0,
+  threshold = COST_ANOMALY_MULTIPLIER,
+} = {}) {
+  const cost = Number(currentCost);
+  const mult = Number.isFinite(threshold) && threshold > 0 ? threshold : COST_ANOMALY_MULTIPLIER;
+  const median = computeMedian(sliceCosts);
+  if (!Number.isFinite(cost) || cost <= 0) {
+    return { isAnomaly: false, median, currentCost: cost, ratio: null, threshold: mult };
+  }
+  if (median <= 0) {
+    return { isAnomaly: false, median, currentCost: cost, ratio: null, threshold: mult };
+  }
+  const ratio = cost / median;
+  return {
+    isAnomaly: ratio > mult,
+    median,
+    currentCost: cost,
+    ratio,
+    threshold: mult,
+  };
+}
+
+/**
+ * Re-rank an escalation chain so cheaper-proven models are tried first.
+ * Stable: models absent from `modelStats` keep their relative input order and
+ * trail after known cheaper models. `"auto"` (and any string-equal sentinel
+ * in `preserveLeading`) is always pinned at the head of the returned chain.
+ *
+ * @param {object} opts
+ * @param {string[]} opts.chain — input escalation chain (order preserved for unknowns)
+ * @param {object} opts.modelStats — output of `aggregateModelStats()`; shape per-model `{ avg_cost_usd, ... }`
+ * @param {string[]} [opts.preserveLeading=["auto"]] — pinned-at-head sentinels
+ * @returns {string[]} new chain, re-ranked by avg_cost_usd ascending for known models
+ */
+export function rerankEscalationChain({
+  chain = [],
+  modelStats = {},
+  preserveLeading = ["auto"],
+} = {}) {
+  if (!Array.isArray(chain) || chain.length === 0) return [];
+  const leading = [];
+  const rest = [];
+  for (const entry of chain) {
+    if (typeof entry !== "string") { rest.push(entry); continue; }
+    if (preserveLeading.includes(entry)) leading.push(entry);
+    else rest.push(entry);
+  }
+  const withStats = [];
+  const withoutStats = [];
+  rest.forEach((model, idx) => {
+    const s = modelStats && typeof modelStats === "object" ? modelStats[model] : null;
+    if (s && Number.isFinite(Number(s.avg_cost_usd))) {
+      withStats.push({ model, cost: Number(s.avg_cost_usd), idx });
+    } else {
+      withoutStats.push({ model, idx });
+    }
+  });
+  // Stable sort: ascending by cost, ties keep original order.
+  withStats.sort((a, b) => {
+    if (a.cost !== b.cost) return a.cost - b.cost;
+    return a.idx - b.idx;
+  });
+  // Preserve original order for unknowns.
+  withoutStats.sort((a, b) => a.idx - b.idx);
+  return [
+    ...leading,
+    ...withStats.map((e) => e.model),
+    ...withoutStats.map((e) => e.model),
+  ];
+}
+
 // ─── Phase-25 Slice 5: Plan postmortem (L5 closed research loop) ──────
 
 /** Subdirectory under `.forge/` where postmortems are stored per-plan. */

@@ -5,7 +5,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [2.58.0] — Unreleased — Phase-26 Competitive & Self-Deterministic Loop
+## [2.58.0] — 2026-04-20 — Phase-26 Competitive & Self-Deterministic Loop
 
 > **The inner loop gains competitive execution and self-correction.** Building on the Phase-25 reflective layer, this release adds three new opt-in subsystems — competitive worktree execution, auto-fix patch proposals, and cost-anomaly detection — a dedicated Dashboard "Inner Loop" tab that surfaces all ten subsystems in one place, and a best-defaults preset so new projects start with advisory-posture defaults out of the box. Every addition is opt-in; nothing in existing workflows changes.
 

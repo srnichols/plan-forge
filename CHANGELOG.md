@@ -7,6 +7,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased] — targeting 2.50.0 / 2.50.1 / 2.51.0 / 2.52.0 / 2.53.0
 
+### In-progress — FORGE-SHOP-06 Ask-bus RPC over the hub
+
+- **Slice 06.1 — Hub ask/respond transport** — `hub.ask(topic, payload, opts)` request/reply RPC with timeout, `hub.onAsk(topic, handler)` single-responder registration, `removeAskHandler()`, `listResponders()`. Timeout eviction (`ErrAskTimeout`), no-responder immediate `ok:false`, responder-error wrapping, late-respond drop with warn log. OTEL-style telemetry spans (`ask-telemetry` events). `close()` rejects pending asks. Purely additive — no changes to existing event frames.
+- Plan: [docs/plans/Phase-FORGE-SHOP-06.md](docs/plans/Phase-FORGE-SHOP-06.md). Test count +22.
+
 ### Shipped — FORGE-SHOP-07 Brain facade (2026-04-20)
 
 - **`pforge-mcp/brain.mjs` facade** — `recall/remember/forget` API routing over L1 (session), L2 (durable files), L3 (OpenBrain semantic). Dumb router with tier-selection rules — no caching, no intelligence.

@@ -1,7 +1,7 @@
 ---
 crucibleId: e4a1c782-9358-4b1e-82d9-615a47cf9e04
 source: self-hosted
-status: draft
+status: in_progress
 phase: FORGE-SHOP-06
 arc: FORGE-SHOP
 ---

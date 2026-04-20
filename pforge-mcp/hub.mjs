@@ -23,6 +23,7 @@ import { createServer } from "node:net";
 const DEFAULT_WS_PORT = 3101;
 const MAX_PORT_RETRIES = 10;
 const HEARTBEAT_INTERVAL_MS = 30_000;
+const DEFAULT_ASK_TIMEOUT_MS = 5_000;
 // G1.1 (v2.36): was 100 — a 20-slice plan burned through that in one run.
 // Raised to 500 so dashboards connecting mid-run see a representative history.
 const EVENT_HISTORY_SIZE = 500;
@@ -117,6 +118,10 @@ export class Hub {
     this.cwd = cwd;
     this.clients = new Map(); // clientId → { ws, label, connectedAt, alive }
     this.eventHistory = [];    // Last N events (ring buffer)
+    this._pendingAsks = new Map(); // requestId → { resolve, reject, timer, topic, ts }
+    this._responders = new Map(); // topic → handler
+    this._askSpans = [];          // OTEL-style telemetry spans for ask/respond pairs
+    this._closed = false;
 
     // Handle new connections
     wss.on("connection", (ws, req) => {
@@ -329,10 +334,158 @@ export class Hub {
   }
 
   /**
+   * Send a request and await a response from the registered handler.
+   *
+   * @param {string} topic - The topic to address (e.g. "brain.gate-check")
+   * @param {*} payload - Arbitrary request payload
+   * @param {object} [opts]
+   * @param {number} [opts.timeoutMs=5000] - Timeout in milliseconds
+   * @param {string} [opts.correlationId] - Optional correlation ID for tracing
+   * @returns {Promise<{ ok: boolean, payload?: *, error?: { code: string, message: string } }>}
+   */
+  ask(topic, payload, { timeoutMs = DEFAULT_ASK_TIMEOUT_MS, correlationId } = {}) {
+    if (this._closed) {
+      return Promise.reject(new Error("hub-closed"));
+    }
+
+    const requestId = `req-${randomUUID()}`;
+    const ts = new Date().toISOString();
+
+    // No responder registered → immediate ok:false (never hang)
+    if (!this._responders.has(topic)) {
+      return Promise.resolve({
+        ok: false,
+        error: { code: "no-responder", message: `No responder registered for topic: ${topic}` },
+      });
+    }
+
+    const handler = this._responders.get(topic);
+    const askStartTime = Date.now();
+
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        if (this._pendingAsks.has(requestId)) {
+          this._pendingAsks.delete(requestId);
+          const span = {
+            name: "hub.ask",
+            topic,
+            requestId,
+            correlationId,
+            durationMs: Date.now() - askStartTime,
+            ok: false,
+          };
+          this._askSpans.push(span);
+          this.broadcast({ type: "ask-telemetry", data: span });
+          console.warn(`[hub] ask timeout: topic=${topic} requestId=${requestId}`);
+          reject(Object.assign(new Error(`Ask timed out for topic: ${topic}`), {
+            code: "ask-timeout",
+            topic,
+            requestId,
+          }));
+        }
+      }, timeoutMs);
+
+      this._pendingAsks.set(requestId, { resolve, reject, timer, topic, ts });
+
+      // Dispatch to handler without blocking the event loop
+      Promise.resolve()
+        .then(() => handler(payload, { requestId, topic, correlationId, ts }))
+        .then((result) => {
+          this._deliverResponse(requestId, result, true, askStartTime, topic, correlationId);
+        })
+        .catch((err) => {
+          this._deliverResponse(
+            requestId,
+            { code: "responder-error", message: err.message },
+            false,
+            askStartTime,
+            topic,
+            correlationId,
+          );
+        });
+    });
+  }
+
+  /**
+   * Register a handler for a topic. Only one handler per topic allowed.
+   *
+   * @param {string} topic - The topic to handle
+   * @param {function} handler - async (payload, meta) → response value
+   */
+  onAsk(topic, handler) {
+    if (this._responders.has(topic)) {
+      throw new Error(`Responder already registered for topic: ${topic}`);
+    }
+    this._responders.set(topic, handler);
+  }
+
+  /**
+   * Remove the handler for a topic. Useful for test teardown.
+   * @param {string} topic
+   */
+  removeAskHandler(topic) {
+    this._responders.delete(topic);
+  }
+
+  /**
+   * List all registered responder topics (debugging infrastructure).
+   * @returns {string[]}
+   */
+  listResponders() {
+    return [...this._responders.keys()];
+  }
+
+  /**
+   * Deliver a response for a pending ask.
+   * Late responses (after timeout eviction) are dropped with a warn log.
+   * @private
+   */
+  _deliverResponse(requestId, result, ok, askStartTime, topic, correlationId) {
+    const pending = this._pendingAsks.get(requestId);
+    if (!pending) {
+      console.warn(`[hub] late respond dropped for requestId=${requestId}`);
+      return;
+    }
+
+    clearTimeout(pending.timer);
+    this._pendingAsks.delete(requestId);
+
+    const span = {
+      name: "hub.ask",
+      topic,
+      requestId,
+      correlationId,
+      durationMs: Date.now() - askStartTime,
+      ok,
+    };
+    this._askSpans.push(span);
+    this.broadcast({ type: "ask-telemetry", data: span });
+
+    if (ok) {
+      pending.resolve({ ok: true, payload: result });
+    } else {
+      pending.resolve({ ok: false, error: result });
+    }
+  }
+
+  /**
    * Shut down the hub gracefully.
    */
   close() {
+    this._closed = true;
     clearInterval(this._heartbeatInterval);
+
+    // Reject all pending asks
+    for (const [requestId, pending] of this._pendingAsks) {
+      clearTimeout(pending.timer);
+      pending.reject(Object.assign(new Error("Hub closed"), {
+        code: "hub-closed",
+        topic: pending.topic,
+        requestId,
+      }));
+    }
+    this._pendingAsks.clear();
+    this._responders.clear();
 
     for (const [, client] of this.clients) {
       client.ws.close(1000, "Server shutting down");

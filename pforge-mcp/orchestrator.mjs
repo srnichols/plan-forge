@@ -36,6 +36,7 @@ import {
   readTemperingState as _readTemperingState,
   readTemperingConfig as _readTemperingConfig,
   TEMPERING_SCAN_STALE_DAYS,
+  getMinimaForDomain,
 } from "./tempering.mjs";
 export const readTemperingState = _readTemperingState;
 export const readTemperingConfig = _readTemperingConfig;
@@ -2104,6 +2105,19 @@ export async function runPlan(planPath, options = {}) {
     };
   }
 
+  // Phase-25 Slice 4 (L6 adaptive gate synthesis): scan plan slices for
+  // domain-matched slices that lack a validation gate and print suggestions.
+  // Advisory-only by default (D8 mode="suggest"); the enforce-mode promotion
+  // path lives in Phase-26 Slice 7. Never mutates the plan.
+  try {
+    const synthResult = synthesizeGateSuggestions({ slices: plan.slices, cwd });
+    const formatted = formatGateSuggestions(synthResult);
+    if (formatted) {
+      // eslint-disable-next-line no-console
+      console.log(formatted);
+    }
+  } catch { /* advisory must never fail a run */ }
+
   // Set up event bus with DI handler
   const runDir = createRunDir(cwd, planPath);
   const logHandler = new LogEventHandler(runDir);
@@ -2455,6 +2469,142 @@ function loadEscalationChain(cwd) {
   } catch { /* fall through to static default */ }
 
   return ["auto", "claude-opus-4.6", "gpt-5.3-codex"];
+}
+
+// ─── Phase-25 Slice 4: Adaptive gate synthesis (L6) ──────────────────
+
+/**
+ * Domain-keyword patterns used by `synthesizeGateSuggestions` to tag a slice
+ * with a Tempering profile (domain / integration / controller). Order matters
+ * — first match wins. Patterns are intentionally conservative; false positives
+ * here produce advisory noise, false negatives are silent no-ops.
+ */
+const GATE_SYNTH_DOMAIN_PATTERNS = [
+  { domain: "controller",  pattern: /\b(controller|endpoint|route|api|http|rest)\b/i },
+  { domain: "integration", pattern: /\b(integration|e2e|end-to-end|contract|workflow|pipeline|migrat)\b/i },
+  { domain: "domain",      pattern: /\b(domain|service|aggregate|entity|repository|model|business|validation)\b/i },
+];
+
+/** Vitest/jest-style suggested gate commands per domain, keyed for portability. */
+const GATE_SYNTH_TEMPLATES = {
+  domain:      "bash -c \"cd pforge-mcp && npx vitest run tests/<your-domain>.test.mjs\"",
+  integration: "bash -c \"cd pforge-mcp && npx vitest run tests/<your-integration>.test.mjs\"",
+  controller:  "bash -c \"cd pforge-mcp && npx vitest run tests/<your-controller>.test.mjs\"",
+};
+
+/**
+ * Load the `runtime.gateSynthesis` config block with defaults.
+ * Schema: { mode: "off" | "suggest" | "enforce", domains: string[] }
+ * Default: { mode: "suggest", domains: ["domain","integration","controller"] }
+ * (Phase-25 D8.)
+ */
+export function loadGateSynthesisConfig(cwd) {
+  const configPath = resolve(cwd, ".forge.json");
+  const defaults = { mode: "suggest", domains: ["domain", "integration", "controller"] };
+  try {
+    if (existsSync(configPath)) {
+      const cfg = JSON.parse(readFileSync(configPath, "utf-8"));
+      const block = cfg?.runtime?.gateSynthesis;
+      if (block && typeof block === "object") {
+        const mode = ["off", "suggest", "enforce"].includes(block.mode) ? block.mode : defaults.mode;
+        const domains = Array.isArray(block.domains) && block.domains.length > 0
+          ? block.domains.filter((d) => typeof d === "string" && d.length > 0)
+          : defaults.domains;
+        return { mode, domains };
+      }
+    }
+  } catch { /* fall through */ }
+  return { ...defaults };
+}
+
+/**
+ * Classify a slice's domain profile by matching its title + files against
+ * `GATE_SYNTH_DOMAIN_PATTERNS`. Returns `null` when no keyword matches.
+ */
+export function classifySliceDomain(slice) {
+  if (!slice) return null;
+  const fileList = Array.isArray(slice.files) ? slice.files : [];
+  const haystack = [slice.title || "", ...fileList].join(" ").toLowerCase();
+  for (const { domain, pattern } of GATE_SYNTH_DOMAIN_PATTERNS) {
+    if (pattern.test(haystack)) return domain;
+  }
+  return null;
+}
+
+/**
+ * Phase-25 MUST #9 — Suggest gates for slices that lack a domain-matched
+ * validation gate. Pure function: reads Tempering minima (read-only),
+ * inspects the parsed slices, emits suggestion records. Does NOT mutate the
+ * plan — Slice 4 is "suggest-only" (D8); the enforce-mode promotion path is
+ * tracked in Phase-26 Slice 7 via `.forge/gate-suggestions.jsonl`.
+ *
+ * @param {object} args
+ * @param {Array<object>} args.slices - parsed plan slices
+ * @param {string} [args.cwd=process.cwd()]
+ * @param {object} [args.config] - override `loadGateSynthesisConfig(cwd)`
+ * @returns {{
+ *   mode: "off" | "suggest" | "enforce",
+ *   suggestions: Array<{
+ *     sliceNumber: (number|string),
+ *     sliceTitle: string,
+ *     domain: string,
+ *     reason: string,
+ *     suggestedCommand: string,
+ *     minima: { coverageMin: (number|null), runtimeBudgetMs: (number|null) }
+ *   }>,
+ * }}
+ */
+export function synthesizeGateSuggestions({ slices, cwd = process.cwd(), config } = {}) {
+  const cfg = config || loadGateSynthesisConfig(cwd);
+  if (cfg.mode === "off") return { mode: cfg.mode, suggestions: [] };
+  if (!Array.isArray(slices) || slices.length === 0) return { mode: cfg.mode, suggestions: [] };
+  const enabledDomains = new Set(cfg.domains || []);
+  const out = [];
+  for (const slice of slices) {
+    const domain = classifySliceDomain(slice);
+    if (!domain) continue;
+    if (!enabledDomains.has(domain)) continue;
+    // If the slice already declares a gate we stay silent — no churn.
+    const gateText = typeof slice.validationGate === "string"
+      ? slice.validationGate.trim()
+      : (Array.isArray(slice.validationGate) ? slice.validationGate.join("\n").trim() : "");
+    if (gateText.length > 0) continue;
+    const minima = getMinimaForDomain(cwd, domain);
+    out.push({
+      sliceNumber: slice.number ?? "?",
+      sliceTitle: slice.title || "",
+      domain,
+      reason: `Slice matches '${domain}' profile but declares no validation gate. Tempering coverage-min ${minima.coverageMin ?? "n/a"}%, runtime-budget ${minima.runtimeBudgetMs ?? "n/a"}ms apply.`,
+      suggestedCommand: GATE_SYNTH_TEMPLATES[domain] || GATE_SYNTH_TEMPLATES.domain,
+      minima: { coverageMin: minima.coverageMin, runtimeBudgetMs: minima.runtimeBudgetMs },
+    });
+  }
+  return { mode: cfg.mode, suggestions: out };
+}
+
+/**
+ * Format gate-synthesis suggestions for printing to stdout during plan
+ * pre-flight. Returns `""` when there are no suggestions.
+ */
+export function formatGateSuggestions(result) {
+  if (!result || !Array.isArray(result.suggestions) || result.suggestions.length === 0) return "";
+  const lines = [
+    "",
+    `--- GATE SYNTHESIS (Phase-25 L6, mode="${result.mode}") ---`,
+    `${result.suggestions.length} slice(s) lack a domain-matched validation gate.`,
+    "Add the suggested commands to the slice's Validation Gate block, or set",
+    "runtime.gateSynthesis.mode = \"off\" in .forge.json to silence this advisory.",
+    "",
+  ];
+  for (const s of result.suggestions) {
+    lines.push(`Slice ${s.sliceNumber} — "${s.sliceTitle}"`);
+    lines.push(`  Domain:  ${s.domain}`);
+    lines.push(`  Reason:  ${s.reason}`);
+    lines.push(`  Suggest: ${s.suggestedCommand}`);
+    lines.push("");
+  }
+  lines.push("--- END GATE SYNTHESIS ---");
+  return lines.join("\n");
 }
 
 /**

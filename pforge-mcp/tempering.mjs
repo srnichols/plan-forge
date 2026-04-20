@@ -194,6 +194,37 @@ export function readTemperingConfig(projectDir) {
   }
 }
 
+// Phase-25 Slice 4 (L6 adaptive gate synthesis) — read-only accessor.
+// Returns the coverage-minimum + runtime-budget numbers for a given domain
+// profile (domain | integration | controller | overall). Used by the
+// orchestrator's `synthesizeGateSuggestions()` pre-flight to advise adding
+// missing gates to slices whose title matches a domain keyword.
+// NOT a mutation point — logic remains in orchestrator.mjs, tempering.mjs
+// just exposes its minima read-only as mandated by Phase-25 Forbidden Actions.
+/**
+ * @param {string} projectDir
+ * @param {"domain"|"integration"|"controller"|"overall"} [domain="domain"]
+ * @returns {{ domain: string, coverageMin: number|null, runtimeBudgetMs: number|null }}
+ */
+export function getMinimaForDomain(projectDir, domain = "domain") {
+  const cfg = readTemperingConfig(projectDir);
+  const coverageMin = cfg?.coverageMinima?.[domain];
+  // Map each domain onto a budget key — conservative defaults mirror the
+  // Phase-25 research report's "cheap cold-path / hot-path-aware" stance.
+  const budgetKey = {
+    domain: "unitMaxMs",
+    integration: "integrationMaxMs",
+    controller: "integrationMaxMs",
+    overall: "unitMaxMs",
+  }[domain] || "unitMaxMs";
+  const runtimeBudgetMs = cfg?.runtimeBudgets?.[budgetKey];
+  return {
+    domain,
+    coverageMin: Number.isFinite(coverageMin) ? coverageMin : null,
+    runtimeBudgetMs: Number.isFinite(runtimeBudgetMs) ? runtimeBudgetMs : null,
+  };
+}
+
 // ─── Stack detection ──────────────────────────────────────────────────
 
 /**

@@ -220,3 +220,58 @@ export function loadAgentRoutingConfig(targetPath) {
     return { enabled: false };
   }
 }
+
+// ─── Phase FORGE-SHOP-06 Slice 06.2 — Delegate Sync Responder ───────
+
+/**
+ * Register the `tempering.delegate-sync` hub responder.
+ * Looks up a bug by ID, resolves its route, builds the analyst prompt,
+ * and records the delegation. Returns the prompt and routing info.
+ *
+ * @param {object} hub - Hub instance with onAsk
+ * @param {string} cwd - Project root
+ * @param {object} [deps] - DI overrides: { readForgeJsonl }
+ */
+export function registerDelegateSyncResponder(hub, cwd, deps = {}) {
+  const _readJsonl = deps.readForgeJsonl || ((filePath, defaultValue = []) => {
+    const fullPath = resolve(cwd, ".forge", filePath);
+    try {
+      if (existsSync(fullPath)) {
+        return readFileSync(fullPath, "utf-8")
+          .split("\n")
+          .filter((line) => line.trim())
+          .map((line) => JSON.parse(line));
+      }
+      return defaultValue;
+    } catch { return defaultValue; }
+  });
+
+  hub.onAsk("tempering.delegate-sync", async (payload) => {
+    const { bugId } = payload || {};
+    if (!bugId) {
+      return { ok: false, error: "missing-bugId" };
+    }
+
+    const bugs = _readJsonl("tempering/bugs.jsonl", []);
+    const bug = bugs.find((b) => b.bugId === bugId);
+    if (!bug) {
+      return { ok: false, error: "bug-not-found" };
+    }
+
+    const route = resolveRoute(bug);
+    if (!route) {
+      return { ok: false, error: "no-route", bugId };
+    }
+
+    const prompt = buildAnalystPrompt(bug, route);
+    recordDelegation(cwd, bugId, route, "sync-ask", null);
+
+    return {
+      ok: true,
+      prompt,
+      bugId,
+      agent: route.agent,
+      skill: route.skill,
+    };
+  });
+}

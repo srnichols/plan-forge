@@ -597,6 +597,24 @@ function renderSliceCards() {
       gateHtml = `<span class="text-xs text-red-400" title="Gate failed: ${s.failedCommand || ''}">⛩ fail</span>`;
     }
 
+    // Phase FORGE-SHOP-06 Slice 06.2 — Gate check result indicator
+    let gateCheckHtml = "";
+    if (s.gateCheck) {
+      const gc = s.gateCheck;
+      if (gc.proceed === false) {
+        const chips = [];
+        if (gc.openBlockingReviews > 0) chips.push(`📋${gc.openBlockingReviews}`);
+        if (gc.openIncidents > 0) chips.push(`🚨${gc.openIncidents}`);
+        if (gc.driftScore != null) chips.push(`📉${gc.driftScore}`);
+        const chipStr = chips.length ? ` (${chips.join(" ")})` : "";
+        gateCheckHtml = `<span class="text-xs text-amber-400" title="Gate blocked: ${gc.reason || ''}${chipStr}">⛩✗</span>`;
+      } else {
+        gateCheckHtml = gc.failOpen
+          ? `<span class="text-xs text-gray-400" title="Gate passed (fail-open)">⛩~</span>`
+          : `<span class="text-xs text-green-400" title="Gate check passed">⛩✓</span>`;
+      }
+    }
+
     // Retry indicator
     const retryHtml = s.attempts && s.attempts > 1
       ? `<span class="text-xs text-yellow-400" title="${s.attempts} attempts">🔄${s.attempts}</span>`
@@ -629,7 +647,7 @@ function renderSliceCards() {
       <div class="slice-card ${bgColor} rounded-lg p-3 border border-gray-700 cursor-pointer hover:border-gray-500 transition-colors" data-slice-id="${s.id}" onclick="loadSliceLog('${s.id}')">
         <div class="flex items-center justify-between mb-1">
           <span class="font-semibold text-sm">${statusIcon} Slice ${s.id} ${sliceModeBadge}${escalatedMark}</span>
-          <span class="text-xs text-gray-500 flex items-center gap-1.5">${retryHtml}${temperingPillHtml}${gateHtml}${duration}${elapsed}</span>
+          <span class="text-xs text-gray-500 flex items-center gap-1.5">${retryHtml}${temperingPillHtml}${gateCheckHtml}${gateHtml}${duration}${elapsed}</span>
         </div>
         <p class="text-xs text-gray-400 truncate">${s.title}</p>
         ${(complexityBadge || spendBadge) ? `<div class="flex items-center gap-1.5 mt-1.5">${complexityBadge}${spendBadge}</div>` : ""}
@@ -3834,6 +3852,7 @@ function renderActivityFeed(events, { groupByCorrelation } = {}) {
     "slice-started": "▶", "slice-completed": "✓", "slice-failed": "✗",
     "liveguard": "🛡️", "tempering": "🛠", "crucible": "🔥",
     "notification-sent": "📤", "notification-send-failed": "📤✗",
+    "gate-blocked": "⛩", "gate-passed": "⛩",
   };
 
   function relativeTime(ts) {
@@ -3852,6 +3871,8 @@ function renderActivityFeed(events, { groupByCorrelation } = {}) {
     // Phase FORGE-SHOP-03 Slice 03.2 — notification event coloring
     const textCls = e.type === "notification-sent" ? "text-green-300"
       : e.type === "notification-send-failed" ? "text-red-400"
+      : e.type === "gate-blocked" ? "text-amber-400"
+      : e.type === "gate-passed" ? "text-green-300"
       : "text-gray-300";
     return `<div class="flex items-center gap-2 py-1 border-b border-gray-700/30 last:border-0">
       <span>${icon}</span>
@@ -3959,6 +3980,7 @@ function renderWatcherPanel() {
       inFlightRuns: state.home.snapshot.quadrants.activeRuns?.inFlight ?? null,
       openIncidents: state.home.snapshot.quadrants.liveguard?.openIncidents ?? null,
       openBugs: state.home.snapshot.quadrants.tempering?.openBugs ?? null,
+      gateChecks: state.home.snapshot.quadrants.activeRuns?.gateChecks ?? null,
     } : null);
     if (homeData && (homeData.inFlightRuns !== null || homeData.openIncidents !== null || homeData.openBugs !== null)) {
       homeChipRow = `
@@ -3968,6 +3990,7 @@ function renderWatcherPanel() {
           <span class="px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300" title="In-flight runs">🔄 ${homeData.inFlightRuns ?? "—"} runs</span>
           <span class="px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300" title="Open incidents">⚠ ${homeData.openIncidents ?? "—"} incidents</span>
           <span class="px-1.5 py-0.5 rounded bg-red-900/40 text-red-300" title="Open bugs">🐛 ${homeData.openBugs ?? "—"} bugs</span>
+          ${homeData.gateChecks ? `<span class="px-1.5 py-0.5 rounded bg-gray-800/40 text-gray-300" title="Gate checks: passed/blocked/fail-open">⛩ ${homeData.gateChecks.passed}/${homeData.gateChecks.blocked}/${homeData.gateChecks.failOpen}</span>` : ""}
         </div>
       </div>`;
     }

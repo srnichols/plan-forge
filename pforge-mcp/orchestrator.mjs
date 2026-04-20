@@ -1690,10 +1690,10 @@ export class SequentialScheduler {
    * @param {Map} nodes - DAG nodes
    * @param {string[]} order - Topological order
    * @param {Function} executeFn - async (slice) => result
-   * @param {object} options - { abortSignal, resumeFrom }
+   * @param {object} options - { abortSignal, resumeFrom, hub, gateCheckConfig }
    */
   async execute(nodes, order, executeFn, options = {}) {
-    const { abortSignal, resumeFrom = null } = options;
+    const { abortSignal, resumeFrom = null, hub = null, gateCheckConfig = null } = options;
     const results = [];
     let skipping = resumeFrom !== null;
 
@@ -1730,6 +1730,43 @@ export class SequentialScheduler {
 
         if (result.status === "passed") {
           this.eventBus.emit("slice-completed", { sliceId: id, complexityScore: slice.complexityScore, ...result });
+
+          // Phase FORGE-SHOP-06 Slice 06.2 — Executor gate wire-in.
+          // After a slice passes, ask the gate-check responder whether to proceed.
+          // Config-guarded: OFF by default (gateCheckConfig.enabled === false).
+          // Fail-open: on timeout or error, proceed to next slice.
+          if (hub && gateCheckConfig?.enabled) {
+            try {
+              const gateResult = await hub.ask("brain.gate-check", {
+                sliceId: id,
+              }, { timeoutMs: gateCheckConfig.timeoutMs || 5000 });
+
+              if (gateResult.ok && gateResult.payload?.proceed === false) {
+                this.eventBus.emit("gate-blocked", {
+                  sliceId: id,
+                  reason: gateResult.payload.reason,
+                  openBlockingReviews: gateResult.payload.openBlockingReviews,
+                  driftScore: gateResult.payload.driftScore,
+                  openIncidents: gateResult.payload.openIncidents,
+                });
+                // Pause — stop sequential execution, caller can resume later
+                break;
+              }
+
+              // Emit gate-passed for dashboard telemetry
+              this.eventBus.emit("gate-passed", { sliceId: id });
+            } catch {
+              // Fail-open: timeout or responder error → continue to next slice.
+              // This is intentional — gate-check is advisory, not blocking on errors.
+              this.eventBus.emit("gate-passed", { sliceId: id, failOpen: true });
+            }
+
+            // Re-check abort signal after gate-check completes
+            if (abortSignal?.aborted) {
+              this.eventBus.emit("run-aborted", { sliceId: id, reason: "User abort" });
+              break;
+            }
+          }
         } else {
           this.eventBus.emit("slice-failed", { sliceId: id, complexityScore: slice.complexityScore, ...result });
           break; // Sequential: stop on first failure
@@ -1957,6 +1994,7 @@ export async function runPlan(planPath, options = {}) {
     manualImport = false,   // v2.37 Crucible (Slice 01.4): bypass crucibleId gate
     manualImportSource = "human", // audit tag: "human" | "speckit" | "grandfather"
     manualImportReason = null,    // free-form note for audit log
+    hub = null,             // Phase FORGE-SHOP-06 Slice 06.2: Hub instance for gate-check
   } = options;
 
   // Load model routing from .forge.json (Slice 5)
@@ -2191,6 +2229,9 @@ export async function runPlan(planPath, options = {}) {
     } catch { /* leave undefined — UI will render a neutral '—' */ }
   }
 
+  // Phase FORGE-SHOP-06 Slice 06.2 — Gate check config for inter-slice validation
+  const gateCheckConfig = hub ? loadGateCheckConfig(cwd) : null;
+
   const results = await scheduler.execute(
     plan.dag.nodes,
     plan.dag.order,
@@ -2199,7 +2240,7 @@ export async function runPlan(planPath, options = {}) {
       memoryEnabled, projectName, planName: basename(planPath, ".md"),
       quorumConfig, escalationChain, eventBus,
     }),
-    { abortSignal, resumeFrom: resumeFrom ? String(resumeFrom) : null },
+    { abortSignal, resumeFrom: resumeFrom ? String(resumeFrom) : null, hub, gateCheckConfig },
   );
 
   // Auto-sweep + auto-analyze after all slices (Slice 6)
@@ -3576,6 +3617,154 @@ export function loadTeardownGuardConfig(cwd) {
     }
   }
   return config;
+}
+
+// ─── Phase FORGE-SHOP-06 Slice 06.2 — Gate Check Configuration ──────
+
+const GATE_CHECK_DEFAULTS = {
+  enabled: false,
+  driftThreshold: 0.6,
+  timeoutMs: 5000,
+};
+
+/**
+ * Load gate-check configuration from .forge.json → runtime.gateCheck.
+ * Returns GATE_CHECK_DEFAULTS (enabled: false) if absent or malformed.
+ * @param {string} cwd - Project root directory
+ * @returns {{ enabled: boolean, driftThreshold: number, timeoutMs: number }}
+ */
+export function loadGateCheckConfig(cwd) {
+  let config = { ...GATE_CHECK_DEFAULTS };
+  const configPath = resolve(cwd, ".forge.json");
+  if (existsSync(configPath)) {
+    try {
+      const raw = JSON.parse(readFileSync(configPath, "utf-8"));
+      if (raw?.runtime?.gateCheck) {
+        config = { ...config, ...raw.runtime.gateCheck };
+      }
+    } catch {
+      /* malformed config — use defaults */
+    }
+  }
+  return config;
+}
+
+// ─── Phase FORGE-SHOP-06 Slice 06.2 — Gate Check Responder ──────────
+
+/**
+ * Register the `brain.gate-check` hub responder.
+ * Pure-read: queries brain facade for open blockers, critical incidents, and drift.
+ * Returns { proceed, reason, openBlockingReviews, driftScore, openIncidents }.
+ *
+ * @param {object} hub - Hub instance with onAsk
+ * @param {string} cwd - Project root
+ * @param {object} [deps] - DI overrides for recall, readReviewQueueState, readForgeJsonl
+ */
+export function registerGateCheckResponder(hub, cwd, deps = {}) {
+  const _recall = deps.recall || brainRecall;
+  const _readRQS = deps.readReviewQueueState || readReviewQueueState;
+  const _readJsonl = deps.readForgeJsonl || readForgeJsonl;
+  const config = deps.config || loadGateCheckConfig(cwd);
+
+  hub.onAsk("brain.gate-check", async (payload) => {
+    const reasons = [];
+    let openBlockingReviews = 0;
+    let openIncidents = 0;
+    let driftScore = null;
+
+    // 1. Check for blocker-severity open reviews
+    try {
+      const rqState = await _recall("project.review.counts", {}, {
+        cwd, readReviewQueueState: _readRQS,
+      });
+      if (rqState?.bySeverity?.blocker) {
+        openBlockingReviews = rqState.bySeverity.blocker;
+      }
+      if (openBlockingReviews > 0) {
+        reasons.push(`${openBlockingReviews} blocker-severity review(s) open`);
+      }
+    } catch { /* treat as no data — proceed */ }
+
+    // 2. Check for critical open incidents
+    try {
+      const incidents = await _recall("project.liveguard.incidents", {}, {
+        cwd, readForgeJsonl: _readJsonl,
+      });
+      if (Array.isArray(incidents)) {
+        openIncidents = incidents.filter(
+          (i) => i.status === "open" && i.severity === "critical",
+        ).length;
+      }
+      if (openIncidents > 0) {
+        reasons.push(`${openIncidents} critical incident(s) open`);
+      }
+    } catch { /* treat as no data — proceed */ }
+
+    // 3. Check drift score against threshold
+    try {
+      const driftHistory = await _recall("project.liveguard.drift", {}, {
+        cwd, readForgeJsonl: _readJsonl,
+      });
+      if (Array.isArray(driftHistory) && driftHistory.length > 0) {
+        const latest = driftHistory[driftHistory.length - 1];
+        const oneHourAgo = Date.now() - 3_600_000;
+        const latestTs = new Date(latest.ts || latest.timestamp || 0).getTime();
+        if (latestTs >= oneHourAgo && typeof latest.driftScore === "number") {
+          driftScore = latest.driftScore;
+          if (driftScore < config.driftThreshold) {
+            reasons.push(`drift score ${driftScore} below threshold ${config.driftThreshold}`);
+          }
+        }
+      }
+    } catch { /* treat as no data — proceed */ }
+
+    const proceed = reasons.length === 0;
+    return {
+      proceed,
+      reason: proceed ? "all checks passed" : reasons.join("; "),
+      openBlockingReviews,
+      driftScore,
+      openIncidents,
+    };
+  });
+}
+
+// ─── Phase FORGE-SHOP-06 Slice 06.2 — Correlation Thread Responder ──
+
+/**
+ * Register the `brain.correlation-thread` hub responder.
+ * Reads hub-events.jsonl and filters by correlationId.
+ *
+ * @param {object} hub - Hub instance with onAsk
+ * @param {string} cwd - Project root
+ * @param {object} [deps] - DI overrides
+ */
+export function registerCorrelationThreadResponder(hub, cwd, deps = {}) {
+  const _readJsonl = deps.readForgeJsonl || readForgeJsonl;
+
+  hub.onAsk("brain.correlation-thread", async (payload) => {
+    const { correlationId, limit = 50 } = payload || {};
+    if (!correlationId) {
+      return { events: [], count: 0 };
+    }
+
+    const allEvents = _readJsonl("hub-events.jsonl", [], cwd);
+    const filtered = allEvents.filter(
+      (e) => e._correlationId === correlationId || e.correlationId === correlationId,
+    );
+
+    // Sort newest-first by timestamp
+    filtered.sort((a, b) => {
+      const tsA = new Date(a.ts || a.timestamp || 0).getTime();
+      const tsB = new Date(b.ts || b.timestamp || 0).getTime();
+      return tsB - tsA;
+    });
+
+    return {
+      events: filtered.slice(0, limit),
+      count: filtered.length,
+    };
+  });
 }
 
 /**
@@ -5701,6 +5890,14 @@ async function buildActiveRunsQuadrant(root) {
       });
       result.openReviews = rqState?.open ?? 0;
     } catch { result.openReviews = 0; }
+
+    // Phase FORGE-SHOP-06 Slice 06.2 — Gate check counters
+    try {
+      const gatePassed = events.filter((e) => e.type === "gate-passed").length;
+      const gateBlocked = events.filter((e) => e.type === "gate-blocked").length;
+      const gateFailOpen = events.filter((e) => e.type === "gate-passed" && e.failOpen).length;
+      result.gateChecks = { passed: gatePassed, blocked: gateBlocked, failOpen: gateFailOpen };
+    } catch { result.gateChecks = null; }
 
     return result;
   } catch { return null; }

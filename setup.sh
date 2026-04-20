@@ -1251,7 +1251,14 @@ TEMPLATE_VERSION="1.0.0"
 if [[ -f "$VERSION_FILE" ]]; then
     TEMPLATE_VERSION="$(tr -d '\n' < "$VERSION_FILE")"
 fi
-cat > "$CONFIG_PATH" <<EOF
+
+# Phase-26 Slice 14 — best-defaults preset writer.
+# Gated on existence so upgrades never clobber a user-customized config.
+# Every Phase-26 inner-loop subsystem ships in ADVISORY posture: detection
+# runs but no action is taken without explicit opt-in.
+write_best_defaults_preset() {
+    local target="$1"
+    cat > "$target" <<EOF
 {
   "projectName": "$PROJECT_NAME",
   "preset": "$(IFS=','; echo "${PRESETS[*]}")",
@@ -1266,11 +1273,25 @@ cat > "$CONFIG_PATH" <<EOF
     "preDeploy": { "blockOnSecrets": true, "warnOnEnvGaps": true, "scanSince": "HEAD~1" },
     "postSlice": { "silentDeltaThreshold": 5, "warnDeltaThreshold": 10, "scoreFloor": 70 },
     "preAgentHandoff": { "injectContext": true, "runRegressionGuard": true, "cacheMaxAgeMinutes": 30, "minAlertSeverity": "medium" }
+  },
+  "innerLoop": {
+    "competitive": { "enabled": false },
+    "autoFix": { "enabled": true, "applyWithoutReview": false },
+    "costAnomaly": { "enabled": true, "ratio": 2.0, "medianWindow": 20 }
+  },
+  "brain": {
+    "federation": { "enabled": false, "repos": [] }
   }
 }
 EOF
+}
 
-green "  CREATED  .forge.json"
+if [[ -f "$CONFIG_PATH" ]]; then
+    yellow "  SKIPPED  .forge.json already exists (preserving user config)"
+else
+    write_best_defaults_preset "$CONFIG_PATH"
+    green "  CREATED  .forge.json (best-defaults preset)"
+fi
 
 # ─── Step 5a: Create docs/plans/auto/ for LiveGuard fix proposals ────
 AUTO_PLANS_DIR="$PROJECT_PATH/docs/plans/auto"

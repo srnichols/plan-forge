@@ -5101,6 +5101,40 @@ export function createExpressApp() {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
+  // ─── Phase-26 Slice 14: Dashboard UI state ──────────────────────────
+  //
+  // Stores per-user-machine dashboard preferences (welcome-card dismissal,
+  // feature-tour progress). Kept in `.forge/dashboard-state.json` so it is
+  // gitignored by default along with the rest of `.forge/`. Schema is an
+  // arbitrary object — the dashboard owns the shape.
+  app.get("/api/dashboard-state", (_req, res) => {
+    try {
+      const path = resolve(PROJECT_DIR, ".forge", "dashboard-state.json");
+      if (!existsSync(path)) return res.json({});
+      res.json(JSON.parse(readFileSync(path, "utf-8")));
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  app.post("/api/dashboard-state", (req, res) => {
+    try {
+      if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) {
+        return res.status(400).json({ error: "Request body must be a JSON object" });
+      }
+      const dir = resolve(PROJECT_DIR, ".forge");
+      if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+      const path = resolve(dir, "dashboard-state.json");
+      // Merge onto existing state so partial updates don't wipe other keys.
+      let current = {};
+      if (existsSync(path)) {
+        try { current = JSON.parse(readFileSync(path, "utf-8")); } catch { current = {}; }
+        if (!current || typeof current !== "object" || Array.isArray(current)) current = {};
+      }
+      const merged = { ...current, ...req.body };
+      writeFileSync(path, JSON.stringify(merged, null, 2));
+      res.json({ success: true, state: merged });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
   // REST API: GET /api/config — read .forge.json
   app.get("/api/config", (_req, res) => {
     try {

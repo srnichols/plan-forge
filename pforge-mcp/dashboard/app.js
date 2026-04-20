@@ -6491,3 +6491,58 @@ function renderInnerLoopFederation(f) {
 
 window.loadInnerLoop = loadInnerLoop;
 
+// ─── Phase-26 Slice 14 — Welcome card (inner-loop features) ──────
+//
+// The card surfaces once per machine, on the first dashboard visit after
+// upgrade to v2.58+. Dismissal state is persisted via /api/dashboard-state,
+// so the card never reappears after any of its buttons are used.
+const WELCOME_INNERLOOP_KEY = "seenInnerLoop258";
+
+async function welcomeLoadState() {
+  try {
+    const res = await fetch(`${API_BASE}/api/dashboard-state`);
+    if (!res.ok) return {};
+    return await res.json();
+  } catch { return {}; }
+}
+
+async function welcomeMarkSeen() {
+  try {
+    await fetch(`${API_BASE}/api/dashboard-state`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ [WELCOME_INNERLOOP_KEY]: true, seenAt: new Date().toISOString() }),
+    });
+  } catch { /* silently degrade — dismissal just won't persist this session */ }
+  const card = document.getElementById("welcome-innerloop");
+  if (card) card.classList.add("hidden");
+}
+
+async function welcomeMaybeShowInnerLoop() {
+  const state = await welcomeLoadState();
+  if (state && state[WELCOME_INNERLOOP_KEY]) return;  // already dismissed
+  const card = document.getElementById("welcome-innerloop");
+  if (card) card.classList.remove("hidden");
+}
+
+function welcomeDismissInnerLoop() { welcomeMarkSeen(); }
+function welcomeGotoInnerLoop() {
+  const btn = document.querySelector('[data-tab="innerloop"]');
+  if (btn) btn.click();
+  welcomeMarkSeen();
+}
+function welcomeGotoConfig() {
+  const btn = document.querySelector('[data-tab="config"]');
+  if (btn) btn.click();
+  welcomeMarkSeen();
+}
+
+window.welcomeDismissInnerLoop = welcomeDismissInnerLoop;
+window.welcomeGotoInnerLoop = welcomeGotoInnerLoop;
+window.welcomeGotoConfig = welcomeGotoConfig;
+
+document.addEventListener("DOMContentLoaded", () => {
+  // Run after the main shell has settled; 250ms is enough for API_BASE to be live.
+  setTimeout(() => { welcomeMaybeShowInnerLoop(); }, 250);
+});
+

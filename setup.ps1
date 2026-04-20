@@ -1376,23 +1376,55 @@ Write-Host "Step 5: Generating .forge.json" -ForegroundColor Cyan
 $configPath = Join-Path $ProjectPath ".forge.json"
 $versionFile = Join-Path $templateRoot "VERSION"
 $templateVersion = if (Test-Path $versionFile) { (Get-Content $versionFile -Raw).Trim() } else { "1.0.0" }
-$config = @{
-    projectName     = $ProjectName
-    preset          = if ($Preset.Count -eq 1) { $Preset[0] } else { $Preset }
-    agents          = if ($agents.Count -eq 1) { $agents[0] } else { $agents }
-    stack           = $stackLabel
-    setupDate       = (Get-Date -Format 'yyyy-MM-dd')
-    templateVersion = $templateVersion
-    modelRouting    = @{ default = "claude-opus-4.6" }
-    hooks           = @{
-        preDeploy        = @{ blockOnSecrets = $true; warnOnEnvGaps = $true; scanSince = "HEAD~1" }
-        postSlice        = @{ silentDeltaThreshold = 5; warnDeltaThreshold = 10; scoreFloor = 70 }
-        preAgentHandoff  = @{ injectContext = $true; runRegressionGuard = $true; cacheMaxAgeMinutes = 30; minAlertSeverity = "medium" }
-    }
-} | ConvertTo-Json -Depth 4
 
-Set-Content -Path $configPath -Value $config
-Write-Host "  CREATED  .forge.json" -ForegroundColor Green
+# Phase-26 Slice 14 — best-defaults preset writer.
+# We only write when `.forge.json` is absent so upgrades never clobber a
+# user-customized config. The preset intentionally keeps every Phase-26
+# inner-loop subsystem in an ADVISORY posture: detection runs, but no action
+# is taken without an explicit opt-in.
+function Write-BestDefaultsPreset {
+    param(
+        [string]$Path,
+        [string]$ProjectName,
+        [object]$Preset,
+        [object]$Agents,
+        [string]$StackLabel,
+        [string]$TemplateVersion
+    )
+    $cfg = @{
+        projectName     = $ProjectName
+        preset          = if ($Preset.Count -eq 1) { $Preset[0] } else { $Preset }
+        agents          = if ($Agents.Count -eq 1) { $Agents[0] } else { $Agents }
+        stack           = $StackLabel
+        setupDate       = (Get-Date -Format 'yyyy-MM-dd')
+        templateVersion = $TemplateVersion
+        modelRouting    = @{ default = "claude-opus-4.6" }
+        hooks           = @{
+            preDeploy        = @{ blockOnSecrets = $true; warnOnEnvGaps = $true; scanSince = "HEAD~1" }
+            postSlice        = @{ silentDeltaThreshold = 5; warnDeltaThreshold = 10; scoreFloor = 70 }
+            preAgentHandoff  = @{ injectContext = $true; runRegressionGuard = $true; cacheMaxAgeMinutes = 30; minAlertSeverity = "medium" }
+        }
+        # Phase-26 defaults — all advisory, zero destructive action by default.
+        innerLoop       = @{
+            competitive  = @{ enabled = $false }  # worktree races are opt-in; off by default
+            autoFix      = @{ enabled = $true; applyWithoutReview = $false }  # detect & draft patches, never auto-apply
+            costAnomaly  = @{ enabled = $true; ratio = 2.0; medianWindow = 20 }  # advisory only
+        }
+        brain           = @{
+            federation = @{ enabled = $false; repos = @() }  # off by default; opt-in per repo
+        }
+    } | ConvertTo-Json -Depth 5
+    Set-Content -Path $Path -Value $cfg
+}
+
+if (Test-Path $configPath) {
+    Write-Host "  SKIPPED  .forge.json already exists (preserving user config)" -ForegroundColor Yellow
+} else {
+    Write-BestDefaultsPreset -Path $configPath `
+        -ProjectName $ProjectName -Preset $Preset -Agents $agents `
+        -StackLabel $stackLabel -TemplateVersion $templateVersion
+    Write-Host "  CREATED  .forge.json (best-defaults preset)" -ForegroundColor Green
+}
 
 # ─── Step 5a: Create docs/plans/auto/ for LiveGuard fix proposals ────
 $autoPlansDir = Join-Path $ProjectPath "docs/plans/auto"

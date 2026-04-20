@@ -288,6 +288,33 @@
   <!-- Tab Content -->
   <div class="p-4 max-w-6xl mx-auto">
 
+    <!-- Phase-26 Slice 14 — welcome card for inner-loop features. -->
+    <!--
+      Hidden by default. Shown once per machine (tracked in
+      `.forge/dashboard-state.json#seenInnerLoop258`) after upgrade to v2.58+.
+      Dismissing or enabling any feature sets the flag; the card never
+      reappears on that machine.
+    -->
+    <div id="welcome-innerloop" data-testid="welcome-innerloop" class="hidden mb-4 bg-emerald-900/20 border border-emerald-700/50 rounded-lg p-4">
+      <div class="flex items-start justify-between gap-3">
+        <div class="flex-1">
+          <h3 class="text-sm font-semibold text-emerald-300 mb-1">🔁 New: Inner-Loop subsystems</h3>
+          <p class="text-xs text-gray-400 mb-3">
+            Plan Forge v2.58 ships five self-deterministic feedback subsystems. All default to
+            <strong>advisory</strong> — detection runs, no action is taken without your opt-in.
+            Review the new <a href="#" onclick="document.querySelector('[data-tab=innerloop]').click();return false;" class="text-emerald-400 underline">Inner Loop tab</a>
+            or tweak defaults below.
+          </p>
+          <div class="flex flex-wrap gap-2">
+            <button onclick="welcomeGotoInnerLoop()" data-testid="welcome-innerloop-goto" class="text-xs px-3 py-1 bg-emerald-700 hover:bg-emerald-600 rounded text-white">Open Inner Loop tab</button>
+            <button onclick="welcomeGotoConfig()" data-testid="welcome-innerloop-config" class="text-xs px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded">Configure</button>
+            <a href="manual/inner-loop.html" target="_blank" class="text-xs px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded">Docs ↗</a>
+          </div>
+        </div>
+        <button onclick="welcomeDismissInnerLoop()" data-testid="welcome-innerloop-dismiss" aria-label="Dismiss" class="text-gray-500 hover:text-gray-300 text-lg leading-none">×</button>
+      </div>
+    </div>
+
     <!-- Home Tab (Phase FORGE-SHOP-01 Slice 01.2) — shop-floor overview -->
     <section id="tab-home" class="tab-content">
       <div class="mb-4">

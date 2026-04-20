@@ -57,9 +57,9 @@ try {
   // .env loading is best-effort. Failure must never break server startup.
 }
 
-import { parsePlan, runPlan, detectWorkers, getCostReport, getHealthTrend, analyzeWithQuorum, generateImage, runAnalyze, readForgeJson, readForgeJsonl, appendForgeJsonl, emitToolTelemetry, regressionGuard, runPostSliceHook, resetPostSliceHookFired, runPreAgentHandoffHook, postOpenClawSnapshot, loadOpenClawConfig, loadQuorumConfig, runWatch, runWatchLive, readCrucibleState, readHomeSnapshot, addReviewItem, resolveReviewItem, listReviewItems, readReviewQueueState, maybeAddFixPlanReview, assessQuorumViability, detectExecutionRuntime } from "./orchestrator.mjs";
+import { parsePlan, runPlan, detectWorkers, getCostReport, getHealthTrend, analyzeWithQuorum, generateImage, runAnalyze, readForgeJson, readForgeJsonl, appendForgeJsonl, emitToolTelemetry, regressionGuard, runPostSliceHook, resetPostSliceHookFired, runPreAgentHandoffHook, postOpenClawSnapshot, loadOpenClawConfig, loadQuorumConfig, runWatch, runWatchLive, readCrucibleState, readHomeSnapshot, addReviewItem, resolveReviewItem, listReviewItems, readReviewQueueState, maybeAddFixPlanReview, assessQuorumViability, detectExecutionRuntime, PROPOSED_FIX_DIR, detectCostAnomaly, computeMedian } from "./orchestrator.mjs";
 // Phase FORGE-SHOP-07 Slice 07.2 — brain facade for unified recall
-import { recall as brainRecall } from "./brain.mjs";
+import { recall as brainRecall, getReviewerCalibration, federationReadTrajectories, loadFederationConfig, validateFederationConfig, TRAJECTORY_FEDERATION_LIMIT } from "./brain.mjs";
 import {
   isOpenBrainConfigured,
   shapeWatcherAnomalyThought,
@@ -75,6 +75,8 @@ import {
   acceptAutoSkill,
   rejectAutoSkill,
   deferAutoSkill,
+  computeGateSuggestionKey,
+  getGateSuggestionCounter,
 } from "./memory.mjs";
 import { createHub, readHubPort } from "./hub.mjs";
 import { createBridge } from "./bridge.mjs";
@@ -4955,6 +4957,147 @@ export function createExpressApp() {
       const result = deferAutoSkill({ cwd: PROJECT_DIR, sha256Prefix });
       if (!result.ok) return res.status(404).json(result);
       res.json(result);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // ─── Phase-26 Slice 12: Inner Loop dashboard endpoints ──────────────
+  //
+  // These power the "Inner Loop" tab (Slice 13). Each endpoint is a
+  // read-only projection over existing on-disk state. All responses are
+  // advisory unless the user has explicitly opted into the subsystem via
+  // `.forge.json` — the endpoints report configuration state alongside
+  // data so the UI can render the right empty-state message.
+
+  // GET /api/innerloop/status — all subsystem states in one payload
+  app.get("/api/innerloop/status", (_req, res) => {
+    try {
+      const cwd = PROJECT_DIR;
+      const calibration = getReviewerCalibration(cwd);
+      const skillsPending = listPendingAutoSkills({ cwd });
+      const federation = loadFederationConfig(cwd);
+      const federationErrors = validateFederationConfig(cwd);
+      const fixProposals = readForgeJsonl("fix-proposals.json", [], cwd);
+      const openFixProposals = fixProposals.filter(
+        (p) => p && p.status !== "resolved" && p.status !== "closed"
+      );
+      res.json({
+        reviewer: {
+          eligible: calibration.eligible,
+          count: calibration.count,
+          threshold: calibration.threshold,
+        },
+        skills: {
+          pendingCount: skillsPending.length,
+        },
+        federation: {
+          enabled: federation.enabled,
+          repoCount: federation.repos.length,
+          configErrors: federationErrors.length,
+        },
+        autoFix: {
+          openProposals: openFixProposals.length,
+        },
+      });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // GET /api/innerloop/reviewer-calibration — count + threshold + eligibility
+  app.get("/api/innerloop/reviewer-calibration", (_req, res) => {
+    try {
+      const result = getReviewerCalibration(PROJECT_DIR);
+      res.json(result);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // GET /api/innerloop/gate-suggestions — recent accept events + per-key counters
+  app.get("/api/innerloop/gate-suggestions", (_req, res) => {
+    try {
+      const cwd = PROJECT_DIR;
+      const path = resolve(cwd, ".forge", "gate-suggestions.jsonl");
+      if (!existsSync(path)) return res.json({ records: [], counters: {} });
+      // Read last 200 accept events for the dashboard list.
+      const lines = readFileSync(path, "utf-8").split("\n").filter(Boolean);
+      const records = [];
+      for (const line of lines) {
+        try {
+          const rec = JSON.parse(line);
+          if (rec && rec.type === "accept") records.push(rec);
+        } catch { /* skip malformed */ }
+      }
+      const recent = records.slice(-200).reverse();
+      const counters = {};
+      for (const rec of records) {
+        if (!rec.suggestionKey) continue;
+        counters[rec.suggestionKey] = (counters[rec.suggestionKey] || 0) + 1;
+      }
+      res.json({ records: recent, counters });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // GET /api/innerloop/cost-anomalies — detected anomalies from .forge/cost-anomalies.jsonl
+  app.get("/api/innerloop/cost-anomalies", (_req, res) => {
+    try {
+      const cwd = PROJECT_DIR;
+      const anomalies = readForgeJsonl("cost-anomalies.jsonl", [], cwd);
+      // Latest 50, newest first.
+      const recent = anomalies.slice(-50).reverse();
+      res.json({ anomalies: recent, count: anomalies.length });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // GET /api/innerloop/proposed-fixes — list .forge/proposed-fixes/*.patch
+  app.get("/api/innerloop/proposed-fixes", (_req, res) => {
+    try {
+      const cwd = PROJECT_DIR;
+      const dir = resolve(cwd, ".forge", PROPOSED_FIX_DIR);
+      if (!existsSync(dir)) return res.json({ fixes: [] });
+      const entries = readdirSync(dir, { withFileTypes: true })
+        .filter((d) => d.isFile() && d.name.endsWith(".patch"));
+      const fixes = [];
+      for (const e of entries) {
+        const fullPath = resolve(dir, e.name);
+        try {
+          const stat = statSync(fullPath);
+          fixes.push({
+            fixId: e.name.slice(0, -".patch".length),
+            path: fullPath,
+            sizeBytes: stat.size,
+            mtimeMs: stat.mtimeMs,
+          });
+        } catch { /* skip unreadable */ }
+      }
+      fixes.sort((a, b) => b.mtimeMs - a.mtimeMs);
+      res.json({ fixes });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // GET /api/innerloop/federation — config + validation errors + recent trajectories
+  app.get("/api/innerloop/federation", (req, res) => {
+    try {
+      const cwd = PROJECT_DIR;
+      const config = loadFederationConfig(cwd);
+      const errors = validateFederationConfig(cwd);
+      let trajectories = [];
+      if (config.enabled && config.repos.length > 0) {
+        const limitQ = Number(req.query?.limit);
+        const limit = Number.isFinite(limitQ) && limitQ > 0
+          ? Math.min(limitQ, TRAJECTORY_FEDERATION_LIMIT)
+          : 20;
+        // Strip large `content` field for the list view.
+        trajectories = federationReadTrajectories({ cwd, limit }).map((t) => ({
+          repo: t.repo,
+          planBasename: t.planBasename,
+          sliceId: t.sliceId,
+          mtimeMs: t.mtimeMs,
+        }));
+      }
+      res.json({
+        enabled: config.enabled,
+        repos: config.repos,
+        configErrors: errors,
+        trajectories,
+        limit: TRAJECTORY_FEDERATION_LIMIT,
+      });
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 

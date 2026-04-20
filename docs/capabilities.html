@@ -178,8 +178,8 @@
       <div class="mt-6 rounded-xl border border-amber-700/30 bg-amber-950/10 p-5">
         <div class="flex items-center gap-2 mb-3">
           <span class="text-amber-400">🛡️</span>
-          <span class="text-sm font-semibold text-amber-400">LiveGuard Tools (11 shipped in v2.27–v2.28)</span>
-          <span class="px-2 py-0.5 text-xs rounded-full bg-amber-900/40 text-amber-500 border border-amber-700/30">+ 2 more in v2.29</span>
+          <span class="text-sm font-semibold text-amber-400">LiveGuard Tools (14 shipped v2.27–v2.30 + 2 Watcher v2.34/v2.35)</span>
+          <span class="px-2 py-0.5 text-xs rounded-full bg-amber-900/40 text-amber-500 border border-amber-700/30">composite run · forge_liveguard_run</span>
         </div>
         <div class="grid gap-2 md:grid-cols-2">
           <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-amber-400 text-xs">forge_drift_report</code><p class="text-xs text-slate-500 mt-1">Architecture drift vs. plan baseline</p></div>
@@ -195,6 +195,7 @@
           <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-amber-400 text-xs">forge_env_diff</code><p class="text-xs text-slate-500 mt-1">Env variable key divergence across .env files — keys only, values never read</p></div>
           <div class="bg-slate-800/40 rounded-lg p-3 border border-amber-700/20"><code class="text-amber-400 text-xs">forge_fix_proposal</code><span class="ml-2 px-1.5 py-0.5 text-[10px] rounded bg-amber-900/40 text-amber-500 border border-amber-700/30">v2.29</span><p class="text-xs text-slate-500 mt-1">Generates scoped 1-2 slice fix plan from regression/drift/incident/secret failure — capped, human-approved only</p></div>
           <div class="bg-slate-800/40 rounded-lg p-3 border border-amber-700/20"><code class="text-amber-400 text-xs">forge_quorum_analyze</code><span class="ml-2 px-1.5 py-0.5 text-[10px] rounded bg-amber-900/40 text-amber-500 border border-amber-700/30">v2.29</span><p class="text-xs text-slate-500 mt-1">Assembles structured quorum prompt from LiveGuard data for multi-model analysis — no LLM calls in server</p></div>
+          <div class="bg-slate-800/40 rounded-lg p-3 border border-amber-700/20"><code class="text-amber-400 text-xs">forge_liveguard_run</code><span class="ml-2 px-1.5 py-0.5 text-[10px] rounded bg-amber-900/40 text-amber-500 border border-amber-700/30">v2.30</span><p class="text-xs text-slate-500 mt-1">Composite scan: drift + sweep + secrets + regression + deps + alerts + health in one call</p></div>
           <div class="bg-slate-800/40 rounded-lg p-3 border border-sky-700/20"><code class="text-sky-300 text-xs">forge_watch</code><span class="ml-2 px-1.5 py-0.5 text-[10px] rounded bg-sky-900/40 text-sky-300 border border-sky-700/30">v2.34/v2.35</span><p class="text-xs text-slate-500 mt-1">Read-only watcher — tail another project's pforge run from a second VS Code session. Snapshot or analyze mode (claude-opus-4.7). Returns counts, anomalies, recommendations, diff cursor.</p></div>
           <div class="bg-slate-800/40 rounded-lg p-3 border border-sky-700/20"><code class="text-sky-300 text-xs">forge_watch_live</code><span class="ml-2 px-1.5 py-0.5 text-[10px] rounded bg-sky-900/40 text-sky-300 border border-sky-700/30">v2.35</span><p class="text-xs text-slate-500 mt-1">Live tail — streams events for a fixed duration via target's WebSocket hub or events.log polling fallback. Read-only subscriber.</p></div>
         </div>
@@ -218,6 +219,78 @@
           <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-rose-400 text-xs">forge_crucible_abandon</code><p class="text-xs text-slate-500 mt-1">Mark smelt abandoned and release any claimed phase number</p></div>
         </div>
         <p class="text-xs text-slate-500 mt-3">Crucible is v2.37 (in development — shipping across 6 slices). Documentation chapter lands in the user manual at v2.37.0 release.</p>
+      </div>
+
+      <!-- Tempering tools preview -->
+      <div class="mt-6 rounded-xl border border-orange-700/30 bg-orange-950/10 p-5">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="text-orange-400">🔨</span>
+          <span class="text-sm font-semibold text-orange-400">Tempering Tools (4 tools — v2.40+)</span>
+          <span class="px-2 py-0.5 text-xs rounded-full bg-orange-900/40 text-orange-300 border border-orange-700/30">temper-quality scoring</span>
+        </div>
+        <p class="text-xs text-slate-500 mb-3">Post-hardening quality pipeline. Scores a plan's Scope Contract clarity, validation gates, slice sizing, and forbidden actions. Maintains an approved-baseline threshold so regressions block future commits.</p>
+        <div class="grid gap-2 md:grid-cols-2">
+          <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-orange-400 text-xs">forge_tempering_run</code><p class="text-xs text-slate-500 mt-1">Run full pipeline (scan + score) against a Crucible-finalized plan; writes temper-score snapshot</p></div>
+          <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-orange-400 text-xs">forge_tempering_scan</code><p class="text-xs text-slate-500 mt-1">Scan for temper-quality signals (contract clarity, gates, slice sizing, forbidden actions)</p></div>
+          <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-orange-400 text-xs">forge_tempering_status</code><p class="text-xs text-slate-500 mt-1">Read latest tempering results per plan (score, findings, baseline delta)</p></div>
+          <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-orange-400 text-xs">forge_tempering_approve_baseline</code><p class="text-xs text-slate-500 mt-1">Approve current tempering score as the new baseline threshold</p></div>
+        </div>
+      </div>
+
+      <!-- Bug Registry tools preview -->
+      <div class="mt-6 rounded-xl border border-red-700/30 bg-red-950/10 p-5">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="text-red-400">🐛</span>
+          <span class="text-sm font-semibold text-red-400">Bug Registry Tools (4 tools — v2.45+)</span>
+          <span class="px-2 py-0.5 text-xs rounded-full bg-red-900/40 text-red-300 border border-red-700/30">native bug tracking</span>
+        </div>
+        <p class="text-xs text-slate-500 mb-3">First-class bug tracking inside Plan Forge — register, filter, transition, and validate fixes. Surfaces in the dashboard timeline + Bug Registry tab, and LiveGuard incidents can auto-link to registered bugs.</p>
+        <div class="grid gap-2 md:grid-cols-2">
+          <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-red-400 text-xs">forge_bug_register</code><p class="text-xs text-slate-500 mt-1">Register a bug with severity, title, description, affected files, linked plan/slice</p></div>
+          <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-red-400 text-xs">forge_bug_list</code><p class="text-xs text-slate-500 mt-1">List bugs with status/severity/plan filters</p></div>
+          <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-red-400 text-xs">forge_bug_update_status</code><p class="text-xs text-slate-500 mt-1">Transition state (open → investigating → in-progress → resolved → closed)</p></div>
+          <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-red-400 text-xs">forge_bug_validate_fix</code><p class="text-xs text-slate-500 mt-1">Verify proposed fix against bug description + linked slice gates</p></div>
+        </div>
+      </div>
+
+      <!-- Testbed tools preview -->
+      <div class="mt-6 rounded-xl border border-green-700/30 bg-green-950/10 p-5">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="text-green-400">🧪</span>
+          <span class="text-sm font-semibold text-green-400">Testbed Tools (3 tools — v2.50+)</span>
+          <span class="px-2 py-0.5 text-xs rounded-full bg-green-900/40 text-green-300 border border-green-700/30">happy-path scenarios</span>
+        </div>
+        <p class="text-xs text-slate-500 mb-3">End-to-end scenario runner against an isolated testbed repository. Guards every release with Chapter 8 happy-path regression validation; failures produce findings linked to the causing change.</p>
+        <div class="grid gap-2 md:grid-cols-2">
+          <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-green-400 text-xs">forge_testbed_run</code><p class="text-xs text-slate-500 mt-1">Execute a single scenario by ID against the configured testbed project</p></div>
+          <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-green-400 text-xs">forge_testbed_happypath</code><p class="text-xs text-slate-500 mt-1">Run all happy-path scenarios sequentially, aggregate pass/fail summary</p></div>
+          <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-green-400 text-xs">forge_testbed_findings</code><p class="text-xs text-slate-500 mt-1">Read cumulative testbed findings (failures, flaky scenarios, runtime trends)</p></div>
+        </div>
+      </div>
+
+      <!-- Collaboration + dashboard tools preview -->
+      <div class="mt-6 rounded-xl border border-slate-700/40 bg-slate-900/40 p-5">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="text-slate-300">🧭</span>
+          <span class="text-sm font-semibold text-slate-300">Collaboration, Notifications &amp; Dashboard (10 tools)</span>
+          <span class="px-2 py-0.5 text-xs rounded-full bg-slate-800/60 text-slate-400 border border-slate-700/40">reviews, alerts, search, memory, release</span>
+        </div>
+        <div class="grid gap-2 md:grid-cols-2">
+          <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-slate-200 text-xs">forge_review_add</code><p class="text-xs text-slate-500 mt-1">Capture a review thread (audit, gate failure, drift finding) linked to plan/slice</p></div>
+          <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-slate-200 text-xs">forge_review_list</code><p class="text-xs text-slate-500 mt-1">List open/resolved review threads</p></div>
+          <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-slate-200 text-xs">forge_review_resolve</code><p class="text-xs text-slate-500 mt-1">Mark a review thread resolved with outcome + rationale</p></div>
+          <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-slate-200 text-xs">forge_notify_send</code><p class="text-xs text-slate-500 mt-1">Emit notification through configured channels (Telegram, Slack, webhook, email)</p></div>
+          <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-slate-200 text-xs">forge_notify_test</code><p class="text-xs text-slate-500 mt-1">Smoke-test every notification channel; returns success/failure per channel</p></div>
+          <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-slate-200 text-xs">forge_home_snapshot</code><p class="text-xs text-slate-500 mt-1">Build the dashboard Home tab payload (run state, drift, incidents, cost, health DNA)</p></div>
+          <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-slate-200 text-xs">forge_timeline</code><p class="text-xs text-slate-500 mt-1">Unified cursor-paged timeline across runs, incidents, deploys, bugs, Crucible, Tempering</p></div>
+          <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-slate-200 text-xs">forge_search</code><p class="text-xs text-slate-500 mt-1">Cross-surface search over plans, events, bugs, incidents, memory (filters by type/date/severity)</p></div>
+          <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-slate-200 text-xs">forge_memory_report</code><p class="text-xs text-slate-500 mt-1">OpenBrain memory usage — captures per day, hit rate on searches, top-recalled thoughts</p></div>
+          <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-slate-200 text-xs">forge_org_rules</code><p class="text-xs text-slate-500 mt-1">Export aggregated <code>.github/instructions/*.md</code> as a single org-rules document</p></div>
+          <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-slate-200 text-xs">forge_doctor_quorum</code><p class="text-xs text-slate-500 mt-1">Health-check every quorum participant — auth, latency, rate-limit headers, availability</p></div>
+          <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-slate-200 text-xs">forge_delegate_to_agent</code><p class="text-xs text-slate-500 mt-1">Delegate a prompt/slice to a specialized reviewer agent (database, security, performance, …)</p></div>
+          <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-slate-200 text-xs">forge_self_update</code><p class="text-xs text-slate-500 mt-1">Check for the latest Plan Forge release, fetch release notes, and optionally install</p></div>
+        </div>
+        <p class="text-xs text-slate-500 mt-3">Total: 65 MCP tools across all subsystems. Call <code class="text-forge-400">forge_capabilities</code> or open <code class="text-forge-400">pforge-mcp/tools.json</code> for the machine-readable surface.</p>
       </div>
     </section>
 

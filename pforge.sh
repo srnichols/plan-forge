@@ -72,6 +72,8 @@ COMMANDS:
   quorum-analyze    Assemble a quorum analysis prompt from LiveGuard data for multi-model dispatch
   testbed-happypath Run all happy-path testbed scenarios sequentially with aggregated pass/fail summary
   smith             Inspect your forge — environment, VS Code config, setup health, and common problems
+  version-bump <v>  Update VERSION, package.json, docs/README/ROADMAP version badges to v<version>
+  migrate-memory    Merge legacy *-history.json ledgers into canonical .jsonl siblings (idempotent)
   tour              Guided walkthrough of your installed Plan Forge files
   help              Show this help message
 
@@ -3847,6 +3849,110 @@ cmd_tour() {
     echo ""
 }
 
+# ─── Command: version-bump ─────────────────────────────────────────────
+# Port of Invoke-VersionBump from pforge.ps1. Updates VERSION file,
+# pforge-mcp/package.json, and version badges/strings in README/ROADMAP/docs.
+cmd_version_bump() {
+    if [ $# -lt 1 ]; then
+        printf "\033[31mERROR: Version required.\033[0m\n" >&2
+        printf "\033[33m  Usage: pforge version-bump <version>\033[0m\n" >&2
+        printf "\033[33m  Example: pforge version-bump 2.14.0\033[0m\n" >&2
+        exit 1
+    fi
+    local new_version="$1"
+    local short_version
+    short_version="$(echo "$new_version" | sed -E 's/\.[0-9]+$//')"
+    local today
+    today="$(date +%Y-%m-%d)"
+
+    echo ""
+    printf "\033[36mVersion Bump: → v%s\033[0m\n" "$new_version"
+    printf "\033[90m─────────────────────────────────────\033[0m\n"
+
+    NEW_VERSION="$new_version" SHORT_VERSION="$short_version" TODAY="$today" REPO_ROOT="$REPO_ROOT" node -e '
+const fs=require("fs"),path=require("path");
+const root=process.env.REPO_ROOT||process.cwd();
+const v=process.env.NEW_VERSION,short=process.env.SHORT_VERSION,today=process.env.TODAY;
+const targets=[
+  {file:"VERSION",pattern:/.*/s,replace:v,desc:"VERSION file"},
+  {file:"pforge-mcp/package.json",pattern:/"version":\s*"[^"]+"/,replace:`"version": "${v}"`,desc:"MCP package.json"},
+  {file:"docs/index.html",pattern:/Dogfooded · v[\d.]+/,replace:`Dogfooded · v${v}`,desc:"index.html hero badge"},
+  {file:"docs/index.html",pattern:/>v[\d.]+<\/div>/,replace:`>v${short}</div>`,desc:"index.html stats card"},
+  {file:"README.md",pattern:/v1\.0 → v[\d.]+/,replace:`v1.0 → v${short}`,desc:"README track record"},
+  {file:"ROADMAP.md",pattern:/\*\*v[\d.]+\*\* \(\d{4}-\d{2}-\d{2}\)/,replace:`**v${v}** (${today})`,desc:"ROADMAP current release"},
+];
+let updated=0;
+for(const t of targets){
+  const p=path.join(root,t.file);
+  if(!fs.existsSync(p)){console.log(`  \x1b[33m⚠  ${t.file} not found\x1b[0m`);continue;}
+  let c=fs.readFileSync(p,"utf8");
+  if(t.pattern.test(c)){c=c.replace(t.pattern,t.replace);fs.writeFileSync(p,c);console.log(`  \x1b[32m✅ ${t.desc}\x1b[0m`);updated++;}
+  else{console.log(`  \x1b[33m⚠  ${t.desc} — pattern not found\x1b[0m`);}
+}
+console.log("");
+console.log(`\x1b[32mUpdated ${updated} files to v${v}\x1b[0m`);
+console.log("\x1b[90mDon'\''t forget: Update CHANGELOG.md manually with release notes.\x1b[0m");
+'
+}
+
+# ─── Command: migrate-memory (GX.5 v2.36) ──────────────────────────────
+# Port of Invoke-MigrateMemory from pforge.ps1. Merges legacy `*-history.json`
+# ledgers into their canonical `.jsonl` siblings. Idempotent; safe to re-run.
+# Backs up the legacy file as `<name>.json.bak-<date>` before removing it.
+# Pass `--dry-run` to preview without touching files.
+cmd_migrate_memory() {
+    echo ""
+    printf "\033[36m─── pforge migrate-memory (GX.5 v2.36) ───\033[0m\n"
+    echo ""
+
+    local forge_dir="$REPO_ROOT/.forge"
+    if [ ! -d "$forge_dir" ]; then
+        printf "\033[33m  ℹ  No .forge/ directory found at %s — nothing to migrate.\033[0m\n" "$REPO_ROOT"
+        return 0
+    fi
+
+    local dry_run="false"
+    for a in "$@"; do
+        case "$a" in
+            --dry-run|-DryRun) dry_run="true" ;;
+        esac
+    done
+
+    FORGE_DIR="$forge_dir" DRY_RUN="$dry_run" node -e '
+const fs=require("fs"),path=require("path");
+const forgeDir=process.env.FORGE_DIR,dryRun=process.env.DRY_RUN==="true";
+const pairs=[
+  {legacy:"drift-history.json",canonical:"drift-history.jsonl"},
+  {legacy:"regression-history.json",canonical:"regression-history.jsonl"},
+  {legacy:"fix-proposals.json",canonical:"fix-proposals.jsonl"},
+];
+const stamp=new Date().toISOString().slice(0,10);
+let migrated=0,skipped=0,merged=0;
+for(const p of pairs){
+  const lp=path.join(forgeDir,p.legacy),cp=path.join(forgeDir,p.canonical);
+  if(!fs.existsSync(lp)){console.log(`  \x1b[90m· ${p.legacy}: not present, skipping.\x1b[0m`);skipped++;continue;}
+  const legacyLines=fs.readFileSync(lp,"utf8").split(/\r?\n/).filter(l=>l&&l.trim().length>0);
+  const canonicalLines=fs.existsSync(cp)?fs.readFileSync(cp,"utf8").split(/\r?\n/).filter(l=>l&&l.trim().length>0):[];
+  const seen=new Set();const combined=[];
+  for(const l of canonicalLines){if(!seen.has(l)){seen.add(l);combined.push(l);}}
+  let newFromLegacy=0;
+  for(const l of legacyLines){if(!seen.has(l)){seen.add(l);combined.push(l);newFromLegacy++;}}
+  if(dryRun){console.log(`  \x1b[33m[dry-run] ${p.legacy} -> ${p.canonical}: would merge ${newFromLegacy} new of ${legacyLines.length} legacy line(s); total after = ${combined.length}\x1b[0m`);continue;}
+  try{
+    fs.writeFileSync(cp,combined.join("\n"));
+    let bak=`${lp}.bak-${stamp}`;
+    if(fs.existsSync(bak)){bak=`${bak}-${Math.random().toString(36).slice(2,8)}`;}
+    fs.renameSync(lp,bak);
+    console.log(`  \x1b[32m✅ ${p.legacy} -> ${p.canonical}: merged ${newFromLegacy} new line(s); legacy backed up as ${path.basename(bak)}\x1b[0m`);
+    migrated++;merged+=newFromLegacy;
+  }catch(e){console.log(`  \x1b[31m❌ Failed to migrate ${p.legacy}: ${e.message}\x1b[0m`);}
+}
+console.log("");
+if(dryRun)console.log("\x1b[33m─── dry-run complete — no files modified ───\x1b[0m");
+else console.log(`\x1b[36m─── migrate-memory complete: ${migrated} migrated, ${skipped} skipped, ${merged} new line(s) merged ───\x1b[0m`);
+'
+}
+
 # ─── Command: testbed-happypath ────────────────────────────────────────
 cmd_testbed_happypath() {
     echo ""
@@ -3908,6 +4014,8 @@ case "$COMMAND" in
     smith)        cmd_doctor "$@" ;;
     testbed-happypath) cmd_testbed_happypath "$@" ;;
     self-update)  cmd_self_update "$@" ;;
+    version-bump) cmd_version_bump "$@" ;;
+    migrate-memory) cmd_migrate_memory "$@" ;;
     tour)         cmd_tour ;;
     help|--help)  show_help ;;
     *)

@@ -52,6 +52,25 @@ const KNOWN_MCP_ONLY = new Set([
   "forge_timeline",
   "forge_search",
   "forge_self_update",
+  // Internal runtime / diagnostic tools — no user-facing CLI need:
+  "forge_abort",           // MCP-only runtime control (mid-run abort signal)
+  "forge_diagnose",        // multi-model bug investigation — MCP-native
+  "forge_memory_capture",  // internal memory ledger writer
+  "forge_memory_report",   // internal memory telemetry
+  "forge_skill_status",    // internal skill runtime introspection
+]);
+
+// ─── Alias map: MCP tools whose CLI equivalent uses a shorter/different name ───
+// These are *matched* tools (not gaps), but their CLI name doesn't derive from
+// `mcpToCli()` naming convention. Keyed by MCP tool name → actual CLI command.
+const CLI_ALIASES = new Map([
+  ["forge_validate",        "check"],        // `pforge check` validates setup
+  ["forge_drift_report",    "drift"],        // `pforge drift` reports drift
+  ["forge_incident_capture","incident"],     // `pforge incident` captures
+  ["forge_deploy_journal",  "deploy-log"],   // `pforge deploy-log` journals
+  ["forge_alert_triage",    "triage"],       // `pforge triage` triages alerts
+  ["forge_ext_search",      "ext search"],   // `pforge ext search` subcommand
+  ["forge_ext_info",        "ext info"],     // `pforge ext info` subcommand
 ]);
 
 /**
@@ -123,6 +142,19 @@ export async function audit({ projectRoot } = {}) {
 
   for (const tool of mcpTools) {
     const expected = mcpToCli(tool);
+
+    // Check alias map first (e.g. forge_validate → check, forge_ext_search → "ext search")
+    if (CLI_ALIASES.has(tool)) {
+      const alias = CLI_ALIASES.get(tool);
+      // For subcommand aliases like "ext search", just check the parent command presence.
+      const parent = alias.split(" ")[0];
+      if (cliCommands.has(parent)) {
+        matched.push({ tool, cliCommand: alias, aliased: true });
+        // Don't delete parent — other subcommands may also alias into it.
+        continue;
+      }
+    }
+
     if (cliCommands.has(expected)) {
       matched.push({ tool, cliCommand: expected });
       cliCommands.delete(expected);

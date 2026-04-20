@@ -5,7 +5,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [2.57.0] — Unreleased — Phase-25 Inner-Loop Enhancements
+## [2.57.0] — 2026-04-27 — Phase-25 Inner-Loop Enhancements
 
 > **The Forge gains a reflective layer.** Seven opt-in subsystems turn deterministic slice execution into a closed research loop: every slice can teach the next one, every run can teach the next plan, every project can teach the next project. Nothing in existing workflows breaks — all new behavior defaults to *off*, *suggest*, or *advisory*.
 

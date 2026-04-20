@@ -5,6 +5,38 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.53.3] — 2026-04-20 — `self-update --force` heals dev-stuck installs
+
+### Fixed
+
+- **`pforge self-update --force` now installs the latest tagged release
+  even when the local install reports "newer".** Previously, clients
+  stuck on e.g. `2.54.0-dev` (installed from a master sibling-clone)
+  could never heal because `compareVersions` ranked their local `-dev`
+  above the latest release (`2.53.2`), so `self-update` exited with
+  "Already current". With `--force`, the check is bypassed and the
+  latest tagged release is installed unconditionally. Mirrors the
+  `pforge.sh` implementation. Without `--force`, prior behaviour is
+  preserved: if the local install reports "already current" but ends in
+  `-dev`, a targeted hint suggests the heal command.
+
+### Dashboard symptoms this unblocks
+
+Clients observed showing:
+- Footer: `Plan Forge v2.54.0-dev`
+- Missing SVG icons on most tab buttons
+- Horizontal scrollbar where sub-tabs should wrap
+
+These were all present in master-clone installs that predate v2.53.0's
+dashboard overhaul (`a26a7cb`, `a7419c1`). `pforge self-update --force`
+now cleanly installs v2.53.3 and restores the current UI.
+
+### Tests
+
+- 2478/2478 vitest passing.
+
+---
+
 ## [2.53.2] — 2026-04-20 — Refuse '-dev' source over clean install
 
 ### Fixed

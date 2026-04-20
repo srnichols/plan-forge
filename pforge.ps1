@@ -4919,6 +4919,7 @@ function Invoke-SelfUpdate {
 
     $autoYes = $Arguments -contains '--yes' -or $Arguments -contains '-y'
     $dryRun = $Arguments -contains '--dry-run'
+    $forceUpdate = $Arguments -contains '--force'
 
     # Read autoUpdate.enabled from .forge.json (default false)
     $autoUpdateEnabled = $false
@@ -4958,13 +4959,27 @@ console.log(JSON.stringify(r || { isNewer: false }));
         exit 1
     }
 
-    if (-not $checkJson.isNewer) {
+    # v2.53.3 — with --force, install the latest tagged release even when the
+    # local install reports 'newer' (the classic "stuck on a 2.54.0-dev build
+    # copied from a master sibling-clone" case). Without --force, preserve the
+    # original behaviour: stop when already current.
+    if (-not $checkJson.isNewer -and -not $forceUpdate) {
         Write-Host "  ✅ Already current (v$currentVersion)" -ForegroundColor Green
+        if ($currentVersion -match '-dev\b' -and $checkJson.latest) {
+            Write-Host ""
+            Write-Host "  ℹ Your local VERSION ends in '-dev' but the latest tagged release is v$($checkJson.latest)." -ForegroundColor Yellow
+            Write-Host "    If this is an accidental install from a master clone, heal with:" -ForegroundColor Yellow
+            Write-Host "      pforge self-update --force" -ForegroundColor Yellow
+        }
         exit 0
     }
 
     $latestTag = "v$($checkJson.latest)"
-    Write-Host "  ⬆ New release available: $latestTag (you have v$currentVersion)" -ForegroundColor Yellow
+    if ($checkJson.isNewer) {
+        Write-Host "  ⬆ New release available: $latestTag (you have v$currentVersion)" -ForegroundColor Yellow
+    } else {
+        Write-Host "  ↻ Forcing heal to latest tagged release: $latestTag (you have v$currentVersion)" -ForegroundColor Yellow
+    }
 
     if ($dryRun) {
         Write-Host "  [dry-run] Would run: pforge update --from-github --tag $latestTag" -ForegroundColor DarkGray
@@ -4982,7 +4997,9 @@ console.log(JSON.stringify(r || { isNewer: false }));
 
     # Delegate to existing update --from-github
     Write-Host "" -ForegroundColor White
-    $script:Arguments = @('--from-github', '--tag', $latestTag)
+    $updateArgs = @('--from-github', '--tag', $latestTag)
+    if ($forceUpdate) { $updateArgs += '--force' }
+    $script:Arguments = $updateArgs
     Invoke-Update
 }
 

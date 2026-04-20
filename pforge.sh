@@ -1959,11 +1959,12 @@ cmd_self_update() {
         "If a newer version exists, prompt for confirmation" \
         "Delegate to 'pforge update --from-github --tag <latest>'"
 
-    local auto_yes=false dry_run=false
+    local auto_yes=false dry_run=false force_heal=false
     for arg in "$@"; do
         case "$arg" in
             --yes|-y) auto_yes=true ;;
             --dry-run) dry_run=true ;;
+            --force) force_heal=true ;;
         esac
     done
 
@@ -1998,15 +1999,30 @@ cmd_self_update() {
     local is_newer
     is_newer="$(echo "$check_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('isNewer',False))" 2>/dev/null || echo "false")"
 
-    if [ "$is_newer" != "True" ] && [ "$is_newer" != "true" ]; then
+    local latest_ver
+    latest_ver="$(echo "$check_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('latest',''))" 2>/dev/null || echo "")"
+
+    # v2.53.3 — with --force, install the latest tagged release even when the
+    # local install reports 'newer' (the classic "stuck on 2.54.0-dev copied
+    # from a master sibling-clone" case). Without --force, preserve prior
+    # behaviour: stop when already current.
+    if [ "$is_newer" != "True" ] && [ "$is_newer" != "true" ] && ! $force_heal; then
         echo "  ✅ Already current (v$current_version)"
+        if echo "$current_version" | grep -qE -- '-dev\b' && [ -n "$latest_ver" ]; then
+            echo ""
+            echo "  ℹ Your local VERSION ends in '-dev' but the latest tagged release is v$latest_ver."
+            echo "    If this is an accidental install from a master clone, heal with:"
+            echo "      pforge self-update --force"
+        fi
         exit 0
     fi
 
-    local latest_ver
-    latest_ver="$(echo "$check_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('latest',''))" 2>/dev/null || echo "")"
     local latest_tag="v$latest_ver"
-    echo "  ⬆ New release available: $latest_tag (you have v$current_version)"
+    if [ "$is_newer" = "True" ] || [ "$is_newer" = "true" ]; then
+        echo "  ⬆ New release available: $latest_tag (you have v$current_version)"
+    else
+        echo "  ↻ Forcing heal to latest tagged release: $latest_tag (you have v$current_version)"
+    fi
 
     if $dry_run; then
         echo "  [dry-run] Would run: pforge update --from-github --tag $latest_tag"
@@ -2024,7 +2040,11 @@ cmd_self_update() {
     fi
 
     echo ""
-    cmd_update --from-github --tag "$latest_tag"
+    if $force_heal; then
+        cmd_update --from-github --tag "$latest_tag" --force
+    else
+        cmd_update --from-github --tag "$latest_tag"
+    fi
 }
 
 # ─── Command: doctor ───────────────────────────────────────────────────

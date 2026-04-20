@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<!-- verified: v2.54.0-dev -->
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chapter 22: The Testbed — Plan Forge Manual</title>
+  <meta name="description" content="Run scenario fixtures against a dedicated testbed repo. Defect logs, hub events, scenario locks. The shop's quality lab." />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+
+    <main>
+      <img src="../assets/brand/station-learn.webp" alt="The Learn station — scenarios replayed against a test fixture, findings feeding the golden brain" class="chapter-hero" />
+
+      <div class="chapter-content">
+
+        <div class="text-xs font-semibold text-amber-500 uppercase tracking-wider mb-2">Act IV — Learn · Chapter 22</div>
+        <h1>The Testbed</h1>
+        <p class="text-lg text-slate-400 mb-8">A separate repo. A library of scenarios. End-to-end proof that the shop still works.</p>
+
+        <div class="callout callout-tip">
+          <strong>Tool:</strong> <code>forge_testbed_run</code>. <strong>Scenarios:</strong> <code>docs/plans/testbed-scenarios/*.json</code>. <strong>Findings:</strong> <code>docs/plans/testbed-findings/*.json</code>. Requires <code>testbed.path</code> in <code>.forge.json</code>.
+        </div>
+
+        <h2 id="why">Why a Separate Testbed?</h2>
+        <p>Unit tests cover one module; integration tests cover one service. Neither tells you whether the full Plan-Forge pipeline still produces a clean, shippable outcome on a real repo under a real scenario. The Testbed does — it's a second, dedicated repository that Plan Forge treats as a read-write fixture, replays a scenario against, and records the defect log.</p>
+
+        <h2 id="scenarios">Scenario Fixtures</h2>
+        <p>Scenarios are JSON files under <code>docs/plans/testbed-scenarios/</code>. Each one describes:</p>
+        <ul>
+          <li>Initial state — branch, commit, known-good baseline.</li>
+          <li>Instructions — the prompt / plan the agent will execute.</li>
+          <li>Expected artifacts — which files must change, which must not.</li>
+          <li>Gates — build, test, lint, drift thresholds.</li>
+        </ul>
+        <p>A scenario is idempotent: the Testbed resets the fixture repo to the pinned commit before every run.</p>
+
+        <h2 id="run">Anatomy of a Run</h2>
+        <p><code>forge_testbed_run</code>:</p>
+        <ol>
+          <li>Acquires <code>.forge/testbed.lock</code> (one scenario at a time per testbed).</li>
+          <li>Verifies the testbed is clean (<code>ERR_TESTBED_DIRTY</code> if not).</li>
+          <li>Replays the scenario end-to-end in the testbed directory.</li>
+          <li>Captures artifacts, run metrics, and any defects.</li>
+          <li>Writes a finding JSON under <code>docs/plans/testbed-findings/</code> and emits <code>testbed-scenario-completed</code>.</li>
+          <li>Releases the lock.</li>
+        </ol>
+
+        <h2 id="errors">Common Errors</h2>
+        <table>
+          <thead><tr><th>Code</th><th>Meaning</th><th>Recovery</th></tr></thead>
+          <tbody>
+            <tr><td><code>ERR_TESTBED_NOT_FOUND</code></td><td><code>testbed.path</code> missing or invalid</td><td>Set it in <code>.forge.json</code></td></tr>
+            <tr><td><code>ERR_TESTBED_DIRTY</code></td><td>Uncommitted changes in the testbed</td><td>Commit or stash inside the testbed repo</td></tr>
+            <tr><td><code>ERR_TESTBED_LOCKED</code></td><td>Another scenario is running</td><td>Wait, or remove a stale <code>.forge/testbed.lock</code></td></tr>
+          </tbody>
+        </table>
+
+        <h2 id="feedback">Feedback Into the Loop</h2>
+        <p>Findings with defects feed two consumers:</p>
+        <ul>
+          <li><strong>Bug Registry</strong> — scanner-eligible defects auto-register via <code>forge_bug_register</code>.</li>
+          <li><strong>Health DNA</strong> — run metrics (duration, gate failures, drift score) feed the daily <a href="health-dna.html">Health DNA</a> fingerprint.</li>
+        </ul>
+
+        <div class="callout callout-info">
+          <strong>Testbed ≠ CI.</strong> Your CI system runs against pull requests and masters the green/red light for merge. The Testbed runs against Plan Forge <em>itself</em>, under a library of synthetic scenarios, to ensure the pipeline still produces shippable code across upgrades.
+        </div>
+
+        <div class="chapter-nav mt-12">
+          <a class="chapter-nav-prev" href="bug-registry.html">← Chapter 21: Bug Registry</a>
+          <a class="chapter-nav-next" href="health-dna.html">Chapter 23: Health DNA →</a>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="assets/manual.js"></script>
+</body>
+</html>

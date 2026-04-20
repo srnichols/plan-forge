@@ -31,7 +31,10 @@
     { id: "watcher",             file: "watcher.html",             num: "19", title: "The Watcher",               act: "III" },
     { id: "remote-bridge",       file: "remote-bridge.html",       num: "20", title: "The Remote Bridge",         act: "III" },
     // ─── Act IV — Learn (memory & retrospectives) ───
-    { id: "memory-architecture", file: "memory-architecture.html", num: "21", title: "Memory Architecture",       act: "IV" },
+    { id: "bug-registry",        file: "bug-registry.html",        num: "21", title: "The Bug Registry",           act: "IV" },
+    { id: "testbed",             file: "testbed.html",             num: "22", title: "The Testbed",                act: "IV" },
+    { id: "health-dna",          file: "health-dna.html",          num: "23", title: "Health DNA",                 act: "IV" },
+    { id: "memory-architecture", file: "memory-architecture.html", num: "24", title: "Memory Architecture",       act: "IV" },
     // ─── Appendices ───
     { id: "glossary",            file: "glossary.html",            num: "A",  title: "Glossary",                 act: "Appendix" },
     { id: "quick-reference",     file: "quick-reference.html",     num: "B",  title: "Quick Reference Card",     act: "Appendix" },

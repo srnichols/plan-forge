@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<!-- verified: v2.54.0-dev -->
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chapter 23: Health DNA — Plan Forge Manual</title>
+  <meta name="description" content="A composite fingerprint of project health — drift, incidents, tests, model success, cost-per-slice. Persisted across sessions. Detects slow decay." />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+
+    <main>
+      <img src="../assets/brand/station-learn.webp" alt="The Learn station — a golden helix glowing inside the brain, encoding project health across sessions" class="chapter-hero" />
+
+      <div class="chapter-content">
+
+        <div class="text-xs font-semibold text-amber-500 uppercase tracking-wider mb-2">Act IV — Learn · Chapter 23</div>
+        <h1>Health DNA</h1>
+        <p class="text-lg text-slate-400 mb-8">A single fingerprint for "how healthy is this project today?" — persisted, trended, compared.</p>
+
+        <div class="callout callout-tip">
+          <strong>Tool:</strong> <code>forge_health_trend</code> (LiveGuard) — writes <code>.forge/health-dna.jsonl</code>. Intent: <code>health-dna</code>. Aliases: <code>health-analysis</code>, <code>system-health</code>, <code>health-report</code>.
+        </div>
+
+        <h2 id="why">Why a Fingerprint?</h2>
+        <p>Any single metric can lie. A project with 100% green tests can still be drowning in drift. A low drift score can mask a CVE backlog. The Health DNA combines five independent signals into one daily fingerprint so slow decay — the kind where everything looks fine but tomorrow's plan costs 2× yesterday's — becomes visible.</p>
+
+        <h2 id="signals">The Five Signals</h2>
+        <table>
+          <thead><tr><th>Signal</th><th>Source</th><th>What it catches</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Drift score</strong></td><td><code>forge_drift_report</code></td><td>Architecture diverging from plan baseline</td></tr>
+            <tr><td><strong>Incident rate</strong></td><td><code>forge_incident_capture</code></td><td>Production failures over trailing window</td></tr>
+            <tr><td><strong>Test pass rate</strong></td><td>CI + testbed findings</td><td>Regression risk</td></tr>
+            <tr><td><strong>Model success rate</strong></td><td>Orchestrator telemetry</td><td>Agent failures + escalation frequency</td></tr>
+            <tr><td><strong>Cost per slice</strong></td><td>Cost ledger</td><td>Token-burn creep — the project getting harder to reason about</td></tr>
+          </tbody>
+        </table>
+
+        <h2 id="format">Record Shape</h2>
+
+        <div class="cmd-block mb-4">
+          <div class="cmd-block-header"><span>.forge/health-dna.jsonl — one record</span></div>
+          <pre><code>{
+  "timestamp": "2026-04-20T00:00:00Z",
+  "driftScore":       0.91,
+  "incidentRate7d":   0,
+  "testPassRate":     0.998,
+  "modelSuccessRate": 0.96,
+  "costPerSlice":     0.34,
+  "composite":        0.93,
+  "delta7d":          -0.02,
+  "delta30d":         -0.08
+}</code></pre>
+        </div>
+
+        <p><code>composite</code> is a weighted blend (weights configurable via <code>.forge.json → health.weights</code>). <code>delta7d</code> and <code>delta30d</code> compare against historical records — a small negative delta is noise, a sustained negative delta is decay.</p>
+
+        <h2 id="decay">Decay Detection</h2>
+        <p>The watcher can alert on Health DNA thresholds:</p>
+        <ul>
+          <li><code>delta7d &lt; -0.10</code> — short-term regression, usually tied to a specific slice.</li>
+          <li><code>delta30d &lt; -0.15</code> — long-term decay, usually architectural.</li>
+          <li><code>composite &lt; 0.60</code> — absolute floor; blocks new executions until addressed.</li>
+        </ul>
+
+        <h2 id="ui">Dashboard</h2>
+        <p>The LiveGuard dashboard's Health tab renders the composite score as a sparkline, with per-signal sub-lines toggleable. The Forge Intelligence page cross-references Health DNA with the OpenBrain memory corpus — "your drift score dropped the day you added the new caching layer" is exactly the kind of conclusion the Learn station exists to surface.</p>
+
+        <div class="callout callout-info">
+          <strong>Why JSONL, not JSON?</strong> Health DNA is append-only by design — every run writes one line. Trimming happens on explicit request (<code>forge_health_trim</code>), not automatically. That way a rolled-back slice doesn't also roll back the memory of how sick the project was before the rollback.
+        </div>
+
+        <div class="chapter-nav mt-12">
+          <a class="chapter-nav-prev" href="testbed.html">← Chapter 22: The Testbed</a>
+          <a class="chapter-nav-next" href="memory-architecture.html">Chapter 24: Memory Architecture →</a>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="assets/manual.js"></script>
+</body>
+</html>

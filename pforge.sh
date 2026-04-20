@@ -70,6 +70,7 @@ COMMANDS:
   env-diff          Compare environment variable keys across .env files — detect missing keys
   health-trend      Health trend analysis — drift, cost, incidents, model performance over time
   quorum-analyze    Assemble a quorum analysis prompt from LiveGuard data for multi-model dispatch
+  testbed-happypath Run all happy-path testbed scenarios sequentially with aggregated pass/fail summary
   smith             Inspect your forge — environment, VS Code config, setup health, and common problems
   tour              Guided walkthrough of your installed Plan Forge files
   help              Show this help message

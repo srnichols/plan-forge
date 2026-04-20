@@ -87,6 +87,8 @@ function Show-Help {
     Write-Host "  env-diff          Compare environment variable keys across .env files — detect missing keys"
     Write-Host "  health-trend      Health trend analysis — drift, cost, incidents, model performance over time"
     Write-Host "  quorum-analyze    Assemble a quorum analysis prompt from LiveGuard data for multi-model dispatch"
+    Write-Host "  testbed-happypath Run all happy-path testbed scenarios sequentially with aggregated pass/fail summary"
+    Write-Host "  migrate-memory    Migrate legacy .forge/memory/ entries into the L2 brain store"
     Write-Host "  tour              Guided walkthrough of your installed Plan Forge files"
     Write-Host "  help              Show this help message"
     Write-Host ""

@@ -4,8 +4,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Chapter 1: What Is Plan Forge? — Plan Forge Manual</title>
-  <meta name="description" content="AI coding agents are powerful but directionless. Plan Forge hardens your development plans into drift-proof execution contracts. Here's what it does and who it's for." />
+  <title>Chapter 1: What Is Plan Forge? — The AI-Native SDLC Forge Shop</title>
+  <meta name="description" content="Plan Forge is the AI-Native SDLC Forge Shop — one workshop, four stations (Smelt, Forge, Guard, Learn) covering every phase of the software lifecycle. Here's what it does, why the four stations matter, and who it's for." />
   <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
@@ -27,18 +27,63 @@
 
     <main>
       <!-- Hero -->
-      <img src="assets/chapter-heroes/ch1-hero.jpg" alt="A forge workshop — anvil, glowing metal, sparks, tools on wall" class="chapter-hero" />
+      <img src="../assets/brand/forge-shop-panorama.webp" alt="Panorama of the Plan Forge Forge Shop — crucible smelting molten iron on the left, anvil with hammer mid-strike center, rune-inscribed watchtower right-of-center, golden brain absorbing event streams on the far right." class="chapter-hero" />
 
       <div class="chapter-content">
 
-        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 1</div>
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 1 · Act I — Smelt</div>
         <h1>What Is Plan Forge?</h1>
-        <p class="text-lg text-slate-400 mb-8">Answer "should I keep reading?" in five minutes.</p>
+        <p class="text-lg text-slate-400 mb-8">The AI-Native SDLC Forge Shop. One workshop, four stations, every phase of the lifecycle.</p>
+
+        <!-- ─── One-line answer ─── -->
+        <h2 id="one-line">The One-Line Answer</h2>
+        <p><strong>Plan Forge is a complete AI-native SDLC workshop.</strong> Instead of giving your AI agent a single code-generation step, it gives the agent <em>a whole shop</em> — four specialized stations (Smelt, Forge, Guard, Learn) connected by gates, telemetry, and persistent memory.</p>
+        <p class="text-sm text-slate-500 italic">"A blacksmith without a shop is just a man with a hammer."</p>
+
+        <!-- ─── The Four Stations ─── -->
+        <h2 id="four-stations">The Four Stations</h2>
+        <p>Every station handles one phase of the software lifecycle. Every station is AI-run and human-supervised.</p>
+
+        <div class="overflow-x-auto mb-6">
+          <table>
+            <thead><tr><th>Station</th><th>Phase</th><th>What runs here</th><th>What comes out</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>🪨 <strong>Smelt</strong></td>
+                <td>Intake → scope contract</td>
+                <td>Specifier agent, hardening runbook, <code>/specify</code>, <code>/harden-plan</code>, Project Principles</td>
+                <td>A Scope Contract the Forge can execute without follow-up questions</td>
+              </tr>
+              <tr>
+                <td>🔨 <strong>Forge</strong></td>
+                <td>Scope contract → shipped code</td>
+                <td><code>pforge run-plan</code>, slice gates, quorum mode, auto-escalation, cost ledger</td>
+                <td>Green tests, green CI, green cost ledger — or an honest stop with a fix proposal</td>
+              </tr>
+              <tr>
+                <td>🛡️ <strong>Guard</strong></td>
+                <td>Post-deploy defense (LiveGuard)</td>
+                <td>Secret scan, env drift, regression guard, incident triage, fix proposals</td>
+                <td>Pre-deploy block on severity ≥ high, post-slice drift advisory, triaged incidents</td>
+              </tr>
+              <tr>
+                <td>🧠 <strong>Learn</strong></td>
+                <td>Memory &amp; retrospectives</td>
+                <td>OpenBrain, bug registry, testbed findings, Health DNA, Forge Intelligence</td>
+                <td>Tomorrow's plan is colder, faster, and less wrong</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-info">
+          <strong>🔗 Want the deep-dive tour?</strong> Each station has its own full walkthrough on the <a href="../shop-tour.html">Shop Tour page</a>. This chapter gives you the overview; Chapter 2 covers how the stations connect.
+        </div>
 
         <!-- ─── The Problem ─── -->
-        <h2 id="the-problem">The Problem in One Sentence</h2>
+        <h2 id="the-problem">The Problem This Solves</h2>
         <p>AI coding agents are powerful but directionless.</p>
-        <p>They generate code fast. But <em>fast</em> isn't the same as <em>good</em>. Without structure, AI-generated code tends to be untestable, insecure, architecturally inconsistent, and impossible to maintain at scale. That's fine for prototypes — it's not fine for production systems.</p>
+        <p>They generate code fast. But <em>fast</em> isn't the same as <em>good</em>. Without a full shop around them — without scope contracts, slice gates, post-deploy guards, and institutional memory — AI-generated code tends to be untestable, insecure, architecturally inconsistent, and impossible to maintain at scale. That's fine for prototypes; it's not fine for production systems.</p>
 
         <!-- ─── The 80/20 Wall ─── -->
         <h2 id="the-wall">The 80/20 Wall</h2>
@@ -49,10 +94,10 @@
         <p><strong>The pattern everyone hits:</strong> <em>prompt → hope → fix → re-prompt → hope harder.</em></p>
 
         <div class="callout callout-warning">
-          <strong>This isn't a model problem. It's a planning problem.</strong> When agents work from loose intent rather than hardened specs, they do fine on greenfield builds but start thrashing once the codebase gets complex enough that every change has downstream consequences.
+          <strong>This isn't a model problem. It's a shop problem.</strong> One hammer is not a workshop. When agents work from loose intent rather than a hardened Scope Contract — and when nothing watches what ships or remembers what failed — they do fine on greenfield builds but start thrashing once the codebase gets complex enough that every change has downstream consequences.
         </div>
 
-        <p>The fix is spec-driven development: specify what you want <em>before</em> the agent writes a line of code, lock the scope so it can't drift, checkpoint at every boundary, and audit with a fresh session that never saw the original work.</p>
+        <p>The fix is the full shop: <strong>Smelt</strong> before the agent writes a line of code, <strong>Forge</strong> the scope so it can't drift, <strong>Guard</strong> what ships, and <strong>Learn</strong> with a memory that carries decisions forward.</p>
         <p><em>Vibe coding gets you a prototype. Plan Forge gets you a product.</em></p>
 
         <div class="callout callout-info">
@@ -63,36 +108,38 @@
           The Dashboard's Cost tab tracks every dollar.
         </div>
 
-        <!-- ─── What Happens Without Guardrails ─── -->
-        <h2 id="without-guardrails">What Happens Without Guardrails</h2>
+        <!-- ─── What Happens Without the Shop ─── -->
+        <h2 id="without-guardrails">What Happens Without the Shop</h2>
 
         <!-- Vibe Coding vs Spec-Driven -->
         <div class="overflow-x-auto mb-6">
           <div class="flex gap-4 min-w-[500px] py-2">
             <div class="flex-1 rounded-xl border border-red-800/30 bg-red-950/15 p-4">
-              <div class="text-xs font-bold text-red-400 mb-2 uppercase tracking-wider">Vibe Coding</div>
+              <div class="text-xs font-bold text-red-400 mb-2 uppercase tracking-wider">Vibe Coding (no shop)</div>
               <ul class="text-xs text-slate-400 space-y-1.5">
                 <li>✗ Prompt → hope → fix → re-prompt</li>
                 <li>✗ Agent picks architecture mid-stream</li>
                 <li>✗ Every session starts from zero</li>
                 <li>✗ Agent reviews its own work</li>
                 <li>✗ "It compiles" = "it's done"</li>
+                <li>✗ Secrets + CVEs ship to prod unnoticed</li>
               </ul>
             </div>
             <div class="flex-1 rounded-xl border border-emerald-800/30 bg-emerald-950/15 p-4">
-              <div class="text-xs font-bold text-emerald-400 mb-2 uppercase tracking-wider">Spec-Driven (Plan Forge)</div>
+              <div class="text-xs font-bold text-emerald-400 mb-2 uppercase tracking-wider">The Forge Shop (Plan Forge)</div>
               <ul class="text-xs text-slate-400 space-y-1.5">
-                <li>✓ Specify → harden → execute → verify</li>
-                <li>✓ Architecture locked before coding starts</li>
-                <li>✓ Memory carries decisions across sessions</li>
-                <li>✓ Fresh session audits independently</li>
-                <li>✓ Build + test pass at every boundary</li>
+                <li>✓ <strong>Smelt</strong>: Scope contract locked before coding</li>
+                <li>✓ <strong>Forge</strong>: Slice gates, build + test at every boundary</li>
+                <li>✓ <strong>Forge</strong>: Fresh session audits independently</li>
+                <li>✓ <strong>Guard</strong>: Secrets + drift + regressions caught pre-deploy</li>
+                <li>✓ <strong>Learn</strong>: Memory carries decisions across sessions</li>
+                <li>✓ <strong>Learn</strong>: Bug registry + testbed + health DNA feed the next plan</li>
               </ul>
             </div>
           </div>
         </div>
 
-        <p>Without guardrails, AI coding agents:</p>
+        <p>Without the shop, AI coding agents:</p>
         <p class="text-sm text-slate-500 italic mb-3">If you've managed human dev teams, you know guardrails aren't about distrust — they're about consistency. The same principle applies when your team members are AI models.</p>
         <ul>
           <li><strong>Silently expand scope</strong> — "I'll also add..." (you didn't ask for that)</li>
@@ -100,15 +147,17 @@
           <li><strong>Skip validation</strong> — ships code that doesn't build or pass tests</li>
           <li><strong>Lose context</strong> — forgets requirements halfway through long sessions</li>
           <li><strong>Never self-audit</strong> — the executor grades its own exam</li>
+          <li><strong>Have no post-deploy defense</strong> — secrets, drift, and regressions land in prod unseen</li>
         </ul>
         <p>These problems get worse the less technical your team is — you may not even notice the drift until it's too late.</p>
 
         <table>
-          <thead><tr><th>Without guardrails</th><th>With Plan Forge</th></tr></thead>
+          <thead><tr><th>Without the shop</th><th>With Plan Forge</th></tr></thead>
           <tbody>
-            <tr><td>Agent writes code that passes once, breaks in production</td><td>Code follows your architecture from the first line</td></tr>
-            <tr><td>30–50% of AI-generated code needs rework after review</td><td>Independent review catches drift <em>before</em> merge</td></tr>
-            <tr><td>Agent re-discovers solved problems every session</td><td>Persistent memory loads prior decisions in seconds</td></tr>
+            <tr><td>Agent writes code that passes once, breaks in production</td><td>Code follows your architecture from the first line (Smelt)</td></tr>
+            <tr><td>30–50% of AI-generated code needs rework after review</td><td>Independent review catches drift <em>before</em> merge (Forge)</td></tr>
+            <tr><td>Agent re-discovers solved problems every session</td><td>Persistent memory loads prior decisions in seconds (Learn)</td></tr>
+            <tr><td>Secrets and CVEs slip into deploys</td><td>LiveGuard blocks pre-deploy on severity ≥ high (Guard)</td></tr>
             <tr><td>Context window wasted on exploration and backtracking</td><td>Hardened plan tells the agent exactly what to build</td></tr>
             <tr><td>"It works on my machine" shipped to staging</td><td>Validation gates pass at every slice boundary</td></tr>
           </tbody>
@@ -116,20 +165,21 @@
 
         <!-- ─── What Plan Forge Does ─── -->
         <h2 id="what-it-does">What Plan Forge Does</h2>
-        <p>Plan Forge is a specification-driven framework that converts your rough ideas into <strong>hardened execution contracts</strong> — structured plans that AI coding agents follow without scope creep, skipped tests, or silent rewrites. It installs guardrail files into your project that automatically load when AI agents edit code, enforcing your architecture, security, testing, and coding standards at every step.</p>
+        <p>Plan Forge is an <strong>AI-native SDLC workshop</strong> — four stations connected by gates, telemetry, and memory — that converts your rough ideas into shipped, defended, remembered software. It installs guardrail files, MCP tools, reviewer agents, and a live dashboard into your project so every AI edit happens inside the shop, not next to it.</p>
 
         <!-- ─── The Blacksmith Analogy ─── -->
-        <h2 id="the-analogy">The Blacksmith Analogy</h2>
-        <p>A blacksmith doesn't hand raw iron to a customer. They heat it, hammer it, and temper it until it holds its edge.</p>
+        <h2 id="the-analogy">The Blacksmith Analogy, Extended</h2>
+        <p>A blacksmith doesn't hand raw iron to a customer. They heat it, hammer it, temper it, and — in a real shop — the master smith watches it ship, remembers which blades broke, and sharpens the process for next time.</p>
         <p>Plan Forge does the same for your development plans:</p>
 
         <table>
-          <thead><tr><th>Forge Stage</th><th>What Happens</th><th>Pipeline Step</th></tr></thead>
+          <thead><tr><th>Shop Stage</th><th>Station</th><th>What Happens</th></tr></thead>
           <tbody>
-            <tr><td>🔥 <strong>Heat</strong> — raw iron</td><td>You describe what you want</td><td>Step 0: Specify</td></tr>
-            <tr><td>🔨 <strong>Hammer</strong> — shape it</td><td>The plan gets structured into slices with validation gates</td><td>Step 2: Harden</td></tr>
-            <tr><td>💧 <strong>Quench</strong> — cool it</td><td>AI builds it slice by slice, checked at every boundary</td><td>Step 3: Execute</td></tr>
-            <tr><td>🔍 <strong>Inspect</strong> — check the edge</td><td>A fresh session audits for drift, completeness, and quality</td><td>Step 5: Review</td></tr>
+            <tr><td>🔥 <strong>Heat</strong> — raw ore</td><td>Smelt</td><td>You describe what you want; the Specifier agent extracts a Scope Contract</td></tr>
+            <tr><td>🔨 <strong>Hammer</strong> — shape it</td><td>Forge</td><td>Plan broken into slices with validation gates; AI builds slice-by-slice</td></tr>
+            <tr><td>💧 <strong>Quench</strong> — check the edge</td><td>Forge</td><td>Fresh-session review audits for drift, completeness, quality</td></tr>
+            <tr><td>🛡️ <strong>Guard</strong> — patrol the floor</td><td>Guard</td><td>LiveGuard scans secrets, drift, regressions, CVEs pre- and post-deploy</td></tr>
+            <tr><td>🧠 <strong>Remember</strong> — sharpen the process</td><td>Learn</td><td>Every incident, fix, and review feeds OpenBrain memory + bug registry + Health DNA</td></tr>
           </tbody>
         </table>
 
@@ -157,16 +207,16 @@
 
         <!-- ─── How to Read This Manual ─── -->
         <h2 id="how-to-read">How to Read This Manual</h2>
-        <p>This manual is structured in three acts:</p>
+        <p>This manual follows the four stations of the shop:</p>
         <ul>
-          <li><strong>Act I — Learn</strong> (Chapters 1–3): What Plan Forge is, how it works, how to install it. Start here if you're new.</li>
-          <li><strong>Act II — Build</strong> (Chapters 4–6): Hands-on. Build a feature with the pipeline, learn to write plans, tour the dashboard. Start here if you've already installed and want to use it.</li>
-          <li><strong>Act III — Master</strong> (Chapters 7–14): Reference and advanced topics. CLI commands, customization, MCP tools, multi-agent setup, troubleshooting. Start here if you're looking up a specific feature.</li>
-          <li><strong>Act IV — Guard</strong> (Chapters 15–17): Post-coding operational intelligence with LiveGuard — drift detection, incident tracking, secret scanning, and health trending.</li>
+          <li><strong>Act I — Smelt</strong> (Chapters 1–5): What Plan Forge is, how the shop works, installation, writing plans, and the Crucible for community-contributed ideas. Start here if you're new.</li>
+          <li><strong>Act II — Forge</strong> (Chapters 6–15): Hands-on building — your first plan, the dashboard, CLI, customization, instructions &amp; agents, MCP tools, extensions, multi-agent, advanced execution, troubleshooting.</li>
+          <li><strong>Act III — Guard</strong> (Chapters 16–18): LiveGuard — mental model, all 14 tools, and the 5-tab dashboard for post-deploy defense.</li>
+          <li><strong>Act IV — Learn</strong> (Chapter 19): Three-tier memory architecture — session, repo, and OpenBrain.</li>
         </ul>
 
         <div class="callout callout-tip">
-          <strong>Already installed and want to build something?</strong> Skip to <a href="your-first-plan.html">Chapter 4: Your First Plan</a>.
+          <strong>Already installed and want to build something?</strong> Skip to <a href="your-first-plan.html">Chapter 6: Your First Plan</a>.
         </div>
 
         <p class="text-sm text-slate-500 mt-8">📄 Full reference: <a href="https://github.com/srnichols/plan-forge/blob/master/README.md" rel="noopener">README.md</a></p>

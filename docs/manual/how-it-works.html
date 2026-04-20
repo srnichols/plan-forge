@@ -4,8 +4,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Chapter 2: How It Works — Plan Forge Manual</title>
-  <meta name="description" content="The 7-step pipeline, session isolation, guardrail auto-loading, and plan structure. Understand the mental model before touching a terminal." />
+  <title>Chapter 2: How It Works — The Four Stations of the Forge Shop</title>
+  <meta name="description" content="A tour of the Plan Forge Shop — Smelt, Forge, Guard, Learn. How the four stations connect, the 7-step pipeline inside the Forge, session isolation, and guardrail auto-loading." />
   <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
@@ -26,15 +26,60 @@
     <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
 
     <main>
+      <!-- Hero -->
+      <img src="../assets/brand/forge-shop-panorama.webp" alt="The four stations of the Plan Forge Shop — Smelt crucible, Forge anvil, Guard watchtower, Learn golden brain." class="chapter-hero" />
+
       <div class="chapter-content">
 
-        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 2</div>
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 2 · Act I — Smelt</div>
         <h1>How It Works</h1>
-        <p class="text-lg text-slate-400 mb-8">The mental model. Understand the pipeline, sessions, and file structure without touching a terminal.</p>
+        <p class="text-lg text-slate-400 mb-8">Tour of the Forge Shop: four stations, the gates between them, and the sessions that keep them honest.</p>
 
-        <!-- ─── The 7-Step Pipeline ─── -->
-        <h2 id="pipeline">The 7-Step Pipeline</h2>
-        <p>Every feature in Plan Forge flows through these steps:</p>
+        <!-- ─── Four Stations Overview ─── -->
+        <h2 id="four-stations">The Four Stations</h2>
+        <p>Plan Forge is not one step — it's a workshop. Every change to your code flows through four stations, each with its own tools, its own artifacts, and its own gate to the next station.</p>
+
+        <div class="overflow-x-auto mb-8">
+          <div class="flex gap-2 min-w-[700px] py-4">
+            <div class="flex-1 rounded-lg border border-amber-900/40 bg-amber-950/20 p-4 text-center">
+              <div class="text-2xl mb-1">🪨</div>
+              <div class="text-xs font-bold text-amber-400 mb-1">Station 1</div>
+              <div class="text-sm font-semibold text-slate-200">Smelt</div>
+              <div class="text-xs text-slate-500 mt-2">Intake → Scope Contract</div>
+            </div>
+            <div class="flex items-center text-slate-600">→</div>
+            <div class="flex-1 rounded-lg border border-amber-900/40 bg-amber-950/20 p-4 text-center">
+              <div class="text-2xl mb-1">🔨</div>
+              <div class="text-xs font-bold text-amber-400 mb-1">Station 2</div>
+              <div class="text-sm font-semibold text-slate-200">Forge</div>
+              <div class="text-xs text-slate-500 mt-2">Contract → Shipped Code</div>
+            </div>
+            <div class="flex items-center text-slate-600">→</div>
+            <div class="flex-1 rounded-lg border border-cyan-900/40 bg-cyan-950/20 p-4 text-center">
+              <div class="text-2xl mb-1">🛡️</div>
+              <div class="text-xs font-bold text-cyan-400 mb-1">Station 3</div>
+              <div class="text-sm font-semibold text-slate-200">Guard</div>
+              <div class="text-xs text-slate-500 mt-2">Deploy Defense (LiveGuard)</div>
+            </div>
+            <div class="flex items-center text-slate-600">→</div>
+            <div class="flex-1 rounded-lg border border-amber-900/40 bg-amber-950/20 p-4 text-center">
+              <div class="text-2xl mb-1">🧠</div>
+              <div class="text-xs font-bold text-amber-400 mb-1">Station 4</div>
+              <div class="text-sm font-semibold text-slate-200">Learn</div>
+              <div class="text-xs text-slate-500 mt-2">Memory &amp; Retros</div>
+            </div>
+          </div>
+        </div>
+
+        <p>The stations are connected by <strong>gates</strong> — Smelt won't hand the plan to Forge until the Scope Contract is crisp; Forge won't ship code until slice gates are green; Guard won't approve a deploy until secret-scan + env-drift are clean; Learn absorbs everything and feeds it back into Smelt for the next plan.</p>
+
+        <div class="callout callout-info">
+          <strong>🔗 Want the deep-dive?</strong> Each station has its own page on the <a href="../shop-tour.html">Shop Tour</a>. This chapter zooms out — how the stations fit together and what happens between them.
+        </div>
+
+        <!-- ─── The 7-Step Pipeline (inside the Forge) ─── -->
+        <h2 id="pipeline">The 7-Step Pipeline (Inside the Forge)</h2>
+        <p>The <strong>Forge</strong> station — where raw scope becomes shipped code — runs a 7-step pipeline. Steps 0–2 happen in Smelt, steps 3–6 happen in Forge, step 6 hands off to Guard and Learn.</p>
 
         <!-- Pipeline visual -->
         <div class="overflow-x-auto mb-8">
@@ -42,48 +87,48 @@
             <div class="flex-1 rounded-lg border border-amber-900/40 bg-amber-950/20 p-3 text-center">
               <div class="text-xs font-bold text-amber-400 mb-1">Step 0</div>
               <div class="text-sm font-semibold text-slate-200">Specify</div>
-              <div class="text-xs text-slate-500 mt-1">What &amp; why</div>
+              <div class="text-xs text-slate-500 mt-1">Smelt · What &amp; why</div>
             </div>
             <div class="flex items-center text-slate-600">→</div>
-            <div class="flex-1 rounded-lg border border-sky-900/40 bg-sky-950/20 p-3 text-center">
-              <div class="text-xs font-bold text-sky-400 mb-1">Step 1</div>
+            <div class="flex-1 rounded-lg border border-amber-900/40 bg-amber-950/20 p-3 text-center">
+              <div class="text-xs font-bold text-amber-400 mb-1">Step 1</div>
               <div class="text-sm font-semibold text-slate-200">Pre-flight</div>
-              <div class="text-xs text-slate-500 mt-1">Verify setup</div>
+              <div class="text-xs text-slate-500 mt-1">Smelt · Verify setup</div>
             </div>
             <div class="flex items-center text-slate-600">→</div>
-            <div class="flex-1 rounded-lg border border-sky-900/40 bg-sky-950/20 p-3 text-center">
-              <div class="text-xs font-bold text-sky-400 mb-1">Step 2</div>
+            <div class="flex-1 rounded-lg border border-amber-900/40 bg-amber-950/20 p-3 text-center">
+              <div class="text-xs font-bold text-amber-400 mb-1">Step 2</div>
               <div class="text-sm font-semibold text-slate-200">Harden</div>
-              <div class="text-xs text-slate-500 mt-1">Scope contract</div>
+              <div class="text-xs text-slate-500 mt-1">Smelt · Scope contract</div>
             </div>
             <div class="flex items-center text-slate-600">→</div>
             <div class="flex-1 rounded-lg border border-emerald-900/40 bg-emerald-950/20 p-3 text-center">
               <div class="text-xs font-bold text-emerald-400 mb-1">Step 3</div>
               <div class="text-sm font-semibold text-slate-200">Execute</div>
-              <div class="text-xs text-slate-500 mt-1">Slice by slice</div>
+              <div class="text-xs text-slate-500 mt-1">Forge · Slice by slice</div>
             </div>
             <div class="flex items-center text-slate-600">→</div>
             <div class="flex-1 rounded-lg border border-emerald-900/40 bg-emerald-950/20 p-3 text-center">
               <div class="text-xs font-bold text-emerald-400 mb-1">Step 4</div>
               <div class="text-sm font-semibold text-slate-200">Sweep</div>
-              <div class="text-xs text-slate-500 mt-1">No TODOs left</div>
+              <div class="text-xs text-slate-500 mt-1">Forge · No TODOs left</div>
             </div>
             <div class="flex items-center text-slate-600">→</div>
-            <div class="flex-1 rounded-lg border border-rose-900/40 bg-rose-950/20 p-3 text-center">
-              <div class="text-xs font-bold text-rose-400 mb-1">Step 5</div>
+            <div class="flex-1 rounded-lg border border-emerald-900/40 bg-emerald-950/20 p-3 text-center">
+              <div class="text-xs font-bold text-emerald-400 mb-1">Step 5</div>
               <div class="text-sm font-semibold text-slate-200">Review</div>
-              <div class="text-xs text-slate-500 mt-1">Drift detection</div>
+              <div class="text-xs text-slate-500 mt-1">Forge · Drift detection</div>
             </div>
             <div class="flex items-center text-slate-600">→</div>
-            <div class="flex-1 rounded-lg border border-purple-900/40 bg-purple-950/20 p-3 text-center">
-              <div class="text-xs font-bold text-purple-400 mb-1">Step 6</div>
+            <div class="flex-1 rounded-lg border border-cyan-900/40 bg-cyan-950/20 p-3 text-center">
+              <div class="text-xs font-bold text-cyan-400 mb-1">Step 6</div>
               <div class="text-sm font-semibold text-slate-200">Ship</div>
-              <div class="text-xs text-slate-500 mt-1">Commit &amp; close</div>
+              <div class="text-xs text-slate-500 mt-1">Guard + Learn</div>
             </div>
           </div>
         </div>
 
-        <p>You describe what you want (Step 0). The AI creates a spec. A pre-flight check verifies your setup (Step 1). The plan gets hardened into a binding scope contract with slices, gates, and forbidden actions (Step 2). The AI builds it slice by slice, validated at every boundary (Step 3). A completeness sweep eliminates stubs and TODOs (Step 4). A <em>fresh</em> session audits everything (Step 5). The shipper commits, updates the roadmap, and captures lessons (Step 6).</p>
+        <p>You describe what you want (Step 0 — Smelt). The AI creates a spec. A pre-flight check verifies your setup (Step 1). The plan gets hardened into a binding scope contract with slices, gates, and forbidden actions (Step 2) — this is when Smelt hands off to Forge. The AI builds it slice by slice, validated at every boundary (Step 3). A completeness sweep eliminates stubs and TODOs (Step 4). A <em>fresh</em> session audits everything (Step 5). The shipper commits, LiveGuard runs its pre-deploy scan (Guard), and OpenBrain captures lessons (Learn). That's Step 6.</p>
 
         <!-- ─── Sessions ─── -->
         <h2 id="sessions">Sessions and Why They Matter</h2>
@@ -91,29 +136,29 @@
         <div class="overflow-x-auto mb-6">
           <div class="flex gap-4 min-w-[600px] py-4">
             <div class="flex-1 rounded-xl border border-amber-800/30 bg-slate-900/60 p-4">
-              <div class="text-xs font-bold text-amber-400 mb-2">Session 1 — Plan</div>
+              <div class="text-xs font-bold text-amber-400 mb-2">Session 1 — Plan (Smelt)</div>
               <div class="text-sm text-slate-400">Steps 0–2</div>
               <p class="text-xs text-slate-500 mt-2">Specify, verify, harden. Produces the scope contract.</p>
             </div>
             <div class="flex-1 rounded-xl border border-emerald-800/30 bg-slate-900/60 p-4">
-              <div class="text-xs font-bold text-emerald-400 mb-2">Session 2 — Build</div>
+              <div class="text-xs font-bold text-emerald-400 mb-2">Session 2 — Build (Forge)</div>
               <div class="text-sm text-slate-400">Steps 3–4</div>
               <p class="text-xs text-slate-500 mt-2">Execute slices, sweep for completeness.</p>
             </div>
             <div class="flex-1 rounded-xl border border-rose-800/30 bg-slate-900/60 p-4">
-              <div class="text-xs font-bold text-rose-400 mb-2">Session 3 — Audit</div>
+              <div class="text-xs font-bold text-rose-400 mb-2">Session 3 — Audit (Forge)</div>
               <div class="text-sm text-slate-400">Step 5</div>
               <p class="text-xs text-slate-500 mt-2">Fresh context. Independent review.</p>
             </div>
-            <div class="flex-1 rounded-xl border border-purple-800/30 bg-slate-900/60 p-4">
-              <div class="text-xs font-bold text-purple-400 mb-2">Session 4 — Ship</div>
+            <div class="flex-1 rounded-xl border border-cyan-800/30 bg-slate-900/60 p-4">
+              <div class="text-xs font-bold text-cyan-400 mb-2">Session 4 — Ship (Guard + Learn)</div>
               <div class="text-sm text-slate-400">Step 6</div>
-              <p class="text-xs text-slate-500 mt-2">Commit, close, capture lessons.</p>
+              <p class="text-xs text-slate-500 mt-2">Commit, LiveGuard scan, capture lessons.</p>
             </div>
           </div>
         </div>
 
-        <p>The executor shouldn't self-audit — that's like grading your own exam. Each session starts fresh, loads the same guardrails, but brings independent judgment. Session 3 (Review) has never seen the code being written — it reads the plan, reads the code, and checks for drift.</p>
+        <p>The executor shouldn't self-audit — that's like grading your own exam. Each session starts fresh, loads the same guardrails, but brings independent judgment. Session 3 (Review) has never seen the code being written — it reads the plan, reads the code, and checks for drift. Session 4 is when Guard and Learn take over: LiveGuard does its pre-deploy scan, OpenBrain writes the lessons.</p>
 
         <div class="callout callout-info">
           <strong>Nested subagents</strong> (v2.16+): Within a session, agents can spawn sub-agents for complex tasks — the architecture reviewer can call the security reviewer, for example. This happens automatically; you don't need to configure it.

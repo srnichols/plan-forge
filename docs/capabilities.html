@@ -744,11 +744,26 @@
 
     <!-- Auto-Update -->
     <section class="mb-16">
-      <h2 class="text-2xl font-bold text-white mb-2">Auto-Update Notification</h2>
+      <h2 class="text-2xl font-bold text-white mb-2">Updating an Existing Install</h2>
       <p class="text-sm text-slate-400 mb-4"><code class="text-forge-400">pforge smith</code> automatically checks GitHub for a newer Plan Forge release — 5 s timeout, 24 h cache in <code class="text-forge-400">.forge/version-check.json</code>, silent when offline.</p>
-      <div class="bg-slate-800/60 rounded-xl p-5 border border-slate-700/30 font-mono text-xs text-slate-300">
-        <span class="text-yellow-400">⚠</span> New version available: <span class="text-forge-400">v2.14.0</span> → run <span class="text-green-400">pforge update</span>
+      <div class="bg-slate-800/60 rounded-xl p-5 border border-slate-700/30 font-mono text-xs text-slate-300 mb-4">
+        <span class="text-yellow-400">⚠</span> New version available: <span class="text-forge-400">vX.Y.Z</span> → run <span class="text-green-400">pforge self-update</span>
       </div>
+      <div class="grid gap-4 md:grid-cols-2 mb-4">
+        <div class="bg-slate-800/60 rounded-xl p-5 border border-green-700/30">
+          <h3 class="text-sm font-bold text-white mb-2">✓ Preferred: upgrade in place</h3>
+          <pre class="text-xs text-slate-300 font-mono whitespace-pre-wrap"><span class="text-green-400">pforge self-update --force</span>  <span class="text-slate-500"># latest GitHub release</span>
+<span class="text-green-400">pforge update</span>              <span class="text-slate-500"># auto-mode (v2.56.0+)</span>
+<span class="text-green-400">pforge update --from-github</span> <span class="text-slate-500"># force GitHub tag</span></pre>
+          <p class="text-xs text-slate-400 mt-3">Preserves <code class="text-forge-400">.forge.json</code>, <code class="text-forge-400">copilot-instructions.md</code>, project principles, and plan files.</p>
+        </div>
+        <div class="bg-slate-800/60 rounded-xl p-5 border border-red-700/30">
+          <h3 class="text-sm font-bold text-white mb-2">✗ Do not clone to update</h3>
+          <pre class="text-xs text-slate-500 font-mono whitespace-pre-wrap line-through">git clone https://github.com/srnichols/plan-forge.git</pre>
+          <p class="text-xs text-slate-400 mt-3">Re-cloning is the <strong>first-time install</strong> path. For existing installs it can drag <code class="text-forge-400">-dev</code> bytes onto a clean release and clobber local config.</p>
+        </div>
+      </div>
+      <p class="text-sm text-slate-400">Control the update source with <code class="text-forge-400">pforge config set update-source &lt;auto|github-tags|local-sibling&gt;</code> (v2.56.0+). See <a href="manual/update-source.html" class="text-forge-400 hover:underline">Manual Appendix G</a>.</p>
     </section>
 
     <!-- Dual-Publish Extensions -->

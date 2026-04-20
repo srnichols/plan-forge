@@ -57,7 +57,7 @@ try {
   // .env loading is best-effort. Failure must never break server startup.
 }
 
-import { parsePlan, runPlan, detectWorkers, getCostReport, getHealthTrend, analyzeWithQuorum, generateImage, runAnalyze, readForgeJson, readForgeJsonl, appendForgeJsonl, emitToolTelemetry, regressionGuard, runPostSliceHook, resetPostSliceHookFired, runPreAgentHandoffHook, postOpenClawSnapshot, loadOpenClawConfig, loadQuorumConfig, runWatch, runWatchLive, readCrucibleState, readHomeSnapshot, addReviewItem, resolveReviewItem, listReviewItems, readReviewQueueState, maybeAddFixPlanReview } from "./orchestrator.mjs";
+import { parsePlan, runPlan, detectWorkers, getCostReport, getHealthTrend, analyzeWithQuorum, generateImage, runAnalyze, readForgeJson, readForgeJsonl, appendForgeJsonl, emitToolTelemetry, regressionGuard, runPostSliceHook, resetPostSliceHookFired, runPreAgentHandoffHook, postOpenClawSnapshot, loadOpenClawConfig, loadQuorumConfig, runWatch, runWatchLive, readCrucibleState, readHomeSnapshot, addReviewItem, resolveReviewItem, listReviewItems, readReviewQueueState, maybeAddFixPlanReview, assessQuorumViability, detectExecutionRuntime } from "./orchestrator.mjs";
 import {
   isOpenBrainConfigured,
   shapeWatcherAnomalyThought,
@@ -1306,6 +1306,18 @@ const TOOLS = [
       required: [],
     },
   },
+  // Issue #73 — Runtime-aware quorum viability
+  {
+    name: "forge_doctor_quorum",
+    description: "Preflight quorum viability check — probes all models in a preset against the current runtime and reports availability, synthesis viability, and fallback recommendations.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        preset: { type: "string", enum: ["power", "speed", "all"], description: "Quorum preset to check. 'all' checks both presets. Default: all" },
+      },
+      required: [],
+    },
+  },
 ];
 
 function planNameToRunbookName(planPath) {
@@ -1474,6 +1486,7 @@ function executeTool(name, args) {
     case "forge_notify_send":
     case "forge_notify_test":
     case "forge_search":
+    case "forge_doctor_quorum":
       return null; // Handled async in CallToolRequestSchema handler
     default:
       return { success: false, error: `Unknown tool: ${name}` };
@@ -4156,6 +4169,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
   }
 
+  // ─── forge_doctor_quorum — runtime-aware quorum viability (#73) ───
+  if (name === "forge_doctor_quorum") {
+    const t0 = Date.now();
+    try {
+      const presetArg = args.preset || "all";
+      const presets = presetArg === "all" ? ["power", "speed"] : [presetArg];
+      const results = presets.map((p) => assessQuorumViability(p));
+      const result = { runtime: detectExecutionRuntime(), presets: results };
+      emitToolTelemetry("forge_doctor_quorum", args, result, Date.now() - t0, "OK", findProjectRoot(PROJECT_DIR));
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      const durationMs = Date.now() - t0;
+      emitToolTelemetry("forge_doctor_quorum", args, { error: err.message }, durationMs, "ERROR", findProjectRoot(PROJECT_DIR));
+      return { content: [{ type: "text", text: `Doctor quorum error: ${err.message}` }], isError: true };
+    }
+  }
+
   // ─── forge_quorum_analyze — assemble structured quorum prompt ───
   if (name === "forge_quorum_analyze") {
     const t0 = Date.now();
@@ -5211,6 +5241,8 @@ export function createExpressApp() {
     "forge_search",
     // Phase FORGE-SHOP-05 Slice 05.1 — Timeline is MCP-native read-only.
     "forge_timeline",
+    // Issue #73 — Doctor quorum is MCP-native read-only.
+    "forge_doctor_quorum",
   ]);
   app.post("/api/tool/:name", async (req, res) => {
     try {

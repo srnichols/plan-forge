@@ -1206,6 +1206,28 @@ export const TOOL_METADATA = {
       output: { threads: [{ correlationId: "abc-123", events: ["..."], firstTs: "...", lastTs: "...", sources: ["run"] }], total: 1, truncated: false, durationMs: 42 },
     },
   },
+  // Issue #73 — Runtime-aware quorum viability
+  forge_doctor_quorum: {
+    intent: ["quorum viability", "model availability", "runtime check", "doctor", "preflight"],
+    aliases: ["doctor-quorum", "quorum-doctor", "quorum-viability"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "2.54.0",
+    prerequisites: [],
+    produces: [],
+    consumes: [],
+    sideEffects: [],
+    writesFiles: false,
+    network: false,
+    risk: "low",
+    errors: {
+      ERR_UNKNOWN_PRESET: { message: "Unknown preset name", recovery: "Use 'power', 'speed', or 'all'" },
+    },
+    example: {
+      input: { preset: "all" },
+      output: { runtime: "cli-gh", presets: [{ preset: "power", declared: 3, effective: 1, synthesisViable: false, recommendation: { preset: "speed", reason: "..." } }] },
+    },
+  },
 };
 
 export const WORKFLOWS = {

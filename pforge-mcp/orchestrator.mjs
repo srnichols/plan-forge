@@ -988,6 +988,33 @@ export function detectWorkers(_projectDir) {
   return results;
 }
 
+// ─── Execution Runtime Detection ──────────────────────────────────────
+
+/**
+ * Detect which execution runtime is hosting this Plan Forge session.
+ * Used by assessQuorumViability() to provide pre-probe advice about
+ * which models are natively available.
+ *
+ * Returns one of:
+ *   "vs-code-agents-enterprise" — VS Code Agents (BYOK, full model access)
+ *   "vs-code-copilot-chat"     — VS Code Copilot Chat (limited models)
+ *   "cli-claude"               — Anthropic Claude CLI
+ *   "cli-codex"                — OpenAI Codex CLI
+ *   "cli-gh"                   — GitHub Copilot CLI (default)
+ *
+ * @param {{ workers?: object[] }} [options] - Inject workers for testing
+ * @returns {string}
+ */
+export function detectExecutionRuntime({ workers } = {}) {
+  if (process.env.VSCODE_AGENT_MODE === "enterprise") return "vs-code-agents-enterprise";
+  if (process.env.VSCODE_PID || process.env.TERM_PROGRAM === "vscode") return "vs-code-copilot-chat";
+  const w = workers || detectWorkers();
+  const primary = w.find((x) => x.available && x.name !== "gh-copilot");
+  if (primary?.name === "claude") return "cli-claude";
+  if (primary?.name === "codex") return "cli-codex";
+  return "cli-gh";
+}
+
 // ─── Quorum Model Availability Probing (H.3) ─────────────────────────
 
 /**
@@ -1081,6 +1108,61 @@ export function filterQuorumModels(config, { probe = probeQuorumModelAvailabilit
     }
   }
   return { available, dropped };
+}
+
+/**
+ * Assess quorum viability for a given preset and runtime.
+ * Combines static availableIn declarations with live probeQuorumModelAvailability().
+ *
+ * availableIn is advisory (for --estimate UX). probeQuorumModelAvailability()
+ * remains the authoritative runtime check — stale availableIn data causes
+ * bad advice but never incorrect execution.
+ *
+ * @param {string} presetName - "power" | "speed"
+ * @param {{ runtimeOverride?: string, probe?: (model: string) => object }} [options]
+ * @returns {{ runtime: string, preset: string, declared: number, effective: number, models: object[], synthesisViable: boolean, recommendation: object|null } | { error: string }}
+ */
+export function assessQuorumViability(presetName, { runtimeOverride = null, probe = probeQuorumModelAvailability } = {}) {
+  const preset = QUORUM_PRESETS[presetName];
+  if (!preset) return { error: `Unknown preset: ${presetName}` };
+
+  const runtime = runtimeOverride || detectExecutionRuntime();
+  const declaredAvailable = preset.availableIn?.[runtime] || null;
+
+  const models = preset.models.map((model) => {
+    const probed = probe(model);
+    return {
+      model,
+      status: probed.available ? "available" : "unavailable",
+      via: probed.via,
+      declaredForRuntime: declaredAvailable ? declaredAvailable.includes(model) : null,
+      reason: probed.reason || null,
+      install: probed.install || null,
+    };
+  });
+
+  const available = models.filter((m) => m.status === "available");
+  const synthesisViable = available.length >= 2;
+
+  let recommendation = null;
+  if (!synthesisViable && preset.fallbacks?.[runtime]) {
+    recommendation = preset.fallbacks[runtime];
+  } else if (available.length < preset.models.length) {
+    recommendation = {
+      note: `Effective quorum: ${available.length}-of-${preset.models.length}`,
+      hint: available.length === 1 ? "synthesis disabled — single-model quorum" : null,
+    };
+  }
+
+  return {
+    runtime,
+    preset: presetName,
+    declared: preset.models.length,
+    effective: available.length,
+    models,
+    synthesisViable,
+    recommendation,
+  };
 }
 
 /**
@@ -4614,12 +4696,30 @@ const QUORUM_PRESETS = {
     reviewerModel: "claude-opus-4.7",
     dryRunTimeout: 300_000, // 5 min — reasoning models need more time
     threshold: 5,           // lower threshold = more slices get quorum treatment
+    availableIn: {
+      "cli-gh": ["claude-opus-4.6"],
+      "cli-claude": ["claude-opus-4.6"],
+      "cli-codex": ["gpt-5.3-codex"],
+      "vs-code-copilot-chat": ["claude-opus-4.6"],
+      "vs-code-agents-enterprise": ["claude-opus-4.6", "gpt-5.3-codex", "grok-4.20-0309-reasoning"],
+    },
+    fallbacks: {
+      "cli-gh": { preset: "speed", reason: "Only 1 of 3 power models available via gh-copilot without API keys" },
+    },
   },
   speed: {
     models: ["claude-sonnet-4.6", "gpt-5.4-mini", "grok-4-1-fast-reasoning"],
     reviewerModel: "claude-sonnet-4.6",
     dryRunTimeout: 120_000, // 2 min — fast models finish quickly
     threshold: 7,           // higher threshold = only the most complex slices
+    availableIn: {
+      "cli-gh": ["claude-sonnet-4.6", "gpt-5.4-mini"],
+      "cli-claude": ["claude-sonnet-4.6"],
+      "cli-codex": ["gpt-5.4-mini"],
+      "vs-code-copilot-chat": ["claude-sonnet-4.6", "gpt-5.4-mini"],
+      "vs-code-agents-enterprise": ["claude-sonnet-4.6", "gpt-5.4-mini", "grok-4-1-fast-reasoning"],
+    },
+    fallbacks: {},
   },
 };
 
@@ -7435,6 +7535,15 @@ function buildEstimate(plan, model, cwd, quorumConfig = null) {
     };
   }
 
+  // Quorum viability assessment — runtime-aware validation (#73)
+  let quorumViability = null;
+  if (quorumConfig && quorumConfig.enabled) {
+    const presetName = quorumConfig.preset || null;
+    if (presetName && QUORUM_PRESETS[presetName]) {
+      quorumViability = assessQuorumViability(presetName);
+    }
+  }
+
   // Phase 3: Recommend cheapest model with >80% success rate from performance history
   let modelRecommendation = null;
   if (cwd) {
@@ -7514,6 +7623,7 @@ function buildEstimate(plan, model, cwd, quorumConfig = null) {
       quorumOverhead,
       totalCostWithQuorumUSD: Math.round((estimatedCost + quorumOverhead.totalOverheadUSD) * 100) / 100,
     }),
+    ...(quorumViability && { quorumViability }),
     confidence: avgTokensPerSlice ? "historical" : "heuristic",
     slices: plan.slices.map((s) => {
       const sliceType = inferSliceType(s);

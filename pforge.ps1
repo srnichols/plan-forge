@@ -89,6 +89,7 @@ function Show-Help {
     Write-Host "  quorum-analyze    Assemble a quorum analysis prompt from LiveGuard data for multi-model dispatch"
     Write-Host "  testbed-happypath Run all happy-path testbed scenarios sequentially with aggregated pass/fail summary"
     Write-Host "  migrate-memory    Migrate legacy .forge/memory/ entries into the L2 brain store"
+    Write-Host "  mcp-call <tool>   Invoke any MCP tool by name (e.g. forge_crucible_list) via the local MCP server"
     Write-Host "  tour              Guided walkthrough of your installed Plan Forge files"
     Write-Host "  help              Show this help message"
     Write-Host ""
@@ -4686,6 +4687,71 @@ function Invoke-MigrateMemory {
     }
 }
 
+# ─── Command: mcp-call ─────────────────────────────────────────────────
+# Generic proxy for any MCP tool exposed by the running pforge-mcp server
+# on :3100. Covers crucible-*, tempering-*, bug-*, generate-image,
+# run-skill, skill-status, and every future tool without needing a
+# bespoke CLI wrapper per tool.
+#
+# Usage:
+#   pforge mcp-call <tool_name> [--arg=value ...] [--json '{"key":"val"}']
+#
+# Examples:
+#   pforge mcp-call forge_crucible_list
+#   pforge mcp-call forge_crucible_submit --title="Add pagination" --description="..."
+#   pforge mcp-call forge_bug_register --json '{"severity":"high","title":"x"}'
+function Invoke-McpCall {
+    if ($Arguments.Count -lt 1) {
+        Write-Host "ERROR: Tool name required." -ForegroundColor Red
+        Write-Host "  Usage: pforge mcp-call <tool_name> [--arg=value ...] [--json '{...}']" -ForegroundColor Yellow
+        Write-Host "  Example: pforge mcp-call forge_crucible_list" -ForegroundColor Yellow
+        exit 1
+    }
+
+    $toolName = $Arguments[0]
+    # Normalize: accept either "forge_crucible_list" or "crucible-list".
+    if ($toolName -notmatch '^forge_') {
+        $toolName = "forge_" + ($toolName -replace '-', '_')
+    }
+
+    # Build params from remaining args. Two forms supported:
+    #   --key=value    → params.key = value
+    #   --json '{...}' → params = parsed JSON (overrides key/value form)
+    $params = @{}
+    $jsonPayload = $null
+    for ($i = 1; $i -lt $Arguments.Count; $i++) {
+        $a = $Arguments[$i]
+        if ($a -eq '--json' -and ($i + 1) -lt $Arguments.Count) {
+            $jsonPayload = $Arguments[$i + 1]
+            $i++
+        } elseif ($a -match '^--([^=]+)=(.*)$') {
+            $params[$Matches[1]] = $Matches[2]
+        }
+    }
+
+    $body = if ($jsonPayload) { $jsonPayload } else { ($params | ConvertTo-Json -Depth 10 -Compress) }
+    $url = "http://localhost:3100/api/tool/$toolName"
+
+    try {
+        $response = Invoke-RestMethod -Uri $url -Method Post -Body $body -ContentType 'application/json' -TimeoutSec 30
+        if ($response -is [string]) { Write-Host $response }
+        else { $response | ConvertTo-Json -Depth 10 }
+    } catch {
+        $status = $null
+        try { $status = $_.Exception.Response.StatusCode.value__ } catch { }
+        if ($status -eq 404) {
+            Write-Host "ERROR: Unknown tool '$toolName'. The MCP server returned 404." -ForegroundColor Red
+            Write-Host "  Tip: run 'pforge mcp-call forge_capabilities' to list available tools." -ForegroundColor Yellow
+        } elseif ($_.Exception.Message -match 'connection|refused|No connection') {
+            Write-Host "ERROR: Plan Forge MCP server not running on localhost:3100." -ForegroundColor Red
+            Write-Host "  Start it via VS Code (.vscode/mcp.json) or 'cd pforge-mcp && npm start'." -ForegroundColor Yellow
+        } else {
+            Write-Host "ERROR: $($_.Exception.Message)" -ForegroundColor Red
+        }
+        exit 1
+    }
+}
+
 # ─── Command: tour ─────────────────────────────────────────────────────
 function Invoke-Tour {
     Write-Host ""
@@ -4939,6 +5005,7 @@ switch ($Command) {
     'smith'        { Invoke-Smith }
     'testbed-happypath' { Invoke-TestbedHappypath }
     'migrate-memory' { Invoke-MigrateMemory }
+    'mcp-call'     { Invoke-McpCall }
     'tour'         { Invoke-Tour }
     'help'         { Show-Help }
     ''             { Show-Help }

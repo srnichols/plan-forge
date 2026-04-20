@@ -58,6 +58,25 @@ const KNOWN_MCP_ONLY = new Set([
   "forge_memory_capture",  // internal memory ledger writer
   "forge_memory_report",   // internal memory telemetry
   "forge_skill_status",    // internal skill runtime introspection
+  // Reachable via the generic `pforge mcp-call <tool>` proxy, so no
+  // dedicated CLI wrapper is needed. Adding new tools here is optional;
+  // they remain invocable from the CLI via mcp-call:
+  "forge_crucible_submit",
+  "forge_crucible_ask",
+  "forge_crucible_preview",
+  "forge_crucible_finalize",
+  "forge_crucible_list",
+  "forge_crucible_abandon",
+  "forge_tempering_scan",
+  "forge_tempering_status",
+  "forge_tempering_run",
+  "forge_tempering_approve_baseline",
+  "forge_bug_register",
+  "forge_bug_list",
+  "forge_bug_update_status",
+  "forge_bug_validate_fix",
+  "forge_generate_image",
+  "forge_run_skill",
 ]);
 
 // ─── Alias map: MCP tools whose CLI equivalent uses a shorter/different name ───

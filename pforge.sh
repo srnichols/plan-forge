@@ -74,6 +74,7 @@ COMMANDS:
   smith             Inspect your forge — environment, VS Code config, setup health, and common problems
   version-bump <v>  Update VERSION, package.json, docs/README/ROADMAP version badges to v<version>
   migrate-memory    Merge legacy *-history.json ledgers into canonical .jsonl siblings (idempotent)
+  mcp-call <tool>   Invoke any MCP tool by name (e.g. forge_crucible_list) via the local MCP server
   tour              Guided walkthrough of your installed Plan Forge files
   help              Show this help message
 
@@ -4057,6 +4058,99 @@ else console.log(`\x1b[36m─── migrate-memory complete: ${migrated} migrate
 '
 }
 
+# ─── Command: mcp-call ─────────────────────────────────────────────────
+# Generic proxy for any MCP tool exposed by the running pforge-mcp server
+# on :3100. Covers crucible-*, tempering-*, bug-*, generate-image,
+# run-skill, skill-status, and every future tool without needing a
+# bespoke CLI wrapper per tool. Mirrors Invoke-McpCall in pforge.ps1.
+#
+# Usage:
+#   pforge mcp-call <tool_name> [--arg=value ...] [--json '{"key":"val"}']
+cmd_mcp_call() {
+    if [ $# -lt 1 ]; then
+        printf "\033[31mERROR: Tool name required.\033[0m\n" >&2
+        printf "\033[33m  Usage: pforge mcp-call <tool_name> [--arg=value ...] [--json '{...}']\033[0m\n" >&2
+        printf "\033[33m  Example: pforge mcp-call forge_crucible_list\033[0m\n" >&2
+        exit 1
+    fi
+
+    local tool_name="$1"
+    shift
+
+    # Normalize: accept either "forge_crucible_list" or "crucible-list".
+    case "$tool_name" in
+        forge_*) ;;
+        *) tool_name="forge_${tool_name//-/_}" ;;
+    esac
+
+    # Assemble params. --key=value pairs, or --json '{...}' override.
+    local json_payload=""
+    local kv_pairs=()
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --json)
+                json_payload="${2:-}"
+                shift 2
+                ;;
+            --*=*)
+                kv_pairs+=("$1")
+                shift
+                ;;
+            *)
+                shift
+                ;;
+        esac
+    done
+
+    local body
+    if [ -n "$json_payload" ]; then
+        body="$json_payload"
+    else
+        body=$(PAIRS="${kv_pairs[*]-}" node -e '
+          const pairs=(process.env.PAIRS||"").split(" ").filter(Boolean);
+          const obj={};
+          for(const p of pairs){const m=p.match(/^--([^=]+)=(.*)$/);if(m)obj[m[1]]=m[2];}
+          process.stdout.write(JSON.stringify(obj));
+        ' 2>/dev/null || echo "{}")
+    fi
+
+    local url="http://localhost:3100/api/tool/${tool_name}"
+    local response http_code
+    if ! command -v curl >/dev/null 2>&1; then
+        printf "\033[31mERROR: curl not found — required for mcp-call.\033[0m\n" >&2
+        exit 1
+    fi
+    response=$(curl -s -o /tmp/pforge-mcp-call.$$ -w "%{http_code}" \
+        -X POST "$url" \
+        -H "Content-Type: application/json" \
+        -d "$body" \
+        --max-time 30 2>/dev/null || echo "000")
+    http_code="$response"
+    local body_out=""
+    [ -f /tmp/pforge-mcp-call.$$ ] && body_out=$(cat /tmp/pforge-mcp-call.$$) && rm -f /tmp/pforge-mcp-call.$$
+
+    case "$http_code" in
+        200)
+            echo "$body_out"
+            ;;
+        404)
+            printf "\033[31mERROR: Unknown tool '%s'. The MCP server returned 404.\033[0m\n" "$tool_name" >&2
+            printf "\033[33m  Tip: run 'pforge mcp-call forge_capabilities' to list available tools.\033[0m\n" >&2
+            exit 1
+            ;;
+        000)
+            printf "\033[31mERROR: Plan Forge MCP server not running on localhost:3100.\033[0m\n" >&2
+            printf "\033[33m  Start it via VS Code (.vscode/mcp.json) or 'cd pforge-mcp && npm start'.\033[0m\n" >&2
+            exit 1
+            ;;
+        *)
+            printf "\033[31mERROR: HTTP %s\033[0m\n" "$http_code" >&2
+            [ -n "$body_out" ] && echo "$body_out" >&2
+            exit 1
+            ;;
+    esac
+}
+
 # ─── Command: testbed-happypath ────────────────────────────────────────
 cmd_testbed_happypath() {
     echo ""
@@ -4120,6 +4214,7 @@ case "$COMMAND" in
     self-update)  cmd_self_update "$@" ;;
     version-bump) cmd_version_bump "$@" ;;
     migrate-memory) cmd_migrate_memory "$@" ;;
+    mcp-call)     cmd_mcp_call "$@" ;;
     tour)         cmd_tour ;;
     help|--help)  show_help ;;
     *)

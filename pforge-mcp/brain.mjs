@@ -284,6 +284,107 @@ function l2Forget(key, deps) {
   }
 }
 
+// ─── Phase-25 Slice 6: Cross-project memory federation (L4-lite) ────────────
+
+/**
+ * Validate a federation repo entry. Per Phase-25 D9:
+ *   - Must be an absolute path (POSIX `/...` or Windows `X:\...`)
+ *   - URLs (http / https / ssh / git) are rejected
+ *   - Must not contain `..` segments (path traversal)
+ */
+export function validateFederationRepo(repo) {
+  if (typeof repo !== "string" || repo.length === 0) {
+    return { ok: false, reason: "repo must be a non-empty string" };
+  }
+  if (/^(https?|ssh|git|ftp):/i.test(repo)) {
+    return { ok: false, reason: "URL-style repos are rejected (absolute local paths only per D9)" };
+  }
+  if (repo.includes("..")) {
+    return { ok: false, reason: "path traversal ('..') is forbidden" };
+  }
+  const isPosixAbs = repo.startsWith("/");
+  const isWinAbs = /^[A-Za-z]:[\\/]/.test(repo);
+  if (!isPosixAbs && !isWinAbs) {
+    return { ok: false, reason: "repo path must be absolute" };
+  }
+  return { ok: true };
+}
+
+/**
+ * Load `.forge.json → brain.federation` from `cwd`.
+ * Schema: { enabled?: boolean, repos: string[] }
+ * Default: { enabled: false, repos: [] }  (opt-in per project)
+ */
+export function loadFederationConfig(cwd = process.cwd()) {
+  const configPath = resolve(cwd, ".forge.json");
+  const defaults = { enabled: false, repos: [] };
+  try {
+    if (existsSync(configPath)) {
+      const cfg = JSON.parse(readFileSync(configPath, "utf-8"));
+      const block = cfg?.brain?.federation;
+      if (block && typeof block === "object") {
+        const enabled = block.enabled === true;
+        const repos = Array.isArray(block.repos) ? block.repos.filter((r) => typeof r === "string") : [];
+        return { enabled, repos };
+      }
+    }
+  } catch { /* fall through */ }
+  return { ...defaults };
+}
+
+/**
+ * Phase-25 MUST #10 — Read a brain key across federated projects.
+ *
+ * Iterates `brain.federation.repos[]` (absolute local paths only per D9) and
+ * attempts to read `<repo>/.forge/brain/<entity>/<id>.json` for each entry
+ * that passes validation. Returns an array of `{ repo, value }` hits, or `[]`
+ * when federation is disabled, mis-configured, or no repo holds the key.
+ * READ-ONLY — never writes to federated repos.
+ */
+export function federationRead(key, opts = {}) {
+  validateKey(key);
+  const { scope, entity, id } = parseKey(key);
+  if (scope !== "cross" && scope !== "cross-project") return [];
+  if (!entity) return [];
+
+  const cwd = opts.cwd || process.cwd();
+  const cfg = opts.config || loadFederationConfig(cwd);
+  if (!cfg.enabled) return [];
+  if (!Array.isArray(cfg.repos) || cfg.repos.length === 0) return [];
+
+  const hits = [];
+  for (const repo of cfg.repos) {
+    const v = validateFederationRepo(repo);
+    if (!v.ok) continue; // silently skip — config errors surfaced via validateFederationConfig()
+    const fileName = id ? `${basename(id)}.json` : "state.json";
+    const filePath = resolve(repo, ".forge", "brain", entity, fileName);
+    const repoRoot = resolve(repo);
+    if (!filePath.startsWith(repoRoot)) continue;
+    if (!existsSync(filePath)) continue;
+    try {
+      const parsed = JSON.parse(readFileSync(filePath, "utf-8"));
+      hits.push({ repo, value: parsed });
+    } catch { /* skip unreadable/malformed */ }
+  }
+  return hits;
+}
+
+/**
+ * Report federation config issues without throwing. Returns an array of
+ * { repo, reason } for each invalid entry; empty when the config is clean
+ * or federation is disabled.
+ */
+export function validateFederationConfig(cwd = process.cwd()) {
+  const cfg = loadFederationConfig(cwd);
+  if (!cfg.enabled) return [];
+  const errors = [];
+  for (const repo of cfg.repos) {
+    const v = validateFederationRepo(repo);
+    if (!v.ok) errors.push({ repo, reason: v.reason });
+  }
+  return errors;
+}
+
 // ─── L3 Backend (Semantic / OpenBrain) ──────────────────────────────────────
 
 async function l3Recall(key, deps) {
@@ -413,6 +514,20 @@ export async function recall(key, opts = {}, deps = {}) {
         servedFrom = "l3";
       }
     }
+  }
+
+  // Phase-25 Slice 6 (MUST #10): for cross.* keys that still missed, attempt
+  // a read-only fan-out across federated repos. Opt-in via .forge.json →
+  // brain.federation.enabled; silent no-op when disabled. Returns the first
+  // hit; ties broken by repo array order (deterministic).
+  if (result == null && (effectiveScope === "cross" || effectiveScope === "cross-project")) {
+    try {
+      const hits = federationRead(key, { cwd: d.cwd });
+      if (hits.length > 0) {
+        result = hits[0].value;
+        servedFrom = "federation";
+      }
+    } catch { /* federation read never fails the call */ }
   }
 
   if (span) {

@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Self-Deterministic Agent Loop — Plan Forge</title>
+  <meta name="description" content="The canonical overview of Plan Forge's full inner loop — how deterministic slice execution, reflexion, trajectories, auto-skills, gate synthesis, postmortems, federation, the reviewer, competitive worktree execution, auto-fix proposals, and cost-anomaly detection compose into a self-deterministic agent loop." />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({ startOnLoad: true, theme: "dark", themeVariables: { fontFamily: "Inter, ui-sans-serif", primaryColor: "#f59e0b", primaryTextColor: "#f1f5f9", lineColor: "#64748b" } });
+  </script>
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+
+    <main>
+      <div class="chapter-content">
+
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Deep Dive · Act II — Forge · Master Narrative</div>
+        <h1>The Self-Deterministic Agent Loop</h1>
+        <p class="text-lg text-slate-400 mb-8">The canonical overview. How Plan Forge's deterministic slice executor, the Phase-25 reflective layer, and the Phase-26 competitive layer compose into a single self-deterministic agent loop.</p>
+
+        <div class="callout callout-info">
+          <strong>Canonical reference.</strong> Start here if you want the whole picture. The companion chapters — <a href="inner-loop.html">The Inner Loop</a> (Phase-25 reflective layer) and <a href="competitive-loop.html">The Competitive Loop</a> (Phase-26 worktree race, auto-fix, cost anomalies) — drill into the individual subsystems.
+        </div>
+
+        <!-- ─── What "self-deterministic" means ─── -->
+        <h2 id="definition">What "self-deterministic" means</h2>
+        <p>Plan Forge's slice executor is <em>deterministic</em>: same plan, same config, same model routing, same outcome. On top of that spine, the Phase-25 and Phase-26 subsystems let the loop observe itself and feed what it learns back into the next slice, the next plan, or a sibling project. The execution contract stays deterministic; the loop's context gets progressively better-informed. That combination is what we mean by <em>self-deterministic</em>:</p>
+        <ul>
+          <li>Determinism at the execution boundary — no randomized control flow, no hidden model selection.</li>
+          <li>Reflective feedback at the learning boundary — trajectories, postmortems, auto-skills, and advisory signals.</li>
+          <li>Every signal is opt-in or advisory by default; nothing silently changes a deterministic plan run.</li>
+        </ul>
+
+        <!-- ─── Diagram A — System-wide state flow ─── -->
+        <h2 id="system-flow">Diagram A — System-wide state flow</h2>
+        <p>The outer pipeline is the same one Plan Forge has always had. The inner loop adds callback arrows that let later stages feed earlier stages without breaking the forward progression.</p>
+
+        <div class="my-8 p-6 bg-slate-900/50 border border-slate-800/60 rounded-xl overflow-x-auto">
+          <pre class="mermaid">
+stateDiagram-v2
+    [*] --> Plan : runPlan(plan)
+    Plan --> Preflight : validate environment
+    Preflight --> Harden : Step-2 hardener
+    Harden --> Execute : slice loop
+    Execute --> Execute : reflexion retry (gate fail)
+    Execute --> Sweep : all slices pass
+    Sweep --> Execute : completeness gap found
+    Sweep --> Review : artifacts consistent
+    Review --> Execute : advisory signal (blocking if opted-in)
+    Review --> Ship : verdict clean
+    Ship --> [*]
+    Execute --> Harden : postmortem feeds next hardener
+    Review --> Stopped : operator halt
+    Stopped --> [*]
+          </pre>
+        </div>
+
+        <p>Two things to notice: first, every backward arrow from <em>Execute</em>, <em>Sweep</em>, and <em>Review</em> is <em>opt-in or advisory</em> by default — the forward pipeline stays honest. Second, the arrow from <em>Execute</em> back to <em>Harden</em> crosses a plan boundary: a postmortem written at the end of this run is read by the hardener at the start of the next one.</p>
+
+        <!-- ─── Diagram B — Inner-loop callback graph ─── -->
+        <h2 id="callback-graph">Diagram B — Inner-loop callback graph</h2>
+        <p>Zooming into a single slice, here is what happens at the slice boundary and how each Phase-25 and Phase-26 subsystem feeds something downstream — the next slice, the next plan's hardener, or a Dashboard promotion surface.</p>
+
+        <div class="my-8 p-6 bg-slate-900/50 border border-slate-800/60 rounded-xl overflow-x-auto">
+          <pre class="mermaid">
+flowchart TD
+    subgraph Slice[Slice execution]
+      direction TB
+      S0[BuildPrompt] --> S1[AutoSkill lookup L2]
+      S1 --> S2[WorkerInvoke]
+      S2 --> S3[GateRun]
+      S3 -->|fail| R1[Reflexion block L7]
+      R1 --> S2
+      S3 -->|pass| T1[Trajectory write L8]
+    end
+
+    T1 --> PM[Postmortem L5]
+    T1 --> AS[AutoSkill capture L2]
+    T1 --> GS[GateSuggestion accrual L6]
+    T1 --> CA[Cost-anomaly check C3]
+    S3 -->|advisory| RV[Reviewer L4]
+    S3 -->|gate fail + small diff| AF[Auto-fix proposal C2]
+    S0 --> FED[Federation read L4-lite]
+
+    PM --> NextHardener[Next plan: Harden reads postmortems]
+    AS --> NextSlice[Next slice: skill injected by L2]
+    GS --> Dash[Dashboard: gate promotion surface]
+    RV --> Dash
+    CA --> Dash
+    AF --> Dash
+    FED --> NextSlice
+
+    subgraph Competitive[Competitive layer C1]
+      direction TB
+      Spawn[Spawn worktrees] --> RaceA[Strategy A: Slice]
+      Spawn --> RaceB[Strategy B: Slice]
+      RaceA --> Elect[Winner election]
+      RaceB --> Elect
+      Elect --> Winner[Promote winner → tree]
+    end
+
+    Winner --> T1
+          </pre>
+        </div>
+
+        <p>The Phase-25 subsystems are labeled L1–L8 in the capabilities surface (<code>forge_capabilities → innerLoop</code>); the Phase-26 subsystems — C1 competitive, C2 auto-fix, C3 cost-anomaly — extend the same surface. Every node in the diagram corresponds to one entry in <code>INNER_LOOP_SURFACE.subsystems</code>.</p>
+
+        <!-- ─── Subsystem roll-call ─── -->
+        <h2 id="subsystem-rollcall">Subsystem roll-call</h2>
+        <p>Every subsystem, the stage at which it fires, and where its output shows up. See the companion chapters for mechanics and configuration.</p>
+
+        <table class="min-w-full text-sm my-6">
+          <thead class="text-left text-slate-400">
+            <tr><th class="p-2 border-b border-slate-800">Subsystem</th><th class="p-2 border-b border-slate-800">Fires at</th><th class="p-2 border-b border-slate-800">Output lands in</th><th class="p-2 border-b border-slate-800">Default posture</th></tr>
+          </thead>
+          <tbody class="text-slate-300">
+            <tr><td class="p-2 border-b border-slate-900"><strong>Reflexion</strong> (L7)</td><td class="p-2 border-b border-slate-900">Gate fail → retry</td><td class="p-2 border-b border-slate-900">Next attempt's prompt</td><td class="p-2 border-b border-slate-900">Always on</td></tr>
+            <tr><td class="p-2 border-b border-slate-900"><strong>Trajectory</strong> (L8)</td><td class="p-2 border-b border-slate-900">Slice pass</td><td class="p-2 border-b border-slate-900"><code>.forge/trajectories/</code></td><td class="p-2 border-b border-slate-900">Always on</td></tr>
+            <tr><td class="p-2 border-b border-slate-900"><strong>Auto-skill library</strong> (L2)</td><td class="p-2 border-b border-slate-900">Slice pass → next slice</td><td class="p-2 border-b border-slate-900"><code>.forge/auto-skills/</code></td><td class="p-2 border-b border-slate-900">Always on</td></tr>
+            <tr><td class="p-2 border-b border-slate-900"><strong>Adaptive gate synthesis</strong> (L6)</td><td class="p-2 border-b border-slate-900">Pre-flight</td><td class="p-2 border-b border-slate-900">Stdout + Dashboard promotion surface</td><td class="p-2 border-b border-slate-900">Suggest (never mutates plans)</td></tr>
+            <tr><td class="p-2 border-b border-slate-900"><strong>Postmortem</strong> (L5)</td><td class="p-2 border-b border-slate-900">Run end</td><td class="p-2 border-b border-slate-900"><code>.forge/plans/&lt;basename&gt;/postmortem-*.json</code></td><td class="p-2 border-b border-slate-900">Always on (retention 10)</td></tr>
+            <tr><td class="p-2 border-b border-slate-900"><strong>Federation</strong> (L4-lite)</td><td class="p-2 border-b border-slate-900">Brain miss → cross-repo read</td><td class="p-2 border-b border-slate-900">In-memory recall</td><td class="p-2 border-b border-slate-900">Off (opt-in, absolute local paths)</td></tr>
+            <tr><td class="p-2 border-b border-slate-900"><strong>Reviewer</strong> (L4)</td><td class="p-2 border-b border-slate-900">Gate-check</td><td class="p-2 border-b border-slate-900">Gate-check response, Dashboard</td><td class="p-2 border-b border-slate-900">Off, advisory-only</td></tr>
+            <tr><td class="p-2 border-b border-slate-900"><strong>Competitive</strong> (C1)</td><td class="p-2 border-b border-slate-900">Slice start (marked competitive)</td><td class="p-2 border-b border-slate-900">Winner's worktree → tree</td><td class="p-2 border-b border-slate-900">Off (opt-in)</td></tr>
+            <tr><td class="p-2 border-b border-slate-900"><strong>Auto-fix</strong> (C2)</td><td class="p-2 border-b border-slate-900">Gate fail + small diff</td><td class="p-2 border-b border-slate-900"><code>.forge/proposed-fixes/</code></td><td class="p-2 border-b border-slate-900">Advisory (never auto-apply)</td></tr>
+            <tr><td class="p-2"><strong>Cost-anomaly</strong> (C3)</td><td class="p-2">Every slice</td><td class="p-2"><code>.forge/cost-anomalies.jsonl</code>, Dashboard</td><td class="p-2">Advisory (detection only)</td></tr>
+          </tbody>
+        </table>
+
+        <!-- ─── Why this matters ─── -->
+        <h2 id="why-this-matters">Why this matters</h2>
+        <p>The individual subsystems are useful on their own. The mesh is what turns a slice runner into a self-deterministic loop: a trajectory written today becomes part of tomorrow's planning context; a cost anomaly noticed this run becomes the reason next run's hardener picks a cheaper model for that slice; a gate command accepted three times graduates into the validation template for that domain. None of this changes the deterministic execution contract — it only changes the information the deterministic executor runs with.</p>
+
+        <div class="callout callout-info mt-8">
+          <strong>Companion chapters.</strong> <a href="inner-loop.html">The Inner Loop</a> covers L1–L8 (Phase-25) mechanics and configuration. <a href="competitive-loop.html">The Competitive Loop</a> covers C1–C3 (Phase-26). Dashboard → <em>Inner Loop</em> tab shows live state for all ten subsystems.
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="assets/manual.js"></script>
+</body>
+</html>

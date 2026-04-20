@@ -72,7 +72,7 @@ Same app, same model (Claude Opus 4.6), same time (~7 min). Only difference: Run
 
 ## How the Stations Work Together
 
-The four stations form a closed loop: **Smelt** intake → **Forge** builds → **Guard** watches → **Learn** captures findings into memory → next **Smelt** starts smarter. Inside the Forge, a deterministic slice executor runs the plan; a reflective inner loop — retries with reflexion context, trajectory capture, auto-skill promotion, and postmortems — turns every slice into a research step that teaches the next one.
+The four stations form a closed loop: **Smelt** intake → **Forge** builds → **Guard** watches → **Learn** captures findings into memory → next **Smelt** starts smarter. Inside the Forge, a deterministic slice executor runs the plan; a reflective inner loop — retries with reflexion context, trajectory capture, auto-skill promotion, and postmortems — turns every slice into a research step that teaches the next one. Together, the ten opt-in inner-loop subsystems compose into a self-deterministic agent loop that keeps execution reproducible while the loop's context improves each pass.
 
 For architecture diagrams, the 7-step pipeline mermaid, the LiveGuard cycle, and the self-improving feedback loops, see **[the Shop Tour](https://planforge.software/shop-tour.html)** and the [interactive manual](https://planforge.software/manual/).
 

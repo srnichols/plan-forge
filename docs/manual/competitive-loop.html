@@ -39,6 +39,8 @@
           <strong>Added in v2.58.0.</strong> Every subsystem on this page is opt-in and ships in advisory posture. Competitive execution is <em>off</em> by default; auto-fix drafts patches but never auto-applies; cost-anomaly detection never halts a run. See also <a href="inner-loop.html">The Inner Loop</a> for the Phase-25 subsystems this chapter builds on.
         </div>
 
+        <p class="text-sm text-slate-400 mt-4">For the canonical system-wide overview covering Phase-25 and Phase-26 together, see <a href="self-deterministic-loop.html">The Self-Deterministic Agent Loop</a>.</p>
+
         <!-- ─── Worktree race flow ─── -->
         <h2 id="worktree-race">Worktree race → winner election</h2>
         <p>When a slice is marked for competitive execution, the orchestrator spawns a worktree per strategy, runs each in isolation, and elects a single winner. Losing worktrees are cleaned up; only the winner's changes enter the working tree.</p>

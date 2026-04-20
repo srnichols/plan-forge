@@ -108,6 +108,10 @@ Ten opt-in subsystems that turn deterministic slice execution into a closed rese
 
 Discover at runtime via `forge_capabilities` → `innerLoop`. Configure via Dashboard → Config tab, Dashboard → Inner Loop tab (v2.58+), or `.forge.json`.
 
+## Self-Deterministic Agent Loop
+
+The ten inner-loop subsystems above compose into what we call a **self-deterministic agent loop**. The slice executor stays deterministic — same plan, same config, same outcome — while the Phase-25 reflective layer (L1–L8) and Phase-26 competitive layer (C1–C3) let the loop observe itself and feed what it learns back into the next slice, the next plan's hardener, or a sibling project. Every feedback arrow is opt-in or advisory; the execution contract never mutates silently. Canonical narrative with two Mermaid diagrams: [`docs/manual/self-deterministic-loop.html`](manual/self-deterministic-loop.html).
+
 ## Agent-Per-Slice Routing
 
 Assign a different AI model to each execution role via `modelRouting` in `.forge.json`. The orchestrator selects the appropriate model automatically based on the current operation:

@@ -15,6 +15,7 @@ Plan Forge is an open-source framework that gives AI coding agents (Copilot, Cla
 - **4 Sessions**: Session isolation prevents self-auditing. The builder and reviewer are always different AI instances.
 - **Validation Gates**: Build + test must pass at every slice boundary before proceeding.
 - **Scope Contract**: Defines what's in scope, out of scope, and forbidden. Drift is structurally impossible.
+- **Self-Deterministic Agent Loop (v2.58)**: The ten opt-in inner-loop subsystems (L1–L8 reflective layer + C1–C3 competitive layer) compose on top of the deterministic executor so runs stay reproducible while the loop's context gets better each pass. Canonical overview: `docs/manual/self-deterministic-loop.html`.
 
 ## Capabilities
 

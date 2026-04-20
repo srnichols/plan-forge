@@ -241,6 +241,16 @@
 
           <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
             <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">What do you mean by "self-deterministic agent loop"?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              The slice executor is deterministic: same plan, same config, same outcome. On top of that spine, ten opt-in inner-loop subsystems (reflexion, trajectories, auto-skills, gate synthesis, postmortems, federation, reviewer, competitive worktree execution, auto-fix proposals, cost-anomaly detection) let the loop observe itself and feed what it learns back into the next slice, the next plan, or a sibling project. Every feedback arrow is opt-in or advisory; the execution contract never mutates silently. That combination — deterministic execution plus reflective context — is what we call a <em>self-deterministic agent loop</em>. See <a href="manual/self-deterministic-loop.html" class="text-forge-400 hover:text-forge-300">the canonical overview with two Mermaid diagrams</a>.
+            </div>
+          </details>
+
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
               <span class="text-sm font-medium text-white pr-4">How is this different from just using Copilot / Cursor / Claude directly?</span>
               <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
             </summary>

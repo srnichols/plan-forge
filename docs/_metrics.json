@@ -39,7 +39,7 @@
   "dashboardTabsBreakdown": "Forge: Home, Runs, Progress, Crucible, Governance, Cost, Actions, Replay, Extensions, Config, Traces, Skills, Watcher, Tempering, Bug Registry, Memory, Timeline, Review (18) + LiveGuard: Health, Incidents, Triage, Security, Env (5) + others (2)",
 
   "manualChapters": 24,
-  "manualAppendices": 6,
+  "manualAppendices": 7,
 
   "abTestApril2026": {
     "tests": { "planForge": 60, "vibeCoding": 13 },

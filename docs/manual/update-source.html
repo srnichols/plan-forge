@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Appendix G: Update Source Modes — Plan Forge Manual</title>
+  <meta name="description" content="Where pforge update pulls template bytes from: auto, github-tags, local-sibling. When to use each, and how to change it." />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+    <main><div class="chapter-content">
+
+      <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Appendix G</div>
+      <h1>Update Source Modes</h1>
+      <p class="text-lg text-slate-400 mb-8">Where <code>pforge update</code> pulls template bytes from — and why the default changed in v2.56.0.</p>
+
+      <!-- ─── Background ─── -->
+      <h2 id="background">The Problem</h2>
+      <p>
+        Before v2.56.0, <code>pforge update</code> had a single hard-coded source-selection rule: use the sibling clone at <code>../plan-forge</code> if one existed, otherwise fail and ask for <code>--from-github</code>. This was optimized for contributors on their primary machine — the sibling is always on master, which is always freshly built, so contributors dogfood every change.
+      </p>
+      <p>
+        The trouble showed up on secondary machines: users who happened to have cloned the Plan Forge repo earlier (say, to browse the source) would later run <code>pforge update</code> on an unrelated project and get surprise <code>-dev</code> bytes from a stale master checkout. The <em>second</em> PC behaved differently from the first, for reasons that weren't obvious.
+      </p>
+
+      <!-- ─── The Three Modes ─── -->
+      <h2 id="modes">The Three Modes</h2>
+      <p>
+        <code>.forge.json</code> now accepts an <code>updateSource</code> key with three values. The default — <code>auto</code> — picks the right thing for most people; the other two give you explicit control.
+      </p>
+      <table>
+        <thead><tr><th>Mode</th><th>Behavior</th><th>When to use</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>auto</code> <span class="text-xs text-slate-500">(default)</span></td>
+            <td>Picks the newer of your sibling clone and the latest GitHub tag. If the sibling is on a <code>-dev</code> build, GitHub wins.</td>
+            <td>Users on any machine. Teams. Anyone who isn't actively contributing patches back to Plan Forge.</td>
+          </tr>
+          <tr>
+            <td><code>github-tags</code></td>
+            <td>Always downloads the latest tagged release from GitHub. Ignores any sibling clone even if present.</td>
+            <td>Teams that want reproducible, audited updates. CI pipelines. Pinned-dependency shops.</td>
+          </tr>
+          <tr>
+            <td><code>local-sibling</code></td>
+            <td>Always uses the sibling clone at <code>../plan-forge</code>. Errors if one is missing.</td>
+            <td>Contributors working on Plan Forge itself. You run <code>git pull</code> in the sibling to pick up changes.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout callout-info">
+        <strong>Auto mode in detail.</strong> It calls the GitHub Releases API (cached 24h in <code>.forge/update-check.json</code>) to resolve the latest tag, reads the sibling's <code>VERSION</code> file, and compares the two with semver precedence — any <code>-dev</code> pre-release loses to a clean tag. If the sibling wins or there's no network, it uses the sibling. If GitHub wins or there's no sibling, it uses the tag.
+      </div>
+
+      <!-- ─── How to Change ─── -->
+      <h2 id="change">How to Change Your Mode</h2>
+      <p>Three ways, all equivalent — they all write <code>.forge.json</code>.</p>
+
+      <h3 id="change-cli">1. CLI</h3>
+      <div class="cmd-block">
+        <div class="cmd-block-header"><span>Terminal</span><button class="cmd-copy-btn">Copy</button></div>
+        <pre><code># Read current value
+pforge config get update-source
+
+# Set it
+pforge config set update-source github-tags
+pforge config set update-source local-sibling
+pforge config set update-source auto
+
+# List all settable keys
+pforge config list</code></pre>
+      </div>
+
+      <h3 id="change-dashboard">2. Dashboard</h3>
+      <p>Open the dashboard (<code>localhost:3100/dashboard</code>), switch to the <strong>Config</strong> tab, find the <strong>Update Source</strong> select. Your choice saves immediately — no Save button required. The hint text below the dropdown reminds you what each mode does.</p>
+
+      <h3 id="change-json">3. Hand-edit <code>.forge.json</code></h3>
+      <div class="cmd-block">
+        <div class="cmd-block-header"><span>.forge.json</span><button class="cmd-copy-btn">Copy</button></div>
+        <pre><code>{
+  "preset": "dotnet",
+  "templateVersion": "2.56.0",
+  "updateSource": "auto"
+}</code></pre>
+      </div>
+
+      <!-- ─── FAQ ─── -->
+      <h2 id="faq">FAQ</h2>
+
+      <h3 id="faq-dev">Will <code>auto</code> ever install <code>-dev</code> bytes over my clean release?</h3>
+      <p>
+        No. The <code>-dev</code> refusal guard from v2.53.2 is still in place: if the selected source is a <code>-dev</code> build and your current install is clean, the update aborts with a helpful message. <code>auto</code> mode short-circuits this earlier by preferring the tagged release. If you explicitly set <code>local-sibling</code> and the sibling is <code>-dev</code>, you'll hit the refusal unless you pass <code>--allow-dev</code>.
+      </p>
+
+      <h3 id="faq-offline">What happens offline in <code>auto</code> mode?</h3>
+      <p>
+        If the GitHub tag lookup fails (timeout, no network, rate-limit), <code>auto</code> falls back to the sibling if one exists. If there's no sibling and no network, you'll get the same error you would have gotten pre-v2.56.0 — run <code>--from-github</code> when you're back online, or set a sibling clone.
+      </p>
+
+      <h3 id="faq-self-update"><code>pforge self-update</code> — does this affect it?</h3>
+      <p>
+        No. <code>self-update</code> is a separate command that <em>always</em> pulls from GitHub releases (it's designed to heal a corrupted install). <code>updateSource</code> only controls <code>pforge update</code>.
+      </p>
+
+      <h3 id="faq-ci">Should CI pipelines set a mode?</h3>
+      <p>
+        Yes — set <code>updateSource</code> to <code>github-tags</code> in your CI's <code>.forge.json</code>. This guarantees every CI run pulls from a specific tagged release and ignores whatever happens to be checked out in adjacent directories.
+      </p>
+
+      <h3 id="faq-migrate">Do I need to migrate my existing <code>.forge.json</code>?</h3>
+      <p>
+        No. Projects with no <code>updateSource</code> key default to <code>auto</code>, which is the recommended behavior anyway. The change is additive.
+      </p>
+
+      <!-- ─── Cross-links ─── -->
+      <h2 id="see-also">See Also</h2>
+      <ul>
+        <li><a href="installation.html#updating">Chapter 3 § Updating</a> — the quick command reference.</li>
+        <li><a href="cli-reference.html">Chapter 8: CLI Reference</a> — full <code>pforge update</code> and <code>pforge config</code> flag list.</li>
+        <li><a href="dashboard.html">Chapter 7: The Dashboard</a> — Config tab walkthrough.</li>
+      </ul>
+
+      <div id="chapter-prev-next" class="chapter-nav"></div>
+
+    </div></main>
+  </div>
+  <script src="assets/manual.js"></script>
+</body>
+</html>

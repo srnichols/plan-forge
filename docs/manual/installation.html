@@ -255,6 +255,11 @@ Setup Health:
 
         <p>Updates replace framework files (pipeline prompts, shared instructions, hooks) but never touch your customized files (<code>copilot-instructions.md</code>, project principles, plan files, <code>.forge.json</code>).</p>
 
+        <div class="callout callout-info">
+          <strong>Where does <code>pforge update</code> pull from?</strong>
+          By default (<code>auto</code>), it picks the newer of a local sibling clone at <code>../plan-forge</code> and the latest GitHub tag — so a stale master checkout won't drag you onto unreleased <code>-dev</code> bytes. See <a href="update-source.html">Appendix G: Update Source Modes</a> for the <code>github-tags</code> and <code>local-sibling</code> options and when to use them.
+        </div>
+
         <div class="callout callout-tip">
           <strong>Next step:</strong> You're installed. Time to build something. Head to <a href="your-first-plan.html">Chapter 4: Your First Plan</a>.
         </div>

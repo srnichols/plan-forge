@@ -226,7 +226,7 @@
       <!-- Badge -->
       <div class="inline-flex items-center gap-2 px-4 py-1.5 mb-8 rounded-full bg-slate-800/80 border border-slate-700/60 text-sm text-slate-300">
         <span class="w-2 h-2 rounded-full bg-forge-500 animate-pulse"></span>
-        Open Source · MIT License · Dogfooded · v2.47.0
+        Open Source · MIT License · Dogfooded · v2.53.3
       </div>
 
       <!-- Logo -->
@@ -236,15 +236,16 @@
 
       <!-- Headline -->
       <h1 class="text-5xl md:text-7xl font-black tracking-tight text-white mb-6 leading-[1.05]">
-        Forge the Plan.<br />
-        Harden the&nbsp;Scope.<br />
-        <span class="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-500">
-          Ship with Confidence.
-        </span>
+        The AI-Native<br />
+        SDLC&nbsp;<span class="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-500">Forge&nbsp;Shop</span>.
       </h1>
 
-      <p class="text-xl md:text-2xl text-slate-400 max-w-3xl mx-auto leading-relaxed mb-10">
-        AI coding guardrails that convert rough ideas into <strong class="text-slate-200">hardened execution contracts</strong> <span class="text-slate-500">(locked-down plans the AI can't deviate from)</span> — so your AI agent builds exactly what you asked for, without drift, scope creep, or skipped tests.
+      <p class="text-xl md:text-2xl text-slate-400 max-w-3xl mx-auto leading-relaxed mb-6">
+        One workshop. <strong class="text-slate-200">Four Stations.</strong> Every phase of your software lifecycle — <span class="text-amber-300">Smelt</span>, <span class="text-amber-300">Forge</span>, <span class="text-amber-300">Guard</span>, <span class="text-amber-300">Learn</span> — under one roof, AI-run, human-supervised.
+      </p>
+
+      <p class="text-base md:text-lg text-slate-500 max-w-2xl mx-auto leading-relaxed mb-10 italic">
+        "A blacksmith without a shop is just a man with a hammer." — Plan Forge gives your AI agent the whole shop.
       </p>
 
       <!-- Read the problem story -->
@@ -252,9 +253,10 @@
         Spending thousands on AI tokens and hitting the 80% wall? <a href="problem.html" class="text-forge-400 hover:underline">Read why — and how to fix it →</a>
       </p>
 
-      <!-- Hero illustration -->
-      <div class="mb-10 max-w-4xl mx-auto">
-        <img src="assets/hero-illustration.webp" alt="Plans being forged into hardened execution contracts" class="w-full rounded-2xl border border-slate-700/40 shadow-2xl shadow-amber-500/5" />
+      <!-- Hero illustration — Forge Shop panorama (all four stations in one scene) -->
+      <div class="mb-10 max-w-5xl mx-auto">
+        <img src="assets/brand/forge-shop-panorama.webp" alt="The Forge Shop: crucible smelting molten iron, anvil with hammer mid-strike, rune-inscribed watchtower scanning, and a golden brain absorbing event streams — all four stations in one workshop." class="w-full rounded-2xl border border-slate-700/40 shadow-2xl shadow-amber-500/10" loading="eager" />
+        <p class="text-xs text-slate-600 mt-3 italic">Smelt → Forge → Guard → Learn — every SDLC phase, one shop.</p>
       </div>
 
       <!-- Video / demo placeholder -->
@@ -363,6 +365,126 @@
           <div class="text-3xl font-black text-forge-400">MIT</div>
           <div class="text-xs text-slate-500 mt-1">Open Source</div>
         </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ================================================
+       THE FOUR STATIONS — tour of the Forge Shop
+  ================================================ -->
+  <!-- Shared SVG sprite for station icons (inline so `<use href="#smelt"/>` works) -->
+  <div aria-hidden="true" class="hidden">
+    <!-- prettier-ignore -->
+    <svg xmlns="http://www.w3.org/2000/svg" width="0" height="0" style="position:absolute">
+      <symbol id="icon-smelt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9h14l-1.5 8a3 3 0 0 1-3 2.5h-5a3 3 0 0 1-3-2.5L5 9z"/><path d="M3 9h18"/><path d="M9 5v4M15 5v4"/><path d="M12 14v3"/><circle cx="12" cy="19.5" r="0.75" fill="currentColor"/></symbol>
+      <symbol id="icon-forge" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h14a2 2 0 0 1 2 2v1H5a2 2 0 0 1-2-2v-1z"/><path d="M7 15v3h10v-3"/><path d="M5 20h14"/><path d="M14 12V8l4-4"/><path d="M16 3l3 3"/></symbol>
+      <symbol id="icon-guard" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 6v6c0 4.5 3.3 8.3 8 9 4.7-.7 8-4.5 8-9V6l-8-3z"/><path d="M8.5 12c1-1.8 2.3-2.8 3.5-2.8s2.5 1 3.5 2.8c-1 1.8-2.3 2.8-3.5 2.8S9.5 13.8 8.5 12z"/><circle cx="12" cy="12" r="1.1" fill="currentColor"/></symbol>
+      <symbol id="icon-learn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5a3 3 0 0 0-3 3 3 3 0 0 0-2 5.5A3 3 0 0 0 6 18a3 3 0 0 0 3 2V5z"/><path d="M15 5a3 3 0 0 1 3 3 3 3 0 0 1 2 5.5 3 3 0 0 1-2 4.5 3 3 0 0 1-3 2V5z"/><path d="M12 5v15"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/><path d="M12 9h-2M12 15h2"/></symbol>
+    </svg>
+  </div>
+
+  <section id="stations" class="py-24 bg-slate-950 grid-overlay">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-16 reveal">
+        <p class="text-forge-500 text-sm font-semibold tracking-widest uppercase mb-3">The Four Stations</p>
+        <h2 class="text-4xl md:text-5xl font-bold text-white mb-6">A Tour of the Forge Shop</h2>
+        <p class="text-xl text-slate-400 max-w-3xl mx-auto">
+          Every station is a phase of the software lifecycle. Every station is run by AI, watched by you, and wired into the next.
+        </p>
+      </div>
+
+      <!-- Smelt -->
+      <article id="smelt" class="grid md:grid-cols-2 gap-10 items-center mb-24 reveal">
+        <div class="order-2 md:order-1">
+          <div class="inline-flex items-center gap-3 mb-4 text-amber-400">
+            <svg class="w-8 h-8" aria-hidden="true"><use href="#icon-smelt"/></svg>
+            <span class="text-xs uppercase tracking-widest font-bold">Station 1 · Smelt</span>
+          </div>
+          <h3 class="text-3xl md:text-4xl font-bold text-white mb-4">Raw idea → refined spec.</h3>
+          <p class="text-slate-400 text-lg leading-relaxed mb-4">
+            Every plan starts as ore. The Smelt station interviews you, extracts the real requirements, flags hidden assumptions, and pours out a <strong class="text-slate-200">Scope Contract</strong> the AI can't argue with.
+          </p>
+          <ul class="space-y-2 text-slate-400 text-sm">
+            <li class="flex gap-2"><span class="text-amber-400">▸</span> Specifier agent · hardening runbook · `/specify` slash command</li>
+            <li class="flex gap-2"><span class="text-amber-400">▸</span> Output: a file the Forge station can execute without follow-up questions</li>
+          </ul>
+        </div>
+        <div class="order-1 md:order-2">
+          <img src="assets/brand/station-smelt.webp" alt="A stone crucible with molten iron pouring into a mold, blacksmith tongs resting on the rim, parchment checklist being inscribed in the warm ember light." class="w-full rounded-2xl border border-slate-700/40 shadow-xl shadow-amber-500/5" loading="lazy" />
+        </div>
+      </article>
+
+      <!-- Forge -->
+      <article id="forge-station" class="grid md:grid-cols-2 gap-10 items-center mb-24 reveal">
+        <div>
+          <img src="assets/brand/station-forge.webp" alt="Anvil with hammer mid-strike, sparks forming small geometric shapes — slices, blocks, and an execution graph glowing within the shower." class="w-full rounded-2xl border border-slate-700/40 shadow-xl shadow-amber-500/5" loading="lazy" />
+        </div>
+        <div>
+          <div class="inline-flex items-center gap-3 mb-4 text-amber-400">
+            <svg class="w-8 h-8" aria-hidden="true"><use href="#icon-forge"/></svg>
+            <span class="text-xs uppercase tracking-widest font-bold">Station 2 · Forge</span>
+          </div>
+          <h3 class="text-3xl md:text-4xl font-bold text-white mb-4">Spec → shipped code.</h3>
+          <p class="text-slate-400 text-lg leading-relaxed mb-4">
+            The anvil. Plans are broken into <strong class="text-slate-200">slices</strong> and struck one at a time — each a commit, each with its own gate. The hammer doesn't swing twice on the same slice unless tests pass.
+          </p>
+          <ul class="space-y-2 text-slate-400 text-sm">
+            <li class="flex gap-2"><span class="text-amber-400">▸</span> `pforge run-plan` · slice gates · quorum mode · cost ledger</li>
+            <li class="flex gap-2"><span class="text-amber-400">▸</span> Output: green tests, green CI, green ledger — or an honest stop</li>
+          </ul>
+        </div>
+      </article>
+
+      <!-- Guard -->
+      <article id="guard" class="grid md:grid-cols-2 gap-10 items-center mb-24 reveal">
+        <div class="order-2 md:order-1">
+          <div class="inline-flex items-center gap-3 mb-4 text-cyan-400">
+            <svg class="w-8 h-8" aria-hidden="true"><use href="#icon-guard"/></svg>
+            <span class="text-xs uppercase tracking-widest font-bold">Station 3 · Guard</span>
+          </div>
+          <h3 class="text-3xl md:text-4xl font-bold text-white mb-4">Standing watch over the floor.</h3>
+          <p class="text-slate-400 text-lg leading-relaxed mb-4">
+            The watchtower. <strong class="text-slate-200">LiveGuard</strong> scans secrets, env drift, CVE surface, and regression risk — before deploy, after every slice, every hour. Incidents become triaged fix plans, not pager calls at 3 AM.
+          </p>
+          <ul class="space-y-2 text-slate-400 text-sm">
+            <li class="flex gap-2"><span class="text-cyan-400">▸</span> forge_secret_scan · forge_drift_report · forge_regression_guard</li>
+            <li class="flex gap-2"><span class="text-cyan-400">▸</span> Output: pre-deploy block, post-slice advisory, incident → fix-proposal</li>
+          </ul>
+        </div>
+        <div class="order-1 md:order-2">
+          <img src="assets/brand/station-guard.webp" alt="Stone watchtower at the edge of the forge floor, rune-inscribed shield glowing cyan, sentry silhouettes patrolling the perimeter — a CVE-labeled scroll intercepted mid-air." class="w-full rounded-2xl border border-slate-700/40 shadow-xl shadow-cyan-500/5" loading="lazy" />
+        </div>
+      </article>
+
+      <!-- Learn -->
+      <article id="learn" class="grid md:grid-cols-2 gap-10 items-center reveal">
+        <div>
+          <img src="assets/brand/station-learn.webp" alt="A golden brain-shaped crystal suspended over an anvil, tendrils of light absorbing event motes, runic memory inscriptions floating upward into the crystal." class="w-full rounded-2xl border border-slate-700/40 shadow-xl shadow-amber-500/5" loading="lazy" />
+        </div>
+        <div>
+          <div class="inline-flex items-center gap-3 mb-4 text-amber-400">
+            <svg class="w-8 h-8" aria-hidden="true"><use href="#icon-learn"/></svg>
+            <span class="text-xs uppercase tracking-widest font-bold">Station 4 · Learn</span>
+          </div>
+          <h3 class="text-3xl md:text-4xl font-bold text-white mb-4">Every strike teaches the next.</h3>
+          <p class="text-slate-400 text-lg leading-relaxed mb-4">
+            The brain above the bench. Plan Forge remembers every incident, every fix, every review — and feeds it back into the next session as <strong class="text-slate-200">OpenBrain memories</strong>, bug-registry entries, and testbed findings. The shop gets sharper the longer you run it.
+          </p>
+          <ul class="space-y-2 text-slate-400 text-sm">
+            <li class="flex gap-2"><span class="text-amber-400">▸</span> OpenBrain · bug registry · testbed findings · health-DNA trend</li>
+            <li class="flex gap-2"><span class="text-amber-400">▸</span> Output: tomorrow's plan is colder, faster, and less wrong</li>
+          </ul>
+        </div>
+      </article>
+
+      <!-- Tour CTA -->
+      <div class="text-center mt-16">
+        <p class="text-slate-500 text-sm mb-4">Want the full walkthrough?</p>
+        <a href="capabilities.html#stations" class="inline-flex items-center gap-2 px-6 py-3 text-sm font-semibold bg-slate-800 hover:bg-slate-700 text-slate-100 rounded-xl border border-slate-700 transition-all">
+          Take the Shop Tour
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
+        </a>
       </div>
     </div>
   </section>

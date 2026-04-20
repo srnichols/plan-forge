@@ -5,6 +5,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.59.0] — Unreleased — Housekeeping
+
+> **Small, targeted cleanup.** One real bug fix (libuv teardown crash on Windows), one version-drift correction, and a ROADMAP prune that closes six stale backlog entries representing work that was already shipped.
+
+### Fixed
+
+- **Bug #82 — Windows libuv teardown assertion on `orchestrator.mjs --analyze` / `--diagnose`.** After a successful xAI/OpenAI/Anthropic API dispatch, `process.exit(0)` was called while undici's keepalive sockets were still closing, tripping `Assertion failed: !(handle->flags & UV_HANDLE_CLOSING), file src\win\async.c, line 76` and a non-zero exit. Both success paths now set `process.exitCode = 0` and let the event loop drain naturally; idle sockets unref and close cleanly. Error paths still use `process.exit(1)` for immediate failure signaling. Verified: same smoke test that crashed now exits cleanly (`$LASTEXITCODE = 0`).
+
+### Changed
+
+- `pforge-mcp/package.json` version bumped `2.47.0` → `2.59.0-dev` to re-align with the top-level `VERSION` file. The `pforge version-bump` command and `pforge smith` drift warning already expected parity; several prior releases had bypassed `version-bump` and let the two drift.
+
+### Docs
+
+- **ROADMAP prune.** Removed six backlog entries representing work already shipped: `pforge update --from-github` (#75, shipped v2.51.0), PreCommit hook against direct-to-master (#74, shipped v2.50.1), runtime-aware `model-performance.json` validation (#73, shipped as `forge_doctor_quorum` + 33 tests), gh-copilot cost/token resolution (#63, closed), preset-specific `validate-setup` minimum counts (shipped), and the B1 shipped marker for `pforge org-rules export`. Phase-27 backlog also had the libuv crash item (now fixed in this release).
+
+---
+
 ## [2.58.0] — 2026-04-20 — Phase-26 Competitive & Self-Deterministic Loop
 
 > **The inner loop gains competitive execution and self-correction.** Building on the Phase-25 reflective layer, this release adds three new opt-in subsystems — competitive worktree execution, auto-fix patch proposals, and cost-anomaly detection — a dedicated Dashboard "Inner Loop" tab that surfaces all ten subsystems in one place, and a best-defaults preset so new projects start with advisory-posture defaults out of the box. Every addition is opt-in; nothing in existing workflows changes.

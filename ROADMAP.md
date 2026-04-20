@@ -146,13 +146,9 @@ v2.49.0 FORGE-SHOP-02 review queue (`forge_review_add/list/resolve`, Review tab,
 
 ### LiveGuard Complements
 
-#### B1. Org Custom Instructions Generator (`pforge org-rules export`) ✅
-
-Shipped in v2.15.
-
 #### B4. Validation Tools Complement Guide
 
-Document how Plan Forge gates complement cloud agent validation (CodeQL, secret scanning, Copilot code review). Add comparison table to COPILOT-VSCODE-GUIDE.md. Optional `.forge.json` `cloudAgentValidation` key.
+Document how Plan Forge gates complement cloud agent validation (CodeQL, secret scanning, Copilot code review). Add comparison table to COPILOT-VSCODE-GUIDE.md. Optional `.forge.json` `cloudAgentValidation` key. *(Related content already lives in [faq.html](docs/faq.html) and [index.html](docs/index.html) — formal guide-page table is incremental polish.)*
 
 ### v2.14 Phase C — Strategic Investments
 
@@ -206,21 +202,9 @@ Coordinate multiple orchestrators across developers.
 
 ### Phase-27 candidates
 - Advisory-to-enforcement calibration — graduate Phase-25/26 subsystems (reviewer-agent, auto-fix, cost-anomaly, competitive) from advisory to blocking/auto-apply once field data justifies thresholds
-- Libuv/Windows teardown crash in `node pforge-mcp/orchestrator.mjs --analyze` — cosmetic exit-code 1 after success path completes; investigate async handle cleanup
-
-### Auto-update
-- `pforge update --from-github` — true auto-install without requiring local clone ([#75](https://github.com/srnichols/plan-forge/issues/75))
-
-### Orchestrator plumbing
-- PreCommit hook rejecting direct-to-master during run-plan execution ([#74](https://github.com/srnichols/plan-forge/issues/74))
-- Runtime-aware `model-performance.json` validation at config time ([#73](https://github.com/srnichols/plan-forge/issues/73))
-- Cost/token tracking model resolution for gh-copilot worker ([#63](https://github.com/srnichols/plan-forge/issues/63))
-
-### Security & Compliance
-- Preset-specific validation minimum count checks in `validate-setup`
 
 ### Community & Docs
-- `specify init` detection — auto-detect Spec Kit project and layer Plan Forge guardrails
+- `specify init` detection — auto-detect Spec Kit project and layer Plan Forge guardrails *(waits on user demand)*
 
 ---
 

@@ -10074,7 +10074,11 @@ if (args.includes("--test")) {
     writeFileSync(reportFile, JSON.stringify(result, null, 2));
     console.log(`\n  📄 Full report saved: ${reportFile}\n`);
 
-    process.exit(0);
+    // Bug #82: avoid `process.exit(0)` after fetch() — on Windows, forcing
+    // exit while undici keepalive sockets are still closing trips
+    // `Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)`. Set exitCode
+    // and let the event loop drain naturally (idle sockets unref themselves).
+    process.exitCode = 0;
   } catch (err) {
     console.error(`Analysis error: ${err.message}`);
     process.exit(1);
@@ -10116,7 +10120,8 @@ if (args.includes("--test")) {
     writeFileSync(reportFile, JSON.stringify(result, null, 2));
     console.log(`\n  📄 Full report saved: ${reportFile}\n`);
 
-    process.exit(0);
+    // Bug #82: see --analyze branch. Same fix — exitCode over exit().
+    process.exitCode = 0;
   } catch (err) {
     console.error(`Diagnosis error: ${err.message}`);
     process.exit(1);

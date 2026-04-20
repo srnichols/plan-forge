@@ -29,7 +29,7 @@ import { createTraceContext, createTelemetryHandler, writeManifest, appendRunInd
 import { isOpenBrainConfigured, buildMemorySearchBlock, buildMemoryCaptureBlock, buildReflexionBlock, buildTrajectorySuffix, extractTrajectory, writeTrajectory, retrieveAutoSkills, buildAutoSkillContext, extractAutoSkill, writeAutoSkill, incrementAutoSkillReuse, buildRunSummaryThought, buildCostAnomalyThought, loadProjectContext, buildPlanBootContext } from "./memory.mjs";
 import { enforceCrucibleId, CrucibleEnforcementError } from "./crucible-enforce.mjs";
 // Phase FORGE-SHOP-07 Slice 07.2 — brain facade for unified recall
-import { recall as brainRecall } from "./brain.mjs";
+import { recall as brainRecall, loadReviewerConfig, invokeReviewer } from "./brain.mjs";
 // Phase TEMPER-01 Slice 01.1 — re-export tempering state reader so the
 // watcher-snapshot contract mirrors readCrucibleState exactly.
 import {
@@ -4010,12 +4010,18 @@ export function registerGateCheckResponder(hub, cwd, deps = {}) {
   const _readRQS = deps.readReviewQueueState || readReviewQueueState;
   const _readJsonl = deps.readForgeJsonl || readForgeJsonl;
   const config = deps.config || loadGateCheckConfig(cwd);
+  // Phase-25 Slice 7: opt-in reviewer (MUST #7 + #8). Advisory-only in v2.57
+  // per D6 (blockOnCritical defaults false). When `deps.quorumInvoke` is
+  // absent the reviewer simply reports skipped.
+  const reviewerConfig = deps.reviewerConfig || loadReviewerConfig(cwd);
+  const reviewerDeps = { quorumInvoke: deps.quorumInvoke };
 
   hub.onAsk("brain.gate-check", async (payload) => {
     const reasons = [];
     let openBlockingReviews = 0;
     let openIncidents = 0;
     let driftScore = null;
+    let reviewer = null;
 
     // 1. Check for blocker-severity open reviews
     try {
@@ -4063,6 +4069,29 @@ export function registerGateCheckResponder(hub, cwd, deps = {}) {
       }
     } catch { /* treat as no data — proceed */ }
 
+    // 4. Opt-in reviewer-agent (Phase-25 Slice 7, MUST #7 + #8). Advisory
+    //    only in v2.57 per D6 — flags `critical` but `blockOnCritical`
+    //    defaults false so verdicts never stop slice progression here. When
+    //    blockOnCritical is true AND the reviewer ran AND flagged critical,
+    //    we append a blocking reason.
+    if (reviewerConfig.enabled) {
+      try {
+        const verdict = await invokeReviewer({
+          sliceNumber: payload?.sliceNumber,
+          sliceTitle: payload?.sliceTitle,
+          diffSummary: payload?.diffSummary,
+          config: reviewerConfig,
+          cwd,
+        }, reviewerDeps);
+        reviewer = verdict;
+        if (verdict.ok && verdict.critical && reviewerConfig.blockOnCritical) {
+          reasons.push(`reviewer flagged critical: ${verdict.summary || "(no summary)"}`);
+        }
+      } catch {
+        // Never block the gate on reviewer infrastructure failure — advisory only.
+      }
+    }
+
     const proceed = reasons.length === 0;
     return {
       proceed,
@@ -4070,6 +4099,7 @@ export function registerGateCheckResponder(hub, cwd, deps = {}) {
       openBlockingReviews,
       driftScore,
       openIncidents,
+      reviewer,
     };
   });
 }

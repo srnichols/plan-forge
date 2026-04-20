@@ -385,6 +385,162 @@ export function validateFederationConfig(cwd = process.cwd()) {
   return errors;
 }
 
+// ─── Phase-25 Slice 7: Reviewer-agent in-loop (L4) ───────────────────────────
+
+/**
+ * Default reviewer configuration. Opt-in per Phase-25 MUST #7.
+ * `blockOnCritical` is advisory-only in v2.57 (D6): the reviewer surfaces
+ * verdicts but never blocks the next slice. Blocking enters Phase-26 after
+ * calibration data exists.
+ */
+export const REVIEWER_DEFAULTS = Object.freeze({
+  enabled: false,
+  quorumPreset: "speed",
+  blockOnCritical: false,
+  timeoutMs: 30000,
+});
+
+/**
+ * Load `.forge.json → runtime.reviewer` with defaults. Unknown fields are
+ * ignored; malformed quorumPreset falls back to "speed".
+ */
+export function loadReviewerConfig(cwd = process.cwd()) {
+  const out = { ...REVIEWER_DEFAULTS };
+  const configPath = resolve(cwd, ".forge.json");
+  if (!existsSync(configPath)) return out;
+  try {
+    const raw = JSON.parse(readFileSync(configPath, "utf-8"));
+    const block = raw?.runtime?.reviewer;
+    if (block && typeof block === "object") {
+      if (typeof block.enabled === "boolean") out.enabled = block.enabled;
+      if (typeof block.quorumPreset === "string" && ["speed", "power"].includes(block.quorumPreset)) {
+        out.quorumPreset = block.quorumPreset;
+      }
+      if (typeof block.blockOnCritical === "boolean") out.blockOnCritical = block.blockOnCritical;
+      if (typeof block.timeoutMs === "number" && block.timeoutMs > 0) out.timeoutMs = Math.floor(block.timeoutMs);
+    }
+  } catch { /* malformed — keep defaults */ }
+  return out;
+}
+
+/**
+ * Parse a reviewer response into a structured verdict. Tolerant of partial
+ * JSON, markdown fences, or prose wrappers. Unknown shapes yield
+ * `{ ok: false, error }` so callers can treat the reviewer as skipped.
+ *
+ * Expected shape (flexible): `{ score: 0-100, critical: boolean, summary: string }`
+ */
+export function parseReviewerResponse(raw) {
+  if (raw == null) return { ok: false, error: "empty response" };
+  if (typeof raw === "object" && !Array.isArray(raw)) {
+    const score = Number(raw.score);
+    const critical = raw.critical === true;
+    const summary = typeof raw.summary === "string" ? raw.summary : "";
+    if (Number.isFinite(score)) {
+      return { ok: true, score: Math.max(0, Math.min(100, score)), critical, summary };
+    }
+    return { ok: false, error: "missing numeric score" };
+  }
+  if (typeof raw === "string") {
+    // Try to extract a JSON object — prefer the first `{...}` balanced block.
+    const fencedMatch = raw.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+    const bareMatch = fencedMatch ? null : raw.match(/\{[\s\S]*\}/);
+    const candidate = fencedMatch ? fencedMatch[1] : (bareMatch ? bareMatch[0] : null);
+    if (!candidate) return { ok: false, error: "no JSON object found in string" };
+    try {
+      return parseReviewerResponse(JSON.parse(candidate));
+    } catch (err) {
+      return { ok: false, error: `invalid JSON: ${err.message}` };
+    }
+  }
+  return { ok: false, error: `unsupported type: ${typeof raw}` };
+}
+
+/**
+ * Phase-25 MUST #8 — Invoke the speed-quorum reviewer on a slice diff.
+ *
+ * Pure DI — the actual quorum LLM call is injected via `deps.quorumInvoke`
+ * so tests can mock it deterministically. When `quorumInvoke` is absent, the
+ * helper returns a skipped verdict rather than throwing.
+ *
+ * Timeboxed via `Promise.race`; on timeout returns `{ ok: false, error, timedOut: true }`.
+ *
+ * @param {{
+ *   sliceNumber?: (number|string),
+ *   sliceTitle?: string,
+ *   diffSummary?: string,
+ *   config?: object,
+ *   cwd?: string,
+ * }} args
+ * @param {{ quorumInvoke?: Function, now?: Function }} [deps]
+ * @returns {Promise<{
+ *   ok: boolean,
+ *   skipped?: boolean,
+ *   timedOut?: boolean,
+ *   error?: string,
+ *   score?: number,
+ *   critical?: boolean,
+ *   summary?: string,
+ *   quorumPreset?: string,
+ *   durationMs?: number,
+ * }>}
+ */
+export async function invokeReviewer(args = {}, deps = {}) {
+  const cwd = args.cwd || process.cwd();
+  const config = args.config || loadReviewerConfig(cwd);
+  if (!config.enabled) {
+    return { ok: false, skipped: true, error: "reviewer disabled" };
+  }
+  const quorumInvoke = typeof deps.quorumInvoke === "function" ? deps.quorumInvoke : null;
+  if (!quorumInvoke) {
+    return { ok: false, skipped: true, error: "no quorumInvoke handler" };
+  }
+
+  const prompt = [
+    `You are a code reviewer. Score the following slice diff from 0-100 and flag if there are any critical issues.`,
+    ``,
+    `Slice: ${args.sliceNumber ?? "?"} — ${args.sliceTitle || ""}`,
+    ``,
+    `Diff summary:`,
+    (args.diffSummary || "(no diff provided)").slice(0, 4000),
+    ``,
+    `Respond with JSON only: {"score": <0-100>, "critical": <true|false>, "summary": "<one-line verdict>"}`,
+  ].join("\n");
+
+  const now = typeof deps.now === "function" ? deps.now : Date.now;
+  const t0 = now();
+  let timer;
+  const timeoutPromise = new Promise((resolve) => {
+    timer = setTimeout(() => resolve({ __timedOut: true }), config.timeoutMs);
+  });
+
+  try {
+    const raced = await Promise.race([
+      Promise.resolve().then(() => quorumInvoke(prompt, { preset: config.quorumPreset })),
+      timeoutPromise,
+    ]);
+    if (raced && raced.__timedOut) {
+      return { ok: false, timedOut: true, error: "reviewer timeout", quorumPreset: config.quorumPreset, durationMs: now() - t0 };
+    }
+    const parsed = parseReviewerResponse(raced);
+    if (!parsed.ok) {
+      return { ok: false, error: parsed.error, quorumPreset: config.quorumPreset, durationMs: now() - t0 };
+    }
+    return {
+      ok: true,
+      score: parsed.score,
+      critical: parsed.critical,
+      summary: parsed.summary,
+      quorumPreset: config.quorumPreset,
+      durationMs: now() - t0,
+    };
+  } catch (err) {
+    return { ok: false, error: err?.message || String(err), quorumPreset: config.quorumPreset, durationMs: now() - t0 };
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 // ─── L3 Backend (Semantic / OpenBrain) ──────────────────────────────────────
 
 async function l3Recall(key, deps) {

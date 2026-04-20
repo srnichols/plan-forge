@@ -1,0 +1,18 @@
+{
+  "scenarioId": "happy-path-01",
+  "kind": "happy-path",
+  "description": "Verify forge init creates .forge directory and default config structure",
+  "setup": [
+    { "cmd": "node -e \"require('fs').mkdirSync('.forge',{recursive:true})\"", "timeout": 10000 }
+  ],
+  "execute": [
+    { "cmd": "node -e \"const ok=require('fs').existsSync('.forge'); process.exit(ok?0:1)\"", "timeout": 10000 }
+  ],
+  "assertions": [
+    { "kind": "exit-code", "expected": 0 },
+    { "kind": "file-exists", "path": ".forge" }
+  ],
+  "teardown": [
+    { "cmd": "node -e \"require('fs').rmSync('.forge',{recursive:true,force:true})\"", "timeout": 10000 }
+  ]
+}

@@ -1310,6 +1310,29 @@ export const TOOL_METADATA = {
       output: { findings: [], total: 0, truncated: false },
     },
   },
+  forge_testbed_happypath: {
+    intent: ["test", "validate", "happy-path", "testbed", "smoke-test"],
+    aliases: ["testbed-happypath", "run-happypath", "happy-path-test"],
+    cost: "high",
+    maxConcurrent: 1,
+    addedIn: "2.57.0",
+    prerequisites: ["testbed repo exists", "happy-path scenarios in docs/plans/testbed-scenarios/"],
+    produces: ["docs/plans/testbed-findings/*.json"],
+    consumes: ["docs/plans/testbed-scenarios/*.json"],
+    sideEffects: ["writes defect log", "emits hub events", "acquires testbed lock"],
+    writesFiles: true,
+    network: false,
+    risk: "medium",
+    errors: {
+      ERR_TESTBED_NOT_FOUND: { message: "Testbed repo not found", recovery: "Set testbed.path in .forge.json" },
+      ERR_TESTBED_LOCKED: { message: "Another scenario is running", recovery: "Wait or remove stale .forge/testbed.lock" },
+      ERR_NO_HAPPYPATH_SCENARIOS: { message: "No happy-path scenarios found", recovery: "Add happy-path scenarios to docs/plans/testbed-scenarios/" },
+    },
+    example: {
+      input: { dryRun: true },
+      output: { passed: 5, failed: 0, total: 5, results: [] },
+    },
+  },
 };
 
 export const WORKFLOWS = {

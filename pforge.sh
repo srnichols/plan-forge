@@ -3846,6 +3846,33 @@ cmd_tour() {
     echo ""
 }
 
+# ─── Command: testbed-happypath ────────────────────────────────────────
+cmd_testbed_happypath() {
+    echo ""
+    echo "╔══════════════════════════════════════════════════════════════╗"
+    echo "║       Plan Forge — Testbed Happy-Path Runner                 ║"
+    echo "╚══════════════════════════════════════════════════════════════╝"
+    echo ""
+
+    local node_args=("$REPO_ROOT/pforge-mcp/testbed/cli-happypath.mjs" "--project-dir" "$REPO_ROOT")
+
+    for arg in "$@"; do
+        case "$arg" in
+            --dry-run) node_args+=("--dry-run") ;;
+            --testbed-path=*) node_args+=("--testbed-path" "${arg#--testbed-path=}") ;;
+            *) node_args+=("$arg") ;;
+        esac
+    done
+
+    echo "Running happy-path scenarios..."
+    if node "${node_args[@]}"; then
+        echo "All happy-path scenarios passed."
+    else
+        echo "Some scenarios failed." >&2
+        exit 1
+    fi
+}
+
 # ─── Command Router ────────────────────────────────────────────────────
 COMMAND="${1:-help}"
 shift 2>/dev/null || true
@@ -3878,6 +3905,7 @@ case "$COMMAND" in
     quorum-analyze)  cmd_quorum_analyze "$@" ;;
     health-trend)    cmd_health_trend "$@" ;;
     smith)        cmd_doctor "$@" ;;
+    testbed-happypath) cmd_testbed_happypath "$@" ;;
     self-update)  cmd_self_update "$@" ;;
     tour)         cmd_tour ;;
     help|--help)  show_help ;;

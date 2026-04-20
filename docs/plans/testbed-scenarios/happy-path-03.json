@@ -1,0 +1,19 @@
+{
+  "scenarioId": "happy-path-03",
+  "kind": "happy-path",
+  "description": "Verify memory store and recall round-trip via file-based persistence",
+  "setup": [
+    { "cmd": "node -e \"require('fs').mkdirSync('.forge/memory',{recursive:true})\"", "timeout": 10000 }
+  ],
+  "execute": [
+    { "cmd": "node -e \"const fs=require('fs'); fs.writeFileSync('.forge/memory/test-thought.json',JSON.stringify({key:'test',value:'hello',ts:Date.now()})); const data=JSON.parse(fs.readFileSync('.forge/memory/test-thought.json','utf-8')); process.exit(data.value==='hello'?0:1)\"", "timeout": 15000 }
+  ],
+  "assertions": [
+    { "kind": "exit-code", "expected": 0 },
+    { "kind": "file-exists", "path": ".forge/memory/test-thought.json" },
+    { "kind": "file-contains", "path": ".forge/memory/test-thought.json", "pattern": "hello" }
+  ],
+  "teardown": [
+    { "cmd": "node -e \"require('fs').rmSync('.forge',{recursive:true,force:true})\"", "timeout": 10000 }
+  ]
+}

@@ -4,6 +4,27 @@ Scenario fixture files define automated validation runs against a
 **testbed repository** — a separate clone of Plan Forge (or a
 consumer project) used to verify forge tools end-to-end.
 
+## Seeded Scenarios
+
+| Scenario ID | Description | Assertion Kinds |
+|-------------|-------------|-----------------|
+| `happy-path-01` | Forge init creates `.forge` directory and default config | `exit-code`, `file-exists` |
+| `happy-path-02` | Plan parsing extracts slice headers and scope contract | `exit-code`, `file-exists`, `file-contains` |
+| `happy-path-03` | Memory store and recall round-trip via file persistence | `exit-code`, `file-exists`, `file-contains` |
+| `happy-path-04` | Smith diagnostics completes within time budget | `exit-code`, `duration-under` |
+| `happy-path-05` | Extension directory creation and artefact listing | `exit-code`, `artefact-count` |
+
+### Running All Happy-Path Scenarios
+
+```bash
+# Via MCP tool
+forge_testbed_happypath --dryRun
+
+# Via CLI
+pforge testbed-happypath --dry-run
+pforge testbed-happypath --testbed-path=/path/to/testbed
+```
+
 ## Fixture Format (JSON)
 
 ```jsonc

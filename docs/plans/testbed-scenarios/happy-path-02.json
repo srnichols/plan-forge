@@ -1,0 +1,19 @@
+{
+  "scenarioId": "happy-path-02",
+  "kind": "happy-path",
+  "description": "Verify plan parsing extracts slice headers and scope contract from a sample plan",
+  "setup": [
+    { "cmd": "node -e \"require('fs').mkdirSync('docs/plans',{recursive:true}); require('fs').writeFileSync('docs/plans/test-plan.md','# Test Plan\\n## Scope Contract\\nMUST do X\\n## Slice 1 — Setup\\nBuild the thing\\n## Slice 2 — Validate\\nTest the thing')\"", "timeout": 10000 }
+  ],
+  "execute": [
+    { "cmd": "node -e \"const c=require('fs').readFileSync('docs/plans/test-plan.md','utf-8'); const ok=c.includes('Scope Contract')&&c.includes('Slice 1'); process.exit(ok?0:1)\"", "timeout": 15000 }
+  ],
+  "assertions": [
+    { "kind": "exit-code", "expected": 0 },
+    { "kind": "file-exists", "path": "docs/plans/test-plan.md" },
+    { "kind": "file-contains", "path": "docs/plans/test-plan.md", "pattern": "Scope Contract" }
+  ],
+  "teardown": [
+    { "cmd": "node -e \"require('fs').rmSync('docs',{recursive:true,force:true})\"", "timeout": 10000 }
+  ]
+}

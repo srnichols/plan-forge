@@ -1349,6 +1349,19 @@ const TOOLS = [
       required: [],
     },
   },
+  {
+    name: "forge_testbed_happypath",
+    description: "Run all happy-path testbed scenarios sequentially. Returns aggregated pass/fail results with per-scenario details. Use dryRun to validate without executing.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        testbedPath: { type: "string", description: "Path to testbed repository (default: from .forge.json testbed.path)" },
+        dryRun: { type: "boolean", description: "If true, skip execute and teardown steps (default: false)" },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+      required: [],
+    },
+  },
 ];
 
 function planNameToRunbookName(planPath) {
@@ -1519,6 +1532,7 @@ function executeTool(name, args) {
     case "forge_search":
     case "forge_doctor_quorum":
     case "forge_testbed_run":
+    case "forge_testbed_happypath":
       return null; // Handled async in CallToolRequestSchema handler
     default:
       return { success: false, error: `Unknown tool: ${name}` };
@@ -4538,6 +4552,58 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
   }
 
+  // ─── forge_testbed_happypath — run all happy-path scenarios (TESTBED-02 Slice 01) ───
+  if (name === "forge_testbed_happypath") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const { listScenarios, loadScenario, resolveTestbedPath } = await import("./testbed/scenarios.mjs");
+      const { runScenario } = await import("./testbed/runner.mjs");
+      const allScenarios = listScenarios({ projectRoot: cwd });
+      const happyPathIds = allScenarios.filter(s => s.kind === "happy-path").map(s => s.scenarioId);
+
+      const testbedPath = resolveTestbedPath({ testbedPath: args.testbedPath }, { projectRoot: cwd });
+      const results = [];
+      let passed = 0;
+      let failed = 0;
+
+      for (const id of happyPathIds) {
+        let scenario;
+        try {
+          scenario = loadScenario(id, { projectRoot: cwd });
+        } catch (loadErr) {
+          results.push({ scenarioId: id, status: "load-error", error: loadErr.message, code: loadErr.code });
+          failed++;
+          continue;
+        }
+        try {
+          const res = await runScenario(scenario, {
+            hub: activeHub,
+            projectRoot: cwd,
+            captureMemoryFn: captureMemory,
+            testbedPath,
+            dryRun: args.dryRun || false,
+          });
+          results.push(res);
+          if (res.status === "passed") passed++;
+          else failed++;
+        } catch (runErr) {
+          results.push({ scenarioId: id, status: "error", error: runErr.message, code: runErr.code });
+          failed++;
+        }
+      }
+
+      const summary = { passed, failed, total: happyPathIds.length, results };
+      const status = failed === 0 && happyPathIds.length > 0 ? "OK" : "FAIL";
+      emitToolTelemetry("forge_testbed_happypath", args, summary, Date.now() - t0, status, cwd);
+      return { content: [{ type: "text", text: JSON.stringify(summary, null, 2) }], isError: failed > 0 };
+    } catch (err) {
+      const durationMs = Date.now() - t0;
+      emitToolTelemetry("forge_testbed_happypath", args, { error: err.message, code: err.code }, durationMs, "ERROR", findProjectRoot(PROJECT_DIR));
+      return { content: [{ type: "text", text: JSON.stringify({ error: err.code || "ERR_TESTBED", message: err.message }) }], isError: true };
+    }
+  }
+
   // ─── Sync pforge tools ───
   const result = executeTool(name, args || {});
 
@@ -5548,6 +5614,8 @@ export function createExpressApp() {
     "forge_doctor_quorum",
     // Phase TESTBED-01 Slice 01 — Testbed runner is MCP-native.
     "forge_testbed_run",
+    // Phase TESTBED-02 Slice 01 — Testbed happypath runner is MCP-native.
+    "forge_testbed_happypath",
   ]);
   app.post("/api/tool/:name", async (req, res) => {
     try {

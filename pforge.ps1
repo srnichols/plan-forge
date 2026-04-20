@@ -4784,6 +4784,34 @@ console.log(JSON.stringify(r || { isNewer: false }));
     Invoke-Update
 }
 
+# ─── Command: testbed-happypath ────────────────────────────────────────
+function Invoke-TestbedHappypath {
+    Write-Host ""
+    Write-Host "╔══════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+    Write-Host "║       Plan Forge — Testbed Happy-Path Runner                 ║" -ForegroundColor Cyan
+    Write-Host "╚══════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+    Write-Host ""
+
+    $nodeArgs = @("$RepoRoot/pforge-mcp/testbed/cli-happypath.mjs", "--project-dir", $RepoRoot)
+
+    if ($DryRun) { $nodeArgs += "--dry-run" }
+
+    foreach ($a in $Arguments) {
+        if ($a -eq '--dry-run') { $nodeArgs += "--dry-run" }
+        elseif ($a -match '^--testbed-path=(.+)$') { $nodeArgs += "--testbed-path"; $nodeArgs += $Matches[1] }
+        elseif ($a -match '^--testbed-path$') { /* next arg handled by node */ $nodeArgs += "--testbed-path" }
+        else { $nodeArgs += $a }
+    }
+
+    Write-Host "Running happy-path scenarios..." -ForegroundColor DarkGray
+    & node $nodeArgs
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Some scenarios failed." -ForegroundColor Red
+        exit 1
+    }
+    Write-Host "All happy-path scenarios passed." -ForegroundColor Green
+}
+
 # ─── Command Router ────────────────────────────────────────────────────
 switch ($Command) {
     'init'         { Invoke-Init }
@@ -4816,6 +4844,7 @@ switch ($Command) {
     'health-trend'    { Invoke-HealthTrend }
     'version-bump' { Invoke-VersionBump }
     'smith'        { Invoke-Smith }
+    'testbed-happypath' { Invoke-TestbedHappypath }
     'migrate-memory' { Invoke-MigrateMemory }
     'tour'         { Invoke-Tour }
     'help'         { Show-Help }

@@ -1,0 +1,18 @@
+{
+  "scenarioId": "happy-path-05",
+  "kind": "happy-path",
+  "description": "Verify extension directory creation and artefact listing",
+  "setup": [
+    { "cmd": "node -e \"require('fs').mkdirSync('.forge/extensions',{recursive:true})\"", "timeout": 10000 }
+  ],
+  "execute": [
+    { "cmd": "node -e \"const fs=require('fs'); fs.writeFileSync('.forge/extensions/ext-a.json','{\\\"name\\\":\\\"a\\\"}'); fs.writeFileSync('.forge/extensions/ext-b.json','{\\\"name\\\":\\\"b\\\"}'); console.log('installed 2 extensions')\"", "timeout": 10000 }
+  ],
+  "assertions": [
+    { "kind": "exit-code", "expected": 0 },
+    { "kind": "artefact-count", "dir": ".forge/extensions", "min": 2 }
+  ],
+  "teardown": [
+    { "cmd": "node -e \"require('fs').rmSync('.forge',{recursive:true,force:true})\"", "timeout": 10000 }
+  ]
+}

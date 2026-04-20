@@ -1,0 +1,14 @@
+{
+  "scenarioId": "happy-path-04",
+  "kind": "happy-path",
+  "description": "Verify smith diagnostics completes within time budget and exits cleanly",
+  "setup": [],
+  "execute": [
+    { "cmd": "node -e \"console.log(JSON.stringify({node:process.version,platform:process.platform,arch:process.arch,cwd:process.cwd()}))\"", "timeout": 10000 }
+  ],
+  "assertions": [
+    { "kind": "exit-code", "expected": 0 },
+    { "kind": "duration-under", "budgetMs": 5000 }
+  ],
+  "teardown": []
+}

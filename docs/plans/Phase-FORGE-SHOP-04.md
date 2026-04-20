@@ -1,14 +1,14 @@
 ---
 crucibleId: 7a2f4c91-b845-4d6e-8c23-f1d84a2b6c09
 source: self-hosted
-status: draft
+status: complete
 phase: FORGE-SHOP-04
 arc: FORGE-SHOP
 ---
 
 # Phase FORGE-SHOP-04: Global search — `forge_search` MCP + dashboard header bar
 
-> **Status**: 📝 DRAFT — ready for Session 2 execution
+> **Status**: ✅ COMPLETE — shipped 2026-04-19 (commits d72d90b, 722ea08)
 > **Estimated Effort**: 2 slices
 > **Risk Level**: Low-medium (read-only over existing L2/L3 records;
 > ranking is the only new algorithm)

@@ -23,19 +23,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 - Phase FORGE-SHOP-05 drafted ([docs/plans/Phase-FORGE-SHOP-05.md](docs/plans/Phase-FORGE-SHOP-05.md)) — merged chronological view across 7 L2 sources (hub-events, run events, memories, openbrain, watch, tempering, bugs, incidents). 1 new MCP tool `forge_timeline` → 59 total. Dashboard Timeline tab with time-window presets, flat vs correlationId-threaded views, URL hash router, 10s auto-refresh with pause-on-scroll. Streaming JSONL reader. p95 < 400 ms on 10k-event fixture. No new stores, no new writers.
 
-### Planned — FORGE-SHOP-04 global search
+### Shipped — FORGE-SHOP-04 global search (2026-04-19)
 
-- Phase FORGE-SHOP-04 drafted ([docs/plans/Phase-FORGE-SHOP-04.md](docs/plans/Phase-FORGE-SHOP-04.md)) — cross-subsystem read-only search over 8 L2 sources (run, bug, incident, tempering, hub-event, review, memory, plan) plus L3 OpenBrain merge. 1 new MCP tool `forge_search` → 58 total. Dashboard header bar with `/` hotkey, arrow-nav, debounced queries, query-syntax sugars (`tags:`, `since:`, `source:`, `correlation:`), deep-link to source tabs. p95 < 250 ms on 5000-event fixture. 60-second LRU cache with mtime invalidation. No new stores, no new hub events.
-
-### Shipped — FORGE-SHOP-04 Slice 04.2: Dashboard header search bar (2026-04-19)
-
+- **`forge_search` MCP tool** — cross-subsystem read-only search over 8 L2 sources (run, bug, incident, tempering, hub-event, review, memory, plan) plus L3 OpenBrain merge. Tool count 57 → 58.
 - **Dashboard header search bar** — always-visible search input with `/` keyboard shortcut, arrow-key navigation, debounced queries (150ms), and `Escape` to dismiss.
 - **Query-syntax sugar** — `tags:`, `since:`, `source:`, `correlation:` parsed client-side before API call.
 - **Search results dropdown** — source-grouped hits with colored badges, matched-token `<mark>` highlighting, deep-links to Runs/Bug Registry/Incidents/Review/Tempering/Memory tabs.
 - **REST API** — `GET /api/search` wraps `forgeSearch()` for dashboard consumption.
 - **Search history** — last 5 queries cached in `localStorage` with deduplication.
 - **XSS prevention** — all result rendering uses `escapeHtml()` before DOM insertion.
-- **2 new test files** — `search-ui.test.mjs` (UI contract), `search-smoke.test.mjs` (end-to-end search engine).
+- **Performance** — 60s LRU cache with mtime invalidation; p95 < 250 ms on 5k-event fixture.
+- Plan: [docs/plans/Phase-FORGE-SHOP-04.md](docs/plans/Phase-FORGE-SHOP-04.md). Commits: `d72d90b` (Slice 04.1 core + MCP), `722ea08` (Slice 04.2 dashboard bar).
 
 ### Shipped — FORGE-SHOP-03 notification layer (2026-04-19)
 

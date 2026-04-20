@@ -123,6 +123,7 @@
       <button class="tab-btn px-3 py-1.5 rounded-t hover:text-emerald-400 text-gray-400 whitespace-nowrap text-xs" data-tab="tempering">🛠 Tempering</button>
       <button class="tab-btn px-3 py-1.5 rounded-t hover:text-red-400 text-gray-400 whitespace-nowrap text-xs" data-tab="bugregistry">🐛 Bug Registry</button>
       <button class="tab-btn px-3 py-1.5 rounded-t hover:text-blue-400 text-gray-400 whitespace-nowrap text-xs" data-tab="memory">Memory</button>
+      <button class="tab-btn px-3 py-1.5 rounded-t hover:text-cyan-400 text-gray-400 whitespace-nowrap text-xs" data-tab="timeline" data-testid="timeline-tab-btn">📅 Timeline</button>
     </div>
     <!-- Sub tabs: LiveGuard -->
     <div id="subtabs-liveguard" class="hidden flex gap-1 pt-1 pb-0.5 overflow-x-auto">
@@ -1180,6 +1181,79 @@
           <p class="text-gray-500 py-2 text-center">Loading…</p>
         </div>
       </div>
+    </section>
+
+    <!-- Timeline Tab (Phase FORGE-SHOP-05 Slice 05.2) — unified chronological event view -->
+    <section id="tab-timeline" class="tab-content hidden">
+      <div class="mb-4 flex items-center justify-between">
+        <div>
+          <h2 class="text-lg font-semibold text-cyan-400">📅 Timeline</h2>
+          <p class="text-xs text-gray-500">Unified chronological view across all forge event sources.</p>
+        </div>
+        <div class="flex gap-2 items-center">
+          <label class="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
+            <input type="checkbox" id="timeline-auto-refresh" data-testid="timeline-auto-refresh" class="rounded">
+            Auto-refresh (10s)
+          </label>
+          <button onclick="loadTimelineData()" data-testid="timeline-refresh-btn" class="text-xs px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded">Refresh</button>
+        </div>
+      </div>
+
+      <!-- Filter bar -->
+      <div class="flex flex-wrap gap-2 mb-4 items-center" data-testid="timeline-filter-bar">
+        <!-- Time window presets -->
+        <span class="text-xs text-gray-500 mr-1">Window:</span>
+        <button class="timeline-window-chip text-xs px-2 py-0.5 rounded-full border border-gray-600 text-gray-400 hover:text-white" data-window="15m" data-testid="timeline-window-15m">15m</button>
+        <button class="timeline-window-chip text-xs px-2 py-0.5 rounded-full border border-gray-600 text-gray-400 hover:text-white" data-window="1h" data-testid="timeline-window-1h">1h</button>
+        <button class="timeline-window-chip text-xs px-2 py-0.5 rounded-full border border-gray-600 text-gray-400 hover:text-white" data-window="6h" data-testid="timeline-window-6h">6h</button>
+        <button class="timeline-window-chip tab-active text-xs px-2 py-0.5 rounded-full border border-cyan-500 text-cyan-400" data-window="24h" data-testid="timeline-window-24h">24h</button>
+        <button class="timeline-window-chip text-xs px-2 py-0.5 rounded-full border border-gray-600 text-gray-400 hover:text-white" data-window="7d" data-testid="timeline-window-7d">7d</button>
+        <button class="timeline-window-chip text-xs px-2 py-0.5 rounded-full border border-gray-600 text-gray-400 hover:text-white" data-window="30d" data-testid="timeline-window-30d">30d</button>
+
+        <!-- Source toggles -->
+        <span class="text-xs text-gray-500 ml-2 mr-1">Sources:</span>
+        <button class="timeline-source-chip tab-active text-xs px-2 py-0.5 rounded-full border border-cyan-500 text-cyan-400" data-source="hub-event" data-testid="timeline-src-hub-event">hub-event</button>
+        <button class="timeline-source-chip tab-active text-xs px-2 py-0.5 rounded-full border border-cyan-500 text-cyan-400" data-source="run" data-testid="timeline-src-run">run</button>
+        <button class="timeline-source-chip tab-active text-xs px-2 py-0.5 rounded-full border border-cyan-500 text-cyan-400" data-source="memory" data-testid="timeline-src-memory">memory</button>
+        <button class="timeline-source-chip tab-active text-xs px-2 py-0.5 rounded-full border border-cyan-500 text-cyan-400" data-source="openbrain" data-testid="timeline-src-openbrain">openbrain</button>
+        <button class="timeline-source-chip tab-active text-xs px-2 py-0.5 rounded-full border border-cyan-500 text-cyan-400" data-source="watch" data-testid="timeline-src-watch">watch</button>
+        <button class="timeline-source-chip tab-active text-xs px-2 py-0.5 rounded-full border border-cyan-500 text-cyan-400" data-source="tempering" data-testid="timeline-src-tempering">tempering</button>
+        <button class="timeline-source-chip tab-active text-xs px-2 py-0.5 rounded-full border border-cyan-500 text-cyan-400" data-source="bug" data-testid="timeline-src-bug">bug</button>
+        <button class="timeline-source-chip tab-active text-xs px-2 py-0.5 rounded-full border border-cyan-500 text-cyan-400" data-source="incident" data-testid="timeline-src-incident">incident</button>
+      </div>
+
+      <!-- Correlation + view toggle row -->
+      <div class="flex flex-wrap gap-3 mb-4 items-center" data-testid="timeline-controls">
+        <span class="text-xs text-gray-500">Correlation:</span>
+        <input type="text" id="timeline-correlation-input" data-testid="timeline-correlation-input"
+          class="bg-gray-700 border border-gray-600 text-gray-100 text-xs rounded px-2 py-1 w-48 placeholder-gray-500
+                 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+          placeholder="Filter by correlationId…" />
+        <button id="timeline-correlation-clear" data-testid="timeline-correlation-clear" onclick="clearTimelineCorrelation()"
+          class="text-xs text-gray-500 hover:text-white" title="Clear correlation filter">✕</button>
+
+        <span class="text-xs text-gray-500 ml-3">View:</span>
+        <button id="timeline-view-flat" data-testid="timeline-view-flat"
+          class="timeline-view-btn tab-active text-xs px-2 py-0.5 rounded border border-cyan-500 text-cyan-400">Flat</button>
+        <button id="timeline-view-threaded" data-testid="timeline-view-threaded"
+          class="timeline-view-btn text-xs px-2 py-0.5 rounded border border-gray-600 text-gray-400 hover:text-white">Threaded</button>
+      </div>
+
+      <!-- Stats bar -->
+      <div class="flex gap-4 mb-3 text-xs text-gray-500" data-testid="timeline-stats">
+        <span>Events: <span id="timeline-total" data-testid="timeline-total">—</span></span>
+        <span>Window: <span id="timeline-window-label" data-testid="timeline-window-label">—</span></span>
+        <span>Duration: <span id="timeline-duration" data-testid="timeline-duration">—</span></span>
+        <span id="timeline-truncated-banner" data-testid="timeline-truncated-banner" class="hidden text-amber-400">⚠ Results truncated — narrow your time window or add filters</span>
+      </div>
+
+      <!-- Event stream -->
+      <div id="timeline-stream" data-testid="timeline-stream" class="bg-gray-800 rounded-lg p-4 max-h-[600px] overflow-y-auto">
+        <p class="text-gray-500 text-center py-8" data-testid="timeline-empty-state">No events found. Try widening the time window or removing filters.</p>
+      </div>
+
+      <!-- Error state -->
+      <div id="timeline-error" data-testid="timeline-error" class="hidden mt-2 text-red-400 text-xs text-center"></div>
     </section>
 
     <!-- LiveGuard Health Tab -->

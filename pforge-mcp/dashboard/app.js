@@ -53,6 +53,12 @@ const state = {
   },
   // Phase FORGE-SHOP-01 Slice 01.2 — Home tab state.
   home: { snapshot: null, groupByCorrelation: false, refreshTimer: null, lastError: null },
+  // Phase FORGE-SHOP-05 Slice 05.2 — Timeline tab state.
+  timeline: {
+    events: [], threads: [], groupBy: "time", correlationId: null,
+    sources: ["hub-event", "run", "memory", "openbrain", "watch", "tempering", "bug", "incident"],
+    window: "24h", autoRefresh: false, refreshTimer: null, lastError: null,
+  },
   // Phase FORGE-SHOP-02 Slice 02.2 — Review tab state.
   review: {
     items: [],
@@ -77,6 +83,11 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
     if (state.review.refreshTimer) {
       clearInterval(state.review.refreshTimer);
       state.review.refreshTimer = null;
+    }
+    // Phase FORGE-SHOP-05 Slice 05.2 — teardown Timeline refresh timer on tab switch
+    if (state.timeline.refreshTimer) {
+      clearInterval(state.timeline.refreshTimer);
+      state.timeline.refreshTimer = null;
     }
 
     // Clear active from ALL tab-btn elements across all groups
@@ -3440,6 +3451,7 @@ const tabLoadHooks = {
   tempering: () => { loadTemperingStatus(); },
   bugregistry: () => { loadBugRegistry(); },
   memory: loadMemoryReport,
+  timeline: loadTimelineTab,
 };
 
 // ─── Theme Toggle ─────────────────────────────────────────────
@@ -5667,4 +5679,350 @@ document.addEventListener("click", (e) => {
 window.selectReviewItem = selectReviewItem;
 window.handleReviewAction = handleReviewAction;
 window.switchToReviewTab = switchToReviewTab;
+
+// ─── Timeline Tab (Phase FORGE-SHOP-05 Slice 05.2) ───────────────
+
+const TIMELINE_WINDOW_MS = {
+  "15m": 15 * 60_000,
+  "1h": 60 * 60_000,
+  "6h": 6 * 3_600_000,
+  "24h": 24 * 3_600_000,
+  "7d": 7 * 86_400_000,
+  "30d": 30 * 86_400_000,
+};
+
+const TIMELINE_SOURCE_ICONS = {
+  "hub-event": "📡", run: "🏃", memory: "🧠", openbrain: "🧪",
+  watch: "👁", tempering: "🛠", bug: "🐛", incident: "🚨",
+};
+
+function timelineParseHash() {
+  const hash = window.location.hash;
+  if (!hash.startsWith("#timeline")) return {};
+  const qs = hash.includes("?") ? hash.slice(hash.indexOf("?") + 1) : "";
+  const params = new URLSearchParams(qs);
+  return {
+    correlationId: params.get("correlationId") || null,
+    window: params.get("window") || null,
+    groupBy: params.get("groupBy") || null,
+    sources: params.get("sources") ? params.get("sources").split(",") : null,
+  };
+}
+
+function timelineUpdateHash() {
+  const parts = [];
+  if (state.timeline.correlationId) parts.push(`correlationId=${encodeURIComponent(state.timeline.correlationId)}`);
+  if (state.timeline.window) parts.push(`window=${state.timeline.window}`);
+  if (state.timeline.groupBy !== "time") parts.push(`groupBy=${state.timeline.groupBy}`);
+  const activeSources = state.timeline.sources || [];
+  const allSources = ["hub-event", "run", "memory", "openbrain", "watch", "tempering", "bug", "incident"];
+  if (activeSources.length > 0 && activeSources.length < allSources.length) {
+    parts.push(`sources=${activeSources.join(",")}`);
+  }
+  const qs = parts.length ? `?${parts.join("&")}` : "";
+  history.replaceState(null, "", `#timeline${qs}`);
+}
+
+function loadTimelineTab() {
+  const hashParams = timelineParseHash();
+  if (hashParams.correlationId) state.timeline.correlationId = hashParams.correlationId;
+  if (hashParams.window && TIMELINE_WINDOW_MS[hashParams.window]) state.timeline.window = hashParams.window;
+  if (hashParams.groupBy === "correlation") state.timeline.groupBy = "correlation";
+  if (hashParams.sources) state.timeline.sources = hashParams.sources;
+
+  // Sync UI chips with state
+  syncTimelineWindowChips();
+  syncTimelineSourceChips();
+  syncTimelineViewBtns();
+  const corrInput = document.getElementById("timeline-correlation-input");
+  if (corrInput) corrInput.value = state.timeline.correlationId || "";
+
+  loadTimelineData();
+}
+
+function syncTimelineWindowChips() {
+  document.querySelectorAll(".timeline-window-chip").forEach((chip) => {
+    if (chip.dataset.window === state.timeline.window) {
+      chip.classList.add("tab-active", "border-cyan-500", "text-cyan-400");
+      chip.classList.remove("border-gray-600", "text-gray-400");
+    } else {
+      chip.classList.remove("tab-active", "border-cyan-500", "text-cyan-400");
+      chip.classList.add("border-gray-600", "text-gray-400");
+    }
+  });
+}
+
+function syncTimelineSourceChips() {
+  document.querySelectorAll(".timeline-source-chip").forEach((chip) => {
+    const src = chip.dataset.source;
+    if (state.timeline.sources.includes(src)) {
+      chip.classList.add("tab-active", "border-cyan-500", "text-cyan-400");
+      chip.classList.remove("border-gray-600", "text-gray-400");
+    } else {
+      chip.classList.remove("tab-active", "border-cyan-500", "text-cyan-400");
+      chip.classList.add("border-gray-600", "text-gray-400");
+    }
+  });
+}
+
+function syncTimelineViewBtns() {
+  const flatBtn = document.getElementById("timeline-view-flat");
+  const threadBtn = document.getElementById("timeline-view-threaded");
+  if (state.timeline.groupBy === "time") {
+    flatBtn?.classList.add("tab-active", "border-cyan-500", "text-cyan-400");
+    flatBtn?.classList.remove("border-gray-600", "text-gray-400");
+    threadBtn?.classList.remove("tab-active", "border-cyan-500", "text-cyan-400");
+    threadBtn?.classList.add("border-gray-600", "text-gray-400");
+  } else {
+    threadBtn?.classList.add("tab-active", "border-cyan-500", "text-cyan-400");
+    threadBtn?.classList.remove("border-gray-600", "text-gray-400");
+    flatBtn?.classList.remove("tab-active", "border-cyan-500", "text-cyan-400");
+    flatBtn?.classList.add("border-gray-600", "text-gray-400");
+  }
+}
+
+async function loadTimelineData() {
+  const now = new Date();
+  const windowMs = TIMELINE_WINDOW_MS[state.timeline.window] || TIMELINE_WINDOW_MS["24h"];
+  const from = new Date(now.getTime() - windowMs).toISOString();
+  const to = now.toISOString();
+
+  const params = new URLSearchParams();
+  params.set("from", from);
+  params.set("to", to);
+  params.set("groupBy", state.timeline.groupBy);
+  params.set("limit", "500");
+  if (state.timeline.correlationId) params.set("correlationId", state.timeline.correlationId);
+  if (state.timeline.sources.length > 0 && state.timeline.sources.length < 8) {
+    params.set("sources", state.timeline.sources.join(","));
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/api/timeline?${params}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    state.timeline.events = data.events || [];
+    state.timeline.threads = data.threads || [];
+    state.timeline.lastError = null;
+
+    // Update stats
+    const totalEl = document.getElementById("timeline-total");
+    if (totalEl) totalEl.textContent = data.total ?? 0;
+    const windowEl = document.getElementById("timeline-window-label");
+    if (windowEl) windowEl.textContent = `${data.windowFrom ? new Date(data.windowFrom).toLocaleString() : "?"} → ${data.windowTo ? new Date(data.windowTo).toLocaleString() : "?"}`;
+    const durEl = document.getElementById("timeline-duration");
+    if (durEl) durEl.textContent = `${data.durationMs ?? 0}ms`;
+
+    const truncBanner = document.getElementById("timeline-truncated-banner");
+    if (truncBanner) truncBanner.classList.toggle("hidden", !data.truncated);
+
+    const errorEl = document.getElementById("timeline-error");
+    if (errorEl) { errorEl.classList.add("hidden"); errorEl.textContent = ""; }
+
+    if (state.timeline.groupBy === "correlation") {
+      renderTimelineThreaded(data.threads || []);
+    } else {
+      renderTimelineFlat(data.events || []);
+    }
+  } catch (err) {
+    state.timeline.lastError = err.message;
+    const errorEl = document.getElementById("timeline-error");
+    if (errorEl) {
+      errorEl.textContent = `Failed to load timeline: ${err.message}`;
+      errorEl.classList.remove("hidden");
+    }
+  }
+
+  // Auto-refresh
+  const autoEl = document.getElementById("timeline-auto-refresh");
+  if (autoEl && autoEl.checked && !state.timeline.refreshTimer) {
+    state.timeline.refreshTimer = setInterval(loadTimelineData, 10_000);
+  }
+
+  timelineUpdateHash();
+}
+
+function timelineRelativeTime(isoStr) {
+  const diff = Date.now() - new Date(isoStr).getTime();
+  if (diff < 60_000) return `${Math.round(diff / 1000)}s ago`;
+  if (diff < 3_600_000) return `${Math.round(diff / 60_000)}m ago`;
+  if (diff < 86_400_000) return `${(diff / 3_600_000).toFixed(1)}h ago`;
+  return `${(diff / 86_400_000).toFixed(1)}d ago`;
+}
+
+function renderTimelineFlat(events) {
+  const container = document.getElementById("timeline-stream");
+  if (!container) return;
+
+  if (!events || events.length === 0) {
+    container.innerHTML = '<p class="text-gray-500 text-center py-8" data-testid="timeline-empty-state">No events found. Try widening the time window or removing filters.</p>';
+    return;
+  }
+
+  let html = '<table class="w-full text-xs"><thead><tr class="text-gray-500 border-b border-gray-700">'
+    + '<th class="py-1 text-left">Time</th>'
+    + '<th class="py-1 text-left">Source</th>'
+    + '<th class="py-1 text-left">Event</th>'
+    + '<th class="py-1 text-left">Correlation</th>'
+    + '<th class="py-1 text-left">Payload</th>'
+    + '</tr></thead><tbody>';
+
+  for (const evt of events) {
+    const src = evt.source || "unknown";
+    const icon = TIMELINE_SOURCE_ICONS[src] || "·";
+    const cid = evt.correlationId || "";
+    const cidShort = cid.length > 12 ? cid.slice(0, 12) + "…" : cid;
+    const payloadStr = evt.payload ? JSON.stringify(evt.payload) : "";
+    const payloadTrunc = payloadStr.length > 80 ? payloadStr.slice(0, 80) + "…" : payloadStr;
+    html += `<tr class="border-b border-gray-700/30 hover:bg-gray-700/30 timeline-event-row" data-correlation="${searchEscapeHtml(cid)}">
+      <td class="py-1 pr-2 text-gray-400 whitespace-nowrap" title="${searchEscapeHtml(evt.ts || "")}">${timelineRelativeTime(evt.ts)}</td>
+      <td class="py-1 pr-2"><span class="search-source-badge" data-source="${searchEscapeHtml(src)}">${icon} ${searchEscapeHtml(src)}</span></td>
+      <td class="py-1 pr-2 text-gray-200">${searchEscapeHtml(evt.event || "")}</td>
+      <td class="py-1 pr-2"><span class="timeline-cid-chip text-cyan-400 cursor-pointer hover:underline" title="Filter by this correlationId" onclick="filterTimelineByCorrelation('${searchEscapeHtml(cid)}')">${searchEscapeHtml(cidShort)}</span></td>
+      <td class="py-1 text-gray-500 truncate max-w-xs" title="${searchEscapeHtml(payloadStr)}">${searchEscapeHtml(payloadTrunc)}</td>
+    </tr>`;
+  }
+
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+function renderTimelineThreaded(threads) {
+  const container = document.getElementById("timeline-stream");
+  if (!container) return;
+
+  if (!threads || threads.length === 0) {
+    container.innerHTML = '<p class="text-gray-500 text-center py-8" data-testid="timeline-empty-state">No threads found. Try widening the time window or removing filters.</p>';
+    return;
+  }
+
+  let html = '';
+  for (const thread of threads) {
+    const cid = thread.correlationId || "__ungrouped__";
+    const cidLabel = cid === "__ungrouped__" ? "(ungrouped)" : (cid.length > 16 ? cid.slice(0, 16) + "…" : cid);
+    const eventCount = thread.events ? thread.events.length : 0;
+    const sourceChips = (thread.sources || []).map(s => {
+      const icon = TIMELINE_SOURCE_ICONS[s] || "·";
+      return `<span class="search-source-badge" data-source="${searchEscapeHtml(s)}">${icon} ${searchEscapeHtml(s)}</span>`;
+    }).join(" ");
+    const span = thread.firstTs && thread.lastTs
+      ? `${timelineRelativeTime(thread.firstTs)} → ${timelineRelativeTime(thread.lastTs)}`
+      : "—";
+
+    html += `<details class="mb-2 bg-gray-700/30 rounded" data-testid="timeline-thread" data-correlation="${searchEscapeHtml(cid)}">
+      <summary class="px-3 py-2 cursor-pointer hover:bg-gray-700/50 flex items-center gap-3 text-xs select-none">
+        <span class="timeline-cid-chip text-cyan-400 font-mono cursor-pointer hover:underline" onclick="event.stopPropagation(); filterTimelineByCorrelation('${searchEscapeHtml(cid)}')" title="Filter by this correlationId">${searchEscapeHtml(cidLabel)}</span>
+        <span class="text-gray-500">${span}</span>
+        ${sourceChips}
+        <span class="text-gray-500 ml-auto">${eventCount} event${eventCount !== 1 ? "s" : ""}</span>
+      </summary>
+      <div class="px-3 pb-2">`;
+
+    if (thread.events && thread.events.length > 0) {
+      html += '<table class="w-full text-xs"><tbody>';
+      for (const evt of thread.events) {
+        const src = evt.source || "unknown";
+        const evtIcon = TIMELINE_SOURCE_ICONS[src] || "·";
+        const payloadStr = evt.payload ? JSON.stringify(evt.payload) : "";
+        const payloadTrunc = payloadStr.length > 60 ? payloadStr.slice(0, 60) + "…" : payloadStr;
+        html += `<tr class="border-b border-gray-700/20">
+          <td class="py-0.5 pr-2 text-gray-400 whitespace-nowrap" title="${searchEscapeHtml(evt.ts || "")}">${timelineRelativeTime(evt.ts)}</td>
+          <td class="py-0.5 pr-2"><span class="search-source-badge" data-source="${searchEscapeHtml(src)}">${evtIcon}</span></td>
+          <td class="py-0.5 pr-2 text-gray-200">${searchEscapeHtml(evt.event || "")}</td>
+          <td class="py-0.5 text-gray-500 truncate max-w-xs">${searchEscapeHtml(payloadTrunc)}</td>
+        </tr>`;
+      }
+      html += '</tbody></table>';
+    }
+
+    html += '</div></details>';
+  }
+
+  container.innerHTML = html;
+}
+
+function filterTimelineByCorrelation(cid) {
+  state.timeline.correlationId = cid || null;
+  const corrInput = document.getElementById("timeline-correlation-input");
+  if (corrInput) corrInput.value = cid || "";
+  loadTimelineData();
+}
+
+function clearTimelineCorrelation() {
+  state.timeline.correlationId = null;
+  const corrInput = document.getElementById("timeline-correlation-input");
+  if (corrInput) corrInput.value = "";
+  loadTimelineData();
+}
+
+// Timeline chip event listeners
+document.querySelectorAll(".timeline-window-chip").forEach((chip) => {
+  chip.addEventListener("click", () => {
+    state.timeline.window = chip.dataset.window;
+    syncTimelineWindowChips();
+    loadTimelineData();
+  });
+});
+
+document.querySelectorAll(".timeline-source-chip").forEach((chip) => {
+  chip.addEventListener("click", () => {
+    const src = chip.dataset.source;
+    const idx = state.timeline.sources.indexOf(src);
+    if (idx >= 0) {
+      state.timeline.sources.splice(idx, 1);
+    } else {
+      state.timeline.sources.push(src);
+    }
+    syncTimelineSourceChips();
+    loadTimelineData();
+  });
+});
+
+document.querySelectorAll(".timeline-view-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    state.timeline.groupBy = btn.id === "timeline-view-threaded" ? "correlation" : "time";
+    syncTimelineViewBtns();
+    loadTimelineData();
+  });
+});
+
+// Correlation input: filter on Enter
+const _tlCorrInput = document.getElementById("timeline-correlation-input");
+if (_tlCorrInput) {
+  _tlCorrInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      state.timeline.correlationId = _tlCorrInput.value.trim() || null;
+      loadTimelineData();
+    }
+  });
+}
+
+// Auto-refresh toggle
+const _tlAutoRefresh = document.getElementById("timeline-auto-refresh");
+if (_tlAutoRefresh) {
+  _tlAutoRefresh.addEventListener("change", () => {
+    state.timeline.autoRefresh = _tlAutoRefresh.checked;
+    if (_tlAutoRefresh.checked) {
+      if (!state.timeline.refreshTimer) {
+        state.timeline.refreshTimer = setInterval(loadTimelineData, 10_000);
+      }
+    } else {
+      if (state.timeline.refreshTimer) {
+        clearInterval(state.timeline.refreshTimer);
+        state.timeline.refreshTimer = null;
+      }
+    }
+  });
+}
+
+// Deep-link support: if hash starts with #timeline, navigate there on load
+if (window.location.hash.startsWith("#timeline")) {
+  const tlBtn = document.querySelector('[data-tab="timeline"]');
+  if (tlBtn) setTimeout(() => tlBtn.click(), 100);
+}
+
+window.loadTimelineData = loadTimelineData;
+window.filterTimelineByCorrelation = filterTimelineByCorrelation;
+window.clearTimelineCorrelation = clearTimelineCorrelation;
 

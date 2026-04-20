@@ -4408,6 +4408,26 @@ export function createExpressApp() {
     }
   });
 
+  // Phase FORGE-SHOP-05 Slice 05.2 — timeline API for dashboard
+  app.get("/api/timeline", async (req, res) => {
+    try {
+      const params = {
+        from: req.query.from || undefined,
+        to: req.query.to || undefined,
+        correlationId: req.query.correlationId || undefined,
+        sources: req.query.sources ? req.query.sources.split(",") : undefined,
+        events: req.query.events ? req.query.events.split(",") : undefined,
+        groupBy: req.query.groupBy || "time",
+        limit: req.query.limit ? parseInt(req.query.limit, 10) : undefined,
+      };
+      const cwd = findProjectRoot(PROJECT_DIR);
+      const result = await forgeTimeline(params, { cwd });
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // Plan Browser static files
   app.use("/ui", express.static(resolve(__dirname, "ui")));
 

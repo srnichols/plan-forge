@@ -19,7 +19,7 @@
       "defaultModel": "claude-sonnet-4.6",
       "invocation": {
         "cmd": "gh",
-        "baseArgs": ["copilot", "--", "-p", "@{PROMPT_FILE}", "--yolo", "--no-ask-user", "--output-format", "jsonl"]
+        "baseArgs": ["copilot", "--", "-p", "@{PROMPT_FILE}", "--yolo", "--no-ask-user", "--output-format", "text"]
       },
       "install": {
         "windows": "winget upgrade --id GitHub.cli",

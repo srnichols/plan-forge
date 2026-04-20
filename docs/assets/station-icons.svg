@@ -1,0 +1,48 @@
+<!-- Plan Forge station icon sprite — Lucide-inspired, 1.75 stroke, currentColor.
+     Usage: <svg class="icon"><use href="/assets/station-icons.svg#smelt"/></svg>
+     All icons are 24×24 viewBox, stroke-linecap=round, stroke-linejoin=round. -->
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+  <defs>
+    <!-- Smelt: crucible bowl with drip -->
+    <symbol id="smelt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M5 9h14l-1.5 8a3 3 0 0 1-3 2.5h-5a3 3 0 0 1-3-2.5L5 9z"/>
+      <path d="M3 9h18"/>
+      <path d="M9 5v4M15 5v4"/>
+      <path d="M12 14v3"/>
+      <circle cx="12" cy="19.5" r="0.75" fill="currentColor"/>
+    </symbol>
+
+    <!-- Forge: anvil with hammer -->
+    <symbol id="forge" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 12h14a2 2 0 0 1 2 2v1H5a2 2 0 0 1-2-2v-1z"/>
+      <path d="M7 15v3h10v-3"/>
+      <path d="M5 20h14"/>
+      <path d="M14 12V8l4-4"/>
+      <path d="M16 3l3 3"/>
+    </symbol>
+
+    <!-- Guard: shield with eye -->
+    <symbol id="guard" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 3 4 6v6c0 4.5 3.3 8.3 8 9 4.7-.7 8-4.5 8-9V6l-8-3z"/>
+      <path d="M8.5 12c1-1.8 2.3-2.8 3.5-2.8s2.5 1 3.5 2.8c-1 1.8-2.3 2.8-3.5 2.8S9.5 13.8 8.5 12z"/>
+      <circle cx="12" cy="12" r="1.1" fill="currentColor"/>
+    </symbol>
+
+    <!-- Learn: brain with circuit node -->
+    <symbol id="learn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M9 5a3 3 0 0 0-3 3 3 3 0 0 0-2 5.5A3 3 0 0 0 6 18a3 3 0 0 0 3 2V5z"/>
+      <path d="M15 5a3 3 0 0 1 3 3 3 3 0 0 1 2 5.5 3 3 0 0 1-2 4.5 3 3 0 0 1-3 2V5z"/>
+      <path d="M12 5v15"/>
+      <circle cx="12" cy="12" r="1.2" fill="currentColor"/>
+      <path d="M12 9h-2M12 15h2"/>
+    </symbol>
+
+    <!-- Command: control dial -->
+    <symbol id="command" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="8"/>
+      <path d="M12 4v2M12 18v2M4 12h2M18 12h2M6.3 6.3l1.4 1.4M16.3 16.3l1.4 1.4M6.3 17.7l1.4-1.4M16.3 7.7l1.4-1.4"/>
+      <circle cx="12" cy="12" r="2.5"/>
+      <path d="M12 12l3-1.5"/>
+    </symbol>
+  </defs>
+</svg>

@@ -212,9 +212,11 @@ describe("CompetitiveScheduler — [competitive] slices", () => {
     expect(seen.every((v) => typeof v.worktreePath === "string")).toBe(true);
 
     expect(results).toHaveLength(1);
-    expect(results[0].status).toBe("competitive-pending");
+    // Slice 3 replaced 'competitive-pending' with 'passed' once winner-selection shipped.
+    expect(results[0].status).toBe("passed");
     expect(results[0].variants).toHaveLength(3);
-    expect(results[0].winningVariant).toBeNull();
+    // Winning variant exists because executeFn returns status: 'passed' for all.
+    expect(results[0].winningVariant).not.toBeNull();
   });
 
   it("respects slice.competitiveVariants override", async () => {

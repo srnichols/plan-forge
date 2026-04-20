@@ -212,6 +212,89 @@ export function archiveWorktree({
 }
 
 /**
+ * Phase-26 Slice 3 — promote the winning variant's commits into the parent
+ * branch. Cherry-picks the commit range `baseRef..variantHEAD` onto the
+ * current HEAD of `projectDir`. The caller (CompetitiveScheduler) is
+ * responsible for archiving the winner worktree afterwards if desired; this
+ * function does NOT delete it (keeps a post-mortem trail).
+ *
+ * Never modifies the winner worktree. Never touches loser worktrees.
+ *
+ * @param {object} opts
+ * @param {string} opts.projectDir
+ * @param {string} opts.planBasename
+ * @param {string|number} opts.sliceId
+ * @param {number} opts.variant
+ * @param {string} [opts.baseRef="HEAD"] the ref the variant was created from
+ * @param {Function} [opts.spawn=spawnSync]
+ * @returns {{ promoted: boolean, commits: string[], from: string, to: string }}
+ */
+export function promoteWinner({
+  projectDir,
+  planBasename,
+  sliceId,
+  variant,
+  baseRef = "HEAD",
+  spawn = spawnSync,
+}) {
+  const worktree = variantPath(projectDir, planBasename, sliceId, variant);
+  if (!existsSync(worktree)) {
+    return { promoted: false, commits: [], from: worktree, to: projectDir, error: "worktree missing" };
+  }
+
+  // Resolve the winner worktree HEAD SHA.
+  const head = spawn("git", ["rev-parse", "HEAD"], { cwd: worktree, encoding: "utf8" });
+  if (!head || head.status !== 0) {
+    const stderr = head?.stderr ? String(head.stderr) : "";
+    throw new Error(`promoteWinner: rev-parse HEAD failed in worktree: ${stderr.slice(0, 300)}`);
+  }
+  const headSha = String(head.stdout).trim();
+
+  // Resolve baseRef to a SHA so the range is unambiguous even if the parent
+  // branch has advanced since the worktree was created.
+  const base = spawn("git", ["rev-parse", baseRef], { cwd: worktree, encoding: "utf8" });
+  if (!base || base.status !== 0) {
+    throw new Error(`promoteWinner: rev-parse ${baseRef} failed`);
+  }
+  const baseSha = String(base.stdout).trim();
+
+  if (baseSha === headSha) {
+    // Variant produced no commits — nothing to cherry-pick.
+    return { promoted: true, commits: [], from: worktree, to: projectDir };
+  }
+
+  // List commits baseSha..headSha oldest-first for cherry-pick.
+  const logResult = spawn(
+    "git",
+    ["rev-list", "--reverse", `${baseSha}..${headSha}`],
+    { cwd: worktree, encoding: "utf8" },
+  );
+  if (!logResult || logResult.status !== 0) {
+    throw new Error(`promoteWinner: rev-list failed: ${String(logResult?.stderr || "").slice(0, 300)}`);
+  }
+  const commits = String(logResult.stdout || "")
+    .split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  // Cherry-pick them into the parent branch (projectDir HEAD).
+  if (commits.length > 0) {
+    const cp = spawn(
+      "git",
+      ["cherry-pick", "-x", ...commits],
+      { cwd: projectDir, encoding: "utf8" },
+    );
+    if (!cp || cp.status !== 0) {
+      throw new Error(
+        `promoteWinner: cherry-pick failed (status=${cp?.status ?? "?"}): ${String(cp?.stderr || "").slice(0, 500)}`,
+      );
+    }
+  }
+
+  return { promoted: true, commits, from: worktree, to: projectDir };
+}
+
+/**
  * List archived variants older than `archiveDays` and remove them.
  * Uses directory mtime; never touches live worktrees. Idempotent.
  *

@@ -2182,13 +2182,142 @@ export class CompetitiveScheduler {
       variants: variants.map((v) => ({ variant: v.variant, status: v.status })),
     });
 
+    // Phase-26 Slice 3 — winner selection + loser archival + fast-forward.
+    const selection = selectWinner(variants);
+
+    if (!selection.winner) {
+      // No variant passed gates. Archive all; slice fails.
+      if (manager && this.projectDir && this.planBasename) {
+        for (const v of variants) {
+          try {
+            manager.archiveWorktree({
+              projectDir: this.projectDir,
+              planBasename: this.planBasename,
+              sliceId: slice.number,
+              variant: v.variant,
+            });
+          } catch { /* swallow — archive best-effort */ }
+        }
+      }
+      this.eventBus.emit("competitive-slice-failed", {
+        sliceId: slice.number,
+        reason: "no variant passed all gates",
+        variants: variants.map((v) => ({ variant: v.variant, status: v.status })),
+      });
+      return {
+        sliceId: slice.number,
+        status: "failed",
+        error: "no variant passed all gates",
+        variants,
+        winningVariant: null,
+      };
+    }
+
+    // Winner found. Promote it and archive losers.
+    let promotion = { promoted: false };
+    if (manager && this.projectDir && this.planBasename && typeof manager.promoteWinner === "function") {
+      try {
+        promotion = manager.promoteWinner({
+          projectDir: this.projectDir,
+          planBasename: this.planBasename,
+          sliceId: slice.number,
+          variant: selection.winner.variant,
+        });
+      } catch (err) {
+        // Promotion failed — fall through; Slice 5's e2e test covers this.
+        promotion = { promoted: false, error: err.message };
+      }
+    }
+
+    if (manager && this.projectDir && this.planBasename) {
+      for (const v of variants) {
+        if (v.variant === selection.winner.variant) continue;
+        try {
+          manager.archiveWorktree({
+            projectDir: this.projectDir,
+            planBasename: this.planBasename,
+            sliceId: slice.number,
+            variant: v.variant,
+          });
+        } catch { /* swallow */ }
+      }
+    }
+
+    this.eventBus.emit("competitive-slice-won", {
+      sliceId: slice.number,
+      winningVariant: selection.winner.variant,
+      reason: selection.reason,
+      promotion,
+    });
+
     return {
       sliceId: slice.number,
-      status: "competitive-pending", // Slice 3 replaces with passed/failed after selectWinner
+      status: "passed",
       variants,
-      winningVariant: null,
+      winningVariant: selection.winner.variant,
+      selectionReason: selection.reason,
+      promotion,
     };
   }
+}
+
+/**
+ * Phase-26 Slice 3 — deterministic winner selection across competitive variants.
+ *
+ * Rule (plan D2):
+ *   1. Only variants whose `status === "passed"` are eligible.
+ *   2. Lowest cost-to-diff ratio wins (cost_usd / max(1, diffLines)).
+ *   3. Tiebreak: shortest diffLines.
+ *   4. Tiebreak: earliest completedAt (or durationMs as fallback).
+ *   5. Final tiebreak: lowest variant number (guarantees total ordering).
+ *
+ * Pure function — no IO, no side effects. The `reason` string is logged for
+ * audit by the caller so operators can reconstruct why a winner was picked.
+ *
+ * @param {Array<object>} variants as returned by `_executeCompetitiveSlice`
+ * @returns {{ winner: object|null, reason: string, eligible: object[] }}
+ */
+export function selectWinner(variants) {
+  if (!Array.isArray(variants) || variants.length === 0) {
+    return { winner: null, reason: "no variants", eligible: [] };
+  }
+  const eligible = variants.filter((v) => v && v.status === "passed");
+  if (eligible.length === 0) {
+    return { winner: null, reason: "no variant passed all gates", eligible: [] };
+  }
+
+  const ratio = (v) => {
+    const cost = Number.isFinite(v.cost_usd) ? Number(v.cost_usd) : 0;
+    const diff = Math.max(1, Number.isFinite(v.diffLines) ? Number(v.diffLines) : 1);
+    return cost / diff;
+  };
+  const completionKey = (v) => {
+    if (typeof v.completedAt === "number" && Number.isFinite(v.completedAt)) return v.completedAt;
+    if (typeof v.completedAt === "string") {
+      const t = Date.parse(v.completedAt);
+      if (!Number.isNaN(t)) return t;
+    }
+    // Fall back to durationMs (shorter = earlier since all started at ~same time).
+    return Number.isFinite(v.durationMs) ? v.durationMs : Number.MAX_SAFE_INTEGER;
+  };
+
+  const sorted = [...eligible].sort((a, b) => {
+    const ra = ratio(a); const rb = ratio(b);
+    if (ra !== rb) return ra - rb;
+    const da = Number.isFinite(a.diffLines) ? a.diffLines : Number.MAX_SAFE_INTEGER;
+    const db = Number.isFinite(b.diffLines) ? b.diffLines : Number.MAX_SAFE_INTEGER;
+    if (da !== db) return da - db;
+    const ca = completionKey(a); const cb = completionKey(b);
+    if (ca !== cb) return ca - cb;
+    return (a.variant ?? 0) - (b.variant ?? 0);
+  });
+
+  const winner = sorted[0];
+  const reason =
+    `variant ${winner.variant}: cost/diff=${ratio(winner).toFixed(6)}` +
+    `, diff=${winner.diffLines ?? "?"}` +
+    `, completion=${completionKey(winner)}`;
+  return { winner, reason, eligible };
 }
 
 /**

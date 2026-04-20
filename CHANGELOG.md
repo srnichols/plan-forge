@@ -5,6 +5,68 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.53.1] — 2026-04-20 — Corrupt-install self-heal + release guard
+
+### 🛡️ Self-heal for stuck clients (v2.50.0/v2.51.0/v2.52.0 broken tarballs)
+
+Tags `v2.50.0`, `v2.51.0`, and `v2.52.0` shipped with `VERSION=X.Y.Z-dev`
+baked into the release tarball (fixed in v2.52.1). Clients who installed
+any of those releases still see `-dev` locally — this release detects and
+auto-fixes that state for **every existing and future install**.
+
+### Added
+
+- **`detectCorruptInstall()`** in `pforge-mcp/update-check.mjs`.
+  Conservative detector: flags when local `VERSION` ends in `-dev`
+  AND a bare release with matching-or-newer core exists on GitHub.
+  Genuine dev branches ahead of the latest release (e.g. `2.54.0-dev`
+  while latest is `2.53.1`) are **not** flagged. 8 new tests cover the
+  full matrix (broken cohort, genuine dev, offline, malformed inputs).
+
+- **MCP server startup banner.** `server.mjs` runs the detector 2s after
+  boot and prints a bordered red alert to stderr when a corrupt install
+  is found. Also emits an `install:corrupt` hub event and writes
+  `.forge/install-health.json` so the dashboard can render a banner.
+  A subsequent heal clears the flag automatically.
+
+- **Smith doctor check.** `pforge smith` now inspects the local `VERSION`
+  file directly (not just `.forge.json.templateVersion`). If it ends in
+  `-dev`, smith warns with the exact heal command. Parity across
+  `pforge.ps1` and `pforge.sh`.
+
+- **Release guard workflow** (`.github/workflows/release-guard.yml`).
+  Runs on every `v*` tag push. Fails the release if `VERSION` on disk
+  doesn't equal the tag core, or if `VERSION` contains `-dev`. This is
+  the exact class of bug that broke v2.50.0/v2.51.0/v2.52.0 — it can
+  never happen again.
+
+### Changed
+
+- **`Invoke-Update` (both shells) invalidates version caches on success.**
+  Removes `.forge/update-check.json`, `.forge/version-check.json`,
+  and `.forge/install-health.json` after a successful update so smith
+  and the dashboard immediately pick up the new state.
+
+### Repository maintenance (post-release)
+
+Tags `v2.50.0`, `v2.51.0`, `v2.52.0` were force-moved to the `v2.53.1`
+commit and their GitHub releases recreated with "SUPERSEDED → v2.53.1"
+notes. Any client who explicitly pins `--tag v2.50.0` now receives the
+v2.53.1 clean tree instead of the broken `-dev` bytes.
+
+### Fixed
+
+- Clients stuck on `v2.50.0-dev` / `v2.51.0-dev` / `v2.52.0-dev` now
+  self-heal via any of: dashboard banner, MCP startup alert, `pforge
+  smith` warning, or the existing `pforge self-update` path. All roads
+  lead to a clean `v2.53.1` install.
+
+### Tests
+
+- 2478/2478 vitest passing (was 2470; added 8 detectCorruptInstall tests).
+
+---
+
 ## [2.53.0] — 2026-04-20 — Dashboard UX modernization + Capability-surface sync + Setup/Smith audit remediation
 
 ### Setup + CLI + Smith audit remediation (2026-04-20)

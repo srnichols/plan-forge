@@ -1737,6 +1737,15 @@ Files in this directory (except this README) are gitignored — they are runtime
     Write-Host "Update complete: v$currentVersion → v$sourceVersion" -ForegroundColor Green
     Write-Host "Run 'pforge check' to validate the updated setup." -ForegroundColor DarkGray
 
+    # v2.53.1 — invalidate version caches so smith/dashboard pick up fresh state.
+    # Prevents stale "update available" banners after a successful heal.
+    foreach ($cacheFile in @(".forge/update-check.json", ".forge/version-check.json", ".forge/install-health.json")) {
+        $cachePath = Join-Path $RepoRoot $cacheFile
+        if (Test-Path $cachePath) {
+            try { Remove-Item -Force $cachePath -ErrorAction SilentlyContinue } catch { }
+        }
+    }
+
     # Auto-install MCP dependencies if MCP files were updated
     $mcpUpdated = ($updates + $newFiles) | Where-Object { $_.Name -like "pforge-mcp/*" }
     if ($mcpUpdated) {
@@ -2709,6 +2718,20 @@ function Invoke-Smith {
     # 4. VERSION CURRENCY
     # ═══════════════════════════════════════════════════════════════
     Write-Host "Version Currency:" -ForegroundColor Cyan
+
+    # v2.53.1 — corrupt-install detection. If local VERSION file ends in '-dev'
+    # AND .forge.json templateVersion disagrees, flag as corrupt. This catches
+    # clients stuck on broken v2.50.0/v2.51.0/v2.52.0 tarballs that shipped
+    # VERSION='X.Y.Z-dev' inside the release.
+    $localVersionFile = Join-Path $RepoRoot "VERSION"
+    $localVersion = $null
+    if (Test-Path $localVersionFile) {
+        $localVersion = (Get-Content $localVersionFile -Raw).Trim()
+    }
+    if ($localVersion -and $localVersion -match '-dev\b') {
+        $bareCore = ($localVersion -replace '^v', '') -split '-' | Select-Object -First 1
+        Doctor-Warn "Local VERSION='$localVersion' ends in '-dev' — possible corrupt install from a broken release tarball (bare v$bareCore may have shipped with '-dev' baked in)" "Run 'pforge self-update --force' to heal"
+    }
 
     $sourceVersion = $null
     $versionCheckCacheFile = Join-Path $RepoRoot ".forge/version-check.json"

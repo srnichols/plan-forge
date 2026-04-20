@@ -151,3 +151,58 @@ export async function checkForUpdate({
   writeCache(projectDir, payload);
   return payload;
 }
+
+/**
+ * Detect a "corrupt install" — a client running from a release tarball whose
+ * VERSION file ends in `-dev` despite a matching bare release existing on GitHub.
+ *
+ * Root cause: tags v2.50.0, v2.51.0, v2.52.0 were published with VERSION=`X.Y.Z-dev`
+ * baked into the tarball. Any client who installed those releases sees `-dev`
+ * locally and never heals on their own because `pforge update` skips same-hash
+ * files and some paths read version from `.forge.json` templateVersion.
+ *
+ * Detection rule (conservative — only flags known-bad states):
+ *   - current ends in `-dev`
+ *   - AND a bare release with core ≥ current's core exists on GitHub
+ *
+ * A genuine `-dev` working branch ahead of the latest release (e.g. local
+ * 2.54.0-dev while latest is 2.53.1) returns { isCorrupt: false } because its
+ * core (2.54.0) is newer than latest (2.53.1).
+ *
+ * Returns:
+ *   { isCorrupt: boolean, reason: string|null, current: string, latest: string|null, recommendedAction: string|null }
+ *
+ * Never throws. `latest` may be null if GitHub is unreachable — in that case
+ * isCorrupt is false (err on the side of not alarming offline users).
+ */
+export function detectCorruptInstall({ currentVersion, latestVersion } = {}) {
+  const result = {
+    isCorrupt: false,
+    reason: null,
+    current: currentVersion || null,
+    latest: latestVersion || null,
+    recommendedAction: null,
+  };
+  if (!currentVersion || typeof currentVersion !== "string") return result;
+
+  const cur = String(currentVersion).trim();
+  if (!/-dev\b/i.test(cur)) return result;
+
+  if (!latestVersion || typeof latestVersion !== "string") return result;
+  const latest = String(latestVersion).trim().replace(/^v/i, "");
+  if (!/^\d+\.\d+\.\d+/.test(latest)) return result;
+
+  // Compare bare cores: if latest >= current's core, current-dev is stale.
+  const curCore = cur.replace(/^v/i, "").split("-")[0];
+  if (!/^\d+\.\d+\.\d+/.test(curCore)) return result;
+
+  // If latest bare release is newer than OR equal to current's core → corrupt.
+  // (Equal means: current says "X.Y.Z-dev" and GitHub has released "X.Y.Z" — stale bytes.)
+  const cmp = compareVersions(curCore, latest);
+  if (cmp <= 0) {
+    result.isCorrupt = true;
+    result.reason = `Local VERSION '${cur}' ends in '-dev' but a matching bare release exists on GitHub (latest=v${latest}). This indicates a corrupt install from a broken release tarball (v2.50.0/v2.51.0/v2.52.0 shipped with '-dev' VERSION baked in).`;
+    result.recommendedAction = `Run: pforge self-update --force`;
+  }
+  return result;
+}

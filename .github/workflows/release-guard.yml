@@ -1,0 +1,46 @@
+name: Release Guard
+
+# Prevents shipping broken tarballs like v2.50.0/v2.51.0/v2.52.0 where VERSION
+# on disk ended in '-dev' despite the tag being a bare release.
+#
+# Rule: if tag is `vX.Y.Z` (no pre-release suffix) then VERSION file at that
+# commit MUST equal `X.Y.Z` exactly. Tags like `vX.Y.Z-rc.1` may match the
+# pre-release form. '-dev' suffixes are always rejected on a release tag.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  verify-version-file:
+    name: VERSION file matches tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify VERSION matches tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          TAG_CORE="${TAG#v}"
+          if [ ! -f VERSION ]; then
+            echo "::error::VERSION file is missing at tag $TAG"
+            exit 1
+          fi
+          FILE_VERSION="$(tr -d '[:space:]' < VERSION)"
+          echo "Tag:          $TAG"
+          echo "Tag core:     $TAG_CORE"
+          echo "VERSION file: $FILE_VERSION"
+          if [ "$FILE_VERSION" != "$TAG_CORE" ]; then
+            echo "::error::VERSION file '$FILE_VERSION' does not match tag core '$TAG_CORE'."
+            echo "::error::This is the exact bug that broke v2.50.0/v2.51.0/v2.52.0 tarballs."
+            echo "::error::Re-tag from a commit where VERSION=$TAG_CORE (no '-dev' suffix)."
+            exit 1
+          fi
+          if echo "$FILE_VERSION" | grep -qiE -- '-dev\b'; then
+            echo "::error::VERSION file contains '-dev' — release tags cannot ship a dev build."
+            exit 1
+          fi
+          echo "✅ VERSION file matches tag $TAG."

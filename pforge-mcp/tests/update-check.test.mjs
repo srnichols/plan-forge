@@ -13,7 +13,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync, existsSync
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-import { cachePath, compareVersions, checkForUpdate } from "../update-check.mjs";
+import { cachePath, compareVersions, checkForUpdate, detectCorruptInstall } from "../update-check.mjs";
 import { createExpressApp } from "../server.mjs";
 
 // ─── compareVersions ────────────────────────────────────────────
@@ -211,5 +211,51 @@ describe("/api/update-status", () => {
       if (prev === undefined) delete process.env.PFORGE_NO_UPDATE_CHECK;
       else process.env.PFORGE_NO_UPDATE_CHECK = prev;
     }
+  });
+});
+
+// ─── detectCorruptInstall (v2.53.1 self-heal) ───────────────────
+
+describe("detectCorruptInstall", () => {
+  it("flags the known v2.50.0-dev corrupt tarball state", () => {
+    const r = detectCorruptInstall({ currentVersion: "2.50.0-dev", latestVersion: "2.53.1" });
+    expect(r.isCorrupt).toBe(true);
+    expect(r.recommendedAction).toMatch(/pforge self-update/i);
+  });
+
+  it("flags v2.51.0-dev and v2.52.0-dev (broken tarball cohort)", () => {
+    expect(detectCorruptInstall({ currentVersion: "2.51.0-dev", latestVersion: "2.53.1" }).isCorrupt).toBe(true);
+    expect(detectCorruptInstall({ currentVersion: "2.52.0-dev", latestVersion: "2.53.1" }).isCorrupt).toBe(true);
+  });
+
+  it("flags current-dev-of-shipped version (e.g. 2.53.1-dev while 2.53.1 is released)", () => {
+    const r = detectCorruptInstall({ currentVersion: "2.53.1-dev", latestVersion: "2.53.1" });
+    expect(r.isCorrupt).toBe(true);
+  });
+
+  it("does NOT flag a genuine dev branch ahead of latest (2.54.0-dev > v2.53.1)", () => {
+    const r = detectCorruptInstall({ currentVersion: "2.54.0-dev", latestVersion: "2.53.1" });
+    expect(r.isCorrupt).toBe(false);
+  });
+
+  it("does NOT flag clean released versions", () => {
+    expect(detectCorruptInstall({ currentVersion: "2.53.0", latestVersion: "2.53.1" }).isCorrupt).toBe(false);
+    expect(detectCorruptInstall({ currentVersion: "2.53.1", latestVersion: "2.53.1" }).isCorrupt).toBe(false);
+  });
+
+  it("returns isCorrupt=false when latest is unknown (offline)", () => {
+    const r = detectCorruptInstall({ currentVersion: "2.50.0-dev", latestVersion: null });
+    expect(r.isCorrupt).toBe(false);
+  });
+
+  it("tolerates missing inputs without throwing", () => {
+    expect(detectCorruptInstall({}).isCorrupt).toBe(false);
+    expect(detectCorruptInstall({ currentVersion: "" }).isCorrupt).toBe(false);
+    expect(detectCorruptInstall({ currentVersion: "garbage", latestVersion: "2.53.1" }).isCorrupt).toBe(false);
+  });
+
+  it("strips leading 'v' prefix on latest", () => {
+    const r = detectCorruptInstall({ currentVersion: "2.50.0-dev", latestVersion: "v2.53.1" });
+    expect(r.isCorrupt).toBe(true);
   });
 });

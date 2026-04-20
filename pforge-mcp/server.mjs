@@ -102,7 +102,7 @@ import { promoteBaseline } from "./tempering/baselines.mjs";
 import { registerBug, listBugs, updateBugStatus, loadBug, setLinkedFixPlan, appendValidationAttempt } from "./tempering/bug-registry.mjs";
 import { classify as classifyBug } from "./tempering/bug-classifier.mjs";
 import { dispatch as dispatchBugAdapter } from "./tempering/bug-adapters/contract.mjs";
-import { checkForUpdate } from "./update-check.mjs";
+import { checkForUpdate, detectCorruptInstall } from "./update-check.mjs";
 // Phase FORGE-SHOP-04 Slice 04.1 — Global search
 import { search as forgeSearch } from "./search/core.mjs";
 // Phase FORGE-SHOP-05 Slice 05.1 — Unified timeline
@@ -6520,6 +6520,62 @@ async function main() {
           .then((r) => {
             if (r && r.isNewer) {
               console.error(`[update-check] A newer Plan Forge release is available: v${r.latest} (you are on v${r.current}). ${r.url}`);
+            }
+            // v2.53.1 — corrupt-install self-heal detection.
+            // Flags clients stuck on v2.50.0/v2.51.0/v2.52.0 broken tarballs.
+            if (r && r.latest) {
+              const corrupt = detectCorruptInstall({ currentVersion: current, latestVersion: r.latest });
+              if (corrupt.isCorrupt) {
+                console.error("");
+                console.error("  ┌──────────────────────────────────────────────────────────────┐");
+                console.error("  │  ⚠  CORRUPT INSTALL DETECTED                                 │");
+                console.error("  ├──────────────────────────────────────────────────────────────┤");
+                console.error(`  │  Local VERSION: ${current.padEnd(44)} │`);
+                console.error(`  │  Latest release: v${r.latest.padEnd(43)} │`);
+                console.error("  │                                                              │");
+                console.error("  │  Your install is from a broken release tarball that shipped  │");
+                console.error("  │  with a '-dev' VERSION file. Self-heal with:                 │");
+                console.error("  │                                                              │");
+                console.error("  │      pforge self-update --force                              │");
+                console.error("  │                                                              │");
+                console.error("  └──────────────────────────────────────────────────────────────┘");
+                console.error("");
+                // Emit hub event + dashboard state so the UI can show a banner.
+                try {
+                  if (activeHub && typeof activeHub.broadcast === "function") {
+                    activeHub.broadcast({
+                      type: "install:corrupt",
+                      severity: "high",
+                      current,
+                      latest: r.latest,
+                      reason: corrupt.reason,
+                      recommendedAction: corrupt.recommendedAction,
+                      detectedAt: new Date().toISOString(),
+                    });
+                  }
+                } catch { /* silent */ }
+                try {
+                  const forgeDir = resolve(PROJECT_DIR, ".forge");
+                  if (!existsSync(forgeDir)) mkdirSync(forgeDir, { recursive: true });
+                  const statePath = resolve(forgeDir, "install-health.json");
+                  writeFileSync(statePath, JSON.stringify({
+                    isCorrupt: true,
+                    current,
+                    latest: r.latest,
+                    reason: corrupt.reason,
+                    recommendedAction: corrupt.recommendedAction,
+                    detectedAt: new Date().toISOString(),
+                  }, null, 2), "utf-8");
+                } catch { /* silent */ }
+              } else {
+                // Clear any stale corrupt flag from a prior healed session.
+                try {
+                  const statePath = resolve(PROJECT_DIR, ".forge", "install-health.json");
+                  if (existsSync(statePath)) {
+                    writeFileSync(statePath, JSON.stringify({ isCorrupt: false, current, latest: r.latest, healedAt: new Date().toISOString() }, null, 2), "utf-8");
+                  }
+                } catch { /* silent */ }
+              }
             }
           })
           .catch(() => { /* silent */ });

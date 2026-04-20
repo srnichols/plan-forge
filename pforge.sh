@@ -1534,6 +1534,11 @@ with open('$config_path', 'w') as f:
     echo "Update complete: v$current_version → v$source_version"
     echo "Run 'pforge check' to validate the updated setup."
 
+    # v2.53.1 — invalidate version caches so smith/dashboard pick up fresh state.
+    for cache_rel in ".forge/update-check.json" ".forge/version-check.json" ".forge/install-health.json"; do
+        rm -f "$REPO_ROOT/$cache_rel" 2>/dev/null || true
+    done
+
     # Check if MCP files were updated — remind to reinstall deps
     local mcp_updated=false
     for entry in "${_updates[@]}" "${_new_files[@]}"; do
@@ -2240,6 +2245,20 @@ cmd_doctor() {
     # 4. VERSION CURRENCY
     # ═══════════════════════════════════════════════════════════════
     echo "Version Currency:"
+
+    # v2.53.1 — corrupt-install detection. If local VERSION file ends in '-dev',
+    # flag as possible corrupt install from a broken release tarball
+    # (v2.50.0/v2.51.0/v2.52.0 shipped with '-dev' VERSION baked in).
+    if [ -f "$REPO_ROOT/VERSION" ]; then
+        local local_version
+        local_version="$(tr -d '[:space:]' < "$REPO_ROOT/VERSION")"
+        if echo "$local_version" | grep -qE -- '-dev\b'; then
+            local bare_core
+            bare_core="${local_version#v}"
+            bare_core="${bare_core%%-*}"
+            doctor_warn "Local VERSION='$local_version' ends in '-dev' — possible corrupt install from a broken release tarball (bare v$bare_core may have shipped with '-dev' baked in)" "Run 'pforge self-update --force' to heal"
+        fi
+    fi
 
     local source_version=""
     local version_check_cache="$REPO_ROOT/.forge/version-check.json"

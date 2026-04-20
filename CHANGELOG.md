@@ -5,7 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [Unreleased] — targeting 2.50.0
+## [Unreleased] — targeting 2.50.0 / 2.51.0
+
+### Planned — FORGE-SHOP-04 global search
+
+- Phase FORGE-SHOP-04 drafted ([docs/plans/Phase-FORGE-SHOP-04.md](docs/plans/Phase-FORGE-SHOP-04.md)) — cross-subsystem read-only search over 8 L2 sources (run, bug, incident, tempering, hub-event, review, memory, plan) plus L3 OpenBrain merge. 1 new MCP tool `forge_search` → 58 total. Dashboard header bar with `/` hotkey, arrow-nav, debounced queries, query-syntax sugars (`tags:`, `since:`, `source:`, `correlation:`), deep-link to source tabs. p95 < 250 ms on 5000-event fixture. 60-second LRU cache with mtime invalidation. No new stores, no new hub events.
 
 ### Shipped — FORGE-SHOP-03 notification layer (2026-04-19)
 

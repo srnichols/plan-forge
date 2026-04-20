@@ -104,8 +104,13 @@
     .tab-btn {
       border-bottom: 2px solid transparent;
       transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
     }
     .tab-btn:hover { color: var(--fg-0); }
+    .tab-btn svg { flex-shrink: 0; width: 14px; height: 14px; }
+    .group-tab svg { flex-shrink: 0; width: 16px; height: 16px; }
     .group-tab { transition: color 0.15s ease, border-color 0.15s ease; }
 
     /* ─── Drawer ─────────────────────────────────────────────────── */
@@ -226,43 +231,43 @@
     <!-- Group tabs -->
     <div class="flex gap-1 items-center" role="tablist" aria-label="Dashboard sections">
       <button class="group-tab group-active px-4 py-2 font-semibold text-blue-400 border-b-2 border-blue-400 whitespace-nowrap flex items-center gap-1.5" data-group="forge" onclick="switchGroup('forge')" role="tab" aria-selected="true" aria-controls="subtabs-forge">
-        <span aria-hidden="true">🔨</span><span>Forge</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.3 2.3-2.7-2.7 2.3-2.3z"/></svg><span>Forge</span>
       </button>
       <button class="group-tab px-4 py-2 font-semibold text-gray-500 hover:text-amber-400 border-b-2 border-transparent whitespace-nowrap flex items-center gap-1.5" data-group="liveguard" onclick="switchGroup('liveguard')" role="tab" aria-selected="false" aria-controls="subtabs-liveguard">
-        <span aria-hidden="true">🛡️</span><span>LiveGuard</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><span>LiveGuard</span>
       </button>
       <button id="notif-bell" class="ml-auto px-3 py-2 relative hover:text-yellow-400 text-gray-400 transition" onclick="toggleNotifications()" aria-label="Toggle notifications" title="Notifications">
         <span aria-hidden="true">🔔</span><span id="notif-count" class="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[1.1rem] h-[1.1rem] px-1 flex items-center justify-center hidden" aria-live="polite">0</span>
       </button>
     </div>
     <!-- Sub tabs: Forge -->
-    <div id="subtabs-forge" class="flex gap-0.5 pt-1 pb-0 overflow-x-auto" role="tablist" aria-label="Forge sections">
-      <button class="tab-btn tab-active px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="home" data-testid="home-tab-btn" role="tab">🏠 Home</button>
-      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="review" data-testid="review-tab-btn" role="tab">📋 Review</button>
-      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="progress" role="tab">Progress</button>
-      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="crucible" role="tab">🔥 Crucible</button>
-      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="governance" role="tab">🛡 Governance</button>
-      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="runs" role="tab">Runs</button>
-      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="cost" role="tab">Cost</button>
-      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="actions" role="tab">Actions</button>
-      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="replay" role="tab">Replay</button>
-      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="extensions" role="tab">Extensions</button>
-      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="config" role="tab">Config</button>
-      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="traces" role="tab">Traces</button>
-      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="skills" role="tab">Skills</button>
-      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="watcher" role="tab">Watcher</button>
-      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="tempering" role="tab">🛠 Tempering</button>
-      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="bugregistry" role="tab">🐛 Bug Registry</button>
-      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="memory" role="tab">Memory</button>
-      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="timeline" data-testid="timeline-tab-btn" role="tab">📅 Timeline</button>
+    <div id="subtabs-forge" class="flex flex-wrap gap-x-0.5 gap-y-1 pt-1 pb-1" role="tablist" aria-label="Forge sections">
+      <button class="tab-btn tab-active px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="home" data-testid="home-tab-btn" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12l9-9 9 9"/><path d="M5 10v10a1 1 0 0 0 1 1h3v-6h6v6h3a1 1 0 0 0 1-1V10"/></svg><span>Home</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="review" data-testid="review-tab-btn" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="3" width="8" height="4" rx="1"/><path d="M16 5h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg><span>Review</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="progress" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg><span>Progress</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="crucible" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 17c1.38 0 2.5-1 2.5-2.5 0-1-.5-2-1-2.5-.5-.5-1-1-1-2s.5-1.5 1-2c-2-.5-5 2-5 5 0 .5 0 1 .5 1.5-.33-.33-.5-.83-.5-1.5zM12 2s5 5 5 10a5 5 0 0 1-10 0c0-3 1-5 2.5-7L12 2z"/></svg><span>Crucible</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="governance" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg><span>Governance</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="runs" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 4 20 12 6 20 6 4"/></svg><span>Runs</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="cost" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg><span>Cost</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="actions" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span>Actions</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="replay" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg><span>Replay</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="extensions" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6a2 2 0 0 1 2-2h4v3a2 2 0 1 0 4 0V4h4a2 2 0 0 1 2 2v4h-3a2 2 0 1 0 0 4h3v4a2 2 0 0 1-2 2h-4v-3a2 2 0 1 0-4 0v3H6a2 2 0 0 1-2-2v-4h3a2 2 0 1 0 0-4H4V6z"/></svg><span>Extensions</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="config" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="6" x2="11" y2="6"/><line x1="15" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="7" y2="12"/><line x1="11" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="15" y2="18"/><line x1="19" y1="18" x2="20" y2="18"/><circle cx="13" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></svg><span>Config</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="traces" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="4" r="2"/><circle cx="6" cy="20" r="2"/><circle cx="18" cy="12" r="2"/><path d="M6 6v4a4 4 0 0 0 4 4h6"/><path d="M6 14v4"/></svg><span>Traces</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="skills" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.4L18 9l-4.2 1.6L12 15l-1.8-4.4L6 9l4.2-1.6L12 3z"/><path d="M19 14l.8 2L22 17l-2.2.9L19 20l-.8-2.1L16 17l2.2-.9L19 14z"/><path d="M5 15l.6 1.4L7 17l-1.4.6L5 19l-.6-1.4L3 17l1.4-.6L5 15z"/></svg><span>Skills</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="watcher" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><span>Watcher</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="tempering" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.3 2.3-2.7-2.7 2.3-2.3a4 4 0 0 0-.3-.3z"/></svg><span>Tempering</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="bugregistry" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="8" height="12" rx="4"/><path d="M12 2v2"/><path d="M10 6h4"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="M4 7l3 2"/><path d="M20 7l-3 2"/><path d="M4 18l3-2"/><path d="M20 18l-3-2"/></svg><span>Bug Registry</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="memory" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v6c0 1.7 4 3 9 3s9-1.3 9-3V5"/><path d="M3 11v6c0 1.7 4 3 9 3s9-1.3 9-3v-6"/></svg><span>Memory</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="timeline" data-testid="timeline-tab-btn" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><span>Timeline</span></button>
     </div>
     <!-- Sub tabs: LiveGuard -->
-    <div id="subtabs-liveguard" class="hidden flex gap-0.5 pt-1 pb-0 overflow-x-auto" role="tablist" aria-label="LiveGuard sections">
-      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400 hover:text-amber-400" data-tab="lg-health" role="tab">Health</button>
-      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400 hover:text-amber-400" data-tab="lg-incidents" role="tab">Incidents</button>
-      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400 hover:text-amber-400" data-tab="lg-triage" role="tab">Triage</button>
-      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400 hover:text-amber-400" data-tab="lg-security" role="tab">Security</button>
-      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400 hover:text-amber-400" data-tab="lg-env" role="tab">Env</button>
+    <div id="subtabs-liveguard" class="hidden flex flex-wrap gap-x-0.5 gap-y-1 pt-1 pb-1" role="tablist" aria-label="LiveGuard sections">
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400 hover:text-amber-400" data-tab="lg-health" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-4l-3 8-4-16-3 8H2"/></svg><span>Health</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400 hover:text-amber-400" data-tab="lg-incidents" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg><span>Incidents</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400 hover:text-amber-400" data-tab="lg-triage" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 12a5 5 0 0 1 5-5V3h-1a6 6 0 0 0-6 6v5a4 4 0 0 0 4 4v0a4 4 0 0 0 4-4"/><circle cx="17" cy="15" r="3"/><path d="M17 18v3"/></svg><span>Triage</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400 hover:text-amber-400" data-tab="lg-security" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Security</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400 hover:text-amber-400" data-tab="lg-env" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="6" rx="1"/><rect x="3" y="14" width="18" height="6" rx="1"/><line x1="7" y1="7" x2="7.01" y2="7"/><line x1="7" y1="17" x2="7.01" y2="17"/></svg><span>Env</span></button>
     </div>
   </nav>
 

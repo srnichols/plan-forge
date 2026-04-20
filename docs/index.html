@@ -228,7 +228,7 @@
       <!-- Badge -->
       <div class="inline-flex items-center gap-2 px-4 py-1.5 mb-8 rounded-full bg-slate-800/80 border border-slate-700/60 text-sm text-slate-300">
         <span class="w-2 h-2 rounded-full bg-forge-500 animate-pulse"></span>
-        Open Source · MIT License · Dogfooded · v2.53.3
+        Open Source · MIT License · Dogfooded · v2.55.0
       </div>
 
       <!-- Logo -->
@@ -247,7 +247,7 @@
       </p>
 
       <p class="text-base md:text-lg text-slate-500 max-w-2xl mx-auto leading-relaxed mb-10 italic">
-        "A blacksmith without a shop is just a man with a hammer." — Plan Forge gives your AI agent the whole shop.
+        "A blacksmith without a shop is just a hammer in a hand." — Plan Forge gives your AI agent the whole shop.
       </p>
 
       <!-- Read the problem story -->
@@ -261,25 +261,18 @@
         <p class="text-xs text-slate-600 mt-3 italic">Smelt → Forge → Guard → Learn — every SDLC phase, one shop.</p>
       </div>
 
-      <!-- Video / demo placeholder -->
-      <div class="mb-10 max-w-3xl mx-auto rounded-2xl border border-slate-700/40 bg-slate-800/30 p-8 text-center">
-        <div class="text-4xl mb-3">🎬</div>
-        <p class="text-sm text-slate-400 mb-2">See Plan Forge in action — from feature idea to shipped code in under 5 minutes.</p>
-        <p class="text-xs text-slate-600">(Video walkthrough coming soon — <a href="https://github.com/srnichols/plan-forge/blob/master/docs/QUICKSTART-WALKTHROUGH.md" class="text-forge-400 hover:underline">read the written walkthrough</a> in the meantime)</p>
-      </div>
-
       <!-- Verified metrics -->
       <div class="mb-12 grid grid-cols-2 md:grid-cols-4 gap-4 max-w-3xl mx-auto">
         <div class="bg-slate-800/60 rounded-xl p-4 text-center border border-slate-700/30">
-          <div class="text-2xl font-bold text-forge-400">11</div>
+          <div class="text-2xl font-bold text-forge-400">12+</div>
           <div class="text-xs text-slate-500">phases self-built</div>
         </div>
         <div class="bg-slate-800/60 rounded-xl p-4 text-center border border-slate-700/30">
-          <div class="text-2xl font-bold text-green-400">103/103</div>
+          <div class="text-2xl font-bold text-green-400">2478/2478</div>
           <div class="text-xs text-slate-500">self-tests passing</div>
         </div>
         <div class="bg-slate-800/60 rounded-xl p-4 text-center border border-slate-700/30">
-          <div class="text-2xl font-bold text-blue-400">18</div>
+          <div class="text-2xl font-bold text-blue-400">65</div>
           <div class="text-xs text-slate-500">MCP tools</div>
         </div>
         <div class="bg-slate-800/60 rounded-xl p-4 text-center border border-slate-700/30">
@@ -483,7 +476,7 @@
       <!-- Tour CTA -->
       <div class="text-center mt-16">
         <p class="text-slate-500 text-sm mb-4">Want the full walkthrough?</p>
-        <a href="capabilities.html#stations" class="inline-flex items-center gap-2 px-6 py-3 text-sm font-semibold bg-slate-800 hover:bg-slate-700 text-slate-100 rounded-xl border border-slate-700 transition-all">
+        <a href="shop-tour.html" class="inline-flex items-center gap-2 px-6 py-3 text-sm font-semibold bg-slate-800 hover:bg-slate-700 text-slate-100 rounded-xl border border-slate-700 transition-all">
           Take the Shop Tour
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
         </a>
@@ -835,7 +828,7 @@
           <p class="text-sm text-slate-400 mb-3">Works with the Copilot cloud agent out of the box. Add <code class="text-sky-300">copilot-setup-steps.yml</code> to provision guardrails, MCP tools, and validation gates before the agent writes a single line.</p>
           <ul class="space-y-1 text-xs text-slate-500">
             <li class="flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-sky-400 shrink-0"></span>Instruction files auto-load identically in cloud + local</li>
-            <li class="flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-sky-400 shrink-0"></span>18 MCP tools wired via <code class="text-sky-300">.vscode/mcp.json</code></li>
+            <li class="flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-sky-400 shrink-0"></span>65 MCP tools wired via <code class="text-sky-300">.vscode/mcp.json</code></li>
             <li class="flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-sky-400 shrink-0"></span>Complements CodeQL, secret scanning, and Copilot code review</li>
           </ul>
         </div>
@@ -875,7 +868,7 @@
           <h3 class="text-xl font-bold text-white mb-2">MCP Server + Orchestrator</h3>
           <p class="text-sm text-slate-400 mb-4">65 MCP tools (core + LiveGuard + Watcher + Crucible + Tempering + Bug Registry + Testbed) — run plans autonomously with <code class="text-forge-400">forge_run_plan</code>, multi-model analysis with <code class="text-forge-400">forge_analyze --quorum</code> and <code class="text-forge-400">forge_diagnose</code>, full health check with <code class="text-forge-400">forge_liveguard_run</code>, generate images with <code class="text-forge-400">forge_generate_image</code>, track costs with <code class="text-forge-400">forge_cost_report</code>, monitor in real-time via WebSocket hub + dashboard at <code class="text-forge-400">localhost:3100/dashboard</code>. Full Auto, Assisted, and Quorum execution modes. xAI Grok + OpenAI support via API provider registry.</p>
           <div class="space-y-1 text-xs text-slate-500">
-            <div>36 tools · 14 LiveGuard · 2 Watcher · Dashboard · REST API · WebSocket · Traces · Parallel · Grok · Image Gen</div>
+            <div>65 tools (Core · LiveGuard · Watcher · Crucible · Tempering · Bug Registry · Testbed) · Dashboard · REST API · WebSocket · Traces · Parallel · Grok · Image Gen</div>
           </div>
         </div>
 
@@ -1704,7 +1697,7 @@ Target project: (current directory)</code></pre>
               </div>
               <div class="p-3 rounded-lg bg-slate-800/60 border border-slate-700/40 text-slate-400">
                 <span class="text-white font-medium block mb-1">What it installs</span>
-                17–18 instruction files, 19 agents, 11 skills, lifecycle hooks, pipeline prompts, copilot-instructions.md, 18 MCP tools
+                21+ instruction files, 19 agents, 13 skills, lifecycle hooks, pipeline prompts, copilot-instructions.md, 65 MCP tools
               </div>
               <div class="p-3 rounded-lg bg-slate-800/60 border border-slate-700/40 text-slate-400">
                 <span class="text-white font-medium block mb-1">What it customizes</span>

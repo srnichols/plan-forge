@@ -26,7 +26,7 @@ import { EventEmitter } from "node:events";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { createTraceContext, createTelemetryHandler, writeManifest, appendRunIndex, pruneRunHistory, addLogSummary } from "./telemetry.mjs";
-import { isOpenBrainConfigured, buildMemorySearchBlock, buildMemoryCaptureBlock, buildReflexionBlock, buildRunSummaryThought, buildCostAnomalyThought, loadProjectContext, buildPlanBootContext } from "./memory.mjs";
+import { isOpenBrainConfigured, buildMemorySearchBlock, buildMemoryCaptureBlock, buildReflexionBlock, buildTrajectorySuffix, extractTrajectory, writeTrajectory, buildRunSummaryThought, buildCostAnomalyThought, loadProjectContext, buildPlanBootContext } from "./memory.mjs";
 import { enforceCrucibleId, CrucibleEnforcementError } from "./crucible-enforce.mjs";
 // Phase FORGE-SHOP-07 Slice 07.2 — brain facade for unified recall
 import { recall as brainRecall } from "./brain.mjs";
@@ -4652,6 +4652,12 @@ async function executeSlice(slice, options) {
       sliceInstructions += "\n" + buildMemoryCaptureBlock(projectName, slice, planName);
     }
 
+    // Phase-25 Slice 2 (L8 Trajectory): ask the worker to emit a first-person
+    // sentinel-wrapped prose note after its work is done. The note is captured
+    // from stdout after gate success and persisted to
+    // .forge/trajectories/<plan>/slice-<id>.md for future slices to consult.
+    sliceInstructions += "\n" + buildTrajectorySuffix();
+
     // Teardown Safety Guard: inject pre-flight constraint
     if (teardownGuardConfig.enabled && isDestructiveSliceTitle(slice.title)) {
       const preFlightWarning = [
@@ -4873,6 +4879,32 @@ async function executeSlice(slice, options) {
     resolve(runDir, `slice-${slice.number}.json`),
     JSON.stringify(sliceResult, null, 2),
   );
+
+  // Phase-25 Slice 2 (L8 Trajectory): persist worker's sentinel-wrapped trajectory
+  // note on successful slices to .forge/trajectories/<plan>/slice-<id>.md.
+  // Word-capped to TRAJECTORY_MAX_WORDS (D2). Non-fatal on failure.
+  if (status === "passed" && planName) {
+    try {
+      const note = extractTrajectory(workerResult.output || "");
+      if (note) {
+        const path = writeTrajectory({
+          cwd,
+          planBasename: planName,
+          sliceId: slice.number,
+          content: note,
+        });
+        sliceResult.trajectoryPath = relative(cwd, path);
+        if (eventBus) {
+          eventBus.emit("trajectory-written", {
+            sliceNumber: slice.number,
+            path: sliceResult.trajectoryPath,
+          });
+        }
+      }
+    } catch {
+      // Non-fatal — trajectory persistence must never fail a passing slice
+    }
+  }
 
   // Record model performance for this slice
   try {

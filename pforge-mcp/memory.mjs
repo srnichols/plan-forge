@@ -13,7 +13,7 @@
  * @module memory
  */
 
-import { readFileSync, existsSync, statSync, readdirSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync, readdirSync } from "node:fs";
 import { resolve, join } from "node:path";
 
 /**
@@ -284,6 +284,202 @@ export function buildReflexionBlock(ctx = {}) {
     "Use this summary to avoid repeating the same mistake. Address the specific error above before the next gate run.",
     "",
   ].join("\n");
+}
+
+// ─── Phase-25 Slice 2: Trajectory notes (L8) ──────────────────────────
+
+/**
+ * Sentinels used by `buildTrajectorySuffix` / `extractTrajectory` to bracket
+ * the worker's trajectory note in its stdout.
+ */
+export const TRAJECTORY_BEGIN_SENTINEL = "<!-- PFORGE_TRAJECTORY:BEGIN -->";
+export const TRAJECTORY_END_SENTINEL = "<!-- PFORGE_TRAJECTORY:END -->";
+
+/**
+ * Phase-25 D2: maximum words retained in a persisted trajectory note.
+ * Overage truncated with a `[truncated]` marker.
+ */
+export const TRAJECTORY_MAX_WORDS = 500;
+
+/**
+ * Build the trajectory-note prompt suffix appended to a slice worker prompt.
+ * Asks the worker to emit a first-person prose note wrapped in sentinels so
+ * later slices in the same plan can learn from the approach (Phase-25 L8,
+ * scenario 5 — "Operator verbalizes intent for the next slice").
+ *
+ * Pure function: deterministic, no fs, no network.
+ *
+ * @returns {string} Prompt suffix (newline-prefixed + suffixed for clean concat).
+ */
+export function buildTrajectorySuffix() {
+  return `
+--- TRAJECTORY NOTE (Phase-25 L8) ---
+After your work is complete and the validation gate has been run, emit a
+brief first-person prose note (≤${TRAJECTORY_MAX_WORDS} words) wrapped in
+sentinels so later slices in the same plan can learn from your approach.
+
+Format — exactly these three lines, in order:
+${TRAJECTORY_BEGIN_SENTINEL}
+<your prose note — a few short paragraphs>
+${TRAJECTORY_END_SENTINEL}
+
+Cover, in plain prose:
+- The approach you chose and why.
+- Any dead-ends you ruled out.
+- Gotchas a future slice should watch for.
+- Key file or function names a later slice may need to touch.
+
+This is NOT a summary of the plan. Do not include commands, code blocks,
+bullet lists of commits, or machine-readable structures — prose only.
+--- END TRAJECTORY NOTE ---
+`;
+}
+
+/**
+ * Extract the trajectory sentinel block from worker stdout.
+ * Returns the trimmed content between sentinels, or null when not present.
+ *
+ * @param {string} output
+ * @returns {string|null}
+ */
+export function extractTrajectory(output) {
+  if (typeof output !== "string") return null;
+  const beginIdx = output.indexOf(TRAJECTORY_BEGIN_SENTINEL);
+  if (beginIdx < 0) return null;
+  const endIdx = output.indexOf(TRAJECTORY_END_SENTINEL, beginIdx + TRAJECTORY_BEGIN_SENTINEL.length);
+  if (endIdx < 0) return null;
+  const body = output.slice(beginIdx + TRAJECTORY_BEGIN_SENTINEL.length, endIdx).trim();
+  return body.length > 0 ? body : null;
+}
+
+/**
+ * Cap a trajectory note at `maxWords` words. When capped, append "\n\n[truncated]"
+ * per Phase-25 D2. Whitespace is normalized to single spaces in the word count
+ * but the original prose layout is preserved up to the cut.
+ *
+ * @param {string} content
+ * @param {number} [maxWords=TRAJECTORY_MAX_WORDS]
+ * @returns {string}
+ */
+export function capTrajectoryWords(content, maxWords = TRAJECTORY_MAX_WORDS) {
+  if (typeof content !== "string") return "";
+  const trimmed = content.trim();
+  if (trimmed.length === 0) return "";
+  const tokens = trimmed.split(/\s+/);
+  if (tokens.length <= maxWords) return trimmed;
+  // Preserve original layout up to the nth word. Walk the raw string and stop
+  // once we've consumed `maxWords` whitespace-separated runs.
+  let count = 0;
+  let cutAt = trimmed.length;
+  let inWord = false;
+  for (let i = 0; i < trimmed.length; i++) {
+    const isWs = /\s/.test(trimmed[i]);
+    if (!isWs && !inWord) {
+      count++;
+      inWord = true;
+      if (count > maxWords) {
+        cutAt = i;
+        break;
+      }
+    } else if (isWs) {
+      inWord = false;
+    }
+  }
+  return trimmed.slice(0, cutAt).trimEnd() + "\n\n[truncated]";
+}
+
+/**
+ * Sanitize an untrusted string for safe use as a filesystem path component.
+ * Keeps `[A-Za-z0-9._-]` only, collapses everything else to `_`, strips any
+ * remaining `..` sequences (to prevent path traversal), and caps length.
+ */
+function sanitizePathComponent(s) {
+  let cleaned = String(s ?? "").replace(/[^A-Za-z0-9._-]/g, "_");
+  // Collapse any `..` sequences (even the trailing ones left after other
+  // chars were replaced) to prevent escaping the intended directory root.
+  while (cleaned.includes("..")) {
+    cleaned = cleaned.replace(/\.\./g, "_");
+  }
+  cleaned = cleaned.slice(0, 128);
+  return cleaned.length > 0 ? cleaned : "_";
+}
+
+/**
+ * Persist a trajectory note to `.forge/trajectories/<plan>/slice-<id>.md`.
+ * Word-capped to `TRAJECTORY_MAX_WORDS` (Phase-25 MUST #2 + D2).
+ *
+ * @param {object} opts
+ * @param {string} [opts.cwd=process.cwd()]
+ * @param {string} opts.planBasename - Plan file name without extension.
+ * @param {(string|number)} opts.sliceId
+ * @param {string} opts.content - Raw trajectory prose.
+ * @returns {string} Absolute path of the written file.
+ */
+export function writeTrajectory({ cwd = process.cwd(), planBasename, sliceId, content }) {
+  if (!planBasename || typeof planBasename !== "string") {
+    throw new Error("writeTrajectory: planBasename is required");
+  }
+  if (sliceId === undefined || sliceId === null || sliceId === "") {
+    throw new Error("writeTrajectory: sliceId is required");
+  }
+  const safePlan = sanitizePathComponent(planBasename);
+  const safeSlice = sanitizePathComponent(String(sliceId));
+  const dir = resolve(cwd, ".forge", "trajectories", safePlan);
+  mkdirSync(dir, { recursive: true });
+  const path = resolve(dir, `slice-${safeSlice}.md`);
+  const capped = capTrajectoryWords(content);
+  writeFileSync(path, capped, "utf-8");
+  return path;
+}
+
+/**
+ * Read a single trajectory note. Returns `null` when the file does not exist.
+ */
+export function readTrajectory({ cwd = process.cwd(), planBasename, sliceId }) {
+  if (!planBasename || sliceId === undefined || sliceId === null || sliceId === "") return null;
+  const safePlan = sanitizePathComponent(planBasename);
+  const safeSlice = sanitizePathComponent(String(sliceId));
+  const path = resolve(cwd, ".forge", "trajectories", safePlan, `slice-${safeSlice}.md`);
+  if (!existsSync(path)) return null;
+  try {
+    return readFileSync(path, "utf-8");
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * List every trajectory note for a plan, sorted numerically by slice id when
+ * possible. Returns `[]` when the directory does not exist.
+ */
+export function listTrajectories({ cwd = process.cwd(), planBasename }) {
+  if (!planBasename) return [];
+  const safePlan = sanitizePathComponent(planBasename);
+  const dir = resolve(cwd, ".forge", "trajectories", safePlan);
+  if (!existsSync(dir)) return [];
+  let files;
+  try {
+    files = readdirSync(dir);
+  } catch {
+    return [];
+  }
+  const entries = [];
+  for (const f of files) {
+    const m = /^slice-(.+)\.md$/.exec(f);
+    if (!m) continue;
+    const sliceId = m[1];
+    const fullPath = resolve(dir, f);
+    let content = "";
+    try { content = readFileSync(fullPath, "utf-8"); } catch { /* skip unreadable */ }
+    entries.push({ sliceId, path: fullPath, content });
+  }
+  entries.sort((a, b) => {
+    const an = Number(a.sliceId);
+    const bn = Number(b.sliceId);
+    if (Number.isFinite(an) && Number.isFinite(bn)) return an - bn;
+    return a.sliceId.localeCompare(b.sliceId);
+  });
+  return entries;
 }
 
 /**

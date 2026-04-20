@@ -1515,6 +1515,130 @@ export const CLI_SCHEMA = {
         "pforge runbook docs/plans/Phase-1-AUTH-PLAN.md --no-incidents",
       ],
     },
+    // ─── LiveGuard CLI commands (v2.27+) ───
+    drift: {
+      description: "Score codebase against architecture guardrails — track drift over time",
+      args: [],
+      flags: { "--threshold": { type: "number", description: "Minimum acceptable score (default 70)" } },
+      examples: ["pforge drift", "pforge drift --threshold 80"],
+    },
+    "deploy-log": {
+      description: "Record a deployment — version, deployer, optional notes, slice ref",
+      args: [{ name: "version", type: "string", required: true }],
+      flags: {
+        "--notes": { type: "string", description: "Deployment notes" },
+        "--slice": { type: "string", description: "Related slice reference" },
+      },
+      examples: ["pforge deploy-log 2.52.1", "pforge deploy-log 2.52.1 --notes \"packaging hotfix\""],
+    },
+    "secret-scan": {
+      description: "Scan recent commits for leaked secrets using Shannon entropy analysis",
+      args: [],
+      flags: { "--depth": { type: "number", description: "Number of commits to scan (default 20)" } },
+      examples: ["pforge secret-scan", "pforge secret-scan --depth 50"],
+    },
+    "env-diff": {
+      description: "Compare environment variable keys across .env files — detect missing keys",
+      args: [],
+      flags: {},
+      examples: ["pforge env-diff"],
+    },
+    "regression-guard": {
+      description: "Run validation gates from plan files — guard against regressions when files change",
+      args: [],
+      flags: {},
+      examples: ["pforge regression-guard"],
+    },
+    hotspot: {
+      description: "Identify git churn hotspots — most frequently changed files",
+      args: [],
+      flags: { "--top": { type: "number", description: "Top N files (default 20)" } },
+      examples: ["pforge hotspot", "pforge hotspot --top 10"],
+    },
+    "dep-watch": {
+      description: "Dependency vulnerability + freshness watcher",
+      args: [],
+      flags: {},
+      examples: ["pforge dep-watch"],
+    },
+    "fix-proposal": {
+      description: "Generate a fix-proposal plan for a drift or incident finding",
+      args: [{ name: "finding-id", type: "string", required: true }],
+      flags: {},
+      examples: ["pforge fix-proposal drift-2026-04-19-001"],
+    },
+    "quorum-analyze": {
+      description: "Assemble a quorum analysis prompt from LiveGuard data for multi-model dispatch",
+      args: [],
+      flags: {},
+      examples: ["pforge quorum-analyze"],
+    },
+    "health-trend": {
+      description: "Health trend analysis — drift, cost, incidents, model performance over time",
+      args: [],
+      flags: { "--window": { type: "string", description: "Time window (7d, 30d, 90d; default 30d)" } },
+      examples: ["pforge health-trend", "pforge health-trend --window 7d"],
+    },
+    "org-rules": {
+      description: "Export org custom instructions from .github/instructions/ for GitHub org settings",
+      args: [{ name: "subcommand", type: "string", required: true, enum: ["export"] }],
+      flags: {
+        "--format": { type: "string", enum: ["github"], description: "Output format" },
+        "--output": { type: "path", description: "Write to file instead of stdout" },
+      },
+      examples: ["pforge org-rules export", "pforge org-rules export --output org-rules.md"],
+    },
+    // ─── Version + release CLI (v2.33+) ───
+    "self-update": {
+      description: "Check for and install the latest Plan Forge release from GitHub",
+      args: [],
+      flags: {
+        "--force": { type: "boolean", description: "Skip prompts" },
+        "--dry-run": { type: "boolean", description: "Show what would happen" },
+      },
+      examples: ["pforge self-update", "pforge self-update --dry-run"],
+    },
+    "version-bump": {
+      description: "Update VERSION, package.json, docs/README/ROADMAP version badges",
+      args: [{ name: "version", type: "string", required: true }],
+      flags: {},
+      examples: ["pforge version-bump 2.53.0"],
+    },
+    "migrate-memory": {
+      description: "Merge legacy *-history.json ledgers into canonical .jsonl siblings (idempotent)",
+      args: [],
+      flags: { "--dry-run": { type: "boolean", description: "Preview without modifying files" } },
+      examples: ["pforge migrate-memory", "pforge migrate-memory --dry-run"],
+    },
+    // ─── Testbed CLI (v2.52+) ───
+    "testbed-happypath": {
+      description: "Run all happy-path testbed scenarios sequentially with aggregated pass/fail summary",
+      args: [],
+      flags: {
+        "--dry-run": { type: "boolean", description: "List scenarios without executing" },
+        "--testbed-path": { type: "path", description: "Path to the testbed repository" },
+      },
+      examples: ["pforge testbed-happypath", "pforge testbed-happypath --dry-run"],
+    },
+    // ─── Generic MCP proxy (v2.53+) ───
+    "mcp-call": {
+      description: "Invoke any MCP tool by name via the local MCP server on :3100 — covers tools without dedicated CLI wrappers",
+      args: [{ name: "tool", type: "string", required: true, description: "Tool name (e.g., forge_crucible_list or crucible-list)" }],
+      flags: {
+        "--json": { type: "string", description: "JSON payload to send as params" },
+      },
+      examples: [
+        "pforge mcp-call forge_crucible_list",
+        "pforge mcp-call forge_bug_register --json '{\"severity\":\"high\",\"title\":\"x\"}'",
+        "pforge mcp-call crucible-submit --title=\"Pagination\" --description=\"...\"",
+      ],
+    },
+    tour: {
+      description: "Guided walkthrough of your installed Plan Forge files",
+      args: [],
+      flags: {},
+      examples: ["pforge tour"],
+    },
     help: { description: "Show help", args: [], flags: {}, examples: ["pforge help"] },
   },
   server: {

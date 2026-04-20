@@ -6,19 +6,36 @@
   <img alt="Plan Forge" src="docs/assets/plan-forge-logo-light.svg" width="400">
 </picture>
 
-> **A blacksmith doesn't hand raw iron to a customer. They heat it, hammer it, and temper it until it holds its edge. Then they watch — because a blade that isn't maintained will dull.**
+## The AI-Native SDLC Forge Shop
+
+> **A blacksmith doesn't hand raw iron to a customer. They smelt it, hammer it, temper it — and then they watch, because a blade that isn't maintained will dull.**
 >
-> Plan Forge does the same for AI-driven development. Your rough ideas go in as raw metal — and come out as **hardened execution contracts** that AI coding agents follow without deviation. After the code ships, **LiveGuard watches the gates** — detecting drift, incidents, and vulnerabilities. And every finding feeds back, so **the forge gets smarter every run**.
+> Plan Forge is a **full-lifecycle AI development shop**. Raw ideas are **smelted** through the Crucible into structured plans. Plans are **forged** into working code through a 7-step hardened pipeline. Shipped code is **guarded** by LiveGuard — drift, secrets, dependencies, incidents, all watched in real time. And every finding is **learned** back into the shop's memory, so the next run starts smarter than the last.
 >
-> *Forge the plan. Guard the gates. Learn from every build.*
+> *Smelt the idea. Forge the code. Guard the build. Learn from every run.*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**[Website](https://planforge.software/)** · **[Quick Start](https://planforge.software/#quickstart)** · **[Manual](https://planforge.software/manual/)** · **[Documentation](https://planforge.software/docs.html)** · **[FAQ](https://planforge.software/faq.html)** · **[Extensions](https://planforge.software/extensions.html)** · **[Spec Kit Interop](https://planforge.software/speckit-interop.html)**
+**[Website](https://planforge.software/)** · **[Shop Tour](https://planforge.software/shop-tour.html)** · **[Manual](https://planforge.software/manual/)** · **[Documentation](https://planforge.software/docs.html)** · **[FAQ](https://planforge.software/faq.html)** · **[Extensions](https://planforge.software/extensions.html)** · **[Spec Kit Interop](https://planforge.software/speckit-interop.html)**
 
 ```
-41 MCP Tools (+2 Watcher) · 14 LiveGuard · 6 Crucible (v2.37-dev) · 19 Agents · 12 Skills · 9 Presets · 7 Adapters · 864 Tests
+65 MCP Tools · 45+ CLI Commands · 19 Agents · 13 Skills · 9 Presets · 7 Adapters · 2470 Tests · v2.53.0
 ```
+
+---
+
+## The Four Stations
+
+Plan Forge is one shop with four stations. Each one handles a distinct part of the software lifecycle — and they all share one memory.
+
+| Station | Verb | What happens here | Start with |
+|---------|------|------------------|-----------|
+| 🪨 **Smelt** | *Smelt the idea* | Rough idea → Crucible interview → tempered plan with scope contract and validation gates. | [Crucible](docs/manual/crucible.html) · [Tempering](docs/manual/tempering.md) |
+| 🔨 **Forge** | *Forge the code* | Hardened plan → DAG-scheduled execution → quorum consensus → shipped code. The classic 7-step pipeline. | [Your First Plan](docs/manual/your-first-plan.html) · [AI Plan Hardening Runbook](docs/plans/AI-Plan-Hardening-Runbook.md) |
+| 🛡️ **Guard** | *Guard the build* | Shipped code → drift scoring, secret scan, dep watch, regression guard, incident capture, remote alerts. | [What is LiveGuard?](docs/manual/what-is-liveguard.html) · [LiveGuard Tools](docs/manual/liveguard-tools.html) |
+| 🧠 **Learn** | *Learn from every run* | Findings → OpenBrain memory → Health DNA → self-tuned escalation, cost, and quorum thresholds. | [Memory Architecture](docs/manual/memory-architecture.html) · [Bug Registry + Testbed](docs/capabilities.md) |
+
+And the **control room** that ties them together: the [live dashboard](docs/manual/dashboard.html) at `localhost:3100/dashboard` with 25 tabs, session replay, WebSocket event hub, cost reports, OTLP traces, and a remote bridge for Telegram / Slack / Discord / OpenClaw.
 
 ---
 
@@ -26,22 +43,23 @@
 
 | You are... | Start with |
 |------------|------------|
-| **Brand new to AI guardrails** | Read [What Is This?](#what-is-this) below → Run [Quick Start](#quick-start) |
+| **Evaluating Plan Forge** | Read [the Shop Tour](https://planforge.software/shop-tour.html) → Skim [capabilities](docs/capabilities.md) |
 | **A developer using VS Code + Copilot** | Run [Quick Start](#quick-start) → Read [COPILOT-VSCODE-GUIDE.md](docs/COPILOT-VSCODE-GUIDE.md) |
 | **An AI agent setting up a project** | Read [AGENT-SETUP.md](AGENT-SETUP.md) (your entry point) |
-| **Just browsing / evaluating** | Keep reading — or visit [planforge.software](https://planforge.software/) |
+| **Already shipping and want the watch layer** | Jump to [LiveGuard](docs/manual/what-is-liveguard.html) — runs standalone on any codebase |
+| **Just browsing** | Keep reading — or visit [planforge.software](https://planforge.software/) |
 
 ---
 
-## Beyond Vibe Coding
+## Why a Whole Shop?
 
-AI coding tools generate code fast — but without structure, that code is untestable, insecure, and impossible to maintain. And even when the build is clean, software doesn't stop changing. Dependencies acquire CVEs. Configuration drifts. Regression gates go stale. Incidents repeat.
+AI coding tools generate code fast. But *fast* doesn't mean *done*. Ideas skip the requirements stage, plans drift mid-execution, shipped code accumulates CVEs, configuration rots, regression gates go stale, and incidents repeat because nobody remembered what caused the last one.
 
-**Plan Forge exists because "it works" isn't enough.** This framework gives AI agents structure during the build, watches the codebase after you ship, and learns from every run — so the next session starts smarter than the last.
+**Plan Forge exists because "it compiles" isn't the same as "it's a product."** A real product needs the full shop — intake, build, watch, and memory — and every station has to feed the next.
 
 > *Vibe coding gets you a prototype. Plan Forge gets you a product — and keeps it healthy.*
 
-**Verified**: 12 phases self-built, 864/864 self-tests, 65 MCP tools, zero manual rollbacks. See [docs/capabilities.md](docs/capabilities.md).
+**Verified**: 12+ phases self-built, 2470/2470 self-tests, 65 MCP tools, zero manual rollbacks. See [docs/capabilities.md](docs/capabilities.md).
 
 ### A/B Test Results (April 2026)
 
@@ -60,13 +78,23 @@ Same app, same model (Claude Opus 4.6), same time (~7 min). Only difference: Run
 
 ## What Is This?
 
-Plan Forge is three things: a **build pipeline** that hardens plans into execution contracts, a **post-coding guard** that watches your codebase after you ship, and a **learning system** that gets smarter every run.
+Plan Forge is a **four-station AI development shop**: **Smelt** raw ideas into structured plans, **Forge** plans into shipped code, **Guard** shipped code against drift and incidents, and **Learn** from every run so the next one starts smarter.
 
-<img src="docs/assets/readme-system-overview.webp" alt="Build → Guard → Learn: three forge stations connected in a cycle — anvil (build), watchtower (guard), golden brain (learn)" width="100%" />
+<img src="docs/assets/readme-system-overview.webp" alt="Smelt → Forge → Guard → Learn: four forge stations connected in a cycle — crucible (smelt), anvil (forge), watchtower (guard), golden brain (learn)" width="100%" />
 
-### 🔨 Build — The Pipeline
+### 🪨 Smelt — The Crucible
 
-A 7-step workflow that breaks features into verifiable slices, locks scope, and validates at every boundary.
+The intake station. Raw ideas enter as text; they exit as hardened plans with scope contracts, validation gates, and forbidden actions.
+
+- **Crucible interview** — lane-scoped questions (tweak / feature / full) infer what the plan needs
+- **Tempering** — scoring pass that grades plan quality before it hits the forge
+- **L3 memory defaults** — recommended answers sourced from prior phases + project principles
+- **6 MCP tools** — `crucible-submit`, `crucible-ask`, `crucible-preview`, `crucible-finalize`, `crucible-list`, `crucible-abandon`
+- **4 tempering tools** — `tempering-run`, `tempering-scan`, `tempering-status`, `tempering-approve-baseline`
+
+### 🔨 Forge — The Pipeline
+
+The build station. A 7-step workflow that breaks features into verifiable slices, locks scope, and validates at every boundary.
 
 ```
 Specify → Pre-flight → Harden → Execute → Sweep → Review → Ship
@@ -76,10 +104,12 @@ Specify → Pre-flight → Harden → Execute → Sweep → Review → Ship
 - **Temper Guards** — tables of common AI shortcuts paired with rebuttals
 - **4-session isolation** — the executor never reviews its own work
 - **Autonomous execution** — `forge_run_plan` runs plans end-to-end with DAG scheduling
+- **Quorum mode** — multi-model consensus for complex slices (`--quorum=power`, `--quorum=speed`)
+- **Auto-escalation** — self-tuning model promotion on slice failure, learned from history
 
-### 🛡️ Guard — LiveGuard
+### 🛡️ Guard — LiveGuard + Watcher + Remote
 
-14 post-coding intelligence tools that watch your codebase after the forge stops building.
+The watch station. 14 post-coding intelligence tools that stay active after the forge stops building, plus a Watcher for observing other projects and a remote bridge for notifications.
 
 - **Drift scoring** — architecture guardrail violations scored 0–100
 - **Secret scanning** — Shannon entropy analysis with key-pattern matching
@@ -99,11 +129,12 @@ Specify → Pre-flight → Harden → Execute → Sweep → Review → Ship
 }
 ```
 
-- **Tempering** — closed-loop bug validation: discovers bugs → classifies → generates fix plans → re-runs scanners to verify → marks fixed. 9 scanner types, mutation testing, and anomaly detection for unaddressed bugs.
+- **Watcher** — read-only observer that tails another project's pforge run from a second VS Code session (snapshot + live-tail modes)
+- **Remote bridge** — trigger plans, receive alerts, and approve runs from Telegram / Slack / Discord / OpenClaw — no VS Code needed
 
-### 🧠 Learn — Self-Recursive Intelligence
+### 🧠 Learn — Memory + Health DNA + Bug Registry + Testbed
 
-The system gets smarter every run. No configuration needed — just use it.
+The memory station. Every finding from every station flows into persistent memory and a Health DNA fingerprint that tunes the whole shop over time.
 
 | Feature | What it learns from | What it improves |
 |---------|-------------------|-----------------|
@@ -114,7 +145,24 @@ The system gets smarter every run. No configuration needed — just use it.
 | **Fix outcome tracking** | Did the fix work? | Learns which fix patterns work |
 | **Health DNA** | All metrics combined | Detects project decay early |
 
-Every LiveGuard finding is auto-captured to persistent memory. Pipeline prompts search this memory before acting — so the next session starts with context, not blank.
+**Also at the Learn station**:
+
+- **Bug Registry** — native bug tracking (register / list / link / update / close / stats) with plan + slice linkage and fix validation
+- **Testbed** — happy-path scenario runner for release validation, cumulative findings, flake detection
+- **OpenBrain memory** — every event from every station is auto-captured to persistent L3 memory; pipeline prompts search this memory before acting, so sessions start with context instead of blank.
+
+---
+
+## The Control Room
+
+All four stations report to one place: the [live dashboard](docs/manual/dashboard.html) at `http://localhost:3100/dashboard`.
+
+- **25 tabs** across Forge (Home, Runs, Progress, Crucible, Governance, Cost, Actions, Replay, Extensions, Config, Traces, Skills, Watcher, Tempering, Bug Registry, Memory, Timeline, Review) and LiveGuard (Health, Incidents, Triage, Security, Env)
+- **WebSocket event hub** — every run emits structured events; the dashboard subscribes live
+- **Session replay** — scrub back through any completed run, slice by slice
+- **Cost reports** — per-run / per-model / monthly aggregation with self-calibrating estimates
+- **OTLP traces** — drop into Jaeger / Honeycomb / Grafana if you want external observability
+- **Remote bridge** — trigger plans from Telegram / Slack / Discord, approve with a tap, stream notifications back
 
 ---
 

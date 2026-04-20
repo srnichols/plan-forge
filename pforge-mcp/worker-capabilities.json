@@ -157,5 +157,20 @@
     "windows": ["winget", "scoop", "choco"],
     "macos": ["brew", "port"],
     "linux": ["apt", "dnf", "pacman", "zypper", "apk"]
+  },
+
+  "innerLoop": {
+    "_comment": "Phase-25 v2.57 inner-loop subsystem capability flags. Advertised via forge_capabilities so MCP consumers + agent adapters can auto-discover feature availability on this node. See INNER_LOOP_SURFACE in capabilities.mjs for the full schema.",
+    "schemaVersion": "1.0",
+    "addedIn": "2.57.0",
+    "subsystems": {
+      "reflexion": true,
+      "trajectory": true,
+      "autoSkills": true,
+      "gateSynthesis": true,
+      "postmortem": true,
+      "federation": true,
+      "reviewer": true
+    }
   }
 }

@@ -1772,6 +1772,45 @@ export const CONFIG_SCHEMA = {
         apiKey: { type: "string", description: "API key (or use .forge/secrets.json OPENCLAW_API_KEY)" },
       },
     },
+    // Phase-25 v2.57 inner-loop subsystems (all opt-in; existing users see no change)
+    runtime: {
+      type: "object",
+      description: "Phase-25 v2.57 inner-loop runtime configuration (opt-in subsystems)",
+      properties: {
+        gateSynthesis: {
+          type: "object",
+          description: "Phase-25 L6 — adaptive gate synthesis from Tempering minima. Suggest-only by default; never mutates plans.",
+          properties: {
+            mode: { type: "string", enum: ["off", "suggest", "enforce"], default: "suggest", description: "off=silent, suggest=print advisory, enforce=track in .forge/gate-suggestions.jsonl (Phase-26)" },
+            domains: { type: "array", items: { type: "string", enum: ["domain", "integration", "controller"] }, default: ["domain", "integration", "controller"], description: "Which Tempering profiles to emit suggestions for" },
+          },
+        },
+        reviewer: {
+          type: "object",
+          description: "Phase-25 L4 — opt-in speed-quorum reviewer that scores slice diffs inside brain.gate-check. Advisory-only in v2.57.",
+          properties: {
+            enabled: { type: "boolean", default: false, description: "Master switch (opt-in)" },
+            quorumPreset: { type: "string", enum: ["speed", "power"], default: "speed", description: "Which quorum preset to use (D5 default: speed)" },
+            blockOnCritical: { type: "boolean", default: false, description: "When true, critical verdicts block the next slice. Advisory-only (false) in v2.57 per D6" },
+            timeoutMs: { type: "number", default: 30000, minimum: 1, description: "Max time to wait for reviewer response" },
+          },
+        },
+      },
+    },
+    brain: {
+      type: "object",
+      description: "Phase-25 L2/L4 memory subsystem configuration",
+      properties: {
+        federation: {
+          type: "object",
+          description: "Phase-25 L4-lite — cross-project read-only memory federation. Opt-in; absolute local paths only (D9).",
+          properties: {
+            enabled: { type: "boolean", default: false, description: "Master switch (opt-in)" },
+            repos: { type: "array", items: { type: "string" }, default: [], description: "Absolute local repo paths. Relative paths and URL schemes (http/https/ssh/git) are rejected" },
+          },
+        },
+      },
+    },
   },
 };
 
@@ -1991,6 +2030,95 @@ const SYSTEM_REFERENCE = {
  * @param {Array} [mcpTools] - Live TOOLS array from server.mjs. If omitted, builds from TOOL_METADATA keys.
  * @param {object} [options] - { cwd, hubPort }
  */
+// ─── Phase-25 v2.57: Inner-Loop Subsystem Surface ────────────────────
+
+/**
+ * Declarative description of the inner-loop subsystems added in Phase-25.
+ * Surfaces via `forge_capabilities` so IDEs + MCP consumers (including the
+ * Dashboard Config tab) auto-discover the subsystems and their opt-in state.
+ * All new subsystems default off/suggest/read-only per the Phase-25 opt-in
+ * invariant — existing users see zero behavior change.
+ */
+export const INNER_LOOP_SURFACE = Object.freeze({
+  schemaVersion: "1.0",
+  description: "Phase-25 v2.57 inner-loop enhancements — closed-loop research patterns. All subsystems are opt-in for existing users; new projects can enable defaults via the Dashboard Config tab.",
+  subsystems: {
+    reflexion: {
+      level: "L7",
+      addedIn: "2.57.0",
+      enabledByDefault: true,
+      description: "On gate-fail retry, injects a Markdown reflexion block (gate name, model, durationMs, stderrTail ≤2KB) into the next attempt's prompt so the worker can reason about its prior failure.",
+      configKey: null,
+      dashboardTab: "Traces",
+      module: "pforge-mcp/memory.mjs → buildReflexionBlock()",
+    },
+    trajectory: {
+      level: "L8",
+      addedIn: "2.57.0",
+      enabledByDefault: true,
+      description: "On slice pass, extracts a sentinel-wrapped trajectory note (≤500 words) from the worker output and writes it to .forge/trajectories/<slice>/<iso>.md for postmortem + federation consumers.",
+      configKey: null,
+      storage: ".forge/trajectories/",
+      dashboardTab: "Replay",
+      module: "pforge-mcp/memory.mjs → writeTrajectory()",
+    },
+    autoSkills: {
+      level: "L2",
+      addedIn: "2.57.0",
+      enabledByDefault: true,
+      description: "Captures slice patterns as auto-skill Markdown files under .forge/auto-skills/ and promotes them once reuseCount reaches the promotion threshold (default 3). Skills are injected into future matching slices.",
+      configKey: null,
+      storage: ".forge/auto-skills/",
+      promotionThreshold: 3,
+      dashboardTab: "Skills",
+      module: "pforge-mcp/memory.mjs → retrieveAutoSkills() / writeAutoSkill()",
+    },
+    gateSynthesis: {
+      level: "L6",
+      addedIn: "2.57.0",
+      enabledByDefault: true,
+      mode: "suggest",
+      description: "Scans plan slices against Tempering domain minima. When a slice matches a profile (domain/integration/controller) but declares no validation gate, prints a suggested command. Never mutates plans. Enforce-mode tracking deferred to Phase-26.",
+      configKey: "runtime.gateSynthesis",
+      configDefaults: { mode: "suggest", domains: ["domain", "integration", "controller"] },
+      dashboardTab: "Config",
+      module: "pforge-mcp/orchestrator.mjs → synthesizeGateSuggestions()",
+    },
+    postmortem: {
+      level: "L5",
+      addedIn: "2.57.0",
+      enabledByDefault: true,
+      description: "After every run (pass or fail), writes a JSON postmortem with retriesPerSlice, gateFlaps, costDelta, driftDelta, topFailureReason. Retention 10 per plan (D7). Step-2 hardener reads the newest 3 to fold signal back into scope decisions.",
+      storage: ".forge/plans/<plan-basename>/postmortem-*.json",
+      retentionCount: 10,
+      dashboardTab: "Runs",
+      module: "pforge-mcp/orchestrator.mjs → buildPlanPostmortem() / writePlanPostmortem()",
+    },
+    federation: {
+      level: "L4-lite",
+      addedIn: "2.57.0",
+      enabledByDefault: false,
+      description: "Read-only cross-project memory fan-out. On brain.recall for a cross.* key that misses L3, reads peer projects' .forge/brain/<entity>/<id>.json. Absolute local paths only; URLs and relative paths rejected.",
+      configKey: "brain.federation",
+      configDefaults: { enabled: false, repos: [] },
+      securityPosture: "absolute-local-paths-only (D9); '..' rejected; defense-in-depth checks resolved path lives under declared repo root",
+      dashboardTab: "Config",
+      module: "pforge-mcp/brain.mjs → federationRead()",
+    },
+    reviewer: {
+      level: "L4",
+      addedIn: "2.57.0",
+      enabledByDefault: false,
+      advisoryOnly: true,
+      description: "Opt-in speed-quorum reviewer that scores slice diffs inside brain.gate-check. Advisory-only in v2.57; critical verdicts do NOT block unless operators explicitly set blockOnCritical=true.",
+      configKey: "runtime.reviewer",
+      configDefaults: { enabled: false, quorumPreset: "speed", blockOnCritical: false, timeoutMs: 30000 },
+      dashboardTab: "Config",
+      module: "pforge-mcp/brain.mjs → invokeReviewer()",
+    },
+  },
+});
+
 export function buildCapabilitySurface(mcpTools, options = {}) {
   const { cwd = process.cwd(), hubPort = null } = options;
 
@@ -2135,6 +2263,7 @@ export function buildCapabilitySurface(mcpTools, options = {}) {
       schedulerSelection: "Auto-detected: if plan has [P] tags → ParallelScheduler, else SequentialScheduler",
       conflictDetection: "Parallel slices with overlapping [scope:] patterns forced to sequential",
     },
+    innerLoop: INNER_LOOP_SURFACE,
     extensions,
     memory: buildMemoryCapabilities(cwd),
     system: SYSTEM_REFERENCE,

@@ -63,6 +63,19 @@ cd my-project-plans
 .\setup.ps1 -Preset <stack>
 ```
 
+## Updating an Existing Install (do NOT re-clone)
+
+If Plan Forge is already installed in a project, upgrade in place — never re-clone the repo:
+
+```
+pforge self-update --force        # pulls latest GitHub release, overwrites framework files
+# or
+pforge update                     # v2.56.0+ auto-mode: picks newer of sibling clone or GitHub tag
+pforge update --from-github       # explicitly pull GitHub release
+```
+
+`self-update` and `update` preserve your `.forge.json`, `copilot-instructions.md`, project principles, and plan files. Cloning the repo a second time is the first-time install path and is almost always the wrong answer for existing installs. See `.\pforge.ps1 config get update-source` (v2.56.0+) for controlling the update source (`auto` | `github-tags` | `local-sibling`).
+
 ## Links
 
 - Website: https://planforge.software

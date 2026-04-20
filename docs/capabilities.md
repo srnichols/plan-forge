@@ -198,6 +198,13 @@ pforge self-update [--force|--dry-run] # Install latest Plan Forge release
 pforge version-bump <version>          # Update VERSION, package.json, docs
 pforge migrate-memory [--dry-run]      # Merge legacy *-history.json into .jsonl siblings
 
+# Config CLI (v2.56+)
+pforge config get <key>                # Read a settable key from .forge.json
+pforge config set <key> <value>        # Write atomically (tmp + rename)
+pforge config list                     # Show all settable keys
+# Current settable keys:
+#   update-source  →  auto | github-tags | local-sibling  (default: auto)
+
 # Org + export CLI (v2.40+)
 pforge org-rules export [--format github] [--output <file>]  # Export org custom instructions
 
@@ -702,7 +709,17 @@ The event is observable via the WebSocket hub (`GET /api/hub`) or captured in th
 - Warns: `⚠ New version available: vX.Y.Z → run pforge update`
 - Silent when offline (network errors are suppressed)
 
-Run `pforge update` to pull the latest release.
+### Upgrading (preferred paths)
+
+Run `pforge self-update` to pull the latest tagged release from GitHub — this is the recommended path for existing installs. Do **not** re-clone the Plan Forge repo just to upgrade; that's the first-time install path.
+
+```
+pforge self-update --force        # overwrites framework files with latest GitHub release
+pforge update                     # v2.56.0+ auto-mode: newer of sibling vs. GitHub tag
+pforge update --from-github       # explicit GitHub release source
+```
+
+Both commands preserve `.forge.json`, `copilot-instructions.md`, project principles, and plan files. See `pforge config get update-source` (v2.56.0+) for the update-source preference (`auto` | `github-tags` | `local-sibling`).
 
 ---
 

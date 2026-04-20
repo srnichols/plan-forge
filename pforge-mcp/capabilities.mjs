@@ -1250,6 +1250,16 @@ export const TOOL_METADATA = {
     cost: "high",
     maxConcurrent: 1,
     addedIn: "2.55.0",
+    // v2.56.0 — explicit agent guidance. Was surfaced in capabilities but
+    // agents were still reaching for `git clone` because neither the intent
+    // field nor the description told them NOT to.
+    whenToUse: "Preferred path for upgrading an existing Plan Forge install. Always pulls the latest tagged release from GitHub and overwrites framework files (pforge.ps1, pforge.sh, pforge-mcp/, .github/prompts, etc.). Does NOT touch .forge.json, copilot-instructions.md, project principles, or plan files.",
+    preferOver: [
+      "git clone https://github.com/srnichols/plan-forge.git  (that's the FIRST-TIME install path, not the update path)",
+      "git pull in a sibling ../plan-forge clone  (master carries -dev suffix; self-update pulls clean release tags)",
+      "Manually downloading a tarball",
+    ],
+    agentGuidance: "If a user asks you to 'update Plan Forge' or 'upgrade to v<X.Y.Z>', run `pforge self-update --force` from the project root. Do not clone the repo. Do not use `git pull` on any sibling clone. After it runs, verify with `Get-Content VERSION`.",
     prerequisites: ["network connectivity", "VERSION file"],
     produces: ["updated framework files", ".forge/update-audit.log entry"],
     consumes: ["VERSION", ".forge.json", ".forge/update-check.json"],
@@ -1263,7 +1273,7 @@ export const TOOL_METADATA = {
     },
     example: {
       input: {},
-      output: { state: "done", detail: "Updated to v2.55.0" },
+      output: { state: "done", detail: "Updated to v2.56.0" },
     },
   },
   forge_testbed_run: {
@@ -1470,11 +1480,42 @@ export const CLI_SCHEMA = {
       },
       examples: ["pforge ext search azure", "pforge ext add azure-infrastructure", "pforge ext list"],
     },
+    config: {
+      description: "Read or write settable keys in .forge.json (v2.56.0+). Writes are atomic (tmp + rename). Use this instead of editing .forge.json by hand for schema-validated keys.",
+      subcommands: {
+        get: { description: "Read a value", args: [{ name: "key", type: "string", required: true }] },
+        set: { description: "Write a value", args: [{ name: "key", type: "string", required: true }, { name: "value", type: "string", required: true }] },
+        list: { description: "Show all settable keys and their current values", args: [] },
+      },
+      settableKeys: {
+        "update-source": {
+          jsonKey: "updateSource",
+          allowed: ["auto", "github-tags", "local-sibling"],
+          default: "auto",
+          description: "Where `pforge update` pulls template bytes from. `auto` picks the newer of sibling clone and GitHub tag; `github-tags` ignores siblings; `local-sibling` always uses ../plan-forge (contributor workflow).",
+        },
+      },
+      examples: [
+        "pforge config get update-source",
+        "pforge config set update-source github-tags",
+        "pforge config list",
+      ],
+    },
     update: {
-      description: "Update framework files from Plan Forge source",
-      args: [{ name: "source", type: "path", required: false, description: "Plan Forge source path" }],
-      flags: { "--dry-run": { type: "boolean" } },
-      examples: ["pforge update ../plan-forge", "pforge update --dry-run"],
+      description: "Update framework files from Plan Forge source. v2.56.0+ auto-selects source: picks newer of local sibling clone and latest GitHub tag (configurable via `updateSource` in .forge.json: auto|github-tags|local-sibling). Use `pforge self-update` to force-pull the latest GitHub release. Never clone the Plan Forge repo just to run an update — that's the first-time install path.",
+      args: [{ name: "source", type: "path", required: false, description: "Optional explicit Plan Forge source path. Leave empty to use auto-mode." }],
+      flags: {
+        "--dry-run": { type: "boolean", description: "Preview changes without writing" },
+        "--from-github": { type: "boolean", description: "Force GitHub tagged release source (ignore sibling clone)" },
+        "--tag": { type: "string", description: "Specific tag to pull (e.g. v2.56.0); implies --from-github" },
+        "--allow-dev": { type: "boolean", description: "Bypass the -dev-over-clean-release refusal guard" },
+      },
+      examples: [
+        "pforge update                  # auto: newer of sibling or latest tag (v2.56.0+)",
+        "pforge update --dry-run        # preview only, no writes",
+        "pforge update --from-github    # force GitHub release source",
+        "pforge self-update             # alias for latest GitHub release, overwrites existing install",
+      ],
     },
     incident: {
       description: "Capture an incident — record description, severity, affected files, and optional resolution time for MTTR tracking",

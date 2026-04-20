@@ -5,7 +5,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [Unreleased] — targeting 2.53.0
+## [2.53.0] — 2026-04-20 — Dashboard UX modernization + Capability-surface sync + Setup/Smith audit remediation
 
 ### Setup + CLI + Smith audit remediation (2026-04-20)
 
@@ -61,7 +61,60 @@ focused commits:
 
 All 2470 tests remain green across each commit.
 
-_(No additional changes yet.)_
+### Capability-surface sync (2026-04-20)
+
+Three follow-up commits aligning the advertised capability surface
+across every documentation and schema artifact:
+
+- **`02747dd` — CLI_SCHEMA +17 commands.** `capabilities.mjs`
+  `CLI_SCHEMA` export grew from 17 to 34 commands. Added: `drift`,
+  `deploy-log`, `secret-scan`, `env-diff`, `regression-guard`,
+  `hotspot`, `dep-watch`, `fix-proposal`, `quorum-analyze`,
+  `health-trend`, `org-rules`, `self-update`, `version-bump`,
+  `migrate-memory`, `testbed-happypath`, `mcp-call`, `tour`.
+  Auto-regenerated into `pforge-mcp/cli-schema.json` on server
+  startup via `writeCliSchema()`.
+
+- **`f3a21d0` — docs/manual/llms prose sync.** `docs/capabilities.md`,
+  `docs/manual/**`, `llms.txt`, and `docs/llms.txt` updated with the
+  full 34-command surface and correct tool counts (65 tools in
+  `TOOL_METADATA`).
+
+- **`cfea1f0` — HTML tile grid.** `docs/capabilities.html` gained
+  tiles for the 17 new commands matching the prose entries, with
+  proper category groupings.
+
+### Dashboard UX modernization (2026-04-20)
+
+- **`a7419c1` — Dashboard styling, navigation, and accessibility.**
+  Full CSS rewrite of `pforge-mcp/dashboard/index.html` using a
+  design-token system (CSS custom properties: `--bg-0..3`,
+  `--fg-0..3`, `--accent`, `--guard`, `--ring`, `--radius-*`,
+  `--shadow-*`). Light theme now re-derives from the same tokens
+  instead of fragile `.light { !important }` overrides. Navigation:
+  standardized Forge subtab hover to a single neutral color (was 7
+  different hover colors — blue/amber/orange/purple/emerald/red/cyan
+  — chaotic); LiveGuard subtabs keep amber hover as group accent.
+  Accessibility: `role=tablist`/`role=tab` on group + sub-tab lists,
+  `aria-selected` / `aria-controls` / `aria-label`, skip-link to
+  `#main-content`, sr-only search label, `prefers-reduced-motion`
+  override, focus-visible ring on all interactive elements via
+  `--ring`. Fixed previously-invalid nested `<main>` elements.
+  Header tightened (smaller title, uppercase tracking badges, pill
+  run status, proper theme-toggle hit target). Motion polish:
+  tab-content `fadeIn` 180ms, slice-card hover lift, drawer uses
+  cubic-bezier with backdrop blur on overlay, custom webkit scrollbar.
+
+- **`a26a7cb` — SVG tab icons + wrap-instead-of-scroll.** All 18
+  Forge subtabs + 5 LiveGuard subtabs + 2 group tabs now use
+  consistent 14–16px stroked Feather/Lucide-style SVG icons that
+  inherit `currentColor` (replaces inconsistent emoji, only 7 of 19
+  tabs had emoji before). Forge subtab row now wraps to a second
+  line on narrow viewports (`overflow-x-auto` → `flex-wrap` with
+  `gap-y-1`) instead of horizontal-scrolling, so all tabs remain
+  visible on small monitors.
+
+All 2470 tests still green.
 
 ---
 

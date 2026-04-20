@@ -2785,6 +2785,276 @@ async function pollHubClients() {
   } catch { /* ignore */ }
 }
 
+// ─── Phase FORGE-SHOP-04 Slice 04.2 — Global Search Bar ───────────────
+
+function searchEscapeHtml(str) {
+  const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+  return String(str).replace(/[&<>"']/g, c => map[c]);
+}
+
+function highlightTokens(snippet, tokens) {
+  if (!tokens || tokens.length === 0) return searchEscapeHtml(snippet);
+  let safe = searchEscapeHtml(snippet);
+  for (const t of tokens) {
+    const escaped = t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    safe = safe.replace(new RegExp(`(${escaped})`, 'gi'), '<mark>$1</mark>');
+  }
+  return safe;
+}
+
+function parseSearchSyntax(inputStr) {
+  const result = { query: '', tags: null, since: null, sources: null, correlationId: null };
+  if (!inputStr) return result;
+  const parts = inputStr.trim().split(/\s+/);
+  const queryParts = [];
+  for (const p of parts) {
+    const lower = p.toLowerCase();
+    if (lower.startsWith('tags:')) {
+      result.tags = p.slice(5).split(',').filter(Boolean);
+    } else if (lower.startsWith('since:')) {
+      result.since = p.slice(6);
+    } else if (lower.startsWith('source:')) {
+      result.sources = p.slice(7).split(',').filter(Boolean);
+    } else if (lower.startsWith('correlation:')) {
+      result.correlationId = p.slice(12);
+    } else {
+      queryParts.push(p);
+    }
+  }
+  result.query = queryParts.join(' ');
+  return result;
+}
+
+function manageSearchHistory(query) {
+  if (!query || !query.trim()) return;
+  const KEY = 'pforge.search.history';
+  let history = [];
+  try { history = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch { history = []; }
+  history = history.filter(h => h !== query.trim());
+  history.unshift(query.trim());
+  if (history.length > 5) history = history.slice(0, 5);
+  try { localStorage.setItem(KEY, JSON.stringify(history)); } catch { /* quota exceeded — degrade silently */ }
+}
+
+function getSearchHistory() {
+  try { return JSON.parse(localStorage.getItem('pforge.search.history') || '[]'); } catch { return []; }
+}
+
+function deepLinkResult(source, recordRef) {
+  const tabMap = {
+    run: 'runs', bug: 'bugregistry', incident: 'lg-incidents',
+    review: 'review', plan: null, tempering: 'tempering',
+    memory: 'memory', 'hub-event': 'home',
+  };
+  const tabName = tabMap[source];
+  if (source === 'plan' && recordRef) {
+    // Plans are file-based — no tab deep-link, just show an info message
+    return;
+  }
+  if (source === 'lg-incidents') {
+    const lgGroupBtn = document.querySelector('.group-tab[data-group="liveguard"]');
+    if (lgGroupBtn) lgGroupBtn.click();
+  }
+  if (tabName) {
+    const tabBtn = document.querySelector(`.tab-btn[data-tab="${tabName}"]`);
+    if (tabBtn) tabBtn.click();
+  }
+}
+
+function renderSearchResults(data, tokens) {
+  const container = document.getElementById('search-results');
+  if (!container) return;
+
+  if (!data || !data.hits || data.hits.length === 0) {
+    container.innerHTML = `<div class="p-4 text-center text-gray-500 text-sm" data-testid="search-empty">
+      <p>No results found</p>
+      <p class="mt-1 text-xs">Try <code class="bg-gray-700 px-1 rounded">tags:blocker</code> or <code class="bg-gray-700 px-1 rounded">since:24h</code></p>
+    </div>`;
+    container.classList.remove('hidden');
+    return;
+  }
+
+  // Group by source
+  const groups = {};
+  for (const hit of data.hits) {
+    const src = hit.source || 'unknown';
+    if (!groups[src]) groups[src] = [];
+    groups[src].push(hit);
+  }
+
+  const sourceLabels = {
+    run: 'Runs', bug: 'Bugs', incident: 'Incidents', review: 'Review',
+    plan: 'Plans', tempering: 'Tempering', memory: 'Memories', 'hub-event': 'Hub Events',
+  };
+
+  let html = '';
+  let idx = 0;
+  for (const [src, hits] of Object.entries(groups)) {
+    html += `<div class="px-3 pt-2 pb-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">${searchEscapeHtml(sourceLabels[src] || src)}</div>`;
+    for (const hit of hits) {
+      const snippet = hit.snippet ? highlightTokens(hit.snippet, tokens) : '';
+      const score = hit.score != null ? `<span class="text-gray-600 text-xs ml-2">${hit.score.toFixed(1)}</span>` : '';
+      const ts = hit.timestamp ? `<span class="text-gray-600 text-xs ml-2">${new Date(hit.timestamp).toLocaleDateString()}</span>` : '';
+      html += `<div class="search-result-item px-3 py-2 border-b border-gray-700/50 flex items-start gap-2"
+        role="option" data-source="${searchEscapeHtml(src)}" data-ref="${searchEscapeHtml(hit.recordRef || '')}" data-index="${idx}" aria-selected="false">
+        <span class="search-source-badge" data-source="${searchEscapeHtml(src)}">${searchEscapeHtml(src)}</span>
+        <div class="flex-1 min-w-0">
+          <div class="text-sm text-gray-200 truncate">${searchEscapeHtml(hit.recordRef || hit.text?.slice(0, 60) || '')}</div>
+          <div class="search-snippet text-xs text-gray-400 mt-0.5 line-clamp-2">${snippet}</div>
+        </div>
+        <div class="flex-shrink-0 flex items-center">${ts}${score}</div>
+      </div>`;
+      idx++;
+    }
+  }
+
+  html += `<div class="px-3 py-1.5 text-xs text-gray-600 text-right border-t border-gray-700">${data.total} result${data.total !== 1 ? 's' : ''} (${data.durationMs}ms)${data.truncated ? ' — truncated' : ''}</div>`;
+  container.innerHTML = html;
+  container.classList.remove('hidden');
+}
+
+function bindGlobalSearch() {
+  const input = document.getElementById('global-search');
+  const results = document.getElementById('search-results');
+  const hint = document.getElementById('search-hint');
+  if (!input || !results) return;
+
+  let debounceTimer = null;
+  let abortController = null;
+
+  // / hotkey
+  document.addEventListener('keydown', (e) => {
+    if (e.key === '/' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) && !e.target.isContentEditable) {
+      e.preventDefault();
+      input.focus();
+    }
+  });
+
+  // Input events
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      input.value = '';
+      results.classList.add('hidden');
+      input.blur();
+      if (hint) hint.classList.remove('hidden');
+      return;
+    }
+
+    const items = results.querySelectorAll('[role="option"]');
+    if (items.length === 0) return;
+    const currentIdx = [...items].findIndex(i => i.getAttribute('aria-selected') === 'true');
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const next = currentIdx < items.length - 1 ? currentIdx + 1 : 0;
+      items.forEach(i => { i.setAttribute('aria-selected', 'false'); i.classList.remove('search-active'); });
+      items[next].setAttribute('aria-selected', 'true');
+      items[next].classList.add('search-active');
+      items[next].scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      const prev = currentIdx > 0 ? currentIdx - 1 : items.length - 1;
+      items.forEach(i => { i.setAttribute('aria-selected', 'false'); i.classList.remove('search-active'); });
+      items[prev].setAttribute('aria-selected', 'true');
+      items[prev].classList.add('search-active');
+      items[prev].scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const selected = results.querySelector('[aria-selected="true"]');
+      if (selected) {
+        deepLinkResult(selected.dataset.source, selected.dataset.ref);
+        results.classList.add('hidden');
+        input.blur();
+      }
+    }
+  });
+
+  input.addEventListener('input', () => {
+    const val = input.value.trim();
+    if (hint) hint.classList.toggle('hidden', val.length > 0);
+
+    if (!val) {
+      results.classList.add('hidden');
+      return;
+    }
+
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => executeSearch(val), 150);
+  });
+
+  input.addEventListener('focus', () => {
+    if (hint) hint.classList.toggle('hidden', input.value.trim().length > 0);
+    if (!input.value.trim()) {
+      const history = getSearchHistory();
+      if (history.length > 0) {
+        results.innerHTML = `<div class="px-3 pt-2 pb-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">Recent</div>`
+          + history.map(h => `<div class="search-result-item px-3 py-2 border-b border-gray-700/50 text-sm text-gray-300 cursor-pointer" data-history="${searchEscapeHtml(h)}">${searchEscapeHtml(h)}</div>`).join('');
+        results.classList.remove('hidden');
+        // Click on history item fills input and triggers search
+        results.querySelectorAll('[data-history]').forEach(el => {
+          el.addEventListener('click', () => {
+            input.value = el.dataset.history;
+            input.dispatchEvent(new Event('input'));
+          });
+        });
+      }
+    }
+  });
+
+  // Click on result item deep-links
+  results.addEventListener('click', (e) => {
+    const item = e.target.closest('[role="option"]');
+    if (item) {
+      deepLinkResult(item.dataset.source, item.dataset.ref);
+      results.classList.add('hidden');
+      input.blur();
+    }
+  });
+
+  // Blur hides results with delay (allow click to fire first)
+  input.addEventListener('blur', () => {
+    setTimeout(() => { results.classList.add('hidden'); }, 200);
+  });
+
+  async function executeSearch(queryStr) {
+    if (queryStr.length > 500) queryStr = queryStr.slice(0, 500);
+    const parsed = parseSearchSyntax(queryStr);
+
+    if (!parsed.query && !parsed.tags && !parsed.since && !parsed.sources && !parsed.correlationId) {
+      results.classList.add('hidden');
+      return;
+    }
+
+    // Show loading
+    results.innerHTML = '<div class="search-loading" data-testid="search-loading"><span>Searching…</span></div>';
+    results.classList.remove('hidden');
+
+    // Abort previous in-flight request
+    if (abortController) abortController.abort();
+    abortController = new AbortController();
+
+    const params = new URLSearchParams();
+    if (parsed.query) params.set('query', parsed.query);
+    if (parsed.tags) params.set('tags', parsed.tags.join(','));
+    if (parsed.since) params.set('since', parsed.since);
+    if (parsed.sources) params.set('sources', parsed.sources.join(','));
+    if (parsed.correlationId) params.set('correlationId', parsed.correlationId);
+    params.set('limit', '20');
+
+    try {
+      const res = await fetch(`${API_BASE}/api/search?${params}`, { signal: abortController.signal });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      manageSearchHistory(queryStr);
+      renderSearchResults(data, parsed.query ? parsed.query.toLowerCase().split(/\s+/) : []);
+    } catch (err) {
+      if (err.name === 'AbortError') return;
+      results.innerHTML = `<div class="search-error" data-testid="search-error">Search failed: ${searchEscapeHtml(err.message)}</div>`;
+      results.classList.remove('hidden');
+    }
+  }
+}
+
 // ─── Init ─────────────────────────────────────────────────────────────
 // Bootstrap version check — detect stale core files and show upgrade banner
 // This code reaches existing users via `pforge update` which copies dashboard/app.js
@@ -2889,6 +3159,9 @@ fetch(`${API_BASE}/api/runs/latest`)
 
 // Connect WebSocket
 connectWebSocket();
+
+// Phase FORGE-SHOP-04 Slice 04.2 — bind global search bar
+bindGlobalSearch();
 
 // Load version in footer
 fetch(`${API_BASE}/api/capabilities`)

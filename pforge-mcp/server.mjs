@@ -4354,6 +4354,25 @@ export function createExpressApp() {
   // Dashboard static files
   app.use("/dashboard", express.static(resolve(__dirname, "dashboard")));
 
+  // Phase FORGE-SHOP-04 Slice 04.2 — search API for dashboard
+  app.get("/api/search", (req, res) => {
+    try {
+      const params = {
+        query: req.query.query || "",
+        tags: req.query.tags ? req.query.tags.split(",") : undefined,
+        since: req.query.since || undefined,
+        correlationId: req.query.correlationId || undefined,
+        sources: req.query.sources ? req.query.sources.split(",") : undefined,
+        limit: req.query.limit ? parseInt(req.query.limit, 10) : undefined,
+      };
+      const cwd = findProjectRoot(PROJECT_DIR);
+      const result = forgeSearch(params, { cwd });
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // Plan Browser static files
   app.use("/ui", express.static(resolve(__dirname, "ui")));
 

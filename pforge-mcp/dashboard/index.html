@@ -34,6 +34,21 @@
     .light .text-gray-500 { color: #94a3b8 !important; }
     .light .text-white { color: #0f172a !important; }
     .light .border-gray-700 { border-color: #cbd5e1 !important; }
+    /* Phase FORGE-SHOP-04 Slice 04.2 — Search bar */
+    .search-result-item { cursor: pointer; transition: background 0.15s; }
+    .search-result-item:hover, .search-result-item.search-active { background: rgba(59,130,246,0.15); }
+    .search-source-badge { display: inline-block; font-size: 0.65rem; padding: 1px 6px; border-radius: 9999px; font-weight: 600; }
+    .search-source-badge[data-source="run"] { background: #1e3a5f; color: #93c5fd; }
+    .search-source-badge[data-source="bug"] { background: #5c1a1a; color: #fca5a5; }
+    .search-source-badge[data-source="incident"] { background: #5c3a0a; color: #fdba74; }
+    .search-source-badge[data-source="review"] { background: #1a3a1a; color: #86efac; }
+    .search-source-badge[data-source="plan"] { background: #2e1a5c; color: #c4b5fd; }
+    .search-source-badge[data-source="tempering"] { background: #1a3a3a; color: #5eead4; }
+    .search-source-badge[data-source="memory"] { background: #3a3a1a; color: #fde68a; }
+    .search-source-badge[data-source="hub-event"] { background: #2a2a3a; color: #a5b4fc; }
+    .search-snippet mark { background: rgba(250,204,21,0.3); color: inherit; border-radius: 2px; padding: 0 1px; }
+    .search-loading { display: flex; align-items: center; justify-content: center; padding: 1rem; color: #9ca3af; }
+    .search-error { padding: 0.75rem; color: #fca5a5; font-size: 0.8rem; text-align: center; }
     /* Responsive */
     @media (max-width: 1024px) { .hide-tablet { display: none; } }
     @media (max-width: 768px) {
@@ -50,6 +65,20 @@
       <h1 class="text-xl font-bold text-white">Plan Forge</h1>
       <span id="connection-badge" class="text-xs px-2 py-0.5 rounded-full bg-red-900 text-red-300">disconnected</span>
       <span id="hub-clients" class="text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-400 hidden" title="Connected clients">0 clients</span>
+    </div>
+    <!-- Phase FORGE-SHOP-04 Slice 04.2 — Global search bar -->
+    <div class="relative flex-1 max-w-md mx-4" id="search-container" data-testid="search-container">
+      <input type="search" id="global-search" data-testid="global-search"
+        class="w-full bg-gray-700 border border-gray-600 text-gray-100 text-sm rounded px-3 py-1.5 pl-8
+               placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+        placeholder="Search runs, bugs, incidents… (press /)" autocomplete="off" />
+      <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 text-xs pointer-events-none">🔍</span>
+      <kbd id="search-hint" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-500
+           bg-gray-600 px-1.5 py-0.5 rounded border border-gray-500 pointer-events-none">/</kbd>
+      <div id="search-results" role="listbox" data-testid="search-results"
+        class="hidden absolute top-full left-0 right-0 mt-1 bg-gray-800 border border-gray-600
+               rounded-lg shadow-xl max-h-96 overflow-y-auto z-50">
+      </div>
     </div>
     <div class="flex items-center gap-4 text-sm text-gray-400">
       <!-- Phase UPDATE-01: non-intrusive update banner (hidden by default) -->

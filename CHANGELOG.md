@@ -23,6 +23,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 - Phase FORGE-SHOP-04 drafted ([docs/plans/Phase-FORGE-SHOP-04.md](docs/plans/Phase-FORGE-SHOP-04.md)) — cross-subsystem read-only search over 8 L2 sources (run, bug, incident, tempering, hub-event, review, memory, plan) plus L3 OpenBrain merge. 1 new MCP tool `forge_search` → 58 total. Dashboard header bar with `/` hotkey, arrow-nav, debounced queries, query-syntax sugars (`tags:`, `since:`, `source:`, `correlation:`), deep-link to source tabs. p95 < 250 ms on 5000-event fixture. 60-second LRU cache with mtime invalidation. No new stores, no new hub events.
 
+### Shipped — FORGE-SHOP-04 Slice 04.2: Dashboard header search bar (2026-04-19)
+
+- **Dashboard header search bar** — always-visible search input with `/` keyboard shortcut, arrow-key navigation, debounced queries (150ms), and `Escape` to dismiss.
+- **Query-syntax sugar** — `tags:`, `since:`, `source:`, `correlation:` parsed client-side before API call.
+- **Search results dropdown** — source-grouped hits with colored badges, matched-token `<mark>` highlighting, deep-links to Runs/Bug Registry/Incidents/Review/Tempering/Memory tabs.
+- **REST API** — `GET /api/search` wraps `forgeSearch()` for dashboard consumption.
+- **Search history** — last 5 queries cached in `localStorage` with deduplication.
+- **XSS prevention** — all result rendering uses `escapeHtml()` before DOM insertion.
+- **2 new test files** — `search-ui.test.mjs` (UI contract), `search-smoke.test.mjs` (end-to-end search engine).
+
 ### Shipped — FORGE-SHOP-03 notification layer (2026-04-19)
 
 - **Notification core** — consumes hub events, routes by rule, rate-limits (token-bucket + digest coalesce), delivers via pluggable adapters. Webhook adapter in core. Slack/Teams/Email/PagerDuty as extension stubs installable via `pforge ext add`.

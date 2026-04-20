@@ -5,7 +5,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [Unreleased] — targeting 2.52.0
+## [Unreleased] — targeting 2.53.0
+
+_(No changes yet.)_
+
+---
+
+## [2.52.0] — 2026-04-20 — Orchestrator silent-failure guard + Testbed happy-path harness + Dashboard polish
+
+Three shipments in one release (3 commits). Tests 1990 → 2470 across full MCP suite. Tools 62 → 63.
+Release: https://github.com/srnichols/plan-forge/releases/tag/v2.52.0
 
 ### Shipped — Orchestrator silent-failure guard (2026-04-20)
 

@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<!-- verified: v2.54.0-dev -->
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chapter 19: The Watcher — Plan Forge Manual</title>
+  <meta name="description" content="The Watcher tails another project's pforge run from a second VS Code session. Snapshot mode, analyze mode, live tail — all read-only by design." />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+
+    <main>
+      <img src="../assets/brand/station-guard.webp" alt="The watchtower at night — rune-inscribed stones, amber sentinel eyes scanning the forge below" class="chapter-hero" />
+
+      <div class="chapter-content">
+
+        <div class="text-xs font-semibold text-cyan-500 uppercase tracking-wider mb-2">Act III — Guard · Chapter 19</div>
+        <h1>The Watcher</h1>
+        <p class="text-lg text-slate-400 mb-8">A second pair of eyes on a running forge. Read-only by design.</p>
+
+        <div class="callout callout-tip">
+          <strong>Shipped in v2.34 (snapshot) · v2.35 (live tail).</strong> The Watcher runs in a <em>separate</em> VS Code Copilot session with Plan-Forge as the workspace and points at another project that's executing a plan. It cannot modify anything in the target — it only reads.
+        </div>
+
+        <h2 id="why">Why a Watcher?</h2>
+        <p>When you execute a long plan (<code>pforge run-plan</code>) the executor session is focused on one thing: building the next slice. It's not a good place to also answer "how's it going?" for a second human, or to notice anomaly patterns across multiple runs. The Watcher is the operational counterpart — it tails the run, reads event streams, and summarizes state.</p>
+        <p>Two modes, one tool:</p>
+        <ul>
+          <li><strong>Snapshot</strong> (<code>forge_watch</code>) — file-reads only, zero AI cost. Returns slice counts, token usage, gate errors, anomalies.</li>
+          <li><strong>Analyze</strong> (<code>forge_watch</code> with <code>mode=analyze</code>) — invokes a frontier model (default <code>claude-opus-4.7</code>) to produce narrative advice from the snapshot.</li>
+        </ul>
+
+        <h2 id="live-tail">Live Tail — <code>forge_watch_live</code></h2>
+        <p>For continuous observation, <code>forge_watch_live</code> streams events for a fixed duration:</p>
+        <ul>
+          <li><strong>WebSocket mode</strong> — connects to the target's hub if running (<code>.forge/server-ports.json</code>).</li>
+          <li><strong>Polling fallback</strong> — tails <code>events.log</code> when the hub isn't up.</li>
+          <li>Default window: 60 seconds. Range: 1 s – 1 hr.</li>
+          <li>Captures up to 500 events in the response payload.</li>
+        </ul>
+
+        <div class="cmd-block mb-4">
+          <div class="cmd-block-header"><span>Typical usage from the Watcher session</span></div>
+          <pre><code>forge_watch {
+  targetPath: "E:/GitHub/Rummag",
+  mode: "snapshot"
+}
+
+forge_watch_live {
+  targetPath: "E:/GitHub/Rummag",
+  durationMs: 30000
+}</code></pre>
+        </div>
+
+        <h2 id="anomalies">Anomaly Rules</h2>
+        <p>The snapshot watcher runs heuristic rules over the run state and surfaces anomalies automatically. Examples:</p>
+        <ul>
+          <li><code>review-queue-backlog</code> — independent reviewer slices piling up.</li>
+          <li><code>tempering-run-failed</code> — a Tempering run returned non-zero.</li>
+          <li><code>mutationBelowMinimum</code> / <code>flakyCount</code> / <code>perfRegressionCount</code> — Tempering quality thresholds breached.</li>
+          <li>Crucible funnel stalls — ideas stuck in <em>Crystallized</em> with no hardener handoff.</li>
+        </ul>
+        <p>Anomalies are emitted as <code>watch-anomaly-detected</code> hub events and appear in the dashboard's Watcher tab.</p>
+
+        <h2 id="history">Watch History</h2>
+        <p>When <code>recordHistory=true</code> (the default in v2.35+), each snapshot is appended to the Watcher session's own <code>.forge/watch-history.jsonl</code> — never the target's. Pair with <code>sinceTimestamp</code> (pass the previous report's <code>cursor</code>) for gap-free continuous monitoring across multiple invocations.</p>
+
+        <h2 id="dashboard">Dashboard Watcher Tab</h2>
+        <p>The dashboard's Watcher tab consumes two event types:</p>
+        <ul>
+          <li><code>watch-snapshot-completed</code> — emitted when <code>forge_watch</code> builds a snapshot.</li>
+          <li><code>watch-anomaly-detected</code> — emitted when one or more anomaly rules fire.</li>
+        </ul>
+        <p>Chip rows surface Tempering state, Crucible funnel state, and a Home chip showing in-flight runs / open incidents / open bugs — all without touching the target project.</p>
+
+        <h2 id="security">Security Model</h2>
+        <div class="callout callout-info">
+          <strong>Read-only by contract.</strong> The Watcher's input schema exposes no write paths. It reads <code>.forge/runs/&lt;runId&gt;/</code> and emits events to its own hub. History writes go only to the Watcher's <code>cwd</code>. Verified by the read-only subscriber test in <code>pforge-mcp/tests/</code>.
+        </div>
+
+        <h2 id="pairing">Pairing the Watcher With the Remote Bridge</h2>
+        <p>A natural pairing: the Watcher runs headless on a long run, and the <a href="remote-bridge.html">Remote Bridge</a> (Chapter 20) forwards hub events to Telegram, Slack, Discord, or OpenClaw so you can check progress from your phone. The Watcher never pushes — it just observes; the Remote Bridge decides what to surface.</p>
+
+        <div class="chapter-nav mt-12">
+          <a class="chapter-nav-prev" href="liveguard-dashboard.html">← Chapter 18: LiveGuard Dashboard</a>
+          <a class="chapter-nav-next" href="remote-bridge.html">Chapter 20: Remote Bridge →</a>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="assets/manual.js"></script>
+</body>
+</html>

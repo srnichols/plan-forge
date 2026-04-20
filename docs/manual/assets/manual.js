@@ -28,8 +28,10 @@
     { id: "what-is-liveguard",   file: "what-is-liveguard.html",   num: "16", title: "What Is LiveGuard?",        act: "III" },
     { id: "liveguard-tools",     file: "liveguard-tools.html",     num: "17", title: "LiveGuard Tools Reference", act: "III" },
     { id: "liveguard-dashboard", file: "liveguard-dashboard.html", num: "18", title: "The LiveGuard Dashboard",    act: "III" },
+    { id: "watcher",             file: "watcher.html",             num: "19", title: "The Watcher",               act: "III" },
+    { id: "remote-bridge",       file: "remote-bridge.html",       num: "20", title: "The Remote Bridge",         act: "III" },
     // ─── Act IV — Learn (memory & retrospectives) ───
-    { id: "memory-architecture", file: "memory-architecture.html", num: "19", title: "Memory Architecture",       act: "IV" },
+    { id: "memory-architecture", file: "memory-architecture.html", num: "21", title: "Memory Architecture",       act: "IV" },
     // ─── Appendices ───
     { id: "glossary",            file: "glossary.html",            num: "A",  title: "Glossary",                 act: "Appendix" },
     { id: "quick-reference",     file: "quick-reference.html",     num: "B",  title: "Quick Reference Card",     act: "Appendix" },

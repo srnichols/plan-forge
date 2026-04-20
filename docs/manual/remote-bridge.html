@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<!-- verified: v2.54.0-dev -->
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chapter 20: The Remote Bridge — Plan Forge Manual</title>
+  <meta name="description" content="Forward hub events to Telegram, Slack, Discord, and OpenClaw. Approval flows from your phone. Webhook routing with rate limits." />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+
+    <main>
+      <img src="../assets/brand/station-guard.webp" alt="Guard watchtower linked by rune-inscribed cables to distant messenger glyphs — Telegram, Slack, Discord" class="chapter-hero" />
+
+      <div class="chapter-content">
+
+        <div class="text-xs font-semibold text-cyan-500 uppercase tracking-wider mb-2">Act III — Guard · Chapter 20</div>
+        <h1>The Remote Bridge</h1>
+        <p class="text-lg text-slate-400 mb-8">Forward hub events off-box. Approve slices from your phone. One config, four channels.</p>
+
+        <div class="callout callout-tip">
+          <strong>Shipped in Phase FORGE-SHOP-03</strong> (commits <code>551b850</code>, <code>5b5a8e7</code>). Four channels supported out of the box: <strong>Telegram</strong>, <strong>Slack</strong>, <strong>Discord</strong>, and <strong>OpenClaw</strong>. Generic webhook routing, per-channel rate limits, and a live config watcher on the dashboard's Notifications subtab.
+        </div>
+
+        <h2 id="why">Why a Remote Bridge?</h2>
+        <p>Plan Forge runs inside your IDE — but some decisions are not IDE-shaped. A reviewer flagged a drift anomaly at 2 AM. A quorum tie needs a human tiebreaker. An incident fired after you closed the laptop. The Remote Bridge forwards hub events to the places you already have notifications — Telegram, Slack, Discord — and supports inline approval / reject flows for the events that need a human.</p>
+
+        <h2 id="channels">The Four Channels</h2>
+
+        <table>
+          <thead><tr><th>Channel</th><th>Best for</th><th>Approval flow</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>Telegram</strong></td>
+              <td>Solo devs — inline buttons on your phone</td>
+              <td>✅ Inline buttons (approve / reject)</td>
+            </tr>
+            <tr>
+              <td><strong>Slack</strong></td>
+              <td>Team channels — rich attachments, threading</td>
+              <td>✅ Block Kit buttons</td>
+            </tr>
+            <tr>
+              <td><strong>Discord</strong></td>
+              <td>Community + OSS projects — embeds</td>
+              <td>⚠️ Message-based (no inline buttons)</td>
+            </tr>
+            <tr>
+              <td><strong>OpenClaw</strong></td>
+              <td>Agent-to-agent coordination (v2.41+)</td>
+              <td>✅ Handoff contract</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h2 id="event-routing">Event Routing</h2>
+        <p>Every hub event carries a <code>channels</code> array. A single event can fan out to multiple destinations:</p>
+
+        <div class="cmd-block mb-4">
+          <div class="cmd-block-header"><span>Example routed event</span></div>
+          <pre><code>{
+  "type": "drift-alert",
+  "severity": "high",
+  "channels": ["telegram", "slack"],
+  "summary": "Drift score dropped from 0.91 → 0.62 after slice 04.2",
+  "approval": {
+    "required": true,
+    "options": ["continue", "pause", "rollback"]
+  }
+}</code></pre>
+        </div>
+
+        <p>Routing is driven by a channels filter on severity and event type. High-severity LiveGuard events (secret found, env key mismatch, drift ≥ threshold) route by default; informational snapshots do not.</p>
+
+        <h2 id="approval">Approval Flow</h2>
+        <p>For events with <code>approval.required=true</code>, the bridge renders interactive buttons (where the channel supports them). When a user clicks a button, the response flows back into the hub as an <code>approval-response</code> event with <code>{channel, platform, user, decision, timestamp}</code>. The orchestrator consumes that event to resume, pause, or roll back the run.</p>
+
+        <div class="callout callout-warning">
+          <strong>Rate limits are enforced per channel.</strong> Telegram caps at 30 messages/sec, Slack at 1/sec per channel, Discord at 5/5s per channel. The bridge includes a configurable limiter (commits <code>551b850</code>) that queues overflow and drops low-severity events when saturated — never high-severity ones.
+        </div>
+
+        <h2 id="config">Configuration</h2>
+        <p>Credentials live in <code>.forge/secrets.json</code> (gitignored). The bridge config itself is in <code>.forge.json</code> under <code>remoteBridge</code>:</p>
+
+        <div class="cmd-block mb-4">
+          <div class="cmd-block-header"><span>.forge.json — remoteBridge stanza</span></div>
+          <pre><code>{
+  "remoteBridge": {
+    "enabled": true,
+    "channels": {
+      "telegram": {
+        "chatId": "-1001234567890",
+        "severityFloor": "medium"
+      },
+      "slack": {
+        "webhookPath": "slack-ops",
+        "severityFloor": "high"
+      }
+    },
+    "rateLimits": {
+      "telegram": { "perSecond": 30 },
+      "slack":    { "perSecond": 1 }
+    }
+  }
+}</code></pre>
+        </div>
+
+        <p>Secrets (<code>TELEGRAM_BOT_TOKEN</code>, <code>SLACK_SIGNING_SECRET</code>, <code>DISCORD_WEBHOOK_URL</code>, etc.) stay out of git via the standard <code>.forge/secrets.json</code> scheme documented in the Guard station reference.</p>
+
+        <h2 id="dashboard">Dashboard — Notifications Subtab</h2>
+        <p>The dashboard's <strong>Config → Notifications</strong> subtab (shipped <code>5b5a8e7</code>) gives you:</p>
+        <ul>
+          <li>Live view of which channels are enabled and their severity floors.</li>
+          <li>Per-channel rate-limit counters and last-send timestamps.</li>
+          <li>Test-send button per channel (fires a synthetic <code>remote-test</code> event).</li>
+          <li>Live config watcher — edits to <code>.forge.json</code> reload without restart.</li>
+        </ul>
+
+        <h2 id="openclaw">OpenClaw — The Agent-to-Agent Channel</h2>
+        <p>OpenClaw is the exception: it's not for humans. When <code>openclaw.endpoint</code> is configured, the <code>PreAgentHandoff</code> hook posts a snapshot (drift, MTTR, open incidents) to OpenClaw before the next agent takes the turn. This lets a separate coordinator service inject context across agents in multi-agent mode — Claude to Codex, Codex to Cursor, and so on. Skipped automatically when <code>PFORGE_QUORUM_TURN</code> is set.</p>
+
+        <h2 id="pairing">Pairing With the Watcher</h2>
+        <p>A recommended pattern: the <a href="watcher.html">Watcher</a> (Chapter 19) runs on a long execution, emitting anomaly events into the hub. The Remote Bridge filters those events by severity and forwards the interesting ones to Telegram. Together they give you safe, phone-friendly observation of a forge running on another box.</p>
+
+        <div class="chapter-nav mt-12">
+          <a class="chapter-nav-prev" href="watcher.html">← Chapter 19: The Watcher</a>
+          <a class="chapter-nav-next" href="memory-architecture.html">Chapter 21: Memory Architecture →</a>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="assets/manual.js"></script>
+</body>
+</html>

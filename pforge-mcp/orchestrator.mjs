@@ -1205,6 +1205,7 @@ export function spawnWorker(prompt, options = {}) {
     cwd = process.cwd(),
     timeout = 1_200_000, // 20 min default
     worker = null,     // override worker choice
+    runPlanActive = false, // propagate PFORGE_RUN_PLAN_ACTIVE to child (#74)
   } = options;
 
   // Route API-based models (e.g., grok-*) to HTTP provider instead of CLI
@@ -1252,7 +1253,11 @@ export function spawnWorker(prompt, options = {}) {
 
     const child = spawn(cmd, args, {
       cwd,
-      env: { ...process.env, NO_COLOR: "1" },
+      env: {
+        ...process.env,
+        NO_COLOR: "1",
+        ...(runPlanActive ? { PFORGE_RUN_PLAN_ACTIVE: "1" } : {}),
+      },
       stdio: ["pipe", "pipe", "pipe"],
     });
 
@@ -4449,7 +4454,7 @@ async function executeSlice(slice, options) {
       };
     } else {
       try {
-        workerResult = await spawnWorker(sliceInstructions, { model: currentModel, cwd });
+        workerResult = await spawnWorker(sliceInstructions, { model: currentModel, cwd, runPlanActive: true });
       } catch (err) {
         return {
           status: "failed",

@@ -260,6 +260,7 @@
       <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="bugregistry" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="8" height="12" rx="4"/><path d="M12 2v2"/><path d="M10 6h4"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="M4 7l3 2"/><path d="M20 7l-3 2"/><path d="M4 18l3-2"/><path d="M20 18l-3-2"/></svg><span>Bug Registry</span></button>
       <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="memory" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v6c0 1.7 4 3 9 3s9-1.3 9-3V5"/><path d="M3 11v6c0 1.7 4 3 9 3s9-1.3 9-3v-6"/></svg><span>Memory</span></button>
       <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="timeline" data-testid="timeline-tab-btn" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><span>Timeline</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="innerloop" data-testid="innerloop-tab-btn" role="tab" title="Inner Loop — self-deterministic feedback subsystems"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.2-8.55"/><path d="M21 3v6h-6"/><circle cx="12" cy="12" r="2"/></svg><span>Inner Loop</span></button>
     </div>
     <!-- Sub tabs: LiveGuard -->
     <div id="subtabs-liveguard" class="hidden flex flex-wrap gap-x-0.5 gap-y-1 pt-1 pb-1" role="tablist" aria-label="LiveGuard sections">
@@ -1447,6 +1448,107 @@
 
       <!-- Error state -->
       <div id="timeline-error" data-testid="timeline-error" class="hidden mt-2 text-red-400 text-xs text-center"></div>
+    </section>
+
+    <!-- Inner Loop Tab (Phase-26 Slice 13) — self-deterministic subsystems at a glance -->
+    <!--
+      Read-only projection over backend subsystems shipped in Phase-26. All six
+      panels are advisory; every subsystem is opt-in via `.forge.json`. Empty
+      states are the expected out-of-the-box UX because the defaults are OFF.
+    -->
+    <section id="tab-innerloop" class="tab-content hidden">
+      <div class="mb-4 flex items-center justify-between">
+        <div>
+          <h2 class="text-lg font-semibold text-emerald-400">🔁 Inner Loop</h2>
+          <p class="text-xs text-gray-500">Self-deterministic feedback subsystems — reviewer calibration, gate suggestions, cost anomalies, proposed fixes, federation.</p>
+        </div>
+        <button onclick="loadInnerLoop()" data-testid="innerloop-refresh-btn" class="text-xs px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded">Refresh</button>
+      </div>
+
+      <!-- Summary row (from /api/innerloop/status) -->
+      <div id="innerloop-summary" data-testid="innerloop-summary" class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        <div class="bg-gray-800 rounded p-3">
+          <div class="text-xs text-gray-500">Reviewer calibration</div>
+          <div id="il-summary-reviewer" class="text-sm font-semibold text-gray-200">—</div>
+        </div>
+        <div class="bg-gray-800 rounded p-3">
+          <div class="text-xs text-gray-500">Auto-skills pending</div>
+          <div id="il-summary-skills" class="text-sm font-semibold text-gray-200">—</div>
+        </div>
+        <div class="bg-gray-800 rounded p-3">
+          <div class="text-xs text-gray-500">Federation</div>
+          <div id="il-summary-federation" class="text-sm font-semibold text-gray-200">—</div>
+        </div>
+        <div class="bg-gray-800 rounded p-3">
+          <div class="text-xs text-gray-500">Open fix proposals</div>
+          <div id="il-summary-autofix" class="text-sm font-semibold text-gray-200">—</div>
+        </div>
+      </div>
+
+      <!-- Six collapsible panels (<details>) -->
+      <div class="space-y-2">
+
+        <!-- Panel 1: Reviewer calibration -->
+        <details class="bg-gray-800 rounded-lg" data-testid="il-panel-reviewer" open>
+          <summary class="cursor-pointer px-4 py-3 text-sm font-medium text-emerald-300 hover:bg-gray-750 rounded-lg">
+            👁️ Reviewer calibration
+          </summary>
+          <div id="il-reviewer-body" class="px-4 pb-4 text-xs text-gray-400">Loading…</div>
+        </details>
+
+        <!-- Panel 2: Gate suggestions -->
+        <details class="bg-gray-800 rounded-lg" data-testid="il-panel-gate-suggestions">
+          <summary class="cursor-pointer px-4 py-3 text-sm font-medium text-emerald-300 hover:bg-gray-750 rounded-lg">
+            💡 Gate suggestions
+          </summary>
+          <div id="il-gate-suggestions-body" class="px-4 pb-4 text-xs text-gray-400">Loading…</div>
+        </details>
+
+        <!-- Panel 3: Cost anomalies -->
+        <details class="bg-gray-800 rounded-lg" data-testid="il-panel-cost-anomalies">
+          <summary class="cursor-pointer px-4 py-3 text-sm font-medium text-emerald-300 hover:bg-gray-750 rounded-lg">
+            📈 Cost anomalies
+          </summary>
+          <div id="il-cost-anomalies-body" class="px-4 pb-4 text-xs text-gray-400">Loading…</div>
+        </details>
+
+        <!-- Panel 4: Proposed fixes -->
+        <details class="bg-gray-800 rounded-lg" data-testid="il-panel-proposed-fixes">
+          <summary class="cursor-pointer px-4 py-3 text-sm font-medium text-emerald-300 hover:bg-gray-750 rounded-lg">
+            🛠️ Proposed fixes
+          </summary>
+          <div id="il-proposed-fixes-body" class="px-4 pb-4 text-xs text-gray-400">Loading…</div>
+        </details>
+
+        <!-- Panel 5: Federation (trajectory sharing across repos) -->
+        <details class="bg-gray-800 rounded-lg" data-testid="il-panel-federation">
+          <summary class="cursor-pointer px-4 py-3 text-sm font-medium text-emerald-300 hover:bg-gray-750 rounded-lg">
+            🌐 Federation
+          </summary>
+          <div id="il-federation-body" class="px-4 pb-4 text-xs text-gray-400">Loading…</div>
+        </details>
+
+        <!-- Panel 6: Docs / help -->
+        <details class="bg-gray-800 rounded-lg" data-testid="il-panel-help">
+          <summary class="cursor-pointer px-4 py-3 text-sm font-medium text-emerald-300 hover:bg-gray-750 rounded-lg">
+            📚 About the Inner Loop
+          </summary>
+          <div class="px-4 pb-4 text-xs text-gray-400 space-y-2">
+            <p>The Inner Loop is a set of feedback subsystems that let Plan Forge improve without human intervention between slices.</p>
+            <ul class="list-disc pl-5 space-y-1">
+              <li><strong>Reviewer calibration</strong> — shows when local reviews become eligible to adjust grader confidence.</li>
+              <li><strong>Gate suggestions</strong> — counts of accepted validation-gate commands, ready for promotion.</li>
+              <li><strong>Cost anomalies</strong> — slices whose token spend drifted above the per-model median.</li>
+              <li><strong>Proposed fixes</strong> — patches produced by the auto-fix subsystem awaiting review.</li>
+              <li><strong>Federation</strong> — recent trajectories discovered in sibling repos configured under <code>brain.federation</code>.</li>
+            </ul>
+            <p>All subsystems are <em>advisory</em> by default. Enable or tune them in the <a href="#" onclick="document.querySelector('[data-tab=config]').click(); return false;" class="text-emerald-400 underline">Config</a> tab.</p>
+          </div>
+        </details>
+
+      </div>
+
+      <div id="innerloop-error" data-testid="innerloop-error" class="hidden mt-3 text-red-400 text-xs text-center"></div>
     </section>
 
     <!-- LiveGuard Health Tab -->

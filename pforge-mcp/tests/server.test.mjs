@@ -1810,7 +1810,7 @@ describe("dashboard tab structure", () => {
   const dashboardHtml = readFileSync(resolve(__dirname, "..", "dashboard", "index.html"), "utf-8");
   const dashboardJs = readFileSync(resolve(__dirname, "..", "dashboard", "app.js"), "utf-8");
 
-  const CORE_TABS = ["progress", "crucible", "governance", "runs", "cost", "actions", "replay", "extensions", "config", "traces", "skills", "watcher", "memory", "timeline"];
+  const CORE_TABS = ["progress", "crucible", "governance", "runs", "cost", "actions", "replay", "extensions", "config", "traces", "skills", "watcher", "memory", "timeline", "innerloop"];
   const LG_TABS = ["lg-health", "lg-incidents", "lg-triage", "lg-security", "lg-env"];
   const ALL_TABS = [...CORE_TABS, ...LG_TABS];
 
@@ -1826,9 +1826,9 @@ describe("dashboard tab structure", () => {
     }
   });
 
-  it("total tab count is 23 (18 core + 5 LG)", () => {
+  it("total tab count is 24 (19 core + 5 LG)", () => {
     const tabMatches = dashboardHtml.match(/data-tab="[^"]+"/g) || [];
-    expect(tabMatches.length).toBe(23);
+    expect(tabMatches.length).toBe(24);
   });
 
   it("has LiveGuard section divider", () => {

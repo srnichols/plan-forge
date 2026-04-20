@@ -3675,6 +3675,7 @@ const tabLoadHooks = {
   bugregistry: () => { loadBugRegistry(); },
   memory: loadMemoryReport,
   timeline: loadTimelineTab,
+  innerloop: loadInnerLoop,
 };
 
 // ─── Theme Toggle ─────────────────────────────────────────────
@@ -6313,4 +6314,180 @@ if (window.location.hash.startsWith("#timeline")) {
 window.loadTimelineData = loadTimelineData;
 window.filterTimelineByCorrelation = filterTimelineByCorrelation;
 window.clearTimelineCorrelation = clearTimelineCorrelation;
+
+// ─── Inner Loop Tab (Phase-26 Slice 13) ────────────────────────
+//
+// Read-only projection over /api/innerloop/* endpoints. All six panels are
+// populated in parallel; each renders its own empty state so a missing
+// subsystem doesn't break the others. Uses the existing top-level
+// `escapeHtml(str)` helper already defined earlier in this file.
+
+async function loadInnerLoop() {
+  const err = document.getElementById("innerloop-error");
+  if (err) { err.classList.add("hidden"); err.textContent = ""; }
+
+  // Fetch all six endpoints concurrently.
+  const endpoints = [
+    ["status", "/api/innerloop/status"],
+    ["reviewer", "/api/innerloop/reviewer-calibration"],
+    ["gates", "/api/innerloop/gate-suggestions"],
+    ["anomalies", "/api/innerloop/cost-anomalies"],
+    ["fixes", "/api/innerloop/proposed-fixes"],
+    ["federation", "/api/innerloop/federation"],
+  ];
+  const results = await Promise.allSettled(endpoints.map(([, url]) =>
+    fetch(`${API_BASE}${url}`).then((r) => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
+  ));
+
+  const data = {};
+  results.forEach((r, i) => {
+    const [key] = endpoints[i];
+    data[key] = r.status === "fulfilled" ? r.value : { __error: r.reason?.message || String(r.reason) };
+  });
+
+  renderInnerLoopSummary(data.status);
+  renderInnerLoopReviewer(data.reviewer);
+  renderInnerLoopGates(data.gates);
+  renderInnerLoopAnomalies(data.anomalies);
+  renderInnerLoopFixes(data.fixes);
+  renderInnerLoopFederation(data.federation);
+}
+
+function renderInnerLoopSummary(s) {
+  if (!s || s.__error) {
+    const msg = s?.__error || "unavailable";
+    ["reviewer", "skills", "federation", "autofix"].forEach((k) => {
+      const el = document.getElementById(`il-summary-${k}`);
+      if (el) el.textContent = "—";
+    });
+    const err = document.getElementById("innerloop-error");
+    if (err) { err.classList.remove("hidden"); err.textContent = `Summary: ${msg}`; }
+    return;
+  }
+  const r = document.getElementById("il-summary-reviewer");
+  if (r) r.textContent = `${s.reviewer.count}/${s.reviewer.threshold}${s.reviewer.eligible ? " ✓" : ""}`;
+  const sk = document.getElementById("il-summary-skills");
+  if (sk) sk.textContent = `${s.skills.pendingCount} pending`;
+  const f = document.getElementById("il-summary-federation");
+  if (f) f.textContent = s.federation.enabled ? `${s.federation.repoCount} repos` : "disabled";
+  const a = document.getElementById("il-summary-autofix");
+  if (a) a.textContent = `${s.autoFix.openProposals} open`;
+}
+
+function renderInnerLoopReviewer(r) {
+  const el = document.getElementById("il-reviewer-body");
+  if (!el) return;
+  if (!r || r.__error) { el.innerHTML = `<p class="text-amber-400">Unavailable: ${escapeHtml(r?.__error || "error")}</p>`; return; }
+  const pct = r.threshold > 0 ? Math.min(100, Math.round((r.count / r.threshold) * 100)) : 0;
+  el.innerHTML = `
+    <div class="flex items-center gap-3 mb-2">
+      <div class="text-lg font-semibold ${r.eligible ? "text-emerald-400" : "text-gray-300"}">${r.count} / ${r.threshold}</div>
+      <div class="text-xs">${r.eligible ? "<span class='text-emerald-400'>✓ eligible</span>" : "<span class='text-gray-500'>not yet eligible</span>"}</div>
+    </div>
+    <div class="w-full bg-gray-700 rounded h-2">
+      <div class="${r.eligible ? "bg-emerald-500" : "bg-gray-500"} h-2 rounded" style="width:${pct}%"></div>
+    </div>
+    <p class="mt-2 text-xs text-gray-500">Reviewer calibration becomes eligible once local review history reaches the threshold. Source: <code>.forge/reviews/*.json</code>.</p>
+  `;
+}
+
+function renderInnerLoopGates(g) {
+  const el = document.getElementById("il-gate-suggestions-body");
+  if (!el) return;
+  if (!g || g.__error) { el.innerHTML = `<p class="text-amber-400">Unavailable: ${escapeHtml(g?.__error || "error")}</p>`; return; }
+  const records = g.records || [];
+  const counters = g.counters || {};
+  if (records.length === 0) {
+    el.innerHTML = `<p class="text-gray-500">No gate-suggestion accepts recorded yet. Gate suggestions appear after you accept an auto-generated validation command.</p>`;
+    return;
+  }
+  const topKeys = Object.entries(counters).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const rowsHtml = records.slice(0, 10).map((r) => `
+    <tr class="border-t border-gray-700/50">
+      <td class="py-1 pr-3 text-gray-400">${escapeHtml(r.at || "")}</td>
+      <td class="py-1 pr-3">${escapeHtml(r.domain || "—")}</td>
+      <td class="py-1 pr-3 font-mono text-[11px] text-gray-300">${escapeHtml(r.suggestedCommand || "")}</td>
+      <td class="py-1 pr-3 text-gray-500">${escapeHtml((r.suggestionKey || "").slice(0, 8))}</td>
+    </tr>`).join("");
+  el.innerHTML = `
+    <div class="mb-3 flex flex-wrap gap-2">
+      ${topKeys.map(([k, n]) => `<span class="px-2 py-0.5 rounded bg-gray-700 text-[11px] text-gray-300"><code>${escapeHtml(k.slice(0, 8))}</code> · <strong>${n}</strong> accept${n === 1 ? "" : "s"}</span>`).join("")}
+    </div>
+    <table class="w-full text-left"><thead><tr class="text-[11px] uppercase text-gray-500"><th class="pr-3">When</th><th class="pr-3">Domain</th><th class="pr-3">Command</th><th>Key</th></tr></thead><tbody>${rowsHtml}</tbody></table>
+    <p class="mt-2 text-xs text-gray-500">Showing ${Math.min(10, records.length)} of ${records.length}. A suggestion becomes promotable once its accept count exceeds the configured threshold.</p>
+  `;
+}
+
+function renderInnerLoopAnomalies(a) {
+  const el = document.getElementById("il-cost-anomalies-body");
+  if (!el) return;
+  if (!a || a.__error) { el.innerHTML = `<p class="text-amber-400">Unavailable: ${escapeHtml(a?.__error || "error")}</p>`; return; }
+  const rows = a.anomalies || [];
+  if (rows.length === 0) { el.innerHTML = `<p class="text-gray-500">No cost anomalies detected.</p>`; return; }
+  const rowsHtml = rows.slice(0, 20).map((r) => `
+    <tr class="border-t border-gray-700/50">
+      <td class="py-1 pr-3 text-gray-400">${escapeHtml(r.at || "")}</td>
+      <td class="py-1 pr-3">#${escapeHtml(String(r.sliceNumber ?? "—"))}</td>
+      <td class="py-1 pr-3 text-amber-400">${escapeHtml(String(r.ratio ?? "—"))}×</td>
+      <td class="py-1 pr-3 text-gray-500">${escapeHtml(r.model || "—")}</td>
+    </tr>`).join("");
+  el.innerHTML = `
+    <table class="w-full text-left"><thead><tr class="text-[11px] uppercase text-gray-500"><th class="pr-3">When</th><th class="pr-3">Slice</th><th class="pr-3">Ratio vs. median</th><th>Model</th></tr></thead><tbody>${rowsHtml}</tbody></table>
+    <p class="mt-2 text-xs text-gray-500">Showing ${Math.min(20, rows.length)} of ${a.count}. Detection ratio and median window are configurable under <code>costAnomaly</code>.</p>
+  `;
+}
+
+function renderInnerLoopFixes(f) {
+  const el = document.getElementById("il-proposed-fixes-body");
+  if (!el) return;
+  if (!f || f.__error) { el.innerHTML = `<p class="text-amber-400">Unavailable: ${escapeHtml(f?.__error || "error")}</p>`; return; }
+  const fixes = f.fixes || [];
+  if (fixes.length === 0) { el.innerHTML = `<p class="text-gray-500">No fix proposals on disk. Proposals appear in <code>.forge/proposed-fixes/*.patch</code> when the auto-fix subsystem drafts a patch.</p>`; return; }
+  const rowsHtml = fixes.slice(0, 20).map((x) => `
+    <tr class="border-t border-gray-700/50">
+      <td class="py-1 pr-3 font-mono text-[11px] text-gray-300">${escapeHtml(x.fixId)}</td>
+      <td class="py-1 pr-3 text-gray-500">${escapeHtml(String(x.sizeBytes))} B</td>
+      <td class="py-1 pr-3 text-gray-500">${escapeHtml(new Date(x.mtimeMs).toISOString())}</td>
+    </tr>`).join("");
+  el.innerHTML = `
+    <table class="w-full text-left"><thead><tr class="text-[11px] uppercase text-gray-500"><th class="pr-3">Fix ID</th><th class="pr-3">Size</th><th>Modified</th></tr></thead><tbody>${rowsHtml}</tbody></table>
+    <p class="mt-2 text-xs text-gray-500">Showing ${Math.min(20, fixes.length)} proposals. Apply or rollback via the Skills / Config tabs.</p>
+  `;
+}
+
+function renderInnerLoopFederation(f) {
+  const el = document.getElementById("il-federation-body");
+  if (!el) return;
+  if (!f || f.__error) { el.innerHTML = `<p class="text-amber-400">Unavailable: ${escapeHtml(f?.__error || "error")}</p>`; return; }
+  if (!f.enabled) {
+    el.innerHTML = `<p class="text-gray-500">Federation disabled. Enable via <code>brain.federation.enabled</code> in Config and list sibling repos under <code>brain.federation.repos</code>.</p>`;
+    return;
+  }
+  const errorsHtml = (f.configErrors || []).length > 0
+    ? `<div class="mb-3 p-2 border border-amber-600/50 rounded bg-amber-900/20 text-amber-300">
+         <div class="font-semibold text-xs mb-1">Configuration issues</div>
+         <ul class="list-disc pl-5 text-[11px] space-y-0.5">${f.configErrors.map((e) => `<li>${escapeHtml(e)}</li>`).join("")}</ul>
+       </div>` : "";
+  const trajs = f.trajectories || [];
+  const trajHtml = trajs.length === 0
+    ? `<p class="text-gray-500">No trajectories discovered yet (depth-2 scan across sibling repos).</p>`
+    : `<table class="w-full text-left"><thead><tr class="text-[11px] uppercase text-gray-500"><th class="pr-3">Repo</th><th class="pr-3">Plan</th><th class="pr-3">Slice</th><th>Modified</th></tr></thead><tbody>
+        ${trajs.slice(0, 20).map((t) => `
+          <tr class="border-t border-gray-700/50">
+            <td class="py-1 pr-3 text-gray-300 font-mono text-[11px]">${escapeHtml(t.repo || "")}</td>
+            <td class="py-1 pr-3">${escapeHtml(t.planBasename || "")}</td>
+            <td class="py-1 pr-3">${escapeHtml(t.sliceId || "")}</td>
+            <td class="py-1 pr-3 text-gray-500">${escapeHtml(new Date(t.mtimeMs).toISOString())}</td>
+          </tr>`).join("")}
+      </tbody></table>`;
+  el.innerHTML = `
+    <div class="mb-2 text-xs text-gray-400">
+      Enabled · ${escapeHtml(String(f.repos?.length || 0))} repo(s) · cap ${escapeHtml(String(f.limit))}
+    </div>
+    ${errorsHtml}
+    ${trajHtml}
+  `;
+}
+
+window.loadInnerLoop = loadInnerLoop;
 

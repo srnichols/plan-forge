@@ -5225,6 +5225,168 @@ function Invoke-Config {
     }
 }
 
+# ─── Command: skills (Phase-26 Slice 8) ───────────────────────────────
+function Invoke-Skills {
+    $sub = if ($Arguments.Count -gt 0) { $Arguments[0] } else { "" }
+    $rest = if ($Arguments.Count -gt 1) { @($Arguments[1..($Arguments.Count - 1)]) } else { @() }
+
+    if (-not $sub -or $sub -eq "help" -or $sub -eq "--help") {
+        Write-Host ""
+        Write-Host "pforge skills — auto-skill promotion (Phase-26 Slice 8)"
+        Write-Host "─────────────────────────────────────────────"
+        Write-Host "  pforge skills pending [--threshold N] [--json]"
+        Write-Host "  pforge skills accept <sha256Prefix>"
+        Write-Host "  pforge skills reject <sha256Prefix> [--reason <text>]"
+        Write-Host "  pforge skills defer  <sha256Prefix>"
+        Write-Host "  pforge skills promote --auto-promote [--threshold N]"
+        return
+    }
+
+    $memoryModule = Join-Path $PSScriptRoot "pforge-mcp/memory.mjs"
+    if (-not (Test-Path $memoryModule)) {
+        Write-Host "ERROR: pforge-mcp/memory.mjs not found at $memoryModule" -ForegroundColor Red
+        exit 1
+    }
+    $moduleUrl = "file:///" + ($memoryModule -replace '\\', '/')
+
+    switch ($sub) {
+        'pending' {
+            $threshold = $null
+            $asJson = $false
+            for ($i = 0; $i -lt $rest.Count; $i++) {
+                switch ($rest[$i]) {
+                    '--threshold' { if (($i + 1) -lt $rest.Count) { $threshold = [int]$rest[$i + 1]; $i++ } }
+                    '--json'      { $asJson = $true }
+                }
+            }
+            $thresholdArg = if ($null -ne $threshold) { $threshold } else { "undefined" }
+            $script = @"
+import("$moduleUrl").then(m => {
+  const skills = m.listPendingAutoSkills({ cwd: process.cwd(), threshold: $thresholdArg });
+  process.stdout.write(JSON.stringify(skills, null, 2));
+}).catch(e => { console.error(e.message); process.exit(1); });
+"@
+            $output = node -e $script
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            if ($asJson) {
+                Write-Output $output
+            } else {
+                $skills = $output | ConvertFrom-Json
+                if (-not $skills -or $skills.Count -eq 0) {
+                    Write-Host "No auto-skills pending promotion." -ForegroundColor Yellow
+                    return
+                }
+                Write-Host ""
+                Write-Host "Pending auto-skills ($($skills.Count))" -ForegroundColor Cyan
+                foreach ($s in $skills) {
+                    Write-Host ("  {0}  reused {1}×  {2}" -f $s.sha256Prefix, $s.reuseCount, $s.summary)
+                }
+                Write-Host ""
+                Write-Host "Use 'pforge skills accept <prefix>' to promote, or 'pforge skills promote --auto-promote' to accept all."
+            }
+        }
+        'accept' {
+            if ($rest.Count -eq 0) {
+                Write-Host "ERROR: sha256Prefix required — usage: pforge skills accept <prefix>" -ForegroundColor Red; exit 1
+            }
+            $prefix = $rest[0]
+            $script = @"
+import("$moduleUrl").then(m => {
+  const r = m.acceptAutoSkill({ cwd: process.cwd(), sha256Prefix: "$prefix" });
+  process.stdout.write(JSON.stringify(r));
+  if (!r.ok) process.exit(2);
+}).catch(e => { console.error(e.message); process.exit(1); });
+"@
+            $output = node -e $script
+            if ($LASTEXITCODE -eq 0) {
+                $r = $output | ConvertFrom-Json
+                Write-Host "✅ Promoted: $($r.promotedPath)" -ForegroundColor Green
+            } else {
+                Write-Host "ERROR: $output" -ForegroundColor Red; exit $LASTEXITCODE
+            }
+        }
+        'reject' {
+            if ($rest.Count -eq 0) {
+                Write-Host "ERROR: sha256Prefix required — usage: pforge skills reject <prefix>" -ForegroundColor Red; exit 1
+            }
+            $prefix = $rest[0]
+            $reason = ""
+            for ($i = 1; $i -lt $rest.Count; $i++) {
+                if ($rest[$i] -eq "--reason" -and ($i + 1) -lt $rest.Count) { $reason = $rest[$i + 1]; $i++ }
+            }
+            $reasonJson = ($reason | ConvertTo-Json -Compress)
+            $script = @"
+import("$moduleUrl").then(m => {
+  const r = m.rejectAutoSkill({ cwd: process.cwd(), sha256Prefix: "$prefix", reason: $reasonJson });
+  process.stdout.write(JSON.stringify(r));
+  if (!r.ok) process.exit(2);
+}).catch(e => { console.error(e.message); process.exit(1); });
+"@
+            $output = node -e $script
+            if ($LASTEXITCODE -eq 0) {
+                $r = $output | ConvertFrom-Json
+                Write-Host "✅ Rejected: $($r.rejectedPath)" -ForegroundColor Green
+            } else {
+                Write-Host "ERROR: $output" -ForegroundColor Red; exit $LASTEXITCODE
+            }
+        }
+        'defer' {
+            if ($rest.Count -eq 0) {
+                Write-Host "ERROR: sha256Prefix required — usage: pforge skills defer <prefix>" -ForegroundColor Red; exit 1
+            }
+            $prefix = $rest[0]
+            $script = @"
+import("$moduleUrl").then(m => {
+  const r = m.deferAutoSkill({ cwd: process.cwd(), sha256Prefix: "$prefix" });
+  process.stdout.write(JSON.stringify(r));
+  if (!r.ok) process.exit(2);
+}).catch(e => { console.error(e.message); process.exit(1); });
+"@
+            $output = node -e $script
+            if ($LASTEXITCODE -eq 0) {
+                $r = $output | ConvertFrom-Json
+                Write-Host "⏳ Deferred until: $($r.deferredUntil)" -ForegroundColor Yellow
+            } else {
+                Write-Host "ERROR: $output" -ForegroundColor Red; exit $LASTEXITCODE
+            }
+        }
+        'promote' {
+            $autoPromote = $false
+            $threshold = $null
+            for ($i = 0; $i -lt $rest.Count; $i++) {
+                switch ($rest[$i]) {
+                    '--auto-promote' { $autoPromote = $true }
+                    '--threshold'    { if (($i + 1) -lt $rest.Count) { $threshold = [int]$rest[$i + 1]; $i++ } }
+                }
+            }
+            if (-not $autoPromote) {
+                Write-Host "ERROR: --auto-promote flag required for non-interactive bulk promotion." -ForegroundColor Red
+                Write-Host "  Use 'pforge skills pending' to review candidates first." -ForegroundColor Yellow
+                exit 1
+            }
+            $thresholdArg = if ($null -ne $threshold) { $threshold } else { "undefined" }
+            $script = @"
+import("$moduleUrl").then(m => {
+  const pending = m.listPendingAutoSkills({ cwd: process.cwd(), threshold: $thresholdArg });
+  const results = [];
+  for (const s of pending) {
+    results.push(m.acceptAutoSkill({ cwd: process.cwd(), sha256Prefix: s.sha256Prefix }));
+  }
+  process.stdout.write(JSON.stringify({ count: pending.length, results }, null, 2));
+}).catch(e => { console.error(e.message); process.exit(1); });
+"@
+            $output = node -e $script
+            if ($LASTEXITCODE -ne 0) { Write-Host $output -ForegroundColor Red; exit $LASTEXITCODE }
+            $r = $output | ConvertFrom-Json
+            Write-Host "✅ Auto-promoted $($r.count) skill(s)." -ForegroundColor Green
+        }
+        default {
+            Write-Host "ERROR: unknown skills subcommand '$sub'" -ForegroundColor Red
+            Write-Host "  Run 'pforge skills' for usage."; exit 1
+        }
+    }
+}
+
 # ─── Command Router ────────────────────────────────────────────────────
 switch ($Command) {
     'init'         { Invoke-Init }
@@ -5262,6 +5424,7 @@ switch ($Command) {
     'mcp-call'     { Invoke-McpCall }
     'tour'         { Invoke-Tour }
     'config'       { Invoke-Config }
+    'skills'       { Invoke-Skills }
     'help'         { Show-Help }
     ''             { Show-Help }
     '--help'       { Show-Help }

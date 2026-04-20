@@ -4394,6 +4394,170 @@ with open('$tmp','w') as f:
     esac
 }
 
+# ─── Command: skills (Phase-26 Slice 8) ───────────────────────────────
+cmd_skills() {
+    local sub="${1:-}"; shift 2>/dev/null || true
+    local memory_module="$REPO_ROOT/pforge-mcp/memory.mjs"
+
+    if [ -z "$sub" ] || [ "$sub" = "help" ] || [ "$sub" = "--help" ]; then
+        echo ""
+        echo "pforge skills — auto-skill promotion (Phase-26 Slice 8)"
+        echo "─────────────────────────────────────────────"
+        echo "  pforge skills pending [--threshold N] [--json]"
+        echo "  pforge skills accept <sha256Prefix>"
+        echo "  pforge skills reject <sha256Prefix> [--reason <text>]"
+        echo "  pforge skills defer  <sha256Prefix>"
+        echo "  pforge skills promote --auto-promote [--threshold N]"
+        return 0
+    fi
+
+    if [ ! -f "$memory_module" ]; then
+        echo "ERROR: pforge-mcp/memory.mjs not found at $memory_module" >&2
+        exit 1
+    fi
+    local module_url="file://$memory_module"
+
+    case "$sub" in
+        pending)
+            local threshold_arg="undefined"
+            local as_json=0
+            while [ $# -gt 0 ]; do
+                case "$1" in
+                    --threshold) threshold_arg="$2"; shift 2 ;;
+                    --json)      as_json=1; shift ;;
+                    *)           shift ;;
+                esac
+            done
+            local output
+            output=$(MODULE_URL="$module_url" THRESHOLD="$threshold_arg" node -e '
+                import(process.env.MODULE_URL).then(m => {
+                  const t = process.env.THRESHOLD === "undefined" ? undefined : Number(process.env.THRESHOLD);
+                  const skills = m.listPendingAutoSkills({ cwd: process.cwd(), threshold: t });
+                  process.stdout.write(JSON.stringify(skills, null, 2));
+                }).catch(e => { console.error(e.message); process.exit(1); });
+            ') || exit $?
+            if [ "$as_json" = "1" ]; then
+                echo "$output"
+            else
+                local count
+                count=$(echo "$output" | node -e 'let d=""; process.stdin.on("data",c=>d+=c).on("end",()=>{try{const a=JSON.parse(d);process.stdout.write(String(a.length));}catch{process.stdout.write("0");}});')
+                if [ "$count" = "0" ]; then
+                    echo "No auto-skills pending promotion."
+                    return 0
+                fi
+                echo ""
+                echo "Pending auto-skills ($count)"
+                echo "$output" | node -e 'let d=""; process.stdin.on("data",c=>d+=c).on("end",()=>{const a=JSON.parse(d);for(const s of a){console.log(`  ${s.sha256Prefix}  reused ${s.reuseCount}×  ${s.summary}`);}});'
+                echo ""
+                echo "Use 'pforge skills accept <prefix>' to promote, or 'pforge skills promote --auto-promote' to accept all."
+            fi
+            ;;
+        accept)
+            local prefix="${1:-}"
+            if [ -z "$prefix" ]; then
+                echo "ERROR: sha256Prefix required — usage: pforge skills accept <prefix>" >&2; exit 1
+            fi
+            local output
+            output=$(MODULE_URL="$module_url" PREFIX="$prefix" node -e '
+                import(process.env.MODULE_URL).then(m => {
+                  const r = m.acceptAutoSkill({ cwd: process.cwd(), sha256Prefix: process.env.PREFIX });
+                  process.stdout.write(JSON.stringify(r));
+                  if (!r.ok) process.exit(2);
+                }).catch(e => { console.error(e.message); process.exit(1); });
+            ')
+            local rc=$?
+            if [ $rc -eq 0 ]; then
+                echo "✅ Promoted: $(echo "$output" | node -e 'let d=""; process.stdin.on("data",c=>d+=c).on("end",()=>{process.stdout.write(JSON.parse(d).promotedPath||"");});')"
+            else
+                echo "ERROR: $output" >&2; exit $rc
+            fi
+            ;;
+        reject)
+            local prefix="${1:-}"; shift 2>/dev/null || true
+            if [ -z "$prefix" ]; then
+                echo "ERROR: sha256Prefix required — usage: pforge skills reject <prefix>" >&2; exit 1
+            fi
+            local reason=""
+            while [ $# -gt 0 ]; do
+                case "$1" in
+                    --reason) reason="$2"; shift 2 ;;
+                    *)        shift ;;
+                esac
+            done
+            local output
+            output=$(MODULE_URL="$module_url" PREFIX="$prefix" REASON="$reason" node -e '
+                import(process.env.MODULE_URL).then(m => {
+                  const r = m.rejectAutoSkill({ cwd: process.cwd(), sha256Prefix: process.env.PREFIX, reason: process.env.REASON || "" });
+                  process.stdout.write(JSON.stringify(r));
+                  if (!r.ok) process.exit(2);
+                }).catch(e => { console.error(e.message); process.exit(1); });
+            ')
+            local rc=$?
+            if [ $rc -eq 0 ]; then
+                echo "✅ Rejected: $(echo "$output" | node -e 'let d=""; process.stdin.on("data",c=>d+=c).on("end",()=>{process.stdout.write(JSON.parse(d).rejectedPath||"");});')"
+            else
+                echo "ERROR: $output" >&2; exit $rc
+            fi
+            ;;
+        defer)
+            local prefix="${1:-}"
+            if [ -z "$prefix" ]; then
+                echo "ERROR: sha256Prefix required — usage: pforge skills defer <prefix>" >&2; exit 1
+            fi
+            local output
+            output=$(MODULE_URL="$module_url" PREFIX="$prefix" node -e '
+                import(process.env.MODULE_URL).then(m => {
+                  const r = m.deferAutoSkill({ cwd: process.cwd(), sha256Prefix: process.env.PREFIX });
+                  process.stdout.write(JSON.stringify(r));
+                  if (!r.ok) process.exit(2);
+                }).catch(e => { console.error(e.message); process.exit(1); });
+            ')
+            local rc=$?
+            if [ $rc -eq 0 ]; then
+                echo "⏳ Deferred until: $(echo "$output" | node -e 'let d=""; process.stdin.on("data",c=>d+=c).on("end",()=>{process.stdout.write(JSON.parse(d).deferredUntil||"");});')"
+            else
+                echo "ERROR: $output" >&2; exit $rc
+            fi
+            ;;
+        promote)
+            local auto_promote=0
+            local threshold_arg="undefined"
+            while [ $# -gt 0 ]; do
+                case "$1" in
+                    --auto-promote) auto_promote=1; shift ;;
+                    --threshold)    threshold_arg="$2"; shift 2 ;;
+                    *)              shift ;;
+                esac
+            done
+            if [ $auto_promote -ne 1 ]; then
+                echo "ERROR: --auto-promote flag required for non-interactive bulk promotion." >&2
+                echo "  Use 'pforge skills pending' to review candidates first." >&2
+                exit 1
+            fi
+            local output
+            output=$(MODULE_URL="$module_url" THRESHOLD="$threshold_arg" node -e '
+                import(process.env.MODULE_URL).then(m => {
+                  const t = process.env.THRESHOLD === "undefined" ? undefined : Number(process.env.THRESHOLD);
+                  const pending = m.listPendingAutoSkills({ cwd: process.cwd(), threshold: t });
+                  const results = [];
+                  for (const s of pending) {
+                    results.push(m.acceptAutoSkill({ cwd: process.cwd(), sha256Prefix: s.sha256Prefix }));
+                  }
+                  process.stdout.write(JSON.stringify({ count: pending.length, results }, null, 2));
+                }).catch(e => { console.error(e.message); process.exit(1); });
+            ') || exit $?
+            local count
+            count=$(echo "$output" | node -e 'let d=""; process.stdin.on("data",c=>d+=c).on("end",()=>{process.stdout.write(String(JSON.parse(d).count||0));});')
+            echo "✅ Auto-promoted $count skill(s)."
+            ;;
+        *)
+            echo "ERROR: unknown skills subcommand '$sub'" >&2
+            echo "  Run 'pforge skills' for usage." >&2
+            exit 1
+            ;;
+    esac
+}
+
 # ─── Command Router ────────────────────────────────────────────────────
 COMMAND="${1:-help}"
 shift 2>/dev/null || true
@@ -4433,6 +4597,7 @@ case "$COMMAND" in
     mcp-call)     cmd_mcp_call "$@" ;;
     tour)         cmd_tour ;;
     config)       cmd_config "$@" ;;
+    skills)       cmd_skills "$@" ;;
     help|--help)  show_help ;;
     *)
         echo "ERROR: Unknown command '$COMMAND'" >&2

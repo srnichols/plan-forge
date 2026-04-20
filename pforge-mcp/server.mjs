@@ -71,6 +71,10 @@ import {
   validateSourceFormat,
   buildWatcherSearchPrompt,
   buildMemoryReport,
+  listPendingAutoSkills,
+  acceptAutoSkill,
+  rejectAutoSkill,
+  deferAutoSkill,
 } from "./memory.mjs";
 import { createHub, readHubPort } from "./hub.mjs";
 import { createBridge } from "./bridge.mjs";
@@ -4897,6 +4901,60 @@ export function createExpressApp() {
         }
       }
       res.json(runs);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // ─── Phase-26 Slice 8: Auto-skill promotion API ──────────────────────
+  // REST API: GET /api/skills/pending — eligible auto-skill candidates
+  app.get("/api/skills/pending", (req, res) => {
+    try {
+      const threshold = req.query.threshold !== undefined
+        ? Number(req.query.threshold)
+        : undefined;
+      const skills = listPendingAutoSkills({ cwd: PROJECT_DIR, threshold });
+      res.json({ skills });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // REST API: POST /api/skills/accept — promote a candidate to .github/skills/
+  // Body: { sha256Prefix: string }
+  app.post("/api/skills/accept", (req, res) => {
+    try {
+      const { sha256Prefix } = req.body || {};
+      if (!sha256Prefix || typeof sha256Prefix !== "string") {
+        return res.status(400).json({ error: "sha256Prefix (string) required" });
+      }
+      const result = acceptAutoSkill({ cwd: PROJECT_DIR, sha256Prefix });
+      if (!result.ok) return res.status(404).json(result);
+      res.json(result);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // REST API: POST /api/skills/reject — move candidate to rejected/ folder
+  // Body: { sha256Prefix: string, reason?: string }
+  app.post("/api/skills/reject", (req, res) => {
+    try {
+      const { sha256Prefix, reason } = req.body || {};
+      if (!sha256Prefix || typeof sha256Prefix !== "string") {
+        return res.status(400).json({ error: "sha256Prefix (string) required" });
+      }
+      const result = rejectAutoSkill({ cwd: PROJECT_DIR, sha256Prefix, reason });
+      if (!result.ok) return res.status(404).json(result);
+      res.json(result);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // REST API: POST /api/skills/defer — defer candidate 7 days
+  // Body: { sha256Prefix: string }
+  app.post("/api/skills/defer", (req, res) => {
+    try {
+      const { sha256Prefix } = req.body || {};
+      if (!sha256Prefix || typeof sha256Prefix !== "string") {
+        return res.status(400).json({ error: "sha256Prefix (string) required" });
+      }
+      const result = deferAutoSkill({ cwd: PROJECT_DIR, sha256Prefix });
+      if (!result.ok) return res.status(404).json(result);
+      res.json(result);
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 

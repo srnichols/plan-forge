@@ -13,7 +13,7 @@
  * @module memory
  */
 
-import { readFileSync, writeFileSync, appendFileSync, mkdirSync, existsSync, statSync, readdirSync } from "node:fs";
+import { readFileSync, writeFileSync, appendFileSync, mkdirSync, existsSync, statSync, readdirSync, unlinkSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { createHash } from "node:crypto";
 
@@ -774,6 +774,171 @@ export function shouldPromoteAutoSkill(skill, threshold = AUTOSKILL_DEFAULT_THRE
   const t = Number.isFinite(threshold) && threshold > 0 ? threshold : AUTOSKILL_DEFAULT_THRESHOLD;
   return n >= t;
 }
+
+// ─── Phase-26 Slice 8: Auto-skill promotion — state machine ──────────────────
+
+/**
+ * Sidecar state file tracking per-skill lifecycle decisions:
+ * `pending` (eligible but not yet actioned), `promoted`, `rejected`, `deferred`.
+ * The markdown candidate files stay untouched; this file records the decision.
+ *
+ * Schema (inside .forge/skills-auto/state.json):
+ *   { "<sha256Prefix>": { status, deferredUntil?: ISO, actionedAt: ISO } }
+ */
+const AUTOSKILL_STATE_FILE = "state.json";
+
+/** Defer window for `deferAutoSkill` — Phase-26 MUST (Defer 7d). */
+export const AUTOSKILL_DEFER_MS = 7 * 24 * 60 * 60 * 1000;
+
+function autoSkillStatePath(cwd) {
+  return resolve(cwd, ".forge", AUTOSKILL_DIR, AUTOSKILL_STATE_FILE);
+}
+
+function readAutoSkillState(cwd) {
+  const path = autoSkillStatePath(cwd);
+  if (!existsSync(path)) return {};
+  try {
+    const data = JSON.parse(readFileSync(path, "utf-8"));
+    return data && typeof data === "object" && !Array.isArray(data) ? data : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeAutoSkillState(cwd, state) {
+  const path = autoSkillStatePath(cwd);
+  mkdirSync(resolve(cwd, ".forge", AUTOSKILL_DIR), { recursive: true });
+  writeFileSync(path, JSON.stringify(state, null, 2), "utf-8");
+}
+
+/**
+ * Derive the on-disk status of an auto-skill candidate.
+ *   - "promoted"  when `.github/skills/auto-<prefix>/SKILL.md` exists
+ *   - "rejected"  when state.json says so (file may also be under rejected/)
+ *   - "deferred"  when state.json says so AND `deferredUntil > now`
+ *   - "pending"   otherwise (default)
+ *
+ * Pure w.r.t. its arguments; reads only.
+ */
+export function getAutoSkillStatus({ cwd = process.cwd(), sha256Prefix, now = Date.now() } = {}) {
+  if (!sha256Prefix) return "pending";
+  const promotedPath = resolve(cwd, ".github", "skills", `auto-${sha256Prefix}`, "SKILL.md");
+  if (existsSync(promotedPath)) return "promoted";
+  const state = readAutoSkillState(cwd);
+  const entry = state[sha256Prefix];
+  if (!entry) return "pending";
+  if (entry.status === "rejected") return "rejected";
+  if (entry.status === "deferred") {
+    const until = entry.deferredUntil ? Date.parse(entry.deferredUntil) : 0;
+    if (Number.isFinite(until) && until > now) return "deferred";
+    // expired defer → back to pending
+    return "pending";
+  }
+  if (entry.status === "promoted") return "promoted";
+  return "pending";
+}
+
+/**
+ * List auto-skill candidates eligible for promotion.
+ * A candidate is "pending" when:
+ *   - `reuseCount >= threshold` (Phase-25 D3 default 3; override via
+ *     `runtime.autoSkill.promoteThreshold`)
+ *   - NOT already promoted (`.github/skills/auto-<prefix>/SKILL.md` absent)
+ *   - NOT rejected (state.json)
+ *   - NOT currently deferred (state.json `deferredUntil` in the future)
+ *
+ * @returns {Array<object>} pending skill records, ordered by reuseCount desc.
+ */
+export function listPendingAutoSkills({ cwd = process.cwd(), threshold, now = Date.now() } = {}) {
+  const t = Number.isFinite(threshold) && threshold > 0
+    ? Math.floor(threshold)
+    : AUTOSKILL_DEFAULT_THRESHOLD;
+  const all = listAutoSkills({ cwd });
+  const out = [];
+  for (const skill of all) {
+    if (!shouldPromoteAutoSkill(skill, t)) continue;
+    const status = getAutoSkillStatus({ cwd, sha256Prefix: skill.sha256Prefix, now });
+    if (status !== "pending") continue;
+    out.push(skill);
+  }
+  out.sort((a, b) => (b.reuseCount || 0) - (a.reuseCount || 0));
+  return out;
+}
+
+/**
+ * Promote an auto-skill to `.github/skills/auto-<sha256Prefix>/SKILL.md`.
+ * Copies the current rendered markdown; records `promoted` in state.json so
+ * the candidate no longer appears in `listPendingAutoSkills`.
+ *
+ * @returns {{ ok: boolean, promotedPath?: string, error?: string }}
+ */
+export function acceptAutoSkill({ cwd = process.cwd(), sha256Prefix, now = new Date() } = {}) {
+  if (!sha256Prefix) return { ok: false, error: "sha256Prefix required" };
+  const record = readAutoSkill({ cwd, sha256Prefix });
+  if (!record) return { ok: false, error: `auto-skill ${sha256Prefix} not found` };
+  const skillDir = resolve(cwd, ".github", "skills", `auto-${sha256Prefix}`);
+  mkdirSync(skillDir, { recursive: true });
+  const promotedPath = resolve(skillDir, "SKILL.md");
+  writeFileSync(promotedPath, renderAutoSkillMarkdown(record), "utf-8");
+  const state = readAutoSkillState(cwd);
+  state[sha256Prefix] = {
+    status: "promoted",
+    actionedAt: (now instanceof Date ? now : new Date(now)).toISOString(),
+  };
+  writeAutoSkillState(cwd, state);
+  return { ok: true, promotedPath };
+}
+
+/**
+ * Reject an auto-skill candidate. Moves the candidate file to
+ * `.forge/skills-auto/rejected/<sha256Prefix>.md` and records the decision.
+ *
+ * @returns {{ ok: boolean, rejectedPath?: string, error?: string }}
+ */
+export function rejectAutoSkill({ cwd = process.cwd(), sha256Prefix, reason = "", now = new Date() } = {}) {
+  if (!sha256Prefix) return { ok: false, error: "sha256Prefix required" };
+  const srcPath = resolve(cwd, ".forge", AUTOSKILL_DIR, `${sha256Prefix}.md`);
+  if (!existsSync(srcPath)) return { ok: false, error: `auto-skill ${sha256Prefix} not found` };
+  const rejectedDir = resolve(cwd, ".forge", AUTOSKILL_DIR, "rejected");
+  mkdirSync(rejectedDir, { recursive: true });
+  const rejectedPath = resolve(rejectedDir, `${sha256Prefix}.md`);
+  writeFileSync(rejectedPath, readFileSync(srcPath, "utf-8"), "utf-8");
+  try {
+    unlinkSync(srcPath);
+  } catch { /* best effort — state record is authoritative */ }
+  const state = readAutoSkillState(cwd);
+  state[sha256Prefix] = {
+    status: "rejected",
+    reason: String(reason || ""),
+    actionedAt: (now instanceof Date ? now : new Date(now)).toISOString(),
+  };
+  writeAutoSkillState(cwd, state);
+  return { ok: true, rejectedPath };
+}
+
+/**
+ * Defer an auto-skill candidate for `AUTOSKILL_DEFER_MS` (7 days). The
+ * candidate returns to `pending` automatically once the defer window expires.
+ *
+ * @returns {{ ok: boolean, deferredUntil?: string, error?: string }}
+ */
+export function deferAutoSkill({ cwd = process.cwd(), sha256Prefix, now = Date.now() } = {}) {
+  if (!sha256Prefix) return { ok: false, error: "sha256Prefix required" };
+  const nowMs = typeof now === "number" ? now : Date.parse(String(now));
+  if (!Number.isFinite(nowMs)) return { ok: false, error: "invalid now" };
+  const record = readAutoSkill({ cwd, sha256Prefix });
+  if (!record) return { ok: false, error: `auto-skill ${sha256Prefix} not found` };
+  const deferredUntil = new Date(nowMs + AUTOSKILL_DEFER_MS).toISOString();
+  const state = readAutoSkillState(cwd);
+  state[sha256Prefix] = {
+    status: "deferred",
+    deferredUntil,
+    actionedAt: new Date(nowMs).toISOString(),
+  };
+  writeAutoSkillState(cwd, state);
+  return { ok: true, deferredUntil };
+}
+
 
 /**
  * Build a prompt block listing retrieved auto-skills for worker injection.

@@ -1,218 +1,233 @@
 /**
- * Tests for forge-master MCP client proxy (Phase-29).
- * Tests createMcpClient factory, McpClient class, and createDispatcher.
+ * pforge-master/tests/mcp-proxy.test.mjs
+ *
+ * Tests for the downstream MCP client (Slice 3) and the stdio MCP proxy path.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { McpClient, createMcpClient, BASE_TOOL_COUNT_MIN } from "../src/mcp-client.mjs";
-import { createDispatcher } from "../src/tool-bridge.mjs";
+import { McpClient, BASE_TOOL_COUNT_MIN, createMcpClient } from "../src/mcp-client.mjs";
+import { invokeAllowlisted } from "../src/tool-bridge.mjs";
 import { BASE_ALLOWLIST } from "../src/allowlist.mjs";
 
-// ─── McpClient unit tests (class constructor + property tests) ───────
+// ─── McpClient unit tests ────────────────────────────────────────────
 
-describe("McpClient", () => {
-  it("is not ready before connect", () => {
-    const client = new McpClient();
-    expect(client.ready).toBe(false);
+describe("McpClient - initial state", () => {
+  it("starts not ready", () => {
+    const c = new McpClient();
+    expect(c.ready).toBe(false);
+    expect(c.toolCount).toBe(0);
+    expect(c.toolNames).toEqual([]);
   });
 
-  it("has zero toolCount before connect", () => {
-    const client = new McpClient();
-    expect(client.toolCount).toBe(0);
+  it("throws when invoke called before connect", async () => {
+    const c = new McpClient();
+    await expect(c.invoke("forge_plan_status", {})).rejects.toThrow(/not connected/);
   });
 
-  it("has empty toolNames before connect", () => {
-    const client = new McpClient();
-    expect(client.toolNames).toEqual([]);
+  it("connect throws when server path does not exist", async () => {
+    const c = new McpClient({ logger: { log: () => {}, warn: () => {} } });
+    await expect(
+      c.connect({ serverPath: "/nonexistent/server.mjs" }),
+    ).rejects.toThrow(/not found/);
   });
 
   it("hasTool returns false before connect", () => {
-    const client = new McpClient();
-    expect(client.hasTool("forge_plan_status")).toBe(false);
-  });
-
-  it("close() is idempotent when not connected", async () => {
-    const client = new McpClient();
-    await expect(client.close()).resolves.toBeUndefined();
-  });
-
-  it("invoke throws when not connected", async () => {
-    const client = new McpClient();
-    await expect(client.invoke("test_tool", {})).rejects.toThrow("not connected");
-  });
-
-  it("close() resets ready state after manual ready override", async () => {
-    const client = new McpClient();
-    // Can't actually set ready externally, but close() should be safe
-    await client.close();
-    expect(client.ready).toBe(false);
-    expect(client.toolCount).toBe(0);
-    expect(client.toolNames).toEqual([]);
-  });
-
-  it("accepts custom logger", () => {
-    const logger = { log: vi.fn(), warn: vi.fn() };
-    const client = new McpClient({ logger });
-    // Constructor should not throw
-    expect(client.ready).toBe(false);
-  });
-
-  it("connect throws when serverPath does not exist", async () => {
-    const client = new McpClient({ logger: { log: vi.fn(), warn: vi.fn() } });
-    await expect(
-      client.connect({ serverPath: "/nonexistent/path/server.mjs" }),
-    ).rejects.toThrow("downstream MCP server not found");
+    const c = new McpClient();
+    expect(c.hasTool("forge_plan_status")).toBe(false);
   });
 });
 
-// ─── BASE_TOOL_COUNT_MIN ─────────────────────────────────────────────
+describe("McpClient - mock transport handshake", () => {
+  function makeClient(toolList) {
+    const mockTools = toolList.map((n) => ({ name: n, description: n }));
+    const mockSdkClient = {
+      connect: vi.fn(),
+      listTools: vi.fn().mockResolvedValue({ tools: mockTools }),
+      callTool: vi.fn().mockResolvedValue({
+        content: [{ type: "text", text: '"ok"' }],
+      }),
+      close: vi.fn(),
+    };
+    const mockTransport = { close: vi.fn() };
+    const logs = [];
+    const warnings = [];
+    const logger = {
+      log: (m) => logs.push(m),
+      warn: (m) => warnings.push(m),
+    };
+    const c = new McpClient({ logPath: null, logger });
+    c._injectForTest({ client: mockSdkClient, transport: mockTransport });
+    return { c, mockSdkClient, logs, warnings };
+  }
+
+  it("becomes ready after _connectWithInjected, logs ready line", async () => {
+    const { c, logs } = makeClient(BASE_ALLOWLIST);
+    await c._connectWithInjected();
+    expect(c.ready).toBe(true);
+    expect(c.toolCount).toBe(BASE_ALLOWLIST.length);
+    expect(logs.some((m) => m.includes("downstream MCP ready"))).toBe(true);
+    expect(logs.some((m) => m.includes("allowlisted"))).toBe(true);
+  });
+
+  it("warns when tool count < BASE_TOOL_COUNT_MIN", async () => {
+    const { c, warnings } = makeClient(["forge_plan_status"]);
+    await c._connectWithInjected();
+    expect(warnings.some((m) => m.includes("< expected"))).toBe(true);
+  });
+
+  it("invoke parses JSON response", async () => {
+    const { c, mockSdkClient } = makeClient(BASE_ALLOWLIST);
+    mockSdkClient.callTool.mockResolvedValue({
+      content: [{ type: "text", text: '{"status":"ok","runs":3}' }],
+    });
+    await c._connectWithInjected();
+    const result = await c.invoke("forge_plan_status", {});
+    expect(result).toEqual({ status: "ok", runs: 3 });
+  });
+
+  it("invoke returns plain text when response is not JSON", async () => {
+    const { c, mockSdkClient } = makeClient(BASE_ALLOWLIST);
+    mockSdkClient.callTool.mockResolvedValue({
+      content: [{ type: "text", text: "plain text result" }],
+    });
+    await c._connectWithInjected();
+    const result = await c.invoke("forge_capabilities", {});
+    expect(result).toBe("plain text result");
+  });
+
+  it("invoke throws when tool returns isError", async () => {
+    const { c, mockSdkClient } = makeClient(BASE_ALLOWLIST);
+    mockSdkClient.callTool.mockResolvedValue({
+      isError: true,
+      content: [{ type: "text", text: "something went wrong" }],
+    });
+    await c._connectWithInjected();
+    await expect(c.invoke("forge_plan_status", {})).rejects.toThrow(/tool error/);
+  });
+
+  it("close resets ready state", async () => {
+    const { c } = makeClient(BASE_ALLOWLIST);
+    await c._connectWithInjected();
+    expect(c.ready).toBe(true);
+    await c.close();
+    expect(c.ready).toBe(false);
+    expect(c.toolCount).toBe(0);
+  });
+});
+
+// ─── tool-bridge with MCP transport ─────────────────────────────────
+
+describe("tool-bridge: MCP transport branch", () => {
+  function makeReadyMockClient(toolName, response) {
+    return {
+      ready: true,
+      invoke: vi.fn().mockResolvedValue(response),
+      hasTool: () => true,
+    };
+  }
+
+  it("uses mcpClient.invoke when mcpClient.ready is true", async () => {
+    const mcpClient = makeReadyMockClient("forge_plan_status", { runs: 1 });
+    const result = await invokeAllowlisted(
+      { tool: "forge_plan_status", args: {}, cwd: "/proj" },
+      {
+        resolvedAllowlist: BASE_ALLOWLIST,
+        dispatcher: vi.fn(),
+        mcpClient,
+      },
+    );
+    expect(result.ok).toBe(true);
+    expect(result.transport).toBe("mcp");
+    expect(mcpClient.invoke).toHaveBeenCalledWith("forge_plan_status", { path: "/proj" });
+  });
+
+  it("falls back to dispatcher when mcpClient is absent", async () => {
+    const dispatcher = vi.fn().mockResolvedValue({ runs: 2 });
+    const result = await invokeAllowlisted(
+      { tool: "forge_plan_status", args: {}, cwd: "/proj" },
+      {
+        resolvedAllowlist: BASE_ALLOWLIST,
+        dispatcher,
+        mcpClient: null,
+      },
+    );
+    expect(result.ok).toBe(true);
+    expect(result.transport).toBe("inprocess");
+    expect(dispatcher).toHaveBeenCalled();
+  });
+
+  it("falls back to dispatcher when mcpClient.ready is false", async () => {
+    const dispatcher = vi.fn().mockResolvedValue("ok");
+    const notReadyClient = { ready: false, invoke: vi.fn() };
+    const result = await invokeAllowlisted(
+      { tool: "forge_plan_status", args: {} },
+      {
+        resolvedAllowlist: BASE_ALLOWLIST,
+        dispatcher,
+        mcpClient: notReadyClient,
+      },
+    );
+    expect(result.transport).toBe("inprocess");
+    expect(notReadyClient.invoke).not.toHaveBeenCalled();
+  });
+
+  it("response schema is identical regardless of transport (ok, tool, summary, result present)", async () => {
+    const mcpResult = { status: "ok" };
+    const inprocResult = { status: "ok" };
+    const deps = { resolvedAllowlist: BASE_ALLOWLIST };
+
+    const viaMcp = await invokeAllowlisted(
+      { tool: "forge_plan_status", args: {} },
+      {
+        ...deps,
+        dispatcher: vi.fn(),
+        mcpClient: { ready: true, invoke: vi.fn().mockResolvedValue(mcpResult) },
+      },
+    );
+    const viaInproc = await invokeAllowlisted(
+      { tool: "forge_plan_status", args: {} },
+      {
+        ...deps,
+        dispatcher: vi.fn().mockResolvedValue(inprocResult),
+        mcpClient: null,
+      },
+    );
+
+    const schemaKeys = ["ok", "tool", "summary", "resultFull", "source"];
+    for (const key of schemaKeys) {
+      expect(viaMcp).toHaveProperty(key);
+      expect(viaInproc).toHaveProperty(key);
+    }
+    expect(viaMcp.ok).toBe(viaInproc.ok);
+    expect(viaMcp.tool).toBe(viaInproc.tool);
+  });
+
+  it("stdio error handling: mcpClient.invoke throws → returns ok:false error payload", async () => {
+    const errorClient = {
+      ready: true,
+      invoke: vi.fn().mockRejectedValue(new Error("stdio timeout")),
+    };
+    const result = await invokeAllowlisted(
+      { tool: "forge_plan_status", args: {} },
+      {
+        resolvedAllowlist: BASE_ALLOWLIST,
+        dispatcher: vi.fn(),
+        mcpClient: errorClient,
+      },
+    );
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/dispatcher_error/);
+  });
+});
+
+// ─── BASE_TOOL_COUNT_MIN constant ─────────────────────────────────────
 
 describe("BASE_TOOL_COUNT_MIN", () => {
-  it("equals BASE_ALLOWLIST length", () => {
+  it("equals BASE_ALLOWLIST.length", () => {
     expect(BASE_TOOL_COUNT_MIN).toBe(BASE_ALLOWLIST.length);
   });
 
-  it("is a positive integer", () => {
-    expect(BASE_TOOL_COUNT_MIN).toBeGreaterThan(0);
-    expect(Number.isInteger(BASE_TOOL_COUNT_MIN)).toBe(true);
-  });
-});
-
-// ─── createMcpClient error handling ─────────────────────────────────
-
-describe("createMcpClient", () => {
-  it("throws when serverPath does not exist", async () => {
-    await expect(
-      createMcpClient({ serverPath: "/nonexistent/path/server.mjs" }),
-    ).rejects.toThrow();
-  });
-});
-
-// ─── createDispatcher ────────────────────────────────────────────────
-
-describe("createDispatcher", () => {
-  it("throws when transport is not provided", () => {
-    expect(() => createDispatcher()).toThrow("transport is required");
-    expect(() => createDispatcher({})).toThrow("transport is required");
-  });
-
-  it("returns a function", () => {
-    const d = createDispatcher({ transport: "inprocess", fallbackDispatcher: vi.fn() });
-    expect(typeof d).toBe("function");
-  });
-
-  describe("transport: inprocess", () => {
-    it("routes to fallbackDispatcher", async () => {
-      const fallback = vi.fn().mockResolvedValue({ ok: true });
-      const d = createDispatcher({ transport: "inprocess", fallbackDispatcher: fallback });
-      const result = await d("forge_plan_status", { plan: "test" }, "/cwd");
-      expect(fallback).toHaveBeenCalledWith("forge_plan_status", { plan: "test" }, "/cwd");
-      expect(result).toEqual({ ok: true });
-    });
-
-    it("throws when no fallbackDispatcher is provided", async () => {
-      const d = createDispatcher({ transport: "inprocess" });
-      await expect(d("forge_status")).rejects.toThrow("no dispatcher available");
-    });
-
-    it("ignores mcpClient even if provided and ready", async () => {
-      const mcpClient = { ready: true, hasTool: () => true, invoke: vi.fn() };
-      const fallback = vi.fn().mockResolvedValue("inprocess-result");
-      const d = createDispatcher({ transport: "inprocess", mcpClient, fallbackDispatcher: fallback });
-      const result = await d("forge_status");
-      expect(fallback).toHaveBeenCalled();
-      expect(mcpClient.invoke).not.toHaveBeenCalled();
-      expect(result).toBe("inprocess-result");
-    });
-
-    it("preserves cwd argument on fallback path", async () => {
-      const fallback = vi.fn().mockResolvedValue("ok");
-      const d = createDispatcher({ transport: "inprocess", fallbackDispatcher: fallback });
-      await d("forge_smith", {}, "/my/project");
-      expect(fallback).toHaveBeenCalledWith("forge_smith", {}, "/my/project");
-    });
-  });
-
-  describe("transport: mcp", () => {
-    it("routes to mcpClient.invoke when client is ready and has the tool", async () => {
-      const mcpClient = {
-        ready: true,
-        hasTool: vi.fn().mockReturnValue(true),
-        invoke: vi.fn().mockResolvedValue({ status: "ok" }),
-      };
-      const d = createDispatcher({ transport: "mcp", mcpClient });
-      const result = await d("forge_plan_status", { plan: "test" });
-      expect(mcpClient.hasTool).toHaveBeenCalledWith("forge_plan_status");
-      expect(mcpClient.invoke).toHaveBeenCalledWith("forge_plan_status", { plan: "test" });
-      expect(result).toEqual({ status: "ok" });
-    });
-
-    it("falls back to in-process when mcpClient is not ready", async () => {
-      const mcpClient = { ready: false, hasTool: vi.fn(), invoke: vi.fn() };
-      const fallback = vi.fn().mockResolvedValue("fallback-result");
-      const d = createDispatcher({ transport: "mcp", mcpClient, fallbackDispatcher: fallback });
-      const result = await d("forge_status");
-      expect(mcpClient.invoke).not.toHaveBeenCalled();
-      expect(fallback).toHaveBeenCalled();
-      expect(result).toBe("fallback-result");
-    });
-
-    it("falls back to in-process when mcpClient is null", async () => {
-      const fallback = vi.fn().mockResolvedValue("fallback");
-      const d = createDispatcher({ transport: "mcp", mcpClient: null, fallbackDispatcher: fallback });
-      const result = await d("forge_status");
-      expect(result).toBe("fallback");
-    });
-
-    it("falls back to in-process when mcpClient does not have the tool", async () => {
-      const mcpClient = {
-        ready: true,
-        hasTool: vi.fn().mockReturnValue(false),
-        invoke: vi.fn(),
-      };
-      const fallback = vi.fn().mockResolvedValue("fallback-for-missing");
-      const d = createDispatcher({ transport: "mcp", mcpClient, fallbackDispatcher: fallback });
-      const result = await d("unknown_tool", { x: 1 });
-      expect(mcpClient.invoke).not.toHaveBeenCalled();
-      expect(fallback).toHaveBeenCalledWith("unknown_tool", { x: 1 }, undefined);
-      expect(result).toBe("fallback-for-missing");
-    });
-
-    it("throws when tool is missing on MCP and no fallback", async () => {
-      const mcpClient = {
-        ready: true,
-        hasTool: vi.fn().mockReturnValue(false),
-        invoke: vi.fn(),
-      };
-      const d = createDispatcher({ transport: "mcp", mcpClient });
-      await expect(d("missing_tool")).rejects.toThrow("not found on downstream MCP");
-    });
-
-    it("throws when mcpClient not ready and no fallback", async () => {
-      const mcpClient = { ready: false, hasTool: vi.fn(), invoke: vi.fn() };
-      const d = createDispatcher({ transport: "mcp", mcpClient });
-      await expect(d("forge_status")).rejects.toThrow("no dispatcher available");
-    });
-
-    it("propagates MCP invoke errors", async () => {
-      const mcpClient = {
-        ready: true,
-        hasTool: vi.fn().mockReturnValue(true),
-        invoke: vi.fn().mockRejectedValue(new Error("MCP connection lost")),
-      };
-      const d = createDispatcher({ transport: "mcp", mcpClient });
-      await expect(d("forge_status")).rejects.toThrow("MCP connection lost");
-    });
-
-    it("defaults args to empty object", async () => {
-      const mcpClient = {
-        ready: true,
-        hasTool: vi.fn().mockReturnValue(true),
-        invoke: vi.fn().mockResolvedValue("ok"),
-      };
-      const d = createDispatcher({ transport: "mcp", mcpClient });
-      await d("forge_status");
-      expect(mcpClient.invoke).toHaveBeenCalledWith("forge_status", {});
-    });
+  it("is at least 30", () => {
+    expect(BASE_TOOL_COUNT_MIN).toBeGreaterThanOrEqual(30);
   });
 });

@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Forge-Master Studio</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='28' font-size='28'>🧠</text></svg>">
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen flex flex-col">
+
+  <!-- Header -->
+  <header class="bg-gray-900 border-b border-gray-800 px-6 py-3 flex items-center gap-4 shrink-0">
+    <div class="flex items-center gap-2">
+      <span class="text-xl" aria-hidden="true">🧠</span>
+      <h1 class="text-base font-semibold text-gray-100">Forge-Master Studio</h1>
+    </div>
+    <div class="flex-1"></div>
+    <span id="status-badge" class="text-xs font-medium px-2.5 py-1 rounded-full bg-gray-800 text-gray-400 border border-gray-700">Idle</span>
+    <button id="theme-toggle" onclick="toggleTheme()" title="Toggle theme" class="w-8 h-8 flex items-center justify-center rounded hover:bg-gray-800 transition text-gray-400 hover:text-white">🌙</button>
+  </header>
+
+  <!-- Three-pane layout -->
+  <div class="flex flex-1 overflow-hidden">
+
+    <!-- LEFT PANE: Prompt Library -->
+    <aside id="prompt-pane" class="w-72 bg-gray-900 border-r border-gray-800 flex flex-col overflow-hidden shrink-0" aria-label="Prompt library">
+      <div class="p-3 border-b border-gray-800">
+        <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Prompt Library</h2>
+        <input id="prompt-search" type="search" placeholder="Search prompts…"
+          class="w-full bg-gray-800 border border-gray-700 text-gray-200 text-sm rounded px-3 py-1.5 focus:outline-none focus:border-blue-500"
+          oninput="filterPrompts(this.value)" />
+      </div>
+      <div id="prompt-list" class="flex-1 overflow-y-auto p-2 space-y-1">
+        <p class="text-gray-500 text-xs px-2 py-4 text-center">Loading prompts…</p>
+      </div>
+    </aside>
+
+    <!-- CENTER PANE: Chat -->
+    <main id="chat-pane" class="flex-1 flex flex-col overflow-hidden" aria-label="Chat">
+      <!-- Messages -->
+      <div id="messages" class="flex-1 overflow-y-auto p-6 space-y-4">
+        <div class="flex justify-center">
+          <div class="text-center max-w-md">
+            <div class="text-4xl mb-3">🧠</div>
+            <h2 class="text-lg font-semibold text-gray-200 mb-2">Forge-Master Studio</h2>
+            <p class="text-sm text-gray-400">Ask questions about your Plan Forge project. Select a prompt from the library or type your own.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Approval card (hidden by default) -->
+      <div id="approval-card" class="hidden mx-6 mb-4 bg-amber-900/20 border border-amber-700/60 rounded-lg p-4">
+        <div class="flex items-start gap-3">
+          <span class="text-amber-400 text-xl shrink-0">⚠️</span>
+          <div class="flex-1">
+            <h3 class="text-sm font-semibold text-amber-300 mb-1">Approval Required</h3>
+            <p id="approval-description" class="text-xs text-gray-300 mb-3">A write tool is requesting approval.</p>
+            <div id="approval-tool-list" class="text-xs font-mono bg-gray-900 rounded p-2 mb-3 text-gray-300"></div>
+            <div class="flex gap-2">
+              <button onclick="approveAction('approve')" class="text-xs px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 rounded text-white font-medium transition">Approve</button>
+              <button onclick="approveAction('deny')" class="text-xs px-3 py-1.5 bg-red-800 hover:bg-red-700 rounded text-white transition">Deny</button>
+              <button onclick="editApproval()" class="text-xs px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded transition">Edit args</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Input bar -->
+      <div class="border-t border-gray-800 p-4 shrink-0">
+        <div class="flex gap-3 items-end max-w-4xl mx-auto">
+          <textarea id="message-input"
+            class="flex-1 bg-gray-800 border border-gray-700 text-gray-100 text-sm rounded-lg px-4 py-3 focus:outline-none focus:border-blue-500 resize-none"
+            placeholder="Ask Forge-Master anything…"
+            rows="2"
+            onkeydown="handleInputKey(event)"
+            aria-label="Message input"></textarea>
+          <button id="send-btn" onclick="sendMessage()"
+            class="shrink-0 px-4 py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-lg text-sm font-medium transition text-white"
+            title="Send (Ctrl+Enter)">
+            Send
+          </button>
+        </div>
+        <p class="text-center text-xs text-gray-600 mt-1">Ctrl+Enter to send · <span id="session-label" class="font-mono text-gray-600"></span></p>
+      </div>
+    </main>
+
+    <!-- RIGHT PANE: Tool calls & context -->
+    <aside id="detail-pane" class="w-80 bg-gray-900 border-l border-gray-800 flex flex-col overflow-hidden shrink-0" aria-label="Session details">
+      <div class="p-3 border-b border-gray-800 flex items-center justify-between">
+        <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wide">Session Details</h2>
+        <button onclick="clearSession()" class="text-xs text-gray-500 hover:text-gray-300 transition">New session</button>
+      </div>
+      <div class="flex-1 overflow-y-auto p-3 space-y-4">
+        <!-- Capabilities -->
+        <section>
+          <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Capabilities</h3>
+          <div id="capabilities-panel" class="text-xs space-y-1 text-gray-400">
+            <p class="text-gray-600">Loading…</p>
+          </div>
+        </section>
+        <!-- Tool Calls -->
+        <section>
+          <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Tool Calls</h3>
+          <div id="tool-calls-panel" class="text-xs space-y-2">
+            <p class="text-gray-600">No tool calls yet</p>
+          </div>
+        </section>
+        <!-- Recent Events -->
+        <section>
+          <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Recent Sessions</h3>
+          <div id="sessions-panel" class="text-xs space-y-1">
+            <p class="text-gray-600">No sessions yet</p>
+          </div>
+        </section>
+      </div>
+    </aside>
+
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

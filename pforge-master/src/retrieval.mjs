@@ -182,7 +182,26 @@ export async function fetchContext(opts = {}, deps = {}) {
   const l2Section = buildSection("l2", l2Entries);
   const l3Section = buildSection("l3", l3Entries);
 
-  const contextBlock = truncateSections(l1Section, l2Section, l3Section);
+  let contextBlock = truncateSections(l1Section, l2Section, l3Section);
+
+  // ── Hub events overlay (non-breaking: skipped if no hubSubscriber) ─
+  if (deps.hubSubscriber) {
+    const events = deps.hubSubscriber.getRecentEvents(10);
+    if (events.length > 0) {
+      const lines = ["### Recent Operational Events", ""];
+      for (const ev of events) {
+        const ts = ev.timestamp ? ` (${ev.timestamp})` : "";
+        const detail = ev.sliceId
+          ? ` — ${ev.sliceId}`
+          : ev.runId ? ` — run:${ev.runId}` : "";
+        lines.push(`- **${ev.type}**${detail}${ts}`);
+      }
+      const hubSection = lines.join("\n");
+      contextBlock = contextBlock
+        ? contextBlock + "\n\n" + hubSection
+        : hubSection;
+    }
+  }
 
   return { contextBlock, sources };
 }

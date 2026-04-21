@@ -1,0 +1,63 @@
+/* Forge-Master Studio — style overrides on top of Tailwind CDN */
+
+:root {
+  --accent: #60a5fa;
+  --bg-0: #030712;
+  --radius: 8px;
+}
+
+html.light body { background: #f1f5f9; color: #0f172a; }
+html.light header { background: #ffffff; border-color: #e2e8f0; }
+html.light aside { background: #f8fafc; border-color: #e2e8f0; }
+html.light #messages { background: #f8fafc; }
+html.light #message-input { background: #ffffff; border-color: #cbd5e1; color: #0f172a; }
+
+/* Message bubbles */
+.msg-user {
+  background: #1e3a5f;
+  border-left: 3px solid #60a5fa;
+}
+.msg-assistant {
+  background: #1f2937;
+  border-left: 3px solid #374151;
+}
+.msg-error {
+  background: #450a0a;
+  border-left: 3px solid #f87171;
+}
+
+/* Tool call card */
+.tool-card {
+  background: #111827;
+  border: 1px solid #1f2937;
+  border-radius: var(--radius);
+}
+.tool-card.ok { border-left: 3px solid #34d399; }
+.tool-card.err { border-left: 3px solid #f87171; }
+
+/* Prompt item */
+.prompt-item {
+  border-radius: var(--radius);
+  transition: background 0.1s;
+}
+.prompt-item:hover { background: #1f2937; }
+.prompt-item.selected { background: #1e3a5f; }
+
+/* Streaming cursor */
+@keyframes blink { 50% { opacity: 0; } }
+.stream-cursor::after {
+  content: "▋";
+  animation: blink 1s step-end infinite;
+  color: var(--accent);
+  font-size: 0.85em;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+
+/* Severity badges */
+.badge-destructive { background: #450a0a; color: #fca5a5; border: 1px solid #7f1d1d; }
+.badge-write { background: #422006; color: #fcd34d; border: 1px solid #78350f; }
+.badge-read { background: #052e16; color: #6ee7b7; border: 1px solid #065f46; }

@@ -130,9 +130,35 @@ let activeRunPromise = null;
 let activeHub = null;    // WebSocket hub instance
 let activeBridge = null; // OpenClaw Bridge instance
 let activeEventWatcher = null; // events.log file watcher
+let _studioClient = null; // McpClient for pforge-master/server.mjs (proxy path)
 
 // Set of runIds that have already received an approval decision (rate-limit: 1 per runId)
 const _approvedRunIds = new Set();
+
+/**
+ * Return a connected McpClient pointed at pforge-master/server.mjs, spawning it
+ * on first call. Returns null if the package is unavailable or spawn fails.
+ * Subsequent calls reuse the cached client (warm path).
+ */
+async function getOrSpawnStudioChild() {
+  if (_studioClient?.ready) return _studioClient;
+  const studioPath = resolve(__dirname, "../pforge-master/server.mjs");
+  if (!existsSync(studioPath)) return null;
+  try {
+    const { McpClient } = await import("../pforge-master/src/mcp-client.mjs");
+    const client = new McpClient({ logger: console });
+    await client.connect({ serverPath: studioPath });
+    _studioClient = client;
+    try {
+      const forgeDir = resolve(PROJECT_DIR, ".forge");
+      if (!existsSync(forgeDir)) mkdirSync(forgeDir, { recursive: true });
+    } catch { /* non-fatal */ }
+    return client;
+  } catch (err) {
+    console.error(`forge-master: failed to spawn studio child: ${err.message} — using in-process fallback`);
+    return null;
+  }
+}
 
 /**
  * Broadcast a LiveGuard tool event to the WebSocket hub.
@@ -4814,6 +4840,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       if (!args.message || typeof args.message !== "string") {
         return { content: [{ type: "text", text: "forge_master_ask: message (string) is required" }], isError: true };
       }
+
+      // ── Proxy path: route through pforge-master/server.mjs if available ──
+      const studio = await getOrSpawnStudioChild();
+      if (studio) {
+        try {
+          const proxyResult = await studio.invoke("forge_master_ask", args);
+          const text = typeof proxyResult === "string" ? proxyResult : JSON.stringify(proxyResult, null, 2);
+          emitToolTelemetry("forge_master_ask", args, { proxied: true }, Date.now() - t0, "OK", cwd);
+          return { content: [{ type: "text", text }] };
+        } catch (proxyErr) {
+          console.error(`forge-master: proxy error, falling back in-process: ${proxyErr.message}`);
+          _studioClient = null; // reset so next call retries
+        }
+      }
+
+      // ── Fallback: in-process reasoning ──
       const { runTurn } = await import("./forge-master/index.mjs");
       const { TOOL_METADATA } = await import("./capabilities.mjs");
       const result = await runTurn(
@@ -7374,11 +7416,13 @@ async function main() {
     if (activeEventWatcher) activeEventWatcher.stop();
     if (activeHub) activeHub.close();
     if (activeBridge) activeBridge.stop();
+    if (_studioClient) _studioClient.close().catch(() => {});
   });
   process.on("SIGINT", () => {
     if (activeEventWatcher) activeEventWatcher.stop();
     if (activeHub) activeHub.close();
     if (activeBridge) activeBridge.stop();
+    if (_studioClient) _studioClient.close().catch(() => {});
   });
 }
 

@@ -70,7 +70,7 @@ export function summarize(text, limit = SUMMARY_LIMIT) {
  * }>}
  */
 export async function invokeAllowlisted({ tool, args = {}, cwd }, deps) {
-  const { resolvedAllowlist, dispatcher, hub = null } = deps;
+  const { resolvedAllowlist, dispatcher, hub = null, mcpClient = null } = deps;
 
   // ── Allowlist gate ──
   const check = isAllowlisted(tool, resolvedAllowlist);
@@ -86,23 +86,30 @@ export async function invokeAllowlisted({ tool, args = {}, cwd }, deps) {
     return errorPayload;
   }
 
-  // ── Dispatch ──
+  // ── Dispatch — MCP transport when client is ready, in-process otherwise ──
+  const transport = mcpClient?.ready ? "mcp" : "inprocess";
   const t0 = Date.now();
   let raw;
   try {
-    raw = await dispatcher(tool, args, cwd);
+    if (transport === "mcp") {
+      raw = await mcpClient.invoke(tool, cwd ? { ...args, path: cwd } : args);
+    } else {
+      raw = await dispatcher(tool, args, cwd);
+    }
   } catch (err) {
     const elapsed = Date.now() - t0;
     const errorPayload = {
       ok: false,
       tool,
       error: `dispatcher_error: ${err.message}`,
+      transport,
       source: "forge-master",
     };
     emitEvent(hub, "forge-master.tool-error", {
       tool,
       error: err.message,
       durationMs: elapsed,
+      transport,
       source: "forge-master",
     });
     return errorPayload;
@@ -121,6 +128,7 @@ export async function invokeAllowlisted({ tool, args = {}, cwd }, deps) {
     summary,
     resultFull: raw,
     costUSD: 0,
+    transport,
     source: "forge-master",
   };
 
@@ -129,6 +137,7 @@ export async function invokeAllowlisted({ tool, args = {}, cwd }, deps) {
     durationMs: elapsed,
     summaryLength: summary.length,
     truncated: fullText.length > SUMMARY_LIMIT,
+    transport,
     source: "forge-master",
   });
 

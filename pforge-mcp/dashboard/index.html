@@ -222,6 +222,7 @@
       <a href="/ui" target="_blank" rel="noopener" class="hover:text-white transition-colors text-xs hide-mobile" title="Open Plan Browser">Plan Browser ↗</a>
       <span id="run-status" class="text-xs font-medium text-gray-300 px-2 py-0.5 rounded bg-gray-700/50 border border-gray-700" title="Current run status">Idle</span>
       <span id="ws-port" class="text-[10px] text-gray-500 font-mono hide-tablet"></span>
+      <button id="restart-server-btn" onclick="triggerServerRestart();" title="Restart MCP server (reloads code after updates). The MCP client will respawn the process automatically." aria-label="Restart MCP server" class="text-base leading-none hover:text-white transition w-7 h-7 flex items-center justify-center rounded hover:bg-gray-700/60">⟳</button>
       <button id="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark theme" aria-label="Toggle theme" class="text-base leading-none hover:text-white transition w-7 h-7 flex items-center justify-center rounded hover:bg-gray-700/60">🌙</button>
     </div>
   </header>

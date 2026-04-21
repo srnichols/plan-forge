@@ -3569,6 +3569,77 @@ function triggerSelfUpdate() {
 }
 window.triggerSelfUpdate = triggerSelfUpdate;
 
+// Restart the MCP/HTTP server process. After self-update replaces files on
+// disk, the running Node process still has old code in memory — only a
+// restart picks it up. The MCP client (VS Code, etc.) respawns the server
+// automatically on the next tool call, so the dashboard just needs to wait
+// for /api/status to come back online, then reload.
+function triggerServerRestart() {
+  const btn = document.getElementById("restart-server-btn");
+  if (!btn) return;
+  if (!confirm("Restart the Plan Forge MCP server?\n\nThe dashboard will reconnect automatically once it's back.")) return;
+  btn.disabled = true;
+  btn.textContent = "…";
+  btn.title = "Restarting…";
+  fetch(`${API_BASE}/api/server/restart`, { method: "POST" })
+    .then(async (r) => {
+      if (r.status === 409) {
+        const body = await r.json().catch(() => ({}));
+        alert(body.error || "Cannot restart during active plan run");
+        btn.disabled = false;
+        btn.textContent = "⟳";
+        btn.title = "Restart MCP server";
+        return;
+      }
+      if (r.status === 429) {
+        alert("Restart rate-limited — wait a few seconds and try again");
+        btn.disabled = false;
+        btn.textContent = "⟳";
+        btn.title = "Restart MCP server";
+        return;
+      }
+      // Server accepted (202). It will exit ~500ms later; poll /api/status
+      // until it comes back, then reload the page.
+      btn.textContent = "…";
+      btn.title = "Waiting for server to come back online…";
+      const started = Date.now();
+      const TIMEOUT_MS = 45_000;
+      const POLL_MS = 1500;
+      const poll = () => {
+        if (Date.now() - started > TIMEOUT_MS) {
+          btn.disabled = false;
+          btn.textContent = "⟳";
+          btn.title = "Restart MCP server";
+          alert("Server did not come back online within 45s. Check the terminal where it was launched.");
+          return;
+        }
+        fetch(`${API_BASE}/api/status`, { cache: "no-store" })
+          .then((s) => { if (s.ok) location.reload(); else setTimeout(poll, POLL_MS); })
+          .catch(() => setTimeout(poll, POLL_MS));
+      };
+      setTimeout(poll, 1500);
+    })
+    .catch((err) => {
+      // Network error is expected once the process exits — treat as success
+      // and start polling.
+      const started = Date.now();
+      const poll = () => {
+        if (Date.now() - started > 45_000) {
+          btn.disabled = false;
+          btn.textContent = "⟳";
+          btn.title = "Restart MCP server";
+          alert(`Restart request failed and server did not recover: ${err.message}`);
+          return;
+        }
+        fetch(`${API_BASE}/api/status`, { cache: "no-store" })
+          .then((s) => { if (s.ok) location.reload(); else setTimeout(poll, 1500); })
+          .catch(() => setTimeout(poll, 1500));
+      };
+      setTimeout(poll, 1500);
+    });
+}
+window.triggerServerRestart = triggerServerRestart;
+
 // Load notifications from localStorage
 renderNotifications();
 
@@ -6648,8 +6719,23 @@ function renderInnerLoopFederation(f) {
   const el = document.getElementById("il-federation-body");
   if (!el) return;
   if (!f || f.__error) { el.innerHTML = `<p class="text-amber-400">Unavailable: ${escapeHtml(f?.__error || "error")}</p>`; return; }
-  if (!f.enabled) {
-    el.innerHTML = `<p class="text-gray-500">Federation disabled. Enable via <code>brain.federation.enabled</code> in Config and list sibling repos under <code>brain.federation.repos</code>.</p>`;
+  const enabled = !!f.enabled;
+  const repoCount = f.repos?.length || 0;
+  // Toggle switch — always visible so users can flip federation on/off from the GUI.
+  const toggleHtml = `
+    <div class="flex items-center gap-3 mb-3">
+      <label class="inline-flex items-center cursor-pointer">
+        <input type="checkbox" id="il-federation-toggle" class="sr-only peer" ${enabled ? "checked" : ""}>
+        <span class="relative w-9 h-5 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></span>
+        <span class="ml-2 text-xs text-gray-300">${enabled ? "Enabled" : "Disabled"}</span>
+      </label>
+      <span class="text-[11px] text-gray-500">${escapeHtml(String(repoCount))} repo(s) configured · cap ${escapeHtml(String(f.limit))}</span>
+      <span id="il-federation-toggle-msg" class="text-[11px] text-gray-500"></span>
+    </div>`;
+  if (!enabled) {
+    el.innerHTML = `${toggleHtml}
+      <p class="text-gray-500 text-xs">Federation is off. Toggle it on to read trajectories from sibling repos listed under <code>brain.federation.repos</code> in <code>.forge.json</code>.</p>`;
+    wireFederationToggle();
     return;
   }
   const errorsHtml = (f.configErrors || []).length > 0
@@ -6669,13 +6755,34 @@ function renderInnerLoopFederation(f) {
             <td class="py-1 pr-3 text-gray-500">${escapeHtml(new Date(t.mtimeMs).toISOString())}</td>
           </tr>`).join("")}
       </tbody></table>`;
-  el.innerHTML = `
-    <div class="mb-2 text-xs text-gray-400">
-      Enabled · ${escapeHtml(String(f.repos?.length || 0))} repo(s) · cap ${escapeHtml(String(f.limit))}
-    </div>
-    ${errorsHtml}
-    ${trajHtml}
-  `;
+  el.innerHTML = `${toggleHtml}${errorsHtml}${trajHtml}`;
+  wireFederationToggle();
+}
+
+function wireFederationToggle() {
+  const toggle = document.getElementById("il-federation-toggle");
+  const msg = document.getElementById("il-federation-toggle-msg");
+  if (!toggle) return;
+  toggle.addEventListener("change", async (ev) => {
+    const target = !!ev.target.checked;
+    toggle.disabled = true;
+    if (msg) { msg.textContent = "Saving…"; msg.className = "text-[11px] text-gray-400"; }
+    try {
+      const res = await fetch(`${API_BASE}/api/innerloop/federation/toggle`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: target }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (msg) { msg.textContent = "Saved"; msg.className = "text-[11px] text-green-400"; }
+      // Re-render panel with fresh server state (picks up repos/errors/trajectories).
+      await loadInnerLoop();
+    } catch (err) {
+      toggle.checked = !target; // revert
+      toggle.disabled = false;
+      if (msg) { msg.textContent = `Failed: ${err.message}`; msg.className = "text-[11px] text-red-400"; }
+    }
+  }, { once: true });
 }
 
 window.loadInnerLoop = loadInnerLoop;

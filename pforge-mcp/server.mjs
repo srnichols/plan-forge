@@ -5214,6 +5214,63 @@ export function createExpressApp() {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
+  // POST /api/innerloop/federation/toggle — flip brain.federation.enabled in .forge.json
+  // Body: { enabled: boolean }. Writes .forge.json atomically (read → merge → write).
+  // Returns the updated state (same shape as GET minus trajectories).
+  app.post("/api/innerloop/federation/toggle", (req, res) => {
+    try {
+      if (!req.body || typeof req.body !== "object" || typeof req.body.enabled !== "boolean") {
+        return res.status(400).json({ error: "body must be { enabled: boolean }" });
+      }
+      const configPath = resolve(PROJECT_DIR, ".forge.json");
+      let cfg = {};
+      if (existsSync(configPath)) {
+        try { cfg = JSON.parse(readFileSync(configPath, "utf-8")); } catch {
+          return res.status(500).json({ error: ".forge.json is not valid JSON" });
+        }
+      }
+      if (!cfg.brain || typeof cfg.brain !== "object") cfg.brain = {};
+      if (!cfg.brain.federation || typeof cfg.brain.federation !== "object") {
+        cfg.brain.federation = { enabled: false, repos: [] };
+      }
+      cfg.brain.federation.enabled = req.body.enabled;
+      if (!Array.isArray(cfg.brain.federation.repos)) cfg.brain.federation.repos = [];
+      writeFileSync(configPath, JSON.stringify(cfg, null, 2) + "\n");
+      const updated = loadFederationConfig(PROJECT_DIR);
+      const errors = validateFederationConfig(PROJECT_DIR);
+      res.json({ enabled: updated.enabled, repos: updated.repos, configErrors: errors });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // POST /api/server/restart — exit the MCP/HTTP server process so the
+  // supervising MCP client (VS Code, etc.) respawns it with freshly-loaded
+  // code. Useful immediately after `pforge self-update` replaces files on
+  // disk but the running process still has the old code in memory.
+  //
+  // Guards: refuses while a plan run is active (same guard as self-update).
+  // Response returns 202 BEFORE the actual exit so the browser sees the ack.
+  let _lastRestartTs = 0;
+  const _RESTART_COOLDOWN_MS = 10 * 1000;
+  app.post("/api/server/restart", (_req, res) => {
+    try {
+      if (activeAbortController) {
+        return res.status(409).json({ error: "Cannot restart during active plan run", code: "ERR_RESTART_DURING_RUN" });
+      }
+      const now = Date.now();
+      if (now - _lastRestartTs < _RESTART_COOLDOWN_MS) {
+        const retryAfterMs = _RESTART_COOLDOWN_MS - (now - _lastRestartTs);
+        return res.status(429).json({ error: "Rate limited", retryAfterMs });
+      }
+      _lastRestartTs = now;
+      res.status(202).json({ ok: true, message: "Server exiting — the MCP client should respawn it automatically" });
+      // Flush the response, then exit. 500ms gives Express time to drain.
+      setTimeout(() => {
+        try { console.log("[restart] exiting on /api/server/restart request"); } catch {}
+        process.exit(0);
+      }, 500).unref?.();
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
   // ─── Phase-26 Slice 14: Dashboard UI state ──────────────────────────
   //
   // Stores per-user-machine dashboard preferences (welcome-card dismissal,

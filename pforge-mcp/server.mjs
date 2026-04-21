@@ -686,6 +686,21 @@ const TOOLS = [
     },
   },
   {
+    name: "forge_estimate_slice",
+    description: "Returns projected cost for a single slice under a chosen quorum mode. Cheaper than forge_estimate_quorum (which estimates the whole plan). Backed by cost-service.mjs estimateSlice(). Un-calibrated — no run-level historical correction factor applied.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        planPath: { type: "string", description: "Path to the plan Markdown file, relative to the project root." },
+        sliceNumber: { type: ["string", "number"], description: "Slice identifier (numeric or alphanumeric, e.g. 4 or '2A')." },
+        mode: { type: "string", enum: ["auto", "power", "speed", "false"], description: "Quorum mode to project under (default: 'auto')." },
+        model: { type: "string", description: "Base model for pricing (default: 'claude-sonnet-4.5')." },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+      required: ["planPath", "sliceNumber"],
+    },
+  },
+  {
     name: "forge_capabilities",
     description: "Machine-readable API surface — returns all MCP tools with semantic metadata (intent, prerequisites, errors, cost), CLI commands, workflow graphs, config schema, dashboard info, and installed extensions. Agents call this once on session start for full discoverability.",
     inputSchema: {
@@ -1538,6 +1553,7 @@ function executeTool(name, args) {
     case "forge_plan_status":
     case "forge_cost_report":
     case "forge_estimate_quorum":
+    case "forge_estimate_slice":
     case "forge_health_trend":
     case "forge_alert_triage":
     case "forge_capabilities":
@@ -1740,6 +1756,55 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       await broadcastLiveGuard("forge_estimate_quorum", "OK", Date.now() - t0, {
         recommended: result.recommended,
         sliceCount: result.auto?.totalSliceCount ?? 0,
+      });
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Estimate error: ${err.message}` }], isError: true };
+    }
+  }
+
+  if (name === "forge_estimate_slice") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      if (!args.planPath || typeof args.planPath !== "string") {
+        return { content: [{ type: "text", text: "forge_estimate_slice: planPath (string) is required" }], isError: true };
+      }
+      if (args.sliceNumber === undefined || args.sliceNumber === null || args.sliceNumber === "") {
+        return { content: [{ type: "text", text: "forge_estimate_slice: sliceNumber is required" }], isError: true };
+      }
+      const planFullPath = resolve(cwd, args.planPath);
+      if (!existsSync(planFullPath)) {
+        return { content: [{ type: "text", text: `PLAN_NOT_FOUND: ${args.planPath}` }], isError: true };
+      }
+      const { parsePlan } = await import("./orchestrator.mjs");
+      const { estimateSlice } = await import("./cost-service.mjs");
+      let plan;
+      try {
+        plan = parsePlan(planFullPath, cwd);
+      } catch (err) {
+        return { content: [{ type: "text", text: `PLAN_PARSE_FAILED: ${err.message}` }], isError: true };
+      }
+      let result;
+      try {
+        result = estimateSlice({
+          plan,
+          sliceNumber: args.sliceNumber,
+          mode: args.mode ?? "auto",
+          model: args.model ?? "claude-sonnet-4.5",
+          cwd,
+        });
+      } catch (err) {
+        const msg = String(err?.message || err);
+        if (msg.includes("not found in plan")) {
+          return { content: [{ type: "text", text: `SLICE_NOT_FOUND: ${msg}` }], isError: true };
+        }
+        throw err;
+      }
+      await broadcastLiveGuard("forge_estimate_slice", "OK", Date.now() - t0, {
+        sliceNumber: String(args.sliceNumber),
+        mode: args.mode ?? "auto",
+        quorumEligible: result.quorumEligible,
       });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
@@ -5880,6 +5945,10 @@ export function createExpressApp() {
     // runPforge() (no CLI counterpart). Added here so the HTTP bridge reaches
     // the MCP handler.
     "forge_estimate_quorum",
+    // Phase-27.2 Slice 3 — forge_estimate_slice is MCP-native (no CLI
+    // counterpart). Adding here so /api/tool/forge_estimate_slice reaches
+    // the MCP handler instead of falling through to runPforge().
+    "forge_estimate_slice",
     "forge_capabilities", "forge_memory_capture",
     // Phase TEMPER-01 Slice 01.2 — Tempering tools handle their own IO
     // via tempering.mjs; they are MCP-native and must not be shelled

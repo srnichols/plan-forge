@@ -345,9 +345,48 @@ describe("http-bridge coverage: every MCP-handled tool is in MCP_ONLY_TOOLS (Pha
     const REQUIRED = [
       // Phase-27.1 Slice 2b — carryover defect from Phase-27 Slice 6
       "forge_estimate_quorum",
+      // Phase-27.2 Slice 3 — registered the same way as forge_estimate_quorum;
+      // included here so the Slice 2b coverage guard stays honest for it too.
+      "forge_estimate_slice",
     ];
     for (const tool of REQUIRED) {
       expect(inSet.has(tool), `${tool} is missing from MCP_ONLY_TOOLS — HTTP bridge will fall through to runPforge`).toBe(true);
     }
+  });
+});
+
+describe("forge_estimate_slice registration (Phase-27.2 Slice 3)", () => {
+  it("TOOL_METADATA.forge_estimate_slice declares required shape", async () => {
+    const { TOOL_METADATA } = await import("../capabilities.mjs");
+    const meta = TOOL_METADATA.forge_estimate_slice;
+    expect(meta, "forge_estimate_slice missing from TOOL_METADATA").toBeDefined();
+    expect(meta.addedIn).toBe("2.61.0");
+    expect(meta.agentGuidance).toMatch(/single slice/i);
+    expect(Array.isArray(meta.intent)).toBe(true);
+    expect(meta.intent).toContain("slice");
+    expect(meta.errors).toHaveProperty("PLAN_NOT_FOUND");
+    expect(meta.errors).toHaveProperty("SLICE_NOT_FOUND");
+  });
+
+  it("tools.json includes forge_estimate_slice with planPath + sliceNumber required", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const toolsJson = JSON.parse(readFileSync(resolve(import.meta.dirname, "..", "tools.json"), "utf-8"));
+    const entry = toolsJson.find((t) => t.name === "forge_estimate_slice");
+    expect(entry, "forge_estimate_slice missing from tools.json").toBeDefined();
+    expect(entry.inputSchema.required).toEqual(expect.arrayContaining(["planPath", "sliceNumber"]));
+    expect(entry.inputSchema.properties.mode.enum).toEqual(["auto", "power", "speed", "false"]);
+  });
+
+  it("server.mjs registers forge_estimate_slice in tool list and dispatcher switch", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const serverSrc = readFileSync(resolve(import.meta.dirname, "..", "server.mjs"), "utf-8");
+    // Tool list entry
+    expect(serverSrc).toMatch(/name:\s*"forge_estimate_slice"/);
+    // Switch-case (case label on its own line)
+    expect(serverSrc).toMatch(/case\s+"forge_estimate_slice"\s*:/);
+    // Handler body
+    expect(serverSrc).toMatch(/if\s*\(\s*name\s*===\s*"forge_estimate_slice"\s*\)/);
   });
 });

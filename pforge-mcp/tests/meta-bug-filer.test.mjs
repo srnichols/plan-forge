@@ -3,7 +3,7 @@
  * Phase-28.3 Slice 2.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   fileMetaBug,
   computeMetaBugHash,
@@ -419,5 +419,4 @@ describe("fileMetaBug — body content", () => {
   });
 });
 
-// Needed for afterEach
-import { afterEach } from "vitest";
+

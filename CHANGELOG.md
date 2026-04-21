@@ -7,6 +7,38 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.61.0] — 2026-04-20 — Cost Projection UI + Per-Slice Estimator
+
+> **Minor release — surfaces cost projection into the operator dashboard and gives agents a per-slice entry point.** Follows the Phase-27.1 dogfood session where `forge_estimate_quorum` produced honest numbers but the dashboard had no way to show them, and agents had to estimate an entire plan just to price one slice. Additive only — existing `forge_estimate_quorum` signature and return shape unchanged; new `slices[]` field under each mode is backward-compatible. Also includes a calibration report documenting that the current `scoreSliceComplexity` threshold of 5 selects zero slices on every real plan in the repo — evidence-gathering for a future scorer rewrite, no scoring changes ship here.
+
+### Added
+
+- **`forge_estimate_slice` MCP tool** — returns projected cost for a single slice under a chosen quorum mode (`auto` / `power` / `speed` / `false`). Cheaper than `forge_estimate_quorum` (which estimates the whole plan). Wired in `capabilities.mjs`, `tools.json`, and `server.mjs` — including the `MCP_ONLY_TOOLS` Set (Phase-27.1 Slice 2b lesson carried forward so the HTTP bridge reaches the handler). Errors: `PLAN_NOT_FOUND`, `SLICE_NOT_FOUND`. Agent guidance: *"Use this when you need cost for a single slice — cheaper than forge_estimate_quorum."* (Phase-27.2 Slices 1 + 3)
+- **`cost-service.estimateSlice({plan, sliceNumber, mode, model, cwd})`** — backing function for the new MCP tool. Returns `{estimatedCostUSD, baseCostUSD, overheadUSD, complexityScore, model, quorumEligible, rationale, generatedAt}`. Un-calibrated — no run-level historical correction factor applied (documented in JSDoc; a single slice doesn't provide enough context to re-derive the factor). (Phase-27.2 Slice 1)
+- **`buildQuorumConfigForMode(mode)` helper** — extracted from `estimateQuorum` so `estimateSlice` and `estimateQuorum` always agree on which models, thresholds, and auto flags each mode implies. Pure refactor; no behavior change. (Phase-27.2 Slice 1)
+- **Per-slice breakdown under each `forge_estimate_quorum` mode** — additive `slices: [{sliceNumber, projectedCostUSD, complexityScore, quorumEligible}]` array on each mode summary. Existing top-level keys unchanged. Consumers ignoring the new field keep working; the dashboard uses it to populate the projected-cost badge without a second round-trip. (Phase-27.2 Slice 2)
+- **Dashboard projected-cost badge** — 💵 ~$0.xxxx on every slice card, next to the existing complexity ⚙ and spend 💰 badges. Order left-to-right: complexity → projected → spend. Tooltip names the active projection mode. Hydrated on plan-open from a single `forge_estimate_quorum` call, cached for the session. Dashboard works without the projection (badge simply doesn't render). (Phase-27.2 Slice 4)
+- **Dashboard plan-projection strip** — collapsible row at the top of the Progress tab showing the four quorum-mode estimates + the recommended mode. Expanded view adds per-mode `$cost · N/M quorum slices · $overhead` detail. When `.forge.json` sets `runtime.cost.budget`, any mode whose projection exceeds the cap renders `text-red-400` with an "Over budget" tooltip. (Phase-27.2 Slice 5)
+- **Projected→actual flourish** — once a slice completes, the projected badge stays visible beside the new actual-spend badge for 5 seconds, then fades out. Operator sees "expected vs actual" side-by-side before the card settles. CSS `transition-opacity` + `opacity-70`, no state machine. (Phase-27.2 Slice 6)
+- **`scoreSliceComplexity` distribution report** (`docs/research/scorecomplexity-distribution-2026-04.md`) — one-page calibration report documenting the score distribution across all 70 slices in the 7 repo plans. Key finding: threshold 5 catches **zero** slices on any real plan; 93% of slices score ≤ 2. Identifies three follow-up options (lower threshold 5→3, add file-count signal, or full scorer rewrite) for a future phase. No scoring changes ship in this release. (Phase-27.2 Slice 7)
+
+### Changed
+
+- **Dashboard cost UX: complexity → projected → actual** left-to-right on every slice card. Operator reads the row as "how hard the scorer thinks this is · what we expected it to cost · what it actually cost." The projected badge is a new third column; complexity and spend badges are unchanged.
+
+### Tests
+
+- `+33` tests total:
+  - `+4` in `tests/cost-service.test.mjs` — `estimateQuorum` per-slice breakdown schema (Slice 2), plus `forge_estimate_slice` registration coverage (Slice 3: TOOL_METADATA shape, tools.json schema, server.mjs tool-list/switch/handler wiring). Also updated the Phase-27.1 Slice 2b `MCP_ONLY_TOOLS` guard's `REQUIRED` array to include `forge_estimate_slice`.
+  - `+14` in `tests/estimate-slice.test.mjs` — per-slice estimator unit tests, mode coverage (auto/power/speed/false), error handling, parity with `estimatePlan` summed across all slices.
+  - `+21` in new `tests/dashboard-cost-projection.test.mjs` — file-contract tests for state shape, `fetchPlanProjection`, `hydrateSliceProjections`, badge markup + ordering, plan-projection strip, budget-cap highlighting, and projected→actual flourish semantics.
+
+### Upgrade notes
+
+- **No breaking changes.** `forge_estimate_quorum` return shape gains a `slices[]` field under each mode; existing fields (`mode`, `estimatedCostUSD`, `baseCostUSD`, `overheadUSD`, `quorumSliceCount`, `totalSliceCount`, `confidence`) are untouched. Consumers parsing the previous shape keep working.
+- **Dashboard requires no config.** The projected-cost badge and plan-projection strip activate automatically on plan-open. Set `runtime.cost.budget` in `.forge.json` to light up the over-budget red highlighting.
+- **`scoreSliceComplexity` is not changed.** The distribution report documents that the current threshold of 5 catches zero slices on real plans, but any scoring/threshold change is explicitly deferred to a future phase with its own scope contract.
+
 ## [2.60.1] — 2026-04-21 — Cost Service Hotfix (v2.60.0 follow-up)
 
 > **Patch release — closes three real bugs the v2.60.0 dogfood exposed, plus a carryover bridge defect from Phase-27 Slice 6.** When `forge_estimate_quorum` shipped in v2.60.0 and was pointed at real plans in `docs/plans/`, it produced numbers between $141–$218 for 11–17-slice plans — numerically close to the $146.57 figure the v2.59 agent was accused of fabricating. The tool-call forcing function was the real fix in v2.60.0; the v2.60.0 release notes were wrong to frame $146.57 as hallucination. What the dogfood exposed: (A) power and speed modes were producing *identical* overhead because the dry-run cost used the first-listed model's rate N times instead of pricing each leg by its own model; (B) `claude-opus-4.7` was absent from `MODEL_PRICING` and silently fell back to the sonnet rate, undercounting power-preset overhead; (C) the `auto` mode's complexity threshold was `7` — higher than any score real plans produce — so `auto` degenerated to `false` on every plan in the repo; (D) `forge_estimate_quorum` was missing from `server.mjs`'s `MCP_ONLY_TOOLS` Set (carryover from Phase-27 Slice 6), so `POST /api/tool/forge_estimate_quorum` fell through to `runPforge()`, which has no CLI counterpart for MCP-native tools.

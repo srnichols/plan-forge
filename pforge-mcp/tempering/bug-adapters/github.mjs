@@ -12,6 +12,7 @@
 
 import { resolve } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 
 // ─── Helpers (exported for tests) ─────────────────────────────────────
 
@@ -505,4 +506,209 @@ export function resolveSelfRepairRepo(config) {
     return { owner: "srnichols", repo: "plan-forge" };
   }
   return { owner: parts[0], repo: parts[1] };
+}
+
+// ─── Meta-bug filer with dedupe ───────────────────────────────────────
+
+/**
+ * Compute a stable 12-char hex hash for meta-bug deduplication.
+ * @param {string} bugClass - One of META_BUG_CLASSES
+ * @param {string} title    - Human-readable bug title
+ * @returns {string} 12-character hex hash
+ */
+export function computeMetaBugHash(bugClass, title) {
+  const normalized = title.toLowerCase().replace(/\s+/g, " ").trim();
+  return createHash("sha256")
+    .update(bugClass + ":" + normalized)
+    .digest("hex")
+    .slice(0, 12);
+}
+
+/**
+ * Search for an existing open meta-bug issue by hash.
+ * Tries `gh issue list` first, falls back to REST search API.
+ *
+ * @returns {Promise<{ issueNumber: number, url: string } | null>}
+ */
+async function findExistingMetaBug(hash, owner, repo, token, { execSync: execSyncFn, fetch: fetchFn, cwd }) {
+  // 1. Try gh CLI
+  if (typeof execSyncFn === "function") {
+    try {
+      const cmd = `gh issue list --repo "${owner}/${repo}" --label "self-repair" --state open --search "${hash}" --json number,url,title --limit 10`;
+      const raw = execSyncFn(cmd, {
+        encoding: "utf-8",
+        timeout: 30_000,
+        stdio: ["pipe", "pipe", "pipe"],
+        cwd,
+      }).trim();
+      if (raw) {
+        const issues = JSON.parse(raw);
+        const match = issues.find((i) => i.title?.includes(hash));
+        if (match) {
+          return { issueNumber: match.number, url: match.url };
+        }
+      }
+    } catch { /* gh CLI unavailable or failed — fall through to REST */ }
+  }
+
+  // 2. REST search fallback
+  if (token && typeof fetchFn === "function") {
+    try {
+      const q = encodeURIComponent(`repo:${owner}/${repo} label:self-repair state:open "${hash}" in:title`);
+      const res = await fetchFn(`https://api.github.com/search/issues?q=${q}&per_page=5`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+        },
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const match = (data.items || []).find((i) => i.title?.includes(hash));
+        if (match) {
+          return { issueNumber: match.number, url: match.html_url };
+        }
+      }
+    } catch { /* search failed — treat as no match */ }
+  }
+
+  return null;
+}
+
+/**
+ * Build the markdown body for a meta-bug issue.
+ */
+function buildMetaBugBody({ bugClass, symptom, workaround, filePaths, slice, plan, trajectoryExcerpt }) {
+  const sections = [];
+  sections.push(`## Class\n\n\`${bugClass}\``);
+  sections.push(`## Symptom\n\n${symptom}`);
+  if (workaround) {
+    sections.push(`## Workaround Applied\n\n${workaround}`);
+  }
+  if (filePaths?.length) {
+    sections.push(`## Files\n\n${filePaths.map((f) => `- \`${f}\``).join("\n")}`);
+  }
+  if (plan || slice) {
+    const parts = [];
+    if (plan) parts.push(`**Plan**: ${plan}`);
+    if (slice) parts.push(`**Slice**: ${slice}`);
+    sections.push(`## Reference\n\n${parts.join("\n")}`);
+  }
+  if (trajectoryExcerpt) {
+    sections.push(`## Context\n\n${trajectoryExcerpt}`);
+  }
+  return sections.join("\n\n");
+}
+
+/**
+ * File a meta-bug (self-repair) issue on GitHub with hash-based deduplication.
+ *
+ * If an open issue with the same hash exists, appends a comment instead of
+ * creating a duplicate. All errors return structured `{ ok: false, error }`.
+ *
+ * @param {object} params
+ * @param {string} params.class      - One of META_BUG_CLASSES
+ * @param {string} params.title      - Human-readable title
+ * @param {string} params.symptom    - What went wrong
+ * @param {string} [params.workaround] - Fix applied
+ * @param {string[]} [params.filePaths] - Affected files
+ * @param {string} [params.slice]    - Slice reference
+ * @param {string} [params.plan]     - Plan reference
+ * @param {string} [params.severity] - low|medium|high|critical
+ * @param {string} [params.trajectoryExcerpt] - Trajectory context
+ * @param {object} config            - Forge configuration
+ * @param {object} [deps]
+ * @returns {Promise<{ ok: boolean, issueNumber?: number, url?: string, deduped?: boolean, hash?: string, error?: string }>}
+ */
+export async function fileMetaBug(params, config, { execSync: execSyncFn, fetch: fetchFn = globalThis.fetch, cwd } = {}) {
+  try {
+    const bugClass = params?.class;
+    const title = params?.title;
+    const symptom = params?.symptom;
+
+    if (!bugClass || !title || !symptom) {
+      return { ok: false, error: "MISSING_REQUIRED_FIELDS" };
+    }
+
+    // Resolve token
+    const tokenResult = resolveGitHubToken(config, { execSync: execSyncFn, cwd });
+    if (!tokenResult.token) {
+      return { ok: false, error: "NO_TOKEN" };
+    }
+
+    // Resolve repo
+    const repoInfo = resolveSelfRepairRepo(config);
+    if (!repoInfo?.owner || !repoInfo?.repo) {
+      return { ok: false, error: "NO_REPO" };
+    }
+
+    const hash = computeMetaBugHash(bugClass, title);
+    const issueTitle = `[self-repair:${hash}] [${bugClass}] ${title}`;
+    const labels = [...SELF_REPAIR_LABELS, bugClass, params.severity || "medium"];
+    const body = buildMetaBugBody({
+      bugClass,
+      symptom,
+      workaround: params.workaround,
+      filePaths: params.filePaths,
+      slice: params.slice,
+      plan: params.plan,
+      trajectoryExcerpt: params.trajectoryExcerpt,
+    });
+
+    // Dedupe: check for existing open issue with this hash
+    const existing = await findExistingMetaBug(hash, repoInfo.owner, repoInfo.repo, tokenResult.token, {
+      execSync: execSyncFn,
+      fetch: fetchFn,
+      cwd,
+    });
+
+    if (existing) {
+      // Append comment with new workaround + slice ref
+      const commentParts = [];
+      if (params.workaround) commentParts.push(`## Workaround Applied\n\n${params.workaround}`);
+      if (params.slice || params.plan) {
+        const refs = [];
+        if (params.plan) refs.push(`**Plan**: ${params.plan}`);
+        if (params.slice) refs.push(`**Slice**: ${params.slice}`);
+        commentParts.push(`## Reference\n\n${refs.join("\n")}`);
+      }
+      commentParts.push(`_Duplicate occurrence detected at ${new Date().toISOString()}_`);
+
+      const commentResult = await addComment(
+        tokenResult.token,
+        repoInfo.owner,
+        repoInfo.repo,
+        existing.issueNumber,
+        commentParts.join("\n\n"),
+        { fetch: fetchFn },
+      );
+
+      if (commentResult?.error) {
+        return { ok: false, error: commentResult.error, hash };
+      }
+
+      return { ok: true, issueNumber: existing.issueNumber, url: existing.url, deduped: true, hash };
+    }
+
+    // No existing issue — create new one
+    let result = createIssueViaGh(repoInfo.owner, repoInfo.repo, issueTitle, body, labels, {
+      execSync: execSyncFn,
+      cwd,
+    });
+
+    if (!result) {
+      result = await createIssueViaRest(tokenResult.token, repoInfo.owner, repoInfo.repo, issueTitle, body, labels, {
+        fetch: fetchFn,
+      });
+    }
+
+    if (!result || result.error) {
+      return { ok: false, error: result?.error || "CREATE_FAILED", hash };
+    }
+
+    return { ok: true, issueNumber: result.issueNumber, url: result.url, deduped: false, hash };
+  } catch {
+    return { ok: false, error: "UNEXPECTED" };
+  }
 }

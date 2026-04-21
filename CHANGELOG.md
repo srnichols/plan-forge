@@ -7,6 +7,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [v2.63.1] — 2026-04-21 — Tempering Triage (Phase-28.5)
+
+> **Patch release — tempering run-directory sorting now uses mtime instead of alphabetical order, preventing stale baselines from shadowing recent runs. Also fixes touch-device CSS hover stickiness in docs nav dropdown.**
+
+### Fixed
+- **Tempering baselines `listRunDirs`** now sorts by mtime (newest-first) and filters for `run-*` prefix, preventing stale or non-run directories from corrupting triage results. (`pforge-mcp/tempering/baselines.mjs`)
+- **Docs nav dropdown** `:hover` gated behind `@media (hover: hover)` to prevent sticky menus on touch devices. (`docs/assets/shared.css`)
+
+### Tests
+- Added `tempering-baselines-sort.test.mjs` (mtime sort, prefix filter, empty-dir edge cases).
+
 ## [2.63.0] — 2026-04-21 — Forge-Master Studio (Phase-29)
 
 > **Feature release — Forge-Master Studio dashboard tab, route wiring, CLI subcommands, and capability surface update.**

@@ -19,7 +19,7 @@
 **[Website](https://planforge.software/)** · **[Shop Tour](https://planforge.software/shop-tour.html)** · **[Manual](https://planforge.software/manual/)** · **[Documentation](https://planforge.software/docs.html)** · **[FAQ](https://planforge.software/faq.html)** · **[Extensions](https://planforge.software/extensions.html)** · **[Spec Kit Interop](https://planforge.software/speckit-interop.html)**
 
 ```
-67 MCP Tools · 45+ CLI Commands · 19 Agents · 13 Skills · 9 Presets · 7 Adapters · 3285 Tests · v2.63.0
+67 MCP Tools · 45+ CLI Commands · 19 Agents · 13 Skills · 9 Presets · 7 Adapters · 3285 Tests · v2.63.1
 ```
 
 ---

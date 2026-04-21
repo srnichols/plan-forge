@@ -1335,6 +1335,7 @@ export function spawnWorker(prompt, options = {}) {
         ...(runPlanActive ? { PFORGE_RUN_PLAN_ACTIVE: "1" } : {}),
       },
       stdio: ["pipe", "pipe", "pipe"],
+      shell: process.platform === "win32",
     });
 
     // Track child for cleanup on parent exit

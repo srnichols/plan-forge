@@ -336,15 +336,20 @@
       </div>
 
       <!-- Forge-Master tools preview -->
-      <div class="mt-6 rounded-xl border border-amber-700/30 bg-amber-950/10 p-5">
+      <div id="forge-master" class="mt-6 rounded-xl border border-amber-700/30 bg-amber-950/10 p-5 scroll-mt-24">
         <div class="flex items-center gap-2 mb-3">
           <span class="text-amber-400">🧭</span>
-          <span class="text-sm font-semibold text-amber-400">Forge-Master (1 tool — v2.62+)</span>
+          <span class="text-sm font-semibold text-amber-400">Forge-Master Studio (1 tool + dashboard — v2.63+)</span>
           <span class="px-2 py-0.5 text-xs rounded-full bg-amber-900/40 text-amber-300 border border-amber-700/30">open-ended reasoning · read-only</span>
         </div>
-        <p class="text-xs text-slate-500 mb-3">A read-only reasoning orchestrator. Classifies user intent, retrieves OpenBrain memory context, and orchestrates other forge tools on the agent's behalf. Purpose-built for multi-step troubleshooting, plan status queries, and funneling ideas into Crucible smelts — without chaining tools by hand.</p>
+        <img src="assets/forge-master-studio-hero.webp"
+             alt="Forge-Master orchestrating ghostly apprentice-smiths at their anvils — a visual metaphor for multi-agent tool orchestration"
+             loading="lazy" decoding="async"
+             class="w-full rounded-lg border border-amber-700/20 mb-3" />
+        <p class="text-xs text-slate-500 mb-3">A read-only reasoning orchestrator. Classifies user intent, retrieves OpenBrain memory context, and orchestrates other forge tools on the agent's behalf. Purpose-built for multi-step troubleshooting, plan status queries, and funneling ideas into Crucible smelts — without chaining tools by hand. Phase-29 added the <strong class="text-amber-300">Forge-Master Studio</strong> dashboard tab with a curated prompt gallery, streaming chat, and a live tool-call trace pane.</p>
         <div class="grid gap-2 md:grid-cols-2">
           <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-amber-400 text-xs">forge_master_ask</code><p class="text-xs text-slate-500 mt-1">Accepts a freeform message. Returns a structured reasoning response built from intent classification, memory retrieval, and allowlist-gated read-only tool calls.</p></div>
+          <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-amber-400 text-xs">Studio tab · prompt gallery · chat stream · tool-call trace</code><p class="text-xs text-slate-500 mt-1">Dashboard UI at <code class="text-amber-400">localhost:3100/dashboard</code>. Also available as CLI via <code class="text-amber-400">pforge forge-master status|logs</code>.</p></div>
         </div>
       </div>
 

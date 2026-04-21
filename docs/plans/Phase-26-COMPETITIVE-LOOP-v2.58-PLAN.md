@@ -1,5 +1,5 @@
 ---
-crucibleId: phase-26-competitive-loop-b8c4d0f2-3e5a-4962-af7b-9d4e2c3f5b6c
+crucibleId: grandfathered-0d145825-c6b4-437c-8936-7133df7b7927
 lane: full
 source: human
 ---

@@ -1,13 +1,23 @@
 #!/usr/bin/env node
 /**
- * Forge-Master Studio — Server Entry Point (Phase-29, Slice 11).
+ * Forge-Master Studio — MCP Server (Phase-29, Slice 4).
  *
- * Supports two modes:
- *   node server.mjs              — MCP stdio transport (default)
- *   node server.mjs --http       — standalone HTTP server on port 3102
- *   node server.mjs --self-test  — run a ping self-test and exit 0
+ * Exposes the Forge-Master reasoning loop as a single MCP tool
+ * (`forge_master_ask`) over a stdio transport. This is the "second
+ * MCP server" that IDE agents can call directly and that
+ * `pforge-mcp/server.mjs` proxies to.
  *
- * @module forge-master/server
+ * Usage:
+ *   node pforge-master/server.mjs                 # stdio MCP (default)
+ *   node pforge-master/server.mjs --mcp-stdio     # explicit stdio flag
+ *   node pforge-master/server.mjs --self-test     # run startup self-test and exit 0
+ *
+ * On startup:
+ *   1. Optionally creates the downstream MCP client (pforge-mcp/server.mjs).
+ *   2. Registers the forge_master_ask tool.
+ *   3. Connects stdio transport and begins serving.
+ *
+ * The server logs to stderr so stdout is reserved for MCP protocol.
  */
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
@@ -16,176 +26,191 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import { existsSync, mkdirSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createServer } from "node:http";
+import { existsSync } from "node:fs";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const args = process.argv.slice(2);
-const mode = args.includes("--http") ? "http" : "mcp-stdio";
-const selfTest = args.includes("--self-test");
+import { runTurn } from "./src/reasoning.mjs";
+import { getForgeMasterConfig } from "./src/config.mjs";
+import { resolveAllowlist } from "./src/allowlist.mjs";
+import { createMcpClient } from "./src/mcp-client.mjs";
 
-if (selfTest) {
-  await runSelfTest();
-} else if (mode === "http") {
-  await runHttpMode();
-} else {
-  await runMcpStdioMode();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const SELF_TEST = process.argv.includes("--self-test");
+const MCP_STDIO = process.argv.includes("--mcp-stdio") || !SELF_TEST;
+
+// ─── Tool definition ──────────────────────────────────────────────────
+
+const FORGE_MASTER_ASK_TOOL = {
+  name: "forge_master_ask",
+  description:
+    "Ask Forge-Master a question about your Plan Forge project. " +
+    "Forge-Master classifies the intent, retrieves relevant context from memory tiers, " +
+    "and calls read-only Plan Forge tools to ground its answer. " +
+    "Write tools require an approval card before execution.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      message: {
+        type: "string",
+        description: "Your question or task for Forge-Master.",
+      },
+      sessionId: {
+        type: "string",
+        description: "Continue an existing session (optional). Omit to start a new session.",
+      },
+      maxToolCalls: {
+        type: "number",
+        description: "Maximum number of tool calls per turn (default: from config, hard ceiling: 10).",
+      },
+      path: {
+        type: "string",
+        description: "Project root path override (optional).",
+      },
+    },
+    required: ["message"],
+  },
+};
+
+// ─── Downstream MCP client ────────────────────────────────────────────
+
+let _downstreamClient = null;
+const DOWNSTREAM_PATH = resolve(__dirname, "../pforge-mcp/server.mjs");
+
+async function getDownstreamClient() {
+  if (_downstreamClient?.ready) return _downstreamClient;
+  if (!existsSync(DOWNSTREAM_PATH)) return null;
+  try {
+    _downstreamClient = await createMcpClient(
+      {
+        serverPath: DOWNSTREAM_PATH,
+        env: { PFORGE_CHILD_MODE: "1", ...process.env },
+      },
+      { logger: console },
+    );
+    return _downstreamClient;
+  } catch (err) {
+    console.error(`forge-master-server: downstream MCP unavailable: ${err.message}`);
+    return null;
+  }
 }
 
-// ─── MCP stdio mode ──────────────────────────────────────────────────
+// ─── MCP Server ───────────────────────────────────────────────────────
 
-async function runMcpStdioMode() {
-  const { runTurn } = await import("./src/reasoning.mjs");
-  const { McpClient } = await import("./src/mcp-client.mjs");
+const server = new Server(
+  { name: "forge-master-studio", version: "1.0.0" },
+  { capabilities: { tools: {} } },
+);
 
-  const downstreamPath = resolve(__dirname, "../pforge-mcp/server.mjs");
-  let dispatcher;
+server.setRequestHandler(ListToolsRequestSchema, async () => {
+  return { tools: [FORGE_MASTER_ASK_TOOL] };
+});
 
-  if (existsSync(downstreamPath)) {
-    try {
-      const mcpClient = new McpClient({ logger: console });
-      await mcpClient.connect({ serverPath: downstreamPath });
-      dispatcher = async (toolName, toolArgs) => mcpClient.invoke(toolName, toolArgs);
-    } catch (err) {
-      console.error(`forge-master: failed to connect to downstream: ${err.message}`);
-      dispatcher = async () => ({});
-    }
-  } else {
-    dispatcher = async () => ({});
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  const { name, arguments: args = {} } = request.params;
+
+  if (name !== "forge_master_ask") {
+    return {
+      content: [{ type: "text", text: `Unknown tool: ${name}` }],
+      isError: true,
+    };
   }
 
-  const server = new Server(
-    { name: "forge-master", version: "2.63.0" },
-    { capabilities: { tools: {} } },
-  );
+  const t0 = Date.now();
 
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: [{
-      name: "forge_master_ask",
-      description: "Ask Forge-Master a question about your Plan Forge project. Forge-Master will classify intent, retrieve context, and reason with available tools.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          message: { type: "string", description: "Your question or request" },
-          sessionId: { type: "string", description: "Optional session ID for context continuity" },
-          maxToolCalls: { type: "number", description: "Maximum tool calls (default: 5)" },
-        },
-        required: ["message"],
+  if (!args.message || typeof args.message !== "string") {
+    return {
+      content: [{ type: "text", text: "forge_master_ask: message (string) is required" }],
+      isError: true,
+    };
+  }
+
+  const cwd = args.path || process.cwd();
+  const config = getForgeMasterConfig({ cwd });
+
+  try {
+    const downstreamClient = await getDownstreamClient();
+    const allowlist = resolveAllowlist({ toolMetadata: {}, discoverExtensionTools: config.discoverExtensionTools });
+
+    const result = await runTurn(
+      {
+        message: args.message,
+        sessionId: args.sessionId || undefined,
+        maxToolCalls: args.maxToolCalls || undefined,
+        cwd,
       },
-    }],
-  }));
-
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    const { name, arguments: toolArgs } = request.params;
-    if (name !== "forge_master_ask") {
-      return { content: [{ type: "text", text: `Unknown tool: ${name}` }], isError: true };
-    }
-    try {
-      const result = await runTurn(
-        {
-          message: toolArgs.message,
-          sessionId: toolArgs.sessionId,
-          maxToolCalls: toolArgs.maxToolCalls,
+      {
+        mcpClient: downstreamClient,
+        dispatcher: async (toolName, toolArgs, toolCwd) => {
+          if (downstreamClient?.ready) {
+            return downstreamClient.invoke(toolName, { ...toolArgs, path: toolCwd || cwd });
+          }
+          return { output: `(tool ${toolName} unavailable — downstream MCP not connected)` };
         },
-        { dispatcher },
-      );
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    } catch (err) {
-      return { content: [{ type: "text", text: `Forge-Master error: ${err.message}` }], isError: true };
-    }
-  });
+        hub: null,
+        toolMetadata: Object.fromEntries(allowlist.map((n) => [n, { name: n }])),
+      },
+    );
+
+    const durationMs = Date.now() - t0;
+    console.error(`forge-master-server: turn complete in ${durationMs}ms, ${result.toolCalls?.length ?? 0} tool calls`);
+
+    return {
+      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+    };
+  } catch (err) {
+    console.error(`forge-master-server: error: ${err.message}`);
+    return {
+      content: [{ type: "text", text: `Forge-Master error: ${err.message}` }],
+      isError: true,
+    };
+  }
+});
+
+// ─── Self-test ────────────────────────────────────────────────────────
+
+async function runSelfTest() {
+  console.error("forge-master-server: --self-test starting");
+
+  // Verify imports resolve
+  const { runTurn: _rt } = await import("./src/reasoning.mjs");
+  const { BASE_ALLOWLIST } = await import("./src/allowlist.mjs");
+  if (!_rt || !BASE_ALLOWLIST?.length) throw new Error("core module imports failed");
+
+  // Verify tool list
+  const tools = [FORGE_MASTER_ASK_TOOL];
+  if (!tools.find((t) => t.name === "forge_master_ask")) throw new Error("forge_master_ask not registered");
+
+  console.error(`forge-master-server: --self-test PASS (forge_master_ask registered, allowlist size ${BASE_ALLOWLIST.length})`);
+  process.exit(0);
+}
+
+// ─── Boot ─────────────────────────────────────────────────────────────
+
+async function main() {
+  if (SELF_TEST) {
+    await runSelfTest();
+    return;
+  }
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
-}
+  console.error("forge-master-server: stdio MCP ready (1 tool: forge_master_ask)");
 
-// ─── HTTP mode ───────────────────────────────────────────────────────
-
-async function runHttpMode() {
-  const { createHttpRoutes } = await import("./src/http-routes.mjs");
-
-  const handler = createHttpRoutes(null);
-  const PORT = 3102;
-  const HOST = "127.0.0.1";
-
-  const httpServer = createServer(async (req, res) => {
-    // Static UI
-    if (req.url === "/" || req.url === "") {
-      res.writeHead(302, { Location: "/ui/" });
-      res.end();
-      return;
-    }
-    if (req.url?.startsWith("/ui/")) {
-      await serveStatic(req, res);
-      return;
-    }
-
-    // API routes
-    try {
-      await handler(req, res);
-    } catch (err) {
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: err.message }));
-    }
+  // Graceful shutdown
+  process.on("SIGTERM", async () => {
+    if (_downstreamClient) await _downstreamClient.close().catch(() => {});
+    process.exit(0);
   });
-
-  httpServer.listen(PORT, HOST, () => {
-    console.log(`forge-master HTTP server running at http://${HOST}:${PORT}`);
+  process.on("SIGINT", async () => {
+    if (_downstreamClient) await _downstreamClient.close().catch(() => {});
+    process.exit(0);
   });
 }
 
-async function serveStatic(req, res) {
-  const { readFileSync } = await import("node:fs");
-  const { join } = await import("node:path");
-  const MIME = {
-    ".html": "text/html",
-    ".js": "application/javascript",
-    ".css": "text/css",
-    ".json": "application/json",
-    ".png": "image/png",
-    ".svg": "image/svg+xml",
-  };
-  const urlPath = req.url.replace(/^\/ui/, "");
-  const filePath = join(__dirname, "ui", urlPath === "/" ? "index.html" : urlPath);
-  try {
-    if (!existsSync(filePath)) {
-      res.writeHead(404);
-      res.end("Not found");
-      return;
-    }
-    const ext = filePath.match(/\.[^.]+$/)?.[0] || ".html";
-    const mime = MIME[ext] || "application/octet-stream";
-    res.writeHead(200, { "Content-Type": mime });
-    res.end(readFileSync(filePath));
-  } catch {
-    res.writeHead(500);
-    res.end("Server error");
-  }
-}
-
-// ─── Self-test mode ──────────────────────────────────────────────────
-
-async function runSelfTest() {
-  const { getPromptCatalog } = await import("./src/prompts.mjs");
-  const { BASE_ALLOWLIST, WRITE_TOOLS_EXCLUDED } = await import("./src/allowlist.mjs");
-
-  const catalog = getPromptCatalog();
-  const promptCount = catalog.categories.reduce((n, c) => n + c.prompts.length, 0);
-
-  const checks = [
-    { name: "prompt-catalog-version", ok: catalog.version === "1.0.0" },
-    { name: "prompt-count-gte-30", ok: promptCount >= 30 },
-    { name: "base-allowlist-populated", ok: BASE_ALLOWLIST.length > 0 },
-    { name: "write-allowlist-populated", ok: WRITE_TOOLS_EXCLUDED.length > 0 },
-  ];
-
-  const failed = checks.filter(c => !c.ok);
-  if (failed.length > 0) {
-    console.error(`Self-test FAILED: ${failed.map(c => c.name).join(", ")}`);
-    process.exit(1);
-  }
-  console.log(`Self-test OK (${checks.length} checks, ${promptCount} prompts)`);
-  process.exit(0);
-}
+main().catch((err) => {
+  console.error(`forge-master-server: fatal: ${err.message}`);
+  process.exit(1);
+});

@@ -100,6 +100,38 @@ export const WRITE_TOOLS_EXCLUDED = Object.freeze([
   "forge_generate_image",
 ]);
 
+// ─── Phase-29 Write Allowlist ────────────────────────────────────────
+
+/**
+ * Write tools admitted in Phase-29. Each entry carries approval metadata.
+ * `severity: "destructive"` tools require typed confirmation in the UI.
+ */
+export const WRITE_ALLOWLIST = Object.freeze([
+  { name: "forge_run_plan",                  requiresApproval: true, severity: "destructive" },
+  { name: "forge_crucible_finalize",         requiresApproval: true, severity: "destructive" },
+  { name: "forge_new_phase",                 requiresApproval: true, severity: "destructive" },
+  { name: "forge_bug_register",              requiresApproval: true, severity: "write" },
+  { name: "forge_bug_update_status",         requiresApproval: true, severity: "write" },
+  { name: "forge_tempering_approve_baseline",requiresApproval: true, severity: "write" },
+  { name: "forge_incident_capture",          requiresApproval: true, severity: "write" },
+  { name: "forge_fix_proposal",              requiresApproval: true, severity: "write" },
+  { name: "forge_run_skill",                 requiresApproval: true, severity: "write" },
+  { name: "forge_review_add",                requiresApproval: true, severity: "write" },
+  { name: "forge_review_resolve",            requiresApproval: true, severity: "write" },
+  { name: "forge_notify_send",               requiresApproval: true, severity: "write" },
+  { name: "forge_notify_test",               requiresApproval: true, severity: "write" },
+  { name: "forge_memory_capture",            requiresApproval: true, severity: "write" },
+]);
+
+/**
+ * Full Phase-29 allowlist: Base (read) + Write tools, as a flat array of
+ * tool names. Suitable for use with `isAllowlisted()`.
+ */
+export const PHASE29_FULL_ALLOWLIST = Object.freeze([
+  ...BASE_ALLOWLIST,
+  ...WRITE_ALLOWLIST.map(t => t.name),
+]);
+
 /**
  * Per-tool usage hints injected into the system prompt so the reasoning
  * model knows when and why to call each tool.
@@ -145,41 +177,6 @@ export const USAGE_HINTS = Object.freeze({
   forge_runbook:          "Read the project runbook — operational procedures, escalation paths.",
   forge_deploy_journal:   "Read the deploy journal — recent deployments, rollbacks, incidents.",
 });
-
-// ─── Phase-29 Write Allowlist ────────────────────────────────────────
-
-/**
- * Write tools enabled in Phase-29 with approval card support.
- * Each entry carries severity and requiresApproval metadata.
- */
-export const WRITE_ALLOWLIST = Object.freeze([
-  { name: "forge_run_plan",                   severity: "high",   requiresApproval: true  },
-  { name: "forge_crucible_finalize",           severity: "medium", requiresApproval: true  },
-  { name: "forge_bug_register",               severity: "low",    requiresApproval: false },
-  { name: "forge_bug_update_status",          severity: "low",    requiresApproval: false },
-  { name: "forge_tempering_approve_baseline", severity: "medium", requiresApproval: true  },
-  { name: "forge_new_phase",                  severity: "high",   requiresApproval: true  },
-  { name: "forge_incident_capture",           severity: "medium", requiresApproval: false },
-  { name: "forge_fix_proposal",               severity: "low",    requiresApproval: false },
-  { name: "forge_run_skill",                  severity: "medium", requiresApproval: true  },
-  { name: "forge_review_add",                 severity: "low",    requiresApproval: false },
-  { name: "forge_review_resolve",             severity: "low",    requiresApproval: false },
-  { name: "forge_delegate_to_agent",          severity: "high",   requiresApproval: true  },
-  { name: "forge_notify_send",                severity: "low",    requiresApproval: false },
-  { name: "forge_notify_test",                severity: "low",    requiresApproval: false },
-  { name: "forge_memory_capture",             severity: "low",    requiresApproval: false },
-  { name: "forge_testbed_run",                severity: "medium", requiresApproval: true  },
-  { name: "forge_generate_image",             severity: "low",    requiresApproval: false },
-]);
-
-/**
- * Full Phase-29 allowlist: base read-only tools + Phase-29 write tools.
- * Spread to pass to isAllowlisted().
- */
-export const PHASE29_FULL_ALLOWLIST = Object.freeze([
-  ...BASE_ALLOWLIST,
-  ...WRITE_ALLOWLIST.map((t) => t.name),
-]);
 
 // ─── Dynamic Extension-Tool Discovery ───────────────────────────────
 

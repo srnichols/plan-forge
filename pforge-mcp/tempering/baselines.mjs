@@ -125,9 +125,13 @@ export function promoteBaseline(opts, cwd) {
     const artRoot = artifactsDir(cwd);
     if (existsSync(artRoot)) {
       const runs = readdirSync(artRoot)
-        .filter((d) => { try { return statSync(resolve(artRoot, d)).isDirectory(); } catch { return false; } })
-        .sort()
-        .reverse();
+        .filter((d) => {
+          if (!d.startsWith("run-")) return false;
+          try { return statSync(resolve(artRoot, d)).isDirectory(); } catch { return false; }
+        })
+        .map((d) => ({ name: d, mtimeMs: statSync(resolve(artRoot, d)).mtimeMs }))
+        .sort((a, b) => b.mtimeMs - a.mtimeMs)
+        .map((e) => e.name);
       for (const run of runs) {
         if (runId && run !== runId) continue;
         for (const scanner of ["ui-playwright", "visual-diff"]) {

@@ -104,3 +104,11 @@ SESSION RESUME CHECKLIST:
 - **Before each slice**: `search_thoughts("<slice topic>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "decision")` — load prior decisions, patterns, and implementation lessons relevant to the current slice
 - **After each slice**: `capture_thought("Slice N: <key decision or outcome>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "plan-forge-step-3-slice-N", type: "decision")` — persist decisions made during execution
 - **After completeness sweep**: `capture_thoughts([...lessons], project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "plan-forge-step-4-sweep", type: "convention")` — batch capture patterns, conventions, and lessons discovered
+
+---
+
+## Self-Repair Reporting
+
+If you had to work around a Plan Forge defect to complete a slice (brittle gate, orchestrator bug, prompt issue), call `forge_meta_bug_file` before ending the slice. This files a meta-bug against Plan Forge itself so the problem is captured and not repeated.
+
+See `.github/instructions/self-repair-reporting.instructions.md` for the three canonical defect classes, worked examples, and the full tool signature.

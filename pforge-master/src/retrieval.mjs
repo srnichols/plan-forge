@@ -12,7 +12,7 @@
  * @module forge-master/retrieval
  */
 
-import { recall } from "../brain.mjs";
+import { recall } from "../../pforge-mcp/brain.mjs";
 import { getForgeMasterConfig } from "./config.mjs";
 
 // ─── Constants ──────────────────────────────────────────────────────

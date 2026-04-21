@@ -7284,101 +7284,107 @@ async function main() {
     console.error(`[capabilities] Auto-generation failed: ${err.message} (non-fatal)`);
   }
 
-  // Start Express HTTP server for dashboard + REST API
-  try {
-    const app = createExpressApp();
-    app.listen(HTTP_PORT, "127.0.0.1", () => {
-      console.error(`Plan Forge Dashboard at http://127.0.0.1:${HTTP_PORT}/dashboard`);
-    });
-  } catch (err) {
-    console.error(`[http] Express server failed to start: ${err.message} (non-fatal)`);
+  if (!process.env.PFORGE_CHILD_MODE) {
+    // Start Express HTTP server for dashboard + REST API
+    try {
+      const app = createExpressApp();
+      app.listen(HTTP_PORT, "127.0.0.1", () => {
+        console.error(`Plan Forge Dashboard at http://127.0.0.1:${HTTP_PORT}/dashboard`);
+      });
+    } catch (err) {
+      console.error(`[http] Express server failed to start: ${err.message} (non-fatal)`);
+    }
   }
 
-  // Phase UPDATE-01 — non-blocking, best-effort update check.
-  // Runs once per boot, cached 24h. Honors PFORGE_NO_UPDATE_CHECK=1.
-  // Failures are silent so a bad network never impedes startup.
-  try {
-    const versionFile = resolve(PROJECT_DIR, "VERSION");
-    const current = existsSync(versionFile) ? readFileSync(versionFile, "utf-8").trim() : null;
-    if (current) {
-      // Delay 2s so startup logs stay clean and we don't race the hub.
-      setTimeout(() => {
-        checkForUpdate({ currentVersion: current, projectDir: PROJECT_DIR })
-          .then((r) => {
-            if (r && r.isNewer) {
-              console.error(`[update-check] A newer Plan Forge release is available: v${r.latest} (you are on v${r.current}). ${r.url}`);
-            }
-            // v2.53.1 — corrupt-install self-heal detection.
-            // Flags clients stuck on v2.50.0/v2.51.0/v2.52.0 broken tarballs.
-            if (r && r.latest) {
-              const corrupt = detectCorruptInstall({ currentVersion: current, latestVersion: r.latest });
-              if (corrupt.isCorrupt) {
-                console.error("");
-                console.error("  ┌──────────────────────────────────────────────────────────────┐");
-                console.error("  │  ⚠  CORRUPT INSTALL DETECTED                                 │");
-                console.error("  ├──────────────────────────────────────────────────────────────┤");
-                console.error(`  │  Local VERSION: ${current.padEnd(44)} │`);
-                console.error(`  │  Latest release: v${r.latest.padEnd(43)} │`);
-                console.error("  │                                                              │");
-                console.error("  │  Your install is from a broken release tarball that shipped  │");
-                console.error("  │  with a '-dev' VERSION file. Self-heal with:                 │");
-                console.error("  │                                                              │");
-                console.error("  │      pforge self-update --force                              │");
-                console.error("  │                                                              │");
-                console.error("  └──────────────────────────────────────────────────────────────┘");
-                console.error("");
-                // Emit hub event + dashboard state so the UI can show a banner.
-                try {
-                  if (activeHub && typeof activeHub.broadcast === "function") {
-                    activeHub.broadcast({
-                      type: "install:corrupt",
-                      severity: "high",
+  if (!process.env.PFORGE_CHILD_MODE) {
+    // Phase UPDATE-01 — non-blocking, best-effort update check.
+    // Runs once per boot, cached 24h. Honors PFORGE_NO_UPDATE_CHECK=1.
+    // Failures are silent so a bad network never impedes startup.
+    try {
+      const versionFile = resolve(PROJECT_DIR, "VERSION");
+      const current = existsSync(versionFile) ? readFileSync(versionFile, "utf-8").trim() : null;
+      if (current) {
+        // Delay 2s so startup logs stay clean and we don't race the hub.
+        setTimeout(() => {
+          checkForUpdate({ currentVersion: current, projectDir: PROJECT_DIR })
+            .then((r) => {
+              if (r && r.isNewer) {
+                console.error(`[update-check] A newer Plan Forge release is available: v${r.latest} (you are on v${r.current}). ${r.url}`);
+              }
+              // v2.53.1 — corrupt-install self-heal detection.
+              // Flags clients stuck on v2.50.0/v2.51.0/v2.52.0 broken tarballs.
+              if (r && r.latest) {
+                const corrupt = detectCorruptInstall({ currentVersion: current, latestVersion: r.latest });
+                if (corrupt.isCorrupt) {
+                  console.error("");
+                  console.error("  ┌──────────────────────────────────────────────────────────────┐");
+                  console.error("  │  ⚠  CORRUPT INSTALL DETECTED                                 │");
+                  console.error("  ├──────────────────────────────────────────────────────────────┤");
+                  console.error(`  │  Local VERSION: ${current.padEnd(44)} │`);
+                  console.error(`  │  Latest release: v${r.latest.padEnd(43)} │`);
+                  console.error("  │                                                              │");
+                  console.error("  │  Your install is from a broken release tarball that shipped  │");
+                  console.error("  │  with a '-dev' VERSION file. Self-heal with:                 │");
+                  console.error("  │                                                              │");
+                  console.error("  │      pforge self-update --force                              │");
+                  console.error("  │                                                              │");
+                  console.error("  └──────────────────────────────────────────────────────────────┘");
+                  console.error("");
+                  // Emit hub event + dashboard state so the UI can show a banner.
+                  try {
+                    if (activeHub && typeof activeHub.broadcast === "function") {
+                      activeHub.broadcast({
+                        type: "install:corrupt",
+                        severity: "high",
+                        current,
+                        latest: r.latest,
+                        reason: corrupt.reason,
+                        recommendedAction: corrupt.recommendedAction,
+                        detectedAt: new Date().toISOString(),
+                      });
+                    }
+                  } catch { /* silent */ }
+                  try {
+                    const forgeDir = resolve(PROJECT_DIR, ".forge");
+                    if (!existsSync(forgeDir)) mkdirSync(forgeDir, { recursive: true });
+                    const statePath = resolve(forgeDir, "install-health.json");
+                    writeFileSync(statePath, JSON.stringify({
+                      isCorrupt: true,
                       current,
                       latest: r.latest,
                       reason: corrupt.reason,
                       recommendedAction: corrupt.recommendedAction,
                       detectedAt: new Date().toISOString(),
-                    });
-                  }
-                } catch { /* silent */ }
-                try {
-                  const forgeDir = resolve(PROJECT_DIR, ".forge");
-                  if (!existsSync(forgeDir)) mkdirSync(forgeDir, { recursive: true });
-                  const statePath = resolve(forgeDir, "install-health.json");
-                  writeFileSync(statePath, JSON.stringify({
-                    isCorrupt: true,
-                    current,
-                    latest: r.latest,
-                    reason: corrupt.reason,
-                    recommendedAction: corrupt.recommendedAction,
-                    detectedAt: new Date().toISOString(),
-                  }, null, 2), "utf-8");
-                } catch { /* silent */ }
-              } else {
-                // Clear any stale corrupt flag from a prior healed session.
-                try {
-                  const statePath = resolve(PROJECT_DIR, ".forge", "install-health.json");
-                  if (existsSync(statePath)) {
-                    writeFileSync(statePath, JSON.stringify({ isCorrupt: false, current, latest: r.latest, healedAt: new Date().toISOString() }, null, 2), "utf-8");
-                  }
-                } catch { /* silent */ }
+                    }, null, 2), "utf-8");
+                  } catch { /* silent */ }
+                } else {
+                  // Clear any stale corrupt flag from a prior healed session.
+                  try {
+                    const statePath = resolve(PROJECT_DIR, ".forge", "install-health.json");
+                    if (existsSync(statePath)) {
+                      writeFileSync(statePath, JSON.stringify({ isCorrupt: false, current, latest: r.latest, healedAt: new Date().toISOString() }, null, 2), "utf-8");
+                    }
+                  } catch { /* silent */ }
+                }
               }
-            }
-          })
-          .catch(() => { /* silent */ });
-      }, 2000).unref?.();
+            })
+            .catch(() => { /* silent */ });
+        }, 2000).unref?.();
+      }
+    } catch { /* silent */ }
+  }
+
+  if (!process.env.PFORGE_CHILD_MODE) {
+    // Start WebSocket hub BEFORE stdio transport — ensures activeHub is set before any tool calls arrive
+    try {
+      activeHub = await createHub({ cwd: PROJECT_DIR });
+      console.error(`Plan Forge WebSocket hub running on port ${activeHub.port}`);
+
+      // Start event file watcher to bridge orchestrator events → dashboard
+      activeEventWatcher = startEventFileWatcher(activeHub, PROJECT_DIR);
+    } catch (err) {
+      console.error(`[hub] WebSocket hub failed to start: ${err.message} (non-fatal)`);
     }
-  } catch { /* silent */ }
-
-  // Start WebSocket hub BEFORE stdio transport — ensures activeHub is set before any tool calls arrive
-  try {
-    activeHub = await createHub({ cwd: PROJECT_DIR });
-    console.error(`Plan Forge WebSocket hub running on port ${activeHub.port}`);
-
-    // Start event file watcher to bridge orchestrator events → dashboard
-    activeEventWatcher = startEventFileWatcher(activeHub, PROJECT_DIR);
-  } catch (err) {
-    console.error(`[hub] WebSocket hub failed to start: ${err.message} (non-fatal)`);
   }
 
   // MCP stdio transport — AFTER hub so broadcastLiveGuard has a hub to send to
@@ -7390,16 +7396,18 @@ async function main() {
     console.error("Plan Forge Dashboard-only mode (no MCP stdio)");
   }
 
-  // Phase-28.4: schedule background drain of OpenBrain queue ~3s after start
-  try {
-    if (__shouldDrainOnInit()) {
-      setTimeout(() => {
-        runDrainPass(PROJECT_DIR, "initialize-drain", activeHub)
-          .then(r => console.error(`[drain] initialize-drain: ${JSON.stringify(r)}`))
-          .catch(e => console.error(`[drain] initialize-drain failed: ${e.message || e}`));
-      }, 3000);
-    }
-  } catch { /* setTimeout registration must never crash startup */ }
+  if (!process.env.PFORGE_CHILD_MODE) {
+    // Phase-28.4: schedule background drain of OpenBrain queue ~3s after start
+    try {
+      if (__shouldDrainOnInit()) {
+        setTimeout(() => {
+          runDrainPass(PROJECT_DIR, "initialize-drain", activeHub)
+            .then(r => console.error(`[drain] initialize-drain: ${JSON.stringify(r)}`))
+            .catch(e => console.error(`[drain] initialize-drain failed: ${e.message || e}`));
+        }, 3000);
+      }
+    } catch { /* setTimeout registration must never crash startup */ }
+  }
 
   // Start Bridge (connects to hub as a WS client; activates if bridge config present)
   try {

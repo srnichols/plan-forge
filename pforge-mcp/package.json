@@ -1,6 +1,6 @@
 {
   "name": "plan-forge-mcp",
-  "version": "2.60.0-dev",
+  "version": "2.60.0",
   "description": "MCP server exposing Plan Forge operations as tools for AI agents",
   "main": "server.mjs",
   "type": "module",

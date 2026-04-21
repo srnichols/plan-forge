@@ -7,6 +7,39 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.60.0] — 2026-04-20 — Cost Service Consolidation + `forge_estimate_quorum`
+
+> **Minor release — one source of truth for pricing, one tool for quorum cost projection.** Motivated by a field incident where an agent, asked "how much will this plan cost under each quorum mode?", produced a four-row picker with a $146.57 headline for `power` mode — invented in chat by hand-multiplying its internal guess at per-slice tokens by an out-of-date rate card. The real `pforge run-plan --estimate --quorum=power` number for the same plan was under $10. The plan existed, the CLI estimator existed, but no MCP tool exposed it to agents, so the agent fabricated. This release fixes both halves: (1) pricing + cost math are extracted from three different files into a single `cost-service.mjs` module (DRY, so "update the rate card" means editing one file); (2) a new `forge_estimate_quorum` MCP tool returns all four quorum-mode estimates in one call, with explicit agent guidance in `copilot-instructions.md` telling agents to call the tool instead of computing in chat. Tied to Karpathy's verifiability principle — numbers the user sees must come from code that can be replayed, not from model arithmetic.
+
+### Added
+
+- **`pforge-mcp/cost-service.mjs`** — new module, single source of truth for all pricing and cost math. Exports `MODEL_PRICING` (the rate card), `getPricing(model)`, `priceSlice(tokens, worker)` (drop-in for the old `calculateSliceCost`), `priceRun(sliceResults)` (drop-in for `buildCostBreakdown`), `estimatePlan(plan, model, cwd, quorumConfig, resumeFrom)` (drop-in for `buildEstimate`), and `estimateQuorum({plan, cwd, resumeFrom, defaultModel})` which returns all four modes (`auto` / `power` / `speed` / `false`) plus a `recommended` field in one call.
+- **`forge_estimate_quorum` MCP tool** — exposes `cost-service.estimateQuorum` over the MCP surface. Wired in `capabilities.mjs` (with `agentGuidance` telling agents to prefer this tool over hand-computed costs), `tools.json` (schema + example), and `server.mjs` (dedicated async handler that resolves `planPath`, parses the plan, runs the estimator, broadcasts a LiveGuard event, and returns JSON).
+- **Regression guard** — `tests/cost-service.test.mjs` includes a named "REGRESSION GUARD: power mode on 6 trivial heuristic slices stays under $25" test that will fail loudly if the estimator ever drifts into the $100+ range the v2.59 agent fabricated. Plus 19 parity tests comparing every cost-service function byte-for-byte against the pre-refactor orchestrator behavior.
+- **`## Cost estimates` section** added to `.github/copilot-instructions.md` and `templates/copilot-instructions.md.template`: "Cost estimates come from tools, not from chat math. Call `forge_estimate_quorum` before showing any picker or decision matrix. Do not hand-compute quorum costs." Carries the $146.57 incident as cautionary context.
+
+### Changed
+
+- **`pforge-mcp/orchestrator.mjs`** — the 313-line pricing block (`MODEL_PRICING`, `calculateSliceCost`, `buildCostBreakdown`, `buildEstimate`) is now a 24-line shim that re-exports `cost-service.mjs` functions. Preserves the exact public signatures so every caller (`pforge run-plan --estimate`, the autonomous executor, every test) keeps working. Shims use `export function X(...args) { return _Y(...args) }` rather than `export const X = _Y` because vitest's ESM module graph gives the latter a `undefined` binding under circular imports (orchestrator ↔ cost-service both need scoring/pricing primitives). Function declarations hoist; const aliases don't.
+- **`pforge-mcp/tempering/scanners/visual-diff.mjs`** — the local 6-entry rate table and inline `estimateCost()` function are deleted. The remaining 6-line adapter delegates to `cost-service.priceSlice` so visual-diff is no longer silently out of sync with orchestrator pricing when a rate changes.
+- **Orchestrator exports** — `aggregateModelStats` and `QUORUM_PRESETS` are now exported so `cost-service.mjs` can use them without duplicating their logic.
+
+### Fixed
+
+- **Duplicate rate cards drift silently.** Before this release, pricing lived in three places: `orchestrator.mjs` `MODEL_PRICING`, `visual-diff.mjs`'s local `rates` object, and implicitly in any caller that did its own token-times-dollar math. Updating Claude Sonnet 4.6's input price meant finding and editing all three. Now it means editing one object in one file.
+- **Agents could fabricate dollar amounts without tool backing.** The previous MCP surface exposed `forge_cost_report` (actuals from prior runs) but no projection tool. Agents asked to estimate upcoming plan cost either said "I can't estimate without running" or — more dangerously — invented numbers. `forge_estimate_quorum` closes the gap and the new `## Cost estimates` instructions make the expectation explicit.
+- **`estimateQuorum` hardening for null `cwd`.** `estimateQuorum({plan, cwd: null, ...})` now defaults `cwd` to `process.cwd()` before passing it down to `scoreSliceComplexity → getHistoricalFailureRate`, which previously crashed on `resolve(null, "...")`. Callers that pass an explicit `cwd` are unchanged.
+
+### Test delta
+
+- `+20` tests (`tests/cost-service.test.mjs`), total `2913 / 2913` green. The 20 include the REGRESSION GUARD named above plus parity tests for every public function in `cost-service.mjs` against its pre-refactor orchestrator behavior.
+
+### Upgrade notes
+
+- **Public API unchanged.** `orchestrator.mjs` still exports `MODEL_PRICING`, `calculateSliceCost`, `buildCostBreakdown`, `buildEstimate`. Every pre-v2.60 caller keeps working without edits.
+- **If you imported `MODEL_PRICING` directly**, the value is now re-exported from `cost-service.mjs` and identical byte-for-byte. No changes required.
+- **If you were reading `visual-diff.mjs`'s local rates**, they're gone — read `cost-service.MODEL_PRICING` instead.
+
 ## [2.59.2] — 2026-04-20 — CLI Papercuts & Smith Downstream Noise
 
 > **Patch release — follow-up to v2.59.1 based on field feedback.** Fixes three cosmetic-but-noisy PowerShell `pforge` bugs that emitted non-zero exit codes on successful operations, one UX gap on the update prompt, four smith warnings that fired spuriously on downstream consumer projects, and one latent `ContainsKey($null)` crash when `.forge.json` omits the `preset` field. No functional changes to orchestrator, MCP tools, setup, or runtime behavior.

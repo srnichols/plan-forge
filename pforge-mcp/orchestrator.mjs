@@ -119,7 +119,7 @@ class OrchestratorEventBus extends EventEmitter {
       "slice-failed", "slice-escalated", "run-completed", "run-aborted",
       "quorum-dispatch-started", "quorum-leg-completed", "quorum-review-completed",
       "skill-started", "skill-step-started", "skill-step-completed", "skill-completed",
-      "slice-model-routed",
+      "slice-model-routed", "self-repair-missed",
     ];
     for (const evt of events) {
       this.on(evt, (data) => this.handler.handle({ type: evt, data, timestamp: new Date().toISOString() }));
@@ -1550,6 +1550,43 @@ export function detectSilentWorkerFailure(workerResult, mode, sliceNumber) {
       `check worker-capabilities.json baseArgs for unsupported flags.`;
   }
   return null;
+}
+
+// ─── Phase-28.3 Slice 4: Post-slice advisory scanner ─────────────────
+//
+// Non-blocking scan of completed slice trajectory for self-repair markers.
+// If markers are present but no forge_meta_bug_file call was made during
+// the slice, emit a `self-repair-missed` advisory to events.log.
+// Pure advisory — does NOT change slice status, does NOT auto-file.
+
+const SELF_REPAIR_MARKERS = /plan was wrong|fixed the plan|gate pattern|brittle gate|workaround|hand-fix|plan forge bug|orchestrator bug/i;
+
+/**
+ * Detect whether a completed slice likely performed self-repair work
+ * but did not file a meta-bug via forge_meta_bug_file.
+ *
+ * @param {string|null} trajectoryContent - The trajectory text (last 200 lines).
+ * @param {string|null} workerOutput - Full worker stdout text.
+ * @returns {{ matched: string[] } | null} Matched markers, or null if no advisory needed.
+ */
+export function detectSelfRepairMissed(trajectoryContent, workerOutput) {
+  if (!trajectoryContent) return null;
+
+  // Scan trajectory for self-repair markers
+  const lines = trajectoryContent.split("\n").slice(-200);
+  const matched = [];
+  for (const line of lines) {
+    const m = line.match(SELF_REPAIR_MARKERS);
+    if (m) matched.push(m[0]);
+  }
+  if (matched.length === 0) return null;
+
+  // Check if forge_meta_bug_file was called anywhere in worker output
+  const output = workerOutput || "";
+  if (output.includes("forge_meta_bug_file")) return null;
+
+  // Deduplicate matched markers
+  return { matched: [...new Set(matched)] };
 }
 
 /**
@@ -6269,6 +6306,31 @@ async function executeSlice(slice, options) {
       }
     } catch {
       // Non-fatal — trajectory persistence must never fail a passing slice
+    }
+  }
+
+  // Phase-28.3 Slice 4: Post-slice advisory — scan trajectory for self-repair
+  // markers. If markers found but no forge_meta_bug_file call, emit advisory.
+  // Non-blocking, non-fatal, does not change slice status.
+  if (status === "passed") {
+    try {
+      const trajectoryText = sliceResult.trajectoryPath
+        ? readFileSync(resolve(cwd, sliceResult.trajectoryPath), "utf8")
+        : null;
+      const advisory = detectSelfRepairMissed(trajectoryText, workerResult?.output);
+      if (advisory) {
+        const advisoryEvent = {
+          sliceId: slice.number,
+          markers: advisory.matched,
+          suggestion: "Consider calling forge_meta_bug_file to record this Plan Forge defect for future prevention.",
+        };
+        sliceResult.selfRepairAdvisory = advisoryEvent;
+        if (eventBus) {
+          eventBus.emit("self-repair-missed", advisoryEvent);
+        }
+      }
+    } catch {
+      // Non-fatal — advisory must never fail a passing slice
     }
   }
 

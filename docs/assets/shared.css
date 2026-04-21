@@ -50,9 +50,16 @@ nav a.nav-active { color: #f59e0b !important; }
    progressive enhancement for mouse users, but state is owned by JS via
    the .nav-dropdown-open class so touch and click-outside work correctly. */
 .nav-dropdown { display: none; }
-.nav-dropdown-trigger.nav-dropdown-open > .nav-dropdown,
-.nav-dropdown-trigger:hover > .nav-dropdown {
+.nav-dropdown-trigger.nav-dropdown-open > .nav-dropdown {
   display: block;
+}
+/* Hover-to-open is gated to real pointer devices only. On touch devices
+   the :hover state can stick after a tap and override the JS close,
+   leaving the menu visually open even after .nav-dropdown-open is gone. */
+@media (hover: hover) and (pointer: fine) {
+  .nav-dropdown-trigger:hover > .nav-dropdown {
+    display: block;
+  }
 }
 .nav-dropdown-trigger .nav-dropdown {
   padding-top: 0.5rem;

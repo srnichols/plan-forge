@@ -7,6 +7,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.62.3] — 2026-04-21 — OpenBrain Queue Drain
+
+> **Patch release — pending OpenBrain queue records now drain automatically on MCP server start, closing a silent data-loss gap where locally enqueued thoughts never reached long-term memory.** New pure drain orchestrator, I/O wrapper with atomic writes, REST endpoint, CLI command, and `forge_smith` warning row. Closes [#84](https://github.com/srnichols/plan-forge/issues/84).
+
+### Added
+
+- **`drainOpenBrainQueue(records, dispatcher, opts)` orchestrator** — pure function in `memory.mjs` that composes `partitionByBackoff`, calls an injected dispatcher per record, applies `applyDeliveryFailure` on failures, and returns structured `{ delivered, deferred, dlq, archive, stats }`. Honors `opts.maxBatch` (default 50). Zero filesystem. (Phase-28.4, Slice 1)
+- **`runDrainPass(cwd, source, hub)` I/O wrapper** — in `server.mjs`, reads the queue file, calls `drainOpenBrainQueue`, atomic-writes survivors (tmp + rename), appends archive/DLQ/stats, broadcasts `openbrain-flush` hub event. (Phase-28.4, Slice 2)
+- **MCP `initialize` drain hook** — schedules `runDrainPass` via `setTimeout(..., 3000)` once per server start. Skips when OpenBrain is not configured. Non-blocking, fire-and-forget, never crashes the server. (Phase-28.4, Slice 2)
+- **`POST /api/memory/drain` REST endpoint** — synchronous drain with `checkApprovalSecret` auth. Returns `{ ok, source, attempted, delivered, deferred, dlq, durationMs }`. 503 when OpenBrain not configured. (Phase-28.4, Slice 3)
+- **`pforge drain-memory` CLI command** — PowerShell and bash. POSTs to the local REST endpoint using the bridge approval secret. Prints a one-line summary. (Phase-28.4, Slice 3)
+- **`forge_smith` Memory drain warning row** — conditional `⚠ Drain:` line when pending count > threshold or oldest entry age > threshold. Thresholds configurable via `.forge.json#openbrain.drainWarn = { count: 10, ageHours: 24 }`. (Phase-28.4, Slice 4)
+
+### Tests
+
+- Phase-28.4 new tests: `drain-orchestrator.test.mjs` (happy/failure/DLQ/batch/mixed paths), `drain-io-wrapper.test.mjs` (atomic write, archive, stats, hub broadcast), `drain-rest-endpoint.test.mjs` (auth, 503, success/error responses), `smith-drain-warning.test.mjs` (thresholds, custom config, source assertions). Total test count: 3277.
+
 ## [2.62.2] — 2026-04-21 — Self-Repair Capture
 
 > **Patch release — adds automatic meta-bug filing when Plan Forge discovers and works around defects in its own plans, orchestrator, or prompts.** New MCP tool `forge_meta_bug_file` routes self-repair issues to a dedicated GitHub Issues lane with hash-based dedupe. A post-slice advisory scanner detects when an agent worked around a Plan Forge defect but forgot to file. New instruction file teaches agents when and how to fire the tool.

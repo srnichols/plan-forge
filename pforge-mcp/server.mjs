@@ -4636,6 +4636,53 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
       } catch { /* best-effort */ }
       output += `\n\nMemory:\n  L1 keys:         (session-scoped)\n  L2 store size:   ${l2DirCount} dirs\n  L3 queue depth:  ${l3QueueDepth}\n  L3 last sync:    ${l3LastSync}`;
+
+      // Phase-28.4 Slice 4 — drain warning row
+      try {
+        const drainWarnCfg = { count: 10, ageHours: 24 };
+        try {
+          const forgeJsonPath = resolve(smithCwd7, ".forge.json");
+          if (existsSync(forgeJsonPath)) {
+            const dwCfg = JSON.parse(readFileSync(forgeJsonPath, "utf-8"));
+            if (dwCfg?.openbrain?.drainWarn) {
+              if (typeof dwCfg.openbrain.drainWarn.count === "number") drainWarnCfg.count = dwCfg.openbrain.drainWarn.count;
+              if (typeof dwCfg.openbrain.drainWarn.ageHours === "number") drainWarnCfg.ageHours = dwCfg.openbrain.drainWarn.ageHours;
+            }
+          }
+        } catch { /* use defaults */ }
+
+        if (l3QueueDepth > 0) {
+          const queuePathDw = resolve(forgeDir, "openbrain-queue.jsonl");
+          const pendingRecords = [];
+          if (existsSync(queuePathDw)) {
+            const dwLines = readFileSync(queuePathDw, "utf-8").split("\n").filter(Boolean);
+            for (const line of dwLines) {
+              try {
+                const rec = JSON.parse(line);
+                if (rec._status === "pending") pendingRecords.push(rec);
+              } catch { /* skip */ }
+            }
+          }
+          if (pendingRecords.length > 0) {
+            const pendingTooMany = pendingRecords.length > drainWarnCfg.count;
+            let oldestAgeMs = 0;
+            for (const r of pendingRecords) {
+              if (r._enqueuedAt) {
+                const age = Date.now() - new Date(r._enqueuedAt).getTime();
+                if (age > oldestAgeMs) oldestAgeMs = age;
+              }
+            }
+            const oldestAgeHours = oldestAgeMs / 3600000;
+            const pendingTooOld = oldestAgeHours > drainWarnCfg.ageHours;
+            if (pendingTooMany || pendingTooOld) {
+              const ageStr = oldestAgeMs > 86400000 ? `${Math.round(oldestAgeMs / 86400000)}d`
+                : oldestAgeMs > 3600000 ? `${Math.round(oldestAgeMs / 3600000)}h`
+                : `${Math.round(oldestAgeMs / 60000)}m`;
+              output += `\n  \u26A0 Drain:         ${pendingRecords.length} pending (oldest: ${ageStr}). Run 'pforge drain-memory' or restart MCP.`;
+            }
+          }
+        }
+      } catch { /* drain warning best-effort */ }
     } catch { /* memory stats not available — skip */ }
 
     // Phase TESTBED-01 Slice 02 — Testbed row in smith output

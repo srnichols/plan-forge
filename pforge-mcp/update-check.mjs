@@ -175,6 +175,25 @@ export async function checkForUpdate({
  * Never throws. `latest` may be null if GitHub is unreachable — in that case
  * isCorrupt is false (err on the side of not alarming offline users).
  */
+/**
+ * Write a fresh cache entry after a successful self-update so the next
+ * `checkForUpdate` returns `isNewer: false` without hitting the network.
+ *
+ * @param {string} projectDir  Project root (parent of `.forge/`).
+ * @param {string} version     The version just installed.
+ */
+export function writeFreshCache(projectDir, version) {
+  if (!projectDir || !version) return;
+  const v = String(version).trim().replace(/^v/i, "");
+  if (!/^\d+\.\d+\.\d+/.test(v)) return;
+  writeCache(projectDir, {
+    latest: v,
+    checkedAt: new Date().toISOString(),
+    url: `https://github.com/srnichols/plan-forge/releases/tag/v${v}`,
+    publishedAt: null,
+  });
+}
+
 export function detectCorruptInstall({ currentVersion, latestVersion } = {}) {
   const result = {
     isCorrupt: false,

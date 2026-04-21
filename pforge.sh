@@ -1617,9 +1617,15 @@ with open('$config_path', 'w') as f:
     echo "Run 'pforge check' to validate the updated setup."
 
     # v2.53.1 — invalidate version caches so smith/dashboard pick up fresh state.
-    for cache_rel in ".forge/update-check.json" ".forge/version-check.json" ".forge/install-health.json"; do
+    for cache_rel in ".forge/version-check.json" ".forge/install-health.json"; do
         rm -f "$REPO_ROOT/$cache_rel" 2>/dev/null || true
     done
+    # Write a fresh update-check.json so the next check returns isNewer=false
+    # without hitting the network (Fix A — self-update invalidates cache).
+    node --input-type=module -e "
+import { writeFreshCache } from './pforge-mcp/update-check.mjs';
+writeFreshCache(process.argv[1], process.argv[2]);
+" "$REPO_ROOT" "$source_version" 2>/dev/null || true
 
     # Check if MCP files were updated — remind to reinstall deps
     local mcp_updated=false

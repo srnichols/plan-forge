@@ -13,7 +13,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync, existsSync
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-import { cachePath, compareVersions, checkForUpdate, detectCorruptInstall } from "../update-check.mjs";
+import { cachePath, compareVersions, checkForUpdate, detectCorruptInstall, writeFreshCache } from "../update-check.mjs";
 import { createExpressApp } from "../server.mjs";
 
 // ─── compareVersions ────────────────────────────────────────────
@@ -211,6 +211,52 @@ describe("/api/update-status", () => {
       if (prev === undefined) delete process.env.PFORGE_NO_UPDATE_CHECK;
       else process.env.PFORGE_NO_UPDATE_CHECK = prev;
     }
+  });
+});
+
+// ─── writeFreshCache (Fix A — self-update invalidates cache) ──────────
+
+describe("writeFreshCache", () => {
+  let dir;
+  beforeEach(() => { dir = mkdtempSync(join(tmpdir(), "pforge-freshcache-")); });
+  afterEach(() => { try { rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ } });
+
+  it("writes a cache file with the supplied version", () => {
+    writeFreshCache(dir, "2.62.0");
+    expect(existsSync(cachePath(dir))).toBe(true);
+    const saved = JSON.parse(readFileSync(cachePath(dir), "utf-8"));
+    expect(saved.latest).toBe("2.62.0");
+    expect(saved.checkedAt).toBeTruthy();
+    expect(saved.url).toMatch(/v2\.62\.0/);
+  });
+
+  it("strips leading v prefix", () => {
+    writeFreshCache(dir, "v2.62.0");
+    const saved = JSON.parse(readFileSync(cachePath(dir), "utf-8"));
+    expect(saved.latest).toBe("2.62.0");
+  });
+
+  it("self-update cache is served by checkForUpdate as isNewer=false", async () => {
+    writeFreshCache(dir, "2.62.0");
+    let fetchCalled = false;
+    const explode = async () => { fetchCalled = true; throw new Error("should not hit network"); };
+    const out = await checkForUpdate({
+      currentVersion: "2.62.0",
+      projectDir: dir,
+      fetchImpl: explode,
+      env: {},
+    });
+    expect(fetchCalled).toBe(false);
+    expect(out).not.toBeNull();
+    expect(out.fromCache).toBe(true);
+    expect(out.isNewer).toBe(false);
+  });
+
+  it("no-ops on missing inputs", () => {
+    expect(() => writeFreshCache(null, "2.62.0")).not.toThrow();
+    expect(() => writeFreshCache(dir, "")).not.toThrow();
+    expect(() => writeFreshCache(dir, "garbage")).not.toThrow();
+    expect(existsSync(cachePath(dir))).toBe(false);
   });
 });
 

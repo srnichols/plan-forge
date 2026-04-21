@@ -1856,12 +1856,21 @@ Files in this directory (except this README) are gitignored — they are runtime
 
     # v2.53.1 — invalidate version caches so smith/dashboard pick up fresh state.
     # Prevents stale "update available" banners after a successful heal.
-    foreach ($cacheFile in @(".forge/update-check.json", ".forge/version-check.json", ".forge/install-health.json")) {
+    foreach ($cacheFile in @(".forge/version-check.json", ".forge/install-health.json")) {
         $cachePath = Join-Path $RepoRoot $cacheFile
         if (Test-Path $cachePath) {
             try { Remove-Item -Force $cachePath -ErrorAction SilentlyContinue } catch { }
         }
     }
+    # Write a fresh update-check.json so the next check returns isNewer=false
+    # without hitting the network (Fix A — self-update invalidates cache).
+    try {
+        $freshCacheScript = @"
+import { writeFreshCache } from './pforge-mcp/update-check.mjs';
+writeFreshCache(process.argv[1], process.argv[2]);
+"@
+        & node --input-type=module -e $freshCacheScript $RepoRoot $sourceVersion 2>&1 | Out-Null
+    } catch { }
 
     # Auto-install MCP dependencies if MCP files were updated.
     # Bugs B & C fix: wrap both in @() so a single-hashtable $updates or

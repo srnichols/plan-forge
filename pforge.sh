@@ -74,6 +74,7 @@ COMMANDS:
   smith             Inspect your forge — environment, VS Code config, setup health, and common problems
   version-bump <v>  Update VERSION, package.json, docs/README/ROADMAP version badges to v<version>
   migrate-memory    Merge legacy *-history.json ledgers into canonical .jsonl siblings (idempotent)
+  drain-memory      Drain pending OpenBrain queue records to the configured OpenBrain server
   mcp-call <tool>   Invoke any MCP tool by name (e.g. forge_crucible_list) via the local MCP server
   tour              Guided walkthrough of your installed Plan Forge files
   help              Show this help message
@@ -4159,6 +4160,60 @@ console.log("\x1b[90mDon'\''t forget: Update CHANGELOG.md manually with release 
 '
 }
 
+# ─── Command: drain-memory (Phase-28.4 v2.62.3) ───────────────────────
+cmd_drain_memory() {
+    print_manual_steps "drain-memory" \
+        "POST to http://localhost:3100/api/memory/drain with bridge secret" \
+        "Drain pending OpenBrain queue records via the running MCP server" \
+        "Print summary of delivered/deferred/dlq counts"
+
+    local port=3100
+
+    # Read bridge secret
+    local secret=""
+    local secret_path="$REPO_ROOT/.forge/bridge-secret"
+    if [ -f "$secret_path" ]; then
+        secret=$(cat "$secret_path" | tr -d '[:space:]')
+    fi
+    if [ -z "$secret" ] && [ -n "$PFORGE_BRIDGE_SECRET" ]; then
+        secret="$PFORGE_BRIDGE_SECRET"
+    fi
+
+    local auth_header=""
+    if [ -n "$secret" ]; then
+        auth_header="-H \"Authorization: Bearer ${secret}\""
+    fi
+
+    local response
+    response=$(eval curl -sf -X POST "http://localhost:${port}/api/memory/drain" \
+        -H "\"Content-Type: application/json\"" \
+        ${auth_header}) || {
+        echo "ERROR: MCP server not running on port ${port}. Start with: node pforge-mcp/server.mjs" >&2
+        exit 1
+    }
+
+    echo "$response" | node -e "
+      const d = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
+      if (d.ok) {
+        console.log('');
+        console.log('\x1b[36m\u{1F4E4} Drain Memory\x1b[0m');
+        console.log('   Attempted: ' + d.attempted);
+        console.log('   \x1b[32mDelivered: ' + d.delivered + '\x1b[0m');
+        const defColor = d.deferred > 0 ? '\x1b[33m' : '';
+        const defReset = d.deferred > 0 ? '\x1b[0m' : '';
+        console.log('   ' + defColor + 'Deferred:  ' + d.deferred + defReset);
+        const dlqColor = d.dlq > 0 ? '\x1b[31m' : '';
+        const dlqReset = d.dlq > 0 ? '\x1b[0m' : '';
+        console.log('   ' + dlqColor + 'DLQ:       ' + d.dlq + dlqReset);
+        console.log('   \x1b[90mDuration:  ' + d.durationMs + 'ms\x1b[0m');
+        console.log('');
+      } else {
+        console.error('\x1b[31mERROR: Drain failed — ' + (d.error || 'unknown') + '\x1b[0m');
+        process.exit(1);
+      }
+    "
+}
+
 # ─── Command: migrate-memory (GX.5 v2.36) ──────────────────────────────
 # Port of Invoke-MigrateMemory from pforge.ps1. Merges legacy `*-history.json`
 # ledgers into their canonical `.jsonl` siblings. Idempotent; safe to re-run.
@@ -4634,6 +4689,7 @@ case "$COMMAND" in
     self-update)  cmd_self_update "$@" ;;
     version-bump) cmd_version_bump "$@" ;;
     migrate-memory) cmd_migrate_memory "$@" ;;
+    drain-memory) cmd_drain_memory "$@" ;;
     mcp-call)     cmd_mcp_call "$@" ;;
     tour)         cmd_tour ;;
     config)       cmd_config "$@" ;;

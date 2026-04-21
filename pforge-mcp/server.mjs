@@ -6669,6 +6669,22 @@ export function createExpressApp() {
     });
   });
 
+  // POST /api/memory/drain — manually drain pending OpenBrain queue records
+  //   Auth: Authorization: Bearer <bridge.approvalSecret>  OR  ?token=<secret>
+  //   Returns { ok, source, attempted, delivered, deferred, dlq, durationMs }
+  app.post("/api/memory/drain", async (req, res) => {
+    if (!checkApprovalSecret(req, res)) return;
+    if (!isOpenBrainConfigured(PROJECT_DIR)) {
+      return res.status(503).json({ ok: false, error: "OpenBrain is not configured." });
+    }
+    try {
+      const result = await runDrainPass(PROJECT_DIR, "rest-drain", activeHub);
+      res.json(result);
+    } catch (e) {
+      res.status(500).json({ ok: false, error: String(e?.message || e) });
+    }
+  });
+
   // Memory search presets API
   app.get("/api/memory/presets", (_req, res) => {
     try {

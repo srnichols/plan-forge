@@ -1767,6 +1767,12 @@ export const CLI_SCHEMA = {
       flags: { "--dry-run": { type: "boolean", description: "Preview without modifying files" } },
       examples: ["pforge migrate-memory", "pforge migrate-memory --dry-run"],
     },
+    "drain-memory": {
+      description: "Drain pending OpenBrain queue records via the local MCP server REST endpoint",
+      args: [],
+      flags: {},
+      examples: ["pforge drain-memory"],
+    },
     // ─── Testbed CLI (v2.52+) ───
     "testbed-happypath": {
       description: "Run all happy-path testbed scenarios sequentially with aggregated pass/fail summary",
@@ -2359,6 +2365,7 @@ export function buildCapabilitySurface(mcpTools, options = {}) {
         { method: "GET", path: "/api/memory", description: "OpenBrain connection status and endpoint" },
         { method: "POST", path: "/api/memory/search", description: "Search OpenBrain project memory. Body: { query, project?, limit? }" },
         { method: "POST", path: "/api/memory/capture", description: "Capture a thought into OpenBrain via REST (OpenClaw use). Auth: bridge.approvalSecret. Body: { content, project?, type?, source?, created_by? }" },
+        { method: "POST", path: "/api/memory/drain", description: "Manually drain pending OpenBrain queue records. Auth: bridge.approvalSecret. Returns { ok, attempted, delivered, deferred, dlq, durationMs }." },
         { method: "GET", path: "/api/bridge/status", description: "Bridge status — channels, pending approvals, stats" },
         { method: "POST", path: "/api/bridge/approve/:runId", description: "Receive approval callback. Auth: bridge.approvalSecret. Body: { action: 'approve'|'reject', approver? }" },
         { method: "GET", path: "/api/bridge/approve/:runId", description: "Browser-friendly approval link for Telegram inline buttons. Query: ?action=approve|reject&token=<secret>" },

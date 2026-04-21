@@ -89,6 +89,7 @@ function Show-Help {
     Write-Host "  quorum-analyze    Assemble a quorum analysis prompt from LiveGuard data for multi-model dispatch"
     Write-Host "  testbed-happypath Run all happy-path testbed scenarios sequentially with aggregated pass/fail summary"
     Write-Host "  migrate-memory    Migrate legacy .forge/memory/ entries into the L2 brain store"
+    Write-Host "  drain-memory      Drain pending OpenBrain queue records to the configured OpenBrain server"
     Write-Host "  mcp-call <tool>   Invoke any MCP tool by name (e.g. forge_crucible_list) via the local MCP server"
     Write-Host "  tour              Guided walkthrough of your installed Plan Forge files"
     Write-Host "  help              Show this help message"
@@ -4780,6 +4781,50 @@ function Invoke-RegressionGuard {
     }
 }
 
+# ─── Command: drain-memory (Phase-28.4 v2.62.3) ───────────────────────
+function Invoke-DrainMemory {
+    Write-ManualSteps "drain-memory" @(
+        "POST to http://localhost:3100/api/memory/drain with bridge secret"
+        "Drain pending OpenBrain queue records via the running MCP server"
+        "Print summary of delivered/deferred/dlq counts"
+    )
+
+    $port = 3100
+    $repoRoot = $RepoRoot
+    if (-not $repoRoot) { $repoRoot = (Get-Location).Path }
+
+    # Read bridge secret
+    $secret = $null
+    $secretPath = Join-Path $repoRoot ".forge" "bridge-secret"
+    if (Test-Path $secretPath) {
+        $secret = (Get-Content -LiteralPath $secretPath -Raw).Trim()
+    }
+    if (-not $secret) { $secret = $env:PFORGE_BRIDGE_SECRET }
+
+    $headers = @{ 'Content-Type' = 'application/json' }
+    if ($secret) { $headers['Authorization'] = "Bearer $secret" }
+
+    try {
+        $response = Invoke-RestMethod -Uri "http://localhost:$port/api/memory/drain" -Method POST -Headers $headers -ErrorAction Stop
+        if ($response.ok) {
+            Write-Host ""
+            Write-Host "`u{1F4E4} Drain Memory" -ForegroundColor Cyan
+            Write-Host "   Attempted: $($response.attempted)" -ForegroundColor White
+            Write-Host "   Delivered: $($response.delivered)" -ForegroundColor Green
+            Write-Host "   Deferred:  $($response.deferred)" -ForegroundColor $(if ($response.deferred -gt 0) { 'Yellow' } else { 'White' })
+            Write-Host "   DLQ:       $($response.dlq)" -ForegroundColor $(if ($response.dlq -gt 0) { 'Red' } else { 'White' })
+            Write-Host "   Duration:  $($response.durationMs)ms" -ForegroundColor DarkGray
+            Write-Host ""
+        } else {
+            Write-Host "ERROR: Drain failed — $($response.error)" -ForegroundColor Red
+            exit 1
+        }
+    } catch {
+        Write-Host "ERROR: MCP server not running on port $port. Start with: node pforge-mcp/server.mjs" -ForegroundColor Red
+        exit 1
+    }
+}
+
 # ─── Command: migrate-memory (GX.5 v2.36) ──────────────────────────────
 function Invoke-MigrateMemory {
     # GX.5: one-shot merge of legacy `*-history.json` and other misnamed
@@ -5485,6 +5530,7 @@ switch ($Command) {
     'smith'        { Invoke-Smith }
     'testbed-happypath' { Invoke-TestbedHappypath }
     'migrate-memory' { Invoke-MigrateMemory }
+    'drain-memory' { Invoke-DrainMemory }
     'mcp-call'     { Invoke-McpCall }
     'tour'         { Invoke-Tour }
     'config'       { Invoke-Config }

@@ -17,3 +17,10 @@ export {
   resolveAllowlist,
   isAllowlisted,
 } from "./allowlist.mjs";
+
+export {
+  classify,
+  LANES,
+  LANE_TOOLS,
+  OFFTOPIC_REDIRECT,
+} from "./intent-router.mjs";

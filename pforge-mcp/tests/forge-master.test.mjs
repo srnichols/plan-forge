@@ -242,4 +242,167 @@ describe("forge-master index", () => {
     expect(typeof mod.resolveAllowlist).toBe("function");
     expect(typeof mod.isAllowlisted).toBe("function");
   });
+
+  it("re-exports intent router APIs", async () => {
+    const mod = await import("../forge-master/index.mjs");
+    expect(typeof mod.classify).toBe("function");
+    expect(mod.LANES).toBeDefined();
+    expect(mod.LANE_TOOLS).toBeDefined();
+    expect(typeof mod.OFFTOPIC_REDIRECT).toBe("string");
+  });
+});
+
+// ─── Intent Router ──────────────────────────────────────────────────
+
+import {
+  classify,
+  LANES,
+  LANE_TOOLS,
+  OFFTOPIC_REDIRECT,
+} from "../forge-master/intent-router.mjs";
+
+describe("forge-master intent router", () => {
+  // ── Build lane (2 examples) ──
+
+  it("classifies 'I want to add multi-tenant auth' as build", async () => {
+    const result = await classify("I want to add multi-tenant auth to my pipeline");
+    expect(result.lane).toBe(LANES.BUILD);
+    expect(result.confidence).toBeGreaterThanOrEqual(0.4);
+    expect(result.reason).toBe("keyword_match");
+    expect(result.suggestedTools).toEqual(LANE_TOOLS[LANES.BUILD]);
+  });
+
+  it("classifies 'create a new phase for auth refactor' as build", async () => {
+    const result = await classify("Let's create a new phase for the auth refactor");
+    expect(result.lane).toBe(LANES.BUILD);
+    expect(result.suggestedTools).toContain("forge_crucible_submit");
+  });
+
+  // ── Operational lane (2 examples) ──
+
+  it("classifies 'what is my plan status' as operational", async () => {
+    const result = await classify("What is my plan status for Phase-27?");
+    expect(result.lane).toBe(LANES.OPERATIONAL);
+    expect(result.reason).toBe("keyword_match");
+    expect(result.suggestedTools).toContain("forge_plan_status");
+  });
+
+  it("classifies 'how much did quorum cost on Phase-27' as operational", async () => {
+    const result = await classify("How much did quorum cost on Phase-27?");
+    expect(result.lane).toBe(LANES.OPERATIONAL);
+    expect(result.suggestedTools).toContain("forge_cost_report");
+  });
+
+  // ── Troubleshoot lane (2 examples) ──
+
+  it("classifies 'why did Phase-27 Slice 4 fail' as troubleshoot", async () => {
+    const result = await classify("Why did Phase-27 Slice 4 fail last run?");
+    expect(result.lane).toBe(LANES.TROUBLESHOOT);
+    expect(result.reason).toBe("keyword_match");
+    expect(result.suggestedTools).toContain("forge_diagnose");
+  });
+
+  it("classifies 'there is a bug in the tempering scanner' as troubleshoot", async () => {
+    const result = await classify("There is a bug in the tempering scanner");
+    expect(result.lane).toBe(LANES.TROUBLESHOOT);
+    expect(result.suggestedTools).toContain("forge_bug_list");
+  });
+
+  // ── Off-topic lane (2 examples) ──
+
+  it("classifies 'what is the weather in Boise' as offtopic", async () => {
+    const result = await classify("What's the weather in Boise?");
+    expect(result.lane).toBe(LANES.OFFTOPIC);
+    expect(result.reason).toBe("keyword_match");
+    expect(result.suggestedTools).toEqual([]);
+  });
+
+  it("classifies 'tell me a joke' as offtopic", async () => {
+    const result = await classify("Tell me a joke about programming");
+    expect(result.lane).toBe(LANES.OFFTOPIC);
+    expect(result.suggestedTools).toEqual([]);
+  });
+
+  // ── Empty / missing input ──
+
+  it("classifies empty message as offtopic with high confidence", async () => {
+    const result = await classify("");
+    expect(result.lane).toBe(LANES.OFFTOPIC);
+    expect(result.confidence).toBe(1.0);
+    expect(result.reason).toBe("empty_message");
+  });
+
+  // ── Ambiguous case: exercises the router-model path (mocked) ──
+
+  it("falls back to router model for ambiguous input and uses model result", async () => {
+    const mockCallApiWorker = async () => ({
+      output: '{"lane": "operational"}',
+    });
+    const mockDetectApiProvider = () => ({
+      name: "xai",
+      baseUrl: "https://api.x.ai/v1",
+      apiKey: "test-key",
+      label: "xAI Grok",
+    });
+
+    // "tell me about things" — no keyword matches
+    const result = await classify("tell me about things in my project", {
+      callApiWorker: mockCallApiWorker,
+      detectApiProvider: mockDetectApiProvider,
+    });
+
+    expect(result.lane).toBe(LANES.OPERATIONAL);
+    expect(result.confidence).toBe(0.75);
+    expect(result.reason).toBe("router_model");
+  });
+
+  it("degrades to keyword-only when router model is unavailable", async () => {
+    const mockDetectApiProvider = () => null; // no provider
+
+    // "the build failed and I see errors" has troubleshoot keywords
+    const result = await classify("the build failed and I see errors", {
+      callApiWorker: async () => ({}),
+      detectApiProvider: mockDetectApiProvider,
+    });
+
+    // Should still classify via keywords (troubleshoot signals)
+    expect(result.lane).toBe(LANES.TROUBLESHOOT);
+    expect(result.reason).toBe("keyword_match");
+  });
+
+  it("degrades gracefully when router model throws", async () => {
+    const mockCallApiWorker = async () => { throw new Error("provider down"); };
+    const mockDetectApiProvider = () => ({
+      name: "xai",
+      baseUrl: "https://api.x.ai/v1",
+      apiKey: "test-key",
+      label: "xAI Grok",
+    });
+
+    // No keyword signals → router model → throws → falls through to no_signals
+    const result = await classify("xyzzy plugh", {
+      callApiWorker: mockCallApiWorker,
+      detectApiProvider: mockDetectApiProvider,
+    });
+
+    expect(result.lane).toBe(LANES.OFFTOPIC);
+    expect(result.reason).toBe("no_signals");
+  });
+
+  // ── LANE_TOOLS structure ──
+
+  it("LANE_TOOLS covers all four lanes", () => {
+    for (const lane of Object.values(LANES)) {
+      expect(LANE_TOOLS).toHaveProperty(lane);
+      expect(Array.isArray(LANE_TOOLS[lane])).toBe(true);
+    }
+    expect(LANE_TOOLS[LANES.OFFTOPIC]).toEqual([]);
+  });
+
+  // ── OFFTOPIC_REDIRECT ──
+
+  it("OFFTOPIC_REDIRECT contains the expected canned text", () => {
+    expect(OFFTOPIC_REDIRECT).toContain("Plan Forge topics");
+    expect(OFFTOPIC_REDIRECT).toContain("plans, runs, costs");
+  });
 });

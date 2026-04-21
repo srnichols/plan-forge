@@ -24,3 +24,11 @@ export {
   LANE_TOOLS,
   OFFTOPIC_REDIRECT,
 } from "./intent-router.mjs";
+
+export {
+  fetchContext,
+  TOKEN_CAP,
+  L1_KEYS,
+  L2_KEYS_BY_LANE,
+  L3_KEYS,
+} from "./retrieval.mjs";

@@ -250,6 +250,15 @@ describe("forge-master index", () => {
     expect(mod.LANE_TOOLS).toBeDefined();
     expect(typeof mod.OFFTOPIC_REDIRECT).toBe("string");
   });
+
+  it("re-exports retrieval APIs", async () => {
+    const mod = await import("../forge-master/index.mjs");
+    expect(typeof mod.fetchContext).toBe("function");
+    expect(mod.TOKEN_CAP).toBe(4000);
+    expect(mod.L1_KEYS).toBeDefined();
+    expect(mod.L2_KEYS_BY_LANE).toBeDefined();
+    expect(mod.L3_KEYS).toBeDefined();
+  });
 });
 
 // ─── Intent Router ──────────────────────────────────────────────────
@@ -404,5 +413,214 @@ describe("forge-master intent router", () => {
   it("OFFTOPIC_REDIRECT contains the expected canned text", () => {
     expect(OFFTOPIC_REDIRECT).toContain("Plan Forge topics");
     expect(OFFTOPIC_REDIRECT).toContain("plans, runs, costs");
+  });
+});
+
+// ─── Retrieval Layer ────────────────────────────────────────────────
+
+import {
+  fetchContext,
+  TOKEN_CAP,
+  L1_KEYS,
+  L2_KEYS_BY_LANE,
+  L3_KEYS,
+  estimateTokens,
+  summarizeValue,
+} from "../forge-master/retrieval.mjs";
+
+describe("forge-master retrieval", () => {
+  // ── Helper: mock recall that returns per-key data ──
+
+  function makeMockRecall(data = {}) {
+    return async (key) => data[key] ?? null;
+  }
+
+  function makeMockConfig(overrides = {}) {
+    return () => ({
+      l3Enabled: false,
+      ...overrides,
+    });
+  }
+
+  // ── All three tiers populated ──
+
+  it("returns context block with L1, L2, L3 sections when all tiers populated", async () => {
+    const mockRecall = makeMockRecall({
+      "session.history": "User asked about Phase-27 cost breakdown.",
+      "session.context": "Currently viewing cost report.",
+      "project.run.latest": { plan: "Phase-27", status: "completed", slices: 8, passed: 8 },
+      "project.tempering.state": { summary: "No active tempering issues." },
+      "cross.pattern.recent": "Auth patterns established in Phase-20.",
+      "cross.convention.recent": "Use conventional commits.",
+    });
+    const mockConfig = makeMockConfig({ l3Enabled: true });
+
+    const result = await fetchContext(
+      { sessionId: "test-session-1", lane: "operational", cwd: "/tmp/test" },
+      { recall: mockRecall, getForgeMasterConfig: mockConfig },
+    );
+
+    expect(result.contextBlock).toContain("### Session");
+    expect(result.contextBlock).toContain("### Project");
+    expect(result.contextBlock).toContain("### Cross-Project");
+    expect(result.contextBlock).toContain("Phase-27 cost breakdown");
+    expect(result.contextBlock).toContain("Phase-27");
+    expect(result.contextBlock).toContain("Auth patterns");
+    expect(result.sources.l1).toContain("session.history");
+    expect(result.sources.l1).toContain("session.context");
+    expect(result.sources.l2).toContain("project.run.latest");
+    expect(result.sources.l3).toContain("cross.pattern.recent");
+    expect(result.sources.l3).toContain("cross.convention.recent");
+  });
+
+  // ── L3 missing (l3Enabled: false) ──
+
+  it("omits L3 section when l3Enabled is false", async () => {
+    const mockRecall = makeMockRecall({
+      "session.history": "User asked about plan status.",
+      "project.run.latest": { plan: "Phase-27", status: "completed" },
+      "cross.pattern.recent": "Should NOT appear.",
+    });
+    const mockConfig = makeMockConfig({ l3Enabled: false });
+
+    const result = await fetchContext(
+      { sessionId: "s1", lane: "operational", cwd: "/tmp/test" },
+      { recall: mockRecall, getForgeMasterConfig: mockConfig },
+    );
+
+    expect(result.contextBlock).toContain("### Session");
+    expect(result.contextBlock).toContain("### Project");
+    expect(result.contextBlock).not.toContain("### Cross-Project");
+    expect(result.contextBlock).not.toContain("Should NOT appear");
+    expect(result.sources.l3).toEqual([]);
+  });
+
+  // ── Token truncation at cap ──
+
+  it("truncates context when total exceeds 4000-token cap (oldest tiers first)", async () => {
+    // Each character ~ 0.25 tokens, so 4000 tokens ~ 16000 chars.
+    // Create L1 and L2 data that together exceed the cap.
+    const longL1 = "A".repeat(10000); // ~2500 tokens
+    const longL2 = "B".repeat(10000); // ~2500 tokens — total ~5000 > 4000
+    const longL3 = "C".repeat(6000); // ~1500 tokens
+
+    const mockRecall = makeMockRecall({
+      "session.history": longL1,
+      "project.run.latest": longL2,
+      "project.tempering.state": null,
+      "cross.pattern.recent": longL3,
+      "cross.convention.recent": null,
+    });
+    const mockConfig = makeMockConfig({ l3Enabled: true });
+
+    const result = await fetchContext(
+      { sessionId: "s1", lane: "operational", cwd: "/tmp/test" },
+      { recall: mockRecall, getForgeMasterConfig: mockConfig },
+    );
+
+    // L3 should be dropped first (least specific)
+    expect(result.contextBlock).not.toContain("### Cross-Project");
+    expect(result.contextBlock).not.toContain("CCCCCC");
+
+    // Verify total is within the character cap (16000 chars + some headroom for markdown)
+    expect(result.contextBlock.length).toBeLessThanOrEqual(TOKEN_CAP * 4 + 100);
+  });
+
+  // ── Empty project (no history) ──
+
+  it("returns empty contextBlock and empty sources when nothing is available", async () => {
+    const mockRecall = makeMockRecall({}); // all nulls
+    const mockConfig = makeMockConfig({ l3Enabled: false });
+
+    const result = await fetchContext(
+      { sessionId: "empty-session", lane: "operational", cwd: "/tmp/test" },
+      { recall: mockRecall, getForgeMasterConfig: mockConfig },
+    );
+
+    expect(result.contextBlock).toBe("");
+    expect(result.sources.l1).toEqual([]);
+    expect(result.sources.l2).toEqual([]);
+    expect(result.sources.l3).toEqual([]);
+  });
+
+  // ── Lane-aware L2 key selection ──
+
+  it("fetches lane-specific L2 keys for troubleshoot lane", async () => {
+    const calledKeys = [];
+    const mockRecall = async (key) => {
+      calledKeys.push(key);
+      if (key === "project.liveguard.incidents") return [{ id: "INC-1", severity: "high" }];
+      return null;
+    };
+    const mockConfig = makeMockConfig();
+
+    const result = await fetchContext(
+      { sessionId: "s1", lane: "troubleshoot", cwd: "/tmp/test" },
+      { recall: mockRecall, getForgeMasterConfig: mockConfig },
+    );
+
+    expect(calledKeys).toContain("project.liveguard.incidents");
+    expect(result.sources.l2).toContain("project.liveguard.incidents");
+    expect(result.contextBlock).toContain("INC-1");
+  });
+
+  // ── Graceful degradation when recall throws ──
+
+  it("returns best-effort context when one recall throws", async () => {
+    let callCount = 0;
+    const mockRecall = async (key) => {
+      callCount++;
+      if (key === "session.history") throw new Error("L1 unavailable");
+      if (key === "project.run.latest") return { plan: "Phase-27", status: "running" };
+      return null;
+    };
+    const mockConfig = makeMockConfig();
+
+    const result = await fetchContext(
+      { sessionId: "s1", lane: "operational", cwd: "/tmp/test" },
+      { recall: mockRecall, getForgeMasterConfig: mockConfig },
+    );
+
+    // Should still have L2 context despite L1 failure
+    expect(result.contextBlock).toContain("Phase-27");
+    expect(result.sources.l2).toContain("project.run.latest");
+    expect(callCount).toBeGreaterThan(1);
+  });
+
+  // ── summarizeValue handles various types ──
+
+  it("summarizeValue handles null, string, array, and object", () => {
+    expect(summarizeValue("k", null)).toBe(null);
+    expect(summarizeValue("k", "hello")).toBe("hello");
+    expect(summarizeValue("k", [])).toBe(null);
+    expect(summarizeValue("k", ["a", "b"])).toBe("a\nb");
+    expect(summarizeValue("k", { summary: "test summary" })).toBe("test summary");
+    expect(summarizeValue("k", { plan: "P1", status: "done" })).toBe("Plan: P1 | Status: done");
+  });
+
+  // ── estimateTokens approximation ──
+
+  it("estimateTokens uses chars/4 approximation", () => {
+    expect(estimateTokens("")).toBe(0);
+    expect(estimateTokens("abcd")).toBe(1);
+    expect(estimateTokens("abcde")).toBe(2);
+    expect(estimateTokens("a".repeat(16000))).toBe(4000);
+  });
+
+  // ── Default lane fallback ──
+
+  it("uses default L2 keys for unknown lane", async () => {
+    const calledKeys = [];
+    const mockRecall = async (key) => { calledKeys.push(key); return null; };
+    const mockConfig = makeMockConfig();
+
+    await fetchContext(
+      { lane: "unknown_lane", cwd: "/tmp/test" },
+      { recall: mockRecall, getForgeMasterConfig: mockConfig },
+    );
+
+    // Should use default keys (project.run.latest, project.tempering.state)
+    expect(calledKeys).toContain("project.run.latest");
+    expect(calledKeys).toContain("project.tempering.state");
   });
 });

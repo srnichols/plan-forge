@@ -2551,6 +2551,14 @@ function buildMemoryCapabilities(cwd) {
 }
 
 /**
+ * Build capabilities surface with no required args — convenience wrapper
+ * for tooling and validation gates that call buildCapabilities().
+ */
+export function buildCapabilities(options = {}) {
+  return buildCapabilitySurface([], options);
+}
+
+/**
  * Write tools.json to pforge-mcp/ directory.
  */
 export function writeToolsJson(mcpTools, outputDir) {

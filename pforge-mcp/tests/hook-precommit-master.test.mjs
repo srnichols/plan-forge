@@ -169,8 +169,14 @@ describe("checkPreCommit", () => {
 
 describe("spawnWorker runPlanActive env propagation", () => {
   let lastSpawnEnv;
+  let savedRunPlanActive;
 
   beforeEach(() => {
+    // Save and clear PFORGE_RUN_PLAN_ACTIVE so it doesn't leak from
+    // the parent environment (e.g. when tests run inside pforge run-plan).
+    savedRunPlanActive = process.env.PFORGE_RUN_PLAN_ACTIVE;
+    delete process.env.PFORGE_RUN_PLAN_ACTIVE;
+
     lastSpawnEnv = undefined;
     mockSpawn.mockImplementation((_cmd, _args, opts) => {
       lastSpawnEnv = opts?.env;
@@ -188,6 +194,8 @@ describe("spawnWorker runPlanActive env propagation", () => {
   });
 
   afterEach(() => {
+    if (savedRunPlanActive === undefined) delete process.env.PFORGE_RUN_PLAN_ACTIVE;
+    else process.env.PFORGE_RUN_PLAN_ACTIVE = savedRunPlanActive;
     mockSpawn.mockReset();
   });
 

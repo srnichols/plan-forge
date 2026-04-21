@@ -46,3 +46,12 @@ export {
   selectProvider,
   ABSOLUTE_CEILING,
 } from "./reasoning.mjs";
+
+export {
+  ensureSessionId,
+  appendTurn,
+  summarizeIfNeeded,
+  SUMMARIZE_THRESHOLD,
+  SUMMARIZE_COUNT,
+  _resetLocks,
+} from "./persistence.mjs";

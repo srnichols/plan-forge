@@ -27,6 +27,7 @@ import { fetchContext } from "./retrieval.mjs";
 import { getForgeMasterConfig } from "./config.mjs";
 import { resolveAllowlist, USAGE_HINTS } from "./allowlist.mjs";
 import { invokeMany } from "./tool-bridge.mjs";
+import { ensureSessionId, appendTurn, summarizeIfNeeded } from "./persistence.mjs";
 
 // ─── Constants ──────────────────────────────────────────────────────
 
@@ -121,8 +122,9 @@ function loadSystemPrompt(contextBlock) {
  * }>}
  */
 export async function runTurn(input, deps = {}) {
-  const { message, sessionId, cwd } = input;
+  const { message, cwd } = input;
   const config = getForgeMasterConfig({ cwd });
+  const effectiveSessionId = ensureSessionId(input.sessionId);
 
   const effectiveMaxToolCalls = Math.min(
     input.maxToolCalls ?? config.maxToolCalls,
@@ -145,6 +147,7 @@ export async function runTurn(input, deps = {}) {
       tokensOut: 0,
       totalCostUSD: 0,
       truncated: false,
+      sessionId: effectiveSessionId,
     };
   }
 
@@ -152,7 +155,7 @@ export async function runTurn(input, deps = {}) {
   let contextBlock = "";
   try {
     const ctx = await fetchContext(
-      { sessionId, lane: classification.lane, cwd },
+      { sessionId: effectiveSessionId, lane: classification.lane, cwd },
       deps,
     );
     contextBlock = ctx.contextBlock;
@@ -182,6 +185,7 @@ export async function runTurn(input, deps = {}) {
         totalCostUSD: 0,
         truncated: false,
         error: "reasoning_model_unavailable",
+        sessionId: effectiveSessionId,
       };
     }
   }
@@ -230,6 +234,7 @@ export async function runTurn(input, deps = {}) {
         totalCostUSD: 0,
         truncated: false,
         error: `reasoning_model_unavailable`,
+        sessionId: effectiveSessionId,
       };
     }
 
@@ -306,6 +311,30 @@ export async function runTurn(input, deps = {}) {
     finalReply = "(tool budget exceeded — partial response)";
   }
 
+  // ── 8. Persist session turn ────────────────────────────────────────
+  const brainDeps = {
+    recall: deps.recall || (async () => null),
+    remember: deps.remember || (() => ({ ok: true })),
+    cwd,
+  };
+
+  try {
+    await appendTurn({
+      sessionId: effectiveSessionId,
+      turn: {
+        role: "turn",
+        userMessage: message,
+        assistantReply: finalReply,
+        toolCalls: allToolCalls,
+        tokensIn: totalTokensIn,
+        tokensOut: totalTokensOut,
+        truncated,
+      },
+    }, brainDeps);
+
+    await summarizeIfNeeded({ sessionId: effectiveSessionId }, brainDeps);
+  } catch { /* persistence failure is non-fatal */ }
+
   // Emit cost event
   if (deps.hub && typeof deps.hub.broadcast === "function") {
     deps.hub.broadcast({
@@ -316,6 +345,7 @@ export async function runTurn(input, deps = {}) {
       tokensOut: totalTokensOut,
       toolCallCount: allToolCalls.length,
       truncated,
+      sessionId: effectiveSessionId,
       timestamp: new Date().toISOString(),
     });
   }
@@ -327,5 +357,6 @@ export async function runTurn(input, deps = {}) {
     tokensOut: totalTokensOut,
     totalCostUSD: 0,
     truncated,
+    sessionId: effectiveSessionId,
   };
 }

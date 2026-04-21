@@ -1108,6 +1108,320 @@ describe("forge-master reasoning", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════
+//  Persistence (Slice 6)
+// ═══════════════════════════════════════════════════════════════════
+
+import {
+  ensureSessionId,
+  appendTurn,
+  summarizeIfNeeded,
+  SUMMARIZE_THRESHOLD,
+  SUMMARIZE_COUNT,
+  _resetLocks,
+} from "../forge-master/persistence.mjs";
+
+describe("forge-master persistence", () => {
+  afterEach(() => _resetLocks());
+
+  // ── ensureSessionId ──────────────────────────────────────────────
+
+  it("ensureSessionId: returns input when valid string", () => {
+    expect(ensureSessionId("my-session")).toBe("my-session");
+    expect(ensureSessionId("abc-123")).toBe("abc-123");
+  });
+
+  it("ensureSessionId: generates UUID for null/undefined/empty", () => {
+    const id1 = ensureSessionId(null);
+    const id2 = ensureSessionId(undefined);
+    const id3 = ensureSessionId("");
+    const id4 = ensureSessionId("   ");
+
+    expect(id1).toMatch(/^[0-9a-f]{8}-/);
+    expect(id2).toMatch(/^[0-9a-f]{8}-/);
+    expect(id3).toMatch(/^[0-9a-f]{8}-/);
+    expect(id4).toMatch(/^[0-9a-f]{8}-/);
+    expect(id1).not.toBe(id2);
+  });
+
+  // ── appendTurn ───────────────────────────────────────────────────
+
+  it("appendTurn: creates new session history on first call", async () => {
+    const store = {};
+    const deps = {
+      recall: async (key) => store[key] ?? null,
+      remember: (key, value) => { store[key] = value; },
+    };
+
+    const result = await appendTurn(
+      { sessionId: "sess-1", turn: { role: "turn", userMessage: "hello", assistantReply: "hi" } },
+      deps,
+    );
+
+    expect(result.turnCount).toBe(1);
+    expect(result.sessionId).toBe("sess-1");
+    const history = store["session.forgemaster.sess-1.history"];
+    expect(history).toHaveLength(1);
+    expect(history[0].userMessage).toBe("hello");
+    expect(history[0].timestamp).toBeDefined();
+  });
+
+  it("appendTurn: appends to existing session history", async () => {
+    const store = {
+      "session.forgemaster.sess-2.history": [
+        { role: "turn", userMessage: "first", assistantReply: "response1", timestamp: "2026-01-01T00:00:00Z" },
+      ],
+    };
+    const deps = {
+      recall: async (key) => store[key] ?? null,
+      remember: (key, value) => { store[key] = value; },
+    };
+
+    const result = await appendTurn(
+      { sessionId: "sess-2", turn: { role: "turn", userMessage: "second", assistantReply: "response2" } },
+      deps,
+    );
+
+    expect(result.turnCount).toBe(2);
+    const history = store["session.forgemaster.sess-2.history"];
+    expect(history).toHaveLength(2);
+    expect(history[0].userMessage).toBe("first");
+    expect(history[1].userMessage).toBe("second");
+  });
+
+  it("appendTurn: throws on missing sessionId", async () => {
+    await expect(appendTurn({ sessionId: null, turn: {} }, {})).rejects.toThrow("requires a sessionId");
+  });
+
+  it("appendTurn: throws on missing turn object", async () => {
+    await expect(appendTurn({ sessionId: "s1", turn: null }, {})).rejects.toThrow("requires a turn object");
+  });
+
+  // ── summarizeIfNeeded ────────────────────────────────────────────
+
+  it("summarizeIfNeeded: no-op when history is at or below threshold", async () => {
+    const history = Array.from({ length: SUMMARIZE_THRESHOLD }, (_, i) => ({
+      role: "turn", userMessage: `msg-${i}`, timestamp: "2026-01-01T00:00:00Z",
+    }));
+    const store = { "session.forgemaster.s1.history": history };
+    const deps = {
+      recall: async (key) => store[key] ?? null,
+      remember: (key, value) => { store[key] = value; },
+    };
+
+    const result = await summarizeIfNeeded({ sessionId: "s1" }, deps);
+    expect(result.summarized).toBe(false);
+    expect(result.turnCount).toBe(SUMMARIZE_THRESHOLD);
+  });
+
+  it("summarizeIfNeeded: triggers at turn 21 (threshold + 1)", async () => {
+    const turnCount = SUMMARIZE_THRESHOLD + 1;
+    const history = Array.from({ length: turnCount }, (_, i) => ({
+      role: "turn", userMessage: `msg-${i}`, timestamp: `2026-01-01T00:${String(i).padStart(2, "0")}:00Z`,
+    }));
+    const store = { "session.forgemaster.s1.history": [...history] };
+    const deps = {
+      recall: async (key) => store[key] ?? null,
+      remember: (key, value) => { store[key] = value; },
+    };
+
+    const result = await summarizeIfNeeded({ sessionId: "s1" }, deps);
+
+    expect(result.summarized).toBe(true);
+    expect(result.summarizedCount).toBe(SUMMARIZE_COUNT);
+    expect(result.remaining).toBe(turnCount - SUMMARIZE_COUNT);
+
+    // L1 should have remaining turns only
+    const updatedHistory = store["session.forgemaster.s1.history"];
+    expect(updatedHistory).toHaveLength(turnCount - SUMMARIZE_COUNT);
+    expect(updatedHistory[0].userMessage).toBe(`msg-${SUMMARIZE_COUNT}`);
+
+    // L2 digest should exist
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const digest = store[`project.forgemaster.digests.${dateStr}`];
+    expect(digest).toHaveLength(1);
+    expect(digest[0].sessionId).toBe("s1");
+    expect(digest[0].turnCount).toBe(SUMMARIZE_COUNT);
+    expect(digest[0].turns).toHaveLength(SUMMARIZE_COUNT);
+  });
+
+  it("summarizeIfNeeded: returns false for null sessionId", async () => {
+    const result = await summarizeIfNeeded({ sessionId: null }, {});
+    expect(result.summarized).toBe(false);
+  });
+
+  // ── Concurrent append tolerance ──────────────────────────────────
+
+  it("appendTurn: concurrent appends do not lose turns", async () => {
+    const store = {};
+    const deps = {
+      recall: async (key) => store[key] ?? null,
+      remember: (key, value) => { store[key] = value; },
+    };
+
+    // Fire 5 concurrent appends
+    const promises = Array.from({ length: 5 }, (_, i) =>
+      appendTurn(
+        { sessionId: "concurrent", turn: { role: "turn", userMessage: `msg-${i}` } },
+        deps,
+      ),
+    );
+
+    const results = await Promise.all(promises);
+
+    // All 5 turns must be present
+    const history = store["session.forgemaster.concurrent.history"];
+    expect(history).toHaveLength(5);
+
+    // Turn counts should be 1..5 (serialized by mutex)
+    const counts = results.map((r) => r.turnCount).sort((a, b) => a - b);
+    expect(counts).toEqual([1, 2, 3, 4, 5]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+//  Session ID integration in reasoning (Slice 6)
+// ═══════════════════════════════════════════════════════════════════
+
+describe("forge-master session integration", () => {
+  let tmpDirS;
+
+  beforeEach(() => {
+    tmpDirS = mkdtempSync(join(tmpdir(), "forge-master-session-"));
+    writeForgeJson(tmpDirS, {});
+  });
+  afterEach(() => {
+    rmSync(tmpDirS, { recursive: true, force: true });
+    _resetLocks();
+  });
+
+  function makeSessionDeps(client, overrides = {}) {
+    return {
+      provider: client,
+      dispatcher: overrides.dispatcher || (async (name) => ({ tool: name, result: "ok" })),
+      hub: overrides.hub || null,
+      toolMetadata: {},
+      recall: overrides.recall || (async () => null),
+      remember: overrides.remember || (() => ({ ok: true })),
+      ...overrides,
+    };
+  }
+
+  it("reasoning: generates sessionId when not provided", async () => {
+    const client = new MockReasoningClient([
+      { type: "reply", content: "Hello there!" },
+    ]);
+
+    const result = await runTurn(
+      { message: "what does my project do?", cwd: tmpDirS },
+      makeSessionDeps(client),
+    );
+
+    expect(result.sessionId).toBeDefined();
+    expect(result.sessionId).toMatch(/^[0-9a-f]{8}-/);
+  });
+
+  it("reasoning: preserves provided sessionId", async () => {
+    const client = new MockReasoningClient([
+      { type: "reply", content: "Status looks good." },
+    ]);
+
+    const result = await runTurn(
+      { message: "what is the project status?", sessionId: "my-fixed-session", cwd: tmpDirS },
+      makeSessionDeps(client),
+    );
+
+    expect(result.sessionId).toBe("my-fixed-session");
+  });
+
+  it("reasoning: off-topic returns sessionId", async () => {
+    const result = await runTurn(
+      { message: "what is the meaning of life?", cwd: tmpDirS },
+      {
+        callApiWorker: async () => ({ text: "OFFTOPIC" }),
+        detectApiProvider: () => ({ provider: "test", apiKey: "k" }),
+      },
+    );
+
+    expect(result.sessionId).toBeDefined();
+    expect(result.sessionId).toMatch(/^[0-9a-f]{8}-/);
+  });
+
+  it("reasoning: persists turn history via brain deps", async () => {
+    const store = {};
+    const client = new MockReasoningClient([
+      { type: "reply", content: "Analysis complete." },
+    ]);
+
+    const result = await runTurn(
+      { message: "what is the current cost of my plan run?", sessionId: "persist-test", cwd: tmpDirS },
+      makeSessionDeps(client, {
+        recall: async (key) => store[key] ?? null,
+        remember: (key, value) => { store[key] = value; },
+      }),
+    );
+
+    expect(result.reply).toBe("Analysis complete.");
+    const historyKey = `session.forgemaster.persist-test.history`;
+    const history = store[historyKey];
+    expect(history).toBeDefined();
+    expect(history).toHaveLength(1);
+    expect(history[0].userMessage).toBe("what is the current cost of my plan run?");
+    expect(history[0].assistantReply).toBe("Analysis complete.");
+  });
+
+  it("reasoning: 21st turn triggers summarization", async () => {
+    const store = {};
+    // Pre-populate 20 turns
+    const existingHistory = Array.from({ length: 20 }, (_, i) => ({
+      role: "turn",
+      userMessage: `msg-${i}`,
+      assistantReply: `reply-${i}`,
+      timestamp: `2026-01-01T00:${String(i).padStart(2, "0")}:00Z`,
+    }));
+    store["session.forgemaster.sum-test.history"] = existingHistory;
+
+    const client = new MockReasoningClient([
+      { type: "reply", content: "Turn 21." },
+    ]);
+
+    await runTurn(
+      { message: "show the plan status for this phase", sessionId: "sum-test", cwd: tmpDirS },
+      makeSessionDeps(client, {
+        recall: async (key) => store[key] ?? null,
+        remember: (key, value) => { store[key] = value; },
+      }),
+    );
+
+    // L1 should have been trimmed (21 - 10 = 11 turns remaining)
+    const history = store["session.forgemaster.sum-test.history"];
+    expect(history.length).toBeLessThanOrEqual(21 - SUMMARIZE_COUNT);
+
+    // Digest should exist
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const digest = store[`project.forgemaster.digests.${dateStr}`];
+    expect(digest).toBeDefined();
+    expect(digest[0].turns).toHaveLength(SUMMARIZE_COUNT);
+  });
+
+  it("reasoning: persistence failure does not crash the turn", async () => {
+    const client = new MockReasoningClient([
+      { type: "reply", content: "Still works." },
+    ]);
+
+    const result = await runTurn(
+      { message: "what is the current project health trend?", sessionId: "fail-test", cwd: tmpDirS },
+      makeSessionDeps(client, {
+        recall: async () => { throw new Error("brain unavailable"); },
+        remember: () => { throw new Error("brain unavailable"); },
+      }),
+    );
+
+    expect(result.reply).toBe("Still works.");
+    expect(result.sessionId).toBe("fail-test");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
 //  MockReasoningClient fixture
 // ═══════════════════════════════════════════════════════════════════
 

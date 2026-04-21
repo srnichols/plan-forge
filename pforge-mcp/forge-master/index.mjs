@@ -32,3 +32,10 @@ export {
   L2_KEYS_BY_LANE,
   L3_KEYS,
 } from "./retrieval.mjs";
+
+export {
+  invokeAllowlisted,
+  invokeMany,
+  summarize,
+  SUMMARY_LIMIT,
+} from "./tool-bridge.mjs";

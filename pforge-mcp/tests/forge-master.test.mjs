@@ -624,3 +624,203 @@ describe("forge-master retrieval", () => {
     expect(calledKeys).toContain("project.tempering.state");
   });
 });
+
+// ─── Tool Bridge ────────────────────────────────────────────────────
+
+import {
+  invokeAllowlisted,
+  invokeMany,
+  summarize,
+  SUMMARY_LIMIT,
+} from "../forge-master/tool-bridge.mjs";
+
+describe("forge-master bridge", () => {
+  const allowlist = [...BASE_ALLOWLIST];
+  const makeDeps = (dispatcher, hub = null) => ({
+    resolvedAllowlist: allowlist,
+    dispatcher,
+    hub,
+  });
+
+  // ── Allowlist rejection ──
+
+  it("rejects forge_run_plan with tool_not_allowlisted", async () => {
+    const dispatcher = async () => { throw new Error("should not be called"); };
+    const result = await invokeAllowlisted(
+      { tool: "forge_run_plan", args: {} },
+      makeDeps(dispatcher),
+    );
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe("tool_not_allowlisted");
+    expect(result.tool).toBe("forge_run_plan");
+    expect(result.source).toBe("forge-master");
+    expect(result.reason).toBe("write_tool_excluded_phase28");
+  });
+
+  it("rejects an unknown tool with tool_not_allowlisted", async () => {
+    const dispatcher = async () => "ok";
+    const result = await invokeAllowlisted(
+      { tool: "not_a_real_tool", args: {} },
+      makeDeps(dispatcher),
+    );
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe("tool_not_allowlisted");
+    expect(result.reason).toBe("tool_not_allowlisted");
+  });
+
+  // ── Successful invocation ──
+
+  it("invokes an allowlisted tool and returns ok + summary", async () => {
+    const dispatcher = async (name, args) => ({ plan: "P1", status: "done" });
+    const result = await invokeAllowlisted(
+      { tool: "forge_plan_status", args: { plan: "test" } },
+      makeDeps(dispatcher),
+    );
+    expect(result.ok).toBe(true);
+    expect(result.tool).toBe("forge_plan_status");
+    expect(result.source).toBe("forge-master");
+    expect(result.resultFull).toEqual({ plan: "P1", status: "done" });
+    expect(typeof result.summary).toBe("string");
+    expect(result.costUSD).toBe(0);
+  });
+
+  // ── Parallel invocation of 3 allowlisted tools ──
+
+  it("invokes 3 allowlisted tools in parallel via invokeMany", async () => {
+    const callOrder = [];
+    const dispatcher = async (name) => {
+      callOrder.push(name);
+      return { tool: name, data: "ok" };
+    };
+    const results = await invokeMany(
+      [
+        { tool: "forge_plan_status", args: {} },
+        { tool: "forge_cost_report", args: {} },
+        { tool: "forge_smith", args: {} },
+      ],
+      makeDeps(dispatcher),
+    );
+    expect(results).toHaveLength(3);
+    expect(results.every((r) => r.ok === true)).toBe(true);
+    expect(results.every((r) => r.source === "forge-master")).toBe(true);
+    // All three should have been dispatched
+    expect(callOrder).toContain("forge_plan_status");
+    expect(callOrder).toContain("forge_cost_report");
+    expect(callOrder).toContain("forge_smith");
+  });
+
+  it("invokeMany rejects blocked tools within a parallel batch", async () => {
+    const dispatcher = async (name) => ({ data: name });
+    const results = await invokeMany(
+      [
+        { tool: "forge_plan_status", args: {} },
+        { tool: "forge_run_plan", args: {} }, // blocked
+        { tool: "forge_smith", args: {} },
+      ],
+      makeDeps(dispatcher),
+    );
+    expect(results).toHaveLength(3);
+    expect(results[0].ok).toBe(true);
+    expect(results[1].ok).toBe(false);
+    expect(results[1].error).toBe("tool_not_allowlisted");
+    expect(results[2].ok).toBe(true);
+  });
+
+  // ── Result summarization / truncation ──
+
+  it("truncates result exceeding SUMMARY_LIMIT", async () => {
+    const longText = "x".repeat(5000);
+    const dispatcher = async () => longText;
+    const result = await invokeAllowlisted(
+      { tool: "forge_sweep", args: {} },
+      makeDeps(dispatcher),
+    );
+    expect(result.ok).toBe(true);
+    expect(result.summary.length).toBeLessThanOrEqual(SUMMARY_LIMIT);
+    expect(result.summary).toContain("…[truncated]");
+    // resultFull preserves full output
+    expect(result.resultFull).toBe(longText);
+  });
+
+  it("does not truncate short results", async () => {
+    const dispatcher = async () => "short response";
+    const result = await invokeAllowlisted(
+      { tool: "forge_status", args: {} },
+      makeDeps(dispatcher),
+    );
+    expect(result.summary).toBe("short response");
+    expect(result.summary).not.toContain("…[truncated]");
+  });
+
+  // ── summarize() unit tests ──
+
+  it("summarize returns text as-is when under limit", () => {
+    expect(summarize("hello")).toBe("hello");
+    expect(summarize("a".repeat(2000))).toBe("a".repeat(2000));
+  });
+
+  it("summarize truncates and appends marker when over limit", () => {
+    const over = "b".repeat(3000);
+    const s = summarize(over);
+    expect(s.length).toBeLessThanOrEqual(SUMMARY_LIMIT);
+    expect(s.endsWith("…[truncated]")).toBe(true);
+  });
+
+  it("summarize handles non-string input", () => {
+    expect(summarize(null)).toBe("");
+    expect(summarize(undefined)).toBe("");
+    expect(summarize({ a: 1 })).toBe('{"a":1}');
+  });
+
+  // ── Cost tagging on emitted hub event ──
+
+  it("emits hub event with source: forge-master on successful call", async () => {
+    const events = [];
+    const hub = { broadcast: (e) => events.push(e) };
+    const dispatcher = async () => "result";
+    await invokeAllowlisted(
+      { tool: "forge_validate", args: {} },
+      makeDeps(dispatcher, hub),
+    );
+    const complete = events.find((e) => e.type === "forge-master.tool-complete");
+    expect(complete).toBeTruthy();
+    expect(complete.source).toBe("forge-master");
+    expect(complete.tool).toBe("forge_validate");
+    expect(typeof complete.durationMs).toBe("number");
+  });
+
+  it("emits hub event with source: forge-master on rejection", async () => {
+    const events = [];
+    const hub = { broadcast: (e) => events.push(e) };
+    const dispatcher = async () => "ok";
+    await invokeAllowlisted(
+      { tool: "forge_run_plan", args: {} },
+      makeDeps(dispatcher, hub),
+    );
+    const rejected = events.find((e) => e.type === "forge-master.tool-rejected");
+    expect(rejected).toBeTruthy();
+    expect(rejected.source).toBe("forge-master");
+  });
+
+  // ── Dispatcher error handling ──
+
+  it("returns ok:false when dispatcher throws", async () => {
+    const dispatcher = async () => { throw new Error("boom"); };
+    const result = await invokeAllowlisted(
+      { tool: "forge_analyze", args: {} },
+      makeDeps(dispatcher),
+    );
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain("dispatcher_error");
+    expect(result.error).toContain("boom");
+    expect(result.source).toBe("forge-master");
+  });
+
+  // ── invokeMany edge cases ──
+
+  it("invokeMany returns empty array for empty calls", async () => {
+    const dispatcher = async () => "ok";
+    expect(await invokeMany([], makeDeps(dispatcher))).toEqual([]);
+    expect(await invokeMany(null, makeDeps(dispatcher))).toEqual([]);
+  });
+});

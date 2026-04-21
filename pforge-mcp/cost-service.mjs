@@ -388,6 +388,169 @@ export function estimatePlan(plan, model, cwd, quorumConfig = null, resumeFrom =
 }
 
 /**
+ * Build a quorum configuration object for a given mode name.
+ * Shared by estimateQuorum and estimateSlice so the two always agree
+ * on which models, thresholds, and auto flags each mode implies.
+ *
+ * @param {"auto"|"power"|"speed"|"false"} mode
+ * @returns {object|null} quorumConfig for estimatePlan, or null for mode "false".
+ */
+export function buildQuorumConfigForMode(mode) {
+  if (mode === "false" || mode === false) return null;
+  if (mode === "auto") {
+    return {
+      enabled: true,
+      auto: true,
+      // Phase-27.1 Slice 3: threshold lowered from 7 → 5 to match
+      // QUORUM_PRESETS.power.threshold. `5` restores the "auto picks
+      // what power would force" semantic.
+      threshold: 5,
+      models: QUORUM_PRESETS.speed?.models || ["claude-sonnet-4.6"],
+      reviewerModel: QUORUM_PRESETS.speed?.reviewerModel || "claude-sonnet-4.6",
+      preset: "speed",
+    };
+  }
+  if (mode === "power") {
+    return {
+      enabled: true,
+      auto: false,
+      threshold: QUORUM_PRESETS.power?.threshold ?? 5,
+      models: QUORUM_PRESETS.power?.models || [],
+      reviewerModel: QUORUM_PRESETS.power?.reviewerModel || "claude-opus-4.7",
+      preset: "power",
+    };
+  }
+  if (mode === "speed") {
+    return {
+      enabled: true,
+      auto: false,
+      threshold: QUORUM_PRESETS.speed?.threshold ?? 7,
+      models: QUORUM_PRESETS.speed?.models || [],
+      reviewerModel: QUORUM_PRESETS.speed?.reviewerModel || "claude-sonnet-4.6",
+      preset: "speed",
+    };
+  }
+  throw new Error(`buildQuorumConfigForMode: unknown mode "${mode}" — expected auto | power | speed | false`);
+}
+
+/**
+ * Project cost for a single slice under a given quorum mode.
+ *
+ * Per-slice projections are un-calibrated base × rate numbers. Run-level
+ * historical calibration (correction factor from cost-history.json) is
+ * applied only in `estimatePlan` / `estimateQuorum`. This is intentional:
+ * a single slice does not provide enough context to re-derive the factor.
+ *
+ * @param {object} options
+ * @param {object} options.plan - Parsed plan object with slices and dag
+ * @param {string|number} options.sliceNumber - Slice identifier (may be alphanumeric, e.g. "2A")
+ * @param {"auto"|"power"|"speed"|"false"} [options.mode="auto"] - Quorum mode
+ * @param {string} [options.model="claude-sonnet-4.5"] - Base model for pricing
+ * @param {string} [options.cwd] - Project root for history + complexity scoring
+ * @returns {{
+ *   estimatedCostUSD: number,
+ *   baseCostUSD: number,
+ *   overheadUSD: number,
+ *   complexityScore: number,
+ *   model: string,
+ *   quorumEligible: boolean,
+ *   rationale: string,
+ *   generatedAt: string
+ * }}
+ */
+export function estimateSlice({ plan, sliceNumber, mode = "auto", model = "claude-sonnet-4.5", cwd } = {}) {
+  if (!plan || !plan.slices) {
+    throw new Error("estimateSlice: plan object with slices is required");
+  }
+  const target = String(sliceNumber);
+  const slice = plan.slices.find((s) => String(s.number) === target);
+  if (!slice) {
+    throw new Error(`estimateSlice: sliceNumber "${target}" not found in plan (available: ${plan.slices.map((s) => s.number).join(", ")})`);
+  }
+
+  // Validate mode before use
+  const VALID_MODES = ["auto", "power", "speed", "false"];
+  if (!VALID_MODES.includes(mode)) {
+    throw new Error(`estimateSlice: unknown mode "${mode}" — expected auto | power | speed | false`);
+  }
+
+  const resolvedCwd = cwd || process.cwd();
+
+  // Historical avg tokens (same logic as estimatePlan, but no correction factor)
+  const historyPath = resolvedCwd ? resolve(resolvedCwd, ".forge", "cost-history.json") : null;
+  let avgTokensPerSlice = null;
+  try {
+    if (historyPath && existsSync(historyPath)) {
+      const history = JSON.parse(readFileSync(historyPath, "utf-8"));
+      if (Array.isArray(history) && history.length > 0) {
+        const totalIn = history.reduce((s, e) => s + (e.total_tokens_in || 0), 0);
+        const totalOut = history.reduce((s, e) => s + (e.total_tokens_out || 0), 0);
+        const totalSlices = history.reduce((s, e) => s + (e.sliceCount || 1), 0);
+        if (totalSlices > 0) {
+          avgTokensPerSlice = { input: Math.round(totalIn / totalSlices), output: Math.round(totalOut / totalSlices) };
+        }
+      }
+    }
+  } catch { /* fall back to heuristic */ }
+  const tokensPerSlice = avgTokensPerSlice || { input: 2000, output: 5000 };
+
+  // Base cost from model pricing
+  const pricing = getPricing(model);
+  const baseCostUSD = (tokensPerSlice.input * pricing.input) + (tokensPerSlice.output * pricing.output);
+
+  // Complexity scoring
+  const { score: complexityScore } = scoreSliceComplexity(slice, resolvedCwd);
+
+  // Quorum config for the requested mode
+  const quorumConfig = buildQuorumConfigForMode(mode);
+
+  // Determine quorum eligibility
+  let quorumEligible = false;
+  let rationale;
+  if (!quorumConfig) {
+    rationale = "mode false: quorum disabled";
+  } else if (quorumConfig.auto) {
+    quorumEligible = complexityScore >= quorumConfig.threshold;
+    rationale = quorumEligible
+      ? `threshold ${quorumConfig.threshold} met: complexity ${complexityScore}`
+      : `threshold ${quorumConfig.threshold} not met: complexity ${complexityScore}`;
+  } else {
+    // power / speed: force all slices into quorum
+    quorumEligible = true;
+    rationale = `mode ${mode}: all slices quorum-eligible`;
+  }
+
+  // Compute quorum overhead if eligible (same per-leg loop as estimatePlan)
+  let overheadUSD = 0;
+  if (quorumEligible && quorumConfig) {
+    const dryRunInput = tokensPerSlice.input * 1.5;
+    const dryRunOutput = tokensPerSlice.output * 0.8;
+    const dryRunCost = quorumConfig.models.reduce((sum, m) => {
+      const mPricing = getPricing(m);
+      return sum + (dryRunInput * mPricing.input) + (dryRunOutput * mPricing.output);
+    }, 0);
+    const reviewerInput = dryRunOutput * quorumConfig.models.length + tokensPerSlice.input;
+    const reviewerOutput = tokensPerSlice.output * 0.6;
+    const reviewerPricing = getPricing(quorumConfig.reviewerModel);
+    const reviewerCost = (reviewerInput * reviewerPricing.input) + (reviewerOutput * reviewerPricing.output);
+    overheadUSD = dryRunCost + reviewerCost;
+  }
+
+  const estimatedCostUSD = baseCostUSD + overheadUSD;
+
+  return {
+    estimatedCostUSD: Math.round(estimatedCostUSD * 1_000_000) / 1_000_000,
+    baseCostUSD: Math.round(baseCostUSD * 1_000_000) / 1_000_000,
+    overheadUSD: Math.round(overheadUSD * 1_000_000) / 1_000_000,
+    complexityScore,
+    model,
+    quorumEligible,
+    rationale,
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+/**
  * Build a cost estimate for all four quorum modes in a single call.
  * This is the canonical "show me the picker" entry point — agents must call
  * this tool instead of hand-computing quorum costs in chat.
@@ -408,42 +571,11 @@ export function estimateQuorum({ plan, cwd, resumeFrom = null, defaultModel = "c
     throw new Error("estimateQuorum: plan object with slices and dag is required");
   }
 
-  // Quorum-enabled paths in estimatePlan call scoreSliceComplexity → getHistoricalFailureRate,
-  // which requires a string cwd. Default to process.cwd() for hermetic callers (tests, MCP
-  // tool invocations without a plan path). The history lookups will miss cleanly when the
-  // directory has no .forge/runs.
   const resolvedCwd = cwd || process.cwd();
 
-  // Build the four quorum configurations.
-  const autoConfig = {
-    enabled: true,
-    auto: true,
-    // Phase-27.1 Slice 3: threshold lowered from 7 → 5 to match
-    // QUORUM_PRESETS.power.threshold. The old `7` gate produced
-    // quorumSliceCount: 0 on every real plan in the repo (11-, 17-, 7-slice),
-    // degenerating `auto` to `false`. `5` restores the "auto picks what power
-    // would force" semantic.
-    threshold: 5,
-    models: QUORUM_PRESETS.speed?.models || ["claude-sonnet-4.6"],
-    reviewerModel: QUORUM_PRESETS.speed?.reviewerModel || "claude-sonnet-4.6",
-    preset: "speed",
-  };
-  const powerConfig = {
-    enabled: true,
-    auto: false,
-    threshold: QUORUM_PRESETS.power?.threshold ?? 5,
-    models: QUORUM_PRESETS.power?.models || [],
-    reviewerModel: QUORUM_PRESETS.power?.reviewerModel || "claude-opus-4.7",
-    preset: "power",
-  };
-  const speedConfig = {
-    enabled: true,
-    auto: false,
-    threshold: QUORUM_PRESETS.speed?.threshold ?? 7,
-    models: QUORUM_PRESETS.speed?.models || [],
-    reviewerModel: QUORUM_PRESETS.speed?.reviewerModel || "claude-sonnet-4.6",
-    preset: "speed",
-  };
+  const autoConfig = buildQuorumConfigForMode("auto");
+  const powerConfig = buildQuorumConfigForMode("power");
+  const speedConfig = buildQuorumConfigForMode("speed");
 
   const estAuto = estimatePlan(plan, defaultModel, resolvedCwd, autoConfig, resumeFrom);
   const estPower = estimatePlan(plan, defaultModel, resolvedCwd, powerConfig, resumeFrom);

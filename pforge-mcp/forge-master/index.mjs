@@ -39,3 +39,10 @@ export {
   summarize,
   SUMMARY_LIMIT,
 } from "./tool-bridge.mjs";
+
+export {
+  runTurn,
+  buildToolSchemas,
+  selectProvider,
+  ABSOLUTE_CEILING,
+} from "./reasoning.mjs";

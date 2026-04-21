@@ -824,3 +824,474 @@ describe("forge-master bridge", () => {
     expect(await invokeMany(null, makeDeps(dispatcher))).toEqual([]);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════
+//  Reasoning loop (Phase-28, Slice 5)
+// ═══════════════════════════════════════════════════════════════════
+
+import {
+  runTurn,
+  buildToolSchemas,
+  selectProvider,
+  ABSOLUTE_CEILING,
+} from "../forge-master/reasoning.mjs";
+import { MockReasoningClient } from "../forge-master/__fixtures__/MockReasoningClient.mjs";
+
+describe("forge-master reasoning", () => {
+  let tmpDirR;
+
+  beforeEach(() => {
+    tmpDirR = mkdtempSync(join(tmpdir(), "forge-master-reasoning-"));
+    // Write a minimal .forge.json so config resolves
+    writeFileSync(
+      join(tmpDirR, ".forge.json"),
+      JSON.stringify({
+        forgeMaster: {
+          reasoningModel: "claude-sonnet-4.5",
+          reasoningProvider: "anthropic",
+          maxToolCalls: 5,
+        },
+      }),
+      "utf-8",
+    );
+  });
+
+  afterEach(() => rmSync(tmpDirR, { recursive: true, force: true }));
+
+  // ── Helpers ─────────────────────────────────────────────────────
+
+  function makeDepsForReasoning(client, overrides = {}) {
+    return {
+      provider: client,
+      dispatcher: overrides.dispatcher || (async (name) => ({ tool: name, result: "ok" })),
+      hub: overrides.hub || null,
+      toolMetadata: {},
+      recall: async () => null,
+      getForgeMasterConfig: () => ({
+        reasoningModel: "claude-sonnet-4.5",
+        reasoningProvider: "anthropic",
+        routerModel: "grok-3-mini",
+        maxToolCalls: 5,
+        ceilingToolCalls: 10,
+        l3Enabled: false,
+        discoverExtensionTools: true,
+        sessionRetentionDays: 14,
+      }),
+      ...overrides,
+    };
+  }
+
+  // ── Happy path: 3 tool calls → final reply ──────────────────────
+
+  it("reasoning: happy path — 3 tool calls then final reply", async () => {
+    const client = new MockReasoningClient([
+      {
+        type: "tool_calls",
+        toolCalls: [
+          { id: "tc1", name: "forge_plan_status", args: {} },
+          { id: "tc2", name: "forge_cost_report", args: {} },
+        ],
+      },
+      {
+        type: "tool_calls",
+        toolCalls: [
+          { id: "tc3", name: "forge_health_trend", args: {} },
+        ],
+      },
+      { type: "reply", content: "Here is your plan summary with costs." },
+    ]);
+
+    const result = await runTurn(
+      { message: "what is my plan status and cost?", cwd: tmpDirR },
+      makeDepsForReasoning(client),
+    );
+
+    expect(result.reply).toBe("Here is your plan summary with costs.");
+    expect(result.toolCalls).toHaveLength(3);
+    expect(result.toolCalls[0].name).toBe("forge_plan_status");
+    expect(result.toolCalls[1].name).toBe("forge_cost_report");
+    expect(result.toolCalls[2].name).toBe("forge_health_trend");
+    expect(result.truncated).toBe(false);
+    expect(result.error).toBeUndefined();
+    expect(client.callCount).toBe(3);
+  });
+
+  // ── Budget overflow: model requests 15 calls, loop stops at ceiling ──
+
+  it("reasoning: budget overflow — stops at maxToolCalls ceiling", async () => {
+    // Script 12 tool calls (exceeds max of 5)
+    const manyToolCalls = [];
+    for (let i = 0; i < 12; i++) {
+      manyToolCalls.push({
+        type: "tool_calls",
+        toolCalls: [{ id: `tc${i}`, name: "forge_status", args: {} }],
+      });
+    }
+    manyToolCalls.push({ type: "reply", content: "done" });
+
+    const client = new MockReasoningClient(manyToolCalls);
+
+    const result = await runTurn(
+      { message: "give me all the status info", maxToolCalls: 5, cwd: tmpDirR },
+      makeDepsForReasoning(client),
+    );
+
+    expect(result.truncated).toBe(true);
+    expect(result.toolCalls.length).toBeLessThanOrEqual(5);
+  });
+
+  // ── Off-topic short-circuit: zero model calls ────────────────────
+
+  it("reasoning: off-topic short-circuit — zero model calls", async () => {
+    const client = new MockReasoningClient([]);
+
+    const result = await runTurn(
+      { message: "what is the weather in Boise?", cwd: tmpDirR },
+      makeDepsForReasoning(client),
+    );
+
+    expect(result.reply).toContain("scoped to Plan Forge");
+    expect(result.toolCalls).toHaveLength(0);
+    expect(result.tokensIn).toBe(0);
+    expect(result.tokensOut).toBe(0);
+    expect(client.callCount).toBe(0); // no model calls!
+  });
+
+  // ── Graceful error when provider throws ──────────────────────────
+
+  it("reasoning: graceful error when provider throws", async () => {
+    const client = new MockReasoningClient([
+      { error: new Error("API connection refused") },
+    ]);
+
+    const result = await runTurn(
+      { message: "what is my plan status?", cwd: tmpDirR },
+      makeDepsForReasoning(client),
+    );
+
+    expect(result.error).toBe("reasoning_model_unavailable");
+    expect(result.toolCalls).toHaveLength(0);
+  });
+
+  // ── Provider unavailable returns structured error ─────────────────
+
+  it("reasoning: returns error when no provider available", async () => {
+    // Override config to use unsupported provider
+    const result = await runTurn(
+      { message: "what is my plan status?", cwd: tmpDirR },
+      {
+        provider: null, // no provider injected
+        dispatcher: async () => ({}),
+        hub: null,
+        toolMetadata: {},
+        recall: async () => null,
+        getForgeMasterConfig: () => ({
+          reasoningModel: "some-unknown-model",
+          reasoningProvider: "unsupported",
+          routerModel: "grok-3-mini",
+          maxToolCalls: 5,
+          ceilingToolCalls: 10,
+          l3Enabled: false,
+          discoverExtensionTools: true,
+          sessionRetentionDays: 14,
+        }),
+      },
+    );
+
+    expect(result.error).toBe("reasoning_model_unavailable");
+    expect(result.toolCalls).toHaveLength(0);
+  });
+
+  // ── Hub event emission on turn completion ─────────────────────────
+
+  it("reasoning: emits hub event with source: forge-master on completion", async () => {
+    const events = [];
+    const hub = { broadcast: (e) => events.push(e) };
+
+    const client = new MockReasoningClient([
+      { type: "reply", content: "done" },
+    ]);
+
+    await runTurn(
+      { message: "what is plan status?", cwd: tmpDirR },
+      makeDepsForReasoning(client, { hub }),
+    );
+
+    const turnEvent = events.find((e) => e.type === "forge-master.turn-complete");
+    expect(turnEvent).toBeTruthy();
+    expect(turnEvent.source).toBe("forge-master");
+    expect(turnEvent.worker).toBe("forge-master-reasoning");
+  });
+
+  // ── buildToolSchemas covers allowlist ─────────────────────────────
+
+  it("reasoning: buildToolSchemas creates schemas from allowlist", () => {
+    const schemas = buildToolSchemas(
+      ["forge_status", "forge_plan_status"],
+      { forge_status: "Quick health check" },
+    );
+    expect(schemas).toHaveLength(2);
+    expect(schemas[0].name).toBe("forge_status");
+    expect(schemas[0].description).toBe("Quick health check");
+    expect(schemas[1].description).toContain("Plan Forge tool");
+    expect(schemas[0].parameters).toHaveProperty("type", "object");
+  });
+
+  // ── selectProvider returns correct adapters ───────────────────────
+
+  it("reasoning: selectProvider resolves anthropic, openai, xai", async () => {
+    const ant = await selectProvider("anthropic");
+    expect(ant).toBeTruthy();
+    expect(typeof ant.sendTurn).toBe("function");
+
+    const oai = await selectProvider("openai");
+    expect(oai).toBeTruthy();
+    expect(typeof oai.sendTurn).toBe("function");
+
+    const xai = await selectProvider("xai");
+    expect(xai).toBeTruthy();
+    expect(typeof xai.sendTurn).toBe("function");
+
+    const none = await selectProvider("unsupported");
+    expect(none).toBeNull();
+  });
+
+  // ── ABSOLUTE_CEILING is 10 ────────────────────────────────────────
+
+  it("reasoning: ABSOLUTE_CEILING is 10", () => {
+    expect(ABSOLUTE_CEILING).toBe(10);
+  });
+
+  // ── Tool call results are recorded with summaries ─────────────────
+
+  it("reasoning: tool call results include resultSummary", async () => {
+    const client = new MockReasoningClient([
+      {
+        type: "tool_calls",
+        toolCalls: [{ id: "tc1", name: "forge_smith", args: {} }],
+      },
+      { type: "reply", content: "Diagnostics passed." },
+    ]);
+
+    const dispatcher = async (name) => `${name} result data`;
+
+    const result = await runTurn(
+      { message: "what is the health trend of my project?", cwd: tmpDirR },
+      makeDepsForReasoning(client, { dispatcher }),
+    );
+
+    expect(result.toolCalls).toHaveLength(1);
+    expect(result.toolCalls[0].resultSummary).toContain("forge_smith result data");
+  });
+
+  // ── Allowlisted tool calls succeed, blocked ones are caught ───────
+
+  it("reasoning: blocked tool in model response still records in toolCalls", async () => {
+    const client = new MockReasoningClient([
+      {
+        type: "tool_calls",
+        toolCalls: [{ id: "tc1", name: "forge_run_plan", args: {} }],
+      },
+      { type: "reply", content: "Tried but was blocked." },
+    ]);
+
+    const result = await runTurn(
+      { message: "what is the cost of my last plan run?", cwd: tmpDirR },
+      makeDepsForReasoning(client),
+    );
+
+    // The tool call is recorded, but bridge rejected it
+    expect(result.toolCalls).toHaveLength(1);
+    expect(result.toolCalls[0].name).toBe("forge_run_plan");
+    expect(result.toolCalls[0].resultSummary).toContain("tool_not_allowlisted");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+//  MockReasoningClient fixture
+// ═══════════════════════════════════════════════════════════════════
+
+describe("forge-master MockReasoningClient", () => {
+  it("returns scripted responses in order", async () => {
+    const client = new MockReasoningClient([
+      { type: "tool_calls", toolCalls: [{ id: "1", name: "forge_status", args: {} }] },
+      { type: "reply", content: "done" },
+    ]);
+
+    const r1 = await client.sendTurn({ messages: [], tools: [], model: "test" });
+    expect(r1.type).toBe("tool_calls");
+    expect(r1.toolCalls).toHaveLength(1);
+
+    const r2 = await client.sendTurn({ messages: [], tools: [], model: "test" });
+    expect(r2.type).toBe("reply");
+    expect(r2.content).toBe("done");
+  });
+
+  it("returns default reply when script exhausted", async () => {
+    const client = new MockReasoningClient([]);
+    const r = await client.sendTurn({ messages: [], tools: [], model: "test" });
+    expect(r.type).toBe("reply");
+    expect(r.content).toContain("Script exhausted");
+  });
+
+  it("records call history", async () => {
+    const client = new MockReasoningClient([{ type: "reply", content: "ok" }]);
+    await client.sendTurn({ messages: [{ role: "user", content: "hi" }], tools: [], model: "m1" });
+    expect(client.callCount).toBe(1);
+    expect(client.calls[0].model).toBe("m1");
+  });
+
+  it("throws when entry has error", async () => {
+    const client = new MockReasoningClient([
+      { error: new Error("api down") },
+    ]);
+    await expect(
+      client.sendTurn({ messages: [], tools: [], model: "test" }),
+    ).rejects.toThrow("api down");
+  });
+
+  it("reset clears call history", async () => {
+    const client = new MockReasoningClient([{ type: "reply", content: "ok" }]);
+    await client.sendTurn({ messages: [], tools: [], model: "test" });
+    expect(client.callCount).toBe(1);
+    client.reset();
+    expect(client.callCount).toBe(0);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+//  Provider adapter unit tests (format translation only — no HTTP)
+// ═══════════════════════════════════════════════════════════════════
+
+import {
+  buildAnthropicTools,
+  formatMessages as formatAnthropicMessages,
+  parseResponse as parseAnthropicResponse,
+} from "../forge-master/providers/anthropic-tools.mjs";
+
+import {
+  buildOpenAITools,
+  formatMessages as formatOpenAIMessages,
+  parseResponse as parseOpenAIResponse,
+} from "../forge-master/providers/openai-tools.mjs";
+
+describe("forge-master providers/anthropic-tools", () => {
+  it("buildAnthropicTools produces input_schema format", () => {
+    const tools = buildAnthropicTools([
+      { name: "forge_status", description: "Get status" },
+    ]);
+    expect(tools).toHaveLength(1);
+    expect(tools[0].name).toBe("forge_status");
+    expect(tools[0]).toHaveProperty("input_schema");
+  });
+
+  it("formatMessages extracts system messages", () => {
+    const { system, messages } = formatAnthropicMessages([
+      { role: "system", content: "You are helpful." },
+      { role: "user", content: "Hello" },
+    ]);
+    expect(system).toBe("You are helpful.");
+    expect(messages).toHaveLength(1);
+    expect(messages[0].role).toBe("user");
+  });
+
+  it("formatMessages converts tool_result to Anthropic format", () => {
+    const { messages } = formatAnthropicMessages([
+      { role: "tool_result", toolCallId: "tc1", content: "result data" },
+    ]);
+    expect(messages).toHaveLength(1);
+    expect(messages[0].role).toBe("user");
+    expect(messages[0].content[0].type).toBe("tool_result");
+    expect(messages[0].content[0].tool_use_id).toBe("tc1");
+  });
+
+  it("parseResponse detects tool_use blocks", () => {
+    const result = parseAnthropicResponse({
+      content: [
+        { type: "text", text: "Let me check." },
+        { type: "tool_use", id: "tu1", name: "forge_status", input: { plan: "phase-28" } },
+      ],
+      usage: { input_tokens: 100, output_tokens: 50 },
+    });
+    expect(result.type).toBe("tool_calls");
+    expect(result.toolCalls).toHaveLength(1);
+    expect(result.toolCalls[0].name).toBe("forge_status");
+    expect(result.content).toBe("Let me check.");
+    expect(result.tokensIn).toBe(100);
+  });
+
+  it("parseResponse returns reply when no tool_use", () => {
+    const result = parseAnthropicResponse({
+      content: [{ type: "text", text: "All good." }],
+      usage: { input_tokens: 50, output_tokens: 30 },
+    });
+    expect(result.type).toBe("reply");
+    expect(result.content).toBe("All good.");
+  });
+});
+
+describe("forge-master providers/openai-tools", () => {
+  it("buildOpenAITools produces function format", () => {
+    const tools = buildOpenAITools([
+      { name: "forge_status", description: "Get status", parameters: { type: "object" } },
+    ]);
+    expect(tools).toHaveLength(1);
+    expect(tools[0].type).toBe("function");
+    expect(tools[0].function.name).toBe("forge_status");
+  });
+
+  it("formatMessages converts tool_result to OpenAI tool role", () => {
+    const msgs = formatOpenAIMessages([
+      { role: "tool_result", toolCallId: "tc1", content: "result data" },
+    ]);
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0].role).toBe("tool");
+    expect(msgs[0].tool_call_id).toBe("tc1");
+  });
+
+  it("formatMessages converts assistant with toolCalls", () => {
+    const msgs = formatOpenAIMessages([
+      {
+        role: "assistant",
+        content: "Checking",
+        toolCalls: [{ id: "tc1", name: "forge_status", args: {} }],
+      },
+    ]);
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0].tool_calls).toHaveLength(1);
+    expect(msgs[0].tool_calls[0].function.name).toBe("forge_status");
+  });
+
+  it("parseResponse detects tool_calls in choices", () => {
+    const result = parseOpenAIResponse({
+      choices: [
+        {
+          message: {
+            content: null,
+            tool_calls: [
+              {
+                id: "tc1",
+                type: "function",
+                function: { name: "forge_status", arguments: '{"plan":"p1"}' },
+              },
+            ],
+          },
+        },
+      ],
+      usage: { prompt_tokens: 100, completion_tokens: 40 },
+    });
+    expect(result.type).toBe("tool_calls");
+    expect(result.toolCalls[0].name).toBe("forge_status");
+    expect(result.toolCalls[0].args).toEqual({ plan: "p1" });
+  });
+
+  it("parseResponse returns reply when no tool_calls", () => {
+    const result = parseOpenAIResponse({
+      choices: [{ message: { content: "Here you go." } }],
+      usage: { prompt_tokens: 50, completion_tokens: 25 },
+    });
+    expect(result.type).toBe("reply");
+    expect(result.content).toBe("Here you go.");
+  });
+});
+

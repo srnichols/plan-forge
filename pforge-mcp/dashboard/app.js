@@ -3448,6 +3448,8 @@ async function loadBrainSubtab() {
   if (!tierTbody) return;
   try {
     const res = await fetch(`${API_BASE}/api/brain/stats`);
+    if (res.status === 404) throw new Error("STALE_SERVER");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     // Tier counters
     const tiers = data.tiers || { l1: { recalls: 0, misses: 0 }, l2: { recalls: 0, misses: 0 }, l3: { recalls: 0, misses: 0 } };
@@ -3481,7 +3483,10 @@ async function loadBrainSubtab() {
       ).join("");
     }
   } catch (err) {
-    tierTbody.innerHTML = `<tr class="text-red-400"><td colspan="4" class="py-4">Error loading brain stats: ${err.message}</td></tr>`;
+    const msg = err.message === "STALE_SERVER"
+      ? "Brain API not available on this MCP server. Restart the server to pick up the latest routes (v2.59+)."
+      : `Error loading brain stats: ${err.message}`;
+    tierTbody.innerHTML = `<tr class="text-red-400"><td colspan="4" class="py-4">${escHtml(msg)}</td></tr>`;
   }
 }
 
@@ -3491,6 +3496,7 @@ async function renderNotificationsSubtab() {
   if (!grid) return;
   try {
     const res = await fetch(`${API_BASE}/api/notifications/config`);
+    if (res.status === 404) throw new Error("STALE_SERVER");
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const cfg = await res.json();
     renderAdapterGrid(grid, cfg);
@@ -3500,7 +3506,10 @@ async function renderNotificationsSubtab() {
     if (perMin) perMin.value = cfg.rateLimit?.perMinute ?? 10;
     if (digestAfter) digestAfter.value = cfg.rateLimit?.digestAfter ?? 5;
   } catch (err) {
-    grid.innerHTML = `<p class="text-red-400 col-span-2">${escHtml(err.message)}</p>`;
+    const msg = err.message === "STALE_SERVER"
+      ? "Notifications API not available on this MCP server. Restart the server to pick up the latest routes (v2.59+)."
+      : err.message;
+    grid.innerHTML = `<p class="text-red-400 col-span-2">${escHtml(msg)}</p>`;
   }
 }
 

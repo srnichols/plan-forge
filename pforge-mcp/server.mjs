@@ -673,6 +673,19 @@ const TOOLS = [
     },
   },
   {
+    name: "forge_estimate_quorum",
+    description: "Returns projected cost of a plan under all four quorum modes (auto / power / speed / false) in a single call. Agents MUST call this tool before presenting any dollar amount for a plan — hand-computed quorum costs drift by an order of magnitude. Backed by cost-service.mjs, the same code path that powers `pforge run-plan --estimate`.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        planPath: { type: "string", description: "Path to the plan Markdown file, relative to the project root." },
+        resumeFrom: { type: "string", description: "Optional slice number to start from — excludes already-shipped slices from the estimate." },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+      required: ["planPath"],
+    },
+  },
+  {
     name: "forge_capabilities",
     description: "Machine-readable API surface — returns all MCP tools with semantic metadata (intent, prerequisites, errors, cost), CLI commands, workflow graphs, config schema, dashboard info, and installed extensions. Agents call this once on session start for full discoverability.",
     inputSchema: {
@@ -1524,6 +1537,7 @@ function executeTool(name, args) {
     case "forge_abort":
     case "forge_plan_status":
     case "forge_cost_report":
+    case "forge_estimate_quorum":
     case "forge_health_trend":
     case "forge_alert_triage":
     case "forge_capabilities":
@@ -1696,6 +1710,40 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return { content: [{ type: "text", text: JSON.stringify(report, null, 2) }] };
     } catch (err) {
       return { content: [{ type: "text", text: `Cost report error: ${err.message}` }], isError: true };
+    }
+  }
+
+  if (name === "forge_estimate_quorum") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      if (!args.planPath || typeof args.planPath !== "string") {
+        return { content: [{ type: "text", text: "forge_estimate_quorum: planPath (string) is required" }], isError: true };
+      }
+      const planFullPath = resolve(cwd, args.planPath);
+      if (!existsSync(planFullPath)) {
+        return { content: [{ type: "text", text: `PLAN_NOT_FOUND: ${args.planPath}` }], isError: true };
+      }
+      const { parsePlan } = await import("./orchestrator.mjs");
+      const { estimateQuorum } = await import("./cost-service.mjs");
+      let plan;
+      try {
+        plan = parsePlan(planFullPath, cwd);
+      } catch (err) {
+        return { content: [{ type: "text", text: `PLAN_PARSE_FAILED: ${err.message}` }], isError: true };
+      }
+      const result = estimateQuorum({
+        plan,
+        cwd,
+        resumeFrom: args.resumeFrom ?? null,
+      });
+      await broadcastLiveGuard("forge_estimate_quorum", "OK", Date.now() - t0, {
+        recommended: result.recommended,
+        sliceCount: result.auto?.totalSliceCount ?? 0,
+      });
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Estimate error: ${err.message}` }], isError: true };
     }
   }
 

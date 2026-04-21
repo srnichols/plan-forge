@@ -19,6 +19,25 @@
 
 ---
 
+## Cost estimates
+
+**Cost estimates come from tools, not from chat math.** When the user asks
+"how much will this plan cost?" or when you present any quorum-mode picker
+showing dollar amounts, you **MUST** call one of these tools first:
+
+- **`forge_estimate_quorum`** — projected cost of a plan under all four
+  quorum modes (`auto`, `power`, `speed`, `false`) in one payload.
+  Call this before showing any picker or decision matrix.
+- **`forge_cost_report`** — actuals from previous runs (token counts,
+  per-model spend, monthly aggregates).
+
+Do **not** hand-compute quorum costs, do **not** invent dollar amounts in
+chat, and do **not** synthesize picker UIs without tool-backed numbers.
+Hand-computed quorum estimates have been observed to overshoot reality by
+an order of magnitude.
+
+---
+
 ## Project Overview
 
 <!-- Fill in your project details -->

@@ -199,6 +199,33 @@ export const TOOL_METADATA = {
     errors: {},
     example: { input: {}, output: { runs: 5, total_cost_usd: 1.23, by_model: {}, forge_model_stats: { "claude-sonnet-4.6": { total_slices: 10, passed: 9, failed: 1, success_rate: 0.9, avg_cost_usd: 0.05 } } } },
   },
+  forge_estimate_quorum: {
+    intent: ["estimate", "cost", "projection", "planning"],
+    aliases: ["cost-picker", "quorum-estimate"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "2.60.0",
+    prerequisites: [],
+    produces: [],
+    consumes: [".forge/cost-history.json", ".forge/model-performance.json", ".forge.json"],
+    sideEffects: [],
+    errors: {
+      PLAN_NOT_FOUND: { message: "Plan file not found", recovery: "Pass a valid planPath relative to the project root" },
+      PLAN_PARSE_FAILED: { message: "Plan could not be parsed", recovery: "Run forge_analyze on the plan first to surface structural issues" },
+    },
+    agentGuidance: "Call this tool before presenting any dollar amount or quorum-mode cost to the user. Do not hand-compute quorum costs in chat — the numbers you would invent drift quickly and have been observed to overshoot reality by an order of magnitude. This tool returns all four quorum modes (auto / power / speed / false) in one payload so you never need to make four separate calls or estimate.",
+    example: {
+      input: { planPath: "docs/plans/Phase-27-COST-SERVICE-v2.60-PLAN.md" },
+      output: {
+        auto:   { mode: "auto",   estimatedCostUSD: 0.42, baseCostUSD: 0.28, overheadUSD: 0.14, quorumSliceCount: 2, totalSliceCount: 7, confidence: "heuristic" },
+        power:  { mode: "power",  estimatedCostUSD: 12.5, baseCostUSD: 0.28, overheadUSD: 12.22, quorumSliceCount: 7, totalSliceCount: 7, confidence: "heuristic" },
+        speed:  { mode: "speed",  estimatedCostUSD: 1.20, baseCostUSD: 0.28, overheadUSD: 0.92, quorumSliceCount: 7, totalSliceCount: 7, confidence: "heuristic" },
+        "false": { mode: "false", estimatedCostUSD: 0.28, baseCostUSD: 0.28, overheadUSD: 0, quorumSliceCount: 0, totalSliceCount: 7, confidence: "heuristic" },
+        recommended: "auto",
+        generatedAt: "2026-04-20T18:00:00.000Z",
+      },
+    },
+  },
   forge_ext_search: {
     intent: ["search", "browse", "discover"],
     aliases: ["find-extensions", "browse-catalog"],

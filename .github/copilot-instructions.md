@@ -38,6 +38,25 @@ an order of magnitude.
 
 ---
 
+## Talking to Forge-Master
+
+**For open-ended reasoning, use `forge_master_ask` instead of chaining
+tools yourself.** Forge-Master classifies your intent, fetches memory
+context, and orchestrates read-only tool calls on your behalf.
+
+- **Use it for**: multi-step reasoning about plans, troubleshooting
+  failures, querying run status, funneling ideas into Crucible smelts.
+- **Don't use it for**: direct file edits or code generation —
+  Forge-Master is read-only.
+- **Example**: `forge_master_ask({ message: "Why did Phase-27 Slice 4
+  fail?" })` — Forge-Master calls `forge_watch_live`, `brain_recall`,
+  and `forge_bug_list` to build an answer.
+
+Prefer `forge_master_ask` over manually calling individual forge tools
+when the task is open-ended or involves multiple steps.
+
+---
+
 ## Project Overview
 
 <!-- Fill in your project details -->

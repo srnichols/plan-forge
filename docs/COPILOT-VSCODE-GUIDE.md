@@ -12,14 +12,15 @@
 2. [How Copilot Reads Your Guardrails](#how-copilot-reads-your-guardrails)
 3. [The 3-Session Workflow in Practice](#the-3-session-workflow-in-practice)
 4. [Single-Session Pipeline with Nested Subagents](#single-session-pipeline-with-nested-subagents)
-5. [Agent Mode vs Ask Mode vs Edit Mode](#agent-mode-vs-ask-mode-vs-edit-mode)
-6. [Managing Context Budget](#managing-context-budget)
-7. [Using Memory to Bridge Sessions](#using-memory-to-bridge-sessions)
-8. [Referencing Files in Prompts](#referencing-files-in-prompts)
-9. [Tips for Better Agent Execution](#tips-for-better-agent-execution)
+5. [Forge-Master — Reasoning Agent](#forge-master--reasoning-agent)
+6. [Agent Mode vs Ask Mode vs Edit Mode](#agent-mode-vs-ask-mode-vs-edit-mode)
+7. [Managing Context Budget](#managing-context-budget)
+8. [Using Memory to Bridge Sessions](#using-memory-to-bridge-sessions)
+9. [Referencing Files in Prompts](#referencing-files-in-prompts)
+10. [Tips for Better Agent Execution](#tips-for-better-agent-execution)
    - [Prompt Templates, Agent Definitions & Skills](#0-use-prompt-templates-agent-definitions--skills)
-10. [Troubleshooting](#troubleshooting)
-11. [Using Plan Forge with Copilot Cloud Agent](#using-plan-forge-with-copilot-cloud-agent)
+11. [Troubleshooting](#troubleshooting)
+12. [Using Plan Forge with Copilot Cloud Agent](#using-plan-forge-with-copilot-cloud-agent)
 
 ---
 
@@ -242,6 +243,33 @@ If `chat.subagents.allowInvocationsFromSubagents` is not set (or if you prefer s
 | **Fix Issues →** | Reviewer Gate → Executor (on LOCKOUT) |
 
 Manual handoff provides the same context transfer — the only difference is that you click the button rather than the agent invoking automatically.
+
+---
+
+## Forge-Master — Reasoning Agent
+
+Forge-Master (`forge_master_ask`) is a guardrailed reasoning agent that sits on top of Plan Forge's MCP tools. Instead of manually chaining `forge_plan_status` → `forge_cost_report` → `forge_bug_list`, you describe what you need in plain language and Forge-Master orchestrates the calls for you.
+
+### When to Use It
+
+| Scenario | Example Prompt |
+|----------|---------------|
+| **Troubleshooting** | *"Why did Phase-27 Slice 4 fail?"* |
+| **Operational Q&A** | *"Which of my last 5 runs had the worst failure rate?"* |
+| **Ideation → Crucible** | *"I want to add multi-tenant billing to my pipeline"* — Forge-Master submits a Crucible smelt and walks the interview |
+| **Status overview** | *"Give me a health summary of the last week"* |
+
+### When NOT to Use It
+
+Forge-Master is **read-only**. It cannot edit files, generate code, or run builds. For those tasks, use Agent mode directly.
+
+### Example in Copilot Chat
+
+```
+@workspace Use forge_master_ask to answer: "Why is my drift score dropping?"
+```
+
+Forge-Master will call `forge_drift_report`, `forge_health_trend`, and `brain_recall` behind the scenes, then return a synthesized answer with the tool calls it made and the cost incurred.
 
 ---
 

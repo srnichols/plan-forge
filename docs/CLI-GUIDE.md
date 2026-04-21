@@ -931,7 +931,7 @@ Aggregated health score from drift, cost, incidents, and model performance over 
 | Execute slices | *(use prompt)* | Paste Step 3 prompt into Copilot |
 | Review & audit | *(use prompt)* | Paste Step 5 prompt into Copilot |
 
-The CLI handles **project management tasks** (setup, status, phases, branches, extensions). The **core pipeline** (hardening, execution, review) still runs through Copilot Agent Mode — those are AI-driven workflows, not shell commands.
+The CLI handles **project management tasks** (setup, status, phases, branches, extensions). The **core pipeline** (hardening, execution, review) still runs through Copilot Agent Mode — those are AI-driven workflows, not shell commands. For open-ended reasoning across multiple tools, use `forge_master_ask` (Forge-Master) via MCP instead of chaining CLI commands manually.
 
 ---
 

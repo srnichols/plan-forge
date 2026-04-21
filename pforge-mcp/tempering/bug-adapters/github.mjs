@@ -462,3 +462,47 @@ export async function syncStatusFromProvider(bugId, config, { fetch: fetchFn = g
     return { provider: "github", ok: false, error: "NETWORK_ERROR" };
   }
 }
+
+// ─── Meta-bug class schema & repo resolver ────────────────────────────
+
+/**
+ * Canonical meta-bug classes for Plan Forge self-repair.
+ *
+ * - plan-defect: brittle gate, missing scope, wrong path, over-narrow grep
+ * - orchestrator-defect: runtime bug in Plan Forge (timeout, spawn, stash)
+ * - prompt-defect: unsafe output, missing rule, placeholder not expanded
+ */
+export const META_BUG_CLASSES = Object.freeze([
+  "plan-defect",
+  "orchestrator-defect",
+  "prompt-defect",
+]);
+
+/** Default labels applied to every meta-bug issue. */
+export const SELF_REPAIR_LABELS = Object.freeze([
+  "self-repair",
+  "plan-forge-internal",
+]);
+
+/**
+ * Resolve the target repository for meta-bug (self-repair) issues.
+ *
+ * Resolution priority:
+ *   1. config.meta.selfRepairRepo  ("owner/repo" string)
+ *   2. Fallback: srnichols/plan-forge
+ *
+ * @param {object|null|undefined} config - Forge configuration object
+ * @returns {{ owner: string, repo: string }}
+ */
+export function resolveSelfRepairRepo(config) {
+  const raw = config?.meta?.selfRepairRepo;
+  if (!raw || typeof raw !== "string") {
+    return { owner: "srnichols", repo: "plan-forge" };
+  }
+  const trimmed = raw.trim();
+  const parts = trimmed.split("/");
+  if (parts.length !== 2 || !parts[0] || !parts[1]) {
+    return { owner: "srnichols", repo: "plan-forge" };
+  }
+  return { owner: parts[0], repo: parts[1] };
+}

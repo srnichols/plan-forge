@@ -17,6 +17,9 @@ import {
   hashUrl,
 } from "../baselines.mjs";
 import { ensureScannerArtifactDir, seedArtifactsGitignore } from "../artifacts.mjs";
+// Phase-27 (v2.60.0): Pricing canonical source lives in cost-service. The
+// local estimateCost() is now a thin adapter over priceSlice.
+import { priceSlice } from "../../cost-service.mjs";
 
 // ─── Default visual analyzer config ──────────────────────────────────
 
@@ -538,14 +541,11 @@ function tryParseJson(text) {
 }
 
 function estimateCost(tokens, model) {
-  const rates = {
-    "claude-opus-4.7": 0.000075,
-    "claude-sonnet-4.5": 0.000015,
-    "gpt-4o": 0.00005,
-    "gpt-5.3-codex": 0.00005,
-    "grok-4.20": 0.00005,
-  };
-  return tokens * (rates[model] || 0.00005);
+  const half = Math.round(tokens / 2);
+  return priceSlice(
+    { tokens_in: half, tokens_out: tokens - half, model },
+    "api-visual-diff",
+  ).cost_usd;
 }
 
 // ─── Quorum helpers ──────────────────────────────────────────────────

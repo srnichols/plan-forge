@@ -15,7 +15,7 @@ import { join } from "node:path";
 import {
   getForgeMasterConfig,
   FORGE_MASTER_DEFAULTS,
-} from "../forge-master/config.mjs";
+} from "../../pforge-master/src/config.mjs";
 
 import {
   BASE_ALLOWLIST,
@@ -23,7 +23,7 @@ import {
   USAGE_HINTS,
   resolveAllowlist,
   isAllowlisted,
-} from "../forge-master/allowlist.mjs";
+} from "../../pforge-master/src/allowlist.mjs";
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
@@ -215,7 +215,7 @@ describe("forge-master allowlist", () => {
 
 describe("forge-master system-prompt", () => {
   it("system-prompt.md exists and contains key sections", () => {
-    const promptPath = join(import.meta.dirname, "..", "forge-master", "system-prompt.md");
+    const promptPath = join(import.meta.dirname, "..", "..", "pforge-master", "src", "system-prompt.md");
     expect(existsSync(promptPath)).toBe(true);
     const content = readFileSync(promptPath, "utf-8");
     expect(content).toContain("Forge-Master");
@@ -268,7 +268,7 @@ import {
   LANES,
   LANE_TOOLS,
   OFFTOPIC_REDIRECT,
-} from "../forge-master/intent-router.mjs";
+} from "../../pforge-master/src/intent-router.mjs";
 
 describe("forge-master intent router", () => {
   // ── Build lane (2 examples) ──
@@ -426,7 +426,7 @@ import {
   L3_KEYS,
   estimateTokens,
   summarizeValue,
-} from "../forge-master/retrieval.mjs";
+} from "../../pforge-master/src/retrieval.mjs";
 
 describe("forge-master retrieval", () => {
   // ── Helper: mock recall that returns per-key data ──
@@ -632,7 +632,7 @@ import {
   invokeMany,
   summarize,
   SUMMARY_LIMIT,
-} from "../forge-master/tool-bridge.mjs";
+} from "../../pforge-master/src/tool-bridge.mjs";
 
 describe("forge-master bridge", () => {
   const allowlist = [...BASE_ALLOWLIST];
@@ -834,8 +834,8 @@ import {
   buildToolSchemas,
   selectProvider,
   ABSOLUTE_CEILING,
-} from "../forge-master/reasoning.mjs";
-import { MockReasoningClient } from "../forge-master/__fixtures__/MockReasoningClient.mjs";
+} from "../../pforge-master/src/reasoning.mjs";
+import { MockReasoningClient } from "../../pforge-master/src/__fixtures__/MockReasoningClient.mjs";
 
 describe("forge-master reasoning", () => {
   let tmpDirR;
@@ -1118,7 +1118,7 @@ import {
   SUMMARIZE_THRESHOLD,
   SUMMARIZE_COUNT,
   _resetLocks,
-} from "../forge-master/persistence.mjs";
+} from "../../pforge-master/src/persistence.mjs";
 
 describe("forge-master persistence", () => {
   afterEach(() => _resetLocks());
@@ -1481,13 +1481,13 @@ import {
   buildAnthropicTools,
   formatMessages as formatAnthropicMessages,
   parseResponse as parseAnthropicResponse,
-} from "../forge-master/providers/anthropic-tools.mjs";
+} from "../../pforge-master/src/providers/anthropic-tools.mjs";
 
 import {
   buildOpenAITools,
   formatMessages as formatOpenAIMessages,
   parseResponse as parseOpenAIResponse,
-} from "../forge-master/providers/openai-tools.mjs";
+} from "../../pforge-master/src/providers/openai-tools.mjs";
 
 describe("forge-master providers/anthropic-tools", () => {
   it("buildAnthropicTools produces input_schema format", () => {

@@ -1,57 +1,7 @@
 /**
- * Plan Forge — Forge-Master Subsystem (Phase-28).
+ * Plan Forge — Forge-Master Subsystem (Phase-29 shim).
  *
- * Package entry point. Re-exports all public surface from submodules
- * so consumers can import from `./forge-master/index.mjs`.
+ * Re-exports the public surface from @pforge/pforge-master so existing
+ * consumers that import from `./forge-master/index.mjs` continue to work.
  */
-
-export {
-  getForgeMasterConfig,
-  FORGE_MASTER_DEFAULTS,
-} from "./config.mjs";
-
-export {
-  BASE_ALLOWLIST,
-  WRITE_TOOLS_EXCLUDED,
-  USAGE_HINTS,
-  resolveAllowlist,
-  isAllowlisted,
-} from "./allowlist.mjs";
-
-export {
-  classify,
-  LANES,
-  LANE_TOOLS,
-  OFFTOPIC_REDIRECT,
-} from "./intent-router.mjs";
-
-export {
-  fetchContext,
-  TOKEN_CAP,
-  L1_KEYS,
-  L2_KEYS_BY_LANE,
-  L3_KEYS,
-} from "./retrieval.mjs";
-
-export {
-  invokeAllowlisted,
-  invokeMany,
-  summarize,
-  SUMMARY_LIMIT,
-} from "./tool-bridge.mjs";
-
-export {
-  runTurn,
-  buildToolSchemas,
-  selectProvider,
-  ABSOLUTE_CEILING,
-} from "./reasoning.mjs";
-
-export {
-  ensureSessionId,
-  appendTurn,
-  summarizeIfNeeded,
-  SUMMARIZE_THRESHOLD,
-  SUMMARIZE_COUNT,
-  _resetLocks,
-} from "./persistence.mjs";
+export * from "../../pforge-master/src/index.mjs";

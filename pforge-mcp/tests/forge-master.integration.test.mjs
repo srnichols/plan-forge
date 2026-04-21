@@ -19,8 +19,8 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync, existsSync, readFileSync
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-import { runTurn, buildToolSchemas, ABSOLUTE_CEILING } from "../forge-master/reasoning.mjs";
-import { ensureSessionId } from "../forge-master/persistence.mjs";
+import { runTurn, buildToolSchemas, ABSOLUTE_CEILING } from "../../pforge-master/src/reasoning.mjs";
+import { ensureSessionId } from "../../pforge-master/src/persistence.mjs";
 import { TOOL_METADATA } from "../capabilities.mjs";
 
 // ─── Helpers ────────────────────────────────────────────────────────

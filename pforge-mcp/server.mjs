@@ -4814,7 +4814,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       if (!args.message || typeof args.message !== "string") {
         return { content: [{ type: "text", text: "forge_master_ask: message (string) is required" }], isError: true };
       }
-      const { runTurn } = await import("./forge-master/reasoning.mjs");
+      const { runTurn } = await import("./forge-master/index.mjs");
       const { TOOL_METADATA } = await import("./capabilities.mjs");
       const result = await runTurn(
         {

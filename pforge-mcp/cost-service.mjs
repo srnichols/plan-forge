@@ -54,3 +54,91 @@ export const MODEL_PRICING = {
 export function getPricing(model) {
   return MODEL_PRICING[model] || MODEL_PRICING.default;
 }
+
+/**
+ * Calculate cost for a single slice from its token data.
+ *
+ * CLI workers (gh-copilot, claude) are subscription-based — cost is estimated
+ * from premium request counts, not token-based API pricing.
+ * API workers use per-token MODEL_PRICING.
+ *
+ * Signature kept positional for drop-in parity with the legacy
+ * `calculateSliceCost(tokens, worker)` entry point in orchestrator.mjs.
+ *
+ * @param {{ tokens_in: number|null, tokens_out: number|null, model: string, premiumRequests?: number }} tokens
+ * @param {string} [worker] - Worker type: "gh-copilot", "claude", "codex", "api-xai", etc.
+ * @returns {{ cost_usd: number, model: string, tokens_in: number, tokens_out: number }}
+ */
+export function priceSlice(tokens, worker) {
+  const model = tokens?.model || "unknown";
+  const tokensIn = typeof tokens?.tokens_in === "number" ? tokens.tokens_in : 0;
+  const tokensOut = typeof tokens?.tokens_out === "number" ? tokens.tokens_out : 0;
+
+  let cost;
+  // CLI subscription workers: cost based on premium requests, not API token pricing
+  if (worker && !worker.startsWith("api-")) {
+    const premiumRequests = tokens?.premiumRequests || 0;
+    // GitHub Copilot premium request rate — approximate per-request cost
+    const PREMIUM_REQUEST_RATE = 0.01; // ~$0.01 per premium request
+    cost = premiumRequests * PREMIUM_REQUEST_RATE;
+  } else {
+    // API workers: use per-token pricing
+    const pricing = getPricing(model);
+    cost = (tokensIn * pricing.input) + (tokensOut * pricing.output);
+  }
+
+  return {
+    cost_usd: Math.round(cost * 1_000_000) / 1_000_000, // 6 decimal places
+    model,
+    tokens_in: tokensIn,
+    tokens_out: tokensOut,
+  };
+}
+
+/**
+ * Build cost breakdown from all slice results.
+ * Drop-in replacement for orchestrator.buildCostBreakdown.
+ * @param {Array} sliceResults
+ * @returns {{ total_cost_usd, by_model, by_slice }}
+ */
+export function priceRun(sliceResults) {
+  const byModel = {};
+  const bySlice = [];
+  let totalCost = 0;
+  let totalIn = 0;
+  let totalOut = 0;
+
+  for (const sr of sliceResults) {
+    if (!sr.tokens || sr.status === "skipped") continue;
+    const cost = priceSlice(sr.tokens, sr.worker);
+    totalCost += cost.cost_usd;
+    totalIn += cost.tokens_in;
+    totalOut += cost.tokens_out;
+
+    bySlice.push({
+      slice: sr.number || sr.sliceId,
+      ...cost,
+    });
+
+    if (!byModel[cost.model]) {
+      byModel[cost.model] = { tokens_in: 0, tokens_out: 0, cost_usd: 0, slices: 0 };
+    }
+    byModel[cost.model].tokens_in += cost.tokens_in;
+    byModel[cost.model].tokens_out += cost.tokens_out;
+    byModel[cost.model].cost_usd += cost.cost_usd;
+    byModel[cost.model].slices += 1;
+  }
+
+  // Round model totals
+  for (const m of Object.values(byModel)) {
+    m.cost_usd = Math.round(m.cost_usd * 1_000_000) / 1_000_000;
+  }
+
+  return {
+    total_cost_usd: Math.round(totalCost * 100) / 100,
+    total_tokens_in: totalIn,
+    total_tokens_out: totalOut,
+    by_model: byModel,
+    by_slice: bySlice,
+  };
+}

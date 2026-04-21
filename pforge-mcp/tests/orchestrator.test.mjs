@@ -41,6 +41,8 @@ import {
   isPlaceholderToken,
   suggestAllowedCommand,
   runGate,
+  DEFAULT_GATE_TIMEOUT_MS,
+  resolveGateTimeoutMs,
 } from "../orchestrator.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -679,6 +681,45 @@ describe("runGate allowlist error message", () => {
   it("still lists the full allowlist", () => {
     const r = runGate("nope-unknown", tmpdir());
     expect(r.error).toContain("Allowed:");
+  });
+});
+
+// ─── runGate timeout configurability ─────────────────────────────────
+
+describe("runGate timeout", () => {
+  const origEnv = process.env.PFORGE_GATE_TIMEOUT_MS;
+
+  afterEach(() => {
+    if (origEnv === undefined) delete process.env.PFORGE_GATE_TIMEOUT_MS;
+    else process.env.PFORGE_GATE_TIMEOUT_MS = origEnv;
+  });
+
+  it("DEFAULT_GATE_TIMEOUT_MS is 300 000", () => {
+    expect(DEFAULT_GATE_TIMEOUT_MS).toBe(300_000);
+  });
+
+  it("resolveGateTimeoutMs returns default when env var is unset", () => {
+    delete process.env.PFORGE_GATE_TIMEOUT_MS;
+    expect(resolveGateTimeoutMs()).toBe(300_000);
+  });
+
+  it("resolveGateTimeoutMs reads PFORGE_GATE_TIMEOUT_MS env var", () => {
+    process.env.PFORGE_GATE_TIMEOUT_MS = "60000";
+    expect(resolveGateTimeoutMs()).toBe(60_000);
+  });
+
+  it("resolveGateTimeoutMs ignores non-positive values", () => {
+    process.env.PFORGE_GATE_TIMEOUT_MS = "0";
+    expect(resolveGateTimeoutMs()).toBe(300_000);
+    process.env.PFORGE_GATE_TIMEOUT_MS = "-1";
+    expect(resolveGateTimeoutMs()).toBe(300_000);
+  });
+
+  it("resolveGateTimeoutMs ignores non-numeric values", () => {
+    process.env.PFORGE_GATE_TIMEOUT_MS = "abc";
+    expect(resolveGateTimeoutMs()).toBe(300_000);
+    process.env.PFORGE_GATE_TIMEOUT_MS = "";
+    expect(resolveGateTimeoutMs()).toBe(300_000);
   });
 });
 

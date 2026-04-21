@@ -46,6 +46,23 @@ export { TEMPERING_SCAN_STALE_DAYS };
 /** Canonical list of all supported agent adapters. Update here — consumed by dashboard, setup, and docs. */
 export const SUPPORTED_AGENTS = ["copilot", "claude", "cursor", "codex", "gemini", "windsurf", "generic"];
 
+/** Default gate timeout: 5 minutes (raised from 2 min in v2.62.1). Override with PFORGE_GATE_TIMEOUT_MS. */
+export const DEFAULT_GATE_TIMEOUT_MS = 300_000;
+
+/**
+ * Resolve the gate timeout in milliseconds.
+ * Priority: PFORGE_GATE_TIMEOUT_MS env var → default (300 000 ms / 5 min).
+ * @returns {number}
+ */
+export function resolveGateTimeoutMs() {
+  const envVal = process.env.PFORGE_GATE_TIMEOUT_MS;
+  if (envVal != null && envVal !== "") {
+    const parsed = Number(envVal);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  return DEFAULT_GATE_TIMEOUT_MS;
+}
+
 /** Allowlist of commands permitted in validation gates. Shared by runGate() and lintGateCommands(). */
 export const GATE_ALLOWED_PREFIXES = [
   // Build / test runners
@@ -1815,11 +1832,12 @@ export function runGate(command, cwd) {
     };
   }
 
+  const gateTimeout = resolveGateTimeoutMs();
   try {
     const output = execSync(command, {
       cwd,
       encoding: "utf-8",
-      timeout: 120_000,
+      timeout: gateTimeout,
       env: { ...process.env, NO_COLOR: "1" },
     });
     return { success: true, output: output.trim(), error: "" };
@@ -4643,7 +4661,7 @@ export async function regressionGuard(files, { plan, failFast = false, cwd = pro
     }
 
     try {
-      const output = execSync(gate.cmd, { cwd, stdio: "pipe", timeout: 120000, encoding: "utf-8" });
+      const output = execSync(gate.cmd, { cwd, stdio: "pipe", timeout: resolveGateTimeoutMs(), encoding: "utf-8" });
       results.push({ ...gate, status: "passed", output: (output || "").trim().slice(0, 500) });
       passed++;
     } catch (err) {

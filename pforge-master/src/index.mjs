@@ -16,6 +16,8 @@ export {
   USAGE_HINTS,
   resolveAllowlist,
   isAllowlisted,
+  WRITE_ALLOWLIST,
+  PHASE29_FULL_ALLOWLIST,
 } from "./allowlist.mjs";
 
 export {
@@ -37,6 +39,7 @@ export {
   invokeAllowlisted,
   invokeMany,
   summarize,
+  createDispatcher,
   SUMMARY_LIMIT,
 } from "./tool-bridge.mjs";
 
@@ -55,3 +58,32 @@ export {
   SUMMARIZE_COUNT,
   _resetLocks,
 } from "./persistence.mjs";
+
+export {
+  createHubSubscriber,
+} from "./hub-subscriber.mjs";
+
+export {
+  createApprovalGate,
+} from "./approvals.mjs";
+
+export {
+  getPromptCatalog,
+  getPromptById,
+} from "./prompts.mjs";
+
+export {
+  createSseStream,
+} from "./sse.mjs";
+
+export {
+  createHttpRoutes,
+} from "./http-routes.mjs";
+
+export {
+  start as lifecycleStart,
+  stop as lifecycleStop,
+  status as lifecycleStatus,
+  logs as lifecycleLogs,
+} from "./lifecycle.mjs";
+

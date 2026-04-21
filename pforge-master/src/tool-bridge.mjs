@@ -164,6 +164,41 @@ export async function invokeMany(calls, deps) {
   );
 }
 
+// ─── Transport-aware dispatcher factory ─────────────────────────────
+
+/**
+ * Create a dispatcher function that routes tool calls through the MCP
+ * protocol or falls back to in-process invocation.
+ *
+ * @param {{
+ *   transport: "mcp" | "inprocess",
+ *   mcpClient?: { ready: boolean, hasTool: (n: string) => boolean, invoke: (n: string, a: object) => Promise<any> } | null,
+ *   fallbackDispatcher?: (name: string, args: object, cwd?: string) => Promise<any>,
+ * }} opts
+ * @returns {(name: string, args: object, cwd?: string) => Promise<any>}
+ */
+export function createDispatcher({ transport, mcpClient = null, fallbackDispatcher = null } = {}) {
+  if (!transport) {
+    throw new Error("createDispatcher: transport is required ('mcp' or 'inprocess')");
+  }
+
+  return async (name, args = {}, cwd) => {
+    if (transport === "mcp" && mcpClient?.ready) {
+      // When MCP transport is selected but the tool isn't available
+      // downstream, fall back to in-process if available.
+      if (!mcpClient.hasTool(name)) {
+        if (fallbackDispatcher) return fallbackDispatcher(name, args, cwd);
+        throw new Error(`tool '${name}' not found on downstream MCP and no fallback dispatcher`);
+      }
+      return mcpClient.invoke(name, args);
+    }
+
+    // transport === "inprocess", or MCP requested but client not ready
+    if (fallbackDispatcher) return fallbackDispatcher(name, args, cwd);
+    throw new Error(`no dispatcher available (transport=${transport}, mcpReady=${!!mcpClient?.ready})`);
+  };
+}
+
 // ─── Hub event helper ───────────────────────────────────────────────
 
 function emitEvent(hub, type, data) {

@@ -228,7 +228,7 @@ bash -c "cd pforge-mcp && npx vitest run tests/forge-master.test.mjs -t 'retriev
 **Validation Gate**:
 ```bash
 bash -c "cd pforge-mcp && npx vitest run tests/forge-master.test.mjs -t 'bridge'"
-bash -c "cd pforge-mcp && grep -c 'source.*forge-master' forge-master/tool-bridge.mjs | tr -d '\\n' | { read n; [ \"$n\" -ge 1 ] || (echo 'source tag missing' && exit 1); }"
+bash -c "cd pforge-mcp && grep -q 'source.*forge-master' forge-master/tool-bridge.mjs || (echo 'source tag missing' && exit 1)"
 ```
 
 ---

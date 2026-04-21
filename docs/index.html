@@ -16,7 +16,7 @@
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:image" content="https://planforge.software/assets/brand/og-card-v2.webp" />
   <meta name="twitter:title" content="Plan Forge — The AI-Native SDLC Forge Shop" />
-  <meta name="twitter:description" content="The AI-Native SDLC Forge Shop — four stations (Smelt, Forge, Guard, Learn), 65 MCP tools, autonomous execution, live dashboard." />
+  <meta name="twitter:description" content="The AI-Native SDLC Forge Shop — four stations (Smelt, Forge, Guard, Learn), 67 MCP tools, autonomous execution, live dashboard." />
   <link rel="canonical" href="https://planforge.software/" />
   <script type="application/ld+json">
   {"@context":"https://schema.org","@type":"SoftwareApplication","name":"Plan Forge","url":"https://planforge.software","description":"The AI-Native SDLC Forge Shop — one workshop, four stations (Smelt, Forge, Guard, Learn) covering every phase of the software lifecycle","applicationCategory":"DeveloperApplication","operatingSystem":"Windows, macOS, Linux","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"author":{"@type":"Organization","name":"Plan Forge","url":"https://github.com/srnichols/plan-forge"}}
@@ -230,7 +230,7 @@
       <!-- Badge -->
       <div class="inline-flex items-center gap-2 px-4 py-1.5 mb-8 rounded-full bg-slate-800/80 border border-slate-700/60 text-sm text-slate-300">
         <span class="w-2 h-2 rounded-full bg-forge-500 animate-pulse"></span>
-        Open Source · MIT License · Dogfooded · v2.59.1
+        Open Source · MIT License · Dogfooded · v2.62.0
       </div>
 
       <!-- Logo -->
@@ -270,7 +270,7 @@
           <div class="text-xs text-slate-500">phases self-built</div>
         </div>
         <div class="bg-slate-800/60 rounded-xl p-4 text-center border border-slate-700/30">
-          <div class="text-2xl font-bold text-green-400">2478/2478</div>
+          <div class="text-2xl font-bold text-green-400">3167/3169</div>
           <div class="text-xs text-slate-500">self-tests passing</div>
         </div>
         <div class="bg-slate-800/60 rounded-xl p-4 text-center border border-slate-700/30">
@@ -844,7 +844,7 @@
           <p class="text-sm text-slate-400 mb-3">Works with the Copilot cloud agent out of the box. Add <code class="text-sky-300">copilot-setup-steps.yml</code> to provision guardrails, MCP tools, and validation gates before the agent writes a single line.</p>
           <ul class="space-y-1 text-xs text-slate-500">
             <li class="flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-sky-400 shrink-0"></span>Instruction files auto-load identically in cloud + local</li>
-            <li class="flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-sky-400 shrink-0"></span>65 MCP tools wired via <code class="text-sky-300">.vscode/mcp.json</code></li>
+            <li class="flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-sky-400 shrink-0"></span>67 MCP tools wired via <code class="text-sky-300">.vscode/mcp.json</code></li>
             <li class="flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-sky-400 shrink-0"></span>Complements CodeQL, secret scanning, and Copilot code review</li>
           </ul>
         </div>
@@ -882,9 +882,9 @@
         <div class="p-8 rounded-2xl bg-slate-800/60 border border-purple-700/30">
           <div class="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center text-2xl mb-4">🔌</div>
           <h3 class="text-xl font-bold text-white mb-2">MCP Server + Orchestrator</h3>
-          <p class="text-sm text-slate-400 mb-4">65 MCP tools (core + LiveGuard + Watcher + Crucible + Tempering + Bug Registry + Testbed) — run plans autonomously with <code class="text-forge-400">forge_run_plan</code>, multi-model analysis with <code class="text-forge-400">forge_analyze --quorum</code> and <code class="text-forge-400">forge_diagnose</code>, full health check with <code class="text-forge-400">forge_liveguard_run</code>, generate images with <code class="text-forge-400">forge_generate_image</code>, track costs with <code class="text-forge-400">forge_cost_report</code>, monitor in real-time via WebSocket hub + dashboard at <code class="text-forge-400">localhost:3100/dashboard</code>. Full Auto, Assisted, and Quorum execution modes. xAI Grok + OpenAI support via API provider registry.</p>
+          <p class="text-sm text-slate-400 mb-4">67 MCP tools (core + LiveGuard + Watcher + Crucible + Tempering + Bug Registry + Testbed + Forge-Master) — run plans autonomously with <code class="text-forge-400">forge_run_plan</code>, multi-model analysis with <code class="text-forge-400">forge_analyze --quorum</code> and <code class="text-forge-400">forge_diagnose</code>, full health check with <code class="text-forge-400">forge_liveguard_run</code>, generate images with <code class="text-forge-400">forge_generate_image</code>, track costs with <code class="text-forge-400">forge_cost_report</code>, monitor in real-time via WebSocket hub + dashboard at <code class="text-forge-400">localhost:3100/dashboard</code>. Full Auto, Assisted, and Quorum execution modes. xAI Grok + OpenAI support via API provider registry.</p>
           <div class="space-y-1 text-xs text-slate-500">
-            <div>65 tools (Core · LiveGuard · Watcher · Crucible · Tempering · Bug Registry · Testbed) · Dashboard · REST API · WebSocket · Traces · Parallel · Grok · Image Gen</div>
+            <div>67 tools (Core · LiveGuard · Watcher · Crucible · Tempering · Bug Registry · Testbed · Forge-Master) · Dashboard · REST API · WebSocket · Traces · Parallel · Grok · Image Gen</div>
           </div>
         </div>
 
@@ -1713,7 +1713,7 @@ Target project: (current directory)</code></pre>
               </div>
               <div class="p-3 rounded-lg bg-slate-800/60 border border-slate-700/40 text-slate-400">
                 <span class="text-white font-medium block mb-1">What it installs</span>
-                21+ instruction files, 19 agents, 13 skills, lifecycle hooks, pipeline prompts, copilot-instructions.md, 65 MCP tools
+                21+ instruction files, 19 agents, 13 skills, lifecycle hooks, pipeline prompts, copilot-instructions.md, 67 MCP tools
               </div>
               <div class="p-3 rounded-lg bg-slate-800/60 border border-slate-700/40 text-slate-400">
                 <span class="text-white font-medium block mb-1">What it customizes</span>
@@ -2084,11 +2084,11 @@ Target project: (current directory)</code></pre>
         <p class="text-lg text-slate-400 max-w-2xl mx-auto mb-8">Every feature in this repo &mdash; the MCP server, the dashboard, the orchestrator, the quorum system &mdash; was developed using the same hardened plan pipeline that ships to users. If the pipeline can build itself without drift, it can build your project too.</p>
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-3xl mx-auto">
           <div class="bg-slate-800/60 rounded-xl p-4 border border-slate-700/30">
-            <div class="text-2xl font-bold text-forge-400">11</div>
+            <div class="text-2xl font-bold text-forge-400">28+</div>
             <div class="text-xs text-slate-500">phases executed</div>
           </div>
           <div class="bg-slate-800/60 rounded-xl p-4 border border-slate-700/30">
-            <div class="text-2xl font-bold text-green-400">v2.59</div>
+            <div class="text-2xl font-bold text-green-400">v2.62</div>
             <div class="text-xs text-slate-500">current version</div>
           </div>
           <div class="bg-slate-800/60 rounded-xl p-4 border border-slate-700/30">
@@ -2096,7 +2096,7 @@ Target project: (current directory)</code></pre>
             <div class="text-xs text-slate-500">manual rollbacks</div>
           </div>
           <div class="bg-slate-800/60 rounded-xl p-4 border border-slate-700/30">
-            <div class="text-2xl font-bold text-purple-400">69</div>
+            <div class="text-2xl font-bold text-purple-400">3167/3169</div>
             <div class="text-xs text-slate-500">self-tests passing</div>
           </div>
         </div>

@@ -205,7 +205,7 @@ And when reading before acting:
 
 ## Tool audit — where we are today
 
-As of v2.53, dual-write coverage across 65 MCP tools:
+As of v2.62, dual-write coverage across 67 MCP tools:
 
 | Bucket | Count | Status |
 |--------|-------|--------|

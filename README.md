@@ -19,7 +19,7 @@
 **[Website](https://planforge.software/)** · **[Shop Tour](https://planforge.software/shop-tour.html)** · **[Manual](https://planforge.software/manual/)** · **[Documentation](https://planforge.software/docs.html)** · **[FAQ](https://planforge.software/faq.html)** · **[Extensions](https://planforge.software/extensions.html)** · **[Spec Kit Interop](https://planforge.software/speckit-interop.html)**
 
 ```
-65 MCP Tools · 45+ CLI Commands · 19 Agents · 13 Skills · 9 Presets · 7 Adapters · 2478 Tests · v2.55.0
+67 MCP Tools · 45+ CLI Commands · 19 Agents · 13 Skills · 9 Presets · 7 Adapters · 3167 Tests · v2.62.0
 ```
 
 ---
@@ -53,7 +53,7 @@ And the **control room** that ties them together: the [live dashboard](docs/manu
 
 ## Verified Results
 
-**Verified**: 12+ phases self-built, 2478/2478 self-tests, 65 MCP tools, zero manual rollbacks. See [docs/capabilities.md](docs/capabilities.md).
+**Verified**: 28+ phases self-built, 3167/3169 self-tests, 67 MCP tools, zero manual rollbacks. See [docs/capabilities.md](docs/capabilities.md).
 
 ### A/B Test Results (April 2026)
 
@@ -130,11 +130,11 @@ One setup command, every tool: `setup.ps1 -Agent all`
 
 GitHub Copilot (primary) · Claude Code · Cursor · Codex CLI · Gemini CLI · Windsurf · Generic
 
-### MCP Server (65 Tools)
+### MCP Server (67 Tools)
 
-`pforge-mcp/server.mjs` exposes core, LiveGuard, Watcher, Crucible, Tempering, Bug Registry, and Testbed operations. Live dashboard at `localhost:3100/dashboard`. REST API for external integrations.
+`pforge-mcp/server.mjs` exposes core, LiveGuard, Watcher, Crucible, Tempering, Bug Registry, Testbed, and Forge-Master operations. Live dashboard at `localhost:3100/dashboard`. REST API for external integrations.
 
-Key tools: `forge_run_plan` · `forge_liveguard_run` · `forge_analyze` · `forge_capabilities` · `forge_smith` · `forge_cost_report`
+Key tools: `forge_run_plan` · `forge_liveguard_run` · `forge_analyze` · `forge_master_ask` · `forge_capabilities` · `forge_smith` · `forge_cost_report`
 
 ### Optional Capabilities
 
@@ -157,7 +157,7 @@ Key tools: `forge_run_plan` · `forge_liveguard_run` · `forge_analyze` · `forg
 |----------|---------|
 | **[docs/COPILOT-VSCODE-GUIDE.md](docs/COPILOT-VSCODE-GUIDE.md)** | VS Code + Copilot walkthrough |
 | **[docs/CLI-GUIDE.md](docs/CLI-GUIDE.md)** | `pforge` CLI reference |
-| **[docs/capabilities.md](docs/capabilities.md)** | Full feature reference — all 65 tools, 19 agents, 13 skills |
+| **[docs/capabilities.md](docs/capabilities.md)** | Full feature reference — all 67 tools, 19 agents, 13 skills |
 | **[CUSTOMIZATION.md](CUSTOMIZATION.md)** | Adapt guardrails for your project |
 | **[planforge.software/manual/](https://planforge.software/manual/)** | Interactive web manual (24 chapters + 6 appendices) |
 | **[planforge.software/faq.html](https://planforge.software/faq.html)** | FAQ |

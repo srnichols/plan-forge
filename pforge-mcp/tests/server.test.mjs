@@ -1810,9 +1810,11 @@ describe("dashboard tab structure", () => {
   const dashboardHtml = readFileSync(resolve(__dirname, "..", "dashboard", "index.html"), "utf-8");
   const dashboardJs = readFileSync(resolve(__dirname, "..", "dashboard", "app.js"), "utf-8");
 
-  const CORE_TABS = ["progress", "crucible", "governance", "runs", "cost", "actions", "replay", "extensions", "config", "traces", "skills", "watcher", "memory", "timeline", "innerloop", "forge-master"];
+  const CORE_TABS = ["progress", "crucible", "governance", "runs", "cost", "actions", "replay", "extensions", "traces", "skills", "watcher", "memory", "timeline", "innerloop"];
   const LG_TABS = ["lg-health", "lg-incidents", "lg-triage", "lg-security", "lg-env"];
-  const ALL_TABS = [...CORE_TABS, ...LG_TABS];
+  const FM_TABS = ["forge-master"];
+  const SETTINGS_TABS = ["config"];
+  const ALL_TABS = [...CORE_TABS, ...LG_TABS, ...FM_TABS, ...SETTINGS_TABS];
 
   it("has 14 core tab buttons", () => {
     for (const tab of CORE_TABS) {
@@ -1826,7 +1828,26 @@ describe("dashboard tab structure", () => {
     }
   });
 
-  it("total tab count is 25 (20 core + 5 LG)", () => {
+  it("Forge-Master is a top-level group (not a Forge sub-tab)", () => {
+    expect(dashboardHtml).toContain('data-group="forge-master"');
+    expect(dashboardHtml).toContain('id="subtabs-forge-master"');
+    // forge-master data-tab button must live inside its own subtab row, not subtabs-forge.
+    const fmRow = dashboardHtml.match(/id="subtabs-forge-master"[\s\S]*?<\/div>/);
+    expect(fmRow?.[0] || "").toContain('data-tab="forge-master"');
+  });
+
+  it("Settings is a top-level group (not a Forge sub-tab)", () => {
+    expect(dashboardHtml).toContain('data-group="settings"');
+    expect(dashboardHtml).toContain('id="subtabs-settings"');
+    // config data-tab button must live inside subtabs-settings, not subtabs-forge.
+    const settingsRow = dashboardHtml.match(/id="subtabs-settings"[\s\S]*?<\/div>/);
+    expect(settingsRow?.[0] || "").toContain('data-tab="config"');
+    // And must NOT appear inside subtabs-forge any more.
+    const forgeRow = dashboardHtml.match(/id="subtabs-forge"[\s\S]*?<\/div>/);
+    expect(forgeRow?.[0] || "").not.toContain('data-tab="config"');
+  });
+
+  it("total tab count is 25 (18 core + 5 LG + 1 Forge-Master + 1 Settings)", () => {
     const tabMatches = dashboardHtml.match(/data-tab="[^"]+"/g) || [];
     expect(tabMatches.length).toBe(25);
   });

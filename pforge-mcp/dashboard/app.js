@@ -117,23 +117,33 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
 });
 
 // ─── Group Tab Switching ──────────────────────────────────────────────
+const GROUP_COLORS = { forge: "blue", liveguard: "amber", "forge-master": "cyan", settings: "purple" };
+const GROUP_ROWS = ["subtabs-forge", "subtabs-liveguard", "subtabs-forge-master", "subtabs-settings"];
+
 function switchGroup(group) {
   // Update group tab styles
   document.querySelectorAll(".group-tab").forEach((g) => {
-    g.classList.remove("group-active", "text-blue-400", "text-amber-400", "border-blue-400", "border-amber-400");
+    g.classList.remove(
+      "group-active",
+      "text-blue-400", "text-amber-400", "text-cyan-400", "text-purple-400",
+      "border-blue-400", "border-amber-400", "border-cyan-400", "border-purple-400"
+    );
     g.classList.add("text-gray-500", "border-transparent");
   });
   const activeGroup = document.querySelector(`.group-tab[data-group="${group}"]`);
   if (activeGroup) {
     activeGroup.classList.add("group-active");
     activeGroup.classList.remove("text-gray-500", "border-transparent");
-    const color = group === "liveguard" ? "amber" : "blue";
+    const color = GROUP_COLORS[group] || "blue";
     activeGroup.classList.add(`text-${color}-400`, `border-${color}-400`);
   }
 
-  // Show/hide subtab rows
-  document.getElementById("subtabs-forge").classList.toggle("hidden", group !== "forge");
-  document.getElementById("subtabs-liveguard").classList.toggle("hidden", group !== "liveguard");
+  // Show/hide subtab rows (group id → `subtabs-${group}`)
+  const activeRowId = `subtabs-${group}`;
+  for (const rowId of GROUP_ROWS) {
+    const row = document.getElementById(rowId);
+    if (row) row.classList.toggle("hidden", rowId !== activeRowId);
+  }
 
   // Auto-click the first subtab in the group if none active
   const subtabRow = document.getElementById(`subtabs-${group}`);

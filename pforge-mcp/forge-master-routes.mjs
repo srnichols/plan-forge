@@ -14,12 +14,15 @@
  */
 
 import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { existsSync } from "node:fs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FORGE_MASTER_ROUTES_PATH = resolve(__dirname, "../pforge-master/src/http-routes.mjs");
 const FORGE_MASTER_PROMPTS_PATH = resolve(__dirname, "../pforge-master/src/prompts.mjs");
+// Dynamic import() needs file:// URLs on Windows, not raw absolute paths.
+const FORGE_MASTER_ROUTES_URL = pathToFileURL(FORGE_MASTER_ROUTES_PATH).href;
+const FORGE_MASTER_PROMPTS_URL = pathToFileURL(FORGE_MASTER_PROMPTS_PATH).href;
 
 /**
  * Register Forge-Master Studio API routes on the Express app.
@@ -35,7 +38,7 @@ export async function registerForgeMasterRoutes(app) {
   }
 
   try {
-    const { createHttpRoutes } = await import(FORGE_MASTER_ROUTES_PATH);
+    const { createHttpRoutes } = await import(FORGE_MASTER_ROUTES_URL);
     createHttpRoutes(app);
     console.error("[forge-master-routes] Forge-Master Studio API registered at /api/forge-master/*");
   } catch (err) {
@@ -52,7 +55,7 @@ export async function registerForgeMasterRoutes(app) {
 export async function getForgeMasterCapabilitiesSummary() {
   if (!existsSync(FORGE_MASTER_PROMPTS_PATH)) return null;
   try {
-    const { getPromptCatalog } = await import(FORGE_MASTER_PROMPTS_PATH);
+    const { getPromptCatalog } = await import(FORGE_MASTER_PROMPTS_URL);
     const catalog = getPromptCatalog();
     return {
       available: true,

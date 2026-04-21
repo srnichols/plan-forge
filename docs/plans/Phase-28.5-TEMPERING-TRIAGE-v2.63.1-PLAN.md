@@ -4,9 +4,9 @@ lane: full
 source: human
 ---
 
-# Phase-28.5 — Tempering Triage (v2.62.4)
+# Phase-28.5 — Tempering Triage (v2.63.1)
 
-> **Target release**: v2.62.4
+> **Target release**: v2.63.1
 > **Status**: Draft — queued behind Phase-29 (do not launch until Phase-29 ships v2.63.0)
 > **Depends on**: Phase-29 tag `v2.63.0` landing on master.
 > **Branch strategy**: Direct to `master`. Small, surgical fixes to tempering visual-diff + baselines pipeline.
@@ -52,15 +52,15 @@ Together they produce persistent false-positive regressions that cannot be clear
 
 ### User Scenarios
 
-1. **Investigate-band diff with API key in secrets.json**: User runs `pforge run-plan ...`, slice finishes, post-slice tempering fires. Visual-diff detects a 0.25 diff (investigate band). Before v2.62.4 → `inconclusive: no spawnWorker provided`. After v2.62.4 → `spawnWorker` forwarded, `hasKey` sees `XAI_API_KEY` from `.forge/secrets.json`, scanner dispatches to Grok, gets a structured `{ verdict, severity, explanation }` back. Quorum event fires. No user action required.
+1. **Investigate-band diff with API key in secrets.json**: User runs `pforge run-plan ...`, slice finishes, post-slice tempering fires. Visual-diff detects a 0.25 diff (investigate band). Before v2.63.1 → `inconclusive: no spawnWorker provided`. After v2.63.1 → `spawnWorker` forwarded, `hasKey` sees `XAI_API_KEY` from `.forge/secrets.json`, scanner dispatches to Grok, gets a structured `{ verdict, severity, explanation }` back. Quorum event fires. No user action required.
 
-2. **Second run of the day**: User runs `ui-playwright` at 09:00, then again at 14:00. Before v2.62.4 → the 14:00 visual-diff reads the 09:00 manifest, diffs against noon-lit screenshots, produces stable false regressions. After v2.62.4 → 14:00 `ui-playwright` overwrites the manifest; 14:00 visual-diff reads 14:00 paths. Clean diff.
+2. **Second run of the day**: User runs `ui-playwright` at 09:00, then again at 14:00. Before v2.63.1 → the 14:00 visual-diff reads the 09:00 manifest, diffs against noon-lit screenshots, produces stable false regressions. After v2.63.1 → 14:00 `ui-playwright` overwrites the manifest; 14:00 visual-diff reads 14:00 paths. Clean diff.
 
-3. **Baseline promotion after CI ran validate**: User promotes a baseline with no explicit `runId`. Before v2.62.4 → `validate-2026-04-01/` wins alphabetically, stale CI screenshot gets promoted. After v2.62.4 → `run-*` filter skips `validate-*`, latest `run-*` by mtime promoted correctly.
+3. **Baseline promotion after CI ran validate**: User promotes a baseline with no explicit `runId`. Before v2.63.1 → `validate-2026-04-01/` wins alphabetically, stale CI screenshot gets promoted. After v2.63.1 → `run-*` filter skips `validate-*`, latest `run-*` by mtime promoted correctly.
 
 4. **Orchestrator post-slice hook**: `maybeRunPostSliceTempering` now forwards `spawnWorker` → tempering runner → visual-diff scanner. Post-slice quorum decisions reflect actual LLM verdicts, not fallback `inconclusive`.
 
-5. **Tests continue to pass**: Existing test suite (3277 tests as of v2.62.3) remains green. New tests add a small, targeted regression guard for each defect. No existing test should need modification beyond optionally asserting the new `spawnWorker` DI parameter.
+5. **Tests continue to pass**: Existing test suite (3285 tests as of v2.63.0) remains green. New tests add a small, targeted regression guard for each defect. No existing test should need modification beyond optionally asserting the new `spawnWorker` DI parameter.
 
 ### Acceptance Criteria
 
@@ -80,9 +80,9 @@ Together they produce persistent false-positive regressions that cannot be clear
 - **MUST**: `promoteBaseline` in [baselines.mjs:114](pforge-mcp/tempering/baselines.mjs) replaces the `.sort().reverse()` block with mtime-descending sort. When `opts.runId` is not supplied, filters candidate directories to those starting with `run-` (skips `validate-*` and any other prefix). With explicit `runId`, no filter applied.
 - **MUST**: Unit tests added for each of the four fixes (see per-slice test lists below). Tests are **additive** — no existing tempering test is modified except to thread `spawnWorker` where needed.
 - **MUST**: Full test suite green: `cd pforge-mcp && npx vitest run` exits 0 with count ≥ 3277 + 4 new tests = 3281+.
-- **MUST**: `CHANGELOG.md` gains a `## v2.62.4 — Tempering Triage` entry with a bullet per defect and a back-link to #85.
-- **MUST**: `VERSION` file and all stamps updated to `2.62.4` (badges, metrics, README tagline, `package.json` files).
-- **MUST**: `forge_capabilities` version string reflects 2.62.4.
+- **MUST**: `CHANGELOG.md` gains a `## v2.63.1 — Tempering Triage` entry with a bullet per defect and a back-link to #85.
+- **MUST**: `VERSION` file and all stamps updated to `2.63.1` (badges, metrics, README tagline, `package.json` files).
+- **MUST**: `forge_capabilities` version string reflects 2.63.1.
 - **SHOULD**: Issue #85 commented with release link after ship.
 - **MAY**: A short note added to `.github/instructions/self-repair-reporting.instructions.md` citing the four-defect compound as an example of when to escalate an external bug report. Nice-to-have; low cost.
 
@@ -291,15 +291,15 @@ bash -c "cd pforge-mcp && npx vitest run tests/tempering-baselines-sort.test.mjs
 
 ---
 
-#### Slice 5: Ship v2.62.4 [sequential] {#slice-5}
+#### Slice 5: Ship v2.63.1 [sequential] {#slice-5}
 
 **Goal**: Stamp version, update CHANGELOG, sweep metrics, verify full suite green. Defer tag + release to human.
 
 **Files**:
-- `VERSION` → `2.62.4`
+- `VERSION` → `2.63.1`
 - `CHANGELOG.md` — prepend:
   ```markdown
-  ## v2.62.4 — Tempering Triage (2026-04-DD)
+  ## v2.63.1 — Tempering Triage (2026-04-DD)
 
   Patch release fixing four compounding defects in the tempering visual-diff
   and baselines pipeline that produced persistent false-positive regressions.
@@ -320,11 +320,11 @@ bash -c "cd pforge-mcp && npx vitest run tests/tempering-baselines-sort.test.mjs
 
   **Related**: #84 (shipped v2.62.3).
   ```
-- `package.json` (root), `pforge-mcp/package.json`, `pforge-master/package.json`, `pforge-sdk/package.json` — `"version": "2.62.4"`.
-- `docs/_metrics.json` — bump `version` to `2.62.4`, `testsPassing` and `testsTotal` to the new count (3277 + 4 slice-1 + 2 slice-2a + 2 slice-2b + 2 slice-3a + 2 slice-3b + 4 slice-4 = **3297**; verify exact count via vitest output). Move `v2.62.3` into `versionBadges` alongside v2.62.2.
-- `docs/index.html` — hero badge to `v2.62.4`; dashboard preview stats `28+/3297/67`.
-- `README.md` tagline → `67 MCP Tools · 45+ CLI Commands · 19 Agents · 13 Skills · 9 Presets · 7 Adapters · 3297 Tests · v2.62.4` (update the tests count from the actual vitest count).
-- `pforge-mcp/capabilities.mjs` — version string to `2.62.4`.
+- `package.json` (root), `pforge-mcp/package.json`, `pforge-master/package.json`, `pforge-sdk/package.json` — `"version": "2.63.1"`.
+- `docs/_metrics.json` — bump `version` to `2.63.1`, `testsPassing` and `testsTotal` to the new count (3277 + 4 slice-1 + 2 slice-2a + 2 slice-2b + 2 slice-3a + 2 slice-3b + 4 slice-4 = **3293**; verify exact count via vitest output). Move `v2.63.0` into `versionBadges` alongside v2.62.3.
+- `docs/index.html` — hero badge to `v2.63.1`; dashboard preview stats `28+/3293/67`.
+- `README.md` tagline → `67 MCP Tools · 45+ CLI Commands · 19 Agents · 13 Skills · 9 Presets · 7 Adapters · 3293 Tests · v2.63.1` (update the tests count from the actual vitest count).
+- `pforge-mcp/capabilities.mjs` — version string to `2.63.1`.
 - Run `scripts/check-metrics.ps1` → must print `[OK] No stale metric aliases found.`
 
 **Depends on**: Slices 1–4.
@@ -340,12 +340,12 @@ bash -c "cd pforge-mcp && npx vitest run tests/tempering-baselines-sort.test.mjs
 
 **Validation Gate**:
 ```bash
-bash -c "grep -q '^2.62.4$' VERSION"
-bash -c "grep -q 'v2.62.4' CHANGELOG.md"
-bash -c "grep -q '\"version\": \"2.62.4\"' package.json"
-bash -c "grep -q '\"version\": \"2.62.4\"' pforge-mcp/package.json"
-bash -c "grep -q '2.62.4' docs/_metrics.json"
-bash -c "grep -q 'v2.62.4' README.md"
+bash -c "grep -q '^2.63.1$' VERSION"
+bash -c "grep -q 'v2.63.1' CHANGELOG.md"
+bash -c "grep -q '\"version\": \"2.63.1\"' package.json"
+bash -c "grep -q '\"version\": \"2.63.1\"' pforge-mcp/package.json"
+bash -c "grep -q '2.63.1' docs/_metrics.json"
+bash -c "grep -q 'v2.63.1' README.md"
 bash -c "cd pforge-mcp && npx vitest run 2>&1 | tail -5 | grep -q 'Tests.*passed'"
 ```
 
@@ -374,6 +374,6 @@ Do NOT edit any of these files in this phase:
 
 ## Post-Ship
 
-- Comment on issue #85 with the v2.62.4 release URL and a summary of the four fixes.
+- Comment on issue #85 with the v2.63.1 release URL and a summary of the four fixes.
 - Add an entry to `docs/plans/DEPLOYMENT-ROADMAP.md` under Phase-28.x.
 - Consider a note in `.github/instructions/self-repair-reporting.instructions.md` citing this phase as an example of an external four-defect compound (MAY).

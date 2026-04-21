@@ -1225,6 +1225,80 @@ export function buildDrainStatsRecord(pass) {
   };
 }
 
+// ─── Phase-28.4 — OpenBrain queue drain orchestrator ────────────────────
+
+/**
+ * Phase-28.4 (v2.62.3): drain eligible records from the OpenBrain queue.
+ * Pure function — composes partitionByBackoff, calls injected dispatcher,
+ * calls applyDeliveryFailure on failures, returns structured result.
+ * Zero filesystem I/O — caller handles persistence.
+ *
+ * @param {Array<object>} records - Queue records from openbrain-queue.jsonl
+ * @param {(record: object) => Promise<{ok: boolean, error?: string}>} dispatcher - Injected delivery function
+ * @param {{maxBatch?: number, maxAttempts?: number, now?: number, source?: string}} [opts]
+ * @returns {Promise<{delivered: Array, deferred: Array, dlq: Array, archive: Array, stats: object}>}
+ */
+export async function drainOpenBrainQueue(records, dispatcher, opts = {}) {
+  const { maxBatch = 50, maxAttempts = 5, now = Date.now(), source = "drain" } = opts;
+  const t0 = now;
+
+  const { ready, deferred } = partitionByBackoff(records, now);
+
+  // Slice to batch ceiling; surplus records go back to deferred untouched
+  const batch = ready.slice(0, maxBatch);
+  const surplus = ready.slice(maxBatch);
+  const allDeferred = [...deferred, ...surplus];
+
+  const delivered = [];
+  const archive = [];
+  const dlq = [];
+  const retrying = [];
+
+  for (const record of batch) {
+    let result;
+    try {
+      result = await dispatcher(record);
+    } catch (err) {
+      result = { ok: false, error: String(err?.message || err || "unknown") };
+    }
+
+    if (result && result.ok) {
+      const done = {
+        ...record,
+        _status: "delivered",
+        _deliveredAt: new Date(now).toISOString(),
+      };
+      delivered.push(done);
+      archive.push(done);
+    } else {
+      const error = result?.error || "unknown";
+      const outcome = applyDeliveryFailure(record, { maxAttempts, error, now });
+      if (outcome.action === "dlq") {
+        dlq.push(outcome.record);
+      } else {
+        retrying.push(outcome.record);
+      }
+    }
+  }
+
+  const stats = buildDrainStatsRecord({
+    attempted: batch.length,
+    delivered: delivered.length,
+    deferred: allDeferred.length + retrying.length,
+    dlq: dlq.length,
+    durationMs: Date.now() - t0,
+    source,
+  });
+
+  return {
+    delivered,
+    deferred: [...allDeferred, ...retrying],
+    dlq,
+    archive,
+    stats,
+  };
+}
+
 // ─── G3.2 — Similarity-based dedupe ────────────────────────────────────
 
 /**

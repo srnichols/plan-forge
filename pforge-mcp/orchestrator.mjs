@@ -500,6 +500,12 @@ function topologicalSort(nodes) {
   return order;
 }
 
+// ─── API Provider Role Allowlist ──────────────────────────────────────
+// API providers (Grok, OpenAI direct, etc.) are text-completion endpoints
+// without tool-call / filesystem access. They are valid for reviewer,
+// analysis, quorum-dry-run, and image roles — NOT for code-writing.
+export const API_ALLOWED_ROLES = new Set(["reviewer", "quorum-dry-run", "analysis", "image"]);
+
 // ─── API Provider Registry ────────────────────────────────────────────
 
 /**
@@ -1287,6 +1293,17 @@ export function spawnWorker(prompt, options = {}) {
   // we respect that choice and skip auto-API-routing.
   const apiProvider = !worker && model ? detectApiProvider(model) : null;
   if (apiProvider) {
+    // Block API providers from code-writing roles. API endpoints are
+    // text-completion only — no tool calls, no filesystem access.
+    const effectiveRole = role || "code";
+    if (!API_ALLOWED_ROLES.has(effectiveRole)) {
+      throw new Error(
+        `Model "${model}" is routed through the ${apiProvider.label} API which cannot execute ` +
+        `tool calls or edit files. ${apiProvider.label} models are valid for reviewer, analysis, ` +
+        `and quorum roles — not as a primary code-writing worker. ` +
+        `For code, use claude-sonnet-4.6 (via gh-copilot) or claude-opus-4.6 (via claude CLI).`
+      );
+    }
     return callApiWorker(prompt, model, apiProvider, { timeout, role });
   }
 

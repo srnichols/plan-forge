@@ -12,8 +12,8 @@
  * role, system + user for analysis/reviewer/quorum-dry-run roles.
  */
 
-import { describe, it, expect } from "vitest";
-import { buildApiMessages } from "../orchestrator.mjs";
+import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
+import { buildApiMessages, spawnWorker, API_ALLOWED_ROLES } from "../orchestrator.mjs";
 
 describe("buildApiMessages — bug #78/#80 role-aware prompt shaping", () => {
   it("returns a single user message for null role (legacy behaviour preserved)", () => {
@@ -67,5 +67,84 @@ describe("buildApiMessages — bug #78/#80 role-aware prompt shaping", () => {
     expect(sys).toContain("not");
     // Must mention at least one of the refusal triggers we're disarming.
     expect(sys).toMatch(/override|act on behalf|execute the instructions/);
+  });
+});
+
+describe("API_ALLOWED_ROLES — role allowlist for API providers", () => {
+  it("contains exactly the four allowed roles", () => {
+    expect(API_ALLOWED_ROLES).toEqual(new Set(["reviewer", "quorum-dry-run", "analysis", "image"]));
+  });
+
+  it("does not contain code-writing roles", () => {
+    expect(API_ALLOWED_ROLES.has("code")).toBe(false);
+    expect(API_ALLOWED_ROLES.has("execute")).toBe(false);
+    expect(API_ALLOWED_ROLES.has(null)).toBe(false);
+  });
+});
+
+describe("spawnWorker — blocks API providers from code-writing role", () => {
+  // These tests rely on the XAI_API_KEY env var being set so detectApiProvider
+  // returns a provider for grok-* models. We mock it for isolation.
+  const originalEnv = process.env.XAI_API_KEY;
+
+  beforeAll(() => {
+    process.env.XAI_API_KEY = "test-key-for-unit-tests";
+  });
+
+  afterAll(() => {
+    if (originalEnv !== undefined) {
+      process.env.XAI_API_KEY = originalEnv;
+    } else {
+      delete process.env.XAI_API_KEY;
+    }
+  });
+
+  it("throws when model is grok-* and role is null (default code-writing)", () => {
+    expect(() => spawnWorker("do stuff", { model: "grok-4.20" }))
+      .toThrow(/grok.*API/i);
+  });
+
+  it("throws when model is grok-* and role is 'code'", () => {
+    expect(() => spawnWorker("do stuff", { model: "grok-4.20", role: "code" }))
+      .toThrow(/grok.*API/i);
+  });
+
+  it("throws when model is grok-* and role is 'execute'", () => {
+    expect(() => spawnWorker("do stuff", { model: "grok-4.20", role: "execute" }))
+      .toThrow(/grok.*API/i);
+  });
+
+  it("error message mentions reviewer as valid alternative", () => {
+    try {
+      spawnWorker("do stuff", { model: "grok-4.20", role: null });
+      expect.unreachable("should have thrown");
+    } catch (e) {
+      expect(e.message).toContain("reviewer");
+    }
+  });
+
+  it("does NOT throw when model is grok-* and role is 'reviewer'", () => {
+    // spawnWorker returns a promise for API-routed models; it should not
+    // throw synchronously. The promise may reject due to network, but the
+    // role check itself passes.
+    expect(() => spawnWorker("review this", { model: "grok-4.20", role: "reviewer" }))
+      .not.toThrow();
+  });
+
+  it("does NOT throw when model is grok-* and role is 'quorum-dry-run'", () => {
+    expect(() => spawnWorker("dry run", { model: "grok-4.20", role: "quorum-dry-run" }))
+      .not.toThrow();
+  });
+
+  it("does NOT throw when model is grok-* and role is 'analysis'", () => {
+    expect(() => spawnWorker("analyze", { model: "grok-4.20", role: "analysis" }))
+      .not.toThrow();
+  });
+
+  it("does NOT throw for claude-sonnet-4.6 with null role (CLI worker path)", () => {
+    // claude-sonnet-4.6 is not an API-provider-pattern model (no Anthropic
+    // direct entry enabled), so it goes through the CLI worker path.
+    expect(() => spawnWorker("build feature", { model: "claude-sonnet-4.6", role: null }))
+      .not.toThrow();
   });
 });

@@ -5530,6 +5530,7 @@ export async function runPostSliceTemperingHook({
   hub = null,
   correlationId = null,
   lastGreenSha = null,
+  spawnWorker = null,
 } = {}) {
   if (!commitMessage) return { triggered: false, skippedReason: "no-commit-message" };
   if (typeof runTemperingRun !== "function") {
@@ -5586,6 +5587,7 @@ export async function runPostSliceTemperingHook({
       correlationId,
       sliceRef,
       lastGreenSha,
+      spawnWorker,
     });
   } catch (err) {
     return { triggered: true, action: "error", skippedReason: `runner-threw:${err.message}` };

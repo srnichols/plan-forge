@@ -419,6 +419,8 @@ export async function runTemperingRun(opts = {}) {
     registerBugFn = null,
     callModel = null,
     env = process.env,
+    // Phase-28.5 Slice 1 — DI hook for LLM visual-diff analyzer.
+    spawnWorker = null,
   } = opts;
 
   const corr = correlationId || `temper-run-${randomUUID()}`;
@@ -697,12 +699,12 @@ export async function runTemperingRun(opts = {}) {
       };
     } else if (visualDiffScannerImpl) {
       visualDiffResult = await visualDiffScannerImpl({
-        config, projectDir, runId, sliceRef, now, env, hub, captureMemory,
+        config, projectDir, runId, sliceRef, now, env, hub, captureMemory, spawnWorker,
       });
     } else {
       const { runVisualDiffScan } = await import("./scanners/visual-diff.mjs");
       visualDiffResult = await runVisualDiffScan({
-        config, projectDir, runId, sliceRef, now, env, hub, captureMemory,
+        config, projectDir, runId, sliceRef, now, env, hub, captureMemory, spawnWorker,
       });
     }
   } catch (err) {

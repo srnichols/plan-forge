@@ -25,7 +25,7 @@
  *   - Aborts cleanly when budget exceeded (closes browser)
  */
 import { ensureScannerArtifactDir, hashUrl, seedArtifactsGitignore } from "../artifacts.mjs";
-import { writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { resolve as pathResolve } from "node:path";
 
 // ─── Scanner config defaults ──────────────────────────────────────────
@@ -319,6 +319,22 @@ export async function runUiSweep(ctx) {
   }
 
   const durationMs = now() - t0;
+
+  // Write screenshot manifest for visual-diff scanner
+  if (artifactDir && settings.captureScreenshots) {
+    try {
+      const manifestEntries = [];
+      for (const [visitedUrl] of visited) {
+        const urlHash = hashUrl(visitedUrl);
+        const screenshotPath = pathResolve(artifactDir, `${urlHash}.png`);
+        if (existsSync(screenshotPath)) {
+          manifestEntries.push({ url: visitedUrl, urlHash, path: screenshotPath });
+        }
+      }
+      writeScreenshotManifest(projectDir, manifestEntries, runId);
+    } catch { /* best-effort */ }
+  }
+
   return {
     ...base,
     verdict,
@@ -408,6 +424,25 @@ async function visitPage({ browser, context, url, settings, artifactDir, axeInje
   }
 
   return { status, ok, reason, links, consoleErrors, failedRequests, a11yViolations };
+}
+
+/**
+ * Write (or overwrite) the screenshot manifest at
+ * `.forge/tempering/screenshot-manifest.json`. Each entry has
+ * `{ url, urlHash, path }`. Passing an empty array clears a stale manifest.
+ *
+ * @param {string} projectDir
+ * @param {Array<{url:string, urlHash:string, path:string}>} entries
+ * @param {string} _runId — reserved for future per-run manifests
+ */
+export function writeScreenshotManifest(projectDir, entries, _runId) {
+  const manifestDir = pathResolve(projectDir, ".forge", "tempering");
+  mkdirSync(manifestDir, { recursive: true });
+  writeFileSync(
+    pathResolve(manifestDir, "screenshot-manifest.json"),
+    JSON.stringify(entries),
+    "utf-8",
+  );
 }
 
 /**

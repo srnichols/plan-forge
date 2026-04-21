@@ -57,7 +57,7 @@ try {
   // .env loading is best-effort. Failure must never break server startup.
 }
 
-import { parsePlan, runPlan, detectWorkers, getCostReport, getHealthTrend, analyzeWithQuorum, generateImage, runAnalyze, readForgeJson, readForgeJsonl, appendForgeJsonl, emitToolTelemetry, regressionGuard, runPostSliceHook, resetPostSliceHookFired, runPreAgentHandoffHook, postOpenClawSnapshot, loadOpenClawConfig, loadQuorumConfig, runWatch, runWatchLive, readCrucibleState, readHomeSnapshot, addReviewItem, resolveReviewItem, listReviewItems, readReviewQueueState, maybeAddFixPlanReview, assessQuorumViability, detectExecutionRuntime, PROPOSED_FIX_DIR, detectCostAnomaly, computeMedian } from "./orchestrator.mjs";
+import { parsePlan, runPlan, detectWorkers, getCostReport, getHealthTrend, analyzeWithQuorum, generateImage, runAnalyze, readForgeJson, readForgeJsonl, appendForgeJsonl, emitToolTelemetry, regressionGuard, runPostSliceHook, resetPostSliceHookFired, runPreAgentHandoffHook, postOpenClawSnapshot, loadOpenClawConfig, loadQuorumConfig, runWatch, runWatchLive, readCrucibleState, readHomeSnapshot, addReviewItem, resolveReviewItem, listReviewItems, readReviewQueueState, maybeAddFixPlanReview, assessQuorumViability, detectExecutionRuntime, PROPOSED_FIX_DIR, detectCostAnomaly, computeMedian, spawnWorker } from "./orchestrator.mjs";
 // Phase FORGE-SHOP-07 Slice 07.2 — brain facade for unified recall
 import { recall as brainRecall, getReviewerCalibration, federationReadTrajectories, loadFederationConfig, validateFederationConfig, TRAJECTORY_FEDERATION_LIMIT } from "./brain.mjs";
 import {
@@ -2374,6 +2374,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         correlationId: args.correlationId || null,
         sliceRef: args.sliceRef || null,
         lastGreenSha: typeof args.lastGreenSha === "string" ? args.lastGreenSha : null,
+        spawnWorker,
       });
       emitToolTelemetry("forge_tempering_run", args, result, Date.now() - t0, result.ok ? "OK" : "ERROR", cwd);
 

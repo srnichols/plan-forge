@@ -8,7 +8,7 @@
  *
  * @module tempering/scanners/visual-diff
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   getScreenshotManifest,
@@ -20,6 +20,8 @@ import { ensureScannerArtifactDir, seedArtifactsGitignore } from "../artifacts.m
 // Phase-27 (v2.60.0): Pricing canonical source lives in cost-service. The
 // local estimateCost() is now a thin adapter over priceSlice.
 import { priceSlice } from "../../cost-service.mjs";
+// Phase-28.5: secrets.json fallback for API key detection
+import { loadSecretFromForge } from "../../secrets.mjs";
 
 // ─── Default visual analyzer config ──────────────────────────────────
 
@@ -137,20 +139,35 @@ export async function runVisualDiffScan(ctx) {
       continue;
     }
 
-    // Load current screenshot
+    // Load current screenshot — prefer current-run artifact when it
+    // exists and is newer than the manifest entry path (freshness fix).
     let currentBuf;
     try {
-      if (entry.path && existsSync(entry.path)) {
-        currentBuf = readFileSync(entry.path);
-      } else {
-        // Try to find in current run artifacts
-        const candidates = [
-          resolve(projectDir, ".forge", "tempering", "artifacts", runId, "ui-playwright", `${urlHash}.png`),
-          resolve(projectDir, ".forge", "tempering", "artifacts", runId, "visual-diff", `${urlHash}.png`),
-        ];
-        for (const c of candidates) {
-          if (existsSync(c)) { currentBuf = readFileSync(c); break; }
+      const currentRunCandidates = [
+        resolve(projectDir, ".forge", "tempering", "artifacts", runId, "ui-playwright", `${urlHash}.png`),
+        resolve(projectDir, ".forge", "tempering", "artifacts", runId, "visual-diff", `${urlHash}.png`),
+      ];
+      let currentRunPath = null;
+      for (const c of currentRunCandidates) {
+        if (existsSync(c)) { currentRunPath = c; break; }
+      }
+
+      if (currentRunPath) {
+        // Current-run artifact exists — check if it's newer than manifest path
+        const manifestPath = entry.path && existsSync(entry.path) ? entry.path : null;
+        if (!manifestPath) {
+          currentBuf = readFileSync(currentRunPath);
+        } else {
+          let manifestMtime = 0;
+          let runMtime = 0;
+          try { manifestMtime = statSync(manifestPath).mtimeMs; } catch { /* fallback */ }
+          try { runMtime = statSync(currentRunPath).mtimeMs; } catch { /* fallback */ }
+          currentBuf = runMtime >= manifestMtime
+            ? readFileSync(currentRunPath)
+            : readFileSync(manifestPath);
         }
+      } else if (entry.path && existsSync(entry.path)) {
+        currentBuf = readFileSync(entry.path);
       }
     } catch { /* fall through */ }
 
@@ -389,7 +406,10 @@ export async function runVisualDiffScan(ctx) {
         explanation = err.message || String(err);
       }
     } else {
-      const hasKey = env?.ANTHROPIC_API_KEY || env?.OPENAI_API_KEY || env?.XAI_API_KEY;
+      const hasKey = env?.ANTHROPIC_API_KEY || env?.OPENAI_API_KEY || env?.XAI_API_KEY
+        || loadSecretFromForge("ANTHROPIC_API_KEY", projectDir)
+        || loadSecretFromForge("OPENAI_API_KEY", projectDir)
+        || loadSecretFromForge("XAI_API_KEY", projectDir);
       if (!hasKey) {
         llmVerdict = "inconclusive";
         explanation = "no API key configured";

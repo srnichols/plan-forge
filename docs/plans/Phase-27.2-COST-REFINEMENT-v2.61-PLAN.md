@@ -1,5 +1,5 @@
 ---
-crucibleId: phase-27-2-cost-refinement-b4d9e2c3-6f8a-4b1d-a3c5-9e7f2a8c4b6d
+crucibleId: d7fa64b8-583a-4f92-9e2c-6309fdb16de7
 lane: full
 source: human
 ---

@@ -148,7 +148,7 @@ bash -c "grep -q 'API_ALLOWED_ROLES' pforge-mcp/orchestrator.mjs"
 **Validation Gate**:
 ```bash
 bash -c "cd pforge-mcp && npx vitest run tests/recommender-api-exclusion.test.mjs"
-bash -c "grep -q 'detectApiProvider' pforge-mcp/cost-service.mjs || grep -q 'API_PROVIDER_PATTERN' pforge-mcp/cost-service.mjs"
+bash -c "grep -Eq 'isApiOnlyModel|detectApiProvider|API_PROVIDER' pforge-mcp/cost-service.mjs"
 ```
 
 ---

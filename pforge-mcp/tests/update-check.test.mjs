@@ -183,6 +183,83 @@ describe("checkForUpdate", () => {
   });
 });
 
+// ─── VERSION mtime invalidates cache (Fix D) ─────────────────
+
+describe("VERSION mtime invalidates cache", () => {
+  let dir;
+  beforeEach(() => { dir = mkdtempSync(join(tmpdir(), "pforge-mtime-")); });
+  afterEach(() => { try { rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ } });
+
+  it("bypasses cache when VERSION is newer than the cache file", async () => {
+    // 1. Write a VERSION file
+    writeFileSync(join(dir, "VERSION"), "2.37.0\n", "utf-8");
+
+    // 2. Prime the cache (will create .forge/update-check.json)
+    const prime = makeFakeFetch({ tag_name: "v2.38.0" });
+    await checkForUpdate({ currentVersion: "2.37.0", projectDir: dir, fetchImpl: prime, env: {} });
+    expect(existsSync(cachePath(dir))).toBe(true);
+
+    // 3. Wait briefly, then touch VERSION so its mtime is strictly newer
+    await new Promise((r) => setTimeout(r, 50));
+    writeFileSync(join(dir, "VERSION"), "2.39.0\n", "utf-8");
+
+    // 4. Call checkForUpdate with a spy fetch — cache should be bypassed
+    let fetchCalled = false;
+    const spyFetch = async () => {
+      fetchCalled = true;
+      return { ok: true, status: 200, json: async () => ({ tag_name: "v2.39.0" }) };
+    };
+    const out = await checkForUpdate({
+      currentVersion: "2.39.0",
+      projectDir: dir,
+      fetchImpl: spyFetch,
+      env: {},
+    });
+    expect(fetchCalled).toBe(true);
+    expect(out.fromCache).toBe(false);
+    expect(out.latest).toBe("2.39.0");
+  });
+
+  it("serves from cache when VERSION is older than the cache file", async () => {
+    // 1. Write VERSION first
+    writeFileSync(join(dir, "VERSION"), "2.37.0\n", "utf-8");
+    await new Promise((r) => setTimeout(r, 50));
+
+    // 2. Prime the cache (written after VERSION, so cache is newer)
+    const prime = makeFakeFetch({ tag_name: "v2.38.0" });
+    await checkForUpdate({ currentVersion: "2.37.0", projectDir: dir, fetchImpl: prime, env: {} });
+
+    // 3. Call again — cache should still be served
+    let fetchCalled = false;
+    const explode = async () => { fetchCalled = true; throw new Error("should not call fetch"); };
+    const out = await checkForUpdate({
+      currentVersion: "2.37.0",
+      projectDir: dir,
+      fetchImpl: explode,
+      env: {},
+    });
+    expect(fetchCalled).toBe(false);
+    expect(out.fromCache).toBe(true);
+  });
+
+  it("serves from cache when no VERSION file exists", async () => {
+    // No VERSION file in dir — the cache should still work normally
+    const prime = makeFakeFetch({ tag_name: "v2.38.0" });
+    await checkForUpdate({ currentVersion: "2.37.0", projectDir: dir, fetchImpl: prime, env: {} });
+
+    let fetchCalled = false;
+    const explode = async () => { fetchCalled = true; throw new Error("should not call fetch"); };
+    const out = await checkForUpdate({
+      currentVersion: "2.37.0",
+      projectDir: dir,
+      fetchImpl: explode,
+      env: {},
+    });
+    expect(fetchCalled).toBe(false);
+    expect(out.fromCache).toBe(true);
+  });
+});
+
 // ─── /api/update-status endpoint ───────────────────────────────
 
 describe("/api/update-status", () => {

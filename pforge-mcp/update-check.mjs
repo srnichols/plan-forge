@@ -11,7 +11,7 @@
  *   - Dashboard rendering and REST exposure live in server.mjs / app.js.
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const RELEASES_URL = "https://api.github.com/repos/srnichols/plan-forge/releases/latest";
@@ -111,7 +111,24 @@ export async function checkForUpdate({
     if (cached && cached.checkedAt) {
       const age = Date.now() - new Date(cached.checkedAt).getTime();
       if (Number.isFinite(age) && age >= 0 && age < ttlMs) {
-        return { ...cached, current: currentVersion, isNewer: compareVersions(currentVersion, cached.latest) < 0, fromCache: true };
+        // Defense-in-depth (Fix D): if VERSION was touched after the cache
+        // was written, treat the cache as stale so a manual version bump or
+        // tarball extraction always triggers a fresh network check.
+        const versionFile = resolve(projectDir, "VERSION");
+        const cacheFile = cachePath(projectDir);
+        try {
+          if (existsSync(versionFile) && existsSync(cacheFile)) {
+            if (statSync(versionFile).mtimeMs > statSync(cacheFile).mtimeMs) {
+              // VERSION is newer — fall through to network refresh.
+            } else {
+              return { ...cached, current: currentVersion, isNewer: compareVersions(currentVersion, cached.latest) < 0, fromCache: true };
+            }
+          } else {
+            return { ...cached, current: currentVersion, isNewer: compareVersions(currentVersion, cached.latest) < 0, fromCache: true };
+          }
+        } catch {
+          return { ...cached, current: currentVersion, isNewer: compareVersions(currentVersion, cached.latest) < 0, fromCache: true };
+        }
       }
     }
   }

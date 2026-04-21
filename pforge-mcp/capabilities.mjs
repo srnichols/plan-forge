@@ -1376,6 +1376,39 @@ export const TOOL_METADATA = {
       output: { findings: [], total: 0, truncated: false },
     },
   },
+  forge_master_ask: {
+    intent: ["ask", "reason", "ideate", "forge-master", "crucible"],
+    aliases: ["ask_forge", "forge_ask"],
+    cost: "high",
+    maxConcurrent: 1,
+    addedIn: "2.61.0",
+    prerequisites: ["ANTHROPIC_API_KEY or OPENAI_API_KEY or XAI_API_KEY"],
+    produces: [".forge/brain/session.forgemaster.*.json"],
+    consumes: [".forge.json", ".forge/brain/**"],
+    sideEffects: ["writes session memory via brain.remember"],
+    writesFiles: false,
+    network: true,
+    risk: "low",
+    agentGuidance: "Use forge_master_ask for multi-step reasoning about Plan Forge workflows — ideating features, troubleshooting failures, querying run status, or funneling ideas into Crucible smelts. Forge-Master classifies intent, fetches memory context, and orchestrates tool calls on your behalf. Prefer this over manually calling individual forge tools when the task is open-ended or involves multiple steps. Do NOT use for direct file edits or code generation — Forge-Master is read-only.",
+    errors: {
+      reasoning_model_unavailable: {
+        message: "No reasoning provider configured",
+        recovery: "Set ANTHROPIC_API_KEY, OPENAI_API_KEY, or XAI_API_KEY, or configure forgeMaster.reasoningModel in .forge.json",
+      },
+    },
+    example: {
+      input: { message: "I want to add multi-tenant billing to my pipeline", sessionId: "sess-abc123" },
+      output: {
+        sessionId: "sess-abc123",
+        reply: "I've started a Crucible smelt for your multi-tenant billing feature...",
+        toolCalls: [{ name: "forge_crucible_submit", args: {}, resultSummary: "Smelt created", costUSD: 0.002 }],
+        tokensIn: 1200,
+        tokensOut: 450,
+        totalCostUSD: 0.003,
+        truncated: false,
+      },
+    },
+  },
   forge_testbed_happypath: {
     intent: ["test", "validate", "happy-path", "testbed", "smoke-test"],
     aliases: ["testbed-happypath", "run-happypath", "happy-path-test"],
@@ -2358,9 +2391,41 @@ export function buildCapabilitySurface(mcpTools, options = {}) {
       conflictDetection: "Parallel slices with overlapping [scope:] patterns forced to sequential",
     },
     innerLoop: INNER_LOOP_SURFACE,
+    forgeMaster: buildForgeMasterCapabilities(cwd),
     extensions,
     memory: buildMemoryCapabilities(cwd),
     system: SYSTEM_REFERENCE,
+  };
+}
+
+// ─── Forge-Master Capabilities ────────────────────────────────────────
+
+/**
+ * Build the forgeMaster subsystem block for forge_capabilities output.
+ * Surfaces config, tools, and allowlist so agents know the subsystem exists.
+ */
+function buildForgeMasterCapabilities(cwd) {
+  let config = {};
+  try {
+    const configPath = resolve(cwd, ".forge.json");
+    if (existsSync(configPath)) {
+      const forgeJson = JSON.parse(readFileSync(configPath, "utf-8"));
+      const block = forgeJson?.forgeMaster ?? {};
+      config = {
+        reasoningModel: block.reasoningModel ?? forgeJson?.model?.default ?? null,
+        routerModel: block.routerModel ?? "grok-3-mini",
+        discoverExtensionTools: block.discoverExtensionTools ?? true,
+      };
+    }
+  } catch { /* fall through to defaults */ }
+
+  return {
+    description: "Forge-Master: an in-IDE reasoning assistant that classifies intent, fetches memory context, and orchestrates read-only tool calls on the owner's behalf. Phase-28 MVP.",
+    addedIn: "2.61.0",
+    tools: ["forge_master_ask"],
+    reasoningModel: config.reasoningModel ?? null,
+    routerModel: config.routerModel ?? "grok-3-mini",
+    configKey: "forgeMaster",
   };
 }
 

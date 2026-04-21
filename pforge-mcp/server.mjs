@@ -1369,6 +1369,20 @@ const TOOLS = [
     },
   },
   {
+    name: "forge_master_ask",
+    description: "Ask Forge-Master to reason about Plan Forge workflows — ideate features via Crucible, troubleshoot failures, query run status, or get operational guidance. Classifies intent, fetches memory context, and orchestrates read-only tool calls. Returns reply text, tool call history, token counts, and session ID for conversation continuity.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        message: { type: "string", description: "Your question or request for Forge-Master" },
+        sessionId: { type: "string", description: "Session ID for conversation continuity (omit for new session)" },
+        maxToolCalls: { type: "number", description: "Max tool calls per turn (default: 5, max: 10)" },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+      required: ["message"],
+    },
+  },
+  {
     name: "forge_testbed_findings",
     description: "Query testbed defect-log findings. Returns findings filtered by status, severity, or date. Read-only — does not modify any files.",
     inputSchema: {
@@ -1569,6 +1583,7 @@ function executeTool(name, args) {
     case "forge_doctor_quorum":
     case "forge_testbed_run":
     case "forge_testbed_happypath":
+    case "forge_master_ask":
       return null; // Handled async in CallToolRequestSchema handler
     default:
       return { success: false, error: `Unknown tool: ${name}` };
@@ -4720,6 +4735,47 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const durationMs = Date.now() - t0;
       emitToolTelemetry("forge_testbed_happypath", args, { error: err.message, code: err.code }, durationMs, "ERROR", findProjectRoot(PROJECT_DIR));
       return { content: [{ type: "text", text: JSON.stringify({ error: err.code || "ERR_TESTBED", message: err.message }) }], isError: true };
+    }
+  }
+
+  // ─── forge_master_ask — Forge-Master reasoning (Phase-28 Slice 07) ───
+  if (name === "forge_master_ask") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      if (!args.message || typeof args.message !== "string") {
+        return { content: [{ type: "text", text: "forge_master_ask: message (string) is required" }], isError: true };
+      }
+      const { runTurn } = await import("./forge-master/reasoning.mjs");
+      const { TOOL_METADATA } = await import("./capabilities.mjs");
+      const result = await runTurn(
+        {
+          message: args.message,
+          sessionId: args.sessionId || undefined,
+          maxToolCalls: args.maxToolCalls || undefined,
+          cwd,
+        },
+        {
+          dispatcher: async (toolName, toolArgs, toolCwd) => {
+            const syncResult = executeTool(toolName, { ...toolArgs, path: toolCwd || cwd });
+            if (syncResult) return syncResult;
+            return { output: `(tool ${toolName} requires async dispatch — not available in Forge-Master bridge)` };
+          },
+          hub: activeHub || null,
+          toolMetadata: TOOL_METADATA,
+        },
+      );
+      emitToolTelemetry("forge_master_ask", args, {
+        sessionId: result.sessionId,
+        tokensIn: result.tokensIn,
+        tokensOut: result.tokensOut,
+        toolCallCount: result.toolCalls?.length ?? 0,
+        truncated: result.truncated,
+      }, Date.now() - t0, result.error ? "ERROR" : "OK", cwd);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      emitToolTelemetry("forge_master_ask", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
+      return { content: [{ type: "text", text: `Forge-Master error: ${err.message}` }], isError: true };
     }
   }
 

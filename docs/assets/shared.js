@@ -60,6 +60,18 @@ document.addEventListener('DOMContentLoaded', () => {
         triggerBtn.setAttribute('aria-expanded', 'false');
       })
     );
+    // Auto-close on mouseleave with a short grace period so the user can
+    // cross the small gap between trigger and panel without it slamming shut.
+    let leaveTimer = null;
+    const cancelLeave = () => { if (leaveTimer) { clearTimeout(leaveTimer); leaveTimer = null; } };
+    trigger.addEventListener('mouseleave', () => {
+      cancelLeave();
+      leaveTimer = setTimeout(() => {
+        trigger.classList.remove('nav-dropdown-open');
+        triggerBtn.setAttribute('aria-expanded', 'false');
+      }, 250);
+    });
+    trigger.addEventListener('mouseenter', cancelLeave);
   });
   if (dropdownTriggers.length) {
     // Click outside any open dropdown closes it

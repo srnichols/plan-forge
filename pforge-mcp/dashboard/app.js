@@ -584,6 +584,13 @@ function handleSliceCompleted(data) {
     slice.model = data.model;
     slice.cost = data.cost_usd;
     Object.assign(slice, data);
+    // Phase-27.2 Slice 6 — projected→actual flourish. Keep the projected
+    // badge visible for ~5s after completion so the operator sees
+    // "expected vs actual" side-by-side, then fade it out.
+    if (typeof slice.projectedCost === "number" && slice.projectedCost > 0) {
+      slice.flourishUntil = Date.now() + 5000;
+      scheduleFlourishClear(slice.id, 5000);
+    }
   }
   stopSliceTimer(data.sliceId);
   updateProgress();
@@ -597,11 +604,28 @@ function handleSliceFailed(data) {
     slice.status = "failed";
     slice.error = data.error;
     Object.assign(slice, data);
+    if (typeof slice.projectedCost === "number" && slice.projectedCost > 0) {
+      slice.flourishUntil = Date.now() + 5000;
+      scheduleFlourishClear(slice.id, 5000);
+    }
   }
   stopSliceTimer(data.sliceId);
   updateProgress();
   renderSliceCards();
   if (activeSliceLogId === data.sliceId) fetchSliceLogContent(data.sliceId);
+}
+
+// Phase-27.2 Slice 6 — schedule a single re-render after the flourish
+// window expires so the projected badge fades out cleanly.
+function scheduleFlourishClear(sliceId, ms) {
+  setTimeout(() => {
+    const slice = state.slices.find((s) => s.id === sliceId);
+    if (!slice) return;
+    if (slice.flourishUntil && Date.now() >= slice.flourishUntil) {
+      delete slice.flourishUntil;
+      renderSliceCards();
+    }
+  }, ms + 50);
 }
 
 function handleRunCompleted(data) {
@@ -729,11 +753,20 @@ function renderSliceCards() {
     // Hydrated from forge_estimate_quorum's per-slice breakdown under the
     // active projectionMode. Only renders when a projection is present in
     // state. Order on the card: complexity → projected → spend.
+    //
+    // Phase-27.2 Slice 6 — flourish: once a slice completes and has an
+    // actual cost, suppress the projected badge EXCEPT during the
+    // 5-second flourish window (slice.flourishUntil) where both badges
+    // render side-by-side so the operator sees expected → actual.
     const modeLabel = state.projectionMode === "recommended" && state.planProjection?.recommended
       ? `recommended (${state.planProjection.recommended})`
       : state.projectionMode;
-    const projectedBadge = (typeof s.projectedCost === "number" && s.projectedCost > 0)
-      ? `<span class="text-xs px-1.5 py-0.5 rounded bg-gray-800 text-sky-300 border border-gray-700" title="Projected cost (mode: ${modeLabel})">💵 ~$${s.projectedCost.toFixed(4)}</span>`
+    const actualCostPresent = typeof s.cost === "number" && s.cost > 0;
+    const flourishing = typeof s.flourishUntil === "number" && s.flourishUntil > Date.now();
+    const showProjected = (typeof s.projectedCost === "number" && s.projectedCost > 0)
+      && (!actualCostPresent || flourishing);
+    const projectedBadge = showProjected
+      ? `<span class="text-xs px-1.5 py-0.5 rounded bg-gray-800 text-sky-300 border border-gray-700 transition-opacity duration-700 ${flourishing ? "opacity-70" : ""}" title="Projected cost (mode: ${modeLabel})">💵 ~$${s.projectedCost.toFixed(4)}</span>`
       : "";
 
     // Gate status indicator

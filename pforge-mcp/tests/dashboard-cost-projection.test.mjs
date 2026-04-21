@@ -143,3 +143,39 @@ describe("dashboard plan-projection strip (Phase-27.2 Slice 5)", () => {
     expect(body).toMatch(/proj\.recommended/);
   });
 });
+
+describe("dashboard projected→actual flourish (Phase-27.2 Slice 6)", () => {
+  it("handleSliceCompleted marks slice.flourishUntil and schedules a clear", () => {
+    const idx = src.indexOf("function handleSliceCompleted");
+    const body = src.slice(idx, idx + 2000);
+    expect(body).toMatch(/flourishUntil\s*=\s*Date\.now\(\)\s*\+\s*5000/);
+    expect(body).toMatch(/scheduleFlourishClear\(/);
+  });
+
+  it("handleSliceFailed also marks flourishUntil (failed slices still have a projection)", () => {
+    const idx = src.indexOf("function handleSliceFailed");
+    const body = src.slice(idx, idx + 2000);
+    expect(body).toMatch(/flourishUntil\s*=\s*Date\.now\(\)\s*\+\s*5000/);
+  });
+
+  it("scheduleFlourishClear() re-renders after window expires", () => {
+    const idx = src.indexOf("function scheduleFlourishClear");
+    expect(idx).toBeGreaterThan(-1);
+    const body = src.slice(idx, idx + 1000);
+    expect(body).toMatch(/setTimeout\(/);
+    expect(body).toMatch(/renderSliceCards\(\)/);
+    expect(body).toMatch(/delete slice\.flourishUntil/);
+  });
+
+  it("projected badge is suppressed when actual cost present AND not flourishing", () => {
+    // Guard expression: actual present → hide unless flourishing
+    expect(src).toMatch(/const\s+actualCostPresent\s*=\s*typeof s\.cost === "number"\s*&&\s*s\.cost\s*>\s*0/);
+    expect(src).toMatch(/const\s+flourishing\s*=\s*typeof s\.flourishUntil === "number"\s*&&\s*s\.flourishUntil\s*>\s*Date\.now\(\)/);
+    expect(src).toMatch(/!actualCostPresent\s*\|\|\s*flourishing/);
+  });
+
+  it("projected badge uses a CSS opacity transition when flourishing", () => {
+    expect(src).toMatch(/transition-opacity/);
+    expect(src).toMatch(/opacity-70/);
+  });
+});

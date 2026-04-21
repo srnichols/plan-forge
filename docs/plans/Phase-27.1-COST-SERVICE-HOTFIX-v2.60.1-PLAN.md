@@ -66,6 +66,7 @@ source: human
 
 ### In-Scope
 - `pforge-mcp/cost-service.mjs` — fix per-leg pricing loop in `estimatePlan`, add `claude-opus-4.7` to `MODEL_PRICING`, lower `autoConfig.threshold` from 7 to 5.
+- `pforge-mcp/server.mjs` — add `forge_estimate_quorum` to the `MCP_ONLY_TOOLS` Set (one-line fix — without it, the dashboard's `/api/tool/forge_estimate_quorum` endpoint falls through to `runPforge` and cannot invoke the tool). Carryover defect from Phase-27 Slice 6.
 - `pforge-mcp/tests/cost-service.test.mjs` — rescale fixture regression ceiling if needed; add a "all QUORUM_PRESETS models are in MODEL_PRICING" coverage test.
 - New `pforge-mcp/tests/cost-service-real-plans.test.mjs` — real-plan smoke matrix over `docs/plans/*-PLAN.md`.
 - `CHANGELOG.md` — `[2.60.1]` section + honest retraction of v2.60.0 "fabrication" framing.
@@ -102,8 +103,9 @@ source: human
 ## Dependency DAG
 
 ```
-Slice 1 (per-leg pricing) ──┐
-Slice 2 (opus-4.7 in table) ──┤── Slice 4 (real-plan test suite)
+Slice 1 (per-leg pricing) ───┐
+Slice 2 (opus-4.7 in table) ──┤
+Slice 2b (HTTP bridge reg)  ──┤── Slice 4 (real-plan test suite)
 Slice 3 (auto threshold=5) ──┘           │
                                           └── Slice 5 (CHANGELOG + release v2.60.1)
 ```
@@ -132,12 +134,14 @@ const dryRunCostPerSlice = quorumConfig.models.reduce((sum, m) => {
 
 **Parity test update**: the existing `estimatePlan parity` test pinned pre-refactor behavior. Because the pre-refactor behavior was *also* buggy (same wrong formula), byte-equal parity no longer holds. Update the parity test to assert: parity for `quorumConfig: null` paths (unchanged), and for quorum-enabled paths assert `totalOverheadUSD > 0` + the new per-leg sum formula directly.
 
+**Rescale fixture regression ceiling here (not in Slice 4)**: after this fix lands, the existing fixture `REGRESSION GUARD: power mode on 6 trivial heuristic slices stays under $25` may cross $25 because `power` legs now price at opus rates. If it does, raise the ceiling to `$50` in the same commit (still catches the $146+ floor, documents the rescale in a code comment naming Phase-27.1 Slice 1). If the ceiling stays under $25, leave it.
+
 **Gates**:
 - Fixture: `power.totalOverheadUSD !== speed.totalOverheadUSD` for any plan with ≥1 quorum slice.
-- Unit test new: `per-leg pricing varies across quorum presets` — two estimates on the same plan, one with `power` config and one with `speed` config; assert `power.overheadUSD > speed.overheadUSD * 3` (reflecting opus-tier ≥5× input premium and ≥3× output premium over sonnet-tier for the flagship legs).
+- Unit test new: `per-leg pricing varies across quorum presets` — two estimates on the same plan, one with `power` config and one with `speed` config; assert `power.overheadUSD > speed.overheadUSD * 4`. Rationale: weighted-average input rate for `power` preset is ~$6.70/Mtok (opus-4.6 $15 + gpt-5.3-codex $3 + grok-reasoning $2, averaged) vs `speed` preset's ~$1.20/Mtok (sonnet-4.6 $3 + gpt-5.4-mini $0.40 + grok-fast $0.20). Observed ratio ≈ 5.5×; `> 4` gives margin for pricing drift without weakening to the point a partial regression passes.
 - Full vitest suite 2913+/2913+ green.
 
-**Commit**: `fix(cost-service): Phase-27.1 Slice 1 — per-leg dry-run pricing uses each quorum model's rate`
+**Commit**: `fix(cost-service): Phase-27.1 Slice 1 — per-leg dry-run pricing uses each quorum model's rate (+ fixture ceiling rescale if needed)`
 
 ---
 
@@ -157,6 +161,29 @@ const dryRunCostPerSlice = quorumConfig.models.reduce((sum, m) => {
 - Full vitest suite green.
 
 **Commit**: `fix(cost-service): Phase-27.1 Slice 2 — add claude-opus-4.7 to MODEL_PRICING`
+
+---
+
+### Slice 2b: Wire `forge_estimate_quorum` through the HTTP bridge
+**Scope**: `pforge-mcp/server.mjs` — `MCP_ONLY_TOOLS` Set literal (around line 5871).
+
+**Defect**: Phase-27 Slice 6 registered the tool in `capabilities.mjs`, `tools.json`, the tools list, switch case, and async handler — but missed the `MCP_ONLY_TOOLS` Set that gates the `/api/tool/:name` HTTP bridge. Without inclusion here, `POST /api/tool/forge_estimate_quorum` falls through to `runPforge("forge_estimate_quorum ...", PROJECT_DIR)`, which has no CLI counterpart — the dashboard cannot invoke the tool.
+
+**Change**: one line, alongside `"forge_cost_report"`:
+```diff
+     "forge_incident_capture", "forge_deploy_journal", "forge_dep_watch",
+     "forge_secret_scan", "forge_env_diff", "forge_fix_proposal",
+-    "forge_hotspot", "forge_runbook", "forge_run_plan", "forge_cost_report",
++    "forge_hotspot", "forge_runbook", "forge_run_plan", "forge_cost_report", "forge_estimate_quorum",
+     "forge_capabilities", "forge_memory_capture",
+```
+
+**Gates**:
+- New test in `tests/cost-service.test.mjs` (or a new `tests/http-bridge-coverage.test.mjs`): every tool name present in `tools.json` that has a dedicated handler in `server.mjs` (i.e. handled by the MCP `CallToolRequestSchema` path, not delegated to `runPforge`) must also appear in `MCP_ONLY_TOOLS`. Prevents this class of regression from recurring on future tool additions.
+- Manual smoke: `curl -X POST http://127.0.0.1:3100/api/tool/forge_estimate_quorum -H 'Content-Type: application/json' -d '{"planPath":"docs/plans/Phase-27-COST-SERVICE-v2.60-PLAN.md"}'` returns a JSON payload with `auto`, `power`, `speed`, `false`, `recommended` keys.
+- Full vitest suite green.
+
+**Commit**: `fix(mcp): Phase-27.1 Slice 2b — wire forge_estimate_quorum through HTTP bridge (carryover from Phase-27 Slice 6)`
 
 ---
 
@@ -198,11 +225,11 @@ const dryRunCostPerSlice = quorumConfig.models.reduce((sum, m) => {
 4. For the **largest plan** (max `slices.length`): `result.auto.quorumSliceCount > 0`.
 5. For **all plans**: every summary has finite `estimatedCostUSD >= 0` and a valid `confidence` string.
 
-**Rescale fixture ceiling if needed**: if after Slice 1 the fixture `power` crosses `$25`, raise the fixture regression guard ceiling to `$50`. Document in a comment: *"Ceiling rescaled Phase-27.1 Slice 4 — fixture `power` rose from ~$18 to ~$32 after per-leg pricing fix. $50 still catches the $146+ fabrication floor."*
+(Fixture ceiling rescale — if any — happens in Slice 1's commit, not here.)
 
 **Gates**:
 - Real-plan test passes on all `docs/plans/*-PLAN.md` present at commit time.
-- Existing fixture regression guard green (possibly with rescaled ceiling).
+- Existing fixture regression guard green (ceiling already rescaled in Slice 1 if needed).
 - Full vitest suite green.
 
 **Commit**: `test(cost-service): Phase-27.1 Slice 4 — real-plan smoke matrix catches integration regressions`

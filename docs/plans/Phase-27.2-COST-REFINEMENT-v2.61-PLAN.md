@@ -141,7 +141,7 @@ export function estimateSlice({ plan, sliceNumber, mode = "auto", model = "claud
 - `mode: "power"` on a trivially-scored slice returns `quorumEligible: true` (power forces all).
 - `mode: "auto"` on a trivially-scored slice returns `quorumEligible: false` and a rationale naming the threshold.
 - Throws with a clear error if `sliceNumber` is not in `plan.slices`.
-- Parity: summing `estimateSlice` over every slice in a plan equals `estimatePlan(...).totalCostWithQuorumUSD` within rounding tolerance (one dollar cent).
+- Parity (un-calibrated): summing `estimateSlice` over every slice in a plan equals `estimatePlan(...).totalCostWithQuorumUSD` **when `estimatePlan` is called with a `cwd` that has no `.forge/cost-history.json`** (historical calibration factor == 1.0). With history present, `estimatePlan` applies a single run-level `correctionFactor` (0.5×–3× clamp) that distorts the sum; the per-slice projection intentionally does not re-derive that factor from a single slice's context. Document this in `estimateSlice`'s JSDoc: "Per-slice projections are un-calibrated base × rate numbers. Run-level historical calibration is applied in `estimatePlan` / `estimateQuorum` only."
 
 **Gates**:
 - Full vitest suite + 10 new tests green.
@@ -180,7 +180,9 @@ Existing keys (`mode`, `estimatedCostUSD`, `baseCostUSD`, `overheadUSD`, `quorum
 ### Slice 3: `forge_estimate_slice` MCP tool
 **Scope**: `pforge-mcp/capabilities.mjs`, `tools.json`, `server.mjs`.
 
-**Registration pattern**: mirror `forge_estimate_quorum` (established in Phase-27 Slice 6).
+**Registration pattern**: mirror `forge_estimate_quorum` (established in Phase-27 Slice 6, corrected in Phase-27.1 Slice 2b).
+
+**Critical**: the tool name MUST also be added to the `MCP_ONLY_TOOLS` Set in `server.mjs` (same fix Phase-27.1 Slice 2b applies for `forge_estimate_quorum`) — otherwise the `/api/tool/forge_estimate_slice` HTTP bridge falls through to `runPforge` and the dashboard cannot invoke it. The HTTP-bridge coverage test added in Phase-27.1 Slice 2b will catch this automatically if we forget; the slice calls it out explicitly so we don't.
 
 **Tool metadata**:
 - `intent: ["estimate", "cost", "slice", "planning"]`

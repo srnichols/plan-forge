@@ -5874,6 +5874,12 @@ export function createExpressApp() {
     "forge_incident_capture", "forge_deploy_journal", "forge_dep_watch",
     "forge_secret_scan", "forge_env_diff", "forge_fix_proposal",
     "forge_hotspot", "forge_runbook", "forge_run_plan", "forge_cost_report",
+    // Phase-27.1 Slice 2b — forge_estimate_quorum was registered in
+    // capabilities.mjs/tools.json/switch case/handler in Phase-27 Slice 6 but
+    // missed this Set, so /api/tool/forge_estimate_quorum fell through to
+    // runPforge() (no CLI counterpart). Added here so the HTTP bridge reaches
+    // the MCP handler.
+    "forge_estimate_quorum",
     "forge_capabilities", "forge_memory_capture",
     // Phase TEMPER-01 Slice 01.2 — Tempering tools handle their own IO
     // via tempering.mjs; they are MCP-native and must not be shelled

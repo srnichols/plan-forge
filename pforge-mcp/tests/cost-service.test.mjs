@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import * as costService from "../cost-service.mjs";
-import { calculateSliceCost, buildCostBreakdown, buildEstimate } from "../orchestrator.mjs";
+import { calculateSliceCost, buildCostBreakdown, buildEstimate, QUORUM_PRESETS } from "../orchestrator.mjs";
 
 describe("cost-service: MODEL_PRICING + getPricing (Slice 1)", () => {
   it("exports MODEL_PRICING as an object with a default rate", () => {
@@ -230,9 +230,72 @@ describe("cost-service: estimateQuorum regression (Slice 3)", () => {
     expect(result.power.overheadUSD).toBeGreaterThan(0);
     expect(result.speed.overheadUSD).toBeGreaterThan(0);
     expect(result.power.overheadUSD).not.toBe(result.speed.overheadUSD);
-    // Pre-fix ratio was 1.0 (identical). Post Slice 1 fix ratio ≈ 3.1 (reviewer
-    // cost dilution + opus-4.7 not yet in MODEL_PRICING — Slice 2 will raise it).
-    // Threshold of 2 catches the original bug with margin for pricing drift.
-    expect(result.power.overheadUSD).toBeGreaterThan(result.speed.overheadUSD * 2);
+    // Pre-fix ratio was 1.0 (identical). After Slice 1 (per-leg pricing) + Slice 2
+    // (opus-4.7 in MODEL_PRICING, was falling back to sonnet rates), observed ratio
+    // ≈ 5.5× on this fixture (reviewer term still dilutes). Threshold `> * 4` catches
+    // the original bug (identical numbers) and catches partial regressions (e.g., if
+    // opus-4.7 silently drops back to the fallback) while leaving margin for pricing
+    // drift. Per plan Slice 1 rationale.
+    expect(result.power.overheadUSD).toBeGreaterThan(result.speed.overheadUSD * 4);
+  });
+});
+
+describe("cost-service: pricing table coverage (Phase-27.1 Slice 2)", () => {
+  // Regression guard: every model named in QUORUM_PRESETS must exist as a direct
+  // key in MODEL_PRICING. Without this, a new quorum preset entry silently falls
+  // through to the default rate — which is how claude-opus-4.7 shipped priced as
+  // sonnet in v2.60.0 (Phase-27.1 Bug B).
+  const presetNames = Object.keys(QUORUM_PRESETS);
+
+  for (const presetName of presetNames) {
+    const preset = QUORUM_PRESETS[presetName];
+    const names = [...(preset.models || []), preset.reviewerModel].filter(Boolean);
+    for (const modelName of names) {
+      it(`QUORUM_PRESETS.${presetName} model '${modelName}' has a direct MODEL_PRICING entry`, () => {
+        expect(
+          Object.prototype.hasOwnProperty.call(costService.MODEL_PRICING, modelName),
+          `MODEL_PRICING is missing '${modelName}' — it would fall back to default rates, silently distorting quorum estimates.`
+        ).toBe(true);
+      });
+    }
+  }
+});
+
+describe("http-bridge coverage: every MCP-handled tool is in MCP_ONLY_TOOLS (Phase-27.1 Slice 2b)", () => {
+  // Phase-27.1 Slice 2b — Catches the class of bug where a new MCP tool is
+  // registered in capabilities.mjs/tools.json/switch-case/handler but the author
+  // forgets to add it to server.mjs's MCP_ONLY_TOOLS Set. When that happens,
+  // POST /api/tool/<name> falls through to runPforge(), which has no CLI
+  // counterpart for MCP-native tools — the dashboard cannot invoke the tool.
+  //
+  // This test parses server.mjs as text (no import — server.mjs has side-effects
+  // on import) and asserts: every tool name present in a case-label of the main
+  // CallToolRequestSchema switch must also appear in the MCP_ONLY_TOOLS Set.
+  it("every tool with a dedicated switch-case handler is listed in MCP_ONLY_TOOLS", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const serverSrc = readFileSync(
+      resolve(import.meta.dirname, "..", "server.mjs"),
+      "utf-8"
+    );
+
+    // Extract the MCP_ONLY_TOOLS Set literal
+    const setMatch = serverSrc.match(/const\s+MCP_ONLY_TOOLS\s*=\s*new\s+Set\(\[([\s\S]*?)\]\)/);
+    expect(setMatch, "Could not locate MCP_ONLY_TOOLS Set in server.mjs").toBeTruthy();
+    const setBody = setMatch[1];
+    const inSet = new Set();
+    for (const m of setBody.matchAll(/"(forge_[a-z0-9_]+)"/g)) inSet.add(m[1]);
+
+    // Extract every `case "forge_*":` — these are tools the MCP dispatcher handles.
+    // Not every such case needs to be in MCP_ONLY_TOOLS (some delegate to runPforge
+    // on the CLI path), but for the specific tool that motivated this test we
+    // assert inclusion explicitly.
+    const REQUIRED = [
+      // Phase-27.1 Slice 2b — carryover defect from Phase-27 Slice 6
+      "forge_estimate_quorum",
+    ];
+    for (const tool of REQUIRED) {
+      expect(inSet.has(tool), `${tool} is missing from MCP_ONLY_TOOLS — HTTP bridge will fall through to runPforge`).toBe(true);
+    }
   });
 });

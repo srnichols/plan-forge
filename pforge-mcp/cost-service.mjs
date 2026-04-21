@@ -22,6 +22,10 @@ import {
 // Source: published API pricing pages. Rates are per 1 token.
 export const MODEL_PRICING = {
   // Anthropic Claude
+  // claude-opus-4.7 — mirrors published claude-opus-4.6 rates until Anthropic
+  // publishes a distinct price point for 4.7. Source: Anthropic pricing page
+  // (claude-opus-4.6: $15 / $75 per Mtok, retrieved 2026-04-20). Phase-27.1 Slice 2.
+  "claude-opus-4.7":        { input: 15 / 1_000_000,   output: 75 / 1_000_000 },
   "claude-opus-4.6":        { input: 15 / 1_000_000,   output: 75 / 1_000_000 },
   "claude-opus-4.6-fast":   { input: 15 / 1_000_000,   output: 75 / 1_000_000 },
   "claude-opus-4.5":        { input: 15 / 1_000_000,   output: 75 / 1_000_000 },
@@ -414,7 +418,12 @@ export function estimateQuorum({ plan, cwd, resumeFrom = null, defaultModel = "c
   const autoConfig = {
     enabled: true,
     auto: true,
-    threshold: 7,
+    // Phase-27.1 Slice 3: threshold lowered from 7 → 5 to match
+    // QUORUM_PRESETS.power.threshold. The old `7` gate produced
+    // quorumSliceCount: 0 on every real plan in the repo (11-, 17-, 7-slice),
+    // degenerating `auto` to `false`. `5` restores the "auto picks what power
+    // would force" semantic.
+    threshold: 5,
     models: QUORUM_PRESETS.speed?.models || ["claude-sonnet-4.6"],
     reviewerModel: QUORUM_PRESETS.speed?.reviewerModel || "claude-sonnet-4.6",
     preset: "speed",

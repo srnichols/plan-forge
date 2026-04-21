@@ -1603,6 +1603,7 @@ function executeTool(name, args) {
     case "forge_testbed_run":
     case "forge_testbed_happypath":
     case "forge_master_ask":
+    case "forge_meta_bug_file":
       return null; // Handled async in CallToolRequestSchema handler
     default:
       return { success: false, error: `Unknown tool: ${name}` };

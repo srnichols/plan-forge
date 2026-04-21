@@ -9,7 +9,7 @@ source: human
 > **Status**: Draft (seed — needs `pforge analyze` hardening before execution)
 > **Depends on**: v2.63.2 shipped (commit `0710256` — Config promoted to top-level Settings group, Forge-Master promoted to top-level group). The four-group nav (Forge / LiveGuard / Forge-Master / Settings) and `switchGroup()` table-driven handling must be in place.
 > **Branch strategy**: Direct to `master`. Pure **decomposition + relocation** — no new features, no behavioral changes to config read/write or persistence. Every setting keeps its current `.forge.json` key and `/api/config` round-trip.
-> **Session budget**: 1 session, ~6 slices (1 per new sub-tab plus one for the structural frame).
+> **Session budget**: 1 session, ~7 slices (structural frame + 4 content-migration slices + sweep + cross-group tab migration).
 > **Design posture**: **Zero logic change.** The oversized `#tab-config` section (currently ~340 HTML lines with three internal `cfg-subtab` buttons invented before the top-level Settings group existed) is broken into proper Settings sub-tabs that live in `subtabs-settings` alongside the existing General/Notifications/Brain. DOM elements move, their IDs are preserved where possible so existing `app.js` save/load handlers keep working with zero refactor. Where an ID rename is required, the handler reference is updated in the same slice. No new endpoints.
 
 ---
@@ -115,6 +115,54 @@ Every element currently in `#tab-config` moves to exactly one destination. The m
 | 4 | Memory + Brain sections | index.html, app.js | OpenBrain status still renders; memory search still functions; brain tier counters still populate |
 | 5 | Bridge (consolidated) + Crucible sections | index.html, app.js | Bridge channels list renders; notifications save round-trip passes; Crucible config save round-trip passes |
 | 6 | Completeness sweep + legacy DOM removal | index.html, app.js, tests | Zero grep hits for `tab-config` / `cfg-subtab`; `dashboard-settings.test.mjs` passes; full vitest suite passes |
+| 7 | Cross-group tab migration (Extensions/Bug Registry/Watcher) | index.html, tests | Three buttons move to new parent subtab rows — see Cross-Group Migration section below |
+
+---
+
+## Cross-Group Migration (Slice 7)
+
+The Forge sub-tab row currently holds 18 buttons — several of which are not execution-shop concerns at all. Phase-30 takes the once-per-release opportunity to relocate the **high-confidence misfits** to their correct group while the nav refactor is already open. Medium-confidence relocations (Governance, Memory consolidation, Crucible→Forge-Master) are deliberately deferred to a follow-up mini-plan because they involve content **consolidation** with existing Settings sections, not just relocation.
+
+### Migrations in this slice
+
+| `data-tab` | Current group | New group | Rationale |
+|-----------|--------------|-----------|-----------|
+| `extensions` | Forge | Settings | Extension catalog + install UX is platform configuration, not execution. Belongs next to API keys, update source, and model routing. |
+| `bugregistry` | Forge | LiveGuard | LiveGuard already owns incidents + triage + env diff. Bugs are the same family (failures requiring triage). Placing them together produces a coherent "operational health" surface. |
+| `watcher` | Forge | LiveGuard | Filesystem watcher is continuous health monitoring — exactly LiveGuard's remit. Living under Forge was an accident of chronology (Watcher shipped before LiveGuard existed). |
+
+### Why these three and not others
+
+- **Extensions** — zero execution coupling. The only reason it was ever in the Forge row is that Forge was the only row when Extensions shipped.
+- **Bug Registry** — the LiveGuard Incidents sub-tab already renders a nearly-identical card layout. Co-locating eliminates a jarring context switch during triage.
+- **Watcher** — continuous monitoring is LiveGuard's definitional concern. The tab even uses amber-styled badges for alerts today, which is the LiveGuard accent color.
+- **Crucible** (deferred) — ideation pairs naturally with Forge-Master, but the Crucible **config** lives in Settings post-Phase-30, so moving the Crucible **tab** to Forge-Master creates a split-ownership pattern worth resolving deliberately in a separate plan.
+- **Governance / Memory** (deferred) — these overlap with Settings content after Phase-30 (Principles/Profile are Settings, OpenBrain memory is Settings → Memory). Migration without consolidation would create duplicate surfaces.
+- **Home** (deferred) — a global landing page above all groups is a bigger UX question than a relocation; out of scope.
+
+### Migration mechanics (per tab, applied three times in slice 7)
+
+- **MUST**: The `<button data-tab="<X>" ...>` element is moved verbatim from `#subtabs-forge` into the destination subtab row (`#subtabs-settings` or `#subtabs-liveguard`). The `data-tab` attribute value is **preserved** — this is critical because `app.js` handlers (e.g. `document.querySelector('.tab-btn.tab-active')?.dataset?.tab === "watcher"`) reference the `data-tab` value, not the parent row. Zero JS refactor is required.
+- **MUST**: The button's hover class is updated to match the destination group accent: `hover:text-purple-400` for Settings moves, `hover:text-amber-400` for LiveGuard moves. (The `text-gray-400` default and `text-xs font-medium` classes stay the same.)
+- **MUST**: The corresponding `<section class="tab-content hidden" id="tab-<X>">` content element is **not** moved — sections live at the `<main>` level and are addressed by `id`, independent of which subtab row the button sits in. Leave the section where it is.
+- **MUST**: The `tabLoadHooks` entry for the tab (in `app.js`) is **not** moved — hook dispatch is keyed on `data-tab` value, which did not change.
+- **MUST**: The per-tab keyboard shortcut (if any, from the `keyboard shortcut 1-9` mapping) is **removed or re-assigned** if the shortcut currently indexes into the Forge row in a position-dependent way. Audit the shortcut handler during slice 7; if it is position-independent (looks up by `data-tab` string), no change is needed.
+
+### Acceptance criteria (slice 7)
+
+- **MUST**: After slice 7, `#subtabs-forge` contains **15** buttons (18 − 3). Structural test: `const forgeRow = dashboardHtml.match(/id="subtabs-forge"[\s\S]*?<\/div>/); expect((forgeRow?.[0].match(/data-tab="/g) || []).length).toBe(15);`
+- **MUST**: `#subtabs-settings` contains 9 Settings-native buttons (from earlier slices) **plus** `data-tab="extensions"` = **10** total buttons. Structural test asserts both the count and the presence of `data-tab="extensions"` inside the subtab row.
+- **MUST**: `#subtabs-liveguard` contains 5 LiveGuard-native buttons **plus** `data-tab="bugregistry"` and `data-tab="watcher"` = **7** total. Structural test asserts count + both presences.
+- **MUST**: Total `data-tab` count in the HTML remains **33** (decomposition in slices 1–6 takes count from 25 → 33; slice 7 only moves buttons, does not add or remove any). The existing total-tab-count test asserts 33.
+- **MUST**: No behavioral regressions — manual sanity check after slice 7: open Settings → Extensions, install/remove an extension; open LiveGuard → Bug Registry, add a bug and resolve it; open LiveGuard → Watcher, trigger a file change. All three surfaces function identically to pre-migration.
+- **SHOULD**: Commit message for slice 7 references each move explicitly so `git log` gives a clean audit trail for the nav archaeology: `refactor(dashboard): migrate Extensions→Settings, Bug Registry→LiveGuard, Watcher→LiveGuard`.
+
+### Out-of-scope for slice 7
+
+- Crucible tab relocation (deferred — see above).
+- Governance/Memory consolidation (deferred).
+- Home-tab global promotion (deferred).
+- Any change to section content, handler logic, or endpoint routes. This slice is pure button relocation.
 
 ---
 
@@ -126,6 +174,8 @@ Every element currently in `#tab-config` moves to exactly one destination. The m
 - Adding new settings.
 - Moving a setting to a destination other than the one in the decomposition-mapping table.
 - Editing files outside `pforge-mcp/dashboard/**` and `pforge-mcp/tests/**` except to update documentation screenshots.
+- Moving any tab not listed in the Cross-Group Migration table (Crucible, Governance, Memory, Home are deferred to a follow-up plan).
+- Changing a moved tab's `data-tab` value, its `tab-content` section, or its handler logic. Slice 7 is button relocation only.
 
 ---
 

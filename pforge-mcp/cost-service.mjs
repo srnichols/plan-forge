@@ -565,6 +565,10 @@ export function estimateSlice({ plan, sliceNumber, mode = "auto", model = "claud
  *   recommended: "auto"|"power"|"speed"|"false",
  *   generatedAt: string
  * }}
+ *   Each mode summary contains: mode, estimatedCostUSD, baseCostUSD,
+ *   overheadUSD, quorumSliceCount, totalSliceCount, confidence, and
+ *   slices[] — an additive per-slice breakdown with sliceNumber,
+ *   projectedCostUSD, complexityScore, quorumEligible.
  */
 export function estimateQuorum({ plan, cwd, resumeFrom = null, defaultModel = "claude-sonnet-4.5" } = {}) {
   if (!plan || !plan.slices || !plan.dag) {
@@ -582,6 +586,21 @@ export function estimateQuorum({ plan, cwd, resumeFrom = null, defaultModel = "c
   const estSpeed = estimatePlan(plan, defaultModel, resolvedCwd, speedConfig, resumeFrom);
   const estNone = estimatePlan(plan, defaultModel, resolvedCwd, null, resumeFrom);
 
+  // Per-mode, per-slice breakdown (additive — does not alter existing keys).
+  // Uses estimateSlice for parity with the single-slice MCP tool. Un-calibrated
+  // (no run-level historical correction factor); summed values may differ from
+  // the run-level estimate's calibrated totalCostWithQuorumUSD.
+  const buildSliceBreakdown = (mode) =>
+    plan.slices.map((s) => {
+      const sliceEst = estimateSlice({ plan, sliceNumber: s.number, mode, model: defaultModel, cwd: resolvedCwd });
+      return {
+        sliceNumber: s.number,
+        projectedCostUSD: sliceEst.estimatedCostUSD,
+        complexityScore: sliceEst.complexityScore,
+        quorumEligible: sliceEst.quorumEligible,
+      };
+    });
+
   const toSummary = (est, mode) => ({
     mode,
     estimatedCostUSD: est.totalCostWithQuorumUSD ?? est.estimatedCostUSD,
@@ -590,6 +609,7 @@ export function estimateQuorum({ plan, cwd, resumeFrom = null, defaultModel = "c
     quorumSliceCount: est.quorumOverhead?.quorumSliceCount ?? 0,
     totalSliceCount: est.sliceCount,
     confidence: est.confidence,
+    slices: buildSliceBreakdown(mode),
   });
 
   const summaries = {

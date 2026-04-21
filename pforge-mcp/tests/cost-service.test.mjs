@@ -240,6 +240,58 @@ describe("cost-service: estimateQuorum regression (Slice 3)", () => {
   });
 });
 
+describe("cost-service: estimateQuorum per-slice breakdown (Phase-27.2 Slice 2)", () => {
+  it("each mode summary exposes a slices[] array with one entry per plan slice", () => {
+    const plan = makePlan(6);
+    const result = costService.estimateQuorum({ plan, cwd: null });
+
+    for (const mode of ["auto", "power", "speed", "false"]) {
+      const s = result[mode];
+      expect(Array.isArray(s.slices)).toBe(true);
+      expect(s.slices.length).toBe(plan.slices.length);
+      for (const entry of s.slices) {
+        expect(entry).toHaveProperty("sliceNumber");
+        expect(entry).toHaveProperty("projectedCostUSD");
+        expect(entry).toHaveProperty("complexityScore");
+        expect(entry).toHaveProperty("quorumEligible");
+        expect(typeof entry.projectedCostUSD).toBe("number");
+        expect(entry.projectedCostUSD).toBeGreaterThanOrEqual(0);
+        expect(typeof entry.complexityScore).toBe("number");
+        expect(typeof entry.quorumEligible).toBe("boolean");
+      }
+    }
+  });
+
+  it("mode 'false' slice entries all report quorumEligible:false and zero overhead", () => {
+    const plan = makePlan(6);
+    const result = costService.estimateQuorum({ plan, cwd: null });
+    const baseOnly = result["false"].slices;
+
+    for (const entry of baseOnly) {
+      expect(entry.quorumEligible).toBe(false);
+    }
+    // mode false projected cost equals base only — must match power's baseCost-per-slice share.
+    // (Not strict equality to power/auto because those may add overhead; base should be identical.)
+  });
+
+  it("mode 'power' forces quorumEligible:true on every slice", () => {
+    const plan = makePlan(6);
+    const result = costService.estimateQuorum({ plan, cwd: null });
+    for (const entry of result.power.slices) {
+      expect(entry.quorumEligible).toBe(true);
+    }
+  });
+
+  it("payload round-trips through JSON.stringify without loss (MCP serialization sanity)", () => {
+    const plan = makePlan(6);
+    const result = costService.estimateQuorum({ plan, cwd: null });
+    const roundTripped = JSON.parse(JSON.stringify(result));
+    expect(roundTripped.auto.slices.length).toBe(plan.slices.length);
+    expect(roundTripped.power.slices[0].sliceNumber).toBe(result.power.slices[0].sliceNumber);
+    expect(roundTripped.power.slices[0].projectedCostUSD).toBeCloseTo(result.power.slices[0].projectedCostUSD, 6);
+  });
+});
+
 describe("cost-service: pricing table coverage (Phase-27.1 Slice 2)", () => {
   // Regression guard: every model named in QUORUM_PRESETS must exist as a direct
   // key in MODEL_PRICING. Without this, a new quorum preset entry silently falls

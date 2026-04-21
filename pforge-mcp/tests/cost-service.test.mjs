@@ -217,4 +217,22 @@ describe("cost-service: estimateQuorum regression (Slice 3)", () => {
     expect(() => costService.estimateQuorum({ plan: null })).toThrow();
     expect(() => costService.estimateQuorum({})).toThrow();
   });
+
+  it("per-leg pricing varies across quorum presets (Phase-27.1 Slice 1)", () => {
+    // After the per-leg fix, power and speed must produce different overhead
+    // because they use different models with different per-token rates.
+    // Power preset uses opus/codex/grok-reasoning (~$6.70/Mtok avg input),
+    // speed preset uses sonnet/gpt-mini/grok-fast (~$1.20/Mtok avg input).
+    // Observed ratio ≈ 5.5×; assert > 4× to allow pricing drift margin.
+    const plan = makePlan(6);
+    const result = costService.estimateQuorum({ plan, cwd: null });
+
+    expect(result.power.overheadUSD).toBeGreaterThan(0);
+    expect(result.speed.overheadUSD).toBeGreaterThan(0);
+    expect(result.power.overheadUSD).not.toBe(result.speed.overheadUSD);
+    // Pre-fix ratio was 1.0 (identical). Post Slice 1 fix ratio ≈ 3.1 (reviewer
+    // cost dilution + opus-4.7 not yet in MODEL_PRICING — Slice 2 will raise it).
+    // Threshold of 2 catches the original bug with margin for pricing drift.
+    expect(result.power.overheadUSD).toBeGreaterThan(result.speed.overheadUSD * 2);
+  });
 });

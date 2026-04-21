@@ -238,9 +238,13 @@ export function estimatePlan(plan, model, cwd, quorumConfig = null, resumeFrom =
     const reviewerInput = dryRunOutputPerLeg * modelCount + tokensPerSlice.input; // All outputs + original
     const reviewerOutput = tokensPerSlice.output * 0.6;
 
-    const dryRunCostPerSlice = modelCount * (
-      (dryRunInputPerLeg * pricing.input) + (dryRunOutputPerLeg * pricing.output)
-    );
+    // Phase-27.1 Slice 1: price each leg using that model's rate, not the
+    // default model's rate. Without this, power and speed return identical
+    // numbers because both multiply by the same default pricing.
+    const dryRunCostPerSlice = quorumConfig.models.reduce((sum, m) => {
+      const mPricing = getPricing(m);
+      return sum + (dryRunInputPerLeg * mPricing.input) + (dryRunOutputPerLeg * mPricing.output);
+    }, 0);
     const reviewerPricing = getPricing(quorumConfig.reviewerModel);
     const reviewerCostPerSlice = (reviewerInput * reviewerPricing.input) + (reviewerOutput * reviewerPricing.output);
 

@@ -415,6 +415,21 @@
         </div>
       </div>
 
+      <!-- Phase-27.2 Slice 5 — Plan projection strip (collapsed by default). -->
+      <!-- Populated by hydratePlanProjectionStrip() once forge_estimate_quorum -->
+      <!-- returns; hidden until then. -->
+      <details id="plan-projection-strip" class="bg-gray-800 rounded-lg mb-4 hidden" data-testid="plan-projection-strip">
+        <summary class="px-4 py-2 cursor-pointer hover:bg-gray-700/50 flex items-center gap-3 text-sm select-none">
+          <span>💵 Plan projection</span>
+          <span id="projection-auto"   class="text-xs text-gray-300"></span>
+          <span id="projection-power"  class="text-xs text-gray-300"></span>
+          <span id="projection-speed"  class="text-xs text-gray-300"></span>
+          <span id="projection-false"  class="text-xs text-gray-300"></span>
+          <span id="projection-recommended" class="text-xs text-blue-300 font-semibold"></span>
+        </summary>
+        <div id="projection-details" class="px-4 pb-3 text-xs text-gray-400 grid gap-1 md:grid-cols-2"></div>
+      </details>
+
       <!-- Plan Browser  -->
       <details id="plan-browser" class="bg-gray-800 rounded-lg mb-4 relative">
         <summary class="px-4 py-3 cursor-pointer hover:bg-gray-700/50 flex items-center gap-2 text-sm font-semibold select-none">

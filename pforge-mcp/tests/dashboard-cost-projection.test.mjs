@@ -93,3 +93,53 @@ describe("dashboard projected-cost badge markup (Phase-27.2 Slice 4)", () => {
     expect(src).toMatch(/title="Projected cost \(mode: \$\{modeLabel\}\)"/);
   });
 });
+
+describe("dashboard plan-projection strip (Phase-27.2 Slice 5)", () => {
+  let indexHtml = "";
+  beforeAll(() => {
+    const INDEX = resolve(HERE, "..", "dashboard", "index.html");
+    indexHtml = readFileSync(INDEX, "utf-8");
+  });
+
+  it("index.html declares a #plan-projection-strip details element (hidden by default)", () => {
+    expect(indexHtml).toMatch(/id="plan-projection-strip"/);
+    expect(indexHtml).toMatch(/id="plan-projection-strip"[^>]*hidden/);
+    expect(indexHtml).toMatch(/data-testid="plan-projection-strip"/);
+  });
+
+  it("strip exposes four mode spans + recommended span + details container", () => {
+    for (const id of ["projection-auto", "projection-power", "projection-speed", "projection-false", "projection-recommended", "projection-details"]) {
+      expect(indexHtml, `missing #${id}`).toMatch(new RegExp(`id="${id}"`));
+    }
+  });
+
+  it("app.js defines hydratePlanProjectionStrip() and calls it from fetchPlanProjection", () => {
+    expect(src).toMatch(/function hydratePlanProjectionStrip\s*\(/);
+    // Must be called after planProjection is set
+    const fetchIdx = src.indexOf("async function fetchPlanProjection");
+    expect(fetchIdx).toBeGreaterThan(-1);
+    const body = src.slice(fetchIdx, fetchIdx + 3000);
+    expect(body).toMatch(/hydratePlanProjectionStrip\(\)/);
+  });
+
+  it("strip un-hides on hydrate and re-hides when projection is cleared", () => {
+    const hydIdx = src.indexOf("function hydratePlanProjectionStrip");
+    const body = src.slice(hydIdx, hydIdx + 4000);
+    expect(body).toMatch(/classList\.remove\(\s*"hidden"\s*\)/);
+    expect(body).toMatch(/classList\.add\(\s*"hidden"\s*\)/);
+  });
+
+  it("budget-cap highlighting: over-budget modes render text-red-400", () => {
+    const hydIdx = src.indexOf("function hydratePlanProjectionStrip");
+    const body = src.slice(hydIdx, hydIdx + 4000);
+    expect(body).toMatch(/text-red-400/);
+    // Over-budget guard must check budgetCapUSD
+    expect(body).toMatch(/budgetCapUSD/);
+  });
+
+  it("recommended label reads from planProjection.recommended", () => {
+    const hydIdx = src.indexOf("function hydratePlanProjectionStrip");
+    const body = src.slice(hydIdx, hydIdx + 4000);
+    expect(body).toMatch(/proj\.recommended/);
+  });
+});

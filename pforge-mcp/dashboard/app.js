@@ -392,6 +392,7 @@ async function fetchPlanProjection(planPath) {
     state.planProjection = parsed;
     state.projectionPlanPath = planPath;
     hydrateSliceProjections();
+    hydratePlanProjectionStrip();
     renderSliceCards();
   } catch { /* non-fatal — dashboard works without projection */ }
 }
@@ -418,6 +419,68 @@ function hydrateSliceProjections() {
       delete s.projectedCost;
       delete s.projectedQuorumEligible;
     }
+  }
+}
+
+// Phase-27.2 Slice 5 — populate the plan-projection strip at the top of
+// the Progress tab. Renders four modes (auto/power/speed/false) + the
+// recommended mode. If runtime.cost.budget is set on the project
+// (surfaced as planProjection.budgetCapUSD), modes whose estimatedCostUSD
+// exceeds the cap render red with an "over budget" tooltip.
+function hydratePlanProjectionStrip() {
+  const strip = document.getElementById("plan-projection-strip");
+  if (!strip) return;
+  const proj = state.planProjection;
+  if (!proj || !proj.recommended) {
+    strip.classList.add("hidden");
+    return;
+  }
+  strip.classList.remove("hidden");
+
+  const budgetCap = typeof proj.budgetCapUSD === "number" ? proj.budgetCapUSD : null;
+  const fmt = (n) => (typeof n === "number" ? `$${n.toFixed(2)}` : "—");
+
+  const setMode = (mode) => {
+    const el = document.getElementById(`projection-${mode}`);
+    if (!el) return;
+    const summary = proj[mode];
+    if (!summary) { el.textContent = ""; return; }
+    const cost = summary.estimatedCostUSD;
+    const overBudget = budgetCap !== null && typeof cost === "number" && cost > budgetCap;
+    el.textContent = `${mode}: ${fmt(cost)}`;
+    el.className = overBudget
+      ? "text-xs text-red-400 font-semibold"
+      : "text-xs text-gray-300";
+    el.title = overBudget
+      ? `Over budget (${fmt(cost)} > ${fmt(budgetCap)})`
+      : `Projected cost for mode '${mode}'`;
+  };
+
+  setMode("auto");
+  setMode("power");
+  setMode("speed");
+  setMode("false");
+
+  const recEl = document.getElementById("projection-recommended");
+  if (recEl) {
+    recEl.textContent = `Recommended: ${proj.recommended}`;
+    recEl.title = budgetCap !== null
+      ? `Cheapest mode under budget cap ${fmt(budgetCap)}`
+      : `Default recommendation (no runtime.cost.budget configured)`;
+  }
+
+  const details = document.getElementById("projection-details");
+  if (details) {
+    const rows = ["auto", "power", "speed", "false"]
+      .map((m) => {
+        const s = proj[m];
+        if (!s) return "";
+        const overBudget = budgetCap !== null && typeof s.estimatedCostUSD === "number" && s.estimatedCostUSD > budgetCap;
+        const costClass = overBudget ? "text-red-400" : "text-gray-200";
+        return `<div><span class="text-gray-500 uppercase">${m}</span> · <span class="${costClass}">${fmt(s.estimatedCostUSD)}</span> · ${s.quorumSliceCount ?? 0}/${s.totalSliceCount ?? 0} quorum · ${fmt(s.overheadUSD)} overhead</div>`;
+      })
+      .join("");
+    details.innerHTML = rows;
   }
 }
 

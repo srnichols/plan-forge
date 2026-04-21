@@ -67,6 +67,15 @@ const state = {
     refreshTimer: null,
     lastError: null,
   },
+  // Phase-27.2 Slice 4 — plan-level cost projection, fetched once per
+  // plan-open via forge_estimate_quorum. Cached for the session and
+  // re-indexed client-side when the operator switches projectionMode.
+  // planProjection shape: { auto, power, speed, false, recommended,
+  // budgetCapUSD?, generatedAt } where each mode object contains a
+  // slices: [{ sliceNumber, projectedCostUSD, complexityScore, quorumEligible }].
+  planProjection: null,
+  projectionMode: "recommended",
+  projectionPlanPath: null, // last planPath the projection was fetched for
 };
 
 const API_BASE = `${window.location.protocol}//${window.location.host}`;
@@ -346,6 +355,70 @@ function handleRunStarted(data) {
 
   renderSliceCards();
   updateProgress();
+
+  // Phase-27.2 Slice 4 — fetch plan-level cost projection on plan-open.
+  // One call per plan; cached for the session. Hydrates
+  // state.slices[i].projectedCost so the projected-cost badge renders.
+  if (data.plan) fetchPlanProjection(data.plan).catch(() => {/* non-fatal */});
+}
+
+// Phase-27.2 Slice 4 — fetch plan-level cost projection (one call per plan,
+// cached for the session). Populates state.planProjection and hydrates
+// state.slices[i].projectedCost for the current projectionMode.
+async function fetchPlanProjection(planPath) {
+  if (!planPath) return;
+  // If projection already fetched for this exact plan, just re-hydrate.
+  if (state.projectionPlanPath === planPath && state.planProjection) {
+    hydrateSliceProjections();
+    return;
+  }
+  try {
+    const res = await fetch(`${API_BASE}/api/tool/forge_estimate_quorum`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ planPath }),
+    });
+    if (!res.ok) return;
+    const payload = await res.json();
+    // MCP tool results are wrapped: { content: [{ type: "text", text: "<json>" }] }
+    const text = payload?.content?.[0]?.text ?? payload?.text ?? payload;
+    let parsed = null;
+    if (typeof text === "string") {
+      try { parsed = JSON.parse(text); } catch { parsed = null; }
+    } else if (text && typeof text === "object") {
+      parsed = text;
+    }
+    if (!parsed || !parsed.recommended) return;
+    state.planProjection = parsed;
+    state.projectionPlanPath = planPath;
+    hydrateSliceProjections();
+    renderSliceCards();
+  } catch { /* non-fatal — dashboard works without projection */ }
+}
+
+// Re-index projected costs onto state.slices from the cached planProjection.
+// Safe to call multiple times; idempotent. No server round-trip.
+function hydrateSliceProjections() {
+  if (!state.planProjection || !Array.isArray(state.slices)) return;
+  const modeKey = state.projectionMode === "recommended"
+    ? state.planProjection.recommended
+    : state.projectionMode;
+  const modeSummary = state.planProjection[modeKey];
+  if (!modeSummary || !Array.isArray(modeSummary.slices)) return;
+  const byNumber = new Map();
+  for (const entry of modeSummary.slices) {
+    byNumber.set(String(entry.sliceNumber), entry);
+  }
+  for (const s of state.slices) {
+    const match = byNumber.get(String(s.id));
+    if (match && typeof match.projectedCostUSD === "number") {
+      s.projectedCost = match.projectedCostUSD;
+      s.projectedQuorumEligible = !!match.quorumEligible;
+    } else {
+      delete s.projectedCost;
+      delete s.projectedQuorumEligible;
+    }
+  }
 }
 
 function updateRunBadges(data) {
@@ -589,6 +662,17 @@ function renderSliceCards() {
       ? `<span class="text-xs px-1.5 py-0.5 rounded bg-gray-800 text-emerald-300 border border-gray-700" title="Model spend for this slice">💰 $${s.cost.toFixed(4)}</span>`
       : "";
 
+    // Phase-27.2 Slice 4 — Projected-cost badge (💵 ~$0.xxxx).
+    // Hydrated from forge_estimate_quorum's per-slice breakdown under the
+    // active projectionMode. Only renders when a projection is present in
+    // state. Order on the card: complexity → projected → spend.
+    const modeLabel = state.projectionMode === "recommended" && state.planProjection?.recommended
+      ? `recommended (${state.planProjection.recommended})`
+      : state.projectionMode;
+    const projectedBadge = (typeof s.projectedCost === "number" && s.projectedCost > 0)
+      ? `<span class="text-xs px-1.5 py-0.5 rounded bg-gray-800 text-sky-300 border border-gray-700" title="Projected cost (mode: ${modeLabel})">💵 ~$${s.projectedCost.toFixed(4)}</span>`
+      : "";
+
     // Gate status indicator
     let gateHtml = "";
     if (s.gateStatus === "passed") {
@@ -650,7 +734,7 @@ function renderSliceCards() {
           <span class="text-xs text-gray-500 flex items-center gap-1.5">${retryHtml}${temperingPillHtml}${gateCheckHtml}${gateHtml}${duration}${elapsed}</span>
         </div>
         <p class="text-xs text-gray-400 truncate">${s.title}</p>
-        ${(complexityBadge || spendBadge) ? `<div class="flex items-center gap-1.5 mt-1.5">${complexityBadge}${spendBadge}</div>` : ""}
+        ${(complexityBadge || projectedBadge || spendBadge) ? `<div class="flex items-center gap-1.5 mt-1.5">${complexityBadge}${projectedBadge}${spendBadge}</div>` : ""}
         ${model ? `<p class="text-xs text-gray-500 mt-1">${modelBadge} ${cost}</p>` : ""}
         ${quorumHtml}
         ${s.error ? `<p class="text-xs text-red-400 mt-1 truncate">${s.error}</p>` : ""}

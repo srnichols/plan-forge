@@ -3814,7 +3814,7 @@ export function recordModelPerformance(cwd, entry) {
  * @param {Array} records - from loadModelPerformance()
  * @returns {object} model → { total_slices, passed, failed, success_rate, avg_cost_usd }
  */
-function aggregateModelStats(records) {
+export function aggregateModelStats(records) {
   const stats = {};
   for (const r of records) {
     const m = r.model || "unknown";
@@ -6302,6 +6302,7 @@ const QUORUM_PRESETS = {
     fallbacks: {},
   },
 };
+export { QUORUM_PRESETS };
 
 // ─── OpenClaw Integration (v2.29) ────────────────────────────────────
 

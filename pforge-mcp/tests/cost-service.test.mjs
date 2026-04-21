@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import * as costService from "../cost-service.mjs";
-import { calculateSliceCost, buildCostBreakdown } from "../orchestrator.mjs";
+import { calculateSliceCost, buildCostBreakdown, buildEstimate } from "../orchestrator.mjs";
 
 describe("cost-service: MODEL_PRICING + getPricing (Slice 1)", () => {
   it("exports MODEL_PRICING as an object with a default rate", () => {
@@ -123,5 +123,98 @@ describe("cost-service: priceRun parity (Slice 2)", () => {
     expect(result.total_tokens_out).toBe(0);
     expect(result.by_slice).toEqual([]);
     expect(result.by_model).toEqual({});
+  });
+});
+
+// ─── Slice 3 fixtures ─────────────────────────────────────────────────
+function makePlan(sliceCount, opts = {}) {
+  const slices = [];
+  const order = [];
+  for (let i = 1; i <= sliceCount; i++) {
+    slices.push({
+      number: i,
+      title: `Slice ${i}`,
+      depends: i === 1 ? [] : [String(i - 1)],
+      parallel: false,
+      scope: opts.scope || [`src/file${i}.mjs`],
+      tasks: opts.tasks || [],
+    });
+    order.push(String(i));
+  }
+  return { slices, dag: { order } };
+}
+
+describe("cost-service: estimatePlan parity (Slice 3)", () => {
+  it("estimatePlan matches buildEstimate — simple 3-slice plan, no quorum, no cwd", () => {
+    const plan = makePlan(3);
+    const a = costService.estimatePlan(plan, "claude-sonnet-4.5", null, null, null);
+    const b = buildEstimate(plan, "claude-sonnet-4.5", null, null, null);
+    expect(a).toEqual(b);
+  });
+
+  it("estimatePlan matches buildEstimate — 5-slice plan with resumeFrom=3", () => {
+    const plan = makePlan(5);
+    const a = costService.estimatePlan(plan, "claude-opus-4.6", null, null, "3");
+    const b = buildEstimate(plan, "claude-opus-4.6", null, null, "3");
+    expect(a).toEqual(b);
+  });
+
+  it("estimatePlan matches buildEstimate — with quorum config enabled", () => {
+    const plan = makePlan(4);
+    const quorumConfig = {
+      enabled: true,
+      auto: false,
+      threshold: 5,
+      models: ["claude-opus-4.6", "gpt-5.3-codex"],
+      reviewerModel: "claude-opus-4.7",
+      preset: "power",
+    };
+    // Note: quorum paths call scoreSliceComplexity → requires non-null cwd.
+    // Use process.cwd() since buildEstimate has the same constraint.
+    const cwd = process.cwd();
+    const a = costService.estimatePlan(plan, "claude-sonnet-4.5", cwd, quorumConfig, null);
+    const b = buildEstimate(plan, "claude-sonnet-4.5", cwd, quorumConfig, null);
+    expect(a).toEqual(b);
+  });
+});
+
+describe("cost-service: estimateQuorum regression (Slice 3)", () => {
+  it("returns all four modes with numeric estimates for a 6-slice heuristic plan", () => {
+    const plan = makePlan(6);
+    const result = costService.estimateQuorum({ plan, cwd: null });
+
+    expect(result.auto).toBeDefined();
+    expect(result.power).toBeDefined();
+    expect(result.speed).toBeDefined();
+    expect(result["false"]).toBeDefined();
+    expect(["auto", "power", "speed", "false"]).toContain(result.recommended);
+    expect(result.generatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+
+    for (const mode of ["auto", "power", "speed", "false"]) {
+      const s = result[mode];
+      expect(typeof s.estimatedCostUSD).toBe("number");
+      expect(s.estimatedCostUSD).toBeGreaterThanOrEqual(0);
+      expect(typeof s.baseCostUSD).toBe("number");
+      expect(typeof s.overheadUSD).toBe("number");
+      expect(s.totalSliceCount).toBe(6);
+      expect(s.confidence).toBe("heuristic");
+    }
+  });
+
+  it("REGRESSION GUARD: power mode on 6 trivial heuristic slices stays under $25 (fabrication catcher)", () => {
+    // This test exists because on 2026-04-20 an agent hallucinated a quorum picker
+    // claiming "power: $146.57" for 6 slices. Real pforge math on the same input
+    // produces ~$10-15. Any change that pushes this above $25 either broke the
+    // pricing table or broke the quorum overhead formula — investigate before shipping.
+    const plan = makePlan(6);
+    const result = costService.estimateQuorum({ plan, cwd: null });
+
+    expect(result.power.estimatedCostUSD).toBeLessThan(25);
+    expect(result["false"].estimatedCostUSD).toBeLessThan(5); // no quorum → just base
+  });
+
+  it("throws on missing plan", () => {
+    expect(() => costService.estimateQuorum({ plan: null })).toThrow();
+    expect(() => costService.estimateQuorum({})).toThrow();
   });
 });

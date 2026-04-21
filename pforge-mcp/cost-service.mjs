@@ -7,6 +7,15 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import {
+  scoreSliceComplexity,
+  loadModelPerformance,
+  inferSliceType,
+  recommendModel,
+  assessQuorumViability,
+  aggregateModelStats,
+  QUORUM_PRESETS,
+} from "./orchestrator.mjs";
 
 // ─── Pricing Table ────────────────────────────────────────────────────
 // Per-token costs in USD. Updated April 2026.
@@ -140,5 +149,337 @@ export function priceRun(sliceResults) {
     total_tokens_out: totalOut,
     by_model: byModel,
     by_slice: bySlice,
+  };
+}
+
+/**
+ * Build a cost estimate for an entire plan.
+ * Drop-in replacement for orchestrator.buildEstimate — same signature, same output shape.
+ *
+ * Historical calibration: reads .forge/cost-history.json when available; clamps
+ * correction factor to [0.5, 3.0]. Quorum overhead computed when quorumConfig.enabled.
+ * Per-plan model recommendation from .forge/model-performance.json.
+ */
+export function estimatePlan(plan, model, cwd, quorumConfig = null, resumeFrom = null) {
+  // Bug #81: When --resume-from is specified, exclude shipped slices from
+  // the estimate. Mirror SequentialScheduler.execute() skip logic: walk the
+  // topological execution order, start including once we hit resumeFrom.
+  // If resumeFrom is null or doesn't match any slice, we fall through to the
+  // full plan (existing behaviour).
+  let effectiveSlices = plan.slices;
+  let effectiveOrder = plan.dag.order;
+  if (resumeFrom !== null && resumeFrom !== undefined) {
+    const target = String(resumeFrom);
+    const startIdx = plan.dag.order.findIndex((id) => id === target);
+    if (startIdx >= 0) {
+      effectiveOrder = plan.dag.order.slice(startIdx);
+      const includeIds = new Set(effectiveOrder);
+      effectiveSlices = plan.slices.filter((s) => includeIds.has(String(s.number)));
+    }
+  }
+
+  // Phase 2 Slice 4: Use historical data if available
+  const historyPath = cwd ? resolve(cwd, ".forge", "cost-history.json") : null;
+  let avgTokensPerSlice = null;
+
+  try {
+    if (historyPath && existsSync(historyPath)) {
+      const history = JSON.parse(readFileSync(historyPath, "utf-8"));
+      if (Array.isArray(history) && history.length > 0) {
+        const totalIn = history.reduce((s, e) => s + (e.total_tokens_in || 0), 0);
+        const totalOut = history.reduce((s, e) => s + (e.total_tokens_out || 0), 0);
+        const totalSlices = history.reduce((s, e) => s + (e.sliceCount || 1), 0);
+        if (totalSlices > 0) {
+          avgTokensPerSlice = {
+            input: Math.round(totalIn / totalSlices),
+            output: Math.round(totalOut / totalSlices),
+            source: `${history.length} prior run(s)`,
+          };
+        }
+      }
+    }
+  } catch {
+    // Fall back to heuristic
+  }
+
+  const tokensPerSlice = avgTokensPerSlice || { input: 2000, output: 5000, source: "heuristic" };
+  const pricing = getPricing(model);
+  const sliceCount = effectiveSlices.length;
+  const totalInputTokens = sliceCount * tokensPerSlice.input;
+  const totalOutputTokens = sliceCount * tokensPerSlice.output;
+  let estimatedCost = (totalInputTokens * pricing.input) + (totalOutputTokens * pricing.output);
+
+  // Cost calibration: compare prior estimates vs actuals to compute correction factor
+  let costCalibration = null;
+  try {
+    if (historyPath && existsSync(historyPath)) {
+      const history = JSON.parse(readFileSync(historyPath, "utf-8"));
+      const withEstimates = Array.isArray(history) ? history.filter(h => h.estimated_cost_usd > 0 && h.total_cost_usd > 0) : [];
+      if (withEstimates.length >= 3) {
+        const ratios = withEstimates.slice(-10).map(h => h.total_cost_usd / h.estimated_cost_usd);
+        const avgRatio = ratios.reduce((a, b) => a + b, 0) / ratios.length;
+        const correctionFactor = Math.max(0.5, Math.min(3.0, avgRatio)); // Clamp to 0.5x–3x
+        estimatedCost *= correctionFactor;
+        costCalibration = { correctionFactor: Math.round(correctionFactor * 100) / 100, samplesUsed: withEstimates.length, source: "historical" };
+      }
+    }
+  } catch { /* fall through to uncalibrated estimate */ }
+
+  // Quorum overhead estimation (v2.5)
+  let quorumOverhead = null;
+  if (quorumConfig && quorumConfig.enabled) {
+    const quorumSlices = quorumConfig.auto
+      ? effectiveSlices.filter((s) => scoreSliceComplexity(s, cwd).score >= quorumConfig.threshold)
+      : effectiveSlices;
+    const modelCount = quorumConfig.models.length;
+    // Each quorum slice: N dry-run prompt+response + 1 reviewer
+    const dryRunInputPerLeg = tokensPerSlice.input * 1.5; // Dry-run prompt is larger
+    const dryRunOutputPerLeg = tokensPerSlice.output * 0.8; // Plan output is shorter than code
+    const reviewerInput = dryRunOutputPerLeg * modelCount + tokensPerSlice.input; // All outputs + original
+    const reviewerOutput = tokensPerSlice.output * 0.6;
+
+    const dryRunCostPerSlice = modelCount * (
+      (dryRunInputPerLeg * pricing.input) + (dryRunOutputPerLeg * pricing.output)
+    );
+    const reviewerPricing = getPricing(quorumConfig.reviewerModel);
+    const reviewerCostPerSlice = (reviewerInput * reviewerPricing.input) + (reviewerOutput * reviewerPricing.output);
+
+    quorumOverhead = {
+      quorumSliceCount: quorumSlices.length,
+      totalSliceCount: sliceCount,
+      dryRunCostPerSlice: Math.round(dryRunCostPerSlice * 100) / 100,
+      reviewerCostPerSlice: Math.round(reviewerCostPerSlice * 100) / 100,
+      totalOverheadUSD: Math.round((dryRunCostPerSlice + reviewerCostPerSlice) * quorumSlices.length * 100) / 100,
+      models: quorumConfig.models,
+      reviewerModel: quorumConfig.reviewerModel,
+      slices: quorumSlices.map((s) => ({
+        number: s.number,
+        title: s.title,
+        complexityScore: scoreSliceComplexity(s, cwd).score,
+      })),
+    };
+  }
+
+  // Quorum viability assessment — runtime-aware validation (#73)
+  let quorumViability = null;
+  if (quorumConfig && quorumConfig.enabled) {
+    const presetName = quorumConfig.preset || null;
+    if (presetName && QUORUM_PRESETS[presetName]) {
+      quorumViability = assessQuorumViability(presetName);
+    }
+  }
+
+  // Phase 3: Recommend cheapest model with >80% success rate from performance history
+  let modelRecommendation = null;
+  if (cwd) {
+    try {
+      const perfRecords = loadModelPerformance(cwd);
+      if (perfRecords.length > 0) {
+        const stats = aggregateModelStats(perfRecords);
+        // Minimum 3 slices of data before trusting a model's success rate
+        const MIN_SAMPLE = 3;
+        const qualified = Object.entries(stats)
+          .filter(([, s]) => s.total_slices >= MIN_SAMPLE && s.success_rate > 0.8)
+          .map(([m, s]) => ({
+            model: m,
+            success_rate: s.success_rate,
+            total_slices: s.total_slices,
+            avg_cost_usd: s.avg_cost_usd,
+          }))
+          .sort((a, b) => a.avg_cost_usd - b.avg_cost_usd);
+
+        if (qualified.length > 0) {
+          const best = qualified[0];
+          modelRecommendation = {
+            model: best.model,
+            reason: `Cheapest model with >${(0.8 * 100).toFixed(0)}% success rate`,
+            success_rate: best.success_rate,
+            avg_cost_usd_per_slice: best.avg_cost_usd,
+            based_on_slices: best.total_slices,
+            all_qualified: qualified,
+          };
+        }
+      }
+    } catch {
+      // Non-fatal — skip recommendation if performance data unavailable
+    }
+  }
+
+  // Slice auto-split advisory: flag slices that have timed out or exceeded task count thresholds
+  let splitAdvisories = [];
+  try {
+    const perfRecords = loadModelPerformance(cwd);
+    for (const s of effectiveSlices) {
+      const priorFailures = perfRecords.filter(p =>
+        p.sliceTitle && s.title && p.sliceTitle.toLowerCase() === s.title.toLowerCase() && p.status !== "passed"
+      );
+      const taskCount = s.tasks?.length || 0;
+      const scopeCount = s.scope?.length || 0;
+      if (priorFailures.length >= 2 || (taskCount > 6 && scopeCount > 4)) {
+        splitAdvisories.push({
+          sliceNumber: s.number,
+          sliceTitle: s.title,
+          reason: priorFailures.length >= 2
+            ? `Failed ${priorFailures.length} time(s) historically — consider splitting`
+            : `${taskCount} tasks + ${scopeCount} scope files — may be too large`,
+          tasks: taskCount,
+          scope: scopeCount,
+          priorFailures: priorFailures.length,
+        });
+      }
+    }
+  } catch { /* best-effort */ }
+
+  return {
+    status: "estimate",
+    sliceCount,
+    executionOrder: effectiveOrder,
+    ...(resumeFrom !== null && resumeFrom !== undefined && { resumeFrom: String(resumeFrom), fullSliceCount: plan.slices.length }),
+    model: model || "auto",
+    ...(modelRecommendation && { modelRecommendation }),
+    ...(splitAdvisories.length > 0 && { splitAdvisories }),
+    tokens: {
+      estimatedInput: totalInputTokens,
+      estimatedOutput: totalOutputTokens,
+      source: tokensPerSlice.source,
+    },
+    estimatedCostUSD: Math.round(estimatedCost * 100) / 100,
+    ...(costCalibration && { costCalibration }),
+    ...(quorumOverhead && {
+      quorumOverhead,
+      totalCostWithQuorumUSD: Math.round((estimatedCost + quorumOverhead.totalOverheadUSD) * 100) / 100,
+    }),
+    ...(quorumViability && { quorumViability }),
+    confidence: avgTokensPerSlice ? "historical" : "heuristic",
+    slices: effectiveSlices.map((s) => {
+      const sliceType = inferSliceType(s);
+      const rec = cwd ? recommendModel(cwd, sliceType) : null;
+      return {
+        number: s.number,
+        title: s.title,
+        depends: s.depends,
+        parallel: s.parallel,
+        scope: s.scope,
+        sliceType,
+        ...(rec && {
+          recommendedModel: {
+            model: rec.model,
+            success_rate: rec.success_rate,
+            based_on_slices: rec.total_slices,
+          },
+        }),
+        ...(quorumConfig && quorumConfig.enabled && {
+          complexityScore: scoreSliceComplexity(s, cwd).score,
+          quorumEligible: quorumConfig.auto
+            ? scoreSliceComplexity(s, cwd).score >= quorumConfig.threshold
+            : true,
+        }),
+      };
+    }),
+  };
+}
+
+/**
+ * Build a cost estimate for all four quorum modes in a single call.
+ * This is the canonical "show me the picker" entry point — agents must call
+ * this tool instead of hand-computing quorum costs in chat.
+ *
+ * @param {object} options
+ * @param {object} options.plan - Parsed plan object (same shape estimatePlan expects)
+ * @param {string} [options.cwd] - Project root for history lookup
+ * @param {string|number} [options.resumeFrom] - Optional resume point
+ * @param {string} [options.defaultModel] - Base model when quorum disabled (default: "claude-sonnet-4.5")
+ * @returns {{
+ *   auto: object, power: object, speed: object, "false": object,
+ *   recommended: "auto"|"power"|"speed"|"false",
+ *   generatedAt: string
+ * }}
+ */
+export function estimateQuorum({ plan, cwd, resumeFrom = null, defaultModel = "claude-sonnet-4.5" } = {}) {
+  if (!plan || !plan.slices || !plan.dag) {
+    throw new Error("estimateQuorum: plan object with slices and dag is required");
+  }
+
+  // Quorum-enabled paths in estimatePlan call scoreSliceComplexity → getHistoricalFailureRate,
+  // which requires a string cwd. Default to process.cwd() for hermetic callers (tests, MCP
+  // tool invocations without a plan path). The history lookups will miss cleanly when the
+  // directory has no .forge/runs.
+  const resolvedCwd = cwd || process.cwd();
+
+  // Build the four quorum configurations.
+  const autoConfig = {
+    enabled: true,
+    auto: true,
+    threshold: 7,
+    models: QUORUM_PRESETS.speed?.models || ["claude-sonnet-4.6"],
+    reviewerModel: QUORUM_PRESETS.speed?.reviewerModel || "claude-sonnet-4.6",
+    preset: "speed",
+  };
+  const powerConfig = {
+    enabled: true,
+    auto: false,
+    threshold: QUORUM_PRESETS.power?.threshold ?? 5,
+    models: QUORUM_PRESETS.power?.models || [],
+    reviewerModel: QUORUM_PRESETS.power?.reviewerModel || "claude-opus-4.7",
+    preset: "power",
+  };
+  const speedConfig = {
+    enabled: true,
+    auto: false,
+    threshold: QUORUM_PRESETS.speed?.threshold ?? 7,
+    models: QUORUM_PRESETS.speed?.models || [],
+    reviewerModel: QUORUM_PRESETS.speed?.reviewerModel || "claude-sonnet-4.6",
+    preset: "speed",
+  };
+
+  const estAuto = estimatePlan(plan, defaultModel, resolvedCwd, autoConfig, resumeFrom);
+  const estPower = estimatePlan(plan, defaultModel, resolvedCwd, powerConfig, resumeFrom);
+  const estSpeed = estimatePlan(plan, defaultModel, resolvedCwd, speedConfig, resumeFrom);
+  const estNone = estimatePlan(plan, defaultModel, resolvedCwd, null, resumeFrom);
+
+  const toSummary = (est, mode) => ({
+    mode,
+    estimatedCostUSD: est.totalCostWithQuorumUSD ?? est.estimatedCostUSD,
+    baseCostUSD: est.estimatedCostUSD,
+    overheadUSD: est.quorumOverhead?.totalOverheadUSD ?? 0,
+    quorumSliceCount: est.quorumOverhead?.quorumSliceCount ?? 0,
+    totalSliceCount: est.sliceCount,
+    confidence: est.confidence,
+  });
+
+  const summaries = {
+    auto: toSummary(estAuto, "auto"),
+    power: toSummary(estPower, "power"),
+    speed: toSummary(estSpeed, "speed"),
+    "false": toSummary(estNone, "false"),
+  };
+
+  // Recommendation: cheapest mode under optional runtime.cost.budget, else auto.
+  let budgetCap = null;
+  if (cwd) {
+    try {
+      const cfgPath = resolve(cwd, ".forge.json");
+      if (existsSync(cfgPath)) {
+        const cfg = JSON.parse(readFileSync(cfgPath, "utf-8"));
+        if (cfg?.runtime?.cost?.budget && Number.isFinite(cfg.runtime.cost.budget)) {
+          budgetCap = cfg.runtime.cost.budget;
+        }
+      }
+    } catch { /* budget cap optional */ }
+  }
+
+  let recommended = "auto";
+  if (budgetCap !== null) {
+    const affordable = Object.entries(summaries)
+      .filter(([, s]) => s.estimatedCostUSD <= budgetCap)
+      .sort((a, b) => a[1].estimatedCostUSD - b[1].estimatedCostUSD);
+    if (affordable.length > 0) recommended = affordable[0][0];
+  }
+
+  return {
+    ...summaries,
+    recommended,
+    ...(budgetCap !== null && { budgetCapUSD: budgetCap }),
+    generatedAt: new Date().toISOString(),
   };
 }

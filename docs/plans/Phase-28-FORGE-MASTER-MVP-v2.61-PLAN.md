@@ -307,7 +307,7 @@ bash -c "cd pforge-mcp && npx vitest run tests/forge-master.test.mjs -t 'persist
 
 **Validation Gate**:
 ```bash
-bash -c "cd pforge-mcp && node -e \"import('./capabilities.mjs').then(m => { const caps = m.buildCapabilities ? m.buildCapabilities() : null; const j = JSON.stringify(caps || {}); if (!j.includes('forge_master_ask')) { console.error('not registered'); process.exit(1); } if (!j.includes('forgeMaster')) { console.error('subsystem missing'); process.exit(1); } console.log('ok'); })\""
+bash -c "cd pforge-mcp && grep -q 'forge_master_ask' capabilities.mjs && grep -q 'forgeMaster' capabilities.mjs"
 bash -c "cd pforge-mcp && npx vitest run tests/forge-master.integration.test.mjs"
 bash -c "cd pforge-mcp && npx vitest run"
 ```

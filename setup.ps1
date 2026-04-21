@@ -1585,6 +1585,20 @@ if (Test-Path $mcpSrcDir) {
         else {
             Write-Host "  SKIP  .vscode/mcp.json → 'plan-forge' already exists" -ForegroundColor Yellow
         }
+        # Add forge-master-chat server entry if pforge-master/server.mjs exists
+        $fmServer = Join-Path $ProjectPath "pforge-master/server.mjs"
+        if ((Test-Path $fmServer) -and -not $existing.servers.PSObject.Properties["forge-master-chat"]) {
+            $fmEntry = @{
+                type    = "stdio"
+                command = "node"
+                args    = @("pforge-master/server.mjs")
+                cwd     = '${workspaceFolder}'
+            }
+            $existing2 = Get-Content $vscodeMcp -Raw | ConvertFrom-Json
+            $existing2.servers | Add-Member -NotePropertyName "forge-master-chat" -NotePropertyValue $fmEntry -Force
+            $existing2 | ConvertTo-Json -Depth 10 | Set-Content $vscodeMcp
+            Write-Host "  MERGE .vscode/mcp.json → added 'forge-master-chat' server" -ForegroundColor Green
+        }
     }
     else {
         $vscodeDir = Join-Path $ProjectPath ".vscode"

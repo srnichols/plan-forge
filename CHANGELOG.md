@@ -7,6 +7,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.63.0] — 2026-05-09 — Forge-Master Studio (Phase-29)
+
+> **Feature release — Forge-Master Studio dashboard tab, route wiring, CLI subcommands, and capability surface update.**
+
+### Added
+- **Forge-Master Studio tab** in main Plan Forge dashboard (`dashboard/index.html`): prompt gallery, chat stream, tool-call trace pane.
+- **`dashboard/forge-master.js`** — client-side tab controller: lazy-init, gallery render/filter, chat send/stream, tool trace UI.
+- **`/api/forge-master/*` route wiring** in main Express server (`server.mjs`) via async fire-and-forget import of `forge-master-routes.mjs`.
+- **`pforge forge-master status|logs`** CLI subcommands in `pforge.ps1` and `pforge.sh` — delegate to `pforge-master/src/lifecycle.mjs`.
+- **`forge-master` entry** in `pforge-mcp/cli-schema.json` with `status` and `logs` sub-subcommands.
+- **`forgeMaster.studio` capabilities block** in `capabilities.mjs` — surfaces `dashboardTabEnabled`, `reasoningModel`, `routerModel`, and `promptCatalogVersion`.
+- **`forge-master-chat` MCP server registration** in `setup.ps1` and `setup.sh` — added to `.vscode/mcp.json` when `pforge-master/server.mjs` is present.
+- **`tests/forge-master-tab.test.mjs`** — dashboard HTML integration tests and route adapter tests.
+
 ## [2.62.3] — 2026-04-21 — OpenBrain Queue Drain
 
 > **Patch release — pending OpenBrain queue records now drain automatically on MCP server start, closing a silent data-loss gap where locally enqueued thoughts never reached long-term memory.** New pure drain orchestrator, I/O wrapper with atomic writes, REST endpoint, CLI command, and `forge_smith` warning row. Closes [#84](https://github.com/srnichols/plan-forge/issues/84).

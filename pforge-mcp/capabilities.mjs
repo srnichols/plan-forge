@@ -2460,6 +2460,12 @@ function buildForgeMasterCapabilities(cwd) {
     reasoningModel: config.reasoningModel ?? null,
     routerModel: config.routerModel ?? "grok-3-mini",
     configKey: "forgeMaster",
+    studio: {
+      dashboardTabEnabled: true,
+      reasoningModel: config.reasoningModel ?? null,
+      routerModel: config.routerModel ?? "grok-3-mini",
+      promptCatalogVersion: "1.0.0",
+    },
   };
 }
 

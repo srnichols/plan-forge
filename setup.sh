@@ -1453,6 +1453,25 @@ MCPEOF
     else
         yellow "  SKIP  .vscode/mcp.json → 'plan-forge' already exists"
     fi
+    # Add forge-master-chat entry if pforge-master/server.mjs is present and not already registered
+    if [[ -f "$PROJECT_PATH/pforge-master/server.mjs" ]] && ! grep -q '"forge-master-chat"' "$VSCODE_MCP" 2>/dev/null; then
+        if command -v python3 &>/dev/null; then
+            python3 - "$VSCODE_MCP" <<'PYEOF'
+import json, sys
+path = sys.argv[1]
+with open(path) as f: data = json.load(f)
+if "forge-master-chat" not in data.get("servers", {}):
+    data.setdefault("servers", {})["forge-master-chat"] = {
+        "type": "stdio", "command": "node",
+        "args": ["pforge-master/server.mjs"], "cwd": "${workspaceFolder}"
+    }
+    with open(path, "w") as f: json.dump(data, f, indent=2)
+    print("  MERGE .vscode/mcp.json -> added 'forge-master-chat' server")
+PYEOF
+        else
+            yellow "  NOTE  add 'forge-master-chat' server to .vscode/mcp.json manually (python3 not found)"
+        fi
+    fi
 
     # Generate .claude/mcp.json for Claude MCP integration (if --agent claude)
     if [[ "$AGENTS" == *"claude"* ]] || [[ "$AGENTS" == "all" ]]; then

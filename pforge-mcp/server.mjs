@@ -7252,6 +7252,11 @@ export function createExpressApp() {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
+  // Phase-29 — Forge-Master Studio API routes (async, registered on demand)
+  import("./forge-master-routes.mjs").then(({ registerForgeMasterRoutes }) => {
+    registerForgeMasterRoutes(app);
+  }).catch(err => console.warn(`[forge-master-routes] Skipped: ${err.message}`));
+
   return app;
 }
 

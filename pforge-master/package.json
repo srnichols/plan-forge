@@ -1,6 +1,6 @@
 {
   "name": "@pforge/pforge-master",
-  "version": "2.62.1-dev",
+  "version": "2.63.0",
   "description": "Forge-Master Studio — standalone reasoning package for Plan Forge",
   "main": "server.mjs",
   "type": "module",

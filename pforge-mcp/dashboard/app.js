@@ -3936,6 +3936,7 @@ const tabLoadHooks = {
   memory: loadMemoryReport,
   timeline: loadTimelineTab,
   innerloop: loadInnerLoop,
+  'forge-master': () => { window.forgeMasterOnTabActivate?.(); },
 };
 
 // ─── Theme Toggle ─────────────────────────────────────────────

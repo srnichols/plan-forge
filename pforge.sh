@@ -4654,6 +4654,23 @@ cmd_skills() {
 }
 
 # ─── Command Router ────────────────────────────────────────────────────
+cmd_forge_master() {
+    local sub="${1:-}"
+    local lifecycle_path="$REPO_ROOT/pforge-master/src/lifecycle.mjs"
+    if [[ ! -f "$lifecycle_path" ]]; then
+        echo "ERROR: pforge-master not found at $lifecycle_path" >&2
+        exit 1
+    fi
+    case "$sub" in
+        status) node "$lifecycle_path" status ;;
+        logs)   node "$lifecycle_path" logs ;;
+        *)
+            echo "Usage: pforge forge-master <status|logs>" >&2
+            exit 1
+            ;;
+    esac
+}
+
 COMMAND="${1:-help}"
 shift 2>/dev/null || true
 
@@ -4694,6 +4711,7 @@ case "$COMMAND" in
     tour)         cmd_tour ;;
     config)       cmd_config "$@" ;;
     skills)       cmd_skills "$@" ;;
+    forge-master) cmd_forge_master "$@" ;;
     help|--help)  show_help ;;
     *)
         echo "ERROR: Unknown command '$COMMAND'" >&2

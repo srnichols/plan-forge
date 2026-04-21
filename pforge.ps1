@@ -5497,6 +5497,23 @@ import("$moduleUrl").then(m => {
 }
 
 # ─── Command Router ────────────────────────────────────────────────────
+function Invoke-ForgeMaster {
+    $sub = if ($Arguments.Count -gt 0) { $Arguments[0] } else { "" }
+    $lifecyclePath = Join-Path $RepoRoot "pforge-master/src/lifecycle.mjs"
+    if (-not (Test-Path $lifecyclePath)) {
+        Write-Host "ERROR: pforge-master not found at $lifecyclePath" -ForegroundColor Red
+        exit 1
+    }
+    switch ($sub) {
+        'status' { node $lifecyclePath status }
+        'logs'   { node $lifecyclePath logs }
+        default  {
+            Write-Host "Usage: pforge forge-master <status|logs>" -ForegroundColor Yellow
+            exit 1
+        }
+    }
+}
+
 switch ($Command) {
     'init'         { Invoke-Init }
     'check'        { Invoke-Check }
@@ -5535,6 +5552,7 @@ switch ($Command) {
     'tour'         { Invoke-Tour }
     'config'       { Invoke-Config }
     'skills'       { Invoke-Skills }
+    'forge-master' { Invoke-ForgeMaster }
     'help'         { Show-Help }
     ''             { Show-Help }
     '--help'       { Show-Help }

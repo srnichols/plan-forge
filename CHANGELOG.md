@@ -7,7 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-## [2.63.0] — 2026-05-09 — Forge-Master Studio (Phase-29)
+## [2.63.0] — 2026-04-21 — Forge-Master Studio (Phase-29)
 
 > **Feature release — Forge-Master Studio dashboard tab, route wiring, CLI subcommands, and capability surface update.**
 

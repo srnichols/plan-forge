@@ -1410,6 +1410,25 @@ const TOOLS = [
       required: [],
     },
   },
+  {
+    name: "forge_meta_bug_file",
+    description: "File a self-repair meta-bug against Plan Forge itself. Creates (or deduplicates) a GitHub issue for plan, orchestrator, or prompt defects discovered during execution. Auto-attaches trajectory context when slice reference is provided.",
+    inputSchema: {
+      type: "object",
+      required: ["class", "title", "symptom"],
+      properties: {
+        class: { type: "string", enum: ["plan-defect", "orchestrator-defect", "prompt-defect"], description: "Category of the meta-bug" },
+        title: { type: "string", description: "Short title describing the defect" },
+        symptom: { type: "string", description: "Observable symptom that revealed the defect" },
+        workaround: { type: "string", description: "Workaround applied during execution" },
+        filePaths: { type: "array", items: { type: "string" }, description: "Files affected by or related to the defect" },
+        slice: { type: "string", description: "Slice reference (e.g. '3') — triggers auto-pull of trajectory excerpt" },
+        plan: { type: "string", description: "Plan name or path for context" },
+        severity: { type: "string", enum: ["low", "medium", "high", "critical"], description: "Defect severity (default: medium)" },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+    },
+  },
 ];
 
 function planNameToRunbookName(planPath) {
@@ -4779,6 +4798,76 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
   }
 
+  // ─── forge_meta_bug_file — self-repair meta-bug filer (Phase-28.3 Slice 03) ───
+  if (name === "forge_meta_bug_file") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const { fileMetaBug, META_BUG_CLASSES } = await import("./tempering/bug-adapters/github.mjs");
+
+      // Validate class enum
+      if (!args.class || !META_BUG_CLASSES.includes(args.class)) {
+        const result = { ok: false, error: "INVALID_CLASS", validClasses: [...META_BUG_CLASSES] };
+        emitToolTelemetry("forge_meta_bug_file", args, result, Date.now() - t0, "ERROR", cwd);
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      }
+      if (!args.title || !args.symptom) {
+        const result = { ok: false, error: "MISSING_REQUIRED_FIELDS" };
+        emitToolTelemetry("forge_meta_bug_file", args, result, Date.now() - t0, "ERROR", cwd);
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      }
+
+      // Auto-pull trajectory excerpt when slice is provided
+      let trajectoryExcerpt;
+      if (args.slice) {
+        try {
+          const planStem = args.plan
+            ? basename(args.plan, ".md").toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "")
+            : null;
+          if (planStem) {
+            const trajPath = resolve(cwd, ".forge", "trajectories", planStem, `slice-${args.slice}.md`);
+            if (existsSync(trajPath)) {
+              const lines = readFileSync(trajPath, "utf-8").split("\n");
+              trajectoryExcerpt = lines.slice(-80).join("\n");
+            }
+          }
+        } catch {
+          // trajectory auto-pull is best-effort
+        }
+      }
+
+      // Load config for GitHub token/repo resolution
+      let config = {};
+      try {
+        config = JSON.parse(readFileSync(resolve(cwd, ".forge.json"), "utf-8"));
+      } catch {
+        // proceed with empty config — fileMetaBug handles token resolution
+      }
+
+      const filerResult = await fileMetaBug(
+        {
+          class: args.class,
+          title: args.title,
+          symptom: args.symptom,
+          workaround: args.workaround,
+          filePaths: args.filePaths,
+          slice: args.slice,
+          plan: args.plan,
+          severity: args.severity,
+          trajectoryExcerpt,
+        },
+        config,
+        { execSync, cwd },
+      );
+
+      emitToolTelemetry("forge_meta_bug_file", args, filerResult, Date.now() - t0, filerResult.ok ? "OK" : "ERROR", cwd);
+      return { content: [{ type: "text", text: JSON.stringify(filerResult, null, 2) }] };
+    } catch (err) {
+      emitToolTelemetry("forge_meta_bug_file", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
+      return { content: [{ type: "text", text: `Meta-bug filing error: ${err.message}` }], isError: true };
+    }
+  }
+
   // ─── Sync pforge tools ───
   const result = executeTool(name, args || {});
 
@@ -6094,6 +6183,8 @@ export function createExpressApp() {
     "forge_testbed_run",
     // Phase TESTBED-02 Slice 01 — Testbed happypath runner is MCP-native.
     "forge_testbed_happypath",
+    // Phase-28.3 Slice 03 — Self-repair meta-bug filer is MCP-native.
+    "forge_meta_bug_file",
   ]);
   app.post("/api/tool/:name", async (req, res) => {
     try {

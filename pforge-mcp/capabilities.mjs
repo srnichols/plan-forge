@@ -1432,6 +1432,33 @@ export const TOOL_METADATA = {
       output: { passed: 5, failed: 0, total: 5, results: [] },
     },
   },
+  forge_meta_bug_file: {
+    intent: ["self-repair", "meta-bug", "file", "defect", "plan-defect"],
+    aliases: ["meta-bug-file", "file-meta-bug", "self-repair-bug"],
+    cost: "low",
+    maxConcurrent: 5,
+    addedIn: "2.62.2",
+    prerequisites: ["gh CLI authenticated OR GITHUB_TOKEN"],
+    produces: ["GitHub issue (or comment on existing issue)"],
+    consumes: [".forge.json", ".forge/trajectories/**"],
+    sideEffects: [
+      "creates or comments on GitHub issue in self-repair repo",
+    ],
+    writesFiles: false,
+    network: true,
+    risk: "low",
+    errors: {
+      NO_TOKEN: { message: "No GitHub token available", recovery: "Set GITHUB_TOKEN env var, add to .forge/secrets.json, or authenticate with gh CLI" },
+      NO_REPO: { message: "Could not resolve target repository", recovery: "Set meta.selfRepairRepo in .forge.json (e.g. 'owner/repo')" },
+      CREATE_FAILED: { message: "GitHub issue creation failed", recovery: "Check token permissions and repository access" },
+      INVALID_CLASS: { message: "Bug class not in META_BUG_CLASSES enum", recovery: "Use one of: plan-defect, orchestrator-defect, prompt-defect" },
+      UNEXPECTED: { message: "Unexpected error during filing", recovery: "Check logs and retry" },
+    },
+    example: {
+      input: { class: "plan-defect", title: "Gate uses wrong grep pattern", symptom: "Slice 3 gate failed", severity: "high" },
+      output: { ok: true, issueNumber: 42, url: "https://github.com/owner/repo/issues/42", deduped: false },
+    },
+  },
 };
 
 export const WORKFLOWS = {

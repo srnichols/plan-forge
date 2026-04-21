@@ -1,0 +1,19 @@
+/**
+ * Plan Forge — Forge-Master Subsystem (Phase-28).
+ *
+ * Package entry point. Re-exports all public surface from submodules
+ * so consumers can import from `./forge-master/index.mjs`.
+ */
+
+export {
+  getForgeMasterConfig,
+  FORGE_MASTER_DEFAULTS,
+} from "./config.mjs";
+
+export {
+  BASE_ALLOWLIST,
+  WRITE_TOOLS_EXCLUDED,
+  USAGE_HINTS,
+  resolveAllowlist,
+  isAllowlisted,
+} from "./allowlist.mjs";

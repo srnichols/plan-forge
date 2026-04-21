@@ -46,17 +46,21 @@ nav a.nav-active { color: #f59e0b !important; }
   color: #34d399 !important;
 }
 
-/* Dropdown menu */
+/* Dropdown menu — click-toggle (see shared.js). Hover still opens as a
+   progressive enhancement for mouse users, but state is owned by JS via
+   the .nav-dropdown-open class so touch and click-outside work correctly. */
 .nav-dropdown { display: none; }
-.nav-dropdown-trigger:hover .nav-dropdown,
-.nav-dropdown-trigger:focus-within .nav-dropdown {
+.nav-dropdown-trigger.nav-dropdown-open > .nav-dropdown,
+.nav-dropdown-trigger:hover > .nav-dropdown {
   display: block;
 }
 .nav-dropdown-trigger .nav-dropdown {
   padding-top: 0.5rem;
   margin-top: 0;
 }
-/* Invisible hover bridge so cursor doesn't lose hover crossing the gap */
+/* Invisible hover bridge so mouse doesn't lose hover crossing the gap.
+   Pointer-events:none ensures the bridge never intercepts clicks on
+   nav links sitting behind it when the menu is closed. */
 .nav-dropdown::before {
   content: '';
   position: absolute;
@@ -64,6 +68,7 @@ nav a.nav-active { color: #f59e0b !important; }
   left: 0;
   right: 0;
   height: 0.75rem;
+  pointer-events: none;
 }
 
 /* FAQ accordion */

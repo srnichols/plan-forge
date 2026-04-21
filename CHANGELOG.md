@@ -7,6 +7,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.62.2] — 2026-04-21 — Self-Repair Capture
+
+> **Patch release — adds automatic meta-bug filing when Plan Forge discovers and works around defects in its own plans, orchestrator, or prompts.** New MCP tool `forge_meta_bug_file` routes self-repair issues to a dedicated GitHub Issues lane with hash-based dedupe. A post-slice advisory scanner detects when an agent worked around a Plan Forge defect but forgot to file. New instruction file teaches agents when and how to fire the tool.
+
+### Added
+
+- **`forge_meta_bug_file` MCP tool** — files GitHub Issues against the configured self-repair repo (`.forge.json#meta.selfRepairRepo`, fallback `srnichols/plan-forge`) when Plan Forge discovers a defect in itself during execution. Accepts `class` (`plan-defect` | `orchestrator-defect` | `prompt-defect`), `title`, `symptom`, optional `workaround`, `filePaths`, `slice`, `plan`, and `severity`. Returns `{ ok, issueNumber, url, deduped }`. (Phase-28.3, Slices 1–3)
+- **Hash-based dedupe** — issue titles embed `[self-repair:<hash>]` where hash is `sha256(class + normalize(title)).slice(0,12)`. Existing open issue with same hash → comment added instead of duplicate. (Phase-28.3, Slice 2)
+- **`resolveSelfRepairRepo(config)`** — resolves target repo from `.forge.json#meta.selfRepairRepo` with fallback to `srnichols/plan-forge`. Validates `owner/repo` shape; malformed input → fallback. (Phase-28.3, Slice 1)
+- **`META_BUG_CLASSES` / `SELF_REPAIR_LABELS` constants** — canonical class list and label set exported from `tempering/bug-adapters/github.mjs`. (Phase-28.3, Slice 1)
+- **Post-slice advisory scanner** — `detectSelfRepairMissed()` in `orchestrator.mjs` scans completed slice trajectories for self-repair markers (`"plan was wrong"`, `"fixed the plan"`, `"brittle gate"`, etc.). If markers present and no `forge_meta_bug_file` call was made, emits non-blocking `self-repair-missed` warning to `events.log`. Never fails the slice; never auto-files. (Phase-28.3, Slice 4)
+- **Self-repair reporting instruction file** — `.github/instructions/self-repair-reporting.instructions.md` with `applyTo: '**'`, priority LOW. Documents the two-lane distinction (project bugs vs meta bugs), three canonical classes with worked examples, tool signature, and when NOT to fire. (Phase-28.3, Slice 5)
+- **Step-3 prompt update** — `step3-execute-slice.prompt.md` now includes a Self-Repair Reporting reminder directing agents to `forge_meta_bug_file` when they work around Plan Forge defects. (Phase-28.3, Slice 5)
+
+### Tests
+
+- Phase-28.3 new tests: `meta-bug-resolver.test.mjs` (resolver + schema), `meta-bug-filer.test.mjs` (filer + dedupe + errors), `meta-bug-tool.test.mjs` (MCP tool validation + wiring), `self-repair-advisory.test.mjs` (marker scan + miss detection). Total test count: 3239.
+
 ## [2.62.1] — 2026-04-21 — Worker Role Guardrails + Gate Portability
 
 > **Patch release — four targeted defect fixes under the same architectural umbrella: respect the boundary between worker capability and call-site role.** No new features; no API changes.

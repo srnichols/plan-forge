@@ -4309,6 +4309,7 @@ export function lintGateCommands(planFilePath, cwd = process.cwd()) {
   const plan = parsePlan(planFilePath, cwd);
   const warnings = [];
   const errors = [];
+  const portabilityWarnings = [];
   const lastSliceNumber = plan.slices.length > 0
     ? plan.slices[plan.slices.length - 1].number
     : null;
@@ -4443,15 +4444,69 @@ export function lintGateCommands(planFilePath, cwd = process.cwd()) {
           message: `${loc}: node -e contains '//' which acts as a line comment on a single line, breaking the code. Remove JS comments from gate commands.`,
         });
       }
+
+      // 10. Cross-platform portability checks (non-blocking)
+      const portResult = validateGatePortability(line);
+      for (const pw of portResult.warnings) {
+        portabilityWarnings.push({
+          ...pw,
+          slice: slice.number,
+          command: line,
+        });
+      }
     }
   }
 
   return {
     warnings,
     errors,
+    portabilityWarnings,
     passed: errors.length === 0,
-    summary: `${errors.length} error(s), ${warnings.length} warning(s) across ${plan.slices.length} slices`,
+    summary: `${errors.length} error(s), ${warnings.length} warning(s), ${portabilityWarnings.length} portability warning(s) across ${plan.slices.length} slices`,
   };
+}
+
+/**
+ * Check a single gate command for cross-platform portability issues.
+ * Returns non-blocking warnings for shell constructs that may behave
+ * differently (or fail) across bash, zsh, cmd.exe, and PowerShell.
+ * @param {string} command - A single gate command string
+ * @returns {{ warnings: Array<{pattern: string, message: string, suggestion: string}> }}
+ */
+export function validateGatePortability(command) {
+  if (!command || typeof command !== "string" || !command.trim()) {
+    return { warnings: [] };
+  }
+  const warnings = [];
+
+  // 1. Pipe into brace-group with read — behavior differs across shells
+  if (/\|\s*\{[^}]*\bread\b/.test(command)) {
+    warnings.push({
+      pattern: "pipe-to-brace-read",
+      message: "Pipe to brace-group with 'read' — variable may be lost in a subshell on some shells.",
+      suggestion: "Use process substitution or a temp file instead of piping into a brace-group.",
+    });
+  }
+
+  // 2. Nested double-quotes inside bash -c — escaping is fragile across platforms
+  if (/bash\s+-c\s+".*\\"/.test(command) || /bash\s+-c\s+".*\\.+"/.test(command)) {
+    warnings.push({
+      pattern: "nested-double-quotes",
+      message: "Nested double-quotes inside bash -c — escaping is fragile across platforms.",
+      suggestion: "Use single-quotes for the outer bash -c argument, or use a script file.",
+    });
+  }
+
+  // 3. Command substitution containing a pipe — complex nesting, error-prone
+  if (/\$\(.*\|.*\)/.test(command)) {
+    warnings.push({
+      pattern: "cmd-substitution-pipe",
+      message: "Command substitution containing a pipe — complex nesting is error-prone cross-platform.",
+      suggestion: "Break into separate commands or use a temporary variable.",
+    });
+  }
+
+  return { warnings };
 }
 
 /**

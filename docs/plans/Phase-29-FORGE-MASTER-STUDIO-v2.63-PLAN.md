@@ -6,7 +6,7 @@ source: human
 
 # Phase-29 — Forge-Master Studio: Standalone Server, Web UI, Write Surface
 
-> **Target release**: v2.62.0
+> **Target release**: v2.63.0
 > **Status**: Draft
 > **Depends on**: v2.61.0 shipped (Phase-28 Forge-Master MVP). The reasoning loop, intent router, retrieval layer, tool bridge, system prompt, allowlist, persistence, provider adapters, and `forge_master_ask` MCP tool must all be in place and stable.
 > **Branch strategy**: Direct to `master`. Primarily **extraction** (move code, do not rewrite) + **additive** (new package for reasoning, new dashboard tab in the existing `:3100` server, new write allowlist, approval gates, M365-Copilot-style prompt gallery). No behavioral changes to v2.61 `forge_master_ask` MCP tool except underlying process boundary.

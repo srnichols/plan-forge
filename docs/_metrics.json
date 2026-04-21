@@ -1,11 +1,11 @@
 {
   "_comment": "Single source of truth for Plan Forge statistics cited across the docs. Update this first, then run scripts/check-metrics.ps1 (or .sh) to find any surface that still shows stale numbers. DO NOT template-inject this file into HTML — the goal is detection, not generation. Bump values here whenever a release changes them.",
   "_updated": "2026-04-21",
-  "_updatedFor": "v2.62.0",
+  "_updatedFor": "v2.62.3",
 
-  "version": "2.62.0",
-  "testsPassing": 3167,
-  "testsTotal": 3169,
+  "version": "2.62.3",
+  "testsPassing": 3277,
+  "testsTotal": 3277,
   "phasesSelfBuilt": "28+",
   "manualRollbacks": 0,
 
@@ -53,10 +53,10 @@
     "_comment": "Numbers that appeared in prior versions and should NEVER appear in current docs. The checker flags any of these found outside of CHANGELOG.md or /memories/.",
     "mcpTools": [18, 34, 36, 43, 52, 65],
     "dashboardTabs": [15],
-    "testsPassing": [103, 2470, 2478, 2486, 2627],
+    "testsPassing": [103, 2470, 2478, 2486, 2627, 3167, 3169],
     "agents": [17, 18],
     "skills": [11, 12],
     "manualChapters": [17, 18, 19],
-    "versionBadges": ["v2.53.3", "v2.54.0", "v2.55.0", "v2.59.0", "v2.59.1", "v2.60.0", "v2.61.0"]
+    "versionBadges": ["v2.53.3", "v2.54.0", "v2.55.0", "v2.59.0", "v2.59.1", "v2.60.0", "v2.61.0", "v2.62.0", "v2.62.1", "v2.62.2"]
   }
 }

@@ -43,6 +43,7 @@ import {
   runGate,
   DEFAULT_GATE_TIMEOUT_MS,
   resolveGateTimeoutMs,
+  isApiOnlyModel,
 } from "../orchestrator.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -694,13 +695,13 @@ describe("runGate timeout", () => {
     else process.env.PFORGE_GATE_TIMEOUT_MS = origEnv;
   });
 
-  it("DEFAULT_GATE_TIMEOUT_MS is 300 000", () => {
-    expect(DEFAULT_GATE_TIMEOUT_MS).toBe(300_000);
+  it("DEFAULT_GATE_TIMEOUT_MS is 600 000", () => {
+    expect(DEFAULT_GATE_TIMEOUT_MS).toBe(600_000);
   });
 
   it("resolveGateTimeoutMs returns default when env var is unset", () => {
     delete process.env.PFORGE_GATE_TIMEOUT_MS;
-    expect(resolveGateTimeoutMs()).toBe(300_000);
+    expect(resolveGateTimeoutMs()).toBe(600_000);
   });
 
   it("resolveGateTimeoutMs reads PFORGE_GATE_TIMEOUT_MS env var", () => {
@@ -710,16 +711,90 @@ describe("runGate timeout", () => {
 
   it("resolveGateTimeoutMs ignores non-positive values", () => {
     process.env.PFORGE_GATE_TIMEOUT_MS = "0";
-    expect(resolveGateTimeoutMs()).toBe(300_000);
+    expect(resolveGateTimeoutMs()).toBe(600_000);
     process.env.PFORGE_GATE_TIMEOUT_MS = "-1";
-    expect(resolveGateTimeoutMs()).toBe(300_000);
+    expect(resolveGateTimeoutMs()).toBe(600_000);
   });
 
   it("resolveGateTimeoutMs ignores non-numeric values", () => {
     process.env.PFORGE_GATE_TIMEOUT_MS = "abc";
-    expect(resolveGateTimeoutMs()).toBe(300_000);
+    expect(resolveGateTimeoutMs()).toBe(600_000);
     process.env.PFORGE_GATE_TIMEOUT_MS = "";
-    expect(resolveGateTimeoutMs()).toBe(300_000);
+    expect(resolveGateTimeoutMs()).toBe(600_000);
+  });
+});
+
+// ─── loadModelPerformance migration (v2.62.1) ─────────────────────────
+
+describe("loadModelPerformance migration — scrubs API-only entries", () => {
+  it("removes grok-* entries from disk and return value", () => {
+    const dir = mkdtempSync(join(tmpdir(), "pforge-perf-"));
+    try {
+      mkdirSync(resolve(dir, ".forge"), { recursive: true });
+      const entries = [
+        { date: "2026-01-01", model: "grok-4.20", status: "passed", cost_usd: 0.01 },
+        { date: "2026-01-02", model: "claude-sonnet-4.6", status: "passed", cost_usd: 0.05 },
+        { date: "2026-01-03", model: "grok-3-mini", status: "failed", cost_usd: 0.005 },
+      ];
+      writeFileSync(resolve(dir, ".forge", "model-performance.json"), JSON.stringify(entries, null, 2));
+
+      const result = loadModelPerformance(dir);
+      expect(result).toHaveLength(1);
+      expect(result[0].model).toBe("claude-sonnet-4.6");
+
+      // Disk must also be clean
+      const onDisk = JSON.parse(readFileSync(resolve(dir, ".forge", "model-performance.json"), "utf-8"));
+      expect(onDisk).toHaveLength(1);
+      expect(onDisk[0].model).toBe("claude-sonnet-4.6");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("is idempotent — second load does NOT rewrite the file", () => {
+    const dir = mkdtempSync(join(tmpdir(), "pforge-perf-"));
+    try {
+      mkdirSync(resolve(dir, ".forge"), { recursive: true });
+      const entries = [
+        { date: "2026-01-01", model: "grok-4.20", status: "passed", cost_usd: 0.01 },
+        { date: "2026-01-02", model: "claude-sonnet-4.6", status: "passed", cost_usd: 0.05 },
+      ];
+      const perfPath = resolve(dir, ".forge", "model-performance.json");
+      writeFileSync(perfPath, JSON.stringify(entries, null, 2));
+
+      loadModelPerformance(dir); // first call — scrubs and writes
+      const mtimeAfterFirst = existsSync(perfPath)
+        ? readFileSync(perfPath, "utf-8")
+        : null;
+
+      loadModelPerformance(dir); // second call — no API entries remain
+      const mtimeAfterSecond = readFileSync(perfPath, "utf-8");
+
+      expect(mtimeAfterFirst).toEqual(mtimeAfterSecond); // file unchanged on second load
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("leaves a file containing only Claude entries untouched", () => {
+    const dir = mkdtempSync(join(tmpdir(), "pforge-perf-"));
+    try {
+      mkdirSync(resolve(dir, ".forge"), { recursive: true });
+      const entries = [
+        { date: "2026-01-01", model: "claude-sonnet-4.6", status: "passed", cost_usd: 0.04 },
+        { date: "2026-01-02", model: "claude-opus-4.6", status: "passed", cost_usd: 0.08 },
+      ];
+      const perfPath = resolve(dir, ".forge", "model-performance.json");
+      const original = JSON.stringify(entries, null, 2);
+      writeFileSync(perfPath, original);
+
+      const result = loadModelPerformance(dir);
+      expect(result).toHaveLength(2);
+      // Content should be identical — no rewrite occurred
+      expect(readFileSync(perfPath, "utf-8")).toBe(original);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 
@@ -854,14 +929,14 @@ describe("getHealthTrend", () => {
 
   it("computes model stats from model-performance.json", () => {
     const now = new Date().toISOString();
-    recordModelPerformance(tempDir, { date: now, model: "gpt-4o", status: "passed", cost_usd: 0.05 });
-    recordModelPerformance(tempDir, { date: now, model: "gpt-4o", status: "passed", cost_usd: 0.03 });
+    recordModelPerformance(tempDir, { date: now, model: "claude-haiku-4.5", status: "passed", cost_usd: 0.05 });
+    recordModelPerformance(tempDir, { date: now, model: "claude-haiku-4.5", status: "passed", cost_usd: 0.03 });
     recordModelPerformance(tempDir, { date: now, model: "claude-sonnet", status: "failed", cost_usd: 0.10 });
 
     const result = getHealthTrend(tempDir, 30, ["models"]);
     expect(result.models.totalSlices).toBe(3);
-    expect(result.models.byModel["gpt-4o"].slices).toBe(2);
-    expect(result.models.byModel["gpt-4o"].successRate).toBe(1);
+    expect(result.models.byModel["claude-haiku-4.5"].slices).toBe(2);
+    expect(result.models.byModel["claude-haiku-4.5"].successRate).toBe(1);
     expect(result.models.byModel["claude-sonnet"].slices).toBe(1);
   });
 

@@ -46,12 +46,12 @@ export { TEMPERING_SCAN_STALE_DAYS };
 /** Canonical list of all supported agent adapters. Update here — consumed by dashboard, setup, and docs. */
 export const SUPPORTED_AGENTS = ["copilot", "claude", "cursor", "codex", "gemini", "windsurf", "generic"];
 
-/** Default gate timeout: 5 minutes (raised from 2 min in v2.62.1). Override with PFORGE_GATE_TIMEOUT_MS. */
-export const DEFAULT_GATE_TIMEOUT_MS = 300_000;
+/** Default gate timeout: 10 minutes (raised from 2 min in v2.62.1). Override with PFORGE_GATE_TIMEOUT_MS. */
+export const DEFAULT_GATE_TIMEOUT_MS = 600_000;
 
 /**
  * Resolve the gate timeout in milliseconds.
- * Priority: PFORGE_GATE_TIMEOUT_MS env var → default (300 000 ms / 5 min).
+ * Priority: PFORGE_GATE_TIMEOUT_MS env var → default (600 000 ms / 10 min).
  * @returns {number}
  */
 export function resolveGateTimeoutMs() {
@@ -3834,13 +3834,24 @@ export function getCostReport(cwd) {
 /**
  * Load the model performance log from .forge/model-performance.json.
  * Returns an array of per-slice performance entries, or [] if none exists.
+ *
+ * Migration (v2.62.1): on first load after the fix, drops any entries where
+ * the model name matches an API-only provider (grok-*, gpt-*, etc.), writes
+ * the cleaned file back, and logs a one-line notice. Idempotent — if no
+ * entries are removed the file is not rewritten.
  */
 export function loadModelPerformance(cwd) {
   const perfPath = resolve(cwd, ".forge", "model-performance.json");
   if (!existsSync(perfPath)) return [];
   try {
     const data = JSON.parse(readFileSync(perfPath, "utf-8"));
-    return Array.isArray(data) ? data : [];
+    if (!Array.isArray(data)) return [];
+    const clean = data.filter(r => !isApiOnlyModel(r.model));
+    if (clean.length < data.length) {
+      writeFileSync(perfPath, JSON.stringify(clean, null, 2));
+      console.log(`[perf] scrubbed ${data.length - clean.length} API-worker entries from model-performance.json (see BUG-api-xai-worker-text-only.md)`);
+    }
+    return clean;
   } catch {
     return [];
   }

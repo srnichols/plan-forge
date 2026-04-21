@@ -2,7 +2,7 @@
 
 **Filed**: 2026-04-21
 **Severity**: Medium — causes false-positive slice failures on any plan whose test gate runs the full suite
-**Status**: Open
+**Status**: Fixed in v2.62.1
 **Observed on**: Phase-28.1 Slice 6 (v2.62.0-dev), gate `bash -c "cd pforge-mcp && npx vitest run"`
 
 ---

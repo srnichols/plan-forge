@@ -2,7 +2,7 @@
 
 **Filed**: 2026-04-21  
 **Severity**: High — quietly poisons cost estimator recommendations and loses wall-clock time on retry loops  
-**Status**: Open  
+**Status**: Fixed in v2.62.1  
 **Repro'd on**: v2.61.0-dev (master @ `2118453`)
 
 ---

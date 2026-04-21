@@ -7,7 +7,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-## [2.62.0] — 2026-04-21 — Forge-Master MVP + Bug-Sweep Hotfix
+## [2.62.1] — 2026-04-21 — Worker Role Guardrails + Gate Portability
+
+> **Patch release — four targeted defect fixes under the same architectural umbrella: respect the boundary between worker capability and call-site role.** No new features; no API changes.
+
+### Fixed
+
+- **API-only models (Grok, GPT) blocked from code-writing worker role** — `spawnWorker()` in `orchestrator.mjs` now throws a descriptive error when the resolved model is an API-only provider (matching `grok-*`, `gpt-*`, `dall-e-*`, or `chatgpt-*`) and the call-site role is `null`, `"code"`, or `"execute"`. API providers remain valid for `reviewer`, `quorum-dry-run`, `analysis`, and `image` roles. New `API_ALLOWED_ROLES` set and `isApiOnlyModel()` helper exported. (Phase-28.2, Slice 1)
+- **Recommender excludes API-only models** — `recommendModel()` in `orchestrator.mjs` and the mirror copy in `cost-service.mjs` now filter out any model matching an API-only provider pattern before scoring. Grok and GPT models are permanently ineligible for code-writing recommendations; only CLI-backed models (claude-*, gemini-*, etc.) qualify. (Phase-28.2, Slice 2)
+- **One-time migration scrubs poisoned model-performance entries** — `loadModelPerformance()` now silently drops historical entries where the model name matches an API-only pattern on the first load after upgrade. Writes the cleaned file back once; idempotent on subsequent loads. Logs `[perf] scrubbed N API-worker entries from model-performance.json` when entries are removed. (Phase-28.2, Slice 3)
+- **Gate portability linter warns on Windows-hostile shell patterns** — new `validateGatePortability()` function in `orchestrator.mjs` detects three known bad patterns: pipe-to-brace-group with `read`, nested double-quotes inside `bash -c`, and command substitution containing a pipe. Integrated into `lintGateCommands()` as a non-blocking `portabilityWarnings` field on the result. Existing plans continue to run; the linter warns authors before wasted worker spend. (Phase-28.2, Slice 4)
+- **Gate timeout raised to 5 min (300 s); configurable via env var** — `runGate()` and the LiveGuard gate runner both use `resolveGateTimeoutMs()` which defaults to `300_000` ms (up from 120 s). Override with `PFORGE_GATE_TIMEOUT_MS` env var. Non-positive and non-numeric values fall back to the default. (Phase-28.2, Slice 5)
+
+### Tests
+
+- Phase-28.2 new tests: `spawn-worker-role.test.mjs` (API provider block + `buildApiMessages`), `recommender-api-exclusion.test.mjs` (`isApiOnlyModel` + `recommendModel` exclusion), `loadModelPerformance migration` describe block in `orchestrator.test.mjs` (scrub + idempotent + clean-file), `lint-gate-portability.test.mjs` (three hostile patterns + clean commands + `lintGateCommands` integration). Total test count: 3172.
+
+
 
 > **Minor release — ships the Phase-28 Forge-Master MVP subsystem and closes three bug-sweep fixes from Phase-28.1.** Forge-Master (`forge_master_ask`) is a new MCP tool that classifies user intent, retrieves memory context, and orchestrates read-only tool calls on the agent's behalf — purpose-built for open-ended reasoning about plans, troubleshooting failures, and funneling ideas into Crucible smelts. The bug fixes resolve a hard Windows blocker (GH #82), a false-positive gate linter on box-drawing diagrams (GH #83), and a stale update-check cache after self-update.
 

@@ -1007,7 +1007,7 @@ describe("forge_health_trend integration", () => {
     const now = new Date().toISOString();
     appendForgeJsonl("drift-history.json", { timestamp: now, score: 85 }, tempDir);
     appendForgeJsonl("incidents.jsonl", { capturedAt: now, severity: "high", resolvedAt: null, mttr: null }, tempDir);
-    recordModelPerformance(tempDir, { date: now, model: "gpt-4o", status: "passed", cost_usd: 0.05 });
+    recordModelPerformance(tempDir, { date: now, model: "claude-haiku-4.5", status: "passed", cost_usd: 0.05 });
 
     const result = getHealthTrend(tempDir, 30);
     expect(result.drift.snapshots).toBe(1);

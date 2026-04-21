@@ -2,7 +2,7 @@
 
 **Filed**: 2026-04-21
 **Severity**: High — costs real money and wall-clock per occurrence
-**Status**: Open
+**Status**: Fixed in v2.62.1
 **Observed on**: Phase-28 (v2.61.0-dev), slices 4 and 7 both failed on gate quoting / piping issues despite correct code
 
 ---

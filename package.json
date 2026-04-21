@@ -1,0 +1,13 @@
+{
+  "name": "plan-forge",
+  "private": true,
+  "workspaces": [
+    "pforge-mcp",
+    "pforge-master"
+  ],
+  "scripts": {
+    "test": "npm test --workspaces --if-present",
+    "test:mcp": "npm test --workspace=pforge-mcp",
+    "test:master": "npm test --workspace=pforge-master"
+  }
+}

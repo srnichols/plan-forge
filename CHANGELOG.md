@@ -7,6 +7,34 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.62.0] — 2026-04-21 — Forge-Master MVP + Bug-Sweep Hotfix
+
+> **Minor release — ships the Phase-28 Forge-Master MVP subsystem and closes three bug-sweep fixes from Phase-28.1.** Forge-Master (`forge_master_ask`) is a new MCP tool that classifies user intent, retrieves memory context, and orchestrates read-only tool calls on the agent's behalf — purpose-built for open-ended reasoning about plans, troubleshooting failures, and funneling ideas into Crucible smelts. The bug fixes resolve a hard Windows blocker (GH #82), a false-positive gate linter on box-drawing diagrams (GH #83), and a stale update-check cache after self-update.
+
+### Added — Forge-Master MVP (Phase-28)
+
+- **`forge_master_ask` MCP tool** — accepts a freeform `message` string and returns a structured reasoning response. Internally: intent classification (keyword + model fallback), memory retrieval (OpenBrain L1/L2/L3 tiers), tool bridge with allowlist enforcement (read-only tools only), multi-step reasoning loop with provider adapters (Anthropic, OpenAI, xAI), session persistence with auto-summarization, and `buildCapabilities` alias export. Registered in `capabilities.mjs`, `tools.json`, and `server.mjs`. (Phase-28, Slices 1–7)
+- **Forge-Master subsystem scaffold** — `pforge-mcp/forge-master/` directory with `config.mjs` (schema validation, `.forge.json` integration), `intent-router.mjs` (keyword matching + model fallback classification), `memory.mjs` (OpenBrain retrieval layer), `tool-bridge.mjs` (allowlist-gated tool execution), `reasoning.mjs` (multi-step loop + provider adapters), `session.mjs` (persistence + auto-summarization). (Phase-28, Slices 1–6)
+- **Agent guidance docs** — `docs/forge-master/` with usage guide, tool reference, and integration examples. (Phase-28, post Slice 7)
+
+### Fixed — Bug-Sweep Hotfix (Phase-28.1)
+
+- **Windows `spawn` ENOENT fix (GH #82)** — added `shell: process.platform === "win32"` to `spawnWorker()` options in `orchestrator.mjs`. On Windows, npm-global CLIs (`claude`, `codex`) are installed as `.cmd` shims that `child_process.spawn` cannot resolve without `shell: true`. Covered by new `orchestrator-spawn-shell.test.mjs`. (Phase-28.1, Slice 1)
+- **Box-drawing characters recognized as prose (GH #83)** — extended `looksLikeProse()` in `orchestrator.mjs` to detect Unicode box-drawing range U+2500–U+257F. Lines containing `┌─┐│└┘├┤┬┴┼` are now correctly identified as documentation rather than being misclassified as shell commands in validation gates. Includes end-to-end regression test via `lint-ascii-diagram.test.mjs` with a fixture plan. (Phase-28.1, Slices 2–3)
+- **Self-update invalidates update-check cache (Fix A)** — after a successful `pforge self-update`, `writeFreshCache()` now writes a proper `update-check.json` entry so the next `checkForUpdate` returns `isNewer: false` without hitting the network. Previously the cache was deleted, forcing an unnecessary network round-trip. New export in `update-check.mjs`. (Phase-28.1, Slice 4)
+- **`checkForUpdate` honors VERSION mtime (Fix D)** — defense-in-depth: `checkForUpdate()` now compares VERSION file mtime against cache file mtime. If VERSION was touched after the cache was written (manual edit, tarball extraction, git sync), the cache is treated as stale. (Phase-28.1, Slice 5)
+
+### Tests
+
+- Phase-28 Forge-Master: tests across intent-router, memory retrieval, tool-bridge, reasoning loop, session persistence, and tool registration.
+- Phase-28.1 bug fixes: `+13` tests — `orchestrator-spawn-shell.test.mjs` (spawn shim), `looksLikeProse` box-drawing tests, `lint-ascii-diagram.test.mjs` (regression guard), `update-check.test.mjs` (writeFreshCache + mtime bypass).
+
+### Upgrade notes
+
+- **No breaking changes.** `forge_master_ask` is a new additive tool; no existing tool signatures or return shapes changed.
+- **Windows users**: the spawn fix resolves the `ENOENT` error that prevented `pforge run-plan` from working on Windows. No configuration needed.
+- **Self-update users**: the stale banner issue is self-healing after upgrading to v2.62.0.
+
 ## [2.61.0] — 2026-04-20 — Cost Projection UI + Per-Slice Estimator
 
 > **Minor release — surfaces cost projection into the operator dashboard and gives agents a per-slice entry point.** Follows the Phase-27.1 dogfood session where `forge_estimate_quorum` produced honest numbers but the dashboard had no way to show them, and agents had to estimate an entire plan just to price one slice. Additive only — existing `forge_estimate_quorum` signature and return shape unchanged; new `slices[]` field under each mode is backward-compatible. Also includes a calibration report documenting that the current `scoreSliceComplexity` threshold of 5 selects zero slices on every real plan in the repo — evidence-gathering for a future scorer rewrite, no scoring changes ship here.

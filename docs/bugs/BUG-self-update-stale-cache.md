@@ -2,7 +2,7 @@
 
 **Filed**: 2026-04-21
 **Severity**: Medium — cosmetic in effect but erodes trust in the self-update pipeline (user thinks the update didn't work)
-**Status**: Open
+**Status**: Fixed in v2.62.0
 **Observed on**: v2.61.0 (dashboard banner still showing "v2.57.0 available (you have v2.50.0-dev)" after a clean `pforge self-update` + `pforge smith`)
 
 ---

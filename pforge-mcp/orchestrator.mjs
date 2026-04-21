@@ -4429,6 +4429,11 @@ export function looksLikeProse(line) {
   // 5. Formula-like assignment with arithmetic op (distinguishes from env-var NODE_ENV=test)
   if (/^[a-z_]\w*\s*=\s*.*[+\-*/x×]/.test(trimmed)) return true;
 
+  // 6. Box-drawing characters (U+2500–U+257F): lines like ┌──────┐, │ text │, └──────┘
+  // These appear in plan files as visual borders and are never valid shell commands.
+  // Range: 0x2500 .. 0x257F
+  if (/[\u2500-\u257F]/.test(trimmed)) return true;
+
   return false;
 }
 

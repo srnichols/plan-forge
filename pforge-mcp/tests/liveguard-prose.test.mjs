@@ -41,6 +41,26 @@ describe("looksLikeProse — prose detection (true cases)", () => {
   it("detects markdown table row", () => {
     expect(looksLikeProse("| Column 1 | Column 2 |")).toBe(true);
   });
+
+  it("detects box-drawing top border: ┌───────┐", () => {
+    expect(looksLikeProse("┌─────────────────────────────┐")).toBe(true);
+  });
+
+  it("detects box-drawing side border: │ text │", () => {
+    expect(looksLikeProse("│  STOP! Before writing ANY code  │")).toBe(true);
+  });
+
+  it("detects box-drawing bottom border: └───────┘", () => {
+    expect(looksLikeProse("└─────────────────────────────┘")).toBe(true);
+  });
+
+  it("detects box-drawing junction characters: ├─┤ ┬ ┴ ┼", () => {
+    expect(looksLikeProse("├─────────────────────────────┤")).toBe(true);
+  });
+
+  it("detects mixed box-drawing with text", () => {
+    expect(looksLikeProse("│  1. ✅ Read this file │")).toBe(true);
+  });
 });
 
 // ─── Group 2: looksLikeProse — real commands → false ──────────────────

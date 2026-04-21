@@ -531,6 +531,22 @@ const API_PROVIDERS = {
 };
 
 /**
+ * Check whether a model name matches an API-only provider pattern.
+ * Unlike detectApiProvider, this does NOT check for API key availability —
+ * it returns true purely based on the model name prefix.
+ * Used by the recommender to exclude models that require external API keys.
+ * @param {string} model - Model identifier (e.g., "grok-3-mini", "gpt-5.2")
+ * @returns {boolean}
+ */
+export function isApiOnlyModel(model) {
+  if (!model) return false;
+  for (const provider of Object.values(API_PROVIDERS)) {
+    if (provider.pattern.test(model)) return true;
+  }
+  return false;
+}
+
+/**
  * Detect which API provider (if any) handles a given model name.
  * Lookup order: environment variable → .forge/secrets.json → null
  * @param {string} model - Model identifier (e.g., "grok-3-mini")
@@ -5708,7 +5724,7 @@ export function recommendModel(cwd, sliceType = null) {
     const stats = aggregateModelStats(relevant);
     const MIN_SAMPLE = 3;
     const qualified = Object.entries(stats)
-      .filter(([, s]) => s.total_slices >= MIN_SAMPLE && s.success_rate > 0.8)
+      .filter(([m, s]) => !isApiOnlyModel(m) && s.total_slices >= MIN_SAMPLE && s.success_rate > 0.8)
       .map(([m, s]) => ({
         model: m,
         success_rate: s.success_rate,

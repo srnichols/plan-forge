@@ -14,6 +14,7 @@ import {
   recommendModel,
   assessQuorumViability,
   aggregateModelStats,
+  isApiOnlyModel,
   QUORUM_PRESETS,
 } from "./orchestrator.mjs";
 
@@ -287,7 +288,7 @@ export function estimatePlan(plan, model, cwd, quorumConfig = null, resumeFrom =
         // Minimum 3 slices of data before trusting a model's success rate
         const MIN_SAMPLE = 3;
         const qualified = Object.entries(stats)
-          .filter(([, s]) => s.total_slices >= MIN_SAMPLE && s.success_rate > 0.8)
+          .filter(([m, s]) => !isApiOnlyModel(m) && s.total_slices >= MIN_SAMPLE && s.success_rate > 0.8)
           .map(([m, s]) => ({
             model: m,
             success_rate: s.success_rate,

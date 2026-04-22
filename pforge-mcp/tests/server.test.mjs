@@ -1855,6 +1855,28 @@ describe("dashboard tab structure", () => {
     expect(tabMatches.length).toBe(33);
   });
 
+  it("Cross-group tab migration (Slice 7): Extensions→Settings, Bug Registry→LiveGuard, Watcher→LiveGuard", () => {
+    // Forge row shrunk from 18 to 15 buttons
+    const forgeRow = dashboardHtml.match(/id="subtabs-forge"[\s\S]*?<\/div>/);
+    expect((forgeRow?.[0].match(/data-tab="/g) || []).length).toBe(15);
+
+    // Extensions moved to Settings row (9 native + 1 migrated = 10 total)
+    const settingsRow = dashboardHtml.match(/id="subtabs-settings"[\s\S]*?<\/div>/);
+    expect(settingsRow?.[0] || "").toContain('data-tab="extensions"');
+    expect((settingsRow?.[0].match(/data-tab="/g) || []).length).toBe(10);
+
+    // Bug Registry + Watcher moved to LiveGuard row (5 native + 2 migrated = 7 total)
+    const liveguardRow = dashboardHtml.match(/id="subtabs-liveguard"[\s\S]*?<\/div>/);
+    expect(liveguardRow?.[0] || "").toContain('data-tab="bugregistry"');
+    expect(liveguardRow?.[0] || "").toContain('data-tab="watcher"');
+    expect((liveguardRow?.[0].match(/data-tab="/g) || []).length).toBe(7);
+
+    // Migrated buttons use destination group accent colors
+    expect(settingsRow?.[0] || "").toMatch(/hover:text-purple-400[^>]*data-tab="extensions"/);
+    expect(liveguardRow?.[0] || "").toMatch(/hover:text-amber-400[^>]*data-tab="watcher"/);
+    expect(liveguardRow?.[0] || "").toMatch(/hover:text-amber-400[^>]*data-tab="bugregistry"/);
+  });
+
   it("has LiveGuard section divider", () => {
     expect(dashboardHtml).toContain("🛡️ LiveGuard");
   });

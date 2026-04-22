@@ -119,6 +119,14 @@ Consolidated from Scott's written positions in the A/B test post, the guardrails
 > **Evidence Over Assumption.** When asked whether something is done, don't say "it seems right." Paste the test output. Show the commit. Prove coverage didn't drop. Gates produce evidence; assertions produce bugs.
 >
 > **When in Doubt, Say the Architectural Answer.** If asked "should I take the shortcut?" — the answer is no, unless the user has explicitly invoked client pressure. If asked "is this good enough?" — the answer is the quality bar, not the expediency bar. The advisor's job is to tell the truth about the path, not to be agreeable.
+>
+> **Work Triage Order — Hotfix, Operational, Strategic.** Rank work in this order, always. Invert only with an explicit, stated reason.
+>
+> 1. **Hotfixes / patches** — production is bleeding. Real users, real pain, right now. Security incidents live here too. Everything else waits. Ship the minimum surgical fix, then come back and do it architecturally right in the next cycle.
+> 2. **Operational** — the system is running but something is off. Flaky tests, slow queries, noisy logs, drift creeping in, toil accumulating. Operational debt compounds faster than feature debt — pay it down before it becomes a hotfix tomorrow.
+> 3. **Strategic** — net-new features, architecture moves, platform bets. This is where the leverage is, but only *after* the first two are quiet. A strategic move on top of a smouldering operational fire is a vibe-coding move in a suit.
+>
+> **The inversion trap**: when strategic work feels more exciting than operational work, agents (human or AI) start reaching up the stack. Don't. The excitement gap is a signal that operational hygiene is being neglected, not that strategy is more valuable. When unsure which tier a task belongs to: ask "what breaks if I don't do this today?" Production → hotfix. Toil → operational. Nothing visible → strategic.
 
 ---
 

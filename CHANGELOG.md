@@ -7,6 +7,31 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.65.0] — 2026-04-22 — Advisory → Enforcement Calibration (Phase-31)
+
+> **Minor release — Phase-31 completes 7 calibration improvements: dashboard timeout-committed badge, plan-parser lint advisory, reflexion prompt wiring, strict-gates CLI flag, complexity threshold recalibration, tempering suppression promoter, and full sweep.**
+
+### Added
+- **Committed-before-timeout badge (Slice 1)** — New `dashboard/live-session.js` module subscribes to `slice-timeout-but-committed` hub events and injects a green badge into the matching slice card showing 7-char pre/post commit SHAs. MutationObserver re-injects badges after `renderSliceCards()` wipes the DOM. Badge clears on `run-started` to prevent cross-run stale state.
+- **Plan-parser lint advisory (Slice 2)** — `runAnalyze` now accepts a `planPath` parameter. When provided, it parses the plan and emits `ADVISORY plan-parser-gate-missing` for each slice that has bash code blocks but no `**Validation Gate**:` marker. Advisory suppressed when `runtime.planParser.implicitGates = true`.
+- **`--strict-gates` CLI flag (Slice 4)** — `pforge run-plan --strict-gates` forces `runtime.gateSynthesis.mode` to `"enforce"` for the run without writing `.forge.json`. Slices flagged by `suggestGatesForPlan()` fail pre-flight with a structured `STRICT_GATES_PREFLIGHT` error. Default `runtime.gateSynthesis.mode` remains `"suggest"`.
+- **Tempering suppression promoter (Slice 6)** — `tempering.mjs` exports `promoteSuppressions({ cwd, threshold })`, `logSuppression`, `readSuppressions`, `readPromoteThreshold`. After each run, suppressions seen ≥ `runtime.tempering.promoteThreshold` (default 3) times are promoted to `.forge/bugs/bug-YYYY-MM-DD-NNN.json` with full suppression history. Idempotent: re-runs append a "re-observed" record rather than duplicating.
+- **Research note** — `docs/research/complexity-threshold-v2.65.md`: distribution analysis across Phase-25–30 plans justifying threshold recalibration to 3.
+- **Research note** — `docs/research/gate-synthesis-flip-safety-v2.65.md`: audit of recent runs confirming `--strict-gates` safety.
+
+### Changed
+- **Reflexion prompt wiring (Slice 3)** — When `lastFailureContext` is non-null on a retry, the worker system prompt prepends a `<prior_attempt>` block with `previousAttempt`, `gateName`, `model`, and `stderrTail` (truncated to 40 lines). First-attempt prompts unchanged.
+- **Complexity threshold recalibrated (Slice 5)** — `scoreSliceComplexity` default threshold lowered from 6 → 3 (60th-percentile of Phase-25–30 distribution). At threshold=6 only 1/63 slices triggered quorum; at threshold=3, 56/63 slices do.
+
+### Tests
+- `tests/dashboard-live-session.test.mjs` — 13 tests (badge render, absent-without-event, markup, index.html wiring)
+- `tests/orchestrator-analyze.test.mjs` — 5 tests (plan-parser lint advisory, implicitGates suppression)
+- `tests/orchestrator-reflexion-prompt.test.mjs` — reflexion wiring coverage
+- `tests/orchestrator-gate-synthesis.test.mjs` — strict-gates flag coverage
+- `tests/orchestrator-complexity.test.mjs` — complexity threshold coverage
+- `tests/tempering-promoter.test.mjs` — 25 tests (readPromoteThreshold, logSuppression, readSuppressions, promoteSuppressions at/below threshold, idempotency, custom threshold, multiple fingerprints)
+- **Total**: 3477 tests across 146 files in `pforge-mcp/`; 65 tests in `pforge-master/`
+
 ## [2.64.1] — 2026-04-22 — Forge-Master Studio hotfix + Smith Phase-29/30 awareness
 
 > **Patch release — bundles the Phase-30.1 Forge-Master Studio tab clickability hotfix with Smith diagnostic improvements for Phase-29/30 files and dev-repo false-positive elimination.**

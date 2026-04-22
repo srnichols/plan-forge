@@ -7,11 +7,13 @@
 
 ## Current Release
 
-**v2.64.0** (2026-04-21) — Settings Panel Decomposition (Phase-30). Monolithic Settings tab split into 9 sub-tabs (General, Models, Execution, API Keys, Updates, Memory, Brain, Bridge, Crucible). Cross-group tab migration: Extensions → Settings row; Bug Registry + Watcher → LiveGuard row. Plus Phase-30.1 hotfix — Forge-Master Studio tab clickability restored by hoisting `window.*` handlers to module top.
+**v2.65.0** (2026-04-22) — Advisory → Enforcement Calibration (Phase-31). Dashboard committed-before-timeout badge; plan-parser lint advisory in `runAnalyze`; reflexion prompt wiring; `--strict-gates` CLI flag; `scoreSliceComplexity` threshold 6→3; tempering suppression promoter (`promoteSuppressions`). 3477 tests across 146 files.
+
+Previous: v2.64.0 (2026-04-21) — Settings Panel Decomposition (Phase-30). Monolithic Settings tab split into 9 sub-tabs (General, Models, Execution, API Keys, Updates, Memory, Brain, Bridge, Crucible). Cross-group tab migration: Extensions → Settings row; Bug Registry + Watcher → LiveGuard row. Plus Phase-30.1 hotfix — Forge-Master Studio tab clickability restored by hoisting `window.*` handlers to module top.
 
 Previous: v2.63.1 (Phase-28.5 tempering mtime sort + docs nav hover fix), v2.63.0 (Phase-29 Forge-Master Studio dashboard tab + routes + CLI), v2.62.x (Forge-Master MVP, worker role guardrails, self-repair capture, OpenBrain queue drain), v2.61.0 (Phase-27.2 cost projection UI + per-slice estimator).
 
-**In flight (2.65.0-dev)**: TBD — Phase-31 planning open. Candidates include advisory-to-enforcement calibration for Phase-25/26 subsystems, Team Mode (v3.1), orchestrator timeout-retry cleanup (meta-bug #88), plan-gate parser hardening (meta-bug #89).
+**In flight (next)**: TBD — Phase-32 planning open. Candidates include ML-backed complexity scoring, deeper advisory-to-enforcement flips, Team Mode (v3.1).
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 

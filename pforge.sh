@@ -4203,49 +4203,163 @@ cmd_tour() {
 }
 
 # ─── Command: version-bump ─────────────────────────────────────────────
-# Port of Invoke-VersionBump from pforge.ps1. Updates VERSION file,
-# pforge-mcp/package.json, and version badges/strings in README/ROADMAP/docs.
+# Pure-bash port of Invoke-VersionBump from pforge.ps1.
+# Supports --dry-run (preview unified diffs, no writes) and --strict
+# (promote every unmatched pattern to a hard failure).
 cmd_version_bump() {
-    if [ $# -lt 1 ]; then
+    local new_version="" dry_run=0 strict=0
+    for arg in "$@"; do
+        case "$arg" in
+            --dry-run) dry_run=1 ;;
+            --strict)  strict=1 ;;
+            -*)        ;;
+            *)         [ -z "$new_version" ] && new_version="$arg" ;;
+        esac
+    done
+
+    if [ -z "$new_version" ]; then
         printf "\033[31mERROR: Version required.\033[0m\n" >&2
         printf "\033[33m  Usage: pforge version-bump <version>\033[0m\n" >&2
         printf "\033[33m  Example: pforge version-bump 2.14.0\033[0m\n" >&2
         exit 1
     fi
-    local new_version="$1"
-    local short_version
-    short_version="$(echo "$new_version" | sed -E 's/\.[0-9]+$//')"
-    local today
-    today="$(date +%Y-%m-%d)"
 
-    echo ""
-    printf "\033[36mVersion Bump: → v%s\033[0m\n" "$new_version"
+    local short_version today
+    short_version="$(printf '%s' "$new_version" | sed -E 's/\.[0-9]+$//')"
+    today="${PFORGE_TEST_TODAY:-$(date +%Y-%m-%d)}"
+
+    # Parallel arrays — one entry per target (index.html appears twice)
+    local target_files target_strategies target_patterns target_replaces target_descs target_optional target_validates
+    target_files=(VERSION "pforge-mcp/package.json" "docs/index.html" "docs/index.html" "README.md" "ROADMAP.md")
+    target_strategies=(Overwrite RegexReplace RegexReplace RegexReplace RegexReplace RegexReplace)
+    target_patterns=("" '"version":[[:space:]]*"[^"]+"' 'Dogfooded · v[0-9.]+' '>v[0-9.]+</div>' 'v1\.0 → v[0-9.]+' '\*\*v[0-9.]+\*\* \([0-9]{4}-[0-9]{2}-[0-9]{2}\)')
+    target_replaces=("" "\"version\": \"$new_version\"" "Dogfooded · v$new_version" ">v$short_version</div>" "v1.0 → v$short_version" "**v$new_version** ($today)")
+    target_descs=("VERSION file" "MCP package.json" "index.html hero badge" "index.html stats card" "README track record" "ROADMAP current release")
+    target_optional=(0 0 0 0 1 0)
+    # validate: substring that MUST be present after each write (short_version for targets that write the truncated form)
+    target_validates=("$new_version" "$new_version" "$new_version" "$short_version" "$short_version" "$new_version")
+
+    local total=${#target_files[@]}
+    local written=0 warned=0 failed=0 dry_would_update=0 dry_warnings=0
+
+    printf "\n\033[36mVersion Bump: → v%s\033[0m\n" "$new_version"
     printf "\033[90m─────────────────────────────────────\033[0m\n"
 
-    NEW_VERSION="$new_version" SHORT_VERSION="$short_version" TODAY="$today" REPO_ROOT="$REPO_ROOT" node -e '
-const fs=require("fs"),path=require("path");
-const root=process.env.REPO_ROOT||process.cwd();
-const v=process.env.NEW_VERSION,short=process.env.SHORT_VERSION,today=process.env.TODAY;
-const targets=[
-  {file:"VERSION",pattern:/.*/s,replace:v,desc:"VERSION file"},
-  {file:"pforge-mcp/package.json",pattern:/"version":\s*"[^"]+"/,replace:`"version": "${v}"`,desc:"MCP package.json"},
-  {file:"docs/index.html",pattern:/Dogfooded · v[\d.]+/,replace:`Dogfooded · v${v}`,desc:"index.html hero badge"},
-  {file:"docs/index.html",pattern:/>v[\d.]+<\/div>/,replace:`>v${short}</div>`,desc:"index.html stats card"},
-  {file:"README.md",pattern:/v1\.0 → v[\d.]+/,replace:`v1.0 → v${short}`,desc:"README track record"},
-  {file:"ROADMAP.md",pattern:/\*\*v[\d.]+\*\* \(\d{4}-\d{2}-\d{2}\)/,replace:`**v${v}** (${today})`,desc:"ROADMAP current release"},
-];
-let updated=0;
-for(const t of targets){
-  const p=path.join(root,t.file);
-  if(!fs.existsSync(p)){console.log(`  \x1b[33m⚠  ${t.file} not found\x1b[0m`);continue;}
-  let c=fs.readFileSync(p,"utf8");
-  if(t.pattern.test(c)){c=c.replace(t.pattern,t.replace);fs.writeFileSync(p,c);console.log(`  \x1b[32m✅ ${t.desc}\x1b[0m`);updated++;}
-  else{console.log(`  \x1b[33m⚠  ${t.desc} — pattern not found\x1b[0m`);}
-}
-console.log("");
-console.log(`\x1b[32mUpdated ${updated} files to v${v}\x1b[0m`);
-console.log("\x1b[90mDon'\''t forget: Update CHANGELOG.md manually with release notes.\x1b[0m");
-'
+    local i=0
+    while [ "$i" -lt "$total" ]; do
+        local file="${target_files[$i]}"
+        local strategy="${target_strategies[$i]}"
+        local p="${target_patterns[$i]}"
+        local r="${target_replaces[$i]}"
+        local desc="${target_descs[$i]}"
+        local optional="${target_optional[$i]}"
+        local validate="${target_validates[$i]}"
+        local filepath="$REPO_ROOT/$file"
+
+        if [ ! -f "$filepath" ]; then
+            if [ "$optional" -eq 1 ]; then
+                printf "  \033[90m⏭️  %s not found (optional, skipping)\033[0m\n" "$file"
+            elif [ "$strict" -eq 1 ] && [ "$dry_run" -eq 0 ]; then
+                printf "  \033[31m❌ %s not found (strict mode)\033[0m\n" "$desc" >&2
+                failed=$((failed + 1))
+            else
+                printf "  \033[33m⚠️  %s not found\033[0m\n" "$file"
+                if [ "$dry_run" -eq 1 ]; then
+                    dry_warnings=$((dry_warnings + 1))
+                else
+                    warned=$((warned + 1))
+                fi
+            fi
+            i=$((i + 1))
+            continue
+        fi
+
+        if [ "$dry_run" -eq 1 ]; then
+            local tmpfile diffout
+            tmpfile="$(mktemp)"
+            diffout="$(mktemp)"
+            if [ "$strategy" = "Overwrite" ]; then
+                printf '%s' "$new_version" > "$tmpfile"
+                dry_would_update=$((dry_would_update + 1))
+                diff -u "$filepath" "$tmpfile" > "$diffout" || true
+                sed -e "1s|^--- .*|--- a/$file|" -e "2s|^+++ .*|+++ b/$file|" "$diffout"
+            else
+                if grep -Eq "$p" "$filepath"; then
+                    sed -E "s|$p|$r|g" "$filepath" > "$tmpfile"
+                    dry_would_update=$((dry_would_update + 1))
+                    diff -u "$filepath" "$tmpfile" > "$diffout" || true
+                    sed -e "1s|^--- .*|--- a/$file|" -e "2s|^+++ .*|+++ b/$file|" "$diffout"
+                else
+                    if [ "$optional" -eq 1 ]; then
+                        printf "  \033[90m⏭️  %s — pattern not found (optional)\033[0m\n" "$desc"
+                    else
+                        printf "  \033[33m⚠️  %s — pattern not found\033[0m\n" "$desc"
+                        dry_warnings=$((dry_warnings + 1))
+                    fi
+                fi
+            fi
+            rm -f "$tmpfile" "$diffout"
+        else
+            if [ "$strategy" = "Overwrite" ]; then
+                printf '%s' "$new_version" > "$filepath"
+                if grep -Fq "$validate" "$filepath"; then
+                    printf "  \033[32m✅ %s\033[0m\n" "$desc"
+                    written=$((written + 1))
+                else
+                    printf "  \033[31m❌ %s — post-write validation failed: %s\033[0m\n" "$desc" "$filepath" >&2
+                    failed=$((failed + 1))
+                fi
+            else
+                if grep -Eq "$p" "$filepath"; then
+                    sed -i.bak -E "s|$p|$r|g" "$filepath"
+                    rm -f "$filepath.bak"
+                    if grep -Fq "$validate" "$filepath"; then
+                        printf "  \033[32m✅ %s\033[0m\n" "$desc"
+                        written=$((written + 1))
+                    else
+                        printf "  \033[31m❌ %s — post-write validation failed: %s\033[0m\n" "$desc" "$filepath" >&2
+                        failed=$((failed + 1))
+                    fi
+                else
+                    if [ "$optional" -eq 1 ]; then
+                        if [ "$strict" -eq 1 ]; then
+                            printf "  \033[31m❌ %s — pattern not found (strict mode)\033[0m\n" "$desc" >&2
+                            failed=$((failed + 1))
+                        else
+                            printf "  \033[90m⏭️  %s — pattern not found (optional)\033[0m\n" "$desc"
+                            warned=$((warned + 1))
+                        fi
+                    else
+                        if [ "$strict" -eq 1 ]; then
+                            printf "  \033[31m❌ %s — pattern not found (strict mode)\033[0m\n" "$desc" >&2
+                            failed=$((failed + 1))
+                        else
+                            printf "  \033[33m⚠️  %s — pattern not found\033[0m\n" "$desc"
+                            warned=$((warned + 1))
+                        fi
+                    fi
+                fi
+            fi
+        fi
+
+        i=$((i + 1))
+    done
+
+    printf "\n"
+
+    if [ "$dry_run" -eq 1 ]; then
+        printf "(dry-run) would update %d/%d targets, %d warning(s)\n" "$dry_would_update" "$total" "$dry_warnings"
+        return 0
+    fi
+
+    if [ "$failed" -gt 0 ]; then
+        printf "\033[31mUpdated %d/%d targets, %d failure(s)\033[0m\n" "$written" "$total" "$failed" >&2
+        exit 1
+    elif [ "$warned" -gt 0 ]; then
+        printf "\033[33mUpdated %d/%d targets, 0 failure(s)\033[0m\n" "$written" "$total" >&2
+    else
+        printf "\033[32mUpdated %d/%d targets, 0 failure(s)\033[0m\n" "$written" "$total"
+    fi
 }
 
 # ─── Command: drain-memory (Phase-28.4 v2.62.3) ───────────────────────

@@ -1,0 +1,23 @@
+--- a/VERSION
++++ b/VERSION
+-1.0.0-dev
++2.0.0
+--- a/pforge-mcp/package.json
++++ b/pforge-mcp/package.json
+-{"version": "1.0.0-dev"}
++{"version": "2.0.0"}
+--- a/docs/index.html
++++ b/docs/index.html
+-Dogfooded · v1.0.0
++Dogfooded · v2.0.0
+->v1.0</div>
++>v2.0</div>
+--- a/README.md
++++ b/README.md
+-v1.0 → v1.0
++v1.0 → v2.0
+--- a/ROADMAP.md
++++ b/ROADMAP.md
+-**v1.0.0** (2024-01-01)
++**v2.0.0** (2024-01-01)
+(dry-run) would update 6/6 targets, 0 warning(s)

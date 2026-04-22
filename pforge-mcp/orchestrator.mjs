@@ -9332,7 +9332,7 @@ const FRAMEWORK_PATHS = ["pforge-mcp", "pforge.ps1", "pforge.sh", "setup.ps1", "
  * @param {string} [options.cwd=process.cwd()] - Project root
  * @returns {Promise<{violations: Array<{file,rule,severity,line,description,framework?:boolean}>, frameworkViolations: Array, filesScanned: number}>}
  */
-export async function runAnalyze({ mode = "file", path: targetPath = ".", rules = null, cwd = process.cwd() } = {}) {
+export async function runAnalyze({ mode = "file", path: targetPath = ".", rules = null, cwd = process.cwd(), planPath = null } = {}) {
   const activeRules = rules
     ? GUARDRAIL_RULES.filter(r => rules.includes(r.id))
     : GUARDRAIL_RULES;
@@ -9381,7 +9381,35 @@ export async function runAnalyze({ mode = "file", path: targetPath = ".", rules 
   }
 
   scanDir(rootPath);
-  return { violations, frameworkViolations, filesScanned };
+
+  // Phase-31 Slice 2 — plan-parser lint advisories.
+  // When planPath is provided, parse the plan and emit an advisory for every
+  // slice that has bash code blocks but no explicit **Validation Gate**: marker.
+  // Advisory is suppressed when runtime.planParser.implicitGates is true because
+  // in that mode parseSlices captures bare bash blocks as the validation gate.
+  // Note: we resolve planPath against cwd (not process.cwd()) and call parseSlices
+  // directly rather than parsePlan(), which resolves paths against process.cwd().
+  const advisories = [];
+  if (planPath) {
+    try {
+      const fullPlanPath = resolve(cwd, planPath);
+      const content = readFileSync(fullPlanPath, "utf-8");
+      const lines = content.replace(/\r\n/g, "\n").split("\n");
+      const { implicitGates } = loadPlanParserConfig(cwd);
+      const slices = parseSlices(lines, { implicitGates });
+      for (const slice of slices) {
+        const bashCount = slice._bashBlockCount || 0;
+        if (bashCount > 0 && !slice.validationGate) {
+          const blockWord = bashCount === 1 ? "bash block" : "bash blocks";
+          advisories.push(
+            `ADVISORY plan-parser-gate-missing: Slice ${slice.number} (${slice.title}) has ${bashCount} ${blockWord} but no **Validation Gate**: marker. Add a validation gate or set runtime.planParser.implicitGates = true to suppress.`
+          );
+        }
+      }
+    } catch { /* best-effort — missing plan file should not crash runAnalyze */ }
+  }
+
+  return { violations, frameworkViolations, filesScanned, advisories };
 }
 
 /**

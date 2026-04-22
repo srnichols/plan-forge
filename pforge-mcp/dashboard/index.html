@@ -121,7 +121,52 @@
     .tab-btn:hover { color: var(--fg-0); }
     .tab-btn svg { flex-shrink: 0; width: 14px; height: 14px; }
     .group-tab svg { flex-shrink: 0; width: 16px; height: 16px; }
-    .group-tab { transition: color 0.15s ease, border-color 0.15s ease; }
+
+    /* ─── Folder-tab treatment for top-level group tabs ───────────
+       Inactive tabs sit 2px lower with no side borders; active tab
+       rises to nav-surface level with rounded top, colored top edge,
+       faint side edges, and a subtle colored glow — reading as a
+       file-folder tab tucked in front of the subtab row. */
+    .group-tab {
+      border-top-left-radius: 8px;
+      border-top-right-radius: 8px;
+      border-top: 2px solid transparent;
+      border-left: 1px solid transparent;
+      border-right: 1px solid transparent;
+      background: transparent;
+      position: relative;
+      top: 2px;
+      transition: color 0.15s ease, border-color 0.15s ease,
+                  background 0.15s ease, top 0.15s ease,
+                  box-shadow 0.15s ease;
+    }
+    .group-tab:not(.group-active):hover {
+      background: rgba(55, 65, 81, 0.35);
+      top: 0;
+    }
+    .group-tab.group-active {
+      top: 0;
+      background: var(--bg-2);
+      border-top-color: currentColor !important;
+      border-left-color: rgba(75, 85, 99, 0.6);
+      border-right-color: rgba(75, 85, 99, 0.6);
+      border-bottom-color: transparent !important;
+      box-shadow:
+        0 -4px 14px -4px currentColor,
+        inset 0 1px 0 0 rgba(255, 255, 255, 0.04);
+      z-index: 2;
+    }
+    /* Light theme: soften glow so it's not overpowering on pale bg */
+    html.light .group-tab.group-active {
+      box-shadow:
+        0 -2px 8px -3px currentColor,
+        inset 0 1px 0 0 rgba(255, 255, 255, 0.5);
+      border-left-color: rgba(148, 163, 184, 0.4);
+      border-right-color: rgba(148, 163, 184, 0.4);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .group-tab { transition: none; }
+    }
 
     /* ─── Drawer ─────────────────────────────────────────────────── */
     #run-detail-drawer {

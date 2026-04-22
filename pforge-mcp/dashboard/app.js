@@ -709,7 +709,11 @@ function renderSliceCards() {
     const statusIcon = { pending: "⏳", executing: "⚡", passed: "✅", failed: "❌", skipped: "⏭️" }[s.status] || "❓";
     const bgColor = { pending: "bg-gray-800", executing: "bg-blue-900/50 slice-executing", passed: "bg-green-900/30", failed: "bg-red-900/30", skipped: "bg-gray-800/50" }[s.status] || "bg-gray-800";
     const duration = s.duration ? `${(s.duration / 1000).toFixed(1)}s` : "";
-    const cost = s.cost ? `$${s.cost.toFixed(4)}` : "";
+    // Format cost: 2 decimals when >= $0.01, else compact '<$0.01' so sub-cent
+    // slices don't render as meaningless $0.00 and don't waste badge width on
+    // 4-decimal scientific-looking strings.
+    const fmtCost = (c) => (c < 0.01 ? "<$0.01" : `$${c.toFixed(2)}`);
+    const cost = s.cost ? fmtCost(s.cost) : "";
     const model = s.model || "";
     const isApiModel = /^grok-/.test(model);
     const modelBadge = isApiModel ? `<span class="text-purple-400">${model}</span> <span class="text-xs text-purple-600">API</span>` : model;
@@ -756,7 +760,7 @@ function renderSliceCards() {
     // Only shows once a cost has been recorded. Separate from the existing
     // footer-level model+cost line so the spend is scannable at-a-glance.
     const spendBadge = (typeof s.cost === "number" && s.cost > 0)
-      ? `<span class="text-xs px-1.5 py-0.5 rounded bg-gray-800 text-emerald-300 border border-gray-700" title="Model spend for this slice">💰 $${s.cost.toFixed(4)}</span>`
+      ? `<span class="text-xs px-1.5 py-0.5 rounded bg-gray-800 text-emerald-300 border border-gray-700" title="Model spend for this slice: $${s.cost.toFixed(4)}">💰 ${fmtCost(s.cost)}</span>`
       : "";
 
     // Phase-27.2 Slice 4 — Projected-cost badge (💵 ~$0.xxxx).
@@ -776,8 +780,8 @@ function renderSliceCards() {
     const showProjected = (typeof s.projectedCost === "number" && s.projectedCost > 0)
       && (!actualCostPresent || flourishing);
     const projectedBadge = showProjected
-      ? `<span class="text-xs px-1.5 py-0.5 rounded bg-gray-800 text-sky-300 border border-gray-700 transition-opacity duration-700 ${flourishing ? "opacity-70" : ""}" title="Projected cost (mode: ${modeLabel})">💵 ~$${s.projectedCost.toFixed(4)}</span>`
-      : "";
+      ? `<span class="text-xs px-1.5 py-0.5 rounded bg-gray-800 text-sky-300 border border-gray-700 transition-opacity duration-700 ${flourishing ? "opacity-70" : ""}" title="Projected cost (mode: ${modeLabel}): $${s.projectedCost.toFixed(4)}">💵 ~${fmtCost(s.projectedCost)}</span>`
+      : "";;
 
     // Gate status indicator
     let gateHtml = "";

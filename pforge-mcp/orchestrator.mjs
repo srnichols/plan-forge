@@ -152,7 +152,12 @@ export function parsePlan(planPath, cwd = process.cwd()) {
 
   const meta = parseMeta(lines);
   const scopeContract = parseScopeContract(lines);
-  const slices = parseSlices(lines);
+  // Meta-bug #89: optional implicit-gate capture — when enabled, a bare
+  // bash/sh code block under a slice header with no explicit
+  // **Validation Gate**: marker is treated as the gate. Opt-in via
+  // .forge.json → runtime.planParser.implicitGates = true (default false).
+  const parserCfg = loadPlanParserConfig(cwd);
+  const slices = parseSlices(lines, { implicitGates: parserCfg.implicitGates });
   const dag = buildDAG(slices);
 
   // v2.37 Crucible (Slice 01.4): expose crucibleId + import source on
@@ -219,12 +224,18 @@ function parseScopeContract(lines) {
  *   [P]                          → parallel-eligible (Phase 6)
  *   [scope: src/auth/**]         → file scope metadata
  */
-function parseSlices(lines) {
+function parseSlices(lines, opts = {}) {
+  const implicitGates = opts.implicitGates === true;
   const slices = [];
   let current = null;
   let inCodeBlock = false;
   let inValidationGate = false;
   let codeBlockContent = [];
+  // Meta-bug #89: track whether the current code block was captured as an
+  // implicit validation gate (bare bash/sh block under a slice header with
+  // no prior **Validation Gate**: marker). Lint-tracked separately from
+  // explicit marker capture so callers can distinguish behaviours.
+  let implicitGateActive = false;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -234,7 +245,12 @@ function parseSlices(lines) {
       if (inCodeBlock) {
         // Closing code block
         if (inValidationGate && current) {
-          current.validationGate = codeBlockContent.join("\n").trim();
+          const body = codeBlockContent.join("\n").trim();
+          current.validationGate = (current.validationGate ? current.validationGate + "\n" : "") + body;
+          if (implicitGateActive) {
+            current.implicitGate = true;
+            implicitGateActive = false;
+          }
           inValidationGate = false;
         }
         codeBlockContent = [];
@@ -242,6 +258,22 @@ function parseSlices(lines) {
       } else {
         inCodeBlock = true;
         codeBlockContent = [];
+        // Meta-bug #89: lint — record that this slice had a bash/sh block
+        // in its body so analyzers can warn when no explicit gate marker
+        // was declared. Capture language off the opening fence.
+        const lang = line.slice(3).trim().toLowerCase();
+        const isShellLang = lang === "bash" || lang === "sh" || lang === "";
+        if (current && isShellLang) {
+          current._bashBlockCount = (current._bashBlockCount || 0) + 1;
+          // Implicit-gate capture (opt-in): first bare bash/sh block under
+          // a slice header with no explicit **Validation Gate**: marker
+          // becomes the validation gate. Default off — callers must pass
+          // { implicitGates: true } to enable (see loadPlanParserConfig).
+          if (implicitGates && !current.validationGate && !inValidationGate) {
+            inValidationGate = true;
+            implicitGateActive = true;
+          }
+        }
       }
       continue;
     }
@@ -3078,6 +3110,28 @@ const GATE_SYNTH_TEMPLATES = {
   integration: "bash -c \"cd pforge-mcp && npx vitest run tests/<your-integration>.test.mjs\"",
   controller:  "bash -c \"cd pforge-mcp && npx vitest run tests/<your-controller>.test.mjs\"",
 };
+
+/**
+ * Meta-bug #89: plan-parser configuration loader.
+ * Returns { implicitGates } with defaults. Opt-in only — false by default
+ * so existing plans with illustrative bash blocks in slice prose are not
+ * accidentally executed as gates.
+ */
+function loadPlanParserConfig(cwd = process.cwd()) {
+  const defaults = { implicitGates: false };
+  try {
+    const configPath = resolve(cwd, ".forge.json");
+    if (!existsSync(configPath)) return defaults;
+    const raw = JSON.parse(readFileSync(configPath, "utf-8"));
+    const block = raw?.runtime?.planParser;
+    if (!block || typeof block !== "object") return defaults;
+    return {
+      implicitGates: block.implicitGates === true,
+    };
+  } catch {
+    return defaults;
+  }
+}
 
 /**
  * Phase-26 Slice 7 (C4 / D8): a gate suggestion auto-injects into enforce-mode

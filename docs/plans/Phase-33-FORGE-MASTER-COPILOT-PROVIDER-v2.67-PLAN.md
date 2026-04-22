@@ -70,7 +70,7 @@ hardened_at: 2026-04-22
 
 ## Acceptance Criteria
 
-### Slice 1 — GitHub Copilot provider adapter
+### Criteria for Slice 1 (provider adapter)
 
 - **MUST**: `pforge-master/src/providers/github-copilot-tools.mjs` exists and exports `buildTools`, `formatMessages`, `callProvider`, `isAvailable`, matching the contract consumed by `reasoning.mjs` from `openai-tools.mjs`.
 - **MUST**: `callProvider` targets `https://models.github.ai/inference/chat/completions` by default; base URL is overridable via a `baseUrl` option.
@@ -82,7 +82,7 @@ hardened_at: 2026-04-22
 - **MUST**: `pforge-master/src/providers/__tests__/github-copilot-tools.test.mjs` contains at least 8 fixture-driven unit tests covering: (a) `buildTools` shape, (b) `formatMessages` assistant + tool_result round-trip, (c) `callProvider` happy path with `fetch` mocked, (d) tool_calls response parsing, (e) 429 handling returns structured error, (f) 500 throws, (g) model fallback to `gpt-4o-mini`, (h) `isAvailable` returns true when `GITHUB_TOKEN` env set and false when all sources empty.
 - **MUST**: Fixture JSON files under `pforge-master/src/__fixtures__/github-copilot/` contain: `request-simple.json`, `response-tool-call.json`, `response-rate-limit.json`, `response-500.json`.
 
-### Slice 2 — Provider selection + zero-key default
+### Criteria for Slice 2 (provider selection)
 
 - **MUST**: `pforge-master/src/reasoning.mjs` provider-selection helper iterates in order: `githubCopilot` -> `anthropic` -> `openai` -> `xai`, selecting the first provider whose `isAvailable()` returns `true`.
 - **MUST**: `pforge-master/src/config.mjs` adds keys `forgeMaster.defaultProvider` (default `"githubCopilot"`) and `forgeMaster.providers.githubCopilot.model` (default `"gpt-4o-mini"`). Override precedence is env var -> `.forge.json` -> default.
@@ -91,14 +91,14 @@ hardened_at: 2026-04-22
 - **MUST**: `pforge-mcp/dashboard/served-app.js` secrets UI renders `GITHUB_TOKEN` as the first row with the label `"GitHub (Copilot, recommended)"`. Existing keys (`XAI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENCLAW_API_KEY`) remain in their current relative order below.
 - **MUST**: `pforge-master/src/__tests__/reasoning-provider-selection.test.mjs` contains at least 4 tests asserting: (a) `githubCopilot` selected when only `GITHUB_TOKEN` is set, (b) fallback to `anthropic` when `githubCopilot.isAvailable() === false` and `ANTHROPIC_API_KEY` set, (c) `no provider available` error + `suggestion` field when all absent, (d) explicit `forgeMaster.defaultProvider` in config overrides the order.
 
-### Slice 3 — Skippable smoke test
+### Criteria for Slice 3 (skippable smoke test)
 
 - **MUST**: `pforge-mcp/tests/forge-master.smoke.test.mjs` uses `test.skipIf(!process.env.FORGE_SMOKE)` (or equivalent vitest skipIf pattern) at the test or describe level.
 - **MUST**: When `FORGE_SMOKE=1` and `GITHUB_TOKEN` resolvable, the smoke test invokes `runTurn` with the prompt `"Should I refactor the orchestrator worker spawn logic or ship Phase-34 first?"` and asserts: (a) response lane is `advisory`, (b) response text contains at least three of `architecture`, `slice`, `fresh session`, `triage`, `evidence`, `boring`, `principle`, `forbidden` (case-insensitive), (c) `tokensOut > 0`, (d) completes within 30 seconds.
 - **MUST**: `scripts/smoke-forge-master.mjs` is a Node script that invokes the same prompt through `runTurn`, prints the full response to stdout, and writes a timestamped transcript to `.forge/smoke/forge-master-<ISO>.md`. Script exits 0 on success, 1 on any provider error.
 - **MUST**: `package.json` gains a script `"smoke:forge-master"` that sets `FORGE_SMOKE=1` and runs the smoke script (use cross-platform syntax or document Windows alternative in the script header).
 
-### Slice 4 — Release v2.67.0
+### Criteria for Slice 4 (release)
 
 - **MUST**: `VERSION` contains `2.67.0` (per Phase-31.1's `Overwrite` strategy).
 - **MUST**: `CHANGELOG.md` has `[2.67.0] - 2026-04-22` section promoted from `[Unreleased]`, headlined with the phrase `"no API key required"` or `"zero-key"`.

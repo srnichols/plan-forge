@@ -7,7 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-## [v2.64.0] — 2026-04-21 — Settings Panel Decomposition (Phase-30)
+## [2.64.0] — 2026-04-21 — Settings Panel Decomposition (Phase-30)
 
 > **Minor release — Single monolithic Settings tab decomposed into 9 sub-tabs (General, Models, Execution, API Keys, Updates, Memory, Brain, Bridge, Crucible). Cross-group tab migration: Extensions moved to Settings row; Bug Registry and Watcher moved to LiveGuard row.**
 
@@ -24,7 +24,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 ### Meta
 - Filed [issue #86](https://github.com/srnichols/plan-forge/issues/86) — headless `gh copilot` autoharden pipeline silently fails to write repo files (class: `orchestrator-defect`). Hand-hardened the plan as a workaround.
 
-## [v2.63.1] — 2026-04-21 — Tempering Triage (Phase-28.5)
+## [2.63.1] — 2026-04-21 — Tempering Triage (Phase-28.5)
 
 > **Patch release — tempering run-directory sorting now uses mtime instead of alphabetical order, preventing stale baselines from shadowing recent runs. Also fixes touch-device CSS hover stickiness in docs nav dropdown.**
 

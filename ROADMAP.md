@@ -7,11 +7,11 @@
 
 ## Current Release
 
-**v2.59.1** (2026-04-20) — Setup/update distribution fixes. Four silent gaps closed: pipeline prompts now ship via setup, `PreCommit.mjs` hook mirrored to templates, `pforge update` prompt glob and Unix shared-instructions list broadened, and `pforge smith` now name-checks pipeline prompts. No runtime changes. 2893/2893 tests.
+**v2.64.0** (2026-04-21) — Settings Panel Decomposition (Phase-30). Monolithic Settings tab split into 9 sub-tabs (General, Models, Execution, API Keys, Updates, Memory, Brain, Bridge, Crucible). Cross-group tab migration: Extensions → Settings row; Bug Registry + Watcher → LiveGuard row. Plus Phase-30.1 hotfix — Forge-Master Studio tab clickability restored by hoisting `window.*` handlers to module top.
 
-Previous: v2.59.0 (2026-04-20) Housekeeping — Bug #82 Windows libuv teardown fix, version-drift correction for `pforge-mcp/package.json`, ROADMAP prune. v2.58.0 (2026-04-20) Phase-26 Competitive & Self-Deterministic Loop. v2.57.0 (2026-04-27) Phase-25 Inner-Loop Enhancements.
+Previous: v2.63.1 (Phase-28.5 tempering mtime sort + docs nav hover fix), v2.63.0 (Phase-29 Forge-Master Studio dashboard tab + routes + CLI), v2.62.x (Forge-Master MVP, worker role guardrails, self-repair capture, OpenBrain queue drain), v2.61.0 (Phase-27.2 cost projection UI + per-slice estimator).
 
-**In flight (targeting 2.60.0)**: TBD — Phase-27 planning open. Candidates include advisory-to-enforcement calibration for Phase-25/26 subsystems, Team Mode (v3.1), and backlog items below.
+**In flight (2.65.0-dev)**: TBD — Phase-31 planning open. Candidates include advisory-to-enforcement calibration for Phase-25/26 subsystems, Team Mode (v3.1), orchestrator timeout-retry cleanup (meta-bug #88), plan-gate parser hardening (meta-bug #89).
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 
@@ -99,6 +99,26 @@ Temper Guards (anti-shortcut tables) and Warning Signs (behavioral anti-patterns
 ---
 
 ## Shipped
+
+### v2.64.0 — Settings Panel Decomposition (Phase-30) ✅
+
+Settings tab decomposed into 9 sub-tabs (General, Models, Execution, API Keys, Updates, Memory, Brain, Bridge, Crucible). Cross-group tab migration: Extensions → Settings; Bug Registry + Watcher → LiveGuard. Phase-30.1 hotfix for Forge-Master Studio tab clickability.
+
+### v2.63.0 — Forge-Master Studio (Phase-29) ✅
+
+Dashboard tab for Forge-Master: prompt gallery, chat stream, tool-call trace pane. `/api/forge-master/*` route wiring. `pforge forge-master status|logs` CLI. `forgeMaster.studio` capabilities block. `forge-master-chat` MCP server auto-registration.
+
+### v2.62.x — Forge-Master MVP + Hardening (Phase-28 arc) ✅
+
+`forge_master_ask` MCP tool for open-ended reasoning (intent classification, memory retrieval, read-only tool orchestration). Bug-sweep hotfixes: Windows `spawn` ENOENT (#82), box-drawing prose detection (#83), self-update cache invalidation. Worker role guardrails: API-only models blocked from code-writing; gate portability linter; 10-min gate timeout. Self-repair capture: `forge_meta_bug_file` tool with hash-based dedupe. OpenBrain queue drain on server start (#84).
+
+### v2.61.0 — Cost Projection UI + Per-Slice Estimator (Phase-27.2) ✅
+
+`forge_estimate_slice` MCP tool. Dashboard projected-cost badges on slice cards. Plan-projection strip with budget warnings. `scoreSliceComplexity` calibration report.
+
+### v2.60.0 — Forge-Master Alpha (Phase-27.1) ✅
+
+Forge-Master alpha subsystem — preparation for Phase-28 MVP.
 
 ### v2.58.0 — Phase-26 Competitive & Self-Deterministic Loop ✅
 
@@ -200,8 +220,11 @@ Coordinate multiple orchestrators across developers.
 
 ## Backlog
 
-### Phase-27 candidates
+### Phase-31 candidates
 - Advisory-to-enforcement calibration — graduate Phase-25/26 subsystems (reviewer-agent, auto-fix, cost-anomaly, competitive) from advisory to blocking/auto-apply once field data justifies thresholds
+- Orchestrator timeout-retry cleanup — meta-bug [#88](https://github.com/srnichols/plan-forge/issues/88)
+- Plan-gate parser hardening for bare bash blocks — meta-bug [#89](https://github.com/srnichols/plan-forge/issues/89)
+- `scoreSliceComplexity` recalibration — threshold 5 selects zero slices on real plans (v2.61.0 research report)
 
 ### Community & Docs
 - `specify init` detection — auto-detect Spec Kit project and layer Plan Forge guardrails *(waits on user demand)*

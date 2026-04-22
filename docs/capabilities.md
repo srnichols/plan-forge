@@ -247,6 +247,7 @@ Plan Forge supports OpenAI-compatible HTTP endpoints via the `API_PROVIDERS` reg
 
 | Provider | Models | Env Var | Endpoint |
 |----------|--------|---------|----------|
+| **GitHub Copilot** *(recommended)* | `gpt-4o-mini` *(default)*, `gpt-4o`, `claude-sonnet-4`, `claude-opus-4` | `GITHUB_TOKEN` (or `gh auth login`) | `models.github.ai/inference` |
 | **xAI Grok** | `grok-4.20`, `grok-4`, `grok-3`, `grok-3-mini`, `grok-4.1-fast-*` | `XAI_API_KEY` | `api.x.ai/v1` |
 
 Set the env var, use any matching model name in `--models` or `.forge.json`, and the orchestrator routes automatically.

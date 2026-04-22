@@ -7,13 +7,15 @@
 
 ## Current Release
 
-**v2.66.0** (2026-04-22) — Forge-Master Advisory Mode (Phase-32). Event-delegated prompt gallery (onclick quoting bug fixed). Intent-router glossary expanded (9+ keyword families; "slice 4 status" → operational). Advisory lane: `LANES.ADVISORY`, `LANE_TOOLS.advisory`, `principles.mjs` with 10-principle UNIVERSAL_BASELINE and per-cwd mtime cache. `{principles_block}` injected into Forge-Master system prompt — architecture-first guardrails active in every advisory response.
+**v2.67.0** (2026-04-22) — Zero-Key Forge-Master via GitHub Models (Phase-33). New `github-copilot-tools.mjs` provider adapter targets `https://models.github.ai/inference` and authenticates via `GITHUB_TOKEN` / `gh auth login` — no third-party API key required. Provider-selection order flipped to `githubCopilot → anthropic → openai → xai`. `GITHUB_TOKEN` is now the first entry in the dashboard secrets UI. Skippable smoke test guards against regressions without breaking CI.
+
+Previous: v2.66.0 (2026-04-22) — Forge-Master Advisory Mode (Phase-32). Event-delegated prompt gallery, intent-router glossary expanded (9+ keyword families), advisory lane with `LANES.ADVISORY`, `principles.mjs` UNIVERSAL_BASELINE, `{principles_block}` in system prompt.
 
 Previous: v2.65.1 (2026-04-22) — version-bump architectural rebuild (Phase-31.1, closes #91). `Get-VersionTargets` manifest, `pforge.sh` parity port, Vitest regression suite.
 
 Previous: v2.63.1 (Phase-28.5 tempering mtime sort + docs nav hover fix), v2.63.0 (Phase-29 Forge-Master Studio dashboard tab + routes + CLI), v2.62.x (Forge-Master MVP, worker role guardrails, self-repair capture, OpenBrain queue drain), v2.61.0 (Phase-27.2 cost projection UI + per-slice estimator).
 
-**In flight (next)**: TBD — Phase-33 planning open. Candidates include ML-backed complexity scoring, deeper advisory-to-enforcement flips, Team Mode (v3.1).
+**In flight (next)**: TBD — Phase-34 planning open. Candidates include ML-backed complexity scoring, deeper advisory-to-enforcement flips, VS Code LM adapter for Forge-Master, Team Mode (v3.1).
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 
@@ -101,6 +103,10 @@ Temper Guards (anti-shortcut tables) and Warning Signs (behavioral anti-patterns
 ---
 
 ## Shipped
+
+### v2.67.0 — Zero-Key Forge-Master via GitHub Models (Phase-33) ✅
+
+New `github-copilot-tools.mjs` provider adapter: `resolveGitHubToken()` 4-tier resolution (passed → `GITHUB_TOKEN` env → `.forge/secrets.json` → `gh auth token` subprocess cache), targets `https://models.github.ai/inference`, OpenAI-compatible chat completions with function calling included in Copilot subscriptions. Provider-selection order flipped to `githubCopilot → anthropic → openai → xai`. `config.mjs` gains `forgeMaster.defaultProvider = "githubCopilot"` and `forgeMaster.providers.githubCopilot.model = "gpt-4o-mini"`. `GITHUB_TOKEN` first in dashboard secrets UI. Skippable smoke test (`FORGE_SMOKE=1`). `scripts/smoke-forge-master.mjs` transcript writer.
 
 ### v2.66.0 — Forge-Master Advisory Mode (Phase-32) ✅
 

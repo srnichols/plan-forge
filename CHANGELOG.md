@@ -7,7 +7,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-## [2.66.0] — 2026-04-22 — Forge-Master Advisory Mode (Phase-32)
+## [2.67.0] — 2026-04-22 — Zero-Key Forge-Master via GitHub Models (Phase-33)
+
+> **Minor release — Forge-Master now works out of the box for GitHub Copilot subscribers — no API key required.**
+
+### Added
+
+- **Slice 1 — GitHub Copilot provider adapter** (`pforge-master/src/providers/github-copilot-tools.mjs`, `src/providers/__tests__/github-copilot-tools.test.mjs`, `src/__fixtures__/github-copilot/`) — New provider adapter targeting `https://models.github.ai/inference/chat/completions`. Authenticates via `resolveGitHubToken()` with a 4-tier resolution chain: passed option → `GITHUB_TOKEN` env → `.forge/secrets.json` → cached `gh auth token` subprocess result. `isAvailable()` returns `true` when any token source resolves without making HTTP calls. Model normalization: OpenAI-style (`gpt-4o`, `gpt-4o-mini`) and Anthropic-style (`claude-sonnet-4`, `claude-opus-4`) pass through; unknown names fall back to `gpt-4o-mini`. Structured 429 return (`{ error: "rate_limited", retryAfter }`) and hard throw on ≥ 500. Eight fixture-driven unit tests covering tool shape, message round-trip, happy-path, tool_calls parsing, 429, 500, model fallback, and `isAvailable`.
+- **Slice 2 — Provider selection + zero-key default** (`pforge-master/src/reasoning.mjs`, `src/config.mjs`, `pforge-mcp/secrets.mjs`, `pforge-mcp/dashboard/served-app.js`, `src/__tests__/reasoning-provider-selection.test.mjs`) — Provider-selection loop now iterates `githubCopilot → anthropic → openai → xai`, picking the first adapter whose `isAvailable()` returns `true`. `config.mjs` gains `forgeMaster.defaultProvider = "githubCopilot"` and `forgeMaster.providers.githubCopilot.model = "gpt-4o-mini"`. No-provider error path now includes a `suggestion` field directing users to `gh auth login` or an explicit API key. `GITHUB_TOKEN` added to `KNOWN_SECRETS` as the first entry, labeled `"GitHub (Copilot, recommended)"`. Dashboard secrets UI renders `GITHUB_TOKEN` as the first row; existing keys retain their relative order.
+- **Slice 3 — Skippable smoke test** (`pforge-mcp/tests/forge-master.smoke.test.mjs`, `scripts/smoke-forge-master.mjs`, `package.json`) — `forge-master.smoke.test.mjs` uses `describe.skipIf(!process.env.FORGE_SMOKE)` so CI without a live token always passes. When `FORGE_SMOKE=1`, invokes `runTurn` with an advisory prompt and asserts lane classification, keyword presence in response text, `tokensOut > 0`, and 30 s completion. `smoke-forge-master.mjs` standalone script prints the full response and writes a timestamped transcript to `.forge/smoke/forge-master-<ISO>.md`. Root `package.json` gains `"smoke:forge-master"` script.
+
+### Tests
+
+- `src/providers/__tests__/github-copilot-tools.test.mjs` — 8 fixture-driven tests: `buildTools` shape, `formatMessages` round-trip, `callProvider` happy path, `tool_calls` parsing, 429 structured return, 500 throw, model fallback, `isAvailable` true/false.
+- `src/__tests__/reasoning-provider-selection.test.mjs` — 4 selection-order tests: githubCopilot first when `GITHUB_TOKEN` set, anthropic fallback, no-provider error + suggestion field, explicit `defaultProvider` override.
+- `tests/forge-master.smoke.test.mjs` — 1 test, skipped without `FORGE_SMOKE=1`.
+
+## [2.66.0]— 2026-04-22 — Forge-Master Advisory Mode (Phase-32)
 
 > **Minor release — Phase-32 elevates Forge-Master from a narrow operational bot to a principled CTO-in-a-box advisor: event-delegated prompt gallery (bug fix), intent-router glossary expansion, advisory lane with architecture-first principles loader.**
 

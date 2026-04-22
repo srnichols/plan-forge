@@ -3950,8 +3950,8 @@ const tabLoadHooks = {
   'settings-api-keys': () => { loadConfig(); },
   'settings-updates': () => { loadConfig(); },
   'settings-memory': () => { loadOpenBrainStatus(); loadMemoryPresets(); },
-  'settings-bridge': () => {},
-  'settings-crucible': () => {},
+  'settings-bridge': () => { loadBridgeStatus(); renderNotificationsSubtab(); },
+  'settings-crucible': () => { loadCrucibleConfigUI(); },
   'settings-brain': () => { loadBrainSubtab(); },
 };
 

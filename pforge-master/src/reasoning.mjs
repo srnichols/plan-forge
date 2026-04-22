@@ -28,6 +28,7 @@ import { getForgeMasterConfig } from "./config.mjs";
 import { resolveAllowlist, USAGE_HINTS } from "./allowlist.mjs";
 import { invokeMany } from "./tool-bridge.mjs";
 import { ensureSessionId, appendTurn, summarizeIfNeeded } from "./persistence.mjs";
+import { loadPrinciples, UNIVERSAL_BASELINE } from "./principles.mjs";
 
 // ─── Constants ──────────────────────────────────────────────────────
 
@@ -82,12 +83,23 @@ export function buildToolSchemas(allowlist, hints = USAGE_HINTS) {
 
 // ─── System Prompt Loader ───────────────────────────────────────────
 
-function loadSystemPrompt(contextBlock) {
+/**
+ * Load and interpolate the system prompt.
+ * Substitutes {principles_block} first (non-negotiable, never truncated),
+ * then {context_block} (may have been pre-trimmed by retrieval.mjs).
+ *
+ * @param {string} contextBlock   — pre-fetched and truncated memory context
+ * @param {string} principlesBlock — active principles (from loadPrinciples or UNIVERSAL_BASELINE)
+ * @returns {string}
+ */
+function loadSystemPrompt(contextBlock, principlesBlock) {
   try {
     const raw = readFileSync(SYSTEM_PROMPT_PATH, "utf-8");
-    return raw.replace("{context_block}", contextBlock || "(no context available)");
+    return raw
+      .replace("{principles_block}", principlesBlock || UNIVERSAL_BASELINE)
+      .replace("{context_block}", contextBlock || "(no context available)");
   } catch {
-    return `You are Forge-Master, a Plan Forge reasoning assistant.\n\n## Current Context\n\n${contextBlock || "(no context available)"}`;
+    return `You are Forge-Master, a Plan Forge reasoning assistant.\n\n## Philosophy & Guardrails\n\n${principlesBlock || UNIVERSAL_BASELINE}\n\n## Current Context\n\n${contextBlock || "(no context available)"}`;
   }
 }
 
@@ -162,7 +174,16 @@ export async function runTurn(input, deps = {}) {
   } catch { /* non-fatal — proceed without context */ }
 
   // ── 3. Load system prompt ─────────────────────────────────────────
-  const systemPrompt = loadSystemPrompt(contextBlock);
+  // Principles are loaded separately and substituted before context_block;
+  // they are NOT subject to the 4000-token context cap in retrieval.mjs.
+  let principlesBlock = UNIVERSAL_BASELINE;
+  try {
+    const { block } = loadPrinciples({ cwd });
+    principlesBlock = block;
+  } catch (err) {
+    console.warn("[forge-master] principles loader failed, using universal baseline:", err?.message);
+  }
+  const systemPrompt = loadSystemPrompt(contextBlock, principlesBlock);
 
   // ── 4. Resolve allowlist + tool schemas ───────────────────────────
   const allowlist = resolveAllowlist({

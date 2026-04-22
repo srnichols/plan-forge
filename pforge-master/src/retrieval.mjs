@@ -33,6 +33,7 @@ const L2_KEYS_BY_LANE = Object.freeze({
   operational:  ["project.run.latest", "project.tempering.state"],
   troubleshoot: ["project.run.latest", "project.tempering.state", "project.liveguard.incidents"],
   offtopic:     ["project.run.latest"],
+  advisory:     ["project.run.latest", "project.tempering.state"],
 });
 const L2_KEYS_DEFAULT = Object.freeze(["project.run.latest", "project.tempering.state"]);
 

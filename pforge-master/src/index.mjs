@@ -51,6 +51,12 @@ export {
 } from "./reasoning.mjs";
 
 export {
+  loadPrinciples,
+  UNIVERSAL_BASELINE,
+  _clearCache as _clearPrinciplesCache,
+} from "./principles.mjs";
+
+export {
   ensureSessionId,
   appendTurn,
   summarizeIfNeeded,

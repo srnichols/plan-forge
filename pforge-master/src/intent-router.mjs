@@ -26,6 +26,7 @@ export const LANES = Object.freeze({
   OPERATIONAL: "operational",
   TROUBLESHOOT: "troubleshoot",
   OFFTOPIC: "offtopic",
+  ADVISORY: "advisory",
 });
 
 // ─── Suggested Tools per Lane ───────────────────────────────────────
@@ -64,6 +65,16 @@ export const LANE_TOOLS = Object.freeze({
     "forge_timeline",
   ],
   [LANES.OFFTOPIC]: [],
+  [LANES.ADVISORY]: [
+    "forge_search",
+    "forge_timeline",
+    "brain_recall",
+    "forge_capabilities",
+    "forge_hotspot",
+    "forge_drift_report",
+    "forge_plan_status",
+    "forge_cost_report",
+  ],
 });
 
 // ─── Keyword Regex Table ────────────────────────────────────────────
@@ -123,6 +134,16 @@ const KEYWORD_RULES = [
   // Crucible extras: smelt, preview, finalize
   { pattern: /\b(smelt|smelts|smelted|preview|finalize|finalise)\b/i, lane: LANES.BUILD, weight: 2 },
 
+  // ── Advisory signals ──
+  { pattern: /\bshould\s+(i|we)\b/i, lane: LANES.ADVISORY, weight: 3 },
+  { pattern: /\b(what|which)\s+is\s+the\s+(right|best)\s+(approach|path|way|choice)\b/i, lane: LANES.ADVISORY, weight: 3 },
+  { pattern: /\b(architecture\s+advice|architect\s+this|arch\s+review)\b/i, lane: LANES.ADVISORY, weight: 3 },
+  { pattern: /\b(refactor\s+or\s+ship|ship\s+vs|fix\s+later|do\s+it\s+right)\b/i, lane: LANES.ADVISORY, weight: 3 },
+  { pattern: /\b(cto|principal\s+engineer|staff\s+engineer)\b/i, lane: LANES.ADVISORY, weight: 2 },
+  { pattern: /\b(recommend|recommendation|your\s+take)\b/i, lane: LANES.ADVISORY, weight: 2 },
+  { pattern: /\bhelp\s+me\s+decide\b/i, lane: LANES.ADVISORY, weight: 3 },
+  { pattern: /\b(what|which)\s+(path|direction)\s+(should|to|forward)\b/i, lane: LANES.ADVISORY, weight: 2 },
+
   // ── Off-topic signals ──
   { pattern: /\b(weather|temperature|forecast|sports|score|game)\b/i, lane: LANES.OFFTOPIC, weight: 3 },
   { pattern: /\b(recipe|cook|food|restaurant|movie|music|song)\b/i, lane: LANES.OFFTOPIC, weight: 3 },
@@ -158,6 +179,7 @@ function scoreKeywords(message) {
     [LANES.OPERATIONAL]: 0,
     [LANES.TROUBLESHOOT]: 0,
     [LANES.OFFTOPIC]: 0,
+    [LANES.ADVISORY]: 0,
   };
   let totalWeight = 0;
 
@@ -208,6 +230,7 @@ Classify the user's message into exactly ONE lane:
 - "build" — the user wants to create, add, implement, or design a new feature, phase, or component
 - "operational" — the user asks about status, cost, health, metrics, memory, watchers, extensions, plans, or runs
 - "troubleshoot" — the user asks about bugs, failures, errors, incidents, regressions, or root causes
+- "advisory" — the user asks for architectural guidance, a recommendation, or a principled decision ("should I", "what's the right approach", "recommend a path")
 - "offtopic" — the message is unrelated to Plan Forge (weather, personal questions, code generation, etc.)
 
 Respond with ONLY a JSON object: {"lane": "<lane>"}

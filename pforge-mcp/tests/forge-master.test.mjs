@@ -400,7 +400,7 @@ describe("forge-master intent router", () => {
 
   // ── LANE_TOOLS structure ──
 
-  it("LANE_TOOLS covers all four lanes", () => {
+  it("LANE_TOOLS covers all five lanes", () => {
     for (const lane of Object.values(LANES)) {
       expect(LANE_TOOLS).toHaveProperty(lane);
       expect(Array.isArray(LANE_TOOLS[lane])).toBe(true);
@@ -563,6 +563,70 @@ describe("glossary expansion", () => {
     const result = await classify("why did the gate fail on slice 2");
     expect(result.lane).toBe(LANES.TROUBLESHOOT);
     expect(result.reason).toBe("keyword_match");
+  });
+});
+
+// ─── Advisory Lane (Phase-32 Slice 3) ──────────────────────────────
+
+describe("advisory lane classification", () => {
+  it("'should I refactor or ship' → advisory", async () => {
+    const result = await classify("should I refactor or ship this feature");
+    expect(result.lane).toBe(LANES.ADVISORY);
+    expect(result.reason).toBe("keyword_match");
+    expect(result.suggestedTools).toContain("brain_recall");
+  });
+
+  it("'architecture advice please' → advisory", async () => {
+    const result = await classify("I need architecture advice please");
+    expect(result.lane).toBe(LANES.ADVISORY);
+    expect(result.reason).toBe("keyword_match");
+    expect(result.suggestedTools).toContain("forge_capabilities");
+  });
+
+  it("'recommend a path forward' → advisory", async () => {
+    const result = await classify("recommend a path forward for this module");
+    expect(result.lane).toBe(LANES.ADVISORY);
+    expect(result.reason).toBe("keyword_match");
+  });
+
+  it("'should we proceed or wait' → advisory", async () => {
+    const result = await classify("should we proceed with the migration or wait");
+    expect(result.lane).toBe(LANES.ADVISORY);
+    expect(result.reason).toBe("keyword_match");
+  });
+
+  it("'help me decide between two approaches' → advisory", async () => {
+    const result = await classify("help me decide between these two approaches");
+    expect(result.lane).toBe(LANES.ADVISORY);
+    expect(result.reason).toBe("keyword_match");
+  });
+
+  it("[stop-condition] 'should I refactor or ship' → advisory (required by plan)", async () => {
+    const result = await classify("should I refactor or ship");
+    expect(result.lane).toBe(LANES.ADVISORY);
+  });
+
+  it("LANE_TOOLS.advisory contains the 8 required read-only tools", () => {
+    const required = [
+      "forge_search",
+      "forge_timeline",
+      "brain_recall",
+      "forge_capabilities",
+      "forge_hotspot",
+      "forge_drift_report",
+      "forge_plan_status",
+      "forge_cost_report",
+    ];
+    for (const tool of required) {
+      expect(LANE_TOOLS[LANES.ADVISORY]).toContain(tool);
+    }
+    expect(LANE_TOOLS[LANES.ADVISORY]).toHaveLength(8);
+  });
+
+  it("advisory lane contains no write tools", () => {
+    for (const tool of LANE_TOOLS[LANES.ADVISORY]) {
+      expect(tool).not.toMatch(/^forge_run_plan|forge_bug_register|forge_bug_update/);
+    }
   });
 });
 

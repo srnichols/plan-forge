@@ -121,6 +121,12 @@ available in Phase-29 and suggest the read-only alternative if one exists.
 
 ---
 
+## Philosophy & Guardrails
+
+{principles_block}
+
+---
+
 ## Current Context
 
 {context_block}

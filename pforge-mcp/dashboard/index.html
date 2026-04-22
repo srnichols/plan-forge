@@ -1056,8 +1056,22 @@
     <section id="tab-settings-memory" class="tab-content hidden">
       <div class="bg-gray-800 rounded-lg p-6 max-w-2xl">
         <h2 class="text-lg font-semibold mb-4">💾 Memory</h2>
-        <p class="text-sm text-gray-400">OpenBrain memory status and search.</p>
-        <p class="text-xs text-gray-500 mt-2">Content migrating from legacy config — arriving in Slice 4.</p>
+        <p class="text-sm text-gray-400 mb-4">OpenBrain connection status, semantic search, and preset queries. Configured via <code class="text-gray-300">openbrain</code> in <code class="text-gray-300">.forge.json</code>.</p>
+        <div class="space-y-4">
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">OpenBrain Memory</label>
+            <div id="cfg-openbrain" class="text-sm text-gray-300 bg-gray-700 rounded px-3 py-2">Checking...</div>
+            <!-- Memory Search -->
+            <div id="memory-search-panel" class="mt-3">
+              <div class="flex gap-2">
+                <input id="memory-search-input" type="text" placeholder="Search plans, configs, runs..." class="flex-1 bg-gray-700 text-white text-sm rounded px-3 py-1.5 border border-gray-600 focus:border-blue-500 outline-none" onkeydown="if(event.key==='Enter')searchMemory()">
+                <button onclick="searchMemory()" class="bg-blue-600 hover:bg-blue-500 text-white text-sm px-3 py-1.5 rounded">Search</button>
+              </div>
+              <div id="memory-presets" class="flex flex-wrap gap-1.5 mt-2"></div>
+              <div id="memory-search-results" class="mt-2 max-h-64 overflow-y-auto"></div>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -1080,8 +1094,49 @@
     <section id="tab-settings-brain" class="tab-content hidden">
       <div class="bg-gray-800 rounded-lg p-6 max-w-2xl">
         <h2 class="text-lg font-semibold mb-4">🧠 Brain</h2>
-        <p class="text-sm text-gray-400">Brain facade tier counters, top keys, and recall misses.</p>
-        <p class="text-xs text-gray-500 mt-2">Content migrating from legacy config — arriving in Slice 4.</p>
+        <p class="text-sm text-gray-400 mb-4">Brain facade tier counters, top keys by hit rate, and recent recall misses. Read-only diagnostics for the L1/L2/L3 memory routing layer.</p>
+        <div id="cfg-brain">
+          <div class="space-y-6">
+            <div>
+              <h3 class="text-sm font-semibold text-gray-300 mb-3">Tier Counters</h3>
+              <p class="text-xs text-gray-500 mb-3">Read-only summary of brain facade routing across L1 (session), L2 (durable), and L3 (semantic) tiers.</p>
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="text-gray-400 text-xs">
+                    <th class="text-left pb-1">Tier</th>
+                    <th class="text-left pb-1">Description</th>
+                    <th class="text-right pb-1">Recalls</th>
+                    <th class="text-right pb-1">Misses</th>
+                  </tr>
+                </thead>
+                <tbody id="brain-tier-tbody">
+                  <tr class="text-gray-500 text-center"><td colspan="4" class="py-4">Loading...</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="border-t border-gray-700 pt-4">
+              <h3 class="text-sm font-semibold text-gray-300 mb-3">Top Keys by Hit Rate</h3>
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="text-gray-400 text-xs">
+                    <th class="text-left pb-1">Key</th>
+                    <th class="text-right pb-1">Hits</th>
+                    <th class="text-right pb-1">Tier</th>
+                  </tr>
+                </thead>
+                <tbody id="brain-topkeys-tbody">
+                  <tr class="text-gray-500 text-center"><td colspan="3" class="py-4">Loading...</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="border-t border-gray-700 pt-4">
+              <h3 class="text-sm font-semibold text-gray-300 mb-3">Recent Recall Misses</h3>
+              <ul id="brain-misses-list" class="text-sm text-gray-400 space-y-1">
+                <li class="text-gray-500">Loading...</li>
+              </ul>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -1112,20 +1167,7 @@
         </div>
         <div id="cfg-general">
         <div id="cfg-form-body" class="space-y-4">
-          <!-- Execution, API Keys, Update Source moved to Settings sub-tabs (Phase-30 Slice 3) -->
-          <div>
-            <label class="block text-sm text-gray-400 mb-1">OpenBrain Memory</label>
-            <div id="cfg-openbrain" class="text-sm text-gray-300 bg-gray-700 rounded px-3 py-2">Checking...</div>
-            <!-- Memory Search  -->
-            <div id="memory-search-panel" class="mt-3">
-              <div class="flex gap-2">
-                <input id="memory-search-input" type="text" placeholder="Search plans, configs, runs..." class="flex-1 bg-gray-700 text-white text-sm rounded px-3 py-1.5 border border-gray-600 focus:border-blue-500 outline-none" onkeydown="if(event.key==='Enter')searchMemory()">
-                <button onclick="searchMemory()" class="bg-blue-600 hover:bg-blue-500 text-white text-sm px-3 py-1.5 rounded">Search</button>
-              </div>
-              <div id="memory-presets" class="flex flex-wrap gap-1.5 mt-2"></div>
-              <div id="memory-search-results" class="mt-2 max-h-64 overflow-y-auto"></div>
-            </div>
-          </div>
+          <!-- Memory + Brain moved to Settings sub-tabs (Phase-30 Slice 4) -->
           <!-- Bridge Section  -->
           <details id="cfg-bridge-details" class="border border-gray-700 rounded-lg p-3">
             <summary class="text-sm text-gray-400 cursor-pointer hover:text-gray-300 font-semibold flex items-center gap-2">
@@ -1199,49 +1241,6 @@
             <p id="notify-status" class="text-xs text-gray-500 mt-1"></p>
           </div>
         </div><!-- end cfg-notifications -->
-        <!-- Brain Subtab (Phase FORGE-SHOP-07 Slice 07.2) -->
-        <div id="cfg-brain" class="hidden">
-          <div class="space-y-6">
-            <div>
-              <h3 class="text-sm font-semibold text-gray-300 mb-3">Tier Counters</h3>
-              <p class="text-xs text-gray-500 mb-3">Read-only summary of brain facade routing across L1 (session), L2 (durable), and L3 (semantic) tiers.</p>
-              <table class="w-full text-sm">
-                <thead>
-                  <tr class="text-gray-400 text-xs">
-                    <th class="text-left pb-1">Tier</th>
-                    <th class="text-left pb-1">Description</th>
-                    <th class="text-right pb-1">Recalls</th>
-                    <th class="text-right pb-1">Misses</th>
-                  </tr>
-                </thead>
-                <tbody id="brain-tier-tbody">
-                  <tr class="text-gray-500 text-center"><td colspan="4" class="py-4">Loading...</td></tr>
-                </tbody>
-              </table>
-            </div>
-            <div class="border-t border-gray-700 pt-4">
-              <h3 class="text-sm font-semibold text-gray-300 mb-3">Top Keys by Hit Rate</h3>
-              <table class="w-full text-sm">
-                <thead>
-                  <tr class="text-gray-400 text-xs">
-                    <th class="text-left pb-1">Key</th>
-                    <th class="text-right pb-1">Hits</th>
-                    <th class="text-right pb-1">Tier</th>
-                  </tr>
-                </thead>
-                <tbody id="brain-topkeys-tbody">
-                  <tr class="text-gray-500 text-center"><td colspan="3" class="py-4">Loading...</td></tr>
-                </tbody>
-              </table>
-            </div>
-            <div class="border-t border-gray-700 pt-4">
-              <h3 class="text-sm font-semibold text-gray-300 mb-3">Recent Recall Misses</h3>
-              <ul id="brain-misses-list" class="text-sm text-gray-400 space-y-1">
-                <li class="text-gray-500">Loading...</li>
-              </ul>
-            </div>
-          </div>
-        </div><!-- end cfg-brain -->
       </div>
 
       <!-- Crucible config (v2.37) -->

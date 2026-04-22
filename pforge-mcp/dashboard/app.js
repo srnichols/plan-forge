@@ -3685,21 +3685,13 @@ function initConfigSubtabs() {
       btn.classList.remove("text-gray-400");
       const general = document.getElementById("cfg-general");
       const notifications = document.getElementById("cfg-notifications");
-      const brain = document.getElementById("cfg-brain");
       if (btn.dataset.cfgtab === "notifications") {
         if (general) general.classList.add("hidden");
         if (notifications) notifications.classList.remove("hidden");
-        if (brain) brain.classList.add("hidden");
         renderNotificationsSubtab();
-      } else if (btn.dataset.cfgtab === "brain") {
-        if (general) general.classList.add("hidden");
-        if (notifications) notifications.classList.add("hidden");
-        if (brain) brain.classList.remove("hidden");
-        loadBrainSubtab();
       } else {
         if (general) general.classList.remove("hidden");
         if (notifications) notifications.classList.add("hidden");
-        if (brain) brain.classList.add("hidden");
       }
     });
   });
@@ -3957,10 +3949,10 @@ const tabLoadHooks = {
   'settings-execution': () => { loadConfig(); },
   'settings-api-keys': () => { loadConfig(); },
   'settings-updates': () => { loadConfig(); },
-  'settings-memory': () => {},
+  'settings-memory': () => { loadOpenBrainStatus(); loadMemoryPresets(); },
   'settings-bridge': () => {},
   'settings-crucible': () => {},
-  'settings-brain': () => {},
+  'settings-brain': () => { loadBrainSubtab(); },
 };
 
 // ─── Theme Toggle ─────────────────────────────────────────────

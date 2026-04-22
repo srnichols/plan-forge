@@ -2619,6 +2619,7 @@ export async function runPlan(planPath, options = {}) {
     manualImportSource = "human", // audit tag: "human" | "speckit" | "grandfather"
     manualImportReason = null,    // free-form note for audit log
     hub = null,             // Phase FORGE-SHOP-06 Slice 06.2: Hub instance for gate-check
+    strictGates = false,    // Phase-31 Slice 4: force enforce mode for this run only
   } = options;
 
   // Load model routing from .forge.json (Slice 5)
@@ -2694,10 +2695,28 @@ export async function runPlan(planPath, options = {}) {
 
   // Phase-25 Slice 4 (L6 adaptive gate synthesis): scan plan slices for
   // domain-matched slices that lack a validation gate and print suggestions.
-  // Advisory-only by default (D8 mode="suggest"); the enforce-mode promotion
-  // path lives in Phase-26 Slice 7. Never mutates the plan.
+  // Advisory-only by default (D8 mode="suggest"). When strictGates=true the
+  // mode is overridden to "enforce" for this run only (never written to
+  // .forge.json) and pre-flight fails with a structured error listing each
+  // offending slice. (Phase-31 Slice 4.)
   try {
-    const synthResult = synthesizeGateSuggestions({ slices: plan.slices, cwd });
+    const baseCfg = loadGateSynthesisConfig(cwd);
+    const synthConfig = strictGates ? { ...baseCfg, mode: "enforce" } : undefined;
+    const synthResult = synthesizeGateSuggestions({ slices: plan.slices, cwd, config: synthConfig });
+    if (strictGates && synthResult.suggestions.length > 0) {
+      return {
+        status: "failed",
+        error: "--strict-gates: pre-flight failed — the following slices lack a domain-matched validation gate:",
+        code: "STRICT_GATES_PREFLIGHT",
+        offendingSlices: synthResult.suggestions.map((s) => ({
+          sliceNumber: s.sliceNumber,
+          sliceTitle: s.sliceTitle,
+          domain: s.domain,
+          reason: s.reason,
+          suggestedCommand: s.suggestedCommand,
+        })),
+      };
+    }
     const formatted = formatGateSuggestions(synthResult);
     if (formatted) {
       // eslint-disable-next-line no-console
@@ -9998,6 +10017,7 @@ if (args.includes("--test")) {
   const manualImport = args.includes("--manual-import");
   const manualImportSource = getArg("--manual-import-source") || "human";
   const manualImportReason = getArg("--manual-import-reason") || null;
+  const strictGates = args.includes("--strict-gates");
 
   try {
     const result = await runPlan(planPath, {
@@ -10013,6 +10033,7 @@ if (args.includes("--test")) {
       manualImport,
       manualImportSource,
       manualImportReason,
+      strictGates,
     });
     console.log(JSON.stringify(result, null, 2));
     process.exit(result.status === "failed" ? 1 : 0);

@@ -3270,7 +3270,7 @@ cmd_doctor() {
 cmd_run_plan() {
     if [ $# -lt 1 ]; then
         echo "ERROR: Missing plan path" >&2
-        echo "Usage: pforge run-plan <plan-file> [--estimate] [--assisted] [--model <name>] [--resume-from <N>] [--dry-run] [--foreground] [--no-quorum] [--quorum] [--quorum=auto] [--quorum-threshold <N>] [--manual-import [--manual-import-source <human|speckit|grandfather>] [--manual-import-reason <text>]]" >&2
+        echo "Usage: pforge run-plan <plan-file> [--estimate] [--assisted] [--model <name>] [--resume-from <N>] [--dry-run] [--foreground] [--no-quorum] [--quorum] [--quorum=auto] [--quorum-threshold <N>] [--strict-gates] [--manual-import [--manual-import-source <human|speckit|grandfather>] [--manual-import-reason <text>]]" >&2
         exit 1
     fi
 
@@ -3295,6 +3295,7 @@ cmd_run_plan() {
     local manual_import=false
     local manual_import_source=""
     local manual_import_reason=""
+    local strict_gates=false
 
     while [ $# -gt 0 ]; do
         case "$1" in
@@ -3306,6 +3307,7 @@ cmd_run_plan() {
             --quorum=*)     quorum_arg="$1" ;;
             --quorum)       quorum_arg="--quorum" ;;
             --manual-import) manual_import=true ;;
+            --strict-gates)  strict_gates=true ;;
             --manual-import-source)
                 shift
                 if [ -z "$1" ]; then echo "ERROR: --manual-import-source requires a value" >&2; exit 1; fi
@@ -3354,6 +3356,7 @@ cmd_run_plan() {
     if [ -n "$quorum_arg" ]; then node_args+=("$quorum_arg"); fi
     if [ -n "$quorum_threshold" ]; then node_args+=("--quorum-threshold" "$quorum_threshold"); fi
     if [ "$manual_import" = true ]; then node_args+=("--manual-import"); fi
+    if [ "$strict_gates" = true ]; then node_args+=("--strict-gates"); fi
     if [ -n "$manual_import_source" ]; then node_args+=("--manual-import-source" "$manual_import_source"); fi
     if [ -n "$manual_import_reason" ]; then node_args+=("--manual-import-reason" "$manual_import_reason"); fi
 

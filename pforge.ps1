@@ -3985,7 +3985,7 @@ function Invoke-Smith {
 function Invoke-RunPlan {
     if ($Arguments.Count -lt 1) {
         Write-Host "ERROR: Missing plan path" -ForegroundColor Red
-        Write-Host "Usage: pforge run-plan <plan-file> [--estimate] [--assisted] [--model <name>] [--resume-from <N>] [--dry-run] [--foreground] [--no-quorum] [--quorum] [--quorum=auto] [--quorum-threshold <N>] [--manual-import [--manual-import-source <human|speckit|grandfather>] [--manual-import-reason <text>]]" -ForegroundColor Yellow
+        Write-Host "Usage: pforge run-plan <plan-file> [--estimate] [--assisted] [--model <name>] [--resume-from <N>] [--dry-run] [--foreground] [--no-quorum] [--quorum] [--quorum=auto] [--quorum-threshold <N>] [--strict-gates] [--manual-import [--manual-import-source <human|speckit|grandfather>] [--manual-import-reason <text>]]" -ForegroundColor Yellow
         exit 1
     }
 
@@ -4003,6 +4003,7 @@ function Invoke-RunPlan {
     $foreground  = $Arguments -contains '--foreground'
     $noQuorum    = $Arguments -contains '--no-quorum'
     $manualImport = $Arguments -contains '--manual-import'
+    $strictGates = $Arguments -contains '--strict-gates'
     $model       = $null
     $resumeFrom  = $null
     $quorumArg   = $null
@@ -4054,6 +4055,7 @@ function Invoke-RunPlan {
     elseif ($quorumArg)   { $nodeArgs += $quorumArg }
     if ($quorumThreshold) { $nodeArgs += '--quorum-threshold'; $nodeArgs += $quorumThreshold }
     if ($manualImport)    { $nodeArgs += '--manual-import' }
+    if ($strictGates)     { $nodeArgs += '--strict-gates' }
     if ($manualImportSource) { $nodeArgs += '--manual-import-source'; $nodeArgs += $manualImportSource }
     if ($manualImportReason) { $nodeArgs += '--manual-import-reason'; $nodeArgs += $manualImportReason }
 

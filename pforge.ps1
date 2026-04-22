@@ -4097,6 +4097,18 @@ function Invoke-RunPlan {
 }
 
 # ─── Command: version-bump (Fix 3 + Fix 10) ───────────────────────────
+function Get-VersionTargets {
+    param([string]$newVersion)
+    return @(
+        [PSCustomObject]@{ File = "VERSION";                 Strategy = 'Overwrite';    Pattern = $null;                                   Replace = $null;                                                                                            Desc = "VERSION file";           Optional = $false },
+        [PSCustomObject]@{ File = "pforge-mcp/package.json"; Strategy = 'RegexReplace'; Pattern = '"version":\s*"[^"]+"';                  Replace = "`"version`": `"$newVersion`"";                                                                   Desc = "MCP package.json";       Optional = $false },
+        [PSCustomObject]@{ File = "docs/index.html";         Strategy = 'RegexReplace'; Pattern = 'Dogfooded · v[\d.]+';                   Replace = "Dogfooded · v$newVersion";                                                                       Desc = "index.html hero badge";  Optional = $false },
+        [PSCustomObject]@{ File = "docs/index.html";         Strategy = 'RegexReplace'; Pattern = '>v[\d.]+</div>';                        Replace = ">v$($newVersion -replace '\.\d+$', '')</div>";                                                   Desc = "index.html stats card";  Optional = $false },
+        [PSCustomObject]@{ File = "README.md";               Strategy = 'RegexReplace'; Pattern = 'v1\.0 → v[\d.]+';                       Replace = "v1.0 → v$($newVersion -replace '\.\d+$', '')";                                                  Desc = "README track record";    Optional = $true  },
+        [PSCustomObject]@{ File = "ROADMAP.md";              Strategy = 'RegexReplace'; Pattern = '\*\*v[\d.]+\*\* \(\d{4}-\d{2}-\d{2}\)'; Replace = "**v$newVersion** ($(Get-Date -Format 'yyyy-MM-dd'))"; Desc = "ROADMAP current release"; Optional = $false }
+    )
+}
+
 function Invoke-VersionBump {
     if ($Arguments.Count -lt 1) {
         Write-Host "ERROR: Version required." -ForegroundColor Red
@@ -4110,44 +4122,46 @@ function Invoke-VersionBump {
     Write-Host "Version Bump: → v$newVersion" -ForegroundColor Cyan
     Write-Host "─────────────────────────────────────" -ForegroundColor DarkGray
 
-    $targets = @(
-        @{ File = "VERSION"; Pattern = '.*'; Replace = $newVersion; Desc = "VERSION file" },
-        @{ File = "pforge-mcp/package.json"; Pattern = '"version":\s*"[^"]+"'; Replace = "`"version`": `"$newVersion`""; Desc = "MCP package.json" }
-    )
-
-    # HTML files with version badges
-    $htmlVersionPatterns = @(
-        @{ File = "docs/index.html"; Pattern = 'Dogfooded · v[\d.]+'; Replace = "Dogfooded · v$newVersion"; Desc = "index.html hero badge" },
-        @{ File = "docs/index.html"; Pattern = '>v[\d.]+</div>'; Replace = ">v$($newVersion -replace '\.\d+$', '')</div>"; Desc = "index.html stats card" }
-    )
-    $targets += $htmlVersionPatterns
-
-    # README track record
-    $targets += @{ File = "README.md"; Pattern = 'v1\.0 → v[\d.]+'; Replace = "v1.0 → v$($newVersion -replace '\.\d+$', '')"; Desc = "README track record" }
-
-    # ROADMAP current release
-    $targets += @{ File = "ROADMAP.md"; Pattern = '\*\*v[\d.]+\*\* \(\d{4}-\d{2}-\d{2}\)'; Replace = "**v$newVersion** ($(Get-Date -Format 'yyyy-MM-dd'))"; Desc = "ROADMAP current release" }
+    $targets = Get-VersionTargets $newVersion
 
     $updated = 0
     foreach ($t in $targets) {
         $filePath = Join-Path $RepoRoot $t.File
         if (Test-Path $filePath) {
-            $content = Get-Content $filePath -Raw
-            if ($content -match $t.Pattern) {
-                $content = $content -replace $t.Pattern, $t.Replace
-                Set-Content $filePath $content -NoNewline
-                Write-Host "  ✅ $($t.Desc)" -ForegroundColor Green
-                $updated++
-            } else {
-                Write-Host "  ⚠️  $($t.Desc) — pattern not found" -ForegroundColor Yellow
+            switch ($t.Strategy) {
+                'Overwrite' {
+                    Set-Content $filePath $newVersion -NoNewline -Encoding UTF8
+                    Write-Host "  ✅ $($t.Desc)" -ForegroundColor Green
+                    $updated++
+                }
+                'RegexReplace' {
+                    $content = Get-Content $filePath -Raw
+                    if ($content -match $t.Pattern) {
+                        $content = $content -replace $t.Pattern, $t.Replace
+                        Set-Content $filePath $content -NoNewline -Encoding UTF8
+                        Write-Host "  ✅ $($t.Desc)" -ForegroundColor Green
+                        $updated++
+                    } else {
+                        if ($t.Optional) {
+                            Write-Host "  ⏭️  $($t.Desc) — pattern not found (optional)" -ForegroundColor DarkGray
+                        } else {
+                            Write-Host "  ⚠️  $($t.Desc) — pattern not found" -ForegroundColor Yellow
+                        }
+                    }
+                }
+                default { throw "Unknown version-bump strategy '$($t.Strategy)' for target '$($t.File)'." }
             }
         } else {
-            Write-Host "  ⚠️  $($t.File) not found" -ForegroundColor Yellow
+            if ($t.Optional) {
+                Write-Host "  ⏭️  $($t.File) not found (optional, skipping)" -ForegroundColor DarkGray
+            } else {
+                Write-Host "  ⚠️  $($t.File) not found" -ForegroundColor Yellow
+            }
         }
     }
 
     Write-Host ""
-    Write-Host "Updated $updated files to v$newVersion" -ForegroundColor Green
+    Write-Host "Updated $updated/$($targets.Count) targets to v$newVersion" -ForegroundColor Green
     Write-Host "Don't forget: Update CHANGELOG.md manually with release notes." -ForegroundColor DarkGray
 }
 

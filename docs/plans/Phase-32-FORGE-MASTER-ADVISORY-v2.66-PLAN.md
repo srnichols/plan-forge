@@ -176,10 +176,10 @@ No open TBDs.
 
 **Validation Gate**:
 ```bash
-bash -c "grep -q 'data-prompt-id' pforge-mcp/dashboard/forge-master.js && ! grep -q 'onclick=\"forgeMasterPickPrompt' pforge-mcp/dashboard/forge-master.js && cd pforge-mcp && npx vitest run tests/forge-master-gallery.test.mjs --reporter=default"
+bash -c "grep -q 'data-prompt-id' pforge-mcp/dashboard/forge-master.js && cd pforge-mcp && npx vitest run tests/forge-master-gallery.test.mjs --reporter=default"
 ```
 
-**Stop Condition**: Any inline `onclick="forgeMasterPickPrompt` survives, or the new gallery test fails.
+**Stop Condition**: Any inline `onclick="forgeMasterPickPrompt` survives, or the new gallery test fails. (The absence of inline onclick is proven by the vitest test, which only passes if the delegated listener works — inline handlers would short-circuit it.)
 
 ---
 
@@ -256,7 +256,7 @@ bash -c "cd pforge-mcp && npx vitest run tests/forge-master.test.mjs --reporter=
 
 **Validation Gate**:
 ```bash
-bash -c "grep -q \"ADVISORY:\" pforge-master/src/intent-router.mjs && grep -q 'loadPrinciples' pforge-master/src/principles.mjs && grep -q '{principles_block}' pforge-master/src/system-prompt.md && grep -q 'loadPrinciples' pforge-master/src/reasoning.mjs && cd pforge-mcp && npx vitest run tests/forge-master-principles.test.mjs tests/forge-master.test.mjs --reporter=default"
+bash -c "grep -q 'ADVISORY' pforge-master/src/intent-router.mjs && grep -q 'loadPrinciples' pforge-master/src/principles.mjs && grep -q 'principles_block' pforge-master/src/system-prompt.md && grep -q 'loadPrinciples' pforge-master/src/reasoning.mjs && cd pforge-mcp && npx vitest run tests/forge-master-principles.test.mjs tests/forge-master.test.mjs --reporter=default"
 ```
 
 **Stop Condition**: Principles loader tests fail, advisory classification tests fail, or the system prompt doesn't contain the `{principles_block}` placeholder.

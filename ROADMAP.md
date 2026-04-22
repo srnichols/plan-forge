@@ -7,7 +7,7 @@
 
 ## Current Release
 
-**v2.65.0** (2026-04-22) — Advisory → Enforcement Calibration (Phase-31). Dashboard committed-before-timeout badge; plan-parser lint advisory in `runAnalyze`; reflexion prompt wiring; `--strict-gates` CLI flag; `scoreSliceComplexity` threshold 6→3; tempering suppression promoter (`promoteSuppressions`). 3477 tests across 146 files.
+**v2.65.1** (2026-04-22) — version-bump architectural rebuild (Phase-31.1, closes #91). `Get-VersionTargets` manifest, `pforge.sh` parity port, Vitest regression suite. Built on Phase-31 advisory calibration base. 3477 tests across 146 files.
 
 Previous: v2.64.0 (2026-04-21) — Settings Panel Decomposition (Phase-30). Monolithic Settings tab split into 9 sub-tabs (General, Models, Execution, API Keys, Updates, Memory, Brain, Bridge, Crucible). Cross-group tab migration: Extensions → Settings row; Bug Registry + Watcher → LiveGuard row. Plus Phase-30.1 hotfix — Forge-Master Studio tab clickability restored by hoisting `window.*` handlers to module top.
 

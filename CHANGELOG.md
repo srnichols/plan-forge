@@ -7,7 +7,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-## [2.65.0] — 2026-04-22 — Advisory-to-Enforcement Calibration (Phase-31)
+## [2.65.1] — 2026-04-22 — version-bump architectural rebuild (Phase-31.1)
+
+> **Patch release — Closes #91. The `version-bump` command was rewritten from an inline imperative script into a structured, testable pipeline with a shared targets manifest. `pforge.sh` now has full parity with `pforge.ps1`. A new Vitest suite provides regression coverage.**
+
+### Changed
+
+- **`pforge.ps1 version-bump` refactored (Slice 3)** — Extracted `Get-VersionTargets` helper that returns a typed targets array with `File`, `Pattern`, `Replacement`, `Strategy`, and `Optional` fields. The bump loop is now data-driven; adding a new target requires one manifest entry, not imperative code.
+- **`pforge.sh version-bump` parity port (Slice 4)** — Shell implementation ported to match the PowerShell architecture: same targets manifest, same `--dry-run` / `--strict` flags, same `Updated N/M targets` summary line and exit semantics.
+
+### Tests
+
+- **`pforge-mcp/tests/version-bump.test.mjs`** — Vitest suite covering dry-run output, strict-mode exit codes, each named target, optional-target skip, and cross-platform summary format.
+
+### Meta
+
+- Closes GitHub issue **#91** — version-bump brittle single-file implementation.
+
+## [2.65.0]— 2026-04-22 — Advisory-to-Enforcement Calibration (Phase-31)
 
 > **Minor release — Phase-31 closes the gap between advisory subsystems and actionable enforcement: gate-synthesis opt-in strict mode, plan-parser lint advisory, reflexion prompt wiring, complexity threshold recalibration, and tempering suppression promoter.**
 

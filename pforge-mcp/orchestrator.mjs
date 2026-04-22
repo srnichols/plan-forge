@@ -5875,6 +5875,17 @@ async function executeSlice(slice, options) {
   const startTime = Date.now();
   const resolvedModel = resolveModel(model, modelRouting, slice);
 
+  // Meta-bug #88: capture HEAD at slice start so the timeout-retry path can
+  // detect a worker that committed successfully just before being killed by
+  // the timeout. Without this, the retry loop burns a premium request
+  // re-doing work that already landed on master.
+  let sliceStartHead = null;
+  try {
+    sliceStartHead = execSync("git rev-parse HEAD", {
+      cwd, encoding: "utf-8", timeout: 5000,
+    }).trim();
+  } catch { /* not a git repo — leave null, retry logic falls back to default */ }
+
   // Fix 8: Snapshot working tree before slice (for safe rollback on failure)
   let snapshotStash = false;
   try {
@@ -6154,6 +6165,38 @@ async function executeSlice(slice, options) {
 
     // Worker timed out — retry with timeout context
     if (workerResult.timedOut) {
+      // Meta-bug #88: before paying for a retry, check whether the worker
+      // committed successfully in its last seconds. If HEAD advanced since
+      // slice start, the work already landed — treat as success and break.
+      if (sliceStartHead) {
+        try {
+          const postTimeoutHead = execSync("git rev-parse HEAD", {
+            cwd, encoding: "utf-8", timeout: 5000,
+          }).trim();
+          if (postTimeoutHead && postTimeoutHead !== sliceStartHead) {
+            writeFileSync(logFile,
+              `\n\n--- WORKER TIMED OUT BUT COMMITTED (${sliceStartHead.slice(0, 7)} -> ${postTimeoutHead.slice(0, 7)}) — treating as success ---\n`,
+              { flag: "a" });
+            if (eventBus && typeof eventBus.emit === "function") {
+              try {
+                eventBus.emit("slice-timeout-but-committed", {
+                  sliceNumber: slice.number,
+                  sliceTitle: slice.title,
+                  preSliceHead: sliceStartHead,
+                  postTimeoutHead,
+                });
+              } catch { /* best-effort */ }
+            }
+            // Force exitCode to 0 so downstream logic (status writer, summary)
+            // sees this as a clean success.
+            workerResult.exitCode = 0;
+            workerResult.timedOut = false;
+            workerResult.committedBeforeTimeout = true;
+            break;
+          }
+        } catch { /* git unavailable — fall through to existing retry logic */ }
+      }
+
       lastError = `Worker timed out after ${Math.round((Date.now() - startTime) / 1000)}s. The task may be too complex for a single slice — consider splitting it.`;
       // Phase-25 Slice 1: capture reflexion context for next attempt's prompt
       lastFailureContext = {

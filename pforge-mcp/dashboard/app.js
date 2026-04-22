@@ -3954,9 +3954,9 @@ const tabLoadHooks = {
   // Phase-30: Settings sub-tabs (content populated in Slices 2-5)
   'settings-general': () => { loadConfig(); },
   'settings-models': () => { loadConfig(); },
-  'settings-execution': () => {},
-  'settings-api-keys': () => {},
-  'settings-updates': () => {},
+  'settings-execution': () => { loadConfig(); },
+  'settings-api-keys': () => { loadConfig(); },
+  'settings-updates': () => { loadConfig(); },
   'settings-memory': () => {},
   'settings-bridge': () => {},
   'settings-crucible': () => {},

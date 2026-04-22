@@ -961,24 +961,95 @@
     <section id="tab-settings-execution" class="tab-content hidden">
       <div class="bg-gray-800 rounded-lg p-6 max-w-2xl">
         <h2 class="text-lg font-semibold mb-4">▶ Execution</h2>
-        <p class="text-sm text-gray-400">Parallelism, retries, history limits, quorum settings, and worker availability.</p>
-        <p class="text-xs text-gray-500 mt-2">Content migrating from legacy config — arriving in Slice 3.</p>
+        <p class="text-sm text-gray-400 mb-4">Parallelism, retries, history limits, quorum settings, and worker availability.</p>
+        <div class="space-y-4">
+          <div class="grid grid-cols-3 gap-3">
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">Max Parallelism</label>
+              <input id="cfg-max-parallel" type="number" min="1" max="10" value="3" class="bg-gray-700 text-white text-sm rounded px-3 py-1.5 w-full">
+            </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">Max Retries</label>
+              <input id="cfg-max-retries" type="number" min="0" max="5" value="1" class="bg-gray-700 text-white text-sm rounded px-3 py-1.5 w-full">
+            </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">Run History Limit</label>
+              <input id="cfg-max-history" type="number" min="10" max="500" value="50" class="bg-gray-700 text-white text-sm rounded px-3 py-1.5 w-full">
+            </div>
+          </div>
+          <div class="border-t border-gray-700 pt-3">
+            <h3 class="text-sm text-gray-400 font-semibold mb-2">Quorum Settings</h3>
+            <div class="grid grid-cols-3 gap-3">
+              <div>
+                <label class="flex items-center gap-2 text-xs text-gray-500">
+                  <input id="cfg-quorum-enabled" type="checkbox" class="rounded border-gray-600 bg-gray-700 text-purple-500 focus:ring-0"> Enable Quorum
+                </label>
+              </div>
+              <div>
+                <label class="block text-xs text-gray-500 mb-1">Preset</label>
+                <select id="cfg-quorum-preset" class="bg-gray-700 text-white text-xs rounded px-2 py-1.5 w-full border border-gray-600">
+                  <option value="">Custom</option>
+                  <option value="power">Power (flagships)</option>
+                  <option value="speed">Speed (fast)</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs text-gray-500 mb-1">Threshold (1-10)</label>
+                <input id="cfg-quorum-threshold" type="number" min="1" max="10" value="7" class="bg-gray-700 text-white text-sm rounded px-3 py-1.5 w-full">
+              </div>
+            </div>
+            <div class="mt-2">
+              <label class="block text-xs text-gray-500 mb-1">Quorum Models (comma-separated)</label>
+              <input id="cfg-quorum-models" type="text" placeholder="claude-opus-4.6, gpt-5.3-codex, grok-4.20-0309-reasoning" class="bg-gray-700 text-white text-sm rounded px-3 py-1.5 w-full border border-gray-600 focus:border-purple-500 outline-none">
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">Available Workers</label>
+            <div id="cfg-workers" class="text-sm text-gray-300 bg-gray-700 rounded px-3 py-2">Checking...</div>
+          </div>
+          <div class="flex gap-2 pt-2">
+            <button onclick="saveConfig()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded text-sm">Save Configuration</button>
+            <button onclick="loadConfig()" class="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm">Reload</button>
+          </div>
+        </div>
       </div>
     </section>
 
     <section id="tab-settings-api-keys" class="tab-content hidden">
       <div class="bg-gray-800 rounded-lg p-6 max-w-2xl">
         <h2 class="text-lg font-semibold mb-4">🔑 API Keys</h2>
-        <p class="text-sm text-gray-400">Provider API key management. Stored in <code class="text-gray-500">.forge/secrets.json</code> (gitignored).</p>
-        <p class="text-xs text-gray-500 mt-2">Content migrating from legacy config — arriving in Slice 3.</p>
+        <p class="text-sm text-gray-400 mb-4">Provider API key management. Stored in <code class="text-gray-500">.forge/secrets.json</code> (gitignored). Environment variables take precedence.</p>
+        <div class="space-y-4">
+          <div id="cfg-api-keys" class="space-y-2">
+            <div class="text-xs text-gray-500">Loading...</div>
+          </div>
+          <div id="cfg-api-providers" class="text-sm text-gray-300 mt-2"></div>
+          <div class="flex gap-2 pt-2">
+            <button onclick="saveConfig()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded text-sm">Save Configuration</button>
+            <button onclick="loadConfig()" class="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm">Reload</button>
+          </div>
+        </div>
       </div>
     </section>
 
     <section id="tab-settings-updates" class="tab-content hidden">
       <div class="bg-gray-800 rounded-lg p-6 max-w-2xl">
         <h2 class="text-lg font-semibold mb-4">⬇ Updates</h2>
-        <p class="text-sm text-gray-400">Update source configuration for <code class="text-gray-500">pforge update</code>.</p>
-        <p class="text-xs text-gray-500 mt-2">Content migrating from legacy config — arriving in Slice 3.</p>
+        <p class="text-sm text-gray-400 mb-4">Update source configuration for <code class="text-gray-500">pforge update</code>.</p>
+        <div class="space-y-4">
+          <label for="cfg-update-source" class="block text-sm text-gray-400 mb-1">Update Source</label>
+          <p class="text-xs text-gray-600 mb-2">Where <code class="text-gray-500">pforge update</code> pulls template bytes from.</p>
+          <select id="cfg-update-source" title="Update source" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full border border-gray-600 focus:border-blue-500 outline-none">
+            <option value="auto">Auto — prefer newer tagged release over <code>-dev</code> sibling (recommended)</option>
+            <option value="github-tags">GitHub tags only — ignore any local sibling clone</option>
+            <option value="local-sibling">Local sibling only — contributor workflow (always use ../plan-forge)</option>
+          </select>
+          <p id="cfg-update-source-hint" class="text-xs text-gray-500 mt-1">Loading…</p>
+          <div class="flex gap-2 pt-2">
+            <button onclick="saveConfig()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded text-sm">Save Configuration</button>
+            <button onclick="loadConfig()" class="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm">Reload</button>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -1041,75 +1112,7 @@
         </div>
         <div id="cfg-general">
         <div id="cfg-form-body" class="space-y-4">
-          <!-- Advanced Settings  -->
-          <details class="border border-gray-700 rounded-lg p-3">
-            <summary class="text-sm text-gray-400 cursor-pointer hover:text-gray-300 font-semibold">Advanced Settings</summary>
-            <div class="space-y-3 mt-3">
-              <div class="grid grid-cols-3 gap-3">
-                <div>
-                  <label class="block text-xs text-gray-500 mb-1">Max Parallelism</label>
-                  <input id="cfg-max-parallel" type="number" min="1" max="10" value="3" class="bg-gray-700 text-white text-sm rounded px-3 py-1.5 w-full">
-                </div>
-                <div>
-                  <label class="block text-xs text-gray-500 mb-1">Max Retries</label>
-                  <input id="cfg-max-retries" type="number" min="0" max="5" value="1" class="bg-gray-700 text-white text-sm rounded px-3 py-1.5 w-full">
-                </div>
-                <div>
-                  <label class="block text-xs text-gray-500 mb-1">Run History Limit</label>
-                  <input id="cfg-max-history" type="number" min="10" max="500" value="50" class="bg-gray-700 text-white text-sm rounded px-3 py-1.5 w-full">
-                </div>
-              </div>
-              <div class="border-t border-gray-700 pt-3">
-                <p class="text-sm text-gray-400 font-semibold mb-2">Quorum Settings</p>
-                <div class="grid grid-cols-3 gap-3">
-                  <div>
-                    <label class="flex items-center gap-2 text-xs text-gray-500">
-                      <input id="cfg-quorum-enabled" type="checkbox" class="rounded border-gray-600 bg-gray-700 text-purple-500 focus:ring-0"> Enable Quorum
-                    </label>
-                  </div>
-                  <div>
-                    <label class="block text-xs text-gray-500 mb-1">Preset</label>
-                    <select id="cfg-quorum-preset" class="bg-gray-700 text-white text-xs rounded px-2 py-1.5 w-full border border-gray-600">
-                      <option value="">Custom</option>
-                      <option value="power">Power (flagships)</option>
-                      <option value="speed">Speed (fast)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label class="block text-xs text-gray-500 mb-1">Threshold (1-10)</label>
-                    <input id="cfg-quorum-threshold" type="number" min="1" max="10" value="7" class="bg-gray-700 text-white text-sm rounded px-3 py-1.5 w-full">
-                  </div>
-                </div>
-                <div class="mt-2">
-                  <label class="block text-xs text-gray-500 mb-1">Quorum Models (comma-separated)</label>
-                  <input id="cfg-quorum-models" type="text" placeholder="claude-opus-4.6, gpt-5.3-codex, grok-4.20-0309-reasoning" class="bg-gray-700 text-white text-sm rounded px-3 py-1.5 w-full border border-gray-600 focus:border-purple-500 outline-none">
-                </div>
-              </div>
-              <div>
-                <label class="block text-xs text-gray-500 mb-1">Available Workers</label>
-                <div id="cfg-workers" class="text-sm text-gray-300 bg-gray-700 rounded px-3 py-2">Checking...</div>
-              </div>
-            </div>
-          </details>
-          <div>
-            <label class="block text-sm text-gray-400 mb-1">API Provider Keys</label>
-            <p class="text-xs text-gray-600 mb-2">Stored in <code class="text-gray-500">.forge/secrets.json</code> (gitignored). Environment variables take precedence.</p>
-            <div id="cfg-api-keys" class="space-y-2">
-              <div class="text-xs text-gray-500">Loading...</div>
-            </div>
-            <div id="cfg-api-providers" class="text-sm text-gray-300 mt-2"></div>
-          </div>
-          <!-- Update Source (v2.56.0) -->
-          <div>
-            <label for="cfg-update-source" class="block text-sm text-gray-400 mb-1">Update Source</label>
-            <p class="text-xs text-gray-600 mb-2">Where <code class="text-gray-500">pforge update</code> pulls template bytes from.</p>
-            <select id="cfg-update-source" title="Update source" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full border border-gray-600 focus:border-blue-500 outline-none">
-              <option value="auto">Auto — prefer newer tagged release over <code>-dev</code> sibling (recommended)</option>
-              <option value="github-tags">GitHub tags only — ignore any local sibling clone</option>
-              <option value="local-sibling">Local sibling only — contributor workflow (always use ../plan-forge)</option>
-            </select>
-            <p id="cfg-update-source-hint" class="text-xs text-gray-500 mt-1">Loading…</p>
-          </div>
+          <!-- Execution, API Keys, Update Source moved to Settings sub-tabs (Phase-30 Slice 3) -->
           <div>
             <label class="block text-sm text-gray-400 mb-1">OpenBrain Memory</label>
             <div id="cfg-openbrain" class="text-sm text-gray-300 bg-gray-700 rounded px-3 py-2">Checking...</div>

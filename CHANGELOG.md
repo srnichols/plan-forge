@@ -7,6 +7,38 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.64.1] — 2026-04-22 — Forge-Master Studio hotfix + Smith Phase-29/30 awareness
+
+> **Patch release — bundles the Phase-30.1 Forge-Master Studio tab clickability hotfix with Smith diagnostic improvements for Phase-29/30 files and dev-repo false-positive elimination.**
+
+### Fixed
+- **Forge-Master Studio tab clickability (Phase-30.1)** — `dashboard/forge-master.js` now hoists `window.forgeMasterInit`, `window.forgeMasterOpen`, and related assignments to module top and wraps init in a try/catch guard so the main tab dispatcher can reach the handlers before the DOMContentLoaded listener fires. Previously, tab clicks reached the dispatcher but its `window.forgeMasterOpen` lookup returned `undefined` because assignments executed after dispatcher binding. Commit `278f9c3`. All 118 forge-master tests pass.
+
+### Added
+- **Smith Phase-29/30 capability-surface awareness** — `pforge smith` now verifies:
+  - `dashboard/forge-master.js` (Phase-29 Forge-Master Studio tab controller)
+  - `pforge-mcp/forge-master-routes.mjs` (Phase-29 `/api/forge-master/*` route wiring)
+  - `pforge-mcp/tools.json` + `cli-schema.json` presence with registered-tool count
+  - New "Forge-Master Studio (Phase-29)" section: `pforge-master/server.mjs` + `src/lifecycle.mjs`
+  Each check emits a targeted `pforge update` FIX hint when missing.
+
+### Changed
+- **Smith dev-repo-aware checks** — `pforge smith` no longer emits false-positive warnings when run inside the plan-forge framework dev repo itself:
+  - `VERSION='x.y.z-dev'` recognized as between-release state (was flagged as corrupt install)
+  - `.forge.json` with no `preset`/`templateVersion` shows "framework dev repo" label
+  - CHANGELOG entry for `-dev` versions no longer required (added at release cut)
+  - `copilot-instructions.md` placeholder scan skipped (root file is the template baseline)
+  - `DEPLOYMENT-ROADMAP.md` check skipped (dev repo uses root `ROADMAP.md`)
+  - Missing `SessionStart`/`PreToolUse`/`PostToolUse`/`Stop` hooks reported as expected (consumers get them via `pforge update`)
+  Result: dev-repo Smith run went from 10 warnings → 3 warnings (only legitimate external-worker ones remain).
+
+### Docs
+- **ROADMAP.md refreshed** — Current Release updated from v2.59.1 to v2.64.0. Added Shipped entries for v2.60 through v2.64 (Cost Projection, Forge-Master MVP arc, Studio, Settings decomposition). Backlog refreshed to Phase-31 candidates including meta-bug #88, #89, and `scoreSliceComplexity` recalibration.
+- **CHANGELOG.md normalized** — v2.64.0 and v2.63.1 headers dropped `v` prefix for consistency with all prior entries.
+
+### Meta
+- **Setup / update / MCP-capabilities file-coverage audit** — confirmed setup scripts use pure recursive copy (auto-discovers new `pforge-mcp/` files), update uses recursive scan for `pforge-mcp/`, `.github/hooks/`, `.github/prompts/*.prompt.md`, and preset files. `tools.json` + `cli-schema.json` auto-generate on server startup from TOOLS array (always in sync). No gaps found.
+
 ## [2.64.0] — 2026-04-21 — Settings Panel Decomposition (Phase-30)
 
 > **Minor release — Single monolithic Settings tab decomposed into 9 sub-tabs (General, Models, Execution, API Keys, Updates, Memory, Brain, Bridge, Crucible). Cross-group tab migration: Extensions moved to Settings row; Bug Registry and Watcher moved to LiveGuard row.**

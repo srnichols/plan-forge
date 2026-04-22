@@ -7,13 +7,13 @@
 
 ## Current Release
 
-**v2.65.1** (2026-04-22) — version-bump architectural rebuild (Phase-31.1, closes #91). `Get-VersionTargets` manifest, `pforge.sh` parity port, Vitest regression suite. Built on Phase-31 advisory calibration base. 3477 tests across 146 files.
+**v2.66.0** (2026-04-22) — Forge-Master Advisory Mode (Phase-32). Event-delegated prompt gallery (onclick quoting bug fixed). Intent-router glossary expanded (9+ keyword families; "slice 4 status" → operational). Advisory lane: `LANES.ADVISORY`, `LANE_TOOLS.advisory`, `principles.mjs` with 10-principle UNIVERSAL_BASELINE and per-cwd mtime cache. `{principles_block}` injected into Forge-Master system prompt — architecture-first guardrails active in every advisory response.
 
-Previous: v2.64.0 (2026-04-21) — Settings Panel Decomposition (Phase-30). Monolithic Settings tab split into 9 sub-tabs (General, Models, Execution, API Keys, Updates, Memory, Brain, Bridge, Crucible). Cross-group tab migration: Extensions → Settings row; Bug Registry + Watcher → LiveGuard row. Plus Phase-30.1 hotfix — Forge-Master Studio tab clickability restored by hoisting `window.*` handlers to module top.
+Previous: v2.65.1 (2026-04-22) — version-bump architectural rebuild (Phase-31.1, closes #91). `Get-VersionTargets` manifest, `pforge.sh` parity port, Vitest regression suite.
 
 Previous: v2.63.1 (Phase-28.5 tempering mtime sort + docs nav hover fix), v2.63.0 (Phase-29 Forge-Master Studio dashboard tab + routes + CLI), v2.62.x (Forge-Master MVP, worker role guardrails, self-repair capture, OpenBrain queue drain), v2.61.0 (Phase-27.2 cost projection UI + per-slice estimator).
 
-**In flight (next)**: TBD — Phase-32 planning open. Candidates include ML-backed complexity scoring, deeper advisory-to-enforcement flips, Team Mode (v3.1).
+**In flight (next)**: TBD — Phase-33 planning open. Candidates include ML-backed complexity scoring, deeper advisory-to-enforcement flips, Team Mode (v3.1).
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 
@@ -101,6 +101,10 @@ Temper Guards (anti-shortcut tables) and Warning Signs (behavioral anti-patterns
 ---
 
 ## Shipped
+
+### v2.66.0 — Forge-Master Advisory Mode (Phase-32) ✅
+
+Event-delegated prompt gallery: `data-prompt-id` + delegated `click` listener replaces inline `onclick` (fixes HTML-attribute quoting bug). Intent-router glossary expanded: 9+ keyword families (slice/gate, phase refs, harden, tempering, quorum, meta-bug, crucible). New `advisory` lane: `LANES.ADVISORY`, `LANE_TOOLS.advisory` (8 read-only tools), keyword rules for advisory phrases. `pforge-master/src/principles.mjs`: `loadPrinciples({ cwd })` with per-cwd mtime cache, 10-principle `UNIVERSAL_BASELINE` (Architecture-First → Keep Gates Boring), replace/append `.forge.json#forgeMaster.philosophy` semantics. System-prompt `{principles_block}` placeholder; principles survive token-pressure trimming.
 
 ### v2.65.0 — Advisory-to-Enforcement Calibration (Phase-31) ✅
 

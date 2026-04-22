@@ -7,7 +7,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-## [2.65.1] — 2026-04-22 — version-bump architectural rebuild (Phase-31.1)
+## [2.66.0] — 2026-04-22 — Forge-Master Advisory Mode (Phase-32)
+
+> **Minor release — Phase-32 elevates Forge-Master from a narrow operational bot to a principled CTO-in-a-box advisor: event-delegated prompt gallery (bug fix), intent-router glossary expansion, advisory lane with architecture-first principles loader.**
+
+### Added
+
+- **Slice 1 — Event-delegated prompt gallery** (`dashboard/forge-master.js`, `tests/forge-master-gallery.test.mjs`) — Fixed HTML-attribute quoting bug: gallery buttons now emit `data-prompt-id` attributes instead of inline `onclick` handlers. `forgeMasterInit` attaches a single delegated `click` listener on `#fm-gallery-list` that resolves the target via `event.target.closest('[data-prompt-id]')`. `window.forgeMasterPickPrompt` global removed; legacy cross-tab globals retained. jsdom-based vitest covers click dispatch, `#fm-composer` value set, and `document.activeElement` focus.
+- **Slice 2 — Intent-router glossary expansion** (`pforge-master/src/intent-router.mjs`, `tests/forge-master.test.mjs`) — `KEYWORD_RULES` gains 9+ new entries covering: bare `slice`/`gate` refs requiring a Plan Forge context marker, `phase-N` references, `harden`/`hardening`, `tempering`/`temper`, `quorum`, `meta-bug`/`self-repair`, `crucible` extras. Each family has positive + negative test coverage. `OFFTOPIC_REDIRECT` rewritten to enumerate all five lanes (`build`, `operational`, `troubleshoot`, `advisory`, `offtopic`) with one example question each. "What's the status of slice 4" now classifies as `operational`.
+- **Slice 3 — Advisory lane + principles loader** (`pforge-master/src/intent-router.mjs`, `pforge-master/src/principles.mjs`, `pforge-master/src/system-prompt.md`, `pforge-master/src/reasoning.mjs`, `pforge-master/src/allowlist.mjs`, `tests/forge-master-principles.test.mjs`) — New `LANES.ADVISORY = "advisory"` constant and `LANE_TOOLS.advisory` (8 read-only tools: `forge_search`, `forge_timeline`, `brain_recall`, `forge_capabilities`, `forge_hotspot`, `forge_drift_report`, `forge_plan_status`, `forge_cost_report`). At least 6 keyword rules route advisory phrases (`"should I"`, `"should we"`, `"what's the right"`, `"architecture advice"`, `"help me decide"`, `"recommend"`). New `pforge-master/src/principles.mjs` exports `loadPrinciples({ cwd })` with per-cwd mtime-invalidating cache; reads `docs/plans/PROJECT-PRINCIPLES.md`, extracts `## Architecture Principles` from `.github/copilot-instructions.md`, applies `.forge.json#forgeMaster.philosophy` override (replace by default; append with `"+ "` prefix). Falls back to 10-principle `UNIVERSAL_BASELINE` (Architecture-First through Keep Gates Boring). System-prompt gains `{principles_block}` placeholder under new `## Philosophy & Guardrails` section; `{context_block}` trims before `{principles_block}` under token pressure.
+
+### Tests
+
+- `tests/forge-master-gallery.test.mjs` — NEW jsdom vitest: click dispatch, value assertion, focus assertion, no-inline-onclick guard.
+- `tests/forge-master.test.mjs` — Added glossary classification tests (positive + negative for each new keyword family), OFFTOPIC_REDIRECT content check.
+- `tests/forge-master-principles.test.mjs` — NEW: universal baseline fallback, PROJECT-PRINCIPLES override, replace/append `.forge.json` semantics, mtime cache invalidation.
+- `tests/forge-master.advisory.test.mjs` — NEW: LANES.ADVISORY, LANE_TOOLS.advisory, advisory-phrase classification, UNIVERSAL_BASELINE Architecture-First check, prompt catalog advisory category, tools.json mirror.
+
+## [2.65.1]— 2026-04-22 — version-bump architectural rebuild (Phase-31.1)
 
 > **Patch release — Closes #91. The `version-bump` command was rewritten from an inline imperative script into a structured, testable pipeline with a shared targets manifest. `pforge.sh` now has full parity with `pforge.ps1`. A new Vitest suite provides regression coverage.**
 

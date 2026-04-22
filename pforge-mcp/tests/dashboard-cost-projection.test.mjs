@@ -62,8 +62,8 @@ describe("dashboard cost projection state (Phase-27.2 Slice 4)", () => {
 
 describe("dashboard projected-cost badge markup (Phase-27.2 Slice 4)", () => {
   it("renders a 💵 ~$0.xxxx badge when s.projectedCost is set", () => {
-    // Badge string literal (the 💵 emoji and ~$ prefix distinguish it from spend)
-    expect(src).toMatch(/💵 ~\$\$\{s\.projectedCost\.toFixed\(4\)\}/);
+    // Badge uses fmtCost() helper; 💵 emoji and ~$ prefix distinguish it from spend
+    expect(src).toMatch(/💵 ~\$\{fmtCost\(s\.projectedCost\)\}/);
   });
 
   it("omits the projectedBadge when s.projectedCost is not a positive number", () => {
@@ -90,7 +90,8 @@ describe("dashboard projected-cost badge markup (Phase-27.2 Slice 4)", () => {
   });
 
   it("tooltip on projected badge names the active mode", () => {
-    expect(src).toMatch(/title="Projected cost \(mode: \$\{modeLabel\}\)"/);
+    // Tooltip includes mode and cost: title="Projected cost (mode: ${modeLabel}): $..."
+    expect(src).toMatch(/title="Projected cost \(mode: \$\{modeLabel\}\)/);
   });
 });
 

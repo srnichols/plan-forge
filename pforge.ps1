@@ -3180,6 +3180,46 @@ function Invoke-Smith {
             } catch { }
         }
 
+        # Phase-29: Forge-Master subsystem (routes + client bridge)
+        $forgeMasterRoutes = Join-Path $RepoRoot "pforge-mcp/forge-master-routes.mjs"
+        if (Test-Path $forgeMasterRoutes) {
+            Doctor-Pass "forge-master-routes.mjs (Phase-29 route wiring)"
+        } else {
+            Doctor-Warn "pforge-mcp/forge-master-routes.mjs missing (Phase-29)" "Re-run 'pforge update' to restore Forge-Master routes"
+        }
+
+        # Auto-generated capability surface (regenerated on server start)
+        $toolsJson = Join-Path $RepoRoot "pforge-mcp/tools.json"
+        $cliSchema = Join-Path $RepoRoot "pforge-mcp/cli-schema.json"
+        if ((Test-Path $toolsJson) -and (Test-Path $cliSchema)) {
+            try {
+                $toolsArr = Get-Content $toolsJson -Raw | ConvertFrom-Json
+                Doctor-Pass "tools.json + cli-schema.json ($($toolsArr.Count) MCP tools registered)"
+            } catch {
+                Doctor-Warn "tools.json / cli-schema.json present but unreadable" "Start the MCP server to regenerate: node pforge-mcp/server.mjs"
+            }
+        } else {
+            Doctor-Warn "tools.json or cli-schema.json missing" "Start the MCP server once to auto-generate: node pforge-mcp/server.mjs"
+        }
+
+        Write-Host ""
+    }
+
+    # ═══════════════════════════════════════════════════════════════
+    # 4d-ii. FORGE-MASTER STUDIO (Phase-29)
+    # ═══════════════════════════════════════════════════════════════
+    $forgeMasterDir = Join-Path $RepoRoot "pforge-master"
+    $forgeMasterServer = Join-Path $forgeMasterDir "server.mjs"
+    $forgeMasterLifecycle = Join-Path $forgeMasterDir "src/lifecycle.mjs"
+    if (Test-Path $forgeMasterDir) {
+        Write-Host "Forge-Master Studio (Phase-29):" -ForegroundColor Cyan
+
+        if (Test-Path $forgeMasterServer) { Doctor-Pass "pforge-master/server.mjs" }
+        else { Doctor-Warn "pforge-master/server.mjs missing" "Re-run 'pforge update' to restore" }
+
+        if (Test-Path $forgeMasterLifecycle) { Doctor-Pass "pforge-master/src/lifecycle.mjs (status/logs backend)" }
+        else { Doctor-Warn "pforge-master/src/lifecycle.mjs missing" "'pforge forge-master status|logs' will fail" }
+
         Write-Host ""
     }
 
@@ -3196,6 +3236,11 @@ function Invoke-Smith {
 
         if (Test-Path $dashboardJs) { Doctor-Pass "dashboard/app.js" }
         else { Doctor-Warn "dashboard/app.js missing" "MCP dashboard has no frontend logic" }
+
+        # Phase-29: Forge-Master Studio tab controller
+        $dashboardForgeMasterJs = Join-Path $RepoRoot "pforge-mcp/dashboard/forge-master.js"
+        if (Test-Path $dashboardForgeMasterJs) { Doctor-Pass "dashboard/forge-master.js (Forge-Master Studio tab)" }
+        else { Doctor-Warn "dashboard/forge-master.js missing (Phase-29)" "Re-run 'pforge update' to restore Forge-Master Studio tab" }
 
         # Dashboard screenshots for docs — only inside the plan-forge dev repo.
         # Downstream consumers don't need to populate docs/assets/dashboard/.

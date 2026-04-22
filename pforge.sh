@@ -2637,6 +2637,47 @@ cmd_doctor() {
             fi
         fi
 
+        # Phase-29: Forge-Master subsystem (routes + client bridge)
+        local forge_master_routes="$REPO_ROOT/pforge-mcp/forge-master-routes.mjs"
+        if [ -f "$forge_master_routes" ]; then
+            doctor_pass "forge-master-routes.mjs (Phase-29 route wiring)"
+        else
+            doctor_warn "pforge-mcp/forge-master-routes.mjs missing (Phase-29)" "Re-run 'pforge update' to restore Forge-Master routes"
+        fi
+
+        # Auto-generated capability surface (regenerated on server start)
+        local tools_json="$REPO_ROOT/pforge-mcp/tools.json"
+        local cli_schema="$REPO_ROOT/pforge-mcp/cli-schema.json"
+        if [ -f "$tools_json" ] && [ -f "$cli_schema" ]; then
+            local tool_count
+            tool_count=$(grep -c '"name"' "$tools_json" 2>/dev/null || echo 0)
+            doctor_pass "tools.json + cli-schema.json ($tool_count MCP tools registered)"
+        else
+            doctor_warn "tools.json or cli-schema.json missing" "Start the MCP server once to auto-generate: node pforge-mcp/server.mjs"
+        fi
+
+        echo ""
+    fi
+
+    # ═══════════════════════════════════════════════════════════════
+    # 4d-ii. FORGE-MASTER STUDIO (Phase-29)
+    # ═══════════════════════════════════════════════════════════════
+    local forge_master_dir="$REPO_ROOT/pforge-master"
+    if [ -d "$forge_master_dir" ]; then
+        echo "Forge-Master Studio (Phase-29):"
+
+        if [ -f "$forge_master_dir/server.mjs" ]; then
+            doctor_pass "pforge-master/server.mjs"
+        else
+            doctor_warn "pforge-master/server.mjs missing" "Re-run 'pforge update' to restore"
+        fi
+
+        if [ -f "$forge_master_dir/src/lifecycle.mjs" ]; then
+            doctor_pass "pforge-master/src/lifecycle.mjs (status/logs backend)"
+        else
+            doctor_warn "pforge-master/src/lifecycle.mjs missing" "'pforge forge-master status|logs' will fail"
+        fi
+
         echo ""
     fi
 
@@ -2653,6 +2694,11 @@ cmd_doctor() {
 
         if [ -f "$dashboard_js" ]; then doctor_pass "dashboard/app.js"
         else doctor_warn "dashboard/app.js missing" "MCP dashboard has no frontend logic"; fi
+
+        # Phase-29: Forge-Master Studio tab controller
+        local dashboard_forge_master_js="$REPO_ROOT/pforge-mcp/dashboard/forge-master.js"
+        if [ -f "$dashboard_forge_master_js" ]; then doctor_pass "dashboard/forge-master.js (Forge-Master Studio tab)"
+        else doctor_warn "dashboard/forge-master.js missing (Phase-29)" "Re-run 'pforge update' to restore Forge-Master Studio tab"; fi
 
         # Dashboard screenshots for docs — only inside the plan-forge dev repo.
         if [ $is_planforge_dev -eq 1 ]; then

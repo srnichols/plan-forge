@@ -3951,6 +3951,16 @@ const tabLoadHooks = {
   timeline: loadTimelineTab,
   innerloop: loadInnerLoop,
   'forge-master': () => { window.forgeMasterOnTabActivate?.(); },
+  // Phase-30: Settings sub-tabs (content populated in Slices 2-5)
+  'settings-general': () => {},
+  'settings-models': () => {},
+  'settings-execution': () => {},
+  'settings-api-keys': () => {},
+  'settings-updates': () => {},
+  'settings-memory': () => {},
+  'settings-bridge': () => {},
+  'settings-crucible': () => {},
+  'settings-brain': () => {},
 };
 
 // ─── Theme Toggle ─────────────────────────────────────────────
@@ -6843,7 +6853,8 @@ function welcomeGotoInnerLoop() {
   welcomeMarkSeen();
 }
 function welcomeGotoConfig() {
-  const btn = document.querySelector('[data-tab="config"]');
+  switchGroup('settings');
+  const btn = document.querySelector('[data-tab="settings-general"]');
   if (btn) btn.click();
   welcomeMarkSeen();
 }

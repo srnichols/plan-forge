@@ -1813,7 +1813,7 @@ describe("dashboard tab structure", () => {
   const CORE_TABS = ["progress", "crucible", "governance", "runs", "cost", "actions", "replay", "extensions", "traces", "skills", "watcher", "memory", "timeline", "innerloop"];
   const LG_TABS = ["lg-health", "lg-incidents", "lg-triage", "lg-security", "lg-env"];
   const FM_TABS = ["forge-master"];
-  const SETTINGS_TABS = ["config"];
+  const SETTINGS_TABS = ["settings-general", "settings-models", "settings-execution", "settings-api-keys", "settings-updates", "settings-memory", "settings-bridge", "settings-crucible", "settings-brain"];
   const ALL_TABS = [...CORE_TABS, ...LG_TABS, ...FM_TABS, ...SETTINGS_TABS];
 
   it("has 14 core tab buttons", () => {
@@ -1836,20 +1836,23 @@ describe("dashboard tab structure", () => {
     expect(fmRow?.[0] || "").toContain('data-tab="forge-master"');
   });
 
-  it("Settings is a top-level group (not a Forge sub-tab)", () => {
+  it("Settings is a top-level group with 9 decomposed sub-tabs (Phase-30)", () => {
     expect(dashboardHtml).toContain('data-group="settings"');
     expect(dashboardHtml).toContain('id="subtabs-settings"');
-    // config data-tab button must live inside subtabs-settings, not subtabs-forge.
     const settingsRow = dashboardHtml.match(/id="subtabs-settings"[\s\S]*?<\/div>/);
-    expect(settingsRow?.[0] || "").toContain('data-tab="config"');
-    // And must NOT appear inside subtabs-forge any more.
+    for (const tab of SETTINGS_TABS) {
+      expect(settingsRow?.[0] || "").toContain(`data-tab="${tab}"`);
+    }
+    // Legacy config button must be retired.
+    expect(settingsRow?.[0] || "").not.toContain('data-tab="config"');
+    // And must NOT appear inside subtabs-forge either.
     const forgeRow = dashboardHtml.match(/id="subtabs-forge"[\s\S]*?<\/div>/);
     expect(forgeRow?.[0] || "").not.toContain('data-tab="config"');
   });
 
-  it("total tab count is 25 (18 core + 5 LG + 1 Forge-Master + 1 Settings)", () => {
+  it("total tab count is 33 (18 core + 5 LG + 1 Forge-Master + 9 Settings — Phase-30 decomposition)", () => {
     const tabMatches = dashboardHtml.match(/data-tab="[^"]+"/g) || [];
-    expect(tabMatches.length).toBe(25);
+    expect(tabMatches.length).toBe(33);
   });
 
   it("has LiveGuard section divider", () => {

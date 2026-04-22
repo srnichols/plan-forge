@@ -127,6 +127,8 @@ Consolidated from Scott's written positions in the A/B test post, the guardrails
 > 3. **Strategic** — net-new features, architecture moves, platform bets. This is where the leverage is, but only *after* the first two are quiet. A strategic move on top of a smouldering operational fire is a vibe-coding move in a suit.
 >
 > **The inversion trap**: when strategic work feels more exciting than operational work, agents (human or AI) start reaching up the stack. Don't. The excitement gap is a signal that operational hygiene is being neglected, not that strategy is more valuable. When unsure which tier a task belongs to: ask "what breaks if I don't do this today?" Production → hotfix. Toil → operational. Nothing visible → strategic.
+>
+> **Keep Gates Boring.** Gates fail on syntax before they fail on logic. The validation step of every slice must be so simple a human can read it and predict the outcome in one breath. Plain `grep -q 'pattern'`, plain `npx vitest run <file>`, plain `test -f <file>`. **No nested shell layers, no escaped quotes inside escaped quotes, no clever one-liners that pipe through four tools.** If a gate needs to check two things, run two gates. If a gate needs a negative assertion, prove it in a test file, not in the gate. A gate that fails on its own shell quoting is worse than no gate — it hides working code behind a false red.
 
 ---
 

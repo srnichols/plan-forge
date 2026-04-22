@@ -3952,8 +3952,8 @@ const tabLoadHooks = {
   innerloop: loadInnerLoop,
   'forge-master': () => { window.forgeMasterOnTabActivate?.(); },
   // Phase-30: Settings sub-tabs (content populated in Slices 2-5)
-  'settings-general': () => {},
-  'settings-models': () => {},
+  'settings-general': () => { loadConfig(); },
+  'settings-models': () => { loadConfig(); },
   'settings-execution': () => {},
   'settings-api-keys': () => {},
   'settings-updates': () => {},

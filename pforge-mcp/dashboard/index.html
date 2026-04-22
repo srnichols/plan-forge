@@ -880,16 +880,81 @@
     <section id="tab-settings-general" class="tab-content hidden">
       <div class="bg-gray-800 rounded-lg p-6 max-w-2xl">
         <h2 class="text-lg font-semibold mb-4">⚙️ General</h2>
-        <p class="text-sm text-gray-400">Project identity: preset, template version, and agent configuration.</p>
-        <p class="text-xs text-gray-500 mt-2">Content migrating from legacy config — arriving in Slice 2.</p>
+        <p class="text-sm text-gray-400 mb-4">Project identity: preset, template version, and agent configuration.</p>
+        <div class="space-y-4">
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Preset</label>
+            <input id="cfg-preset" title="Preset" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full" readonly>
+          </div>
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Template Version</label>
+            <input id="cfg-version" title="Template version" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full" readonly>
+          </div>
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Agents</label>
+            <div id="cfg-agents" class="flex gap-2 flex-wrap"></div>
+          </div>
+          <div class="flex gap-2 pt-2">
+            <button onclick="saveConfig()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded text-sm">Save Configuration</button>
+            <button onclick="loadConfig()" class="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm">Reload</button>
+          </div>
+          <p id="cfg-status" class="text-xs text-gray-500 mt-2"></p>
+        </div>
       </div>
     </section>
 
     <section id="tab-settings-models" class="tab-content hidden">
       <div class="bg-gray-800 rounded-lg p-6 max-w-2xl">
         <h2 class="text-lg font-semibold mb-4">🧩 Models</h2>
-        <p class="text-sm text-gray-400">Model routing: default execution model and image generation model selection.</p>
-        <p class="text-xs text-gray-500 mt-2">Content migrating from legacy config — arriving in Slice 2.</p>
+        <p class="text-sm text-gray-400 mb-4">Model routing: default execution model and image generation model selection.</p>
+        <div class="space-y-4">
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Model Routing — Default</label>
+            <select id="cfg-model-default" title="Default model" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full">
+              <option value="auto">auto</option>
+              <optgroup label="xAI Grok (API)">
+                <option value="grok-4.20">grok-4.20</option>
+                <option value="grok-4">grok-4</option>
+                <option value="grok-3">grok-3</option>
+                <option value="grok-3-mini">grok-3-mini</option>
+              </optgroup>
+              <optgroup label="Claude (CLI)">
+                <option value="claude-sonnet-4.6">claude-sonnet-4.6</option>
+                <option value="claude-opus-4.6">claude-opus-4.6</option>
+              </optgroup>
+              <optgroup label="OpenAI (CLI)">
+                <option value="gpt-5.2-codex">gpt-5.2-codex</option>
+                <option value="gpt-5-mini">gpt-5-mini</option>
+              </optgroup>
+              <optgroup label="Google (CLI)">
+                <option value="gemini-3-pro-preview">gemini-3-pro-preview</option>
+              </optgroup>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Image Generation Model</label>
+            <div class="flex gap-2 items-center">
+              <select id="cfg-model-image" title="Image generation model" class="bg-gray-700 text-white text-sm rounded px-3 py-2 flex-1">
+                <option value="">None (disabled)</option>
+                <optgroup label="xAI Grok (XAI_API_KEY)">
+                  <option value="grok-imagine-image">grok-imagine-image</option>
+                  <option value="grok-imagine-image-pro">grok-imagine-image-pro</option>
+                </optgroup>
+                <optgroup label="OpenAI (OPENAI_API_KEY)">
+                  <option value="dall-e-3">dall-e-3</option>
+                  <option value="dall-e-4">dall-e-4</option>
+                  <option value="gpt-image-1">gpt-image-1</option>
+                </optgroup>
+              </select>
+              <span class="text-xs text-gray-500 shrink-0">🎨</span>
+            </div>
+            <p class="text-xs text-gray-600 mt-1">Agents delegate image tasks (logos, diagrams, icons) to this model via <code class="text-gray-500">forge_generate_image</code>. Requires <code class="text-gray-500">XAI_API_KEY</code> for Grok or <code class="text-gray-500">OPENAI_API_KEY</code> for DALL-E.</p>
+          </div>
+          <div class="flex gap-2 pt-2">
+            <button onclick="saveConfig()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded text-sm">Save Configuration</button>
+            <button onclick="loadConfig()" class="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm">Reload</button>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -976,60 +1041,6 @@
         </div>
         <div id="cfg-general">
         <div id="cfg-form-body" class="space-y-4">
-          <div>
-            <label class="block text-sm text-gray-400 mb-1">Preset</label>
-            <input id="cfg-preset" title="Preset" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full" readonly>
-          </div>
-          <div>
-            <label class="block text-sm text-gray-400 mb-1">Template Version</label>
-            <input id="cfg-version" title="Template version" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full" readonly>
-          </div>
-          <div>
-            <label class="block text-sm text-gray-400 mb-1">Agents</label>
-            <div id="cfg-agents" class="flex gap-2 flex-wrap"></div>
-          </div>
-          <div>
-            <label class="block text-sm text-gray-400 mb-1">Model Routing — Default</label>
-            <select id="cfg-model-default" title="Default model" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full">
-              <option value="auto">auto</option>
-              <optgroup label="xAI Grok (API)">
-                <option value="grok-4.20">grok-4.20</option>
-                <option value="grok-4">grok-4</option>
-                <option value="grok-3">grok-3</option>
-                <option value="grok-3-mini">grok-3-mini</option>
-              </optgroup>
-              <optgroup label="Claude (CLI)">
-                <option value="claude-sonnet-4.6">claude-sonnet-4.6</option>
-                <option value="claude-opus-4.6">claude-opus-4.6</option>
-              </optgroup>
-              <optgroup label="OpenAI (CLI)">
-                <option value="gpt-5.2-codex">gpt-5.2-codex</option>
-                <option value="gpt-5-mini">gpt-5-mini</option>
-              </optgroup>
-              <optgroup label="Google (CLI)">
-                <option value="gemini-3-pro-preview">gemini-3-pro-preview</option>
-              </optgroup>
-            </select>
-          </div>
-          <div>
-            <label class="block text-sm text-gray-400 mb-1">Image Generation Model</label>
-            <div class="flex gap-2 items-center">
-              <select id="cfg-model-image" title="Image generation model" class="bg-gray-700 text-white text-sm rounded px-3 py-2 flex-1">
-                <option value="">None (disabled)</option>
-                <optgroup label="xAI Grok (XAI_API_KEY)">
-                  <option value="grok-imagine-image">grok-imagine-image</option>
-                  <option value="grok-imagine-image-pro">grok-imagine-image-pro</option>
-                </optgroup>
-                <optgroup label="OpenAI (OPENAI_API_KEY)">
-                  <option value="dall-e-3">dall-e-3</option>
-                  <option value="dall-e-4">dall-e-4</option>
-                  <option value="gpt-image-1">gpt-image-1</option>
-                </optgroup>
-              </select>
-              <span class="text-xs text-gray-500 shrink-0">🎨</span>
-            </div>
-            <p class="text-xs text-gray-600 mt-1">Agents delegate image tasks (logos, diagrams, icons) to this model via <code class="text-gray-500">forge_generate_image</code>. Requires <code class="text-gray-500">XAI_API_KEY</code> for Grok or <code class="text-gray-500">OPENAI_API_KEY</code> for DALL-E.</p>
-          </div>
           <!-- Advanced Settings  -->
           <details class="border border-gray-700 rounded-lg p-3">
             <summary class="text-sm text-gray-400 cursor-pointer hover:text-gray-300 font-semibold">Advanced Settings</summary>
@@ -1228,7 +1239,6 @@
             </div>
           </div>
         </div><!-- end cfg-brain -->
-        <p id="cfg-status" class="text-xs text-gray-500 mt-2"></p>
       </div>
 
       <!-- Crucible config (v2.37) -->

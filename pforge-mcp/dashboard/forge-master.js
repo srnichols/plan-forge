@@ -3,6 +3,11 @@
  *
  * Drives the #tab-forge-master section in the main Plan Forge dashboard.
  * Talks to /api/forge-master/* routes registered by forge-master-routes.mjs.
+ *
+ * Phase-30.1 — window.forgeMaster* assignments moved to the top of this
+ * module so inline onclick handlers are wired even if init() throws.
+ * Hoisted-function declarations below are visible here because the IIFE
+ * scope runs after full module parse.
  */
 
 // ─── State ────────────────────────────────────────────────────────────
@@ -13,6 +18,24 @@ const fm = {
   activeCategory: null,
   gallerySearch: "",
 };
+
+// ─── Global surface (wired FIRST — before anything that could throw) ──
+// Inline onclick="forgeMasterXxx()" handlers need these globals present
+// even if /api/forge-master/prompts fails or a DOM query returns null.
+window.forgeMasterOnTabActivate = () => {
+  try {
+    if (!fm.catalog) forgeMasterInit();
+  } catch (err) {
+    const list = document.getElementById("fm-gallery-list");
+    if (list) list.innerHTML = `<p class="text-xs text-red-400">Forge-Master init failed: ${err?.message || err}</p>`;
+    // eslint-disable-next-line no-console
+    console.error("[forge-master] init error", err);
+  }
+};
+window.forgeMasterNewChat = (...args) => forgeMasterNewChat(...args);
+window.forgeMasterSend = (...args) => forgeMasterSend(...args);
+window.forgeMasterPickPrompt = (...args) => forgeMasterPickPrompt(...args);
+window.forgeMasterFilterGallery = (...args) => forgeMasterFilterGallery(...args);
 
 // ─── Init ─────────────────────────────────────────────────────────────
 
@@ -171,13 +194,5 @@ function forgeMasterAddToolTrace(tc) {
   trace.appendChild(el);
 }
 
-// ─── Tab activation hook ──────────────────────────────────────────────
-
-window.forgeMasterOnTabActivate = function () {
-  if (!fm.catalog) forgeMasterInit();
-};
-
-window.forgeMasterNewChat = forgeMasterNewChat;
-window.forgeMasterSend = forgeMasterSend;
-window.forgeMasterPickPrompt = forgeMasterPickPrompt;
-window.forgeMasterFilterGallery = forgeMasterFilterGallery;
+// Note: window.forgeMaster* assignments are at the TOP of this file
+// (Phase-30.1) so inline onclick handlers are wired regardless of init state.

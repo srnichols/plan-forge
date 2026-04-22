@@ -142,10 +142,12 @@ No open TBDs.
 
 **Validation Gate**:
 ```bash
-bash -c "cd /e/GitHub/Plan-Forge && mkdir -p .forge/tmp/vb1 && cp VERSION .forge/tmp/vb1/VERSION.bak && pwsh -NoProfile -Command \"& ./pforge.ps1 version-bump 9.9.9; \$v = Get-Content VERSION -Raw; if (\$v -ne '9.9.9') { Write-Error \\\"VERSION is '\$v', expected '9.9.9'\\\"; exit 1 }\" && cp .forge/tmp/vb1/VERSION.bak VERSION && rm -rf .forge/tmp/vb1 && echo OK"
+bash -c "grep -q 'Get-VersionTargets' pforge.ps1 && grep -q \"Strategy = 'Overwrite'\" pforge.ps1 && grep -q \"Strategy = 'RegexReplace'\" pforge.ps1 && grep -q 'Set-Content.*-NoNewline' pforge.ps1 && echo OK"
 ```
 
-**Stop Condition**: VERSION file after bump contains anything other than exactly `9.9.9`, or the function errors before completing.
+Structural verification via grep. End-to-end VERSION correctness is verified by Slice 4's vitest suite (which spawns the script against fixture repos). Avoids nested pwsh-in-bash quoting — see [meta-bug #92](https://github.com/srnichols/plan-forge/issues/92).
+
+**Stop Condition**: Any of the four required identifiers (`Get-VersionTargets`, Overwrite strategy, RegexReplace strategy, Set-Content with -NoNewline) is missing from `pforge.ps1`.
 
 ---
 
@@ -166,10 +168,12 @@ bash -c "cd /e/GitHub/Plan-Forge && mkdir -p .forge/tmp/vb1 && cp VERSION .forge
 
 **Validation Gate**:
 ```bash
-bash -c "cd /e/GitHub/Plan-Forge && cp VERSION .forge/vb2.bak && pwsh -NoProfile -Command \"& ./pforge.ps1 version-bump 9.9.9; \$code = \$LASTEXITCODE; if (\$code -ne 0) { Write-Error \\\"expected 0, got \$code\\\"; exit 1 }\" && cp .forge/vb2.bak VERSION && pwsh -NoProfile -Command \"Set-Content VERSION 'broken-fixture' -NoNewline; & ./pforge.ps1 version-bump 9.9.9 --strict 2>&1 | Out-Null; if (\$LASTEXITCODE -eq 0) { Write-Error 'strict mode on missing pattern should have failed'; exit 1 }\" && cp .forge/vb2.bak VERSION && rm .forge/vb2.bak && echo OK"
+bash -c "grep -q '\-\-strict' pforge.ps1 && grep -qE 'Select-String.*-Path|Get-Content.*-SimpleMatch' pforge.ps1 && grep -qE 'written|warned|failed' pforge.ps1 && grep -q 'Optional = .true' pforge.ps1 && echo OK"
 ```
 
-**Stop Condition**: Default mode exits non-zero on happy path, OR `--strict` exits 0 when a RegexReplace pattern is missing.
+Structural verification via grep. End-to-end strict-mode failure behaviour is verified by Slice 4's vitest suite. Avoids nested pwsh-in-bash quoting — see [meta-bug #92](https://github.com/srnichols/plan-forge/issues/92).
+
+**Stop Condition**: `--strict` flag missing, post-write validation call missing, the three-bucket bookkeeping variables missing, or no Optional-flagged targets.
 
 ---
 
@@ -188,10 +192,12 @@ bash -c "cd /e/GitHub/Plan-Forge && cp VERSION .forge/vb2.bak && pwsh -NoProfile
 
 **Validation Gate**:
 ```bash
-bash -c "cd /e/GitHub/Plan-Forge && V=\$(cat VERSION) && pwsh -NoProfile -Command \"& ./pforge.ps1 version-bump 9.9.9 --dry-run\" > .forge/vb3.out 2>&1 && NEW=\$(cat VERSION) && if [ \"\$V\" != \"\$NEW\" ]; then echo 'FAIL: VERSION was modified during dry-run'; exit 1; fi && if ! grep -q '+9.9.9' .forge/vb3.out; then echo 'FAIL: diff output missing +9.9.9'; exit 1; fi && if ! grep -q 'dry-run' .forge/vb3.out; then echo 'FAIL: dry-run summary line missing'; exit 1; fi && rm .forge/vb3.out && echo OK"
+bash -c "grep -q '\-\-dry-run' pforge.ps1 && grep -q 'Get-UnifiedDiff\|unified.*diff\|UnifiedDiff' pforge.ps1 && grep -q '(dry-run)' pforge.ps1 && echo OK"
 ```
 
-**Stop Condition**: `--dry-run` modifies any file, OR diff output is missing the expected `+9.9.9` line.
+Structural verification via grep. End-to-end dry-run no-mutation + diff shape is verified by Slice 4's vitest suite (golden-file comparison against `expected-dry-run.diff`). Avoids nested pwsh-in-bash quoting — see [meta-bug #92](https://github.com/srnichols/plan-forge/issues/92).
+
+**Stop Condition**: `--dry-run` flag parsing missing, unified-diff helper missing, or dry-run summary line missing.
 
 ---
 
@@ -211,8 +217,10 @@ bash -c "cd /e/GitHub/Plan-Forge && V=\$(cat VERSION) && pwsh -NoProfile -Comman
 
 **Validation Gate**:
 ```bash
-bash -c "cd /e/GitHub/Plan-Forge/pforge-mcp && npx vitest run tests/version-bump.test.mjs"
+bash -c "cd pforge-mcp && npx vitest run tests/version-bump.test.mjs --reporter=default"
 ```
+
+This is the end-to-end gate for Slices 1-3 as well — if any earlier slice's code is wrong, this vitest run will catch it here.
 
 **Stop Condition**: Any test case in the new suite fails.
 
@@ -236,10 +244,10 @@ bash -c "cd /e/GitHub/Plan-Forge/pforge-mcp && npx vitest run tests/version-bump
 
 **Validation Gate**:
 ```bash
-bash -c "test \"$(cat VERSION)\" = \"2.65.1\" && git rev-parse v2.65.1 >/dev/null 2>&1 && echo OK"
+bash -c "grep -q '^2.65.1$' VERSION && git rev-parse v2.65.1 >/dev/null 2>&1 && grep -q '\[2.65.1\]' CHANGELOG.md && echo OK"
 ```
 
-**Stop Condition**: VERSION does not contain exactly `2.65.1`, or the v2.65.1 tag is absent.
+**Stop Condition**: VERSION does not contain exactly `2.65.1`, or the v2.65.1 tag is absent, or CHANGELOG `[2.65.1]` section is missing.
 
 ---
 

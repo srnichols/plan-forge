@@ -1307,6 +1307,24 @@
         </div>
       </div>
 
+      <!-- Legend: what each scanner type means -->
+      <details class="mb-4 bg-gray-800/60 border border-gray-700 rounded-lg" data-testid="tempering-legend">
+        <summary class="text-xs text-gray-300 cursor-pointer hover:text-white px-3 py-2 select-none">
+          ℹ️ <span class="font-medium">What do these test types mean?</span>
+        </summary>
+        <div class="px-4 pb-3 pt-1 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 text-xs text-gray-400">
+          <div><span class="text-emerald-300 font-medium">Unit</span> — a single function or class in isolation; fast, no I/O.</div>
+          <div><span class="text-emerald-300 font-medium">Integration</span> — multiple modules wired together (service + repository, API + DB).</div>
+          <div><span class="text-emerald-300 font-medium">UI / Playwright</span> — end-to-end browser driving through real pages and clicks.</div>
+          <div><span class="text-emerald-300 font-medium">Contract</span> — request/response shape agreements between services (schema, OpenAPI).</div>
+          <div><span class="text-emerald-300 font-medium">Visual Diff</span> — compares rendered screenshots against a baseline; catches silent CSS/layout regressions.</div>
+          <div><span class="text-emerald-300 font-medium">Flakiness</span> — tests whose pass/fail outcome isn’t deterministic on the same code.</div>
+          <div><span class="text-emerald-300 font-medium">Performance Budget</span> — enforced ceilings on latency, memory, or throughput per critical path.</div>
+          <div><span class="text-emerald-300 font-medium">Load / Stress</span> — behaviour under sustained traffic and beyond-design traffic.</div>
+          <div><span class="text-emerald-300 font-medium">Mutation</span> — deliberately breaks source to verify the tests actually detect it; measures assertion strictness.</div>
+        </div>
+      </details>
+
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <!-- Latest scan summary -->
         <div class="bg-gray-800 rounded-lg p-4 lg:col-span-1" data-testid="tempering-summary">
@@ -1318,7 +1336,8 @@
 
         <!-- Coverage vs. minima -->
         <div class="bg-gray-800 rounded-lg p-4 lg:col-span-2" data-testid="tempering-coverage">
-          <h3 class="text-sm font-semibold text-gray-300 mb-3">Coverage vs. minima</h3>
+          <h3 class="text-sm font-semibold text-gray-300 mb-1">Coverage vs. minima</h3>
+          <p class="text-xs text-gray-500 mb-3">How much of each architectural layer your tests actually exercise, compared to the minimum the project requires. <span class="text-gray-400">Domain</span> = business rules, <span class="text-gray-400">Integration</span> = cross-module wiring, <span class="text-gray-400">Controller</span> = HTTP/entry-point handlers, <span class="text-gray-400">Overall</span> = weighted average.</p>
           <div id="tempering-coverage-body">
             <p class="text-gray-500 text-sm py-4 text-center">No coverage data.</p>
           </div>
@@ -1347,19 +1366,23 @@
         <div id="visual-diff-list" class="space-y-4" data-testid="visual-diff-list"></div>
       </div>
       <div class="bg-gray-800 rounded-lg p-4 lg:col-span-3 mt-4" data-testid="tempering-flakiness">
-        <h3 class="text-lg font-semibold mb-2">🎲 Flaky Tests</h3>
+        <h3 class="text-lg font-semibold mb-1">🎲 Flaky Tests</h3>
+        <p class="text-xs text-gray-500 mb-3">Tests that sometimes pass and sometimes fail on the same code — usually due to timing, shared state, or network assumptions. Flaky tests erode trust in the suite and hide real regressions. Listed worst-first by fail rate.</p>
         <div id="tempering-flakiness-body"></div>
       </div>
       <div class="bg-gray-800 rounded-lg p-4 lg:col-span-3 mt-4" data-testid="tempering-perf-budget">
-        <h3 class="text-lg font-semibold mb-2">⚡ Performance Budget</h3>
+        <h3 class="text-lg font-semibold mb-1">⚡ Performance Budget</h3>
+        <p class="text-xs text-gray-500 mb-3">Upper bounds on latency, memory, or throughput for critical paths. A budget miss means a request, function, or page is slower than the product promised — caught before it ships, not after users complain.</p>
         <div id="tempering-perf-budget-body"></div>
       </div>
       <div class="bg-gray-800 rounded-lg p-4 lg:col-span-3 mt-4" data-testid="tempering-load-stress">
-        <h3 class="text-lg font-semibold mb-2">🔥 Load / Stress</h3>
+        <h3 class="text-lg font-semibold mb-1">🔥 Load / Stress</h3>
+        <p class="text-xs text-gray-500 mb-3">Behaviour under sustained traffic (load) and beyond-design traffic (stress). Surfaces connection-pool exhaustion, memory leaks, and thundering-herd failures that unit tests can’t see.</p>
         <div id="tempering-load-stress-body"></div>
       </div>
       <div class="bg-gray-800 rounded-lg p-4 lg:col-span-3 mt-4" data-testid="tempering-mutation">
-        <h3 class="text-lg font-semibold mb-2">🧬 Mutation Testing</h3>
+        <h3 class="text-lg font-semibold mb-1">🧬 Mutation Testing</h3>
+        <p class="text-xs text-gray-500 mb-3">Deliberately breaks your source code in small ways (flips a condition, drops a line) and re-runs the tests. If nothing fails, a test is missing. The mutation-kill score measures how strict your tests really are — coverage says a line ran, mutation says it was actually checked.</p>
         <div id="tempering-mutation-body"></div>
       </div>
     </section>

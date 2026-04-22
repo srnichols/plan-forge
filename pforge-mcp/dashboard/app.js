@@ -3674,28 +3674,6 @@ loadPlans();
 
 const KNOWN_ADAPTERS = ["webhook", "slack", "teams", "email", "pagerduty"];
 
-function initConfigSubtabs() {
-  document.querySelectorAll(".cfg-subtab").forEach(btn => {
-    btn.addEventListener("click", () => {
-      document.querySelectorAll(".cfg-subtab").forEach(b => {
-        b.classList.remove("cfg-subtab-active", "bg-gray-700", "text-white");
-        b.classList.add("text-gray-400");
-      });
-      btn.classList.add("cfg-subtab-active", "bg-gray-700", "text-white");
-      btn.classList.remove("text-gray-400");
-      const general = document.getElementById("cfg-general");
-      const notifications = document.getElementById("cfg-notifications");
-      if (btn.dataset.cfgtab === "notifications") {
-        if (general) general.classList.add("hidden");
-        if (notifications) notifications.classList.remove("hidden");
-        renderNotificationsSubtab();
-      } else {
-        if (general) general.classList.remove("hidden");
-        if (notifications) notifications.classList.add("hidden");
-      }
-    });
-  });
-}
 
 // Phase FORGE-SHOP-07 Slice 07.2 — Brain subtab data loader
 async function loadBrainSubtab() {
@@ -3927,7 +3905,6 @@ const tabLoadHooks = {
   runs: () => { loadRuns(); tabBadgeState.runsNew = 0; updateTabBadges(); },
   replay: loadReplayRuns,
   extensions: loadExtensions,
-  config: () => { loadConfig(); loadCrucibleConfigUI(); initConfigSubtabs(); },
   traces: loadTraces,
   cost: () => { loadCost(); tabBadgeState.hasAnomaly = false; updateTabBadges(); },
   skills: loadSkillCatalog,

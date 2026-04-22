@@ -7,6 +7,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [v2.64.0] — 2026-04-21 — Settings Panel Decomposition (Phase-30)
+
+> **Minor release — Single monolithic Settings tab decomposed into 9 sub-tabs (General, Models, Execution, API Keys, Updates, Memory, Brain, Bridge, Crucible). Cross-group tab migration: Extensions moved to Settings row; Bug Registry and Watcher moved to LiveGuard row.**
+
+### Changed
+- **Settings sub-tabs** — `dashboard/index.html` `#tab-config` replaced with 9 sub-tab sections under `#subtabs-settings`, each routable via `data-tab="settings-*"`.
+- **Cross-group tab migration** — Extensions button relocated from Forge row → Settings row (`hover:text-purple-400`); Bug Registry + Watcher buttons relocated from Forge row → LiveGuard row (`hover:text-amber-400`).
+- **Tab row counts** — Forge: 18→15; Settings: 9→10; LiveGuard: 5→7 (total `data-tab` count unchanged at 33).
+- **Legacy DOM removed** — `initConfigSubtabs()` and internal `cfg-subtab` buttons removed from `app.js`; the main tab dispatcher now handles routing directly.
+
+### Tests
+- Added `dashboard-settings.test.mjs` — asserts presence of all 9 Settings sub-tabs, correct `data-tab` prefixes, and section anchors.
+- Added structural "Cross-group tab migration (Slice 7)" test in `server.test.mjs` — row counts, accent hover colors, and total button tally.
+
+### Meta
+- Filed [issue #86](https://github.com/srnichols/plan-forge/issues/86) — headless `gh copilot` autoharden pipeline silently fails to write repo files (class: `orchestrator-defect`). Hand-hardened the plan as a workaround.
+
 ## [v2.63.1] — 2026-04-21 — Tempering Triage (Phase-28.5)
 
 > **Patch release — tempering run-directory sorting now uses mtime instead of alphabetical order, preventing stale baselines from shadowing recent runs. Also fixes touch-device CSS hover stickiness in docs nav dropdown.**

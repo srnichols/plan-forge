@@ -1,12 +1,15 @@
 ---
 lane: full
 source: human
+hardened: true
+hardened_by: hand-harden (interactive chat — headless gh copilot blocked, see issue #86)
+hardened_at: 2026-04-21
 ---
 
 # Phase-30 — Settings Panel Decomposition
 
 > **Target release**: v2.64.0
-> **Status**: Draft (seed — needs `pforge analyze` hardening before execution)
+> **Status**: Hardened — ready for `pforge run-plan`
 > **Depends on**: v2.63.2 shipped (commit `0710256` — Config promoted to top-level Settings group, Forge-Master promoted to top-level group). The four-group nav (Forge / LiveGuard / Forge-Master / Settings) and `switchGroup()` table-driven handling must be in place.
 > **Branch strategy**: Direct to `master`. Pure **decomposition + relocation** — no new features, no behavioral changes to config read/write or persistence. Every setting keeps its current `.forge.json` key and `/api/config` round-trip.
 > **Session budget**: 1 session, ~7 slices (structural frame + 4 content-migration slices + sweep + cross-group tab migration).
@@ -182,3 +185,202 @@ The Forge sub-tab row currently holds 18 buttons — several of which are not ex
 ## Rollback Plan
 
 Single-commit revert. The decomposition is contained to three files (index.html, app.js, tests). `git revert <merge-sha>` restores the prior Settings surface. `.forge.json` is unchanged so no data migration is required in either direction.
+
+Pre-launch tag `pre-phase-30` should be created on `master` before `run-plan`. Emergency revert: `git reset --hard pre-phase-30 && git push origin master --force-with-lease`. Forward-fix (v2.64.1 hotfix) is preferred over revert for any defect discovered post-ship.
+
+---
+
+## Scope Contract
+
+**In scope** (worker MAY edit these paths):
+
+- `pforge-mcp/dashboard/index.html`
+- `pforge-mcp/dashboard/app.js`
+- `pforge-mcp/tests/server.test.mjs`
+- `pforge-mcp/tests/dashboard-settings.test.mjs` (new in slice 6 — MAY be created)
+- `VERSION` (ship slice only)
+- `package.json` (ship slice only — version bump)
+- `pforge-mcp/package.json` (ship slice only — version bump)
+- `CHANGELOG.md` (ship slice only)
+- `docs/plans/DEPLOYMENT-ROADMAP.md` (status update only)
+- `.forge/release-notes-v2.64.0.md` (ship slice only)
+
+**Out of scope** (drift detection MUST flag edits here):
+
+- Any other file under `pforge-mcp/` except the dashboard and test paths above.
+- Any server-side route file (`pforge-mcp/server.mjs`, `pforge-mcp/*.mjs` at package root).
+- `.forge.json` or any other config under `.forge/`.
+- Any file under `docs/` other than the roadmap status update.
+- Any file under `pforge-master/`, `pforge-sdk/`, `extensions/`, `presets/`, `templates/`, `deploy/`, `scripts/`.
+- Any plan file under `docs/plans/` other than this one and `DEPLOYMENT-ROADMAP.md`.
+- `.github/**` — instructions, prompts, agents, hooks, workflows untouched.
+
+**Commands the worker MUST use**:
+
+- Test suite: `cd pforge-mcp && npm test` (runs `vitest run`). Full suite MUST pass at every slice boundary.
+- Scoped test: `cd pforge-mcp && npx vitest run tests/server.test.mjs` for fast structural feedback during DOM migration.
+- New settings suite (slice 6+): `cd pforge-mcp && npx vitest run tests/dashboard-settings.test.mjs`.
+- Grep gates: plain `grep` (POSIX) via git-bash shim on Windows — avoid brace-group pipes per `memories/repo/plan-gate-command-rules.md`.
+
+---
+
+## Session Budget
+
+- **Sessions**: 1 (Execute). Specify and Plan are complete (this document).
+- **Slices**: 7 (1 frame + 4 content migration + 1 sweep + 1 cross-group).
+- **Token ceiling (advisory)**: per-slice `grok-4.20` budget ~40k in / 15k out. If a slice hits 2× that, stop and split.
+- **Commit cadence**: one commit per slice, conventional commit style. Slice 6 and 7 each produce a standalone commit. The release commit (tag `v2.64.0`) is a separate post-slice-7 step.
+
+---
+
+## Per-Slice Validation Gates (executable)
+
+Each gate is a shell-portable one-liner runnable via the `bash` shim on Windows. `PASS` means exit code 0; any non-zero exit fails the gate.
+
+### Slice 1 — Sub-tab frame
+
+```bash
+# 9 new data-tab="settings-<slug>" buttons exist
+grep -q 'data-tab="settings-general"' pforge-mcp/dashboard/index.html && \
+grep -q 'data-tab="settings-models"' pforge-mcp/dashboard/index.html && \
+grep -q 'data-tab="settings-execution"' pforge-mcp/dashboard/index.html && \
+grep -q 'data-tab="settings-api-keys"' pforge-mcp/dashboard/index.html && \
+grep -q 'data-tab="settings-updates"' pforge-mcp/dashboard/index.html && \
+grep -q 'data-tab="settings-memory"' pforge-mcp/dashboard/index.html && \
+grep -q 'data-tab="settings-bridge"' pforge-mcp/dashboard/index.html && \
+grep -q 'data-tab="settings-crucible"' pforge-mcp/dashboard/index.html && \
+grep -q 'data-tab="settings-brain"' pforge-mcp/dashboard/index.html
+
+# Legacy config top-level button is retired
+! grep -q 'data-tab="config"' pforge-mcp/dashboard/index.html
+
+# Test suite updated and passing
+cd pforge-mcp && npm test
+```
+
+### Slice 2 — General + Models sections
+
+```bash
+# Destination sections exist
+grep -q 'id="tab-settings-general"' pforge-mcp/dashboard/index.html && \
+grep -q 'id="tab-settings-models"' pforge-mcp/dashboard/index.html
+
+# Moved IDs resolve (still present in DOM)
+grep -q 'id="cfg-preset"' pforge-mcp/dashboard/index.html && \
+grep -q 'id="cfg-version"' pforge-mcp/dashboard/index.html && \
+grep -q 'id="cfg-agents"' pforge-mcp/dashboard/index.html && \
+grep -q 'id="cfg-model-default"' pforge-mcp/dashboard/index.html && \
+grep -q 'id="cfg-model-image"' pforge-mcp/dashboard/index.html
+
+cd pforge-mcp && npm test
+```
+
+### Slice 3 — Execution + API Keys + Updates
+
+```bash
+grep -q 'id="tab-settings-execution"' pforge-mcp/dashboard/index.html && \
+grep -q 'id="tab-settings-api-keys"' pforge-mcp/dashboard/index.html && \
+grep -q 'id="tab-settings-updates"' pforge-mcp/dashboard/index.html
+
+# All Execution IDs still resolve (accordion flattened, IDs preserved)
+grep -q 'id="cfg-max-parallel"' pforge-mcp/dashboard/index.html && \
+grep -q 'id="cfg-max-retries"' pforge-mcp/dashboard/index.html && \
+grep -q 'id="cfg-max-history"' pforge-mcp/dashboard/index.html && \
+grep -q 'id="cfg-quorum-enabled"' pforge-mcp/dashboard/index.html && \
+grep -q 'id="cfg-quorum-preset"' pforge-mcp/dashboard/index.html && \
+grep -q 'id="cfg-quorum-threshold"' pforge-mcp/dashboard/index.html && \
+grep -q 'id="cfg-quorum-models"' pforge-mcp/dashboard/index.html && \
+grep -q 'id="cfg-workers"' pforge-mcp/dashboard/index.html && \
+grep -q 'id="cfg-api-keys"' pforge-mcp/dashboard/index.html && \
+grep -q 'id="cfg-api-providers"' pforge-mcp/dashboard/index.html && \
+grep -q 'id="cfg-update-source"' pforge-mcp/dashboard/index.html
+
+cd pforge-mcp && npm test
+```
+
+### Slice 4 — Memory + Brain
+
+```bash
+grep -q 'id="tab-settings-memory"' pforge-mcp/dashboard/index.html && \
+grep -q 'id="tab-settings-brain"' pforge-mcp/dashboard/index.html && \
+grep -q 'id="cfg-openbrain"' pforge-mcp/dashboard/index.html && \
+grep -q 'id="memory-search-panel"' pforge-mcp/dashboard/index.html && \
+grep -q 'id="memory-search-input"' pforge-mcp/dashboard/index.html && \
+grep -q 'id="cfg-brain"' pforge-mcp/dashboard/index.html
+
+cd pforge-mcp && npm test
+```
+
+### Slice 5 — Bridge (consolidated) + Crucible
+
+```bash
+grep -q 'id="tab-settings-bridge"' pforge-mcp/dashboard/index.html && \
+grep -q 'id="tab-settings-crucible"' pforge-mcp/dashboard/index.html
+
+# Old <details> accordion removed, contents retained
+! grep -q 'id="cfg-bridge-details"' pforge-mcp/dashboard/index.html
+
+cd pforge-mcp && npm test
+```
+
+### Slice 6 — Completeness sweep + legacy DOM removal
+
+```bash
+# Legacy config section and internal subtab row fully removed
+! grep -q 'id="tab-config"' pforge-mcp/dashboard/index.html
+! grep -q 'data-tab="config"' pforge-mcp/dashboard/index.html
+! grep -q 'class="cfg-subtab' pforge-mcp/dashboard/index.html
+! grep -q 'cfg-subtab' pforge-mcp/dashboard/app.js
+
+# New structural test suite exists and passes
+test -f pforge-mcp/tests/dashboard-settings.test.mjs
+cd pforge-mcp && npm test
+```
+
+### Slice 7 — Cross-group tab migration
+
+```bash
+# Extensions moved to Settings subtab row
+node -e "const h=require('fs').readFileSync('pforge-mcp/dashboard/index.html','utf8'); const row=h.match(/id=\"subtabs-settings\"[\s\S]*?<\/div>/); if(!row||!row[0].includes('data-tab=\"extensions\"'))process.exit(1)"
+
+# Bug Registry + Watcher moved to LiveGuard subtab row
+node -e "const h=require('fs').readFileSync('pforge-mcp/dashboard/index.html','utf8'); const row=h.match(/id=\"subtabs-liveguard\"[\s\S]*?<\/div>/); if(!row||!row[0].includes('data-tab=\"bugregistry\"')||!row[0].includes('data-tab=\"watcher\"'))process.exit(1)"
+
+# Forge subtab row shrunk to 15 buttons (was 18)
+node -e "const h=require('fs').readFileSync('pforge-mcp/dashboard/index.html','utf8'); const row=h.match(/id=\"subtabs-forge\"[\s\S]*?<\/div>/); const n=(row[0].match(/data-tab=\"/g)||[]).length; if(n!==15){console.error('forge row='+n);process.exit(1)}"
+
+# Total data-tab count is 33 (25 - 1 retired config + 9 new settings)
+node -e "const h=require('fs').readFileSync('pforge-mcp/dashboard/index.html','utf8'); const n=(h.match(/data-tab=\"/g)||[]).length; if(n!==33){console.error('total='+n);process.exit(1)}"
+
+cd pforge-mcp && npm test
+```
+
+### Ship gate (post-slice-7, pre-tag)
+
+```bash
+# VERSION bumped
+grep -q '^2\.64\.0$' VERSION
+
+# Release notes exist
+test -f .forge/release-notes-v2.64.0.md
+
+# Full test suite green
+cd pforge-mcp && npm test && cd ..
+
+# Changelog updated
+grep -q '## \[2\.64\.0\]' CHANGELOG.md
+
+# Completeness sweep clean on dashboard paths
+! grep -rE 'TODO|FIXME|XXX' pforge-mcp/dashboard/index.html pforge-mcp/dashboard/app.js
+```
+
+---
+
+## Preflight (human, before `pforge run-plan`)
+
+1. `git status` shows clean `master`.
+2. Tag `pre-phase-30` created: `git tag pre-phase-30 && git push origin pre-phase-30`.
+3. MCP server running on `localhost:3100` (`pforge.ps1 mcp-call forge_capabilities` returns without a connection error).
+4. `pforge analyze docs/plans/Phase-30-SETTINGS-SPLIT-v2.64-PLAN.md` runs without red findings on Scope Contract and per-slice gates.
+5. Estimate reviewed: `.\pforge.ps1 run-plan docs/plans/Phase-30-SETTINGS-SPLIT-v2.64-PLAN.md --estimate --quorum=false --model grok-4.20`.
+

@@ -102,6 +102,10 @@ Temper Guards (anti-shortcut tables) and Warning Signs (behavioral anti-patterns
 
 ## Shipped
 
+### v2.65.0 — Advisory-to-Enforcement Calibration (Phase-31) ✅
+
+Committed-before-timeout dashboard badge (`live-session.js`). Plan-parser lint advisory in `pforge analyze` (`runAnalyze` + `planPath` parameter). Reflexion prompt wiring — `<prior_attempt>` block injected into system-prompt preamble on retries. `--strict-gates` CLI flag for opt-in gate enforcement without default flip. `scoreSliceComplexity` threshold recalibrated 6→3 (research note in `docs/research/complexity-threshold-v2.65.md`). Tempering suppression promoter (`promoteSuppressions`, `logSuppression`, `readSuppressions`, `readPromoteThreshold`).
+
 ### v2.64.0 — Settings Panel Decomposition (Phase-30) ✅
 
 Settings tab decomposed into 9 sub-tabs (General, Models, Execution, API Keys, Updates, Memory, Brain, Bridge, Crucible). Cross-group tab migration: Extensions → Settings; Bug Registry + Watcher → LiveGuard. Phase-30.1 hotfix for Forge-Master Studio tab clickability.

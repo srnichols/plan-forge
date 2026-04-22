@@ -7,6 +7,36 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.65.0] — 2026-04-22 — Advisory-to-Enforcement Calibration (Phase-31)
+
+> **Minor release — Phase-31 closes the gap between advisory subsystems and actionable enforcement: gate-synthesis opt-in strict mode, plan-parser lint advisory, reflexion prompt wiring, complexity threshold recalibration, and tempering suppression promoter.**
+
+### Added
+
+- **Slice 1 — Committed-before-timeout dashboard badge** (`dashboard/live-session.js`, `dashboard/index.html`) — New live-session module subscribes to the `slice-timeout-but-committed` hub event and injects a green `committed-before-timeout (<pre>→<post>)` badge into the matching slice card. MutationObserver re-injects badges after `renderSliceCards()` replaces the DOM. Clears stale state on `run-started`.
+- **Slice 2 — Plan-parser lint advisory in `pforge analyze`** (`orchestrator.mjs`) — `runAnalyze` now accepts a `planPath` parameter and emits an `ADVISORY plan-parser-gate-missing` line for every slice that has bash code blocks but no `**Validation Gate**:` marker. Advisory is suppressed when `runtime.planParser.implicitGates = true` (bare blocks already captured as gates in that mode). Exit code unchanged.
+- **Slice 4 — `--strict-gates` CLI flag** (`pforge.ps1`, `pforge.sh`, `orchestrator.mjs`) — `pforge run-plan --strict-gates` forces `runtime.gateSynthesis.mode = "enforce"` for the run without writing `.forge.json`. When active, slices flagged by `suggestGatesForPlan()` fail pre-flight with a structured `STRICT_GATES_PREFLIGHT` error listing offending slices. Default `runtime.gateSynthesis.mode` remains `"suggest"` — no breaking change for v2.64.x consumers.
+- **Slice 6 — Tempering suppression promoter** (`tempering.mjs`) — New exports `logSuppression`, `readSuppressions`, `readPromoteThreshold`, and `promoteSuppressions`. When a suppression fingerprint accumulates ≥ threshold occurrences, `promoteSuppressions` writes `.forge/bugs/BUG-<date>-<seq>.json` with required registry fields (`bugId`, `fingerprint`, `source`, `classification`, `severity`, `promotedAt`, `suppressionCount`). Idempotent — re-runs append "re-observed" entry instead of creating a duplicate. Threshold configurable via `runtime.tempering.promoteThreshold` (default 3), which overrides the function parameter.
+
+### Changed
+
+- **Slice 3 — Reflexion prompt wiring** (`orchestrator.mjs`) — When `lastFailureContext` is non-null on a retry attempt, the worker's system-prompt preamble now includes a `<prior_attempt>` block with `previousAttempt`, `gateName`, `model`, and `stderrTail` (truncated to 40 lines). First attempts are unaffected — no empty block injected.
+- **Slice 5 — `scoreSliceComplexity` default threshold 6 → 3** (`orchestrator.mjs`) — Recalibrated based on distribution analysis across Phase-25–30 plans (`docs/research/complexity-threshold-v2.65.md`). Previous default of 5–6 selected zero slices; threshold 3 selects the expected 60th-percentile slice set.
+
+### Research
+
+- `docs/research/gate-synthesis-flip-safety-v2.65.md` — Audit of Phase-25–30 runs under strict-gates mode; confirms safe to expose as opt-in flag, not yet safe as default.
+- `docs/research/complexity-threshold-v2.65.md` — Slice complexity distribution table across all Phase-25–30 plans; documents threshold selection rationale.
+
+### Tests
+
+- `tests/dashboard-live-session.test.mjs` (13 tests) — Slice 1 badge lifecycle, MutationObserver re-inject, run-started clear.
+- `tests/orchestrator-analyze.test.mjs` (5 tests) — Slice 2 advisory fire/suppress/absent cases.
+- `tests/orchestrator-reflexion-prompt.test.mjs` — Slice 3 prior-attempt injection and absence on first attempt.
+- `tests/orchestrator-gate-synthesis.test.mjs` (10 tests) — Slice 4 strict-gates pre-flight, enforce override, default-remains-suggest.
+- `tests/orchestrator-complexity.test.mjs` — Slice 5 threshold=3 default.
+- `tests/tempering-promoter.test.mjs` (25 tests) — Slice 6 full coverage: below-threshold, at-threshold, idempotency, custom threshold, multiple fingerprints.
+
 ## [2.65.0] — 2026-04-22 — Advisory → Enforcement Calibration (Phase-31)
 
 > **Minor release — Phase-31 completes 7 calibration improvements: dashboard timeout-committed badge, plan-parser lint advisory, reflexion prompt wiring, strict-gates CLI flag, complexity threshold recalibration, tempering suppression promoter, and full sweep.**

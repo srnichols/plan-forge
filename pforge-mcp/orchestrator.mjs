@@ -37,6 +37,7 @@ import {
   readTemperingConfig as _readTemperingConfig,
   TEMPERING_SCAN_STALE_DAYS,
   getMinimaForDomain,
+  promoteSuppressions as _promoteSuppressions,
 } from "./tempering.mjs";
 export const readTemperingState = _readTemperingState;
 export const readTemperingConfig = _readTemperingConfig;
@@ -2999,6 +3000,12 @@ export async function runPlan(planPath, options = {}) {
     // Never block the run on postmortem failure.
     summary.postmortem = { error: err?.message || String(err) };
   }
+
+  // Phase-31 Slice 6: promote recurring tempering suppressions to bug files.
+  // Runs after postmortem so suppression data from this run is fully written.
+  try {
+    _promoteSuppressions({ cwd });
+  } catch { /* never block the run on promoter failure */ }
 
   return summary;
 }

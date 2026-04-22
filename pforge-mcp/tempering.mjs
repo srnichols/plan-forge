@@ -30,6 +30,7 @@ import {
   mkdirSync,
   readFileSync,
   writeFileSync,
+  appendFileSync,
   readdirSync,
   statSync,
 } from "node:fs";
@@ -1040,3 +1041,190 @@ export function handleStatus({ projectDir, limit = 10 }) {
     scans: summaries,
   };
 }
+
+// ─── Phase-31 Slice 6: Suppression promoter ─────────────────────────────────
+
+const SUPPRESSIONS_DIR = ".forge/tempering";
+const SUPPRESSIONS_FILE = "suppressions.jsonl";
+const BUGS_DIR = ".forge/bugs";
+const PROMOTE_THRESHOLD_DEFAULT = 3;
+
+/**
+ * Read the promote threshold from .forge.json.
+ * Returns runtime.tempering.promoteThreshold if it is a positive integer > 0,
+ * otherwise returns defaultThreshold (default: 3).
+ *
+ * @param {string} cwd - Project root directory
+ * @param {number} [defaultThreshold=3] - Fallback threshold
+ * @returns {number}
+ */
+export function readPromoteThreshold(cwd, defaultThreshold = PROMOTE_THRESHOLD_DEFAULT) {
+  try {
+    const configPath = resolve(cwd, ".forge.json");
+    if (!existsSync(configPath)) return defaultThreshold;
+    const raw = JSON.parse(readFileSync(configPath, "utf-8"));
+    const val = raw?.runtime?.tempering?.promoteThreshold;
+    if (typeof val === "number" && Number.isInteger(val) && val > 0) return val;
+    return defaultThreshold;
+  } catch {
+    return defaultThreshold;
+  }
+}
+
+/**
+ * Append one suppression record to .forge/tempering/suppressions.jsonl.
+ *
+ * @param {object} opts
+ * @param {string} opts.cwd - Project root
+ * @param {string} opts.fingerprint - Suppression fingerprint
+ * @param {string} [opts.scanner="unit"] - Scanner name
+ * @param {object} [opts.evidence={}] - Additional evidence (testName, etc.)
+ * @param {string} [opts.runId] - Run identifier
+ * @param {Function} [opts.nowFn] - Override for current timestamp (for testing)
+ */
+export function logSuppression({ cwd, fingerprint, scanner = "unit", evidence = {}, runId, nowFn }) {
+  const dir = resolve(cwd, SUPPRESSIONS_DIR);
+  mkdirSync(dir, { recursive: true });
+  const record = {
+    _v: 1,
+    fingerprint,
+    scanner,
+    evidence,
+    suppressedAt: (nowFn ? nowFn() : new Date().toISOString()),
+    ...(runId !== undefined ? { runId } : {}),
+  };
+  appendFileSync(resolve(dir, SUPPRESSIONS_FILE), JSON.stringify(record) + "\n", "utf-8");
+}
+
+/**
+ * Read all suppression records from .forge/tempering/suppressions.jsonl.
+ * Malformed lines are silently skipped.
+ *
+ * @param {string} cwd - Project root
+ * @returns {object[]}
+ */
+export function readSuppressions(cwd) {
+  const filePath = resolve(cwd, SUPPRESSIONS_DIR, SUPPRESSIONS_FILE);
+  if (!existsSync(filePath)) return [];
+  const lines = readFileSync(filePath, "utf-8").split("\n").filter(Boolean);
+  const records = [];
+  for (const line of lines) {
+    try { records.push(JSON.parse(line)); } catch { /* skip malformed */ }
+  }
+  return records;
+}
+
+/**
+ * Generate a unique bug ID in the format bug-YYYY-MM-DD-NNN, where NNN is
+ * one higher than the highest existing sequence number for that date.
+ *
+ * @param {string} bugsDir - Absolute path to .forge/bugs/
+ * @param {string} datePart - e.g. "2026-04-22"
+ * @returns {string}
+ */
+function nextBugId(bugsDir, datePart) {
+  let max = 0;
+  if (existsSync(bugsDir)) {
+    for (const f of readdirSync(bugsDir)) {
+      const m = f.match(new RegExp(`^bug-${datePart.replace(/-/g, "\\-")}-(\\d{3})\\.json$`));
+      if (m) max = Math.max(max, parseInt(m[1], 10));
+    }
+  }
+  return `bug-${datePart}-${String(max + 1).padStart(3, "0")}`;
+}
+
+/**
+ * Promote recurring suppression groups into bug files.
+ *
+ * Groups suppression records by fingerprint. For each fingerprint with a
+ * count >= effective threshold (read from .forge.json, falling back to the
+ * `threshold` parameter), writes a JSON bug file to .forge/bugs/ unless one
+ * already exists for that fingerprint.
+ *
+ * @param {object} opts
+ * @param {string} opts.cwd - Project root
+ * @param {number} [opts.threshold=3] - Default threshold (overridden by .forge.json)
+ * @returns {{ ok: boolean, promoted: object[], skipped: object[] }}
+ */
+export function promoteSuppressions({ cwd, threshold = PROMOTE_THRESHOLD_DEFAULT } = {}) {
+  const effectiveThreshold = readPromoteThreshold(cwd, threshold);
+  const records = readSuppressions(cwd);
+
+  // Group by fingerprint.
+  const groups = new Map();
+  for (const rec of records) {
+    if (!rec.fingerprint) continue;
+    if (!groups.has(rec.fingerprint)) groups.set(rec.fingerprint, []);
+    groups.get(rec.fingerprint).push(rec);
+  }
+
+  const bugsDir = resolve(cwd, BUGS_DIR);
+  const promoted = [];
+  const skipped = [];
+
+  // Build a fingerprint → existing bugId lookup from disk.
+  const existingByFingerprint = new Map();
+  if (existsSync(bugsDir)) {
+    for (const f of readdirSync(bugsDir)) {
+      if (!f.endsWith(".json") || f.startsWith(".")) continue;
+      try {
+        const data = JSON.parse(readFileSync(resolve(bugsDir, f), "utf-8"));
+        if (data.fingerprint) existingByFingerprint.set(data.fingerprint, data.bugId || f.replace(/\.json$/, ""));
+      } catch { /* skip unreadable */ }
+    }
+  }
+
+  const now = new Date().toISOString();
+  const datePart = now.slice(0, 10); // YYYY-MM-DD
+
+  for (const [fingerprint, recs] of groups) {
+    const count = recs.length;
+    if (count < effectiveThreshold) {
+      skipped.push({ fingerprint, count, reason: "below-threshold" });
+      continue;
+    }
+
+    // Idempotency: skip if a bug file for this fingerprint already exists.
+    if (existingByFingerprint.has(fingerprint)) {
+      skipped.push({ fingerprint, count, reason: "already-exists", bugId: existingByFingerprint.get(fingerprint) });
+      continue;
+    }
+
+    // Choose last record as the most recent occurrence for evidence.
+    const last = recs[recs.length - 1];
+    const first = recs[0];
+
+    mkdirSync(bugsDir, { recursive: true });
+    const bugId = nextBugId(bugsDir, datePart);
+    const bug = {
+      bugId,
+      fingerprint,
+      source: "suppression-promoter",
+      scanner: last.scanner || "unit",
+      evidence: last.evidence || {},
+      suppressionCount: count,
+      firstSeenAt: first.suppressedAt || now,
+      lastSeenAt: last.suppressedAt || now,
+      status: "open",
+      promotedAt: now,
+      classification: "real-bug",
+      classifierMeta: { rule: "suppression-promoter" },
+      severity: "medium",
+      discoveredAt: first.suppressedAt || now,
+      updatedAt: now,
+    };
+
+    const bugPath = resolve(bugsDir, `${bugId}.json`);
+    try {
+      writeFileSync(bugPath, JSON.stringify(bug, null, 2) + "\n", { flag: "wx", encoding: "utf-8" });
+      promoted.push({ fingerprint, bugId, count });
+      existingByFingerprint.set(fingerprint, bugId);
+    } catch (err) {
+      // Exclusive-create failed (concurrent write or race) — treat as already-exists.
+      skipped.push({ fingerprint, count, reason: "already-exists", bugId });
+    }
+  }
+
+  return { ok: true, promoted, skipped };
+}
+

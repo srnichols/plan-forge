@@ -1622,6 +1622,33 @@ export function detectSelfRepairMissed(trajectoryContent, workerOutput) {
 }
 
 /**
+ * Phase-31 Slice 3 (Reflexion prompt wiring): builds the final slice prompt for
+ * a retry attempt by prepending the reflexion context block as a system-prompt
+ * preamble so the worker sees it before all other instructions.
+ *
+ * Invariant: all retry paths that increment `attempt` MUST populate
+ * `lastFailureContext` before calling this function, otherwise reflexion is
+ * silently skipped. See the two assignment sites in `executeSlice` (~line 6256
+ * and ~line 6276).
+ *
+ * Pure function: no fs, no network, deterministic. Safe to unit-test in isolation.
+ *
+ * @param {string} sliceInstructions - The fully-assembled prompt for this attempt.
+ * @param {object|null} lastFailureContext - Context from the previous failed attempt,
+ *   or null on the first attempt. Must conform to the `buildReflexionBlock` contract:
+ *   `{ previousAttempt, gateName, model, durationMs, stderrTail }`.
+ * @returns {string} `sliceInstructions` unchanged when `lastFailureContext` is null;
+ *   otherwise the reflexion preamble block + "\n\n" + `sliceInstructions`.
+ */
+export function buildRetryPrompt(sliceInstructions, lastFailureContext) {
+  if (lastFailureContext === null || lastFailureContext === undefined) {
+    return sliceInstructions;
+  }
+  const reflexionBlock = buildReflexionBlock(lastFailureContext);
+  return `${reflexionBlock}\n\n${sliceInstructions}`;
+}
+
+/**
  * Parse JSONL output from CLI worker.
  */
 function parseJSONL(output) {
@@ -6146,21 +6173,9 @@ async function executeSlice(slice, options) {
       sliceInstructions = preFlightWarning + sliceInstructions;
     }
 
-    if (attempt > 0 && lastError) {
-      // Phase-25 Slice 1 (L1 Reflexion): prepend a "## Previous attempt (N-1) summary"
-      // Markdown block with gate name, chosen model, duration, and stderr tail (≤2KB)
-      // so the worker can learn from the previous failure instead of repeating it.
-      const reflexionBlock = buildReflexionBlock(
-        lastFailureContext || {
-          previousAttempt: attempt,
-          gateName: "unknown",
-          model: currentModel || "auto",
-          durationMs: 0,
-          stderrTail: lastError,
-        },
-      );
-      sliceInstructions += `\n\n${reflexionBlock}`;
-    }
+    // Phase-31 Slice 3: prepend reflexion preamble when a prior attempt context
+    // is available. First attempts (lastFailureContext === null) are unchanged.
+    sliceInstructions = buildRetryPrompt(sliceInstructions, lastFailureContext);
 
     if (mode === "assisted") {
       workerResult = {

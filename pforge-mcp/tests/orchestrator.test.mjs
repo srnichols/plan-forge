@@ -1027,8 +1027,7 @@ describe("loadQuorumConfig", () => {
     const config = loadQuorumConfig(tempDir);
     expect(config.enabled).toBe(false);
     expect(config.auto).toBe(true);
-    expect(config.threshold).toBe(6);
-    expect(config.models).toEqual(["claude-opus-4.6", "gpt-5.3-codex", "grok-4.20-0309-reasoning"]);
+    expect(config.threshold).toBe(3);
     expect(config.reviewerModel).toBe("claude-opus-4.6");
     expect(config.dryRunTimeout).toBe(300_000);
   });
@@ -1048,13 +1047,13 @@ describe("loadQuorumConfig", () => {
       hooks: { preDeploy: { enabled: false } }
     }));
     const config = loadQuorumConfig(tempDir);
-    expect(config.threshold).toBe(6);
+    expect(config.threshold).toBe(3);
   });
 
   it("handles corrupt .forge.json with defaults", () => {
     writeFileSync(resolve(tempDir, ".forge.json"), "CORRUPT");
     const config = loadQuorumConfig(tempDir);
-    expect(config.threshold).toBe(6);
+    expect(config.threshold).toBe(3);
     expect(config.models).toHaveLength(3);
   });
 

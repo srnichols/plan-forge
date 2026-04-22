@@ -8615,7 +8615,12 @@ export function loadQuorumConfig(cwd, presetOverride = null) {
   const defaults = {
     enabled: false,
     auto: true,
-    threshold: 6,
+    // Phase-31 Slice 5: recalibrated from 6 → 3 based on empirical distribution
+    // across Phase-25–30 plans (63 slices). At threshold=6 only 1/63 slices
+    // triggered quorum. At threshold=3 (60th-percentile score), 56/63 slices
+    // qualify — matching the intent of "complex slices get multi-model review".
+    // See docs/research/complexity-threshold-v2.65.md for full analysis.
+    threshold: 3,
     models: ["claude-opus-4.6", "gpt-5.3-codex", "grok-4.20-0309-reasoning"],
     reviewerModel: "claude-opus-4.6",
     dryRunTimeout: 300_000, // 5 min per dry-run leg

@@ -1,0 +1,7 @@
+{
+  "error": {
+    "message": "Rate limit exceeded. Please retry after 60 seconds.",
+    "type": "rate_limit_error",
+    "code": "rate_limit_exceeded"
+  }
+}

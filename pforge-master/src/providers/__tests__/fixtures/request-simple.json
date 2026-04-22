@@ -1,0 +1,22 @@
+{
+  "model": "gpt-4o-mini",
+  "messages": [
+    { "role": "user", "content": "What is 2 + 2?" }
+  ],
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "calculator",
+        "description": "Perform basic arithmetic",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "expression": { "type": "string" }
+          },
+          "required": ["expression"]
+        }
+      }
+    }
+  ]
+}

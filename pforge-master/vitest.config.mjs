@@ -15,6 +15,6 @@ export default defineConfig({
   plugins: [stripShebang],
   test: {
     environment: "node",
-    include: ["tests/**/*.test.mjs"],
+    include: ["tests/**/*.test.mjs", "src/**/__tests__/**/*.test.mjs"],
   },
 });

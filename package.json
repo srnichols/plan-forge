@@ -9,6 +9,7 @@
   "scripts": {
     "test": "npm test --workspaces --if-present",
     "test:mcp": "npm test --workspace=pforge-mcp",
-    "test:master": "npm test --workspace=pforge-master"
+    "test:master": "npm test --workspace=pforge-master",
+    "smoke:forge-master": "FORGE_SMOKE=1 node scripts/smoke-forge-master.mjs"
   }
 }

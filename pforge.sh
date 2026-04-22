@@ -2278,7 +2278,19 @@ cmd_doctor() {
         # Parse with grep/sed (no jq dependency)
         preset="$(grep -o '"preset"[^,}]*' "$config_path" | sed 's/"preset":\s*"//' | sed 's/"//' || echo "unknown")"
         template_version="$(grep -o '"templateVersion"[^,}]*' "$config_path" | sed 's/"templateVersion":\s*"//' | sed 's/"//' || echo "unknown")"
-        doctor_pass ".forge.json valid (preset: $preset, v$template_version)"
+        local label_bits=""
+        [ -n "$preset" ] && [ "$preset" != "unknown" ] && label_bits="preset: $preset"
+        if [ -n "$template_version" ] && [ "$template_version" != "unknown" ]; then
+            [ -n "$label_bits" ] && label_bits="$label_bits, v$template_version" || label_bits="v$template_version"
+        fi
+        if [ $is_planforge_dev -eq 1 ] && [ -z "$label_bits" ]; then
+            label_bits="framework dev repo"
+        fi
+        if [ -n "$label_bits" ]; then
+            doctor_pass ".forge.json valid ($label_bits)"
+        else
+            doctor_pass ".forge.json valid"
+        fi
 
         # Check configured agents
         local configured_agents
@@ -2388,10 +2400,14 @@ cmd_doctor() {
         local local_version
         local_version="$(tr -d '[:space:]' < "$REPO_ROOT/VERSION")"
         if echo "$local_version" | grep -qE -- '-dev\b'; then
-            local bare_core
-            bare_core="${local_version#v}"
-            bare_core="${bare_core%%-*}"
-            doctor_warn "Local VERSION='$local_version' ends in '-dev' — possible corrupt install from a broken release tarball (bare v$bare_core may have shipped with '-dev' baked in)" "Run 'pforge self-update --force' to heal"
+            if [ $is_planforge_dev -eq 1 ]; then
+                doctor_pass "Local VERSION='$local_version' (framework dev repo — between-release state)"
+            else
+                local bare_core
+                bare_core="${local_version#v}"
+                bare_core="${bare_core%%-*}"
+                doctor_warn "Local VERSION='$local_version' ends in '-dev' — possible corrupt install from a broken release tarball (bare v$bare_core may have shipped with '-dev' baked in)" "Run 'pforge self-update --force' to heal"
+            fi
         fi
     fi
 
@@ -2441,11 +2457,22 @@ cmd_doctor() {
         fi
     fi
 
+    # In the framework dev repo, .forge.json has no templateVersion; VERSION is authoritative.
+    if [ $is_planforge_dev -eq 1 ] && [ -n "$local_version" ]; then
+        template_version="$local_version"
+    fi
+
     if [ -n "$source_version" ]; then
         if [ "$template_version" = "$source_version" ]; then
             doctor_pass "Up to date (v$template_version)"
-        elif [ "$template_version" = "unknown" ]; then
-            doctor_warn "Cannot determine installed version (.forge.json missing)"
+        elif [ "$template_version" = "unknown" ] || [ -z "$template_version" ]; then
+            if [ $is_planforge_dev -eq 1 ]; then
+                doctor_pass "Framework dev repo (v${local_version:-unknown}, latest release v$source_version)"
+            else
+                doctor_warn "Cannot determine installed version (.forge.json missing templateVersion)"
+            fi
+        elif [ $is_planforge_dev -eq 1 ] && echo "$template_version" | grep -qE -- '-dev\b'; then
+            doctor_pass "Framework dev repo (v$template_version ahead of last release v$source_version)"
         else
             doctor_warn "Installed v$template_version — latest is v$source_version" "Run 'pforge update' to upgrade"
         fi
@@ -2776,9 +2803,17 @@ cmd_doctor() {
         if [ $hook_count -eq ${#expected_hooks[@]} ]; then
             doctor_pass "$hook_count/${#expected_hooks[@]} lifecycle hooks present"
         elif [ $hook_count -gt 0 ]; then
-            doctor_warn "$hook_count/${#expected_hooks[@]} hooks — missing: $hook_missing" "Run 'pforge update' to install missing hooks"
+            if [ $is_planforge_dev -eq 1 ]; then
+                doctor_pass "Hooks missing locally (expected in framework dev repo — consumers get them via 'pforge update'): $hook_missing"
+            else
+                doctor_warn "$hook_count/${#expected_hooks[@]} hooks — missing: $hook_missing" "Run 'pforge update' to install missing hooks"
+            fi
         else
-            doctor_warn "No lifecycle hooks found" "Run 'pforge update' to install hooks"
+            if [ $is_planforge_dev -eq 1 ]; then
+                doctor_pass "No lifecycle hooks in framework dev repo (consumers get them via 'pforge update')"
+            else
+                doctor_warn "No lifecycle hooks found" "Run 'pforge update' to install hooks"
+            fi
         fi
         echo ""
     fi
@@ -2823,6 +2858,8 @@ cmd_doctor() {
     if [ -f "$changelog_path" ]; then
         if grep -qiE "\[v?${current_ver}\]|## v?${current_ver}" "$changelog_path" 2>/dev/null; then
             doctor_pass "CHANGELOG.md has entry for v$current_ver"
+        elif echo "$current_ver" | grep -qE -- '-dev\b'; then
+            doctor_pass "CHANGELOG.md present (v$current_ver is between-release; entry added at release cut)"
         elif [ $is_planforge_dev -eq 1 ]; then
             # Framework repo: VERSION == release cadence, so every bump needs a CHANGELOG line.
             doctor_warn "CHANGELOG.md missing entry for v$current_ver" "Add a '## [$current_ver] — <date>' section with release notes"
@@ -2924,7 +2961,8 @@ cmd_doctor() {
     fi
 
     # 5d. Unresolved placeholders in copilot-instructions.md
-    if [ -f "$copilot_instr" ]; then
+    # Skipped in the framework dev repo: the root file IS the template baseline.
+    if [ -f "$copilot_instr" ] && [ $is_planforge_dev -eq 0 ]; then
         local ph_count=0
         local ph_list=""
         for ph in '<YOUR PROJECT NAME>' '<YOUR TECH STACK>' '<YOUR BUILD COMMAND>' '<YOUR TEST COMMAND>' '<YOUR LINT COMMAND>' '<YOUR DEV COMMAND>' '<DATE>'; do
@@ -2940,7 +2978,8 @@ cmd_doctor() {
     fi
 
     # 5e. Roadmap missing
-    if [ ! -f "$REPO_ROOT/docs/plans/DEPLOYMENT-ROADMAP.md" ]; then
+    # Skipped in the framework dev repo: it uses root ROADMAP.md, not DEPLOYMENT-ROADMAP.md (consumer template).
+    if [ ! -f "$REPO_ROOT/docs/plans/DEPLOYMENT-ROADMAP.md" ] && [ $is_planforge_dev -eq 0 ]; then
         doctor_warn "DEPLOYMENT-ROADMAP.md not found" "Run 'pforge init' or create docs/plans/DEPLOYMENT-ROADMAP.md"
         problems_found=true
     fi

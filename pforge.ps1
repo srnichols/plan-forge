@@ -2713,7 +2713,12 @@ function Invoke-Smith {
             $config = Get-Content $configPath -Raw | ConvertFrom-Json
             $preset = $config.preset
             $templateVersion = $config.templateVersion
-            Doctor-Pass ".forge.json valid (preset: $preset, v$templateVersion)"
+            $labelBits = @()
+            if ($preset) { $labelBits += "preset: $preset" }
+            if ($templateVersion) { $labelBits += "v$templateVersion" }
+            if ($isPlanForgeDevRepo -and $labelBits.Count -eq 0) { $labelBits += "framework dev repo" }
+            $label = if ($labelBits.Count -gt 0) { " ($($labelBits -join ', '))" } else { "" }
+            Doctor-Pass ".forge.json valid$label"
 
             # Check configured agents
             $configuredAgents = @('copilot')
@@ -2893,8 +2898,13 @@ function Invoke-Smith {
         $localVersion = (Get-Content $localVersionFile -Raw).Trim()
     }
     if ($localVersion -and $localVersion -match '-dev\b') {
-        $bareCore = ($localVersion -replace '^v', '') -split '-' | Select-Object -First 1
-        Doctor-Warn "Local VERSION='$localVersion' ends in '-dev' — possible corrupt install from a broken release tarball (bare v$bareCore may have shipped with '-dev' baked in)" "Run 'pforge self-update --force' to heal"
+        if ($isPlanForgeDevRepo) {
+            # Between-release state in the framework dev repo is expected.
+            Doctor-Pass "Local VERSION='$localVersion' (framework dev repo — between-release state)"
+        } else {
+            $bareCore = ($localVersion -replace '^v', '') -split '-' | Select-Object -First 1
+            Doctor-Warn "Local VERSION='$localVersion' ends in '-dev' — possible corrupt install from a broken release tarball (bare v$bareCore may have shipped with '-dev' baked in)" "Run 'pforge self-update --force' to heal"
+        }
     }
 
     $sourceVersion = $null
@@ -2943,12 +2953,25 @@ function Invoke-Smith {
         }
     }
 
+    # In the framework dev repo, .forge.json has no templateVersion field;
+    # the authoritative installed version is the VERSION file itself.
+    if ($isPlanForgeDevRepo -and $localVersion) {
+        $templateVersion = $localVersion
+    }
+
     if ($sourceVersion) {
         if ($templateVersion -eq $sourceVersion) {
             Doctor-Pass "Up to date (v$templateVersion)"
         }
-        elseif ($templateVersion -eq 'unknown') {
-            Doctor-Warn "Cannot determine installed version (.forge.json missing)"
+        elseif ($templateVersion -eq 'unknown' -or [string]::IsNullOrWhiteSpace($templateVersion)) {
+            if ($isPlanForgeDevRepo) {
+                Doctor-Pass "Framework dev repo (v$localVersion, latest release v$sourceVersion)"
+            } else {
+                Doctor-Warn "Cannot determine installed version (.forge.json missing templateVersion)"
+            }
+        }
+        elseif ($isPlanForgeDevRepo -and ($templateVersion -match '-dev\b')) {
+            Doctor-Pass "Framework dev repo (v$templateVersion ahead of last release v$sourceVersion)"
         }
         else {
             Doctor-Warn "Installed v$templateVersion — latest is v$sourceVersion" "Run 'pforge update' to upgrade"
@@ -3362,10 +3385,19 @@ function Invoke-Smith {
             $hookMissing = $allExpectedHooks | Where-Object { -not $hookSources.ContainsKey($_) }
             Doctor-Pass "$hookCount/$($allExpectedHooks.Count) hooks present"
             if ($hookMissing.Count -gt 0) {
-                Doctor-Warn "Missing hooks: $($hookMissing -join ', ')" "Run 'pforge update' to install missing hook files, or add entries under 'hooks' in .forge.json"
+                if ($isPlanForgeDevRepo) {
+                    # Framework dev repo ships hooks via templates/.github/hooks/ — the dev repo itself doesn't consume them.
+                    Doctor-Pass "Hooks missing locally (expected in framework dev repo — consumers get them via 'pforge update'): $($hookMissing -join ', ')"
+                } else {
+                    Doctor-Warn "Missing hooks: $($hookMissing -join ', ')" "Run 'pforge update' to install missing hook files, or add entries under 'hooks' in .forge.json"
+                }
             }
         } else {
-            Doctor-Warn "No lifecycle hooks found" "Run 'pforge update' to install hooks, or define them under 'hooks' in .forge.json"
+            if ($isPlanForgeDevRepo) {
+                Doctor-Pass "No lifecycle hooks in framework dev repo (consumers get them via 'pforge update')"
+            } else {
+                Doctor-Warn "No lifecycle hooks found" "Run 'pforge update' to install hooks, or define them under 'hooks' in .forge.json"
+            }
         }
         Write-Host ""
     }
@@ -3410,6 +3442,9 @@ function Invoke-Smith {
         $clContent = Get-Content $changelogPath -Raw
         if ($clContent -match "\[v?$([regex]::Escape($currentVer))\]|## v?$([regex]::Escape($currentVer))") {
             Doctor-Pass "CHANGELOG.md has entry for v$currentVer"
+        } elseif ($currentVer -match '-dev\b') {
+            # Between-release state — '-dev' versions don't ship a CHANGELOG entry until cut.
+            Doctor-Pass "CHANGELOG.md present (v$currentVer is between-release; entry added at release cut)"
         } elseif ($isPlanForgeDevRepo) {
             # Framework repo: VERSION == release cadence, so every bump needs a CHANGELOG line.
             Doctor-Warn "CHANGELOG.md missing entry for v$currentVer" "Add a '## [$currentVer] — <date>' section with release notes"
@@ -3527,7 +3562,9 @@ function Invoke-Smith {
     }
 
     # 5d. copilot-instructions.md still has placeholders
-    if (Test-Path $copilotInstr) {
+    # Skipped in the framework dev repo: the root file IS the template baseline
+    # that downstream projects receive — it's supposed to contain placeholders.
+    if ((Test-Path $copilotInstr) -and -not $isPlanForgeDevRepo) {
         $ciContent = Get-Content $copilotInstr -Raw
         $placeholders = @('<YOUR PROJECT NAME>', '<YOUR TECH STACK>', '<YOUR BUILD COMMAND>', '<YOUR TEST COMMAND>', '<YOUR LINT COMMAND>', '<YOUR DEV COMMAND>', '<DATE>')
         $foundPlaceholders = @()
@@ -3543,8 +3580,9 @@ function Invoke-Smith {
     }
 
     # 5e. Roadmap file missing
+    # Skipped in the framework dev repo: it uses root ROADMAP.md, not DEPLOYMENT-ROADMAP.md (which is a consumer template).
     $roadmapPath = Join-Path $RepoRoot "docs/plans/DEPLOYMENT-ROADMAP.md"
-    if (-not (Test-Path $roadmapPath)) {
+    if (-not (Test-Path $roadmapPath) -and -not $isPlanForgeDevRepo) {
         Doctor-Warn "DEPLOYMENT-ROADMAP.md not found" "Run 'pforge init' or create docs/plans/DEPLOYMENT-ROADMAP.md"
         $problemsFound = $true
     }

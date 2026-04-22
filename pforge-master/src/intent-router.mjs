@@ -100,6 +100,28 @@ const KEYWORD_RULES = [
   { pattern: /\b(regression|regressed|test.{0,5}fail|build.{0,5}fail)\b/i, lane: LANES.TROUBLESHOOT, weight: 3 },
   { pattern: /\b(fix|fixing|troubleshoot|trouble|problem|issue)\b/i, lane: LANES.TROUBLESHOOT, weight: 1 },
   { pattern: /\b(what went wrong|not working|doesn't work|stopped working)\b/i, lane: LANES.TROUBLESHOOT, weight: 3 },
+  // Combined "why + fail" is a very strong investigation signal (outweighs phase/slice operational terms)
+  { pattern: /\b(why did|why does|why is)\b.{0,60}\b(fail|failed|failure|error|crash)\b/i, lane: LANES.TROUBLESHOOT, weight: 4 },
+  // Phase-32 Slice 2: meta-bug / self-repair family → strong troubleshoot signal
+  { pattern: /\b(meta[-\s]?bug|self[-\s]?repair|plan[-\s]?defect|orchestrator[-\s]?defect|prompt[-\s]?defect)\b/i, lane: LANES.TROUBLESHOOT, weight: 3 },
+
+  // ── Phase-32 Slice 2: Plan Forge domain glossary ──────────────────
+  // Slices and gates with a Plan Forge context marker (prevents "slice me an apple")
+  { pattern: /\b(slice|slices|gate|gates)\s+(\d+|status|passed|failed|done|complete|ran|running|in.progress|stuck|blocked)/i, lane: LANES.OPERATIONAL, weight: 3 },
+  // Plan hardening vocabulary
+  { pattern: /\b(harden|hardened|hardening)\b/i, lane: LANES.OPERATIONAL, weight: 2 },
+  // Plan execution / resume vocabulary
+  { pattern: /\b(executed|execution|resume-from|resume\s+from)\b/i, lane: LANES.OPERATIONAL, weight: 2 },
+  // Tempering / baseline / enforcement signals
+  { pattern: /\b(tempering|baseline|enforcement|suppressed)\b/i, lane: LANES.OPERATIONAL, weight: 2 },
+  // Quorum extras: reflexion, retry, escalation
+  { pattern: /\b(reflexion|escalation|retry|retried|attempt)\b/i, lane: LANES.OPERATIONAL, weight: 2 },
+  // Phase reference (e.g. "Phase-33", "Phase 27.2") → strong operational signal
+  { pattern: /\b(phase[-\s]?\d+(\.\d+)?)\b/i, lane: LANES.OPERATIONAL, weight: 3 },
+  // pforge CLI / run-plan invocation references
+  { pattern: /\b(pforge|run-plan|forge\s+run|forge\s+plan)\b/i, lane: LANES.OPERATIONAL, weight: 2 },
+  // Crucible extras: smelt, preview, finalize
+  { pattern: /\b(smelt|smelts|smelted|preview|finalize|finalise)\b/i, lane: LANES.BUILD, weight: 2 },
 
   // ── Off-topic signals ──
   { pattern: /\b(weather|temperature|forecast|sports|score|game)\b/i, lane: LANES.OFFTOPIC, weight: 3 },
@@ -112,8 +134,12 @@ const KEYWORD_RULES = [
 // ─── Off-Topic Redirect (canned response) ───────────────────────────
 
 export const OFFTOPIC_REDIRECT =
-  "I'm scoped to Plan Forge topics — plans, runs, costs, memory, Crucible, " +
-  "tempering, watchers, and bug registry. Ask me something in that lane.";
+  "I'm scoped to Plan Forge topics. Try asking about:\n" +
+  "  \u2022 operational \u2014 \"what's the status of slice 4\", \"cost report for this week\"\n" +
+  "  \u2022 troubleshoot \u2014 \"why did the gate fail\", \"diagnose this incident\"\n" +
+  "  \u2022 build \u2014 \"I want to add OAuth\" (routes to Crucible)\n" +
+  "  \u2022 advisory \u2014 \"should I refactor or ship\", \"architecture advice\"\n" +
+  "Outside those lanes I'll redirect you.";
 
 // Confidence thresholds
 const HIGH_CONFIDENCE = 0.85;

@@ -412,11 +412,159 @@ describe("forge-master intent router", () => {
 
   it("OFFTOPIC_REDIRECT contains the expected canned text", () => {
     expect(OFFTOPIC_REDIRECT).toContain("Plan Forge topics");
-    expect(OFFTOPIC_REDIRECT).toContain("plans, runs, costs");
+    expect(OFFTOPIC_REDIRECT).toContain("operational");
+    expect(OFFTOPIC_REDIRECT).toContain("troubleshoot");
+    expect(OFFTOPIC_REDIRECT).toContain("build");
+    expect(OFFTOPIC_REDIRECT).toContain("advisory");
   });
 });
 
-// ─── Retrieval Layer ────────────────────────────────────────────────
+// ─── Glossary Expansion (Phase-32 Slice 2) ─────────────────────────
+
+describe("glossary expansion", () => {
+  // ── Slices / Gates (contextual) ──
+
+  it("'what's the status of slice 4' → operational", async () => {
+    const result = await classify("what's the status of slice 4");
+    expect(result.lane).toBe(LANES.OPERATIONAL);
+    expect(result.reason).toBe("keyword_match");
+  });
+
+  it("'gate 3 passed in the last run' → operational", async () => {
+    const result = await classify("gate 3 passed in the last run");
+    expect(result.lane).toBe(LANES.OPERATIONAL);
+    expect(result.reason).toBe("keyword_match");
+  });
+
+  it("'slice me an apple' does NOT classify as operational (food context wins)", async () => {
+    // "recipe" / "food" offtopic rules score higher than the bare-slice contextual rule
+    // which requires a Plan Forge context marker after the word
+    const result = await classify("can you slice me an apple");
+    expect(result.lane).not.toBe(LANES.OPERATIONAL);
+  });
+
+  // ── Hardening ──
+
+  it("'help me harden Phase-33' → operational", async () => {
+    const result = await classify("help me harden Phase-33");
+    expect(result.lane).toBe(LANES.OPERATIONAL);
+    expect(result.reason).toBe("keyword_match");
+  });
+
+  it("'the plan is fully hardened' → operational", async () => {
+    const result = await classify("the plan is fully hardened and ready to execute");
+    expect(result.lane).toBe(LANES.OPERATIONAL);
+  });
+
+  // ── Execution / Resume ──
+
+  it("'why did the execution fail at slice 3' → troubleshoot", async () => {
+    // "why did...fail" combined pattern (w4) beats execution (w2) + slice 3 (w3)
+    const result = await classify("why did the execution fail at slice 3");
+    expect(result.lane).toBe(LANES.TROUBLESHOOT);
+    expect(result.reason).toBe("keyword_match");
+  });
+
+  it("'resume-from slice 4 to skip the first three' → operational", async () => {
+    const result = await classify("resume-from slice 4 to skip the first three");
+    expect(result.lane).toBe(LANES.OPERATIONAL);
+    expect(result.reason).toBe("keyword_match");
+  });
+
+  // ── Tempering ──
+
+  it("'did tempering fire on this slice' → operational", async () => {
+    const result = await classify("did tempering fire on this slice");
+    expect(result.lane).toBe(LANES.OPERATIONAL);
+    expect(result.reason).toBe("keyword_match");
+  });
+
+  it("'suppressed advisory from last run' → operational", async () => {
+    const result = await classify("show me the suppressed advisory from last run");
+    expect(result.lane).toBe(LANES.OPERATIONAL);
+    expect(result.reason).toBe("keyword_match");
+  });
+
+  // ── Quorum / Reflexion extras ──
+
+  it("'how did reflexion change the answer' → operational", async () => {
+    const result = await classify("how did reflexion change the answer on that slice");
+    expect(result.lane).toBe(LANES.OPERATIONAL);
+    expect(result.reason).toBe("keyword_match");
+  });
+
+  it("'another attempt failed' → troubleshoot (fail beats retry)", async () => {
+    const result = await classify("another attempt failed with the same error");
+    expect(result.lane).toBe(LANES.TROUBLESHOOT);
+  });
+
+  // ── Meta-bugs / Self-repair ──
+
+  it("'I need to file a meta-bug about this' → troubleshoot", async () => {
+    const result = await classify("I need to file a meta-bug about this plan defect");
+    expect(result.lane).toBe(LANES.TROUBLESHOOT);
+    expect(result.reason).toBe("keyword_match");
+  });
+
+  it("'self-repair was triggered during the run' → troubleshoot", async () => {
+    const result = await classify("self-repair was triggered during the run");
+    expect(result.lane).toBe(LANES.TROUBLESHOOT);
+    expect(result.reason).toBe("keyword_match");
+  });
+
+  it("'plan-defect detected in slice 2' → troubleshoot", async () => {
+    const result = await classify("plan-defect detected in slice 2");
+    expect(result.lane).toBe(LANES.TROUBLESHOOT);
+    expect(result.reason).toBe("keyword_match");
+  });
+
+  it("a normal build request without meta-bug terms is not troubleshoot", async () => {
+    const result = await classify("I want to add a new feature to the pipeline");
+    expect(result.lane).not.toBe(LANES.TROUBLESHOOT);
+  });
+
+  // ── Phase refs ──
+
+  it("'is Phase-31 done?' → operational", async () => {
+    const result = await classify("is Phase-31 done?");
+    expect(result.lane).toBe(LANES.OPERATIONAL);
+    expect(result.reason).toBe("keyword_match");
+  });
+
+  it("'status of phase 27.2' → operational", async () => {
+    const result = await classify("what is the status of phase 27.2");
+    expect(result.lane).toBe(LANES.OPERATIONAL);
+    expect(result.reason).toBe("keyword_match");
+  });
+
+  it("'phase of the moon' does NOT classify as operational (no digit after phase)", async () => {
+    // The phase-ref pattern requires a digit immediately after phase
+    const result = await classify("what is the phase of the moon tonight");
+    expect(result.lane).not.toBe(LANES.OPERATIONAL);
+  });
+
+  // ── Crucible extras ──
+
+  it("'can we smelt this idea in crucible' → build", async () => {
+    const result = await classify("can we smelt this idea in crucible");
+    expect(result.lane).toBe(LANES.BUILD);
+    expect(result.reason).toBe("keyword_match");
+  });
+
+  it("'finalize the plan before shipping' → build", async () => {
+    const result = await classify("finalize the plan before shipping");
+    expect(result.lane).toBe(LANES.BUILD);
+    expect(result.reason).toBe("keyword_match");
+  });
+
+  // ── Stop-condition guard (from plan) ──
+
+  it("[stop-condition] 'why did the gate fail on slice 2' → troubleshoot", async () => {
+    const result = await classify("why did the gate fail on slice 2");
+    expect(result.lane).toBe(LANES.TROUBLESHOOT);
+    expect(result.reason).toBe("keyword_match");
+  });
+});
 
 import {
   fetchContext,

@@ -316,7 +316,7 @@ describe("forge-master integration — error paths", () => {
       },
     );
 
-    expect(result.error).toBe("reasoning_model_unavailable");
+    expect(result.error).toBe("no provider available");
     expect(result.reply).toBe("");
     expect(result.toolCalls).toHaveLength(0);
   });

@@ -2609,6 +2609,7 @@ async function loadApiProviderStatus() {
 
 // ─── Provider API Keys ────────────────────────────────────────
 const KNOWN_PROVIDER_KEYS = [
+  { key: "GITHUB_TOKEN", label: "GitHub (Copilot, recommended)", placeholder: "ghp_..." },
   { key: "XAI_API_KEY", label: "xAI (Grok)", placeholder: "xai-..." },
   { key: "OPENAI_API_KEY", label: "OpenAI (GPT / DALL-E)", placeholder: "sk-..." },
   { key: "ANTHROPIC_API_KEY", label: "Anthropic (Claude API)", placeholder: "sk-ant-..." },

@@ -1,5 +1,5 @@
 /**
- * Plan Forge — Forge-Master Reasoning Loop (Phase-28, Slice 5).
+ * Plan Forge — Forge-Master Reasoning Loop (Phase-28, Slice 5; Phase-33, Slice 2).
  *
  * Implements the tool-use reasoning loop:
  *   1. Classify intent via intent-router.
@@ -12,7 +12,8 @@
  * Exports:
  *   - runTurn({message, sessionId, maxToolCalls, cwd}, deps) → result
  *   - buildToolSchemas(allowlist, usageHints) → schema array
- *   - selectProvider(providerName) → adapter module
+ *   - selectProvider(providerName) → adapter module  (explicit by-name selection)
+ *   - autoSelectProvider(config, env, _providers) → adapter module (availability-order selection)
  *   - ABSOLUTE_CEILING — hard ceiling for tool calls (10)
  *
  * @module forge-master/reasoning
@@ -29,6 +30,7 @@ import { resolveAllowlist, USAGE_HINTS } from "./allowlist.mjs";
 import { invokeMany } from "./tool-bridge.mjs";
 import { ensureSessionId, appendTurn, summarizeIfNeeded } from "./persistence.mjs";
 import { loadPrinciples, UNIVERSAL_BASELINE } from "./principles.mjs";
+import * as githubCopilotProvider from "./providers/github-copilot-tools.mjs";
 
 // ─── Constants ──────────────────────────────────────────────────────
 
@@ -39,15 +41,23 @@ const SYSTEM_PROMPT_PATH = resolve(__dirname, "system-prompt.md");
 
 // ─── Provider Selection ─────────────────────────────────────────────
 
+const NO_PROVIDER_SUGGESTION =
+  "Install GitHub CLI and run 'gh auth login', or set GITHUB_TOKEN, OPENAI_API_KEY, ANTHROPIC_API_KEY, or XAI_API_KEY";
+
+const AUTO_SELECT_ORDER = ["githubCopilot", "anthropic", "openai", "xai"];
+
 /**
- * Select the appropriate provider adapter based on provider name.
- * Returns a module with `sendTurn(opts)`.
+ * Select the appropriate provider adapter by explicit name.
+ * Returns a module with `sendTurn(opts)`, or null for unknown names.
+ * Maintained for backward compatibility — prefer `autoSelectProvider` for new code.
  *
- * @param {"anthropic"|"openai"|"xai"|string|null} providerName
+ * @param {"githubCopilot"|"anthropic"|"openai"|"xai"|string|null} providerName
  * @returns {Promise<{ sendTurn: Function, PROVIDER_NAME: string }|null>}
  */
 export async function selectProvider(providerName) {
   switch (providerName) {
+    case "githubCopilot":
+      return githubCopilotProvider;
     case "anthropic":
       return import("./providers/anthropic-tools.mjs");
     case "openai":
@@ -57,6 +67,56 @@ export async function selectProvider(providerName) {
     default:
       return null;
   }
+}
+
+/**
+ * Auto-select the first available provider adapter by checking `isAvailable()`.
+ * Iterates `["githubCopilot", "anthropic", "openai", "xai"]` unless
+ * `config.defaultProvider` overrides the starting position.
+ *
+ * @param {{ defaultProvider?: string }} config
+ * @param {NodeJS.ProcessEnv} [env]
+ * @param {Record<string, { module: object, isAvailable: () => boolean }>|null} [_providers]
+ *   — injectable for testing; null = use real providers
+ * @returns {Promise<{ sendTurn: Function, PROVIDER_NAME: string }|null>}
+ */
+export async function autoSelectProvider(config, env = process.env, _providers = null) {
+  const providerDefs = _providers || {
+    githubCopilot: {
+      module: githubCopilotProvider,
+      isAvailable: () => githubCopilotProvider.isAvailable(),
+    },
+    anthropic: {
+      module: null,
+      isAvailable: () => Boolean(env.ANTHROPIC_API_KEY),
+      load: () => import("./providers/anthropic-tools.mjs"),
+    },
+    openai: {
+      module: null,
+      isAvailable: () => Boolean(env.OPENAI_API_KEY),
+      load: () => import("./providers/openai-tools.mjs"),
+    },
+    xai: {
+      module: null,
+      isAvailable: () => Boolean(env.XAI_API_KEY),
+      load: () => import("./providers/xai-tools.mjs"),
+    },
+  };
+
+  let order = [...AUTO_SELECT_ORDER];
+  const preferred = config?.defaultProvider;
+  if (preferred && order.includes(preferred)) {
+    order = [preferred, ...order.filter((p) => p !== preferred)];
+  }
+
+  for (const name of order) {
+    const entry = providerDefs[name];
+    if (!entry) continue;
+    if (entry.isAvailable()) {
+      return entry.module ?? (await entry.load());
+    }
+  }
+  return null;
 }
 
 // ─── Tool Schema Builder ────────────────────────────────────────────
@@ -195,8 +255,13 @@ export async function runTurn(input, deps = {}) {
   // ── 5. Select provider adapter ────────────────────────────────────
   let provider = deps.provider || null;
   if (!provider) {
-    const providerName = config.reasoningProvider;
-    provider = await selectProvider(providerName);
+    // Explicit reasoningProvider in config → use by name (backward compat).
+    // Null/absent reasoningProvider → auto-select by isAvailable() order.
+    if (config.reasoningProvider) {
+      provider = await selectProvider(config.reasoningProvider);
+    } else {
+      provider = await autoSelectProvider(config, process.env, deps._providers || null);
+    }
     if (!provider) {
       return {
         reply: "",
@@ -205,7 +270,8 @@ export async function runTurn(input, deps = {}) {
         tokensOut: 0,
         totalCostUSD: 0,
         truncated: false,
-        error: "reasoning_model_unavailable",
+        error: "no provider available",
+        suggestion: NO_PROVIDER_SUGGESTION,
         sessionId: effectiveSessionId,
       };
     }

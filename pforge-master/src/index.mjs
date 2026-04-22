@@ -47,6 +47,7 @@ export {
   runTurn,
   buildToolSchemas,
   selectProvider,
+  autoSelectProvider,
   ABSOLUTE_CEILING,
 } from "./reasoning.mjs";
 

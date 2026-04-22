@@ -9,6 +9,7 @@
     "test": "vitest run"
   },
   "devDependencies": {
+    "jsdom": "^29.0.2",
     "vitest": "^2.1.9"
   },
   "dependencies": {

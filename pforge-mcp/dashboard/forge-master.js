@@ -3,11 +3,6 @@
  *
  * Drives the #tab-forge-master section in the main Plan Forge dashboard.
  * Talks to /api/forge-master/* routes registered by forge-master-routes.mjs.
- *
- * Phase-30.1 — window.forgeMaster* assignments moved to the top of this
- * module so inline onclick handlers are wired even if init() throws.
- * Hoisted-function declarations below are visible here because the IIFE
- * scope runs after full module parse.
  */
 
 // ─── State ────────────────────────────────────────────────────────────
@@ -19,9 +14,7 @@ const fm = {
   gallerySearch: "",
 };
 
-// ─── Global surface (wired FIRST — before anything that could throw) ──
-// Inline onclick="forgeMasterXxx()" handlers need these globals present
-// even if /api/forge-master/prompts fails or a DOM query returns null.
+// Historical note: globals kept for cross-tab inline handlers.
 window.forgeMasterOnTabActivate = () => {
   try {
     if (!fm.catalog) forgeMasterInit();
@@ -34,7 +27,6 @@ window.forgeMasterOnTabActivate = () => {
 };
 window.forgeMasterNewChat = (...args) => forgeMasterNewChat(...args);
 window.forgeMasterSend = (...args) => forgeMasterSend(...args);
-window.forgeMasterPickPrompt = (...args) => forgeMasterPickPrompt(...args);
 window.forgeMasterFilterGallery = (...args) => forgeMasterFilterGallery(...args);
 
 // ─── Init ─────────────────────────────────────────────────────────────
@@ -45,6 +37,13 @@ async function forgeMasterInit() {
     if (!res.ok) throw new Error("prompts API unavailable");
     fm.catalog = await res.json();
     forgeMasterRenderGallery();
+    const list = document.getElementById("fm-gallery-list");
+    if (list) {
+      list.addEventListener("click", e => {
+        const btn = e.target.closest("button[data-prompt-id]");
+        if (btn) forgeMasterPickPrompt(btn.dataset.promptId);
+      });
+    }
   } catch (err) {
     const list = document.getElementById("fm-gallery-list");
     if (list) list.innerHTML = `<p class="text-xs text-red-400">Forge-Master Studio API unavailable: ${err.message}</p>`;
@@ -68,7 +67,7 @@ function forgeMasterRenderGallery() {
     for (const p of prompts) {
       html += `<button
         class="w-full text-left text-xs px-2 py-1.5 rounded hover:bg-gray-700 text-gray-300 mb-0.5 block"
-        onclick="forgeMasterPickPrompt(${JSON.stringify(p.id)})"
+        data-prompt-id="${p.id}"
         title="${p.description}">
         ${p.title}
       </button>`;
@@ -194,5 +193,4 @@ function forgeMasterAddToolTrace(tc) {
   trace.appendChild(el);
 }
 
-// Note: window.forgeMaster* assignments are at the TOP of this file
-// (Phase-30.1) so inline onclick handlers are wired regardless of init state.
+// Historical note: globals kept for cross-tab inline handlers.

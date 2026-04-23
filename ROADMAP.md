@@ -7,9 +7,11 @@
 
 ## Current Release
 
-**v2.77.0** (2026-04-23) — Forge-Master Pattern Surfacing (Phase-38.6). Adds a read-only pattern detector that scans run history and surfaces recurring patterns as advisory observations. Four detectors: gate-failure-recurrence, model-failure-rate-by-complexity, slice-flap-pattern, cost-anomaly. New `forge_patterns_list` MCP tool (advisory lane only). Dashboard "Recurring Patterns" panel grouped by severity. CLI: `pforge patterns list [--since <iso>]`.
+**v2.78.0** (2026-04-23) — Forge-Master Quorum Advisory Mode (Phase-38.7). Multi-model quorum dispatch for high-stakes advisory questions. When `quorumAdvisory` pref is enabled, Forge-Master fans out to 2–3 models in parallel, emits a `quorum-estimate` SSE event with per-model cost before dispatch, and returns all replies with a dissent summary. Hard-blocked on operational/troubleshoot/build lanes. Dashboard adds segmented control and multi-model reply cards.
 
-Previous: **v2.76.0** (2026-04-23) — Forge-Master Daily Digest (Phase-38.5). Adds `pforge digest` CLI command with `--date`, `--force`, `--notify` flags. Digest aggregator builds structured daily report covering probe lane-match deltas, aging meta-bugs, stalled phases, drift trend, and cost anomalies. Markdown + JSON renderers. Dashboard "Yesterday's Digest" tile. GitHub Actions workflow (opt-in cron). Idempotent output to `.forge/digests/`.
+Previous: **v2.77.0** (2026-04-23) — Forge-Master Pattern Surfacing (Phase-38.6). Adds a read-only pattern detector that scans run history and surfaces recurring patterns as advisory observations. Four detectors: gate-failure-recurrence, model-failure-rate-by-complexity, slice-flap-pattern, cost-anomaly. New `forge_patterns_list` MCP tool (advisory lane only). Dashboard "Recurring Patterns" panel grouped by severity. CLI: `pforge patterns list [--since <iso>]`.
+
+Previous: **v2.76.0**(2026-04-23) — Forge-Master Daily Digest (Phase-38.5). Adds `pforge digest` CLI command with `--date`, `--force`, `--notify` flags. Digest aggregator builds structured daily report covering probe lane-match deltas, aging meta-bugs, stalled phases, drift trend, and cost anomalies. Markdown + JSON renderers. Dashboard "Yesterday's Digest" tile. GitHub Actions workflow (opt-in cron). Idempotent output to `.forge/digests/`.
 
 Previous: **v2.75.0**(2026-04-23) — Forge-Master Planner-Executor Split (Phase-38.4). Adds a planner decomposition layer to `runTurn`: complex multi-step queries are decomposed into up to 5 ordered read-only tool calls, executed with dependency-aware parallelism, and synthesized into a single reply. New `plan` SSE event emitted before tool-call events. Falls back to the existing reactive tool loop for simple queries. New files: `planner.mjs`, `plan-executor.mjs`. 3 new planner validation probes.
 
@@ -19,7 +21,7 @@ Previous: **v2.73.0**(2026-04-23) — Forge-Master Cross-Session Recall (Phase-3
 
 Previous: **v2.72.0** (2026-04-25) — Forge-Master Conversation Memory (Phase-38.1). Adds file-based JSONL session persistence to the Forge-Master reasoning engine. `runTurn` loads prior conversation turns before classification and persists each turn to disk. Per-tab session IDs flow from the dashboard (`sessionStorage` UUID) through `x-pforge-session-id` HTTP header to `deps.sessionId` in `runTurn`. Sessions auto-rotate at 200 turns. New CLI: `pforge fm-session list|purge`.
 
-**In flight (next)**: Phase-38.6 Slice 5 — Recursive Test-Hardening. Load simulation, failure injection, probe regression.
+**In flight (next)**: Phase-38.7 Slice 5 — Recursive Test-Hardening. Load simulation, failure injection, probe regression, quorum dispatcher hardening.
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 

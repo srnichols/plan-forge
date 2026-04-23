@@ -7,6 +7,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.78.0] — 2026-04-23 — Forge-Master Quorum Advisory Mode (Phase-38.7)
+
+> **Phase-38.7 — Multi-model quorum advisory for high-stakes decisions.**
+> When `quorumAdvisory` pref is `"always"` (or `"auto"` with advisory-lane escalation to high tier),
+> Forge-Master fans out the prompt to 2–3 models in parallel and returns all replies with a dissent
+> summary. A `quorum-estimate` SSE event is emitted before dispatch so clients can display cost and
+> cancel. Quorum is hard-blocked on operational, troubleshoot, and build lanes. Human picks the reply
+> — no auto-winner selection.
+
+### Added
+- `pforge-master/src/quorum-dispatcher.mjs` — `dispatchQuorum({prompt, models, deps})` dispatches to up to 3 models in parallel via `Promise.allSettled` with a 60s hard timeout. Returns `{replies: [{model, text, durationMs, costUSD}], dissent: {topic, axis}}`. Partial results on model failure (1 fails → remaining returned). `extractDissent(replies)` performs keyword-frequency divergence analysis across reply texts.
+- `pforge-master/src/__tests__/quorum-dispatcher.test.mjs` — unit tests covering parallel dispatch, partial failure, all-fail, timeout, and dissent extraction.
+- `pforge-master/src/reasoning.mjs` — quorum advisory path: reads `deps.quorumAdvisory` pref, evaluates auto-engage conditions (lane=advisory, autoEscalated, fromTier=high, confidence≥medium), emits `quorum-estimate` SSE event before dispatch, calls `dispatchQuorum`, accumulates quorum costs. Hard lane guard: quorum NEVER fires on operational/troubleshoot/build lanes (`QUORUM_BLOCKED_LANES` set).
+- `pforge-master/src/http-routes.mjs` — `loadPrefs`/`savePrefs` extended with `quorumAdvisory: "off"|"auto"|"always"` field (default `"off"`). `quorum-estimate` SSE event emitted before model dispatch. `done` SSE event includes `quorumResult`. Both `/api/forge-master/ask` and `/api/forge-master/stream` endpoints pass `quorumAdvisory` and `onQuorumEstimate` callback to `runTurn`.
+- `pforge-mcp/dashboard/forge-master.js` — "Quorum advisory" segmented control (`off / auto / always`) wired to `GET/PUT /api/forge-master/prefs`. `quorum-estimate` SSE listener renders cost estimate bubble with per-model badges. Multi-model reply cards rendered side-by-side with model name, duration, token counts, and cost. Dissent summary rendered as blockquote above reply cards.
+- `pforge-master/tests/quorum-sse.test.mjs` — SSE ordering test: `quorum-estimate` event arrives before any reply chunk in auto-engage scenario.
+- `pforge-master/tests/quorum-dashboard.test.mjs` — dashboard UI test: 3-card layout renders from fixture quorum reply payload, dissent summary visible.
+- `.forge/validation/probes.json` — new probe `adv-quorum-trigger` with a high-stakes advisory prompt for quorum dispatch validation.
+
 ## [2.77.0] — 2026-04-23 — Forge-Master Pattern Surfacing (Phase-38.6)
 
 > **Phase-38.6 — Read-only pattern detector scans run history and surfaces recurring patterns as advisory observations.**

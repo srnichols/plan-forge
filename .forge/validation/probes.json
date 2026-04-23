@@ -1,0 +1,198 @@
+[
+  {
+    "id": "op-status-basic",
+    "lane": "operational",
+    "message": "What is the status of Phase-34.1?",
+    "expectedTools": ["forge_plan_status", "forge_phase_status"],
+    "notes": "Basic plan status lookup"
+  },
+  {
+    "id": "op-cost-week",
+    "lane": "operational",
+    "message": "How much have I spent on forge runs this week?",
+    "expectedTools": ["forge_cost_report"],
+    "notes": "Cost query; should NOT hand-compute"
+  },
+  {
+    "id": "op-cost-quorum-estimate",
+    "lane": "operational",
+    "message": "How much would Phase-34.1 have cost under power quorum mode?",
+    "expectedTools": ["forge_estimate_quorum"],
+    "notes": "Estimator routing; CRITICAL — must call tool, not invent numbers"
+  },
+  {
+    "id": "op-memory-recall",
+    "lane": "operational",
+    "message": "What do I have in memory about Windows gate dispatch?",
+    "expectedTools": ["brain_recall", "forge_memory_report"],
+    "notes": "Memory lookup"
+  },
+  {
+    "id": "op-phase-reference",
+    "lane": "operational",
+    "message": "Did Phase-32 ship?",
+    "expectedTools": ["forge_plan_status"],
+    "notes": "Phase-N reference pattern"
+  },
+  {
+    "id": "op-slice-status",
+    "lane": "operational",
+    "message": "Is slice 4 of Phase-34 passed?",
+    "expectedTools": ["forge_plan_status"],
+    "notes": "Slice N pattern (not 'slice me an apple')"
+  },
+  {
+    "id": "ts-why-fail",
+    "lane": "troubleshoot",
+    "message": "Why did the gate for Phase-33 Slice 4 fail?",
+    "expectedTools": ["forge_diagnose", "forge_timeline", "brain_recall"],
+    "notes": "Why+fail is weight-4 pattern — classic troubleshoot"
+  },
+  {
+    "id": "ts-meta-bug",
+    "lane": "troubleshoot",
+    "message": "Is this gate failure a plan-defect or an orchestrator-defect?",
+    "expectedTools": ["forge_bug_list", "forge_search"],
+    "notes": "Meta-bug classification — CURRENTLY routes to troubleshoot; Phase-35 might split to meta-bug-triage"
+  },
+  {
+    "id": "ts-recurrence",
+    "lane": "troubleshoot",
+    "message": "The orchestrator is erroring out on Windows again. Did we see this before?",
+    "expectedTools": ["forge_bug_list", "brain_recall", "forge_timeline"],
+    "notes": "Recurrence detection"
+  },
+  {
+    "id": "ts-incident-diagnose",
+    "lane": "troubleshoot",
+    "message": "Latest incident — what's going on?",
+    "expectedTools": ["forge_diagnose", "forge_watch_live"],
+    "notes": "Vague but clearly troubleshoot"
+  },
+  {
+    "id": "build-feature",
+    "lane": "build",
+    "message": "I want to add a dark-mode toggle to the dashboard.",
+    "expectedTools": ["forge_crucible_submit", "forge_crucible_ask"],
+    "notes": "Classic build intent — should route to Crucible"
+  },
+  {
+    "id": "build-refactor",
+    "lane": "build",
+    "message": "Can we refactor the cost-service into a repository pattern?",
+    "expectedTools": ["forge_crucible_submit"],
+    "notes": "Refactor signal, weaker but still build"
+  },
+  {
+    "id": "build-crucible-direct",
+    "lane": "build",
+    "message": "Start a new crucible smelt for OAuth2 login.",
+    "expectedTools": ["forge_crucible_submit"],
+    "notes": "Direct crucible vocab"
+  },
+  {
+    "id": "adv-should-i",
+    "lane": "advisory",
+    "message": "Should I refactor this service or ship the quick fix?",
+    "expectedTools": ["brain_recall", "forge_hotspot"],
+    "notes": "Classic advisory — 'should I' + 'refactor or ship'"
+  },
+  {
+    "id": "adv-principle-judgment",
+    "lane": "advisory",
+    "message": "I'm about to add a 4th abstraction layer for a one-off operation — is this over-engineering?",
+    "expectedTools": ["brain_recall", "forge_search"],
+    "notes": "Principle judgment — Phase-35 candidate for dedicated lane"
+  },
+  {
+    "id": "adv-arch-review",
+    "lane": "advisory",
+    "message": "Give me an architecture review of the Forge-Master intent router.",
+    "expectedTools": ["forge_search", "forge_hotspot"],
+    "notes": "Arch advice signal"
+  },
+  {
+    "id": "adv-path-forward",
+    "lane": "advisory",
+    "message": "What's the best path forward for the hollow-release problem we just hit?",
+    "expectedTools": ["brain_recall", "forge_bug_list"],
+    "notes": "Path forward pattern"
+  },
+  {
+    "id": "planner-cost-breakdown",
+    "lane": "operational",
+    "message": "Show me the cost breakdown for all runs that failed last week, grouped by model and sorted by total spend.",
+    "expectedTools": ["forge_cost_report", "forge_plan_status"],
+    "notes": "Multi-step planner probe — requires cost + run filtering + aggregation across models"
+  },
+  {
+    "id": "planner-recent-failures",
+    "lane": "troubleshoot",
+    "message": "List every slice that failed in the last 3 phases, show each failure's root cause from the bug tracker, and tell me which model was used for each.",
+    "expectedTools": ["forge_plan_status", "forge_bug_list", "forge_diagnose"],
+    "notes": "Multi-step planner probe — requires plan status + bug correlation + model lookup"
+  },
+  {
+    "id": "planner-phase-status",
+    "lane": "operational",
+    "message": "Give me a complete status report on Phase-38: how many slices shipped, which are still open, what's the total cost so far, and are there any open bugs?",
+    "expectedTools": ["forge_plan_status", "forge_cost_report", "forge_bug_list"],
+    "notes": "Multi-step planner probe — requires phase status + cost + bug aggregation in one turn"
+  },
+  {
+    "id": "adv-quorum-trigger",
+    "lane": "advisory",
+    "message": "I'm choosing between adding a caching layer now or shipping without it and adding it in the next phase — which approach has fewer downstream risks given our current architecture?",
+    "expectedTools": ["brain_recall", "forge_search", "forge_hotspot"],
+    "notes": "High-stakes advisory prompt designed to trigger quorum dispatch when quorumAdvisory=auto and tier escalates to high"
+  },
+  {
+    "id": "off-weather",
+    "lane": "offtopic",
+    "message": "What's the weather in Denver tomorrow?",
+    "expectedTools": [],
+    "notes": "Should redirect"
+  },
+  {
+    "id": "off-code-gen",
+    "lane": "offtopic",
+    "message": "Write me a Python script to scrape a website.",
+    "expectedTools": [],
+    "notes": "Code-gen is off-topic for Forge-Master"
+  },
+  {
+    "id": "amb-slice-food",
+    "lane": "offtopic",
+    "message": "Can you slice me an apple?",
+    "expectedTools": [],
+    "notes": "Trap — 'slice' without Plan Forge context should NOT route operational"
+  },
+  {
+    "id": "amb-plan",
+    "lane": "any",
+    "message": "What's the plan?",
+    "expectedTools": [],
+    "notes": "Intentionally vague — accept any lane but note confidence; low confidence is acceptable"
+  },
+  {
+    "id": "amb-help",
+    "lane": "any",
+    "message": "Help me.",
+    "expectedTools": [],
+    "notes": "Degenerate input — should ask for clarification, not crash"
+  },
+  {
+    "id": "multi-intent",
+    "lane": "any",
+    "message": "Phase-34 shipped with hollow slices — should we fix forward or rewind, and what's the cost of each option?",
+    "expectedTools": ["forge_estimate_quorum", "brain_recall"],
+    "notes": "Multi-intent: troubleshoot + advisory + operational. Classifier should pick dominant lane with acknowledgment of mix"
+  },
+  {
+    "id": "long-context",
+    "lane": "troubleshoot",
+    "message": "Earlier today I shipped v2.66.0, then v2.67.0, then v2.68.0. The v2.68.0 release bundled Phase-34 Slices 1, 2, and 3. Running the test suites from Phase-34 just now shows 10 failures in intent-auto-escalation.test.mjs and 5 failures in forge-master-prefs.test.mjs. I need to understand whether this is an orchestrator bug, a plan-hardening prompt defect, or both. Please diagnose.",
+    "expectedTools": ["forge_diagnose", "forge_bug_list", "brain_recall"],
+    "notes": "Long real-world troubleshoot prompt — stress test for context handling"
+  }
+]

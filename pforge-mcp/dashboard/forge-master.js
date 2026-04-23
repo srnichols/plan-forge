@@ -82,6 +82,7 @@ async function forgeMasterInit() {
     }
     await forgeMasterLoadPrefs();
     forgeMasterLoadDigest();
+    forgeMasterLoadPatterns();
     const root = document.getElementById("forge-master-root");
     if (root) {
       root.addEventListener("click", e => {
@@ -443,5 +444,92 @@ async function forgeMasterLoadDigest() {
 
 window.forgeMasterRenderDigestTile = (...args) => forgeMasterRenderDigestTile(...args);
 window.forgeMasterLoadDigest = () => forgeMasterLoadDigest();
+
+// ─── Recurring Patterns Panel ─────────────────────────────────────────
+
+const FM_PATTERN_SEVERITY_ICON = { info: "🟢", warning: "🟡", error: "🔴" };
+const FM_PATTERN_SEVERITY_ORDER = { error: 0, warning: 1, info: 2 };
+
+/**
+ * Render the "Recurring patterns" panel from detected pattern data.
+ * Patterns are grouped by severity (error first, then warning, then info).
+ *
+ * @param {Array<{id: string, detector: string, severity: string, title: string, detail: string, occurrences: number, plans: string[]}>} patterns
+ */
+function forgeMasterRenderPatternsPanel(patterns) {
+  const root = document.getElementById("forge-master-root");
+  if (!root) return;
+
+  let panel = document.getElementById("fm-patterns-panel");
+  if (!panel) {
+    panel = document.createElement("div");
+    panel.id = "fm-patterns-panel";
+    panel.className = "border border-gray-700 rounded p-3 mb-3 text-xs";
+    // Insert after digest tile if present, otherwise at top
+    const digestTile = document.getElementById("fm-digest-tile");
+    if (digestTile && digestTile.nextSibling) {
+      root.insertBefore(panel, digestTile.nextSibling);
+    } else if (digestTile) {
+      root.appendChild(panel);
+    } else {
+      root.insertBefore(panel, root.firstChild);
+    }
+  }
+
+  if (!patterns || patterns.length === 0) {
+    panel.innerHTML = `<h4 class="text-cyan-400 font-semibold mb-1">Recurring Patterns</h4>
+      <p class="text-gray-500">No patterns detected.</p>`;
+    return;
+  }
+
+  // Sort by severity: error → warning → info
+  const sorted = [...patterns].sort((a, b) =>
+    (FM_PATTERN_SEVERITY_ORDER[a.severity] ?? 3) - (FM_PATTERN_SEVERITY_ORDER[b.severity] ?? 3)
+  );
+
+  // Group by severity
+  const groups = new Map();
+  for (const p of sorted) {
+    const sev = p.severity || "info";
+    if (!groups.has(sev)) groups.set(sev, []);
+    groups.get(sev).push(p);
+  }
+
+  let rows = "";
+  for (const [severity, items] of groups) {
+    const icon = FM_PATTERN_SEVERITY_ICON[severity] || "⚪";
+    rows += `<div class="mt-1 mb-0.5 text-gray-400 font-semibold">${icon} ${severity} (${items.length})</div>`;
+    for (const p of items) {
+      const plans = p.plans && p.plans.length > 0 ? p.plans.join(", ") : "";
+      rows += `<div class="pl-4 py-0.5 text-gray-300">
+        <span class="font-mono text-cyan-600">${p.title || p.id}</span>
+        <span class="text-gray-500 ml-1">× ${p.occurrences || 0}</span>
+        ${plans ? `<span class="text-gray-600 ml-1">(${plans})</span>` : ""}
+      </div>`;
+    }
+  }
+
+  panel.innerHTML = `<h4 class="text-cyan-400 font-semibold mb-1">Recurring Patterns</h4>${rows}`;
+}
+
+/**
+ * Load patterns from the forge_patterns_list API and render the panel.
+ */
+async function forgeMasterLoadPatterns() {
+  try {
+    const res = await fetch("/api/forge-master/patterns");
+    if (!res.ok) {
+      forgeMasterRenderPatternsPanel(null);
+      return;
+    }
+    const patterns = await res.json();
+    forgeMasterRenderPatternsPanel(Array.isArray(patterns) ? patterns : patterns.patterns || []);
+  } catch {
+    forgeMasterRenderPatternsPanel(null);
+  }
+}
+
+window.forgeMasterRenderPatternsPanel = (...args) => forgeMasterRenderPatternsPanel(...args);
+window.forgeMasterLoadPatterns = () => forgeMasterLoadPatterns();
 
 // Historical note: globals kept for cross-tab inline handlers.

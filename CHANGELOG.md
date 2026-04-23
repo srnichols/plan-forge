@@ -7,6 +7,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.77.0] — 2026-04-23 — Forge-Master Pattern Surfacing (Phase-38.6)
+
+> **Phase-38.6 — Read-only pattern detector scans run history and surfaces recurring patterns as advisory observations.**
+> A file-based detector registry auto-discovers `pforge-mcp/patterns/detectors/*.mjs` modules.
+> Four detectors ship: gate-failure-recurrence, model-failure-rate-by-complexity, slice-flap-pattern,
+> and cost-anomaly. Patterns are surfaced in the troubleshoot lane as advisory context and via the
+> new `forge_patterns_list` MCP tool (advisory lane only — Phase-32 guardrail). Dashboard adds a
+> "Recurring patterns" panel grouped by severity. CLI: `pforge patterns list [--since <iso>]`.
+
+### Added
+- `pforge-mcp/patterns/registry.mjs` — `runDetectors(ctx)` auto-loads detectors from `detectors/` directory, invokes each with `{graph, runs, costs}`, collects results. Malformed detectors are skipped with a warning.
+- `pforge-mcp/patterns/detectors/gate-failure-recurrence.mjs` — detects repeated gate failures (≥ 3 occurrences across ≥ 2 plans). Surfaces the `tee /tmp/` anti-pattern as a specific case.
+- `pforge-mcp/patterns/detectors/model-failure-rate-by-complexity.mjs` — detects models with > 25% failure rate on slices with complexity ≥ 4.
+- `pforge-mcp/patterns/detectors/slice-flap-pattern.mjs` — detects slices that flapped (pass→fail→pass) ≥ 3 times across runs.
+- `pforge-mcp/patterns/detectors/cost-anomaly.mjs` — detects slices where cost spikes > 2× the rolling average.
+- `forge_patterns_list` MCP tool — advisory-lane-only read-only tool. NOT in operational/troubleshoot/build allowlists (Phase-32 guardrail).
+- `pforge-master/src/intent-router.mjs` — `forge_patterns_list` added to `LANE_TOOLS.advisory` only.
+- `pforge-master/src/reasoning.mjs` — when troubleshoot lane fires AND `runAllDetectors` returns ≥ 1 match, pattern summaries appended to reply context as advisory observations.
+- `pforge-mcp/dashboard/forge-master.js` — "Recurring Patterns" panel: `forgeMasterRenderPatternsPanel(patterns)` renders patterns grouped by severity (error → warning → info) with occurrence counts and plan names. `forgeMasterLoadPatterns()` fetches from `/api/forge-master/patterns`. Auto-loaded on Forge-Master tab init.
+- `pforge.ps1` + `pforge.sh` — `pforge patterns list [--since <iso>]` CLI command.
+- `pforge-mcp/tests/patterns-registry.test.mjs` — registry + gate-failure-recurrence detector tests.
+- `pforge-mcp/tests/patterns-detectors.test.mjs` — tests for model-failure-rate, slice-flap, cost-anomaly detectors.
+- `pforge-mcp/tests/patterns-dashboard.test.mjs` — dashboard panel rendering tests from fixture pattern data.
+
 ## [2.76.0] — 2026-04-23 — Forge-Master Daily Digest (Phase-38.5)
 
 > **Phase-38.5 — Daily digest aggregator, renderer, CLI command, and dashboard tile.**

@@ -227,8 +227,8 @@ describe("BASE_TOOL_COUNT_MIN", () => {
     expect(BASE_TOOL_COUNT_MIN).toBe(BASE_ALLOWLIST.length);
   });
 
-  it("is at least 30", () => {
-    expect(BASE_TOOL_COUNT_MIN).toBeGreaterThanOrEqual(30);
+  it("is at least 15", () => {
+    expect(BASE_TOOL_COUNT_MIN).toBeGreaterThanOrEqual(15);
   });
 });
 

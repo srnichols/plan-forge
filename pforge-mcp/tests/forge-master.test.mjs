@@ -140,10 +140,8 @@ describe("forge-master allowlist", () => {
     expect(BASE_ALLOWLIST).toContain("forge_plan_status");
     expect(BASE_ALLOWLIST).toContain("forge_cost_report");
     expect(BASE_ALLOWLIST).toContain("forge_smith");
-    expect(BASE_ALLOWLIST).toContain("forge_crucible_submit");
-    expect(BASE_ALLOWLIST).toContain("brain_recall");
+    // forge_crucible_submit, brain_recall, forge_timeline removed in Phase-37.1
     expect(BASE_ALLOWLIST).toContain("forge_search");
-    expect(BASE_ALLOWLIST).toContain("forge_timeline");
   });
 
   it("BASE_ALLOWLIST does NOT contain write tools", () => {

@@ -1644,6 +1644,11 @@ function executeTool(name, args) {
  * `http-routes.mjs`) can wire it as the real `mcpCall` for the HTTP
  * dispatcher, replacing the default no-op.
  *
+ * For tools handled synchronously by `executeTool` (CLI-delegated), the
+ * result is returned directly. For tools that return null from `executeTool`
+ * (async/streaming tools handled in the MCP CallToolRequestSchema handler),
+ * the call is forwarded to that handler and its terminal result is returned.
+ *
  * @param {string} toolName
  * @param {object} [args]
  * @returns {Promise<any>}
@@ -1651,7 +1656,29 @@ function executeTool(name, args) {
 export async function invokeForgeTool(toolName, args = {}) {
   const syncResult = executeTool(toolName, args);
   if (syncResult != null) return syncResult;
-  return { output: `(tool ${toolName} requires async dispatch — not available in Forge-Master bridge)` };
+
+  // ASYNC tool: forward through the registered MCP CallToolRequestSchema handler
+  try {
+    const handlers = server._requestHandlers || server.requestHandlers;
+    const handler = handlers?.get?.("tools/call");
+    if (handler) {
+      const mcpResult = await handler({
+        method: "tools/call",
+        params: { name: toolName, arguments: args },
+      });
+      if (mcpResult?.content?.[0]?.text) {
+        try {
+          return JSON.parse(mcpResult.content[0].text);
+        } catch {
+          return mcpResult;
+        }
+      }
+      return mcpResult || {};
+    }
+  } catch (err) {
+    return { error: `Tool handler error: ${err.message}` };
+  }
+  return {};
 }
 
 // ─── MCP Server ───────────────────────────────────────────────────────

@@ -198,6 +198,7 @@ function loadSystemPrompt(contextBlock, principlesBlock) {
  *   detectApiProvider?: Function,
  *   resolveApiKey?: (provider: string) => string | null,
  *   forceKeywordOnly?: boolean, — when true, skip stage-2 router-model in classify()
+ *   resolvedAllowlist?: string[], — override computed allowlist (test injection)
  * }} [deps] — injected dependencies for testability
  * @returns {Promise<{
  *   reply: string,
@@ -318,7 +319,7 @@ export async function runTurn(input, deps = {}) {
   const systemPrompt = loadSystemPrompt(contextBlock, principlesBlock);
 
   // ── 4. Resolve allowlist + tool schemas ───────────────────────────
-  const allowlist = resolveAllowlist({
+  const allowlist = deps.resolvedAllowlist ?? resolveAllowlist({
     toolMetadata: deps.toolMetadata || {},
     discoverExtensionTools: config.discoverExtensionTools,
   });

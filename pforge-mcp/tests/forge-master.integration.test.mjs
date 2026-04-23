@@ -229,6 +229,7 @@ describe("forge-master integration — happy-path", () => {
       },
       hub: null,
       toolMetadata: {},
+      resolvedAllowlist: ["forge_crucible_submit", "forge_crucible_ask"],
       recall: async () => null,
       remember: () => ({ ok: true }),
     };

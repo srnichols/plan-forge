@@ -18,7 +18,7 @@
 export const BASE_ALLOWLIST = Object.freeze([
   // Planning / status
   "forge_plan_status",
-  "forge_phase_status",
+  // "forge_phase_status",  // removed in Phase-37.1 — no MCP handler
   "forge_status",
   "forge_diff",
   "forge_capabilities",
@@ -34,46 +34,46 @@ export const BASE_ALLOWLIST = Object.freeze([
   "forge_watch",
   "forge_watch_live",
   "forge_alert_triage",
-  "forge_dep_watch",
-  "forge_drift_report",
-  "forge_hotspot",
-  "forge_regression_guard",
+  // "forge_dep_watch",        // removed in Phase-37.1 — no MCP handler
+  // "forge_drift_report",     // removed in Phase-37.1 — no MCP handler
+  // "forge_hotspot",          // removed in Phase-37.1 — no MCP handler
+  // "forge_regression_guard", // removed in Phase-37.1 — no MCP handler
 
   // Diagnostics
   "forge_smith",
   "forge_sweep",
   "forge_validate",
   "forge_analyze",
-  "forge_diagnose",
+  // "forge_diagnose",         // removed in Phase-37.1 — no MCP handler
 
   // Crucible (interview — submit/ask/preview touch an in-progress smelt only)
-  "forge_crucible_list",
-  "forge_crucible_submit",
-  "forge_crucible_ask",
-  "forge_crucible_preview",
+  // "forge_crucible_list",    // removed in Phase-37.1 — no MCP handler
+  // "forge_crucible_submit",  // removed in Phase-37.1 — no MCP handler
+  // "forge_crucible_ask",     // removed in Phase-37.1 — no MCP handler
+  // "forge_crucible_preview", // removed in Phase-37.1 — no MCP handler
 
   // Memory & retrieval
-  "brain_recall",
+  // "brain_recall",           // removed in Phase-37.1 — no MCP handler
   "forge_memory_report",
   "forge_search",
-  "forge_timeline",
+  // "forge_timeline",         // removed in Phase-37.1 — no MCP handler
 
   // Tempering reads
-  "forge_tempering_scan",
-  "forge_tempering_status",
+  // "forge_tempering_scan",   // removed in Phase-37.1 — no MCP handler
+  // "forge_tempering_status", // removed in Phase-37.1 — no MCP handler
 
   // Bug / review / skill reads
-  "forge_bug_list",
-  "forge_review_list",
-  "forge_skill_status",
+  // "forge_bug_list",         // removed in Phase-37.1 — no MCP handler
+  // "forge_review_list",      // removed in Phase-37.1 — no MCP handler
+  // "forge_skill_status",     // removed in Phase-37.1 — no MCP handler
 
   // Extension reads
   "forge_ext_search",
   "forge_ext_info",
 
   // Ops reads
-  "forge_runbook",
-  "forge_deploy_journal",
+  // "forge_runbook",          // removed in Phase-37.1 — no MCP handler
+  // "forge_deploy_journal",   // removed in Phase-37.1 — no MCP handler
 ]);
 
 /**

@@ -30,8 +30,10 @@ const FORGE_MASTER_PROMPTS_URL = pathToFileURL(FORGE_MASTER_PROMPTS_PATH).href;
  * routes are skipped with a console warning in that case.
  *
  * @param {import("express").Application} app
+ * @param {Function} [mcpCall] — in-process tool invoker from server.mjs; wires
+ *   the real dispatcher into /stream. Falls back to no-op when omitted.
  */
-export async function registerForgeMasterRoutes(app) {
+export async function registerForgeMasterRoutes(app, mcpCall) {
   if (!existsSync(FORGE_MASTER_ROUTES_PATH)) {
     console.warn("[forge-master-routes] pforge-master not found — Forge-Master Studio API disabled");
     return;
@@ -39,7 +41,7 @@ export async function registerForgeMasterRoutes(app) {
 
   try {
     const { createHttpRoutes } = await import(FORGE_MASTER_ROUTES_URL);
-    createHttpRoutes(app);
+    createHttpRoutes(app, mcpCall ? { mcpCall } : undefined);
     console.error("[forge-master-routes] Forge-Master Studio API registered at /api/forge-master/*");
   } catch (err) {
     console.warn(`[forge-master-routes] Failed to register routes: ${err.message}`);

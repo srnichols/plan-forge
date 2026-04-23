@@ -1637,6 +1637,23 @@ function executeTool(name, args) {
   }
 }
 
+/**
+ * In-process MCP tool invoker — wraps `executeTool` for use as a dispatcher.
+ *
+ * Exposed as a named export so `forge-master-routes.mjs` (and ultimately
+ * `http-routes.mjs`) can wire it as the real `mcpCall` for the HTTP
+ * dispatcher, replacing the default no-op.
+ *
+ * @param {string} toolName
+ * @param {object} [args]
+ * @returns {Promise<any>}
+ */
+export async function invokeForgeTool(toolName, args = {}) {
+  const syncResult = executeTool(toolName, args);
+  if (syncResult != null) return syncResult;
+  return { output: `(tool ${toolName} requires async dispatch — not available in Forge-Master bridge)` };
+}
+
 // ─── MCP Server ───────────────────────────────────────────────────────
 const server = new Server(
   { name: "plan-forge-mcp", version: "2.12.3" },
@@ -4868,9 +4885,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         },
         {
           dispatcher: async (toolName, toolArgs, toolCwd) => {
-            const syncResult = executeTool(toolName, { ...toolArgs, path: toolCwd || cwd });
-            if (syncResult) return syncResult;
-            return { output: `(tool ${toolName} requires async dispatch — not available in Forge-Master bridge)` };
+            return invokeForgeTool(toolName, { ...toolArgs, path: toolCwd || cwd });
           },
           hub: activeHub || null,
           toolMetadata: TOOL_METADATA,
@@ -7255,7 +7270,7 @@ export function createExpressApp() {
 
   // Phase-29 — Forge-Master Studio API routes (async, registered on demand)
   import("./forge-master-routes.mjs").then(({ registerForgeMasterRoutes }) => {
-    registerForgeMasterRoutes(app);
+    registerForgeMasterRoutes(app, invokeForgeTool);
   }).catch(err => console.warn(`[forge-master-routes] Skipped: ${err.message}`));
 
   return app;

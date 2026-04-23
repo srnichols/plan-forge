@@ -20,6 +20,7 @@ import { getForgeMasterConfig } from "./config.mjs";
 import { runTurn } from "./reasoning.mjs";
 import { createSseStream } from "./sse.mjs";
 import { BASE_ALLOWLIST, WRITE_ALLOWLIST } from "./allowlist.mjs";
+import { createHttpDispatcher, invokeForgeTool } from "./http-dispatcher.mjs";
 import { randomUUID } from "node:crypto";
 
 const sessions = new Map();
@@ -36,19 +37,21 @@ const pendingApprovals = new Map();
  * `http.createServer(handler)`.
  *
  * @param {object} app — express app or null
+ * @param {{ mcpCall?: Function }} [opts] — optional in-process tool invoker
  * @returns {Function|undefined} — request handler when app is null
  */
-export function createHttpRoutes(app) {
+export function createHttpRoutes(app, { mcpCall = invokeForgeTool } = {}) {
+  const dispatcher = createHttpDispatcher({ allowlist: BASE_ALLOWLIST, mcpCall });
   if (app && typeof app.get === "function") {
-    _registerExpress(app);
+    _registerExpress(app, dispatcher);
   } else {
-    return _buildNodeHandler();
+    return _buildNodeHandler(dispatcher);
   }
 }
 
 // ─── Express-mode registration ───────────────────────────────────────
 
-function _registerExpress(app) {
+function _registerExpress(app, dispatcher) {
   app.get("/api/forge-master/prompts", (req, res) => {
     res.json(getPromptCatalog());
   });
@@ -91,7 +94,7 @@ function _registerExpress(app) {
       const result = await runTurn(
         { message, sessionId },
         {
-          dispatcher: async () => ({}),
+          dispatcher,
           onClassification: (data) => { sse.send("classification", data); },
         },
       );
@@ -126,7 +129,7 @@ function _registerExpress(app) {
 
 // ─── Built-in http handler (no express) ─────────────────────────────
 
-function _buildNodeHandler() {
+function _buildNodeHandler(dispatcher) {
   return async function handler(req, res) {
     const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
     const path = url.pathname;
@@ -195,7 +198,7 @@ function _buildNodeHandler() {
         const result = await runTurn(
           { message, sessionId },
           {
-            dispatcher: async () => ({}),
+            dispatcher,
             onClassification: (data) => { sse.send("classification", data); },
           },
         );

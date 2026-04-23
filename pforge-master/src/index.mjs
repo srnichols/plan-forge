@@ -88,6 +88,11 @@ export {
 } from "./http-routes.mjs";
 
 export {
+  createHttpDispatcher,
+  invokeForgeTool,
+} from "./http-dispatcher.mjs";
+
+export {
   start as lifecycleStart,
   stop as lifecycleStop,
   status as lifecycleStatus,

@@ -20,7 +20,7 @@
  */
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync, appendFileSync, readdirSync, statSync, rmSync } from "node:fs";
-import { spawn, execSync } from "node:child_process";
+import { spawn, execSync, execFileSync } from "node:child_process";
 import { resolve, basename, dirname, join, relative, extname, isAbsolute } from "node:path";
 import { EventEmitter } from "node:events";
 import { tmpdir } from "node:os";
@@ -78,6 +78,69 @@ export const GATE_ALLOWED_PREFIXES = [
   // Project tools
   "pforge",
 ];
+
+/**
+ * Unix tools not available in cmd.exe on Windows.
+ * Shared by runGate() (bash dispatch) and lintGateCommands() (portability lint).
+ */
+export const UNIX_TOOLS = ["grep", "sed", "awk", "wc", "head", "tail", "sort", "diff", "test", "tr", "xargs", "find"];
+
+// ─── Windows bash dispatch ─────────────────────────────────────────────
+
+/** undefined = not yet probed; null = probed, not found; string = probed, found */
+let cachedBashPath = undefined;
+
+/** Reset bash path probe cache — for tests only. */
+export function __resetBashPathCache() {
+  cachedBashPath = undefined;
+}
+
+/**
+ * Locate bash.exe on Windows. Probe order:
+ *   1. PFORGE_BASH_PATH env (always re-checked; not cached)
+ *   2. Cached result from a previous probe
+ *   3. Fixed Git-for-Windows locations
+ *   4. `where bash` PATH search
+ *
+ * @returns {string|null} Absolute path to bash, or null if not found.
+ */
+export function resolveBashPath() {
+  const envPath = (process.env.PFORGE_BASH_PATH || "").trim();
+  if (envPath && existsSync(envPath)) return envPath;
+
+  if (cachedBashPath !== undefined) return cachedBashPath;
+
+  const fixed = [
+    "C:\\Program Files\\Git\\bin\\bash.exe",
+    "C:\\Program Files (x86)\\Git\\bin\\bash.exe",
+  ];
+  for (const p of fixed) {
+    if (existsSync(p)) {
+      cachedBashPath = p;
+      return cachedBashPath;
+    }
+  }
+
+  try {
+    const raw = execFileSync("where", ["bash"], {
+      encoding: "utf-8",
+      timeout: 5000,
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    for (const candidate of raw.split(/\r?\n/)) {
+      const line = candidate.trim();
+      if (line && existsSync(line)) {
+        cachedBashPath = line;
+        return cachedBashPath;
+      }
+    }
+  } catch {
+    // `where` failed or bash not on PATH
+  }
+
+  cachedBashPath = null;
+  return null;
+}
 
 // ─── Event Bus (C3: Dependency Injection) ─────────────────────────────
 
@@ -1930,6 +1993,39 @@ export function runGate(command, cwd) {
   }
 
   const gateTimeout = resolveGateTimeoutMs();
+
+  // Windows bash dispatch: route Unix tools through bash so plans that use
+  // grep/sed/awk/etc. work on Windows without manual wrapping.
+  if (process.platform === "win32") {
+    // Strip any path prefix and .exe/.cmd extension to get the bare tool name.
+    const cmdName = cmdBase.split("/").pop().split("\\").pop().replace(/\.(exe|cmd|bat)$/i, "");
+    if (UNIX_TOOLS.includes(cmdName)) {
+      const bashPath = resolveBashPath();
+      if (bashPath === null) {
+        return {
+          success: false,
+          output: "",
+          error: `gate requires bash but none found on Windows. Install Git for Windows or set PFORGE_BASH_PATH to a bash.exe path. Detected Unix tool: '${cmdName}'.`,
+        };
+      }
+      try {
+        const output = execFileSync(bashPath, ["-c", command], {
+          cwd,
+          encoding: "utf-8",
+          timeout: gateTimeout,
+          env: { ...process.env, NO_COLOR: "1" },
+        });
+        return { success: true, output: output.trim(), error: "" };
+      } catch (err) {
+        return {
+          success: false,
+          output: (err.stdout || "").trim(),
+          error: (err.stderr || err.message || "").trim(),
+        };
+      }
+    }
+  }
+
   try {
     const output = execSync(command, {
       cwd,
@@ -4556,8 +4652,7 @@ export function lintGateCommands(planFilePath, cwd = process.cwd()) {
       }
 
       // 6. Unix-only commands (not available in cmd.exe on Windows)
-      const WINDOWS_UNAVAILABLE = ["grep", "sed", "awk", "wc", "head", "tail", "sort", "diff", "test", "tr", "xargs", "find"];
-      if (WINDOWS_UNAVAILABLE.includes(cmdToken) && !/^bash\s+-c/.test(line)) {
+      if (UNIX_TOOLS.includes(cmdToken) && !/^bash\s+-c/.test(line)) {
         warnings.push({
           slice: slice.number,
           command: line,

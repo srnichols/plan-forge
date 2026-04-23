@@ -175,6 +175,18 @@ const KEYWORD_RULES = [
   // Crucible extras: smelt, preview, finalize
   { pattern: /\b(smelt|smelts|smelted|preview|finalize|finalise)\b/i, lane: LANES.BUILD, weight: 2 },
 
+  // ── Phase-37 Slice 1: operational lane calibration patterns ──────────────
+  // Combined phase/slice reference (covers "slice 4" without the longer context gates)
+  { pattern: /\b(phase[- ]?\d+|slice\s+\d+)\b/i, lane: LANES.OPERATIONAL, weight: 3 },
+  // Cost/spend family — adds "spent", "tokens", "quorum", "estimate" variants
+  { pattern: /\b(cost|spend|spent|budget|tokens|quorum|estimate)\b/i, lane: LANES.OPERATIONAL, weight: 3 },
+  // Shipping/release vocabulary
+  { pattern: /\b(ship|shipped|landed|merged|released|deployed)\b/i, lane: LANES.OPERATIONAL, weight: 2 },
+  // Status vocabulary expansion: adds running/ran/failed/passed/green/red
+  { pattern: /\b(status|progress|running|ran|failed|passed|green|red)\b/i, lane: LANES.OPERATIONAL, weight: 2 },
+  // Memory/recall family — weight 3 (stronger than the existing weight-2 rule)
+  { pattern: /\b(memory|recall|brain|remembered)\b/i, lane: LANES.OPERATIONAL, weight: 3 },
+
   // ── Advisory signals ──
   { pattern: /\bshould\s+(i|we)\b/i, lane: LANES.ADVISORY, weight: 3 },
   { pattern: /\b(what|which)\s+is\s+the\s+(right|best)\s+(approach|path|way|choice)\b/i, lane: LANES.ADVISORY, weight: 3 },

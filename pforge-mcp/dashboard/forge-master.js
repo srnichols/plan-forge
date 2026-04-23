@@ -29,6 +29,8 @@ const fm = {
   activeCategory: null,
   gallerySearch: "",
   dialTier: null,
+  quorumAdvisory: "off",
+  quorumEstimateBubbleId: null,
   chatCost: { usd: 0, tokensIn: 0, tokensOut: 0 },
 };
 
@@ -41,6 +43,14 @@ const FM_DIAL_TIERS = [
 ];
 
 const FM_DIAL_TOOLTIP = "Powered by frontier models via your GitHub Copilot subscription. Higher tiers may hit rate limits sooner.";
+
+// ─── Quorum advisory picker ──────────────────────────────────────────
+
+const FM_QUORUM_MODES = [
+  { mode: "off",    label: "Off" },
+  { mode: "auto",   label: "Auto" },
+  { mode: "always", label: "Always" },
+];
 
 // Historical note: globals kept for cross-tab inline handlers.
 window.forgeMasterOnTabActivate = () => {
@@ -86,8 +96,10 @@ async function forgeMasterInit() {
     const root = document.getElementById("forge-master-root");
     if (root) {
       root.addEventListener("click", e => {
-        const btn = e.target.closest("button[data-tier]");
-        if (btn) forgeMasterDialClick(btn.dataset.tier);
+        const tierBtn = e.target.closest("button[data-tier]");
+        if (tierBtn) { forgeMasterDialClick(tierBtn.dataset.tier); return; }
+        const quorumBtn = e.target.closest("button[data-quorum]");
+        if (quorumBtn) forgeMasterQuorumClick(quorumBtn.dataset.quorum);
       });
     }
   } catch (err) {
@@ -190,6 +202,11 @@ function forgeMasterStream(url, thinkingId) {
     forgeMasterUpdateBubble(replyBubbleId, replyText);
   });
 
+  es.addEventListener("quorum-estimate", (e) => {
+    const data = JSON.parse(e.data);
+    fm.quorumEstimateBubbleId = forgeMasterRenderQuorumEstimate(data);
+  });
+
   es.addEventListener("tool-call", (e) => {
     const tc = JSON.parse(e.data);
     forgeMasterAddToolTrace(tc);
@@ -207,12 +224,25 @@ function forgeMasterStream(url, thinkingId) {
       if (data.relatedTurns && data.relatedTurns.length > 0) {
         forgeMasterRenderRelatedConversations(data.relatedTurns);
       }
+      // Quorum: update estimate bubble and render model cards
+      if (fm.quorumEstimateBubbleId) {
+        forgeMasterUpdateBubble(fm.quorumEstimateBubbleId, "Quorum complete.");
+        fm.quorumEstimateBubbleId = null;
+      }
+      if (data.quorumResult && data.quorumResult.replies && data.quorumResult.replies.length > 0) {
+        forgeMasterRenderQuorumReply(data.quorumResult, replyBubbleId);
+      }
     } catch { /* non-fatal */ }
     es.close();
   });
 
   es.addEventListener("error", () => {
     if (replyText === "") forgeMasterUpdateBubble(replyBubbleId, "Stream error.");
+    // Clean up quorum estimate bubble on error
+    if (fm.quorumEstimateBubbleId) {
+      forgeMasterUpdateBubble(fm.quorumEstimateBubbleId, "Quorum interrupted.");
+      fm.quorumEstimateBubbleId = null;
+    }
     es.close();
   });
 }
@@ -273,13 +303,170 @@ function forgeMasterRenderCostMeter() {
   meterEl.textContent = `Chat: ${costStr} · ${tokenStr}`;
 }
 
+// ─── Quorum Advisory Picker ──────────────────────────────────────────
+
+function forgeMasterRenderQuorumPicker(activeMode) {
+  let pickerEl = document.getElementById("fm-quorum-picker");
+  if (!pickerEl) {
+    const meterEl = document.getElementById("fm-cost-meter");
+    const dialEl = document.getElementById("fm-dial");
+    const anchor = meterEl || dialEl;
+    if (!anchor) return;
+    pickerEl = document.createElement("div");
+    pickerEl.id = "fm-quorum-picker";
+    pickerEl.className = "flex items-center gap-1 mb-2";
+    pickerEl.title = "Quorum advisory: query multiple models for diverse perspectives on advisory questions.";
+    anchor.insertAdjacentElement("afterend", pickerEl);
+  }
+  const label = document.createElement("span");
+  label.className = "text-xs text-gray-500 mr-1";
+  label.textContent = "Quorum:";
+  pickerEl.innerHTML = "";
+  pickerEl.appendChild(label);
+  for (const { mode, label: btnLabel } of FM_QUORUM_MODES) {
+    const btn = document.createElement("button");
+    const active = mode === activeMode;
+    btn.className = active
+      ? "text-xs px-3 py-1 rounded bg-cyan-700 text-white font-semibold"
+      : "text-xs px-3 py-1 rounded bg-gray-700 text-gray-300 hover:bg-gray-600";
+    btn.dataset.quorum = mode;
+    btn.textContent = btnLabel;
+    pickerEl.appendChild(btn);
+  }
+}
+
+async function forgeMasterQuorumClick(mode) {
+  try {
+    const res = await fetch("/api/forge-master/prefs", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tier: fm.dialTier, quorumAdvisory: mode }),
+    });
+    if (!res.ok) return;
+    const saved = await res.json();
+    fm.quorumAdvisory = saved.quorumAdvisory || "off";
+    forgeMasterRenderQuorumPicker(fm.quorumAdvisory);
+  } catch {
+    // noop
+  }
+}
+
+// ─── Quorum Estimate Bubble ──────────────────────────────────────────
+
+function forgeMasterRenderQuorumEstimate(data) {
+  const stream = document.getElementById("fm-chat-stream");
+  if (!stream) return null;
+
+  const models = data.models || [];
+  const cost = typeof data.estimatedCostUSD === "number"
+    ? `~$${data.estimatedCostUSD.toFixed(4)}`
+    : "";
+
+  const el = document.createElement("div");
+  el.id = "fm-quorum-estimate";
+  el.className = "bg-gray-800 text-gray-300 self-start mr-8 rounded px-3 py-2 text-xs";
+
+  const header = document.createElement("div");
+  header.className = "text-cyan-400 font-semibold mb-1";
+  header.textContent = `Quorum advisory — ${models.length} models ${cost ? "· " + cost + " est." : ""}`;
+  el.appendChild(header);
+
+  for (const modelName of models) {
+    const badge = document.createElement("div");
+    badge.className = "inline-block bg-gray-700 rounded px-2 py-0.5 mr-1 mb-1 text-xs text-gray-300";
+    badge.textContent = `${modelName} · running…`;
+    badge.dataset.quorumModel = modelName;
+    el.appendChild(badge);
+  }
+
+  stream.appendChild(el);
+  stream.scrollTop = stream.scrollHeight;
+  return el.id;
+}
+
+// ─── Quorum Reply Cards ──────────────────────────────────────────────
+
+function forgeMasterRenderQuorumReply(quorumResult, bubbleId) {
+  const stream = document.getElementById("fm-chat-stream");
+  if (!stream) return;
+
+  const { replies, dissent } = quorumResult;
+  if (!replies || replies.length === 0) return;
+
+  // Update the estimate bubble to "complete" if it still exists
+  const estimateEl = document.getElementById("fm-quorum-estimate");
+  if (estimateEl) {
+    const badges = estimateEl.querySelectorAll("[data-quorum-model]");
+    for (const b of badges) {
+      const modelName = b.dataset.quorumModel;
+      const reply = replies.find(r => r.model === modelName);
+      b.textContent = reply
+        ? `${modelName} · ${reply.durationMs}ms`
+        : `${modelName} · no response`;
+    }
+  }
+
+  // Build quorum reply container
+  const container = document.createElement("div");
+  container.id = "fm-quorum-reply";
+  container.className = "bg-gray-800 text-gray-300 self-start mr-8 rounded px-3 py-2 text-xs mt-1";
+
+  // Dissent summary at top
+  if (dissent && dissent.topic) {
+    const dissentEl = document.createElement("div");
+    dissentEl.className = "border-l-2 border-cyan-600 pl-2 mb-2 text-gray-400";
+    const strong = document.createElement("strong");
+    strong.textContent = "Dissent: ";
+    dissentEl.appendChild(strong);
+    const topicSpan = document.createElement("span");
+    topicSpan.textContent = `${dissent.topic} — ${dissent.axis}`;
+    dissentEl.appendChild(topicSpan);
+    container.appendChild(dissentEl);
+  }
+
+  // Model cards in a flex row
+  const cardRow = document.createElement("div");
+  cardRow.className = "flex gap-2 flex-wrap";
+
+  for (const reply of replies) {
+    const card = document.createElement("div");
+    card.className = "flex-1 min-w-0 border border-gray-700 rounded p-2";
+    card.dataset.quorumCard = reply.model;
+
+    const modelLabel = document.createElement("div");
+    modelLabel.className = "text-cyan-400 font-mono text-xs mb-1 truncate";
+    modelLabel.textContent = reply.model;
+    card.appendChild(modelLabel);
+
+    const replyText = document.createElement("div");
+    replyText.className = "text-gray-300 whitespace-pre-wrap text-xs mb-1";
+    replyText.textContent = reply.text || "";
+    card.appendChild(replyText);
+
+    const meta = document.createElement("div");
+    meta.className = "text-gray-500 text-xs";
+    const dur = reply.durationMs ? `${reply.durationMs}ms` : "";
+    const cost = typeof reply.costUSD === "number" ? `$${reply.costUSD.toFixed(4)}` : "";
+    meta.textContent = [dur, cost].filter(Boolean).join(" · ");
+    card.appendChild(meta);
+
+    cardRow.appendChild(card);
+  }
+
+  container.appendChild(cardRow);
+  stream.appendChild(container);
+  stream.scrollTop = stream.scrollHeight;
+}
+
 async function forgeMasterLoadPrefs() {
   try {
     const res = await fetch("/api/forge-master/prefs");
     if (!res.ok) return;
-    const { tier } = await res.json();
-    fm.dialTier = tier;
-    forgeMasterRenderDial(tier);
+    const prefs = await res.json();
+    fm.dialTier = prefs.tier;
+    fm.quorumAdvisory = prefs.quorumAdvisory || "off";
+    forgeMasterRenderDial(prefs.tier);
+    forgeMasterRenderQuorumPicker(fm.quorumAdvisory);
   } catch {
     // prefs unavailable — dial stays hidden
   }
@@ -290,12 +477,12 @@ async function forgeMasterDialClick(tier) {
     const res = await fetch("/api/forge-master/prefs", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tier }),
+      body: JSON.stringify({ tier, quorumAdvisory: fm.quorumAdvisory }),
     });
     if (!res.ok) return;
-    const { tier: saved } = await res.json();
-    fm.dialTier = saved;
-    forgeMasterRenderDial(saved);
+    const saved = await res.json();
+    fm.dialTier = saved.tier;
+    forgeMasterRenderDial(saved.tier);
   } catch {
     // noop
   }
@@ -531,5 +718,10 @@ async function forgeMasterLoadPatterns() {
 
 window.forgeMasterRenderPatternsPanel = (...args) => forgeMasterRenderPatternsPanel(...args);
 window.forgeMasterLoadPatterns = () => forgeMasterLoadPatterns();
+
+// ─── Quorum test helpers ──────────────────────────────────────────────
+window.forgeMasterRenderQuorumPicker = (...args) => forgeMasterRenderQuorumPicker(...args);
+window.forgeMasterRenderQuorumEstimate = (...args) => forgeMasterRenderQuorumEstimate(...args);
+window.forgeMasterRenderQuorumReply = (...args) => forgeMasterRenderQuorumReply(...args);
 
 // Historical note: globals kept for cross-tab inline handlers.

@@ -30,9 +30,14 @@ import { resolveAllowlist, USAGE_HINTS } from "./allowlist.mjs";
 import { invokeMany } from "./tool-bridge.mjs";
 import { ensureSessionId, appendTurn, summarizeIfNeeded } from "./persistence.mjs";
 import { appendTurn as storeAppendTurn, loadSession, hashReply } from "./session-store.mjs";
+import { loadIndex, queryIndex } from "./recall-index.mjs";
 import { loadPrinciples, UNIVERSAL_BASELINE } from "./principles.mjs";
 import { resolveModel, VALID_TIERS } from "./reasoning-tier.mjs";
 import * as githubCopilotProvider from "./providers/github-copilot-tools.mjs";
+
+// ─── Recall-eligible lanes ────────────────────────────────────────────
+
+const RECALL_LANES = new Set([LANES.OPERATIONAL, LANES.TROUBLESHOOT, LANES.ADVISORY]);
 
 // ─── Constants ──────────────────────────────────────────────────────
 
@@ -218,6 +223,7 @@ function loadSystemPrompt(contextBlock, principlesBlock) {
  *   fromTier: string|null,
  *   toTier: string|null,
  *   reason: string|null,
+ *   relatedTurns: Array<{turnId:string,sessionId:string,timestamp:string,userMessage:string,lane:string,replyHash:string,score:number}>,
  * }>}
  */
 export async function runTurn(input, deps = {}) {
@@ -304,6 +310,7 @@ export async function runTurn(input, deps = {}) {
       toTier: null,
       reason: null,
       classification: classification ?? null,
+      relatedTurns: [],
     };
   }
 
@@ -330,6 +337,30 @@ export async function runTurn(input, deps = {}) {
     );
     contextBlock = ctx.contextBlock;
   } catch { /* non-fatal — proceed without context */ }
+
+  // ── 2a. Cross-session recall (advisory context injection) ─────────
+  // Query the BM25 recall index for top-3 prior turns semantically
+  // related to this message. Only active for non-ephemeral sessions
+  // on recall-eligible lanes (operational, troubleshoot, advisory).
+  // Recall failure is always non-fatal — it must never fail the turn.
+  let relatedTurns = [];
+  if (!isEphemeral && RECALL_LANES.has(classification.lane)) {
+    try {
+      await loadIndex(cwd);
+      relatedTurns = await queryIndex(message, { topK: 3, projectDir: cwd });
+    } catch (err) {
+      console.warn("[forge-master] recall-index query failed (non-fatal):", err?.message);
+      relatedTurns = [];
+    }
+    if (relatedTurns.length > 0) {
+      const recallLines = relatedTurns.map((r) => {
+        const ts = r.timestamp ? r.timestamp.slice(0, 10) : "unknown";
+        return `- [${ts} · ${r.lane}] "${r.userMessage}"`;
+      });
+      const recallBlock = `> **Recall (advisory):**\n${recallLines.join("\n")}`;
+      contextBlock = `${contextBlock}\n\n${recallBlock}`.trimStart();
+    }
+  }
 
   // Inject prior conversation turns into the context block so the model
   // has awareness of the current session history (user messages only;
@@ -390,6 +421,7 @@ export async function runTurn(input, deps = {}) {
         toTier: autoToTier,
         reason: autoEscalationReason,
         classification: classification ?? null,
+        relatedTurns: [],
       };
     }
   }
@@ -452,6 +484,7 @@ export async function runTurn(input, deps = {}) {
           toTier: autoToTier,
           reason: autoEscalationReason,
           classification: classification ?? null,
+          relatedTurns: [],
         };
       }
 
@@ -482,6 +515,7 @@ export async function runTurn(input, deps = {}) {
           toTier: autoToTier,
           reason: autoEscalationReason,
           classification: classification ?? null,
+          relatedTurns: [],
         };
       }
       break;
@@ -628,5 +662,6 @@ export async function runTurn(input, deps = {}) {
     toTier: autoToTier,
     reason: autoEscalationReason,
     classification: classification ?? null,
+    relatedTurns,
   };
 }

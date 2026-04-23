@@ -573,8 +573,32 @@
 
       <!-- Pipeline -->
       <div class="relative mb-16">
+        <!-- Station lanes — groups the 7 steps into the 3 workshop stations (desktop) -->
+        <div class="hidden lg:grid grid-cols-7 gap-4 mb-4">
+          <div class="col-span-3 px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500/10 to-amber-500/5 border border-amber-500/30 flex items-center justify-center gap-2 text-xs font-semibold text-amber-300">
+            <span>🪨</span><span>Smelt</span>
+            <span class="hidden xl:inline text-slate-500 font-normal">· idea → scope contract</span>
+          </div>
+          <div class="col-span-2 px-3 py-1.5 rounded-lg bg-gradient-to-r from-emerald-500/10 to-emerald-500/5 border border-emerald-500/30 flex items-center justify-center gap-2 text-xs font-semibold text-emerald-300">
+            <span>🔨</span><span>Forge</span>
+            <span class="hidden xl:inline text-slate-500 font-normal">· code → no TODOs</span>
+          </div>
+          <div class="col-span-2 px-3 py-1.5 rounded-lg bg-gradient-to-r from-rose-500/10 via-rose-500/5 to-purple-500/10 border border-rose-500/30 flex items-center justify-center gap-2 text-xs font-semibold text-rose-300">
+            <span>🛡️</span><span>Guard &amp; Ship</span>
+            <span class="hidden xl:inline text-slate-500 font-normal">· audit → commit</span>
+          </div>
+        </div>
+        <!-- Station lanes — compact chips for tablet/mobile -->
+        <div class="flex lg:hidden justify-center flex-wrap gap-2 mb-4 text-xs">
+          <span class="px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 font-semibold">🪨 Smelt</span>
+          <span class="text-slate-600">→</span>
+          <span class="px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 font-semibold">🔨 Forge</span>
+          <span class="text-slate-600">→</span>
+          <span class="px-2.5 py-1 rounded-full bg-rose-500/10 border border-rose-500/30 text-rose-300 font-semibold">🛡️ Guard &amp; Ship</span>
+        </div>
+
         <!-- Connecting line (desktop) -->
-        <div class="hidden lg:block absolute top-[2.75rem] left-[calc(100%/14)] right-[calc(100%/14)] h-px bg-gradient-to-r from-amber-500/30 via-orange-500/30 to-red-500/30 pointer-events-none"></div>
+        <div class="hidden lg:block absolute top-[calc(2.75rem+3.25rem)] left-[calc(100%/14)] right-[calc(100%/14)] h-px bg-gradient-to-r from-amber-500/30 via-orange-500/30 to-red-500/30 pointer-events-none"></div>
 
         <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-4">
 
@@ -636,9 +660,93 @@
         </div>
       </div>
 
-      <!-- Pipeline illustration -->
-      <div class="mb-12">
-        <img src="assets/pipeline-flow.webp" alt="7-step pipeline: Specify, Pre-flight, Harden, Execute, Sweep, Review, Ship" class="w-full max-w-4xl mx-auto rounded-2xl border border-slate-700/40 shadow-2xl shadow-amber-500/5" loading="lazy" />
+      <!-- Composed figure: the 7 steps don't run alone.
+           Forge-Master observes from above, an inner loop lives inside Step 3,
+           and OpenBrain memory feeds the next run. -->
+      <div class="mb-12 max-w-5xl mx-auto">
+        <figure class="rounded-2xl border border-slate-700/40 bg-slate-900/40 p-6 sm:p-8 shadow-2xl shadow-amber-500/5 space-y-6">
+
+          <!-- BAND 1 — Forge-Master advisor rail -->
+          <div class="relative">
+            <div class="flex items-center gap-2 text-[11px] uppercase tracking-widest font-bold text-amber-300/90 mb-3">
+              <span class="inline-flex items-center justify-center w-5 h-5 rounded bg-amber-500/20 border border-amber-500/40 text-[10px]">⚡</span>
+              <span>Forge-Master</span>
+              <span class="text-slate-600 font-normal normal-case tracking-normal">· one advisor, three touchpoints</span>
+            </div>
+            <div class="relative h-10 flex items-center">
+              <!-- dashed rail -->
+              <div class="absolute inset-x-4 top-1/2 h-px border-t border-dashed border-amber-500/30 pointer-events-none"></div>
+              <!-- 3 anchor pills -->
+              <div class="relative z-10 grid grid-cols-3 gap-3 w-full">
+                <div class="flex items-center gap-2 text-xs">
+                  <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+                  <span class="text-slate-300"><strong class="text-white">Intake</strong> · funnel ideas into Smelt</span>
+                </div>
+                <div class="flex items-center justify-center gap-2 text-xs">
+                  <span class="w-2 h-2 rounded-full bg-amber-400 pulse-soft"></span>
+                  <span class="text-slate-300"><strong class="text-white">Inside the slice</strong> · reasons during Execute</span>
+                </div>
+                <div class="flex items-center justify-end gap-2 text-xs">
+                  <span class="text-slate-300"><strong class="text-white">Ops &amp; advice</strong> · post-ship Q&amp;A</span>
+                  <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- BAND 2 — Inner loop inside Step 3 -->
+          <div class="relative p-5 rounded-xl bg-emerald-950/30 border border-emerald-800/40">
+            <div class="flex items-start gap-4">
+              <div class="shrink-0 w-12 h-12 rounded-full bg-emerald-500/20 border-2 border-emerald-500/70 flex items-center justify-center text-emerald-300 font-black relative">
+                <span>3</span>
+                <span class="absolute -top-1 -right-1 text-amber-300 pulse-soft text-sm">✦</span>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 mb-2">
+                  <span class="text-sm font-bold text-white">Execute — with an inner loop</span>
+                  <span class="text-emerald-400 text-base" aria-hidden="true">⟳</span>
+                </div>
+                <p class="text-xs text-slate-400 mb-3">Every slice is a research step. When a gate fails, the loop closes instead of the run:</p>
+                <div class="flex flex-wrap items-center gap-2 text-xs">
+                  <span class="px-2.5 py-1 rounded-md bg-slate-900/70 border border-slate-700/50 text-slate-300">try</span>
+                  <span class="text-slate-600">→</span>
+                  <span class="px-2.5 py-1 rounded-md bg-slate-900/70 border border-slate-700/50 text-slate-300">reflect</span>
+                  <span class="text-slate-600">→</span>
+                  <span class="px-2.5 py-1 rounded-md bg-slate-900/70 border border-slate-700/50 text-slate-300">trajectory</span>
+                  <span class="text-slate-600">→</span>
+                  <span class="px-2.5 py-1 rounded-md bg-slate-900/70 border border-slate-700/50 text-slate-300">auto-skill</span>
+                  <span class="text-slate-600">→</span>
+                  <span class="px-2.5 py-1 rounded-md bg-slate-900/70 border border-slate-700/50 text-slate-300">postmortem</span>
+                  <a href="manual/inner-loop.html" class="ml-auto text-forge-400 hover:text-forge-500 text-xs">Inside the loop →</a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- BAND 3 — Learn / OpenBrain memory -->
+          <div class="relative p-5 rounded-xl bg-gradient-to-r from-purple-500/5 via-slate-800/40 to-amber-500/5 border border-purple-500/20">
+            <div class="flex items-center gap-4">
+              <div class="shrink-0 w-12 h-12 rounded-xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-xl">🧠</div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 mb-1">
+                  <span class="text-sm font-bold text-white">Learn — OpenBrain memory</span>
+                  <span class="text-[11px] px-2 py-0.5 rounded bg-slate-800 border border-slate-700/50 text-slate-400">captures every run</span>
+                </div>
+                <p class="text-xs text-slate-400">Postmortems, trajectories, decisions, drift scores — all indexed. The next <span class="text-amber-300 font-semibold">Smelt</span> starts with what this run learned.</p>
+              </div>
+              <!-- Curved back-arrow (desktop only) -->
+              <div class="hidden sm:flex items-center gap-1.5 text-xs text-slate-500 whitespace-nowrap">
+                <span class="text-amber-400">↺</span>
+                <span>feeds next Smelt</span>
+              </div>
+            </div>
+          </div>
+
+          <figcaption class="text-[11px] text-slate-600 text-center pt-2">
+            The 7 steps above are the floor plan. Forge-Master walks the floor, the inner loop lives inside the anvil, and Learn is the shop's memory.
+            <a href="manual/how-it-works.html" class="text-forge-400 hover:text-forge-500 ml-1">Full diagram →</a>
+          </figcaption>
+        </figure>
       </div>
 
       <!-- Why separate sessions? -->

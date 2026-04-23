@@ -2292,6 +2292,70 @@ Target project: (current directory)</code></pre>
         setTimeout(() => { el.textContent = orig; el.style.color = ''; }, 2000);
       }
     }
+
+    // Desktop dropdown menus — click-toggle with outside-click + Escape + mouseleave
+    // grace period. Keeps parity with shared.js (used on every other page).
+    const dropdownTriggers = document.querySelectorAll('.nav-dropdown-trigger');
+    dropdownTriggers.forEach((trigger) => {
+      const triggerBtn = trigger.querySelector('button');
+      if (!triggerBtn) return;
+      triggerBtn.setAttribute('aria-haspopup', 'true');
+      triggerBtn.setAttribute('aria-expanded', 'false');
+      triggerBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const wasOpen = trigger.classList.contains('nav-dropdown-open');
+        dropdownTriggers.forEach((t) => {
+          t.classList.remove('nav-dropdown-open');
+          const b = t.querySelector('button');
+          if (b) b.setAttribute('aria-expanded', 'false');
+        });
+        if (!wasOpen) {
+          trigger.classList.add('nav-dropdown-open');
+          triggerBtn.setAttribute('aria-expanded', 'true');
+        }
+      });
+      trigger.querySelectorAll('.nav-dropdown a').forEach((a) =>
+        a.addEventListener('click', () => {
+          trigger.classList.remove('nav-dropdown-open');
+          triggerBtn.setAttribute('aria-expanded', 'false');
+        })
+      );
+      let leaveTimer = null;
+      const cancelLeave = () => { if (leaveTimer) { clearTimeout(leaveTimer); leaveTimer = null; } };
+      trigger.addEventListener('mouseleave', () => {
+        cancelLeave();
+        leaveTimer = setTimeout(() => {
+          trigger.classList.remove('nav-dropdown-open');
+          triggerBtn.setAttribute('aria-expanded', 'false');
+        }, 250);
+      });
+      trigger.addEventListener('mouseenter', cancelLeave);
+    });
+    if (dropdownTriggers.length) {
+      document.addEventListener('click', (e) => {
+        dropdownTriggers.forEach((trigger) => {
+          if (!trigger.contains(e.target) && trigger.classList.contains('nav-dropdown-open')) {
+            trigger.classList.remove('nav-dropdown-open');
+            const b = trigger.querySelector('button');
+            if (b) b.setAttribute('aria-expanded', 'false');
+          }
+        });
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+        dropdownTriggers.forEach((trigger) => {
+          if (trigger.classList.contains('nav-dropdown-open')) {
+            trigger.classList.remove('nav-dropdown-open');
+            const b = trigger.querySelector('button');
+            if (b) {
+              b.setAttribute('aria-expanded', 'false');
+              b.focus();
+            }
+          }
+        });
+      });
+    }
   </script>
 
 </body>

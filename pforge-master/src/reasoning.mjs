@@ -275,6 +275,7 @@ export async function runTurn(input, deps = {}) {
       fromTier: null,
       toTier: null,
       reason: null,
+      classification: classification ?? null,
     };
   }
 
@@ -350,6 +351,7 @@ export async function runTurn(input, deps = {}) {
         fromTier: autoFromTier,
         toTier: autoToTier,
         reason: autoEscalationReason,
+        classification: classification ?? null,
       };
     }
   }
@@ -411,6 +413,7 @@ export async function runTurn(input, deps = {}) {
           fromTier: autoFromTier,
           toTier: autoToTier,
           reason: autoEscalationReason,
+          classification: classification ?? null,
         };
       }
 
@@ -440,6 +443,7 @@ export async function runTurn(input, deps = {}) {
           fromTier: autoFromTier,
           toTier: autoToTier,
           reason: autoEscalationReason,
+          classification: classification ?? null,
         };
       }
       break;
@@ -573,5 +577,6 @@ export async function runTurn(input, deps = {}) {
     fromTier: autoFromTier,
     toTier: autoToTier,
     reason: autoEscalationReason,
+    classification: classification ?? null,
   };
 }

@@ -68,15 +68,17 @@ for ($i = $StartIndex; $i -lt $plans.Count; $i++) {
         Write-Host "Attaching to already-running orchestrator PID $orchPid" -ForegroundColor Yellow
     } else {
         # Launch orchestrator. `pforge.ps1 run-plan` forks the node orchestrator
-        # and returns immediately with a line like "Orchestrator running in background  PID: 12345".
-        $launchOut = & .\pforge.ps1 run-plan $plan --quorum=auto --model claude-opus-4.6 --manual-import 2>&1 |
-            Tee-Object -FilePath $runLog
-        $pidLine  = $launchOut | Select-String -Pattern 'PID:\s*(\d+)' | Select-Object -First 1
-        if (-not $pidLine) {
-            "!! could not capture orchestrator PID for $planName — abort" | Tee-Object -FilePath $chainLog -Append
+        # and returns immediately. PID is recorded to .forge/last-orch.pid
+        # (Write-Host bypasses stdout, so we read the PID file instead).
+        $pidFile = ".forge/last-orch.pid"
+        if (Test-Path $pidFile) { Remove-Item $pidFile -Force }
+        & .\pforge.ps1 run-plan $plan --quorum=auto --model claude-opus-4.6 --manual-import 2>&1 |
+            Tee-Object -FilePath $runLog | Out-Null
+        if (-not (Test-Path $pidFile)) {
+            "!! .forge/last-orch.pid missing after launch of $planName — abort" | Tee-Object -FilePath $chainLog -Append
             exit 1
         }
-        $orchPid = [int]$pidLine.Matches[0].Groups[1].Value
+        $orchPid = [int](Get-Content $pidFile -Raw).Trim()
         Write-Host "Orchestrator PID: $orchPid (waiting...)" -ForegroundColor DarkGray
     }
 

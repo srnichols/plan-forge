@@ -4114,6 +4114,13 @@ function Invoke-RunPlan {
         }
         Write-Host ""
         $proc = Start-Process -FilePath 'node' -ArgumentList $nodeArgs -PassThru -NoNewWindow
+        # Record PID to .forge/last-orch.pid so chain runners and external tooling
+        # can attach without scraping Write-Host output (which bypasses stdout).
+        try {
+            $pidDir = Join-Path (Get-Location) '.forge'
+            if (-not (Test-Path $pidDir)) { New-Item -ItemType Directory -Path $pidDir -Force | Out-Null }
+            Set-Content -Path (Join-Path $pidDir 'last-orch.pid') -Value $proc.Id -NoNewline -Encoding ASCII
+        } catch {}
         Write-Host "Orchestrator running in background  PID: $($proc.Id)" -ForegroundColor Green
         Write-Host "Monitor : pforge plan-status" -ForegroundColor DarkGray
         Write-Host "Logs    : .forge/runs/ (latest sub-directory)" -ForegroundColor DarkGray

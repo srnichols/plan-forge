@@ -29,6 +29,7 @@ const fm = {
   activeCategory: null,
   gallerySearch: "",
   dialTier: null,
+  chatCost: { usd: 0, tokensIn: 0, tokensOut: 0 },
 };
 
 // ─── Dial config ──────────────────────────────────────────────────────
@@ -135,6 +136,8 @@ function forgeMasterPickPrompt(id) {
 
 function forgeMasterNewChat() {
   fm.sessionId = null;
+  fm.chatCost = { usd: 0, tokensIn: 0, tokensOut: 0 };
+  forgeMasterRenderCostMeter();
   const stream = document.getElementById("fm-chat-stream");
   const trace = document.getElementById("fm-tool-trace");
   if (stream) stream.innerHTML = '<p class="text-xs text-gray-500 text-center mt-8">New chat started. Type a message or pick a prompt.</p>';
@@ -187,6 +190,12 @@ function forgeMasterStream(url, thinkingId) {
   es.addEventListener("done", (e) => {
     try {
       const data = JSON.parse(e.data);
+      if (typeof data.totalCostUSD === "number") {
+        fm.chatCost.usd += data.totalCostUSD;
+        fm.chatCost.tokensIn += data.tokensIn || 0;
+        fm.chatCost.tokensOut += data.tokensOut || 0;
+        forgeMasterRenderCostMeter();
+      }
       if (data.relatedTurns && data.relatedTurns.length > 0) {
         forgeMasterRenderRelatedConversations(data.relatedTurns);
       }
@@ -220,6 +229,40 @@ function forgeMasterRenderDial(activeTier) {
       : "text-xs px-3 py-1 rounded bg-gray-700 text-gray-300 hover:bg-gray-600";
     return `<button class="${cls}" data-tier="${tier}">${label}</button>`;
   }).join("");
+  forgeMasterRenderCostMeter();
+}
+
+// ─── Cost Meter ───────────────────────────────────────────────────────
+
+/**
+ * Render the chat cost meter below the reasoning dial.
+ * Shows accumulated API-equivalent cost for the current chat.
+ * Note: Copilot subscription users are not billed per-token.
+ */
+function forgeMasterRenderCostMeter() {
+  let meterEl = document.getElementById("fm-cost-meter");
+  if (!meterEl) {
+    const dialEl = document.getElementById("fm-dial");
+    if (!dialEl) return;
+    meterEl = document.createElement("div");
+    meterEl.id = "fm-cost-meter";
+    meterEl.className = "text-xs text-gray-500 mb-2";
+    dialEl.insertAdjacentElement("afterend", meterEl);
+  }
+  const { usd, tokensIn, tokensOut } = fm.chatCost;
+  const totalTokens = tokensIn + tokensOut;
+  if (totalTokens === 0) {
+    meterEl.textContent = "";
+    return;
+  }
+  const costStr = usd < 0.0001
+    ? `<$0.0001`
+    : `~$${usd.toFixed(4)}`;
+  const tokenStr = totalTokens >= 1000
+    ? `${(totalTokens / 1000).toFixed(1)}k tok`
+    : `${totalTokens} tok`;
+  meterEl.title = "API-equivalent estimate. Copilot subscription users are not billed per-token.";
+  meterEl.textContent = `Chat: ${costStr} · ${tokenStr}`;
 }
 
 async function forgeMasterLoadPrefs() {

@@ -33,6 +33,7 @@ import { appendTurn as storeAppendTurn, loadSession, hashReply } from "./session
 import { loadIndex, queryIndex } from "./recall-index.mjs";
 import { loadPrinciples, UNIVERSAL_BASELINE } from "./principles.mjs";
 import { resolveModel, VALID_TIERS } from "./reasoning-tier.mjs";
+import { computeTurnCost } from "./cost.mjs";
 import * as githubCopilotProvider from "./providers/github-copilot-tools.mjs";
 
 // ─── Recall-eligible lanes ────────────────────────────────────────────
@@ -444,6 +445,7 @@ export async function runTurn(input, deps = {}) {
   const allToolCalls = [];
   let totalTokensIn = 0;
   let totalTokensOut = 0;
+  let totalCostUSD = 0;
   let truncated = false;
   let finalReply = "";
   let iterationCount = 0;
@@ -471,7 +473,7 @@ export async function runTurn(input, deps = {}) {
           toolCalls: allToolCalls,
           tokensIn: totalTokensIn,
           tokensOut: totalTokensOut,
-          totalCostUSD: 0,
+          totalCostUSD: totalCostUSD,
           truncated: false,
           error: `reasoning_model_unavailable`,
           sessionId: effectiveSessionId,
@@ -502,7 +504,7 @@ export async function runTurn(input, deps = {}) {
           toolCalls: allToolCalls,
           tokensIn: totalTokensIn,
           tokensOut: totalTokensOut,
-          totalCostUSD: 0,
+          totalCostUSD: totalCostUSD,
           truncated: false,
           error: "rate_limited",
           sessionId: effectiveSessionId,
@@ -523,6 +525,7 @@ export async function runTurn(input, deps = {}) {
 
     totalTokensIn += response.tokensIn || 0;
     totalTokensOut += response.tokensOut || 0;
+    totalCostUSD += computeTurnCost(currentModel, response.tokensIn || 0, response.tokensOut || 0);
 
     // ── Final reply ──
     if (response.type === "reply") {
@@ -650,7 +653,7 @@ export async function runTurn(input, deps = {}) {
     toolCalls: allToolCalls,
     tokensIn: totalTokensIn,
     tokensOut: totalTokensOut,
-    totalCostUSD: 0,
+    totalCostUSD,
     truncated,
     sessionId: effectiveSessionId,
     requestedTier,

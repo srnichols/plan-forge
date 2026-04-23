@@ -158,11 +158,11 @@ function _registerExpress(app, dispatcher) {
         },
       );
       if (result.error) {
-        sse.send("error", { error: result.error, sessionId });
+        sse.send("error", { error: result.error, sessionId, tokensIn: result.tokensIn, tokensOut: result.tokensOut, totalCostUSD: result.totalCostUSD || 0 });
       } else {
         sse.send("reply", { content: result.reply, sessionId });
         for (const tc of result.toolCalls || []) sse.send("tool-call", tc);
-        sse.send("done", { sessionId, tokensIn: result.tokensIn, tokensOut: result.tokensOut, relatedTurns: result.relatedTurns || [] });
+        sse.send("done", { sessionId, tokensIn: result.tokensIn, tokensOut: result.tokensOut, totalCostUSD: result.totalCostUSD || 0, resolvedModel: result.resolvedModel || null, relatedTurns: result.relatedTurns || [] });
       }
     } catch (err) {
       sse.send("error", { error: err.message });
@@ -292,11 +292,11 @@ function _buildNodeHandler(dispatcher) {
           },
         );
         if (result.error) {
-          sse.send("error", { error: result.error, sessionId });
+          sse.send("error", { error: result.error, sessionId, tokensIn: result.tokensIn, tokensOut: result.tokensOut, totalCostUSD: result.totalCostUSD || 0 });
         } else {
           sse.send("reply", { content: result.reply, sessionId });
           for (const tc of result.toolCalls || []) sse.send("tool-call", tc);
-          sse.send("done", { sessionId, tokensIn: result.tokensIn, tokensOut: result.tokensOut, relatedTurns: result.relatedTurns || [] });
+          sse.send("done", { sessionId, tokensIn: result.tokensIn, tokensOut: result.tokensOut, totalCostUSD: result.totalCostUSD || 0, resolvedModel: result.resolvedModel || null, relatedTurns: result.relatedTurns || [] });
         }
       } catch (err) {
         sse.send("error", { error: err.message });

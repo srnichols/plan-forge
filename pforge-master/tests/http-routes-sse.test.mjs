@@ -135,6 +135,50 @@ describe("express path — /stream SSE events", () => {
     expect(events).toEqual(["start", "classification", "reply", "done"]);
   });
 
+  it("done payload includes totalCostUSD and resolvedModel", async () => {
+    runTurn.mockImplementation(async (input, deps) => {
+      deps.onClassification(MOCK_CLASSIFICATION);
+      return {
+        reply: "ok",
+        toolCalls: [],
+        tokensIn: 100,
+        tokensOut: 50,
+        totalCostUSD: 0.00042,
+        resolvedModel: "gpt-4o-mini",
+      };
+    });
+
+    const req = { params: { sessionId: "s-cost-1" }, query: { message: "status" } };
+    await app.callGet("/api/forge-master/chat/:sessionId/stream", req, res);
+
+    const doneFrame = res._frames().find((f) => f.event === "done");
+    expect(doneFrame).toBeDefined();
+    expect(doneFrame.data.totalCostUSD).toBe(0.00042);
+    expect(doneFrame.data.resolvedModel).toBe("gpt-4o-mini");
+  });
+
+  it("error payload includes totalCostUSD for accounting", async () => {
+    runTurn.mockImplementation(async (input, deps) => {
+      deps.onClassification(MOCK_CLASSIFICATION);
+      return {
+        reply: "",
+        toolCalls: [],
+        tokensIn: 50,
+        tokensOut: 0,
+        totalCostUSD: 0.000015,
+        error: "rate_limited",
+      };
+    });
+
+    const req = { params: { sessionId: "s-cost-err" }, query: { message: "x" } };
+    await app.callGet("/api/forge-master/chat/:sessionId/stream", req, res);
+
+    const errFrame = res._frames().find((f) => f.event === "error");
+    expect(errFrame).toBeDefined();
+    expect(errFrame.data.error).toBe("rate_limited");
+    expect(errFrame.data.totalCostUSD).toBe(0.000015);
+  });
+
   it("classification payload matches what runTurn emits", async () => {
     runTurn.mockImplementation(async (input, deps) => {
       deps.onClassification(MOCK_CLASSIFICATION);

@@ -7,6 +7,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.74.3] — 2026-04-23 — `pforge analyze` wildcard crash fix
+
+> **Point-release — unblocks `analyze` on plans containing bracket/brace characters in Scope Contract paths.**
+> `Invoke-Analyze` used PowerShell `-like "*$fp*"` to match changed files against in-scope / forbidden path hints. When a scope line contained characters that PowerShell treats as wildcard metacharacters (`[`, `]`, `{`, `}`), the match threw `The specified wildcard character pattern is not valid`. Switched to `String.Contains` (literal substring) — same intent, no wildcard interpretation.
+
+### Fixed
+- `pforge.ps1` — `Invoke-Analyze` Coverage block uses `$file.Contains($fp)` / `$file.Contains($sp)` instead of `-like` wildcards. Analyze now completes on plans like `Phase-38.4-FM-PLANNER-EXECUTOR-v2.75-PLAN.md` whose scope lines include `{steps: [], skipReason: "lane=offtopic"}`.
+
+---
+
 ## [2.74.2] — 2026-04-23 — `forge_status` graceful fallback (hammer 8/8)
 
 > **Point-release — closes the last `ts-drift` failure from v2.74.1.**

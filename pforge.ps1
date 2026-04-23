@@ -2010,7 +2010,7 @@ function Invoke-Analyze {
 
     # Fix 9: Also parse checkbox format as fallback criteria
     if ($allCriteria.Count -eq 0) {
-        $checkboxCriteria = [regex]::Matches($planContent, '(?m)(?<=## Acceptance Criteria\s*\n)(?:^\s*- \[[ x]\]\s*(.+)\n?)+') 
+        $checkboxCriteria = [regex]::Matches($planContent, '(?m)(?<=## Acceptance Criteria\s*\n)(?:^\s*- \[[ x]\]\s*(.+)\n?)+')
         if (-not $checkboxCriteria -or $checkboxCriteria.Count -eq 0) {
             # Try line-by-line within acceptance criteria section
             $inAC = $false
@@ -2086,7 +2086,10 @@ function Invoke-Analyze {
     foreach ($file in $changedFiles) {
         $isForbidden = $false
         foreach ($fp in $forbiddenPaths) {
-            if ($file -like "*$fp*") { $violations++; $isForbidden = $true; break }
+            # Use .Contains (literal substring) instead of -like to avoid
+            # PowerShell wildcard interpretation when path hints include
+            # bracket/brace characters (e.g. "{steps: [], ...}" in scope lines).
+            if ($file.Contains($fp)) { $violations++; $isForbidden = $true; break }
         }
         if ($isForbidden) { continue }
 
@@ -2094,7 +2097,7 @@ function Invoke-Analyze {
         if ($inScopePaths.Count -eq 0) { $isInScope = $true }
         else {
             foreach ($sp in $inScopePaths) {
-                if ($file -like "*$sp*") { $isInScope = $true; break }
+                if ($file.Contains($sp)) { $isInScope = $true; break }
             }
         }
         if ($isInScope) { $inScope++ } else { $outOfScope++ }

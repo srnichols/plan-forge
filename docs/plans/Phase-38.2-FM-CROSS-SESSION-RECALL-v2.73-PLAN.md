@@ -1,4 +1,4 @@
-﻿---
+---
 crucibleId: 5b1be390-d26a-4a76-bd72-ef27a73d55ea
 lane: feature
 source: human
@@ -260,6 +260,7 @@ node -e "const fs=require('fs');const v=fs.readFileSync('VERSION','utf8').trim()
 - [pforge-master/src/recall-index.mjs](pforge-master/src/recall-index.mjs)
 - [pforge-master/src/reasoning.mjs](pforge-master/src/reasoning.mjs)
 - [scripts/probe-forge-master.mjs](scripts/probe-forge-master.mjs)
+Additionally run: `node scripts/hammer-fm.mjs --scenario=phase-38.2-baseline --tier=keyword-only` — capture output to `.forge/load-sim/38.2/hammer-<iter>.md`.
 
 **Sub-tasks** (iterate until 2 consecutive zero-defect iterations; hard cap 5):
 
@@ -273,6 +274,7 @@ node -e "const fs=require('fs');const v=fs.readFileSync('VERSION','utf8').trim()
 - All prior turns are OFFTOPIC — assert `queryIndex` returns `[]` gracefully.
 
 **3 — Probe-harness regression**: Run `node scripts/probe-forge-master.mjs --keyword-only --timeout=90` AND `node scripts/probe-forge-master.mjs --timeout=120`. Both MUST meet baseline (≥22/24 OK, ≥16/18 lane-match). Capture output to `.forge/validation/results-<iso>.md`.
+Additionally run: `node scripts/hammer-fm.mjs --scenario=phase-38.2-baseline --tier=keyword-only` — capture output to `.forge/load-sim/38.2/hammer-<iter>.md`.
 
 **4 — `pforge` self-check sweep** → capture to `.forge/load-sim/38.2/diagnostics-<iter>.txt`:
 - `pforge analyze docs/plans/Phase-38.2-FM-CROSS-SESSION-RECALL-v2.73-PLAN.md` — consistency ≥ 85

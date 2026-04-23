@@ -1,0 +1,30 @@
+{
+  "name": "Phase-38.6 Baseline",
+  "description": "Pattern surfacing flows",
+  "prompts": [
+    {
+      "id": "ps-pattern-1",
+      "message": "What recurring patterns of failure have you observed in recent plan runs?",
+      "expectedLane": "ADVISORY",
+      "purpose": "failure pattern detection"
+    },
+    {
+      "id": "ps-pattern-2",
+      "message": "Are there any code smells or architectural anti-patterns emerging across slices?",
+      "expectedLane": "ADVISORY",
+      "purpose": "anti-pattern detection"
+    },
+    {
+      "id": "ps-pattern-3",
+      "message": "Show me all the gate failures from the last 10 runs and identify common root causes.",
+      "expectedLane": "TROUBLESHOOT",
+      "purpose": "gate failure pattern analysis"
+    },
+    {
+      "id": "ps-pattern-4",
+      "message": "What prompts consistently fail the lane-match scorer in the hammer harness?",
+      "expectedLane": "ADVISORY",
+      "purpose": "harness pattern surfacing"
+    }
+  ]
+}

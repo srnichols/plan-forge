@@ -1,4 +1,4 @@
-﻿---
+---
 crucibleId: dc32e7bd-2327-4000-99f8-722fac005c38
 lane: feature
 source: human
@@ -276,6 +276,7 @@ node -e "const fs=require('fs');const v=fs.readFileSync('VERSION','utf8').trim()
 - [pforge-mcp/graph/builder.mjs](pforge-mcp/graph/builder.mjs)
 - [pforge-mcp/graph/query.mjs](pforge-mcp/graph/query.mjs)
 - [scripts/probe-forge-master.mjs](scripts/probe-forge-master.mjs)
+Additionally run: `node scripts/hammer-fm.mjs --scenario=phase-38.3-baseline --tier=keyword-only` — capture output to `.forge/load-sim/38.3/hammer-<iter>.md`.
 
 **Sub-tasks** (iterate until 2 consecutive zero-defect iterations; hard cap 5):
 
@@ -289,6 +290,7 @@ node -e "const fs=require('fs');const v=fs.readFileSync('VERSION','utf8').trim()
 - Plan .md with malformed frontmatter — builder skips that file, logs warning, continues.
 
 **3 — Probe-harness regression**: Run `node scripts/probe-forge-master.mjs --keyword-only --timeout=90` AND `node scripts/probe-forge-master.mjs --timeout=120`. Both MUST meet baseline (≥22/24 OK, ≥16/18 lane-match). Capture output to `.forge/validation/results-<iso>.md`.
+Additionally run: `node scripts/hammer-fm.mjs --scenario=phase-38.3-baseline --tier=keyword-only` — capture output to `.forge/load-sim/38.3/hammer-<iter>.md`.
 
 **4 — `pforge` self-check sweep** → capture to `.forge/load-sim/38.3/diagnostics-<iter>.txt`:
 - `pforge analyze docs/plans/Phase-38.3-FM-KNOWLEDGE-GRAPH-v2.74-PLAN.md` — consistency ≥ 85

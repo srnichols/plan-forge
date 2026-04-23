@@ -1,4 +1,4 @@
-﻿---
+---
 crucibleId: 8f92ee55-ff4e-4d50-859c-05d19ed3a81e
 lane: feature
 source: human
@@ -268,6 +268,7 @@ node -e "const fs=require('fs');const v=fs.readFileSync('VERSION','utf8').trim()
 - [pforge-master/src/quorum-dispatcher.mjs](pforge-master/src/quorum-dispatcher.mjs)
 - [pforge-master/src/reasoning.mjs](pforge-master/src/reasoning.mjs)
 - [scripts/probe-forge-master.mjs](scripts/probe-forge-master.mjs)
+Additionally run: `node scripts/hammer-fm.mjs --scenario=phase-38.7-baseline --tier=keyword-only` — capture output to `.forge/load-sim/38.7/hammer-<iter>.md`.
 
 **Sub-tasks** (iterate until 2 consecutive zero-defect iterations; hard cap 5):
 
@@ -281,6 +282,7 @@ node -e "const fs=require('fs');const v=fs.readFileSync('VERSION','utf8').trim()
 - Cost estimate calculation overflows (extreme token counts) — assert capped at safe value, no NaN.
 
 **3 — Probe-harness regression**: Run `node scripts/probe-forge-master.mjs --keyword-only --timeout=90` AND `node scripts/probe-forge-master.mjs --timeout=120`. Both MUST meet baseline (≥22/24 OK, ≥16/18 lane-match). Capture output to `.forge/validation/results-<iso>.md`.
+Additionally run: `node scripts/hammer-fm.mjs --scenario=phase-38.7-baseline --tier=keyword-only` — capture output to `.forge/load-sim/38.7/hammer-<iter>.md`.
 
 **4 — `pforge` self-check sweep** → capture to `.forge/load-sim/38.7/diagnostics-<iter>.txt`:
 - `pforge analyze docs/plans/Phase-38.7-FM-QUORUM-ADVISORY-v2.78-PLAN.md` — consistency ≥ 85

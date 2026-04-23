@@ -7,6 +7,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.71.2] — 2026-04-24 — Forge-Master Hammer Harness (Phase-37.2)
+
+> **Phase-37.2 — Hammer harness for end-to-end Forge-Master testing.**  
+> Adds `scripts/hammer-fm.mjs`, four bundled scenario packs, and `pforge hammer-fm` CLI surface.  
+> Replaces ad-hoc probe scripts with a repeatable, scored harness.
+
+### Added
+- `scripts/hammer-fm.mjs` — injectable CLI; `main(argv, deps)` returns exit code; `loadScenario(name, opts)` validates scenario packs
+- `scripts/hammer-fm/sse-client.mjs` — chunk-boundary-safe SSE reader with injectable `fetchFn`
+- `scripts/hammer-fm/scorers.mjs` — 6 pure scorer functions: `lane`, `toolPresence`, `contentMatch`, `noForbiddenContent`, `sseHealth`, `latency`; exported as `ALL_SCORERS`
+- `scripts/hammer-fm/reporter.mjs` — Markdown + JSON reporter with per-prompt table, tier-comparison section, cost summary
+- `scripts/hammer-fm/scenarios/shipped-prompts.json` — 8 prompts (1 per lane category)
+- `scripts/hammer-fm/scenarios/realistic-qa.json` — 20 prompts (ambiguous, multi-intent, follow-up, off-topic, operational)
+- `scripts/hammer-fm/scenarios/dial-sweep.json` — 10 prompts designed for tier-comparison sweeps
+- `scripts/hammer-fm/scenarios/phase-38.1-baseline.json` — 6 conversation-memory baseline prompts for Phase-38.1 hardening
+- `pforge hammer-fm` CLI command (pforge.sh + pforge.ps1)
+- `docs/CLI-GUIDE.md` — `hammer-fm` section with scenario schema, bundled scenarios, and report format
+- `.gitignore` — `.forge/hammer-forge-master/reports/` excluded
+- `pforge-mcp/tests/hammer-fm.test.mjs` — 35 unit tests (all green)
+
+### Changed
+- `pforge.sh` / `pforge.ps1` — added `hammer-fm` dispatcher (`cmd_hammer_fm` / `Invoke-HammerFm`)
 ## [2.71.1] — 2026-04-23 — Forge-Master HTTP Bridge Completeness (Phase-37.1)
 
 > **Phase-37.1 — Hotfix release. Live-fire hammer evidence on 2026-04-23 showed every downstream tool call from the Forge-Master HTTP bridge returned either `"Unknown tool: X"` or `"requires async dispatch — not available in Forge-Master bridge"`. Root cause: `invokeForgeTool` (the `mcpCall` injected into `registerForgeMasterRoutes`) handled only a subset of the MCP tool registry; the HTTP dispatcher bailed early on streaming tools instead of awaiting their terminal payload. This release closes both error classes for all read-only tools in `BASE_ALLOWLIST`. Re-hammer of the 8-prompt battery shows zero `Unknown tool` and zero `requires async dispatch` in all 8 post-fix logs; 7/8 labels have a non-error `tool-call` `resultSummary`.**
@@ -3438,3 +3460,4 @@ Every SKILL.md now follows the full Skill Blueprint format: Frontmatter → Trig
 - Setup wizard with auto-detection (`setup.ps1` / `setup.sh`)
 - Validation scripts (`validate-setup.ps1` / `validate-setup.sh`)
 - Worked examples for TypeScript, .NET, and Python
+

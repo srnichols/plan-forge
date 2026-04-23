@@ -1,4 +1,4 @@
-﻿---
+---
 crucibleId: bc753a48-cd91-4460-8bae-9fe527bbb717
 lane: feature
 source: human
@@ -39,6 +39,7 @@ No prior postmortems — first execution.
 - `pforge-master/src/http-routes.mjs` — forward `plan` SSE event from `runTurn`.
 - Probe harness `.forge/validation/probes.json` — 3 new multi-step probes.
 - `pforge-master/scripts/probe-forge-master.mjs` — assert `plan` SSE event for new probes.
+Additionally run: `node scripts/hammer-fm.mjs --scenario=phase-38.4-baseline --tier=keyword-only` — capture output to `.forge/load-sim/38.4/hammer-<iter>.md`.
 - `VERSION`, `CHANGELOG.md`, `ROADMAP.md` — v2.75.0 release metadata.
 
 ### Out of Scope
@@ -109,6 +110,7 @@ No prior postmortems — first execution.
 
 - **MUST**: `.forge/validation/probes.json` gains at least 3 new probes labeled `planner-` that exercise multi-step queries (e.g. `planner-cost-breakdown`, `planner-recent-failures`, `planner-phase-status`).
 - **MUST**: Probe harness run with `node scripts/probe-forge-master.mjs --keyword-only` shows ≥ 1 probe where the SSE stream includes a `plan` event.
+Additionally run: `node scripts/hammer-fm.mjs --scenario=phase-38.4-baseline --tier=keyword-only` — capture output to `.forge/load-sim/38.4/hammer-<iter>.md`.
 - **MUST**: `VERSION` contains exactly `2.75.0`.
 - **MUST**: `CHANGELOG.md` has a `[2.75.0]` section mentioning `planner-executor`, `plan SSE event`, and `multi-step queries`.
 - **MUST**: `ROADMAP.md` reflects Phase-38.4 / v2.75.0 as shipped.
@@ -240,6 +242,7 @@ npx vitest run pforge-master/tests/planner-sse.test.mjs pforge-master/tests/http
 **Files to modify**:
 - `.forge/validation/probes.json`
 - `scripts/probe-forge-master.mjs`
+Additionally run: `node scripts/hammer-fm.mjs --scenario=phase-38.4-baseline --tier=keyword-only` — capture output to `.forge/load-sim/38.4/hammer-<iter>.md`.
 - `VERSION`, `CHANGELOG.md`, `ROADMAP.md`
 
 **Depends On**: Slice 3 complete.
@@ -247,6 +250,7 @@ npx vitest run pforge-master/tests/planner-sse.test.mjs pforge-master/tests/http
 **Context Files**:
 - [.forge/validation/probes.json](../../.forge/validation/probes.json)
 - [scripts/probe-forge-master.mjs](../../scripts/probe-forge-master.mjs)
+Additionally run: `node scripts/hammer-fm.mjs --scenario=phase-38.4-baseline --tier=keyword-only` — capture output to `.forge/load-sim/38.4/hammer-<iter>.md`.
 
 **Validation Gate**:
 ```bash
@@ -281,6 +285,7 @@ node -e "const fs=require('fs');const v=fs.readFileSync('VERSION','utf8').trim()
 - Plan returns 6 steps (> cap) — assert only first 5 executed.
 
 **3 — Probe-harness regression**: Run `node scripts/probe-forge-master.mjs --keyword-only --timeout=90` AND `node scripts/probe-forge-master.mjs --timeout=120`. Both MUST meet baseline (≥22/24 OK, ≥16/18 lane-match). Capture output to `.forge/validation/results-<iso>.md`.
+Additionally run: `node scripts/hammer-fm.mjs --scenario=phase-38.4-baseline --tier=keyword-only` — capture output to `.forge/load-sim/38.4/hammer-<iter>.md`.
 
 **4 — `pforge` self-check sweep** → capture to `.forge/load-sim/38.4/diagnostics-<iter>.txt`:
 - `pforge analyze docs/plans/Phase-38.4-FM-PLANNER-EXECUTOR-v2.75-PLAN.md` — consistency ≥ 85

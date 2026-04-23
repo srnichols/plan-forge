@@ -15,16 +15,54 @@
  * @module forge-master/http-routes
  */
 
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { join } from "node:path";
 import { getPromptCatalog } from "./prompts.mjs";
 import { getForgeMasterConfig } from "./config.mjs";
 import { runTurn } from "./reasoning.mjs";
 import { createSseStream } from "./sse.mjs";
 import { BASE_ALLOWLIST, WRITE_ALLOWLIST } from "./allowlist.mjs";
 import { createHttpDispatcher, invokeForgeTool } from "./http-dispatcher.mjs";
+import { VALID_TIERS } from "./reasoning-tier.mjs";
 import { randomUUID } from "node:crypto";
 
 const sessions = new Map();
 const pendingApprovals = new Map();
+
+const PREFS_FILE = ".forge/fm-prefs.json";
+const PREFS_DEFAULTS = { tier: null, autoEscalate: false };
+
+/**
+ * Load Forge-Master user prefs from `<cwd>/.forge/fm-prefs.json`.
+ * Returns defaults when the file is missing or the stored tier is invalid.
+ *
+ * @param {string} [cwd] — project root (defaults to process.cwd())
+ * @returns {{ tier: string|null, autoEscalate: boolean }}
+ */
+export function loadPrefs(cwd = process.cwd()) {
+  const prefsPath = join(cwd, PREFS_FILE);
+  if (!existsSync(prefsPath)) return { ...PREFS_DEFAULTS };
+  try {
+    const raw = JSON.parse(readFileSync(prefsPath, "utf-8"));
+    const tier = raw.tier && VALID_TIERS.includes(raw.tier) ? raw.tier : null;
+    const autoEscalate = typeof raw.autoEscalate === "boolean" ? raw.autoEscalate : false;
+    return { tier, autoEscalate };
+  } catch {
+    return { ...PREFS_DEFAULTS };
+  }
+}
+
+/**
+ * Persist Forge-Master user prefs to `<cwd>/.forge/fm-prefs.json`.
+ *
+ * @param {{ tier: string|null, autoEscalate: boolean }} prefs
+ * @param {string} [cwd] — project root (defaults to process.cwd())
+ */
+export function savePrefs(prefs, cwd = process.cwd()) {
+  const forgeDir = join(cwd, ".forge");
+  mkdirSync(forgeDir, { recursive: true });
+  writeFileSync(join(cwd, PREFS_FILE), JSON.stringify(prefs, null, 2), "utf-8");
+}
 
 // ─── Route handler map ───────────────────────────────────────────────
 
@@ -72,6 +110,20 @@ function _registerExpress(app, dispatcher) {
       promptCategories: catalog.categories.length,
       promptCount,
     });
+  });
+
+  app.get("/api/forge-master/prefs", (req, res) => {
+    res.json(loadPrefs(process.cwd()));
+  });
+
+  app.put("/api/forge-master/prefs", (req, res) => {
+    const { tier, autoEscalate } = req.body || {};
+    const normalized = {
+      tier: tier && VALID_TIERS.includes(tier) ? tier : null,
+      autoEscalate: typeof autoEscalate === "boolean" ? autoEscalate : false,
+    };
+    savePrefs(normalized, process.cwd());
+    res.json(normalized);
   });
 
   app.post("/api/forge-master/chat", (req, res) => {
@@ -176,6 +228,21 @@ function _buildNodeHandler(dispatcher) {
         promptCategories: catalog.categories.length,
         promptCount,
       });
+    }
+
+    if (method === "GET" && path === "/api/forge-master/prefs") {
+      return json(res, 200, loadPrefs(process.cwd()));
+    }
+
+    if (method === "PUT" && path === "/api/forge-master/prefs") {
+      const body = await readBody(req);
+      const { tier, autoEscalate } = body;
+      const normalized = {
+        tier: tier && VALID_TIERS.includes(tier) ? tier : null,
+        autoEscalate: typeof autoEscalate === "boolean" ? autoEscalate : false,
+      };
+      savePrefs(normalized, process.cwd());
+      return json(res, 200, normalized);
     }
 
     if (method === "POST" && path === "/api/forge-master/chat") {

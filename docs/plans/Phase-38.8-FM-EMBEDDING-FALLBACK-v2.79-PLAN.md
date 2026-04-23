@@ -1,4 +1,4 @@
-﻿---
+---
 crucibleId: 1bf3f9c7-bf79-441e-925e-9ea7642ece82
 lane: feature
 source: human
@@ -42,6 +42,7 @@ No prior postmortems — first execution.
 - Pref `forgeMaster.embeddingFallback: true|false` (default `true`) in `loadPrefs`/`savePrefs`.
 - Dashboard tile: cache size + hit rate in `pforge-mcp/dashboard/forge-master.js`.
 - Probe harness `scripts/probe-forge-master.mjs` — report `viaCounts: {keyword, embedding, router}` per run.
+Additionally run: `node scripts/hammer-fm.mjs --scenario=phase-38.8-baseline --tier=keyword-only` — capture output to `.forge/load-sim/38.8/hammer-<iter>.md`.
 - `VERSION`, `CHANGELOG.md`, `ROADMAP.md` — v2.79.0 release metadata.
 
 ### Out of Scope
@@ -109,6 +110,7 @@ No prior postmortems — first execution.
 ### Slice 4 — Probe harness + release v2.79.0
 
 - **MUST**: `scripts/probe-forge-master.mjs` reports `viaCounts: {keyword, embedding, router}` in the results summary after a warm-cache run.
+Additionally run: `node scripts/hammer-fm.mjs --scenario=phase-38.8-baseline --tier=keyword-only` — capture output to `.forge/load-sim/38.8/hammer-<iter>.md`.
 - **MUST**: Full probe harness run achieves ≥ 22/24 OK (same bar as Phase-37 baseline).
 - **MUST**: After a warm-up run, at least 1 probe is routed via `"embedding-cache"` (reported in `viaCounts.embedding ≥ 1`).
 - **MUST**: `pref.embeddingFallback` is exposed in `GET/PUT /api/forge-master/prefs`.
@@ -243,6 +245,7 @@ feat(embedding): wire embedding stage-1.5 into classify() with write-through cac
 
 **Files to modify**:
 - `scripts/probe-forge-master.mjs`
+Additionally run: `node scripts/hammer-fm.mjs --scenario=phase-38.8-baseline --tier=keyword-only` — capture output to `.forge/load-sim/38.8/hammer-<iter>.md`.
 - `pforge-master/src/http-routes.mjs` — expose `embeddingFallback` in prefs
 - `pforge-mcp/dashboard/forge-master.js` — cache stats tile
 - `VERSION`, `CHANGELOG.md`, `ROADMAP.md`
@@ -251,6 +254,7 @@ feat(embedding): wire embedding stage-1.5 into classify() with write-through cac
 
 **Context Files**:
 - [scripts/probe-forge-master.mjs](../../scripts/probe-forge-master.mjs)
+Additionally run: `node scripts/hammer-fm.mjs --scenario=phase-38.8-baseline --tier=keyword-only` — capture output to `.forge/load-sim/38.8/hammer-<iter>.md`.
 - [pforge-master/src/http-routes.mjs](../../pforge-master/src/http-routes.mjs)
 
 **Steps**:
@@ -262,6 +266,7 @@ feat(embedding): wire embedding stage-1.5 into classify() with write-through cac
 **Validation Gate**:
 ```r
 node scripts/probe-forge-master.mjs --keyword-only --timeout=90 ; node -e "const fs=require('fs');if(fs.readFileSync('VERSION','utf8').trim()!=='2.79.0')throw new Error('VERSION');console.log('ok')"
+Additionally run: `node scripts/hammer-fm.mjs --scenario=phase-38.8-baseline --tier=keyword-only` — capture output to `.forge/load-sim/38.8/hammer-<iter>.md`.
 ```
 
 chore(release): v2.79.0 — Forge-Master embedding intent fallback`
@@ -292,6 +297,7 @@ chore(release): v2.79.0 — Forge-Master embedding intent fallback`
 - Concurrent writes to `embedding-cache.bin` — assert no corruption (tmpfile+rename pattern).
 
 **3 — Probe-harness regression**: Run `node scripts/probe-forge-master.mjs --keyword-only --timeout=90` AND `node scripts/probe-forge-master.mjs --timeout=120`. Both MUST meet baseline (≥22/24 OK, ≥16/18 lane-match). Capture output to `.forge/validation/results-<iso>.md`.
+Additionally run: `node scripts/hammer-fm.mjs --scenario=phase-38.8-baseline --tier=keyword-only` — capture output to `.forge/load-sim/38.8/hammer-<iter>.md`.
 
 **4 — `pforge` self-check sweep** → capture to `.forge/load-sim/38.8/diagnostics-<iter>.txt`:
 - `pforge analyze docs/plans/Phase-38.8-FM-EMBEDDING-FALLBACK-v2.79-PLAN.md` — consistency ≥ 85

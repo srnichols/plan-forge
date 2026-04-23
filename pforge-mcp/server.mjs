@@ -4901,13 +4901,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       // ── Fallback: in-process reasoning ──
-      const { runTurn } = await import("./forge-master/index.mjs");
+      const { runTurn, loadPrefs } = await import("./forge-master/index.mjs");
       const { TOOL_METADATA } = await import("./capabilities.mjs");
+      const prefs = loadPrefs(cwd);
       const result = await runTurn(
         {
           message: args.message,
           sessionId: args.sessionId || undefined,
           maxToolCalls: args.maxToolCalls || undefined,
+          tier: prefs.tier || undefined,
           cwd,
         },
         {

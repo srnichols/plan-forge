@@ -1,0 +1,44 @@
+{
+  "name": "phase-38.1-baseline",
+  "description": "Baseline scenario for Phase-38.1 (Forge-Master Conversation Memory). Exercises multi-turn dialog and session-scoped memory recall flows. Acceptance scorers deferred until Phase-38.1 ships.",
+  "prompts": [
+    {
+      "id": "p381-turn-recall-01",
+      "message": "What did we discuss earlier in this session about the plan status?",
+      "expectedLane": "operational",
+      "notes": "multi-turn recall — after 38.1, should surface prior turns. Baseline: no prior context yet."
+    },
+    {
+      "id": "p381-session-context-01",
+      "message": "Continue from where we left off with the slice analysis.",
+      "expectedLane": "operational",
+      "notes": "session context follow-up — references prior conversation turn"
+    },
+    {
+      "id": "p381-memory-store-01",
+      "message": "Remember that the quorum threshold for this project is 5. I'll ask about it later.",
+      "expectedLane": "operational",
+      "notes": "implicit memory store — tests whether turn is persisted"
+    },
+    {
+      "id": "p381-memory-recall-01",
+      "message": "What quorum threshold did I mention earlier?",
+      "expectedLane": "operational",
+      "notes": "explicit recall after p381-memory-store-01 — deferred acceptance until 38.1 ships"
+    },
+    {
+      "id": "p381-long-session-01",
+      "message": "Summarize everything we've talked about in this session.",
+      "expectedLane": "operational",
+      "notes": "session summary — tests full turn history recall"
+    },
+    {
+      "id": "p381-context-boundary-01",
+      "message": "What is the current plan status?",
+      "expectedLane": "operational",
+      "expectedTools": ["forge_plan_status"],
+      "mustNotContain": ["Unknown tool"],
+      "notes": "baseline operational prompt — must work with or without session memory"
+    }
+  ]
+}

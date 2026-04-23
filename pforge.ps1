@@ -5613,6 +5613,16 @@ function Invoke-ForgeMaster {
     }
 }
 
+# ─── Command: hammer-fm ────────────────────────────────────────────
+function Invoke-HammerFm {
+    $scriptPath = Join-Path $RepoRoot "scripts/hammer-fm.mjs"
+    if (-not (Test-Path $scriptPath)) {
+        Write-Host "ERROR: hammer-fm harness not found at $scriptPath" -ForegroundColor Red
+        exit 1
+    }
+    node $scriptPath @Arguments
+}
+
 switch ($Command) {
     'init'         { Invoke-Init }
     'check'        { Invoke-Check }
@@ -5652,6 +5662,7 @@ switch ($Command) {
     'config'       { Invoke-Config }
     'skills'       { Invoke-Skills }
     'forge-master' { Invoke-ForgeMaster }
+    'hammer-fm'    { Invoke-HammerFm }
     'help'         { Show-Help }
     ''             { Show-Help }
     '--help'       { Show-Help }

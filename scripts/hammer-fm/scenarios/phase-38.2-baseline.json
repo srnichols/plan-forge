@@ -1,0 +1,30 @@
+{
+  "name": "Phase-38.2 Baseline",
+  "description": "Cross-session recall flows",
+  "prompts": [
+    {
+      "id": "cr-recall-1",
+      "message": "What decisions did I make last session about the authentication service?",
+      "expectedLane": "MEMORY_OPS",
+      "purpose": "cross-session recall"
+    },
+    {
+      "id": "cr-recall-2",
+      "message": "Summarize the last 3 sessions. What were the key outcomes?",
+      "expectedLane": "MEMORY_OPS",
+      "purpose": "session history recall"
+    },
+    {
+      "id": "cr-recall-3",
+      "message": "Did we discuss adding rate limiting in a previous session?",
+      "expectedLane": "MEMORY_OPS",
+      "purpose": "fact retrieval from memory"
+    },
+    {
+      "id": "cr-recall-4",
+      "message": "Show me all memories tagged with the authentication module.",
+      "expectedLane": "MEMORY_OPS",
+      "purpose": "memory tag query"
+    }
+  ]
+}

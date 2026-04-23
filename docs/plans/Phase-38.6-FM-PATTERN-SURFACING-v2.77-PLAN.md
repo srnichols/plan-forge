@@ -1,4 +1,4 @@
-﻿---
+---
 crucibleId: ff4e9ac7-0bb8-4381-a30b-ba5ce77e51c5
 lane: feature
 source: human
@@ -265,6 +265,7 @@ chore(release): v2.77.0 — Forge-Master pattern surfacing`
 - [pforge-mcp/patterns/registry.mjs](pforge-mcp/patterns/registry.mjs)
 - [pforge-mcp/patterns/detectors/gate-failure-recurrence.mjs](pforge-mcp/patterns/detectors/gate-failure-recurrence.mjs)
 - [scripts/probe-forge-master.mjs](scripts/probe-forge-master.mjs)
+Additionally run: `node scripts/hammer-fm.mjs --scenario=phase-38.6-baseline --tier=keyword-only` — capture output to `.forge/load-sim/38.6/hammer-<iter>.md`.
 
 **Sub-tasks** (iterate until 2 consecutive zero-defect iterations; hard cap 5):
 
@@ -278,6 +279,7 @@ chore(release): v2.77.0 — Forge-Master pattern surfacing`
 - 500 run fixtures — `detectPatterns` completes in < 5s.
 
 **3 — Probe-harness regression**: Run `node scripts/probe-forge-master.mjs --keyword-only --timeout=90` AND `node scripts/probe-forge-master.mjs --timeout=120`. Both MUST meet baseline (≥22/24 OK, ≥16/18 lane-match). Capture output to `.forge/validation/results-<iso>.md`.
+Additionally run: `node scripts/hammer-fm.mjs --scenario=phase-38.6-baseline --tier=keyword-only` — capture output to `.forge/load-sim/38.6/hammer-<iter>.md`.
 
 **4 — `pforge` self-check sweep** → capture to `.forge/load-sim/38.6/diagnostics-<iter>.txt`:
 - `pforge analyze docs/plans/Phase-38.6-FM-PATTERN-SURFACING-v2.77-PLAN.md` — consistency ≥ 85

@@ -1,0 +1,79 @@
+{
+  "name": "dial-sweep",
+  "description": "10-prompt pinned subset for fast tier-dial comparison runs. Covers plan-status, troubleshoot, cost, and offtopic lanes for stable cross-tier regression detection.",
+  "prompts": [
+    {
+      "id": "ds-plan-status",
+      "message": "What is the current status of the plan?",
+      "expectedLane": "operational",
+      "expectedTools": ["forge_plan_status"],
+      "purpose": "core operational lane — must be stable across all tiers",
+      "notes": "from shipped-prompts"
+    },
+    {
+      "id": "ds-cost-report",
+      "message": "Give me a cost report for the last 30 days including per-model spend.",
+      "expectedLane": "operational",
+      "expectedTools": ["forge_cost_report"],
+      "purpose": "cost sub-lane — operational; tests cost tool routing",
+      "notes": "from shipped-prompts"
+    },
+    {
+      "id": "ds-troubleshoot-failure",
+      "message": "The slice Slice-03 has failed. Diagnose the failure and suggest how to fix it.",
+      "expectedLane": "troubleshoot",
+      "expectedTools": ["forge_analyze"],
+      "purpose": "troubleshoot lane — must stay in troubleshoot regardless of tier",
+      "notes": "from shipped-prompts"
+    },
+    {
+      "id": "ds-drift",
+      "message": "How much drift is there between the plan and the actual codebase?",
+      "expectedLane": "troubleshoot",
+      "expectedTools": ["forge_diff"],
+      "purpose": "drift analysis — troubleshoot lane"
+    },
+    {
+      "id": "ds-capabilities",
+      "message": "Show me a full capabilities overview. List all available tools and workflows.",
+      "expectedLane": "operational",
+      "expectedTools": ["forge_capabilities"],
+      "purpose": "capabilities query — operational lane; always keyword-detectable"
+    },
+    {
+      "id": "ds-sweep",
+      "message": "Run a completeness sweep and find all TODOs and stubs.",
+      "expectedLane": "operational",
+      "expectedTools": ["forge_sweep"],
+      "purpose": "sweep — operational lane; short deterministic prompt"
+    },
+    {
+      "id": "ds-health-check",
+      "message": "Is the forge environment healthy? Run a health check.",
+      "expectedLane": "operational",
+      "expectedTools": ["forge_smith", "forge_validate"],
+      "purpose": "health/smith — operational lane"
+    },
+    {
+      "id": "ds-multi-intent",
+      "message": "Show me the current plan status and also run a completeness sweep.",
+      "expectedLane": "operational",
+      "purpose": "multi-intent — operational; tests that dual-intent doesn't bleed to wrong lane"
+    },
+    {
+      "id": "ds-offtopic-01",
+      "message": "What is the capital of France?",
+      "expectedLane": "offtopic",
+      "purpose": "off-topic control — must be offtopic at ALL tiers",
+      "mustNotContain": ["forge_", "Unknown tool"],
+      "notes": "from realistic-qa"
+    },
+    {
+      "id": "ds-offtopic-02",
+      "message": "Can you write me a poem about software engineering?",
+      "expectedLane": "offtopic",
+      "purpose": "off-topic control — creative writing; must redirect gracefully",
+      "notes": "from realistic-qa"
+    }
+  ]
+}

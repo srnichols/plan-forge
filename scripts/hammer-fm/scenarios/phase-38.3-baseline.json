@@ -1,0 +1,30 @@
+{
+  "name": "Phase-38.3 Baseline",
+  "description": "Knowledge graph query flows",
+  "prompts": [
+    {
+      "id": "kg-query-1",
+      "message": "What is the dependency graph for the payment service?",
+      "expectedLane": "ADVISORY",
+      "purpose": "knowledge graph traversal"
+    },
+    {
+      "id": "kg-query-2",
+      "message": "Show me all modules that depend on the database service.",
+      "expectedLane": "ADVISORY",
+      "purpose": "reverse dependency lookup"
+    },
+    {
+      "id": "kg-query-3",
+      "message": "Which services are affected if I change the user authentication interface?",
+      "expectedLane": "ADVISORY",
+      "purpose": "impact analysis"
+    },
+    {
+      "id": "kg-query-4",
+      "message": "Map out the data flow from user login to session creation.",
+      "expectedLane": "ADVISORY",
+      "purpose": "data flow tracing"
+    }
+  ]
+}

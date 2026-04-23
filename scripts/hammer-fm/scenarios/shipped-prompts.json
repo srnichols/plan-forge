@@ -1,0 +1,62 @@
+{
+  "name": "shipped-prompts",
+  "description": "One representative prompt from each of the 7 prompt categories in the shipped catalog (pforge-master/src/prompts.mjs).",
+  "prompts": [
+    {
+      "id": "ps-current-status",
+      "message": "What is the current status of the plan? Show me the latest run, which slices are complete, which are in-progress, and any failures.",
+      "expectedLane": "operational",
+      "expectedTools": ["forge_plan_status", "forge_status"],
+      "notes": "plan-status category — operational lane"
+    },
+    {
+      "id": "ts-diagnose-failure",
+      "message": "The slice Slice-03 has failed. Diagnose the failure, explain the root cause, and suggest how to fix it.",
+      "expectedLane": "troubleshoot",
+      "expectedTools": ["forge_analyze", "forge_smith"],
+      "notes": "troubleshooting category — troubleshoot lane"
+    },
+    {
+      "id": "cr-list-smelts",
+      "message": "List all active Crucible smelts. Show which are in-progress, pending review, or ready to finalize.",
+      "expectedLane": "operational",
+      "expectedTools": ["forge_capabilities"],
+      "notes": "crucible category — operational lane (Crucible tools are build lane in some configs)"
+    },
+    {
+      "id": "cq-estimate",
+      "message": "Estimate the cost of running the current plan under all four quorum modes (unanimous, majority, any, solo). Which is most cost-effective?",
+      "expectedLane": "operational",
+      "expectedTools": ["forge_estimate_quorum", "forge_cost_report"],
+      "notes": "cost-quorum category"
+    },
+    {
+      "id": "tq-sweep",
+      "message": "Run a completeness sweep. Find all TODOs, stubs, mocks, and incomplete implementations that need attention.",
+      "expectedLane": "operational",
+      "expectedTools": ["forge_sweep"],
+      "notes": "testing category"
+    },
+    {
+      "id": "mem-report",
+      "message": "Give me a full memory system report. What keys are stored, their sizes, and which entries are stale?",
+      "expectedLane": "operational",
+      "expectedTools": ["forge_memory_report"],
+      "notes": "memory category"
+    },
+    {
+      "id": "ext-capabilities",
+      "message": "Show me a full capabilities overview. List all available tools, extensions, configuration options, and workflows.",
+      "expectedLane": "operational",
+      "expectedTools": ["forge_capabilities"],
+      "notes": "extensions category"
+    },
+    {
+      "id": "ts-drift",
+      "message": "How much drift is there between the plan and the actual codebase? What are the biggest gaps?",
+      "expectedLane": "troubleshoot",
+      "expectedTools": ["forge_diff"],
+      "notes": "troubleshooting drift — troubleshoot lane"
+    }
+  ]
+}

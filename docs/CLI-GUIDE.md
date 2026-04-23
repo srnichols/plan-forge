@@ -1190,3 +1190,82 @@ IF command not found → CLI not installed. Fall back to manual steps.
 | `.github/instructions/*.instructions.md` | — | `ext install`, `ext remove` |
 | `.github/agents/*.agent.md` | — | `ext install`, `ext remove` |
 | `.github/prompts/*.prompt.md` | — | `ext install`, `ext remove` |
+
+---
+
+## `hammer-fm` — Forge-Master End-to-End Hammer Harness
+
+Runs named scenario packs against a live Forge-Master dashboard, scores SSE output, and writes JSON + Markdown reports.
+
+```
+pforge hammer-fm [options]
+
+Options:
+  --scenario=<name>        Scenario pack name (required); see Bundled Scenarios below
+  --tier=<t>               Tier to test: keyword-only | low | medium | high | all
+                           "all" runs each prompt 4× (once per tier). Default: keyword-only
+  --base-url=<url>         Forge-Master base URL. Default: http://localhost:3100
+  --output-dir=<dir>       Write reports here. Default: .forge/hammer-forge-master/reports/
+  --dry-run                Print what would run; make no HTTP requests
+  --help                   Show usage
+
+Exit codes:
+  0 — all prompts passed
+  1 — one or more failures or runtime error
+  2 — connection refused (dashboard unreachable)
+```
+
+### Bundled Scenarios
+
+| Scenario name | Prompts | Purpose |
+|---------------|---------|---------|
+| `shipped-prompts` | 8 | One prompt per category — validates all 7 lane classifications |
+| `realistic-qa` | 20 | Ambiguous, multi-intent, follow-up, off-topic, operational |
+| `dial-sweep` | 10 | Same prompts across all 4 tiers for tier-comparison report |
+| `phase-38.1-baseline` | 6 | Conversation-memory flows for Phase-38.1 hardening |
+
+### Scenario JSON Schema
+
+Scenario files live in `scripts/hammer-fm/scenarios/`. Each file must match:
+
+```jsonc
+{
+  "name": "human-readable name",
+  "description": "what this scenario tests",
+  "prompts": [
+    {
+      "id": "unique-slug",          // required; must be unique within file
+      "message": "prompt text",     // required
+      "expectedLane": "PLAN_OPS",   // optional; one of the 8 Forge-Master lanes
+      "expectedTools": ["forge_run_plan"],  // optional array
+      "mustContain": ["keyword"],   // optional; scored against final text event
+      "mustNotContain": ["error"],  // optional
+      "notes": "why this prompt",   // optional
+      "purpose": "test ambiguity"   // optional
+    }
+  ]
+}
+```
+
+### Adding a Custom Scenario
+
+1. Create `scripts/hammer-fm/scenarios/<name>.json` matching the schema above
+2. Run: `pforge hammer-fm --scenario=<name> --dry-run` to validate
+3. Run: `pforge hammer-fm --scenario=<name> --tier=keyword-only` for a live run
+
+### Reports
+
+Reports are written to `.forge/hammer-forge-master/reports/` (gitignored):
+- `<scenario>-<tier>-<timestamp>.json` — machine-readable per-prompt results
+- `<scenario>-<tier>-<timestamp>.md` — Markdown table with pass/fail, scores, tier comparison
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `scripts/hammer-fm.mjs` | CLI entry point; exports `main(argv, deps)` |
+| `scripts/hammer-fm/sse-client.mjs` | SSE stream reader with chunk-boundary handling |
+| `scripts/hammer-fm/scorers.mjs` | 6 pure scorer functions |
+| `scripts/hammer-fm/reporter.mjs` | Markdown + JSON report writer |
+| `scripts/hammer-fm/scenarios/` | Bundled scenario JSON files |
+| `pforge-mcp/tests/hammer-fm.test.mjs` | 35 unit tests |

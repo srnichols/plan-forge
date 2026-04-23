@@ -1,0 +1,158 @@
+{
+  "name": "realistic-qa",
+  "description": "20 realistic Plan-Forge-adjacent questions covering ambiguous phrasing, multi-intent, follow-up context, off-topic redirects, operational status, and troubleshooting.",
+  "prompts": [
+    {
+      "id": "rqa-ambiguous-01",
+      "message": "Is everything okay?",
+      "expectedLane": "operational",
+      "expectedTools": ["forge_plan_status", "forge_status"],
+      "mustNotContain": ["Unknown tool"],
+      "notes": "ambiguous phrasing — should route to operational/status"
+    },
+    {
+      "id": "rqa-ambiguous-02",
+      "message": "What's the latest?",
+      "expectedLane": "operational",
+      "mustNotContain": ["Unknown tool"],
+      "notes": "ambiguous phrasing — minimal context"
+    },
+    {
+      "id": "rqa-ambiguous-03",
+      "message": "How are we doing on costs lately?",
+      "expectedLane": "operational",
+      "expectedTools": ["forge_cost_report"],
+      "mustNotContain": ["Unknown tool"],
+      "notes": "ambiguous phrasing around costs"
+    },
+    {
+      "id": "rqa-ambiguous-04",
+      "message": "Something is broken. Can you help?",
+      "expectedLane": "troubleshoot",
+      "mustNotContain": ["Unknown tool"],
+      "notes": "ambiguous phrasing — troubleshoot lane expected"
+    },
+    {
+      "id": "rqa-ambiguous-05",
+      "message": "Check if everything is clean.",
+      "expectedLane": "operational",
+      "expectedTools": ["forge_sweep", "forge_validate"],
+      "mustNotContain": ["Unknown tool"],
+      "notes": "ambiguous phrasing — sweep/validate intent"
+    },
+    {
+      "id": "rqa-multi-intent-01",
+      "message": "Show me the current plan status and also run a completeness sweep for any TODOs.",
+      "expectedLane": "operational",
+      "expectedTools": ["forge_plan_status", "forge_sweep"],
+      "mustNotContain": ["Unknown tool"],
+      "notes": "multi-intent: status + sweep"
+    },
+    {
+      "id": "rqa-multi-intent-02",
+      "message": "How much has Phase-37 cost so far, and are there any open bugs from those runs?",
+      "expectedLane": "operational",
+      "expectedTools": ["forge_cost_report"],
+      "mustNotContain": ["Unknown tool"],
+      "notes": "multi-intent: cost + bugs"
+    },
+    {
+      "id": "rqa-multi-intent-03",
+      "message": "Diagnose the last slice failure and tell me the current drift score.",
+      "expectedLane": "troubleshoot",
+      "mustNotContain": ["Unknown tool"],
+      "notes": "multi-intent: diagnose + drift"
+    },
+    {
+      "id": "rqa-followup-01",
+      "message": "Which slice failed last time?",
+      "expectedLane": "operational",
+      "expectedTools": ["forge_plan_status"],
+      "mustNotContain": ["Unknown tool"],
+      "notes": "follow-up requiring session context — tests memory/status"
+    },
+    {
+      "id": "rqa-followup-02",
+      "message": "Can you re-run that analysis with more detail?",
+      "expectedLane": "operational",
+      "mustNotContain": ["Unknown tool"],
+      "notes": "follow-up context: references prior turn implicitly"
+    },
+    {
+      "id": "rqa-followup-03",
+      "message": "What did that tool return exactly?",
+      "expectedLane": "operational",
+      "mustNotContain": ["Unknown tool"],
+      "notes": "follow-up context: references a prior tool call result"
+    },
+    {
+      "id": "rqa-offtopic-01",
+      "message": "What is the capital of France?",
+      "expectedLane": "offtopic",
+      "mustNotContain": ["Unknown tool"],
+      "notes": "off-topic: geography — should redirect gracefully"
+    },
+    {
+      "id": "rqa-offtopic-02",
+      "message": "Can you write me a poem about software engineering?",
+      "expectedLane": "offtopic",
+      "mustNotContain": ["Unknown tool"],
+      "notes": "off-topic: creative writing request"
+    },
+    {
+      "id": "rqa-operational-01",
+      "message": "Show me the last 5 plan runs and their statuses.",
+      "expectedLane": "operational",
+      "expectedTools": ["forge_plan_status"],
+      "mustNotContain": ["Unknown tool"],
+      "notes": "operational status"
+    },
+    {
+      "id": "rqa-operational-02",
+      "message": "What tools are currently available in the allowlist?",
+      "expectedLane": "operational",
+      "expectedTools": ["forge_capabilities"],
+      "mustNotContain": ["Unknown tool"],
+      "notes": "operational: capabilities query"
+    },
+    {
+      "id": "rqa-operational-03",
+      "message": "Give me the cost report for the last 7 days broken down by model.",
+      "expectedLane": "operational",
+      "expectedTools": ["forge_cost_report"],
+      "mustNotContain": ["Unknown tool"],
+      "notes": "operational: cost breakdown"
+    },
+    {
+      "id": "rqa-operational-04",
+      "message": "Is the forge environment healthy? Run a quick health check.",
+      "expectedLane": "operational",
+      "expectedTools": ["forge_smith", "forge_validate"],
+      "mustNotContain": ["Unknown tool"],
+      "notes": "operational: health check"
+    },
+    {
+      "id": "rqa-troubleshoot-01",
+      "message": "Why did Phase-37 Slice 2 fail? Give me a root cause analysis.",
+      "expectedLane": "troubleshoot",
+      "expectedTools": ["forge_analyze"],
+      "mustNotContain": ["Unknown tool"],
+      "notes": "troubleshooting: specific slice failure"
+    },
+    {
+      "id": "rqa-troubleshoot-02",
+      "message": "There are integration test failures in the pforge-mcp suite. Help me diagnose.",
+      "expectedLane": "troubleshoot",
+      "mustNotContain": ["Unknown tool"],
+      "notes": "troubleshooting: test failures"
+    },
+    {
+      "id": "rqa-troubleshoot-03",
+      "message": "The quorum is not reaching consensus. What's wrong with the model configuration?",
+      "expectedLane": "troubleshoot",
+      "expectedTools": ["forge_doctor_quorum"],
+      "mustNotContain": ["Unknown tool"],
+      "notes": "troubleshooting: quorum configuration"
+    }
+  ]
+}

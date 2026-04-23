@@ -1,4 +1,4 @@
-﻿---
+---
 crucibleId: 8406b431-fee8-4a0d-baec-49775a3b1e8b
 lane: feature
 source: human
@@ -264,6 +264,7 @@ chore(release): v2.76.0 — Forge-Master daily digest`
 - [pforge-mcp/digest/aggregator.mjs](pforge-mcp/digest/aggregator.mjs)
 - [pforge-mcp/digest/render.mjs](pforge-mcp/digest/render.mjs)
 - [scripts/probe-forge-master.mjs](scripts/probe-forge-master.mjs)
+Additionally run: `node scripts/hammer-fm.mjs --scenario=phase-38.5-baseline --tier=keyword-only` — capture output to `.forge/load-sim/38.5/hammer-<iter>.md`.
 
 **Sub-tasks** (iterate until 2 consecutive zero-defect iterations; hard cap 5):
 
@@ -277,6 +278,7 @@ chore(release): v2.76.0 — Forge-Master daily digest`
 - 1000 bugs in `.forge/bugs/` — `aging-bugs` section completes in < 2s.
 
 **3 — Probe-harness regression**: Run `node scripts/probe-forge-master.mjs --keyword-only --timeout=90` AND `node scripts/probe-forge-master.mjs --timeout=120`. Both MUST meet baseline (≥22/24 OK, ≥16/18 lane-match). Capture output to `.forge/validation/results-<iso>.md`.
+Additionally run: `node scripts/hammer-fm.mjs --scenario=phase-38.5-baseline --tier=keyword-only` — capture output to `.forge/load-sim/38.5/hammer-<iter>.md`.
 
 **4 — `pforge` self-check sweep** → capture to `.forge/load-sim/38.5/diagnostics-<iter>.txt`:
 - `pforge analyze docs/plans/Phase-38.5-FM-DAILY-DIGEST-v2.76-PLAN.md` — consistency ≥ 85

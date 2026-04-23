@@ -7,7 +7,9 @@
 
 ## Current Release
 
-**v2.71.1** (2026-04-23) — Forge-Master HTTP Bridge Completeness (Phase-37.1). Hotfix for live-fire hammer evidence showing every downstream tool call from the HTTP bridge returned `"Unknown tool: X"` or `"requires async dispatch"`. Extended `invokeForgeTool` in `pforge-mcp/server.mjs` to handle all read-only `BASE_ALLOWLIST` tools; replaced the async-dispatch early-return stub with a terminal-await path that aggregates stream events into `{events:[...], terminal: <payload>}`. Removed allowlist entries with no MCP handler. New tests: `http-dispatcher-parity.test.mjs` + `http-dispatcher-async.test.mjs`. Re-hammer: 8/8 post-fix logs clean — 0 `Unknown tool`, 0 `requires async dispatch`, 7/8 with real tool-call data.
+**v2.71.2** (2026-04-24) — Forge-Master Hammer Harness (Phase-37.2). Adds `hammer-fm` end-to-end harness CLI, 4 bundled scenario packs, 6 scorers, Markdown+JSON reporter, and 35 unit tests.
+
+Previous: **v2.71.1** (2026-04-23) — Forge-Master HTTP Bridge Completeness (Phase-37.1). Hotfix for live-fire hammer evidence showing every downstream tool call from the HTTP bridge returned `"Unknown tool: X"` or `"requires async dispatch"`. Extended `invokeForgeTool` in `pforge-mcp/server.mjs` to handle all read-only `BASE_ALLOWLIST` tools; replaced the async-dispatch early-return stub with a terminal-await path that aggregates stream events into `{events:[...], terminal: <payload>}`. Removed allowlist entries with no MCP handler. New tests: `http-dispatcher-parity.test.mjs` + `http-dispatcher-async.test.mjs`. Re-hammer: 8/8 post-fix logs clean — 0 `Unknown tool`, 0 `requires async dispatch`, 7/8 with real tool-call data.
 
 Previous: **v2.71.0** (2026-04-23) — Classifier Calibration + Keyword-Only Harness (Phase-37 Slice 4). `--keyword-only` flag in `scripts/probe-forge-master.mjs` sends `x-pforge-keyword-only: 1` header, wiring a bypass from harness → HTTP routes → `runTurn` → `classify()` that skips the stage-2 router model. `opts.keywordOnly` added to `classify()`. `deps.forceKeywordOnly` added to `runTurn`. Validated: lane-match 19/21 in both keyword-only and normal probe runs (threshold ≥16/18). Finding 1 from `FINDINGS-2026-04-23.md` stamped RESOLVED.— Forge-Master Runtime Observability (Phase-36). Classification events now forwarded via SSE (`event: classification` with `{ lane, confidence }`). Probe harness (`scripts/probe-forge-master.mjs`) captures classification per-probe and renders a "Classification match" accuracy table in the Markdown report. Console output shows `lane=<lane> conf=<conf>` inline. Validated: 14/21 lane-match, 70 lines ✅/OK in report. Results committed to `.forge/validation/`. Phase-36 Slice 4 shipped.
 
@@ -266,3 +268,4 @@ No committed timeline — evaluating based on community feedback.
 1. **Vote on existing issues** — 👍 reactions help us prioritize
 2. **Open a feature request** — [GitHub Issues](https://github.com/srnichols/plan-forge/issues) with the `enhancement` label
 3. **Contribute directly** — See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines
+

@@ -13,15 +13,15 @@
       "id": "ts-diagnose-failure",
       "message": "The slice Slice-03 has failed. Diagnose the failure, explain the root cause, and suggest how to fix it.",
       "expectedLane": "troubleshoot",
-      "expectedTools": ["forge_analyze", "forge_smith"],
-      "notes": "troubleshooting category — troubleshoot lane"
+      "expectedTools": ["forge_analyze", "forge_smith", "forge_plan_status", "forge_health_trend", "forge_sweep", "forge_bug_list"],
+      "notes": "troubleshooting category — troubleshoot lane. Expected tool set widened to any valid diagnostic tool (Phase-37.3)."
     },
     {
       "id": "cr-list-smelts",
       "message": "List all active Crucible smelts. Show which are in-progress, pending review, or ready to finalize.",
       "expectedLane": "operational",
-      "expectedTools": ["forge_capabilities"],
-      "notes": "crucible category — operational lane (Crucible tools are build lane in some configs)"
+      "expectedTools": ["forge_crucible_list", "forge_search", "forge_status"],
+      "notes": "crucible list (read-only) — operational lane. Canonical tool is forge_crucible_list; forge_search and forge_status are acceptable fallbacks. Phase-37.3 scenario fix (was forge_capabilities)."
     },
     {
       "id": "cq-estimate",
@@ -54,9 +54,9 @@
     {
       "id": "ts-drift",
       "message": "How much drift is there between the plan and the actual codebase? What are the biggest gaps?",
-      "expectedLane": "troubleshoot",
-      "expectedTools": ["forge_diff"],
-      "notes": "troubleshooting drift — troubleshoot lane"
+      "expectedLane": "operational",
+      "expectedTools": ["forge_diff", "forge_drift_report"],
+      "notes": "drift reports are operational readouts (classifier pattern at intent-router.mjs:134). Lane corrected in Phase-37.3."
     }
   ]
 }

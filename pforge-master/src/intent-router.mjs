@@ -81,6 +81,7 @@ export const LANE_TOOLS = Object.freeze({
     "forge_drift_report",
     "forge_plan_status",
     "forge_cost_report",
+    "forge_graph_query",
   ],
   [LANES.TEMPERING]: [],
   [LANES.PRINCIPLE_JUDGMENT]: [],
@@ -132,6 +133,10 @@ const KEYWORD_RULES = [
   { pattern: /\b(extension|extensions|ext search|ext info)\b/i, lane: LANES.OPERATIONAL, weight: 1 },
   { pattern: /\b(deploy journal|runbook|capabilities)\b/i, lane: LANES.OPERATIONAL, weight: 1 },
   { pattern: /\b(drift|diff|hotspot)\b/i, lane: LANES.OPERATIONAL, weight: 1 },
+  // Phase-37.3 Slice 1 — completeness-sweep vocabulary (TODOs/stubs/mocks live in operational readouts)
+  { pattern: /\b(sweep|completeness\s+sweep|todos?|stubs?|mocks?|incomplete|placeholders?)\b/i, lane: LANES.OPERATIONAL, weight: 2 },
+  // Phase-37.3 Slice 1 — read-only Crucible verbs (list/show/view smelts → operational, not build)
+  { pattern: /\b(list|show|view|display)\s+(?:all\s+)?(?:active\s+|pending\s+|open\s+|crucible\s+)*(smelts?|crucible\s+entries?|crucible\s+items?)\b/i, lane: LANES.OPERATIONAL, weight: 3 },
 
   // ── Troubleshoot signals ──
   { pattern: /\b(fail|failed|failure|failing|broken|broke|crash|crashed)\b/i, lane: LANES.TROUBLESHOOT, weight: 3 },

@@ -250,6 +250,13 @@ export async function runTurn(input, deps = {}) {
     detectApiProvider: deps.detectApiProvider,
   });
 
+  // Notify observer (non-fatal — SSE/observability hook)
+  try {
+    if (typeof deps.onClassification === "function") {
+      deps.onClassification(classification);
+    }
+  } catch { /* observer errors must not affect reasoning */ }
+
   // Off-topic short-circuit — no model call, no tool calls, near-zero cost
   if (classification.lane === LANES.OFFTOPIC) {
     return {

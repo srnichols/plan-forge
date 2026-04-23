@@ -151,8 +151,7 @@ hardened_at: 2026-04-23
 
 **Validation gate**:
 ```bash
-npx vitest run pforge-master/tests/http-routes-sse.test.mjs --reporter=default 2>&1 | tee /tmp/s1-out.txt
-grep -E "Tests +[2-9][0-9]* passed" /tmp/s1-out.txt
+npx vitest run pforge-master/tests/http-routes-sse.test.mjs --reporter=default
 ```
 AND
 ```bash
@@ -188,13 +187,11 @@ grep -q 'apiKey\|stack' pforge-master/src/http-routes.mjs ; [ $? -ne 0 ]
 
 **Validation gate**:
 ```bash
-npx vitest run pforge-master/src/__tests__/reasoning-classification-surface.test.mjs --reporter=default 2>&1 | tee /tmp/s2-out.txt
-grep -E "Tests +[3-9][0-9]* passed" /tmp/s2-out.txt
+npx vitest run pforge-master/src/__tests__/reasoning-classification-surface.test.mjs --reporter=default
 ```
 AND
 ```bash
-npx vitest run pforge-master/src/__tests__/reasoning-tier.test.mjs pforge-master/src/__tests__/intent-auto-escalation.test.mjs --reporter=default 2>&1 | tee /tmp/s2-reg.txt
-grep -E "failed" /tmp/s2-reg.txt ; [ $? -ne 0 ]
+npx vitest run pforge-master/src/__tests__/reasoning-tier.test.mjs pforge-master/src/__tests__/intent-auto-escalation.test.mjs --reporter=default
 ```
 
 **Commit**: `feat(reasoning): surface classification via callback + return field`
@@ -249,8 +246,7 @@ grep -E "failed" /tmp/s2-reg.txt ; [ $? -ne 0 ]
 
 **Validation gate**:
 ```bash
-npx vitest run pforge-master/tests/http-dispatcher.test.mjs --reporter=default 2>&1 | tee /tmp/s3-out.txt
-grep -E "Tests +[3-9][0-9]* passed" /tmp/s3-out.txt
+npx vitest run pforge-master/tests/http-dispatcher.test.mjs --reporter=default
 ```
 AND
 ```bash

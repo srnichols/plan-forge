@@ -90,11 +90,18 @@ function _registerExpress(app) {
       sse.send("start", { sessionId });
       const result = await runTurn(
         { message, sessionId },
-        { dispatcher: async () => ({}) },
+        {
+          dispatcher: async () => ({}),
+          onClassification: (data) => { sse.send("classification", data); },
+        },
       );
-      sse.send("reply", { content: result.reply, sessionId });
-      for (const tc of result.toolCalls || []) sse.send("tool-call", tc);
-      sse.send("done", { sessionId, tokensIn: result.tokensIn, tokensOut: result.tokensOut });
+      if (result.error) {
+        sse.send("error", { error: result.error, sessionId });
+      } else {
+        sse.send("reply", { content: result.reply, sessionId });
+        for (const tc of result.toolCalls || []) sse.send("tool-call", tc);
+        sse.send("done", { sessionId, tokensIn: result.tokensIn, tokensOut: result.tokensOut });
+      }
     } catch (err) {
       sse.send("error", { error: err.message });
     } finally {
@@ -187,11 +194,18 @@ function _buildNodeHandler() {
         sse.send("start", { sessionId });
         const result = await runTurn(
           { message, sessionId },
-          { dispatcher: async () => ({}) },
+          {
+            dispatcher: async () => ({}),
+            onClassification: (data) => { sse.send("classification", data); },
+          },
         );
-        sse.send("reply", { content: result.reply, sessionId });
-        for (const tc of result.toolCalls || []) sse.send("tool-call", tc);
-        sse.send("done", { sessionId, tokensIn: result.tokensIn, tokensOut: result.tokensOut });
+        if (result.error) {
+          sse.send("error", { error: result.error, sessionId });
+        } else {
+          sse.send("reply", { content: result.reply, sessionId });
+          for (const tc of result.toolCalls || []) sse.send("tool-call", tc);
+          sse.send("done", { sessionId, tokensIn: result.tokensIn, tokensOut: result.tokensOut });
+        }
       } catch (err) {
         sse.send("error", { error: err.message });
       } finally {

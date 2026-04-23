@@ -267,6 +267,116 @@
 
         <p>At this point I haven't written a single line of product code. Everything so far was pipeline plumbing. That plumbing is what makes Passes 3 and 4 free.</p>
 
+        <h2>Interlude: Not Everything Is a Smelt</h2>
+
+        <p>The first version of the wrapper made a mistake I want to call out, because it's the mistake that almost sank the loop. It routed <em>every</em> finding through the Crucible. Console errors, 404s, auth redirects, placeholder regex hits — all of it became a proposed smelt for the Crucible to interview. The result was an interview queue 60+ items deep, and half the items were noise the Crucible had no business thinking about.</p>
+
+        <p>The fix was to triage findings into <strong>three lanes</strong> <em>before</em> the Crucible ever sees them.</p>
+
+        <figure class="my-8 not-prose">
+          <svg viewBox="0 0 780 320" class="w-full rounded-xl border border-slate-700/50 bg-slate-950" role="img" aria-label="Three-lane triage funnel: discovery findings split into bug registry, Crucible, and filtered noise">
+            <defs>
+              <marker id="lane-rose" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#fb7185"/></marker>
+              <marker id="lane-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#fbbf24"/></marker>
+              <marker id="lane-slate" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#64748b"/></marker>
+            </defs>
+
+            <text x="390" y="22" text-anchor="middle" fill="#64748b" font-family="Inter,sans-serif" font-size="11" font-weight="600" letter-spacing="2">THREE-LANE TRIAGE</text>
+
+            <!-- Source: Discovery harness -->
+            <g>
+              <rect x="40" y="120" width="180" height="80" rx="10" fill="#1e293b" fill-opacity="0.8" stroke="#475569" stroke-width="1.5"/>
+              <text x="130" y="148" text-anchor="middle" fill="#e2e8f0" font-family="Inter,sans-serif" font-size="13" font-weight="700">Discovery harness</text>
+              <text x="130" y="170" text-anchor="middle" fill="#94a3b8" font-family="JetBrains Mono,monospace" font-size="11">dev-&lt;ts&gt;.json</text>
+              <text x="130" y="186" text-anchor="middle" fill="#64748b" font-family="Inter,sans-serif" font-size="10" font-style="italic">69 raw findings</text>
+            </g>
+
+            <!-- Wrapper / triage node -->
+            <g>
+              <circle cx="340" cy="160" r="42" fill="#0f172a" stroke="#fbbf24" stroke-width="2"/>
+              <text x="340" y="158" text-anchor="middle" fill="#fbbf24" font-family="Inter,sans-serif" font-size="11" font-weight="700">triage</text>
+              <text x="340" y="174" text-anchor="middle" fill="#94a3b8" font-family="JetBrains Mono,monospace" font-size="9">wrapper.mjs</text>
+            </g>
+
+            <!-- Connector: harness -> triage -->
+            <line x1="220" y1="160" x2="295" y2="160" stroke="#cbd5e1" stroke-width="2.5" marker-end="url(#lane-slate)"/>
+
+            <!-- Lane 1: Bug registry (top, rose) -->
+            <path d="M 382 140 Q 460 90 540 70" stroke="#fb7185" stroke-width="2.5" fill="none" marker-end="url(#lane-rose)"/>
+            <g>
+              <rect x="540" y="40" width="210" height="76" rx="10" fill="#4c0519" fill-opacity="0.4" stroke="#be123c" stroke-width="1.5"/>
+              <text x="645" y="64" text-anchor="middle" fill="#fb7185" font-family="Inter,sans-serif" font-size="12" font-weight="700">BUG REGISTRY</text>
+              <text x="645" y="84" text-anchor="middle" fill="#e2e8f0" font-family="JetBrains Mono,monospace" font-size="11">4 bugs · B1–B4</text>
+              <text x="645" y="102" text-anchor="middle" fill="#94a3b8" font-family="Inter,sans-serif" font-size="10" font-style="italic">auto-smelt → fix → temper</text>
+            </g>
+
+            <!-- Lane 2: Crucible (middle, amber) -->
+            <line x1="382" y1="160" x2="533" y2="160" stroke="#fbbf24" stroke-width="2.5" marker-end="url(#lane-amber)"/>
+            <g>
+              <rect x="540" y="130" width="210" height="76" rx="10" fill="#451a03" fill-opacity="0.4" stroke="#b45309" stroke-width="1.5"/>
+              <text x="645" y="154" text-anchor="middle" fill="#fbbf24" font-family="Inter,sans-serif" font-size="12" font-weight="700">CRUCIBLE</text>
+              <text x="645" y="174" text-anchor="middle" fill="#e2e8f0" font-family="JetBrains Mono,monospace" font-size="11">7 patterns · 62 routes</text>
+              <text x="645" y="192" text-anchor="middle" fill="#94a3b8" font-family="Inter,sans-serif" font-size="10" font-style="italic">interview → harden → plan</text>
+            </g>
+
+            <!-- Lane 3: Filtered (bottom, slate) -->
+            <path d="M 382 180 Q 460 230 540 250" stroke="#64748b" stroke-width="2.5" fill="none" stroke-dasharray="6 4" marker-end="url(#lane-slate)"/>
+            <g>
+              <rect x="540" y="220" width="210" height="76" rx="10" fill="#0f172a" fill-opacity="0.8" stroke="#475569" stroke-width="1.5"/>
+              <text x="645" y="244" text-anchor="middle" fill="#94a3b8" font-family="Inter,sans-serif" font-size="12" font-weight="700">FILTERED</text>
+              <text x="645" y="264" text-anchor="middle" fill="#e2e8f0" font-family="JetBrains Mono,monospace" font-size="11">58 hits · 16 + 42</text>
+              <text x="645" y="282" text-anchor="middle" fill="#64748b" font-family="Inter,sans-serif" font-size="10" font-style="italic">auth-307 + seed-404 (noise)</text>
+            </g>
+
+            <!-- Edge annotations -->
+            <text x="455" y="100" text-anchor="middle" fill="#fb7185" font-family="Inter,sans-serif" font-size="10" font-style="italic" font-weight="600">confirmed defect</text>
+            <text x="457" y="152" text-anchor="middle" fill="#fbbf24" font-family="Inter,sans-serif" font-size="10" font-style="italic" font-weight="600">scope-ambiguous</text>
+            <text x="455" y="220" text-anchor="middle" fill="#64748b" font-family="Inter,sans-serif" font-size="10" font-style="italic" font-weight="600">harness-tuning</text>
+          </svg>
+          <figcaption class="text-xs text-slate-500 text-center mt-2 italic">One real Rummag audit: 69 findings in, 4 defects to the registry, 7 feature patterns to the Crucible, 58 hits filtered. The Crucible only sees scope-ambiguous work.</figcaption>
+        </figure>
+
+        <p>The bug lane skips the Crucible entirely because bugs aren't <em>ideas</em> — they have evidence, they have scope, they don't need an interview. Route them straight to the registry and let auto-smelt fix them in a single pass. The Crucible gets the lane it was built for: scope-ambiguous feature work that needs hardening before it can be executed.</p>
+
+        <div class="overflow-x-auto mb-6 not-prose">
+          <table class="w-full text-sm border border-slate-700/50 rounded-lg overflow-hidden">
+            <thead class="bg-slate-800/60">
+              <tr>
+                <th class="text-left px-4 py-3 text-slate-200 font-semibold">Lane</th>
+                <th class="text-left px-4 py-3 text-slate-200 font-semibold">What goes there</th>
+                <th class="text-left px-4 py-3 text-slate-200 font-semibold">This audit</th>
+                <th class="text-left px-4 py-3 text-slate-200 font-semibold">Next step</th>
+              </tr>
+            </thead>
+            <tbody class="text-slate-300">
+              <tr class="border-t border-slate-700/50">
+                <td class="px-4 py-3 font-semibold text-rose-400">Bug registry</td>
+                <td class="px-4 py-3">Confirmed defects with hard evidence — 5xx, 404 on seeded ID, schema reject</td>
+                <td class="px-4 py-3 font-mono text-xs">4 bugs<br/><span class="text-slate-500">(B1–B4 API)</span></td>
+                <td class="px-4 py-3 text-slate-400">Auto-smelt → fix in one pass → tempering validates</td>
+              </tr>
+              <tr class="border-t border-slate-700/50">
+                <td class="px-4 py-3 font-semibold text-amber-400">Crucible</td>
+                <td class="px-4 py-3">Feature gaps — empty shells, missing flows, unshipped work</td>
+                <td class="px-4 py-3 font-mono text-xs">7 patterns<br/><span class="text-slate-500">(62 routes)</span></td>
+                <td class="px-4 py-3 text-slate-400">Interview → harden → Phase-NN plan</td>
+              </tr>
+              <tr class="border-t border-slate-700/50">
+                <td class="px-4 py-3 font-semibold text-slate-400">Filtered out</td>
+                <td class="px-4 py-3">Methodology-only noise — auth redirects, seed mismatches</td>
+                <td class="px-4 py-3 font-mono text-xs">58 hits<br/><span class="text-slate-500">(16 + 42)</span></td>
+                <td class="px-4 py-3 text-slate-400">Nothing — harness tuning problem, not a finding</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>The third lane — noise — is the one most teams get wrong. A 307 on an auth-gated route isn't a bug, it's the middleware working correctly. A 404 on an <code>/items/:id</code> you never seeded is a test data problem, not a code problem. The harness must filter these before triage, or the Crucible drowns in busywork and the signal-to-noise ratio collapses.</p>
+
+        <blockquote><p>Discovery that cries wolf on auth redirects teaches the Crucible to ignore it. Tune signal-to-noise at the source.</p></blockquote>
+
+        <p><strong>Sequencing matters.</strong> In the audit above I'm running the bug lane <em>first</em> — fix 4 known defects, watch tempering validate them, prove the mechanics end-to-end. Only then does the feature lane open with F1 (campaign donate/edit/manage). If Round 1's bug lane fails, the auto-smelt re-ingests and retries without me — the loop eats its own mistakes before it ever touches the feature backlog. That ordering is what makes the feature lane safe to run unattended.</p>
+
         <h2>Pass 3: Execute and Temper</h2>
 
         <p>Step 3 runs the plan slice by slice. Nothing exotic here — the same <code>pforge run-plan</code> workflow Plan Forge uses on itself. The interesting part is what happens after the last slice commits.</p>

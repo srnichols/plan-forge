@@ -7,7 +7,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-## [2.71.0] — 2026-04-23 — Classifier calibration + Keyword-Only Harness (Phase-37 Slice 4)
+## [2.71.1] — 2026-04-23 — Forge-Master HTTP Bridge Completeness (Phase-37.1)
+
+> **Phase-37.1 — Hotfix release. Live-fire hammer evidence on 2026-04-23 showed every downstream tool call from the Forge-Master HTTP bridge returned either `"Unknown tool: X"` or `"requires async dispatch — not available in Forge-Master bridge"`. Root cause: `invokeForgeTool` (the `mcpCall` injected into `registerForgeMasterRoutes`) handled only a subset of the MCP tool registry; the HTTP dispatcher bailed early on streaming tools instead of awaiting their terminal payload. This release closes both error classes for all read-only tools in `BASE_ALLOWLIST`. Re-hammer of the 8-prompt battery shows zero `Unknown tool` and zero `requires async dispatch` in all 8 post-fix logs; 7/8 labels have a non-error `tool-call` `resultSummary`.**
+
+### Fixed
+
+- **`pforge-mcp/server.mjs` → `invokeForgeTool` — dispatcher parity** — Extended the in-process MCP dispatcher to handle every read-only tool in `BASE_ALLOWLIST`. Tools previously returned `{"success":false,"error":"Unknown tool: X"}` now resolve via the correct `requestHandlers` path. For streaming tools, the dispatcher awaits the terminal event and aggregates intermediate events into `{events:[...], terminal: <payload>}` (capped at `streamEventCap`, default 20). The `"requires async dispatch — not available in Forge-Master bridge"` early-return stub is removed; async tools now resolve through the terminal-await path.
+- **`pforge-master/src/http-dispatcher.mjs` — async terminal await** — Removed the early-return guard for streaming tools. Dispatcher now awaits final payload for tools using the Plan Forge async stream protocol. Docblock updated to describe terminal-await behaviour.
+- **`pforge-master/src/allowlist.mjs` — allowlist hygiene** — `BASE_ALLOWLIST` entries with no MCP handler removed with inline `// removed in Phase-37.1 — no MCP handler` comment.
+
+### Added
+
+- **`pforge-master/tests/http-dispatcher-parity.test.mjs`** — Parameterised test asserting every `BASE_ALLOWLIST` entry resolves without `"Unknown tool"` or `"requires async dispatch"` error strings. Red scaffolds from Slice 1 now green.
+- **`pforge-master/tests/http-dispatcher-async.test.mjs`** — Proves that mocked streaming tools (`forge_plan_status`, `forge_search`, `forge_cost_report`) resolve through the terminal-await path with `{events:[...], terminal: ...}`, not the old stub. Now green.
+
+### Validation
+
+- Re-hammer (`.forge/hammer-forge-master/logic/post-fix/*.txt`): 8/8 files — 0 `Unknown tool`, 0 `requires async dispatch`, 7/8 with non-error `tool-call` `resultSummary` (01-offtopic correctly has none; it is an off-topic query).
+- Full `pforge-master` suite (≥ 133 tests) green. Full `pforge-mcp` suite green (tolerating pre-existing #97 cost-service regression).
+
+## [2.71.0]— 2026-04-23 — Classifier calibration + Keyword-Only Harness (Phase-37 Slice 4)
 
 > **Phase-37 Slice 4 — Harness validation & release. `--keyword-only` flag forces the probe to skip the stage-2 router model; `x-pforge-keyword-only: 1` HTTP header wires the bypass end-to-end from harness through HTTP routes to the `classify()` call. Validated: lane-match 19/21 (keyword-only) and 19/21 (normal) — both exceed the ≥16/18 threshold. Provider rate-limiting reduced live-reply count in both runs; classification routing is verified via SSE `classification` events emitted before any model call.**
 

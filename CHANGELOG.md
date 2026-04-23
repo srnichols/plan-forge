@@ -7,6 +7,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.75.0] — 2026-04-23 — Forge-Master Planner-Executor Split (Phase-38.4)
+
+> **Phase-38.4 — Planner-executor decomposition layer for Forge-Master.**
+> `runTurn` now optionally runs a planner stage that decomposes complex multi-step queries
+> into up to 5 ordered read-only tool calls, executes them (with dependency-aware parallelism),
+> and synthesizes the reply over the joined results. Falls back to the existing reactive
+> tool loop when the planner produces zero steps or detects a simple query.
+
+### Added
+- `pforge-master/src/planner.mjs` — `plan({userMessage, classification, lane, allowedTools, deps})` decomposes complex queries into up to 5 ordered tool-call steps. Skip heuristics for `offtopic` lane, single-tool-obvious queries, and empty allowlists. Uses cheapest provider tier (`resolveModel("low")`) for decomposition.
+- `pforge-master/src/plan-executor.mjs` — `executePlan(plan, deps)` executes planned steps with dependency-aware parallelism (`Promise.all` for independent steps, sequential for `dependsOn` chains). Hard 30s timeout; single-step failures do not abort independent branches.
+- `pforge-master/src/__tests__/planner.test.mjs` — unit tests for planner: multi-step plans, skip cases (offtopic, single-tool, no-tools), tool validation, max-step cap.
+- `pforge-master/src/__tests__/plan-executor.test.mjs` — unit tests for executor: sequential execution, parallel branches, error isolation, timeout enforcement.
+- `pforge-master/tests/planner-sse.test.mjs` — SSE event ordering: `plan` event emitted before `tool-call` events; no `plan` event when planner returns `skipReason`.
+- `plan` SSE event — shape `{type: "plan", steps: [...]}` — emitted before tool-call events when the planner decomposes a query.
+- 3 new validation probes (`planner-cost-breakdown`, `planner-recent-failures`, `planner-phase-status`) exercising multi-step planner queries.
+
+### Changed
+- `pforge-master/src/reasoning.mjs` — `runTurn` calls `plan()` after classification; if steps are non-empty, calls `executePlan` and synthesizes reply over results. Falls back to reactive loop on `skipReason` or planner failure.
+- `pforge-master/src/http-routes.mjs` — forwards `plan` SSE event from `runTurn`.
+
 ## [2.74.4] — 2026-04-23 — Homepage dropdown + cumulative 2.74.x roll-up
 
 > **Patch release — rolls up v2.74.0 through v2.74.3 (all previously documented but never tagged) plus a homepage-only UX fix.**

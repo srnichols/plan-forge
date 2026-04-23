@@ -46,36 +46,18 @@ nav a.nav-active { color: #f59e0b !important; }
   color: #34d399 !important;
 }
 
-/* Dropdown menu — click-toggle (see shared.js). Hover still opens as a
-   progressive enhancement for mouse users, but state is owned by JS via
-   the .nav-dropdown-open class so touch and click-outside work correctly. */
+/* Dropdown menu — click-toggle (see shared.js). JS owns all open/close
+   state via the .nav-dropdown-open class. No CSS :hover rule: hover-to-open
+   created race conditions with JS close logic that left menus feeling
+   "stuck" on hover-capable devices. Click to open, click-outside/Escape/
+   link-click to close. */
 .nav-dropdown { display: none; }
 .nav-dropdown-trigger.nav-dropdown-open > .nav-dropdown {
   display: block;
 }
-/* Hover-to-open is gated to real pointer devices only. On touch devices
-   the :hover state can stick after a tap and override the JS close,
-   leaving the menu visually open even after .nav-dropdown-open is gone. */
-@media (hover: hover) and (pointer: fine) {
-  .nav-dropdown-trigger:hover > .nav-dropdown {
-    display: block;
-  }
-}
 .nav-dropdown-trigger .nav-dropdown {
   padding-top: 0.5rem;
   margin-top: 0;
-}
-/* Invisible hover bridge so mouse doesn't lose hover crossing the gap.
-   Pointer-events:none ensures the bridge never intercepts clicks on
-   nav links sitting behind it when the menu is closed. */
-.nav-dropdown::before {
-  content: '';
-  position: absolute;
-  top: -0.75rem;
-  left: 0;
-  right: 0;
-  height: 0.75rem;
-  pointer-events: none;
 }
 
 /* FAQ accordion */

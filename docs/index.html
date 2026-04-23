@@ -2321,16 +2321,6 @@ Target project: (current directory)</code></pre>
           triggerBtn.setAttribute('aria-expanded', 'false');
         })
       );
-      let leaveTimer = null;
-      const cancelLeave = () => { if (leaveTimer) { clearTimeout(leaveTimer); leaveTimer = null; } };
-      trigger.addEventListener('mouseleave', () => {
-        cancelLeave();
-        leaveTimer = setTimeout(() => {
-          trigger.classList.remove('nav-dropdown-open');
-          triggerBtn.setAttribute('aria-expanded', 'false');
-        }, 250);
-      });
-      trigger.addEventListener('mouseenter', cancelLeave);
     });
     if (dropdownTriggers.length) {
       document.addEventListener('click', (e) => {

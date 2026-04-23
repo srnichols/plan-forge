@@ -1996,10 +1996,14 @@ export function runGate(command, cwd) {
 
   // Windows bash dispatch: route Unix tools through bash so plans that use
   // grep/sed/awk/etc. work on Windows without manual wrapping.
+  // Also route shell-chained commands (`cmd1 ; cmd2`, `cmd1 && cmd2`) through bash,
+  // because cmd.exe treats `;` as a literal character (not a separator) and would
+  // pass the remainder as argv to the first tool — a common false-failure source.
   if (process.platform === "win32") {
     // Strip any path prefix and .exe/.cmd extension to get the bare tool name.
     const cmdName = cmdBase.split("/").pop().split("\\").pop().replace(/\.(exe|cmd|bat)$/i, "");
-    if (UNIX_TOOLS.includes(cmdName)) {
+    const hasShellChain = /(^|[^&|])(\s;\s|\s&&\s|\s\|\|\s)/.test(command);
+    if (UNIX_TOOLS.includes(cmdName) || hasShellChain) {
       const bashPath = resolveBashPath();
       if (bashPath === null) {
         return {

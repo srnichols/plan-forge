@@ -291,13 +291,15 @@
 
         <h2>What Makes This Work</h2>
 
-        <p>Three things had to be true for the loop to close:</p>
+        <p>Four things had to be true for the loop to close:</p>
 
         <p><strong>1. Structured evidence, not prose.</strong> The Crucible can't smelt a bug report that says "the pricing page looks weird." It can smelt <code>{"route": "/pricing", "placeholders": ["Coming soon", "TODO: price tiers"], "broken_hrefs": ["#"]}</code>. The discovery harness exists to turn the first into the second.</p>
 
-        <p><strong>2. Tempering has to re-audit with the same tool that discovered.</strong> If discovery uses regex and tempering uses eyeballs, the loop leaks. If both use the same harness, a fix is only "done" when the same JSON query that found it now returns empty.</p>
+        <p><strong>2. Triage before the Crucible, not after.</strong> Findings split into three lanes (bug registry / Crucible / filtered noise) at the wrapper, not inside the Crucible interview. This is the insight from the previous section, and it's the one that took longest to learn.</p>
 
-        <p><strong>3. Auto-smelt is opt-in but default-on.</strong> You can turn it off per-project, but the moment you turn it off, the loop degrades into a pipeline — and pipelines end. The whole point is that this one doesn't.</p>
+        <p><strong>3. Tempering has to re-audit with the same tool that discovered.</strong> If discovery uses regex and tempering uses eyeballs, the loop leaks. If both use the same harness, a fix is only "done" when the same JSON query that found it now returns empty.</p>
+
+        <p><strong>4. Auto-smelt is opt-in but default-on.</strong> You can turn it off per-project, but the moment you turn it off, the loop degrades into a pipeline — and pipelines end. The whole point is that this one doesn't.</p>
 
         <h2>The Pattern Generalizes</h2>
 

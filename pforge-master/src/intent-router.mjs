@@ -175,6 +175,22 @@ const KEYWORD_RULES = [
   // Crucible extras: smelt, preview, finalize
   { pattern: /\b(smelt|smelts|smelted|preview|finalize|finalise)\b/i, lane: LANES.BUILD, weight: 2 },
 
+  // ── Phase-37 Slice 2: troubleshoot lane calibration patterns ─────────────
+  // Forge-Master runtime components: orchestrator / worker / gate vocabulary
+  { pattern: /\b(orchestrator|worker|gate|timeout|stuck|hang|deadlock|erroring|crash|exception)\b/i, lane: LANES.TROUBLESHOOT, weight: 3 },
+  // Recurrence / "did we see this before" pattern
+  { pattern: /\b(did we see|seen before|recurring|again|last time)\b/i, lane: LANES.TROUBLESHOOT, weight: 2 },
+  // Incident / outage family
+  { pattern: /\b(incident|outage|alert)\b/i, lane: LANES.TROUBLESHOOT, weight: 3 },
+
+  // ── Phase-37 Slice 2: advisory lane calibration patterns ──────────────────
+  // Architecture / design / abstraction / principle vocabulary
+  { pattern: /\b(architecture|design|refactor|abstraction|principle|over.?engineer|separation of concerns)\b/i, lane: LANES.ADVISORY, weight: 3 },
+  // Review / audit / critique / opinion vocabulary
+  { pattern: /\b(review|audit|critique|thoughts on|opinion)\b/i, lane: LANES.ADVISORY, weight: 2 },
+  // Decision-framing vocabulary: should I/we, best path, trade-offs
+  { pattern: /\b(should i|should we|best path|best approach|way forward|trade.?offs?)\b/i, lane: LANES.ADVISORY, weight: 3 },
+
   // ── Phase-37 Slice 1: operational lane calibration patterns ──────────────
   // Combined phase/slice reference (covers "slice 4" without the longer context gates)
   { pattern: /\b(phase[- ]?\d+|slice\s+\d+)\b/i, lane: LANES.OPERATIONAL, weight: 3 },

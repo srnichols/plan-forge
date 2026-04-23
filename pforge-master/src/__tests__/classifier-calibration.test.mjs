@@ -1,5 +1,5 @@
 /**
- * Classifier calibration — Phase-37, Slice 1.
+ * Classifier calibration — Phase-37, Slices 1 & 2.
  *
  * Authoritative keyword-only regression harness.
  * Stage-2 router-model is disabled (callApiWorker throws) so ONLY
@@ -31,6 +31,14 @@ async function kwClassify(message) {
     detectApiProvider: stubbedDetectApiProvider,
   });
 }
+
+/**
+ * Classifier calibration — Phase-37, Slices 1 & 2.
+ *
+ * Each probe ID corresponds to .forge/validation/probes.json.
+ * Stage-2 router-model is disabled in all tests (callApiWorker throws)
+ * so ONLY scoreKeywords() determines the result.
+ */
 
 // ── operational lane ────────────────────────────────────────────────────────
 
@@ -67,5 +75,59 @@ describe("operational", () => {
       "What do I have in memory about Windows gate dispatch?",
     );
     expect(r.lane).toBe(LANES.OPERATIONAL);
+  });
+});
+
+// ── troubleshoot lane ───────────────────────────────────────────────────────
+
+describe("troubleshoot", () => {
+  it("ts-recurrence — orchestrator erroring + did we see → troubleshoot", async () => {
+    const r = await kwClassify(
+      "The orchestrator is erroring out on Windows again. Did we see this before?",
+    );
+    expect(r.lane).toBe(LANES.TROUBLESHOOT);
+  });
+
+  it("ts-why-fail — 'Why did slice 3 fail?' → troubleshoot", async () => {
+    const r = await kwClassify("Why did slice 3 fail?");
+    expect(r.lane).toBe(LANES.TROUBLESHOOT);
+  });
+
+  it("ts-crash — 'The build crashed with an exception' → troubleshoot", async () => {
+    const r = await kwClassify("The build crashed with an exception");
+    expect(r.lane).toBe(LANES.TROUBLESHOOT);
+  });
+
+  it("ts-regression — 'We have a regression in the gate runner' → troubleshoot", async () => {
+    const r = await kwClassify("We have a regression in the gate runner");
+    expect(r.lane).toBe(LANES.TROUBLESHOOT);
+  });
+});
+
+// ── advisory lane ───────────────────────────────────────────────────────────
+
+describe("advisory", () => {
+  it("adv-principle-judgment — abstraction layer over-engineering question → advisory", async () => {
+    const r = await kwClassify(
+      "I'm about to add a 4th abstraction layer for a one-off operation — is this over-engineering?",
+    );
+    expect(r.lane).toBe(LANES.ADVISORY);
+  });
+
+  it("adv-arch-review — architecture review request → advisory", async () => {
+    const r = await kwClassify(
+      "Give me an architecture review of the Forge-Master intent router.",
+    );
+    expect(r.lane).toBe(LANES.ADVISORY);
+  });
+
+  it("adv-refactor-or-ship — 'Should I refactor or ship?' → advisory", async () => {
+    const r = await kwClassify("Should I refactor or ship?");
+    expect(r.lane).toBe(LANES.ADVISORY);
+  });
+
+  it("adv-best-approach — 'What is the best approach for caching?' → advisory", async () => {
+    const r = await kwClassify("What is the best approach for caching?");
+    expect(r.lane).toBe(LANES.ADVISORY);
   });
 });

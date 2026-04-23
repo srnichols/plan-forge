@@ -7,7 +7,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-## [2.67.0] — 2026-04-22 — Zero-Key Forge-Master via GitHub Models (Phase-33)
+## [2.68.0] — 2026-04-22 — Forge-Master Reasoning Dial (Phase-34)
+
+> **Forge-Master gains a reasoning dial: Fast / Balanced / Deep, no API key required for any tier.**
+
+### Added
+
+- **Slice 1 — Tier resolver + 429 fallback** (`pforge-master/src/reasoning-tier.mjs`, `pforge-master/src/config.mjs`, `pforge-master/src/reasoning.mjs`, `pforge-master/src/__tests__/reasoning-tier.test.mjs`) — New `reasoning-tier.mjs` module exports `resolveModel(tier, config)` mapping `"low"` → `gpt-4o-mini`, `"medium"` → `gpt-4o`, `"high"` → `claude-sonnet-4`. Unknown tiers fall back to `config.forgeMaster.defaultTier` (default `"low"`). `runTurn` accepts an optional `tier` parameter; an explicit `model` option always wins over the tier resolver. 429 graceful degradation: `high` → `medium` → `low` retry chain with no infinite loop at `low`. Turn trace gains `requestedTier`, `resolvedModel`, `fallbackFromTier`, and `escalated` fields. Defaults added to `config.mjs`: `forgeMaster.reasoningTiers`, `forgeMaster.defaultTier = "low"`, `forgeMaster.autoEscalate = true`.
+- **Slice 2 — Auto-escalation for high-stakes lanes** (`pforge-master/src/intent-router.mjs`, `pforge-master/src/reasoning.mjs`, `pforge-master/src/__tests__/intent-auto-escalation.test.mjs`) — Each lane descriptor gains a `recommendedTierBump` integer (default `0`). Lanes `"tempering"`, `"principle-judgment"`, and `"meta-bug-triage"` set it to `1`. `runTurn` applies the bump once per turn (`low+1→medium`, `medium+1→high`, `high+1→high`, capped) when `config.forgeMaster.autoEscalate !== false` and no explicit `model` is set. Turn trace gains `autoEscalated`, `fromTier`, `toTier`, and `reason` fields. Opt-out: set `forgeMaster.autoEscalate = false` in `.forge.json`.
+- **Slice 3 — Dashboard dial + prefs endpoint** (`pforge-mcp/server.mjs`, `pforge-mcp/dashboard/forge-master.js`, `pforge-mcp/dashboard/served-app.js`, `pforge-mcp/tests/forge-master-prefs.test.mjs`, `.forge/forge-master-prefs.json`) — `GET /api/forge-master/prefs` returns `{ tier, autoEscalate }` (defaults `low` / `true` when prefs file absent). `PUT /api/forge-master/prefs` validates tier and writes `.forge/forge-master-prefs.json`; returns HTTP 400 on invalid tier. `forge_master_ask` reads prefs on each invocation (≤ 5 s TTL cache) and threads `tier` into `runTurn`. Dashboard gains a three-position dial (Fast / Balanced / Deep) above the composer that does **not** expose model names. Dial hidden when no provider is reachable; `"Connect GitHub"` prompt shown instead.
+
+### Tests
+
+- `pforge-master/src/__tests__/reasoning-tier.test.mjs` — 7+ tests: low/medium/high resolution, unknown-tier fallback, explicit model override, 429-at-high retries to medium, 429-at-low surfaces error.
+- `pforge-master/src/__tests__/intent-auto-escalation.test.mjs` — 10 tests: advisory lane no-bump, tempering/principle-judgment/meta-bug-triage bumps, cap at high, explicit model disables bump, `autoEscalate: false` disables bump, LANE_DESCRIPTORS shape.
+- `pforge-mcp/tests/forge-master-prefs.test.mjs` — REST round-trip tests: GET defaults, PUT valid tier, PUT invalid tier (400), file write, TTL cache.
+
+## [2.67.0]— 2026-04-22 — Zero-Key Forge-Master via GitHub Models (Phase-33)
 
 > **Minor release — Forge-Master now works out of the box for GitHub Copilot subscribers — no API key required.**
 

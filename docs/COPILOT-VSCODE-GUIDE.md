@@ -271,6 +271,16 @@ Forge-Master is **read-only**. It cannot edit files, generate code, or run build
 
 Forge-Master will call `forge_drift_report`, `forge_health_trend`, and `brain_recall` behind the scenes, then return a synthesized answer with the tool calls it made and the cost incurred.
 
+### Reasoning Depth
+
+Forge-Master ships with three reasoning tiers you can set from the dashboard dial or via `.forge/forge-master-prefs.json`:
+
+- **Fast** (default) — Uses a lightweight model. Best for intent classification, tool routing, quick status lookups, and any turn where speed matters more than depth. Adequate for 95% of advisory queries.
+- **Balanced** — Steps up to a mid-tier model. Best for multi-hop reasoning that spans several tool calls (e.g., correlating a run failure with a prior bug), or when Fast consistently misses nuance in your queries.
+- **Deep** — Uses the strongest available model. Best for principle judgment ("is this a vibe-coding violation?"), tempering ambiguity, and meta-bug triage where a wrong call has downstream consequences. Slower and more expensive per turn.
+
+Auto-escalation is on by default: turns classified into the `tempering`, `principle-judgment`, or `meta-bug-triage` lanes automatically bump one tier (Fast → Balanced, Balanced → Deep) regardless of your dial position. To opt out, set `forgeMaster.autoEscalate = false` in `.forge.json`. If the selected tier returns a rate-limit error, Forge-Master falls back one tier for that turn and logs the fallback in the turn trace — no turn is ever dropped.
+
 ---
 
 ## Agent Mode vs Ask Mode vs Edit Mode

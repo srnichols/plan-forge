@@ -7,7 +7,9 @@
 
 ## Current Release
 
-**v2.67.0** (2026-04-22) — Zero-Key Forge-Master via GitHub Models (Phase-33). New `github-copilot-tools.mjs` provider adapter targets `https://models.github.ai/inference` and authenticates via `GITHUB_TOKEN` / `gh auth login` — no third-party API key required. Provider-selection order flipped to `githubCopilot → anthropic → openai → xai`. `GITHUB_TOKEN` is now the first entry in the dashboard secrets UI. Skippable smoke test guards against regressions without breaking CI.
+**v2.68.0** (2026-04-22) — Forge-Master Reasoning Dial (Phase-34). Three-tier reasoning dial (Fast / Balanced / Deep) added to the Forge-Master dashboard. `reasoning-tier.mjs` resolves tier → model without exposing model names in the UI. Auto-escalation default-on for `tempering`, `principle-judgment`, and `meta-bug-triage` lanes. 429 graceful degradation: `high → medium → low` fallback chain with turn-trace fields. `GET/PUT /api/forge-master/prefs` REST endpoints. Opt-out via `forgeMaster.autoEscalate = false`.
+
+Previous: v2.67.0 (2026-04-22) — Zero-Key Forge-Master via GitHub Models (Phase-33). New `github-copilot-tools.mjs` provider adapter targets `https://models.github.ai/inference` and authenticates via `GITHUB_TOKEN` / `gh auth login` — no third-party API key required. Provider-selection order flipped to `githubCopilot → anthropic → openai → xai`. `GITHUB_TOKEN` is now the first entry in the dashboard secrets UI. Skippable smoke test guards against regressions without breaking CI.
 
 Previous: v2.66.0 (2026-04-22) — Forge-Master Advisory Mode (Phase-32). Event-delegated prompt gallery, intent-router glossary expanded (9+ keyword families), advisory lane with `LANES.ADVISORY`, `principles.mjs` UNIVERSAL_BASELINE, `{principles_block}` in system prompt.
 
@@ -15,7 +17,7 @@ Previous: v2.65.1 (2026-04-22) — version-bump architectural rebuild (Phase-31.
 
 Previous: v2.63.1 (Phase-28.5 tempering mtime sort + docs nav hover fix), v2.63.0 (Phase-29 Forge-Master Studio dashboard tab + routes + CLI), v2.62.x (Forge-Master MVP, worker role guardrails, self-repair capture, OpenBrain queue drain), v2.61.0 (Phase-27.2 cost projection UI + per-slice estimator).
 
-**In flight (next)**: TBD — Phase-34 planning open. Candidates include ML-backed complexity scoring, deeper advisory-to-enforcement flips, VS Code LM adapter for Forge-Master, Team Mode (v3.1).
+**In flight (next)**: TBD — Phase-35 planning open. Candidates include per-tier rate-limit budget tracking, cost meter on the dial, ML-backed complexity scoring, VS Code LM adapter for Forge-Master, Team Mode (v3.1).
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 

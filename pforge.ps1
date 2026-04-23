@@ -5715,6 +5715,16 @@ function Invoke-FmSession {
     }
 }
 
+# ─── Command: digest ───────────────────────────────────────────────
+function Invoke-Digest {
+    $scriptPath = Join-Path $RepoRoot "scripts/digest.mjs"
+    if (-not (Test-Path $scriptPath)) {
+        Write-Host "ERROR: digest script not found at $scriptPath" -ForegroundColor Red
+        exit 1
+    }
+    node $scriptPath @Arguments
+}
+
 # ─── Command: hammer-fm ────────────────────────────────────────────
 function Invoke-HammerFm {
     $scriptPath = Join-Path $RepoRoot "scripts/hammer-fm.mjs"
@@ -5768,6 +5778,7 @@ switch ($Command) {
     'fm-session'   { Invoke-FmSession }
     'fm-recall'    { Invoke-FmRecall }
     'graph'        { Invoke-Graph }
+    'digest'       { Invoke-Digest }
     'help'         { Show-Help }
     ''             { Show-Help }
     '--help'       { Show-Help }

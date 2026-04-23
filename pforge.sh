@@ -4970,6 +4970,16 @@ cmd_graph() {
     node "$script_path" "$@"
 }
 
+# ─── Command: digest ───────────────────────────────────────────────
+cmd_digest() {
+    local script_path="$REPO_ROOT/scripts/digest.mjs"
+    if [[ ! -f "$script_path" ]]; then
+        echo "ERROR: digest script not found at $script_path" >&2
+        exit 1
+    fi
+    node "$script_path" "$@"
+}
+
 # ─── Command: hammer-fm ────────────────────────────────────────────
 cmd_hammer_fm() {
     local script_path="$REPO_ROOT/scripts/hammer-fm.mjs"
@@ -5028,6 +5038,7 @@ case "$COMMAND" in
     fm-session)   cmd_fm_session "$@" ;;
     fm-recall)    cmd_fm_recall "$@" ;;
     graph)        cmd_graph "$@" ;;
+    digest)       cmd_digest "$@" ;;
     help|--help)  show_help ;;
     *)
         echo "ERROR: Unknown command '$COMMAND'" >&2

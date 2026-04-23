@@ -7,7 +7,9 @@
 
 ## Current Release
 
-**v2.75.0** (2026-04-23) — Forge-Master Planner-Executor Split (Phase-38.4). Adds a planner decomposition layer to `runTurn`: complex multi-step queries are decomposed into up to 5 ordered read-only tool calls, executed with dependency-aware parallelism, and synthesized into a single reply. New `plan` SSE event emitted before tool-call events. Falls back to the existing reactive tool loop for simple queries. New files: `planner.mjs`, `plan-executor.mjs`. 3 new planner validation probes.
+**v2.76.0** (2026-04-23) — Forge-Master Daily Digest (Phase-38.5). Adds `pforge digest` CLI command with `--date`, `--force`, `--notify` flags. Digest aggregator builds structured daily report covering probe lane-match deltas, aging meta-bugs, stalled phases, drift trend, and cost anomalies. Markdown + JSON renderers. Dashboard "Yesterday's Digest" tile. GitHub Actions workflow (opt-in cron). Idempotent output to `.forge/digests/`.
+
+Previous: **v2.75.0** (2026-04-23) — Forge-Master Planner-Executor Split (Phase-38.4). Adds a planner decomposition layer to `runTurn`: complex multi-step queries are decomposed into up to 5 ordered read-only tool calls, executed with dependency-aware parallelism, and synthesized into a single reply. New `plan` SSE event emitted before tool-call events. Falls back to the existing reactive tool loop for simple queries. New files: `planner.mjs`, `plan-executor.mjs`. 3 new planner validation probes.
 
 Previous: **v2.74.0** (2026-04-23) — Plan Forge Knowledge Graph (Phase-38.3). Adds a queryable in-memory knowledge graph over Plan Forge artifacts. New `forge_graph_query` MCP tool (advisory lane only) covers Phase, Slice, Commit, File, Bug, and Run nodes with typed edges. Snapshot persisted atomically to `.forge/graph/snapshot.json`. New CLI: `pforge graph rebuild|stats|query`.
 
@@ -15,25 +17,7 @@ Previous: **v2.73.0**(2026-04-23) — Forge-Master Cross-Session Recall (Phase-3
 
 Previous: **v2.72.0** (2026-04-25) — Forge-Master Conversation Memory (Phase-38.1). Adds file-based JSONL session persistence to the Forge-Master reasoning engine. `runTurn` loads prior conversation turns before classification and persists each turn to disk. Per-tab session IDs flow from the dashboard (`sessionStorage` UUID) through `x-pforge-session-id` HTTP header to `deps.sessionId` in `runTurn`. Sessions auto-rotate at 200 turns. New CLI: `pforge fm-session list|purge`.
 
-Previous: **v2.71.2** (2026-04-24) — Forge-Master Hammer Harness (Phase-37.2). Adds `hammer-fm` end-to-end harness CLI, 4 bundled scenario packs, 6 scorers, Markdown+JSON reporter, and 35 unit tests.
-
-Previous: **v2.71.1** (2026-04-23) — Forge-Master HTTP Bridge Completeness (Phase-37.1). Hotfix for live-fire hammer evidence showing every downstream tool call from the HTTP bridge returned `"Unknown tool: X"` or `"requires async dispatch"`. Extended `invokeForgeTool` in `pforge-mcp/server.mjs` to handle all read-only `BASE_ALLOWLIST` tools; replaced the async-dispatch early-return stub with a terminal-await path that aggregates stream events into `{events:[...], terminal: <payload>}`. Removed allowlist entries with no MCP handler. New tests: `http-dispatcher-parity.test.mjs` + `http-dispatcher-async.test.mjs`. Re-hammer: 8/8 post-fix logs clean — 0 `Unknown tool`, 0 `requires async dispatch`, 7/8 with real tool-call data.
-
-Previous: **v2.71.0** (2026-04-23) — Classifier Calibration + Keyword-Only Harness (Phase-37 Slice 4). `--keyword-only` flag in `scripts/probe-forge-master.mjs` sends `x-pforge-keyword-only: 1` header, wiring a bypass from harness → HTTP routes → `runTurn` → `classify()` that skips the stage-2 router model. `opts.keywordOnly` added to `classify()`. `deps.forceKeywordOnly` added to `runTurn`. Validated: lane-match 19/21 in both keyword-only and normal probe runs (threshold ≥16/18). Finding 1 from `FINDINGS-2026-04-23.md` stamped RESOLVED.— Forge-Master Runtime Observability (Phase-36). Classification events now forwarded via SSE (`event: classification` with `{ lane, confidence }`). Probe harness (`scripts/probe-forge-master.mjs`) captures classification per-probe and renders a "Classification match" accuracy table in the Markdown report. Console output shows `lane=<lane> conf=<conf>` inline. Validated: 14/21 lane-match, 70 lines ✅/OK in report. Results committed to `.forge/validation/`. Phase-36 Slice 4 shipped.
-
-Previous: v2.68.0 (2026-04-22) — Forge-Master Reasoning Dial (Phase-34). Three-tier reasoning dial (Fast / Balanced / Deep) added to the Forge-Master dashboard. `reasoning-tier.mjs` resolves tier → model without exposing model names in the UI. Auto-escalation default-on for `tempering`, `principle-judgment`, and `meta-bug-triage` lanes. 429 graceful degradation: `high → medium → low` fallback chain with turn-trace fields. `GET/PUT /api/forge-master/prefs` REST endpoints. Opt-out via `forgeMaster.autoEscalate = false`.
-
-Previous: v2.67.0 (2026-04-22) — Zero-Key Forge-Master via GitHub Models (Phase-33).New `github-copilot-tools.mjs` provider adapter targets `https://models.github.ai/inference` and authenticates via `GITHUB_TOKEN` / `gh auth login` — no third-party API key required. Provider-selection order flipped to `githubCopilot → anthropic → openai → xai`. `GITHUB_TOKEN` is now the first entry in the dashboard secrets UI. Skippable smoke test guards against regressions without breaking CI.
-
-Previous: v2.70.0 (2026-04-23) — Forge-Master Runtime Observability (Phase-36). Classification events now forwarded via SSE (`event: classification` with `{ lane, confidence }`). Probe harness (`scripts/probe-forge-master.mjs`) captures classification per-probe and renders a "Classification match" accuracy table in the Markdown report. Console output shows `lane=<lane> conf=<conf>` inline. Validated: 14/21 lane-match, 70 lines ✅/OK in report. Results committed to `.forge/validation/`. Phase-36 Slice 4 shipped.
-
-Previous: v2.68.0 (2026-04-22) — Forge-Master Reasoning Dial (Phase-34). Three-tier reasoning dial (Fast / Balanced / Deep) added to the Forge-Master dashboard. `reasoning-tier.mjs` resolves tier → model without exposing model names in the UI. Auto-escalation default-on for `tempering`, `principle-judgment`, and `meta-bug-triage` lanes. 429 graceful degradation: `high → medium → low` fallback chain with turn-trace fields. `GET/PUT /api/forge-master/prefs` REST endpoints. Opt-out via `forgeMaster.autoEscalate = false`.
-
-Previous: v2.65.1 (2026-04-22) — version-bump architectural rebuild (Phase-31.1, closes #91). `Get-VersionTargets` manifest, `pforge.sh` parity port, Vitest regression suite.
-
-Previous: v2.63.1 (Phase-28.5 tempering mtime sort + docs nav hover fix), v2.63.0 (Phase-29 Forge-Master Studio dashboard tab + routes + CLI), v2.62.x (Forge-Master MVP, worker role guardrails, self-repair capture, OpenBrain queue drain), v2.61.0 (Phase-27.2 cost projection UI + per-slice estimator).
-
-**In flight (next)**: Phase-38.5 — Recursive Test-Hardening for Phase-38.4. Candidates: load simulation, failure injection, probe regression.
+**In flight (next)**: Phase-38.5 Slice 5 — Recursive Test-Hardening. Load simulation, failure injection, probe regression.
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 

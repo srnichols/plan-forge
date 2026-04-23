@@ -1,0 +1,71 @@
+# Plan Forge — Daily Digest Workflow (Phase-38.5)
+#
+# Generates a daily digest of project health (probe deltas, aging bugs,
+# stalled phases, drift trend, cost anomalies) and optionally notifies
+# via configured channels.
+#
+# The schedule trigger is commented out by default — uncomment to activate.
+# The workflow_dispatch trigger is always active for manual runs.
+
+name: Daily Digest
+
+on:
+  # schedule:
+  #   - cron: '0 7 * * *'  # Every day at 07:00 UTC — adjust to your timezone
+  workflow_dispatch:
+    inputs:
+      date:
+        description: 'Digest date (ISO, e.g. 2026-04-22). Defaults to yesterday.'
+        required: false
+        type: string
+      force:
+        description: 'Force regeneration even if digest already exists'
+        required: false
+        type: boolean
+        default: false
+      notify:
+        description: 'Dispatch via configured notification channels'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  digest:
+    name: Generate Daily Digest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Generate digest
+        run: |
+          ARGS=""
+          if [ -n "${{ inputs.date }}" ]; then
+            ARGS="$ARGS --date ${{ inputs.date }}"
+          fi
+          if [ "${{ inputs.force }}" = "true" ]; then
+            ARGS="$ARGS --force"
+          fi
+          if [ "${{ inputs.notify }}" = "true" ]; then
+            ARGS="$ARGS --notify"
+          fi
+          chmod +x pforge.sh
+          ./pforge.sh digest $ARGS
+
+      - name: Upload digest artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-digest
+          path: .forge/digests/
+          if-no-files-found: ignore
+          retention-days: 30

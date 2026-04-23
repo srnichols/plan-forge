@@ -7,6 +7,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.76.0] — 2026-04-23 — Forge-Master Daily Digest (Phase-38.5)
+
+> **Phase-38.5 — Daily digest aggregator, renderer, CLI command, and dashboard tile.**
+> `pforge digest [--date <iso>] [--notify] [--force]` generates a structured daily digest
+> covering probe lane-match deltas, aging meta-bugs, stalled phases, drift trend, and cost
+> anomalies. Routes via existing notifier extensions when `--notify` is passed. Idempotent
+> by default — re-run on the same date is a no-op unless `--force` is supplied. Dashboard
+> tile renders "Yesterday's Digest" on the Forge-Master tab.
+
+### Added
+- `pforge-mcp/digest/aggregator.mjs` — `buildDigest({projectDir, date, baselineDate})` reads probe results, meta-bugs, roadmap, drift history, and cost history. Returns `{sections, generatedAt}` with five sections: `probe-deltas`, `aging-bugs`, `stalled-phases`, `drift-trend`, `cost-anomaly`. Pure reader — never modifies artifacts.
+- `pforge-mcp/digest/render.mjs` — `renderMarkdown(digest)` and `renderJson(digest)`. Markdown renderer includes severity badges (`🟢 info`, `🟡 warn`, `🔴 alert`), per-section item renderers, all-green summary, and UTC "Generated at" footer. JSON renderer produces stable `{version: "1", date, sections}` format.
+- `pforge.ps1` + `pforge.sh` — `pforge digest` CLI command with `--date`, `--force`, and `--notify` flags. Idempotency guard: skips generation if digest file exists unless `--force`. Notifier dispatch via configured `extensions/notify-*` channels.
+- `pforge-mcp/dashboard/forge-master.js` — "Yesterday's Digest" tile: `forgeMasterRenderDigestTile(digestJson)` renders a compact tile showing section severity icons and item counts. `forgeMasterLoadDigest()` fetches latest digest from `/api/forge-master/digest/latest`. Auto-loaded on Forge-Master tab init.
+- `.github/workflows/forge-daily-digest.yml` — example GitHub Actions workflow with `schedule:` trigger (commented out by default) and `workflow_dispatch:` trigger (active). Uploads digest artifact.
+- `pforge-mcp/tests/digest-aggregator.test.mjs` — unit tests for all 5 aggregator sections, empty-state, severity labels.
+- `pforge-mcp/tests/digest-render.test.mjs` — snapshot-style determinism tests for Markdown and JSON renderers.
+- `pforge-mcp/tests/digest-dashboard.test.mjs` — unit tests for dashboard tile rendering from fixture digest JSON.
+- Digest output written to `.forge/digests/<YYYY-MM-DD>.json` (gitignored via `**/.forge/`).
+
 ## [2.75.1] — 2026-04-23 — Homepage dropdown actually hidden
 
 > **Patch release — fixes the homepage nav dropdown that remained visible after v2.74.4's JS-only fix.**

@@ -81,6 +81,7 @@ async function forgeMasterInit() {
       });
     }
     await forgeMasterLoadPrefs();
+    forgeMasterLoadDigest();
     const root = document.getElementById("forge-master-root");
     if (root) {
       root.addEventListener("click", e => {
@@ -374,5 +375,73 @@ function forgeMasterRenderRelatedConversations(relatedTurns) {
     Related conversations (${relatedTurns.length})
   </summary>${rows}`;
 }
+
+// ─── Yesterday's Digest ───────────────────────────────────────────────
+
+/**
+ * Render the "Yesterday's Digest" tile from the latest digest JSON
+ * found in .forge/digests/. Fetches via the dashboard API route.
+ *
+ * @param {{ version: string, date: string, sections: Array<{id: string, title: string, severity: string, items: any[]}> }} digestJson
+ */
+function forgeMasterRenderDigestTile(digestJson) {
+  const root = document.getElementById("forge-master-root");
+  if (!root) return;
+
+  let tile = document.getElementById("fm-digest-tile");
+  if (!tile) {
+    tile = document.createElement("div");
+    tile.id = "fm-digest-tile";
+    tile.className = "border border-gray-700 rounded p-3 mb-3 text-xs";
+    root.insertBefore(tile, root.firstChild);
+  }
+
+  if (!digestJson || !digestJson.sections) {
+    tile.innerHTML = `<h4 class="text-cyan-400 font-semibold mb-1">Yesterday's Digest</h4>
+      <p class="text-gray-500">No digest available.</p>`;
+    return;
+  }
+
+  const SEVERITY_ICON = { info: "🟢", warn: "🟡", alert: "🔴" };
+
+  const sectionRows = digestJson.sections.map(s => {
+    const icon = SEVERITY_ICON[s.severity] || "⚪";
+    const count = s.items.length;
+    const summary = count === 0 ? "all clear" : `${count} item${count > 1 ? "s" : ""}`;
+    return `<div class="flex items-center gap-2 py-0.5">
+      <span>${icon}</span>
+      <span class="text-gray-300">${s.title}</span>
+      <span class="text-gray-500 ml-auto">${summary}</span>
+    </div>`;
+  }).join("");
+
+  const allGreen = digestJson.sections.every(s => s.items.length === 0);
+  const statusLine = allGreen
+    ? `<p class="text-green-500 mt-1">✅ All green — no significant deltas.</p>`
+    : "";
+
+  tile.innerHTML = `<h4 class="text-cyan-400 font-semibold mb-1">Yesterday's Digest <span class="text-gray-500 font-normal">(${digestJson.date})</span></h4>
+    ${sectionRows}${statusLine}`;
+}
+
+/**
+ * Load the latest digest from the dashboard API and render the tile.
+ */
+async function forgeMasterLoadDigest() {
+  try {
+    const res = await fetch("/api/forge-master/digest/latest");
+    if (!res.ok) {
+      forgeMasterRenderDigestTile(null);
+      return;
+    }
+    const digestJson = await res.json();
+    forgeMasterRenderDigestTile(digestJson);
+  } catch {
+    forgeMasterRenderDigestTile(null);
+  }
+}
+
+window.forgeMasterRenderDigestTile = (...args) => forgeMasterRenderDigestTile(...args);
+window.forgeMasterLoadDigest = () => forgeMasterLoadDigest();
 
 // Historical note: globals kept for cross-tab inline handlers.

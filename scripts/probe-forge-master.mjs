@@ -1,5 +1,8 @@
 // Forge-Master validation probe runner.
-// Usage: node scripts/probe-forge-master.mjs [--host=127.0.0.1:3100] [--timeout=60]
+// Usage: node scripts/probe-forge-master.mjs [--host=127.0.0.1:3100] [--timeout=60] [--keyword-only]
+//
+// Flags:
+//   --keyword-only   Send x-pforge-keyword-only: 1 header; server skips stage-2 router model
 //
 // SSE events emitted by /api/forge-master/chat/:id/stream (per http-routes.mjs):
 //   start          { sessionId }
@@ -20,6 +23,7 @@ const argv = Object.fromEntries(
 );
 const HOST = argv.host || "127.0.0.1:3100";
 const TIMEOUT_SEC = Number(argv.timeout || 60);
+const KEYWORD_ONLY = argv["keyword-only"] === "true" || argv["keyword-only"] === "1";
 const BASE = `http://${HOST}`;
 
 const PROBES_PATH = resolve(".forge/validation/probes.json");
@@ -37,6 +41,7 @@ const jsonPath = join(outDir, `results-${stamp}.json`);
 const mdPath = join(outDir, `results-${stamp}.md`);
 
 console.log(`[probe] ${probes.length} probes → ${BASE}`);
+console.log(`[probe] keyword-only: ${KEYWORD_ONLY}`);
 console.log(`[probe] results → ${mdPath}`);
 console.log("");
 
@@ -63,7 +68,10 @@ for (const [i, probe] of probes.entries()) {
   try {
     const init = await fetch(`${BASE}/api/forge-master/chat`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        ...(KEYWORD_ONLY ? { "x-pforge-keyword-only": "1" } : {}),
+      },
       body: JSON.stringify({ message: probe.message }),
     });
     const body = await init.json();
@@ -142,8 +150,9 @@ for (const [i, probe] of probes.entries()) {
   const toolNames = toolCalls.map((t) => t?.name || t?.tool || "?");
   const status = errorEvent ? "🔥" : reply ? "OK" : "EMPTY";
   const laneStr = classificationData?.lane ? `lane=${classificationData.lane}` : "lane=?";
-  const confStr = classificationData?.confidence != null
-    ? `conf=${classificationData.confidence.toFixed(2)}`
+  const rawConf = classificationData?.confidence;
+  const confStr = rawConf != null
+    ? `conf=${typeof rawConf === "number" ? rawConf.toFixed(2) : rawConf}`
     : "conf=?";
   console.log(
     `${status} ${laneStr} ${confStr} tokens=${tokensIn}/${tokensOut} tools=${toolCalls.length}${toolNames.length ? `(${toolNames.join(",")})` : ""} dur=${durationMs}ms${errorEvent ? ` ERR:${errorEvent.error || JSON.stringify(errorEvent).slice(0, 60)}` : ""}`,
@@ -230,8 +239,9 @@ function renderMarkdown(rs) {
       if (match) classAgg[expected].matched++;
     }
     const matchIcon = match === null ? "—" : match ? "✅" : "❌";
-    const conf = r.classification?.confidence != null
-      ? r.classification.confidence.toFixed(2)
+    const rawConf2 = r.classification?.confidence;
+    const conf = rawConf2 != null
+      ? (typeof rawConf2 === "number" ? rawConf2.toFixed(2) : rawConf2)
       : "?";
     classRows.push(`| ${r.probe.id} | ${expected} | ${got} | ${conf} | ${matchIcon} |`);
   }
@@ -245,8 +255,10 @@ function renderMarkdown(rs) {
     const status = r.error || r.errorEvent ? "FAIL" : r.reply ? "OK" : "EMPTY";
     const toolList = (r.toolCalls || []).map((t) => t.name).join(", ") || "—";
     const classGot = r.classification?.lane ?? "?";
-    const classConf = r.classification?.confidence != null
-      ? r.classification.confidence.toFixed(2) : "?";
+    const rawClassConf = r.classification?.confidence;
+    const classConf = rawClassConf != null
+      ? (typeof rawClassConf === "number" ? rawClassConf.toFixed(2) : rawClassConf)
+      : "?";
     const classMatch = r.probe.lane === "any"
       ? "—"
       : classGot === r.probe.lane ? "✅" : "❌";

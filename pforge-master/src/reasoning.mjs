@@ -197,6 +197,7 @@ function loadSystemPrompt(contextBlock, principlesBlock) {
  *   callApiWorker?: Function,
  *   detectApiProvider?: Function,
  *   resolveApiKey?: (provider: string) => string | null,
+ *   forceKeywordOnly?: boolean, — when true, skip stage-2 router-model in classify()
  * }} [deps] — injected dependencies for testability
  * @returns {Promise<{
  *   reply: string,
@@ -246,6 +247,7 @@ export async function runTurn(input, deps = {}) {
   // ── 1. Intent classification ──────────────────────────────────────
   const classification = await classify(message, {
     cwd,
+    keywordOnly: deps.forceKeywordOnly || false,
     callApiWorker: deps.callApiWorker,
     detectApiProvider: deps.detectApiProvider,
   });

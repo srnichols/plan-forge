@@ -7,6 +7,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.71.0] — 2026-04-23 — Classifier calibration + Keyword-Only Harness (Phase-37 Slice 4)
+
+> **Phase-37 Slice 4 — Harness validation & release. `--keyword-only` flag forces the probe to skip the stage-2 router model; `x-pforge-keyword-only: 1` HTTP header wires the bypass end-to-end from harness through HTTP routes to the `classify()` call. Validated: lane-match 19/21 (keyword-only) and 19/21 (normal) — both exceed the ≥16/18 threshold. Provider rate-limiting reduced live-reply count in both runs; classification routing is verified via SSE `classification` events emitted before any model call.**
+
+### Added
+
+- **`scripts/probe-forge-master.mjs` — `--keyword-only` flag** — When set, the probe sends `x-pforge-keyword-only: 1` on every `POST /api/forge-master/chat` request, instructing the server to skip stage-2 router-model classification and use the keyword-only result directly. Console output shows `keyword-only: true` banner. Enables isolated regression testing of `scoreKeywords()` without needing an API key or incurring model cost.
+- **`pforge-master/src/http-routes.mjs` — `x-pforge-keyword-only` header support** — Both Express and bare-node paths read the `x-pforge-keyword-only: 1` request header from `POST /api/forge-master/chat`, store `keywordOnly: true` in the session, and forward `forceKeywordOnly: true` to `runTurn` in the SSE stream handler.
+- **`pforge-master/src/reasoning.mjs` — `deps.forceKeywordOnly`** — When `deps.forceKeywordOnly` is true, `runTurn` passes `keywordOnly: true` to `classify()`, skipping the stage-2 router-model call. JSDoc updated to document the new dep field.
+- **`pforge-master/src/intent-router.mjs` — `opts.keywordOnly`** — `classify()` accepts a `keywordOnly` option; when true, the router-model branch is skipped even if `callApiWorker` and `detectApiProvider` are provided. Enables deterministic, zero-cost classification in test and harness contexts.
+- **Classifier calibration validated** — Both probe runs show lane-match 19/21 classifiable probes against `.forge/validation/probes.json`. Per-probe classification table in markdown report shows ✅/❌ per probe with expected vs. actual lane and confidence tier. Results committed to `.forge/validation/`. Finding 1 from `FINDINGS-2026-04-23.md` stamped RESOLVED.
+
+### Notes
+
+- The `forceKeywordOnly` path is a test/harness concern only. Production traffic via `forge_master_ask` always goes through the full two-stage classify flow.
+- Rate-limiting on the GitHub Copilot provider reduced live-reply counts in both probe runs (11/24 and 11/24 replies). Lane-match accuracy — the primary classifier calibration metric — is unaffected by rate-limiting since classification fires before the reasoning model call.
+- `scripts/probe-forge-master.mjs` confidence display now handles both string (`"low"|"medium"|"high"`) and numeric confidence values from the SSE `classification` event, preventing a `toFixed is not a function` crash introduced in Phase-36.
+
 ## [2.70.0] — 2026-04-23 — Forge-Master Runtime Observability (Phase-36 Slice 4)
 
 > **Phase-36 Slice 4 — Probe validation & release. Classification events are now observable end-to-end via SSE; the probe harness captures lane + confidence per-probe and reports accuracy in Markdown.**

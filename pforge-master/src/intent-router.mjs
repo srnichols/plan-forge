@@ -386,6 +386,7 @@ async function callRouterModel(message, deps) {
  *   cwd?: string,
  *   callApiWorker?: Function,
  *   detectApiProvider?: Function,
+ *   keywordOnly?: boolean,  — when true, skip stage-2 router-model entirely
  * }} [opts]
  * @returns {Promise<{
  *   lane: string,
@@ -419,8 +420,8 @@ export async function classify(message, opts = {}) {
     };
   }
 
-  // No keyword match or ambiguous — try router model
-  if (opts.callApiWorker && opts.detectApiProvider) {
+  // No keyword match or ambiguous — try router model (skipped when keywordOnly)
+  if (!opts.keywordOnly && opts.callApiWorker && opts.detectApiProvider) {
     const config = getForgeMasterConfig({ cwd: opts.cwd });
     const routerProvider = opts.detectApiProvider(config.routerModel);
 

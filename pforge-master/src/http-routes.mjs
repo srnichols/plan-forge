@@ -78,7 +78,8 @@ function _registerExpress(app, dispatcher) {
     const { message, sessionId: reqSessionId } = req.body || {};
     if (!message) return res.status(400).json({ error: "message required" });
     const sessionId = reqSessionId || randomUUID();
-    sessions.set(sessionId, { createdAt: new Date().toISOString(), lastMessage: message });
+    const keywordOnly = req.headers["x-pforge-keyword-only"] === "1";
+    sessions.set(sessionId, { createdAt: new Date().toISOString(), lastMessage: message, keywordOnly });
     res.json({
       sessionId,
       streamUrl: `/api/forge-master/chat/${sessionId}/stream?message=${encodeURIComponent(message)}`,
@@ -88,6 +89,7 @@ function _registerExpress(app, dispatcher) {
   app.get("/api/forge-master/chat/:sessionId/stream", async (req, res) => {
     const { sessionId } = req.params;
     const message = req.query.message || "";
+    const session = sessions.get(sessionId) || {};
     const sse = createSseStream(res);
     try {
       sse.send("start", { sessionId });
@@ -95,6 +97,7 @@ function _registerExpress(app, dispatcher) {
         { message, sessionId },
         {
           dispatcher,
+          forceKeywordOnly: session.keywordOnly || false,
           onClassification: (data) => { sse.send("classification", data); },
         },
       );
@@ -180,7 +183,8 @@ function _buildNodeHandler(dispatcher) {
       const { message, sessionId: reqSessionId } = body;
       if (!message) return json(res, 400, { error: "message required" });
       const sessionId = reqSessionId || randomUUID();
-      sessions.set(sessionId, { createdAt: new Date().toISOString(), lastMessage: message });
+      const keywordOnly = req.headers["x-pforge-keyword-only"] === "1";
+      sessions.set(sessionId, { createdAt: new Date().toISOString(), lastMessage: message, keywordOnly });
       return json(res, 200, {
         sessionId,
         streamUrl: `/api/forge-master/chat/${sessionId}/stream?message=${encodeURIComponent(message)}`,
@@ -192,6 +196,7 @@ function _buildNodeHandler(dispatcher) {
     if (method === "GET" && streamMatch) {
       const sessionId = streamMatch[1];
       const message = url.searchParams.get("message") || "";
+      const session = sessions.get(sessionId) || {};
       const sse = createSseStream(res);
       try {
         sse.send("start", { sessionId });
@@ -199,6 +204,7 @@ function _buildNodeHandler(dispatcher) {
           { message, sessionId },
           {
             dispatcher,
+            forceKeywordOnly: session.keywordOnly || false,
             onClassification: (data) => { sse.send("classification", data); },
           },
         );

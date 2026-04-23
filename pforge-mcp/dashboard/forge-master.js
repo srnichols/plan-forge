@@ -56,6 +56,7 @@ window.forgeMasterOnTabActivate = () => {
 window.forgeMasterNewChat = (...args) => forgeMasterNewChat(...args);
 window.forgeMasterSend = (...args) => forgeMasterSend(...args);
 window.forgeMasterFilterGallery = (...args) => forgeMasterFilterGallery(...args);
+window.forgeMasterRenderRelatedConversations = (...args) => forgeMasterRenderRelatedConversations(...args);
 
 // ─── Init ─────────────────────────────────────────────────────────────
 
@@ -183,7 +184,15 @@ function forgeMasterStream(url, thinkingId) {
     forgeMasterAddToolTrace(tc);
   });
 
-  es.addEventListener("done", () => { es.close(); });
+  es.addEventListener("done", (e) => {
+    try {
+      const data = JSON.parse(e.data);
+      if (data.relatedTurns && data.relatedTurns.length > 0) {
+        forgeMasterRenderRelatedConversations(data.relatedTurns);
+      }
+    } catch { /* non-fatal */ }
+    es.close();
+  });
 
   es.addEventListener("error", () => {
     if (replyText === "") forgeMasterUpdateBubble(replyBubbleId, "Stream error.");
@@ -280,6 +289,41 @@ function forgeMasterAddToolTrace(tc) {
   el.className = "border border-gray-700 rounded px-2 py-1 mb-1";
   el.innerHTML = `<span class="text-cyan-400 font-mono">${tc.name || tc.tool || "tool"}</span>`;
   trace.appendChild(el);
+}
+
+// ─── Related Conversations ────────────────────────────────────────────
+
+/**
+ * Render the "Related conversations" section from recall results.
+ * Creates or updates the #fm-related-conversations element.
+ *
+ * @param {Array<{turnId,sessionId,timestamp,userMessage,lane,replyHash,score}>} relatedTurns
+ */
+function forgeMasterRenderRelatedConversations(relatedTurns) {
+  const stream = document.getElementById("fm-chat-stream");
+  if (!stream || !relatedTurns || relatedTurns.length === 0) return;
+
+  let el = document.getElementById("fm-related-conversations");
+  if (!el) {
+    el = document.createElement("details");
+    el.id = "fm-related-conversations";
+    el.className = "mt-2 border border-gray-700 rounded text-xs";
+    stream.appendChild(el);
+  }
+
+  const rows = relatedTurns.map((r) => {
+    const ts = r.timestamp ? r.timestamp.slice(0, 10) : "";
+    const lane = r.lane || "";
+    const msg = (r.userMessage || "").slice(0, 100);
+    return `<div class="px-2 py-1 border-t border-gray-700 text-gray-400">
+      <span class="text-cyan-600 font-mono text-xs">[${ts} · ${lane}]</span>
+      <span class="ml-1 text-gray-300">${msg}</span>
+    </div>`;
+  }).join("");
+
+  el.innerHTML = `<summary class="px-2 py-1 text-cyan-500 cursor-pointer hover:bg-gray-700">
+    Related conversations (${relatedTurns.length})
+  </summary>${rows}`;
 }
 
 // Historical note: globals kept for cross-tab inline handlers.

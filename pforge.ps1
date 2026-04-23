@@ -96,6 +96,8 @@ function Show-Help {
     Write-Host "  fm-session list              List active Forge-Master conversation sessions"
     Write-Host "  fm-session purge <id>        Purge a specific session (active + archive)"
     Write-Host "  fm-session purge --all       Purge all sessions"
+    Write-Host "  fm-recall query <text>       Query the cross-session recall index (top-3 results)"
+    Write-Host "  fm-recall rebuild            Rebuild the recall index from all fm-sessions"
     Write-Host "  help              Show this help message"
     Write-Host ""
     Write-Host "OPTIONS:" -ForegroundColor Yellow
@@ -5617,6 +5619,16 @@ function Invoke-ForgeMaster {
     }
 }
 
+# ─── Command: fm-recall ────────────────────────────────────────────
+function Invoke-FmRecall {
+    $scriptPath = Join-Path $RepoRoot "scripts/fm-recall.mjs"
+    if (-not (Test-Path $scriptPath)) {
+        Write-Host "ERROR: fm-recall script not found at $scriptPath" -ForegroundColor Red
+        exit 1
+    }
+    node $scriptPath @Arguments
+}
+
 # ─── Command: fm-session ───────────────────────────────────────────
 function Invoke-FmSession {
     $sub = if ($Arguments.Count -gt 0) { $Arguments[0] } else { "" }
@@ -5725,6 +5737,7 @@ switch ($Command) {
     'forge-master' { Invoke-ForgeMaster }
     'hammer-fm'    { Invoke-HammerFm }
     'fm-session'   { Invoke-FmSession }
+    'fm-recall'    { Invoke-FmRecall }
     'help'         { Show-Help }
     ''             { Show-Help }
     '--help'       { Show-Help }

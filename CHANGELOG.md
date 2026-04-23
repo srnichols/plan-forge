@@ -7,6 +7,31 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.73.0] — 2026-04-23 — Forge-Master Cross-Session Recall (Phase-38.2)
+
+> **Phase-38.2 — BM25 recall index over past fm-sessions for cross-session memory.**  
+> `runTurn` now queries a BM25 index over all prior conversation turns for operational, troubleshoot, and advisory lanes, injecting the top-3 related turns as advisory context into the system prompt.  
+> Recall is non-fatal — index failure always degrades gracefully without affecting the turn.
+
+### Added
+- `pforge-master/src/recall-index.mjs` — pure-JS BM25 indexer (`buildIndex`, `loadIndex`, `queryIndex`); reads `*.jsonl` + `*.archive.jsonl` from `.forge/fm-sessions/`; excludes OFFTOPIC turns; lazy daily refresh; concurrent-build serialization; atomic write
+- `pforge-master/src/__tests__/recall-index.test.mjs` — 16 tests covering build, query, lazy refresh, OFFTOPIC exclusion, concurrent builds, archive indexing, empty-state, malformed JSONL
+- `pforge-master/src/__tests__/reasoning-recall.test.mjs` — 6 integration tests: cross-session recall surface, graceful degradation, OFFTOPIC skip, ephemeral skip, no-provider path, classification isolation
+- `scripts/fm-recall.mjs` — CLI helper for `pforge fm-recall query "<text>"` and `pforge fm-recall rebuild`
+- `pforge fm-recall query|rebuild` CLI commands in `pforge.ps1` and `pforge.sh`
+- `pforge-mcp/tests/dashboard-forge-master-recall.test.mjs` — 4 dashboard unit tests for the related-conversations panel
+
+### Changed
+- `pforge-master/src/reasoning.mjs` — cross-session recall for non-ephemeral sessions on `operational`, `troubleshoot`, `advisory` lanes; injects `> **Recall (advisory):**` block into contextBlock; `relatedTurns` returned on all result shapes
+- `pforge-master/src/http-routes.mjs` — `done` SSE event now includes `relatedTurns` array (both Express and bare-node paths)
+- `pforge-mcp/dashboard/forge-master.js` — `forgeMasterStream` handles `relatedTurns` from `done` event; `forgeMasterRenderRelatedConversations` renders collapsible `<details>` "Related conversations" section
+
+### Notes
+- Recall index stored at `.forge/fm-sessions/recall-index.json` — gitignored, never committed
+- Minimum query length: 3 tokens (shorter queries return `[]` without index access)
+- BM25 parameters: k1=1.5, b=0.75 (standard TREC defaults)
+- Cross-project isolation: index keyed by `projectDir`; no leakage across repositories
+
 ## [2.72.0] — 2026-04-25 — Forge-Master Conversation Memory (Phase-38.1)
 
 > **Phase-38.1 — File-based conversation memory for Forge-Master.**  

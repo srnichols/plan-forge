@@ -162,7 +162,7 @@ function _registerExpress(app, dispatcher) {
       } else {
         sse.send("reply", { content: result.reply, sessionId });
         for (const tc of result.toolCalls || []) sse.send("tool-call", tc);
-        sse.send("done", { sessionId, tokensIn: result.tokensIn, tokensOut: result.tokensOut });
+        sse.send("done", { sessionId, tokensIn: result.tokensIn, tokensOut: result.tokensOut, relatedTurns: result.relatedTurns || [] });
       }
     } catch (err) {
       sse.send("error", { error: err.message });
@@ -171,7 +171,7 @@ function _registerExpress(app, dispatcher) {
     }
   });
 
-  app.post("/api/forge-master/chat/:sessionId/approve", (req, res) => {
+  app.post("/api/forge-master/chat/:sessionId/approve",(req, res) => {
     const { sessionId } = req.params;
     const { approvalId, decision, editedArgs } = req.body || {};
     const gate = pendingApprovals.get(approvalId);
@@ -296,7 +296,7 @@ function _buildNodeHandler(dispatcher) {
         } else {
           sse.send("reply", { content: result.reply, sessionId });
           for (const tc of result.toolCalls || []) sse.send("tool-call", tc);
-          sse.send("done", { sessionId, tokensIn: result.tokensIn, tokensOut: result.tokensOut });
+          sse.send("done", { sessionId, tokensIn: result.tokensIn, tokensOut: result.tokensOut, relatedTurns: result.relatedTurns || [] });
         }
       } catch (err) {
         sse.send("error", { error: err.message });

@@ -76,6 +76,8 @@ COMMANDS:
   fm-session list              List active Forge-Master conversation sessions
   fm-session purge <id>        Purge a specific session (active + archive)
   fm-session purge --all       Purge all sessions
+  fm-recall query <text>       Query the cross-session recall index (top-3 results)
+  fm-recall rebuild            Rebuild the recall index from all fm-sessions
   version-bump <v>  Update VERSION, package.json, docs/README/ROADMAP version badges to v<version>
   migrate-memory    Merge legacy *-history.json ledgers into canonical .jsonl siblings (idempotent)
   drain-memory      Drain pending OpenBrain queue records to the configured OpenBrain server
@@ -4933,6 +4935,16 @@ cmd_fm_session() {
     esac
 }
 
+# ─── Command: fm-recall ────────────────────────────────────────────
+cmd_fm_recall() {
+    local script_path="$REPO_ROOT/scripts/fm-recall.mjs"
+    if [[ ! -f "$script_path" ]]; then
+        echo "ERROR: fm-recall script not found at $script_path" >&2
+        exit 1
+    fi
+    node "$script_path" "$@"
+}
+
 # ─── Command: hammer-fm ────────────────────────────────────────────
 cmd_hammer_fm() {
     local script_path="$REPO_ROOT/scripts/hammer-fm.mjs"
@@ -4989,6 +5001,7 @@ case "$COMMAND" in
     forge-master) cmd_forge_master "$@" ;;
     hammer-fm)    cmd_hammer_fm "$@" ;;
     fm-session)   cmd_fm_session "$@" ;;
+    fm-recall)    cmd_fm_recall "$@" ;;
     help|--help)  show_help ;;
     *)
         echo "ERROR: Unknown command '$COMMAND'" >&2

@@ -72,10 +72,12 @@ describe("runTurn no-provider error", () => {
 
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), "forge-provider-sel-"));
-    // No reasoningProvider set → triggers autoSelectProvider path
+    // reasoningModel set to a value that won't match any provider pattern,
+    // so resolveReasoningProvider returns null and autoSelectProvider is used.
+    // This makes the test env-independent (GITHUB_TOKEN et al don't matter).
     writeFileSync(
       join(tmpDir, ".forge.json"),
-      JSON.stringify({ forgeMaster: { maxToolCalls: 3 } }),
+      JSON.stringify({ forgeMaster: { maxToolCalls: 3, reasoningModel: "test-no-key-model" } }),
       "utf-8",
     );
   });

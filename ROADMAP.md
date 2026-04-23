@@ -7,7 +7,9 @@
 
 ## Current Release
 
-**v2.71.2** (2026-04-24) — Forge-Master Hammer Harness (Phase-37.2). Adds `hammer-fm` end-to-end harness CLI, 4 bundled scenario packs, 6 scorers, Markdown+JSON reporter, and 35 unit tests.
+**v2.72.0** (2026-04-25) — Forge-Master Conversation Memory (Phase-38.1). Adds file-based JSONL session persistence to the Forge-Master reasoning engine. `runTurn` loads prior conversation turns before classification and persists each turn to disk. Per-tab session IDs flow from the dashboard (`sessionStorage` UUID) through `x-pforge-session-id` HTTP header to `deps.sessionId` in `runTurn`. Sessions auto-rotate at 200 turns. New CLI: `pforge fm-session list|purge`.
+
+Previous: **v2.71.2** (2026-04-24) — Forge-Master Hammer Harness (Phase-37.2). Adds `hammer-fm` end-to-end harness CLI, 4 bundled scenario packs, 6 scorers, Markdown+JSON reporter, and 35 unit tests.
 
 Previous: **v2.71.1** (2026-04-23) — Forge-Master HTTP Bridge Completeness (Phase-37.1). Hotfix for live-fire hammer evidence showing every downstream tool call from the HTTP bridge returned `"Unknown tool: X"` or `"requires async dispatch"`. Extended `invokeForgeTool` in `pforge-mcp/server.mjs` to handle all read-only `BASE_ALLOWLIST` tools; replaced the async-dispatch early-return stub with a terminal-await path that aggregates stream events into `{events:[...], terminal: <payload>}`. Removed allowlist entries with no MCP handler. New tests: `http-dispatcher-parity.test.mjs` + `http-dispatcher-async.test.mjs`. Re-hammer: 8/8 post-fix logs clean — 0 `Unknown tool`, 0 `requires async dispatch`, 7/8 with real tool-call data.
 

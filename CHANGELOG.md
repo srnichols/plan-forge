@@ -7,7 +7,32 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-## [2.71.2] — 2026-04-24 — Forge-Master Hammer Harness (Phase-37.2)
+## [2.72.0] — 2026-04-25 — Forge-Master Conversation Memory (Phase-38.1)
+
+> **Phase-38.1 — File-based conversation memory for Forge-Master.**  
+> Adds JSONL session persistence so `runTurn` loads prior turns before classification and persists each turn to disk.  
+> Per-tab session IDs flow from the dashboard through the HTTP layer to the reasoning engine.
+
+### Added
+- `pforge-master/src/session-store.mjs` — file-based JSONL session persistence primitives: `appendTurn`, `loadSession`, `purgeSession`, `rotateIfNeeded`, `hashReply`; per-session mutex; auto-rotation at 200 turns (oldest 100 → archive); path sanitization against traversal
+- `pforge-master/src/__tests__/session-store.test.mjs` — 20 tests covering all operations
+- `pforge-master/src/__tests__/reasoning-session.test.mjs` — 5 integration tests for runTurn session persistence
+- `pforge-master/tests/session-route.test.mjs` — 7 tests for HTTP session header threading and `/api/forge-master/session/:id` route
+- `GET /api/forge-master/session/:id` HTTP route — returns `{sessionId, turns: last 10}` for both Express and bare-node paths
+- `pforge fm-session list|purge <id>|purge --all` CLI commands in `pforge.ps1` and `pforge.sh`
+- `docs/CLI-GUIDE.md` — `fm-session` subcommand group with file format, rotation, and usage notes
+
+### Changed
+- `pforge-master/src/reasoning.mjs` — canonical `effectiveSessionId` (deps.sessionId ?? input.sessionId); `isEphemeral` guard; prior turn loading (last 10) before classification; prior turns injected into contextBlock; OFFTOPIC path and main reply path both persist turns
+- `pforge-master/src/http-routes.mjs` — POST `/api/forge-master/chat` reads `x-pforge-session-id` header; stream handler threads `deps.sessionId`; bare-node path mirrors same changes
+- `pforge-mcp/dashboard/forge-master.js` — `FM_TAB_SESSION_ID` generated at module init via `sessionStorage`; attached as `x-pforge-session-id` header on every chat request
+
+### Notes
+- Session files stored in `.forge/fm-sessions/` which is gitignored — never committed
+- Ephemeral sessions (no header) write nothing to disk — probe harness and CLI one-shots remain zero-disk-side-effect
+- Pre-existing test failure in `reasoning-provider-selection.test.mjs` "(c)" unrelated to this phase
+
+— 2026-04-24 — Forge-Master Hammer Harness (Phase-37.2)
 
 > **Phase-37.2 — Hammer harness for end-to-end Forge-Master testing.**  
 > Adds `scripts/hammer-fm.mjs`, four bundled scenario packs, and `pforge hammer-fm` CLI surface.  

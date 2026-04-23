@@ -92,6 +92,10 @@ function Show-Help {
     Write-Host "  drain-memory      Drain pending OpenBrain queue records to the configured OpenBrain server"
     Write-Host "  mcp-call <tool>   Invoke any MCP tool by name (e.g. forge_crucible_list) via the local MCP server"
     Write-Host "  tour              Guided walkthrough of your installed Plan Forge files"
+    Write-Host "  hammer-fm         Run Forge-Master hammer harness against a live dashboard (see: pforge hammer-fm --help)"
+    Write-Host "  fm-session list              List active Forge-Master conversation sessions"
+    Write-Host "  fm-session purge <id>        Purge a specific session (active + archive)"
+    Write-Host "  fm-session purge --all       Purge all sessions"
     Write-Host "  help              Show this help message"
     Write-Host ""
     Write-Host "OPTIONS:" -ForegroundColor Yellow
@@ -5613,6 +5617,63 @@ function Invoke-ForgeMaster {
     }
 }
 
+# ─── Command: fm-session ───────────────────────────────────────────
+function Invoke-FmSession {
+    $sub = if ($Arguments.Count -gt 0) { $Arguments[0] } else { "" }
+    $fmDir = Join-Path $RepoRoot ".forge/fm-sessions"
+    switch ($sub) {
+        'list' {
+            if (-not (Test-Path $fmDir)) {
+                Write-Host "No fm-sessions directory found at $fmDir" -ForegroundColor Yellow
+                exit 0
+            }
+            $files = Get-ChildItem $fmDir -Filter "*.jsonl" | Where-Object { $_.Name -notmatch "\.archive\.jsonl$" }
+            if ($files.Count -eq 0) {
+                Write-Host "No active sessions found." -ForegroundColor Yellow
+            } else {
+                $files | ForEach-Object {
+                    $id = $_.BaseName
+                    $turns = (Get-Content $_.FullName | Measure-Object).Count
+                    Write-Host ("  {0,-40} {1,4} turn(s)" -f $id, $turns)
+                }
+            }
+        }
+        'purge' {
+            $target = if ($Arguments.Count -gt 1) { $Arguments[1] } else { "" }
+            if ($target -eq '--all') {
+                if (Test-Path $fmDir) {
+                    Remove-Item $fmDir -Recurse -Force
+                    Write-Host "All fm-sessions purged." -ForegroundColor Green
+                } else {
+                    Write-Host "No fm-sessions directory to purge." -ForegroundColor Yellow
+                }
+            } elseif ($target) {
+                $safe = $target -replace '[^A-Za-z0-9._-]', ''
+                if ($safe -ne $target) {
+                    Write-Host "ERROR: invalid session id '$target'" -ForegroundColor Red; exit 1
+                }
+                $active  = Join-Path $fmDir "$safe.jsonl"
+                $archive = Join-Path $fmDir "$safe.archive.jsonl"
+                $removed = 0
+                if (Test-Path $active)  { Remove-Item $active  -Force; $removed++ }
+                if (Test-Path $archive) { Remove-Item $archive -Force; $removed++ }
+                if ($removed -gt 0) {
+                    Write-Host "Purged session '$safe'." -ForegroundColor Green
+                } else {
+                    Write-Host "Session '$safe' not found." -ForegroundColor Yellow
+                }
+            } else {
+                Write-Host "Usage: pforge fm-session purge <id> | purge --all" -ForegroundColor Yellow
+                exit 1
+            }
+        }
+        default {
+            Write-Host "Usage: pforge fm-session <list | purge <id> | purge --all>" -ForegroundColor Yellow
+            exit 1
+        }
+    }
+}
+
 # ─── Command: hammer-fm ────────────────────────────────────────────
 function Invoke-HammerFm {
     $scriptPath = Join-Path $RepoRoot "scripts/hammer-fm.mjs"
@@ -5663,6 +5724,7 @@ switch ($Command) {
     'skills'       { Invoke-Skills }
     'forge-master' { Invoke-ForgeMaster }
     'hammer-fm'    { Invoke-HammerFm }
+    'fm-session'   { Invoke-FmSession }
     'help'         { Show-Help }
     ''             { Show-Help }
     '--help'       { Show-Help }

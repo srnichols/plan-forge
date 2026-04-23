@@ -29,6 +29,7 @@ import { getForgeMasterConfig } from "./config.mjs";
 import { resolveAllowlist, USAGE_HINTS } from "./allowlist.mjs";
 import { invokeMany } from "./tool-bridge.mjs";
 import { ensureSessionId, appendTurn, summarizeIfNeeded } from "./persistence.mjs";
+import { appendTurn as storeAppendTurn, loadSession, hashReply } from "./session-store.mjs";
 import { loadPrinciples, UNIVERSAL_BASELINE } from "./principles.mjs";
 import { resolveModel, VALID_TIERS } from "./reasoning-tier.mjs";
 import * as githubCopilotProvider from "./providers/github-copilot-tools.mjs";
@@ -199,6 +200,7 @@ function loadSystemPrompt(contextBlock, principlesBlock) {
  *   resolveApiKey?: (provider: string) => string | null,
  *   forceKeywordOnly?: boolean, — when true, skip stage-2 router-model in classify()
  *   resolvedAllowlist?: string[], — override computed allowlist (test injection)
+ *   sessionId?: string, — file-based session store ID; "ephemeral" suppresses disk writes
  * }} [deps] — injected dependencies for testability
  * @returns {Promise<{
  *   reply: string,
@@ -221,7 +223,18 @@ function loadSystemPrompt(contextBlock, principlesBlock) {
 export async function runTurn(input, deps = {}) {
   const { message, cwd } = input;
   const config = getForgeMasterConfig({ cwd });
-  const effectiveSessionId = ensureSessionId(input.sessionId);
+  const effectiveSessionId = ensureSessionId(deps.sessionId ?? input.sessionId);
+  const isEphemeral = !effectiveSessionId || effectiveSessionId === "ephemeral";
+
+  // ── Session store: load prior turns for context ───────────────────
+  // Non-ephemeral sessions surface the last 10 turns before classification.
+  let priorTurns = [];
+  if (!isEphemeral) {
+    try {
+      const all = await loadSession(effectiveSessionId, cwd);
+      priorTurns = all.slice(-10);
+    } catch { /* non-fatal — proceed without prior context */ }
+  }
 
   // ── Tier / model resolution ───────────────────────────────────────
   // Explicit `input.model` takes precedence and bypasses tier logic entirely.
@@ -251,6 +264,7 @@ export async function runTurn(input, deps = {}) {
     keywordOnly: deps.forceKeywordOnly || false,
     callApiWorker: deps.callApiWorker,
     detectApiProvider: deps.detectApiProvider,
+    priorTurns, // forward-compat: intent-router will use in a later phase
   });
 
   // Notify observer (non-fatal — SSE/observability hook)
@@ -262,6 +276,17 @@ export async function runTurn(input, deps = {}) {
 
   // Off-topic short-circuit — no model call, no tool calls, near-zero cost
   if (classification.lane === LANES.OFFTOPIC) {
+    // Persist offtopic turns so conversation history is accurate
+    if (!isEphemeral) {
+      try {
+        await storeAppendTurn(effectiveSessionId, {
+          userMessage: message,
+          classification,
+          replyHash: hashReply(OFFTOPIC_REDIRECT),
+          toolCalls: [],
+        }, cwd);
+      } catch { /* non-fatal */ }
+    }
     return {
       reply: OFFTOPIC_REDIRECT,
       toolCalls: [],
@@ -305,6 +330,16 @@ export async function runTurn(input, deps = {}) {
     );
     contextBlock = ctx.contextBlock;
   } catch { /* non-fatal — proceed without context */ }
+
+  // Inject prior conversation turns into the context block so the model
+  // has awareness of the current session history (user messages only;
+  // reply text is not stored — only its hash).
+  if (priorTurns.length > 0) {
+    const priorBlock = priorTurns
+      .map((t) => `Turn ${t.turn}: User: "${t.userMessage}"`)
+      .join("\n");
+    contextBlock = `## Prior conversation turns (oldest first)\n\n${priorBlock}\n\n${contextBlock}`;
+  }
 
   // ── 3. Load system prompt ─────────────────────────────────────────
   // Principles are loaded separately and substituted before context_block;
@@ -548,6 +583,18 @@ export async function runTurn(input, deps = {}) {
 
     await summarizeIfNeeded({ sessionId: effectiveSessionId }, brainDeps);
   } catch { /* persistence failure is non-fatal */ }
+
+  // ── 8a. File-based session store persistence ──────────────────────
+  if (!isEphemeral) {
+    try {
+      await storeAppendTurn(effectiveSessionId, {
+        userMessage: message,
+        classification,
+        replyHash: hashReply(finalReply),
+        toolCalls: allToolCalls,
+      }, cwd);
+    } catch { /* non-fatal */ }
+  }
 
   // Emit cost event
   if (deps.hub && typeof deps.hub.broadcast === "function") {

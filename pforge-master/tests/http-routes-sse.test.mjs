@@ -63,10 +63,11 @@ function parseSseFrames(raw) {
 // ─── Mock express app ─────────────────────────────────────────────────
 
 function makeMockApp() {
-  const routes = { GET: {}, POST: {} };
+  const routes = { GET: {}, POST: {}, PUT: {} };
   return {
     get(path, handler) { routes.GET[path] = handler; },
     post(path, handler) { routes.POST[path] = handler; },
+    put(path, handler) { routes.PUT[path] = handler; },
     use() {},              // catch-all — not under test
     _routes: routes,
     async callGet(path, req, res) {

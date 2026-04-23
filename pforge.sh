@@ -73,6 +73,9 @@ COMMANDS:
   testbed-happypath Run all happy-path testbed scenarios sequentially with aggregated pass/fail summary
   smith             Inspect your forge — environment, VS Code config, setup health, and common problems
   hammer-fm         Run Forge-Master hammer harness against a live dashboard (see: pforge hammer-fm --help)
+  fm-session list              List active Forge-Master conversation sessions
+  fm-session purge <id>        Purge a specific session (active + archive)
+  fm-session purge --all       Purge all sessions
   version-bump <v>  Update VERSION, package.json, docs/README/ROADMAP version badges to v<version>
   migrate-memory    Merge legacy *-history.json ledgers into canonical .jsonl siblings (idempotent)
   drain-memory      Drain pending OpenBrain queue records to the configured OpenBrain server
@@ -4874,6 +4877,62 @@ cmd_forge_master() {
     esac
 }
 
+# ─── Command: fm-session ───────────────────────────────────────────
+cmd_fm_session() {
+    local sub="${1:-}"
+    local fm_dir="$REPO_ROOT/.forge/fm-sessions"
+    case "$sub" in
+        list)
+            if [[ ! -d "$fm_dir" ]]; then
+                echo "No fm-sessions directory found at $fm_dir"
+                exit 0
+            fi
+            local found=0
+            for f in "$fm_dir"/*.jsonl; do
+                [[ "$f" == *.archive.jsonl ]] && continue
+                [[ -f "$f" ]] || continue
+                local id
+                id="$(basename "$f" .jsonl)"
+                local turns
+                turns="$(wc -l < "$f" | tr -d ' ')"
+                printf "  %-40s %4s turn(s)\n" "$id" "$turns"
+                found=1
+            done
+            [[ "$found" -eq 0 ]] && echo "No active sessions found."
+            ;;
+        purge)
+            local target="${2:-}"
+            if [[ "$target" == "--all" ]]; then
+                if [[ -d "$fm_dir" ]]; then
+                    rm -rf "$fm_dir"
+                    echo "All fm-sessions purged."
+                else
+                    echo "No fm-sessions directory to purge."
+                fi
+            elif [[ -n "$target" ]]; then
+                local safe
+                safe="$(echo "$target" | tr -cd 'A-Za-z0-9._-')"
+                if [[ "$safe" != "$target" ]]; then
+                    echo "ERROR: invalid session id '$target'" >&2; exit 1
+                fi
+                local removed=0
+                [[ -f "$fm_dir/$safe.jsonl" ]] && { rm -f "$fm_dir/$safe.jsonl"; ((removed++)); }
+                [[ -f "$fm_dir/$safe.archive.jsonl" ]] && { rm -f "$fm_dir/$safe.archive.jsonl"; ((removed++)); }
+                if [[ "$removed" -gt 0 ]]; then
+                    echo "Purged session '$safe'."
+                else
+                    echo "Session '$safe' not found."
+                fi
+            else
+                echo "Usage: pforge fm-session purge <id> | purge --all" >&2; exit 1
+            fi
+            ;;
+        *)
+            echo "Usage: pforge fm-session <list | purge <id> | purge --all>" >&2; exit 1
+            ;;
+    esac
+}
+
 # ─── Command: hammer-fm ────────────────────────────────────────────
 cmd_hammer_fm() {
     local script_path="$REPO_ROOT/scripts/hammer-fm.mjs"
@@ -4929,6 +4988,7 @@ case "$COMMAND" in
     skills)       cmd_skills "$@" ;;
     forge-master) cmd_forge_master "$@" ;;
     hammer-fm)    cmd_hammer_fm "$@" ;;
+    fm-session)   cmd_fm_session "$@" ;;
     help|--help)  show_help ;;
     *)
         echo "ERROR: Unknown command '$COMMAND'" >&2

@@ -1269,3 +1269,43 @@ Reports are written to `.forge/hammer-forge-master/reports/` (gitignored):
 | `scripts/hammer-fm/reporter.mjs` | Markdown + JSON report writer |
 | `scripts/hammer-fm/scenarios/` | Bundled scenario JSON files |
 | `pforge-mcp/tests/hammer-fm.test.mjs` | 35 unit tests |
+
+---
+
+## `fm-session` — Forge-Master Conversation Session Management
+
+Manage file-based Forge-Master conversation sessions stored in `.forge/fm-sessions/`.
+
+Each browser tab generates a unique session ID via `sessionStorage` and sends it as `x-pforge-session-id` on every chat request. The MCP server persists each turn to a JSONL file in `.forge/fm-sessions/`.
+
+```
+pforge fm-session list
+pforge fm-session purge <session-id>
+pforge fm-session purge --all
+```
+
+### Subcommands
+
+| Subcommand | Description |
+|-----------|-------------|
+| `list` | List all active sessions with turn counts |
+| `purge <id>` | Remove active + archive files for a specific session |
+| `purge --all` | Remove entire `.forge/fm-sessions/` directory |
+
+### Session File Format
+
+Active file: `.forge/fm-sessions/<session-id>.jsonl`  
+Archive file: `.forge/fm-sessions/<session-id>.archive.jsonl`
+
+Each line is a JSON object:
+```json
+{"turn": 1, "timestamp": "2025-01-01T00:00:00.000Z", "userMessage": "...", "classification": "operational", "replyHash": "a1b2c3d4e5f60000", "toolCalls": []}
+```
+
+Sessions auto-rotate: when a session reaches 200 turns, the oldest 100 are moved to the archive file and the active file is rewritten with the newest 100.
+
+### Notes
+
+- Session files are stored in `.forge/` which is gitignored — sessions are never committed
+- Ephemeral sessions (no `x-pforge-session-id` header) write nothing to disk
+- Use `purge --all` to reclaim disk space when sessions accumulate

@@ -155,6 +155,7 @@ function _registerExpress(app, dispatcher) {
           sessionId: session.fmSessionId || null,
           forceKeywordOnly: session.keywordOnly || false,
           onClassification: (data) => { sse.send("classification", data); },
+          onPlan: (data) => { sse.send("plan", data); },
         },
       );
       if (result.error) {
@@ -289,6 +290,7 @@ function _buildNodeHandler(dispatcher) {
             sessionId: session.fmSessionId || null,
             forceKeywordOnly: session.keywordOnly || false,
             onClassification: (data) => { sse.send("classification", data); },
+            onPlan: (data) => { sse.send("plan", data); },
           },
         );
         if (result.error) {

@@ -94,6 +94,7 @@ describe("runTurn tier fallback", () => {
         toolMetadata: {},
         recall: async () => null,
         remember: () => ({ ok: true }),
+        resolvedAllowlist: ["forge_plan_status"],
       },
     );
 

@@ -27,7 +27,9 @@ import { classify, LANES, LANE_DESCRIPTORS, OFFTOPIC_REDIRECT } from "./intent-r
 import { fetchContext } from "./retrieval.mjs";
 import { getForgeMasterConfig } from "./config.mjs";
 import { resolveAllowlist, USAGE_HINTS } from "./allowlist.mjs";
-import { invokeMany } from "./tool-bridge.mjs";
+import { invokeMany, invokeAllowlisted } from "./tool-bridge.mjs";
+import { plan as runPlanner } from "./planner.mjs";
+import { executePlan } from "./plan-executor.mjs";
 import { ensureSessionId, appendTurn, summarizeIfNeeded } from "./persistence.mjs";
 import { appendTurn as storeAppendTurn, loadSession, hashReply } from "./session-store.mjs";
 import { loadIndex, queryIndex } from "./recall-index.mjs";
@@ -436,18 +438,101 @@ export async function runTurn(input, deps = {}) {
     apiKey = providerInfo?.apiKey || null;
   }
 
-  // ── 7. Tool-use loop ──────────────────────────────────────────────
-  const conversationMessages = [
-    { role: "system", content: systemPrompt },
-    { role: "user", content: message },
-  ];
-
+  // ── Token / cost accumulators (used by planner + reactive loop) ──
   const allToolCalls = [];
   let totalTokensIn = 0;
   let totalTokensOut = 0;
   let totalCostUSD = 0;
   let truncated = false;
   let finalReply = "";
+
+  // ── 6a. Proactive planner + executor ───────────────────────────────
+  // After classification, attempt to plan tool-call steps proactively.
+  // If the planner returns steps, execute them and inject results as
+  // synthesis context before the reactive tool loop.
+  // Any failure falls through to the reactive loop unchanged.
+  let plannerSynthesis = null;
+  try {
+    const callPlannerModel = async ({ systemPrompt: sp, userMessage: um }) => {
+      const planResp = await provider.sendTurn({
+        messages: [
+          { role: "system", content: sp },
+          { role: "user", content: um },
+        ],
+        tools: [],
+        model: currentModel,
+        apiKey: apiKey || "",
+        signal: undefined,
+      });
+      totalTokensIn += planResp.tokensIn || 0;
+      totalTokensOut += planResp.tokensOut || 0;
+      totalCostUSD += computeTurnCost(currentModel, planResp.tokensIn || 0, planResp.tokensOut || 0);
+      return planResp.content || "";
+    };
+
+    const planResult = await runPlanner({
+      userMessage: message,
+      classification,
+      lane: classification.lane,
+      allowedTools: allowlist,
+      deps: { callPlannerModel },
+    });
+
+    // Emit plan SSE event before executor fires
+    try {
+      if (typeof deps.onPlan === "function") {
+        deps.onPlan(planResult);
+      }
+    } catch { /* observer errors must not affect reasoning */ }
+
+    if (planResult.steps && planResult.steps.length > 0) {
+      const planDispatch = async (step, priorOutputs) => {
+        const result = await invokeAllowlisted(
+          { tool: step.tool, args: step.args || {}, cwd },
+          {
+            resolvedAllowlist: allowlist,
+            dispatcher: deps.dispatcher || (async () => ({})),
+            hub: deps.hub || null,
+          },
+        );
+        return result;
+      };
+
+      const execResult = await executePlan(
+        { steps: planResult.steps },
+        { dispatch: planDispatch },
+      );
+
+      // Build synthesis context from executor results
+      const lines = execResult.results.map((r) => {
+        const status = r.error ? `ERROR: ${r.error}` : "OK";
+        const output = r.error
+          ? "(no output)"
+          : (typeof r.output === "string" ? r.output : JSON.stringify(r.output ?? null));
+        const truncated = output.length > 800 ? output.slice(0, 800) + "…" : output;
+        return `[${r.step.id}] ${r.step.tool} → ${status}\n${truncated}`;
+      });
+      plannerSynthesis = lines.join("\n\n");
+    }
+  } catch {
+    // Planner or executor failure — fall through to reactive loop
+    plannerSynthesis = null;
+  }
+
+  // ── 7. Tool-use loop ──────────────────────────────────────────────
+  const conversationMessages = [
+    { role: "system", content: systemPrompt },
+    { role: "user", content: message },
+  ];
+
+  // Inject planner synthesis as pre-fetched context if available
+  if (plannerSynthesis) {
+    conversationMessages.push({
+      role: "user",
+      content: `The following tool results were pre-fetched to help answer the query:\n\n${plannerSynthesis}\n\nUse these results to formulate your response. You may call additional tools if needed.`,
+    });
+  }
+
   let iterationCount = 0;
   const maxIterations = effectiveMaxToolCalls + 1; // allow one extra for final reply
 

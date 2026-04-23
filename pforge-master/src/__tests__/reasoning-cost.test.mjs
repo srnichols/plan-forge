@@ -66,7 +66,7 @@ describe("totalCostUSD — single turn", () => {
     const tokensOut = 150;
     const result = await runTurn(
       { message: "What is the forge status?", cwd: tmpDir },
-      { provider: makeProvider("ok", tokensIn, tokensOut), dispatcher: async () => ({}), hub: null, sessionId: "ephemeral" },
+      { provider: makeProvider("ok", tokensIn, tokensOut), dispatcher: async () => ({}), hub: null, sessionId: "ephemeral", resolvedAllowlist: ["forge_plan_status"] },
     );
     // The model resolved from config with no tier defaults to null → uses default pricing
     const expected = computeTurnCost(result.resolvedModel, tokensIn, tokensOut);
@@ -118,7 +118,7 @@ describe("totalCostUSD — rate-limit fallback", () => {
     };
     const result = await runTurn(
       { message: "What is the forge status?", cwd: tmpDir },
-      { provider: flakeyProvider, dispatcher: async () => ({}), hub: null, sessionId: "ephemeral" },
+      { provider: flakeyProvider, dispatcher: async () => ({}), hub: null, sessionId: "ephemeral", resolvedAllowlist: ["forge_plan_status"] },
     );
     // First call threw → reasoning_model_unavailable error, cost = 0 (no tokens)
     expect(result.totalCostUSD).toBe(0);

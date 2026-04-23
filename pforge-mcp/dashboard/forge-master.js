@@ -93,6 +93,7 @@ async function forgeMasterInit() {
     await forgeMasterLoadPrefs();
     forgeMasterLoadDigest();
     forgeMasterLoadPatterns();
+    forgeMasterLoadCacheStats();
     const root = document.getElementById("forge-master-root");
     if (root) {
       root.addEventListener("click", e => {
@@ -718,6 +719,65 @@ async function forgeMasterLoadPatterns() {
 
 window.forgeMasterRenderPatternsPanel = (...args) => forgeMasterRenderPatternsPanel(...args);
 window.forgeMasterLoadPatterns = () => forgeMasterLoadPatterns();
+
+// ─── Embedding Cache Stats Tile ───────────────────────────────────────
+
+/**
+ * Render the embedding cache stats tile.
+ * @param {{ size: number, hitRate: number, maxSize: number }|null} stats
+ */
+function forgeMasterRenderCacheStatsTile(stats) {
+  const root = document.getElementById("forge-master-root");
+  if (!root) return;
+
+  let tile = document.getElementById("fm-cache-stats-tile");
+  if (!tile) {
+    tile = document.createElement("div");
+    tile.id = "fm-cache-stats-tile";
+    tile.className = "border border-gray-700 rounded p-3 mb-3 text-xs";
+    const patternsPanel = document.getElementById("fm-patterns-panel");
+    if (patternsPanel && patternsPanel.nextSibling) {
+      root.insertBefore(tile, patternsPanel.nextSibling);
+    } else if (patternsPanel) {
+      root.appendChild(tile);
+    } else {
+      root.appendChild(tile);
+    }
+  }
+
+  if (!stats) {
+    tile.innerHTML = `<h4 class="text-cyan-400 font-semibold mb-1">Embedding Cache</h4>
+      <p class="text-gray-500">Cache stats unavailable.</p>`;
+    return;
+  }
+
+  const pct = (stats.hitRate * 100).toFixed(1);
+  tile.innerHTML = `<h4 class="text-cyan-400 font-semibold mb-1">Embedding Cache</h4>
+    <div class="flex gap-4 text-gray-300">
+      <span>Size: <strong>${stats.size}</strong> / ${stats.maxSize}</span>
+      <span>Hit rate: <strong>${pct}%</strong></span>
+    </div>`;
+}
+
+/**
+ * Load cache stats from the API and render the tile.
+ */
+async function forgeMasterLoadCacheStats() {
+  try {
+    const res = await fetch("/api/forge-master/cache-stats");
+    if (!res.ok) {
+      forgeMasterRenderCacheStatsTile(null);
+      return;
+    }
+    const stats = await res.json();
+    forgeMasterRenderCacheStatsTile(stats);
+  } catch {
+    forgeMasterRenderCacheStatsTile(null);
+  }
+}
+
+window.forgeMasterRenderCacheStatsTile = (...args) => forgeMasterRenderCacheStatsTile(...args);
+window.forgeMasterLoadCacheStats = () => forgeMasterLoadCacheStats();
 
 // ─── Quorum test helpers ──────────────────────────────────────────────
 window.forgeMasterRenderQuorumPicker = (...args) => forgeMasterRenderQuorumPicker(...args);

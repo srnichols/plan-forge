@@ -7,6 +7,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.79.0] — 2026-04-23 — Forge-Master Embedding Intent Fallback (Phase-38.8)
+
+> **Phase-38.8 — Embedding-based intent classification fallback.**
+> Adds a "stage 1.5" cosine-similarity cache between the fast keyword scorer (stage 1) and the
+> expensive router-model API call (stage 2). When a prompt closely matches a previously-classified
+> prompt (cosine ≥ 0.85), the cached classification is inherited — zero API cost, works fully
+> offline once warm. Uses `all-MiniLM-L6-v2` via `@xenova/transformers` (optional peer dep) with
+> a deterministic hash bag-of-words fallback when the package is not installed.
+
+### Added
+- `pforge-master/src/embedding/provider.mjs` — async `embed(text) → Float32Array`. Auto-selects `transformers-mini` (lazy-loaded `@xenova/transformers` `all-MiniLM-L6-v2`) when available; falls back to `hash-bag` zero-dep deterministic hash bag-of-words baseline.
+- `pforge-master/src/embedding/hash-bag.mjs` — tokenize, hash each token with a 32-bit hash, set corresponding index in a 512-length Float32Array; L2-normalize.
+- `pforge-master/src/embedding/transformers-mini.mjs` — dynamic `import('@xenova/transformers')`, `all-MiniLM-L6-v2` pipeline.
+- `pforge-master/src/embedding/cache.mjs` — `addEntry`, `query`, `evictLRU`, `save`, `load`. Cosine similarity, LRU eviction at 500-entry cap, binary file persistence (`.forge/fm-sessions/embedding-cache.bin`) with JSON metadata sidecar.
+- `pforge-master/src/intent-router.mjs` — stage 1.5: after keyword scoring, before stage-2 router-model, queries the embedding cache. Returns `{via: "embedding-cache"}` on cache hit. Write-through: every successful classification is cached asynchronously. Skipped when `embeddingFallback === false`. Errors log a warning and fall through gracefully.
+- `pforge-master/src/http-routes.mjs` — `loadPrefs`/`savePrefs` extended with `embeddingFallback: true` (default). New `GET /api/forge-master/cache-stats` endpoint returns `{size, hitRate, maxSize: 500}`.
+- `pforge-mcp/dashboard/forge-master.js` — "Embedding Cache" tile showing cache size and hit rate.
+- `scripts/probe-forge-master.mjs` — accumulates `via` field from each classification SSE event; prints `viaCounts: {keyword, embedding, router, other}` summary at end of run.
+- `pforge-master/src/__tests__/embedding-provider.test.mjs` — hash-bag determinism, vector length, provider fallback tests.
+- `pforge-master/src/__tests__/embedding-cache.test.mjs` — add/query round-trip, threshold filtering, LRU eviction, save/load.
+- `pforge-master/src/__tests__/embedding-stage15.test.mjs` — stage 1.5 cache hit returns early with `via: "embedding-cache"`, fallback to stage-2 on miss, `embeddingFallback: false` opt-out, error resilience, write-through cache population.
+
 ## [2.78.0] — 2026-04-23 — Forge-Master Quorum Advisory Mode (Phase-38.7)
 
 > **Phase-38.7 — Multi-model quorum advisory for high-stakes decisions.**

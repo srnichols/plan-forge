@@ -22,6 +22,7 @@
  */
 
 import { getForgeMasterConfig } from "./config.mjs";
+import { query as queryCacheRaw, addEntry as addCacheEntry } from "./embedding/cache.mjs";
 
 // ─── Lane Constants ─────────────────────────────────────────────────
 
@@ -425,18 +426,44 @@ export async function classify(message, opts = {}) {
   }
 
   const trimmed = message.trim();
+  const embedFn = opts._embed; // DI seam for tests
 
   // Stage 1: keyword scoring
   const kwResult = scoreKeywords(trimmed);
   const kwClassification = deriveFromScores(kwResult);
 
   if (kwClassification) {
-    return {
+    const result = {
       lane: kwClassification.lane,
       confidence: scoreToConfidence(kwClassification.score),
       reason: "keyword_match",
       suggestedTools: LANE_TOOLS[kwClassification.lane],
     };
+    _writeThroughCache(trimmed, result, embedFn);
+    return result;
+  }
+
+  // Stage 1.5: embedding cache lookup (skipped when embeddingFallback === false)
+  if (opts.embeddingFallback !== false) {
+    try {
+      const cacheHits = await queryCacheRaw(trimmed, {
+        threshold: 0.85,
+        topK: 1,
+        ...(embedFn ? { _embed: embedFn } : {}),
+      });
+      if (cacheHits.length > 0) {
+        const hit = cacheHits[0];
+        return {
+          lane: hit.classification.lane,
+          confidence: hit.classification.confidence || "medium",
+          reason: "embedding-cache",
+          via: "embedding-cache",
+          suggestedTools: LANE_TOOLS[hit.classification.lane],
+        };
+      }
+    } catch (err) {
+      console.warn("embedding cache query failed", err?.message || String(err));
+    }
   }
 
   // No keyword match or ambiguous — try router model (skipped when keywordOnly)
@@ -453,12 +480,14 @@ export async function classify(message, opts = {}) {
       });
 
       if (modelLane) {
-        return {
+        const result = {
           lane: modelLane,
           confidence: "medium",
           reason: "router_model",
           suggestedTools: LANE_TOOLS[modelLane],
         };
+        _writeThroughCache(trimmed, result, embedFn);
+        return result;
       }
     }
   }
@@ -469,12 +498,14 @@ export async function classify(message, opts = {}) {
       .filter(([, s]) => s > 0)
       .sort((a, b) => b[1] - a[1]);
     const [topLane, topScore] = sorted[0];
-    return {
+    const result = {
       lane: topLane,
       confidence: scoreToConfidence(topScore),
       reason: "keyword_weak",
       suggestedTools: LANE_TOOLS[topLane],
     };
+    _writeThroughCache(trimmed, result, embedFn);
+    return result;
   }
 
   // No signals at all — default to offtopic
@@ -484,4 +515,17 @@ export async function classify(message, opts = {}) {
     reason: "no_signals",
     suggestedTools: LANE_TOOLS[LANES.OFFTOPIC],
   };
+}
+
+/**
+ * Fire-and-forget: write a successful classification to the embedding cache.
+ * Errors are swallowed — cache population must never break the classify path.
+ */
+function _writeThroughCache(text, classification, embedFn) {
+  addCacheEntry({
+    text,
+    classification: { lane: classification.lane, confidence: classification.confidence },
+    confidence: classification.confidence === "high" ? 0.95 : classification.confidence === "medium" ? 0.75 : 0.5,
+    ...(embedFn ? { _embed: embedFn } : {}),
+  }).catch(() => { /* swallow — cache write is advisory */ });
 }

@@ -91,6 +91,7 @@ for (const [i, probe] of probes.entries()) {
   let tokensOut = 0;
   let errorEvent = null;
   let classificationData = null;
+  let classificationVia = null;
 
   try {
     const ctrl = new AbortController();
@@ -116,6 +117,7 @@ for (const [i, probe] of probes.entries()) {
         switch (evt.event) {
           case "classification":
             classificationData = { lane: evt.data?.lane, confidence: evt.data?.confidence };
+            classificationVia = evt.data?.via || evt.data?.reason || "keyword";
             break;
           case "reply":
             reply = evt.data?.content ?? reply;
@@ -164,6 +166,7 @@ for (const [i, probe] of probes.entries()) {
     durationMs,
     reply,
     classification: classificationData,
+    via: classificationVia,
     toolCalls: toolCalls.map((t) => ({
       name: t?.name || t?.tool || "?",
       args: t?.arguments || t?.args,
@@ -191,6 +194,19 @@ const totalIn = results.reduce((s, r) => s + (r.tokensIn || 0), 0);
 const totalOut = results.reduce((s, r) => s + (r.tokensOut || 0), 0);
 console.log(
   `[probe] replies: ${ok}/${results.length}, empty: ${empties}, errors: ${errs}, tokens: ${totalIn} in / ${totalOut} out`,
+);
+
+// ─── viaCounts summary ──────────────────────────────────────────────
+const viaCounts = { keyword: 0, embedding: 0, router: 0, other: 0 };
+for (const r of results) {
+  const v = r.via || "other";
+  if (v === "keyword_match" || v === "keyword_weak" || v === "keyword") viaCounts.keyword++;
+  else if (v === "embedding-cache") viaCounts.embedding++;
+  else if (v === "router_model") viaCounts.router++;
+  else viaCounts.other++;
+}
+console.log(
+  `[probe] viaCounts: keyword=${viaCounts.keyword}, embedding=${viaCounts.embedding}, router=${viaCounts.router}, other=${viaCounts.other}`,
 );
 
 // ─── helpers ──────────────────────────────────────────────────────

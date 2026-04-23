@@ -7,7 +7,9 @@
 
 ## Current Release
 
-**v2.78.0** (2026-04-23) — Forge-Master Quorum Advisory Mode (Phase-38.7). Multi-model quorum dispatch for high-stakes advisory questions. When `quorumAdvisory` pref is enabled, Forge-Master fans out to 2–3 models in parallel, emits a `quorum-estimate` SSE event with per-model cost before dispatch, and returns all replies with a dissent summary. Hard-blocked on operational/troubleshoot/build lanes. Dashboard adds segmented control and multi-model reply cards.
+**v2.79.0** (2026-04-23) — Forge-Master Embedding Intent Fallback (Phase-38.8). Adds a "stage 1.5" cosine-similarity cache between keyword scoring and the router-model API call. When a prompt closely matches a previously-classified prompt (cosine ≥ 0.85), the cached classification is inherited — zero API cost, works fully offline once warm. Uses `all-MiniLM-L6-v2` via `@xenova/transformers` (optional) with deterministic hash bag-of-words fallback. New `embeddingFallback` pref. Dashboard cache stats tile. Probe harness reports `viaCounts`.
+
+Previous: **v2.78.0** (2026-04-23) — Forge-Master Quorum Advisory Mode (Phase-38.7). Multi-model quorum dispatch for high-stakes advisory questions. When `quorumAdvisory` pref is enabled, Forge-Master fans out to 2–3 models in parallel, emits a `quorum-estimate` SSE event with per-model cost before dispatch, and returns all replies with a dissent summary. Hard-blocked on operational/troubleshoot/build lanes. Dashboard adds segmented control and multi-model reply cards.
 
 Previous: **v2.77.0** (2026-04-23) — Forge-Master Pattern Surfacing (Phase-38.6). Adds a read-only pattern detector that scans run history and surfaces recurring patterns as advisory observations. Four detectors: gate-failure-recurrence, model-failure-rate-by-complexity, slice-flap-pattern, cost-anomaly. New `forge_patterns_list` MCP tool (advisory lane only). Dashboard "Recurring Patterns" panel grouped by severity. CLI: `pforge patterns list [--since <iso>]`.
 
@@ -21,7 +23,7 @@ Previous: **v2.73.0**(2026-04-23) — Forge-Master Cross-Session Recall (Phase-3
 
 Previous: **v2.72.0** (2026-04-25) — Forge-Master Conversation Memory (Phase-38.1). Adds file-based JSONL session persistence to the Forge-Master reasoning engine. `runTurn` loads prior conversation turns before classification and persists each turn to disk. Per-tab session IDs flow from the dashboard (`sessionStorage` UUID) through `x-pforge-session-id` HTTP header to `deps.sessionId` in `runTurn`. Sessions auto-rotate at 200 turns. New CLI: `pforge fm-session list|purge`.
 
-**In flight (next)**: Phase-38.7 Slice 5 — Recursive Test-Hardening. Load simulation, failure injection, probe regression, quorum dispatcher hardening.
+**In flight (next)**: Phase-38.8 Slice 5 — Recursive Test-Hardening. Load simulation, failure injection, probe regression, embedding cache hardening.
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 

@@ -26,14 +26,32 @@ import { BASE_ALLOWLIST, WRITE_ALLOWLIST } from "./allowlist.mjs";
 import { createHttpDispatcher, invokeForgeTool } from "./http-dispatcher.mjs";
 import { VALID_TIERS } from "./reasoning-tier.mjs";
 import { loadSession } from "./session-store.mjs";
+import { size as embeddingCacheSize } from "./embedding/cache.mjs";
 import { randomUUID } from "node:crypto";
 
 const sessions = new Map();
 const pendingApprovals = new Map();
+let _embeddingCacheQueries = 0;
+let _embeddingCacheHits = 0;
+
+/** Record a cache query (called by reasoning loop or externally). */
+export function recordCacheQuery(hit) {
+  _embeddingCacheQueries++;
+  if (hit) _embeddingCacheHits++;
+}
+
+/** Get cache stats for the dashboard tile. */
+export function getCacheStats() {
+  const sz = embeddingCacheSize();
+  const hitRate = _embeddingCacheQueries > 0
+    ? _embeddingCacheHits / _embeddingCacheQueries
+    : 0;
+  return { size: sz, hitRate: Math.round(hitRate * 1000) / 1000, maxSize: 500 };
+}
 
 const PREFS_FILE = ".forge/fm-prefs.json";
 const VALID_QUORUM_MODES = ["off", "auto", "always"];
-const PREFS_DEFAULTS = { tier: null, autoEscalate: false, quorumAdvisory: "off" };
+const PREFS_DEFAULTS = { tier: null, autoEscalate: false, quorumAdvisory: "off", embeddingFallback: true };
 
 /**
  * Load Forge-Master user prefs from `<cwd>/.forge/fm-prefs.json`.
@@ -50,7 +68,8 @@ export function loadPrefs(cwd = process.cwd()) {
     const tier = raw.tier && VALID_TIERS.includes(raw.tier) ? raw.tier : null;
     const autoEscalate = typeof raw.autoEscalate === "boolean" ? raw.autoEscalate : false;
     const quorumAdvisory = VALID_QUORUM_MODES.includes(raw.quorumAdvisory) ? raw.quorumAdvisory : "off";
-    return { tier, autoEscalate, quorumAdvisory };
+    const embeddingFallback = typeof raw.embeddingFallback === "boolean" ? raw.embeddingFallback : true;
+    return { tier, autoEscalate, quorumAdvisory, embeddingFallback };
   } catch {
     return { ...PREFS_DEFAULTS };
   }
@@ -120,12 +139,17 @@ function _registerExpress(app, dispatcher) {
     res.json(loadPrefs(process.cwd()));
   });
 
+  app.get("/api/forge-master/cache-stats", (req, res) => {
+    res.json(getCacheStats());
+  });
+
   app.put("/api/forge-master/prefs", (req, res) => {
-    const { tier, autoEscalate, quorumAdvisory } = req.body || {};
+    const { tier, autoEscalate, quorumAdvisory, embeddingFallback } = req.body || {};
     const normalized = {
       tier: tier && VALID_TIERS.includes(tier) ? tier : null,
       autoEscalate: typeof autoEscalate === "boolean" ? autoEscalate : false,
       quorumAdvisory: VALID_QUORUM_MODES.includes(quorumAdvisory) ? quorumAdvisory : "off",
+      embeddingFallback: typeof embeddingFallback === "boolean" ? embeddingFallback : true,
     };
     savePrefs(normalized, process.cwd());
     res.json(normalized);
@@ -255,13 +279,18 @@ function _buildNodeHandler(dispatcher) {
       return json(res, 200, loadPrefs(process.cwd()));
     }
 
+    if (method === "GET" && path === "/api/forge-master/cache-stats") {
+      return json(res, 200, getCacheStats());
+    }
+
     if (method === "PUT" && path === "/api/forge-master/prefs") {
       const body = await readBody(req);
-      const { tier, autoEscalate, quorumAdvisory } = body;
+      const { tier, autoEscalate, quorumAdvisory, embeddingFallback } = body;
       const normalized = {
         tier: tier && VALID_TIERS.includes(tier) ? tier : null,
         autoEscalate: typeof autoEscalate === "boolean" ? autoEscalate : false,
         quorumAdvisory: VALID_QUORUM_MODES.includes(quorumAdvisory) ? quorumAdvisory : "off",
+        embeddingFallback: typeof embeddingFallback === "boolean" ? embeddingFallback : true,
       };
       savePrefs(normalized, process.cwd());
       return json(res, 200, normalized);

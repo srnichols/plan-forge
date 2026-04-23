@@ -7,7 +7,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-## [2.75.0] — 2026-04-23 — Forge-Master Planner-Executor Split (Phase-38.4)
+## [2.75.1] — 2026-04-23 — Homepage dropdown actually hidden
+
+> **Patch release — fixes the homepage nav dropdown that remained visible after v2.74.4's JS-only fix.**
+> Root cause: `docs/index.html` does not load `assets/shared.css` and had **no** inline CSS for `.nav-dropdown`. The dropdown `<div>` carries Tailwind's `grid` utility (`display: grid`), so the panel was always rendered. The `nav-dropdown-open` class toggle added in v2.74.4 had nothing to match against. Added the missing CSS rules inline, with `!important` to beat Tailwind's `.grid` utility. Also simplified the click-toggle by dropping the CSS `:hover` open rule and the JS mouseleave timer — dropdowns are now strictly click-controlled across the whole site (click to open, click-again / click-outside / link-click / Escape to close).
+
+### Fixed
+- `docs/index.html` — added inline CSS for `.nav-dropdown-trigger > .nav-dropdown { display: none !important; }` and `.nav-dropdown-trigger.nav-dropdown-open > .nav-dropdown { display: grid !important; }`. The homepage dropdown now hides by default and only opens on click.
+- `docs/assets/shared.css` — removed the CSS `:hover`-to-open rule (`@media (hover: hover)`) and the invisible `.nav-dropdown::before` hover-bridge pseudo-element. Removing hover-to-open eliminated the race with JS state that could leave dropdowns feeling stuck on hover-capable devices.
+- `docs/assets/shared.js` and `docs/index.html` — removed the mouseleave auto-close timer. Close paths now come from explicit user actions only (click-outside, link-click, Escape).
+
+
 
 > **Phase-38.4 — Planner-executor decomposition layer for Forge-Master.**
 > `runTurn` now optionally runs a planner stage that decomposes complex multi-step queries

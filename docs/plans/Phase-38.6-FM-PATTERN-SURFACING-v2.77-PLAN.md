@@ -300,7 +300,7 @@ Additionally run: `node scripts/hammer-fm.mjs --scenario=phase-38.6-baseline --t
 
 **Validation gate**:
 ```
-node scripts/sim-load-phase-38.6.mjs --validate-converged ; npx vitest run pforge-mcp/tests/patterns-registry.test.mjs ; pforge analyze docs/plans/Phase-38.6-FM-PATTERN-SURFACING-v2.77-PLAN.md
+node scripts/sim-load-phase-38.6.mjs --validate-converged ; npx vitest run pforge-mcp/tests/patterns-registry.test.mjs ; bash ./pforge.sh analyze docs/plans/Phase-38.6-FM-PATTERN-SURFACING-v2.77-PLAN.md
 ```
 
 **Commit**: `test(38.6): recursive load-hardening converged`

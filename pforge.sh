@@ -4999,9 +4999,6 @@ cmd_hammer_fm() {
         exit 1
     fi
     node "$script_path" "$@"
-}xit 1
-            ;;
-    esac
 }
 
 COMMAND="${1:-help}"

@@ -19,7 +19,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - `pforge-master/src/__tests__/reasoning-recall.test.mjs` — 6 integration tests: cross-session recall surface, graceful degradation, OFFTOPIC skip, ephemeral skip, no-provider path, classification isolation
 - `scripts/fm-recall.mjs` — CLI helper for `pforge fm-recall query "<text>"` and `pforge fm-recall rebuild`
 - `pforge fm-recall query|rebuild` CLI commands in `pforge.ps1` and `pforge.sh`
-- `pforge-mcp/tests/dashboard-forge-master-recall.test.mjs` — 4 dashboard unit tests for the related-conversations panel
+- `pforge-mcp/tests/forge-master-recall.test.mjs` — 8 dashboard unit tests for the related-conversations panel: renders on non-empty payload, correct count in summary, per-turn message/lane/date, no-op on empty/null, updates in place
 
 ### Changed
 - `pforge-master/src/reasoning.mjs` — cross-session recall for non-ephemeral sessions on `operational`, `troubleshoot`, `advisory` lanes; injects `> **Recall (advisory):**` block into contextBlock; `relatedTurns` returned on all result shapes

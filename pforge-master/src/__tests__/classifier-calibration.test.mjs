@@ -131,3 +131,39 @@ describe("advisory", () => {
     expect(r.lane).toBe(LANES.ADVISORY);
   });
 });
+
+// ── offtopic guards ──────────────────────────────────────────────────────────
+
+describe("offtopic guards", () => {
+  it("off-weather — pure weather query → offtopic", async () => {
+    const r = await kwClassify("What is the weather today?");
+    expect(r.lane).toBe(LANES.OFFTOPIC);
+  });
+
+  it("off-code-gen — code generation request → offtopic", async () => {
+    const r = await kwClassify("Write me a Python function to reverse a list");
+    expect(r.lane).toBe(LANES.OFFTOPIC);
+  });
+
+  it("amb-slice-food — plan run + food keyword tie → offtopic (tie-breaker)", async () => {
+    // "plan run" fires operational w3; "recipe" fires offtopic w3 — tie-breaker forces offtopic.
+    const r = await kwClassify("I need a plan run for a recipe");
+    expect(r.lane).toBe(LANES.OFFTOPIC);
+  });
+});
+
+// ── confidence tiers ─────────────────────────────────────────────────────────
+
+describe("confidence", () => {
+  it("amb-plan — no keyword signals → confidence 'low'", async () => {
+    // "What's the plan?" matches no keyword rules → no_signals path → low confidence.
+    const r = await kwClassify("What's the plan?");
+    expect(r.confidence).toBe("low");
+  });
+
+  it("high-score probe — strong troubleshoot signal → confidence 'high'", async () => {
+    // Combined why+fail rule (w4) + fail family (w3) + why family (w2) = 9 on troubleshoot → high.
+    const r = await kwClassify("Why did Phase-34 fail?");
+    expect(r.confidence).toBe("high");
+  });
+});

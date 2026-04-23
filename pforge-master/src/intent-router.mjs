@@ -16,7 +16,7 @@
  *   - meta-bug-triage    — triage of meta-bugs, self-repair, plan/orchestrator defects
  *
  * Exports:
- *   classify(message, opts?) → {lane, confidence, reason, suggestedTools}
+ *   classify(message, opts?) → {lane, confidence: "low"|"medium"|"high", reason, suggestedTools}
  *
  * @module forge-master/intent-router
  */
@@ -231,9 +231,20 @@ export const OFFTOPIC_REDIRECT =
   "  \u2022 advisory \u2014 \"should I refactor or ship\", \"architecture advice\"\n" +
   "Outside those lanes I'll redirect you.";
 
-// Confidence thresholds
+// Internal confidence thresholds (used within deriveFromScores only)
 const HIGH_CONFIDENCE = 0.85;
 const AMBIGUOUS_THRESHOLD = 0.55;
+
+/**
+ * Convert a raw keyword score to a confidence tier string.
+ * @param {number} score
+ * @returns {"low"|"medium"|"high"}
+ */
+function scoreToConfidence(score) {
+  if (score <= 2) return "low";
+  if (score <= 5) return "medium";
+  return "high";
+}
 
 // ─── Keyword Classification ─────────────────────────────────────────
 
@@ -266,9 +277,9 @@ function scoreKeywords(message) {
 }
 
 /**
- * Derive lane + confidence from keyword scores.
+ * Derive lane + raw score from keyword scores.
  * @param {{ scores: Record<string, number>, totalWeight: number }} result
- * @returns {{ lane: string, confidence: number } | null}
+ * @returns {{ lane: string, score: number } | null}
  */
 function deriveFromScores({ scores, totalWeight }) {
   if (totalWeight === 0) return null;
@@ -279,15 +290,25 @@ function deriveFromScores({ scores, totalWeight }) {
 
   if (sorted.length === 0) return null;
 
-  const [topLane, topScore] = sorted[0];
-  const confidence = topScore / totalWeight;
+  // OFFTOPIC tie-breaker: when offtopic score >= any non-offtopic score, offtopic wins.
+  const offtopicScore = scores[LANES.OFFTOPIC] ?? 0;
+  const maxNonOfftopicScore = Math.max(
+    0,
+    ...Object.entries(scores)
+      .filter(([lane]) => lane !== LANES.OFFTOPIC)
+      .map(([, s]) => s),
+  );
 
-  // If the top lane has a clear lead, classify with high confidence
-  if (sorted.length === 1 || confidence >= AMBIGUOUS_THRESHOLD) {
-    return {
-      lane: topLane,
-      confidence: Math.min(confidence, HIGH_CONFIDENCE),
-    };
+  if (offtopicScore > 0 && offtopicScore >= maxNonOfftopicScore) {
+    return { lane: LANES.OFFTOPIC, score: offtopicScore };
+  }
+
+  const [topLane, topScore] = sorted[0];
+  const numericConfidence = topScore / totalWeight;
+
+  // If the top lane has a clear lead, classify with confidence
+  if (sorted.length === 1 || numericConfidence >= AMBIGUOUS_THRESHOLD) {
+    return { lane: topLane, score: topScore };
   }
 
   // Multiple lanes scored but no clear winner — ambiguous
@@ -368,7 +389,7 @@ async function callRouterModel(message, deps) {
  * }} [opts]
  * @returns {Promise<{
  *   lane: string,
- *   confidence: number,
+ *   confidence: "low"|"medium"|"high",
  *   reason: string,
  *   suggestedTools: string[],
  * }>}
@@ -377,7 +398,7 @@ export async function classify(message, opts = {}) {
   if (!message || typeof message !== "string" || !message.trim()) {
     return {
       lane: LANES.OFFTOPIC,
-      confidence: 1.0,
+      confidence: "high",
       reason: "empty_message",
       suggestedTools: LANE_TOOLS[LANES.OFFTOPIC],
     };
@@ -392,7 +413,7 @@ export async function classify(message, opts = {}) {
   if (kwClassification) {
     return {
       lane: kwClassification.lane,
-      confidence: kwClassification.confidence,
+      confidence: scoreToConfidence(kwClassification.score),
       reason: "keyword_match",
       suggestedTools: LANE_TOOLS[kwClassification.lane],
     };
@@ -413,7 +434,7 @@ export async function classify(message, opts = {}) {
       if (modelLane) {
         return {
           lane: modelLane,
-          confidence: 0.75,
+          confidence: "medium",
           reason: "router_model",
           suggestedTools: LANE_TOOLS[modelLane],
         };
@@ -426,10 +447,10 @@ export async function classify(message, opts = {}) {
     const sorted = Object.entries(kwResult.scores)
       .filter(([, s]) => s > 0)
       .sort((a, b) => b[1] - a[1]);
-    const topLane = sorted[0][0];
+    const [topLane, topScore] = sorted[0];
     return {
       lane: topLane,
-      confidence: 0.4,
+      confidence: scoreToConfidence(topScore),
       reason: "keyword_weak",
       suggestedTools: LANE_TOOLS[topLane],
     };
@@ -438,7 +459,7 @@ export async function classify(message, opts = {}) {
   // No signals at all — default to offtopic
   return {
     lane: LANES.OFFTOPIC,
-    confidence: 0.5,
+    confidence: "low",
     reason: "no_signals",
     suggestedTools: LANE_TOOLS[LANES.OFFTOPIC],
   };

@@ -66,8 +66,8 @@ describe("runTurn() — classification surfaced on success", () => {
 
     expect(result.classification).toBeDefined();
     expect(typeof result.classification.lane).toBe("string");
-    expect(typeof result.classification.confidence).toBe("number");
-    expect(result.classification.confidence).toBeGreaterThanOrEqual(0);
+    expect(typeof result.classification.confidence).toBe("string");
+    expect(["low", "medium", "high"]).toContain(result.classification.confidence);
   });
 });
 
@@ -155,6 +155,6 @@ describe("runTurn() — classification surfaced when provider throws", () => {
     expect(result.error).toBe("reasoning_model_unavailable");
     expect(result.classification).toBeDefined();
     expect(typeof result.classification.lane).toBe("string");
-    expect(result.classification.confidence).toBeGreaterThanOrEqual(0);
+    expect(["low", "medium", "high"]).toContain(result.classification.confidence);
   });
 });

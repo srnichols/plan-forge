@@ -95,7 +95,7 @@ function _matchParamRoute(routeMap, path) {
 
 const MOCK_CLASSIFICATION = {
   lane: "operational",
-  confidence: 0.92,
+  confidence: "high",
   reason: "keyword match",
   suggestedTools: ["forge_plan_status"],
 };
@@ -146,7 +146,7 @@ describe("express path — /stream SSE events", () => {
     const classFrame = res._frames().find((f) => f.event === "classification");
     expect(classFrame.data).toMatchObject({
       lane: "operational",
-      confidence: 0.92,
+      confidence: "high",
     });
   });
 

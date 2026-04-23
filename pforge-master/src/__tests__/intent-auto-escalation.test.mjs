@@ -57,7 +57,7 @@ describe("classify() high-stakes lane routing", () => {
   it("(3) routes 'tempering gate evaluation' to LANES.TEMPERING", async () => {
     const result = await classify("Please run a tempering gate evaluation for this slice");
     expect(result.lane).toBe(LANES.TEMPERING);
-    expect(result.confidence).toBeGreaterThan(0);
+    expect(["low", "medium", "high"]).toContain(result.confidence);
   });
 
   // ── (4) classify() routes principle-judgment message ──
@@ -65,7 +65,7 @@ describe("classify() high-stakes lane routing", () => {
   it("(4) routes 'principle judgment' message to LANES.PRINCIPLE_JUDGMENT", async () => {
     const result = await classify("I need a principle judgment on whether to add this abstraction");
     expect(result.lane).toBe(LANES.PRINCIPLE_JUDGMENT);
-    expect(result.confidence).toBeGreaterThan(0);
+    expect(["low", "medium", "high"]).toContain(result.confidence);
   });
 
   // ── (5) classify() routes meta-bug triage message ──
@@ -73,7 +73,7 @@ describe("classify() high-stakes lane routing", () => {
   it("(5) routes 'triage this meta bug' to LANES.META_BUG_TRIAGE", async () => {
     const result = await classify("Can you triage this meta bug from Slice 4?");
     expect(result.lane).toBe(LANES.META_BUG_TRIAGE);
-    expect(result.confidence).toBeGreaterThan(0);
+    expect(["low", "medium", "high"]).toContain(result.confidence);
   });
 });
 

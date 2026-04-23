@@ -2,15 +2,12 @@
 // Usage: node scripts/probe-forge-master.mjs [--host=127.0.0.1:3100] [--timeout=60]
 //
 // SSE events emitted by /api/forge-master/chat/:id/stream (per http-routes.mjs):
-//   start     { sessionId }
-//   reply     { content, sessionId }
-//   tool-call <per-call record>
-//   done      { sessionId, tokensIn, tokensOut }
-//   error     { error }
-//
-// GAPS (documented in the report):
-//   1. classification.lane is NOT emitted. runTurn computes it but drops it.
-//   2. The /stream route wires a stub dispatcher — tool calls execute as no-ops.
+//   start          { sessionId }
+//   classification { lane, confidence, reason, suggestedTools }
+//   reply          { content, sessionId }
+//   tool-call      <per-call record>
+//   done           { sessionId, tokensIn, tokensOut }
+//   error          { error }
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -85,6 +82,7 @@ for (const [i, probe] of probes.entries()) {
   let tokensIn = 0;
   let tokensOut = 0;
   let errorEvent = null;
+  let classificationData = null;
 
   try {
     const ctrl = new AbortController();
@@ -108,6 +106,9 @@ for (const [i, probe] of probes.entries()) {
         if (!evt) continue;
         events.push(evt);
         switch (evt.event) {
+          case "classification":
+            classificationData = { lane: evt.data?.lane, confidence: evt.data?.confidence };
+            break;
           case "reply":
             reply = evt.data?.content ?? reply;
             break;
@@ -140,8 +141,12 @@ for (const [i, probe] of probes.entries()) {
   const durationMs = Date.now() - start;
   const toolNames = toolCalls.map((t) => t?.name || t?.tool || "?");
   const status = errorEvent ? "🔥" : reply ? "OK" : "EMPTY";
+  const laneStr = classificationData?.lane ? `lane=${classificationData.lane}` : "lane=?";
+  const confStr = classificationData?.confidence != null
+    ? `conf=${classificationData.confidence.toFixed(2)}`
+    : "conf=?";
   console.log(
-    `${status} tokens=${tokensIn}/${tokensOut} tools=${toolCalls.length}${toolNames.length ? `(${toolNames.join(",")})` : ""} dur=${durationMs}ms${errorEvent ? ` ERR:${errorEvent.error || JSON.stringify(errorEvent).slice(0, 60)}` : ""}`,
+    `${status} ${laneStr} ${confStr} tokens=${tokensIn}/${tokensOut} tools=${toolCalls.length}${toolNames.length ? `(${toolNames.join(",")})` : ""} dur=${durationMs}ms${errorEvent ? ` ERR:${errorEvent.error || JSON.stringify(errorEvent).slice(0, 60)}` : ""}`,
   );
 
   results.push({
@@ -149,6 +154,7 @@ for (const [i, probe] of probes.entries()) {
     sessionId,
     durationMs,
     reply,
+    classification: classificationData,
     toolCalls: toolCalls.map((t) => ({
       name: t?.name || t?.tool || "?",
       args: t?.arguments || t?.args,
@@ -210,9 +216,40 @@ function renderMarkdown(rs) {
     .map(([l, s]) => `| ${l} | ${s.ok}/${s.total} | ${s.empty} | ${s.errors} |`)
     .join("\n");
 
+  // ── Classification match table ───────────────────────────────────
+  // Only count probes that have a definite expected lane (not "any")
+  const classRows = [];
+  const classAgg = {};
+  for (const r of rs) {
+    const expected = r.probe.lane;
+    const got = r.classification?.lane ?? "?";
+    const match = expected === "any" ? null : got === expected;
+    if (expected !== "any") {
+      classAgg[expected] = classAgg[expected] || { total: 0, matched: 0 };
+      classAgg[expected].total++;
+      if (match) classAgg[expected].matched++;
+    }
+    const matchIcon = match === null ? "—" : match ? "✅" : "❌";
+    const conf = r.classification?.confidence != null
+      ? r.classification.confidence.toFixed(2)
+      : "?";
+    classRows.push(`| ${r.probe.id} | ${expected} | ${got} | ${conf} | ${matchIcon} |`);
+  }
+  const classAggRows = Object.entries(classAgg)
+    .map(([l, a]) => `| ${l} | ${a.matched}/${a.total} |`)
+    .join("\n");
+  const totalClassifiable = Object.values(classAgg).reduce((s, a) => s + a.total, 0);
+  const totalMatched = Object.values(classAgg).reduce((s, a) => s + a.matched, 0);
+
   const probeRows = rs.map((r, i) => {
     const status = r.error || r.errorEvent ? "FAIL" : r.reply ? "OK" : "EMPTY";
     const toolList = (r.toolCalls || []).map((t) => t.name).join(", ") || "—";
+    const classGot = r.classification?.lane ?? "?";
+    const classConf = r.classification?.confidence != null
+      ? r.classification.confidence.toFixed(2) : "?";
+    const classMatch = r.probe.lane === "any"
+      ? "—"
+      : classGot === r.probe.lane ? "✅" : "❌";
     return [
       `### ${i + 1}. [${status}] ${r.probe.id} — expected lane \`${r.probe.lane}\``,
       ``,
@@ -220,6 +257,7 @@ function renderMarkdown(rs) {
       ``,
       `- **Duration**: ${r.durationMs} ms`,
       `- **Tokens**: ${r.tokensIn || 0} in → ${r.tokensOut || 0} out`,
+      `- **Classification**: lane=\`${classGot}\` conf=${classConf} ${classMatch}`,
       `- **Tool calls**: ${toolList}`,
       `- **SSE events**: ${(r.eventNames || []).join(" → ") || "—"}`,
       r.error ? `- **Init error**: \`${r.error}\`` : "",
@@ -249,9 +287,24 @@ function renderMarkdown(rs) {
     ``,
     `## Harness caveats`,
     ``,
-    `- **\`classification.lane\` is not emitted via SSE.** \`runTurn\` computes it but the /stream handler in \`pforge-master/src/http-routes.mjs\` does not forward it. Lane-match cannot be validated from this endpoint. Fix: add \`sse.send("classification", { lane, confidence })\`.`,
     `- **The /stream route wires a stub dispatcher** (\`dispatcher: async () => ({})\`). Tool calls are requested by the model but execute as no-ops.`,
-    `- Use this report for **reply-quality + request-level tool selection** review. For full tool-chain validation, call \`runTurn\` directly in a node harness with a real dispatcher.`,
+    `- Use this report for **reply-quality + classification + request-level tool selection** review. For full tool-chain validation, call \`runTurn\` directly in a node harness with a real dispatcher.`,
+    ``,
+    `## Classification Match`,
+    ``,
+    `**Overall**: ${totalMatched}/${totalClassifiable} classifiable probes matched expected lane.`,
+    ``,
+    `### Per-Lane Accuracy`,
+    ``,
+    `| Expected Lane | Matched |`,
+    `|---------------|---------|`,
+    classAggRows,
+    ``,
+    `### Per-Probe Classification`,
+    ``,
+    `| Probe ID | Expected | Got | Confidence | Match |`,
+    `|----------|----------|-----|-----------|-------|`,
+    ...classRows,
     ``,
     `## Summary by Expected Lane`,
     ``,

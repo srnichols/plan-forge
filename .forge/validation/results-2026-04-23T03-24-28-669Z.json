@@ -1,0 +1,777 @@
+[
+  {
+    "probe": {
+      "id": "op-status-basic",
+      "lane": "operational",
+      "message": "What is the status of Phase-34.1?",
+      "expectedTools": [
+        "forge_plan_status",
+        "forge_phase_status"
+      ],
+      "notes": "Basic plan status lookup"
+    },
+    "sessionId": "bed45f99-fcd0-46e0-b202-2c9adeeb3b8c",
+    "durationMs": 4976,
+    "reply": "I'm scoped to Plan Forge topics — plans, runs, costs, memory, Crucible, tempering, watchers, and bug registry. Ask me something in that lane.",
+    "classification": {
+      "lane": "operational",
+      "confidence": 0.85
+    },
+    "toolCalls": [
+      {
+        "name": "forge_phase_status",
+        "args": {}
+      }
+    ],
+    "tokensIn": 6127,
+    "tokensOut": 49,
+    "errorEvent": null,
+    "eventCount": 5,
+    "eventNames": [
+      "start",
+      "classification",
+      "reply",
+      "tool-call",
+      "done"
+    ]
+  },
+  {
+    "probe": {
+      "id": "op-cost-week",
+      "lane": "operational",
+      "message": "How much have I spent on forge runs this week?",
+      "expectedTools": [
+        "forge_cost_report"
+      ],
+      "notes": "Cost query; should NOT hand-compute"
+    },
+    "sessionId": "548b33d3-1e9e-4e3d-8fdf-8741cf3f111d",
+    "durationMs": 10,
+    "reply": "I'm scoped to Plan Forge topics. Try asking about:\n  • operational — \"what's the status of slice 4\", \"cost report for this week\"\n  • troubleshoot — \"why did the gate fail\", \"diagnose this incident\"\n  • build — \"I want to add OAuth\" (routes to Crucible)\n  • advisory — \"should I refactor or ship\", \"architecture advice\"\nOutside those lanes I'll redirect you.",
+    "classification": {
+      "lane": "offtopic",
+      "confidence": 0.5
+    },
+    "toolCalls": [],
+    "tokensIn": 0,
+    "tokensOut": 0,
+    "errorEvent": null,
+    "eventCount": 4,
+    "eventNames": [
+      "start",
+      "classification",
+      "reply",
+      "done"
+    ]
+  },
+  {
+    "probe": {
+      "id": "op-cost-quorum-estimate",
+      "lane": "operational",
+      "message": "How much would Phase-34.1 have cost under power quorum mode?",
+      "expectedTools": [
+        "forge_estimate_quorum"
+      ],
+      "notes": "Estimator routing; CRITICAL — must call tool, not invent numbers"
+    },
+    "sessionId": "c2bb7fbb-efeb-41ff-b908-b3b53263d7ff",
+    "durationMs": 4533,
+    "reply": "I cannot directly estimate the cost of Phase-34.1 under power quorum mode at this time. However, you can run the `forge_estimate_quorum` tool in your environment to get that information. If you need further assistance understanding how to interpret the results, feel free to ask!",
+    "classification": {
+      "lane": "operational",
+      "confidence": 0.85
+    },
+    "toolCalls": [
+      {
+        "name": "forge_estimate_quorum",
+        "args": {}
+      }
+    ],
+    "tokensIn": 6148,
+    "tokensOut": 76,
+    "errorEvent": null,
+    "eventCount": 5,
+    "eventNames": [
+      "start",
+      "classification",
+      "reply",
+      "tool-call",
+      "done"
+    ]
+  },
+  {
+    "probe": {
+      "id": "op-memory-recall",
+      "lane": "operational",
+      "message": "What do I have in memory about Windows gate dispatch?",
+      "expectedTools": [
+        "brain_recall",
+        "forge_memory_report"
+      ],
+      "notes": "Memory lookup"
+    },
+    "sessionId": "a8205f0a-3f43-4bfd-bc75-36d334b2f4b4",
+    "durationMs": 7802,
+    "reply": "I'm scoped to Plan Forge topics — plans, runs, costs, memory, Crucible, tempering, watchers, and bug registry. Ask me something in that lane.",
+    "classification": {
+      "lane": "operational",
+      "confidence": 0.85
+    },
+    "toolCalls": [
+      {
+        "name": "brain_recall",
+        "args": {}
+      },
+      {
+        "name": "forge_search",
+        "args": {}
+      },
+      {
+        "name": "forge_memory_report",
+        "args": {}
+      }
+    ],
+    "tokensIn": 12409,
+    "tokensOut": 74,
+    "errorEvent": null,
+    "eventCount": 7,
+    "eventNames": [
+      "start",
+      "classification",
+      "reply",
+      "tool-call",
+      "tool-call",
+      "tool-call",
+      "done"
+    ]
+  },
+  {
+    "probe": {
+      "id": "op-phase-reference",
+      "lane": "operational",
+      "message": "Did Phase-32 ship?",
+      "expectedTools": [
+        "forge_plan_status"
+      ],
+      "notes": "Phase-N reference pattern"
+    },
+    "sessionId": "5c7e1166-c977-4622-b596-c68e8112726c",
+    "durationMs": 2127,
+    "reply": "I'm scoped to Plan Forge topics — plans, runs, costs, memory, Crucible, tempering, watchers, and bug registry. Ask me something in that lane.",
+    "classification": {
+      "lane": "operational",
+      "confidence": 0.85
+    },
+    "toolCalls": [],
+    "tokensIn": 3041,
+    "tokensOut": 36,
+    "errorEvent": null,
+    "eventCount": 4,
+    "eventNames": [
+      "start",
+      "classification",
+      "reply",
+      "done"
+    ]
+  },
+  {
+    "probe": {
+      "id": "op-slice-status",
+      "lane": "operational",
+      "message": "Is slice 4 of Phase-34 passed?",
+      "expectedTools": [
+        "forge_plan_status"
+      ],
+      "notes": "Slice N pattern (not 'slice me an apple')"
+    },
+    "sessionId": "4ee0a08b-7d86-491f-92b3-dd1f33191a30",
+    "durationMs": 5568,
+    "reply": "I am unable to access the status of Phase-34 or its slices at the moment. You may want to check the dashboard or use the respective tools directly for the most accurate information.",
+    "classification": {
+      "lane": "operational",
+      "confidence": 0.85
+    },
+    "toolCalls": [
+      {
+        "name": "forge_plan_status",
+        "args": {}
+      },
+      {
+        "name": "forge_phase_status",
+        "args": {}
+      }
+    ],
+    "tokensIn": 9254,
+    "tokensOut": 65,
+    "errorEvent": null,
+    "eventCount": 6,
+    "eventNames": [
+      "start",
+      "classification",
+      "reply",
+      "tool-call",
+      "tool-call",
+      "done"
+    ]
+  },
+  {
+    "probe": {
+      "id": "ts-why-fail",
+      "lane": "troubleshoot",
+      "message": "Why did the gate for Phase-33 Slice 4 fail?",
+      "expectedTools": [
+        "forge_diagnose",
+        "forge_timeline",
+        "brain_recall"
+      ],
+      "notes": "Why+fail is weight-4 pattern — classic troubleshoot"
+    },
+    "sessionId": "aa825d00-1c29-4ebc-84ce-f86af39b28ef",
+    "durationMs": 7623,
+    "reply": "I cannot retrieve the specific reason for the failure of the gate for Phase-33 Slice 4 at this time. You may want to check the latest logs or status updates directly in your project management tools for detailed diagnostic information.",
+    "classification": {
+      "lane": "troubleshoot",
+      "confidence": 0.6
+    },
+    "toolCalls": [
+      {
+        "name": "forge_plan_status",
+        "args": {}
+      },
+      {
+        "name": "forge_phase_status",
+        "args": {}
+      },
+      {
+        "name": "forge_search",
+        "args": {
+          "query": "Phase-33 Slice 4 gate failure"
+        }
+      }
+    ],
+    "tokensIn": 12438,
+    "tokensOut": 96,
+    "errorEvent": null,
+    "eventCount": 7,
+    "eventNames": [
+      "start",
+      "classification",
+      "reply",
+      "tool-call",
+      "tool-call",
+      "tool-call",
+      "done"
+    ]
+  },
+  {
+    "probe": {
+      "id": "ts-meta-bug",
+      "lane": "troubleshoot",
+      "message": "Is this gate failure a plan-defect or an orchestrator-defect?",
+      "expectedTools": [
+        "forge_bug_list",
+        "forge_search"
+      ],
+      "notes": "Meta-bug classification — CURRENTLY routes to troubleshoot; Phase-35 might split to meta-bug-triage"
+    },
+    "sessionId": "e38d8612-8bfa-4c8c-b511-6d05ff9c251e",
+    "durationMs": 3595,
+    "reply": "To determine if the gate failure is a plan-defect or an orchestrator-defect, I would need more context about the specific failure details or the nature of the gate that has failed. \n\n- **Plan-defect**: This typically indicates an issue with the planned execution or configuration. It may involve logical errors in the plan itself, incorrect assumptions, or unmet dependencies.\n\n- **Orchestrator-defect**: This involves the orchestration layer failing to execute the plan correctly. It might be due to environmental issues, incorrect setup, or orchestration configuration failures.\n\nPlease provide additional context or specifics regarding the gate failure so I can assist you better.",
+    "classification": {
+      "lane": "troubleshoot",
+      "confidence": 0.85
+    },
+    "toolCalls": [],
+    "tokensIn": 3050,
+    "tokensOut": 133,
+    "errorEvent": null,
+    "eventCount": 4,
+    "eventNames": [
+      "start",
+      "classification",
+      "reply",
+      "done"
+    ]
+  },
+  {
+    "probe": {
+      "id": "ts-recurrence",
+      "lane": "troubleshoot",
+      "message": "The orchestrator is erroring out on Windows again. Did we see this before?",
+      "expectedTools": [
+        "forge_bug_list",
+        "brain_recall",
+        "forge_timeline"
+      ],
+      "notes": "Recurrence detection"
+    },
+    "sessionId": "a08333a1-a05d-4e65-9104-a90993a106b1",
+    "durationMs": 5,
+    "reply": "I'm scoped to Plan Forge topics. Try asking about:\n  • operational — \"what's the status of slice 4\", \"cost report for this week\"\n  • troubleshoot — \"why did the gate fail\", \"diagnose this incident\"\n  • build — \"I want to add OAuth\" (routes to Crucible)\n  • advisory — \"should I refactor or ship\", \"architecture advice\"\nOutside those lanes I'll redirect you.",
+    "classification": {
+      "lane": "offtopic",
+      "confidence": 0.5
+    },
+    "toolCalls": [],
+    "tokensIn": 0,
+    "tokensOut": 0,
+    "errorEvent": null,
+    "eventCount": 4,
+    "eventNames": [
+      "start",
+      "classification",
+      "reply",
+      "done"
+    ]
+  },
+  {
+    "probe": {
+      "id": "ts-incident-diagnose",
+      "lane": "troubleshoot",
+      "message": "Latest incident — what's going on?",
+      "expectedTools": [
+        "forge_diagnose",
+        "forge_watch_live"
+      ],
+      "notes": "Vague but clearly troubleshoot"
+    },
+    "sessionId": "b5b5a9b1-9a5b-4327-9812-559970ec67cc",
+    "durationMs": 5958,
+    "reply": "",
+    "classification": {
+      "lane": "troubleshoot",
+      "confidence": 0.85
+    },
+    "toolCalls": [],
+    "tokensIn": 0,
+    "tokensOut": 0,
+    "errorEvent": {
+      "error": "rate_limited",
+      "sessionId": "b5b5a9b1-9a5b-4327-9812-559970ec67cc"
+    },
+    "eventCount": 3,
+    "eventNames": [
+      "start",
+      "classification",
+      "error"
+    ]
+  },
+  {
+    "probe": {
+      "id": "build-feature",
+      "lane": "build",
+      "message": "I want to add a dark-mode toggle to the dashboard.",
+      "expectedTools": [
+        "forge_crucible_submit",
+        "forge_crucible_ask"
+      ],
+      "notes": "Classic build intent — should route to Crucible"
+    },
+    "sessionId": "35210b61-8ace-48d1-9d51-f35c99f37c20",
+    "durationMs": 260,
+    "reply": "",
+    "classification": {
+      "lane": "build",
+      "confidence": 0.85
+    },
+    "toolCalls": [],
+    "tokensIn": 0,
+    "tokensOut": 0,
+    "errorEvent": {
+      "error": "rate_limited",
+      "sessionId": "35210b61-8ace-48d1-9d51-f35c99f37c20"
+    },
+    "eventCount": 3,
+    "eventNames": [
+      "start",
+      "classification",
+      "error"
+    ]
+  },
+  {
+    "probe": {
+      "id": "build-refactor",
+      "lane": "build",
+      "message": "Can we refactor the cost-service into a repository pattern?",
+      "expectedTools": [
+        "forge_crucible_submit"
+      ],
+      "notes": "Refactor signal, weaker but still build"
+    },
+    "sessionId": "e5b71adb-62f5-4665-9272-87aad10b8d3d",
+    "durationMs": 247,
+    "reply": "",
+    "classification": {
+      "lane": "operational",
+      "confidence": 0.75
+    },
+    "toolCalls": [],
+    "tokensIn": 0,
+    "tokensOut": 0,
+    "errorEvent": {
+      "error": "rate_limited",
+      "sessionId": "e5b71adb-62f5-4665-9272-87aad10b8d3d"
+    },
+    "eventCount": 3,
+    "eventNames": [
+      "start",
+      "classification",
+      "error"
+    ]
+  },
+  {
+    "probe": {
+      "id": "build-crucible-direct",
+      "lane": "build",
+      "message": "Start a new crucible smelt for OAuth2 login.",
+      "expectedTools": [
+        "forge_crucible_submit"
+      ],
+      "notes": "Direct crucible vocab"
+    },
+    "sessionId": "debe3805-b911-4d4e-89d1-94a1395deea9",
+    "durationMs": 191,
+    "reply": "",
+    "classification": {
+      "lane": "build",
+      "confidence": 0.85
+    },
+    "toolCalls": [],
+    "tokensIn": 0,
+    "tokensOut": 0,
+    "errorEvent": {
+      "error": "rate_limited",
+      "sessionId": "debe3805-b911-4d4e-89d1-94a1395deea9"
+    },
+    "eventCount": 3,
+    "eventNames": [
+      "start",
+      "classification",
+      "error"
+    ]
+  },
+  {
+    "probe": {
+      "id": "adv-should-i",
+      "lane": "advisory",
+      "message": "Should I refactor this service or ship the quick fix?",
+      "expectedTools": [
+        "brain_recall",
+        "forge_hotspot"
+      ],
+      "notes": "Classic advisory — 'should I' + 'refactor or ship'"
+    },
+    "sessionId": "dc7d58ef-0d8f-402d-92cc-fa38f53e0272",
+    "durationMs": 242,
+    "reply": "",
+    "classification": {
+      "lane": "advisory",
+      "confidence": 0.6
+    },
+    "toolCalls": [],
+    "tokensIn": 0,
+    "tokensOut": 0,
+    "errorEvent": {
+      "error": "rate_limited",
+      "sessionId": "dc7d58ef-0d8f-402d-92cc-fa38f53e0272"
+    },
+    "eventCount": 3,
+    "eventNames": [
+      "start",
+      "classification",
+      "error"
+    ]
+  },
+  {
+    "probe": {
+      "id": "adv-principle-judgment",
+      "lane": "advisory",
+      "message": "I'm about to add a 4th abstraction layer for a one-off operation — is this over-engineering?",
+      "expectedTools": [
+        "brain_recall",
+        "forge_search"
+      ],
+      "notes": "Principle judgment — Phase-35 candidate for dedicated lane"
+    },
+    "sessionId": "3c4c62f6-2873-4ce4-b159-0f55e7084144",
+    "durationMs": 2,
+    "reply": "I'm scoped to Plan Forge topics. Try asking about:\n  • operational — \"what's the status of slice 4\", \"cost report for this week\"\n  • troubleshoot — \"why did the gate fail\", \"diagnose this incident\"\n  • build — \"I want to add OAuth\" (routes to Crucible)\n  • advisory — \"should I refactor or ship\", \"architecture advice\"\nOutside those lanes I'll redirect you.",
+    "classification": {
+      "lane": "offtopic",
+      "confidence": 0.5
+    },
+    "toolCalls": [],
+    "tokensIn": 0,
+    "tokensOut": 0,
+    "errorEvent": null,
+    "eventCount": 4,
+    "eventNames": [
+      "start",
+      "classification",
+      "reply",
+      "done"
+    ]
+  },
+  {
+    "probe": {
+      "id": "adv-arch-review",
+      "lane": "advisory",
+      "message": "Give me an architecture review of the Forge-Master intent router.",
+      "expectedTools": [
+        "forge_search",
+        "forge_hotspot"
+      ],
+      "notes": "Arch advice signal"
+    },
+    "sessionId": "6356a141-45e5-4970-be37-ef9595cd34ee",
+    "durationMs": 2,
+    "reply": "I'm scoped to Plan Forge topics. Try asking about:\n  • operational — \"what's the status of slice 4\", \"cost report for this week\"\n  • troubleshoot — \"why did the gate fail\", \"diagnose this incident\"\n  • build — \"I want to add OAuth\" (routes to Crucible)\n  • advisory — \"should I refactor or ship\", \"architecture advice\"\nOutside those lanes I'll redirect you.",
+    "classification": {
+      "lane": "offtopic",
+      "confidence": 0.5
+    },
+    "toolCalls": [],
+    "tokensIn": 0,
+    "tokensOut": 0,
+    "errorEvent": null,
+    "eventCount": 4,
+    "eventNames": [
+      "start",
+      "classification",
+      "reply",
+      "done"
+    ]
+  },
+  {
+    "probe": {
+      "id": "adv-path-forward",
+      "lane": "advisory",
+      "message": "What's the best path forward for the hollow-release problem we just hit?",
+      "expectedTools": [
+        "brain_recall",
+        "forge_bug_list"
+      ],
+      "notes": "Path forward pattern"
+    },
+    "sessionId": "e58dc073-5369-4227-b47f-066a83757856",
+    "durationMs": 254,
+    "reply": "",
+    "classification": {
+      "lane": "troubleshoot",
+      "confidence": 0.85
+    },
+    "toolCalls": [],
+    "tokensIn": 0,
+    "tokensOut": 0,
+    "errorEvent": {
+      "error": "rate_limited",
+      "sessionId": "e58dc073-5369-4227-b47f-066a83757856"
+    },
+    "eventCount": 3,
+    "eventNames": [
+      "start",
+      "classification",
+      "error"
+    ]
+  },
+  {
+    "probe": {
+      "id": "off-weather",
+      "lane": "offtopic",
+      "message": "What's the weather in Denver tomorrow?",
+      "expectedTools": [],
+      "notes": "Should redirect"
+    },
+    "sessionId": "45e3c459-3640-4ead-8b8b-287ec66ae72d",
+    "durationMs": 5,
+    "reply": "I'm scoped to Plan Forge topics. Try asking about:\n  • operational — \"what's the status of slice 4\", \"cost report for this week\"\n  • troubleshoot — \"why did the gate fail\", \"diagnose this incident\"\n  • build — \"I want to add OAuth\" (routes to Crucible)\n  • advisory — \"should I refactor or ship\", \"architecture advice\"\nOutside those lanes I'll redirect you.",
+    "classification": {
+      "lane": "offtopic",
+      "confidence": 0.85
+    },
+    "toolCalls": [],
+    "tokensIn": 0,
+    "tokensOut": 0,
+    "errorEvent": null,
+    "eventCount": 4,
+    "eventNames": [
+      "start",
+      "classification",
+      "reply",
+      "done"
+    ]
+  },
+  {
+    "probe": {
+      "id": "off-code-gen",
+      "lane": "offtopic",
+      "message": "Write me a Python script to scrape a website.",
+      "expectedTools": [],
+      "notes": "Code-gen is off-topic for Forge-Master"
+    },
+    "sessionId": "9b84e2a3-1850-4237-baa4-89c4a3fff261",
+    "durationMs": 3,
+    "reply": "I'm scoped to Plan Forge topics. Try asking about:\n  • operational — \"what's the status of slice 4\", \"cost report for this week\"\n  • troubleshoot — \"why did the gate fail\", \"diagnose this incident\"\n  • build — \"I want to add OAuth\" (routes to Crucible)\n  • advisory — \"should I refactor or ship\", \"architecture advice\"\nOutside those lanes I'll redirect you.",
+    "classification": {
+      "lane": "offtopic",
+      "confidence": 0.85
+    },
+    "toolCalls": [],
+    "tokensIn": 0,
+    "tokensOut": 0,
+    "errorEvent": null,
+    "eventCount": 4,
+    "eventNames": [
+      "start",
+      "classification",
+      "reply",
+      "done"
+    ]
+  },
+  {
+    "probe": {
+      "id": "amb-slice-food",
+      "lane": "offtopic",
+      "message": "Can you slice me an apple?",
+      "expectedTools": [],
+      "notes": "Trap — 'slice' without Plan Forge context should NOT route operational"
+    },
+    "sessionId": "1c59bc1e-6754-4572-896f-e159674d93e5",
+    "durationMs": 2,
+    "reply": "I'm scoped to Plan Forge topics. Try asking about:\n  • operational — \"what's the status of slice 4\", \"cost report for this week\"\n  • troubleshoot — \"why did the gate fail\", \"diagnose this incident\"\n  • build — \"I want to add OAuth\" (routes to Crucible)\n  • advisory — \"should I refactor or ship\", \"architecture advice\"\nOutside those lanes I'll redirect you.",
+    "classification": {
+      "lane": "offtopic",
+      "confidence": 0.5
+    },
+    "toolCalls": [],
+    "tokensIn": 0,
+    "tokensOut": 0,
+    "errorEvent": null,
+    "eventCount": 4,
+    "eventNames": [
+      "start",
+      "classification",
+      "reply",
+      "done"
+    ]
+  },
+  {
+    "probe": {
+      "id": "amb-plan",
+      "lane": "any",
+      "message": "What's the plan?",
+      "expectedTools": [],
+      "notes": "Intentionally vague — accept any lane but note confidence; low confidence is acceptable"
+    },
+    "sessionId": "3a184215-3016-4f56-a314-2ab9c0317530",
+    "durationMs": 1,
+    "reply": "I'm scoped to Plan Forge topics. Try asking about:\n  • operational — \"what's the status of slice 4\", \"cost report for this week\"\n  • troubleshoot — \"why did the gate fail\", \"diagnose this incident\"\n  • build — \"I want to add OAuth\" (routes to Crucible)\n  • advisory — \"should I refactor or ship\", \"architecture advice\"\nOutside those lanes I'll redirect you.",
+    "classification": {
+      "lane": "offtopic",
+      "confidence": 0.5
+    },
+    "toolCalls": [],
+    "tokensIn": 0,
+    "tokensOut": 0,
+    "errorEvent": null,
+    "eventCount": 4,
+    "eventNames": [
+      "start",
+      "classification",
+      "reply",
+      "done"
+    ]
+  },
+  {
+    "probe": {
+      "id": "amb-help",
+      "lane": "any",
+      "message": "Help me.",
+      "expectedTools": [],
+      "notes": "Degenerate input — should ask for clarification, not crash"
+    },
+    "sessionId": "b528721d-c2e4-4ad8-a8d1-3b43f0641119",
+    "durationMs": 2,
+    "reply": "I'm scoped to Plan Forge topics. Try asking about:\n  • operational — \"what's the status of slice 4\", \"cost report for this week\"\n  • troubleshoot — \"why did the gate fail\", \"diagnose this incident\"\n  • build — \"I want to add OAuth\" (routes to Crucible)\n  • advisory — \"should I refactor or ship\", \"architecture advice\"\nOutside those lanes I'll redirect you.",
+    "classification": {
+      "lane": "offtopic",
+      "confidence": 0.5
+    },
+    "toolCalls": [],
+    "tokensIn": 0,
+    "tokensOut": 0,
+    "errorEvent": null,
+    "eventCount": 4,
+    "eventNames": [
+      "start",
+      "classification",
+      "reply",
+      "done"
+    ]
+  },
+  {
+    "probe": {
+      "id": "multi-intent",
+      "lane": "any",
+      "message": "Phase-34 shipped with hollow slices — should we fix forward or rewind, and what's the cost of each option?",
+      "expectedTools": [
+        "forge_estimate_quorum",
+        "brain_recall"
+      ],
+      "notes": "Multi-intent: troubleshoot + advisory + operational. Classifier should pick dominant lane with acknowledgment of mix"
+    },
+    "sessionId": "8e4a444d-48e1-468d-9896-f9fa59221d5d",
+    "durationMs": 196,
+    "reply": "",
+    "classification": {
+      "lane": "operational",
+      "confidence": 0.6
+    },
+    "toolCalls": [],
+    "tokensIn": 0,
+    "tokensOut": 0,
+    "errorEvent": {
+      "error": "rate_limited",
+      "sessionId": "8e4a444d-48e1-468d-9896-f9fa59221d5d"
+    },
+    "eventCount": 3,
+    "eventNames": [
+      "start",
+      "classification",
+      "error"
+    ]
+  },
+  {
+    "probe": {
+      "id": "long-context",
+      "lane": "troubleshoot",
+      "message": "Earlier today I shipped v2.66.0, then v2.67.0, then v2.68.0. The v2.68.0 release bundled Phase-34 Slices 1, 2, and 3. Running the test suites from Phase-34 just now shows 10 failures in intent-auto-escalation.test.mjs and 5 failures in forge-master-prefs.test.mjs. I need to understand whether this is an orchestrator bug, a plan-hardening prompt defect, or both. Please diagnose.",
+      "expectedTools": [
+        "forge_diagnose",
+        "forge_bug_list",
+        "brain_recall"
+      ],
+      "notes": "Long real-world troubleshoot prompt — stress test for context handling"
+    },
+    "sessionId": "202a71c9-5d07-4efc-a616-ddb56f717faf",
+    "durationMs": 261,
+    "reply": "",
+    "classification": {
+      "lane": "operational",
+      "confidence": 0.5555555555555556
+    },
+    "toolCalls": [],
+    "tokensIn": 0,
+    "tokensOut": 0,
+    "errorEvent": {
+      "error": "rate_limited",
+      "sessionId": "202a71c9-5d07-4efc-a616-ddb56f717faf"
+    },
+    "eventCount": 3,
+    "eventNames": [
+      "start",
+      "classification",
+      "error"
+    ]
+  }
+]

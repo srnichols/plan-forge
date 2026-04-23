@@ -7,6 +7,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.70.0] — 2026-04-23 — Forge-Master Runtime Observability (Phase-36 Slice 4)
+
+> **Phase-36 Slice 4 — Probe validation & release. Classification events are now observable end-to-end via SSE; the probe harness captures lane + confidence per-probe and reports accuracy in Markdown.**
+
+### Added
+
+- **`scripts/probe-forge-master.mjs` — classification capture** — SSE parser now handles `event === "classification"`, storing `{ lane, confidence }` per probe. Console output format changed from `tokens=X/Y tools=Z` to `lane=<lane> conf=<conf> tokens=X/Y tools=Z`. Results JSON includes a top-level `classification` field per probe entry.
+- **`scripts/probe-forge-master.mjs` — Classification match report section** — Markdown report gains a "Classification match" section with: overall lane-match count, per-lane accuracy table (`| Expected Lane | Matched |`), and per-probe table (`| Probe ID | Expected | Got | Confidence | Match |`). Each probe's body section gains a `**Classification**` line showing lane, confidence, and ✅/❌ match icon.
+- **Harness caveats updated** — Removed the outdated `"classification.lane is not emitted via SSE"` warning (resolved: `onClassification` callback has been wired in `http-routes.mjs` since Phase-29). Retained the stub-dispatcher caveat.
+- **Validation results committed** — `.forge/validation/results-2026-04-23T03-24-28-669Z.md` and `.json`. Run against `http://127.0.0.1:3100` with 24 probes: 14/21 classifiable probes matched expected lane (≥12 threshold); 70 lines containing ✅ or OK (≥22 threshold). See [results-2026-04-23T03-24-28-669Z.md](.forge/validation/results-2026-04-23T03-24-28-669Z.md).
+
+### Notes
+
+- Classification is driven by `classify()` in `pforge-master/src/intent-router.mjs` and forwarded via `onClassification` in `pforge-master/src/http-routes.mjs` (both express and bare-node paths).
+- Rate-limiting on the GitHub Copilot provider caused 8/24 probes to short-circuit with `error: "rate_limited"`. Classification events still fired correctly for those probes (SSE sequence: `start → classification → error`). Reply-level metrics reflect available capacity; lane-match metrics cover all probes.
+
 ## [2.69.0] — 2026-04-23 — Phase-34 rebuild (Closes #96)
 
 > **Phase-35 — Repairs Phase-34 hollow slices that shipped with grep-only gates and no vitest execution.**

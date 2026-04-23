@@ -80,6 +80,82 @@
           <strong>🔁 See also: <a href="inner-loop.html">The Inner Loop</a></strong> — the reflective layer v2.57.0 adds on top of the Forge spine: reflexion retries, trajectories, auto-skill promotion, adaptive gate synthesis, postmortems, cross-project federation, and the opt-in reviewer agent. All opt-in, all Dashboard-configurable.
         </div>
 
+        <!-- ─── The Loop That Never Ends ─── -->
+        <h2 id="closed-loop">The Loop That Never Ends</h2>
+        <p>Drawn linearly, Plan Forge looks like a 7-step pipeline. Drawn honestly, it's a <strong>closed loop</strong>. Every failed test, every regression caught by tempering, every placeholder spotted by a discovery scan re-enters the Smelt station as a new ore — auto-smelted into a Crucible idea, hardened into a slice, executed, and re-tested. The loop only pauses when there's nothing left to find.</p>
+
+        <div class="overflow-x-auto mb-4">
+          <div class="rounded-2xl border border-slate-700/50 bg-slate-950/60 p-6 min-w-[720px]">
+            <div class="grid grid-cols-3 gap-4">
+              <!-- Row 1: Discovery → Crucible → Harden -->
+              <div class="rounded-lg border border-amber-900/40 bg-amber-950/20 p-3 text-center">
+                <div class="text-xs font-bold text-amber-400 mb-1">DISCOVERY</div>
+                <div class="text-xs text-slate-300 font-mono leading-relaxed">content audit<br/>+ route crawl<br/>+ placeholder regex</div>
+              </div>
+              <div class="flex flex-col items-center justify-center text-slate-500 text-xs">
+                <div class="text-slate-600">finds</div>
+                <div class="text-forge-400 text-2xl leading-none">→</div>
+              </div>
+              <div class="rounded-lg border border-amber-900/40 bg-amber-950/20 p-3 text-center">
+                <div class="text-xs font-bold text-amber-400 mb-1">CRUCIBLE</div>
+                <div class="text-xs text-slate-300 font-mono leading-relaxed">forge_crucible_<br/>submit (agent)</div>
+              </div>
+
+              <!-- Row 2: vertical arrow on right (crucible → harden) -->
+              <div></div>
+              <div></div>
+              <div class="flex justify-center items-center text-forge-400 text-2xl leading-none">↓</div>
+
+              <!-- Row 3: Harden centered right -->
+              <div></div>
+              <div></div>
+              <div class="rounded-lg border border-amber-900/40 bg-amber-950/20 p-3 text-center">
+                <div class="text-xs font-bold text-amber-400 mb-1">HARDEN</div>
+                <div class="text-xs text-slate-300 font-mono leading-relaxed">Phase-NN plan<br/>+ Scope Contract</div>
+              </div>
+
+              <!-- Row 4: vertical arrow harden → execute -->
+              <div></div>
+              <div></div>
+              <div class="flex justify-center items-center text-forge-400 text-2xl leading-none">↓</div>
+
+              <!-- Row 5: Bug registry ← Tempering ← Execute -->
+              <div class="rounded-lg border border-rose-900/40 bg-rose-950/20 p-3 text-center">
+                <div class="text-xs font-bold text-rose-400 mb-1">BUG REGISTRY</div>
+                <div class="text-xs text-slate-300 font-mono leading-relaxed">auto-smelt loop</div>
+              </div>
+              <div class="flex flex-col items-center justify-center text-slate-500 text-xs">
+                <div class="text-slate-600">fails</div>
+                <div class="text-forge-400 text-2xl leading-none">←</div>
+              </div>
+              <div class="rounded-lg border border-rose-900/40 bg-rose-950/20 p-3 text-center">
+                <div class="text-xs font-bold text-rose-400 mb-1">TEMPERING</div>
+                <div class="text-xs text-slate-300 font-mono leading-relaxed">forge_tempering_<br/>run</div>
+              </div>
+
+              <!-- Row 6: Execute left of tempering -->
+              <div></div>
+              <div class="flex flex-col items-center justify-center text-slate-500 text-xs">
+                <div class="text-slate-600">green</div>
+                <div class="text-forge-400 text-2xl leading-none">←</div>
+              </div>
+              <div class="rounded-lg border border-emerald-900/40 bg-emerald-950/20 p-3 text-center">
+                <div class="text-xs font-bold text-emerald-400 mb-1">EXECUTE</div>
+                <div class="text-xs text-slate-300 font-mono leading-relaxed">slice-by-slice<br/>+ test gates</div>
+              </div>
+
+              <!-- Row 7: back-arrow bug registry → discovery -->
+              <div class="flex justify-center items-center text-forge-400 text-2xl leading-none">↑</div>
+              <div class="col-span-2 text-xs text-slate-500 flex items-center">re-enters Smelt as new ore</div>
+            </div>
+          </div>
+        </div>
+        <p class="text-sm text-slate-500 italic mb-8">Every bug tempering catches becomes a new Crucible smelt. Every placeholder discovery scans find becomes a new plan slice. The loop runs until there's nothing left to find — and then it waits for the next deploy to start again.</p>
+
+        <div class="callout callout-info">
+          <strong>Case study:</strong> <a href="../blog/the-loop-that-never-ends.html">The Loop That Never Ends — How Rummag Auto-Smelts Its Own Website Bugs</a> shows this loop applied to a real production site audit, with a 4-pass discovery harness feeding the Crucible.
+        </div>
+
         <!-- ─── The 7-Step Pipeline (inside the Forge) ─── -->
         <h2 id="pipeline">The 7-Step Pipeline (Inside the Forge)</h2>
         <p>The <strong>Forge</strong> station — where raw scope becomes shipped code — runs a 7-step pipeline. Steps 0–2 happen in Smelt, steps 3–6 happen in Forge, step 6 hands off to Guard and Learn.</p>

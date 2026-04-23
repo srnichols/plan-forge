@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Loop That Never Ends — How Rummag Auto-Smelts Its Own Website Bugs — Plan Forge Blog</title>
+  <meta name="description" content="A real-world case study: turning a static website audit into a closed-loop execution pipeline. Discovery → Crucible → Harden → Execute → Tempering → Bug registry → back to Discovery." />
+  <meta property="og:title" content="The Loop That Never Ends — How Rummag Auto-Smelts Its Own Website Bugs" />
+  <meta property="og:description" content="A 4-pass discovery harness feeds the Crucible. Tempering failures become new smelts. The loop runs until there's nothing left to find." />
+  <meta property="og:type" content="article" />
+  <meta property="og:url" content="https://planforge.software/blog/the-loop-that-never-ends.html" />
+  <meta property="og:image" content="https://planforge.software/assets/brand/og-card-v2.webp" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="The Loop That Never Ends — How Rummag Auto-Smelts Its Own Website Bugs" />
+  <meta name="twitter:description" content="A real-world case study of Plan Forge's closed-loop pipeline applied to a production website audit." />
+  <link rel="canonical" href="https://planforge.software/blog/the-loop-that-never-ends.html" />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    "headline": "The Loop That Never Ends — How Rummag Auto-Smelts Its Own Website Bugs",
+    "description": "A real-world case study: turning a static website audit into a closed-loop execution pipeline with a 4-pass discovery harness feeding the Crucible.",
+    "url": "https://planforge.software/blog/the-loop-that-never-ends.html",
+    "datePublished": "2026-04-23",
+    "author": { "@type": "Person", "name": "Scott Nichols", "url": "https://github.com/srnichols" },
+    "publisher": { "@type": "Organization", "name": "Plan Forge", "url": "https://planforge.software" }
+  }
+  </script>
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { theme: { extend: { colors: { forge: { 300:'#fcd34d',400:'#fbbf24',500:'#f59e0b',600:'#d97706',700:'#b45309' }}, fontFamily: { sans:['Inter','system-ui','sans-serif'], mono:['"JetBrains Mono"','"Fira Code"','monospace'] }}}}
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/blog.css" />
+</head>
+<body class="bg-slate-950 text-slate-100 antialiased">
+
+  <!-- NAV -->
+  <nav class="sticky top-0 z-50 bg-slate-950/92 backdrop-blur-md border-b border-slate-800/60">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <a href="../index.html" class="flex items-center gap-3 shrink-0"><img src="../assets/plan-forge-logo.svg" alt="Plan Forge" class="h-7 w-auto" /></a>
+        <div class="hidden md:flex items-center gap-7">
+          <a href="../shop-tour.html" class="text-sm text-amber-400 font-semibold transition-colors">Shop Tour</a>
+          <a href="../index.html#solution" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">How It Works</a>
+          <a href="../examples.html" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">Examples</a>
+          <a href="./" class="text-sm text-forge-400 transition-colors">Blog</a>
+          <a href="../faq.html" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">FAQ</a>
+        </div>
+        <div class="hidden md:flex items-center gap-3">
+          <a href="https://github.com/srnichols/plan-forge" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">GitHub</a>
+          <a href="../index.html#quickstart" class="px-4 py-2 text-sm font-semibold bg-forge-500 hover:bg-forge-400 text-slate-900 rounded-lg transition-colors">Get Started</a>
+        </div>
+        <button id="mobile-btn" class="md:hidden p-2 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors" aria-label="Open menu">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+      </div>
+    </div>
+    <div id="mobile-menu" class="hidden md:hidden border-t border-slate-800/60 bg-slate-950/98">
+      <div class="px-4 py-3 space-y-1">
+        <a href="../index.html#solution" class="block py-2 text-sm text-slate-300 hover:text-slate-100">How It Works</a>
+        <a href="../examples.html" class="block py-2 text-sm text-slate-300 hover:text-slate-100">Examples</a>
+        <a href="./" class="block py-2 text-sm text-forge-400 hover:text-slate-100 font-semibold">Blog</a>
+        <a href="../faq.html" class="block py-2 text-sm text-slate-300 hover:text-slate-100">FAQ</a>
+        <a href="../shop-tour.html" class="block py-2 text-sm text-amber-400 font-semibold hover:text-slate-100">Shop Tour</a>
+        <a href="../manual/" class="block py-2 text-sm text-slate-300 hover:text-slate-100">Manual</a>
+        <a href="https://github.com/srnichols/plan-forge" class="block py-2 text-sm text-forge-400 font-semibold">GitHub →</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ARTICLE -->
+  <article class="py-16 bg-slate-900">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+
+      <!-- Meta -->
+      <div class="mb-8">
+        <a href="./" class="text-sm text-forge-400 hover:underline">← Back to Blog</a>
+      </div>
+      <div class="flex items-center gap-3 mb-6">
+        <span class="px-3 py-1 rounded-full bg-emerald-500/10 text-xs font-medium text-emerald-400 border border-emerald-500/20">Case Study</span>
+        <span class="px-3 py-1 rounded-full bg-forge-500/10 text-xs font-medium text-forge-400 border border-forge-500/20">NEW</span>
+        <span class="text-xs text-slate-500">April 23, 2026 · 8 min read</span>
+      </div>
+      <h1 class="text-4xl md:text-5xl font-black text-white mb-6 leading-tight">The Loop That Never Ends</h1>
+      <p class="text-xl text-slate-400 mb-8 leading-relaxed">How Rummag turned a website audit into a self-smelting pipeline — and why every failed test now becomes the next plan slice.</p>
+      <div class="flex items-center gap-3 mb-10 pb-10 border-b border-slate-800/60">
+        <img src="https://github.com/srnichols.png" alt="Scott Nichols" class="w-10 h-10 rounded-full border border-slate-700" loading="lazy" />
+        <div>
+          <p class="text-sm font-medium text-slate-200"><a href="../manual/about-author.html" class="hover:text-forge-400 transition-colors">Scott Nichols</a></p>
+          <p class="text-xs text-slate-500">Director @ Microsoft</p>
+        </div>
+      </div>
+
+      <!-- Content -->
+      <div class="blog-content">
+
+        <p>Most pipelines end. You ship, you close the PR, you move on. Then two weeks later a customer reports a broken link, a <code>Coming soon</code> that never came, or a <code>TODO</code> hiding in the FAQ. You open a ticket. You context-switch. You rebuild the mental model of what <em>should</em> be there.</p>
+
+        <p>This post is about what happens when you stop treating bugs as interruptions and start treating them as <strong>new ore</strong>.</p>
+
+        <h2>The Project: Rummag</h2>
+
+        <p>Rummag is a production Next.js site I maintain — marketing pages, a product catalog, a handful of interactive demos. Like most sites that grow organically, it had accumulated the usual rot: placeholder copy that never got replaced, stale <code>/docs</code> routes, console errors nobody noticed, <code>href="#"</code> waiting to be wired up.</p>
+
+        <p>I could have sat down with a checklist. Instead, I wired it into Plan Forge's closed loop.</p>
+
+        <h2>The Loop (Drawn Honestly)</h2>
+
+        <p>Plan Forge has a 7-step pipeline, but drawing it as a straight line has always been a simplification. The <em>real</em> shape is circular:</p>
+
+        <pre class="bg-slate-950 border border-slate-700/50 rounded-lg p-4 text-xs text-slate-300 overflow-x-auto leading-relaxed"><code>┌─ DISCOVERY ──────┐       ┌─ CRUCIBLE ──────┐       ┌─ HARDEN ─────────┐
+│ content audit   │──────▶│ forge_crucible_ │──────▶│ Phase-NN plan    │
+│ + route crawl   │ finds │ submit (agent)  │       │ + Scope Contract │
+│ + placeholder   │       └─────────────────┘       └──────────────────┘
+│   regex         │                                          │
+└─────────────────┘                                          ▼
+        ▲                  ┌─ TEMPERING ─────┐       ┌─ EXECUTE ────────┐
+        │                  │ forge_tempering │◀──────│ slice-by-slice   │
+  ┌─ BUG REGISTRY ──┐      │ _run            │ green │ + test gates     │
+  │ auto-smelt loop │◀─────└─────────────────┘       └──────────────────┘
+  └─────────────────┘  fails
+</code></pre>
+
+        <p>The back-edges are the point. <strong>Discovery finds problems and funnels them into the Crucible.</strong> <strong>Tempering catches regressions and writes them to the bug registry, which auto-smelts them back into Discovery's next pass.</strong> You don't hit a "done" state — you hit a quiet state. And the next deploy starts the loop again.</p>
+
+        <h2>Pass 1: The Discovery Harness</h2>
+
+        <p>Before the loop can run, Discovery needs to actually <em>discover</em> things. I built a reusable Node crawler — one file, ~200 lines — that emits structured JSON the Crucible can consume:</p>
+
+        <ul>
+          <li>Crawls <code>/</code> + <code>sitemap.xml</code> + a known-routes list checked into the repo</li>
+          <li>Per route, records: HTTP status, <code>&lt;title&gt;</code>, <code>&lt;h1&gt;</code>, word-count of <code>&lt;main&gt;</code></li>
+          <li>Placeholder markers: matches against <code>TODO</code>, <code>Coming soon</code>, <code>Lorem</code>, <code>placeholder</code>, <code>mock</code></li>
+          <li>Broken <code>&lt;a href&gt;</code> count, via a follow-up fetch on each internal link</li>
+          <li>Console errors captured via Playwright</li>
+          <li>Writes everything to <code>.forge/audits/dev-&lt;ts&gt;.json</code>, buckets triaged by severity</li>
+        </ul>
+
+        <p>That's Pass 1. The output is boring JSON. But it's <em>structured</em> boring JSON, which is the only kind the Crucible can turn into smelts.</p>
+
+        <blockquote><p>A discovery harness that emits prose is a report. A discovery harness that emits structured JSON is <em>fuel</em>.</p></blockquote>
+
+        <h2>Pass 2: The Crucible Eats the JSON</h2>
+
+        <p>The second pass is almost embarrassingly simple. I wrote a 30-line wrapper that reads <code>.forge/audits/dev-&lt;ts&gt;.json</code>, groups findings by route and severity, and for each group calls <code>forge_crucible_submit</code> with:</p>
+
+        <ul>
+          <li><strong>Title</strong>: <em>"Fix 3 placeholder blocks + 1 broken link on <code>/pricing</code>"</em></li>
+          <li><strong>Evidence</strong>: the raw JSON entries that triggered the smelt</li>
+          <li><strong>Priority</strong>: derived from the severity bucket</li>
+        </ul>
+
+        <p>The Crucible does its usual interview dance — asks clarifying questions, proposes scope, confirms forbidden actions. Then it hands a finalized smelt to Step 2 (Harden), which emits a <code>Phase-NN</code> plan with a Scope Contract.</p>
+
+        <p>At this point I haven't written a single line of product code. Everything so far was pipeline plumbing. That plumbing is what makes Passes 3 and 4 free.</p>
+
+        <h2>Pass 3: Execute and Temper</h2>
+
+        <p>Step 3 runs the plan slice by slice. Nothing exotic here — the same <code>pforge run-plan</code> workflow Plan Forge uses on itself. The interesting part is what happens after the last slice commits.</p>
+
+        <p><strong>Tempering</strong> re-runs the discovery harness against the newly-deployed preview URL. If the JSON output is empty for the routes the plan claimed to fix, Tempering reports green and closes the loop. If not — if a placeholder slipped through, or a "fix" introduced a new broken link — Tempering writes the failures to the bug registry.</p>
+
+        <p>And the bug registry auto-smelts. No human triage. The exact same pipeline I used to <em>write</em> the fix re-runs to <em>catch</em> the fix's own regressions.</p>
+
+        <h2>Pass 4: The Loop Closes on Itself</h2>
+
+        <p>The final pass is the one that made me sit up straight. Once the bug registry has auto-smelt enabled, the loop runs <em>without me</em>. I described the discovery harness, wrote the Crucible wrapper, hardened the first plan. After that:</p>
+
+        <ol>
+          <li>Cron runs the discovery harness nightly</li>
+          <li>New findings → auto-smelt → new Phase-NN plan</li>
+          <li>Plan runs on the dev branch</li>
+          <li>Tempering re-audits</li>
+          <li>If clean, PR opens; if not, auto-smelt again</li>
+        </ol>
+
+        <p>I stopped maintaining a manual TODO list for Rummag two weeks ago. The loop found 23 placeholders I didn't know existed, 7 broken links from a migration last month, and a console error in the checkout flow that had been silently firing for weeks. It's still finding things — slower now, but steady.</p>
+
+        <h2>What Makes This Work</h2>
+
+        <p>Three things had to be true for the loop to close:</p>
+
+        <p><strong>1. Structured evidence, not prose.</strong> The Crucible can't smelt a bug report that says "the pricing page looks weird." It can smelt <code>{"route": "/pricing", "placeholders": ["Coming soon", "TODO: price tiers"], "broken_hrefs": ["#"]}</code>. The discovery harness exists to turn the first into the second.</p>
+
+        <p><strong>2. Tempering has to re-audit with the same tool that discovered.</strong> If discovery uses regex and tempering uses eyeballs, the loop leaks. If both use the same harness, a fix is only "done" when the same JSON query that found it now returns empty.</p>
+
+        <p><strong>3. Auto-smelt is opt-in but default-on.</strong> You can turn it off per-project, but the moment you turn it off, the loop degrades into a pipeline — and pipelines end. The whole point is that this one doesn't.</p>
+
+        <h2>The Pattern Generalizes</h2>
+
+        <p>Rummag is a website, but the pattern isn't website-specific. Replace "discovery harness" with any tool that emits structured findings:</p>
+
+        <ul>
+          <li><strong>A .NET API</strong>: Roslyn analyzer runs → emits JSON of violations → Crucible smelts → plan fixes → tempering re-runs the analyzer</li>
+          <li><strong>A Python data pipeline</strong>: Great Expectations suite → fails → emits JSON → Crucible smelts → plan adds missing validation → tempering re-runs the suite</li>
+          <li><strong>An infrastructure repo</strong>: Azure Resource Graph query → emits compliance gaps → Crucible smelts → Bicep patch → tempering re-queries</li>
+        </ul>
+
+        <p>Any system where you can express "what correct looks like" as a query that returns empty when everything is fine can live inside this loop.</p>
+
+        <h2>See It on the Manual Page</h2>
+
+        <p>The cyclical version of this diagram now lives on the <a href="../manual/how-it-works.html#closed-loop" class="text-forge-400 hover:underline">How It Works</a> manual page, right above the 7-step pipeline. The linear view (7 steps, Smelt → Forge → Guard → Learn) is still true — it's what happens <em>inside</em> a single pass. The cyclical view is what happens <em>across</em> passes, and it's the view that matters once auto-smelt is on.</p>
+
+        <p>Linear pipelines end when the last slice ships. Cyclical pipelines only pause when there's nothing left to find. In a real production system, that pause is never more than temporary.</p>
+
+        <p><a href="https://github.com/srnichols/plan-forge" class="text-forge-400 hover:underline font-semibold">Plan Forge is free and open source.</a> MIT licensed. Wire it into your next project and stop maintaining a TODO list by hand.</p>
+
+      </div>
+
+      <!-- Post nav -->
+      <div class="mt-12 pt-8 border-t border-slate-800/60 flex justify-between items-center">
+        <a href="the-journey-from-impossible-to-seven-minutes.html" class="text-sm text-forge-400 hover:underline">← Previous: From Impossible to 7 Minutes</a>
+        <a href="./" class="text-sm text-forge-400 hover:underline">All posts →</a>
+      </div>
+
+    </div>
+  </article>
+
+  <!-- FOOTER -->
+  <footer class="border-t border-slate-800/60 bg-slate-950 py-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex flex-col md:flex-row items-center justify-between gap-4 mb-4">
+        <div class="flex items-center gap-3">
+          <img src="https://github.com/srnichols.png" alt="Scott Nichols" class="w-8 h-8 rounded-full border border-slate-700" loading="lazy" />
+          <p class="text-sm text-slate-500">Created by <a href="https://github.com/srnichols" class="text-forge-400 hover:underline">Scott Nichols</a></p>
+        </div>
+        <div class="flex gap-4">
+          <a href="https://github.com/srnichols" class="text-sm text-slate-500 hover:text-slate-300">GitHub</a>
+          <a href="https://www.linkedin.com/in/srnichols/" class="text-sm text-slate-500 hover:text-slate-300">LinkedIn</a>
+        </div>
+      </div>
+      <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+        <p class="text-sm text-slate-600">© 2026 Plan Forge. Open source under the MIT License.</p>
+        <div class="flex gap-6">
+          <a href="../index.html" class="text-sm text-slate-500 hover:text-slate-300">Home</a>
+          <a href="https://github.com/srnichols/plan-forge" class="text-sm text-slate-500 hover:text-slate-300">GitHub</a>
+          <a href="../docs.html" class="text-sm text-slate-500 hover:text-slate-300">Docs</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/shared.js"></script>
+</body>
+</html>

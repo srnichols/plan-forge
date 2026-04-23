@@ -5,8 +5,16 @@
     <link>https://planforge.software/blog/</link>
     <description>Lessons, patterns, and A/B test results from building with AI coding agents. By Scott Nichols.</description>
     <language>en-us</language>
-    <lastBuildDate>Fri, 11 Apr 2026 00:00:00 GMT</lastBuildDate>
+    <lastBuildDate>Thu, 23 Apr 2026 00:00:00 GMT</lastBuildDate>
     <atom:link href="https://planforge.software/blog/feed.xml" rel="self" type="application/rss+xml" />
+
+    <item>
+      <title>The Loop That Never Ends — How Rummag Auto-Smelts Its Own Website Bugs</title>
+      <link>https://planforge.software/blog/the-loop-that-never-ends.html</link>
+      <guid>https://planforge.software/blog/the-loop-that-never-ends.html</guid>
+      <pubDate>Thu, 23 Apr 2026 00:00:00 GMT</pubDate>
+      <description>A real-world case study: turning a Next.js site audit into a closed-loop execution pipeline. Discovery harness feeds the Crucible, tempering catches regressions, bug registry auto-smelts failures.</description>
+    </item>
 
     <item>
       <title>The A/B Test: 99 vs 44 — Same App, Same Model, Same Time</title>

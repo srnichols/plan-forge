@@ -147,12 +147,24 @@ cmd_status() {
 
     local roadmap="$REPO_ROOT/docs/plans/DEPLOYMENT-ROADMAP.md"
     if [ ! -f "$roadmap" ]; then
-        echo "ERROR: DEPLOYMENT-ROADMAP.md not found at $roadmap" >&2
-        exit 1
+        # Fall back to root ROADMAP.md; if neither exists, degrade to a
+        # friendly notice and exit 0 (missing roadmap is a valid state,
+        # not an error). Keeps forge_status a soft tool for agent flows.
+        local alt_roadmap="$REPO_ROOT/ROADMAP.md"
+        if [ -f "$alt_roadmap" ]; then
+            roadmap="$alt_roadmap"
+        else
+            echo ""
+            echo "No roadmap file found."
+            echo "  Looked for: docs/plans/DEPLOYMENT-ROADMAP.md, ROADMAP.md"
+            echo "  Create one with 'pforge init' or 'pforge new-phase <name>'."
+            echo ""
+            return 0
+        fi
     fi
 
     echo ""
-    echo "Phase Status (from DEPLOYMENT-ROADMAP.md):"
+    echo "Phase Status (from $(basename "$roadmap")):"
     echo "─────────────────────────────────────────────"
 
     local current_phase="" current_goal=""

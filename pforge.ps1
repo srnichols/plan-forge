@@ -171,13 +171,26 @@ function Invoke-Status {
     )
     $roadmap = Join-Path $RepoRoot "docs/plans/DEPLOYMENT-ROADMAP.md"
     if (-not (Test-Path $roadmap)) {
-        Write-Host "ERROR: DEPLOYMENT-ROADMAP.md not found." -ForegroundColor Red
-        Write-Host "  Expected at: $roadmap" -ForegroundColor Red
-        exit 1
+        # Fall back to root ROADMAP.md (used by the framework dev repo and some
+        # consumers) so tools calling `pforge status` get a useful readout
+        # instead of a non-zero exit. If neither exists, degrade to a friendly
+        # notice and exit 0 — a repo without a roadmap is a valid state, not
+        # an error. (Keeps forge_status a "soft" tool for agent flows.)
+        $altRoadmap = Join-Path $RepoRoot "ROADMAP.md"
+        if (Test-Path $altRoadmap) {
+            $roadmap = $altRoadmap
+        } else {
+            Write-Host ""
+            Write-Host "No roadmap file found." -ForegroundColor Yellow
+            Write-Host "  Looked for: docs/plans/DEPLOYMENT-ROADMAP.md, ROADMAP.md" -ForegroundColor DarkGray
+            Write-Host "  Create one with 'pforge init' or 'pforge new-phase <name>'." -ForegroundColor DarkGray
+            Write-Host ""
+            return
+        }
     }
 
     Write-Host ""
-    Write-Host "Phase Status (from DEPLOYMENT-ROADMAP.md):" -ForegroundColor Cyan
+    Write-Host "Phase Status (from $([System.IO.Path]::GetFileName($roadmap))):" -ForegroundColor Cyan
     Write-Host "─────────────────────────────────────────────" -ForegroundColor DarkGray
 
     $lines = Get-Content $roadmap

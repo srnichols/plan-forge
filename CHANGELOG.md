@@ -7,6 +7,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.74.2] — 2026-04-23 — `forge_status` graceful fallback (hammer 8/8)
+
+> **Point-release — closes the last `ts-drift` failure from v2.74.1.**
+> `pforge status` (and the MCP `forge_status` / `forge_plan_status` paths that wrap it) now fall back to root `ROADMAP.md` when `docs/plans/DEPLOYMENT-ROADMAP.md` is absent, and degrade to a friendly zero-exit notice when neither exists. A missing roadmap is a valid repo state, not an error — this keeps `forge_status` a soft tool for agent flows and fixes the `tool-success-rate` scorer false-negative.
+
+### Fixed
+- `pforge.ps1` / `pforge.sh` — `Invoke-Status` / `cmd_status` fall back to root `ROADMAP.md`, then to a zero-exit informational message. No more `exit 1` on repos without the consumer-template roadmap.
+
+### Validated
+- `pforge hammer-fm --scenario=shipped-prompts --tier=keyword-only --parallel=1 --timeout=90` → **8/8 passed** (report: `.forge/hammer-forge-master/reports/2026-04-23T18-44-51-953Z/`). Up from 7/8 in v2.74.1 and 4/8 pre-tuning.
+
+---
+
 ## [2.74.1] — 2026-04-23 — Forge-Master classifier tuning + hammer scenario fixes
 
 > **Point-release tuning off the 2026-04-23 hammer run.**

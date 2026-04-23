@@ -3,22 +3,22 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>The Loop That Never Ends — How Rummag Auto-Smelts Its Own Website Bugs — Plan Forge Blog</title>
+  <title>The Loop That Never Ends — How TheProject Auto-Smelts Its Own Website Bugs — Plan Forge Blog</title>
   <meta name="description" content="A real-world case study: turning a static website audit into a closed-loop execution pipeline. Discovery → Crucible → Harden → Execute → Tempering → Bug registry → back to Discovery." />
-  <meta property="og:title" content="The Loop That Never Ends — How Rummag Auto-Smelts Its Own Website Bugs" />
+  <meta property="og:title" content="The Loop That Never Ends — How TheProject Auto-Smelts Its Own Website Bugs" />
   <meta property="og:description" content="A 4-pass discovery harness feeds the Crucible. Tempering failures become new smelts. The loop runs until there's nothing left to find." />
   <meta property="og:type" content="article" />
   <meta property="og:url" content="https://planforge.software/blog/the-loop-that-never-ends.html" />
   <meta property="og:image" content="https://planforge.software/assets/brand/og-card-v2.webp" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="The Loop That Never Ends — How Rummag Auto-Smelts Its Own Website Bugs" />
+  <meta name="twitter:title" content="The Loop That Never Ends — How TheProject Auto-Smelts Its Own Website Bugs" />
   <meta name="twitter:description" content="A real-world case study of Plan Forge's closed-loop pipeline applied to a production website audit." />
   <link rel="canonical" href="https://planforge.software/blog/the-loop-that-never-ends.html" />
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
     "@type": "BlogPosting",
-    "headline": "The Loop That Never Ends — How Rummag Auto-Smelts Its Own Website Bugs",
+    "headline": "The Loop That Never Ends — How TheProject Auto-Smelts Its Own Website Bugs",
     "description": "A real-world case study: turning a static website audit into a closed-loop execution pipeline with a 4-pass discovery harness feeding the Crucible.",
     "url": "https://planforge.software/blog/the-loop-that-never-ends.html",
     "datePublished": "2026-04-23",
@@ -87,7 +87,7 @@
         <span class="text-xs text-slate-500">April 23, 2026 · 8 min read</span>
       </div>
       <h1 class="text-4xl md:text-5xl font-black text-white mb-6 leading-tight">The Loop That Never Ends</h1>
-      <p class="text-xl text-slate-400 mb-8 leading-relaxed">How Rummag turned a website audit into a self-smelting pipeline — and why every failed test now becomes the next plan slice.</p>
+      <p class="text-xl text-slate-400 mb-8 leading-relaxed">How TheProject turned a website audit into a self-smelting pipeline — and why every failed test now becomes the next plan slice.</p>
       <div class="flex items-center gap-3 mb-10 pb-10 border-b border-slate-800/60">
         <img src="https://github.com/srnichols.png" alt="Scott Nichols" class="w-10 h-10 rounded-full border border-slate-700" loading="lazy" />
         <div>
@@ -105,9 +105,9 @@
 
         <p>This post is about what happens when you stop treating bugs as interruptions and start treating them as <strong>new ore</strong>.</p>
 
-        <h2>The Project: Rummag</h2>
+        <h2>The Project: TheProject</h2>
 
-        <p>Rummag is a production Next.js site I maintain — marketing pages, a product catalog, a handful of interactive demos. Like most sites that grow organically, it had accumulated the usual rot: placeholder copy that never got replaced, stale <code>/docs</code> routes, console errors nobody noticed, <code>href="#"</code> waiting to be wired up.</p>
+        <p>TheProject is a production Next.js site I maintain — marketing pages, a product catalog, a handful of interactive demos. Like most sites that grow organically, it had accumulated the usual rot: placeholder copy that never got replaced, stale <code>/docs</code> routes, console errors nobody noticed, <code>href="#"</code> waiting to be wired up.</p>
 
         <p>I could have sat down with a checklist. Instead, I wired it into Plan Forge's closed loop.</p>
 
@@ -333,7 +333,7 @@
             <text x="457" y="152" text-anchor="middle" fill="#fbbf24" font-family="Inter,sans-serif" font-size="10" font-style="italic" font-weight="600">scope-ambiguous</text>
             <text x="455" y="220" text-anchor="middle" fill="#64748b" font-family="Inter,sans-serif" font-size="10" font-style="italic" font-weight="600">harness-tuning</text>
           </svg>
-          <figcaption class="text-xs text-slate-500 text-center mt-2 italic">One real Rummag audit: 69 findings in, 4 defects to the registry, 7 feature patterns to the Crucible, 58 hits filtered. The Crucible only sees scope-ambiguous work.</figcaption>
+          <figcaption class="text-xs text-slate-500 text-center mt-2 italic">One real TheProject audit: 69 findings in, 4 defects to the registry, 7 feature patterns to the Crucible, 58 hits filtered. The Crucible only sees scope-ambiguous work.</figcaption>
         </figure>
 
         <p>The bug lane skips the Crucible entirely because bugs aren't <em>ideas</em> — they have evidence, they have scope, they don't need an interview. Route them straight to the registry and let auto-smelt fix them in a single pass. The Crucible gets the lane it was built for: scope-ambiguous feature work that needs hardening before it can be executed.</p>
@@ -397,7 +397,7 @@
           <li>If clean, PR opens; if not, auto-smelt again</li>
         </ol>
 
-        <p>I stopped maintaining a manual TODO list for Rummag two weeks ago. The loop found 23 placeholders I didn't know existed, 7 broken links from a migration last month, and a console error in the checkout flow that had been silently firing for weeks. It's still finding things — slower now, but steady.</p>
+        <p>I stopped maintaining a manual TODO list for TheProject two weeks ago. The loop found 23 placeholders I didn't know existed, 7 broken links from a migration last month, and a console error in the checkout flow that had been silently firing for weeks. It's still finding things — slower now, but steady.</p>
 
         <h2>What Makes This Work</h2>
 
@@ -413,7 +413,7 @@
 
         <h2>The Pattern Generalizes</h2>
 
-        <p>Rummag is a website, but the pattern isn't website-specific. Replace "discovery harness" with any tool that emits structured findings:</p>
+        <p>TheProject is a website, but the pattern isn't website-specific. Replace "discovery harness" with any tool that emits structured findings:</p>
 
         <ul>
           <li><strong>A .NET API</strong>: Roslyn analyzer runs → emits JSON of violations → Crucible smelts → plan fixes → tempering re-runs the analyzer</li>

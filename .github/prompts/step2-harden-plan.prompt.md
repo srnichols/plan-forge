@@ -117,6 +117,7 @@ Every gate command MUST be cross-platform. Apply these rules when writing gates:
 | **No `//` comments in `node -e`** | `node -e "const x=1; // comment"` | Remove comments — `//` swallows the rest of a one-liner |
 | **No `--grep` with vitest** | `npx vitest run --grep "pattern"` | Run the full suite: `bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"` |
 | **No `pforge` CLI in gates** | `pforge runbook plan.md` | `pwsh ./pforge.ps1 runbook plan.md` or rewrite as `node -e` |
+| **No `pforge analyze` in gates** | `pforge analyze docs/plans/Phase-X.md` | Omit — the orchestrator auto-runs analyze post-execution. Use `pforge regression-guard <plan>` if you need a doc-integrity gate. `pforge analyze` exits 1 on noisy text-match coverage heuristics and reliably false-negatives Slice 5 recursive-hardening gates (observed on Phases 38.1-38.8). |
 | **No multi-line `node -e`** | `node -e "\n import(...)...\n"` | Collapse to single line |
 | **No `cat FILE`** | `cat VERSION` | `node -e "console.log(require('fs').readFileSync('VERSION','utf8').trim())"` |
 | **`npx vitest` from project root** | `npx vitest run` (picks up wrong version) | `bash -c "cd pforge-mcp && npx vitest run"` |

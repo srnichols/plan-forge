@@ -4663,6 +4663,20 @@ export function lintGateCommands(planFilePath, cwd = process.cwd()) {
         });
       }
 
+      // 6. `pforge analyze <plan>` in gates — reliably false-negatives on noisy
+      // text-match test-coverage heuristic. Observed Slice 5 failure on all 8
+      // Phase-38.x plans. Orchestrator auto-runs analyze post-execution, so the
+      // in-gate call is redundant. Use `pforge regression-guard` for doc checks.
+      if (/\bpforge\s+analyze\b/.test(line)) {
+        warnings.push({
+          slice: slice.number,
+          command: line,
+          rule: "pforge-analyze-in-gate",
+          severity: "warn",
+          message: `${loc}: 'pforge analyze' in a gate exits 1 on noisy text-match heuristics (false-negatived all Phase-38.1–38.8 Slice 5 gates). Omit it — the orchestrator auto-runs analyze post-execution. Use 'pforge regression-guard <plan>' for a doc-integrity check instead.`,
+        });
+      }
+
       // 6. Unix-only commands (not available in cmd.exe on Windows)
       if (UNIX_TOOLS.includes(cmdToken) && !/^bash\s+-c/.test(line)) {
         warnings.push({

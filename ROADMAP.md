@@ -23,7 +23,7 @@ Previous: **v2.73.0**(2026-04-23) — Forge-Master Cross-Session Recall (Phase-3
 
 Previous: **v2.72.0** (2026-04-25) — Forge-Master Conversation Memory (Phase-38.1). Adds file-based JSONL session persistence to the Forge-Master reasoning engine. `runTurn` loads prior conversation turns before classification and persists each turn to disk. Per-tab session IDs flow from the dashboard (`sessionStorage` UUID) through `x-pforge-session-id` HTTP header to `deps.sessionId` in `runTurn`. Sessions auto-rotate at 200 turns. New CLI: `pforge fm-session list|purge`.
 
-**In flight (next)**: Phase-38.8 Slice 5 — Recursive Test-Hardening. Load simulation, failure injection, probe regression, embedding cache hardening.
+**In flight (next)**: Phase-38 series complete (v2.72.0 → v2.79.0). Next phase TBD — candidates: gate-template hardening (eliminate Slice 5 false-negatives), embedding fallback hardening (first-class WASM model), Forge-Master unified timeline.
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 

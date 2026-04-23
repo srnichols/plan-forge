@@ -25,3 +25,6 @@
 *.jpg binary
 *.gif binary
 *.ico binary
+
+pforge text eol=lf
+

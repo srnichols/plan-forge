@@ -30,6 +30,7 @@ import { resolveAllowlist, USAGE_HINTS } from "./allowlist.mjs";
 import { invokeMany } from "./tool-bridge.mjs";
 import { ensureSessionId, appendTurn, summarizeIfNeeded } from "./persistence.mjs";
 import { loadPrinciples, UNIVERSAL_BASELINE } from "./principles.mjs";
+import { resolveModel, VALID_TIERS } from "./reasoning-tier.mjs";
 import * as githubCopilotProvider from "./providers/github-copilot-tools.mjs";
 
 // ─── Constants ──────────────────────────────────────────────────────
@@ -38,6 +39,13 @@ export const ABSOLUTE_CEILING = 10;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SYSTEM_PROMPT_PATH = resolve(__dirname, "system-prompt.md");
+
+// Ordered from highest to lowest for tier fallback traversal
+const TIER_ORDER = ["high", "medium", "low"];
+function nextTier(tier) {
+  const idx = TIER_ORDER.indexOf(tier);
+  return idx >= 0 && idx < TIER_ORDER.length - 1 ? TIER_ORDER[idx + 1] : null;
+}
 
 // ─── Provider Selection ─────────────────────────────────────────────
 
@@ -173,6 +181,8 @@ function loadSystemPrompt(contextBlock, principlesBlock) {
  *   sessionId?: string,
  *   maxToolCalls?: number,
  *   cwd?: string,
+ *   tier?: "low"|"medium"|"high",
+ *   model?: string,
  * }} input
  * @param {{
  *   provider?: { sendTurn: Function },
@@ -191,12 +201,27 @@ function loadSystemPrompt(contextBlock, principlesBlock) {
  *   totalCostUSD: number,
  *   truncated: boolean,
  *   error?: string,
+ *   requestedTier: string|null,
+ *   resolvedModel: string|null,
+ *   fallbackFromTier: string|null,
+ *   escalated: boolean,
  * }>}
  */
 export async function runTurn(input, deps = {}) {
   const { message, cwd } = input;
   const config = getForgeMasterConfig({ cwd });
   const effectiveSessionId = ensureSessionId(input.sessionId);
+
+  // ── Tier / model resolution ───────────────────────────────────────
+  // Explicit `input.model` takes precedence and bypasses tier logic entirely.
+  const inputModel = typeof input.model === "string" ? input.model : null;
+  const rawInputTier = input.tier ?? null;
+  const requestedTier = !inputModel && rawInputTier && VALID_TIERS.includes(rawInputTier)
+    ? rawInputTier
+    : (!inputModel && config.defaultTier ? config.defaultTier : null);
+  let currentTier = requestedTier;
+  let currentModel = inputModel ?? resolveModel(currentTier, config);
+  let fallbackFromTier = null;
 
   const effectiveMaxToolCalls = Math.min(
     input.maxToolCalls ?? config.maxToolCalls,
@@ -220,6 +245,10 @@ export async function runTurn(input, deps = {}) {
       totalCostUSD: 0,
       truncated: false,
       sessionId: effectiveSessionId,
+      requestedTier,
+      resolvedModel: currentModel,
+      fallbackFromTier: null,
+      escalated: false,
     };
   }
 
@@ -273,6 +302,10 @@ export async function runTurn(input, deps = {}) {
         error: "no provider available",
         suggestion: NO_PROVIDER_SUGGESTION,
         sessionId: effectiveSessionId,
+        requestedTier,
+        resolvedModel: currentModel,
+        fallbackFromTier: null,
+        escalated: false,
       };
     }
   }
@@ -304,25 +337,60 @@ export async function runTurn(input, deps = {}) {
     iterationCount++;
 
     let response;
-    try {
-      response = await provider.sendTurn({
-        messages: conversationMessages,
-        tools: toolSchemas,
-        model: config.reasoningModel,
-        apiKey: apiKey || "",
-        signal: undefined,
-      });
-    } catch (err) {
-      return {
-        reply: finalReply,
-        toolCalls: allToolCalls,
-        tokensIn: totalTokensIn,
-        tokensOut: totalTokensOut,
-        totalCostUSD: 0,
-        truncated: false,
-        error: `reasoning_model_unavailable`,
-        sessionId: effectiveSessionId,
-      };
+    // Provider call with tier-based fallback on HTTP 429 (type: "rate_limited").
+    // On each rate_limited response, descend one tier (high→medium→low).
+    // If no lower tier is available, surface a structured rate_limited error.
+    for (;;) {
+      try {
+        response = await provider.sendTurn({
+          messages: conversationMessages,
+          tools: toolSchemas,
+          model: currentModel,
+          apiKey: apiKey || "",
+          signal: undefined,
+        });
+      } catch (err) {
+        return {
+          reply: finalReply,
+          toolCalls: allToolCalls,
+          tokensIn: totalTokensIn,
+          tokensOut: totalTokensOut,
+          totalCostUSD: 0,
+          truncated: false,
+          error: `reasoning_model_unavailable`,
+          sessionId: effectiveSessionId,
+          requestedTier,
+          resolvedModel: currentModel,
+          fallbackFromTier,
+          escalated: false,
+        };
+      }
+
+      if (response.type === "rate_limited") {
+        const next = nextTier(currentTier);
+        if (next) {
+          if (!fallbackFromTier) fallbackFromTier = currentTier;
+          currentTier = next;
+          currentModel = resolveModel(currentTier, config);
+          continue;
+        }
+        // No lower tier available — surface the error
+        return {
+          reply: "",
+          toolCalls: allToolCalls,
+          tokensIn: totalTokensIn,
+          tokensOut: totalTokensOut,
+          totalCostUSD: 0,
+          truncated: false,
+          error: "rate_limited",
+          sessionId: effectiveSessionId,
+          requestedTier,
+          resolvedModel: currentModel,
+          fallbackFromTier,
+          escalated: false,
+        };
+      }
+      break;
     }
 
     totalTokensIn += response.tokensIn || 0;
@@ -445,5 +513,9 @@ export async function runTurn(input, deps = {}) {
     totalCostUSD: 0,
     truncated,
     sessionId: effectiveSessionId,
+    requestedTier,
+    resolvedModel: currentModel,
+    fallbackFromTier,
+    escalated: false,
   };
 }

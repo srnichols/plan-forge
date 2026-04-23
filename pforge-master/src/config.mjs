@@ -33,6 +33,9 @@ export const FORGE_MASTER_DEFAULTS = Object.freeze({
   sessionRetentionDays: 14,
   l3Enabled: false,
   discoverExtensionTools: true,
+  reasoningTiers: Object.freeze({ low: null, medium: null, high: null }),
+  defaultTier: null,
+  autoEscalate: false,
 });
 
 const VALID_PROVIDERS = new Set(["githubCopilot", "anthropic", "openai", "xai"]);
@@ -77,6 +80,9 @@ function resolveReasoningProvider(forgeMasterBlock, resolvedModel) {
  *   sessionRetentionDays: number,
  *   l3Enabled: boolean,
  *   discoverExtensionTools: boolean,
+ *   reasoningTiers: { low: string|null, medium: string|null, high: string|null },
+ *   defaultTier: "low"|"medium"|"high"|null,
+ *   autoEscalate: boolean,
  * }}
  */
 export function getForgeMasterConfig({ cwd = process.cwd() } = {}) {
@@ -124,6 +130,22 @@ export function getForgeMasterConfig({ cwd = process.cwd() } = {}) {
       ? block.defaultProvider
       : FORGE_MASTER_DEFAULTS.defaultProvider;
 
+  const reasoningTiers = {
+    low: typeof block?.reasoningTiers?.low === "string" ? block.reasoningTiers.low : null,
+    medium: typeof block?.reasoningTiers?.medium === "string" ? block.reasoningTiers.medium : null,
+    high: typeof block?.reasoningTiers?.high === "string" ? block.reasoningTiers.high : null,
+  };
+
+  const VALID_TIER_VALUES = ["low", "medium", "high"];
+  const defaultTier =
+    (typeof block?.defaultTier === "string" && VALID_TIER_VALUES.includes(block.defaultTier))
+      ? block.defaultTier
+      : FORGE_MASTER_DEFAULTS.defaultTier;
+
+  const autoEscalate = typeof block?.autoEscalate === "boolean"
+    ? block.autoEscalate
+    : FORGE_MASTER_DEFAULTS.autoEscalate;
+
   return {
     reasoningModel,
     reasoningProvider,
@@ -134,5 +156,8 @@ export function getForgeMasterConfig({ cwd = process.cwd() } = {}) {
     sessionRetentionDays,
     l3Enabled,
     discoverExtensionTools,
+    reasoningTiers,
+    defaultTier,
+    autoEscalate,
   };
 }

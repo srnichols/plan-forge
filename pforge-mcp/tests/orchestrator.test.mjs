@@ -1028,7 +1028,7 @@ describe("loadQuorumConfig", () => {
     expect(config.enabled).toBe(false);
     expect(config.auto).toBe(true);
     expect(config.threshold).toBe(3);
-    expect(config.reviewerModel).toBe("claude-opus-4.6");
+    expect(config.reviewerModel).toBe("claude-opus-4.7");
     expect(config.dryRunTimeout).toBe(300_000);
   });
 

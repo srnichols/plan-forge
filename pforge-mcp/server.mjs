@@ -4551,7 +4551,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       // suggestedModels from .forge.json quorum.models (config is source of truth)
       const qConfig = loadQuorumConfig(cwd);
-      const suggestedModels = (qConfig.models || ["claude-opus-4.6", "grok-4.20", "gemini-3-pro-preview"]).slice(0, quorumSize);
+      const suggestedModels = (qConfig.models || ["claude-opus-4.7", "grok-4.20", "gemini-3-pro-preview"]).slice(0, quorumSize);
 
       // promptTokenEstimate
       const promptTokenEstimate = Math.ceil(quorumPrompt.length / 4);
@@ -6442,7 +6442,7 @@ export function createExpressApp() {
     }
   });
 
-  // REST API: GET /api/replay/:runIdx/:sliceId — session replay log 
+  // REST API: GET /api/replay/:runIdx/:sliceId — session replay log
   app.get("/api/replay/:runIdx/:sliceId", (req, res) => {
     try {
       const runsDir = resolve(PROJECT_DIR, ".forge", "runs");
@@ -7140,7 +7140,7 @@ export function createExpressApp() {
       const quorumPrompt = `## Context\n${contextStr}\n\n## Question\n${questionUsed}\n\n## Voting Instruction\n${votingInstruction}`;
 
       const qConfig = loadQuorumConfig(PROJECT_DIR);
-      const suggestedModels = (qConfig.models || ["claude-opus-4.6", "grok-4.20", "gemini-3-pro-preview"]).slice(0, quorumSize);
+      const suggestedModels = (qConfig.models || ["claude-opus-4.7", "grok-4.20", "gemini-3-pro-preview"]).slice(0, quorumSize);
       const promptTokenEstimate = Math.ceil(quorumPrompt.length / 4);
 
       let dataSnapshotAge = "unknown";
@@ -7215,7 +7215,7 @@ export function createExpressApp() {
       const quorumPrompt = `## Context\n${contextStr}\n\n## Question\n${questionUsed}\n\n## Voting Instruction\n${votingInstruction}`;
 
       const qConfig = loadQuorumConfig(PROJECT_DIR);
-      const suggestedModels = (qConfig.models || ["claude-opus-4.6", "grok-4.20", "gemini-3-pro-preview"]).slice(0, quorumSize);
+      const suggestedModels = (qConfig.models || ["claude-opus-4.7", "grok-4.20", "gemini-3-pro-preview"]).slice(0, quorumSize);
       const promptTokenEstimate = Math.ceil(quorumPrompt.length / 4);
 
       let dataSnapshotAge = "unknown";

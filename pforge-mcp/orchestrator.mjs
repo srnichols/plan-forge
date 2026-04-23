@@ -1430,7 +1430,7 @@ export function spawnWorker(prompt, options = {}) {
         `Model "${model}" is routed through the ${apiProvider.label} API which cannot execute ` +
         `tool calls or edit files. ${apiProvider.label} models are valid for reviewer, analysis, ` +
         `and quorum roles — not as a primary code-writing worker. ` +
-        `For code, use claude-sonnet-4.6 (via gh-copilot) or claude-opus-4.6 (via claude CLI).`
+        `For code, use claude-sonnet-4.6 (via gh-copilot) or claude-opus-4.7 (via claude CLI).`
       );
     }
     return callApiWorker(prompt, model, apiProvider, { timeout, role });
@@ -3193,9 +3193,10 @@ function loadMaxRetries(cwd) {
 
 /**
  * Load escalation chain from .forge.json.
- * Schema: { "escalationChain": ["auto", "claude-opus-4.6", "gpt-5.3-codex"] }
+ * Schema: { "escalationChain": ["auto", "claude-opus-4.7", "gpt-5.3-codex"] }
  * On each retry, the orchestrator escalates to the next model in the chain.
- * First escalation jumps to top-tier reasoning (Opus), then to Codex for bug-fixing.
+ * First escalation jumps to top-tier reasoning (Opus 4.7 — strongest reasoner
+ * for hard bugs), then to Codex for bug-fixing.
  * @returns {string[]}
  */
 function loadEscalationChain(cwd) {
@@ -3236,7 +3237,7 @@ function loadEscalationChain(cwd) {
     }
   } catch { /* fall through to static default */ }
 
-  return ["auto", "claude-opus-4.6", "gpt-5.3-codex"];
+  return ["auto", "claude-opus-4.7", "gpt-5.3-codex"];
 }
 
 // ─── Phase-25 Slice 4: Adaptive gate synthesis (L6) ──────────────────
@@ -6072,7 +6073,7 @@ async function executeSlice(slice, options) {
   const { cwd, model, modelRouting = {}, mode, runDir, maxRetries = 1,
     memoryEnabled = false, projectName = "", planName = "",
     quorumConfig = null,
-    escalationChain = ["auto", "claude-opus-4.6", "gpt-5.3-codex"],
+    escalationChain = ["auto", "claude-opus-4.7", "gpt-5.3-codex"],
     eventBus = null } = options;
   const startTime = Date.now();
   const resolvedModel = resolveModel(model, modelRouting, slice);
@@ -8723,8 +8724,8 @@ export function loadQuorumConfig(cwd, presetOverride = null) {
     // qualify — matching the intent of "complex slices get multi-model review".
     // See docs/research/complexity-threshold-v2.65.md for full analysis.
     threshold: 3,
-    models: ["claude-opus-4.6", "gpt-5.3-codex", "grok-4.20-0309-reasoning"],
-    reviewerModel: "claude-opus-4.6",
+    models: ["claude-opus-4.7", "gpt-5.3-codex", "grok-4.20-0309-reasoning"],
+    reviewerModel: "claude-opus-4.7",
     dryRunTimeout: 300_000, // 5 min per dry-run leg
     strictAvailability: false, // H.3: true = fast-fail if any model unavailable
   };

@@ -264,7 +264,7 @@ export async function runTurn(input, deps = {}) {
     keywordOnly: deps.forceKeywordOnly || false,
     callApiWorker: deps.callApiWorker,
     detectApiProvider: deps.detectApiProvider,
-    priorTurns, // forward-compat: intent-router will use in a later phase
+    priorTurns,
   });
 
   // Notify observer (non-fatal — SSE/observability hook)

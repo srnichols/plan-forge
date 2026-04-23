@@ -337,13 +337,25 @@ User message: `;
 /**
  * Call the router model for ambiguous classification.
  * @param {string} message
- * @param {{ callApiWorker: Function, routerModel: string, routerProvider: object }} deps
+ * @param {{ callApiWorker: Function, routerModel: string, routerProvider: object, priorTurns?: object[] }} deps
  * @returns {Promise<string|null>} lane name or null on failure
  */
 async function callRouterModel(message, deps) {
   try {
+    let prompt = ROUTER_PROMPT;
+    if (deps.priorTurns && deps.priorTurns.length > 0) {
+      const contextLines = deps.priorTurns
+        .slice(-5)
+        .map(t => (t.userMessage || "").trim().slice(0, 100))
+        .filter(Boolean)
+        .map(m => `- ${JSON.stringify(m)}`)
+        .join("\n");
+      if (contextLines) {
+        prompt = `Recent conversation (last user messages):\n${contextLines}\n\n${ROUTER_PROMPT}`;
+      }
+    }
     const result = await deps.callApiWorker(
-      ROUTER_PROMPT + JSON.stringify(message),
+      prompt + JSON.stringify(message),
       deps.routerModel,
       deps.routerProvider,
       { timeout: 15_000, role: "forge-master-router" },
@@ -386,7 +398,8 @@ async function callRouterModel(message, deps) {
  *   cwd?: string,
  *   callApiWorker?: Function,
  *   detectApiProvider?: Function,
- *   keywordOnly?: boolean,  — when true, skip stage-2 router-model entirely
+ *   keywordOnly?: boolean,   — when true, skip stage-2 router-model entirely
+ *   priorTurns?: object[],   — recent session turns for context-aware routing
  * }} [opts]
  * @returns {Promise<{
  *   lane: string,
@@ -430,6 +443,7 @@ export async function classify(message, opts = {}) {
         callApiWorker: opts.callApiWorker,
         routerModel: config.routerModel,
         routerProvider,
+        priorTurns: opts.priorTurns,
       });
 
       if (modelLane) {

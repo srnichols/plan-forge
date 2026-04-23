@@ -7,6 +7,22 @@
 
 // ─── State ────────────────────────────────────────────────────────────
 
+// Persistent file-based session ID — one per browser tab, survives page reload.
+// Uses sessionStorage so different tabs get different IDs.
+const FM_TAB_SESSION_ID = (() => {
+  try {
+    let id = sessionStorage.getItem("fm-session");
+    if (!id) {
+      id = crypto.randomUUID();
+      sessionStorage.setItem("fm-session", id);
+    }
+    return id;
+  } catch {
+    // Fallback for environments without sessionStorage (tests, non-browser)
+    return crypto.randomUUID ? crypto.randomUUID() : null;
+  }
+})();
+
 const fm = {
   sessionId: null,
   catalog: null,
@@ -136,7 +152,10 @@ async function forgeMasterSend() {
   try {
     const res = await fetch("/api/forge-master/chat", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(FM_TAB_SESSION_ID ? { "x-pforge-session-id": FM_TAB_SESSION_ID } : {}),
+      },
       body: JSON.stringify({ message, sessionId: fm.sessionId }),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);

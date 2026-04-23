@@ -5,12 +5,13 @@
  * module as well as any express-compatible app object.
  *
  * Routes:
- *   GET  /api/forge-master/prompts         — prompt catalog
- *   GET  /api/forge-master/sessions        — recent sessions list
- *   GET  /api/forge-master/capabilities    — server capabilities
- *   POST /api/forge-master/chat            — start a chat session
- *   GET  /api/forge-master/chat/:id/stream — SSE stream
- *   POST /api/forge-master/chat/:id/approve — resolve approval
+ *   GET  /api/forge-master/prompts           — prompt catalog
+ *   GET  /api/forge-master/sessions          — recent sessions list
+ *   GET  /api/forge-master/capabilities      — server capabilities
+ *   POST /api/forge-master/chat              — start a chat session
+ *   GET  /api/forge-master/chat/:id/stream   — SSE stream
+ *   POST /api/forge-master/chat/:id/approve  — resolve approval
+ *   GET  /api/forge-master/session/:id       — last 10 turns for a session
  *
  * @module forge-master/http-routes
  */
@@ -24,6 +25,7 @@ import { createSseStream } from "./sse.mjs";
 import { BASE_ALLOWLIST, WRITE_ALLOWLIST } from "./allowlist.mjs";
 import { createHttpDispatcher, invokeForgeTool } from "./http-dispatcher.mjs";
 import { VALID_TIERS } from "./reasoning-tier.mjs";
+import { loadSession } from "./session-store.mjs";
 import { randomUUID } from "node:crypto";
 
 const sessions = new Map();
@@ -131,7 +133,8 @@ function _registerExpress(app, dispatcher) {
     if (!message) return res.status(400).json({ error: "message required" });
     const sessionId = reqSessionId || randomUUID();
     const keywordOnly = req.headers["x-pforge-keyword-only"] === "1";
-    sessions.set(sessionId, { createdAt: new Date().toISOString(), lastMessage: message, keywordOnly });
+    const fmSessionId = req.headers["x-pforge-session-id"] || null;
+    sessions.set(sessionId, { createdAt: new Date().toISOString(), lastMessage: message, keywordOnly, fmSessionId });
     res.json({
       sessionId,
       streamUrl: `/api/forge-master/chat/${sessionId}/stream?message=${encodeURIComponent(message)}`,
@@ -149,6 +152,7 @@ function _registerExpress(app, dispatcher) {
         { message, sessionId },
         {
           dispatcher,
+          sessionId: session.fmSessionId || null,
           forceKeywordOnly: session.keywordOnly || false,
           onClassification: (data) => { sse.send("classification", data); },
         },
@@ -175,6 +179,16 @@ function _registerExpress(app, dispatcher) {
     gate({ decision, editedArgs });
     pendingApprovals.delete(approvalId);
     res.json({ ok: true, approvalId, decision });
+  });
+
+  app.get("/api/forge-master/session/:id", async (req, res) => {
+    const { id } = req.params;
+    try {
+      const turns = await loadSession(id, process.cwd());
+      res.json({ sessionId: id, turns: turns.slice(-10) });
+    } catch {
+      res.json({ sessionId: id, turns: [] });
+    }
   });
 
   app.use("/api/forge-master", (req, res) => {
@@ -251,7 +265,8 @@ function _buildNodeHandler(dispatcher) {
       if (!message) return json(res, 400, { error: "message required" });
       const sessionId = reqSessionId || randomUUID();
       const keywordOnly = req.headers["x-pforge-keyword-only"] === "1";
-      sessions.set(sessionId, { createdAt: new Date().toISOString(), lastMessage: message, keywordOnly });
+      const fmSessionId = req.headers["x-pforge-session-id"] || null;
+      sessions.set(sessionId, { createdAt: new Date().toISOString(), lastMessage: message, keywordOnly, fmSessionId });
       return json(res, 200, {
         sessionId,
         streamUrl: `/api/forge-master/chat/${sessionId}/stream?message=${encodeURIComponent(message)}`,
@@ -271,6 +286,7 @@ function _buildNodeHandler(dispatcher) {
           { message, sessionId },
           {
             dispatcher,
+            sessionId: session.fmSessionId || null,
             forceKeywordOnly: session.keywordOnly || false,
             onClassification: (data) => { sse.send("classification", data); },
           },
@@ -300,6 +316,18 @@ function _buildNodeHandler(dispatcher) {
       gate({ decision, editedArgs });
       pendingApprovals.delete(approvalId);
       return json(res, 200, { ok: true, approvalId, decision });
+    }
+
+    // GET /api/forge-master/session/:id
+    const sessionMatch = path.match(/^\/api\/forge-master\/session\/([^/]+)$/);
+    if (method === "GET" && sessionMatch) {
+      const id = sessionMatch[1];
+      try {
+        const turns = await loadSession(id, process.cwd());
+        return json(res, 200, { sessionId: id, turns: turns.slice(-10) });
+      } catch {
+        return json(res, 200, { sessionId: id, turns: [] });
+      }
     }
 
     return json(res, 404, { error: "not found" });

@@ -7,9 +7,11 @@
 
 ## Current Release
 
-**v2.68.0** (2026-04-22) — Forge-Master Reasoning Dial (Phase-34). Three-tier reasoning dial (Fast / Balanced / Deep) added to the Forge-Master dashboard. `reasoning-tier.mjs` resolves tier → model without exposing model names in the UI. Auto-escalation default-on for `tempering`, `principle-judgment`, and `meta-bug-triage` lanes. 429 graceful degradation: `high → medium → low` fallback chain with turn-trace fields. `GET/PUT /api/forge-master/prefs` REST endpoints. Opt-out via `forgeMaster.autoEscalate = false`.
+**v2.68.1** (2026-04-22) — Windows Gate Bash Dispatch Hotfix (Phase-34.1, closes #94 #95). Orchestrator now detects Unix-shell commands in gate strings and auto-wraps them in `bash -c "..."` on Windows when Git for Windows bash is available; falls back to plain `cmd.exe` dispatch otherwise. Fixes silent gate failures on Windows where `grep`/`test`/`sed` commands were passed raw to `cmd.exe`. Phase-34.1 shipped.
 
-Previous: v2.67.0 (2026-04-22) — Zero-Key Forge-Master via GitHub Models (Phase-33). New `github-copilot-tools.mjs` provider adapter targets `https://models.github.ai/inference` and authenticates via `GITHUB_TOKEN` / `gh auth login` — no third-party API key required. Provider-selection order flipped to `githubCopilot → anthropic → openai → xai`. `GITHUB_TOKEN` is now the first entry in the dashboard secrets UI. Skippable smoke test guards against regressions without breaking CI.
+Previous: v2.68.0 (2026-04-22) — Forge-Master Reasoning Dial (Phase-34). Three-tier reasoning dial (Fast / Balanced / Deep) added to the Forge-Master dashboard. `reasoning-tier.mjs` resolves tier → model without exposing model names in the UI. Auto-escalation default-on for `tempering`, `principle-judgment`, and `meta-bug-triage` lanes. 429 graceful degradation: `high → medium → low` fallback chain with turn-trace fields. `GET/PUT /api/forge-master/prefs` REST endpoints. Opt-out via `forgeMaster.autoEscalate = false`.
+
+Previous: v2.67.0 (2026-04-22) — Zero-Key Forge-Master via GitHub Models (Phase-33).New `github-copilot-tools.mjs` provider adapter targets `https://models.github.ai/inference` and authenticates via `GITHUB_TOKEN` / `gh auth login` — no third-party API key required. Provider-selection order flipped to `githubCopilot → anthropic → openai → xai`. `GITHUB_TOKEN` is now the first entry in the dashboard secrets UI. Skippable smoke test guards against regressions without breaking CI.
 
 Previous: v2.66.0 (2026-04-22) — Forge-Master Advisory Mode (Phase-32). Event-delegated prompt gallery, intent-router glossary expanded (9+ keyword families), advisory lane with `LANES.ADVISORY`, `principles.mjs` UNIVERSAL_BASELINE, `{principles_block}` in system prompt.
 

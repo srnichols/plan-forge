@@ -102,6 +102,12 @@ After all sections are drafted, run a **PLAN QUALITY SELF-CHECK** before outputt
 Gate commands run via `execSync` on the host OS — on Windows this means `cmd.exe`, not bash.
 Every gate command MUST be cross-platform. Apply these rules when writing gates:
 
+> **Windows + Git for Windows note**: If the user has Git for Windows installed, the orchestrator
+> auto-wraps gate commands that contain Unix-shell syntax (`grep`, `test`, `sed`, `awk`, `cat`, etc.)
+> in `bash -c "..."` automatically. In that case, Unix-shell gates work fine. Without Git for Windows,
+> only `node`, `npx`, and `npm` commands are safe in gates on Windows — use `node -e` one-liners
+> for all non-vitest checks.
+
 | Rule | Bad | Good |
 |------|-----|------|
 | **No Unix-only commands** | `grep -c "foo" file.md` | `node -e "const c=require('fs').readFileSync('file.md','utf8');if(!c.includes('foo'))throw new Error('missing');console.log('ok');"` |

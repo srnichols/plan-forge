@@ -7,7 +7,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-## [2.68.0] — 2026-04-22 — Forge-Master Reasoning Dial (Phase-34)
+## [2.68.1] — 2026-04-22 — Windows gate bash dispatch hotfix
+
+> **Hotfix — Windows users whose gate commands use Unix-shell tools (`grep`, `test`, `sed`, etc.) were silently failing because the orchestrator dispatched gates through `cmd.exe` instead of bash.**
+
+On Windows, the orchestrator's `execSync` call went directly to `cmd.exe`, which doesn't recognise Unix shell commands. The fix (Phase-34.1, closes [#94](../../issues/94) and [#95](../../issues/95)) teaches the orchestrator to detect Unix-shell syntax in gate command strings and auto-wrap them in `bash -c "..."` when Git for Windows bash is on `PATH`; if bash is absent the command is dispatched as-is (existing `node`/`npx`/`npm` gates are unaffected). The `step2-harden-plan.prompt.md` plan-authoring guidance now explicitly documents this behaviour so authors know they can safely write `grep`/`sed`/`test` gates when Git for Windows is available, and should fall back to `node -e` one-liners otherwise.
+
+## [2.68.0]— 2026-04-22 — Forge-Master Reasoning Dial (Phase-34)
 
 > **Forge-Master gains a reasoning dial: Fast / Balanced / Deep, no API key required for any tier.**
 

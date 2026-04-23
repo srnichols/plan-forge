@@ -118,10 +118,9 @@
         <figure class="my-8 not-prose">
           <svg viewBox="0 0 780 440" class="w-full rounded-xl border border-slate-700/50 bg-slate-950" role="img" aria-label="Plan Forge closed loop: Discovery -> Crucible -> Harden -> Execute -> Tempering -> Bug Registry -> back to Discovery">
             <defs>
-              <marker id="arr-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#fbbf24"/></marker>
-              <marker id="arr-emerald" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#34d399"/></marker>
-              <marker id="arr-rose" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#fb7185"/></marker>
-              <filter id="glow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+              <marker id="arr-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#fbbf24"/></marker>
+              <marker id="arr-emerald" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#34d399"/></marker>
+              <marker id="arr-rose" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#fb7185"/></marker>
             </defs>
 
             <!-- Top row: Discovery -> Crucible -> Harden -->
@@ -165,24 +164,24 @@
               <text x="660" y="373" text-anchor="middle" fill="#e2e8f0" font-family="JetBrains Mono,monospace" font-size="11">+ test gates</text>
             </g>
 
-            <!-- Arrows top row -->
-            <line x1="220" y1="90" x2="285" y2="90" stroke="#fbbf24" stroke-width="2" marker-end="url(#arr-amber)" filter="url(#glow)"/>
-            <text x="252" y="82" text-anchor="middle" fill="#94a3b8" font-family="Inter,sans-serif" font-size="10" font-style="italic">finds</text>
-            <line x1="490" y1="90" x2="555" y2="90" stroke="#fbbf24" stroke-width="2" marker-end="url(#arr-amber)" filter="url(#glow)"/>
+            <!-- Arrows top row (Discovery -> Crucible -> Harden) -->
+            <line x1="220" y1="90" x2="282" y2="90" stroke="#fbbf24" stroke-width="2.5" marker-end="url(#arr-amber)"/>
+            <text x="251" y="82" text-anchor="middle" fill="#cbd5e1" font-family="Inter,sans-serif" font-size="11" font-style="italic">finds</text>
+            <line x1="490" y1="90" x2="552" y2="90" stroke="#fbbf24" stroke-width="2.5" marker-end="url(#arr-amber)"/>
 
             <!-- Right side: Harden -> Execute -->
-            <line x1="660" y1="140" x2="660" y2="295" stroke="#fbbf24" stroke-width="2" marker-end="url(#arr-amber)" filter="url(#glow)"/>
-            <text x="670" y="220" fill="#94a3b8" font-family="Inter,sans-serif" font-size="10" font-style="italic">ship</text>
+            <line x1="660" y1="140" x2="660" y2="292" stroke="#fbbf24" stroke-width="2.5" marker-end="url(#arr-amber)"/>
+            <text x="670" y="220" fill="#cbd5e1" font-family="Inter,sans-serif" font-size="11" font-style="italic">ship</text>
 
-            <!-- Arrows bottom row (right to left) -->
-            <line x1="555" y1="350" x2="495" y2="350" stroke="#34d399" stroke-width="2" marker-end="url(#arr-emerald)" filter="url(#glow)"/>
-            <text x="525" y="342" text-anchor="middle" fill="#94a3b8" font-family="Inter,sans-serif" font-size="10" font-style="italic">green</text>
-            <line x1="285" y1="350" x2="225" y2="350" stroke="#fb7185" stroke-width="2" marker-end="url(#arr-rose)" filter="url(#glow)"/>
-            <text x="255" y="342" text-anchor="middle" fill="#94a3b8" font-family="Inter,sans-serif" font-size="10" font-style="italic">fails</text>
+            <!-- Arrows bottom row (Execute -> Tempering -> Bug Registry, right to left) -->
+            <line x1="558" y1="350" x2="492" y2="350" stroke="#34d399" stroke-width="2.5" marker-end="url(#arr-emerald)"/>
+            <text x="525" y="342" text-anchor="middle" fill="#cbd5e1" font-family="Inter,sans-serif" font-size="11" font-style="italic">green</text>
+            <line x1="288" y1="350" x2="222" y2="350" stroke="#fb7185" stroke-width="2.5" marker-end="url(#arr-rose)"/>
+            <text x="255" y="342" text-anchor="middle" fill="#cbd5e1" font-family="Inter,sans-serif" font-size="11" font-style="italic">fails</text>
 
-            <!-- Left back-edge: Bug Registry up to Discovery -->
-            <path d="M 120 295 L 120 145" stroke="#fb7185" stroke-width="2" fill="none" stroke-dasharray="6 4" marker-end="url(#arr-rose)" filter="url(#glow)"/>
-            <text x="12" y="220" fill="#fb7185" font-family="Inter,sans-serif" font-size="10" font-style="italic" font-weight="600">auto-smelt</text>
+            <!-- Left back-edge: Bug Registry up to Discovery (the loop closing) -->
+            <path d="M 120 295 L 120 148" stroke="#fb7185" stroke-width="2.5" fill="none" stroke-dasharray="7 5" marker-end="url(#arr-rose)"/>
+            <text x="12" y="218" fill="#fb7185" font-family="Inter,sans-serif" font-size="11" font-style="italic" font-weight="700">auto-smelt</text>
             <text x="12" y="234" fill="#94a3b8" font-family="Inter,sans-serif" font-size="10" font-style="italic">(new ore)</text>
 
             <!-- Title -->

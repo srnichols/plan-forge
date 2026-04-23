@@ -8,7 +8,7 @@
 
 .PARAMETER Preset
     One or more tech stack presets. Accepts a single value or a comma-separated list.
-    Valid values: dotnet, typescript, python, java, go, swift, azure-iac, custom
+    Valid values: dotnet, typescript, python, java, go, swift, rust, php, azure-iac, custom
     Example: -Preset azure-iac                  (IaC-only repo)
     Example: -Preset dotnet,azure-iac           (app with infra folder)
 
@@ -967,7 +967,7 @@ if ($Preset.Count -eq 1 -and $Preset[0] -match ',') {
     $Preset = $Preset[0] -split ',' | ForEach-Object { $_.Trim() }
 }
 
-$validPresets = @('dotnet','typescript','python','java','go','swift','azure-iac','custom')
+$validPresets = @('dotnet','typescript','python','java','go','swift','rust','php','azure-iac','custom')
 foreach ($p in $Preset) {
     if ($p -notin $validPresets) {
         Write-Host "  ERROR  Unknown preset '$p'. Valid values: $($validPresets -join ', ')" -ForegroundColor Red

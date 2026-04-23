@@ -7,7 +7,7 @@
 #   ./setup.sh                  # Interactive mode
 #   ./setup.sh --force          # Overwrite existing files
 #
-# Presets: dotnet, typescript, python, java, go, swift, azure-iac, custom
+# Presets: dotnet, typescript, python, java, go, swift, rust, php, azure-iac, custom
 
 set -euo pipefail
 
@@ -39,7 +39,7 @@ while [[ $# -gt 0 ]]; do
         --force|-f)   FORCE=true; shift ;;
         --auto-detect|-a) AUTO_DETECT=true; shift ;;
         --help|-h)
-            echo "Usage: ./setup.sh [--preset dotnet|typescript|python|java|go|swift|azure-iac|custom] [--path DIR] [--name NAME] [--agent copilot|claude|cursor|codex|gemini|generic|all] [--generic-dir DIR] [--force] [--auto-detect]"
+            echo "Usage: ./setup.sh [--preset dotnet|typescript|python|java|go|swift|rust|php|azure-iac|custom] [--path DIR] [--name NAME] [--agent copilot|claude|cursor|codex|gemini|generic|all] [--generic-dir DIR] [--force] [--auto-detect]"
             exit 0 ;;
         *) red "Unknown option: $1"; exit 1 ;;
     esac
@@ -987,7 +987,7 @@ for i in "${!PRESETS[@]}"; do
     PRESETS[$i]="$(echo "${PRESETS[$i]}" | tr -d ' ')"
 done
 
-VALID_PRESETS=(dotnet typescript python java go swift azure-iac custom)
+VALID_PRESETS=(dotnet typescript python java go swift rust php azure-iac custom)
 for p in "${PRESETS[@]}"; do
     valid=false
     for v in "${VALID_PRESETS[@]}"; do [[ "$p" == "$v" ]] && valid=true && break; done

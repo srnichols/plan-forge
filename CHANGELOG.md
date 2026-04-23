@@ -56,8 +56,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [2.73.0] — 2026-04-23 — Forge-Master Cross-Session Recall (Phase-38.2)
 
-> **Phase-38.2 — BM25 recall index over past fm-sessions for cross-session memory.**  
-> `runTurn` now queries a BM25 index over all prior conversation turns for operational, troubleshoot, and advisory lanes, injecting the top-3 related turns as advisory context into the system prompt.  
+> **Phase-38.2 — BM25 recall index over past fm-sessions for cross-session memory.**
+> `runTurn` now queries a BM25 index over all prior conversation turns for operational, troubleshoot, and advisory lanes, injecting the top-3 related turns as advisory context into the system prompt.
 > Recall is non-fatal — index failure always degrades gracefully without affecting the turn.
 
 ### Added
@@ -81,8 +81,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [2.72.0] — 2026-04-25 — Forge-Master Conversation Memory (Phase-38.1)
 
-> **Phase-38.1 — File-based conversation memory for Forge-Master.**  
-> Adds JSONL session persistence so `runTurn` loads prior turns before classification and persists each turn to disk.  
+> **Phase-38.1 — File-based conversation memory for Forge-Master.**
+> Adds JSONL session persistence so `runTurn` loads prior turns before classification and persists each turn to disk.
 > Per-tab session IDs flow from the dashboard through the HTTP layer to the reasoning engine.
 
 ### Added
@@ -106,8 +106,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 — 2026-04-24 — Forge-Master Hammer Harness (Phase-37.2)
 
-> **Phase-37.2 — Hammer harness for end-to-end Forge-Master testing.**  
-> Adds `scripts/hammer-fm.mjs`, four bundled scenario packs, and `pforge hammer-fm` CLI surface.  
+> **Phase-37.2 — Hammer harness for end-to-end Forge-Master testing.**
+> Adds `scripts/hammer-fm.mjs`, four bundled scenario packs, and `pforge hammer-fm` CLI surface.
 > Replaces ad-hoc probe scripts with a repeatable, scored harness.
 
 ### Added
@@ -2394,7 +2394,7 @@ Second of three beta drops on the path to v2.36.0. This one tightens the
     failures (default 5) the record moves to `.forge/openbrain-dlq.jsonl`.
   - `partitionByBackoff(records, now)` — splits eligible records from those still
     waiting on backoff.
-  
+
   These are the building blocks a drain worker (or the existing `SessionStart`
   hook) will wire in a follow-up beta.
 

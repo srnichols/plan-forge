@@ -1,0 +1,17 @@
+#!/usr/bin/env sh
+# Plan Forge — postSlice hook (Phase-38.3)
+#
+# Invoked after each slice commit to rebuild the knowledge graph snapshot.
+# Wired via .forge.json hooks.postSlice or by installing as a git post-commit hook.
+#
+# Usage (git hook install):
+#   cp .github/hooks/postSlice .git/hooks/post-commit && chmod +x .git/hooks/post-commit
+
+set -e
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+GRAPH_SCRIPT="$REPO_ROOT/scripts/graph.mjs"
+
+if [ -f "$GRAPH_SCRIPT" ]; then
+  node "$GRAPH_SCRIPT" rebuild
+fi

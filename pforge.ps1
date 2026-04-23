@@ -98,6 +98,9 @@ function Show-Help {
     Write-Host "  fm-session purge --all       Purge all sessions"
     Write-Host "  fm-recall query <text>       Query the cross-session recall index (top-3 results)"
     Write-Host "  fm-recall rebuild            Rebuild the recall index from all fm-sessions"
+    Write-Host "  graph rebuild                Rebuild the knowledge graph snapshot"
+    Write-Host "  graph stats                  Print node count by type from graph snapshot"
+    Write-Host "  graph query [type]           Query the knowledge graph (phase, file, recent-changes, neighbors)"
     Write-Host "  help              Show this help message"
     Write-Host ""
     Write-Host "OPTIONS:" -ForegroundColor Yellow
@@ -5629,6 +5632,16 @@ function Invoke-FmRecall {
     node $scriptPath @Arguments
 }
 
+# ─── Command: graph ────────────────────────────────────────────────
+function Invoke-Graph {
+    $scriptPath = Join-Path $RepoRoot "scripts/graph.mjs"
+    if (-not (Test-Path $scriptPath)) {
+        Write-Host "ERROR: graph script not found at $scriptPath" -ForegroundColor Red
+        exit 1
+    }
+    node $scriptPath @Arguments
+}
+
 # ─── Command: fm-session ───────────────────────────────────────────
 function Invoke-FmSession {
     $sub = if ($Arguments.Count -gt 0) { $Arguments[0] } else { "" }
@@ -5738,6 +5751,7 @@ switch ($Command) {
     'hammer-fm'    { Invoke-HammerFm }
     'fm-session'   { Invoke-FmSession }
     'fm-recall'    { Invoke-FmRecall }
+    'graph'        { Invoke-Graph }
     'help'         { Show-Help }
     ''             { Show-Help }
     '--help'       { Show-Help }

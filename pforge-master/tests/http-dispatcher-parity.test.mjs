@@ -59,6 +59,7 @@ const ASYNC_TOOLS = new Set([
   "forge_alert_triage",
   "forge_memory_report",
   "forge_search",
+  "forge_graph_query",
 ]);
 
 /**

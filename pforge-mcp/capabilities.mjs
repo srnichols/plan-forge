@@ -1459,6 +1459,28 @@ export const TOOL_METADATA = {
       output: { ok: true, issueNumber: 42, url: "https://github.com/owner/repo/issues/42", deduped: false },
     },
   },
+  // Phase-38.3 — Knowledge graph query
+  forge_graph_query: {
+    intent: ["graph", "query", "knowledge-graph", "artifacts", "relationships"],
+    aliases: ["graph-query", "kg-query", "forge-graph"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "2.74.0",
+    prerequisites: [],
+    produces: [],
+    consumes: [".forge/graph/snapshot.json", "docs/plans/", ".forge/runs/", ".forge/bugs/"],
+    sideEffects: [],
+    writesFiles: false,
+    network: false,
+    risk: "low",
+    errors: {
+      ERR_BAD_TYPE: { message: "Unknown query type", recovery: "Use phase, file, recent-changes, or neighbors" },
+    },
+    example: {
+      input: { type: "recent-changes", since: "30d" },
+      output: { nodes: [{ id: "commit-abc123", type: "Commit", name: "feat(graph): add builder" }], edges: [], nodeCount: 1, edgeCount: 0 },
+    },
+  },
 };
 
 export const WORKFLOWS = {

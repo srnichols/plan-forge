@@ -1456,6 +1456,22 @@ const TOOLS = [
       },
     },
   },
+  // Phase-38.3 — Knowledge graph query tool
+  {
+    name: "forge_graph_query",
+    description: "Query the Plan Forge knowledge graph. Returns subgraph of nodes and edges matching the query. Supports phase, file, recent-changes, and neighbor traversal queries.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        type: { type: "string", enum: ["phase", "file", "recent-changes", "neighbors"], description: "Query type" },
+        filter: { type: "string", description: "Phase name, file path, node ID, or keyword depending on query type" },
+        since: { type: "string", description: "ISO timestamp or relative (90d, 30d, 7d) for recent-changes queries" },
+        edgeType: { type: "string", description: "Filter neighbors by edge type (optional)" },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+      required: ["type"],
+    },
+  },
 ];
 
 function planNameToRunbookName(planPath) {
@@ -1631,6 +1647,7 @@ function executeTool(name, args) {
     case "forge_testbed_happypath":
     case "forge_master_ask":
     case "forge_meta_bug_file":
+    case "forge_graph_query":
       return null; // Handled async in CallToolRequestSchema handler
     default:
       return { success: false, error: `Unknown tool: ${name}` };
@@ -5004,6 +5021,32 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
   }
 
+  // ─── forge_graph_query — knowledge graph query (Phase-38.3) ───
+  if (name === "forge_graph_query") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const { queryByPhase, queryByFile, queryRecentChanges, neighbors } = await import("./graph/query.mjs");
+      const queryType = args.type || "recent-changes";
+      let result;
+      if (queryType === "phase") {
+        result = queryByPhase(args.filter || "", { projectDir: cwd });
+      } else if (queryType === "file") {
+        result = queryByFile(args.filter || "", { projectDir: cwd });
+      } else if (queryType === "neighbors") {
+        result = neighbors(args.filter || "", { projectDir: cwd, edgeType: args.edgeType });
+      } else {
+        result = queryRecentChanges({ since: args.since, type: args.filter }, { projectDir: cwd });
+      }
+      emitToolTelemetry("forge_graph_query", args, result, Date.now() - t0, "OK", cwd);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      const durationMs = Date.now() - t0;
+      emitToolTelemetry("forge_graph_query", args, { error: err.message }, durationMs, "ERROR", findProjectRoot(PROJECT_DIR));
+      return { content: [{ type: "text", text: `Graph query error: ${err.message}` }], isError: true };
+    }
+  }
+
   // ─── Sync pforge tools ───
   const result = executeTool(name, args || {});
 
@@ -6432,6 +6475,8 @@ export function createExpressApp() {
     "forge_testbed_happypath",
     // Phase-28.3 Slice 03 — Self-repair meta-bug filer is MCP-native.
     "forge_meta_bug_file",
+    // Phase-38.3 — Knowledge graph query is MCP-native.
+    "forge_graph_query",
   ]);
   app.post("/api/tool/:name", async (req, res) => {
     try {

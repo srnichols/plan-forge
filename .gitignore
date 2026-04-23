@@ -54,6 +54,9 @@ GEMINI.md
 docs/plans/auto/*
 !docs/plans/auto/README.md
 
+# Phase-38.3 knowledge graph snapshot (runtime artifact, not source-controlled)
+.forge/graph/
+
 # Testbed findings (local audit trail, not repo history)
 docs/plans/testbed-findings/*.json
 

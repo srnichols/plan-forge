@@ -74,6 +74,9 @@ export const BASE_ALLOWLIST = Object.freeze([
   // Ops reads
   // "forge_runbook",          // removed in Phase-37.1 — no MCP handler
   // "forge_deploy_journal",   // removed in Phase-37.1 — no MCP handler
+
+  // Phase-38.3 — Knowledge graph (advisory lane only)
+  "forge_graph_query",
 ]);
 
 /**
@@ -176,6 +179,7 @@ export const USAGE_HINTS = Object.freeze({
   forge_ext_info:         "Get detailed info about a specific extension.",
   forge_runbook:          "Read the project runbook — operational procedures, escalation paths.",
   forge_deploy_journal:   "Read the deploy journal — recent deployments, rollbacks, incidents.",
+  forge_graph_query:      "Query the knowledge graph — phases, slices, commits, files, bugs, runs, and their relationships.",
 });
 
 // ─── Dynamic Extension-Tool Discovery ───────────────────────────────

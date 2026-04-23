@@ -7,7 +7,9 @@
 
 ## Current Release
 
-**v2.73.0** (2026-04-23) — Forge-Master Cross-Session Recall (Phase-38.2). Adds a BM25 recall index over all past `fm-session` JSONL files. `runTurn` now queries the index for operational, troubleshoot, and advisory lanes and injects the top-3 related prior turns as `> **Recall (advisory):**` advisory context. Index stored at `.forge/fm-sessions/recall-index.json` with lazy daily refresh. New CLI: `pforge fm-recall query|rebuild`. Dashboard renders "Related conversations" collapsible section when recall results are present.
+**v2.74.0** (2026-04-23) — Plan Forge Knowledge Graph (Phase-38.3). Adds a queryable in-memory knowledge graph over Plan Forge artifacts. New `forge_graph_query` MCP tool (advisory lane only) covers Phase, Slice, Commit, File, Bug, and Run nodes with typed edges. Snapshot persisted atomically to `.forge/graph/snapshot.json`. New CLI: `pforge graph rebuild|stats|query`.
+
+Previous: **v2.73.0** (2026-04-23) — Forge-Master Cross-Session Recall (Phase-38.2). Adds a BM25 recall index over all past `fm-session` JSONL files. `runTurn` now queries the index for operational, troubleshoot, and advisory lanes and injects the top-3 related prior turns as `> **Recall (advisory):**` advisory context. Index stored at `.forge/fm-sessions/recall-index.json` with lazy daily refresh. New CLI: `pforge fm-recall query|rebuild`. Dashboard renders "Related conversations" collapsible section when recall results are present.
 
 Previous: **v2.72.0** (2026-04-25) — Forge-Master Conversation Memory (Phase-38.1). Adds file-based JSONL session persistence to the Forge-Master reasoning engine. `runTurn` loads prior conversation turns before classification and persists each turn to disk. Per-tab session IDs flow from the dashboard (`sessionStorage` UUID) through `x-pforge-session-id` HTTP header to `deps.sessionId` in `runTurn`. Sessions auto-rotate at 200 turns. New CLI: `pforge fm-session list|purge`.
 
@@ -29,7 +31,7 @@ Previous: v2.65.1 (2026-04-22) — version-bump architectural rebuild (Phase-31.
 
 Previous: v2.63.1 (Phase-28.5 tempering mtime sort + docs nav hover fix), v2.63.0 (Phase-29 Forge-Master Studio dashboard tab + routes + CLI), v2.62.x (Forge-Master MVP, worker role guardrails, self-repair capture, OpenBrain queue drain), v2.61.0 (Phase-27.2 cost projection UI + per-slice estimator).
 
-**In flight (next)**: Phase-38.3 — Forge-Master Knowledge Graph. Candidates: graph nodes for plans/bugs/memory artifacts, graph traversal tools, VS Code LM adapter for Forge-Master, Team Mode (v3.1).
+**In flight (next)**: Phase-38.4 — Team Mode (v3.1). Candidates: multi-user plan coordination, VS Code LM adapter for Forge-Master, shared graph annotations.
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 

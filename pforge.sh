@@ -78,6 +78,9 @@ COMMANDS:
   fm-session purge --all       Purge all sessions
   fm-recall query <text>       Query the cross-session recall index (top-3 results)
   fm-recall rebuild            Rebuild the recall index from all fm-sessions
+  graph rebuild                Rebuild the knowledge graph snapshot
+  graph stats                  Print node count by type from graph snapshot
+  graph query [type]           Query the knowledge graph (phase, file, recent-changes, neighbors)
   version-bump <v>  Update VERSION, package.json, docs/README/ROADMAP version badges to v<version>
   migrate-memory    Merge legacy *-history.json ledgers into canonical .jsonl siblings (idempotent)
   drain-memory      Drain pending OpenBrain queue records to the configured OpenBrain server
@@ -4945,6 +4948,16 @@ cmd_fm_recall() {
     node "$script_path" "$@"
 }
 
+# ─── Command: graph ────────────────────────────────────────────────
+cmd_graph() {
+    local script_path="$REPO_ROOT/scripts/graph.mjs"
+    if [[ ! -f "$script_path" ]]; then
+        echo "ERROR: graph script not found at $script_path" >&2
+        exit 1
+    fi
+    node "$script_path" "$@"
+}
+
 # ─── Command: hammer-fm ────────────────────────────────────────────
 cmd_hammer_fm() {
     local script_path="$REPO_ROOT/scripts/hammer-fm.mjs"
@@ -5002,6 +5015,7 @@ case "$COMMAND" in
     hammer-fm)    cmd_hammer_fm "$@" ;;
     fm-session)   cmd_fm_session "$@" ;;
     fm-recall)    cmd_fm_recall "$@" ;;
+    graph)        cmd_graph "$@" ;;
     help|--help)  show_help ;;
     *)
         echo "ERROR: Unknown command '$COMMAND'" >&2

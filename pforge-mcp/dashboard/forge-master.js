@@ -58,6 +58,12 @@ window.forgeMasterNewChat = (...args) => forgeMasterNewChat(...args);
 window.forgeMasterSend = (...args) => forgeMasterSend(...args);
 window.forgeMasterFilterGallery = (...args) => forgeMasterFilterGallery(...args);
 window.forgeMasterRenderRelatedConversations = (...args) => forgeMasterRenderRelatedConversations(...args);
+window.forgeMasterRenderCostMeter = () => forgeMasterRenderCostMeter();
+/** Test helper — sets chat cost state then re-renders the meter. */
+window._forgeMasterSetChatCost = (usd, tokensIn, tokensOut) => {
+  fm.chatCost = { usd, tokensIn, tokensOut };
+  forgeMasterRenderCostMeter();
+};
 
 // ─── Init ─────────────────────────────────────────────────────────────
 

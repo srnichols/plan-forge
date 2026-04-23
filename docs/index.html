@@ -95,6 +95,14 @@
     /* Active nav */
     nav a.nav-active { color: #f59e0b !important; }
 
+    /* Nav dropdown — click-controlled (see inline script below).
+       The dropdown <div> has Tailwind's `grid` class for its open layout,
+       which defaults to display:grid. We force it hidden and only show it
+       when JS adds .nav-dropdown-open to the trigger wrapper.
+       !important is required to beat Tailwind's `.grid` utility. */
+    .nav-dropdown-trigger > .nav-dropdown { display: none !important; }
+    .nav-dropdown-trigger.nav-dropdown-open > .nav-dropdown { display: grid !important; }
+
     /* Copy feedback */
     .copy-btn.copied { color: #34d399 !important; }
 

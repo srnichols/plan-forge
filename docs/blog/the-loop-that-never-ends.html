@@ -99,6 +99,8 @@
       <!-- Content -->
       <div class="blog-content">
 
+        <img src="assets/loop-never-ends-hero.webp" alt="A forge smith watching a glowing ouroboros of molten metal circle around an anvil, with scrolls of bug reports being consumed by the flame and re-emerging as pristine blueprints" class="w-full rounded-2xl border border-slate-700/40 shadow-2xl shadow-emerald-500/10 mb-10" onerror="this.style.display='none'" />
+
         <p>Most pipelines end. You ship, you close the PR, you move on. Then two weeks later a customer reports a broken link, a <code>Coming soon</code> that never came, or a <code>TODO</code> hiding in the FAQ. You open a ticket. You context-switch. You rebuild the mental model of what <em>should</em> be there.</p>
 
         <p>This post is about what happens when you stop treating bugs as interruptions and start treating them as <strong>new ore</strong>.</p>
@@ -113,18 +115,81 @@
 
         <p>Plan Forge has a 7-step pipeline, but drawing it as a straight line has always been a simplification. The <em>real</em> shape is circular:</p>
 
-        <pre class="bg-slate-950 border border-slate-700/50 rounded-lg p-4 text-xs text-slate-300 overflow-x-auto leading-relaxed"><code>┌─ DISCOVERY ──────┐       ┌─ CRUCIBLE ──────┐       ┌─ HARDEN ─────────┐
-│ content audit   │──────▶│ forge_crucible_ │──────▶│ Phase-NN plan    │
-│ + route crawl   │ finds │ submit (agent)  │       │ + Scope Contract │
-│ + placeholder   │       └─────────────────┘       └──────────────────┘
-│   regex         │                                          │
-└─────────────────┘                                          ▼
-        ▲                  ┌─ TEMPERING ─────┐       ┌─ EXECUTE ────────┐
-        │                  │ forge_tempering │◀──────│ slice-by-slice   │
-  ┌─ BUG REGISTRY ──┐      │ _run            │ green │ + test gates     │
-  │ auto-smelt loop │◀─────└─────────────────┘       └──────────────────┘
-  └─────────────────┘  fails
-</code></pre>
+        <figure class="my-8 not-prose">
+          <svg viewBox="0 0 780 440" class="w-full rounded-xl border border-slate-700/50 bg-slate-950" role="img" aria-label="Plan Forge closed loop: Discovery -> Crucible -> Harden -> Execute -> Tempering -> Bug Registry -> back to Discovery">
+            <defs>
+              <marker id="arr-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#fbbf24"/></marker>
+              <marker id="arr-emerald" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#34d399"/></marker>
+              <marker id="arr-rose" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#fb7185"/></marker>
+              <filter id="glow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+            </defs>
+
+            <!-- Top row: Discovery -> Crucible -> Harden -->
+            <g>
+              <rect x="20" y="40" width="200" height="100" rx="10" fill="#451a03" fill-opacity="0.35" stroke="#b45309" stroke-width="1.5"/>
+              <text x="120" y="66" text-anchor="middle" fill="#fbbf24" font-family="Inter,sans-serif" font-size="12" font-weight="700">DISCOVERY</text>
+              <text x="120" y="90" text-anchor="middle" fill="#e2e8f0" font-family="JetBrains Mono,monospace" font-size="11">content audit</text>
+              <text x="120" y="107" text-anchor="middle" fill="#e2e8f0" font-family="JetBrains Mono,monospace" font-size="11">+ route crawl</text>
+              <text x="120" y="124" text-anchor="middle" fill="#e2e8f0" font-family="JetBrains Mono,monospace" font-size="11">+ placeholder regex</text>
+            </g>
+            <g>
+              <rect x="290" y="40" width="200" height="100" rx="10" fill="#451a03" fill-opacity="0.35" stroke="#b45309" stroke-width="1.5"/>
+              <text x="390" y="66" text-anchor="middle" fill="#fbbf24" font-family="Inter,sans-serif" font-size="12" font-weight="700">CRUCIBLE</text>
+              <text x="390" y="96" text-anchor="middle" fill="#e2e8f0" font-family="JetBrains Mono,monospace" font-size="11">forge_crucible_submit</text>
+              <text x="390" y="113" text-anchor="middle" fill="#94a3b8" font-family="JetBrains Mono,monospace" font-size="10">(agent)</text>
+            </g>
+            <g>
+              <rect x="560" y="40" width="200" height="100" rx="10" fill="#451a03" fill-opacity="0.35" stroke="#b45309" stroke-width="1.5"/>
+              <text x="660" y="66" text-anchor="middle" fill="#fbbf24" font-family="Inter,sans-serif" font-size="12" font-weight="700">HARDEN</text>
+              <text x="660" y="96" text-anchor="middle" fill="#e2e8f0" font-family="JetBrains Mono,monospace" font-size="11">Phase-NN plan</text>
+              <text x="660" y="113" text-anchor="middle" fill="#e2e8f0" font-family="JetBrains Mono,monospace" font-size="11">+ Scope Contract</text>
+            </g>
+
+            <!-- Bottom row: Bug Registry <- Tempering <- Execute -->
+            <g>
+              <rect x="20" y="300" width="200" height="100" rx="10" fill="#4c0519" fill-opacity="0.35" stroke="#be123c" stroke-width="1.5"/>
+              <text x="120" y="326" text-anchor="middle" fill="#fb7185" font-family="Inter,sans-serif" font-size="12" font-weight="700">BUG REGISTRY</text>
+              <text x="120" y="356" text-anchor="middle" fill="#e2e8f0" font-family="JetBrains Mono,monospace" font-size="11">auto-smelt loop</text>
+              <text x="120" y="373" text-anchor="middle" fill="#94a3b8" font-family="JetBrains Mono,monospace" font-size="10">(re-enters Discovery)</text>
+            </g>
+            <g>
+              <rect x="290" y="300" width="200" height="100" rx="10" fill="#4c0519" fill-opacity="0.35" stroke="#be123c" stroke-width="1.5"/>
+              <text x="390" y="326" text-anchor="middle" fill="#fb7185" font-family="Inter,sans-serif" font-size="12" font-weight="700">TEMPERING</text>
+              <text x="390" y="356" text-anchor="middle" fill="#e2e8f0" font-family="JetBrains Mono,monospace" font-size="11">forge_tempering_run</text>
+              <text x="390" y="373" text-anchor="middle" fill="#94a3b8" font-family="JetBrains Mono,monospace" font-size="10">(re-audit)</text>
+            </g>
+            <g>
+              <rect x="560" y="300" width="200" height="100" rx="10" fill="#022c22" fill-opacity="0.5" stroke="#047857" stroke-width="1.5"/>
+              <text x="660" y="326" text-anchor="middle" fill="#34d399" font-family="Inter,sans-serif" font-size="12" font-weight="700">EXECUTE</text>
+              <text x="660" y="356" text-anchor="middle" fill="#e2e8f0" font-family="JetBrains Mono,monospace" font-size="11">slice-by-slice</text>
+              <text x="660" y="373" text-anchor="middle" fill="#e2e8f0" font-family="JetBrains Mono,monospace" font-size="11">+ test gates</text>
+            </g>
+
+            <!-- Arrows top row -->
+            <line x1="220" y1="90" x2="285" y2="90" stroke="#fbbf24" stroke-width="2" marker-end="url(#arr-amber)" filter="url(#glow)"/>
+            <text x="252" y="82" text-anchor="middle" fill="#94a3b8" font-family="Inter,sans-serif" font-size="10" font-style="italic">finds</text>
+            <line x1="490" y1="90" x2="555" y2="90" stroke="#fbbf24" stroke-width="2" marker-end="url(#arr-amber)" filter="url(#glow)"/>
+
+            <!-- Right side: Harden -> Execute -->
+            <line x1="660" y1="140" x2="660" y2="295" stroke="#fbbf24" stroke-width="2" marker-end="url(#arr-amber)" filter="url(#glow)"/>
+            <text x="670" y="220" fill="#94a3b8" font-family="Inter,sans-serif" font-size="10" font-style="italic">ship</text>
+
+            <!-- Arrows bottom row (right to left) -->
+            <line x1="555" y1="350" x2="495" y2="350" stroke="#34d399" stroke-width="2" marker-end="url(#arr-emerald)" filter="url(#glow)"/>
+            <text x="525" y="342" text-anchor="middle" fill="#94a3b8" font-family="Inter,sans-serif" font-size="10" font-style="italic">green</text>
+            <line x1="285" y1="350" x2="225" y2="350" stroke="#fb7185" stroke-width="2" marker-end="url(#arr-rose)" filter="url(#glow)"/>
+            <text x="255" y="342" text-anchor="middle" fill="#94a3b8" font-family="Inter,sans-serif" font-size="10" font-style="italic">fails</text>
+
+            <!-- Left back-edge: Bug Registry up to Discovery -->
+            <path d="M 120 295 L 120 145" stroke="#fb7185" stroke-width="2" fill="none" stroke-dasharray="6 4" marker-end="url(#arr-rose)" filter="url(#glow)"/>
+            <text x="12" y="220" fill="#fb7185" font-family="Inter,sans-serif" font-size="10" font-style="italic" font-weight="600">auto-smelt</text>
+            <text x="12" y="234" fill="#94a3b8" font-family="Inter,sans-serif" font-size="10" font-style="italic">(new ore)</text>
+
+            <!-- Title -->
+            <text x="390" y="22" text-anchor="middle" fill="#64748b" font-family="Inter,sans-serif" font-size="11" font-weight="600" letter-spacing="2">THE CLOSED LOOP</text>
+          </svg>
+          <figcaption class="text-xs text-slate-500 text-center mt-2 italic">Amber arrows = forward path. Green = happy path out of Execute. Rose dashed = the loop closing back on itself.</figcaption>
+        </figure>
 
         <p>The back-edges are the point. <strong>Discovery finds problems and funnels them into the Crucible.</strong> <strong>Tempering catches regressions and writes them to the bug registry, which auto-smelts them back into Discovery's next pass.</strong> You don't hit a "done" state — you hit a quiet state. And the next deploy starts the loop again.</p>
 
@@ -142,6 +207,50 @@
         </ul>
 
         <p>That's Pass 1. The output is boring JSON. But it's <em>structured</em> boring JSON, which is the only kind the Crucible can turn into smelts.</p>
+
+        <figure class="my-8 not-prose">
+          <svg viewBox="0 0 780 180" class="w-full rounded-xl border border-slate-700/50 bg-slate-950" role="img" aria-label="4-pass build sequence: Discovery harness, Crucible wrapper, Execute, Auto-smelt">
+            <defs>
+              <marker id="p-arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#fbbf24"/></marker>
+            </defs>
+            <text x="390" y="22" text-anchor="middle" fill="#64748b" font-family="Inter,sans-serif" font-size="11" font-weight="600" letter-spacing="2">THE 4-PASS BUILD</text>
+
+            <!-- Pass 1 -->
+            <g>
+              <circle cx="100" cy="90" r="28" fill="#451a03" fill-opacity="0.5" stroke="#b45309" stroke-width="2"/>
+              <text x="100" y="95" text-anchor="middle" fill="#fbbf24" font-family="Inter,sans-serif" font-size="16" font-weight="800">1</text>
+              <text x="100" y="140" text-anchor="middle" fill="#e2e8f0" font-family="Inter,sans-serif" font-size="12" font-weight="600">Harness</text>
+              <text x="100" y="156" text-anchor="middle" fill="#94a3b8" font-family="JetBrains Mono,monospace" font-size="10">Node + Playwright</text>
+            </g>
+            <line x1="135" y1="90" x2="265" y2="90" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#p-arr)"/>
+
+            <!-- Pass 2 -->
+            <g>
+              <circle cx="300" cy="90" r="28" fill="#451a03" fill-opacity="0.5" stroke="#b45309" stroke-width="2"/>
+              <text x="300" y="95" text-anchor="middle" fill="#fbbf24" font-family="Inter,sans-serif" font-size="16" font-weight="800">2</text>
+              <text x="300" y="140" text-anchor="middle" fill="#e2e8f0" font-family="Inter,sans-serif" font-size="12" font-weight="600">Wrapper</text>
+              <text x="300" y="156" text-anchor="middle" fill="#94a3b8" font-family="JetBrains Mono,monospace" font-size="10">JSON → Crucible</text>
+            </g>
+            <line x1="335" y1="90" x2="465" y2="90" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#p-arr)"/>
+
+            <!-- Pass 3 -->
+            <g>
+              <circle cx="500" cy="90" r="28" fill="#022c22" fill-opacity="0.6" stroke="#047857" stroke-width="2"/>
+              <text x="500" y="95" text-anchor="middle" fill="#34d399" font-family="Inter,sans-serif" font-size="16" font-weight="800">3</text>
+              <text x="500" y="140" text-anchor="middle" fill="#e2e8f0" font-family="Inter,sans-serif" font-size="12" font-weight="600">Execute</text>
+              <text x="500" y="156" text-anchor="middle" fill="#94a3b8" font-family="JetBrains Mono,monospace" font-size="10">slices + temper</text>
+            </g>
+            <line x1="535" y1="90" x2="665" y2="90" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#p-arr)"/>
+
+            <!-- Pass 4 -->
+            <g>
+              <circle cx="700" cy="90" r="28" fill="#4c0519" fill-opacity="0.6" stroke="#be123c" stroke-width="2"/>
+              <text x="700" y="95" text-anchor="middle" fill="#fb7185" font-family="Inter,sans-serif" font-size="16" font-weight="800">4</text>
+              <text x="700" y="140" text-anchor="middle" fill="#e2e8f0" font-family="Inter,sans-serif" font-size="12" font-weight="600">Auto-smelt</text>
+              <text x="700" y="156" text-anchor="middle" fill="#94a3b8" font-family="JetBrains Mono,monospace" font-size="10">no human triage</text>
+            </g>
+          </svg>
+        </figure>
 
         <blockquote><p>A discovery harness that emits prose is a report. A discovery harness that emits structured JSON is <em>fuel</em>.</p></blockquote>
 

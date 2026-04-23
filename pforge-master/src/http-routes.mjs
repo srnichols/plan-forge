@@ -32,7 +32,8 @@ const sessions = new Map();
 const pendingApprovals = new Map();
 
 const PREFS_FILE = ".forge/fm-prefs.json";
-const PREFS_DEFAULTS = { tier: null, autoEscalate: false };
+const VALID_QUORUM_MODES = ["off", "auto", "always"];
+const PREFS_DEFAULTS = { tier: null, autoEscalate: false, quorumAdvisory: "off" };
 
 /**
  * Load Forge-Master user prefs from `<cwd>/.forge/fm-prefs.json`.
@@ -48,7 +49,8 @@ export function loadPrefs(cwd = process.cwd()) {
     const raw = JSON.parse(readFileSync(prefsPath, "utf-8"));
     const tier = raw.tier && VALID_TIERS.includes(raw.tier) ? raw.tier : null;
     const autoEscalate = typeof raw.autoEscalate === "boolean" ? raw.autoEscalate : false;
-    return { tier, autoEscalate };
+    const quorumAdvisory = VALID_QUORUM_MODES.includes(raw.quorumAdvisory) ? raw.quorumAdvisory : "off";
+    return { tier, autoEscalate, quorumAdvisory };
   } catch {
     return { ...PREFS_DEFAULTS };
   }
@@ -119,10 +121,11 @@ function _registerExpress(app, dispatcher) {
   });
 
   app.put("/api/forge-master/prefs", (req, res) => {
-    const { tier, autoEscalate } = req.body || {};
+    const { tier, autoEscalate, quorumAdvisory } = req.body || {};
     const normalized = {
       tier: tier && VALID_TIERS.includes(tier) ? tier : null,
       autoEscalate: typeof autoEscalate === "boolean" ? autoEscalate : false,
+      quorumAdvisory: VALID_QUORUM_MODES.includes(quorumAdvisory) ? quorumAdvisory : "off",
     };
     savePrefs(normalized, process.cwd());
     res.json(normalized);
@@ -145,6 +148,7 @@ function _registerExpress(app, dispatcher) {
     const { sessionId } = req.params;
     const message = req.query.message || "";
     const session = sessions.get(sessionId) || {};
+    const prefs = loadPrefs(process.cwd());
     const sse = createSseStream(res);
     try {
       sse.send("start", { sessionId });
@@ -154,8 +158,10 @@ function _registerExpress(app, dispatcher) {
           dispatcher,
           sessionId: session.fmSessionId || null,
           forceKeywordOnly: session.keywordOnly || false,
+          quorumAdvisory: prefs.quorumAdvisory || "off",
           onClassification: (data) => { sse.send("classification", data); },
           onPlan: (data) => { sse.send("plan", data); },
+          onQuorumEstimate: (data) => { sse.send("quorum-estimate", data); },
         },
       );
       if (result.error) {
@@ -163,7 +169,7 @@ function _registerExpress(app, dispatcher) {
       } else {
         sse.send("reply", { content: result.reply, sessionId });
         for (const tc of result.toolCalls || []) sse.send("tool-call", tc);
-        sse.send("done", { sessionId, tokensIn: result.tokensIn, tokensOut: result.tokensOut, totalCostUSD: result.totalCostUSD || 0, resolvedModel: result.resolvedModel || null, relatedTurns: result.relatedTurns || [] });
+        sse.send("done", { sessionId, tokensIn: result.tokensIn, tokensOut: result.tokensOut, totalCostUSD: result.totalCostUSD || 0, resolvedModel: result.resolvedModel || null, relatedTurns: result.relatedTurns || [], quorumResult: result.quorumResult || null });
       }
     } catch (err) {
       sse.send("error", { error: err.message });
@@ -251,10 +257,11 @@ function _buildNodeHandler(dispatcher) {
 
     if (method === "PUT" && path === "/api/forge-master/prefs") {
       const body = await readBody(req);
-      const { tier, autoEscalate } = body;
+      const { tier, autoEscalate, quorumAdvisory } = body;
       const normalized = {
         tier: tier && VALID_TIERS.includes(tier) ? tier : null,
         autoEscalate: typeof autoEscalate === "boolean" ? autoEscalate : false,
+        quorumAdvisory: VALID_QUORUM_MODES.includes(quorumAdvisory) ? quorumAdvisory : "off",
       };
       savePrefs(normalized, process.cwd());
       return json(res, 200, normalized);
@@ -280,6 +287,7 @@ function _buildNodeHandler(dispatcher) {
       const sessionId = streamMatch[1];
       const message = url.searchParams.get("message") || "";
       const session = sessions.get(sessionId) || {};
+      const prefs = loadPrefs(process.cwd());
       const sse = createSseStream(res);
       try {
         sse.send("start", { sessionId });
@@ -289,8 +297,10 @@ function _buildNodeHandler(dispatcher) {
             dispatcher,
             sessionId: session.fmSessionId || null,
             forceKeywordOnly: session.keywordOnly || false,
+            quorumAdvisory: prefs.quorumAdvisory || "off",
             onClassification: (data) => { sse.send("classification", data); },
             onPlan: (data) => { sse.send("plan", data); },
+            onQuorumEstimate: (data) => { sse.send("quorum-estimate", data); },
           },
         );
         if (result.error) {
@@ -298,7 +308,7 @@ function _buildNodeHandler(dispatcher) {
         } else {
           sse.send("reply", { content: result.reply, sessionId });
           for (const tc of result.toolCalls || []) sse.send("tool-call", tc);
-          sse.send("done", { sessionId, tokensIn: result.tokensIn, tokensOut: result.tokensOut, totalCostUSD: result.totalCostUSD || 0, resolvedModel: result.resolvedModel || null, relatedTurns: result.relatedTurns || [] });
+          sse.send("done", { sessionId, tokensIn: result.tokensIn, tokensOut: result.tokensOut, totalCostUSD: result.totalCostUSD || 0, resolvedModel: result.resolvedModel || null, relatedTurns: result.relatedTurns || [], quorumResult: result.quorumResult || null });
         }
       } catch (err) {
         sse.send("error", { error: err.message });

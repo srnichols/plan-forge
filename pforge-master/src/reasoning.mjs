@@ -36,11 +36,31 @@ import { loadIndex, queryIndex } from "./recall-index.mjs";
 import { loadPrinciples, UNIVERSAL_BASELINE } from "./principles.mjs";
 import { resolveModel, VALID_TIERS } from "./reasoning-tier.mjs";
 import { computeTurnCost } from "./cost.mjs";
+import { dispatchQuorum } from "./quorum-dispatcher.mjs";
 import * as githubCopilotProvider from "./providers/github-copilot-tools.mjs";
 
 // ─── Recall-eligible lanes ────────────────────────────────────────────
 
 const RECALL_LANES = new Set([LANES.OPERATIONAL, LANES.TROUBLESHOOT, LANES.ADVISORY]);
+
+// ─── Quorum advisory — model set for multi-model fan-out ────────────
+
+const QUORUM_MODELS = [
+  { model: "claude-sonnet-4-20250514", provider: "anthropic" },
+  { model: "gpt-5.2", provider: "openai" },
+  { model: "grok-4.20", provider: "xai" },
+];
+
+// Lanes where quorum must NEVER engage (hard guard)
+const QUORUM_BLOCKED_LANES = new Set([
+  LANES.BUILD,
+  LANES.OPERATIONAL,
+  LANES.TROUBLESHOOT,
+  LANES.OFFTOPIC,
+  LANES.TEMPERING,
+  LANES.PRINCIPLE_JUDGMENT,
+  LANES.META_BUG_TRIAGE,
+]);
 
 // ─── Constants ──────────────────────────────────────────────────────
 
@@ -542,6 +562,64 @@ export async function runTurn(input, deps = {}) {
     plannerSynthesis = null;
   }
 
+  // ── 6b. Quorum advisory fan-out ──────────────────────────────────
+  // When quorum advisory mode is enabled, fan out to multiple models
+  // for advisory-lane turns. Hard guard: quorum NEVER fires on
+  // operational, troubleshoot, build, or other non-advisory lanes.
+  let quorumResult = null;
+  const quorumAdvisoryMode = deps.quorumAdvisory || "off";
+
+  if (quorumAdvisoryMode !== "off" && !QUORUM_BLOCKED_LANES.has(classification.lane)) {
+    const shouldEngage =
+      quorumAdvisoryMode === "always" ||
+      (quorumAdvisoryMode === "auto" &&
+        classification.lane === LANES.ADVISORY &&
+        autoEscalated === true &&
+        autoToTier === "high" &&
+        (classification.confidence === "medium" || classification.confidence === "high"));
+
+    if (shouldEngage) {
+      // Estimate cost and emit quorum-estimate SSE event BEFORE dispatch
+      const estimatedCostUSD = QUORUM_MODELS.reduce((sum, m) => {
+        return sum + computeTurnCost(m.model, 500, 500);
+      }, 0);
+
+      try {
+        if (typeof deps.onQuorumEstimate === "function") {
+          deps.onQuorumEstimate({
+            type: "quorum-estimate",
+            models: QUORUM_MODELS.map((m) => m.model),
+            estimatedCostUSD,
+            canCancel: true,
+          });
+        }
+      } catch { /* observer errors must not affect reasoning */ }
+
+      // Dispatch to multiple models in parallel
+      try {
+        quorumResult = await dispatchQuorum({
+          prompt: message,
+          models: QUORUM_MODELS,
+          deps: {
+            selectProvider,
+            systemPrompt,
+            timeoutMs: undefined, // use default 60s
+          },
+        });
+
+        // Accumulate quorum costs
+        if (quorumResult?.replies) {
+          for (const r of quorumResult.replies) {
+            totalCostUSD += r.costUSD || 0;
+          }
+        }
+      } catch {
+        // Quorum failure is non-fatal — fall through to single-model path
+        quorumResult = null;
+      }
+    }
+  }
+
   // ── 7. Tool-use loop ──────────────────────────────────────────────
   const conversationMessages = [
     { role: "system", content: systemPrompt },
@@ -774,5 +852,6 @@ export async function runTurn(input, deps = {}) {
     reason: autoEscalationReason,
     classification: classification ?? null,
     relatedTurns,
+    quorumResult,
   };
 }

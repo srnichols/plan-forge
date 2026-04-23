@@ -82,6 +82,7 @@ export const LANE_TOOLS = Object.freeze({
     "forge_plan_status",
     "forge_cost_report",
     "forge_graph_query",
+    "forge_patterns_list",
   ],
   [LANES.TEMPERING]: [],
   [LANES.PRINCIPLE_JUDGMENT]: [],

@@ -1472,6 +1472,18 @@ const TOOLS = [
       required: ["type"],
     },
   },
+  // Phase-38.6 — Pattern surfacing tool (advisory lane only)
+  {
+    name: "forge_patterns_list",
+    description: "List recurring patterns detected across plan runs. Returns gate-failure recurrences, model failure rates, slice flap patterns, and cost anomalies. Advisory only — never injected into plan hardener or executor.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        since: { type: "string", description: "ISO timestamp — only patterns observed after this date (optional)" },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+    },
+  },
 ];
 
 function planNameToRunbookName(planPath) {
@@ -1648,6 +1660,7 @@ function executeTool(name, args) {
     case "forge_master_ask":
     case "forge_meta_bug_file":
     case "forge_graph_query":
+    case "forge_patterns_list":
       return null; // Handled async in CallToolRequestSchema handler
     default:
       return { success: false, error: `Unknown tool: ${name}` };
@@ -5047,6 +5060,31 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
   }
 
+  // ─── forge_patterns_list — pattern surfacing (Phase-38.6) ───
+  if (name === "forge_patterns_list") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const { runDetectors } = await import("./patterns/registry.mjs");
+      let patterns = await runDetectors({ cwd });
+      if (args.since) {
+        const sinceDate = new Date(args.since);
+        if (!isNaN(sinceDate.getTime())) {
+          patterns = patterns.filter((p) => {
+            if (!p.lastSeen) return true;
+            return new Date(p.lastSeen) >= sinceDate;
+          });
+        }
+      }
+      emitToolTelemetry("forge_patterns_list", args, { count: patterns.length }, Date.now() - t0, "OK", cwd);
+      return { content: [{ type: "text", text: JSON.stringify(patterns, null, 2) }] };
+    } catch (err) {
+      const durationMs = Date.now() - t0;
+      emitToolTelemetry("forge_patterns_list", args, { error: err.message }, durationMs, "ERROR", findProjectRoot(PROJECT_DIR));
+      return { content: [{ type: "text", text: `Pattern list error: ${err.message}` }], isError: true };
+    }
+  }
+
   // ─── Sync pforge tools ───
   const result = executeTool(name, args || {});
 
@@ -6477,6 +6515,8 @@ export function createExpressApp() {
     "forge_meta_bug_file",
     // Phase-38.3 — Knowledge graph query is MCP-native.
     "forge_graph_query",
+    // Phase-38.6 — Pattern list is MCP-native.
+    "forge_patterns_list",
   ]);
   app.post("/api/tool/:name", async (req, res) => {
     try {

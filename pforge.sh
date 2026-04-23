@@ -81,6 +81,7 @@ COMMANDS:
   graph rebuild                Rebuild the knowledge graph snapshot
   graph stats                  Print node count by type from graph snapshot
   graph query [type]           Query the knowledge graph (phase, file, recent-changes, neighbors)
+  patterns list [--since <iso>] List recurring patterns detected across plan runs
   version-bump <v>  Update VERSION, package.json, docs/README/ROADMAP version badges to v<version>
   migrate-memory    Merge legacy *-history.json ledgers into canonical .jsonl siblings (idempotent)
   drain-memory      Drain pending OpenBrain queue records to the configured OpenBrain server
@@ -4960,6 +4961,16 @@ cmd_fm_recall() {
     node "$script_path" "$@"
 }
 
+# ─── Command: patterns ───────────────────────────────────────────
+cmd_patterns() {
+    local script_path="$REPO_ROOT/scripts/patterns.mjs"
+    if [[ ! -f "$script_path" ]]; then
+        echo "ERROR: patterns script not found at $script_path" >&2
+        exit 1
+    fi
+    node "$script_path" "$@"
+}
+
 # ─── Command: graph ────────────────────────────────────────────────
 cmd_graph() {
     local script_path="$REPO_ROOT/scripts/graph.mjs"
@@ -5037,6 +5048,7 @@ case "$COMMAND" in
     hammer-fm)    cmd_hammer_fm "$@" ;;
     fm-session)   cmd_fm_session "$@" ;;
     fm-recall)    cmd_fm_recall "$@" ;;
+    patterns)     cmd_patterns "$@" ;;
     graph)        cmd_graph "$@" ;;
     digest)       cmd_digest "$@" ;;
     help|--help)  show_help ;;

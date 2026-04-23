@@ -101,6 +101,7 @@ function Show-Help {
     Write-Host "  graph rebuild                Rebuild the knowledge graph snapshot"
     Write-Host "  graph stats                  Print node count by type from graph snapshot"
     Write-Host "  graph query [type]           Query the knowledge graph (phase, file, recent-changes, neighbors)"
+    Write-Host "  patterns list [--since <iso>] List recurring patterns detected across plan runs"
     Write-Host "  help              Show this help message"
     Write-Host ""
     Write-Host "OPTIONS:" -ForegroundColor Yellow
@@ -5665,6 +5666,16 @@ function Invoke-Graph {
     node $scriptPath @Arguments
 }
 
+# ─── Command: patterns ─────────────────────────────────────────────
+function Invoke-Patterns {
+    $scriptPath = Join-Path $RepoRoot "scripts/patterns.mjs"
+    if (-not (Test-Path $scriptPath)) {
+        Write-Host "ERROR: patterns script not found at $scriptPath" -ForegroundColor Red
+        exit 1
+    }
+    node $scriptPath @Arguments
+}
+
 # ─── Command: fm-session ───────────────────────────────────────────
 function Invoke-FmSession {
     $sub = if ($Arguments.Count -gt 0) { $Arguments[0] } else { "" }
@@ -5784,6 +5795,7 @@ switch ($Command) {
     'hammer-fm'    { Invoke-HammerFm }
     'fm-session'   { Invoke-FmSession }
     'fm-recall'    { Invoke-FmRecall }
+    'patterns'     { Invoke-Patterns }
     'graph'        { Invoke-Graph }
     'digest'       { Invoke-Digest }
     'help'         { Show-Help }

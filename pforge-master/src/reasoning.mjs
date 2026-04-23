@@ -365,6 +365,29 @@ export async function runTurn(input, deps = {}) {
     }
   }
 
+  // ── 2b. Pattern surfacing (troubleshoot context injection) ─────────
+  // When the troubleshoot lane fires, run pattern detectors over run
+  // history. If ≥ 1 recurring pattern is found, inject summaries into
+  // the context block as advisory observations.
+  // Pattern failure is always non-fatal — it must never fail the turn.
+  let surfacedPatterns = [];
+  if (classification.lane === LANES.TROUBLESHOOT) {
+    try {
+      const detectPatterns = deps.detectPatterns || null;
+      if (typeof detectPatterns === "function") {
+        surfacedPatterns = await detectPatterns({ cwd });
+      }
+    } catch {
+      surfacedPatterns = [];
+    }
+    if (surfacedPatterns.length > 0) {
+      const patternLines = surfacedPatterns.slice(0, 3).map(
+        (p) => `> **Recurring pattern observed:** ${p.title || p.summary || p.id}`
+      );
+      contextBlock = `${contextBlock}\n\n${patternLines.join("\n")}`.trimStart();
+    }
+  }
+
   // Inject prior conversation turns into the context block so the model
   // has awareness of the current session history (user messages only;
   // reply text is not stored — only its hash).

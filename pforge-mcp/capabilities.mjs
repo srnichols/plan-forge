@@ -1987,7 +1987,7 @@ const SYSTEM_REFERENCE = {
   },
 
   pipeline: {
-    description: "6-step planning and execution pipeline with 3-session isolation",
+    description: "7-step planning and execution pipeline with 3-session isolation",
     steps: {
       "Step 0": { name: "Specify", prompt: "step0-specify-feature.prompt.md", agent: "specifier", description: "Define what and why" },
       "Step 1": { name: "Preflight", prompt: "step1-preflight-check.prompt.md", description: "Verify prerequisites" },
@@ -1995,8 +1995,9 @@ const SYSTEM_REFERENCE = {
       "Step 3": { name: "Execute", prompt: "step3-execute-slice.prompt.md", agent: "executor", description: "Build slice-by-slice. Also: pforge run-plan (automated)" },
       "Step 4": { name: "Sweep", prompt: "step4-completeness-sweep.prompt.md", description: "Eliminate TODO/stub/mock markers" },
       "Step 5": { name: "Review", prompt: "step5-review-gate.prompt.md", agent: "reviewer-gate", description: "Independent audit for drift, compliance, quality" },
+      "Step 6": { name: "Ship", prompt: "step6-ship.prompt.md", agent: "shipper", description: "Commit, update roadmap, capture lessons to memory" },
     },
-    sessionIsolation: "Steps 0-2 in Session 1, Steps 3-4 in Session 2, Step 5 in Session 3 (prevents context bleed)",
+    sessionIsolation: "Steps 0-2 in Session 1, Steps 3-4 in Session 2, Step 5 in Session 3, Step 6 in Session 4 (prevents context bleed)",
   },
 
   planFormat: {
@@ -2114,7 +2115,7 @@ const SYSTEM_REFERENCE = {
     "Stop Condition": "A condition that halts execution — e.g., 'If migration fails, STOP'",
 
     // Pipeline
-    "Pipeline": "The 6-step process: Specify → Preflight → Harden → Execute → Sweep → Review",
+    "Pipeline": "The 7-step process: Specify → Preflight → Harden → Execute → Sweep → Review → Ship",
     "Step 0 (Specify)": "Define what and why — structured specification with acceptance criteria",
     "Step 2 (Harden)": "Convert spec into binding execution contract with slices, gates, and scope",
     "Step 3 (Execute)": "Build code slice-by-slice. Can be automated (pforge run-plan) or manual (Agent Mode)",

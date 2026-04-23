@@ -50,7 +50,7 @@ hardened_at: 2026-04-22
 - Any change to the `build`, `operational`, or `troubleshoot` lane tool lists
 - Any write tool in the `advisory` lane
 - Any Crucible interview integration with advisory (Crucible = "what to build"; advisory = "how to decide")
-- Any principles injection into the Plan Forge pipeline prompts (step0–step5)
+- Any principles injection into the Plan Forge pipeline prompts (step0–step6)
 - Any redesign of `forge-master.js` module shape (TypeScript conversion, state-machine refactor, etc.)
 - Any change to `.forge.json` schema validation rules for users automatically — `forgeMaster.philosophy` key is opt-in
 - Any change to provider adapters (`providers/anthropic-tools.mjs` etc.)

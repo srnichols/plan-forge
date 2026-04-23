@@ -2017,7 +2017,12 @@ export function runGate(command, cwd) {
           cwd,
           encoding: "utf-8",
           timeout: gateTimeout,
-          env: { ...process.env, NO_COLOR: "1" },
+          env: {
+            ...process.env,
+            NO_COLOR: "1",
+            // Prepend repo root so bash shims (e.g. `pforge`) are on PATH.
+            PATH: `${cwd}${process.platform === "win32" ? ";" : ":"}${process.env.PATH || ""}`,
+          },
         });
         return { success: true, output: output.trim(), error: "" };
       } catch (err) {

@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Bash shim so `pforge <cmd>` resolves on Git Bash / WSL.
+# Delegates to pforge.sh in the same directory.
+SCRIPT_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+exec bash "$SCRIPT_DIR/pforge.sh" "$@"

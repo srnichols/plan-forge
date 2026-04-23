@@ -2017,6 +2017,7 @@ export function runGate(command, cwd) {
           cwd,
           encoding: "utf-8",
           timeout: gateTimeout,
+          maxBuffer: 16 * 1024 * 1024,
           env: {
             ...process.env,
             NO_COLOR: "1",
@@ -2040,6 +2041,7 @@ export function runGate(command, cwd) {
       cwd,
       encoding: "utf-8",
       timeout: gateTimeout,
+      maxBuffer: 16 * 1024 * 1024,
       env: { ...process.env, NO_COLOR: "1" },
     });
     return { success: true, output: output.trim(), error: "" };

@@ -35,7 +35,7 @@ export const FORGE_MASTER_DEFAULTS = Object.freeze({
   discoverExtensionTools: true,
   reasoningTiers: Object.freeze({ low: null, medium: null, high: null }),
   defaultTier: null,
-  autoEscalate: false,
+  autoEscalate: true,
 });
 
 const VALID_PROVIDERS = new Set(["githubCopilot", "anthropic", "openai", "xai"]);

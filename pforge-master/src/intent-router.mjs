@@ -6,10 +6,14 @@
  *   2. Router-model call (only when keyword match is ambiguous)
  *
  * Lanes:
- *   - build         — user wants to create/add/change a feature → Crucible
- *   - operational    — status, cost, health, memory, watcher queries
- *   - troubleshoot   — bug, incident, failure investigation
- *   - offtopic       — everything outside Plan Forge's domain
+ *   - build              — user wants to create/add/change a feature → Crucible
+ *   - operational        — status, cost, health, memory, watcher queries
+ *   - troubleshoot       — bug, incident, failure investigation
+ *   - offtopic           — everything outside Plan Forge's domain
+ *   - advisory           — architectural guidance and principled recommendations
+ *   - tempering          — tempering gate evaluation and enforcement checks
+ *   - principle-judgment — principled architectural decisions and principle reviews
+ *   - meta-bug-triage    — triage of meta-bugs, self-repair, plan/orchestrator defects
  *
  * Exports:
  *   classify(message, opts?) → {lane, confidence, reason, suggestedTools}
@@ -27,6 +31,9 @@ export const LANES = Object.freeze({
   TROUBLESHOOT: "troubleshoot",
   OFFTOPIC: "offtopic",
   ADVISORY: "advisory",
+  TEMPERING: "tempering",
+  PRINCIPLE_JUDGMENT: "principle-judgment",
+  META_BUG_TRIAGE: "meta-bug-triage",
 });
 
 // ─── Suggested Tools per Lane ───────────────────────────────────────
@@ -75,6 +82,28 @@ export const LANE_TOOLS = Object.freeze({
     "forge_plan_status",
     "forge_cost_report",
   ],
+  [LANES.TEMPERING]: [],
+  [LANES.PRINCIPLE_JUDGMENT]: [],
+  [LANES.META_BUG_TRIAGE]: [],
+});
+
+// ─── Lane Descriptors ────────────────────────────────────────────────
+
+/**
+ * Per-lane metadata used by the reasoning loop.
+ * `recommendedTierBump: 1` marks lanes as high-stakes — the reasoning loop
+ * will auto-escalate to the next higher tier when it receives a message in
+ * one of these lanes (unless the caller opts out via `autoEscalate: false`).
+ */
+export const LANE_DESCRIPTORS = Object.freeze({
+  [LANES.BUILD]:              { recommendedTierBump: 0 },
+  [LANES.OPERATIONAL]:        { recommendedTierBump: 0 },
+  [LANES.TROUBLESHOOT]:       { recommendedTierBump: 0 },
+  [LANES.OFFTOPIC]:           { recommendedTierBump: 0 },
+  [LANES.ADVISORY]:           { recommendedTierBump: 0 },
+  [LANES.TEMPERING]:          { recommendedTierBump: 1 },
+  [LANES.PRINCIPLE_JUDGMENT]: { recommendedTierBump: 1 },
+  [LANES.META_BUG_TRIAGE]:    { recommendedTierBump: 1 },
 });
 
 // ─── Keyword Regex Table ────────────────────────────────────────────
@@ -113,8 +142,20 @@ const KEYWORD_RULES = [
   { pattern: /\b(what went wrong|not working|doesn't work|stopped working)\b/i, lane: LANES.TROUBLESHOOT, weight: 3 },
   // Combined "why + fail" is a very strong investigation signal (outweighs phase/slice operational terms)
   { pattern: /\b(why did|why does|why is)\b.{0,60}\b(fail|failed|failure|error|crash)\b/i, lane: LANES.TROUBLESHOOT, weight: 4 },
-  // Phase-32 Slice 2: meta-bug / self-repair family → strong troubleshoot signal
+  // ── Phase-32 Slice 2: meta-bug / self-repair family → strong troubleshoot signal
   { pattern: /\b(meta[-\s]?bug|self[-\s]?repair|plan[-\s]?defect|orchestrator[-\s]?defect|prompt[-\s]?defect)\b/i, lane: LANES.TROUBLESHOOT, weight: 3 },
+
+  // ── Tempering lane signals ─────────────────────────────────────────
+  { pattern: /\btempering\s+(gate|evaluation|check|enforcement)\b/i, lane: LANES.TEMPERING, weight: 4 },
+  { pattern: /\b(run|evaluate|execute)\s+(a\s+)?tempering\b/i, lane: LANES.TEMPERING, weight: 3 },
+
+  // ── Principle-judgment lane signals ───────────────────────────────
+  { pattern: /\bprinciple\s+judgment\b/i, lane: LANES.PRINCIPLE_JUDGMENT, weight: 5 },
+  { pattern: /\bprincipled?\s+(decision|review|call|assessment|ruling)\b/i, lane: LANES.PRINCIPLE_JUDGMENT, weight: 3 },
+
+  // ── Meta-bug-triage lane signals ──────────────────────────────────
+  { pattern: /\btriage\b.{0,40}\b(meta[-\s]?bug|self[-\s]?repair|plan[-\s]?defect|orchestrator[-\s]?defect)\b/i, lane: LANES.META_BUG_TRIAGE, weight: 5 },
+  { pattern: /\b(triage|triaging)\b/i, lane: LANES.META_BUG_TRIAGE, weight: 3 },
 
   // ── Phase-32 Slice 2: Plan Forge domain glossary ──────────────────
   // Slices and gates with a Plan Forge context marker (prevents "slice me an apple")
@@ -180,6 +221,9 @@ function scoreKeywords(message) {
     [LANES.TROUBLESHOOT]: 0,
     [LANES.OFFTOPIC]: 0,
     [LANES.ADVISORY]: 0,
+    [LANES.TEMPERING]: 0,
+    [LANES.PRINCIPLE_JUDGMENT]: 0,
+    [LANES.META_BUG_TRIAGE]: 0,
   };
   let totalWeight = 0;
 
@@ -231,6 +275,9 @@ Classify the user's message into exactly ONE lane:
 - "operational" — the user asks about status, cost, health, metrics, memory, watchers, extensions, plans, or runs
 - "troubleshoot" — the user asks about bugs, failures, errors, incidents, regressions, or root causes
 - "advisory" — the user asks for architectural guidance, a recommendation, or a principled decision ("should I", "what's the right approach", "recommend a path")
+- "tempering" — the user requests a tempering gate evaluation, enforcement check, or tempering run
+- "principle-judgment" — the user asks for a principled architectural decision, principle review, or principle ruling
+- "meta-bug-triage" — the user wants to triage a meta-bug, self-repair issue, plan defect, or orchestrator defect
 - "offtopic" — the message is unrelated to Plan Forge (weather, personal questions, code generation, etc.)
 
 Respond with ONLY a JSON object: {"lane": "<lane>"}

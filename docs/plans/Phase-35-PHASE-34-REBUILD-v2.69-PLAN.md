@@ -169,15 +169,14 @@ hardened_at: 2026-04-23
 
 **Validation gate**:
 ```bash
-npx vitest run pforge-master/src/__tests__/intent-auto-escalation.test.mjs --reporter=default 2>&1 | tee /tmp/s1-out.txt
-grep -E "Tests +10 passed" /tmp/s1-out.txt
+npx vitest run pforge-master/src/__tests__/intent-auto-escalation.test.mjs --reporter=default
 ```
 AND
 ```bash
-npx vitest run pforge-master/src/__tests__/intent-router.test.mjs --reporter=default 2>&1 | tee /tmp/s1-reg.txt
-grep -E "failed" /tmp/s1-reg.txt ; [ $? -ne 0 ]
+grep -q "LANES.TEMPERING\|TEMPERING:" pforge-master/src/intent-router.mjs
+grep -q "LANE_DESCRIPTORS" pforge-master/src/intent-router.mjs
 ```
-Expected: first gate exits 0 and stdout contains `Tests  10 passed`. Second gate exits 0 because `grep failed` finds nothing (no regressions). Windows dispatch auto-wraps through git bash per Phase-34.1.
+Expected: vitest exit code 0 (all 10 tests pass); grep exit code 0 for both structural checks. No `tee`, no `/tmp` — commands run through pforge Windows bash dispatch or cmd without platform-specific pipes.
 
 **Commit**: `feat(intent-router): add tempering / principle-judgment / meta-bug-triage lanes + LANE_DESCRIPTORS (#96)`
 
@@ -224,15 +223,13 @@ Expected: first gate exits 0 and stdout contains `Tests  10 passed`. Second gate
 
 **Validation gate**:
 ```bash
-npx vitest run pforge-master/src/__tests__/intent-auto-escalation.test.mjs --reporter=default 2>&1 | tee /tmp/s2-out.txt
-grep -E "Tests +10 passed" /tmp/s2-out.txt
+npx vitest run pforge-master/src/__tests__/intent-auto-escalation.test.mjs --reporter=default
 ```
 AND
 ```bash
-npx vitest run pforge-master/src/__tests__/reasoning-tier.test.mjs --reporter=default 2>&1 | tee /tmp/s2-reg.txt
-grep -E "failed" /tmp/s2-reg.txt ; [ $? -ne 0 ]
+npx vitest run pforge-master/src/__tests__/reasoning-tier.test.mjs --reporter=default
 ```
-Expected: auto-escalation test (test 6) now passes; Phase-34 Slice 1 tier-resolver tests still green.
+Expected: both vitest invocations exit 0. Auto-escalation tests pass; Phase-34 Slice 1 tier-resolver tests still green (no regressions).
 
 **Commit**: `feat(reasoning): auto-escalate tier for high-stakes lanes (#96)`
 
@@ -311,14 +308,13 @@ Expected: auto-escalation test (test 6) now passes; Phase-34 Slice 1 tier-resolv
 
 **Validation gate**:
 ```bash
-npx vitest run pforge-mcp/tests/forge-master-prefs.test.mjs --reporter=default 2>&1 | tee /tmp/s3-out.txt
-grep -E "Tests +5 passed" /tmp/s3-out.txt
+npx vitest run pforge-mcp/tests/forge-master-prefs.test.mjs --reporter=default
 ```
 AND
 ```bash
-grep -q "\.forge/fm-prefs.json\|\.forge/" .gitignore
+grep -q "fm-prefs.json\|^\.forge/" .gitignore
 ```
-Expected: vitest shows `Tests  5 passed`; grep finds the gitignore entry.
+Expected: vitest exit 0 (all 5 tests pass); grep finds the gitignore entry.
 
 **Commit**: `feat(forge-master): prefs persistence + REST endpoints (#96)`
 

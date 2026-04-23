@@ -23,7 +23,7 @@ import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { classify, LANES, OFFTOPIC_REDIRECT } from "./intent-router.mjs";
+import { classify, LANES, LANE_DESCRIPTORS, OFFTOPIC_REDIRECT } from "./intent-router.mjs";
 import { fetchContext } from "./retrieval.mjs";
 import { getForgeMasterConfig } from "./config.mjs";
 import { resolveAllowlist, USAGE_HINTS } from "./allowlist.mjs";
@@ -45,6 +45,11 @@ const TIER_ORDER = ["high", "medium", "low"];
 function nextTier(tier) {
   const idx = TIER_ORDER.indexOf(tier);
   return idx >= 0 && idx < TIER_ORDER.length - 1 ? TIER_ORDER[idx + 1] : null;
+}
+/** Escalate to the next higher tier (toward "high"). Returns null if already at top. */
+function escalateTier(tier) {
+  const idx = TIER_ORDER.indexOf(tier);
+  return idx > 0 ? TIER_ORDER[idx - 1] : null;
 }
 
 // ─── Provider Selection ─────────────────────────────────────────────
@@ -205,6 +210,10 @@ function loadSystemPrompt(contextBlock, principlesBlock) {
  *   resolvedModel: string|null,
  *   fallbackFromTier: string|null,
  *   escalated: boolean,
+ *   autoEscalated: boolean,
+ *   fromTier: string|null,
+ *   toTier: string|null,
+ *   reason: string|null,
  * }>}
  */
 export async function runTurn(input, deps = {}) {
@@ -228,6 +237,12 @@ export async function runTurn(input, deps = {}) {
     ABSOLUTE_CEILING,
   );
 
+  // ── Auto-escalation state ────────────────────────────────────────
+  let autoEscalated = false;
+  let autoFromTier = null;
+  let autoToTier = null;
+  let autoEscalationReason = null;
+
   // ── 1. Intent classification ──────────────────────────────────────
   const classification = await classify(message, {
     cwd,
@@ -249,7 +264,25 @@ export async function runTurn(input, deps = {}) {
       resolvedModel: currentModel,
       fallbackFromTier: null,
       escalated: false,
+      autoEscalated: false,
+      fromTier: null,
+      toTier: null,
+      reason: null,
     };
+  }
+
+  // ── Auto-escalation for high-stakes lanes ─────────────────────────
+  if (!inputModel && currentTier && config.autoEscalate &&
+      LANE_DESCRIPTORS[classification.lane]?.recommendedTierBump > 0) {
+    const escalated = escalateTier(currentTier);
+    if (escalated) {
+      autoEscalated = true;
+      autoFromTier = currentTier;
+      autoToTier = escalated;
+      autoEscalationReason = `high-stakes lane: ${classification.lane}`;
+      currentTier = escalated;
+      currentModel = resolveModel(currentTier, config);
+    }
   }
 
   // ── 2. Fetch memory context ───────────────────────────────────────
@@ -306,6 +339,10 @@ export async function runTurn(input, deps = {}) {
         resolvedModel: currentModel,
         fallbackFromTier: null,
         escalated: false,
+        autoEscalated,
+        fromTier: autoFromTier,
+        toTier: autoToTier,
+        reason: autoEscalationReason,
       };
     }
   }
@@ -363,6 +400,10 @@ export async function runTurn(input, deps = {}) {
           resolvedModel: currentModel,
           fallbackFromTier,
           escalated: false,
+          autoEscalated,
+          fromTier: autoFromTier,
+          toTier: autoToTier,
+          reason: autoEscalationReason,
         };
       }
 
@@ -388,6 +429,10 @@ export async function runTurn(input, deps = {}) {
           resolvedModel: currentModel,
           fallbackFromTier,
           escalated: false,
+          autoEscalated,
+          fromTier: autoFromTier,
+          toTier: autoToTier,
+          reason: autoEscalationReason,
         };
       }
       break;
@@ -517,5 +562,9 @@ export async function runTurn(input, deps = {}) {
     resolvedModel: currentModel,
     fallbackFromTier,
     escalated: false,
+    autoEscalated,
+    fromTier: autoFromTier,
+    toTier: autoToTier,
+    reason: autoEscalationReason,
   };
 }

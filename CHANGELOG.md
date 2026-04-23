@@ -7,6 +7,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.74.4] — 2026-04-23 — Homepage dropdown + cumulative 2.74.x roll-up
+
+> **Patch release — rolls up v2.74.0 through v2.74.3 (all previously documented but never tagged) plus a homepage-only UX fix.**
+> The Resources dropdown on the `planforge.software` homepage was stuck open on touch and had no reliable close path on mouse, because `docs/index.html` uses an inline `<script>` block that predates the `nav-dropdown-open` click-toggle logic added to `shared.js`. Every other page already used `shared.js` and was unaffected.
+
+### Fixed
+- `docs/index.html` — ported the dropdown click-toggle, outside-click, Escape-key, and mouseleave grace-period logic from `assets/shared.js` into the homepage's inline script so the Resources menu now closes reliably on click-outside, Escape, and mouse-leave. Parity with all other pages restored.
+
+### Included from prior untagged work
+- v2.74.3 — `pforge analyze` wildcard crash fix (scope paths with `[]{}` characters)
+- v2.74.2 — `forge_status` graceful fallback to root `ROADMAP.md`
+- v2.74.1 — Forge-Master classifier tuning + hammer scenario corrections (4/8 → 8/8)
+- v2.74.0 — Plan Forge Knowledge Graph (Phase-38.3, `forge_graph_query` advisory tool)
+
+See the respective `[2.74.0]`–`[2.74.3]` sections below for full details.
+
+---
+
 ## [2.74.3] — 2026-04-23 — `pforge analyze` wildcard crash fix
 
 > **Point-release — unblocks `analyze` on plans containing bracket/brace characters in Scope Contract paths.**

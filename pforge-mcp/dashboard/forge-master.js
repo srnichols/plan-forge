@@ -12,12 +12,24 @@ const fm = {
   catalog: null,
   activeCategory: null,
   gallerySearch: "",
+  dialTier: null,
 };
+
+// ─── Dial config ──────────────────────────────────────────────────────
+
+const FM_DIAL_TIERS = [
+  { tier: "low",    label: "Fast" },
+  { tier: "medium", label: "Balanced" },
+  { tier: "high",   label: "Deep" },
+];
+
+const FM_DIAL_TOOLTIP = "Powered by frontier models via your GitHub Copilot subscription. Higher tiers may hit rate limits sooner.";
 
 // Historical note: globals kept for cross-tab inline handlers.
 window.forgeMasterOnTabActivate = () => {
   try {
     if (!fm.catalog) forgeMasterInit();
+    else forgeMasterLoadPrefs();
   } catch (err) {
     const list = document.getElementById("fm-gallery-list");
     if (list) list.innerHTML = `<p class="text-xs text-red-400">Forge-Master init failed: ${err?.message || err}</p>`;
@@ -42,6 +54,14 @@ async function forgeMasterInit() {
       list.addEventListener("click", e => {
         const btn = e.target.closest("button[data-prompt-id]");
         if (btn) forgeMasterPickPrompt(btn.dataset.promptId);
+      });
+    }
+    await forgeMasterLoadPrefs();
+    const root = document.getElementById("forge-master-root");
+    if (root) {
+      root.addEventListener("click", e => {
+        const btn = e.target.closest("button[data-tier]");
+        if (btn) forgeMasterDialClick(btn.dataset.tier);
       });
     }
   } catch (err) {
@@ -150,6 +170,56 @@ function forgeMasterStream(url, thinkingId) {
     if (replyText === "") forgeMasterUpdateBubble(replyBubbleId, "Stream error.");
     es.close();
   });
+}
+
+// ─── Dial ─────────────────────────────────────────────────────────────
+
+function forgeMasterRenderDial(activeTier) {
+  let dialEl = document.getElementById("fm-dial");
+  if (!dialEl) {
+    const chatCol = document.querySelector("#tab-forge-master .flex-1.flex.flex-col");
+    if (!chatCol) return;
+    dialEl = document.createElement("div");
+    dialEl.id = "fm-dial";
+    dialEl.className = "flex items-center gap-1 mb-2";
+    dialEl.title = FM_DIAL_TOOLTIP;
+    chatCol.insertBefore(dialEl, chatCol.firstChild);
+  }
+  dialEl.innerHTML = FM_DIAL_TIERS.map(({ tier, label }) => {
+    const active = tier === activeTier;
+    const cls = active
+      ? "text-xs px-3 py-1 rounded bg-cyan-700 text-white font-semibold"
+      : "text-xs px-3 py-1 rounded bg-gray-700 text-gray-300 hover:bg-gray-600";
+    return `<button class="${cls}" data-tier="${tier}">${label}</button>`;
+  }).join("");
+}
+
+async function forgeMasterLoadPrefs() {
+  try {
+    const res = await fetch("/api/forge-master/prefs");
+    if (!res.ok) return;
+    const { tier } = await res.json();
+    fm.dialTier = tier;
+    forgeMasterRenderDial(tier);
+  } catch {
+    // prefs unavailable — dial stays hidden
+  }
+}
+
+async function forgeMasterDialClick(tier) {
+  try {
+    const res = await fetch("/api/forge-master/prefs", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tier }),
+    });
+    if (!res.ok) return;
+    const { tier: saved } = await res.json();
+    fm.dialTier = saved;
+    forgeMasterRenderDial(saved);
+  } catch {
+    // noop
+  }
 }
 
 // ─── UI helpers ───────────────────────────────────────────────────────

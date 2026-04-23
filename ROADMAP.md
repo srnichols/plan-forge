@@ -7,7 +7,9 @@
 
 ## Current Release
 
-**v2.68.1** (2026-04-22) — Windows Gate Bash Dispatch Hotfix (Phase-34.1, closes #94 #95). Orchestrator now detects Unix-shell commands in gate strings and auto-wraps them in `bash -c "..."` on Windows when Git for Windows bash is available; falls back to plain `cmd.exe` dispatch otherwise. Fixes silent gate failures on Windows where `grep`/`test`/`sed` commands were passed raw to `cmd.exe`. Phase-34.1 shipped.
+**v2.69.0** (2026-04-23) — Phase-34 Rebuild (Phase-35, closes #96). Repairs hollow Phase-34 slices that shipped with grep-only gates and no vitest execution. New intent-router lanes: `tempering`, `principle-judgment`, `meta-bug-triage` with `LANE_DESCRIPTORS` and `recommendedTierBump`. Auto-escalation in `runTurn` for high-stakes lanes. Prefs persistence (`loadPrefs`/`savePrefs`, `.forge/fm-prefs.json`). `GET/PUT /api/forge-master/prefs` REST endpoints wired into `forge_master_ask`. Fast/Balanced/Deep dashboard dial above composer. Phase-35 shipped.
+
+Previous: v2.68.1 (2026-04-22) — Windows Gate Bash Dispatch Hotfix (Phase-34.1, closes #94 #95). Orchestrator now detects Unix-shell commands in gate strings and auto-wraps them in `bash -c "..."` on Windows when Git for Windows bash is available; falls back to plain `cmd.exe` dispatch otherwise.
 
 Previous: v2.68.0 (2026-04-22) — Forge-Master Reasoning Dial (Phase-34). Three-tier reasoning dial (Fast / Balanced / Deep) added to the Forge-Master dashboard. `reasoning-tier.mjs` resolves tier → model without exposing model names in the UI. Auto-escalation default-on for `tempering`, `principle-judgment`, and `meta-bug-triage` lanes. 429 graceful degradation: `high → medium → low` fallback chain with turn-trace fields. `GET/PUT /api/forge-master/prefs` REST endpoints. Opt-out via `forgeMaster.autoEscalate = false`.
 
@@ -19,7 +21,7 @@ Previous: v2.65.1 (2026-04-22) — version-bump architectural rebuild (Phase-31.
 
 Previous: v2.63.1 (Phase-28.5 tempering mtime sort + docs nav hover fix), v2.63.0 (Phase-29 Forge-Master Studio dashboard tab + routes + CLI), v2.62.x (Forge-Master MVP, worker role guardrails, self-repair capture, OpenBrain queue drain), v2.61.0 (Phase-27.2 cost projection UI + per-slice estimator).
 
-**In flight (next)**: TBD — Phase-35 planning open. Candidates include per-tier rate-limit budget tracking, cost meter on the dial, ML-backed complexity scoring, VS Code LM adapter for Forge-Master, Team Mode (v3.1).
+**In flight (next)**: TBD — Phase-36 planning open. Candidates include per-tier rate-limit budget tracking, cost meter on the dial, ML-backed complexity scoring, VS Code LM adapter for Forge-Master, Team Mode (v3.1).
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 

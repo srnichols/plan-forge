@@ -7,6 +7,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.69.0] — 2026-04-23 — Phase-34 rebuild (Closes #96)
+
+> **Phase-35 — Repairs Phase-34 hollow slices that shipped with grep-only gates and no vitest execution.**
+> Root cause: Phase-34 grep-only gates shipped without running test suites. Fix: every gate that references a test file now invokes vitest.
+
+### Added
+
+- **Slice 1 — Intent-router additions** (`pforge-master/src/intent-router.mjs`) — New lanes: tempering, principle-judgment, meta-bug-triage with auto-escalation. Adds `LANES.TEMPERING`, `LANES.PRINCIPLE_JUDGMENT`, `LANES.META_BUG_TRIAGE` constants and exports `LANE_DESCRIPTORS` (frozen object, each lane keyed with `recommendedTierBump`). Keyword patterns tuned to beat existing OPERATIONAL/TROUBLESHOOT collision points. `LANE_TOOLS` entries for three new lanes (empty array; Phase-36 will populate). `scoreKeywords` zero-score map and stage-2 router-model prompt extended.
+- **Slice 2 — Auto-escalation in runTurn** (`pforge-master/src/reasoning.mjs`) — `runTurn` inspects `LANE_DESCRIPTORS[lane].recommendedTierBump` and bumps resolved tier for high-stakes lanes (`low → medium → high`, capped). Return object gains `autoEscalated`, `fromTier`, `toTier`, `reason` fields on every code path. Opt-out: `forgeMaster.autoEscalate = false` in `.forge.json`.
+- **Slice 3 — Prefs file persistence + REST endpoints** (`pforge-master/src/http-routes.mjs`) — Exports `loadPrefs(cwd)` and `savePrefs(prefs, cwd)`. Prefs backing file is `.forge/fm-prefs.json`. Defaults: `{ tier: null, autoEscalate: false }`. `GET /api/forge-master/prefs` and `PUT /api/forge-master/prefs` registered in `createHttpRoutes`. `forge_master_ask` reads prefs tier on each invocation and threads into `runTurn`.
+- **Slice 4 — Dashboard dial UI** (`pforge-mcp/dashboard/forge-master.js`) — Prefs endpoints + Fast/Balanced/Deep dashboard dial. Three-position segmented control (Fast↔low, Balanced↔medium, Deep↔high) inserted above composer on tab load. On click, PUTs new tier to prefs endpoint. Dial hidden when prefs endpoint unavailable. No model names exposed in UI.
+
+### Tests
+
+- `pforge-master/src/__tests__/intent-auto-escalation.test.mjs` — 10 tests: LANE_DESCRIPTORS shape, recommendedTierBump values, classify routing for three new lanes, no regressions to existing lanes.
+- `pforge-mcp/tests/forge-master-prefs.test.mjs` — 5 tests: loadPrefs defaults, round-trip save/load, invalid tier sanitisation, REST route registration.
+
 ## [2.68.1] — 2026-04-22 — Windows gate bash dispatch hotfix
 
 > **Hotfix — Windows users whose gate commands use Unix-shell tools (`grep`, `test`, `sed`, etc.) were silently failing because the orchestrator dispatched gates through `cmd.exe` instead of bash.**

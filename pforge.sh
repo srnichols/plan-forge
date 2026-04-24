@@ -1197,6 +1197,16 @@ cmd_update() {
         resolved_tag="$(echo "$tag_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('tag',''))" 2>/dev/null)"
         echo "  Tag: $resolved_tag"
 
+        # Drift warning — source repo has a newer tag than the latest Release
+        local drift_msg
+        drift_msg="$(echo "$tag_result" | python3 -c "import json,sys; d=json.load(sys.stdin); w=d.get('warning') or {}; print(w.get('message',''))" 2>/dev/null || echo "")"
+        if [ -n "$drift_msg" ]; then
+            echo "" >&2
+            echo "WARNING: Release/tag drift detected" >&2
+            echo "  $drift_msg" >&2
+            echo "" >&2
+        fi
+
         # Download tarball
         echo "Downloading release tarball..."
         local dl_result

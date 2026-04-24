@@ -42,9 +42,6 @@ const DEFAULT_BASE_URL = "http://127.0.0.1:3100";
 const DEFAULT_OUT_DIR = ".forge/hammer-forge-master/reports";
 const DEFAULT_TIMEOUT_SEC = 60;
 const DEFAULT_PARALLEL = 4;
-const DEFAULT_RETRY_MAX = 3;
-const DEFAULT_RETRY_DELAY_SEC = 5;
-const DEFAULT_INTER_DELAY_SEC = 0;
 const KNOWN_SCENARIOS = [
   "shipped-prompts",
   "realistic-qa",
@@ -167,44 +164,10 @@ function _tierHeaders(tier) {
   return {};
 }
 
-// ── Rate-limit detection ──────────────────────────────────────────
+// ── Run one prompt against the server ─────────────────────────────
 
-function _isRateLimited(result) {
-  if (result.error && /rate.?limit/i.test(result.error)) return true;
-  if (!result.events) return false;
-  return result.events.some(
-    (e) => e.event === "error" && /rate.?limit/i.test(String(e.data?.error ?? "")),
-  );
-}
-
-function _sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-// ── Run one prompt (single attempt, no retry) ────────────────────
-
-async function _runPromptOnce(prompt, { baseUrl, tier, timeoutMs, fetchFn, openStreamFn }) {
-  const reqHeaders = {
-    "content-type": "application/json",
-    ..._tierHeaders(tier),
-  };
-  const start = Date.now();
-
-  let sessionId, streamUrl;
-  try {
-    const resp = await fetchFn(`${baseUrl}/api/forge-master/chat`, {
-      method: "POST",
-      headers: reqHeaders,
-      body: JSON.stringify({ message: prompt.message }),
-    });
-    if (!resp.ok) {
-      throw new Error(`HTTP ${resp.status}`);
-    }
-    const body = await resp.json();
-    sessionId = body.sessionId;
-    streamUrl = body.streamUrl;
-    if (!sessionId || !streamUrl) {
-      throw new Error(`bad init response: ${JSON.stringify(body)}`);
+async function _runPrompt(prompt, { baseUrl, tier, timeoutMs, fetchFn, openStreamFn }) {
+.stringify(body)}`);
     }
   } catch (err) {
     return {
@@ -228,25 +191,6 @@ async function _runPromptOnce(prompt, { baseUrl, tier, timeoutMs, fetchFn, openS
     closedReason,
     durationMs: Date.now() - start,
   };
-}
-
-// ── Run one prompt with retry on rate-limit ───────────────────────
-
-async function _runPrompt(prompt, opts) {
-  const { retryMax = 0, retryDelayMs = 5000 } = opts;
-  for (let attempt = 0; attempt <= retryMax; attempt++) {
-    const result = await _runPromptOnce(prompt, opts);
-    result.attempt = attempt + 1;
-
-    if (_isRateLimited(result) && attempt < retryMax) {
-      const delay = retryDelayMs * Math.pow(2, attempt);
-      console.log(`     \u23F3 rate-limited (attempt ${attempt + 1}/${retryMax + 1}), retrying in ${(delay / 1000).toFixed(1)}s\u2026`);
-      await _sleep(delay);
-      continue;
-    }
-
-    return result;
-  }
 }
 
 // ── Score one prompt result ────────────────────────────────────────
@@ -342,10 +286,6 @@ export async function main(argv, deps = {}) {
   const baseUrl = args["base-url"] || DEFAULT_BASE_URL;
   const parallel = Math.max(1, parseInt(args.parallel || DEFAULT_PARALLEL, 10));
   const timeoutMs = Math.max(5000, parseInt(args.timeout || DEFAULT_TIMEOUT_SEC, 10) * 1000);
-  const retryMax = Math.max(0, parseInt(args["retry-max"] ?? DEFAULT_RETRY_MAX, 10));
-  const retryDelayMs = Math.max(1000, parseInt(args["retry-delay"] ?? DEFAULT_RETRY_DELAY_SEC, 10) * 1000);
-  const interDelayMs = Math.max(0, parseInt(args["inter-delay"] ?? DEFAULT_INTER_DELAY_SEC, 10) * 1000);
-  const laneOnly = args["lane-only"] === "true";
   const dryRun = args["dry-run"] === "true";
   const outDirRaw = args["out-dir"] || DEFAULT_OUT_DIR;
   // Resolve relative to repo root unless absolute
@@ -394,7 +334,7 @@ export async function main(argv, deps = {}) {
   console.log(
     `[hammer-fm] scenario: ${scenario.name || scenarioName} (${scenario.prompts.length} prompts)`,
   );
-  console.log(`[hammer-fm] tier=${tier} parallel=${parallel} timeout=${timeoutMs / 1000}s retry=${retryMax}x backoff=${retryDelayMs / 1000}s inter-delay=${interDelayMs / 1000}s`);
+  console.log(`[hammer-fm] tier=${tier} parallel=${parallel} timeout=${timeoutMs / 1000}s`);
 
   try {
     const probe = await fetchFn(`${baseUrl}/api/forge-master/capabilities`);
@@ -420,30 +360,22 @@ export async function main(argv, deps = {}) {
     while (prompts.length > 0) {
       const batch = prompts.splice(0, parallel);
       const results = await Promise.all(
-        batch.map((p) => _runPrompt(p, { baseUrl, tier: t, timeoutMs, fetchFn, openStreamFn, retryMax, retryDelayMs })),
+        batch.map((p) => _runPrompt(p, { baseUrl, tier: t, timeoutMs, fetchFn, openStreamFn })),
       );
       for (const [i, result] of results.entries()) {
-        const activeScorerSet = laneOnly
-          ? ALL_SCORERS.filter((s) => s.name === "lane-match")
-          : ALL_SCORERS;
-        const scored = _scorePrompt(batch[i], result, activeScorerSet);
+        const scored = _scorePrompt(batch[i], result, ALL_SCORERS);
         const icon =
           scored.verdict === "pass" ? "✅" : scored.verdict === "error" ? "🔥" : "❌";
         const lane =
           result.events?.find((e) => e.event === "classification")?.data?.lane ?? "?";
         const dur = result.durationMs != null ? `${result.durationMs}ms` : "?";
-        const retryTag = result.attempt > 1 ? ` (attempt ${result.attempt})` : "";
-        console.log(`  ${icon} [${batch[i].id}] lane=${lane} dur=${dur}${retryTag}`);
+        console.log(`  ${icon} [${batch[i].id}] lane=${lane} dur=${dur}`);
         if (scored.verdict !== "pass") {
           for (const s of scored.scores.filter((x) => !x.pass)) {
             console.log(`     ↳ ${s.scorer}: ${s.reason}`);
           }
         }
         allRecords.push({ ...scored, tier: t });
-      }
-      // Inter-prompt delay to reduce rate-limiting
-      if (interDelayMs > 0 && prompts.length > 0) {
-        await _sleep(interDelayMs);
       }
     }
   }
@@ -460,19 +392,7 @@ export async function main(argv, deps = {}) {
 
   const failed = allRecords.filter((r) => r.verdict !== "pass");
   const passed = allRecords.length - failed.length;
-  const rateLimited = allRecords.filter((r) =>
-    r.scores?.some((s) => !s.pass && /rate.?limit/i.test(s.reason ?? "")) ||
-    r.events?.some((e) => e.event === "error" && /rate.?limit/i.test(String(e.data?.error ?? ""))),
-  );
-  const retried = allRecords.filter((r) => (r.attempt ?? 1) > 1);
-
   console.log(`\n[hammer-fm] ${passed}/${allRecords.length} passed`);
-  if (retried.length > 0) {
-    console.log(`[hammer-fm] ${retried.length} prompt(s) required retry`);
-  }
-  if (rateLimited.length > 0) {
-    console.log(`[hammer-fm] ${rateLimited.length} prompt(s) still rate-limited after all retries`);
-  }
 
   return failed.length === 0 ? 0 : 1;
 }

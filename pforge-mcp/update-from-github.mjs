@@ -18,6 +18,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, unl
 import { resolve, join } from "node:path";
 
 const RELEASES_URL = "https://api.github.com/repos/srnichols/plan-forge/releases/latest";
+const TAGS_URL = "https://api.github.com/repos/srnichols/plan-forge/tags?per_page=100";
 const TARBALL_BASE = "https://api.github.com/repos/srnichols/plan-forge/tarball";
 const DEFAULT_MAX_TARBALL_BYTES = 52_428_800; // 50 MB
 const DEFAULT_CACHE_DIR = ".forge/cache";
@@ -98,6 +99,96 @@ export async function resolveTag({ tag, fetchImpl = globalThis.fetch, env = proc
     throw new UpdateError("ERR_API", "GitHub API response missing tag_name.");
   }
   return tagName;
+}
+
+// ─── Semver comparison ──────────────────────────────────────────────
+// Parses "v1.2.3" / "1.2.3" into [1,2,3]. Returns null for non-semver tags
+// (e.g., pre-release suffixes "v1.2.3-beta" are parsed as [1,2,3] and the
+// suffix is preserved separately so stable > pre-release).
+function parseSemver(tag) {
+  if (typeof tag !== "string") return null;
+  const m = tag.match(/^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/);
+  if (!m) return null;
+  return {
+    major: Number(m[1]),
+    minor: Number(m[2]),
+    patch: Number(m[3]),
+    pre: m[4] || null,
+  };
+}
+
+function compareSemver(a, b) {
+  if (a.major !== b.major) return a.major - b.major;
+  if (a.minor !== b.minor) return a.minor - b.minor;
+  if (a.patch !== b.patch) return a.patch - b.patch;
+  // Stable (no pre) ranks higher than pre-release.
+  if (!a.pre && b.pre) return 1;
+  if (a.pre && !b.pre) return -1;
+  if (a.pre && b.pre) return a.pre < b.pre ? -1 : a.pre > b.pre ? 1 : 0;
+  return 0;
+}
+
+// ─── Drift detection ─────────────────────────────────────────────────
+// Fetches /tags and returns the newest stable semver tag. Used to detect
+// the case where tags have been pushed but no GitHub Release was cut —
+// /releases/latest then silently returns an older version than HEAD.
+// Returns null on network failure or no parseable tags (non-fatal).
+export async function fetchNewestSemverTag({ fetchImpl = globalThis.fetch, env = process.env } = {}) {
+  const headers = {
+    accept: "application/vnd.github+json",
+    "user-agent": "plan-forge-update",
+  };
+  if (env.GITHUB_TOKEN) headers.authorization = `token ${env.GITHUB_TOKEN}`;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), CONNECT_TIMEOUT_MS);
+  let res;
+  try {
+    res = await fetchImpl(TAGS_URL, { headers, signal: controller.signal });
+  } catch {
+    clearTimeout(timer);
+    return null;
+  }
+  clearTimeout(timer);
+
+  if (!res.ok) return null;
+  let tags;
+  try { tags = await res.json(); } catch { return null; }
+  if (!Array.isArray(tags)) return null;
+
+  let newest = null;
+  let newestName = null;
+  for (const t of tags) {
+    const parsed = parseSemver(t?.name);
+    if (!parsed) continue;
+    // Skip pre-releases — we only want stable tags for drift comparison.
+    if (parsed.pre) continue;
+    if (!newest || compareSemver(parsed, newest) > 0) {
+      newest = parsed;
+      newestName = t.name;
+    }
+  }
+  return newestName;
+}
+
+// Returns { drift: boolean, newestTag, releaseTag, message }. Non-null only
+// when a newer stable tag exists than the resolved Release tag.
+export async function checkLatestDrift(resolvedReleaseTag, opts = {}) {
+  const releaseSemver = parseSemver(resolvedReleaseTag);
+  if (!releaseSemver) return null;
+  const newestTag = await fetchNewestSemverTag(opts);
+  if (!newestTag) return null;
+  const newestSemver = parseSemver(newestTag);
+  if (!newestSemver) return null;
+  if (compareSemver(newestSemver, releaseSemver) <= 0) return null;
+  return {
+    drift: true,
+    newestTag,
+    releaseTag: resolvedReleaseTag,
+    message: `GitHub tag ${newestTag} exists but the latest published Release is ${resolvedReleaseTag}. ` +
+             `The source repo pushed tags without cutting Releases — you are getting an older version. ` +
+             `Re-run with --tag ${newestTag} to fetch the newest tag, or ask the maintainer to publish the missing Release(s).`,
+  };
 }
 
 // ─── URL builder ─────────────────────────────────────────────────────
@@ -259,8 +350,18 @@ async function main() {
 
   try {
     if (action === "resolve-tag") {
+      const wasLatest = !tag || /^latest$/i.test(tag);
       const resolved = await resolveTag({ tag });
-      process.stdout.write(JSON.stringify({ ok: true, tag: resolved }) + "\n");
+      const out = { ok: true, tag: resolved };
+      // Only probe for drift when caller asked for "latest" — if they
+      // pinned an explicit tag, they already know what they want.
+      if (wasLatest) {
+        try {
+          const drift = await checkLatestDrift(resolved);
+          if (drift) out.warning = drift;
+        } catch { /* drift check is advisory — never fail resolve-tag over it */ }
+      }
+      process.stdout.write(JSON.stringify(out) + "\n");
     } else if (action === "download") {
       const config = loadFromGitHubConfig(projectDir);
       if (!tag) { process.stderr.write("ERROR: --tag required for download\n"); process.exit(1); }

@@ -7,6 +7,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+- `pforge self-update` / `update-from-github.mjs` — now warns when source repo has pushed semver tags ahead of the latest GitHub Release. Consumers previously received a silently-older version when maintainers tagged without cutting Releases (meta-bug [#100](https://github.com/srnichols/plan-forge/issues/100)). New exports: `fetchNewestSemverTag`, `checkLatestDrift`. Warning surfaces in both `pforge.sh` and `pforge.ps1` update flows. Advisory-only — never fails the update.
+
+### Docs
+- Release procedure memory updated — `gh release create` is now called out as MANDATORY step 6, not optional. Verification step added: `node pforge-mcp/update-from-github.mjs resolve-tag` must print no `warning` field.
+
 ## [2.80.1] — 2026-04-24 — Post-Phase-39 polish
 
 > Packaging and surface polish on top of v2.80.0 — no runtime behavior changes.

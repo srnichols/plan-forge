@@ -1276,6 +1276,14 @@ function Invoke-Update {
         $resolvedTag = $tagJson.tag
         Write-Host "  Tag: $resolvedTag" -ForegroundColor White
 
+        # Drift warning — source repo has a newer tag than the latest Release
+        if ($tagJson.warning -and $tagJson.warning.message) {
+            Write-Host ""
+            Write-Host "WARNING: Release/tag drift detected" -ForegroundColor Yellow
+            Write-Host "  $($tagJson.warning.message)" -ForegroundColor Yellow
+            Write-Host ""
+        }
+
         Write-Host "Downloading release tarball..." -ForegroundColor DarkCyan
         $dlArgs = @("download", "--tag", $resolvedTag, "--project-dir", $RepoRoot)
         $dlResult = & node $nodeHelper @dlArgs 2>&1 | Select-Object -Last 1

@@ -15,6 +15,8 @@ import {
   downloadTarball,
   appendAuditLog,
   loadFromGitHubConfig,
+  fetchNewestSemverTag,
+  checkLatestDrift,
   UpdateError,
 } from "../update-from-github.mjs";
 
@@ -106,6 +108,69 @@ describe("buildTarballUrl", () => {
   it("returns /tarball/<tag> format", () => {
     const url = buildTarballUrl("v2.50.0");
     expect(url).toBe("https://api.github.com/repos/srnichols/plan-forge/tarball/v2.50.0");
+  });
+});
+
+// ─── fetchNewestSemverTag / checkLatestDrift ────────────────────────
+
+describe("fetchNewestSemverTag", () => {
+  it("returns the highest stable semver tag", async () => {
+    const tags = [
+      { name: "v2.80.1" },
+      { name: "v2.80.0" },
+      { name: "v2.75.1" },
+      { name: "v2.79.0" },
+      { name: "not-a-semver" },
+    ];
+    const fetch = makeFetch(200, tags);
+    const newest = await fetchNewestSemverTag({ fetchImpl: fetch, env: {} });
+    expect(newest).toBe("v2.80.1");
+  });
+
+  it("skips pre-release tags", async () => {
+    const tags = [
+      { name: "v3.0.0-beta.1" },
+      { name: "v2.80.1" },
+    ];
+    const fetch = makeFetch(200, tags);
+    const newest = await fetchNewestSemverTag({ fetchImpl: fetch, env: {} });
+    expect(newest).toBe("v2.80.1");
+  });
+
+  it("returns null on network failure (non-fatal)", async () => {
+    const fetch = vi.fn().mockRejectedValue(new Error("boom"));
+    const newest = await fetchNewestSemverTag({ fetchImpl: fetch, env: {} });
+    expect(newest).toBeNull();
+  });
+});
+
+describe("checkLatestDrift", () => {
+  it("reports drift when tags are ahead of release", async () => {
+    const fetch = makeFetch(200, [{ name: "v2.80.1" }, { name: "v2.79.0" }]);
+    const drift = await checkLatestDrift("v2.75.1", { fetchImpl: fetch, env: {} });
+    expect(drift).not.toBeNull();
+    expect(drift.newestTag).toBe("v2.80.1");
+    expect(drift.releaseTag).toBe("v2.75.1");
+    expect(drift.message).toContain("v2.80.1");
+    expect(drift.message).toContain("v2.75.1");
+  });
+
+  it("returns null when release matches newest tag", async () => {
+    const fetch = makeFetch(200, [{ name: "v2.80.1" }, { name: "v2.79.0" }]);
+    const drift = await checkLatestDrift("v2.80.1", { fetchImpl: fetch, env: {} });
+    expect(drift).toBeNull();
+  });
+
+  it("returns null when release is ahead of stable tags (pre-release scenario)", async () => {
+    const fetch = makeFetch(200, [{ name: "v2.80.0" }]);
+    const drift = await checkLatestDrift("v2.81.0", { fetchImpl: fetch, env: {} });
+    expect(drift).toBeNull();
+  });
+
+  it("returns null on API failure (advisory check must not break update)", async () => {
+    const fetch = vi.fn().mockRejectedValue(new Error("network"));
+    const drift = await checkLatestDrift("v2.80.1", { fetchImpl: fetch, env: {} });
+    expect(drift).toBeNull();
   });
 });
 

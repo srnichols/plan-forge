@@ -17,7 +17,7 @@
     {
       "id": "dd-digest-3",
       "message": "Summarize all bugs filed in the last 24 hours.",
-      "expectedLane": "advisory",
+      "expectedLane": "operational",
       "purpose": "daily bug summary"
     },
     {

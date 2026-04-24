@@ -29,7 +29,7 @@
     {
       "id": "cr-recall-5",
       "message": "What bugs were discussed two sessions ago?",
-      "expectedLane": "operational",
+      "expectedLane": "troubleshoot",
       "notes": "ordinal cross-session retrieval"
     },
     {

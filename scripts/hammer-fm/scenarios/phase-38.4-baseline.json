@@ -17,7 +17,7 @@
     {
       "id": "pe-coord-3",
       "message": "The executor failed on slice 5. Diagnose the failure and retry.",
-      "expectedLane": "troubleshoot",
+      "expectedLane": "operational",
       "notes": "executor failure recovery"
     },
     {

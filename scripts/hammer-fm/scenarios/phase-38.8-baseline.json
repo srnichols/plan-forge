@@ -41,7 +41,7 @@
     {
       "id": "ef-fallback-7",
       "message": "My OPENAI_API_KEY is missing. Search memory anyway using keyword matching.",
-      "expectedLane": "troubleshoot",
+      "expectedLane": "operational",
       "notes": "explicit fallback trigger"
     },
     {
@@ -71,7 +71,7 @@
     {
       "id": "ef-fallback-12",
       "message": "Show me the top five memories most similar to 'gate failure recurrence detector'.",
-      "expectedLane": "operational",
+      "expectedLane": "troubleshoot",
       "notes": "top-k similarity"
     }
   ]

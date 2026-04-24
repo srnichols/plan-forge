@@ -35,7 +35,7 @@
     {
       "id": "p381-session-context-03",
       "message": "Back to the file list I asked about earlier — which one had the failing gate?",
-      "expectedLane": "operational",
+      "expectedLane": "troubleshoot",
       "notes": "contextual pronoun + filter"
     },
     {
@@ -107,13 +107,13 @@
     {
       "id": "p381-context-boundary-02",
       "message": "Which slices are currently failing?",
-      "expectedLane": "operational",
+      "expectedLane": "troubleshoot",
       "notes": "baseline state query"
     },
     {
       "id": "p381-context-boundary-03",
       "message": "Show me open bugs registered from the last run.",
-      "expectedLane": "operational",
+      "expectedLane": "troubleshoot",
       "notes": "baseline data query"
     }
   ]

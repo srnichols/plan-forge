@@ -5,7 +5,7 @@
     {
       "id": "ps-pattern-1",
       "message": "What recurring patterns of failure have you observed in recent plan runs?",
-      "expectedLane": "advisory",
+      "expectedLane": "troubleshoot",
       "purpose": "failure pattern detection"
     },
     {
@@ -23,7 +23,7 @@
     {
       "id": "ps-pattern-4",
       "message": "What prompts consistently fail the lane-match scorer in the hammer harness?",
-      "expectedLane": "advisory",
+      "expectedLane": "troubleshoot",
       "purpose": "harness pattern surfacing"
     }
   ]

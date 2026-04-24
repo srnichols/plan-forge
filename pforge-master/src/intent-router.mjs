@@ -143,6 +143,10 @@ const KEYWORD_RULES = [
   { pattern: /\b(remind me|recap|summarize|left off|continue from|this session|this conversation|earlier.{0,15}(asked|said|mentioned|discussed))\b/i, lane: LANES.OPERATIONAL, weight: 3 },
   { pattern: /\b(last\s+(session|time|conversation)|previous\s+session|past\s+sessions?)\b/i, lane: LANES.OPERATIONAL, weight: 3 },
   { pattern: /\b(prior\s+chats?|in\s+a\s+previous\s+chat|earlier\s+planning)\b/i, lane: LANES.OPERATIONAL, weight: 3 },
+  // Phase-38.R3 — first-person session recall ("did I say", "I mentioned", "we agreed")
+  { pattern: /\b(did I say|I said|I mentioned|I told you|we decided|we agreed|we discussed)\b/i, lane: LANES.OPERATIONAL, weight: 3 },
+  // Phase-38.R3 — "execute/run the plan" → operational (not advisory "review")
+  { pattern: /\b(execute|run)\s+(the\s+)?plan\b/i, lane: LANES.OPERATIONAL, weight: 3 },
   { pattern: /\b(note for later|keep in mind|for later|remember that)\b/i, lane: LANES.OPERATIONAL, weight: 2 },
   { pattern: /\b(decisions?\s+we.{0,10}made|what\s+(did|have)\s+(i|we)\s+(decide|commit|choose|pick|say))\b/i, lane: LANES.OPERATIONAL, weight: 3 },
   { pattern: /\b(everything\s+we.{0,10}(talked|discussed)|every\s+decision|key\s+outcomes?)\b/i, lane: LANES.OPERATIONAL, weight: 2 },
@@ -237,12 +241,15 @@ const KEYWORD_RULES = [
   { pattern: /\bhelp\s+me\s+decide\b/i, lane: LANES.ADVISORY, weight: 3 },
   { pattern: /\b(what|which)\s+(path|direction)\s+(should|to|forward)\b/i, lane: LANES.ADVISORY, weight: 2 },
   // Phase-38 — architecture/analysis advisory vocabulary
-  { pattern: /\b(dependency\s+graph|data\s+flow|call\s+graph|module.{0,10}depend|services?\s+affected)\b/i, lane: LANES.ADVISORY, weight: 3 },
+  { pattern: /\b(dependency\s+graph|data\s+flow|call\s+graph|module.{0,10}depend|services?\s+(are\s+)?affected)\b/i, lane: LANES.ADVISORY, weight: 3 },
   { pattern: /\b(code\s+smells?|anti[- ]?patterns?|recurring\s+patterns?|emerging.{0,15}pattern)\b/i, lane: LANES.ADVISORY, weight: 3 },
   { pattern: /\b(daily\s+digest|overall\s+health|project\s+health|health.{0,10}summary|one[- ]paragraph\s+summary)\b/i, lane: LANES.ADVISORY, weight: 3 },
   { pattern: /\b(is\s+it\s+better|better\s+architecturally|model\s+as\s+(an?\s+)?enum|pluggable\s+strategy)\b/i, lane: LANES.ADVISORY, weight: 3 },
-  { pattern: /\b(eager[- ]load|lazy[- ]load|expose\s+over|keep.{0,10}internal)\b/i, lane: LANES.ADVISORY, weight: 2 },
+  { pattern: /\b(eager[- ]load\w*|lazy[- ]load\w*|expose\s+over|keep.{0,10}internal)\b/i, lane: LANES.ADVISORY, weight: 2 },
   { pattern: /\b(map\s+out|summarize\s+all|identify\s+common)\b/i, lane: LANES.ADVISORY, weight: 2 },
+  // Phase-38.R3 — explicit advice request + impact analysis
+  { pattern: /\badvise\b|\barchitectural\s+(guidance|advice)\b/i, lane: LANES.ADVISORY, weight: 3 },
+  { pattern: /\b(affected\s+if\s+(I|we)|impact\s+(of\s+)?chang|what\s+(breaks|changes)\s+if)\b/i, lane: LANES.ADVISORY, weight: 3 },
 
   // ── Off-topic signals ──
   { pattern: /\b(weather|temperature|forecast|sports|score|game)\b/i, lane: LANES.OFFTOPIC, weight: 3 },

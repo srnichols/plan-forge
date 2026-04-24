@@ -337,6 +337,48 @@ describe("writeFreshCache", () => {
   });
 });
 
+// ─── self-update wrapper fallback shape (meta-bug: silent "Already current") ───
+//
+// Regression for the case where a client on v2.66.0 ran `pforge self-update`,
+// the GitHub API check failed (rate limit / timeout / network), and the
+// wrapper script silently printed "Already current (v2.66.0)" because its
+// fallback collapsed `null` into `{ isNewer: false }`. The wrappers now emit
+// `{ checkFailed: true }` so the shell/powershell sides can branch.
+
+describe("self-update wrapper fallback", () => {
+  let dir;
+  beforeEach(() => { dir = mkdtempSync(join(tmpdir(), "pforge-selfupdate-")); });
+  afterEach(() => { try { rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ } });
+
+  // Mirrors the inline script embedded in pforge.sh and pforge.ps1.
+  function wrapperShape(r) {
+    return r === null ? { checkFailed: true } : r;
+  }
+
+  it("emits checkFailed marker when checkForUpdate returns null (network error)", async () => {
+    const boom = async () => { throw new Error("ECONNREFUSED"); };
+    const r = await checkForUpdate({ currentVersion: "2.66.0", projectDir: dir, fetchImpl: boom, env: {}, force: true });
+    const shape = wrapperShape(r);
+    expect(shape.checkFailed).toBe(true);
+    expect(shape.isNewer).toBeUndefined();
+  });
+
+  it("emits checkFailed marker when GitHub returns HTTP 403 (rate limit)", async () => {
+    const rateLimited = makeFakeFetch({}, { status: 403 });
+    const r = await checkForUpdate({ currentVersion: "2.66.0", projectDir: dir, fetchImpl: rateLimited, env: {}, force: true });
+    expect(wrapperShape(r)).toEqual({ checkFailed: true });
+  });
+
+  it("passes through a successful check unchanged (no checkFailed marker)", async () => {
+    const ok = makeFakeFetch({ tag_name: "v2.80.1" });
+    const r = await checkForUpdate({ currentVersion: "2.66.0", projectDir: dir, fetchImpl: ok, env: {}, force: true });
+    const shape = wrapperShape(r);
+    expect(shape.checkFailed).toBeUndefined();
+    expect(shape.isNewer).toBe(true);
+    expect(shape.latest).toBe("2.80.1");
+  });
+});
+
 // ─── detectCorruptInstall (v2.53.1 self-heal) ───────────────────
 
 describe("detectCorruptInstall", () => {

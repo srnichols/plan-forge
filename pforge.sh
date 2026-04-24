@@ -2098,15 +2098,31 @@ cmd_self_update() {
     local current_version
     current_version="$(cat "$REPO_ROOT/VERSION" | tr -d '[:space:]')"
 
-    local check_script="import { checkForUpdate } from './pforge-mcp/update-check.mjs'; const r = await checkForUpdate({ currentVersion: process.argv[1], projectDir: process.argv[2], force: true }); console.log(JSON.stringify(r || { isNewer: false }));"
+    # Emit a distinct marker when checkForUpdate returns null so we can
+    # tell "GitHub API failed" apart from "checked and up to date" (meta-bug:
+    # client stuck on v2.66.0 saw 'Already current' after an API failure).
+    local check_script="import { checkForUpdate } from './pforge-mcp/update-check.mjs'; const r = await checkForUpdate({ currentVersion: process.argv[1], projectDir: process.argv[2], force: true }); console.log(JSON.stringify(r === null ? { checkFailed: true } : r));"
     local check_result
     check_result="$(node --input-type=module -e "$check_script" "$current_version" "$REPO_ROOT" 2>&1 | tail -1)"
+
+    local check_failed
+    check_failed="$(echo "$check_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('checkFailed',False))" 2>/dev/null || echo "false")"
 
     local is_newer
     is_newer="$(echo "$check_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('isNewer',False))" 2>/dev/null || echo "false")"
 
     local latest_ver
     latest_ver="$(echo "$check_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('latest',''))" 2>/dev/null || echo "")"
+
+    # Check-failed path: tell the user the check didn't complete instead of
+    # claiming they're current. --force still proceeds (heal path).
+    if { [ "$check_failed" = "True" ] || [ "$check_failed" = "true" ]; } && ! $force_heal; then
+        echo "  ⚠ Could not check for updates — GitHub API unreachable, rate-limited, or timed out." >&2
+        echo "    Your local version is v$current_version. This is NOT a confirmation that it is current." >&2
+        echo "    Try again shortly, or set PFORGE_NO_UPDATE_CHECK=1 to suppress checks." >&2
+        echo "    To force-install the latest tagged release anyway: pforge self-update --force" >&2
+        exit 2
+    fi
 
     # v2.53.3 — with --force, install the latest tagged release even when the
     # local install reports 'newer' (the classic "stuck on 2.54.0-dev copied

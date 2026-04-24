@@ -5287,10 +5287,13 @@ function Invoke-SelfUpdate {
     }
 
     Write-Host "Checking for updates (force refresh)..." -ForegroundColor DarkCyan
+    # Emit a distinct marker when checkForUpdate returns null so we can tell
+    # "GitHub API failed" apart from "checked and up to date" (meta-bug:
+    # client stuck on v2.66.0 saw 'Already current' after an API failure).
     $checkScript = @"
 import { checkForUpdate } from './pforge-mcp/update-check.mjs';
 const r = await checkForUpdate({ currentVersion: process.argv[1], projectDir: process.argv[2], force: true });
-console.log(JSON.stringify(r || { isNewer: false }));
+console.log(JSON.stringify(r === null ? { checkFailed: true } : r));
 "@
     $currentVersion = (Get-Content (Join-Path $RepoRoot "VERSION") -Raw).Trim()
     $checkResult = & node --input-type=module -e $checkScript $currentVersion $RepoRoot 2>&1 | Select-Object -Last 1
@@ -5299,6 +5302,16 @@ console.log(JSON.stringify(r || { isNewer: false }));
     } catch {
         Write-Host "ERROR: Failed to parse update check output: $checkResult" -ForegroundColor Red
         exit 1
+    }
+
+    # Check-failed path: tell the user the check didn't complete instead of
+    # claiming they're current. --force still proceeds (heal path).
+    if ($checkJson.checkFailed -and -not $forceUpdate) {
+        Write-Host "  ⚠ Could not check for updates — GitHub API unreachable, rate-limited, or timed out." -ForegroundColor Yellow
+        Write-Host "    Your local version is v$currentVersion. This is NOT a confirmation that it is current." -ForegroundColor Yellow
+        Write-Host "    Try again shortly, or set PFORGE_NO_UPDATE_CHECK=1 to suppress checks." -ForegroundColor Yellow
+        Write-Host "    To force-install the latest tagged release anyway: pforge self-update --force" -ForegroundColor Yellow
+        exit 2
     }
 
     # v2.53.3 — with --force, install the latest tagged release even when the

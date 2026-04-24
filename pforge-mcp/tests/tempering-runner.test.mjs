@@ -469,6 +469,9 @@ describe("runTemperingRun", () => {
     expect(rec.scanners[7].scanner).toBe("load-stress");
     // Slice 05.2 — mutation scanner fires ninth.
     expect(rec.scanners[8].scanner).toBe("mutation");
+    // Meta-bug #102 — content-audit scanner fires tenth.
+    expect(rec.scanners[9].scanner).toBe("content-audit");
+    expect(rec.scanners).toHaveLength(10);
   });
 
   it("emits start / scanner-started / scanner-completed / completed events in order", async () => {
@@ -476,11 +479,14 @@ describe("runTemperingRun", () => {
     const spawn = makeFakeSpawn({ stdout: "", exitCode: 0 });
     await runTemperingRun({ projectDir, hub, spawn, adapter: fakeAdapter });
     const types = hub.events.map((e) => e.type);
-    // Slice 05.2 — nine scanners fire in order (unit, integration,
-    // ui-playwright, contract, visual-diff, flakiness, perf-budget,
-    // load-stress, mutation), each bracketed by started/completed.
+    // Ten scanners fire in order (unit, integration, ui-playwright,
+    // contract, visual-diff, flakiness, perf-budget, load-stress,
+    // mutation, content-audit — meta-bug #102), each bracketed by
+    // started/completed.
     expect(types).toEqual([
       "tempering-run-started",
+      "tempering-run-scanner-started",
+      "tempering-run-scanner-completed",
       "tempering-run-scanner-started",
       "tempering-run-scanner-completed",
       "tempering-run-scanner-started",

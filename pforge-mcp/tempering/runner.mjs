@@ -174,6 +174,7 @@ const SCANNER_BUDGET_KEYS = Object.freeze({
   "performance-budget": "perfBudgetMaxMs",
   "load-stress": "loadStressMaxMs",
   mutation: "mutationMaxMs",
+  "content-audit": "contentAuditMaxMs",
 });
 
 /**
@@ -412,6 +413,8 @@ export async function runTemperingRun(opts = {}) {
     loadStressScannerImpl = null,
     // TEMPER-05 Slice 05.2 — Mutation scanner dependency injection.
     mutationScannerImpl = null,
+    // Meta-bug #102 — Content-audit scanner dependency injection.
+    contentAuditScannerImpl = null,
     // TEMPER-06 Slice 06.1 — Bug registry + classifier DI.
     // `classifyFn` and `registerBugFn` override the real classify/registerBug
     // for tests. `callModel` is threaded to the classifier's LLM layer.
@@ -974,8 +977,72 @@ export async function runTemperingRun(opts = {}) {
     durationMs: mutationResult.durationMs || 0,
   });
 
+  // ── Content-audit scanner (meta-bug #102) ──
+  // Cross-stack scanner — probes a running app's routes for HTTP
+  // status, placeholders, and empty-shell SPA markers. Skips cleanly
+  // when no base URL is configured so CI on bare repos stays green.
+  emit(hub, "tempering-run-scanner-started", { correlationId: corr, scanner: "content-audit", stack });
+
+  let contentAuditResult;
+  try {
+    const priorBudgetExceeded = unitResult.verdict === "budget-exceeded"
+      || integrationResult.verdict === "budget-exceeded"
+      || uiResult.verdict === "budget-exceeded"
+      || contractResult.verdict === "budget-exceeded"
+      || visualDiffResult.verdict === "budget-exceeded"
+      || flakinessResult.verdict === "budget-exceeded"
+      || perfBudgetResult.verdict === "budget-exceeded"
+      || loadStressResult.verdict === "budget-exceeded"
+      || mutationResult.verdict === "budget-exceeded";
+    if (priorBudgetExceeded) {
+      contentAuditResult = {
+        scanner: "content-audit",
+        sliceRef,
+        startedAt: new Date(now()).toISOString(),
+        completedAt: new Date(now()).toISOString(),
+        skipped: true,
+        reason: "prior-budget-exceeded",
+        verdict: "skipped",
+        pass: 0, fail: 0,
+        durationMs: 0,
+      };
+    } else if (contentAuditScannerImpl) {
+      contentAuditResult = await contentAuditScannerImpl({
+        config, projectDir, runId, sliceRef, now, env,
+      });
+    } else {
+      const { runContentAudit } = await import("./scanners/content-audit.mjs");
+      contentAuditResult = await runContentAudit({
+        config, projectDir, runId, sliceRef, now, env,
+      });
+    }
+  } catch (err) {
+    contentAuditResult = {
+      scanner: "content-audit",
+      sliceRef,
+      startedAt: new Date(now()).toISOString(),
+      completedAt: new Date(now()).toISOString(),
+      skipped: true,
+      reason: `scanner-load-failed:${err.message || err}`,
+      verdict: "skipped",
+      pass: 0, fail: 0,
+      durationMs: 0,
+    };
+  }
+
+  emit(hub, "tempering-run-scanner-completed", {
+    correlationId: corr,
+    scanner: "content-audit",
+    stack,
+    verdict: contentAuditResult.verdict,
+    pass: contentAuditResult.pass || 0,
+    fail: contentAuditResult.fail || 0,
+    skipped: contentAuditResult.skipped ? 1 : 0,
+    durationMs: contentAuditResult.durationMs || 0,
+  });
+
   // Overall verdict: worst of the scanner verdicts
-  const scanners = [unitResult, integrationResult, uiResult, contractResult, visualDiffResult, flakinessResult, perfBudgetResult, loadStressResult, mutationResult];
+  const scanners = [unitResult, integrationResult, uiResult, contractResult, visualDiffResult, flakinessResult, perfBudgetResult, loadStressResult, mutationResult, contentAuditResult];
   const overallVerdict = deriveOverallVerdict(scanners);
 
   // ── TEMPER-06 Slice 06.1 — Bug registration hook ──
@@ -1096,6 +1163,7 @@ const SCANNER_IMPORT_MAP = {
   "performance-budget": "./scanners/performance-budget.mjs",
   "load-stress":        "./scanners/load-stress.mjs",
   "mutation":           "./scanners/mutation.mjs",
+  "content-audit":      "./scanners/content-audit.mjs",
 };
 
 const SCANNER_ENTRY_POINTS = {
@@ -1106,6 +1174,7 @@ const SCANNER_ENTRY_POINTS = {
   "performance-budget": "runPerformanceBudgetScan",
   "load-stress":        "runLoadStressScan",
   "mutation":           "runMutationScan",
+  "content-audit":      "runContentAudit",
 };
 
 /**

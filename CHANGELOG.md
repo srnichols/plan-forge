@@ -7,6 +7,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+- `content-audit` scanner is now wired into `runTemperingRun` as the 10th scanner in the standard sequence (after `mutation`). It probes configured routes for HTTP status, placeholders, and empty-shell SPA markers. Skips cleanly when no base URL is available. Adds `contentAuditMaxMs` budget key, `contentAuditScannerImpl` DI hook, `content-audit` entry in `SCANNER_IMPORT_MAP` + `SCANNER_ENTRY_POINTS`. Fixes meta-bug [#102](https://github.com/srnichols/plan-forge/issues/102).
+
 ### Fixed
 - `costService.estimateQuorum` / `estimateSlice` — callers that pass `cwd: null` now get a pure heuristic estimate instead of silently reading the pforge repo's own `.forge/cost-history.json`. Previously `cwd || process.cwd()` collapsed null to the working directory, producing `confidence: "historical"` on fresh plans and inflating power-mode totals by up to 8× via an inherited correction factor. `loadModelPerformance` and `getHistoricalFailureRate` also guard null cwd. Fixes meta-bug [#97](https://github.com/srnichols/plan-forge/issues/97).
 - `orchestrator.executeSlice` — signal-killed workers are now marked `failed`, not `passed`. Added `detectKilledBySignal()` recognizing Windows `STATUS_CONTROL_C_EXIT` (0xC000013A), `STATUS_BREAK`, and Unix signal-encoded exits (128+signal). Status logic no longer defaults to passed when a slice has no validation gate AND the worker exited non-zero. `sliceResult` now surfaces `killedBySignal` and `statusReason`. Fixes meta-bug [#99](https://github.com/srnichols/plan-forge/issues/99).

@@ -2084,7 +2084,7 @@ const SYSTEM_REFERENCE = {
   },
 
   skills: {
-    description: "12 multi-step executable procedures with validation gates, MCP tool integration, Temper Guards, Exit Proof, and Warning Signs per Skill Blueprint spec",
+    description: "14 multi-step executable procedures with validation gates, MCP tool integration, Temper Guards, Exit Proof, and Warning Signs per Skill Blueprint spec",
     format: "Every skill follows the Skill Blueprint (docs/SKILL-BLUEPRINT.md): Frontmatter → Trigger → Steps → Safety Rules → Temper Guards → Warning Signs → Exit Proof → Persistent Memory",
     available: {
       "/database-migration": "Generate, review, test, and deploy schema migrations",
@@ -2098,6 +2098,9 @@ const SYSTEM_REFERENCE = {
       "/health-check": "Forge diagnostic: forge_smith → forge_validate → forge_sweep with structured report",
       "/forge-execute": "Guided plan execution: list plans → estimate cost → choose mode → execute → report",
       "/forge-quench": "Systematically reduce code complexity while preserving behavior — measure, understand (Chesterton's Fence), propose, prove, report",
+      "/forge-troubleshoot": "Diagnose forge/plan execution failures — gather logs, traces, and state for root-cause analysis",
+      "/security-audit": "OWASP scan, dependency audit, secrets detection with severity report",
+      "/audit-loop": "Recursive audit drain — scan → triage → fix, repeat until convergence (Phase-39)",
     },
     invocation: "Type / in Copilot Chat to see available skills, or use forge_run_skill MCP tool",
   },

@@ -14,7 +14,7 @@ pforge smith                 # confirm environment is healthy
 pforge audit-loop --help     # should print usage, no side effects
 ```
 
-Expected version: **v2.80.0** (tag `v2.80.0`, commit `bf6f57c` or newer).
+Expected version: **v2.80.1** (tag `v2.80.1`, commit `bf6f57c` or newer).
 
 ---
 

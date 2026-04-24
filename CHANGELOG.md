@@ -7,6 +7,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.80.1] — 2026-04-24 — Post-Phase-39 polish
+
+> Packaging and surface polish on top of v2.80.0 — no runtime behavior changes.
+
+### Fixed
+- `pforge audit-loop --help` / `-h` — prints usage and exits cleanly without running a drain or writing history (previously fell through to execution).
+- Forge-Master classifier keyword coverage — broadened operational/advisory lane regex; hammer-fm harness now passes 84/84 stress prompts with pure keyword routing (no LLM required).
+- `scripts/hammer-fm.mjs` — added rate-limit retry with exponential backoff.
+
+### Changed
+- `pforge-mcp/capabilities.mjs#skills.available` — enumerated all 14 shared skills: added `/audit-loop`, `/forge-troubleshoot`, `/security-audit` to the advertised surface (previously listed 11).
+
+### Docs
+- `docs/RUMMAG-AUDIT-LOOP-FIELD-TEST.md` — field test guide for validating the audit-loop feature against an external project.
+
 ## [2.80.0] — 2026-04-24 — Audit Loop Promotion (Phase-39)
 
 > **Phase-39 — Recursive audit-loop promotion to first-class Tempering subsystem.**

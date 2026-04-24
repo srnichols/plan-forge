@@ -154,6 +154,12 @@ const KEYWORD_RULES = [
   { pattern: /\b(pause|abort|rollback|rolled\s+back|restore|queue\s+(it|as)|do\s+not\s+execute)\b/i, lane: LANES.OPERATIONAL, weight: 3 },
   { pattern: /\b(create\s+a\s+plan|execute.{0,10}(first|next|the)\s+slice)\b/i, lane: LANES.OPERATIONAL, weight: 2 },
   { pattern: /\b(apply\s+a\s+hotfix|in-?flight\s+run|working\s+tree)\b/i, lane: LANES.OPERATIONAL, weight: 2 },
+  // Meta-bug #98 — conversational operational phrasings that previously slipped
+  // through keyword scoring and fell out to the "no_signals → offtopic" default.
+  { pattern: /\b(pick\s+up\s+(the\s+)?thread|pick\s+up\s+where|back\s+to\s+(the|that|what)|where\s+we\s+left\s+off)\b/i, lane: LANES.OPERATIONAL, weight: 3 },
+  { pattern: /\b(preferences?|settings?\s+I|my\s+(model|mode|quorum|threshold|config|setting)s?)\b/i, lane: LANES.OPERATIONAL, weight: 3 },
+  { pattern: /\b(open\s+bugs?|registered\s+bugs?|bug\s+registry)\b/i, lane: LANES.TROUBLESHOOT, weight: 3 },
+  { pattern: /\b(failing\s+gate|gate\s+failure|gate\s+failed|scope\s+contract|violates?\s+(the\s+)?scope)\b/i, lane: LANES.TROUBLESHOOT, weight: 3 },
   // Phase-38 — quorum/complexity/cost-savings vocabulary
   { pattern: /\b(speed\s+mode|power\s+mode|auto.?mode|complexity\s+scores?|per-?slice\s+complexity)\b/i, lane: LANES.OPERATIONAL, weight: 3 },
   { pattern: /\b(how\s+much\s+would\s+I\s+save|save.{0,20}(moving|switching)|flip.{0,10}from.{0,10}to)\b/i, lane: LANES.OPERATIONAL, weight: 2 },
@@ -539,7 +545,10 @@ export async function classify(message, opts = {}) {
     return result;
   }
 
-  // No signals at all — default to offtopic
+  // No signals at all — default to offtopic. Meta-bug #98 considered
+  // flipping this to operational, but explicit tests guard the "slice
+  // me an apple" / "phase of the moon" → offtopic contract. The #98
+  // fix lives in the expanded keyword patterns above, not here.
   return {
     lane: LANES.OFFTOPIC,
     confidence: "low",

@@ -9,6 +9,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 - `content-audit` scanner is now wired into `runTemperingRun` as the 10th scanner in the standard sequence (after `mutation`). It probes configured routes for HTTP status, placeholders, and empty-shell SPA markers. Skips cleanly when no base URL is available. Adds `contentAuditMaxMs` budget key, `contentAuditScannerImpl` DI hook, `content-audit` entry in `SCANNER_IMPORT_MAP` + `SCANNER_ENTRY_POINTS`. Fixes meta-bug [#102](https://github.com/srnichols/plan-forge/issues/102).
+- `intent-router` keyword rules expanded to cover conversational operational phrasings — "pick up the thread", "where we left off", "back to the X", preference/settings recall, and specific troubleshoot markers (`open bugs`, `failing gate`, `scope contract` violations). Reduces keyword-only fallback misroutes to offtopic. Fixes meta-bug [#98](https://github.com/srnichols/plan-forge/issues/98).
 
 ### Fixed
 - `costService.estimateQuorum` / `estimateSlice` — callers that pass `cwd: null` now get a pure heuristic estimate instead of silently reading the pforge repo's own `.forge/cost-history.json`. Previously `cwd || process.cwd()` collapsed null to the working directory, producing `confidence: "historical"` on fresh plans and inflating power-mode totals by up to 8× via an inherited correction factor. `loadModelPerformance` and `getHistoricalFailureRate` also guard null cwd. Fixes meta-bug [#97](https://github.com/srnichols/plan-forge/issues/97).

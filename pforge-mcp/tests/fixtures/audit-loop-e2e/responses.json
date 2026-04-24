@@ -1,0 +1,19 @@
+{
+  "_comment": "Mock HTTP responses for the 4 fixture routes. 3 known-bad + 1 classifier-noise.",
+  "/": {
+    "status": 200,
+    "body": "<html><head><title>Home</title></head><body><main><h1>Welcome</h1><p>This is the home page with enough words to pass the minimum word count threshold for content audit scanning validation purposes.</p></main></body></html>"
+  },
+  "/about": {
+    "status": 200,
+    "body": "<html><head><title>About</title></head><body><main><p>TODO: fill in the about page content later when we have time to write it up properly for the site launch.</p></main></body></html>"
+  },
+  "/missing-page": {
+    "status": 404,
+    "body": "<html><head><title>Not Found</title></head><body><h1>404</h1></body></html>"
+  },
+  "/dashboard": {
+    "status": 200,
+    "body": "<html><head><title>Dashboard</title></head><body><div id=\"root\"></div><script src=\"/_next/static/chunks/main.js\"></script><script>self.__next_f.push([1,\"data\"])</script></body></html>"
+  }
+}

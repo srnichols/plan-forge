@@ -1655,6 +1655,46 @@ export function detectSilentWorkerFailure(workerResult, mode, sliceNumber) {
   return null;
 }
 
+/**
+ * Meta-bug #99: detect worker subprocesses killed by a signal / Ctrl+C.
+ *
+ * Returns a reason string if the exit code indicates the worker was
+ * terminated abnormally rather than returning a normal non-zero status.
+ * The orchestrator must not mark such slices as "passed" — the work was
+ * interrupted and cannot be trusted, even when no validation gate exists.
+ *
+ * Exit code conventions:
+ *   - Windows STATUS_CONTROL_C_EXIT = 0xC000013A = 3221225786 (Ctrl+C)
+ *   - Windows STATUS_BREAK          = 0xC000013B = 3221225787 (Ctrl+Break)
+ *   - Unix signals encoded as 128 + signal_number:
+ *       130 = SIGINT   (Ctrl+C)
+ *       137 = SIGKILL
+ *       143 = SIGTERM
+ *       129..159 range covers all standard signals
+ *
+ * @param {number|null|undefined} exitCode
+ * @returns {string|null} reason string, or null if the exit is not signal-like
+ */
+export function detectKilledBySignal(exitCode) {
+  if (exitCode === null || exitCode === undefined) return null;
+  if (typeof exitCode !== "number") return null;
+  if (exitCode === 0) return null;
+
+  // Windows control-signal exits
+  if (exitCode === 3221225786) return "STATUS_CONTROL_C_EXIT (Ctrl+C / 0xC000013A)";
+  if (exitCode === 3221225787) return "STATUS_BREAK (Ctrl+Break / 0xC000013B)";
+
+  // Unix signal-encoded exits (128 + signal, signals 1..31)
+  if (exitCode >= 129 && exitCode <= 159) {
+    const signal = exitCode - 128;
+    const names = { 1: "SIGHUP", 2: "SIGINT", 3: "SIGQUIT", 9: "SIGKILL", 15: "SIGTERM" };
+    const name = names[signal] || `signal ${signal}`;
+    return `killed by ${name} (exit ${exitCode})`;
+  }
+
+  return null;
+}
+
 // ─── Phase-28.3 Slice 4: Post-slice advisory scanner ─────────────────
 //
 // Non-blocking scan of completed slice trajectory for self-repair markers.
@@ -6532,10 +6572,38 @@ async function executeSlice(slice, options) {
   // the gate (if any) ran against unchanged files. Treat as a failure so operators see it.
   const silentFailure = detectSilentWorkerFailure(workerResult, mode, slice.number);
 
-  // Status: gate is the authority. Worker exit code may be non-zero from shell wrappers
-  // even when the work succeeded. If gates pass, the slice passed.
-  // Issue #77: silent worker failures override gate success.
-  const status = silentFailure ? "failed" : (gateResult.success ? "passed" : "failed");
+  // Meta-bug #99: worker killed by signal / Ctrl+C must never be marked passed,
+  // even when no validation gate exists. Previously this fell through because
+  // the default `gateResult.success = true` for slices without a gate combined
+  // with `silentFailure` only firing on exit 0.
+  const killedBySignal = detectKilledBySignal(workerResult.exitCode);
+  const hadValidationGate = !!slice.validationGate;
+
+  // Status: gate is the authority when it ran. Without a gate, the worker's
+  // exit code becomes the fallback signal — a non-zero exit (especially a
+  // signal-kill) is a failure even if no gate existed to catch it.
+  //   - silentFailure (exit 0, no output) → failed
+  //   - killedBySignal (Ctrl+C, SIGTERM, etc.) → failed
+  //   - gate exists and failed → failed
+  //   - no gate AND worker exited non-zero → failed (meta-bug #99)
+  //   - otherwise → passed
+  let status;
+  let statusReason = null;
+  if (silentFailure) {
+    status = "failed";
+    statusReason = silentFailure;
+  } else if (killedBySignal) {
+    status = "failed";
+    statusReason = `worker killed before completion: ${killedBySignal}`;
+  } else if (!gateResult.success) {
+    status = "failed";
+    statusReason = `validation gate failed: ${gateResult.failedCommand || "unknown"}`;
+  } else if (!hadValidationGate && workerResult.exitCode !== 0) {
+    status = "failed";
+    statusReason = `worker exited ${workerResult.exitCode} with no validation gate to cross-check — cannot assume success`;
+  } else {
+    status = "passed";
+  }
 
   const sliceResult = {
     number: slice.number,
@@ -6548,6 +6616,8 @@ async function executeSlice(slice, options) {
     gateError: gateResult.error || null,
     failedCommand: gateResult.failedCommand || null,
     ...(silentFailure && { silentFailure }),
+    ...(killedBySignal && { killedBySignal }),
+    ...(statusReason && { statusReason }),
     tokens: workerResult.tokens || { tokens_in: null, tokens_out: null, model: "unknown" },
     worker: workerResult.worker,
     model: workerResult.model,

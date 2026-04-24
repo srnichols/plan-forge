@@ -13,6 +13,7 @@ import {
   suggestInstall,
   detectPackageManager,
   detectSilentWorkerFailure,
+  detectKilledBySignal,
 } from "../orchestrator.mjs";
 
 describe("worker-capabilities matrix", () => {
@@ -168,6 +169,53 @@ describe("detectSilentWorkerFailure (issue #77)", () => {
   it("returns null when workerResult is missing", () => {
     expect(detectSilentWorkerFailure(null, "autonomous", "7")).toBeNull();
     expect(detectSilentWorkerFailure(undefined, "autonomous", "8")).toBeNull();
+  });
+});
+
+describe("detectKilledBySignal (meta-bug #99)", () => {
+  it("flags Windows STATUS_CONTROL_C_EXIT (3221225786 / 0xC000013A)", () => {
+    expect(detectKilledBySignal(3221225786)).toMatch(/STATUS_CONTROL_C_EXIT/);
+    expect(detectKilledBySignal(3221225786)).toMatch(/Ctrl\+C/);
+  });
+
+  it("flags Windows STATUS_BREAK (3221225787)", () => {
+    expect(detectKilledBySignal(3221225787)).toMatch(/STATUS_BREAK/);
+  });
+
+  it("flags Unix SIGINT (exit 130)", () => {
+    expect(detectKilledBySignal(130)).toMatch(/SIGINT/);
+  });
+
+  it("flags Unix SIGKILL (exit 137)", () => {
+    expect(detectKilledBySignal(137)).toMatch(/SIGKILL/);
+  });
+
+  it("flags Unix SIGTERM (exit 143)", () => {
+    expect(detectKilledBySignal(143)).toMatch(/SIGTERM/);
+  });
+
+  it("flags unnamed signal exit codes in range 129..159", () => {
+    expect(detectKilledBySignal(135)).toMatch(/signal 7/);
+  });
+
+  it("does NOT flag exit 0", () => {
+    expect(detectKilledBySignal(0)).toBeNull();
+  });
+
+  it("does NOT flag ordinary non-zero exits (1, 2, 64)", () => {
+    expect(detectKilledBySignal(1)).toBeNull();
+    expect(detectKilledBySignal(2)).toBeNull();
+    expect(detectKilledBySignal(64)).toBeNull();
+  });
+
+  it("does NOT flag orchestrator timeout sentinel (-1)", () => {
+    expect(detectKilledBySignal(-1)).toBeNull();
+  });
+
+  it("returns null for null/undefined/non-numeric input", () => {
+    expect(detectKilledBySignal(null)).toBeNull();
+    expect(detectKilledBySignal(undefined)).toBeNull();
+    expect(detectKilledBySignal("130")).toBeNull();
   });
 });
 

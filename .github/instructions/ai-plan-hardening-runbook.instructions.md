@@ -32,3 +32,8 @@ SESSION 3 → Review & Audit (fresh agent, read-only, drift detection)
 - Each slice needs at least one concrete validation gate
 - Tag slices `[parallel-safe]` or `[sequential]`
 - Include `Context Files` per slice (especially `.github/instructions/*.instructions.md`)
+- **Never nest escaped double-quotes inside `bash -c "..."`** (meta-bug [#93](https://github.com/srnichols/plan-forge/issues/93)).
+  On Windows `cmd → bash`, three-level escapes like `bash -c "grep -q onclick=\\\"foo\\\" file"` collapse with
+  `/bin/bash: -c: line 1: unexpected EOF while looking for matching quote`. Use single quotes inside (`'foo'`),
+  switch to a `node -e` one-liner using `.includes()`, or rely on a vitest test that already proves the
+  presence/absence. The full Gate Portability Rules live in `step2-harden-plan.prompt.md`.

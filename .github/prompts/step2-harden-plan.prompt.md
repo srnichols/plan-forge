@@ -4,9 +4,9 @@ description: "Pipeline Step 2 — Harden a draft plan into an execution contract
 
 # Step 2: Harden the Plan
 
-> **Pipeline**: Step 2 of 5 (Session 1 — Plan Hardening)  
-> **When**: After pre-flight passes (Step 1)  
-> **Model suggestion**: Claude (best at structured plan generation and scope contract design)  
+> **Pipeline**: Step 2 of 5 (Session 1 — Plan Hardening)
+> **When**: After pre-flight passes (Step 1)
+> **Model suggestion**: Claude (best at structured plan generation and scope contract design)
 > **Next Step**: `step3-execute-slice.prompt.md` (new session)
 
 Replace `<YOUR-PLAN>` with your plan filename (without path or `.md` extension).
@@ -122,6 +122,7 @@ Every gate command MUST be cross-platform. Apply these rules when writing gates:
 | **No `cat FILE`** | `cat VERSION` | `node -e "console.log(require('fs').readFileSync('VERSION','utf8').trim())"` |
 | **`npx vitest` from project root** | `npx vitest run` (picks up wrong version) | `bash -c "cd pforge-mcp && npx vitest run"` |
 | **curl localhost:* in non-final slices** | `curl http://localhost:3100/api/...` | Move runtime API checks to vitest integration tests |
+| **No nested escaped quotes inside `bash -c "..."`** (meta-bug [#93](https://github.com/srnichols/plan-forge/issues/93)) | `bash -c "grep -q onclick=\"forgeMasterPickPrompt\" file.html"` — collapses on Windows `cmd → bash` with `/bin/bash: -c: line 1: unexpected EOF while looking for matching quote` | Use single quotes inside double: `bash -c "grep -q onclick='forgeMasterPickPrompt' file.html"`, OR move to `node -e` with `.includes()`, OR rely on an existing vitest test that already proves the absence/presence. Never stack three levels of escapes (`\\\"`) — they survive some quoting layers and break on others. |
 
 **Preferred gate pattern** (covers 90% of slices):
 ```bash

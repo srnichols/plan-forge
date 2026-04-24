@@ -21,6 +21,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Docs
 - Release procedure memory updated — `gh release create` is now called out as MANDATORY step 6, not optional. Verification step added: `node pforge-mcp/update-from-github.mjs resolve-tag` must print no `warning` field.
+- `step2-harden-plan.prompt.md` + `ai-plan-hardening-runbook.instructions.md` — added explicit rule against nested escaped double-quotes inside `bash -c "..."` gate strings. Stacking three levels of escapes (`\\"`) collapses on Windows `cmd → bash` with `/bin/bash: -c: line 1: unexpected EOF while looking for matching quote`. Guidance: use single-quotes inside, switch to `node -e` + `.includes()`, or rely on an existing vitest test. The `validateGatePortability()` regex (`nested-double-quotes` rule) already catches this at plan-lint time; docs fix closes the prompt-side authoring gap. Fixes meta-bug [#93](https://github.com/srnichols/plan-forge/issues/93).
 
 ## [2.80.1] — 2026-04-24 — Post-Phase-39 polish
 

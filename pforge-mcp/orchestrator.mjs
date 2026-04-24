@@ -4161,6 +4161,8 @@ export function getCostReport(cwd) {
  * entries are removed the file is not rewritten.
  */
 export function loadModelPerformance(cwd) {
+  // Meta-bug #97: callers may pass null cwd to opt out of history lookup.
+  if (!cwd) return [];
   const perfPath = resolve(cwd, ".forge", "model-performance.json");
   if (!existsSync(perfPath)) return [];
   try {
@@ -8955,6 +8957,8 @@ export function scoreSliceComplexity(slice, cwd) {
  * Returns 0-1 (0 = no history or never failed, 1 = always fails).
  */
 function getHistoricalFailureRate(slice, cwd) {
+  // Meta-bug #97: callers may pass null cwd to opt out of history lookup.
+  if (!cwd) return 0;
   const runsDir = resolve(cwd, ".forge", "runs");
   if (!existsSync(runsDir)) return 0;
 

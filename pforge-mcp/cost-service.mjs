@@ -475,7 +475,7 @@ export function estimateSlice({ plan, sliceNumber, mode = "auto", model = "claud
     throw new Error(`estimateSlice: unknown mode "${mode}" — expected auto | power | speed | false`);
   }
 
-  const resolvedCwd = cwd || process.cwd();
+  const resolvedCwd = cwd === null ? null : (cwd || process.cwd());
 
   // Historical avg tokens (same logic as estimatePlan, but no correction factor)
   const historyPath = resolvedCwd ? resolve(resolvedCwd, ".forge", "cost-history.json") : null;
@@ -576,7 +576,13 @@ export function estimateQuorum({ plan, cwd, resumeFrom = null, defaultModel = "c
     throw new Error("estimateQuorum: plan object with slices and dag is required");
   }
 
-  const resolvedCwd = cwd || process.cwd();
+  // Meta-bug #97: distinguish `cwd === null` (caller opts out of history lookup —
+  // fresh heuristic estimate) from `cwd === undefined` (fall back to process.cwd()).
+  // Previously both collapsed to process.cwd(), which on a pforge checkout silently
+  // pulled the plan-forge repo's own .forge/cost-history.json and produced
+  // "historical" confidence + inflated cost (calibration factor × large-run token
+  // averages) on caller-supplied heuristic plans.
+  const resolvedCwd = cwd === null ? null : (cwd || process.cwd());
 
   const autoConfig = buildQuorumConfigForMode("auto");
   const powerConfig = buildQuorumConfigForMode("power");

@@ -9,6 +9,16 @@ description: "Pipeline Step 2 — Harden a draft plan into an execution contract
 > **Model suggestion**: Claude (best at structured plan generation and scope contract design)
 > **Next Step**: `step3-execute-slice.prompt.md` (new session)
 
+> ⚠️ **Do not harden plans with headless `gh copilot`** (meta-bug [#86](https://github.com/srnichols/plan-forge/issues/86)).
+> `gh copilot` in `-p` / `--autopilot` mode runs in a sandboxed session that cannot write to your
+> repository regardless of the flags you pass (`--allow-all`, `--allow-all-tools --allow-all-paths
+> --no-ask-user`, `--yolo --no-ask-user` all fail the same way). The CLI will either exit 1 with
+> `Permission denied and could not request permission from user`, or exit 0 with the edits written
+> to `~/.copilot/session-state/<sid>/files/` instead of your repo.
+>
+> **Use interactive hardening instead**: open this prompt in VS Code Copilot chat (agent mode),
+> or call `forge_master_ask` with `mode: "harden"`. Both can write to the workspace directly.
+
 Replace `<YOUR-PLAN>` with your plan filename (without path or `.md` extension).
 
 ---

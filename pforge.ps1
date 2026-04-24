@@ -5767,6 +5767,29 @@ function Invoke-AuditLoop {
 
     for ($i = 0; $i -lt $Arguments.Count; $i++) {
         switch -Regex ($Arguments[$i]) {
+            '^(--help|-h)$' {
+                Write-Host "Usage: pforge audit-loop [options]"
+                Write-Host ""
+                Write-Host "Run the tempering audit drain loop — discover bugs by re-probing until"
+                Write-Host "findings converge to zero or the max-rounds cap fires."
+                Write-Host ""
+                Write-Host "Options:"
+                Write-Host "  --auto            Respect audit.mode in .forge.json; exit early when no"
+                Write-Host "                    auto-activation signals trip. Default: always run."
+                Write-Host "  --max=N           Cap the drain at N rounds (default: 5)."
+                Write-Host "  --dry-run         Print the plan; write no artifacts and run no drain."
+                Write-Host "  --env=NAME        Target environment (dev|staging). 'production' is forbidden."
+                Write-Host "  --help, -h        Show this help and exit."
+                Write-Host ""
+                Write-Host "Examples:"
+                Write-Host "  pforge audit-loop                          # Run drain now (manual trigger)"
+                Write-Host "  pforge audit-loop --auto                   # Only run if signals trip"
+                Write-Host "  pforge audit-loop --dry-run                # Preview without side effects"
+                Write-Host "  pforge audit-loop --max=3 --env=staging    # Cap rounds, target staging"
+                Write-Host ""
+                Write-Host "See docs/CLI-GUIDE.md for the full audit-loop reference."
+                return
+            }
             '^--auto$'      { $autoMode = $true }
             '^--dry-run$'   { $dryRun = $true }
             '^--max=(\d+)$' { $maxRounds = [int]$Matches[1] }

@@ -5015,6 +5015,31 @@ cmd_audit_loop() {
 
     while [ $# -gt 0 ]; do
         case "$1" in
+            --help|-h)
+                cat <<'EOF'
+Usage: pforge audit-loop [options]
+
+Run the tempering audit drain loop — discover bugs by re-probing until
+findings converge to zero or the max-rounds cap fires.
+
+Options:
+  --auto            Respect audit.mode in .forge.json; exit early when no
+                    auto-activation signals trip. Default: always run.
+  --max=N           Cap the drain at N rounds (default: 5).
+  --dry-run         Print the plan; write no artifacts and run no drain.
+  --env=NAME        Target environment (dev|staging). 'production' is forbidden.
+  --help, -h        Show this help and exit.
+
+Examples:
+  pforge audit-loop                          # Run drain now (manual trigger)
+  pforge audit-loop --auto                   # Only run if signals trip
+  pforge audit-loop --dry-run                # Preview without side effects
+  pforge audit-loop --max=3 --env=staging    # Cap rounds, target staging
+
+See docs/CLI-GUIDE.md for the full audit-loop reference.
+EOF
+                return 0
+                ;;
             --auto)     auto_mode=true; shift ;;
             --dry-run)  dry_run=true; shift ;;
             --max=*)    max_rounds="${1#--max=}"; shift ;;

@@ -10,7 +10,7 @@ source: human
 > **Status**: Draft — ready for Step-2 hardening
 > **Depends on**: v2.79.0 (Phase-38.8) landed on master
 > **Branch strategy**: Direct to `master`. Additive — no breaking changes to existing tempering surface.
-> **Session budget**: 8 slices in **1 session**. ~105 min, budget ≤ $14.
+> **Session budget**: 9 slices in **1 session**. ~135 min, budget ≤ $17.
 > **Design posture**: Promote a field-tested pattern (proposal 0001) into a first-class Plan-Forge primitive by **extending** `tempering/` rather than forking it. Two new tools, one new agent, one new scanner, one thin skill wrapper, plus a quorum-style activation surface (default `off`). Zero duplication of existing crawler/classifier/bug-registry code.
 
 ---
@@ -87,6 +87,8 @@ Proposal 0001 documents a loop that closes this gap (discovery → triage → th
 - **MUST**: CLI `pforge audit-loop` command exists with flags `--auto`, `--max=N`, `--dry-run`, `--env=dev|staging`. Manual one-shot `pforge audit-loop` ignores `audit.mode` and always runs. `--auto` respects `audit.mode` and exits early (exit code 0, message "no drain signals tripped") if no threshold trips. **Test**: `pforge-mcp/tests/cli-audit-loop.test.mjs` — covers manual run, `--auto` with no signals (early exit), `--auto` with signals tripped (drain dispatched), `--dry-run` (no triage routing), and `--env=staging` plumbing.
 - **MUST**: Auto-activation evaluator in `pforge-mcp/tempering/auto-activate.mjs` exports `shouldAutoDrain({ planContext, config, lastDrainTs, lastVerdict }) → { fire: boolean, signals: string[] }`. Emits a `drain-auto-estimate` event (via existing hub) before dispatch so callers can cancel. **Test**: `pforge-mcp/tests/audit-auto-activate.test.mjs` — one case per threshold (route-files, UI-components, days-since, investigate-verdict), plus a no-signals-tripped case and a `mode: "off"` short-circuit case.
 - **MUST**: `pforge run-plan` checks `audit.mode` after plan completion. On `"auto"`, calls the evaluator; on `"always"`, dispatches unconditionally; on `"off"`, does nothing. NEVER runs per-slice — only once at plan end. **Test**: `pforge-mcp/tests/run-plan-audit-hook.test.mjs` — three cases (off/auto/always) plus per-slice negative assertion.
+- **MUST**: Integration & E2E validation (Slice 8) covers a live MCP handshake for both new tools, an end-to-end drain against a fixture project with three known-bad routes, a CLI E2E for `pforge audit-loop` (dry-run and live), auto-activation threshold E2Es, and a full no-regression sweep of the prior test baseline. **Test**: `pforge-mcp/tests/e2e-audit-loop.test.mjs` and `pforge-mcp/tests/e2e-audit-loop-cli.test.mjs` — together contain ≥ 5 `test(` entries and must pass.
+- **MUST**: Documentation sweep (Slice 9) updates every auto-discovering surface: `README.md`, `CHANGELOG.md`, `VERSION`, `docs/capabilities.md`, `docs/capabilities.html`, `docs/CLI-GUIDE.md`, `docs/COPILOT-VSCODE-GUIDE.md`, `docs/manual/` tempering chapter, `docs/index.html`, `docs/docs.html`, `docs/faq.html`, `llms.txt`, `docs/llms.txt`, and `pforge-mcp/capabilities.mjs`. Each MUST contain the string `forge_tempering_drain` or `audit-loop` as appropriate. **Test**: Slice 9 validation gate greps all required files; CI lint verifies no broken cross-links to the new tool/CLI names.
 - **MUST NOT**: Introduce a `forge_audit_*` tool namespace. Introduce a `.forge/audit/` directory distinct from `.forge/audits/`. Modify `forge_bug_register`, `forge_crucible_submit`, or `runTemperingRun`'s exported signature. Ship with `audit.mode` default anything other than `"off"`. Wire auto-drain into per-slice post-tempering — only plan-completion.
 
 ---
@@ -139,13 +141,37 @@ Proposal 0001 documents a loop that closes this gap (discovery → triage → th
 - `pforge run-plan` end-of-plan hook calls the evaluator and dispatches on `auto`/`always`.
 - **Gate**: `grep -q '"mode": *"off"' pforge-mcp/config/*.mjs` (or wherever the default lives) AND `grep -q 'shouldAutoDrain' pforge-mcp/tempering/auto-activate.mjs` AND `grep -q 'audit-loop' pforge/*.mjs` (or CLI entry) AND the 4 activation-surface tests pass.
 
-### Slice 8 — Docs + CHANGELOG + blog cross-link
-- `CHANGELOG.md` — v2.80.0 section listing all additions (scanner, drain, triage, tools, agent, skill, activation surface).
-- `docs/blog/the-loop-that-never-ends.html` — footer paragraph linking to `forge_tempering_drain` docs and noting default-off activation.
-- `docs/capabilities.md` — new rows for both tools and the `pforge audit-loop` CLI.
-- `docs/CLI-GUIDE.md` — `audit-loop` subcommand section.
-- Full vitest suite passes.
-- **Gate**: `grep -q '2.80.0' CHANGELOG.md` AND `grep -q 'forge_tempering_drain' docs/blog/the-loop-that-never-ends.html` AND `grep -q 'audit-loop' docs/CLI-GUIDE.md` AND `npm test` exit 0.
+### Slice 8 — Integration & E2E validation
+All unit tests from Slices 1–7 must be green before this slice runs. This slice proves the whole loop works end-to-end before any docs ship.
+- **Live MCP handshake**: boot `pforge-mcp/server.mjs` against a temp project fixture, call `forge_tempering_drain` and `forge_triage_route` over the MCP transport, assert responses match schemas in `tools.json`.
+- **End-to-end drain**: seed a fixture project (`pforge-mcp/tests/fixtures/audit-loop-e2e/`) with 3 known-bad routes + 1 classifier-noise pattern. Run `forge_tempering_drain` and assert: ran ≥2 rounds, converged or hit max-rounds cleanly, wrote `.forge/audits/dev-<ts>.json` with valid shape, wrote per-round deltas to `drain-history.jsonl`, triage routed findings to all three lanes.
+- **CLI E2E**: spawn `pforge audit-loop --dry-run --env=dev` against the fixture; assert exit 0 and no triage side effects. Then spawn without `--dry-run` and assert triage artifacts created.
+- **Auto-activation E2E**: synthetic `planContext` trips each threshold independently; assert `shouldAutoDrain` fires for each and that `drain-auto-estimate` event is emitted on the hub before dispatch.
+- **Safety rails**: assert `forbidProduction: true` cannot be overridden at runtime; assert `audit.mode` defaults to `"off"` on a fresh `.forge.json` with no `audit` key.
+- **No-regression sweep**: full existing test suite (baseline 3285 tests at v2.79) passes. New total ≥ 3295 + the ~14 new tests from Slices 1–7 + the new E2E tests.
+- **Gate**: `npm test` exit 0 AND `pforge-mcp/tests/e2e-audit-loop.test.mjs` exists AND `pforge-mcp/tests/e2e-audit-loop-cli.test.mjs` exists AND both pass AND `grep -c 'test(' pforge-mcp/tests/e2e-audit-loop.test.mjs` ≥ 5.
+
+### Slice 9 — Documentation sweep
+All auto-discovering docs, capability manifests, and user-facing surfaces updated so the new features are findable without reading the plan.
+- **`README.md`** — add one-paragraph "Audit Loop" section under the feature list with a CLI example.
+- **`CHANGELOG.md`** — v2.80.0 section listing all additions (scanner, drain, triage, two MCP tools, reviewer agent, skill, activation surface, E2E suite).
+- **`VERSION`** — bump to `2.80.0`.
+- **`docs/capabilities.md`** — new rows for `forge_tempering_drain`, `forge_triage_route`, and the `pforge audit-loop` CLI.
+- **`docs/capabilities.html`** — mirror the `.md` additions in the HTML capability index (used by the website).
+- **`docs/CLI-GUIDE.md`** — full `audit-loop` subcommand section (flags, examples, when-to-use).
+- **`docs/COPILOT-VSCODE-GUIDE.md`** — append note about the `/audit-loop` skill and `forge_tempering_drain` tool being callable from chat.
+- **`docs/EXTENSIONS.md`** — note classifier-as-code and the classifier-reviewer agent if extension authors need to plug in.
+- **`docs/UNIFIED-SYSTEM-ARCHITECTURE.md`** — add audit drain loop to the system diagram section (one paragraph + one line in the ASCII/Mermaid diagram if present).
+- **`docs/manual/`** — add or extend the tempering chapter with an "Audit Loop" subsection.
+- **`docs/index.html`** — small feature-card or bullet under "What's new" linking to the blog + capabilities page.
+- **`docs/docs.html`** — add audit loop to the table of contents / sidebar.
+- **`docs/faq.html`** — one Q&A: "Does Plan-Forge audit my deployed app automatically?" → "No — audit.mode defaults to `off`."
+- **`docs/blog/the-loop-that-never-ends.html`** — footer paragraph linking to `forge_tempering_drain` docs and noting default-off activation (already in Slice 7 criteria, but verified here).
+- **`llms.txt`** and **`docs/llms.txt`** — add line items for the two new MCP tools and the `pforge audit-loop` command so LLM discovery indexes pick them up.
+- **`pforge-mcp/capabilities.mjs`** — ensure the new tools are exported in the capabilities manifest (auto-discovery for `forge_capabilities` tool). Add schema entries if needed.
+- **`action.yml`** / **`plugin.json`** — surface the new CLI command if these manifests enumerate subcommands.
+- **`AGENT-SETUP.md`** and **`CUSTOMIZATION.md`** — brief mention of the classifier-reviewer agent and audit-loop skill where setup instructions list available agents/skills.
+- **Gate**: `grep -q '2.80.0' CHANGELOG.md` AND `grep -q '2.80.0' VERSION` AND `grep -q 'forge_tempering_drain' docs/capabilities.md` AND `grep -q 'forge_tempering_drain' docs/capabilities.html` AND `grep -q 'audit-loop' docs/CLI-GUIDE.md` AND `grep -q 'audit-loop' README.md` AND `grep -q 'forge_tempering_drain' llms.txt` AND `grep -q 'forge_tempering_drain' pforge-mcp/capabilities.mjs` AND `grep -q 'forge_tempering_drain' docs/blog/the-loop-that-never-ends.html` AND `npm test` exit 0.
 
 ---
 
@@ -169,15 +195,34 @@ Proposal 0001 documents a loop that closes this gap (discovery → triage → th
 - `pforge-mcp/tests/cli-audit-loop.test.mjs` (new)
 - `pforge-mcp/tests/audit-auto-activate.test.mjs` (new)
 - `pforge-mcp/tests/run-plan-audit-hook.test.mjs` (new)
+- `pforge-mcp/tests/e2e-audit-loop.test.mjs` (new — Slice 8)
+- `pforge-mcp/tests/e2e-audit-loop-cli.test.mjs` (new — Slice 8)
+- `pforge-mcp/tests/fixtures/audit-loop-e2e/` (new — fixture project for Slice 8)
+- `pforge-mcp/capabilities.mjs` (additive — register new tools)
 - `pforge-mcp/dashboard/` (additive panel only — no edits to existing tiles)
 - CLI entry file (`pforge.mjs` or `pforge-mcp/cli.mjs`) — additive subcommand only
 - `.forge.json` schema / config loader — additive `audit` object only
+- `README.md`
+- `AGENT-SETUP.md`
+- `CUSTOMIZATION.md`
+- `llms.txt`
+- `docs/llms.txt`
+- `docs/capabilities.md`
+- `docs/capabilities.html`
 - `docs/CLI-GUIDE.md`
+- `docs/COPILOT-VSCODE-GUIDE.md`
+- `docs/EXTENSIONS.md`
+- `docs/UNIFIED-SYSTEM-ARCHITECTURE.md`
+- `docs/manual/**` (tempering chapter only)
+- `docs/index.html` (small additive block only)
+- `docs/docs.html` (sidebar/TOC addition only)
+- `docs/faq.html` (one Q&A addition only)
+- `docs/blog/the-loop-that-never-ends.html` (footer cross-link only)
+- `action.yml` (only if it enumerates CLI subcommands)
+- `plugin.json` (only if it enumerates CLI subcommands)
 - `.github/agents/audit-classifier-reviewer.agent.md` (new)
 - `presets/shared/skills/audit-loop/SKILL.md` (new)
 - `CHANGELOG.md`
-- `docs/capabilities.md`
-- `docs/blog/the-loop-that-never-ends.html` (footer cross-link only)
 - `VERSION`
 
 **Forbidden actions:**

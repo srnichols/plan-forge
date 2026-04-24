@@ -1,30 +1,78 @@
 {
-  "name": "Phase-38.2 Baseline",
-  "description": "Cross-session recall flows",
+  "name": "phase-38.2-baseline",
+  "description": "Phase-38.2 cross-session recall — memory retrieval that spans sessions.",
   "prompts": [
     {
       "id": "cr-recall-1",
       "message": "What decisions did I make last session about the authentication service?",
       "expectedLane": "operational",
-      "purpose": "cross-session recall"
+      "notes": "cross-session recall"
     },
     {
       "id": "cr-recall-2",
       "message": "Summarize the last 3 sessions. What were the key outcomes?",
       "expectedLane": "operational",
-      "purpose": "session history recall"
+      "notes": "session history recall"
     },
     {
       "id": "cr-recall-3",
       "message": "Did we discuss adding rate limiting in a previous session?",
       "expectedLane": "operational",
-      "purpose": "fact retrieval from memory"
+      "notes": "fact retrieval from memory"
     },
     {
       "id": "cr-recall-4",
       "message": "Show me all memories tagged with the authentication module.",
       "expectedLane": "operational",
-      "purpose": "memory tag query"
+      "notes": "memory tag query"
+    },
+    {
+      "id": "cr-recall-5",
+      "message": "What bugs were discussed two sessions ago?",
+      "expectedLane": "operational",
+      "notes": "ordinal cross-session retrieval"
+    },
+    {
+      "id": "cr-recall-6",
+      "message": "Pull up anything I said about the embedding cache architecture in prior chats.",
+      "expectedLane": "operational",
+      "notes": "topic-scoped cross-session retrieval"
+    },
+    {
+      "id": "cr-recall-7",
+      "message": "Was the quorum threshold I chose last week 5 or 7?",
+      "expectedLane": "operational",
+      "notes": "specific-value recall with time anchor"
+    },
+    {
+      "id": "cr-recall-8",
+      "message": "Give me the full history of plan-hardening decisions across all sessions for Phase-38.",
+      "expectedLane": "operational",
+      "notes": "cross-session decision log"
+    },
+    {
+      "id": "cr-recall-9",
+      "message": "Which files did we mark as forbidden in earlier planning sessions?",
+      "expectedLane": "operational",
+      "notes": "scope-contract recall"
+    },
+    {
+      "id": "cr-recall-10",
+      "message": "Recall any architecture tradeoffs I weighed in a previous chat about the intent router.",
+      "expectedLane": "operational",
+      "notes": "rationale recall"
+    },
+    {
+      "id": "cr-recall-11",
+      "message": "Did I ever commit to a specific caching TTL? Check past sessions.",
+      "expectedLane": "operational",
+      "notes": "commitment recall"
+    },
+    {
+      "id": "cr-recall-12",
+      "message": "Find memories from the session where we discussed the OpenBrain queue drain.",
+      "expectedLane": "operational",
+      "notes": "topic-anchored session lookup"
     }
   ]
 }

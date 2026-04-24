@@ -1,18 +1,42 @@
 {
-  "name": "Phase-38.7 Quorum Direct",
-  "description": "Direct advisory-lane prompts to fire Phase-38.7 quorum advisory fan-out",
+  "name": "phase-38.7-quorum-direct",
+  "description": "Phase-38.7 advisory-lane prompts — architectural should-I questions that reliably fire quorum fan-out.",
   "prompts": [
     {
       "id": "qa-advisory-1",
       "message": "Should I refactor the intent-router module now or defer until Phase-39? Give me architectural guidance.",
       "expectedLane": "advisory",
-      "purpose": "should-I architectural decision"
+      "notes": "should-I architectural decision"
     },
     {
       "id": "qa-advisory-2",
       "message": "Recommend the best architecture pattern for the embedding cache: in-memory LRU or on-disk SQLite? Explain tradeoffs.",
       "expectedLane": "advisory",
-      "purpose": "architecture recommendation"
+      "notes": "architecture recommendation"
+    },
+    {
+      "id": "qa-advisory-3",
+      "message": "Should we centralize all tool telemetry behind a single emitter, or keep per-module emitters? Recommend with rationale.",
+      "expectedLane": "advisory",
+      "notes": "code organization recommendation"
+    },
+    {
+      "id": "qa-advisory-4",
+      "message": "Is it better architecturally to model quorum modes as an enum or a pluggable strategy interface? Advise.",
+      "expectedLane": "advisory",
+      "notes": "type design recommendation"
+    },
+    {
+      "id": "qa-advisory-5",
+      "message": "Should the pattern detector registry be eager-loaded at server boot or lazy-loaded on first request? Give architectural guidance.",
+      "expectedLane": "advisory",
+      "notes": "startup architecture recommendation"
+    },
+    {
+      "id": "qa-advisory-6",
+      "message": "Recommend whether to expose session-memory writes over MCP or keep them internal to Forge-Master. Explain the security tradeoffs.",
+      "expectedLane": "advisory",
+      "notes": "API surface recommendation"
     }
   ]
 }

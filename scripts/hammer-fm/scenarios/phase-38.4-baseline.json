@@ -1,30 +1,78 @@
 {
-  "name": "Phase-38.4 Baseline",
-  "description": "Planner-executor coordination flows",
+  "name": "phase-38.4-baseline",
+  "description": "Phase-38.4 planner-executor coordination — plan creation, execution, amendments.",
   "prompts": [
     {
       "id": "pe-coord-1",
       "message": "Create a plan to add OAuth2 login and then execute the first slice.",
       "expectedLane": "operational",
-      "purpose": "plan + immediate execution"
+      "notes": "plan + immediate execution"
     },
     {
       "id": "pe-coord-2",
       "message": "Run the current plan and report back when slice 3 completes.",
       "expectedLane": "operational",
-      "purpose": "plan execution with completion signal"
+      "notes": "plan execution with completion signal"
     },
     {
       "id": "pe-coord-3",
       "message": "The executor failed on slice 5. Diagnose the failure and retry.",
       "expectedLane": "troubleshoot",
-      "purpose": "executor failure recovery"
+      "notes": "executor failure recovery"
     },
     {
       "id": "pe-coord-4",
       "message": "Pause the current run, apply a hotfix to the plan, then resume.",
       "expectedLane": "operational",
-      "purpose": "mid-run plan amendment"
+      "notes": "mid-run plan amendment"
+    },
+    {
+      "id": "pe-coord-5",
+      "message": "Draft a plan for adding email notifications and execute slices 1 through 3 back-to-back.",
+      "expectedLane": "operational",
+      "notes": "plan + multi-slice execution"
+    },
+    {
+      "id": "pe-coord-6",
+      "message": "Execute the plan but stop after each slice so I can review.",
+      "expectedLane": "operational",
+      "notes": "interactive execution gating"
+    },
+    {
+      "id": "pe-coord-7",
+      "message": "Slice 2 produced a gate failure — investigate and propose a fix.",
+      "expectedLane": "troubleshoot",
+      "notes": "gate failure diagnosis"
+    },
+    {
+      "id": "pe-coord-8",
+      "message": "Abort the in-flight run, restore the working tree, and report what was rolled back.",
+      "expectedLane": "operational",
+      "notes": "abort + rollback"
+    },
+    {
+      "id": "pe-coord-9",
+      "message": "Plan a migration for the notification schema and queue it as draft, do not execute.",
+      "expectedLane": "operational",
+      "notes": "plan without execute"
+    },
+    {
+      "id": "pe-coord-10",
+      "message": "Resume the plan from slice 4 but skip slice 5 and continue with 6.",
+      "expectedLane": "operational",
+      "notes": "resume-from with skip"
+    },
+    {
+      "id": "pe-coord-11",
+      "message": "The planner emitted a slice that violates the scope contract — reject it and regenerate.",
+      "expectedLane": "troubleshoot",
+      "notes": "scope contract enforcement"
+    },
+    {
+      "id": "pe-coord-12",
+      "message": "Execute slice 7 twice with different quorum modes to compare outcomes.",
+      "expectedLane": "operational",
+      "notes": "comparative execution"
     }
   ]
 }

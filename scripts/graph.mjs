@@ -5,7 +5,7 @@
  */
 import { resolve } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { join, dirname } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -23,7 +23,7 @@ async function main() {
     process.exit(0);
   }
   if (subcommand === "rebuild") {
-    const { buildGraph } = await import(join(mcpDir, "graph", "builder.mjs").replace(/\\/g, "/"));
+    const { buildGraph } = await import(pathToFileURL(join(mcpDir, "graph", "builder.mjs")).href);
     const graph = buildGraph(repoRoot);
     const typeCounts = {};
     for (const node of graph.nodes) {
@@ -50,7 +50,7 @@ async function main() {
     }
   } else if (subcommand === "query") {
     const queryType = rest[0] || "recent-changes";
-    const { queryRecentChanges, queryByPhase, queryByFile, neighbors } = await import(join(mcpDir, "graph", "query.mjs").replace(/\\/g, "/"));
+    const { queryRecentChanges, queryByPhase, queryByFile, neighbors } = await import(pathToFileURL(join(mcpDir, "graph", "query.mjs")).href);
     let result;
     if (queryType === "phase") {
       result = queryByPhase(rest[1] || "", { projectDir: repoRoot });

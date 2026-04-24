@@ -142,6 +142,7 @@ const KEYWORD_RULES = [
   // Phase-38 — session/turn recall and conversational context
   { pattern: /\b(remind me|recap|summarize|left off|continue from|this session|this conversation|earlier.{0,15}(asked|said|mentioned|discussed))\b/i, lane: LANES.OPERATIONAL, weight: 3 },
   { pattern: /\b(last\s+(session|time|conversation)|previous\s+session|past\s+sessions?)\b/i, lane: LANES.OPERATIONAL, weight: 3 },
+  { pattern: /\b(prior\s+chats?|in\s+a\s+previous\s+chat|earlier\s+planning)\b/i, lane: LANES.OPERATIONAL, weight: 3 },
   { pattern: /\b(note for later|keep in mind|for later|remember that)\b/i, lane: LANES.OPERATIONAL, weight: 2 },
   { pattern: /\b(decisions?\s+we.{0,10}made|what\s+(did|have)\s+(i|we)\s+(decide|commit|choose|pick|say))\b/i, lane: LANES.OPERATIONAL, weight: 3 },
   { pattern: /\b(everything\s+we.{0,10}(talked|discussed)|every\s+decision|key\s+outcomes?)\b/i, lane: LANES.OPERATIONAL, weight: 2 },
@@ -235,6 +236,13 @@ const KEYWORD_RULES = [
   { pattern: /\b(recommend|recommendation|your\s+take)\b/i, lane: LANES.ADVISORY, weight: 2 },
   { pattern: /\bhelp\s+me\s+decide\b/i, lane: LANES.ADVISORY, weight: 3 },
   { pattern: /\b(what|which)\s+(path|direction)\s+(should|to|forward)\b/i, lane: LANES.ADVISORY, weight: 2 },
+  // Phase-38 — architecture/analysis advisory vocabulary
+  { pattern: /\b(dependency\s+graph|data\s+flow|call\s+graph|module.{0,10}depend|services?\s+affected)\b/i, lane: LANES.ADVISORY, weight: 3 },
+  { pattern: /\b(code\s+smells?|anti[- ]?patterns?|recurring\s+patterns?|emerging.{0,15}pattern)\b/i, lane: LANES.ADVISORY, weight: 3 },
+  { pattern: /\b(daily\s+digest|overall\s+health|project\s+health|health.{0,10}summary|one[- ]paragraph\s+summary)\b/i, lane: LANES.ADVISORY, weight: 3 },
+  { pattern: /\b(is\s+it\s+better|better\s+architecturally|model\s+as\s+(an?\s+)?enum|pluggable\s+strategy)\b/i, lane: LANES.ADVISORY, weight: 3 },
+  { pattern: /\b(eager[- ]load|lazy[- ]load|expose\s+over|keep.{0,10}internal)\b/i, lane: LANES.ADVISORY, weight: 2 },
+  { pattern: /\b(map\s+out|summarize\s+all|identify\s+common)\b/i, lane: LANES.ADVISORY, weight: 2 },
 
   // ── Off-topic signals ──
   { pattern: /\b(weather|temperature|forecast|sports|score|game)\b/i, lane: LANES.OFFTOPIC, weight: 3 },

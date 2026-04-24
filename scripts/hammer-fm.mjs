@@ -44,6 +44,7 @@ const DEFAULT_TIMEOUT_SEC = 60;
 const DEFAULT_PARALLEL = 4;
 const DEFAULT_RETRY_MAX = 3;
 const DEFAULT_RETRY_DELAY_SEC = 5;
+const DEFAULT_INTER_DELAY_SEC = 0;
 const KNOWN_SCENARIOS = [
   "shipped-prompts",
   "realistic-qa",
@@ -343,6 +344,8 @@ export async function main(argv, deps = {}) {
   const timeoutMs = Math.max(5000, parseInt(args.timeout || DEFAULT_TIMEOUT_SEC, 10) * 1000);
   const retryMax = Math.max(0, parseInt(args["retry-max"] ?? DEFAULT_RETRY_MAX, 10));
   const retryDelayMs = Math.max(1000, parseInt(args["retry-delay"] ?? DEFAULT_RETRY_DELAY_SEC, 10) * 1000);
+  const interDelayMs = Math.max(0, parseInt(args["inter-delay"] ?? DEFAULT_INTER_DELAY_SEC, 10) * 1000);
+  const laneOnly = args["lane-only"] === "true";
   const dryRun = args["dry-run"] === "true";
   const outDirRaw = args["out-dir"] || DEFAULT_OUT_DIR;
   // Resolve relative to repo root unless absolute
@@ -391,7 +394,7 @@ export async function main(argv, deps = {}) {
   console.log(
     `[hammer-fm] scenario: ${scenario.name || scenarioName} (${scenario.prompts.length} prompts)`,
   );
-  console.log(`[hammer-fm] tier=${tier} parallel=${parallel} timeout=${timeoutMs / 1000}s retry=${retryMax}x backoff=${retryDelayMs / 1000}s`);
+  console.log(`[hammer-fm] tier=${tier} parallel=${parallel} timeout=${timeoutMs / 1000}s retry=${retryMax}x backoff=${retryDelayMs / 1000}s inter-delay=${interDelayMs / 1000}s`);
 
   try {
     const probe = await fetchFn(`${baseUrl}/api/forge-master/capabilities`);
@@ -420,7 +423,10 @@ export async function main(argv, deps = {}) {
         batch.map((p) => _runPrompt(p, { baseUrl, tier: t, timeoutMs, fetchFn, openStreamFn, retryMax, retryDelayMs })),
       );
       for (const [i, result] of results.entries()) {
-        const scored = _scorePrompt(batch[i], result, ALL_SCORERS);
+        const activeScorerSet = laneOnly
+          ? ALL_SCORERS.filter((s) => s.name === "lane-match")
+          : ALL_SCORERS;
+        const scored = _scorePrompt(batch[i], result, activeScorerSet);
         const icon =
           scored.verdict === "pass" ? "✅" : scored.verdict === "error" ? "🔥" : "❌";
         const lane =
@@ -434,6 +440,10 @@ export async function main(argv, deps = {}) {
           }
         }
         allRecords.push({ ...scored, tier: t });
+      }
+      // Inter-prompt delay to reduce rate-limiting
+      if (interDelayMs > 0 && prompts.length > 0) {
+        await _sleep(interDelayMs);
       }
     }
   }

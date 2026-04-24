@@ -6,7 +6,7 @@ priority: HIGH
 
 # Plan Forge — Quick Reference
 
-> **Full Runbook**: [AI-Plan-Hardening-Runbook.md](../../docs/plans/AI-Plan-Hardening-Runbook.md)  
+> **Full Runbook**: [AI-Plan-Hardening-Runbook.md](../../docs/plans/AI-Plan-Hardening-Runbook.md)
 > **Step-by-Step**: [AI-Plan-Hardening-Runbook-Instructions.md](../../docs/plans/AI-Plan-Hardening-Runbook-Instructions.md)
 
 ## Pipeline Summary

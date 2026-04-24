@@ -627,41 +627,155 @@ function topologicalSort(nodes) {
 export const API_ALLOWED_ROLES = new Set(["reviewer", "quorum-dry-run", "analysis", "image"]);
 
 // ─── API Provider Registry ────────────────────────────────────────────
+//
+// Model routing has two tiers (fixed in meta-bug #103):
+//
+//   1. DIRECT_API_ONLY — patterns that MUST use direct HTTP. No CLI proxy
+//      serves them. gh-copilot does not accept --model grok-* or dall-e-*.
+//      These models are unavailable without the provider's env key.
+//
+//   2. COPILOT_SERVABLE — patterns that gh-copilot serves via the user's
+//      GitHub Copilot subscription. `gh copilot --model <name>` works for
+//      these regardless of whether the user has a direct OpenAI key.
+//      Routing precedence: gh-copilot CLI (subscription) → direct API
+//      (pay-per-token) → unavailable.
+//
+// Keeping these lists separate prevents the regression in #103 where
+// gpt-5.3-codex was dropped from quorum because it matched the OpenAI
+// pattern and no OPENAI_API_KEY was set — even though gh-copilot was
+// installed and would have served it fine.
 
 /**
- * Registry of API-based model providers (OpenAI-compatible endpoints).
- * Each provider maps a model name pattern to an API endpoint + env var for the key.
- * Models matching a provider pattern are dispatched via HTTP instead of CLI.
+ * Providers that ONLY accept direct HTTP dispatch. gh-copilot does not
+ * proxy these. If the corresponding env key is missing, the model is
+ * unavailable — there is no CLI fallback to try.
  */
-const API_PROVIDERS = {
+const DIRECT_API_ONLY = {
   xai: {
     pattern: /^grok-/,
     baseUrl: "https://api.x.ai/v1",
     envKey: "XAI_API_KEY",
     label: "xAI Grok",
   },
-  openai: {
-    pattern: /^(gpt-|dall-e-|chatgpt-)/,
+  "openai-image": {
+    pattern: /^dall-e-/,
     baseUrl: "https://api.openai.com/v1",
     envKey: "OPENAI_API_KEY",
-    label: "OpenAI",
+    label: "OpenAI DALL-E",
   },
-  // Future providers:
-  // anthropic: { pattern: /^claude-/, baseUrl: "https://api.anthropic.com/v1", envKey: "ANTHROPIC_API_KEY", label: "Anthropic Direct" },
 };
 
 /**
- * Check whether a model name matches an API-only provider pattern.
- * Unlike detectApiProvider, this does NOT check for API key availability —
- * it returns true purely based on the model name prefix.
- * Used by the recommender to exclude models that require external API keys.
- * @param {string} model - Model identifier (e.g., "grok-3-mini", "gpt-5.2")
+ * Providers whose models gh-copilot serves via the Copilot subscription.
+ * Routed CLI-first; falls back to direct HTTP only when the user explicitly
+ * sets the provider's env key AND gh-copilot is unavailable.
+ */
+const COPILOT_SERVABLE = {
+  openai: {
+    pattern: /^(gpt-|chatgpt-)/,
+    baseUrl: "https://api.openai.com/v1",
+    envKey: "OPENAI_API_KEY",
+    label: "OpenAI (via Copilot or direct)",
+  },
+  // Future: anthropic-direct served via Copilot — gh-copilot already serves claude-*
+  // through its CLI today, so we don't need a COPILOT_SERVABLE entry for claude.
+};
+
+/**
+ * Combined view for backwards compatibility with any code that iterated
+ * API_PROVIDERS directly. New callers should prefer the specific registries.
+ */
+const API_PROVIDERS = { ...DIRECT_API_ONLY, ...COPILOT_SERVABLE };
+
+/**
+ * Probe whether gh-copilot CLI is installed and available. Used by routing
+ * decisions to determine whether Copilot-servable models can use the
+ * subscription path instead of requiring a direct API key.
+ * Dependency-injectable for testing.
+ * @returns {boolean}
+ */
+let _ghCopilotProbe = () => {
+  try {
+    const workers = loadWorkerCapabilities();
+    const spec = workers.workers?.["gh-copilot"];
+    if (!spec) return false;
+    return probeWorker("gh-copilot", spec).available;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Inject a gh-copilot availability probe for testing. Pass `null` to restore
+ * the default real-filesystem probe.
+ * @param {(() => boolean) | null} probe
+ */
+export function setGhCopilotProbe(probe) {
+  _ghCopilotProbe = probe || (() => {
+    try {
+      const workers = loadWorkerCapabilities();
+      const spec = workers.workers?.["gh-copilot"];
+      if (!spec) return false;
+      return probeWorker("gh-copilot", spec).available;
+    } catch {
+      return false;
+    }
+  });
+}
+
+function isGhCopilotAvailable() {
+  return _ghCopilotProbe();
+}
+
+/**
+ * Check whether a model name matches a direct-HTTP-only provider pattern.
+ * These models CANNOT be served by gh-copilot regardless of environment.
+ * @param {string} model
+ * @returns {boolean}
+ */
+export function isDirectApiOnlyModel(model) {
+  if (!model) return false;
+  for (const provider of Object.values(DIRECT_API_ONLY)) {
+    if (provider.pattern.test(model)) return true;
+  }
+  return false;
+}
+
+/**
+ * Check whether a model name matches a Copilot-servable provider pattern.
+ * These models CAN be routed via gh-copilot when the CLI is installed.
+ * @param {string} model
+ * @returns {boolean}
+ */
+export function isCopilotServableModel(model) {
+  if (!model) return false;
+  for (const provider of Object.values(COPILOT_SERVABLE)) {
+    if (provider.pattern.test(model)) return true;
+  }
+  return false;
+}
+
+/**
+ * Environment-aware check: does this model require a direct external API
+ * key given the current environment? Returns:
+ *   - true  for DIRECT_API_ONLY models (always direct API)
+ *   - true  for COPILOT_SERVABLE models ONLY when gh-copilot is unavailable
+ *   - false otherwise (including Copilot-servable models when gh-copilot is installed)
+ *
+ * Used by the recommender to exclude models that would force the user into
+ * a direct-API billing path. Fixed in meta-bug #103: previously returned
+ * `true` unconditionally for `gpt-*` / `chatgpt-*`, blocking them from quorums
+ * and recommendations even though the Copilot subscription would serve them.
+ *
+ * @param {string} model
  * @returns {boolean}
  */
 export function isApiOnlyModel(model) {
   if (!model) return false;
-  for (const provider of Object.values(API_PROVIDERS)) {
-    if (provider.pattern.test(model)) return true;
+  if (isDirectApiOnlyModel(model)) return true;
+  if (isCopilotServableModel(model)) {
+    // Copilot-servable models are "API-only" only when gh-copilot is absent.
+    return !isGhCopilotAvailable();
   }
   return false;
 }
@@ -669,6 +783,12 @@ export function isApiOnlyModel(model) {
 /**
  * Detect which API provider (if any) handles a given model name.
  * Lookup order: environment variable → .forge/secrets.json → null
+ *
+ * NOTE: This ONLY returns a provider for models that the caller has decided
+ * to route through direct HTTP. Routing decisions live in spawnWorker and
+ * probeQuorumModelAvailability — they consult this helper AFTER determining
+ * that the CLI path is unavailable or inappropriate.
+ *
  * @param {string} model - Model identifier (e.g., "grok-3-mini")
  * @returns {{ name, baseUrl, apiKey, label } | null}
  */
@@ -1226,6 +1346,94 @@ export function detectExecutionRuntime({ workers } = {}) {
   return "cli-gh";
 }
 
+// ─── Client Host Detection ───────────────────────────────────────────
+//
+// detectClientHost() identifies the editor/agent surface Plan Forge is
+// running under — separate from detectExecutionRuntime() (which picks a
+// CLI). Host detection drives OBSERVABILITY today (meta-bug #103):
+// routing decisions emit a `host` field so users running Plan Forge from
+// Claude Code or Cursor can see which billing surface each model call
+// hits. Full host-aware routing preference (prefer Claude's subscription
+// in Claude Code, warn in Cursor where we can't proxy, etc.) is tracked
+// separately in meta-bug #104.
+
+/**
+ * Detect which editor / agent surface is hosting Plan Forge. Order is
+ * significant — more specific signals first (e.g. Cursor sets
+ * `TERM_PROGRAM=cursor` even though it's built on VS Code).
+ *
+ * Returns one of:
+ *   "vs-code-copilot"   — VS Code + GitHub Copilot (the most common case)
+ *   "vs-code-agents"    — VS Code Agents (Enterprise BYOK surface)
+ *   "cursor"            — Cursor editor
+ *   "windsurf"          — Codeium Windsurf editor
+ *   "zed"               — Zed editor
+ *   "claude-code"       — Anthropic Claude Code CLI
+ *   "cli-terminal"      — Plain terminal / CI / headless
+ *
+ * @returns {string}
+ */
+export function detectClientHost() {
+  // Anthropic Claude Code sets these envs when invoking tools / MCP servers.
+  if (process.env.CLAUDECODE === "1" || process.env.CLAUDE_CODE_ENTRYPOINT) return "claude-code";
+  // Editor-specific TERM_PROGRAM values (checked before generic VS Code
+  // because Cursor/Windsurf are VS Code forks and set VSCODE_* too).
+  const term = (process.env.TERM_PROGRAM || "").toLowerCase();
+  if (term === "cursor" || process.env.CURSOR_TRACE_ID) return "cursor";
+  if (term === "windsurf") return "windsurf";
+  if (process.env.ZED_TERM) return "zed";
+  // VS Code (Copilot Chat or Agents)
+  if (process.env.VSCODE_AGENT_MODE === "enterprise") return "vs-code-agents";
+  if (process.env.VSCODE_PID || term === "vscode") return "vs-code-copilot";
+  return "cli-terminal";
+}
+
+/**
+ * Describe the billing surface implied by choosing a given transport for
+ * a Copilot-servable model under the current client host. Surfaces this
+ * in logs and `probeQuorumModelAvailability` results so users can see
+ * which subscription is being charged before a quorum run starts.
+ *
+ * @param {"gh-copilot"|"direct-api"|"other-cli"} via
+ * @param {string} host  — result of detectClientHost()
+ * @returns {{ label: string, warning: string|null }}
+ */
+export function describeBillingSurface(via, host) {
+  if (via === "gh-copilot") {
+    switch (host) {
+      case "vs-code-copilot":
+      case "vs-code-agents":
+        return { label: "GitHub Copilot subscription (VS Code)", warning: null };
+      case "claude-code":
+        return {
+          label: "GitHub Copilot subscription",
+          warning:
+            "Running under Claude Code, but this model routes through your Copilot seat " +
+            "(Anthropic subscription is not used for gpt-* / chatgpt-* models). Track with meta-bug #104.",
+        };
+      case "cursor":
+        return {
+          label: "GitHub Copilot subscription (via local gh CLI)",
+          warning:
+            "Running under Cursor, but this model routes through your local gh-copilot CLI " +
+            "rather than Cursor's own subscription — Plan Forge cannot see Cursor's model proxy from a subprocess.",
+        };
+      case "windsurf":
+      case "zed":
+        return {
+          label: "GitHub Copilot subscription (via local gh CLI)",
+          warning: `Running under ${host}, but model routes through your local gh-copilot CLI.`,
+        };
+      default:
+        return { label: "GitHub Copilot subscription", warning: null };
+    }
+  }
+  if (via === "direct-api") {
+    return { label: "Direct API (pay-per-token)", warning: null };
+  }
+  return { label: "CLI worker", warning: null };
+}
+
 // ─── Quorum Model Availability Probing (H.3) ─────────────────────────
 
 /**
@@ -1244,49 +1452,91 @@ export function resolveRequiredCli(model) {
 /**
  * Probe whether a single quorum model is available on this machine.
  *
- * Routing mirrors spawnWorker():
- *   - API-routed models (grok-*, gpt-*, chatgpt-*) → detectApiProvider
- *   - CLI-routed models (claude-*, codex-*, default) → detectWorkers cache
+ * Routing precedence (fixed in meta-bug #103):
+ *   1. DIRECT_API_ONLY models (grok-*, dall-e-*)      → detectApiProvider only
+ *   2. COPILOT_SERVABLE models (gpt-*, chatgpt-*)     → gh-copilot CLI preferred,
+ *                                                        direct API fallback
+ *   3. CLI-routed models (claude-*, codex-*, default) → detectWorkers + gh fallback
  *
  * @param {string} model
  * @returns {{ model: string, available: boolean, via: "api"|"cli", provider?: string, worker?: string, reason?: string, install?: string }}
  */
 export function probeQuorumModelAvailability(model) {
-  // Path 1: API-routed models — reuse detectApiProvider (checks env + secrets.json)
-  const apiProvider = detectApiProvider(model);
-  if (apiProvider) {
-    return { model, available: true, via: "api", provider: apiProvider.name };
-  }
-  // Pattern matched an API provider but env key missing → unavailable with reason
-  for (const [name, provider] of Object.entries(API_PROVIDERS)) {
-    if (provider.pattern.test(model)) {
-      return {
-        model, available: false, via: "api", provider: name,
-        reason: `${provider.envKey} not set`,
-        install: `Set ${provider.envKey} in env or .forge/secrets.json`,
-      };
+  const workers = detectWorkers();
+  // Use the injectable probe so tests can simulate "gh-copilot not installed".
+  // The real probe (default) resolves through loadWorkerCapabilities →
+  // probeWorker("gh-copilot", ...), matching detectWorkers().
+  const ghCopilotAvailable = isGhCopilotAvailable();
+  const ghCopilot = ghCopilotAvailable
+    ? workers.find((w) => w.name === "gh-copilot") || { name: "gh-copilot", available: true }
+    : null;
+  const host = detectClientHost();
+
+  // Path 1: Direct-API-only models (grok-*, dall-e-*) — no CLI proxy exists.
+  if (isDirectApiOnlyModel(model)) {
+    const apiProvider = detectApiProvider(model);
+    if (apiProvider) {
+      const billing = describeBillingSurface("direct-api", host);
+      return { model, available: true, via: "api", provider: apiProvider.name, host, billing: billing.label };
+    }
+    for (const [name, provider] of Object.entries(DIRECT_API_ONLY)) {
+      if (provider.pattern.test(model)) {
+        return {
+          model, available: false, via: "api", provider: name, host,
+          reason: `${provider.envKey} not set`,
+          install: `Set ${provider.envKey} in env or .forge/secrets.json`,
+        };
+      }
     }
   }
 
-  // Path 2: CLI-routed models — mirror spawnWorker()'s actual behavior,
-  // which picks the FIRST available non-API worker and passes --model to it.
-  // Prefer the model-specific CLI (claude, codex) when present, but fall
-  // back to gh-copilot (which accepts --model for any model) to match
-  // real spawn behavior. This fixes the regression where claude-opus-*
-  // models were marked unavailable on systems where only `gh` is installed
-  // (the common case — every prior run in this repo used gh-copilot).
+  // Path 2: Copilot-servable models (gpt-*, chatgpt-*) — prefer gh-copilot
+  // subscription over direct API. Only fall back to direct API if the CLI
+  // is unavailable AND the user explicitly set an OpenAI key.
+  if (isCopilotServableModel(model)) {
+    if (ghCopilot) {
+      const billing = describeBillingSurface("gh-copilot", host);
+      return {
+        model, available: true, via: "cli", worker: "gh-copilot",
+        provider: "copilot-subscription", host,
+        billing: billing.label,
+        billingWarning: billing.warning,
+      };
+    }
+    const apiProvider = detectApiProvider(model);
+    if (apiProvider) {
+      const billing = describeBillingSurface("direct-api", host);
+      return {
+        model, available: true, via: "api", provider: apiProvider.name,
+        fallback: true, host, billing: billing.label,
+      };
+    }
+    // Neither gh-copilot nor a direct key available
+    for (const [name, provider] of Object.entries(COPILOT_SERVABLE)) {
+      if (provider.pattern.test(model)) {
+        return {
+          model, available: false, via: "cli", provider: name, host,
+          reason: `gh-copilot CLI not installed and ${provider.envKey} not set`,
+          install: `Install gh-copilot (preferred) or set ${provider.envKey} in env or .forge/secrets.json`,
+        };
+      }
+    }
+  }
+
+  // Path 3: CLI-routed models (claude-*, codex-*, default) — mirror
+  // spawnWorker()'s actual behavior, which picks the FIRST available
+  // non-API worker and passes --model to it. Prefer the model-specific
+  // CLI (claude, codex) when present, but fall back to gh-copilot (which
+  // accepts --model for any model) to match real spawn behavior.
   const preferredCli = resolveRequiredCli(model);
-  const workers = detectWorkers();
   const preferred = workers.find((w) => w.name === preferredCli && w.available);
-  if (preferred) return { model, available: true, via: "cli", worker: preferred.name };
-  // Fallback: gh-copilot accepts --model <any> and drives the actual spawn
-  const ghCopilot = workers.find((w) => w.name === "gh-copilot" && w.available);
+  if (preferred) return { model, available: true, via: "cli", worker: preferred.name, host };
   if (ghCopilot) {
-    return { model, available: true, via: "cli", worker: "gh-copilot", fallback: true };
+    return { model, available: true, via: "cli", worker: "gh-copilot", fallback: true, host };
   }
   const hint = suggestInstall(preferredCli);
   return {
-    model, available: false, via: "cli",
+    model, available: false, via: "cli", host,
     reason: `CLI '${preferredCli}' not on PATH (and no gh-copilot fallback available)`,
     install: hint.command || hint.docs || null,
   };
@@ -1310,6 +1560,17 @@ export function filterQuorumModels(config, { probe = probeQuorumModelAvailabilit
     const result = probe(model);
     if (result.available) {
       available.push(model);
+      // Observability for meta-bug #103: announce the billing surface
+      // whenever it isn't the obvious "local CLI" choice — Copilot
+      // subscription, direct API, or cross-host cases (e.g. gpt-* routing
+      // through gh-copilot while the user is in Claude Code).
+      if (result.billing) {
+        const tag = result.fallback ? " (fallback)" : "";
+        console.error(`[quorum] ${model} → ${result.billing}${tag}`);
+      }
+      if (result.billingWarning) {
+        console.error(`[quorum] ${model} — ${result.billingWarning}`);
+      }
     } else {
       dropped.push(result);
       console.error(
@@ -1422,12 +1683,52 @@ export function spawnWorker(prompt, options = {}) {
                        // shaping and telemetry.
   } = options;
 
-  // Route API-based models (e.g., grok-*) to HTTP provider instead of CLI.
+  // Routing decision (fixed in meta-bug #103):
+  //   - Direct-API-only models (grok-*, dall-e-*): HTTP required, no CLI
+  //     alternative exists. If key is missing, throw.
+  //   - Copilot-servable models (gpt-*, chatgpt-*): prefer gh-copilot CLI
+  //     (subscription) when installed; fall back to direct HTTP only if the
+  //     user set OPENAI_API_KEY. gh-copilot proxies these models and avoids
+  //     charging the user twice.
+  //   - Everything else: CLI (existing behavior).
+  //
   // Bug #78: honor an explicit `worker` override — some call sites need to
   // force a specific CLI even when the model name would normally match an
   // API provider (tests, fallback paths). If the caller passes `worker`,
   // we respect that choice and skip auto-API-routing.
-  const apiProvider = !worker && model ? detectApiProvider(model) : null;
+  let apiProvider = null;
+  if (!worker && model) {
+    if (isDirectApiOnlyModel(model)) {
+      apiProvider = detectApiProvider(model);
+      if (!apiProvider) {
+        // Look up the envKey for a clearer error
+        const matched = Object.values(DIRECT_API_ONLY).find((p) => p.pattern.test(model));
+        const envKey = matched?.envKey || "the provider's API key";
+        const label = matched?.label || "the provider";
+        throw new Error(
+          `Model "${model}" requires ${label} direct API access — ${envKey} is not set ` +
+          `and gh-copilot does not proxy this model. ` +
+          `Set ${envKey} in env or .forge/secrets.json.`
+        );
+      }
+    } else if (isCopilotServableModel(model)) {
+      // Prefer CLI path (Copilot subscription). Only route to HTTP if
+      // gh-copilot is unavailable AND the user explicitly set a direct key.
+      if (!isGhCopilotAvailable()) {
+        apiProvider = detectApiProvider(model);
+        if (!apiProvider) {
+          const matched = Object.values(COPILOT_SERVABLE).find((p) => p.pattern.test(model));
+          const envKey = matched?.envKey || "OPENAI_API_KEY";
+          throw new Error(
+            `Model "${model}" is Copilot-servable but gh-copilot CLI is not installed ` +
+            `and ${envKey} is not set. Install gh-copilot (preferred) or set ${envKey}.`
+          );
+        }
+      }
+      // else: fall through to CLI path below — gh-copilot will handle it
+    }
+  }
+
   if (apiProvider) {
     // Block API providers from code-writing roles. API endpoints are
     // text-completion only — no tool calls, no filesystem access.
@@ -1450,7 +1751,15 @@ export function spawnWorker(prompt, options = {}) {
       return;
     }
 
-    const chosen = workers[0];
+    // For Copilot-servable models (gpt-*, chatgpt-*), prefer gh-copilot
+    // specifically — claude / codex CLIs do not accept `--model gpt-*`.
+    // Fixed in meta-bug #103. If gh-copilot is not in the worker list
+    // we fall through to workers[0] and let the CLI report the error.
+    let chosen = workers[0];
+    if (!worker && model && isCopilotServableModel(model)) {
+      const gh = workers.find((w) => w.name === "gh-copilot");
+      if (gh) chosen = gh;
+    }
     let args;
     let cmd;
 

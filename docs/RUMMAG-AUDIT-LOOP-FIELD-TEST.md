@@ -1,4 +1,4 @@
-# Rummag Field Test — Audit Loop (Plan Forge v2.80.0)
+# Rummag Field Test — Audit Loop (Plan Forge v2.80.1)
 
 > **Goal**: Validate the promoted audit-loop feature against a real codebase with real findings. Reproduce or improve on the 88 → 0 drain curve originally observed during Phase-39 design.
 
@@ -14,7 +14,7 @@ pforge smith                 # confirm environment is healthy
 pforge audit-loop --help     # should print usage, no side effects
 ```
 
-Expected version: **v2.80.1** (tag `v2.80.1`, commit `bf6f57c` or newer).
+Expected version: **v2.80.1** (tag `v2.80.1`, commit `b432bb6` or newer). `pforge audit-loop --help` exits cleanly without running a drain — that fix landed in v2.80.1.
 
 ---
 
@@ -110,6 +110,6 @@ pforge self-update; pforge audit-loop --dry-run --env=dev; pforge audit-loop --m
 
 ---
 
-**Plan Forge version**: v2.80.0
+**Plan Forge version**: v2.80.1
 **Phase**: 39 (Audit Loop Promotion)
 **Originating proposal**: [0001-recursive-audit-loop.md](../0001-recursive-audit-loop.md)

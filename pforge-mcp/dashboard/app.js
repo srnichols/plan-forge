@@ -325,6 +325,21 @@ function handleEvent(event) {
         renderBugRegistry();
       }
       break;
+    // Phase-39 Slice 7 — Audit drain loop live events
+    case "drain-started":
+      addNotification(`Audit drain started (${(event.data || event).maxRounds || '?'} rounds max)`, "amber");
+      break;
+    case "drain-round-completed":
+      addNotification(`Drain round ${(event.data || event).round}: ${(event.data || event).realFindings} findings`, "amber");
+      break;
+    case "drain-completed":
+      if (typeof forgeMasterRenderDrainCurve === "function") forgeMasterRenderDrainCurve(event.data || event);
+      addNotification(`Audit drain ${(event.data || event).terminated}: ${((event.data || event).drainCurve || []).join(' → ')}`,
+        (event.data || event).terminated === "converged" ? "success" : "amber");
+      break;
+    case "drain-auto-estimate":
+      addNotification(`Auto-drain estimate: mode=${(event.data || event).mode}`, "amber");
+      break;
   }
 }
 

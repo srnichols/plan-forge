@@ -94,13 +94,18 @@ async function forgeMasterInit() {
     forgeMasterLoadDigest();
     forgeMasterLoadPatterns();
     forgeMasterLoadCacheStats();
+    forgeMasterLoadAuditConfig();
     const root = document.getElementById("forge-master-root");
     if (root) {
       root.addEventListener("click", e => {
         const tierBtn = e.target.closest("button[data-tier]");
         if (tierBtn) { forgeMasterDialClick(tierBtn.dataset.tier); return; }
         const quorumBtn = e.target.closest("button[data-quorum]");
-        if (quorumBtn) forgeMasterQuorumClick(quorumBtn.dataset.quorum);
+        if (quorumBtn) { forgeMasterQuorumClick(quorumBtn.dataset.quorum); return; }
+        const auditBtn = e.target.closest("button[data-audit]");
+        if (auditBtn) { forgeMasterAuditClick(auditBtn.dataset.audit); return; }
+        const auditAction = e.target.closest("button[data-audit-action]");
+        if (auditAction) forgeMasterStartDrain();
       });
     }
   } catch (err) {
@@ -783,5 +788,119 @@ window.forgeMasterLoadCacheStats = () => forgeMasterLoadCacheStats();
 window.forgeMasterRenderQuorumPicker = (...args) => forgeMasterRenderQuorumPicker(...args);
 window.forgeMasterRenderQuorumEstimate = (...args) => forgeMasterRenderQuorumEstimate(...args);
 window.forgeMasterRenderQuorumReply = (...args) => forgeMasterRenderQuorumReply(...args);
+
+// ─── Audit Loop Activation Surface (Phase-39 Slice 7) ────────────────
+
+const FM_AUDIT_MODES = [
+  { mode: "off",    label: "Off" },
+  { mode: "auto",   label: "Auto" },
+  { mode: "always", label: "Always" },
+];
+
+function forgeMasterRenderAuditPicker(activeMode) {
+  let pickerEl = document.getElementById("fm-audit-picker");
+  if (!pickerEl) {
+    const quorumEl = document.getElementById("fm-quorum-picker");
+    const dialEl = document.getElementById("fm-dial");
+    const anchor = quorumEl || dialEl;
+    if (!anchor) return;
+    pickerEl = document.createElement("div");
+    pickerEl.id = "fm-audit-picker";
+    pickerEl.className = "flex items-center gap-1 mb-2";
+    pickerEl.title = "Audit loop: discover bugs from the running system via tempering drain.";
+    anchor.insertAdjacentElement("afterend", pickerEl);
+  }
+  const label = document.createElement("span");
+  label.className = "text-xs text-gray-500 mr-1";
+  label.textContent = "Audit:";
+  pickerEl.innerHTML = "";
+  pickerEl.appendChild(label);
+  for (const { mode, label: btnLabel } of FM_AUDIT_MODES) {
+    const btn = document.createElement("button");
+    const active = mode === activeMode;
+    btn.className = active
+      ? "text-xs px-3 py-1 rounded bg-green-700 text-white font-semibold"
+      : "text-xs px-3 py-1 rounded bg-gray-700 text-gray-300 hover:bg-gray-600";
+    btn.dataset.audit = mode;
+    btn.textContent = btnLabel;
+    pickerEl.appendChild(btn);
+  }
+  // Start drain loop button
+  if (activeMode !== "off") {
+    const startBtn = document.createElement("button");
+    startBtn.className = "text-xs px-3 py-1 ml-2 rounded bg-blue-700 text-white hover:bg-blue-600";
+    startBtn.textContent = "\u{25B6} Start drain loop";
+    startBtn.dataset.auditAction = "start";
+    pickerEl.appendChild(startBtn);
+  }
+}
+
+async function forgeMasterAuditClick(mode) {
+  try {
+    const res = await fetch("/api/audit/config", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode }),
+    });
+    if (!res.ok) return;
+    const saved = await res.json();
+    forgeMasterRenderAuditPicker(saved.mode || "off");
+  } catch {
+    // noop
+  }
+}
+
+async function forgeMasterStartDrain() {
+  try {
+    const res = await fetch("/api/audit/drain", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ env: "dev" }),
+    });
+    if (!res.ok) return;
+    const result = await res.json();
+    forgeMasterRenderDrainCurve(result);
+  } catch {
+    // noop
+  }
+}
+
+function forgeMasterRenderDrainCurve(drainResult) {
+  let curveEl = document.getElementById("fm-drain-curve");
+  if (!curveEl) {
+    const pickerEl = document.getElementById("fm-audit-picker");
+    if (!pickerEl) return;
+    curveEl = document.createElement("div");
+    curveEl.id = "fm-drain-curve";
+    curveEl.className = "text-xs text-gray-400 mt-1 mb-2 font-mono";
+    pickerEl.insertAdjacentElement("afterend", curveEl);
+  }
+  if (!drainResult || !drainResult.summary) {
+    curveEl.textContent = "";
+    return;
+  }
+  const curve = drainResult.summary.drainCurve || [];
+  const terminated = drainResult.summary.terminated || "unknown";
+  const icon = terminated === "converged" ? "\u2705" : "\u{1F504}";
+  curveEl.textContent = `${icon} Drain: ${curve.join(" \u2192 ")} (${terminated})`;
+}
+
+async function forgeMasterLoadAuditConfig() {
+  try {
+    const res = await fetch("/api/audit/config");
+    if (!res.ok) return;
+    const config = await res.json();
+    forgeMasterRenderAuditPicker(config.mode || "off");
+  } catch {
+    forgeMasterRenderAuditPicker("off");
+  }
+}
+
+// Audit test helpers
+window.forgeMasterRenderAuditPicker = (...args) => forgeMasterRenderAuditPicker(...args);
+window.forgeMasterAuditClick = (...args) => forgeMasterAuditClick(...args);
+window.forgeMasterStartDrain = () => forgeMasterStartDrain();
+window.forgeMasterRenderDrainCurve = (...args) => forgeMasterRenderDrainCurve(...args);
+window.forgeMasterLoadAuditConfig = () => forgeMasterLoadAuditConfig();
 
 // Historical note: globals kept for cross-tab inline handlers.

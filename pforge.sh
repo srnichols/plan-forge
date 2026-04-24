@@ -82,6 +82,11 @@ COMMANDS:
   graph stats                  Print node count by type from graph snapshot
   graph query [type]           Query the knowledge graph (phase, file, recent-changes, neighbors)
   patterns list [--since <iso>] List recurring patterns detected across plan runs
+  audit-loop        Run audit drain loop — discover bugs from the running system
+    --auto          Respect config mode (off/auto/always); without this, always runs one drain
+    --max=N         Override maximum rounds (default: 5)
+    --dry-run       Show what would happen without triage side effects
+    --env=ENV       Set environment (dev, staging; production is forbidden)
   version-bump <v>  Update VERSION, package.json, docs/README/ROADMAP version badges to v<version>
   migrate-memory    Merge legacy *-history.json ledgers into canonical .jsonl siblings (idempotent)
   drain-memory      Drain pending OpenBrain queue records to the configured OpenBrain server
@@ -5001,6 +5006,81 @@ cmd_hammer_fm() {
     node "$script_path" "$@"
 }
 
+# ─── Command: audit-loop (Phase-39 Slice 7) ───────────────────────
+cmd_audit_loop() {
+    local auto_mode=false
+    local max_rounds=""
+    local dry_run=false
+    local env_name="dev"
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --auto)     auto_mode=true; shift ;;
+            --dry-run)  dry_run=true; shift ;;
+            --max=*)    max_rounds="${1#--max=}"; shift ;;
+            --max)      max_rounds="$2"; shift 2 ;;
+            --env=*)    env_name="${1#--env=}"; shift ;;
+            --env)      env_name="$2"; shift 2 ;;
+            *) shift ;;
+        esac
+    done
+
+    if [ "$env_name" = "production" ]; then
+        echo "ERROR: Audit loop is forbidden in production (forbidProduction: true)." >&2
+        exit 1
+    fi
+
+    print_manual_steps "audit-loop" \
+        "Load audit activation config from .forge.json" \
+        "Evaluate auto-activation thresholds (if --auto)" \
+        "Run tempering drain loop (up to maxRounds rounds)" \
+        "Triage each finding into bug / spec / classifier lanes" \
+        "Write drain curve to .forge/tempering/drain-history.jsonl"
+
+    local port=3100
+
+    if [ "$auto_mode" = "true" ]; then
+        local config
+        config=$(curl -sf "http://localhost:${port}/api/audit/config") || {
+            echo "ERROR: MCP server not running on port ${port}. Start with: node pforge-mcp/server.mjs" >&2
+            exit 1
+        }
+        local mode
+        mode=$(echo "$config" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));console.log(d.mode||'off')")
+        echo ""
+        echo -e "\xF0\x9F\x94\x8D Audit Loop (mode: $mode)"
+        if [ "$mode" = "off" ]; then
+            echo "   Audit loop is disabled (mode: off). Set audit.mode in .forge.json to 'auto' or 'always'."
+            return 0
+        fi
+    fi
+
+    local payload="{\"env\":\"${env_name}\",\"dryRun\":${dry_run}}"
+    if [ -n "$max_rounds" ]; then
+        payload="{\"env\":\"${env_name}\",\"dryRun\":${dry_run},\"maxRounds\":${max_rounds}}"
+    fi
+
+    local response
+    response=$(curl -sf -X POST "http://localhost:${port}/api/audit/drain" \
+        -H "Content-Type: application/json" \
+        -d "$payload") || {
+        echo "ERROR: MCP server not running on port ${port}. Start with: node pforge-mcp/server.mjs" >&2
+        exit 1
+    }
+
+    echo "$response" | node -e "
+      const d = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
+      if (d.dryRun) {
+        console.log('\n\u{1F4CB} Dry Run — would run drain with maxRounds=' + d.maxRounds);
+      } else {
+        console.log('\n\u2705 Audit Drain Complete');
+        console.log('   Rounds:   ' + (d.summary?.totalRounds || 0));
+        console.log('   Outcome:  ' + (d.summary?.terminated || 'unknown'));
+        console.log('   Curve:    ' + (d.summary?.drainCurve || []).join(' -> '));
+      }
+    "
+}
+
 COMMAND="${1:-help}"
 shift 2>/dev/null || true
 
@@ -5043,6 +5123,7 @@ case "$COMMAND" in
     skills)       cmd_skills "$@" ;;
     forge-master) cmd_forge_master "$@" ;;
     hammer-fm)    cmd_hammer_fm "$@" ;;
+    audit-loop)   cmd_audit_loop "$@" ;;
     fm-session)   cmd_fm_session "$@" ;;
     fm-recall)    cmd_fm_recall "$@" ;;
     patterns)     cmd_patterns "$@" ;;

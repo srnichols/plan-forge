@@ -112,6 +112,8 @@ import { dispatch as dispatchBugAdapter } from "./tempering/bug-adapters/contrac
 // Phase-39 Slice 4 — Audit loop MCP tools
 import { runTemperingDrain } from "./tempering/drain.mjs";
 import { routeFinding } from "./tempering/triage.mjs";
+// Phase-39 Slice 7 — audit-loop activation surface
+import { loadAuditConfig, saveAuditConfig, shouldAutoDrain } from "./tempering/auto-activate.mjs";
 import { checkForUpdate, detectCorruptInstall } from "./update-check.mjs";
 // Phase FORGE-SHOP-04 Slice 04.1 — Global search
 import { search as forgeSearch } from "./search/core.mjs";
@@ -6163,6 +6165,45 @@ export function createExpressApp() {
   app.get("/api/liveguard/traces", (_req, res) => {
     try {
       res.json(readForgeJsonl("liveguard-events.jsonl", [], PROJECT_DIR));
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // REST API: GET /api/audit/config — read audit activation config
+  app.get("/api/audit/config", (_req, res) => {
+    try {
+      const config = loadAuditConfig(PROJECT_DIR);
+      res.json(config);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // REST API: PUT /api/audit/config — update audit activation config
+  app.put("/api/audit/config", (req, res) => {
+    try {
+      const patch = req.body || {};
+      const result = saveAuditConfig(PROJECT_DIR, patch);
+      if (!result.ok) return res.status(500).json({ error: result.error });
+      res.json(result.config);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // REST API: POST /api/audit/drain — trigger audit drain loop manually
+  app.post("/api/audit/drain", async (req, res) => {
+    try {
+      const config = loadAuditConfig(PROJECT_DIR);
+      const { maxRounds, dryRun, env } = req.body || {};
+      const rounds = maxRounds || config.maxRounds || 5;
+      if (config.forbidProduction && env === "production") {
+        return res.status(403).json({ error: "production-forbidden" });
+      }
+      if (dryRun) {
+        return res.json({ dryRun: true, config, wouldRun: true, maxRounds: rounds });
+      }
+      const drainResult = await runTemperingDrain({
+        project: PROJECT_DIR,
+        maxRounds: rounds,
+        hub: activeHub,
+      });
+      res.json(drainResult);
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 

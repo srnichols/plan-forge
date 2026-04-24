@@ -39,6 +39,13 @@ import {
   getMinimaForDomain,
   promoteSuppressions as _promoteSuppressions,
 } from "./tempering.mjs";
+// Phase-39 Slice 7 — audit-loop activation surface
+import {
+  loadAuditConfig as _loadAuditConfig,
+  shouldAutoDrain as _shouldAutoDrain,
+} from "./tempering/auto-activate.mjs";
+export const loadAuditConfig = _loadAuditConfig;
+export const shouldAutoDrain = _shouldAutoDrain;
 export const readTemperingState = _readTemperingState;
 export const readTemperingConfig = _readTemperingConfig;
 export { TEMPERING_SCAN_STALE_DAYS };
@@ -3067,6 +3074,27 @@ export async function runPlan(planPath, options = {}) {
     if (ciConfig.enabled && ciConfig.workflow) {
       summary.ci = triggerCiWorkflow(ciConfig, eventBus);
     }
+  }
+
+  // Phase-39 Slice 7 — audit-loop activation hook (end-of-plan)
+  if (allPassed && !estimate && !dryRun) {
+    try {
+      const auditConfig = _loadAuditConfig(cwd);
+      const evaluation = _shouldAutoDrain({
+        cwd,
+        config: auditConfig,
+        filesChanged: results.length,
+        env: process.env.PFORGE_ENV || "dev",
+      });
+      if (evaluation.fire) {
+        eventBus.emit("drain-auto-estimate", {
+          mode: auditConfig.mode,
+          maxRounds: auditConfig.maxRounds,
+          signals: evaluation.signals,
+        });
+        summary.auditDrain = { dispatched: true, mode: auditConfig.mode, signals: evaluation.signals };
+      }
+    } catch { /* non-fatal — never fail the run for audit activation */ }
   }
 
   // Write summary

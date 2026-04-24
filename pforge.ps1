@@ -102,6 +102,11 @@ function Show-Help {
     Write-Host "  graph stats                  Print node count by type from graph snapshot"
     Write-Host "  graph query [type]           Query the knowledge graph (phase, file, recent-changes, neighbors)"
     Write-Host "  patterns list [--since <iso>] List recurring patterns detected across plan runs"
+    Write-Host "  audit-loop        Run audit drain loop — discover bugs from the running system"
+    Write-Host "    --auto          Respect config mode (off/auto/always); without this, always runs one drain"
+    Write-Host "    --max=N         Override maximum rounds (default: 5)"
+    Write-Host "    --dry-run       Show what would happen without triage side effects"
+    Write-Host "    --env=ENV       Set environment (dev, staging; production is forbidden)"
     Write-Host "  help              Show this help message"
     Write-Host ""
     Write-Host "OPTIONS:" -ForegroundColor Yellow
@@ -5753,6 +5758,79 @@ function Invoke-HammerFm {
     node $scriptPath @Arguments
 }
 
+# ─── Command: audit-loop (Phase-39 Slice 7) ───────────────────────
+function Invoke-AuditLoop {
+    $autoMode = $false
+    $maxRounds = $null
+    $dryRun   = $false
+    $env      = "dev"
+
+    for ($i = 0; $i -lt $Arguments.Count; $i++) {
+        switch -Regex ($Arguments[$i]) {
+            '^--auto$'      { $autoMode = $true }
+            '^--dry-run$'   { $dryRun = $true }
+            '^--max=(\d+)$' { $maxRounds = [int]$Matches[1] }
+            '^--max$'       { if (($i + 1) -lt $Arguments.Count) { $maxRounds = [int]$Arguments[$i + 1]; $i++ } }
+            '^--env=(.+)$'  { $env = $Matches[1] }
+            '^--env$'       { if (($i + 1) -lt $Arguments.Count) { $env = $Arguments[$i + 1]; $i++ } }
+        }
+    }
+
+    if ($env -eq "production") {
+        Write-Host "ERROR: Audit loop is forbidden in production (forbidProduction: true)." -ForegroundColor Red
+        exit 1
+    }
+
+    Write-ManualSteps "audit-loop" @(
+        "Load audit activation config from .forge.json"
+        "Evaluate auto-activation thresholds (if --auto)"
+        "Run tempering drain loop (up to maxRounds rounds)"
+        "Triage each finding into bug / spec / classifier lanes"
+        "Write drain curve to .forge/tempering/drain-history.jsonl"
+    )
+
+    $port = 3100
+    $payload = @{
+        env    = $env
+        dryRun = $dryRun
+    }
+    if ($maxRounds) { $payload.maxRounds = $maxRounds }
+
+    if ($autoMode) {
+        try {
+            $configUri = "http://localhost:$port/api/audit/config"
+            $config = Invoke-RestMethod -Uri $configUri -Method GET -ErrorAction Stop
+            Write-Host ""
+            Write-Host "`u{1F50D} Audit Loop (mode: $($config.mode))" -ForegroundColor Cyan
+            if ($config.mode -eq "off") {
+                Write-Host "   Audit loop is disabled (mode: off). Set audit.mode in .forge.json to 'auto' or 'always'." -ForegroundColor Yellow
+                return
+            }
+        } catch {
+            Write-Host "ERROR: MCP server not running on port $port. Start with: node pforge-mcp/server.mjs" -ForegroundColor Red
+            exit 1
+        }
+    }
+
+    try {
+        $drainUri  = "http://localhost:$port/api/audit/drain"
+        $body      = $payload | ConvertTo-Json -Compress
+        $response  = Invoke-RestMethod -Uri $drainUri -Method POST -ContentType "application/json" -Body $body -ErrorAction Stop
+        Write-Host ""
+        if ($dryRun) {
+            Write-Host "`u{1F4CB} Dry Run — would run drain with maxRounds=$($response.maxRounds)" -ForegroundColor Yellow
+        } else {
+            Write-Host "`u{2705} Audit Drain Complete" -ForegroundColor Green
+            Write-Host "   Rounds:   $($response.summary.totalRounds)" -ForegroundColor White
+            Write-Host "   Outcome:  $($response.summary.terminated)" -ForegroundColor White
+            Write-Host "   Curve:    $($response.summary.drainCurve -join ' -> ')" -ForegroundColor White
+        }
+    } catch {
+        Write-Host "ERROR: MCP server not running on port $port. Start with: node pforge-mcp/server.mjs" -ForegroundColor Red
+        exit 1
+    }
+}
+
 switch ($Command) {
     'init'         { Invoke-Init }
     'check'        { Invoke-Check }
@@ -5793,6 +5871,7 @@ switch ($Command) {
     'skills'       { Invoke-Skills }
     'forge-master' { Invoke-ForgeMaster }
     'hammer-fm'    { Invoke-HammerFm }
+    'audit-loop'   { Invoke-AuditLoop }
     'fm-session'   { Invoke-FmSession }
     'fm-recall'    { Invoke-FmRecall }
     'patterns'     { Invoke-Patterns }

@@ -5107,11 +5107,35 @@ EOF
       const d = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
       if (d.dryRun) {
         console.log('\n\u{1F4CB} Dry Run — would run drain with maxRounds=' + d.maxRounds);
-      } else {
-        console.log('\n\u2705 Audit Drain Complete');
-        console.log('   Rounds:   ' + (d.summary?.totalRounds || 0));
-        console.log('   Outcome:  ' + (d.summary?.terminated || 'unknown'));
-        console.log('   Curve:    ' + (d.summary?.drainCurve || []).join(' -> '));
+        process.exit(0);
+      }
+      const s = d.summary || {};
+      const terminated = s.terminated || 'unknown';
+      if (terminated === 'no-work') {
+        console.log('\n\u26A0 Audit Drain Did Not Run');
+        console.log('   Reason: ' + (s.reason || 'unknown'));
+        console.log('   No scanners executed. Check .forge/tempering/config.json (enabled/scanners) and that an adapter exists for your stack.');
+        if (s.historyPath) console.log('   History: ' + s.historyPath);
+        if (s.fsErrors) {
+          console.log('   Filesystem errors:');
+          for (const e of s.fsErrors) console.log('     ' + e.op + ' ' + e.path + ': ' + e.message);
+        }
+        process.exit(2);
+      }
+      if (terminated === 'aborted') {
+        console.log('\n\u26D4 Audit Drain Aborted');
+        console.log('   Rounds:   ' + (s.totalRounds || 0));
+        if (s.historyPath) console.log('   History: ' + s.historyPath);
+        process.exit(1);
+      }
+      console.log('\n\u2705 Audit Drain Complete');
+      console.log('   Rounds:   ' + (s.totalRounds || 0));
+      console.log('   Outcome:  ' + terminated);
+      console.log('   Curve:    ' + (s.drainCurve || []).join(' -> '));
+      if (s.historyPath) console.log('   History: ' + s.historyPath);
+      if (s.fsErrors) {
+        console.log('   WARNING: Failed to persist some drain history lines:');
+        for (const e of s.fsErrors) console.log('     ' + e.op + ' ' + e.path + ': ' + e.message);
       }
     "
 }

@@ -200,3 +200,92 @@ describe("audit artifact shape", () => {
     }
   });
 });
+
+// ─── Meta-bug #101 regression: no-work detection ─────────────────────
+
+describe("drain no-work detection (meta-bug #101)", () => {
+  let tmpDir;
+  beforeEach(() => { tmpDir = makeTmpDir(); });
+  afterEach(() => { cleanTmpDir(tmpDir); });
+
+  it("reports 'no-work' when runner returns { ok:true, skipped:true }", async () => {
+    const result = await runTemperingDrain({
+      project: tmpDir,
+      maxRounds: 5,
+      runTemperingRunFn: async () => ({
+        ok: true,
+        skipped: true,
+        reason: "tempering-disabled",
+        runId: "run-skip",
+      }),
+    });
+
+    expect(result.terminated).toBe("no-work");
+    expect(result.summary.terminated).toBe("no-work");
+    expect(result.summary.reason).toBe("tempering-disabled");
+    expect(result.rounds).toHaveLength(1);
+    expect(result.rounds[0].noWork).toBe(true);
+    expect(result.rounds[0].reason).toBe("tempering-disabled");
+  });
+
+  it("reports 'no-work' when runner returns ok but no scanners array", async () => {
+    const result = await runTemperingDrain({
+      project: tmpDir,
+      maxRounds: 5,
+      runTemperingRunFn: async () => ({
+        ok: true,
+        runId: "run-no-scanners",
+        verdict: "pass",
+      }),
+    });
+
+    expect(result.terminated).toBe("no-work");
+    expect(result.summary.reason).toBe("no-scanners-executed");
+  });
+
+  it("reports 'no-work' when scanners array is empty", async () => {
+    const result = await runTemperingDrain({
+      project: tmpDir,
+      maxRounds: 5,
+      runTemperingRunFn: async () => ({
+        ok: true,
+        runId: "run-empty",
+        verdict: "pass",
+        scanners: [],
+      }),
+    });
+
+    expect(result.terminated).toBe("no-work");
+    expect(result.summary.reason).toBe("no-scanners-executed");
+  });
+
+  it("does NOT mistake a real convergent run (scanners present, 0 findings) for no-work", async () => {
+    // This is the case where scanners actually ran and found nothing — legitimate convergence.
+    const result = await runTemperingDrain({
+      project: tmpDir,
+      maxRounds: 5,
+      runTemperingRunFn: async () => ({
+        ok: true,
+        runId: "run-real",
+        verdict: "pass",
+        scanners: [{ scanner: "unit", verdict: "pass", pass: 10, fail: 0, findings: [] }],
+      }),
+    });
+
+    expect(result.terminated).toBe("converged");
+    expect(result.rounds[0].noWork).toBeUndefined();
+  });
+
+  it("summary includes historyPath so callers know where artifacts live", async () => {
+    const result = await runTemperingDrain({
+      project: tmpDir,
+      maxRounds: 1,
+      runTemperingRunFn: async () => ({
+        ok: true,
+        scanners: [{ scanner: "unit", findings: [] }],
+      }),
+    });
+    expect(result.summary.historyPath).toContain("drain-history.jsonl");
+  });
+});
+

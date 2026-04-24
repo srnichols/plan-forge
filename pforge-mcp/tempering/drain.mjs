@@ -68,16 +68,29 @@ function extractCounts(runResult) {
 
 function ensureHistoryDir(projectDir) {
   const dir = resolve(projectDir, ".forge", "tempering");
+  const errors = [];
   if (!existsSync(dir)) {
-    try { mkdirSync(dir, { recursive: true }); } catch { /* best-effort */ }
+    try {
+      mkdirSync(dir, { recursive: true });
+    } catch (err) {
+      errors.push({ op: "mkdir", path: dir, message: err.message });
+    }
   }
-  return resolve(dir, "drain-history.jsonl");
+  return { historyPath: resolve(dir, "drain-history.jsonl"), errors };
 }
 
-function appendHistoryLine(historyPath, line) {
+function appendHistoryLine(historyPath, line, errors) {
   try {
     appendFileSync(historyPath, JSON.stringify(line) + "\n", "utf-8");
-  } catch { /* best-effort — non-fatal */ }
+    return true;
+  } catch (err) {
+    // Record the first write error we see; subsequent failures are usually
+    // the same cause and noisy to log individually.
+    if (errors && errors.length === 0) {
+      errors.push({ op: "append", path: historyPath, message: err.message });
+    }
+    return false;
+  }
 }
 
 // ─── Default convergence rule ────────────────────────────────────────
@@ -128,7 +141,9 @@ export function runTemperingDrain(opts = {}) {
     });
   }
 
-  const historyPath = ensureHistoryDir(project);
+  const historyFs = ensureHistoryDir(project);
+  const historyPath = historyFs.historyPath;
+  const fsErrors = [...historyFs.errors];
 
   return (async () => {
     emit(hub, "drain-started", {
@@ -171,8 +186,35 @@ export function runTemperingDrain(opts = {}) {
           verdict: runResult?.verdict || null,
         };
         rounds.push(errorRound);
-        appendHistoryLine(historyPath, errorRound);
+        appendHistoryLine(historyPath, errorRound, fsErrors);
         terminated = "aborted";
+        break;
+      }
+
+      // Tempering runner returned ok:true but nothing actually executed
+      // (e.g., `enabled: false` in tempering config, or no scanner
+      // adapters loaded for the detected stack). Without this guard the
+      // default convergence rule sees 0 findings and declares success,
+      // producing a misleading "converged, curve [0]" result with no
+      // real verification. See meta-bug #101.
+      if (runResult.skipped === true || !Array.isArray(runResult.scanners) || runResult.scanners.length === 0) {
+        const noWorkRound = {
+          round,
+          runId: runResult.runId || null,
+          realFindings: 0,
+          patterns: 0,
+          ts: new Date(now()).toISOString(),
+          deltas: null,
+          verdict: runResult.verdict || null,
+          findingCount: 0,
+          noWork: true,
+          reason: runResult.skipped
+            ? (runResult.reason || "tempering-skipped")
+            : "no-scanners-executed",
+        };
+        rounds.push(noWorkRound);
+        appendHistoryLine(historyPath, noWorkRound, fsErrors);
+        terminated = "no-work";
         break;
       }
 
@@ -194,7 +236,7 @@ export function runTemperingDrain(opts = {}) {
       };
 
       rounds.push(roundData);
-      appendHistoryLine(historyPath, roundData);
+      appendHistoryLine(historyPath, roundData, fsErrors);
 
       emit(hub, "drain-round-completed", {
         correlationId: corr,
@@ -218,7 +260,16 @@ export function runTemperingDrain(opts = {}) {
       drainCurve: rounds.map((r) => r.realFindings),
       finalRealFindings: rounds.length > 0 ? rounds[rounds.length - 1].realFindings : 0,
       finalPatterns: rounds.length > 0 ? rounds[rounds.length - 1].patterns : 0,
+      historyPath,
     };
+    if (fsErrors.length > 0) {
+      summary.fsErrors = fsErrors;
+    }
+    // Propagate no-work reason so the CLI/REST layer can surface it
+    // instead of printing a false "converged" checkmark.
+    if (terminated === "no-work" && rounds.length > 0) {
+      summary.reason = rounds[rounds.length - 1].reason;
+    }
 
     emit(hub, "drain-completed", {
       correlationId: corr,

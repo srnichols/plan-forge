@@ -5850,11 +5850,41 @@ function Invoke-AuditLoop {
         Write-Host ""
         if ($dryRun) {
             Write-Host "`u{1F4CB} Dry Run — would run drain with maxRounds=$($response.maxRounds)" -ForegroundColor Yellow
+        } elseif ($response.summary.terminated -eq "no-work") {
+            Write-Host "`u{26A0} Audit Drain Did Not Run" -ForegroundColor Yellow
+            Write-Host "   Reason: $($response.summary.reason)" -ForegroundColor Yellow
+            Write-Host "   No scanners executed. Check .forge/tempering/config.json (enabled/scanners) and that an adapter exists for your stack." -ForegroundColor Yellow
+            if ($response.summary.historyPath) {
+                Write-Host "   History: $($response.summary.historyPath)" -ForegroundColor DarkGray
+            }
+            if ($response.summary.fsErrors) {
+                Write-Host "   Filesystem errors:" -ForegroundColor Red
+                foreach ($e in $response.summary.fsErrors) {
+                    Write-Host "     $($e.op) $($e.path): $($e.message)" -ForegroundColor Red
+                }
+            }
+            exit 2
+        } elseif ($response.summary.terminated -eq "aborted") {
+            Write-Host "`u{26D4} Audit Drain Aborted" -ForegroundColor Red
+            Write-Host "   Rounds:   $($response.summary.totalRounds)" -ForegroundColor White
+            if ($response.summary.historyPath) {
+                Write-Host "   History: $($response.summary.historyPath)" -ForegroundColor DarkGray
+            }
+            exit 1
         } else {
             Write-Host "`u{2705} Audit Drain Complete" -ForegroundColor Green
             Write-Host "   Rounds:   $($response.summary.totalRounds)" -ForegroundColor White
             Write-Host "   Outcome:  $($response.summary.terminated)" -ForegroundColor White
             Write-Host "   Curve:    $($response.summary.drainCurve -join ' -> ')" -ForegroundColor White
+            if ($response.summary.historyPath) {
+                Write-Host "   History: $($response.summary.historyPath)" -ForegroundColor DarkGray
+            }
+            if ($response.summary.fsErrors) {
+                Write-Host "   WARNING: Failed to persist some drain history lines:" -ForegroundColor Yellow
+                foreach ($e in $response.summary.fsErrors) {
+                    Write-Host "     $($e.op) $($e.path): $($e.message)" -ForegroundColor Yellow
+                }
+            }
         }
     } catch {
         Write-Host "ERROR: MCP server not running on port $port. Start with: node pforge-mcp/server.mjs" -ForegroundColor Red

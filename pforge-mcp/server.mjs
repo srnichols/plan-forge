@@ -109,6 +109,9 @@ import { promoteBaseline } from "./tempering/baselines.mjs";
 import { registerBug, listBugs, updateBugStatus, loadBug, setLinkedFixPlan, appendValidationAttempt } from "./tempering/bug-registry.mjs";
 import { classify as classifyBug } from "./tempering/bug-classifier.mjs";
 import { dispatch as dispatchBugAdapter } from "./tempering/bug-adapters/contract.mjs";
+// Phase-39 Slice 4 — Audit loop MCP tools
+import { runTemperingDrain } from "./tempering/drain.mjs";
+import { routeFinding } from "./tempering/triage.mjs";
 import { checkForUpdate, detectCorruptInstall } from "./update-check.mjs";
 // Phase FORGE-SHOP-04 Slice 04.1 — Global search
 import { search as forgeSearch } from "./search/core.mjs";
@@ -278,6 +281,46 @@ function captureMemory(content, type, source, cwd) {
       timestamp: thought.captured_at,
     });
   } catch { /* memory capture is best-effort — never break tool execution */ }
+}
+
+// ─── Audit artifact writer (Phase-39 Slice 4) ──────────────────────
+
+/**
+ * Write the drain result as a `.forge/audits/dev-<ts>.json` audit artifact.
+ * Shape matches the blog's documented convention (ts, rounds, findingsByLane,
+ * terminated, summary).
+ *
+ * @param {string} projectDir - Project directory
+ * @param {{ rounds, terminated, summary }} drainResult - Result from runTemperingDrain
+ * @param {object|null} sliceRef - Optional plan+slice context
+ * @returns {string} Path to the written artifact (relative to projectDir)
+ */
+function writeAuditArtifact(projectDir, drainResult, sliceRef) {
+  const ts = Date.now();
+  const auditsDir = resolve(projectDir, ".forge", "audits");
+  mkdirSync(auditsDir, { recursive: true });
+  const fileName = `dev-${ts}.json`;
+  const filePath = resolve(auditsDir, fileName);
+
+  const findingsByLane = { bug: 0, spec: 0, classifier: 0 };
+  for (const round of drainResult.rounds || []) {
+    if (round.findingCount) {
+      findingsByLane.bug += round.realFindings || 0;
+      findingsByLane.classifier += round.patterns || 0;
+    }
+  }
+
+  const artifact = {
+    ts: new Date(ts).toISOString(),
+    rounds: drainResult.rounds || [],
+    findingsByLane,
+    terminated: drainResult.terminated,
+    summary: drainResult.summary || {},
+    sliceRef: sliceRef || null,
+  };
+
+  writeFileSync(filePath, JSON.stringify(artifact, null, 2));
+  return `.forge/audits/${fileName}`;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────
@@ -943,6 +986,59 @@ const TOOLS = [
         url: { type: "string", description: "Full URL to approve (alternative to urlHash — hash will be derived)" },
         runId: { type: "string", description: "Specific run ID to promote from (optional — defaults to most recent)" },
         path: { type: "string", description: "Project directory (default: current)" },
+      },
+    },
+  },
+  // Phase-39 Slice 4 — Audit loop MCP tools
+  {
+    name: "forge_tempering_drain",
+    description: "Tempering drain loop — wraps forge_tempering_run in a round-loop that re-probes until convergence or max-rounds cap fires. Writes per-round deltas to .forge/tempering/drain-history.jsonl and a final audit artifact to .forge/audits/dev-<ts>.json. USE FOR: recursive audit loops, post-plan convergence checks, drain-until-clean semantics. DO NOT USE FOR: single-shot tempering runs (use forge_tempering_run), editing source, creating bugs directly.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Project directory (default: current)" },
+        maxRounds: { type: "number", description: "Maximum drain rounds (default: 5, max: 20)" },
+        scanners: { type: "array", items: { type: "string" }, description: "Scanner names to run each round (default: all enabled)" },
+        correlationId: { type: "string", description: "Optional correlation ID" },
+        sliceRef: {
+          type: "object",
+          description: "Optional plan+slice context",
+          properties: {
+            plan: { type: "string" },
+            slice: { type: "string" },
+          },
+        },
+      },
+    },
+  },
+  {
+    name: "forge_triage_route",
+    description: "Triage a single tempering finding into one of three lanes: 'bug' (product defect), 'spec' (feature/spec gap), or 'classifier' (noise). Pure routing — no side effects. Fail-safe: unknown classifier output always routes to 'bug' with low confidence. USE FOR: per-finding triage after a tempering run, building custom drain loops. DO NOT USE FOR: batch triage (use forge_tempering_drain), registering bugs (use forge_bug_register after triage).",
+    inputSchema: {
+      type: "object",
+      required: ["finding"],
+      properties: {
+        finding: {
+          type: "object",
+          description: "A finding from a tempering scanner: { class, route, severity, evidence }",
+          properties: {
+            class: { type: "string" },
+            route: { type: "string" },
+            severity: { type: "string", enum: ["critical", "high", "medium", "low", "info"] },
+            evidence: { type: "object" },
+          },
+          required: ["class", "severity"],
+        },
+        classifierResult: {
+          type: "object",
+          description: "Output from the bug classifier. If omitted, fail-safe routes to 'bug' lane.",
+          properties: {
+            classification: { type: "string" },
+            reason: { type: "string" },
+            confidence: { type: "number" },
+            source: { type: "string" },
+          },
+        },
       },
     },
   },
@@ -2500,6 +2596,63 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
       return { content: [{ type: "text", text: `Baseline approval error: ${err.message}` }], isError: true };
+    }
+  }
+
+  // ─── Phase-39 Slice 4 — Audit loop tools ────────────────────────
+  if (name === "forge_tempering_drain") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const maxRounds = typeof args.maxRounds === "number" ? Math.min(Math.max(1, args.maxRounds), 20) : 5;
+      const result = await runTemperingDrain({
+        project: cwd,
+        maxRounds,
+        scanners: Array.isArray(args.scanners) ? args.scanners : undefined,
+        hub: activeHub,
+        correlationId: args.correlationId || null,
+        spawnWorker,
+      });
+
+      // Write audit artifact to .forge/audits/dev-<ts>.json
+      const auditArtifactPath = writeAuditArtifact(cwd, result, args.sliceRef || null);
+
+      const response = {
+        ok: result.terminated !== "aborted",
+        ...result,
+        auditArtifact: auditArtifactPath,
+      };
+
+      emitToolTelemetry("forge_tempering_drain", args, response, Date.now() - t0, response.ok ? "OK" : "ERROR", cwd);
+
+      // L3 capture on completion
+      try {
+        const summary = [
+          `Drain ${response.ok ? "converged" : "did not converge"}: ${result.terminated}`,
+          `rounds=${result.rounds.length}`,
+          `curve=[${result.summary.drainCurve.join(",")}]`,
+          `finalFindings=${result.summary.finalRealFindings}`,
+        ].join(" — ");
+        captureMemory(summary, "lesson", `forge_tempering_drain/${result.terminated}`, cwd);
+      } catch { /* best-effort */ }
+
+      return { content: [{ type: "text", text: JSON.stringify(response, null, 2) }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Tempering drain error: ${err.message}` }], isError: true };
+    }
+  }
+
+  if (name === "forge_triage_route") {
+    const t0 = Date.now();
+    try {
+      if (!args.finding || typeof args.finding !== "object") {
+        return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: "finding object required" }, null, 2) }], isError: true };
+      }
+      const result = routeFinding(args.finding, args.classifierResult || null);
+      emitToolTelemetry("forge_triage_route", args, result, Date.now() - t0, "OK", PROJECT_DIR);
+      return { content: [{ type: "text", text: JSON.stringify({ ok: true, ...result }, null, 2) }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Triage route error: ${err.message}` }], isError: true };
     }
   }
 

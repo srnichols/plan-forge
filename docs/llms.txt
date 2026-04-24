@@ -19,21 +19,22 @@ Plan Forge is an open-source framework that gives AI coding agents (Copilot, Cla
 
 ## Capabilities
 
-- 65 MCP tools — core orchestration + LiveGuard + Watcher + Crucible + Tempering + Bug Registry + Testbed. Start with `forge_capabilities` for full discovery; call `mcp-call <tool>` from the CLI for any tool without a dedicated wrapper.
-- 45+ CLI commands (`pforge <command>`) — plan hardening (run-plan, analyze, sweep), LiveGuard (drift, incident, secret-scan, env-diff, dep-watch, hotspot, regression-guard, fix-proposal, quorum-analyze, health-trend, deploy-log), releases (self-update, version-bump, migrate-memory), testbed (testbed-happypath), introspection (smith, check, status, tour), agent setup (claude, codex, cursor, copilot), org-rules export.
+- 67 MCP tools — core orchestration + LiveGuard + Watcher + Crucible + Tempering + Bug Registry + Testbed. Start with `forge_capabilities` for full discovery; call `mcp-call <tool>` from the CLI for any tool without a dedicated wrapper.
+- 46+ CLI commands (`pforge <command>`) — plan hardening (run-plan, analyze, sweep), LiveGuard (drift, incident, secret-scan, env-diff, dep-watch, hotspot, regression-guard, fix-proposal, quorum-analyze, health-trend, deploy-log), audit loop (audit-loop), releases (self-update, version-bump, migrate-memory), testbed (testbed-happypath), introspection (smith, check, status, tour), agent setup (claude, codex, cursor, copilot), org-rules export.
 - LiveGuard tools — post-coding intelligence: drift scoring, incident tracking, secret scanning, dependency vulnerability monitoring, regression guard, health trend with Health DNA fingerprint, alert triage, environment diff, fix proposals with code snippets, quorum analysis, composite health check (`forge_liveguard_run`).
-- Crucible + Tempering — community forge intake, lifecycle state machine, and temper-quality scoring for community extensions.
+- Crucible + Tempering — community forge intake, lifecycle state machine, temper-quality scoring, and audit drain loop (`forge_tempering_drain`, `forge_triage_route`).
 - Bug Registry — native bug tracking (register/list/link/update/close/stats) integrated into the dashboard timeline + notifications.
 - Testbed — happy-path scenario runner with Chapter 8 hooks for release validation.
 - Forge Intelligence — self-recursive improvement: auto-tune escalation chains from model performance, cost estimate calibration from historical actuals, adaptive quorum thresholds, slice auto-split advisories.
 - LiveGuard Intelligence — recurring incident detection (auto-escalate systemic), fix proposal outcome tracking, hotspot test priority, Project Health DNA for decay detection.
 - OpenBrain integration — auto-capture findings to persistent memory; pipeline prompts search memory before acting.
-- 19 reviewer agents (6 stack-specific + 8 cross-stack + 5 pipeline)
-- 13 slash command skills
+- 20 reviewer agents (6 stack-specific + 8 cross-stack + 5 pipeline + 1 classifier-reviewer)
+- 14 slash command skills (including /audit-loop)
 - 15-18 auto-loading instruction files per preset
 - 15 scaffolding prompt templates per app preset
 - Live dashboard at localhost:3100/dashboard — multi-tab (FORGE, LIVEGUARD, CRUCIBLE, BUG REGISTRY, NOTIFICATIONS, TIMELINE/SEARCH, WATCHER)
 - Quorum mode: multi-model consensus for complex slices (--quorum=power, --quorum=speed)
+- Audit Loop: closed-loop audit drain via `pforge audit-loop` or `.forge.json#audit` activation surface (off/auto/always, default off)
 - Auto-escalation: automatic model promotion on slice failure (self-tuning from history)
 - Agent-per-slice routing: assign different models per role
 - Cost tracking with multi-model pricing table (self-calibrating estimates)

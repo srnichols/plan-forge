@@ -907,6 +907,53 @@ Aggregated health score from drift, cost, incidents, and model performance over 
 .\pforge.ps1 health-trend --days 30
 ```
 
+### `pforge audit-loop`
+
+Run the audit drain loop — discovers bugs from the running system by probing live routes, triaging findings, and iterating until convergence.
+
+Without `--auto`, runs a manual one-shot drain (ignores `.forge.json#audit` config). With `--auto`, respects `audit.mode` in `.forge.json` (`off` / `auto` / `always`) and exits early if no threshold trips.
+
+```powershell
+# PowerShell — manual one-shot (always runs one drain)
+.\pforge.ps1 audit-loop
+
+# PowerShell — respect config thresholds
+.\pforge.ps1 audit-loop --auto
+
+# PowerShell — dry run with custom max rounds
+.\pforge.ps1 audit-loop --dry-run --max=3
+
+# PowerShell — target staging environment
+.\pforge.ps1 audit-loop --env=staging
+```
+
+```bash
+# Bash — manual one-shot
+./pforge.sh audit-loop
+
+# Bash — respect config
+./pforge.sh audit-loop --auto
+
+# Bash — dry run
+./pforge.sh audit-loop --dry-run --max=3
+```
+
+**Flags:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--auto` | *(off)* | Respect `.forge.json#audit` config. Without this flag, always runs one drain |
+| `--max=N` | `5` | Maximum drain rounds before stopping |
+| `--dry-run` | *(off)* | Show what would happen without triage side effects |
+| `--env=ENV` | `dev` | Target environment (`dev`, `staging`). Production is forbidden |
+
+**When to use:**
+- After shipping a plan, run `pforge audit-loop` to discover regressions in your running app
+- Set `audit.mode: "auto"` in `.forge.json` and use `--auto` for threshold-gated runs (e.g., in CI after deploy)
+- Use `--dry-run` to preview findings before committing to triage
+
+**Related MCP tools:** `forge_tempering_drain`, `forge_triage_route`
+
 ---
 
 ## CLI vs Manual Workflow

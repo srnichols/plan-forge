@@ -7,7 +7,7 @@
 
 ## After Running `setup.ps1`
 
-The setup wizard copies preset files and generates your project-specific configuration. If you used `-Agent claude`, `-Agent cursor`, or `-Agent codex`, native files for those agents were also generated — including rich context files with all 16 guardrail files embedded, all prompts as native skills/commands, all 19 reviewer agents as invocable skills, and smart instructions that emulate Copilot's auto-loading and post-edit scanning. Copilot files are always installed.
+The setup wizard copies preset files and generates your project-specific configuration. If you used `-Agent claude`, `-Agent cursor`, or `-Agent codex`, native files for those agents were also generated — including rich context files with all 16 guardrail files embedded, all prompts as native skills/commands, all 20 reviewer agents (including the classifier-reviewer for audit-loop triage) as invocable skills, and smart instructions that emulate Copilot's auto-loading and post-edit scanning. Copilot files are always installed.
 
 Here's what to customize next:
 

@@ -4,7 +4,7 @@
 >
 > **This file is your entry point.** Read it top-to-bottom, then execute the appropriate path.
 >
-> **What you get**: 65 MCP tools (core + LiveGuard + Watcher + Crucible + Tempering + Bug Registry + Testbed), 45+ CLI commands, 19 reviewer agents, 13 skills, live dashboard, self-recursive intelligence (the system gets smarter every run), OpenBrain persistent memory integration. Call `forge_capabilities` for full discovery.
+> **What you get**: 67 MCP tools (core + LiveGuard + Watcher + Crucible + Tempering + Bug Registry + Testbed), 46+ CLI commands, 20 reviewer agents, 14 skills, live dashboard, audit drain loop, self-recursive intelligence (the system gets smarter every run), OpenBrain persistent memory integration. Call `forge_capabilities` for full discovery.
 
 ---
 

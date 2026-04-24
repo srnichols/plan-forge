@@ -19,7 +19,7 @@
 **[Website](https://planforge.software/)** · **[Shop Tour](https://planforge.software/shop-tour.html)** · **[Manual](https://planforge.software/manual/)** · **[Documentation](https://planforge.software/docs.html)** · **[FAQ](https://planforge.software/faq.html)** · **[Extensions](https://planforge.software/extensions.html)** · **[Spec Kit Interop](https://planforge.software/speckit-interop.html)**
 
 ```
-69 MCP Tools · 45+ CLI Commands · 14 Agents · 15 Skills · 9 Presets · 7 Adapters · 3285 Tests · v2.75.1
+69 MCP Tools · 45+ CLI Commands · 14 Agents · 15 Skills · 9 Presets · 7 Adapters · 3285 Tests · v2.80.0
 ```
 
 ---
@@ -141,6 +141,7 @@ Key tools: `forge_run_plan` · `forge_liveguard_run` · `forge_analyze` · `forg
 | Feature | How to Enable | What It Does |
 |---------|--------------|-------------|
 | **Quorum mode** | Automatic (complexity ≥ 6) | 3 models analyze in parallel, reviewer synthesizes. Self-tuning threshold. |
+| **Audit Loop** | `pforge audit-loop` or `.forge.json#audit` | Closed-loop drain: content-audit scanner → triage → fix. Default off; opt-in via `audit.mode: "auto"` or `"always"`. |
 | **Auto-escalation** | Built-in | Model fails → auto-promotes. Chain reorders by success rate. |
 | **Cost tracking** | Built-in | Per-slice tokens, 23-model pricing, `--estimate` with historical calibration. |
 | **OpenBrain memory** | Configure MCP endpoint | 13 tools auto-capture findings. 4 prompts search before acting. |

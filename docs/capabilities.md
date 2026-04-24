@@ -1,12 +1,12 @@
 # Plan Forge — Capabilities Reference
 
-> **Tools**: 65 MCP (20 core + 14 LiveGuard + 2 Watcher + 6 Crucible + 4 Tempering + 4 Bug Registry + 3 Testbed + 3 Review + 3 Notify/Home/Delegate + additional doctor/memory/search/timeline/org) | **CLI**: 45+ commands | **Presets**: 9 | **Agents**: 19 | **Skills**: 13
+> **Tools**: 67 MCP (20 core + 14 LiveGuard + 2 Watcher + 6 Crucible + 6 Tempering + 4 Bug Registry + 3 Testbed + 3 Review + 3 Notify/Home/Delegate + additional doctor/memory/search/timeline/org) | **CLI**: 46+ commands | **Presets**: 9 | **Agents**: 20 | **Skills**: 14
 >
 > Machine-readable version: call `forge_capabilities` MCP tool, `GET https://planforge.software/.well-known/plan-forge.json`, or read `pforge-mcp/tools.json` (auto-generated on every MCP server start).
 
 ---
 
-## MCP Tools (65)
+## MCP Tools (67)
 
 | Tool | Intent | Cost | Description |
 |------|--------|------|-------------|
@@ -55,6 +55,8 @@
 | `forge_tempering_scan` | tempering | low | **v2.40+** — Scan for temper-quality signals (Scope Contract clarity, validation gates, slice sizing, forbidden actions). |
 | `forge_tempering_status` | tempering | low | **v2.40+** — Read latest tempering results per plan. |
 | `forge_tempering_approve_baseline` | tempering | low | **v2.40+** — Approve current tempering score as the new baseline threshold. |
+| `forge_tempering_drain` | tempering | medium | **v2.80+** — Run the audit drain loop: iterates content-audit scan → triage → fix rounds until convergence or maxRounds. Accepts `project`, `maxRounds`, `scanners`, `dryRun`, `env`. |
+| `forge_triage_route` | tempering | low | **v2.80+** — Route a single finding through the triage classifier. Returns `{ lane, payload, confidence }` where lane is `"bug"`, `"spec"`, or `"classifier"`. |
 | `forge_bug_register` | bug-registry | low | **v2.45+** — Register a bug with severity, title, description, affected files, linked plan/slice. |
 | `forge_bug_list` | bug-registry | low | **v2.45+** — List bugs with status/severity/plan filters. |
 | `forge_bug_update_status` | bug-registry | low | **v2.45+** — Update bug status (open → investigating → in-progress → resolved → closed). |

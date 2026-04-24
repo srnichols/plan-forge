@@ -139,6 +139,19 @@ const KEYWORD_RULES = [
   { pattern: /\b(sweep|completeness\s+sweep|todos?|stubs?|mocks?|incomplete|placeholders?)\b/i, lane: LANES.OPERATIONAL, weight: 2 },
   // Phase-37.3 Slice 1 — read-only Crucible verbs (list/show/view smelts → operational, not build)
   { pattern: /\b(list|show|view|display)\s+(?:all\s+)?(?:active\s+|pending\s+|open\s+|crucible\s+)*(smelts?|crucible\s+entries?|crucible\s+items?)\b/i, lane: LANES.OPERATIONAL, weight: 3 },
+  // Phase-38 — session/turn recall and conversational context
+  { pattern: /\b(remind me|recap|summarize|left off|continue from|this session|this conversation|earlier.{0,15}(asked|said|mentioned|discussed))\b/i, lane: LANES.OPERATIONAL, weight: 3 },
+  { pattern: /\b(last\s+(session|time|conversation)|previous\s+session|past\s+sessions?)\b/i, lane: LANES.OPERATIONAL, weight: 3 },
+  { pattern: /\b(note for later|keep in mind|for later|remember that)\b/i, lane: LANES.OPERATIONAL, weight: 2 },
+  { pattern: /\b(decisions?\s+we.{0,10}made|what\s+(did|have)\s+(i|we)\s+(decide|commit|choose|pick|say))\b/i, lane: LANES.OPERATIONAL, weight: 3 },
+  { pattern: /\b(everything\s+we.{0,10}(talked|discussed)|every\s+decision|key\s+outcomes?)\b/i, lane: LANES.OPERATIONAL, weight: 2 },
+  // Phase-38 — multi-step orchestration verbs
+  { pattern: /\b(pause|abort|rollback|rolled\s+back|restore|queue\s+(it|as)|do\s+not\s+execute)\b/i, lane: LANES.OPERATIONAL, weight: 3 },
+  { pattern: /\b(create\s+a\s+plan|execute.{0,10}(first|next|the)\s+slice)\b/i, lane: LANES.OPERATIONAL, weight: 2 },
+  { pattern: /\b(apply\s+a\s+hotfix|in-?flight\s+run|working\s+tree)\b/i, lane: LANES.OPERATIONAL, weight: 2 },
+  // Phase-38 — quorum/complexity/cost-savings vocabulary
+  { pattern: /\b(speed\s+mode|power\s+mode|auto.?mode|complexity\s+scores?|per-?slice\s+complexity)\b/i, lane: LANES.OPERATIONAL, weight: 3 },
+  { pattern: /\b(how\s+much\s+would\s+I\s+save|save.{0,20}(moving|switching)|flip.{0,10}from.{0,10}to)\b/i, lane: LANES.OPERATIONAL, weight: 2 },
 
   // ── Troubleshoot signals ──
   { pattern: /\b(fail|failed|failure|failing|broken|broke|crash|crashed)\b/i, lane: LANES.TROUBLESHOOT, weight: 3 },
@@ -151,6 +164,9 @@ const KEYWORD_RULES = [
   { pattern: /\b(why did|why does|why is)\b.{0,60}\b(fail|failed|failure|error|crash)\b/i, lane: LANES.TROUBLESHOOT, weight: 4 },
   // ── Phase-32 Slice 2: meta-bug / self-repair family → strong troubleshoot signal
   { pattern: /\b(meta[-\s]?bug|self[-\s]?repair|plan[-\s]?defect|orchestrator[-\s]?defect|prompt[-\s]?defect)\b/i, lane: LANES.TROUBLESHOOT, weight: 3 },
+  // Phase-38 — service unavailability / fallback vocabulary
+  { pattern: /\b(unavailable|fall\s*back|fallback|rate[- ]limiting\s+us)\b/i, lane: LANES.TROUBLESHOOT, weight: 3 },
+  { pattern: /\b(reject\s+it|regenerate|violates?\s+the\s+scope)\b/i, lane: LANES.TROUBLESHOOT, weight: 3 },
 
   // ── Tempering lane signals ─────────────────────────────────────────
   { pattern: /\btempering\s+(gate|evaluation|check|enforcement)\b/i, lane: LANES.TEMPERING, weight: 4 },

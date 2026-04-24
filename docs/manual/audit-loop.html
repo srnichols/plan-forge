@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Audit Loop — Closed-Loop Bug Discovery via Content-Audit Drain</title>
+  <meta name="description" content="How the Plan Forge Audit Loop works: content-audit scanner probes live routes, triage routes findings to bug/spec/classifier lanes, drain iterates until convergence. Default off, explicit opt-in." />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+
+    <main>
+      <div class="chapter-content">
+
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Deep Dive · Act II — Forge</div>
+        <h1>Audit Loop</h1>
+        <p class="text-lg text-slate-400 mb-8">Closed-loop bug discovery: content-audit scan → triage → fix, iterating until convergence or max rounds. Added in v2.80.0.</p>
+
+        <div class="callout callout-info">
+          <strong>Added in v2.80.0.</strong> The audit loop defaults to <code>off</code>. It never runs automatically unless you explicitly set <code>audit.mode</code> to <code>"auto"</code> or <code>"always"</code> in <code>.forge.json</code>. Production environments are always forbidden.
+        </div>
+
+        <h2>What It Does</h2>
+        <p>The audit loop is a first-class Tempering subsystem that discovers bugs from a running system. It probes live routes against a dev or staging server, triages the findings into actionable lanes, and iterates until the finding count converges (no new issues found) or the maximum round limit is reached.</p>
+
+        <h2>The Three Components</h2>
+
+        <h3>1. Content-Audit Scanner</h3>
+        <p><code>pforge-mcp/tempering/scanners/content-audit.mjs</code> — HTTP-probes a set of routes against a live base URL and emits structured findings: HTTP status, page title, h1, word count, placeholder markers, and client-shell detection for hydrated SPAs.</p>
+        <ul>
+          <li><strong>Production guard</strong>: Reuses <code>looksLikeProduction()</code> from <code>ui-playwright.mjs</code>. Refuses to crawl production URLs unless <code>allowProduction: true</code> is explicitly set (and <code>forbidProduction</code> in config is immutably <code>true</code>).</li>
+          <li><strong>Injectable fetcher</strong>: Tests use a mock fetcher — no real HTTP in the test suite.</li>
+        </ul>
+
+        <h3>2. Triage Router</h3>
+        <p><code>pforge-mcp/tempering/triage.mjs</code> — <code>routeFinding(finding, classifier)</code> routes each finding to one of three lanes:</p>
+        <table>
+          <thead><tr><th>Lane</th><th>Destination</th><th>What happens</th></tr></thead>
+          <tbody>
+            <tr><td><code>"bug"</code></td><td>Bug Registry</td><td>Finding registered via <code>forge_bug_register</code></td></tr>
+            <tr><td><code>"spec"</code></td><td>Crucible</td><td>Finding submitted as a new smelt (feature gap)</td></tr>
+            <tr><td><code>"classifier"</code></td><td>Local artifact</td><td>Proposal written to <code>.forge/audits/</code> for human review</td></tr>
+          </tbody>
+        </table>
+        <p>Unknown classifier output falls safe to <code>{ lane: "bug", confidence: "low" }</code> — findings are never dropped.</p>
+
+        <h3>3. Drain Loop</h3>
+        <p><code>pforge-mcp/tempering/drain.mjs</code> — <code>runTemperingDrain(opts)</code> orchestrates the full cycle:</p>
+        <ol>
+          <li>Run all registered scanners (content-audit + any others)</li>
+          <li>Triage each finding through <code>routeFinding()</code></li>
+          <li>Apply fixes for bug-lane findings (via injectable <code>spawnWorker</code>)</li>
+          <li>Re-scan to check if fixes resolved the issues</li>
+          <li>Repeat until convergence or <code>maxRounds</code> (default 5)</li>
+        </ol>
+
+        <h2>Activation Surface</h2>
+        <p>Configuration lives in <code>.forge.json#audit</code>:</p>
+        <pre><code>{
+  "audit": {
+    "mode": "off",
+    "maxRounds": 5,
+    "autoThresholds": {
+      "minFilesChanged": 5,
+      "minDaysSinceLastDrain": 3,
+      "requireFindings": true
+    },
+    "environments": ["dev", "staging"],
+    "forbidProduction": true
+  }
+}</code></pre>
+
+        <table>
+          <thead><tr><th>Mode</th><th>Behavior</th></tr></thead>
+          <tbody>
+            <tr><td><code>"off"</code> (default)</td><td>No automatic drain. Manual only via <code>pforge audit-loop</code>.</td></tr>
+            <tr><td><code>"auto"</code></td><td>Evaluates thresholds after plan completion. Fires only if change-surface signals trip.</td></tr>
+            <tr><td><code>"always"</code></td><td>Dispatches unconditionally after every plan completion.</td></tr>
+          </tbody>
+        </table>
+
+        <h2>CLI Usage</h2>
+        <pre><code># Manual one-shot (ignores config, always runs)
+pforge audit-loop
+
+# Respect .forge.json#audit config
+pforge audit-loop --auto
+
+# Dry run with custom rounds
+pforge audit-loop --dry-run --max=3
+
+# Target staging
+pforge audit-loop --env=staging</code></pre>
+
+        <h2>MCP Tools</h2>
+        <ul>
+          <li><code>forge_tempering_drain</code> — programmatic drain loop access. Accepts <code>project</code>, <code>maxRounds</code>, <code>scanners</code>, <code>dryRun</code>, <code>env</code>.</li>
+          <li><code>forge_triage_route</code> — route a single finding through the classifier. Returns <code>{ lane, payload, confidence }</code>.</li>
+        </ul>
+
+        <h2>Dashboard</h2>
+        <p>The audit-loop toggle in the dashboard persists to <code>.forge.json#audit</code> — not session-scoped. This matches the pattern used by Forge-Master prefs (<code>.forge/fm-prefs.json</code>) and the quorum advisory toggle.</p>
+
+        <h2>Design Decisions</h2>
+        <ul>
+          <li><strong>Classifier proposals are local files</strong> (v2.80): Written to <code>.forge/audits/</code> as JSON artifacts. GitHub PR creation deferred to v2.81+.</li>
+          <li><strong><code>spawnWorker</code> is injectable</strong>: Consistent with visual-diff quorum and bug classifier patterns. Already in the function signature.</li>
+          <li><strong>Production is immutably forbidden</strong>: <code>forbidProduction: true</code> cannot be overridden via config — it's hardcoded in <code>auto-activate.mjs</code>.</li>
+        </ul>
+
+        <div class="chapter-nav">
+          <a href="competitive-loop.html">← The Competitive Loop</a>
+          <a href="what-is-liveguard.html">What Is LiveGuard? →</a>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="assets/sidebar.js"></script>
+</body>
+</html>

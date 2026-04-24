@@ -1,7 +1,7 @@
 {
   "name": "plan-forge",
-  "version": "2.75.1",
-  "description": "Plan Forge — Harden AI-driven development plans into drift-proof execution contracts. 7-step pipeline, 14 reviewer agents, 15 skills, 69 MCP tools (core + LiveGuard + Watcher + Crucible + Tempering + Bug Registry + Testbed + Forge-Master), 45+ CLI commands, live dashboard, quorum mode, self-recursive intelligence (Forge + LiveGuard), OpenBrain memory integration, cost tracking. Supports 9 presets (dotnet, typescript, python, java, go, swift, rust, php, azure-iac).",
+  "version": "2.80.0",
+  "description": "Plan Forge — Harden AI-driven development plans into drift-proof execution contracts. 7-step pipeline, 20 reviewer agents, 14 skills, 69 MCP tools (core + LiveGuard + Watcher + Crucible + Tempering + Bug Registry + Testbed + Forge-Master), 46+ CLI commands, live dashboard, quorum mode, audit drain loop, self-recursive intelligence (Forge + LiveGuard), OpenBrain memory integration, cost tracking. Supports 9 presets (dotnet, typescript, python, java, go, swift, rust, php, azure-iac).",
   "author": "srnichols",
   "license": "MIT",
   "homepage": "https://github.com/srnichols/plan-forge",

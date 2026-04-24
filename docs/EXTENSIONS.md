@@ -143,6 +143,16 @@ pforge ext install docs/plans/examples/extensions/plan-forge-memory
 
 **Requires:** [OpenBrain](https://github.com/srnichols/OpenBrain) running (Docker Compose, Kubernetes, or Azure — 5-minute setup). Zero cost if self-hosted with Ollama.
 
+---
+
+## Audit Loop & Classifier Extensions
+
+Extension authors building custom scanners or classifiers for the audit drain loop should note:
+
+- **Custom scanners**: Implement the scanner interface (see `pforge-mcp/tempering/scanners/content-audit.mjs` for the reference implementation) and register via `.forge.json#tempering.scanners`.
+- **Classifier-as-code**: The `classifier` triage lane emits local proposal artifacts to `.forge/audits/`. Extensions can provide custom classifier logic by implementing the classifier interface referenced by `routeFinding()` in `pforge-mcp/tempering/triage.mjs`.
+- **Classifier-reviewer agent**: The built-in `classifier-reviewer.agent.md` reviews classifier lane proposals. Extension authors can provide domain-specific classifier-reviewer agents for specialized triage (e.g., accessibility findings, performance regressions).
+
 See the [extension README](plans/examples/extensions/plan-forge-memory/README.md) for the complete integration map, setup guide, and worked examples.
 
 ## Distribution Channels

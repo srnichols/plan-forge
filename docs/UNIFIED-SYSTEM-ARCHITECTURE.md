@@ -41,6 +41,7 @@ Together they form a closed-loop system: describe a feature from any device → 
 |-------------|-----|
 | Plan Forge → OpenBrain | Skills run `search_thoughts` before acting, `capture_thought` after completing |
 | Plan Forge → OpenClaw | Orchestrator sends webhook notifications on slice completion/failure |
+| Plan Forge Audit Loop | `forge_tempering_drain` iterates scan → triage → fix; findings route to bug registry or Crucible |
 | OpenBrain → Copilot Memory | `forge_sync_memories` generates hints Copilot Memory auto-discovers |
 | OpenClaw → Plan Forge | Routes "build this feature" requests → triggers `forge_run_plan` |
 
@@ -68,8 +69,17 @@ Plan Forge works standalone. OpenBrain and OpenClaw are optional enhancements:
     "enabled": true,
     "webhookUrl": "https://hooks.slack.com/...",
     "events": ["run-complete", "slice-failed", "review-passed"]
+  },
+  "audit": {
+    "mode": "off",
+    "maxRounds": 5,
+    "autoThresholds": { "minFilesChanged": 5, "minDaysSinceLastDrain": 3, "requireFindings": true },
+    "environments": ["dev", "staging"],
+    "forbidProduction": true
   }
 }
 ```
+
+> **Audit Loop** (v2.80+): The `audit` object controls automatic audit drain activation. Set `mode` to `"auto"` for threshold-gated runs or `"always"` for unconditional drains after plan completion. `"off"` (default) disables automatic drains. Use `pforge audit-loop` for manual one-shot runs regardless of config.
 
 > **Full architecture details** including deployment topology, workspace layout, security model, session management, notification flows, and worked examples are available in the [Interactive Manual](https://planforge.software/manual/how-it-works.html) and preserved in git history (pre-v2.21).

@@ -7,6 +7,37 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.80.0] — 2026-04-24 — Audit Loop Promotion (Phase-39)
+
+> **Phase-39 — Recursive audit-loop promotion to first-class Tempering subsystem.**
+> Adds a closed-loop audit drain that discovers bugs from a running system: content-audit
+> scanner probes live routes, `runTemperingDrain` iterates scan → triage → fix until
+> convergence, and two new MCP tools (`forge_tempering_drain`, `forge_triage_route`) expose
+> the pipeline programmatically. A classifier-reviewer agent and `/audit-loop` skill round
+> out the user surface. Activation follows the quorum-style `off / auto / always` pattern
+> via `.forge.json#audit` — default is `"off"`, explicit opt-in required.
+
+### Added
+- `pforge-mcp/tempering/scanners/content-audit.mjs` — HTTP-probe + HTML-inspection scanner. Probes routes against a live base URL, emits structured findings (status, title, h1, word count, placeholder markers, client-shell detection). Production guard via `looksLikeProduction()` from `ui-playwright.mjs`; `allowProduction` defaults to `false`.
+- `pforge-mcp/tempering/drain.mjs` — `runTemperingDrain(opts)` iterates scan → triage → fix rounds until convergence or `maxRounds` (default 5). Accepts injectable `spawnWorker` for LLM worker injection. Emits hub events per round.
+- `pforge-mcp/tempering/triage.mjs` — `routeFinding(finding, classifier) → { lane, payload, confidence }`. Routes findings to `"bug"` (bug registry), `"spec"` (Crucible), or `"classifier"` (local proposal artifact). Unknown classifier output falls safe to `{ lane: "bug", confidence: "low" }`.
+- `pforge-mcp/tempering/auto-activate.mjs` — Activation surface: `loadAuditConfig(cwd)`, `saveAuditConfig(cwd, patch)`, `shouldAutoDrain(planContext)`. Config stored in `.forge.json#audit` with `mode: "off" | "auto" | "always"` (default `"off"`). `forbidProduction: true` is immutable.
+- MCP tool `forge_tempering_drain` — programmatic access to the audit drain loop. Accepts `project`, `maxRounds`, `scanners`, `dryRun`, `env`.
+- MCP tool `forge_triage_route` — programmatic finding triage. Accepts a finding object and optional classifier config, returns routed lane + payload.
+- CLI command `pforge audit-loop` — manual one-shot drain. Flags: `--auto` (respect `.forge.json#audit` config), `--max=N`, `--dry-run`, `--env=dev|staging`.
+- Classifier-reviewer agent (`classifier-reviewer.agent.md`) — reviews classifier lane proposals.
+- `/audit-loop` slash command skill for interactive audit drain from chat.
+- Dashboard audit-loop toggle — persists to `.forge.json#audit` via `saveAuditConfig`.
+- `pforge run-plan` post-completion hook — checks `audit.mode` after plan completion. `"auto"` evaluates thresholds; `"always"` dispatches unconditionally; `"off"` skips. Never runs per-slice.
+- E2E test suite: `pforge-mcp/tests/e2e-audit-loop.test.mjs`, `pforge-mcp/tests/e2e-audit-loop-cli.test.mjs`.
+
+### Design Decisions (Slice 9 Documentation Sweep)
+- `runTemperingDrain` accepts `spawnWorker` — already implemented and tested; consistent with visual-diff quorum injection pattern.
+- Content-audit scanner reuses `looksLikeProduction()` guard from `ui-playwright.mjs` — no separate guard needed.
+- Classifier lane proposals write to local `.forge/audits/` artifacts (not GitHub issues) for v2.80. GitHub PR creation deferred to v2.81+.
+- CLI naming confirmed: `pforge audit-loop` (manual one-shot) vs `pforge audit-loop --auto` (config-respecting). Matches `--quorum=auto` convention.
+- Dashboard toggle persists to `.forge.json#audit` (not session cache) — parity with existing tempering and Forge-Master prefs.
+
 ## [2.79.0] — 2026-04-23 — Forge-Master Embedding Intent Fallback (Phase-38.8)
 
 > **Phase-38.8 — Embedding-based intent classification fallback.**

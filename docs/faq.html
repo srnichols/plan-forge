@@ -114,6 +114,14 @@
           "@type": "Answer",
           "text": "Pre-configured quorum profiles. --quorum=power uses flagship models (Claude Opus 4.6 + GPT-5.3-Codex + Grok 4.20 Reasoning) with threshold 5 and 5min timeout. --quorum=speed uses fast models (Claude Sonnet 4.6 + GPT-5.4-mini + Grok 4.1 Fast Reasoning) with threshold 7 and 2min timeout."
         }
+      },
+      {
+        "@type": "Question",
+        "name": "Does Plan Forge audit my deployed app automatically?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No — audit.mode defaults to 'off' in .forge.json. You must explicitly opt in by setting audit.mode to 'auto' (threshold-gated) or 'always' (unconditional after plan completion). For one-off audits, run 'pforge audit-loop' from the CLI. Production environments are always forbidden — the audit loop only targets dev and staging."
+        }
       }
     ]
   }

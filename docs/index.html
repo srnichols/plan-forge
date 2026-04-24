@@ -924,6 +924,18 @@
           <a href="capabilities.html#quorum" class="mt-3 inline-block text-xs text-red-400 hover:underline">See A/B results + workflow diagram →</a>
         </div>
 
+        <!-- Audit Loop -->
+        <div class="p-8 rounded-2xl bg-slate-800/60 border border-slate-700/50">
+          <div class="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center text-2xl mb-4">🔄</div>
+          <h3 class="text-xl font-bold text-white mb-2">Audit Loop</h3>
+          <p class="text-sm text-slate-400 mb-3">Closed-loop bug discovery. The audit drain probes live routes, triages findings into bug/spec/classifier lanes, and iterates until convergence. Runs post-plan or on demand.</p>
+          <div class="space-y-2 text-xs text-slate-400">
+            <div class="flex items-center gap-2"><span class="text-emerald-400">→</span> <code class="text-emerald-300">pforge audit-loop</code> — manual one-shot drain</div>
+            <div class="flex items-center gap-2"><span class="text-emerald-400">→</span> <code class="text-emerald-300">audit.mode: "auto"</code> — threshold-gated, default off</div>
+            <div class="flex items-center gap-2"><span class="text-emerald-400">→</span> Production always forbidden — dev and staging only</div>
+          </div>
+        </div>
+
         <!-- Forge-Master Studio -->
         <div class="p-0 rounded-2xl bg-gradient-to-br from-slate-800 to-slate-800/50 border border-amber-700/30 overflow-hidden">
           <img src="assets/forge-master-studio-hero.webp"

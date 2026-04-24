@@ -599,6 +599,48 @@ export const TOOL_METADATA = {
       output: { ok: true, urlHash: "a1b2c3d4e5f67890", baselinePath: ".forge/tempering/baselines/a1b2c3d4e5f67890.png" },
     },
   },
+  forge_tempering_drain: {
+    intent: ["tempering", "audit", "drain", "loop"],
+    aliases: ["audit-loop", "drain-loop", "tempering-drain"],
+    cost: "medium",
+    maxConcurrent: 1,
+    addedIn: "2.80.0",
+    prerequisites: [".forge.json exists", "dev server running (for content-audit scanner)"],
+    produces: [".forge/audits/dev-*.json"],
+    consumes: [".forge.json#audit", ".forge/tempering/"],
+    sideEffects: [
+      "filesystem-write (audit artifacts)",
+      "broadcasts drain-round-started / drain-round-completed / drain-converged hub events",
+      "may register bugs via forge_bug_register",
+      "may submit Crucible smelts for spec-lane findings",
+    ],
+    errors: {
+      PRODUCTION_BLOCKED: { message: "Production environment is forbidden", recovery: "Use --env=dev or --env=staging" },
+      NO_SCANNERS: { message: "No scanners matched the requested set", recovery: "Omit scanners param to run all available scanners" },
+    },
+    example: {
+      input: { project: ".", maxRounds: 3, dryRun: false, env: "dev" },
+      output: { ok: true, rounds: 2, converged: true, totalFindings: 12, triaged: { bug: 8, spec: 3, classifier: 1 } },
+    },
+  },
+  forge_triage_route: {
+    intent: ["tempering", "triage", "route", "classify"],
+    aliases: ["triage-finding", "route-finding"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "2.80.0",
+    prerequisites: [],
+    produces: [],
+    consumes: [],
+    sideEffects: [],
+    errors: {
+      INVALID_FINDING: { message: "Finding object is required with at least a title field", recovery: "Provide a finding object from a scanner result" },
+    },
+    example: {
+      input: { finding: { title: "Missing h1 on /about", scanner: "content-audit", severity: "medium" } },
+      output: { lane: "bug", payload: { title: "Missing h1 on /about", severity: "medium" }, confidence: "high" },
+    },
+  },
   // Phase TEMPER-06 Slice 06.1 — Bug Registry
   forge_bug_register: {
     intent: ["tempering", "bug", "register", "create"],

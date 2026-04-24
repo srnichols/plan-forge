@@ -5,25 +5,25 @@
     {
       "id": "pe-coord-1",
       "message": "Create a plan to add OAuth2 login and then execute the first slice.",
-      "expectedLane": "PLAN_OPS",
+      "expectedLane": "operational",
       "purpose": "plan + immediate execution"
     },
     {
       "id": "pe-coord-2",
       "message": "Run the current plan and report back when slice 3 completes.",
-      "expectedLane": "PLAN_OPS",
+      "expectedLane": "operational",
       "purpose": "plan execution with completion signal"
     },
     {
       "id": "pe-coord-3",
       "message": "The executor failed on slice 5. Diagnose the failure and retry.",
-      "expectedLane": "TROUBLESHOOT",
+      "expectedLane": "troubleshoot",
       "purpose": "executor failure recovery"
     },
     {
       "id": "pe-coord-4",
       "message": "Pause the current run, apply a hotfix to the plan, then resume.",
-      "expectedLane": "PLAN_OPS",
+      "expectedLane": "operational",
       "purpose": "mid-run plan amendment"
     }
   ]

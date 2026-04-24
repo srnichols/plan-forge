@@ -5,25 +5,25 @@
     {
       "id": "kg-query-1",
       "message": "What is the dependency graph for the payment service?",
-      "expectedLane": "ADVISORY",
+      "expectedLane": "advisory",
       "purpose": "knowledge graph traversal"
     },
     {
       "id": "kg-query-2",
       "message": "Show me all modules that depend on the database service.",
-      "expectedLane": "ADVISORY",
+      "expectedLane": "advisory",
       "purpose": "reverse dependency lookup"
     },
     {
       "id": "kg-query-3",
       "message": "Which services are affected if I change the user authentication interface?",
-      "expectedLane": "ADVISORY",
+      "expectedLane": "advisory",
       "purpose": "impact analysis"
     },
     {
       "id": "kg-query-4",
       "message": "Map out the data flow from user login to session creation.",
-      "expectedLane": "ADVISORY",
+      "expectedLane": "advisory",
       "purpose": "data flow tracing"
     }
   ]

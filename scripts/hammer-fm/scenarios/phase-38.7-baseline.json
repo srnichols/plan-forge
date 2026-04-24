@@ -5,25 +5,25 @@
     {
       "id": "qa-quorum-1",
       "message": "What quorum mode should I use for Phase-38.7? Estimate cost and explain tradeoffs.",
-      "expectedLane": "ADVISORY",
+      "expectedLane": "operational",
       "purpose": "quorum mode recommendation"
     },
     {
       "id": "qa-quorum-2",
       "message": "Run the plan under speed mode and tell me if any slices are too complex for fast models.",
-      "expectedLane": "PLAN_OPS",
+      "expectedLane": "operational",
       "purpose": "quorum speed analysis"
     },
     {
       "id": "qa-quorum-3",
       "message": "Compare the cost of running Phase-38.5 under power vs speed mode.",
-      "expectedLane": "ADVISORY",
+      "expectedLane": "operational",
       "purpose": "quorum cost comparison"
     },
     {
       "id": "qa-quorum-4",
       "message": "Override quorum for slice 4 only — use power mode for that slice.",
-      "expectedLane": "PLAN_OPS",
+      "expectedLane": "operational",
       "purpose": "per-slice quorum override"
     }
   ]

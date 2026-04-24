@@ -5,25 +5,25 @@
     {
       "id": "ef-fallback-1",
       "message": "Search my memory for anything related to rate limiting implementation.",
-      "expectedLane": "MEMORY_OPS",
+      "expectedLane": "operational",
       "purpose": "embedding search"
     },
     {
       "id": "ef-fallback-2",
       "message": "Find memories semantically similar to authentication token refresh.",
-      "expectedLane": "MEMORY_OPS",
+      "expectedLane": "operational",
       "purpose": "semantic similarity search"
     },
     {
       "id": "ef-fallback-3",
       "message": "The embedding service is unavailable. Fall back to keyword search for authentication docs.",
-      "expectedLane": "MEMORY_OPS",
+      "expectedLane": "troubleshoot",
       "purpose": "embedding fallback test"
     },
     {
       "id": "ef-fallback-4",
       "message": "Index all memories from this session and confirm they are searchable.",
-      "expectedLane": "MEMORY_OPS",
+      "expectedLane": "operational",
       "purpose": "embedding index verification"
     }
   ]

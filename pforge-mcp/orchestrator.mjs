@@ -92,6 +92,49 @@ export const GATE_ALLOWED_PREFIXES = [
  */
 export const UNIX_TOOLS = ["grep", "sed", "awk", "wc", "head", "tail", "sort", "diff", "test", "tr", "xargs", "find"];
 
+/**
+ * Parse an `--only-slices` expression into a sorted array of slice numbers.
+ * Supports comma-separated integers and inclusive dash ranges.
+ *   "2,4-6" → [2, 4, 5, 6]
+ *   "3"     → [3]
+ *   ""      → []
+ * Invalid tokens (non-integer) or descending ranges throw an Error whose
+ * message contains "invalid --only-slices expression".
+ * @param {string} expr
+ * @returns {number[]}
+ */
+export function parseOnlySlicesExpr(expr) {
+  if (!expr || !expr.trim()) return [];
+  const parts = expr.trim().split(/\s*,\s*/);
+  const result = new Set();
+  for (const part of parts) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+    if (trimmed.includes("-")) {
+      const pieces = trimmed.split("-");
+      if (pieces.length !== 2 || !pieces[0] || !pieces[1]) {
+        throw new Error(`invalid --only-slices expression: "${part}"`);
+      }
+      const start = Number(pieces[0]);
+      const end = Number(pieces[1]);
+      if (!Number.isInteger(start) || !Number.isInteger(end)) {
+        throw new Error(`invalid --only-slices expression: "${part}"`);
+      }
+      if (end < start) {
+        throw new Error(`invalid --only-slices expression: "${part}" (descending range)`);
+      }
+      for (let i = start; i <= end; i++) result.add(i);
+    } else {
+      const n = Number(trimmed);
+      if (!Number.isInteger(n)) {
+        throw new Error(`invalid --only-slices expression: "${part}"`);
+      }
+      result.add(n);
+    }
+  }
+  return [...result].sort((a, b) => a - b);
+}
+
 // ─── Windows bash dispatch ─────────────────────────────────────────────
 
 /** undefined = not yet probed; null = probed, not found; string = probed, found */
@@ -3084,7 +3127,14 @@ export async function runPlan(planPath, options = {}) {
     manualImportReason = null,    // free-form note for audit log
     hub = null,             // Phase FORGE-SHOP-06 Slice 06.2: Hub instance for gate-check
     strictGates = false,    // Phase-31 Slice 4: force enforce mode for this run only
+    onlySlices = null,      // Phase-33.1: number[] | null — run only specified slice IDs
+    noTempering = false,    // Phase-33.1: disable post-slice tempering for this run
   } = options;
+
+  // Mutual exclusion: --resume-from and --only-slices cannot both be active
+  if (resumeFrom !== null && onlySlices !== null && onlySlices.length > 0) {
+    throw new Error("--resume-from and --only-slices are mutually exclusive");
+  }
 
   // Load model routing from .forge.json (Slice 5)
   const modelRouting = loadModelRouting(cwd);
@@ -3367,16 +3417,51 @@ export async function runPlan(planPath, options = {}) {
   // Phase FORGE-SHOP-06 Slice 06.2 — Gate check config for inter-slice validation
   const gateCheckConfig = hub ? loadGateCheckConfig(cwd) : null;
 
-  const results = await scheduler.execute(
-    plan.dag.nodes,
-    plan.dag.order,
-    async (slice) => executeSlice(slice, {
-      cwd, model: effectiveModel, modelRouting, mode, runDir, maxRetries,
-      memoryEnabled, projectName, planName: basename(planPath, ".md"),
-      quorumConfig, escalationChain, eventBus,
-    }),
-    { abortSignal, resumeFrom: resumeFrom ? String(resumeFrom) : null, hub, gateCheckConfig },
-  );
+  // Phase-33.1: Set PFORGE_DISABLE_TEMPERING env var before the slice loop when requested.
+  // Use try/finally to restore the prior value so in-process callers don't leak state.
+  const _priorDisableTempering = process.env.PFORGE_DISABLE_TEMPERING;
+  if (noTempering) {
+    process.env.PFORGE_DISABLE_TEMPERING = "1";
+  }
+
+  // Phase-33.1: Pre-filter execution order for --only-slices.
+  // Filtering here (before scheduler dispatch) ensures all scheduler types respect it.
+  let executionOrder = plan.dag.order;
+  if (onlySlices !== null && onlySlices.length > 0) {
+    const onlySet = new Set(onlySlices.map(String));
+    for (const id of plan.dag.order) {
+      if (!onlySet.has(id)) {
+        console.log(`[orchestrator] Slice ${id} skipped (not in --only-slices)`);
+      }
+    }
+    for (const id of onlySlices) {
+      if (!plan.dag.nodes.has(String(id))) {
+        console.warn(`[orchestrator] Slice ${id} requested via --only-slices was not found in plan`);
+      }
+    }
+    executionOrder = plan.dag.order.filter((id) => onlySet.has(id));
+  }
+
+  let results;
+  try {
+    results = await scheduler.execute(
+      plan.dag.nodes,
+      executionOrder,
+      async (slice) => executeSlice(slice, {
+        cwd, model: effectiveModel, modelRouting, mode, runDir, maxRetries,
+        memoryEnabled, projectName, planName: basename(planPath, ".md"),
+        quorumConfig, escalationChain, eventBus,
+      }),
+      { abortSignal, resumeFrom: resumeFrom ? String(resumeFrom) : null, hub, gateCheckConfig },
+    );
+  } finally {
+    // Restore the prior value of PFORGE_DISABLE_TEMPERING regardless of outcome
+    if (_priorDisableTempering === undefined) {
+      delete process.env.PFORGE_DISABLE_TEMPERING;
+    } else {
+      process.env.PFORGE_DISABLE_TEMPERING = _priorDisableTempering;
+    }
+  }
 
   // Auto-sweep + auto-analyze after all slices (Slice 6)
   const allPassed = results.every((r) => r.status === "passed" || r.status === "skipped");
@@ -6139,6 +6224,10 @@ export async function runPostSliceTemperingHook({
   lastGreenSha = null,
   spawnWorker = null,
 } = {}) {
+  // Phase-33.1: Honor PFORGE_DISABLE_TEMPERING — set by runPlan when --no-tempering is active.
+  if (process.env.PFORGE_DISABLE_TEMPERING === "1") {
+    return { skipped: true, reason: "PFORGE_DISABLE_TEMPERING" };
+  }
   if (!commitMessage) return { triggered: false, skippedReason: "no-commit-message" };
   if (typeof runTemperingRun !== "function") {
     return { triggered: false, skippedReason: "no-runner-injected" };
@@ -10591,6 +10680,23 @@ if (args.includes("--test")) {
   const manualImportReason = getArg("--manual-import-reason") || null;
   const strictGates = args.includes("--strict-gates");
 
+  // Phase-33.1: --only-slices <expr> and --no-tempering
+  const onlySlicesRaw = getArg("--only-slices");
+  let onlySlices = null;
+  if (onlySlicesRaw) {
+    try {
+      onlySlices = parseOnlySlicesExpr(onlySlicesRaw);
+    } catch (err) {
+      console.error(`Orchestrator error: ${err.message}`);
+      process.exit(1);
+    }
+  }
+  if (resumeFrom !== null && onlySlices !== null && onlySlices.length > 0) {
+    console.error("--resume-from and --only-slices are mutually exclusive");
+    process.exit(1);
+  }
+  const noTempering = args.includes("--no-tempering");
+
   try {
     const result = await runPlan(planPath, {
       cwd: process.cwd(),
@@ -10606,6 +10712,8 @@ if (args.includes("--test")) {
       manualImportSource,
       manualImportReason,
       strictGates,
+      onlySlices,
+      noTempering,
     });
     console.log(JSON.stringify(result, null, 2));
     process.exit(result.status === "failed" ? 1 : 0);

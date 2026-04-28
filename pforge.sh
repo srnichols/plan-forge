@@ -3323,7 +3323,7 @@ cmd_doctor() {
 cmd_run_plan() {
     if [ $# -lt 1 ]; then
         echo "ERROR: Missing plan path" >&2
-        echo "Usage: pforge run-plan <plan-file> [--estimate] [--assisted] [--model <name>] [--resume-from <N>] [--dry-run] [--foreground] [--no-quorum] [--quorum] [--quorum=auto] [--quorum-threshold <N>] [--strict-gates] [--manual-import [--manual-import-source <human|speckit|grandfather>] [--manual-import-reason <text>]]" >&2
+        echo "Usage: pforge run-plan <plan-file> [--estimate] [--assisted] [--model <name>] [--resume-from <N>] [--dry-run] [--foreground] [--no-quorum] [--quorum] [--quorum=auto] [--quorum-threshold <N>] [--strict-gates] [--manual-import [--manual-import-source <human|speckit|grandfather>] [--manual-import-reason <text>]] [--only-slices <expr>] [--no-tempering]" >&2
         exit 1
     fi
 
@@ -3349,6 +3349,8 @@ cmd_run_plan() {
     local manual_import_source=""
     local manual_import_reason=""
     local strict_gates=false
+    local only_slices=""
+    local no_tempering=false
 
     while [ $# -gt 0 ]; do
         case "$1" in
@@ -3361,6 +3363,11 @@ cmd_run_plan() {
             --quorum)       quorum_arg="--quorum" ;;
             --manual-import) manual_import=true ;;
             --strict-gates)  strict_gates=true ;;
+            --no-tempering)  no_tempering=true ;;
+            --only-slices)
+                shift
+                if [ -z "$1" ]; then echo "ERROR: --only-slices requires a value" >&2; exit 1; fi
+                only_slices="$1" ;;
             --manual-import-source)
                 shift
                 if [ -z "$1" ]; then echo "ERROR: --manual-import-source requires a value" >&2; exit 1; fi
@@ -3412,6 +3419,8 @@ cmd_run_plan() {
     if [ "$strict_gates" = true ]; then node_args+=("--strict-gates"); fi
     if [ -n "$manual_import_source" ]; then node_args+=("--manual-import-source" "$manual_import_source"); fi
     if [ -n "$manual_import_reason" ]; then node_args+=("--manual-import-reason" "$manual_import_reason"); fi
+    if [ -n "$only_slices" ]; then node_args+=("--only-slices" "$only_slices"); fi
+    if [ "$no_tempering" = true ]; then node_args+=("--no-tempering"); fi
 
     echo ""
     if [ "$estimate" = true ]; then

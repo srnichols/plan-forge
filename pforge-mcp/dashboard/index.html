@@ -1963,6 +1963,12 @@
           <label class="flex items-center gap-2 text-sm text-gray-400" title="Maps to --dry-run — validate gates without executing">
             <input id="launch-dry-run" type="checkbox" class="rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-0"> Dry run (gate-only)
           </label>
+          <label class="flex items-center gap-2 text-sm text-gray-400" title="Maps to --no-tempering — skip post-slice tempering hook">
+            <input id="launch-no-tempering" type="checkbox" class="rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-0"> Skip tempering
+          </label>
+          <label class="flex items-center gap-2 text-sm text-gray-400" title="Maps to --only-slices &lt;expr&gt; — run only the specified slices (e.g. 2,4-6)">
+            Only slices: <input id="launch-only-slices" type="text" placeholder="e.g. 2,4-6" class="bg-gray-700 text-white text-sm rounded px-2 py-1 w-24 placeholder:text-gray-500">
+          </label>
         </div>
         <div id="launch-workers" class="text-xs text-gray-500"></div>
         <div class="flex gap-2 pt-2">

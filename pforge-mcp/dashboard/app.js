@@ -1813,6 +1813,14 @@ async function openLaunchPanel() {
   } catch {
     workersEl.textContent = "";
   }
+
+  // Mutual exclusion: --resume-from and --only-slices cannot both have values
+  const resumeFromEl = document.getElementById("launch-resume-from");
+  const onlySlicesEl = document.getElementById("launch-only-slices");
+  if (resumeFromEl && onlySlicesEl) {
+    resumeFromEl.addEventListener("input", () => { onlySlicesEl.disabled = !!resumeFromEl.value; });
+    onlySlicesEl.addEventListener("input", () => { resumeFromEl.disabled = !!onlySlicesEl.value; });
+  }
 }
 
 function closeLaunchPanel() {
@@ -1829,6 +1837,8 @@ async function submitLaunch(estimateOnly) {
   const dryRun = document.getElementById("launch-dry-run")?.checked;
   const resumeFromRaw = document.getElementById("launch-resume-from")?.value;
   const resumeFrom = resumeFromRaw && /^\d+$/.test(resumeFromRaw.trim()) ? resumeFromRaw.trim() : "";
+  const onlySlicesRaw = document.getElementById("launch-only-slices")?.value?.trim() || "";
+  const noTempering = document.getElementById("launch-no-tempering")?.checked;
   const statusEl = document.getElementById("launch-status");
 
   if (!plan) { statusEl.textContent = "Select a plan first"; return; }
@@ -1838,6 +1848,8 @@ async function submitLaunch(estimateOnly) {
     `Quorum: ${quorum}`,
     resumeFrom ? `Resume from slice ${resumeFrom}` : null,
     dryRun ? "Dry run" : null,
+    onlySlicesRaw ? `Only slices: ${onlySlicesRaw}` : null,
+    noTempering ? "Skip tempering" : null,
   ].filter(Boolean).join(", ");
   if (!confirm(`${estimate ? "Estimate" : "Launch"} "${plan}"?\n${summary}`)) return;
 
@@ -1849,6 +1861,8 @@ async function submitLaunch(estimateOnly) {
     if (quorum !== "false") args += ` --quorum ${quorum}`;
     if (resumeFrom) args += ` --resume-from ${resumeFrom}`;
     if (dryRun) args += " --dry-run";
+    if (onlySlicesRaw) args += ` --only-slices ${onlySlicesRaw}`;
+    if (noTempering) args += " --no-tempering";
     if (estimate) args += " --estimate";
 
     const res = await fetch(`${API_BASE}/api/tool/run-plan`, {

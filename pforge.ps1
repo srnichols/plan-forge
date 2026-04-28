@@ -4024,7 +4024,7 @@ function Invoke-Smith {
 function Invoke-RunPlan {
     if ($Arguments.Count -lt 1) {
         Write-Host "ERROR: Missing plan path" -ForegroundColor Red
-        Write-Host "Usage: pforge run-plan <plan-file> [--estimate] [--assisted] [--model <name>] [--resume-from <N>] [--dry-run] [--foreground] [--no-quorum] [--quorum] [--quorum=auto] [--quorum-threshold <N>] [--strict-gates] [--manual-import [--manual-import-source <human|speckit|grandfather>] [--manual-import-reason <text>]]" -ForegroundColor Yellow
+        Write-Host "Usage: pforge run-plan <plan-file> [--estimate] [--assisted] [--model <name>] [--resume-from <N>] [--dry-run] [--foreground] [--no-quorum] [--quorum] [--quorum=auto] [--quorum-threshold <N>] [--strict-gates] [--manual-import [--manual-import-source <human|speckit|grandfather>] [--manual-import-reason <text>]] [--only-slices <expr>] [--no-tempering]" -ForegroundColor Yellow
         exit 1
     }
 
@@ -4049,6 +4049,8 @@ function Invoke-RunPlan {
     $quorumThreshold = $null
     $manualImportSource = $null
     $manualImportReason = $null
+    $onlySlices = $null
+    $noTempering = $Arguments -contains '--no-tempering'
 
     for ($i = 1; $i -lt $Arguments.Count; $i++) {
         if ($Arguments[$i] -eq '--model' -and ($i + 1) -lt $Arguments.Count) {
@@ -4068,6 +4070,9 @@ function Invoke-RunPlan {
         }
         if ($Arguments[$i] -eq '--manual-import-reason' -and ($i + 1) -lt $Arguments.Count) {
             $manualImportReason = $Arguments[$i + 1]
+        }
+        if ($Arguments[$i] -eq '--only-slices' -and ($i + 1) -lt $Arguments.Count) {
+            $onlySlices = $Arguments[$i + 1]
         }
     }
 
@@ -4097,6 +4102,8 @@ function Invoke-RunPlan {
     if ($strictGates)     { $nodeArgs += '--strict-gates' }
     if ($manualImportSource) { $nodeArgs += '--manual-import-source'; $nodeArgs += $manualImportSource }
     if ($manualImportReason) { $nodeArgs += '--manual-import-reason'; $nodeArgs += $manualImportReason }
+    if ($onlySlices)      { $nodeArgs += '--only-slices'; $nodeArgs += $onlySlices }
+    if ($noTempering)     { $nodeArgs += '--no-tempering' }
 
     # Delegate to orchestrator
     Write-Host ""

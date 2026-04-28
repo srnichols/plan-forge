@@ -6656,6 +6656,25 @@ export function createExpressApp() {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
+  // REST API: POST /api/tool/run-plan — run or estimate a plan (with arg validation)
+  // Validates --only-slices value before proxying to the pforge CLI.
+  const ONLY_SLICES_RE = /^[0-9](?:[0-9,\- ]*[0-9])?$/;
+  app.post("/api/tool/run-plan", (req, res) => {
+    try {
+      const toolArgs = req.body?.args || "";
+      const tokens = toolArgs.trim().split(/\s+/);
+      const onlySlicesIdx = tokens.indexOf("--only-slices");
+      if (onlySlicesIdx !== -1) {
+        const val = tokens[onlySlicesIdx + 1];
+        if (!val || !ONLY_SLICES_RE.test(val)) {
+          return res.status(400).json({ error: "invalid --only-slices value" });
+        }
+      }
+      const result = runPforge(`run-plan ${toolArgs}`.trim(), PROJECT_DIR);
+      res.json(result);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
   // REST API: POST /api/tool/:name — invoke forge tool
   // MCP-only tools route through internal handler; CLI tools proxy through pforge.ps1
   const MCP_ONLY_TOOLS = new Set([

@@ -1485,7 +1485,7 @@ async function loadCost() {
       renderChart("chart-monthly", "bar", months, values, "Monthly Spend ($)");
     }
 
-    // Cost Trend Line 
+    // Cost Trend Line
     if (runs.length > 0) {
       const runCosts = runs.slice().reverse().map((r) => r.cost?.total_cost_usd || 0);
       const runLabels = runs.slice().reverse().map((r) => {
@@ -1550,7 +1550,7 @@ async function loadCost() {
         });
       }
 
-      // Anomaly banner 
+      // Anomaly banner
       const recent = runs.slice(0, 5);
       const anomaly = recent.find((r) => (r.cost?.total_cost_usd || 0) > avg * 3 && avg > 0);
       if (anomaly) {
@@ -1564,7 +1564,7 @@ async function loadCost() {
         updateTabBadges();
       }
 
-      // Duration Per Run Chart 
+      // Duration Per Run Chart
       const runDurations = runs.slice().reverse().map((r) => r.totalDuration ? r.totalDuration / 1000 : 0);
       const durCtx = document.getElementById("chart-duration-trend");
       if (durCtx && runDurations.some((d) => d > 0)) {
@@ -1826,10 +1826,20 @@ async function submitLaunch(estimateOnly) {
   const model = document.getElementById("launch-model").value;
   const quorum = document.getElementById("launch-quorum").value;
   const estimate = estimateOnly || document.getElementById("launch-estimate").checked;
+  const dryRun = document.getElementById("launch-dry-run")?.checked;
+  const resumeFromRaw = document.getElementById("launch-resume-from")?.value;
+  const resumeFrom = resumeFromRaw && /^\d+$/.test(resumeFromRaw.trim()) ? resumeFromRaw.trim() : "";
   const statusEl = document.getElementById("launch-status");
 
   if (!plan) { statusEl.textContent = "Select a plan first"; return; }
-  if (!confirm(`${estimate ? "Estimate" : "Launch"} "${plan}"?\nMode: ${mode}, Model: ${model}, Quorum: ${quorum}`)) return;
+  const summary = [
+    `Mode: ${mode}`,
+    `Model: ${model}`,
+    `Quorum: ${quorum}`,
+    resumeFrom ? `Resume from slice ${resumeFrom}` : null,
+    dryRun ? "Dry run" : null,
+  ].filter(Boolean).join(", ");
+  if (!confirm(`${estimate ? "Estimate" : "Launch"} "${plan}"?\n${summary}`)) return;
 
   statusEl.textContent = estimate ? "Estimating..." : "Launching...";
   try {
@@ -1837,6 +1847,8 @@ async function submitLaunch(estimateOnly) {
     if (mode !== "auto") args += ` --${mode}`;
     if (model !== "auto") args += ` --model ${model}`;
     if (quorum !== "false") args += ` --quorum ${quorum}`;
+    if (resumeFrom) args += ` --resume-from ${resumeFrom}`;
+    if (dryRun) args += " --dry-run";
     if (estimate) args += " --estimate";
 
     const res = await fetch(`${API_BASE}/api/tool/run-plan`, {
@@ -2538,7 +2550,7 @@ async function loadConfig() {
     document.getElementById("cfg-version").value = currentConfig.templateVersion || "";
     document.getElementById("cfg-model-default").value = currentConfig.modelRouting?.default || "auto";
 
-    // Image generation model 
+    // Image generation model
     const imgModel = document.getElementById("cfg-model-image");
     if (imgModel) imgModel.value = currentConfig.modelRouting?.imageGeneration || "";
 
@@ -2554,7 +2566,7 @@ async function loadConfig() {
 
     document.getElementById("cfg-status").textContent = "Configuration loaded.";
 
-    // Advanced settings 
+    // Advanced settings
     const maxP = document.getElementById("cfg-max-parallel");
     const maxR = document.getElementById("cfg-max-retries");
     const maxH = document.getElementById("cfg-max-history");
@@ -2599,24 +2611,46 @@ async function loadConfig() {
   }
 }
 
+// Provider status registry — must mirror KNOWN_PROVIDER_KEYS below.
+// Order matches recommendation order; GitHub Copilot first (Phase-33 / v2.67.0 default).
+const PROVIDER_STATUS_REGISTRY = [
+  { key: "GITHUB_TOKEN",      label: "GitHub Copilot",   models: "gpt-4o-mini, gpt-4o, claude-sonnet-4 (via models.github.ai)" },
+  { key: "XAI_API_KEY",       label: "xAI Grok",          models: "grok-4.20, grok-4, grok-3-mini" },
+  { key: "ANTHROPIC_API_KEY", label: "Anthropic Claude", models: "claude-sonnet-4.5, claude-opus" },
+  { key: "OPENAI_API_KEY",    label: "OpenAI",            models: "gpt-5, dall-e-3" },
+];
+
 async function loadApiProviderStatus() {
   const el = document.getElementById("cfg-api-providers");
   if (!el) return;
   try {
-    const res = await fetch(`${API_BASE}/api/tool/smith`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ args: "" }),
-    });
+    const res = await fetch(`${API_BASE}/api/secrets`);
     const data = await res.json();
-    const output = data.output || "";
-    // Look for API provider info in smith output
-    const hasXai = /XAI_API_KEY/.test(output) || /api-xai/.test(output) || /grok/.test(output);
-    if (hasXai) {
-      el.innerHTML = '<span class="text-green-400">xAI Grok</span> <span class="text-gray-500">— XAI_API_KEY configured</span>';
-    } else {
-      el.innerHTML = '<span class="text-gray-500">No API providers detected. Set XAI_API_KEY for Grok models.</span>';
+    const keys = data.keys || {};
+
+    const configured = PROVIDER_STATUS_REGISTRY.filter((p) => keys[p.key]?.set);
+    if (configured.length === 0) {
+      el.innerHTML =
+        '<span class="text-gray-500">No API providers detected. ' +
+        'Set <code class="text-forge-400">GITHUB_TOKEN</code> for Copilot (recommended), ' +
+        'or any of <code>XAI_API_KEY</code> / <code>ANTHROPIC_API_KEY</code> / <code>OPENAI_API_KEY</code>.</span>';
+      return;
     }
+
+    el.innerHTML = configured
+      .map((p) => {
+        const info = keys[p.key];
+        const src = info?.source === "env" ? "env var" : ".forge/secrets.json";
+        return (
+          `<div class="flex items-center gap-2 text-xs mt-1">` +
+            `<span class="text-green-400">✓</span> ` +
+            `<span class="text-gray-200 font-medium">${p.label}</span> ` +
+            `<span class="text-gray-500">— ${p.key} (${src})</span> ` +
+            `<span class="text-gray-600">· ${p.models}</span>` +
+          `</div>`
+        );
+      })
+      .join("");
   } catch {
     el.textContent = "Unable to check";
   }
@@ -2759,7 +2793,7 @@ async function saveConfig() {
     const agents = [...document.querySelectorAll(".cfg-agent-checkbox:checked")].map((c) => c.value);
     const modelDefault = document.getElementById("cfg-model-default").value;
     const modelImage = document.getElementById("cfg-model-image")?.value || "";
-    // Advanced settings 
+    // Advanced settings
     const maxP = parseInt(document.getElementById("cfg-max-parallel")?.value, 10);
     const maxR = parseInt(document.getElementById("cfg-max-retries")?.value, 10);
     const maxH = parseInt(document.getElementById("cfg-max-history")?.value, 10);
@@ -3521,6 +3555,53 @@ fetch(`${API_BASE}/api/update-status`)
     banner.classList.add("inline-flex");
   })
   .catch(() => {});
+
+// Manual "check for updates now" button (header). Bypasses the 24h cache via
+// ?force=1 and surfaces the result either through the existing update banner
+// (when newer) or an inline notification (when current / unreachable).
+async function triggerUpdateCheck() {
+  const btn = document.getElementById("check-updates-btn");
+  if (!btn) return;
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "…";
+  btn.title = "Checking GitHub…";
+  try {
+    const r = await fetch(`${API_BASE}/api/update-status?force=1`, { cache: "no-store" });
+    if (!r.ok) {
+      addNotification(`Update check failed (HTTP ${r.status})`, "error");
+      return;
+    }
+    const data = await r.json();
+    if (!data) {
+      addNotification("Update check unavailable (network or suppressed)", "warning");
+      return;
+    }
+    if (data.available && data.latest) {
+      // Force-show the banner even if previously dismissed for this version.
+      try { localStorage.removeItem("pforge-update-dismissed"); } catch { /* ignore */ }
+      const banner = document.getElementById("update-banner");
+      const text = document.getElementById("update-banner-text");
+      if (banner && text) {
+        banner.href = data.url || "https://github.com/srnichols/plan-forge/releases/latest";
+        banner.dataset.latest = data.latest;
+        text.textContent = `v${data.latest} available (you have v${data.current})`;
+        banner.classList.remove("hidden");
+        banner.classList.add("inline-flex");
+      }
+      addNotification(`Update available: v${data.latest} (you are on v${data.current})`, "info");
+    } else {
+      addNotification(`Up to date (v${data.current || "?"})`, "success");
+    }
+  } catch (err) {
+    addNotification(`Update check error: ${err.message}`, "error");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+    btn.title = "Check GitHub for a newer Plan Forge release (bypasses 24h cache)";
+  }
+}
+window.triggerUpdateCheck = triggerUpdateCheck;
 
 // Phase AUTO-UPDATE-01 Slice 2 — self-update from dashboard
 function triggerSelfUpdate() {
@@ -5448,7 +5529,7 @@ function showSpanDetail(idx) {
   if (!traceData) return;
   const span = traceData.spans[idx];
 
-  // Events — render full detail 
+  // Events — render full detail
   const eventsEl = document.getElementById("trace-events");
   if (span.events?.length > 0) {
     eventsEl.innerHTML = span.events.map((e) => {
@@ -5467,7 +5548,7 @@ function showSpanDetail(idx) {
     eventsEl.innerHTML = '<p class="text-gray-500">No events</p>';
   }
 
-  // Attributes — formatted table 
+  // Attributes — formatted table
   const attrsEl = document.getElementById("trace-attributes");
   const labels = { model: "Model", tokens_in: "Input Tokens", tokens_out: "Output Tokens", worker: "Worker", cost_usd: "Cost ($)", exit_code: "Exit Code", duration_ms: "Duration (ms)", slice_id: "Slice ID" };
   const allAttrs = { ...span.attributes, status: span.status, kind: span.kind, spanId: span.spanId };
@@ -5477,7 +5558,7 @@ function showSpanDetail(idx) {
   }).join("");
   attrsEl.innerHTML = `<table class="w-full">${rows}</table>`;
 
-  // Log summary 
+  // Log summary
   if (span.logSummary?.length > 0) {
     attrsEl.innerHTML += `<details class="mt-2"><summary class="text-xs text-gray-500 cursor-pointer">Log Summary (${span.logSummary.length} entries)</summary>
       <pre class="text-xs text-gray-400 mt-1 whitespace-pre-wrap max-h-32 overflow-y-auto">${span.logSummary.map((l) => escHtml(l)).join("\n")}</pre>

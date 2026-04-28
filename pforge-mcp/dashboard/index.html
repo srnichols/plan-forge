@@ -277,6 +277,7 @@
       <a href="/ui" target="_blank" rel="noopener" class="hover:text-white transition-colors text-xs hide-mobile" title="Open Plan Browser">Plan Browser ↗</a>
       <span id="run-status" class="text-xs font-medium text-gray-300 px-2 py-0.5 rounded bg-gray-700/50 border border-gray-700" title="Current run status">Idle</span>
       <span id="ws-port" class="text-[10px] text-gray-500 font-mono hide-tablet"></span>
+      <button id="check-updates-btn" onclick="triggerUpdateCheck();" title="Check GitHub for a newer Plan Forge release (bypasses 24h cache)" aria-label="Check for updates" class="text-base leading-none hover:text-white transition w-7 h-7 flex items-center justify-center rounded hover:bg-gray-700/60">⬆</button>
       <button id="restart-server-btn" onclick="triggerServerRestart();" title="Restart MCP server (reloads code after updates). The MCP client will respawn the process automatically." aria-label="Restart MCP server" class="text-base leading-none hover:text-white transition w-7 h-7 flex items-center justify-center rounded hover:bg-gray-700/60">⟳</button>
       <button id="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark theme" aria-label="Toggle theme" class="text-base leading-none hover:text-white transition w-7 h-7 flex items-center justify-center rounded hover:bg-gray-700/60">🌙</button>
     </div>
@@ -1950,11 +1951,18 @@
               <option value="true">All slices (custom models)</option>
             </select>
           </div>
-          <div class="flex items-end">
-            <label class="flex items-center gap-2 text-sm text-gray-400 pb-2">
-              <input id="launch-estimate" type="checkbox" class="rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-0"> Estimate only
-            </label>
+          <div>
+            <label for="launch-resume-from" class="block text-sm text-gray-400 mb-1" title="Maps to --resume-from N">Resume from slice</label>
+            <input id="launch-resume-from" type="number" min="1" placeholder="(start from beginning)" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full placeholder:text-gray-500">
           </div>
+        </div>
+        <div class="flex flex-wrap gap-x-4 gap-y-1 pt-1">
+          <label class="flex items-center gap-2 text-sm text-gray-400" title="Maps to --estimate">
+            <input id="launch-estimate" type="checkbox" class="rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-0"> Estimate only
+          </label>
+          <label class="flex items-center gap-2 text-sm text-gray-400" title="Maps to --dry-run — validate gates without executing">
+            <input id="launch-dry-run" type="checkbox" class="rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-0"> Dry run (gate-only)
+          </label>
         </div>
         <div id="launch-workers" class="text-xs text-gray-500"></div>
         <div class="flex gap-2 pt-2">

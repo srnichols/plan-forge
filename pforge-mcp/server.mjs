@@ -5430,13 +5430,14 @@ export function createExpressApp() {
   // REST API: GET /api/update-status — is there a newer Plan Forge release?
   // Returns the last cached check (may be null when suppressed / unavailable).
   // See `kickoffUpdateCheck()` below for the boot-time refresh.
-  app.get("/api/update-status", async (_req, res) => {
+  // Pass ?force=1 to bypass the 24h cache and hit GitHub now (manual check).
+  app.get("/api/update-status", async (req, res) => {
     try {
       const versionFile = resolve(PROJECT_DIR, "VERSION");
       const current = existsSync(versionFile) ? readFileSync(versionFile, "utf-8").trim() : null;
       if (!current) return res.json({ available: false, reason: "no-version-file" });
-      // Serve from cache — never hit the network on a dashboard request.
-      const result = await checkForUpdate({ currentVersion: current, projectDir: PROJECT_DIR });
+      const force = req.query?.force === "1" || req.query?.force === "true";
+      const result = await checkForUpdate({ currentVersion: current, projectDir: PROJECT_DIR, force });
       if (!result) return res.json({ available: false, current });
       return res.json({
         available: Boolean(result.isNewer),
@@ -5984,7 +5985,7 @@ export function createExpressApp() {
         }
       }
       // Also check env vars for known provider keys
-      const envKeys = ["XAI_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "OPENCLAW_API_KEY"];
+      const envKeys = ["GITHUB_TOKEN", "XAI_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "OPENCLAW_API_KEY"];
       for (const ek of envKeys) {
         if (!masked[ek] && process.env[ek]) {
           masked[ek] = { set: true, masked: "••••" + process.env[ek].slice(-4), source: "env" };

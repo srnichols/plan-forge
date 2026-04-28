@@ -92,9 +92,8 @@ hardened_at: 2026-04-28
 - **MUST**: When the user types a value into `#launch-resume-from`, `#launch-only-slices` is disabled (and vice versa) — mutual exclusion enforced in the UI before the args reach the server. Implemented via a single `input` event listener registered when the modal mounts.
 - **MUST**: `pforge-mcp/server.mjs` `/api/tool/run-plan` accepts `--only-slices <expr>` and `--no-tempering` in its arg allowlist. The value following `--only-slices` is validated to match the regex `/^[0-9](?:[0-9,\- ]*[0-9])?$/` before being forwarded; on mismatch the endpoint returns HTTP 400 with `{ error: "invalid --only-slices value" }`.
 - **MUST**: `pforge-mcp/tests/server-run-plan-route.test.mjs` (extend or add) contains tests for: (a) `--only-slices "2,4-6"` accepted, (b) `--only-slices "; rm -rf"` rejected with 400, (c) `--no-tempering` accepted as a bare flag.
-- **GATE**: `npx vitest run pforge-mcp/tests/server-run-plan-route.test.mjs --reporter=basic` exits 0.
-- **GATE**: `node -e "const fs=require('fs');const h=fs.readFileSync('pforge-mcp/dashboard/index.html','utf8');if(!h.includes('launch-only-slices')||!h.includes('launch-no-tempering'))process.exit(1)"` exits 0.
-- **GATE**: `node -e "const fs=require('fs');const j=fs.readFileSync('pforge-mcp/dashboard/app.js','utf8');if(!j.includes('--only-slices')||!j.includes('--no-tempering'))process.exit(1)"` exits 0.
+- **GATE**: `npx vitest run pforge-mcp/tests/server-run-plan-route.test.mjs pforge-mcp/tests/dashboard-launch-controls.test.mjs --reporter=basic` exits 0.
+- **MUST**: `pforge-mcp/tests/dashboard-launch-controls.test.mjs` (NEW) contains at least 2 tests asserting that (a) `pforge-mcp/dashboard/index.html` contains both `launch-only-slices` and `launch-no-tempering` substrings, (b) `pforge-mcp/dashboard/app.js` contains both `--only-slices` and `--no-tempering` substrings. Both tests use `readFileSync` against the real files (no mocks).
 
 ### Criteria for Slice 3 (release v2.67.1)
 
@@ -121,12 +120,14 @@ hardened_at: 2026-04-28
 **Validation gate**: `npx vitest run pforge-mcp/tests/orchestrator-launch-controls.test.mjs pforge-mcp/tests/tempering-post-slice-hook.test.mjs --reporter=basic`
 
 ### Slice 2 — Wrappers + dashboard + server allowlist
-**Files**: `pforge.ps1`, `pforge.sh`, `pforge-mcp/dashboard/index.html`, `pforge-mcp/dashboard/app.js`, `pforge-mcp/server.mjs`, `pforge-mcp/tests/server-run-plan-route.test.mjs`
-**Validation gate**: `npx vitest run pforge-mcp/tests/server-run-plan-route.test.mjs --reporter=basic` AND the two `node -e` HTML/JS presence checks listed above.
+**Files**: `pforge.ps1`, `pforge.sh`, `pforge-mcp/dashboard/index.html`, `pforge-mcp/dashboard/app.js`, `pforge-mcp/server.mjs`, `pforge-mcp/tests/server-run-plan-route.test.mjs`, `pforge-mcp/tests/dashboard-launch-controls.test.mjs`
+**Validation gate**: `npx vitest run pforge-mcp/tests/server-run-plan-route.test.mjs pforge-mcp/tests/dashboard-launch-controls.test.mjs --reporter=basic`
 
 ### Slice 3 — Release v2.67.1
-**Files**: `VERSION`, `pforge-mcp/package.json`, `CHANGELOG.md`, `ROADMAP.md`, `.github/copilot-instructions.md`
-**Validation gate**: `node -e "const v=require('fs').readFileSync('VERSION','utf8').trim();const p=JSON.parse(require('fs').readFileSync('pforge-mcp/package.json','utf8')).version;if(v!=='2.67.1'||p!=='2.67.1')process.exit(1)"`
+**Files**: `VERSION`, `pforge-mcp/package.json`, `CHANGELOG.md`, `ROADMAP.md`, `.github/copilot-instructions.md`, `pforge-mcp/tests/version-2-67-1.test.mjs`
+**Validation gate**: `npx vitest run pforge-mcp/tests/version-2-67-1.test.mjs --reporter=basic`
+
+> Slice 3 ships a tiny one-shot test asserting `VERSION` and `pforge-mcp/package.json` both report `2.67.1`. Keeping the gate as a vitest invocation matches Slices 1 and 2 and avoids inline `node -e` parsing edge cases.
 
 ---
 

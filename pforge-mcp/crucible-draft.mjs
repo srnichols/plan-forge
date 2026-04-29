@@ -1,5 +1,5 @@
 /**
- * Plan Forge — Crucible Draft Renderer (Slice 01.3).
+ * Plan Forge — Crucible Draft Renderer (Phase-35 Slice 2).
  *
  * Assembles a phase-doc markdown body from a smelt's raw idea + answers.
  * Emits the six mandatory blocks every hardened plan must carry:
@@ -17,6 +17,8 @@
  * Hard rule: this renderer must NEVER inject plausible-sounding filler
  * in place of a `{{TBD:}}` marker. Slice 01.3 Stop Condition.
  */
+
+import { inferRepoCommands } from "./crucible-infer.mjs";
 
 const TBD_REGEX = /\{\{TBD:\s*([a-z0-9-]+)\s*\}\}/gi;
 
@@ -55,6 +57,62 @@ function asBulletList(value) {
 }
 
 /**
+ * Synthesize a concrete Slice 1 markdown block from interview answers and
+ * inferred repo commands. Returns `null` when any required prerequisite is
+ * missing, so the caller falls back to the generic `> Slice template:` block.
+ *
+ * Prerequisites:
+ *   - `smelt.answers` must contain a non-empty `scope-files` / `scope-in` answer
+ *   - `smelt.answers` must contain a non-empty `validation-gates` / `validation` answer
+ *   - `repoCommands.buildCommand` and `repoCommands.testCommand` must both be non-null
+ *
+ * @param {{ smelt: object, repoCommands: object }} params
+ * @returns {string|null}
+ */
+export function synthesizeSliceBlock({ smelt, repoCommands }) {
+  if (!smelt || !repoCommands) return null;
+  if (!repoCommands.buildCommand || !repoCommands.testCommand) return null;
+
+  const ans = indexAnswers(smelt);
+
+  const scopeRaw = firstAnswer(ans, "scope-files", "scope-file", "scope-in");
+  if (!scopeRaw) return null;
+  const filesBullet = asBulletList(scopeRaw);
+  if (!filesBullet) return null;
+
+  const gatesRaw = firstAnswer(ans, "validation-gates", "validation");
+  if (!gatesRaw) return null;
+  const gatesLines = gatesRaw
+    .split(/\r?\n/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s) => {
+      if (/^-\s*\[/.test(s)) return s;
+      if (/^[-*]\s+/.test(s)) return `- [ ] ${s.replace(/^[-*]\s+/, "")}`;
+      return `- [ ] ${s}`;
+    });
+  if (gatesLines.length === 0) return null;
+
+  const rawIdea = (smelt.rawIdea || "").trim();
+  const titleBase =
+    firstAnswer(ans, "feature-name") || rawIdea.split(/\r?\n/)[0] || "Untitled";
+  const title = titleBase.slice(0, 60);
+
+  return [
+    `### Slice 1 — ${title}`,
+    "",
+    `Build command: ${repoCommands.buildCommand}`,
+    `Test command:  ${repoCommands.testCommand}`,
+    "",
+    "**Files**:",
+    filesBullet,
+    "",
+    "**Acceptance Criteria**:",
+    gatesLines.join("\n"),
+  ].join("\n");
+}
+
+/**
  * Render the phase-doc body for a smelt. Caller prepends the crucibleId
  * frontmatter.
  *
@@ -66,10 +124,12 @@ function asBulletList(value) {
  *   answers?: Array<{questionId:string, answer:string}>,
  *   phaseName?: string|null,
  * }} smelt
+ * @param {{ cwd?: string }} [options]
  * @returns {string} markdown body (trailing newline included)
  */
-export function renderDraft(smelt) {
+export function renderDraft(smelt, options = {}) {
   if (!smelt) throw new Error("smelt required");
+  const cwd = options && options.cwd;
   const ans = indexAnswers(smelt);
   const lane = smelt.lane || "feature";
   const rawIdea = (smelt.rawIdea || "").trim();
@@ -169,15 +229,24 @@ export function renderDraft(smelt) {
     lines.push("_Slice breakdown is authored during the Plan Hardener step (Session 1, Step 2)._");
   }
   lines.push("");
-  lines.push("> Slice template:");
-  lines.push(">");
-  lines.push("> ```");
-  lines.push("> ### Slice N — <name>");
-  lines.push("> Build command: <cmd>");
-  lines.push("> Test command:  <cmd>");
-  lines.push("> Tasks:         <list>");
-  lines.push("> Files:         <manifest>");
-  lines.push("> ```");
+
+  const synthesized = cwd
+    ? synthesizeSliceBlock({ smelt, repoCommands: inferRepoCommands(cwd) })
+    : null;
+
+  if (synthesized) {
+    lines.push(synthesized);
+  } else {
+    lines.push("> Slice template:");
+    lines.push(">");
+    lines.push("> ```");
+    lines.push("> ### Slice N — <name>");
+    lines.push("> Build command: <cmd>");
+    lines.push("> Test command:  <cmd>");
+    lines.push("> Tasks:         <list>");
+    lines.push("> Files:         <manifest>");
+    lines.push("> ```");
+  }
   lines.push("");
 
   // Block 2: Validation Gates

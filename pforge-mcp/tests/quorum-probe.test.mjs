@@ -3,6 +3,7 @@ import {
   resolveRequiredCli,
   probeQuorumModelAvailability,
   filterQuorumModels,
+  setGhCopilotProbe,
 } from "../orchestrator.mjs";
 
 // ─── resolveRequiredCli ─────────────────────────────────────────────────
@@ -50,20 +51,30 @@ describe("probeQuorumModelAvailability", () => {
     expect(result.install).toMatch(/XAI_API_KEY/);
   });
 
-  it("gpt model available when OPENAI_API_KEY is set", () => {
+  // #103/#104: gpt-* prefers gh-copilot CLI by default. Direct API only
+  // wins when gh-copilot is unavailable OR routing.hostPreference="direct-api"
+  // OR host is non-Copilot under "auto" with an API key set. These tests
+  // force gh-copilot=false to verify the API fallback path.
+  it("gpt model available via direct API when gh-copilot unavailable + OPENAI_API_KEY set", () => {
     process.env.OPENAI_API_KEY = "sk-test";
-    const result = probeQuorumModelAvailability("gpt-5.3-codex");
-    expect(result.available).toBe(true);
-    expect(result.via).toBe("api");
-    expect(result.provider).toBe("openai");
+    setGhCopilotProbe(() => false);
+    try {
+      const result = probeQuorumModelAvailability("gpt-5.3-codex");
+      expect(result.available).toBe(true);
+      expect(result.via).toBe("api");
+      expect(result.provider).toBe("openai");
+    } finally { setGhCopilotProbe(null); }
   });
 
-  it("gpt model unavailable when OPENAI_API_KEY is not set", () => {
+  it("gpt model unavailable when neither gh-copilot nor OPENAI_API_KEY available", () => {
     delete process.env.OPENAI_API_KEY;
-    const result = probeQuorumModelAvailability("gpt-5.3-codex");
-    expect(result.available).toBe(false);
-    expect(result.via).toBe("api");
-    expect(result.reason).toMatch(/OPENAI_API_KEY/);
+    setGhCopilotProbe(() => false);
+    try {
+      const result = probeQuorumModelAvailability("gpt-5.3-codex");
+      expect(result.available).toBe(false);
+      expect(result.via).toBe("cli");
+      expect(result.reason).toMatch(/OPENAI_API_KEY/);
+    } finally { setGhCopilotProbe(null); }
   });
 
   // CLI-routed models depend on host PATH — tested via filterQuorumModels with injected probe
@@ -136,7 +147,9 @@ describe("filterQuorumModels", () => {
 
   it("logs stderr warning for each dropped model", () => {
     const probe = makeProbe(new Set(["a"]));
-    filterQuorumModels({ models: ["a", "b", "c"] }, { probe });
+    // #104: filterQuorumModels also emits a host summary line by default.
+    // Suppress with summary:false for assertion clarity.
+    filterQuorumModels({ models: ["a", "b", "c"] }, { probe, summary: false });
     expect(console.error).toHaveBeenCalledTimes(2);
     expect(console.error).toHaveBeenCalledWith(expect.stringContaining("[quorum] model b unavailable"));
     expect(console.error).toHaveBeenCalledWith(expect.stringContaining("[quorum] model c unavailable"));
@@ -144,7 +157,7 @@ describe("filterQuorumModels", () => {
 
   it("includes install hint in warning when present", () => {
     const probe = makeProbe(new Set());
-    filterQuorumModels({ models: ["x"] }, { probe });
+    filterQuorumModels({ models: ["x"] }, { probe, summary: false });
     expect(console.error).toHaveBeenCalledWith(expect.stringContaining("install: Install x"));
   });
 });

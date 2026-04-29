@@ -1523,6 +1523,83 @@ export function describeBillingSurface(via, host) {
   return { label: "CLI worker", warning: null };
 }
 
+// ─── Host-Aware Routing Preference (#104) ────────────────────────────
+//
+// #103 added host-detection observability (warn the user which subscription
+// each gpt-* call hits). #104 turns observability into POLICY: by default,
+// when running under a host whose subscription is NOT GitHub Copilot
+// (Claude Code, Cursor, Windsurf, Zed), prefer the user's direct-API
+// surface for Copilot-servable models so they don't silently burn a
+// Copilot seat alongside the subscription they're already paying for.
+//
+// Users can override via `.forge.json`:
+//   { "routing": { "hostPreference": "auto" | "gh-copilot" | "direct-api" | "drop" } }
+//
+//   - "auto" (default): host-aware. claude-code/cursor/windsurf/zed → direct-api first;
+//     vs-code-* and cli-terminal → gh-copilot first.
+//   - "gh-copilot": always prefer gh-copilot first regardless of host (legacy #103 behavior).
+//   - "direct-api": always prefer direct API first regardless of host.
+//   - "drop": treat gpt-*/chatgpt-* as unavailable when no direct API key is set
+//     under non-Copilot hosts. Strongest "honor the user's vendor" stance.
+
+const VALID_ROUTING_PREFS = new Set(["auto", "gh-copilot", "direct-api", "drop"]);
+
+/**
+ * Resolve the ordered routing preference for a Copilot-servable model
+ * under a given host + user preference. Returns the order in which
+ * transports should be tried, plus a `dropIfNoDirectApi` flag.
+ *
+ * @param {string} host        — result of detectClientHost()
+ * @param {string} userPref    — "auto" | "gh-copilot" | "direct-api" | "drop"
+ * @returns {{ order: ("direct-api"|"gh-copilot")[], dropIfNoDirectApi: boolean }}
+ */
+export function getRoutingPreference(host, userPref = "auto") {
+  const pref = VALID_ROUTING_PREFS.has(userPref) ? userPref : "auto";
+  if (pref === "gh-copilot") {
+    return { order: ["gh-copilot", "direct-api"], dropIfNoDirectApi: false };
+  }
+  if (pref === "direct-api") {
+    return { order: ["direct-api", "gh-copilot"], dropIfNoDirectApi: false };
+  }
+  if (pref === "drop") {
+    // Non-Copilot hosts: require direct API; Copilot hosts: behave as auto.
+    const isCopilotHost = host === "vs-code-copilot" || host === "vs-code-agents" || host === "cli-terminal";
+    if (isCopilotHost) return { order: ["gh-copilot", "direct-api"], dropIfNoDirectApi: false };
+    return { order: ["direct-api"], dropIfNoDirectApi: true };
+  }
+  // pref === "auto"
+  switch (host) {
+    case "claude-code":
+    case "cursor":
+    case "windsurf":
+    case "zed":
+      return { order: ["direct-api", "gh-copilot"], dropIfNoDirectApi: false };
+    case "vs-code-copilot":
+    case "vs-code-agents":
+    case "cli-terminal":
+    default:
+      return { order: ["gh-copilot", "direct-api"], dropIfNoDirectApi: false };
+  }
+}
+
+/**
+ * Load `routing.hostPreference` from .forge.json. Falls back to "auto".
+ * @param {string} cwd
+ * @returns {string}
+ */
+export function loadRoutingPreference(cwd) {
+  try {
+    const configPath = resolve(cwd, ".forge.json");
+    if (!existsSync(configPath)) return "auto";
+    const config = JSON.parse(readFileSync(configPath, "utf-8"));
+    const pref = config?.routing?.hostPreference;
+    if (typeof pref === "string" && VALID_ROUTING_PREFS.has(pref)) return pref;
+    return "auto";
+  } catch {
+    return "auto";
+  }
+}
+
 // ─── Quorum Model Availability Probing (H.3) ─────────────────────────
 
 /**
@@ -1543,14 +1620,19 @@ export function resolveRequiredCli(model) {
  *
  * Routing precedence (fixed in meta-bug #103):
  *   1. DIRECT_API_ONLY models (grok-*, dall-e-*)      → detectApiProvider only
- *   2. COPILOT_SERVABLE models (gpt-*, chatgpt-*)     → gh-copilot CLI preferred,
- *                                                        direct API fallback
+ *   2. COPILOT_SERVABLE models (gpt-*, chatgpt-*)     → host-aware preference
+ *                                                        (#104) — Claude Code /
+ *                                                        Cursor / Windsurf / Zed
+ *                                                        prefer direct API by
+ *                                                        default; VS Code +
+ *                                                        Copilot prefer gh CLI.
  *   3. CLI-routed models (claude-*, codex-*, default) → detectWorkers + gh fallback
  *
  * @param {string} model
+ * @param {{ hostPreference?: string, host?: string }} [opts]
  * @returns {{ model: string, available: boolean, via: "api"|"cli", provider?: string, worker?: string, reason?: string, install?: string }}
  */
-export function probeQuorumModelAvailability(model) {
+export function probeQuorumModelAvailability(model, opts = {}) {
   const workers = detectWorkers();
   // Use the injectable probe so tests can simulate "gh-copilot not installed".
   // The real probe (default) resolves through loadWorkerCapabilities →
@@ -1559,7 +1641,8 @@ export function probeQuorumModelAvailability(model) {
   const ghCopilot = ghCopilotAvailable
     ? workers.find((w) => w.name === "gh-copilot") || { name: "gh-copilot", available: true }
     : null;
-  const host = detectClientHost();
+  const host = opts.host || detectClientHost();
+  const hostPreference = opts.hostPreference || "auto";
 
   // Path 1: Direct-API-only models (grok-*, dall-e-*) — no CLI proxy exists.
   if (isDirectApiOnlyModel(model)) {
@@ -1579,32 +1662,62 @@ export function probeQuorumModelAvailability(model) {
     }
   }
 
-  // Path 2: Copilot-servable models (gpt-*, chatgpt-*) — prefer gh-copilot
-  // subscription over direct API. Only fall back to direct API if the CLI
-  // is unavailable AND the user explicitly set an OpenAI key.
+  // Path 2: Copilot-servable models (gpt-*, chatgpt-*).
+  // #104: routing order is host-aware and user-overridable. Default ("auto"):
+  // VS Code + Copilot users prefer gh-copilot (subscription they already pay
+  // for); Claude Code / Cursor / Windsurf / Zed users prefer direct API
+  // (so they don't silently double-pay by using their Copilot seat too).
+  // The "drop" preference forces gpt-* to be unavailable on non-Copilot
+  // hosts when no direct API key is present.
   if (isCopilotServableModel(model)) {
-    if (ghCopilot) {
+    const { order, dropIfNoDirectApi } = getRoutingPreference(host, hostPreference);
+    const apiProvider = detectApiProvider(model);
+
+    const buildGhCopilotResult = () => {
       const billing = describeBillingSurface("gh-copilot", host);
       return {
         model, available: true, via: "cli", worker: "gh-copilot",
         provider: "copilot-subscription", host,
         billing: billing.label,
         billingWarning: billing.warning,
+        routingPreference: hostPreference,
       };
-    }
-    const apiProvider = detectApiProvider(model);
-    if (apiProvider) {
+    };
+    const buildDirectApiResult = (fallback) => {
       const billing = describeBillingSurface("direct-api", host);
       return {
         model, available: true, via: "api", provider: apiProvider.name,
-        fallback: true, host, billing: billing.label,
+        host, billing: billing.label,
+        ...(fallback ? { fallback: true } : {}),
+        routingPreference: hostPreference,
       };
+    };
+
+    for (let i = 0; i < order.length; i++) {
+      const transport = order[i];
+      const isFallback = i > 0;
+      if (transport === "gh-copilot" && ghCopilot) return buildGhCopilotResult();
+      if (transport === "direct-api" && apiProvider) return buildDirectApiResult(isFallback);
     }
-    // Neither gh-copilot nor a direct key available
+
+    // Neither preferred transport available — produce a host-aware reason.
+    if (dropIfNoDirectApi && !apiProvider) {
+      for (const [name, provider] of Object.entries(COPILOT_SERVABLE)) {
+        if (provider.pattern.test(model)) {
+          return {
+            model, available: false, via: "api", provider: name, host,
+            routingPreference: hostPreference,
+            reason: `routing.hostPreference="drop" under host=${host} requires ${provider.envKey}`,
+            install: `Set ${provider.envKey} in env or .forge/secrets.json, or change routing.hostPreference in .forge.json`,
+          };
+        }
+      }
+    }
     for (const [name, provider] of Object.entries(COPILOT_SERVABLE)) {
       if (provider.pattern.test(model)) {
         return {
           model, available: false, via: "cli", provider: name, host,
+          routingPreference: hostPreference,
           reason: `gh-copilot CLI not installed and ${provider.envKey} not set`,
           install: `Install gh-copilot (preferred) or set ${provider.envKey} in env or .forge/secrets.json`,
         };
@@ -1636,17 +1749,23 @@ export function probeQuorumModelAvailability(model) {
  * Dedupes, probes each unique model once, and returns available + dropped lists.
  *
  * @param {{ models: string[] }} config
- * @param {{ probe?: (model: string) => object }} [options] - Inject probe for testing
- * @returns {{ available: string[], dropped: { model: string, reason: string, install?: string }[] }}
+ * @param {{ probe?: (model: string, opts?: object) => object, hostPreference?: string, host?: string, cwd?: string, summary?: boolean }} [options]
+ * @returns {{ available: string[], dropped: { model: string, reason: string, install?: string }[], host: string, hostPreference: string, table: object[] }}
  */
-export function filterQuorumModels(config, { probe = probeQuorumModelAvailability } = {}) {
+export function filterQuorumModels(config, options = {}) {
+  const probe = options.probe || probeQuorumModelAvailability;
+  const cwd = options.cwd || process.cwd();
+  const host = options.host || detectClientHost();
+  const hostPreference = options.hostPreference || loadRoutingPreference(cwd);
   const seen = new Set();
   const available = [];
   const dropped = [];
+  const table = [];
   for (const model of config.models) {
     if (seen.has(model)) continue;
     seen.add(model);
-    const result = probe(model);
+    const result = probe(model, { hostPreference, host });
+    table.push(result);
     if (result.available) {
       available.push(model);
       // Observability for meta-bug #103: announce the billing surface
@@ -1668,7 +1787,38 @@ export function filterQuorumModels(config, { probe = probeQuorumModelAvailabilit
       );
     }
   }
-  return { available, dropped };
+  // #104: emit a pre-run summary table once per quorum filter so users see
+  // host + per-model billing surface before any spend happens.
+  if (options.summary !== false) {
+    try { console.error(formatQuorumSummary(table, host, hostPreference)); } catch { /* non-fatal */ }
+  }
+  return { available, dropped, host, hostPreference, table };
+}
+
+/**
+ * Format a human-readable quorum summary table — one row per model showing
+ * transport (CLI vs API), billing surface, and any host-mismatch warning.
+ * Surfaced before quorum runs so the user can confirm their spend lands
+ * on the subscription they expect.
+ *
+ * @param {object[]} rows  — probe results from probeQuorumModelAvailability
+ * @param {string} host
+ * @param {string} hostPreference
+ * @returns {string}
+ */
+export function formatQuorumSummary(rows, host, hostPreference) {
+  const lines = [];
+  lines.push(`[quorum] models (host: ${host}, routing.hostPreference: ${hostPreference}):`);
+  for (const r of rows) {
+    const mark = r.available ? (r.billingWarning ? "⚠" : "✓") : "✗";
+    const via = r.via === "api"
+      ? `direct-api${r.provider ? ` (${r.provider})` : ""}`
+      : `${r.worker || "cli"}`;
+    const billing = r.billing || r.reason || "unavailable";
+    lines.push(`  ${mark} ${r.model.padEnd(28)} via ${via.padEnd(22)} ${billing}`);
+    if (r.billingWarning) lines.push(`      ↳ ${r.billingWarning}`);
+  }
+  return lines.join("\n");
 }
 
 /**
@@ -7342,6 +7492,22 @@ async function executeSlice(slice, options) {
     tokens: workerResult.tokens || { tokens_in: null, tokens_out: null, model: "unknown" },
     worker: workerResult.worker,
     model: workerResult.model,
+    // #104: record host + billing surface per slice so cost aggregation
+    // can distinguish subscription-covered vs pay-per-token spend.
+    ...(() => {
+      try {
+        const host = detectClientHost();
+        const via = workerResult.worker === "gh-copilot"
+          ? "gh-copilot"
+          : (workerResult.worker && /^(claude|codex|grok|xai)/i.test(workerResult.worker) ? "other-cli" : "direct-api");
+        const billing = describeBillingSurface(via, host);
+        return {
+          host,
+          billingSurface: billing.label,
+          ...(billing.warning ? { billingWarning: billing.warning } : {}),
+        };
+      } catch { return {}; }
+    })(),
     attempts: attempt + 1,
     ...(currentModel !== finalModel && { escalatedModel: finalModel || "auto" }),
     ...(useQuorum && {

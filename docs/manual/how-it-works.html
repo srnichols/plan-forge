@@ -86,67 +86,63 @@
 
         <div class="overflow-x-auto mb-4">
           <div class="rounded-2xl border border-slate-700/50 bg-slate-950/60 p-6 min-w-[720px]">
-            <div class="grid grid-cols-3 gap-4">
-              <!-- Row 1: Discovery → Crucible → Harden -->
+            <!-- Clockwise closed-loop: Discovery → Crucible → Harden → Execute → Tempering → Bug Registry → (back to Discovery) -->
+            <div class="grid grid-cols-[1fr_auto_1fr_auto_1fr] gap-y-3 items-center">
+
+              <!-- Row 1: DISCOVERY → CRUCIBLE → HARDEN -->
               <div class="rounded-lg border border-amber-900/40 bg-amber-950/20 p-3 text-center">
                 <div class="text-xs font-bold text-amber-400 mb-1">DISCOVERY</div>
                 <div class="text-xs text-slate-300 font-mono leading-relaxed">content audit<br/>+ route crawl<br/>+ placeholder regex</div>
               </div>
-              <div class="flex flex-col items-center justify-center text-slate-500 text-xs">
-                <div class="text-slate-600">finds</div>
+              <div class="flex flex-col items-center px-2 text-slate-500">
+                <div class="text-[10px] uppercase tracking-wider text-slate-600">finds</div>
                 <div class="text-forge-400 text-2xl leading-none">→</div>
               </div>
               <div class="rounded-lg border border-amber-900/40 bg-amber-950/20 p-3 text-center">
                 <div class="text-xs font-bold text-amber-400 mb-1">CRUCIBLE</div>
                 <div class="text-xs text-slate-300 font-mono leading-relaxed">forge_crucible_<br/>submit (agent)</div>
               </div>
-
-              <!-- Row 2: vertical arrow on right (crucible → harden) -->
-              <div></div>
-              <div></div>
-              <div class="flex justify-center items-center text-forge-400 text-2xl leading-none">↓</div>
-
-              <!-- Row 3: Harden centered right -->
-              <div></div>
-              <div></div>
+              <div class="flex flex-col items-center px-2 text-slate-500">
+                <div class="text-[10px] uppercase tracking-wider text-slate-600">smelts</div>
+                <div class="text-forge-400 text-2xl leading-none">→</div>
+              </div>
               <div class="rounded-lg border border-amber-900/40 bg-amber-950/20 p-3 text-center">
                 <div class="text-xs font-bold text-amber-400 mb-1">HARDEN</div>
                 <div class="text-xs text-slate-300 font-mono leading-relaxed">Phase-NN plan<br/>+ Scope Contract</div>
               </div>
 
-              <!-- Row 4: vertical arrow harden → execute -->
+              <!-- Row 2: vertical connectors (only outer columns) -->
+              <div class="flex justify-center text-forge-400 text-2xl leading-none">↑</div>
               <div></div>
               <div></div>
-              <div class="flex justify-center items-center text-forge-400 text-2xl leading-none">↓</div>
+              <div></div>
+              <div class="flex justify-center text-forge-400 text-2xl leading-none">↓</div>
 
-              <!-- Row 5: Bug registry ← Tempering ← Execute -->
+              <!-- Row 3: BUG REGISTRY ← TEMPERING ← EXECUTE -->
               <div class="rounded-lg border border-rose-900/40 bg-rose-950/20 p-3 text-center">
                 <div class="text-xs font-bold text-rose-400 mb-1">BUG REGISTRY</div>
-                <div class="text-xs text-slate-300 font-mono leading-relaxed">auto-smelt loop</div>
+                <div class="text-xs text-slate-300 font-mono leading-relaxed">auto-smelt loop<br/>(re-enters Smelt)</div>
               </div>
-              <div class="flex flex-col items-center justify-center text-slate-500 text-xs">
-                <div class="text-slate-600">fails</div>
+              <div class="flex flex-col items-center px-2 text-slate-500">
+                <div class="text-[10px] uppercase tracking-wider text-slate-600">files</div>
                 <div class="text-forge-400 text-2xl leading-none">←</div>
               </div>
               <div class="rounded-lg border border-rose-900/40 bg-rose-950/20 p-3 text-center">
                 <div class="text-xs font-bold text-rose-400 mb-1">TEMPERING</div>
                 <div class="text-xs text-slate-300 font-mono leading-relaxed">forge_tempering_<br/>run</div>
               </div>
-
-              <!-- Row 6: Execute left of tempering -->
-              <div></div>
-              <div class="flex flex-col items-center justify-center text-slate-500 text-xs">
-                <div class="text-slate-600">green</div>
+              <div class="flex flex-col items-center px-2 text-slate-500">
+                <div class="text-[10px] uppercase tracking-wider text-slate-600">scans</div>
                 <div class="text-forge-400 text-2xl leading-none">←</div>
               </div>
               <div class="rounded-lg border border-emerald-900/40 bg-emerald-950/20 p-3 text-center">
                 <div class="text-xs font-bold text-emerald-400 mb-1">EXECUTE</div>
                 <div class="text-xs text-slate-300 font-mono leading-relaxed">slice-by-slice<br/>+ test gates</div>
               </div>
+            </div>
 
-              <!-- Row 7: back-arrow bug registry → discovery -->
-              <div class="flex justify-center items-center text-forge-400 text-2xl leading-none">↑</div>
-              <div class="col-span-2 text-xs text-slate-500 flex items-center">re-enters Smelt as new ore</div>
+            <div class="mt-4 pt-4 border-t border-slate-800 text-center text-xs text-slate-500">
+              ⟲ Closed loop · every failed test re-enters Smelt as new ore
             </div>
           </div>
         </div>

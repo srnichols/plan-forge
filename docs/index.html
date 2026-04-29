@@ -509,6 +509,77 @@
 
 
   <!-- ================================================
+       THE FLOOR MANAGER — Inner Loop + Forge-Master
+  ================================================ -->
+  <section id="floor-manager" class="py-24 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 border-y border-slate-800/60 relative overflow-hidden">
+    <div class="absolute inset-0 grid-overlay opacity-40 pointer-events-none"></div>
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
+      <div class="grid lg:grid-cols-2 gap-12 items-center">
+        <div class="reveal">
+          <p class="text-cyan-400 text-sm font-semibold tracking-widest uppercase mb-3">Above the Four Stations</p>
+          <h2 class="text-4xl md:text-5xl font-bold text-white mb-6">
+            The <span class="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-cyan-400">Floor Manager</span>.
+          </h2>
+          <p class="text-xl text-slate-300 leading-relaxed mb-6">
+            Four stations don't run themselves. <strong class="text-slate-100">Forge-Master</strong> and the <strong class="text-slate-100">Inner Loop</strong> walk the floor — rerouting work when a slice fails, retrying with what they learned, and feeding every outcome back into Smelt as the next ore.
+          </p>
+          <p class="text-slate-400 leading-relaxed mb-8">
+            This is what turns a 7-step pipeline into a <em>closed loop</em>: every failed test becomes a Crucible idea, every regression becomes a slice, every postmortem becomes a memory. The shop sharpens itself.
+          </p>
+
+          <!-- Capability bullets -->
+          <ul class="space-y-3 mb-8">
+            <li class="flex gap-3 text-slate-300">
+              <span class="text-amber-400 font-bold mt-0.5">⟲</span>
+              <span><strong class="text-slate-100">Reflexion retries</strong> — when a slice fails, the worker re-reads the failure, drafts a fix, and tries again with bounded attempts.</span>
+            </li>
+            <li class="flex gap-3 text-slate-300">
+              <span class="text-amber-400 font-bold mt-0.5">📜</span>
+              <span><strong class="text-slate-100">Trajectories &amp; postmortems</strong> — every attempt is recorded; failures auto-file meta-bugs against Plan Forge itself.</span>
+            </li>
+            <li class="flex gap-3 text-slate-300">
+              <span class="text-amber-400 font-bold mt-0.5">🛡️</span>
+              <span><strong class="text-slate-100">Adaptive gates</strong> — gates that catch real bugs get promoted; brittle ones get rewritten.</span>
+            </li>
+            <li class="flex gap-3 text-slate-300">
+              <span class="text-cyan-400 font-bold mt-0.5">🧭</span>
+              <span><strong class="text-slate-100">Forge-Master</strong> — the read-only foreman: classifies your intent, pulls memory, and orchestrates tool calls so you don't chain them by hand.</span>
+            </li>
+            <li class="flex gap-3 text-slate-300">
+              <span class="text-cyan-400 font-bold mt-0.5">🌐</span>
+              <span><strong class="text-slate-100">Cross-project federation</strong> — lessons from one repo become guardrails in the next. Opt-in, Dashboard-configurable.</span>
+            </li>
+          </ul>
+
+          <div class="flex flex-wrap gap-3">
+            <a href="manual/inner-loop.html" class="inline-flex items-center gap-2 px-5 py-3 text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-slate-900 rounded-xl transition-all">
+              Read: The Inner Loop
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
+            </a>
+            <a href="manual/how-it-works.html#closed-loop" class="inline-flex items-center gap-2 px-5 py-3 text-sm font-semibold bg-slate-800 hover:bg-slate-700 text-slate-100 rounded-xl border border-slate-700 transition-all">
+              See the closed loop
+            </a>
+          </div>
+        </div>
+
+        <div class="reveal">
+          <div class="relative">
+            <div class="absolute -inset-4 bg-gradient-to-r from-amber-500/10 via-cyan-500/10 to-amber-500/10 blur-2xl rounded-3xl"></div>
+            <img src="assets/brand/floor-manager.webp"
+                 alt="A glowing golden-brain mechanical foreman suspended above the forge floor, amber and cyan tendrils linking the four station silhouettes (crucible, anvil, watchtower, brain-crystal) in a closed feedback loop."
+                 class="relative w-full rounded-2xl border border-slate-700/40 shadow-2xl shadow-amber-500/10"
+                 loading="lazy" />
+          </div>
+          <p class="text-xs text-slate-500 italic mt-4 text-center">
+            The foreman walks the floor — Forge-Master orchestrates, the Inner Loop closes the cycle.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ================================================
        THE PROBLEM
   ================================================ -->
   <section id="problem" class="py-24 bg-slate-900">

@@ -1,0 +1,5549 @@
+[
+  {
+    "name": "forge_smith",
+    "description": "Inspect the forge — diagnose environment, VS Code config, setup health, version currency, and common problems. Returns structured results with pass/fail/warning counts.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      }
+    },
+    "intent": [
+      "diagnose",
+      "inspect",
+      "health-check"
+    ],
+    "aliases": [
+      "inspect-forge",
+      "health-check"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "1.3.0",
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [
+      ".forge.json",
+      ".github/"
+    ],
+    "sideEffects": [],
+    "errors": {
+      "NOT_GIT_REPO": {
+        "message": "Not inside a git repository",
+        "recovery": "Run from a git-initialized project"
+      }
+    },
+    "example": {
+      "input": {},
+      "output": {
+        "summary": "8 passed, 1 failed, 2 warnings"
+      }
+    }
+  },
+  {
+    "name": "forge_validate",
+    "description": "Validate Plan Forge setup — check that all required files exist, file counts match preset expectations, and no unresolved placeholders remain.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      }
+    },
+    "intent": [
+      "validate",
+      "check",
+      "verify"
+    ],
+    "aliases": [
+      "check-setup",
+      "validate-setup"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "1.3.0",
+    "prerequisites": [
+      ".forge.json exists"
+    ],
+    "produces": [],
+    "consumes": [
+      ".forge.json",
+      ".github/"
+    ],
+    "sideEffects": [],
+    "errors": {
+      "NO_CONFIG": {
+        "message": ".forge.json not found",
+        "recovery": "Run setup first"
+      }
+    },
+    "example": {
+      "input": {},
+      "output": {
+        "result": "17 passed, 0 failed"
+      }
+    }
+  },
+  {
+    "name": "forge_sweep",
+    "description": "Run completeness sweep — scan code files for TODO, FIXME, HACK, stub, placeholder, and mock data markers. Returns locations of all deferred-work markers.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      }
+    },
+    "intent": [
+      "scan",
+      "audit",
+      "completeness"
+    ],
+    "aliases": [
+      "find-todos",
+      "completeness-check"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "1.3.0",
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [
+      "src/**",
+      "tests/**"
+    ],
+    "sideEffects": [],
+    "errors": {},
+    "example": {
+      "input": {},
+      "output": {
+        "markers": 3,
+        "locations": [
+          "src/api.ts:42 TODO",
+          "..."
+        ]
+      }
+    }
+  },
+  {
+    "name": "forge_status",
+    "description": "Show all phases from DEPLOYMENT-ROADMAP.md with their current status (planned, in-progress, complete, paused).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      }
+    },
+    "intent": [
+      "read",
+      "status",
+      "overview"
+    ],
+    "aliases": [
+      "phase-status",
+      "roadmap-status"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "1.3.0",
+    "prerequisites": [
+      "docs/plans/DEPLOYMENT-ROADMAP.md exists"
+    ],
+    "produces": [],
+    "consumes": [
+      "docs/plans/DEPLOYMENT-ROADMAP.md"
+    ],
+    "sideEffects": [],
+    "errors": {
+      "NO_ROADMAP": {
+        "message": "DEPLOYMENT-ROADMAP.md not found",
+        "recovery": "Create docs/plans/DEPLOYMENT-ROADMAP.md or run pforge new-phase"
+      }
+    },
+    "example": {
+      "input": {},
+      "output": {
+        "phases": [
+          {
+            "name": "Phase 1",
+            "status": "complete"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "name": "forge_diff",
+    "description": "Compare changed files against a plan's Scope Contract — detect drift, forbidden file edits, and unplanned changes.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "plan": {
+          "type": "string",
+          "description": "Path to the plan file (e.g., docs/plans/Phase-1-AUTH-PLAN.md)"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      },
+      "required": [
+        "plan"
+      ]
+    },
+    "intent": [
+      "compare",
+      "drift-detect",
+      "scope-check"
+    ],
+    "aliases": [
+      "scope-drift",
+      "check-drift"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "1.3.0",
+    "prerequisites": [
+      "plan file exists",
+      "git initialized"
+    ],
+    "produces": [],
+    "consumes": [
+      "docs/plans/*.md"
+    ],
+    "sideEffects": [],
+    "errors": {
+      "PLAN_NOT_FOUND": {
+        "message": "Plan file not found",
+        "recovery": "Check the plan path"
+      }
+    },
+    "example": {
+      "input": {
+        "plan": "docs/plans/Phase-1.md"
+      },
+      "output": {
+        "drift": false,
+        "forbidden": 0
+      }
+    }
+  },
+  {
+    "name": "forge_ext_search",
+    "description": "Search the Plan Forge community extension catalog. Returns matching extensions with names, descriptions, categories, and install commands.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Search keyword (optional — omit to list all)"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      }
+    },
+    "intent": [
+      "search",
+      "browse",
+      "discover"
+    ],
+    "aliases": [
+      "find-extensions",
+      "browse-catalog"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "1.3.0",
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [
+      "extensions/catalog.json"
+    ],
+    "sideEffects": [],
+    "errors": {},
+    "example": {
+      "input": {
+        "query": "azure"
+      },
+      "output": {
+        "results": []
+      }
+    }
+  },
+  {
+    "name": "forge_ext_info",
+    "description": "Show detailed information about a specific extension from the community catalog — author, version, category, provides, tags, and install command.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Extension name from the catalog"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      },
+      "required": [
+        "name"
+      ]
+    },
+    "intent": [
+      "read",
+      "detail",
+      "info"
+    ],
+    "aliases": [
+      "extension-detail"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "1.3.0",
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [
+      "extensions/catalog.json"
+    ],
+    "sideEffects": [],
+    "errors": {
+      "NOT_FOUND": {
+        "message": "Extension not found",
+        "recovery": "Use forge_ext_search to find available extensions"
+      }
+    },
+    "example": {
+      "input": {
+        "name": "azure-infrastructure"
+      },
+      "output": {
+        "name": "azure-infrastructure",
+        "version": "1.0.0"
+      }
+    }
+  },
+  {
+    "name": "forge_new_phase",
+    "description": "Create a new phase plan file and add it to the deployment roadmap. Returns the created file path and roadmap entry.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Phase name (e.g., 'user-auth', 'payment-gateway')"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      },
+      "required": [
+        "name"
+      ]
+    },
+    "intent": [
+      "create",
+      "scaffold",
+      "plan"
+    ],
+    "aliases": [
+      "new-plan",
+      "create-phase"
+    ],
+    "cost": "low",
+    "maxConcurrent": 1,
+    "addedIn": "1.3.0",
+    "prerequisites": [],
+    "produces": [
+      "docs/plans/Phase-N-<name>-PLAN.md",
+      "docs/plans/DEPLOYMENT-ROADMAP.md (updated)"
+    ],
+    "consumes": [],
+    "sideEffects": [
+      "creates plan file",
+      "updates roadmap"
+    ],
+    "errors": {},
+    "example": {
+      "input": {
+        "name": "user-auth"
+      },
+      "output": {
+        "file": "docs/plans/Phase-1-USER-AUTH-PLAN.md"
+      }
+    }
+  },
+  {
+    "name": "forge_analyze",
+    "description": "Cross-artifact analysis — validates requirement traceability, test coverage, scope compliance, and validation gates. Returns a consistency score (0-100) with detailed breakdown. With quorum=true, dispatches to multiple AI models (including API providers like xAI Grok) for multi-model consensus analysis.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "plan": {
+          "type": "string",
+          "description": "Path to the plan or source file to analyze (e.g., docs/plans/Phase-1-AUTH-PLAN.md or src/services/billing.ts)"
+        },
+        "quorum": {
+          "type": "boolean",
+          "description": "If true, dispatch analysis to multiple models and synthesize findings. Default: false"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "plan",
+            "file"
+          ],
+          "description": "Analysis mode: 'plan' (plan consistency) or 'file' (code review). Default: auto-detected from filename"
+        },
+        "models": {
+          "type": "string",
+          "description": "Comma-separated model list override (e.g., 'grok-3-mini,claude-sonnet-4.6,gpt-5.3-codex'). Default: quorum config models"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      },
+      "required": [
+        "plan"
+      ]
+    },
+    "intent": [
+      "analyze",
+      "score",
+      "audit"
+    ],
+    "aliases": [
+      "consistency-check",
+      "plan-analysis"
+    ],
+    "cost": "low",
+    "maxConcurrent": 5,
+    "addedIn": "1.3.0",
+    "prerequisites": [
+      "plan file exists"
+    ],
+    "produces": [],
+    "consumes": [
+      "docs/plans/*.md",
+      "src/**",
+      "tests/**"
+    ],
+    "sideEffects": [],
+    "errors": {
+      "PLAN_NOT_FOUND": {
+        "message": "Plan file not found",
+        "recovery": "Check the plan path"
+      },
+      "LOW_SCORE": {
+        "message": "Score below 60%",
+        "recovery": "Review gaps in traceability, coverage, tests, or gates"
+      }
+    },
+    "example": {
+      "input": {
+        "plan": "docs/plans/Phase-1.md"
+      },
+      "output": {
+        "score": 85,
+        "status": "passed"
+      }
+    }
+  },
+  {
+    "name": "forge_diagnose",
+    "description": "Multi-model bug investigation — dispatches independent bug analysis to multiple AI models (including API providers like xAI Grok), then synthesizes root cause analysis with fix recommendations. Each model examines code paths, failure modes, edge cases, and race conditions independently.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "file": {
+          "type": "string",
+          "description": "Path to the source file to investigate (e.g., src/services/billing.ts)"
+        },
+        "models": {
+          "type": "string",
+          "description": "Comma-separated model list override (e.g., 'grok-3-mini,grok-4,claude-sonnet-4.6'). Default: quorum config models"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      },
+      "required": [
+        "file"
+      ]
+    },
+    "intent": [
+      "analyze",
+      "debug",
+      "investigate"
+    ],
+    "aliases": [
+      "bug-investigate",
+      "multi-model-debug",
+      "root-cause"
+    ],
+    "cost": "medium",
+    "maxConcurrent": 3,
+    "addedIn": "2.15.0",
+    "prerequisites": [
+      "file exists"
+    ],
+    "produces": [],
+    "consumes": [
+      "src/**",
+      "tests/**"
+    ],
+    "sideEffects": [],
+    "errors": {
+      "FILE_NOT_FOUND": {
+        "message": "Target file not found",
+        "recovery": "Check the file path"
+      }
+    },
+    "example": {
+      "input": {
+        "file": "src/api.ts"
+      },
+      "output": {
+        "diagnosis": "Root cause identified",
+        "models": 3
+      }
+    }
+  },
+  {
+    "name": "forge_run_plan",
+    "description": "Execute a hardened plan — spawn CLI workers for each slice, validate at every boundary, track tokens. Supports Full Auto (gh copilot CLI) and Assisted (human + automated gates) modes. Use --estimate for cost prediction without executing. Plans without crucibleId frontmatter are rejected — pass manualImport:true (with optional manualImportSource / manualImportReason) to bypass the Crucible gate; bypasses are logged to .forge/crucible/manual-imports.jsonl.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "plan": {
+          "type": "string",
+          "description": "Path to the hardened plan file (e.g., docs/plans/Phase-1-AUTH-PLAN.md)"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "assisted"
+          ],
+          "description": "Execution mode: 'auto' (CLI worker) or 'assisted' (human + gates). Default: auto"
+        },
+        "model": {
+          "type": "string",
+          "description": "Model override (e.g., claude-sonnet-4.6, gpt-5.2-codex). Default: auto"
+        },
+        "estimate": {
+          "type": "boolean",
+          "description": "If true, return cost estimate without executing"
+        },
+        "resumeFrom": {
+          "type": "number",
+          "description": "Slice number to resume from (skips completed slices)"
+        },
+        "dryRun": {
+          "type": "boolean",
+          "description": "If true, parse and validate plan without executing"
+        },
+        "quorum": {
+          "type": "string",
+          "enum": [
+            "false",
+            "true",
+            "auto",
+            "power",
+            "speed"
+          ],
+          "description": "Quorum mode: 'false' (off), 'true' (all slices), 'auto' (threshold-based), 'power' (flagship models: Opus + GPT-5.3 + Grok 4.20), 'speed' (fast models: Sonnet + GPT-5.4-mini + Grok 4.1-fast). Default: auto"
+        },
+        "quorumThreshold": {
+          "type": "number",
+          "description": "Override complexity threshold for auto quorum (1-10). Default: 6"
+        },
+        "manualImport": {
+          "type": "boolean",
+          "description": "v2.37 Crucible — bypass the crucibleId frontmatter gate. Logged to .forge/crucible/manual-imports.jsonl."
+        },
+        "manualImportSource": {
+          "type": "string",
+          "enum": [
+            "human",
+            "speckit",
+            "grandfather"
+          ],
+          "description": "v2.37 Crucible — audit tag for --manual-import bypass. Default: human."
+        },
+        "manualImportReason": {
+          "type": "string",
+          "description": "v2.37 Crucible — optional free-form note recorded in the manual-import audit log."
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      },
+      "required": [
+        "plan"
+      ]
+    },
+    "intent": [
+      "execute",
+      "automate",
+      "run"
+    ],
+    "aliases": [
+      "execute-plan",
+      "run-plan"
+    ],
+    "cost": "high",
+    "maxConcurrent": 1,
+    "addedIn": "2.0.0",
+    "prerequisites": [
+      "plan file exists",
+      "gh copilot CLI installed (for auto mode)"
+    ],
+    "produces": [
+      ".forge/runs/<timestamp>/summary.json",
+      ".forge/runs/<timestamp>/slice-N.json"
+    ],
+    "consumes": [
+      "docs/plans/*.md",
+      ".forge.json"
+    ],
+    "sideEffects": [
+      "creates/modifies source files",
+      "runs build/test commands",
+      "spawns CLI workers"
+    ],
+    "quorum": {
+      "addedIn": "2.5.0",
+      "description": "Multi-model consensus: dispatch to 3+ models for dry-run analysis, synthesize best approach, then execute",
+      "parameters": {
+        "quorum": {
+          "type": "string",
+          "enum": [
+            "false",
+            "true",
+            "auto"
+          ],
+          "default": "auto",
+          "description": "Quorum mode (default: 'auto' — threshold-based; 'true' forces all slices; 'false' disables)"
+        },
+        "quorumThreshold": {
+          "type": "number",
+          "description": "Complexity score threshold for auto mode (1-10, default: 6)"
+        }
+      },
+      "config": ".forge.json → quorum { enabled, auto, threshold, models[], reviewerModel, dryRunTimeout }"
+    },
+    "errors": {
+      "PLAN_NOT_FOUND": {
+        "message": "Plan file not found",
+        "recovery": "Check the path or run forge_status to see available plans"
+      },
+      "NO_WORKER": {
+        "message": "No CLI workers available",
+        "recovery": "Install gh copilot CLI, or use mode: 'assisted'"
+      },
+      "GATE_FAILED": {
+        "message": "Validation gate failed",
+        "recovery": "Check slice results, fix code, use resumeFrom to continue"
+      },
+      "ABORTED": {
+        "message": "Run was aborted",
+        "recovery": "Re-run or use resumeFrom to continue from last slice"
+      }
+    },
+    "example": {
+      "input": {
+        "plan": "docs/plans/Phase-1.md",
+        "estimate": true
+      },
+      "output": {
+        "status": "estimate",
+        "sliceCount": 4,
+        "estimatedCostUSD": 0.32,
+        "confidence": "heuristic"
+      }
+    }
+  },
+  {
+    "name": "forge_abort",
+    "description": "Abort the currently running plan execution. The abort takes effect between slices — the current slice will finish first.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      }
+    },
+    "intent": [
+      "stop",
+      "cancel",
+      "abort"
+    ],
+    "aliases": [
+      "stop-run",
+      "cancel-execution"
+    ],
+    "cost": "low",
+    "maxConcurrent": 1,
+    "addedIn": "2.0.0",
+    "prerequisites": [
+      "active run in progress"
+    ],
+    "produces": [],
+    "consumes": [],
+    "sideEffects": [
+      "stops execution after current slice"
+    ],
+    "errors": {
+      "NO_ACTIVE_RUN": {
+        "message": "No active plan execution to abort",
+        "recovery": "No action needed"
+      }
+    },
+    "example": {
+      "input": {},
+      "output": {
+        "message": "Abort signal sent"
+      }
+    }
+  },
+  {
+    "name": "forge_plan_status",
+    "description": "Get the status of the latest plan execution run. Shows per-slice results, token usage, duration, and overall status from .forge/runs/.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "plan": {
+          "type": "string",
+          "description": "Filter by plan name (optional — shows latest if omitted)"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      }
+    },
+    "intent": [
+      "read",
+      "status",
+      "progress"
+    ],
+    "aliases": [
+      "run-status",
+      "check-progress"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "2.0.0",
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [
+      ".forge/runs/"
+    ],
+    "sideEffects": [],
+    "errors": {
+      "NO_RUNS": {
+        "message": "No runs found",
+        "recovery": "Run forge_run_plan first"
+      }
+    },
+    "example": {
+      "input": {},
+      "output": {
+        "status": "completed",
+        "passed": 4,
+        "failed": 0
+      }
+    }
+  },
+  {
+    "name": "forge_cost_report",
+    "description": "Cost tracking report — shows total spend, per-model breakdown, and monthly aggregation from .forge/cost-history.json. Includes token counts, run history, and forge_model_stats (success rate per model from model-performance.json).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      }
+    },
+    "intent": [
+      "read",
+      "cost",
+      "billing"
+    ],
+    "aliases": [
+      "cost-summary",
+      "token-report"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "2.0.0",
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [
+      ".forge/cost-history.json",
+      ".forge/model-performance.json"
+    ],
+    "sideEffects": [],
+    "errors": {},
+    "example": {
+      "input": {},
+      "output": {
+        "runs": 5,
+        "total_cost_usd": 1.23,
+        "by_model": {},
+        "forge_model_stats": {
+          "claude-sonnet-4.6": {
+            "total_slices": 10,
+            "passed": 9,
+            "failed": 1,
+            "success_rate": 0.9,
+            "avg_cost_usd": 0.05
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "forge_estimate_quorum",
+    "description": "Returns projected cost of a plan under all four quorum modes (auto / power / speed / false) in a single call. Agents MUST call this tool before presenting any dollar amount for a plan — hand-computed quorum costs drift by an order of magnitude. Backed by cost-service.mjs, the same code path that powers `pforge run-plan --estimate`.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "planPath": {
+          "type": "string",
+          "description": "Path to the plan Markdown file, relative to the project root."
+        },
+        "resumeFrom": {
+          "type": "string",
+          "description": "Optional slice number to start from — excludes already-shipped slices from the estimate."
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      },
+      "required": [
+        "planPath"
+      ]
+    },
+    "intent": [
+      "estimate",
+      "cost",
+      "projection",
+      "planning"
+    ],
+    "aliases": [
+      "cost-picker",
+      "quorum-estimate"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "2.60.0",
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [
+      ".forge/cost-history.json",
+      ".forge/model-performance.json",
+      ".forge.json"
+    ],
+    "sideEffects": [],
+    "errors": {
+      "PLAN_NOT_FOUND": {
+        "message": "Plan file not found",
+        "recovery": "Pass a valid planPath relative to the project root"
+      },
+      "PLAN_PARSE_FAILED": {
+        "message": "Plan could not be parsed",
+        "recovery": "Run forge_analyze on the plan first to surface structural issues"
+      }
+    },
+    "agentGuidance": "Call this tool before presenting any dollar amount or quorum-mode cost to the user. Do not hand-compute quorum costs in chat — the numbers you would invent drift quickly and have been observed to overshoot reality by an order of magnitude. This tool returns all four quorum modes (auto / power / speed / false) in one payload so you never need to make four separate calls or estimate.",
+    "example": {
+      "input": {
+        "planPath": "docs/plans/Phase-27-COST-SERVICE-v2.60-PLAN.md"
+      },
+      "output": {
+        "auto": {
+          "mode": "auto",
+          "estimatedCostUSD": 0.42,
+          "baseCostUSD": 0.28,
+          "overheadUSD": 0.14,
+          "quorumSliceCount": 2,
+          "totalSliceCount": 7,
+          "confidence": "heuristic"
+        },
+        "power": {
+          "mode": "power",
+          "estimatedCostUSD": 12.5,
+          "baseCostUSD": 0.28,
+          "overheadUSD": 12.22,
+          "quorumSliceCount": 7,
+          "totalSliceCount": 7,
+          "confidence": "heuristic"
+        },
+        "speed": {
+          "mode": "speed",
+          "estimatedCostUSD": 1.2,
+          "baseCostUSD": 0.28,
+          "overheadUSD": 0.92,
+          "quorumSliceCount": 7,
+          "totalSliceCount": 7,
+          "confidence": "heuristic"
+        },
+        "false": {
+          "mode": "false",
+          "estimatedCostUSD": 0.28,
+          "baseCostUSD": 0.28,
+          "overheadUSD": 0,
+          "quorumSliceCount": 0,
+          "totalSliceCount": 7,
+          "confidence": "heuristic"
+        },
+        "recommended": "auto",
+        "generatedAt": "2026-04-20T18:00:00.000Z"
+      }
+    }
+  },
+  {
+    "name": "forge_estimate_slice",
+    "description": "Returns projected cost for a single slice under a chosen quorum mode. Cheaper than forge_estimate_quorum (which estimates the whole plan). Backed by cost-service.mjs estimateSlice(). Un-calibrated — no run-level historical correction factor applied.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "planPath": {
+          "type": "string",
+          "description": "Path to the plan Markdown file, relative to the project root."
+        },
+        "sliceNumber": {
+          "type": [
+            "string",
+            "number"
+          ],
+          "description": "Slice identifier (numeric or alphanumeric, e.g. 4 or '2A')."
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "power",
+            "speed",
+            "false"
+          ],
+          "description": "Quorum mode to project under (default: 'auto')."
+        },
+        "model": {
+          "type": "string",
+          "description": "Base model for pricing (default: 'claude-sonnet-4.5')."
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      },
+      "required": [
+        "planPath",
+        "sliceNumber"
+      ]
+    },
+    "intent": [
+      "estimate",
+      "cost",
+      "slice",
+      "planning"
+    ],
+    "aliases": [
+      "slice-cost",
+      "per-slice-estimate"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "2.61.0",
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [
+      ".forge/cost-history.json"
+    ],
+    "sideEffects": [],
+    "errors": {
+      "PLAN_NOT_FOUND": {
+        "message": "Plan file not found",
+        "recovery": "Pass a valid planPath relative to the project root"
+      },
+      "SLICE_NOT_FOUND": {
+        "message": "Slice number not in plan",
+        "recovery": "Call forge_plan_status or forge_estimate_quorum to see available slice numbers"
+      }
+    },
+    "agentGuidance": "Use this when you need cost for a single slice — cheaper than forge_estimate_quorum (which estimates the whole plan). Returns projected cost, complexity score, and a rationale for why the slice is or isn't quorum-eligible under the chosen mode.",
+    "example": {
+      "input": {
+        "planPath": "docs/plans/Phase-27.2-COST-REFINEMENT-v2.61-PLAN.md",
+        "sliceNumber": 4,
+        "mode": "power"
+      },
+      "output": {
+        "estimatedCostUSD": 1.8423,
+        "baseCostUSD": 0.0425,
+        "overheadUSD": 1.7998,
+        "complexityScore": 6,
+        "model": "claude-sonnet-4.5",
+        "quorumEligible": true,
+        "rationale": "mode power: all slices quorum-eligible",
+        "generatedAt": "2026-04-20T18:00:00.000Z"
+      }
+    }
+  },
+  {
+    "name": "forge_capabilities",
+    "description": "Machine-readable API surface — returns all MCP tools with semantic metadata (intent, prerequisites, errors, cost), CLI commands, workflow graphs, config schema, dashboard info, and installed extensions. Agents call this once on session start for full discoverability.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      }
+    },
+    "intent": [
+      "discover",
+      "introspect",
+      "api-surface"
+    ],
+    "aliases": [
+      "get-capabilities",
+      "discover-tools",
+      "api-schema"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "2.3.0",
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [
+      ".forge.json",
+      ".vscode/mcp.json"
+    ],
+    "sideEffects": [],
+    "errors": {},
+    "example": {
+      "input": {},
+      "output": {
+        "tools": 28,
+        "workflows": 4,
+        "memory": {
+          "configured": true
+        }
+      }
+    }
+  },
+  {
+    "name": "forge_watch",
+    "description": "WATCHER (v2.34) — read-only observer that tails another project's pforge run. Run this from a SECOND VS Code Copilot session with Plan-Forge as the workspace, pointing targetPath at the project being executed. Returns snapshot of current run state (slices passed/failed/in-progress, token counts, gate errors) plus heuristic anomaly detection. Mode 'analyze' additionally invokes a frontier model (default: claude-opus-4.7) for narrative advice. The watcher CANNOT modify any files in the target project.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "targetPath": {
+          "type": "string",
+          "description": "Absolute path to the project being watched (e.g., E:/GitHub/Rummag)"
+        },
+        "runId": {
+          "type": "string",
+          "description": "Specific run directory under .forge/runs/ (default: latest)"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "snapshot",
+            "analyze"
+          ],
+          "description": "snapshot = file reads only, no AI cost. analyze = invokes watcher model for advice."
+        },
+        "model": {
+          "type": "string",
+          "description": "Override watcher model (default: claude-opus-4.7)"
+        },
+        "tailEvents": {
+          "type": "number",
+          "description": "Trailing events to include (1-200, default: 25). Lower = cheaper analyze prompts."
+        },
+        "sinceTimestamp": {
+          "type": "string",
+          "description": "(v2.35) ISO timestamp cursor — only flag events newer than this. Pass back the previous report's `cursor` field for continuous monitoring."
+        },
+        "recordHistory": {
+          "type": "boolean",
+          "description": "(v2.35) Append snapshot to watcher's own .forge/watch-history.jsonl (default: true)"
+        }
+      },
+      "required": [
+        "targetPath"
+      ]
+    },
+    "intent": [
+      "observe",
+      "watch",
+      "monitor",
+      "advise"
+    ],
+    "aliases": [
+      "watcher",
+      "tail-run",
+      "observe-run"
+    ],
+    "cost": "low",
+    "maxConcurrent": 5,
+    "addedIn": "2.34.0",
+    "prerequisites": [
+      "<targetPath>/.forge/runs/ exists"
+    ],
+    "produces": [
+      "<watcherCwd>/.forge/watch-history.jsonl (when recordHistory=true)"
+    ],
+    "consumes": [
+      "<targetPath>/.forge/runs/<runId>/events.log",
+      "<targetPath>/.forge/runs/<runId>/slice-*.json",
+      "<targetPath>/.forge/runs/<runId>/summary.json"
+    ],
+    "sideEffects": [
+      "appends to watcher's own .forge/watch-history.jsonl (NEVER target's)",
+      "may emit watch-snapshot-completed/watch-anomaly-detected/watch-advice-generated hub events",
+      "in 'analyze' mode, invokes a frontier model (default claude-opus-4.7)"
+    ],
+    "securityNote": "Read-only by design — cannot modify any files in the target project. History is written only to watcher's own cwd.",
+    "errors": {
+      "MISSING_TARGET": {
+        "message": "targetPath is required",
+        "recovery": "Pass an absolute path to the project being watched"
+      },
+      "NO_RUNS": {
+        "message": "No run directory found",
+        "recovery": "Verify the target has executed at least one pforge run"
+      }
+    },
+    "example": {
+      "input": {
+        "targetPath": "E:/GitHub/Rummag",
+        "mode": "snapshot"
+      },
+      "output": {
+        "ok": true,
+        "runState": "in-progress",
+        "counts": {
+          "started": 5,
+          "completed": 4,
+          "failed": 0,
+          "escalated": 0
+        },
+        "anomalies": [],
+        "recommendations": [],
+        "cursor": "2025-04-17T12:34:56.789Z"
+      }
+    }
+  },
+  {
+    "name": "forge_watch_live",
+    "description": "WATCHER LIVE TAIL (v2.35) — stream events from another project's pforge run for a fixed duration. Connects to the target's WebSocket hub if running (`.forge/server-ports.json`); falls back to file polling otherwise. Read-only by design — only subscribes, never sends commands. Returns aggregate stats and the captured event stream.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "targetPath": {
+          "type": "string",
+          "description": "Absolute path to the project being watched"
+        },
+        "durationMs": {
+          "type": "number",
+          "description": "How long to listen, in ms (1000-3600000, default: 60000)"
+        },
+        "pollIntervalMs": {
+          "type": "number",
+          "description": "Polling interval if hub not running (default: 3000ms)"
+        }
+      },
+      "required": [
+        "targetPath"
+      ]
+    },
+    "intent": [
+      "observe",
+      "stream",
+      "tail",
+      "monitor"
+    ],
+    "aliases": [
+      "watcher-live",
+      "live-tail",
+      "stream-events"
+    ],
+    "cost": "low",
+    "maxConcurrent": 5,
+    "addedIn": "2.35.0",
+    "prerequisites": [
+      "<targetPath>/.forge/runs/ exists"
+    ],
+    "produces": [],
+    "consumes": [
+      "<targetPath>/.forge/server-ports.json (preferred — WebSocket subscription)",
+      "<targetPath>/.forge/runs/<latest>/events.log (polling fallback)"
+    ],
+    "sideEffects": [
+      "opens read-only WebSocket subscription to target hub OR polls events.log",
+      "captures up to 500 events for the response payload"
+    ],
+    "securityNote": "Read-only subscriber — never sends commands or modifies target files.",
+    "errors": {
+      "MISSING_TARGET": {
+        "message": "targetPath is required",
+        "recovery": "Pass an absolute path to the project being watched"
+      },
+      "TARGET_NOT_FOUND": {
+        "message": "Target path does not exist",
+        "recovery": "Verify path and try again"
+      }
+    },
+    "example": {
+      "input": {
+        "targetPath": "E:/GitHub/Rummag",
+        "durationMs": 30000
+      },
+      "output": {
+        "ok": true,
+        "mode": "websocket",
+        "events": 42,
+        "capturedEvents": 42
+      }
+    }
+  },
+  {
+    "name": "forge_memory_report",
+    "description": "GX.3 (v2.36): aggregate the health of every memory surface — L2 jsonl files (record counts, schema _v distribution), OpenBrain queue state (pending/delivered/failed/deferred/DLQ), drain stats trend, capture telemetry (per-tool/per-type volume + dedup rate), search cache health, and orphans under .forge/. Read-only — never mutates files.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      }
+    },
+    "intent": [
+      "memory-report",
+      "memory-health",
+      "memory-audit"
+    ],
+    "aliases": [
+      "memory-report",
+      "mem-report",
+      "memory-health"
+    ],
+    "cost": "low",
+    "maxConcurrent": 4,
+    "addedIn": "2.36.0-beta.4",
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [
+      ".forge/liveguard-memories.jsonl",
+      ".forge/openbrain-queue.jsonl",
+      ".forge/openbrain-dlq.jsonl",
+      ".forge/openbrain-stats.jsonl",
+      ".forge/telemetry/memory-captures.jsonl",
+      ".forge/memory-search-cache.jsonl"
+    ],
+    "sideEffects": [],
+    "securityNote": "Read-only aggregator. No data leaves the server.",
+    "errors": {},
+    "example": {
+      "input": {},
+      "output": {
+        "_v": 1,
+        "queue": {
+          "pending": 3,
+          "delivered": 42,
+          "failed": 0,
+          "deferred": 1,
+          "dlq": 0
+        },
+        "telemetry": {
+          "total": 64,
+          "dedupedCount": 7
+        },
+        "cache": {
+          "totalEntries": 12,
+          "uniqueKeys": 9,
+          "freshEntries": 5
+        },
+        "orphans": []
+      }
+    }
+  },
+  {
+    "name": "forge_skill_status",
+    "description": "Get recent skill execution events from the WebSocket hub history. Shows which skills were run, per-step results, and timing.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "skillName": {
+          "type": "string",
+          "description": "Filter by skill name (optional — shows all recent if omitted)"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      }
+    },
+    "intent": [
+      "read",
+      "status",
+      "skills"
+    ],
+    "aliases": [
+      "skill-events",
+      "recent-skills"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "2.16.0",
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [],
+    "sideEffects": [],
+    "errors": {},
+    "example": {
+      "input": {},
+      "output": {
+        "events": []
+      }
+    }
+  },
+  {
+    "name": "forge_run_skill",
+    "description": "Execute a skill programmatically — parse the SKILL.md, run steps with validation gates, emit events to the hub, return structured results. Use for automated skill execution with progress tracking.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "skill": {
+          "type": "string",
+          "description": "Skill name (e.g., 'health-check', 'test-sweep') or path to SKILL.md"
+        },
+        "args": {
+          "type": "string",
+          "description": "Arguments to pass to the skill (optional)"
+        },
+        "dryRun": {
+          "type": "boolean",
+          "description": "If true, parse and validate skill without executing"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      },
+      "required": [
+        "skill"
+      ]
+    },
+    "intent": [
+      "execute",
+      "skill",
+      "automate"
+    ],
+    "aliases": [
+      "invoke-skill",
+      "execute-skill"
+    ],
+    "cost": "medium",
+    "maxConcurrent": 3,
+    "addedIn": "2.16.0",
+    "prerequisites": [
+      "skill exists"
+    ],
+    "produces": [],
+    "consumes": [
+      ".github/skills/*.md"
+    ],
+    "sideEffects": [
+      "may modify source files depending on skill"
+    ],
+    "errors": {
+      "SKILL_NOT_FOUND": {
+        "message": "Skill not found",
+        "recovery": "Use forge_skill_status to list available skills"
+      }
+    },
+    "example": {
+      "input": {
+        "skill": "test-sweep"
+      },
+      "output": {
+        "status": "completed",
+        "steps": 5
+      }
+    }
+  },
+  {
+    "name": "forge_org_rules",
+    "description": "Export org custom instructions — consolidate .github/instructions/*.instructions.md files into a single block for GitHub org-level Copilot custom instructions (Layer 1 of the two-layer model). Strips per-file frontmatter since org instructions apply universally. USE FOR: export org rules, generate org-level Copilot instructions, consolidate coding standards, org governance, GitHub org custom instructions.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        },
+        "format": {
+          "type": "string",
+          "description": "Output format: github (default, plain text for org settings), markdown (formatted with headers), or json (structured)",
+          "enum": [
+            "github",
+            "markdown",
+            "json"
+          ]
+        },
+        "output": {
+          "type": "string",
+          "description": "File path to write output relative to project dir (optional — returns content if omitted)"
+        }
+      }
+    },
+    "intent": [
+      "generate",
+      "export",
+      "org-standards"
+    ],
+    "aliases": [
+      "org-rules-export",
+      "org-instructions"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "2.15.0",
+    "prerequisites": [
+      ".forge.json exists"
+    ],
+    "produces": [
+      "org-rules.instructions.md"
+    ],
+    "consumes": [
+      ".forge.json",
+      ".github/instructions/*.instructions.md"
+    ],
+    "sideEffects": [
+      "generates org-rules instruction file"
+    ],
+    "errors": {},
+    "example": {
+      "input": {},
+      "output": {
+        "file": "org-rules.instructions.md",
+        "rules": 12
+      }
+    }
+  },
+  {
+    "name": "forge_crucible_submit",
+    "description": "Submit a raw idea to the Crucible — starts a new smelt (idea → spec workflow). Returns a smelt id, a recommended lane (tweak / feature / full), and the first interview question. USE FOR: kicking off Crucible from an AI agent or CLI with a one-line description of a change, bug, or feature. Agent-submitted smelts are subject to the recursion guardrail (default depth=1, set source='agent').",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "rawIdea": {
+          "type": "string",
+          "description": "The raw idea text — a sentence or short paragraph describing the change."
+        },
+        "lane": {
+          "type": "string",
+          "enum": [
+            "tweak",
+            "feature",
+            "full"
+          ],
+          "description": "Override the recommended lane. Omit to accept the heuristic's choice."
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "human",
+            "agent"
+          ],
+          "description": "Who submitted the smelt. Default: human."
+        },
+        "parentSmeltId": {
+          "type": "string",
+          "description": "Parent smelt id if this was spawned from another smelt (used for recursion depth tracking)."
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      },
+      "required": [
+        "rawIdea"
+      ]
+    },
+    "intent": [
+      "crucible",
+      "submit",
+      "smelt-start"
+    ],
+    "aliases": [
+      "crucible-submit",
+      "start-smelt"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "2.37.0",
+    "prerequisites": [],
+    "produces": [
+      ".forge/crucible/<id>.json"
+    ],
+    "consumes": [],
+    "sideEffects": [
+      "creates smelt record",
+      "broadcasts crucible-smelt-started event"
+    ],
+    "errors": {
+      "MISSING_RAW_IDEA": {
+        "message": "rawIdea is required",
+        "recovery": "Supply a non-empty rawIdea string"
+      },
+      "INVALID_LANE": {
+        "message": "invalid lane",
+        "recovery": "Use tweak | feature | full, or omit to accept the heuristic"
+      }
+    },
+    "example": {
+      "input": {
+        "rawIdea": "add rate limiting to the login endpoint"
+      },
+      "output": {
+        "id": "uuid",
+        "recommendedLane": "feature",
+        "firstQuestion": null
+      }
+    }
+  },
+  {
+    "name": "forge_crucible_ask",
+    "description": "Advance the Crucible interview — supply an answer and get the next question, or mark the smelt ready for preview/finalize when the interview is complete. Call without `answer` to fetch the current question. USE FOR: the interactive Q&A loop that turns a raw idea into a hardened spec.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Smelt id returned by forge_crucible_submit."
+        },
+        "answer": {
+          "type": "string",
+          "description": "Answer to the current question. Omit to fetch the current question without advancing."
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "intent": [
+      "crucible",
+      "interview",
+      "ask"
+    ],
+    "aliases": [
+      "crucible-ask",
+      "smelt-ask"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "2.37.0",
+    "prerequisites": [
+      "smelt exists and is in-progress"
+    ],
+    "produces": [
+      ".forge/crucible/<id>.json"
+    ],
+    "consumes": [
+      ".forge/crucible/<id>.json"
+    ],
+    "sideEffects": [
+      "updates smelt record",
+      "broadcasts crucible-smelt-updated event"
+    ],
+    "errors": {
+      "SMELT_NOT_FOUND": {
+        "message": "smelt not found: <id>",
+        "recovery": "Verify the smelt id via forge_crucible_list"
+      },
+      "WRONG_STATUS": {
+        "message": "smelt is finalized/abandoned, cannot continue interview",
+        "recovery": "Start a new smelt with forge_crucible_submit"
+      }
+    },
+    "example": {
+      "input": {
+        "id": "uuid",
+        "answer": "yes, API-wide rate limit"
+      },
+      "output": {
+        "done": true,
+        "nextQuestion": null,
+        "draftPreview": "# ..."
+      }
+    }
+  },
+  {
+    "name": "forge_crucible_preview",
+    "description": "Render the current draft of a smelt as a Markdown plan. Returns the draft, the tentative phase name (null until finalized), and a list of unresolved fields (slots still awaiting an answer). USE FOR: reviewing before finalize, or for the dashboard's live-preview pane.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Smelt id."
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "intent": [
+      "crucible",
+      "preview",
+      "draft"
+    ],
+    "aliases": [
+      "crucible-preview",
+      "smelt-preview"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "2.37.0",
+    "prerequisites": [
+      "smelt exists"
+    ],
+    "produces": [],
+    "consumes": [
+      ".forge/crucible/<id>.json"
+    ],
+    "sideEffects": [],
+    "errors": {
+      "SMELT_NOT_FOUND": {
+        "message": "smelt not found: <id>",
+        "recovery": "Verify the smelt id via forge_crucible_list"
+      }
+    },
+    "example": {
+      "input": {
+        "id": "uuid"
+      },
+      "output": {
+        "markdown": "# ...",
+        "phaseName": null,
+        "unresolvedFields": []
+      }
+    }
+  },
+  {
+    "name": "forge_crucible_finalize",
+    "description": "Finalize a smelt — atomically claim the next phase number, write docs/plans/Phase-NN.md with a `crucibleId:` frontmatter stamp, and mark the smelt finalized. Returns the chosen phase name and the plan path. Plan Hardener handoff lands in Slice 01.6. USE FOR: closing the idea→spec workflow when the interview is done. Refuses to finalize when critical fields (scope-in/scope-files, validation-gates, forbidden-actions) are unresolved. Returns inferred build/test commands when a recognized manifest (package.json, *.csproj, Cargo.toml, pyproject.toml, go.mod) is present.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Smelt id. Must be status=in-progress."
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "intent": [
+      "crucible",
+      "finalize",
+      "emit-plan"
+    ],
+    "aliases": [
+      "crucible-finalize",
+      "smelt-finalize"
+    ],
+    "cost": "low",
+    "maxConcurrent": 1,
+    "addedIn": "2.37.0",
+    "prerequisites": [
+      "smelt exists and is in-progress"
+    ],
+    "produces": [
+      "docs/plans/Phase-NN.md",
+      ".forge/crucible/phase-claims.json"
+    ],
+    "consumes": [
+      ".forge/crucible/<id>.json",
+      "docs/plans/Phase-*.md"
+    ],
+    "sideEffects": [
+      "writes plan file",
+      "claims phase number atomically",
+      "broadcasts crucible-smelt-finalized event"
+    ],
+    "errors": {
+      "SMELT_NOT_FOUND": {
+        "message": "smelt not found: <id>",
+        "recovery": "Verify the smelt id"
+      },
+      "WRONG_STATUS": {
+        "message": "smelt is finalized/abandoned, cannot finalize",
+        "recovery": "Only in-progress smelts can be finalized"
+      },
+      "PHASE_CLAIMED": {
+        "message": "phase already claimed",
+        "recovery": "Retry — the phase-claim race resolver will pick the next number"
+      }
+    },
+    "example": {
+      "input": {
+        "id": "uuid"
+      },
+      "output": {
+        "phaseName": "Phase-07",
+        "planPath": "docs/plans/Phase-07.md",
+        "hardenerInvoked": false
+      }
+    }
+  },
+  {
+    "name": "forge_crucible_list",
+    "description": "List Crucible smelts, newest-first, optionally filtered by status. USE FOR: dashboard smelt-list panel, resuming in-progress smelts across sessions, auditing recently finalized smelts.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "in-progress",
+            "finalized",
+            "abandoned"
+          ],
+          "description": "Filter by smelt status. Omit to return all."
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      }
+    },
+    "intent": [
+      "crucible",
+      "list",
+      "smelts"
+    ],
+    "aliases": [
+      "crucible-list",
+      "list-smelts"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "2.37.0",
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [
+      ".forge/crucible/"
+    ],
+    "sideEffects": [],
+    "errors": {},
+    "example": {
+      "input": {
+        "status": "in-progress"
+      },
+      "output": {
+        "smelts": [
+          {
+            "id": "uuid",
+            "lane": "feature",
+            "rawIdea": "...",
+            "status": "in-progress"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "name": "forge_crucible_abandon",
+    "description": "Abandon a smelt — marks it status=abandoned and releases any phase-number claim it held. Idempotent: re-abandoning a smelt is a no-op. USE FOR: discarding a smelt that was started by mistake or superseded by another idea.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Smelt id to abandon."
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "intent": [
+      "crucible",
+      "abandon",
+      "discard"
+    ],
+    "aliases": [
+      "crucible-abandon",
+      "smelt-abandon"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "2.37.0",
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [
+      ".forge/crucible/<id>.json"
+    ],
+    "sideEffects": [
+      "marks smelt abandoned",
+      "releases phase-number claim if held"
+    ],
+    "errors": {},
+    "example": {
+      "input": {
+        "id": "uuid"
+      },
+      "output": {
+        "abandoned": true
+      }
+    }
+  },
+  {
+    "name": "forge_tempering_scan",
+    "description": "Tempering (read-only) — scan an existing coverage report (lcov.info / coverage-final.json / cobertura.xml / jacoco.xml / go cover.out / tarpaulin JSON) and report per-layer coverage vs. configured minima. On first run, seeds .forge/tempering/config.json with enterprise defaults. Does NOT execute any tests. USE FOR: diagnosing coverage gaps, pre-deploy readiness checks, dashboard feeds. Writes .forge/tempering/scan-<ts>.json.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        },
+        "correlationId": {
+          "type": "string",
+          "description": "Optional correlation id to thread this scan to an upstream smelt / plan / run. When omitted, one is minted."
+        }
+      }
+    },
+    "intent": [
+      "tempering",
+      "coverage",
+      "scan",
+      "read-only"
+    ],
+    "aliases": [
+      "tempering-scan",
+      "coverage-scan"
+    ],
+    "cost": "low",
+    "maxConcurrent": 5,
+    "addedIn": "2.42.0",
+    "prerequisites": [],
+    "produces": [
+      ".forge/tempering/scan-<ts>.json",
+      ".forge/tempering/config.json (first run)"
+    ],
+    "consumes": [
+      "coverage/lcov.info",
+      "coverage/coverage-final.json",
+      "coverage/cobertura.xml",
+      "TestResults/coverage.cobertura.xml",
+      "coverage.xml",
+      "coverage.json",
+      "target/site/jacoco/jacoco.xml",
+      "build/reports/jacoco/test/jacocoTestReport.xml",
+      "coverage.out",
+      "cover.out",
+      "tarpaulin-report.json",
+      "lcov.info"
+    ],
+    "sideEffects": [
+      "creates .forge/tempering/ on first run",
+      "seeds config.json with enterprise defaults on first run (never overwrites)",
+      "writes scan record",
+      "broadcasts tempering-scan-started and tempering-scan-completed hub events",
+      "captures scan summary to L3 via captureMemory (best-effort)"
+    ],
+    "errors": {
+      "UNKNOWN_STACK": {
+        "message": "Could not detect project stack",
+        "recovery": "Ensure one of package.json / *.csproj / pyproject.toml / go.mod / Cargo.toml / pom.xml exists at the project root"
+      },
+      "NO_COVERAGE": {
+        "message": "No coverage report found for detected stack",
+        "recovery": "Generate a coverage report with your test runner's coverage flag (e.g. vitest --coverage, dotnet test --collect:\"XPlat Code Coverage\", pytest --cov=. --cov-report=xml)"
+      },
+      "PARSE_EMPTY": {
+        "message": "Coverage report parsed to zero records",
+        "recovery": "Verify the report is non-empty and matches the expected format"
+      }
+    },
+    "example": {
+      "input": {},
+      "output": {
+        "ok": true,
+        "scanId": "scan-2026-04-19T...",
+        "stack": "typescript",
+        "status": "amber",
+        "coverageVsMinima": [
+          {
+            "layer": "domain",
+            "minimum": 90,
+            "actual": 76,
+            "gap": 14,
+            "files": []
+          }
+        ]
+      }
+    }
+  },
+  {
+    "name": "forge_tempering_status",
+    "description": "Return the latest N Tempering scan summaries — used by the dashboard feed and `forge_smith` panel. Read-only; never triggers a scan. USE FOR: checking freshness, listing recent coverage status, wiring Tempering into other tools.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        },
+        "limit": {
+          "type": "number",
+          "description": "Max scans to return (1..100, default 10)."
+        }
+      }
+    },
+    "intent": [
+      "tempering",
+      "status",
+      "history"
+    ],
+    "aliases": [
+      "tempering-status",
+      "coverage-status"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "2.42.0",
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [
+      ".forge/tempering/scan-*.json"
+    ],
+    "sideEffects": [],
+    "errors": {},
+    "example": {
+      "input": {
+        "limit": 5
+      },
+      "output": {
+        "ok": true,
+        "initialized": true,
+        "state": {
+          "totalScans": 3,
+          "latestStatus": "amber",
+          "gaps": 1,
+          "belowMinimum": 1,
+          "stale": false,
+          "staleCutoffDays": 7
+        },
+        "scans": []
+      }
+    }
+  },
+  {
+    "name": "forge_tempering_run",
+    "description": "Tempering execution harness — runs the enabled test scanners (unit, integration, UI/Playwright, and API contract/OpenAPI/GraphQL) through each stack's preset adapter (typescript/dotnet/python/go/java/rust; php/swift/azure-iac stub until extension). Enforces config.runtimeBudgets with SIGTERM→SIGKILL, writes .forge/tempering/run-<ts>.json and .forge/tempering/artifacts/<runId>/contract/report.json, emits tempering-run-started / tempering-run-scanner-started / tempering-run-scanner-completed / tempering-run-completed hub events. USE FOR: post-slice verification, pre-deploy gates, CI adapters. Forbidden: does NOT edit source, does NOT create bugs (that lands in TEMPER-06), does NOT recurse into plan-forge itself.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        },
+        "correlationId": {
+          "type": "string",
+          "description": "Optional correlation id to thread this run to an upstream smelt / plan / slice. When omitted, one is minted."
+        },
+        "sliceRef": {
+          "type": "object",
+          "description": "Optional plan+slice context. Surfaced in the run record and hub events so dashboards can group runs by slice.",
+          "properties": {
+            "plan": {
+              "type": "string"
+            },
+            "slice": {
+              "type": "string"
+            }
+          }
+        },
+        "lastGreenSha": {
+          "type": "string",
+          "description": "Git SHA of the most recent green run; when present and config.execution.regressionFirst is true, the adapter is hinted to run tests covering changed files first."
+        },
+        "fullMutation": {
+          "type": "boolean",
+          "description": "Force mutation scanner regardless of scheduling gate. Default: false."
+        },
+        "trigger": {
+          "type": "string",
+          "enum": [
+            "post-slice",
+            "nightly",
+            "manual"
+          ],
+          "description": "Trigger context for scheduling decisions (mutation scanner gating). Default: manual."
+        }
+      }
+    },
+    "intent": [
+      "tempering",
+      "run",
+      "execute",
+      "unit-tests",
+      "contract",
+      "visual-diff",
+      "mutation"
+    ],
+    "aliases": [
+      "tempering-run",
+      "run-tempering",
+      "run-tests"
+    ],
+    "cost": "medium",
+    "maxConcurrent": 1,
+    "addedIn": "2.43.0",
+    "prerequisites": [
+      "project stack is one of: typescript, dotnet, python, go, java, rust",
+      "test runner available on PATH (npx/dotnet/pytest/go/mvn/cargo)"
+    ],
+    "produces": [
+      ".forge/tempering/run-<ts>.json",
+      ".forge/tempering/artifacts/<runId>/contract/report.json",
+      ".forge/tempering/artifacts/<runId>/visual-diff/report.json"
+    ],
+    "consumes": [
+      ".forge/tempering/config.json",
+      "presets/<stack>/tempering-adapter.mjs"
+    ],
+    "sideEffects": [
+      "spawns a test-runner subprocess",
+      "enforces config.runtimeBudgets.unitMaxMs (SIGTERM then SIGKILL)",
+      "broadcasts tempering-run-started / tempering-run-scanner-started / tempering-run-scanner-completed / tempering-run-completed hub events",
+      "captures an L3 memory entry on completion"
+    ],
+    "errors": {
+      "MISSING_PROJECTDIR": {
+        "message": "projectDir required",
+        "recovery": "Pass `path` or invoke from a project directory"
+      },
+      "NO_ADAPTER": {
+        "message": "No preset adapter for detected stack",
+        "recovery": "Install the matching preset or extend presets/<stack>/tempering-adapter.mjs"
+      }
+    },
+    "example": {
+      "input": {
+        "sliceRef": {
+          "plan": "Phase-FOO.md",
+          "slice": "04.1"
+        }
+      },
+      "output": {
+        "ok": true,
+        "runId": "run-2026-04-19T...",
+        "stack": "typescript",
+        "verdict": "pass",
+        "scanners": [
+          {
+            "scanner": "unit",
+            "pass": 412,
+            "fail": 0,
+            "skipped": 1
+          },
+          {
+            "scanner": "contract",
+            "pass": 8,
+            "fail": 0,
+            "violations": []
+          },
+          {
+            "scanner": "visual-diff",
+            "verdict": "pass",
+            "pass": 3,
+            "fail": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "name": "forge_tempering_approve_baseline",
+    "description": "Promote the current screenshot for a URL to the visual-diff baseline. Copies the latest screenshot to .forge/tempering/baselines/ and writes a JSON sidecar with promotion metadata. Idempotent — re-promoting overwrites. USE FOR: accepting intentional visual changes after a visual regression is flagged by forge_tempering_run.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "urlHash": {
+          "type": "string",
+          "description": "Hash of the URL to approve (from visual-diff scanner output)"
+        },
+        "url": {
+          "type": "string",
+          "description": "Full URL to approve (alternative to urlHash — hash will be derived)"
+        },
+        "runId": {
+          "type": "string",
+          "description": "Specific run ID to promote from (optional — defaults to most recent)"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      }
+    },
+    "intent": [
+      "approve",
+      "baseline",
+      "visual"
+    ],
+    "aliases": [
+      "approve-baseline",
+      "promote-baseline",
+      "accept-visual"
+    ],
+    "cost": "low",
+    "maxConcurrent": 5,
+    "addedIn": "2.45.0",
+    "prerequisites": [],
+    "produces": [
+      ".forge/tempering/baselines/"
+    ],
+    "consumes": [
+      ".forge/tempering/screenshots/",
+      ".forge/tempering/baselines/",
+      ".forge/tempering/artifacts/"
+    ],
+    "sideEffects": [
+      "filesystem-write",
+      "broadcasts tempering-baseline-promoted hub event"
+    ],
+    "errors": {
+      "NO_SCREENSHOT": {
+        "message": "No screenshot found for the given hash",
+        "recovery": "Run forge_tempering_run first to capture screenshots, then approve"
+      },
+      "ALREADY_BASELINE": {
+        "message": "Baseline already exists (will be overwritten)",
+        "recovery": "This is informational — promotion is idempotent"
+      },
+      "INVALID_URL_HASH": {
+        "message": "urlHash or url is required",
+        "recovery": "Provide either urlHash from the visual-diff scanner output or the full URL"
+      }
+    },
+    "example": {
+      "input": {
+        "urlHash": "a1b2c3d4e5f67890"
+      },
+      "output": {
+        "ok": true,
+        "urlHash": "a1b2c3d4e5f67890",
+        "baselinePath": ".forge/tempering/baselines/a1b2c3d4e5f67890.png"
+      }
+    }
+  },
+  {
+    "name": "forge_tempering_drain",
+    "description": "Tempering drain loop — wraps forge_tempering_run in a round-loop that re-probes until convergence or max-rounds cap fires. Writes per-round deltas to .forge/tempering/drain-history.jsonl and a final audit artifact to .forge/audits/dev-<ts>.json. USE FOR: recursive audit loops, post-plan convergence checks, drain-until-clean semantics. DO NOT USE FOR: single-shot tempering runs (use forge_tempering_run), editing source, creating bugs directly.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        },
+        "maxRounds": {
+          "type": "number",
+          "description": "Maximum drain rounds (default: 5, max: 20)"
+        },
+        "scanners": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Scanner names to run each round (default: all enabled)"
+        },
+        "correlationId": {
+          "type": "string",
+          "description": "Optional correlation ID"
+        },
+        "sliceRef": {
+          "type": "object",
+          "description": "Optional plan+slice context",
+          "properties": {
+            "plan": {
+              "type": "string"
+            },
+            "slice": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "intent": [
+      "tempering",
+      "audit",
+      "drain",
+      "loop"
+    ],
+    "aliases": [
+      "audit-loop",
+      "drain-loop",
+      "tempering-drain"
+    ],
+    "cost": "medium",
+    "maxConcurrent": 1,
+    "addedIn": "2.80.0",
+    "prerequisites": [
+      ".forge.json exists",
+      "dev server running (for content-audit scanner)"
+    ],
+    "produces": [
+      ".forge/audits/dev-*.json"
+    ],
+    "consumes": [
+      ".forge.json#audit",
+      ".forge/tempering/"
+    ],
+    "sideEffects": [
+      "filesystem-write (audit artifacts)",
+      "broadcasts drain-round-started / drain-round-completed / drain-converged hub events",
+      "may register bugs via forge_bug_register",
+      "may submit Crucible smelts for spec-lane findings"
+    ],
+    "errors": {
+      "PRODUCTION_BLOCKED": {
+        "message": "Production environment is forbidden",
+        "recovery": "Use --env=dev or --env=staging"
+      },
+      "NO_SCANNERS": {
+        "message": "No scanners matched the requested set",
+        "recovery": "Omit scanners param to run all available scanners"
+      }
+    },
+    "example": {
+      "input": {
+        "project": ".",
+        "maxRounds": 3,
+        "dryRun": false,
+        "env": "dev"
+      },
+      "output": {
+        "ok": true,
+        "rounds": 2,
+        "converged": true,
+        "totalFindings": 12,
+        "triaged": {
+          "bug": 8,
+          "spec": 3,
+          "classifier": 1
+        }
+      }
+    }
+  },
+  {
+    "name": "forge_triage_route",
+    "description": "Triage a single tempering finding into one of three lanes: 'bug' (product defect), 'spec' (feature/spec gap), or 'classifier' (noise). Pure routing — no side effects. Fail-safe: unknown classifier output always routes to 'bug' with low confidence. USE FOR: per-finding triage after a tempering run, building custom drain loops. DO NOT USE FOR: batch triage (use forge_tempering_drain), registering bugs (use forge_bug_register after triage).",
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "finding"
+      ],
+      "properties": {
+        "finding": {
+          "type": "object",
+          "description": "A finding from a tempering scanner: { class, route, severity, evidence }",
+          "properties": {
+            "class": {
+              "type": "string"
+            },
+            "route": {
+              "type": "string"
+            },
+            "severity": {
+              "type": "string",
+              "enum": [
+                "critical",
+                "high",
+                "medium",
+                "low",
+                "info"
+              ]
+            },
+            "evidence": {
+              "type": "object"
+            }
+          },
+          "required": [
+            "class",
+            "severity"
+          ]
+        },
+        "classifierResult": {
+          "type": "object",
+          "description": "Output from the bug classifier. If omitted, fail-safe routes to 'bug' lane.",
+          "properties": {
+            "classification": {
+              "type": "string"
+            },
+            "reason": {
+              "type": "string"
+            },
+            "confidence": {
+              "type": "number"
+            },
+            "source": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "intent": [
+      "tempering",
+      "triage",
+      "route",
+      "classify"
+    ],
+    "aliases": [
+      "triage-finding",
+      "route-finding"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "2.80.0",
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [],
+    "sideEffects": [],
+    "errors": {
+      "INVALID_FINDING": {
+        "message": "Finding object is required with at least a title field",
+        "recovery": "Provide a finding object from a scanner result"
+      }
+    },
+    "example": {
+      "input": {
+        "finding": {
+          "title": "Missing h1 on /about",
+          "scanner": "content-audit",
+          "severity": "medium"
+        }
+      },
+      "output": {
+        "lane": "bug",
+        "payload": {
+          "title": "Missing h1 on /about",
+          "severity": "medium"
+        },
+        "confidence": "high"
+      }
+    }
+  },
+  {
+    "name": "forge_bug_register",
+    "description": "Register a bug discovered by a tempering scanner. Classifies real-bug vs infra and writes .forge/bugs/<bugId>.json for real bugs. Infra-classified failures are not written to disk — they are only tracked in the run record.",
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "scanner",
+        "evidence"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        },
+        "scanner": {
+          "type": "string",
+          "enum": [
+            "unit",
+            "integration",
+            "ui-playwright",
+            "visual-diff",
+            "flakiness",
+            "mutation",
+            "load-stress",
+            "contract",
+            "performance-budget"
+          ],
+          "description": "Scanner that discovered the bug"
+        },
+        "severity": {
+          "type": "string",
+          "enum": [
+            "critical",
+            "high",
+            "medium",
+            "low"
+          ],
+          "description": "Bug severity (default: medium)"
+        },
+        "evidence": {
+          "type": "object",
+          "description": "Bug evidence: { testName, assertionMessage, stackTrace, ... }"
+        },
+        "affectedFiles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Files affected by this bug"
+        },
+        "reproSteps": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Steps to reproduce"
+        },
+        "correlationId": {
+          "type": "string",
+          "description": "Correlation ID to thread to run/plan"
+        },
+        "sliceRef": {
+          "type": "object",
+          "description": "Plan+slice context",
+          "properties": {
+            "plan": {
+              "type": "string"
+            },
+            "slice": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "intent": [
+      "tempering",
+      "bug",
+      "register",
+      "create"
+    ],
+    "aliases": [
+      "bug-register",
+      "register-bug"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "2.47.0",
+    "prerequisites": [
+      ".forge/tempering/ exists (auto-created)"
+    ],
+    "produces": [
+      ".forge/bugs/<bugId>.json"
+    ],
+    "consumes": [
+      ".forge/tempering/config.json",
+      ".forge/tempering/run-*.json (for flakiness data)"
+    ],
+    "sideEffects": [
+      "creates .forge/bugs/ on first run",
+      "writes bug JSON record (real-bug only)",
+      "broadcasts tempering-bug-registered hub event",
+      "captures L3 memory via captureMemory (real-bug only)"
+    ],
+    "errors": {
+      "MISSING_EVIDENCE": {
+        "message": "Evidence must include testName or assertionMessage+stackTrace",
+        "recovery": "Provide at least testName in the evidence object"
+      },
+      "DUPLICATE_BUG": {
+        "message": "Bug with same fingerprint already exists",
+        "recovery": "Use forge_bug_list to find the existing bug"
+      },
+      "CLASSIFIER_FAILED": {
+        "message": "Bug classifier could not determine classification",
+        "recovery": "Manually set classification or retry with more evidence"
+      },
+      "SCANNER_NOT_RECOGNIZED": {
+        "message": "Scanner name not in known list",
+        "recovery": "Use one of the 9 supported scanner names"
+      }
+    },
+    "example": {
+      "input": {
+        "scanner": "visual-diff",
+        "evidence": {
+          "testName": "homepage",
+          "assertionMessage": "pixel diff > threshold"
+        }
+      },
+      "output": {
+        "ok": true,
+        "bugId": "bug-2026-04-19-001",
+        "classification": "real-bug"
+      }
+    }
+  },
+  {
+    "name": "forge_bug_list",
+    "description": "List bugs from the registry with optional filters. Returns all bugs matching the given criteria from .forge/bugs/.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        },
+        "status": {
+          "type": "string",
+          "description": "Filter by status: open|in-fix|fixed|wont-fix|duplicate"
+        },
+        "severity": {
+          "type": "string",
+          "description": "Filter by severity: critical|high|medium|low"
+        },
+        "scanner": {
+          "type": "string",
+          "description": "Filter by scanner name"
+        },
+        "since": {
+          "type": "string",
+          "description": "Only bugs after this ISO date"
+        },
+        "until": {
+          "type": "string",
+          "description": "Only bugs before this ISO date"
+        }
+      }
+    },
+    "intent": [
+      "tempering",
+      "bug",
+      "list",
+      "query"
+    ],
+    "aliases": [
+      "bug-list",
+      "list-bugs",
+      "bug-query"
+    ],
+    "cost": "low",
+    "maxConcurrent": 5,
+    "addedIn": "2.47.0",
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [
+      ".forge/bugs/*.json"
+    ],
+    "sideEffects": [],
+    "errors": {},
+    "example": {
+      "input": {
+        "status": "open",
+        "severity": "high"
+      },
+      "output": {
+        "ok": true,
+        "count": 2,
+        "bugs": [
+          {
+            "bugId": "bug-2026-04-19-001",
+            "scanner": "unit",
+            "severity": "high",
+            "status": "open"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "name": "forge_bug_update_status",
+    "description": "Transition a bug's status (open → in-fix → fixed, or open → wont-fix/duplicate) with transition validation. Terminal states (fixed, wont-fix, duplicate) cannot be changed.",
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "bugId",
+        "newStatus"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        },
+        "bugId": {
+          "type": "string",
+          "description": "Bug ID to update"
+        },
+        "newStatus": {
+          "type": "string",
+          "description": "New status: open|in-fix|fixed|wont-fix|duplicate"
+        },
+        "note": {
+          "type": "string",
+          "description": "Optional note about the transition"
+        }
+      }
+    },
+    "intent": [
+      "tempering",
+      "bug",
+      "status",
+      "update"
+    ],
+    "aliases": [
+      "bug-update",
+      "update-bug-status",
+      "bug-transition"
+    ],
+    "cost": "low",
+    "maxConcurrent": 5,
+    "addedIn": "2.47.0",
+    "prerequisites": [
+      "bug exists in .forge/bugs/"
+    ],
+    "produces": [],
+    "consumes": [
+      ".forge/bugs/<bugId>.json"
+    ],
+    "sideEffects": [
+      "updates .forge/bugs/<bugId>.json",
+      "broadcasts tempering-bug-status-changed hub event"
+    ],
+    "errors": {
+      "BUG_NOT_FOUND": {
+        "message": "Bug ID not found in registry",
+        "recovery": "Use forge_bug_list to find valid bug IDs"
+      },
+      "INVALID_TRANSITION": {
+        "message": "Status transition not allowed",
+        "recovery": "Check VALID_TRANSITIONS for allowed transitions from current status"
+      }
+    },
+    "example": {
+      "input": {
+        "bugId": "bug-2026-04-19-001",
+        "newStatus": "in-fix"
+      },
+      "output": {
+        "ok": true,
+        "bugId": "bug-2026-04-19-001",
+        "newStatus": "in-fix"
+      }
+    }
+  },
+  {
+    "name": "forge_bug_validate_fix",
+    "description": "Re-run the scanner(s) that discovered a bug to verify the fix. On pass: marks bug as 'fixed', dispatches commentValidatedFix to bug-adapter, broadcasts tempering-bug-validated-fixed event. On fail: appends attempt to bug.validationAttempts[], status unchanged.",
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "bugId"
+      ],
+      "properties": {
+        "bugId": {
+          "type": "string",
+          "description": "Bug registry ID to validate"
+        },
+        "scannerOverride": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Override scanner list (default: uses bug.scanner)"
+        },
+        "testNameOverride": {
+          "type": "string",
+          "description": "Override test name filter (default: uses bug.evidence.testName)"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      }
+    },
+    "intent": [
+      "validate-fix",
+      "bug-validate",
+      "closed-loop",
+      "verify-fix"
+    ],
+    "aliases": [
+      "bug-validate-fix",
+      "validate-bug-fix"
+    ],
+    "cost": "medium",
+    "maxConcurrent": 1,
+    "addedIn": "2.47.0",
+    "prerequisites": [
+      "Bug exists in .forge/bugs/",
+      "Scanner named by bug.scanner is available in tempering/scanners/"
+    ],
+    "produces": [],
+    "consumes": [
+      ".forge/bugs/<bugId>.json",
+      ".forge/tempering/*.json"
+    ],
+    "sideEffects": [
+      "re-runs scanner(s) that discovered the bug",
+      "appends bug.validationAttempts[]",
+      "on pass: updates bug status to 'fixed'",
+      "on pass: dispatches commentValidatedFix to bug-adapter",
+      "on pass: broadcasts tempering-bug-validated-fixed event",
+      "on pass with OpenBrain configured: saves L3 thought"
+    ],
+    "errors": {
+      "BUG_NOT_FOUND": {
+        "message": "Bug ID not found in registry",
+        "recovery": "Use forge_bug_list to find valid bug IDs"
+      },
+      "ALREADY_FIXED": {
+        "message": "Bug already in terminal status",
+        "recovery": "No action needed — bug is already resolved"
+      },
+      "SCANNER_UNAVAILABLE": {
+        "message": "Scanner that discovered the bug is no longer registered",
+        "recovery": "Use scannerOverride to specify an alternative scanner"
+      }
+    },
+    "example": {
+      "input": {
+        "bugId": "bug-2026-04-19-001"
+      },
+      "output": {
+        "bugId": "bug-2026-04-19-001",
+        "verdict": "fixed",
+        "scanners": [
+          "unit"
+        ],
+        "attempt": {
+          "at": "2026-04-19T12:00:00Z",
+          "scanners": [
+            "unit"
+          ],
+          "result": "pass"
+        }
+      }
+    }
+  },
+  {
+    "name": "forge_memory_capture",
+    "description": "Capture a thought, decision, or lesson into OpenBrain persistent memory. USE FOR: recording architecture decisions, patterns chosen, gotchas discovered, conventions established, or any cross-session knowledge that future AI sessions should know. Requires OpenBrain to be configured in .vscode/mcp.json or .claude/mcp.json.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "content": {
+          "type": "string",
+          "description": "The thought, decision, or lesson to capture. Be specific — future agents will read this."
+        },
+        "project": {
+          "type": "string",
+          "description": "Project name to scope the memory (default: read from .forge.json)"
+        },
+        "type": {
+          "type": "string",
+          "description": "Memory type: decision | lesson | convention | pattern | gotcha (default: decision)",
+          "enum": [
+            "decision",
+            "lesson",
+            "convention",
+            "pattern",
+            "gotcha"
+          ]
+        },
+        "source": {
+          "type": "string",
+          "description": "Source identifier (e.g. 'openclaw-trigger', 'plan-forge/slice-3'). Default: 'forge_memory_capture'"
+        },
+        "created_by": {
+          "type": "string",
+          "description": "Who captured this (e.g. 'openclaw', 'copilot-agent'). Default: 'forge_memory_capture'"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      },
+      "required": [
+        "content"
+      ]
+    },
+    "intent": [
+      "capture",
+      "remember",
+      "persist"
+    ],
+    "aliases": [
+      "save-thought",
+      "memory-broadcast"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "2.6.0",
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [],
+    "sideEffects": [
+      "broadcasts memory-captured hub event"
+    ],
+    "errors": {},
+    "example": {
+      "input": {
+        "content": "Use JWT for auth",
+        "type": "convention"
+      },
+      "output": {
+        "event": "memory-captured"
+      }
+    }
+  },
+  {
+    "name": "forge_generate_image",
+    "description": "Generate an image using AI image models (xAI Grok Aurora or OpenAI DALL-E). Provide a text description and get a generated image saved to disk. Supports format conversion — request WebP, PNG, AVIF, or JPEG regardless of what the API returns. Useful for creating logos, diagrams, UI mockups, icons, and illustrations during plan execution. Requires XAI_API_KEY (Grok) or OPENAI_API_KEY (DALL-E).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "description": "Detailed text description of the image to generate. Be specific about style, colors, composition, and content."
+        },
+        "outputPath": {
+          "type": "string",
+          "description": "File path to save the image (relative to project dir). The file extension determines the output format — e.g., 'assets/logo.webp' converts to WebP, 'docs/hero.png' converts to PNG."
+        },
+        "model": {
+          "type": "string",
+          "description": "Image model to use. Default: grok-imagine-image",
+          "enum": [
+            "grok-imagine-image",
+            "grok-imagine-image-pro",
+            "dall-e-3",
+            "dall-e-4",
+            "gpt-image-1"
+          ]
+        },
+        "size": {
+          "type": "string",
+          "description": "Image dimensions. Default: 1024x1024",
+          "enum": [
+            "1024x1024",
+            "1024x768",
+            "768x1024"
+          ]
+        },
+        "format": {
+          "type": "string",
+          "description": "Output format override (if different from file extension). Default: inferred from outputPath extension.",
+          "enum": [
+            "jpg",
+            "png",
+            "webp",
+            "avif"
+          ]
+        },
+        "quality": {
+          "type": "number",
+          "description": "Encoding quality 1-100. Default: 85. Lower = smaller file, less detail.",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      },
+      "required": [
+        "prompt",
+        "outputPath"
+      ]
+    },
+    "intent": [
+      "create",
+      "generate",
+      "image"
+    ],
+    "aliases": [
+      "image-gen",
+      "generate-artwork",
+      "create-image"
+    ],
+    "cost": "medium",
+    "maxConcurrent": 3,
+    "addedIn": "2.17.0",
+    "prerequisites": [
+      "XAI_API_KEY or OPENAI_API_KEY set"
+    ],
+    "produces": [
+      "<outputPath>"
+    ],
+    "consumes": [],
+    "sideEffects": [
+      "creates image file on disk",
+      "calls external API"
+    ],
+    "errors": {
+      "NO_API_KEY": {
+        "message": "No image generation API key found",
+        "recovery": "Set XAI_API_KEY or OPENAI_API_KEY in env or .forge/secrets.json"
+      },
+      "GENERATION_FAILED": {
+        "message": "Image generation failed",
+        "recovery": "Check the prompt, try a different model, or verify API key"
+      }
+    },
+    "example": {
+      "input": {
+        "prompt": "minimalist logo",
+        "outputPath": "assets/logo.webp"
+      },
+      "output": {
+        "file": "assets/logo.webp",
+        "model": "grok-imagine-image"
+      }
+    }
+  },
+  {
+    "name": "forge_drift_report",
+    "description": "Score the codebase against architecture guardrail rules. Tracks drift over time in .forge/drift-history.jsonl. Fires a bridge notification when score drops below threshold. With autoIncident, auto-captures incidents and generates fix proposals for high/critical violations.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Directory to scan (default: project root)"
+        },
+        "threshold": {
+          "type": "number",
+          "description": "Alert threshold 0-100. Fires drift-alert when score drops below this value. Default: 70",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "rules": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Guardrail rule IDs to check. Default: all rules (empty-catch, any-type, sync-over-async, sql-injection, deferred-work)"
+        },
+        "autoIncident": {
+          "type": "boolean",
+          "description": "Auto-capture incidents for high/critical violations and generate fix proposals. Default: false"
+        }
+      },
+      "required": []
+    },
+    "intent": [
+      "drift-detect",
+      "architecture-audit",
+      "guardrail-score"
+    ],
+    "aliases": [
+      "drift-check",
+      "drift-score",
+      "arch-drift"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "2.27.0",
+    "prerequisites": [
+      "git initialized"
+    ],
+    "produces": [
+      ".forge/drift-history.jsonl"
+    ],
+    "consumes": [
+      ".github/instructions/*.instructions.md",
+      "**/*.{js,ts,cs,py}"
+    ],
+    "sideEffects": [
+      "appends to .forge/drift-history.jsonl",
+      "may fire drift-alert hub event"
+    ],
+    "errors": {
+      "NO_SOURCE_FILES": {
+        "message": "No source files found to analyze",
+        "recovery": "Check path argument"
+      },
+      "ANALYSIS_FAILED": {
+        "message": "Rule analysis failed",
+        "recovery": "Check file permissions and path"
+      }
+    },
+    "example": {
+      "input": {
+        "threshold": 70
+      },
+      "output": {
+        "score": 85,
+        "violations": [],
+        "trend": "stable",
+        "delta": 0,
+        "historyLength": 1
+      }
+    }
+  },
+  {
+    "name": "forge_incident_capture",
+    "description": "Capture an incident — record description, severity, affected files, and optional resolution timestamp for MTTR tracking. Appends to .forge/incidents.jsonl. Dispatches a bridge notification to the onCall target configured in .forge.json when an incident is captured.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": "string",
+          "description": "Short description of the incident (e.g., 'API latency spike on /checkout')"
+        },
+        "severity": {
+          "type": "string",
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ],
+          "description": "Incident severity level. Default: medium"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Affected file paths (optional, for traceability)"
+        },
+        "resolvedAt": {
+          "type": "string",
+          "description": "ISO 8601 resolution timestamp for MTTR calculation. Omit at capture time — supply via a second call when the incident is resolved."
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      },
+      "required": [
+        "description"
+      ]
+    },
+    "intent": [
+      "capture-incident",
+      "record-outage",
+      "track-mttr"
+    ],
+    "aliases": [
+      "incident-capture",
+      "record-incident",
+      "log-incident"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "2.27.0",
+    "prerequisites": [
+      ".forge directory exists or will be created"
+    ],
+    "produces": [
+      ".forge/incidents.jsonl"
+    ],
+    "consumes": [
+      ".forge.json"
+    ],
+    "sideEffects": [
+      "appends to .forge/incidents.jsonl",
+      "may fire incident-captured hub event",
+      "may dispatch bridge notification to onCall target"
+    ],
+    "errors": {
+      "RESOLVED_BEFORE_CAPTURED": {
+        "message": "resolvedAt is earlier than capturedAt",
+        "recovery": "Check the resolvedAt timestamp — it must be after the incident was captured"
+      },
+      "INVALID_SEVERITY": {
+        "message": "severity must be low, medium, high, or critical",
+        "recovery": "Use one of: low, medium, high, critical"
+      }
+    },
+    "example": {
+      "input": {
+        "description": "API latency spike on /checkout",
+        "severity": "high",
+        "files": [
+          "src/api/checkout.ts"
+        ]
+      },
+      "output": {
+        "id": "inc-1700000000000",
+        "description": "API latency spike on /checkout",
+        "severity": "high",
+        "capturedAt": "2024-01-01T00:00:00.000Z",
+        "resolvedAt": null,
+        "mttr": null
+      }
+    }
+  },
+  {
+    "name": "forge_regression_guard",
+    "description": "Run regression guard — extract validation gate commands from plan files, execute them against the current codebase, and report passed/failed/blocked results. Guards against regressions when files change. Accepts a list of changed files and an optional plan to scope the check. Falls back to testCommand slice fields when no bash-block gates are present.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Changed file paths to guard (included in result for traceability). If omitted, all plan gates are checked."
+        },
+        "plan": {
+          "type": "string",
+          "description": "Path to a specific plan file to extract gates from (e.g., docs/plans/Phase-1-AUTH-PLAN.md). If omitted, all plan files in docs/plans/ are scanned."
+        },
+        "failFast": {
+          "type": "boolean",
+          "description": "If true, stop on first gate failure. Default: false"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      }
+    },
+    "intent": [
+      "regression-check",
+      "gate-validation",
+      "ci-guard"
+    ],
+    "aliases": [
+      "regression-guard",
+      "run-gates",
+      "guard-regressions"
+    ],
+    "cost": "medium",
+    "maxConcurrent": 1,
+    "addedIn": "2.29.0",
+    "prerequisites": [
+      "docs/plans/ contains at least one *-PLAN.md (or supply plan arg)"
+    ],
+    "produces": [
+      ".forge/telemetry/tool-calls.jsonl"
+    ],
+    "consumes": [
+      "docs/plans/*.md"
+    ],
+    "sideEffects": [
+      "executes shell commands from validation gates"
+    ],
+    "errors": {
+      "NO_PLANS_FOUND": {
+        "message": "No plan files found in docs/plans/",
+        "recovery": "Supply a plan path via the plan argument or create a plan file"
+      },
+      "GATE_FAILED": {
+        "message": "One or more validation gates failed",
+        "recovery": "Review failed gate output and fix the issue, then re-run"
+      }
+    },
+    "example": {
+      "input": {
+        "files": [
+          "src/api.ts",
+          "src/auth.ts"
+        ],
+        "failFast": false
+      },
+      "output": {
+        "gatesChecked": 3,
+        "passed": 3,
+        "failed": 0,
+        "blocked": 0,
+        "skipped": 0,
+        "success": true
+      }
+    }
+  },
+  {
+    "name": "forge_runbook",
+    "description": "Generate a human-readable operational runbook from a hardened plan file. Parses slices, scope contract, build/test commands, and validation gates into a structured Markdown document. Optionally appends recent incidents from .forge/incidents.jsonl for operational context. Saves to .forge/runbooks/<plan-name>-runbook.md and returns the output path.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "plan": {
+          "type": "string",
+          "description": "Path to the plan file (e.g., docs/plans/Phase-1-AUTH-PLAN.md)"
+        },
+        "includeIncidents": {
+          "type": "boolean",
+          "description": "Include recent incidents from .forge/incidents.jsonl for operational context. Default: true"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      },
+      "required": [
+        "plan"
+      ]
+    },
+    "intent": [
+      "generate-runbook",
+      "document-plan",
+      "ops-runbook"
+    ],
+    "aliases": [
+      "runbook-gen",
+      "plan-runbook",
+      "generate-ops-doc"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "2.30.0",
+    "prerequisites": [
+      "plan file exists"
+    ],
+    "produces": [
+      ".forge/runbooks/<plan-name>-runbook.md"
+    ],
+    "consumes": [
+      "docs/plans/*.md",
+      ".forge/incidents.jsonl"
+    ],
+    "sideEffects": [
+      "creates .forge/runbooks/ directory",
+      "writes runbook markdown file"
+    ],
+    "errors": {
+      "PLAN_NOT_FOUND": {
+        "message": "Plan file not found",
+        "recovery": "Check the plan path argument"
+      }
+    },
+    "example": {
+      "input": {
+        "plan": "docs/plans/Phase-1-AUTH-PLAN.md",
+        "includeIncidents": true
+      },
+      "output": {
+        "runbook": ".forge/runbooks/phase-1-auth-plan-runbook.md",
+        "slices": 4,
+        "generatedAt": "2024-01-01T00:00:00.000Z"
+      }
+    }
+  },
+  {
+    "name": "forge_hotspot",
+    "description": "Identify git churn hotspots — files that change most frequently. Helps prioritize refactoring, testing, and review effort. Caches results in .forge/hotspot-cache.json (24h TTL). Accepts --top N and --since filters.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "top": {
+          "type": "number",
+          "description": "Number of hotspot files to return. Default: 10",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "since": {
+          "type": "string",
+          "description": "Git log --since filter (e.g., '3 months ago', '2024-01-01'). Default: '6 months ago'"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      },
+      "required": []
+    },
+    "intent": [
+      "churn-analysis",
+      "hotspot-detect",
+      "risk-files"
+    ],
+    "aliases": [
+      "hotspot",
+      "churn",
+      "change-frequency"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "2.31.0",
+    "prerequisites": [
+      "git initialized"
+    ],
+    "produces": [
+      ".forge/hotspot-cache.json"
+    ],
+    "consumes": [
+      "git log history"
+    ],
+    "sideEffects": [
+      "writes .forge/hotspot-cache.json (24h cache TTL)"
+    ],
+    "errors": {
+      "GIT_LOG_FAILED": {
+        "message": "git log command failed",
+        "recovery": "Ensure you are inside a git repository with commit history"
+      },
+      "NO_COMMITS": {
+        "message": "No commits found in the given time range",
+        "recovery": "Widen the --since filter or check the branch has history"
+      }
+    },
+    "example": {
+      "input": {
+        "top": 5,
+        "since": "3 months ago"
+      },
+      "output": {
+        "generatedAt": "2024-01-01T00:00:00.000Z",
+        "since": "3 months ago",
+        "totalFiles": 42,
+        "showing": 5,
+        "hotspots": [
+          {
+            "file": "src/api.ts",
+            "commits": 28
+          }
+        ]
+      }
+    }
+  },
+  {
+    "name": "forge_health_trend",
+    "description": "Health trend analysis — aggregates drift scores, cost history, incident frequency, and model performance over a configurable time window. Returns per-metric summaries, an overall health score (0–100), and trend direction. Data sourced from .forge/ operational files.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "days": {
+          "type": "number",
+          "description": "Number of days of history to analyze. Default: 30"
+        },
+        "metrics": {
+          "type": "string",
+          "description": "Comma-separated metric filter (drift,cost,incidents,models). Default: all"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      }
+    },
+    "intent": [
+      "health",
+      "trend",
+      "monitoring",
+      "health-dna"
+    ],
+    "aliases": [
+      "health-analysis",
+      "system-health",
+      "health-report",
+      "health-dna"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "2.32.0",
+    "prerequisites": [],
+    "produces": [
+      ".forge/health-dna.jsonl"
+    ],
+    "consumes": [
+      ".forge/drift-history.jsonl",
+      ".forge/cost-history.json",
+      ".forge/incidents.jsonl",
+      ".forge/model-performance.json",
+      ".forge/regression-history.jsonl"
+    ],
+    "sideEffects": [
+      "writes .forge/health-dna.jsonl (project health fingerprint)"
+    ],
+    "errors": {
+      "NO_DATA": {
+        "message": "No operational data found for the requested time window",
+        "recovery": "Run forge tools (drift, run-plan, incident) to generate data, or widen the --days window"
+      }
+    },
+    "example": {
+      "input": {
+        "days": 30
+      },
+      "output": {
+        "days": 30,
+        "healthScore": 87,
+        "trend": "stable",
+        "dataPoints": 15,
+        "drift": {
+          "snapshots": 5,
+          "avg": 85
+        },
+        "cost": {
+          "runs": 3,
+          "totalUsd": 1.23
+        },
+        "incidents": {
+          "total": 2,
+          "open": 0
+        },
+        "models": {
+          "totalSlices": 10
+        },
+        "tests": {
+          "runs": 5,
+          "passRate": 1
+        },
+        "healthDNA": {
+          "driftAvg": 85,
+          "testPassRate": 1,
+          "incidentRate": 0.07
+        }
+      }
+    }
+  },
+  {
+    "name": "forge_alert_triage",
+    "description": "Triage open alerts — read incidents and drift violations, rank by priority (severity × recency), and return a prioritized list. Read-only: does not modify any data store. Tiebreak: more recent alerts rank higher when priority scores are equal.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "minSeverity": {
+          "type": "string",
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ],
+          "description": "Minimum severity to include. Default: low (all)"
+        },
+        "max": {
+          "type": "number",
+          "description": "Maximum number of alerts to return. Default: 20",
+          "minimum": 1,
+          "maximum": 200
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      },
+      "required": []
+    },
+    "intent": [
+      "triage-alerts",
+      "prioritize-incidents",
+      "rank-alerts"
+    ],
+    "aliases": [
+      "alert-triage",
+      "triage",
+      "prioritize-alerts"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "2.31.0",
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [
+      ".forge/incidents.jsonl",
+      ".forge/drift-history.jsonl"
+    ],
+    "sideEffects": [],
+    "errors": {
+      "NO_ALERTS": {
+        "message": "No open alerts found matching the filter criteria",
+        "recovery": "Lower --min-severity or check that incidents exist in .forge/incidents.jsonl"
+      },
+      "INVALID_SEVERITY": {
+        "message": "minSeverity must be low, medium, high, or critical",
+        "recovery": "Use one of: low, medium, high, critical"
+      }
+    },
+    "example": {
+      "input": {
+        "minSeverity": "medium",
+        "max": 5
+      },
+      "output": {
+        "total": 3,
+        "showing": 3,
+        "minSeverity": "medium",
+        "alerts": [
+          {
+            "source": "incident",
+            "id": "inc-1700000000000",
+            "description": "API latency spike",
+            "severity": "high",
+            "priority": 2.4,
+            "timestamp": "2024-01-01T00:00:00.000Z",
+            "files": [
+              "src/api.ts"
+            ]
+          }
+        ],
+        "generatedAt": "2024-01-01T00:00:00.000Z"
+      }
+    },
+    "notes": "Read-only — does not write to any data store. Priority = severity_weight × recency_factor. Tiebreak: more recent timestamp ranks higher."
+  },
+  {
+    "name": "forge_deploy_journal",
+    "description": "Record a deployment — log version, deployer, optional notes, and optional slice reference. Appends to .forge/deploy-journal.jsonl. Used by forge_incident_capture to correlate incidents with the most recent deploy.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "string",
+          "description": "Deployed version (e.g., 'v2.31.0', '1.0.0-rc.1')"
+        },
+        "by": {
+          "type": "string",
+          "description": "Who or what triggered the deploy (e.g., 'CI', 'alice'). Default: 'unknown'"
+        },
+        "notes": {
+          "type": "string",
+          "description": "Free-form deploy notes (e.g., 'hotfix for checkout timeout')"
+        },
+        "slice": {
+          "type": "string",
+          "description": "Plan slice reference (e.g., 'S3', 'Slice 7.2')"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      },
+      "required": [
+        "version"
+      ]
+    },
+    "intent": [
+      "record-deploy",
+      "log-deployment",
+      "deploy-tracking"
+    ],
+    "aliases": [
+      "deploy-journal",
+      "deploy-log",
+      "record-deployment"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "2.27.0",
+    "prerequisites": [
+      ".forge directory exists or will be created"
+    ],
+    "produces": [
+      ".forge/deploy-journal.jsonl"
+    ],
+    "consumes": [],
+    "sideEffects": [
+      "appends to .forge/deploy-journal.jsonl",
+      "may fire deploy-recorded hub event"
+    ],
+    "errors": {
+      "MISSING_VERSION": {
+        "message": "version is required",
+        "recovery": "Supply a version string (e.g., 'v2.31.0')"
+      }
+    },
+    "example": {
+      "input": {
+        "version": "v2.31.0",
+        "by": "CI",
+        "notes": "hotfix for checkout timeout",
+        "slice": "S3"
+      },
+      "output": {
+        "id": "deploy-1700000000000",
+        "version": "v2.31.0",
+        "by": "CI",
+        "notes": "hotfix for checkout timeout",
+        "slice": "S3",
+        "deployedAt": "2024-01-01T00:00:00.000Z"
+      }
+    }
+  },
+  {
+    "name": "forge_dep_watch",
+    "description": "Scan project dependencies for known vulnerabilities using npm audit. Compares against previous snapshot in .forge/deps-snapshot.json to detect new and resolved CVEs. Fires a bridge notification when new vulnerabilities are found. Non-npm projects degrade gracefully.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        },
+        "notify": {
+          "type": "boolean",
+          "description": "Send bridge notification for new vulnerabilities. Default: true"
+        }
+      },
+      "required": []
+    },
+    "intent": [
+      "dep-scan",
+      "cve-check",
+      "dependency-audit"
+    ],
+    "aliases": [
+      "dep-watch",
+      "dependency-watch",
+      "cve-scan"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "2.27.0",
+    "prerequisites": [
+      "package.json or package-lock.json in project root"
+    ],
+    "produces": [
+      ".forge/deps-snapshot.json"
+    ],
+    "consumes": [
+      "package.json",
+      "package-lock.json"
+    ],
+    "sideEffects": [
+      "writes .forge/deps-snapshot.json",
+      "may fire dep-vulnerability hub event"
+    ],
+    "errors": {
+      "NO_PACKAGE_JSON": {
+        "message": "No package.json found in project root",
+        "recovery": "Ensure you are in a Node.js project with a package.json file"
+      },
+      "AUDIT_FAILED": {
+        "message": "npm audit command failed",
+        "recovery": "Check npm is installed and network connectivity; non-npm projects return graceful degradation"
+      }
+    },
+    "example": {
+      "input": {
+        "path": ".",
+        "notify": true
+      },
+      "output": {
+        "newVulnerabilities": [],
+        "resolvedVulnerabilities": [],
+        "unchanged": 42,
+        "snapshot": {
+          "capturedAt": "2024-01-01T00:00:00.000Z",
+          "depCount": 42
+        }
+      }
+    }
+  },
+  {
+    "name": "forge_secret_scan",
+    "description": "Post-commit entropy analysis — scan git diff output for high-entropy strings that may be leaked secrets. Uses Shannon entropy with key-name heuristics. Never logs actual secret values — only file paths, line numbers, entropy scores, and <REDACTED> placeholders. Caches results in .forge/secret-scan-cache.json. Annotates deploy journal sidecar when last deploy matches HEAD.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "since": {
+          "type": "string",
+          "description": "Git ref or range to scan (e.g., 'HEAD~1', 'abc123..def456'). Default: HEAD~1"
+        },
+        "threshold": {
+          "type": "number",
+          "description": "Minimum Shannon entropy to flag (3.5–5.0). Default: 4.0",
+          "minimum": 3.5,
+          "maximum": 5
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      },
+      "required": []
+    },
+    "intent": [
+      "secret-scan",
+      "entropy-scan",
+      "leak-detection"
+    ],
+    "aliases": [
+      "secret-scan",
+      "scan-secrets",
+      "entropy-check"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "2.28.0",
+    "prerequisites": [
+      "git initialized"
+    ],
+    "produces": [
+      ".forge/secret-scan-cache.json"
+    ],
+    "consumes": [
+      "git diff output"
+    ],
+    "sideEffects": [
+      "writes .forge/secret-scan-cache.json",
+      "may annotate .forge/deploy-journal-meta.json sidecar"
+    ],
+    "securityNote": "Never logs actual secret values — only file paths, line numbers, entropy scores, and <REDACTED> placeholders. All findings are masked before caching or emitting telemetry.",
+    "errors": {
+      "GIT_UNAVAILABLE": {
+        "message": "git is not available or not a git repository",
+        "recovery": "Ensure you are inside a git repository — tool degrades gracefully returning { clean: null, scannedFiles: 0, findings: [], error: 'git unavailable' }"
+      },
+      "DIFF_TIMEOUT": {
+        "message": "git diff timed out (30s limit)",
+        "recovery": "Narrow the --since range to reduce diff size"
+      }
+    },
+    "example": {
+      "input": {
+        "since": "HEAD~1",
+        "threshold": 4
+      },
+      "output": {
+        "scannedAt": "2024-01-01T00:00:00.000Z",
+        "since": "HEAD~1",
+        "threshold": 4,
+        "scannedFiles": 5,
+        "clean": false,
+        "findings": [
+          {
+            "file": "src/config.js",
+            "line": 5,
+            "type": "api_key",
+            "entropyScore": 4.8,
+            "masked": "<REDACTED>",
+            "confidence": "high"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "name": "forge_env_diff",
+    "description": "Compare environment variable keys across .env files — detect missing keys between baseline and target environments. Compares key names only (never values). Caches results in .forge/env-diff-cache.json. Integrates with forge_runbook to surface environment key gaps.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "baseline": {
+          "type": "string",
+          "description": "Baseline .env file path (relative to project root). Default: .env"
+        },
+        "files": {
+          "type": "string",
+          "description": "Comma-separated target .env file paths to compare against baseline (e.g., '.env.staging,.env.production'). Default: auto-detect .env.* files"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      },
+      "required": []
+    },
+    "intent": [
+      "env-diff",
+      "environment-comparison",
+      "env-key-gaps"
+    ],
+    "aliases": [
+      "env-diff",
+      "compare-env",
+      "env-check"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "2.28.0",
+    "prerequisites": [
+      "baseline .env file exists"
+    ],
+    "produces": [
+      ".forge/env-diff-cache.json"
+    ],
+    "consumes": [
+      ".env",
+      ".env.*"
+    ],
+    "sideEffects": [
+      "writes .forge/env-diff-cache.json — key names only, no values"
+    ],
+    "securityNote": "Compares key names only — never reads, logs, or caches environment variable values.",
+    "errors": {
+      "BASELINE_NOT_FOUND": {
+        "message": "baseline .env file does not exist",
+        "recovery": "Create the baseline file or pass --baseline pointing to an existing .env file"
+      },
+      "TARGET_NOT_FOUND": {
+        "message": "one or more target .env files not found",
+        "recovery": "Check the --files argument or ensure .env.* files exist in the project root"
+      }
+    },
+    "example": {
+      "input": {
+        "baseline": ".env",
+        "files": ".env.staging,.env.production"
+      },
+      "output": {
+        "scannedAt": "2024-01-01T00:00:00.000Z",
+        "baseline": ".env",
+        "filesCompared": 2,
+        "pairs": [
+          {
+            "file": ".env.staging",
+            "missingInTarget": [
+              "STRIPE_KEY"
+            ],
+            "missingInBaseline": []
+          }
+        ],
+        "summary": {
+          "clean": false,
+          "totalGaps": 1,
+          "baselineKeyCount": 12
+        }
+      }
+    }
+  },
+  {
+    "name": "forge_fix_proposal",
+    "description": "Generate a 1-3 slice fix plan from regression, drift, incident, secret-scan, Crucible (stalled/orphan), or tempering-bug failure. Writes to docs/plans/auto/LIVEGUARD-FIX-<id>.md. Capped at one proposal per id.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "description": "Data source: 'regression', 'drift', 'incident', 'secret', 'crucible', or 'tempering-bug'. Default: auto-detect from latest data"
+        },
+        "incidentId": {
+          "type": "string",
+          "description": "Incident ID to generate fix for (required for incident source)"
+        },
+        "smeltId": {
+          "type": "string",
+          "description": "Crucible smelt ID to target (optional for crucible source; auto-selects worst offender when omitted)"
+        },
+        "bugId": {
+          "type": "string",
+          "description": "Bug registry ID (required when source is 'tempering-bug')"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      },
+      "required": []
+    },
+    "intent": [
+      "fix-proposal",
+      "auto-fix",
+      "liveguard-fix",
+      "generate-fix-plan"
+    ],
+    "aliases": [
+      "fix-proposal",
+      "auto-fix",
+      "generate-fix"
+    ],
+    "cost": "low",
+    "maxConcurrent": 3,
+    "addedIn": "2.29.0",
+    "prerequisites": [
+      "LiveGuard data available (drift, incidents, secret scan, Crucible funnel, or tempering bugs)"
+    ],
+    "produces": [
+      "docs/plans/auto/LIVEGUARD-FIX-<id>.md"
+    ],
+    "consumes": [
+      ".forge/drift-history.jsonl",
+      ".forge/incidents.jsonl",
+      ".forge/secret-scan-cache.json",
+      ".forge/regression-gates.json",
+      ".forge/crucible/*.json",
+      ".forge/hub-events.jsonl",
+      ".forge/bugs/*.json"
+    ],
+    "sideEffects": [
+      "writes docs/plans/auto/LIVEGUARD-FIX-{incidentId}.md",
+      "appends .forge/fix-proposals.json",
+      "broadcasts fix-proposal-ready event"
+    ],
+    "securityNote": "Plans are generated locally. One proposal per incidentId to prevent spam.",
+    "errors": {
+      "NO_DATA": {
+        "message": "No LiveGuard data found",
+        "recovery": "Run drift, incident-capture, regression-guard, secret-scan, start a Crucible smelt, or register a tempering bug first"
+      },
+      "ALREADY_EXISTS": {
+        "message": "Fix proposal already exists for this ID",
+        "recovery": "Check docs/plans/auto/ for existing plan"
+      },
+      "CRUCIBLE_HEALTHY": {
+        "message": "Crucible funnel is healthy — no stalled or orphan smelts to fix",
+        "recovery": "Wait for the watcher to flag a smelt, or pass a specific smeltId to force a proposal"
+      },
+      "MISSING_BUG_ID": {
+        "message": "bugId is required when source is tempering-bug",
+        "recovery": "Pass bugId from forge_bug_list"
+      },
+      "BUG_TERMINAL_STATUS": {
+        "message": "Bug is already in a terminal status (fixed/wont-fix/duplicate)",
+        "recovery": "No fix plan needed — bug is already resolved"
+      }
+    },
+    "example": {
+      "input": {
+        "source": "incident",
+        "incidentId": "INC-001"
+      },
+      "output": {
+        "fixId": "INC-001",
+        "plan": "docs/plans/auto/LIVEGUARD-FIX-INC-001.md",
+        "source": "incident",
+        "sliceCount": 2,
+        "alreadyExists": false
+      }
+    }
+  },
+  {
+    "name": "forge_quorum_analyze",
+    "description": "Assemble a structured 3-section quorum prompt from any LiveGuard data source. No LLM calls — returns the prompt for multi-model dispatch. Supports customQuestion freeform override (max 500 chars) and analysisGoal presets.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "description": "Data source: 'drift', 'incident', 'triage', 'runbook', 'fix-proposal'. Required."
+        },
+        "targetFile": {
+          "type": "string",
+          "description": "Specific data file path (relative to .forge/). Defaults to most recent for source type."
+        },
+        "analysisGoal": {
+          "type": "string",
+          "description": "Preset question: 'root-cause', 'risk-assess', 'fix-review', 'runbook-validate'. Ignored when customQuestion is provided."
+        },
+        "customQuestion": {
+          "type": "string",
+          "description": "Freeform question override (max 500 chars). Replaces the analysisGoal preset entirely."
+        },
+        "quorumSize": {
+          "type": "number",
+          "description": "Number of model votes to request in the prompt. Default: 3."
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      },
+      "required": []
+    },
+    "intent": [
+      "quorum-analyze",
+      "quorum-prompt",
+      "multi-model-analysis"
+    ],
+    "aliases": [
+      "quorum-analyze",
+      "quorum-prompt",
+      "multi-model"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "2.29.0",
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [
+      ".forge/drift-history.jsonl",
+      ".forge/incidents.jsonl",
+      ".forge/deploy-journal.jsonl",
+      ".forge/secret-scan-cache.json"
+    ],
+    "sideEffects": [
+      "none — read-only prompt assembly, no LLM calls"
+    ],
+    "securityNote": "customQuestion is XSS-validated and length-capped at 500 chars. No data leaves the server.",
+    "errors": {
+      "QUESTION_TOO_LONG": {
+        "message": "customQuestion exceeds 500 chars",
+        "recovery": "Shorten the question"
+      },
+      "XSS_DETECTED": {
+        "message": "customQuestion contains disallowed content",
+        "recovery": "Remove script tags or event handlers"
+      }
+    },
+    "example": {
+      "input": {
+        "source": "drift",
+        "customQuestion": "Why did drift score drop 15 points?"
+      },
+      "output": {
+        "quorumPrompt": "## Context\n...\n\n## Question\nWhy did drift score drop 15 points?\n\n## Voting Instruction\n...",
+        "promptTokenEstimate": 250,
+        "suggestedModels": [
+          "claude-opus-4.6",
+          "grok-4.20",
+          "gemini-3-pro-preview"
+        ],
+        "dataSnapshotAge": "12m ago",
+        "questionUsed": "Why did drift score drop 15 points?"
+      }
+    }
+  },
+  {
+    "name": "forge_liveguard_run",
+    "description": "Run all applicable LiveGuard checks in a single call and return a unified health report. Executes: drift, sweep, secret-scan, regression-guard, dep-watch, alert-triage, and health-trend. Optionally runs diff if a plan is specified. NOTE: May take 2-3 minutes for .NET projects (dep-watch runs `dotnet list package --vulnerable`). Set client timeout to at least 300 seconds.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "plan": {
+          "type": "string",
+          "description": "Plan file path for scope diff (optional). If omitted, diff is skipped."
+        },
+        "threshold": {
+          "type": "number",
+          "description": "Drift alert threshold 0-100. Default: 70"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      },
+      "required": []
+    },
+    "intent": [
+      "liveguard-run",
+      "health-check",
+      "full-scan",
+      "liveguard-all"
+    ],
+    "aliases": [
+      "liveguard-run",
+      "lg-run",
+      "full-check"
+    ],
+    "cost": "medium",
+    "maxConcurrent": 1,
+    "addedIn": "2.30.0",
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [
+      ".forge/drift-history.jsonl",
+      ".forge/incidents.jsonl",
+      ".forge/regression-history.jsonl",
+      ".forge/bugs/*.json",
+      ".forge/tempering/config.json"
+    ],
+    "sideEffects": [
+      "runs drift scan, sweep, secret scan, regression guard, dep watch, alert triage, health trend in sequence",
+      "broadcasts liveguard-tool-completed event"
+    ],
+    "securityNote": "Composite tool — executes multiple LiveGuard tools. No data leaves the server.",
+    "errors": {
+      "PARTIAL_FAILURE": {
+        "message": "One or more sub-tools failed",
+        "recovery": "Check individual tool errors in the response"
+      }
+    },
+    "example": {
+      "input": {
+        "plan": "docs/plans/Phase-1-AUTH-PLAN.md"
+      },
+      "output": {
+        "drift": {
+          "score": 100,
+          "appViolations": 0
+        },
+        "sweep": {
+          "appMarkers": 0
+        },
+        "secrets": {
+          "findings": 0
+        },
+        "regression": {
+          "gates": 2,
+          "passed": 2,
+          "failed": 0
+        },
+        "deps": {
+          "vulnerabilities": 0
+        },
+        "alerts": {
+          "critical": 0,
+          "high": 0
+        },
+        "health": {
+          "avgScore": 95,
+          "trend": "stable"
+        },
+        "overallStatus": "green"
+      }
+    }
+  },
+  {
+    "name": "forge_home_snapshot",
+    "description": "Read-only aggregated snapshot of the four shop-floor subsystems (Crucible, active runs, LiveGuard, Tempering) plus a trimmed activity feed. Use as a one-call health overview.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "targetPath": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        },
+        "activityTail": {
+          "type": "number",
+          "description": "Recent hub events to include (default: 25, clamped 1..200)"
+        }
+      },
+      "required": []
+    },
+    "intent": [
+      "shop-floor-overview",
+      "health-summary",
+      "home-tab-data"
+    ],
+    "aliases": [
+      "home-snapshot",
+      "shop-overview",
+      "project-health"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "2.48.0",
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [
+      ".forge/crucible/**/*.json",
+      ".forge/runs/**/events.log",
+      ".forge/drift-history.jsonl",
+      ".forge/incidents.jsonl",
+      ".forge/fix-proposals.jsonl",
+      ".forge/tempering/**/*.json",
+      ".forge/hub-events.jsonl"
+    ],
+    "sideEffects": [],
+    "securityNote": "Read-only aggregator. No data leaves the server.",
+    "errors": {
+      "IO_FAILURE": {
+        "message": "Failed to read project state",
+        "recovery": "Check file permissions and .forge directory integrity"
+      }
+    },
+    "example": {
+      "input": {
+        "activityTail": 25
+      },
+      "output": {
+        "ok": true,
+        "quadrants": {
+          "crucible": {
+            "total": 42,
+            "finalized": 30,
+            "stalled": 2,
+            "lastActivity": null
+          },
+          "activeRuns": {
+            "inFlight": 1,
+            "lastSliceOutcome": "pass",
+            "lastRunId": "run_001",
+            "lastRunAgeMs": 12000
+          },
+          "liveguard": {
+            "driftScore": 87,
+            "openIncidents": 0,
+            "openFixProposals": 1,
+            "lastDriftAgeMs": 300000
+          },
+          "tempering": {
+            "coverageStatus": "ok",
+            "openBugs": 3,
+            "lastScanAgeMs": 60000
+          }
+        },
+        "activityFeed": []
+      }
+    }
+  },
+  {
+    "name": "forge_review_add",
+    "description": "Add an item to the review queue. Used by producers (crucible/tempering/bug classifier) when human judgment is required.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "enum": [
+            "crucible-stall",
+            "tempering-quorum-inconclusive",
+            "tempering-baseline",
+            "bug-classify",
+            "fix-plan-approval"
+          ]
+        },
+        "severity": {
+          "type": "string",
+          "enum": [
+            "blocker",
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "context": {
+          "type": "object"
+        },
+        "correlationId": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "source",
+        "severity",
+        "title"
+      ]
+    },
+    "intent": [
+      "review",
+      "queue",
+      "add",
+      "human-judgment"
+    ],
+    "aliases": [
+      "review-add",
+      "add-review",
+      "queue-add"
+    ],
+    "cost": "low",
+    "maxConcurrent": 5,
+    "addedIn": "2.49.0",
+    "writesFiles": true,
+    "risk": "low",
+    "prerequisites": [],
+    "produces": [
+      ".forge/review-queue/<itemId>.json"
+    ],
+    "consumes": [],
+    "sideEffects": [
+      "creates .forge/review-queue/ on first run",
+      "writes review item JSON record",
+      "broadcasts review-queue-item-added hub event"
+    ],
+    "errors": {
+      "ERR_INVALID_SOURCE": {
+        "message": "Source not in allowed set",
+        "recovery": "Use one of: crucible-stall, tempering-quorum-inconclusive, tempering-baseline, bug-classify, fix-plan-approval"
+      },
+      "ERR_INVALID_SEVERITY": {
+        "message": "Severity not in allowed set",
+        "recovery": "Use one of: blocker, high, medium, low"
+      },
+      "ERR_INVALID_TITLE": {
+        "message": "Title is required and must be non-empty",
+        "recovery": "Provide a descriptive title string"
+      },
+      "ERR_INVALID_CONTEXT": {
+        "message": "Context must be an object",
+        "recovery": "Pass context as a JSON object, not a string"
+      }
+    },
+    "example": {
+      "input": {
+        "source": "crucible-stall",
+        "severity": "high",
+        "title": "Smelt stalled for 7+ days"
+      },
+      "output": {
+        "_v": 1,
+        "itemId": "review-2026-04-19-001",
+        "source": "crucible-stall",
+        "severity": "high",
+        "status": "open"
+      }
+    }
+  },
+  {
+    "name": "forge_review_list",
+    "description": "List review queue items with optional filters and pagination.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "open",
+            "resolved",
+            "deferred"
+          ]
+        },
+        "source": {
+          "type": "string"
+        },
+        "severity": {
+          "type": "string"
+        },
+        "correlationId": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "number"
+        },
+        "cursor": {
+          "type": "number"
+        },
+        "path": {
+          "type": "string"
+        }
+      }
+    },
+    "intent": [
+      "review",
+      "queue",
+      "list",
+      "query"
+    ],
+    "aliases": [
+      "review-list",
+      "list-reviews",
+      "review-query"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "2.49.0",
+    "writesFiles": false,
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [
+      ".forge/review-queue/*.json"
+    ],
+    "sideEffects": [],
+    "errors": {},
+    "example": {
+      "input": {
+        "status": "open",
+        "severity": "high"
+      },
+      "output": {
+        "ok": true,
+        "count": 1,
+        "items": [
+          {
+            "itemId": "review-2026-04-19-001",
+            "source": "crucible-stall",
+            "severity": "high",
+            "status": "open"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "name": "forge_review_resolve",
+    "description": "Resolve an open review queue item (approve/reject/defer). Emits hub event and captures L3 memory.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "itemId": {
+          "type": "string"
+        },
+        "resolution": {
+          "type": "string",
+          "enum": [
+            "approve",
+            "reject",
+            "defer"
+          ]
+        },
+        "resolvedBy": {
+          "type": "string"
+        },
+        "note": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "itemId",
+        "resolution",
+        "resolvedBy"
+      ]
+    },
+    "intent": [
+      "review",
+      "resolve",
+      "approve",
+      "reject",
+      "defer"
+    ],
+    "aliases": [
+      "review-resolve",
+      "resolve-review"
+    ],
+    "cost": "low",
+    "maxConcurrent": 5,
+    "addedIn": "2.49.0",
+    "writesFiles": true,
+    "risk": "low",
+    "prerequisites": [
+      "Review item exists and is open"
+    ],
+    "produces": [],
+    "consumes": [
+      ".forge/review-queue/<itemId>.json"
+    ],
+    "sideEffects": [
+      "updates review item status to resolved/deferred",
+      "broadcasts review-queue-item-resolved hub event",
+      "captures L3 memory via captureMemory (structured tags only, no free-text note)"
+    ],
+    "errors": {
+      "ERR_ITEM_NOT_FOUND": {
+        "message": "Review item not found",
+        "recovery": "Use forge_review_list to find valid item IDs"
+      },
+      "ERR_ALREADY_RESOLVED": {
+        "message": "Item is already resolved or deferred",
+        "recovery": "No action needed — item is already resolved"
+      },
+      "ERR_INVALID_RESOLUTION": {
+        "message": "Resolution not in allowed set",
+        "recovery": "Use one of: approve, reject, defer"
+      },
+      "ERR_INVALID_RESOLVED_BY": {
+        "message": "resolvedBy is required and must be non-empty",
+        "recovery": "Provide the name/identifier of who resolved it"
+      }
+    },
+    "example": {
+      "input": {
+        "itemId": "review-2026-04-19-001",
+        "resolution": "approve",
+        "resolvedBy": "engineer-1"
+      },
+      "output": {
+        "itemId": "review-2026-04-19-001",
+        "status": "resolved",
+        "resolution": "approve",
+        "resolvedBy": "engineer-1"
+      }
+    }
+  },
+  {
+    "name": "forge_delegate_to_agent",
+    "description": "Route a tempering bug to the appropriate agent/skill for read-only analysis.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "bugId": {
+          "type": "string"
+        },
+        "targetPath": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "analyst",
+            "review-queue-item"
+          ]
+        },
+        "dryRun": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "bugId",
+        "mode"
+      ]
+    },
+    "intent": [
+      "delegate",
+      "route",
+      "agent",
+      "analyze",
+      "triage"
+    ],
+    "aliases": [
+      "delegate-bug",
+      "route-to-agent",
+      "agent-delegate"
+    ],
+    "cost": "low",
+    "maxConcurrent": 5,
+    "addedIn": "2.50.0",
+    "writesFiles": true,
+    "risk": "low",
+    "prerequisites": [
+      "Bug must exist in .forge/bugs/"
+    ],
+    "produces": [
+      ".forge/tempering/findings/<bugId>.json",
+      ".forge/tempering/delegations.jsonl",
+      ".forge/review-queue/<itemId>.json"
+    ],
+    "consumes": [
+      ".forge/bugs/<bugId>.json",
+      ".forge/tempering/config.json"
+    ],
+    "sideEffects": [
+      "appends delegation record to .forge/tempering/delegations.jsonl",
+      "creates review queue item when mode=review-queue-item",
+      "broadcasts tempering-bug-delegated hub event",
+      "captures L3 memory (metadata only — bugId, agent, severity)"
+    ],
+    "errors": {
+      "BUG_NOT_FOUND": {
+        "message": "Bug ID not found in .forge/bugs/",
+        "recovery": "Use forge_bug_list to find valid bug IDs"
+      },
+      "NO_ROUTE": {
+        "message": "No routing rule matches this bug type/severity",
+        "recovery": "Bug may need manual triage — check type and severity"
+      }
+    },
+    "example": {
+      "input": {
+        "bugId": "BUG-20260419-001",
+        "mode": "analyst",
+        "dryRun": true
+      },
+      "output": {
+        "ok": true,
+        "routed": true,
+        "bugId": "BUG-20260419-001",
+        "agent": "security",
+        "skill": "security-audit",
+        "mode": "analyst",
+        "dryRun": true,
+        "reviewItemId": null,
+        "analystPrompt": "## Agent Analysis Request..."
+      }
+    }
+  },
+  {
+    "name": "forge_notify_send",
+    "description": "Send a notification directly via a named adapter, bypassing routing rules. Use for ad-hoc agent dispatches.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "via": {
+          "type": "string",
+          "description": "Adapter name (webhook, slack, teams, etc.)"
+        },
+        "payload": {
+          "type": "object",
+          "description": "Event payload to send"
+        },
+        "formattedMessage": {
+          "type": "string",
+          "description": "Pre-formatted message text (optional)"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      },
+      "required": [
+        "via",
+        "payload"
+      ]
+    },
+    "intent": [
+      "notify",
+      "send",
+      "webhook",
+      "alert"
+    ],
+    "aliases": [
+      "send-notification",
+      "notify-send"
+    ],
+    "cost": "low",
+    "maxConcurrent": 5,
+    "addedIn": "2.50.0",
+    "prerequisites": [
+      ".forge/notifications/config.json exists with adapter configured"
+    ],
+    "produces": [],
+    "consumes": [
+      ".forge/notifications/config.json"
+    ],
+    "sideEffects": [
+      "sends HTTP request to configured adapter endpoint",
+      "emits notification-sent or notification-send-failed hub event"
+    ],
+    "errors": {
+      "ERR_ADAPTER_NOT_FOUND": {
+        "message": "Adapter not registered",
+        "recovery": "Check adapter name; available: webhook"
+      },
+      "ERR_LITERAL_SECRET": {
+        "message": "URL contains literal secret",
+        "recovery": "Use ${env:VAR_NAME} template instead of literal URLs"
+      },
+      "ERR_SEND_TIMEOUT": {
+        "message": "Adapter send timed out (5s)",
+        "recovery": "Check endpoint responsiveness"
+      }
+    },
+    "example": {
+      "input": {
+        "via": "webhook",
+        "payload": {
+          "type": "incident-opened",
+          "severity": "high"
+        },
+        "formattedMessage": "Critical incident opened"
+      },
+      "output": {
+        "ok": true,
+        "adapter": "webhook",
+        "statusCode": 200,
+        "deliveryMs": 142
+      }
+    }
+  },
+  {
+    "name": "forge_notify_test",
+    "description": "Test notification adapter configuration. Validates config and optionally sends a test payload.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "adapter": {
+          "type": "string",
+          "description": "Adapter name to test (default: all)"
+        },
+        "dryRun": {
+          "type": "boolean",
+          "description": "If true, only validate config without sending (default: true)"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      }
+    },
+    "intent": [
+      "notify",
+      "test",
+      "validate",
+      "check"
+    ],
+    "aliases": [
+      "test-notification",
+      "notify-test"
+    ],
+    "cost": "low",
+    "maxConcurrent": 5,
+    "addedIn": "2.50.0",
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [
+      ".forge/notifications/config.json"
+    ],
+    "sideEffects": [
+      "optionally sends test HTTP request when dryRun=false"
+    ],
+    "errors": {},
+    "example": {
+      "input": {
+        "adapter": "webhook"
+      },
+      "output": {
+        "ok": true,
+        "adapters": [
+          {
+            "name": "webhook",
+            "configValid": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "name": "forge_search",
+    "description": "Search across forge artifacts — runs, bugs, incidents, tempering, hub events, review queue, memories, and plans. Reads existing L2 files and optional L3 OpenBrain index. Returns ranked results with snippets.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Free-text search (case-insensitive, whitespace-tokenized)"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Filter: hit must have ALL listed tags"
+        },
+        "since": {
+          "type": "string",
+          "description": "ISO timestamp or relative (24h, 7d, 2w, 30m)"
+        },
+        "correlationId": {
+          "type": "string",
+          "description": "Filter + score boost on exact match"
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Limit to source types (run, bug, incident, tempering, hub-event, review, memory, plan)"
+        },
+        "limit": {
+          "type": "number",
+          "description": "Max results (default 50, max 200)"
+        }
+      },
+      "required": [
+        "query"
+      ]
+    },
+    "intent": [
+      "search",
+      "find",
+      "query",
+      "lookup"
+    ],
+    "aliases": [
+      "search-forge",
+      "find-artifact"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "2.51.0",
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [
+      ".forge/runs/",
+      ".forge/bugs/",
+      ".forge/incidents/",
+      ".forge/tempering/",
+      ".forge/hub-events.jsonl",
+      ".forge/review-queue.json",
+      ".forge/liveguard-memories.jsonl",
+      "docs/plans/"
+    ],
+    "sideEffects": [],
+    "writesFiles": false,
+    "network": false,
+    "risk": "low",
+    "errors": {
+      "ERR_BAD_SINCE": {
+        "message": "Invalid since value",
+        "recovery": "Use ISO timestamp or relative: 24h, 7d, 2w, 30m"
+      }
+    },
+    "example": {
+      "input": {
+        "query": "blocker",
+        "tags": [
+          "review"
+        ],
+        "limit": 10
+      },
+      "output": {
+        "hits": [
+          {
+            "source": "bug",
+            "recordRef": "BUG-42",
+            "snippet": "…critical blocker in auth…",
+            "score": 2.1
+          }
+        ],
+        "total": 1,
+        "truncated": false,
+        "durationMs": 45
+      }
+    }
+  },
+  {
+    "name": "forge_timeline",
+    "description": "Unified chronological view across all forge event sources with correlationId grouping. Merges hub-events, runs, memories, openbrain, watch, tempering, bugs, and incidents into a single timeline.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "type": "string",
+          "description": "Start of window: ISO timestamp or relative (24h, 7d, 30m). Default: now - 24h"
+        },
+        "to": {
+          "type": "string",
+          "description": "End of window: ISO timestamp or relative. Default: now"
+        },
+        "correlationId": {
+          "type": "string",
+          "description": "Filter to a single correlation thread"
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Limit to source types: hub-event, run, memory, openbrain, watch, tempering, bug, incident"
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Filter by event type (glob supported: slice-*, tempering-*)"
+        },
+        "groupBy": {
+          "type": "string",
+          "enum": [
+            "time",
+            "correlation"
+          ],
+          "description": "Default: time (flat chronological). correlation: group by correlationId"
+        },
+        "limit": {
+          "type": "number",
+          "description": "Max results (default 500, max 2000)"
+        }
+      },
+      "required": []
+    },
+    "intent": [
+      "timeline",
+      "history",
+      "chronological",
+      "events",
+      "what-happened"
+    ],
+    "aliases": [
+      "timeline",
+      "event-history",
+      "forge-timeline"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "2.53.0",
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [
+      ".forge/hub-events.jsonl",
+      ".forge/runs/",
+      ".forge/liveguard-memories.jsonl",
+      ".forge/openbrain-queue.jsonl",
+      ".forge/watch-history.jsonl",
+      ".forge/tempering/",
+      ".forge/bugs/",
+      ".forge/incidents/"
+    ],
+    "sideEffects": [],
+    "writesFiles": false,
+    "network": false,
+    "risk": "low",
+    "errors": {
+      "ERR_BAD_SINCE": {
+        "message": "Invalid from/to value",
+        "recovery": "Use ISO timestamp or relative: 24h, 7d, 30m"
+      },
+      "ERR_LIMIT_EXCEEDED": {
+        "message": "Limit exceeds max 2000",
+        "recovery": "Reduce limit to 2000 or less"
+      }
+    },
+    "example": {
+      "input": {
+        "from": "24h",
+        "sources": [
+          "run",
+          "bug"
+        ],
+        "groupBy": "correlation",
+        "limit": 100
+      },
+      "output": {
+        "threads": [
+          {
+            "correlationId": "abc-123",
+            "events": [
+              "..."
+            ],
+            "firstTs": "...",
+            "lastTs": "...",
+            "sources": [
+              "run"
+            ]
+          }
+        ],
+        "total": 1,
+        "truncated": false,
+        "durationMs": 42
+      }
+    }
+  },
+  {
+    "name": "forge_doctor_quorum",
+    "description": "Preflight quorum viability check — probes all models in a preset against the current runtime and reports availability, synthesis viability, and fallback recommendations.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "preset": {
+          "type": "string",
+          "enum": [
+            "power",
+            "speed",
+            "all"
+          ],
+          "description": "Quorum preset to check. 'all' checks both presets. Default: all"
+        }
+      },
+      "required": []
+    },
+    "intent": [
+      "quorum viability",
+      "model availability",
+      "runtime check",
+      "doctor",
+      "preflight"
+    ],
+    "aliases": [
+      "doctor-quorum",
+      "quorum-doctor",
+      "quorum-viability"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "2.54.0",
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [],
+    "sideEffects": [],
+    "writesFiles": false,
+    "network": false,
+    "risk": "low",
+    "errors": {
+      "ERR_UNKNOWN_PRESET": {
+        "message": "Unknown preset name",
+        "recovery": "Use 'power', 'speed', or 'all'"
+      }
+    },
+    "example": {
+      "input": {
+        "preset": "all"
+      },
+      "output": {
+        "runtime": "cli-gh",
+        "presets": [
+          {
+            "preset": "power",
+            "declared": 3,
+            "effective": 1,
+            "synthesisViable": false,
+            "recommendation": {
+              "preset": "speed",
+              "reason": "..."
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "name": "forge_testbed_run",
+    "description": "Run a testbed scenario against an external testbed repository. Executes preflight checks, setup, execution steps, and assertions, then writes defect findings. Use dryRun to validate without executing.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "scenarioId": {
+          "type": "string",
+          "description": "Scenario fixture ID (filename stem under docs/plans/testbed-scenarios/)"
+        },
+        "testbedPath": {
+          "type": "string",
+          "description": "Path to testbed repository (default: from .forge.json testbed.path)"
+        },
+        "dryRun": {
+          "type": "boolean",
+          "description": "If true, skip execute and teardown steps (default: false)"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      },
+      "required": [
+        "scenarioId"
+      ]
+    },
+    "intent": [
+      "test",
+      "validate",
+      "testbed",
+      "scenario",
+      "end-to-end"
+    ],
+    "aliases": [
+      "run-testbed",
+      "testbed-scenario",
+      "testbed-run"
+    ],
+    "cost": "high",
+    "maxConcurrent": 1,
+    "addedIn": "2.56.0",
+    "prerequisites": [
+      "testbed repo exists",
+      "scenario fixture in docs/plans/testbed-scenarios/"
+    ],
+    "produces": [
+      "docs/plans/testbed-findings/*.json"
+    ],
+    "consumes": [
+      "docs/plans/testbed-scenarios/*.json",
+      ".forge.json"
+    ],
+    "sideEffects": [
+      "writes defect log",
+      "emits hub events",
+      "acquires testbed lock"
+    ],
+    "writesFiles": true,
+    "network": false,
+    "risk": "medium",
+    "errors": {
+      "ERR_TESTBED_NOT_FOUND": {
+        "message": "Testbed repo not found",
+        "recovery": "Set testbed.path in .forge.json"
+      },
+      "ERR_TESTBED_DIRTY": {
+        "message": "Testbed has uncommitted changes",
+        "recovery": "Commit or stash changes in testbed"
+      },
+      "ERR_TESTBED_LOCKED": {
+        "message": "Another scenario is running",
+        "recovery": "Wait or remove stale .forge/testbed.lock"
+      },
+      "ERR_SCENARIO_NOT_FOUND": {
+        "message": "Scenario fixture not found",
+        "recovery": "Check docs/plans/testbed-scenarios/"
+      },
+      "ERR_TESTBED_HEAD_MISMATCH": {
+        "message": "Testbed HEAD does not match expected commit",
+        "recovery": "Check expectedHead in scenario fixture"
+      }
+    },
+    "example": {
+      "input": {
+        "scenarioId": "happy-path-01"
+      },
+      "output": {
+        "scenarioId": "happy-path-01",
+        "status": "passed",
+        "durationMs": 60000
+      }
+    }
+  },
+  {
+    "name": "forge_master_ask",
+    "description": "Ask Forge-Master to reason about Plan Forge workflows — ideate features via Crucible, troubleshoot failures, query run status, or get operational guidance. Classifies intent, fetches memory context, and orchestrates read-only tool calls. Returns reply text, tool call history, token counts, and session ID for conversation continuity.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string",
+          "description": "Your question or request for Forge-Master"
+        },
+        "sessionId": {
+          "type": "string",
+          "description": "Session ID for conversation continuity (omit for new session)"
+        },
+        "maxToolCalls": {
+          "type": "number",
+          "description": "Max tool calls per turn (default: 5, max: 10)"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      },
+      "required": [
+        "message"
+      ]
+    },
+    "intent": [
+      "ask",
+      "reason",
+      "ideate",
+      "forge-master",
+      "crucible"
+    ],
+    "aliases": [
+      "ask_forge",
+      "forge_ask"
+    ],
+    "cost": "high",
+    "maxConcurrent": 1,
+    "addedIn": "2.61.0",
+    "prerequisites": [
+      "ANTHROPIC_API_KEY or OPENAI_API_KEY or XAI_API_KEY"
+    ],
+    "produces": [
+      ".forge/brain/session.forgemaster.*.json"
+    ],
+    "consumes": [
+      ".forge.json",
+      ".forge/brain/**"
+    ],
+    "sideEffects": [
+      "writes session memory via brain.remember"
+    ],
+    "writesFiles": false,
+    "network": true,
+    "risk": "low",
+    "agentGuidance": "Use forge_master_ask for multi-step reasoning about Plan Forge workflows — ideating features, troubleshooting failures, querying run status, or funneling ideas into Crucible smelts. Forge-Master classifies intent, fetches memory context, and orchestrates tool calls on your behalf. Prefer this over manually calling individual forge tools when the task is open-ended or involves multiple steps. Do NOT use for direct file edits or code generation — Forge-Master is read-only.",
+    "errors": {
+      "reasoning_model_unavailable": {
+        "message": "No reasoning provider configured",
+        "recovery": "Set ANTHROPIC_API_KEY, OPENAI_API_KEY, or XAI_API_KEY, or configure forgeMaster.reasoningModel in .forge.json"
+      }
+    },
+    "example": {
+      "input": {
+        "message": "I want to add multi-tenant billing to my pipeline",
+        "sessionId": "sess-abc123"
+      },
+      "output": {
+        "sessionId": "sess-abc123",
+        "reply": "I've started a Crucible smelt for your multi-tenant billing feature...",
+        "toolCalls": [
+          {
+            "name": "forge_crucible_submit",
+            "args": {},
+            "resultSummary": "Smelt created",
+            "costUSD": 0.002
+          }
+        ],
+        "tokensIn": 1200,
+        "tokensOut": 450,
+        "totalCostUSD": 0.003,
+        "truncated": false
+      }
+    }
+  },
+  {
+    "name": "forge_testbed_findings",
+    "description": "Query testbed defect-log findings. Returns findings filtered by status, severity, or date. Read-only — does not modify any files.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "description": "Filter by status (open, fixed, wontfix, duplicate)"
+        },
+        "severity": {
+          "type": "string",
+          "description": "Filter by severity (blocker, high, medium, low, polish)"
+        },
+        "since": {
+          "type": "string",
+          "description": "Filter by date — only findings on or after this ISO 8601 date (e.g. 2026-04-01)"
+        },
+        "limit": {
+          "type": "number",
+          "description": "Max findings to return (default: 50)"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      },
+      "required": []
+    },
+    "intent": [
+      "query",
+      "findings",
+      "defect-log",
+      "testbed"
+    ],
+    "aliases": [
+      "testbed-findings",
+      "list-findings"
+    ],
+    "cost": "low",
+    "maxConcurrent": 5,
+    "addedIn": "2.56.0",
+    "prerequisites": [],
+    "produces": [
+      "findings list"
+    ],
+    "consumes": [
+      "docs/plans/testbed-findings/*.json"
+    ],
+    "sideEffects": [],
+    "writesFiles": false,
+    "network": false,
+    "risk": "low",
+    "errors": {},
+    "example": {
+      "input": {
+        "status": "open",
+        "severity": "high"
+      },
+      "output": {
+        "findings": [],
+        "total": 0,
+        "truncated": false
+      }
+    }
+  },
+  {
+    "name": "forge_testbed_happypath",
+    "description": "Run all happy-path testbed scenarios sequentially. Returns aggregated pass/fail results with per-scenario details. Use dryRun to validate without executing.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "testbedPath": {
+          "type": "string",
+          "description": "Path to testbed repository (default: from .forge.json testbed.path)"
+        },
+        "dryRun": {
+          "type": "boolean",
+          "description": "If true, skip execute and teardown steps (default: false)"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      },
+      "required": []
+    },
+    "intent": [
+      "test",
+      "validate",
+      "happy-path",
+      "testbed",
+      "smoke-test"
+    ],
+    "aliases": [
+      "testbed-happypath",
+      "run-happypath",
+      "happy-path-test"
+    ],
+    "cost": "high",
+    "maxConcurrent": 1,
+    "addedIn": "2.57.0",
+    "prerequisites": [
+      "testbed repo exists",
+      "happy-path scenarios in docs/plans/testbed-scenarios/"
+    ],
+    "produces": [
+      "docs/plans/testbed-findings/*.json"
+    ],
+    "consumes": [
+      "docs/plans/testbed-scenarios/*.json"
+    ],
+    "sideEffects": [
+      "writes defect log",
+      "emits hub events",
+      "acquires testbed lock"
+    ],
+    "writesFiles": true,
+    "network": false,
+    "risk": "medium",
+    "errors": {
+      "ERR_TESTBED_NOT_FOUND": {
+        "message": "Testbed repo not found",
+        "recovery": "Set testbed.path in .forge.json"
+      },
+      "ERR_TESTBED_LOCKED": {
+        "message": "Another scenario is running",
+        "recovery": "Wait or remove stale .forge/testbed.lock"
+      },
+      "ERR_NO_HAPPYPATH_SCENARIOS": {
+        "message": "No happy-path scenarios found",
+        "recovery": "Add happy-path scenarios to docs/plans/testbed-scenarios/"
+      }
+    },
+    "example": {
+      "input": {
+        "dryRun": true
+      },
+      "output": {
+        "passed": 5,
+        "failed": 0,
+        "total": 5,
+        "results": []
+      }
+    }
+  },
+  {
+    "name": "forge_meta_bug_file",
+    "description": "File a self-repair meta-bug against Plan Forge itself. Creates (or deduplicates) a GitHub issue for plan, orchestrator, or prompt defects discovered during execution. Auto-attaches trajectory context when slice reference is provided.",
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "class",
+        "title",
+        "symptom"
+      ],
+      "properties": {
+        "class": {
+          "type": "string",
+          "enum": [
+            "plan-defect",
+            "orchestrator-defect",
+            "prompt-defect"
+          ],
+          "description": "Category of the meta-bug"
+        },
+        "title": {
+          "type": "string",
+          "description": "Short title describing the defect"
+        },
+        "symptom": {
+          "type": "string",
+          "description": "Observable symptom that revealed the defect"
+        },
+        "workaround": {
+          "type": "string",
+          "description": "Workaround applied during execution"
+        },
+        "filePaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Files affected by or related to the defect"
+        },
+        "slice": {
+          "type": "string",
+          "description": "Slice reference (e.g. '3') — triggers auto-pull of trajectory excerpt"
+        },
+        "plan": {
+          "type": "string",
+          "description": "Plan name or path for context"
+        },
+        "severity": {
+          "type": "string",
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ],
+          "description": "Defect severity (default: medium)"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      }
+    },
+    "intent": [
+      "self-repair",
+      "meta-bug",
+      "file",
+      "defect",
+      "plan-defect"
+    ],
+    "aliases": [
+      "meta-bug-file",
+      "file-meta-bug",
+      "self-repair-bug"
+    ],
+    "cost": "low",
+    "maxConcurrent": 5,
+    "addedIn": "2.62.2",
+    "prerequisites": [
+      "gh CLI authenticated OR GITHUB_TOKEN"
+    ],
+    "produces": [
+      "GitHub issue (or comment on existing issue)"
+    ],
+    "consumes": [
+      ".forge.json",
+      ".forge/trajectories/**"
+    ],
+    "sideEffects": [
+      "creates or comments on GitHub issue in self-repair repo"
+    ],
+    "writesFiles": false,
+    "network": true,
+    "risk": "low",
+    "errors": {
+      "NO_TOKEN": {
+        "message": "No GitHub token available",
+        "recovery": "Set GITHUB_TOKEN env var, add to .forge/secrets.json, or authenticate with gh CLI"
+      },
+      "NO_REPO": {
+        "message": "Could not resolve target repository",
+        "recovery": "Set meta.selfRepairRepo in .forge.json (e.g. 'owner/repo')"
+      },
+      "CREATE_FAILED": {
+        "message": "GitHub issue creation failed",
+        "recovery": "Check token permissions and repository access"
+      },
+      "INVALID_CLASS": {
+        "message": "Bug class not in META_BUG_CLASSES enum",
+        "recovery": "Use one of: plan-defect, orchestrator-defect, prompt-defect"
+      },
+      "UNEXPECTED": {
+        "message": "Unexpected error during filing",
+        "recovery": "Check logs and retry"
+      }
+    },
+    "example": {
+      "input": {
+        "class": "plan-defect",
+        "title": "Gate uses wrong grep pattern",
+        "symptom": "Slice 3 gate failed",
+        "severity": "high"
+      },
+      "output": {
+        "ok": true,
+        "issueNumber": 42,
+        "url": "https://github.com/owner/repo/issues/42",
+        "deduped": false
+      }
+    }
+  },
+  {
+    "name": "forge_graph_query",
+    "description": "Query the Plan Forge knowledge graph. Returns subgraph of nodes and edges matching the query. Supports phase, file, recent-changes, and neighbor traversal queries.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "phase",
+            "file",
+            "recent-changes",
+            "neighbors"
+          ],
+          "description": "Query type"
+        },
+        "filter": {
+          "type": "string",
+          "description": "Phase name, file path, node ID, or keyword depending on query type"
+        },
+        "since": {
+          "type": "string",
+          "description": "ISO timestamp or relative (90d, 30d, 7d) for recent-changes queries"
+        },
+        "edgeType": {
+          "type": "string",
+          "description": "Filter neighbors by edge type (optional)"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      },
+      "required": [
+        "type"
+      ]
+    },
+    "intent": [
+      "graph",
+      "query",
+      "knowledge-graph",
+      "artifacts",
+      "relationships"
+    ],
+    "aliases": [
+      "graph-query",
+      "kg-query",
+      "forge-graph"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "2.74.0",
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [
+      ".forge/graph/snapshot.json",
+      "docs/plans/",
+      ".forge/runs/",
+      ".forge/bugs/"
+    ],
+    "sideEffects": [],
+    "writesFiles": false,
+    "network": false,
+    "risk": "low",
+    "errors": {
+      "ERR_BAD_TYPE": {
+        "message": "Unknown query type",
+        "recovery": "Use phase, file, recent-changes, or neighbors"
+      }
+    },
+    "example": {
+      "input": {
+        "type": "recent-changes",
+        "since": "30d"
+      },
+      "output": {
+        "nodes": [
+          {
+            "id": "commit-abc123",
+            "type": "Commit",
+            "name": "feat(graph): add builder"
+          }
+        ],
+        "edges": [],
+        "nodeCount": 1,
+        "edgeCount": 0
+      }
+    }
+  },
+  {
+    "name": "forge_patterns_list",
+    "description": "List recurring patterns detected across plan runs. Returns gate-failure recurrences, model failure rates, slice flap patterns, and cost anomalies. Advisory only — never injected into plan hardener or executor.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "since": {
+          "type": "string",
+          "description": "ISO timestamp — only patterns observed after this date (optional)"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      }
+    }
+  }
+]

@@ -91,6 +91,7 @@ import {
   handleFinalize as crucibleHandleFinalize,
   handleList as crucibleHandleList,
   handleAbandon as crucibleHandleAbandon,
+  CrucibleFinalizeRefusedError,
 } from "./crucible-server.mjs";
 import { loadCrucibleConfig, saveCrucibleConfig } from "./crucible-config.mjs";
 import { readManualImports } from "./crucible-enforce.mjs";
@@ -2508,6 +2509,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
+      if (err instanceof CrucibleFinalizeRefusedError) {
+        const payload = { ok: false, refused: true, criticalGaps: err.payload.criticalGaps, hint: err.payload.hint };
+        return { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }] };
+      }
       return { content: [{ type: "text", text: `Crucible finalize error: ${err.message}` }], isError: true };
     }
   }

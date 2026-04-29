@@ -17,6 +17,7 @@ import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "nod
 import { resolve, join } from "node:path";
 
 import { loadCrucibleConfig } from "./crucible-config.mjs";
+import { inferRepoCommands } from "./crucible-infer.mjs";
 
 import {
   claimPhaseNumber,
@@ -80,6 +81,34 @@ export function computeStaleDefaultsWarnings(smelt, projectDir) {
   }
   return warnings;
 }
+
+// ─── Finalize refusal ────────────────────────────────────────────────
+
+/**
+ * Thrown by handleFinalize when the rendered draft still contains unresolved
+ * markers for fields that are required before a plan can be executed.
+ *
+ * `payload.criticalGaps` lists the question IDs that must be answered.
+ */
+export class CrucibleFinalizeRefusedError extends Error {
+  constructor(payload) {
+    super(payload.hint || "finalize refused");
+    this.name = "CrucibleFinalizeRefusedError";
+    this.payload = payload;
+  }
+}
+
+/**
+ * Fields whose absence blocks finalization entirely. A plan that still has
+ * {{TBD: <any of these>}} cannot be executed by the orchestrator.
+ */
+const CRITICAL_FIELDS = new Set([
+  "scope-in",
+  "scope-files",
+  "validation-gates",
+  "validation",
+  "forbidden-actions",
+]);
 
 // ─── Lane inference ──────────────────────────────────────────────────
 
@@ -264,6 +293,20 @@ export function handleFinalize({ id, projectDir, hub }) {
     throw new Error(`smelt is ${smelt.status}, cannot finalize`);
   }
 
+  // Render a preview draft (no phaseName yet) to detect critical TBD gaps
+  // before committing to a phase number or writing any file.
+  const previewBody = renderDraft(smelt, { cwd: projectDir });
+  const allUnresolved = extractUnresolvedFields(previewBody);
+  const criticalGaps = allUnresolved.filter((f) => CRITICAL_FIELDS.has(f));
+
+  if (criticalGaps.length > 0) {
+    throw new CrucibleFinalizeRefusedError({
+      id,
+      criticalGaps,
+      hint: "Run forge_crucible_ask with these question IDs to fill the gaps before finalizing.",
+    });
+  }
+
   const existing = collectExistingPhaseNames(projectDir);
   const phaseName = nextPhaseNumber(existing);
   claimPhaseNumber(projectDir, phaseName, id);
@@ -279,7 +322,7 @@ export function handleFinalize({ id, projectDir, hub }) {
     `source: ${smelt.source}\n` +
     `---\n\n`;
   const bodySmelt = { ...smelt, phaseName };
-  const body = renderDraft(bodySmelt);
+  const body = renderDraft(bodySmelt, { cwd: projectDir });
   const markdown = frontmatter + body;
   writeFileSync(planPath, markdown, "utf-8");
 
@@ -308,9 +351,14 @@ export function handleFinalize({ id, projectDir, hub }) {
     nextStep: "step2-harden-plan.prompt.md",
   });
 
+  const inferred = inferRepoCommands(projectDir);
+  const unresolvedFields = allUnresolved.filter((f) => !CRITICAL_FIELDS.has(f));
+
   return {
     phaseName,
     planPath,
+    unresolvedFields,
+    inferred,
     hardenerInvoked: false, // Slice 6 wires the Plan Hardener handoff
     hardenerHandoff: {
       event: "crucible-handoff-to-hardener",

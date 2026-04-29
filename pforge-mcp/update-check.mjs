@@ -23,6 +23,47 @@ export function cachePath(projectDir) {
 }
 
 /**
+ * Resolve the framework's own version — the VERSION file shipped with the
+ * running install. Always reads from the install's repo root (computed from
+ * `serverDir`) so the answer is independent of `PROJECT_DIR`, the user's
+ * `cwd`, and any stale literals baked into source.
+ *
+ * Resolution order (first match wins):
+ *   1. `<serverDir>/../VERSION`  — repo root when server.mjs lives in `pforge-mcp/`
+ *   2. `<serverDir>/VERSION`     — server.mjs at repo root (defensive)
+ *   3. `<projectDir>/VERSION`    — caller-provided fallback (legacy callers)
+ *   4. `"unknown"`               — never throws, never invents a number
+ *
+ * Issue #106: previously the MCP handshake hard-coded "2.12.3" and the
+ * capabilities generator fell back to "2.14.0" when VERSION was missing.
+ * Both produced stale or fictitious version strings in the boot log,
+ * dashboard, and `/api/version` endpoint after self-update. This helper
+ * collapses all framework-version reads to a single source of truth.
+ *
+ * @param {{ serverDir: string, projectDir?: string|null }} opts
+ * @returns {string} bare version string ("2.81.0", "2.82.0-dev", or "unknown")
+ */
+export function resolveFrameworkVersion({ serverDir, projectDir = null } = {}) {
+  if (!serverDir || typeof serverDir !== "string") return "unknown";
+  const candidates = [
+    resolve(serverDir, "..", "VERSION"),
+    resolve(serverDir, "VERSION"),
+  ];
+  if (projectDir && typeof projectDir === "string") {
+    candidates.push(resolve(projectDir, "VERSION"));
+  }
+  for (const path of candidates) {
+    try {
+      if (existsSync(path)) {
+        const v = readFileSync(path, "utf-8").trim();
+        if (v) return v.replace(/^v/i, "");
+      }
+    } catch { /* keep looking */ }
+  }
+  return "unknown";
+}
+
+/**
  * Compare two semver-like version strings. Returns:
  *   -1  if `a` < `b`
  *    0  if equal

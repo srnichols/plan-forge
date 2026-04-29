@@ -115,7 +115,7 @@ import { runTemperingDrain } from "./tempering/drain.mjs";
 import { routeFinding } from "./tempering/triage.mjs";
 // Phase-39 Slice 7 — audit-loop activation surface
 import { loadAuditConfig, saveAuditConfig, shouldAutoDrain } from "./tempering/auto-activate.mjs";
-import { checkForUpdate, detectCorruptInstall } from "./update-check.mjs";
+import { checkForUpdate, detectCorruptInstall, resolveFrameworkVersion } from "./update-check.mjs";
 // Phase FORGE-SHOP-04 Slice 04.1 — Global search
 import { search as forgeSearch } from "./search/core.mjs";
 // Phase FORGE-SHOP-05 Slice 05.1 — Unified timeline
@@ -124,9 +124,17 @@ import express from "express";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+// Issue #106: single source of truth for the framework's own version.
+// Reads `<install root>/VERSION` (independent of PROJECT_DIR / cwd) so the
+// MCP handshake, /api/version endpoint, capabilities digest, and boot-time
+// update-check all report the same number — and that number is always the
+// version of the running install, not a stale literal baked into source.
+const FRAMEWORK_VERSION = resolveFrameworkVersion({ serverDir: __dirname });
+
 // ─── Config ───────────────────────────────────────────────────────────
 const { resolved: PROJECT_DIR, source: PROJECT_DIR_SOURCE } = resolveProjectRoot({ env: process.env, argv: process.argv, serverDir: __dirname, cwd: process.cwd() });
 console.error(`[pforge-mcp] PROJECT_DIR=${PROJECT_DIR} (source=${PROJECT_DIR_SOURCE})`);
+console.error(`[pforge-mcp] FRAMEWORK_VERSION=${FRAMEWORK_VERSION}`);
 const HTTP_PORT = parseInt(process.env.PLAN_FORGE_HTTP_PORT || "3100", 10);
 const IS_WINDOWS = process.platform === "win32";
 const PFORGE = IS_WINDOWS ? "powershell.exe -NoProfile -ExecutionPolicy Bypass -File pforge.ps1" : "bash pforge.sh";
@@ -516,7 +524,11 @@ function callOrgRules({ format = "github", output: outputFile = null } = {}, cwd
   } catch { /* keep folder name */ }
 
   const versionFile = join(cwd, "VERSION");
-  const version = existsSync(versionFile) ? readFileSync(versionFile, "utf-8").trim() : "2.14.0";
+  // Issue #106: when cwd is a sub-tree without a VERSION file, fall back to
+  // the install's own VERSION instead of a stale literal.
+  const version = existsSync(versionFile)
+    ? readFileSync(versionFile, "utf-8").trim()
+    : FRAMEWORK_VERSION;
 
   function stripFrontmatter(raw) {
     const stripped = raw.replace(/^---[\s\S]*?---\s*/m, "").trim();
@@ -1846,7 +1858,8 @@ export async function invokeForgeTool(toolName, args = {}) {
 
 // ─── MCP Server ───────────────────────────────────────────────────────
 const server = new Server(
-  { name: "plan-forge-mcp", version: "2.12.3" },
+  // Issue #106: report the running install's version, not a stale literal.
+  { name: "plan-forge-mcp", version: FRAMEWORK_VERSION },
   { capabilities: { tools: {} } }
 );
 
@@ -5413,7 +5426,8 @@ export async function runDrainPass(cwd, source, hub, deps = {}) {
     durationMs: Date.now() - t0,
   };
 }
-
+
+
 /** Reset the planPath-alias deprecation warning flag. Exported for testing only. */
 export function __resetPlanPathAliasWarned() {
   _planPathAliasWarned = false;
@@ -5477,9 +5491,14 @@ export function createExpressApp() {
   // REST API: GET /api/version — server + framework version
   app.get("/api/version", (_req, res) => {
     try {
+      // Issue #106: prefer PROJECT_DIR's VERSION when available (lets the
+      // dashboard show the framework version of the project being managed),
+      // but always fall back to FRAMEWORK_VERSION (the install's own VERSION)
+      // so we never report "unknown" or a stale literal.
       const versionFile = resolve(PROJECT_DIR, "VERSION");
-      const frameworkVersion = existsSync(versionFile) ? readFileSync(versionFile, "utf-8").trim() : "unknown";
-      // Server and framework ship together — use the repo VERSION for both.
+      const projectVersion = existsSync(versionFile) ? readFileSync(versionFile, "utf-8").trim() : null;
+      const frameworkVersion = projectVersion || FRAMEWORK_VERSION;
+      // Server and framework ship together — use the same value for both.
       res.json({ server: frameworkVersion, framework: frameworkVersion });
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
@@ -5490,8 +5509,12 @@ export function createExpressApp() {
   // Pass ?force=1 to bypass the 24h cache and hit GitHub now (manual check).
   app.get("/api/update-status", async (req, res) => {
     try {
+      // Issue #106: use FRAMEWORK_VERSION (install's own VERSION) so the
+      // dashboard's update banner compares against the running framework,
+      // not whatever VERSION happens to live in PROJECT_DIR.
       const versionFile = resolve(PROJECT_DIR, "VERSION");
-      const current = existsSync(versionFile) ? readFileSync(versionFile, "utf-8").trim() : null;
+      const projectVersion = existsSync(versionFile) ? readFileSync(versionFile, "utf-8").trim() : null;
+      const current = (FRAMEWORK_VERSION && FRAMEWORK_VERSION !== "unknown") ? FRAMEWORK_VERSION : projectVersion;
       if (!current) return res.json({ available: false, reason: "no-version-file" });
       const force = req.query?.force === "1" || req.query?.force === "true";
       const result = await checkForUpdate({ currentVersion: current, projectDir: PROJECT_DIR, force });
@@ -5541,8 +5564,10 @@ export function createExpressApp() {
 
       // 1. Check for updates (force refresh)
       send("checking", "Checking for updates...");
+      // Issue #106: framework's own VERSION drives self-update, not PROJECT_DIR.
       const versionFile = resolve(PROJECT_DIR, "VERSION");
-      const currentVersion = existsSync(versionFile) ? readFileSync(versionFile, "utf-8").trim() : null;
+      const projectVersion = existsSync(versionFile) ? readFileSync(versionFile, "utf-8").trim() : null;
+      const currentVersion = (FRAMEWORK_VERSION && FRAMEWORK_VERSION !== "unknown") ? FRAMEWORK_VERSION : projectVersion;
       if (!currentVersion) {
         send("failed", "VERSION file not found");
         return res.end();
@@ -7706,9 +7731,15 @@ async function main() {
     // Phase UPDATE-01 — non-blocking, best-effort update check.
     // Runs once per boot, cached 24h. Honors PFORGE_NO_UPDATE_CHECK=1.
     // Failures are silent so a bad network never impedes startup.
+    //
+    // Issue #106: report the install's VERSION (FRAMEWORK_VERSION), NOT
+    // PROJECT_DIR/VERSION. The boot log message
+    //   "[update-check] A newer Plan Forge release is available: ... (you are on vX.Y.Z)"
+    // is about the FRAMEWORK, so the comparison must use the framework's own
+    // VERSION — otherwise misresolved PROJECT_DIRs (issues #105/#125) cause
+    // the log to claim the user is on an unrelated number from their cwd.
     try {
-      const versionFile = resolve(PROJECT_DIR, "VERSION");
-      const current = existsSync(versionFile) ? readFileSync(versionFile, "utf-8").trim() : null;
+      const current = FRAMEWORK_VERSION && FRAMEWORK_VERSION !== "unknown" ? FRAMEWORK_VERSION : null;
       if (current) {
         // Delay 2s so startup logs stay clean and we don't race the hub.
         setTimeout(() => {

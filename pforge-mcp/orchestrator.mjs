@@ -9995,16 +9995,19 @@ export function buildEstimate(plan, model, cwd, quorumConfig = null, resumeFrom 
  * Run auto-sweep after all slices pass.
  * Calls pforge sweep and captures results.
  */
-function runAutoSweep(cwd) {
+export function runAutoSweep(cwd) {
   const IS_WINDOWS = process.platform === "win32";
   const pforge = IS_WINDOWS
     ? `powershell.exe -NoProfile -ExecutionPolicy Bypass -File pforge.ps1 sweep`
     : `bash pforge.sh sweep`;
   try {
-    const output = execSync(pforge, { cwd, encoding: "utf-8", timeout: 30_000, env: { ...process.env, NO_COLOR: "1" } });
+    const output = execSync(pforge, { cwd, encoding: "utf-8", timeout: 120_000, maxBuffer: 64 * 1024 * 1024, env: { ...process.env, NO_COLOR: "1" } });
     const markerCount = (output.match(/TODO|FIXME|HACK|stub|placeholder/gi) || []).length;
     return { ran: true, clean: markerCount === 0, markerCount, output: output.trim() };
   } catch (err) {
+    if (err.code === "ENOBUFS" || err instanceof RangeError) {
+      return { ran: false, clean: false, error: "ENOBUFS: sweep output exceeded 64MB buffer", markerCount: 0, output: "" };
+    }
     return { ran: true, clean: false, error: (err.stderr || err.message || "").trim() };
   }
 }

@@ -72,7 +72,9 @@ export class CrucibleEnforcementError extends Error {
   constructor(planPath, frontmatter = {}) {
     super(
       "Plan missing crucibleId — run it through Crucible first " +
-      "(forge_crucible_submit), or pass --manual-import to bypass (logged).",
+      "(forge_crucible_submit), or bypass: CLI '--manual-import' / " +
+      "MCP body { manualImport: true, manualImportSource?, manualImportReason? }. " +
+      "Bypass is logged.",
     );
     this.name = "CrucibleEnforcementError";
     this.code = "CRUCIBLE_ID_REQUIRED";

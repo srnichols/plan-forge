@@ -3191,7 +3191,7 @@ export async function runPlan(planPath, options = {}) {
   }
 
   // Pre-flight: lint gate commands before burning time on execution
-  const gateLint = lintGateCommands(planPath);
+  const gateLint = lintGateCommands(planPath, cwd);
   if (!gateLint.passed) {
     const errorSummary = gateLint.errors.map(e => `  ❌ ${e.message}`).join("\n");
     const warnSummary = gateLint.warnings.map(w => `  ⚠️ ${w.message}`).join("\n");
@@ -3325,64 +3325,93 @@ export async function runPlan(planPath, options = {}) {
   const memoryEnabled = isOpenBrainConfigured(cwd);
   const projectName = loadProjectName(cwd);
 
-  // Quorum mode (v2.5)
+  // Quorum mode (v2.5) — fix #122: respect .forge.json quorum.enabled when quorum==="auto"
   let quorumConfig = null;
   if (quorum) {
     quorumConfig = loadQuorumConfig(cwd, quorumPreset);
-    quorumConfig.enabled = true;
+
+    // "auto" (CLI default): preserve quorumConfig.enabled from .forge.json.
+    // Absence of .forge.json quorum.enabled ≙ legacy default ≙ enabled=true.
+    // true / "true" / preset: caller explicitly requested quorum — force enabled regardless of config.
+    const callerExplicit = quorum === true || quorum === "true" || quorumPreset !== null;
+
+    let configHasExplicitEnabled = false;
+    if (!callerExplicit) {
+      try {
+        const fp = resolve(cwd, ".forge.json");
+        if (existsSync(fp)) {
+          const raw = JSON.parse(readFileSync(fp, "utf-8"));
+          configHasExplicitEnabled = raw.quorum != null && typeof raw.quorum === "object" && "enabled" in raw.quorum;
+        }
+      } catch { /* ignore — use legacy default */ }
+    }
+
+    if (callerExplicit) {
+      quorumConfig.enabled = true;
+    } else if (!configHasExplicitEnabled) {
+      // Legacy default: absence of quorum.enabled in .forge.json means enabled
+      quorumConfig.enabled = true;
+    }
+    // else: quorum === "auto" AND .forge.json has explicit enabled — use the loaded value
+
     if (quorum === "auto") {
       quorumConfig.auto = true;
-    } else if (quorum === true) {
+    } else if (quorum === true || quorum === "true") {
       quorumConfig.auto = false; // Force quorum on all slices
     }
     if (quorumThreshold !== null && typeof quorumThreshold === "number") {
       quorumConfig.threshold = quorumThreshold;
     }
 
-    // H.3: Probe model availability — drop unavailable models early with a single warning
-    const { available: availableModels, dropped: droppedModels } = filterQuorumModels(quorumConfig);
+    const quorumSource = callerExplicit ? "cli" : (configHasExplicitEnabled ? "config" : "default");
+    console.error(`[quorum] enabled=${quorumConfig.enabled} auto=${quorumConfig.auto} source=${quorumSource}`);
 
-    if (availableModels.length === 0) {
-      const err = new Error(
-        `[quorum] no available models. Dropped: ${droppedModels.map((d) => `${d.model} (${d.reason})`).join(", ")}. ` +
-        `Install hints: ${droppedModels.map((d) => d.install).filter(Boolean).join(" | ")}`,
-      );
-      err.exitCode = 2;
-      throw err;
-    }
+    // H.3: Probe model availability — only when quorum is actually enabled
+    if (quorumConfig.enabled) {
+      const { available: availableModels, dropped: droppedModels } = filterQuorumModels(quorumConfig);
 
-    if (quorumConfig.strictAvailability && droppedModels.length > 0) {
-      const err = new Error(
-        `[quorum] strictAvailability=true and ${droppedModels.length} model(s) unavailable: ` +
-        droppedModels.map((d) => `${d.model} (${d.reason})`).join(", "),
-      );
-      err.exitCode = 2;
-      throw err;
-    }
-
-    if (availableModels.length === 1) {
-      console.error(
-        `[quorum] only 1 of ${quorumConfig.models.length} models available — degrading to single-model ` +
-        `(no multi-perspective synthesis benefit); set quorum.strictAvailability=true to fail instead`,
-      );
-    }
-
-    quorumConfig.models = availableModels;
-    quorumConfig.droppedModels = droppedModels;
-
-    // Probe reviewerModel separately — warn but do not block (existing fallback handles it)
-    if (quorumConfig.reviewerModel) {
-      const reviewerResult = probeQuorumModelAvailability(quorumConfig.reviewerModel);
-      if (!reviewerResult.available) {
-        console.error(
-          `[quorum] reviewer model ${quorumConfig.reviewerModel} unavailable: ${reviewerResult.reason} — ` +
-          `existing reviewer fallback will be used`,
+      if (availableModels.length === 0) {
+        const err = new Error(
+          `[quorum] no available models. Dropped: ${droppedModels.map((d) => `${d.model} (${d.reason})`).join(", ")}. ` +
+          `Install hints: ${droppedModels.map((d) => d.install).filter(Boolean).join(" | ")}`,
         );
+        err.exitCode = 2;
+        throw err;
+      }
+
+      if (quorumConfig.strictAvailability && droppedModels.length > 0) {
+        const err = new Error(
+          `[quorum] strictAvailability=true and ${droppedModels.length} model(s) unavailable: ` +
+          droppedModels.map((d) => `${d.model} (${d.reason})`).join(", "),
+        );
+        err.exitCode = 2;
+        throw err;
+      }
+
+      if (availableModels.length === 1) {
+        console.error(
+          `[quorum] only 1 of ${quorumConfig.models.length} models available — degrading to single-model ` +
+          `(no multi-perspective synthesis benefit); set quorum.strictAvailability=true to fail instead`,
+        );
+      }
+
+      quorumConfig.models = availableModels;
+      quorumConfig.droppedModels = droppedModels;
+
+      // Probe reviewerModel separately — warn but do not block (existing fallback handles it)
+      if (quorumConfig.reviewerModel) {
+        const reviewerResult = probeQuorumModelAvailability(quorumConfig.reviewerModel);
+        if (!reviewerResult.available) {
+          console.error(
+            `[quorum] reviewer model ${quorumConfig.reviewerModel} unavailable: ${reviewerResult.reason} — ` +
+            `existing reviewer fallback will be used`,
+          );
+        }
       }
     }
   }
 
-  eventBus.emit("run-started", { ...runMeta, quorum: quorumConfig ? { enabled: true, auto: quorumConfig.auto, threshold: quorumConfig.threshold } : null });
+  eventBus.emit("run-started", { ...runMeta, quorum: quorumConfig ? { enabled: quorumConfig.enabled, auto: quorumConfig.auto, threshold: quorumConfig.threshold } : null });
 
   // GX.2 (v2.36): L3 → L1 preload. Emit a `memory-preload` event right after
   // run-started carrying the deterministic search-hints derived from the plan.

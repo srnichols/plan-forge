@@ -78,6 +78,13 @@ COMMANDS:
   fm-session purge --all       Purge all sessions
   fm-recall query <text>       Query the cross-session recall index (top-3 results)
   fm-recall rebuild            Rebuild the recall index from all fm-sessions
+  timeline                     Unified chronological event timeline (hub-events, runs, bugs, forge-master, …)
+    --window <15m|1h|6h|24h|7d|30d>  Time window (default: 24h)
+    --source <name,...>               Comma-separated source filter
+    --correlation <id>               Filter to a single correlationId thread
+    --group-by <time|correlation>    Group mode (default: time)
+    --limit <n>                      Max events (default: 100)
+    --json                           Output raw JSON
   graph rebuild                Rebuild the knowledge graph snapshot
   graph stats                  Print node count by type from graph snapshot
   graph query [type]           Query the knowledge graph (phase, file, recent-changes, neighbors)
@@ -5001,6 +5008,16 @@ cmd_fm_recall() {
     node "$script_path" "$@"
 }
 
+# ─── Command: timeline ───────────────────────────────────────────────
+cmd_timeline() {
+    local script_path="$REPO_ROOT/scripts/timeline.mjs"
+    if [[ ! -f "$script_path" ]]; then
+        echo "ERROR: timeline script not found at $script_path" >&2
+        exit 1
+    fi
+    node "$script_path" "$@"
+}
+
 # ─── Command: patterns ───────────────────────────────────────────
 cmd_patterns() {
     local script_path="$REPO_ROOT/scripts/patterns.mjs"
@@ -5210,6 +5227,7 @@ case "$COMMAND" in
     audit-loop)   cmd_audit_loop "$@" ;;
     fm-session)   cmd_fm_session "$@" ;;
     fm-recall)    cmd_fm_recall "$@" ;;
+    timeline)     cmd_timeline "$@" ;;
     patterns)     cmd_patterns "$@" ;;
     graph)        cmd_graph "$@" ;;
     digest)       cmd_digest "$@" ;;

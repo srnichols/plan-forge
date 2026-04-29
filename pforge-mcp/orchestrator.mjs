@@ -3568,13 +3568,23 @@ export async function runPlan(planPath, options = {}) {
       plan.dag.nodes,
       executionOrder,
       async (slice) => {
+        // Bug #123: capture HEAD before the slice so we can deterministically
+        // detect commits made by the worker itself (gh-copilot, claude CLI).
+        // Without this, autoCommitSliceIfDirty saw a clean tree post-slice
+        // and reported "clean-tree" \u2014 even though the worker had committed
+        // multiple times \u2014 producing non-deterministic per-slice commit
+        // counts in run summaries.
+        let startSha = null;
+        try {
+          startSha = execSync("git rev-parse HEAD", { cwd, encoding: "utf-8", timeout: 5_000 }).trim();
+        } catch { /* not a git repo or detached \u2014 fall through */ }
         const result = await executeSlice(slice, {
           cwd, model: effectiveModel, modelRouting, mode, runDir, maxRetries,
           memoryEnabled, projectName, planName: basename(planPath, ".md"),
           quorumConfig, escalationChain, eventBus,
         });
         if (result.status === "passed") {
-          result.autoCommit = autoCommitSliceIfDirty({ slice, cwd, mode, eventBus });
+          result.autoCommit = autoCommitSliceIfDirty({ slice, cwd, mode, eventBus, startSha });
         }
         return result;
       },
@@ -6323,7 +6333,7 @@ export function resetPostSliceHookFired() {
  * @param {{ emit: Function }} [params.eventBus]
  * @returns {{ committed: boolean, reason?: string, sha?: string, message?: string, error?: string }}
  */
-export function autoCommitSliceIfDirty({ slice, cwd = process.cwd(), mode, eventBus } = {}) {
+export function autoCommitSliceIfDirty({ slice, cwd = process.cwd(), mode, eventBus, startSha = null } = {}) {
   if (mode === "assisted") {
     return { committed: false, reason: "assisted-mode" };
   }
@@ -6338,6 +6348,18 @@ export function autoCommitSliceIfDirty({ slice, cwd = process.cwd(), mode, event
   }
 
   if (!statusOut || !statusOut.trim()) {
+    // Bug #123: tree is clean \u2014 but did the worker advance HEAD itself?
+    // If startSha was captured and HEAD now differs, the worker (gh-copilot
+    // or claude CLI) committed during execution. Report deterministically.
+    if (startSha) {
+      try {
+        const currentSha = execSync("git rev-parse HEAD", { cwd, encoding: "utf-8", timeout: 5_000 }).trim();
+        if (currentSha && currentSha !== startSha) {
+          eventBus?.emit("slice-auto-committed", { sliceNumber: slice.number, sha: currentSha, message: "(worker-committed)", source: "worker" });
+          return { committed: true, sha: currentSha, message: "(worker-committed)", source: "worker" };
+        }
+      } catch { /* fall through */ }
+    }
     return { committed: false, reason: "clean-tree" };
   }
 
@@ -7486,17 +7508,19 @@ const DATABASE_KEYWORDS = /\b(migration|schema|alter|create\s+table|drop|seed|in
  */
 
 const QUORUM_PRESETS = {
+  // Bug #107: power = the premium tier (opus-4.7). Previously this preset
+  // shipped opus-4.6 and the default shipped opus-4.7 — backwards.
   power: {
-    models: ["claude-opus-4.6", "gpt-5.3-codex", "grok-4.20-0309-reasoning"],
+    models: ["claude-opus-4.7", "gpt-5.3-codex", "grok-4.20-0309-reasoning"],
     reviewerModel: "claude-opus-4.7",
     dryRunTimeout: 300_000, // 5 min — reasoning models need more time
     threshold: 5,           // lower threshold = more slices get quorum treatment
     availableIn: {
-      "cli-gh": ["claude-opus-4.6"],
-      "cli-claude": ["claude-opus-4.6"],
+      "cli-gh": ["claude-opus-4.7"],
+      "cli-claude": ["claude-opus-4.7"],
       "cli-codex": ["gpt-5.3-codex"],
-      "vs-code-copilot-chat": ["claude-opus-4.6"],
-      "vs-code-agents-enterprise": ["claude-opus-4.6", "gpt-5.3-codex", "grok-4.20-0309-reasoning"],
+      "vs-code-copilot-chat": ["claude-opus-4.7"],
+      "vs-code-agents-enterprise": ["claude-opus-4.7", "gpt-5.3-codex", "grok-4.20-0309-reasoning"],
     },
     fallbacks: {
       "cli-gh": { preset: "speed", reason: "Only 1 of 3 power models available via gh-copilot without API keys" },
@@ -9518,7 +9542,10 @@ export function loadQuorumConfig(cwd, presetOverride = null) {
     // qualify — matching the intent of "complex slices get multi-model review".
     // See docs/research/complexity-threshold-v2.65.md for full analysis.
     threshold: 3,
-    models: ["claude-opus-4.7", "gpt-5.3-codex", "grok-4.20-0309-reasoning"],
+    // Bug #107: default uses the standard tier (opus-4.6). Users who want
+    // the premium tier (opus-4.7) opt in via --quorum=power. Reviewer stays
+    // on 4.7 since it only runs once per slice and the spend is bounded.
+    models: ["claude-opus-4.6", "gpt-5.3-codex", "grok-4.20-0309-reasoning"],
     reviewerModel: "claude-opus-4.7",
     dryRunTimeout: 300_000, // 5 min per dry-run leg
     strictAvailability: false, // H.3: true = fast-fail if any model unavailable

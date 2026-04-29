@@ -7,6 +7,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+- `forge-master` sessions (`fm-turn` events) added as a 9th source in the unified timeline. Reads `.forge/fm-sessions/*.jsonl` and `*.archive.jsonl` with rotation-safe deduplication by `{sessionId, turn}`. Each event carries `lane`, `userMessage` (truncated to 200 chars), and `turn` in its payload. Fixes the dashboard gap where Forge-Master queries were invisible in the chronological event view.
+- `pforge timeline` CLI command — offline-first chronological view via `scripts/timeline.mjs`. Accepts `--window`, `--from`, `--to`, `--source`, `--correlation`, `--group-by`, `--limit`, `--json`. Wired in both `pforge.ps1` and `pforge.sh`.
+- Dashboard Timeline tab: `forge-master` source chip (🤖) and CSS badge added alongside existing 8 source chips. `state.timeline.sources` default updated to include all 9 sources.
+- Timeline LRU cache now invalidates on `.forge/fm-sessions` mtime in addition to `.forge` root — prevents stale results after new turns are appended.
+
 ## [2.81.0] — 2026-04-24 — Model routing split & meta-bug sweep
 
 > **Highlight**: `gpt-*` / `chatgpt-*` models (including `gpt-5.3-codex`) no longer drop from auto-quorum when `OPENAI_API_KEY` is unset but `gh-copilot` is installed. The old pattern-match routing conflated "requires a direct API key" with "routed via HTTP"; the registry is now split into `DIRECT_API_ONLY` (grok-\*, dall-e-\* — no CLI proxy) and `COPILOT_SERVABLE` (gpt-\*, chatgpt-\* — proxied via Copilot subscription). Ships alongside 9 closed meta-bugs (#86, #90, #93, #97, #98, #99, #100, #101, #102, #103) and the `content-audit` scanner now wired into the standard tempering sequence.

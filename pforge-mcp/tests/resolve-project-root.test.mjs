@@ -147,4 +147,46 @@ describe("resolveProjectRoot", () => {
       expect(result.warning).toBeTruthy();
     }
   });
+
+  // Bug #105/#125: when launched from a sub-package that has its own
+  // package.json (e.g. pforge-mcp/), the resolver previously stopped at
+  // that sub-package and used it as PROJECT_DIR. The two-tier marker
+  // walk must walk past sub-package package.json files to find the
+  // outer .git / .forge.json first.
+  it("Branch G — strong marker (.git) wins over inner package.json sub-package", () => {
+    // Layout:
+    //   tempDir/
+    //     .git
+    //     pforge-mcp/
+    //       package.json  ← weak marker; must NOT anchor
+    writeFileSync(join(tempDir, ".git"), "");
+    const subPkg = join(tempDir, "pforge-mcp");
+    mkdirSync(subPkg);
+    writeFileSync(join(subPkg, "package.json"), "{}");
+
+    const result = resolveProjectRoot({
+      env: {},
+      argv: [],
+      serverDir: subPkg,
+      cwd: subPkg,
+    });
+    expect(result.source).toBe("marker:.git");
+    expect(result.resolved).toBe(resolve(tempDir));
+  });
+
+  it("Branch G2 — strong marker (.forge.json) wins over inner package.json", () => {
+    writeFileSync(join(tempDir, ".forge.json"), "{}");
+    const subPkg = join(tempDir, "pforge-mcp");
+    mkdirSync(subPkg);
+    writeFileSync(join(subPkg, "package.json"), "{}");
+
+    const result = resolveProjectRoot({
+      env: {},
+      argv: [],
+      serverDir: subPkg,
+      cwd: subPkg,
+    });
+    expect(result.source).toBe("marker:.forge.json");
+    expect(result.resolved).toBe(resolve(tempDir));
+  });
 });

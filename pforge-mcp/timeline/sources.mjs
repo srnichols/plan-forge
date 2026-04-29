@@ -246,6 +246,46 @@ async function readBugs(cwd, filters) {
   return results;
 }
 
+// ─── Source: forge-master ────────────────────────────────────────────
+
+async function readForgeMasterSessions(cwd, filters) {
+  const sessDir = resolve(cwd, ".forge", "fm-sessions");
+  if (!existsSync(sessDir)) return [];
+
+  const files = listDir(sessDir).filter((f) => f.endsWith(".jsonl"));
+  const seen = new Set(); // dedupe across archive + active during rotation
+  const results = [];
+
+  for (const file of files) {
+    // Derive sessionId: strip .archive.jsonl or .jsonl suffix
+    const sessionId = file.replace(/\.archive\.jsonl$/, "").replace(/\.jsonl$/, "");
+    const filePath = resolve(sessDir, file);
+
+    const events = await streamJsonl(filePath, (rec) => {
+      const dedupeKey = `${sessionId}:${rec.turn}`;
+      if (seen.has(dedupeKey)) return null;
+      seen.add(dedupeKey);
+
+      const lane = rec.classification?.lane || rec.classification || "";
+      const msgPreview = typeof rec.userMessage === "string"
+        ? rec.userMessage.slice(0, 200)
+        : "";
+
+      return {
+        ts: rec.timestamp || "",
+        source: "forge-master",
+        event: "fm-turn",
+        correlationId: sessionId,
+        payload: { turn: rec.turn, lane, userMessage: msgPreview },
+      };
+    }, filters);
+
+    results.push(...events);
+  }
+
+  return results;
+}
+
 // ─── Source: incident ───────────────────────────────────────────────
 
 async function readIncidents(cwd, filters) {
@@ -280,4 +320,5 @@ export const TIMELINE_SOURCES = {
   "tempering": { read: readTempering },
   "bug": { read: readBugs },
   "incident": { read: readIncidents },
+  "forge-master": { read: readForgeMasterSessions },
 };

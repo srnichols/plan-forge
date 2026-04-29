@@ -98,6 +98,13 @@ function Show-Help {
     Write-Host "  fm-session purge --all       Purge all sessions"
     Write-Host "  fm-recall query <text>       Query the cross-session recall index (top-3 results)"
     Write-Host "  fm-recall rebuild            Rebuild the recall index from all fm-sessions"
+    Write-Host "  timeline                     Unified chronological event timeline (hub-events, runs, bugs, forge-master, …)"
+    Write-Host "    --window <15m|1h|6h|24h|7d|30d>  Time window (default: 24h)"
+    Write-Host "    --source <name,...>               Comma-separated source filter"
+    Write-Host "    --correlation <id>               Filter to a single correlationId thread"
+    Write-Host "    --group-by <time|correlation>    Group mode (default: time)"
+    Write-Host "    --limit <n>                      Max events (default: 100)"
+    Write-Host "    --json                           Output raw JSON"
     Write-Host "  graph rebuild                Rebuild the knowledge graph snapshot"
     Write-Host "  graph stats                  Print node count by type from graph snapshot"
     Write-Host "  graph query [type]           Query the knowledge graph (phase, file, recent-changes, neighbors)"
@@ -5689,6 +5696,16 @@ function Invoke-FmRecall {
     node $scriptPath @Arguments
 }
 
+# ─── Command: timeline ─────────────────────────────────────────────
+function Invoke-Timeline {
+    $scriptPath = Join-Path $RepoRoot "scripts/timeline.mjs"
+    if (-not (Test-Path $scriptPath)) {
+        Write-Host "ERROR: timeline script not found at $scriptPath" -ForegroundColor Red
+        exit 1
+    }
+    node $scriptPath @Arguments
+}
+
 # ─── Command: graph ────────────────────────────────────────────────
 function Invoke-Graph {
     $scriptPath = Join-Path $RepoRoot "scripts/graph.mjs"
@@ -5955,6 +5972,7 @@ switch ($Command) {
     'audit-loop'   { Invoke-AuditLoop }
     'fm-session'   { Invoke-FmSession }
     'fm-recall'    { Invoke-FmRecall }
+    'timeline'     { Invoke-Timeline }
     'patterns'     { Invoke-Patterns }
     'graph'        { Invoke-Graph }
     'digest'       { Invoke-Digest }

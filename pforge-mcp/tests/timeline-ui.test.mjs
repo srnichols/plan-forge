@@ -41,10 +41,10 @@ describe("dashboard/index.html — Timeline tab shell", () => {
     }
   });
 
-  it("has 8 source toggle chips", () => {
+  it("has 9 source toggle chips", () => {
     const chips = indexHtml.match(/timeline-source-chip/g) || [];
-    expect(chips.length).toBe(8);
-    for (const src of ["hub-event", "run", "memory", "openbrain", "watch", "tempering", "bug", "incident"]) {
+    expect(chips.length).toBe(9);
+    for (const src of ["hub-event", "run", "memory", "openbrain", "watch", "tempering", "bug", "incident", "forge-master"]) {
       expect(indexHtml).toContain(`data-testid="timeline-src-${src}"`);
     }
   });
@@ -165,8 +165,8 @@ describe("dashboard/app.js — Timeline functions", () => {
     expect(appJs).toContain("/api/timeline");
   });
 
-  it("renders source icons for all 8 sources", () => {
-    for (const src of ["hub-event", "run", "memory", "openbrain", "watch", "tempering", "bug", "incident"]) {
+  it("renders source icons for all 9 sources", () => {
+    for (const src of ["hub-event", "run", "memory", "openbrain", "watch", "tempering", "bug", "incident", "forge-master"]) {
       expect(appJs).toContain(`"${src}"`);
     }
   });

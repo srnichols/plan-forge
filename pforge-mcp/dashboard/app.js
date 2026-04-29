@@ -56,7 +56,7 @@ const state = {
   // Phase FORGE-SHOP-05 Slice 05.2 — Timeline tab state.
   timeline: {
     events: [], threads: [], groupBy: "time", correlationId: null,
-    sources: ["hub-event", "run", "memory", "openbrain", "watch", "tempering", "bug", "incident"],
+    sources: ["hub-event", "run", "memory", "openbrain", "watch", "tempering", "bug", "incident", "forge-master"],
     window: "24h", autoRefresh: false, refreshTimer: null, lastError: null,
   },
   // Phase FORGE-SHOP-02 Slice 02.2 — Review tab state.
@@ -6347,7 +6347,7 @@ const TIMELINE_WINDOW_MS = {
 
 const TIMELINE_SOURCE_ICONS = {
   "hub-event": "📡", run: "🏃", memory: "🧠", openbrain: "🧪",
-  watch: "👁", tempering: "🛠", bug: "🐛", incident: "🚨",
+  watch: "👁", tempering: "🛠", bug: "🐛", incident: "🚨", "forge-master": "🤖",
 };
 
 function timelineParseHash() {
@@ -6369,7 +6369,7 @@ function timelineUpdateHash() {
   if (state.timeline.window) parts.push(`window=${state.timeline.window}`);
   if (state.timeline.groupBy !== "time") parts.push(`groupBy=${state.timeline.groupBy}`);
   const activeSources = state.timeline.sources || [];
-  const allSources = ["hub-event", "run", "memory", "openbrain", "watch", "tempering", "bug", "incident"];
+  const allSources = ["hub-event", "run", "memory", "openbrain", "watch", "tempering", "bug", "incident", "forge-master"];
   if (activeSources.length > 0 && activeSources.length < allSources.length) {
     parts.push(`sources=${activeSources.join(",")}`);
   }
@@ -6447,7 +6447,7 @@ async function loadTimelineData() {
   params.set("groupBy", state.timeline.groupBy);
   params.set("limit", "500");
   if (state.timeline.correlationId) params.set("correlationId", state.timeline.correlationId);
-  if (state.timeline.sources.length > 0 && state.timeline.sources.length < 8) {
+  if (state.timeline.sources.length > 0 && state.timeline.sources.length < 9) {
     params.set("sources", state.timeline.sources.join(","));
   }
 

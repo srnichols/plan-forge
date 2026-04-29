@@ -177,6 +177,6 @@ describe("Timeline smoke tests", () => {
     expect(result).toHaveProperty("windowFrom");
     expect(result).toHaveProperty("windowTo");
     expect(result).toHaveProperty("sourcesQueried");
-    expect(result.sourcesQueried.length).toBe(8);
+    expect(result.sourcesQueried.length).toBe(9);
   });
 });

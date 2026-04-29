@@ -517,8 +517,13 @@ describe("performance guard", () => {
 // ─── TIMELINE_SOURCES registry ─────────────────────────────────────────
 
 describe("TIMELINE_SOURCES", () => {
-  it("has 8 source adapters", () => {
-    expect(Object.keys(TIMELINE_SOURCES).length).toBe(8);
+  it("has 9 source adapters", () => {
+    expect(Object.keys(TIMELINE_SOURCES).length).toBe(9);
+  });
+
+  it("includes forge-master source", () => {
+    expect(TIMELINE_SOURCES["forge-master"]).toBeDefined();
+    expect(typeof TIMELINE_SOURCES["forge-master"].read).toBe("function");
   });
 
   it("all sources have a read function", () => {

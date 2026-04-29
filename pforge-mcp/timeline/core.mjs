@@ -32,6 +32,15 @@ function cacheKey(params) {
   });
 }
 
+function forgeDirMtime(forgeDir) {
+  // Use the max mtime across .forge root and .forge/fm-sessions so that new
+  // Forge-Master turns (written to fm-sessions/) invalidate the cache promptly.
+  let m = 0;
+  try { m = Math.max(m, statSync(forgeDir).mtimeMs); } catch { /* missing */ }
+  try { m = Math.max(m, statSync(resolve(forgeDir, "fm-sessions")).mtimeMs); } catch { /* missing */ }
+  return m;
+}
+
 function cacheGet(key, forgeDir) {
   const entry = cache.get(key);
   if (!entry) return null;
@@ -39,15 +48,9 @@ function cacheGet(key, forgeDir) {
     cache.delete(key);
     return null;
   }
-  // Invalidate if .forge directory mtime changed
-  try {
-    const stat = statSync(forgeDir);
-    if (stat.mtimeMs !== entry.mtimeMs) {
-      cache.delete(key);
-      return null;
-    }
-  } catch {
-    // .forge missing — invalidate
+  // Invalidate if .forge directory or fm-sessions mtime changed
+  const current = forgeDirMtime(forgeDir);
+  if (current === 0 || current !== entry.mtimeMs) {
     cache.delete(key);
     return null;
   }
@@ -66,11 +69,7 @@ function cacheSet(key, forgeDir, data) {
     }
     if (oldestKey) cache.delete(oldestKey);
   }
-  let mtimeMs = 0;
-  try {
-    mtimeMs = statSync(forgeDir).mtimeMs;
-  } catch { /* missing dir */ }
-  cache.set(key, { data, insertedAt: Date.now(), mtimeMs });
+  cache.set(key, { data, insertedAt: Date.now(), mtimeMs: forgeDirMtime(forgeDir) });
 }
 
 /** Exposed for testing — clears the internal LRU cache. */

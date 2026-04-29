@@ -487,12 +487,40 @@ export function resolveProjectRoot({ env, argv, serverDir, cwd }) {
     return { resolved: resolve(argv[projectFlagIdx + 1]), source: "--project" };
   }
 
-  // 3. Walk up from cwd, then serverDir, checking markers in order
-  const markers = [".forge.json", ".git", "package.json"];
-  for (const startDir of [cwd, serverDir]) {
+  // 3. Walk up from cwd, then serverDir, looking for STRONG markers first
+  // (.forge.json, .git). Only fall back to package.json (a WEAK marker)
+  // when neither strong marker is found anywhere up the tree.
+  //
+  // Issues #105 / #125: previously the marker check was a single tier
+  // — [".forge.json", ".git", "package.json"] — which meant launching
+  // from `pforge-mcp/` (which has its own package.json) anchored
+  // PROJECT_DIR to `pforge-mcp/` instead of walking up to the actual
+  // project containing `.git` / `.forge.json`. Splitting into tiers
+  // ensures `.git` always wins over a sub-package's package.json.
+  const STRONG_MARKERS = [".forge.json", ".git"];
+  const WEAK_MARKERS = ["package.json"];
+  const startDirs = [cwd, serverDir];
+
+  // Pass 1: look for any strong marker in any ancestor of any start dir.
+  for (const startDir of startDirs) {
     let dir = resolve(startDir);
     while (true) {
-      for (const marker of markers) {
+      for (const marker of STRONG_MARKERS) {
+        if (existsSync(join(dir, marker))) {
+          return { resolved: dir, source: `marker:${marker}` };
+        }
+      }
+      const parent = resolve(dir, "..");
+      if (parent === dir) break;
+      dir = parent;
+    }
+  }
+
+  // Pass 2: no strong marker found anywhere — fall back to nearest weak marker.
+  for (const startDir of startDirs) {
+    let dir = resolve(startDir);
+    while (true) {
+      for (const marker of WEAK_MARKERS) {
         if (existsSync(join(dir, marker))) {
           return { resolved: dir, source: `marker:${marker}` };
         }
@@ -1127,14 +1155,15 @@ const TOOLS = [
   },
   {
     name: "forge_bug_update_status",
-    description: "Transition a bug's status (open → in-fix → fixed, or open → wont-fix/duplicate) with transition validation. Terminal states (fixed, wont-fix, duplicate) cannot be changed.",
+    description: "Transition a bug's status (open → in-fix → fixed, or open → wont-fix/duplicate) with transition validation. Terminal states (fixed, wont-fix, duplicate) cannot be changed. Accepts either 'newStatus' or 'status' as the field name (#116).",
     inputSchema: {
       type: "object",
-      required: ["bugId", "newStatus"],
+      required: ["bugId"],
       properties: {
         path: { type: "string", description: "Project directory (default: current)" },
         bugId: { type: "string", description: "Bug ID to update" },
         newStatus: { type: "string", description: "New status: open|in-fix|fixed|wont-fix|duplicate" },
+        status: { type: "string", description: "Alias for newStatus (#116). One of newStatus|status is required." },
         note: { type: "string", description: "Optional note about the transition" },
       },
     },
@@ -1499,14 +1528,14 @@ const TOOLS = [
   // Phase FORGE-SHOP-05 Slice 05.1 — Unified timeline
   {
     name: "forge_timeline",
-    description: "Unified chronological view across all forge event sources with correlationId grouping. Merges hub-events, runs, memories, openbrain, watch, tempering, bugs, and incidents into a single timeline.",
+    description: "Unified chronological view across all forge event sources with correlationId grouping. Merges hub-events, runs, memories, openbrain, watch, tempering, bugs, incidents, and forge-master sessions into a single timeline.",
     inputSchema: {
       type: "object",
       properties: {
         from: { type: "string", description: "Start of window: ISO timestamp or relative (24h, 7d, 30m). Default: now - 24h" },
         to: { type: "string", description: "End of window: ISO timestamp or relative. Default: now" },
         correlationId: { type: "string", description: "Filter to a single correlation thread" },
-        sources: { type: "array", items: { type: "string" }, description: "Limit to source types: hub-event, run, memory, openbrain, watch, tempering, bug, incident" },
+        sources: { type: "array", items: { type: "string" }, description: "Limit to source types: hub-event, run, memory, openbrain, watch, tempering, bug, incident, forge-master" },
         events: { type: "array", items: { type: "string" }, description: "Filter by event type (glob supported: slice-*, tempering-*)" },
         groupBy: { type: "string", enum: ["time", "correlation"], description: "Default: time (flat chronological). correlation: group by correlationId" },
         limit: { type: "number", description: "Max results (default 500, max 2000)" },
@@ -2776,12 +2805,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
-      const result = await updateBugStatus(cwd, args.bugId, args.newStatus, { note: args.note || null });
+      // Bug #116: accept `status` as an alias for `newStatus`. Field-name
+      // confusion was a footgun in the autonomous bug-fix loop \u2014 callers
+      // copy the schema name from forge_bug_register (`status`) and the
+      // tool silently rejected the call. Now both names work and we surface
+      // a clear error if neither is provided.
+      const newStatus = args.newStatus || args.status;
+      if (typeof newStatus !== "string" || newStatus === "") {
+        return { content: [{ type: "text", text: JSON.stringify({ error: "MISSING_STATUS", message: "forge_bug_update_status requires 'newStatus' (or alias 'status'). Valid values: open|in-fix|fixed|wont-fix|duplicate." }) }], isError: true };
+      }
+      const result = await updateBugStatus(cwd, args.bugId, newStatus, { note: args.note || null });
       if (result.ok && activeHub) {
         try {
           activeHub.broadcast({
             type: "tempering-bug-status-changed",
-            data: { bugId: args.bugId, newStatus: args.newStatus, note: args.note || null },
+            data: { bugId: args.bugId, newStatus, note: args.note || null },
             timestamp: new Date().toISOString(),
           });
         } catch { /* best-effort */ }

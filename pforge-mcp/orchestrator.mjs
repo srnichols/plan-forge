@@ -1855,10 +1855,17 @@ export function spawnWorker(prompt, options = {}) {
       env: {
         ...process.env,
         NO_COLOR: "1",
+        // Prevent git commit / rebase from opening an interactive editor.
+        // Bug #121: without these, autonomous loops can hang indefinitely.
+        GIT_EDITOR: "true",
+        GIT_TERMINAL_PROMPT: "0",
+        GIT_SEQUENCE_EDITOR: "true",
         ...(runPlanActive ? { PFORGE_RUN_PLAN_ACTIVE: "1" } : {}),
       },
       stdio: ["pipe", "pipe", "pipe"],
       shell: process.platform === "win32",
+      // Bug #121: suppress the console flash on Windows when spawning CLI workers.
+      windowsHide: true,
     });
 
     // Track child for cleanup on parent exit

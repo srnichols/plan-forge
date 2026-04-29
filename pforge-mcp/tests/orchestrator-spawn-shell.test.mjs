@@ -51,8 +51,8 @@ describe("spawnWorker — bug #82 shell option on Windows", () => {
       .filter((i) => i >= 0);
     expect(spawnLineIdxs.length).toBeGreaterThan(0);
     for (const idx of spawnLineIdxs) {
-      // Check the next 10 lines for shell:
-      const block = lines.slice(idx, idx + 12).join("\n");
+      // Check the next 20 lines for shell: (window widened for env-block additions)
+      const block = lines.slice(idx, idx + 20).join("\n");
       expect(block).toContain("shell:");
     }
   });

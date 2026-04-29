@@ -3530,11 +3530,17 @@ export async function runPlan(planPath, options = {}) {
     results = await scheduler.execute(
       plan.dag.nodes,
       executionOrder,
-      async (slice) => executeSlice(slice, {
-        cwd, model: effectiveModel, modelRouting, mode, runDir, maxRetries,
-        memoryEnabled, projectName, planName: basename(planPath, ".md"),
-        quorumConfig, escalationChain, eventBus,
-      }),
+      async (slice) => {
+        const result = await executeSlice(slice, {
+          cwd, model: effectiveModel, modelRouting, mode, runDir, maxRetries,
+          memoryEnabled, projectName, planName: basename(planPath, ".md"),
+          quorumConfig, escalationChain, eventBus,
+        });
+        if (result.status === "passed") {
+          result.autoCommit = autoCommitSliceIfDirty({ slice, cwd, mode, eventBus });
+        }
+        return result;
+      },
       { abortSignal, resumeFrom: resumeFrom ? String(resumeFrom) : null, hub, gateCheckConfig },
     );
   } finally {
@@ -6170,6 +6176,55 @@ let _postSliceHookFired = false;
  */
 export function resetPostSliceHookFired() {
   _postSliceHookFired = false;
+}
+
+/**
+ * After a slice passes, commit any dirty working-tree changes with a
+ * deterministic conventional-commit message derived from the slice title.
+ * Never commits on `mode === "assisted"` runs.
+ *
+ * @param {object} params
+ * @param {{ number: number, title: string }} params.slice
+ * @param {string} [params.cwd=process.cwd()]
+ * @param {string} [params.mode]   — "assisted" skips auto-commit
+ * @param {{ emit: Function }} [params.eventBus]
+ * @returns {{ committed: boolean, reason?: string, sha?: string, message?: string, error?: string }}
+ */
+export function autoCommitSliceIfDirty({ slice, cwd = process.cwd(), mode, eventBus } = {}) {
+  if (mode === "assisted") {
+    return { committed: false, reason: "assisted-mode" };
+  }
+
+  // Check working tree
+  let statusOut;
+  try {
+    statusOut = execSync("git status --porcelain", { cwd, encoding: "utf-8", timeout: 5_000 });
+  } catch (err) {
+    eventBus?.emit("slice-dirty-tree-warning", { sliceNumber: slice?.number, error: err.message });
+    return { committed: false, reason: "git-failed", error: err.message };
+  }
+
+  if (!statusOut || !statusOut.trim()) {
+    return { committed: false, reason: "clean-tree" };
+  }
+
+  // Infer conventional commit type from title
+  const conventionalType = /^(bug\s*#?\d+|fix)/i.test(slice.title) ? "fix" : "feat";
+
+  // Strip only "Bug #N: " prefix (not "Fix"), truncate to 72 chars
+  const subject = slice.title.replace(/^bug\s*#?\d+[:\s]*/i, "").slice(0, 72).trim() || slice.title.slice(0, 72);
+  const commitMessage = `${conventionalType}(slice-${slice.number}): ${subject}`;
+
+  try {
+    execSync("git add -A", { cwd, encoding: "utf-8", timeout: 10_000 });
+    execSync(`git commit -m "${commitMessage}"`, { cwd, encoding: "utf-8", timeout: 15_000 });
+    const sha = execSync("git rev-parse HEAD", { cwd, encoding: "utf-8", timeout: 5_000 }).trim();
+    eventBus?.emit("slice-auto-committed", { sliceNumber: slice.number, sha, message: commitMessage });
+    return { committed: true, sha, message: commitMessage };
+  } catch (err) {
+    eventBus?.emit("slice-dirty-tree-warning", { sliceNumber: slice?.number, error: err.message });
+    return { committed: false, reason: "git-failed", error: err.message };
+  }
 }
 
 /**

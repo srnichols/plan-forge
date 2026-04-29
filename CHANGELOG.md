@@ -7,11 +7,36 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.82.0] — 2026-04-29 — Host-aware routing + 19-issue sweep
+
 ### Added
-- `forge-master` sessions (`fm-turn` events) added as a 9th source in the unified timeline. Reads `.forge/fm-sessions/*.jsonl` and `*.archive.jsonl` with rotation-safe deduplication by `{sessionId, turn}`. Each event carries `lane`, `userMessage` (truncated to 200 chars), and `turn` in its payload. Fixes the dashboard gap where Forge-Master queries were invisible in the chronological event view.
-- `pforge timeline` CLI command — offline-first chronological view via `scripts/timeline.mjs`. Accepts `--window`, `--from`, `--to`, `--source`, `--correlation`, `--group-by`, `--limit`, `--json`. Wired in both `pforge.ps1` and `pforge.sh`.
-- Dashboard Timeline tab: `forge-master` source chip (🤖) and CSS badge added alongside existing 8 source chips. `state.timeline.sources` default updated to include all 9 sources.
-- Timeline LRU cache now invalidates on `.forge/fm-sessions` mtime in addition to `.forge` root — prevents stale results after new turns are appended.
+- **Host-aware routing preference (#104)** — `getRoutingPreference(host, userPref)` + `loadRoutingPreference(cwd)` in `orchestrator.mjs`. Default (`auto`): Claude Code / Cursor / Windsurf / Zed prefer direct API FIRST so users don't silently double-pay against their non-Copilot subscription. VS Code + Copilot / cli-terminal keep `gh-copilot` first. Override via `.forge.json` → `{ "routing": { "hostPreference": "auto" | "gh-copilot" | "direct-api" | "drop" } }`. The `"drop"` mode refuses `gpt-*` on non-Copilot hosts unless `OPENAI_API_KEY` is set (strongest "honor the vendor" stance).
+- **Quorum pre-run summary table** — `filterQuorumModels` now emits a host + per-model billing surface table before any spend (✓/⚠/✗ rows with warning callouts). `formatQuorumSummary(rows, host, hostPreference)` exported for reuse.
+- **Per-slice billing telemetry** — `slice-N.json` now records `host`, `billingSurface`, and `billingWarning` for cost aggregation that distinguishes subscription-covered vs pay-per-token spend.
+- **`forge-master` sessions in unified timeline** (`fm-turn` events) — 9th source. Reads `.forge/fm-sessions/*.jsonl` + `*.archive.jsonl` with rotation-safe dedupe by `{sessionId, turn}`. Each event carries `lane`, `userMessage` (truncated 200 chars), and `turn`.
+- **`pforge timeline` CLI** — offline chronological view via `scripts/timeline.mjs`. Flags: `--window`, `--from`, `--to`, `--source`, `--correlation`, `--group-by`, `--limit`, `--json`.
+- **Dashboard Timeline tab** — `forge-master` source chip (🤖) + CSS badge alongside existing 8 sources.
+- **Crucible finalize quality gate (#118)** — Phase-35: `CRITICAL_FIELDS` extended with `build-command` + `test-command`; `CrucibleFinalizeRefusedError` thrown when critical gaps remain. Inferred repo commands via new `inferRepoCommands` helper.
+
+### Fixed
+- **#104** — host-aware routing preference (see Added).
+- **#105 / #125** — `resolveProjectRoot` two-tier markers: STRONG (`.forge.json`, `.git`) walks all ancestors of cwd then serverDir; WEAK (`package.json`) is fallback only. Eliminates project-root mis-detection when launching from subpackage dirs.
+- **#106** — single source of truth for framework version in `server.mjs`.
+- **#107** — quorum preset semantics: `power` = premium tier (`claude-opus-4.7` across the row); default tier uses `claude-opus-4.6` with `4.7` reviewer only.
+- **#108 / #109 / #113 / #115** — `parseSlices` now merges `**Files:**` body-line paths into slice scope, fixing the SCOPE-vs-Files-manifest contradiction at the root.
+- **#111 / #117 / #119 / #121 / #122 / #124 / #126 / #127** — verified pre-existing fixes (closed with verification comments).
+- **#116** — `forge_bug_update_status` accepts both `newStatus` and `status`; emits `MISSING_STATUS` when neither is supplied.
+- **#118** — Crucible finalize refuses to draft TBD-laden plans; gates rubber-stamping (Phase-35).
+- **#120** — `detectCostModel` correctly identifies subscription vs API providers; `gpt-*`/`chatgpt-*` without `OPENAI_API_KEY` → `gh-copilot` host (~$0.01/req) instead of OpenAI direct pricing (fixes ~250x estimate overshoot for Copilot users). Phase-34.
+- **#123** — `executeSlice` captures `startSha` before slice and detects worker-committed changes when tree is clean post-run.
+- **#129** — origin tag-collision preflight prevents accidental overwrite of remote tags.
+- Timeline LRU cache invalidates on `.forge/fm-sessions` mtime — prevents stale results after new turns are appended.
+
+### Tests
+- 26 new regression tests in `tests/host-routing-preference.test.mjs` (#104).
+- 18 updated tests in `tests/quorum-probe.test.mjs` to reflect post-#103 routing.
+- All 60 routing/quorum tests passing; broader suite green except known Windows-EPERM flakes in `quorum-config-precedence.test.mjs` (pre-existing).
+- Removed duplicate `.test.js` files (vitest only loads `.test.mjs`).
 
 ## [2.81.0] — 2026-04-24 — Model routing split & meta-bug sweep
 

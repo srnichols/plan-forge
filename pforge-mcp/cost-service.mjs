@@ -69,6 +69,83 @@ export function getPricing(model) {
   return MODEL_PRICING[model] || MODEL_PRICING.default;
 }
 
+// ─── Provider Awareness ───────────────────────────────────────────────
+// Subscription CLI providers bill by premium-request count, not per-token.
+export const SUBSCRIPTION_PROVIDERS = new Set(["gh-copilot", "claude-cli", "codex-cli"]);
+
+const CLI_PER_REQUEST_USD = 0.01;
+
+/**
+ * Determine cost model for the active execution environment.
+ *
+ * Precedence (highest to lowest):
+ *   1. env.PFORGE_COST_MODEL — explicit override
+ *   2. forgeConfig.cost?.model — project-level config in .forge.json
+ *   3. Model-name heuristic:
+ *      - gpt-*       → openai-api
+ *      - grok-*      → xai-api
+ *      - claude-* + ANTHROPIC_API_KEY → anthropic-api
+ *      - claude-* (no key)            → claude-cli
+ *      - "gh-copilot" / *copilot*     → gh-copilot
+ *      - else                         → unknown
+ *   4. default → unknown
+ *
+ * @param {{ env?: Record<string,string>, forgeConfig?: object, model?: string }} opts
+ * @returns {{ provider: string, perRequestUsd: number|null, source: string }}
+ */
+export function detectCostModel({ env = {}, forgeConfig = {}, model = "" } = {}) {
+  const knownProviders = new Set([
+    "gh-copilot", "claude-cli", "codex-cli",
+    "anthropic-api", "openai-api", "xai-api", "unknown",
+  ]);
+
+  function toResult(provider, source) {
+    let perRequestUsd;
+    if (SUBSCRIPTION_PROVIDERS.has(provider)) {
+      perRequestUsd = CLI_PER_REQUEST_USD;
+    } else if (provider === "unknown") {
+      perRequestUsd = 0;
+    } else {
+      perRequestUsd = null; // API provider — use token-based pricing
+    }
+    return { provider, perRequestUsd, source };
+  }
+
+  // 1. Explicit env override
+  const envOverride = env.PFORGE_COST_MODEL;
+  if (envOverride && knownProviders.has(envOverride)) {
+    return toResult(envOverride, "env:PFORGE_COST_MODEL");
+  }
+
+  // 2. forge.json cost.model
+  const cfgModel = forgeConfig?.cost?.model;
+  if (cfgModel && knownProviders.has(cfgModel)) {
+    return toResult(cfgModel, "forge.json:cost.model");
+  }
+
+  // 3. Model-name heuristic
+  const m = typeof model === "string" ? model : "";
+  if (m.startsWith("gpt-")) {
+    return toResult("openai-api", "model-prefix");
+  }
+  if (m.startsWith("grok-")) {
+    return toResult("xai-api", "model-prefix");
+  }
+  if (m.startsWith("claude-")) {
+    const hasKey = Boolean(env.ANTHROPIC_API_KEY);
+    return toResult(hasKey ? "anthropic-api" : "claude-cli", "model-prefix");
+  }
+  if (m === "gh-copilot" || m.includes("copilot")) {
+    return toResult("gh-copilot", "model-prefix");
+  }
+  if (m === "codex-cli" || m.startsWith("codex-")) {
+    return toResult("codex-cli", "model-prefix");
+  }
+
+  // 4. Default
+  return toResult("unknown", "default");
+}
+
 /**
  * Calculate cost for a single slice from its token data.
  *

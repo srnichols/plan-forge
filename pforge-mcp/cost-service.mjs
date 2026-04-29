@@ -124,11 +124,18 @@ export function detectCostModel({ env = {}, forgeConfig = {}, model = "" } = {})
   }
 
   // 3. Model-name heuristic
+  // Issue #120: previously gpt-* always routed to openai-api (token pricing),
+  // which produced ~250x overestimates for users running gh-copilot. Align
+  // with probeQuorumModelAvailability's host detection: when no API key is
+  // present, prefer the local CLI (gh-copilot for gpt-*, claude-cli for
+  // claude-*) which is subscription-priced.
   const m = typeof model === "string" ? model : "";
-  if (m.startsWith("gpt-")) {
-    return toResult("openai-api", "model-prefix");
+  if (m.startsWith("gpt-") || m.startsWith("chatgpt-")) {
+    const hasKey = Boolean(env.OPENAI_API_KEY);
+    return toResult(hasKey ? "openai-api" : "gh-copilot", "model-prefix");
   }
   if (m.startsWith("grok-")) {
+    // Grok has no Copilot host today — direct API only.
     return toResult("xai-api", "model-prefix");
   }
   if (m.startsWith("claude-")) {

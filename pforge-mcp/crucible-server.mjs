@@ -108,6 +108,11 @@ const CRITICAL_FIELDS = new Set([
   "validation-gates",
   "validation",
   "forbidden-actions",
+  // Issue #118: build/test commands are required to make a slice executable.
+  // Without them the orchestrator hits the "no executable gates → rubber-stamp"
+  // path and the slice passes without doing anything.
+  "build-command",
+  "test-command",
 ]);
 
 // ─── Lane inference ──────────────────────────────────────────────────

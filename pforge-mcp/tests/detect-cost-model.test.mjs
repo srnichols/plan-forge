@@ -55,10 +55,18 @@ describe("detectCostModel — precedence", () => {
     expect(result.perRequestUsd).toBeNull();
   });
 
-  it("heuristic: gpt-* → openai-api", () => {
-    const result = detectCostModel({ model: "gpt-5.4" });
+  it("heuristic: gpt-* with OPENAI_API_KEY → openai-api", () => {
+    // Issue #120: gpt-* only routes to openai-api when an API key is present.
+    // Otherwise it routes to gh-copilot (subscription).
+    const result = detectCostModel({ env: { OPENAI_API_KEY: "sk-x" }, model: "gpt-5.4" });
     expect(result.provider).toBe("openai-api");
     expect(result.perRequestUsd).toBeNull();
+  });
+
+  it("heuristic: gpt-* without OPENAI_API_KEY → gh-copilot (#120)", () => {
+    const result = detectCostModel({ env: {}, model: "gpt-5.4" });
+    expect(result.provider).toBe("gh-copilot");
+    expect(result.perRequestUsd).toBe(0.01);
   });
 
   it("heuristic: grok-* → xai-api", () => {
@@ -99,7 +107,7 @@ describe("detectCostModel — precedence", () => {
 
   it("unrecognised PFORGE_COST_MODEL falls through to heuristic", () => {
     const result = detectCostModel({
-      env: { PFORGE_COST_MODEL: "my-custom-provider" },
+      env: { PFORGE_COST_MODEL: "my-custom-provider", OPENAI_API_KEY: "sk-x" },
       model: "gpt-5.4",
     });
     expect(result.provider).toBe("openai-api");

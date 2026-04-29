@@ -556,6 +556,34 @@ function parseSlices(lines, opts = {}) {
       }
     }
 
+    // Issues #108/#109/#113/#115: plans frequently use **Files:** to list the
+    // files a slice will create or modify. Without parsing this, the
+    // orchestrator-injected SCOPE clause was built only from [scope: ...] /
+    // **Context Files:** and contradicted the plan's own Files list. Merge
+    // them so SCOPE always covers what the plan declares as in-scope.
+    //
+    // Match: **Files:** `a.ts`, `b.ts`  /  **Files**: a.ts, b.ts
+    // We only treat backtick-wrapped or whitespace-separated path-like tokens
+    // as files; prose lines that happen to start with the word "Files" are
+    // ignored when no path tokens are found.
+    const filesBodyMatch = line.match(/^\s*[-*]?\s*\*\*Files:?\*\*:?\s*(.+)/i);
+    if (filesBodyMatch) {
+      const rest = filesBodyMatch[1];
+      const backticks = rest.match(/`([^`]+)`/g) || [];
+      let candidates = backticks.map((s) => s.replace(/`/g, "").trim());
+      if (candidates.length === 0) {
+        // No backticks — fall back to comma/whitespace splitting and keep
+        // only tokens that look like a path (contain '/' or '.' or end in *).
+        candidates = rest
+          .split(/[\s,]+/)
+          .map((s) => s.trim().replace(/[.,;]+$/, ""))
+          .filter((s) => s.length > 0 && /[\/.*]/.test(s));
+      }
+      for (const f of candidates) {
+        if (!current.scope.includes(f)) current.scope.push(f);
+      }
+    }
+
     // Parse numbered tasks
     const taskMatch = line.match(/^\d+\.\s+(.+)/);
     if (taskMatch) current.tasks.push(taskMatch[1].trim());

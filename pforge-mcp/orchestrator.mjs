@@ -3154,6 +3154,7 @@ export async function runPlan(planPath, options = {}) {
     strictGates = false,    // Phase-31 Slice 4: force enforce mode for this run only
     onlySlices = null,      // Phase-33.1: number[] | null — run only specified slice IDs
     noTempering = false,    // Phase-33.1: disable post-slice tempering for this run
+    allowRetrograde = false, // Meta-bug #129: allow plan whose target version already exists on origin
   } = options;
 
   // Mutual exclusion: --resume-from and --only-slices cannot both be active
@@ -3221,6 +3222,42 @@ export async function runPlan(planPath, options = {}) {
       code: "NO_SLICES",
       planPath,
     };
+  }
+
+  // Meta-bug #129 preflight: refuse to run a plan whose target release version
+  // already exists as a tag on origin. Prevents the "retrograde release" class
+  // of disaster (re-running an old plan against newer master, producing a
+  // chore(release): commit + tag that overwrites a shipped release). Runs
+  // BEFORE estimate / dryRun so estimating a doomed plan also surfaces the
+  // problem early. Bypass with `--allow-retrograde` if intentional (e.g.
+  // patch release on a hotfix branch). Network / git errors degrade to
+  // advisory — offline runs are not blocked.
+  if (!allowRetrograde) {
+    const collision = detectVersionCollision(planPath, cwd);
+    if (collision.collision) {
+      return {
+        status: "failed",
+        error:
+          `Refusing to run plan: target version v${collision.version} ` +
+          `already exists on origin (sha=${collision.originSha?.slice(0, 12) || "?"}). ` +
+          `Re-running this plan would overwrite a shipped release.`,
+        code: "VERSION_COLLISION",
+        version: collision.version,
+        originSha: collision.originSha,
+        planPath,
+        hint:
+          "Either bump the plan to a fresh version (recommended), " +
+          "or pass --allow-retrograde if you intentionally want to re-tag " +
+          "(this is almost never what you want — see meta-bug #129).",
+      };
+    }
+    if (collision.error) {
+      // eslint-disable-next-line no-console
+      console.error(
+        `[preflight] Could not check origin for v${collision.version} ` +
+        `tag collision (advisory): ${collision.error}`,
+      );
+    }
   }
 
   // Estimation mode — return without executing
@@ -5086,6 +5123,102 @@ function computeTrendDirection(values) {
   if (delta > threshold) return "increasing";
   if (delta < -threshold) return "decreasing";
   return "stable";
+}
+
+/**
+ * Extract a target release version from a plan file.
+ *
+ * Scans (in order):
+ *   1. Plan filename for `v<MAJOR>.<MINOR>[.<PATCH>][-...]` (e.g. `Phase-33.4-...-v2.67.4-PLAN.md`)
+ *   2. Plan frontmatter `version:` field (if present)
+ *   3. First `chore(release): vX.Y.Z` literal in the body
+ *
+ * Returns `null` when no version literal is found (non-release plan).
+ *
+ * @param {string} planPath - Path to plan markdown file
+ * @returns {string|null} Bare semver string (no `v` prefix) or null
+ */
+export function extractPlanReleaseVersion(planPath) {
+  if (!planPath || typeof planPath !== "string") return null;
+
+  // 1. Filename: ...-v2.67.4-... or ...-v2.67-... Pre-release suffix is
+  //    intentionally NOT captured from the filename (too easy to swallow
+  //    "-PLAN.md" etc.) — use frontmatter or chore(release) line for that.
+  const fname = planPath.split(/[\\/]/).pop() || "";
+  const fnameMatch = fname.match(/[-_]v(\d+\.\d+(?:\.\d+)?)\b/);
+  if (fnameMatch) return fnameMatch[1];
+
+  // 2./3. Body scan (frontmatter `version:` or chore(release) line)
+  let body = "";
+  try {
+    body = readFileSync(planPath, "utf-8");
+  } catch {
+    return null;
+  }
+
+  const fmMatch = body.match(/(?:^|\n)version:\s*['"]?v?(\d+\.\d+(?:\.\d+)?(?:[-+][0-9A-Za-z.-]+)?)['"]?/);
+  if (fmMatch) return fmMatch[1];
+
+  const choreMatch = body.match(/chore\(release\):\s*v(\d+\.\d+(?:\.\d+)?(?:[-+][0-9A-Za-z.-]+)?)/);
+  if (choreMatch) return choreMatch[1];
+
+  return null;
+}
+
+/**
+ * Check whether a plan's target release version collides with a tag that
+ * already exists on `origin`. Prevents the "retrograde release disaster"
+ * (re-running an old plan against newer master, producing a `chore(release):`
+ * commit + tag that overwrites a shipped release).
+ *
+ * Behaviour:
+ *   - Returns `{ collision: false, version: null }` when no version is detected
+ *     (non-release plan — bail out as no-op).
+ *   - Returns `{ collision: false, version, originSha: null }` when the tag does
+ *     not exist on origin.
+ *   - Returns `{ collision: true, version, originSha }` when the tag already
+ *     exists on origin.
+ *
+ * If `git ls-remote` itself fails (no network, no remote, etc.) returns
+ * `{ collision: false, version, error }` — the orchestrator treats this as
+ * advisory-only so offline runs aren't blocked.
+ *
+ * @param {string} planPath - Path to plan markdown file
+ * @param {string} [cwd=process.cwd()] - Project root (where git is invoked)
+ * @param {{ runner?: (cmd: string, opts: object) => string }} [opts] - Test seam
+ * @returns {{ version: string|null, collision: boolean, originSha: string|null, error: string|null }}
+ */
+export function detectVersionCollision(planPath, cwd = process.cwd(), opts = {}) {
+  const version = extractPlanReleaseVersion(planPath);
+  if (!version) {
+    return { version: null, collision: false, originSha: null, error: null };
+  }
+
+  const tagRef = `refs/tags/v${version}`;
+  const runner = opts.runner || ((cmd, options) => execSync(cmd, options).toString());
+
+  try {
+    const out = runner(`git ls-remote --tags origin ${tagRef}`, {
+      cwd,
+      encoding: "utf-8",
+      timeout: 10_000,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    const trimmed = (out || "").trim();
+    if (!trimmed) {
+      return { version, collision: false, originSha: null, error: null };
+    }
+    // Output format: "<sha>\trefs/tags/v2.67.4"
+    const sha = trimmed.split(/\s+/)[0] || null;
+    return { version, collision: true, originSha: sha, error: null };
+  } catch (err) {
+    return {
+      version,
+      collision: false,
+      originSha: null,
+      error: err && err.message ? err.message : String(err),
+    };
+  }
 }
 
 /**
@@ -10838,6 +10971,10 @@ if (args.includes("--test")) {
   }
   const noTempering = args.includes("--no-tempering");
 
+  // Meta-bug #129: allow re-running a plan whose target version is already
+  // tagged on origin. Default: false (refuse retrograde releases).
+  const allowRetrograde = args.includes("--allow-retrograde");
+
   try {
     const result = await runPlan(planPath, {
       cwd: process.cwd(),
@@ -10855,6 +10992,7 @@ if (args.includes("--test")) {
       strictGates,
       onlySlices,
       noTempering,
+      allowRetrograde,
     });
     console.log(JSON.stringify(result, null, 2));
     process.exit(result.status === "failed" ? 1 : 0);

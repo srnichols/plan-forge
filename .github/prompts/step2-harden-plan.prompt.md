@@ -166,6 +166,40 @@ If ANY need input: list them and WAIT.
 
 ---
 
+## Release-Slice Hardening (when the plan ships a tag)
+
+If any slice contains `chore(release): vX.Y.Z` or creates a git tag, that slice
+is a **release slice** and MUST include these gates verbatim (meta-bug #129):
+
+```bash
+# 1. Refuse to release if the target tag already exists on origin.
+git ls-remote --tags origin "refs/tags/v$VERSION" | grep -q . && {
+  echo "FATAL: tag v$VERSION already exists on origin — refusing to release"
+  exit 1
+} || true
+
+# 2. Refuse to retrograde the version (target must be > latest shipped tag).
+LATEST=$(git ls-remote --tags origin 'refs/tags/v[0-9]*' | \
+  awk -F/ '{print $NF}' | sort -V | tail -1 | sed 's/^v//')
+node -e "
+  const a='$VERSION'.split('.').map(Number);
+  const b='$LATEST'.split('.').map(Number);
+  for (let i=0;i<3;i++){if((a[i]||0)>(b[i]||0))process.exit(0);if((a[i]||0)<(b[i]||0))process.exit(1);}
+  process.exit(1);
+" || { echo "FATAL: v$VERSION is not strictly greater than latest v$LATEST"; exit 1; }
+```
+
+The orchestrator now also runs this as a **preflight** check on the plan
+filename / frontmatter / `chore(release)` line — see
+`detectVersionCollision()` in orchestrator.mjs. The plan-level gate above is
+a defense-in-depth backup; both must pass.
+
+If the plan intentionally re-tags a shipped version (almost never), the
+operator must pass `--allow-retrograde` to bypass the orchestrator preflight,
+and the plan must include a Stop Condition explaining why.
+
+---
+
 ## Persistent Memory (if OpenBrain is configured)
 
 - **Before hardening**: `search_thoughts("<phase topic>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode")` — load prior decisions, patterns, and post-mortem lessons that inform scope and slicing

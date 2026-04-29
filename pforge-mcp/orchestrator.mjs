@@ -403,7 +403,7 @@ function parseSlices(lines, opts = {}) {
     //   ### SLICE N.N - Title
     //   ### Slice 2A: Title (optional single trailing alpha)
     const sliceMatch = line.match(
-      /^#{3,4}\s+slice\s+([\d.]+[A-Za-z]?)\s*[:\u2014\u2013—–-]\s*(.+?)(?:\s*\[.+?\])*\s*$/ui
+      /^#{2,4}\s+slice\s+([\d.]+[A-Za-z]?)\s*[:\u2014\u2013—–-]\s*(.+?)(?:\s*\[.+?\])*\s*$/ui
     );
     if (sliceMatch) {
       // Save previous slice
@@ -3168,6 +3168,16 @@ export async function runPlan(planPath, options = {}) {
 
   // Parse plan
   const plan = parsePlan(planPath, cwd);
+
+  // Zero-slice guard: loud-fail before any dispatch (Bug #124)
+  if (plan.slices.length === 0) {
+    return {
+      status: "failed",
+      error: "No slices found in plan — expected '### Slice N: …' headers (h2/h3/h4 accepted)",
+      code: "NO_SLICES",
+      planPath,
+    };
+  }
 
   // Estimation mode — return without executing
   if (estimate) {

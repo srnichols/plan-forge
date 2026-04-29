@@ -30,11 +30,11 @@ function makeTmpDir() {
   return mkdtempSync(join(tmpdir(), "pforge-quorum-prec-"));
 }
 
-/** Write a minimal zero-slice plan file (no ### Slice N: headers). */
+/** Write a minimal single-slice plan file so the zero-slice guard is not triggered. */
 function writePlan(dir, name = "plan.md") {
   writeFileSync(
     join(dir, name),
-    "---\ntitle: Quorum Test Plan\n---\n# Quorum Test Plan\n\nNo slices.\n",
+    "---\ncrucibleId: quorum-test\n---\n# Quorum Test Plan\n\n### Slice 1: Quorum Probe\n\nTask.\n",
     "utf-8",
   );
   return join(dir, name);

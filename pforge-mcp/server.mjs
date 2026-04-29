@@ -124,7 +124,8 @@ import express from "express";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // ─── Config ───────────────────────────────────────────────────────────
-const PROJECT_DIR = process.env.PLAN_FORGE_PROJECT || process.argv.find((a, i) => process.argv[i - 1] === "--project") || process.cwd();
+const { resolved: PROJECT_DIR, source: PROJECT_DIR_SOURCE } = resolveProjectRoot({ env: process.env, argv: process.argv, serverDir: __dirname, cwd: process.cwd() });
+console.error(`[pforge-mcp] PROJECT_DIR=${PROJECT_DIR} (source=${PROJECT_DIR_SOURCE})`);
 const HTTP_PORT = parseInt(process.env.PLAN_FORGE_HTTP_PORT || "3100", 10);
 const IS_WINDOWS = process.platform === "win32";
 const PFORGE = IS_WINDOWS ? "powershell.exe -NoProfile -ExecutionPolicy Bypass -File pforge.ps1" : "bash pforge.sh";
@@ -463,6 +464,38 @@ function findProjectRoot(startDir) {
     dir = resolve(dir, "..");
   }
   return startDir;
+}
+
+export function resolveProjectRoot({ env, argv, serverDir, cwd }) {
+  // 1. Env var takes highest precedence
+  if (env.PLAN_FORGE_PROJECT) {
+    return { resolved: resolve(env.PLAN_FORGE_PROJECT), source: "env" };
+  }
+
+  // 2. --project CLI flag
+  const projectFlagIdx = argv.indexOf("--project");
+  if (projectFlagIdx !== -1 && argv[projectFlagIdx + 1]) {
+    return { resolved: resolve(argv[projectFlagIdx + 1]), source: "--project" };
+  }
+
+  // 3. Walk up from cwd, then serverDir, checking markers in order
+  const markers = [".forge.json", ".git", "package.json"];
+  for (const startDir of [cwd, serverDir]) {
+    let dir = resolve(startDir);
+    while (true) {
+      for (const marker of markers) {
+        if (existsSync(join(dir, marker))) {
+          return { resolved: dir, source: `marker:${marker}` };
+        }
+      }
+      const parent = resolve(dir, "..");
+      if (parent === dir) break;
+      dir = parent;
+    }
+  }
+
+  // 4. Fallback to cwd
+  return { resolved: cwd, source: "fallback-cwd", warning: "no .git/.forge.json/package.json marker found" };
 }
 
 // ─── Org Rules Consolidation ──────────────────────────────────────────

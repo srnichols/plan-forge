@@ -277,7 +277,8 @@ export function parsePlan(planPath, cwd = process.cwd()) {
   // v2.37 Crucible (Slice 01.4): expose crucibleId + import source on
   // plan.meta so downstream code (status, reporting, dashboard) can
   // display provenance. Enforcement happens in runPlan(), not here —
-  // parsePlan() must stay side-effect-free for estimate/dry-run flows.
+  // parsePlan() avoids enforcement/mutation side effects but may emit
+  // advisory console.warn for invalid frontmatter values (e.g. Bug #127).
   const fmMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n/);
   if (fmMatch) {
     for (const fmLine of fmMatch[1].split(/\r?\n/)) {
@@ -290,6 +291,23 @@ export function parsePlan(planPath, cwd = process.cwd()) {
       if (kv[1] === "crucibleId") meta.crucibleId = v;
       else if (kv[1] === "lane") meta.lane = v;
       else if (kv[1] === "source") meta.crucibleSource = v;
+      else if (kv[1] === "model") {
+        const rawValue = kv[2];
+        const isQuotedValue =
+          (rawValue.startsWith('"') && rawValue.endsWith('"')) ||
+          (rawValue.startsWith("'") && rawValue.endsWith("'"));
+        const looksLikeNonString =
+          !isQuotedValue &&
+          (/^\d+(\.\d+)?$/.test(v) ||
+            /^(true|false|null|~)$/i.test(v) ||
+            /^[{\[]/.test(v));
+        if (looksLikeNonString) {
+          // eslint-disable-next-line no-console
+          console.warn("[model] frontmatter model: ignored — not a string");
+        } else if (v.length > 0) {
+          meta.model = v;
+        }
+      }
     }
   }
 
@@ -3136,9 +3154,8 @@ export async function runPlan(planPath, options = {}) {
     throw new Error("--resume-from and --only-slices are mutually exclusive");
   }
 
-  // Load model routing from .forge.json (Slice 5)
+  // Load model routing from .forge.json (Slice 5 — effectiveModel resolved after parsePlan)
   const modelRouting = loadModelRouting(cwd);
-  const effectiveModel = model || modelRouting.default || null;
 
   // v2.37 Crucible (Slice 01.4) — enforce that the plan was smelted
   // through the Crucible funnel or an explicit `--manual-import` bypass
@@ -3168,6 +3185,26 @@ export async function runPlan(planPath, options = {}) {
 
   // Parse plan
   const plan = parsePlan(planPath, cwd);
+
+  // Bug #127: Precedence: options.model > frontmatter model: > .forge.json default > null
+  const fmModel = (plan.meta && typeof plan.meta.model === "string" && plan.meta.model.trim().length > 0)
+    ? plan.meta.model.trim() : null;
+  let effectiveModel, modelSource;
+  if (model) {
+    effectiveModel = model;
+    modelSource = "options";
+  } else if (fmModel) {
+    effectiveModel = fmModel;
+    modelSource = "frontmatter";
+  } else if (modelRouting.default) {
+    effectiveModel = modelRouting.default;
+    modelSource = "config";
+  } else {
+    effectiveModel = null;
+    modelSource = "default";
+  }
+  // eslint-disable-next-line no-console
+  console.error(`[model] resolved=${effectiveModel} source=${modelSource}`);
 
   // Zero-slice guard: loud-fail before any dispatch (Bug #124)
   if (plan.slices.length === 0) {

@@ -260,6 +260,17 @@ export function estimatePlan(plan, model, cwd, quorumConfig = null, resumeFrom =
     }
   }
 
+  // Phase-34 Slice 2: Provider-aware cost model detection
+  let forgeConfig = {};
+  try {
+    const forgePath = cwd ? resolve(cwd, ".forge.json") : null;
+    if (forgePath && existsSync(forgePath)) {
+      forgeConfig = JSON.parse(readFileSync(forgePath, "utf-8"));
+    }
+  } catch { /* default to {} */ }
+  const costModel = detectCostModel({ env: process.env, forgeConfig, model });
+  const pricingMode = SUBSCRIPTION_PROVIDERS.has(costModel.provider) ? "subscription" : "token";
+
   // Phase 2 Slice 4: Use historical data if available
   const historyPath = cwd ? resolve(cwd, ".forge", "cost-history.json") : null;
   let avgTokensPerSlice = null;
@@ -284,28 +295,59 @@ export function estimatePlan(plan, model, cwd, quorumConfig = null, resumeFrom =
     // Fall back to heuristic
   }
 
+  // Subscription path: calibrate avg premium requests per slice from history
+  let avgPremiumPerSlice = null;
+  if (pricingMode === "subscription") {
+    try {
+      if (historyPath && existsSync(historyPath)) {
+        const history = JSON.parse(readFileSync(historyPath, "utf-8"));
+        if (Array.isArray(history) && history.length > 0) {
+          const valid = history.filter(
+            (e) => typeof e.total_premium_requests === "number" && (e.sliceCount || 1) > 0
+          );
+          if (valid.length > 0) {
+            const sum = valid.reduce(
+              (s, e) => s + e.total_premium_requests / (e.sliceCount || 1),
+              0
+            );
+            avgPremiumPerSlice = Math.max(0.5, Math.min(5.0, sum / valid.length));
+          }
+        }
+      }
+    } catch { /* fall through to default 1.5 */ }
+  }
+
   const tokensPerSlice = avgTokensPerSlice || { input: 2000, output: 5000, source: "heuristic" };
   const pricing = getPricing(model);
   const sliceCount = effectiveSlices.length;
   const totalInputTokens = sliceCount * tokensPerSlice.input;
   const totalOutputTokens = sliceCount * tokensPerSlice.output;
-  let estimatedCost = (totalInputTokens * pricing.input) + (totalOutputTokens * pricing.output);
+  let estimatedCost;
+  if (pricingMode === "subscription") {
+    const reqPerSlice = avgPremiumPerSlice !== null ? avgPremiumPerSlice : 1.5;
+    estimatedCost = sliceCount * reqPerSlice * costModel.perRequestUsd;
+  } else {
+    estimatedCost = (totalInputTokens * pricing.input) + (totalOutputTokens * pricing.output);
+  }
 
-  // Cost calibration: compare prior estimates vs actuals to compute correction factor
+  // Cost calibration: compare prior estimates vs actuals to compute correction factor.
+  // Subscription providers are calibrated via avgPremiumPerSlice; skip token-based correction.
   let costCalibration = null;
-  try {
-    if (historyPath && existsSync(historyPath)) {
-      const history = JSON.parse(readFileSync(historyPath, "utf-8"));
-      const withEstimates = Array.isArray(history) ? history.filter(h => h.estimated_cost_usd > 0 && h.total_cost_usd > 0) : [];
-      if (withEstimates.length >= 3) {
-        const ratios = withEstimates.slice(-10).map(h => h.total_cost_usd / h.estimated_cost_usd);
-        const avgRatio = ratios.reduce((a, b) => a + b, 0) / ratios.length;
-        const correctionFactor = Math.max(0.5, Math.min(3.0, avgRatio)); // Clamp to 0.5x–3x
-        estimatedCost *= correctionFactor;
-        costCalibration = { correctionFactor: Math.round(correctionFactor * 100) / 100, samplesUsed: withEstimates.length, source: "historical" };
+  if (pricingMode === "token") {
+    try {
+      if (historyPath && existsSync(historyPath)) {
+        const history = JSON.parse(readFileSync(historyPath, "utf-8"));
+        const withEstimates = Array.isArray(history) ? history.filter(h => h.estimated_cost_usd > 0 && h.total_cost_usd > 0) : [];
+        if (withEstimates.length >= 3) {
+          const ratios = withEstimates.slice(-10).map(h => h.total_cost_usd / h.estimated_cost_usd);
+          const avgRatio = ratios.reduce((a, b) => a + b, 0) / ratios.length;
+          const correctionFactor = Math.max(0.5, Math.min(3.0, avgRatio)); // Clamp to 0.5x–3x
+          estimatedCost *= correctionFactor;
+          costCalibration = { correctionFactor: Math.round(correctionFactor * 100) / 100, samplesUsed: withEstimates.length, source: "historical" };
+        }
       }
-    }
-  } catch { /* fall through to uncalibrated estimate */ }
+    } catch { /* fall through to uncalibrated estimate */ }
+  }
 
   // Quorum overhead estimation (v2.5)
   let quorumOverhead = null;
@@ -430,6 +472,9 @@ export function estimatePlan(plan, model, cwd, quorumConfig = null, resumeFrom =
       source: tokensPerSlice.source,
     },
     estimatedCostUSD: Math.round(estimatedCost * 100) / 100,
+    estimated_cost_usd: Math.round(estimatedCost * 100) / 100,
+    provider: costModel.provider,
+    pricingMode,
     ...(costCalibration && { costCalibration }),
     ...(quorumOverhead && {
       quorumOverhead,

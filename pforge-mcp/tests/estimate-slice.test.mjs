@@ -109,22 +109,36 @@ describe("cost-service: estimateSlice parity with estimatePlan (Phase-27.2 Slice
   // When there is no cost history (correction factor == 1.0), summing estimateSlice
   // over every slice should equal estimatePlan's total. This holds for each quorum mode.
   // estimatePlan rounds at different precision (hundredths), so we compare within tolerance.
+  // ANTHROPIC_API_KEY is set to force token-based pricing in both estimatePlan and estimateSlice
+  // so the parity comparison is meaningful (Phase-34 Slice 2: provider-aware estimatePlan).
 
   for (const mode of ["auto", "power", "speed", "false"]) {
     it(`parity: sum(estimateSlice) ≈ estimatePlan total — mode "${mode}"`, () => {
-      const plan = makePlan(5);
-      const quorumConfig = buildQuorumConfigForMode(mode);
+      const origKey = process.env.ANTHROPIC_API_KEY;
+      const origCostModel = process.env.PFORGE_COST_MODEL;
+      try {
+        process.env.ANTHROPIC_API_KEY = "test-key-for-parity";
+        delete process.env.PFORGE_COST_MODEL;
 
-      const sliceSum = plan.slices.reduce((acc, s) => {
-        const est = estimateSlice({ plan, sliceNumber: s.number, mode, cwd: CLEAN_CWD });
-        return acc + est.estimatedCostUSD;
-      }, 0);
+        const plan = makePlan(5);
+        const quorumConfig = buildQuorumConfigForMode(mode);
 
-      const planEst = estimatePlan(plan, "claude-sonnet-4.5", CLEAN_CWD, quorumConfig, null);
-      const planTotal = planEst.totalCostWithQuorumUSD ?? planEst.estimatedCostUSD;
+        const sliceSum = plan.slices.reduce((acc, s) => {
+          const est = estimateSlice({ plan, sliceNumber: s.number, mode, cwd: CLEAN_CWD });
+          return acc + est.estimatedCostUSD;
+        }, 0);
 
-      // estimatePlan rounds to 2 decimals; estimateSlice to 6. Allow 1 cent tolerance.
-      expect(Math.abs(sliceSum - planTotal)).toBeLessThan(0.01);
+        const planEst = estimatePlan(plan, "claude-sonnet-4.5", CLEAN_CWD, quorumConfig, null);
+        const planTotal = planEst.totalCostWithQuorumUSD ?? planEst.estimatedCostUSD;
+
+        // estimatePlan rounds to 2 decimals; estimateSlice to 6. Allow 1 cent tolerance.
+        expect(Math.abs(sliceSum - planTotal)).toBeLessThan(0.01);
+      } finally {
+        if (origKey === undefined) delete process.env.ANTHROPIC_API_KEY;
+        else process.env.ANTHROPIC_API_KEY = origKey;
+        if (origCostModel === undefined) delete process.env.PFORGE_COST_MODEL;
+        else process.env.PFORGE_COST_MODEL = origCostModel;
+      }
     });
   }
 });

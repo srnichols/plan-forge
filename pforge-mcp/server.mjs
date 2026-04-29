@@ -131,6 +131,7 @@ const PFORGE = IS_WINDOWS ? "powershell.exe -NoProfile -ExecutionPolicy Bypass -
 
 // ─── Orchestrator State ───────────────────────────────────────────────
 let activeAbortController = null;
+let _planPathAliasWarned = false;
 let activeRunPromise = null;
 let activeHub = null;    // WebSocket hub instance
 let activeBridge = null; // OpenClaw Bridge instance
@@ -1825,11 +1826,24 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   // ─── Async orchestrator tools ───
   if (name === "forge_run_plan") {
     try {
+      // Validate plan path before any resolve() — accepts planPath as an alias for plan
+      let planArg = args.plan;
+      if ((typeof planArg !== "string" || planArg === "") && typeof args.planPath === "string" && args.planPath !== "") {
+        if (!_planPathAliasWarned) {
+          _planPathAliasWarned = true;
+          console.warn("[forge_run_plan] 'planPath' is an alias; prefer 'plan'");
+        }
+        planArg = args.planPath;
+      }
+      if (typeof planArg !== "string" || planArg === "") {
+        return { content: [{ type: "text", text: "forge_run_plan: 'plan' is required (string path to plan markdown)" }], isError: true };
+      }
+
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
-      const planPath = resolve(cwd, args.plan);
+      const planPath = resolve(cwd, planArg);
 
       if (!existsSync(planPath)) {
-        return { content: [{ type: "text", text: `Plan file not found: ${args.plan}` }], isError: true };
+        return { content: [{ type: "text", text: `Plan file not found: ${planArg}` }], isError: true };
       }
 
       activeAbortController = new AbortController();
@@ -5360,6 +5374,11 @@ export async function runDrainPass(cwd, source, hub, deps = {}) {
     dlq: result.stats.dlq,
     durationMs: Date.now() - t0,
   };
+}
+
+/** Reset the planPath-alias deprecation warning flag. Exported for testing only. */
+export function __resetPlanPathAliasWarned() {
+  _planPathAliasWarned = false;
 }
 
 /** Check whether the initialize-time drain should run. Exported for testing. */

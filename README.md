@@ -163,6 +163,7 @@ Key tools: `forge_run_plan` · `forge_liveguard_run` · `forge_analyze` · `forg
 | **[planforge.software/manual/](https://planforge.software/manual/)** | Interactive web manual (24 chapters + 6 appendices) |
 | **[planforge.software/faq.html](https://planforge.software/faq.html)** | FAQ |
 | **[AGENT-SETUP.md](AGENT-SETUP.md)** | AI agent entry point |
+| **[CONTRIBUTING.md](CONTRIBUTING.md)** · **[docs/RELEASE-CHECKLIST.md](docs/RELEASE-CHECKLIST.md)** | Maintainer guide · release & distribution-sync checklist |
 
 ---
 

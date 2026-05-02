@@ -57,6 +57,17 @@ chore(scope): build, deps, config
 - Bash: Follow existing patterns in `setup.sh`
 - Markdown: Use ATX headings (`#`), fenced code blocks, tables for structured data
 
+## Releasing (maintainers)
+
+Every tagged release MUST follow [docs/RELEASE-CHECKLIST.md](docs/RELEASE-CHECKLIST.md). It covers:
+
+- Distribution sync invariants (hooks mirror, instruction enumeration, prompt globs)
+- Version-file synchronization (`VERSION` + `pforge-mcp/package.json` + CHANGELOG)
+- The 9-step tag → push → release → bump-back sequence
+- Test triage policy and disaster recovery
+
+> **A pushed tag is NOT a Release.** Skipping `gh release create` makes the version invisible to `pforge self-update`. We've shipped that bug before — the checklist exists to prevent it again.
+
 ## License
 
 By contributing, you agree that your contributions will be licensed under the [MIT License](LICENSE).

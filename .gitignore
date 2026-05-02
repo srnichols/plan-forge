@@ -68,3 +68,7 @@ docs/plans/testbed-findings/*.json
 .pr-body-*.md
 
 .forge/hammer-forge-master/reports/
+
+# Temporary scratch files
+.tmp-*
+

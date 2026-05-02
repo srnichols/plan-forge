@@ -1162,6 +1162,7 @@ $sharedFiles = @(
     @{ Src = ".github/instructions/architecture-principles.instructions.md";   Dst = ".github/instructions/architecture-principles.instructions.md" }
     @{ Src = ".github/instructions/context-fuel.instructions.md";              Dst = ".github/instructions/context-fuel.instructions.md" }
     @{ Src = ".github/instructions/git-workflow.instructions.md";              Dst = ".github/instructions/git-workflow.instructions.md" }
+    @{ Src = ".github/instructions/self-repair-reporting.instructions.md";     Dst = ".github/instructions/self-repair-reporting.instructions.md" }
     @{ Src = ".github/instructions/status-reporting.instructions.md";          Dst = ".github/instructions/status-reporting.instructions.md" }
     @{ Src = "templates/.github/instructions/project-principles.instructions.md"; Dst = ".github/instructions/project-principles.instructions.md" }
 )

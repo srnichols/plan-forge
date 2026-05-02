@@ -1570,7 +1570,7 @@ function Invoke-Update {
     # Update shared instruction files
     $srcSharedInstr = Join-Path $sourcePath ".github/instructions"
     $dstInstr = Join-Path $RepoRoot ".github/instructions"
-    $sharedInstructions = @("architecture-principles.instructions.md", "git-workflow.instructions.md", "ai-plan-hardening-runbook.instructions.md", "status-reporting.instructions.md", "context-fuel.instructions.md")
+    $sharedInstructions = @("architecture-principles.instructions.md", "git-workflow.instructions.md", "ai-plan-hardening-runbook.instructions.md", "self-repair-reporting.instructions.md", "status-reporting.instructions.md", "context-fuel.instructions.md")
     if (Test-Path $srcSharedInstr) {
         foreach ($instrName in $sharedInstructions) {
             $srcFile = Join-Path $srcSharedInstr $instrName

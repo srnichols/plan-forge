@@ -38,6 +38,14 @@ export const TWEAK_QUESTIONS = Object.freeze([
     required: true,
     defaultSource: "validation-gate",
   }),
+  // Issue #135 — same blocker as feature lane: `forbidden-actions` is in
+  // CRITICAL_FIELDS so even tweak smelts must answer this to finalize.
+  Object.freeze({
+    id: "forbidden-actions",
+    prompt: "What MUST this tweak not do? (e.g., 'no schema changes', 'no edits outside scope-file')",
+    required: true,
+    defaultSource: null,
+  }),
   Object.freeze({
     id: "rollback",
     prompt: "How do we roll back if this breaks something?",
@@ -76,6 +84,15 @@ export const FEATURE_QUESTIONS = Object.freeze([
     prompt: "Which build/test commands gate completion of each slice?",
     required: true,
     defaultSource: "validation-gate",
+  }),
+  // Issue #135 — `forbidden-actions` is in CRITICAL_FIELDS (crucible-server.mjs)
+  // so finalize refuses any feature smelt that lacks it. Without this question
+  // the interview completes but finalize is unrunnable without manual JSON edit.
+  Object.freeze({
+    id: "forbidden-actions",
+    prompt: "What MUST this slice not do? (e.g., 'no destructive migrations', 'no API contract changes', 'no edits outside scope-files')",
+    required: true,
+    defaultSource: null,
   }),
   Object.freeze({
     id: "rollback",

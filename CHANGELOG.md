@@ -7,6 +7,38 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.82.1] — 2026-05-02 — 9-issue hotfix sweep + setup/update sync repair
+
+> **Hotfix release** addressing the 9-issue cluster filed against v2.82.0 (#130–#138). Five orchestrator/Crucible bug classes that produced false-pass slices, orphaned deliverables, false-fail gates, and undocumented Crucible MCP failures. Net test delta: +5 passing, zero regressions across 4010-test suite.
+
+### Fixed — Orchestrator (#130–#133)
+- **#130 — Slice-prompt scope used `Context files` instead of `Files in scope`** — `parseSlices` now accepts `**Files in scope**` heading + multi-line bullet list as an edit allow-list source (previously only inline `**Files:**` was parsed). Also accepts `**Exit gate**` as an alias for `**Validation Gate**`. Hand-authored plans following the Crucible/Hardener convention no longer silently no-op slices that declared distinct context vs. edit targets.
+- **#131 — `node -e` gates mangled by PowerShell on Windows** — `runGate` detects `node -e "..."` / `node -p "..."` invocations and runs them via `execFileSync('node', ['-e', script], { shell: false })`, bypassing PowerShell's `$var` expansion (`$transaction` → `""`) and backslash-stripping inside double-quoted strings (`\b`/`\s`/`\d` regex escapes were being eaten before node ever saw them). Eliminates the false-fail class that hit Phase-64 Slice 2, Phase-66 Slices 1+2 in field reports.
+- **#132 — Failing gates orphaned worker deliverables** — new `stageOrphansOnSliceFailure()` helper runs `git add -A` (no commit) when a slice fails, writes `.forge/runs/<runId>/orphans-slice-<N>.json` listing every uncommitted file with copy-paste recovery commands, and emits a `slice-orphan-warning` event. The gate said no, the work is preserved; the human triages instead of losing it to a clean-tree on the next resume.
+- **#133 — Non-empty stderr false-failed gates with exit code 0** — gate pass/fail is now strictly determined by `exitCode`. Stderr is captured separately (still surfaced for diagnostics in `gateResult.stderr`) but never promotes to `gateError` when exit was zero. Opt-in `failOnStderr: true` for gates that genuinely need strict-stderr behaviour. Prisma's `"Loaded Prisma config from prisma.config.ts"` banner no longer kills passing migrations.
+
+### Fixed — Crucible (#134–#138)
+- **#134 — `forge_crucible_*` MCP tools fell through to "Unknown command"** — added all 6 Crucible tool names (`forge_crucible_submit`, `_ask`, `_preview`, `_finalize`, `_list`, `_abandon`) to the `MCP_ONLY_TOOLS` allowlist in `server.mjs`. `POST /api/tool/forge_crucible_*` now routes through the MCP `CallToolRequestSchema` handler instead of falling through to `pforge.ps1` (which has no Crucible CLI verbs).
+- **#135 — Feature/tweak interview never asked for `forbidden-actions`** — `forbidden-actions` added as a 7th feature-lane question and 4th tweak-lane question (between validation-gates and rollback). `CRITICAL_FIELDS` required it but no question collected it, making finalize unrunnable without a hand-edit of `.forge/crucible/<id>.json`. Question banks now match `CRITICAL_FIELDS`.
+- **#136 — `/api/crucible/finalize` HTTP error stripped `criticalGaps`** — REST wrapper now returns `409 Conflict` with `criticalGaps[]`, `unresolvedFields[]`, and a `hint` pointing at `/api/crucible/preview`. LLM agents calling finalize can self-correct without a second API round-trip.
+- **#137 — `forge_crucible_finalize` overwrote hand-authored plans** — new `CruciblePlanExistsError` thrown when `docs/plans/Phase-NN.md` exists and is non-empty. A side-by-side `Phase-NN.crucible-draft.md` is written so the smelt's draft is preserved, but the hand-authored plan is never replaced unless the caller passes `overwrite: true` (new optional param on both REST and MCP tool schemas). REST returns 409 with `phaseName` / `planPath` / `draftPath`.
+- **#138 — `/api/crucible/ask` ignored client-supplied question id** — new optional `questionId` parameter on both REST and MCP `forge_crucible_ask` tool schemas. When supplied, the server validates it matches the pending question id and refuses with `ASK_QUESTION_MISMATCH` (REST: 409 with `expected` / `got`; MCP: structured `{ ok: false, code, expected, got }`). Multi-turn LLM clients that fall out of sync now get a loud failure instead of silent answer corruption.
+
+### Fixed — Setup/update distribution sync
+- **`templates/.github/hooks/postSlice` was missing** — the executable `postSlice` shell hook (Phase-38.3 knowledge-graph rebuild) existed in `.github/hooks/` but never landed in `templates/.github/hooks/`, so consuming repos never received it via setup. Mirrored per setup-update-invariants checklist.
+- **`self-repair-reporting.instructions.md` was missing from setup/update enumerations** — the file existed in `.github/instructions/` and was loaded by Copilot, but `setup.ps1` Step 2, `setup.sh` Step 2, `pforge.ps1`'s `$sharedInstructions`, and `pforge.sh`'s `for instr_name in ...` loop all enumerated only 5 of the 6 shared instruction files. Consumers running `pforge update` never received it. Now enumerated in all 4 distribution surfaces.
+
+### Tests
+- All 9 issues fixed without regressing any previously-passing tests. Net suite delta: 3958 → 3963 passing (+5), 45 → 40 failing (-5). Remaining 40 failures are pre-existing baseline failures unrelated to this hotfix (forge-master intent router, tempering-integration two-scanner, runtime-quorum-viability, mcp-audit-tools, cost-service-real-plans).
+- `tests/crucible-server.test.mjs` — 4 finalize tests now walk the full interview before finalizing (CRITICAL_FIELDS gate); `totalQuestions` updated 6→7.
+- `tests/crucible-interview.test.mjs` — bank-length expectations updated tweak 3→4, feature 6→7.
+- `tests/crucible-config-governance.test.mjs` — handoff test provides all 4 tweak answers.
+
+### Schema additions (backward-compatible)
+- `forge_crucible_ask` gained optional `questionId` (string).
+- `forge_crucible_finalize` gained optional `overwrite` (boolean).
+- New error codes documented in `tools.json` + `capabilities.mjs`: `ASK_QUESTION_MISMATCH`, `CRITICAL_FIELDS_MISSING`, `PLAN_ALREADY_EXISTS`.
+
 ## [2.82.0] — 2026-04-29 — Host-aware routing + 19-issue sweep
 
 ### Added

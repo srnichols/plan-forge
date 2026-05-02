@@ -45,6 +45,27 @@ function makeFakeHub() {
   };
 }
 
+/**
+ * Walk a fresh feature smelt through the full interview so handleFinalize
+ * passes the CRITICAL_FIELDS check. Issue #135 surfaced that finalize
+ * legitimately refuses smelts missing `forbidden-actions` (and has done
+ * for `scope-files` / `validation-gates` since v2.37); these tests need
+ * to actually answer the questions before finalize, not assume an empty
+ * smelt finalizes cleanly.
+ */
+function answerFeatureInterview(id, projectDir, hub) {
+  const answers = [
+    "user-visible outcome",
+    "src/feature.ts, src/feature.test.ts",
+    "no schema changes",
+    "src/feature.test.ts",
+    "npm run test",
+    "no destructive migrations; no API contract changes",
+    "git revert HEAD",
+  ];
+  for (const a of answers) handleAsk({ id, answer: a, projectDir, hub });
+}
+
 beforeEach(() => {
   projectDir = mkdtempSync(join(tmpdir(), "pforge-crucible-srv-"));
   fakeHub = makeFakeHub();
@@ -92,7 +113,8 @@ describe("getNextQuestion", () => {
     expect(q).not.toBeNull();
     expect(q.id).toBe("goal");
     expect(q.questionIndex).toBe(1);
-    expect(q.totalQuestions).toBe(6);
+    // Issue #135 — feature lane gained `forbidden-actions` (was 6).
+    expect(q.totalQuestions).toBe(7);
   });
   it("returns null once every question is answered", () => {
     const smelt = {
@@ -100,6 +122,8 @@ describe("getNextQuestion", () => {
       answers: [
         { questionId: "scope-file", answer: "x" },
         { questionId: "validation", answer: "y" },
+        // Issue #135 — tweak lane also gained `forbidden-actions`.
+        { questionId: "forbidden-actions", answer: "none" },
         { questionId: "rollback", answer: "z" },
       ],
     };
@@ -246,7 +270,8 @@ describe("handleAsk", () => {
     expect(fakeHub.broadcasts[0].data).toMatchObject({
       id,
       questionIndex: 1,
-      totalQuestions: 6,
+      // Issue #135 — feature lane gained `forbidden-actions` (was 6).
+      totalQuestions: 7,
     });
   });
   it("advances question counter across multiple answers", () => {
@@ -295,6 +320,7 @@ describe("handleFinalize", () => {
       projectDir,
       hub: fakeHub,
     });
+    answerFeatureInterview(id, projectDir, fakeHub);
     fakeHub.broadcasts.length = 0;
 
     const r = handleFinalize({ id, projectDir, hub: fakeHub });
@@ -328,6 +354,7 @@ describe("handleFinalize", () => {
     writeFileSync(join(plansDir, "Phase-01.md"), "# existing", "utf-8");
 
     const { id } = handleSubmit({ rawIdea: "y", projectDir, hub: fakeHub });
+    answerFeatureInterview(id, projectDir, fakeHub);
     const r = handleFinalize({ id, projectDir, hub: fakeHub });
     expect(r.phaseName).toBe("Phase-02");
   });
@@ -339,6 +366,7 @@ describe("handleFinalize", () => {
   });
   it("refuses to double-finalize", () => {
     const { id } = handleSubmit({ rawIdea: "x", projectDir, hub: fakeHub });
+    answerFeatureInterview(id, projectDir, fakeHub);
     handleFinalize({ id, projectDir, hub: fakeHub });
     expect(() => handleFinalize({ id, projectDir, hub: fakeHub }))
       .toThrow(/cannot finalize/);
@@ -364,6 +392,7 @@ describe("handleList", () => {
   it("filters by status", () => {
     const { id } = handleSubmit({ rawIdea: "x", projectDir, hub: fakeHub });
     handleSubmit({ rawIdea: "y", projectDir, hub: fakeHub });
+    answerFeatureInterview(id, projectDir, fakeHub);
     handleFinalize({ id, projectDir, hub: fakeHub });
     expect(handleList({ status: "in-progress", projectDir }).smelts).toHaveLength(1);
     expect(handleList({ status: "finalized", projectDir }).smelts).toHaveLength(1);

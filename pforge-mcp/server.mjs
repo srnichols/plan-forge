@@ -92,6 +92,8 @@ import {
   handleList as crucibleHandleList,
   handleAbandon as crucibleHandleAbandon,
   CrucibleFinalizeRefusedError,
+  CruciblePlanExistsError,
+  CrucibleAskMismatchError,
 } from "./crucible-server.mjs";
 import { loadCrucibleConfig, saveCrucibleConfig } from "./crucible-config.mjs";
 import { readManualImports } from "./crucible-enforce.mjs";
@@ -956,6 +958,7 @@ const TOOLS = [
       type: "object",
       properties: {
         id: { type: "string", description: "Smelt id returned by forge_crucible_submit." },
+        questionId: { type: "string", description: "Optional — the id of the question this answer is for. When supplied, the server validates it matches the pending question and refuses with ASK_QUESTION_MISMATCH on drift (Issue #138). Omit to trust the server's pending question." },
         answer: { type: "string", description: "Answer to the current question. Omit to fetch the current question without advancing." },
         path: { type: "string", description: "Project directory (default: current)" },
       },
@@ -976,11 +979,12 @@ const TOOLS = [
   },
   {
     name: "forge_crucible_finalize",
-    description: "Finalize a smelt — atomically claim the next phase number, write docs/plans/Phase-NN.md with a `crucibleId:` frontmatter stamp, and mark the smelt finalized. Returns the chosen phase name and the plan path. Plan Hardener handoff lands in Slice 01.6. USE FOR: closing the idea→spec workflow when the interview is done.",
+    description: "Finalize a smelt — atomically claim the next phase number, write docs/plans/Phase-NN.md with a `crucibleId:` frontmatter stamp, and mark the smelt finalized. Refuses to overwrite an existing plan unless `overwrite:true` is passed (Issue #137). Returns the chosen phase name and the plan path. USE FOR: closing the idea→spec workflow when the interview is done.",
     inputSchema: {
       type: "object",
       properties: {
         id: { type: "string", description: "Smelt id. Must be status=in-progress." },
+        overwrite: { type: "boolean", description: "Issue #137 — when true, replaces an existing docs/plans/Phase-NN.md. When false (default), refuses if the file exists and instead writes a side-by-side `Phase-NN.crucible-draft.md`." },
         path: { type: "string", description: "Project directory (default: current)" },
       },
       required: ["id"],
@@ -2521,12 +2525,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
       const result = crucibleHandleAsk({
         id: args.id,
+        questionId: args.questionId,
         answer: args.answer,
         projectDir: cwd,
         hub: activeHub,
       });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
+      // Issue #138 — surface mismatched questionId as a structured payload
+      // so callers can re-fetch the pending question and retry.
+      if (err instanceof CrucibleAskMismatchError) {
+        const payload = { ok: false, code: err.code, expected: err.expected, got: err.got, hint: err.message };
+        return { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }] };
+      }
       return { content: [{ type: "text", text: `Crucible ask error: ${err.message}` }], isError: true };
     }
   }
@@ -2548,11 +2559,26 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         id: args.id,
         projectDir: cwd,
         hub: activeHub,
+        overwrite: args.overwrite === true,
       });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
       if (err instanceof CrucibleFinalizeRefusedError) {
         const payload = { ok: false, refused: true, criticalGaps: err.payload.criticalGaps, hint: err.payload.hint };
+        return { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }] };
+      }
+      // Issue #137 — plan-already-exists is a structured refusal so callers
+      // can choose to re-issue with overwrite:true or accept the side-by-side draft.
+      if (err instanceof CruciblePlanExistsError) {
+        const payload = {
+          ok: false,
+          refused: true,
+          code: err.code,
+          phaseName: err.phaseName,
+          planPath: err.planPath,
+          draftPath: err.draftPath,
+          hint: err.message,
+        };
         return { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }] };
       }
       return { content: [{ type: "text", text: `Crucible finalize error: ${err.message}` }], isError: true };
@@ -6436,13 +6462,23 @@ export function createExpressApp() {
   // POST /api/crucible/ask — record an answer and fetch the next question
   app.post("/api/crucible/ask", (req, res) => {
     try {
-      const { id, answer } = req.body || {};
+      const { id, answer, questionId } = req.body || {};
       if (typeof id !== "string" || !id) {
         return res.status(400).json({ error: "id is required" });
       }
-      const result = crucibleHandleAsk({ id, answer, projectDir: PROJECT_DIR, hub: activeHub });
+      const result = crucibleHandleAsk({ id, answer, questionId, projectDir: PROJECT_DIR, hub: activeHub });
       res.json(result);
     } catch (err) {
+      // Issue #138 — surface ASK_QUESTION_MISMATCH as 409 with the expected
+      // pending question so the client can re-fetch and retry.
+      if (err && err.code === "ASK_QUESTION_MISMATCH") {
+        return res.status(409).json({
+          error: err.message,
+          code: err.code,
+          expected: err.expected,
+          got: err.got,
+        });
+      }
       const status = /not found/i.test(err.message) ? 404 : 500;
       res.status(status).json({ error: err.message });
     }
@@ -6471,13 +6507,39 @@ export function createExpressApp() {
   // POST /api/crucible/finalize — emit docs/plans/Phase-NN.md
   app.post("/api/crucible/finalize", (req, res) => {
     try {
-      const { id } = req.body || {};
+      const { id, overwrite } = req.body || {};
       if (typeof id !== "string" || !id) {
         return res.status(400).json({ error: "id is required" });
       }
-      const result = crucibleHandleFinalize({ id, projectDir: PROJECT_DIR, hub: activeHub });
+      const result = crucibleHandleFinalize({
+        id,
+        projectDir: PROJECT_DIR,
+        hub: activeHub,
+        overwrite: overwrite === true,
+      });
       res.status(201).json(result);
     } catch (err) {
+      // Issue #136 — propagate criticalGaps so callers don't have to fall
+      // back to GET /preview to discover what's missing.
+      if (err instanceof CrucibleFinalizeRefusedError) {
+        return res.status(409).json({
+          error: "Cannot finalize: smelt has unresolved fields. Resolve required questions first.",
+          criticalGaps: err.payload?.criticalGaps || [],
+          unresolvedFields: err.payload?.criticalGaps || [],
+          hint: err.payload?.hint || "GET /api/crucible/preview?id=... for details",
+        });
+      }
+      // Issue #137 — surface "plan already exists" as 409 with a path hint
+      // so callers can re-issue with overwrite:true if they really mean it.
+      if (err && err.code === "PLAN_ALREADY_EXISTS") {
+        return res.status(409).json({
+          error: err.message,
+          phaseName: err.phaseName,
+          planPath: err.planPath,
+          draftPath: err.draftPath,
+          hint: "Re-submit with overwrite:true to replace, or accept the side-by-side draft path.",
+        });
+      }
       const status = /not found/i.test(err.message) ? 404 : 500;
       res.status(status).json({ error: err.message });
     }
@@ -6851,6 +6913,16 @@ export function createExpressApp() {
     "forge_graph_query",
     // Phase-38.6 — Pattern list is MCP-native.
     "forge_patterns_list",
+    // Issue #134 — Crucible tools are MCP-native (handled by switch-case
+    // in CallToolRequestSchema). Without these in the allowlist,
+    // POST /api/tool/forge_crucible_* falls through to runPforge() which
+    // has no Crucible CLI commands and returns "Unknown command".
+    "forge_crucible_submit",
+    "forge_crucible_ask",
+    "forge_crucible_preview",
+    "forge_crucible_finalize",
+    "forge_crucible_list",
+    "forge_crucible_abandon",
   ]);
   app.post("/api/tool/:name", async (req, res) => {
     try {

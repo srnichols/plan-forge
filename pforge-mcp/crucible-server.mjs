@@ -99,6 +99,37 @@ export class CrucibleFinalizeRefusedError extends Error {
 }
 
 /**
+ * Issue #137 — thrown by handleFinalize when `docs/plans/Phase-NN.md` already
+ * exists and the caller did not pass `overwrite: true`. Carries the existing
+ * path plus the side-by-side draft path that was written instead.
+ */
+export class CruciblePlanExistsError extends Error {
+  constructor({ phaseName, planPath, draftPath }) {
+    super(`Plan already exists at ${planPath}. Pass overwrite:true to replace, or use the side-by-side draft at ${draftPath}.`);
+    this.name = "CruciblePlanExistsError";
+    this.code = "PLAN_ALREADY_EXISTS";
+    this.phaseName = phaseName;
+    this.planPath = planPath;
+    this.draftPath = draftPath;
+  }
+}
+
+/**
+ * Issue #138 — thrown by handleAsk when the client supplies an explicit `id`
+ * that does not match the question the server has pending. Prevents silent
+ * answer corruption when client and server fall out of sync.
+ */
+export class CrucibleAskMismatchError extends Error {
+  constructor({ expected, got }) {
+    super(`Question id mismatch: server expected '${expected}' but client sent '${got}'. Re-fetch the next question and retry.`);
+    this.name = "CrucibleAskMismatchError";
+    this.code = "ASK_QUESTION_MISMATCH";
+    this.expected = expected;
+    this.got = got;
+  }
+}
+
+/**
  * Fields whose absence blocks finalization entirely. A plan that still has
  * {{TBD: <any of these>}} cannot be executed by the orchestrator.
  */
@@ -239,7 +270,7 @@ export function handleSubmit({ rawIdea, lane, source, parentSmeltId, projectDir,
  * not a client-supplied string — and so the interview cannot record
  * answers for nonexistent questions.
  */
-export function handleAsk({ id, answer, projectDir, hub }) {
+export function handleAsk({ id, answer, questionId, projectDir, hub }) {
   const smelt = loadSmelt(id, projectDir);
   if (!smelt) throw new Error(`smelt not found: ${id}`);
   if (smelt.status !== "in-progress") {
@@ -248,6 +279,14 @@ export function handleAsk({ id, answer, projectDir, hub }) {
 
   let current = smelt;
   const pending = interviewGetNextQuestion(smelt, { projectDir });
+
+  // Issue #138 — if the caller supplied a `questionId` (the schema field
+  // formerly mistaken for the smelt `id`), validate it matches the pending
+  // question. Refuse mismatched answers so a confused client can't silently
+  // record the wrong answer against the wrong question.
+  if (typeof questionId === "string" && questionId.length > 0 && pending && questionId !== pending.id) {
+    throw new CrucibleAskMismatchError({ expected: pending.id, got: questionId });
+  }
 
   if (answer !== undefined && answer !== null && `${answer}`.length > 0 && pending) {
     const patch = {
@@ -290,8 +329,17 @@ export function handlePreview({ id, projectDir }) {
 
 /**
  * forge_crucible_finalize
+ *
+ * @param {object} params
+ * @param {string} params.id
+ * @param {string} params.projectDir
+ * @param {object} [params.hub]
+ * @param {boolean} [params.overwrite=false] — Issue #137: when false (default),
+ *   refuses to overwrite an existing `docs/plans/Phase-NN.md` and instead
+ *   writes a side-by-side `Phase-NN.crucible-draft.md` plus throws a
+ *   `CruciblePlanExistsError` so the caller can decide.
  */
-export function handleFinalize({ id, projectDir, hub }) {
+export function handleFinalize({ id, projectDir, hub, overwrite = false }) {
   const smelt = loadSmelt(id, projectDir);
   if (!smelt) throw new Error(`smelt not found: ${id}`);
   if (smelt.status !== "in-progress") {
@@ -314,7 +362,6 @@ export function handleFinalize({ id, projectDir, hub }) {
 
   const existing = collectExistingPhaseNames(projectDir);
   const phaseName = nextPhaseNumber(existing);
-  claimPhaseNumber(projectDir, phaseName, id);
 
   const planDir = resolve(projectDir, "docs", "plans");
   mkdirSync(planDir, { recursive: true });
@@ -329,6 +376,28 @@ export function handleFinalize({ id, projectDir, hub }) {
   const bodySmelt = { ...smelt, phaseName };
   const body = renderDraft(bodySmelt, { cwd: projectDir });
   const markdown = frontmatter + body;
+
+  // Issue #137 — don't overwrite a hand-authored plan. If the path already
+  // exists and is non-empty, write a side-by-side `.crucible-draft.md` and
+  // refuse with a CruciblePlanExistsError that surfaces both paths.
+  const planExists = existsSync(planPath);
+  let planFileExistedAndNonEmpty = false;
+  if (planExists) {
+    try {
+      const stat = statSync(planPath);
+      planFileExistedAndNonEmpty = stat.size > 0;
+    } catch { /* treat unreadable as non-existent */ }
+  }
+
+  if (planFileExistedAndNonEmpty && !overwrite) {
+    const draftPath = join(planDir, `${phaseName}.crucible-draft.md`);
+    writeFileSync(draftPath, markdown, "utf-8");
+    // Do NOT claim the phase number, do NOT mutate the smelt status — the
+    // caller has to re-finalize with overwrite:true (or pick a new phase).
+    throw new CruciblePlanExistsError({ phaseName, planPath, draftPath });
+  }
+
+  claimPhaseNumber(projectDir, phaseName, id);
   writeFileSync(planPath, markdown, "utf-8");
 
   updateSmelt(id, {

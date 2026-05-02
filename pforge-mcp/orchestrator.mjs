@@ -363,6 +363,10 @@ function parseSlices(lines, opts = {}) {
   let inCodeBlock = false;
   let inValidationGate = false;
   let codeBlockContent = [];
+  // Issue #130 — when set, subsequent bullet lines are appended to current.scope
+  // until a blank line, another bold heading, or a non-bullet line is reached.
+  // Reset whenever we hit a slice header, a fence, or a non-matching line.
+  let inFilesInScopeBlock = false;
   // Meta-bug #89: track whether the current code block was captured as an
   // implicit validation gate (bare bash/sh block under a slice header with
   // no prior **Validation Gate**: marker). Lint-tracked separately from
@@ -374,6 +378,8 @@ function parseSlices(lines, opts = {}) {
 
     // Track code blocks
     if (line.startsWith("```")) {
+      // Issue #130 \u2014 a fence always closes any open Files-in-scope window.
+      inFilesInScopeBlock = false;
       if (inCodeBlock) {
         // Closing code block
         if (inValidationGate && current) {
@@ -426,6 +432,9 @@ function parseSlices(lines, opts = {}) {
     if (sliceMatch) {
       // Save previous slice
       if (current) slices.push(current);
+      // Issue #130 \u2014 reset any open Files-in-scope window when crossing a
+      // slice boundary so file lists never leak between slices.
+      inFilesInScopeBlock = false;
 
       const rawNumber = sliceMatch[1];
       const rawTitle = sliceMatch[2].trim();
@@ -502,8 +511,12 @@ function parseSlices(lines, opts = {}) {
     // Supports two formats:
     //   1. **Validation Gate**: <inline text>  (prose description, no code block)
     //   2. **Validation Gate**:\n```bash\n<commands>\n```  (fenced code block)
-    const gateMatch = line.match(/\*\*Validation Gate\*?\*?\s*:?\s*(.*)$/i);
+    // Issue #130 — also accept **Exit gate** as an alias for Validation Gate;
+    // many hand-authored plans use that label and the absence of a parser
+    // match silently produced "No validation gate defined" + false-positive passes.
+    const gateMatch = line.match(/\*\*(?:Validation Gate|Exit [Gg]ate)\*?\*?\s*:?\s*(.*)$/i);
     if (gateMatch) {
+      inFilesInScopeBlock = false;
       const inlineText = (gateMatch[1] || "").trim();
       if (inlineText && current) {
         // Inline gate text — extract backtick-wrapped commands or use prose
@@ -563,15 +576,23 @@ function parseSlices(lines, opts = {}) {
     // them so SCOPE always covers what the plan declares as in-scope.
     //
     // Match: **Files:** `a.ts`, `b.ts`  /  **Files**: a.ts, b.ts
+    //        **Files in scope**: `a.ts`, `b.ts`
     // We only treat backtick-wrapped or whitespace-separated path-like tokens
     // as files; prose lines that happen to start with the word "Files" are
     // ignored when no path tokens are found.
-    const filesBodyMatch = line.match(/^\s*[-*]?\s*\*\*Files:?\*\*:?\s*(.+)/i);
+    //
+    // Issue #130 — also accept the multi-line bullet-list form:
+    //   **Files in scope**
+    //   - `path/to/file.tsx` — prose description
+    //   - `path/to/other.tsx` — more prose
+    // The orchestrator silently no-op'd Phase-57 Slice 5 because it parsed
+    // **Context Files** as the edit allow-list and never saw **Files in scope**.
+    const filesBodyMatch = line.match(/^\s*[-*]?\s*\*\*Files(?:\s+in\s+scope)?:?\*\*:?\s*(.*)$/i);
     if (filesBodyMatch) {
-      const rest = filesBodyMatch[1];
+      const rest = (filesBodyMatch[1] || "").trim();
       const backticks = rest.match(/`([^`]+)`/g) || [];
       let candidates = backticks.map((s) => s.replace(/`/g, "").trim());
-      if (candidates.length === 0) {
+      if (candidates.length === 0 && rest.length > 0) {
         // No backticks — fall back to comma/whitespace splitting and keep
         // only tokens that look like a path (contain '/' or '.' or end in *).
         candidates = rest
@@ -581,6 +602,43 @@ function parseSlices(lines, opts = {}) {
       }
       for (const f of candidates) {
         if (!current.scope.includes(f)) current.scope.push(f);
+      }
+      // Issue #130 — if the heading line carried no inline files, the file
+      // list is on subsequent bullet lines. Open a multi-line capture window.
+      inFilesInScopeBlock = candidates.length === 0;
+      continue;
+    }
+
+    // Issue #130 — multi-line `**Files in scope**` bullet capture. While the
+    // window is open, every `- `/`* ` line is parsed for backtick-wrapped or
+    // path-like tokens. The window closes on a blank line, a new bold heading,
+    // or any non-bullet line.
+    if (inFilesInScopeBlock) {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        inFilesInScopeBlock = false;
+      } else if (/^\*\*/.test(trimmed) || /^#/.test(trimmed)) {
+        inFilesInScopeBlock = false;
+        // fall through so this line is parsed by the rules below
+      } else {
+        const bulletMatch = trimmed.match(/^[-*]\s+(.+)/);
+        if (bulletMatch) {
+          const body = bulletMatch[1];
+          const backticks = body.match(/`([^`]+)`/g) || [];
+          let candidates = backticks.map((s) => s.replace(/`/g, "").trim());
+          if (candidates.length === 0) {
+            // First whitespace-separated token that looks like a path.
+            const firstToken = body.split(/[\s,]+/)[0].replace(/[.,;]+$/, "");
+            if (firstToken && /[\/.*]/.test(firstToken)) candidates = [firstToken];
+          }
+          for (const f of candidates) {
+            if (!current.scope.includes(f)) current.scope.push(f);
+          }
+          continue;
+        } else {
+          inFilesInScopeBlock = false;
+          // fall through
+        }
       }
     }
 
@@ -2571,18 +2629,36 @@ export function suggestAllowedCommand(token) {
  * Run a validation gate command directly (no AI worker needed).
  * Commands are validated against an allowlist of common build/test tools.
  *
+ * Issue #133: pass/fail is strictly determined by the child process's
+ * exit code. Stderr content alone never causes a failure (Prisma's
+ * "Loaded Prisma config from prisma.config.ts" banner used to false-fail
+ * gates that exited 0). Stderr is captured separately so callers can
+ * surface it for diagnostics. Opt-in via `failOnStderr` if a gate
+ * genuinely needs strict-stderr behaviour.
+ *
+ * Issue #131: `node -e "<script>"` (and `node -p "<expr>"`) commands are
+ * executed via `execFileSync('node', ['-e', script], { shell: false })`
+ * so PowerShell never sees the script. Previously, `$transaction` was
+ * expanded to "" and `\b`/`\s`/`\d` regex escapes were stripped before
+ * node received the argv \u2014 producing false-fail gates with shipped
+ * deliverables.
+ *
  * @param {string} command - Shell command to run
  * @param {string} cwd - Working directory
- * @returns {{ success: boolean, output: string, error: string }}
+ * @param {object} [opts]
+ * @param {boolean} [opts.failOnStderr=false] - Issue #133 opt-in: treat
+ *   non-empty stderr as failure even when exit code is 0.
+ * @returns {{ success: boolean, output: string, error: string, stderr: string, exitCode: number }}
  */
-export function runGate(command, cwd) {
+export function runGate(command, cwd, opts = {}) {
+  const failOnStderr = opts.failOnStderr === true;
   // C1: Validate gate commands against allowlist to prevent arbitrary execution
   const cmdBase = command.trim().split(/\s+/)[0].toLowerCase();
   const isAllowed = GATE_ALLOWED_PREFIXES.some((p) => cmdBase === p || cmdBase.endsWith(`/${p}`));
   if (!isAllowed) {
     const hints = [];
     if (isPlaceholderToken(cmdBase)) {
-      hints.push(`'${cmdBase}' looks like an unfilled template placeholder — edit your plan file and replace it with a real build/test command.`);
+      hints.push(`'${cmdBase}' looks like an unfilled template placeholder \u2014 edit your plan file and replace it with a real build/test command.`);
     }
     const suggestion = suggestAllowedCommand(cmdBase);
     if (suggestion) hints.push(`Did you mean '${suggestion}'?`);
@@ -2590,17 +2666,62 @@ export function runGate(command, cwd) {
     return {
       success: false,
       output: "",
+      stderr: "",
       error: `Validation gate blocked: '${cmdBase}' not in allowlist.${hintSuffix} Allowed: ${GATE_ALLOWED_PREFIXES.join(", ")}`,
+      exitCode: -1,
     };
   }
 
   const gateTimeout = resolveGateTimeoutMs();
 
+  // Issue #131 \u2014 inline-script node invocations (`node -e "..."` / `node -p "..."`).
+  // Run via execFileSync with shell:false so PowerShell never parses `$var`
+  // or strips `\b`/`\s`/`\d` regex escapes from the script body.
+  const inlineNodeMatch = command.match(/^\s*node\s+(-e|-p|--eval|--print)\s+(.+)$/i);
+  if (inlineNodeMatch) {
+    const flag = inlineNodeMatch[1].startsWith("--") ? inlineNodeMatch[1] : (inlineNodeMatch[1] === "-p" ? "--print" : "--eval");
+    let script = inlineNodeMatch[2].trim();
+    // Strip a single matching pair of outer quotes (single or double) the
+    // shell would normally consume. Inner quotes survive because we never
+    // round-trip through a shell.
+    if ((script.startsWith('"') && script.endsWith('"')) || (script.startsWith("'") && script.endsWith("'"))) {
+      script = script.slice(1, -1);
+    }
+    try {
+      const stdoutBuf = execFileSync("node", [flag, script], {
+        cwd,
+        encoding: "utf-8",
+        timeout: gateTimeout,
+        maxBuffer: 16 * 1024 * 1024,
+        env: { ...process.env, NO_COLOR: "1" },
+        stdio: ["ignore", "pipe", "pipe"],
+        shell: false,
+      });
+      return { success: true, output: (stdoutBuf || "").trim(), stderr: "", error: "", exitCode: 0 };
+    } catch (err) {
+      const exitCode = typeof err.status === "number" ? err.status : 1;
+      const stderrText = (err.stderr || "").toString();
+      const stdoutText = (err.stdout || "").toString();
+      // Issue #133 \u2014 if exit was zero (signal etc.), still treat as success
+      // unless caller opted in to failOnStderr.
+      if (exitCode === 0 && !failOnStderr) {
+        return { success: true, output: stdoutText.trim(), stderr: stderrText.trim(), error: "", exitCode };
+      }
+      return {
+        success: false,
+        output: stdoutText.trim(),
+        stderr: stderrText.trim(),
+        error: stderrText.trim() || err.message || "node -e gate failed",
+        exitCode,
+      };
+    }
+  }
+
   // Windows bash dispatch: route Unix tools through bash so plans that use
   // grep/sed/awk/etc. work on Windows without manual wrapping.
   // Also route shell-chained commands (`cmd1 ; cmd2`, `cmd1 && cmd2`) through bash,
   // because cmd.exe treats `;` as a literal character (not a separator) and would
-  // pass the remainder as argv to the first tool — a common false-failure source.
+  // pass the remainder as argv to the first tool \u2014 a common false-failure source.
   if (process.platform === "win32") {
     // Strip any path prefix and .exe/.cmd extension to get the bare tool name.
     const cmdName = cmdBase.split("/").pop().split("\\").pop().replace(/\.(exe|cmd|bat)$/i, "");
@@ -2611,7 +2732,9 @@ export function runGate(command, cwd) {
         return {
           success: false,
           output: "",
+          stderr: "",
           error: `gate requires bash but none found on Windows. Install Git for Windows or set PFORGE_BASH_PATH to a bash.exe path. Detected Unix tool: '${cmdName}'.`,
+          exitCode: -1,
         };
       }
       try {
@@ -2626,14 +2749,17 @@ export function runGate(command, cwd) {
             // Prepend repo root so bash shims (e.g. `pforge`) are on PATH.
             PATH: `${cwd}${process.platform === "win32" ? ";" : ":"}${process.env.PATH || ""}`,
           },
+          stdio: ["ignore", "pipe", "pipe"],
         });
-        return { success: true, output: output.trim(), error: "" };
+        return { success: true, output: (output || "").trim(), stderr: "", error: "", exitCode: 0 };
       } catch (err) {
-        return {
-          success: false,
-          output: (err.stdout || "").trim(),
-          error: (err.stderr || err.message || "").trim(),
-        };
+        const exitCode = typeof err.status === "number" ? err.status : 1;
+        const stdoutText = (err.stdout || "").toString().trim();
+        const stderrText = (err.stderr || err.message || "").toString().trim();
+        if (exitCode === 0 && !failOnStderr) {
+          return { success: true, output: stdoutText, stderr: stderrText, error: "", exitCode };
+        }
+        return { success: false, output: stdoutText, stderr: stderrText, error: stderrText, exitCode };
       }
     }
   }
@@ -2645,14 +2771,20 @@ export function runGate(command, cwd) {
       timeout: gateTimeout,
       maxBuffer: 16 * 1024 * 1024,
       env: { ...process.env, NO_COLOR: "1" },
+      stdio: ["ignore", "pipe", "pipe"],
     });
-    return { success: true, output: output.trim(), error: "" };
+    return { success: true, output: (output || "").trim(), stderr: "", error: "", exitCode: 0 };
   } catch (err) {
-    return {
-      success: false,
-      output: (err.stdout || "").trim(),
-      error: (err.stderr || err.message || "").trim(),
-    };
+    const exitCode = typeof err.status === "number" ? err.status : 1;
+    const stdoutText = (err.stdout || "").toString().trim();
+    const stderrText = (err.stderr || err.message || "").toString().trim();
+    // Issue #133 \u2014 some shells (notably cmd.exe wrapping `pnpm`) will throw
+    // even with exit 0 in unusual signal/timeout cases. Honour exit code as
+    // the source of truth and only surface stderr as `error` on failure.
+    if (exitCode === 0 && !failOnStderr) {
+      return { success: true, output: stdoutText, stderr: stderrText, error: "", exitCode };
+    }
+    return { success: false, output: stdoutText, stderr: stderrText, error: stderrText, exitCode };
   }
 }
 
@@ -3763,6 +3895,15 @@ export async function runPlan(planPath, options = {}) {
         });
         if (result.status === "passed") {
           result.autoCommit = autoCommitSliceIfDirty({ slice, cwd, mode, eventBus, startSha });
+        } else if (result.status === "failed") {
+          // Issue #132 \u2014 the gate said no, but the worker may have written
+          // perfectly correct files (typical when the gate script itself is
+          // buggy). Stage them and warn so the operator can triage instead of
+          // losing work to a clean-tree on the next resume.
+          const orphans = stageOrphansOnSliceFailure({ slice, cwd, runDir, mode, eventBus });
+          if (orphans) {
+            result.orphans = orphans;
+          }
         }
         return result;
       },
@@ -6558,6 +6699,112 @@ export function autoCommitSliceIfDirty({ slice, cwd = process.cwd(), mode, event
     eventBus?.emit("slice-dirty-tree-warning", { sliceNumber: slice?.number, error: err.message });
     return { committed: false, reason: "git-failed", error: err.message };
   }
+}
+
+/**
+ * Issue #132 \u2014 after a slice fails, capture any uncommitted worker
+ * deliverables so they aren't silently orphaned. Stages files with
+ * `git add -A` (no commit), writes `.forge/runs/<runId>/orphans-slice-<N>.json`
+ * with the file list and recovery hints, and emits a `slice-orphan-warning`
+ * event. Failing-gate is the most common case: a buggy gate script (typo,
+ * relative path, regex escape issue) marks the slice failed even though
+ * the deliverables on disk are correct. Without staging + warning, the
+ * next resume saw a clean tree and either re-ran the slice (wasting tokens)
+ * or skipped it entirely.
+ *
+ * Never throws \u2014 best-effort. Returns a summary or null when nothing was
+ * to capture.
+ *
+ * @param {object} params
+ * @param {{ number: number, title: string }} params.slice
+ * @param {string} params.cwd
+ * @param {string} [params.runDir] - .forge/runs/<runId> for orphans-slice-N.json
+ * @param {string} [params.mode] - "assisted" skips staging
+ * @param {{ emit: Function }} [params.eventBus]
+ * @returns {{ staged: boolean, files: string[], orphansPath?: string, reason?: string, error?: string }|null}
+ */
+export function stageOrphansOnSliceFailure({ slice, cwd = process.cwd(), runDir = null, mode, eventBus } = {}) {
+  if (mode === "assisted") {
+    return { staged: false, files: [], reason: "assisted-mode" };
+  }
+
+  let statusOut;
+  try {
+    statusOut = execSync("git status --porcelain", { cwd, encoding: "utf-8", timeout: 5_000 });
+  } catch (err) {
+    return { staged: false, files: [], reason: "git-failed", error: err.message };
+  }
+
+  if (!statusOut || !statusOut.trim()) {
+    return null; // nothing on disk to orphan
+  }
+
+  // Parse `git status --porcelain` into a flat file list. Each line is
+  // "XY path" (or "XY orig -> new" for renames). We capture the rightmost
+  // path so renamed files are tracked at their new location.
+  const files = statusOut
+    .split(/\r?\n/)
+    .filter((l) => l.trim())
+    .map((l) => {
+      const arrowIdx = l.indexOf(" -> ");
+      const tail = arrowIdx >= 0 ? l.slice(arrowIdx + 4) : l.slice(3);
+      return tail.trim().replace(/^"|"$/g, "");
+    })
+    .filter(Boolean);
+
+  // Stage everything so files become visible in `git status` (and can be
+  // committed by the operator after triage). We never commit on failure
+  // \u2014 the gate said no, the human must verify.
+  let staged = false;
+  let stageError = null;
+  try {
+    execSync("git add -A", { cwd, encoding: "utf-8", timeout: 10_000 });
+    staged = true;
+  } catch (err) {
+    stageError = err.message;
+  }
+
+  // Drop a structured orphans-slice-N.json artifact next to the run log.
+  let orphansPath = null;
+  if (runDir) {
+    try {
+      mkdirSync(runDir, { recursive: true });
+      orphansPath = resolve(runDir, `orphans-slice-${slice.number}.json`);
+      const payload = {
+        sliceNumber: slice.number,
+        sliceTitle: slice.title,
+        capturedAt: new Date().toISOString(),
+        staged,
+        stageError,
+        files,
+        recovery: [
+          `git status --short  # review staged files`,
+          `git diff --cached   # see what the worker wrote`,
+          `git commit -m "feat(slice-${slice.number}): <subject>"   # if deliverables are correct`,
+          `git restore --staged . && git restore .                  # if deliverables are wrong`,
+        ],
+      };
+      writeFileSync(orphansPath, JSON.stringify(payload, null, 2), "utf-8");
+    } catch {
+      orphansPath = null;
+    }
+  }
+
+  if (eventBus && typeof eventBus.emit === "function") {
+    try {
+      eventBus.emit("slice-orphan-warning", {
+        sliceNumber: slice.number,
+        sliceTitle: slice.title,
+        fileCount: files.length,
+        files: files.slice(0, 20), // cap event payload
+        staged,
+        stageError,
+        orphansPath: orphansPath ? relative(cwd, orphansPath) : null,
+      });
+    } catch { /* best-effort */ }
+  }
+
+  return { staged, files, orphansPath: orphansPath || undefined, ...(stageError ? { error: stageError } : {}) };
 }
 
 /**

@@ -410,6 +410,7 @@ export const TOOL_METADATA = {
     errors: {
       SMELT_NOT_FOUND: { message: "smelt not found: <id>", recovery: "Verify the smelt id via forge_crucible_list" },
       WRONG_STATUS: { message: "smelt is finalized/abandoned, cannot continue interview", recovery: "Start a new smelt with forge_crucible_submit" },
+      ASK_QUESTION_MISMATCH: { message: "client-supplied questionId did not match the server's pending question (Issue #138)", recovery: "Re-fetch the next question via forge_crucible_ask without an answer, then retry with the matching questionId" },
     },
     example: {
       input: { id: "uuid", answer: "yes, API-wide rate limit" },
@@ -448,6 +449,8 @@ export const TOOL_METADATA = {
       SMELT_NOT_FOUND: { message: "smelt not found: <id>", recovery: "Verify the smelt id" },
       WRONG_STATUS: { message: "smelt is finalized/abandoned, cannot finalize", recovery: "Only in-progress smelts can be finalized" },
       PHASE_CLAIMED: { message: "phase already claimed", recovery: "Retry — the phase-claim race resolver will pick the next number" },
+      CRITICAL_FIELDS_MISSING: { message: "smelt has unresolved CRITICAL_FIELDS (e.g. forbidden-actions); finalize refused", recovery: "Call forge_crucible_ask to fill the gaps surfaced under criticalGaps[]" },
+      PLAN_ALREADY_EXISTS: { message: "docs/plans/Phase-NN.md already exists — finalize refused (Issue #137); a side-by-side .crucible-draft.md was written", recovery: "Pass overwrite:true to replace, or accept the side-by-side draftPath" },
     },
     example: {
       input: { id: "uuid" },

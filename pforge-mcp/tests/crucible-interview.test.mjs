@@ -46,11 +46,13 @@ afterEach(() => {
 // ─── Question banks ──────────────────────────────────────────────────
 
 describe("question banks", () => {
-  it("tweak bank has 3 questions", () => {
-    expect(TWEAK_QUESTIONS).toHaveLength(3);
+  it("tweak bank has 4 questions", () => {
+    // Issue #135 — added `forbidden-actions` (was 3).
+    expect(TWEAK_QUESTIONS).toHaveLength(4);
   });
-  it("feature bank has 6 questions", () => {
-    expect(FEATURE_QUESTIONS).toHaveLength(6);
+  it("feature bank has 7 questions", () => {
+    // Issue #135 — added `forbidden-actions` (was 6).
+    expect(FEATURE_QUESTIONS).toHaveLength(7);
   });
   it("full bank has 12 questions (mirrors Step-0 prompt)", () => {
     expect(FULL_QUESTIONS).toHaveLength(12);
@@ -80,8 +82,9 @@ describe("question banks", () => {
     expect(getQuestionBank("nonsense")).toBe(FEATURE_QUESTIONS);
   });
   it("totalQuestions matches bank length", () => {
-    expect(totalQuestions("tweak")).toBe(3);
-    expect(totalQuestions("feature")).toBe(6);
+    // Issue #135 — tweak 3→4, feature 6→7.
+    expect(totalQuestions("tweak")).toBe(4);
+    expect(totalQuestions("feature")).toBe(7);
     expect(totalQuestions("full")).toBe(12);
   });
 });
@@ -94,7 +97,8 @@ describe("getNextQuestion", () => {
     expect(q).not.toBeNull();
     expect(q.id).toBe(FEATURE_QUESTIONS[0].id);
     expect(q.questionIndex).toBe(1);
-    expect(q.totalQuestions).toBe(6);
+    // Issue #135 — feature lane gained `forbidden-actions` (was 6).
+    expect(q.totalQuestions).toBe(7);
   });
   it("advances to the next unanswered question", () => {
     const q = getNextQuestion({

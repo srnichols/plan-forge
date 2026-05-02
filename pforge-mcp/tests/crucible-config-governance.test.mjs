@@ -239,9 +239,17 @@ describe("handleFinalize Hardener handoff", () => {
       source: "human",
       projectDir: dir,
     });
-    // Satisfy the store's in-progress gate with a single recorded answer
+    // Issue #135 \u2014 finalize refuses smelts missing CRITICAL_FIELDS
+    // (scope-files, validation-gates, forbidden-actions). Provide answers
+    // covering all four tweak questions so finalize reaches the handoff.
+    const now = new Date().toISOString();
     updateSmelt(smelt.id, {
-      answers: [{ questionId: "manual-test", answer: "yes", recordedAt: new Date().toISOString() }],
+      answers: [
+        { questionId: "scope-file", answer: "package.json", recordedAt: now },
+        { questionId: "validation", answer: "npm test", recordedAt: now },
+        { questionId: "forbidden-actions", answer: "no schema changes", recordedAt: now },
+        { questionId: "rollback", answer: "git revert HEAD", recordedAt: now },
+      ],
     }, dir);
 
     const events = [];

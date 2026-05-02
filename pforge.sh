@@ -1470,7 +1470,7 @@ print(v if isinstance(v, str) else ','.join(v))
     local src_instr="$source_path/.github/instructions"
     if [ -d "$src_instr" ]; then
         local instr_name
-        for instr_name in "architecture-principles.instructions.md" "git-workflow.instructions.md" "ai-plan-hardening-runbook.instructions.md" "status-reporting.instructions.md" "context-fuel.instructions.md"; do
+        for instr_name in "architecture-principles.instructions.md" "git-workflow.instructions.md" "ai-plan-hardening-runbook.instructions.md" "self-repair-reporting.instructions.md" "status-reporting.instructions.md" "context-fuel.instructions.md"; do
             _pf_check "$src_instr/$instr_name" "$REPO_ROOT/.github/instructions/$instr_name" ".github/instructions/$instr_name"
         done
     fi

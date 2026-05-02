@@ -1552,6 +1552,10 @@
           "type": "string",
           "description": "Smelt id returned by forge_crucible_submit."
         },
+        "questionId": {
+          "type": "string",
+          "description": "Optional — the id of the question this answer is for. When supplied, the server validates it matches the pending question and refuses with ASK_QUESTION_MISMATCH on drift (Issue #138). Omit to trust the server's pending question."
+        },
         "answer": {
           "type": "string",
           "description": "Answer to the current question. Omit to fetch the current question without advancing."
@@ -1598,6 +1602,10 @@
       "WRONG_STATUS": {
         "message": "smelt is finalized/abandoned, cannot continue interview",
         "recovery": "Start a new smelt with forge_crucible_submit"
+      },
+      "ASK_QUESTION_MISMATCH": {
+        "message": "client-supplied questionId did not match the server's pending question (Issue #138)",
+        "recovery": "Re-fetch the next question via forge_crucible_ask without an answer, then retry with the matching questionId"
       }
     },
     "example": {
@@ -1670,13 +1678,17 @@
   },
   {
     "name": "forge_crucible_finalize",
-    "description": "Finalize a smelt — atomically claim the next phase number, write docs/plans/Phase-NN.md with a `crucibleId:` frontmatter stamp, and mark the smelt finalized. Returns the chosen phase name and the plan path. Plan Hardener handoff lands in Slice 01.6. USE FOR: closing the idea→spec workflow when the interview is done. Refuses to finalize when critical fields (scope-in/scope-files, validation-gates, forbidden-actions) are unresolved. Returns inferred build/test commands when a recognized manifest (package.json, *.csproj, Cargo.toml, pyproject.toml, go.mod) is present.",
+    "description": "Finalize a smelt — atomically claim the next phase number, write docs/plans/Phase-NN.md with a `crucibleId:` frontmatter stamp, and mark the smelt finalized. Refuses to finalize when critical fields (scope-in/scope-files, validation-gates, forbidden-actions) are unresolved. Refuses to overwrite an existing plan unless `overwrite:true` is passed (Issue #137); a side-by-side `Phase-NN.crucible-draft.md` is written instead. Returns inferred build/test commands when a recognized manifest (package.json, *.csproj, Cargo.toml, pyproject.toml, go.mod) is present. USE FOR: closing the idea→spec workflow when the interview is done.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "id": {
           "type": "string",
           "description": "Smelt id. Must be status=in-progress."
+        },
+        "overwrite": {
+          "type": "boolean",
+          "description": "Issue #137 — when true, replaces an existing docs/plans/Phase-NN.md. When false (default), refuses if the file exists and writes a side-by-side `Phase-NN.crucible-draft.md` instead."
         },
         "path": {
           "type": "string",
@@ -1727,6 +1739,14 @@
       "PHASE_CLAIMED": {
         "message": "phase already claimed",
         "recovery": "Retry — the phase-claim race resolver will pick the next number"
+      },
+      "CRITICAL_FIELDS_MISSING": {
+        "message": "smelt has unresolved CRITICAL_FIELDS (e.g. forbidden-actions); finalize refused",
+        "recovery": "Call forge_crucible_ask to fill the gaps surfaced under criticalGaps[]"
+      },
+      "PLAN_ALREADY_EXISTS": {
+        "message": "docs/plans/Phase-NN.md already exists — finalize refused (Issue #137); a side-by-side .crucible-draft.md was written",
+        "recovery": "Pass overwrite:true to replace, or accept the side-by-side draftPath"
       }
     },
     "example": {
@@ -2599,12 +2619,11 @@
   },
   {
     "name": "forge_bug_update_status",
-    "description": "Transition a bug's status (open → in-fix → fixed, or open → wont-fix/duplicate) with transition validation. Terminal states (fixed, wont-fix, duplicate) cannot be changed.",
+    "description": "Transition a bug's status (open → in-fix → fixed, or open → wont-fix/duplicate) with transition validation. Terminal states (fixed, wont-fix, duplicate) cannot be changed. Accepts either 'newStatus' or 'status' as the field name (#116).",
     "inputSchema": {
       "type": "object",
       "required": [
-        "bugId",
-        "newStatus"
+        "bugId"
       ],
       "properties": {
         "path": {
@@ -2618,6 +2637,10 @@
         "newStatus": {
           "type": "string",
           "description": "New status: open|in-fix|fixed|wont-fix|duplicate"
+        },
+        "status": {
+          "type": "string",
+          "description": "Alias for newStatus (#116). One of newStatus|status is required."
         },
         "note": {
           "type": "string",
@@ -4799,7 +4822,7 @@
   },
   {
     "name": "forge_timeline",
-    "description": "Unified chronological view across all forge event sources with correlationId grouping. Merges hub-events, runs, memories, openbrain, watch, tempering, bugs, and incidents into a single timeline.",
+    "description": "Unified chronological view across all forge event sources with correlationId grouping. Merges hub-events, runs, memories, openbrain, watch, tempering, bugs, incidents, and forge-master sessions into a single timeline.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -4820,7 +4843,7 @@
           "items": {
             "type": "string"
           },
-          "description": "Limit to source types: hub-event, run, memory, openbrain, watch, tempering, bug, incident"
+          "description": "Limit to source types: hub-event, run, memory, openbrain, watch, tempering, bug, incident, forge-master"
         },
         "events": {
           "type": "array",

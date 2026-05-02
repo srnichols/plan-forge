@@ -44,7 +44,12 @@ export async function registerForgeMasterRoutes(app, mcpCall) {
     createHttpRoutes(app, mcpCall ? { mcpCall } : undefined);
     console.error("[forge-master-routes] Forge-Master Studio API registered at /api/forge-master/*");
   } catch (err) {
-    console.warn(`[forge-master-routes] Failed to register routes: ${err.message}`);
+    // Issue #149 Bucket B: previously this swallowed errors as warnings,
+    // including TypeError when the app was missing required HTTP methods.
+    // That hid an entire class of bug. Log loudly and re-throw so callers
+    // (including tests) see the failure instead of a half-registered surface.
+    console.error(`[forge-master-routes] Failed to register routes: ${err.message}`);
+    throw err;
   }
 }
 

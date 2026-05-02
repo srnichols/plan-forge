@@ -33,6 +33,7 @@ describe("forge-master routes adapter", () => {
     const mockApp = {
       get(path) { routes.push({ method: "GET", path }); },
       post(path) { routes.push({ method: "POST", path }); },
+      put(path) { routes.push({ method: "PUT", path }); },
       use(path) { routes.push({ method: "USE", path }); },
     };
     const { registerForgeMasterRoutes } = await import("../forge-master-routes.mjs");

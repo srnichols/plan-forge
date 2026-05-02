@@ -104,6 +104,20 @@ export function savePrefs(prefs, cwd = process.cwd()) {
 export function createHttpRoutes(app, { mcpCall = invokeForgeTool } = {}) {
   const dispatcher = createHttpDispatcher({ allowlist: BASE_ALLOWLIST, mcpCall });
   if (app && typeof app.get === "function") {
+    // Defensive check: _registerExpress requires get/post/put/use. Detecting
+    // an incomplete express-shaped object up front gives a clear error
+    // instead of a swallowed `app.put is not a function` mid-registration
+    // (which historically left the routes half-registered and produced
+    // confusing downstream test failures — see issue #149 Bucket B).
+    const missing = ["get", "post", "put", "use"].filter(
+      (m) => typeof app[m] !== "function",
+    );
+    if (missing.length > 0) {
+      throw new TypeError(
+        `createHttpRoutes: express-shaped app is missing required method(s): ${missing.join(", ")}. ` +
+        `If this is a test mock, add stubs for those methods. If it's a real express app, upgrade express to >=4.0.`,
+      );
+    }
     _registerExpress(app, dispatcher);
   } else {
     return _buildNodeHandler(dispatcher);

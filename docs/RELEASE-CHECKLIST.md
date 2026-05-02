@@ -255,6 +255,15 @@ node pforge-mcp/update-from-github.mjs resolve-tag
 
 v2.53.2 added a guard: `Invoke-Update` (pforge.ps1) and `cmd_update` (pforge.sh) refuse if `source_version` matches `-dev` AND `current_version` doesn't AND `--allow-dev` not set. If a user reports landing on a `-dev` build, point them at `pforge self-update` (the `--from-github` path is authoritative).
 
+### User reports `pforge self-update` says "Already current" but they're on a higher version than the latest release
+
+v2.82.2 added explicit downgrade detection. `pforge self-update`:
+- Without `--force`: prints a warning that local VERSION is HIGHER than the latest release, lists the likely causes (fork bumped past upstream, manual VERSION edit, sibling-clone with dev version baked in), and explicitly says "doing nothing on purpose — refuses to silently downgrade." Exits 0.
+- With `--force` alone: prints `⚠ DOWNGRADE: ...` and exits 1 unless `--downgrade` is also passed. `--force` does NOT imply `--downgrade`.
+- With `--force --downgrade`: proceeds with the install over the higher local version, after a `↻ Proceeding with explicit downgrade` line.
+
+If a user genuinely wants the older release (e.g. their local v2.96.0 is corrupt or from a fork they want to abandon), the explicit form is `pforge self-update --force --downgrade`.
+
 ---
 
 ## 7 — Quick checklist (printable)

@@ -7,6 +7,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.82.2] — 2026-05-02 — Explicit downgrade guard for `pforge self-update`
+
+> **One-liner**: `pforge self-update` no longer silently does nothing (or silently downgrades on `--force`) when the local VERSION is HIGHER than the latest GitHub release. Field report from a v2.96.0 user revealed the gap.
+
+### Added
+- **Explicit downgrade detection in `pforge self-update`** — when `current > latest` (clean local, no `-dev` suffix):
+  - Without `--force`: prints `⚠ Your local VERSION (vX.Y.Z) is HIGHER than the latest GitHub release (vA.B.C)` with likely-causes hint (fork bumped past upstream, manual VERSION edit, sibling-clone with dev version baked in) and confirms self-update "is doing nothing on purpose — refuses to silently downgrade." Exits 0.
+  - With `--force` alone: prints `⚠ DOWNGRADE: self-update wants to install vA.B.C but you already have vX.Y.Z` and exits 1. `--force` does NOT imply `--downgrade`.
+  - With `--force --downgrade`: proceeds with explicit log line `↻ Proceeding with explicit downgrade`.
+
+### Why
+A user reported running `pforge self-update` from v2.96.0 (likely from a sibling clone with a manually-bumped VERSION or an internal fork). The old flow returned `✅ Already current (v2.96.0)` because `compareVersions(2.96.0, 2.82.1) < 0` is false. With `--force`, the heal path would have silently downgraded them to v2.82.1 with no warning. The new gate makes both surfaces explicit.
+
+### Files
+- `pforge.ps1` — `Invoke-SelfUpdate`: added `[version]` comparison + `--downgrade` flag handling
+- `pforge.sh` — `cmd_self_update`: added `sort -V` comparison + `--downgrade` flag handling
+- `docs/RELEASE-CHECKLIST.md` — new disaster-recovery entry for the `current > latest` case
+
+### Tests
+Unchanged from v2.82.1 (3963 passing, 40 pre-existing baseline failures). No new tests — change is shell-script logic; test coverage planned for v2.83.0 alongside other update-flow tests.
+
 ## [2.82.1] — 2026-05-02 — 9-issue hotfix sweep + setup/update sync repair
 
 > **Hotfix release** addressing the 9-issue cluster filed against v2.82.0 (#130–#138). Five orchestrator/Crucible bug classes that produced false-pass slices, orphaned deliverables, false-fail gates, and undocumented Crucible MCP failures. Net test delta: +5 passing, zero regressions across 4010-test suite.

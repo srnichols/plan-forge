@@ -5340,6 +5340,24 @@ console.log(JSON.stringify(r === null ? { checkFailed: true } : r));
             Write-Host "    If this is an accidental install from a master clone, heal with:" -ForegroundColor Yellow
             Write-Host "      pforge self-update --force" -ForegroundColor Yellow
         }
+        # v2.82.2 — explicit downgrade detection: warn (don't silently say
+        # "current") when local VERSION is HIGHER than the latest release.
+        # Detected via update-check.mjs returning isNewer=false WITH a non-null
+        # latest AND the current core (-dev stripped) being numerically greater.
+        if (-not ($currentVersion -match '-dev\b') -and $checkJson.latest) {
+            $currentCore = ($currentVersion -split '-')[0]
+            $latestCore  = ($checkJson.latest -split '-')[0]
+            try {
+                if ([version]$currentCore -gt [version]$latestCore) {
+                    Write-Host ""
+                    Write-Host "  ⚠  Your local VERSION (v$currentVersion) is HIGHER than the latest GitHub release (v$($checkJson.latest))." -ForegroundColor Yellow
+                    Write-Host "    This usually means: a fork bumped past upstream, a manual VERSION edit, or a" -ForegroundColor DarkGray
+                    Write-Host "    sibling-clone install from a branch with a higher dev version baked in." -ForegroundColor DarkGray
+                    Write-Host "    'pforge self-update' is doing nothing on purpose — it refuses to silently downgrade." -ForegroundColor DarkGray
+                    Write-Host "    To force a downgrade anyway: pforge self-update --force --downgrade" -ForegroundColor DarkGray
+                }
+            } catch { /* non-semver core — skip the check */ }
+        }
         exit 0
     }
 
@@ -5347,7 +5365,23 @@ console.log(JSON.stringify(r === null ? { checkFailed: true } : r));
     if ($checkJson.isNewer) {
         Write-Host "  ⬆ New release available: $latestTag (you have v$currentVersion)" -ForegroundColor Yellow
     } else {
-        Write-Host "  ↻ Forcing heal to latest tagged release: $latestTag (you have v$currentVersion)" -ForegroundColor Yellow
+        # v2.82.2 — force-heal path: distinguish heal-from-dev vs. real downgrade.
+        $isRealDowngrade = $false
+        if (-not ($currentVersion -match '-dev\b') -and $checkJson.latest) {
+            $currentCore = ($currentVersion -split '-')[0]
+            $latestCore  = ($checkJson.latest -split '-')[0]
+            try { $isRealDowngrade = [version]$currentCore -gt [version]$latestCore } catch { }
+        }
+        if ($isRealDowngrade) {
+            $allowDowngrade = $Arguments -contains '--downgrade'
+            Write-Host ""
+            Write-Host "  ⚠  DOWNGRADE: self-update wants to install $latestTag but you already have v$currentVersion." -ForegroundColor Red
+            Write-Host "    --force does NOT imply --downgrade. Re-run with: pforge self-update --force --downgrade" -ForegroundColor Yellow
+            if (-not $allowDowngrade) { exit 1 }
+            Write-Host "  ↻ Proceeding with explicit downgrade (--downgrade): $latestTag over v$currentVersion" -ForegroundColor Yellow
+        } else {
+            Write-Host "  ↻ Forcing heal to latest tagged release: $latestTag (you have v$currentVersion)" -ForegroundColor Yellow
+        }
     }
 
     if ($dryRun) {

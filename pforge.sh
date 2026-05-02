@@ -2143,6 +2143,22 @@ cmd_self_update() {
             echo "    If this is an accidental install from a master clone, heal with:"
             echo "      pforge self-update --force"
         fi
+        # v2.82.2 — explicit downgrade detection: warn when local VERSION is
+        # HIGHER than the latest release (clean local, no -dev suffix).
+        if [ -n "$latest_ver" ] && ! echo "$current_version" | grep -qE -- '-dev\b'; then
+            local cur_core latest_core highest
+            cur_core="$(echo "$current_version" | cut -d- -f1)"
+            latest_core="$(echo "$latest_ver" | cut -d- -f1)"
+            highest="$(printf '%s\n%s\n' "$cur_core" "$latest_core" | sort -V | tail -n1)"
+            if [ "$highest" = "$cur_core" ] && [ "$cur_core" != "$latest_core" ]; then
+                echo ""
+                echo "  ⚠  Your local VERSION (v$current_version) is HIGHER than the latest GitHub release (v$latest_ver)."
+                echo "    This usually means: a fork bumped past upstream, a manual VERSION edit, or a"
+                echo "    sibling-clone install from a branch with a higher dev version baked in."
+                echo "    'pforge self-update' is doing nothing on purpose — it refuses to silently downgrade."
+                echo "    To force a downgrade anyway: pforge self-update --force --downgrade"
+            fi
+        fi
         exit 0
     fi
 
@@ -2150,7 +2166,28 @@ cmd_self_update() {
     if [ "$is_newer" = "True" ] || [ "$is_newer" = "true" ]; then
         echo "  ⬆ New release available: $latest_tag (you have v$current_version)"
     else
-        echo "  ↻ Forcing heal to latest tagged release: $latest_tag (you have v$current_version)"
+        # v2.82.2 — force-heal path: distinguish heal-from-dev vs. real downgrade.
+        local is_real_downgrade=false
+        if [ -n "$latest_ver" ] && ! echo "$current_version" | grep -qE -- '-dev\b'; then
+            local cur_core latest_core highest
+            cur_core="$(echo "$current_version" | cut -d- -f1)"
+            latest_core="$(echo "$latest_ver" | cut -d- -f1)"
+            highest="$(printf '%s\n%s\n' "$cur_core" "$latest_core" | sort -V | tail -n1)"
+            if [ "$highest" = "$cur_core" ] && [ "$cur_core" != "$latest_core" ]; then
+                is_real_downgrade=true
+            fi
+        fi
+        if $is_real_downgrade; then
+            local allow_downgrade=false
+            for a in "$@"; do [ "$a" = "--downgrade" ] && allow_downgrade=true; done
+            echo ""
+            echo "  ⚠  DOWNGRADE: self-update wants to install $latest_tag but you already have v$current_version."
+            echo "    --force does NOT imply --downgrade. Re-run with: pforge self-update --force --downgrade"
+            if ! $allow_downgrade; then exit 1; fi
+            echo "  ↻ Proceeding with explicit downgrade (--downgrade): $latest_tag over v$current_version"
+        else
+            echo "  ↻ Forcing heal to latest tagged release: $latest_tag (you have v$current_version)"
+        fi
     fi
 
     if $dry_run; then

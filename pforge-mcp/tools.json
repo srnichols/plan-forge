@@ -2259,7 +2259,7 @@
       "drain-loop",
       "tempering-drain"
     ],
-    "cost": "medium",
+    "cost": "high",
     "maxConcurrent": 1,
     "addedIn": "2.80.0",
     "prerequisites": [
@@ -2267,7 +2267,9 @@
       "dev server running (for content-audit scanner)"
     ],
     "produces": [
-      ".forge/audits/dev-*.json"
+      ".forge/audits/dev-*.json",
+      ".forge/audits/dev-<ts>.json",
+      ".forge/tempering/drain-history.jsonl"
     ],
     "consumes": [
       ".forge.json#audit",
@@ -2287,6 +2289,14 @@
       "NO_SCANNERS": {
         "message": "No scanners matched the requested set",
         "recovery": "Omit scanners param to run all available scanners"
+      },
+      "MISSING_PROJECTDIR": {
+        "message": "projectDir / path is required",
+        "recovery": "Pass --path <dir> on the CLI or projectDir in the tool args"
+      },
+      "MAX_ROUNDS_EXCEEDED": {
+        "message": "Drain did not converge within maxRounds (default: 5, max: 20)",
+        "recovery": "Increase maxRounds, narrow the scanners list, or address findings shown in drain-history.jsonl before retrying"
       }
     },
     "example": {
@@ -2388,6 +2398,10 @@
       "INVALID_FINDING": {
         "message": "Finding object is required with at least a title field",
         "recovery": "Provide a finding object from a scanner result"
+      },
+      "MISSING_FINDING": {
+        "message": "finding object is required",
+        "recovery": "Pass a finding object (with class, severity, route, evidence) from a tempering scanner result"
       }
     },
     "example": {

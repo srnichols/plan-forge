@@ -494,7 +494,11 @@ export async function runTurn(input, deps = {}) {
   // If the planner returns steps, execute them and inject results as
   // synthesis context before the reactive tool loop.
   // Any failure falls through to the reactive loop unchanged.
+  //
+  // Tests can opt out via `deps.skipPlanner: true` to avoid the planner
+  // sendTurn consuming a scripted MockReasoningClient response (#149 Bucket B).
   let plannerSynthesis = null;
+  if (!deps.skipPlanner) {
   try {
     const callPlannerModel = async ({ systemPrompt: sp, userMessage: um }) => {
       const planResp = await provider.sendTurn({
@@ -560,6 +564,7 @@ export async function runTurn(input, deps = {}) {
   } catch {
     // Planner or executor failure — fall through to reactive loop
     plannerSynthesis = null;
+  }
   }
 
   // ── 6b. Quorum advisory fan-out ──────────────────────────────────

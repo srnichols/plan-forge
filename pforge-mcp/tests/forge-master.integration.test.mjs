@@ -143,6 +143,9 @@ describe("forge-master integration — happy-path", () => {
     const dispatcherCalls = [];
     const deps = {
       provider,
+      // #149 Bucket B: skip the proactive planner sendTurn so it doesn't
+      // consume a scripted MockProvider response before the reactive loop runs.
+      skipPlanner: true,
       dispatcher: async (name, args) => {
         dispatcherCalls.push({ name, args });
         if (name === "forge_plan_status") return { status: "completed", slices: 5 };
@@ -271,6 +274,9 @@ describe("forge-master integration — happy-path", () => {
     ]);
     const deps1 = {
       provider: provider1,
+      // #149 Bucket B: skip planner sendTurn so the single scripted reply
+      // isn't consumed by the planner before the reactive loop sees it.
+      skipPlanner: true,
       dispatcher: async () => ({}),
       hub: null,
       toolMetadata: {},
@@ -377,6 +383,9 @@ describe("forge-master integration — error paths", () => {
 
     const deps = {
       provider,
+      // #149 Bucket B: skip planner sendTurn so the truncation path triggers
+      // off the reactive loop's tool_calls scripts, not the planner's discovery call.
+      skipPlanner: true,
       dispatcher: async () => ({ result: "ok" }),
       hub: null,
       toolMetadata: {},

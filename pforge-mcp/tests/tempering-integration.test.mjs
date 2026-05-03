@@ -301,10 +301,10 @@ describe("runTemperingRun — two-scanner run (TEMPER-02 Slice 02.2)", () => {
     const r = await runTemperingRun({
       projectDir, hub, spawn, adapter: bothScannersAdapter,
     });
-    // Slice 05.2 adds mutation scanner.
-    // 9 entries on the record but only unit+integration contribute to
+    // Slice 05.2 added mutation scanner; v2.81 wired content-audit (#102).
+    // 10 entries on the record but only unit+integration contribute to
     // pass/fail totals here.
-    expect(r.scanners).toHaveLength(9);
+    expect(r.scanners).toHaveLength(10);
     expect(r.scanners[0].scanner).toBe("unit");
     expect(r.scanners[1].scanner).toBe("integration");
     expect(r.scanners[2].scanner).toBe("ui-playwright");
@@ -316,10 +316,11 @@ describe("runTemperingRun — two-scanner run (TEMPER-02 Slice 02.2)", () => {
     expect(r.scanners[6].scanner).toBe("performance-budget");
     expect(r.scanners[7].scanner).toBe("load-stress");
     expect(r.scanners[8].scanner).toBe("mutation");
+    expect(r.scanners[9].scanner).toBe("content-audit");
     expect(r.verdict).toBe("pass");
 
     const completed = hub.events.find((e) => e.type === "tempering-run-completed");
-    expect(completed.data.scannerCount).toBe(9);
+    expect(completed.data.scannerCount).toBe(10);
     expect(completed.data.pass).toBe(8);
   });
 

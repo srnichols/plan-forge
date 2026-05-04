@@ -74,10 +74,10 @@
     </div>
   </nav>
 
-  <!-- Rebrand banner (v2 — Forge Shop positioning) -->
+  <!-- Refresh banner (May 2026 — Forge Shop positioning) -->
   <div class="bg-amber-950/40 border-y border-amber-900/40 py-3">
     <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-sm text-amber-200">
-      <strong>Heads up:</strong> this post uses v1.x positioning (<em>&ldquo;AI coding guardrails&rdquo;</em>). The current framing is the <strong>AI-Native SDLC Forge Shop</strong> &mdash; four stations: Smelt, Forge, Guard, Learn. <a href="../shop-tour.html" class="underline font-semibold text-amber-300 hover:text-amber-100">See the current Shop Tour &rarr;</a>
+      <strong>Refreshed May 2026:</strong> The 7-agent lineup hasn't changed &mdash; but the system around it has. Plan Forge is now the <strong>AI-Native SDLC Forge Shop</strong> with four stations (Smelt, Forge, Guard, Learn), and the multi-agent story is even better in a four-station shop. <a href="../shop-tour.html" class="underline font-semibold text-amber-300 hover:text-amber-100">See the Shop Tour &rarr;</a>
     </div>
   </div>
   <!-- ARTICLE -->
@@ -90,7 +90,7 @@
       </div>
       <div class="flex items-center gap-3 mb-6">
         <span class="px-3 py-1 rounded-full bg-sky-500/10 text-xs font-medium text-sky-400 border border-sky-500/20">Multi-Agent</span>
-        <span class="text-xs text-slate-500">April 7, 2026 · 8 min read</span>
+        <span class="text-xs text-slate-500">April 7, 2026 · Refreshed May 4, 2026 · 9 min read</span>
       </div>
       <h1 class="text-4xl md:text-5xl font-black text-white mb-6 leading-tight">One Framework, Seven AI Agents: Why We Stopped Picking Favorites</h1>
       <div class="flex items-center gap-3 mb-10 pb-10 border-b border-slate-800/60">
@@ -146,7 +146,7 @@
         </table>
         </div>
 
-        <p>Every format includes <strong>all 18 guardrail files</strong>, <strong>all pipeline prompts</strong>, and <strong>all 19 reviewer agents</strong> — transformed into the native format each tool expects.</p>
+        <p>Every format includes <strong>all guardrail files</strong>, <strong>all pipeline prompts</strong>, and <strong>all 14 reviewer agents</strong> &mdash; transformed into the native format each tool expects. See the <a href="../manual/multi-agent.html" class="text-forge-400 hover:underline">multi-agent manual</a> for the full file-by-file breakdown.</p>
 
         <h2>How the Adapters Work</h2>
 
@@ -192,7 +192,18 @@
           <li><strong>Experimenting with Gemini?</strong> — <code>-Agent gemini</code> and MCP auto-configures</li>
           <li><strong>Using everything?</strong> — <code>-Agent all</code> and every format generates in one pass</li>
         </ul>
+        <h3>The Four-Station Multi-Agent Pattern</h3>
 
+        <p>The seven-agent story got more interesting when Plan Forge grew into a four-station shop. The <strong>Smelt</strong>, <strong>Forge</strong>, <strong>Guard</strong>, and <strong>Learn</strong> stations don't care which AI tool walks up to them &mdash; they care that the same rules apply.</p>
+
+        <ul>
+          <li><strong>Smelt</strong> &mdash; A senior dev runs the <a href="../manual/crucible.html" class="text-forge-400 hover:underline">Crucible interview</a> in Claude Code to harden a feature spec. The interview's critical-fields gate is the same regardless of which agent is on the other end.</li>
+          <li><strong>Forge</strong> &mdash; Two devs on Cursor and one on Copilot pick up slices in parallel. Same scope contract, same validation gates per slice, same Quorum Mode escalation when complexity is high.</li>
+          <li><strong>Guard</strong> &mdash; <a href="../manual/what-is-liveguard.html" class="text-forge-400 hover:underline">LiveGuard</a> drift / secret / dependency scans run against shipped code regardless of which agent built it. Alerts route the same way to Slack / Teams / PagerDuty &mdash; the on-call engineer doesn't need to know whether Claude or Cursor wrote the offending diff.</li>
+          <li><strong>Learn</strong> &mdash; Every finding flows into shared <a href="../manual/memory-architecture.html" class="text-forge-400 hover:underline">memory</a> that every agent in every tool can read on the next run.</li>
+        </ul>
+
+        <p>The picker stays per-developer. The standards, the gates, and the institutional memory are shared.</p>
         <h2>What's the Same, What's Different</h2>
 
         <table>
@@ -200,10 +211,10 @@
             <tr><th>Capability</th><th>All 7 Agents</th><th>Copilot Only</th></tr>
           </thead>
           <tbody>
-            <tr><td>18 guardrail files</td><td>✅ embedded in native format</td><td>✅ auto-loading by file type</td></tr>
-            <tr><td>19 reviewer agents</td><td>✅ as native commands/skills</td><td>✅ as agent picker entries</td></tr>
+            <tr><td>Guardrail files</td><td>✅ embedded in native format</td><td>✅ auto-loading by file type</td></tr>
+            <tr><td>14 reviewer agents</td><td>✅ as native commands/skills</td><td>✅ as agent picker entries</td></tr>
             <tr><td>Pipeline prompts</td><td>✅ as native slash commands</td><td>✅ as prompt templates</td></tr>
-            <tr><td>MCP tools (18)</td><td>✅ Claude + Gemini + Copilot</td><td>✅ via .vscode/mcp.json</td></tr>
+            <tr><td>MCP tools (69)</td><td>✅ Claude + Gemini + Copilot</td><td>✅ via .vscode/mcp.json</td></tr>
             <tr><td>Auto-load by file type</td><td>❌ embedded instead</td><td>✅ via applyTo frontmatter</td></tr>
             <tr><td>Lifecycle hooks</td><td>❌ VS Code only</td><td>✅ SessionStart, PreToolUse, etc.</td></tr>
           </tbody>
@@ -229,7 +240,19 @@
 
         <blockquote><p>It doesn't matter which agent writes the code. What matters is that every agent knows what every other agent decided — and why.</p></blockquote>
 
-        <p>This is what makes the multi-agent story more than a convenience feature. It's not just "pick your favorite tool." It's "your whole team's AI agents build on each other's knowledge, across tools, across sessions, across time." The decisions compound. The mistakes are learned from. And nobody starts from zero — ever.</p>
+        <p>This is what makes the multi-agent story more than a convenience feature. It's not just "pick your favorite tool." It's "your whole team's AI agents build on each other's knowledge, across tools, across sessions, across time." The decisions compound. The mistakes are learned from. And nobody starts from zero &mdash; ever.</p>
+
+        <h2>Where to Go Next</h2>
+
+        <p>If this multi-agent story landed for you, here's where to go deeper:</p>
+
+        <ul>
+          <li><a href="../shop-tour.html" class="text-forge-400 hover:underline font-semibold">Shop Tour</a> &mdash; the visual walkthrough of all four stations and how they share memory across agents.</li>
+          <li><a href="../manual/multi-agent.html" class="text-forge-400 hover:underline font-semibold">Multi-Agent manual</a> &mdash; the canonical reference for every adapter, every file, every flag.</li>
+          <li><a href="spec-kit-plan-forge.html" class="text-forge-400 hover:underline font-semibold">Spec Kit + Plan Forge</a> &mdash; how the multi-agent setup pairs with Spec Kit's spec-first workflow.</li>
+          <li><a href="the-loop-that-never-ends.html" class="text-forge-400 hover:underline font-semibold">The Loop That Never Ends</a> &mdash; the Learn station in action, auto-smelting findings back into new specs that any agent can pick up.</li>
+          <li><a href="quorum-mode-3-models.html" class="text-forge-400 hover:underline font-semibold">Quorum Mode</a> &mdash; what happens when 3 different models review each other's slice on the Forge station.</li>
+        </ul>
 
         <h2>Try It</h2>
 

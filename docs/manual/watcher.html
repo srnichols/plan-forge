@@ -38,21 +38,26 @@
         </div>
 
         <h2 id="why">Why a Watcher?</h2>
-        <p>When you execute a long plan (<code>pforge run-plan</code>) the executor session is focused on one thing: building the next slice. It's not a good place to also answer "how's it going?" for a second human, or to notice anomaly patterns across multiple runs. The Watcher is the operational counterpart — it tails the run, reads event streams, and summarizes state.</p>
+        <p>When you execute a long plan (<code>pforge run-plan</code>) the executor session is focused on one thing: building the next slice. It's not a good place to also answer "how's it going?" for a second human, or to notice anomaly patterns across multiple runs. The Watcher is the operational counterpart &mdash; it tails the run, reads event streams, and summarizes state.</p>
+
+        <img src="assets/diagrams/watcher-two-session-topology.svg" alt="Two-session topology: Session 1 (Build/Target) runs pforge run-plan in a VS Code window, with its own WebSocket hub on port 3101 and append-only files in .forge/runs/. Session 2 (Watcher) runs in a second VS Code window with its own working directory and uses forge_watch (snapshot, file reads only, $0) and forge_watch_live (bounded window WebSocket subscription with polling fallback). Watcher writes only to its own .forge/watch-history.jsonl &mdash; never to the target. The watcher's input schema exposes no write paths to the target." class="diagram-img diagram-img-md my-4" />
+
         <p>Two modes, one tool:</p>
         <ul>
           <li><strong>Snapshot</strong> (<code>forge_watch</code>) — file-reads only, zero AI cost. Returns slice counts, token usage, gate errors, anomalies.</li>
           <li><strong>Analyze</strong> (<code>forge_watch</code> with <code>mode=analyze</code>) — invokes a frontier model (default <code>claude-opus-4.7</code>) to produce narrative advice from the snapshot.</li>
         </ul>
 
-        <h2 id="live-tail">Live Tail — <code>forge_watch_live</code></h2>
+        <h2 id="live-tail">Live Tail &mdash; <code>forge_watch_live</code></h2>
         <p>For near-live observation, <code>forge_watch_live</code> tails the event stream for a bounded window:</p>
         <ul>
-          <li><strong>WebSocket mode</strong> — connects to the target's hub if running (<code>.forge/server-ports.json</code>).</li>
-          <li><strong>Polling fallback</strong> — tails <code>events.log</code> when the hub isn't up.</li>
-          <li>Default window: 60 seconds. Range: 1 s – 1 hr.</li>
+          <li><strong>WebSocket mode</strong> &mdash; connects to the target's hub if running (<code>.forge/server-ports.json</code>).</li>
+          <li><strong>Polling fallback</strong> &mdash; tails <code>events.log</code> when the hub isn't up.</li>
+          <li>Default window: 60 seconds. Range: 1 s &ndash; 1 hr.</li>
           <li>Captures up to 500 events in the response payload.</li>
         </ul>
+
+        <img src="assets/diagrams/watcher-snapshot-vs-live.svg" alt="Snapshot vs Live Tail comparison table: Data source (file reads vs WebSocket/log tail), Cost ($0 always vs $0 baseline + frontier model in analyze mode), Window (point-in-time vs bounded durationMs default 60s), Returns (counts/anomalies/advice/cursor vs event stream up to 500 events), Best for (spot checks vs live debugging), History (watch-history.jsonl vs cursor chaining)." class="diagram-img diagram-img-md my-4" />
 
         <div class="cmd-block mb-4">
           <div class="cmd-block-header"><span>Typical usage from the Watcher session</span></div>

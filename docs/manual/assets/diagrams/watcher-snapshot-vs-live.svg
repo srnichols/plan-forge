@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 360" fill="none">
+  <style>
+    text { font-family: 'Inter', sans-serif; }
+    .node { rx: 8; ry: 8; stroke-width: 1.5; }
+    .arrow { stroke: #475569; stroke-width: 1.5; fill: none; marker-end: url(#smah); }
+    .label { font-size: 10px; fill: #94a3b8; }
+    .small { font-size: 9px; fill: #94a3b8; }
+    .title { font-size: 11px; fill: #e2e8f0; font-weight: 600; }
+    .mode { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+    .row-label { font-size: 9px; fill: #cbd5e1; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+    .ok { fill: #34d399; }
+    .warn { fill: #fcd34d; }
+    .bad { fill: #fb7185; }
+    .surf { font-size: 9px; font-family: 'JetBrains Mono', monospace; fill: #94a3b8; }
+  </style>
+  <defs>
+    <marker id="smah" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#475569" />
+    </marker>
+  </defs>
+
+  <!-- Header row labels -->
+  <text x="40" y="40" class="row-label" text-anchor="start">Aspect</text>
+
+  <!-- ─── Snapshot column ─── -->
+  <rect x="190" y="20" width="270" height="320" class="node" fill="#0f172a" stroke="#fbbf24" stroke-width="2" />
+  <text x="325" y="40" class="mode" style="fill:#fbbf24;" text-anchor="middle">SNAPSHOT</text>
+  <text x="325" y="55" class="surf" text-anchor="middle">forge_watch</text>
+
+  <!-- ─── Live Tail column ─── -->
+  <rect x="490" y="20" width="270" height="320" class="node" fill="#0f172a" stroke="#7dd3fc" stroke-width="2" />
+  <text x="625" y="40" class="mode" style="fill:#7dd3fc;" text-anchor="middle">LIVE TAIL</text>
+  <text x="625" y="55" class="surf" text-anchor="middle">forge_watch_live</text>
+
+  <!-- Row separators (light) -->
+  <line x1="190" y1="70" x2="760" y2="70" stroke="#1e293b" stroke-width="1" />
+  <line x1="190" y1="115" x2="760" y2="115" stroke="#1e293b" stroke-width="1" />
+  <line x1="190" y1="160" x2="760" y2="160" stroke="#1e293b" stroke-width="1" />
+  <line x1="190" y1="205" x2="760" y2="205" stroke="#1e293b" stroke-width="1" />
+  <line x1="190" y1="250" x2="760" y2="250" stroke="#1e293b" stroke-width="1" />
+  <line x1="190" y1="295" x2="760" y2="295" stroke="#1e293b" stroke-width="1" />
+
+  <!-- Row 1: Data source -->
+  <text x="40" y="93" class="row-label">Data source</text>
+  <text x="325" y="88" class="title" text-anchor="middle">File reads</text>
+  <text x="325" y="103" class="small" text-anchor="middle">.forge/runs/&lt;runId&gt;/*.json</text>
+  <text x="625" y="88" class="title" text-anchor="middle">WebSocket / log tail</text>
+  <text x="625" y="103" class="small" text-anchor="middle">hub if up · events.log fallback</text>
+
+  <!-- Row 2: Cost -->
+  <text x="40" y="138" class="row-label">Cost</text>
+  <text x="325" y="138" class="title ok" text-anchor="middle">$0 (always)</text>
+  <text x="625" y="133" class="title ok" text-anchor="middle">$0 (snapshot data)</text>
+  <text x="625" y="148" class="small" text-anchor="middle">+ analyze mode invokes a frontier model</text>
+
+  <!-- Row 3: Window -->
+  <text x="40" y="183" class="row-label">Window</text>
+  <text x="325" y="178" class="title" text-anchor="middle">Point-in-time</text>
+  <text x="325" y="193" class="small" text-anchor="middle">whatever's on disk right now</text>
+  <text x="625" y="178" class="title" text-anchor="middle">Bounded</text>
+  <text x="625" y="193" class="small" text-anchor="middle">durationMs (default 60s · range 1s–1h)</text>
+
+  <!-- Row 4: Output -->
+  <text x="40" y="228" class="row-label">Returns</text>
+  <text x="325" y="223" class="title" text-anchor="middle">Counts · anomalies · advice</text>
+  <text x="325" y="238" class="small" text-anchor="middle">+ recommendations + diff cursor</text>
+  <text x="625" y="223" class="title" text-anchor="middle">Event stream</text>
+  <text x="625" y="238" class="small" text-anchor="middle">≤ 500 events · per-type filters</text>
+
+  <!-- Row 5: Best for -->
+  <text x="40" y="273" class="row-label">Best for</text>
+  <text x="325" y="268" class="title warn" text-anchor="middle">"How is the run doing?"</text>
+  <text x="325" y="283" class="small" text-anchor="middle">spot checks · history snapshots</text>
+  <text x="625" y="268" class="title warn" text-anchor="middle">"Watch live for X minutes"</text>
+  <text x="625" y="283" class="small" text-anchor="middle">debugging · stall detection</text>
+
+  <!-- Row 6: History -->
+  <text x="40" y="318" class="row-label">History</text>
+  <text x="325" y="318" class="small" text-anchor="middle">recordHistory=true → watch-history.jsonl</text>
+  <text x="625" y="318" class="small" text-anchor="middle">in-memory · pass cursor to chain calls</text>
+</svg>

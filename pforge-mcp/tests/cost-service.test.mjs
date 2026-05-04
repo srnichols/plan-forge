@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import * as costService from "../cost-service.mjs";
 import { calculateSliceCost, buildCostBreakdown, buildEstimate, QUORUM_PRESETS } from "../orchestrator.mjs";
 
@@ -224,19 +224,70 @@ describe("cost-service: estimateQuorum regression (Slice 3)", () => {
     // Power preset uses opus/codex/grok-reasoning (~$6.70/Mtok avg input),
     // speed preset uses sonnet/gpt-mini/grok-fast (~$1.20/Mtok avg input).
     // Observed ratio ≈ 5.5×; assert > 4× to allow pricing drift margin.
-    const plan = makePlan(6);
-    const result = costService.estimateQuorum({ plan, cwd: null });
+    //
+    // Phase-29 (v2.83.0): provider-aware per-leg pricing means subscription
+    // CLIs (gh-copilot, claude-cli) flatten their legs to a per-request
+    // charge, which collapses the power/speed differential. To keep this
+    // test exercising the original token-pricing differential, force API
+    // mode by setting the API keys for this test only.
+    const prevAnthropic = process.env.ANTHROPIC_API_KEY;
+    const prevOpenAI = process.env.OPENAI_API_KEY;
+    process.env.ANTHROPIC_API_KEY = "test-anthropic-key";
+    process.env.OPENAI_API_KEY = "test-openai-key";
+    try {
+      const plan = makePlan(6);
+      const result = costService.estimateQuorum({ plan, cwd: null });
 
-    expect(result.power.overheadUSD).toBeGreaterThan(0);
-    expect(result.speed.overheadUSD).toBeGreaterThan(0);
-    expect(result.power.overheadUSD).not.toBe(result.speed.overheadUSD);
-    // Pre-fix ratio was 1.0 (identical). After Slice 1 (per-leg pricing) + Slice 2
-    // (opus-4.7 in MODEL_PRICING, was falling back to sonnet rates), observed ratio
-    // ≈ 5.5× on this fixture (reviewer term still dilutes). Threshold `> * 4` catches
-    // the original bug (identical numbers) and catches partial regressions (e.g., if
-    // opus-4.7 silently drops back to the fallback) while leaving margin for pricing
-    // drift. Per plan Slice 1 rationale.
-    expect(result.power.overheadUSD).toBeGreaterThan(result.speed.overheadUSD * 4);
+      expect(result.power.overheadUSD).toBeGreaterThan(0);
+      expect(result.speed.overheadUSD).toBeGreaterThan(0);
+      expect(result.power.overheadUSD).not.toBe(result.speed.overheadUSD);
+      // Pre-fix ratio was 1.0 (identical). After Slice 1 (per-leg pricing) + Slice 2
+      // (opus-4.7 in MODEL_PRICING, was falling back to sonnet rates), observed ratio
+      // ≈ 5.5× on this fixture (reviewer term still dilutes). Threshold `> * 4` catches
+      // the original bug (identical numbers) and catches partial regressions (e.g., if
+      // opus-4.7 silently drops back to the fallback) while leaving margin for pricing
+      // drift. Per plan Slice 1 rationale.
+      expect(result.power.overheadUSD).toBeGreaterThan(result.speed.overheadUSD * 4);
+    } finally {
+      if (prevAnthropic === undefined) delete process.env.ANTHROPIC_API_KEY; else process.env.ANTHROPIC_API_KEY = prevAnthropic;
+      if (prevOpenAI === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = prevOpenAI;
+    }
+  });
+
+  it("REGRESSION: subscription mode (gh-copilot/claude-cli) flattens per-leg cost (Phase-29 / v2.83.0)", () => {
+    // Field report: rummag user on gh-copilot saw $23.53 estimate where actual
+    // ran ~$0.10–$0.50 — a ~250× over-estimate. Root cause: estimatePlan and
+    // estimateSlice priced quorum legs via raw API token rates (MODEL_PRICING)
+    // even when the active provider was a flat-rate subscription CLI. After
+    // the fix, each leg of a subscription provider should bill ~$0.01 per
+    // request regardless of token volume, capping power overhead at roughly
+    // (3 dry-runs + 1 reviewer) × $0.01 × sliceCount = ~$0.24 for 6 slices
+    // (grok legs still token-priced via xai-api). Without API keys present,
+    // detectCostModel routes claude-* → claude-cli and gpt-* → gh-copilot.
+    const prevAnthropic = process.env.ANTHROPIC_API_KEY;
+    const prevOpenAI = process.env.OPENAI_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.OPENAI_API_KEY;
+    try {
+      const plan = makePlan(6);
+      const result = costService.estimateQuorum({ plan, cwd: null });
+
+      // Power overhead must collapse dramatically vs the API-mode test above.
+      // API-mode power on the same fixture exceeds $1; subscription-mode must
+      // be well under $1 (only the grok leg uses token math).
+      expect(result.power.overheadUSD).toBeLessThan(1.0);
+      expect(result.speed.overheadUSD).toBeLessThan(1.0);
+
+      // Per-slice projections must also reflect the flattening — slice
+      // entries for power mode should sit well under the legacy bug's
+      // ~$3+ per slice.
+      for (const entry of result.power.slices) {
+        expect(entry.projectedCostUSD).toBeLessThan(0.5);
+      }
+    } finally {
+      if (prevAnthropic === undefined) delete process.env.ANTHROPIC_API_KEY; else process.env.ANTHROPIC_API_KEY = prevAnthropic;
+      if (prevOpenAI === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = prevOpenAI;
+    }
   });
 });
 

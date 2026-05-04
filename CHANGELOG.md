@@ -7,6 +7,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.83.0] — 2026-05-04 — Provider-aware quorum cost estimates (~250× over-estimate fix)
+
+> **One-liner**: Quorum overhead pricing now respects the active provider. Subscription CLIs (gh-copilot, claude-cli) bill flat per-request instead of being incorrectly priced at raw API token rates — fixes the field-reported $23.53 estimate that ran ~$0.10–$0.50 in reality.
+
+### Fixed
+- **`estimatePlan` quorum overhead used token-based API pricing for every leg, ignoring the active provider.** The base estimate had been provider-aware since v2.60.0 (issue #120), but the quorum overhead block in `pforge-mcp/cost-service.mjs` still priced each dry-run leg via `MODEL_PRICING` regardless of whether `claude-opus-4.7` / `gpt-5.3-codex` were running through `claude-cli` / `gh-copilot` (flat ~$0.01 per premium request) or hitting the API directly ($15 / $75 per Mtok). Result: ~250× over-estimates for subscription CLI users (a 6-slice plan in `power` mode dropped from ~$23 to ~$0.45 after the fix). Now each leg is re-detected via `detectCostModel` and subscription legs charge `CLI_PER_REQUEST_USD`.
+- **`estimateSlice` had the same provider-blind bug for both base cost and quorum overhead.** The per-slice picker numbers shown in dashboards now agree with the run-level estimate. Mirrors the `estimatePlan` fix using a shared `costForLeg()` helper.
+
+### Tests
+- New regression test in `pforge-mcp/tests/cost-service.test.mjs`: subscription mode (no API keys) caps power overhead under $1 and per-slice projection under $0.50 for a 6-slice fixture.
+- Existing API-mode differential test (`per-leg pricing varies across quorum presets`) updated to explicitly set `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` so it continues to exercise the token-pricing differential path the test was designed for.
+
+### Files
+- `pforge-mcp/cost-service.mjs` — `estimatePlan` and `estimateSlice` route per-leg pricing through a `costForLeg()` helper that consults `detectCostModel` per model.
+- `pforge-mcp/tests/cost-service.test.mjs` — new subscription-mode regression test; existing differential test scoped to API mode via env-key setup/teardown.
+
+### Field report (Rummag, 2026-05-04)
+A user on `gh-copilot` saw `pforge` quote $23.53 for an 8-slice plan in `auto` mode where the actual run cost ~$0.10–$0.50. Investigation confirmed the v2.60.0 base-cost fix never reached the quorum overhead path. This release closes that gap.
+
 ## [2.82.2] — 2026-05-02 — Explicit downgrade guard for `pforge self-update`
 
 > **One-liner**: `pforge self-update` no longer silently does nothing (or silently downgrades on `--force`) when the local VERSION is HIGHER than the latest GitHub release. Field report from a v2.96.0 user revealed the gap.

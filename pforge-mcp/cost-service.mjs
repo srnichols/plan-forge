@@ -372,12 +372,27 @@ export function estimatePlan(plan, model, cwd, quorumConfig = null, resumeFrom =
     // Phase-27.1 Slice 1: price each leg using that model's rate, not the
     // default model's rate. Without this, power and speed return identical
     // numbers because both multiply by the same default pricing.
-    const dryRunCostPerSlice = quorumConfig.models.reduce((sum, m) => {
-      const mPricing = getPricing(m);
-      return sum + (dryRunInputPerLeg * mPricing.input) + (dryRunOutputPerLeg * mPricing.output);
-    }, 0);
-    const reviewerPricing = getPricing(quorumConfig.reviewerModel);
-    const reviewerCostPerSlice = (reviewerInput * reviewerPricing.input) + (reviewerOutput * reviewerPricing.output);
+    //
+    // Phase-29 (v2.83.0): provider-aware per-leg pricing. The base estimate
+    // already routes gpt-* / claude-* to gh-copilot / claude-cli when no API
+    // key is set (issue #120 fix). The quorum overhead block had NOT been
+    // updated, so it still priced every leg via raw API token rates — which
+    // produced ~250× over-estimates for users on gh-copilot. Re-detect the
+    // provider per leg and bill subscription legs as 1 premium request.
+    const costForLeg = (legModel, inTokens, outTokens) => {
+      const legCost = detectCostModel({ env: process.env, forgeConfig, model: legModel });
+      if (SUBSCRIPTION_PROVIDERS.has(legCost.provider)) {
+        // Subscription provider — flat per-request charge regardless of token volume.
+        return legCost.perRequestUsd;
+      }
+      const mPricing = getPricing(legModel);
+      return (inTokens * mPricing.input) + (outTokens * mPricing.output);
+    };
+    const dryRunCostPerSlice = quorumConfig.models.reduce(
+      (sum, m) => sum + costForLeg(m, dryRunInputPerLeg, dryRunOutputPerLeg),
+      0
+    );
+    const reviewerCostPerSlice = costForLeg(quorumConfig.reviewerModel, reviewerInput, reviewerOutput);
 
     quorumOverhead = {
       quorumSliceCount: quorumSlices.length,
@@ -624,9 +639,30 @@ export function estimateSlice({ plan, sliceNumber, mode = "auto", model = "claud
   } catch { /* fall back to heuristic */ }
   const tokensPerSlice = avgTokensPerSlice || { input: 2000, output: 5000 };
 
-  // Base cost from model pricing
-  const pricing = getPricing(model);
-  const baseCostUSD = (tokensPerSlice.input * pricing.input) + (tokensPerSlice.output * pricing.output);
+  // Phase-29 (v2.83.0): provider-aware base + overhead. estimateSlice was
+  // unconditionally using token-based MODEL_PRICING for both base and
+  // quorum overhead, which over-estimated by ~250× for users on
+  // subscription CLIs (gh-copilot, claude-cli). Mirror estimatePlan's
+  // detection logic so the per-slice picker numbers agree with the
+  // run-level estimate.
+  let forgeConfig = {};
+  try {
+    const forgePath = resolvedCwd ? resolve(resolvedCwd, ".forge.json") : null;
+    if (forgePath && existsSync(forgePath)) {
+      forgeConfig = JSON.parse(readFileSync(forgePath, "utf-8"));
+    }
+  } catch { /* default to {} */ }
+  const costForLeg = (legModel, inTokens, outTokens) => {
+    const legCost = detectCostModel({ env: process.env, forgeConfig, model: legModel });
+    if (SUBSCRIPTION_PROVIDERS.has(legCost.provider)) {
+      return legCost.perRequestUsd;
+    }
+    const mPricing = getPricing(legModel);
+    return (inTokens * mPricing.input) + (outTokens * mPricing.output);
+  };
+
+  // Base cost respects the active provider (subscription vs API)
+  const baseCostUSD = costForLeg(model, tokensPerSlice.input, tokensPerSlice.output);
 
   // Complexity scoring
   const { score: complexityScore } = scoreSliceComplexity(slice, resolvedCwd);
@@ -655,14 +691,13 @@ export function estimateSlice({ plan, sliceNumber, mode = "auto", model = "claud
   if (quorumEligible && quorumConfig) {
     const dryRunInput = tokensPerSlice.input * 1.5;
     const dryRunOutput = tokensPerSlice.output * 0.8;
-    const dryRunCost = quorumConfig.models.reduce((sum, m) => {
-      const mPricing = getPricing(m);
-      return sum + (dryRunInput * mPricing.input) + (dryRunOutput * mPricing.output);
-    }, 0);
+    const dryRunCost = quorumConfig.models.reduce(
+      (sum, m) => sum + costForLeg(m, dryRunInput, dryRunOutput),
+      0
+    );
     const reviewerInput = dryRunOutput * quorumConfig.models.length + tokensPerSlice.input;
     const reviewerOutput = tokensPerSlice.output * 0.6;
-    const reviewerPricing = getPricing(quorumConfig.reviewerModel);
-    const reviewerCost = (reviewerInput * reviewerPricing.input) + (reviewerOutput * reviewerPricing.output);
+    const reviewerCost = costForLeg(quorumConfig.reviewerModel, reviewerInput, reviewerOutput);
     overheadUSD = dryRunCost + reviewerCost;
   }
 

@@ -386,6 +386,25 @@
 
         <blockquote><p>The forge is lit. The metal is hot. Build something that lasts.</p></blockquote>
 
+        <h2>Epilogue: Where the Journey Went Next <span class="text-slate-500 text-base font-normal">(May 2026)</span></h2>
+
+        <p>A month after this post went up, Plan Forge stopped being just a build pipeline and became a <strong>shop</strong>. Not because anyone asked &mdash; because the same problems that drove the original guardrails kept appearing on either side of the build. <em>How do you know what to build?</em> The Smelt station was born from that. <em>How do you know it's still right after you ship?</em> <a href="../manual/what-is-liveguard.html" class="text-forge-400 hover:underline">LiveGuard</a> came from that. <em>How does the next run get smarter?</em> The Learn station made that explicit.</p>
+
+        <p>The pipeline that this post is about is still here &mdash; it's now the <strong>Forge</strong> station of a four-station shop (<a href="../shop-tour.html" class="text-forge-400 hover:underline">Smelt &middot; Forge &middot; Guard &middot; Learn</a>). Highlights since April:</p>
+
+        <ul>
+          <li><strong>Smelt</strong> &mdash; The <a href="../manual/crucible.html" class="text-forge-400 hover:underline">Crucible interview</a> now intakes features with a critical-fields gate. Specs that used to drift past the planner refuse to leave the smelter incomplete.</li>
+          <li><strong>Forge</strong> &mdash; <a href="quorum-mode-3-models.html" class="text-forge-400 hover:underline">Quorum Mode</a> (3 models reviewing in parallel) escalates automatically on high-complexity slices. Host-aware routing keeps the right model on the right host without silently double-billing.</li>
+          <li><strong>Guard</strong> &mdash; LiveGuard shipped: drift scoring against the original spec, secret scans, dependency watch, regression guards, incident capture, and remote alerts to Slack / Teams / PagerDuty / OpenClaw. The spec stops mattering at merge no longer; it becomes the baseline LiveGuard measures the running system against.</li>
+          <li><strong>Learn</strong> &mdash; <a href="../manual/health-dna.html" class="text-forge-400 hover:underline">Health DNA</a> aggregates findings across runs and self-tunes escalation, cost, and quorum thresholds. The next plan starts with what the last plan learned.</li>
+          <li><strong>Audit Loop</strong> &mdash; A closed-loop self-tempering drain (scan &rarr; triage &rarr; fix until convergence) became a first-class subsystem in v2.80. The loop literally never ends now &mdash; that earned its own <a href="the-loop-that-never-ends.html" class="text-forge-400 hover:underline">post</a>.</li>
+          <li><strong>Forge-Master</strong> &mdash; A read-only intent classifier with an embedding cache and quorum advisory mode. The shop now has a front door you can talk to.</li>
+        </ul>
+
+        <p>The numbers grew too &mdash; <strong>69 MCP tools, 14 specialized reviewer agents, 9 presets, 7 host adapters</strong>. None of it was on the roadmap a year ago. Each station emerged because a real problem demanded it, and the next one always rhymed with the same lesson this whole post is about: <em>the model isn't the bottleneck &mdash; context is</em>. The shop is just more places to put context.</p>
+
+        <p>If this epilogue made you want to see the loop close, <strong><a href="the-loop-that-never-ends.html" class="text-forge-400 hover:underline">The Loop That Never Ends &rarr;</a></strong> picks up exactly where this story leaves off.</p>
+
       </div>
 
       <!-- Post nav -->

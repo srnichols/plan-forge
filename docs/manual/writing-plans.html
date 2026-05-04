@@ -33,7 +33,7 @@
 
         <!-- ─── Plan Structure ─── -->
         <h2 id="structure">Plan Structure</h2>
-        <p>Every hardened plan has these mandatory sections. The plan-hardener agent adds them automatically during Step 2, but you should understand what each does and how to edit them:</p>
+        <p>Every hardened plan has these mandatory sections. The plan-hardener agent adds them automatically during Step 2 (or the Crucible interview adds them upstream during Smelt), but you should understand what each does and how to edit them:</p>
 
         <table>
           <thead><tr><th>Section</th><th>Required?</th><th>Purpose</th></tr></thead>
@@ -41,11 +41,40 @@
             <tr><td><strong>Scope Contract</strong></td><td>Yes</td><td>In-scope paths, out-of-scope, forbidden actions</td></tr>
             <tr><td><strong>MUST Criteria</strong></td><td>Yes</td><td>Non-negotiable outcomes (checkboxes)</td></tr>
             <tr><td><strong>SHOULD Criteria</strong></td><td>Optional</td><td>Best-effort goals</td></tr>
-            <tr><td><strong>Execution Slices</strong></td><td>Yes</td><td>Checkpointed work chunks with gates</td></tr>
+            <tr><td><strong>Build / Test Commands</strong></td><td>Yes <span class="text-amber-400 text-xs">v2.82.1+</span></td><td><code>build-command</code> + <code>test-command</code> &mdash; required by the Crucible critical-fields gate</td></tr>
+            <tr><td><strong>Execution Slices</strong></td><td>Yes</td><td>Checkpointed work chunks with gates and per-slice <code>**Files in scope**</code></td></tr>
             <tr><td><strong>Branch Strategy</strong></td><td>Recommended</td><td>Git branch name and merge approach</td></tr>
             <tr><td><strong>Rollback Plan</strong></td><td>Recommended</td><td>How to undo if things go wrong</td></tr>
           </tbody>
         </table>
+
+        <div class="callout callout-info">
+          <strong>Field aliases (v2.82.1)</strong>: Per-slice scope can be authored as either <code>**Files:**</code> or <code>**Files in scope**</code> (the latter is what the Crucible/hardener now emit). Validation gates can be authored as either <code>**Validation Gate**</code> or <code>**Exit gate**</code>. The orchestrator parses both. Hand-authored plans following the convention should prefer the <code>Files in scope</code> + <code>Exit gate</code> pair to match generated output.
+        </div>
+
+        <!-- ─── CRITICAL_FIELDS gate ─── -->
+        <h2 id="critical-fields">CRITICAL_FIELDS Gate <span class="text-amber-400 text-base font-normal">v2.82.1+</span></h2>
+        <p>Plans created via the <a href="crucible.html">Crucible smelter</a> are now blocked from finalizing until <strong>every CRITICAL_FIELD is filled in</strong>. This eliminates the entire class of "TBD-laden plans that compile but can't run."</p>
+
+        <table>
+          <thead><tr><th>Field</th><th>What it locks down</th><th>Example</th></tr></thead>
+          <tbody>
+            <tr><td><code>build-command</code></td><td>The exact command the orchestrator will run as the build gate per slice</td><td><code>dotnet build</code></td></tr>
+            <tr><td><code>test-command</code></td><td>The exact command the orchestrator will run as the test gate</td><td><code>dotnet test</code></td></tr>
+            <tr><td><code>scope</code></td><td>In-scope paths (per-slice <code>Files in scope</code> + plan-level scope)</td><td><code>src/services/**, tests/services/**</code></td></tr>
+            <tr><td><code>validation-gates</code></td><td>At least one executable gate per slice</td><td><code>dotnet test --filter UserService</code></td></tr>
+            <tr><td><code>forbidden-actions</code></td><td>Concrete file patterns or actions that are out-of-bounds</td><td><code>Do NOT modify src/database/migrations/</code></td></tr>
+            <tr><td><code>rollback</code></td><td>How to undo the change cleanly</td><td><code>git revert &lt;commit&gt;</code> or named feature flag</td></tr>
+          </tbody>
+        </table>
+
+        <p>If any CRITICAL_FIELD is missing, <code>forge_crucible_finalize</code> returns <code>409</code> with <code>CRITICAL_FIELDS_MISSING</code> and a <code>criticalGaps[]</code> array pointing at the unresolved fields. The Crucible interview adds a question for each missing field automatically &mdash; the feature lane now asks 7 questions (was 6); the tweak lane asks 4 (was 3).</p>
+
+        <p>The build/test commands are inferred from your repo when possible (via <code>inferRepoCommands</code> &mdash; checks <code>package.json</code>, <code>*.csproj</code>, <code>pyproject.toml</code>, <code>Cargo.toml</code>, etc.) so most projects don't have to type them by hand.</p>
+
+        <div class="callout callout-tip">
+          <strong>Hand-authored plans bypass the gate</strong>: If you write the plan yourself in <code>docs/plans/Phase-NN.md</code> instead of using the Crucible, the gate doesn't apply. But you still want to fill these fields in &mdash; the orchestrator reads <code>build-command</code> and <code>test-command</code> from the plan frontmatter when running gates that don't specify a full command inline.
+        </div>
 
         <!-- ─── Scope Contract ─── -->
         <h2 id="scope-contract">Writing a Good Scope Contract</h2>
@@ -71,6 +100,10 @@
 **In Scope**: anything related to users
 **Out of Scope**: nothing specific
 **Forbidden Actions**: don't break things</code></pre>
+        </div>
+
+        <div class="callout callout-info">
+          <strong>Forbidden Actions come from the Crucible interview</strong>: The 7th feature-lane question (added v2.82.1) explicitly asks for forbidden actions. Answers like &ldquo;don't touch the migrations folder&rdquo; or &ldquo;don't add new NuGet packages without approval&rdquo; flow directly into this section as concrete patterns. If you skip the interview and hand-author the plan, write them as <em>file patterns or named actions</em> &mdash; not vibes.
         </div>
 
         <p>"Anything related to users" gives the AI free rein to refactor 20 files. "Don't break things" isn't enforceable. Be specific about paths, and list forbidden actions as concrete file patterns. That's how you get lasagna code — clean layers, each with a purpose — instead of spaghetti where everything touches everything.</p>

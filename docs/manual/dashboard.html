@@ -183,19 +183,76 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
 
         <img src="../assets/dashboard/extensions.png" alt="Dashboard Extensions tab showing visual catalog browser with search, install buttons, and extension details" class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
 
-        <!-- ─── Config Tab ─── -->
-        <h2 id="config">Config Tab</h2>
-        <p>Visual editor for <code>.forge.json</code>. Edit without touching the file directly:</p>
-        <ul>
-          <li><strong>Model routing</strong> — set default, execution, and review models from a dropdown</li>
-          <li><strong>Image generation model</strong> — Grok Aurora or DALL-E for plan art</li>
-          <li><strong>Agent toggles</strong> — enable/disable specific reviewer agents</li>
-          <li><strong>Quorum threshold</strong> — complexity level that triggers multi-model consensus</li>
-          <li><strong>Escalation chain</strong> — model failover order</li>
-        </ul>
-        <p>Changes save directly to <code>.forge.json</code> via the REST API.</p>
+        <!-- ─── Settings Group ─── -->
+        <h2 id="config">Settings Group <span style="color:#c084fc;font-size:0.6em;vertical-align:middle">v2.69+ Phase-30</span></h2>
+        <p>Phase-30 broke the old monolithic <em>Config</em> tab into a top-level <strong>Settings</strong> group with <strong>9 purpose-built sub-tabs</strong>. Settings is one of four top-level groups in the dashboard nav:</p>
 
-        <img src="../assets/dashboard/config.png" alt="Dashboard Config tab showing visual editor for .forge.json with model routing, agent toggles, and quorum settings" class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
+        <div class="grid md:grid-cols-2 gap-3 my-4">
+          <div class="p-3 bg-slate-900/40 border border-blue-500/20 rounded-lg"><strong class="text-blue-400">🔨 Forge</strong> <span class="text-slate-500 text-xs">(default)</span><br><span class="text-xs text-slate-400">Home · Review · Progress · Crucible · Governance · Runs · Cost · Actions · Replay · Traces · Skills · Tempering · Memory · Timeline · Inner Loop · Extensions</span></div>
+          <div class="p-3 bg-slate-900/40 border border-amber-500/20 rounded-lg"><strong class="text-amber-400">🛡 LiveGuard</strong><br><span class="text-xs text-slate-400">Health · Incidents · Triage · Security · Env · Watcher · Bug Registry</span></div>
+          <div class="p-3 bg-slate-900/40 border border-cyan-500/20 rounded-lg"><strong class="text-cyan-400">📋 Forge-Master</strong><br><span class="text-xs text-slate-400">Studio (the reasoning orchestrator's home)</span></div>
+          <div class="p-3 bg-slate-900/40 border border-purple-500/20 rounded-lg"><strong class="text-purple-400">⚙ Settings</strong> <span class="text-slate-500 text-xs">(this section)</span><br><span class="text-xs text-slate-400">9 sub-tabs covering platform-wide configuration</span></div>
+        </div>
+
+        <p>Click <strong>Settings</strong> in the top nav and you'll see 9 purple-accented sub-tabs. Every tab persists changes to its specific config file via the dashboard's safe-write path (sanitizer drops unknown fields, snaps numbers to safe bounds — no UI bug can corrupt your config).</p>
+
+        <h3 id="settings-general">⚙ General</h3>
+        <p>Project identity: preset, template version, and agent enablement.</p>
+        <ul>
+          <li><strong>Preset</strong> — the stack profile applied during setup (dotnet, typescript, python, etc.). Read-only on this tab; change via <code>setup.ps1 -Preset &lt;name&gt;</code>.</li>
+          <li><strong>Template Version</strong> — current framework version applied to your project files. <code>pforge update</code> bumps this.</li>
+          <li><strong>Agents</strong> — toggle which reviewer agents are active. Persists to <code>.forge.json#agents</code>.</li>
+        </ul>
+        <img src="../assets/dashboard/settings-general.png" alt="Settings → General sub-tab showing project identity fields (preset, template version, agents) with Save Configuration and Reload buttons" class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
+
+        <h3 id="settings-models">⚛ Models</h3>
+        <p>Model routing: default execution model and image generation model selection.</p>
+        <ul>
+          <li><strong>Model Routing — Default</strong> — <code>auto</code> (orchestrator picks per slice), or pin to a specific model</li>
+          <li><strong>Image Generation Model</strong> — Grok Aurora (<code>XAI_API_KEY</code>) or DALL-E (<code>OPENAI_API_KEY</code>) for diagrams and chapter heroes via <code>forge_generate_image</code></li>
+        </ul>
+        <img src="../assets/dashboard/settings-models.png" alt="Settings → Models sub-tab with Model Routing dropdown set to auto and Image Generation Model dropdown" class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
+
+        <h3 id="settings-execution">›_ Execution</h3>
+        <p>Per-slice execution behavior: quorum mode, escalation chain, complexity threshold, retry policy. The most-edited Settings tab during day-to-day work.</p>
+        <img src="../assets/dashboard/settings-execution.png" alt="Settings → Execution sub-tab showing quorum mode, threshold, escalation chain, and retry policy controls" class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
+
+        <h3 id="settings-api-keys">⚿ API Keys</h3>
+        <p>Stores API keys in <code>.forge/secrets.json</code> (gitignored). Same precedence as env vars: anything set here is picked up by the orchestrator without restarting the server.</p>
+        <ul>
+          <li><code>XAI_API_KEY</code> — Grok models + Aurora image generation</li>
+          <li><code>OPENAI_API_KEY</code> — GPT models direct + DALL-E (also enables OpenAI fallback for <code>COPILOT_SERVABLE</code> models)</li>
+          <li><code>ANTHROPIC_API_KEY</code> — Claude direct (Forge-Master + workers without <code>claude</code> CLI)</li>
+        </ul>
+        <p>Values are masked on display. The "Test" button against each key validates by calling the provider's lightweight endpoint — never the full reasoning model.</p>
+        <img src="../assets/dashboard/settings-api-keys.png" alt="Settings → API Keys sub-tab showing masked input fields for XAI, OpenAI, Anthropic keys with per-row Test buttons" class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
+
+        <h3 id="settings-updates">↓ Updates</h3>
+        <p>Framework version status + one-click <code>pforge self-update</code> from upstream. Surfaces version drift between your local <code>VERSION</code> and GitHub's latest release.</p>
+
+        <h3 id="settings-memory">🗄 Memory</h3>
+        <p>OpenBrain wiring: server URL, MCP credentials, project scope. See <a href="memory-architecture.html">Chapter 24 — Memory Architecture</a> for the three-tier model.</p>
+
+        <h3 id="settings-bridge">🔔 Bridge</h3>
+        <p>Remote Bridge endpoints for Slack / Teams / PagerDuty / OpenClaw / Telegram / Discord. See <a href="remote-bridge.html">Chapter 20 — Remote Bridge</a> for the per-channel walkthrough.</p>
+
+        <h3 id="settings-crucible">🔥 Crucible</h3>
+        <p>Idea-smelting pipeline configuration. Persists to <code>.forge/crucible/config.json</code>.</p>
+        <ul>
+          <li><strong>Default Lane</strong> — <code>tweak</code> (4q) / <code>feature</code> (7q) / <code>full</code> (~12q). Lane controls interview length.</li>
+          <li><strong>Self-Referral Depth</strong> — max child smelts a parent can spawn (0–3, default 1)</li>
+          <li><strong>Auto-approve agent-submitted smelts</strong> — when <code>source: agent</code>, finalize without human approval (off by default)</li>
+          <li><strong>Default-Source Weights</strong> — Memory / Principles / Plans (sum to 100). Server normalizes if you don't.</li>
+          <li><strong>Stale Defaults Warning</strong> — hours after which Principles/profile changes flag <code>STALE_PRINCIPLES</code>/<code>STALE_PROFILE</code> in the interview</li>
+        </ul>
+        <img src="../assets/dashboard/settings-crucible.png" alt="Settings → Crucible sub-tab showing Default Lane dropdown, Self-Referral Depth, Auto-approve toggle, Default-Source Weights, and Stale Defaults Warning fields" class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
+
+        <h3 id="settings-brain">🧠 Brain</h3>
+        <p>Forge-Master reasoning configuration: <code>reasoningModel</code>, <code>routerModel</code>, <code>quorumAdvisory</code>, <code>embeddingFallback</code>, GitHub Models zero-key path. See <a href="forge-master.html#config">Forge-Master → Configuration</a> for every field.</p>
+
+        <div class="callout callout-tip">
+          <strong>Audit-Loop activation</strong> isn't on a Settings tab — it lives in <code>.forge.json#audit.mode</code> (<code>off | auto | always</code>) and is toggled via the <a href="audit-loop.html">Audit Loop chapter</a>. Drain results stream into the <strong>Tempering</strong> tab in the Forge group.
+        </div>
 
         <!-- ─── Traces Tab ─── -->
         <h2 id="traces">Traces Tab</h2>
@@ -245,16 +302,16 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
           <li><strong>Embedding cache tile</strong> — pulls from <code>GET /api/forge-master/cache-stats</code>. Shows <code>{size, hitRate, maxSize: 500}</code>. When cold, displays a hint that hits start once you've used Forge-Master a few times.</li>
         </ul>
 
-        <!-- ─── Audit-Loop Tab + Config (v2.80) ─── -->
-        <h2 id="audit-loop">Audit-Loop Settings <span style="color:#fcd34d;font-size:0.6em;vertical-align:middle">v2.80</span></h2>
-        <p>The Config tab grew an Audit-Loop section that persists to <code>.forge.json</code> &rarr; <code>audit</code>:</p>
+        <!-- ─── Audit-Loop activation surfaces ─── -->
+        <h2 id="audit-loop">Audit-Loop Activation <span style="color:#fcd34d;font-size:0.6em;vertical-align:middle">v2.80</span></h2>
+        <p>The audit loop is opt-in. It's <strong>not</strong> on a Settings tab &mdash; mode is read from <code>.forge.json#audit.mode</code> directly:</p>
         <ul>
-          <li><strong>Mode toggle</strong> — <code>off</code> (default) / <code>auto</code> / <code>always</code>. Persists immediately to <code>.forge.json#audit.mode</code> via the dashboard's safe-write path</li>
-          <li><strong>Max rounds</strong> — drain caps after N rounds (default 5)</li>
-          <li><strong>Allowed environments</strong> — <code>dev</code> and <code>staging</code> by default; production is hard-blocked unless <code>allowProduction: true</code> in scanner opts (and even then only with explicit override)</li>
-          <li>Live drain progress streams via the <code>tempering-round-completed</code> hub event &mdash; one event per round with scanner pass/fail counts and findings triaged</li>
+          <li><strong>Mode values</strong> &mdash; <code>off</code> (default) / <code>auto</code> / <code>always</code></li>
+          <li><strong>Max rounds</strong> &mdash; drain caps after N rounds (default 5)</li>
+          <li><strong>Allowed environments</strong> &mdash; <code>dev</code> and <code>staging</code> by default; production is hard-blocked unless <code>allowProduction: true</code> in scanner opts (and even then only with explicit override)</li>
+          <li><strong>Live progress</strong> &mdash; drain rounds stream via <code>tempering-round-completed</code> hub events and surface in the <strong>Forge → Tempering</strong> tab</li>
         </ul>
-        <p>See <a href="audit-loop.html">Audit Loop deep dive</a> for the full activation flow.</p>
+        <p>Trigger manually with <code>pforge audit-loop --auto</code> (respects <code>.forge.json#audit.mode</code>) or via the <code>forge_tempering_drain</code> MCP tool. See <a href="audit-loop.html">Audit Loop deep dive</a> for the full activation flow.</p>
 
         <!-- ─── Timeline Tab (v2.82) ─── -->
         <h2 id="timeline">Timeline Tab <span style="color:#a3e635;font-size:0.6em;vertical-align:middle">v2.82 · 9 sources</span></h2>

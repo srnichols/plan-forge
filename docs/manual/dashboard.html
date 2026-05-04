@@ -233,6 +233,42 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
           <li><strong>Live Watch</strong> + <strong>Watch Snapshot</strong> cards on the Actions tab copy the matching <code>pforge watch-live</code> / <code>pforge watch</code> invocations</li>
         </ul>
 
+        <!-- ─── Forge-Master Studio Tab (v2.61 + v2.78–v2.79 + v2.82) ─── -->
+        <h2 id="studio">Forge-Master Studio Tab <span style="color:#c4b5fd;font-size:0.6em;vertical-align:middle">v2.61+ · expanded v2.78–v2.79 · timeline v2.82</span></h2>
+        <p>The reasoning orchestrator's home. See <a href="forge-master.html">the Forge-Master chapter</a> for the deep dive. Three panels:</p>
+        <ul>
+          <li><strong>Prompt gallery</strong> — pre-built prompts grouped by intent (operational, troubleshoot, advisory). Click to populate the chat box; edit before sending.</li>
+          <li><strong>Streaming chat</strong> — sends to <code>/api/forge-master/stream</code>. Shows live <code>classification</code> badge with the <code>via</code> field (<code>keyword</code> / <code>embedding-cache</code> / <code>router-llm</code>), <code>quorum-estimate</code> cost preview if advisory mode triggers (with cancel button), live <code>tool-call</code> trace, and the streaming reply token-by-token.</li>
+          <li><strong>Embedding cache tile</strong> — pulls from <code>GET /api/forge-master/cache-stats</code>. Shows <code>{size, hitRate, maxSize: 500}</code>. When cold, displays a hint that hits start once you've used Forge-Master a few times.</li>
+        </ul>
+
+        <!-- ─── Audit-Loop Tab + Config (v2.80) ─── -->
+        <h2 id="audit-loop">Audit-Loop Settings <span style="color:#fcd34d;font-size:0.6em;vertical-align:middle">v2.80</span></h2>
+        <p>The Config tab grew an Audit-Loop section that persists to <code>.forge.json</code> &rarr; <code>audit</code>:</p>
+        <ul>
+          <li><strong>Mode toggle</strong> — <code>off</code> (default) / <code>auto</code> / <code>always</code>. Persists immediately to <code>.forge.json#audit.mode</code> via the dashboard's safe-write path</li>
+          <li><strong>Max rounds</strong> — drain caps after N rounds (default 5)</li>
+          <li><strong>Allowed environments</strong> — <code>dev</code> and <code>staging</code> by default; production is hard-blocked unless <code>allowProduction: true</code> in scanner opts (and even then only with explicit override)</li>
+          <li>Live drain progress streams via the <code>tempering-round-completed</code> hub event &mdash; one event per round with scanner pass/fail counts and findings triaged</li>
+        </ul>
+        <p>See <a href="audit-loop.html">Audit Loop deep dive</a> for the full activation flow.</p>
+
+        <!-- ─── Timeline Tab (v2.82) ─── -->
+        <h2 id="timeline">Timeline Tab <span style="color:#a3e635;font-size:0.6em;vertical-align:middle">v2.82 · 9 sources</span></h2>
+        <p>Unified chronological view of every event across the shop. Source chips filter the feed:</p>
+        <ol>
+          <li><code>run</code> &mdash; plan executions (slice progress, completes, aborts)</li>
+          <li><code>incident</code> &mdash; LiveGuard incident lifecycle</li>
+          <li><code>bug</code> &mdash; Bug Registry status changes</li>
+          <li><code>deploy</code> &mdash; <code>forge_deploy_journal</code> entries</li>
+          <li><code>crucible</code> &mdash; smelt lifecycle (started / question / finalized)</li>
+          <li><code>fm-turn</code> <span class="text-purple-300 text-xs">v2.82</span> &mdash; Forge-Master turns (lane + truncated user message + turn number)</li>
+          <li><code>memory</code> &mdash; <code>memory-captured</code> events from OpenBrain</li>
+          <li><code>tempering</code> &mdash; audit-loop drain rounds</li>
+          <li><code>watch</code> &mdash; watcher snapshot / anomaly / advice events</li>
+        </ol>
+        <p>The CLI equivalent is <code>pforge timeline</code> &mdash; same 9 sources, same correlation-id grouping, JSON-pipeable for scripts.</p>
+
         <!-- ─── LiveGuard Section ─── -->
         <h2 id="liveguard">LiveGuard Section <span style="color:#f59e0b;font-size:0.6em;vertical-align:middle">v2.28+</span></h2>
         <p>Five amber-accented tabs separated by a visual divider from the FORGE section. LiveGuard tools (<code>forge_drift_report</code>, <code>forge_regression_guard</code>, <code>forge_incident_capture</code>, <code>forge_secret_scan</code>, <code>forge_env_diff</code>, <code>forge_liveguard_run</code>, etc.) broadcast <code>liveguard</code> + <code>liveguard-tool-completed</code> events that populate these tabs in real time.</p>

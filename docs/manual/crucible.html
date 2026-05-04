@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Chapter 6.6: Crucible — Plan Forge Manual</title>
-  <meta name="description" content="The idea-smelting pipeline: lanes (tweak/feature/full), interview questions, recursion guardrails, grandfather migration, Spec Kit coexistence, bypass enforcement, dashboard Config, and Governance tab." />
+  <title>Chapter 5: Crucible — Plan Forge Manual</title>
+  <meta name="description" content="The idea-smelting station: lanes (tweak/feature/full), interview questions, CRITICAL_FIELDS gate, recursion guardrails, grandfather migration, Spec Kit coexistence, bypass enforcement, Governance tab." />
   <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
@@ -27,12 +27,16 @@
     <main>
       <div class="chapter-content">
 
-        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 6.6</div>
-        <h1>Crucible — The Idea Smelter</h1>
-        <p class="text-lg text-slate-400 mb-8">Before a plan can be hardened, the raw ore has to be smelted. Crucible is the stage that happens <em>before</em> Plan Hardening — where an idea becomes a well-specified Phase plan through a short, structured interview.</p>
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 5</div>
+        <h1>Crucible &mdash; The Idea Smelter</h1>
+        <p class="text-lg text-slate-400 mb-8">The Smelt station. Before a plan can be hardened, the raw ore has to be smelted. Crucible is the stage that happens <em>before</em> Plan Hardening &mdash; where an idea becomes a well-specified Phase plan through a short, structured interview that refuses to finalize until every CRITICAL_FIELD is filled in.</p>
 
         <div class="callout callout-tip">
-          <strong>New in v2.37.0</strong>: Crucible is the first mandatory pre-hardening stage. Every plan under <code>docs/plans/Phase-*.md</code> must now carry a <code>crucibleId</code> in its frontmatter — either from a smelt, from the <code>--manual-import</code> bypass, or from the grandfather migration.
+          <strong>v2.82.1 hardened</strong>: Crucible now enforces a <strong>critical-fields gate</strong> at finalize time &mdash; plans cannot leave the smelter with placeholder TBDs in <code>build-command</code>, <code>test-command</code>, scope, validation gates, forbidden actions, or rollback. Question counts bumped: feature lane <strong>7</strong> (was 6), tweak lane <strong>4</strong> (was 3). See <a href="#critical-fields">CRITICAL_FIELDS Gate</a> below.
+        </div>
+
+        <div class="callout callout-info">
+          <strong>Original (v2.37.0)</strong>: Crucible became the first mandatory pre-hardening stage. Every plan under <code>docs/plans/Phase-*.md</code> must carry a <code>crucibleId</code> in its frontmatter &mdash; either from a smelt, from the <code>--manual-import</code> bypass, or from the grandfather migration.
         </div>
 
         <h2 id="why">Why Smelt Before Hardening?</h2>
@@ -48,13 +52,13 @@
         <div class="grid md:grid-cols-3 gap-4 my-6">
           <div class="p-4 bg-slate-900 border border-slate-800 rounded-lg">
             <div class="text-forge-400 font-semibold mb-1">tweak</div>
-            <div class="text-xs text-slate-400 mb-2">~3 questions</div>
-            <p class="text-sm">Version bumps, config flag flips, doc edits, small bug fixes. Inferred when the raw idea mentions "bump", "fix typo", "update dep".</p>
+            <div class="text-xs text-slate-400 mb-2">4 questions <span class="text-amber-400">(was 3)</span></div>
+            <p class="text-sm">Version bumps, config flag flips, doc edits, small bug fixes. Inferred when the raw idea mentions "bump", "fix typo", "update dep". Adds <code>forbidden-actions</code> question (v2.82.1) so even tiny changes declare what they won't touch.</p>
           </div>
           <div class="p-4 bg-slate-900 border border-slate-800 rounded-lg">
             <div class="text-forge-400 font-semibold mb-1">feature</div>
-            <div class="text-xs text-slate-400 mb-2">~6 questions</div>
-            <p class="text-sm">Default lane. New endpoint, new tool, new UI section, new service with a handful of slices.</p>
+            <div class="text-xs text-slate-400 mb-2">7 questions <span class="text-amber-400">(was 6)</span></div>
+            <p class="text-sm">Default lane. New endpoint, new tool, new UI section, new service with a handful of slices. Adds <code>forbidden-actions</code> as the 7th question (v2.82.1).</p>
           </div>
           <div class="p-4 bg-slate-900 border border-slate-800 rounded-lg">
             <div class="text-forge-400 font-semibold mb-1">full</div>
@@ -64,11 +68,58 @@
         </div>
 
         <h2 id="interview">The Interview Loop</h2>
-        <p>Crucible streams one question at a time. You answer, it writes the answer to the smelt's JSONL record, then it computes the next question. Three MCP tools drive the loop:</p>
-        <pre><code>forge_crucible_submit { rawIdea, lane?, source? }   → { id, firstQuestion }
-forge_crucible_ask    { id, answer }                 → { nextQuestion | done: true }
-forge_crucible_finalize { id }                        → { phaseName, planPath, hardenerHandoff }</code></pre>
+        <p>Crucible streams one question at a time. You answer, it writes the answer to the smelt's JSONL record, then it computes the next question. Six MCP tools drive the loop:</p>
+        <pre><code>forge_crucible_submit  { rawIdea, lane?, source? }      → { id, firstQuestion }
+forge_crucible_ask     { id, answer, questionId? }      → { nextQuestion | done: true }
+forge_crucible_preview { id }                            → { draft, criticalGaps[] }
+forge_crucible_finalize{ id, overwrite? }                → { phaseName, planPath, hardenerHandoff }
+forge_crucible_list    { status? }                       → [ smelts … ]
+forge_crucible_abandon { id, reason? }                   → { ok }</code></pre>
+
+        <p><strong>Optional <code>questionId</code> on <code>ask</code> (v2.82.1)</strong>: pass the question id you're answering. If it doesn't match the server's pending question id, the call returns <code>409</code> with <code>ASK_QUESTION_MISMATCH</code> and an <code>{ expected, got }</code> payload. Multi-turn LLM clients that fall out of sync get a loud failure instead of silent answer corruption.</p>
+
+        <p><strong>Build/test command inference</strong>: when the build-command or test-command questions come up, the interview pre-fills suggestions via <code>inferRepoCommands</code> &mdash; it inspects <code>package.json</code> scripts, <code>*.csproj</code>, <code>pyproject.toml</code>, <code>Cargo.toml</code>, <code>go.mod</code>, etc. You usually just confirm.</p>
+
         <p>Finalize writes <code>docs/plans/&lt;phaseName&gt;.md</code> with the answer-derived draft and emits <code>crucible-handoff-to-hardener</code> on the hub so the dashboard (and downstream agents) can pick up the plan for Step 2.</p>
+
+        <h2 id="critical-fields">CRITICAL_FIELDS Gate <span class="text-amber-400 text-base font-normal">v2.82.1+</span></h2>
+        <p>Crucible refuses to finalize a smelt with placeholder TBDs. The gate checks six fields; <strong>any unresolved field is a hard block</strong>:</p>
+
+        <table class="manual-table my-4">
+          <thead><tr><th>Field</th><th>Lane(s)</th><th>What it locks down</th></tr></thead>
+          <tbody>
+            <tr><td><code>build-command</code></td><td>all</td><td>Exact build command the orchestrator runs as a per-slice gate. Inferred from repo if possible.</td></tr>
+            <tr><td><code>test-command</code></td><td>all</td><td>Exact test command. Inferred from repo if possible.</td></tr>
+            <tr><td><code>scope</code></td><td>all</td><td>Plan-level + per-slice <code>Files in scope</code></td></tr>
+            <tr><td><code>validation-gates</code></td><td>feature, full</td><td>At least one executable gate per slice</td></tr>
+            <tr><td><code>forbidden-actions</code></td><td>tweak (4), feature (7)</td><td>Concrete file patterns or named actions that are out-of-bounds</td></tr>
+            <tr><td><code>rollback</code></td><td>feature, full</td><td>How to undo the change cleanly</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Finalize behavior with gaps</h3>
+        <p>If any field is missing, <code>forge_crucible_finalize</code> returns:</p>
+
+        <ul>
+          <li><strong>MCP tool</strong>: <code>{ ok: false, code: "CRITICAL_FIELDS_MISSING", criticalGaps: [{ field, reason, hint }, …] }</code></li>
+          <li><strong>REST</strong>: <code>409 Conflict</code> with <code>{ criticalGaps[], unresolvedFields[], hint: "call /api/crucible/preview" }</code></li>
+        </ul>
+
+        <p>The <code>preview</code> tool returns the same <code>criticalGaps[]</code> structure without trying to write a plan, so LLM agents can self-correct.</p>
+
+        <h3>Plan-already-exists protection</h3>
+        <p>If <code>docs/plans/&lt;phaseName&gt;.md</code> already exists and is non-empty, finalize refuses to overwrite a hand-authored plan:</p>
+
+        <ul>
+          <li>A side-by-side <code>&lt;phaseName&gt;.crucible-draft.md</code> is written so the smelt's draft is preserved</li>
+          <li><strong>MCP tool</strong>: <code>{ ok: false, code: "PLAN_ALREADY_EXISTS", phaseName, planPath, draftPath }</code></li>
+          <li><strong>REST</strong>: <code>409 Conflict</code> with the same payload</li>
+          <li>Pass <code>overwrite: true</code> on either surface to bypass &mdash; the previous plan moves to <code>&lt;phaseName&gt;.replaced-&lt;timestamp&gt;.md</code></li>
+        </ul>
+
+        <div class="callout callout-warning">
+          <strong>Don't overwrite without reading the existing plan.</strong> The gate exists because hand-authored plans frequently encode constraints the smelter's questions can't elicit. The draft file lets you cherry-pick what's new from the smelt before destroying the original.
+        </div>
 
         <h2 id="recursion">Recursion Guardrails</h2>
         <p>A smelt can spawn a child smelt — useful when answering a question reveals a sub-feature that itself needs its own phase. The server enforces a <strong>maximum recursion depth</strong> (default <code>1</code>, configurable up to <code>3</code>) so a runaway agent cannot chain smelts indefinitely.</p>
@@ -116,6 +167,15 @@ forge_crucible_finalize { id }                        → { phaseName, planPath,
         <dl class="space-y-3 my-4">
           <dt class="font-semibold text-slate-100">"Plan rejected: missing crucibleId"</dt>
           <dd class="text-slate-400 text-sm">Expected. Either finalize a smelt, re-run setup to trigger grandfather migration, or use <code>--manual-import</code> with a <code>--reason</code>.</dd>
+
+          <dt class="font-semibold text-slate-100">CRITICAL_FIELDS_MISSING on finalize <span class="text-amber-400 text-xs font-normal">v2.82.1</span></dt>
+          <dd class="text-slate-400 text-sm">Call <code>forge_crucible_preview</code> to see <code>criticalGaps[]</code> with <code>{ field, reason, hint }</code> for each missing answer. The interview will queue a question for each gap when you call <code>ask</code> next.</dd>
+
+          <dt class="font-semibold text-slate-100">PLAN_ALREADY_EXISTS on finalize <span class="text-amber-400 text-xs font-normal">v2.82.1</span></dt>
+          <dd class="text-slate-400 text-sm">Read the existing plan at <code>planPath</code> and the smelt's draft at <code>draftPath</code> before deciding. If you genuinely want to replace the existing plan, call finalize again with <code>overwrite: true</code>; the original moves to <code>&lt;phaseName&gt;.replaced-&lt;timestamp&gt;.md</code>.</dd>
+
+          <dt class="font-semibold text-slate-100">ASK_QUESTION_MISMATCH <span class="text-amber-400 text-xs font-normal">v2.82.1</span></dt>
+          <dd class="text-slate-400 text-sm">Your client passed a <code>questionId</code> that doesn't match the server's pending question. Re-fetch state via <code>forge_crucible_preview</code> (returns the active question) and retry. Common when two LLM clients drive the same smelt out of order.</dd>
 
           <dt class="font-semibold text-slate-100">"STALE_PRINCIPLES" warning on every smelt</dt>
           <dd class="text-slate-400 text-sm">Your Principles file changed after the smelt started. Read it, then resume or abandon. If you consistently hit this, raise <code>staleDefaultsHours</code> in Config.</dd>

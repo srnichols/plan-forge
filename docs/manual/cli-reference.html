@@ -360,19 +360,19 @@ DRIFT DETECTED — 1 forbidden file(s) touched.</code></pre>
           <table>
             <thead><tr><th>Flag</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
             <tbody>
-              <tr><td><code>--estimate</code></td><td>boolean</td><td>—</td><td>Cost prediction only, no execution</td></tr>
-              <tr><td><code>--assisted</code></td><td>boolean</td><td>—</td><td>Human codes, orchestrator validates gates</td></tr>
-              <tr><td><code>--model</code></td><td>string</td><td>—</td><td>Model override (e.g., <code>claude-sonnet-4.6</code>)</td></tr>
-              <tr><td><code>--resume-from</code></td><td>number</td><td>—</td><td>Skip completed slices, resume from N</td></tr>
-              <tr><td><code>--dry-run</code></td><td>boolean</td><td>—</td><td>Parse and validate without executing</td></tr>
-              <tr><td><code>--quorum</code></td><td>boolean | auto</td><td>—</td><td>Force quorum on all slices, or <code>auto</code> for threshold-based</td></tr>
-              <tr><td><code>--quorum-threshold</code></td><td>number</td><td>6</td><td>Complexity threshold for auto quorum (1–10)</td></tr>
+              <tr><td><code>--estimate</code></td><td>boolean</td><td>&mdash;</td><td>Cost prediction only, no execution. Always backed by <code>forge_estimate_quorum</code> &mdash; never hand-computed.</td></tr>
+              <tr><td><code>--assisted</code></td><td>boolean</td><td>&mdash;</td><td>Human codes, orchestrator validates gates</td></tr>
+              <tr><td><code>--model</code></td><td>string</td><td>&mdash;</td><td>Model override (e.g., <code>claude-sonnet-4.6</code>)</td></tr>
+              <tr><td><code>--resume-from</code></td><td>number</td><td>&mdash;</td><td>Skip completed slices, resume from N</td></tr>
+              <tr><td><code>--dry-run</code></td><td>boolean</td><td>&mdash;</td><td>Parse and validate without executing</td></tr>
+              <tr><td><code>--quorum</code></td><td>auto | power | speed | false</td><td><code>auto</code></td><td>Quorum preset. <code>auto</code>: threshold-based escalation. <code>power</code>: flagship models, threshold 5 (premium tier). <code>speed</code>: fast models, threshold 7. <code>false</code>: disable.</td></tr>
+              <tr><td><code>--quorum-threshold</code></td><td>number</td><td>6</td><td>Override the complexity threshold for auto-quorum (1&ndash;10). Implied by <code>--quorum=power|speed</code>.</td></tr>
             </tbody>
           </table>
 
           <div class="cmd-block">
             <div class="cmd-block-header"><span>Execute a plan (5 modes)</span><button class="cmd-copy-btn">Copy</button></div>
-            <pre><code># Estimate cost without executing
+            <pre><code># Estimate cost without executing (always tool-backed via forge_estimate_quorum)
 .\pforge.ps1 run-plan docs/plans/Phase-7.md --estimate
 
 # Full auto execution
@@ -384,7 +384,9 @@ DRIFT DETECTED — 1 forbidden file(s) touched.</code></pre>
 # Resume from slice 3 after fixing a failure
 .\pforge.ps1 run-plan docs/plans/Phase-7.md --resume-from 3
 
-# Quorum mode with custom threshold
+# Quorum presets (v2.82)
+.\pforge.ps1 run-plan docs/plans/Phase-7.md --quorum=power     # flagship models, threshold 5
+.\pforge.ps1 run-plan docs/plans/Phase-7.md --quorum=speed     # fast models, threshold 7
 .\pforge.ps1 run-plan docs/plans/Phase-7.md --quorum=auto --quorum-threshold 8</code></pre>
           </div>
 
@@ -392,9 +394,9 @@ DRIFT DETECTED — 1 forbidden file(s) touched.</code></pre>
           <table>
             <thead><tr><th>Mode</th><th>Flag</th><th>What Happens</th></tr></thead>
             <tbody>
-              <tr><td>Full Auto</td><td><em>(default)</em></td><td><code>gh copilot</code> CLI executes each slice with full project context</td></tr>
+              <tr><td>Full Auto</td><td><em>(default)</em></td><td><code>gh copilot</code> CLI executes each slice with full project context. Routing honors host-aware preference (v2.82) so non-Copilot hosts (Claude Code, Cursor, Windsurf, Zed) prefer direct API to honor your subscription.</td></tr>
               <tr><td>Assisted</td><td><code>--assisted</code></td><td>You code in VS Code; orchestrator prompts and validates gates</td></tr>
-              <tr><td>Estimate</td><td><code>--estimate</code></td><td>Shows slice count, token estimate, and cost — without executing</td></tr>
+              <tr><td>Estimate</td><td><code>--estimate</code></td><td>Shows slice count, token estimate, and cost &mdash; without executing. Returns the same numbers as the <code>forge_estimate_quorum</code> tool.</td></tr>
             </tbody>
           </table>
 
@@ -502,6 +504,79 @@ DRIFT DETECTED — 1 forbidden file(s) touched.</code></pre>
             <div class="cmd-block-header"><span>PowerShell / Bash</span><button class="cmd-copy-btn">Copy</button></div>
             <pre><code>pforge help</code></pre>
           </div>
+        </div>
+
+        <!-- ─── audit-loop (Tempering / v2.80) ─── -->
+        <div class="cmd-ref" id="audit-loop">
+          <div class="cmd-ref-title">pforge audit-loop <span class="text-xs text-amber-400 font-normal">v2.80+</span></div>
+          <div class="cmd-ref-desc">Run a closed-loop audit drain (scan &rarr; triage &rarr; fix) until convergence. Off by default; opt in via <code>.forge.json</code> &rarr; <code>audit.mode = "auto" | "always"</code>, or use <code>--auto</code> to respect the config.</div>
+
+          <table>
+            <thead><tr><th>Flag</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>--auto</code></td><td>boolean</td><td>&mdash;</td><td>Respect <code>.forge.json#audit.mode</code> &mdash; skip cleanly if <code>off</code></td></tr>
+              <tr><td><code>--max</code></td><td>number</td><td>5</td><td>Maximum drain rounds before terminating</td></tr>
+              <tr><td><code>--dry-run</code></td><td>boolean</td><td>&mdash;</td><td>Scan + triage but skip fix dispatch</td></tr>
+              <tr><td><code>--env</code></td><td>dev | staging</td><td>dev</td><td>Environment name passed to content-audit scanner. Production is hard-blocked unless <code>allowProduction: true</code> in scanner opts.</td></tr>
+            </tbody>
+          </table>
+
+          <div class="cmd-block">
+            <div class="cmd-block-header"><span>PowerShell / Bash</span><button class="cmd-copy-btn">Copy</button></div>
+            <pre><code># One-shot manual drain (3 rounds max, dry-run)
+pforge audit-loop --max 3 --dry-run
+
+# Respect .forge.json#audit config (most common in CI)
+pforge audit-loop --auto
+
+# Drain against staging
+pforge audit-loop --auto --env staging</code></pre>
+          </div>
+
+          <div class="callout callout-info callout-sm">
+            <strong>Findings route to three lanes</strong>: <code>bug</code> (registers in the bug registry), <code>spec</code> (submits to Crucible for re-smelting), or <code>classifier</code> (writes a local proposal artifact under <code>.forge/audits/</code> for human review). The <code>classifier-reviewer</code> agent in <code>.github/agents/</code> can audit the classifier's lane choices read-only.
+          </div>
+
+          <p class="text-sm text-slate-500 mt-2">Also available as: <code>forge_tempering_drain</code> MCP tool, <code>POST /api/tempering/drain</code> REST endpoint, and the <code>/audit-loop</code> slash-command skill in chat.</p>
+        </div>
+
+        <!-- ─── timeline (v2.82) ─── -->
+        <div class="cmd-ref" id="timeline">
+          <div class="cmd-ref-title">pforge timeline <span class="text-xs text-amber-400 font-normal">v2.82+</span></div>
+          <div class="cmd-ref-desc">Offline chronological view of every event across the shop &mdash; runs, slices, incidents, bugs, deploys, Crucible interviews, Forge-Master turns, audit-loop rounds, memory captures. 9 sources, dedupe-safe across log rotation.</div>
+
+          <table>
+            <thead><tr><th>Flag</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>--window</code></td><td>duration</td><td>24h</td><td>Lookback window (e.g., <code>1h</code>, <code>24h</code>, <code>7d</code>)</td></tr>
+              <tr><td><code>--from</code> / <code>--to</code></td><td>ISO datetime</td><td>&mdash;</td><td>Explicit range (overrides <code>--window</code>)</td></tr>
+              <tr><td><code>--source</code></td><td>string</td><td>all</td><td>Filter to one source: <code>run</code>, <code>incident</code>, <code>bug</code>, <code>deploy</code>, <code>crucible</code>, <code>fm-turn</code>, <code>memory</code>, <code>tempering</code>, <code>watch</code></td></tr>
+              <tr><td><code>--correlation</code></td><td>string</td><td>&mdash;</td><td>Filter to one correlation id (run id, incident id, etc.)</td></tr>
+              <tr><td><code>--group-by</code></td><td>source | hour | day</td><td>&mdash;</td><td>Bucket events for a summary view</td></tr>
+              <tr><td><code>--limit</code></td><td>number</td><td>200</td><td>Max events returned</td></tr>
+              <tr><td><code>--json</code></td><td>boolean</td><td>&mdash;</td><td>Machine-readable JSON output</td></tr>
+            </tbody>
+          </table>
+
+          <div class="cmd-block">
+            <div class="cmd-block-header"><span>PowerShell / Bash</span><button class="cmd-copy-btn">Copy</button></div>
+            <pre><code># Last 24h, all sources
+pforge timeline
+
+# Last hour, only Forge-Master turns
+pforge timeline --window 1h --source fm-turn
+
+# Everything tied to one run
+pforge timeline --correlation run-2026-05-04T120000
+
+# Daily summary for the past week, grouped by source
+pforge timeline --window 7d --group-by source
+
+# JSON for piping into jq / scripts
+pforge timeline --window 24h --json | jq '.[] | select(.source == "incident")'</code></pre>
+          </div>
+
+          <p class="text-sm text-slate-500 mt-2">Also available as: <code>forge_timeline</code> MCP tool, <code>GET /api/timeline</code> REST endpoint, and the Timeline tab on the dashboard.</p>
         </div>
 
         <!-- ─── LiveGuard commands ─── -->

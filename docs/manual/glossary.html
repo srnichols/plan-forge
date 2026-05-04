@@ -92,10 +92,17 @@
           <tr><td><strong>DAG</strong></td><td>Directed Acyclic Graph — the dependency graph of slices determining execution order.</td></tr>
           <tr><td><strong>[P] tag</strong></td><td>Parallel-safe marker on a slice header. Enables concurrent execution.</td></tr>
           <tr><td><strong>[depends: Slice N]</strong></td><td>Dependency marker. Slice waits for N to complete before starting.</td></tr>
-          <tr><td><strong>Quorum Mode</strong></td><td>Multi-model consensus: 3+ models analyze a slice independently, reviewer synthesizes best approach.</td></tr>
+          <tr><td><strong>Quorum Mode</strong></td><td>Multi-model consensus on slice execution: 3+ models analyze a slice independently, reviewer synthesizes best approach. Auto-winner. CLI: <code>--quorum=auto/power/speed/false</code>.</td></tr>
           <tr><td><strong>Quorum Auto</strong></td><td>Threshold-based: only slices scoring above the complexity threshold use quorum.</td></tr>
+          <tr><td><strong>Quorum Advisory</strong></td><td>Multi-model consensus on Forge-Master prompts (not slices). Returns all replies + dissent summary; <strong>human picks the reply</strong>. Configured via <code>forgeMaster.quorumAdvisory: "off" | "auto" | "always"</code>. Hard-blocked on operational, troubleshoot, build lanes.</td></tr>
           <tr><td><strong>Complexity Score</strong></td><td>1–10 rating based on file scope, dependencies, security keywords, gate count, historical failure rate.</td></tr>
           <tr><td><strong>Escalation Chain</strong></td><td>Model failover order: if Model A fails, try B, then C.</td></tr>
+          <tr><td><strong>Forge-Master</strong></td><td>Read-only reasoning orchestrator with three-stage intent classifier (keyword → embedding cache → router LLM). Lives at <code>forge_master_ask</code> + Studio dashboard tab. Phase-28 MVP (v2.61), expanded v2.78–v2.79.</td></tr>
+          <tr><td><strong>Embedding Cache</strong></td><td>Stage 1.5 of the Forge-Master intent classifier. Cosine-similarity match (≥ 0.85) against previously-classified prompts. Zero API cost on hit, works fully offline once warm. 500-entry LRU.</td></tr>
+          <tr><td><strong>CRITICAL_FIELDS</strong></td><td>The six fields the Crucible critical-fields gate requires before finalizing: build-command, test-command, scope, validation-gates, forbidden-actions, rollback. Added v2.82.1.</td></tr>
+          <tr><td><strong>Host-Aware Routing</strong></td><td>Routing preference (v2.82+) that detects the IDE/CLI host (VS Code, Claude Code, Cursor, Windsurf, Zed, CLI) and chooses CLI proxy vs direct API to honor whichever subscription the user is paying for. Modes: <code>auto / gh-copilot / direct-api / drop</code>.</td></tr>
+          <tr><td><strong>DIRECT_API_ONLY</strong></td><td>Routing class for models with no CLI proxy: <code>grok-*</code>, <code>dall-e-*</code>. Always require an API key (XAI_API_KEY / OPENAI_API_KEY).</td></tr>
+          <tr><td><strong>COPILOT_SERVABLE</strong></td><td>Routing class for <code>gpt-*</code> / <code>chatgpt-*</code> models. <code>gh-copilot</code> can proxy them via your Copilot subscription; direct API is fallback if <code>OPENAI_API_KEY</code> is set. Split introduced in v2.81 to fix #103.</td></tr>
         </tbody>
       </table>
 
@@ -111,7 +118,7 @@
           <tr><td><strong>Dashboard</strong></td><td>Web UI at <code>localhost:3100/dashboard</code>. 25 tabs for monitoring, cost, replay, skills, config, watcher, and LiveGuard.</td></tr>
           <tr><td><strong>Lifecycle Hook</strong></td><td>Automatic actions: SessionStart, PreToolUse, PostToolUse, Stop.</td></tr>
           <tr><td><strong>OpenBrain</strong></td><td>Optional companion MCP server for persistent semantic memory across sessions.</td></tr>
-          <tr><td><strong>MCP</strong></td><td>Model Context Protocol. A standard for AI agents to call functions. Plan Forge's MCP server exposes 67 tools (core + LiveGuard + Watcher + Crucible + Tempering + Bug Registry + Testbed + Forge-Master).</td></tr>
+          <tr><td><strong>MCP</strong></td><td>Model Context Protocol. A standard for AI agents to call functions. Plan Forge's MCP server exposes 69 tools (core + LiveGuard + Watcher + Crucible + Tempering + Bug Registry + Testbed + Forge-Master).</td></tr>
           <tr><td><strong>Bridge</strong></td><td>Notification dispatcher that forwards WebSocket hub events to external platforms (Slack, Discord, Telegram, generic webhooks).</td></tr>
         </tbody>
       </table>

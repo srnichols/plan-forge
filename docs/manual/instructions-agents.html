@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Chapter 9: Instruction Files &amp; Agents — Plan Forge Manual</title>
-  <meta name="description" content="Deep dive into the guardrail system: 18 instruction files, 19 agents, 13 skills, 4 lifecycle hooks. What each covers and when it activates." />
+  <meta name="description" content="Deep dive into the guardrail system: 17 instruction files, 14 reviewer agents, 15 skills, 4 lifecycle hooks plus 3 LiveGuard hooks. What each covers and when it activates." />
   <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
@@ -86,7 +86,7 @@ applyTo: "**/auth/**,**/security/**,**/middleware/**"
 
       <!-- ─── Agents ─── -->
       <h2 id="agents">Agents</h2>
-      <p>19 agents organized in three categories. Agents are <strong>read-only</strong> — they audit code but can't edit files.</p>
+      <p>14 reviewer agents organized in three categories. Agents are <strong>read-only</strong> &mdash; they audit code but can't edit files.</p>
 
       <h3>Stack-Specific Agents (6)</h3>
       <p>Vary by preset — examples for <code>dotnet</code>:</p>

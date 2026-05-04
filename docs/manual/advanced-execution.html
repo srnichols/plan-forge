@@ -44,6 +44,20 @@
       </div>
       <p>Use a fast/cheap model for execution and a more capable model for review. The orchestrator routes each slice to the appropriate model based on its role.</p>
 
+      <h3 id="routing-split">DIRECT_API_ONLY vs COPILOT_SERVABLE <span class="text-amber-400 text-base font-normal">v2.81+</span></h3>
+      <p>Models are split into two routing classes that determine <em>how</em> the orchestrator reaches them:</p>
+
+      <table>
+        <thead><tr><th>Class</th><th>Models</th><th>Routing</th></tr></thead>
+        <tbody>
+          <tr><td><code>DIRECT_API_ONLY</code></td><td><code>grok-*</code>, <code>dall-e-*</code></td><td>HTTP API only. No CLI proxy exists. Requires <code>XAI_API_KEY</code> / <code>OPENAI_API_KEY</code>.</td></tr>
+          <tr><td><code>COPILOT_SERVABLE</code></td><td><code>gpt-*</code>, <code>chatgpt-*</code> (incl. <code>gpt-5.3-codex</code>)</td><td>Prefers <code>gh copilot</code> CLI proxy when available (uses your Copilot subscription). Falls back to direct OpenAI API if <code>OPENAI_API_KEY</code> is set.</td></tr>
+          <tr><td>Everything else</td><td>Claude, Gemini, etc.</td><td>CLI-first via the matching agent CLI (<code>claude</code>, <code>gemini</code>, etc.)</td></tr>
+        </tbody>
+      </table>
+
+      <p>This split (Phase-34, fixes #103) means <code>gpt-*</code> models <strong>no longer drop from auto-quorum</strong> when <code>OPENAI_API_KEY</code> is unset but <code>gh-copilot</code> is installed. The old pattern conflated &ldquo;requires direct API&rdquo; with &ldquo;routed via HTTP&rdquo; and unfairly penalized Copilot users.</p>
+
       <h2 id="escalation">Escalation Chains</h2>
       <p>When a model fails a slice, the orchestrator automatically escalates to the next model in the chain:</p>
       <div class="cmd-block">
@@ -91,6 +105,56 @@ pforge run-plan docs/plans/Phase-7.md --quorum=speed</code></pre>
           <tr><td>No flag</td><td>Single model per slice</td><td>1× baseline cost</td></tr>
         </tbody>
       </table>
+
+      <h3 id="quorum-vs-advisory">Quorum Mode vs Quorum Advisory — What's the Difference? <span class="text-amber-400 text-base font-normal">v2.78+</span></h3>
+      <p>Two surfaces use the word "quorum." They're related but operate at different scopes:</p>
+
+      <table>
+        <thead><tr><th></th><th>Quorum Mode (this section)</th><th>Quorum Advisory <a href="forge-master.html#quorum-advisory">(Forge-Master)</a></th></tr></thead>
+        <tbody>
+          <tr><td><strong>Where</strong></td><td><code>forge_run_plan</code> / <code>--quorum=&hellip;</code></td><td><code>forge_master_ask</code> / Studio tab</td></tr>
+          <tr><td><strong>Decision unit</strong></td><td>Per slice</td><td>Per prompt</td></tr>
+          <tr><td><strong>Auto-winner?</strong></td><td>Yes &mdash; reviewer synthesizes one approach</td><td>No &mdash; human picks the reply</td></tr>
+          <tr><td><strong>Activation</strong></td><td><code>--quorum=auto/power/speed</code> CLI flag</td><td><code>forgeMaster.quorumAdvisory: "auto" \| "always"</code> in <code>.forge.json</code></td></tr>
+          <tr><td><strong>Cost preview</strong></td><td><code>forge_estimate_quorum</code> tool</td><td><code>quorum-estimate</code> SSE event before dispatch (cancellable)</td></tr>
+          <tr><td><strong>Best for</strong></td><td>High-complexity slice execution that benefits from multi-model consensus</td><td>High-stakes <em>judgment</em> calls (architectural choices, trade-offs) where dissent is the signal</td></tr>
+        </tbody>
+      </table>
+
+      <p>You can use both. Quorum Mode runs slice execution; Quorum Advisory helps you decide what to put <em>in</em> the slice in the first place.</p>
+
+      <h2 id="host-routing">Host-Aware Routing <span class="text-amber-400 text-base font-normal">v2.82+</span></h2>
+      <p>Plan Forge runs in different IDEs and CLI hosts (VS Code + Copilot, Claude Code, Cursor, Windsurf, Zed, the bare CLI). Each host has its own billing surface. The host-aware routing preference (added v2.82, fixes #104) ensures users on non-Copilot hosts <strong>don't silently double-pay</strong> against subscriptions they're already paying for.</p>
+
+      <h3>The four modes</h3>
+      <table>
+        <thead><tr><th>Mode</th><th>Behavior</th><th>When to use</th></tr></thead>
+        <tbody>
+          <tr><td><code>auto</code> (default)</td><td>Claude Code / Cursor / Windsurf / Zed prefer direct API <em>first</em>; VS Code + Copilot / CLI keep <code>gh-copilot</code> first</td><td>Recommended. Honors whatever subscription the user is paying for.</td></tr>
+          <tr><td><code>gh-copilot</code></td><td>Always prefer <code>gh copilot</code> regardless of host</td><td>You want all spend to land on your Copilot subscription</td></tr>
+          <tr><td><code>direct-api</code></td><td>Always prefer direct HTTP APIs regardless of host</td><td>You're scripting with explicit per-call cost tracking</td></tr>
+          <tr><td><code>drop</code></td><td>Refuses <code>gpt-*</code> on non-Copilot hosts unless <code>OPENAI_API_KEY</code> is set. Strongest "honor the vendor" stance.</td><td>You want to fail loudly rather than spend silently</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Configuration</h3>
+      <pre><code>{
+  "routing": {
+    "hostPreference": "auto"   // "auto" \| "gh-copilot" \| "direct-api" \| "drop"
+  }
+}</code></pre>
+
+      <h3>Pre-run summary table</h3>
+      <p>Before any model fires in quorum mode, the orchestrator emits a per-model billing surface table to stdout:</p>
+
+      <pre><code>Quorum Pre-Run Summary (host: claude-code, preference: auto)
+  ✓ claude-opus-4.7   → anthropic-direct      ($0.0061/req)
+  ✓ gpt-5.3-codex     → openai-direct         ($0.0048/req)
+  ⚠ grok-4.20         → xai-direct            ($0.0033/req)  needs XAI_API_KEY
+  ✓ claude-sonnet-4.6 → anthropic-direct      ($0.0019/req)
+</code></pre>
+
+      <p>Per-slice telemetry now records <code>host</code>, <code>billingSurface</code>, and <code>billingWarning</code> in <code>slice-N.json</code> so cost aggregation can distinguish subscription-covered vs pay-per-token spend in the Cost Report.</p>
 
       <h2 id="cost-optimization">Cost Optimization</h2>
       <p>The orchestrator tracks model performance in <code>.forge/model-performance.json</code> — success rate, average cost, and duration per model. It auto-selects the cheapest model with &gt;80% historical pass rate.</p>

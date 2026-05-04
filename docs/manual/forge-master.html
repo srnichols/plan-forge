@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Forge-Master — Read-Only Reasoning Orchestrator — Plan Forge Manual</title>
+  <meta name="description" content="Forge-Master is Plan Forge's read-only reasoning orchestrator. Three-stage intent classifier (keyword → embedding cache → router LLM), quorum advisory mode for high-stakes decisions, dashboard Studio tab, and the forge_master_ask MCP tool." />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+
+    <main>
+      <div class="chapter-content">
+
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Deep Dive · Cross-cutting</div>
+        <h1>Forge-Master</h1>
+        <p class="text-lg text-slate-400 mb-8">A read-only reasoning orchestrator with its own dashboard tab. Classifies intent, pulls OpenBrain memory, and chains read-only forge tools on your behalf — so you can ask open-ended questions instead of wiring tool calls by hand.</p>
+
+        <div class="callout callout-info">
+          <strong>Added in v2.61.0 (Phase-28 MVP).</strong> Substantially expanded in v2.78–v2.79: quorum advisory mode (Phase-38.7), embedding cache fallback (Phase-38.8), unified-timeline integration (v2.82). Forge-Master is read-only by design — it never writes code or files. Use it to <em>think</em>; use the rest of the forge to <em>do</em>.
+        </div>
+
+        <h2 id="why">Why a Reasoning Orchestrator?</h2>
+        <p>Plan Forge has 69 MCP tools. Most of the time you know which one you need. But sometimes you don't — sometimes the question is open-ended:</p>
+
+        <ul>
+          <li><em>"Why did Phase-27 Slice 4 fail?"</em> &rarr; needs <code>forge_watch_live</code> + <code>brain_recall</code> + <code>forge_bug_list</code></li>
+          <li><em>"Pick up the thread from yesterday's auth work"</em> &rarr; needs memory recall + <code>forge_status</code> + <code>forge_plan_status</code></li>
+          <li><em>"Should we add caching to the user lookup?"</em> &rarr; needs <code>forge_search</code> + <code>brain_recall</code> for prior decisions + maybe <code>forge_diagnose</code></li>
+        </ul>
+
+        <p>Chaining the right tools by hand is slow and easy to get wrong. Forge-Master is the front door: <strong>one prompt in, one synthesized answer out</strong>. Behind the scenes it classifies your intent, pulls relevant memory, and orchestrates whatever read-only tools fit.</p>
+
+        <div class="callout callout-tip">
+          <strong>Read-only is a feature, not a limitation.</strong> Forge-Master cannot edit your code, change <code>.forge.json</code>, or finalize a smelt. That guarantee is what makes it safe to ask anything at any time. When the answer requires a write, Forge-Master tells you the exact tool to call yourself.
+        </div>
+
+        <!-- ─── Three Access Surfaces ─── -->
+        <h2 id="surfaces">Three Access Surfaces</h2>
+        <table class="manual-table my-4">
+          <thead><tr><th>Surface</th><th>Best for</th><th>Where</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Studio tab</strong></td><td>Interactive exploration with prompt gallery, streaming chat, live tool-call trace</td><td><code>localhost:3100/dashboard</code> &rarr; Studio</td></tr>
+            <tr><td><strong><code>forge_master_ask</code> MCP tool</strong></td><td>Agents that want one-shot reasoning embedded in a larger conversation</td><td>Any MCP-compatible client (Copilot, Claude Code, Cursor, Codex, Windsurf)</td></tr>
+            <tr><td><strong><code>pforge forge-master status|logs</code></strong></td><td>Scripts, CI checks, health probes</td><td>CLI</td></tr>
+          </tbody>
+        </table>
+
+        <h3 id="ask-tool">The <code>forge_master_ask</code> tool</h3>
+        <p>The MCP tool is a one-shot entry-point:</p>
+
+        <pre><code>forge_master_ask {
+  message: "Why did Phase-27 Slice 4 fail?"
+}
+→ {
+  ok: true,
+  lane: "troubleshoot",
+  via: "router-llm",          // or "keyword" / "embedding-cache"
+  toolCalls: [
+    { name: "forge_watch_live", args: { phase: "27", slice: 4 } },
+    { name: "brain_recall",     args: { query: "Phase-27 slice 4 failures" } }
+  ],
+  reply: "The slice failed because…",
+  costUSD: 0.0023
+}</code></pre>
+
+        <div class="callout callout-info">
+          <strong>copilot-instructions.md guidance</strong>: <em>"Prefer <code>forge_master_ask</code> over manually calling individual forge tools when the task is open-ended or involves multiple steps. Don't use it for direct file edits — Forge-Master is read-only."</em>
+        </div>
+
+        <!-- ─── Three-Stage Intent Classifier ─── -->
+        <h2 id="intent-classifier">Three-Stage Intent Classifier</h2>
+        <p>Every prompt is classified into a <strong>lane</strong> before tools are dispatched. The classifier runs three stages in order, falling through only when the prior stage didn't match confidently. This keeps the common case free (keyword) and the edge case smart (router LLM).</p>
+
+        <div class="grid md:grid-cols-3 gap-4 my-6">
+          <div class="p-4 bg-slate-900 border border-amber-700/30 rounded-lg">
+            <div class="text-xs font-bold text-amber-400 uppercase tracking-wider mb-1">Stage 1</div>
+            <div class="text-base font-semibold text-slate-100 mb-2">Keyword scoring</div>
+            <p class="text-sm text-slate-400">Fast regex/keyword match against per-lane vocabularies. Zero API cost. Returns immediately if confidence is high. Covers the bulk of operational prompts (<em>"open bugs"</em>, <em>"failing gate"</em>, <em>"scope contract violation"</em>, etc.).</p>
+          </div>
+          <div class="p-4 bg-slate-900 border border-purple-700/30 rounded-lg">
+            <div class="text-xs font-bold text-purple-400 uppercase tracking-wider mb-1">Stage 1.5</div>
+            <div class="text-base font-semibold text-slate-100 mb-2">Embedding cache</div>
+            <p class="text-sm text-slate-400">Cosine-similarity match (≥ 0.85) against previously-classified prompts. Zero API cost on hit. Uses <code>all-MiniLM-L6-v2</code> via <code>@xenova/transformers</code> (lazy-loaded peer dep), or a deterministic hash bag-of-words fallback when the package isn't installed. <strong>Works fully offline once warm.</strong></p>
+          </div>
+          <div class="p-4 bg-slate-900 border border-sky-700/30 rounded-lg">
+            <div class="text-xs font-bold text-sky-400 uppercase tracking-wider mb-1">Stage 2</div>
+            <div class="text-base font-semibold text-slate-100 mb-2">Router LLM</div>
+            <p class="text-sm text-slate-400">Default model: <code>grok-3-mini</code>. Used for ambiguous prompts the cache hasn't seen. Every successful classification is then written through to the cache, so the next similar prompt skips this stage entirely.</p>
+          </div>
+        </div>
+
+        <p>Each successful turn carries a <code>via</code> field telling you which stage answered: <code>"keyword"</code>, <code>"embedding-cache"</code>, or <code>"router-llm"</code>. The dashboard's Forge-Master tab summarizes the distribution as <code>{keyword, embedding, router}</code> percentages.</p>
+
+        <h3 id="lanes">The Lanes</h3>
+        <p>Forge-Master classifies into one of these lanes. Each lane has a different default tool allowlist:</p>
+
+        <table class="manual-table my-4">
+          <thead><tr><th>Lane</th><th>Use case</th><th>Quorum-eligible?</th></tr></thead>
+          <tbody>
+            <tr><td><code>operational</code></td><td>Status queries, run lookups, "what's happening" — reads runs, plan status, costs</td><td>No (hard-blocked)</td></tr>
+            <tr><td><code>troubleshoot</code></td><td>Failure diagnosis — reads logs, watch-live, bugs, traces</td><td>No (hard-blocked)</td></tr>
+            <tr><td><code>build</code></td><td>"How would I build X" — reads patterns, runbooks, prior plans</td><td>No (hard-blocked)</td></tr>
+            <tr><td><code>advisory</code></td><td>Open-ended judgment calls — "should we…", "which approach…", "what's the trade-off…"</td><td><strong>Yes</strong> (default escalation target for quorum advisory)</td></tr>
+            <tr><td><code>offtopic</code></td><td>Catch-all when nothing else matches; routed to a polite fallback reply</td><td>No</td></tr>
+          </tbody>
+        </table>
+
+        <!-- ─── Quorum Advisory Mode ─── -->
+        <h2 id="quorum-advisory">Quorum Advisory Mode <span class="text-amber-400 text-base font-normal">v2.78+</span></h2>
+        <p>For high-stakes decisions in the <code>advisory</code> lane, Forge-Master can fan the prompt out to 2–3 models in parallel and return all replies plus a dissent summary. <strong>The human picks the reply</strong> — there's no auto-winner selection, because the whole point is to surface disagreement.</p>
+
+        <h3>Activation</h3>
+        <p>Set <code>quorumAdvisory</code> in <code>.forge.json</code> &rarr; <code>forgeMaster</code>:</p>
+
+        <table class="manual-table my-4">
+          <thead><tr><th>Mode</th><th>When quorum fires</th></tr></thead>
+          <tbody>
+            <tr><td><code>"off"</code> (default)</td><td>Never. Single-model reply only.</td></tr>
+            <tr><td><code>"auto"</code></td><td>Lane is <code>advisory</code> AND prompt was auto-escalated to the high tier AND classifier confidence is medium or above. The conservative trigger.</td></tr>
+            <tr><td><code>"always"</code></td><td>Every <code>advisory</code>-lane prompt fires quorum. Highest spend, highest signal.</td></tr>
+          </tbody>
+        </table>
+
+        <div class="callout callout-warning">
+          <strong>Quorum is hard-blocked on operational, troubleshoot, and build lanes.</strong> Even with <code>"always"</code>, those lanes get a single-model reply. Quorum is for <em>judgment</em>, not for <em>lookups</em>.
+        </div>
+
+        <h3>Cost preview before dispatch</h3>
+        <p>Before any model is called, the <code>/api/forge-master/stream</code> endpoint emits a <code>quorum-estimate</code> SSE event with the projected cost. Studio displays this and lets you cancel before spending. Programmatic clients should listen for the event:</p>
+
+        <pre><code>data: {"type":"quorum-estimate","models":3,"estimatedUSD":0.0142,"models":[
+  {"name":"claude-opus-4.7","estUSD":0.0061},
+  {"name":"gpt-5.3-codex","estUSD":0.0048},
+  {"name":"grok-4.20","estUSD":0.0033}
+]}
+</code></pre>
+
+        <h3>Dissent extraction</h3>
+        <p>After all replies arrive, Forge-Master runs a keyword-frequency divergence analysis across the reply texts and emits a <code>dissent: { topic, axis }</code> summary. <em>Topic</em> is what the models disagreed about; <em>axis</em> is the dimension of disagreement (timing, scope, model choice, etc.). The dashboard renders this as a one-line summary above the three replies so you can see the disagreement before reading.</p>
+
+        <h3>Partial failure</h3>
+        <p>Quorum dispatch uses <code>Promise.allSettled</code> with a 60s hard timeout per model. If 1 of 3 fails or times out, the remaining replies are returned with a <code>partial: true</code> flag. If all fail, the response is <code>{ ok: false, code: "QUORUM_ALL_FAILED" }</code>.</p>
+
+        <!-- ─── REST + Tool Surface ─── -->
+        <h2 id="api">REST API + MCP Tool</h2>
+        <table class="manual-table my-4">
+          <thead><tr><th>Method</th><th>Endpoint / tool</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td>MCP tool</td><td><code>forge_master_ask</code></td><td>One-shot reasoning. Accepts <code>{ message, sessionId? }</code>; returns lane, via, toolCalls[], reply, costUSD.</td></tr>
+            <tr><td>POST</td><td><code>/api/forge-master/ask</code></td><td>Same as the MCP tool, over HTTP. Returns <code>200</code> with the full result.</td></tr>
+            <tr><td>POST</td><td><code>/api/forge-master/stream</code></td><td>Streaming variant (Server-Sent Events). Emits <code>classification</code>, <code>quorum-estimate</code> (if advisory triggers), <code>tool-call</code>, <code>tool-result</code>, <code>delta</code> (token chunks), <code>done</code>.</td></tr>
+            <tr><td>GET</td><td><code>/api/forge-master/cache-stats</code></td><td>Embedding cache liveliness: <code>{ size, hitRate, maxSize: 500 }</code>. Use as a health probe.</td></tr>
+            <tr><td>GET / POST</td><td><code>/api/forge-master/prefs</code></td><td>Read / write per-project Forge-Master preferences. Schema: <code>{ tier, autoEscalate, quorumAdvisory, embeddingFallback }</code>.</td></tr>
+          </tbody>
+        </table>
+
+        <!-- ─── Configuration ─── -->
+        <h2 id="config">Configuration</h2>
+        <p>Forge-Master config lives under <code>forgeMaster</code> in <code>.forge.json</code>. All fields are optional — sensible defaults apply:</p>
+
+        <pre><code>{
+  "forgeMaster": {
+    "reasoningModel": "claude-opus-4.6",       // model used for replies in advisory lane
+    "routerModel": "grok-3-mini",              // model used by stage-2 intent classifier
+    "quorumAdvisory": "auto",                  // "off" | "auto" | "always"
+    "embeddingFallback": true,                 // enable stage 1.5 embedding cache
+    "discoverExtensionTools": true,            // allow extension-supplied tools to register
+    "providers": {
+      "githubCopilot": { "model": "gpt-4o" }   // GitHub Models override (zero-key path)
+    }
+  }
+}</code></pre>
+
+        <table class="manual-table my-4">
+          <thead><tr><th>Field</th><th>Default</th><th>What it controls</th></tr></thead>
+          <tbody>
+            <tr><td><code>reasoningModel</code></td><td><code>model.default</code> (or <code>gpt-4o-mini</code>)</td><td>Model used to compose replies in advisory lane. Falls back to <code>.forge.json</code>'s top-level <code>model.default</code>.</td></tr>
+            <tr><td><code>routerModel</code></td><td><code>grok-3-mini</code></td><td>Stage-2 intent classifier model. Cheap by design — it's classifying, not reasoning.</td></tr>
+            <tr><td><code>quorumAdvisory</code></td><td><code>"off"</code></td><td>Enables Quorum Advisory Mode in the <code>advisory</code> lane.</td></tr>
+            <tr><td><code>embeddingFallback</code></td><td><code>true</code></td><td>Enables the stage 1.5 embedding cache. Disable to force every cache-miss to the router LLM.</td></tr>
+            <tr><td><code>discoverExtensionTools</code></td><td><code>true</code></td><td>Allow extensions in <code>extensions/</code> to register tools that Forge-Master can call.</td></tr>
+            <tr><td><code>providers.githubCopilot.model</code></td><td><code>gpt-4o-mini</code></td><td>Model used when routing through GitHub Models (zero-key path with <code>gh auth login</code>).</td></tr>
+          </tbody>
+        </table>
+
+        <h3 id="zero-key">Zero-key setup</h3>
+        <p>The recommended setup path requires <strong>no API keys</strong>: run <code>gh auth login</code> once and Forge-Master auto-detects your GitHub token, then routes through <a href="https://models.github.ai/inference">GitHub Models</a>. GitHub Copilot subscribers get this for free.</p>
+        <p>Set <code>ANTHROPIC_API_KEY</code>, <code>OPENAI_API_KEY</code>, or <code>XAI_API_KEY</code> only if you want to override the default with a premium model directly. The dashboard <strong>Settings → API Keys</strong> tab is the GUI equivalent.</p>
+
+        <!-- ─── Embedding Cache Internals ─── -->
+        <h2 id="embedding-cache">Embedding Cache Internals</h2>
+        <p>The stage 1.5 cache is small, opinionated, and zero-config:</p>
+
+        <ul>
+          <li><strong>Persistence</strong>: <code>.forge/fm-sessions/embedding-cache.bin</code> (binary Float32Array) plus a JSON metadata sidecar</li>
+          <li><strong>Capacity</strong>: 500 entries, LRU eviction</li>
+          <li><strong>Hit threshold</strong>: cosine similarity ≥ 0.85 returns cached classification with <code>via: "embedding-cache"</code></li>
+          <li><strong>Provider</strong>: <code>all-MiniLM-L6-v2</code> via <code>@xenova/transformers</code> (lazy-loaded). When the package isn't installed, the cache uses a deterministic 32-bit hash bag-of-words baseline (<code>hash-bag</code>). Both produce 384-dim vectors that are L2-normalized.</li>
+          <li><strong>Write-through</strong>: every successful router-LLM classification is asynchronously written to the cache</li>
+          <li><strong>Liveliness probe</strong>: <code>GET /api/forge-master/cache-stats</code> returns <code>{ size, hitRate, maxSize: 500 }</code></li>
+        </ul>
+
+        <div class="callout callout-tip">
+          <strong>Disable for testing</strong>: Set <code>embeddingFallback: false</code> in prefs to force every cache-miss to the router LLM. Useful when you're tuning intent vocabularies and want to measure raw stage-2 behavior.
+        </div>
+
+        <!-- ─── Dashboard Studio Tab ─── -->
+        <h2 id="studio">Dashboard Studio Tab</h2>
+        <p>Open <code>localhost:3100/dashboard</code> &rarr; <strong>Studio</strong>. Three panels:</p>
+
+        <ul>
+          <li><strong>Prompt gallery</strong> — pre-built prompts grouped by intent (operational, troubleshoot, advisory). Click to populate the chat box; edit before sending.</li>
+          <li><strong>Streaming chat</strong> — sends to <code>/api/forge-master/stream</code>. Shows live classification badge, tool-call trace as each tool fires, and the streaming reply token-by-token.</li>
+          <li><strong>Embedding cache tile</strong> — shows current size, hit rate, and the LRU capacity (500). When the cache is cold, the tile shows a hint that hits will start once you've used Forge-Master a few times.</li>
+        </ul>
+
+        <p>Forge-Master turns also surface in the unified <a href="dashboard.html">Timeline tab</a> as <code>fm-turn</code> events (added v2.82). Each turn carries the lane, the user message (truncated to 200 chars), and the turn number — useful for retrospectives.</p>
+
+        <!-- ─── CLI ─── -->
+        <h2 id="cli">CLI</h2>
+        <table class="manual-table my-4">
+          <thead><tr><th>Command</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>pforge forge-master status</code></td><td>Health check: server up, cache loaded, last classification</td></tr>
+            <tr><td><code>pforge forge-master logs [--tail N]</code></td><td>Tail recent turns from <code>.forge/fm-sessions/*.jsonl</code></td></tr>
+          </tbody>
+        </table>
+
+        <!-- ─── Troubleshooting ─── -->
+        <h2 id="troubleshooting">Troubleshooting</h2>
+        <dl class="space-y-3 my-4">
+          <dt class="font-semibold text-slate-100">Replies say "I can't help with that" for a question I think is reasonable</dt>
+          <dd class="text-slate-400 text-sm">Likely classified as <code>offtopic</code>. Check the <code>via</code> field in the response — if it says <code>"keyword"</code>, the keyword scorer didn't match. Rephrase using one of the keyword-rich phrasings ("status of …", "why did … fail", "should we …"), or wait until <code>embedding-cache</code> warms up.</dd>
+
+          <dt class="font-semibold text-slate-100">Quorum advisory never fires even though I set <code>"auto"</code></dt>
+          <dd class="text-slate-400 text-sm">Auto requires <strong>all four</strong>: lane = advisory, autoEscalated = true, fromTier = high, confidence ≥ medium. Use <code>"always"</code> to remove the gating during testing, then revert. Note that operational/troubleshoot/build lanes are <strong>hard-blocked</strong> regardless of mode.</dd>
+
+          <dt class="font-semibold text-slate-100">Cache hit rate is stuck at 0%</dt>
+          <dd class="text-slate-400 text-sm">Three causes: (1) the cache is fresh and hasn't seen similar prompts yet — give it 10–20 turns; (2) <code>@xenova/transformers</code> isn't installed and the hash-bag fallback isn't matching well — install the peer dep for better embeddings; (3) <code>embeddingFallback: false</code> in prefs disables the stage entirely.</dd>
+
+          <dt class="font-semibold text-slate-100">"NO_REASONING_MODEL" error</dt>
+          <dd class="text-slate-400 text-sm">No reasoning model configured and no API key found. Either run <code>gh auth login</code> (zero-key path), set <code>ANTHROPIC_API_KEY</code> / <code>OPENAI_API_KEY</code> / <code>XAI_API_KEY</code>, or set <code>forgeMaster.reasoningModel</code> in <code>.forge.json</code>.</dd>
+
+          <dt class="font-semibold text-slate-100">Router model classifying everything as <code>offtopic</code></dt>
+          <dd class="text-slate-400 text-sm">The router model is too small for your prompt style. Try bumping <code>routerModel</code> from <code>grok-3-mini</code> to <code>grok-4</code> or <code>gpt-4o-mini</code>. The router runs once per prompt — small models are usually fine, but quirky vocabularies sometimes need more capability.</dd>
+        </dl>
+
+        <!-- ─── Further Reading ─── -->
+        <h2 id="further">Further Reading</h2>
+        <ul>
+          <li><a href="dashboard.html">Chapter 7 — The Dashboard</a> (the Studio tab + Timeline integration)</li>
+          <li><a href="advanced-execution.html">Chapter 14 — Advanced Execution</a> (how Quorum Advisory differs from forge_run_plan's quorum modes)</li>
+          <li><a href="memory-architecture.html">Chapter 24 — Memory Architecture</a> (how Forge-Master uses OpenBrain for retrieval)</li>
+          <li><a href="mcp-server.html#tools-forge-master">Chapter 11 — MCP Server &amp; Tools, Forge-Master section</a> (REST + tool reference)</li>
+          <li><a href="../../pforge-master/README.md">pforge-master/README.md</a> (package-level configuration reference)</li>
+        </ul>
+
+        <!-- Prev / Next -->
+        <div id="chapter-prev-next" class="chapter-nav"></div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="assets/manual.js"></script>
+</body>
+</html>

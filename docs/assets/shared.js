@@ -21,12 +21,50 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('scroll', onScroll, { passive: true });
   }
 
-  // Mobile menu
+  // Mobile menu — toggle on hamburger, close on outside-click, Escape, or
+  // any link inside. Hamburger icon swaps to an X when open and aria state
+  // is kept in sync for screen readers.
   const btn = document.getElementById('mobile-btn');
   const menu = document.getElementById('mobile-menu');
   if (btn && menu) {
-    btn.addEventListener('click', () => menu.classList.toggle('hidden'));
-    menu.querySelectorAll('a').forEach(a => a.addEventListener('click', () => menu.classList.add('hidden')));
+    const HAMBURGER_SVG = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>';
+    const CLOSE_SVG = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>';
+    btn.setAttribute('aria-haspopup', 'true');
+    btn.setAttribute('aria-expanded', 'false');
+    btn.setAttribute('aria-controls', 'mobile-menu');
+
+    const setMenuState = (open) => {
+      menu.classList.toggle('hidden', !open);
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      btn.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+      btn.innerHTML = open ? CLOSE_SVG : HAMBURGER_SVG;
+    };
+    const closeMenu = () => setMenuState(false);
+    const toggleMenu = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setMenuState(menu.classList.contains('hidden'));
+    };
+
+    btn.addEventListener('click', toggleMenu);
+    menu.querySelectorAll('a').forEach((a) => a.addEventListener('click', closeMenu));
+    // Click outside the menu (and not on the toggle button) closes it.
+    document.addEventListener('click', (e) => {
+      if (menu.classList.contains('hidden')) return;
+      if (menu.contains(e.target) || btn.contains(e.target)) return;
+      closeMenu();
+    });
+    // Escape closes and returns focus to the toggle button.
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      if (menu.classList.contains('hidden')) return;
+      closeMenu();
+      btn.focus();
+    });
+    // Resizing past the md breakpoint resets state so the menu doesn't
+    // stay "open" when the desktop nav takes over.
+    const mq = window.matchMedia('(min-width: 768px)');
+    mq.addEventListener('change', (e) => { if (e.matches) closeMenu(); });
   }
 
   // Desktop dropdown menus — click-toggle with outside-click + Escape to close.

@@ -44,7 +44,9 @@
         <p class="text-sm text-slate-400 mt-4">For the canonical system-wide overview covering Phase-25 and Phase-26 together, see <a href="self-deterministic-loop.html">The Self-Deterministic Agent Loop</a>.</p>
 
         <!-- ─── Worktree race flow ─── -->
-        <h2 id="worktree-race">Worktree race → winner election</h2>
+        <h2 id="worktree-race">Worktree race &rarr; winner election</h2>
+
+        <img src="assets/diagrams/competitive-worktree-race.svg" alt="Competitive loop flow across 4 phases: Spawn (slice arrives, competitive enabled, spawn N worktrees), Race (3 parallel worktrees with claude-sonnet-4.6, grok-4, gpt-5.3-codex executing in their own .forge/worktrees/slice-N-* directories with build/test gates), Election (4 tie-breaker rules in order: gates pass -> reviewer score -> token cost lower wins -> wall-clock faster wins), Winner (worktree B chosen as cheapest passing, applied to main). Eliminated worktrees retained for trace and auto-fix proposal generation. Cost-anomaly detection runs advisory-only and never halts a run." class="diagram-img diagram-img-md my-4" />
         <p>When a slice is marked for competitive execution, the orchestrator spawns a worktree per strategy, runs each in isolation, and elects a single winner. Losing worktrees are cleaned up; only the winner's changes enter the working tree.</p>
 
         <div class="my-8 p-6 bg-slate-900/50 border border-slate-800/60 rounded-xl overflow-x-auto">

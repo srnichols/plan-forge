@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 400" fill="none">
+  <style>
+    text { font-family: 'Inter', sans-serif; }
+    .node { rx: 8; ry: 8; stroke-width: 1.5; }
+    .arrow { stroke: #475569; stroke-width: 1.5; fill: none; marker-end: url(#crah); }
+    .arrow-win { stroke: #34d399; stroke-width: 2.5; fill: none; marker-end: url(#crahw); }
+    .arrow-loss { stroke: #475569; stroke-width: 1; fill: none; stroke-dasharray: 4 3; }
+    .label { font-size: 10px; fill: #94a3b8; }
+    .small { font-size: 9px; fill: #94a3b8; }
+    .title { font-size: 11px; fill: #e2e8f0; font-weight: 600; }
+    .phase { font-size: 9px; fill: #f59e0b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .pass { font-size: 10px; fill: #34d399; font-weight: 600; }
+    .fail { font-size: 10px; fill: #fb7185; font-weight: 600; }
+    .surf { font-size: 9px; font-family: 'JetBrains Mono', monospace; fill: #cbd5e1; }
+    .winner { font-size: 11px; fill: #34d399; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+  </style>
+  <defs>
+    <marker id="crah" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#475569" />
+    </marker>
+    <marker id="crahw" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+      <path d="M0,0 L9,3.5 L0,7" fill="#34d399" />
+    </marker>
+  </defs>
+
+  <!-- ─── Phase 1: Spawn ─── -->
+  <text x="80" y="20" class="phase" text-anchor="middle">1 · SPAWN</text>
+  <rect x="10" y="35" width="140" height="65" class="node" fill="#0f172a" stroke="#fbbf24" />
+  <text x="80" y="55" class="title" text-anchor="middle">Slice arrives</text>
+  <text x="80" y="71" class="small" text-anchor="middle">competitive: enabled</text>
+  <text x="80" y="86" class="small" text-anchor="middle">spawn N worktrees</text>
+
+  <!-- Fan-out arrows to 3 workers -->
+  <path d="M150,55 L210,55" class="arrow" />
+  <path d="M150,65 L210,160" class="arrow" />
+  <path d="M150,75 L210,265" class="arrow" />
+
+  <!-- ─── Phase 2: Race (3 parallel worktrees) ─── -->
+  <text x="320" y="20" class="phase" text-anchor="middle">2 · RACE (parallel worktrees)</text>
+
+  <!-- Worktree A -->
+  <rect x="210" y="35" width="220" height="80" class="node" fill="#0f172a" stroke="#34d399" />
+  <text x="320" y="55" class="title" text-anchor="middle">Worktree A · claude-sonnet-4.6</text>
+  <text x="320" y="72" class="surf" text-anchor="middle">.forge/worktrees/slice-N-a/</text>
+  <text x="320" y="90" class="small" text-anchor="middle">build ✓ · test ✓ · 1.2k tokens</text>
+  <text x="320" y="105" class="pass" text-anchor="middle">passed (38s)</text>
+
+  <!-- Worktree B -->
+  <rect x="210" y="125" width="220" height="80" class="node" fill="#0f172a" stroke="#34d399" />
+  <text x="320" y="145" class="title" text-anchor="middle">Worktree B · grok-4</text>
+  <text x="320" y="162" class="surf" text-anchor="middle">.forge/worktrees/slice-N-b/</text>
+  <text x="320" y="180" class="small" text-anchor="middle">build ✓ · test ✓ · 0.9k tokens</text>
+  <text x="320" y="195" class="pass" text-anchor="middle">passed (52s)</text>
+
+  <!-- Worktree C -->
+  <rect x="210" y="225" width="220" height="80" class="node" fill="#0f172a" stroke="#fb7185" />
+  <text x="320" y="245" class="title" text-anchor="middle">Worktree C · gpt-5.3-codex</text>
+  <text x="320" y="262" class="surf" text-anchor="middle">.forge/worktrees/slice-N-c/</text>
+  <text x="320" y="280" class="small" text-anchor="middle">build ✓ · test ✗</text>
+  <text x="320" y="295" class="fail" text-anchor="middle">failed (44s) — eliminated</text>
+
+  <!-- Arrows to election (only passers) -->
+  <path d="M430,75 L490,140" class="arrow" />
+  <path d="M430,165 L490,165" class="arrow" />
+  <!-- Loser arrow dotted, no marker -->
+  <path d="M430,265 Q470,340 320,365" class="arrow-loss" />
+  <text x="380" y="380" class="label" text-anchor="middle">eliminated worktree retained for trace + auto-fix proposal</text>
+
+  <!-- ─── Phase 3: Election ─── -->
+  <text x="585" y="20" class="phase" text-anchor="middle">3 · ELECTION</text>
+  <rect x="490" y="115" width="195" height="100" class="node" fill="#020617" stroke="#fbbf24" stroke-dasharray="3 3" />
+  <text x="588" y="135" class="title" text-anchor="middle">Tie-breaker rules (in order)</text>
+  <text x="510" y="155" class="small" text-anchor="start">1. ✓ Gates pass</text>
+  <text x="510" y="170" class="small" text-anchor="start">2. ✓ Reviewer score</text>
+  <text x="510" y="185" class="small" text-anchor="start">3. 💰 Token cost (lower wins)</text>
+  <text x="510" y="200" class="small" text-anchor="start">4. ⚡ Wall-clock (faster wins)</text>
+
+  <!-- Arrow to winner -->
+  <path d="M685,165 L735,165" class="arrow-win" />
+
+  <!-- ─── Phase 4: Winner ─── -->
+  <text x="755" y="20" class="phase" text-anchor="middle">4 · WINNER</text>
+  <rect x="700" y="130" width="75" height="70" class="node" fill="#0f172a" stroke="#34d399" stroke-width="2" />
+  <text x="737" y="155" class="winner" text-anchor="middle">B</text>
+  <text x="737" y="175" class="small" text-anchor="middle">cheapest</text>
+  <text x="737" y="188" class="small" text-anchor="middle">passing</text>
+
+  <!-- Apply winner -->
+  <path d="M737,200 L737,250" class="arrow-win" />
+  <text x="737" y="263" class="pass" text-anchor="middle">→ apply</text>
+  <text x="737" y="278" class="small" text-anchor="middle">to main</text>
+
+  <!-- Cost-anomaly footer note -->
+  <rect x="20" y="335" width="430" height="55" class="node" fill="#020617" stroke="#fcd34d" stroke-dasharray="2 3" />
+  <text x="235" y="355" class="title" style="fill:#fcd34d;" text-anchor="middle">Cost-anomaly detection (advisory only)</text>
+  <text x="235" y="370" class="small" text-anchor="middle">Eliminated/expensive worktrees flagged in postmortem</text>
+  <text x="235" y="383" class="small" text-anchor="middle">Never halts a run — emits <tspan class="surf">cost-anomaly</tspan> hub event</text>
+</svg>

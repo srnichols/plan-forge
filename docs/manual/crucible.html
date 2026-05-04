@@ -51,6 +51,8 @@
         </ul>
 
         <h2 id="lanes">The Three Lanes</h2>
+
+        <img src="assets/diagrams/crucible-lane-decision.svg" alt="Crucible lane decision tree: raw idea enters forge_crucible_submit. If lane is explicitly provided, use it. Otherwise, keyword inference matches: 'bump'/'fix typo'/'update dep' -> tweak (4 questions, scope+build+test+forbidden), 'new endpoint'/'new service' -> feature (7 questions, all 6 CRITICAL_FIELDS), 'refactor subsystem'/'architectural shift' -> full (~12 questions, feature plus architecture/integration/risk/dep matrix). Default fallback if no keyword match: feature lane. Lane drives interview depth and which CRITICAL_FIELDS are enforced at finalize." class="diagram-img diagram-img-md my-4" />
         <p>Crucible scales its interview to the size of the change. Pick (or let the server infer) one of:</p>
         <div class="grid md:grid-cols-3 gap-4 my-6">
           <div class="p-4 bg-slate-900 border border-slate-800 rounded-lg">

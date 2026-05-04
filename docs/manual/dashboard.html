@@ -53,6 +53,12 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
           <strong>Auto-start</strong>: If you have <code>.vscode/mcp.json</code> configured (created during setup), the MCP server starts automatically when Copilot uses a forge tool. The dashboard is always available at port 3100 while the server runs.
         </div>
 
+        <!-- ─── Tab Categories overview ─── -->
+        <h2 id="tab-overview">Tab Categories</h2>
+        <p>The dashboard groups its tabs into <strong>4 top-level groups</strong> (Forge / LiveGuard / Forge-Master / Settings). Knowing which group a tab lives in is the fastest way to find what you're looking for &mdash; especially across the 33 tabs total. Click a group tab in the top nav to expose its sub-tabs.</p>
+
+        <img src="assets/diagrams/dashboard-tabs-grouped.svg" alt="Dashboard tab taxonomy: 4 top-level groups. Forge (blue, default, 16 tabs) holds Home, Review, Progress, Crucible, Governance, Runs, Cost, Actions, Replay, Traces, Skills, Tempering, Memory, Timeline, Inner Loop, Extensions — covers build/execute/ship and active-run monitoring. LiveGuard (amber, 7 tabs) holds Health, Incidents, Triage, Security, Env, Watcher, Bug Registry — covers post-deploy defense. Forge-Master (cyan, 1 tab) holds Studio — read-only reasoning orchestrator. Settings (purple, 9 sub-tabs) holds General, Models, Execution, API Keys, Updates, Memory, Bridge, Crucible, Brain — platform-wide configuration with safe-write to .forge.json." class="diagram-img diagram-img-md my-4" />
+
         <!-- ─── Progress Tab ─── -->
         <h2 id="progress">Progress Tab</h2>
         <p>The default view during plan execution. This is where you watch your plan come to life — real-time slice status via WebSocket updates:</p>

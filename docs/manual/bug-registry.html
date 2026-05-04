@@ -44,6 +44,8 @@
         <p>When a bug is registered, the classifier computes a fingerprint from the scanner name + test name + assertion message + normalized stack trace. Re-registering the same fingerprint returns <code>DUPLICATE_BUG</code> with the existing <code>bugId</code> — no noise, no duplication.</p>
 
         <h2 id="lifecycle">The Status Lifecycle</h2>
+
+        <img src="assets/diagrams/bug-registry-status-machine.svg" alt="Bug registry status machine: bugs start in 'open' (just registered, amber). Forward progression: open -> in-fix (work in progress) -> validating (forge_bug_validate_fix runs the gate) -> fixed (terminal green). If the gate fails, validating loops back to in-fix. From 'open' there are three side classifications to dashed gray terminal states: won't-fix, duplicate (links to original), and noise (false positive). Backward transitions from any terminal state are forbidden (red dashed line crossed out). Fingerprint dedupes on register; re-registering an existing fingerprint does not open a new bug ID." class="diagram-img diagram-img-md my-4" />
         <p>Every bug moves through an explicit state machine:</p>
 
         <div class="cmd-block mb-4">

@@ -40,6 +40,8 @@
         <h2 id="why">Why a Remote Bridge?</h2>
         <p>Plan Forge runs inside your IDE — but some decisions are not IDE-shaped. A reviewer flagged a drift anomaly at 2 AM. A quorum tie needs a human tiebreaker. An incident fired after you closed the laptop. The Remote Bridge forwards hub events to the places you already have notifications — Telegram, Slack, Discord — and supports inline approval / reject flows for the events that need a human.</p>
 
+        <img src="assets/diagrams/remote-bridge-fanout.svg" alt="Remote Bridge fan-out: WebSocket Hub events (approval-requested, incident-fired, drift-alert, slice-failed, quorum-tie) flow into forge_notify_send router which applies per-channel rate limits, severity filters, and message templates from .forge.json#bridge. Router fans out to 6 channels: Telegram, Slack, Discord, Microsoft Teams, PagerDuty, OpenClaw. Telegram, Slack, Discord, and OpenClaw support inline approval flows; Teams is webhook-only; PagerDuty receives incidents only. User responses flow back as approval-resolved hub events that resume paused slices, close incidents, or break quorum ties." class="diagram-img diagram-img-md my-4" />
+
         <h2 id="channels">The Four Channels</h2>
 
         <table>

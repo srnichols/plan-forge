@@ -113,6 +113,8 @@
 
         <!-- ─── Slicing Strategy ─── -->
         <h2 id="slicing">Slicing Strategy</h2>
+
+        <img src="assets/diagrams/slicing-strategy-antipatterns.svg" alt="Slicing strategy: side-by-side comparison of tight scope (left, green) vs loose scope (right, red). Tight scope shows 3 slices each touching one architectural layer (Controller, Service, Repository) with concrete forbidden actions (no migrations, no AppSettings.json, no new NuGet packages). Loose scope shows one mega-slice mixing 4 layers (controllers + services + repositories + migrations) with the consequences: test fails make it impossible to isolate which layer broke, mid-slice migrations can't roll back cleanly, reviewers can't audit one boundary at a time. Forbidden actions section shows 'don't break things' as struck-through (unenforceable). Bottom rule: one layer per slice, scope = exact file paths, forbidden actions = concrete patterns. If you can't write the gate command, the slice is too broad." class="diagram-img diagram-img-md my-4" />
         <p>Slices are 30–120 minute chunks of work. Each slice should produce a commit-worthy change — the "one PR" rule.</p>
 
         <h3>Rules of Thumb</h3>

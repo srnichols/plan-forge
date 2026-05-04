@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 380" fill="none">
+  <style>
+    text { font-family: 'Inter', sans-serif; }
+    .group { rx: 10; ry: 10; stroke-width: 2; }
+    .tile { rx: 5; ry: 5; stroke-width: 1; }
+    .label { font-size: 10px; fill: #cbd5e1; }
+    .small { font-size: 9px; fill: #94a3b8; }
+    .tiny { font-size: 8px; fill: #94a3b8; }
+    .group-title { font-size: 13px; font-weight: 700; }
+    .group-sub { font-size: 9px; fill: #94a3b8; }
+    .tab-name { font-size: 9px; fill: #e2e8f0; font-weight: 500; }
+  </style>
+
+  <!-- ─── Group 1: Forge (default, blue) ─── -->
+  <rect x="20" y="20" width="370" height="170" class="group" fill="#0a1428" stroke="#60a5fa" />
+  <rect x="20" y="20" width="370" height="32" class="group" fill="#0f1d3d" stroke="#60a5fa" />
+  <text x="32" y="40" class="group-title" style="fill:#60a5fa;">🔨 Forge</text>
+  <text x="80" y="40" class="group-sub">build · execute · ship · monitor active runs</text>
+  <text x="380" y="40" class="tiny" text-anchor="end">16 tabs · default group</text>
+
+  <!-- Forge tabs (4 cols × 4 rows) -->
+  <g transform="translate(35, 65)">
+    <!-- row 1 -->
+    <rect x="0"   y="0"  width="80" height="26" class="tile" fill="#020617" stroke="#1e293b" /><text x="40" y="17" class="tab-name" text-anchor="middle">Home</text>
+    <rect x="86"  y="0"  width="80" height="26" class="tile" fill="#020617" stroke="#1e293b" /><text x="126" y="17" class="tab-name" text-anchor="middle">Review</text>
+    <rect x="172" y="0"  width="80" height="26" class="tile" fill="#020617" stroke="#1e293b" /><text x="212" y="17" class="tab-name" text-anchor="middle">Progress</text>
+    <rect x="258" y="0"  width="80" height="26" class="tile" fill="#020617" stroke="#1e293b" /><text x="298" y="17" class="tab-name" text-anchor="middle">Crucible</text>
+    <!-- row 2 -->
+    <rect x="0"   y="30" width="80" height="26" class="tile" fill="#020617" stroke="#1e293b" /><text x="40" y="47" class="tab-name" text-anchor="middle">Governance</text>
+    <rect x="86"  y="30" width="80" height="26" class="tile" fill="#020617" stroke="#1e293b" /><text x="126" y="47" class="tab-name" text-anchor="middle">Runs</text>
+    <rect x="172" y="30" width="80" height="26" class="tile" fill="#020617" stroke="#1e293b" /><text x="212" y="47" class="tab-name" text-anchor="middle">Cost</text>
+    <rect x="258" y="30" width="80" height="26" class="tile" fill="#020617" stroke="#1e293b" /><text x="298" y="47" class="tab-name" text-anchor="middle">Actions</text>
+    <!-- row 3 -->
+    <rect x="0"   y="60" width="80" height="26" class="tile" fill="#020617" stroke="#1e293b" /><text x="40" y="77" class="tab-name" text-anchor="middle">Replay</text>
+    <rect x="86"  y="60" width="80" height="26" class="tile" fill="#020617" stroke="#1e293b" /><text x="126" y="77" class="tab-name" text-anchor="middle">Traces</text>
+    <rect x="172" y="60" width="80" height="26" class="tile" fill="#020617" stroke="#1e293b" /><text x="212" y="77" class="tab-name" text-anchor="middle">Skills</text>
+    <rect x="258" y="60" width="80" height="26" class="tile" fill="#020617" stroke="#1e293b" /><text x="298" y="77" class="tab-name" text-anchor="middle">Tempering</text>
+    <!-- row 4 -->
+    <rect x="0"   y="90" width="80" height="26" class="tile" fill="#020617" stroke="#1e293b" /><text x="40" y="107" class="tab-name" text-anchor="middle">Memory</text>
+    <rect x="86"  y="90" width="80" height="26" class="tile" fill="#020617" stroke="#1e293b" /><text x="126" y="107" class="tab-name" text-anchor="middle">Timeline</text>
+    <rect x="172" y="90" width="80" height="26" class="tile" fill="#020617" stroke="#1e293b" /><text x="212" y="107" class="tab-name" text-anchor="middle">Inner Loop</text>
+    <rect x="258" y="90" width="80" height="26" class="tile" fill="#020617" stroke="#1e293b" /><text x="298" y="107" class="tab-name" text-anchor="middle">Extensions</text>
+  </g>
+
+  <!-- ─── Group 2: LiveGuard (amber) ─── -->
+  <rect x="400" y="20" width="370" height="170" class="group" fill="#1c1404" stroke="#fbbf24" />
+  <rect x="400" y="20" width="370" height="32" class="group" fill="#291e08" stroke="#fbbf24" />
+  <text x="412" y="40" class="group-title" style="fill:#fbbf24;">🛡 LiveGuard</text>
+  <text x="478" y="40" class="group-sub">post-deploy defense · drift · incidents · alerts</text>
+  <text x="760" y="40" class="tiny" text-anchor="end">7 tabs</text>
+
+  <g transform="translate(415, 65)">
+    <!-- row 1 -->
+    <rect x="0"   y="0"  width="80" height="26" class="tile" fill="#020617" stroke="#1e293b" /><text x="40" y="17" class="tab-name" text-anchor="middle">Health</text>
+    <rect x="86"  y="0"  width="80" height="26" class="tile" fill="#020617" stroke="#1e293b" /><text x="126" y="17" class="tab-name" text-anchor="middle">Incidents</text>
+    <rect x="172" y="0"  width="80" height="26" class="tile" fill="#020617" stroke="#1e293b" /><text x="212" y="17" class="tab-name" text-anchor="middle">Triage</text>
+    <rect x="258" y="0"  width="80" height="26" class="tile" fill="#020617" stroke="#1e293b" /><text x="298" y="17" class="tab-name" text-anchor="middle">Security</text>
+    <!-- row 2 -->
+    <rect x="0"   y="30" width="80" height="26" class="tile" fill="#020617" stroke="#1e293b" /><text x="40" y="47" class="tab-name" text-anchor="middle">Env</text>
+    <rect x="86"  y="30" width="80" height="26" class="tile" fill="#020617" stroke="#1e293b" /><text x="126" y="47" class="tab-name" text-anchor="middle">Watcher</text>
+    <rect x="172" y="30" width="166" height="26" class="tile" fill="#020617" stroke="#1e293b" /><text x="255" y="47" class="tab-name" text-anchor="middle">Bug Registry</text>
+  </g>
+
+  <text x="585" y="160" class="small" text-anchor="middle" font-style="italic">Covers everything that happens after the slice ships.</text>
+  <text x="585" y="175" class="tiny" text-anchor="middle">Streams hub events: incident-fired, drift-alert, secret-leaked, dep-vuln-found.</text>
+
+  <!-- ─── Group 3: Forge-Master (cyan) ─── -->
+  <rect x="20" y="200" width="370" height="155" class="group" fill="#082f33" stroke="#22d3ee" />
+  <rect x="20" y="200" width="370" height="32" class="group" fill="#0d4549" stroke="#22d3ee" />
+  <text x="32" y="220" class="group-title" style="fill:#22d3ee;">🧭 Forge-Master</text>
+  <text x="125" y="220" class="group-sub">read-only reasoning orchestrator · "talk to the shop"</text>
+  <text x="380" y="220" class="tiny" text-anchor="end">1 tab (Studio)</text>
+
+  <g transform="translate(35, 245)">
+    <rect x="0" y="0" width="338" height="26" class="tile" fill="#020617" stroke="#1e293b" />
+    <text x="169" y="17" class="tab-name" text-anchor="middle">Studio · prompt gallery + streaming chat + cache stats</text>
+  </g>
+
+  <text x="200" y="305" class="small" text-anchor="middle" font-style="italic">Three-stage classifier (keyword → embedding → router LLM)</text>
+  <text x="200" y="320" class="tiny" text-anchor="middle">+ optional Quorum Advisory Mode for high-stakes decisions</text>
+  <text x="200" y="340" class="tiny" text-anchor="middle">Read-only by design — never writes code or files.</text>
+
+  <!-- ─── Group 4: Settings (purple) ─── -->
+  <rect x="400" y="200" width="370" height="155" class="group" fill="#180a2f" stroke="#c084fc" />
+  <rect x="400" y="200" width="370" height="32" class="group" fill="#240e45" stroke="#c084fc" />
+  <text x="412" y="220" class="group-title" style="fill:#c084fc;">⚙ Settings</text>
+  <text x="478" y="220" class="group-sub">platform-wide configuration · safe-write to .forge.json</text>
+  <text x="760" y="220" class="tiny" text-anchor="end">9 sub-tabs</text>
+
+  <g transform="translate(415, 245)">
+    <!-- row 1 -->
+    <rect x="0"   y="0"  width="80" height="26" class="tile" fill="#020617" stroke="#1e293b" /><text x="40" y="17" class="tab-name" text-anchor="middle">General</text>
+    <rect x="86"  y="0"  width="80" height="26" class="tile" fill="#020617" stroke="#1e293b" /><text x="126" y="17" class="tab-name" text-anchor="middle">Models</text>
+    <rect x="172" y="0"  width="80" height="26" class="tile" fill="#020617" stroke="#1e293b" /><text x="212" y="17" class="tab-name" text-anchor="middle">Execution</text>
+    <rect x="258" y="0"  width="80" height="26" class="tile" fill="#020617" stroke="#1e293b" /><text x="298" y="17" class="tab-name" text-anchor="middle">API Keys</text>
+    <!-- row 2 -->
+    <rect x="0"   y="30" width="80" height="26" class="tile" fill="#020617" stroke="#1e293b" /><text x="40" y="47" class="tab-name" text-anchor="middle">Updates</text>
+    <rect x="86"  y="30" width="80" height="26" class="tile" fill="#020617" stroke="#1e293b" /><text x="126" y="47" class="tab-name" text-anchor="middle">Memory</text>
+    <rect x="172" y="30" width="80" height="26" class="tile" fill="#020617" stroke="#1e293b" /><text x="212" y="47" class="tab-name" text-anchor="middle">Bridge</text>
+    <rect x="258" y="30" width="80" height="26" class="tile" fill="#020617" stroke="#1e293b" /><text x="298" y="47" class="tab-name" text-anchor="middle">Crucible</text>
+    <!-- row 3 -->
+    <rect x="0"   y="60" width="80" height="26" class="tile" fill="#020617" stroke="#1e293b" /><text x="40" y="77" class="tab-name" text-anchor="middle">Brain</text>
+  </g>
+</svg>

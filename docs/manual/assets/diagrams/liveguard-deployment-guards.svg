@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 380" fill="none">
+  <style>
+    text { font-family: 'Inter', sans-serif; }
+    .node { rx: 6; ry: 6; stroke-width: 1.5; }
+    .lane-bg { rx: 8; ry: 8; stroke-width: 1.5; }
+    .label { font-size: 10px; fill: #cbd5e1; }
+    .small { font-size: 9px; fill: #94a3b8; }
+    .tiny { font-size: 8px; fill: #94a3b8; }
+    .title { font-size: 11px; fill: #e2e8f0; font-weight: 600; }
+    .lane-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+    .lane-sub { font-size: 9px; fill: #94a3b8; font-style: italic; }
+    .tool { font-size: 10px; font-family: 'JetBrains Mono', monospace; fill: #e2e8f0; font-weight: 500; }
+    .catches { font-size: 8px; fill: #94a3b8; }
+    .trigger { font-size: 9px; font-weight: 600; }
+    .post-color { fill: #fbbf24; }
+    .pre-color { fill: #fb7185; }
+    .sched-color { fill: #c4b5fd; }
+  </style>
+
+  <!-- Lane 1: After Execution (post-slice) -->
+  <rect x="20" y="20" width="240" height="340" class="lane-bg" fill="#1c1404" stroke="#fbbf24" />
+  <rect x="20" y="20" width="240" height="40" class="lane-bg" fill="#291e08" stroke="#fbbf24" />
+  <text x="140" y="40" class="lane-title post-color" text-anchor="middle">⚡ After Execution</text>
+  <text x="140" y="54" class="lane-sub" text-anchor="middle">trigger: PostSlice hook</text>
+
+  <rect x="35" y="75" width="210" height="55" class="node" fill="#0f172a" stroke="#fbbf24" />
+  <text x="45" y="92" class="tool">forge_drift_report</text>
+  <text x="45" y="108" class="catches">Catches: scope-contract violations</text>
+  <text x="45" y="121" class="catches">→ files modified outside the plan</text>
+
+  <rect x="35" y="140" width="210" height="55" class="node" fill="#0f172a" stroke="#fbbf24" />
+  <text x="45" y="157" class="tool">forge_regression_guard</text>
+  <text x="45" y="173" class="catches">Catches: gates that used to pass</text>
+  <text x="45" y="186" class="catches">→ regression on shipped code</text>
+
+  <rect x="35" y="205" width="210" height="55" class="node" fill="#0f172a" stroke="#fbbf24" />
+  <text x="45" y="222" class="tool">forge_runbook</text>
+  <text x="45" y="238" class="catches">Generates: ops runbook</text>
+  <text x="45" y="251" class="catches">→ from plan + execution traces</text>
+
+  <rect x="35" y="270" width="210" height="55" class="node" fill="#0f172a" stroke="#fbbf24" />
+  <text x="45" y="287" class="tool">forge_deploy_journal</text>
+  <text x="45" y="303" class="catches">Records: deploy event</text>
+  <text x="45" y="316" class="catches">→ baseline for next drift run</text>
+
+  <text x="140" y="350" class="trigger post-color" text-anchor="middle">→ runs every commit</text>
+
+  <!-- Lane 2: Before Deploy (critical gates) -->
+  <rect x="270" y="20" width="240" height="340" class="lane-bg" fill="#1c0408" stroke="#fb7185" />
+  <rect x="270" y="20" width="240" height="40" class="lane-bg" fill="#290811" stroke="#fb7185" />
+  <text x="390" y="40" class="lane-title pre-color" text-anchor="middle">⛔ Before Deploy</text>
+  <text x="390" y="54" class="lane-sub" text-anchor="middle">trigger: PreDeploy hook</text>
+
+  <rect x="285" y="75" width="210" height="55" class="node" fill="#0f172a" stroke="#fb7185" />
+  <text x="295" y="92" class="tool">forge_secret_scan</text>
+  <text x="295" y="108" class="catches">Catches: high-entropy secrets</text>
+  <text x="295" y="121" class="catches">→ blocks deploy on hi-sev hits</text>
+
+  <rect x="285" y="140" width="210" height="55" class="node" fill="#0f172a" stroke="#fb7185" />
+  <text x="295" y="157" class="tool">forge_env_diff</text>
+  <text x="295" y="173" class="catches">Catches: missing env vars</text>
+  <text x="295" y="186" class="catches">→ key divergence prod vs staging</text>
+
+  <rect x="285" y="205" width="210" height="55" class="node" fill="#0f172a" stroke="#fb7185" />
+  <text x="295" y="222" class="tool">forge_dep_watch</text>
+  <text x="295" y="238" class="catches">Catches: vulnerable dependencies</text>
+  <text x="295" y="251" class="catches">→ npm audit / dotnet list --vulnerable</text>
+
+  <rect x="285" y="270" width="210" height="55" class="node" fill="#0f172a" stroke="#fb7185" />
+  <text x="295" y="287" class="tool">forge_liveguard_run</text>
+  <text x="295" y="303" class="catches">Composite: drift + secret + reg + dep</text>
+  <text x="295" y="316" class="catches">→ one-shot pre-flight</text>
+
+  <text x="390" y="350" class="trigger pre-color" text-anchor="middle">→ blocks on hi-sev</text>
+
+  <!-- Lane 3: On Schedule (background watch) -->
+  <rect x="520" y="20" width="240" height="340" class="lane-bg" fill="#150c1f" stroke="#c4b5fd" />
+  <rect x="520" y="20" width="240" height="40" class="lane-bg" fill="#1d1230" stroke="#c4b5fd" />
+  <text x="640" y="40" class="lane-title sched-color" text-anchor="middle">🕓 On Schedule</text>
+  <text x="640" y="54" class="lane-sub" text-anchor="middle">trigger: cron / watcher</text>
+
+  <rect x="535" y="75" width="210" height="55" class="node" fill="#0f172a" stroke="#c4b5fd" />
+  <text x="545" y="92" class="tool">forge_health_trend</text>
+  <text x="545" y="108" class="catches">Catches: slow decay</text>
+  <text x="545" y="121" class="catches">→ 5-signal composite over 30d</text>
+
+  <rect x="535" y="140" width="210" height="55" class="node" fill="#0f172a" stroke="#c4b5fd" />
+  <text x="545" y="157" class="tool">forge_hotspot</text>
+  <text x="545" y="173" class="catches">Catches: churn-prone files</text>
+  <text x="545" y="186" class="catches">→ git churn rank, last N commits</text>
+
+  <rect x="535" y="205" width="210" height="55" class="node" fill="#0f172a" stroke="#c4b5fd" />
+  <text x="545" y="222" class="tool">forge_incident_capture</text>
+  <text x="545" y="238" class="catches">Records: incident with severity</text>
+  <text x="545" y="251" class="catches">→ MTTR tracking + alert routing</text>
+
+  <rect x="535" y="270" width="210" height="55" class="node" fill="#0f172a" stroke="#c4b5fd" />
+  <text x="545" y="287" class="tool">forge_alert_triage</text>
+  <text x="545" y="303" class="catches">Reads: incidents + drift violations</text>
+  <text x="545" y="316" class="catches">→ ranks by priority, surfaces top N</text>
+
+  <text x="640" y="350" class="trigger sched-color" text-anchor="middle">→ runs daily / on alert</text>
+</svg>

@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 360" fill="none">
+  <style>
+    text { font-family: 'Inter', sans-serif; }
+    .node { rx: 28; ry: 28; stroke-width: 2; }
+    .arrow { stroke: #475569; stroke-width: 1.5; fill: none; marker-end: url(#bsah); }
+    .arrow-ok { stroke: #34d399; stroke-width: 2; fill: none; marker-end: url(#bsahok); }
+    .arrow-bad { stroke: #fb7185; stroke-width: 1.5; fill: none; stroke-dasharray: 5 3; }
+    .label { font-size: 10px; fill: #94a3b8; }
+    .small { font-size: 9px; fill: #cbd5e1; }
+    .tiny { font-size: 9px; fill: #94a3b8; font-style: italic; }
+    .title { font-size: 12px; fill: #e2e8f0; font-weight: 600; }
+    .legend { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .pill { font-size: 13px; font-weight: 700; }
+    .terminal-good { fill: #34d399; }
+    .terminal-bad { fill: #fb7185; }
+    .work { fill: #fbbf24; }
+    .review { fill: #c4b5fd; }
+    .surf { font-size: 9px; font-family: 'JetBrains Mono', monospace; fill: #94a3b8; }
+  </style>
+  <defs>
+    <marker id="bsah" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#475569" />
+    </marker>
+    <marker id="bsahok" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+      <path d="M0,0 L9,3.5 L0,7" fill="#34d399" />
+    </marker>
+  </defs>
+
+  <!-- ─── Open ─── -->
+  <ellipse cx="100" cy="100" rx="60" ry="32" class="node" fill="#0f172a" stroke="#fbbf24" />
+  <text x="100" y="98" class="title" text-anchor="middle">open</text>
+  <text x="100" y="113" class="surf" text-anchor="middle">just registered</text>
+
+  <!-- Open → in-fix -->
+  <path d="M160,100 L240,100" class="arrow-ok" />
+  <text x="200" y="92" class="label" text-anchor="middle">claim &amp;</text>
+  <text x="200" y="113" class="label" text-anchor="middle">start work</text>
+
+  <!-- ─── In-fix ─── -->
+  <ellipse cx="320" cy="100" rx="65" ry="32" class="node" fill="#0f172a" stroke="#fbbf24" />
+  <text x="320" y="98" class="title work" text-anchor="middle">in-fix</text>
+  <text x="320" y="113" class="surf" text-anchor="middle">work in progress</text>
+
+  <!-- In-fix → validating -->
+  <path d="M385,100 L465,100" class="arrow-ok" />
+  <text x="425" y="92" class="label" text-anchor="middle">submit</text>
+  <text x="425" y="113" class="label" text-anchor="middle">fix</text>
+
+  <!-- ─── Validating ─── -->
+  <ellipse cx="545" cy="100" rx="65" ry="32" class="node" fill="#0f172a" stroke="#c4b5fd" />
+  <text x="545" y="98" class="title review" text-anchor="middle">validating</text>
+  <text x="545" y="113" class="surf" text-anchor="middle">forge_bug_validate_fix</text>
+
+  <!-- Validating → fixed (terminal good) -->
+  <path d="M610,100 L685,100" class="arrow-ok" />
+  <text x="650" y="92" class="label ok" text-anchor="middle">gate ✓</text>
+
+  <!-- Fixed (terminal good) -->
+  <ellipse cx="730" cy="100" rx="40" ry="32" class="node" fill="#0f172a" stroke="#34d399" stroke-width="2.5" />
+  <text x="730" y="98" class="pill terminal-good" text-anchor="middle">fixed</text>
+  <text x="730" y="115" class="surf" text-anchor="middle">terminal</text>
+
+  <!-- Validating → in-fix (gate fail loop) -->
+  <path d="M540,135 Q430,200 320,135" class="arrow" />
+  <text x="430" y="195" class="label" text-anchor="middle">gate ✗ → re-open</text>
+
+  <!-- ─── Side branches: terminal classifications from open ─── -->
+
+  <!-- open → wont-fix -->
+  <path d="M100,135 L100,225" class="arrow" />
+  <ellipse cx="100" cy="260" rx="65" ry="28" class="node" fill="#0f172a" stroke="#64748b" stroke-dasharray="4 3" />
+  <text x="100" y="258" class="title" text-anchor="middle" style="fill:#94a3b8;">won't-fix</text>
+  <text x="100" y="273" class="surf" text-anchor="middle">terminal</text>
+  <text x="100" y="160" class="tiny" text-anchor="middle">classify as</text>
+
+  <!-- open → duplicate -->
+  <path d="M150,128 L260,225" class="arrow" />
+  <ellipse cx="290" cy="260" rx="65" ry="28" class="node" fill="#0f172a" stroke="#64748b" stroke-dasharray="4 3" />
+  <text x="290" y="258" class="title" text-anchor="middle" style="fill:#94a3b8;">duplicate</text>
+  <text x="290" y="273" class="surf" text-anchor="middle">→ links to original</text>
+
+  <!-- open → noise -->
+  <path d="M200,128 L450,225" class="arrow" />
+  <ellipse cx="480" cy="260" rx="55" ry="28" class="node" fill="#0f172a" stroke="#64748b" stroke-dasharray="4 3" />
+  <text x="480" y="258" class="title" text-anchor="middle" style="fill:#94a3b8;">noise</text>
+  <text x="480" y="273" class="surf" text-anchor="middle">false positive</text>
+
+  <!-- ─── FORBIDDEN: backward arrow fixed → in-fix ─── -->
+  <path d="M730,135 Q730,170 320,170" class="arrow-bad" />
+  <text x="540" y="190" class="label" style="fill:#fb7185;font-weight:600;" text-anchor="middle">✗ no backward transitions from terminal states</text>
+
+  <!-- ─── Legend ─── -->
+  <rect x="600" y="220" width="170" height="115" class="node" fill="#020617" stroke="#475569" stroke-dasharray="2 3" />
+  <text x="685" y="237" class="legend" text-anchor="middle" style="fill:#cbd5e1;">LEGEND</text>
+  <line x1="615" y1="252" x2="635" y2="252" stroke="#34d399" stroke-width="2" />
+  <text x="640" y="256" class="small">valid forward path</text>
+  <line x1="615" y1="272" x2="635" y2="272" stroke="#475569" stroke-width="1.5" />
+  <text x="640" y="276" class="small">retry / classify</text>
+  <line x1="615" y1="292" x2="635" y2="292" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="4 3" />
+  <text x="640" y="296" class="small">forbidden</text>
+  <text x="685" y="320" class="tiny" text-anchor="middle">fingerprint dedupes on register;</text>
+  <text x="685" y="332" class="tiny" text-anchor="middle">re-register only opens new IDs.</text>
+</svg>

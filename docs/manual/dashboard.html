@@ -84,7 +84,7 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
 
         <p>Each card shows: slice title, status (queued → executing → passed/failed), duration, model used, token count, and cost. Cards update in real-time as events arrive over WebSocket.</p>
 
-        <img src="../assets/dashboard/progress.png" alt="Dashboard Progress tab showing 3 slices passed, 1 executing, 2 queued, with plan browser, DAG view, and event log" class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
+        <img src="../assets/dashboard/progress.png" alt="Dashboard Progress tab — Slice 1 passed (✅57.8s), Slice 2 executing (amber pulse), Slices 3-4 queued. Quorum auto badge and live event log streaming run-started / slice-started / slice-completed events." class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
 
         <!-- ─── Runs Tab ─── -->
         <h2 id="runs">Runs Tab</h2>
@@ -271,6 +271,7 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
           <li><code>watch</code> &mdash; watcher snapshot / anomaly / advice events</li>
         </ol>
         <p>The CLI equivalent is <code>pforge timeline</code> &mdash; same 9 sources, same correlation-id grouping, JSON-pipeable for scripts.</p>
+        <img src="../assets/dashboard/timeline.png" alt="Dashboard Timeline tab — unified chronological view across 9 sources (run, incident, bug, deploy, crucible, fm-turn, memory, tempering, watch)" class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
 
         <!-- ─── LiveGuard Section ─── -->
         <h2 id="liveguard">LiveGuard Section <span style="color:#f59e0b;font-size:0.6em;vertical-align:middle">v2.28+</span></h2>

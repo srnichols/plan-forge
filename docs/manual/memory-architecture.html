@@ -39,6 +39,8 @@
 
         <!-- ─── Overview ─── -->
         <h2 id="overview">The Three Tiers</h2>
+
+        <img src="assets/diagrams/memory-three-tier-capture.svg" alt="Three-tier memory capture flow: forge_memory_capture call fans out to L1 (hub WebSocket broadcast, instant, ephemeral), L2 (.forge/memory/ files, sync, persistent, gitignored), and L3 (OpenBrain pgvector via async push, cross-project, cross-tool, semantic search). All three readable independently from the read path." class="diagram-img diagram-img-md my-4" />
         <p>Plan Forge separates <em>volatile working memory</em> from <em>durable project memory</em> from <em>cross-project semantic memory</em>. Every <code>captureMemory</code> call writes to all three in a single best-effort pass — no tier blocks the others, no failure aborts the calling tool.</p>
 
         <table class="w-full text-sm border border-slate-700/40 rounded-lg overflow-hidden mb-6">

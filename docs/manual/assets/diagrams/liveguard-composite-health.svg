@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 320" fill="none">
+  <style>
+    text { font-family: 'Inter', sans-serif; }
+    .node { rx: 8; ry: 8; stroke-width: 1.5; }
+    .arrow { stroke: #475569; stroke-width: 1.5; fill: none; marker-end: url(#hsah); }
+    .label { font-size: 10px; fill: #94a3b8; }
+    .small { font-size: 9px; fill: #94a3b8; }
+    .title { font-size: 11px; fill: #e2e8f0; font-weight: 600; }
+    .signal { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .formula { font-size: 11px; fill: #fbbf24; font-family: 'JetBrains Mono', monospace; font-weight: 600; }
+  </style>
+  <defs>
+    <marker id="hsah" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#475569" />
+    </marker>
+  </defs>
+
+  <!-- 5 input signals -->
+  <text x="100" y="20" class="signal" style="fill:#f59e0b;" text-anchor="middle">5 SIGNALS</text>
+
+  <rect x="20" y="35" width="160" height="38" class="node" fill="#0f172a" stroke="#fb7185" />
+  <text x="100" y="50" class="signal" style="fill:#fb7185;" text-anchor="middle">DRIFT</text>
+  <text x="100" y="65" class="small" text-anchor="middle">forge_drift_report avg</text>
+
+  <rect x="20" y="80" width="160" height="38" class="node" fill="#0f172a" stroke="#fb923c" />
+  <text x="100" y="95" class="signal" style="fill:#fb923c;" text-anchor="middle">INCIDENT RATE</text>
+  <text x="100" y="110" class="small" text-anchor="middle">open / 30d</text>
+
+  <rect x="20" y="125" width="160" height="38" class="node" fill="#0f172a" stroke="#34d399" />
+  <text x="100" y="140" class="signal" style="fill:#34d399;" text-anchor="middle">TEST PASS RATE</text>
+  <text x="100" y="155" class="small" text-anchor="middle">% across last N runs</text>
+
+  <rect x="20" y="170" width="160" height="38" class="node" fill="#0f172a" stroke="#60a5fa" />
+  <text x="100" y="185" class="signal" style="fill:#60a5fa;" text-anchor="middle">MODEL SUCCESS</text>
+  <text x="100" y="200" class="small" text-anchor="middle">% slice pass on 1st try</text>
+
+  <rect x="20" y="215" width="160" height="38" class="node" fill="#0f172a" stroke="#c4b5fd" />
+  <text x="100" y="230" class="signal" style="fill:#c4b5fd;" text-anchor="middle">COST / SLICE</text>
+  <text x="100" y="245" class="small" text-anchor="middle">USD trend over 30d</text>
+
+  <!-- Aggregation -->
+  <text x="380" y="20" class="signal" style="fill:#fbbf24;" text-anchor="middle">AGGREGATE</text>
+  <rect x="270" y="40" width="220" height="225" class="node" fill="#020617" stroke="#fbbf24" stroke-dasharray="3 3" />
+  <text x="380" y="60" class="title" text-anchor="middle">forge_health_trend</text>
+  <text x="380" y="76" class="label" text-anchor="middle">weighted composite (0–100)</text>
+  <text x="380" y="100" class="formula" text-anchor="middle">score =</text>
+  <text x="380" y="118" class="formula" style="font-size:10px;" text-anchor="middle">25·(1−drift) + 20·(1−inc)</text>
+  <text x="380" y="134" class="formula" style="font-size:10px;" text-anchor="middle">+ 25·tests + 20·success</text>
+  <text x="380" y="150" class="formula" style="font-size:10px;" text-anchor="middle">+ 10·(1−cost_norm)</text>
+
+  <line x1="290" y1="170" x2="470" y2="170" stroke="#475569" stroke-width="1" stroke-dasharray="2 2" />
+  <text x="380" y="190" class="title" text-anchor="middle">Decay detection</text>
+  <text x="380" y="206" class="label" text-anchor="middle">7-day rolling delta</text>
+  <text x="380" y="222" class="label" text-anchor="middle">trigger if Δ score &lt; -10</text>
+  <text x="380" y="244" class="small" style="fill:#fb7185;font-style:italic;" text-anchor="middle">→ alert + auto-incident</text>
+
+  <path d="M180,53 L270,90" class="arrow" />
+  <path d="M180,98 L270,110" class="arrow" />
+  <path d="M180,143 L270,130" class="arrow" />
+  <path d="M180,188 L270,150" class="arrow" />
+  <path d="M180,233 L270,170" class="arrow" />
+
+  <!-- Output -->
+  <text x="640" y="20" class="signal" style="fill:#34d399;" text-anchor="middle">RENDER</text>
+
+  <!-- Gauge -->
+  <rect x="540" y="40" width="200" height="80" class="node" fill="#0f172a" stroke="#34d399" />
+  <text x="640" y="60" class="title" text-anchor="middle">Composite gauge</text>
+  <text x="640" y="78" class="label" text-anchor="middle">0–100 with trend arrow</text>
+  <text x="640" y="98" class="formula" style="fill:#34d399;font-size:18px;" text-anchor="middle">87 ↗</text>
+
+  <!-- Persisted -->
+  <rect x="540" y="135" width="200" height="60" class="node" fill="#0f172a" stroke="#fbbf24" />
+  <text x="640" y="155" class="title" text-anchor="middle">.forge/health-dna.json</text>
+  <text x="640" y="171" class="label" text-anchor="middle">snapshot per run</text>
+  <text x="640" y="187" class="small" text-anchor="middle">cross-session decay history</text>
+
+  <!-- Dashboard -->
+  <rect x="540" y="210" width="200" height="50" class="node" fill="#0f172a" stroke="#7dd3fc" />
+  <text x="640" y="230" class="title" text-anchor="middle">LiveGuard Health tab</text>
+  <text x="640" y="246" class="label" text-anchor="middle">30-day chart + components</text>
+
+  <path d="M490,80 L540,80" class="arrow" />
+  <path d="M490,160 L540,160" class="arrow" />
+  <path d="M490,235 L540,235" class="arrow" />
+
+  <!-- Footer note -->
+  <text x="380" y="295" class="label" text-anchor="middle">Health DNA is the persistent fingerprint of project decay over time</text>
+  <text x="380" y="310" class="small" style="fill:#fbbf24;" text-anchor="middle">→ feeds Forge-Master classification + escalation tuning + auto-fix proposals</text>
+</svg>

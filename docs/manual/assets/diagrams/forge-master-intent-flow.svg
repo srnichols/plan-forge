@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 280" fill="none">
+  <style>
+    text { font-family: 'Inter', sans-serif; }
+    .node { rx: 8; ry: 8; stroke-width: 1.5; }
+    .arrow { stroke: #475569; stroke-width: 1.5; fill: none; marker-end: url(#fmah); }
+    .arrow-cache { stroke: #c4b5fd; stroke-width: 1.5; fill: none; stroke-dasharray: 4 3; marker-end: url(#fmcah); }
+    .label { font-size: 10px; fill: #94a3b8; }
+    .title { font-size: 11px; fill: #e2e8f0; font-weight: 600; }
+    .stage { font-size: 9px; fill: #f59e0b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .cost { font-size: 9px; fill: #34d399; font-weight: 500; font-style: italic; }
+    .miss { font-size: 9px; fill: #94a3b8; font-style: italic; }
+  </style>
+  <defs>
+    <marker id="fmah" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#475569" />
+    </marker>
+    <marker id="fmcah" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#c4b5fd" />
+    </marker>
+  </defs>
+
+  <!-- Prompt input -->
+  <text x="60" y="20" class="phase" style="fill:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;font-size:9px;font-weight:600;" text-anchor="middle">USER PROMPT</text>
+  <rect x="10" y="35" width="100" height="40" class="node" fill="#0f172a" stroke="#64748b" />
+  <text x="60" y="55" class="title" text-anchor="middle">message</text>
+  <text x="60" y="68" class="label" text-anchor="middle">free-form text</text>
+
+  <!-- Stage 1: keyword -->
+  <text x="220" y="20" class="stage" text-anchor="middle">STAGE 1 · KEYWORD</text>
+  <rect x="135" y="35" width="170" height="55" class="node" fill="#0f172a" stroke="#fbbf24" />
+  <text x="220" y="55" class="title" text-anchor="middle">Keyword scoring</text>
+  <text x="220" y="70" class="label" text-anchor="middle">per-lane vocabularies</text>
+  <text x="220" y="84" class="cost" text-anchor="middle">cost: $0 · sync</text>
+  <path d="M110,55 L135,55" class="arrow" />
+
+  <!-- Match? branch -->
+  <path d="M305,55 L350,55" class="arrow" />
+  <text x="328" y="48" class="label" text-anchor="middle">match?</text>
+
+  <!-- Stage 1.5: embedding cache -->
+  <text x="450" y="115" class="stage" style="fill:#c4b5fd;" text-anchor="middle">STAGE 1.5 · EMBEDDING CACHE</text>
+  <rect x="350" y="125" width="200" height="55" class="node" fill="#0f172a" stroke="#c4b5fd" />
+  <text x="450" y="145" class="title" text-anchor="middle">Cosine similarity ≥ 0.85</text>
+  <text x="450" y="160" class="label" text-anchor="middle">all-MiniLM-L6-v2 · LRU 500</text>
+  <text x="450" y="174" class="cost" text-anchor="middle">cost: $0 · offline-capable</text>
+
+  <!-- Stage 1 -> Stage 1.5 (miss path) -->
+  <path d="M220,90 L220,130 L350,150" class="arrow-cache" />
+  <text x="220" y="108" class="miss" text-anchor="middle">no keyword hit</text>
+
+  <!-- Stage 1.5 -> Stage 2 (cache miss path) -->
+  <path d="M550,150 L600,150 L620,90" class="arrow-cache" />
+  <text x="595" y="120" class="miss" text-anchor="middle">cache miss</text>
+
+  <!-- Stage 2: router LLM -->
+  <text x="680" y="20" class="stage" style="fill:#60a5fa;" text-anchor="middle">STAGE 2 · ROUTER LLM</text>
+  <rect x="600" y="35" width="155" height="55" class="node" fill="#0f172a" stroke="#60a5fa" />
+  <text x="678" y="55" class="title" text-anchor="middle">grok-3-mini</text>
+  <text x="678" y="70" class="label" text-anchor="middle">structured intent</text>
+  <text x="678" y="84" class="cost" style="fill:#fbbf24;" text-anchor="middle">cost: ~$0.0002</text>
+
+  <!-- Stage 1 (match) -> classified outcome -->
+  <path d="M305,55 L605,55" class="arrow" />
+
+  <!-- Outputs -->
+  <rect x="195" y="220" width="370" height="40" class="node" fill="#020617" stroke="#34d399" />
+  <text x="380" y="240" class="title" text-anchor="middle">Lane classification</text>
+  <text x="380" y="254" class="label" text-anchor="middle">operational · troubleshoot · build · advisory · offtopic</text>
+
+  <!-- All paths -> output -->
+  <path d="M220,90 L220,200 L300,220" class="arrow" />
+  <path d="M450,180 L450,200 L380,220" class="arrow-cache" />
+  <path d="M678,90 L678,200 L500,220" class="arrow" />
+
+  <!-- Write-through to cache -->
+  <text x="678" y="220" class="miss" style="fill:#c4b5fd;" text-anchor="middle">write-through</text>
+  <path d="M620,90 Q650,180 600,180" class="arrow-cache" />
+
+  <!-- via field annotation -->
+  <text x="380" y="278" class="label" style="fill:#fbbf24;" text-anchor="middle">via: "keyword" | "embedding-cache" | "router-llm"</text>
+</svg>

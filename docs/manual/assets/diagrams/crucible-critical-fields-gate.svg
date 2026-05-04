@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 320" fill="none">
+  <style>
+    text { font-family: 'Inter', sans-serif; }
+    .node { rx: 8; ry: 8; stroke-width: 1.5; }
+    .arrow { stroke: #475569; stroke-width: 1.5; fill: none; marker-end: url(#cgah); }
+    .label { font-size: 10px; fill: #94a3b8; }
+    .title { font-size: 11px; fill: #e2e8f0; font-weight: 600; }
+    .phase { font-size: 9px; fill: #f59e0b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .field-ok { font-size: 10px; fill: #34d399; }
+    .field-gap { font-size: 10px; fill: #fb7185; font-weight: 600; }
+    .err { font-size: 10px; fill: #fca5a5; font-family: 'JetBrains Mono', monospace; font-weight: 600; }
+  </style>
+  <defs>
+    <marker id="cgah" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#475569" />
+    </marker>
+  </defs>
+
+  <!-- Input: smelt + finalize call -->
+  <text x="100" y="20" class="phase" text-anchor="middle">FINALIZE CALL</text>
+  <rect x="20" y="35" width="160" height="50" class="node" fill="#0f172a" stroke="#fbbf24" />
+  <text x="100" y="55" class="title" text-anchor="middle">forge_crucible_finalize</text>
+  <text x="100" y="70" class="label" text-anchor="middle">{ id, overwrite? }</text>
+
+  <!-- Gate -->
+  <text x="380" y="20" class="phase" text-anchor="middle">CRITICAL_FIELDS GATE</text>
+  <rect x="220" y="35" width="320" height="220" class="node" fill="#020617" stroke="#fbbf24" stroke-dasharray="3 3" />
+  <text x="380" y="55" class="title" text-anchor="middle">Six required fields</text>
+
+  <!-- field rows -->
+  <text x="240" y="80" class="label">build-command</text>
+  <text x="320" y="80" class="field-ok">✓ "dotnet build"</text>
+
+  <text x="240" y="100" class="label">test-command</text>
+  <text x="320" y="100" class="field-ok">✓ "dotnet test"</text>
+
+  <text x="240" y="120" class="label">scope</text>
+  <text x="320" y="120" class="field-ok">✓ src/services/**</text>
+
+  <text x="240" y="140" class="label">validation-gates</text>
+  <text x="320" y="140" class="field-ok">✓ per-slice gate</text>
+
+  <text x="240" y="160" class="label">forbidden-actions</text>
+  <text x="320" y="160" class="field-gap">✗ MISSING (v2.82.1)</text>
+
+  <text x="240" y="180" class="label">rollback</text>
+  <text x="320" y="180" class="field-ok">✓ git revert &lt;sha&gt;</text>
+
+  <!-- Aggregate verdict -->
+  <line x1="240" y1="200" x2="520" y2="200" stroke="#475569" stroke-width="1" stroke-dasharray="2 2" />
+  <text x="380" y="220" class="title" style="fill:#fb7185;" text-anchor="middle">criticalGaps[] = [forbidden-actions]</text>
+  <text x="380" y="240" class="label" text-anchor="middle">any unresolved → block finalize</text>
+
+  <!-- Arrow in -->
+  <path d="M180,60 L220,60" class="arrow" />
+
+  <!-- Outcomes -->
+  <text x="660" y="20" class="phase" text-anchor="middle">RESPONSE</text>
+
+  <!-- Pass branch -->
+  <rect x="570" y="40" width="180" height="60" class="node" fill="#0f172a" stroke="#34d399" />
+  <text x="660" y="60" class="title" style="fill:#34d399;" text-anchor="middle">✓ All filled → pass</text>
+  <text x="660" y="76" class="label" text-anchor="middle">writes Phase-NN.md</text>
+  <text x="660" y="92" class="label" text-anchor="middle">emits crucible-handoff</text>
+  <path d="M540,90 L570,70" class="arrow" />
+
+  <!-- Fail branch -->
+  <rect x="570" y="115" width="180" height="100" class="node" fill="#0f172a" stroke="#fb7185" />
+  <text x="660" y="135" class="title" style="fill:#fb7185;" text-anchor="middle">✗ Gaps → 409 Conflict</text>
+  <text x="660" y="152" class="err" text-anchor="middle">CRITICAL_FIELDS_MISSING</text>
+  <text x="660" y="170" class="label" text-anchor="middle">criticalGaps: [</text>
+  <text x="660" y="184" class="label" style="font-family:'JetBrains Mono',monospace;" text-anchor="middle">{ field, reason, hint }</text>
+  <text x="660" y="198" class="label" text-anchor="middle">]</text>
+  <path d="M540,200 L570,150" class="arrow" />
+
+  <!-- Plan exists branch -->
+  <rect x="570" y="225" width="180" height="50" class="node" fill="#0f172a" stroke="#fcd34d" />
+  <text x="660" y="245" class="title" style="fill:#fcd34d;" text-anchor="middle">⚠ Plan exists → 409</text>
+  <text x="660" y="262" class="err" style="fill:#fde68a;" text-anchor="middle">PLAN_ALREADY_EXISTS</text>
+
+  <!-- Recovery loop -->
+  <text x="380" y="285" class="label" style="fill:#94a3b8;" text-anchor="middle">→ call forge_crucible_ask to fill missing field, retry finalize</text>
+  <path d="M660,275 Q380,310 100,90" class="arrow" />
+</svg>

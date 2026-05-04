@@ -88,6 +88,8 @@ forge_crucible_abandon { id, reason? }                   → { ok }</code></pre>
         <h2 id="critical-fields">CRITICAL_FIELDS Gate <span class="text-amber-400 text-base font-normal">v2.82.1+</span></h2>
         <p>Crucible refuses to finalize a smelt with placeholder TBDs. The gate checks six fields; <strong>any unresolved field is a hard block</strong>:</p>
 
+        <img src="assets/diagrams/crucible-critical-fields-gate.svg" alt="CRITICAL_FIELDS gate flow: forge_crucible_finalize call enters the gate which checks six required fields (build-command, test-command, scope, validation-gates, forbidden-actions, rollback). If any field is missing, returns 409 with CRITICAL_FIELDS_MISSING and criticalGaps[]. If plan file already exists, returns 409 with PLAN_ALREADY_EXISTS. Otherwise writes Phase-NN.md and emits crucible-handoff event." class="diagram-img diagram-img-md my-4" />
+
         <table class="manual-table my-4">
           <thead><tr><th>Field</th><th>Lane(s)</th><th>What it locks down</th></tr></thead>
           <tbody>

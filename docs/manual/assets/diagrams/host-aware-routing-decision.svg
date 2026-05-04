@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 360" fill="none">
+  <style>
+    text { font-family: 'Inter', sans-serif; }
+    .node { rx: 8; ry: 8; stroke-width: 1.5; }
+    .arrow { stroke: #475569; stroke-width: 1.5; fill: none; marker-end: url(#hrah); }
+    .arrow-pref { stroke: #fbbf24; stroke-width: 2; fill: none; marker-end: url(#hrahp); }
+    .label { font-size: 10px; fill: #94a3b8; }
+    .small { font-size: 9px; fill: #94a3b8; }
+    .title { font-size: 11px; fill: #e2e8f0; font-weight: 600; }
+    .phase { font-size: 9px; fill: #f59e0b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .surf { font-size: 9px; font-family: 'JetBrains Mono', monospace; }
+    .ok { fill: #34d399; }
+    .warn { fill: #fcd34d; }
+    .bad { fill: #fb7185; }
+  </style>
+  <defs>
+    <marker id="hrah" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#475569" />
+    </marker>
+    <marker id="hrahp" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#fbbf24" />
+    </marker>
+  </defs>
+
+  <!-- Detect host -->
+  <text x="120" y="20" class="phase" text-anchor="middle">1 · DETECT HOST</text>
+  <rect x="20" y="35" width="200" height="55" class="node" fill="#0f172a" stroke="#fbbf24" />
+  <text x="120" y="55" class="title" text-anchor="middle">detectClientHost()</text>
+  <text x="120" y="72" class="label" text-anchor="middle">env vars + parent process</text>
+  <text x="120" y="86" class="label" text-anchor="middle">→ vs-code-copilot · cursor · …</text>
+
+  <!-- Read pref -->
+  <text x="380" y="20" class="phase" text-anchor="middle">2 · LOAD PREF</text>
+  <rect x="280" y="35" width="200" height="55" class="node" fill="#0f172a" stroke="#fbbf24" />
+  <text x="380" y="55" class="title" text-anchor="middle">.forge.json#routing</text>
+  <text x="380" y="72" class="surf" style="fill:#94a3b8;" text-anchor="middle">{ hostPreference: "auto" }</text>
+  <text x="380" y="86" class="label" text-anchor="middle">default = "auto"</text>
+
+  <path d="M220,62 L280,62" class="arrow" />
+
+  <!-- Decision branch -->
+  <text x="640" y="20" class="phase" text-anchor="middle">3 · CHOOSE</text>
+  <rect x="540" y="30" width="200" height="65" class="node" fill="#020617" stroke="#fbbf24" stroke-dasharray="3 3" />
+  <text x="640" y="50" class="title" text-anchor="middle">getRoutingPreference</text>
+  <text x="640" y="66" class="label" text-anchor="middle">(host, userPref)</text>
+  <text x="640" y="82" class="label" style="fill:#fbbf24;" text-anchor="middle">→ pickedSurface + warning?</text>
+
+  <path d="M480,62 L540,62" class="arrow" />
+
+  <!-- 4 outcomes -->
+  <!-- AUTO + Copilot host: gh-copilot first -->
+  <rect x="20" y="130" width="180" height="80" class="node" fill="#0f172a" stroke="#34d399" />
+  <text x="110" y="150" class="phase" style="fill:#34d399;" text-anchor="middle">AUTO + COPILOT HOST</text>
+  <text x="110" y="170" class="title" text-anchor="middle">gh-copilot first</text>
+  <text x="110" y="186" class="small" text-anchor="middle">VS Code + Copilot, CLI</text>
+  <text x="110" y="200" class="surf ok" text-anchor="middle">→ subscription</text>
+
+  <!-- AUTO + non-Copilot: direct API first -->
+  <rect x="210" y="130" width="180" height="80" class="node" fill="#0f172a" stroke="#34d399" />
+  <text x="300" y="150" class="phase" style="fill:#34d399;" text-anchor="middle">AUTO + NON-COPILOT</text>
+  <text x="300" y="170" class="title" text-anchor="middle">direct API first</text>
+  <text x="300" y="186" class="small" text-anchor="middle">Claude Code, Cursor, Windsurf, Zed</text>
+  <text x="300" y="200" class="surf ok" text-anchor="middle">→ Anthropic / OpenAI / xAI</text>
+
+  <!-- gh-copilot forced -->
+  <rect x="400" y="130" width="180" height="80" class="node" fill="#0f172a" stroke="#fcd34d" />
+  <text x="490" y="150" class="phase" style="fill:#fcd34d;" text-anchor="middle">gh-copilot (FORCED)</text>
+  <text x="490" y="170" class="title" text-anchor="middle">always Copilot</text>
+  <text x="490" y="186" class="small" text-anchor="middle">all spend → Copilot</text>
+  <text x="490" y="200" class="surf warn" text-anchor="middle">→ subscription</text>
+
+  <!-- direct-api forced -->
+  <rect x="590" y="130" width="160" height="80" class="node" fill="#0f172a" stroke="#fcd34d" />
+  <text x="670" y="150" class="phase" style="fill:#fcd34d;" text-anchor="middle">direct-api (FORCED)</text>
+  <text x="670" y="170" class="title" text-anchor="middle">always direct</text>
+  <text x="670" y="186" class="small" text-anchor="middle">explicit API tracking</text>
+  <text x="670" y="200" class="surf warn" text-anchor="middle">→ pay-per-token</text>
+
+  <path d="M580,90 L110,130" class="arrow-pref" />
+  <path d="M610,95 L300,130" class="arrow-pref" />
+  <path d="M640,95 L490,130" class="arrow-pref" />
+  <path d="M680,90 L670,130" class="arrow-pref" />
+
+  <!-- DROP mode -->
+  <rect x="220" y="240" width="350" height="60" class="node" fill="#020617" stroke="#fb7185" />
+  <text x="395" y="260" class="phase" style="fill:#fb7185;" text-anchor="middle">drop (STRICTEST)</text>
+  <text x="395" y="278" class="title" style="fill:#fca5a5;" text-anchor="middle">refuse gpt-* on non-Copilot host</text>
+  <text x="395" y="293" class="label" text-anchor="middle">unless OPENAI_API_KEY is set · fail loudly, never silently</text>
+
+  <path d="M640,95 Q640,230 395,240" class="arrow-pref" />
+
+  <!-- Pre-run summary table annotation -->
+  <text x="395" y="325" class="label" text-anchor="middle">Quorum mode emits a per-model billing surface table to stdout before any model fires</text>
+  <text x="395" y="342" class="label" style="fill:#fbbf24;" text-anchor="middle">Per-slice telemetry records: host, billingSurface, billingWarning</text>
+</svg>

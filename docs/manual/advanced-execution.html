@@ -129,6 +129,8 @@ pforge run-plan docs/plans/Phase-7.md --quorum=speed</code></pre>
       <h2 id="host-routing">Host-Aware Routing <span class="text-amber-400 text-base font-normal">v2.82+</span></h2>
       <p>Plan Forge runs in different IDEs and CLI hosts (VS Code + Copilot, Claude Code, Cursor, Windsurf, Zed, the bare CLI). Each host has its own billing surface. The host-aware routing preference (added v2.82, fixes #104) ensures users on non-Copilot hosts <strong>don't silently double-pay</strong> against subscriptions they're already paying for.</p>
 
+      <img src="assets/diagrams/host-aware-routing-decision.svg" alt="Host-aware routing decision tree: detectClientHost identifies the IDE/CLI host, .forge.json#routing.hostPreference is loaded (default auto), getRoutingPreference picks one of four surfaces. Auto+Copilot host -> gh-copilot first (subscription). Auto+non-Copilot -> direct API first (honor user's subscription). gh-copilot mode -> always Copilot. direct-api mode -> always direct. drop mode -> refuse gpt-* on non-Copilot host without OPENAI_API_KEY." class="diagram-img diagram-img-md my-4" />
+
       <h3>The four modes</h3>
       <table>
         <thead><tr><th>Mode</th><th>Behavior</th><th>When to use</th></tr></thead>

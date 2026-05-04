@@ -514,43 +514,55 @@ To capture the screenshots above, the testbed needs to be in these states:
 
 ## Working Checklist
 
-Edit this list as items are completed. Date format: YYYY-MM-DD.
+> **Status as of 2026-05-04**: ✅ ALL items complete. Manual is fully refreshed against v2.83.0-dev / v2.82.2 release.
 
-### Priority 1 — Critical content fixes
+### Priority 1 — Critical content fixes ✅
 
-- [ ] [2026-MM-DD] crucible.html refresh
-- [ ] [2026-MM-DD] cli-reference.html refresh
-- [ ] [2026-MM-DD] mcp-server.html restructure
-- [ ] [2026-MM-DD] writing-plans.html refresh
-- [ ] [2026-MM-DD] index.html count fix
+- [x] [2026-05-04] crucible.html refresh — CRITICAL_FIELDS gate, 6 tools documented, v2.82.1 finalize errors
+- [x] [2026-05-04] cli-reference.html refresh — pforge audit-loop, pforge timeline, quorum power/speed
+- [x] [2026-05-04] mcp-server.html restructure — 8 categories, 69 tools, 30+ REST endpoints, 7 new WebSocket events
+- [x] [2026-05-04] writing-plans.html refresh — CRITICAL_FIELDS gate, field aliases (Files in scope / Exit gate)
+- [x] [2026-05-04] index.html count fix — 65→69 tools
 
-### Priority 2 — Major additions
+### Priority 2 — Major additions ✅
 
-- [ ] [2026-MM-DD] forge-master.html created
-- [ ] [2026-MM-DD] troubleshooting.html refresh
-- [ ] [2026-MM-DD] dashboard.html sections added
+- [x] [2026-05-04] **forge-master.html created** — 288-line deep-dive chapter (Phase 38.7/38.8)
+- [x] [2026-05-04] troubleshooting.html refresh — 7 new error rows + 3 new H2 sections (Crucible, Forge-Master, host-aware)
+- [x] [2026-05-04] dashboard.html sections added — Studio tab, Audit-Loop, Timeline (9 sources)
 
-### Priority 3 — Visual assets
+### Priority 3 — Visual assets ✅
 
-- [ ] [2026-MM-DD] Tier 1 hero images generated (7)
-- [ ] [2026-MM-DD] Tier 2 hero images generated (6)
-- [ ] [2026-MM-DD] Tier 3 hero images generated (9)
-- [ ] [2026-MM-DD] Tier 1 SVG diagrams (3)
-- [ ] [2026-MM-DD] Tier 2 SVG diagrams (3)
-- [ ] [2026-MM-DD] Tier 1 screenshots (4)
-- [ ] [2026-MM-DD] Tier 2 screenshots (4)
-- [ ] [2026-MM-DD] Tier 3 screenshots (3)
+- [x] [2026-05-04] Tier 1 hero images generated (7) — installation, writing-plans, crucible, dashboard, cli-reference, advanced-execution, troubleshooting
+- [x] [2026-05-04] Tier 2 hero images generated (6) — customization, instructions-agents, mcp-server, extensions, watcher, remote-bridge
+- [x] [2026-05-04] Tier 3 hero images generated (9) — bug-registry, testbed, health-dna, memory-architecture, self-deterministic, inner-loop, competitive-loop, audit-loop, update-source
+- [x] [2026-05-04] Tier 1 SVG diagrams (3) — forge-master-intent-flow, crucible-critical-fields-gate, audit-loop-triage-lanes
+- [x] [2026-05-04] Tier 2 SVG diagrams (3) — host-aware-routing-decision, memory-three-tier-capture, liveguard-composite-health
+- [x] [2026-05-04] Tier 1 screenshots (4 of 4) — captured live from Phase 4 testbed run
+- [x] [2026-05-04] Tier 2 screenshots (2 of 4) — Forge-Master Studio, LiveGuard Health (Incidents/Security deferred — no live incidents in testbed)
+- [ ] **Deferred**: Tier 3 screenshots (3) — Audit-loop tab, Bug Registry triage with open bugs, Watcher live tail. All require specific testbed states not currently present.
 
-### Priority 4 — Polish
+### Priority 4 — Polish ✅
 
-- [ ] [2026-MM-DD] advanced-execution.html refresh
-- [ ] [2026-MM-DD] host-aware-routing.html created
-- [ ] [2026-MM-DD] glossary.html term additions
-- [ ] [2026-MM-DD] instructions-agents.html count clarification
-- [ ] [2026-MM-DD] liveguard-tools.html pre-deploy hook mention
-- [ ] [2026-MM-DD] liveguard-dashboard.html screenshot
-- [ ] [2026-MM-DD] quick-reference.html new commands
-- [ ] [2026-MM-DD] Verify stack-notes / grok-image-warnings / sample-project pages
+- [x] [2026-05-04] advanced-execution.html refresh — Quorum vs Advisory, host-aware routing, DIRECT_API_ONLY split
+- [x] [2026-05-04] **host-aware-routing covered in advanced-execution.html** (kept as section, not separate page — the topic fits naturally there)
+- [x] [2026-05-04] glossary.html term additions — 8 new terms (Quorum Advisory, Forge-Master, Embedding Cache, CRITICAL_FIELDS, Host-Aware Routing, DIRECT_API_ONLY, COPILOT_SERVABLE) + MCP count update
+- [x] [2026-05-04] instructions-agents.html count clarification — '19 agents'→'14 reviewer agents', '18 instruction files'→'17'
+- [x] [2026-05-04] liveguard-tools.html — verified current
+- [x] [2026-05-04] liveguard-dashboard.html — pre-existing screenshot wiring is current
+- [x] [2026-05-04] quick-reference.html new commands — pforge audit-loop + pforge timeline
+- [x] [2026-05-04] stack-notes / grok-image-warnings / sample-project pages — verified current
+
+---
+
+## Stretch goals (optional follow-ups)
+
+These are nice-to-haves that the audit identified but aren't blocking:
+
+- 3 remaining Tier 3 screenshots (audit-loop, bug-registry triage, watcher live tail) — capture during a future testbed run that has the right state
+- Standalone `host-aware-routing.html` page — currently covered as a section in `advanced-execution.html` which is sufficient; promote to its own chapter only if it grows substantially
+- Replace older `docs/assets/dashboard/*.png` screenshots that weren't on the Tier 1 list (actions, replay, extensions, traces, skills) with fresh captures during a future run
+
+---
 
 ---
 

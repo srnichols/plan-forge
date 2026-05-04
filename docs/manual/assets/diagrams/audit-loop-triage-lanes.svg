@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 320" fill="none">
+  <style>
+    text { font-family: 'Inter', sans-serif; }
+    .node { rx: 8; ry: 8; stroke-width: 1.5; }
+    .arrow { stroke: #475569; stroke-width: 1.5; fill: none; marker-end: url(#alah); }
+    .arrow-loop { stroke: #fcd34d; stroke-width: 1.5; fill: none; stroke-dasharray: 5 3; marker-end: url(#aloah); }
+    .label { font-size: 10px; fill: #94a3b8; }
+    .title { font-size: 11px; fill: #e2e8f0; font-weight: 600; }
+    .phase { font-size: 9px; fill: #f59e0b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .lane { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+  </style>
+  <defs>
+    <marker id="alah" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#475569" />
+    </marker>
+    <marker id="aloah" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#fcd34d" />
+    </marker>
+  </defs>
+
+  <!-- Step 1: scan -->
+  <text x="80" y="20" class="phase" text-anchor="middle">1 · SCAN</text>
+  <rect x="10" y="35" width="140" height="65" class="node" fill="#0f172a" stroke="#fbbf24" />
+  <text x="80" y="55" class="title" text-anchor="middle">content-audit</text>
+  <text x="80" y="71" class="label" text-anchor="middle">probe live routes</text>
+  <text x="80" y="86" class="label" text-anchor="middle">HTTP + HTML inspection</text>
+
+  <!-- arrow to triage -->
+  <path d="M150,67 L210,67" class="arrow" />
+  <text x="180" y="60" class="label" text-anchor="middle">findings[]</text>
+
+  <!-- Step 2: triage -->
+  <text x="290" y="20" class="phase" text-anchor="middle">2 · TRIAGE</text>
+  <rect x="210" y="35" width="160" height="65" class="node" fill="#0f172a" stroke="#fbbf24" />
+  <text x="290" y="55" class="title" text-anchor="middle">forge_triage_route</text>
+  <text x="290" y="71" class="label" text-anchor="middle">classify each finding</text>
+  <text x="290" y="86" class="label" text-anchor="middle">→ lane + payload + confidence</text>
+
+  <!-- 3 lanes branching out -->
+  <path d="M370,55 L450,40" class="arrow" />
+  <path d="M370,67 L450,100" class="arrow" />
+  <path d="M370,80 L450,160" class="arrow" />
+
+  <!-- Bug lane -->
+  <text x="540" y="20" class="lane" style="fill:#fb7185;" text-anchor="middle">LANE 1 · BUG</text>
+  <rect x="450" y="30" width="180" height="50" class="node" fill="#0f172a" stroke="#fb7185" />
+  <text x="540" y="50" class="title" text-anchor="middle">forge_bug_register</text>
+  <text x="540" y="66" class="label" text-anchor="middle">fingerprint-deduped registry</text>
+
+  <!-- Spec lane -->
+  <text x="540" y="92" class="lane" style="fill:#fbbf24;" text-anchor="middle">LANE 2 · SPEC</text>
+  <rect x="450" y="100" width="180" height="50" class="node" fill="#0f172a" stroke="#fbbf24" />
+  <text x="540" y="120" class="title" text-anchor="middle">forge_crucible_submit</text>
+  <text x="540" y="136" class="label" text-anchor="middle">re-smelt as a new feature</text>
+
+  <!-- Classifier lane -->
+  <text x="540" y="162" class="lane" style="fill:#c4b5fd;" text-anchor="middle">LANE 3 · CLASSIFIER</text>
+  <rect x="450" y="170" width="180" height="50" class="node" fill="#0f172a" stroke="#c4b5fd" />
+  <text x="540" y="190" class="title" text-anchor="middle">.forge/audits/&lt;ts&gt;.json</text>
+  <text x="540" y="206" class="label" text-anchor="middle">human review</text>
+
+  <!-- Step 3: fix -->
+  <text x="710" y="100" class="phase" text-anchor="middle">3 · FIX</text>
+  <rect x="650" y="115" width="120" height="50" class="node" fill="#0f172a" stroke="#34d399" />
+  <text x="710" y="135" class="title" text-anchor="middle">spawnWorker</text>
+  <text x="710" y="151" class="label" text-anchor="middle">applies fix</text>
+
+  <path d="M630,55 L660,115" class="arrow" />
+  <path d="M630,125 L650,135" class="arrow" />
+  <path d="M630,195 L660,160" class="arrow" />
+
+  <!-- Loop back -->
+  <path d="M710,165 Q710,260 80,260 Q60,260 60,100" class="arrow-loop" />
+  <text x="380" y="280" class="label" style="fill:#fcd34d;" text-anchor="middle">→ next round (until convergence or maxRounds=5)</text>
+
+  <!-- Activation note -->
+  <rect x="10" y="115" width="200" height="65" class="node" fill="#020617" stroke="#475569" stroke-dasharray="2 3" />
+  <text x="110" y="135" class="title" style="fill:#94a3b8;" text-anchor="middle">Activation</text>
+  <text x="110" y="151" class="label" text-anchor="middle">.forge.json#audit.mode</text>
+  <text x="110" y="167" class="label" style="font-family:'JetBrains Mono',monospace;" text-anchor="middle">"off" (default) | "auto" | "always"</text>
+
+  <!-- Hard guards -->
+  <rect x="10" y="195" width="200" height="55" class="node" fill="#020617" stroke="#fb7185" stroke-dasharray="2 3" />
+  <text x="110" y="215" class="title" style="fill:#fb7185;" text-anchor="middle">Production hard-blocked</text>
+  <text x="110" y="231" class="label" text-anchor="middle">forbidProduction: true</text>
+  <text x="110" y="245" class="label" text-anchor="middle">(immutable)</text>
+</svg>

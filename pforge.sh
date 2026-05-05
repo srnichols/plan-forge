@@ -94,7 +94,7 @@ COMMANDS:
     --max=N         Override maximum rounds (default: 5)
     --dry-run       Show what would happen without triage side effects
     --env=ENV       Set environment (dev, staging; production is forbidden)
-  github <sub>      Inspect the GitHub-native AI surface (status | doctor)
+  github <sub>      Inspect the GitHub-native AI surface (status | doctor | metrics)
   version-bump <v>  Update VERSION, package.json, docs/README/ROADMAP version badges to v<version>
   migrate-memory    Merge legacy *-history.json ledgers into canonical .jsonl siblings (idempotent)
   drain-memory      Drain pending OpenBrain queue records to the configured OpenBrain server
@@ -5243,6 +5243,7 @@ pforge github — Inspect the GitHub-native AI surface
 SUBCOMMANDS:
   status            Print a checklist of GitHub-native primitives Plan-Forge integrates with
   doctor            Same as status, plus one-line fix hints for warn/fail rows
+  metrics           Manage GitHub Copilot usage metrics (pull | --help)
 
 OPTIONS:
   --project <dir>   Project root to inspect (default: current directory)
@@ -5253,9 +5254,118 @@ EXAMPLES:
   pforge github status
   pforge github doctor --extra
   pforge github status --json | jq .summary
+  pforge github metrics pull --org myorg
 
 EOF
         return 0
+    fi
+
+    if [[ "$sub" == "metrics" ]]; then
+        local metrics_sub="${1:-}"
+        shift 2>/dev/null || true
+
+        if [[ -z "$metrics_sub" || "$metrics_sub" == "--help" || "$metrics_sub" == "-h" || "$metrics_sub" == "help" ]]; then
+            cat <<'EOF'
+
+pforge github metrics — Manage GitHub Copilot usage metrics
+
+SUBCOMMANDS:
+  pull              Fetch Copilot metrics from the GitHub API and persist locally
+
+OPTIONS (pull):
+  --org <name>       GitHub org slug (required)
+  --since <date>     ISO date or shorthand like '30d' (default: 30d)
+  --until <date>     ISO date upper bound (default: today)
+  --store-dir <dir>  JSONL store directory (default: .forge/metrics)
+  --json             Emit result summary as JSON
+
+EXAMPLES:
+  pforge github metrics pull --org myorg
+  pforge github metrics pull --org myorg --since 7d
+  pforge github metrics pull --org myorg --since 2024-01-01 --until 2024-01-31 --json
+
+EOF
+            return 0
+        fi
+
+        if [[ "$metrics_sub" != "pull" ]]; then
+            echo "ERROR: unknown subcommand 'pforge github metrics $metrics_sub'. Try 'pforge github metrics --help'." >&2
+            exit 1
+        fi
+
+        # ── metrics pull ─────────────────────────────────────────────────
+        local org="" since="" until="" store_dir="" json_output=false
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                --org)       org="$2";       shift 2 ;;
+                --since)     since="$2";     shift 2 ;;
+                --until)     until="$2";     shift 2 ;;
+                --store-dir) store_dir="$2"; shift 2 ;;
+                --json)      json_output=true; shift ;;
+                *) shift ;;
+            esac
+        done
+
+        if [[ -z "$org" ]]; then
+            echo "ERROR: --org is required. Usage: pforge github metrics pull --org <orgname>" >&2
+            exit 1
+        fi
+
+        local metrics_script="${REPO_ROOT}/pforge-mcp/github-metrics.mjs"
+        if [[ ! -f "$metrics_script" ]]; then
+            echo "ERROR: github-metrics.mjs not found at $metrics_script" >&2
+            exit 1
+        fi
+
+        [[ -z "$store_dir" ]] && store_dir="$(pwd)/.forge/metrics"
+        local since_arg="${since:-30d}"
+        local until_arg="${until:-}"
+
+        local pull_inline
+        pull_inline=$(cat <<'JSEOF'
+import { pullMetrics, writeMetrics } from './pforge-mcp/github-metrics.mjs';
+const [org, since, until, storeDir] = process.argv.slice(1);
+try {
+  const records = pullMetrics({ org, since, until: until || undefined });
+  const result  = writeMetrics(records, { storeDir });
+  const summary = { ok: true, org, fetched: records.length, written: result.written, skipped: result.skipped };
+  console.log(JSON.stringify(summary));
+} catch (e) {
+  process.stderr.write(JSON.stringify({ ok: false, error: e.message, name: e.name }) + '\n');
+  process.exit(1);
+}
+JSEOF
+)
+
+        local raw_out node_exit
+        pushd "$REPO_ROOT" >/dev/null || true
+        raw_out=$(node --input-type=module -e "$pull_inline" "$org" "$since_arg" "$until_arg" "$store_dir" 2>&1)
+        node_exit=$?
+        popd >/dev/null || true
+
+        local last_line
+        last_line=$(printf '%s\n' "$raw_out" | grep -v '^$' | tail -1)
+
+        if $json_output; then
+            echo "$last_line"
+        else
+            echo "$last_line" | node -e "
+try {
+  const d = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8').trim());
+  if (d.ok) {
+    console.log('\u2705 Fetched ' + d.fetched + \" records for org '\" + d.org + \"'\");
+    if (d.written && d.written.length > 0) console.log('   Written:  ' + d.written.join(', '));
+    if (d.skipped && d.skipped.length > 0) console.log('   Skipped (already stored): ' + d.skipped.join(', '));
+  } else {
+    process.stderr.write('ERROR: ' + (d.error || 'unknown error') + '\n');
+    process.exit(1);
+  }
+} catch (err) {
+  process.stderr.write('ERROR: Failed to parse output from github-metrics.mjs\n');
+  process.exit(1);
+}"
+        fi
+        exit $node_exit
     fi
 
     if [[ "$sub" != "status" && "$sub" != "doctor" ]]; then

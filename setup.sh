@@ -1544,6 +1544,7 @@ echo "  - Run .github/prompts/project-profile.prompt.md to generate project-spec
 echo "  - Run .github/prompts/project-principles.prompt.md to define project principles"
 echo "  - Use .github/prompts/step0-specify-feature.prompt.md to define your first feature"
 echo "  - Start your first plan the Crucible way: call forge_crucible_submit (MCP) — every plan ships with a crucibleId for full traceability"
+echo "  - On GitHub? Run 'pforge github status' for a GitHub-native readiness check, or read /manual/plan-forge-on-the-github-stack.html"
 echo ""
 
 # ─── Step 8: Auto-validate ─────────────────────────────────────────────

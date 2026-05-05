@@ -114,6 +114,7 @@ function Show-Help {
     Write-Host "    --max=N         Override maximum rounds (default: 5)"
     Write-Host "    --dry-run       Show what would happen without triage side effects"
     Write-Host "    --env=ENV       Set environment (dev, staging; production is forbidden)"
+    Write-Host "  github <sub>      Inspect the GitHub-native AI surface (status | doctor)"
     Write-Host "  help              Show this help message"
     Write-Host ""
     Write-Host "OPTIONS:" -ForegroundColor Yellow
@@ -5963,6 +5964,57 @@ function Invoke-AuditLoop {
     }
 }
 
+# ─── Command: github ───────────────────────────────────────────────────
+function Invoke-Github {
+    # Subcommands: status | doctor | --help
+    $sub = if ($Arguments -and $Arguments.Count -gt 0) { $Arguments[0] } else { '' }
+    $rest = if ($Arguments -and $Arguments.Count -gt 1) { $Arguments[1..($Arguments.Count - 1)] } else { @() }
+
+    if ($sub -eq '' -or $sub -eq '--help' -or $sub -eq '-h' -or $sub -eq 'help') {
+        Write-Host ""
+        Write-Host "pforge github — Inspect the GitHub-native AI surface" -ForegroundColor Cyan
+        Write-Host ""
+        Write-Host "SUBCOMMANDS:" -ForegroundColor Yellow
+        Write-Host "  status            Print a checklist of GitHub-native primitives Plan-Forge integrates with"
+        Write-Host "  doctor            Same as status, plus one-line fix hints for warn/fail rows"
+        Write-Host ""
+        Write-Host "OPTIONS:" -ForegroundColor Yellow
+        Write-Host "  --project <dir>   Project root to inspect (default: current directory)"
+        Write-Host "  --json            Emit structured JSON to stdout"
+        Write-Host "  --extra           Run optional depth checks (instruction-file applyTo, etc.)"
+        Write-Host ""
+        Write-Host "EXAMPLES:" -ForegroundColor Yellow
+        Write-Host "  pforge github status"
+        Write-Host "  pforge github doctor --extra"
+        Write-Host "  pforge github status --json | ConvertFrom-Json"
+        Write-Host ""
+        return
+    }
+
+    if ($sub -ne 'status' -and $sub -ne 'doctor') {
+        Write-Host "ERROR: unknown subcommand 'pforge github $sub'. Try 'pforge github --help'." -ForegroundColor Red
+        exit 1
+    }
+
+    $script = Join-Path $RepoRoot "pforge-mcp/github-introspect.mjs"
+    if (-not (Test-Path $script)) {
+        Write-Host "ERROR: github-introspect.mjs not found at $script" -ForegroundColor Red
+        exit 1
+    }
+
+    # Default --project to caller's CWD (not the framework RepoRoot) so users
+    # inspecting their own project get the right answer.
+    $hasProject = $false
+    foreach ($a in $rest) { if ($a -eq '--project' -or $a.StartsWith('--project=')) { $hasProject = $true; break } }
+    $cliArgs = @($script)
+    if (-not $hasProject) { $cliArgs += @('--project', (Get-Location).Path) }
+    if ($sub -eq 'doctor') { $cliArgs += '--doctor' }
+    if ($rest -and $rest.Count -gt 0) { $cliArgs += $rest }
+
+    & node @cliArgs
+    exit $LASTEXITCODE
+}
+
 switch ($Command) {
     'init'         { Invoke-Init }
     'check'        { Invoke-Check }
@@ -6010,6 +6062,7 @@ switch ($Command) {
     'patterns'     { Invoke-Patterns }
     'graph'        { Invoke-Graph }
     'digest'       { Invoke-Digest }
+    'github'       { Invoke-Github }
     'help'         { Show-Help }
     ''             { Show-Help }
     '--help'       { Show-Help }

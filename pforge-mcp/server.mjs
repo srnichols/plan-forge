@@ -118,6 +118,8 @@ import { routeFinding } from "./tempering/triage.mjs";
 // Phase-39 Slice 7 — audit-loop activation surface
 import { loadAuditConfig, saveAuditConfig, shouldAutoDrain } from "./tempering/auto-activate.mjs";
 import { checkForUpdate, detectCorruptInstall, resolveFrameworkVersion } from "./update-check.mjs";
+// Phase GITHUB-A — GitHub stack introspection
+import { inspectGithubStack } from "./github-introspect.mjs";
 // Phase FORGE-SHOP-04 Slice 04.1 — Global search
 import { search as forgeSearch } from "./search/core.mjs";
 // Phase FORGE-SHOP-05 Slice 05.1 — Unified timeline
@@ -660,6 +662,17 @@ const TOOLS = [
       type: "object",
       properties: {
         path: { type: "string", description: "Project directory (default: current)" },
+      },
+    },
+  },
+  {
+    name: "forge_github_status",
+    description: "Inspect the GitHub-native AI surface a project has wired up — .github/copilot-instructions.md, AGENTS.md, .github/instructions/, .github/prompts/, .vscode/mcp.json (Plan-Forge entry), .github/workflows/, github.com remote, gh CLI. Read-only; no network calls. USE FOR: diagnosing missing GitHub Copilot / GHAS / MCP wiring; building a readiness report; in-IDE chat answering 'what GitHub primitives am I missing?'.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Project directory (default: current)" },
+        extra: { type: "boolean", description: "Run optional depth checks (instruction-file applyTo, copilot-instructions length)" },
       },
     },
   },
@@ -1795,6 +1808,10 @@ function executeTool(name, args) {
   switch (name) {
     case "forge_smith":
       return runPforge("smith", cwd);
+    case "forge_github_status": {
+      const result = inspectGithubStack(cwd, { extra: !!args.extra });
+      return { success: true, ...result };
+    }
     case "forge_validate":
       return runPforge("check", cwd);
     case "forge_sweep":

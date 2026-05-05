@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Appendix H: Plan Forge on the GitHub Stack — Plan Forge Manual</title>
+  <meta name="description" content="How Plan-Forge integrates with GitHub-native AI primitives: Copilot, AGENTS.md, .github/copilot-instructions.md, .github/instructions/, MCP, GHAS, Spaces, Metrics API. Optional, opt-in, deepest-on-GitHub." />
+  <meta property="og:title" content="Plan Forge on the GitHub Stack" />
+  <meta property="og:description" content="The deep-dive on Plan-Forge's GitHub integration. Optional, opt-in, deepest-on-GitHub." />
+  <meta property="og:type" content="article" />
+  <link rel="canonical" href="https://planforge.software/manual/plan-forge-on-the-github-stack.html" />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+    <main><div class="chapter-content">
+
+      <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Appendix H</div>
+      <h1>Plan Forge on the GitHub Stack</h1>
+      <p class="text-lg text-slate-400 mb-8">A tour of the GitHub-native primitives Plan-Forge integrates with, plus the readiness check for your repo.</p>
+
+      <div class="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5 mb-10">
+        <p class="text-sm text-slate-400 mb-2"><strong class="text-slate-200">When to read this chapter:</strong> you are running (or considering) Plan-Forge against a repository hosted on GitHub, with GitHub Copilot, Copilot Coding Agent, GHAS, or Copilot Spaces in the picture.</p>
+        <p class="text-sm text-slate-400 mb-0"><strong class="text-slate-200">When to skip it:</strong> you are on Bitbucket, GitLab, Azure DevOps, or anywhere else. None of this is required by Plan-Forge — see <a href="stack-notes.html" class="text-amber-400 hover:underline">Appendix C: Stack-Specific Notes</a> for language-preset details, and <a href="extensions.html" class="text-amber-400 hover:underline">Chapter 12: Extensions</a> for the OSS extension surface.</p>
+      </div>
+
+      <p>Plan-Forge does not require GitHub. It runs against any repo, with any agent (Copilot, Claude Code, Cursor, Codex), and against any CI system. <strong class="text-slate-200">But when the repo is on GitHub, Plan-Forge has the deepest stack of integrations</strong> — eight first-class primitives it consumes today, plus several it dispatches to. This appendix is the single canonical reference for that integration surface.</p>
+
+      <p>Section 1 is the readiness check — a one-command snapshot of which GitHub primitives your repo currently has wired up. Section 2 is the surface-by-surface tour. Sections 3 through 8 (Copilot Coding Agent dispatch, GHAS remediation chains, Copilot Spaces sync, Metrics API leaderboard, BYOK and other agent platforms) are <strong class="text-amber-400">in progress</strong> and will land in upcoming releases.</p>
+
+      <!-- ─── Section 1 — Readiness Check ─── -->
+      <h2 id="readiness-check">1. Is your repo set up? Run <code>pforge github status</code></h2>
+
+      <p>The fastest way to know which GitHub-native primitives Plan-Forge can use against your repo is the introspection command:</p>
+
+      <pre><code>pforge github status</code></pre>
+
+      <p>Output is a checklist of the eight default checks, each marked with a glyph:</p>
+
+      <ul>
+        <li><strong class="text-emerald-400">✓ pass</strong> — primitive is wired up correctly</li>
+        <li><strong class="text-amber-400">⚠ warn</strong> — primitive is partially wired or recommended-but-missing</li>
+        <li><strong class="text-rose-400">✗ fail</strong> — primitive is missing and Plan-Forge integration depends on it</li>
+        <li><strong class="text-slate-400">⊘ n/a</strong> — primitive does not apply to this repo (e.g. not a git clone)</li>
+      </ul>
+
+      <p>Sample output, run against the Plan-Forge repository itself:</p>
+
+      <pre><code>GitHub stack readiness — E:\GitHub\Plan-Forge
+────────────────────────────────────────────────────────────────────────
+  ✓ .github/copilot-instructions.md
+      present
+  ⚠ AGENTS.md
+      missing — open agent standard not adopted
+  ✓ .github/instructions/*.instructions.md
+      7 instruction files found
+  ✓ .github/prompts/*.prompt.md
+      8 prompt files found
+  ✓ .vscode/mcp.json
+      Plan-Forge MCP server registered
+  ✓ .github/workflows/
+      4 workflow files found
+  ✓ git remote → github.com
+      github.com remote configured
+  ✓ gh CLI on PATH
+      gh CLI available
+────────────────────────────────────────────────────────────────────────
+  7 pass · 1 warn · 0 fail · 0 n/a  (8 checks)</code></pre>
+
+      <p class="text-sm text-slate-500 mt-6">And against the Plan-Forge testbed (a sample repo set up via <code>setup.ps1</code>):</p>
+      <figure class="my-6">
+        <img src="assets/screenshots/github-status-testbed.png" alt="Terminal output of pforge github status against the Plan-Forge testbed showing 7 pass, 1 warn, 0 fail, 0 n/a across 8 checks" class="w-full max-w-3xl rounded-xl border border-slate-700/50 shadow-2xl shadow-amber-500/5" loading="lazy" />
+        <figcaption class="text-xs text-slate-500 mt-2 text-center"><code>pforge github status</code> against the Plan-Forge testbed — generated by <code>scripts/capture-github-status-screenshot.mjs</code>.</figcaption>
+      </figure>
+
+      <p>To get fix hints for every <strong class="text-amber-400">⚠</strong> and <strong class="text-rose-400">✗</strong> row, use the <code>doctor</code> subcommand:</p>
+
+      <pre><code>pforge github doctor</code></pre>
+
+      <p>For machine-readable output (e.g. piping into a dashboard or another tool), add <code>--json</code>:</p>
+
+      <pre><code>pforge github status --json</code></pre>
+
+      <p>The JSON shape is stable and documented in the <a href="mcp-server-reference.html" class="text-amber-400 hover:underline">MCP Server Reference</a> under <code>forge_github_status</code>. Two extra <em>SHOULD</em>-tier checks (instruction-file <code>applyTo:</code> usage, copilot-instructions length) run when you add <code>--extra</code>.</p>
+
+      <h3 id="exit-codes">Exit codes</h3>
+      <table>
+        <thead><tr><th>Code</th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td><code>0</code></td><td>No <strong class="text-rose-400">✗ fail</strong> rows. Warns and N/A are allowed.</td></tr>
+          <tr><td><code>1</code></td><td>At least one <strong class="text-rose-400">✗ fail</strong> row.</td></tr>
+          <tr><td><code>2</code></td><td>Invalid arguments to the CLI.</td></tr>
+        </tbody>
+      </table>
+
+      <p>This makes the command CI-friendly: a workflow can fail-fast on missing primitives, or treat warnings as advisory only.</p>
+
+      <h3 id="from-mcp">From an MCP client (Copilot Chat, Claude Code, Cursor)</h3>
+
+      <p>The same checklist is exposed as the <code>forge_github_status</code> MCP tool. From an in-IDE chat:</p>
+
+      <blockquote>
+        <p class="text-slate-300">"Run <code>forge_github_status</code> on this repo and tell me which GitHub primitives I'm missing."</p>
+      </blockquote>
+
+      <p>The agent receives the structured JSON and can answer with line-level precision — useful when you're evaluating Plan-Forge inside an existing repo and don't want to leave the IDE.</p>
+
+      <!-- ─── Section 2 — The Eight Primitives ─── -->
+      <h2 id="eight-primitives">2. The eight GitHub-native primitives Plan-Forge consumes</h2>
+
+      <p>Each row below is one check from <code>pforge github status</code>. The "What Plan-Forge does with it" column is what makes this chapter different from the GitHub docs: it tells you exactly how Plan-Forge uses the primitive, and which Plan-Forge feature stops working if you remove it.</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Primitive</th>
+            <th>What it is</th>
+            <th>What Plan-Forge does with it</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>.github/copilot-instructions.md</code></td>
+            <td>Repo-wide context Copilot Chat reads on every conversation.</td>
+            <td>Generated by <code>setup.ps1</code> / <code>setup.sh</code>. Plan-Forge writes the project overview, architecture summary, quick-command reference, and pipeline reference here. Re-generated by <code>pforge update</code> while preserving customizations.</td>
+          </tr>
+          <tr>
+            <td><code>AGENTS.md</code></td>
+            <td>Open standard adopted by Cursor, Codex, OpenAI, Anthropic, and GitHub for cross-agent context.</td>
+            <td>Generated alongside <code>copilot-instructions.md</code>. Lets Plan-Forge support BYOK — the same context surface works whether the user picks Copilot, Cursor, Claude Code, or Codex.</td>
+          </tr>
+          <tr>
+            <td><code>.github/instructions/*.instructions.md</code></td>
+            <td>Path-scoped Copilot instructions (each file's <code>applyTo:</code> frontmatter targets a glob).</td>
+            <td>Plan-Forge ships ~17 instruction files: <code>architecture-principles</code>, <code>git-workflow</code>, <code>testing</code>, <code>security</code>, <code>database</code>, etc. Each auto-loads when Copilot edits a matching file. The Step-2 Plan Hardener and Step-5 Reviewer reference these directly.</td>
+          </tr>
+          <tr>
+            <td><code>.github/prompts/*.prompt.md</code></td>
+            <td>Reusable prompt files Copilot Chat can invoke as slash commands.</td>
+            <td>Plan-Forge ships the pipeline prompts: <code>step0-specify-feature</code>, <code>step1-preflight-check</code>, <code>step2-harden-plan</code>, <code>step3-execute-slice</code>, <code>step4-completeness-sweep</code>, <code>step5-review-gate</code>. The full Plan-Forge pipeline runs through these in sequence.</td>
+          </tr>
+          <tr>
+            <td><code>.vscode/mcp.json</code></td>
+            <td>VS Code's MCP-server registry. Each entry exposes a server's tools to Copilot Chat.</td>
+            <td>Plan-Forge registers itself here as <code>plan-forge</code>, exposing ~36 MCP tools (<code>forge_run_plan</code>, <code>forge_estimate_quorum</code>, <code>forge_cost_report</code>, <code>forge_github_status</code>, …). See <a href="mcp-server-quickstart.html" class="text-amber-400 hover:underline">MCP Server Quick Start</a>.</td>
+          </tr>
+          <tr>
+            <td><code>.github/workflows/</code></td>
+            <td>GitHub Actions — the CI surface.</td>
+            <td>Validation gates from Plan-Forge plans can run as GitHub Actions jobs. The <code>regression-guard</code> command is designed to be triggered from a workflow on every PR. Phase GITHUB-B will add an Actions composite for one-step Plan-Forge dispatch.</td>
+          </tr>
+          <tr>
+            <td>git remote → github.com</td>
+            <td>Repository hosted on GitHub.</td>
+            <td>Pre-requisite for everything in Sections 3+: Copilot Coding Agent dispatch (creates issues + PRs against the repo), GHAS API access, Spaces sync, Metrics API ingestion. Without a github.com remote those features have no target.</td>
+          </tr>
+          <tr>
+            <td>GitHub CLI (<code>gh</code>)</td>
+            <td>GitHub's official command-line tool for issues, PRs, releases, and GHAS.</td>
+            <td>Plan-Forge prefers <code>gh</code> for any GitHub API operation when it's installed (auth is already handled). Strict requirement for Phase GITHUB-B's SARIF ingestion command and for one-shot issue creation in <code>pforge run-plan --worker copilot-coding-agent</code>.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p class="mt-6 text-sm text-slate-400">
+        <strong class="text-slate-200">A note on optionality:</strong> not having every row green does not break Plan-Forge. It limits which Plan-Forge features are available. The CLI still runs end-to-end against any repo with any agent — the GitHub primitives unlock the deepest, most automated path.
+      </p>
+
+      <!-- ─── Coming sections ─── -->
+      <h2 id="coming-soon">3–8. Coming in upcoming releases</h2>
+
+      <p>This chapter is a living scaffold. The sections below are planned and will land as their underlying integrations ship.</p>
+
+      <div class="grid md:grid-cols-2 gap-4 mt-6">
+        <div class="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5">
+          <div class="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-2">Coming next</div>
+          <div class="text-base font-bold text-slate-100 mb-1">3. Dispatching to Copilot Coding Agent</div>
+          <p class="text-sm text-slate-400 mb-0"><code>pforge run-plan --worker copilot-coding-agent</code> creates a GitHub Issue per slice, assigns to <code>@copilot</code>, polls the resulting PR, and captures the run trajectory back into the Plan-Forge dashboard.</p>
+        </div>
+        <div class="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5">
+          <div class="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-2">Coming next</div>
+          <div class="text-base font-bold text-slate-100 mb-1">4. GHAS-driven remediation</div>
+          <p class="text-sm text-slate-400 mb-0"><code>pforge plan-from-sarif &lt;file&gt;</code> turns a CodeQL SARIF result into a Plan-Forge plan with one slice per finding, severity-ordered. Pairs with the existing PreDeploy LiveGuard hook (<code>forge_secret_scan</code> + <code>forge_env_diff</code>) and <code>/security-audit</code> skill.</p>
+        </div>
+        <div class="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5">
+          <div class="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-2">Planned</div>
+          <div class="text-base font-bold text-slate-100 mb-1">5. Copilot Spaces sync</div>
+          <p class="text-sm text-slate-400 mb-0"><code>pforge sync-spaces</code> pushes the active plan, instruction files, and Plan-Forge tool catalog into a designated Copilot Space — the closest analogue to the AI-SDLC-Hub pattern many enterprise readouts call out.</p>
+        </div>
+        <div class="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5">
+          <div class="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-2">Planned</div>
+          <div class="text-base font-bold text-slate-100 mb-1">6. Metrics API + Plan-Forge unified leaderboard</div>
+          <p class="text-sm text-slate-400 mb-0">Pull AI-assisted PR rate, acceptance, and code-review usage from the Copilot Metrics API and merge with Plan-Forge's plan-execution metrics for a single dashboard view.</p>
+        </div>
+        <div class="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5">
+          <div class="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-2">Planned</div>
+          <div class="text-base font-bold text-slate-100 mb-1">7. BYOK and the multi-model picker</div>
+          <p class="text-sm text-slate-400 mb-0">How Plan-Forge's <code>--model</code> flag and quorum modes (<code>auto</code> / <code>power</code> / <code>speed</code>) compose with Copilot's multi-model picker. When BYOK matters, when the picker is enough.</p>
+        </div>
+        <div class="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5">
+          <div class="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-2">Planned</div>
+          <div class="text-base font-bold text-slate-100 mb-1">8. Other agent platforms</div>
+          <p class="text-sm text-slate-400 mb-0">An honest read on Plan-Forge's depth-of-integration with Claude Code, Cursor, and Codex. What works today, what doesn't, and how to choose.</p>
+        </div>
+      </div>
+
+      <p class="text-sm text-slate-500 mt-8">If a section above is blocking your evaluation, open an issue at <a href="https://github.com/srnichols/plan-forge/issues" class="text-amber-400 hover:underline">github.com/srnichols/plan-forge/issues</a> with the tag <code>github-stack</code>. We prioritize sections by demand.</p>
+
+      <div id="chapter-prev-next" class="chapter-nav"></div>
+    </div></main>
+  </div>
+  <script src="assets/manual.js"></script>
+</body>
+</html>

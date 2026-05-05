@@ -7,6 +7,32 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.85.0] — 2026-05-05 — `pforge github` introspection + GitHub-stack manual chapter
+
+> **One-liner**: New opt-in `pforge github status` / `pforge github doctor` commands inspect a repo's GitHub-native AI surface (Copilot instructions, AGENTS.md, MCP, GHAS, Coding Agent prerequisites). Paired with a new manual chapter and audience tiles on the manual index. Strictly additive — no GitHub dependency added to the core path.
+
+### Added
+- **`pforge github status`** — read-only checklist of 8 GitHub-native primitives Plan-Forge integrates with: `.github/copilot-instructions.md`, `AGENTS.md`, `.github/instructions/*.instructions.md`, `.github/prompts/*.prompt.md`, `.vscode/mcp.json` (with Plan-Forge entry detection), `.github/workflows/`, `git remote → github.com`, `gh` CLI on PATH. Glyph output (✓/⚠/✗/⊘) plus `--json` for machine consumption. Exit code 0 if no failures, 1 otherwise.
+- **`pforge github doctor`** — same checklist plus one-line `fixHint` for every warn/fail row.
+- **`--extra` flag** — runs two SHOULD-tier depth checks: instruction-file `applyTo:` usage, copilot-instructions length ≥ 50 lines.
+- **`forge_github_status` MCP tool** — same JSON output exposed to MCP clients (Copilot Chat, Claude Code, Cursor) so in-IDE chats can answer "what GitHub primitives am I missing?" with line-level precision.
+- **Appendix H — "Plan Forge on the GitHub Stack"** — new manual chapter at [docs/manual/plan-forge-on-the-github-stack.html](docs/manual/plan-forge-on-the-github-stack.html). Covers the readiness check (Section 1) and the 8-primitive integration surface (Section 2). Sections 3–8 (Coding Agent dispatch, GHAS chains, Spaces sync, Metrics API leaderboard, BYOK, other agent platforms) are stubbed with "Coming next / Planned" callouts to land in upcoming releases.
+- **Audience tiles** on `docs/manual/index.html` — four cards beneath the Quickstart hero: "I'm new to Plan-Forge", "I'm running it on the GitHub stack", "I'm extending it", "I'm on a different stack". Self-routes new readers to the right chapter without forcing the GitHub story on Bitbucket / GitLab / Azure DevOps users.
+- **`scripts/capture-github-status-screenshot.mjs`** — Playwright-driven generator that runs `pforge github status` against the testbed and renders a styled terminal-pane PNG to `docs/manual/assets/screenshots/github-status-testbed.png`. Re-runnable as the testbed evolves.
+
+### Changed
+- `setup.ps1` and `setup.sh` post-install "Optional (recommended)" output gains one line pointing at `pforge github status` and the new chapter.
+- `docs/manual/assets/manual.js` registers Appendix H between G (Update Source Modes) and About-the-Author.
+
+### Files
+- New: `pforge-mcp/github-introspect.mjs` (introspection module + CLI entrypoint), `pforge-mcp/tests/github-introspect.test.mjs` (34 tests covering all 8 default + 2 extra checks across green/partial/empty fixtures), `pforge-mcp/tests/fixtures/github-introspect/` (3 fixture directories).
+- New: `docs/manual/plan-forge-on-the-github-stack.html`, `docs/manual/assets/screenshots/github-status-testbed.png`.
+- New: `scripts/capture-github-status-screenshot.mjs`, `docs/plans/Phase-GITHUB-A-INTROSPECTION-PLAN.md`.
+- Modified: `pforge.ps1`, `pforge.sh` (add `github` subcommand dispatcher), `pforge-mcp/server.mjs` + `pforge-mcp/tools.json` (register `forge_github_status` MCP tool), `setup.ps1`, `setup.sh`, `docs/manual/index.html`, `docs/manual/assets/manual.js`, `VERSION`, `pforge-mcp/package.json`.
+
+### Why this matters
+Plan-Forge has the deepest stack of integrations on GitHub — `.github/*` instruction files, AGENTS.md, MCP server, Copilot Coding Agent dispatch, GHAS-orchestrated remediation. But there was no way for a user (or a Microsoft / GitHub field engineer evaluating Plan-Forge for a customer) to see at a glance which GitHub primitives a given repo had wired up. This release fills that gap with a strictly opt-in CLI and a documentation home that grows over time. Phase GITHUB-B (Copilot Coding Agent dispatch + SARIF ingestion) and Phase GITHUB-C (the full chapter content) are the planned follow-ons.
+
 ## [2.83.0] — 2026-05-04 — Provider-aware quorum cost estimates (~250× over-estimate fix)
 
 > **One-liner**: Quorum overhead pricing now respects the active provider. Subscription CLIs (gh-copilot, claude-cli) bill flat per-request instead of being incorrectly priced at raw API token rates — fixes the field-reported $23.53 estimate that ran ~$0.10–$0.50 in reality.

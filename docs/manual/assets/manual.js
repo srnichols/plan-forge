@@ -53,6 +53,7 @@
     { id: "sample-project",       file: "sample-project.html",      num: "E",  title: "Sample Project",            act: "Appendix" },
     { id: "liveguard-runbooks",  file: "liveguard-runbooks.html",  num: "F",  title: "LiveGuard Alert Runbooks",  act: "Appendix" },
     { id: "update-source",       file: "update-source.html",       num: "G",  title: "Update Source Modes",       act: "Appendix" },
+    { id: "plan-forge-on-the-github-stack", file: "plan-forge-on-the-github-stack.html", num: "H",  title: "Plan Forge on the GitHub Stack", act: "Appendix" },
     { id: "about-author",         file: "about-author.html",        num: "",   title: "About the Author",          act: "Appendix" },
   ];
 

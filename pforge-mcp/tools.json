@@ -44,6 +44,50 @@
     }
   },
   {
+    "name": "forge_github_status",
+    "description": "Inspect the GitHub-native AI surface a project has wired up — .github/copilot-instructions.md, AGENTS.md, .github/instructions/, .github/prompts/, .vscode/mcp.json (Plan-Forge entry), .github/workflows/, github.com remote, gh CLI. Read-only; no network calls. USE FOR: diagnosing missing GitHub Copilot / GHAS / MCP wiring; building a readiness report; in-IDE chat answering 'what GitHub primitives am I missing?'.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        },
+        "extra": {
+          "type": "boolean",
+          "description": "Run optional depth checks (instruction-file applyTo, copilot-instructions length)"
+        }
+      }
+    },
+    "intent": [
+      "diagnose",
+      "inspect",
+      "github-readiness"
+    ],
+    "aliases": [
+      "github-status",
+      "github-readiness"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "2.85.0",
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [
+      ".github/",
+      ".vscode/",
+      "AGENTS.md"
+    ],
+    "sideEffects": [],
+    "errors": {},
+    "example": {
+      "input": {},
+      "output": {
+        "summary": "7 pass, 1 warn, 0 fail, 0 n/a (8 checks)"
+      }
+    }
+  },
+  {
     "name": "forge_validate",
     "description": "Validate Plan Forge setup — check that all required files exist, file counts match preset expectations, and no unresolved placeholders remain.",
     "inputSchema": {

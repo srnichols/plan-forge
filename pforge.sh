@@ -94,6 +94,7 @@ COMMANDS:
     --max=N         Override maximum rounds (default: 5)
     --dry-run       Show what would happen without triage side effects
     --env=ENV       Set environment (dev, staging; production is forbidden)
+  github <sub>      Inspect the GitHub-native AI surface (status | doctor)
   version-bump <v>  Update VERSION, package.json, docs/README/ROADMAP version badges to v<version>
   migrate-memory    Merge legacy *-history.json ledgers into canonical .jsonl siblings (idempotent)
   drain-memory      Drain pending OpenBrain queue records to the configured OpenBrain server
@@ -5219,6 +5220,68 @@ EOF
     "
 }
 
+# ─── Command: github ───────────────────────────────────────────────────
+cmd_github() {
+    local sub="${1:-}"
+    shift 2>/dev/null || true
+
+    if [[ -z "$sub" || "$sub" == "--help" || "$sub" == "-h" || "$sub" == "help" ]]; then
+        cat <<'EOF'
+
+pforge github — Inspect the GitHub-native AI surface
+
+SUBCOMMANDS:
+  status            Print a checklist of GitHub-native primitives Plan-Forge integrates with
+  doctor            Same as status, plus one-line fix hints for warn/fail rows
+
+OPTIONS:
+  --project <dir>   Project root to inspect (default: current directory)
+  --json            Emit structured JSON to stdout
+  --extra           Run optional depth checks (instruction-file applyTo, etc.)
+
+EXAMPLES:
+  pforge github status
+  pforge github doctor --extra
+  pforge github status --json | jq .summary
+
+EOF
+        return 0
+    fi
+
+    if [[ "$sub" != "status" && "$sub" != "doctor" ]]; then
+        echo "ERROR: unknown subcommand 'pforge github $sub'. Try 'pforge github --help'." >&2
+        exit 1
+    fi
+
+    local script="${REPO_ROOT}/pforge-mcp/github-introspect.mjs"
+    if [[ ! -f "$script" ]]; then
+        echo "ERROR: github-introspect.mjs not found at $script" >&2
+        exit 1
+    fi
+
+    # Default --project to caller's CWD (not the framework REPO_ROOT) unless
+    # the user already supplied --project explicitly.
+    local has_project=0
+    for a in "$@"; do
+        case "$a" in
+            --project|--project=*) has_project=1; break ;;
+        esac
+    done
+
+    local args=("$script")
+    if [[ $has_project -eq 0 ]]; then
+        args+=(--project "$(pwd)")
+    fi
+    if [[ "$sub" == "doctor" ]]; then
+        args+=(--doctor)
+    fi
+    if [[ $# -gt 0 ]]; then
+        args+=("$@")
+    fi
+
+    node "${args[@]}"
+}
+
 COMMAND="${1:-help}"
 shift 2>/dev/null || true
 
@@ -5268,6 +5331,7 @@ case "$COMMAND" in
     patterns)     cmd_patterns "$@" ;;
     graph)        cmd_graph "$@" ;;
     digest)       cmd_digest "$@" ;;
+    github)       cmd_github "$@" ;;
     help|--help)  show_help ;;
     *)
         echo "ERROR: Unknown command '$COMMAND'" >&2

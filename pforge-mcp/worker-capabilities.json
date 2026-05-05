@@ -55,6 +55,35 @@
       }
     },
 
+    "copilot-coding-agent": {
+      "description": "GitHub Copilot Coding Agent (cloud worker — creates Issues, polls for PRs)",
+      "probe": {
+        "command": "gh",
+        "versionArgs": ["auth", "status"],
+        "capabilityMarkers": ["Logged in to github.com"],
+        "capabilityDescription": "Authenticated gh CLI with Copilot Coding Agent access"
+      },
+      "command": "gh",
+      "costModel": "subscription",
+      "concurrency": 5,
+      "requires": ["github-remote", "gh-cli"],
+      "invocation": {
+        "cmd": "gh",
+        "baseArgs": ["issue", "create"]
+      },
+      "install": {
+        "windows": "winget upgrade --id GitHub.cli && gh auth login",
+        "macos": "brew upgrade gh && gh auth login",
+        "linux": "Upgrade gh via your package manager, then gh auth login",
+        "docs": "https://docs.github.com/en/copilot/using-github-copilot/using-copilot-coding-agent"
+      },
+      "failureModes": [
+        "gh auth status fails — run 'gh auth login' first.",
+        "Repo is not GitHub-hosted — copilot-coding-agent requires a GitHub remote.",
+        "Copilot Coding Agent never opens a PR within the polling timeout (default 30 min) — slice marked failed."
+      ]
+    },
+
     "codex": {
       "description": "OpenAI Codex CLI (fallback worker)",
       "probe": {

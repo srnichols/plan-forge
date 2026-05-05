@@ -1,0 +1,120 @@
+{
+  "version": "2.1.0",
+  "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "CodeQL",
+          "version": "2.15.4",
+          "rules": [
+            {
+              "id": "js/sql-injection",
+              "name": "SqlInjection",
+              "shortDescription": { "text": "Database query built from user-controlled sources" },
+              "defaultConfiguration": { "level": "error" },
+              "properties": {
+                "tags": ["security", "external/cwe/cwe-089"],
+                "securitySeverity": "8.8"
+              }
+            },
+            {
+              "id": "js/xss",
+              "name": "ReflectedXss",
+              "shortDescription": { "text": "Reflected cross-site scripting" },
+              "defaultConfiguration": { "level": "error" },
+              "properties": {
+                "tags": ["security", "external/cwe/cwe-079"],
+                "securitySeverity": "6.1"
+              }
+            },
+            {
+              "id": "js/path-injection",
+              "name": "PathInjection",
+              "shortDescription": { "text": "Uncontrolled data used in path expression" },
+              "defaultConfiguration": { "level": "warning" },
+              "properties": {
+                "tags": ["security", "external/cwe/cwe-022"],
+                "securitySeverity": "9.3"
+              }
+            },
+            {
+              "id": "js/unused-variable",
+              "name": "UnusedVariable",
+              "shortDescription": { "text": "Unused variable, import, or local function" },
+              "defaultConfiguration": { "level": "note" },
+              "properties": {
+                "tags": ["maintainability"],
+                "securitySeverity": "1.0"
+              }
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "js/xss",
+          "ruleIndex": 1,
+          "message": { "text": "Cross-site scripting vulnerability from user input." },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "src/routes/profile.js", "uriBaseId": "%SRCROOT%" },
+                "region": { "startLine": 88, "startColumn": 5 }
+              }
+            }
+          ],
+          "level": "error"
+        },
+        {
+          "ruleId": "js/unused-variable",
+          "ruleIndex": 3,
+          "message": { "text": "Variable 'tmpCache' is never read." },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "src/utils/cache.js", "uriBaseId": "%SRCROOT%" },
+                "region": { "startLine": 14, "startColumn": 7 }
+              }
+            }
+          ],
+          "level": "note"
+        },
+        {
+          "ruleId": "js/sql-injection",
+          "ruleIndex": 0,
+          "message": { "text": "This query depends on a user-provided value." },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "src/db/queries.js", "uriBaseId": "%SRCROOT%" },
+                "region": { "startLine": 42, "startColumn": 10 }
+              }
+            },
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "src/db/queries.js", "uriBaseId": "%SRCROOT%" },
+                "region": { "startLine": 67, "startColumn": 12 }
+              }
+            }
+          ],
+          "level": "error"
+        },
+        {
+          "ruleId": "js/path-injection",
+          "ruleIndex": 2,
+          "message": { "text": "This path depends on a user-provided value." },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "src/files/upload.js", "uriBaseId": "%SRCROOT%" },
+                "region": { "startLine": 23, "startColumn": 20 }
+              }
+            }
+          ],
+          "level": "warning"
+        }
+      ]
+    }
+  ]
+}

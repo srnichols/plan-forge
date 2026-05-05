@@ -7464,6 +7464,9 @@ async function executeSlice(slice, options) {
   // mandated by Phase-25 MUST #1: gateName, model, durationMs, stderrTail.
   let lastFailureContext = null;
   let currentModel = finalModel;
+  // Phase GITHUB-B Slice 4 — trajectory schema for copilot-coding-agent slices.
+  // Captures issue + PR provenance so sliceResult.trajectory carries render hints.
+  let copilotDispatchData = null;
 
   // Phase-25 Slice 3 (L2 Voyager): retrieve auto-skills matching this slice's
   // domain keywords once per slice so every retry sees the same context.
@@ -7576,6 +7579,18 @@ async function executeSlice(slice, options) {
           timeoutMs: DEFAULT_TIMEOUT_MS,
         });
         const timedOut = prResult.status === "timeout";
+        // Phase GITHUB-B Slice 4 — capture trajectory data for sliceResult
+        const prHint = timedOut
+          ? `PR pending (timeout)`
+          : `PR #${prResult.prNumber} (${prResult.status})`;
+        copilotDispatchData = {
+          issueNumber: issueResult.issueNumber,
+          issueUrl: issueResult.issueUrl,
+          prNumber: timedOut ? null : prResult.prNumber,
+          prUrl: timedOut ? null : prResult.prUrl,
+          prStatus: prResult.status,
+          renderHint: `🤖 Issue #${issueResult.issueNumber} → ${prHint}`,
+        };
         workerResult = {
           output: JSON.stringify({ ...issueResult, pr: prResult }),
           exitCode: timedOut ? 1 : 0,
@@ -7844,6 +7859,9 @@ async function executeSlice(slice, options) {
         }), { tokens_in: 0, tokens_out: 0 }) || { tokens_in: 0, tokens_out: 0 },
       },
     }),
+    // Phase GITHUB-B Slice 4 — trajectory schema for copilot-coding-agent.
+    // Present only when worker dispatched via GitHub Issue + PR polling.
+    ...(copilotDispatchData && { trajectory: copilotDispatchData }),
   };
 
   writeFileSync(

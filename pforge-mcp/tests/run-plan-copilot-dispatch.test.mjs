@@ -353,3 +353,137 @@ describe("runPlan copilot-coding-agent — dispatch routing", () => {
     expect(dispatchCalled).toBe(false);
   });
 });
+
+// ─── Trajectory schema tests ──────────────────────────────────────────────────
+
+describe("runPlan copilot-coding-agent — trajectory schema", () => {
+  let tmpDir;
+  let planPath;
+  let mock;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), "pforge-cca-trajectory-"));
+    planPath = join(tmpDir, "test-plan.md");
+    writeFileSync(planPath, buildFixturePlan(), "utf-8");
+  });
+
+  afterEach(() => {
+    mock?.cleanup();
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("trajectory schema is present on slice result after successful PR poll", async () => {
+    mock = createMockGh([
+      {
+        match: ["issue", "create"],
+        stdout: "https://github.com/owner/repo/issues/7\n",
+      },
+      {
+        match: ["pr", "list"],
+        stdout: JSON.stringify([
+          { number: 20, url: "https://github.com/owner/repo/pull/20", state: "OPEN", isDraft: false },
+        ]) + "\n",
+      },
+    ]);
+
+    const result = await runPlan(planPath, {
+      cwd: tmpDir,
+      manualImport: true,
+      worker: "copilot-coding-agent",
+      quorum: false,
+      noTempering: true,
+      _inspectGithubStack: () => passingInspection(tmpDir),
+      _dispatchSlice: (slice, opts) => dispatchSlice(slice, { ...opts, env: mock.env }),
+      _pollPullRequest: (issueNumber, opts) =>
+        pollPullRequest(issueNumber, { ...opts, env: mock.env, intervalMs: 0, timeoutMs: 5_000 }),
+    });
+
+    expect(result.status).toBe("completed");
+    expect(result.sliceResults).toHaveLength(2);
+
+    const first = result.sliceResults[0];
+    expect(first.trajectory).toBeDefined();
+    expect(first.trajectory.issueNumber).toBe(7);
+    expect(first.trajectory.issueUrl).toBe("https://github.com/owner/repo/issues/7");
+    expect(first.trajectory.prNumber).toBe(20);
+    expect(first.trajectory.prUrl).toBe("https://github.com/owner/repo/pull/20");
+    expect(first.trajectory.prStatus).toBe("open");
+    expect(first.trajectory.renderHint).toMatch(/Issue #7/);
+    expect(first.trajectory.renderHint).toMatch(/PR #20/);
+  });
+
+  it("trajectory renderHint includes issue and PR numbers", async () => {
+    mock = createMockGh([
+      {
+        match: ["issue", "create"],
+        stdout: "https://github.com/owner/repo/issues/42\n",
+      },
+      {
+        match: ["pr", "list"],
+        stdout: JSON.stringify([
+          { number: 99, url: "https://github.com/owner/repo/pull/99", state: "OPEN", isDraft: false },
+        ]) + "\n",
+      },
+    ]);
+
+    const result = await runPlan(planPath, {
+      cwd: tmpDir,
+      manualImport: true,
+      worker: "copilot-coding-agent",
+      quorum: false,
+      noTempering: true,
+      _inspectGithubStack: () => passingInspection(tmpDir),
+      _dispatchSlice: (slice, opts) => dispatchSlice(slice, { ...opts, env: mock.env }),
+      _pollPullRequest: (issueNumber, opts) =>
+        pollPullRequest(issueNumber, { ...opts, env: mock.env, intervalMs: 0, timeoutMs: 5_000 }),
+    });
+
+    const first = result.sliceResults?.[0];
+    expect(first?.trajectory?.renderHint).toBe("🤖 Issue #42 → PR #99 (open)");
+  });
+
+  it("trajectory prStatus is timeout when no PR is found within timeoutMs", async () => {
+    mock = createMockGh([
+      {
+        match: ["issue", "create"],
+        stdout: "https://github.com/owner/repo/issues/5\n",
+      },
+      { match: ["pr", "list"], stdout: "[]\n" },
+    ]);
+
+    const result = await runPlan(planPath, {
+      cwd: tmpDir,
+      manualImport: true,
+      worker: "copilot-coding-agent",
+      quorum: false,
+      noTempering: true,
+      _inspectGithubStack: () => passingInspection(tmpDir),
+      _dispatchSlice: (slice, opts) => dispatchSlice(slice, { ...opts, env: mock.env }),
+      _pollPullRequest: (issueNumber, opts) =>
+        pollPullRequest(issueNumber, { ...opts, env: mock.env, intervalMs: 0, timeoutMs: 0 }),
+    });
+
+    const first = result.sliceResults?.[0];
+    expect(first?.trajectory?.prStatus).toBe("timeout");
+    expect(first?.trajectory?.prNumber).toBeNull();
+    expect(first?.trajectory?.prUrl).toBeNull();
+    expect(first?.trajectory?.renderHint).toMatch(/Issue #5/);
+    expect(first?.trajectory?.renderHint).toMatch(/timeout/);
+  });
+
+  it("trajectory is absent when no copilot-coding-agent worker is used", async () => {
+    // Run in dryRun mode — no worker dispatched, no trajectory expected
+    const result = await runPlan(planPath, {
+      cwd: tmpDir,
+      manualImport: true,
+      quorum: false,
+      noTempering: true,
+      dryRun: true,
+      _inspectGithubStack: () => { throw new Error("should not be called"); },
+    });
+
+    expect(result.status).toBe("dry-run");
+    // dry-run returns no sliceResults; confirming no trajectory attached
+    expect(result.sliceResults).toBeUndefined();
+  });
+});

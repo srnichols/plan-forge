@@ -852,6 +852,11 @@ function renderSliceCards() {
     const durationBarColor = s.status === "failed" ? "bg-red-500/40" : s.status === "passed" ? "bg-green-500/30" : "bg-blue-500/30";
     const durationBar = s.duration ? `<div class="mt-1.5 h-1 rounded-full bg-gray-700 overflow-hidden"><div class="${durationBarColor} h-full rounded-full" style="width:${durationPct}%"></div></div>` : "";
 
+    // Phase GITHUB-B Slice 4 — trajectory render hint for copilot-coding-agent slices.
+    const trajectoryHint = s.trajectory?.renderHint
+      ? `<p class="text-xs text-cyan-500 mt-1 truncate" title="${s.trajectory.renderHint}">${s.trajectory.renderHint}</p>`
+      : "";
+
     return `
       <div class="slice-card ${bgColor} rounded-lg p-3 border border-gray-700 cursor-pointer hover:border-gray-500 transition-colors" data-slice-id="${s.id}" onclick="loadSliceLog('${s.id}')">
         <div class="flex items-center justify-between mb-1">
@@ -863,6 +868,7 @@ function renderSliceCards() {
         ${model ? `<p class="text-xs text-gray-500 mt-1">${modelBadge} ${cost}</p>` : ""}
         ${quorumHtml}
         ${s.error ? `<p class="text-xs text-red-400 mt-1 truncate">${s.error}</p>` : ""}
+        ${trajectoryHint}
         ${durationBar}
       </div>
     `;

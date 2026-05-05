@@ -226,8 +226,41 @@
 
       <p>When a PR is merged, Plan-Forge fetches the Coding Agent's session log from the PR's <em>Copilot Activity</em> tab via the GitHub API and appends it to the plan's trajectory file at <code>.forge/trajectories/&lt;plan-slug&gt;.jsonl</code>. This makes the Coding Agent's reasoning searchable by <code>pforge timeline</code> and <code>forge_master_ask</code> just like any other execution session.</p>
 
+      <h3 id="preflight-checks">Pre-flight checks</h3>
+
+      <p>Before Plan-Forge creates any GitHub Issues for a <code>--worker copilot-coding-agent</code> run, it executes a pre-flight check that includes the <strong class="text-slate-200"><code>copilot-coding-agent-assignable</code></strong> probe. This probe calls the GitHub Assignees API to verify that <code>@copilot</code> is an assignable user on the repository. If it is not — typically because Copilot Coding Agent has not been enabled at the org or repo level — the orchestrator stops immediately with a fix-hint rather than creating issues that will never be picked up.</p>
+
+      <p>The probe has three return states:</p>
+
+      <table>
+        <thead><tr><th>Status</th><th>Meaning</th><th>Action taken by orchestrator</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong class="text-emerald-400">pass</strong></td>
+            <td><code>@copilot</code> is assignable on this repo — Copilot Coding Agent is enabled and ready.</td>
+            <td>Pre-flight continues; slice execution proceeds normally.</td>
+          </tr>
+          <tr>
+            <td><strong class="text-amber-400">warn</strong></td>
+            <td>Copilot Coding Agent is not enabled — <code>--assignee @copilot</code> would be silently dropped.</td>
+            <td>Promoted to a hard fail. Execution stops before any issue is created. Fix-hint links to GitHub's docs for enabling Copilot Coding Agent at the repo or org level.</td>
+          </tr>
+          <tr>
+            <td><strong class="text-rose-400">fail</strong></td>
+            <td>API error — token lacks <code>repo</code> scope, network unreachable, or GitHub returned 4xx/5xx.</td>
+            <td>Execution stops. Fix-hint describes the token scope requirement and suggests <code>gh auth status</code>.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>You can run the probe manually via <code>pforge github status</code> with <code>--gh-token</code>:</p>
+
+      <pre><code>pforge github status --gh-token</code></pre>
+
+      <p>Without <code>--gh-token</code>, the check returns <code>na</code> ("skipped — pass --gh-token to probe") and does not make any API calls. The probe is intentionally opt-in on the status command to keep the hot path free of network I/O — but it always runs automatically when the orchestrator's pre-flight fires for a <code>--worker copilot-coding-agent</code> dispatch.</p>
+
       <div class="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5 mt-6">
-        <p class="text-sm text-slate-400 mb-0"><strong class="text-slate-200">Prerequisite:</strong> <code>gh</code> CLI must be authenticated (<code>gh auth status</code>) and the repo must have Copilot Coding Agent enabled at the org or repo level. Run <code>pforge github status</code> — all eight checks should pass before using <code>--worker copilot-coding-agent</code>.</p>
+        <p class="text-sm text-slate-400 mb-0"><strong class="text-slate-200">Prerequisite:</strong> <code>gh</code> CLI must be authenticated (<code>gh auth status</code>) and the repo must have Copilot Coding Agent enabled at the org or repo level. Run <code>pforge github status --gh-token</code> — all checks including <code>copilot-coding-agent-assignable</code> should pass before using <code>--worker copilot-coding-agent</code>.</p>
       </div>
 
       <!-- ─── Section 4 — GHAS remediation ─── -->

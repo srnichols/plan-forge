@@ -7,7 +7,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-## [2.90.3] — 2026-05-05 — Hotfix: Gate Linter (W1–W4 warnings, strict mode, per-gate disable)
+## [2.90.4] — 2026-05-05 — Hotfix: Copilot Coding Agent Enablement Detector (`copilot-coding-agent-assignable`)
+
+> **One-liner**: Adds a `copilot-coding-agent-assignable` check to `inspectGithubStack()` (backing `pforge github status` / `forge_github_status`) that probes whether `@copilot` is an assignable user on the configured remote. Without a token the check returns `na`; with `--gh-token` it calls the GitHub Assignees API and returns `pass`, `warn` (Copilot not enabled), or `fail` (API error). The orchestrator's `--worker copilot-coding-agent` pre-flight always invokes the probe and promotes `warn` to a hard fail — preventing the silent 30-min polling timeout that occurred in the Phase GITHUB-C dogfood when the assignee was silently dropped.
+
+### Added — Hotfix v2.90.4
+
+- **`copilot-coding-agent-assignable` check** in `pforge-mcp/github-introspect.mjs` — new entry in the `inspectGithubStack` checks array (after `gh-cli`, before extras). Without a GitHub token, returns `{ status: "na", detail: "skipped — pass --gh-token to probe" }`. With a token, calls `gh api repos/<owner>/<repo>/assignees` filtered for `login === "copilot"`.
+- **Return semantics**: `pass` — `@copilot` is assignable on this repo; `warn` — Copilot Coding Agent not enabled (`--assignee @copilot` will be silently dropped), with a `fixHint` linking to GitHub docs; `fail` — API error (401/403 token scope issue or network failure).
+- **Orchestrator pre-flight integration** in `pforge-mcp/orchestrator.mjs` — when `--worker copilot-coding-agent` is active, the pre-flight always calls `inspectGithubStack(cwd, { ghToken: true })` and promotes the new check's `warn` result to a hard fail with the fix-hint surfaced. Prevents issue creation when the assignment would be silently dropped.
+- **`pforge-mcp/tests/github-introspect-copilot-agent.test.mjs`** — vitest cases covering: `pass` (copilot in assignees), `warn` (copilot absent), `na` (no token provided), `fail` (API 401/403 error), `fail` (network error). Uses a mock-`gh` helper consistent with the existing `github-introspect.test.mjs` pattern.
+- **Section 3 "Pre-flight checks" subsection** in `docs/manual/plan-forge-on-the-github-stack.html` — documents the `copilot-coding-agent-assignable` probe, its three return states, and when the orchestrator runs it automatically.
+
+### Changed — Hotfix v2.90.4
+
+- **`pforge github status --json`** output now includes the `copilot-coding-agent-assignable` check entry when `--gh-token` is supplied, preserving the stable JSON shape documented in the MCP Server Reference.
+
+## [2.90.3]— 2026-05-05 — Hotfix: Gate Linter (W1–W4 warnings, strict mode, per-gate disable)
 
 > **One-liner**: Adds a static gate-linter pass to `pforge-mcp/orchestrator.mjs` that scans validation-gate command strings before execution and emits structured warnings (W1–W4) for known portability anti-patterns. Strict mode (`PFORGE_GATE_LINT_STRICT=1`) promotes warnings to hard failures. Individual gates can opt out with a `# pforge-lint-disable <codes>` comment line.
 

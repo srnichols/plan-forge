@@ -180,10 +180,12 @@ Edit this list as items are completed. Date format: YYYY-MM-DD.
 
 ### Tier 3 (restructure)
 
-- [ ] [2026-MM-DD] Split dashboard.html into 3 chapters
+> **Status**: Drafted as a hardened plan at [docs/plans/Phase-MANUAL-RESTRUCTURE-PLAN.md](plans/Phase-MANUAL-RESTRUCTURE-PLAN.md). Awaiting Step 2 hardening, then Step 3 execution. Estimated cost: $0.30–$1.00 across 9 sequential slices. Pure documentation restructure — no code changes.
+
+- [ ] [2026-MM-DD] Split dashboard.html into 4 chapters
 - [ ] [2026-MM-DD] Split mcp-server.html into 3 chapters
 - [ ] [2026-MM-DD] Split instructions-agents.html into 2 chapters
-- [ ] [2026-MM-DD] Add Quickstart Act 0
+- [ ] [2026-MM-DD] Add Quickstart Act 0 (3 chapters)
 
 ---
 

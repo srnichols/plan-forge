@@ -32,23 +32,32 @@
 
         <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 5</div>
         <h1>Crucible &mdash; The Idea Smelter</h1>
-        <p class="text-lg text-slate-400 mb-8">The Smelt station. Before a plan can be hardened, the raw ore has to be smelted. Crucible is the stage that happens <em>before</em> Plan Hardening &mdash; where an idea becomes a well-specified Phase plan through a short, structured interview that refuses to finalize until every CRITICAL_FIELD is filled in.</p>
-
-        <div class="callout callout-tip">
-          <strong>Hardened intake</strong>: Crucible enforces a <strong>critical-fields gate</strong> at finalize time &mdash; plans cannot leave the smelter with placeholder TBDs in <code>build-command</code>, <code>test-command</code>, scope, validation gates, forbidden actions, or rollback. Question counts: feature lane <strong>7</strong>, tweak lane <strong>4</strong>. See <a href="#critical-fields">CRITICAL_FIELDS Gate</a> below.
-        </div>
+        <p class="text-lg text-slate-400 mb-8">The Crucible is the intake interview for Plan Forge. You bring a rough idea ("add user profile editing") and the smelter walks you through 4&ndash;12 questions, then writes out a complete Phase plan that's ready for the Forge to execute.</p>
 
         <div class="callout callout-info">
-          <strong>Mandatory pre-hardening stage</strong>: Every plan under <code>docs/plans/Phase-*.md</code> must carry a <code>crucibleId</code> in its frontmatter &mdash; either from a smelt, from the <code>--manual-import</code> bypass, or from the grandfather migration that runs once on first upgrade.
+          <strong>Why an interview?</strong> Most plans fail because the spec is too vague. Crucible refuses to write a plan until you've answered a fixed set of <strong>CRITICAL_FIELDS</strong> &mdash; build command, test command, scope, validation gates, forbidden actions, and rollback steps. No TBDs allowed. The Forge can only execute plans that pass this gate.
         </div>
 
-        <h2 id="why">Why Smelt Before Hardening?</h2>
-        <p>Plan Hardening (Step 2) assumes you already know what you want to build. Crucible exists because, most of the time, you don't — not precisely enough for a hardened plan. The smelter forces three things:</p>
+        <h2 id="how-it-works">How It Works</h2>
+        <p>The Crucible has three sizes (called <strong>lanes</strong>) that scale the interview to the size of the change:</p>
         <ul>
-          <li><strong>A stable phase name</strong> — atomic claim prevents two parallel agents from both creating "Phase 17".</li>
-          <li><strong>A minimum set of answered questions</strong> — lane-scaled (3/6/12) so trivial tweaks don't get full-feature ceremony.</li>
-          <li><strong>A provenance stamp</strong> — every plan carries <code>crucibleId</code>, <code>lane</code>, <code>source</code> in frontmatter so later gates can audit how it got here.</li>
+          <li><strong>tweak</strong> &mdash; 4 questions. For version bumps, config tweaks, doc edits, small fixes.</li>
+          <li><strong>feature</strong> &mdash; 7 questions. The default. For new endpoints, new tools, new services with a handful of slices.</li>
+          <li><strong>full</strong> &mdash; about 12 questions. For architectural changes that touch three or more top-level modules.</li>
         </ul>
+        <p>You can pick a lane explicitly, or let Crucible infer one from your raw idea (it looks for keywords like "bump" or "refactor subsystem"). When the interview ends, Crucible writes <code>docs/plans/Phase-NN.md</code> and hands it off to the Plan Hardener (Step 2 of the pipeline).</p>
+
+        <h2 id="why">Why Smelt Before Hardening?</h2>
+        <p>The Plan Hardener (Step 2) assumes you already know what you want to build. Crucible exists because most of the time, you don't &mdash; not precisely enough for a hardened plan. The smelter enforces three things:</p>
+        <ul>
+          <li><strong>A stable phase name</strong> &mdash; an atomic claim prevents two parallel agents from both creating "Phase 17".</li>
+          <li><strong>A minimum set of answered questions</strong> &mdash; lane-scaled (4 / 7 / ~12) so trivial tweaks don't get full-feature ceremony.</li>
+          <li><strong>A provenance stamp</strong> &mdash; every plan carries <code>crucibleId</code>, <code>lane</code>, and <code>source</code> in its frontmatter so downstream gates can audit how it got here.</li>
+        </ul>
+
+        <div class="callout callout-tip">
+          <strong>One enforcement detail to know up front</strong>: every plan under <code>docs/plans/Phase-*.md</code> must carry a <code>crucibleId</code>. Plans get one of three ways: by finishing a smelt, by using <code>--manual-import</code> for hand-authored or Spec Kit imports, or by the grandfather migration that runs once when you first upgrade. Plans without a <code>crucibleId</code> are rejected at run time.
+        </div>
 
         <h2 id="lanes">The Three Lanes</h2>
 
@@ -57,13 +66,13 @@
         <div class="grid md:grid-cols-3 gap-4 my-6">
           <div class="p-4 bg-slate-900 border border-slate-800 rounded-lg">
             <div class="text-forge-400 font-semibold mb-1">tweak</div>
-            <div class="text-xs text-slate-400 mb-2">4 questions <span class="text-amber-400">(was 3)</span></div>
-            <p class="text-sm">Version bumps, config flag flips, doc edits, small bug fixes. Inferred when the raw idea mentions "bump", "fix typo", "update dep". Adds <code>forbidden-actions</code> as a question so even tiny changes declare what they won't touch.</p>
+            <div class="text-xs text-slate-400 mb-2">4 questions</div>
+            <p class="text-sm">Version bumps, config flag flips, doc edits, small bug fixes. Inferred when the raw idea mentions "bump", "fix typo", "update dep". Includes a <code>forbidden-actions</code> question so even tiny changes declare what they won't touch.</p>
           </div>
           <div class="p-4 bg-slate-900 border border-slate-800 rounded-lg">
             <div class="text-forge-400 font-semibold mb-1">feature</div>
-            <div class="text-xs text-slate-400 mb-2">7 questions <span class="text-amber-400">(was 6)</span></div>
-            <p class="text-sm">Default lane. New endpoint, new tool, new UI section, new service with a handful of slices. Adds <code>forbidden-actions</code> as the 7th question.</p>
+            <div class="text-xs text-slate-400 mb-2">7 questions</div>
+            <p class="text-sm">Default lane. New endpoint, new tool, new UI section, new service with a handful of slices.</p>
           </div>
           <div class="p-4 bg-slate-900 border border-slate-800 rounded-lg">
             <div class="text-forge-400 font-semibold mb-1">full</div>

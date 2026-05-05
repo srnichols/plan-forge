@@ -171,12 +171,12 @@ Edit this list as items are completed. Date format: YYYY-MM-DD.
 - [x] [2026-05-04] dashboard.html "25 tabs" → "33 tabs across 4 top-level groups" — fixed contradiction between headline number and body content
 - [x] [2026-05-04] glossary.html "Getting Started: Read These Five First" section — numbered list of Plan Forge → Plan → Scope contract → Slice → Validation gate, each with anchor to its full entry, before the alphabetical reference begins
 
-### Tier 2 (medium cost)
+### Tier 2 (medium cost) ✅ COMPLETE
 
-- [ ] [2026-MM-DD] crucible.html lede rewrite
-- [ ] [2026-MM-DD] cli-reference.html "I'm trying to..." section
-- [ ] [2026-MM-DD] liveguard-tools.html "LiveGuard Is Not" section
-- [ ] [2026-MM-DD] instructions-agents.html scenario walkthrough
+- [x] [2026-05-04] crucible.html lede rewrite — opens with "The Crucible is the intake interview for Plan Forge..." and "How It Works" section that introduces lanes/CRITICAL_FIELDS in plain English before any version chips
+- [x] [2026-05-04] cli-reference.html "I'm Trying To..." section — new H2 with goal-oriented use-case table grouped into 5 bands (Setup, Planning, Execution, Troubleshooting, Post-deploy). Each row links to the matching anchor in the alphabetical reference below
+- [x] [2026-05-04] liveguard-tools.html "What LiveGuard is — and isn't" callout — explicitly contrasts with APM tools (Datadog/New Relic/Sentry); explains LiveGuard runs at build/pre-deploy, not on running traffic; gives the mental model "is what we shipped safe" vs "is the running app healthy right now"
+- [x] [2026-05-04] instructions-agents.html "A Concrete Scenario" section — walks through editing src/auth/token-validator.cs with a 4-row table showing exactly which 4 instruction files auto-load, why each pattern matched, and what each "whispers to the AI". Closes with the swap behavior when context changes
 
 ### Tier 3 (restructure)
 

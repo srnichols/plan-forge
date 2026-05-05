@@ -72,6 +72,47 @@
           Use <strong>analyze</strong> after hardening a plan. Use <strong>diagnose</strong> when a slice fails.
         </div>
 
+        <!-- ─── I'm trying to... use-case index ─── -->
+        <h2 id="i-want-to">I'm Trying To&hellip;</h2>
+        <p>Most people don't need every command. Find your use case, run the matching command:</p>
+
+        <table>
+          <thead><tr><th>Goal</th><th>Command</th><th>When</th></tr></thead>
+          <tbody>
+            <tr><td colspan="3" class="bg-slate-900/40 text-xs font-bold text-slate-500 uppercase tracking-wider">Setup &amp; daily housekeeping</td></tr>
+            <tr><td>Set up a new project</td><td><a href="#init"><code>pforge init</code></a></td><td>First time on this repo</td></tr>
+            <tr><td>Check setup is healthy</td><td><a href="#smith"><code>pforge smith</code></a></td><td>Before reporting a bug; after upgrading</td></tr>
+            <tr><td>Validate file counts and templates</td><td><a href="#check"><code>pforge check</code></a></td><td>Before committing setup changes</td></tr>
+            <tr><td>Update framework files</td><td><a href="#update"><code>pforge update</code></a></td><td>After a new Plan Forge release</td></tr>
+
+            <tr><td colspan="3" class="bg-slate-900/40 text-xs font-bold text-slate-500 uppercase tracking-wider">Planning &amp; authoring</td></tr>
+            <tr><td>Start a new feature plan</td><td><a href="#new-phase"><code>pforge new-phase &lt;name&gt;</code></a></td><td>You have a feature in mind</td></tr>
+            <tr><td>Score a plan's quality before running it</td><td><a href="#analyze"><code>pforge analyze &lt;plan&gt;</code></a></td><td>Right after hardening</td></tr>
+            <tr><td>See what files changed vs the plan's scope</td><td><a href="#diff"><code>pforge diff &lt;plan&gt;</code></a></td><td>Mid-execution; before commit</td></tr>
+            <tr><td>Find leftover TODO/FIXME/HACK markers</td><td><a href="#sweep"><code>pforge sweep</code></a></td><td>Before declaring a slice done</td></tr>
+
+            <tr><td colspan="3" class="bg-slate-900/40 text-xs font-bold text-slate-500 uppercase tracking-wider">Execution</td></tr>
+            <tr><td>Estimate cost before running</td><td><code>pforge run-plan &lt;plan&gt; --estimate</code></td><td>You want to know what this will cost first</td></tr>
+            <tr><td>Run a plan end-to-end (cheapest)</td><td><a href="#run-plan"><code>pforge run-plan &lt;plan&gt;</code></a></td><td>Plan is hardened and you trust it</td></tr>
+            <tr><td>Run with multi-model consensus</td><td><code>pforge run-plan &lt;plan&gt; --quorum=auto</code></td><td>High-stakes feature; complex slices</td></tr>
+            <tr><td>Resume after a failed slice</td><td><code>pforge run-plan &lt;plan&gt; --resume-from N</code></td><td>You fixed slice N&minus;1's failure</td></tr>
+            <tr><td>Co-pilot mode (you code, gates check)</td><td><code>pforge run-plan &lt;plan&gt; --assisted</code></td><td>You want to write the code yourself</td></tr>
+
+            <tr><td colspan="3" class="bg-slate-900/40 text-xs font-bold text-slate-500 uppercase tracking-wider">Troubleshooting</td></tr>
+            <tr><td>Investigate a failing slice</td><td><a href="#diagnose"><code>pforge diagnose &lt;file&gt;</code></a></td><td>Slice failed and you don't know why</td></tr>
+            <tr><td>Run closed-loop drain</td><td><a href="#audit-loop"><code>pforge audit-loop</code></a></td><td>Mass content audit (opt-in feature)</td></tr>
+            <tr><td>See chronological event history</td><td><a href="#timeline"><code>pforge timeline</code></a></td><td>Forensic / "what happened on Tuesday?"</td></tr>
+
+            <tr><td colspan="3" class="bg-slate-900/40 text-xs font-bold text-slate-500 uppercase tracking-wider">Post-deploy (LiveGuard)</td></tr>
+            <tr><td>Score code drift since baseline</td><td><a href="#liveguard"><code>pforge drift</code></a></td><td>After every deploy</td></tr>
+            <tr><td>Scan for high-entropy secrets</td><td><a href="#liveguard"><code>pforge secret-scan</code></a></td><td>Before every deploy (blocking)</td></tr>
+            <tr><td>Scan dependencies for CVEs</td><td><a href="#liveguard"><code>pforge dep-watch</code></a></td><td>Daily / before deploy</td></tr>
+            <tr><td>Compute health score 0&ndash;100</td><td><a href="#liveguard"><code>pforge health-trend</code></a></td><td>Weekly / on alert</td></tr>
+          </tbody>
+        </table>
+
+        <p class="text-sm text-slate-500">Full command reference below, organized alphabetically. Each entry has the equivalent manual steps for non-CLI users.</p>
+
         <!-- ═══════════════════════════════════════════════ -->
         <!-- COMMANDS -->
         <!-- ═══════════════════════════════════════════════ -->

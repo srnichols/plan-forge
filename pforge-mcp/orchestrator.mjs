@@ -44,6 +44,14 @@ import {
   loadAuditConfig as _loadAuditConfig,
   shouldAutoDrain as _shouldAutoDrain,
 } from "./tempering/auto-activate.mjs";
+// Phase GITHUB-B Slice 3 — Copilot Coding Agent dispatch routing
+import { inspectGithubStack as _inspectGithubStackDefault } from "./github-introspect.mjs";
+import {
+  dispatchSlice as _dispatchSliceDefault,
+  pollPullRequest as _pollPullRequestDefault,
+  DEFAULT_POLL_INTERVAL_MS,
+  DEFAULT_TIMEOUT_MS,
+} from "./workers/copilot-coding-agent.mjs";
 export const loadAuditConfig = _loadAuditConfig;
 export const shouldAutoDrain = _shouldAutoDrain;
 export const readTemperingState = _readTemperingState;
@@ -3465,6 +3473,11 @@ export async function runPlan(planPath, options = {}) {
     onlySlices = null,      // Phase-33.1: number[] | null — run only specified slice IDs
     noTempering = false,    // Phase-33.1: disable post-slice tempering for this run
     allowRetrograde = false, // Meta-bug #129: allow plan whose target version already exists on origin
+    worker = null,           // Phase GITHUB-B Slice 3: e.g. "copilot-coding-agent"
+    // Injectable dependencies for testing (copilot-coding-agent dispatch path)
+    _inspectGithubStack = _inspectGithubStackDefault,
+    _dispatchSlice = _dispatchSliceDefault,
+    _pollPullRequest = _pollPullRequestDefault,
   } = options;
 
   // Mutual exclusion: --resume-from and --only-slices cannot both be active
@@ -3589,6 +3602,35 @@ export async function runPlan(planPath, options = {}) {
   // Dry run — parse and validate only
   if (dryRun) {
     return { status: "dry-run", plan };
+  }
+
+  // Phase GITHUB-B Slice 3 — Copilot Coding Agent pre-flight (skipped for estimate/dryRun)
+  if (worker === "copilot-coding-agent") {
+    const inspection = _inspectGithubStack(cwd);
+    const githubRemote = inspection.checks.find((c) => c.id === "github-remote");
+    const ghCli = inspection.checks.find((c) => c.id === "gh-cli");
+    const failed = [];
+    if (!githubRemote || githubRemote.status !== "pass") {
+      const detail = githubRemote?.detail ?? "check unavailable";
+      const hint = githubRemote?.fixHint ? ` — ${githubRemote.fixHint}` : "";
+      failed.push(`github-remote: ${detail}${hint}`);
+    }
+    if (!ghCli || ghCli.status !== "pass") {
+      const detail = ghCli?.detail ?? "check unavailable";
+      const hint = ghCli?.fixHint ? ` — ${ghCli.fixHint}` : "";
+      failed.push(`gh-cli: ${detail}${hint}`);
+    }
+    if (failed.length > 0) {
+      return {
+        status: "failed",
+        error:
+          "copilot-coding-agent worker requires a GitHub repo. " +
+          "Run 'pforge github status' for diagnostics.\n" +
+          failed.join("\n"),
+        code: "COPILOT_AGENT_PREFLIGHT_FAILED",
+        planPath,
+      };
+    }
   }
 
   // Pre-flight: lint gate commands before burning time on execution
@@ -3892,6 +3934,7 @@ export async function runPlan(planPath, options = {}) {
           cwd, model: effectiveModel, modelRouting, mode, runDir, maxRetries,
           memoryEnabled, projectName, planName: basename(planPath, ".md"),
           quorumConfig, escalationChain, eventBus,
+          worker, _dispatchSlice, _pollPullRequest,
         });
         if (result.status === "passed") {
           result.autoCommit = autoCommitSliceIfDirty({ slice, cwd, mode, eventBus, startSha });
@@ -7285,7 +7328,11 @@ async function executeSlice(slice, options) {
     memoryEnabled = false, projectName = "", planName = "",
     quorumConfig = null,
     escalationChain = ["auto", "claude-opus-4.7", "gpt-5.3-codex"],
-    eventBus = null } = options;
+    eventBus = null,
+    worker = null,
+    _dispatchSlice = _dispatchSliceDefault,
+    _pollPullRequest = _pollPullRequestDefault,
+  } = options;
   const startTime = Date.now();
   const resolvedModel = resolveModel(model, modelRouting, slice);
 
@@ -7518,6 +7565,34 @@ async function executeSlice(slice, options) {
         worker: "human",
         model: "human",
       };
+    } else if (worker === "copilot-coding-agent") {
+      // Phase GITHUB-B Slice 3 — dispatch via GitHub Issue + poll for PR.
+      // Uses injected _dispatchSlice / _pollPullRequest for testability.
+      try {
+        const issueResult = _dispatchSlice(slice, { cwd });
+        const prResult = await _pollPullRequest(issueResult.issueNumber, {
+          cwd,
+          intervalMs: DEFAULT_POLL_INTERVAL_MS,
+          timeoutMs: DEFAULT_TIMEOUT_MS,
+        });
+        const timedOut = prResult.status === "timeout";
+        workerResult = {
+          output: JSON.stringify({ ...issueResult, pr: prResult }),
+          exitCode: timedOut ? 1 : 0,
+          worker: "copilot-coding-agent",
+          model: "copilot-coding-agent",
+          stderr: timedOut
+            ? `Copilot did not open a PR within the polling timeout (issue #${issueResult.issueNumber})`
+            : "",
+        };
+      } catch (err) {
+        return {
+          status: "failed",
+          duration: Date.now() - startTime,
+          error: err.message,
+          attempts: attempt + 1,
+        };
+      }
     } else {
       try {
         workerResult = await spawnWorker(sliceInstructions, { model: currentModel, cwd, runPlanActive: true });

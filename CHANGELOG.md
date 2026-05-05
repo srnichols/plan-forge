@@ -7,7 +7,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-## [2.90.4] — 2026-05-05 — Hotfix: Copilot Coding Agent Enablement Detector (`copilot-coding-agent-assignable`)
+## [2.90.5] — 2026-05-05 — Hotfix: Sequencer Hardening Sweep
+
+> **One-liner**: Hardens `scripts/sequence-plans.ps1` into a tested, documented, module-backed sequencer. Extracts shared helpers into `scripts/sequence-plans.psm1`, adds a `-WhatIf` dry-run switch and `-MaxWaitMinutes` watch cap, ships a bash equivalent (`scripts/sequence-plans.sh`), adds Pester unit tests (`scripts/tests/sequence-plans.tests.ps1`), and creates `scripts/README.md` with full usage examples and scenario documentation.
+
+### Added — Hotfix v2.90.5
+
+- **`scripts/sequence-plans.psm1`** — PowerShell module exporting `Get-CurrentOrchestratorPid`, `Test-OrchestratorAlive`, `Get-LatestRunDir`, and `Get-RunStatus`. Extracted from the live-fixed sequencer script for testability. `Get-RunStatus` correctly inspects the `run-completed` JSON payload (`"failed": N`) and treats an absent terminal event as `in-progress` (safe failure).
+- **`-WhatIf` switch** on `sequence-plans.ps1` — dry-run mode that prints what the sequencer would do (commit, push, dispatch) without executing any side effects. Safe for CI pre-flight checks.
+- **`-MaxWaitMinutes` parameter** (default 240) — bounds the orchestrator watch loop. After the cap, the sequencer exits 1 with a timeout message rather than polling indefinitely.
+- **`scripts/tests/sequence-plans.tests.ps1`** — Pester test file covering five `Get-RunStatus` scenarios (clean run, failed count > 0, explicit `run-failed`/`run-aborted` events, no terminal event, missing events.log) using fixture files created in a temp directory.
+- **`scripts/sequence-plans.sh`** — Bash equivalent of `sequence-plans.ps1` for Linux/macOS, with feature-parity on the core chain-condition logic (`get_run_status`, `--whatif`, `--max-wait-minutes`).
+- **`scripts/README.md`** — new documentation file describing the sequencer family: usage examples for both PowerShell and Bash, parameter table, `-WhatIf` output example, exit codes, chaining conditions, the four chaining scenarios, and the module API.
+
+### Changed — Hotfix v2.90.5
+
+- **`scripts/sequence-plans.ps1`** refactored to `Import-Module` the new `sequence-plans.psm1` module instead of inlining the helper functions. Behaviour is identical; the refactor enables unit testing of the helpers.
+
+## [2.90.4]— 2026-05-05 — Hotfix: Copilot Coding Agent Enablement Detector (`copilot-coding-agent-assignable`)
 
 > **One-liner**: Adds a `copilot-coding-agent-assignable` check to `inspectGithubStack()` (backing `pforge github status` / `forge_github_status`) that probes whether `@copilot` is an assignable user on the configured remote. Without a token the check returns `na`; with `--gh-token` it calls the GitHub Assignees API and returns `pass`, `warn` (Copilot not enabled), or `fail` (API error). The orchestrator's `--worker copilot-coding-agent` pre-flight always invokes the probe and promotes `warn` to a hard fail — preventing the silent 30-min polling timeout that occurred in the Phase GITHUB-C dogfood when the assignee was silently dropped.
 

@@ -5729,6 +5729,8 @@ export function lintGateCommands(planFilePath, cwd = process.cwd()) {
   const warnings = [];
   const errors = [];
   const portabilityWarnings = [];
+  // Strict mode: PFORGE_GATE_LINT_STRICT=1 promotes all W-rule warnings to errors.
+  const strictMode = process.env.PFORGE_GATE_LINT_STRICT === "1";
   const lastSliceNumber = plan.slices.length > 0
     ? plan.slices[plan.slices.length - 1].number
     : null;
@@ -5738,8 +5740,15 @@ export function lintGateCommands(planFilePath, cwd = process.cwd()) {
 
     // Also lint raw lines for comment detection before coalescing
     const rawLines = slice.validationGate.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+    // Parse per-gate suppression directives: # pforge-lint-disable W1 or # pforge-lint-disable W1,W2
+    const disabledRules = new Set();
     for (const raw of rawLines) {
-      if (raw.startsWith("#")) {
+      const disableMatch = raw.match(/^#\s*pforge-lint-disable\s+(.+)$/i);
+      if (disableMatch) {
+        for (const rid of disableMatch[1].split(",").map(s => s.trim().toUpperCase()).filter(Boolean)) {
+          disabledRules.add(rid);
+        }
+      } else if (raw.startsWith("#")) {
         const loc = `Slice ${slice.number} ("${slice.title}")`;
         warnings.push({
           slice: slice.number,
@@ -5879,13 +5888,14 @@ export function lintGateCommands(planFilePath, cwd = process.cwd()) {
 
       // W1. bash -c prefix pitfall — wrapping cross-platform commands in bash is
       // unnecessary and fails on Windows where bash is not in PATH by default.
-      if (/^bash\s+-c\b/.test(line)) {
-        warnings.push({
+      if (/^bash\s+-c\b/.test(line) && !disabledRules.has("W1")) {
+        const _sev = strictMode ? "error" : "warn";
+        (_sev === "error" ? errors : warnings).push({
           slice: slice.number,
           command: line,
           ruleId: "W1",
           rule: "bash-prefix",
-          severity: "warn",
+          severity: _sev,
           message: `${loc}: 'bash -c' prefix detected — fails on Windows (bash not in PATH). Rewrite as a direct node/npx command or use 'pwsh -Command' instead.`,
         });
       }
@@ -5895,13 +5905,14 @@ export function lintGateCommands(planFilePath, cwd = process.cwd()) {
       // hasShellChain, but wrapping in a 'node -e' script that uses child_process
       // is more portable and avoids cmd.exe quirks.  Skip lines already caught by
       // W1 (bash -c prefix), which legitimately use pipes inside the bash string.
-      if (!/^bash\s+-c\b/.test(line) && /^(node|npx|pwsh)\b.*\|/.test(line)) {
-        warnings.push({
+      if (!/^bash\s+-c\b/.test(line) && /^(node|npx|pwsh)\b.*\|/.test(line) && !disabledRules.has("W2")) {
+        const _sev = strictMode ? "error" : "warn";
+        (_sev === "error" ? errors : warnings).push({
           slice: slice.number,
           command: line,
           ruleId: "W2",
           rule: "pipeline-node",
-          severity: "warn",
+          severity: _sev,
           message: `${loc}: Shell pipeline with '${cmdToken}' as left operand — cmd.exe may handle this differently. Consider wrapping in a 'node -e' script that uses child_process for portability.`,
         });
       }
@@ -5913,13 +5924,14 @@ export function lintGateCommands(planFilePath, cwd = process.cwd()) {
       // at the shell level — making the compiled regex match a literal backslash
       // followed by 's' rather than the whitespace class.  The heuristic fires when
       // two consecutive backslashes precede a metachar in the gate string as stored.
-      if (/^node\s+-e\s+.*\\\\[sdwSDWbBntr]/.test(line)) {
-        warnings.push({
+      if (/^node\s+-e\s+.*\\\\[sdwSDWbBntr]/.test(line) && !disabledRules.has("W3")) {
+        const _sev = strictMode ? "error" : "warn";
+        (_sev === "error" ? errors : warnings).push({
           slice: slice.number,
           command: line,
           ruleId: "W3",
           rule: "regex-escape",
-          severity: "warn",
+          severity: _sev,
           message: `${loc}: node -e contains '\\\\<metachar>' — the double-backslash is likely an over-escape; cmd.exe strips one level, so the regex may not match as intended. Use a single '\\' for regex escapes inside node -e strings.`,
         });
       }
@@ -5927,13 +5939,14 @@ export function lintGateCommands(planFilePath, cwd = process.cwd()) {
       // W4. cd-chain pitfall — 'cd dir && command' does not change the working
       // directory for the subsequent command on Windows cmd.exe.  Use the
       // command's own --cwd / --project flag, or spawn with { cwd: '...' }.
-      if (/\bcd\s+\S+.*&&/.test(line)) {
-        warnings.push({
+      if (/\bcd\s+\S+.*&&/.test(line) && !disabledRules.has("W4")) {
+        const _sev = strictMode ? "error" : "warn";
+        (_sev === "error" ? errors : warnings).push({
           slice: slice.number,
           command: line,
           ruleId: "W4",
           rule: "cd-chain",
-          severity: "warn",
+          severity: _sev,
           message: `${loc}: 'cd dir && command' chain — on Windows cmd.exe the directory change does not persist for the next command. Use a --cwd flag or run commands from the target directory directly.`,
         });
       }

@@ -7,7 +7,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-## [2.90.0] — 2026-05-05 — Phase GITHUB-B.1: --worker CLI plumbing + REAL Section 9 dogfood capture
+## [2.90.1] — 2026-05-05 — Hotfix: Test-Sweep Deadlock Guard (output watchdog)
+
+> **One-liner**: Adds a streaming-output watchdog to `spawnWorker` in `pforge-mcp/orchestrator.mjs` that fires a `slice-output-stalled` event and kills the subprocess when no stdout/stderr bytes arrive for `PFORGE_WORKER_OUTPUT_IDLE_MS` (default 8 min). Prevents the silent 25-min deadlock observed in Phase B Slice 9 and Phase D Slice 7 of the GitHub-stack dogfood.
+
+### Added — Hotfix v2.90.1
+
+- **`DEFAULT_WORKER_OUTPUT_IDLE_MS = 480_000`** (8 min) constant exported from `pforge-mcp/orchestrator.mjs` — the baseline idle threshold before the watchdog fires.
+- **`resolveWorkerOutputIdleMs()`** — env-var resolver (mirrors `resolveGateTimeoutMs` shape). Reads `PFORGE_WORKER_OUTPUT_IDLE_MS`; falls back to default on absent, zero, negative, or non-numeric values. Positive float values are accepted.
+- **Idle-timer inside `spawnWorker`** — resets on every `data` event from stdout and stderr. When the timer fires: subprocess is SIGKILL'd, `spawnWorker` resolves with `{ exitCode: -1, stalled: true, stallDurationMs }`, and the orchestrator emits a `slice-output-stalled` event with `{ sliceId, sliceTitle, stallDurationMs, lastBytesAtIso }` before the standard `slice-failed` event.
+- **Watchdog skipped in `--dry-run` / `--estimate` mode** — no subprocess is spawned in those modes, so the timer is never installed.
+- **`pforge-mcp/tests/spawn-worker-output-watchdog.test.mjs`** — 8 vitest cases covering: silent-killed, output-flows, env-override (positive int, positive float, non-numeric fallback, empty-string fallback, negative fallback), and env-zero-falls-back-to-default.
+- **Worker output watchdog section** in `.github/instructions/plan-gate-command-rules.md` — documents `PFORGE_WORKER_OUTPUT_IDLE_MS`, the 8-min default, disable/soften patterns, and the `slice-output-stalled` event shape.
+
+### Environment variable
+
+| Variable | Default | Notes |
+|---|---|---|
+| `PFORGE_WORKER_OUTPUT_IDLE_MS` | `480000` (8 min) | Positive integer/float → override threshold. `0`, negative, or non-numeric → fall back to default. Set to a large value (e.g. `86400000`) to effectively soften the watchdog without disabling it. |
+
+## [2.90.0]— 2026-05-05 — Phase GITHUB-B.1: --worker CLI plumbing + REAL Section 9 dogfood capture
 
 > **One-liner**: Closes the gap between Phase B Slice 3 (orchestrator API supports `--worker copilot-coding-agent`) and the actual CLI dispatchers. The first dogfood attempt fell through to standard `gh-copilot` because `pforge.ps1`/`pforge.sh`/`orchestrator.mjs` argv parser never read `--worker`. This release wires the flag through all three layers and re-runs the dogfood for real — producing GitHub Issue #150 via genuine `gh issue create --assignee @copilot`. Copilot Coding Agent didn't pick it up (likely not enabled at the repo level), so the issue was closed without merge, but the dispatch pipeline is now verified end-to-end with both findings honestly captured in Section 9.
 

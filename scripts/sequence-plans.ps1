@@ -90,8 +90,8 @@ if (-not $initialPid) {
   }
   $finalStatus = Get-RunStatus -RunDir $runDir
   Write-Stamp "Orchestrator PID $initialPid exited. Final status: $finalStatus" Green
-  if ($finalStatus -eq "failed") {
-    Write-Stamp "Run failed — NOT proceeding to next plan. Inspect: $runDir" Red
+  if ($finalStatus -ne "completed") {
+    Write-Stamp "Run did not reach 'completed' (status=$finalStatus) - NOT proceeding to next plan. Inspect: $runDir" Red
     exit 1
   }
 }

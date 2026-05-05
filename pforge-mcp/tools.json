@@ -525,7 +525,7 @@
   },
   {
     "name": "forge_run_plan",
-    "description": "Execute a hardened plan — spawn CLI workers for each slice, validate at every boundary, track tokens. Supports Full Auto (gh copilot CLI) and Assisted (human + automated gates) modes. Use --estimate for cost prediction without executing. Plans without crucibleId frontmatter are rejected — pass manualImport:true (with optional manualImportSource / manualImportReason) to bypass the Crucible gate; bypasses are logged to .forge/crucible/manual-imports.jsonl.",
+    "description": "Execute a hardened plan — spawn CLI workers for each slice, validate at every boundary, track tokens. Supports Full Auto (gh copilot CLI) and Assisted (human + automated gates) modes. Use --estimate for cost prediction without executing.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1678,7 +1678,7 @@
   },
   {
     "name": "forge_crucible_finalize",
-    "description": "Finalize a smelt — atomically claim the next phase number, write docs/plans/Phase-NN.md with a `crucibleId:` frontmatter stamp, and mark the smelt finalized. Refuses to finalize when critical fields (scope-in/scope-files, validation-gates, forbidden-actions) are unresolved. Refuses to overwrite an existing plan unless `overwrite:true` is passed (Issue #137); a side-by-side `Phase-NN.crucible-draft.md` is written instead. Returns inferred build/test commands when a recognized manifest (package.json, *.csproj, Cargo.toml, pyproject.toml, go.mod) is present. USE FOR: closing the idea→spec workflow when the interview is done.",
+    "description": "Finalize a smelt — atomically claim the next phase number, write docs/plans/Phase-NN.md with a `crucibleId:` frontmatter stamp, and mark the smelt finalized. Refuses to overwrite an existing plan unless `overwrite:true` is passed (Issue #137). Returns the chosen phase name and the plan path. USE FOR: closing the idea→spec workflow when the interview is done.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1688,7 +1688,7 @@
         },
         "overwrite": {
           "type": "boolean",
-          "description": "Issue #137 — when true, replaces an existing docs/plans/Phase-NN.md. When false (default), refuses if the file exists and writes a side-by-side `Phase-NN.crucible-draft.md` instead."
+          "description": "Issue #137 — when true, replaces an existing docs/plans/Phase-NN.md. When false (default), refuses if the file exists and instead writes a side-by-side `Phase-NN.crucible-draft.md`."
         },
         "path": {
           "type": "string",
@@ -2259,7 +2259,7 @@
       "drain-loop",
       "tempering-drain"
     ],
-    "cost": "high",
+    "cost": "medium",
     "maxConcurrent": 1,
     "addedIn": "2.80.0",
     "prerequisites": [
@@ -2267,9 +2267,7 @@
       "dev server running (for content-audit scanner)"
     ],
     "produces": [
-      ".forge/audits/dev-*.json",
-      ".forge/audits/dev-<ts>.json",
-      ".forge/tempering/drain-history.jsonl"
+      ".forge/audits/dev-*.json"
     ],
     "consumes": [
       ".forge.json#audit",
@@ -2289,14 +2287,6 @@
       "NO_SCANNERS": {
         "message": "No scanners matched the requested set",
         "recovery": "Omit scanners param to run all available scanners"
-      },
-      "MISSING_PROJECTDIR": {
-        "message": "projectDir / path is required",
-        "recovery": "Pass --path <dir> on the CLI or projectDir in the tool args"
-      },
-      "MAX_ROUNDS_EXCEEDED": {
-        "message": "Drain did not converge within maxRounds (default: 5, max: 20)",
-        "recovery": "Increase maxRounds, narrow the scanners list, or address findings shown in drain-history.jsonl before retrying"
       }
     },
     "example": {
@@ -2398,10 +2388,6 @@
       "INVALID_FINDING": {
         "message": "Finding object is required with at least a title field",
         "recovery": "Provide a finding object from a scanner result"
-      },
-      "MISSING_FINDING": {
-        "message": "finding object is required",
-        "recovery": "Pass a finding object (with class, severity, route, evidence) from a tempering scanner result"
       }
     },
     "example": {

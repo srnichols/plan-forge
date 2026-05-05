@@ -1,0 +1,239 @@
+[
+  {
+    "date": "2024-11-01",
+    "total_active_users": 24,
+    "total_engaged_users": 20,
+    "copilot_ide_code_completions": {
+      "total_engaged_users": 18,
+      "languages": [
+        {
+          "name": "python",
+          "total_engaged_users": 5,
+          "total_code_suggestions": 249,
+          "total_code_acceptances": 123,
+          "total_code_lines_suggested": 225,
+          "total_code_lines_accepted": 135
+        },
+        {
+          "name": "javascript",
+          "total_engaged_users": 7,
+          "total_code_suggestions": 316,
+          "total_code_acceptances": 161,
+          "total_code_lines_suggested": 283,
+          "total_code_lines_accepted": 168
+        }
+      ],
+      "editors": [
+        {
+          "name": "vscode",
+          "total_engaged_users": 13
+        }
+      ]
+    },
+    "copilot_ide_chat": {
+      "total_engaged_users": 10
+    },
+    "copilot_dotcom_chat": {
+      "total_engaged_users": 4
+    },
+    "copilot_dotcom_pull_requests": {
+      "total_engaged_users": 6,
+      "repositories": [
+        {
+          "name": "sample-org/api",
+          "total_engaged_users": 4,
+          "models": [
+            {
+              "name": "default",
+              "is_custom_model": false,
+              "total_pr_summaries_created": 5,
+              "total_engaged_users": 4
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "date": "2024-11-02",
+    "total_active_users": 26,
+    "total_engaged_users": 22,
+    "copilot_ide_code_completions": {
+      "total_engaged_users": 19,
+      "languages": [
+        {
+          "name": "python",
+          "total_engaged_users": 6,
+          "total_code_suggestions": 301,
+          "total_code_acceptances": 148,
+          "total_code_lines_suggested": 270,
+          "total_code_lines_accepted": 152
+        },
+        {
+          "name": "typescript",
+          "total_engaged_users": 8,
+          "total_code_suggestions": 420,
+          "total_code_acceptances": 210,
+          "total_code_lines_suggested": 390,
+          "total_code_lines_accepted": 205
+        }
+      ],
+      "editors": [
+        {
+          "name": "vscode",
+          "total_engaged_users": 15
+        }
+      ]
+    },
+    "copilot_ide_chat": {
+      "total_engaged_users": 12
+    },
+    "copilot_dotcom_chat": {
+      "total_engaged_users": 5
+    },
+    "copilot_dotcom_pull_requests": {
+      "total_engaged_users": 7,
+      "repositories": [
+        {
+          "name": "sample-org/api",
+          "total_engaged_users": 5,
+          "models": [
+            {
+              "name": "default",
+              "is_custom_model": false,
+              "total_pr_summaries_created": 7,
+              "total_engaged_users": 5
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "date": "2024-11-03",
+    "total_active_users": 20,
+    "total_engaged_users": 17,
+    "copilot_ide_code_completions": {
+      "total_engaged_users": 14,
+      "languages": [
+        {
+          "name": "python",
+          "total_engaged_users": 4,
+          "total_code_suggestions": 198,
+          "total_code_acceptances": 99,
+          "total_code_lines_suggested": 180,
+          "total_code_lines_accepted": 101
+        }
+      ],
+      "editors": [
+        {
+          "name": "vscode",
+          "total_engaged_users": 10
+        }
+      ]
+    },
+    "copilot_ide_chat": {
+      "total_engaged_users": 8
+    },
+    "copilot_dotcom_chat": {
+      "total_engaged_users": 3
+    },
+    "copilot_dotcom_pull_requests": {
+      "total_engaged_users": 4,
+      "repositories": []
+    }
+  },
+  {
+    "date": "2024-11-04",
+    "total_active_users": 28,
+    "total_engaged_users": 24,
+    "copilot_ide_code_completions": {
+      "total_engaged_users": 20,
+      "languages": [
+        {
+          "name": "python",
+          "total_engaged_users": 6,
+          "total_code_suggestions": 330,
+          "total_code_acceptances": 175,
+          "total_code_lines_suggested": 310,
+          "total_code_lines_accepted": 180
+        },
+        {
+          "name": "go",
+          "total_engaged_users": 5,
+          "total_code_suggestions": 210,
+          "total_code_acceptances": 118,
+          "total_code_lines_suggested": 195,
+          "total_code_lines_accepted": 122
+        }
+      ],
+      "editors": [
+        {
+          "name": "vscode",
+          "total_engaged_users": 16
+        },
+        {
+          "name": "neovim",
+          "total_engaged_users": 4
+        }
+      ]
+    },
+    "copilot_ide_chat": {
+      "total_engaged_users": 13
+    },
+    "copilot_dotcom_chat": {
+      "total_engaged_users": 6
+    },
+    "copilot_dotcom_pull_requests": {
+      "total_engaged_users": 8,
+      "repositories": [
+        {
+          "name": "sample-org/backend",
+          "total_engaged_users": 8,
+          "models": [
+            {
+              "name": "default",
+              "is_custom_model": false,
+              "total_pr_summaries_created": 9,
+              "total_engaged_users": 8
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "date": "2024-11-05",
+    "total_active_users": 22,
+    "total_engaged_users": 19,
+    "copilot_ide_code_completions": {
+      "total_engaged_users": 15,
+      "languages": [
+        {
+          "name": "javascript",
+          "total_engaged_users": 9,
+          "total_code_suggestions": 275,
+          "total_code_acceptances": 140,
+          "total_code_lines_suggested": 260,
+          "total_code_lines_accepted": 145
+        }
+      ],
+      "editors": [
+        {
+          "name": "vscode",
+          "total_engaged_users": 11
+        }
+      ]
+    },
+    "copilot_ide_chat": {
+      "total_engaged_users": 9
+    },
+    "copilot_dotcom_chat": {
+      "total_engaged_users": 3
+    },
+    "copilot_dotcom_pull_requests": {
+      "total_engaged_users": 5,
+      "repositories": []
+    }
+  }
+]

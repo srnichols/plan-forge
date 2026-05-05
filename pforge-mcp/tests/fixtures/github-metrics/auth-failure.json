@@ -1,0 +1,5 @@
+{
+  "message": "Token lacks required scopes. Please grant the 'copilot:read' scope to access the Copilot Metrics API.",
+  "documentation_url": "https://docs.github.com/rest/copilot/copilot-metrics#get-copilot-metrics-for-an-organization",
+  "status": "403"
+}

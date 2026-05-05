@@ -35,11 +35,11 @@
         <p class="text-lg text-slate-400 mb-8">The Smelt station. Before a plan can be hardened, the raw ore has to be smelted. Crucible is the stage that happens <em>before</em> Plan Hardening &mdash; where an idea becomes a well-specified Phase plan through a short, structured interview that refuses to finalize until every CRITICAL_FIELD is filled in.</p>
 
         <div class="callout callout-tip">
-          <strong>v2.82.1 hardened</strong>: Crucible now enforces a <strong>critical-fields gate</strong> at finalize time &mdash; plans cannot leave the smelter with placeholder TBDs in <code>build-command</code>, <code>test-command</code>, scope, validation gates, forbidden actions, or rollback. Question counts bumped: feature lane <strong>7</strong> (was 6), tweak lane <strong>4</strong> (was 3). See <a href="#critical-fields">CRITICAL_FIELDS Gate</a> below.
+          <strong>Hardened intake</strong>: Crucible enforces a <strong>critical-fields gate</strong> at finalize time &mdash; plans cannot leave the smelter with placeholder TBDs in <code>build-command</code>, <code>test-command</code>, scope, validation gates, forbidden actions, or rollback. Question counts: feature lane <strong>7</strong>, tweak lane <strong>4</strong>. See <a href="#critical-fields">CRITICAL_FIELDS Gate</a> below.
         </div>
 
         <div class="callout callout-info">
-          <strong>Original (v2.37.0)</strong>: Crucible became the first mandatory pre-hardening stage. Every plan under <code>docs/plans/Phase-*.md</code> must carry a <code>crucibleId</code> in its frontmatter &mdash; either from a smelt, from the <code>--manual-import</code> bypass, or from the grandfather migration.
+          <strong>Mandatory pre-hardening stage</strong>: Every plan under <code>docs/plans/Phase-*.md</code> must carry a <code>crucibleId</code> in its frontmatter &mdash; either from a smelt, from the <code>--manual-import</code> bypass, or from the grandfather migration that runs once on first upgrade.
         </div>
 
         <h2 id="why">Why Smelt Before Hardening?</h2>
@@ -58,12 +58,12 @@
           <div class="p-4 bg-slate-900 border border-slate-800 rounded-lg">
             <div class="text-forge-400 font-semibold mb-1">tweak</div>
             <div class="text-xs text-slate-400 mb-2">4 questions <span class="text-amber-400">(was 3)</span></div>
-            <p class="text-sm">Version bumps, config flag flips, doc edits, small bug fixes. Inferred when the raw idea mentions "bump", "fix typo", "update dep". Adds <code>forbidden-actions</code> question (v2.82.1) so even tiny changes declare what they won't touch.</p>
+            <p class="text-sm">Version bumps, config flag flips, doc edits, small bug fixes. Inferred when the raw idea mentions "bump", "fix typo", "update dep". Adds <code>forbidden-actions</code> as a question so even tiny changes declare what they won't touch.</p>
           </div>
           <div class="p-4 bg-slate-900 border border-slate-800 rounded-lg">
             <div class="text-forge-400 font-semibold mb-1">feature</div>
             <div class="text-xs text-slate-400 mb-2">7 questions <span class="text-amber-400">(was 6)</span></div>
-            <p class="text-sm">Default lane. New endpoint, new tool, new UI section, new service with a handful of slices. Adds <code>forbidden-actions</code> as the 7th question (v2.82.1).</p>
+            <p class="text-sm">Default lane. New endpoint, new tool, new UI section, new service with a handful of slices. Adds <code>forbidden-actions</code> as the 7th question.</p>
           </div>
           <div class="p-4 bg-slate-900 border border-slate-800 rounded-lg">
             <div class="text-forge-400 font-semibold mb-1">full</div>
@@ -81,7 +81,7 @@ forge_crucible_finalize{ id, overwrite? }                → { phaseName, planPa
 forge_crucible_list    { status? }                       → [ smelts … ]
 forge_crucible_abandon { id, reason? }                   → { ok }</code></pre>
 
-        <p><strong>Optional <code>questionId</code> on <code>ask</code> (v2.82.1)</strong>: pass the question id you're answering. If it doesn't match the server's pending question id, the call returns <code>409</code> with <code>ASK_QUESTION_MISMATCH</code> and an <code>{ expected, got }</code> payload. Multi-turn LLM clients that fall out of sync get a loud failure instead of silent answer corruption.</p>
+        <p><strong>Optional <code>questionId</code> on <code>ask</code></strong>: pass the question id you're answering. If it doesn't match the server's pending question id, the call returns <code>409</code> with <code>ASK_QUESTION_MISMATCH</code> and an <code>{ expected, got }</code> payload. Multi-turn LLM clients that fall out of sync get a loud failure instead of silent answer corruption.</p>
 
         <p><strong>Build/test command inference</strong>: when the build-command or test-command questions come up, the interview pre-fills suggestions via <code>inferRepoCommands</code> &mdash; it inspects <code>package.json</code> scripts, <code>*.csproj</code>, <code>pyproject.toml</code>, <code>Cargo.toml</code>, <code>go.mod</code>, etc. You usually just confirm.</p>
 

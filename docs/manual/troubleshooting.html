@@ -133,7 +133,7 @@
       </table>
 
       <h2 id="crucible-issues">Crucible Finalize Fails <span class="text-amber-400 text-base font-normal">v2.82.1+</span></h2>
-      <p>The Crucible critical-fields gate (v2.82.1) refuses to draft TBD-laden plans. If finalize keeps returning <code>CRITICAL_FIELDS_MISSING</code>, the recovery path is:</p>
+      <p>The Crucible critical-fields gate refuses to draft TBD-laden plans. If finalize keeps returning <code>CRITICAL_FIELDS_MISSING</code>, the recovery path is:</p>
 
       <ol>
         <li><code>forge_crucible_preview { id }</code> &mdash; returns <code>criticalGaps: [{ field, reason, hint }, &hellip;]</code></li>
@@ -157,7 +157,7 @@
       <p>See <a href="forge-master.html#troubleshooting">Forge-Master chapter &mdash; Troubleshooting</a> for the full list.</p>
 
       <h2 id="host-routing">Host-Aware Routing Confusion <span class="text-amber-400 text-base font-normal">v2.82+</span></h2>
-      <p>v2.82 added host-aware routing so users on Claude Code / Cursor / Windsurf / Zed don't silently double-pay against their non-Copilot subscription when calling <code>gpt-*</code> models. If you're seeing surprising routing behavior:</p>
+      <p>Host-aware routing detects which IDE / CLI host you're running Plan Forge from (VS Code + Copilot, Claude Code, Cursor, Windsurf, Zed, bare terminal) so you don't silently double-pay against your non-Copilot subscription when calling <code>gpt-*</code> models. If you're seeing surprising routing behavior:</p>
 
       <table>
         <thead><tr><th>Symptom</th><th>What's happening</th><th>Override</th></tr></thead>

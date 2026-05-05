@@ -26,6 +26,30 @@
       <p class="text-lg text-slate-400 mb-8">Every Plan Forge term defined.</p>
       <p class="text-sm text-slate-500 mb-6">Auto-generated from <code>capabilities.mjs</code> glossary, hand-edited for clarity.</p>
 
+      <!-- ─── Getting Started ─── -->
+      <h2 id="getting-started">Getting Started: Read These Five First</h2>
+      <p>If you're new to Plan Forge, these five terms unlock 80% of the manual. They build on each other in this order:</p>
+
+      <ol class="space-y-3 my-6 ml-6 list-decimal">
+        <li>
+          <strong><a href="#core" class="text-forge-400">Plan Forge</a></strong> &mdash; the whole shop. A workshop with four stations (Smelt, Forge, Guard, Learn) that take an idea from "vague feature request" all the way to "shipped, monitored, and remembered."
+        </li>
+        <li>
+          <strong><a href="#core" class="text-forge-400">Plan</a></strong> &mdash; a Markdown file in <code>docs/plans/</code> that describes one feature. The unit of work Plan Forge operates on.
+        </li>
+        <li>
+          <strong><a href="#core" class="text-forge-400">Scope contract</a></strong> &mdash; the section of the plan that says exactly which files are in-scope, out-of-scope, and forbidden. Without this, AI agents drift into unrelated code.
+        </li>
+        <li>
+          <strong><a href="#core" class="text-forge-400">Slice</a></strong> &mdash; one numbered step inside a plan. Plans are broken into 3&ndash;7 slices so the AI works in checkpointed chunks. Each slice ends at a validation gate.
+        </li>
+        <li>
+          <strong><a href="#core" class="text-forge-400">Validation gate</a></strong> &mdash; a concrete shell command (e.g., <code>dotnet test</code>) that must pass before the next slice runs. Gates are how Plan Forge knows the AI didn't break anything.
+        </li>
+      </ol>
+
+      <p class="text-sm text-slate-500 mb-8">Read those five and you can follow the rest of the manual without backtracking. The full alphabetical reference begins below, organized by topic.</p>
+
       <h2 id="core">Core Concepts</h2>
       <table>
         <thead><tr><th>Term</th><th>Definition</th></tr></thead>

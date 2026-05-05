@@ -52,7 +52,7 @@
         </table>
 
         <div class="callout callout-info">
-          <strong>Field aliases (v2.82.1)</strong>: Per-slice scope can be authored as either <code>**Files:**</code> or <code>**Files in scope**</code> (the latter is what the Crucible/hardener now emit). Validation gates can be authored as either <code>**Validation Gate**</code> or <code>**Exit gate**</code>. The orchestrator parses both. Hand-authored plans following the convention should prefer the <code>Files in scope</code> + <code>Exit gate</code> pair to match generated output.
+          <strong>Field aliases</strong>: Per-slice scope can be authored as either <code>**Files:**</code> or <code>**Files in scope**</code> (the latter is what the Crucible/hardener now emit). Validation gates can be authored as either <code>**Validation Gate**</code> or <code>**Exit gate**</code>. The orchestrator parses both. Hand-authored plans following the convention should prefer the <code>Files in scope</code> + <code>Exit gate</code> pair to match generated output.
         </div>
 
         <!-- ─── CRITICAL_FIELDS gate ─── -->
@@ -106,7 +106,7 @@
         </div>
 
         <div class="callout callout-info">
-          <strong>Forbidden Actions come from the Crucible interview</strong>: The 7th feature-lane question (added v2.82.1) explicitly asks for forbidden actions. Answers like &ldquo;don't touch the migrations folder&rdquo; or &ldquo;don't add new NuGet packages without approval&rdquo; flow directly into this section as concrete patterns. If you skip the interview and hand-author the plan, write them as <em>file patterns or named actions</em> &mdash; not vibes.
+          <strong>Forbidden Actions come from the Crucible interview</strong>: The 7th feature-lane question explicitly asks for forbidden actions. Answers like &ldquo;don't touch the migrations folder&rdquo; or &ldquo;don't add new NuGet packages without approval&rdquo; flow directly into this section as concrete patterns. If you skip the interview and hand-author the plan, write them as <em>file patterns or named actions</em> &mdash; not vibes.
         </div>
 
         <p>"Anything related to users" gives the AI free rein to refactor 20 files. "Don't break things" isn't enforceable. Be specific about paths, and list forbidden actions as concrete file patterns. That's how you get lasagna code — clean layers, each with a purpose — instead of spaghetti where everything touches everything.</p>

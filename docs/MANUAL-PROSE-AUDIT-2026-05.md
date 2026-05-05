@@ -162,14 +162,14 @@ These are surgical edits to existing chapters. Each is 30-60 min of work.
 
 Edit this list as items are completed. Date format: YYYY-MM-DD.
 
-### Tier 1 (surgical edits, low cost)
+### Tier 1 (surgical edits, low cost) ✅ COMPLETE
 
-- [ ] [2026-MM-DD] "Plan Forge in 5 terms" callout in what-is-plan-forge.html
-- [ ] [2026-MM-DD] Version-speak strip across 5 chapters
-- [ ] [2026-MM-DD] Acronym expansions (MCP, OTLP, RBAC, RFC 7807)
-- [ ] [2026-MM-DD] how-it-works.html duplicate paragraph fix
-- [ ] [2026-MM-DD] dashboard.html "25 tabs" → "33 tabs"
-- [ ] [2026-MM-DD] glossary.html Getting Started section
+- [x] [2026-05-04] "Plan Forge in 5 terms" callout in what-is-plan-forge.html — added right under the One-Line Answer; defines Plan, Slice, Scope contract, Validation gate, Hardened plan with one sentence each
+- [x] [2026-05-04] Version-speak strip across 5 chapters — removed `(v2.82.1)` / `v2.82 added` / `v2.57.0 adds` / `v2.16+` / `Phase-30 broke` / `Original (v2.37.0)` interruptions from body prose. Kept version chips on H2/H3 headings (those answer "is my install current?") and in the Common Errors table where they identify when an error code was introduced
+- [x] [2026-05-04] Acronym expansions — `MCP` → `MCP (Model Context Protocol)`, `OTLP` → `OTLP (OpenTelemetry Protocol)`, `RBAC` → `RBAC (role-based access control)`, `ProblemDetails` → `ProblemDetails (RFC 7807 standard JSON error responses)` on first use per chapter
+- [x] [2026-05-04] how-it-works.html duplicate paragraph fix — removed the italic prose paragraph that repeated the diagram caption verbatim
+- [x] [2026-05-04] dashboard.html "25 tabs" → "33 tabs across 4 top-level groups" — fixed contradiction between headline number and body content
+- [x] [2026-05-04] glossary.html "Getting Started: Read These Five First" section — numbered list of Plan Forge → Plan → Scope contract → Slice → Validation gate, each with anchor to its full entry, before the alphabetical reference begins
 
 ### Tier 2 (medium cost)
 

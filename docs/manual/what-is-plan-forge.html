@@ -39,6 +39,19 @@
         <p><strong>Plan Forge is a complete AI-native SDLC workshop.</strong> Instead of giving your AI agent a single code-generation step, it gives the agent <em>a whole shop</em> — four specialized stations (Smelt, Forge, Guard, Learn) connected by gates, telemetry, and persistent memory.</p>
         <p class="text-sm text-slate-500 italic">"A blacksmith without a shop is just a hammer in a hand."</p>
 
+        <!-- ─── Plan Forge in 5 terms ─── -->
+        <div class="callout callout-info">
+          <strong>Plan Forge in 5 terms</strong> &mdash; you'll see these everywhere; bookmark them now.
+          <ul class="mt-2 space-y-1 text-sm">
+            <li><strong>Plan</strong> &mdash; a Markdown file in <code>docs/plans/</code> describing one feature: what to build, what files it can touch, what tests must pass.</li>
+            <li><strong>Slice</strong> &mdash; one numbered step inside a plan. Plans are broken into 3&ndash;7 slices so the AI works in checkpointed chunks instead of one giant edit.</li>
+            <li><strong>Scope contract</strong> &mdash; the section of the plan that lists exactly which files are in-scope vs out-of-scope vs forbidden. The orchestrator enforces it: edits outside scope are blocked.</li>
+            <li><strong>Validation gate</strong> &mdash; a concrete shell command (e.g., <code>dotnet test</code>) that must pass before the next slice runs. Gates are how Plan Forge knows the AI didn't break anything.</li>
+            <li><strong>Hardened plan</strong> &mdash; a plan that has gone through Step 2 of the pipeline (Plan Hardener), which adds the scope contract, validation gates, forbidden actions, and rollback steps. Plans the AI can execute autonomously must be hardened.</li>
+          </ul>
+          <p class="mt-2 text-xs text-slate-500">All five terms have full entries in the <a href="glossary.html">Glossary</a>.</p>
+        </div>
+
         <!-- ─── The Four Stations ─── -->
         <h2 id="four-stations">The Four Stations</h2>
         <p>Every station handles one phase of the software lifecycle. Every station is AI-run and human-supervised.</p>

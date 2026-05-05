@@ -32,11 +32,11 @@
 
         <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 6</div>
         <h1>The Dashboard</h1>
-        <p class="text-lg text-slate-400 mb-8">25 tabs. Real-time execution monitoring, cost tracking, session replay, one-click actions, watcher live feed, and LiveGuard health.</p>
+        <p class="text-lg text-slate-400 mb-8">33 tabs across 4 top-level groups (Forge / LiveGuard / Forge-Master / Settings). Real-time execution monitoring, cost tracking, session replay, one-click actions, watcher live feed, and LiveGuard health.</p>
 
         <!-- ─── Starting ─── -->
         <h2 id="starting">Starting the Dashboard</h2>
-        <p>The dashboard is part of the MCP server. Start it, then open your browser:</p>
+        <p>The dashboard is part of the MCP server (Model Context Protocol &mdash; the standard that lets AI agents call functions). Start it, then open your browser:</p>
 
         <div class="cmd-block">
           <div class="cmd-block-header"><span>Terminal</span><button class="cmd-copy-btn">Copy</button></div>
@@ -190,8 +190,8 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
         <img src="../assets/dashboard/extensions.png" alt="Dashboard Extensions tab showing visual catalog browser with search, install buttons, and extension details" class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
 
         <!-- ─── Settings Group ─── -->
-        <h2 id="config">Settings Group <span style="color:#c084fc;font-size:0.6em;vertical-align:middle">v2.69+ Phase-30</span></h2>
-        <p>Phase-30 broke the old monolithic <em>Config</em> tab into a top-level <strong>Settings</strong> group with <strong>9 purpose-built sub-tabs</strong>. Settings is one of four top-level groups in the dashboard nav:</p>
+        <h2 id="config">Settings Group <span style="color:#c084fc;font-size:0.6em;vertical-align:middle">v2.69+</span></h2>
+        <p>The Settings group is a top-level container with <strong>9 purpose-built sub-tabs</strong> for platform-wide configuration. It replaced the older single Config tab. Settings is one of four top-level groups in the dashboard nav:</p>
 
         <div class="grid md:grid-cols-2 gap-3 my-4">
           <div class="p-3 bg-slate-900/40 border border-blue-500/20 rounded-lg"><strong class="text-blue-400">🔨 Forge</strong> <span class="text-slate-500 text-xs">(default)</span><br><span class="text-xs text-slate-400">Home · Review · Progress · Crucible · Governance · Runs · Cost · Actions · Replay · Traces · Skills · Tempering · Memory · Timeline · Inner Loop · Extensions</span></div>
@@ -262,7 +262,7 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
 
         <!-- ─── Traces Tab ─── -->
         <h2 id="traces">Traces Tab</h2>
-        <p>OTLP trace waterfall view. Every plan execution emits OpenTelemetry spans:</p>
+        <p>OTLP (OpenTelemetry Protocol) trace waterfall view. Every plan execution emits OpenTelemetry spans:</p>
 
         <table>
           <thead><tr><th>Span</th><th>What It Captures</th></tr></thead>

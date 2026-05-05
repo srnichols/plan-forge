@@ -64,12 +64,12 @@ applyTo: "**/auth/**,**/security/**,**/middleware/**"
         <thead><tr><th>File</th><th>Domain</th><th>Loads When Editing</th></tr></thead>
         <tbody>
           <tr><td><code>api-patterns</code></td><td>REST conventions, pagination, error responses</td><td>Controllers, routes, endpoints</td></tr>
-          <tr><td><code>auth</code></td><td>JWT/OIDC, RBAC, multi-tenant isolation</td><td>Auth modules, middleware</td></tr>
+          <tr><td><code>auth</code></td><td>JWT/OIDC, RBAC (role-based access control), multi-tenant isolation</td><td>Auth modules, middleware</td></tr>
           <tr><td><code>caching</code></td><td>Redis, in-memory cache, TTL strategies</td><td>Cache services, config</td></tr>
           <tr><td><code>database</code></td><td>ORM/query patterns, migrations, connections</td><td>Repositories, SQL, models</td></tr>
           <tr><td><code>dapr</code></td><td>Dapr sidecar patterns, pub/sub, state management</td><td>Dapr config, service invocation</td></tr>
           <tr><td><code>deploy</code></td><td>Dockerfiles, health checks, container optimization</td><td>Dockerfiles, compose, k8s</td></tr>
-          <tr><td><code>errorhandling</code></td><td>Exception hierarchy, ProblemDetails, error boundaries</td><td>Error handlers, middleware</td></tr>
+          <tr><td><code>errorhandling</code></td><td>Exception hierarchy, ProblemDetails (RFC 7807 standard JSON error responses), error boundaries</td><td>Error handlers, middleware</td></tr>
           <tr><td><code>graphql</code></td><td>Schema design, resolvers, query patterns, Hot Chocolate / Apollo</td><td>GraphQL types, resolvers</td></tr>
           <tr><td><code>messaging</code></td><td>Pub/sub, job queues, event-driven patterns</td><td>Event handlers, message consumers</td></tr>
           <tr><td><code>multi-environment</code></td><td>Dev/staging/prod config, environment detection</td><td>Config files, env setup</td></tr>

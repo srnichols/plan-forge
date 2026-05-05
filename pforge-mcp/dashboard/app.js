@@ -53,6 +53,8 @@ const state = {
   },
   // Phase FORGE-SHOP-01 Slice 01.2 — Home tab state.
   home: { snapshot: null, groupByCorrelation: false, refreshTimer: null, lastError: null },
+  // Phase GITHUB-D Slice 6 — GitHub Metrics tab state.
+  githubMetrics: { org: null, lastFetch: null },
   // Phase FORGE-SHOP-05 Slice 05.2 — Timeline tab state.
   timeline: {
     events: [], threads: [], groupBy: "time", correlationId: null,
@@ -4037,6 +4039,7 @@ const tabLoadHooks = {
   timeline: loadTimelineTab,
   innerloop: loadInnerLoop,
   'forge-master': () => { window.forgeMasterOnTabActivate?.(); },
+  'github-metrics': loadGithubMetrics,
   // Phase-30: Settings sub-tabs (content populated in Slices 2-5)
   'settings-general': () => { loadConfig(); },
   'settings-models': () => { loadConfig(); },
@@ -6953,4 +6956,42 @@ document.addEventListener("DOMContentLoaded", () => {
   // Run after the main shell has settled; 250ms is enough for API_BASE to be live.
   setTimeout(() => { welcomeMaybeShowInnerLoop(); }, 250);
 });
+
+// ─── GitHub Metrics Tab ────────────────────────────────────────────────
+async function loadGithubMetrics() {
+  const orgInput = document.getElementById("gm-org-input");
+  const org = orgInput?.value?.trim() || state.githubMetrics.org || "";
+  if (org) state.githubMetrics.org = org;
+
+  const errEl = document.getElementById("gm-error");
+  if (errEl) errEl.classList.add("hidden");
+
+  try {
+    const qs = org ? `?org=${encodeURIComponent(org)}` : "";
+    const body = await fetch(`${API_BASE}/api/github-metrics${qs}`).then((r) => r.json());
+    const { metrics = [], costReport = null } = body;
+
+    const adoptionEl = document.getElementById("gm-adoption-panel");
+    if (adoptionEl) {
+      adoptionEl.innerHTML = window.githubMetricsRenderAdoptionPanel?.(metrics) ?? "";
+    }
+
+    const orchEl = document.getElementById("gm-orchestration-panel");
+    if (orchEl) {
+      orchEl.innerHTML = window.githubMetricsRenderOrchestrationPanel?.(costReport) ?? "";
+    }
+
+    const teamEl = document.getElementById("gm-per-team-panel");
+    if (teamEl) {
+      teamEl.innerHTML = window.githubMetricsRenderPerTeamTable?.([]) ?? "";
+    }
+
+    state.githubMetrics.lastFetch = Date.now();
+  } catch (e) {
+    if (errEl) {
+      errEl.textContent = `Failed to load GitHub metrics: ${e.message}`;
+      errEl.classList.remove("hidden");
+    }
+  }
+}
 

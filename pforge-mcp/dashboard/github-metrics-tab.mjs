@@ -142,6 +142,15 @@ export function renderEmptyState(org) {
 </div>`;
 }
 
+// ─── Browser interop ─────────────────────────────────────────────────────────
+// Expose render helpers to non-module scripts (app.js) via window.
+if (typeof window !== "undefined") {
+  window.githubMetricsRenderAdoptionPanel = renderAdoptionPanel;
+  window.githubMetricsRenderOrchestrationPanel = renderOrchestrationPanel;
+  window.githubMetricsRenderPerTeamTable = renderPerTeamTable;
+  window.githubMetricsRenderEmptyState = renderEmptyState;
+}
+
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
 function formatPercent(val) {

@@ -3368,7 +3368,7 @@ cmd_doctor() {
 cmd_run_plan() {
     if [ $# -lt 1 ]; then
         echo "ERROR: Missing plan path" >&2
-        echo "Usage: pforge run-plan <plan-file> [--estimate] [--assisted] [--model <name>] [--resume-from <N>] [--dry-run] [--foreground] [--no-quorum] [--quorum] [--quorum=auto] [--quorum-threshold <N>] [--strict-gates] [--manual-import [--manual-import-source <human|speckit|grandfather>] [--manual-import-reason <text>]] [--only-slices <expr>] [--no-tempering]" >&2
+        echo "Usage: pforge run-plan <plan-file> [--estimate] [--assisted] [--model <name>] [--worker <name>] [--resume-from <N>] [--dry-run] [--foreground] [--no-quorum] [--quorum] [--quorum=auto] [--quorum-threshold <N>] [--strict-gates] [--manual-import [--manual-import-source <human|speckit|grandfather>] [--manual-import-reason <text>]] [--only-slices <expr>] [--no-tempering]" >&2
         exit 1
     fi
 
@@ -3387,6 +3387,7 @@ cmd_run_plan() {
     local dry_run=false
     local foreground=false
     local model=""
+    local worker=""
     local resume_from=""
     local quorum_arg=""
     local quorum_threshold=""
@@ -3427,6 +3428,12 @@ cmd_run_plan() {
                     echo "ERROR: --model requires a value" >&2; exit 1
                 fi
                 model="$1" ;;
+            --worker)
+                shift
+                if [ -z "$1" ] || [ "${1#-}" != "$1" ]; then
+                    echo "ERROR: --worker requires a value" >&2; exit 1
+                fi
+                worker="$1" ;;
             --resume-from)
                 shift
                 if [ -z "$1" ] || [ "${1#-}" != "$1" ]; then
@@ -3457,6 +3464,7 @@ cmd_run_plan() {
     if [ "$estimate" = true ]; then node_args+=("--estimate"); fi
     if [ "$dry_run" = true ]; then node_args+=("--dry-run"); fi
     if [ -n "$model" ]; then node_args+=("--model" "$model"); fi
+    if [ -n "$worker" ]; then node_args+=("--worker" "$worker"); fi
     if [ -n "$resume_from" ]; then node_args+=("--resume-from" "$resume_from"); fi
     if [ -n "$quorum_arg" ]; then node_args+=("$quorum_arg"); fi
     if [ -n "$quorum_threshold" ]; then node_args+=("--quorum-threshold" "$quorum_threshold"); fi

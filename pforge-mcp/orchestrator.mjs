@@ -11509,6 +11509,10 @@ if (args.includes("--test")) {
 
   const mode = getArg("--mode") || "auto";
   const model = getArg("--model") || null;
+  // Phase GITHUB-B.1: --worker <name> selects a non-default worker. Currently
+  // recognised: "copilot-coding-agent" (Phase GITHUB-B Slice 3 dispatch path).
+  // Falls through to standard worker selection when null.
+  const worker = getArg("--worker") || null;
   const resumeFrom = getArg("--resume-from") ? Number(getArg("--resume-from")) : null;
   const estimate = args.includes("--estimate");
   const dryRun = args.includes("--dry-run");
@@ -11559,6 +11563,7 @@ if (args.includes("--test")) {
       cwd: process.cwd(),
       mode,
       model,
+      worker,
       resumeFrom,
       estimate,
       dryRun,

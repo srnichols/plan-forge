@@ -4032,7 +4032,7 @@ function Invoke-Smith {
 function Invoke-RunPlan {
     if ($Arguments.Count -lt 1) {
         Write-Host "ERROR: Missing plan path" -ForegroundColor Red
-        Write-Host "Usage: pforge run-plan <plan-file> [--estimate] [--assisted] [--model <name>] [--resume-from <N>] [--dry-run] [--foreground] [--no-quorum] [--quorum] [--quorum=auto] [--quorum-threshold <N>] [--strict-gates] [--manual-import [--manual-import-source <human|speckit|grandfather>] [--manual-import-reason <text>]] [--only-slices <expr>] [--no-tempering]" -ForegroundColor Yellow
+        Write-Host "Usage: pforge run-plan <plan-file> [--estimate] [--assisted] [--model <name>] [--worker <name>] [--resume-from <N>] [--dry-run] [--foreground] [--no-quorum] [--quorum] [--quorum=auto] [--quorum-threshold <N>] [--strict-gates] [--manual-import [--manual-import-source <human|speckit|grandfather>] [--manual-import-reason <text>]] [--only-slices <expr>] [--no-tempering]" -ForegroundColor Yellow
         exit 1
     }
 
@@ -4058,11 +4058,15 @@ function Invoke-RunPlan {
     $manualImportSource = $null
     $manualImportReason = $null
     $onlySlices = $null
+    $worker = $null
     $noTempering = $Arguments -contains '--no-tempering'
 
     for ($i = 1; $i -lt $Arguments.Count; $i++) {
         if ($Arguments[$i] -eq '--model' -and ($i + 1) -lt $Arguments.Count) {
             $model = $Arguments[$i + 1]
+        }
+        if ($Arguments[$i] -eq '--worker' -and ($i + 1) -lt $Arguments.Count) {
+            $worker = $Arguments[$i + 1]
         }
         if ($Arguments[$i] -eq '--resume-from' -and ($i + 1) -lt $Arguments.Count) {
             $resumeFrom = $Arguments[$i + 1]
@@ -4102,6 +4106,7 @@ function Invoke-RunPlan {
     if ($estimate)        { $nodeArgs += '--estimate' }
     if ($dryRun)          { $nodeArgs += '--dry-run' }
     if ($model)           { $nodeArgs += '--model'; $nodeArgs += $model }
+    if ($worker)          { $nodeArgs += '--worker'; $nodeArgs += $worker }
     if ($resumeFrom)      { $nodeArgs += '--resume-from'; $nodeArgs += $resumeFrom }
     if ($noQuorum)        { $nodeArgs += '--no-quorum' }
     elseif ($quorumArg)   { $nodeArgs += $quorumArg }

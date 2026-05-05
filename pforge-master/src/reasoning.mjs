@@ -550,6 +550,29 @@ export async function runTurn(input, deps = {}) {
         { dispatch: planDispatch },
       );
 
+      // Issue #153 — surface planner-executed steps as tool-call records so
+      // SSE consumers (and result.toolCalls) can see what the planner ran,
+      // distinguish planner steps from reactive tool calls (`source: "planner"`),
+      // and detect when a step errored. Without this the planner's tool calls
+      // were invisible to the dashboard / API consumers, which made it
+      // impossible to tell whether a hallucinated reply contradicted the
+      // very tool results the planner had pre-fetched.
+      for (const r of execResult.results) {
+        const outputStr = r.error
+          ? `ERROR: ${r.error}`
+          : (typeof r.output === "string" ? r.output : JSON.stringify(r.output ?? null));
+        const summary = outputStr.length > 800 ? outputStr.slice(0, 800) + "…" : outputStr;
+        allToolCalls.push({
+          name: r.step.tool,
+          args: r.step.args || {},
+          resultSummary: summary,
+          costUSD: 0,
+          source: "planner",
+          stepId: r.step.id,
+          ...(r.error && { error: r.error }),
+        });
+      }
+
       // Build synthesis context from executor results
       const lines = execResult.results.map((r) => {
         const status = r.error ? `ERROR: ${r.error}` : "OK";
@@ -726,8 +749,15 @@ export async function runTurn(input, deps = {}) {
 
     // ── Tool calls ──
     if (response.type === "tool_calls" && response.toolCalls) {
-      // Check budget
-      if (allToolCalls.length + response.toolCalls.length > effectiveMaxToolCalls) {
+      // Check budget. Issue #153 — planner-executed steps are bookkept in
+      // allToolCalls for SSE visibility but must not count against the
+      // reactive tool-use budget; otherwise a planner that pre-fetched 5
+      // steps would burn the entire budget before the reactive loop ran.
+      const reactiveCount = allToolCalls.reduce(
+        (n, tc) => (tc.source === "planner" ? n : n + 1),
+        0,
+      );
+      if (reactiveCount + response.toolCalls.length > effectiveMaxToolCalls) {
         // Budget would be exceeded — truncate
         truncated = true;
         finalReply = response.content || "(tool budget exceeded — partial response)";

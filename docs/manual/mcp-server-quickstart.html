@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MCP Server — Quick Start — Plan Forge Manual</title>
+  <meta name="description" content="Start the Plan Forge MCP server and learn the essential tools: forge_capabilities, forge_run_plan, forge_plan_status, forge_smith, forge_abort, forge_diagnose." />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+    <main>
+      <!-- Hero -->
+      <img src="assets/chapter-heroes/ch11-hero.jpg" alt="Isometric server architecture as stacked amber tower-anvils radiating tool icons connected by data streams" class="chapter-hero" />
+      <div class="chapter-content">
+
+      <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 11 · Quick Start</div>
+      <h1>MCP Server — Quick Start</h1>
+      <p class="text-lg text-slate-400 mb-8">Start the server, verify it's running, and call your first forge tools in under five minutes.</p>
+
+      <div class="callout callout-tip">
+        <strong>New to this chapter?</strong> Start at <a href="mcp-server.html">Chapter 11 — MCP Server &amp; Tools</a> for the architecture overview, then return here to get hands-on. The <a href="mcp-server-reference.html">Full Reference</a> has the complete tool tables and REST API.
+      </div>
+
+      <!-- ─── Starting ─── -->
+      <h2 id="starting">Starting the Server</h2>
+      <div class="cmd-block">
+        <div class="cmd-block-header"><span>Terminal</span><button class="cmd-copy-btn">Copy</button></div>
+        <pre><code># Install dependencies (first time only)
+cd pforge-mcp && npm install && cd ..
+
+# Full server: MCP + HTTP + WebSocket
+node pforge-mcp/server.mjs
+
+# Dashboard only (no MCP stdio)
+node pforge-mcp/server.mjs --dashboard-only
+
+# Custom project path
+node pforge-mcp/server.mjs --project /path/to/project</code></pre>
+      </div>
+      <p>With <code>.vscode/mcp.json</code> configured (created by <code>setup.ps1</code> / <code>setup.sh</code>), the server auto-starts when Copilot calls any forge tool — you don't need to start it manually.</p>
+
+      <h3 id="verify">Verify It's Running</h3>
+      <div class="cmd-block">
+        <div class="cmd-block-header"><span>Terminal</span><button class="cmd-copy-btn">Copy</button></div>
+        <pre><code># Check the health endpoint
+curl http://localhost:3100/api/status
+
+# Or open the dashboard in your browser
+open http://localhost:3100</code></pre>
+      </div>
+
+      <!-- ─── Essential Tools ─── -->
+      <h2 id="essential-tools">Essential Tools</h2>
+      <p>These are the tools you'll use most often. Start with <code>forge_capabilities</code> to discover the full surface; use <code>forge_run_plan</code> to execute your work.</p>
+
+      <div class="callout callout-tip">
+        <strong>Discovery first</strong>: Always call <code>forge_capabilities</code> at the start of a session — it returns the live API surface including tool schemas, config options, extensions, and per-tool error codes.
+      </div>
+
+      <h3 id="tool-capabilities">forge_capabilities — Discovery</h3>
+      <p>Returns the complete, always-authoritative API surface. Call this first.</p>
+      <div class="cmd-block">
+        <div class="cmd-block-header"><span>Copilot Chat</span><button class="cmd-copy-btn">Copy</button></div>
+        <pre><code>forge_capabilities({})</code></pre>
+      </div>
+      <p>Returns: tool schemas, intents, config keys, available extensions, per-tool error codes.</p>
+
+      <h3 id="tool-smith">forge_smith — Environment Check</h3>
+      <p>Diagnose your setup: VS Code config, Node version, MCP connectivity, preset health, version currency. Run this when something isn't working.</p>
+      <div class="cmd-block">
+        <div class="cmd-block-header"><span>Copilot Chat</span><button class="cmd-copy-btn">Copy</button></div>
+        <pre><code>forge_smith({})</code></pre>
+      </div>
+
+      <h3 id="tool-run-plan">forge_run_plan — Execute a Plan</h3>
+      <p>Execute a hardened plan file. Spawns workers, validates gates after each slice, tracks tokens and cost. This is the core execution command.</p>
+      <div class="cmd-block">
+        <div class="cmd-block-header"><span>Copilot Chat</span><button class="cmd-copy-btn">Copy</button></div>
+        <pre><code>// Estimate cost before running (recommended)
+forge_run_plan({ plan: "docs/plans/Phase-1.md", estimate: true })
+
+// Execute
+forge_run_plan({ plan: "docs/plans/Phase-1.md" })
+
+// Execute with quorum mode
+forge_run_plan({ plan: "docs/plans/Phase-1.md", quorum: "auto" })
+
+// Resume from a specific slice
+forge_run_plan({ plan: "docs/plans/Phase-1.md", resumeFrom: 3 })</code></pre>
+      </div>
+      <p>Quorum modes: <code>auto</code> (adaptive), <code>power</code> (flagship models, threshold 5), <code>speed</code> (fast models, threshold 7), <code>false</code> (single model, no quorum).</p>
+
+      <h3 id="tool-plan-status">forge_plan_status — Execution Status</h3>
+      <p>Poll the status of the currently running (or most recent) plan execution. Returns per-slice results, tokens consumed, duration, and gate outcomes.</p>
+      <div class="cmd-block">
+        <div class="cmd-block-header"><span>Copilot Chat</span><button class="cmd-copy-btn">Copy</button></div>
+        <pre><code>forge_plan_status({})</code></pre>
+      </div>
+
+      <h3 id="tool-abort">forge_abort — Stop Execution</h3>
+      <p>Abort the currently running plan execution. The orchestrator finishes the current slice's work-in-progress before stopping.</p>
+      <div class="cmd-block">
+        <div class="cmd-block-header"><span>Copilot Chat</span><button class="cmd-copy-btn">Copy</button></div>
+        <pre><code>forge_abort({})</code></pre>
+      </div>
+
+      <h3 id="tool-diagnose">forge_diagnose — Bug Investigation</h3>
+      <p>Multi-model bug investigation: provide a symptom or error message and receive root-cause analysis plus fix recommendations.</p>
+      <div class="cmd-block">
+        <div class="cmd-block-header"><span>Copilot Chat</span><button class="cmd-copy-btn">Copy</button></div>
+        <pre><code>forge_diagnose({ symptom: "TypeError: Cannot read properties of undefined at line 42" })</code></pre>
+      </div>
+
+      <h3 id="tool-analyze">forge_analyze — Consistency Scoring</h3>
+      <p>Cross-artifact consistency scoring (0–100 across 4 dimensions). Checks that your plans, code, tests, and docs are in sync. Run before shipping.</p>
+      <div class="cmd-block">
+        <div class="cmd-block-header"><span>Copilot Chat</span><button class="cmd-copy-btn">Copy</button></div>
+        <pre><code>forge_analyze({})</code></pre>
+      </div>
+
+      <h3 id="tool-estimate">forge_estimate_quorum — Cost Preview</h3>
+      <p>Project the cost of a plan under all four quorum modes before executing. <strong>Always call this instead of hand-computing costs.</strong></p>
+      <div class="cmd-block">
+        <div class="cmd-block-header"><span>Copilot Chat</span><button class="cmd-copy-btn">Copy</button></div>
+        <pre><code>forge_estimate_quorum({ plan: "docs/plans/Phase-1.md" })</code></pre>
+      </div>
+
+      <!-- ─── Typical Workflow ─── -->
+      <h2 id="workflow">Typical Workflow</h2>
+      <ol class="space-y-2 text-sm">
+        <li><strong>1. Discover</strong> — <code>forge_capabilities({})</code> to see the live API surface</li>
+        <li><strong>2. Check setup</strong> — <code>forge_smith({})</code> to confirm everything is green</li>
+        <li><strong>3. Estimate</strong> — <code>forge_estimate_quorum({ plan: "..." })</code> before any execution</li>
+        <li><strong>4. Run</strong> — <code>forge_run_plan({ plan: "..." })</code> to execute your plan</li>
+        <li><strong>5. Monitor</strong> — <code>forge_plan_status({})</code> to track progress</li>
+        <li><strong>6. Review</strong> — <code>forge_analyze({})</code> to confirm artifact consistency</li>
+      </ol>
+
+      <div class="callout callout-info mt-6">
+        <strong>Need the full tool list?</strong> See <a href="mcp-server-reference.html">MCP Server — Full Reference</a> for all 69 tools across 8 categories, REST API endpoints, WebSocket events, telemetry, cost tracking, SDK, and API key configuration.
+      </div>
+
+      <p class="text-sm text-slate-500 mt-8">📄 Full reference: <a href="https://github.com/srnichols/plan-forge/blob/master/docs/capabilities.md" rel="noopener">capabilities.md</a>, <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/EVENTS.md" rel="noopener">EVENTS.md</a>, <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/tools.json" rel="noopener">tools.json</a></p>
+      <div id="chapter-prev-next" class="chapter-nav"></div>
+
+    </div></main>
+  </div>
+  <script src="assets/manual.js"></script>
+</body>
+</html>

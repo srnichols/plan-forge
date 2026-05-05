@@ -27,7 +27,20 @@ The .NET preset assumed pure backend work. As soon as a consuming project added 
 - New: `presets/dotnet/.github/instructions/blazor-fluent-ui.instructions.md`, `presets/dotnet/.github/agents/blazor-reviewer.agent.md`, `presets/dotnet/.github/skills/ui-scaffold/SKILL.md`.
 - Modified: `presets/dotnet/.github/copilot-instructions.md`, `docs/manual/testbed.html`.
 
-## [2.86.0] — 2026-05-05 — Copilot Coding Agent dispatch + GHAS remediation chapters
+## [2.87.0] — 2026-05-05 — Copilot Metrics API leaderboard (Appendix H § 6)
+
+> **One-liner**: Section 6 of Appendix H ("Plan Forge on the GitHub Stack") is now live — full documentation for `pforge github metrics pull`, the unified Copilot Metrics API + Plan-Forge leaderboard dashboard tab, `forge_github_metrics` MCP tool, JSONL schema versioning (`copilot-metrics/v1`), cache TTL configuration, and per-team join key precedence. VERSION bumped to 2.87.0.
+
+### Added
+- **Appendix H § 6 — Metrics API + Plan-Forge unified leaderboard**: full documentation for `pforge github metrics pull`. Covers the command flags (`--org`, `--enterprise`, `--team`, `--since`, `--out`, `--no-cache`), the JSONL schema (`copilot-metrics/v1` with `_schema` field for forward-compatible evolution), the `pforge-mcp/metrics-schema.mjs` module (`CURRENT_SCHEMA`, `validateRow`, `migrateRow`), dashboard tab group placement (Forge group vs GitHub group, `group: "github"` in `tab-registry.mjs`), the leaderboard composite score (AI-assisted PR rate 40%, acceptance rate 40%, code-review usage 20%), `forge_github_metrics` MCP tool (input schema: `team`, `since`, `metric`, `format`; reads from cached JSONL, never proxies GitHub API directly), cache TTL configuration (`cacheTtlMinutes` default 60, `staleWarningMinutes` default 480, `Cache-Control` header), and per-team join key precedence (explicit `teamMap` → slug normalisation → exact match; `--dry-run` join-preview table).
+- Updated intro paragraph in Appendix H to reflect Section 6 as live; Sections 5, 7, 8 remain "in progress".
+- "Coming soon" grid updated from 5–8 to 5, 7–8 (Section 6 promoted to full live section).
+- Section 5 (Copilot Spaces sync) promoted from planned-grid card to a named stub section with an in-progress callout.
+
+### Files
+- Modified: `docs/manual/plan-forge-on-the-github-stack.html` (Section 6 full content; intro paragraph; Section 5 stub; coming-soon grid), `VERSION`, `pforge-mcp/package.json`.
+
+## [2.86.0]
 
 > **One-liner**: Sections 3 and 4 of Appendix H ("Plan Forge on the GitHub Stack") are now live — full documentation for `pforge run-plan --worker copilot-coding-agent` (issue body template, PR detection fallback, trajectory capture) and `pforge plan-from-sarif` (SARIF stdin support, severity ordering, security-audit integration). VERSION bumped to 2.86.0.
 

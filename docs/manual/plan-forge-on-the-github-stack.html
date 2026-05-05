@@ -36,7 +36,7 @@
 
       <p>Plan-Forge does not require GitHub. It runs against any repo, with any agent (Copilot, Claude Code, Cursor, Codex), and against any CI system. <strong class="text-slate-200">But when the repo is on GitHub, Plan-Forge has the deepest stack of integrations</strong> — eight first-class primitives it consumes today, plus several it dispatches to. This appendix is the single canonical reference for that integration surface.</p>
 
-      <p>Section 1 is the readiness check — a one-command snapshot of which GitHub primitives your repo currently has wired up. Section 2 is the surface-by-surface tour. Sections 3 (Copilot Coding Agent dispatch) and 4 (GHAS remediation chains) are now live. Sections 5 through 8 (Copilot Spaces sync, Metrics API leaderboard, BYOK and other agent platforms) are <strong class="text-amber-400">in progress</strong> and will land in upcoming releases.</p>
+      <p>Section 1 is the readiness check — a one-command snapshot of which GitHub primitives your repo currently has wired up. Section 2 is the surface-by-surface tour. Sections 3 (Copilot Coding Agent dispatch), 4 (GHAS remediation chains), and 6 (Metrics API leaderboard) are now live. Sections 5, 7, and 8 (Copilot Spaces sync, BYOK and multi-model picker, other agent platforms) are <strong class="text-amber-400">in progress</strong> and will land in upcoming releases.</p>
 
       <!-- ─── Section 1 — Readiness Check ─── -->
       <h2 id="readiness-check">1. Is your repo set up? Run <code>pforge github status</code></h2>
@@ -273,21 +273,146 @@ codeql database analyze my-db --format=sarifv2.1.0 --output=- | \
 
       <p>That one prompt triggers the full pipeline: SARIF fetch → plan generation → plan review → optional execution. See the <a href="skills.html" class="text-amber-400 hover:underline">Skills Reference</a> for the full <code>/security-audit</code> flow.</p>
 
-      <!-- ─── Coming sections ─── -->
-      <h2 id="coming-soon">5–8. Coming in upcoming releases</h2>
+      <!-- ─── Section 5 stub ─── -->
+      <h2 id="spaces-sync">5. Copilot Spaces sync</h2>
 
-      <p>This chapter is a living scaffold. The sections below are planned and will land as their underlying integrations ship.</p>
+      <div class="rounded-xl border border-amber-500/30 bg-amber-500/5 p-5 mt-2">
+        <div class="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-2">In progress</div>
+        <p class="text-sm text-slate-400 mb-0"><code>pforge sync-spaces</code> will push the active plan, instruction files, and Plan-Forge tool catalog into a designated Copilot Space — the closest analogue to the AI-SDLC-Hub pattern many enterprise readouts call out. This section will land in an upcoming release.</p>
+      </div>
+
+      <!-- ─── Section 6 — Metrics API leaderboard ─── -->
+      <h2 id="metrics-leaderboard">6. Metrics API + Plan-Forge unified leaderboard</h2>
+
+      <p>The Copilot Metrics API (available at the org and enterprise level via <code>gh api /orgs/{org}/copilot/metrics</code>) surfaces AI-assisted PR rate, code-suggestion acceptance, and code-review usage across your teams. Plan-Forge pulls that data alongside its own plan-execution metrics — slices shipped, MTTR, drift rate — and presents them in a single leaderboard view on the dashboard.</p>
+
+      <h3 id="metrics-pull">Pulling Metrics API data</h3>
+
+      <p>Fetch and cache the latest Copilot Metrics API payload with:</p>
+
+      <pre><code>pforge github metrics pull</code></pre>
+
+      <p>By default this targets the org inferred from <code>git remote get-url origin</code>. Override with <code>--org &lt;name&gt;</code>. For enterprise-level metrics, use <code>--enterprise &lt;slug&gt;</code>. The pull authenticates via the <code>gh</code> CLI — run <code>gh auth status</code> first if you see a 401.</p>
+
+      <p>Additional flags:</p>
+
+      <table>
+        <thead><tr><th>Flag</th><th>Default</th><th>Effect</th></tr></thead>
+        <tbody>
+          <tr><td><code>--team &lt;slug&gt;</code></td><td>(all teams)</td><td>Filter to a single team slug. Repeatable for multiple teams.</td></tr>
+          <tr><td><code>--since &lt;ISO-date&gt;</code></td><td>30 days ago</td><td>Start of the pull window. Metrics API returns daily buckets.</td></tr>
+          <tr><td><code>--out &lt;path&gt;</code></td><td><code>.forge/metrics/copilot-&lt;date&gt;.jsonl</code></td><td>Override the output path. Use <code>-</code> to print to stdout.</td></tr>
+          <tr><td><code>--no-cache</code></td><td>(cache enabled)</td><td>Force a fresh API fetch even if a cached response exists.</td></tr>
+        </tbody>
+      </table>
+
+      <h3 id="metrics-jsonl-schema">JSONL schema and schema versioning</h3>
+
+      <p>Each line written to <code>.forge/metrics/</code> is a JSON object with a stable <code>_schema</code> field so downstream consumers (dashboards, CI scripts, <code>forge_github_metrics</code>) can handle forward evolution without breakage:</p>
+
+      <pre><code>{
+  "_schema": "copilot-metrics/v1",
+  "date": "2026-05-05",
+  "org": "acme",
+  "team": "platform",
+  "ai_pr_rate": 0.74,
+  "acceptance_rate": 0.61,
+  "code_review_usage": 0.43,
+  "active_users": 18,
+  "_pulled_at": "2026-05-05T11:00:00Z"
+}</code></pre>
+
+      <p>The schema version follows <code>&lt;namespace&gt;/v&lt;N&gt;</code>. A bump to <code>v2</code> will only happen when a field is removed or renamed — adding fields is non-breaking. Consumers should read <code>_schema</code> and warn (not crash) on unknown versions. The <code>pforge-mcp/metrics-schema.mjs</code> module exports <code>CURRENT_SCHEMA</code>, <code>validateRow(row)</code>, and <code>migrateRow(row)</code> for any tool that reads the JSONL files.</p>
+
+      <h3 id="metrics-dashboard">Dashboard tab placement — Forge group vs GitHub group</h3>
+
+      <p>The dashboard sidebar organises tabs into two groups:</p>
+
+      <ul>
+        <li><strong class="text-slate-200">Forge group</strong> — tabs sourced entirely from Plan-Forge data: <em>Timeline</em>, <em>Cost</em>, <em>Forge Master</em>, <em>Digest</em>. These work offline and do not require a GitHub connection.</li>
+        <li><strong class="text-slate-200">GitHub group</strong> — tabs that join Plan-Forge data with GitHub API data: <em>Metrics Leaderboard</em> (this section) and, in a future release, <em>Spaces</em>. These tabs show a "Connect GitHub" prompt when <code>gh auth status</code> returns non-zero or no pull has been run yet.</li>
+      </ul>
+
+      <p>The <em>Metrics Leaderboard</em> tab sits at the top of the GitHub group. It renders a table of teams ranked by a composite score — a weighted blend of AI-assisted PR rate (40 %), acceptance rate (40 %), and code-review usage (20 %) — next to their Plan-Forge plan-completion rate for the same window. Hovering a row reveals the raw daily time-series chart.</p>
+
+      <p>Tab group placement is controlled by the <code>group</code> field in <code>pforge-mcp/dashboard/tab-registry.mjs</code>. Tabs with <code>group: "github"</code> are hidden when the GitHub group is collapsed (the user preference persists in <code>localStorage</code>).</p>
+
+      <h3 id="forge-github-metrics-mcp">The <code>forge_github_metrics</code> MCP tool</h3>
+
+      <p><code>forge_github_metrics</code> exposes the leaderboard data to any MCP client (Copilot Chat, Claude Code, Cursor). It reads from the cached JSONL in <code>.forge/metrics/</code> — it never calls the GitHub API directly, so it works offline and in air-gapped environments after an initial pull.</p>
+
+      <pre><code>// In Copilot Chat or any MCP client:
+forge_github_metrics({ team: "platform", since: "2026-04-01" })</code></pre>
+
+      <p>Input schema:</p>
+
+      <table>
+        <thead><tr><th>Field</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>team</code></td><td>string | string[]</td><td>(all teams)</td><td>Filter by team slug(s).</td></tr>
+          <tr><td><code>since</code></td><td>ISO date string</td><td>30 days ago</td><td>Start of the aggregation window.</td></tr>
+          <tr><td><code>metric</code></td><td>"all" | "ai_pr_rate" | "acceptance_rate" | "code_review_usage"</td><td>"all"</td><td>Return only the specified metric column.</td></tr>
+          <tr><td><code>format</code></td><td>"leaderboard" | "timeseries" | "raw"</td><td>"leaderboard"</td><td><code>leaderboard</code> = ranked table; <code>timeseries</code> = per-team daily arrays; <code>raw</code> = unprocessed JSONL rows.</td></tr>
+        </tbody>
+      </table>
+
+      <p>The tool is registered in <code>pforge-mcp/server.mjs</code> alongside <code>forge_github_status</code> and is listed in <code>pforge-mcp/tools.json</code>. It is included in the Plan-Forge MCP server entry in <code>.vscode/mcp.json</code> without requiring a separate <code>setup</code> run — the tool registration is additive and picked up on the next MCP server restart.</p>
+
+      <h3 id="metrics-cache-ttl">Cache TTL for the dashboard endpoint</h3>
+
+      <p>The dashboard's <code>GET /api/metrics/leaderboard</code> endpoint serves the aggregated leaderboard from the on-disk JSONL cache. It does not proxy the GitHub API on demand. Cache staleness is controlled by two settings in <code>.forge.json</code>:</p>
+
+      <pre><code>{
+  "metrics": {
+    "cacheTtlMinutes": 60,
+    "staleWarningMinutes": 480
+  }
+}</code></pre>
+
+      <ul>
+        <li><strong class="text-slate-200"><code>cacheTtlMinutes</code></strong> (default: 60) — the dashboard appends a <code>Cache-Control: max-age=&lt;N×60&gt;</code> header. Browsers and CDNs respect this. In-process in-memory cache is also flushed after this window, so a fresh request re-reads from disk.</li>
+        <li><strong class="text-slate-200"><code>staleWarningMinutes</code></strong> (default: 480 = 8 hours) — if the newest JSONL row is older than this, the leaderboard tab shows a <strong class="text-amber-400">⚠ Data may be stale</strong> banner with the age and a one-click <strong>Re-pull</strong> button that runs <code>pforge github metrics pull</code> in the background.</li>
+      </ul>
+
+      <p>Set <code>cacheTtlMinutes: 0</code> to disable the in-memory cache entirely (reads from disk on every request). Useful in CI environments where the JSONL files are updated by a scheduled workflow and you want every page load to reflect the latest data.</p>
+
+      <h3 id="per-team-join-key">Per-team join key precedence</h3>
+
+      <p>The leaderboard joins Metrics API rows (keyed by GitHub team slug) with Plan-Forge plan-completion rows (keyed by the <code>team</code> field in the plan frontmatter). In practice these two key spaces often diverge — a GitHub team might be <code>platform-eng</code> while the plan frontmatter uses <code>platform</code>.</p>
+
+      <p>Plan-Forge resolves the join using the following precedence order:</p>
+
+      <ol>
+        <li><strong class="text-slate-200">Explicit mapping in <code>.forge.json#metrics.teamMap</code></strong> — highest precedence. Map GitHub team slugs to plan team labels:
+          <pre><code>{
+  "metrics": {
+    "teamMap": {
+      "platform-eng": "platform",
+      "fe-core":       "frontend"
+    }
+  }
+}</code></pre>
+        </li>
+        <li><strong class="text-slate-200">Slug normalisation</strong> — if no explicit mapping exists, Plan-Forge applies a normaliser: lowercase, strip trailing <code>-eng</code> / <code>-team</code> / <code>-squad</code>, replace hyphens with underscores. If the normalised forms match, the rows are joined.</li>
+        <li><strong class="text-slate-200">Exact match</strong> — if normalisation still doesn't produce a match, the rows are left unjoined. Metrics API rows without a plan partner appear in the leaderboard with plan-side columns as <code>—</code>, and vice versa. No silent data loss; mismatches are surfaced explicitly.</li>
+      </ol>
+
+      <p>Run <code>pforge github metrics pull --dry-run</code> to see a join-preview table: every Metrics API team slug listed next to the plan team label it resolves to, and a <code>no match</code> flag for unresolved rows. This makes it easy to build up the <code>teamMap</code> incrementally.</p>
+
+      <div class="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5 mt-6">
+        <p class="text-sm text-slate-400 mb-0"><strong class="text-slate-200">Prerequisite:</strong> <code>gh</code> CLI must be authenticated (<code>gh auth status</code>) and the repo's org must have Copilot Metrics API access enabled (requires GitHub Copilot Business or Enterprise). Run <code>pforge github status</code> to verify the GitHub stack readiness before pulling metrics.</p>
+      </div>
+
+      <!-- ─── Coming sections ─── -->
+      <h2 id="coming-soon">5, 7–8. Other planned sections</h2>
+
+      <p>The sections below are planned and will land as their underlying integrations ship.</p>
 
       <div class="grid md:grid-cols-2 gap-4 mt-6">
-        <div class="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5">
-          <div class="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-2">Planned</div>
+        <div class="rounded-xl border border-amber-500/30 bg-amber-500/5 p-5">
+          <div class="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-2">In progress</div>
           <div class="text-base font-bold text-slate-100 mb-1">5. Copilot Spaces sync</div>
           <p class="text-sm text-slate-400 mb-0"><code>pforge sync-spaces</code> pushes the active plan, instruction files, and Plan-Forge tool catalog into a designated Copilot Space — the closest analogue to the AI-SDLC-Hub pattern many enterprise readouts call out.</p>
-        </div>
-        <div class="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5">
-          <div class="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-2">Planned</div>
-          <div class="text-base font-bold text-slate-100 mb-1">6. Metrics API + Plan-Forge unified leaderboard</div>
-          <p class="text-sm text-slate-400 mb-0">Pull AI-assisted PR rate, acceptance, and code-review usage from the Copilot Metrics API and merge with Plan-Forge's plan-execution metrics for a single dashboard view.</p>
         </div>
         <div class="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5">
           <div class="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-2">Planned</div>

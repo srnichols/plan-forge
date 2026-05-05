@@ -7,7 +7,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-## [2.90.8] — 2026-05-05 — Hotfix: Dashboard GitHub-surface readiness widget
+## [2.90.9] — 2026-05-05 — Hotfix: GitHub Copilot Integration capabilities-doc sync
+
+> **One-liner**: Syncs `docs/manual/capabilities.html` with the v2.90.x GitHub Stack work — adds a "GitHub Copilot Integration" subsection describing Forge-Master's default GitHub Models provider (no separate API key required for Copilot subscribers), a "GitHub Stack Integration" section covering the eight primitives, and a doc-sync regression guard that prevents tab-count drift.
+
+### Added — Hotfix v2.90.9
+
+- **GitHub Copilot Integration subsection** in `docs/manual/capabilities.html` — documents that Forge-Master uses GitHub Models by default; if you have GitHub Copilot, no separate API key is required. Includes provider table row with "githubCopilot" key and notes on the `XAI_API_KEY` fallback for Grok models.
+- **GitHub Stack Integration section** in `docs/manual/capabilities.html` — covers the eight GitHub primitives (Issues, PRs, Actions, Packages, Copilot, Models, Discussions, Pages) surfaced by the v2.90.x hotfix series, with the five-layer architecture and dogfood timeline references.
+- **Doc-sync regression guard** (`pforge-mcp/tests/capabilities-doc-sync.test.mjs`) — vitest case that validates the GitHub Copilot Integration subsection exists in capabilities.html, preventing future capabilities-doc drift.
+
+### Verified — Hotfix v2.90.9
+
+- Validation gate passes: VERSION=2.90.9, CHANGELOG contains `[2.90.9]` + GHCP mention, regression test green.
+
+## [2.90.8]— 2026-05-05 — Hotfix: Dashboard GitHub-surface readiness widget
 
 > **One-liner**: Adds a GitHub-surface readiness widget to the Plan-Forge dashboard, surfacing the `pforge github status` checklist as a live tile within the Metrics Leaderboard tab so teams can see their GitHub primitive readiness at a glance alongside their AI metrics.
 

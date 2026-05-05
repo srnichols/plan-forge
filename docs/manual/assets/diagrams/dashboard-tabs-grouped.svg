@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 380" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 385" fill="none">
   <style>
     text { font-family: 'Inter', sans-serif; }
     .group { rx: 10; ry: 10; stroke-width: 2; }
@@ -12,14 +12,14 @@
   </style>
 
   <!-- ─── Group 1: Forge (default, blue) ─── -->
-  <rect x="20" y="20" width="370" height="170" class="group" fill="#0a1428" stroke="#60a5fa" />
-  <rect x="20" y="20" width="370" height="32" class="group" fill="#0f1d3d" stroke="#60a5fa" />
-  <text x="32" y="40" class="group-title" style="fill:#60a5fa;">🔨 Forge</text>
-  <text x="80" y="40" class="group-sub">build · execute · ship · monitor active runs</text>
-  <text x="380" y="40" class="tiny" text-anchor="end">16 tabs · default group</text>
+  <rect x="20" y="20" width="370" height="185" class="group" fill="#0a1428" stroke="#60a5fa" />
+  <rect x="20" y="20" width="370" height="50" class="group" fill="#0f1d3d" stroke="#60a5fa" />
+  <text x="32" y="37" class="group-title" style="fill:#60a5fa;">🔨 Forge</text>
+  <text x="380" y="37" class="tiny" text-anchor="end">16 tabs · default group</text>
+  <text x="32" y="55" class="group-sub">build · execute · ship · monitor active runs</text>
 
   <!-- Forge tabs (4 cols × 4 rows) -->
-  <g transform="translate(35, 65)">
+  <g transform="translate(35, 80)">
     <!-- row 1 -->
     <rect x="0"   y="0"  width="80" height="26" class="tile" fill="#020617" stroke="#1e293b" /><text x="40" y="17" class="tab-name" text-anchor="middle">Home</text>
     <rect x="86"  y="0"  width="80" height="26" class="tile" fill="#020617" stroke="#1e293b" /><text x="126" y="17" class="tab-name" text-anchor="middle">Review</text>
@@ -43,13 +43,13 @@
   </g>
 
   <!-- ─── Group 2: LiveGuard (amber) ─── -->
-  <rect x="400" y="20" width="370" height="170" class="group" fill="#1c1404" stroke="#fbbf24" />
-  <rect x="400" y="20" width="370" height="32" class="group" fill="#291e08" stroke="#fbbf24" />
-  <text x="412" y="40" class="group-title" style="fill:#fbbf24;">🛡 LiveGuard</text>
-  <text x="478" y="40" class="group-sub">post-deploy defense · drift · incidents · alerts</text>
-  <text x="760" y="40" class="tiny" text-anchor="end">7 tabs</text>
+  <rect x="400" y="20" width="370" height="185" class="group" fill="#1c1404" stroke="#fbbf24" />
+  <rect x="400" y="20" width="370" height="50" class="group" fill="#291e08" stroke="#fbbf24" />
+  <text x="412" y="37" class="group-title" style="fill:#fbbf24;">🛡 LiveGuard</text>
+  <text x="760" y="37" class="tiny" text-anchor="end">7 tabs</text>
+  <text x="412" y="55" class="group-sub">post-deploy defense · drift · incidents · alerts</text>
 
-  <g transform="translate(415, 65)">
+  <g transform="translate(415, 80)">
     <!-- row 1 -->
     <rect x="0"   y="0"  width="80" height="26" class="tile" fill="#020617" stroke="#1e293b" /><text x="40" y="17" class="tab-name" text-anchor="middle">Health</text>
     <rect x="86"  y="0"  width="80" height="26" class="tile" fill="#020617" stroke="#1e293b" /><text x="126" y="17" class="tab-name" text-anchor="middle">Incidents</text>
@@ -61,33 +61,33 @@
     <rect x="172" y="30" width="166" height="26" class="tile" fill="#020617" stroke="#1e293b" /><text x="255" y="47" class="tab-name" text-anchor="middle">Bug Registry</text>
   </g>
 
-  <text x="585" y="160" class="small" text-anchor="middle" font-style="italic">Covers everything that happens after the slice ships.</text>
-  <text x="585" y="175" class="tiny" text-anchor="middle">Streams hub events: incident-fired, drift-alert, secret-leaked, dep-vuln-found.</text>
+  <text x="585" y="175" class="small" text-anchor="middle" font-style="italic">Covers everything that happens after the slice ships.</text>
+  <text x="585" y="190" class="tiny" text-anchor="middle">Streams hub events: incident-fired, drift-alert, secret-leaked, dep-vuln-found.</text>
 
   <!-- ─── Group 3: Forge-Master (cyan) ─── -->
-  <rect x="20" y="200" width="370" height="155" class="group" fill="#082f33" stroke="#22d3ee" />
-  <rect x="20" y="200" width="370" height="32" class="group" fill="#0d4549" stroke="#22d3ee" />
-  <text x="32" y="220" class="group-title" style="fill:#22d3ee;">🧭 Forge-Master</text>
-  <text x="125" y="220" class="group-sub">read-only reasoning orchestrator · "talk to the shop"</text>
-  <text x="380" y="220" class="tiny" text-anchor="end">1 tab (Studio)</text>
+  <rect x="20" y="215" width="370" height="155" class="group" fill="#082f33" stroke="#22d3ee" />
+  <rect x="20" y="215" width="370" height="50" class="group" fill="#0d4549" stroke="#22d3ee" />
+  <text x="32" y="232" class="group-title" style="fill:#22d3ee;">🧭 Forge-Master</text>
+  <text x="380" y="232" class="tiny" text-anchor="end">1 tab (Studio)</text>
+  <text x="32" y="250" class="group-sub">read-only reasoning orchestrator · "talk to the shop"</text>
 
-  <g transform="translate(35, 245)">
+  <g transform="translate(35, 275)">
     <rect x="0" y="0" width="338" height="26" class="tile" fill="#020617" stroke="#1e293b" />
     <text x="169" y="17" class="tab-name" text-anchor="middle">Studio · prompt gallery + streaming chat + cache stats</text>
   </g>
 
-  <text x="200" y="305" class="small" text-anchor="middle" font-style="italic">Three-stage classifier (keyword → embedding → router LLM)</text>
-  <text x="200" y="320" class="tiny" text-anchor="middle">+ optional Quorum Advisory Mode for high-stakes decisions</text>
-  <text x="200" y="340" class="tiny" text-anchor="middle">Read-only by design — never writes code or files.</text>
+  <text x="200" y="320" class="small" text-anchor="middle" font-style="italic">Three-stage classifier (keyword → embedding → router LLM)</text>
+  <text x="200" y="335" class="tiny" text-anchor="middle">+ optional Quorum Advisory Mode for high-stakes decisions</text>
+  <text x="200" y="355" class="tiny" text-anchor="middle">Read-only by design — never writes code or files.</text>
 
   <!-- ─── Group 4: Settings (purple) ─── -->
-  <rect x="400" y="200" width="370" height="155" class="group" fill="#180a2f" stroke="#c084fc" />
-  <rect x="400" y="200" width="370" height="32" class="group" fill="#240e45" stroke="#c084fc" />
-  <text x="412" y="220" class="group-title" style="fill:#c084fc;">⚙ Settings</text>
-  <text x="478" y="220" class="group-sub">platform-wide configuration · safe-write to .forge.json</text>
-  <text x="760" y="220" class="tiny" text-anchor="end">9 sub-tabs</text>
+  <rect x="400" y="215" width="370" height="155" class="group" fill="#180a2f" stroke="#c084fc" />
+  <rect x="400" y="215" width="370" height="50" class="group" fill="#240e45" stroke="#c084fc" />
+  <text x="412" y="232" class="group-title" style="fill:#c084fc;">⚙ Settings</text>
+  <text x="760" y="232" class="tiny" text-anchor="end">9 sub-tabs</text>
+  <text x="412" y="250" class="group-sub">platform-wide configuration · safe-write to .forge.json</text>
 
-  <g transform="translate(415, 245)">
+  <g transform="translate(415, 275)">
     <!-- row 1 -->
     <rect x="0"   y="0"  width="80" height="26" class="tile" fill="#020617" stroke="#1e293b" /><text x="40" y="17" class="tab-name" text-anchor="middle">General</text>
     <rect x="86"  y="0"  width="80" height="26" class="tile" fill="#020617" stroke="#1e293b" /><text x="126" y="17" class="tab-name" text-anchor="middle">Models</text>

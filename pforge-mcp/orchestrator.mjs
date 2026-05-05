@@ -5890,6 +5890,40 @@ export function lintGateCommands(planFilePath, cwd = process.cwd()) {
         });
       }
 
+      // W2. Pipeline in node/npx/pwsh gate — shell pipe operator with a node-family
+      // left operand.  Shell pipelines still work when the orchestrator detects
+      // hasShellChain, but wrapping in a 'node -e' script that uses child_process
+      // is more portable and avoids cmd.exe quirks.  Skip lines already caught by
+      // W1 (bash -c prefix), which legitimately use pipes inside the bash string.
+      if (!/^bash\s+-c\b/.test(line) && /^(node|npx|pwsh)\b.*\|/.test(line)) {
+        warnings.push({
+          slice: slice.number,
+          command: line,
+          ruleId: "W2",
+          rule: "pipeline-node",
+          severity: "warn",
+          message: `${loc}: Shell pipeline with '${cmdToken}' as left operand — cmd.exe may handle this differently. Consider wrapping in a 'node -e' script that uses child_process for portability.`,
+        });
+      }
+
+      // W3. Regex-escape heuristic — double-escaped backslash before a common
+      // regex metachar (\\s, \\d, \\w, \\S, \\D, \\W, \\b, \\B, \\n, \\t, \\r)
+      // inside a 'node -e' command.  cmd.exe strips one backslash level when
+      // processing double-quoted strings, so '\\\\s' in plan source becomes '\\s'
+      // at the shell level — making the compiled regex match a literal backslash
+      // followed by 's' rather than the whitespace class.  The heuristic fires when
+      // two consecutive backslashes precede a metachar in the gate string as stored.
+      if (/^node\s+-e\s+.*\\\\[sdwSDWbBntr]/.test(line)) {
+        warnings.push({
+          slice: slice.number,
+          command: line,
+          ruleId: "W3",
+          rule: "regex-escape",
+          severity: "warn",
+          message: `${loc}: node -e contains '\\\\<metachar>' — the double-backslash is likely an over-escape; cmd.exe strips one level, so the regex may not match as intended. Use a single '\\' for regex escapes inside node -e strings.`,
+        });
+      }
+
       // W4. cd-chain pitfall — 'cd dir && command' does not change the working
       // directory for the subsequent command on Windows cmd.exe.  Use the
       // command's own --cwd / --project flag, or spawn with { cwd: '...' }.

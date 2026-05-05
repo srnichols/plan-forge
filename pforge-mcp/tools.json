@@ -5613,5 +5613,74 @@
         }
       }
     }
+  },
+  {
+    "name": "forge_github_metrics",
+    "description": "Fetch live GitHub repository metrics via the gh CLI — stars, forks, open issues, PR counts, and commit activity. Requires gh CLI authenticated. USE FOR: project health dashboards, sprint retrospectives, answering 'how active is this repo?'. Returns null fields gracefully when gh is unavailable.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "repo": {
+          "type": "string",
+          "description": "Repository slug owner/repo (auto-detected from git remote when omitted)"
+        },
+        "period": {
+          "type": "string",
+          "description": "Lookback window: 7d, 30d, or 90d (default: 30d)"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      }
+    },
+    "intent": [
+      "metrics",
+      "github",
+      "health"
+    ],
+    "aliases": [
+      "github-metrics",
+      "repo-metrics"
+    ],
+    "cost": "low",
+    "maxConcurrent": 5,
+    "addedIn": "2.86.0",
+    "prerequisites": [
+      "gh CLI installed and authenticated"
+    ],
+    "produces": [],
+    "consumes": [
+      "GitHub API (read-only via gh CLI)"
+    ],
+    "sideEffects": [],
+    "writesFiles": false,
+    "network": true,
+    "risk": "low",
+    "errors": {
+      "REPO_NOT_DETECTED": {
+        "message": "Could not detect repository slug",
+        "recovery": "Pass repo: 'owner/repo' or add a github.com remote"
+      }
+    },
+    "example": {
+      "input": {
+        "period": "30d"
+      },
+      "output": {
+        "ok": true,
+        "repo": "owner/repo",
+        "period": "30d",
+        "repoMeta": {
+          "stars": 42,
+          "forks": 7,
+          "language": "TypeScript"
+        },
+        "pullRequests": { "open": 3 },
+        "issues": { "open": 5 },
+        "commits": { "weeksInPeriod": 4, "totalCommits": 28 },
+        "contributors": 6
+      }
+    }
   }
 ]

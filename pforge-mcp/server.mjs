@@ -677,6 +677,18 @@ const TOOLS = [
     },
   },
   {
+    name: "forge_github_metrics",
+    description: "Fetch live GitHub repository metrics via the gh CLI — stars, forks, open issues, PR counts, and commit activity. Requires gh CLI authenticated. USE FOR: project health dashboards, sprint retrospectives, answering 'how active is this repo?'. Returns null fields gracefully when gh is unavailable.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        repo: { type: "string", description: "Repository slug owner/repo (auto-detected from git remote when omitted)" },
+        period: { type: "string", description: "Lookback window: 7d, 30d, or 90d (default: 30d)" },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+    },
+  },
+  {
     name: "forge_validate",
     description: "Validate Plan Forge setup — check that all required files exist, file counts match preset expectations, and no unresolved placeholders remain.",
     inputSchema: {
@@ -1856,6 +1868,7 @@ function executeTool(name, args) {
     case "forge_meta_bug_file":
     case "forge_graph_query":
     case "forge_patterns_list":
+    case "forge_github_metrics":
       return null; // Handled async in CallToolRequestSchema handler
     default:
       return { success: false, error: `Unknown tool: ${name}` };
@@ -5386,6 +5399,123 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
   }
 
+  // ─── forge_github_metrics — live GitHub repository metrics (Phase GITHUB-D) ───
+  if (name === "forge_github_metrics") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const period = args.period || "30d";
+      const periodDays = period === "7d" ? 7 : period === "90d" ? 90 : 30;
+
+      // Detect repo slug from args, then git remote, then gh CLI
+      let repoSlug = args.repo || null;
+      if (!repoSlug) {
+        try {
+          const remoteUrl = execSync("git remote get-url origin", {
+            cwd, encoding: "utf-8", stdio: ["ignore", "pipe", "pipe"], timeout: 5000,
+          }).trim();
+          const match = remoteUrl.match(/github\.com[:/]([^/\s]+\/[^\s.]+?)(?:\.git)?$/i);
+          if (match) repoSlug = match[1];
+        } catch { /* no remote */ }
+      }
+      if (!repoSlug) {
+        try {
+          repoSlug = execSync("gh repo view --json nameWithOwner -q .nameWithOwner", {
+            cwd, encoding: "utf-8", stdio: ["ignore", "pipe", "pipe"], timeout: 5000,
+          }).trim();
+        } catch { /* gh unavailable */ }
+      }
+
+      if (!repoSlug) {
+        const notDetected = { ok: false, error: "REPO_NOT_DETECTED", hint: "Pass repo: 'owner/repo' or add a github.com remote." };
+        emitToolTelemetry("forge_github_metrics", args, notDetected, Date.now() - t0, "ERROR", cwd);
+        return { content: [{ type: "text", text: JSON.stringify(notDetected, null, 2) }] };
+      }
+
+      // Safe gh api wrapper — returns null on any error rather than throwing
+      function ghApi(apiPath) {
+        try {
+          return JSON.parse(execSync(`gh api ${apiPath}`, {
+            cwd, encoding: "utf-8", stdio: ["ignore", "pipe", "pipe"], timeout: 10000,
+          }));
+        } catch { return null; }
+      }
+
+      // Repo metadata
+      const repoData = ghApi(`repos/${repoSlug}`);
+
+      // Open PR count via gh pr list (handles pagination better than raw API)
+      let openPRs = null;
+      try {
+        const prList = JSON.parse(execSync(`gh pr list --repo ${repoSlug} --state open --json number --limit 500`, {
+          cwd, encoding: "utf-8", stdio: ["ignore", "pipe", "pipe"], timeout: 10000,
+        }));
+        openPRs = prList.length;
+      } catch { /* gh auth or network failure */ }
+
+      // Open issue count via gh issue list
+      let openIssues = null;
+      try {
+        const issueList = JSON.parse(execSync(`gh issue list --repo ${repoSlug} --state open --json number --limit 500`, {
+          cwd, encoding: "utf-8", stdio: ["ignore", "pipe", "pipe"], timeout: 10000,
+        }));
+        openIssues = issueList.length;
+      } catch { /* gh auth or network failure */ }
+
+      // Commit activity (52-week weekly breakdown from GitHub stats API)
+      const commitActivity = ghApi(`repos/${repoSlug}/stats/commit_activity`);
+      let commitStats = null;
+      if (Array.isArray(commitActivity)) {
+        const cutoff = Date.now() - periodDays * 24 * 60 * 60 * 1000;
+        const inPeriod = commitActivity.filter((w) => w.week * 1000 >= cutoff);
+        commitStats = {
+          weeksInPeriod: inPeriod.length,
+          totalCommits: inPeriod.reduce((s, w) => s + (w.total || 0), 0),
+        };
+      }
+
+      // Contributors count
+      const contributors = ghApi(`repos/${repoSlug}/contributors?per_page=1&anon=false`);
+      let contributorCount = null;
+      if (contributors !== null) {
+        // GitHub returns paginated; use Link header total when available — fall back to array length
+        try {
+          const allContrib = JSON.parse(execSync(`gh api repos/${repoSlug}/contributors?per_page=100 --paginate`, {
+            cwd, encoding: "utf-8", stdio: ["ignore", "pipe", "pipe"], timeout: 15000,
+          }));
+          contributorCount = Array.isArray(allContrib) ? allContrib.length : null;
+        } catch { contributorCount = Array.isArray(contributors) ? contributors.length : null; }
+      }
+
+      const result = {
+        ok: true,
+        repo: repoSlug,
+        period,
+        scannedAt: new Date().toISOString(),
+        repoMeta: repoData ? {
+          stars: repoData.stargazers_count ?? null,
+          forks: repoData.forks_count ?? null,
+          openIssuesFromApi: repoData.open_issues_count ?? null,
+          defaultBranch: repoData.default_branch ?? null,
+          language: repoData.language ?? null,
+          visibility: repoData.visibility ?? null,
+          createdAt: repoData.created_at ?? null,
+          pushedAt: repoData.pushed_at ?? null,
+        } : null,
+        pullRequests: { open: openPRs },
+        issues: { open: openIssues },
+        commits: commitStats,
+        contributors: contributorCount,
+      };
+
+      emitToolTelemetry("forge_github_metrics", args, { ok: true, repo: repoSlug }, Date.now() - t0, "OK", cwd);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      emitToolTelemetry("forge_github_metrics", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
+      return { content: [{ type: "text", text: `GitHub metrics error: ${err.message}` }], isError: true };
+    }
+  }
+
   // ─── Sync pforge tools ───
   const result = executeTool(name, args || {});
 
@@ -6930,6 +7060,8 @@ export function createExpressApp() {
     "forge_graph_query",
     // Phase-38.6 — Pattern list is MCP-native.
     "forge_patterns_list",
+    // Phase GITHUB-D — GitHub metrics is MCP-native.
+    "forge_github_metrics",
     // Issue #134 — Crucible tools are MCP-native (handled by switch-case
     // in CallToolRequestSchema). Without these in the allowlist,
     // POST /api/tool/forge_crucible_* falls through to runPforge() which

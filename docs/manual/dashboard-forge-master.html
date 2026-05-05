@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard — Forge-Master Studio — Plan Forge Manual</title>
+  <meta name="description" content="The Forge-Master Studio tab in the Plan Forge dashboard: streaming chat, prompt gallery, embedding cache tile, quorum advisory, and classification badge with via field." />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+
+    <main>
+      <div class="chapter-content">
+
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 7 · Forge-Master Studio</div>
+        <h1>Dashboard — Forge-Master Studio</h1>
+        <p class="text-lg text-slate-400 mb-8">The reasoning orchestrator's home in the dashboard. Part of <a href="dashboard.html">Chapter 7: The Dashboard</a>.</p>
+
+        <div class="callout callout-info mb-6">
+          <strong>Part of Chapter 7</strong> — This page covers the <strong>Forge-Master</strong> top-level group. See <a href="dashboard.html">The Dashboard</a> for the Forge group tabs, <a href="dashboard-settings.html">Dashboard — Settings Group</a>, and <a href="dashboard-liveguard.html">Dashboard — LiveGuard Tabs</a>.
+        </div>
+
+        <!-- ─── Forge-Master Studio Tab ─── -->
+        <h2 id="studio">Forge-Master Studio Tab <span style="color:#c4b5fd;font-size:0.6em;vertical-align:middle">v2.61+ · expanded v2.78–v2.79 · timeline v2.82</span></h2>
+        <p>The reasoning orchestrator's home. See <a href="forge-master.html">the Forge-Master chapter</a> for the deep dive. Three panels:</p>
+        <ul>
+          <li><strong>Prompt gallery</strong> — pre-built prompts grouped by intent (operational, troubleshoot, advisory). Click to populate the chat box; edit before sending.</li>
+          <li><strong>Streaming chat</strong> — sends to <code>/api/forge-master/stream</code>. Shows live <code>classification</code> badge with the <code>via</code> field (<code>keyword</code> / <code>embedding-cache</code> / <code>router-llm</code>), <code>quorum-estimate</code> cost preview if advisory mode triggers (with cancel button), live <code>tool-call</code> trace, and the streaming reply token-by-token.</li>
+          <li><strong>Embedding cache tile</strong> — pulls from <code>GET /api/forge-master/cache-stats</code>. Shows <code>{size, hitRate, maxSize: 500}</code>. When cold, displays a hint that hits start once you've used Forge-Master a few times.</li>
+        </ul>
+
+        <h3 id="studio-classification">Classification Badge</h3>
+        <p>Every Forge-Master response shows a <code>classification</code> badge indicating how the intent was routed:</p>
+        <table>
+          <thead><tr><th>Via value</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr><td><code>keyword</code></td><td>Fast-path: matched by keyword rules, no model call for routing</td></tr>
+            <tr><td><code>embedding-cache</code></td><td>Hit the write-through embedding cache — free re-route</td></tr>
+            <tr><td><code>router-llm</code></td><td>Router model called to classify intent (stage 3 fallback)</td></tr>
+          </tbody>
+        </table>
+
+        <h3 id="studio-quorum">Quorum Advisory</h3>
+        <p>When <code>quorumAdvisory</code> is set to <code>auto</code> or <code>always</code> in Settings → Brain, advisory-lane responses show a <code>quorum-estimate</code> cost preview before the models are called. A cancel button aborts the quorum dispatch if the estimated cost is too high.</p>
+
+        <h3 id="studio-sessions">Session Persistence <span style="color:#c4b5fd;font-size:0.6em;vertical-align:middle">v2.72</span></h3>
+        <p>The Studio tab maintains a persistent per-tab session ID in <code>sessionStorage</code> and sends it as <code>x-pforge-session-id</code> on every request. This means prior turns survive page reloads and New Chat resets — Forge-Master can reference earlier messages in the same browser tab session.</p>
+        <p>Session history is stored as JSONL in <code>.forge/fm-sessions/</code>. Use <code>pforge fm-session list</code> to inspect sessions or <code>pforge fm-session purge</code> to clean up. Sessions auto-rotate at 200 turns.</p>
+
+        <h3 id="studio-timeline">Timeline Source <span style="color:#c4b5fd;font-size:0.6em;vertical-align:middle">v2.82</span></h3>
+        <p>Forge-Master turns are indexed as the <code>fm-turn</code> source in the <a href="dashboard.html#timeline">Timeline tab</a>. Each entry shows the lane, a truncated user message, and turn number. Useful for correlating reasoning decisions with plan execution events.</p>
+
+        <div class="callout callout-tip">
+          <strong>Deep dive</strong>: The <a href="forge-master.html">Forge-Master chapter</a> covers the full reasoning pipeline — intent classification, tool call orchestration, BM25 recall, quorum dispatch, and session management.
+        </div>
+
+        <div id="chapter-prev-next" class="chapter-nav"></div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="assets/manual.js"></script>
+</body>
+</html>

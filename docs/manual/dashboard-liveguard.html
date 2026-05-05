@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard — LiveGuard Tabs — Plan Forge Manual</title>
+  <meta name="description" content="The LiveGuard tabs in the Plan Forge dashboard: Health, Incidents, Triage, Security, and Env tabs for post-deploy defense and real-time threat monitoring." />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+
+    <main>
+      <div class="chapter-content">
+
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 7 · LiveGuard Tabs</div>
+        <h1>Dashboard — LiveGuard Tabs</h1>
+        <p class="text-lg text-slate-400 mb-8">Five amber-accented tabs for post-deploy defense: Health, Incidents, Triage, Security, and Env. Part of <a href="dashboard.html">Chapter 7: The Dashboard</a>.</p>
+
+        <div class="callout callout-info mb-6">
+          <strong>Part of Chapter 7</strong> — This page covers the <strong>LiveGuard</strong> top-level group. See <a href="dashboard.html">The Dashboard</a> for the Forge group tabs, <a href="dashboard-settings.html">Dashboard — Settings Group</a>, and <a href="dashboard-forge-master.html">Dashboard — Forge-Master Studio</a>.
+        </div>
+
+        <!-- ─── LiveGuard Section ─── -->
+        <h2 id="liveguard">LiveGuard Section <span style="color:#f59e0b;font-size:0.6em;vertical-align:middle">v2.28+</span></h2>
+        <p>Five amber-accented tabs separated by a visual divider from the FORGE section. LiveGuard tools (<code>forge_drift_report</code>, <code>forge_regression_guard</code>, <code>forge_incident_capture</code>, <code>forge_secret_scan</code>, <code>forge_env_diff</code>, <code>forge_liveguard_run</code>, etc.) broadcast <code>liveguard</code> + <code>liveguard-tool-completed</code> events that populate these tabs in real time.</p>
+
+        <div class="callout callout-tip">
+          For a full LiveGuard deep-dive — what it guards against, how drift detection works, and how incidents flow to resolution — see <a href="what-is-liveguard.html">Chapter 16: What Is LiveGuard?</a> and <a href="liveguard-tools.html">Chapter 17: LiveGuard Tools Reference</a>.
+        </div>
+
+        <h2 id="lg-health">Health Tab <span style="color:#f59e0b;font-size:0.6em;vertical-align:middle">LiveGuard</span></h2>
+        <p>Composite project health fingerprint produced by <code>forge_health_trend</code> and <code>forge_liveguard_run</code>:</p>
+        <ul>
+          <li><strong>Overall score</strong> (0–100) with trend direction (improving / stable / degrading)</li>
+          <li><strong>Component metrics</strong> — drift average, incident rate, test pass rate, model success rate, cost per slice</li>
+          <li><strong>Gate summary</strong> — drift / sweep / secret-scan / regression-guard / dep-watch / alert-triage pass/fail counts from the last <code>forge_liveguard_run</code></li>
+          <li><strong>Health DNA</strong> — persisted to <code>.forge/health-dna.json</code> for cross-session decay detection</li>
+        </ul>
+
+        <h2 id="lg-incidents">Incidents Tab <span style="color:#f59e0b;font-size:0.6em;vertical-align:middle">LiveGuard</span></h2>
+        <p>Open and recently resolved incidents captured by <code>forge_incident_capture</code> and auto-chained from drift:</p>
+        <ul>
+          <li><strong>Incident list</strong> — ID, severity, description, affected files, first seen, MTTR when resolved</li>
+          <li><strong>Recurring pattern flag</strong> — incidents on the same files ≥3 times in 30 days are auto-escalated to <code>high</code></li>
+          <li><strong>Auto-resolve</strong> — incidents close automatically when <code>forge_regression_guard</code> passes on overlapping scope</li>
+          <li><strong>Fix proposals</strong> — <code>forge_fix_proposal</code> plans linked to the originating incident are surfaced inline</li>
+        </ul>
+
+        <h2 id="lg-triage">Triage Tab <span style="color:#f59e0b;font-size:0.6em;vertical-align:middle">LiveGuard</span></h2>
+        <p>Prioritized alert stream from <code>forge_alert_triage</code>:</p>
+        <ul>
+          <li><strong>Severity-ordered alerts</strong> — critical / high / medium / low with source tool and timestamp</li>
+          <li><strong>Source breakdown</strong> — drift violations, secret-scan findings, env-diff gaps, dep-watch vulnerabilities</li>
+          <li><strong>Framework-code filtering</strong> — <code>pforge-mcp/</code>, <code>pforge.*</code>, <code>setup.*</code> paths are excluded from app-code scoring</li>
+        </ul>
+
+        <h2 id="lg-security">Security Tab <span style="color:#f59e0b;font-size:0.6em;vertical-align:middle">LiveGuard</span></h2>
+        <p>Secret hygiene and dependency vulnerability posture:</p>
+        <ul>
+          <li><strong>Secret scan results</strong> — entropy + key-name findings from <code>forge_secret_scan</code>, masked as <code>&lt;REDACTED&gt;</code>, confidence high / medium / low</li>
+          <li><strong>Vulnerable dependencies</strong> — <code>forge_dep_watch</code> output for npm (<code>npm audit</code>) and .NET (<code>dotnet list package --vulnerable</code>)</li>
+          <li><strong>PreDeploy gate status</strong> — blocks deploys on high-severity secret findings when <code>hooks.preDeploy</code> is enabled</li>
+        </ul>
+
+        <h2 id="lg-env">Env Tab <span style="color:#f59e0b;font-size:0.6em;vertical-align:middle">LiveGuard</span></h2>
+        <p>Environment-variable drift between local <code>.env</code>, example templates, and deploy targets via <code>forge_env_diff</code>:</p>
+        <ul>
+          <li><strong>Missing keys</strong> — present in <code>.env.example</code> / deploy config but absent from local <code>.env</code></li>
+          <li><strong>Extra keys</strong> — local-only values that are not in the shared template</li>
+          <li><strong>Cache freshness</strong> — stale-cache warning when the scan has not run since the last deploy</li>
+          <li><strong>Deploy journal link</strong> — correlates env gaps with the most recent <code>forge_deploy_journal</code> entry</li>
+        </ul>
+
+        <div id="chapter-prev-next" class="chapter-nav"></div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="assets/manual.js"></script>
+</body>
+</html>

@@ -189,75 +189,9 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
 
         <img src="../assets/dashboard/extensions.png" alt="Dashboard Extensions tab showing visual catalog browser with search, install buttons, and extension details" class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
 
-        <!-- ─── Settings Group ─── -->
-        <h2 id="config">Settings Group <span style="color:#c084fc;font-size:0.6em;vertical-align:middle">v2.69+</span></h2>
-        <p>The Settings group is a top-level container with <strong>9 purpose-built sub-tabs</strong> for platform-wide configuration. It replaced the older single Config tab. Settings is one of four top-level groups in the dashboard nav:</p>
-
-        <div class="grid md:grid-cols-2 gap-3 my-4">
-          <div class="p-3 bg-slate-900/40 border border-blue-500/20 rounded-lg"><strong class="text-blue-400">🔨 Forge</strong> <span class="text-slate-500 text-xs">(default)</span><br><span class="text-xs text-slate-400">Home · Review · Progress · Crucible · Governance · Runs · Cost · Actions · Replay · Traces · Skills · Tempering · Memory · Timeline · Inner Loop · Extensions</span></div>
-          <div class="p-3 bg-slate-900/40 border border-amber-500/20 rounded-lg"><strong class="text-amber-400">🛡 LiveGuard</strong><br><span class="text-xs text-slate-400">Health · Incidents · Triage · Security · Env · Watcher · Bug Registry</span></div>
-          <div class="p-3 bg-slate-900/40 border border-cyan-500/20 rounded-lg"><strong class="text-cyan-400">📋 Forge-Master</strong><br><span class="text-xs text-slate-400">Studio (the reasoning orchestrator's home)</span></div>
-          <div class="p-3 bg-slate-900/40 border border-purple-500/20 rounded-lg"><strong class="text-purple-400">⚙ Settings</strong> <span class="text-slate-500 text-xs">(this section)</span><br><span class="text-xs text-slate-400">9 sub-tabs covering platform-wide configuration</span></div>
-        </div>
-
-        <p>Click <strong>Settings</strong> in the top nav and you'll see 9 purple-accented sub-tabs. Every tab persists changes to its specific config file via the dashboard's safe-write path (sanitizer drops unknown fields, snaps numbers to safe bounds — no UI bug can corrupt your config).</p>
-
-        <h3 id="settings-general">⚙ General</h3>
-        <p>Project identity: preset, template version, and agent enablement.</p>
-        <ul>
-          <li><strong>Preset</strong> — the stack profile applied during setup (dotnet, typescript, python, etc.). Read-only on this tab; change via <code>setup.ps1 -Preset &lt;name&gt;</code>.</li>
-          <li><strong>Template Version</strong> — current framework version applied to your project files. <code>pforge update</code> bumps this.</li>
-          <li><strong>Agents</strong> — toggle which reviewer agents are active. Persists to <code>.forge.json#agents</code>.</li>
-        </ul>
-        <img src="../assets/dashboard/settings-general.png" alt="Settings → General sub-tab showing project identity fields (preset, template version, agents) with Save Configuration and Reload buttons" class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
-
-        <h3 id="settings-models">⚛ Models</h3>
-        <p>Model routing: default execution model and image generation model selection.</p>
-        <ul>
-          <li><strong>Model Routing — Default</strong> — <code>auto</code> (orchestrator picks per slice), or pin to a specific model</li>
-          <li><strong>Image Generation Model</strong> — Grok Aurora (<code>XAI_API_KEY</code>) or DALL-E (<code>OPENAI_API_KEY</code>) for diagrams and chapter heroes via <code>forge_generate_image</code></li>
-        </ul>
-        <img src="../assets/dashboard/settings-models.png" alt="Settings → Models sub-tab with Model Routing dropdown set to auto and Image Generation Model dropdown" class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
-
-        <h3 id="settings-execution">›_ Execution</h3>
-        <p>Per-slice execution behavior: quorum mode, escalation chain, complexity threshold, retry policy. The most-edited Settings tab during day-to-day work.</p>
-        <img src="../assets/dashboard/settings-execution.png" alt="Settings → Execution sub-tab showing quorum mode, threshold, escalation chain, and retry policy controls" class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
-
-        <h3 id="settings-api-keys">⚿ API Keys</h3>
-        <p>Stores API keys in <code>.forge/secrets.json</code> (gitignored). Same precedence as env vars: anything set here is picked up by the orchestrator without restarting the server.</p>
-        <ul>
-          <li><code>XAI_API_KEY</code> — Grok models + Aurora image generation</li>
-          <li><code>OPENAI_API_KEY</code> — GPT models direct + DALL-E (also enables OpenAI fallback for <code>COPILOT_SERVABLE</code> models)</li>
-          <li><code>ANTHROPIC_API_KEY</code> — Claude direct (Forge-Master + workers without <code>claude</code> CLI)</li>
-        </ul>
-        <p>Values are masked on display. The "Test" button against each key validates by calling the provider's lightweight endpoint — never the full reasoning model.</p>
-        <img src="../assets/dashboard/settings-api-keys.png" alt="Settings → API Keys sub-tab showing masked input fields for XAI, OpenAI, Anthropic keys with per-row Test buttons" class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
-
-        <h3 id="settings-updates">↓ Updates</h3>
-        <p>Framework version status + one-click <code>pforge self-update</code> from upstream. Surfaces version drift between your local <code>VERSION</code> and GitHub's latest release.</p>
-
-        <h3 id="settings-memory">🗄 Memory</h3>
-        <p>OpenBrain wiring: server URL, MCP credentials, project scope. See <a href="memory-architecture.html">Chapter 24 — Memory Architecture</a> for the three-tier model.</p>
-
-        <h3 id="settings-bridge">🔔 Bridge</h3>
-        <p>Remote Bridge endpoints for Slack / Teams / PagerDuty / OpenClaw / Telegram / Discord. See <a href="remote-bridge.html">Chapter 20 — Remote Bridge</a> for the per-channel walkthrough.</p>
-
-        <h3 id="settings-crucible">🔥 Crucible</h3>
-        <p>Idea-smelting pipeline configuration. Persists to <code>.forge/crucible/config.json</code>.</p>
-        <ul>
-          <li><strong>Default Lane</strong> — <code>tweak</code> (4q) / <code>feature</code> (7q) / <code>full</code> (~12q). Lane controls interview length.</li>
-          <li><strong>Self-Referral Depth</strong> — max child smelts a parent can spawn (0–3, default 1)</li>
-          <li><strong>Auto-approve agent-submitted smelts</strong> — when <code>source: agent</code>, finalize without human approval (off by default)</li>
-          <li><strong>Default-Source Weights</strong> — Memory / Principles / Plans (sum to 100). Server normalizes if you don't.</li>
-          <li><strong>Stale Defaults Warning</strong> — hours after which Principles/profile changes flag <code>STALE_PRINCIPLES</code>/<code>STALE_PROFILE</code> in the interview</li>
-        </ul>
-        <img src="../assets/dashboard/settings-crucible.png" alt="Settings → Crucible sub-tab showing Default Lane dropdown, Self-Referral Depth, Auto-approve toggle, Default-Source Weights, and Stale Defaults Warning fields" class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
-
-        <h3 id="settings-brain">🧠 Brain</h3>
-        <p>Forge-Master reasoning configuration: <code>reasoningModel</code>, <code>routerModel</code>, <code>quorumAdvisory</code>, <code>embeddingFallback</code>, GitHub Models zero-key path. See <a href="forge-master.html#config">Forge-Master → Configuration</a> for every field.</p>
-
-        <div class="callout callout-tip">
-          <strong>Audit-Loop activation</strong> isn't on a Settings tab — it lives in <code>.forge.json#audit.mode</code> (<code>off | auto | always</code>) and is toggled via the <a href="audit-loop.html">Audit Loop chapter</a>. Drain results stream into the <strong>Tempering</strong> tab in the Forge group.
+        <!-- ─── Settings Group (moved to sub-page) ─── -->
+        <div class="callout callout-info" id="config">
+          <strong>⚙ Settings Group</strong> — The Settings group has 9 purpose-built sub-tabs (General, Models, Execution, API Keys, Updates, Memory, Bridge, Crucible, Brain) for platform-wide configuration. Full reference: <a href="dashboard-settings.html">Dashboard — Settings Group →</a>
         </div>
 
         <!-- ─── Traces Tab ─── -->
@@ -299,14 +233,10 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
           <li><strong>Live Watch</strong> + <strong>Watch Snapshot</strong> cards on the Actions tab copy the matching <code>pforge watch-live</code> / <code>pforge watch</code> invocations</li>
         </ul>
 
-        <!-- ─── Forge-Master Studio Tab (v2.61 + v2.78–v2.79 + v2.82) ─── -->
-        <h2 id="studio">Forge-Master Studio Tab <span style="color:#c4b5fd;font-size:0.6em;vertical-align:middle">v2.61+ · expanded v2.78–v2.79 · timeline v2.82</span></h2>
-        <p>The reasoning orchestrator's home. See <a href="forge-master.html">the Forge-Master chapter</a> for the deep dive. Three panels:</p>
-        <ul>
-          <li><strong>Prompt gallery</strong> — pre-built prompts grouped by intent (operational, troubleshoot, advisory). Click to populate the chat box; edit before sending.</li>
-          <li><strong>Streaming chat</strong> — sends to <code>/api/forge-master/stream</code>. Shows live <code>classification</code> badge with the <code>via</code> field (<code>keyword</code> / <code>embedding-cache</code> / <code>router-llm</code>), <code>quorum-estimate</code> cost preview if advisory mode triggers (with cancel button), live <code>tool-call</code> trace, and the streaming reply token-by-token.</li>
-          <li><strong>Embedding cache tile</strong> — pulls from <code>GET /api/forge-master/cache-stats</code>. Shows <code>{size, hitRate, maxSize: 500}</code>. When cold, displays a hint that hits start once you've used Forge-Master a few times.</li>
-        </ul>
+        <!-- ─── Forge-Master Studio Tab (moved to sub-page) ─── -->
+        <div class="callout callout-info" id="studio">
+          <strong>📋 Forge-Master Studio Tab</strong> — The Studio tab (v2.61+) provides the reasoning orchestrator's chat interface with prompt gallery, streaming replies, embedding cache tile, and quorum advisory. Full reference: <a href="dashboard-forge-master.html">Dashboard — Forge-Master Studio →</a>
+        </div>
 
         <!-- ─── Audit-Loop activation surfaces ─── -->
         <h2 id="audit-loop">Audit-Loop Activation <span style="color:#fcd34d;font-size:0.6em;vertical-align:middle">v2.80</span></h2>
@@ -336,52 +266,10 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
         <p>The CLI equivalent is <code>pforge timeline</code> &mdash; same 9 sources, same correlation-id grouping, JSON-pipeable for scripts.</p>
         <img src="../assets/dashboard/timeline.png" alt="Dashboard Timeline tab — unified chronological view across 9 sources (run, incident, bug, deploy, crucible, fm-turn, memory, tempering, watch)" class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
 
-        <!-- ─── LiveGuard Section ─── -->
-        <h2 id="liveguard">LiveGuard Section <span style="color:#f59e0b;font-size:0.6em;vertical-align:middle">v2.28+</span></h2>
-        <p>Five amber-accented tabs separated by a visual divider from the FORGE section. LiveGuard tools (<code>forge_drift_report</code>, <code>forge_regression_guard</code>, <code>forge_incident_capture</code>, <code>forge_secret_scan</code>, <code>forge_env_diff</code>, <code>forge_liveguard_run</code>, etc.) broadcast <code>liveguard</code> + <code>liveguard-tool-completed</code> events that populate these tabs in real time.</p>
-
-        <h2 id="lg-health">Health Tab <span style="color:#f59e0b;font-size:0.6em;vertical-align:middle">LiveGuard</span></h2>
-        <p>Composite project health fingerprint produced by <code>forge_health_trend</code> and <code>forge_liveguard_run</code>:</p>
-        <ul>
-          <li><strong>Overall score</strong> (0–100) with trend direction (improving / stable / degrading)</li>
-          <li><strong>Component metrics</strong> — drift average, incident rate, test pass rate, model success rate, cost per slice</li>
-          <li><strong>Gate summary</strong> — drift / sweep / secret-scan / regression-guard / dep-watch / alert-triage pass/fail counts from the last <code>forge_liveguard_run</code></li>
-          <li><strong>Health DNA</strong> — persisted to <code>.forge/health-dna.json</code> for cross-session decay detection</li>
-        </ul>
-
-        <h2 id="lg-incidents">Incidents Tab <span style="color:#f59e0b;font-size:0.6em;vertical-align:middle">LiveGuard</span></h2>
-        <p>Open and recently resolved incidents captured by <code>forge_incident_capture</code> and auto-chained from drift:</p>
-        <ul>
-          <li><strong>Incident list</strong> — ID, severity, description, affected files, first seen, MTTR when resolved</li>
-          <li><strong>Recurring pattern flag</strong> — incidents on the same files ≥3 times in 30 days are auto-escalated to <code>high</code></li>
-          <li><strong>Auto-resolve</strong> — incidents close automatically when <code>forge_regression_guard</code> passes on overlapping scope</li>
-          <li><strong>Fix proposals</strong> — <code>forge_fix_proposal</code> plans linked to the originating incident are surfaced inline</li>
-        </ul>
-
-        <h2 id="lg-triage">Triage Tab <span style="color:#f59e0b;font-size:0.6em;vertical-align:middle">LiveGuard</span></h2>
-        <p>Prioritized alert stream from <code>forge_alert_triage</code>:</p>
-        <ul>
-          <li><strong>Severity-ordered alerts</strong> — critical / high / medium / low with source tool and timestamp</li>
-          <li><strong>Source breakdown</strong> — drift violations, secret-scan findings, env-diff gaps, dep-watch vulnerabilities</li>
-          <li><strong>Framework-code filtering</strong> — <code>pforge-mcp/</code>, <code>pforge.*</code>, <code>setup.*</code> paths are excluded from app-code scoring</li>
-        </ul>
-
-        <h2 id="lg-security">Security Tab <span style="color:#f59e0b;font-size:0.6em;vertical-align:middle">LiveGuard</span></h2>
-        <p>Secret hygiene and dependency vulnerability posture:</p>
-        <ul>
-          <li><strong>Secret scan results</strong> — entropy + key-name findings from <code>forge_secret_scan</code>, masked as <code>&lt;REDACTED&gt;</code>, confidence high / medium / low</li>
-          <li><strong>Vulnerable dependencies</strong> — <code>forge_dep_watch</code> output for npm (<code>npm audit</code>) and .NET (<code>dotnet list package --vulnerable</code>)</li>
-          <li><strong>PreDeploy gate status</strong> — blocks deploys on high-severity secret findings when <code>hooks.preDeploy</code> is enabled</li>
-        </ul>
-
-        <h2 id="lg-env">Env Tab <span style="color:#f59e0b;font-size:0.6em;vertical-align:middle">LiveGuard</span></h2>
-        <p>Environment-variable drift between local <code>.env</code>, example templates, and deploy targets via <code>forge_env_diff</code>:</p>
-        <ul>
-          <li><strong>Missing keys</strong> — present in <code>.env.example</code> / deploy config but absent from local <code>.env</code></li>
-          <li><strong>Extra keys</strong> — local-only values that are not in the shared template</li>
-          <li><strong>Cache freshness</strong> — stale-cache warning when the scan has not run since the last deploy</li>
-          <li><strong>Deploy journal link</strong> — correlates env gaps with the most recent <code>forge_deploy_journal</code> entry</li>
-        </ul>
+        <!-- ─── LiveGuard Section (moved to sub-page) ─── -->
+        <div class="callout callout-info" id="liveguard">
+          <strong>🛡 LiveGuard Tabs</strong> — The LiveGuard group has 5 amber-accented tabs (Health, Incidents, Triage, Security, Env) for post-deploy defense. Full reference: <a href="dashboard-liveguard.html">Dashboard — LiveGuard Tabs →</a>
+        </div>
 
         <!-- ─── Port Reference ─── -->
         <h2 id="ports">Port Reference</h2>

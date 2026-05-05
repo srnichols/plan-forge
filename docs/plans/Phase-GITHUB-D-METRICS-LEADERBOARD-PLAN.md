@@ -197,7 +197,7 @@ node -e "const cp=require('child_process'); const out=cp.execFileSync('pwsh',['-
 **Goal**: Mirror Slice 2 in bash.
 **Validation gate**:
 ```bash
-bash pforge.sh github metrics --help | grep -q pull
+node -e "const cp=require('child_process'); const out=cp.execFileSync('bash',['pforge.sh','github','metrics','--help'],{encoding:'utf8'}); if(!/pull/i.test(out)){console.error('no pull subcommand in help');process.exit(1)} console.log('ok')"
 ```
 **Estimated cost**: $0.15
 

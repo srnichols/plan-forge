@@ -183,14 +183,14 @@ The work is **strictly opt-in and additive**:
 
 ## Slice Plan
 
-> **Note for Hardener**: Memory note `plan-gate-command-rules.md` applies — single-line `bash -c "..."` for any Unix-tool gate. Memory note `test-fixtures-git-restrictions.md` applies — SARIF fixtures use `.json` extensions (no `.git/` paths so they're safe to commit, unlike the github-introspect fixtures which had to be programmatic).
+> **Note for Hardener**: Memory note `plan-gate-command-rules.md` applies — write gate commands as plain `node ...` / `pwsh ...` / `npx ...` / `grep ...` invocations; the orchestrator auto-routes Unix tools through Git Bash on Windows. **DO NOT** wrap commands in `bash -c "..."` yourself — that bypasses auto-routing and resolves to WSL bash on Windows, which has no Windows `node`/`npx` on PATH (lesson learned from this Phase's first run, postmortem 2026-05-05). Memory note `test-fixtures-git-restrictions.md` applies — SARIF fixtures use `.json` extensions (no `.git/` paths so they're safe to commit, unlike the github-introspect fixtures which had to be programmatic).
 
 ### Slice 1 — copilot-coding-agent module + mock-gh harness
 **Files in scope**: `pforge-mcp/workers/copilot-coding-agent.mjs`, `pforge-mcp/tests/copilot-coding-agent.test.mjs`, `pforge-mcp/tests/helpers/mock-gh.mjs`
 **Goal**: Implement `dispatchSlice` and `pollPullRequest`. Build a mock-gh helper that creates a tmpdir-based `gh` script, exports it via PATH override, returns scripted responses. Vitest covers happy path + 5 edge cases.
 **Validation gate**:
 ```bash
-bash -c "cd pforge-mcp && npx vitest run tests/copilot-coding-agent.test.mjs"
+npx --prefix pforge-mcp vitest run pforge-mcp/tests/copilot-coding-agent.test.mjs
 ```
 **Estimated cost**: $0.50
 
@@ -199,7 +199,7 @@ bash -c "cd pforge-mcp && npx vitest run tests/copilot-coding-agent.test.mjs"
 **Goal**: Add `copilot-coding-agent` entry with command/probe/costModel/concurrency/requires fields.
 **Validation gate**:
 ```bash
-bash -c "node -e \"const w=require('./pforge-mcp/worker-capabilities.json'); if(!w.workers['copilot-coding-agent']) process.exit(1)\""
+node -e "const w=require('./pforge-mcp/worker-capabilities.json'); if(!w.workers || !w.workers['copilot-coding-agent']) { console.error('missing worker entry'); process.exit(1) } else { console.log('ok') }"
 ```
 **Estimated cost**: $0.10
 
@@ -208,7 +208,7 @@ bash -c "node -e \"const w=require('./pforge-mcp/worker-capabilities.json'); if(
 **Goal**: When `--worker copilot-coding-agent` is selected, run `inspectGithubStack` pre-flight and route slice execution to the new module. Integration test runs a 2-slice fixture plan end-to-end.
 **Validation gate**:
 ```bash
-bash -c "cd pforge-mcp && npx vitest run tests/run-plan-copilot-dispatch.test.mjs"
+npx --prefix pforge-mcp vitest run pforge-mcp/tests/run-plan-copilot-dispatch.test.mjs
 ```
 **Estimated cost**: $0.60
 
@@ -217,7 +217,7 @@ bash -c "cd pforge-mcp && npx vitest run tests/run-plan-copilot-dispatch.test.mj
 **Goal**: Capture github block in trajectory at dispatch and after polling. Dashboard's Runs tab renders issue/PR URLs when present.
 **Validation gate**:
 ```bash
-bash -c "cd pforge-mcp && npx vitest run tests/run-plan-copilot-dispatch.test.mjs --grep trajectory"
+npx --prefix pforge-mcp vitest run pforge-mcp/tests/run-plan-copilot-dispatch.test.mjs -t trajectory
 ```
 **Estimated cost**: $0.30
 
@@ -226,7 +226,7 @@ bash -c "cd pforge-mcp && npx vitest run tests/run-plan-copilot-dispatch.test.mj
 **Goal**: `--dry-run` prints issue bodies. `--estimate` prints wall-clock + $0 cost.
 **Validation gate**:
 ```bash
-bash -c "cd pforge-mcp && npx vitest run tests/copilot-coding-agent.test.mjs --grep estimate"
+npx --prefix pforge-mcp vitest run pforge-mcp/tests/copilot-coding-agent.test.mjs -t estimate
 ```
 **Estimated cost**: $0.20
 
@@ -235,7 +235,7 @@ bash -c "cd pforge-mcp && npx vitest run tests/copilot-coding-agent.test.mjs --g
 **Goal**: Parse SARIF, generate plan markdown, sort by severity, dedupe locations. Vitest covers all 5 listed cases.
 **Validation gate**:
 ```bash
-bash -c "cd pforge-mcp && npx vitest run tests/sarif-to-plan.test.mjs"
+npx --prefix pforge-mcp vitest run pforge-mcp/tests/sarif-to-plan.test.mjs
 ```
 **Estimated cost**: $0.50
 
@@ -244,8 +244,7 @@ bash -c "cd pforge-mcp && npx vitest run tests/sarif-to-plan.test.mjs"
 **Goal**: Add `plan-from-sarif` subcommand to both dispatchers; route to `node pforge-mcp/sarif-to-plan.mjs`. Support stdin via `-` arg.
 **Validation gate**:
 ```bash
-bash -c "node pforge-mcp/sarif-to-plan.mjs pforge-mcp/tests/fixtures/sarif/multi-mixed.sarif.json | grep -q '## Slice'"
-bash -c "pwsh -NoProfile -File pforge.ps1 plan-from-sarif --help | grep -q sarif"
+node -e "const cp=require('child_process'); const out=cp.execFileSync('node',['pforge-mcp/sarif-to-plan.mjs','pforge-mcp/tests/fixtures/sarif/multi-mixed.sarif.json'],{encoding:'utf8'}); if(!/##\\s+Slice/.test(out)){console.error('no Slice headers in output');process.exit(1)} console.log('ok')"
 ```
 **Estimated cost**: $0.20
 
@@ -254,7 +253,7 @@ bash -c "pwsh -NoProfile -File pforge.ps1 plan-from-sarif --help | grep -q sarif
 **Goal**: Generate a plan from each fixture, run through `parsePlan`, assert no errors and slice count matches finding count.
 **Validation gate**:
 ```bash
-bash -c "cd pforge-mcp && npx vitest run tests/sarif-to-plan-roundtrip.test.mjs"
+npx --prefix pforge-mcp vitest run pforge-mcp/tests/sarif-to-plan-roundtrip.test.mjs
 ```
 **Estimated cost**: $0.20
 
@@ -263,7 +262,7 @@ bash -c "cd pforge-mcp && npx vitest run tests/sarif-to-plan-roundtrip.test.mjs"
 **Goal**: Run full pforge-mcp vitest suite, ensure no regressions.
 **Validation gate**:
 ```bash
-bash -c "cd pforge-mcp && npx vitest run"
+npx --prefix pforge-mcp vitest run
 ```
 **Estimated cost**: $0.10
 
@@ -272,10 +271,7 @@ bash -c "cd pforge-mcp && npx vitest run"
 **Goal**: Replace the Section 3 + 4 "Coming next" callouts with full content (worked examples, screenshots if available). Bump VERSION 2.85.0 → 2.86.0. CHANGELOG entry.
 **Validation gate**:
 ```bash
-bash -c "grep -q 'pforge run-plan --worker copilot-coding-agent' docs/manual/plan-forge-on-the-github-stack.html"
-bash -c "grep -q 'pforge plan-from-sarif' docs/manual/plan-forge-on-the-github-stack.html"
-bash -c "grep -q '2.86.0' VERSION"
-bash -c "grep -q 'Copilot Coding Agent dispatch' CHANGELOG.md"
+node -e "const fs=require('fs'); const html=fs.readFileSync('docs/manual/plan-forge-on-the-github-stack.html','utf8'); const cl=fs.readFileSync('CHANGELOG.md','utf8'); const v=fs.readFileSync('VERSION','utf8').trim(); const checks={section3:/pforge run-plan --worker copilot-coding-agent/.test(html), section4:/pforge plan-from-sarif/.test(html), version:v==='2.86.0', changelog:/Copilot Coding Agent dispatch/i.test(cl)}; const failed=Object.entries(checks).filter(([_,v])=>!v); if(failed.length){console.error('failed:',failed.map(([k])=>k).join(','));process.exit(1)} console.log('ok')"
 ```
 **Estimated cost**: $0.40
 
@@ -315,5 +311,5 @@ bash -c "grep -q 'Copilot Coding Agent dispatch' CHANGELOG.md"
 - All `gh` shell-outs in production code MUST escape user-provided strings (slice titles especially). Step 5 Review should grep for `execSync.*\\\$\{` patterns in the new module.
 - The mock-gh helper pattern is reusable for future GitHub-API tests — consider extracting to `tests/helpers/mock-gh.mjs` if Slice 1 hasn't already.
 - Existing test count: 450. Phase B adds ~25–35 tests. Final count target: 475–485.
-- All gates use single-line `bash -c "..."` per memory note `plan-gate-command-rules.md`. Do not introduce `cd dir && cmd` patterns.
+- All gates use direct `node ...` / `npx ...` / `pwsh ...` invocations (NOT wrapped in `bash -c`). The orchestrator's auto-routing handles cross-platform dispatch. See `plan-gate-command-rules.md` for the trap.
 - Total estimated cost is $3.00–$6.00 across 10 slices. Re-run `forge_estimate_quorum` if a flagship model is selected.

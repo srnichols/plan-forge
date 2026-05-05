@@ -138,15 +138,14 @@ The work is **strictly documentation-only** for the chapter prose. The dogfood c
 
 ## Slice Plan
 
-> Memory note `plan-gate-command-rules.md` applies. All gates use single-line `bash -c "..."`.
+> Memory note `plan-gate-command-rules.md` applies. **DO NOT** wrap commands in `bash -c "..."` — that bypasses the orchestrator's auto-routing on Windows. Write gates as plain `node ...` / `npx ...` invocations.
 
 ### Slice 1 — Section 5: Copilot Spaces sync (manual pattern + roadmap)
 **Files in scope**: `docs/manual/plan-forge-on-the-github-stack.html`
 **Goal**: Replace Section 5 callout with full content — pattern description, manual-copy steps, GitHub Spaces docs link, Phase GITHUB-E roadmap callout.
 **Validation gate**:
 ```bash
-bash -c "grep -q 'Copilot Spaces' docs/manual/plan-forge-on-the-github-stack.html"
-bash -c "grep -q 'Phase GITHUB-E' docs/manual/plan-forge-on-the-github-stack.html"
+node -e "const html=require('fs').readFileSync('docs/manual/plan-forge-on-the-github-stack.html','utf8'); const checks={spaces:/Copilot Spaces/i.test(html), roadmap:/Phase GITHUB-E/i.test(html)}; const failed=Object.entries(checks).filter(([_,v])=>!v); if(failed.length){console.error('failed:',failed.map(([k])=>k).join(','));process.exit(1)} console.log('ok')"
 ```
 **Estimated cost**: $0.20
 
@@ -155,9 +154,7 @@ bash -c "grep -q 'Phase GITHUB-E' docs/manual/plan-forge-on-the-github-stack.htm
 **Goal**: Replace Section 7 callout. Cover --model flag, quorum modes, picker interaction, BYOK cost model with worked numbers (claude-sonnet-4.6 vs gpt-5.5 vs grok-4 examples).
 **Validation gate**:
 ```bash
-bash -c "grep -q 'BYOK' docs/manual/plan-forge-on-the-github-stack.html"
-bash -c "grep -q '--model' docs/manual/plan-forge-on-the-github-stack.html"
-bash -c "grep -q 'quorum' docs/manual/plan-forge-on-the-github-stack.html"
+node -e "const html=require('fs').readFileSync('docs/manual/plan-forge-on-the-github-stack.html','utf8'); const checks={byok:/BYOK/i.test(html), modelFlag:/--model/.test(html), quorum:/quorum/i.test(html)}; const failed=Object.entries(checks).filter(([_,v])=>!v); if(failed.length){console.error('failed:',failed.map(([k])=>k).join(','));process.exit(1)} console.log('ok')"
 ```
 **Estimated cost**: $0.25
 
@@ -166,9 +163,7 @@ bash -c "grep -q 'quorum' docs/manual/plan-forge-on-the-github-stack.html"
 **Goal**: Replace Section 8 callout. Three subsections, alphabetical, each with assessment + verdict.
 **Validation gate**:
 ```bash
-bash -c "grep -q 'Claude Code' docs/manual/plan-forge-on-the-github-stack.html"
-bash -c "grep -q 'Cursor' docs/manual/plan-forge-on-the-github-stack.html"
-bash -c "grep -q 'Codex' docs/manual/plan-forge-on-the-github-stack.html"
+node -e "const html=require('fs').readFileSync('docs/manual/plan-forge-on-the-github-stack.html','utf8'); const checks={claude:/Claude Code/i.test(html), cursor:/Cursor/i.test(html), codex:/Codex/i.test(html)}; const failed=Object.entries(checks).filter(([_,v])=>!v); if(failed.length){console.error('failed:',failed.map(([k])=>k).join(','));process.exit(1)} console.log('ok')"
 ```
 **Estimated cost**: $0.30
 
@@ -177,18 +172,17 @@ bash -c "grep -q 'Codex' docs/manual/plan-forge-on-the-github-stack.html"
 **Goal**: Add "Read next" link at end of each new section. Sweep for any remaining "Coming next" / "Planned" callouts (only Section 9 may have a placeholder if dogfood not yet captured).
 **Validation gate**:
 ```bash
-bash -c "grep -c 'Coming next' docs/manual/plan-forge-on-the-github-stack.html | grep -E '^[0-1]$'"
+node -e "const html=require('fs').readFileSync('docs/manual/plan-forge-on-the-github-stack.html','utf8'); const matches=(html.match(/Coming next/gi)||[]); if(matches.length>1){console.error('still '+matches.length+' Coming next callouts; expected 0 or 1 (Section 9 placeholder)');process.exit(1)} console.log('ok ('+matches.length+' Coming next callouts)')"
 ```
 **Estimated cost**: $0.15
 
-### Slice 5 — Section 9 + dogfood runbook (gated)
-**Files in scope**: `docs/manual/plan-forge-on-the-github-stack.html`, `docs/plans/PHASE-GITHUB-C-DOGFOOD-RUNBOOK.md`
+### Slice 5 — [DEFERRED — manual] Section 9 + dogfood runbook (gated)
+**Status**: **DEFERRED** to a later interactive session per the user's instruction. Section 9 of the chapter will be a placeholder pointing at the future runbook; the runbook itself (`docs/plans/PHASE-GITHUB-C-DOGFOOD-RUNBOOK.md`) is left for manual authoring because it dispatches real GitHub Issues against the live `srnichols/plan-forge` repo and must be reviewed line-by-line before execution.
+**Files in scope** (when run): `docs/manual/plan-forge-on-the-github-stack.html`, `docs/plans/PHASE-GITHUB-C-DOGFOOD-RUNBOOK.md`
 **Goal**: Add Section 9 callout pointing at the runbook. Author the runbook with command, side-effects, rollback, export procedure, and the explicit "do not auto-run" warning.
-**Validation gate**:
+**Validation gate** (when run):
 ```bash
-bash -c "grep -q 'Built with Plan-Forge' docs/manual/plan-forge-on-the-github-stack.html"
-bash -c "test -f docs/plans/PHASE-GITHUB-C-DOGFOOD-RUNBOOK.md"
-bash -c "grep -q 'DO NOT run this as part' docs/plans/PHASE-GITHUB-C-DOGFOOD-RUNBOOK.md"
+node -e "const html=require('fs').readFileSync('docs/manual/plan-forge-on-the-github-stack.html','utf8'); const fs=require('fs'); const checks={section9:/Built with Plan-Forge/i.test(html), runbook:fs.existsSync('docs/plans/PHASE-GITHUB-C-DOGFOOD-RUNBOOK.md'), warning:fs.existsSync('docs/plans/PHASE-GITHUB-C-DOGFOOD-RUNBOOK.md') && /DO NOT run this as part/i.test(fs.readFileSync('docs/plans/PHASE-GITHUB-C-DOGFOOD-RUNBOOK.md','utf8'))}; const failed=Object.entries(checks).filter(([_,v])=>!v); if(failed.length){console.error('failed:',failed.map(([k])=>k).join(','));process.exit(1)} console.log('ok')"
 ```
 **Estimated cost**: $0.20
 
@@ -197,8 +191,8 @@ bash -c "grep -q 'DO NOT run this as part' docs/plans/PHASE-GITHUB-C-DOGFOOD-RUN
 **Goal**: Bump VERSION (next minor after Phase D), add CHANGELOG entry. Add a test asserting all 9 section headings present.
 **Validation gate**:
 ```bash
-bash -c "cd pforge-mcp && npx vitest run tests/manual-chapter-headings.test.mjs"
-bash -c "grep -q 'GitHub-stack chapter complete' CHANGELOG.md"
+npx --prefix pforge-mcp vitest run pforge-mcp/tests/manual-chapter-headings.test.mjs
+node -e "const cl=require('fs').readFileSync('CHANGELOG.md','utf8'); if(!/GitHub-stack chapter/i.test(cl)){console.error('CHANGELOG missing GitHub-stack chapter entry');process.exit(1)} console.log('ok')"
 ```
 **Estimated cost**: $0.15
 

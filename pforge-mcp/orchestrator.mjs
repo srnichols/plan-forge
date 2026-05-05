@@ -3701,10 +3701,13 @@ export async function runPlan(planPath, options = {}) {
   }
 
   // Phase GITHUB-B Slice 3 — Copilot Coding Agent pre-flight (skipped for estimate/dryRun)
+  // Hotfix v2.90.4: always probe copilot-coding-agent-assignable (ghToken:true) so a
+  // missing Copilot Coding Agent enablement is caught before any issue is created.
   if (worker === "copilot-coding-agent") {
-    const inspection = _inspectGithubStack(cwd);
+    const inspection = _inspectGithubStack(cwd, { ghToken: true });
     const githubRemote = inspection.checks.find((c) => c.id === "github-remote");
     const ghCli = inspection.checks.find((c) => c.id === "gh-cli");
+    const copilotAssignable = inspection.checks.find((c) => c.id === "copilot-coding-agent-assignable");
     const failed = [];
     if (!githubRemote || githubRemote.status !== "pass") {
       const detail = githubRemote?.detail ?? "check unavailable";
@@ -3715,6 +3718,13 @@ export async function runPlan(planPath, options = {}) {
       const detail = ghCli?.detail ?? "check unavailable";
       const hint = ghCli?.fixHint ? ` — ${ghCli.fixHint}` : "";
       failed.push(`gh-cli: ${detail}${hint}`);
+    }
+    // warn = Copilot Coding Agent not enabled; fail = API error. Both block dispatch.
+    // na = check was skipped (token not available or check deferred) — not blocking.
+    if (copilotAssignable && (copilotAssignable.status === "warn" || copilotAssignable.status === "fail")) {
+      const detail = copilotAssignable.detail ?? "check unavailable";
+      const hint = copilotAssignable.fixHint ? ` — ${copilotAssignable.fixHint}` : "";
+      failed.push(`copilot-coding-agent-assignable: ${detail}${hint}`);
     }
     if (failed.length > 0) {
       return {

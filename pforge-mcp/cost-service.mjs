@@ -643,7 +643,7 @@ export function buildQuorumConfigForMode(mode) {
  *   generatedAt: string
  * }}
  */
-export function estimateSlice({ plan, sliceNumber, mode = "auto", model = "claude-sonnet-4.5", cwd } = {}) {
+export function estimateSlice({ plan, sliceNumber, mode = "auto", model = "claude-sonnet-4.5", cwd, env = process.env } = {}) {
   if (!plan || !plan.slices) {
     throw new Error("estimateSlice: plan object with slices is required");
   }
@@ -693,7 +693,7 @@ export function estimateSlice({ plan, sliceNumber, mode = "auto", model = "claud
     }
   } catch { /* default to {} */ }
   const costForLeg = (legModel, inTokens, outTokens) => {
-    const legCost = detectCostModel({ env: process.env, forgeConfig, model: legModel });
+    const legCost = detectCostModel({ env, forgeConfig, model: legModel });
     if (SUBSCRIPTION_PROVIDERS.has(legCost.provider)) {
       return legCost.perRequestUsd;
     }

@@ -79,6 +79,7 @@ export function pullMetrics({ org, since, until, ghCmd = "gh", env } = {}) {
   const result = spawnSync(ghCmd, ["api", url], {
     encoding: "utf-8",
     env: env ?? process.env,
+    shell: process.platform === "win32",
   });
 
   if (result.error) {

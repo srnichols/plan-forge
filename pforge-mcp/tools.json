@@ -569,7 +569,7 @@
   },
   {
     "name": "forge_run_plan",
-    "description": "Execute a hardened plan — spawn CLI workers for each slice, validate at every boundary, track tokens. Supports Full Auto (gh copilot CLI) and Assisted (human + automated gates) modes. Use --estimate for cost prediction without executing.",
+    "description": "Execute a hardened plan — spawn CLI workers for each slice, validate at every boundary, track tokens. Supports Full Auto (gh copilot CLI) and Assisted (human + automated gates) modes. Use --estimate for cost prediction without executing. To bypass Crucible enforcement and import a plan directly, pass manualImport:true.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -2303,7 +2303,7 @@
       "drain-loop",
       "tempering-drain"
     ],
-    "cost": "medium",
+    "cost": "high",
     "maxConcurrent": 1,
     "addedIn": "2.80.0",
     "prerequisites": [
@@ -2311,7 +2311,8 @@
       "dev server running (for content-audit scanner)"
     ],
     "produces": [
-      ".forge/audits/dev-*.json"
+      ".forge/tempering/drain-history.jsonl",
+      ".forge/audits/dev-<ts>.json"
     ],
     "consumes": [
       ".forge.json#audit",
@@ -2324,13 +2325,13 @@
       "may submit Crucible smelts for spec-lane findings"
     ],
     "errors": {
-      "PRODUCTION_BLOCKED": {
-        "message": "Production environment is forbidden",
-        "recovery": "Use --env=dev or --env=staging"
+      "MISSING_PROJECTDIR": {
+        "message": "Project directory not found or not provided",
+        "recovery": "Provide a valid path parameter pointing to the project root"
       },
-      "NO_SCANNERS": {
-        "message": "No scanners matched the requested set",
-        "recovery": "Omit scanners param to run all available scanners"
+      "MAX_ROUNDS_EXCEEDED": {
+        "message": "Drain loop hit the maximum round cap without converging",
+        "recovery": "Increase maxRounds or resolve remaining findings manually"
       }
     },
     "example": {
@@ -2429,7 +2430,7 @@
     "consumes": [],
     "sideEffects": [],
     "errors": {
-      "INVALID_FINDING": {
+      "MISSING_FINDING": {
         "message": "Finding object is required with at least a title field",
         "recovery": "Provide a finding object from a scanner result"
       }

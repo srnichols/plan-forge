@@ -96,8 +96,9 @@ describe("cost-service: estimateSlice (Phase-27.2 Slice 1)", () => {
 
   it("uses the specified model for pricing", () => {
     const plan = makePlan(3);
-    const opusResult = estimateSlice({ plan, sliceNumber: 1, mode: "false", model: "claude-opus-4.6", cwd: CLEAN_CWD });
-    const sonnetResult = estimateSlice({ plan, sliceNumber: 1, mode: "false", model: "claude-sonnet-4.5", cwd: CLEAN_CWD });
+    const API_ENV = { ANTHROPIC_API_KEY: "sk-fake-test-key" };
+    const opusResult = estimateSlice({ plan, sliceNumber: 1, mode: "false", model: "claude-opus-4.6", cwd: CLEAN_CWD, env: API_ENV });
+    const sonnetResult = estimateSlice({ plan, sliceNumber: 1, mode: "false", model: "claude-sonnet-4.5", cwd: CLEAN_CWD, env: API_ENV });
     expect(opusResult.model).toBe("claude-opus-4.6");
     expect(sonnetResult.model).toBe("claude-sonnet-4.5");
     // Opus is more expensive than sonnet

@@ -860,6 +860,7 @@ let _ghCopilotProbe = () => {
     return false;
   }
 };
+let _ghCopilotCache = null;
 
 /**
  * Inject a gh-copilot availability probe for testing. Pass `null` to restore
@@ -867,6 +868,7 @@ let _ghCopilotProbe = () => {
  * @param {(() => boolean) | null} probe
  */
 export function setGhCopilotProbe(probe) {
+  _ghCopilotCache = null;
   _ghCopilotProbe = probe || (() => {
     try {
       const workers = loadWorkerCapabilities();
@@ -880,7 +882,8 @@ export function setGhCopilotProbe(probe) {
 }
 
 function isGhCopilotAvailable() {
-  return _ghCopilotProbe();
+  if (_ghCopilotCache === null) _ghCopilotCache = _ghCopilotProbe();
+  return _ghCopilotCache;
 }
 
 /**

@@ -123,7 +123,7 @@ export async function runLoadStressScan(ctx) {
 
   for (const ep of endpoints) {
     // Budget check between endpoints
-    if (now() > deadline) {
+    if (now() >= deadline) {
       return {
         scanner: "load-stress", sliceRef,
         startedAt, completedAt: new Date(now()).toISOString(),

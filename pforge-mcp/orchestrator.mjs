@@ -47,6 +47,7 @@ import {
 // Phase GITHUB-B Slice 3 — Copilot Coding Agent dispatch routing
 import { inspectGithubStack as _inspectGithubStackDefault } from "./github-introspect.mjs";
 import {
+  buildIssueBody as _buildIssueBodyDefault,
   dispatchSlice as _dispatchSliceDefault,
   pollPullRequest as _pollPullRequestDefault,
   DEFAULT_POLL_INTERVAL_MS,
@@ -3596,11 +3597,25 @@ export async function runPlan(planPath, options = {}) {
         estimateQuorumConfig.threshold = quorumThreshold;
       }
     }
-    return buildEstimate(plan, effectiveModel, cwd, estimateQuorumConfig, resumeFrom);
+    return buildEstimate(plan, effectiveModel, cwd, estimateQuorumConfig, resumeFrom, worker);
   }
 
   // Dry run — parse and validate only
   if (dryRun) {
+    // Phase GITHUB-B Slice 5: copilot-coding-agent dry-run prints issue body previews
+    // without requiring `gh` to be installed.
+    if (worker === "copilot-coding-agent") {
+      const issuePreviews = plan.slices.map((s) => ({
+        number: s.number,
+        title: s.title || "Untitled slice",
+        issueBody: _buildIssueBodyDefault({
+          goal: s.goal || (Array.isArray(s.tasks) ? s.tasks.join("\n") : s.tasks),
+          scope: s.scope,
+          gate: s.validationGate,
+        }),
+      }));
+      return { status: "dry-run", plan, issuePreviews };
+    }
     return { status: "dry-run", plan };
   }
 
@@ -10742,8 +10757,8 @@ export function calculateSliceCost(tokens, worker) {
 export function buildCostBreakdown(sliceResults) {
   return _priceRun(sliceResults);
 }
-export function buildEstimate(plan, model, cwd, quorumConfig = null, resumeFrom = null) {
-  return _estimatePlan(plan, model, cwd, quorumConfig, resumeFrom);
+export function buildEstimate(plan, model, cwd, quorumConfig = null, resumeFrom = null, worker = null) {
+  return _estimatePlan(plan, model, cwd, quorumConfig, resumeFrom, worker);
 }
 
 

@@ -76,6 +76,13 @@ export const SUBSCRIPTION_PROVIDERS = new Set(["gh-copilot", "claude-cli", "code
 const CLI_PER_REQUEST_USD = 0.01;
 
 /**
+ * Expected wall-clock minutes for one Copilot Coding Agent slice.
+ * Based on DEFAULT_TIMEOUT_MS (30 min) in copilot-coding-agent.mjs.
+ * Used by estimatePlan to project elapsed time for --estimate output.
+ */
+export const COPILOT_AGENT_MINUTES_PER_SLICE = 30;
+
+/**
  * Determine cost model for the active execution environment.
  *
  * Precedence (highest to lowest):
@@ -249,7 +256,7 @@ export function priceRun(sliceResults) {
  * correction factor to [0.5, 3.0]. Quorum overhead computed when quorumConfig.enabled.
  * Per-plan model recommendation from .forge/model-performance.json.
  */
-export function estimatePlan(plan, model, cwd, quorumConfig = null, resumeFrom = null) {
+export function estimatePlan(plan, model, cwd, quorumConfig = null, resumeFrom = null, worker = null) {
   // Bug #81: When --resume-from is specified, exclude shipped slices from
   // the estimate. Mirror SequentialScheduler.execute() skip logic: walk the
   // topological execution order, start including once we hit resumeFrom.
@@ -329,6 +336,39 @@ export function estimatePlan(plan, model, cwd, quorumConfig = null, resumeFrom =
   const sliceCount = effectiveSlices.length;
   const totalInputTokens = sliceCount * tokensPerSlice.input;
   const totalOutputTokens = sliceCount * tokensPerSlice.output;
+
+  // Phase GITHUB-B Slice 5: copilot-coding-agent dispatches GitHub Issues to the
+  // cloud agent — no API token billing and no CLI premium requests. Cost is $0.
+  // Wall-clock time is estimated as sliceCount × COPILOT_AGENT_MINUTES_PER_SLICE.
+  if (worker === "copilot-coding-agent") {
+    return {
+      status: "estimate",
+      sliceCount,
+      executionOrder: effectiveOrder,
+      ...(resumeFrom !== null && resumeFrom !== undefined && { resumeFrom: String(resumeFrom), fullSliceCount: plan.slices.length }),
+      worker: "copilot-coding-agent",
+      model: model || "copilot-coding-agent",
+      tokens: {
+        estimatedInput: totalInputTokens,
+        estimatedOutput: totalOutputTokens,
+        source: tokensPerSlice.source,
+      },
+      estimatedCostUSD: 0,
+      estimated_cost_usd: 0,
+      provider: "copilot-coding-agent",
+      pricingMode: "subscription",
+      wallClockEstimateMinutes: sliceCount * COPILOT_AGENT_MINUTES_PER_SLICE,
+      confidence: "heuristic",
+      slices: effectiveSlices.map((s) => ({
+        number: s.number,
+        title: s.title,
+        depends: s.depends,
+        parallel: s.parallel,
+        scope: s.scope,
+      })),
+    };
+  }
+
   let estimatedCost;
   if (pricingMode === "subscription") {
     const reqPerSlice = avgPremiumPerSlice !== null ? avgPremiumPerSlice : 1.5;

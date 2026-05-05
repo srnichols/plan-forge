@@ -114,7 +114,7 @@ function Show-Help {
     Write-Host "    --max=N         Override maximum rounds (default: 5)"
     Write-Host "    --dry-run       Show what would happen without triage side effects"
     Write-Host "    --env=ENV       Set environment (dev, staging; production is forbidden)"
-    Write-Host "  github <sub>      Inspect the GitHub-native AI surface (status | doctor)"
+    Write-Host "  github <sub>      Inspect the GitHub-native AI surface (status | doctor | metrics)"
     Write-Host "  help              Show this help message"
     Write-Host ""
     Write-Host "OPTIONS:" -ForegroundColor Yellow
@@ -5976,9 +5976,9 @@ function Invoke-AuditLoop {
 
 # ─── Command: github ───────────────────────────────────────────────────
 function Invoke-Github {
-    # Subcommands: status | doctor | --help
+    # Subcommands: status | doctor | metrics | --help
     $sub = if ($Arguments -and $Arguments.Count -gt 0) { $Arguments[0] } else { '' }
-    $rest = if ($Arguments -and $Arguments.Count -gt 1) { $Arguments[1..($Arguments.Count - 1)] } else { @() }
+    [string[]]$rest = if ($Arguments -and $Arguments.Count -gt 1) { @($Arguments[1..($Arguments.Count - 1)]) } else { @() }
 
     if ($sub -eq '' -or $sub -eq '--help' -or $sub -eq '-h' -or $sub -eq 'help') {
         Write-Host ""
@@ -5987,6 +5987,7 @@ function Invoke-Github {
         Write-Host "SUBCOMMANDS:" -ForegroundColor Yellow
         Write-Host "  status            Print a checklist of GitHub-native primitives Plan-Forge integrates with"
         Write-Host "  doctor            Same as status, plus one-line fix hints for warn/fail rows"
+        Write-Host "  metrics           Manage GitHub Copilot usage metrics (pull | --help)"
         Write-Host ""
         Write-Host "OPTIONS:" -ForegroundColor Yellow
         Write-Host "  --project <dir>   Project root to inspect (default: current directory)"
@@ -5997,8 +5998,117 @@ function Invoke-Github {
         Write-Host "  pforge github status"
         Write-Host "  pforge github doctor --extra"
         Write-Host "  pforge github status --json | ConvertFrom-Json"
+        Write-Host "  pforge github metrics pull --org myorg"
         Write-Host ""
         return
+    }
+
+    if ($sub -eq 'metrics') {
+        [string[]]$restArr = @($rest)
+        $metricsSub  = if ($restArr.Count -gt 0) { $restArr[0] } else { '' }
+        [string[]]$metricsRest = if ($restArr.Count -gt 1) { @($restArr[1..($restArr.Count - 1)]) } else { @() }
+
+        if ($metricsSub -eq '' -or $metricsSub -eq '--help' -or $metricsSub -eq '-h' -or $metricsSub -eq 'help') {
+            Write-Host ""
+            Write-Host "pforge github metrics — Manage GitHub Copilot usage metrics" -ForegroundColor Cyan
+            Write-Host ""
+            Write-Host "SUBCOMMANDS:" -ForegroundColor Yellow
+            Write-Host "  pull              Fetch Copilot metrics from the GitHub API and persist locally"
+            Write-Host ""
+            Write-Host "OPTIONS (pull):" -ForegroundColor Yellow
+            Write-Host "  --org <name>       GitHub org slug (required)"
+            Write-Host "  --since <date>     ISO date or shorthand like '30d' (default: 30d)"
+            Write-Host "  --until <date>     ISO date upper bound (default: today)"
+            Write-Host "  --store-dir <dir>  JSONL store directory (default: .forge/metrics)"
+            Write-Host "  --json             Emit result summary as JSON"
+            Write-Host ""
+            Write-Host "EXAMPLES:" -ForegroundColor Yellow
+            Write-Host "  pforge github metrics pull --org myorg"
+            Write-Host "  pforge github metrics pull --org myorg --since 7d"
+            Write-Host "  pforge github metrics pull --org myorg --since 2024-01-01 --until 2024-01-31 --json"
+            Write-Host ""
+            return
+        }
+
+        if ($metricsSub -ne 'pull') {
+            Write-Host "ERROR: unknown subcommand 'pforge github metrics $metricsSub'. Try 'pforge github metrics --help'." -ForegroundColor Red
+            exit 1
+        }
+
+        # ── metrics pull ──────────────────────────────────────────────────
+        $org = ''; $since = ''; $until = ''; $storeDir = ''; $jsonOutput = $false
+        $i = 0
+        while ($i -lt $metricsRest.Count) {
+            switch ($metricsRest[$i]) {
+                '--org'       { $org      = $metricsRest[++$i] }
+                '--since'     { $since    = $metricsRest[++$i] }
+                '--until'     { $until    = $metricsRest[++$i] }
+                '--store-dir' { $storeDir = $metricsRest[++$i] }
+                '--json'      { $jsonOutput = $true }
+            }
+            $i++
+        }
+
+        if (-not $org) {
+            Write-Host "ERROR: --org is required. Usage: pforge github metrics pull --org <orgname>" -ForegroundColor Red
+            exit 1
+        }
+
+        $metricsScript = Join-Path $RepoRoot "pforge-mcp/github-metrics.mjs"
+        if (-not (Test-Path $metricsScript)) {
+            Write-Host "ERROR: github-metrics.mjs not found at $metricsScript" -ForegroundColor Red
+            exit 1
+        }
+
+        if (-not $storeDir) { $storeDir = Join-Path (Get-Location).Path '.forge/metrics' }
+        $sinceArg = if ($since) { $since } else { '30d' }
+        $untilArg = if ($until) { $until } else { '' }
+
+        $pullInline = @"
+import { pullMetrics, writeMetrics } from './pforge-mcp/github-metrics.mjs';
+const [org, since, until, storeDir] = process.argv.slice(1);
+try {
+  const records = pullMetrics({ org, since, until: until || undefined });
+  const result  = writeMetrics(records, { storeDir });
+  const summary = { ok: true, org, fetched: records.length, written: result.written, skipped: result.skipped };
+  console.log(JSON.stringify(summary));
+} catch (e) {
+  process.stderr.write(JSON.stringify({ ok: false, error: e.message, name: e.name }) + '\n');
+  process.exit(1);
+}
+"@
+        Push-Location $RepoRoot
+        try {
+            $rawOut = & node --input-type=module -e $pullInline $org $sinceArg $untilArg $storeDir 2>&1
+        } finally {
+            Pop-Location
+        }
+        $nodeExit = $LASTEXITCODE
+
+        $lastLine = ($rawOut | Where-Object { $_ }) | Select-Object -Last 1
+        try {
+            $parsed = $lastLine | ConvertFrom-Json
+        } catch {
+            Write-Host "ERROR: Failed to parse output from github-metrics.mjs" -ForegroundColor Red
+            $rawOut | ForEach-Object { Write-Host $_ }
+            exit 1
+        }
+
+        if ($jsonOutput) {
+            Write-Output ($parsed | ConvertTo-Json -Depth 5)
+        } elseif ($parsed.ok) {
+            Write-Host "✅ Fetched $($parsed.fetched) records for org '$($parsed.org)'" -ForegroundColor Green
+            if ($parsed.written -and $parsed.written.Count -gt 0) {
+                Write-Host "   Written:  $($parsed.written -join ', ')" -ForegroundColor DarkCyan
+            }
+            if ($parsed.skipped -and $parsed.skipped.Count -gt 0) {
+                Write-Host "   Skipped (already stored): $($parsed.skipped -join ', ')" -ForegroundColor DarkGray
+            }
+        } else {
+            Write-Host "ERROR: $($parsed.error)" -ForegroundColor Red
+            exit 1
+        }
+        exit $nodeExit
     }
 
     if ($sub -ne 'status' -and $sub -ne 'doctor') {

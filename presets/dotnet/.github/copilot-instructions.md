@@ -89,8 +89,10 @@ This project uses the **Plan Forge Pipeline**:
 | File | Domain |
 |------|--------|
 | `architecture-principles.instructions.md` | Core architecture rules |
+| `api-patterns.instructions.md` | REST conventions, ProblemDetails, pagination |
+| `blazor-fluent-ui.instructions.md` | Blazor Server + Fluent UI components, lifecycle, accessibility |
 | `database.instructions.md` | Dapper/EF Core patterns |
-| `testing.instructions.md` | xUnit, Testcontainers |
+| `testing.instructions.md` | xUnit, Testcontainers, bUnit |
 | `security.instructions.md` | Auth, validation, secrets |
 | `deploy.instructions.md` | Docker, K8s |
 | `git-workflow.instructions.md` | Commit conventions |

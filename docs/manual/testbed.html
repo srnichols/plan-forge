@@ -40,6 +40,32 @@
         <h2 id="why">Why a Separate Testbed?</h2>
         <p>Unit tests cover one module; integration tests cover one service. Neither tells you whether the full Plan-Forge pipeline still produces a clean, shippable outcome on a real repo under a real scenario. The Testbed does — it's a second, dedicated repository that Plan Forge treats as a read-write fixture, replays a scenario against, and records the defect log.</p>
 
+        <h2 id="learn">Learn-by-Doing: The Reference Testbed</h2>
+        <p>The canonical reference testbed lives at <a href="https://github.com/srnichols/plan-forge-testbed" target="_blank" rel="noopener">srnichols/plan-forge-testbed</a>. It's a real .NET 10 application — <strong>TimeTracker</strong>, a billable-hours tracker with Clients, Projects, Time Entries, Billing, Invoices, and Dashboard surfaces — used as the worked example throughout this manual.</p>
+
+        <p>If you're learning Plan-Forge by doing, work through it in this order:</p>
+
+        <ol>
+          <li><strong>Backend slices</strong> (<code>docs/plans/Phase-1-CLIENTS-CRUD-PLAN.md</code>) — see how <code>pforge run-plan</code> drives a four-slice CRUD feature with <code>[P]</code> parallelism, <code>[depends:]</code>, <code>[scope:]</code>, and validation gates.</li>
+          <li><strong>UI slices</strong> (<code>docs/plans/Phase-2-WEB-UI-PLAN.md</code>) — Plan-Forge builds a Blazor Server + Microsoft Fluent UI front-end against the existing REST API. The plan demonstrates that pforge produces <em>enterprise-grade</em> UI: layered (page → service interface → repository, never <code>DbContext</code> in components), accessible (WCAG 2.1 AA), and tested (bUnit). This is the proof artifact for "pforge does not vibe-code."</li>
+          <li><strong>Operational scenarios</strong> (<code>docs/plans/testbed-scenarios/*.json</code>) — the synthetic regressions in the section below, replayed end-to-end via <code>forge_testbed_run</code>.</li>
+        </ol>
+
+        <p>The .NET preset ships three artifacts that make Step 2 work on any consuming project — they're not testbed-specific:</p>
+
+        <table>
+          <thead><tr><th>Artifact</th><th>Path</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td>Instruction file</td><td><code>.github/instructions/blazor-fluent-ui.instructions.md</code></td><td>Auto-loads on <code>*.razor</code> edits. Forbids <code>DbContext</code> in components, mandates code-behind split, lifecycle discipline, accessibility checklist.</td></tr>
+            <tr><td>Reviewer agent</td><td><code>.github/agents/blazor-reviewer.agent.md</code></td><td>Read-only audit of UI changes for layer violations, lifecycle bugs, and Fluent UI misuse.</td></tr>
+            <tr><td>Skill</td><td><code>.github/skills/ui-scaffold/SKILL.md</code></td><td><code>/ui-scaffold &lt;Entity&gt; --crud</code> generates the page + DTO + service interface + bUnit test in one shot, enforcing the layering rules.</td></tr>
+          </tbody>
+        </table>
+
+        <div class="callout callout-tip">
+          <strong>Why a UI demo?</strong> Backend slices are easy to make look impressive — they're terse, type-safe, and gates are straightforward. UI is where vibe-coding usually wins on speed and loses on quality. The Phase-2 UI plan exists to demonstrate that Plan-Forge produces UI you'd actually deploy: separation of concerns intact, no <code>DbContext</code> in <code>.razor</code>, every page accessible, every component tested.
+        </div>
+
         <h2 id="scenarios">Scenario Fixtures</h2>
         <p>Scenarios are JSON files under <code>docs/plans/testbed-scenarios/</code>. Each one describes:</p>
         <ul>

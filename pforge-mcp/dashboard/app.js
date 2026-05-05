@@ -7015,8 +7015,16 @@ async function loadGithubMetrics() {
 
   try {
     const qs = org ? `?org=${encodeURIComponent(org)}` : "";
-    const body = await fetch(`${API_BASE}/api/github-metrics${qs}`).then((r) => r.json());
-    const { metrics = [], costReport = null } = body;
+    const [metricsBody, readinessChecks] = await Promise.all([
+      fetch(`${API_BASE}/api/github-metrics${qs}`).then((r) => r.json()),
+      fetch(`${API_BASE}/api/github-readiness`).then((r) => r.json()).catch(() => []),
+    ]);
+    const { metrics = [], costReport = null } = metricsBody;
+
+    const readinessEl = document.getElementById("gm-readiness");
+    if (readinessEl) {
+      readinessEl.innerHTML = window.githubReadinessRenderWidget?.(Array.isArray(readinessChecks) ? readinessChecks : []) ?? "";
+    }
 
     const adoptionEl = document.getElementById("gm-adoption-panel");
     if (adoptionEl) {

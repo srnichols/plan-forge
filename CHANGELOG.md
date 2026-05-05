@@ -7,6 +7,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added — Blazor + Fluent UI guidance for the .NET preset
+The `dotnet` preset previously shipped 17 backend instruction files (api-patterns, auth, database, deploy, etc.) and 6 reviewer agents — but **zero UI-layer guidance**. Consumers building a Blazor front-end (e.g., the [plan-forge-testbed](https://github.com/srnichols/plan-forge-testbed) reference app) had no rules for pforge to enforce. This entry closes that gap with three artifacts in `presets/dotnet/`:
+
+- **`presets/dotnet/.github/instructions/blazor-fluent-ui.instructions.md`** — auto-loads on `*.razor` / `*.razor.cs` edits via `applyTo`. Codifies the layering rule (no `DbContext` in components — page → service interface → repository), code-behind discipline, lifecycle correctness (`CancellationToken` propagation, `Dispose` patterns), Microsoft Fluent UI conventions, render-mode discipline, WCAG 2.1 AA accessibility checklist, bUnit testing requirements, and a Warning Signs catalogue mirroring the one in `architecture-principles`.
+- **`presets/dotnet/.github/agents/blazor-reviewer.agent.md`** — read-only reviewer agent in the same shape as `architecture-reviewer` / `database-reviewer`. Audits `.razor` / `.razor.cs` changes for layer violations (CRITICAL), lifecycle bugs (HIGH), missing server-side validation (HIGH), Fluent UI convention violations (MEDIUM), and accessibility gaps. Confidence-tagged output (`DEFINITE` / `LIKELY` / `INVESTIGATE`) and cross-reference tags for overlap with `accessibility-reviewer` / `architecture-reviewer`.
+- **`presets/dotnet/.github/skills/ui-scaffold/SKILL.md`** — slash-command skill (`/ui-scaffold <Entity> --crud`) that scaffolds a new Blazor page **with the layering enforced from the start**: service interface (if missing), DTO/form model, page component split into markup + code-behind, three render branches (loading / success / error), bUnit tests covering all three branches, and an accessibility pass. Modes: `--read-only` (default), `--crud`, `--form-only`. Refuses to scaffold a page that injects `DbContext` directly — no exceptions.
+
+### Added — Manual update
+- **Chapter 22 "The Testbed" gains a Learn-by-Doing section** ([docs/manual/testbed.html](docs/manual/testbed.html#learn)) pointing at the [srnichols/plan-forge-testbed](https://github.com/srnichols/plan-forge-testbed) reference app and explaining the recommended learning order (backend slices → UI slices → operational scenarios). Documents the three new preset artifacts as the proof that pforge produces enterprise-grade UI rather than vibe-coded UI.
+
+### Changed
+- `presets/dotnet/.github/copilot-instructions.md` — instruction-file reference table now includes `blazor-fluent-ui.instructions.md` and `api-patterns.instructions.md`.
+
+### Why this matters
+The .NET preset assumed pure backend work. As soon as a consuming project added a Blazor surface (which the reference testbed now will, to demonstrate end-to-end pforge value beyond API CRUD), pforge had no rules to apply — meaning the orchestrator could ship `.razor` files that injected `DbContext`, skipped `<PageTitle>`, or hand-rolled validation, and the executor had no guardrails to catch it. The Blazor instruction file plus reviewer agent close that loop. The `ui-scaffold` skill makes the right shape the easiest shape to generate, which is how you actually get teams to follow architecture principles in practice.
+
+### Files
+- New: `presets/dotnet/.github/instructions/blazor-fluent-ui.instructions.md`, `presets/dotnet/.github/agents/blazor-reviewer.agent.md`, `presets/dotnet/.github/skills/ui-scaffold/SKILL.md`.
+- Modified: `presets/dotnet/.github/copilot-instructions.md`, `docs/manual/testbed.html`.
+
 ## [2.86.0] — 2026-05-05 — Copilot Coding Agent dispatch + GHAS remediation chapters
 
 > **One-liner**: Sections 3 and 4 of Appendix H ("Plan Forge on the GitHub Stack") are now live — full documentation for `pforge run-plan --worker copilot-coding-agent` (issue body template, PR detection fallback, trajectory capture) and `pforge plan-from-sarif` (SARIF stdin support, severity ordering, security-audit integration). VERSION bumped to 2.86.0.

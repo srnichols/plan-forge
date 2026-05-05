@@ -172,14 +172,14 @@ The work is **strictly opt-in and additive**:
 
 ## Slice Plan
 
-> Memory note `plan-gate-command-rules.md` applies — single-line `bash -c "..."` for any Unix-tool gate.
+> Memory note `plan-gate-command-rules.md` applies — write gate commands as plain `node ...` / `pwsh ...` / `npx ...` invocations; the orchestrator auto-routes Unix tools through Git Bash on Windows. **DO NOT** wrap commands in `bash -c "..."` yourself — that bypasses auto-routing and resolves to WSL bash on Windows (which has no `node`/`npx` on its PATH).
 
 ### Slice 1 — github-metrics core module + tests
 **Files in scope**: `pforge-mcp/github-metrics.mjs`, `pforge-mcp/tests/github-metrics.test.mjs`, `pforge-mcp/tests/fixtures/github-metrics/{sample-30d,empty-org,auth-failure}.json`
 **Goal**: Implement `pullMetrics`, `writeMetrics`, `loadMetrics` with HTTP mocks. Cover all 5 listed test cases.
 **Validation gate**:
 ```bash
-bash -c "cd pforge-mcp && npx vitest run tests/github-metrics.test.mjs"
+npx --prefix pforge-mcp vitest run pforge-mcp/tests/github-metrics.test.mjs
 ```
 **Estimated cost**: $0.40
 
@@ -188,7 +188,7 @@ bash -c "cd pforge-mcp && npx vitest run tests/github-metrics.test.mjs"
 **Goal**: Extend existing `Invoke-Github` to recognise `metrics` as a sub-subcommand routing to `metrics pull`. Wire to the new module.
 **Validation gate**:
 ```bash
-bash -c "pwsh -NoProfile -File pforge.ps1 github metrics --help | grep -q pull"
+node -e "const cp=require('child_process'); const out=cp.execFileSync('pwsh',['-NoProfile','-File','pforge.ps1','github','metrics','--help'],{encoding:'utf8'}); if(!/pull/i.test(out)){console.error('no pull subcommand in help');process.exit(1)} console.log('ok')"
 ```
 **Estimated cost**: $0.20
 
@@ -206,7 +206,7 @@ bash pforge.sh github metrics --help | grep -q pull
 **Goal**: Register `forge_github_metrics` MCP tool wrapping `loadMetrics` (read-only). Skip if Hardener pulls scope.
 **Validation gate**:
 ```bash
-bash -c "grep -q 'forge_github_metrics' pforge-mcp/tools.json"
+node -e "const t=JSON.parse(require('fs').readFileSync('pforge-mcp/tools.json','utf8')); if(!t.find(x=>x.name==='forge_github_metrics')){console.error('forge_github_metrics not registered');process.exit(1)} console.log('ok')"
 ```
 **Estimated cost**: $0.20
 **Drop condition**: If Hardener review or earlier slices overrun, defer to Phase E backlog.
@@ -216,7 +216,7 @@ bash -c "grep -q 'forge_github_metrics' pforge-mcp/tools.json"
 **Goal**: `GET /api/github-metrics` endpoint returns merged data. Dashboard tab module renders the three panels.
 **Validation gate**:
 ```bash
-bash -c "cd pforge-mcp && npx vitest run tests/github-metrics-dashboard.test.mjs"
+npx --prefix pforge-mcp vitest run pforge-mcp/tests/github-metrics-dashboard.test.mjs
 ```
 **Estimated cost**: $0.40
 
@@ -225,7 +225,7 @@ bash -c "cd pforge-mcp && npx vitest run tests/github-metrics-dashboard.test.mjs
 **Goal**: Tab appears in the dashboard. Empty state shows the populate-command with copy-button.
 **Validation gate**:
 ```bash
-bash -c "cd pforge-mcp && npx vitest run tests/github-metrics-dashboard.test.mjs --grep 'tab|empty'"
+npx --prefix pforge-mcp vitest run pforge-mcp/tests/github-metrics-dashboard.test.mjs -t "tab|empty"
 ```
 **Estimated cost**: $0.30
 
@@ -234,7 +234,7 @@ bash -c "cd pforge-mcp && npx vitest run tests/github-metrics-dashboard.test.mjs
 **Goal**: Run dashboard-related tests, ensure no regressions.
 **Validation gate**:
 ```bash
-bash -c "cd pforge-mcp && npx vitest run tests/dashboard-"
+npx --prefix pforge-mcp vitest run "pforge-mcp/tests/dashboard-*.test.mjs"
 ```
 **Estimated cost**: $0.10
 
@@ -243,8 +243,7 @@ bash -c "cd pforge-mcp && npx vitest run tests/dashboard-"
 **Goal**: Replace Section 6 "Coming next" callout with full content. Bump VERSION (next minor after Phase B). CHANGELOG entry.
 **Validation gate**:
 ```bash
-bash -c "grep -q 'pforge github metrics pull' docs/manual/plan-forge-on-the-github-stack.html"
-bash -c "grep -q 'Copilot Metrics API' CHANGELOG.md"
+node -e "const fs=require('fs'); const html=fs.readFileSync('docs/manual/plan-forge-on-the-github-stack.html','utf8'); const cl=fs.readFileSync('CHANGELOG.md','utf8'); const checks={section6:/pforge github metrics pull/.test(html), changelog:/Copilot Metrics API/i.test(cl)}; const failed=Object.entries(checks).filter(([_,v])=>!v); if(failed.length){console.error('failed:',failed.map(([k])=>k).join(','));process.exit(1)} console.log('ok')"
 ```
 **Estimated cost**: $0.30
 

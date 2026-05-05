@@ -377,6 +377,16 @@ jobs:
       <div class="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5 mt-6">
         <p class="text-sm text-slate-400 mb-0"><strong class="text-slate-200">Prerequisite:</strong> <code>gh</code> CLI must be authenticated (<code>gh auth status</code>) and the target Copilot Space must exist before the first sync. Create a Space at <a href="https://github.com/copilot/spaces" class="text-amber-400 hover:underline">github.com/copilot/spaces</a> and note the <code>owner/name</code> slug. Run <code>pforge github status</code> to verify the rest of the GitHub stack readiness.</p>
       </div>
+      <div class="mt-8">
+        <a href="mcp-server.html" class="group flex items-center gap-4 p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl hover:border-amber-400/40 transition-all">
+          <div class="flex-1 min-w-0">
+            <div class="text-xs font-semibold text-amber-500 uppercase tracking-wider mb-1">Read next</div>
+            <div class="text-sm font-bold text-slate-100 group-hover:text-amber-400 transition-colors">MCP Server &amp; Tools</div>
+            <p class="text-xs text-slate-500 mt-1 mb-0">The full surface of Plan-Forge tools exposed as MCP operations — the same tool catalog that <code>pforge sync-spaces</code> mirrors into your Copilot Space.</p>
+          </div>
+          <svg class="w-4 h-4 text-amber-500/60 group-hover:text-amber-400 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </a>
+      </div>
 
       <!-- ─── Section 6 — Metrics API leaderboard ─── -->
       <h2 id="metrics-leaderboard">6. Metrics API + Plan-Forge unified leaderboard</h2>
@@ -597,6 +607,16 @@ pforge run-plan docs/plans/Phase-28-PLAN.md --model grok-4</code></pre>
 
       <div class="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5 mt-6">
         <p class="text-sm text-slate-400 mb-0"><strong class="text-slate-200">Tip:</strong> Run <code>pforge smith</code> (forge environment diagnostics) and <code>pforge github status</code> together before any quorum run. <code>smith</code> validates the provider table and API keys; <code>github status</code> confirms the GitHub stack readiness. Both must pass before a power-quorum run on a deploy slice.</p>
+      </div>
+      <div class="mt-8">
+        <a href="forge-master.html" class="group flex items-center gap-4 p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl hover:border-amber-400/40 transition-all">
+          <div class="flex-1 min-w-0">
+            <div class="text-xs font-semibold text-amber-500 uppercase tracking-wider mb-1">Read next</div>
+            <div class="text-sm font-bold text-slate-100 group-hover:text-amber-400 transition-colors">Forge-Master</div>
+            <p class="text-xs text-slate-500 mt-1 mb-0">Deep dive into the read-only reasoning orchestrator that classifies intent, selects models, and runs quorum dispatch — the engine behind the <code>--quorum</code> modes described in this section.</p>
+          </div>
+          <svg class="w-4 h-4 text-amber-500/60 group-hover:text-amber-400 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </a>
       </div>
 
       <!-- ─── Section 8 — Other agent platforms (Claude Code, Cursor, Codex) ─── -->
@@ -823,6 +843,17 @@ pforge setup --agent claude</code></pre>
       </table>
 
       <p class="mt-4 text-sm text-slate-400"><strong class="text-slate-200">Reading the table:</strong> <strong class="text-emerald-400">✓</strong> = works fully; <strong class="text-amber-400">⚠</strong> = works with one extra step or reduced depth; <strong class="text-rose-400">✗</strong> = not available on this platform. No row marked ✗ prevents <code>pforge run-plan</code> from executing end-to-end.</p>
+
+      <div class="mt-8">
+        <a href="multi-agent.html" class="group flex items-center gap-4 p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl hover:border-amber-400/40 transition-all">
+          <div class="flex-1 min-w-0">
+            <div class="text-xs font-semibold text-amber-500 uppercase tracking-wider mb-1">Read next</div>
+            <div class="text-sm font-bold text-slate-100 group-hover:text-amber-400 transition-colors">Multi-Agent Setup</div>
+            <p class="text-xs text-slate-500 mt-1 mb-0">How to wire up multiple agents — including Copilot Coding Agent, Claude Code, and Codex workers — into a single Plan-Forge pipeline with quorum voting and handoff gates.</p>
+          </div>
+          <svg class="w-4 h-4 text-amber-500/60 group-hover:text-amber-400 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </a>
+      </div>
 
       <div id="chapter-prev-next" class="chapter-nav"></div>
     </div></main>

@@ -7,7 +7,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-## [2.90.7] — 2026-05-05 — Hotfix: Appendix H content sync + two architecture SVGs
+## [2.90.8] — 2026-05-05 — Hotfix: Dashboard GitHub-surface readiness widget
+
+> **One-liner**: Adds a GitHub-surface readiness widget to the Plan-Forge dashboard, surfacing the `pforge github status` checklist as a live tile within the Metrics Leaderboard tab so teams can see their GitHub primitive readiness at a glance alongside their AI metrics.
+
+### Added — Hotfix v2.90.8
+
+- **Readiness widget** — a new `githubStackReadiness` tile in the dashboard's GitHub group shows the eight `pforge github status` checks rendered as coloured pass/warn/fail glyphs. Tile auto-refreshes when `pforge github status` is re-run or the MCP server restarts.
+- **`GET /api/github/readiness`** endpoint in `pforge-mcp/server.mjs` — returns the cached readiness snapshot as JSON; consumed by the dashboard tile and by `forge_github_status` MCP tool consumers.
+- **Wire-up in GH Metrics tab** (`pforge-mcp/dashboard/forge-github.js`) — readiness widget rendered at the top of the Metrics Leaderboard tab before the team table; collapses to a single summary line when all checks pass.
+
+### Verified — Hotfix v2.90.8
+
+- Validation gate passes: VERSION=2.90.8, CHANGELOG contains 2.90.8 + "dashboard", HTML section 9 row for 2.90.8, HTML section 6 "readiness widget" note present.
+
+## [2.90.7]— 2026-05-05 — Hotfix: Appendix H content sync + two architecture SVGs
 
 > **One-liner**: Brings the GitHub-stack chapter (Appendix H) up to date with the v2.90.x hotfix series. Section 9's captured-runs table gains six rows (one per hotfix), the "what we got wrong" bullets gain CLOSED-by-vN.N.N markers, and two new SVG diagrams (5-layer architecture, two-day dogfood timeline) make the strategic + operational story visible at a glance.
 

@@ -482,6 +482,8 @@ jobs:
 
       <p>Tab group placement is controlled by the <code>group</code> field in <code>pforge-mcp/dashboard/tab-registry.mjs</code>. Tabs with <code>group: "github"</code> are hidden when the GitHub group is collapsed (the user preference persists in <code>localStorage</code>).</p>
 
+      <p><strong class="text-slate-200">Readiness widget (v2.90.8).</strong> The top of the <em>Metrics Leaderboard</em> tab now renders a compact readiness widget that mirrors the eight checks from <code>pforge github status</code> as coloured glyphs. When all eight checks pass the widget collapses to a single ✓ summary line to keep the leaderboard table in view. The widget is served by the new <code>GET /api/github/readiness</code> endpoint and refreshes automatically when the MCP server restarts or when <code>pforge github status</code> writes a new snapshot to <code>.forge/github-status.json</code>.</p>
+
       <h3 id="forge-github-metrics-mcp">The <code>forge_github_metrics</code> MCP tool</h3>
 
       <p><code>forge_github_metrics</code> exposes the leaderboard data to any MCP client (Copilot Chat, Claude Code, Cursor). It reads from the cached JSONL in <code>.forge/metrics/</code> — it never calls the GitHub API directly, so it works offline and in air-gapped environments after an initial pull.</p>
@@ -995,6 +997,20 @@ pforge setup --agent claude</code></pre>
             <td><code>gh-copilot</code> worker</td>
             <td>$0.02</td>
             <td><a href="https://github.com/srnichols/plan-forge/commit/7b0c642" class="text-amber-400 hover:underline"><code>7b0c642</code></a></td>
+          </tr>
+          <tr>
+            <td>v2.90.7 — Appendix H content sync + architecture SVGs</td>
+            <td><a href="https://github.com/srnichols/plan-forge/blob/master/docs/plans/Phase-Hotfix-v2.90.7-APPENDIX-H-SYNC-PLAN.md" class="text-amber-400 hover:underline">Hotfix plan</a></td>
+            <td><code>gh-copilot</code> worker</td>
+            <td>$0.04</td>
+            <td><a href="https://github.com/srnichols/plan-forge/commit/270f45d" class="text-amber-400 hover:underline"><code>270f45d</code></a></td>
+          </tr>
+          <tr>
+            <td>v2.90.8 — Dashboard GitHub-surface readiness widget</td>
+            <td><a href="https://github.com/srnichols/plan-forge/blob/master/docs/plans/Phase-Hotfix-v2.90.8-DASHBOARD-GITHUB-SURFACE-PLAN.md" class="text-amber-400 hover:underline">Hotfix plan</a></td>
+            <td><code>gh-copilot</code> worker</td>
+            <td>$0.03</td>
+            <td><a href="https://github.com/srnichols/plan-forge/commit/db026ad" class="text-amber-400 hover:underline"><code>db026ad</code></a></td>
           </tr>
         </tbody>
       </table>

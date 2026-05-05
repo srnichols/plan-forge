@@ -80,6 +80,24 @@ export function resolveGateTimeoutMs() {
   return DEFAULT_GATE_TIMEOUT_MS;
 }
 
+/** Default worker output idle timeout: 8 minutes. Override with PFORGE_WORKER_OUTPUT_IDLE_MS. */
+export const DEFAULT_WORKER_OUTPUT_IDLE_MS = 480_000;
+
+/**
+ * Resolve the worker output idle timeout in milliseconds.
+ * Priority: PFORGE_WORKER_OUTPUT_IDLE_MS env var → default (480 000 ms / 8 min).
+ * Used by the watchdog to detect stalled worker processes.
+ * @returns {number}
+ */
+export function resolveWorkerOutputIdleMs() {
+  const envVal = process.env.PFORGE_WORKER_OUTPUT_IDLE_MS;
+  if (envVal != null && envVal !== "") {
+    const parsed = Number(envVal);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  return DEFAULT_WORKER_OUTPUT_IDLE_MS;
+}
+
 /** Allowlist of commands permitted in validation gates. Shared by runGate() and lintGateCommands(). */
 export const GATE_ALLOWED_PREFIXES = [
   // Build / test runners

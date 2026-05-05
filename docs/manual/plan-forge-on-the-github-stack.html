@@ -907,15 +907,17 @@ pforge setup --agent claude</code></pre>
           </tr>
           <tr>
             <td>9 (this section)</td>
-            <td><a href="https://github.com/srnichols/plan-forge/blob/master/docs/plans/PHASE-GITHUB-C-DOGFOOD-RUNBOOK.md" class="text-amber-400 hover:underline">Dogfood runbook</a></td>
-            <td><strong class="text-amber-400">Copilot Coding Agent</strong> (live dispatch)</td>
-            <td>$0.00 (subscription)</td>
-            <td><em>captured at run time — see runbook for the trajectory link</em></td>
+            <td><a href="https://github.com/srnichols/plan-forge/blob/master/docs/plans/Phase-GITHUB-C-DOGFOOD-PLAN.md" class="text-amber-400 hover:underline">Dogfood plan</a> (per <a href="https://github.com/srnichols/plan-forge/blob/master/docs/plans/PHASE-GITHUB-C-DOGFOOD-RUNBOOK.md" class="text-amber-400 hover:underline">runbook</a>)</td>
+            <td>Standard <code>gh-copilot</code> worker <span class="text-amber-400">†</span></td>
+            <td>$0.01</td>
+            <td><a href="https://github.com/srnichols/plan-forge/commit/c76314f" class="text-amber-400 hover:underline"><code>c76314f</code></a></td>
           </tr>
         </tbody>
       </table>
 
-      <p class="mt-6"><strong class="text-slate-200">Total spend to write this chapter: $0.16</strong> across 31 worker-executed slices and one manual scaffold. The total time was approximately 10 hours of orchestrator wall-clock plus ~30 minutes of human review and gate-fix iterations.</p>
+      <p class="text-sm text-slate-400 mt-4"><strong class="text-amber-400">† Honest footnote.</strong> The dogfood plan was authored to dispatch via the new <code>copilot-coding-agent</code> worker (Phase GITHUB-B Slice 3), but the <code>--worker</code> flag is not yet plumbed through the <code>pforge.ps1</code>/<code>pforge.sh</code> CLI arg parsers — the worker landed at the orchestrator API level only. The May 5 dogfood run therefore used the standard <code>gh-copilot</code> worker, which auto-completed the marker locally with no GitHub Issue or PR created. This is exactly the kind of honest gap Section 9 is here to surface, and is tracked as a follow-up under "Phase GITHUB-B.1 — CLI plumbing for <code>--worker</code>". The Section 9 table will be re-captured against a real Copilot Coding Agent dispatch once that flag is wired through.</p>
+
+      <p class="mt-6"><strong class="text-slate-200">Total spend to write this chapter: $0.17</strong> across 32 worker-executed slices and one manual scaffold. The total time was approximately 10 hours of orchestrator wall-clock plus ~45 minutes of human review and gate-fix iterations.</p>
 
       <h3 id="dogfood-honesty">What we got right and what we got wrong</h3>
 
@@ -925,6 +927,7 @@ pforge setup --agent claude</code></pre>
         <li><strong>Two slices needed plan-author intervention.</strong> Phase B Slice 7's gate looked for <code>##&nbsp;Slice</code> when the SARIF generator emits <code>###&nbsp;Slice</code>; Phase D Slice 3 wrapped <code>node -e</code> in <code>bash -c</code> on Windows, which routes to WSL bash where Windows <code>node</code> isn't on PATH. Both were plan-authoring bugs caught by the orchestrator's auto-routing logic (<a href="https://github.com/srnichols/plan-forge/blob/master/.github/instructions/plan-gate-command-rules.md" class="text-amber-400 hover:underline">documented here</a>). Worker output was correct in both cases; only the validation gates needed fixing.</li>
         <li><strong>Two long-running test sweeps deadlocked.</strong> Phase B Slice 9 (full vitest suite) and Phase D Slice 7 (dashboard glob) both had the worker waiting on subprocess output that never flushed. Each was resolved by killing the orchestrator, running the gate manually to verify, and resuming via <code>--resume-from</code>. This is a known Phase-34 limitation tracked in the orchestrator backlog.</li>
         <li><strong>The sequencer initially treated <code>run-completed</code> as success.</strong> The orchestrator emits <code>run-completed</code> even when slices fail. The sequencer was hardened mid-run to require <code>status: completed</code> AND <code>failed: 0</code> before chaining the next plan. Lesson committed in <a href="https://github.com/srnichols/plan-forge/commit/a4bfb7f" class="text-amber-400 hover:underline"><code>a4bfb7f</code></a>.</li>
+        <li><strong>The dogfood capture itself surfaced a CLI plumbing gap.</strong> The Section 9 dogfood was authored to dispatch via <code>--worker copilot-coding-agent</code> (Phase B Slice 3 routing), but the <code>--worker</code> CLI flag isn't yet parsed by <code>pforge.ps1</code>/<code>pforge.sh</code>. The May 5 run completed in 42 seconds via the standard <code>gh-copilot</code> worker (commit <a href="https://github.com/srnichols/plan-forge/commit/c76314f" class="text-amber-400 hover:underline"><code>c76314f</code></a>) without ever calling <code>gh issue create</code>. Tracked as Phase GITHUB-B.1.</li>
       </ul>
 
       <p class="text-sm text-slate-400 mt-6"><strong class="text-slate-200">Why this matters:</strong> the chapter you're reading is not a marketing artifact. It's a working system describing itself, with bug tickets and gate fixes you can read as commits. The "Plan-Forge is the deepest harness on the GitHub stack" claim isn't a slogan — it's the trail of commits above.</p>

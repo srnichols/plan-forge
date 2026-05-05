@@ -54,8 +54,19 @@ function Get-RunStatus {
   param([string]$RunDir)
   if (-not $RunDir -or -not (Test-Path "$RunDir/events.log")) { return "unknown" }
   $tail = Get-Content "$RunDir/events.log" -Tail 50
-  if ($tail | Where-Object { $_ -match 'run-completed' }) { return "completed" }
   if ($tail | Where-Object { $_ -match 'run-failed|run-aborted' }) { return "failed" }
+
+  # 'run-completed' is emitted on both success and partial-success runs. Inspect
+  # the JSON payload for actual slice failures before declaring success.
+  $completed = $tail | Where-Object { $_ -match 'run-completed' } | Select-Object -Last 1
+  if ($completed) {
+    if ($completed -match '"failed":(\d+)') {
+      $failedCount = [int]$Matches[1]
+      if ($failedCount -gt 0) { return "failed" }
+    }
+    if ($completed -match '"status":"failed"') { return "failed" }
+    return "completed"
+  }
   return "in-progress"
 }
 

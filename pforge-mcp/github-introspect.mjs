@@ -50,6 +50,7 @@ const CHECK_ORDER = [
   "actions-workflows",
   "github-remote",
   "gh-cli",
+  "copilot-coding-agent-assignable",
 ];
 
 /**
@@ -73,6 +74,7 @@ export function inspectGithubStack(projectRoot, opts = {}) {
   checks.push(checkActionsWorkflows(root));
   checks.push(checkGithubRemote(root));
   checks.push(checkGhCli());
+  checks.push(checkCopilotCodingAgentAssignable(root, opts));
 
   if (opts.extra) {
     checks.push(checkCopilotInstructionsDepth(root));
@@ -324,6 +326,29 @@ function checkGhCli() {
       fixHint: "Install GitHub CLI: https://cli.github.com — unlocks issue / PR / GHAS workflows.",
     };
   }
+}
+
+// ─── extra (SHOULD) checks ──────────────────────────────────────────────────
+
+/** @returns {CheckResult} */
+function checkCopilotCodingAgentAssignable(root, opts) {
+  if (!opts.ghToken) {
+    return {
+      id: "copilot-coding-agent-assignable",
+      label: "Copilot coding agent assignable",
+      status: "na",
+      detail: "requires ghToken — pass opts.ghToken to enable this network check",
+    };
+  }
+  // Network-backed check (Phase GITHUB-B): verify the repo has Copilot coding
+  // agent enabled and that the authenticated user can assign it to issues/PRs.
+  // Implementation deferred to Phase GITHUB-B once the REST endpoint is stable.
+  return {
+    id: "copilot-coding-agent-assignable",
+    label: "Copilot coding agent assignable",
+    status: "na",
+    detail: "network check not yet implemented for this token scope",
+  };
 }
 
 // ─── extra (SHOULD) checks ──────────────────────────────────────────────────

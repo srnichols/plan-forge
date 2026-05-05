@@ -120,6 +120,8 @@ import { loadAuditConfig, saveAuditConfig, shouldAutoDrain } from "./tempering/a
 import { checkForUpdate, detectCorruptInstall, resolveFrameworkVersion } from "./update-check.mjs";
 // Phase GITHUB-A — GitHub stack introspection
 import { inspectGithubStack } from "./github-introspect.mjs";
+// Phase GITHUB-D Slice 5 — Copilot Metrics REST endpoint
+import { loadMetrics } from "./github-metrics.mjs";
 // Phase FORGE-SHOP-04 Slice 04.1 — Global search
 import { search as forgeSearch } from "./search/core.mjs";
 // Phase FORGE-SHOP-05 Slice 05.1 — Unified timeline
@@ -6316,6 +6318,42 @@ export function createExpressApp() {
   app.get("/api/cost", (_req, res) => {
     try {
       res.json(getCostReport(PROJECT_DIR));
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // REST API: GET /api/github-metrics — Phase GITHUB-D Slice 5
+  // Returns Copilot Metrics records for an org plus cost-service data for the
+  // "GitHub × Plan-Forge" unified leaderboard dashboard tab.
+  // Query params: org (required), since, until, storeDir (optional overrides)
+  app.get("/api/github-metrics", (req, res) => {
+    try {
+      const org = req.query.org || null;
+      const since = req.query.since || undefined;
+      const until = req.query.until || undefined;
+      const storeDir = req.query.storeDir
+        ? resolve(req.query.storeDir)
+        : resolve(PROJECT_DIR, ".forge", "github-metrics");
+
+      let metrics = [];
+      if (org) {
+        try {
+          metrics = loadMetrics({ storeDir, org, since, until });
+        } catch {
+          metrics = [];
+        }
+      }
+
+      let costReport = null;
+      try { costReport = getCostReport(PROJECT_DIR); } catch { /* best-effort */ }
+
+      res.json({
+        org: org || null,
+        since: since || null,
+        until: until || null,
+        metrics,
+        costReport: costReport || null,
+        _meta: { storeDir, recordCount: metrics.length },
+      });
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 

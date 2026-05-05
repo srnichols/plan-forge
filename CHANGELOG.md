@@ -7,6 +7,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.90.0] — 2026-05-05 — Phase GITHUB-B.1: --worker CLI plumbing + REAL Section 9 dogfood capture
+
+> **One-liner**: Closes the gap between Phase B Slice 3 (orchestrator API supports `--worker copilot-coding-agent`) and the actual CLI dispatchers. The first dogfood attempt fell through to standard `gh-copilot` because `pforge.ps1`/`pforge.sh`/`orchestrator.mjs` argv parser never read `--worker`. This release wires the flag through all three layers and re-runs the dogfood for real — producing GitHub Issue #150 via genuine `gh issue create --assignee @copilot`. Copilot Coding Agent didn't pick it up (likely not enabled at the repo level), so the issue was closed without merge, but the dispatch pipeline is now verified end-to-end with both findings honestly captured in Section 9.
+
+### Added — Phase GITHUB-B.1
+- **`--worker <name>` flag** on `pforge run-plan` (PowerShell + bash) — forwards to the orchestrator's `runPlan(opts.worker)` (Phase B Slice 3 dispatch path). Currently recognises `copilot-coding-agent`; falls through to standard worker selection when omitted.
+- **`getArg("--worker")` parsing** in `pforge-mcp/orchestrator.mjs` CLI entry point.
+- **Usage strings** in both dispatcher help banners now list `--worker <name>`.
+
+### Changed
+- **Section 9 of Appendix H** — table row 9 now points at the real Issue #150 + the B.1 wiring commit. Footnote rewritten as a two-stage capture: first attempt revealed the CLI gap, B.1 fixed it, second attempt produced the live dispatch but Copilot Coding Agent didn't auto-pick-up the assignment.
+- **"What we got right and what we got wrong" subsection** — the dogfood-CLI bullet now describes both findings (CLI plumbing + agent listener) instead of just the first.
+- **Total spend** updated: $0.17 → $0.18 across 32 → 33 worker-executed slices.
+
+### Verified
+- 45/45 vitest cases across `manual-chapter-headings`, `run-plan-copilot-dispatch`, `copilot-coding-agent` test files all pass.
+- `pforge run-plan ... --dry-run --worker copilot-coding-agent` now emits `issuePreviews` (proves the routing).
+- Live `--worker copilot-coding-agent` dispatch successfully called `gh issue create` against `srnichols/plan-forge` and produced [Issue #150](https://github.com/srnichols/plan-forge/issues/150) (closed without merge per the runbook's rollback procedure).
+
+### Next: enable Copilot Coding Agent on this repo
+The remaining gap is at the GitHub side: Copilot Coding Agent appears not to be enabled for the user account or repository, so `--assignee @copilot` was silently dropped. When that's enabled, re-running `pforge run-plan docs/plans/Phase-GITHUB-C-DOGFOOD-PLAN.md --worker copilot-coding-agent` should round-trip the full Issue → PR → merge cycle in a single command.
+
 ## [2.89.1] — 2026-05-05 — Section 9 dogfood capture (with honest CLI-plumbing footnote)
 
 > **One-liner**: First live execution of the Section 9 dogfood plan. Marker correctly updated; revealed that `--worker copilot-coding-agent` is plumbed at the orchestrator API level (Phase B Slice 3) but not yet at the `pforge.ps1`/`pforge.sh` CLI arg parser. The May 5 run therefore used the standard `gh-copilot` worker, not Copilot Coding Agent's issue-dispatch path. Section 9 now documents this honestly and tracks the fix as Phase GITHUB-B.1.

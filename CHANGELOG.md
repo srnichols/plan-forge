@@ -120,7 +120,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 ### Next: enable Copilot Coding Agent on this repo
 The remaining gap is at the GitHub side: Copilot Coding Agent appears not to be enabled for the user account or repository, so `--assignee @copilot` was silently dropped. When that's enabled, re-running `pforge run-plan docs/plans/Phase-GITHUB-C-DOGFOOD-PLAN.md --worker copilot-coding-agent` should round-trip the full Issue → PR → merge cycle in a single command.
 
-## [2.89.1] — 2026-05-05 — Section 9 dogfood capture (with honest CLI-plumbing footnote)
+### Hotfix series 2.90.x
+
+Five hotfixes followed this base release, discovered during and after the GitHub-stack dogfood: **[2.90.1]** output watchdog (8-min idle kill), **[2.90.2]** worker timeout uplift (20 min → 30 min) with per-slice override, **[2.90.3]** gate linter (W1–W4 portability warnings), **[2.90.4]** `copilot-coding-agent-assignable` detector (prevents silent assignment drops), **[2.90.5]** sequencer hardening sweep (psm1 module, WhatIf, MaxWaitMinutes, bash parity). See individual entries above for full details.
+
+### Detailed history
+
+Versions 2.89.0 and 2.89.1 preceded this release and are consolidated here. They covered: **(2.89.0)** Appendix H Section 9 "Built with Plan-Forge" + dogfood runbook + Blazor/Fluent UI guidance for the `.NET` preset (blazor-fluent-ui.instructions.md, blazor-reviewer agent, ui-scaffold skill, Chapter 22 testbed section); **(2.89.1)** first live Section 9 dogfood run which correctly updated the DOGFOOD-MARKER but surfaced the CLI plumbing gap (--worker not wired through pforge.ps1/pforge.sh argv) that this 2.90.0 release fixed. The full individual entries follow below.
+
+## 2.89.1 — 2026-05-05 — Section 9 dogfood capture (with honest CLI-plumbing footnote)
 
 > **One-liner**: First live execution of the Section 9 dogfood plan. Marker correctly updated; revealed that `--worker copilot-coding-agent` is plumbed at the orchestrator API level (Phase B Slice 3) but not yet at the `pforge.ps1`/`pforge.sh` CLI arg parser. The May 5 run therefore used the standard `gh-copilot` worker, not Copilot Coding Agent's issue-dispatch path. Section 9 now documents this honestly and tracks the fix as Phase GITHUB-B.1.
 
@@ -133,7 +141,7 @@ The remaining gap is at the GitHub side: Copilot Coding Agent appears not to be 
 ### Why this still matters
 The dogfood didn't take the path the plan author intended (no GitHub Issue, no PR), but the run completed cleanly, the marker was correctly updated, and the gap is now documented in Section 9 itself — exactly what the chapter's "warts-and-all" framing exists to do. Phase GITHUB-B.1 will be a small, focused phase: add `--worker <name>` to the CLI arg parser in both dispatchers, then re-run this same dogfood plan against the real Copilot Coding Agent path.
 
-## [2.89.0] — 2026-05-05 — Appendix H Section 9 ("Built with Plan-Forge") + dogfood runbook
+## 2.89.0 — 2026-05-05 — Appendix H Section 9 ("Built with Plan-Forge") + dogfood runbook
 
 > **One-liner**: Closes the GitHub-stack chapter. Adds Section 9 — the "Built with Plan-Forge" honesty section that documents which sections were written by which Plan-Forge run, the total $0.16 spend across 31 worker-executed slices, and a warts-and-all list of the two plan-author bugs and two long-running test deadlocks the dogfood surfaced. The deferred Slice 5 dogfood runbook is now authored at `docs/plans/PHASE-GITHUB-C-DOGFOOD-RUNBOOK.md` for future live-dispatch capture against the live `srnichols/plan-forge` repo.
 

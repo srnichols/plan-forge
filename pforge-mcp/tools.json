@@ -58,32 +58,26 @@
           "description": "Run optional depth checks (instruction-file applyTo, copilot-instructions length)"
         }
       }
-    },
-    "intent": [
-      "diagnose",
-      "inspect",
-      "github-readiness"
-    ],
-    "aliases": [
-      "github-status",
-      "github-readiness"
-    ],
-    "cost": "low",
-    "maxConcurrent": 10,
-    "addedIn": "2.85.0",
-    "prerequisites": [],
-    "produces": [],
-    "consumes": [
-      ".github/",
-      ".vscode/",
-      "AGENTS.md"
-    ],
-    "sideEffects": [],
-    "errors": {},
-    "example": {
-      "input": {},
-      "output": {
-        "summary": "7 pass, 1 warn, 0 fail, 0 n/a (8 checks)"
+    }
+  },
+  {
+    "name": "forge_github_metrics",
+    "description": "Fetch live GitHub repository metrics via the gh CLI — stars, forks, open issues, PR counts, and commit activity. Requires gh CLI authenticated. USE FOR: project health dashboards, sprint retrospectives, answering 'how active is this repo?'. Returns null fields gracefully when gh is unavailable.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "repo": {
+          "type": "string",
+          "description": "Repository slug owner/repo (auto-detected from git remote when omitted)"
+        },
+        "period": {
+          "type": "string",
+          "description": "Lookback window: 7d, 30d, or 90d (default: 30d)"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
       }
     }
   },
@@ -569,7 +563,7 @@
   },
   {
     "name": "forge_run_plan",
-    "description": "Execute a hardened plan — spawn CLI workers for each slice, validate at every boundary, track tokens. Supports Full Auto (gh copilot CLI) and Assisted (human + automated gates) modes. Use --estimate for cost prediction without executing. To bypass Crucible enforcement and import a plan directly, pass manualImport:true.",
+    "description": "Execute a hardened plan — spawn CLI workers for each slice, validate at every boundary, track tokens. Supports Full Auto (gh copilot CLI) and Assisted (human + automated gates) modes. Use --estimate for cost prediction without executing.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -2303,7 +2297,7 @@
       "drain-loop",
       "tempering-drain"
     ],
-    "cost": "high",
+    "cost": "medium",
     "maxConcurrent": 1,
     "addedIn": "2.80.0",
     "prerequisites": [
@@ -2311,8 +2305,7 @@
       "dev server running (for content-audit scanner)"
     ],
     "produces": [
-      ".forge/tempering/drain-history.jsonl",
-      ".forge/audits/dev-<ts>.json"
+      ".forge/audits/dev-*.json"
     ],
     "consumes": [
       ".forge.json#audit",
@@ -2325,13 +2318,13 @@
       "may submit Crucible smelts for spec-lane findings"
     ],
     "errors": {
-      "MISSING_PROJECTDIR": {
-        "message": "Project directory not found or not provided",
-        "recovery": "Provide a valid path parameter pointing to the project root"
+      "PRODUCTION_BLOCKED": {
+        "message": "Production environment is forbidden",
+        "recovery": "Use --env=dev or --env=staging"
       },
-      "MAX_ROUNDS_EXCEEDED": {
-        "message": "Drain loop hit the maximum round cap without converging",
-        "recovery": "Increase maxRounds or resolve remaining findings manually"
+      "NO_SCANNERS": {
+        "message": "No scanners matched the requested set",
+        "recovery": "Omit scanners param to run all available scanners"
       }
     },
     "example": {
@@ -2430,7 +2423,7 @@
     "consumes": [],
     "sideEffects": [],
     "errors": {
-      "MISSING_FINDING": {
+      "INVALID_FINDING": {
         "message": "Finding object is required with at least a title field",
         "recovery": "Provide a finding object from a scanner result"
       }
@@ -5611,75 +5604,6 @@
           "type": "string",
           "description": "Project directory (default: current)"
         }
-      }
-    }
-  },
-  {
-    "name": "forge_github_metrics",
-    "description": "Fetch live GitHub repository metrics via the gh CLI — stars, forks, open issues, PR counts, and commit activity. Requires gh CLI authenticated. USE FOR: project health dashboards, sprint retrospectives, answering 'how active is this repo?'. Returns null fields gracefully when gh is unavailable.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "repo": {
-          "type": "string",
-          "description": "Repository slug owner/repo (auto-detected from git remote when omitted)"
-        },
-        "period": {
-          "type": "string",
-          "description": "Lookback window: 7d, 30d, or 90d (default: 30d)"
-        },
-        "path": {
-          "type": "string",
-          "description": "Project directory (default: current)"
-        }
-      }
-    },
-    "intent": [
-      "metrics",
-      "github",
-      "health"
-    ],
-    "aliases": [
-      "github-metrics",
-      "repo-metrics"
-    ],
-    "cost": "low",
-    "maxConcurrent": 5,
-    "addedIn": "2.86.0",
-    "prerequisites": [
-      "gh CLI installed and authenticated"
-    ],
-    "produces": [],
-    "consumes": [
-      "GitHub API (read-only via gh CLI)"
-    ],
-    "sideEffects": [],
-    "writesFiles": false,
-    "network": true,
-    "risk": "low",
-    "errors": {
-      "REPO_NOT_DETECTED": {
-        "message": "Could not detect repository slug",
-        "recovery": "Pass repo: 'owner/repo' or add a github.com remote"
-      }
-    },
-    "example": {
-      "input": {
-        "period": "30d"
-      },
-      "output": {
-        "ok": true,
-        "repo": "owner/repo",
-        "period": "30d",
-        "repoMeta": {
-          "stars": 42,
-          "forks": 7,
-          "language": "TypeScript"
-        },
-        "pullRequests": { "open": 3 },
-        "issues": { "open": 5 },
-        "commits": { "weeksInPeriod": 4, "totalCommits": 28 },
-        "contributors": 6
       }
     }
   }

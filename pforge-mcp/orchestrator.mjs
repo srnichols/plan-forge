@@ -98,6 +98,24 @@ export function resolveWorkerOutputIdleMs() {
   return DEFAULT_WORKER_OUTPUT_IDLE_MS;
 }
 
+/** Default worker total-run timeout: 30 minutes. Override with PFORGE_WORKER_TIMEOUT_MS. */
+export const DEFAULT_WORKER_TIMEOUT_MS = 1_800_000;
+
+/**
+ * Resolve the worker total-run timeout in milliseconds.
+ * Priority: PFORGE_WORKER_TIMEOUT_MS env var → default (1 800 000 ms / 30 min).
+ * Used by spawnWorker() to hard-kill a worker that never finishes.
+ * @returns {number}
+ */
+export function resolveWorkerTimeoutMs() {
+  const envVal = process.env.PFORGE_WORKER_TIMEOUT_MS;
+  if (envVal != null && envVal !== "") {
+    const parsed = Number(envVal);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  return DEFAULT_WORKER_TIMEOUT_MS;
+}
+
 /** Allowlist of commands permitted in validation gates. Shared by runGate() and lintGateCommands(). */
 export const GATE_ALLOWED_PREFIXES = [
   // Build / test runners

@@ -7,7 +7,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-## [2.85.0] — 2026-05-05 — `pforge github` introspection + GitHub-stack manual chapter
+## [2.86.0] — 2026-05-05 — Copilot Coding Agent dispatch + GHAS remediation chapters
+
+> **One-liner**: Sections 3 and 4 of Appendix H ("Plan Forge on the GitHub Stack") are now live — full documentation for `pforge run-plan --worker copilot-coding-agent` (issue body template, PR detection fallback, trajectory capture) and `pforge plan-from-sarif` (SARIF stdin support, severity ordering, security-audit integration). VERSION bumped to 2.86.0.
+
+### Added
+- **Appendix H § 3 — Dispatching to Copilot Coding Agent**: full documentation for `pforge run-plan --worker copilot-coding-agent`. Covers the issue body template (canonical block always present; per-stack block injected from `project-profile.instructions.md` when available), PR detection fallback order (linked-issue search via `gh pr list --search "closes #<N>"` first, branch-pattern scan second), `--dry-run` flag for previewing issue bodies, trajectory capture to `.forge/trajectories/<plan-slug>.jsonl`, and `--on-stall` behavior.
+- **Appendix H § 4 — GHAS-driven remediation**: full documentation for `pforge plan-from-sarif`. Covers reading SARIF from a file or from stdin (`pforge plan-from-sarif -`), severity ordering (`error` → `warning` → `note`), slice structure (title, scope contract, per-rule validation gate), `--min-severity` and `--rule-filter` flags, and integration with the PreDeploy LiveGuard hook and `/security-audit` skill.
+- Updated intro paragraph in Appendix H to reflect Sections 3 and 4 as live; Sections 5–8 remain "in progress".
+- Sections 5–8 "coming soon" grid updated from 3–8 to 5–8 (Copilot Spaces sync, Metrics API leaderboard, BYOK, other agent platforms still planned).
+
+### Files
+- Modified: `docs/manual/plan-forge-on-the-github-stack.html` (Sections 3 and 4 full content; intro paragraph; coming-soon grid), `VERSION`, `pforge-mcp/package.json`.
+
+## [2.85.0]— 2026-05-05 — `pforge github` introspection + GitHub-stack manual chapter
 
 > **One-liner**: New opt-in `pforge github status` / `pforge github doctor` commands inspect a repo's GitHub-native AI surface (Copilot instructions, AGENTS.md, MCP, GHAS, Coding Agent prerequisites). Paired with a new manual chapter and audience tiles on the manual index. Strictly additive — no GitHub dependency added to the core path.
 

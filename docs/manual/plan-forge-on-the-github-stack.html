@@ -36,7 +36,7 @@
 
       <p>Plan-Forge does not require GitHub. It runs against any repo, with any agent (Copilot, Claude Code, Cursor, Codex), and against any CI system. <strong class="text-slate-200">But when the repo is on GitHub, Plan-Forge has the deepest stack of integrations</strong> — eight first-class primitives it consumes today, plus several it dispatches to. This appendix is the single canonical reference for that integration surface.</p>
 
-      <p>Section 1 is the readiness check — a one-command snapshot of which GitHub primitives your repo currently has wired up. Section 2 is the surface-by-surface tour. Sections 3 through 8 (Copilot Coding Agent dispatch, GHAS remediation chains, Copilot Spaces sync, Metrics API leaderboard, BYOK and other agent platforms) are <strong class="text-amber-400">in progress</strong> and will land in upcoming releases.</p>
+      <p>Section 1 is the readiness check — a one-command snapshot of which GitHub primitives your repo currently has wired up. Section 2 is the surface-by-surface tour. Sections 3 (Copilot Coding Agent dispatch) and 4 (GHAS remediation chains) are now live. Sections 5 through 8 (Copilot Spaces sync, Metrics API leaderboard, BYOK and other agent platforms) are <strong class="text-amber-400">in progress</strong> and will land in upcoming releases.</p>
 
       <!-- ─── Section 1 — Readiness Check ─── -->
       <h2 id="readiness-check">1. Is your repo set up? Run <code>pforge github status</code></h2>
@@ -176,22 +176,109 @@
         <strong class="text-slate-200">A note on optionality:</strong> not having every row green does not break Plan-Forge. It limits which Plan-Forge features are available. The CLI still runs end-to-end against any repo with any agent — the GitHub primitives unlock the deepest, most automated path.
       </p>
 
+      <!-- ─── Section 3 — Copilot Coding Agent dispatch ─── -->
+      <h2 id="coding-agent-dispatch">3. Dispatching to Copilot Coding Agent</h2>
+
+      <p>When your repo is hosted on GitHub and has Copilot Coding Agent enabled, Plan-Forge can hand each slice of a plan off to the Coding Agent automatically — creating a GitHub Issue per slice, assigning it to <code>@copilot</code>, polling the resulting PR, and capturing the run trajectory back into the Plan-Forge dashboard.</p>
+
+      <pre><code>pforge run-plan --worker copilot-coding-agent docs/plans/my-feature-PLAN.md</code></pre>
+
+      <p>The <code>--worker copilot-coding-agent</code> flag replaces the default in-process execution loop with the GitHub dispatch loop. Every other flag (<code>--quorum</code>, <code>--estimate</code>, <code>--resume-from</code>) works unchanged.</p>
+
+      <h3 id="issue-body-template">Issue body template — canonical vs per-stack</h3>
+
+      <p>Each slice becomes a GitHub Issue. The body is assembled from two sources:</p>
+
+      <ol>
+        <li><strong class="text-slate-200">Canonical block</strong> — always present. Contains the slice title, scope contract, validation gate commands, and a reference to the plan file. This block is the same regardless of which tech stack the project uses.</li>
+        <li><strong class="text-slate-200">Per-stack block</strong> — injected when a <code>.github/instructions/project-profile.instructions.md</code> exists. Appends the project's language, framework, test runner, and any Forbidden Actions so the Coding Agent has immediate context without reading the full plan.</li>
+      </ol>
+
+      <p>The canonical block is produced by <code>pforge-mcp/coding-agent-dispatch.mjs</code>. The per-stack block is read from <code>project-profile.instructions.md</code> if present; if the file is absent, the block is silently omitted. You can inspect the issue body before creating it:</p>
+
+      <pre><code>pforge run-plan --worker copilot-coding-agent --dry-run docs/plans/my-feature-PLAN.md</code></pre>
+
+      <p>The <code>--dry-run</code> flag prints the would-be issue body for each slice and exits without touching GitHub.</p>
+
+      <h3 id="pr-detection">PR detection — linked-issue search, branch pattern, fallback order</h3>
+
+      <p>After creating the issue and assigning it to <code>@copilot</code>, Plan-Forge polls for the resulting PR. It uses a two-stage fallback:</p>
+
+      <table>
+        <thead><tr><th>Stage</th><th>Strategy</th><th>How it works</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>1 (primary)</td>
+            <td>Linked-issue search</td>
+            <td><code>gh pr list --search "closes #&lt;issue-number&gt;"</code> — matches PRs that reference the issue in their body. Works reliably when the Coding Agent follows GitHub's "closes" keyword convention.</td>
+          </tr>
+          <tr>
+            <td>2 (fallback)</td>
+            <td>Branch pattern</td>
+            <td>Scans open PRs whose branch name contains <code>copilot/</code> or the slugified slice title. Used when the agent opens a PR without a closes link (rare, but observed in edge cases).</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>If neither stage finds a PR within the configured timeout (default: 30 minutes, configurable via <code>.forge.json#codingAgent.pollTimeoutMinutes</code>), the slice is marked <code>stalled</code> and Plan-Forge moves to the next slice or stops, depending on <code>--on-stall</code> (<code>skip</code> | <code>abort</code>, default <code>abort</code>).</p>
+
+      <h3 id="trajectory-capture">Trajectory capture</h3>
+
+      <p>When a PR is merged, Plan-Forge fetches the Coding Agent's session log from the PR's <em>Copilot Activity</em> tab via the GitHub API and appends it to the plan's trajectory file at <code>.forge/trajectories/&lt;plan-slug&gt;.jsonl</code>. This makes the Coding Agent's reasoning searchable by <code>pforge timeline</code> and <code>forge_master_ask</code> just like any other execution session.</p>
+
+      <div class="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5 mt-6">
+        <p class="text-sm text-slate-400 mb-0"><strong class="text-slate-200">Prerequisite:</strong> <code>gh</code> CLI must be authenticated (<code>gh auth status</code>) and the repo must have Copilot Coding Agent enabled at the org or repo level. Run <code>pforge github status</code> — all eight checks should pass before using <code>--worker copilot-coding-agent</code>.</p>
+      </div>
+
+      <!-- ─── Section 4 — GHAS remediation ─── -->
+      <h2 id="ghas-remediation">4. GHAS-driven remediation</h2>
+
+      <p>GitHub Advanced Security (GHAS) surfaces security findings — CodeQL alerts, secret scans, Dependabot advisories — as SARIF files or API responses. <code>pforge plan-from-sarif</code> turns a SARIF result into a runnable Plan-Forge plan with one slice per finding, severity-ordered so the highest-severity issues execute first.</p>
+
+      <pre><code>pforge plan-from-sarif codeql-results.sarif --out docs/plans/ghas-remediation-PLAN.md</code></pre>
+
+      <p>The generated plan is a standard Plan-Forge plan. Run it with any worker (<code>pforge run-plan</code>, <code>--worker copilot-coding-agent</code>, etc.) and all the usual flags apply.</p>
+
+      <h3 id="sarif-stdin">Reading SARIF from stdin</h3>
+
+      <p>Pass <code>-</code> as the file argument to read SARIF from stdin. This lets you pipe directly from <code>gh</code> or any SARIF producer without writing an intermediate file:</p>
+
+      <pre><code># Pipe CodeQL results from the GitHub API
+gh api /repos/{owner}/{repo}/code-scanning/analyses/latest/sarif | \
+  pforge plan-from-sarif - --out docs/plans/ghas-remediation-PLAN.md
+
+# Or from a local CodeQL database run
+codeql database analyze my-db --format=sarifv2.1.0 --output=- | \
+  pforge plan-from-sarif - --out docs/plans/ghas-remediation-PLAN.md</code></pre>
+
+      <h3 id="severity-ordering">Severity ordering and slice structure</h3>
+
+      <p>Findings are sorted by SARIF <code>level</code> in descending order — <code>error</code> → <code>warning</code> → <code>note</code> — then by rule ID for deterministic ordering within a level. Each finding becomes one slice with:</p>
+
+      <ul>
+        <li>Slice title: <code>[SARIF] &lt;ruleId&gt; — &lt;location&gt;</code></li>
+        <li>Scope contract: the finding's message, the affected file and line range, and the recommended fix from the rule metadata (if present)</li>
+        <li>Validation gate: re-runs CodeQL on the affected file and asserts zero findings for that rule</li>
+      </ul>
+
+      <p>Use <code>--min-severity warning</code> to exclude <code>note</code>-level findings from the plan. Use <code>--rule-filter &lt;ruleId&gt;</code> to include only a specific rule. Both flags can be combined.</p>
+
+      <h3 id="ghas-integration-surface">Integration with the Plan-Forge security surface</h3>
+
+      <p><code>pforge plan-from-sarif</code> is the inbound half of the GHAS integration. The outbound half is the existing PreDeploy LiveGuard hook: before any deploy slice executes, <code>forge_secret_scan</code> + <code>forge_env_diff</code> run automatically and block on severity ≥ high. The <code>/security-audit</code> skill combines both: it invokes <code>pforge plan-from-sarif</code> against the latest SARIF, presents the generated plan for review, then hands off to <code>pforge run-plan</code>.</p>
+
+      <blockquote>
+        <p class="text-slate-300">"Run <code>/security-audit</code> and generate a remediation plan for all high-severity CodeQL findings."</p>
+      </blockquote>
+
+      <p>That one prompt triggers the full pipeline: SARIF fetch → plan generation → plan review → optional execution. See the <a href="skills.html" class="text-amber-400 hover:underline">Skills Reference</a> for the full <code>/security-audit</code> flow.</p>
+
       <!-- ─── Coming sections ─── -->
-      <h2 id="coming-soon">3–8. Coming in upcoming releases</h2>
+      <h2 id="coming-soon">5–8. Coming in upcoming releases</h2>
 
       <p>This chapter is a living scaffold. The sections below are planned and will land as their underlying integrations ship.</p>
 
       <div class="grid md:grid-cols-2 gap-4 mt-6">
-        <div class="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5">
-          <div class="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-2">Coming next</div>
-          <div class="text-base font-bold text-slate-100 mb-1">3. Dispatching to Copilot Coding Agent</div>
-          <p class="text-sm text-slate-400 mb-0"><code>pforge run-plan --worker copilot-coding-agent</code> creates a GitHub Issue per slice, assigns to <code>@copilot</code>, polls the resulting PR, and captures the run trajectory back into the Plan-Forge dashboard.</p>
-        </div>
-        <div class="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5">
-          <div class="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-2">Coming next</div>
-          <div class="text-base font-bold text-slate-100 mb-1">4. GHAS-driven remediation</div>
-          <p class="text-sm text-slate-400 mb-0"><code>pforge plan-from-sarif &lt;file&gt;</code> turns a CodeQL SARIF result into a Plan-Forge plan with one slice per finding, severity-ordered. Pairs with the existing PreDeploy LiveGuard hook (<code>forge_secret_scan</code> + <code>forge_env_diff</code>) and <code>/security-audit</code> skill.</p>
-        </div>
         <div class="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5">
           <div class="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-2">Planned</div>
           <div class="text-base font-bold text-slate-100 mb-1">5. Copilot Spaces sync</div>

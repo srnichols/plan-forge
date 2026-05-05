@@ -1,0 +1,171 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 540" fill="none">
+  <style>
+    text { font-family: 'Inter', sans-serif; }
+    .layer { rx: 10; ry: 10; stroke-width: 1.5; }
+    .primitive { rx: 6; ry: 6; stroke-width: 1; }
+    .arrow { stroke: #475569; stroke-width: 1.5; fill: none; marker-end: url(#arrowhead); }
+    .arrow-up { stroke: #f59e0b; stroke-width: 1.5; fill: none; marker-end: url(#arrowhead-amber); stroke-dasharray: 3 3; }
+    .label { font-size: 11px; fill: #cbd5e1; }
+    .title { font-size: 13px; fill: #f1f5f9; font-weight: 600; }
+    .layer-title { font-size: 12px; fill: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .accent { font-size: 10px; fill: #f59e0b; font-weight: 600; }
+    .desc { font-size: 9.5px; fill: #94a3b8; }
+  </style>
+
+  <defs>
+    <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#475569" />
+    </marker>
+    <marker id="arrowhead-amber" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#f59e0b" />
+    </marker>
+  </defs>
+
+  <!-- ─── Layer 1: Models (top) ─── -->
+  <text x="20" y="32" class="layer-title">Layer 1 — Models</text>
+  <g>
+    <rect x="20" y="42" width="160" height="48" class="layer" fill="#1e293b" stroke="#334155" />
+    <text x="100" y="62" text-anchor="middle" class="title">Anthropic</text>
+    <text x="100" y="78" text-anchor="middle" class="desc">claude-sonnet-4.6</text>
+
+    <rect x="200" y="42" width="160" height="48" class="layer" fill="#1e293b" stroke="#334155" />
+    <text x="280" y="62" text-anchor="middle" class="title">OpenAI</text>
+    <text x="280" y="78" text-anchor="middle" class="desc">gpt-5.5, gpt-5.3-codex</text>
+
+    <rect x="380" y="42" width="160" height="48" class="layer" fill="#1e293b" stroke="#334155" />
+    <text x="460" y="62" text-anchor="middle" class="title">Google / xAI</text>
+    <text x="460" y="78" text-anchor="middle" class="desc">gemini-3.1-pro, grok-4</text>
+
+    <rect x="560" y="42" width="320" height="48" class="layer" fill="#1e293b" stroke="#334155" />
+    <text x="720" y="62" text-anchor="middle" class="title">Anyone else (BYOK)</text>
+    <text x="720" y="78" text-anchor="middle" class="desc">selectable per slice via --model + .forge/secrets.json</text>
+  </g>
+
+  <!-- ─── Layer 2: Agent runtimes ─── -->
+  <text x="20" y="118" class="layer-title">Layer 2 — Agent runtimes</text>
+  <g>
+    <rect x="20" y="128" width="200" height="58" class="layer" fill="#0f1c2e" stroke="#1e3a5f" />
+    <text x="120" y="148" text-anchor="middle" class="title">Copilot Coding Agent</text>
+    <text x="120" y="164" text-anchor="middle" class="desc">async issue→PR, GitHub-native</text>
+    <text x="120" y="178" text-anchor="middle" class="accent">dispatched by Plan-Forge</text>
+
+    <rect x="240" y="128" width="200" height="58" class="layer" fill="#0f1c2e" stroke="#1e3a5f" />
+    <text x="340" y="148" text-anchor="middle" class="title">Claude Code · Cursor · Codex</text>
+    <text x="340" y="164" text-anchor="middle" class="desc">interactive workers, BYOK</text>
+    <text x="340" y="178" text-anchor="middle" class="accent">selectable via --worker</text>
+
+    <rect x="460" y="128" width="200" height="58" class="layer" fill="#0f1c2e" stroke="#1e3a5f" />
+    <text x="560" y="148" text-anchor="middle" class="title">gh-copilot CLI</text>
+    <text x="560" y="164" text-anchor="middle" class="desc">subscription-billed worker</text>
+    <text x="560" y="178" text-anchor="middle" class="accent">default for Plan-Forge slices</text>
+
+    <rect x="680" y="128" width="200" height="58" class="layer" fill="#0f1c2e" stroke="#1e3a5f" />
+    <text x="780" y="148" text-anchor="middle" class="title">Direct API workers</text>
+    <text x="780" y="164" text-anchor="middle" class="desc">grok-*, dall-e-* (HTTP only)</text>
+    <text x="780" y="178" text-anchor="middle" class="accent">routed automatically</text>
+  </g>
+
+  <!-- ─── Layer 3: GitHub primitives (the 8 things this chapter exists to document) ─── -->
+  <text x="20" y="214" class="layer-title">Layer 3 — GitHub primitives <tspan fill="#f59e0b">(the 8 things Plan-Forge consumes — Section 2)</tspan></text>
+  <g>
+    <!-- Row 1 -->
+    <rect x="20" y="224" width="200" height="44" class="primitive" fill="#0a1d33" stroke="#3b82f6" />
+    <text x="120" y="241" text-anchor="middle" class="title">.github/copilot-instructions.md</text>
+    <text x="120" y="257" text-anchor="middle" class="desc">repo-wide context</text>
+
+    <rect x="240" y="224" width="200" height="44" class="primitive" fill="#0a1d33" stroke="#3b82f6" />
+    <text x="340" y="241" text-anchor="middle" class="title">AGENTS.md</text>
+    <text x="340" y="257" text-anchor="middle" class="desc">cross-agent open standard</text>
+
+    <rect x="460" y="224" width="200" height="44" class="primitive" fill="#0a1d33" stroke="#3b82f6" />
+    <text x="560" y="241" text-anchor="middle" class="title">.github/instructions/*.md</text>
+    <text x="560" y="257" text-anchor="middle" class="desc">path-scoped (applyTo)</text>
+
+    <rect x="680" y="224" width="200" height="44" class="primitive" fill="#0a1d33" stroke="#3b82f6" />
+    <text x="780" y="241" text-anchor="middle" class="title">.github/prompts/*.prompt.md</text>
+    <text x="780" y="257" text-anchor="middle" class="desc">slash commands</text>
+
+    <!-- Row 2 -->
+    <rect x="20" y="276" width="200" height="44" class="primitive" fill="#0a1d33" stroke="#3b82f6" />
+    <text x="120" y="293" text-anchor="middle" class="title">.vscode/mcp.json</text>
+    <text x="120" y="309" text-anchor="middle" class="desc">MCP server registry</text>
+
+    <rect x="240" y="276" width="200" height="44" class="primitive" fill="#0a1d33" stroke="#3b82f6" />
+    <text x="340" y="293" text-anchor="middle" class="title">.github/workflows/</text>
+    <text x="340" y="309" text-anchor="middle" class="desc">GitHub Actions (CI)</text>
+
+    <rect x="460" y="276" width="200" height="44" class="primitive" fill="#0a1d33" stroke="#3b82f6" />
+    <text x="560" y="293" text-anchor="middle" class="title">git remote → github.com</text>
+    <text x="560" y="309" text-anchor="middle" class="desc">unlocks issue / PR / GHAS APIs</text>
+
+    <rect x="680" y="276" width="200" height="44" class="primitive" fill="#0a1d33" stroke="#3b82f6" />
+    <text x="780" y="293" text-anchor="middle" class="title">gh CLI (+ optional --gh-token)</text>
+    <text x="780" y="309" text-anchor="middle" class="desc">issue/PR + Copilot probe</text>
+  </g>
+
+  <!-- ─── Layer 4: Plan-Forge orchestration (where the chapter says we live) ─── -->
+  <text x="20" y="346" class="layer-title">Layer 4 — Plan-Forge orchestration <tspan fill="#f59e0b">(this is the chapter's claim of value)</tspan></text>
+  <g>
+    <rect x="20" y="356" width="860" height="78" class="layer" fill="#1c1410" stroke="#f59e0b" stroke-width="2" />
+
+    <text x="60" y="378" class="title">pforge run-plan</text>
+    <text x="60" y="394" class="desc">slice-by-slice exec</text>
+
+    <text x="190" y="378" class="title">tempering · regression-guard</text>
+    <text x="190" y="394" class="desc">drift detection, plan eval</text>
+
+    <text x="380" y="378" class="title">forge_cost_report</text>
+    <text x="380" y="394" class="desc">per-slice $ tracking</text>
+
+    <text x="540" y="378" class="title">forge_estimate_quorum</text>
+    <text x="540" y="394" class="desc">cost projection</text>
+
+    <text x="710" y="378" class="title">LiveGuard hooks</text>
+    <text x="710" y="394" class="desc">PreDeploy gates</text>
+
+    <text x="60" y="418" class="title">pforge github status / doctor</text>
+    <text x="60" y="431" class="desc">readiness probe (Section 1)</text>
+
+    <text x="280" y="418" class="title">--worker copilot-coding-agent</text>
+    <text x="280" y="431" class="desc">issue→PR dispatch (Section 3)</text>
+
+    <text x="540" y="418" class="title">plan-from-sarif</text>
+    <text x="540" y="431" class="desc">CodeQL → plan (Section 4)</text>
+
+    <text x="700" y="418" class="title">github metrics pull</text>
+    <text x="700" y="431" class="desc">leaderboard (Section 6)</text>
+  </g>
+
+  <!-- ─── Layer 5: Your repo (consumer) ─── -->
+  <text x="20" y="462" class="layer-title">Layer 5 — Your repo (the artifacts Plan-Forge produces)</text>
+  <g>
+    <rect x="20" y="472" width="280" height="48" class="layer" fill="#0f1f15" stroke="#10b981" />
+    <text x="160" y="490" text-anchor="middle" class="title">Plan files in docs/plans/</text>
+    <text x="160" y="506" text-anchor="middle" class="desc">specify → harden → execute → ship</text>
+
+    <rect x="320" y="472" width="280" height="48" class="layer" fill="#0f1f15" stroke="#10b981" />
+    <text x="460" y="490" text-anchor="middle" class="title">Trajectories under .forge/</text>
+    <text x="460" y="506" text-anchor="middle" class="desc">replay-able slice runs</text>
+
+    <rect x="620" y="472" width="260" height="48" class="layer" fill="#0f1f15" stroke="#10b981" />
+    <text x="750" y="490" text-anchor="middle" class="title">Real Issues + PRs + commits</text>
+    <text x="750" y="506" text-anchor="middle" class="desc">on github.com/&lt;you&gt;/&lt;repo&gt;</text>
+  </g>
+
+  <!-- ─── Connecting flows ─── -->
+  <!-- Layer 4 consumes Layer 3 (dashed amber, going up) -->
+  <path d="M 80 356 L 80 320" class="arrow-up" />
+  <path d="M 270 356 L 270 320" class="arrow-up" />
+  <path d="M 460 356 L 460 320" class="arrow-up" />
+  <path d="M 650 356 L 650 320" class="arrow-up" />
+  <path d="M 820 356 L 820 320" class="arrow-up" />
+
+  <!-- Layer 4 produces Layer 5 (solid grey, going down) -->
+  <path d="M 160 434 L 160 472" class="arrow" />
+  <path d="M 460 434 L 460 472" class="arrow" />
+  <path d="M 750 434 L 750 472" class="arrow" />
+
+  <!-- Layer 4 dispatches to Layer 2 agent runtimes (curved path on far right) -->
+  <path d="M 870 360 Q 895 245 880 195" class="arrow-up" />
+  <text x="888" y="280" class="accent" transform="rotate(90 888 280)">dispatches via --worker</text>
+</svg>

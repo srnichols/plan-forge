@@ -7,6 +7,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.90.7] — 2026-05-05 — Hotfix: Appendix H content sync + two architecture SVGs
+
+> **One-liner**: Brings the GitHub-stack chapter (Appendix H) up to date with the v2.90.x hotfix series. Section 9's captured-runs table gains six rows (one per hotfix), the "what we got wrong" bullets gain CLOSED-by-vN.N.N markers, and two new SVG diagrams (5-layer architecture, two-day dogfood timeline) make the strategic + operational story visible at a glance.
+
+### Added
+- **`docs/manual/assets/diagrams/github-stack-architecture.svg`** — 5-layer architecture diagram (Models → Agent runtimes → 8 GitHub primitives → Plan-Forge orchestration → Your repo). Embedded after Section 2's table.
+- **`docs/manual/assets/diagrams/github-stack-dogfood-timeline.svg`** — two-day swimlane diagram showing yesterday's 6 phases, today's 6 hotfixes, the 5 issues each closed by its hotfix, and the live GitHub Issue #150. Embedded inside Section 9.
+- **Six new rows in Section 9's captured-runs table** for v2.90.1 through v2.90.6.
+- **CLOSED-by-vN.N.N markers** on all five "what we got wrong" bullets — every issue the dogfood surfaced is now linked to the hotfix that resolved it.
+- **A fifth bullet** documenting the regex-over-escape bug Hotfix v2.90.1's own Slice 3 surfaced (closed by v2.90.3's W3 lint rule).
+
+### Changed
+- Section 9 opener gains a third paragraph noting "every issue the dogfood surfaced was closed in code by the v2.90.x hotfix series" — the chapter now describes a system that just rebuilt the parts of itself it found wanting.
+- Total spend: $0.18 → $0.45 (33 phase slices + 18 hotfix slices = 51 worker-executed slices across two days).
+
+### Verified
+- 22/22 vitest cases (`manual-chapter-headings` + `changelog-format` regression tests) pass.
+- Chapter is now 1030 lines, all 9 sections content-complete.
+
 ## [2.90.6] — 2026-05-05 — CHANGELOG cleanup + format regression guard
 
 > **One-liner**: Consolidates the three overlapping Section-9/dogfood entries (originally shipped as 2.89.0, 2.89.1, 2.90.0) into a single canonical `[2.90.0]` entry, adds a "Hotfix series 2.90.x" skim-reader callout, normalises all `[X.Y.Z]` headings to the `## [X.Y.Z] — YYYY-MM-DD — <one-liner>` em-dash format, and ships a regression test (`pforge-mcp/tests/changelog-format.test.mjs`) that prevents `[2.89.x]` headings from re-appearing and enforces em-dash separators going forward.

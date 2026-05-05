@@ -176,6 +176,11 @@
         <strong class="text-slate-200">A note on optionality:</strong> not having every row green does not break Plan-Forge. It limits which Plan-Forge features are available. The CLI still runs end-to-end against any repo with any agent — the GitHub primitives unlock the deepest, most automated path.
       </p>
 
+      <figure class="my-8">
+        <img src="assets/diagrams/github-stack-architecture.svg" alt="Five-layer architecture diagram showing how Plan-Forge sits on top of the eight GitHub-native primitives (Layer 3) and dispatches to multiple agent runtimes (Layer 2) backed by any model (Layer 1), producing plan files, trajectories, and live GitHub artifacts (Layer 5)." class="w-full max-w-4xl mx-auto rounded-xl border border-slate-700/50" loading="lazy" />
+        <figcaption class="text-xs text-slate-500 mt-2 text-center">The five-layer view. Plan-Forge's orchestration layer (amber) consumes the eight GitHub primitives below and produces working artifacts above. Every primitive is documented in this chapter — every Plan-Forge feature in the amber band has a section below.</figcaption>
+      </figure>
+
       <!-- ─── Section 3 — Copilot Coding Agent dispatch ─── -->
       <h2 id="coding-agent-dispatch">3. Dispatching to Copilot Coding Agent</h2>
 
@@ -894,7 +899,8 @@ pforge setup --agent claude</code></pre>
 
       <div class="rounded-xl border border-amber-500/30 bg-amber-500/5 p-5 mb-6">
         <p class="text-sm text-slate-300 mb-2"><strong class="text-amber-400">This chapter was written by Plan-Forge.</strong> Sections 1, 3, 4, 5, 6, 7, and 8 were drafted by <code>pforge run-plan</code> dispatching to GitHub Copilot via the <code>gh-copilot</code> worker. Each section is a captured slice trajectory you can audit.</p>
-        <p class="text-sm text-slate-400 mb-0">Section 9 itself — the artifact you're reading now — is the dogfood of the dogfood: a single live <code>--worker copilot-coding-agent</code> dispatch against this same repository, captured at runtime.</p>
+        <p class="text-sm text-slate-300 mb-2">Section 9 itself — the artifact you're reading now — is the dogfood of the dogfood: a single live <code>--worker copilot-coding-agent</code> dispatch against this same repository, captured at runtime.</p>
+        <p class="text-sm text-slate-400 mb-0"><strong class="text-emerald-400">And every issue the dogfood surfaced was closed in code by the v2.90.x hotfix series</strong> — also shipped autonomously through Plan-Forge, also captured below. The chapter you're reading describes a system that just rebuilt the parts of itself it found wanting.</p>
       </div>
 
       <h3 id="dogfood-runs">Captured runs</h3>
@@ -945,25 +951,76 @@ pforge setup --agent claude</code></pre>
             <td>$0.01</td>
             <td><a href="https://github.com/srnichols/plan-forge/issues/150" class="text-amber-400 hover:underline">Issue #150</a> + <a href="https://github.com/srnichols/plan-forge/commit/bb56040" class="text-amber-400 hover:underline"><code>bb56040</code></a></td>
           </tr>
+          <tr>
+            <td colspan="5" class="text-xs text-slate-500 italic py-3 border-t border-slate-700/50">Hotfix series 2.90.x — closes the bugs the dogfood surfaced. All shipped autonomously via the <code>scripts/sequence-hotfix-series.ps1</code> chain after one human gate-fix on v2.90.1.</td>
+          </tr>
+          <tr>
+            <td>v2.90.1 — worker output watchdog</td>
+            <td><a href="https://github.com/srnichols/plan-forge/blob/master/docs/plans/Phase-Hotfix-v2.90.1-WATCHDOG-PLAN.md" class="text-amber-400 hover:underline">Hotfix plan</a></td>
+            <td><code>gh-copilot</code> worker</td>
+            <td>$0.03</td>
+            <td><a href="https://github.com/srnichols/plan-forge/commit/0f353d2" class="text-amber-400 hover:underline"><code>0f353d2</code></a></td>
+          </tr>
+          <tr>
+            <td>v2.90.2 — worker timeout uplift + per-slice override</td>
+            <td><a href="https://github.com/srnichols/plan-forge/blob/master/docs/plans/Phase-Hotfix-v2.90.2-WORKER-TIMEOUT-PLAN.md" class="text-amber-400 hover:underline">Hotfix plan</a></td>
+            <td><code>gh-copilot</code> worker</td>
+            <td>$0.05</td>
+            <td><a href="https://github.com/srnichols/plan-forge/commit/b609eb2" class="text-amber-400 hover:underline"><code>b609eb2</code></a></td>
+          </tr>
+          <tr>
+            <td>v2.90.3 — plan-gate linter (W1–W4)</td>
+            <td><a href="https://github.com/srnichols/plan-forge/blob/master/docs/plans/Phase-Hotfix-v2.90.3-GATE-LINTER-PLAN.md" class="text-amber-400 hover:underline">Hotfix plan</a></td>
+            <td><code>gh-copilot</code> worker</td>
+            <td>$0.08</td>
+            <td><a href="https://github.com/srnichols/plan-forge/commit/c47d5be" class="text-amber-400 hover:underline"><code>c47d5be</code></a></td>
+          </tr>
+          <tr>
+            <td>v2.90.4 — Copilot Coding Agent assignable probe</td>
+            <td><a href="https://github.com/srnichols/plan-forge/blob/master/docs/plans/Phase-Hotfix-v2.90.4-COPILOT-AGENT-PROBE-PLAN.md" class="text-amber-400 hover:underline">Hotfix plan</a></td>
+            <td><code>gh-copilot</code> worker</td>
+            <td>$0.05</td>
+            <td><a href="https://github.com/srnichols/plan-forge/commit/0d8324c" class="text-amber-400 hover:underline"><code>0d8324c</code></a></td>
+          </tr>
+          <tr>
+            <td>v2.90.5 — sequencer hardening sweep</td>
+            <td><a href="https://github.com/srnichols/plan-forge/blob/master/docs/plans/Phase-Hotfix-v2.90.5-SEQUENCER-SWEEP-PLAN.md" class="text-amber-400 hover:underline">Hotfix plan</a></td>
+            <td><code>gh-copilot</code> worker</td>
+            <td>$0.04</td>
+            <td><a href="https://github.com/srnichols/plan-forge/commit/f736e39" class="text-amber-400 hover:underline"><code>f736e39</code></a></td>
+          </tr>
+          <tr>
+            <td>v2.90.6 — CHANGELOG cleanup + format regression test</td>
+            <td><a href="https://github.com/srnichols/plan-forge/blob/master/docs/plans/Phase-Hotfix-v2.90.6-CHANGELOG-CLEANUP-PLAN.md" class="text-amber-400 hover:underline">Hotfix plan</a></td>
+            <td><code>gh-copilot</code> worker</td>
+            <td>$0.02</td>
+            <td><a href="https://github.com/srnichols/plan-forge/commit/7b0c642" class="text-amber-400 hover:underline"><code>7b0c642</code></a></td>
+          </tr>
         </tbody>
       </table>
 
       <p class="text-sm text-slate-400 mt-4"><strong class="text-amber-400">† Honest two-stage capture.</strong> The first dogfood attempt on May 5 (commit <a href="https://github.com/srnichols/plan-forge/commit/c76314f" class="text-amber-400 hover:underline"><code>c76314f</code></a>) silently fell through to the standard <code>gh-copilot</code> worker because the <code>--worker</code> CLI flag was never wired through <code>pforge.ps1</code>/<code>pforge.sh</code> — only into <code>runPlan(opts.worker)</code> at the orchestrator API level (Phase B Slice 3). Phase GITHUB-B.1 (commit <code>bb56040</code>) closed the gap, and the second attempt produced <a href="https://github.com/srnichols/plan-forge/issues/150" class="text-amber-400 hover:underline">Issue #150</a> via real <code>gh issue create --assignee @copilot</code>. Copilot Coding Agent did not pick up the assignment (likely not enabled at the repo level for the user account, since the <code>assignees</code> field came back empty), so no PR materialized and the issue was closed without merge. <strong class="text-slate-200">The dispatch pipeline is verified end-to-end; the agent listener is the missing piece.</strong> When Copilot Coding Agent is enabled on this repo, re-running the dogfood plan should round-trip a full Issue → PR → merge cycle in a single command.</p>
 
-      <p class="mt-6"><strong class="text-slate-200">Total spend to write this chapter: $0.18</strong> across 33 worker-executed slices and one manual scaffold. The total time was approximately 11 hours of orchestrator wall-clock plus ~60 minutes of human review and gate-fix iterations across two real GitHub dispatches.</p>
+      <p class="mt-6"><strong class="text-slate-200">Total spend to write this chapter and close every issue it surfaced: $0.45</strong> across 51 worker-executed slices (33 phase + 18 hotfix) and one manual scaffold. The phases ran across yesterday's overnight session; the six-hotfix series shipped today in a single sequenced run after one human gate-fix on v2.90.1.</p>
+
+      <figure class="my-8">
+        <img src="assets/diagrams/github-stack-dogfood-timeline.svg" alt="Two-day timeline showing yesterday's six phases (A, B, D, C-auto, B.1, C9) on the left, today's six hotfixes (v2.90.1 through v2.90.6) on the right, and five issues surfaced at runtime each connected by a closure arrow to the hotfix that resolved it. Live GitHub Issue #150 is shown closed without merge. Footer totals: 51 worker-executed slices, $0.45, 12 version bumps, 5/5 issues closed." class="w-full max-w-4xl mx-auto rounded-xl border border-slate-700/50" loading="lazy" />
+        <figcaption class="text-xs text-slate-500 mt-2 text-center">Two-day shipping arc. Every issue surfaced at runtime has a closure arrow pointing at the hotfix that resolved it. The remaining open dependency — Copilot Coding Agent enablement on this repo — is GitHub-side, not in code.</figcaption>
+      </figure>
 
       <h3 id="dogfood-honesty">What we got right and what we got wrong</h3>
 
       <p>The Phase B / D / C runs are documented warts-and-all in the project's <a href="https://github.com/srnichols/plan-forge/commits/master?since=2026-05-04" class="text-amber-400 hover:underline">commit history</a>. A few honest observations:</p>
 
       <ul>
-        <li><strong>Two slices needed plan-author intervention.</strong> Phase B Slice 7's gate looked for <code>##&nbsp;Slice</code> when the SARIF generator emits <code>###&nbsp;Slice</code>; Phase D Slice 3 wrapped <code>node -e</code> in <code>bash -c</code> on Windows, which routes to WSL bash where Windows <code>node</code> isn't on PATH. Both were plan-authoring bugs caught by the orchestrator's auto-routing logic (<a href="https://github.com/srnichols/plan-forge/blob/master/.github/instructions/plan-gate-command-rules.md" class="text-amber-400 hover:underline">documented here</a>). Worker output was correct in both cases; only the validation gates needed fixing.</li>
-        <li><strong>Two long-running test sweeps deadlocked.</strong> Phase B Slice 9 (full vitest suite) and Phase D Slice 7 (dashboard glob) both had the worker waiting on subprocess output that never flushed. Each was resolved by killing the orchestrator, running the gate manually to verify, and resuming via <code>--resume-from</code>. This is a known Phase-34 limitation tracked in the orchestrator backlog.</li>
-        <li><strong>The sequencer initially treated <code>run-completed</code> as success.</strong> The orchestrator emits <code>run-completed</code> even when slices fail. The sequencer was hardened mid-run to require <code>status: completed</code> AND <code>failed: 0</code> before chaining the next plan. Lesson committed in <a href="https://github.com/srnichols/plan-forge/commit/a4bfb7f" class="text-amber-400 hover:underline"><code>a4bfb7f</code></a>.</li>
-        <li><strong>The dogfood capture surfaced two real gaps.</strong> First attempt: the <code>--worker copilot-coding-agent</code> flag was silently ignored by the CLI dispatchers (Phase B Slice 3 plumbed it into the orchestrator API only). Phase GITHUB-B.1 (commit <a href="https://github.com/srnichols/plan-forge/commit/bb56040" class="text-amber-400 hover:underline"><code>bb56040</code></a>) wired the flag through <code>pforge.ps1</code>, <code>pforge.sh</code>, and <code>orchestrator.mjs</code>'s argv parser. Second attempt: <a href="https://github.com/srnichols/plan-forge/issues/150" class="text-amber-400 hover:underline">Issue #150</a> was created with <code>--assignee @copilot</code>, but the assignment field came back empty — Copilot Coding Agent isn't enabled at the repo level. The dispatch pipeline is verified; the agent listener is the missing piece. Both findings are documented in the † footnote above, exactly as a working-system-describing-itself should.</li>
+        <li><strong>Two slices needed plan-author intervention.</strong> Phase B Slice 7's gate looked for <code>##&nbsp;Slice</code> when the SARIF generator emits <code>###&nbsp;Slice</code>; Phase D Slice 3 wrapped <code>node -e</code> in <code>bash -c</code> on Windows, which routes to WSL bash where Windows <code>node</code> isn't on PATH. Both were plan-authoring bugs caught by the orchestrator's auto-routing logic (<a href="https://github.com/srnichols/plan-forge/blob/master/.github/instructions/plan-gate-command-rules.md" class="text-amber-400 hover:underline">documented here</a>). Worker output was correct in both cases; only the validation gates needed fixing. <strong class="text-emerald-400">CLOSED by Hotfix v2.90.3</strong> — the new W1–W4 plan-gate linter rules catch both patterns at <code>pforge analyze</code> time before the slice ever runs.</li>
+        <li><strong>Two long-running test sweeps deadlocked.</strong> Phase B Slice 9 (full vitest suite) and Phase D Slice 7 (dashboard glob) both had the worker waiting on subprocess output that never flushed. Each was resolved by killing the orchestrator, running the gate manually to verify, and resuming via <code>--resume-from</code>. <strong class="text-emerald-400">CLOSED by Hotfix v2.90.1</strong> — the streaming-output watchdog (<code>PFORGE_WORKER_OUTPUT_IDLE_MS</code>, default 8 min) now fails fast on silent subprocesses. <strong class="text-emerald-400">CLOSED by Hotfix v2.90.2</strong> — worker timeout raised 20m → 30m default with a per-slice <code>workerTimeoutMs</code> frontmatter override.</li>
+        <li><strong>The sequencer initially treated <code>run-completed</code> as success.</strong> The orchestrator emits <code>run-completed</code> even when slices fail. The sequencer was hardened mid-run to require <code>status: completed</code> AND <code>failed: 0</code> before chaining the next plan. Lesson committed in <a href="https://github.com/srnichols/plan-forge/commit/a4bfb7f" class="text-amber-400 hover:underline"><code>a4bfb7f</code></a>. <strong class="text-emerald-400">CLOSED by Hotfix v2.90.5</strong> — sequencer extracted into a Pester-tested <code>.psm1</code> module with a bash equivalent and a <code>scripts/README.md</code> documenting the four chain-conditions.</li>
+        <li><strong>The dogfood capture surfaced two real gaps.</strong> First attempt: the <code>--worker copilot-coding-agent</code> flag was silently ignored by the CLI dispatchers (Phase B Slice 3 plumbed it into the orchestrator API only). Phase GITHUB-B.1 (commit <a href="https://github.com/srnichols/plan-forge/commit/bb56040" class="text-amber-400 hover:underline"><code>bb56040</code></a>) wired the flag through <code>pforge.ps1</code>, <code>pforge.sh</code>, and <code>orchestrator.mjs</code>'s argv parser. Second attempt: <a href="https://github.com/srnichols/plan-forge/issues/150" class="text-amber-400 hover:underline">Issue #150</a> was created with <code>--assignee @copilot</code>, but the assignment field came back empty — Copilot Coding Agent isn't enabled at the repo level. <strong class="text-emerald-400">DETECTED by Hotfix v2.90.4</strong> — the new <code>copilot-coding-agent-assignable</code> check in <code>inspectGithubStack</code> probes <code>gh api repos/&lt;owner&gt;/&lt;repo&gt;/assignees</code> when <code>--gh-token</code> is passed and hard-fails the pre-flight before the dispatch runs. The remaining gap (enabling Copilot Coding Agent on this repo) is GitHub-side, not in code.</li>
+        <li><strong>The hotfix series itself caught one more bug.</strong> Hotfix v2.90.1 Slice 3's gate used <code>/2\\.90\\.1/</code> (over-escaped) which after <code>cmd.exe</code> + <code>node -e</code> double-stripping became the literal regex <code>/2\.90\.1/</code> — never matched. The gate failed on its own success deliverable. Caught by hand, fixed in <a href="https://github.com/srnichols/plan-forge/commit/083e9c0" class="text-amber-400 hover:underline"><code>083e9c0</code></a> across all six remaining hotfix plans before re-running. The other five hotfixes ran completely autonomously through the sequencer chain. <strong class="text-emerald-400">CLOSED by Hotfix v2.90.3</strong> — W3 (regex-escape heuristic) flags this pattern at lint time.</li>
       </ul>
 
-      <p class="text-sm text-slate-400 mt-6"><strong class="text-slate-200">Why this matters:</strong> the chapter you're reading is not a marketing artifact. It's a working system describing itself, with bug tickets and gate fixes you can read as commits. The "Plan-Forge is the deepest harness on the GitHub stack" claim isn't a slogan — it's the trail of commits above.</p>
+      <p class="text-sm text-slate-400 mt-6"><strong class="text-slate-200">Why this matters:</strong> the chapter you're reading is not a marketing artifact. It's a working system describing itself, with bug tickets and gate fixes you can read as commits. The "Plan-Forge is the deepest harness on the GitHub stack" claim isn't a slogan — it's the trail of commits above. <strong class="text-emerald-400">5 of the 5 issues this dogfood surfaced are now closed in code.</strong> The one remaining external dependency — Copilot Coding Agent enablement on this repo — is detected by Hotfix v2.90.4 so the next attempt will fail fast instead of silently.</p>
 
       <div id="chapter-prev-next" class="chapter-nav"></div>
     </div></main>

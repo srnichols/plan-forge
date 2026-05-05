@@ -854,10 +854,28 @@ function renderSliceCards() {
     const durationBarColor = s.status === "failed" ? "bg-red-500/40" : s.status === "passed" ? "bg-green-500/30" : "bg-blue-500/30";
     const durationBar = s.duration ? `<div class="mt-1.5 h-1 rounded-full bg-gray-700 overflow-hidden"><div class="${durationBarColor} h-full rounded-full" style="width:${durationPct}%"></div></div>` : "";
 
-    // Phase GITHUB-B Slice 4 — trajectory render hint for copilot-coding-agent slices.
-    const trajectoryHint = s.trajectory?.renderHint
-      ? `<p class="text-xs text-cyan-500 mt-1 truncate" title="${s.trajectory.renderHint}">${s.trajectory.renderHint}</p>`
-      : "";
+    // Phase GITHUB-B Slice 4 / Hotfix-v2.90.8 — Clickable Issue/PR badges for
+    // copilot-coding-agent slices. When trajectory has full GitHub URLs, render
+    // clickable <a> badges that open the issue/PR in a new tab and stop the
+    // click from bubbling up to the slice-card loadSliceLog handler.
+    // Falls back to plain renderHint text when URLs are absent (e.g. timeout).
+    let trajectoryHtml = "";
+    if (s.trajectory) {
+      const t = s.trajectory;
+      const parts = [];
+      if (t.issueUrl && t.issueNumber) {
+        parts.push(`<a href="${t.issueUrl}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" class="text-xs text-cyan-400 hover:text-cyan-200 underline" title="Open GitHub issue #${t.issueNumber}">🔗 #${t.issueNumber}</a>`);
+      }
+      if (t.prUrl && t.prNumber) {
+        const prLinkColor = t.prStatus === "merged" ? "text-purple-400 hover:text-purple-200" : "text-cyan-400 hover:text-cyan-200";
+        parts.push(`<a href="${t.prUrl}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" class="text-xs ${prLinkColor} underline" title="Open GitHub PR #${t.prNumber} (${t.prStatus || "unknown"})">⤴ PR #${t.prNumber}</a>`);
+      }
+      if (parts.length > 0) {
+        trajectoryHtml = `<div class="flex items-center gap-1.5 mt-1">${parts.join('<span class="text-gray-600 text-xs">→</span>')}</div>`;
+      } else if (t.renderHint) {
+        trajectoryHtml = `<p class="text-xs text-cyan-500 mt-1 truncate" title="${t.renderHint}">${t.renderHint}</p>`;
+      }
+    }
 
     return `
       <div class="slice-card ${bgColor} rounded-lg p-3 border border-gray-700 cursor-pointer hover:border-gray-500 transition-colors" data-slice-id="${s.id}" onclick="loadSliceLog('${s.id}')">
@@ -870,7 +888,7 @@ function renderSliceCards() {
         ${model ? `<p class="text-xs text-gray-500 mt-1">${modelBadge} ${cost}</p>` : ""}
         ${quorumHtml}
         ${s.error ? `<p class="text-xs text-red-400 mt-1 truncate">${s.error}</p>` : ""}
-        ${trajectoryHint}
+        ${trajectoryHtml}
         ${durationBar}
       </div>
     `;

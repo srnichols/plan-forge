@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Chapter 9: Instruction Files &amp; Agents — Plan Forge Manual</title>
-  <meta name="description" content="Deep dive into the guardrail system: 17 instruction files, 14 reviewer agents, 15 skills, 4 lifecycle hooks plus 3 LiveGuard hooks. What each covers and when it activates." />
+  <title>Chapter 10: Instruction Files &amp; Agents — Plan Forge Manual</title>
+  <meta name="description" content="How Plan Forge guardrails auto-load: the applyTo system, 4 universal instruction files, and 17 domain-specific files that whisper the right rules at the right time." />
   <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
@@ -24,13 +24,13 @@
       <img src="assets/chapter-heroes/ch10-hero.jpg" alt="Constellation of glowing amber instruction-rule nodes interconnected by threads of light — auto-loading guardrails activating in context" class="chapter-hero" />
       <div class="chapter-content">
 
-      <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 9</div>
+      <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 10</div>
       <h1>Instruction Files &amp; Agents</h1>
       <p class="text-lg text-slate-400 mb-8">The guardrail system: what each file covers, when it activates, and how agents review your code.</p>
 
       <!-- ─── Overview ─── -->
       <h2 id="overview">How Auto-Loading Works</h2>
-      <p>Each instruction file has an <code>applyTo</code> glob pattern in its YAML frontmatter. When you edit a file matching that pattern, the instruction auto-loads into the AI's context. No manual action needed — it's the difference between drowning the AI in every rule you have and having the right guidance whisper only when it's relevant. (For full details on writing your own <code>applyTo</code> patterns, see <a href="customization.html#custom-instructions">Chapter 8</a>.)</p>
+      <p>Each instruction file has an <code>applyTo</code> glob pattern in its YAML frontmatter. When you edit a file matching that pattern, the instruction auto-loads into the AI's context. No manual action needed — it's the difference between drowning the AI in every rule you have and having the right guidance whisper only when it's relevant. (For full details on writing your own <code>applyTo</code> patterns, see <a href="customization.html#custom-instructions">Chapter 9</a>.)</p>
       <div class="cmd-block">
         <div class="cmd-block-header"><span>Example: security.instructions.md</span></div>
         <pre><code>---
@@ -105,89 +105,9 @@ applyTo: "**/auth/**,**/security/**,**/middleware/**"
       </div>
       <p>As of v2.18, every instruction file includes <strong>Temper Guards</strong> (shortcut prevention tables) and <strong>Warning Signs</strong> (observable anti-patterns). These help agents avoid common quality erosion and help reviewers detect violations.</p>
 
-      <!-- ─── Agents ─── -->
-      <h2 id="agents">Agents</h2>
-      <p>14 reviewer agents organized in three categories. Agents are <strong>read-only</strong> &mdash; they audit code but can't edit files.</p>
-
-      <h3>Stack-Specific Agents (6)</h3>
-      <p>Vary by preset — examples for <code>dotnet</code>:</p>
-      <table>
-        <thead><tr><th>Agent</th><th>Reviews</th></tr></thead>
-        <tbody>
-          <tr><td>architecture-reviewer</td><td>Layer separation, dependency direction, SOLID</td></tr>
-          <tr><td>database-reviewer</td><td>Query patterns, migrations, connection management</td></tr>
-          <tr><td>deploy-reviewer</td><td>Dockerfile, health checks, container optimization</td></tr>
-          <tr><td>performance-reviewer</td><td>Hot paths, allocations, async patterns</td></tr>
-          <tr><td>security-reviewer</td><td>Input validation, auth, secrets, OWASP</td></tr>
-          <tr><td>test-runner</td><td>Test coverage, test patterns, mocking strategy</td></tr>
-        </tbody>
-      </table>
-
-      <h3>Cross-Stack Agents (8)</h3>
-      <p>Shared across all presets — same expertise regardless of language:</p>
-      <table>
-        <thead><tr><th>Agent</th><th>Reviews</th></tr></thead>
-        <tbody>
-          <tr><td>api-contract-reviewer</td><td>API versioning, backward compatibility, OpenAPI</td></tr>
-          <tr><td>accessibility-reviewer</td><td>WCAG 2.2, semantic HTML, ARIA, keyboard nav</td></tr>
-          <tr><td>multi-tenancy-reviewer</td><td>Tenant isolation, data leakage, RLS, cache separation</td></tr>
-          <tr><td>cicd-reviewer</td><td>Pipeline safety, secrets, rollback strategies</td></tr>
-          <tr><td>observability-reviewer</td><td>Structured logging, distributed tracing, metrics</td></tr>
-          <tr><td>dependency-reviewer</td><td>CVEs, outdated packages, license conflicts</td></tr>
-          <tr><td>compliance-reviewer</td><td>GDPR, CCPA, SOC2, PII handling, audit logs</td></tr>
-          <tr><td>error-handling-reviewer</td><td>Exception hierarchy, error boundaries, ProblemDetails</td></tr>
-        </tbody>
-      </table>
-
-      <h3>Pipeline Agents (6)</h3>
-      <p>Drive the 7-step pipeline with handoff buttons between stages:</p>
-      <table>
-        <thead><tr><th>Agent</th><th>Pipeline Step</th><th>What It Does</th></tr></thead>
-        <tbody>
-          <tr><td>specifier</td><td>Step 0</td><td>Interviews you, produces specification</td></tr>
-          <tr><td>preflight</td><td>Step 1</td><td>Verifies prerequisites, checks environment readiness</td></tr>
-          <tr><td>plan-hardener</td><td>Step 2</td><td>Converts spec into hardened execution contract</td></tr>
-          <tr><td>executor</td><td>Step 3</td><td>Executes slices, validates gates</td></tr>
-          <tr><td>reviewer-gate</td><td>Step 5</td><td>Independent audit for drift and compliance</td></tr>
-          <tr><td>shipper</td><td>Step 6</td><td>Commits, updates roadmap, captures lessons</td></tr>
-        </tbody>
-      </table>
-
-      <!-- ─── Skills ─── -->
-      <h2 id="skills">Skills</h2>
-      <p>12 slash commands per app preset. Skills <strong>do work</strong> — they can read, write, and run terminal commands:</p>
-      <table>
-        <thead><tr><th>Skill</th><th>Invocation</th><th>What It Does</th></tr></thead>
-        <tbody>
-          <tr><td>database-migration</td><td><code>/database-migration</code></td><td>Generate, review, test, deploy schema migrations</td></tr>
-          <tr><td>staging-deploy</td><td><code>/staging-deploy</code></td><td>Build, push, migrate, deploy, verify on staging</td></tr>
-          <tr><td>test-sweep</td><td><code>/test-sweep</code></td><td>Run all test suites and aggregate results</td></tr>
-          <tr><td>dependency-audit</td><td><code>/dependency-audit</code></td><td>Scan for vulnerabilities, outdated packages, licenses</td></tr>
-          <tr><td>security-audit</td><td><code>/security-audit</code></td><td>OWASP scan, secrets detection, severity report</td></tr>
-          <tr><td>code-review</td><td><code>/code-review</code></td><td>Architecture, security, testing, patterns review</td></tr>
-          <tr><td>release-notes</td><td><code>/release-notes</code></td><td>Generate from git history and CHANGELOG</td></tr>
-          <tr><td>api-doc-gen</td><td><code>/api-doc-gen</code></td><td>Generate/update OpenAPI spec, validate consistency</td></tr>
-          <tr><td>onboarding</td><td><code>/onboarding</code></td><td>Walk new dev through setup, architecture, first task</td></tr>
-          <tr><td>health-check</td><td><code>/health-check</code></td><td>Forge diagnostic: smith → validate → sweep</td></tr>
-          <tr><td>forge-execute</td><td><code>/forge-execute</code></td><td>Guided plan execution: list → estimate → execute → report</td></tr>
-          <tr><td>forge-troubleshoot</td><td><code>/forge-troubleshoot</code></td><td>Diagnose common Plan Forge issues</td></tr>
-        </tbody>
-      </table>
-
-      <!-- ─── Lifecycle Hooks ─── -->
-      <h2 id="hooks">Lifecycle Hooks</h2>
-      <p>Hooks run automatically during agent sessions — no manual activation:</p>
-      <table>
-        <thead><tr><th>Hook</th><th>When</th><th>What It Enforces</th></tr></thead>
-        <tbody>
-          <tr><td><strong>SessionStart</strong></td><td>Session begins</td><td>Injects Project Principles, current phase, forbidden patterns</td></tr>
-          <tr><td><strong>PreToolUse</strong></td><td>Before file edit</td><td>Blocks edits to paths listed in plan's Forbidden Actions</td></tr>
-          <tr><td><strong>PostToolUse</strong></td><td>After file edit</td><td>Auto-formats, warns on TODO/FIXME/stub markers</td></tr>
-          <tr><td><strong>Stop</strong></td><td>Session ends</td><td>Warns if code modified but no test run detected</td></tr>
-        </tbody>
-      </table>
-      <div class="callout callout-warning">
-        <strong>PostToolUse warning</strong>: If you see "⚠ Deferred-work marker detected" after an edit, the AI left a TODO or stub. Address it before moving on — the completeness sweep (Step 4) will catch it anyway.
+      <div class="callout callout-tip">
+        <strong>Agents, Skills &amp; Hooks</strong> — the reviewer agents (14), slash-command skills (12), and lifecycle hooks are covered in the companion reference:
+        <a href="instructions-agents-reference.html">Chapter 10 · Reference — Agents, Skills &amp; Hooks →</a>
       </div>
 
       <p class="text-sm text-slate-500 mt-8">📄 Full reference: <a href="https://github.com/srnichols/plan-forge/blob/master/docs/capabilities.md" rel="noopener">capabilities.md</a>, <a href="https://github.com/srnichols/plan-forge/blob/master/docs/COPILOT-VSCODE-GUIDE.md" rel="noopener">COPILOT-VSCODE-GUIDE.md</a></p>

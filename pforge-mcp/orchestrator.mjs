@@ -102,12 +102,46 @@ export function resolveWorkerOutputIdleMs() {
 export const DEFAULT_WORKER_TIMEOUT_MS = 1_800_000;
 
 /**
+ * Parse a workerTimeoutMs value from a plan body line.
+ * Accepts plain numbers or shorthand strings like "30m", "1h", "90s".
+ * Returns null if the value is invalid, zero, or negative (falls through to env/default).
+ * @param {string|number} raw
+ * @returns {number|null}
+ */
+export function parseWorkerTimeoutValue(raw) {
+  if (raw == null) return null;
+  const str = String(raw).trim().replace(/^["']|["']$/g, ""); // strip optional quotes
+  // Shorthand: 30m, 1h, 90s
+  const shorthandMatch = str.match(/^(\d+(?:\.\d+)?)\s*(ms|s|m|h)$/i);
+  if (shorthandMatch) {
+    const n = parseFloat(shorthandMatch[1]);
+    const unit = shorthandMatch[2].toLowerCase();
+    const multipliers = { ms: 1, s: 1_000, m: 60_000, h: 3_600_000 };
+    const ms = Math.round(n * multipliers[unit]);
+    if (ms > 0) return ms;
+    console.warn(`[pforge] workerTimeoutMs shorthand "${str}" resolved to ≤0; ignoring.`);
+    return null;
+  }
+  const num = Number(str);
+  if (!Number.isFinite(num) || num <= 0) {
+    if (str !== "0") console.warn(`[pforge] workerTimeoutMs value "${str}" is invalid; ignoring.`);
+    return null;
+  }
+  return Math.round(num);
+}
+
+/**
  * Resolve the worker total-run timeout in milliseconds.
- * Priority: PFORGE_WORKER_TIMEOUT_MS env var → default (1 800 000 ms / 30 min).
+ * Priority: opts.sliceOverride (per-slice frontmatter) → PFORGE_WORKER_TIMEOUT_MS env var → default (1 800 000 ms / 30 min).
  * Used by spawnWorker() to hard-kill a worker that never finishes.
+ * @param {{ sliceOverride?: number|null }} [opts]
  * @returns {number}
  */
-export function resolveWorkerTimeoutMs() {
+export function resolveWorkerTimeoutMs(opts = {}) {
+  const sliceOverride = opts && opts.sliceOverride != null ? opts.sliceOverride : null;
+  if (sliceOverride !== null && Number.isFinite(sliceOverride) && sliceOverride > 0) {
+    return sliceOverride;
+  }
   const envVal = process.env.PFORGE_WORKER_TIMEOUT_MS;
   if (envVal != null && envVal !== "") {
     const parsed = Number(envVal);
@@ -497,6 +531,7 @@ function parseSlices(lines, opts = {}) {
         testCommand: null,
         validationGate: null,
         stopCondition: null,
+        workerTimeoutMs: null,
         tasks: [],
         rawLines: [],
       };
@@ -583,6 +618,13 @@ function parseSlices(lines, opts = {}) {
     // Parse stop condition
     const stopMatch = line.match(/\*\*Stop Condition\*\*:\s*(.+)/);
     if (stopMatch) current.stopCondition = stopMatch[1].trim();
+
+    // Parse per-slice worker timeout override
+    const workerTimeoutMatch = line.match(/\*\*WorkerTimeoutMs\*\*:\s*(.+)/i);
+    if (workerTimeoutMatch) {
+      const parsed = parseWorkerTimeoutValue(workerTimeoutMatch[1].trim());
+      if (parsed !== null) current.workerTimeoutMs = parsed;
+    }
 
     // Parse body-line **Depends On:** — merges with any [depends: ...] header tag.
     // Formats supported (colon can be inside OR outside the bold markers):
@@ -7664,7 +7706,7 @@ async function executeSlice(slice, options) {
       }
     } else {
       try {
-        workerResult = await spawnWorker(sliceInstructions, { model: currentModel, cwd, runPlanActive: true });
+        workerResult = await spawnWorker(sliceInstructions, { model: currentModel, cwd, runPlanActive: true, timeout: resolveWorkerTimeoutMs({ sliceOverride: slice.workerTimeoutMs }) });
       } catch (err) {
         return {
           status: "failed",

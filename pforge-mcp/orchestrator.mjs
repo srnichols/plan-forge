@@ -4036,6 +4036,10 @@ export async function runPlan(planPath, options = {}) {
         try {
           startSha = execSync("git rev-parse HEAD", { cwd, encoding: "utf-8", timeout: 5_000 }).trim();
         } catch { /* not a git repo or detached \u2014 fall through */ }
+        // Issue #151: snapshot working-tree state so autoCommitSliceIfDirty
+        // can distinguish worker-owned paths from operator-owned paths that
+        // were already dirty when the slice began.
+        const preSliceState = snapshotPreSliceState({ cwd });
         const result = await executeSlice(slice, {
           cwd, model: effectiveModel, modelRouting, mode, runDir, maxRetries,
           memoryEnabled, projectName, planName: basename(planPath, ".md"),
@@ -4043,7 +4047,7 @@ export async function runPlan(planPath, options = {}) {
           worker, _dispatchSlice, _pollPullRequest,
         });
         if (result.status === "passed") {
-          result.autoCommit = autoCommitSliceIfDirty({ slice, cwd, mode, eventBus, startSha });
+          result.autoCommit = autoCommitSliceIfDirty({ slice, cwd, mode, eventBus, startSha, preSliceState });
         } else if (result.status === "failed") {
           // Issue #132 \u2014 the gate said no, but the worker may have written
           // perfectly correct files (typical when the gate script itself is
@@ -6870,18 +6874,240 @@ export function resetPostSliceHookFired() {
 }
 
 /**
+ * Parse `git status --porcelain` output into a Map<path, statusLine>.
+ * The status line is the full original line including the XY status code,
+ * which lets callers tell whether a path was further modified between two
+ * snapshots (same path + different line = worker touched it). Renames are
+ * tracked at their post-rename path.
+ *
+ * @param {string} porcelain
+ * @returns {Map<string, string>}
+ */
+export function parseGitPorcelain(porcelain) {
+  const map = new Map();
+  if (!porcelain) return map;
+  for (const raw of porcelain.split(/\r?\n/)) {
+    if (!raw.trim()) continue;
+    const arrowIdx = raw.indexOf(" -> ");
+    const tail = arrowIdx >= 0 ? raw.slice(arrowIdx + 4) : raw.slice(3);
+    const path = tail.trim().replace(/^"|"$/g, "");
+    if (path) map.set(path, raw);
+  }
+  return map;
+}
+
+/**
+ * Capture the working-tree state at slice start so {@link autoCommitSliceIfDirty}
+ * can later distinguish worker-owned paths from operator-owned paths that
+ * were already dirty when the slice began. Issue #151.
+ *
+ * Returns null on any git failure (caller treats null as "no snapshot — fall
+ * back to legacy `git add -A` behaviour").
+ *
+ * @param {{ cwd?: string }} [params]
+ * @returns {Map<string, string>|null}
+ */
+export function snapshotPreSliceState({ cwd = process.cwd() } = {}) {
+  try {
+    const out = execSync("git status --porcelain", { cwd, encoding: "utf-8", timeout: 5_000 });
+    return parseGitPorcelain(out);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Shell-quote a single path for use after `git add --`. Wraps in double
+ * quotes and escapes embedded quotes/backslashes. Safe on POSIX and Windows
+ * because git accepts forward-slash quoted paths on both.
+ */
+function shellQuotePath(p) {
+  return `"${String(p).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+}
+
+/**
+ * Issue #152 — extract the file paths declared in a slice's
+ * **Files Modified (Exhaustive)** table (or the more permissive
+ * **Files Modified** label many plans use).
+ *
+ * Plans express the table in markdown:
+ *
+ *   | File | Change |
+ *   |------|--------|
+ *   | `path/to/file.ts` | description |
+ *   | path/other.md     | description |
+ *
+ * Only the first column is parsed. Backtick-wrapped paths are preferred;
+ * otherwise we accept any token that looks like a path (contains `/`, `.`,
+ * or matches a glob-ish pattern). Returns an empty array when the slice has
+ * no such table — the caller must treat that as "no contract to enforce"
+ * rather than a violation.
+ *
+ * @param {{ rawLines?: string[] }} slice
+ * @returns {string[]}
+ */
+export function extractFilesModifiedExhaustive(slice) {
+  const lines = slice?.rawLines || [];
+  if (lines.length === 0) return [];
+
+  // Look for a heading or bold marker that opens the table window.
+  // Accepts "Files Modified", "Files Modified (Exhaustive)", "Files Touched",
+  // optionally as bold (`**`), optionally followed by a colon. The bold
+  // close `**` always precedes the optional `:` in markdown:
+  //   **Files Modified (Exhaustive)**:  ← bold close, then colon
+  //   **Files Modified**:
+  //   **Files Modified**
+  //   Files Modified:
+  // Case-insensitive.
+  const headerRe = /^\s*\*{0,2}files\s+(?:modified|touched)(?:\s*\([^)]*\))?\*{0,2}\s*:?\s*$/i;
+
+  const declared = [];
+  let inTable = false;
+  let sawSeparator = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    if (!inTable) {
+      if (headerRe.test(line.trim())) {
+        inTable = true;
+        sawSeparator = false;
+      }
+      continue;
+    }
+
+    // Inside the table window. A blank line, a markdown heading, or another
+    // bold-section marker closes the window.
+    const trimmed = line.trim();
+    if (trimmed === "" || /^#{1,6}\s/.test(trimmed) || /^\*\*[^*]+\*\*\s*:?\s*$/.test(trimmed)) {
+      // Allow a single blank line right after the header before the table starts;
+      // otherwise close.
+      if (declared.length === 0 && trimmed === "" && !sawSeparator) continue;
+      break;
+    }
+
+    // Markdown table separator: |---|---|
+    if (/^\s*\|?[\s:|-]+\|?\s*$/.test(line) && line.includes("-")) {
+      sawSeparator = true;
+      continue;
+    }
+
+    // Table row: leading "|" + cells. Skip the header row ("File | Change").
+    if (line.includes("|")) {
+      const cells = line.split("|").map((c) => c.trim()).filter((c) => c.length > 0);
+      if (cells.length === 0) continue;
+      const firstCell = cells[0];
+
+      // Skip the header row. Detect by exact match against common header
+      // labels (case-insensitive, no trailing punctuation).
+      if (!sawSeparator && /^(file|path|filename)$/i.test(firstCell)) continue;
+
+      // Prefer backtick-wrapped paths; fall back to bare tokens that look
+      // like a path.
+      const backticks = firstCell.match(/`([^`]+)`/g);
+      if (backticks && backticks.length > 0) {
+        for (const b of backticks) {
+          const p = b.replace(/`/g, "").trim();
+          if (p && !declared.includes(p)) declared.push(p);
+        }
+      } else if (/[/.]/.test(firstCell) && !/\s/.test(firstCell)) {
+        if (!declared.includes(firstCell)) declared.push(firstCell);
+      }
+    }
+  }
+
+  return declared;
+}
+
+/**
+ * Issue #152 — verify every path declared in the slice's
+ * **Files Modified (Exhaustive)** table actually appears in the slice's
+ * working-tree changes (`git diff --name-only <startSha>..HEAD` plus current
+ * porcelain for uncommitted edits).
+ *
+ * Returns a structured result. Never throws. When `declared` is empty, the
+ * result reports `enforced: false` — there's no contract to enforce.
+ *
+ * @param {object} params
+ * @param {{ number: number|string, title: string, rawLines?: string[] }} params.slice
+ * @param {string} [params.cwd=process.cwd()]
+ * @param {string|null} [params.startSha] — HEAD SHA captured at slice start
+ * @returns {{
+ *   enforced: boolean,
+ *   declared: string[],
+ *   actual: string[],
+ *   missing: string[],
+ * }}
+ */
+export function verifyFilesModified({ slice, cwd = process.cwd(), startSha = null } = {}) {
+  const declared = extractFilesModifiedExhaustive(slice);
+  if (declared.length === 0) {
+    return { enforced: false, declared: [], actual: [], missing: [] };
+  }
+
+  // Collect actual touched paths: committed since startSha + currently dirty.
+  const actualSet = new Set();
+
+  if (startSha) {
+    try {
+      const diffOut = execSync(`git diff --name-only ${startSha} HEAD`, {
+        cwd, encoding: "utf-8", timeout: 5_000,
+      });
+      for (const p of diffOut.split(/\r?\n/)) {
+        const path = p.trim();
+        if (path) actualSet.add(path);
+      }
+    } catch { /* startSha may not exist on first slice — fall through */ }
+  }
+
+  try {
+    const porcelain = execSync("git status --porcelain", {
+      cwd, encoding: "utf-8", timeout: 5_000,
+    });
+    for (const path of parseGitPorcelain(porcelain).keys()) {
+      actualSet.add(path);
+    }
+  } catch { /* not a git repo — leave actualSet possibly empty */ }
+
+  const actual = [...actualSet];
+  // Normalize separators for cross-platform comparison (declared paths in
+  // plans are typically forward-slash; git output is forward-slash on all OSes).
+  const norm = (p) => String(p).replace(/\\/g, "/").replace(/^\.\//, "").trim();
+  const actualNorm = new Set(actual.map(norm));
+  const missing = declared.filter((d) => !actualNorm.has(norm(d)));
+
+  return { enforced: true, declared, actual, missing };
+}
+
+/**
  * After a slice passes, commit any dirty working-tree changes with a
  * deterministic conventional-commit message derived from the slice title.
  * Never commits on `mode === "assisted"` runs.
+ *
+ * Issue #151 — when `preSliceState` is provided, only paths the worker
+ * actually created or modified during the slice are staged. Paths that were
+ * already dirty at slice start (operator edits, parallel-process scratch
+ * files) are left alone and reported via a `slice-foreign-files-detected`
+ * event. Without `preSliceState` the function falls back to the legacy
+ * `git add -A` behaviour for backward compatibility.
  *
  * @param {object} params
  * @param {{ number: number, title: string }} params.slice
  * @param {string} [params.cwd=process.cwd()]
  * @param {string} [params.mode]   — "assisted" skips auto-commit
  * @param {{ emit: Function }} [params.eventBus]
- * @returns {{ committed: boolean, reason?: string, sha?: string, message?: string, error?: string }}
+ * @param {string|null} [params.startSha]
+ * @param {Map<string, string>|null} [params.preSliceState] — porcelain snapshot from {@link snapshotPreSliceState}
+ * @returns {{ committed: boolean, reason?: string, sha?: string, message?: string, error?: string, foreignFiles?: string[] }}
  */
-export function autoCommitSliceIfDirty({ slice, cwd = process.cwd(), mode, eventBus, startSha = null } = {}) {
+export function autoCommitSliceIfDirty({
+  slice,
+  cwd = process.cwd(),
+  mode,
+  eventBus,
+  startSha = null,
+  preSliceState = null,
+} = {}) {
   if (mode === "assisted") {
     return { committed: false, reason: "assisted-mode" };
   }
@@ -6911,6 +7137,43 @@ export function autoCommitSliceIfDirty({ slice, cwd = process.cwd(), mode, event
     return { committed: false, reason: "clean-tree" };
   }
 
+  // Issue #151 — split current dirty paths into worker-owned vs foreign.
+  // A path is worker-owned when:
+  //   (a) it didn't exist in the pre-slice snapshot (newly created/modified), OR
+  //   (b) its porcelain status line changed (worker further modified it).
+  // A path is foreign when it appears identically in pre and post snapshots
+  // (the operator/parallel-process touched it before the slice and the
+  // worker never touched it again).
+  const currentState = parseGitPorcelain(statusOut);
+  let workerPaths;
+  let foreignFiles = [];
+
+  if (preSliceState) {
+    workerPaths = [];
+    for (const [path, line] of currentState) {
+      const priorLine = preSliceState.get(path);
+      if (priorLine === undefined || priorLine !== line) {
+        workerPaths.push(path);
+      } else {
+        foreignFiles.push(path);
+      }
+    }
+
+    if (foreignFiles.length > 0) {
+      eventBus?.emit("slice-foreign-files-detected", {
+        sliceNumber: slice?.number,
+        foreignFiles,
+      });
+    }
+
+    if (workerPaths.length === 0) {
+      // Worker didn't touch the working tree (only operator-owned dirt remains).
+      return { committed: false, reason: "no-worker-changes", foreignFiles };
+    }
+  } else {
+    workerPaths = null; // signal: legacy `git add -A` path
+  }
+
   // Infer conventional commit type from title
   const conventionalType = /^(bug\s*#?\d+|fix)/i.test(slice.title) ? "fix" : "feat";
 
@@ -6919,11 +7182,26 @@ export function autoCommitSliceIfDirty({ slice, cwd = process.cwd(), mode, event
   const commitMessage = `${conventionalType}(slice-${slice.number}): ${subject}`;
 
   try {
-    execSync("git add -A", { cwd, encoding: "utf-8", timeout: 10_000 });
+    if (workerPaths) {
+      // Stage worker-owned paths individually so foreign files stay un-staged.
+      // Chunk to avoid blowing past Windows command-line length limits when a
+      // slice touches a very large number of files.
+      const CHUNK = 50;
+      for (let i = 0; i < workerPaths.length; i += CHUNK) {
+        const batch = workerPaths.slice(i, i + CHUNK).map(shellQuotePath).join(" ");
+        execSync(`git add -- ${batch}`, { cwd, encoding: "utf-8", timeout: 10_000 });
+      }
+    } else {
+      execSync("git add -A", { cwd, encoding: "utf-8", timeout: 10_000 });
+    }
     execSync(`git commit -m "${commitMessage}"`, { cwd, encoding: "utf-8", timeout: 15_000 });
     const sha = execSync("git rev-parse HEAD", { cwd, encoding: "utf-8", timeout: 5_000 }).trim();
-    eventBus?.emit("slice-auto-committed", { sliceNumber: slice.number, sha, message: commitMessage });
-    return { committed: true, sha, message: commitMessage };
+    const evt = { sliceNumber: slice.number, sha, message: commitMessage };
+    if (foreignFiles.length > 0) evt.foreignFiles = foreignFiles;
+    eventBus?.emit("slice-auto-committed", evt);
+    const out = { committed: true, sha, message: commitMessage };
+    if (foreignFiles.length > 0) out.foreignFiles = foreignFiles;
+    return out;
   } catch (err) {
     eventBus?.emit("slice-dirty-tree-warning", { sliceNumber: slice?.number, error: err.message });
     return { committed: false, reason: "git-failed", error: err.message };
@@ -8049,6 +8327,33 @@ async function executeSlice(slice, options) {
     // Present only when worker dispatched via GitHub Issue + PR polling.
     ...(copilotDispatchData && { trajectory: copilotDispatchData }),
   };
+
+  // Issue #152 — verify the slice's Files Modified (Exhaustive) table.
+  // Non-blocking advisory: never flips status to failed. Surfaces missing
+  // declarations as a warning event + sliceResult.filesModifiedCheck so the
+  // run summary, dashboard, and post-run audits can see the omission.
+  if (status === "passed") {
+    try {
+      const fmCheck = verifyFilesModified({ slice, cwd, startSha: sliceStartHead });
+      if (fmCheck.enforced) {
+        sliceResult.filesModifiedCheck = {
+          enforced: true,
+          declared: fmCheck.declared,
+          missing: fmCheck.missing,
+        };
+        if (fmCheck.missing.length > 0 && eventBus) {
+          eventBus.emit("slice-files-modified-warning", {
+            sliceNumber: slice.number,
+            sliceTitle: slice.title,
+            declared: fmCheck.declared,
+            missing: fmCheck.missing,
+          });
+        }
+      }
+    } catch {
+      // Non-fatal — Files Modified verification must never fail a passing slice
+    }
+  }
 
   writeFileSync(
     resolve(runDir, `slice-${slice.number}.json`),

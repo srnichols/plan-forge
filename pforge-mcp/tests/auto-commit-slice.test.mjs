@@ -23,7 +23,7 @@ vi.mock("node:child_process", () => ({
 }));
 
 import { execSync } from "node:child_process";
-import { autoCommitSliceIfDirty } from "../orchestrator.mjs";
+import { autoCommitSliceIfDirty, parseGitPorcelain, snapshotPreSliceState } from "../orchestrator.mjs";
 
 const FAKE_SHA = "abc1234def5678";
 
@@ -148,5 +148,153 @@ describe("autoCommitSliceIfDirty — Bug #123 auto-commit determinism", () => {
       "slice-dirty-tree-warning",
       expect.objectContaining({ sliceNumber: 3 }),
     );
+  });
+});
+
+// ─── Issue #151: pre-slice snapshot prevents foreign-file bleed ─────────────
+
+describe("autoCommitSliceIfDirty — Issue #151 pre-slice snapshot", () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  it("parseGitPorcelain produces a path→line map that distinguishes status changes", () => {
+    const out = " M src/a.ts\n?? scratch.md\nMM lib/b.ts\n";
+    const map = parseGitPorcelain(out);
+    expect(map.size).toBe(3);
+    expect(map.get("src/a.ts")).toBe(" M src/a.ts");
+    expect(map.get("scratch.md")).toBe("?? scratch.md");
+    expect(map.get("lib/b.ts")).toBe("MM lib/b.ts");
+  });
+
+  it("parseGitPorcelain handles renames (tracks new path)", () => {
+    const out = "R  old.ts -> new.ts\n";
+    const map = parseGitPorcelain(out);
+    expect(map.has("new.ts")).toBe(true);
+    expect(map.has("old.ts")).toBe(false);
+  });
+
+  it("snapshotPreSliceState returns null on git failure (legacy fallback)", () => {
+    execSync.mockImplementationOnce(() => { throw new Error("not a repo"); });
+    const result = snapshotPreSliceState({ cwd: "/fake/cwd" });
+    expect(result).toBeNull();
+  });
+
+  it("snapshotPreSliceState returns parsed Map on success", () => {
+    execSync.mockReturnValueOnce(" M file.ts\n?? other.md\n");
+    const result = snapshotPreSliceState({ cwd: "/fake/cwd" });
+    expect(result).toBeInstanceOf(Map);
+    expect(result.size).toBe(2);
+    expect(result.get("file.ts")).toBe(" M file.ts");
+  });
+
+  it("(151-A) only stages worker-touched paths, leaves operator dirt alone", () => {
+    // Pre-slice: operator already had foreign.md and scratch.ts dirty
+    const preSliceState = parseGitPorcelain("?? foreign.md\n M scratch.ts\n");
+
+    // Post-slice: operator dirt still there + worker created worker-new.ts
+    execSync
+      .mockReturnValueOnce("?? foreign.md\n M scratch.ts\n?? worker-new.ts\n") // git status --porcelain
+      .mockReturnValueOnce(undefined)                                            // git add -- "worker-new.ts"
+      .mockReturnValueOnce(undefined)                                            // git commit
+      .mockReturnValueOnce(FAKE_SHA + "\n");                                     // git rev-parse HEAD
+
+    const eventBus = { emit: vi.fn() };
+    const slice = { number: 5, title: "Add new worker file" };
+    const result = autoCommitSliceIfDirty({
+      slice, cwd: "/fake/cwd", mode: "auto", eventBus, preSliceState,
+    });
+
+    expect(result.committed).toBe(true);
+    expect(result.foreignFiles).toEqual(["foreign.md", "scratch.ts"]);
+
+    // git add must target worker-new.ts only (NOT foreign.md or scratch.ts)
+    const addCall = execSync.mock.calls[1][0];
+    expect(addCall).toMatch(/git add -- /);
+    expect(addCall).toContain("worker-new.ts");
+    expect(addCall).not.toContain("foreign.md");
+    expect(addCall).not.toContain("scratch.ts");
+
+    // Foreign-files event fired
+    expect(eventBus.emit).toHaveBeenCalledWith(
+      "slice-foreign-files-detected",
+      expect.objectContaining({ sliceNumber: 5, foreignFiles: ["foreign.md", "scratch.ts"] }),
+    );
+  });
+
+  it("(151-B) treats a status-line change as a worker touch", () => {
+    // file.ts was " M" (modified, not staged) — worker further modifies it to "MM" (staged + new mods)
+    const preSliceState = parseGitPorcelain(" M file.ts\n");
+
+    execSync
+      .mockReturnValueOnce("MM file.ts\n")
+      .mockReturnValueOnce(undefined)
+      .mockReturnValueOnce(undefined)
+      .mockReturnValueOnce(FAKE_SHA + "\n");
+
+    const slice = { number: 2, title: "tweak file" };
+    const result = autoCommitSliceIfDirty({
+      slice, cwd: "/fake/cwd", mode: "auto", preSliceState,
+    });
+
+    expect(result.committed).toBe(true);
+    expect(result.foreignFiles).toBeUndefined();
+    expect(execSync.mock.calls[1][0]).toContain("file.ts");
+  });
+
+  it("(151-C) returns no-worker-changes when only foreign files are dirty", () => {
+    // Pre-slice = post-slice (worker did nothing on disk)
+    const preSliceState = parseGitPorcelain("?? operator-scratch.md\n");
+
+    execSync.mockReturnValueOnce("?? operator-scratch.md\n");
+
+    const eventBus = { emit: vi.fn() };
+    const slice = { number: 1, title: "noop slice" };
+    const result = autoCommitSliceIfDirty({
+      slice, cwd: "/fake/cwd", mode: "auto", eventBus, preSliceState,
+    });
+
+    expect(result).toMatchObject({
+      committed: false,
+      reason: "no-worker-changes",
+      foreignFiles: ["operator-scratch.md"],
+    });
+    // No git add / commit attempted
+    expect(execSync).toHaveBeenCalledTimes(1);
+    expect(eventBus.emit).toHaveBeenCalledWith(
+      "slice-foreign-files-detected",
+      expect.objectContaining({ foreignFiles: ["operator-scratch.md"] }),
+    );
+  });
+
+  it("(151-D) falls back to git add -A when no preSliceState provided (back-compat)", () => {
+    execSync
+      .mockReturnValueOnce(" M legacy.ts\n")
+      .mockReturnValueOnce(undefined) // git add -A
+      .mockReturnValueOnce(undefined) // git commit
+      .mockReturnValueOnce(FAKE_SHA + "\n");
+
+    const slice = { number: 1, title: "feat: legacy" };
+    const result = autoCommitSliceIfDirty({ slice, cwd: "/fake/cwd", mode: "auto" });
+
+    expect(result.committed).toBe(true);
+    expect(execSync.mock.calls[1][0]).toBe("git add -A");
+  });
+
+  it("(151-E) chunks large worker-path lists across multiple git add calls", () => {
+    // 75 worker paths → expect 2 git add calls (50 + 25) + commit + rev-parse
+    const preSliceState = new Map();
+    const lines = Array.from({ length: 75 }, (_, i) => `?? new-${i}.ts`);
+    execSync
+      .mockReturnValueOnce(lines.join("\n") + "\n")
+      .mockReturnValueOnce(undefined) // git add batch 1
+      .mockReturnValueOnce(undefined) // git add batch 2
+      .mockReturnValueOnce(undefined) // commit
+      .mockReturnValueOnce(FAKE_SHA + "\n");
+
+    const slice = { number: 9, title: "big slice" };
+    autoCommitSliceIfDirty({ slice, cwd: "/fake/cwd", mode: "auto", preSliceState });
+
+    const addCalls = execSync.mock.calls.filter((c) => /git add -- /.test(c[0]));
+    expect(addCalls.length).toBe(2);
   });
 });

@@ -244,7 +244,7 @@ npx --prefix pforge-mcp vitest run pforge-mcp/tests/sarif-to-plan.test.mjs
 **Goal**: Add `plan-from-sarif` subcommand to both dispatchers; route to `node pforge-mcp/sarif-to-plan.mjs`. Support stdin via `-` arg.
 **Validation gate**:
 ```bash
-node -e "const cp=require('child_process'); const out=cp.execFileSync('node',['pforge-mcp/sarif-to-plan.mjs','pforge-mcp/tests/fixtures/sarif/multi-mixed.sarif.json'],{encoding:'utf8'}); if(!/##\\s+Slice/.test(out)){console.error('no Slice headers in output');process.exit(1)} console.log('ok')"
+node -e "const cp=require('child_process'); const out=cp.execFileSync('node',['pforge-mcp/sarif-to-plan.mjs','pforge-mcp/tests/fixtures/sarif/multi-mixed.sarif.json'],{encoding:'utf8'}); if(!/^###?\s+Slice/m.test(out)){console.error('no Slice headers in output');process.exit(1)} console.log('ok')"
 ```
 **Estimated cost**: $0.20
 

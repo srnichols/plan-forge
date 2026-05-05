@@ -36,7 +36,7 @@
 
       <p>Plan-Forge does not require GitHub. It runs against any repo, with any agent (Copilot, Claude Code, Cursor, Codex), and against any CI system. <strong class="text-slate-200">But when the repo is on GitHub, Plan-Forge has the deepest stack of integrations</strong> — eight first-class primitives it consumes today, plus several it dispatches to. This appendix is the single canonical reference for that integration surface.</p>
 
-      <p>Section 1 is the readiness check — a one-command snapshot of which GitHub primitives your repo currently has wired up. Section 2 is the surface-by-surface tour. Sections 3 (Copilot Coding Agent dispatch), 4 (GHAS remediation chains), and 6 (Metrics API leaderboard) are now live. Sections 5, 7, and 8 (Copilot Spaces sync, BYOK and multi-model picker, other agent platforms) are <strong class="text-amber-400">in progress</strong> and will land in upcoming releases.</p>
+      <p>Section 1 is the readiness check — a one-command snapshot of which GitHub primitives your repo currently has wired up. Section 2 is the surface-by-surface tour. Sections 3 (Copilot Coding Agent dispatch), 4 (GHAS remediation chains), 5 (Copilot Spaces sync), and 6 (Metrics API leaderboard) are now live. Sections 7 and 8 (BYOK and multi-model picker, other agent platforms) are <strong class="text-amber-400">in progress</strong> and will land in upcoming releases.</p>
 
       <!-- ─── Section 1 — Readiness Check ─── -->
       <h2 id="readiness-check">1. Is your repo set up? Run <code>pforge github status</code></h2>
@@ -273,12 +273,109 @@ codeql database analyze my-db --format=sarifv2.1.0 --output=- | \
 
       <p>That one prompt triggers the full pipeline: SARIF fetch → plan generation → plan review → optional execution. See the <a href="skills.html" class="text-amber-400 hover:underline">Skills Reference</a> for the full <code>/security-audit</code> flow.</p>
 
-      <!-- ─── Section 5 stub ─── -->
+      <!-- ─── Section 5 — Copilot Spaces sync ─── -->
       <h2 id="spaces-sync">5. Copilot Spaces sync</h2>
 
-      <div class="rounded-xl border border-amber-500/30 bg-amber-500/5 p-5 mt-2">
-        <div class="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-2">In progress</div>
-        <p class="text-sm text-slate-400 mb-0"><code>pforge sync-spaces</code> will push the active plan, instruction files, and Plan-Forge tool catalog into a designated Copilot Space — the closest analogue to the AI-SDLC-Hub pattern many enterprise readouts call out. This section will land in an upcoming release.</p>
+      <p>Copilot Spaces is GitHub's team-scoped knowledge hub — a curated collection of files, instructions, and context that Copilot Chat draws from automatically when a Space is selected. Plan-Forge integrates with Spaces via <code>pforge sync-spaces</code>: a single command that pushes the active plan, instruction files, and Plan-Forge tool catalog into a designated Space, giving every chat session in the org instant access to the current plan state without manual copy-paste.</p>
+
+      <pre><code>pforge sync-spaces</code></pre>
+
+      <p>By default this targets the Space named <code>plan-forge</code> in the same org as the repo's <code>git remote</code>. Override with <code>--space &lt;owner/name&gt;</code>. For org-wide broadcast, use <code>--org &lt;slug&gt;</code> to push to every Space in the org that has the <code>plan-forge-sync</code> topic tag.</p>
+
+      <h3 id="what-gets-synced">What gets synced</h3>
+
+      <p><code>pforge sync-spaces</code> builds a payload from four sources and uploads them as versioned Space files:</p>
+
+      <table>
+        <thead><tr><th>Source</th><th>Space path</th><th>Update frequency</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Active plan file (the one matching <code>.forge/active-plan</code>)</td>
+            <td><code>plan-forge/active-plan.md</code></td>
+            <td>Every sync</td>
+          </tr>
+          <tr>
+            <td>All <code>.github/instructions/*.instructions.md</code> files</td>
+            <td><code>plan-forge/instructions/&lt;name&gt;.md</code></td>
+            <td>Only when file hash changes</td>
+          </tr>
+          <tr>
+            <td>MCP tool catalog (<code>forge_capabilities</code> snapshot)</td>
+            <td><code>plan-forge/tool-catalog.md</code></td>
+            <td>Only when version changes</td>
+          </tr>
+          <tr>
+            <td>Project profile (<code>.github/instructions/project-profile.instructions.md</code> if present)</td>
+            <td><code>plan-forge/project-profile.md</code></td>
+            <td>Only when file hash changes</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>Files are uploaded using the GitHub Spaces API authenticated via the <code>gh</code> CLI — run <code>gh auth status</code> before your first sync. Unchanged files (same SHA-256) are skipped to stay within API rate limits.</p>
+
+      <h3 id="spaces-sync-flags">Flags</h3>
+
+      <table>
+        <thead><tr><th>Flag</th><th>Default</th><th>Effect</th></tr></thead>
+        <tbody>
+          <tr><td><code>--space &lt;owner/name&gt;</code></td><td>Inferred from remote + <code>.forge.json</code></td><td>Target a specific Space by owner and name.</td></tr>
+          <tr><td><code>--org &lt;slug&gt;</code></td><td>(single repo Space)</td><td>Broadcast to all Spaces in the org tagged <code>plan-forge-sync</code>.</td></tr>
+          <tr><td><code>--dry-run</code></td><td>(off)</td><td>Print what would be uploaded without making API calls.</td></tr>
+          <tr><td><code>--force</code></td><td>(off)</td><td>Re-upload all files even if SHA-256 matches.</td></tr>
+          <tr><td><code>--no-instructions</code></td><td>(instructions included)</td><td>Skip the <code>.github/instructions/</code> payload. Useful when the Space already has a curated instruction set you don't want overwritten.</td></tr>
+        </tbody>
+      </table>
+
+      <h3 id="spaces-ai-sdlc-hub">The AI-SDLC-Hub pattern</h3>
+
+      <p>Many enterprise readouts describe an "AI-SDLC-Hub" — a single Space that every developer in the org selects by default, giving all Copilot Chat sessions a shared view of the team's architecture decisions, coding standards, and active delivery plan. <code>pforge sync-spaces</code> is the automation layer for that pattern: instead of a human curating the Space manually, the hub is kept current by a scheduled CI job or a post-commit hook.</p>
+
+      <p>A minimal GitHub Actions workflow to sync on every push to <code>main</code>:</p>
+
+      <pre><code>name: Plan-Forge Spaces Sync
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/plans/**'
+      - '.github/instructions/**'
+      - '.forge.json'
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: npm install -g plan-forge
+      - run: pforge sync-spaces --space ${{ vars.PFORGE_SPACES_TARGET }}
+        env:
+          GH_TOKEN: ${{ secrets.PFORGE_SPACES_TOKEN }}</code></pre>
+
+      <p>Store the target Space name as a repository variable (<code>PFORGE_SPACES_TARGET</code>) and the <code>gh</code>-compatible token as a secret. The token needs <code>copilot_spaces:write</code> scope.</p>
+
+      <h3 id="spaces-config">Persisting the target Space</h3>
+
+      <p>To avoid specifying <code>--space</code> on every invocation, write the target into <code>.forge.json</code>:</p>
+
+      <pre><code>{
+  "github": {
+    "spacesTarget": "acme-org/plan-forge-hub"
+  }
+}</code></pre>
+
+      <p><code>pforge sync-spaces</code> reads this field and uses it as the default target. The field can also be set via the CLI:</p>
+
+      <pre><code>pforge config set github.spacesTarget acme-org/plan-forge-hub</code></pre>
+
+      <h3 id="spaces-roadmap">Roadmap</h3>
+
+      <p>The current release ships the core sync path: plan, instructions, tool catalog, and project profile. Phase GITHUB-E will add bidirectional sync — pulling conversation summaries and noteworthy Q&amp;A threads from the Space back into the Plan-Forge timeline so decision rationale captured in chat is preserved alongside the plan execution history. The <code>pforge github status</code> readiness check will also gain a dedicated Spaces row in Phase GITHUB-E.</p>
+
+      <div class="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5 mt-6">
+        <p class="text-sm text-slate-400 mb-0"><strong class="text-slate-200">Prerequisite:</strong> <code>gh</code> CLI must be authenticated (<code>gh auth status</code>) and the target Copilot Space must exist before the first sync. Create a Space at <a href="https://github.com/copilot/spaces" class="text-amber-400 hover:underline">github.com/copilot/spaces</a> and note the <code>owner/name</code> slug. Run <code>pforge github status</code> to verify the rest of the GitHub stack readiness.</p>
       </div>
 
       <!-- ─── Section 6 — Metrics API leaderboard ─── -->
@@ -404,16 +501,11 @@ forge_github_metrics({ team: "platform", since: "2026-04-01" })</code></pre>
       </div>
 
       <!-- ─── Coming sections ─── -->
-      <h2 id="coming-soon">5, 7–8. Other planned sections</h2>
+      <h2 id="coming-soon">7–8. Other planned sections</h2>
 
       <p>The sections below are planned and will land as their underlying integrations ship.</p>
 
       <div class="grid md:grid-cols-2 gap-4 mt-6">
-        <div class="rounded-xl border border-amber-500/30 bg-amber-500/5 p-5">
-          <div class="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-2">In progress</div>
-          <div class="text-base font-bold text-slate-100 mb-1">5. Copilot Spaces sync</div>
-          <p class="text-sm text-slate-400 mb-0"><code>pforge sync-spaces</code> pushes the active plan, instruction files, and Plan-Forge tool catalog into a designated Copilot Space — the closest analogue to the AI-SDLC-Hub pattern many enterprise readouts call out.</p>
-        </div>
         <div class="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5">
           <div class="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-2">Planned</div>
           <div class="text-base font-bold text-slate-100 mb-1">7. BYOK and the multi-model picker</div>

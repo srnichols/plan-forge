@@ -240,6 +240,7 @@
         <div class="bg-slate-800/60 rounded-lg p-4 border border-slate-700/30"><code class="text-forge-400 text-sm">forge_run_skill</code><p class="text-xs text-slate-500 mt-1">Execute skills programmatically with dry-run</p></div>
         <div class="bg-slate-800/60 rounded-lg p-4 border border-cyan-700/30"><code class="text-forge-400 text-sm">forge_generate_image</code><p class="text-xs text-slate-500 mt-1">Generate images via xAI Aurora or OpenAI DALL-E</p></div>
         <div class="bg-slate-800/60 rounded-lg p-4 border border-blue-700/30"><code class="text-forge-400 text-sm">forge_memory_capture</code><p class="text-xs text-slate-500 mt-1">Normalise &amp; broadcast a memory-captured event; returns capture_thought payload for OpenBrain</p></div>
+        <div class="bg-slate-800/60 rounded-lg p-4 border border-green-700/30"><code class="text-forge-400 text-sm">forge_github_status</code><p class="text-xs text-slate-500 mt-1">Check GitHub API connectivity, Copilot subscription status, and GitHub Models API availability — returns auth state, rate limits, per-service health</p></div>
       </div>
       <!-- LiveGuard tools preview -->
       <div class="mt-6 rounded-xl border border-amber-700/30 bg-amber-950/10 p-5">
@@ -395,7 +396,7 @@
         </div>
         <div class="bg-slate-800/60 rounded-xl p-6 border border-sky-700/30">
           <h3 class="text-lg font-bold text-white mb-2">Cloud Agent</h3>
-          <p class="text-sm text-slate-400">Copilot cloud agent provisions the environment via <code class="text-sky-300">copilot-setup-steps.yml</code>. Guardrails auto-load, all 67 MCP tools are available, and <code class="text-sky-300">forge_run_plan</code> executes slices autonomously on GitHub Issues.</p>
+          <p class="text-sm text-slate-400">Copilot cloud agent provisions the environment via <code class="text-sky-300">copilot-setup-steps.yml</code>. Guardrails auto-load, all 67 MCP tools are available, and <code class="text-sky-300">forge_run_plan</code> executes slices autonomously on GitHub Issues. Use <code class="text-sky-300">--worker copilot-coding-agent</code> to route each slice to a Copilot cloud agent session via GitHub Issue dispatch.</p>
         </div>
         <div class="bg-slate-800/60 rounded-xl p-6 border border-purple-700/30">
           <h3 class="text-lg font-bold text-white mb-2">Parallel</h3>
@@ -798,6 +799,49 @@
           <h3 class="text-sm font-bold text-white mb-2">Spec Kit Compatible</h3>
           <p class="text-xs text-slate-400"><code class="text-forge-400">extensions.json</code> format for the Spec Kit registry. Extensions marked <code class="text-forge-400">speckit_compatible: true</code> work in both tools.</p>
         </div>
+      </div>
+    </section>
+
+    <!-- GitHub Stack Integration -->
+    <section class="mb-16">
+      <h2 class="text-2xl font-bold text-white mb-2">GitHub Stack Integration</h2>
+      <p class="text-sm text-slate-400 mb-6">First-class integration with GitHub Copilot, GitHub Models, and GitHub Actions for cloud-based execution and security-driven plan generation.</p>
+      <div class="grid gap-6 md:grid-cols-2 mb-8">
+        <div class="bg-slate-800/60 rounded-xl p-6 border border-green-700/30">
+          <h3 class="text-sm font-bold text-white mb-2"><code class="text-forge-400">forge_github_status</code></h3>
+          <p class="text-xs text-slate-400 mb-3">Check GitHub API connectivity, Copilot subscription status, and GitHub Models API availability. Returns auth state, rate limits, and per-service health. CLI: <code class="text-slate-400">pforge github-status</code></p>
+          <table class="w-full text-xs">
+            <tbody class="text-slate-400 space-y-1">
+              <tr class="border-b border-slate-700"><td class="py-1 pr-3 font-medium text-white">githubAuth</td><td class="py-1"><code>authenticated</code> / <code>unauthenticated</code></td></tr>
+              <tr class="border-b border-slate-700"><td class="py-1 pr-3 font-medium text-white">copilotPlan</td><td class="py-1"><code>individual</code> / <code>business</code> / <code>enterprise</code> / <code>none</code></td></tr>
+              <tr class="border-b border-slate-700"><td class="py-1 pr-3 font-medium text-white">modelsApiAvailable</td><td class="py-1"><code>true</code> when <code>models.github.ai/inference</code> is reachable</td></tr>
+              <tr><td class="py-1 pr-3 font-medium text-white">rateLimitRemaining</td><td class="py-1">Remaining GitHub API requests for the hour</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="bg-slate-800/60 rounded-xl p-6 border border-blue-700/30">
+          <h3 class="text-sm font-bold text-white mb-2">GitHub Models</h3>
+          <p class="text-xs text-slate-400 mb-3"><code class="text-blue-300">models.github.ai/inference</code> is the recommended API provider for Plan Forge — the default inference endpoint when <code class="text-blue-300">GITHUB_TOKEN</code> (or <code class="text-blue-300">gh auth login</code>) is configured.</p>
+          <p class="text-xs text-slate-500">Supported models: <code>gpt-4o-mini</code> <em>(default)</em>, <code>gpt-4o</code>, <code>claude-sonnet-4</code>, <code>claude-opus-4</code>. Set <code class="text-blue-300">GITHUB_TOKEN</code> to enable; no separate API key required beyond GitHub auth.</p>
+        </div>
+        <div class="bg-slate-800/60 rounded-xl p-6 border border-sky-700/30">
+          <h3 class="text-sm font-bold text-white mb-2">Copilot Coding Agent Worker</h3>
+          <p class="text-xs text-slate-400 mb-3">Dispatch slice execution to the Copilot coding agent instead of the local CLI. Each slice becomes a GitHub Issue; the agent picks it up, opens a PR, and the orchestrator polls for completion.</p>
+          <div class="bg-slate-900/80 rounded-lg p-3 font-mono text-xs text-slate-300 mb-3">pforge run-plan &lt;plan&gt; --worker copilot-coding-agent</div>
+          <p class="text-xs text-slate-500">Requires <code class="text-slate-400">copilot-setup-steps.yml</code> in <code class="text-slate-400">.github/</code> and Copilot for Business or Enterprise. Pre-flight calls <code class="text-forge-400">forge_github_status</code> — <code class="text-slate-400">warn</code> on the assignability check promotes to a hard fail to prevent silent dispatch drops.</p>
+        </div>
+        <div class="bg-slate-800/60 rounded-xl p-6 border border-amber-700/30">
+          <h3 class="text-sm font-bold text-white mb-2">plan-from-sarif</h3>
+          <p class="text-xs text-slate-400 mb-3">Generate a remediation plan from a GitHub Code Scanning SARIF report. Groups findings by CWE / rule ID and emits a hardened Plan Forge plan where each slice targets a specific vulnerability class.</p>
+          <div class="bg-slate-900/80 rounded-lg p-3 font-mono text-xs text-slate-300 mb-3">pforge plan-from-sarif &lt;sarif-file&gt; [--severity high,critical] [--output docs/plans/]</div>
+          <p class="text-xs text-slate-500">High-severity findings are auto-registered via <code class="text-forge-400">forge_bug_register</code>. Integrates with <code class="text-forge-400">forge_secret_scan</code>. Gate: <code class="text-slate-400">pforge run-plan docs/plans/&lt;sarif-plan&gt;.md</code>.</p>
+        </div>
+      </div>
+      <div class="bg-slate-800/60 rounded-xl p-6 border border-purple-700/30">
+        <h3 class="text-sm font-bold text-white mb-2">github-metrics</h3>
+        <p class="text-xs text-slate-400 mb-3">Pull GitHub repository metrics (PR velocity, code frequency, contributor cadence) into the LiveGuard health context.</p>
+        <div class="bg-slate-900/80 rounded-lg p-3 font-mono text-xs text-slate-300 mb-3">pforge github-metrics [--repo &lt;owner/repo&gt;] [--window 30d]</div>
+        <p class="text-xs text-slate-500">Metrics written to <code class="text-slate-400">.forge/github-metrics.json</code> and surfaced on the Dashboard <strong class="text-white">GitHub</strong> tab. <code class="text-forge-400">forge_health_trend</code> incorporates PR cycle time as a signal when the file is present. Requires <code class="text-slate-400">GITHUB_TOKEN</code> with <code class="text-slate-400">repo</code> scope.</p>
       </div>
     </section>
 

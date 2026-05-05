@@ -25,58 +25,20 @@ param(
 $ErrorActionPreference = "Stop"
 Set-Location $RepoRoot
 
+Import-Module (Join-Path $PSScriptRoot "sequence-plans.psm1") -Force
+
 function Write-Stamp {
   param([string]$msg, [ConsoleColor]$color = "White")
   Write-Host "[$(Get-Date -Format 'HH:mm:ss')] $msg" -ForegroundColor $color
 }
 
-function Get-CurrentOrchestratorPid {
-  $pidFile = Join-Path $RepoRoot ".forge/last-orch.pid"
-  if (-not (Test-Path $pidFile)) { return $null }
-  $content = (Get-Content $pidFile -Raw).Trim()
-  if ($content -match '^\d+$') { return [int]$content }
-  return $null
-}
-
-function Test-OrchestratorAlive {
-  param([int]$ProcId)
-  if (-not $ProcId) { return $false }
-  return (Get-Process -Id $ProcId -ErrorAction SilentlyContinue) -ne $null
-}
-
-function Get-LatestRunDir {
-  $runs = Get-ChildItem (Join-Path $RepoRoot ".forge/runs") -Directory -ErrorAction SilentlyContinue
-  if (-not $runs) { return $null }
-  return ($runs | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
-}
-
-function Get-RunStatus {
-  param([string]$RunDir)
-  if (-not $RunDir -or -not (Test-Path "$RunDir/events.log")) { return "unknown" }
-  $tail = Get-Content "$RunDir/events.log" -Tail 50
-  if ($tail | Where-Object { $_ -match 'run-failed|run-aborted' }) { return "failed" }
-
-  # 'run-completed' is emitted on both success and partial-success runs. Inspect
-  # the JSON payload for actual slice failures before declaring success.
-  $completed = $tail | Where-Object { $_ -match 'run-completed' } | Select-Object -Last 1
-  if ($completed) {
-    if ($completed -match '"failed":(\d+)') {
-      $failedCount = [int]$Matches[1]
-      if ($failedCount -gt 0) { return "failed" }
-    }
-    if ($completed -match '"status":"failed"') { return "failed" }
-    return "completed"
-  }
-  return "in-progress"
-}
-
 # ─── Phase 1: wait for current run ───
-$initialPid = Get-CurrentOrchestratorPid
+$initialPid = Get-CurrentOrchestratorPid -RepoRoot $RepoRoot
 if (-not $initialPid) {
   Write-Stamp "No orchestrator PID found in .forge/last-orch.pid — assuming nothing in flight." Yellow
 } else {
   Write-Stamp "Watching orchestrator PID $initialPid (poll every ${PollSeconds}s)..." Cyan
-  $runDir = Get-LatestRunDir
+  $runDir = Get-LatestRunDir -RepoRoot $RepoRoot
   Write-Stamp "Run dir: $runDir" DarkGray
 
   $iters = 0

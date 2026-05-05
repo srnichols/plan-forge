@@ -6357,6 +6357,22 @@ export function createExpressApp() {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
+  // REST API: GET /api/github-readiness — Phase Hotfix-v2.90.8 Slice 4
+  // Returns inspectGithubStack() result for the requested project directory.
+  // Query params:
+  //   cwd       — project root to inspect (defaults to PROJECT_DIR)
+  //   gh-token  — "true" to enable the network-backed assignable probe (opt-in)
+  app.get("/api/github-readiness", (req, res) => {
+    try {
+      const cwd = req.query.cwd ? resolve(req.query.cwd) : findProjectRoot(PROJECT_DIR);
+      const ghToken = req.query["gh-token"] === "true" ? true : null;
+      const result = inspectGithubStack(cwd, { ghToken });
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // REST API: GET /api/memory/report — GX.3 (v2.36) memory health aggregator
   // Backs the Memory tab in the dashboard (GX.1).
   app.get("/api/memory/report", (_req, res) => {

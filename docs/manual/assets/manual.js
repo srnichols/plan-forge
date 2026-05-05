@@ -7,6 +7,10 @@
   // ─── Chapter registry ───
   const CHAPTERS = [
     { id: "index",               file: "index.html",               num: "",   title: "Manual Home",              act: "" },
+    // ─── Quickstart (Zero to shipped in 30 min) ───
+    { id: "quickstart-install",      file: "quickstart-install.html",      num: "Q1", title: "Install",                act: "Quickstart" },
+    { id: "quickstart-first-plan",   file: "quickstart-first-plan.html",   num: "Q2", title: "Your First Plan",         act: "Quickstart" },
+    { id: "quickstart-first-deploy", file: "quickstart-first-deploy.html", num: "Q3", title: "Review & Ship",           act: "Quickstart" },
     // ─── Act I — Smelt (intake → scope contract) ───
     { id: "what-is-plan-forge",  file: "what-is-plan-forge.html",  num: "1",  title: "What Is Plan Forge?",      act: "I" },
     { id: "how-it-works",        file: "how-it-works.html",        num: "2",  title: "How It Works",             act: "I" },
@@ -22,6 +26,7 @@
     { id: "cli-reference",       file: "cli-reference.html",       num: "8",  title: "CLI Reference",            act: "II" },
     { id: "customization",       file: "customization.html",       num: "9",  title: "Customization",            act: "II" },
     { id: "instructions-agents", file: "instructions-agents.html", num: "10", title: "Instruction Files & Agents", act: "II" },
+    { id: "instructions-agents-reference", file: "instructions-agents-reference.html", num: "", title: "Instructions & Agents — Reference", act: "II" },
     { id: "mcp-server",           file: "mcp-server.html",              num: "11", title: "MCP Server & Tools",        act: "II" },
     { id: "mcp-server-quickstart", file: "mcp-server-quickstart.html", num: "",   title: "MCP Server — Quick Start",  act: "II" },
     { id: "mcp-server-reference",  file: "mcp-server-reference.html",  num: "",   title: "MCP Server — Reference",    act: "II" },
@@ -85,7 +90,7 @@
       // Act header
       if (ch.act && ch.act !== lastAct) {
         lastAct = ch.act;
-        const actLabels = { I: "Act I — Smelt", II: "Act II — Forge", III: "Act III — Guard", IV: "Act IV — Learn", Appendix: "Appendices" };
+        const actLabels = { Quickstart: "⚡ Quickstart", I: "Act I — Smelt", II: "Act II — Forge", III: "Act III — Guard", IV: "Act IV — Learn", Appendix: "Appendices" };
         const actEl = document.createElement("div");
         actEl.className = "sidebar-act";
         actEl.textContent = actLabels[ch.act] || ch.act;
@@ -171,6 +176,19 @@
   // ─── Client-side search ───
   // Cross-page search index: chapters + key sections from every chapter
   const SEARCH_SECTIONS = [
+    // Quickstart
+    { t: "Check Prerequisites",                  u: "quickstart-install.html#prerequisites" },
+    { t: "Clone and Run Setup",                  u: "quickstart-install.html#clone" },
+    { t: "Pick Your Preset",                     u: "quickstart-install.html#presets" },
+    { t: "Verify with pforge smith",             u: "quickstart-install.html#verify" },
+    { t: "Specify the Feature (Quickstart)",     u: "quickstart-first-plan.html#step-0" },
+    { t: "Pre-flight Check (Quickstart)",        u: "quickstart-first-plan.html#step-1" },
+    { t: "Harden the Plan (Quickstart)",         u: "quickstart-first-plan.html#step-2" },
+    { t: "Execute the Plan (Quickstart)",        u: "quickstart-first-plan.html#step-3" },
+    { t: "Sweep for Deferred Work (Quickstart)", u: "quickstart-first-deploy.html#step-4" },
+    { t: "Independent Review (Quickstart)",      u: "quickstart-first-deploy.html#step-5" },
+    { t: "Ship (Quickstart)",                    u: "quickstart-first-deploy.html#step-6" },
+    { t: "Whats Next After Quickstart",          u: "quickstart-first-deploy.html#whats-next" },
     // Ch 1
     { t: "The Problem in One Sentence", u: "what-is-plan-forge.html#the-problem" },
     { t: "What Happens Without Guardrails", u: "what-is-plan-forge.html#without-guardrails" },

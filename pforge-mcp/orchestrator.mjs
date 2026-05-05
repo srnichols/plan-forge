@@ -5723,7 +5723,9 @@ export function parseValidationGates(planFilePath, cwd = process.cwd()) {
  * @returns {{ warnings: Array, errors: Array, passed: boolean }}
  */
 export function lintGateCommands(planFilePath, cwd = process.cwd()) {
-  const plan = parsePlan(planFilePath, cwd);
+  const plan = (planFilePath !== null && typeof planFilePath === "object")
+    ? planFilePath
+    : parsePlan(planFilePath, cwd);
   const warnings = [];
   const errors = [];
   const portabilityWarnings = [];
@@ -5875,6 +5877,33 @@ export function lintGateCommands(planFilePath, cwd = process.cwd()) {
         });
       }
 
+      // W1. bash -c prefix pitfall — wrapping cross-platform commands in bash is
+      // unnecessary and fails on Windows where bash is not in PATH by default.
+      if (/^bash\s+-c\b/.test(line)) {
+        warnings.push({
+          slice: slice.number,
+          command: line,
+          ruleId: "W1",
+          rule: "bash-prefix",
+          severity: "warn",
+          message: `${loc}: 'bash -c' prefix detected — fails on Windows (bash not in PATH). Rewrite as a direct node/npx command or use 'pwsh -Command' instead.`,
+        });
+      }
+
+      // W4. cd-chain pitfall — 'cd dir && command' does not change the working
+      // directory for the subsequent command on Windows cmd.exe.  Use the
+      // command's own --cwd / --project flag, or spawn with { cwd: '...' }.
+      if (/\bcd\s+\S+.*&&/.test(line)) {
+        warnings.push({
+          slice: slice.number,
+          command: line,
+          ruleId: "W4",
+          rule: "cd-chain",
+          severity: "warn",
+          message: `${loc}: 'cd dir && command' chain — on Windows cmd.exe the directory change does not persist for the next command. Use a --cwd flag or run commands from the target directory directly.`,
+        });
+      }
+
       // 10. Cross-platform portability checks (non-blocking)
       const portResult = validateGatePortability(line);
       for (const pw of portResult.warnings) {
@@ -5887,13 +5916,17 @@ export function lintGateCommands(planFilePath, cwd = process.cwd()) {
     }
   }
 
-  return {
+  const allFindings = [...errors, ...warnings, ...portabilityWarnings];
+  const result = {
     warnings,
     errors,
     portabilityWarnings,
     passed: errors.length === 0,
     summary: `${errors.length} error(s), ${warnings.length} warning(s), ${portabilityWarnings.length} portability warning(s) across ${plan.slices.length} slices`,
+    find: (predicate) => allFindings.find(predicate),
+    filter: (predicate) => allFindings.filter(predicate),
   };
+  return result;
 }
 
 /**

@@ -180,11 +180,14 @@ describe("Section 8 — Spec-Kit positioning (reserved for Phase GITHUB-D)", () 
     expect(allIds).not.toContain("spec-kit");
   });
 
-  it("platform-comparison is the last named sub-section ID before chapter-prev-next", () => {
+  it("platform-comparison is the last named sub-section ID inside Section 8 (before Section 9)", () => {
     const s8Start = allIds.indexOf("other-agent-platforms");
     expect(s8Start, 'id="other-agent-platforms" must exist').toBeGreaterThan(-1);
     const idsFromS8 = allIds.slice(s8Start);
-    const endIdx = idsFromS8.indexOf("chapter-prev-next");
+    // Section 8 ends where Section 9 (built-with-plan-forge) begins. Fall back
+    // to chapter-prev-next for plans that haven't added Section 9 yet.
+    const s9Idx = idsFromS8.indexOf("built-with-plan-forge");
+    const endIdx = s9Idx >= 0 ? s9Idx : idsFromS8.indexOf("chapter-prev-next");
     const s8Ids = endIdx >= 0 ? idsFromS8.slice(0, endIdx) : idsFromS8;
     expect(s8Ids[s8Ids.length - 1]).toBe("platform-comparison");
   });

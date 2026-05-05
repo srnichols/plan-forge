@@ -7,6 +7,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.89.0] — 2026-05-05 — Appendix H Section 9 ("Built with Plan-Forge") + dogfood runbook
+
+> **One-liner**: Closes the GitHub-stack chapter. Adds Section 9 — the "Built with Plan-Forge" honesty section that documents which sections were written by which Plan-Forge run, the total $0.16 spend across 31 worker-executed slices, and a warts-and-all list of the two plan-author bugs and two long-running test deadlocks the dogfood surfaced. The deferred Slice 5 dogfood runbook is now authored at `docs/plans/PHASE-GITHUB-C-DOGFOOD-RUNBOOK.md` for future live-dispatch capture against the live `srnichols/plan-forge` repo.
+
+### Added
+- **Section 9 of Appendix H** — `Built with Plan-Forge` callout + captured-runs table mapping each chapter section to its Phase plan, worker, cost, and trajectory commit. Includes the "what we got right and what we got wrong" subsection citing the two plan-authoring bugs and two test-sweep deadlocks from the Phase B/C/D execution trail.
+- **`docs/plans/PHASE-GITHUB-C-DOGFOOD-RUNBOOK.md`** — gated runbook for the live Copilot Coding Agent dispatch against the live repo. Documents pre-requisites, the dispatch command (`pforge run-plan ... --worker copilot-coding-agent --confirm-live-dispatch`), success criteria, and a full rollback procedure. Explicitly marked **DO NOT run as part of `pforge run-plan` autonomous execution**.
+
+### Fixed
+- `pforge-mcp/tests/manual-chapter-headings.test.mjs` — `platform-comparison is the last named sub-section` regression test now correctly bounds Section 8 to the start of Section 9 (`built-with-plan-forge`) rather than walking through to `chapter-prev-next`. Without this fix, adding any sub-section after Section 8 would produce a false failure.
+
+### Why this matters
+The chapter was 8/9 sections complete after the autonomous Phase C run. Section 9 was deferred because it requires a real GitHub Issue/PR dispatch against the live repo, which is unsafe to run inside `pforge run-plan` without human review. The runbook + Section 9 placeholder land the chapter at content-complete (with the dogfood capture itself remaining a one-off manual operation per the runbook).
+
 ### Added — Blazor + Fluent UI guidance for the .NET preset
 The `dotnet` preset previously shipped 17 backend instruction files (api-patterns, auth, database, deploy, etc.) and 6 reviewer agents — but **zero UI-layer guidance**. Consumers building a Blazor front-end (e.g., the [plan-forge-testbed](https://github.com/srnichols/plan-forge-testbed) reference app) had no rules for pforge to enforce. This entry closes that gap with three artifacts in `presets/dotnet/`:
 

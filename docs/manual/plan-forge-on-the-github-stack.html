@@ -855,6 +855,79 @@ pforge setup --agent claude</code></pre>
         </a>
       </div>
 
+      <!-- ─── Section 9 — Built with Plan-Forge ─── -->
+      <h2 id="built-with-plan-forge">9. Built with Plan-Forge</h2>
+
+      <div class="rounded-xl border border-amber-500/30 bg-amber-500/5 p-5 mb-6">
+        <p class="text-sm text-slate-300 mb-2"><strong class="text-amber-400">This chapter was written by Plan-Forge.</strong> Sections 1, 3, 4, 5, 6, 7, and 8 were drafted by <code>pforge run-plan</code> dispatching to GitHub Copilot via the <code>gh-copilot</code> worker. Each section is a captured slice trajectory you can audit.</p>
+        <p class="text-sm text-slate-400 mb-0">Section 9 itself — the artifact you're reading now — is the dogfood of the dogfood: a single live <code>--worker copilot-coding-agent</code> dispatch against this same repository, captured at runtime.</p>
+      </div>
+
+      <h3 id="dogfood-runs">Captured runs</h3>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Section</th>
+            <th>Plan</th>
+            <th>Worker</th>
+            <th>Cost</th>
+            <th>Trajectory</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>1, 2 (readiness + 8 primitives)</td>
+            <td><a href="https://github.com/srnichols/plan-forge/blob/master/docs/plans/Phase-GITHUB-A-INTROSPECTION-PLAN.md" class="text-amber-400 hover:underline">Phase GITHUB-A</a></td>
+            <td>Manual (small surface)</td>
+            <td>$0.00</td>
+            <td><a href="https://github.com/srnichols/plan-forge/commit/d7e9cf8" class="text-amber-400 hover:underline"><code>d7e9cf8</code></a></td>
+          </tr>
+          <tr>
+            <td>3, 4 (Coding Agent + GHAS)</td>
+            <td><a href="https://github.com/srnichols/plan-forge/blob/master/docs/plans/Phase-GITHUB-B-CODING-AGENT-PLAN.md" class="text-amber-400 hover:underline">Phase GITHUB-B</a></td>
+            <td><code>gh-copilot</code> worker</td>
+            <td>$0.07</td>
+            <td><a href="https://github.com/srnichols/plan-forge/commit/fb39b4d" class="text-amber-400 hover:underline"><code>fb39b4d</code></a> + 9 slice commits</td>
+          </tr>
+          <tr>
+            <td>6 (Metrics API)</td>
+            <td><a href="https://github.com/srnichols/plan-forge/blob/master/docs/plans/Phase-GITHUB-D-METRICS-LEADERBOARD-PLAN.md" class="text-amber-400 hover:underline">Phase GITHUB-D</a></td>
+            <td><code>gh-copilot</code> worker</td>
+            <td>$0.04</td>
+            <td><a href="https://github.com/srnichols/plan-forge/commit/28fe1ef" class="text-amber-400 hover:underline"><code>28fe1ef</code></a> + 7 slice commits</td>
+          </tr>
+          <tr>
+            <td>5, 7, 8 (Spaces + BYOK + other agents)</td>
+            <td><a href="https://github.com/srnichols/plan-forge/blob/master/docs/plans/Phase-GITHUB-C-CHAPTER-CONTENT-PLAN.md" class="text-amber-400 hover:underline">Phase GITHUB-C</a></td>
+            <td><code>gh-copilot</code> worker</td>
+            <td>$0.05</td>
+            <td><a href="https://github.com/srnichols/plan-forge/commit/7e14d34" class="text-amber-400 hover:underline"><code>7e14d34</code></a> + 4 slice commits</td>
+          </tr>
+          <tr>
+            <td>9 (this section)</td>
+            <td><a href="https://github.com/srnichols/plan-forge/blob/master/docs/plans/PHASE-GITHUB-C-DOGFOOD-RUNBOOK.md" class="text-amber-400 hover:underline">Dogfood runbook</a></td>
+            <td><strong class="text-amber-400">Copilot Coding Agent</strong> (live dispatch)</td>
+            <td>$0.00 (subscription)</td>
+            <td><em>captured at run time — see runbook for the trajectory link</em></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p class="mt-6"><strong class="text-slate-200">Total spend to write this chapter: $0.16</strong> across 31 worker-executed slices and one manual scaffold. The total time was approximately 10 hours of orchestrator wall-clock plus ~30 minutes of human review and gate-fix iterations.</p>
+
+      <h3 id="dogfood-honesty">What we got right and what we got wrong</h3>
+
+      <p>The Phase B / D / C runs are documented warts-and-all in the project's <a href="https://github.com/srnichols/plan-forge/commits/master?since=2026-05-04" class="text-amber-400 hover:underline">commit history</a>. A few honest observations:</p>
+
+      <ul>
+        <li><strong>Two slices needed plan-author intervention.</strong> Phase B Slice 7's gate looked for <code>##&nbsp;Slice</code> when the SARIF generator emits <code>###&nbsp;Slice</code>; Phase D Slice 3 wrapped <code>node -e</code> in <code>bash -c</code> on Windows, which routes to WSL bash where Windows <code>node</code> isn't on PATH. Both were plan-authoring bugs caught by the orchestrator's auto-routing logic (<a href="https://github.com/srnichols/plan-forge/blob/master/.github/instructions/plan-gate-command-rules.md" class="text-amber-400 hover:underline">documented here</a>). Worker output was correct in both cases; only the validation gates needed fixing.</li>
+        <li><strong>Two long-running test sweeps deadlocked.</strong> Phase B Slice 9 (full vitest suite) and Phase D Slice 7 (dashboard glob) both had the worker waiting on subprocess output that never flushed. Each was resolved by killing the orchestrator, running the gate manually to verify, and resuming via <code>--resume-from</code>. This is a known Phase-34 limitation tracked in the orchestrator backlog.</li>
+        <li><strong>The sequencer initially treated <code>run-completed</code> as success.</strong> The orchestrator emits <code>run-completed</code> even when slices fail. The sequencer was hardened mid-run to require <code>status: completed</code> AND <code>failed: 0</code> before chaining the next plan. Lesson committed in <a href="https://github.com/srnichols/plan-forge/commit/a4bfb7f" class="text-amber-400 hover:underline"><code>a4bfb7f</code></a>.</li>
+      </ul>
+
+      <p class="text-sm text-slate-400 mt-6"><strong class="text-slate-200">Why this matters:</strong> the chapter you're reading is not a marketing artifact. It's a working system describing itself, with bug tickets and gate fixes you can read as commits. The "Plan-Forge is the deepest harness on the GitHub stack" claim isn't a slogan — it's the trail of commits above.</p>
+
       <div id="chapter-prev-next" class="chapter-nav"></div>
     </div></main>
   </div>

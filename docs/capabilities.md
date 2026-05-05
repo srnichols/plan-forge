@@ -1,6 +1,6 @@
 # Plan Forge — Capabilities Reference
 
-> **Tools**: 67 MCP (20 core + 14 LiveGuard + 2 Watcher + 6 Crucible + 6 Tempering + 4 Bug Registry + 3 Testbed + 3 Review + 3 Notify/Home/Delegate + additional doctor/memory/search/timeline/org) | **CLI**: 46+ commands | **Presets**: 9 | **Agents**: 20 | **Skills**: 14
+> **Tools**: 68 MCP (21 core + 14 LiveGuard + 2 Watcher + 6 Crucible + 6 Tempering + 4 Bug Registry + 3 Testbed + 3 Review + 3 Notify/Home/Delegate + additional doctor/memory/search/timeline/org/github) | **CLI**: 46+ commands | **Presets**: 9 | **Agents**: 20 | **Skills**: 14
 >
 > Machine-readable version: call `forge_capabilities` MCP tool, `GET https://planforge.software/.well-known/plan-forge.json`, or read `pforge-mcp/tools.json` (auto-generated on every MCP server start).
 
@@ -77,6 +77,7 @@
 | `forge_doctor_quorum` | diagnostics | low | Health-check every quorum participant model — auth, latency, rate-limit headers, per-model availability. |
 | `forge_delegate_to_agent` | agent-routing | medium | Delegate a prompt/slice to a specialized reviewer agent (database, security, performance, etc.) and return the agent's report. |
 | `forge_self_update` | release | low | Check for the latest Plan Forge release, fetch release notes, and (optionally) trigger install. |
+| `forge_github_status` | diagnose | low | Check GitHub API connectivity, Copilot subscription status, and GitHub Models API availability. Returns auth state, rate limits, and per-service health. |
 
 ## Execution Modes
 
@@ -268,6 +269,62 @@ Store API keys in the gitignored `.forge/` directory as an alternative to enviro
 ```
 
 `.forge/` is in `.gitignore` by default — secrets are never committed.
+
+## GitHub Copilot Integration
+
+Plan Forge has first-class integration with GitHub Copilot, GitHub Models, and GitHub Actions for cloud-based execution and security-driven plan generation.
+
+### forge_github_status
+
+`forge_github_status` — Check GitHub API connectivity, Copilot subscription status, and GitHub Models API availability. Returns auth state, rate limits, and per-service health.
+
+| Field | Description |
+|-------|-------------|
+| `githubAuth` | Authentication state (`authenticated` / `unauthenticated`) |
+| `copilotPlan` | Copilot subscription plan (`individual` / `business` / `enterprise` / `none`) |
+| `modelsApiAvailable` | `true` when `models.github.ai/inference` is reachable |
+| `rateLimitRemaining` | Remaining GitHub API requests for the hour |
+
+CLI: `pforge github-status`
+
+### GitHub Models
+
+GitHub Models (`models.github.ai/inference`) is the recommended API provider for Plan Forge. It is the default inference endpoint when `GITHUB_TOKEN` (or `gh auth login`) is configured. Supported models: `gpt-4o-mini` *(default)*, `gpt-4o`, `claude-sonnet-4`, `claude-opus-4`.
+
+### Copilot Coding Agent Worker
+
+Dispatch slice execution to the Copilot coding agent instead of the local CLI:
+
+```
+pforge run-plan <plan> --worker copilot-coding-agent
+```
+
+The `--worker copilot-coding-agent` flag routes each slice to a Copilot cloud agent session. Requires `copilot-setup-steps.yml` in `.github/` and an active Copilot for Business or Enterprise subscription. Guardrails and MCP tools are available inside the cloud agent environment; the dashboard receives live slice events via WebSocket.
+
+| Flag | Description |
+|------|-------------|
+| `--worker copilot-coding-agent` | Route slice execution to Copilot coding agent |
+| `--worker local` | Run locally (default) |
+
+### plan-from-sarif
+
+Generate a remediation plan from a GitHub Code Scanning SARIF report:
+
+```
+pforge plan-from-sarif <sarif-file> [--severity high,critical] [--output docs/plans/]
+```
+
+Reads SARIF findings, groups by CWE / rule ID, and emits a hardened Plan Forge plan where each slice targets a specific vulnerability class. Integrates with `forge_secret_scan` and `forge_bug_register` — high-severity findings are auto-registered as bugs. Gate: `pforge run-plan docs/plans/<sarif-plan>.md`.
+
+### github-metrics
+
+Pull GitHub repository metrics (PR velocity, code frequency, contributor cadence) into the LiveGuard health context:
+
+```
+pforge github-metrics [--repo <owner/repo>] [--window 30d]
+```
+
+Metrics are written to `.forge/github-metrics.json` and surfaced on the Dashboard **GitHub** tab. `forge_health_trend` incorporates PR cycle time as a signal when the file is present. Requires `GITHUB_TOKEN` with `repo` scope.
 
 ## REST API
 
@@ -826,11 +883,11 @@ LiveGuard is the operational intelligence layer that activates after the forge p
 
 The existing unified dashboard at `localhost:3100/dashboard` gains a **LIVEGUARD section** (5 amber-accented tabs) separated by a visual divider from the existing FORGE section (10 blue-accented tabs, including the v2.35 **Watcher** tab). Single WebSocket, single Chart.js, no new server process.
 
-**Dashboard sections after v2.35.0 (25 tabs total)**:
+**Dashboard sections after v2.35.0 (26 tabs total)**:
 
 | Section | Tabs | Active Color |
 |---------|---------|--------------|
-| FORGE | Progress, Runs, Cost, Actions, Replay, Extensions, Config, Traces, Skills, **Watcher** | Blue (`#3b82f6`) |
+| FORGE | Progress, Runs, Cost, Actions, Replay, Extensions, Config, Traces, Skills, **Watcher**, **GitHub** | Blue (`#3b82f6`) |
 | LIVEGUARD | Health, Incidents, Triage, Security, Env | Amber (`#f59e0b`) |
 
 Each LiveGuard tab includes a `Docs ↗` link to the corresponding manual chapter.

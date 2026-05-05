@@ -5838,6 +5838,16 @@ function Invoke-HammerFm {
     node $scriptPath @Arguments
 }
 
+# ─── Command: plan-from-sarif ──────────────────────────────────────
+function Invoke-PlanFromSarif {
+    $scriptPath = Join-Path $RepoRoot "pforge-mcp/sarif-to-plan.mjs"
+    if (-not (Test-Path $scriptPath)) {
+        Write-Host "ERROR: sarif-to-plan script not found at $scriptPath" -ForegroundColor Red
+        exit 1
+    }
+    node $scriptPath @Arguments
+}
+
 # ─── Command: audit-loop (Phase-39 Slice 7) ───────────────────────
 function Invoke-AuditLoop {
     $autoMode = $false
@@ -6062,6 +6072,7 @@ switch ($Command) {
     'patterns'     { Invoke-Patterns }
     'graph'        { Invoke-Graph }
     'digest'       { Invoke-Digest }
+    'plan-from-sarif' { Invoke-PlanFromSarif }
     'github'       { Invoke-Github }
     'help'         { Show-Help }
     ''             { Show-Help }

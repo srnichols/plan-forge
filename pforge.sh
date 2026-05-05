@@ -5096,6 +5096,16 @@ cmd_hammer_fm() {
     node "$script_path" "$@"
 }
 
+# ─── Command: plan-from-sarif ─────────────────────────────────────
+cmd_plan_from_sarif() {
+    local script_path="$REPO_ROOT/pforge-mcp/sarif-to-plan.mjs"
+    if [[ ! -f "$script_path" ]]; then
+        echo "ERROR: sarif-to-plan script not found at $script_path" >&2
+        exit 1
+    fi
+    node "$script_path" "$@"
+}
+
 # ─── Command: audit-loop (Phase-39 Slice 7) ───────────────────────
 cmd_audit_loop() {
     local auto_mode=false
@@ -5331,6 +5341,7 @@ case "$COMMAND" in
     patterns)     cmd_patterns "$@" ;;
     graph)        cmd_graph "$@" ;;
     digest)       cmd_digest "$@" ;;
+    plan-from-sarif) cmd_plan_from_sarif "$@" ;;
     github)       cmd_github "$@" ;;
     help|--help)  show_help ;;
     *)

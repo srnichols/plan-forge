@@ -133,6 +133,70 @@ This sets a 60-minute timeout for that slice only. Other slices use the default.
 
 ---
 
+## Gate Linter
+
+### Overview
+
+The orchestrator's `runGate` function runs a static linter on each gate command string **before** executing it. The linter detects known portability anti-patterns and emits structured warnings so plan authors get actionable feedback without waiting for a runtime failure.
+
+Warnings are emitted as `gate-lint-warn` SSE events. In the default advisory mode, the gate still runs. In strict mode, the gate is skipped and marked failed immediately.
+
+### Warning codes
+
+| Code | Triggered by | Why it matters |
+|---|---|---|
+| **W1** | `bash -c` or `sh -c` wrapper in gate command | The orchestrator spawns gates via `cmd.exe` on Windows; bash wrappers are silently skipped or error out without a useful message. |
+| **W2** | Brace-group pipe `\| {` or `\| {` variant | Brace-group variable scoping is invisible through the `cmd.exe` → node shim; the check always exits `0` (false pass). |
+| **W3** | Quoted glob argument to `npx vitest run` (e.g. `"pforge-mcp/tests/foo-*.test.mjs"`) | Windows does not expand globs inside quoted strings; vitest reports "no test files found" and exits `0`. |
+| **W4** | `require(` call on a `.mjs` file path | `.mjs` files are ESM-only; `require()` throws at runtime. Use `import()` with `await` instead. |
+
+### `PFORGE_GATE_LINT_STRICT`
+
+When this variable is set to `1` or `true`, any W1–W4 warning is treated as a **hard gate failure**:
+
+- The gate command is **not executed**.
+- The slice fails with `exitCode: 1` and a `gate-lint-strict-abort` reason.
+- The warning codes that triggered the abort are included in the `slice-failed` event payload.
+
+Any other value (including `0`, `false`, or an empty string) leaves the linter in advisory-only mode.
+
+```
+PFORGE_GATE_LINT_STRICT=1 pforge run-plan docs/plans/my-plan.md
+```
+
+### `pforge-lint-disable` per-gate directive
+
+To suppress one or more warning codes for a single gate, add a `# pforge-lint-disable <codes>` comment anywhere in the gate command string:
+
+```
+node -e "..." # pforge-lint-disable W3
+```
+
+Multiple codes are comma-separated:
+
+```
+bash -c "..." # pforge-lint-disable W1,W2
+```
+
+- Unknown codes in the disable list are silently ignored.
+- The directive applies **only to the gate it appears in**; it does not affect other gates in the same slice or plan.
+- Using `pforge-lint-disable` in strict mode still suppresses the listed warnings for that gate (the gate runs normally).
+
+### `gate-lint-warn` SSE event
+
+```json
+{
+  "event": "gate-lint-warn",
+  "sliceId": "2",
+  "gateIndex": 0,
+  "code": "W1",
+  "message": "bash -c wrapper detected — gate will not run on Windows cmd.exe",
+  "cmd": "bash -c \"node -e \\\"...\\\"\""
+}
+```
+
+---
+
 ## Gate Template (copy-paste safe)
 
 ```

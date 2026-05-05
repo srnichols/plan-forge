@@ -7,7 +7,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-## [2.90.2] — 2026-05-05 — Hotfix: Worker Timeout Uplift + Per-Slice Override
+## [2.90.3] — 2026-05-05 — Hotfix: Gate Linter (W1–W4 warnings, strict mode, per-gate disable)
+
+> **One-liner**: Adds a static gate-linter pass to `pforge-mcp/orchestrator.mjs` that scans validation-gate command strings before execution and emits structured warnings (W1–W4) for known portability anti-patterns. Strict mode (`PFORGE_GATE_LINT_STRICT=1`) promotes warnings to hard failures. Individual gates can opt out with a `# pforge-lint-disable <codes>` comment line.
+
+### Added — Hotfix v2.90.3
+
+- **Gate linter** in `pforge-mcp/orchestrator.mjs` — `lintGateCommand(cmd, opts?)` scans each gate string and returns `{ warnings: LintWarning[] }`. Called by `runGate` before spawning the subprocess; warnings are emitted as `gate-lint-warn` SSE events. In strict mode the gate is skipped and fails immediately.
+- **Warning codes W1–W4**:
+  - **W1** — `bash -c` / `sh -c` wrapper detected; gate will not run on Windows `cmd.exe`.
+  - **W2** — Brace-group pipe (`| {`) detected; invisible through the `cmd.exe` → node shim.
+  - **W3** — Quoted glob in `npx vitest run "…*…"` argument; glob is not expanded on Windows.
+  - **W4** — `require()` call on a `.mjs` file detected; must use `import()` with `await`.
+- **`PFORGE_GATE_LINT_STRICT`** environment variable — when set to `1` or `true`, any W1–W4 warning is treated as a hard gate failure. Default is advisory-only (warnings logged, gate still runs).
+- **`# pforge-lint-disable <codes>`** inline directive — a gate command that contains this comment (e.g. `# pforge-lint-disable W1,W3`) suppresses the listed warning codes for that gate only. Useful for intentional platform-specific gates.
+- **`pforge-mcp/tests/gate-linter.test.mjs`** — vitest cases covering: W1 detection (bash wrapper), W2 detection (brace-group), W3 detection (quoted vitest glob), W4 detection (require on .mjs), clean gate → no warnings, strict-mode abort, per-gate disable (single code, multiple codes, unknown code ignored), and combined multi-warning gates.
+- **Gate linter section** in `.github/instructions/plan-gate-command-rules.md` — documents W1–W4 codes, `PFORGE_GATE_LINT_STRICT`, and `pforge-lint-disable` syntax.
+
+### Environment variable
+
+| Variable | Default | Notes |
+|---|---|---|
+| `PFORGE_GATE_LINT_STRICT` | _(unset)_ | Set to `1` or `true` to promote gate-linter warnings to hard failures. Any other value (including `0` or `false`) leaves the linter in advisory-only mode. |
+
+## [2.90.2]— 2026-05-05 — Hotfix: Worker Timeout Uplift + Per-Slice Override
 
 > **One-liner**: Raises the default worker subprocess timeout from 20 min to 30 min (`DEFAULT_WORKER_TIMEOUT_MS = 1_800_000`), adds `resolveWorkerTimeoutMs(opts)` for priority-chain resolution (per-slice frontmatter → `PFORGE_WORKER_TIMEOUT_MS` env → default), and wires the override into the slice runner. Prevents premature 20-min kills observed during the GitHub-stack dogfood (Phase B Slice 5, 25:28 first attempt).
 

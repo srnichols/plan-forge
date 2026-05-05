@@ -4,9 +4,9 @@ description: "Pipeline Step 3 — Execute a hardened plan slice-by-slice with va
 
 # Step 3: Execute Slices
 
-> **Pipeline**: Step 3 of 5 (Session 2 — Execution)  
-> **When**: After plan is hardened (Step 2), in a new agent session  
-> **Model suggestion**: Any model / Codex / Copilot Auto (10% token savings) — execution is mechanical; Codex is fast and focused  
+> **Pipeline**: Step 3 of 5 (Session 2 — Execution)
+> **When**: After plan is hardened (Step 2), in a new agent session
+> **Model suggestion**: Any model / Codex / Copilot Auto (10% token savings) — execution is mechanical; Codex is fast and focused
 > **Next Step**: `step4-completeness-sweep.prompt.md`
 
 Replace `<YOUR-HARDENED-PLAN>` with your hardened plan filename.
@@ -57,6 +57,25 @@ For [parallel-safe] slices:
 - If any parallel slice fails, pause all slices in that group and report
 
 After ALL slices pass, run the COMPLETENESS SWEEP (Section 6.1).
+
+---
+
+### Files Modified Verification (Issue #152)
+
+Before declaring a slice complete — even if the validation gate passes — re-read
+the slice's **Files Modified (Exhaustive)** table (when present). For each row,
+confirm via `git diff --name-only HEAD` (or `git status --porcelain` for new
+files) that the path appears in the slice's working-tree changes.
+
+If any declared file is missing from the diff, **the slice is not finished**:
+- Either complete the missing modification, OR
+- Amend the plan to remove the row (with a brief rationale) before continuing.
+
+Do not rely on the validation gate alone. Gates often only test what the worker
+*chose* to add to the build (`dotnet test <slnx>`, `npm test`, etc.) — they do
+not catch a silently-skipped registration like a missing `.csproj` reference,
+an unedited README, or an unreleased CHANGELOG entry. The Exhaustive table is
+the contract; the gate is one verification of it, not the only one.
 
 ---
 

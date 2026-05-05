@@ -34,7 +34,7 @@
         <p class="text-lg text-slate-400 mb-8">Three tiers, one capture path. How Plan Forge remembers what it learned — across slices, across sessions, across plans.</p>
 
         <div class="callout callout-tip">
-          <strong>New in v2.36.0</strong>: This chapter consolidates the three-tier memory work shipped across PRs <code>v2.35.1</code> through <code>v2.36.0</code> — closing every gap from the memory-architecture audit (G1.1–G1.4, G2.1–G2.8, G3.1–G3.7, GX.1–GX.5).
+          <strong>New in v2.36.0</strong>: This chapter consolidates the three-tier memory work shipped across the <code>v2.35.1</code>–<code>v2.36.0</code> release window.
         </div>
 
         <!-- ─── Overview ─── -->
@@ -105,7 +105,7 @@
         <ul>
           <li><strong>Subscribers</strong> — WebSocket clients (the dashboard), the watcher worker, the OpenBrain drain worker, anything listening for <code>memory-captured</code></li>
           <li><strong>Replay file</strong> — every event also appends to <code>.forge/hub-events.jsonl</code> so a fresh dashboard can rebuild state on connect</li>
-          <li><strong>Worker capability probe</strong> (G1.4 / hotfix v2.36.0-beta.3) — workers announce which event types they handle so the hub can drop unhandled events early instead of fanning out garbage</li>
+          <li><strong>Worker capability probe</strong> — workers announce which event types they handle so the hub can drop unhandled events early instead of fanning out garbage</li>
         </ul>
 
         <!-- ─── L2 ─── -->
@@ -145,7 +145,7 @@
         </div>
 
         <!-- ─── Boot Preload ─── -->
-        <h2 id="preload">L3 → L1 Preload (GX.2)</h2>
+        <h2 id="preload">L3 → L1 Preload</h2>
         <p>When <code>forge_run_plan</code> emits <code>run-started</code>, the orchestrator calls <code>buildPlanBootContext(plan, projectName)</code> to derive a small set of semantic queries the agent should pre-fetch from L3 before slice 1:</p>
 
         <ul>
@@ -156,13 +156,13 @@
         <p>The hints are emitted as a <code>memory-preload</code> hub event. Any agent runtime listening (Copilot, Claude Code, Cursor) can resolve the hints via <code>search_thoughts</code> and seed its working context — eliminating the cold-start "what did we learn last time" gap.</p>
 
         <!-- ─── Watcher ─── -->
-        <h2 id="watcher">Watcher → Memory (G3.1)</h2>
+        <h2 id="watcher">Watcher → Memory</h2>
         <p>The file watcher (chapter <a href="dashboard.html#watcher">6 — Watcher tab</a>) doesn't just emit FS events — it drives capture. When a file change matches a watcher rule, the watcher composes a <code>buildWatcherSearchPrompt</code> payload and pushes it through the same <code>captureMemory</code> path so the change becomes a first-class L2 record and an L3 query.</p>
 
         <p>This closes the loop where edits made <em>between</em> plan slices used to vanish from memory. Now the watcher feeds L1/L2/L3 just like any tool would.</p>
 
         <!-- ─── Source Format ─── -->
-        <h2 id="source-format">Source Attribution (GX.4)</h2>
+        <h2 id="source-format">Source Attribution</h2>
         <p>Every capture carries a <code>source</code> field with a strict format: <code>&lt;tool&gt;</code> or <code>&lt;tool&gt;/&lt;subsystem&gt;</code>. <code>validateSourceFormat</code> rejects anything else. This means the Memory tab's "by tool" breakdown is always accurate — no untagged drift.</p>
 
         <div class="cmd-block">
@@ -180,7 +180,7 @@
         </div>
 
         <!-- ─── Migration ─── -->
-        <h2 id="migration">Migration: pforge migrate-memory (GX.5)</h2>
+        <h2 id="migration">Migration: pforge migrate-memory</h2>
         <p>Schema changes (the <code>_v</code> field bumps) are handled by the migration switch in <code>pforge.ps1</code> / <code>pforge.sh</code>:</p>
 
         <div class="cmd-block">
@@ -215,7 +215,7 @@ pforge migrate-memory
           <li><a href="mcp-server.html"><code>forge_memory_report</code></a> — the underlying tool (chapter 10)</li>
         </ul>
 
-        <p class="text-sm text-slate-500 mt-8">📄 v2.36.0 changelog: <a href="https://github.com/srnichols/plan-forge/blob/master/CHANGELOG.md" rel="noopener">CHANGELOG.md</a> — see the rollup entry covering G1.1–G1.4, G2.1–G2.8, G3.1–G3.7, GX.1–GX.5.</p>
+        <p class="text-sm text-slate-500 mt-8">📄 v2.36.0 changelog: <a href="https://github.com/srnichols/plan-forge/blob/master/CHANGELOG.md" rel="noopener">CHANGELOG.md</a>.</p>
 
         <div id="chapter-prev-next" class="chapter-nav"></div>
 

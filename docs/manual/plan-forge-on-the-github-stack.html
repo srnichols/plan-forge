@@ -36,7 +36,7 @@
 
       <p>Plan-Forge does not require GitHub. It runs against any repo, with any agent (Copilot, Claude Code, Cursor, Codex), and against any CI system. <strong class="text-slate-200">But when the repo is on GitHub, Plan-Forge has the deepest stack of integrations</strong> — eight first-class primitives it consumes today, plus several it dispatches to. This appendix is the single canonical reference for that integration surface.</p>
 
-      <p>Section 1 is the readiness check — a one-command snapshot of which GitHub primitives your repo currently has wired up. Section 2 is the surface-by-surface tour. Sections 3 (Copilot Coding Agent dispatch), 4 (GHAS remediation chains), 5 (Copilot Spaces sync), and 6 (Metrics API leaderboard) are now live. Sections 7 and 8 (BYOK and multi-model picker, other agent platforms) are <strong class="text-amber-400">in progress</strong> and will land in upcoming releases.</p>
+      <p>Section 1 is the readiness check — a one-command snapshot of which GitHub primitives your repo currently has wired up. Section 2 is the surface-by-surface tour. Sections 3 (Copilot Coding Agent dispatch), 4 (GHAS remediation chains), 5 (Copilot Spaces sync), 6 (Metrics API leaderboard), and 7 (BYOK and the multi-model picker) are now live. Section 8 (other agent platforms) is <strong class="text-amber-400">in progress</strong> and will land in an upcoming release.</p>
 
       <!-- ─── Section 1 — Readiness Check ─── -->
       <h2 id="readiness-check">1. Is your repo set up? Run <code>pforge github status</code></h2>
@@ -500,25 +500,117 @@ forge_github_metrics({ team: "platform", since: "2026-04-01" })</code></pre>
         <p class="text-sm text-slate-400 mb-0"><strong class="text-slate-200">Prerequisite:</strong> <code>gh</code> CLI must be authenticated (<code>gh auth status</code>) and the repo's org must have Copilot Metrics API access enabled (requires GitHub Copilot Business or Enterprise). Run <code>pforge github status</code> to verify the GitHub stack readiness before pulling metrics.</p>
       </div>
 
-      <!-- ─── Coming sections ─── -->
-      <h2 id="coming-soon">7–8. Other planned sections</h2>
+      <!-- ─── Section 7 — BYOK and the multi-model picker ─── -->
+      <h2 id="byok-model-picker">7. BYOK and the multi-model picker</h2>
 
-      <p>The sections below are planned and will land as their underlying integrations ship.</p>
+      <p>GitHub Copilot ships a built-in multi-model picker that lets individual developers switch between supported models (GPT-4o, Claude Sonnet, Gemini, and others) inside their editor. Plan-Forge has its own orthogonal model-selection surface: the <code>--model</code> flag and the quorum system. This section explains how the two compose, when BYOK (bring-your-own-key) matters, and when the picker is enough.</p>
 
-      <div class="grid md:grid-cols-2 gap-4 mt-6">
-        <div class="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5">
-          <div class="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-2">Planned</div>
-          <div class="text-base font-bold text-slate-100 mb-1">7. BYOK and the multi-model picker</div>
-          <p class="text-sm text-slate-400 mb-0">How Plan-Forge's <code>--model</code> flag and quorum modes (<code>auto</code> / <code>power</code> / <code>speed</code>) compose with Copilot's multi-model picker. When BYOK matters, when the picker is enough.</p>
-        </div>
-        <div class="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5">
-          <div class="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-2">Planned</div>
-          <div class="text-base font-bold text-slate-100 mb-1">8. Other agent platforms</div>
-          <p class="text-sm text-slate-400 mb-0">An honest read on Plan-Forge's depth-of-integration with Claude Code, Cursor, and Codex. What works today, what doesn't, and how to choose.</p>
-        </div>
+      <h3 id="model-flag">The <code>--model</code> flag</h3>
+
+      <p>Every plan-execution command accepts a <code>--model</code> flag that overrides the default model for the entire run:</p>
+
+      <pre><code>pforge run-plan docs/plans/Phase-28-PLAN.md --model gpt-4.1
+pforge run-plan docs/plans/Phase-28-PLAN.md --model claude-sonnet-4.5
+pforge run-plan docs/plans/Phase-28-PLAN.md --model grok-3</code></pre>
+
+      <p>The value is forwarded to the Forge-Master reasoning layer (<code>pforge-master/src/reasoning.mjs</code>), which resolves it against the configured provider table in <code>.forge.json#providers</code>. If no provider entry exists for the requested model, Forge-Master falls back to the default provider and logs a <code>warn</code> event to the timeline.</p>
+
+      <p>The flag is independent of the Copilot multi-model picker. A developer can have GPT-4o selected in their editor picker while Plan-Forge runs a plan with <code>--model claude-sonnet-4.5</code>. The two selections do not interfere — Copilot Chat and Plan-Forge use separate request paths.</p>
+
+      <h3 id="quorum-modes">Quorum modes: <code>auto</code>, <code>power</code>, <code>speed</code>, and <code>false</code></h3>
+
+      <p>For high-stakes slices — deploy steps, schema migrations, security patches — Plan-Forge can run the same slice prompt across multiple models and require a threshold of agreement before committing. This is the quorum system.</p>
+
+      <pre><code>pforge run-plan docs/plans/Phase-28-PLAN.md --quorum=power   # flagship models, threshold 5
+pforge run-plan docs/plans/Phase-28-PLAN.md --quorum=speed   # fast models, threshold 7
+pforge run-plan docs/plans/Phase-28-PLAN.md --quorum=auto    # Plan-Forge picks mode per slice
+pforge run-plan docs/plans/Phase-28-PLAN.md --quorum=false   # disable quorum entirely</code></pre>
+
+      <table>
+        <thead><tr><th>Mode</th><th>Models polled</th><th>Agreement threshold</th><th>Best for</th></tr></thead>
+        <tbody>
+          <tr><td><code>power</code></td><td>Up to 3 flagship models (GPT-5, Claude Opus, Grok-4)</td><td>5 / 7 points</td><td>Deploy slices, schema migrations</td></tr>
+          <tr><td><code>speed</code></td><td>Up to 3 fast models (GPT-4.1, Claude Haiku, Grok-3-mini)</td><td>7 / 7 points</td><td>High-volume code generation, CI budget caps</td></tr>
+          <tr><td><code>auto</code></td><td>Plan-Forge selects per slice based on slice risk tags</td><td>Per-slice</td><td>Mixed plans; recommended default</td></tr>
+          <tr><td><code>false</code></td><td>Single model only</td><td>N/A</td><td>Local development, cost sensitivity</td></tr>
+        </tbody>
+      </table>
+
+      <p>Cost estimates for each mode are available before you run by calling <code>forge_estimate_quorum</code> (MCP) or running:</p>
+
+      <pre><code>pforge run-plan --estimate docs/plans/Phase-28-PLAN.md</code></pre>
+
+      <p>This prints a projected cost breakdown under each of the four quorum modes, sourced from the live token-price table in <code>pforge-mcp/cost/price-table.mjs</code> — not hand-computed approximations.</p>
+
+      <h3 id="byok-when-it-matters">When BYOK matters</h3>
+
+      <p>BYOK is the practice of supplying your own API key directly to a model provider rather than routing through GitHub Copilot's proxy. Plan-Forge supports BYOK for any provider that exposes an OpenAI-compatible endpoint. Set the key in <code>.forge/secrets.json</code> (gitignored) or via environment variable:</p>
+
+      <pre><code># .forge/secrets.json (gitignored)
+{
+  "XAI_API_KEY": "xai-...",
+  "ANTHROPIC_API_KEY": "sk-ant-...",
+  "OPENAI_API_KEY": "sk-..."
+}
+
+# Or as environment variables:
+export XAI_API_KEY=xai-...
+pforge run-plan docs/plans/Phase-28-PLAN.md --model grok-4</code></pre>
+
+      <p>BYOK matters in the following situations:</p>
+
+      <ul>
+        <li><strong class="text-slate-200">Model not in the Copilot picker</strong> — Grok-4, Grok-3, and Grok-3-mini are only reachable via direct xAI keys today. Set <code>XAI_API_KEY</code> and they become available to <code>--model</code> and quorum.</li>
+        <li><strong class="text-slate-200">Higher rate limits</strong> — a GitHub Copilot Business seat has shared rate-limit headroom. Direct BYOK keys give dedicated limits. In heavy quorum runs (power mode across three flagship models), hitting the shared rate limit stalls the run. BYOK avoids the contention.</li>
+        <li><strong class="text-slate-200">Data-residency or audit requirements</strong> — some organisations route only approved models through the Copilot proxy for compliance. BYOK lets the remainder go direct without touching the proxy at all.</li>
+        <li><strong class="text-slate-200">Cost arbitrage</strong> — the Copilot Business per-seat fee is often cheaper per token for everyday chat, but a heavy automated quorum run on flagship models may be cheaper billed direct at volume pricing. Run <code>pforge run-plan --estimate</code> to compare.</li>
+      </ul>
+
+      <h3 id="copilot-picker-vs-pforge">Copilot picker vs Plan-Forge model selection: the short answer</h3>
+
+      <p>The Copilot multi-model picker is the right tool when a <em>human developer</em> is choosing a model interactively for chat or inline suggestions. Plan-Forge model selection (<code>--model</code>, quorum) is the right tool when an <em>automated plan execution run</em> needs reproducible, auditable model routing with cost tracking and agreement enforcement. The two are complementary:</p>
+
+      <ul>
+        <li>During development, let the picker follow the developer's preference.</li>
+        <li>During <code>pforge run-plan</code> execution (CI or local), lock the model via <code>--model</code> or quorum so the run is reproducible across machines.</li>
+        <li>If both are unset, Forge-Master uses the provider priority list in <code>.forge.json#providers</code>. The Copilot picker setting has no effect on headless plan runs.</li>
+      </ul>
+
+      <h3 id="provider-config">Provider configuration in <code>.forge.json</code></h3>
+
+      <p>The full provider table lives under <code>.forge.json#providers</code>. Each entry maps a model identifier to a provider, base URL, and optional per-model settings:</p>
+
+      <pre><code>{
+  "providers": {
+    "default": "githubCopilot",
+    "models": {
+      "gpt-5.4":           { "provider": "githubCopilot" },
+      "claude-sonnet-4.6": { "provider": "githubCopilot" },
+      "grok-4":            { "provider": "xai",   "baseUrl": "https://api.x.ai/v1" },
+      "grok-3":            { "provider": "xai",   "baseUrl": "https://api.x.ai/v1" },
+      "grok-3-mini":       { "provider": "xai",   "baseUrl": "https://api.x.ai/v1" }
+    }
+  }
+}</code></pre>
+
+      <p>The internal provider key for GitHub Copilot is <code>"githubCopilot"</code> (not <code>"github-copilot"</code>). Using the wrong key causes <code>selectProvider</code> to return <code>null</code> and fall through to the default. Run <code>pforge smith</code> to validate your provider table and surface misconfiguration before a plan run.</p>
+
+      <div class="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5 mt-6">
+        <p class="text-sm text-slate-400 mb-0"><strong class="text-slate-200">Tip:</strong> Run <code>pforge smith</code> (forge environment diagnostics) and <code>pforge github status</code> together before any quorum run. <code>smith</code> validates the provider table and API keys; <code>github status</code> confirms the GitHub stack readiness. Both must pass before a power-quorum run on a deploy slice.</p>
       </div>
 
-      <p class="text-sm text-slate-500 mt-8">If a section above is blocking your evaluation, open an issue at <a href="https://github.com/srnichols/plan-forge/issues" class="text-amber-400 hover:underline">github.com/srnichols/plan-forge/issues</a> with the tag <code>github-stack</code>. We prioritize sections by demand.</p>
+      <!-- ─── Section 8 — Other agent platforms ─── -->
+      <h2 id="coming-soon">8. Other planned sections</h2>
+
+      <p>The section below is planned and will land as the underlying integration ships.</p>
+
+      <div class="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5 mt-6">
+        <div class="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-2">Planned</div>
+        <div class="text-base font-bold text-slate-100 mb-1">8. Other agent platforms</div>
+        <p class="text-sm text-slate-400 mb-0">An honest read on Plan-Forge's depth-of-integration with Claude Code, Cursor, and Codex. What works today, what doesn't, and how to choose.</p>
+      </div>
+
+      <p class="text-sm text-slate-500 mt-8">If the section above is blocking your evaluation, open an issue at <a href="https://github.com/srnichols/plan-forge/issues" class="text-amber-400 hover:underline">github.com/srnichols/plan-forge/issues</a> with the tag <code>github-stack</code>. We prioritize sections by demand.</p>
 
       <div id="chapter-prev-next" class="chapter-nav"></div>
     </div></main>

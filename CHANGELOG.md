@@ -7,7 +7,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-## [2.90.5] — 2026-05-05 — Hotfix: Sequencer Hardening Sweep
+## [2.90.6] — 2026-05-05 — CHANGELOG cleanup + format regression guard
+
+> **One-liner**: Consolidates the three overlapping Section-9/dogfood entries (originally shipped as 2.89.0, 2.89.1, 2.90.0) into a single canonical `[2.90.0]` entry, adds a "Hotfix series 2.90.x" skim-reader callout, normalises all `[X.Y.Z]` headings to the `## [X.Y.Z] — YYYY-MM-DD — <one-liner>` em-dash format, and ships a regression test (`pforge-mcp/tests/changelog-format.test.mjs`) that prevents `[2.89.x]` headings from re-appearing and enforces em-dash separators going forward.
+
+### Changed — Hotfix v2.90.6
+
+- **`CHANGELOG.md`** — `[2.89.0]` and `[2.89.1]` headings removed as standalone bracketed entries; their content preserved verbatim under a "Detailed history" subsection inside `[2.90.0]`. A "Hotfix series 2.90.x" preamble added below the `[2.90.0]` heading for skim-readers. All `[X.Y.Z]` headings that contained dates now use em-dash (`—`) separators consistently.
+
+### Added — Hotfix v2.90.6
+
+- **`pforge-mcp/tests/changelog-format.test.mjs`** — vitest regression guard. Cases: (1) no `[2.89.0]` heading re-appears, (2) no `[2.89.1]` heading re-appears, (3) all dated `[X.Y.Z]` headings use em-dash (not hyphen-minus), (4) `[2.90.6]` heading exists, (5) `VERSION` reads `2.90.6`, (6) `pforge-mcp/package.json` reads `2.90.6`, (7) `VERSION` matches `pforge-mcp/package.json`.
+
+### Why this matters
+
+The May 5 hotfix series (2.90.1–2.90.5) produced five rapid entries in quick succession on top of the already-dense Section-9 dogfood narrative. Without consolidation, the front of the file consumed ~80 lines of dogfood detail before a reader reached any other content. The regression test ensures future releases cannot re-introduce the removed `[2.89.x]` versioning artifacts or silently revert to hyphen-minus separators.
+
+## [2.90.5]— 2026-05-05 — Hotfix: Sequencer Hardening Sweep
 
 > **One-liner**: Hardens `scripts/sequence-plans.ps1` into a tested, documented, module-backed sequencer. Extracts shared helpers into `scripts/sequence-plans.psm1`, adds a `-WhatIf` dry-run switch and `-MaxWaitMinutes` watch cap, ships a bash equivalent (`scripts/sequence-plans.sh`), adds Pester unit tests (`scripts/tests/sequence-plans.tests.ps1`), and creates `scripts/README.md` with full usage examples and scenario documentation.
 

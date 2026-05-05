@@ -178,14 +178,14 @@ Edit this list as items are completed. Date format: YYYY-MM-DD.
 - [x] [2026-05-04] liveguard-tools.html "What LiveGuard is — and isn't" callout — explicitly contrasts with APM tools (Datadog/New Relic/Sentry); explains LiveGuard runs at build/pre-deploy, not on running traffic; gives the mental model "is what we shipped safe" vs "is the running app healthy right now"
 - [x] [2026-05-04] instructions-agents.html "A Concrete Scenario" section — walks through editing src/auth/token-validator.cs with a 4-row table showing exactly which 4 instruction files auto-load, why each pattern matched, and what each "whispers to the AI". Closes with the swap behavior when context changes
 
-### Tier 3 (restructure)
+### Tier 3 (restructure) ✅ COMPLETE
 
-> **Status**: Drafted as a hardened plan at [docs/plans/Phase-MANUAL-RESTRUCTURE-PLAN.md](plans/Phase-MANUAL-RESTRUCTURE-PLAN.md). Awaiting Step 2 hardening, then Step 3 execution. Estimated cost: $0.30–$1.00 across 9 sequential slices. Pure documentation restructure — no code changes.
+> **Status**: All restructure slices (1–9) shipped. Plan: [docs/plans/Phase-MANUAL-RESTRUCTURE-PLAN.md](plans/Phase-MANUAL-RESTRUCTURE-PLAN.md). Migration reference: [MANUAL-RESTRUCTURE-2026-05-MIGRATION.md](MANUAL-RESTRUCTURE-2026-05-MIGRATION.md). Final sweep decisions recorded in Slice 9.
 
-- [ ] [2026-MM-DD] Split dashboard.html into 4 chapters
-- [ ] [2026-MM-DD] Split mcp-server.html into 3 chapters
-- [ ] [2026-MM-DD] Split instructions-agents.html into 2 chapters
-- [ ] [2026-MM-DD] Add Quickstart Act 0 (3 chapters)
+- [x] [2026-05-04] Split dashboard.html into 4 chapters — core tabs remain in dashboard.html; LiveGuard tabs → dashboard-liveguard.html; Forge-Master Studio → dashboard-forge-master.html; Settings group → dashboard-settings.html. Permanent stub callouts retained at original anchors (#liveguard, #config, #studio).
+- [x] [2026-05-04] Split mcp-server.html into 3 chapters — mcp-server.html became a navigation hub; quick-start tools guide → mcp-server-quickstart.html; full 69-tool reference → mcp-server-reference.html.
+- [x] [2026-05-04] Split instructions-agents.html into 2 chapters — tutorial (how auto-loading works + concrete scenario) retained in instructions-agents.html; full agents/skills/hooks reference tables → instructions-agents-reference.html.
+- [x] [2026-05-04] Add Quickstart section (3 chapters) — quickstart-install.html, quickstart-first-plan.html, quickstart-first-deploy.html. Named "Quickstart" (not "Act 0") in nav; appears before Act I in the index.
 
 ---
 

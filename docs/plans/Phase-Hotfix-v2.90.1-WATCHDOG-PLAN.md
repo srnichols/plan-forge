@@ -126,7 +126,7 @@ npx --prefix pforge-mcp vitest run pforge-mcp/tests/spawn-worker-output-watchdog
 **Goal**: Document `PFORGE_WORKER_OUTPUT_IDLE_MS` + watchdog behavior. Bump VERSION 2.90.0 → 2.90.1. CHANGELOG entry under "Hotfix series 2.90.x".
 **Validation gate**:
 ```bash
-node -e "const fs=require('fs'); const v=fs.readFileSync('VERSION','utf8').trim(); const cl=fs.readFileSync('CHANGELOG.md','utf8'); const inst=fs.readFileSync('.github/instructions/plan-gate-command-rules.md','utf8'); const checks={version:v==='2.90.1', changelog:/2\\.90\\.1/.test(cl) && /watchdog/i.test(cl), instruction:/PFORGE_WORKER_OUTPUT_IDLE_MS/.test(inst)}; const failed=Object.entries(checks).filter(([_,v])=>!v); if(failed.length){console.error('failed:',failed.map(([k])=>k).join(','));process.exit(1)} console.log('ok')"
+node -e "const fs=require('fs'); const v=fs.readFileSync('VERSION','utf8').trim(); const cl=fs.readFileSync('CHANGELOG.md','utf8'); const inst=fs.readFileSync('.github/instructions/plan-gate-command-rules.md','utf8'); const checks={version:v==='2.90.1', changelog:/2\.90\.1/.test(cl) && /watchdog/i.test(cl), instruction:/PFORGE_WORKER_OUTPUT_IDLE_MS/.test(inst)}; const failed=Object.entries(checks).filter(([_,v])=>!v); if(failed.length){console.error('failed:',failed.map(([k])=>k).join(','));process.exit(1)} console.log('ok')"
 ```
 **Estimated cost**: $0.05
 

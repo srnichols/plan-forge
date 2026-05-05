@@ -94,7 +94,7 @@ The work is **strictly documentation-only**. No code, no tests changed. `VERSION
 **Files in scope**: `CHANGELOG.md`
 **Validation gate**:
 ```bash
-node -e "const cl=require('fs').readFileSync('CHANGELOG.md','utf8'); const checks={no289:!/##\\s+\\[2\\.89\\./.test(cl), has290consolidated:/##\\s+\\[2\\.90\\.0\\]/.test(cl), hasHistorySection:/Detailed history/.test(cl), hasHotfixSeriesCallout:/Hotfix series 2\\.90\\.x/i.test(cl)}; const failed=Object.entries(checks).filter(([_,v])=>!v); if(failed.length){console.error('failed:',failed.map(([k])=>k).join(','));process.exit(1)} console.log('ok')"
+node -e "const cl=require('fs').readFileSync('CHANGELOG.md','utf8'); const checks={no289:!/##\s+\[2\.89\./.test(cl), has290consolidated:/##\s+\[2\.90\.0\]/.test(cl), hasHistorySection:/Detailed history/.test(cl), hasHotfixSeriesCallout:/Hotfix series 2\.90\.x/i.test(cl)}; const failed=Object.entries(checks).filter(([_,v])=>!v); if(failed.length){console.error('failed:',failed.map(([k])=>k).join(','));process.exit(1)} console.log('ok')"
 ```
 **Estimated cost**: $0.05
 
@@ -103,7 +103,7 @@ node -e "const cl=require('fs').readFileSync('CHANGELOG.md','utf8'); const check
 **Validation gate**:
 ```bash
 npx --prefix pforge-mcp vitest run pforge-mcp/tests/changelog-format.test.mjs
-node -e "const fs=require('fs'); const v=fs.readFileSync('VERSION','utf8').trim(); const cl=fs.readFileSync('CHANGELOG.md','utf8'); const checks={version:v==='2.90.6', has2906:/##\\s+\\[2\\.90\\.6\\]/.test(cl)}; const failed=Object.entries(checks).filter(([_,v])=>!v); if(failed.length){console.error('failed:',failed.map(([k])=>k).join(','));process.exit(1)} console.log('ok')"
+node -e "const fs=require('fs'); const v=fs.readFileSync('VERSION','utf8').trim(); const cl=fs.readFileSync('CHANGELOG.md','utf8'); const checks={version:v==='2.90.6', has2906:/##\s+\[2\.90\.6\]/.test(cl)}; const failed=Object.entries(checks).filter(([_,v])=>!v); if(failed.length){console.error('failed:',failed.map(([k])=>k).join(','));process.exit(1)} console.log('ok')"
 ```
 **Estimated cost**: $0.05
 

@@ -106,7 +106,7 @@ These were caught at runtime via three failed cascades. The sequencer is now cor
 **Files in scope**: `scripts/sequence-plans.ps1`, `scripts/sequence-plans.psm1`
 **Validation gate**:
 ```bash
-node -e "const fs=require('fs'); const psm=fs.readFileSync('scripts/sequence-plans.psm1','utf8'); const ps1=fs.readFileSync('scripts/sequence-plans.ps1','utf8'); const checks={moduleHasGetRunStatus:/function\\s+Get-RunStatus/.test(psm), moduleHasTestAlive:/function\\s+Test-OrchestratorAlive/.test(psm), moduleHasGetPid:/function\\s+Get-CurrentOrchestratorPid/.test(psm), ps1ImportsModule:/Import-Module|\\.\\s+\\$PSScriptRoot/.test(ps1)}; const failed=Object.entries(checks).filter(([_,v])=>!v); if(failed.length){console.error('failed:',failed.map(([k])=>k).join(','));process.exit(1)} console.log('ok')"
+node -e "const fs=require('fs'); const psm=fs.readFileSync('scripts/sequence-plans.psm1','utf8'); const ps1=fs.readFileSync('scripts/sequence-plans.ps1','utf8'); const checks={moduleHasGetRunStatus:/function\s+Get-RunStatus/.test(psm), moduleHasTestAlive:/function\s+Test-OrchestratorAlive/.test(psm), moduleHasGetPid:/function\s+Get-CurrentOrchestratorPid/.test(psm), ps1ImportsModule:/Import-Module|\.\s+\$PSScriptRoot/.test(ps1)}; const failed=Object.entries(checks).filter(([_,v])=>!v); if(failed.length){console.error('failed:',failed.map(([k])=>k).join(','));process.exit(1)} console.log('ok')"
 ```
 **Estimated cost**: $0.10
 
@@ -122,7 +122,7 @@ node -e "const fs=require('fs'); if(!fs.existsSync('scripts/tests/sequence-plans
 **Files in scope**: `scripts/README.md`, `VERSION`, `pforge-mcp/package.json`, `CHANGELOG.md`
 **Validation gate**:
 ```bash
-node -e "const fs=require('fs'); const v=fs.readFileSync('VERSION','utf8').trim(); const cl=fs.readFileSync('CHANGELOG.md','utf8'); const readme=fs.readFileSync('scripts/README.md','utf8'); const checks={version:v==='2.90.5', changelog:/2\\.90\\.5/.test(cl) && /sequencer/i.test(cl), readme:/sequence-plans/i.test(readme) && /WhatIf/.test(readme)}; const failed=Object.entries(checks).filter(([_,v])=>!v); if(failed.length){console.error('failed:',failed.map(([k])=>k).join(','));process.exit(1)} console.log('ok')"
+node -e "const fs=require('fs'); const v=fs.readFileSync('VERSION','utf8').trim(); const cl=fs.readFileSync('CHANGELOG.md','utf8'); const readme=fs.readFileSync('scripts/README.md','utf8'); const checks={version:v==='2.90.5', changelog:/2\.90\.5/.test(cl) && /sequencer/i.test(cl), readme:/sequence-plans/i.test(readme) && /WhatIf/.test(readme)}; const failed=Object.entries(checks).filter(([_,v])=>!v); if(failed.length){console.error('failed:',failed.map(([k])=>k).join(','));process.exit(1)} console.log('ok')"
 ```
 **Estimated cost**: $0.05
 

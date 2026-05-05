@@ -130,7 +130,7 @@ npx --prefix pforge-mcp vitest run pforge-mcp/tests/lint-gate-windows-portabilit
 **Files in scope**: `.github/instructions/plan-gate-command-rules.md`, `VERSION`, `pforge-mcp/package.json`, `CHANGELOG.md`
 **Validation gate**:
 ```bash
-node -e "const fs=require('fs'); const v=fs.readFileSync('VERSION','utf8').trim(); const cl=fs.readFileSync('CHANGELOG.md','utf8'); const inst=fs.readFileSync('.github/instructions/plan-gate-command-rules.md','utf8'); const checks={version:v==='2.90.3', changelog:/2\\.90\\.3/.test(cl), w1:/W1/.test(inst), w4:/W4/.test(inst), strict:/PFORGE_GATE_LINT_STRICT/.test(inst), suppress:/pforge-lint-disable/.test(inst)}; const failed=Object.entries(checks).filter(([_,v])=>!v); if(failed.length){console.error('failed:',failed.map(([k])=>k).join(','));process.exit(1)} console.log('ok')"
+node -e "const fs=require('fs'); const v=fs.readFileSync('VERSION','utf8').trim(); const cl=fs.readFileSync('CHANGELOG.md','utf8'); const inst=fs.readFileSync('.github/instructions/plan-gate-command-rules.md','utf8'); const checks={version:v==='2.90.3', changelog:/2\.90\.3/.test(cl), w1:/W1/.test(inst), w4:/W4/.test(inst), strict:/PFORGE_GATE_LINT_STRICT/.test(inst), suppress:/pforge-lint-disable/.test(inst)}; const failed=Object.entries(checks).filter(([_,v])=>!v); if(failed.length){console.error('failed:',failed.map(([k])=>k).join(','));process.exit(1)} console.log('ok')"
 ```
 **Estimated cost**: $0.10
 

@@ -112,7 +112,7 @@ npx --prefix pforge-mcp vitest run pforge-mcp/tests/github-introspect-copilot-ag
 **Files in scope**: `docs/manual/plan-forge-on-the-github-stack.html`, `VERSION`, `pforge-mcp/package.json`, `CHANGELOG.md`
 **Validation gate**:
 ```bash
-node -e "const fs=require('fs'); const v=fs.readFileSync('VERSION','utf8').trim(); const cl=fs.readFileSync('CHANGELOG.md','utf8'); const html=fs.readFileSync('docs/manual/plan-forge-on-the-github-stack.html','utf8'); const checks={version:v==='2.90.4', changelog:/2\\.90\\.4/.test(cl) && /assignable|copilot-coding-agent-assignable/i.test(cl), section3:/Pre-flight checks/i.test(html) && /assignable/i.test(html)}; const failed=Object.entries(checks).filter(([_,v])=>!v); if(failed.length){console.error('failed:',failed.map(([k])=>k).join(','));process.exit(1)} console.log('ok')"
+node -e "const fs=require('fs'); const v=fs.readFileSync('VERSION','utf8').trim(); const cl=fs.readFileSync('CHANGELOG.md','utf8'); const html=fs.readFileSync('docs/manual/plan-forge-on-the-github-stack.html','utf8'); const checks={version:v==='2.90.4', changelog:/2\.90\.4/.test(cl) && /assignable|copilot-coding-agent-assignable/i.test(cl), section3:/Pre-flight checks/i.test(html) && /assignable/i.test(html)}; const failed=Object.entries(checks).filter(([_,v])=>!v); if(failed.length){console.error('failed:',failed.map(([k])=>k).join(','));process.exit(1)} console.log('ok')"
 ```
 **Estimated cost**: $0.10
 

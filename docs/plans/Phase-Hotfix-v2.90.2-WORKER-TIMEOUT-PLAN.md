@@ -118,7 +118,7 @@ npx --prefix pforge-mcp vitest run pforge-mcp/tests/parser.test.mjs
 **Validation gate**:
 ```bash
 npx --prefix pforge-mcp vitest run pforge-mcp/tests/worker-timeout-resolve.test.mjs
-node -e "const fs=require('fs'); const v=fs.readFileSync('VERSION','utf8').trim(); const cl=fs.readFileSync('CHANGELOG.md','utf8'); const inst=fs.readFileSync('.github/instructions/plan-gate-command-rules.md','utf8'); const checks={version:v==='2.90.2', changelog:/2\\.90\\.2/.test(cl) && /worker timeout/i.test(cl), instruction:/PFORGE_WORKER_TIMEOUT_MS/.test(inst)}; const failed=Object.entries(checks).filter(([_,v])=>!v); if(failed.length){console.error('failed:',failed.map(([k])=>k).join(','));process.exit(1)} console.log('ok')"
+node -e "const fs=require('fs'); const v=fs.readFileSync('VERSION','utf8').trim(); const cl=fs.readFileSync('CHANGELOG.md','utf8'); const inst=fs.readFileSync('.github/instructions/plan-gate-command-rules.md','utf8'); const checks={version:v==='2.90.2', changelog:/2\.90\.2/.test(cl) && /worker timeout/i.test(cl), instruction:/PFORGE_WORKER_TIMEOUT_MS/.test(inst)}; const failed=Object.entries(checks).filter(([_,v])=>!v); if(failed.length){console.error('failed:',failed.map(([k])=>k).join(','));process.exit(1)} console.log('ok')"
 ```
 **Estimated cost**: $0.10
 

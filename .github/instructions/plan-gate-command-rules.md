@@ -93,6 +93,46 @@ When the orchestrator is invoked with `--dry-run` or `--estimate`, no subprocess
 
 ---
 
+## Worker Timeout
+
+### Overview
+
+The orchestrator's `spawnWorker` function uses a total-run timeout to hard-kill a worker subprocess that never exits. If the worker does not exit within the configured threshold, the slice fails with a timeout error.
+
+The default was raised from 20 min to **30 min** in v2.90.2 to avoid premature timeouts on moderate-complexity slices observed during the GitHub-stack dogfood (Phase B Slice 5, 25:28 first attempt).
+
+### Environment variable
+
+| Variable | Default | Effect |
+|---|---|---|
+| `PFORGE_WORKER_TIMEOUT_MS` | `1800000` (30 minutes) | Total-run timeout in milliseconds before the worker subprocess is hard-killed |
+
+**Accepted values**:
+- Positive integer or float → overrides the default threshold.
+- `0`, negative number, or non-numeric string → falls back to the default (`1800000`). A warning is logged.
+- Large value (e.g. `7200000` = 2 h) → extends the timeout for a slow environment.
+
+### Per-slice override
+
+A plan author can override the timeout for a specific slice by adding `workerTimeoutMs: <ms>` to the slice's frontmatter (or as a `**WorkerTimeoutMs**: <number>` body line). The parser captures it into `slice.workerTimeoutMs`.
+
+**Priority**: `slice.workerTimeoutMs` (per-slice frontmatter) → `PFORGE_WORKER_TIMEOUT_MS` env var → `DEFAULT_WORKER_TIMEOUT_MS` (30 min).
+
+Example slice frontmatter:
+```
+**WorkerTimeoutMs**: 3600000
+```
+This sets a 60-minute timeout for that slice only. Other slices use the default.
+
+### API surface (pforge-mcp/orchestrator.mjs)
+
+| Export | Type | Description |
+|---|---|---|
+| `DEFAULT_WORKER_TIMEOUT_MS` | `number` | `1_800_000` — the 30-minute default |
+| `resolveWorkerTimeoutMs(opts?)` | `(opts?: {sliceOverride?: number\|null}) => number` | Resolves the effective timeout using the priority chain above |
+
+---
+
 ## Gate Template (copy-paste safe)
 
 ```

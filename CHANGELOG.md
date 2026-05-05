@@ -7,7 +7,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-## [2.90.1] — 2026-05-05 — Hotfix: Test-Sweep Deadlock Guard (output watchdog)
+## [2.90.2] — 2026-05-05 — Hotfix: Worker Timeout Uplift + Per-Slice Override
+
+> **One-liner**: Raises the default worker subprocess timeout from 20 min to 30 min (`DEFAULT_WORKER_TIMEOUT_MS = 1_800_000`), adds `resolveWorkerTimeoutMs(opts)` for priority-chain resolution (per-slice frontmatter → `PFORGE_WORKER_TIMEOUT_MS` env → default), and wires the override into the slice runner. Prevents premature 20-min kills observed during the GitHub-stack dogfood (Phase B Slice 5, 25:28 first attempt).
+
+### Added — Hotfix v2.90.2
+
+- **`DEFAULT_WORKER_TIMEOUT_MS = 1_800_000`** (30 min) constant exported from `pforge-mcp/orchestrator.mjs` — replaces the previous hardcoded 20-min (`1_200_000`) default.
+- **`resolveWorkerTimeoutMs(opts?)`** — priority-chain resolver: `opts.sliceOverride` (per-slice frontmatter) → `PFORGE_WORKER_TIMEOUT_MS` env var → `DEFAULT_WORKER_TIMEOUT_MS`. Mirrors `resolveGateTimeoutMs` shape. Accepts positive int/float; rejects zero, negative, or non-numeric (falls back with warning).
+- **Per-slice `workerTimeoutMs` frontmatter** — `parsePlan` now extracts `**WorkerTimeoutMs**: <value>` (plain number or shorthand like `"30m"`, `"1h"`, `"90s"`) from slice body. Captured into `slice.workerTimeoutMs` and threaded into `spawnWorker({ timeout: resolveWorkerTimeoutMs({ sliceOverride: slice.workerTimeoutMs }) })`.
+- **`pforge-mcp/tests/worker-timeout-resolve.test.mjs`** — vitest cases covering: default-30min, env-override (positive int, positive float, non-numeric fallback, empty-string fallback, zero fallback, negative fallback), per-slice-override (valid, zero, negative, null, undefined), slice-overrides-env (per-slice beats env), and uplift-guard (new default ≥ 1.5× old).
+- **Worker timeout section** in `.github/instructions/plan-gate-command-rules.md` — documents `PFORGE_WORKER_TIMEOUT_MS`, the 30-min default, the per-slice override syntax, and the `resolveWorkerTimeoutMs` API surface.
+
+### Changed
+
+- **`spawnWorker` default timeout** raised from 1,200,000 ms (20 min) to `resolveWorkerTimeoutMs()` (30 min by default). Existing callers that pass an explicit `timeout` are unchanged.
+
+## [2.90.1]— 2026-05-05 — Hotfix: Test-Sweep Deadlock Guard (output watchdog)
 
 > **One-liner**: Adds a streaming-output watchdog to `spawnWorker` in `pforge-mcp/orchestrator.mjs` that fires a `slice-output-stalled` event and kills the subprocess when no stdout/stderr bytes arrive for `PFORGE_WORKER_OUTPUT_IDLE_MS` (default 8 min). Prevents the silent 25-min deadlock observed in Phase B Slice 9 and Phase D Slice 7 of the GitHub-stack dogfood.
 

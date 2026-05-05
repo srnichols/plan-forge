@@ -342,6 +342,10 @@ function handleEvent(event) {
     case "drain-auto-estimate":
       addNotification(`Auto-drain estimate: mode=${(event.data || event).mode}`, "amber");
       break;
+    // Phase Hotfix-v2.90.8 Slice 3 — slice-output-stalled pill
+    case "slice-output-stalled":
+      handleSliceOutputStalled(event.data || event);
+      break;
   }
 }
 
@@ -642,6 +646,19 @@ function handleSliceFailed(data) {
   if (activeSliceLogId === data.sliceId) fetchSliceLogContent(data.sliceId);
 }
 
+// Phase Hotfix-v2.90.8 Slice 3 — slice-output-stalled pill.
+// Marks the slice with outputStalled=true so renderSliceCards can render
+// the amber ⏸ stalled pill. Clears automatically when the slice completes
+// or fails (outputStalled is not carried forward via Object.assign there).
+function handleSliceOutputStalled(data) {
+  const slice = state.slices.find((s) => s.id === data.sliceId);
+  if (slice) {
+    slice.outputStalled = true;
+    if (typeof data.stallDuration === "number") slice.stallDuration = data.stallDuration;
+  }
+  renderSliceCards();
+}
+
 // Phase-27.2 Slice 6 — schedule a single re-render after the flourish
 // window expires so the projected badge fades out cleanly.
 function scheduleFlourishClear(sliceId, ms) {
@@ -848,6 +865,18 @@ function renderSliceCards() {
       temperingPillHtml = `<span class="text-xs ${pillColor}" title="${pillTitle}">🔨${pillIcon}</span>`;
     }
 
+    // Phase Hotfix-v2.90.8 Slice 3 — slice-output-stalled pill.
+    // Shown while the slice is still executing but has produced no output for
+    // an extended period. Amber ⏸ so it is visually distinct from gate/retry
+    // indicators. Tooltip shows the stall duration when available.
+    let stallPillHtml = "";
+    if (s.outputStalled) {
+      const stallTitle = typeof s.stallDuration === "number"
+        ? `No output for ${s.stallDuration}s — slice may be stuck`
+        : "No output for extended period — slice may be stuck";
+      stallPillHtml = `<span class="text-xs text-amber-400" data-testid="slice-output-stalled-pill" title="${stallTitle}">⏸ stalled</span>`;
+    }
+
     // Duration bar (proportional to max duration across all slices)
     const maxDuration = Math.max(...state.slices.map((x) => x.duration || 0), 1);
     const durationPct = s.duration ? Math.round((s.duration / maxDuration) * 100) : 0;
@@ -881,7 +910,7 @@ function renderSliceCards() {
       <div class="slice-card ${bgColor} rounded-lg p-3 border border-gray-700 cursor-pointer hover:border-gray-500 transition-colors" data-slice-id="${s.id}" onclick="loadSliceLog('${s.id}')">
         <div class="flex items-center justify-between mb-1">
           <span class="font-semibold text-sm">${statusIcon} Slice ${s.id} ${sliceModeBadge}${escalatedMark}</span>
-          <span class="text-xs text-gray-500 flex items-center gap-1.5">${retryHtml}${temperingPillHtml}${gateCheckHtml}${gateHtml}${duration}${elapsed}</span>
+          <span class="text-xs text-gray-500 flex items-center gap-1.5">${retryHtml}${temperingPillHtml}${stallPillHtml}${gateCheckHtml}${gateHtml}${duration}${elapsed}</span>
         </div>
         <p class="text-xs text-gray-400 truncate">${s.title}</p>
         ${(complexityBadge || projectedBadge || spendBadge) ? `<div class="flex items-center gap-1.5 mt-1.5">${complexityBadge}${projectedBadge}${spendBadge}</div>` : ""}

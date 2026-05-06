@@ -2521,6 +2521,14 @@ export function extractTokens(events) {
     apiDurationMs,
     sessionDurationMs,
     codeChanges,
+    // Phase-COST-TOKEN-COVERAGE Slice 9: vendor field signals to priceSlice()
+    // that this is a CLI extraction path with no surfaced cache/reasoning data.
+    // Combined with the worker arg in priceSlice(), CLI workers stay on the
+    // subscription premium-request path (v2.83.0 fix protected, Forbidden
+    // Action #1). Set to "unknown" so any caller that bypasses the worker
+    // routing falls through to the legacy backward-compatible billing math
+    // (no surprise cache/reasoning charges without a positive vendor ID).
+    vendor: "unknown",
   };
 }
 

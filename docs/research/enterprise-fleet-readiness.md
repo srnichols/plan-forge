@@ -750,6 +750,28 @@ Hardened phase plan: **[docs/plans/Phase-COST-TOKEN-COVERAGE-PLAN.md](../plans/P
 
 7 slices, ~$1.00–$2.50 estimated cost, all small code + tests, no docs-heavy work, fully backward-compatible (additive schema, defaulting strategy, positional `priceSlice()` signature preserved). Awaiting hardening (Step 2) and execution. Ready for the Plan Forge pipeline.
 
+### 12.6 Status: FIXED in Phase-COST-TOKEN-COVERAGE (2026-05-06)
+
+Defect resolved. All 10 hardened slices executed. Audit re-run: `priceSlice()` now correctly accounts for all four token classes (cache_read, cache_creation_5m, cache_creation_1h, reasoning_tokens) plus OpenAI service tier (flex 0.5× symmetric, priority 2.0×/1.5× asymmetric).
+
+Hardening also surfaced and corrected stale base rates discovered during the vendor-pricing research:
+- Anthropic Opus 4.5/4.6/4.7 corrected from $15/$75 to $5/$25 per Mtok (Plan Forge was 3× overestimating)
+- GPT-5.4 input corrected from $5 to $2.50 per Mtok (Plan Forge was 2× overestimating on input)
+- 14 missing model entries added (gpt-5.5, gpt-5, gpt-5-mini, gpt-5-nano, gpt-5.4-nano, gpt-5.1, o1, o1-mini, o3, o3-mini, o4-mini, gpt-4o, gpt-4o-mini, grok-4.3)
+- Per-model cache multipliers: OpenAI varies by family (GPT-5.x = 0.10×, GPT-4.1/o3 = 0.25×, o1/GPT-4o = 0.50×); Anthropic 0.10× universal
+
+Combined effect: cost reports for Anthropic-Opus + OpenAI-with-caching workloads now match vendor invoices within ~5%.
+
+**Scope clarification by cost path:**
+
+- **Subscription CLI workers** (`gh-copilot`, `claude-cli`, `codex-cli`): unchanged. These bill via the v2.83.0 premium-request path; this fix does not touch that code path. The `costForLeg()` helper at `pforge-mcp/cost-service.mjs:309-318` is byte-identical to pre-execution. GitHub Copilot, Claude Code, and Codex CLI users see no cost-report difference.
+- **Direct vendor API keys** (Anthropic, OpenAI, xAI): full benefit from both the missing token classes and the stale-base-rate corrections. Cost-report numbers should now align with vendor invoices.
+- **Azure OpenAI**: cache + reasoning + service_tier fields apply via the OpenAI-compatible parser; AOAI deployment-type uplift (+10% for Data Zone / Regional vs. Global) deferred to the BYO-Azure-OpenAI phase per §11.5.A.
+
+**Plan executed**: [docs/plans/Phase-COST-TOKEN-COVERAGE-PLAN.md](../plans/Phase-COST-TOKEN-COVERAGE-PLAN.md). 10 slices in 6 commits (`d123fd3` → Slices 1+2, `a91c211` → Slice 3, then Slices 4–10 in subsequent commits). All validation gates passed. Subscription-CLI regression guard verified ($0.05 unchanged). Mirror-opposite vendor invariant verified (Anthropic excludes cached from `tokens_in`; OpenAI/xAI include cached and subtract before billing). Reasoning tokens verified NOT double-counted.
+
+See [CHANGELOG.md](../../CHANGELOG.md) `[Unreleased]` section "Phase-COST-TOKEN-COVERAGE — Cost-Service Token Coverage" for the full release-note narrative.
+
 ---
 
 ## Section 13 — Quick wins surfaced by ACI audit

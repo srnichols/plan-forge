@@ -7,7 +7,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-## [2.90.9] — 2026-05-05 — Hotfix: GitHub Copilot Integration capabilities-doc sync
+## [2.90.10] — 2026-05-05 — Hotfix: 3-issue self-repair (orchestrator + Forge-Master)
+
+> **One-liner**: Closes three open self-repair / runtime issues filed against Plan Forge: (a) `attemptAutoCommit` sweeping operator files into slice commits (#151), (b) the slice gate not verifying every entry in the **Files Modified (Exhaustive)** table (#152), and (c) Forge-Master's planner-executed tool calls not surfacing in `result.toolCalls` (#153). All three fixes are non-breaking, additive, and back-compat (legacy code paths untouched when new params are absent).
+
+### Fixed — Hotfix v2.90.10
+
+- **#151 (high) — Auto-commit scope bleed.** `autoCommitSliceIfDirty` now accepts an optional `preSliceState` snapshot (captured at slice start via the new `snapshotPreSliceState`) and stages only paths the worker actually created or modified. Foreign (operator-owned) paths are reported via the new `slice-foreign-files-detected` event but left un-staged. Falls back to `git add -A` when no snapshot is provided. Restores accurate slice provenance for `pforge analyze` / scope-drift detection.
+- **#152 (medium) — Files Modified (Exhaustive) not enforced.** Two-layer fix:
+  - `step3-execute-slice.prompt.md` adds an explicit pre-completion checklist requiring the worker to confirm every row of the table appears in `git diff --name-only HEAD`.
+  - Orchestrator-level non-blocking advisory: after a slice passes, `verifyFilesModified` parses the table, diffs declared paths against the working-tree changes, attaches the result to `sliceResult.filesModifiedCheck`, and emits `slice-files-modified-warning` for any missing entries. Strictly advisory — never flips status to failed.
+- **#153 — Forge-Master planner steps invisible.** Planner-executed tool calls now push into `result.toolCalls` with `source: "planner"` (and `error` when the executor failed). Distinguishes planner pre-fetch from reactive tool-use in dashboard / API consumers, and excludes planner entries from the reactive tool-call budget so a 5-step pre-fetch doesn't burn the entire budget.
+
+### Verified — Hotfix v2.90.10
+
+- 17/17 `auto-commit-slice.test.mjs` (8 new for #151)
+- 13/13 `files-modified-check.test.mjs` (new for #152)
+- 384/384 `pforge-master` suite (3 new for #153, no regressions)
+- 252/252 in touched orchestrator-area tests
+- VERSION + `pforge-mcp/package.json` realigned to 2.90.10 (resolves the 2.90.8/2.90.9 drift that was failing `changelog-format` tests).
+
+
 
 > **One-liner**: Syncs `docs/manual/capabilities.html` with the v2.90.x GitHub Stack work — adds a "GitHub Copilot Integration" subsection describing Forge-Master's default GitHub Models provider (no separate API key required for Copilot subscribers), a "GitHub Stack Integration" section covering the eight primitives, and a doc-sync regression guard that prevents tab-count drift.
 

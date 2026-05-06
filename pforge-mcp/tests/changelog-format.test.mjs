@@ -72,19 +72,19 @@ describe("CHANGELOG.md — heading format (em-dash required for 2.85.0+ entries)
 });
 
 describe("CHANGELOG.md — release marker presence", () => {
-  it("contains a [2.90.6] heading", () => {
-    const has2906 = /##\s+\[2\.90\.6\]/.test(changelog);
-    expect(has2906, "Missing ## [2.90.6] heading in CHANGELOG.md").toBe(true);
+  it("contains a [2.90.10] heading", () => {
+    const has = /##\s+\[2\.90\.10\]/.test(changelog);
+    expect(has, "Missing ## [2.90.10] heading in CHANGELOG.md").toBe(true);
   });
 });
 
 describe("VERSION and package.json consistency", () => {
-  it("VERSION file reads 2.90.6", () => {
-    expect(version).toBe("2.90.6");
+  it("VERSION file reads 2.90.10", () => {
+    expect(version).toBe("2.90.10");
   });
 
-  it("pforge-mcp/package.json version reads 2.90.6", () => {
-    expect(pkg.version).toBe("2.90.6");
+  it("pforge-mcp/package.json version reads 2.90.10", () => {
+    expect(pkg.version).toBe("2.90.10");
   });
 
   it("VERSION file matches pforge-mcp/package.json version", () => {

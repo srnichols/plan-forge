@@ -19,54 +19,211 @@ import {
 } from "./orchestrator.mjs";
 
 // ─── Pricing Table ────────────────────────────────────────────────────
-// Per-token costs in USD. Updated April 2026.
-// Source: published API pricing pages. Rates are per 1 token.
+// Per-token costs in USD. Updated 2026-05-06 (Phase-COST-TOKEN-COVERAGE).
+// Source: published vendor API pricing pages, retrieval date in _source.
+// Rates are per 1 token. Multipliers default to 1.0 in getPricing() if absent.
+//
+// IMPORTANT — Vendor convention asymmetry:
+//   - Anthropic input_tokens EXCLUDES cache_read_input_tokens + cache_creation_*
+//     (bill all three independently per priceSlice() math).
+//   - OpenAI / xAI prompt_tokens INCLUDES cached_tokens
+//     (subtract cached_tokens before billing the uncached portion).
+// See Phase-COST-TOKEN-COVERAGE-PLAN.md Forbidden Actions #4 and #5.
+//
+// _retiredAfter: ISO date marking xAI's May 15, 2026 model retirements
+// (informational only; entries kept for historical cost-history.json compatibility).
 export const MODEL_PRICING = {
-  // Anthropic Claude
-  // claude-opus-4.7 — mirrors published claude-opus-4.6 rates until Anthropic
-  // publishes a distinct price point for 4.7. Source: Anthropic pricing page
-  // (claude-opus-4.6: $15 / $75 per Mtok, retrieved 2026-04-20). Phase-27.1 Slice 2.
-  "claude-opus-4.7":        { input: 15 / 1_000_000,   output: 75 / 1_000_000 },
-  "claude-opus-4.6":        { input: 15 / 1_000_000,   output: 75 / 1_000_000 },
-  "claude-opus-4.6-fast":   { input: 15 / 1_000_000,   output: 75 / 1_000_000 },
-  "claude-opus-4.5":        { input: 15 / 1_000_000,   output: 75 / 1_000_000 },
-  "claude-sonnet-4.6":      { input: 3 / 1_000_000,    output: 15 / 1_000_000 },
-  "claude-sonnet-4.5":      { input: 3 / 1_000_000,    output: 15 / 1_000_000 },
-  "claude-sonnet-4":        { input: 3 / 1_000_000,    output: 15 / 1_000_000 },
-  "claude-haiku-4.5":       { input: 0.8 / 1_000_000,  output: 4 / 1_000_000 },
-  // OpenAI GPT
-  "gpt-5.4":                { input: 5 / 1_000_000,    output: 15 / 1_000_000 },
-  "gpt-5.3-codex":          { input: 3 / 1_000_000,    output: 12 / 1_000_000 },
-  "gpt-5.2-codex":          { input: 2 / 1_000_000,    output: 8 / 1_000_000 },
-  "gpt-5.2":                { input: 2 / 1_000_000,    output: 8 / 1_000_000 },
-  "gpt-5.4-mini":           { input: 0.4 / 1_000_000,  output: 1.6 / 1_000_000 },
-  "gpt-5-mini":             { input: 0.4 / 1_000_000,  output: 1.6 / 1_000_000 },
-  "gpt-4.1":                { input: 2 / 1_000_000,    output: 8 / 1_000_000 },
-  // Google Gemini
+  // ─── Anthropic Claude ──────────────────────────────────────────────
+  // Cache: read 0.10×, 5m write 1.25×, 1h write 2.0× (uniform across all tiers).
+  // Opus 4.5/4.6/4.7 dropped to $5/$25 per Anthropic pricing page (2026-05-06).
+  // Source: https://platform.claude.com/docs/en/docs/build-with-claude/prompt-caching
+  "claude-opus-4.7":        { input: 5 / 1_000_000,    output: 25 / 1_000_000,
+    cache_read_multiplier: 0.10, cache_write_5m_multiplier: 1.25, cache_write_1h_multiplier: 2.0,
+    _source: "https://platform.claude.com/docs/en/docs/build-with-claude/prompt-caching (2026-05-06)" },
+  "claude-opus-4.6":        { input: 5 / 1_000_000,    output: 25 / 1_000_000,
+    cache_read_multiplier: 0.10, cache_write_5m_multiplier: 1.25, cache_write_1h_multiplier: 2.0,
+    _source: "https://platform.claude.com/docs/en/docs/build-with-claude/prompt-caching (2026-05-06)" },
+  "claude-opus-4.6-fast":   { input: 5 / 1_000_000,    output: 25 / 1_000_000,
+    cache_read_multiplier: 0.10, cache_write_5m_multiplier: 1.25, cache_write_1h_multiplier: 2.0,
+    _source: "https://platform.claude.com/docs/en/docs/build-with-claude/prompt-caching (2026-05-06)" },
+  "claude-opus-4.5":        { input: 5 / 1_000_000,    output: 25 / 1_000_000,
+    cache_read_multiplier: 0.10, cache_write_5m_multiplier: 1.25, cache_write_1h_multiplier: 2.0,
+    _source: "https://platform.claude.com/docs/en/docs/build-with-claude/prompt-caching (2026-05-06)" },
+  "claude-sonnet-4.6":      { input: 3 / 1_000_000,    output: 15 / 1_000_000,
+    cache_read_multiplier: 0.10, cache_write_5m_multiplier: 1.25, cache_write_1h_multiplier: 2.0,
+    _source: "https://platform.claude.com/docs/en/docs/build-with-claude/prompt-caching (2026-05-06)" },
+  "claude-sonnet-4.5":      { input: 3 / 1_000_000,    output: 15 / 1_000_000,
+    cache_read_multiplier: 0.10, cache_write_5m_multiplier: 1.25, cache_write_1h_multiplier: 2.0,
+    _source: "https://platform.claude.com/docs/en/docs/build-with-claude/prompt-caching (2026-05-06)" },
+  "claude-sonnet-4":        { input: 3 / 1_000_000,    output: 15 / 1_000_000,
+    cache_read_multiplier: 0.10, cache_write_5m_multiplier: 1.25, cache_write_1h_multiplier: 2.0,
+    _source: "https://platform.claude.com/docs/en/docs/build-with-claude/prompt-caching (2026-05-06)" },
+  "claude-haiku-4.5":       { input: 1 / 1_000_000,    output: 5 / 1_000_000,
+    cache_read_multiplier: 0.10, cache_write_5m_multiplier: 1.25, cache_write_1h_multiplier: 2.0,
+    _source: "https://platform.claude.com/docs/en/docs/build-with-claude/prompt-caching (2026-05-06)" },
+
+  // ─── OpenAI GPT (5.x family) ───────────────────────────────────────
+  // Cache: 0.10× read for GPT-5.x. Writes are FREE (no cache_write multiplier).
+  // Flex: 0.5× input AND 0.5× output (symmetric, gpt-5.5 + gpt-5.4 only).
+  // Priority: 2.0× input, 1.5× output (asymmetric).
+  // Source: https://developers.openai.com/api/docs/pricing (2026-05-06)
+  "gpt-5.5":                { input: 5 / 1_000_000,    output: 30 / 1_000_000,
+    cache_read_multiplier: 0.10,
+    flex_input_multiplier: 0.5, flex_output_multiplier: 0.5,
+    priority_input_multiplier: 2.0, priority_output_multiplier: 1.5,
+    _source: "https://developers.openai.com/api/docs/pricing (2026-05-06)" },
+  "gpt-5.4":                { input: 2.5 / 1_000_000,  output: 15 / 1_000_000,
+    cache_read_multiplier: 0.10,
+    flex_input_multiplier: 0.5, flex_output_multiplier: 0.5,
+    priority_input_multiplier: 2.0, priority_output_multiplier: 1.5,
+    _source: "https://developers.openai.com/api/docs/pricing (2026-05-06)" },
+  "gpt-5.4-mini":           { input: 0.75 / 1_000_000, output: 4.5 / 1_000_000,
+    cache_read_multiplier: 0.10,
+    _source: "https://developers.openai.com/api/docs/pricing (2026-05-06)" },
+  "gpt-5.4-nano":           { input: 0.20 / 1_000_000, output: 1.25 / 1_000_000,
+    cache_read_multiplier: 0.10,
+    _source: "https://developers.openai.com/api/docs/pricing (2026-05-06)" },
+  "gpt-5.3-codex":          { input: 1.75 / 1_000_000, output: 14 / 1_000_000,
+    cache_read_multiplier: 0.10,
+    _source: "https://developers.openai.com/api/docs/pricing (2026-05-06)" },
+  "gpt-5.2-codex":          { input: 1.75 / 1_000_000, output: 14 / 1_000_000,
+    cache_read_multiplier: 0.10,
+    _source: "https://developers.openai.com/api/docs/pricing (2026-05-06)" },
+  "gpt-5.2":                { input: 1.75 / 1_000_000, output: 14 / 1_000_000,
+    cache_read_multiplier: 0.10,
+    _source: "https://developers.openai.com/api/docs/pricing (2026-05-06)" },
+  "gpt-5.1":                { input: 1.25 / 1_000_000, output: 10 / 1_000_000,
+    cache_read_multiplier: 0.10,
+    _source: "https://developers.openai.com/api/docs/pricing (2026-05-06)" },
+  "gpt-5":                  { input: 1.25 / 1_000_000, output: 10 / 1_000_000,
+    cache_read_multiplier: 0.10,
+    _source: "https://developers.openai.com/api/docs/pricing (2026-05-06)" },
+  "gpt-5-mini":             { input: 0.25 / 1_000_000, output: 2 / 1_000_000,
+    cache_read_multiplier: 0.10,
+    _source: "https://developers.openai.com/api/docs/pricing (2026-05-06)" },
+  "gpt-5-nano":             { input: 0.05 / 1_000_000, output: 0.40 / 1_000_000,
+    cache_read_multiplier: 0.10,
+    _source: "https://developers.openai.com/api/docs/pricing (2026-05-06)" },
+
+  // ─── OpenAI GPT 4.x family ────────────────────────────────────────
+  // Cache: 0.25× read for GPT-4.1; 0.50× for GPT-4o.
+  "gpt-4.1":                { input: 2 / 1_000_000,    output: 8 / 1_000_000,
+    cache_read_multiplier: 0.25,
+    _source: "https://developers.openai.com/api/docs/pricing (2026-05-06)" },
+  "gpt-4o":                 { input: 2.5 / 1_000_000,  output: 10 / 1_000_000,
+    cache_read_multiplier: 0.50,
+    _source: "https://developers.openai.com/api/docs/pricing (2026-05-06)" },
+  "gpt-4o-mini":            { input: 0.15 / 1_000_000, output: 0.60 / 1_000_000,
+    cache_read_multiplier: 0.50,
+    _source: "https://developers.openai.com/api/docs/pricing (2026-05-06)" },
+
+  // ─── OpenAI o-series (reasoning models) ───────────────────────────
+  // Cache: 0.50× read for o1 / o1-mini / o3-mini; 0.25× for o3 / o4-mini.
+  // reasoning_tokens are billed at output rate AND already counted in output_tokens
+  // — DO NOT add reasoning_tokens separately to billable output (Forbidden Action #3).
+  "o1":                     { input: 15 / 1_000_000,   output: 60 / 1_000_000,
+    cache_read_multiplier: 0.50,
+    _source: "https://developers.openai.com/api/docs/pricing (2026-05-06)" },
+  "o1-mini":                { input: 1.10 / 1_000_000, output: 4.40 / 1_000_000,
+    cache_read_multiplier: 0.50,
+    _source: "https://developers.openai.com/api/docs/pricing (2026-05-06)" },
+  "o3":                     { input: 2 / 1_000_000,    output: 8 / 1_000_000,
+    cache_read_multiplier: 0.25,
+    _source: "https://developers.openai.com/api/docs/pricing (2026-05-06)" },
+  "o3-mini":                { input: 1.10 / 1_000_000, output: 4.40 / 1_000_000,
+    cache_read_multiplier: 0.50,
+    _source: "https://developers.openai.com/api/docs/pricing (2026-05-06)" },
+  "o4-mini":                { input: 1.10 / 1_000_000, output: 4.40 / 1_000_000,
+    cache_read_multiplier: 0.25,
+    _source: "https://developers.openai.com/api/docs/pricing (2026-05-06)" },
+
+  // ─── Google Gemini ────────────────────────────────────────────────
   "gemini-3-pro-preview":   { input: 1.25 / 1_000_000, output: 5 / 1_000_000 },
-  // xAI Grok (reasoning_tokens billed as output — per docs.x.ai/developers/models)
-  "grok-4.20":                         { input: 2 / 1_000_000,    output: 6 / 1_000_000 },
-  "grok-4.20-0309-reasoning":         { input: 2 / 1_000_000,    output: 6 / 1_000_000 },
-  "grok-4.20-0309-non-reasoning":     { input: 2 / 1_000_000,    output: 6 / 1_000_000 },
-  "grok-4.20-multi-agent-0309":       { input: 2 / 1_000_000,    output: 6 / 1_000_000 },
-  "grok-4-1-fast-reasoning":          { input: 0.20 / 1_000_000, output: 0.50 / 1_000_000 },
-  "grok-4-1-fast-non-reasoning":      { input: 0.20 / 1_000_000, output: 0.50 / 1_000_000 },
-  "grok-4":                 { input: 2 / 1_000_000,    output: 6 / 1_000_000 },
-  "grok-4-0709":            { input: 2 / 1_000_000,    output: 6 / 1_000_000 },
-  "grok-3":                 { input: 3 / 1_000_000,    output: 15 / 1_000_000 },
-  "grok-3-mini":            { input: 0.30 / 1_000_000, output: 0.50 / 1_000_000 },
-  // Fallback
+
+  // ─── xAI Grok ─────────────────────────────────────────────────────
+  // Cache: ~0.25× approximation. Authoritative cost comes from response
+  // usage.cost_in_usd_ticks (1 tick = 1e-10 USD); priceSlice() uses ticks
+  // when present and falls back to multiplier math otherwise.
+  // Source: https://docs.x.ai/developers/models, https://docs.x.ai/developers/cost-tracking
+  // _retiredAfter: marks xAI May 15, 2026 retirements (kept for historical compat).
+  "grok-4.3":                          { input: 1.25 / 1_000_000, output: 2.50 / 1_000_000,
+    cache_read_multiplier: 0.25,
+    _source: "https://docs.x.ai/developers/models (2026-05-06)" },
+  "grok-4.20":                         { input: 1.25 / 1_000_000, output: 2.50 / 1_000_000,
+    cache_read_multiplier: 0.25,
+    _source: "https://docs.x.ai/developers/models (2026-05-06)" },
+  "grok-4.20-0309-reasoning":          { input: 1.25 / 1_000_000, output: 2.50 / 1_000_000,
+    cache_read_multiplier: 0.25,
+    _source: "https://docs.x.ai/developers/models (2026-05-06)" },
+  "grok-4.20-0309-non-reasoning":      { input: 1.25 / 1_000_000, output: 2.50 / 1_000_000,
+    cache_read_multiplier: 0.25,
+    _source: "https://docs.x.ai/developers/models (2026-05-06)" },
+  "grok-4.20-multi-agent-0309":        { input: 1.25 / 1_000_000, output: 2.50 / 1_000_000,
+    cache_read_multiplier: 0.25,
+    _source: "https://docs.x.ai/developers/models (2026-05-06)" },
+  "grok-4-1-fast-reasoning":           { input: 0.20 / 1_000_000, output: 0.50 / 1_000_000,
+    cache_read_multiplier: 0.25, _retiredAfter: "2026-05-15",
+    _source: "https://docs.x.ai/developers/migration/may-15-retirement (2026-05-06)" },
+  "grok-4-1-fast-non-reasoning":       { input: 0.20 / 1_000_000, output: 0.50 / 1_000_000,
+    cache_read_multiplier: 0.25, _retiredAfter: "2026-05-15",
+    _source: "https://docs.x.ai/developers/migration/may-15-retirement (2026-05-06)" },
+  "grok-4":                            { input: 1.25 / 1_000_000, output: 2.50 / 1_000_000,
+    cache_read_multiplier: 0.25,
+    _source: "https://docs.x.ai/developers/models (2026-05-06)" },
+  "grok-4-0709":                       { input: 1.25 / 1_000_000, output: 2.50 / 1_000_000,
+    cache_read_multiplier: 0.25, _retiredAfter: "2026-05-15",
+    _source: "https://docs.x.ai/developers/migration/may-15-retirement (2026-05-06)" },
+  "grok-3":                            { input: 3 / 1_000_000,    output: 15 / 1_000_000,
+    _retiredAfter: "2026-05-15",
+    _source: "https://docs.x.ai/developers/migration/may-15-retirement (2026-05-06)" },
+  "grok-3-mini":                       { input: 0.30 / 1_000_000, output: 0.50 / 1_000_000 },
+
+  // ─── Fallback ─────────────────────────────────────────────────────
+  // Conservative default: kept at $3/$15 (Sonnet-class) so unknown models
+  // don't dramatically under-estimate cost. No cache multipliers applied
+  // (defaults to 1.0 — no benefit assumed for unrecognised models).
   default:                  { input: 3 / 1_000_000,    output: 15 / 1_000_000 },
 };
 
 /**
+ * Default multiplier values applied to every pricing entry that doesn't override them.
+ * Phase-COST-TOKEN-COVERAGE Slice 1: enables additive vendor-aware math in priceSlice()
+ * without breaking entries that only carry { input, output }. Anthropic-only fields
+ * (cache_write_5m_multiplier, cache_write_1h_multiplier) and OpenAI-only fields
+ * (flex_*, priority_*) all default to 1.0 so unknown/legacy entries cost as before.
+ */
+const PRICING_MULTIPLIER_DEFAULTS = Object.freeze({
+  cache_read_multiplier: 1.0,
+  cache_write_5m_multiplier: 1.0,
+  cache_write_1h_multiplier: 1.0,
+  flex_input_multiplier: 1.0,
+  flex_output_multiplier: 1.0,
+  priority_input_multiplier: 1.0,
+  priority_output_multiplier: 1.0,
+});
+
+/**
  * Look up per-token pricing for a model. Unknown models fall through to the
  * default rate so callers never hit an undefined.
+ *
+ * Returns the full pricing object with all multiplier defaults applied (1.0 for any
+ * cache_read / cache_write / flex / priority multiplier the entry doesn't override).
+ * Callers can rely on every multiplier field being a number — no need to handle
+ * missing keys downstream.
+ *
  * @param {string} model
- * @returns {{ input: number, output: number }}
+ * @returns {{
+ *   input: number, output: number,
+ *   cache_read_multiplier: number,
+ *   cache_write_5m_multiplier: number, cache_write_1h_multiplier: number,
+ *   flex_input_multiplier: number, flex_output_multiplier: number,
+ *   priority_input_multiplier: number, priority_output_multiplier: number,
+ *   _retiredAfter?: string, _source?: string,
+ * }}
  */
 export function getPricing(model) {
-  return MODEL_PRICING[model] || MODEL_PRICING.default;
+  const entry = MODEL_PRICING[model] || MODEL_PRICING.default;
+  return { ...PRICING_MULTIPLIER_DEFAULTS, ...entry };
 }
 
 // ─── Provider Awareness ───────────────────────────────────────────────
@@ -161,42 +318,212 @@ export function detectCostModel({ env = {}, forgeConfig = {}, model = "" } = {})
 }
 
 /**
+ * Round a USD cost to 6 decimal places (matches existing convention; ~$0.000001 precision).
+ */
+function roundUsd(n) {
+  return Math.round(n * 1_000_000) / 1_000_000;
+}
+
+/**
+ * Build a zero-filled `cost_breakdown` object. Every priceSlice() return populates
+ * the same shape so downstream consumers can rely on the keys existing.
+ */
+function emptyBreakdown() {
+  return {
+    input_uncached: 0,
+    input_cache_read: 0,
+    input_cache_write_5m: 0,
+    input_cache_write_1h: 0,
+    output_total: 0,
+    reasoning_tokens: 0,
+    tier_adjustment: 0,
+    subscription_cost: 0,
+  };
+}
+
+/**
+ * Resolve OpenAI / xAI service-tier multipliers from a pricing entry.
+ * Returns `{ input: 1.0, output: 1.0 }` for unknown/missing tiers (no adjustment).
+ */
+function resolveTierMultipliers(pricing, serviceTier) {
+  switch (serviceTier) {
+    case "flex":
+      return { input: pricing.flex_input_multiplier, output: pricing.flex_output_multiplier };
+    case "priority":
+      return { input: pricing.priority_input_multiplier, output: pricing.priority_output_multiplier };
+    case "standard":
+    case "default":
+    case null:
+    case undefined:
+    default:
+      return { input: 1.0, output: 1.0 };
+  }
+}
+
+/**
  * Calculate cost for a single slice from its token data.
  *
- * CLI workers (gh-copilot, claude) are subscription-based — cost is estimated
- * from premium request counts, not token-based API pricing.
- * API workers use per-token MODEL_PRICING.
+ * Phase-COST-TOKEN-COVERAGE Slice 3: vendor-aware billing math with per-class
+ * `cost_breakdown`. Five execution paths, picked from `tokens.vendor`:
  *
- * Signature kept positional for drop-in parity with the legacy
- * `calculateSliceCost(tokens, worker)` entry point in orchestrator.mjs.
+ *  - **Subscription CLI** (`worker` is set and not `api-*`): unchanged path —
+ *    `premiumRequests × $0.01`. v2.83.0 Forbidden Action #1 protected.
+ *  - **Anthropic** (`vendor === 'anthropic'`): `tokens_in` is uncached input
+ *    (after last cache breakpoint). Bill `tokens_in`, cache_read, 5m write,
+ *    1h write each independently with their multipliers.
+ *  - **OpenAI** (`vendor === 'openai'`): `tokens_in` INCLUDES `cache_read_tokens`.
+ *    Subtract cached from input before billing uncached portion. Apply tier
+ *    multipliers (flex/priority).
+ *  - **xAI** (`vendor === 'xai'`): if `cost_in_usd_ticks` present, use it directly
+ *    (1 tick = 1e-10 USD); skip computed math. Otherwise mirror OpenAI math.
+ *  - **Unknown / legacy** (`vendor` absent or unrecognized): backward-compatible
+ *    math. `tokens_in × input + tokens_out × output`. Existing callers that
+ *    construct `{ tokens_in, tokens_out, model }` see identical cost as before.
  *
- * @param {{ tokens_in: number|null, tokens_out: number|null, model: string, premiumRequests?: number }} tokens
+ * @param {{
+ *   tokens_in?: number|null, tokens_out?: number|null, model?: string,
+ *   premiumRequests?: number,
+ *   cache_read_tokens?: number,
+ *   cache_creation_5m_tokens?: number, cache_creation_1h_tokens?: number,
+ *   cache_creation_input_tokens?: number,
+ *   reasoning_tokens?: number,
+ *   service_tier?: 'standard'|'flex'|'priority'|'default'|null,
+ *   cost_in_usd_ticks?: number,
+ *   vendor?: 'anthropic'|'openai'|'xai'|'azure-openai'|'unknown',
+ * }} tokens
  * @param {string} [worker] - Worker type: "gh-copilot", "claude", "codex", "api-xai", etc.
- * @returns {{ cost_usd: number, model: string, tokens_in: number, tokens_out: number }}
+ * @returns {{
+ *   cost_usd: number, model: string, tokens_in: number, tokens_out: number,
+ *   cost_breakdown: object,
+ * }}
  */
 export function priceSlice(tokens, worker) {
   const model = tokens?.model || "unknown";
   const tokensIn = typeof tokens?.tokens_in === "number" ? tokens.tokens_in : 0;
   const tokensOut = typeof tokens?.tokens_out === "number" ? tokens.tokens_out : 0;
+  const breakdown = emptyBreakdown();
 
-  let cost;
-  // CLI subscription workers: cost based on premium requests, not API token pricing
+  // ─── Subscription CLI path (UNCHANGED — v2.83.0 Forbidden Action) ───
   if (worker && !worker.startsWith("api-")) {
     const premiumRequests = tokens?.premiumRequests || 0;
-    // GitHub Copilot premium request rate — approximate per-request cost
     const PREMIUM_REQUEST_RATE = 0.01; // ~$0.01 per premium request
-    cost = premiumRequests * PREMIUM_REQUEST_RATE;
-  } else {
-    // API workers: use per-token pricing
-    const pricing = getPricing(model);
-    cost = (tokensIn * pricing.input) + (tokensOut * pricing.output);
+    const cost = premiumRequests * PREMIUM_REQUEST_RATE;
+    breakdown.subscription_cost = roundUsd(cost);
+    return {
+      cost_usd: roundUsd(cost),
+      model,
+      tokens_in: tokensIn,
+      tokens_out: tokensOut,
+      cost_breakdown: breakdown,
+    };
   }
 
+  // ─── xAI authoritative override: cost_in_usd_ticks wins ───
+  // Per xAI cost-tracking docs: usage.cost_in_usd_ticks is the authoritative
+  // billed amount per response (1 tick = 1e-10 USD). When present, multiplier
+  // math is bypassed so estimates exactly match the xAI invoice.
+  if (tokens?.vendor === "xai" && typeof tokens?.cost_in_usd_ticks === "number") {
+    const costFromTicks = tokens.cost_in_usd_ticks * 1e-10;
+    const reasoning = tokens?.reasoning_tokens || 0;
+    breakdown.input_uncached = roundUsd(costFromTicks); // attributed for sum invariant
+    breakdown.reasoning_tokens = reasoning;
+    breakdown.authoritative_source = "cost_in_usd_ticks";
+    return {
+      cost_usd: roundUsd(costFromTicks),
+      model,
+      tokens_in: tokensIn,
+      tokens_out: tokensOut,
+      cost_breakdown: breakdown,
+    };
+  }
+
+  const pricing = getPricing(model);
+  const reasoningTokens = tokens?.reasoning_tokens || 0;
+  breakdown.reasoning_tokens = reasoningTokens; // informational subset of tokens_out
+
+  // ─── Anthropic path: input_tokens EXCLUDES cached + creation ───
+  // Bill each component independently. Per Anthropic prompt caching docs,
+  // total billable input = uncached + cache_read + cache_creation (5m + 1h).
+  if (tokens?.vendor === "anthropic") {
+    const cacheRead = tokens?.cache_read_tokens || 0;
+    let cache5m = tokens?.cache_creation_5m_tokens || 0;
+    let cache1h = tokens?.cache_creation_1h_tokens || 0;
+    const cacheCombined = tokens?.cache_creation_input_tokens || 0;
+
+    // If only the combined cache_creation_input_tokens is set (no 5m/1h split),
+    // default the entire amount to 5m rate. Per plan Required Decision #4:
+    // when split is unavailable, 5m rate is the conservative-correct default.
+    if (cacheCombined > 0 && cache5m === 0 && cache1h === 0) {
+      cache5m = cacheCombined;
+    }
+
+    breakdown.input_uncached = roundUsd(tokensIn * pricing.input);
+    breakdown.input_cache_read = roundUsd(cacheRead * pricing.input * pricing.cache_read_multiplier);
+    breakdown.input_cache_write_5m = roundUsd(cache5m * pricing.input * pricing.cache_write_5m_multiplier);
+    breakdown.input_cache_write_1h = roundUsd(cache1h * pricing.input * pricing.cache_write_1h_multiplier);
+    breakdown.output_total = roundUsd(tokensOut * pricing.output);
+    breakdown.tier_adjustment = 0; // Anthropic has no flex/priority tier today
+
+    const cost = breakdown.input_uncached + breakdown.input_cache_read +
+                 breakdown.input_cache_write_5m + breakdown.input_cache_write_1h +
+                 breakdown.output_total;
+    return {
+      cost_usd: roundUsd(cost),
+      model,
+      tokens_in: tokensIn,
+      tokens_out: tokensOut,
+      cost_breakdown: breakdown,
+    };
+  }
+
+  // ─── OpenAI / xAI (computed) path: prompt_tokens INCLUDES cached ───
+  // Subtract cached from input before billing the uncached portion.
+  // Apply service-tier multipliers (flex 0.5×, priority 2.0/1.5× asymmetric).
+  if (tokens?.vendor === "openai" || tokens?.vendor === "xai") {
+    const cacheRead = tokens?.cache_read_tokens || 0;
+    const uncachedIn = Math.max(0, tokensIn - cacheRead);
+    const tier = resolveTierMultipliers(pricing, tokens?.service_tier);
+
+    const inputUncachedCost = uncachedIn * pricing.input * tier.input;
+    const inputCacheReadCost = cacheRead * pricing.input * pricing.cache_read_multiplier * tier.input;
+    const outputCost = tokensOut * pricing.output * tier.output;
+
+    // Tier adjustment = (computed cost at active tier) − (cost at standard tier)
+    // Negative for flex savings, positive for priority surcharge, 0 for standard.
+    const standardCost = (uncachedIn * pricing.input) +
+                         (cacheRead * pricing.input * pricing.cache_read_multiplier) +
+                         (tokensOut * pricing.output);
+    const activeCost = inputUncachedCost + inputCacheReadCost + outputCost;
+    const tierAdjustment = activeCost - standardCost;
+
+    breakdown.input_uncached = roundUsd(inputUncachedCost);
+    breakdown.input_cache_read = roundUsd(inputCacheReadCost);
+    breakdown.output_total = roundUsd(outputCost);
+    breakdown.tier_adjustment = roundUsd(tierAdjustment);
+
+    return {
+      cost_usd: roundUsd(activeCost),
+      model,
+      tokens_in: tokensIn,
+      tokens_out: tokensOut,
+      cost_breakdown: breakdown,
+    };
+  }
+
+  // ─── Unknown / legacy / azure-openai path: backward-compatible math ───
+  // Vendor absent or unrecognized. Existing callers that construct
+  // { tokens_in, tokens_out, model } see identical cost as before. New
+  // optional fields are ignored on this path so cache + reasoning are not
+  // applied without a positive vendor identification (avoids surprise costs).
+  const cost = (tokensIn * pricing.input) + (tokensOut * pricing.output);
+  breakdown.input_uncached = roundUsd(tokensIn * pricing.input);
+  breakdown.output_total = roundUsd(tokensOut * pricing.output);
   return {
-    cost_usd: Math.round(cost * 1_000_000) / 1_000_000, // 6 decimal places
+    cost_usd: roundUsd(cost),
     model,
     tokens_in: tokensIn,
     tokens_out: tokensOut,
+    cost_breakdown: breakdown,
   };
 }
 

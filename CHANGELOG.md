@@ -7,6 +7,46 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Phase-COST-TOKEN-COVERAGE — Cost-Service Token Coverage (2026-05-06)
+
+> **One-liner**: Adds vendor-aware billing math to `priceSlice()` for prompt-cache reads, ephemeral cache writes (5m + 1h split for Anthropic), reasoning tokens, and OpenAI service tiers (flex/priority). Also refreshes stale base rates (Anthropic Opus dropped 3×, GPT-5.4 dropped 2×) and adds 14 missing model entries. Fixes 30–80% cost underestimate on Anthropic + OpenAI workloads with prompt caching or extended thinking. See `docs/research/enterprise-fleet-readiness.md` §12 for the audit and `docs/plans/Phase-COST-TOKEN-COVERAGE-PLAN.md` for the executed plan.
+
+#### Fixed
+- `priceSlice()` now bills `cache_read_tokens`, `cache_creation_5m_tokens`, `cache_creation_1h_tokens`, and `service_tier`. Resolves systematic 30–80% cost underestimate on Anthropic + OpenAI workloads with prompt caching or extended thinking.
+- Refreshed stale base rates in `MODEL_PRICING` against vendor-published rates retrieved 2026-05-06 (URLs cited in `_source` field per entry):
+  - Claude Opus 4.5/4.6/4.7 corrected from $15/$75 to $5/$25 per Mtok (3× overestimate)
+  - GPT-5.4 input corrected from $5 to $2.50 per Mtok (2× overestimate)
+  - GPT-5.4-mini, GPT-5.3-codex, GPT-5.2, Claude Haiku 4.5 corrected to current vendor-published rates
+- Added missing models: `gpt-5.5`, `gpt-5`, `gpt-5-mini`, `gpt-5-nano`, `gpt-5.4-nano`, `gpt-5.1`, `o1`, `o1-mini`, `o3`, `o3-mini`, `o4-mini`, `gpt-4o`, `gpt-4o-mini`, `grok-4.3`
+- Marked `grok-3`, `grok-4-0709`, `grok-4-1-fast-reasoning`, `grok-4-1-fast-non-reasoning` with `_retiredAfter: "2026-05-15"` per xAI retirement notice (entries kept for historical compatibility)
+
+#### Added
+- Per-vendor token-class breakdown in `priceSlice()` return shape: new `cost_breakdown` field with `input_uncached`, `input_cache_read`, `input_cache_write_5m`, `input_cache_write_1h`, `output_total`, `reasoning_tokens` (informational), `tier_adjustment`, `subscription_cost`, and (for xAI) `authoritative_source`.
+- Per-model cache multipliers: OpenAI varies by family (GPT-5.x = 0.10×, GPT-4.1/o3/o4-mini = 0.25×, o1/o1-mini/o3-mini/GPT-4o = 0.50×); Anthropic 0.10× universal; xAI ~0.25× approximation. Cache writes free for OpenAI per vendor docs.
+- Asymmetric service tier multipliers: flex 0.5× symmetric (gpt-5.5, gpt-5.4 only); priority 2.0× input / 1.5× output (gpt-5.5, gpt-5.4 only).
+- xAI `cost_in_usd_ticks` authoritative override: when present in the response, `priceSlice()` uses it directly (1 tick = 1e-10 USD) and skips computed multiplier math.
+- `parseResponse()` in `pforge-master/src/providers/anthropic-tools.mjs`, `openai-tools.mjs`, and `xai-tools.mjs` now extracts cache + reasoning + service_tier + cost_in_usd_ticks fields. Each adds a `vendor` field that signals to `priceSlice()` which billing convention to apply.
+- New test files: `pforge-mcp/tests/cost-service-token-coverage.test.mjs` (14 cases covering all 5 vendor paths) and `pforge-mcp/tests/parseResponse-cache-fields.test.mjs` (11 cases covering the three provider extractions).
+
+#### Notes
+Plan Forge bills via three distinct paths depending on the worker configuration:
+
+1. **Subscription CLI workers** (`gh-copilot`, `claude-cli`, `codex-cli`) bill via the v2.83.0 premium-request path (`CLI_PER_REQUEST_USD × premiumRequests`). **This fix does NOT affect this path** — GitHub Copilot, Claude Code, and Codex CLI users see no cost-report change. The `costForLeg()` helper at `pforge-mcp/cost-service.mjs:309-318` is byte-identical to pre-execution.
+2. **Direct vendor API keys** (`ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `XAI_API_KEY` in `.forge/secrets.json` or env) bill per-token at vendor rates. This fix corrects both the missing token classes AND the stale base rates for this path.
+3. **Azure OpenAI in customer tenant** bills per-token via AOAI rates. This fix applies the cache + reasoning fields uniformly; the AOAI deployment-type uplift (+10% for Data Zone / Regional vs. Global) is deferred to the BYO-Azure-OpenAI phase per `docs/research/enterprise-fleet-readiness.md` §11.5.A.
+
+#### Verified
+- All 38 existing `cost-service.test.mjs` tests pass (regression guard)
+- All 14 new `cost-service-token-coverage.test.mjs` tests pass
+- All 11 new `parseResponse-cache-fields.test.mjs` tests pass
+- `cost-service-real-plans.test.mjs` smoke matrix passes
+- `costForLeg()` v2.83.0 fix at `cost-service.mjs:309-318` byte-identical to pre-execution
+- Subscription-CLI regression guard: `priceSlice({ model: 'gh-copilot', premiumRequests: 5 })` produces $0.05 (unchanged)
+- Mirror-opposite vendor invariant: same logical workload bills correctly on both Anthropic (excludes cached from `tokens_in`) and OpenAI (includes cached in `tokens_in`)
+- Reasoning tokens NOT double-counted: o3 with `reasoning_tokens=700` inside `tokens_out=1000` bills only at output rate × 1000
+
+---
+
 ## [2.90.10] — 2026-05-05 — Hotfix: 3-issue self-repair (orchestrator + Forge-Master)
 
 > **One-liner**: Closes three open self-repair / runtime issues filed against Plan Forge: (a) `attemptAutoCommit` sweeping operator files into slice commits (#151), (b) the slice gate not verifying every entry in the **Files Modified (Exhaustive)** table (#152), and (c) Forge-Master's planner-executed tool calls not surfacing in `result.toolCalls` (#153). All three fixes are non-breaking, additive, and back-compat (legacy code paths untouched when new params are absent).

@@ -88,13 +88,35 @@ export function formatMessages(messages) {
 
 /**
  * Parse Anthropic response into the generic format.
+ *
+ * Phase-COST-TOKEN-COVERAGE Slice 5: Extracts prompt-cache + cache-creation
+ * fields. Anthropic's `input_tokens` is uncached input only (post-cache-breakpoint);
+ * cache_read and cache_creation are reported separately. Both ephemeral_5m and
+ * ephemeral_1h sub-buckets are exposed when the 1-hour TTL is used. The
+ * `vendor: "anthropic"` field signals to priceSlice() to apply the
+ * cached-EXCLUDED billing math (mirror-opposite of OpenAI/xAI).
+ *
  * @param {object} data - Anthropic API response
- * @returns {{ type: "reply"|"tool_calls", content?: string, toolCalls?: Array, tokensIn: number, tokensOut: number }}
+ * @returns {{
+ *   type: "reply"|"tool_calls", content?: string, toolCalls?: Array,
+ *   tokensIn: number, tokensOut: number,
+ *   cacheReadTokens: number,
+ *   cacheCreationInputTokens: number,
+ *   cacheCreation5mTokens: number,
+ *   cacheCreation1hTokens: number,
+ *   vendor: "anthropic",
+ * }}
  */
 export function parseResponse(data) {
   const usage = data.usage || {};
   const tokensIn = usage.input_tokens || 0;
   const tokensOut = usage.output_tokens || 0;
+  // Phase-COST-TOKEN-COVERAGE Slice 5: cache + creation token extraction
+  const cacheReadTokens = usage.cache_read_input_tokens || 0;
+  const cacheCreationInputTokens = usage.cache_creation_input_tokens || 0;
+  const creation = usage.cache_creation || {};
+  const cacheCreation5mTokens = creation.ephemeral_5m_input_tokens || 0;
+  const cacheCreation1hTokens = creation.ephemeral_1h_input_tokens || 0;
 
   const contentBlocks = data.content || [];
   const toolUseBlocks = contentBlocks.filter((b) => b.type === "tool_use");
@@ -112,6 +134,11 @@ export function parseResponse(data) {
       })),
       tokensIn,
       tokensOut,
+      cacheReadTokens,
+      cacheCreationInputTokens,
+      cacheCreation5mTokens,
+      cacheCreation1hTokens,
+      vendor: "anthropic",
     };
   }
 
@@ -120,6 +147,11 @@ export function parseResponse(data) {
     content: textContent || data.content?.[0]?.text || "",
     tokensIn,
     tokensOut,
+    cacheReadTokens,
+    cacheCreationInputTokens,
+    cacheCreation5mTokens,
+    cacheCreation1hTokens,
+    vendor: "anthropic",
   };
 }
 

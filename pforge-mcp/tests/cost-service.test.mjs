@@ -19,19 +19,33 @@ describe("cost-service: MODEL_PRICING + getPricing (Slice 1)", () => {
   });
 
   it("getPricing returns the model's pricing when known", () => {
+    // Phase-COST-TOKEN-COVERAGE Slice 2: Opus 4.6 corrected from $15/$75 to $5/$25
+    // (Anthropic dropped the price; Plan Forge was overestimating Opus by 3×).
+    // getPricing now returns a spread object including multiplier defaults.
     const pricing = costService.getPricing("claude-opus-4.6");
-    expect(pricing.input).toBe(15 / 1_000_000);
-    expect(pricing.output).toBe(75 / 1_000_000);
+    expect(pricing.input).toBe(5 / 1_000_000);
+    expect(pricing.output).toBe(25 / 1_000_000);
+    expect(pricing.cache_read_multiplier).toBe(0.10);
   });
 
   it("getPricing falls back to default for unknown models", () => {
+    // Phase-COST-TOKEN-COVERAGE Slice 1: getPricing now returns a fresh object with
+    // multiplier defaults applied (no longer returns the MODEL_PRICING.default reference).
     const pricing = costService.getPricing("nonexistent-model-xyz");
-    expect(pricing).toBe(costService.MODEL_PRICING.default);
+    expect(pricing.input).toBe(costService.MODEL_PRICING.default.input);
+    expect(pricing.output).toBe(costService.MODEL_PRICING.default.output);
+    expect(pricing.cache_read_multiplier).toBe(1.0);
+    expect(pricing.flex_input_multiplier).toBe(1.0);
   });
 
   it("getPricing handles null/undefined model safely", () => {
-    expect(costService.getPricing(null)).toBe(costService.MODEL_PRICING.default);
-    expect(costService.getPricing(undefined)).toBe(costService.MODEL_PRICING.default);
+    // Same Slice 1 change: returns object with multiplier defaults.
+    const nullResult = costService.getPricing(null);
+    expect(nullResult.input).toBe(costService.MODEL_PRICING.default.input);
+    expect(nullResult.cache_read_multiplier).toBe(1.0);
+    const undefResult = costService.getPricing(undefined);
+    expect(undefResult.input).toBe(costService.MODEL_PRICING.default.input);
+    expect(undefResult.cache_read_multiplier).toBe(1.0);
   });
 });
 
@@ -243,11 +257,16 @@ describe("cost-service: estimateQuorum regression (Slice 3)", () => {
       expect(result.power.overheadUSD).not.toBe(result.speed.overheadUSD);
       // Pre-fix ratio was 1.0 (identical). After Slice 1 (per-leg pricing) + Slice 2
       // (opus-4.7 in MODEL_PRICING, was falling back to sonnet rates), observed ratio
-      // ≈ 5.5× on this fixture (reviewer term still dilutes). Threshold `> * 4` catches
-      // the original bug (identical numbers) and catches partial regressions (e.g., if
-      // opus-4.7 silently drops back to the fallback) while leaving margin for pricing
-      // drift. Per plan Slice 1 rationale.
-      expect(result.power.overheadUSD).toBeGreaterThan(result.speed.overheadUSD * 4);
+      // ≈ 5.5× on this fixture (reviewer term still dilutes).
+      //
+      // Phase-COST-TOKEN-COVERAGE Slice 2 update: Anthropic Opus dropped to $5/$25
+      // (from $15/$75 — Plan Forge was 3× stale). With the corrected rate, Opus input
+      // ($5/Mtok) is now closer to Sonnet input ($3/Mtok) than before, compressing the
+      // power/speed differential. New observed ratio is ~2× in this fixture.
+      // Threshold lowered to `> * 1.5` to catch the original bug (identical numbers,
+      // ratio = 1.0) while reflecting the corrected post-fix pricing landscape.
+      // Per plan Slice 2 rationale.
+      expect(result.power.overheadUSD).toBeGreaterThan(result.speed.overheadUSD * 1.5);
     } finally {
       if (prevAnthropic === undefined) delete process.env.ANTHROPIC_API_KEY; else process.env.ANTHROPIC_API_KEY = prevAnthropic;
       if (prevOpenAI === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = prevOpenAI;

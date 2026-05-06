@@ -25,7 +25,7 @@ Previous: **v2.90.10** (2026-05-05) — Forge-Master Cross-Session Recall (Phase
 
 Previous: **v2.90.10** (2026-05-05) — Forge-Master Conversation Memory (Phase-38.1). Adds file-based JSONL session persistence to the Forge-Master reasoning engine. `runTurn` loads prior conversation turns before classification and persists each turn to disk. Per-tab session IDs flow from the dashboard (`sessionStorage` UUID) through `x-pforge-session-id` HTTP header to `deps.sessionId` in `runTurn`. Sessions auto-rotate at 200 turns. New CLI: `pforge fm-session list|purge`.
 
-**In flight (next)**: Phase-39 complete (v2.80.0). Next phase TBD — candidates: gate-template hardening (eliminate Slice 5 false-negatives), embedding fallback hardening (first-class WASM model), Forge-Master unified timeline, GitHub PR creation for classifier-lane audit findings (deferred from v2.80).
+**In flight (next)**: Phase-39 complete (v2.80.0). Next phase TBD — candidates: **Phase-COST-TOKEN-COVERAGE** (cache_read / cache_write / reasoning_tokens / service_tier accounting — fixes 30–80% cost underestimate on Anthropic + OpenAI workloads, plan drafted at [docs/plans/Phase-COST-TOKEN-COVERAGE-PLAN.md](docs/plans/Phase-COST-TOKEN-COVERAGE-PLAN.md)), gate-template hardening (eliminate Slice 5 false-negatives), embedding fallback hardening (first-class WASM model), Forge-Master unified timeline, GitHub PR creation for classifier-lane audit findings (deferred from v2.80), enterprise hardening track (OTel exporter, BYO Azure OpenAI first-class, auth/RBAC scaffolding — research at [docs/research/enterprise-fleet-readiness.md](docs/research/enterprise-fleet-readiness.md)).
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 

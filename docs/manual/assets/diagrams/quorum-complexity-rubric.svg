@@ -1,0 +1,120 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 420" fill="none" role="img" aria-labelledby="qcr-title qcr-desc">
+  <title id="qcr-title">Quorum complexity scoring rubric</title>
+  <desc id="qcr-desc">Seven weighted signals (scope files, dependencies, security keywords, database keywords, gate lines, task count, historical failure rate) feed into scoreSliceComplexity, producing a 1–10 integer. Threshold gates compare against the active mode (auto=6, power=5, speed=7) to decide which slices fan out to multi-model quorum.</desc>
+  <style>
+    text { font-family: 'Inter', sans-serif; }
+    .node { rx: 8; ry: 8; stroke-width: 1.5; }
+    .arrow { stroke: #475569; stroke-width: 1.4; fill: none; marker-end: url(#qcr-ah); }
+    .arrow-bold { stroke: #f59e0b; stroke-width: 2; fill: none; marker-end: url(#qcr-ah-amber); }
+    .label { font-size: 10px; fill: #94a3b8; }
+    .micro { font-size: 9px; fill: #64748b; }
+    .title { font-size: 11px; fill: #e2e8f0; font-weight: 600; }
+    .phase { font-size: 9px; fill: #f59e0b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .weight { font-size: 10px; fill: #fbbf24; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+    .formula { font-size: 11px; fill: #e2e8f0; font-family: 'JetBrains Mono', monospace; }
+    .score-num { font-size: 22px; fill: #f59e0b; font-weight: 800; font-family: 'JetBrains Mono', monospace; }
+  </style>
+  <defs>
+    <marker id="qcr-ah" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#475569" />
+    </marker>
+    <marker id="qcr-ah-amber" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#f59e0b" />
+    </marker>
+  </defs>
+
+  <!-- Phase 1: Signals -->
+  <text x="120" y="22" class="phase" text-anchor="middle">1. SIGNALS (per slice)</text>
+
+  <rect x="20" y="35" width="200" height="34" class="node" fill="#0f172a" stroke="#60a5fa" />
+  <text x="32" y="50" class="title">scope files / 5</text>
+  <text x="32" y="63" class="micro">slice.scope[].length, capped 1.0</text>
+  <text x="208" y="56" class="weight" text-anchor="end">×0.20</text>
+
+  <rect x="20" y="78" width="200" height="34" class="node" fill="#0f172a" stroke="#60a5fa" />
+  <text x="32" y="93" class="title">dependencies / 4</text>
+  <text x="32" y="106" class="micro">slice.depends[].length</text>
+  <text x="208" y="99" class="weight" text-anchor="end">×0.20</text>
+
+  <rect x="20" y="121" width="200" height="34" class="node" fill="#0f172a" stroke="#fb7185" />
+  <text x="32" y="136" class="title">security keywords / 3</text>
+  <text x="32" y="149" class="micro">auth, crypto, secret, token, …</text>
+  <text x="208" y="142" class="weight" text-anchor="end">×0.15</text>
+
+  <rect x="20" y="164" width="200" height="34" class="node" fill="#0f172a" stroke="#fb7185" />
+  <text x="32" y="179" class="title">database keywords / 3</text>
+  <text x="32" y="192" class="micro">migration, schema, sql, index, …</text>
+  <text x="208" y="185" class="weight" text-anchor="end">×0.15</text>
+
+  <rect x="20" y="207" width="200" height="34" class="node" fill="#0f172a" stroke="#a78bfa" />
+  <text x="32" y="222" class="title">gate lines / 5</text>
+  <text x="32" y="235" class="micro">non-blank validationGate lines</text>
+  <text x="208" y="228" class="weight" text-anchor="end">×0.10</text>
+
+  <rect x="20" y="250" width="200" height="34" class="node" fill="#0f172a" stroke="#a78bfa" />
+  <text x="32" y="265" class="title">tasks / 10</text>
+  <text x="32" y="278" class="micro">slice.tasks[].length</text>
+  <text x="208" y="272" class="weight" text-anchor="end">×0.10</text>
+
+  <rect x="20" y="293" width="200" height="34" class="node" fill="#0f172a" stroke="#34d399" />
+  <text x="32" y="308" class="title">historical failure rate</text>
+  <text x="32" y="321" class="micro">.forge/runs/index.jsonl, last 20</text>
+  <text x="208" y="314" class="weight" text-anchor="end">×0.10</text>
+
+  <!-- Arrows from signals to formula -->
+  <path d="M220,52 L320,165" class="arrow" />
+  <path d="M220,95 L320,170" class="arrow" />
+  <path d="M220,138 L320,175" class="arrow" />
+  <path d="M220,181 L320,180" class="arrow" />
+  <path d="M220,224 L320,185" class="arrow" />
+  <path d="M220,267 L320,190" class="arrow" />
+  <path d="M220,310 L320,195" class="arrow" />
+
+  <!-- Phase 2: Formula -->
+  <text x="430" y="22" class="phase" text-anchor="middle">2. WEIGHTED SUM</text>
+  <rect x="320" y="135" width="220" height="110" class="node" fill="#0f172a" stroke="#fbbf24" />
+  <text x="430" y="160" class="title" text-anchor="middle">scoreSliceComplexity()</text>
+  <text x="332" y="183" class="formula">raw = Σ (signal × weight)</text>
+  <text x="332" y="202" class="formula">score = clamp(1, 10,</text>
+  <text x="346" y="218" class="formula">round(raw × 9) + 1)</text>
+  <text x="430" y="236" class="micro" text-anchor="middle">orchestrator.mjs ~L10630</text>
+
+  <!-- Score arrow -->
+  <path d="M540,190 L600,190" class="arrow-bold" />
+
+  <!-- Phase 3: Score output -->
+  <text x="640" y="22" class="phase" text-anchor="middle">3. SCORE</text>
+  <rect x="600" y="155" width="80" height="70" class="node" fill="#0f172a" stroke="#f59e0b" />
+  <text x="640" y="195" class="score-num" text-anchor="middle">1–10</text>
+  <text x="640" y="215" class="micro" text-anchor="middle">integer</text>
+
+  <!-- Threshold gates -->
+  <text x="760" y="22" class="phase" text-anchor="middle">4. THRESHOLD GATE</text>
+
+  <rect x="700" y="40" width="115" height="42" class="node" fill="#0f172a" stroke="#a78bfa" />
+  <text x="757" y="56" class="title" text-anchor="middle">power</text>
+  <text x="757" y="72" class="label" text-anchor="middle">score ≥ 5 → fan out</text>
+
+  <rect x="700" y="92" width="115" height="42" class="node" fill="#0f172a" stroke="#fbbf24" />
+  <text x="757" y="108" class="title" text-anchor="middle">auto (default)</text>
+  <text x="757" y="124" class="label" text-anchor="middle">score ≥ 6 → fan out</text>
+
+  <rect x="700" y="144" width="115" height="42" class="node" fill="#0f172a" stroke="#34d399" />
+  <text x="757" y="160" class="title" text-anchor="middle">speed</text>
+  <text x="757" y="176" class="label" text-anchor="middle">score ≥ 7 → fan out</text>
+
+  <rect x="700" y="196" width="115" height="42" class="node" fill="#0f172a" stroke="#475569" />
+  <text x="757" y="212" class="title" text-anchor="middle">below threshold</text>
+  <text x="757" y="228" class="label" text-anchor="middle">single-model run</text>
+
+  <path d="M680,180 L700,61" class="arrow" />
+  <path d="M680,185 L700,113" class="arrow" />
+  <path d="M680,195 L700,165" class="arrow" />
+  <path d="M680,205 L700,217" class="arrow" />
+
+  <!-- Footer note -->
+  <rect x="20" y="350" width="780" height="55" class="node" fill="#1e293b" stroke="#334155" />
+  <text x="34" y="370" class="title">📊 Real-plan calibration:</text>
+  <text x="34" y="386" class="label">Observed maximum score across the Plan Forge dogfood corpus is 4–6 (most slices land 2–4). Threshold 5 fires quorum on roughly 10–25% of slices in</text>
+  <text x="34" y="400" class="label">a typical phase plan; threshold 7 fires on &lt;5%. Use <tspan class="formula" font-size="10">--quorum-threshold N</tspan> to override per run, or let Adaptive Threshold tune it from history.</text>
+</svg>

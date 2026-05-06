@@ -127,6 +127,10 @@
         <h2 id="quorum-advisory">Quorum Advisory Mode <span class="text-amber-400 text-base font-normal">v2.78+</span></h2>
         <p>For high-stakes decisions in the <code>advisory</code> lane, Forge-Master can fan the prompt out to 2–3 models in parallel and return all replies plus a dissent summary. <strong>The human picks the reply</strong> — there's no auto-winner selection, because the whole point is to surface disagreement.</p>
 
+        <div class="callout callout-info">
+          <strong>Not the same as Quorum Mode.</strong> Quorum <em>Advisory</em> (this section) is per-prompt, human-picks-the-winner, scoped to advisory-lane Forge-Master prompts. Quorum <em>Mode</em> is per-slice, reviewer-synthesizes, scoped to <code>pforge run-plan</code> execution. See <a href="advanced-execution.html#quorum-vs-advisory">the side-by-side comparison in Chapter 13</a> for when to use which.
+        </div>
+
         <h3>Activation</h3>
         <p>Set <code>quorumAdvisory</code> in <code>.forge.json</code> &rarr; <code>forgeMaster</code>:</p>
 

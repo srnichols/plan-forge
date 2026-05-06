@@ -99,9 +99,9 @@
         <tbody>
           <tr><td>Use cheaper execution model</td><td>50–70%</td><td>Set <code>modelRouting.execute</code> to a smaller model</td></tr>
           <tr><td>Reserve expensive model for review</td><td>30–50%</td><td><code>modelRouting.review: "claude-opus-4.6"</code></td></tr>
-          <tr><td>Raise quorum threshold</td><td>20–40%</td><td><code>--quorum-threshold 8</code> (fewer slices trigger consensus)</td></tr>
+          <tr><td>Raise quorum threshold</td><td>20–40%</td><td><code>--quorum-threshold 8</code> (fewer slices trigger consensus &mdash; see <a href="advanced-execution.html#quorum-complexity">scoring rubric</a>)</td></tr>
           <tr><td>Reduce context per slice</td><td>10–20%</td><td>Use targeted <code>Context:</code> lists (see <a href="writing-plans.html#context">Chapter 5</a>)</td></tr>
-          <tr><td>Preview before running</td><td>N/A</td><td><code>pforge run-plan --estimate</code></td></tr>
+          <tr><td>Preview before running</td><td>N/A</td><td><code>pforge run-plan --estimate</code> or <a href="advanced-execution.html#quorum-estimate"><code>forge_estimate_quorum</code></a> (compares all four modes)</td></tr>
         </tbody>
       </table>
 
@@ -125,7 +125,7 @@
           <tr><td><code>CRITICAL_FIELDS_MISSING</code> <span class="text-amber-400 text-xs">v2.82.1</span></td><td>Crucible finalize blocked &mdash; missing build-command, test-command, scope, gates, forbidden-actions, or rollback</td><td>Call <code>forge_crucible_preview</code> for <code>criticalGaps[]</code>, then continue the interview</td></tr>
           <tr><td><code>PLAN_ALREADY_EXISTS</code> <span class="text-amber-400 text-xs">v2.82.1</span></td><td>Crucible finalize refuses to overwrite hand-authored <code>docs/plans/Phase-NN.md</code></td><td>Read both files (existing plan + <code>.crucible-draft.md</code>), then re-finalize with <code>overwrite: true</code> if you really mean it</td></tr>
           <tr><td><code>ASK_QUESTION_MISMATCH</code> <span class="text-amber-400 text-xs">v2.82.1</span></td><td>Client passed a stale <code>questionId</code> to <code>forge_crucible_ask</code></td><td>Re-fetch state via <code>forge_crucible_preview</code>, retry with the current question id</td></tr>
-          <tr><td><code>QUORUM_ALL_FAILED</code> <span class="text-amber-400 text-xs">v2.78</span></td><td>All quorum models timed out (60s each) or errored</td><td>Check API keys / network; retry. Consider <code>--quorum=speed</code> if flagship models are unavailable.</td></tr>
+          <tr><td><code>QUORUM_ALL_FAILED</code> <span class="text-amber-400 text-xs">v2.78</span></td><td>All quorum models timed out (60s each) or errored</td><td>Check API keys / network; retry. Consider <code>--quorum=speed</code> if flagship models are unavailable. <a href="advanced-execution.html#quorum-multi-agent">Multi-agent quorum reference</a>.</td></tr>
           <tr><td><code>NO_REASONING_MODEL</code></td><td>Forge-Master has no model configured and no API key found</td><td><code>gh auth login</code> for zero-key path, or set <code>ANTHROPIC_API_KEY</code> / <code>OPENAI_API_KEY</code> / <code>XAI_API_KEY</code>, or set <code>forgeMaster.reasoningModel</code></td></tr>
           <tr><td>Subprocess <code>STATUS_CONTROL_C_EXIT (0xC000013A)</code> <span class="text-amber-400 text-xs">v2.81</span></td><td>Worker process was killed by signal mid-slice</td><td>Slice is now correctly marked <em>failed</em> (not silently passed). Check <code>statusReason</code>, then <code>--resume-from N</code></td></tr>
           <tr><td><code>slice-orphan-warning</code> event <span class="text-amber-400 text-xs">v2.82.1</span></td><td>Failed slice's worker deliverables were staged but not committed</td><td>See <code>.forge/runs/&lt;runId&gt;/orphans-slice-&lt;N&gt;.json</code> for copy-paste recovery commands</td></tr>

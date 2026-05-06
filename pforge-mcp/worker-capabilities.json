@@ -1,34 +1,46 @@
 {
   "_comment": "Single source of truth for worker + runtime capability checks. Consumed by orchestrator.mjs detectWorkers() and pforge.ps1 Invoke-Smith Runtime & Worker Readiness section. See issue #28 for the silent-failure mode this prevents.",
-  "_version": 1,
-  "_updated": "2026-04-18",
+  "_version": 2,
+  "_updated": "2026-05-06",
 
   "workers": {
     "gh-copilot": {
-      "description": "GitHub Copilot CLI (primary worker)",
+      "description": "GitHub Copilot CLI (primary worker). Probes the standalone `copilot` binary first; falls back to the legacy `gh copilot` extension for older installs.",
       "probe": {
-        "command": "gh",
-        "versionArgs": ["copilot", "--version"],
-        "helpArgs": ["copilot", "--", "--help"],
-        "capabilityMarkers": ["--yolo", "-p,", "--no-ask-user"],
-        "capabilityDescription": "Agentic prompt mode with --yolo / -p / --no-ask-user"
+        "command": "copilot",
+        "versionArgs": ["--version"],
+        "helpArgs": ["--help"],
+        "capabilityMarkers": ["--allow-all", "--prompt"],
+        "capabilityDescription": "Non-interactive prompt mode with --prompt and --allow-all (env: COPILOT_ALLOW_ALL)",
+        "fallback": {
+          "command": "gh",
+          "versionArgs": ["copilot", "--version"],
+          "helpArgs": ["copilot", "--", "--help"],
+          "capabilityMarkers": ["--yolo", "-p,", "--no-ask-user"],
+          "capabilityDescription": "Legacy gh copilot extension agentic mode"
+        }
       },
       "minVersion": "1.0.32",
       "versionRegex": "GitHub Copilot CLI\\s+v?(\\d+\\.\\d+\\.\\d+)",
-      "requires": { "gh": ">=2.88.0" },
       "defaultModel": "claude-sonnet-4.6",
       "invocation": {
-        "cmd": "gh",
-        "baseArgs": ["copilot", "--", "-p", "@{PROMPT_FILE}", "--yolo", "--no-ask-user", "--output-format", "text"]
+        "cmd": "copilot",
+        "baseArgs": ["-p", "@{PROMPT_FILE}", "--allow-all"],
+        "fallback": {
+          "cmd": "gh",
+          "baseArgs": ["copilot", "--", "-p", "@{PROMPT_FILE}", "--yolo", "--no-ask-user", "--output-format", "text"]
+        }
       },
       "install": {
-        "windows": "winget upgrade --id GitHub.cli",
-        "macos": "brew upgrade gh",
-        "linux": "Upgrade gh via your package manager (apt/dnf/pacman); Copilot CLI ships with gh >= 2.88",
+        "windows": "winget install GitHub.CopilotCLI   (or npm install -g @github/copilot)",
+        "macos": "brew install github/gh/copilot      (or npm install -g @github/copilot)",
+        "linux": "npm install -g @github/copilot",
         "docs": "https://docs.github.com/en/copilot/github-copilot-in-the-cli"
       },
       "failureModes": [
-        "gh < 2.88 ships the legacy suggest/explain extension (v1.2.x) with no agentic mode — slices will silently pass producing zero code."
+        "Standalone `copilot` CLI unavailable AND `gh` < 2.88 — both probe targets miss; install one.",
+        "VS Code Copilot Chat extension installs an empty `copilot.bat` shim on Windows, which breaks `gh copilot` invocations with `%1 is not a valid Win32 application`. probeWorker() now disambiguates this case (issue #159) and points at the bad shim instead of saying 'not found'.",
+        "Standalone `copilot` not authenticated — run `copilot` interactively once and `/login`, or set `COPILOT_GITHUB_TOKEN` / `GH_TOKEN` (issue #155)."
       ]
     },
 

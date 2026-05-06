@@ -1468,63 +1468,194 @@ export function suggestInstall(toolName) {
 }
 
 /**
+ * Classify a probe failure into an actionable category. Used by
+ * {@link probeWorker} to disambiguate between distinct failure modes that
+ * historically all reported "not found on PATH" (issue #159):
+ *
+ *   - "missing"     — ENOENT / "not recognized" / "command not found" — install it
+ *   - "unexecutable" — found but corrupt (e.g. empty .bat shim from VS Code's
+ *                      Copilot Chat extension on Windows produces
+ *                      "%1 is not a valid Win32 application")
+ *   - "auth"        — exec succeeded but the CLI exited non-zero with an
+ *                      auth-missing message (gh copilot / standalone copilot
+ *                      both surface this when not logged in)
+ *   - "timeout"     — execSync hit its 10-second timeout
+ *   - "exec-failed" — generic non-zero exit / spawn error not matching above
+ *
+ * Returns `{ category, hint }` where hint is a short human-readable
+ * suggestion the smith / dashboard can surface verbatim.
+ *
+ * @param {Error} err - The error object from `execSync` catch
+ * @param {string} command - The command name being probed (e.g. "copilot")
+ * @returns {{ category: string, hint: string }}
+ */
+export function classifyProbeFailure(err, command) {
+  const msg = String(err?.message || err?.code || err || "");
+  const stdout = String(err?.stdout || "");
+  const stderr = String(err?.stderr || "");
+  const haystack = `${msg}\n${stdout}\n${stderr}`;
+
+  // Check auth-missing FIRST — auth errors usually exit non-zero with a
+  // recognisable message in stderr, and we want the actionable advice
+  // ("run gh auth login") instead of generic "exec failed".
+  if (/no authentication|not authenticated|please log in|run.*\/login\b|gh auth login|COPILOT_GITHUB_TOKEN|GH_TOKEN/i.test(haystack)) {
+    return {
+      category: "auth",
+      hint: `${command} is installed but not authenticated. Run \`gh auth login\` (or set COPILOT_GITHUB_TOKEN / GH_TOKEN).`,
+    };
+  }
+  if (/not a valid Win32 application|Exec format error|cannot execute binary file|is not recognized as.*executable/i.test(haystack)) {
+    return {
+      category: "unexecutable",
+      hint: `${command} resolves to a corrupt or empty shim on PATH. On Windows this is often the empty copilot.bat shim from VS Code's Copilot Chat extension — delete or rename it. Inspect: where.exe ${command}`,
+    };
+  }
+  if (err?.code === "ETIMEDOUT" || /ETIMEDOUT/.test(haystack)) {
+    return {
+      category: "timeout",
+      hint: `${command} probe timed out (>10s). Network or auth prompt may be hanging the CLI.`,
+    };
+  }
+  if (err?.code === "ENOENT" || /ENOENT|command not found|not recognized as/i.test(haystack)) {
+    return {
+      category: "missing",
+      hint: `${command} not found on PATH.`,
+    };
+  }
+  return {
+    category: "exec-failed",
+    hint: `${command} exec failed (exit ${err?.status ?? "?"}): ${msg.split(/\r?\n/)[0].slice(0, 160)}`,
+  };
+}
+
+/**
  * Probe a single CLI worker from the capability matrix.
  * Returns a structured result — NEVER throws, always returns the shape so smith can report.
+ *
+ * Fallback support (issue #157): when `spec.probe.fallback` is present and
+ * the primary probe fails with `missing` or `unexecutable`, the fallback
+ * probe is attempted using the same min-version + capability-marker logic.
+ * This lets one worker entry cover both the new standalone `copilot` CLI
+ * and the legacy `gh copilot` extension under a single name (gh-copilot).
  */
 function probeWorker(name, spec) {
-  const probe = spec.probe || {};
   const result = {
     name, type: "cli",
     available: false, capable: false,
     version: null, minVersion: spec.minVersion || null,
     reason: null, installHint: null,
+    failureCategory: null,
+    probedCommand: null,
+    usingFallback: false,
   };
-  // Step 1: version probe
+
+  const tryProbe = (probe) => attemptProbe(name, spec, probe, result);
+
+  const primary = spec.probe || {};
+  const primaryResult = tryProbe(primary);
+  if (primaryResult.terminal) {
+    return primaryResult.value;
+  }
+
+  // Fallback path — only when the primary failed with a recoverable category
+  // ("missing" or "unexecutable" — auth/timeout failures don't help to retry
+  // against a different binary because the user's intent is clearly the
+  // primary; surface the original problem instead).
+  const fallback = primary.fallback;
+  const recoverableCategories = new Set(["missing", "unexecutable"]);
+  if (fallback && recoverableCategories.has(result.failureCategory)) {
+    const previousReason = result.reason;
+    const previousHint = result.installHint;
+    const previousCategory = result.failureCategory;
+    const fallbackResult = tryProbe(fallback);
+    if (fallbackResult.value.available) {
+      fallbackResult.value.usingFallback = true;
+      return fallbackResult.value;
+    }
+    // Fallback also failed — keep the primary failure as the user-visible
+    // reason (it's the documented "primary" install path). Append a one-line
+    // note that fallback was tried and also failed.
+    result.reason = previousReason;
+    result.installHint = previousHint;
+    result.failureCategory = previousCategory;
+    result.reason += ` Fallback (${fallback.command}) also failed: ${fallbackResult.value.reason}`;
+  }
+  return result;
+}
+
+/**
+ * Run one probe attempt (version → min-version → capability) using a single
+ * probe spec object. Mutates the shared `result` object so the caller can
+ * surface partial state (probedCommand, failureCategory) when fallback runs.
+ *
+ * Returns `{ terminal, value }`:
+ *   - terminal=true means the probe fully succeeded OR failed in a way the
+ *     caller should NOT retry against a fallback (auth, timeout, exec-failed,
+ *     or capability-marker mismatch — the binary is there but unsuitable).
+ *   - terminal=false means the caller MAY retry the fallback.
+ */
+function attemptProbe(name, spec, probe, result) {
+  result.probedCommand = probe.command || null;
+
   let versionOut = "";
   try {
     versionOut = execSync(`${probe.command} ${(probe.versionArgs || []).join(" ")}`, {
       encoding: "utf-8", timeout: 10_000, stdio: "pipe",
     });
-  } catch {
-    result.reason = `${probe.command} not found on PATH`;
+  } catch (err) {
+    const cls = classifyProbeFailure(err, probe.command);
+    result.reason = cls.hint;
     result.installHint = suggestInstall(name).command;
-    return result;
+    result.failureCategory = cls.category;
+    // Allow fallback retry only for missing / unexecutable. Auth/timeout/
+    // exec-failed are terminal — same problem will hit the fallback.
+    const recoverable = cls.category === "missing" || cls.category === "unexecutable";
+    return { terminal: !recoverable, value: result };
   }
-  // Parse version
+
   if (spec.versionRegex) {
-    const m = versionOut.match(new RegExp(spec.versionRegex));
+    const m = (versionOut || "").match(new RegExp(spec.versionRegex));
     if (m) result.version = m[1];
   }
-  // Step 2: min-version check
   if (result.version && spec.minVersion && compareVersions(result.version, spec.minVersion) < 0) {
     result.reason = `${name} v${result.version} is older than required v${spec.minVersion}`;
     result.installHint = suggestInstall(name).command;
-    return result;
+    result.failureCategory = "outdated";
+    return { terminal: true, value: result };
   }
-  // Step 3: capability probe (agentic flag markers in --help)
+
   if (probe.capabilityMarkers && probe.capabilityMarkers.length > 0) {
+    let helpOut = "";
     try {
-      const helpOut = execSync(`${probe.command} ${(probe.helpArgs || []).join(" ")}`, {
+      helpOut = execSync(`${probe.command} ${(probe.helpArgs || []).join(" ")}`, {
         encoding: "utf-8", timeout: 10_000, stdio: "pipe",
       });
-      const missing = probe.capabilityMarkers.filter((m) => !helpOut.includes(m));
-      if (missing.length === 0) {
-        result.capable = true;
-      } else {
-        result.reason = `${name} lacks agentic flags: ${missing.join(", ")} — likely legacy build (see issue #28)`;
-        result.installHint = suggestInstall(name).command;
-        return result;
-      }
-    } catch {
-      result.reason = `${name} help probe failed — cannot verify agentic capability`;
-      return result;
+    } catch (err) {
+      const cls = classifyProbeFailure(err, probe.command);
+      result.reason = `${name} help probe failed — ${cls.hint}`;
+      result.failureCategory = cls.category;
+      return { terminal: true, value: result };
+    }
+    const missing = probe.capabilityMarkers.filter((m) => !helpOut.includes(m));
+    if (missing.length === 0) {
+      result.capable = true;
+    } else {
+      result.reason = `${name} lacks agentic flags: ${missing.join(", ")} — likely legacy build (see issue #28)`;
+      result.installHint = suggestInstall(name).command;
+      result.failureCategory = "legacy-build";
+      return { terminal: true, value: result };
     }
   } else {
-    // No markers declared — presence is sufficient (runtime-like worker)
     result.capable = true;
   }
   result.available = result.capable;
-  return result;
+  // Clear failure metadata on full success
+  if (result.available) {
+    result.reason = null;
+    result.installHint = null;
+    result.failureCategory = null;
+  }
+  return { terminal: true, value: result };
 }
 
 /**
@@ -2158,11 +2289,17 @@ export function spawnWorker(prompt, options = {}) {
 
     // Build invocation from the capability matrix (single source of truth — issue #28).
     // Supports {PROMPT_FILE} and {PROMPT} placeholders in worker-capabilities.json.
+    // Issue #157: when probeWorker chose the legacy fallback (e.g. `gh copilot`
+    // because the standalone `copilot` CLI wasn't found), use the matching
+    // `invocation.fallback` block so flag surfaces don't mismatch the binary.
     const matrix = loadWorkerCapabilities();
     const spec = matrix.workers?.[chosen.name];
-    if (spec?.invocation?.cmd) {
-      cmd = spec.invocation.cmd;
-      args = (spec.invocation.baseArgs || []).map((a) =>
+    const invocation = (chosen.usingFallback && spec?.invocation?.fallback)
+      ? spec.invocation.fallback
+      : spec?.invocation;
+    if (invocation?.cmd) {
+      cmd = invocation.cmd;
+      args = (invocation.baseArgs || []).map((a) =>
         String(a).replace("{PROMPT_FILE}", promptFile).replace("{PROMPT}", prompt)
       );
       if (model) args.push("--model", model);

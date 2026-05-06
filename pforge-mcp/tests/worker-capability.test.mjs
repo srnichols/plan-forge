@@ -32,7 +32,15 @@ describe("worker-capabilities matrix", () => {
     const gh = matrix.workers["gh-copilot"];
     expect(gh).toBeDefined();
     expect(gh.minVersion).toBeTruthy();
+    // Primary probe (standalone `copilot` CLI, post-#157) requires its
+    // own non-interactive markers.
     expect(gh.probe.capabilityMarkers).toEqual(
+      expect.arrayContaining(["--allow-all", "--prompt"])
+    );
+    // Fallback probe (legacy `gh copilot` extension) keeps the original
+    // agentic markers so the issue #28 floor is enforced on either path.
+    expect(gh.probe.fallback).toBeDefined();
+    expect(gh.probe.fallback.capabilityMarkers).toEqual(
       expect.arrayContaining(["--yolo", "--no-ask-user"])
     );
     expect(gh.invocation.baseArgs.some((a) => String(a).includes("{PROMPT_FILE}"))).toBe(true);

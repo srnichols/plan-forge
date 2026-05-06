@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 480" fill="none" role="img" aria-labelledby="abt-title abt-desc">
+  <title id="abt-title">A/B test results: Plan Forge vs vibe coding</title>
+  <desc id="abt-desc">Head-to-head bar chart comparing Plan Forge (green) against vibe coding (red) across six structural quality metrics from the April 11 2026 .NET A/B test. Same task, same model (Claude Opus 4.6), same machine, comparable time (7 vs 8 minutes). Plan Forge: 60 tests, 6 interfaces, 9 DTOs, 4 typed exceptions, 79 CancellationToken references, 99 quality score. Vibe coding: 13 tests, 0 interfaces, 0 DTOs, 0 typed exceptions, 0 CancellationToken references, 44 quality score. Across structural quality, vibe coding scored zero on four of six metrics.</desc>
+  <style>
+    text { font-family: 'Inter', sans-serif; }
+    .title-text { font-size: 14px; fill: #e2e8f0; font-weight: 700; }
+    .subtitle { font-size: 11px; fill: #94a3b8; }
+    .axis-label { font-size: 11px; fill: #cbd5e1; font-weight: 600; }
+    .bar-label { font-size: 13px; fill: #e2e8f0; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+    .legend-text { font-size: 11px; fill: #cbd5e1; font-weight: 500; }
+    .footnote { font-size: 10px; fill: #64748b; }
+    .vibe-bar { fill: #ef4444; }
+    .forge-bar { fill: #10b981; }
+    .axis-line { stroke: #334155; stroke-width: 1; }
+  </style>
+
+  <!-- Title -->
+  <text x="450" y="28" class="title-text" text-anchor="middle">Same task. Same model (Claude Opus 4.6). Comparable time (7 vs 8 min).</text>
+  <text x="450" y="46" class="subtitle" text-anchor="middle">Structural quality across 6 metrics — vibe coding vs Plan Forge</text>
+
+  <!-- Legend -->
+  <rect x="610" y="62" width="14" height="14" class="vibe-bar" rx="2" />
+  <text x="630" y="74" class="legend-text">Vibe coding</text>
+  <rect x="720" y="62" width="14" height="14" class="forge-bar" rx="2" />
+  <text x="740" y="74" class="legend-text">Plan Forge</text>
+
+  <!-- Baseline axis -->
+  <line x1="60" y1="380" x2="860" y2="380" class="axis-line" />
+
+  <!-- Bar pairs: width=50 each, gap=8 between pair, gap=58 between groups; group center every ~130px starting at 130 -->
+  <!-- Group 1: Tests (max 60, scale 60→260px) -->
+  <g>
+    <rect x="80" y="324" width="50" height="56" class="vibe-bar" rx="2" /><!-- 13 → 56px -->
+    <text x="105" y="318" class="bar-label" text-anchor="middle">13</text>
+    <rect x="138" y="120" width="50" height="260" class="forge-bar" rx="2" /><!-- 60 → 260px -->
+    <text x="163" y="114" class="bar-label" text-anchor="middle">60</text>
+    <text x="134" y="402" class="axis-label" text-anchor="middle">Tests</text>
+    <text x="134" y="418" class="footnote" text-anchor="middle">4.6× more</text>
+  </g>
+
+  <!-- Group 2: Interfaces (max 6, scale 6→260px) -->
+  <g>
+    <rect x="222" y="380" width="50" height="0" class="vibe-bar" rx="2" /><!-- 0 → 0 (just baseline) -->
+    <text x="247" y="374" class="bar-label" text-anchor="middle">0</text>
+    <rect x="280" y="120" width="50" height="260" class="forge-bar" rx="2" /><!-- 6 → 260px -->
+    <text x="305" y="114" class="bar-label" text-anchor="middle">6</text>
+    <text x="276" y="402" class="axis-label" text-anchor="middle">Interfaces</text>
+    <text x="276" y="418" class="footnote" text-anchor="middle">vibe = 0</text>
+  </g>
+
+  <!-- Group 3: DTOs (max 9, scale 9→260px) -->
+  <g>
+    <rect x="364" y="380" width="50" height="0" class="vibe-bar" rx="2" />
+    <text x="389" y="374" class="bar-label" text-anchor="middle">0</text>
+    <rect x="422" y="120" width="50" height="260" class="forge-bar" rx="2" />
+    <text x="447" y="114" class="bar-label" text-anchor="middle">9</text>
+    <text x="418" y="402" class="axis-label" text-anchor="middle">DTOs</text>
+    <text x="418" y="418" class="footnote" text-anchor="middle">vibe = 0</text>
+  </g>
+
+  <!-- Group 4: Typed Exceptions (max 4, scale 4→260px) -->
+  <g>
+    <rect x="506" y="380" width="50" height="0" class="vibe-bar" rx="2" />
+    <text x="531" y="374" class="bar-label" text-anchor="middle">0</text>
+    <rect x="564" y="120" width="50" height="260" class="forge-bar" rx="2" />
+    <text x="589" y="114" class="bar-label" text-anchor="middle">4</text>
+    <text x="560" y="402" class="axis-label" text-anchor="middle">Typed Exceptions</text>
+    <text x="560" y="418" class="footnote" text-anchor="middle">vibe = 0</text>
+  </g>
+
+  <!-- Group 5: CancellationToken (max 79, scale 79→260px) -->
+  <g>
+    <rect x="648" y="380" width="50" height="0" class="vibe-bar" rx="2" />
+    <text x="673" y="374" class="bar-label" text-anchor="middle">0</text>
+    <rect x="706" y="120" width="50" height="260" class="forge-bar" rx="2" />
+    <text x="731" y="114" class="bar-label" text-anchor="middle">79</text>
+    <text x="702" y="402" class="axis-label" text-anchor="middle">CancellationToken</text>
+    <text x="702" y="418" class="footnote" text-anchor="middle">vibe = 0</text>
+  </g>
+
+  <!-- Group 6: Quality Score (max 100, scale 99→260px) -->
+  <g>
+    <rect x="790" y="265" width="50" height="115" class="vibe-bar" rx="2" /><!-- 44 → 115px -->
+    <text x="815" y="259" class="bar-label" text-anchor="middle">44</text>
+    <rect x="848" y="121" width="50" height="259" class="forge-bar" rx="2" /><!-- 99 → 259px -->
+    <text x="873" y="115" class="bar-label" text-anchor="middle">99</text>
+    <text x="844" y="402" class="axis-label" text-anchor="middle">Quality (/100)</text>
+    <text x="844" y="418" class="footnote" text-anchor="middle">2.25× higher</text>
+  </g>
+
+  <!-- Footer attribution -->
+  <text x="60" y="460" class="footnote">Source: docs/blog/ab-test-plan-forge-vs-vibe-coding.html (April 11 2026 .NET WebAPI A/B test, identical .NET 10 skeleton, same git commit baseline)</text>
+</svg>

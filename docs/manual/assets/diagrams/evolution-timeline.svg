@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 320" fill="none" role="img" aria-labelledby="evt-title evt-desc">
+  <title id="evt-title">Plan Forge evolution timeline v1.0 to v2.83</title>
+  <desc id="evt-desc">Horizontal timeline showing Plan Forge's seven major version milestones from Summer 2025 (v1.0, 18 instruction files plus 4-session pipeline) through May 2026 (v2.83, host-aware routing plus quorum estimator plus complexity rubric). Intermediate milestones: v2.0 January 2026 (autonomous orchestrator and DAG-based execution), v2.5 February 2026 (Quorum Mode multi-model consensus), v2.10 March 2026 (OpenClaw bridge for cross-platform notifications), v2.14 March 2026 (Copilot platform integration), v2.18 April 2026 (Temper Guards and Warning Signs and Context Fuel). The current milestone v2.83 is highlighted in amber.</desc>
+  <style>
+    text { font-family: 'Inter', sans-serif; }
+    .title-text { font-size: 14px; fill: #e2e8f0; font-weight: 700; }
+    .subtitle { font-size: 11px; fill: #94a3b8; }
+    .axis-line { stroke: #475569; stroke-width: 2; }
+    .marker { fill: #1e293b; stroke: #64748b; stroke-width: 2; }
+    .marker-current { fill: #1e293b; stroke: #f59e0b; stroke-width: 2.5; }
+    .version-label { font-size: 13px; fill: #e2e8f0; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+    .version-current { font-size: 13px; fill: #f59e0b; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+    .date-label { font-size: 10px; fill: #94a3b8; }
+    .date-current { font-size: 10px; fill: #fbbf24; font-weight: 600; }
+    .feature-label { font-size: 10px; fill: #cbd5e1; }
+    .feature-current { font-size: 10px; fill: #fde68a; font-weight: 500; }
+    .footnote { font-size: 9px; fill: #64748b; }
+  </style>
+
+  <!-- Title -->
+  <text x="550" y="26" class="title-text" text-anchor="middle">From "impossible" to 7 minutes — a year of building AI coding guardrails</text>
+  <text x="550" y="44" class="subtitle" text-anchor="middle">Seven inflection points (v1.0 → v2.83), Summer 2025 → May 2026</text>
+
+  <!-- Timeline axis -->
+  <line x1="60" y1="160" x2="1040" y2="160" class="axis-line" />
+
+  <!-- Markers: 7 evenly spaced — positions x = 110, 265, 420, 575, 730, 885, 1010 (slight compression at end so v2.83 fits) -->
+  <!-- Use: 110, 250, 390, 530, 670, 810, 990 → step ~140-180 -->
+
+  <!-- v1.0 -->
+  <circle cx="100" cy="160" r="8" class="marker" />
+  <text x="100" y="78" class="version-label" text-anchor="middle">v1.0</text>
+  <text x="100" y="94" class="date-label" text-anchor="middle">Summer 2025</text>
+  <line x1="100" y1="100" x2="100" y2="148" stroke="#475569" stroke-width="1" stroke-dasharray="2,2" />
+  <text x="100" y="190" class="feature-label" text-anchor="middle">18 instruction files</text>
+  <text x="100" y="204" class="feature-label" text-anchor="middle">4-session pipeline</text>
+
+  <!-- v2.0 -->
+  <circle cx="245" cy="160" r="8" class="marker" />
+  <text x="245" y="78" class="version-label" text-anchor="middle">v2.0</text>
+  <text x="245" y="94" class="date-label" text-anchor="middle">January 2026</text>
+  <line x1="245" y1="100" x2="245" y2="148" stroke="#475569" stroke-width="1" stroke-dasharray="2,2" />
+  <text x="245" y="190" class="feature-label" text-anchor="middle">Autonomous orchestrator</text>
+  <text x="245" y="204" class="feature-label" text-anchor="middle">DAG execution + 17 MCP tools</text>
+
+  <!-- v2.5 -->
+  <circle cx="390" cy="160" r="8" class="marker" />
+  <text x="390" y="78" class="version-label" text-anchor="middle">v2.5</text>
+  <text x="390" y="94" class="date-label" text-anchor="middle">February 2026</text>
+  <line x1="390" y1="100" x2="390" y2="148" stroke="#475569" stroke-width="1" stroke-dasharray="2,2" />
+  <text x="390" y="190" class="feature-label" text-anchor="middle">Quorum Mode</text>
+  <text x="390" y="204" class="feature-label" text-anchor="middle">3-model consensus</text>
+
+  <!-- v2.10 -->
+  <circle cx="535" cy="160" r="8" class="marker" />
+  <text x="535" y="78" class="version-label" text-anchor="middle">v2.10</text>
+  <text x="535" y="94" class="date-label" text-anchor="middle">March 2026</text>
+  <line x1="535" y1="100" x2="535" y2="148" stroke="#475569" stroke-width="1" stroke-dasharray="2,2" />
+  <text x="535" y="190" class="feature-label" text-anchor="middle">OpenClaw bridge</text>
+  <text x="535" y="204" class="feature-label" text-anchor="middle">Cross-platform notify</text>
+
+  <!-- v2.14 -->
+  <circle cx="680" cy="160" r="8" class="marker" />
+  <text x="680" y="78" class="version-label" text-anchor="middle">v2.14</text>
+  <text x="680" y="94" class="date-label" text-anchor="middle">March 2026</text>
+  <line x1="680" y1="100" x2="680" y2="148" stroke="#475569" stroke-width="1" stroke-dasharray="2,2" />
+  <text x="680" y="190" class="feature-label" text-anchor="middle">Copilot platform</text>
+  <text x="680" y="204" class="feature-label" text-anchor="middle">native integration</text>
+
+  <!-- v2.18 -->
+  <circle cx="825" cy="160" r="8" class="marker" />
+  <text x="825" y="78" class="version-label" text-anchor="middle">v2.18</text>
+  <text x="825" y="94" class="date-label" text-anchor="middle">April 2026</text>
+  <line x1="825" y1="100" x2="825" y2="148" stroke="#475569" stroke-width="1" stroke-dasharray="2,2" />
+  <text x="825" y="190" class="feature-label" text-anchor="middle">Temper Guards</text>
+  <text x="825" y="204" class="feature-label" text-anchor="middle">Warning Signs + Context Fuel</text>
+
+  <!-- v2.83 (current, amber highlight) -->
+  <circle cx="980" cy="160" r="10" class="marker-current" />
+  <text x="980" y="78" class="version-current" text-anchor="middle">v2.83</text>
+  <text x="980" y="94" class="date-current" text-anchor="middle">May 2026 (current)</text>
+  <line x1="980" y1="102" x2="980" y2="148" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="3,2" />
+  <text x="980" y="190" class="feature-current" text-anchor="middle">Host-aware routing</text>
+  <text x="980" y="204" class="feature-current" text-anchor="middle">Quorum estimator + rubric</text>
+
+  <!-- Period brackets / phases -->
+  <text x="100" y="244" class="footnote" text-anchor="middle">— Foundation —</text>
+  <text x="390" y="244" class="footnote" text-anchor="middle">— Automation —</text>
+  <text x="680" y="244" class="footnote" text-anchor="middle">— Integration —</text>
+  <text x="900" y="244" class="footnote" text-anchor="middle">— Self-defense + cost-aware —</text>
+
+  <!-- Footer attribution -->
+  <text x="60" y="290" class="footnote">Source: docs/blog/the-journey-from-impossible-to-seven-minutes.html (historical narrative through April 2026; v2.83 added per CHANGELOG.md)</text>
+</svg>

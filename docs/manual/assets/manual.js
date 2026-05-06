@@ -217,6 +217,20 @@
     { t: "Plans Are Markdown", u: "how-it-works.html#plans" },
     { t: "Slices Gates and Scope", u: "how-it-works.html#building-blocks" },
     { t: "Nested Subagents", u: "how-it-works.html#sessions" },
+    // Lessons Learned
+    { t: "Agents Don't Drift Maliciously", u: "lessons-learned.html#agents-dont-drift-maliciously" },
+    { t: "Auto-Loading Beats Manual", u: "lessons-learned.html#auto-loading-beats-manual" },
+    { t: "Independent Review Catches What Builds Miss", u: "lessons-learned.html#independent-review" },
+    { t: "Slice Boundaries Matter More Than You Think", u: "lessons-learned.html#slice-boundaries" },
+    { t: "Focused Instructions Beat Generic Ones", u: "lessons-learned.html#focused-instructions" },
+    // Project History
+    { t: "v1.0 Foundation", u: "project-history.html#v1-0-foundation" },
+    { t: "v2.0 Autonomous", u: "project-history.html#v2-0-autonomous" },
+    { t: "v2.5 Quorum Mode", u: "project-history.html#v2-5-quorum" },
+    { t: "v2.10 OpenClaw", u: "project-history.html#v2-10-openclaw" },
+    { t: "v2.14 GitHub Copilot Integration", u: "project-history.html#v2-14-copilot" },
+    { t: "v2.18 Temper Guards", u: "project-history.html#v2-18-temper-guards" },
+    { t: "v2.83 Current Release", u: "project-history.html#v2-83-current" },
     // Ch 3
     { t: "Prerequisites", u: "installation.html#prerequisites" },
     { t: "One-Click Install", u: "installation.html#one-click" },

@@ -5173,7 +5173,7 @@ export function loadModelPerformance(cwd) {
     const clean = data.filter(r => !isApiOnlyModel(r.model));
     if (clean.length < data.length) {
       writeFileSync(perfPath, JSON.stringify(clean, null, 2));
-      console.log(`[perf] scrubbed ${data.length - clean.length} API-worker entries from model-performance.json (see BUG-api-xai-worker-text-only.md)`);
+      console.log(`[perf] scrubbed ${data.length - clean.length} API-worker entries from model-performance.json`);
     }
     return clean;
   } catch {
@@ -10565,7 +10565,6 @@ export function loadQuorumConfig(cwd, presetOverride = null) {
     // across Phase-25–30 plans (63 slices). At threshold=6 only 1/63 slices
     // triggered quorum. At threshold=3 (60th-percentile score), 56/63 slices
     // qualify — matching the intent of "complex slices get multi-model review".
-    // See docs/research/complexity-threshold-v2.65.md for full analysis.
     threshold: 3,
     // Bug #107: default uses the standard tier (opus-4.6). Users who want
     // the premium tier (opus-4.7) opt in via --quorum=power. Reviewer stays

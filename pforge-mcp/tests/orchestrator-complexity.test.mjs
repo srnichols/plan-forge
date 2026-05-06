@@ -7,7 +7,7 @@
  *   - Threshold=3 correctly selects slices with score ≥ 3 and excludes score < 3
  *   - Adaptive threshold mechanism still respects floor/ceiling bounds
  *
- * Research basis: docs/research/complexity-threshold-v2.65.md
+ * Research basis (Phase-31 Slice 5 calibration):
  *   - 63 slices across Phase-25–30: mean=3.24, median=3, 60th-pct=3
  *   - threshold=6 selected 1/63 slices (1.6%) — effectively inert
  *   - threshold=3 selected 56/63 slices (88.9%) — correct auto-quorum coverage
@@ -39,7 +39,7 @@ describe("loadQuorumConfig — Phase-31 recalibrated default threshold", () => {
   beforeEach(() => { cwd = makeTmpDir(); });
   afterEach(() => { rmSync(cwd, { recursive: true, force: true }); });
 
-  it("default threshold is 3 (recalibrated from 6 — see complexity-threshold-v2.65.md)", () => {
+  it("default threshold is 3 (recalibrated from 6 in Phase-31 Slice 5)", () => {
     // Phase-31 Slice 5: empirical 60th-percentile across 63 real slices is 3.
     // Prior default of 6 selected only 1/63 slices; 3 selects 56/63.
     const config = loadQuorumConfig(cwd);

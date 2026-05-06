@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Appendix J: GitHub Stack Alignment — Plan Forge Manual</title>
+  <meta name="description" content="How Plan Forge composes with the GitHub-native primitives GitHub explicitly leaves to the ecosystem. The Copilot SDK preview is GitHub stating this out loud — Plan Forge is built for that lane." />
+  <meta property="og:title" content="GitHub Stack Alignment" />
+  <meta property="og:description" content="GitHub deliberately leaves orchestration, planning, eval, fleet ops, and quality scorecards to the ecosystem. Plan Forge is built to fill that exact lane." />
+  <meta property="og:type" content="article" />
+  <link rel="canonical" href="https://planforge.software/manual/github-stack-alignment.html" />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+    <main><img src="assets/chapter-heroes/appendix-j-hero.jpg" alt="Two intricate gear assemblies meshing above the anvil — brass clockwork (GitHub primitives) interlocking with glowing amber filigree (Plan Forge orchestration), sparking ember particles upward at the meshing point" class="chapter-hero" /><div class="chapter-content">
+
+      <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Appendix J</div>
+      <h1>GitHub Stack Alignment</h1>
+      <p class="text-lg text-slate-400 mb-8">The thesis: GitHub ships the agent runtime + integration standards + customization primitives + engagement metrics. Everything <em>above</em> the runtime is the ecosystem's lane. Plan Forge is built for that lane.</p>
+
+      <div class="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5 mb-10">
+        <p class="text-sm text-slate-400 mb-2"><strong class="text-slate-200">Audience:</strong> Platform engineers and architects evaluating Plan Forge alongside an existing GitHub Enterprise + Copilot Enterprise investment.</p>
+        <p class="text-sm text-slate-400 mb-0"><strong class="text-slate-200">Companion to:</strong> <a href="plan-forge-on-the-github-stack.html" class="text-amber-400 hover:underline">Appendix H — Plan Forge on the GitHub Stack</a> (the deeper integration tour). This page is the strategic framing; Appendix H is the surface-by-surface technical reference.</p>
+      </div>
+
+      <h2 id="the-signal-april-2026">The signal: GitHub said this out loud in April 2026</h2>
+
+      <p>On April 2, 2026, GitHub shipped the <strong class="text-slate-200">Copilot SDK in public preview</strong>. The release notes describe it as "the same production-tested agent runtime that powers GitHub Copilot cloud agent and Copilot CLI" exposed for application developers to embed.</p>
+
+      <p>The implication is unmistakable: <strong class="text-slate-200">GitHub views agent orchestration as something built <em>on top of</em> their primitives, not inside them.</strong></p>
+
+      <p>This page documents how Plan Forge composes with the primitives GitHub explicitly leaves to the ecosystem.</p>
+
+      <h2 id="what-github-ships-the-substrate">What GitHub ships (the substrate)</h2>
+
+      <table>
+        <thead><tr><th>Primitive</th><th>What it is</th><th>Status (May 2026)</th></tr></thead>
+        <tbody>
+          <tr><td><strong class="text-slate-200">Copilot Cloud Agent</strong> (formerly Coding Agent)</td><td>Ephemeral Actions-powered runner. Single repo / single branch / single PR per task. Three modes: research-only, plan-only, branch-only</td><td>GA</td></tr>
+          <tr><td><strong class="text-slate-200">AGENTS.md</strong></td><td>Open standard for agent context files</td><td>Stewarded by <strong>Agentic AI Foundation under the Linux Foundation</strong>. 60k+ repos use it. GitHub adopts; does not own</td></tr>
+          <tr><td><strong class="text-slate-200">Agent Skills</strong></td><td>Open standard for agent procedural knowledge</td><td>Repo <code>agentskills/agentskills</code>, Apache 2.0, <strong>maintained by Anthropic</strong>. GitHub adopts</td></tr>
+          <tr><td><strong class="text-slate-200">Model Context Protocol (MCP)</strong></td><td>Open standard for agent-to-tool integration</td><td>Linux Foundation project. Maintained by Anthropic et al. GitHub ships <code>github/github-mcp-server</code> (29.5k stars, MIT) as the reference implementation</td></tr>
+          <tr><td><code>.github/instructions/</code></td><td>GitHub-native repo customization</td><td>GA. Plan Forge ships ~16 instruction files</td></tr>
+          <tr><td><code>.github/copilot-instructions.md</code></td><td>Repo-wide Copilot context</td><td>GA</td></tr>
+          <tr><td><code>.github/agents/</code></td><td>Custom agent personas</td><td>GA on github.com (preview in JetBrains/Eclipse/Xcode)</td></tr>
+          <tr><td><code>.github/hooks/</code></td><td>Lifecycle hooks (preToolUse, postToolUse, sessionStart, etc.)</td><td>GA</td></tr>
+          <tr><td><code>.github/skills/</code></td><td>Repo-scoped skill definitions</td><td>GA</td></tr>
+          <tr><td><strong class="text-slate-200">GitHub Actions</strong></td><td>CI/CD runtime that powers Cloud Agent</td><td>GA</td></tr>
+          <tr><td><strong class="text-slate-200">GitHub Advanced Security</strong> (GHAS)</td><td>Code scanning, secret scanning, Dependabot</td><td>GA</td></tr>
+          <tr><td><strong class="text-slate-200">Copilot Spaces</strong></td><td>Curated context bundles for chat</td><td>GA (chat-side; not yet a Cloud Agent execution context)</td></tr>
+          <tr><td><strong class="text-slate-200">Copilot Metrics API</strong></td><td>Adoption + flow metrics (active users, PR throughput, time-to-merge)</td><td>GA</td></tr>
+          <tr><td><strong class="text-slate-200">Copilot SDK</strong></td><td>Embed the Cloud Agent runtime in your own app</td><td><strong class="text-amber-400">Public preview, April 2, 2026</strong></td></tr>
+          <tr><td><strong class="text-slate-200">Custom properties</strong></td><td>Org-level governance primitive</td><td>GA</td></tr>
+          <tr><td><strong class="text-slate-200">Org runner controls + firewall</strong></td><td>Cloud Agent runtime governance</td><td>GA (April 2026)</td></tr>
+        </tbody>
+      </table>
+
+      <p>This is a strong, coherent substrate. It is also explicitly <em>just the substrate</em>.</p>
+
+      <h2 id="what-github-leaves-to-ecosystem">What GitHub deliberately leaves to the ecosystem (the Plan Forge lane)</h2>
+
+      <p>These are the surfaces GitHub does not ship and shows no sign of shipping — direct evidence from GitHub's own docs and roadmap:</p>
+
+      <table>
+        <thead><tr><th>Gap</th><th>Evidence</th></tr></thead>
+        <tbody>
+          <tr><td><strong class="text-slate-200">Hardened plan as versioned artifact</strong> with scope contract, slices, validation gates, drift detection</td><td>Plan-mode is session-scoped one-shot; no plan file format, no scope contract, no slice persistence</td></tr>
+          <tr><td><strong class="text-slate-200">Cross-repo / multi-service orchestration</strong></td><td>Explicit single-repo limitation: <em>"Copilot can only make changes in the repository specified when you start a task. Copilot cannot make changes across multiple repositories in one run."</em></td></tr>
+          <tr><td><strong class="text-slate-200">Multi-model quorum / consensus</strong> per task</td><td>No built-in mechanism. Single model per session</td></tr>
+          <tr><td><strong class="text-slate-200">Plan execution harness</strong> with per-slice gates and resume-from semantics</td><td><code>copilot-setup-steps.yml</code> is one pre-flight hook; nothing slice-aware</td></tr>
+          <tr><td><strong class="text-slate-200">Semantic eval harness</strong> (test pass rate, regression rate, plan-adherence)</td><td>Metrics API explicitly does not measure quality, only adoption + flow</td></tr>
+          <tr><td><strong class="text-slate-200">Cost prediction per task / per plan</strong> before execution</td><td>Only post-hoc Actions + premium-request totals</td></tr>
+          <tr><td><strong class="text-slate-200">Live programmatic watch</strong> of an in-flight agent from external tools</td><td>Session UI is in-product only; no public stream</td></tr>
+          <tr><td><strong class="text-slate-200">Cross-org / cross-team fleet console</strong> with queue, capacity, SLA visibility</td><td>Only per-issue / per-project session UI</td></tr>
+          <tr><td><strong class="text-slate-200">Pre-merge plan-adherence gates</strong></td><td>No first-party concept of "this PR drifted from the approved plan"</td></tr>
+          <tr><td><strong class="text-slate-200">Agent skills / instructions sync</strong> across N repos</td><td>Up to consumer (<code>.github-private</code> is the only template mechanism)</td></tr>
+          <tr><td><strong class="text-slate-200">Multi-tenant cost budgets</strong> and prioritization</td><td>Not in product</td></tr>
+          <tr><td><strong class="text-slate-200">A/B comparison</strong> of custom agents or models for the same task class</td><td>Not in product</td></tr>
+        </tbody>
+      </table>
+
+      <p>GitHub's positioning is consistent: <strong class="text-slate-200">wrap your tool/data source as an MCP server, layer your customization via the open file standards (AGENTS.md, Skills, instructions), and build your orchestration on top of the SDK.</strong> That is exactly the Plan Forge architecture.</p>
+
+      <h2 id="how-plan-forge-composes">How Plan Forge composes with each GitHub primitive</h2>
+
+      <table>
+        <thead><tr><th>GitHub primitive</th><th>How Plan Forge consumes it</th><th>Where in Plan Forge</th></tr></thead>
+        <tbody>
+          <tr><td><strong class="text-slate-200">Copilot Cloud Agent</strong></td><td>Plan Forge dispatches plan slices to CCA via <code>gh issue create --assignee @copilot</code>. Trajectories captured to <code>.forge/trajectories/&lt;plan-slug&gt;.jsonl</code></td><td><code>pforge-mcp/orchestrator.mjs</code> (<code>--worker copilot-coding-agent</code> mode)</td></tr>
+          <tr><td><strong class="text-slate-200">AGENTS.md</strong></td><td>Plan Forge generates and maintains AGENTS.md alongside <code>.github/copilot-instructions.md</code> so any AGENTS.md-aware agent (Claude Code, Cursor, Codex, Amp, Aider, Gemini CLI, Goose, Windsurf) consumes Plan Forge context</td><td><code>pforge-mcp/server.mjs</code> setup phase</td></tr>
+          <tr><td><code>.github/instructions/</code></td><td>Plan Forge ships ~16 instruction files covering architecture, security, testing, database, API, auth, error handling, deployment, performance, observability, version, status reporting, context fuel, self-repair, plan hardening</td><td><code>templates/.github/instructions/</code></td></tr>
+          <tr><td><code>.github/copilot-instructions.md</code></td><td>Plan Forge generates the project-scoped Copilot instructions during <code>setup.ps1</code> / <code>setup.sh</code></td><td><code>setup.ps1</code>, <code>setup.sh</code></td></tr>
+          <tr><td><code>.github/agents/</code></td><td>Plan Forge ships 20 custom agent personas (architecture, database, security, deploy, performance, test-runner, API contracts, accessibility, multi-tenancy, CI/CD, observability, dependency, compliance, plus 6 pipeline agents and an audit classifier)</td><td><code>templates/.github/agents/</code></td></tr>
+          <tr><td><code>.github/hooks/</code></td><td>Plan Forge ships SessionStart, PreToolUse, PostToolUse, Stop, plus three LiveGuard hooks (PreDeploy, PostSlice, PreAgentHandoff)</td><td><code>templates/.github/hooks/</code></td></tr>
+          <tr><td><code>.github/skills/</code></td><td>Plan Forge ships 14 skills as <code>/</code> slash-commands: database-migration, staging-deploy, test-sweep, dependency-audit, security-audit, code-review, release-notes, api-doc-gen, onboarding, health-check, forge-execute, audit-loop, plus pipeline skills</td><td><code>templates/.github/skills/</code></td></tr>
+          <tr><td><strong class="text-slate-200">MCP</strong></td><td>Plan Forge ships its own MCP server (<code>pforge-mcp</code>) with 68+ tools covering planning, execution, eval, observability, cost, memory, search, timeline, notifications. Auto-generates <code>.vscode/mcp.json</code></td><td><code>pforge-mcp/server.mjs</code>, <code>pforge-mcp/tools.json</code></td></tr>
+          <tr><td><code>github/github-mcp-server</code></td><td>Plan Forge documents this as the canonical GitHub-side MCP integration. Plan Forge agents call it via the MCP plumbing they already speak</td><td>docs reference, <code>.vscode/mcp.json</code> example</td></tr>
+          <tr><td><strong class="text-slate-200">GitHub Actions</strong></td><td>Plan Forge plans can run as Actions workflows; <code>pforge run-plan</code> is callable from any runner. CCA itself runs in Actions and Plan Forge plans dispatched via CCA inherit Actions concurrency, runners, and minutes</td><td><code>action.yml</code></td></tr>
+          <tr><td><strong class="text-slate-200">GitHub Advanced Security</strong></td><td>Plan Forge's <code>forge_secret_scan</code>, <code>forge_dep_watch</code>, and security-audit skill complement GHAS — not replace it. Plan Forge surfaces GHAS findings into plan-aware bug reports</td><td><code>pforge-mcp/notifications/</code>, <code>dependency-reviewer.agent.md</code></td></tr>
+          <tr><td><strong class="text-slate-200">Copilot Spaces</strong></td><td>Plan Forge plan files + Scope Contract are the equivalent concept for autonomous execution. Spaces serves chat-side context curation; Plan Forge serves execution-time scope binding</td><td>docs reference</td></tr>
+          <tr><td><strong class="text-slate-200">Copilot Metrics API</strong></td><td>Plan Forge does not duplicate it. Plan Forge surfaces <em>quality</em> metrics (gate failure rates, drift scores, plan-adherence, regressions caught at gate boundary, cost per merged PR) that the Metrics API explicitly does not</td><td><code>forge_health_trend</code>, <code>forge_drift_report</code>, <code>forge_cost_report</code></td></tr>
+          <tr><td><strong class="text-slate-200">Copilot SDK</strong></td><td>Plan Forge does not embed the Copilot runtime. Plan Forge orchestrates <em>across</em> multiple agent runtimes (CCA, Claude Code, Codex, custom workers). The SDK is the right tool when you want to embed a single agent in your app; Plan Forge is the right tool when you want to coordinate many agent runs as a delivery pipeline</td><td>architecture reference</td></tr>
+          <tr><td><strong class="text-slate-200">Custom properties</strong></td><td>Plan Forge documents the recommended custom-property schema for governing per-team Plan Forge enablement, plan templates, and budget caps</td><td><code>templates/docs/CUSTOMIZATION.md</code></td></tr>
+          <tr><td><strong class="text-slate-200">Org runner controls</strong></td><td>Plan Forge dispatched plans inherit the org's runner policy. No conflict, no override needed</td><td>docs reference</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="composition-picture">The composition picture</h2>
+
+      <pre><code>┌─────────────────────────────────────────────────────────────────────────┐
+│                       PLAN FORGE (orchestration layer)                  │
+│   plans · slices · scope contracts · gates · cost · drift · memory      │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                ┌───────────────────┼───────────────────┐
+                ▼                   ▼                   ▼
+┌─────────────────────┐  ┌─────────────────┐  ┌─────────────────────┐
+│ AGENTS.md / Skills  │  │  MCP servers    │  │  GitHub Actions     │
+│ .github/instructions│  │  (Plan Forge,   │  │  (Cloud Agent       │
+│ .github/agents      │  │   GitHub MCP,   │  │   runtime, plus     │
+│ .github/hooks       │  │   org tools)    │  │   user CI)          │
+└─────────────────────┘  └─────────────────┘  └─────────────────────┘
+        │                        │                       │
+        └────────────────────────┼───────────────────────┘
+                                 ▼
+        ┌─────────────────────────────────────────────────┐
+        │  GitHub Copilot Cloud Agent (the agent runtime)  │
+        │  + Copilot Enterprise + GHAS + Metrics API       │
+        └─────────────────────────────────────────────────┘
+                                 │
+                                 ▼
+                    ┌─────────────────────────┐
+                    │      Customer's repos    │
+                    └─────────────────────────┘</code></pre>
+
+      <p>Read top-to-bottom: Plan Forge orchestrates a plan, generates the GitHub-native customization files, dispatches slices to the agent runtime via the integration standards, and runs validation against the customer's own repos. <strong class="text-slate-200">Every box except the top one is GitHub-native.</strong></p>
+
+      <h2 id="why-this-matters-consolidation-thesis">Why this matters for the consolidation thesis</h2>
+
+      <p>If your strategic direction is "consolidate on GitHub Enterprise + Copilot Enterprise," Plan Forge <em>reinforces</em> that choice rather than competing with it.</p>
+
+      <ul>
+        <li><strong class="text-slate-200">Cursor and Sourcegraph Amp are platform-agnostic by design.</strong> They work as well on GitLab and Bitbucket as on GitHub. Adopting them does not strengthen your GitHub investment.</li>
+        <li><strong class="text-slate-200">GitHub Copilot Cloud Agent shipped the substrate but explicitly leaves orchestration to the ecosystem.</strong> Without an orchestration layer, the substrate is incomplete for fleet rollouts.</li>
+        <li><strong class="text-slate-200">Plan Forge is the only project in the comparison set built specifically to extend GitHub primitives in the direction GitHub itself signaled is the ecosystem's lane.</strong> The architecture is a deliberate "yes, and" to GitHub's stack.</li>
+      </ul>
+
+      <p>For Microsoft-shop enterprises pursuing the GitHub-native consolidation thesis, this is the cleanest path: GitHub for the substrate, Plan Forge for the orchestration layer, no third vendor in the picture.</p>
+
+      <h2 id="variations-microsoft-foundry">Variations for Microsoft Foundry shops</h2>
+
+      <p>For customers using <strong class="text-slate-200">Microsoft Foundry</strong> (Azure OpenAI, Foundry Agent Service, Foundry Toolboxes), Plan Forge composes additionally with:</p>
+
+      <ul>
+        <li><strong class="text-slate-200">Azure OpenAI</strong> as a first-class LLM provider (alongside GitHub Copilot, Anthropic, OpenAI, xAI). Auth via Entra ID (recommended), API key, or managed identity. Endpoint format <code>https://{resource}.openai.azure.com/openai/v1/</code>. Customer configures <strong>deployment names</strong>, not model families.</li>
+        <li><strong class="text-slate-200">Foundry Toolboxes</strong> as MCP-compatible endpoints. Plan Forge already speaks MCP; pointing <code>.vscode/mcp.json</code> at a Foundry Toolbox endpoint is config, not code.</li>
+        <li><strong class="text-slate-200">Foundry App Insights</strong> as the OTel sink. Plan Forge OTel traces land in the same dashboards as the customer's Foundry agent runs.</li>
+      </ul>
+
+      <p>See <a href="enterprise-reference-architecture.html#microsoft-foundry-variant" class="text-amber-400 hover:underline">Reference Architecture — Microsoft Foundry variant</a> for the full picture.</p>
+
+      <h2 id="what-plan-forge-does-not-duplicate">What Plan Forge does <em>not</em> duplicate</h2>
+
+      <p>Discipline matters. Plan Forge does not:</p>
+
+      <ul>
+        <li>Replicate the Copilot Metrics API (we add quality metrics; we don't re-implement adoption metrics)</li>
+        <li>Embed or fork the Copilot Cloud Agent runtime (we dispatch to it)</li>
+        <li>Compete with <code>github/github-mcp-server</code> (we use it; we ship our own MCP server for orchestration concerns)</li>
+        <li>Reinvent AGENTS.md, Skills, or MCP (we adopt the open standards; we contribute back when we learn something)</li>
+      </ul>
+
+      <p>If GitHub ships a feature that subsumes a Plan Forge capability, the right answer is to delete the Plan Forge code and use GitHub's. We're explicit about that in the project README.</p>
+
+      <div id="chapter-prev-next"></div>
+    </div></main>
+  </div>
+  <script src="assets/manual.js"></script>
+</body>
+</html>

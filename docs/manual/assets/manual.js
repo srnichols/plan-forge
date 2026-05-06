@@ -60,6 +60,8 @@
     { id: "agent-factory-recipe",             file: "agent-factory-recipe.html",             num: "L", title: "Agent Factory Recipe",              act: "Appendix" },
     { id: "fleet-operator-playbook",          file: "fleet-operator-playbook.html",          num: "M", title: "Fleet Operator Playbook",           act: "Appendix" },
     { id: "compliance-and-data-residency",    file: "compliance-and-data-residency.html",    num: "N", title: "Compliance & Data Residency",       act: "Appendix" },
+    { id: "lessons-learned",                  file: "lessons-learned.html",                  num: "",  title: "Lessons Learned",                   act: "Appendix" },
+    { id: "project-history",                  file: "project-history.html",                  num: "",  title: "Project History",                   act: "Appendix" },
     { id: "about-author",         file: "about-author.html",        num: "",   title: "About the Author",          act: "Appendix" },
   ];
 
@@ -198,6 +200,8 @@
     { t: "Whats Next After Quickstart",          u: "quickstart-first-deploy.html#whats-next" },
     // Ch 1
     { t: "The Problem in One Sentence", u: "what-is-plan-forge.html#the-problem" },
+    { t: "The 80/20 Wall", u: "what-is-plan-forge.html#the-eighty-twenty-wall" },
+    { t: "Evidence A/B Test Results", u: "what-is-plan-forge.html#evidence" },
     { t: "What Happens Without Guardrails", u: "what-is-plan-forge.html#without-guardrails" },
     { t: "What Plan Forge Does", u: "what-is-plan-forge.html#what-it-does" },
     { t: "The Blacksmith Analogy", u: "what-is-plan-forge.html#the-analogy" },
@@ -206,6 +210,7 @@
     // Ch 2
     { t: "The 7-Step Pipeline", u: "how-it-works.html#pipeline" },
     { t: "Sessions and Why They Matter", u: "how-it-works.html#sessions" },
+    { t: "Why Session Isolation Works", u: "how-it-works.html#why-session-isolation-works" },
     { t: "The File System", u: "how-it-works.html#file-system" },
     { t: "How Guardrails Auto-Load (applyTo)", u: "how-it-works.html#apply-to" },
     { t: ".forge.json Config", u: "how-it-works.html#forge-json" },

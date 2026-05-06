@@ -1343,7 +1343,7 @@ pforge fm-session purge --all
 
 ### Session File Format
 
-Active file: `.forge/fm-sessions/<session-id>.jsonl`  
+Active file: `.forge/fm-sessions/<session-id>.jsonl`
 Archive file: `.forge/fm-sessions/<session-id>.archive.jsonl`
 
 Each line is a JSON object:

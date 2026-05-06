@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Project History — Plan Forge Manual</title>
+  <meta name="description" content="Plan Forge version timeline from v1.0 (Summer 2025) through v2.83 (May 2026) — what each milestone shipped, what problem it solved, and why each inflection point mattered." />
+  <meta property="og:title" content="Project History — Plan Forge Manual" />
+  <meta property="og:description" content="Seven inflection points across a year of building AI coding guardrails." />
+  <meta property="og:type" content="article" />
+  <link rel="canonical" href="https://planforge.software/manual/project-history.html" />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+    <main><div class="chapter-content">
+
+      <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Reference</div>
+      <h1>Project History</h1>
+      <p class="text-lg text-slate-400 mb-8">Seven inflection points from v1.0 (Summer 2025) to v2.83 (May 2026). Each one solved a specific problem the previous version exposed.</p>
+
+      <img src="assets/diagrams/evolution-timeline.svg" alt="Plan Forge evolution timeline showing seven version milestones: v1.0 Summer 2025 (18 instruction files plus 4-session pipeline), v2.0 January 2026 (autonomous orchestrator plus 17 MCP tools), v2.5 February 2026 (Quorum Mode 3-model consensus), v2.10 March 2026 (OpenClaw bridge for cross-platform notifications), v2.14 March 2026 (Copilot platform integration), v2.18 April 2026 (Temper Guards plus Warning Signs plus Context Fuel), v2.83 May 2026 highlighted in amber as current (host-aware routing plus quorum estimator plus complexity rubric)" class="diagram-img diagram-img-md my-6" />
+
+      <div class="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5 mb-10">
+        <p class="text-sm text-slate-400 mb-2"><strong class="text-slate-200">When to read this chapter:</strong> understanding why a feature exists, evaluating whether a design constraint is foundational or contingent, or onboarding to the architecture's history.</p>
+        <p class="text-sm text-slate-400 mb-0"><strong class="text-slate-200">Reference adaptation</strong> of the marketing essay <a href="../blog/the-journey-from-impossible-to-seven-minutes.html" class="text-amber-400 hover:underline" rel="noopener">From Impossible to 7 Minutes — A Year of Building AI Coding Guardrails</a> (April 2026), extended through v2.83 from the CHANGELOG.</p>
+      </div>
+
+      <h2 id="v1-0-foundation">v1.0 — Foundation (Summer 2025)</h2>
+
+      <p><strong>What shipped</strong>: 18 specialized instruction files, prompt templates, and the 4-session pipeline (Specify → Plan → Execute → Review). Plan Forge at this point was "files you install" — a guardrail collection that lived in the project's <code>.github/</code> directory.</p>
+
+      <p><strong>Inflection point</strong>: The breakthrough was not the file count. It was discovering that <em>session isolation</em> works — the builder cannot review its own work, but a separate session with fresh context catches blind spots reliably. This insight made consistent quality possible and became the foundation everything else built on. See <a href="how-it-works.html#why-session-isolation-works">How It Works → Why Session Isolation Works</a> and <a href="lessons-learned.html#independent-review">Lessons Learned → Lesson 3</a>.</p>
+
+      <p><strong>What it solved</strong>: Single-session AI work had a quality ceiling — agents would believe their own bad code was correct because the bad code lived in the same context window as the proposed fix.</p>
+
+      <h2 id="v2-0-autonomous">v2.0 — Autonomous Orchestrator (January 2026)</h2>
+
+      <p><strong>What shipped</strong>: DAG-based execution engine with CLI worker spawning, 17 MCP tools (<code>forge_run_plan</code>, <code>forge_analyze</code>, <code>forge_diagnose</code>, <code>forge_cost_report</code>, etc.), the <code>pforge</code> CLI, and the dashboard with live progress / cost aggregation / session replay.</p>
+
+      <p><strong>Inflection point</strong>: Plan Forge stopped being "files you install" and became "a system that runs." The MCP server gave it a programmatic API; the dashboard gave it visibility; the orchestrator made full plan execution possible without human intervention between slices.</p>
+
+      <p><strong>What it solved</strong>: Hardened plans existed in v1.0 but a human had to drive each slice. Long features required hours of supervised execution. The orchestrator removed the supervision tax for everything except gate failures.</p>
+
+      <h2 id="v2-5-quorum">v2.5 — Quorum Mode (February 2026)</h2>
+
+      <p><strong>What shipped</strong>: Multi-model consensus analysis. Three models analyze the same slice independently; a reviewer model synthesizes their findings into a unified report. See <a href="advanced-execution.html#quorum">Advanced Execution → Quorum Mode</a> for current mechanics.</p>
+
+      <p><strong>Inflection point</strong>: Single-model execution was hitting its limits. Claude excelled at architecture; GPT at breadth; Grok brought a different analytical lens. Each model had blind spots, and those blind spots were consistent. Treating AI code analysis as a <em>consensus</em> process — the way human code review works — produced 20% more test recommendations than any single model alone (per <a href="../blog/quorum-mode-3-models.html" rel="noopener">quorum A/B test</a>).</p>
+
+      <p><strong>What it solved</strong>: Quality plateau on complex slices. One model's blind spot is another model's strength.</p>
+
+      <h2 id="v2-10-openclaw">v2.10 — OpenClaw Bridge (March 2026)</h2>
+
+      <p><strong>What shipped</strong>: Cross-platform notification fan-out — Telegram, Slack, Discord, Microsoft Teams, PagerDuty, OpenClaw — with inline approval / reject flows for events that need a human. See <a href="remote-bridge.html">Remote Bridge</a>.</p>
+
+      <p><strong>Inflection point</strong>: Plan Forge runs inside the IDE, but some decisions are not IDE-shaped. A reviewer flags drift at 2 AM. A quorum tie needs a human tiebreaker. An incident fires after the laptop closes. The bridge made the forge able to <em>reach you</em> instead of waiting for you to come back.</p>
+
+      <p><strong>What it solved</strong>: The "I missed the notification" failure mode that blocked autonomous execution overnight or away from the desk.</p>
+
+      <h2 id="v2-14-copilot">v2.14 — Copilot Platform Integration (March 2026)</h2>
+
+      <p><strong>What shipped</strong>: Native VS Code experience — skills, agents, lifecycle hooks (<code>SessionStart</code>, <code>PreToolUse</code>, <code>PostToolUse</code>, <code>Stop</code>), and instruction auto-loading via <code>applyTo</code> frontmatter. See <a href="multi-agent.html#copilot">Multi-Agent → Copilot</a>.</p>
+
+      <p><strong>Inflection point</strong>: Auto-loading turned guardrail adoption from optional ("whoever remembered") to default ("it just works"). The <code>applyTo</code> pattern moved compliance from roughly 20% to 100%. See <a href="lessons-learned.html#auto-loading-beats-manual">Lessons Learned → Lesson 2</a>.</p>
+
+      <p><strong>What it solved</strong>: Manual instruction-file attachment was a dead pattern. Lifecycle hooks gave Plan Forge the ability to enforce rules at file-edit time rather than relying on the agent to remember to load them.</p>
+
+      <h2 id="v2-18-temper-guards">v2.18 — Temper Guards, Warning Signs, Context Fuel (April 2026)</h2>
+
+      <p><strong>What shipped</strong>: Each instruction file gained two new sections — <em>Temper Guards</em> documenting the specific shortcuts agents take that produce compiling but architecturally broken code, and <em>Warning Signs</em> listing observable anti-patterns reviewers can grep for. <em>Context Fuel</em> instruction file taught agents to manage their own context budgets.</p>
+
+      <p><strong>Inflection point</strong>: Agent-skills analysis revealed a class of failure that previous guardrails missed — the model would write code that compiled, passed tests, and looked plausible while violating an architectural principle nobody had thought to forbid explicitly. Temper Guards captured these as named anti-patterns; Warning Signs gave reviewers a way to detect them.</p>
+
+      <p><strong>What it solved</strong>: The "looks correct, is structurally wrong" failure mode. Compiling code is not architecturally compliant code.</p>
+
+      <h2 id="v2-83-current">v2.83 — Host-Aware Routing, Quorum Estimator, Complexity Rubric (May 2026, current)</h2>
+
+      <p><strong>What shipped</strong>: Host-aware model routing (subscription-vs-API billing surface awareness), <code>forge_estimate_quorum</code> tool for tool-backed cost projection across all four quorum modes, and the documented complexity scoring rubric (<a href="advanced-execution.html#quorum-complexity">scoreSliceComplexity()</a>) with seven weighted signals. See <a href="advanced-execution.html#host-routing">Host-Aware Routing</a> and <a href="advanced-execution.html#quorum-estimate">Estimating Quorum Cost</a>.</p>
+
+      <p><strong>Inflection point</strong>: Quorum cost was previously hand-computed by agents — and observed to overshoot reality by an order of magnitude. The estimator tool replaced chat math with measured projection. Host-aware routing fixed the silent-double-pay failure mode where <code>gpt-*</code> models on Claude Code or Cursor would bill the user's pay-per-token API instead of their existing subscription.</p>
+
+      <p><strong>What it solved</strong>: Cost surprise. Both the quorum overhead surprise (estimator) and the host billing surprise (routing).</p>
+
+      <h2 id="see-also">See Also</h2>
+
+      <ul>
+        <li><a href="../blog/the-journey-from-impossible-to-seven-minutes.html" rel="noopener">Original blog post</a> — first-person narrative version with the human story behind each inflection point</li>
+        <li><a href="lessons-learned.html">Lessons Learned</a> — the seven principles that emerged from this evolution</li>
+        <li><a href="https://github.com/srnichols/plan-forge/blob/master/CHANGELOG.md" rel="noopener">CHANGELOG.md</a> — full version-by-version detail beyond the seven inflection points</li>
+      </ul>
+
+      <p class="text-sm text-slate-500 mt-8">📄 Reference adaptation of <a href="../blog/the-journey-from-impossible-to-seven-minutes.html" rel="noopener">the-journey-from-impossible-to-seven-minutes.html</a>. v2.83 milestone added from CHANGELOG.md (post-blog).</p>
+      <div id="chapter-prev-next" class="chapter-nav"></div>
+    </div></main>
+  </div>
+  <script src="assets/manual.js"></script>
+</body>
+</html>

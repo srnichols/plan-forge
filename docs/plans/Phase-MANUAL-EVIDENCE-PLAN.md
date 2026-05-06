@@ -62,7 +62,7 @@ All resolved during hardening; no TBDs remain.
 | 2 | Where to place "Session Isolation Why" content | **Section in `how-it-works.html`**. The 4-session structure is already there; this section explains the *why* alongside the *what*. |
 | 3 | Lessons-Learned and Project-History — chapters or appendices | **Appendices** (act: "Appendix"). They're reference material, not part of the linear learning path. |
 | 4 | Numbering for the 2 new appendices | **No letters** — register with `num: ""` so the sidebar shows just the title. Precedent: `about-author` already uses no number. (Verified: `manual.js:60` and the rendered sidebar.) Alternative: continue O, P after Phase-ENTERPRISE-DOCS-HTML's I–N. **Decision: No letters.** Lessons-Learned and Project-History are conceptually different from the I–N enterprise appendix track. |
-| 5 | A/B test bar chart — embed numbers from which run | The **April 11 2026 ".NET 60 vs 13" run** documented in `docs/blog/ab-test-plan-forge-vs-vibe-coding.html`. Verified numbers: tests 60/13, interfaces 6/0, DTOs 9/0, CancellationToken refs 79/0, typed exceptions 4/0, quality score 99/44, build cost $0.62. |
+| 5 | A/B test bar chart — embed numbers from which run | The **April 11 2026 ".NET 60 vs 13" run** documented in `docs/blog/ab-test-plan-forge-vs-vibe-coding.html`. Verified numbers: tests 60/13, interfaces 6/0, DTOs 9/0, CancellationToken refs 79/0, typed exceptions 4/0, quality score 99/44, build time 7 vs 8 minutes, model Claude Opus 4.6, 4.6× more tests, 2.25× higher quality. |
 | 6 | Evolution timeline — which version milestones to include | v1.0 (Summer 2025, 18 instruction files + 4-session pipeline), v2.0 (Jan 2026, autonomous orchestrator + 17 MCP tools), v2.5 (Feb 2026, Quorum Mode), v2.10 (Mar 2026, OpenClaw bridge), v2.14 (Mar 2026, Copilot platform integration), v2.18 (Apr 2026, Temper Guards + Warning Signs + Context Fuel), v2.83 (May 2026, current). All anchored from the journey blog. |
 | 7 | Voice for adapted blog content | Reference voice: third person, present tense, no "I/we/you decided to". Quote blog posts inline only when the original phrasing is the technical claim itself (e.g. "an order of magnitude reduction in scope drift"). |
 | 8 | How to verify numeric claims | Each slice with numeric claims includes a `grep -F` line in its validation gate confirming the same number appears in the source blog HTML. |
@@ -84,7 +84,7 @@ All resolved during hardening; no TBDs remain.
 
 - **MUST**: New `<h2 id="evidence">Evidence: A/B Test Results</h2>` exists
 - **MUST**: References `evidence-ab-test-bars.svg` via `<img src="assets/diagrams/evidence-ab-test-bars.svg" alt="...">` with descriptive alt text covering all bars
-- **MUST**: Includes the verified numbers (60/13 tests, 6/0 interfaces, 9/0 DTOs, 79/0 CancellationToken refs, 4/0 typed exceptions, 99/44 quality, $0.62 cost) presented as a table
+- **MUST**: Includes the verified numbers (60/13 tests, 6/0 interfaces, 9/0 DTOs, 79/0 CancellationToken refs, 4/0 typed exceptions, 99/44 quality, 7 vs 8 minutes, model Claude Opus 4.6) presented as a table
 - **MUST**: Links back to the source blog post: `<a href="../blog/ab-test-plan-forge-vs-vibe-coding.html" rel="noopener">Full A/B test write-up</a>`
 - **MUST**: Includes a one-paragraph explanation of methodology (same model: Claude Opus 4.6; same time: ~7 minutes; same task)
 - **MUST**: Includes a "What this measures" callout explaining that the differences are structural quality (interfaces, DTOs, cancellation, exception types) — not just test count
@@ -206,7 +206,7 @@ All resolved during hardening; no TBDs remain.
 grep -F "60" docs/blog/ab-test-plan-forge-vs-vibe-coding.html >/dev/null
 grep -F "99" docs/blog/ab-test-plan-forge-vs-vibe-coding.html >/dev/null
 grep -F "44" docs/blog/ab-test-plan-forge-vs-vibe-coding.html >/dev/null
-grep -F "0.62" docs/blog/ab-test-plan-forge-vs-vibe-coding.html >/dev/null
+grep -F "Claude Opus 4.6" docs/blog/ab-test-plan-forge-vs-vibe-coding.html >/dev/null
 grep -F "an order of magnitude" docs/blog/guardrails-lessons-learned.html >/dev/null
 grep -F "v1.0" docs/blog/the-journey-from-impossible-to-seven-minutes.html >/dev/null
 grep -F "v2.18" docs/blog/the-journey-from-impossible-to-seven-minutes.html >/dev/null

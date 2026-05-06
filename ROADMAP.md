@@ -1,6 +1,6 @@
 # Plan Forge — Project Roadmap
 
-> **Purpose**: Public roadmap for the Plan Forge framework itself.  
+> **Purpose**: Public roadmap for the Plan Forge framework itself.
 > **Not to be confused with**: `docs/plans/DEPLOYMENT-ROADMAP.md` — that's the template your project uses for feature tracking.
 
 ---

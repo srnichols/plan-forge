@@ -318,42 +318,212 @@ export function detectCostModel({ env = {}, forgeConfig = {}, model = "" } = {})
 }
 
 /**
+ * Round a USD cost to 6 decimal places (matches existing convention; ~$0.000001 precision).
+ */
+function roundUsd(n) {
+  return Math.round(n * 1_000_000) / 1_000_000;
+}
+
+/**
+ * Build a zero-filled `cost_breakdown` object. Every priceSlice() return populates
+ * the same shape so downstream consumers can rely on the keys existing.
+ */
+function emptyBreakdown() {
+  return {
+    input_uncached: 0,
+    input_cache_read: 0,
+    input_cache_write_5m: 0,
+    input_cache_write_1h: 0,
+    output_total: 0,
+    reasoning_tokens: 0,
+    tier_adjustment: 0,
+    subscription_cost: 0,
+  };
+}
+
+/**
+ * Resolve OpenAI / xAI service-tier multipliers from a pricing entry.
+ * Returns `{ input: 1.0, output: 1.0 }` for unknown/missing tiers (no adjustment).
+ */
+function resolveTierMultipliers(pricing, serviceTier) {
+  switch (serviceTier) {
+    case "flex":
+      return { input: pricing.flex_input_multiplier, output: pricing.flex_output_multiplier };
+    case "priority":
+      return { input: pricing.priority_input_multiplier, output: pricing.priority_output_multiplier };
+    case "standard":
+    case "default":
+    case null:
+    case undefined:
+    default:
+      return { input: 1.0, output: 1.0 };
+  }
+}
+
+/**
  * Calculate cost for a single slice from its token data.
  *
- * CLI workers (gh-copilot, claude) are subscription-based — cost is estimated
- * from premium request counts, not token-based API pricing.
- * API workers use per-token MODEL_PRICING.
+ * Phase-COST-TOKEN-COVERAGE Slice 3: vendor-aware billing math with per-class
+ * `cost_breakdown`. Five execution paths, picked from `tokens.vendor`:
  *
- * Signature kept positional for drop-in parity with the legacy
- * `calculateSliceCost(tokens, worker)` entry point in orchestrator.mjs.
+ *  - **Subscription CLI** (`worker` is set and not `api-*`): unchanged path —
+ *    `premiumRequests × $0.01`. v2.83.0 Forbidden Action #1 protected.
+ *  - **Anthropic** (`vendor === 'anthropic'`): `tokens_in` is uncached input
+ *    (after last cache breakpoint). Bill `tokens_in`, cache_read, 5m write,
+ *    1h write each independently with their multipliers.
+ *  - **OpenAI** (`vendor === 'openai'`): `tokens_in` INCLUDES `cache_read_tokens`.
+ *    Subtract cached from input before billing uncached portion. Apply tier
+ *    multipliers (flex/priority).
+ *  - **xAI** (`vendor === 'xai'`): if `cost_in_usd_ticks` present, use it directly
+ *    (1 tick = 1e-10 USD); skip computed math. Otherwise mirror OpenAI math.
+ *  - **Unknown / legacy** (`vendor` absent or unrecognized): backward-compatible
+ *    math. `tokens_in × input + tokens_out × output`. Existing callers that
+ *    construct `{ tokens_in, tokens_out, model }` see identical cost as before.
  *
- * @param {{ tokens_in: number|null, tokens_out: number|null, model: string, premiumRequests?: number }} tokens
+ * @param {{
+ *   tokens_in?: number|null, tokens_out?: number|null, model?: string,
+ *   premiumRequests?: number,
+ *   cache_read_tokens?: number,
+ *   cache_creation_5m_tokens?: number, cache_creation_1h_tokens?: number,
+ *   cache_creation_input_tokens?: number,
+ *   reasoning_tokens?: number,
+ *   service_tier?: 'standard'|'flex'|'priority'|'default'|null,
+ *   cost_in_usd_ticks?: number,
+ *   vendor?: 'anthropic'|'openai'|'xai'|'azure-openai'|'unknown',
+ * }} tokens
  * @param {string} [worker] - Worker type: "gh-copilot", "claude", "codex", "api-xai", etc.
- * @returns {{ cost_usd: number, model: string, tokens_in: number, tokens_out: number }}
+ * @returns {{
+ *   cost_usd: number, model: string, tokens_in: number, tokens_out: number,
+ *   cost_breakdown: object,
+ * }}
  */
 export function priceSlice(tokens, worker) {
   const model = tokens?.model || "unknown";
   const tokensIn = typeof tokens?.tokens_in === "number" ? tokens.tokens_in : 0;
   const tokensOut = typeof tokens?.tokens_out === "number" ? tokens.tokens_out : 0;
+  const breakdown = emptyBreakdown();
 
-  let cost;
-  // CLI subscription workers: cost based on premium requests, not API token pricing
+  // ─── Subscription CLI path (UNCHANGED — v2.83.0 Forbidden Action) ───
   if (worker && !worker.startsWith("api-")) {
     const premiumRequests = tokens?.premiumRequests || 0;
-    // GitHub Copilot premium request rate — approximate per-request cost
     const PREMIUM_REQUEST_RATE = 0.01; // ~$0.01 per premium request
-    cost = premiumRequests * PREMIUM_REQUEST_RATE;
-  } else {
-    // API workers: use per-token pricing
-    const pricing = getPricing(model);
-    cost = (tokensIn * pricing.input) + (tokensOut * pricing.output);
+    const cost = premiumRequests * PREMIUM_REQUEST_RATE;
+    breakdown.subscription_cost = roundUsd(cost);
+    return {
+      cost_usd: roundUsd(cost),
+      model,
+      tokens_in: tokensIn,
+      tokens_out: tokensOut,
+      cost_breakdown: breakdown,
+    };
   }
 
+  // ─── xAI authoritative override: cost_in_usd_ticks wins ───
+  // Per xAI cost-tracking docs: usage.cost_in_usd_ticks is the authoritative
+  // billed amount per response (1 tick = 1e-10 USD). When present, multiplier
+  // math is bypassed so estimates exactly match the xAI invoice.
+  if (tokens?.vendor === "xai" && typeof tokens?.cost_in_usd_ticks === "number") {
+    const costFromTicks = tokens.cost_in_usd_ticks * 1e-10;
+    const reasoning = tokens?.reasoning_tokens || 0;
+    breakdown.input_uncached = roundUsd(costFromTicks); // attributed for sum invariant
+    breakdown.reasoning_tokens = reasoning;
+    breakdown.authoritative_source = "cost_in_usd_ticks";
+    return {
+      cost_usd: roundUsd(costFromTicks),
+      model,
+      tokens_in: tokensIn,
+      tokens_out: tokensOut,
+      cost_breakdown: breakdown,
+    };
+  }
+
+  const pricing = getPricing(model);
+  const reasoningTokens = tokens?.reasoning_tokens || 0;
+  breakdown.reasoning_tokens = reasoningTokens; // informational subset of tokens_out
+
+  // ─── Anthropic path: input_tokens EXCLUDES cached + creation ───
+  // Bill each component independently. Per Anthropic prompt caching docs,
+  // total billable input = uncached + cache_read + cache_creation (5m + 1h).
+  if (tokens?.vendor === "anthropic") {
+    const cacheRead = tokens?.cache_read_tokens || 0;
+    let cache5m = tokens?.cache_creation_5m_tokens || 0;
+    let cache1h = tokens?.cache_creation_1h_tokens || 0;
+    const cacheCombined = tokens?.cache_creation_input_tokens || 0;
+
+    // If only the combined cache_creation_input_tokens is set (no 5m/1h split),
+    // default the entire amount to 5m rate. Per plan Required Decision #4:
+    // when split is unavailable, 5m rate is the conservative-correct default.
+    if (cacheCombined > 0 && cache5m === 0 && cache1h === 0) {
+      cache5m = cacheCombined;
+    }
+
+    breakdown.input_uncached = roundUsd(tokensIn * pricing.input);
+    breakdown.input_cache_read = roundUsd(cacheRead * pricing.input * pricing.cache_read_multiplier);
+    breakdown.input_cache_write_5m = roundUsd(cache5m * pricing.input * pricing.cache_write_5m_multiplier);
+    breakdown.input_cache_write_1h = roundUsd(cache1h * pricing.input * pricing.cache_write_1h_multiplier);
+    breakdown.output_total = roundUsd(tokensOut * pricing.output);
+    breakdown.tier_adjustment = 0; // Anthropic has no flex/priority tier today
+
+    const cost = breakdown.input_uncached + breakdown.input_cache_read +
+                 breakdown.input_cache_write_5m + breakdown.input_cache_write_1h +
+                 breakdown.output_total;
+    return {
+      cost_usd: roundUsd(cost),
+      model,
+      tokens_in: tokensIn,
+      tokens_out: tokensOut,
+      cost_breakdown: breakdown,
+    };
+  }
+
+  // ─── OpenAI / xAI (computed) path: prompt_tokens INCLUDES cached ───
+  // Subtract cached from input before billing the uncached portion.
+  // Apply service-tier multipliers (flex 0.5×, priority 2.0/1.5× asymmetric).
+  if (tokens?.vendor === "openai" || tokens?.vendor === "xai") {
+    const cacheRead = tokens?.cache_read_tokens || 0;
+    const uncachedIn = Math.max(0, tokensIn - cacheRead);
+    const tier = resolveTierMultipliers(pricing, tokens?.service_tier);
+
+    const inputUncachedCost = uncachedIn * pricing.input * tier.input;
+    const inputCacheReadCost = cacheRead * pricing.input * pricing.cache_read_multiplier * tier.input;
+    const outputCost = tokensOut * pricing.output * tier.output;
+
+    // Tier adjustment = (computed cost at active tier) − (cost at standard tier)
+    // Negative for flex savings, positive for priority surcharge, 0 for standard.
+    const standardCost = (uncachedIn * pricing.input) +
+                         (cacheRead * pricing.input * pricing.cache_read_multiplier) +
+                         (tokensOut * pricing.output);
+    const activeCost = inputUncachedCost + inputCacheReadCost + outputCost;
+    const tierAdjustment = activeCost - standardCost;
+
+    breakdown.input_uncached = roundUsd(inputUncachedCost);
+    breakdown.input_cache_read = roundUsd(inputCacheReadCost);
+    breakdown.output_total = roundUsd(outputCost);
+    breakdown.tier_adjustment = roundUsd(tierAdjustment);
+
+    return {
+      cost_usd: roundUsd(activeCost),
+      model,
+      tokens_in: tokensIn,
+      tokens_out: tokensOut,
+      cost_breakdown: breakdown,
+    };
+  }
+
+  // ─── Unknown / legacy / azure-openai path: backward-compatible math ───
+  // Vendor absent or unrecognized. Existing callers that construct
+  // { tokens_in, tokens_out, model } see identical cost as before. New
+  // optional fields are ignored on this path so cache + reasoning are not
+  // applied without a positive vendor identification (avoids surprise costs).
+  const cost = (tokensIn * pricing.input) + (tokensOut * pricing.output);
+  breakdown.input_uncached = roundUsd(tokensIn * pricing.input);
+  breakdown.output_total = roundUsd(tokensOut * pricing.output);
   return {
-    cost_usd: Math.round(cost * 1_000_000) / 1_000_000, // 6 decimal places
+    cost_usd: roundUsd(cost),
     model,
     tokens_in: tokensIn,
     tokens_out: tokensOut,
+    cost_breakdown: breakdown,
   };
 }
 

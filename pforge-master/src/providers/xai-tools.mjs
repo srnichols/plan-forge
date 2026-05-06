@@ -16,10 +16,34 @@
 import {
   buildOpenAITools,
   formatMessages,
-  parseResponse,
+  parseResponse as parseOpenAIResponse,
 } from "./openai-tools.mjs";
 
 const DEFAULT_BASE_URL = "https://api.x.ai/v1";
+
+/**
+ * Parse xAI response into the generic format.
+ *
+ * Phase-COST-TOKEN-COVERAGE Slice 7: xAI is OpenAI-compatible at the wire,
+ * so we delegate to the OpenAI parser then overlay xAI-specific fields:
+ *   - vendor: "xai" (overrides the "openai" the base parser sets)
+ *   - costInUsdTicks: authoritative billed amount per response
+ *     (1 tick = 1e-10 USD). When present, priceSlice() uses it directly
+ *     and skips computed multiplier math. See xAI cost-tracking docs.
+ *
+ * @param {object} data - xAI API response (OpenAI-compatible shape)
+ * @returns {object} same shape as openai parseResponse plus costInUsdTicks + vendor: "xai"
+ */
+export function parseResponse(data) {
+  const base = parseOpenAIResponse(data);
+  const usage = data.usage || {};
+  const costInUsdTicks = typeof usage.cost_in_usd_ticks === "number" ? usage.cost_in_usd_ticks : null;
+  return {
+    ...base,
+    costInUsdTicks,
+    vendor: "xai",
+  };
+}
 
 /**
  * Send a reply-only request (no tool schemas).

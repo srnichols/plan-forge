@@ -79,17 +79,41 @@ export function formatMessages(messages) {
 
 /**
  * Parse OpenAI response into the generic format.
+ *
+ * Phase-COST-TOKEN-COVERAGE Slice 6: Extracts cached_tokens, reasoning_tokens,
+ * and service_tier. Handles BOTH the Chat Completions API shape
+ * (`prompt_tokens` + `prompt_tokens_details.cached_tokens`) and the
+ * Responses API shape (`input_tokens` + `input_tokens_details.cached_tokens`).
+ * The `vendor: "openai"` field signals to priceSlice() to apply the
+ * cached-INCLUDED billing math (mirror-opposite of Anthropic).
+ *
  * @param {object} data - OpenAI API response
- * @returns {{ type: "reply"|"tool_calls", content?: string, toolCalls?: Array, tokensIn: number, tokensOut: number }}
+ * @returns {{
+ *   type: "reply"|"tool_calls", content?: string, toolCalls?: Array,
+ *   tokensIn: number, tokensOut: number,
+ *   cacheReadTokens: number, reasoningTokens: number,
+ *   serviceTier: string|null, vendor: "openai",
+ * }}
  */
 export function parseResponse(data) {
   const usage = data.usage || {};
-  const tokensIn = usage.prompt_tokens || 0;
-  const tokensOut = usage.completion_tokens || 0;
+  // Chat Completions API uses prompt_tokens/completion_tokens; Responses API
+  // uses input_tokens/output_tokens. Read whichever is present.
+  const tokensIn = usage.prompt_tokens || usage.input_tokens || 0;
+  const tokensOut = usage.completion_tokens || usage.output_tokens || 0;
+  // Phase-COST-TOKEN-COVERAGE Slice 6: cache + reasoning + tier extraction
+  const promptDetails = usage.prompt_tokens_details || usage.input_tokens_details || {};
+  const completionDetails = usage.completion_tokens_details || usage.output_tokens_details || {};
+  const cacheReadTokens = promptDetails.cached_tokens || 0;
+  const reasoningTokens = completionDetails.reasoning_tokens || 0;
+  const serviceTier = data.service_tier || null;
 
   const choice = data.choices?.[0];
   if (!choice) {
-    return { type: "reply", content: "", tokensIn, tokensOut };
+    return {
+      type: "reply", content: "", tokensIn, tokensOut,
+      cacheReadTokens, reasoningTokens, serviceTier, vendor: "openai",
+    };
   }
 
   const message = choice.message || {};
@@ -105,6 +129,10 @@ export function parseResponse(data) {
       })),
       tokensIn,
       tokensOut,
+      cacheReadTokens,
+      reasoningTokens,
+      serviceTier,
+      vendor: "openai",
     };
   }
 
@@ -113,6 +141,10 @@ export function parseResponse(data) {
     content: message.content || "",
     tokensIn,
     tokensOut,
+    cacheReadTokens,
+    reasoningTokens,
+    serviceTier,
+    vendor: "openai",
   };
 }
 

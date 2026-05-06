@@ -54,6 +54,14 @@
     { id: "liveguard-runbooks",  file: "liveguard-runbooks.html",  num: "F",  title: "LiveGuard Alert Runbooks",  act: "Appendix" },
     { id: "update-source",       file: "update-source.html",       num: "G",  title: "Update Source Modes",       act: "Appendix" },
     { id: "plan-forge-on-the-github-stack", file: "plan-forge-on-the-github-stack.html", num: "H",  title: "Plan Forge on the GitHub Stack", act: "Appendix" },
+    { id: "enterprise-deployment",            file: "enterprise-deployment.html",            num: "I", title: "Plan Forge for Enterprise",         act: "Appendix" },
+    { id: "github-stack-alignment",           file: "github-stack-alignment.html",           num: "J", title: "GitHub Stack Alignment",            act: "Appendix" },
+    { id: "enterprise-reference-architecture", file: "enterprise-reference-architecture.html", num: "K", title: "Enterprise Reference Architecture", act: "Appendix" },
+    { id: "agent-factory-recipe",             file: "agent-factory-recipe.html",             num: "L", title: "Agent Factory Recipe",              act: "Appendix" },
+    { id: "fleet-operator-playbook",          file: "fleet-operator-playbook.html",          num: "M", title: "Fleet Operator Playbook",           act: "Appendix" },
+    { id: "compliance-and-data-residency",    file: "compliance-and-data-residency.html",    num: "N", title: "Compliance & Data Residency",       act: "Appendix" },
+    { id: "lessons-learned",                  file: "lessons-learned.html",                  num: "",  title: "Lessons Learned",                   act: "Appendix" },
+    { id: "project-history",                  file: "project-history.html",                  num: "",  title: "Project History",                   act: "Appendix" },
     { id: "about-author",         file: "about-author.html",        num: "",   title: "About the Author",          act: "Appendix" },
   ];
 
@@ -192,6 +200,8 @@
     { t: "Whats Next After Quickstart",          u: "quickstart-first-deploy.html#whats-next" },
     // Ch 1
     { t: "The Problem in One Sentence", u: "what-is-plan-forge.html#the-problem" },
+    { t: "The 80/20 Wall", u: "what-is-plan-forge.html#the-eighty-twenty-wall" },
+    { t: "Evidence A/B Test Results", u: "what-is-plan-forge.html#evidence" },
     { t: "What Happens Without Guardrails", u: "what-is-plan-forge.html#without-guardrails" },
     { t: "What Plan Forge Does", u: "what-is-plan-forge.html#what-it-does" },
     { t: "The Blacksmith Analogy", u: "what-is-plan-forge.html#the-analogy" },
@@ -200,6 +210,7 @@
     // Ch 2
     { t: "The 7-Step Pipeline", u: "how-it-works.html#pipeline" },
     { t: "Sessions and Why They Matter", u: "how-it-works.html#sessions" },
+    { t: "Why Session Isolation Works", u: "how-it-works.html#why-session-isolation-works" },
     { t: "The File System", u: "how-it-works.html#file-system" },
     { t: "How Guardrails Auto-Load (applyTo)", u: "how-it-works.html#apply-to" },
     { t: ".forge.json Config", u: "how-it-works.html#forge-json" },
@@ -343,6 +354,12 @@
     { t: "Model Routing", u: "advanced-execution.html#model-routing" },
     { t: "Escalation Chains", u: "advanced-execution.html#escalation" },
     { t: "Quorum Mode", u: "advanced-execution.html#quorum" },
+    { t: "Quorum vs Quorum Advisory", u: "advanced-execution.html#quorum-vs-advisory" },
+    { t: "Worked Example - Copilot CLI + Grok API", u: "advanced-execution.html#quorum-mixed-example" },
+    { t: "Estimating Quorum Cost forge_estimate_quorum", u: "advanced-execution.html#quorum-estimate" },
+    { t: "Quorum Complexity Scoring Rubric", u: "advanced-execution.html#quorum-complexity" },
+    { t: "Multi-Agent Quorum Turns PFORGE_QUORUM_TURN", u: "advanced-execution.html#quorum-multi-agent" },
+    { t: "Host-Aware Routing", u: "advanced-execution.html#host-routing" },
     { t: "Cost Optimization", u: "advanced-execution.html#cost-optimization" },
     { t: "CI Integration GitHub Actions", u: "advanced-execution.html#ci-integration" },
     { t: "Parallel Execution DAG", u: "advanced-execution.html#parallel" },
@@ -357,6 +374,39 @@
     { t: "Costs Are Too High", u: "troubleshooting.html#costs-high" },
     { t: "Grok Image Generation", u: "troubleshooting.html#image-generation" },
     { t: "Common Error Messages", u: "troubleshooting.html#common-errors" },
+    // Appendix I — Plan Forge for Enterprise
+    { t: "Why Plan Forge for the Enterprise", u: "enterprise-deployment.html#why-plan-forge-for-the-enterprise" },
+    { t: "Where to Find What You Need (Enterprise)", u: "enterprise-deployment.html#where-to-find-what-you-need" },
+    { t: "Quick Start for Evaluators", u: "enterprise-deployment.html#quick-start-for-evaluators" },
+    // Appendix J — GitHub Stack Alignment
+    { t: "What GitHub Ships (the Substrate)", u: "github-stack-alignment.html#what-github-ships-the-substrate" },
+    { t: "What GitHub Leaves to the Ecosystem", u: "github-stack-alignment.html#what-github-leaves-to-ecosystem" },
+    { t: "How Plan Forge Composes with GitHub", u: "github-stack-alignment.html#how-plan-forge-composes" },
+    // Appendix K — Enterprise Reference Architecture
+    { t: "Generic Enterprise Reference Architecture", u: "enterprise-reference-architecture.html#reference-architecture-a-generic" },
+    { t: "Microsoft Foundry Composition Variant", u: "enterprise-reference-architecture.html#microsoft-foundry-variant" },
+    { t: "Network and Isolation Patterns (Cloud / Hybrid / Air-Gapped)", u: "enterprise-reference-architecture.html#network-and-isolation-patterns" },
+    { t: "Capacity Planning (Per-Team Sizing)", u: "enterprise-reference-architecture.html#capacity-planning" },
+    // Appendix L — Agent Factory Recipe
+    { t: "Agent Factory — The Recipe in One Page", u: "agent-factory-recipe.html#the-recipe-in-one-page" },
+    { t: "Step 3 — Route Agents to Lanes", u: "agent-factory-recipe.html#step-3-route-agents" },
+    { t: "MCP Server Selection (Plan Forge / GitHub / Foundry Toolbox)", u: "agent-factory-recipe.html#step-5-shared-tools" },
+    { t: "Scaling the Factory Across Teams", u: "agent-factory-recipe.html#scaling-the-factory" },
+    // Appendix M — Fleet Operator Playbook
+    { t: "Day 1 — Pilot Installation", u: "fleet-operator-playbook.html#day-1-pilot-installation" },
+    { t: "Week 4 — Pilot Graduation", u: "fleet-operator-playbook.html#week-4-pilot-graduation" },
+    { t: "Week 12 — Full Fleet Quarterly Review", u: "fleet-operator-playbook.html#week-12-full-fleet" },
+    { t: "Fleet KPIs", u: "fleet-operator-playbook.html#kpis" },
+    { t: "Cost Discipline", u: "fleet-operator-playbook.html#cost-discipline" },
+    { t: "Multi-Team Operations (Federated vs Centralized)", u: "fleet-operator-playbook.html#multi-team" },
+    // Appendix N — Compliance and Data Residency
+    { t: "Compliance — Data Flow", u: "compliance-and-data-residency.html#data-flow" },
+    { t: "Compliance — Audit Logging", u: "compliance-and-data-residency.html#audit-logging" },
+    { t: "Compliance — Identity and Authentication", u: "compliance-and-data-residency.html#identity-and-authentication" },
+    { t: "Compliance Posture (SOC2 / HIPAA / PCI / FedRAMP / GDPR)", u: "compliance-and-data-residency.html#compliance-posture" },
+    { t: "Air-Gapped Deployment", u: "compliance-and-data-residency.html#air-gapped-deployment" },
+    { t: "Azure Government", u: "compliance-and-data-residency.html#azure-government" },
+    { t: "Observability Export (OTel)", u: "compliance-and-data-residency.html#observability-export" },
   ];
 
   function initSearch() {

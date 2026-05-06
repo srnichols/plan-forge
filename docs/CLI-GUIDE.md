@@ -723,6 +723,8 @@ Execute a hardened plan — spawn CLI workers for each slice, validate at every 
 - `--quorum=speed` — Fast preset: Claude Sonnet 4.6 + GPT-5.4-mini + Grok 4.1 Fast Reasoning (threshold 7, 2min timeout)
 - `--quorum-threshold <N>` — Override complexity threshold (1-10)
 
+> **OAuth-only quorum works.** The `--quorum=*` presets fan out via the local `copilot` CLI &mdash; one subprocess per model &mdash; so a GitHub Copilot subscription alone is enough; no API keys required. Add `XAI_API_KEY` (env var or `.forge/secrets.json`) to mix in a Grok leg alongside the Copilot-served legs. Models whose CLI/credentials aren't reachable are dropped at startup by `filterQuorumModels` rather than failing the run. See [advanced-execution.html#quorum-mixed-example](manual/advanced-execution.html#quorum-mixed-example) for a worked 2× Copilot + 1× Grok config.
+
 **Results written to:** `.forge/runs/<timestamp>/`
 - `run.json` — run metadata
 - `slice-N.json` — per-slice results with token tracking
@@ -1341,7 +1343,7 @@ pforge fm-session purge --all
 
 ### Session File Format
 
-Active file: `.forge/fm-sessions/<session-id>.jsonl`  
+Active file: `.forge/fm-sessions/<session-id>.jsonl`
 Archive file: `.forge/fm-sessions/<session-id>.archive.jsonl`
 
 Each line is a JSON object:

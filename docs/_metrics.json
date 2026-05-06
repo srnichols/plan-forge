@@ -40,7 +40,7 @@
   "dashboardTabsBreakdown": "Forge: Home, Runs, Progress, Crucible, Governance, Cost, Actions, Replay, Extensions, Config, Traces, Skills, Watcher, Tempering, Bug Registry, Memory, Timeline, Review, Inner Loop, Forge-Master (20) + LiveGuard: Health, Incidents, Triage, Security, Env (5)",
 
   "manualChapters": 24,
-  "manualAppendices": 7,
+  "manualAppendices": 14,
 
   "abTestApril2026": {
     "tests": { "planForge": 60, "vibeCoding": 13 },
@@ -57,6 +57,7 @@
     "agents": [17, 18],
     "skills": [11, 12],
     "manualChapters": [17, 18, 19],
+    "manualAppendices": [6, 7, 8],
     "versionBadges": ["v2.53.3", "v2.54.0", "v2.55.0", "v2.59.0", "v2.59.1", "v2.60.0", "v2.61.0", "v2.62.0", "v2.62.1", "v2.62.2", "v2.62.3", "v2.63.0"]
   }
 }

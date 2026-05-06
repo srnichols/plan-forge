@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 640" width="900" height="640" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <!-- Background -->
+  <rect width="900" height="640" fill="#0f172a"/>
+
+  <!-- Outer customer-network boundary -->
+  <rect x="20" y="20" width="860" height="600" rx="14" fill="none" stroke="#475569" stroke-width="2" stroke-dasharray="8 4"/>
+  <text x="40" y="48" fill="#94a3b8" font-size="14" font-weight="700">CUSTOMER'S NETWORK BOUNDARY</text>
+
+  <!-- 1. Developer Workstations -->
+  <rect x="60" y="78" width="780" height="92" rx="10" fill="#1e293b" stroke="#f59e0b" stroke-width="2"/>
+  <text x="80" y="106" fill="#f59e0b" font-size="13" font-weight="700">DEVELOPER WORKSTATIONS  ·  5 teams × ~200 devs</text>
+  <text x="80" y="128" fill="#cbd5e1" font-size="12">• Plan Forge orchestrator (local CLI, dashboard at :3100)</text>
+  <text x="80" y="146" fill="#cbd5e1" font-size="12">• VS Code + Copilot + Plan Forge MCP server</text>
+  <text x="80" y="164" fill="#cbd5e1" font-size="12">• Local .forge/ directory: plans, runs, traces, cost-history</text>
+
+  <!-- Arrow down -->
+  <line x1="450" y1="170" x2="450" y2="195" stroke="#64748b" stroke-width="2"/>
+  <polygon points="450,200 444,190 456,190" fill="#64748b"/>
+
+  <!-- 2. GitHub Enterprise -->
+  <rect x="60" y="205" width="780" height="92" rx="10" fill="#1e293b" stroke="#334155" stroke-width="2"/>
+  <text x="80" y="233" fill="#e2e8f0" font-size="13" font-weight="700">GITHUB ENTERPRISE  (cloud or GHES self-hosted)</text>
+  <text x="80" y="255" fill="#cbd5e1" font-size="12">• Repos, Issues, PRs, Actions runners</text>
+  <text x="80" y="273" fill="#cbd5e1" font-size="12">• Copilot Enterprise + Copilot Cloud Agent</text>
+  <text x="80" y="291" fill="#cbd5e1" font-size="12">• GHAS (code scanning, secret scanning, Dependabot)  ·  Org-scoped policies + custom properties</text>
+
+  <!-- Arrow down -->
+  <line x1="450" y1="297" x2="450" y2="322" stroke="#64748b" stroke-width="2"/>
+  <polygon points="450,327 444,317 456,317" fill="#64748b"/>
+
+  <!-- 3. CI / Fleet-Scale Execution -->
+  <rect x="60" y="332" width="780" height="92" rx="10" fill="#1e293b" stroke="#334155" stroke-width="2"/>
+  <text x="80" y="360" fill="#e2e8f0" font-size="13" font-weight="700">CI / FLEET-SCALE EXECUTION</text>
+  <text x="80" y="382" fill="#cbd5e1" font-size="12">• GitHub Actions runners (org-default, self-hosted, or hybrid)</text>
+  <text x="80" y="400" fill="#cbd5e1" font-size="12">• Plan Forge as `pforge run-plan` invoked from workflow</text>
+  <text x="80" y="418" fill="#cbd5e1" font-size="12">• Cloud Agent ephemeral runners (per-task, per-PR)</text>
+
+  <!-- Arrow down -->
+  <line x1="450" y1="424" x2="450" y2="449" stroke="#64748b" stroke-width="2"/>
+  <polygon points="450,454 444,444 456,444" fill="#64748b"/>
+
+  <!-- 4. Observability -->
+  <rect x="60" y="459" width="780" height="92" rx="10" fill="#1e293b" stroke="#334155" stroke-width="2"/>
+  <text x="80" y="487" fill="#e2e8f0" font-size="13" font-weight="700">OBSERVABILITY</text>
+  <text x="80" y="509" fill="#cbd5e1" font-size="12">• OTel collector (in-network)</text>
+  <text x="80" y="527" fill="#cbd5e1" font-size="12">• Splunk / Datadog / Grafana / App Insights as backend</text>
+  <text x="80" y="545" fill="#cbd5e1" font-size="12">• Plan Forge dashboard for plan-aware views (localhost:3100)</text>
+
+  <!-- Arrow down to LLM -->
+  <line x1="450" y1="551" x2="450" y2="582" stroke="#64748b" stroke-width="2"/>
+  <polygon points="450,587 444,577 456,577" fill="#64748b"/>
+
+  <!-- 5. LLM Provider (outside boundary) -->
+  <rect x="280" y="592" width="340" height="38" rx="8" fill="#0c1424" stroke="#64748b" stroke-width="2" stroke-dasharray="6 3"/>
+  <text x="450" y="617" fill="#cbd5e1" font-size="12" text-anchor="middle">LLM PROVIDER  ·  customer-chosen (Anthropic / OpenAI / xAI / Foundry / Copilot)</text>
+</svg>

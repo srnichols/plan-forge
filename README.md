@@ -140,7 +140,7 @@ Key tools: `forge_run_plan` · `forge_liveguard_run` · `forge_analyze` · `forg
 
 | Feature | How to Enable | What It Does |
 |---------|--------------|-------------|
-| **Quorum mode** | Automatic (complexity ≥ 6) | 3 models analyze in parallel, reviewer synthesizes. Self-tuning threshold. |
+| **Quorum mode** | Automatic (complexity ≥ 6) | 3 models analyze in parallel, reviewer synthesizes. Works **OAuth-only via the Copilot CLI** &mdash; no API keys required. Add `XAI_API_KEY` to mix in a Grok leg. Self-tuning threshold. |
 | **Audit Loop** | `pforge audit-loop` or `.forge.json#audit` | Closed-loop drain: content-audit scanner → triage → fix. Default off; opt-in via `audit.mode: "auto"` or `"always"`. |
 | **Auto-escalation** | Built-in | Model fails → auto-promotes. Chain reorders by success rate. |
 | **Cost tracking** | Built-in | Per-slice tokens, 23-model pricing, `--estimate` with historical calibration. |

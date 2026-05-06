@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Appendix K: Enterprise Reference Architecture — Plan Forge Manual</title>
+  <meta name="description" content="One canonical architecture for a 5-team / 1000-developer Plan Forge fleet, plus the Microsoft Foundry composition variant. Capacity planning, isolation patterns, failure modes, deployment timeline." />
+  <meta property="og:title" content="Enterprise Reference Architecture" />
+  <meta property="og:description" content="5-team / 1000-developer reference architecture + Microsoft Foundry composition. Local-first, GitHub-native, three isolation patterns including air-gapped." />
+  <meta property="og:type" content="article" />
+  <link rel="canonical" href="https://planforge.software/manual/enterprise-reference-architecture.html" />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+    <main><img src="assets/chapter-heroes/appendix-k-hero.jpg" alt="An architectural blueprint scroll on the workbench drawing itself into a 5-layer stacked tower of glowing translucent rectangles, anchored at the anvil base, with Azure-blue accents suggesting a cloud tenant boundary" class="chapter-hero" /><div class="chapter-content">
+
+      <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Appendix K</div>
+      <h1>Enterprise Reference Architecture</h1>
+      <p class="text-lg text-slate-400 mb-8">One canonical architecture for a 5-team / 1000-developer fleet, plus the Microsoft Foundry composition variant for Azure-tenant deployments.</p>
+
+      <div class="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5 mb-10">
+        <p class="text-sm text-slate-400 mb-2"><strong class="text-slate-200">Audience:</strong> Platform architects and security engineers planning a multi-team Plan Forge deployment.</p>
+        <p class="text-sm text-slate-400 mb-0"><strong class="text-slate-200">Scope:</strong> Generic enterprise architecture (Pattern A) and the Microsoft Foundry composition variant (Pattern B). Plus three network/isolation patterns including the air-gapped option that's a structural differentiator.</p>
+      </div>
+
+      <h2 id="design-principles">Design principles</h2>
+
+      <p>Three constraints shape every architecture below:</p>
+
+      <ol>
+        <li><strong class="text-slate-200">Local-first control plane.</strong> The Plan Forge orchestrator runs on the developer's box or a CI runner. There is no Plan Forge SaaS service. Source code does not leave the customer's network unless the customer chooses to call a hosted LLM.</li>
+        <li><strong class="text-slate-200">GitHub-native by design.</strong> Plan Forge consumes GitHub Issues, Copilot Cloud Agent, Actions, AGENTS.md, MCP, and the github-mcp-server as its substrate. Reinforces a GitHub Enterprise + Copilot Enterprise consolidation rather than competing with it.</li>
+        <li><strong class="text-slate-200">Open standards throughout.</strong> AGENTS.md (Linux Foundation), MCP (Linux Foundation), Agent Skills (Apache 2.0, Anthropic-maintained), OpenTelemetry <code>gen_ai.*</code> semantic conventions. No proprietary file formats.</li>
+      </ol>
+
+      <h2 id="reference-architecture-a-generic">Reference architecture A — Generic enterprise (5 teams, 1000 developers)</h2>
+
+      <figure class="my-6">
+        <img src="assets/diagrams/enterprise-reference-architecture-generic.svg" alt="Generic 5-team enterprise reference architecture: developer workstations → GitHub Enterprise → CI/fleet execution → observability → LLM provider, all within the customer's network boundary." class="w-full max-w-4xl mx-auto rounded-xl border border-slate-700/50 shadow-2xl shadow-amber-500/5" loading="lazy" />
+        <figcaption class="text-xs text-slate-500 mt-2 text-center">Generic enterprise reference architecture — 5 teams × ~200 developers. Plan Forge orchestrator runs in the customer's network; only LLM inference may cross the boundary depending on provider choice.</figcaption>
+      </figure>
+
+      <h3 id="component-responsibilities">Component responsibilities</h3>
+
+      <table>
+        <thead><tr><th>Component</th><th>Owns</th><th>Does not own</th></tr></thead>
+        <tbody>
+          <tr><td><strong class="text-slate-200">Developer workstation</strong></td><td>Local plan execution, IDE-time orchestration, the dashboard, all <code>.forge/</code> artifacts</td><td>Multi-team aggregation, long-running compute</td></tr>
+          <tr><td><strong class="text-slate-200">GitHub Enterprise</strong></td><td>Source of truth for repos, issues, PRs. Hosts Copilot Cloud Agent runs. Runs Actions workflows</td><td>Plan-level orchestration. Quality / eval / drift detection</td></tr>
+          <tr><td><strong class="text-slate-200">Actions runners</strong></td><td>Long-running plan execution, scheduled <code>pforge run-plan</code> jobs, fleet-scale dispatch</td><td>Interactive developer-loop workflows</td></tr>
+          <tr><td><strong class="text-slate-200">OTel collector + backend</strong></td><td>All trace, metric, and log aggregation across teams</td><td>Real-time agent control</td></tr>
+          <tr><td><strong class="text-slate-200">LLM provider</strong></td><td>Inference for worker LLM calls</td><td>Plan state, scope enforcement, gate validation</td></tr>
+        </tbody>
+      </table>
+
+      <h3 id="data-flow">Data flow</h3>
+
+      <ol>
+        <li>Developer (or CI) starts a plan run.</li>
+        <li>Plan Forge orchestrator reads the plan file, builds the slice DAG, dispatches each slice to the configured worker (Copilot Cloud Agent for GitHub-native runs, Claude Code / Codex CLI for direct runs, etc.).</li>
+        <li>Worker consumes AGENTS.md + plan slice context + MCP tools. Calls the configured LLM provider for completions.</li>
+        <li>Plan Forge runs the slice's validation gate. On pass, advances. On fail, retries with reflexion or escalates per plan policy.</li>
+        <li>Cost, trace, and event data is appended to <code>.forge/runs/&lt;id&gt;/</code> locally and emitted to the OTel collector for fleet aggregation.</li>
+        <li>PR is opened (Cloud Agent path) or commit is staged (direct path). Plan-aware diff (<code>pforge diff</code>) checks scope-contract adherence before merge.</li>
+      </ol>
+
+      <h2 id="microsoft-foundry-variant">Reference architecture B — Microsoft Foundry variant</h2>
+
+      <p>For customers running on Microsoft Foundry (Azure OpenAI, Foundry Agent Service, Foundry Toolboxes), Plan Forge composes as the SDLC orchestrator layer above Foundry's model gateway and agent runtime.</p>
+
+      <figure class="my-6">
+        <img src="assets/diagrams/enterprise-reference-architecture-foundry.svg" alt="Microsoft Foundry composition: Plan Forge orchestrates above Foundry; Foundry serves as model gateway; Foundry Agent Service hosts production agents; both share Foundry Toolbox (MCP) and App Insights (OTel sink). Entra ID and Private VNet support the boundary." class="w-full max-w-4xl mx-auto rounded-xl border border-slate-700/50 shadow-2xl shadow-amber-500/5" loading="lazy" />
+        <figcaption class="text-xs text-slate-500 mt-2 text-center">Microsoft Foundry composition variant. Plan Forge sits <em>above</em> Foundry as the SDLC orchestrator; Foundry sits <em>below</em> as model gateway and production agent runtime.</figcaption>
+      </figure>
+
+      <h3 id="what-sits-where">What sits where</h3>
+
+      <ul>
+        <li><strong class="text-slate-200">Plan Forge above Foundry</strong>: Plan Forge is the SDLC orchestrator (specify, plan, harden, execute, validate, ship). Foundry is the model gateway and production agent runtime. Plan Forge is not inside Foundry, not beside Foundry as a peer agent product, but above Foundry as the higher-altitude orchestration layer.</li>
+        <li><strong class="text-slate-200">Foundry as model provider</strong>: Plan Forge talks to AOAI via the OpenAI-compatible endpoint <code>https://{resource}.openai.azure.com/openai/v1/</code>. Auth via Entra ID (recommended), API key, or managed identity. Customer configures <strong>deployment names</strong>, not model families.</li>
+        <li><strong class="text-slate-200">Foundry Toolbox as shared MCP surface</strong>: Customer's curated, governed, audited tool surface — exposed once via Foundry Toolbox, consumed by Plan Forge in worker sessions and by Foundry agents in production. Single source of truth for org tools.</li>
+        <li><strong class="text-slate-200">App Insights as OTel sink</strong>: Plan Forge emits OTel traces (per the <code>gen_ai.*</code> spec). Pointed at the Foundry-attached Application Insights resource, Plan Forge runs show up in the same dashboards as Foundry agent runs.</li>
+        <li><strong class="text-slate-200">Plan Forge generates code that deploys to Foundry</strong>: A Plan Forge plan can ship a feature that <em>is</em> a Foundry agent. <code>deploy.instructions.md</code> and the skill system include <code>/staging-deploy</code> and similar skills that target Foundry deployment paths.</li>
+      </ul>
+
+      <h3 id="what-does-not-compose">What does <em>not</em> compose</h3>
+
+      <ul>
+        <li>Plan Forge workers do not run as Foundry hosted agents. Different lifetimes, different IO models. Plan Forge workers need filesystem/git/terminal; Foundry hosted agents are containerized with VM-isolated sandboxes per session.</li>
+        <li>Plan Forge does not register itself as a Foundry "fleet view" entity. Integration is one-way (Plan Forge writes to App Insights); the single pane of glass for Plan Forge runs is the Plan Forge dashboard.</li>
+      </ul>
+
+      <h3 id="auth-flow-entra">Auth flow (Entra recommended)</h3>
+
+      <pre><code>from azure.identity import DefaultAzureCredential, get_bearer_token_provider
+token_provider = get_bearer_token_provider(
+    DefaultAzureCredential(), "https://ai.azure.com/.default"
+)
+client = OpenAI(
+    base_url="https://YOUR-RESOURCE.openai.azure.com/openai/v1/",
+    api_key=token_provider,
+)</code></pre>
+
+      <p>Required role assignment on the Foundry resource: <strong class="text-slate-200">Cognitive Services OpenAI User</strong> or <strong class="text-slate-200">Contributor</strong>.</p>
+
+      <h3 id="friction-to-design-around">Friction to design around</h3>
+
+      <ol>
+        <li><strong class="text-slate-200">Deployment-name vs model-name</strong>: Customer says "I'm using gpt-5.4-mini"; Plan Forge needs the deployment name (e.g., <code>eastus-prod-mini</code>).</li>
+        <li><strong class="text-slate-200">AOAI quota differs from OpenAI</strong>: Fixed TPM quotas per region per model, plus PTU for provisioned. A slice estimating 150K tokens against a 100K TPM deployment will throttle mid-run. Plan ahead.</li>
+        <li><strong class="text-slate-200">Government cloud</strong>: Azure Gov has a reduced model catalog (<code>gpt-5.1</code>, <code>gpt-4.1</code> family, <code>o3-mini</code>, <code>gpt-4o</code>). Use the <code>power-gov</code> quorum preset (or graceful fallback) when targeting Azure Government.</li>
+      </ol>
+
+      <h2 id="network-and-isolation-patterns">Network and isolation patterns</h2>
+
+      <h3 id="pattern-1-cloud-llm">Pattern 1: Fully cloud-LLM (typical SaaS company)</h3>
+
+      <ul>
+        <li>LLM calls go to public Anthropic / OpenAI / GitHub Copilot endpoints</li>
+        <li>Plan Forge runs locally, traces go to cloud-hosted observability</li>
+        <li>Lowest cost, fastest setup, weakest isolation</li>
+        <li>Right for: most non-regulated companies, internal tooling, dev productivity</li>
+      </ul>
+
+      <h3 id="pattern-2-hybrid">Pattern 2: Hybrid (Microsoft-shop typical)</h3>
+
+      <ul>
+        <li>LLM calls go to Azure OpenAI in customer's tenant via private endpoint</li>
+        <li>Plan Forge runs locally and in customer's Azure DevOps / GitHub Actions</li>
+        <li>Traces to App Insights in same Azure subscription</li>
+        <li>Right for: regulated SaaS, fintech, healthtech with Microsoft preference</li>
+      </ul>
+
+      <h3 id="pattern-3-air-gapped">Pattern 3: Air-gapped (defense, sovereign cloud, regulated)</h3>
+
+      <ul>
+        <li>LLM calls go to <strong class="text-slate-200">on-prem inference</strong> (Foundry Local powered by Azure Local, Ollama, vLLM, or similar)</li>
+        <li>Plan Forge runs entirely in-network; no calls leave the boundary</li>
+        <li>OTel collector + backend in-network</li>
+        <li>GitHub Enterprise Server (GHES) instead of cloud</li>
+        <li>Right for: defense, FedRAMP High, IL5/IL6, sovereign cloud customers</li>
+      </ul>
+
+      <p>Plan Forge is structurally compatible with all three. <strong class="text-amber-400">Pattern 3 is the differentiator</strong> — Cursor cannot offer this (control plane in AWS), Sourcegraph Amp explicitly cannot (no self-host, no BYOK), GitHub Copilot Cloud Agent runs on GitHub-hosted infrastructure. <strong class="text-slate-200">For air-gapped requirements, Plan Forge is structurally the only viable option in the comparison set.</strong></p>
+
+      <h2 id="capacity-planning">Capacity planning</h2>
+
+      <h3 id="per-team-sizing">Per-team sizing (typical)</h3>
+
+      <p>For a team of ~50 developers running ~3 plans/day per developer:</p>
+
+      <table>
+        <thead><tr><th>Resource</th><th>Estimate</th></tr></thead>
+        <tbody>
+          <tr><td>Plan Forge orchestrator processes</td><td>One per active developer, low CPU/memory (Node.js process, dashboard at :3100)</td></tr>
+          <tr><td>GitHub Actions minutes (CCA-dispatched plans)</td><td>~15K min/month (varies wildly by plan complexity)</td></tr>
+          <tr><td>LLM tokens (mixed-mode quorum)</td><td>~50M input + 10M output per team-month at moderate use</td></tr>
+          <tr><td>Storage (<code>.forge/runs/</code> retention)</td><td>~5GB / team / quarter at typical detail</td></tr>
+          <tr><td>OTel trace volume</td><td>~100K spans / team / day</td></tr>
+        </tbody>
+      </table>
+
+      <h3 id="org-level-governance">Org-level governance</h3>
+
+      <ul>
+        <li><strong class="text-slate-200">Custom properties</strong> on repos to scope which Plan Forge plans are allowed</li>
+        <li><strong class="text-slate-200">Org runner policies</strong> to control which Cloud Agent runners are available</li>
+        <li><strong class="text-slate-200">Branch protection rules</strong> to require Plan Forge gate-passed status before merge</li>
+        <li><strong class="text-slate-200">Cost budgets</strong> in <code>.forge.json</code> per repo or per team</li>
+      </ul>
+
+      <h2 id="failure-modes-and-mitigations">Failure modes and mitigations</h2>
+
+      <table>
+        <thead><tr><th>Failure</th><th>Detection</th><th>Mitigation</th></tr></thead>
+        <tbody>
+          <tr><td>LLM provider outage</td><td>OTel error rate spike on <code>gen_ai.*</code> spans</td><td>Plan Forge supports multi-provider routing in <code>.forge.json</code>. Failover order configurable per slice</td></tr>
+          <tr><td>AOAI quota exhausted mid-slice</td><td>Worker error, gate failure</td><td>Preflight quota check (planned), slice retry with backoff, cross-region failover via deployment alias</td></tr>
+          <tr><td>GitHub Actions runner exhaustion</td><td>Workflow queue depth, Cloud Agent session pending</td><td>Self-hosted runner pool, prioritize critical plans via <code>[P]</code> tag and runner labels</td></tr>
+          <tr><td>Plan drift (PR diverges from approved plan)</td><td><code>pforge diff</code> post-execution</td><td>Pre-merge gate fails; reviewer-gate agent flags; review thread opened via <code>forge_review_add</code></td></tr>
+          <tr><td>Cost runaway (slice loops or model misroutes)</td><td><code>forge_cost_report</code> anomaly, dashboard cost-tile alert</td><td>Per-slice <code>workerTimeoutMs</code> cap, <code>forge_alert_triage</code> priority queue, in-loop stuck detector (planned)</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="reference-deployment-timeline">Reference deployment timeline</h2>
+
+      <p>For an enterprise rolling out across 5 teams in 90 days:</p>
+
+      <table>
+        <thead><tr><th>Week</th><th>Milestone</th></tr></thead>
+        <tbody>
+          <tr><td>0</td><td>Stakeholder alignment, pick LLM provider strategy, identify pilot team</td></tr>
+          <tr><td>1–2</td><td>Pilot team installs Plan Forge, runs first plan against a known-easy feature, baseline cost + cycle time</td></tr>
+          <tr><td>3–4</td><td>Pilot team runs 5+ plans, refines instruction files, captures lessons</td></tr>
+          <tr><td>5–6</td><td>Add team 2 + team 3 in parallel; first multi-team observability dashboards</td></tr>
+          <tr><td>7–8</td><td>Add teams 4 + 5; introduce shared MCP server (Foundry Toolbox or in-house equivalent)</td></tr>
+          <tr><td>9–10</td><td>Org-wide rollout patterns formalized; cost guardrails; quality KPIs reported up</td></tr>
+          <tr><td>11–12</td><td>First quarterly review; eval data informs next-quarter planning</td></tr>
+        </tbody>
+      </table>
+
+      <p>See <a href="fleet-operator-playbook.html" class="text-amber-400 hover:underline">Appendix M — Fleet Operator Playbook</a> for week-by-week specifics.</p>
+
+      <div id="chapter-prev-next"></div>
+    </div></main>
+  </div>
+  <script src="assets/manual.js"></script>
+</body>
+</html>

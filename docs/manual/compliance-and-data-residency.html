@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Appendix N: Compliance and Data Residency — Plan Forge Manual</title>
+  <meta name="description" content="Where data lives, what's logged, how to export for audit, identity model, compliance posture per framework (SOC2/HIPAA/PCI-DSS/FedRAMP/GDPR), air-gapped deployment, Azure Government." />
+  <meta property="og:title" content="Compliance and Data Residency" />
+  <meta property="og:description" content="Plan Forge security review reference. Local-first, structured audit trail, air-gapped supported. Honest about today's gaps and the roadmap." />
+  <meta property="og:type" content="article" />
+  <link rel="canonical" href="https://planforge.software/manual/compliance-and-data-residency.html" />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+    <main><img src="assets/chapter-heroes/appendix-n-hero.jpg" alt="A massive glowing golden vault door embedded in the forge wall, slightly ajar with warm light pouring out. An illuminated audit ledger on the workbench. Ghost-translucent compliance seals drift in ember trails around the vault" class="chapter-hero" /><div class="chapter-content">
+
+      <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Appendix N</div>
+      <h1>Compliance and Data Residency</h1>
+      <p class="text-lg text-slate-400 mb-8">Where data lives, what's logged, how to export for audit, identity (today and roadmap), and the air-gapped / Azure Government deployment paths.</p>
+
+      <div class="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5 mb-10">
+        <p class="text-sm text-slate-400 mb-2"><strong class="text-slate-200">Audience:</strong> Security architects, compliance officers, and platform leads conducting a security review of Plan Forge.</p>
+        <p class="text-sm text-slate-400 mb-0"><strong class="text-slate-200">Scope:</strong> Where data lives, what's logged, how to export for audit, identity model (today and roadmap), and the air-gapped / Azure Government deployment paths.</p>
+      </div>
+
+      <h2 id="tldr-for-security-review">TL;DR for security review</h2>
+
+      <p>Plan Forge is <strong class="text-slate-200">local-first</strong>. The orchestrator runs on the developer's machine or a CI runner inside the customer's network. There is no Plan Forge SaaS service. Source code does not leave the customer's network unless the customer chooses to call a hosted LLM (and even then, all logging stays local). The audit trail is structured, complete, and exportable. Identity is currently bearer-token only and is the largest gap on the roadmap.</p>
+
+      <table>
+        <thead><tr><th>Concern</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>Source code leaves network</td><td>Only when customer-configured LLM provider is hosted; all logging stays local</td></tr>
+          <tr><td>Audit log of agent actions</td><td>Structured, complete, <strong class="text-emerald-400">production-grade</strong> today (<code>telemetry.mjs</code>, <code>EVENTS.md</code>)</td></tr>
+          <tr><td>Audit log export</td><td>OTel exporter on roadmap (Week 2 of enterprise hardening); manual export available today</td></tr>
+          <tr><td>Identity / SSO</td><td><strong class="text-amber-400">Bearer token only today</strong>; Entra ID / SAML / SCIM on roadmap</td></tr>
+          <tr><td>RBAC</td><td><strong class="text-amber-400">None today</strong>; on roadmap</td></tr>
+          <tr><td>Data residency controls</td><td>Customer chooses LLM provider region; Plan Forge respects</td></tr>
+          <tr><td>Air-gapped deployment</td><td>Architecturally supported; documentation gap (this doc)</td></tr>
+          <tr><td>Encryption at rest</td><td>Customer's filesystem encryption (Plan Forge respects)</td></tr>
+          <tr><td>Secret redaction</td><td>Built-in for testbed findings; configurable scope on roadmap</td></tr>
+          <tr><td>FedRAMP / IL5 / IL6 / HIPAA / PCI / SOC2</td><td>Plan Forge is OSS — compliance posture is the customer's deployment, not a Plan Forge certification</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="data-flow">Data flow</h2>
+
+      <p>Five concrete data movements. For each, who handles the data and where it goes.</p>
+
+      <h3 id="data-1-source-code">1. Source code</h3>
+
+      <p><strong class="text-slate-200">Stays in the customer's network</strong>, except for:</p>
+      <ul>
+        <li>The bytes of files you choose to send to a hosted LLM as part of a prompt (Anthropic API, OpenAI API, GitHub Copilot, etc.)</li>
+        <li>The bytes of code Copilot Cloud Agent reads on its GitHub-hosted ephemeral runner (subject to GitHub's data handling)</li>
+      </ul>
+
+      <p>If you use only on-prem inference (Foundry Local, Ollama, vLLM, llama.cpp, etc.), source code never leaves your network for any reason.</p>
+
+      <h3 id="data-2-plan-files">2. Plan files</h3>
+
+      <p><strong class="text-slate-200">Stay in the customer's repo.</strong> Plan files (<code>docs/plans/*.md</code>) are committed to git. They live wherever the repo lives.</p>
+
+      <h3 id="data-3-forge-artifacts">3. <code>.forge/</code> artifacts</h3>
+
+      <p><strong class="text-slate-200">Stay on the local filesystem</strong> (developer machine or CI runner). Includes:</p>
+      <ul>
+        <li><code>.forge/runs/&lt;id&gt;/</code> — per-run trajectory, events, slice artifacts, summary, traces, cost history</li>
+        <li><code>.forge/cost-history.json</code> — aggregate cost</li>
+        <li><code>.forge/telemetry/tool-calls.jsonl</code> — MCP tool invocations</li>
+        <li><code>.forge/liveguard-events.jsonl</code> — LiveGuard scan events</li>
+        <li><code>.forge/trajectories/&lt;plan-slug&gt;.jsonl</code> — Copilot Coding Agent trajectories (when CCA is the worker)</li>
+        <li><code>.forge/fm-sessions/*.jsonl</code> — Forge-Master conversation sessions</li>
+      </ul>
+
+      <p><code>.forge/</code> is gitignored by default. It can be committed for audit purposes if your security policy requires.</p>
+
+      <h3 id="data-4-memory">4. Memory</h3>
+
+      <p>Three tiers, three different residency stories:</p>
+
+      <table>
+        <thead><tr><th>Tier</th><th>Location</th><th>Lifetime</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td><strong class="text-slate-200">L1 (volatile hub)</strong></td><td>In-process RAM</td><td>Per-process</td><td>Bounded ring buffer, evicted on restart</td></tr>
+          <tr><td><strong class="text-slate-200">L2 (structured)</strong></td><td>Local filesystem (<code>.forge/</code>, <code>.github/</code>, <code>docs/plans/</code>)</td><td>Persistent</td><td>Survives restart; lives where the repo lives</td></tr>
+          <tr><td><strong class="text-slate-200">L3 (semantic via OpenBrain)</strong></td><td>External Postgres + pgvector (optional)</td><td>Forever</td><td><strong>Cross-project by design.</strong> If used, deploy the Postgres in your network</td></tr>
+        </tbody>
+      </table>
+
+      <p>If L3/OpenBrain is not configured, Plan Forge runs single-project, single-session memory only. No external service required.</p>
+
+      <h3 id="data-5-telemetry">5. Telemetry / observability</h3>
+
+      <p>By default, telemetry stays local in <code>.forge/telemetry/</code>. With the OTel exporter (Week 2 of enterprise hardening), traces and metrics are emitted in the OpenTelemetry <code>gen_ai.*</code> semantic-convention format to a customer-chosen OTLP endpoint. Common targets:</p>
+
+      <ul>
+        <li>Splunk Observability Cloud</li>
+        <li>Datadog</li>
+        <li>Grafana Tempo / Mimir / Loki</li>
+        <li>Microsoft Application Insights (especially relevant for Foundry-attached deployments)</li>
+        <li>Honeycomb</li>
+        <li>Customer-hosted OTel Collector forwarding anywhere</li>
+      </ul>
+
+      <p>The OTel exporter is <strong class="text-slate-200">off by default</strong>. Enable by setting <code>OTEL_EXPORTER_OTLP_ENDPOINT</code>.</p>
+
+      <h2 id="audit-logging">Audit logging</h2>
+
+      <h3 id="audit-whats-logged">What's logged</h3>
+
+      <p>Plan Forge emits <strong class="text-slate-200">structured events</strong> for ~30 categories. The schema is documented in <code>pforge-mcp/EVENTS.md</code>. Categories include:</p>
+
+      <ul>
+        <li>Plan execution lifecycle (<code>run-started</code>, <code>slice-started</code>, <code>slice-completed</code>, <code>run-completed</code>)</li>
+        <li>Worker LLM calls (model, provider, token counts, latency, cost)</li>
+        <li>MCP tool invocations (tool name, args [optional], result [optional])</li>
+        <li>Validation gate execution (gate name, result, duration)</li>
+        <li>Quorum dispatch (<code>quorum-started</code>, <code>quorum-model-replied</code>, <code>quorum-synthesized</code>)</li>
+        <li>LiveGuard scans (<code>drift-</code>, <code>incident-</code>, <code>secret-scan-</code>, <code>dep-watch-</code>)</li>
+        <li>Crucible smelts (idea funnel)</li>
+        <li>Tempering runs (plan hardening)</li>
+        <li>Bug registry (open, status changes)</li>
+        <li>Skill execution (start, step, complete)</li>
+        <li>Watcher events (when one project tails another)</li>
+      </ul>
+
+      <p>Each event carries:</p>
+      <ul>
+        <li>ISO8601 timestamp</li>
+        <li>Event type</li>
+        <li>Correlation ID (groups events from the same run)</li>
+        <li>Source (which subsystem emitted it)</li>
+        <li>Severity (TRACE / DEBUG / INFO / WARN / ERROR / FATAL)</li>
+        <li>Type-specific data payload</li>
+      </ul>
+
+      <h3 id="audit-where-logged">Where it's logged</h3>
+
+      <table>
+        <thead><tr><th>Sink</th><th>Format</th><th>Retention</th></tr></thead>
+        <tbody>
+          <tr><td><code>.forge/runs/&lt;id&gt;/events.log</code></td><td>NDJSON</td><td>Per-run, kept until manual cleanup</td></tr>
+          <tr><td><code>.forge/runs/&lt;id&gt;/trace.json</code></td><td>OTLP-compatible</td><td>Per-run</td></tr>
+          <tr><td><code>.forge/telemetry/tool-calls.jsonl</code></td><td>NDJSON, append-only</td><td>Persistent</td></tr>
+          <tr><td><code>.forge/liveguard-events.jsonl</code></td><td>NDJSON, append-only</td><td>Persistent</td></tr>
+          <tr><td>Hub event stream</td><td>In-memory + WebSocket</td><td>Volatile (last N events)</td></tr>
+        </tbody>
+      </table>
+
+      <h3 id="audit-export">How to export for audit</h3>
+
+      <p>Today (manual):</p>
+
+      <pre><code># Aggregate all events from a date range
+jq -s 'sort_by(.ts)' .forge/runs/*/events.log &gt; audit-export.json
+
+# Or use forge_search for filtered export
+pforge search --since 2026-04-01 --sources run,liveguard,bug --output audit.json</code></pre>
+
+      <p>Roadmap (Week 2 of enterprise hardening): <code>pforge audit export --since &lt;date&gt; --format &lt;json|csv&gt;</code> as a first-class CLI.</p>
+
+      <h3 id="audit-secret-redaction">Secret redaction</h3>
+
+      <p>Built-in for testbed findings (<code>defect-log.mjs</code>). High-entropy secret detection in diffs (<code>forge_secret_scan</code>) <strong class="text-slate-200">always redacts values</strong>; findings are masked before caching or display. Plan to formalize as a configurable scope in Week 3 (auth/RBAC scaffolding).</p>
+
+      <h2 id="identity-and-authentication">Identity and authentication</h2>
+
+      <h3 id="identity-today">Today</h3>
+
+      <p>Plan Forge supports:</p>
+      <ul>
+        <li><strong class="text-slate-200">Bearer token</strong> for write operations against the dashboard / hub (configured as <code>bridge.approvalSecret</code> in <code>.forge.json</code>)</li>
+        <li><strong class="text-slate-200">API keys</strong> loaded from environment variables or <code>.forge/secrets.json</code> for LLM providers (OpenAI, Anthropic, xAI, GitHub Copilot, Azure OpenAI when manually configured)</li>
+      </ul>
+
+      <p>Known secrets recognized:</p>
+      <ul>
+        <li><code>GITHUB_TOKEN</code></li>
+        <li><code>XAI_API_KEY</code></li>
+        <li><code>OPENAI_API_KEY</code></li>
+        <li><code>ANTHROPIC_API_KEY</code></li>
+        <li><code>OPENCLAW_API_KEY</code></li>
+      </ul>
+
+      <p><strong class="text-slate-200">Not yet supported as first-class:</strong></p>
+      <ul>
+        <li><code>AZURE_OPENAI_API_KEY</code> + endpoint URL (works manually; first-class config on roadmap)</li>
+        <li>Entra ID / SAML / SCIM</li>
+        <li>OAuth flows</li>
+      </ul>
+
+      <h3 id="identity-roadmap">Identity roadmap</h3>
+
+      <p>Order of priority based on enterprise requests:</p>
+
+      <ol>
+        <li><strong class="text-slate-200">BYO Azure OpenAI first-class</strong> (Week 3 of enterprise hardening) — <code>AZURE_OPENAI_API_KEY</code> and endpoint as recognized secrets, deployment-name vs model-name handled in config, Entra ID auth via <code>azure-identity</code> SDK</li>
+        <li><strong class="text-slate-200">Auth model documentation + extension point</strong> (Week 3) — describes how Plan Forge thinks about identity today and the planned model. Adds a clear interface for plugging in SSO providers</li>
+        <li><strong class="text-slate-200">Config-driven RBAC scaffold</strong> (Week 3) — roles, permissions, who can do what (enforcement basic; structure right)</li>
+        <li><strong class="text-slate-200">Entra ID SSO</strong> (post-Week-4) — full implementation</li>
+        <li><strong class="text-slate-200">SAML / SCIM</strong> (later) — driven by enterprise demand</li>
+      </ol>
+
+      <p>If your security review requires SSO/SCIM/RBAC today, Plan Forge is not a fit. The honest answer matters more than overpromising.</p>
+
+      <h2 id="compliance-posture">Compliance posture</h2>
+
+      <p>Plan Forge is <strong class="text-slate-200">open-source software (MIT license)</strong>. Compliance certifications (FedRAMP, IL5/IL6, HIPAA, PCI-DSS, SOC2) attach to the <strong>customer's deployment</strong> of Plan Forge, not to Plan Forge itself. There is no Plan Forge SaaS to certify.</p>
+
+      <p>That said, several Plan Forge architectural choices are friendly to compliance audits:</p>
+
+      <table>
+        <thead><tr><th>Posture</th><th>What helps</th></tr></thead>
+        <tbody>
+          <tr><td><strong class="text-slate-200">No SaaS data plane</strong></td><td>Nothing to subpoena from a vendor; data lives where you put it</td></tr>
+          <tr><td><strong class="text-slate-200">Structured audit trail</strong></td><td>Every action logged with timestamps, correlation IDs, severity</td></tr>
+          <tr><td><strong class="text-slate-200">Open source</strong></td><td>Auditable end-to-end; no proprietary closed binaries</td></tr>
+          <tr><td><strong class="text-slate-200">Local-first by default</strong></td><td>Air-gapped deployment is structurally possible (see below)</td></tr>
+          <tr><td><strong class="text-slate-200">Open standards</strong></td><td>AGENTS.md, MCP, OTel <code>gen_ai.*</code> — no proprietary lock-in to challenge</td></tr>
+          <tr><td><strong class="text-slate-200">Compliance reviewer agent</strong></td><td><code>.github/agents/compliance-reviewer.agent.md</code> ships out of the box for GDPR/CCPA/SOC2/HIPAA-aware code review</td></tr>
+          <tr><td><strong class="text-slate-200">Project profile compliance frameworks</strong></td><td><code>.github/prompts/project-profile.prompt.md</code> collects SOC2, HIPAA, PCI-DSS, GDPR, FedRAMP early in setup</td></tr>
+        </tbody>
+      </table>
+
+      <p>For specific frameworks:</p>
+
+      <h3 id="soc2-type-ii">SOC2 Type II</h3>
+      <ul>
+        <li>Audit trail completeness: <strong class="text-emerald-400">✓</strong> (events, traces, run artifacts)</li>
+        <li>Access controls: <strong class="text-amber-400">⚠</strong> (bearer token today; SSO/RBAC on roadmap)</li>
+        <li>Change management: <strong class="text-emerald-400">✓</strong> (git-based plan files, scope contracts, gates)</li>
+        <li>Encryption in transit: <strong class="text-emerald-400">✓</strong> for LLM API calls; <strong class="text-emerald-400">✓</strong> for OTel export when configured with TLS</li>
+        <li>Encryption at rest: customer's filesystem encryption</li>
+      </ul>
+
+      <h3 id="hipaa">HIPAA</h3>
+      <ul>
+        <li>BAA: not applicable (no Plan Forge SaaS to BAA)</li>
+        <li>Customer's BAA with their LLM provider applies to inference data</li>
+        <li>Audit log: structured and complete</li>
+        <li>PHI handling: customer's responsibility — Plan Forge does not pre-process content</li>
+      </ul>
+
+      <h3 id="pci-dss">PCI-DSS</h3>
+      <ul>
+        <li>Scope reduction: Plan Forge does not handle payment data unless customer-configured to read it. Recommend isolating any PCI-relevant code review to dedicated Plan Forge instances with strict secret scanning enabled.</li>
+        <li>Secret handling: built-in detection + redaction for high-entropy strings in diffs</li>
+      </ul>
+
+      <h3 id="fedramp-il">FedRAMP / IL5 / IL6</h3>
+      <ul>
+        <li>Plan Forge is deployable in Azure Government and on-prem environments that match FedRAMP / IL boundaries</li>
+        <li>Use only FedRAMP-authorized LLM providers (Azure OpenAI in Azure Government has FedRAMP-authorized models — <code>gpt-5.1</code>, <code>gpt-4.1</code>, <code>o3-mini</code>, <code>gpt-4o</code>)</li>
+        <li>Plan Forge itself does not require FedRAMP authorization (it's software you run, not a service you consume)</li>
+      </ul>
+
+      <h3 id="gdpr-ccpa">GDPR / CCPA</h3>
+      <ul>
+        <li>Data minimization: Plan Forge does not collect personal data unless customer-configured</li>
+        <li>Right to access / delete: applies to data the customer chooses to capture; <code>.forge/</code> artifacts are deletable</li>
+      </ul>
+
+      <h2 id="air-gapped-deployment">Air-gapped deployment</h2>
+
+      <p>Plan Forge is architecturally compatible with fully air-gapped deployment. The complete pattern:</p>
+
+      <h3 id="airgap-works">What works air-gapped</h3>
+      <ul>
+        <li>Plan Forge orchestrator (Node.js process; no inbound network calls required)</li>
+        <li>Dashboard (<code>localhost:3100</code>)</li>
+        <li>Plan execution against local repos</li>
+        <li>All <code>.forge/</code> artifact storage</li>
+        <li>L1 (in-memory) and L2 (filesystem) memory tiers</li>
+        <li>OTel export to in-network OTel collector</li>
+        <li>Validation gates (run locally as shell commands)</li>
+      </ul>
+
+      <h3 id="airgap-special-handling">What requires special handling air-gapped</h3>
+
+      <table>
+        <thead><tr><th>Component</th><th>Air-gapped solution</th></tr></thead>
+        <tbody>
+          <tr><td><strong class="text-slate-200">LLM inference</strong></td><td>Use <strong>Foundry Local powered by Azure Local</strong> (preview May 2026), Ollama, vLLM, llama.cpp, or similar on-prem inference. Configure as the OpenAI-compatible endpoint Plan Forge talks to.</td></tr>
+          <tr><td><strong class="text-slate-200">GitHub Enterprise</strong></td><td>Use <strong>GitHub Enterprise Server (GHES)</strong> instead of GitHub.com. Plan Forge supports GHES; Cloud Agent local-MCP-server pattern works</td></tr>
+          <tr><td><strong class="text-slate-200">Update checks</strong></td><td>Set <code>PFORGE_NO_UPDATE_CHECK=1</code> to disable. Manual updates via <code>pforge self-update --from-local &lt;path&gt;</code> or repo sync from internal mirror</td></tr>
+          <tr><td><strong class="text-slate-200">OpenBrain L3 memory</strong></td><td>Optional; if used, deploy the Postgres+pgvector inside the boundary</td></tr>
+          <tr><td><strong class="text-slate-200">MCP servers</strong></td><td>Self-host any MCP server you want available; point <code>.vscode/mcp.json</code> at internal endpoints only</td></tr>
+        </tbody>
+      </table>
+
+      <h3 id="airgap-not-works">What does NOT work air-gapped</h3>
+      <ul>
+        <li>Plan Forge Hub WebSocket connections to external observability (configure local OTel collector instead)</li>
+        <li>Any LLM provider that requires public internet (configure on-prem inference instead)</li>
+        <li>The community extensions catalog (use <code>pforge ext add --from-local &lt;path&gt;</code> for vetted extensions)</li>
+      </ul>
+
+      <h3 id="airgap-checklist">Deployment checklist for air-gap</h3>
+      <ul>
+        <li>On-prem LLM inference deployed (Foundry Local / Ollama / vLLM)</li>
+        <li>GHES instead of GitHub.com (or no GitHub at all if your VCS is internal)</li>
+        <li>Internal git mirror for <code>srnichols/plan-forge</code> updates</li>
+        <li>OTel collector inside the boundary</li>
+        <li>OpenBrain (if using L3 memory) deployed inside the boundary</li>
+        <li>All MCP server endpoints internal</li>
+        <li><code>PFORGE_NO_UPDATE_CHECK=1</code> set</li>
+        <li>Network egress audit confirms zero outbound to public internet</li>
+      </ul>
+
+      <p><strong class="text-amber-400">This is the differentiator vs. competitors.</strong> Cursor cannot offer this (control plane in AWS even with self-hosted workers). Sourcegraph Amp explicitly cannot (no self-host, no BYOK). GitHub Copilot Cloud Agent runs on GitHub-hosted infrastructure. <strong class="text-slate-200">For air-gapped requirements, Plan Forge is structurally the only viable option in the comparison set.</strong></p>
+
+      <h2 id="azure-government">Azure Government</h2>
+
+      <p>For customers deploying in Azure Government:</p>
+
+      <h3 id="azure-gov-works">What works</h3>
+      <ul>
+        <li>Plan Forge orchestrator running on Azure Government VMs / AKS / Functions</li>
+        <li>Azure OpenAI in Azure Government as the LLM provider</li>
+        <li>Endpoint domain: <code>openai.azure.us</code> (not <code>openai.azure.com</code>)</li>
+        <li>Auth: <code>login.microsoftonline.us</code> Entra ID (when first-class Entra support lands)</li>
+        <li>Today: API key auth works via the manually-configured Azure OpenAI path</li>
+      </ul>
+
+      <h3 id="azure-gov-models">Model availability</h3>
+
+      <p>Azure Government has a <strong class="text-slate-200">substantially smaller catalog</strong> than commercial Azure:</p>
+      <ul>
+        <li><code>gpt-5.1</code></li>
+        <li><code>gpt-4.1</code></li>
+        <li><code>gpt-4.1-mini</code></li>
+        <li><code>o3-mini</code></li>
+        <li><code>gpt-4o</code></li>
+        <li>Embeddings: <code>text-embedding-3-large</code>, <code>text-embedding-3-small</code>, <code>text-embedding-ada-002</code></li>
+      </ul>
+
+      <p>Available in <code>usgovarizona</code> and <code>usgovvirginia</code>, with Data Zone Standard and Provisioned variants.</p>
+
+      <h3 id="azure-gov-implications">Plan Forge implications</h3>
+      <ul>
+        <li>The default <code>power</code> quorum preset (assumes flagship models like <code>gpt-5.5</code> or <code>claude-opus-4.7</code>) won't resolve cleanly</li>
+        <li>Use a <code>power-gov</code> preset (planned) or graceful fallback</li>
+        <li>The <code>speed</code> preset works (<code>gpt-4.1-mini</code> exists in gov)</li>
+      </ul>
+
+      <h3 id="azure-gov-compliance">Compliance certifications inherited</h3>
+
+      <p>Both global Azure and Azure Government are FedRAMP High. Azure Government adds contractual commitments around US-based data storage and screened-US-persons access. HIPAA and PCI are covered under Azure's standard compliance umbrella for the underlying services; Plan Forge running on top inherits the boundary.</p>
+
+      <p>For Azure Government Secret and Top Secret cloud feature availability, contact your Microsoft account team — public documentation is limited.</p>
+
+      <h2 id="observability-export">Observability export</h2>
+
+      <p>The Week 2 work in the enterprise hardening track adds first-class OpenTelemetry export. Spec is documented in the enterprise-fleet-readiness research §8.6. Summary:</p>
+
+      <h3 id="observability-emitted">What gets emitted</h3>
+      <ul>
+        <li><strong class="text-slate-200">Spans</strong> for every LLM call (CLIENT, kind chat/embeddings/etc.) with full <code>gen_ai.*</code> attribute set including token counts (input, output, cache_read, cache_write, reasoning), latency, model, provider</li>
+        <li><strong class="text-slate-200">Spans</strong> for every MCP tool call (INTERNAL, kind execute_tool) with tool name and call ID</li>
+        <li><strong class="text-slate-200">Spans</strong> for every slice (INTERNAL, kind invoke_agent) with plan/slice correlation</li>
+        <li><strong class="text-slate-200">Spans</strong> for every plan run (INTERNAL, kind invoke_workflow)</li>
+        <li><strong class="text-slate-200">Spans</strong> for every validation gate (INTERNAL, plan-forge-vendor namespace)</li>
+        <li><strong class="text-slate-200">Metrics</strong> — <code>gen_ai.client.operation.duration</code> histogram, <code>gen_ai.client.token.usage</code> histogram</li>
+        <li><strong class="text-slate-200">Events</strong> (opt-in) — <code>gen_ai.client.inference.operation.details</code> with input/output messages (gated by <code>pforge.telemetry.captureContent</code> flag, default off — PII implications)</li>
+      </ul>
+
+      <h3 id="observability-vendor-extensions">Vendor-namespaced extensions</h3>
+
+      <p><code>pforge.*</code> attributes for plan/slice/run correlation, scope contract IDs, gate names, cost USD (since <code>gen_ai.cost</code> doesn't exist in the spec).</p>
+
+      <h3 id="observability-backends">Backends supported</h3>
+
+      <p>Anything that speaks OTLP. Tested compatibility (planned for Week 2):</p>
+      <ul>
+        <li>Splunk Observability Cloud</li>
+        <li>Datadog</li>
+        <li>Grafana Tempo</li>
+        <li>Microsoft Application Insights (especially relevant for Foundry-attached deployments — Foundry uses the same OTel <code>gen_ai.*</code> conventions, so Plan Forge runs land in the same dashboards as the customer's Foundry agents)</li>
+        <li>Honeycomb</li>
+        <li>Customer-hosted OTel Collector</li>
+      </ul>
+
+      <h3 id="observability-privacy">Privacy controls</h3>
+      <ul>
+        <li>Content capture (prompt + completion text) is <strong class="text-slate-200">opt-in by default</strong></li>
+        <li>Three patterns supported: don't capture / capture as span attributes / externalize via hook to a separate store with only references on the span</li>
+        <li>Toggle via <code>pforge.telemetry.captureContent</code> config flag and standard OTel env vars</li>
+      </ul>
+
+      <h2 id="common-security-review-questions">Common security review questions</h2>
+
+      <details class="my-4 rounded-xl border border-slate-700/50 bg-slate-900/40 p-5">
+        <summary class="cursor-pointer text-slate-200 font-semibold">Where can our source code go?</summary>
+        <p class="mt-3 mb-0">Wherever you choose to send it via your configured LLM provider. With on-prem inference, nowhere outside your network. Plan Forge itself never transmits source code.</p>
+      </details>
+
+      <details class="my-4 rounded-xl border border-slate-700/50 bg-slate-900/40 p-5">
+        <summary class="cursor-pointer text-slate-200 font-semibold">Does Plan Forge phone home?</summary>
+        <p class="mt-3 mb-0">No telemetry is transmitted to Plan Forge maintainers. The optional update check fetches release metadata from GitHub. Disable with <code>PFORGE_NO_UPDATE_CHECK=1</code>.</p>
+      </details>
+
+      <details class="my-4 rounded-xl border border-slate-700/50 bg-slate-900/40 p-5">
+        <summary class="cursor-pointer text-slate-200 font-semibold">Can we audit every action an agent took?</summary>
+        <p class="mt-3 mb-0">Yes. Per-run trajectory in <code>.forge/runs/&lt;id&gt;/</code> includes events, slice artifacts, traces, cost history, and (for CCA-dispatched runs) the full Copilot Cloud Agent trajectory.</p>
+      </details>
+
+      <details class="my-4 rounded-xl border border-slate-700/50 bg-slate-900/40 p-5">
+        <summary class="cursor-pointer text-slate-200 font-semibold">How do we prevent agents from editing files outside scope?</summary>
+        <p class="mt-3 mb-2">Plan Forge enforces scope contracts at the plan level (<code>In Scope</code>, <code>Out of Scope</code>, <code>Forbidden Actions</code> blocks). Pre-tool-use hooks block edits to forbidden paths. Post-execution <code>pforge diff</code> checks for drift.</p>
+        <p class="mb-0"><strong class="text-amber-400">Honest gap</strong>: enforcement is best-effort at the worker level — the orchestrator can't always <em>prevent</em> a bad edit, only detect it. Roadmap item to harden.</p>
+      </details>
+
+      <details class="my-4 rounded-xl border border-slate-700/50 bg-slate-900/40 p-5">
+        <summary class="cursor-pointer text-slate-200 font-semibold">What happens if an agent malfunctions?</summary>
+        <p class="mt-3 mb-0">Per-slice <code>workerTimeoutMs</code> cap kills runaway workers. Reflexion retry with backoff handles recoverable failures. <code>forge_alert_triage</code> ranks issues by priority. In-loop stuck detector is on the roadmap (OpenHands-pattern).</p>
+      </details>
+
+      <details class="my-4 rounded-xl border border-slate-700/50 bg-slate-900/40 p-5">
+        <summary class="cursor-pointer text-slate-200 font-semibold">Can we enforce a budget per team?</summary>
+        <p class="mt-3 mb-0"><code>.forge.json</code> per repo supports <code>cost.dailyMax</code> and similar caps (planned formalization). Per-engineer attribution is on the roadmap.</p>
+      </details>
+
+      <details class="my-4 rounded-xl border border-slate-700/50 bg-slate-900/40 p-5">
+        <summary class="cursor-pointer text-slate-200 font-semibold">What's the data retention model?</summary>
+        <p class="mt-3 mb-0">Plan Forge does not delete <code>.forge/</code> artifacts automatically. Retention is the customer's policy — implement via standard filesystem tools or post-run cleanup hooks.</p>
+      </details>
+
+      <details class="my-4 rounded-xl border border-slate-700/50 bg-slate-900/40 p-5">
+        <summary class="cursor-pointer text-slate-200 font-semibold">Are LLM responses cached?</summary>
+        <p class="mt-3 mb-0">Plan Forge does not cache LLM responses. Some LLM providers (Anthropic, OpenAI) do prompt caching — that's their infrastructure, billed at reduced rates. Plan Forge tracks cache hit/miss for cost accuracy (Phase-COST-TOKEN-COVERAGE landed the per-vendor billing math).</p>
+      </details>
+
+      <details class="my-4 rounded-xl border border-slate-700/50 bg-slate-900/40 p-5">
+        <summary class="cursor-pointer text-slate-200 font-semibold">How do we know Plan Forge itself isn't compromised?</summary>
+        <p class="mt-3 mb-0">Open source. MIT license. Audit the code. Plan Forge is dogfooded against itself — every release ships through the same Plan Forge pipeline that customers use. Self-repair tooling (<code>forge_meta_bug_file</code>) gives agents a way to file defects against Plan Forge during execution.</p>
+      </details>
+
+      <div id="chapter-prev-next"></div>
+    </div></main>
+  </div>
+  <script src="assets/manual.js"></script>
+</body>
+</html>

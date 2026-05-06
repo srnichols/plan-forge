@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Appendix I: Plan Forge for Enterprise — Plan Forge Manual</title>
+  <meta name="description" content="The enterprise landing page for Plan Forge — reference architecture, GitHub stack alignment, agent factory recipe, fleet operator playbook, compliance and data residency. Map to every enterprise concern." />
+  <meta property="og:title" content="Plan Forge for Enterprise" />
+  <meta property="og:description" content="Open-source AI-SDLC orchestrator for teams whose code lives on GitHub. Local-first, GitHub-native, open-standards-throughout." />
+  <meta property="og:type" content="article" />
+  <link rel="canonical" href="https://planforge.software/manual/enterprise-deployment.html" />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+    <main><img src="assets/chapter-heroes/appendix-i-hero.jpg" alt="A glowing golden compass rose floating above the anvil, with six radiating beams ending in icons for the six enterprise concerns: network, architecture, calendar, security shield, audit ledger, deployment rocket" class="chapter-hero" /><div class="chapter-content">
+
+      <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Appendix I</div>
+      <h1>Plan Forge for Enterprise</h1>
+      <p class="text-lg text-slate-400 mb-8">The landing page for enterprise evaluators — reference architecture, GitHub stack alignment, operator playbook, compliance reference, and the map of where to find every enterprise answer.</p>
+
+      <div class="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5 mb-10">
+        <p class="text-sm text-slate-400 mb-2"><strong class="text-slate-200">Audience:</strong> Platform leads, security architects, and engineering managers evaluating Plan Forge for multi-team deployment in regulated or large-scale environments.</p>
+        <p class="text-sm text-slate-400 mb-0"><strong class="text-slate-200">TL;DR:</strong> Plan Forge is the open-source AI-SDLC orchestrator for teams whose code lives on GitHub. It is local-first by design (no Plan Forge SaaS plane), composes cleanly with Microsoft Foundry and other enterprise model gateways, and ships the orchestration layer GitHub explicitly leaves to the ecosystem.</p>
+      </div>
+
+      <h2 id="why-plan-forge-for-the-enterprise">Why Plan Forge for the enterprise</h2>
+
+      <p>Most "AI-SDLC" tools today are point solutions: a code completion in the IDE, an autonomous agent that opens one PR, a code reviewer that comments on PRs. Plan Forge is the layer above those — a plan-driven, gate-enforced, cost-tracked, multi-slice orchestration framework that turns a feature spec into a series of validated commits.</p>
+
+      <p>Three structural choices make it enterprise-fit:</p>
+
+      <ol>
+        <li><strong class="text-slate-200">Local-first / air-gappable control plane.</strong> The orchestrator runs on the developer's box or a CI runner. There is no Plan Forge SaaS service. Source code does not leave the customer's network unless the customer chooses to call a hosted LLM (and even then, all logging stays local). This is a structural difference from Cursor (workers can run on-prem but the control plane is in AWS) and Sourcegraph Amp (cloud-only, no self-host, no BYOK).</li>
+        <li><strong class="text-slate-200">GitHub-native by design, not by integration.</strong> Plans, slices, and validation gates compose with GitHub Issues, Copilot Cloud Agent, Actions, AGENTS.md, and the GitHub MCP server. The architecture extends GitHub primitives in the direction GitHub has signaled (via the Copilot SDK preview and AGENTS.md/MCP/Skills as Linux Foundation standards) is the ecosystem's lane.</li>
+        <li><strong class="text-slate-200">Open standards throughout.</strong> AGENTS.md, MCP, Agent Skills, and OpenTelemetry <code>gen_ai.*</code> semantic conventions are first-class. No proprietary file formats, no vendor lock-in, no "you must use our cloud."</li>
+      </ol>
+
+      <h2 id="where-to-find-what-you-need">Where to find what you need</h2>
+
+      <p>This page is a map. Each link goes to the document that answers a specific enterprise concern.</p>
+
+      <h3 id="architecture-and-reference-deployments">Architecture and reference deployments</h3>
+
+      <table>
+        <thead><tr><th>You're asking</th><th>Read</th></tr></thead>
+        <tbody>
+          <tr><td>What does a 5-team Plan Forge deployment look like?</td><td><a href="enterprise-reference-architecture.html" class="text-amber-400 hover:underline">Reference Architecture</a></td></tr>
+          <tr><td>How does Plan Forge compose with Microsoft Foundry / Azure OpenAI in our tenant?</td><td><a href="enterprise-reference-architecture.html#microsoft-foundry-variant" class="text-amber-400 hover:underline">Reference Architecture — Microsoft-shop variant</a></td></tr>
+          <tr><td>How does Plan Forge align with the GitHub stack we already pay for?</td><td><a href="github-stack-alignment.html" class="text-amber-400 hover:underline">GitHub Stack Alignment</a> (Appendix J), and the deeper <a href="plan-forge-on-the-github-stack.html" class="text-amber-400 hover:underline">Plan Forge on the GitHub Stack</a> (Appendix H)</td></tr>
+          <tr><td>How do we onboard 12 squad members on Day 1?</td><td><a href="agent-factory-recipe.html" class="text-amber-400 hover:underline">Agent Factory Recipe</a></td></tr>
+        </tbody>
+      </table>
+
+      <h3 id="operations">Operations</h3>
+
+      <table>
+        <thead><tr><th>You're asking</th><th>Read</th></tr></thead>
+        <tbody>
+          <tr><td>What does Day 1 / Week 4 / Week 12 look like for a team adopting Plan Forge?</td><td><a href="fleet-operator-playbook.html" class="text-amber-400 hover:underline">Fleet Operator Playbook</a></td></tr>
+          <tr><td>How do we run Plan Forge across N teams with shared visibility?</td><td><a href="fleet-operator-playbook.html#multi-team" class="text-amber-400 hover:underline">Fleet Operator Playbook — Multi-Team</a></td></tr>
+          <tr><td>What metrics should we track?</td><td><a href="fleet-operator-playbook.html#kpis" class="text-amber-400 hover:underline">Fleet Operator Playbook — KPIs</a></td></tr>
+        </tbody>
+      </table>
+
+      <h3 id="security-compliance-data-residency">Security, compliance, data residency</h3>
+
+      <table>
+        <thead><tr><th>You're asking</th><th>Read</th></tr></thead>
+        <tbody>
+          <tr><td>What gets logged, where, in what format, and how do we export it for audit?</td><td><a href="compliance-and-data-residency.html" class="text-amber-400 hover:underline">Compliance and Data Residency</a></td></tr>
+          <tr><td>Where does our source code go when we run Plan Forge?</td><td><a href="compliance-and-data-residency.html#data-flow" class="text-amber-400 hover:underline">Compliance — Data Flow</a></td></tr>
+          <tr><td>Can we run Plan Forge fully air-gapped?</td><td><a href="compliance-and-data-residency.html#air-gapped-deployment" class="text-amber-400 hover:underline">Compliance — Air-Gapped</a></td></tr>
+          <tr><td>Does Plan Forge work with Azure Government?</td><td><a href="compliance-and-data-residency.html#azure-government" class="text-amber-400 hover:underline">Compliance — Azure Government</a></td></tr>
+          <tr><td>What about HIPAA, FedRAMP, SOC2, PCI?</td><td><a href="compliance-and-data-residency.html#compliance-posture" class="text-amber-400 hover:underline">Compliance — Compliance Posture</a></td></tr>
+        </tbody>
+      </table>
+
+      <h3 id="identity-auth-rbac">Identity, auth, RBAC</h3>
+
+      <table>
+        <thead><tr><th>You're asking</th><th>Read</th></tr></thead>
+        <tbody>
+          <tr><td>How does authentication work today?</td><td><a href="compliance-and-data-residency.html#identity-and-authentication" class="text-amber-400 hover:underline">Compliance — Identity</a></td></tr>
+          <tr><td>What's the roadmap for Entra ID / SAML / SCIM?</td><td><a href="compliance-and-data-residency.html#identity-roadmap" class="text-amber-400 hover:underline">Compliance — Roadmap</a></td></tr>
+        </tbody>
+      </table>
+
+      <h3 id="telemetry-and-observability">Telemetry and observability</h3>
+
+      <table>
+        <thead><tr><th>You're asking</th><th>Read</th></tr></thead>
+        <tbody>
+          <tr><td>Can we ship Plan Forge traces to Splunk / Datadog / Application Insights?</td><td><a href="compliance-and-data-residency.html#observability-export" class="text-amber-400 hover:underline">Compliance — Observability Export</a></td></tr>
+        </tbody>
+      </table>
+
+      <h3 id="cost-and-budgeting">Cost and budgeting</h3>
+
+      <table>
+        <thead><tr><th>You're asking</th><th>Read</th></tr></thead>
+        <tbody>
+          <tr><td>How do we estimate cost for a plan before running it?</td><td><a href="fleet-operator-playbook.html#cost-discipline" class="text-amber-400 hover:underline">Fleet Operator Playbook — Cost Discipline</a></td></tr>
+          <tr><td>How do we attribute cost to teams and engineers?</td><td><a href="fleet-operator-playbook.html#cost-attribution" class="text-amber-400 hover:underline">Fleet Operator Playbook — Cost Attribution</a></td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="what-plan-forge-is-not">What Plan Forge is <em>not</em></h2>
+
+      <p>We are deliberate about lanes. Plan Forge is not:</p>
+
+      <ul>
+        <li><strong class="text-slate-200">An IDE replacement.</strong> Cursor, Windsurf, VS Code Copilot Chat all do that better. Plan Forge sits above the IDE.</li>
+        <li><strong class="text-slate-200">An LLM provider.</strong> Plan Forge talks to Anthropic, OpenAI, xAI, GitHub Copilot, Microsoft Foundry. Pick yours.</li>
+        <li><strong class="text-slate-200">A first-party agent runtime in the Foundry/Agent-Service sense.</strong> Plan Forge orchestrates the SDLC; Microsoft Agent Framework and Foundry Agent Service are the agent runtime layer one altitude below.</li>
+        <li><strong class="text-slate-200">A SaaS product.</strong> There is no Plan Forge cloud. The dashboard runs on <code>localhost:3100</code>. Customers own their deployment top to bottom.</li>
+      </ul>
+
+      <h2 id="quick-start-for-evaluators">Quick start for evaluators</h2>
+
+      <p>If you have 30 minutes:</p>
+
+      <ol>
+        <li>Read <a href="enterprise-reference-architecture.html" class="text-amber-400 hover:underline">Reference Architecture</a> for the picture.</li>
+        <li>Read <a href="github-stack-alignment.html" class="text-amber-400 hover:underline">GitHub Stack Alignment</a> for the why.</li>
+        <li>Skim <a href="compliance-and-data-residency.html" class="text-amber-400 hover:underline">Compliance and Data Residency</a> — Sections 1–3 cover 80% of typical security review questions.</li>
+      </ol>
+
+      <p>If you have 90 minutes:</p>
+
+      <ol start="4">
+        <li>Read <a href="fleet-operator-playbook.html" class="text-amber-400 hover:underline">Fleet Operator Playbook</a> — gives you a calendar, not a feature list.</li>
+        <li>Read <a href="agent-factory-recipe.html" class="text-amber-400 hover:underline">Agent Factory Recipe</a> — the concrete onboarding pattern.</li>
+      </ol>
+
+      <p>If you want to run it:</p>
+
+      <ol start="6">
+        <li>Follow the <a href="quickstart-install.html" class="text-amber-400 hover:underline">Quickstart</a> walkthrough, then return here for the multi-team patterns.</li>
+      </ol>
+
+      <h2 id="engineering-principles">Engineering principles that make this work</h2>
+
+      <p>Plan Forge is built on five non-negotiables that show up in every layer:</p>
+
+      <ol>
+        <li><strong class="text-slate-200">Architecture-first</strong>: every change asks five questions before code is written (see <code>.github/instructions/architecture-principles.instructions.md</code>)</li>
+        <li><strong class="text-slate-200">Separation of concerns</strong>: orchestrator → worker → repository → presentation, never collapsed</li>
+        <li><strong class="text-slate-200">Test-driven for business logic</strong>: Red → Green → Refactor</li>
+        <li><strong class="text-slate-200">Type safety</strong>: explicit types at every boundary</li>
+        <li><strong class="text-slate-200">Open standards</strong>: AGENTS.md, MCP, Skills, OTel <code>gen_ai.*</code> — adopt, don't invent</li>
+      </ol>
+
+      <p>Customers can read the same instruction files Plan Forge agents read. Nothing is hidden. The framework is the documentation.</p>
+
+      <h2 id="support-model">Support model</h2>
+
+      <p>Plan Forge is open source (MIT). Support model is honest:</p>
+
+      <ul>
+        <li><strong class="text-slate-200">Issues</strong> on GitHub for bugs and feature requests</li>
+        <li><strong class="text-slate-200">GitHub Discussions</strong> for usage questions</li>
+        <li><strong class="text-slate-200">Self-repair tooling</strong> built in — <code>forge_meta_bug_file</code> lets agents file defects against Plan Forge itself when they encounter them, and the project is dogfooded against itself</li>
+        <li><strong class="text-slate-200">No commercial support tier today.</strong> This may change. When it does, the open-source core stays open source.</li>
+      </ul>
+
+      <p>For enterprises that need a commercial relationship, the right pattern today is to use Plan Forge directly and engage your usual platform-services partner (Microsoft FDE, Slalom, Accenture, etc.) for integration work.</p>
+
+      <div id="chapter-prev-next"></div>
+    </div></main>
+  </div>
+  <script src="assets/manual.js"></script>
+</body>
+</html>

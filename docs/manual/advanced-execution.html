@@ -80,6 +80,12 @@
       <h2 id="quorum">Quorum Mode</h2>
       <p>Multi-model consensus for complex slices. Multiple models analyze the same problem independently, then a reviewer synthesizes the best approach.</p>
 
+      <div class="callout callout-tip">
+        <strong>OAuth-only quorum works.</strong> If you have a GitHub Copilot subscription and the <code>copilot</code> CLI is logged in, <code>--quorum=power|speed|auto</code> fans out across multiple models <em>without</em> any API keys &mdash; each leg is a separate <code>copilot</code> subprocess invoked with a different <code>--model</code> flag. The orchestrator's quorum dispatcher (<a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/orchestrator.mjs" rel="noopener"><code>quorumDispatch</code></a>) calls <code>spawnWorker</code> once per model inside <code>Promise.all</code>; <code>filterQuorumModels</code> drops any model whose CLI/credentials aren't reachable so the quorum gracefully degrades instead of failing.<br><br>
+        <strong>Add API keys to mix providers.</strong> Set <code>XAI_API_KEY</code> (or drop it in <code>.forge/secrets.json</code>) and a Grok leg joins the same parallel fan-out alongside your Copilot-served legs &mdash; see the <a href="#quorum-mixed-example">worked example</a> below.<br><br>
+        Not to be confused with <a href="forge-master.html#quorum-advisory">Forge-Master's <code>dispatchQuorum</code></a>, which is HTTP-only and does require per-model API keys. That surface only powers the chat reasoning lane &mdash; not <code>run-plan</code>.
+      </div>
+
       <img src="assets/diagrams/quorum-flow.svg" alt="Quorum flow: dispatch to 3 models, independent analysis, reviewer synthesizes, then execute" class="diagram-img diagram-img-md" />
       <div class="cmd-block">
         <div class="cmd-block-header"><span>Terminal</span><button class="cmd-copy-btn">Copy</button></div>
@@ -109,6 +115,61 @@ pforge run-plan docs/plans/Phase-7.md --quorum=speed</code></pre>
         </tbody>
       </table>
 
+      <!-- ─── Mixed-quorum worked example (issue #156) ─── -->
+      <h3 id="quorum-mixed-example">Worked Example — 2× Copilot CLI + 1× Grok API <span class="text-amber-400 text-base font-normal">v2.83+</span></h3>
+
+      <p>The most common production setup: ride your Copilot subscription for the bulk of the quorum, add one direct-API leg (Grok or OpenAI) for diversity. Both kinds of leg run in the same <code>Promise.all</code> &mdash; no special config to "merge" them.</p>
+
+      <p><strong>Step 1 &mdash; declare the model mix in <code>.forge.json</code>:</strong></p>
+
+      <div class="cmd-block">
+        <div class="cmd-block-header"><span><code>.forge.json</code></span><button class="cmd-copy-btn">Copy</button></div>
+        <pre><code>{
+  "quorum": {
+    "models": [
+      "gpt-5.3-codex",                  // → copilot CLI subprocess
+      "claude-sonnet-4.6",              // → copilot CLI subprocess
+      "grok-4.20-0309-reasoning"        // → direct-API worker (XAI_API_KEY)
+    ],
+    "reviewerModel": "claude-opus-4.7"  // → copilot CLI subprocess
+  }
+}</code></pre>
+      </div>
+
+      <p><strong>Step 2 &mdash; provision the Grok key (one of):</strong></p>
+
+      <div class="cmd-block">
+        <div class="cmd-block-header"><span>Terminal</span><button class="cmd-copy-btn">Copy</button></div>
+        <pre><code># Option A: env var (per-shell)
+$env:XAI_API_KEY = "xai-..."
+
+# Option B: project-local secrets file (gitignored)
+# .forge/secrets.json
+{ "XAI_API_KEY": "xai-..." }</code></pre>
+      </div>
+
+      <p><strong>Step 3 &mdash; run with quorum:</strong></p>
+
+      <div class="cmd-block">
+        <div class="cmd-block-header"><span>Terminal</span><button class="cmd-copy-btn">Copy</button></div>
+        <pre><code># See the projected cost across all four modes first (always tool-backed)
+pforge run-plan --estimate docs/plans/Phase-7.md
+
+# Then run — quorum-eligible slices fan out to all three models in parallel
+pforge run-plan docs/plans/Phase-7.md --quorum=auto</code></pre>
+      </div>
+
+      <p>What happens at slice dispatch:</p>
+
+      <ul>
+        <li><code>quorumDispatch</code> sees three models in the config.</li>
+        <li><code>spawnWorker</code> is called three times concurrently. The first two route to the local <code>copilot</code> CLI (no key needed &mdash; rides your Copilot subscription); the third routes to the xAI HTTP worker using <code>XAI_API_KEY</code>.</li>
+        <li>All three return their dry-run analyses. <code>quorumReview</code> synthesises them via the reviewer model into a single <code>enhancedPrompt</code>.</li>
+        <li>The actual slice execution runs once with that synthesised prompt &mdash; not three concurrent edits.</li>
+      </ul>
+
+      <p>If the Grok key is missing, <code>filterQuorumModels</code> drops Grok from the list at run-plan startup and the quorum proceeds with the two Copilot-served legs &mdash; no failure, just a smaller jury.</p>
+
       <h3 id="quorum-vs-advisory">Quorum Mode vs Quorum Advisory — What's the Difference? <span class="text-amber-400 text-base font-normal">v2.78+</span></h3>
       <p>Two surfaces use the word "quorum." They're related but operate at different scopes:</p>
 
@@ -125,6 +186,174 @@ pforge run-plan docs/plans/Phase-7.md --quorum=speed</code></pre>
       </table>
 
       <p>You can use both. Quorum Mode runs slice execution; Quorum Advisory helps you decide what to put <em>in</em> the slice in the first place.</p>
+
+      <!-- ─── Estimating Quorum Cost ─── -->
+      <h3 id="quorum-estimate">Estimating Quorum Cost — <code>forge_estimate_quorum</code> <span class="text-amber-400 text-base font-normal">v2.83+</span></h3>
+
+      <div class="callout callout-warning">
+        <strong>Cost estimates come from tools, not chat math.</strong> When deciding which quorum mode to run — or showing the user dollar amounts in any picker — call <code>forge_estimate_quorum</code> first. Hand-computed quorum estimates have been observed to overshoot reality by an order of magnitude (Phase-COST-TOKEN-COVERAGE field reports). The agent guidance shipped in <code>.github/copilot-instructions.md</code> requires this for any quorum picker UI.
+      </div>
+
+      <p><code>forge_estimate_quorum</code> projects the cost of a plan under <strong>all four quorum modes</strong> in one round-trip — no need to call <code>--estimate</code> four separate times. It returns per-mode totals plus a per-slice breakdown showing which slices cleared the threshold.</p>
+
+      <img src="assets/diagrams/quorum-estimate-tool-flow.svg" alt="forge_estimate_quorum flow: tool call with planPath, parsePlan + scoreSliceComplexity, four parallel mode estimations (false/auto/power/speed), comparison JSON output with per-mode totals and per-slice breakdown" class="diagram-img diagram-img-md my-4" />
+
+      <h4 class="text-base font-semibold text-slate-200 mt-6 mb-2">Calling the tool</h4>
+
+      <div class="cmd-block">
+        <div class="cmd-block-header"><span>MCP / Copilot Chat</span><button class="cmd-copy-btn">Copy</button></div>
+        <pre><code>// Direct MCP call
+forge_estimate_quorum({
+  planPath: "docs/plans/Phase-7.md",
+  resumeFrom: 1   // optional — only estimate slices ≥ N
+})
+
+// CLI equivalent (runs all four modes under the hood)
+pforge run-plan docs/plans/Phase-7.md --estimate --quorum-compare</code></pre>
+      </div>
+
+      <h4 class="text-base font-semibold text-slate-200 mt-6 mb-2">Response shape</h4>
+
+      <div class="cmd-block">
+        <div class="cmd-block-header"><span>Response (abbreviated)</span></div>
+        <pre><code>{
+  "false":  { "totalCostUSD": 0.28, "baseCostUSD": 0.28, "overheadUSD": 0,
+              "quorumSliceCount": 0, "totalSliceCount": 7, "confidence": "historical" },
+  "auto":   { "totalCostUSD": 0.42, "baseCostUSD": 0.28, "overheadUSD": 0.14,
+              "quorumSliceCount": 1, "totalSliceCount": 7, "confidence": "historical" },
+  "power":  { "totalCostUSD": 12.50, "baseCostUSD": 0.42, "overheadUSD": 12.08,
+              "quorumSliceCount": 3, "totalSliceCount": 7, "confidence": "historical" },
+  "speed":  { "totalCostUSD": 1.20, "baseCostUSD": 0.31, "overheadUSD": 0.89,
+              "quorumSliceCount": 1, "totalSliceCount": 7, "confidence": "historical" },
+  "slices": [
+    { "sliceNumber": 1, "complexityScore": 3, "projectedCostUSD": 0.04, "quorumEligible": false },
+    { "sliceNumber": 2, "complexityScore": 6, "projectedCostUSD": 4.18, "quorumEligible": true  },
+    { "sliceNumber": 3, "complexityScore": 7, "projectedCostUSD": 4.22, "quorumEligible": true  },
+    ...
+  ]
+}</code></pre>
+      </div>
+
+      <table>
+        <thead><tr><th>Field</th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td><code>baseCostUSD</code></td><td>What the plan costs <em>without</em> quorum overhead — single-model run for every slice</td></tr>
+          <tr><td><code>overheadUSD</code></td><td>Δ added by the extra quorum legs + reviewer synthesis. <code>baseCostUSD + overheadUSD = totalCostUSD</code>.</td></tr>
+          <tr><td><code>quorumSliceCount</code></td><td>How many slices cleared the mode's threshold and will fan out to multiple models</td></tr>
+          <tr><td><code>confidence</code></td><td><code>"historical"</code> when calibrated against ≥ 3 prior runs, <code>"heuristic"</code> for cold-start projects</td></tr>
+          <tr><td><code>slices[].complexityScore</code></td><td>The 1–10 score from <a href="#quorum-complexity">scoreSliceComplexity()</a></td></tr>
+          <tr><td><code>slices[].quorumEligible</code></td><td>Whether this slice cleared the threshold for the requested mode</td></tr>
+        </tbody>
+      </table>
+
+      <h4 class="text-base font-semibold text-slate-200 mt-6 mb-2">Worked cost example: 7-slice fixture plan</h4>
+
+      <p>The numbers above come from the heuristic fixture used in <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/capabilities.mjs" rel="noopener"><code>capabilities.mjs</code></a> — illustrative, not measured. For a typical mid-size plan (10–15 slices, 1–3 quorum-eligible), real-world numbers from the Plan Forge dogfood corpus look like:</p>
+
+      <table>
+        <thead><tr><th>Mode</th><th>Total cost</th><th>Multiplier vs baseline</th><th>Slices fanned out</th><th>Use when</th></tr></thead>
+        <tbody>
+          <tr><td><code>false</code> (off)</td><td>~$0.30 – $2.00</td><td>1.0×</td><td>0 / 12</td><td>Mechanical work, conversions, doc edits</td></tr>
+          <tr><td><code>--quorum=auto</code></td><td>~$0.40 – $3.50</td><td>1.2 – 1.8×</td><td>1–2 / 12</td><td>Default for normal feature work</td></tr>
+          <tr><td><code>--quorum=speed</code></td><td>~$1.00 – $4.00</td><td>1.5 – 2.5×</td><td>1 / 12 (threshold 7)</td><td>Tight budget, want consensus only on the genuinely hard slices</td></tr>
+          <tr><td><code>--quorum=power</code></td><td>~$10 – $25</td><td>10 – 30×</td><td>2–4 / 12 (threshold 5)</td><td>Architectural slices, security-critical paths, irreversible migrations</td></tr>
+          <tr><td><code>--quorum</code> (force-all)</td><td>~$30 – $80</td><td>30 – 100×</td><td>12 / 12</td><td>Almost never. Use <code>auto</code> + selective <code>--quorum-threshold</code> instead.</td></tr>
+        </tbody>
+      </table>
+
+      <p class="text-sm text-slate-500 italic">Numbers are order-of-magnitude — actual cost depends on slice scope size, host (subscription-covered vs pay-per-token), and the cost-calibration ratio in <code>.forge/cost-history.json</code>. Always estimate before running.</p>
+
+      <div class="callout callout-info">
+        <strong>Single-slice variant</strong>: <code>forge_estimate_slice</code> (companion tool) returns cost for one slice with rationale strings like <code>"threshold 5 met: complexity 6"</code> or <code>"mode false: quorum disabled"</code>. Useful when you want to ask &ldquo;is <em>this</em> specific slice worth quorum?&rdquo; without re-estimating the whole plan.
+      </div>
+
+      <!-- ─── Complexity Scoring Rubric ─── -->
+      <h3 id="quorum-complexity">Complexity Scoring Rubric — How a Slice Earns Its Score <span class="text-amber-400 text-base font-normal">v2.83+</span></h3>
+
+      <p>What makes a slice "complex enough to need quorum"? The orchestrator's <code>scoreSliceComplexity()</code> function (see <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/orchestrator.mjs" rel="noopener"><code>orchestrator.mjs</code></a>) reads seven weighted signals from the parsed slice and produces an integer 1–10. Modes then compare that score against their threshold to decide whether to fan out.</p>
+
+      <img src="assets/diagrams/quorum-complexity-rubric.svg" alt="Quorum complexity scoring rubric: seven signals (scope files, dependencies, security keywords, database keywords, gate lines, task count, historical failure rate) with their weights, fed through scoreSliceComplexity to produce a 1-10 score, then routed by threshold gate (power=5, auto=6, speed=7) to either fan-out or single-model run" class="diagram-img diagram-img-md my-4" />
+
+      <h4 class="text-base font-semibold text-slate-200 mt-6 mb-2">The seven signals</h4>
+
+      <table>
+        <thead><tr><th>Signal</th><th>Weight</th><th>Source</th><th>What it captures</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Scope breadth</strong></td><td>0.20</td><td><code>slice.scope[].length / 5</code></td><td>How many files this slice touches. Wide scope ⇒ more places to make a mistake.</td></tr>
+          <tr><td><strong>Dependencies</strong></td><td>0.20</td><td><code>slice.depends[].length / 4</code></td><td>How many earlier slices this one builds on. Deep dependencies ⇒ harder reasoning chain.</td></tr>
+          <tr><td><strong>Security keywords</strong></td><td>0.15</td><td>Hits in title + tasks + gate</td><td>Matches against <code>auth, crypto, secret, token, password, jwt, oauth, …</code>. Security mistakes are expensive to roll back.</td></tr>
+          <tr><td><strong>Database keywords</strong></td><td>0.15</td><td>Hits in title + tasks + gate</td><td>Matches against <code>migration, schema, sql, index, constraint, foreign key, …</code>. Schema changes are often irreversible.</td></tr>
+          <tr><td><strong>Gate complexity</strong></td><td>0.10</td><td>Non-blank lines in <code>validationGate</code></td><td>A long validation gate is a proxy for "this slice has a lot of correctness conditions to satisfy."</td></tr>
+          <tr><td><strong>Task count</strong></td><td>0.10</td><td><code>slice.tasks[].length / 10</code></td><td>Many small tasks ⇒ more chances for a single model to lose track.</td></tr>
+          <tr><td><strong>Historical failure rate</strong></td><td>0.10</td><td><code>.forge/runs/index.jsonl</code> (last 20)</td><td>If past slices with similar title words have failed often, this one gets nudged up. Self-tuning over time.</td></tr>
+        </tbody>
+      </table>
+
+      <p>The raw weighted sum (0–1) is mapped to the final integer via <code>clamp(1, 10, round(raw × 9) + 1)</code>.</p>
+
+      <h4 class="text-base font-semibold text-slate-200 mt-6 mb-2">Threshold mapping</h4>
+
+      <table>
+        <thead><tr><th>Mode</th><th>Threshold</th><th>What clears it (typical)</th></tr></thead>
+        <tbody>
+          <tr><td><code>--quorum=power</code></td><td><strong>5</strong></td><td>Slices touching 3+ files <em>or</em> with deep deps <em>or</em> mentioning auth/schema</td></tr>
+          <tr><td><code>--quorum=auto</code></td><td><strong>6</strong> (CLI default)</td><td>The above <em>plus</em> a substantial gate or 6+ tasks</td></tr>
+          <tr><td><code>--quorum=speed</code></td><td><strong>7</strong></td><td>Only the genuinely hard slices — wide scope <em>and</em> security/db keywords <em>and</em> failure history</td></tr>
+          <tr><td>Custom</td><td><code>--quorum-threshold N</code></td><td>Override per run; <code>1</code> = quorum everything, <code>10</code> = quorum almost nothing</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout callout-tip">
+        <strong>Real-plan calibration</strong>: across the Plan Forge dogfood corpus, observed maximum scores land between 4 and 6 — most slices score 2–4. That means threshold 5 is the sweet spot for <code>power</code> mode (catches the architectural slices), threshold 6 is conservative for <code>auto</code> (catches roughly 10–25% of slices in a typical phase), and threshold 7 fires on &lt;5% of slices. The <a href="#cost-optimization">Adaptive Quorum Threshold</a> system in <code>.forge/quorum-history.json</code> auto-tunes these from your project's run history.
+      </div>
+
+      <h4 class="text-base font-semibold text-slate-200 mt-6 mb-2">Worked example</h4>
+
+      <p>Consider a slice titled "Add JWT refresh-token rotation with Redis backing" with 4 scope files, depends on slices 2 and 5, 7 tasks, a 12-line validation gate, and 1 prior failure in 8 historical matches:</p>
+
+      <div class="cmd-block">
+        <div class="cmd-block-header"><span>scoreSliceComplexity walkthrough</span></div>
+        <pre><code>scope    = min(4/5, 1.0)   × 0.20 = 0.16
+depends  = min(2/4, 1.0)   × 0.20 = 0.10
+security = min(2/3, 1.0)   × 0.15 = 0.10   // "jwt", "token"
+database = min(0/3, 1.0)   × 0.15 = 0.00
+gate     = min(12/5, 1.0)  × 0.10 = 0.10
+tasks    = min(7/10, 1.0)  × 0.10 = 0.07
+history  = (1/8)           × 0.10 = 0.0125
+                                    ──────
+raw                              = 0.5425
+score = clamp(1, 10, round(0.5425 × 9) + 1) = 6
+
+→ clears threshold for: power (≥5), auto (≥6)
+→ does NOT clear:        speed (≥7)</code></pre>
+      </div>
+
+      <!-- ─── Multi-Agent Quorum Turns ─── -->
+      <h3 id="quorum-multi-agent">Multi-Agent Quorum Turns — <code>PFORGE_QUORUM_TURN</code> <span class="text-amber-400 text-base font-normal">v2.78+</span></h3>
+
+      <p>When quorum runs in <a href="multi-agent.html">multi-agent mode</a> (Claude → Codex → Cursor handoffs), the orchestrator sets the <code>PFORGE_QUORUM_TURN</code> environment variable for the duration of each quorum-leg invocation. This is a coordination signal, not user-facing config — but it shows up in logs and matters when debugging hook behavior.</p>
+
+      <h4 class="text-base font-semibold text-slate-200 mt-6 mb-2">What the variable controls</h4>
+
+      <table>
+        <thead><tr><th>Hook / system</th><th>Behavior when <code>PFORGE_QUORUM_TURN</code> is set</th></tr></thead>
+        <tbody>
+          <tr><td><code>PreAgentHandoff</code> hook</td><td><strong>Skipped.</strong> Returns <code>{ triggered: false, skippedReason: "PFORGE_QUORUM_TURN active" }</code> and logs <code>[PreAgentHandoff] skipping context injection — PFORGE_QUORUM_TURN active</code>. See <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/orchestrator.mjs" rel="noopener"><code>orchestrator.mjs</code> ~L7585</a>.</td></tr>
+          <tr><td><a href="remote-bridge.html#openclaw">OpenClaw snapshot post</a></td><td><strong>Skipped.</strong> No drift / MTTR / incident snapshot is sent between quorum legs.</td></tr>
+          <tr><td>Cost telemetry</td><td>Per-leg cost is tagged <code>quorumTurn: true</code> in <code>slice-N.json</code> so the Cost Report can roll up the legs into a single quorum line item.</td></tr>
+          <tr><td>Tracing</td><td>Each leg gets its own trace span but with a shared <code>quorumGroupId</code> so dashboards can collapse them.</td></tr>
+        </tbody>
+      </table>
+
+      <h4 class="text-base font-semibold text-slate-200 mt-6 mb-2">Why skip context injection?</h4>
+
+      <p>Quorum exists to get <em>independent</em> analyses from each model. If <code>PreAgentHandoff</code> injected the same drift / MTTR / open-incident context into every leg, the models would converge — defeating the whole point. The reviewer (the synthesizing model) <em>does</em> get the full handoff context when it merges the proposals, because that's where the project-wide state actually matters.</p>
+
+      <div class="callout callout-warning">
+        <strong>Don't set this variable manually.</strong> It's owned by the orchestrator and the multi-agent dispatch layer. Setting it yourself in a shell will cause the next <code>PreAgentHandoff</code> to silently skip — which can mask drift alerts. If you see <code>"PFORGE_QUORUM_TURN active"</code> in logs outside a quorum run, something has leaked the variable; clear it with <code>Remove-Item Env:PFORGE_QUORUM_TURN</code> (PowerShell) or <code>unset PFORGE_QUORUM_TURN</code> (bash).
+      </div>
+
+      <p class="text-sm text-slate-400">📄 Cross-references: <a href="multi-agent.html">Chapter 12 — Multi-Agent</a> for the handoff model · <a href="remote-bridge.html#openclaw">Chapter 17 — Remote Bridge</a> for the OpenClaw snapshot path · <a href="forge-master.html#quorum-advisory">Forge-Master Quorum Advisory</a> for the per-prompt counterpart.</p>
 
       <h2 id="host-routing">Host-Aware Routing <span class="text-amber-400 text-base font-normal">v2.82+</span></h2>
       <p>Plan Forge runs in different IDEs and CLI hosts (VS Code + Copilot, Claude Code, Cursor, Windsurf, Zed, the bare CLI). Each host has its own billing surface. The host-aware routing preference (added v2.82, fixes #104) ensures users on non-Copilot hosts <strong>don't silently double-pay</strong> against subscriptions they're already paying for.</p>

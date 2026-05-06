@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Appendix M: Fleet Operator Playbook — Plan Forge Manual</title>
+  <meta name="description" content="A calendar, not a feature list. Day 1 / Week 4 / Week 12 milestones with concrete go/no-go criteria for operating Plan Forge across multiple product teams." />
+  <meta property="og:title" content="Fleet Operator Playbook" />
+  <meta property="og:description" content="Day 1 / Week 4 / Week 12 calendar for multi-team Plan Forge rollouts. Go/no-go criteria, KPIs, multi-team patterns, escalation model." />
+  <meta property="og:type" content="article" />
+  <link rel="canonical" href="https://planforge.software/manual/fleet-operator-playbook.html" />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+    <main><img src="assets/chapter-heroes/appendix-m-hero.jpg" alt="An ornate calendar timeline scroll with glowing milestones at Day 1, Week 4, Week 8, Week 12 (seedling, sapling, young tree, mature tree). Five tiny team-flag silhouettes float in formation above the timeline" class="chapter-hero" /><div class="chapter-content">
+
+      <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Appendix M</div>
+      <h1>Fleet Operator Playbook</h1>
+      <p class="text-lg text-slate-400 mb-8">A calendar, not a feature list. Day 1 / Week 4 / Week 12 milestones with concrete go/no-go criteria for operating Plan Forge across multiple product teams.</p>
+
+      <div class="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5 mb-10">
+        <p class="text-sm text-slate-400 mb-2"><strong class="text-slate-200">Audience:</strong> Platform leads operating Plan Forge across multiple product teams.</p>
+        <p class="text-sm text-slate-400 mb-0"><strong class="text-slate-200">How to use:</strong> Each phase has a goal, activities, go/no-go criteria, and anti-patterns. If you're following it strictly and something feels off, that's a signal worth investigating, not a step to skip.</p>
+      </div>
+
+      <h2 id="day-0-prerequisites">Day 0 — Prerequisites</h2>
+
+      <p>Before you begin:</p>
+
+      <ul>
+        <li>GitHub Enterprise + Copilot Enterprise + Copilot Cloud Agent enabled on target repos</li>
+        <li>LLM provider strategy decided (Anthropic, OpenAI, xAI, GitHub Copilot, Microsoft Foundry, or combination)</li>
+        <li>Pilot team identified (one team, 5–15 engineers, real product work, not a sandbox)</li>
+        <li>Executive sponsor named (someone who can defend cycle-time experiments at QBR)</li>
+        <li>Initial budget envelope set (~$2K–$10K for the first month per team, varies wildly)</li>
+        <li>OTel collector + observability backend chosen (Splunk, Datadog, Grafana, App Insights)</li>
+      </ul>
+
+      <p>If any of these aren't true, work on them first. Plan Forge accelerates teams that already have direction; it doesn't substitute for it.</p>
+
+      <h2 id="day-1-pilot-installation">Day 1 — Pilot installation</h2>
+
+      <h3 id="day-1-goal">Goal</h3>
+      <p>Pilot team has Plan Forge installed, has run one plan end-to-end against a real (small) feature, and has a baseline measurement of cycle time and cost.</p>
+
+      <h3 id="day-1-activities">Activities (~4–6 hours total)</h3>
+
+      <ol>
+        <li><strong class="text-slate-200">Install</strong> (30 min)
+          <ul>
+            <li>Clone Plan Forge to each pilot dev's machine: <code>git clone https://github.com/srnichols/plan-forge</code></li>
+            <li>Or use the consumer-mode setup: <code>setup.ps1</code> (Windows) or <code>setup.sh</code> (Mac/Linux) in target project</li>
+            <li>Verify: <code>pforge smith</code> returns clean</li>
+          </ul>
+        </li>
+        <li><strong class="text-slate-200">Configure</strong> (1–2 hr) — see <a href="agent-factory-recipe.html" class="text-amber-400 hover:underline">Appendix L — Agent Factory Recipe</a> Steps 2–5
+          <ul>
+            <li>Run <code>project-profile.prompt.md</code> once for the pilot repo</li>
+            <li>Run <code>project-principles.prompt.md</code> once</li>
+            <li>Review and customize <code>AGENTS.md</code> and <code>.github/copilot-instructions.md</code></li>
+            <li>Configure <code>.vscode/mcp.json</code> with Plan Forge MCP server + github-mcp-server (and Foundry Toolbox if applicable)</li>
+          </ul>
+        </li>
+        <li><strong class="text-slate-200">First plan</strong> (2–3 hr including review)
+          <ul>
+            <li>Pick a real, small feature (1–3 day's worth of human work)</li>
+            <li>Run <code>step0</code> through <code>step5</code> of the pipeline</li>
+            <li>Use <code>pforge run-plan --estimate &lt;plan&gt;</code> first to see projected cost</li>
+            <li>Run <code>pforge run-plan --assisted &lt;plan&gt;</code> for human-in-the-loop the first time</li>
+            <li>Compare PR diff to plan via <code>pforge diff</code></li>
+          </ul>
+        </li>
+        <li><strong class="text-slate-200">Baseline metrics</strong> (30 min)
+          <ul>
+            <li>Capture: total time spec → PR, total cost (LLM + Actions minutes), number of slices, number of gate failures, drift score</li>
+            <li>Save to <code>.forge/baseline-2026-05-06.json</code> or your team's metrics store</li>
+          </ul>
+        </li>
+      </ol>
+
+      <h3 id="day-1-go-no-go">Go/no-go criteria</h3>
+
+      <table>
+        <thead><tr><th>Signal</th><th>Pass</th><th>Fail</th></tr></thead>
+        <tbody>
+          <tr><td>First plan ran end-to-end</td><td>Yes</td><td>Stop, debug</td></tr>
+          <tr><td><code>pforge diff</code> clean post-merge</td><td>Yes (drift score ≥ 80)</td><td>Plan was too vague — re-harden</td></tr>
+          <tr><td>Cost within 50% of estimate</td><td>Yes</td><td>Either pricing data is stale or workload differs from typical — investigate</td></tr>
+          <tr><td>Pilot team's reaction</td><td>"Useful, with caveats"</td><td>"Confusing" or "in the way" — review configuration</td></tr>
+        </tbody>
+      </table>
+
+      <h3 id="day-1-anti-patterns">Anti-patterns</h3>
+
+      <ul>
+        <li><strong class="text-rose-400">Picking a toy feature</strong> — lessons don't scale to real work</li>
+        <li><strong class="text-rose-400">Skipping <code>--assisted</code> first time</strong> — first plan should be observable</li>
+        <li><strong class="text-rose-400">Running multiple plans in parallel before lessons land</strong> — waste of cost</li>
+        <li><strong class="text-rose-400">Skipping the baseline measurement</strong> — you'll have nothing to compare against in Week 4</li>
+      </ul>
+
+      <h2 id="week-1-pilot-runs-n-plans">Week 1 — Pilot runs N plans</h2>
+
+      <h3 id="week-1-goal">Goal</h3>
+      <p>Pilot team runs 5+ plans, friction patterns become visible, instruction files start to encode lessons.</p>
+
+      <h3 id="week-1-activities">Activities</h3>
+
+      <ul>
+        <li><strong class="text-slate-200">Daily standup adds 5 minutes for Plan Forge friction</strong>: each dev who used it that day flags one thing that didn't work</li>
+        <li><strong class="text-slate-200">End of week</strong>: dedicated 1-hour retro
+          <ul>
+            <li>What worked</li>
+            <li>What didn't (be specific — instruction file, prompt, agent persona, gate, cost)</li>
+            <li>What changed in <code>.github/instructions/*</code> as a result</li>
+          </ul>
+        </li>
+      </ul>
+
+      <h3 id="week-1-go-no-go">Go/no-go criteria for Week 2</h3>
+
+      <table>
+        <thead><tr><th>Signal</th><th>Pass</th><th>Fail</th></tr></thead>
+        <tbody>
+          <tr><td>≥ 5 plans completed</td><td>Yes</td><td>Slow uptake — investigate barriers (often: fear of cost, unclear when to use vs not)</td></tr>
+          <tr><td>Drift score average ≥ 70</td><td>Yes</td><td>Plan-hardener prompt needs project-specific tuning</td></tr>
+          <tr><td>Instruction files updated ≥ 3 times</td><td>Yes</td><td>Team isn't iterating — that's the value loop, must enable it</td></tr>
+          <tr><td>Cost-per-PR trending down or stable</td><td>Yes</td><td>Cost going up plan-over-plan suggests waste — investigate slice sizing</td></tr>
+        </tbody>
+      </table>
+
+      <h3 id="week-1-anti-patterns">Anti-patterns</h3>
+
+      <ul>
+        <li><strong class="text-rose-400">Devs using Plan Forge for everything</strong> — it's wrong for trivial bug fixes; right for plan-able work</li>
+        <li><strong class="text-rose-400">No iteration on instructions</strong> — the value compounds via instructions; if they're untouched, the team isn't learning</li>
+        <li><strong class="text-rose-400">Hidden cost surprises</strong> — surface costs daily, not weekly, in the first month</li>
+      </ul>
+
+      <h2 id="week-4-pilot-graduation">Week 4 — Pilot graduation, second team onboarding</h2>
+
+      <h3 id="week-4-goal">Goal</h3>
+      <p>Pilot team is self-sufficient. Second team starts, with patterns from Pilot 1 captured as templates. First multi-team observability dashboards live.</p>
+
+      <h3 id="week-4-activities">Activities</h3>
+
+      <ol>
+        <li><strong class="text-slate-200">Pilot graduation</strong>: pilot team operates Plan Forge without daily platform-team support. Platform team transitions to "office hours" model (1 hr / week).</li>
+        <li><strong class="text-slate-200">Second team onboard</strong> (1 work day):
+          <ul>
+            <li>Reuses pilot team's <code>AGENTS.md</code> style and <code>.github/instructions/*</code> (forks where stack differs)</li>
+            <li>Reuses agent routing decisions from <code>.github/agents/ROUTING.md</code></li>
+            <li>First plan runs in <code>--assisted</code> mode</li>
+          </ul>
+        </li>
+        <li><strong class="text-slate-200">Multi-team observability</strong>:
+          <ul>
+            <li>Both teams' OTel data flows to the same backend</li>
+            <li>Dashboards: per-team plan throughput, per-team cost, per-team drift scores, gate failure heatmap across teams</li>
+            <li>Plan Forge dashboard at <code>localhost:3100</code> shows per-developer; the OTel backend shows org-wide</li>
+          </ul>
+        </li>
+        <li><strong class="text-slate-200">First quarterly KPI snapshot</strong>:
+          <ul>
+            <li>Cycle time (spec → merged PR)</li>
+            <li>Cost per merged PR</li>
+            <li>Plan-Forge-driven PR percentage</li>
+            <li>Drift / regression incidents caught at gate vs. caught in production</li>
+          </ul>
+        </li>
+      </ol>
+
+      <h3 id="week-4-go-no-go">Go/no-go criteria for Week 8</h3>
+
+      <table>
+        <thead><tr><th>Signal</th><th>Pass</th><th>Fail</th></tr></thead>
+        <tbody>
+          <tr><td>Pilot team self-sufficient</td><td>Yes</td><td>Means platform team is still bottleneck — extract patterns into docs</td></tr>
+          <tr><td>Team 2 ran first plan within 1 day of onboarding</td><td>Yes</td><td>Onboarding pattern needs simplification</td></tr>
+          <tr><td>Multi-team dashboards reflect real data</td><td>Yes</td><td>OTel pipeline issue — fix before adding more teams</td></tr>
+          <tr><td>Cost per merged PR vs. baseline</td><td>Trending down or stable</td><td>If up, investigate model routing and slice sizing</td></tr>
+        </tbody>
+      </table>
+
+      <h3 id="week-4-anti-patterns">Anti-patterns</h3>
+
+      <ul>
+        <li><strong class="text-rose-400">Onboarding team 2 before team 1 is ready to teach</strong> — copy-paste failures multiply</li>
+        <li><strong class="text-rose-400">Letting two teams diverge on instruction files</strong> — common ground is what makes the fleet feel like a fleet</li>
+        <li><strong class="text-rose-400">Platform team trying to operate every team's Plan Forge instance</strong> — doesn't scale; build the office-hours model early</li>
+      </ul>
+
+      <h2 id="week-8-fleet-patterns">Week 8 — 4 teams active, fleet patterns formalized</h2>
+
+      <h3 id="week-8-goal">Goal</h3>
+      <p>4 of 5 teams active. Shared MCP server (Foundry Toolbox or in-house) deployed. Reviewer agents are catching real issues at PR time.</p>
+
+      <h3 id="week-8-activities">Activities</h3>
+
+      <ol>
+        <li><strong class="text-slate-200">Add teams 3 and 4</strong> in parallel using the Week 4 onboarding pattern (now refined)</li>
+        <li><strong class="text-slate-200">Deploy shared MCP server</strong>:
+          <ul>
+            <li>For MS-shop fleets: Foundry Toolbox with curated tools (Web Search, Code Interpreter, File Search, org-specific OpenAPI tools)</li>
+            <li>For others: in-house MCP server hosted on Azure Container Apps / AWS App Runner / similar</li>
+            <li>Update each team's <code>.vscode/mcp.json</code> to consume</li>
+          </ul>
+        </li>
+        <li><strong class="text-slate-200">Reviewer agent quality pass</strong>:
+          <ul>
+            <li>For each of the 20 ship-default agents, look at the last 30 days of comments. Are they useful? Are they being acted on? Are they fired at the right cadence?</li>
+            <li>Tune agent personas based on findings. Document in agent file changelog.</li>
+          </ul>
+        </li>
+        <li><strong class="text-slate-200">Cost guardrails formalized</strong>:
+          <ul>
+            <li>Per-team budget caps in <code>.forge.json</code></li>
+            <li>Cost anomaly alerts via <code>forge_alert_triage</code></li>
+            <li>Cost-per-merged-PR target set per team based on Week 4 data</li>
+          </ul>
+        </li>
+        <li><strong class="text-slate-200">Drift / quality KPIs reported to engineering leadership</strong>:
+          <ul>
+            <li>Plan adherence (% of PRs with <code>pforge diff</code> clean)</li>
+            <li>Gate failure rate (overall, per team, trend)</li>
+            <li>Regressions caught at gate vs. in production</li>
+            <li>Cost per merged PR (per team, trend)</li>
+            <li>Reviewer-agent acceptance rate</li>
+          </ul>
+        </li>
+      </ol>
+
+      <h3 id="week-8-go-no-go">Go/no-go criteria for Week 12</h3>
+
+      <table>
+        <thead><tr><th>Signal</th><th>Pass</th><th>Fail</th></tr></thead>
+        <tbody>
+          <tr><td>4 teams active and self-sufficient</td><td>Yes</td><td>Onboarding pattern still has friction; investigate</td></tr>
+          <tr><td>Shared MCP server reduces per-team config drift</td><td>Yes</td><td>Adoption needs nudging — show concrete value</td></tr>
+          <tr><td>Reviewer-agent comments acted on ≥ 30% of the time</td><td>Yes</td><td>Personas need tuning, or routing is wrong</td></tr>
+          <tr><td>Cost guardrails preventing runaway</td><td>Yes</td><td>Budgets ineffective — likely too high or unenforced</td></tr>
+        </tbody>
+      </table>
+
+      <h3 id="week-8-anti-patterns">Anti-patterns</h3>
+
+      <ul>
+        <li><strong class="text-rose-400">Adding team 5 before teams 3 and 4 are stable</strong> — compounds confusion</li>
+        <li><strong class="text-rose-400">MCP server becomes a kitchen sink</strong> — keep it curated; resist "add every API"</li>
+        <li><strong class="text-rose-400">Reviewer agents never tuned</strong> — they degrade over time as the codebase evolves</li>
+      </ul>
+
+      <h2 id="week-12-full-fleet">Week 12 — Full fleet, first quarterly review</h2>
+
+      <h3 id="week-12-goal">Goal</h3>
+      <p>All 5 teams active. First quarterly review of fleet metrics. Plan for next quarter.</p>
+
+      <h3 id="week-12-activities">Activities</h3>
+
+      <ol>
+        <li><strong class="text-slate-200">Add team 5</strong> using mature onboarding pattern (now ~4 hours)</li>
+        <li><strong class="text-slate-200">Quarterly review</strong> (half-day session):
+          <ul>
+            <li>All KPIs reviewed (cycle time, cost-per-PR, drift, gate failures, reviewer-agent value, regressions caught)</li>
+            <li>Each team presents one win and one friction</li>
+            <li>Patterns extracted: what worked across teams, what's team-specific</li>
+            <li>Roadmap for next quarter: which capabilities to add, which to retire, which instruction-file patterns to standardize</li>
+          </ul>
+        </li>
+        <li><strong class="text-slate-200">Eval data flywheel</strong> (begin if not already):
+          <ul>
+            <li>Trajectories from completed runs become demonstrations for future runs</li>
+            <li><code>forge_health_trend</code> aggregates the quarter's data</li>
+            <li>Memory architecture (<code>/memories/repo/</code>) captures the institutional learning</li>
+          </ul>
+        </li>
+        <li><strong class="text-slate-200">Document the fleet operations model</strong>:
+          <ul>
+            <li>Who runs what</li>
+            <li>On-call rotation for fleet-level issues</li>
+            <li>Escalation path when Plan Forge has a defect (use <code>forge_meta_bug_file</code>)</li>
+          </ul>
+        </li>
+      </ol>
+
+      <h3 id="week-12-go-no-go">Go/no-go criteria for next quarter</h3>
+
+      <table>
+        <thead><tr><th>Signal</th><th>Pass</th><th>Fail</th></tr></thead>
+        <tbody>
+          <tr><td>All 5 teams operating without daily platform support</td><td>Yes</td><td>Fleet is too dependent — invest in self-service</td></tr>
+          <tr><td>Cost per merged PR is below baseline</td><td>Yes</td><td>Diminishing returns — investigate where time is going</td></tr>
+          <tr><td>Quarterly KPIs trending right direction</td><td>Yes</td><td>Hypothesis was wrong somewhere — adjust</td></tr>
+          <tr><td>Engineering leadership confident in scale-out to next 5 teams</td><td>Yes</td><td>Trust gap — surface what's missing</td></tr>
+        </tbody>
+      </table>
+
+      <h3 id="week-12-anti-patterns">Anti-patterns</h3>
+
+      <ul>
+        <li><strong class="text-rose-400">Treating quarterly review as a status update</strong> — it's a planning session, not a report</li>
+        <li><strong class="text-rose-400">Skipping eval flywheel</strong> — trajectories are an asset; ignored, they're just storage</li>
+        <li><strong class="text-rose-400">No documented operations model</strong> — Plan Forge becomes one person's hobby instead of a fleet capability</li>
+      </ul>
+
+      <h2 id="kpis">KPIs</h2>
+
+      <p>The metrics that matter at the fleet level:</p>
+
+      <table>
+        <thead><tr><th>KPI</th><th>Source</th><th>Healthy range</th></tr></thead>
+        <tbody>
+          <tr><td><strong class="text-slate-200">Cycle time (spec → merged PR)</strong></td><td>OTel + git history</td><td>30–70% of pre-Plan-Forge baseline</td></tr>
+          <tr><td><strong class="text-slate-200">Cost per merged PR</strong></td><td><code>forge_cost_report</code></td><td>Stable or declining month-over-month</td></tr>
+          <tr><td><strong class="text-slate-200">Plan adherence (drift score)</strong></td><td><code>forge_diff</code> per plan</td><td>≥ 80% of plans clean</td></tr>
+          <tr><td><strong class="text-slate-200">Gate failure rate</strong></td><td><code>forge_health_trend</code></td><td>&lt; 30%; failures should drive instruction updates</td></tr>
+          <tr><td><strong class="text-slate-200">Regressions caught at gate vs. production</strong></td><td>Bug registry + OTel</td><td>Ratio improving over time</td></tr>
+          <tr><td><strong class="text-slate-200">Reviewer-agent acceptance rate</strong></td><td>Manual sampling</td><td>≥ 30% of comments acted on</td></tr>
+          <tr><td><strong class="text-slate-200">Plan Forge plans / total PRs</strong></td><td><code>forge_health_trend</code></td><td>Grows over time toward team comfort level</td></tr>
+          <tr><td><strong class="text-slate-200">Per-engineer cost (when implemented)</strong></td><td>Cost service (planned)</td><td>Outliers investigated, not punished</td></tr>
+          <tr><td><strong class="text-slate-200">Time-to-green per slice</strong></td><td>OTel + slice events</td><td>Stable or improving</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="cost-discipline">Cost discipline</h2>
+
+      <p>Three habits that make cost predictable:</p>
+
+      <ol>
+        <li><strong class="text-slate-200">Always estimate before running.</strong> <code>pforge run-plan --estimate &lt;plan&gt;</code> shows projected cost across all four quorum modes (<code>auto</code>, <code>power</code>, <code>speed</code>, <code>false</code>). Look at the numbers before the spend.</li>
+        <li><strong class="text-slate-200">Quorum mode is a knob, not a default.</strong> <code>power</code> (Opus + GPT-5 + Grok consensus, threshold 5) is for high-stakes architectural slices. <code>speed</code> (cheaper models, threshold 7) is for high-volume routine work. <code>auto</code> makes a per-slice judgment. <code>false</code> is single-model. Use them deliberately.</li>
+        <li><strong class="text-slate-200">Watch the per-slice retry count.</strong> Slices that retry 3+ times are usually either (a) gate is broken, (b) plan was too vague, or (c) wrong model for the task. Investigate, don't just absorb.</li>
+      </ol>
+
+      <h2 id="cost-attribution">Cost attribution</h2>
+
+      <p>Today, Plan Forge tracks cost per plan, per slice, per model. <strong class="text-slate-200">Per-engineer attribution is on the roadmap</strong> (planned) — until then, the workaround is:</p>
+
+      <ul>
+        <li>Each developer runs Plan Forge under their own user account</li>
+        <li>Their <code>.forge/cost-history.json</code> is their own ledger</li>
+        <li>Aggregate at the team level via OTel resource attributes (<code>service.namespace</code>, <code>service.instance.id</code>)</li>
+      </ul>
+
+      <p>For finance teams that need formal chargeback, the OTel data is the source of truth, not the dashboard.</p>
+
+      <h2 id="multi-team">Multi-team operations</h2>
+
+      <p>Two patterns work; pick one and stick with it:</p>
+
+      <h3 id="pattern-a-federated">Pattern A: Federated (recommended for most)</h3>
+
+      <ul>
+        <li>Each team owns its own Plan Forge installation, instruction files, and dashboard</li>
+        <li>Platform team owns the shared MCP server, the OTel pipeline, and cross-team KPIs</li>
+        <li>Quarterly cross-team learning session</li>
+      </ul>
+
+      <p>Pros: teams move at their own pace, instruction files reflect team culture, no central bottleneck.<br>
+      Cons: harder to enforce org-wide patterns.</p>
+
+      <h3 id="pattern-b-centralized">Pattern B: Centralized</h3>
+
+      <ul>
+        <li>Platform team owns the canonical instruction files, agent personas, and quorum presets</li>
+        <li>Teams consume from a shared <code>.github-private/</code> template repo</li>
+        <li>Changes to shared assets require platform-team review</li>
+      </ul>
+
+      <p>Pros: consistency across teams, easier compliance posture.<br>
+      Cons: bottlenecks if platform team is small; teams may resent loss of autonomy.</p>
+
+      <p>The right answer depends on your engineering culture. Federated works for cultures that value team autonomy; centralized works for cultures that value consistency.</p>
+
+      <h2 id="escalation">Escalation: when Plan Forge itself has a defect</h2>
+
+      <p>Plan Forge is software. Software has bugs. The escalation path:</p>
+
+      <ol>
+        <li><strong class="text-slate-200">Self-repair first</strong>: agents can file meta-bugs against Plan Forge with <code>forge_meta_bug_file</code> when they encounter a defect during execution. The tool routes to the Plan Forge GitHub repo with a stable hash to deduplicate</li>
+        <li><strong class="text-slate-200">Workaround in instruction files</strong>: if the defect is reproducible and you can route around it via instructions, do so and document the workaround</li>
+        <li><strong class="text-slate-200">GitHub issue</strong> at <code>srnichols/plan-forge</code> for non-emergency defects</li>
+        <li><strong class="text-slate-200">Pin a working version</strong> in <code>package.json</code> if a recent release introduced the defect; rollback is one <code>npm install</code> away</li>
+      </ol>
+
+      <p>Plan Forge is open source. There is no commercial support tier today. The escalation model is community + your own platform team's competence.</p>
+
+      <h2 id="common-operational-mistakes">Common operational mistakes</h2>
+
+      <table>
+        <thead><tr><th>Mistake</th><th>Symptom</th><th>Fix</th></tr></thead>
+        <tbody>
+          <tr><td>Adding teams faster than the fleet can absorb</td><td>Inconsistent quality, cost surprises, frustrated devs</td><td>One team at a time until self-sufficient; don't compress for OKR optics</td></tr>
+          <tr><td>Skipping the iteration loop</td><td>Same friction in plan 50 as in plan 5</td><td>Mandate post-plan retro; encode lessons in instructions</td></tr>
+          <tr><td>Treating Plan Forge as "set it and forget it"</td><td>Quality degrades; agents feel stale</td><td>It's a living configuration; budget time monthly to maintain</td></tr>
+          <tr><td>Reviewer agents fire on everything</td><td>Humans tune them out; signal lost</td><td>Tune routing per team; advisory ≠ blocking ≠ escalation</td></tr>
+          <tr><td>Cost reports go unread</td><td>Surprises at month-end</td><td>Daily cost dashboard for first month, weekly thereafter</td></tr>
+          <tr><td>No on-call for fleet-level Plan Forge issues</td><td>One engineer is the SPOF</td><td>Document operations model; rotate ownership</td></tr>
+          <tr><td>Eval data ignored</td><td>Trajectories accumulate; learning doesn't compound</td><td>Quarterly review trajectories; promote useful patterns</td></tr>
+        </tbody>
+      </table>
+
+      <div id="chapter-prev-next"></div>
+    </div></main>
+  </div>
+  <script src="assets/manual.js"></script>
+</body>
+</html>

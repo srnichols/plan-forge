@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Appendix L: Agent Factory Recipe — Plan Forge Manual</title>
+  <meta name="description" content="A repeatable 7-step recipe to onboard 12+ Virtual Squad agent personas across product teams. Substrate check → configure → route → shared context → shared tools → pilot → iterate." />
+  <meta property="og:title" content="Agent Factory Recipe" />
+  <meta property="og:description" content="Onboard 12+ specialized agent personas in one work day, replicable in one hour per additional squad. The factory pattern for fleet rollouts." />
+  <meta property="og:type" content="article" />
+  <link rel="canonical" href="https://planforge.software/manual/agent-factory-recipe.html" />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+    <main><img src="assets/chapter-heroes/appendix-l-hero.jpg" alt="Twelve glowing humanoid silhouettes of varied specialist roles arranged in a semicircle around the anvil, each with a different colored aura (security blue, performance red, architecture green); a glowing recipe scroll at the center on the anvil" class="chapter-hero" /><div class="chapter-content">
+
+      <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Appendix L</div>
+      <h1>Agent Factory Recipe</h1>
+      <p class="text-lg text-slate-400 mb-8">Get a fleet of specialized agents productive on Day 1, not Day 90. A repeatable 7-step recipe.</p>
+
+      <div class="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5 mb-10">
+        <p class="text-sm text-slate-400 mb-2"><strong class="text-slate-200">Audience:</strong> Platform leads onboarding 12+ "Virtual Squad" agent personas across product teams in the first weeks of a Plan Forge rollout.</p>
+        <p class="text-sm text-slate-400 mb-0"><strong class="text-slate-200">Goal:</strong> One work day for the first squad, one hour per additional squad thereafter.</p>
+      </div>
+
+      <h2 id="what-agent-factory-means">What "Agent Factory" means in Plan Forge</h2>
+
+      <p>Plan Forge ships <strong class="text-slate-200">20 agent personas</strong> out of the box. Each is a Markdown file under <code>.github/agents/</code> with a YAML frontmatter description and a body that defines the persona's expertise, tone, and lane. Agents are invoked from chat (agent picker dropdown) or referenced from a plan slice (<code>agent: security-reviewer</code>). They cannot edit files — they audit and report.</p>
+
+      <p>The "Agent Factory" is the configuration plus convention layer that makes those 20 personas productive against a customer's specific stack on Day 1, instead of generic-but-vague.</p>
+
+      <h2 id="the-recipe-in-one-page">The recipe in one page</h2>
+
+      <pre><code>1. SUBSTRATE     — confirm GitHub-native primitives are in place
+2. CONFIGURE     — write project profile + project principles (one hour each)
+3. ROUTE         — assign agents to lanes (which agents own which kinds of work)
+4. SHARED CONTEXT — populate AGENTS.md, copilot-instructions.md, instruction files
+5. SHARED TOOLS  — point at MCP servers (Plan Forge MCP, github-mcp-server, optional Foundry Toolbox)
+6. PILOT         — run one real plan with the full agent fleet, capture friction
+7. ITERATE       — encode lessons in instruction files; re-run</code></pre>
+
+      <p>Each step below is one to two hours for a platform lead familiar with the codebase. The whole recipe is achievable in <strong class="text-slate-200">one work day</strong> for the first squad and replicates in <strong class="text-slate-200">one hour per additional squad</strong> thereafter.</p>
+
+      <h2 id="step-1-substrate-check">Step 1 — Substrate check (15 min)</h2>
+
+      <p>Verify the GitHub-native primitives Plan Forge depends on are enabled in the org:</p>
+
+      <table>
+        <thead><tr><th>Primitive</th><th>Check</th><th>If missing</th></tr></thead>
+        <tbody>
+          <tr><td>GitHub Copilot Enterprise</td><td>Org admin → Copilot tab → "Copilot Enterprise" enabled</td><td>Provision before continuing</td></tr>
+          <tr><td>Copilot Cloud Agent</td><td>Org admin → Copilot tab → Cloud Agent toggle ON for target repos (or via custom properties)</td><td>Enable per <a href="https://docs.github.com/en/copilot/concepts/about-copilot-coding-agent" class="text-amber-400 hover:underline">GitHub docs</a></td></tr>
+          <tr><td>GitHub Actions enabled per repo</td><td>Repo settings → Actions → "Allow all actions" or specific allowlist</td><td>Enable per repo</td></tr>
+          <tr><td>MCP support in IDE</td><td>VS Code 1.95+ with <code>chat.mcp.enabled</code> setting on, or Copilot CLI 1.x</td><td>Update IDE / install CLI</td></tr>
+          <tr><td>AGENTS.md aware tooling</td><td>At least one of: Claude Code, Cursor, Codex, Amp, Aider, Gemini CLI, Goose, Windsurf</td><td>Pick at least one — they're Plan Forge's worker options for non-CCA paths</td></tr>
+        </tbody>
+      </table>
+
+      <p>If any are missing, fix before moving on. The factory recipe assumes the substrate is in place.</p>
+
+      <h2 id="step-2-configure-profile-and-principles">Step 2 — Configure project profile and principles (2 hr)</h2>
+
+      <p>Plan Forge ships two prompts that, run once, produce the configuration that downstream agents inherit:</p>
+
+      <h3 id="project-profile"><code>project-profile.prompt.md</code> — what your stack is</h3>
+
+      <p>A guided interview that produces <code>.github/instructions/project-profile.instructions.md</code>. Captures:</p>
+      <ul>
+        <li>Languages, frameworks, ORM, test framework</li>
+        <li>Build / test / lint / dev commands</li>
+        <li>Compliance frameworks (SOC2, HIPAA, PCI-DSS, GDPR, FedRAMP)</li>
+        <li>Coding standards (naming, file organization, import ordering)</li>
+        <li>Database conventions, API patterns, error handling preferences</li>
+      </ul>
+
+      <p>This file auto-loads (via <code>applyTo: '**'</code> in frontmatter) for every agent session in the repo. <strong class="text-slate-200">Run it once per repo.</strong> It's the foundation everything else assumes.</p>
+
+      <h3 id="project-principles"><code>project-principles.prompt.md</code> — what your team commits to</h3>
+
+      <p>A second interview that produces <code>docs/plans/PROJECT-PRINCIPLES.md</code> plus a companion <code>.github/instructions/project-principles.instructions.md</code>. Captures:</p>
+      <ul>
+        <li>Architectural commitments (what you will and won't build)</li>
+        <li>Forbidden patterns (anti-patterns specific to your codebase)</li>
+        <li>Boundaries (what's in scope for AI-driven work, what isn't)</li>
+      </ul>
+
+      <p>This file is loaded by the SessionStart hook and pinned in agent context for the duration of every session.</p>
+
+      <h3 id="why-both">Why both</h3>
+
+      <p>Profile = facts about the stack. Principles = commitments about how the team works. Confusing the two is a common mistake. Profile is descriptive; principles is prescriptive. Both feed every agent every session.</p>
+
+      <h2 id="step-3-route-agents">Step 3 — Route agents to lanes (30 min)</h2>
+
+      <p>Plan Forge ships these 20 personas. Decide who owns what <em>for your team</em>:</p>
+
+      <h3 id="stack-specific-reviewers">Stack-specific reviewers (6)</h3>
+
+      <table>
+        <thead><tr><th>Agent</th><th>Owns</th></tr></thead>
+        <tbody>
+          <tr><td><code>architecture-reviewer</code></td><td>Layer separation, pattern adherence, refactor proposals</td></tr>
+          <tr><td><code>database-reviewer</code></td><td>Schema, migrations, query performance, ORM patterns</td></tr>
+          <tr><td><code>deploy-reviewer</code></td><td>Dockerfiles, CI/CD config, deployment scripts</td></tr>
+          <tr><td><code>performance-reviewer</code></td><td>Hot/cold path analysis, allocation, profiling</td></tr>
+          <tr><td><code>security-reviewer</code></td><td>Input validation, secret handling, OWASP, auth</td></tr>
+          <tr><td><code>test-runner</code></td><td>Test coverage, test quality, fixture sanity</td></tr>
+        </tbody>
+      </table>
+
+      <h3 id="cross-stack-reviewers">Cross-stack reviewers (7)</h3>
+
+      <table>
+        <thead><tr><th>Agent</th><th>Owns</th></tr></thead>
+        <tbody>
+          <tr><td><code>api-contracts-reviewer</code></td><td>OpenAPI consistency, breaking change detection</td></tr>
+          <tr><td><code>accessibility-reviewer</code></td><td>WCAG, ARIA, keyboard navigation</td></tr>
+          <tr><td><code>multi-tenancy-reviewer</code></td><td>Tenant isolation, row-level security, cross-tenant query risk</td></tr>
+          <tr><td><code>ci-cd-reviewer</code></td><td>Pipeline correctness, runner sanity, gate completeness</td></tr>
+          <tr><td><code>observability-reviewer</code></td><td>Trace coverage, log quality, metric meaningfulness</td></tr>
+          <tr><td><code>dependency-reviewer</code></td><td>Vulnerability scanning, license compliance, version hygiene</td></tr>
+          <tr><td><code>compliance-reviewer</code></td><td>GDPR / CCPA / SOC2 / HIPAA / PCI-DSS conformance</td></tr>
+        </tbody>
+      </table>
+
+      <h3 id="pipeline-agents">Pipeline agents (6) — these have handoff buttons</h3>
+
+      <table>
+        <thead><tr><th>Agent</th><th>Stage</th></tr></thead>
+        <tbody>
+          <tr><td><code>specifier</code></td><td>Step 0: define what & why</td></tr>
+          <tr><td><code>preflight</code></td><td>Step 1: verify prerequisites</td></tr>
+          <tr><td><code>plan-hardener</code></td><td>Step 2: harden plan into execution contract</td></tr>
+          <tr><td><code>executor</code></td><td>Step 3: execute slices with validation gates</td></tr>
+          <tr><td><code>reviewer-gate</code></td><td>Step 5: independent review and drift detection</td></tr>
+          <tr><td><code>shipper</code></td><td>Step 6: commit, deploy, close</td></tr>
+        </tbody>
+      </table>
+
+      <h3 id="audit-classifier">Audit / classifier (1)</h3>
+
+      <table>
+        <thead><tr><th>Agent</th><th>Role</th></tr></thead>
+        <tbody>
+          <tr><td><code>audit-classifier-reviewer</code></td><td>Reviews changes to the audit classifier itself; enforces before/after finding counts</td></tr>
+        </tbody>
+      </table>
+
+      <h3 id="routing-decisions">Routing decisions to make</h3>
+
+      <p>For each agent, pick:</p>
+
+      <ol>
+        <li><strong class="text-slate-200">Owner</strong> — which team member (or rotation) is the human reviewer when this agent fires?</li>
+        <li><strong class="text-slate-200">Trigger</strong> — automatic on PR? Manual via slash command? Plan-slice-bound?</li>
+        <li><strong class="text-slate-200">Authority</strong> — advisory (commenter), gating (blocks merge), or escalation-only (raises an issue)?</li>
+      </ol>
+
+      <p>Document the routing in <code>.github/agents/ROUTING.md</code> (you may need to create this — it's not yet a Plan Forge default but the convention is clean and we recommend adopting it).</p>
+
+      <h2 id="step-4-shared-context">Step 4 — Shared context: AGENTS.md and instruction files (2 hr)</h2>
+
+      <p>Plan Forge generates these on <code>setup.ps1</code> / <code>setup.sh</code>. The factory step is to <em>populate</em> them with project-specific content beyond the templated defaults.</p>
+
+      <h3 id="agents-md"><code>AGENTS.md</code> (repo root)</h3>
+
+      <p>The Linux Foundation-stewarded standard read by Claude Code, Cursor, Codex, Amp, Aider, Gemini CLI, Goose, Windsurf, and others. Contents:</p>
+      <ul>
+        <li>Project overview (one paragraph)</li>
+        <li>Build / test / lint / dev commands (the substantive ones, not generic placeholders)</li>
+        <li>Code style conventions</li>
+        <li>Testing conventions</li>
+        <li>Security considerations</li>
+        <li>PR conventions</li>
+      </ul>
+
+      <p>Plan Forge keeps this in sync with the project-profile output, but <strong class="text-slate-200">review the generated content</strong> — generic phrasing here costs you on every agent run.</p>
+
+      <h3 id="copilot-instructions"><code>.github/copilot-instructions.md</code></h3>
+
+      <p>The GitHub-native equivalent. Contains:</p>
+      <ul>
+        <li>Architecture principles link</li>
+        <li>Quick commands</li>
+        <li>Coding standards summary</li>
+        <li>Pipeline overview</li>
+        <li>Skill / agent / hook references</li>
+      </ul>
+
+      <p>Plan Forge generates a strong default. Customize the "Project Overview" section with your team's specifics.</p>
+
+      <h3 id="instructions-files"><code>.github/instructions/*.instructions.md</code></h3>
+
+      <p>Plan Forge ships ~16 of these. Each has an <code>applyTo</code> glob that controls when it auto-loads:</p>
+
+      <table>
+        <thead><tr><th>File</th><th>Loads on</th></tr></thead>
+        <tbody>
+          <tr><td><code>architecture-principles.instructions.md</code></td><td><code>**</code> (always — universal baseline)</td></tr>
+          <tr><td><code>project-profile.instructions.md</code></td><td><code>**</code> (always — your stack)</td></tr>
+          <tr><td><code>project-principles.instructions.md</code></td><td><code>**</code> if <code>PROJECT-PRINCIPLES.md</code> exists</td></tr>
+          <tr><td><code>git-workflow.instructions.md</code></td><td><code>**</code></td></tr>
+          <tr><td><code>api-patterns.instructions.md</code></td><td><code>**</code></td></tr>
+          <tr><td><code>auth.instructions.md</code></td><td><code>**</code></td></tr>
+          <tr><td><code>database.instructions.md</code></td><td><code>**</code></td></tr>
+          <tr><td><code>security.instructions.md</code></td><td><code>**</code></td></tr>
+          <tr><td><code>testing.instructions.md</code></td><td><code>**</code></td></tr>
+          <tr><td><code>errorhandling.instructions.md</code></td><td><code>**</code></td></tr>
+          <tr><td><code>deploy.instructions.md</code></td><td><code>**</code></td></tr>
+          <tr><td><code>observability.instructions.md</code></td><td><code>**</code></td></tr>
+          <tr><td><code>caching.instructions.md</code></td><td><code>**</code></td></tr>
+          <tr><td><code>messaging.instructions.md</code></td><td><code>**</code></td></tr>
+          <tr><td><code>multi-environment.instructions.md</code></td><td><code>**</code></td></tr>
+          <tr><td><code>performance.instructions.md</code></td><td><code>**</code></td></tr>
+          <tr><td><code>version.instructions.md</code></td><td><code>**</code></td></tr>
+          <tr><td><code>status-reporting.instructions.md</code></td><td><code>docs/plans/**</code>, <code>pforge-mcp/**</code>, <code>.forge/**</code></td></tr>
+          <tr><td><code>context-fuel.instructions.md</code></td><td><code>**</code></td></tr>
+          <tr><td><code>self-repair-reporting.instructions.md</code></td><td><code>**</code></td></tr>
+        </tbody>
+      </table>
+
+      <p>These are templated. Read each one. Add team-specific guidance where the template is generic.</p>
+
+      <h2 id="step-5-shared-tools">Step 5 — Shared tools: MCP server selection (30 min)</h2>
+
+      <p>Configure <code>.vscode/mcp.json</code> (Plan Forge generates this; you augment) with the MCP servers the fleet should share:</p>
+
+      <h3 id="required">Required</h3>
+
+      <pre><code>{
+  "mcpServers": {
+    "plan-forge": {
+      "command": "node",
+      "args": ["./pforge-mcp/server.mjs"]
+    }
+  }
+}</code></pre>
+
+      <h3 id="strongly-recommended">Strongly recommended</h3>
+
+      <pre><code>{
+  "github": {
+    "url": "https://api.githubcopilot.com/mcp/",
+    "auth": "oauth"
+  }
+}</code></pre>
+
+      <p>The github-mcp-server gives every agent in the fleet first-class access to GitHub Issues, PRs, repos, code-scanning alerts, and 19 other toolsets. 29.5k stars, MIT, official.</p>
+
+      <h3 id="for-microsoft-shop-fleets">For Microsoft-shop fleets</h3>
+
+      <pre><code>{
+  "foundry-toolbox": {
+    "url": "https://YOUR-FOUNDRY-TOOLBOX-ENDPOINT/mcp",
+    "auth": {
+      "type": "bearer",
+      "tokenSource": "azure-keyvault://your-vault/foundry-toolbox-pat"
+    }
+  }
+}</code></pre>
+
+      <p>Foundry Toolboxes are MCP-compatible endpoints that bundle Web Search, Code Interpreter, File Search, Azure AI Search, OpenAPI tools, and Agent-to-Agent connections behind a single endpoint with versioning, auth, and policy enforcement. <strong class="text-slate-200">Single source of truth for the org's tools</strong> — consumed identically by Plan Forge agents in worker sessions and by Foundry agents in production.</p>
+
+      <h3 id="for-azure-devops-shops">For Azure DevOps shops</h3>
+
+      <pre><code>{
+  "azure-devops": {
+    "url": "https://YOUR-FOUNDRY-CATALOG/mcp/azuredevops",
+    "auth": "oauth"
+  }
+}</code></pre>
+
+      <p>Microsoft ships an Azure DevOps MCP Server (preview) as a Foundry catalog entry.</p>
+
+      <h2 id="step-6-pilot-run">Step 6 — Pilot run (1–2 hr including observation)</h2>
+
+      <p>Pick a real, small feature for the pilot. Not a toy. Not a refactor. A tangible feature with a clear acceptance criterion.</p>
+
+      <p>Run the full pipeline:</p>
+
+      <ol>
+        <li><code>step0-specify-feature.prompt.md</code> — define what & why</li>
+        <li><code>step1-preflight-check.prompt.md</code> — verify prerequisites</li>
+        <li><code>step2-harden-plan.prompt.md</code> — harden the plan into an execution contract</li>
+        <li><code>pforge run-plan --estimate &lt;plan&gt;</code> — see projected cost under each quorum mode</li>
+        <li><code>pforge run-plan &lt;plan&gt;</code> — execute (or <code>--assisted</code> for human-in-the-loop)</li>
+        <li><code>step5-review-gate.prompt.md</code> — independent review</li>
+      </ol>
+
+      <p>Watch for:</p>
+
+      <ul>
+        <li><strong class="text-slate-200">Drift between plan and PR</strong> — <code>pforge diff</code> should be clean. If it's not, the plan was too vague.</li>
+        <li><strong class="text-slate-200">Gate failures</strong> — count them. Each gate failure is a lesson. Capture it as an instruction-file edit so future agents don't repeat.</li>
+        <li><strong class="text-slate-200">Cost surprises</strong> — the estimate vs. actual delta tells you whether your plan complexity scoring is accurate.</li>
+        <li><strong class="text-slate-200">Reviewer-agent noise</strong> — too quiet means the agent isn't loaded with enough context; too loud means the lanes are wrong.</li>
+      </ul>
+
+      <h2 id="step-7-iterate">Step 7 — Iterate: encode lessons in instruction files (ongoing)</h2>
+
+      <p>Every Plan Forge project should be doing this constantly:</p>
+
+      <ul>
+        <li>Friction point in a plan → update the relevant instruction file</li>
+        <li>Gate failure → tighten the gate or update plan-hardener prompt</li>
+        <li>Reviewer false positive → adjust the agent persona definition</li>
+        <li>Cost overrun → revise complexity threshold or quorum routing</li>
+      </ul>
+
+      <p>The factory's value compounds. The first plan teaches you 5 things. The fifth plan teaches you 1. By the tenth plan, the agents are productive against your specific codebase, not generic.</p>
+
+      <h2 id="scaling-the-factory">Scaling the factory</h2>
+
+      <p>After the first squad is productive, replicate to additional teams:</p>
+
+      <ol>
+        <li><strong class="text-slate-200">Fork the project profile</strong> for each team's repos (their stack may differ slightly)</li>
+        <li><strong class="text-slate-200">Reuse the principles</strong> when teams share architectural commitments</li>
+        <li><strong class="text-slate-200">Reuse the agent routing</strong> as a starting point; customize per team's review culture</li>
+        <li><strong class="text-slate-200">Share the AGENTS.md content discipline</strong> — every team should be reading and refining their AGENTS.md monthly</li>
+      </ol>
+
+      <p>For a 5-team / 1000-dev rollout, the factory typically takes:</p>
+
+      <ul>
+        <li>Team 1: 2–3 days (figuring out the patterns)</li>
+        <li>Team 2: 1 day (with the patterns in hand)</li>
+        <li>Teams 3–5: 4 hours each (mostly project-profile customization)</li>
+      </ul>
+
+      <h2 id="common-mistakes">Common mistakes</h2>
+
+      <table>
+        <thead><tr><th>Mistake</th><th>Symptom</th><th>Fix</th></tr></thead>
+        <tbody>
+          <tr><td>Generic project profile</td><td>Agents give generic advice; reviewers ignore them</td><td>Re-run <code>project-profile.prompt.md</code> with thoughtful answers, not defaults</td></tr>
+          <tr><td>No project principles</td><td>Agents drift outside scope; PRs widen unexpectedly</td><td>Run <code>project-principles.prompt.md</code>; document forbidden patterns explicitly</td></tr>
+          <tr><td>Default agent routing</td><td>Reviewers fire on irrelevant changes; humans tune them out</td><td>Document routing in <code>.github/agents/ROUTING.md</code> per team</td></tr>
+          <tr><td>Skip AGENTS.md customization</td><td>AGENTS.md-aware agents (Cursor, Claude Code) give weak suggestions</td><td>Read the generated AGENTS.md; add team-specific build/test/style content</td></tr>
+          <tr><td>One MCP server forever</td><td>Agents lack access to org-specific tools; humans bridge manually</td><td>Add Foundry Toolbox or in-house MCP servers as fleet matures</td></tr>
+          <tr><td>First plan is a toy</td><td>Lessons don't scale to real work</td><td>Pilot a real, small feature — never a hello-world</td></tr>
+          <tr><td>No iteration loop</td><td>Same friction in plan 2, plan 3, plan 4</td><td>After every plan, ask "what would make plan N+1 better?" — encode the answer in instruction files</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="what-success-looks-like">What success looks like</h2>
+
+      <p>After 30 days with the factory in place:</p>
+
+      <ul>
+        <li>Time from "feature spec" to "PR open" drops 50–70% for in-scope work</li>
+        <li>Plan Forge plans pass review with <code>pforge diff</code> clean ≥ 80% of the time</li>
+        <li>Per-team cost-per-merged-PR is tracked and trending stable or down</li>
+        <li>Reviewer agents catch 30–50% of issues before human review (depending on team and codebase)</li>
+        <li>Onboarding new engineers takes hours not weeks (the agents are the institutional knowledge)</li>
+      </ul>
+
+      <p>These are real numbers from dogfooding. They scale linearly with the discipline applied to the factory configuration.</p>
+
+      <div id="chapter-prev-next"></div>
+    </div></main>
+  </div>
+  <script src="assets/manual.js"></script>
+</body>
+</html>

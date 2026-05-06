@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 380" fill="none" role="img" aria-labelledby="qet-title qet-desc">
+  <title id="qet-title">forge_estimate_quorum tool flow</title>
+  <desc id="qet-desc">The forge_estimate_quorum MCP tool takes a planPath, parses the plan into slices, then runs estimatePlan four times — once per quorum mode (false/auto/power/speed). Each pass scores every slice for complexity, computes per-leg dry-run cost across the mode's model set, and returns a side-by-side comparison so the agent can pick a mode without hand-computing dollar amounts.</desc>
+  <style>
+    text { font-family: 'Inter', sans-serif; }
+    .node { rx: 8; ry: 8; stroke-width: 1.5; }
+    .arrow { stroke: #475569; stroke-width: 1.4; fill: none; marker-end: url(#qet-ah); }
+    .arrow-bold { stroke: #f59e0b; stroke-width: 2; fill: none; marker-end: url(#qet-ah-amber); }
+    .label { font-size: 10px; fill: #94a3b8; }
+    .micro { font-size: 9px; fill: #64748b; }
+    .title { font-size: 11px; fill: #e2e8f0; font-weight: 600; }
+    .phase { font-size: 9px; fill: #f59e0b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .mono { font-size: 10px; fill: #cbd5e1; font-family: 'JetBrains Mono', monospace; }
+    .cost { font-size: 13px; fill: #fbbf24; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+  </style>
+  <defs>
+    <marker id="qet-ah" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#475569" />
+    </marker>
+    <marker id="qet-ah-amber" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#f59e0b" />
+    </marker>
+  </defs>
+
+  <!-- Phase 1: Tool call -->
+  <text x="100" y="22" class="phase" text-anchor="middle">1. TOOL CALL</text>
+  <rect x="25" y="35" width="155" height="80" class="node" fill="#0f172a" stroke="#60a5fa" />
+  <text x="100" y="55" class="title" text-anchor="middle">forge_estimate_quorum</text>
+  <text x="38" y="75" class="mono">{ planPath,</text>
+  <text x="50" y="89" class="mono">  resumeFrom? }</text>
+  <text x="100" y="106" class="micro" text-anchor="middle">MCP tool / CLI estimate</text>
+
+  <!-- Arrow to parse -->
+  <path d="M180,75 L220,75" class="arrow" />
+
+  <!-- Phase 2: Parse + score -->
+  <text x="310" y="22" class="phase" text-anchor="middle">2. PARSE + SCORE</text>
+  <rect x="220" y="35" width="180" height="80" class="node" fill="#0f172a" stroke="#a78bfa" />
+  <text x="310" y="55" class="title" text-anchor="middle">parsePlan(planPath)</text>
+  <text x="310" y="73" class="label" text-anchor="middle">→ slices[]</text>
+  <text x="310" y="91" class="title" text-anchor="middle">scoreSliceComplexity</text>
+  <text x="310" y="106" class="label" text-anchor="middle">→ 1–10 per slice</text>
+
+  <!-- Arrow fan-out -->
+  <path d="M400,55 L460,40" class="arrow" />
+  <path d="M400,70 L460,98" class="arrow" />
+  <path d="M400,80 L460,158" class="arrow" />
+  <path d="M400,95 L460,218" class="arrow" />
+
+  <!-- Phase 3: 4 parallel mode estimates -->
+  <text x="540" y="22" class="phase" text-anchor="middle">3. ESTIMATE × 4 MODES</text>
+
+  <rect x="460" y="32" width="170" height="46" class="node" fill="#0f172a" stroke="#475569" />
+  <text x="472" y="48" class="title">mode: false</text>
+  <text x="472" y="62" class="micro">single-model baseline</text>
+  <text x="618" y="62" class="cost" text-anchor="end">$0.28</text>
+
+  <rect x="460" y="90" width="170" height="46" class="node" fill="#0f172a" stroke="#fbbf24" />
+  <text x="472" y="106" class="title">mode: auto</text>
+  <text x="472" y="120" class="micro">threshold 5, default chain</text>
+  <text x="618" y="120" class="cost" text-anchor="end">$0.42</text>
+
+  <rect x="460" y="148" width="170" height="46" class="node" fill="#0f172a" stroke="#a78bfa" />
+  <text x="472" y="164" class="title">mode: power</text>
+  <text x="472" y="178" class="micro">flagship × 3, threshold 5</text>
+  <text x="618" y="178" class="cost" text-anchor="end">$12.50</text>
+
+  <rect x="460" y="206" width="170" height="46" class="node" fill="#0f172a" stroke="#34d399" />
+  <text x="472" y="222" class="title">mode: speed</text>
+  <text x="472" y="236" class="micro">fast × 3, threshold 7</text>
+  <text x="618" y="236" class="cost" text-anchor="end">$1.20</text>
+
+  <!-- Arrows to comparison -->
+  <path d="M630,55 L700,135" class="arrow" />
+  <path d="M630,113 L700,140" class="arrow" />
+  <path d="M630,171 L700,145" class="arrow" />
+  <path d="M630,229 L700,150" class="arrow-bold" />
+
+  <!-- Phase 4: Comparison output -->
+  <text x="755" y="22" class="phase" text-anchor="middle">4. COMPARE</text>
+  <rect x="700" y="105" width="100" height="80" class="node" fill="#0f172a" stroke="#f59e0b" />
+  <text x="750" y="125" class="title" text-anchor="middle">JSON</text>
+  <text x="750" y="142" class="label" text-anchor="middle">modes[]</text>
+  <text x="750" y="158" class="label" text-anchor="middle">slices[]</text>
+  <text x="750" y="174" class="label" text-anchor="middle">confidence</text>
+
+  <!-- Footer: example response -->
+  <rect x="20" y="240" width="780" height="125" class="node" fill="#1e293b" stroke="#334155" />
+  <text x="34" y="262" class="title">📋 Example response (7-slice fixture, see capabilities.mjs#L220):</text>
+  <text x="34" y="284" class="mono">{ "false": { totalCostUSD: 0.28, quorumSliceCount: 0, totalSliceCount: 7, confidence: "historical" },</text>
+  <text x="34" y="300" class="mono">  "auto":  { totalCostUSD: 0.42, quorumSliceCount: 1, totalSliceCount: 7, confidence: "historical" },</text>
+  <text x="34" y="316" class="mono">  "power": { totalCostUSD: 12.50, quorumSliceCount: 3, totalSliceCount: 7, confidence: "historical" },</text>
+  <text x="34" y="332" class="mono">  "speed": { totalCostUSD: 1.20, quorumSliceCount: 1, totalSliceCount: 7, confidence: "historical" } }</text>
+  <text x="34" y="354" class="micro">⚠ Always call this tool before showing dollar amounts in chat — hand-computed quorum estimates have been observed to overshoot by ~10×.</text>
+</svg>

@@ -7,6 +7,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+---
+
+## [2.90.11] — 2026-05-07 — Bug fixes
+
+> **One-liner**: Hotfix bundle that ships two backwards-compatible bug-fix phases: tool-surface ACI hardening (5 fixes that shrink default payloads, eliminate silent empty results, and add cursor pagination to `forge_home_snapshot`) and cost-service token-coverage (vendor-aware billing math for prompt-cache reads, ephemeral cache writes, reasoning tokens, and OpenAI service tiers — fixes 30–80% cost underestimate on Anthropic + OpenAI workloads). Subscription-CLI cost path (`gh-copilot`, `claude-cli`, `codex-cli`) is byte-identical and unaffected.
+
 ### Phase-ACI-HARDENING — Tool surface ACI compliance pass (2026-05-07)
 
 > **One-liner**: Five backwards-compatible tool-surface fixes raising the SWE-agent ACI compliance score (`docs/research/enterprise-fleet-readiness.md` §13). Default payloads shrink dramatically, empty results stop being silent, and `forge_home_snapshot` gains drill subcommand + cursor pagination so agents can fetch only what they need.

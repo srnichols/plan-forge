@@ -7,6 +7,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Phase-ACI-HARDENING — Tool surface ACI compliance pass (2026-05-07)
+
+> **One-liner**: Five backwards-compatible tool-surface fixes raising the SWE-agent ACI compliance score (`docs/research/enterprise-fleet-readiness.md` §13). Default payloads shrink dramatically, empty results stop being silent, and `forge_home_snapshot` gains drill subcommand + cursor pagination so agents can fetch only what they need.
+
+#### Added
+- `forge_home_snapshot` `drill` parameter (`crucible | activeRuns | liveguard | tempering | activity`) — returns only the named quadrant for a focused, smaller payload. Default behaviour (full snapshot) unchanged.
+- `forge_home_snapshot` `activityCursor` parameter + `activityPagination` response field (`{ hasMore, nextCursor, totalLines }`) — cursor pagination over the activity feed instead of always returning the most-recent N entries.
+- `forge_watch_live` `verbose` parameter — defaults to `false`, projecting events to a lite shape `{ ts, type, correlationId }` (typically 90% smaller than full event payloads). Pass `verbose: true` to opt back into full event objects (pre-ACI behaviour).
+- `forge_search` empty-result `message` field — when `total === 0`, the response now includes an actionable suggestion describing the query, active filters, and how to broaden the search. Eliminates "is search broken?" agent confusion.
+- `forge_timeline` empty-result `message` field — same pattern: when no events fall in the window, the response includes a `message` describing the window, active filters, and how to widen.
+- `forge_sweep` `markersFound` field + friendly success message — when no TODO/FIXME/HACK/stub/placeholder markers exist, output now reads `"✓ No TODO/FIXME/HACK/stub/placeholder markers found in app code. Code is complete!"` instead of staying silent. The structured `markersFound: 0|N` field is also added.
+- New test file: `pforge-mcp/tests/aci-hardening.test.mjs` (15 cases covering drill, cursor pagination, and friendly empty messages).
+- Tool-surface ACI temper-guards section in `.github/instructions/architecture-principles.instructions.md` — five anti-patterns ("return full object to be safe", "raw CLI output is good enough", "pagination too hard, return all", "empty response means nothing happened", "agent will figure undocumented fields out") with empirically validated counter-patterns. Plus two new entries in the Warning Signs list specifically for MCP tool surfaces.
+
+#### Notes
+- All five fixes are **backwards-compatible**: existing fields (`quadrants`, `hits`, `total`, `events`, `activityFeed`, `output`) keep their shapes. New behaviour is opt-in via new request params or surfaces only on the empty-result path.
+- `costForLeg()` (v2.83.0 invariant, `pforge-mcp/cost-service.mjs:749`) is byte-identical — the cost-attribution machinery is untouched.
+
+---
+
 ### Phase-COST-TOKEN-COVERAGE — Cost-Service Token Coverage (2026-05-06)
 
 > **One-liner**: Adds vendor-aware billing math to `priceSlice()` for prompt-cache reads, ephemeral cache writes (5m + 1h split for Anthropic), reasoning tokens, and OpenAI service tiers (flex/priority). Also refreshes stale base rates (Anthropic Opus dropped 3×, GPT-5.4 dropped 2×) and adds 14 missing model entries. Fixes 30–80% cost underestimate on Anthropic + OpenAI workloads with prompt caching or extended thinking. See `docs/research/enterprise-fleet-readiness.md` §12 for the audit and `docs/plans/Phase-COST-TOKEN-COVERAGE-PLAN.md` for the executed plan.

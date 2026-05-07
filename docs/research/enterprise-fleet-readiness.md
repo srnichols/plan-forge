@@ -528,7 +528,7 @@ Three new items based on research:
 
 - [ ] **Audit `.forge/runs/` event schema** for OpenHands-style explicit `source` vs LLM `role` separation. Document the schema publicly with versioning.
 - [ ] **Add a `security_risk` field to `ActionEvent`-equivalent records** in trajectory capture (per OpenHands pattern). Drives future confirmation policy work.
-- [ ] **Re-read every Plan Forge tool definition through the SWE-agent ACI lens**: bounded views, sparse results, friendly empty-output messages. Especially `forge_capabilities`, `forge_run_plan`, `forge_plan_status`, `forge_home_snapshot`. ACI tuning is one of the highest-ROI quality improvements possible without adding features.
+- [x] **Re-read every Plan Forge tool definition through the SWE-agent ACI lens**: bounded views, sparse results, friendly empty-output messages. Especially `forge_capabilities`, `forge_run_plan`, `forge_plan_status`, `forge_home_snapshot`. ACI tuning is one of the highest-ROI quality improvements possible without adding features. _Done 2026-05-07: Phase-ACI-HARDENING shipped the §13 top-5 fixes — `forge_home_snapshot` drill + activity cursor pagination, `forge_search` / `forge_timeline` friendly empty messages, `forge_watch_live` lite event projection, `forge_sweep` empty-result message, plus tool-surface temper guards in `architecture-principles.instructions.md`._
 
 ### Backlog (post-Week 4, surfaced by research)
 
@@ -814,7 +814,7 @@ Three new high-priority items now sit ahead of the original Week 1 documentation
 ### Priority A (engineering, before Week 1 docs publish)
 
 1. **Cost-service token coverage fix** (Section 12) — phase-worthy, highest customer impact
-2. **ACI hardening pass** (Section 13) — small phase, high agent-quality ROI
+2. **ACI hardening pass** (Section 13) — small phase, high agent-quality ROI _**(shipped 2026-05-07: PR after this one)**_
 
 ### Priority B (Week 1 documentation, now informed by Foundry research)
 
@@ -855,5 +855,5 @@ The original six docs, sharpened by Foundry findings:
   - **PR #158** (squash `f72665c`) + cleanup (`da79672`) — 6 enterprise appendices converted from Markdown to HTML matching the manual chapter template (Appendices I–N), 2 new SVG diagrams, 7 hero images via Grok Aurora (back-fills Appendix H + new I–N), navigation registry updated, index.html cards added. Source `.md` files removed.
   - **PR #160** (squash `ee378e3`) — Phase-MANUAL-EVIDENCE Phase 1: A/B test evidence diagram, evolution timeline, lessons-learned reference chapter, project-history reference chapter, expansions to what-is-plan-forge.html and how-it-works.html.
 
-  **Net result**: Priority A (cost fix + ACI hardening) and Priority B (Week 1 docs) from §14 are complete on master. ACI hardening pass (§13) is the only Priority A item still queued. Priority C (OTel exporter, audit log formalization, auth scaffolding, BYO Azure OpenAI) and Priority D (Foundry-informed backlog) are unstarted and remain the natural next chapter of work.
+  **Net result**: Priority A (cost fix + ACI hardening) and Priority B (Week 1 docs) from §14 are now both complete on master. Priority C (OTel exporter, audit log formalization, auth scaffolding, BYO Azure OpenAI) and Priority D (Foundry-informed backlog) are unstarted and remain the natural next chapter of work.
 - **2026-05-06 (Phase-MANUAL-DISCOVERY-LOOP and Phase-MANUAL-INTEGRATIONS plans drafted)** — Two follow-up plans authored in parallel sessions and now committed to master at [docs/plans/Phase-MANUAL-DISCOVERY-LOOP-PLAN.md](../plans/Phase-MANUAL-DISCOVERY-LOOP-PLAN.md) and [docs/plans/Phase-MANUAL-INTEGRATIONS-PLAN.md](../plans/Phase-MANUAL-INTEGRATIONS-PLAN.md). Neither has been executed yet. Both extend the manual coverage further.

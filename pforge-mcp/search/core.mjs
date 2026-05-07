@@ -287,6 +287,24 @@ export function search(params, opts = {}) {
 
   const durationMs = Math.round(performance.now() - start);
 
+  // Phase ACI-HARDENING (Section 13 fix #2): friendly empty-result message
+  // so the agent doesn't confuse "no hits" with "search failed silently".
+  if (total === 0) {
+    const filterParts = [];
+    if (tags && tags.length > 0) filterParts.push(`tags=[${tags.join(", ")}]`);
+    if (sinceDate) filterParts.push(`since=${since}`);
+    if (correlationId) filterParts.push(`correlationId=${correlationId}`);
+    if (sources && sources.length > 0) filterParts.push(`sources=[${sources.join(", ")}]`);
+    const filterDesc = filterParts.length > 0 ? ` with filters ${filterParts.join(", ")}` : "";
+    return {
+      hits,
+      total,
+      truncated,
+      durationMs,
+      message: `No matches for "${query}"${filterDesc}. Try broadening tags, removing the since filter, or omitting correlationId. Searched ${activeSources.length} source type(s).`,
+    };
+  }
+
   return { hits, total, truncated, durationMs };
 }
 

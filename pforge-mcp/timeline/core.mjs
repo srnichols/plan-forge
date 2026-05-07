@@ -180,6 +180,20 @@ export async function timeline(params = {}, opts = {}) {
   }
 
   result.durationMs = Math.round(performance.now() - start);
+
+  // Phase ACI-HARDENING (Section 13 fix #2): friendly empty-result message
+  // so the agent doesn't confuse "no events" with "timeline failed silently".
+  if (total === 0) {
+    const fromHuman = windowFrom || "unset";
+    const toHuman = windowTo || "now";
+    const filterParts = [];
+    if (correlationId) filterParts.push(`correlationId=${correlationId}`);
+    if (eventFilters && eventFilters.length > 0) filterParts.push(`events=[${eventFilters.join(", ")}]`);
+    if (params.sources) filterParts.push(`sources=[${(params.sources || []).join(", ")}]`);
+    const filterDesc = filterParts.length > 0 ? ` with filters ${filterParts.join(", ")}` : "";
+    result.message = `No events in window ${fromHuman} → ${toHuman}${filterDesc}. Try widening the from/to range (default is last 24h), removing event filters, or checking that the project has activity in .forge/.`;
+  }
+
   cacheSet(ck, forgeDir, result);
 
   return result;

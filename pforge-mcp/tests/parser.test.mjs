@@ -103,7 +103,15 @@ describe("parsePlan", () => {
   });
 
   it("throws for paths outside project directory", () => {
-    expect(() => parsePlan("C:\\Windows\\System32\\evil.md")).toThrow(
+    // Use a platform-correct absolute path that genuinely resolves outside
+    // any plausible project root. Hardcoding Windows-style "C:\\Windows\\..."
+    // failed on Linux CI because Node's `resolve()` treats "C:\\..." as a
+    // relative filename on POSIX, so the path ended up *inside* projectRoot
+    // and the guard never fired — the read just hit ENOENT instead.
+    const outsidePath = process.platform === "win32"
+      ? "C:\\Windows\\System32\\evil.md"
+      : "/etc/passwd-evil.md";
+    expect(() => parsePlan(outsidePath)).toThrow(
       /must be within project directory/
     );
   });

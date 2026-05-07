@@ -120,6 +120,28 @@ pforge audit-loop --env=staging</code></pre>
         <h2>Dashboard</h2>
         <p>The audit-loop toggle in the dashboard persists to <code>.forge.json#audit</code> — not session-scoped. This matches the pattern used by Forge-Master prefs (<code>.forge/fm-prefs.json</code>) and the quorum advisory toggle.</p>
 
+        <h2 id="discovery-harness">Discovery Harness Implementation</h2>
+        <p>The discovery harness is the engine that turns a running dev server into a stream of structured findings. It uses a 4-pass build sequence — crawl, wrap, execute, auto-smelt — to close the loop between bug discovery and bug resolution with no human triage required.</p>
+
+        <img src="assets/diagrams/discovery-harness-four-pass.svg" alt="Discovery Harness 4-pass build sequence: Pass 1 (Harness) crawls routes with Node + Playwright, Pass 2 (Wrapper) transforms JSON into Crucible smelts, Pass 3 (Execute) runs slices with Tempering, Pass 4 (Auto-smelt) converts failures into new smelts" class="diagram-img diagram-img-md my-4" />
+
+        <h3>Pass 1 — Harness (Node + Playwright)</h3>
+        <p>A headless Playwright browser crawls every route exposed by the dev server. For each page the harness records HTTP status, document title, <code>h1</code> text, word count, placeholder markers (e.g. <code>Coming soon</code>, <code>TODO</code>), broken links, and client-shell detection for hydrated SPAs. Results are written as structured JSON to <code>.forge/audits/</code>.</p>
+        <p>Representative example: a marketing site with 47 routes produces 12 findings on its first pass — three placeholder headings, two broken anchor links, four pages returning non-200 status codes, and three pages with zero meaningful content.</p>
+
+        <h3>Pass 2 — Wrapper (JSON → Crucible)</h3>
+        <p>Each finding from Pass 1 is transformed into a Crucible smelt via <code>forge_crucible_submit</code>. The wrapper applies severity triage, routing findings through the three-lane classifier (bug, spec, classifier) before packaging them as structured smelt input with enough context for the hardener to produce actionable plan slices.</p>
+
+        <h3>Pass 3 — Execute (Slices + Tempering)</h3>
+        <p>The hardened plan runs slice-by-slice through <code>forge_run_plan</code>. Each slice carries its own validation gate and Tempering re-audit. LiveGuard hooks fire between slices, catching regressions before they compound.</p>
+
+        <h3>Pass 4 — Auto-smelt (Closed Loop)</h3>
+        <p>Any Tempering failures from Pass 3 are converted into new smelts via <code>forge_tempering_drain</code> and re-entered into the bug registry — no human triage required. The loop iterates until convergence (zero new findings) or the configured <code>maxRounds</code> limit (default 5) is reached.</p>
+
+        <div class="callout callout-info">
+          <strong>Further reading.</strong> For a real-world walkthrough of the 4-pass sequence applied to a production Next.js site, see the blog post <a href="../../blog/the-loop-that-never-ends.html">The Loop That Never Ends</a>.
+        </div>
+
         <h2>Design Decisions</h2>
         <ul>
           <li><strong>Classifier proposals are local files</strong> (v2.80): Written to <code>.forge/audits/</code> as JSON artifacts. GitHub PR creation deferred to v2.81+.</li>

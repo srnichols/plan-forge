@@ -59,6 +59,64 @@
           </tbody>
         </table>
 
+        <!-- ─── Unified Memory Across Agents ─── -->
+        <h2 id="unified-memory-across-agents">Unified Memory Across Agents</h2>
+        <p>OpenBrain isn't just a per-session scratch pad — it's a <strong>shared memory layer</strong> that compounds across every AI agent, every IDE, and every session. When Claude captures a gotcha in Slice 2, Copilot reads it in Slice 5 without any manual handoff. When Cursor records a naming convention, Claude's next run already knows it.</p>
+
+        <img src="assets/diagrams/openbrain-cross-agent-compounding.svg" alt="OpenBrain cross-agent compounding: Claude, Cursor, and Copilot each write decisions via capture_thought and read prior context via search_thoughts. Knowledge compounds — each slice raises the quality floor for every future agent." class="diagram-img diagram-img-md my-4" />
+
+        <h3 class="text-base font-semibold text-slate-200 mt-6 mb-3">How it works — 4 steps</h3>
+        <ol>
+          <li><strong>Capture</strong> — any agent calls <code>capture_thought({ content, project, source, type })</code> after a key decision. The record is scoped to your project and the originating slice path.</li>
+          <li><strong>Fan-out</strong> — Plan Forge's L2 + L3 capture path appends the record locally (<code>.forge/openbrain-queue.jsonl</code>) and drains it to OpenBrain asynchronously.</li>
+          <li><strong>Retrieve</strong> — at the start of any slice (or any session), agents call <code>search_thoughts({ query, project, limit })</code> to surface relevant prior decisions before writing a single line of code.</li>
+          <li><strong>Compound</strong> — each new capture raises the signal quality for every future agent. A convention captured in Phase 1 is still enforced in Phase 40 — by a different agent, in a different IDE.</li>
+        </ol>
+
+        <h3 class="text-base font-semibold text-slate-200 mt-6 mb-3">Agent integration table</h3>
+        <table class="w-full text-sm border border-slate-700/40 rounded-lg overflow-hidden mb-6">
+          <thead class="bg-slate-900/60">
+            <tr>
+              <th class="text-left p-3 text-slate-400 font-semibold">Agent</th>
+              <th class="text-left p-3 text-slate-400 font-semibold">Capture path</th>
+              <th class="text-left p-3 text-slate-400 font-semibold">Retrieve path</th>
+              <th class="text-left p-3 text-slate-400 font-semibold">Notes</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800">
+            <tr>
+              <td class="p-3 font-semibold text-purple-400">Claude</td>
+              <td class="p-3"><code>capture_thought</code> MCP tool</td>
+              <td class="p-3"><code>search_thoughts</code> MCP tool</td>
+              <td class="p-3">Full read/write; memory-preload event on plan start</td>
+            </tr>
+            <tr>
+              <td class="p-3 font-semibold text-emerald-400">Cursor</td>
+              <td class="p-3"><code>capture_thought</code> MCP tool</td>
+              <td class="p-3"><code>search_thoughts</code> MCP tool</td>
+              <td class="p-3">Background agent and composer mode both supported</td>
+            </tr>
+            <tr>
+              <td class="p-3 font-semibold text-blue-400">Copilot</td>
+              <td class="p-3"><code>capture_thought</code> MCP tool</td>
+              <td class="p-3"><code>search_thoughts</code> MCP tool</td>
+              <td class="p-3">Lifecycle hooks (SessionStart) inject prior context automatically</td>
+            </tr>
+            <tr>
+              <td class="p-3 text-slate-500">Future agents</td>
+              <td class="p-3 text-slate-500">Any MCP client</td>
+              <td class="p-3 text-slate-500">Any MCP client</td>
+              <td class="p-3 text-slate-500">MCP-capable clients connect to the same store</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="callout callout-tip">
+          <strong>See also</strong>: <a href="multi-agent.html#openbrain-connective-tissue">Multi-Agent → OpenBrain: The Connective Tissue</a> — a deeper dive into how OpenBrain wires the 4-station pipeline together and what happens at each agent handoff.
+        </div>
+
+        <p class="text-sm text-slate-500 mt-2">Concepts in this section were first explored in the blog posts <a href="../blog/seven-agents.html" rel="noopener">One Framework, Seven AI Agents</a> and <a href="../blog/unified-system.html" rel="noopener">From WhatsApp to Shipped PR: The Unified System</a>.</p>
+
         <!-- ─── Diagram ─── -->
         <h2 id="flow">Capture Flow</h2>
         <p>One write, three destinations. The diagram below traces a single <code>captureMemory({tool, type, body})</code> call from any tool through the dual-write fan-out:</p>

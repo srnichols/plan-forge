@@ -17,6 +17,7 @@
     { id: "installation",        file: "installation.html",        num: "3",  title: "Installation",             act: "I" },
     { id: "writing-plans",       file: "writing-plans.html",       num: "4",  title: "Writing Plans That Work",  act: "I" },
     { id: "crucible",            file: "crucible.html",            num: "5",  title: "Crucible (Idea Smelting)", act: "I" },
+    { id: "spec-kit-interop",    file: "spec-kit-interop.html",    num: "",   title: "Spec Kit Interop",         act: "I" },
     // ─── Act II — Forge (execute → ship) ───
     { id: "your-first-plan",     file: "your-first-plan.html",     num: "6",  title: "Your First Plan",          act: "II" },
     { id: "dashboard",           file: "dashboard.html",           num: "7",  title: "The Dashboard",            act: "II" },
@@ -364,6 +365,7 @@
     { t: "Windsurf Setup", u: "multi-agent.html#windsurf" },
     { t: "Cloud Agent", u: "multi-agent.html#cloud-agent" },
     { t: "Spec Kit Interop", u: "multi-agent.html#spec-kit" },
+    { t: "OpenBrain: The Connective Tissue", u: "multi-agent.html#openbrain-connective-tissue" },
     // Ch 13
     { t: "Model Routing", u: "advanced-execution.html#model-routing" },
     { t: "Escalation Chains", u: "advanced-execution.html#escalation" },
@@ -392,6 +394,14 @@
     { t: "Costs Are Too High", u: "troubleshooting.html#costs-high" },
     { t: "Grok Image Generation", u: "troubleshooting.html#image-generation" },
     { t: "Common Error Messages", u: "troubleshooting.html#common-errors" },
+    // Ch 20 — Remote Bridge
+    { t: "End-to-End Workflow: WhatsApp to Shipped PR", u: "remote-bridge.html#end-to-end-workflow" },
+    // Ch 24 — Memory Architecture
+    { t: "Unified Memory Across Agents", u: "memory-architecture.html#unified-memory-across-agents" },
+    // Spec Kit Interop (Act I integration)
+    { t: "Spec Kit Import Flow", u: "spec-kit-interop.html#import-flow" },
+    { t: "Spec Kit Import Procedure", u: "spec-kit-interop.html#import-procedure" },
+    { t: "Spec Kit Ecosystem Extensions", u: "spec-kit-interop.html#ecosystem-extensions" },
     // Appendix I — Plan Forge for Enterprise
     { t: "Why Plan Forge for the Enterprise", u: "enterprise-deployment.html#why-plan-forge-for-the-enterprise" },
     { t: "Where to Find What You Need (Enterprise)", u: "enterprise-deployment.html#where-to-find-what-you-need" },

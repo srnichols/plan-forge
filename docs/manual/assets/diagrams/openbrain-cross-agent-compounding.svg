@@ -1,0 +1,167 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 460" fill="none" role="img" aria-labelledby="obca-title obca-desc">
+  <title id="obca-title">OpenBrain cross-agent compounding</title>
+  <desc id="obca-desc">OpenBrain acts as a shared memory layer between AI agents — Claude, Cursor, and Copilot each capture decisions (capture_thought) and retrieve prior context (search_thoughts). Knowledge compounds across agents and sessions so each slice benefits from every previous run.</desc>
+  <style>
+    text { font-family: 'Inter', sans-serif; }
+    .node { rx: 8; ry: 8; stroke-width: 1.5; }
+    .arrow { stroke: #475569; stroke-width: 1.4; fill: none; marker-end: url(#obca-ah); }
+    .arrow-write { stroke: #f59e0b; stroke-width: 1.8; fill: none; marker-end: url(#obca-ah-amber); }
+    .arrow-read  { stroke: #60a5fa; stroke-width: 1.8; fill: none; marker-end: url(#obca-ah-blue); }
+    .label  { font-size: 10px; fill: #94a3b8; }
+    .micro  { font-size: 9px;  fill: #64748b; }
+    .title  { font-size: 11px; fill: #e2e8f0; font-weight: 600; }
+    .phase  { font-size: 9px;  fill: #f59e0b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .mono   { font-size: 10px; fill: #fbbf24; font-family: 'JetBrains Mono', monospace; }
+    .big    { font-size: 14px; fill: #e2e8f0; font-weight: 700; }
+    .caption { font-size: 9px; fill: #64748b; font-style: italic; }
+  </style>
+  <defs>
+    <marker id="obca-ah" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#475569" />
+    </marker>
+    <marker id="obca-ah-amber" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#f59e0b" />
+    </marker>
+    <marker id="obca-ah-blue" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#60a5fa" />
+    </marker>
+  </defs>
+
+  <!-- ── Background ── -->
+  <rect width="820" height="460" fill="#0f172a" rx="10" />
+
+  <!-- ══════════════════════════════════════════════
+       COLUMN 1: AI Agents (left)
+       ══════════════════════════════════════════════ -->
+  <text x="110" y="22" class="phase" text-anchor="middle">AI AGENTS</text>
+
+  <!-- Claude -->
+  <rect x="20" y="35" width="180" height="56" class="node" fill="#0f172a" stroke="#a78bfa" />
+  <text x="110" y="56" class="big" text-anchor="middle">Claude</text>
+  <text x="110" y="73" class="micro" text-anchor="middle">Anthropic · plan execution</text>
+  <text x="110" y="85" class="micro" text-anchor="middle">pforge run-plan, gh-copilot-worker</text>
+
+  <!-- Cursor -->
+  <rect x="20" y="115" width="180" height="56" class="node" fill="#0f172a" stroke="#34d399" />
+  <text x="110" y="136" class="big" text-anchor="middle">Cursor</text>
+  <text x="110" y="153" class="micro" text-anchor="middle">Cursor IDE · code editing</text>
+  <text x="110" y="165" class="micro" text-anchor="middle">background agent, composer mode</text>
+
+  <!-- Copilot -->
+  <rect x="20" y="195" width="180" height="56" class="node" fill="#0f172a" stroke="#60a5fa" />
+  <text x="110" y="216" class="big" text-anchor="middle">Copilot</text>
+  <text x="110" y="233" class="micro" text-anchor="middle">GitHub Copilot CLI · review &amp; ship</text>
+  <text x="110" y="245" class="micro" text-anchor="middle">code-review agent, shipper agent</text>
+
+  <!-- Future / generic agent -->
+  <rect x="20" y="275" width="180" height="40" class="node" fill="#0f172a" stroke="#334155" />
+  <text x="110" y="291" class="label" text-anchor="middle">future agents</text>
+  <text x="110" y="306" class="micro" text-anchor="middle">any MCP-capable client</text>
+
+
+  <!-- ══════════════════════════════════════════════
+       COLUMN 2: OpenBrain (center)
+       ══════════════════════════════════════════════ -->
+  <text x="410" y="22" class="phase" text-anchor="middle">OPENBRAIN SHARED MEMORY</text>
+
+  <!-- Main OpenBrain box -->
+  <rect x="290" y="35" width="240" height="180" class="node" fill="#1e1a2e" stroke="#f59e0b" />
+  <text x="410" y="62" class="title" text-anchor="middle" font-size="13">OpenBrain</text>
+  <text x="410" y="80" class="mono" text-anchor="middle">capture_thought()</text>
+  <text x="410" y="96" class="label" text-anchor="middle">persist a decision or lesson</text>
+  <text x="410" y="118" class="mono" text-anchor="middle">search_thoughts()</text>
+  <text x="410" y="134" class="label" text-anchor="middle">retrieve relevant prior context</text>
+
+  <line x1="302" y1="144" x2="518" y2="144" stroke="#334155" stroke-width="1" />
+  <text x="410" y="158" class="micro" text-anchor="middle">storage: .forge/openbrain/ (JSONL)</text>
+  <text x="410" y="173" class="micro" text-anchor="middle">scoped by project + source path</text>
+  <text x="410" y="188" class="micro" text-anchor="middle">BM25 + semantic re-ranking</text>
+  <text x="410" y="206" class="micro" text-anchor="middle" fill="#64748b">project: "Plan-Forge"  |  type: convention | lesson | decision</text>
+
+  <!-- Thought store tiers -->
+  <rect x="290" y="240" width="240" height="80" class="node" fill="#0f172a" stroke="#334155" />
+  <text x="410" y="258" class="phase" text-anchor="middle">THOUGHT TIERS</text>
+  <text x="302" y="275" class="label">convention</text>
+  <text x="302" y="290" class="label">lesson</text>
+  <text x="302" y="305" class="label">decision</text>
+  <text x="410" y="275" class="micro">naming, patterns, guardrails</text>
+  <text x="410" y="290" class="micro">gotchas, dead-ends, warnings</text>
+  <text x="410" y="305" class="micro">arch choices + rationale</text>
+
+  <!-- Compound counter badge -->
+  <rect x="300" y="338" width="220" height="44" class="node" fill="#1e293b" stroke="#f59e0b" />
+  <text x="410" y="357" class="phase" text-anchor="middle">COMPOUNDING EFFECT</text>
+  <text x="410" y="374" class="label" text-anchor="middle">each capture raises signal quality for all future agents</text>
+
+
+  <!-- ══════════════════════════════════════════════
+       COLUMN 3: Outcomes (right)
+       ══════════════════════════════════════════════ -->
+  <text x="700" y="22" class="phase" text-anchor="middle">OUTCOMES</text>
+
+  <rect x="590" y="35" width="210" height="46" class="node" fill="#0f172a" stroke="#34d399" />
+  <text x="695" y="54" class="title" text-anchor="middle">No repeated mistakes</text>
+  <text x="695" y="70" class="micro" text-anchor="middle">gotchas captured once, reused forever</text>
+
+  <rect x="590" y="92" width="210" height="46" class="node" fill="#0f172a" stroke="#60a5fa" />
+  <text x="695" y="111" class="title" text-anchor="middle">Faster ramp-up</text>
+  <text x="695" y="127" class="micro" text-anchor="middle">search_thoughts at session start</text>
+
+  <rect x="590" y="149" width="210" height="46" class="node" fill="#0f172a" stroke="#a78bfa" />
+  <text x="695" y="168" class="title" text-anchor="middle">Pattern consistency</text>
+  <text x="695" y="184" class="micro" text-anchor="middle">conventions shared across agents + IDEs</text>
+
+  <rect x="590" y="206" width="210" height="46" class="node" fill="#0f172a" stroke="#fb7185" />
+  <text x="695" y="225" class="title" text-anchor="middle">Architecture integrity</text>
+  <text x="695" y="241" class="micro" text-anchor="middle">decisions survive session boundaries</text>
+
+
+  <!-- ══════════════════════════════════════════════
+       ARROWS — agents → OpenBrain (write, amber)
+       ══════════════════════════════════════════════ -->
+  <!-- Claude → OpenBrain write -->
+  <path d="M200,60 Q245,60 290,100" class="arrow-write" />
+  <text x="232" y="72" class="caption">capture</text>
+
+  <!-- Cursor → OpenBrain write -->
+  <path d="M200,140 L290,140" class="arrow-write" />
+  <text x="232" y="132" class="caption">capture</text>
+
+  <!-- Copilot → OpenBrain write -->
+  <path d="M200,220 Q245,220 290,175" class="arrow-write" />
+  <text x="232" y="212" class="caption">capture</text>
+
+  <!-- ══════════════════════════════════════════════
+       ARROWS — OpenBrain → agents (read, blue)
+       ══════════════════════════════════════════════ -->
+  <!-- OpenBrain → Claude read -->
+  <path d="M290,88 Q245,78 200,70" class="arrow-read" />
+  <text x="220" y="86" class="caption" fill="#60a5fa">search</text>
+
+  <!-- OpenBrain → Cursor read -->
+  <path d="M290,152 L200,152" class="arrow-read" />
+  <text x="220" y="147" class="caption" fill="#60a5fa">search</text>
+
+  <!-- OpenBrain → Copilot read -->
+  <path d="M290,162 Q245,200 200,228" class="arrow-read" />
+  <text x="220" y="198" class="caption" fill="#60a5fa">search</text>
+
+  <!-- future agent → OpenBrain (dashed, neutral) -->
+  <path d="M200,292 L290,280" stroke="#334155" stroke-width="1.2" stroke-dasharray="4,3" fill="none" marker-end="url(#obca-ah)" />
+
+  <!-- ══════════════════════════════════════════════
+       ARROWS — OpenBrain → outcomes
+       ══════════════════════════════════════════════ -->
+  <path d="M530,80 L590,58" class="arrow" />
+  <path d="M530,120 L590,115" class="arrow" />
+  <path d="M530,160 L590,172" class="arrow" />
+  <path d="M530,185 L590,229" class="arrow" />
+
+  <!-- ══════════════════════════════════════════════
+       FOOTER
+       ══════════════════════════════════════════════ -->
+  <rect x="20" y="400" width="780" height="46" class="node" fill="#1e293b" stroke="#334155" />
+  <text x="34" y="419" class="title">📡 Usage pattern:</text>
+  <text x="34" y="434" class="label">Session start → <tspan class="mono">search_thoughts(query, project:"Plan-Forge", limit:5)</tspan>  ·  After a key decision → <tspan class="mono">capture_thought(content, project:"Plan-Forge", source:"…/slice-N")</tspan></text>
+  <text x="34" y="446" class="micro">Claude, Cursor, and Copilot all operate on the same OpenBrain store — each slice they execute raises the quality floor for every future agent.</text>
+</svg>

@@ -1,0 +1,168 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 540" fill="none">
+  <style>
+    text { font-family: 'Inter', sans-serif; }
+    .pillar { rx: 10; ry: 10; stroke-width: 1.5; }
+    .box { rx: 6; ry: 6; stroke-width: 1; }
+    .arrow { stroke: #475569; stroke-width: 1.5; fill: none; marker-end: url(#arrowhead); }
+    .label { font-size: 11px; fill: #cbd5e1; }
+    .title { font-size: 13px; fill: #f1f5f9; font-weight: 600; }
+    .pillar-title { font-size: 12px; fill: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .accent { font-size: 10px; fill: #f59e0b; font-weight: 600; }
+    .desc { font-size: 9.5px; fill: #94a3b8; }
+    .heading { font-size: 15px; fill: #f1f5f9; font-weight: 700; }
+    .sub { font-size: 10px; fill: #64748b; }
+    .connector { stroke: #334155; stroke-width: 1; stroke-dasharray: 4 3; fill: none; }
+  </style>
+
+  <defs>
+    <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#475569" />
+    </marker>
+    <marker id="arrowhead-blue" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#3b82f6" />
+    </marker>
+    <marker id="arrowhead-amber" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#f59e0b" />
+    </marker>
+    <marker id="arrowhead-green" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#22c55e" />
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="900" height="540" fill="#0f172a" />
+
+  <!-- Title -->
+  <text x="450" y="36" text-anchor="middle" class="heading">Plan Forge — Unified System: Three Pillars</text>
+  <text x="450" y="54" text-anchor="middle" class="sub">Orchestration · Memory · Execution across the full AI development pipeline</text>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- PILLAR 1: ORCHESTRATION (left) -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <rect x="30" y="75" width="250" height="420" class="pillar" fill="#1e293b" stroke="#334155" />
+  <text x="155" y="100" text-anchor="middle" class="pillar-title">Pillar 1 — Orchestration</text>
+
+  <!-- Plan Forge core -->
+  <rect x="50" y="112" width="210" height="52" class="box" fill="#0f172a" stroke="#3b82f6" />
+  <text x="155" y="133" text-anchor="middle" class="title">Plan Forge</text>
+  <text x="155" y="150" text-anchor="middle" class="desc">Pipeline · run-plan · quorum · slices</text>
+
+  <!-- Copilot agent -->
+  <rect x="50" y="178" width="210" height="52" class="box" fill="#0f172a" stroke="#818cf8" />
+  <text x="155" y="199" text-anchor="middle" class="title">Copilot</text>
+  <text x="155" y="216" text-anchor="middle" class="desc">GitHub Copilot CLI / VS Code agent</text>
+
+  <!-- ACP -->
+  <rect x="50" y="244" width="210" height="52" class="box" fill="#0f172a" stroke="#a78bfa" />
+  <text x="155" y="265" text-anchor="middle" class="title">ACP</text>
+  <text x="155" y="282" text-anchor="middle" class="desc">Agent Communication Protocol bridge</text>
+
+  <!-- Hooks -->
+  <rect x="50" y="310" width="210" height="42" class="box" fill="#0f172a" stroke="#334155" />
+  <text x="155" y="326" text-anchor="middle" class="label">Lifecycle Hooks</text>
+  <text x="155" y="341" text-anchor="middle" class="desc">PreDeploy · PostSlice · PreAgentHandoff</text>
+
+  <!-- LiveGuard -->
+  <rect x="50" y="365" width="210" height="42" class="box" fill="#0f172a" stroke="#334155" />
+  <text x="155" y="381" text-anchor="middle" class="label">LiveGuard</text>
+  <text x="155" y="396" text-anchor="middle" class="desc">Drift detection · secret scan · env diff</text>
+
+  <!-- Quorum -->
+  <rect x="50" y="420" width="210" height="42" class="box" fill="#0f172a" stroke="#334155" />
+  <text x="155" y="436" text-anchor="middle" class="label">Quorum Dispatcher</text>
+  <text x="155" y="451" text-anchor="middle" class="desc">auto · power · speed · consensus</text>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- PILLAR 2: MEMORY (center) -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <rect x="325" y="75" width="250" height="420" class="pillar" fill="#1e293b" stroke="#334155" />
+  <text x="450" y="100" text-anchor="middle" class="pillar-title">Pillar 2 — Memory</text>
+
+  <!-- OpenBrain -->
+  <rect x="345" y="112" width="210" height="52" class="box" fill="#0f172a" stroke="#f59e0b" />
+  <text x="450" y="133" text-anchor="middle" class="title">OpenBrain</text>
+  <text x="450" y="150" text-anchor="middle" class="desc">Cross-session memory · BM25 recall · thoughts</text>
+
+  <!-- Session Store -->
+  <rect x="345" y="178" width="210" height="52" class="box" fill="#0f172a" stroke="#d97706" />
+  <text x="450" y="199" text-anchor="middle" class="title">Session Store</text>
+  <text x="450" y="216" text-anchor="middle" class="desc">JSONL persistence · session history · rotate</text>
+
+  <!-- Recall Index -->
+  <rect x="345" y="244" width="210" height="52" class="box" fill="#0f172a" stroke="#334155" />
+  <text x="450" y="265" text-anchor="middle" class="label">Recall Index</text>
+  <text x="450" y="282" text-anchor="middle" class="desc">BM25 (k1=1.5, b=0.75) · fm-recall CLI</text>
+
+  <!-- Daily Digest -->
+  <rect x="345" y="310" width="210" height="42" class="box" fill="#0f172a" stroke="#334155" />
+  <text x="450" y="326" text-anchor="middle" class="label">Daily Digest</text>
+  <text x="450" y="341" text-anchor="middle" class="desc">Aggregator · renderer · forge-daily-digest</text>
+
+  <!-- Embedding cache -->
+  <rect x="345" y="365" width="210" height="42" class="box" fill="#0f172a" stroke="#334155" />
+  <text x="450" y="381" text-anchor="middle" class="label">Embedding Cache</text>
+  <text x="450" y="396" text-anchor="middle" class="desc">Cosine similarity · write-through · stage 1.5</text>
+
+  <!-- Forge Master -->
+  <rect x="345" y="420" width="210" height="42" class="box" fill="#0f172a" stroke="#f59e0b" />
+  <text x="450" y="436" text-anchor="middle" class="label">Forge Master</text>
+  <text x="450" y="451" text-anchor="middle" class="desc">Intent router · classify · orchestrate</text>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- PILLAR 3: EXECUTION (right) -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <rect x="620" y="75" width="250" height="420" class="pillar" fill="#1e293b" stroke="#334155" />
+  <text x="745" y="100" text-anchor="middle" class="pillar-title">Pillar 3 — Execution</text>
+
+  <!-- OpenClaw -->
+  <rect x="640" y="112" width="210" height="52" class="box" fill="#0f172a" stroke="#22c55e" />
+  <text x="745" y="133" text-anchor="middle" class="title">OpenClaw</text>
+  <text x="745" y="150" text-anchor="middle" class="desc">Multi-agent snapshot · handoff · traces</text>
+
+  <!-- MCP Server -->
+  <rect x="640" y="178" width="210" height="52" class="box" fill="#0f172a" stroke="#16a34a" />
+  <text x="745" y="199" text-anchor="middle" class="title">MCP Server</text>
+  <text x="745" y="216" text-anchor="middle" class="desc">67 tools · forge_run_plan · forge_analyze</text>
+
+  <!-- Audit Loop -->
+  <rect x="640" y="244" width="210" height="52" class="box" fill="#0f172a" stroke="#334155" />
+  <text x="745" y="265" text-anchor="middle" class="label">Audit Loop</text>
+  <text x="745" y="282" text-anchor="middle" class="desc">Content audit · triage · drain · auto-activate</text>
+
+  <!-- Dashboard -->
+  <rect x="640" y="310" width="210" height="42" class="box" fill="#0f172a" stroke="#334155" />
+  <text x="745" y="326" text-anchor="middle" class="label">Dashboard</text>
+  <text x="745" y="341" text-anchor="middle" class="desc">localhost:3100 · live progress · cost · replay</text>
+
+  <!-- Timeline -->
+  <rect x="640" y="365" width="210" height="42" class="box" fill="#0f172a" stroke="#334155" />
+  <text x="745" y="381" text-anchor="middle" class="label">Timeline</text>
+  <text x="745" y="396" text-anchor="middle" class="desc">9 sources · fm-turn events · pforge timeline</text>
+
+  <!-- Hammer FM -->
+  <rect x="640" y="420" width="210" height="42" class="box" fill="#0f172a" stroke="#334155" />
+  <text x="745" y="436" text-anchor="middle" class="label">Hammer FM</text>
+  <text x="745" y="451" text-anchor="middle" class="desc">Load harness · scorers · scenario packs</text>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- CONNECTING ARROWS between pillars -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+
+  <!-- Pillar 1 → Pillar 2 (Plan Forge → OpenBrain) -->
+  <path d="M260,138 L345,138" stroke="#3b82f6" stroke-width="1.5" fill="none" marker-end="url(#arrowhead-blue)" />
+  <text x="302" y="130" text-anchor="middle" class="accent">memory</text>
+
+  <!-- Pillar 2 → Pillar 3 (OpenBrain → OpenClaw) -->
+  <path d="M555,138 L640,138" stroke="#f59e0b" stroke-width="1.5" fill="none" marker-end="url(#arrowhead-amber)" />
+  <text x="597" y="130" text-anchor="middle" class="accent">snapshot</text>
+
+  <!-- Pillar 1 → Pillar 3 (ACP) -->
+  <path d="M260,270 Q450,510 640,270" class="connector" marker-end="url(#arrowhead)" />
+  <text x="450" y="510" text-anchor="middle" class="sub">ACP agent handoff</text>
+
+  <!-- Legend -->
+  <text x="30" y="515" class="sub">● Plan Forge orchestrates end-to-end</text>
+  <text x="30" y="530" class="sub">● Copilot + ACP bridge human &amp; AI agents</text>
+  <text x="340" y="515" class="sub">● OpenBrain persists decisions across sessions</text>
+  <text x="640" y="515" class="sub">● OpenClaw coordinates multi-agent traces</text>
+</svg>

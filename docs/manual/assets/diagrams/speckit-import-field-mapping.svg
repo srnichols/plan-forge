@@ -1,0 +1,169 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 400" fill="none">
+  <style>
+    text { font-family: 'Inter', sans-serif; }
+    .node { rx: 8; ry: 8; stroke-width: 1.5; }
+    .arrow { stroke: #475569; stroke-width: 1.5; fill: none; marker-end: url(#arr); }
+    .label { font-size: 10px; fill: #94a3b8; }
+    .title { font-size: 11px; fill: #e2e8f0; font-weight: 600; }
+    .phase { font-size: 9px; fill: #f59e0b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .field-ok { font-size: 10px; fill: #34d399; }
+    .field-warn { font-size: 10px; fill: #fcd34d; }
+    .field-src { font-size: 10px; fill: #7dd3fc; }
+    .monospace { font-family: 'JetBrains Mono', monospace; font-size: 9px; fill: #94a3b8; }
+  </style>
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#475569" />
+    </marker>
+    <marker id="arr-gold" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#fbbf24" />
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="820" height="400" fill="#020617" />
+
+  <!-- === SOURCE FILES (left column) === -->
+  <text x="80" y="20" class="phase" text-anchor="middle">SOURCE FILES</text>
+
+  <!-- spec.md -->
+  <rect x="10" y="32" width="140" height="48" class="node" fill="#0f172a" stroke="#7dd3fc" />
+  <text x="80" y="50" class="title" style="fill:#7dd3fc;" text-anchor="middle">spec.md</text>
+  <text x="80" y="65" class="label" text-anchor="middle">feature spec · acceptance criteria</text>
+  <text x="80" y="78" class="monospace" text-anchor="middle">title, goals, out-of-scope</text>
+
+  <!-- plan.md -->
+  <rect x="10" y="96" width="140" height="48" class="node" fill="#0f172a" stroke="#a78bfa" />
+  <text x="80" y="114" class="title" style="fill:#a78bfa;" text-anchor="middle">plan.md</text>
+  <text x="80" y="129" class="label" text-anchor="middle">phase plan · scope contract</text>
+  <text x="80" y="142" class="monospace" text-anchor="middle">slices, scope, forbidden-actions</text>
+
+  <!-- tasks.md -->
+  <rect x="10" y="160" width="140" height="48" class="node" fill="#0f172a" stroke="#34d399" />
+  <text x="80" y="178" class="title" style="fill:#34d399;" text-anchor="middle">tasks.md</text>
+  <text x="80" y="193" class="label" text-anchor="middle">slice task breakdown</text>
+  <text x="80" y="206" class="monospace" text-anchor="middle">task-id, owner, status</text>
+
+  <!-- constitution.md -->
+  <rect x="10" y="224" width="140" height="48" class="node" fill="#0f172a" stroke="#fb923c" />
+  <text x="80" y="242" class="title" style="fill:#fb923c;" text-anchor="middle">constitution.md</text>
+  <text x="80" y="257" class="label" text-anchor="middle">agent rules · guardrails</text>
+  <text x="80" y="270" class="monospace" text-anchor="middle">commitments, prohibitions</text>
+
+  <!-- PROJECT-PRINCIPLES (bottom — policy overlay) -->
+  <rect x="10" y="290" width="140" height="48" class="node" fill="#0f172a" stroke="#f59e0b" stroke-dasharray="4 2" />
+  <text x="80" y="308" class="title" style="fill:#f59e0b;" text-anchor="middle">PROJECT-PRINCIPLES</text>
+  <text x="80" y="323" class="label" text-anchor="middle">non-negotiable constraints</text>
+  <text x="80" y="336" class="monospace" text-anchor="middle">tech-stack, patterns, limits</text>
+
+  <!-- === FIELD MAPPER (centre) === -->
+  <text x="430" y="20" class="phase" text-anchor="middle">SPECKIT IMPORT — FIELD MAPPER</text>
+
+  <rect x="200" y="32" width="280" height="310" class="node" fill="#080f1a" stroke="#475569" stroke-dasharray="3 3" />
+
+  <!-- Column headers -->
+  <text x="240" y="55" class="label">Source field</text>
+  <text x="380" y="55" class="label">Crucible field</text>
+  <line x1="200" y1="60" x2="480" y2="60" stroke="#1e293b" stroke-width="1" />
+
+  <!-- Row 1 -->
+  <text x="210" y="78" class="field-src">spec.md → title</text>
+  <text x="370" y="78" class="field-ok">→ plan-title</text>
+
+  <!-- Row 2 -->
+  <text x="210" y="98" class="field-src">spec.md → goals[]</text>
+  <text x="370" y="98" class="field-ok">→ objectives[]</text>
+
+  <!-- Row 3 -->
+  <text x="210" y="118" class="field-src">plan.md → scope</text>
+  <text x="370" y="118" class="field-ok">→ scope</text>
+
+  <!-- Row 4 -->
+  <text x="210" y="138" class="field-src">plan.md → slices[]</text>
+  <text x="370" y="138" class="field-ok">→ slices[]</text>
+
+  <!-- Row 5 -->
+  <text x="210" y="158" class="field-src">plan.md → forbidden-actions</text>
+  <text x="370" y="158" class="field-ok">→ forbidden-actions</text>
+
+  <!-- Row 6 -->
+  <text x="210" y="178" class="field-src">tasks.md → task-id</text>
+  <text x="370" y="178" class="field-ok">→ slice.tasks[]</text>
+
+  <!-- Row 7 -->
+  <text x="210" y="198" class="field-src">tasks.md → status</text>
+  <text x="370" y="198" class="field-ok">→ slice.status</text>
+
+  <!-- Row 8 -->
+  <text x="210" y="218" class="field-src">constitution.md → rules</text>
+  <text x="370" y="218" class="field-ok">→ agent-constraints</text>
+
+  <!-- Separator -->
+  <line x1="200" y1="232" x2="480" y2="232" stroke="#1e293b" stroke-width="1" stroke-dasharray="2 2" />
+
+  <!-- Policy overlay rows -->
+  <text x="210" y="252" class="field-warn">PROJECT-PRINCIPLES</text>
+  <text x="370" y="252" class="field-warn">→ policy-overlay</text>
+  <text x="210" y="268" class="label">  tech-stack constraints</text>
+  <text x="370" y="268" class="field-ok">→ enforced pre-smelt</text>
+  <text x="210" y="284" class="label">  forbidden patterns</text>
+  <text x="370" y="284" class="field-ok">→ lint-guards</text>
+
+  <!-- Missing field indicator -->
+  <line x1="200" y1="300" x2="480" y2="300" stroke="#1e293b" stroke-width="1" stroke-dasharray="2 2" />
+  <text x="340" y="320" class="label" style="fill:#fb7185;" text-anchor="middle">missing required field → import blocked</text>
+  <text x="340" y="336" class="monospace" style="fill:#fca5a5;" text-anchor="middle">SPECKIT_IMPORT_MISSING_FIELD error</text>
+
+  <!-- Arrows from sources into mapper -->
+  <path d="M150,56 L200,90" class="arrow" />
+  <path d="M150,120 L200,140" class="arrow" />
+  <path d="M150,184 L200,190" class="arrow" />
+  <path d="M150,248 L200,240" class="arrow" />
+  <!-- PROJECT-PRINCIPLES dashed arrow -->
+  <path d="M150,314 L200,310" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="4 2" fill="none" marker-end="url(#arr-gold)" />
+
+  <!-- === CRUCIBLE (right) === -->
+  <text x="670" y="20" class="phase" text-anchor="middle">Crucible</text>
+
+  <rect x="540" y="32" width="260" height="220" class="node" fill="#0f172a" stroke="#fbbf24" />
+  <text x="670" y="55" class="title" style="fill:#fbbf24;" text-anchor="middle">Crucible Smelt</text>
+
+  <text x="560" y="80" class="label">plan-title</text>
+  <text x="700" y="80" class="field-ok">✓ from spec.md</text>
+
+  <text x="560" y="100" class="label">objectives[]</text>
+  <text x="700" y="100" class="field-ok">✓ from spec.md</text>
+
+  <text x="560" y="120" class="label">scope</text>
+  <text x="700" y="120" class="field-ok">✓ from plan.md</text>
+
+  <text x="560" y="140" class="label">slices[]</text>
+  <text x="700" y="140" class="field-ok">✓ from plan.md</text>
+
+  <text x="560" y="160" class="label">forbidden-actions</text>
+  <text x="700" y="160" class="field-ok">✓ from plan.md</text>
+
+  <text x="560" y="180" class="label">slice.tasks[]</text>
+  <text x="700" y="180" class="field-ok">✓ from tasks.md</text>
+
+  <text x="560" y="200" class="label">agent-constraints</text>
+  <text x="700" y="200" class="field-ok">✓ from constitution.md</text>
+
+  <text x="560" y="220" class="label">policy-overlay</text>
+  <text x="700" y="220" class="field-warn">⚑ PROJECT-PRINCIPLES</text>
+
+  <text x="670" y="244" class="label" text-anchor="middle">all fields present → forge_crucible_smelt</text>
+
+  <!-- Arrow mapper → Crucible -->
+  <path d="M480,150 L540,150" class="arrow" />
+
+  <!-- Output: plan file emitted -->
+  <rect x="540" y="275" width="260" height="60" class="node" fill="#0f172a" stroke="#34d399" />
+  <text x="670" y="295" class="title" style="fill:#34d399;" text-anchor="middle">✓ Phase-NN.md emitted</text>
+  <text x="670" y="312" class="label" text-anchor="middle">hardened plan · execution-ready</text>
+  <text x="670" y="327" class="label" text-anchor="middle">crucible-handoff event fired</text>
+  <path d="M670,252 L670,275" class="arrow" />
+
+  <!-- Caption -->
+  <text x="410" y="385" class="label" text-anchor="middle">speckit-import maps source-file fields into Crucible's required schema; PROJECT-PRINCIPLES enforces policy before smelt</text>
+</svg>

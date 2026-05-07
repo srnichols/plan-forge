@@ -125,6 +125,25 @@ for (const file of allHtml) {
 log(`   Checked ${totalLinks} internal links`);
 log(`   ${brokenLinks === 0 ? "✓ All internal links resolve" : "✗ " + brokenLinks + " broken links"}`);
 
+// ─── Step 4b: Forbid local-relative .md links (manual is HTML for end users) ───
+log("\n4b. Checking for local .md links (manual is HTML for users)…");
+let mdLinks = 0;
+const mdRegex = /href="(?!https?:|mailto:)([^"#]+\.md(?:#[^"]*)?)"/g;
+for (const file of allHtml) {
+  const content = fs.readFileSync(path.join(MANUAL_DIR, file), "utf8");
+  let m;
+  while ((m = mdRegex.exec(content)) !== null) {
+    issues.push({
+      severity: "HIGH",
+      type: "MD-LINK",
+      file,
+      msg: `Local .md link: href="${m[1]}" — link to an HTML page in the manual or use a full https://github.com/ URL labelled 'on GitHub'`,
+    });
+    mdLinks++;
+  }
+}
+log(`   ${mdLinks === 0 ? "✓ No local .md links — all user-facing links go to HTML" : "✗ " + mdLinks + " local .md links found"}`);
+
 // ─── Step 5: Chapter shell sanity ───
 log("\n5. Checking chapter shell…");
 let shellIssues = 0;

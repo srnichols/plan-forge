@@ -32,6 +32,18 @@
         <strong>Prerequisite refresher</strong>: This chapter assumes you know what <a href="how-it-works.html#building-blocks">slices, gates, and scope contracts</a> are (Chapter 2) and have run at least one plan (Chapter 4). If those terms are unfamiliar, start there.
       </div>
 
+      <div class="callout callout-tip">
+        <strong>New here? What this chapter is about.</strong> Up until now, you've run plans with default settings — one model, one pass, all slices treated equally. This chapter shows you the dials you can turn to make execution <em>cheaper, smarter, or more reliable</em>. Each section is independent — pick what you need:
+        <ul class="mt-2 mb-0">
+          <li><strong>Model Routing</strong> — assign different AI models to different jobs (cheap one for grunt work, expensive one for review).</li>
+          <li><strong>Escalation Chains</strong> — if Model A fails a slice, automatically retry with Model B, then C.</li>
+          <li><strong>Quorum Mode</strong> — have multiple models solve the same slice in parallel and pick the best answer. Higher quality, higher cost.</li>
+          <li><strong>Cost Optimization &amp; CI Integration</strong> — caps, budgets, and running plans inside GitHub Actions.</li>
+          <li><strong>Resume &amp; Retry</strong> — pick up where a failed run left off without redoing finished slices.</li>
+        </ul>
+        Defaults are sensible — you don't need any of this for your first run. Come back when you want to tune.
+      </div>
+
       <h2 id="model-routing">Model Routing</h2>
       <p>Assign different models per role in <code>.forge.json</code>:</p>
       <p class="text-sm text-slate-500 italic mb-3">Same principle as a human team: let the junior do the legwork, the senior does the final check. Costs less, catches more.</p>

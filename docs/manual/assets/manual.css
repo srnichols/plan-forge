@@ -20,8 +20,9 @@
   overflow-y: auto;
   border-right: 1px solid rgba(51, 65, 85, 0.5);
   background: #020617;
-  scrollbar-width: thin;
-  scrollbar-color: #334155 transparent;
+}
+@supports (scrollbar-width: thin) {
+  .manual-sidebar { scrollbar-width: thin; scrollbar-color: #334155 transparent; }
 }
 .manual-sidebar::-webkit-scrollbar { width: 4px; }
 .manual-sidebar::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
@@ -35,6 +36,62 @@
   color: #64748b;
   padding: 0.75rem 1.25rem 0.25rem;
 }
+
+/* Collapsible act header (button form) */
+button.sidebar-act-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+}
+button.sidebar-act-toggle:hover { color: #cbd5e1; }
+.sidebar-act-chevron {
+  transition: transform 0.18s ease;
+  color: #64748b;
+  flex-shrink: 0;
+}
+button.sidebar-act-toggle.expanded .sidebar-act-chevron { transform: rotate(90deg); }
+
+.sidebar-act-children {
+  display: none;
+  padding-bottom: 0.25rem;
+}
+.sidebar-act-children.expanded { display: block; }
+
+/* Sidebar control row (Collapse / Expand / Theme) */
+.sidebar-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding: 0.65rem 0.85rem 0;
+}
+.sidebar-ctrl-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.55rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #94a3b8;
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(51, 65, 85, 0.5);
+  border-radius: 0.4rem;
+  cursor: pointer;
+  font-family: inherit;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+.sidebar-ctrl-btn:hover {
+  color: #e2e8f0;
+  background: rgba(51, 65, 85, 0.7);
+  border-color: rgba(245, 158, 11, 0.4);
+}
+.sidebar-ctrl-btn svg { flex-shrink: 0; }
+
 .sidebar-link {
   display: flex;
   align-items: center;
@@ -384,3 +441,150 @@
   .cmd-block { background: #f8fafc; border-color: #e2e8f0; }
   .cmd-block pre { color: #1e293b; }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Light Theme — opt-in via html.light-mode (toggle in sidebar)
+   Targets the manual chrome (sidebar, chapter shell, prose, tables,
+   callouts). Inline diagrams and code blocks intentionally stay dark
+   for legibility — code reads better on a dark background.
+   ═══════════════════════════════════════════════════════════════ */
+html.light-mode body { background: #f8fafc; color: #334155; }
+
+/* Sidebar */
+html.light-mode .manual-sidebar {
+  background: #ffffff;
+  border-right-color: #e2e8f0;
+}
+@supports (scrollbar-color: auto) {
+  html.light-mode .manual-sidebar { scrollbar-color: #cbd5e1 transparent; }
+}
+html.light-mode .manual-sidebar::-webkit-scrollbar-thumb { background: #cbd5e1; }
+html.light-mode .manual-sidebar > nav > a:first-of-type { /* logo link */
+  color: #0f172a !important;
+  border-bottom-color: #e2e8f0 !important;
+}
+html.light-mode .manual-sidebar > nav > a:first-of-type:hover { color: #d97706 !important; }
+html.light-mode .sidebar-act { color: #475569; }
+html.light-mode button.sidebar-act-toggle:hover { color: #0f172a; }
+html.light-mode .sidebar-act-chevron { color: #94a3b8; }
+html.light-mode .sidebar-link { color: #475569; }
+html.light-mode .sidebar-link:hover { color: #0f172a; background: rgba(241, 245, 249, 0.8); }
+html.light-mode .sidebar-link.active {
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.1);
+  border-left-color: #d97706;
+}
+html.light-mode .sidebar-link .chapter-num { color: #94a3b8; }
+html.light-mode .sidebar-link.active .chapter-num { color: #b45309; }
+
+/* Sidebar controls */
+html.light-mode .sidebar-ctrl-btn {
+  color: #475569;
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+}
+html.light-mode .sidebar-ctrl-btn:hover {
+  color: #0f172a;
+  background: #ffffff;
+  border-color: #d97706;
+}
+
+/* Search */
+html.light-mode .search-input {
+  background: #ffffff;
+  border-color: #e2e8f0;
+  color: #0f172a;
+}
+html.light-mode .search-input::placeholder { color: #94a3b8; }
+html.light-mode .search-input:focus { border-color: #d97706; }
+html.light-mode .search-results {
+  background: #ffffff;
+  border-color: #e2e8f0;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+}
+html.light-mode .search-result-item {
+  color: #475569;
+  border-bottom-color: #f1f5f9;
+}
+html.light-mode .search-result-item:hover { background: #f8fafc; color: #0f172a; }
+html.light-mode .search-result-item mark { background: #fef3c7; color: #b45309; }
+
+/* Chapter content shell */
+html.light-mode .chapter-content h1 { color: #0f172a; }
+html.light-mode .chapter-content h2 { color: #0f172a; border-bottom-color: #e2e8f0; }
+html.light-mode .chapter-content h3 { color: #1e293b; }
+html.light-mode .chapter-content p { color: #475569; }
+html.light-mode .chapter-content ul,
+html.light-mode .chapter-content ol { color: #475569; }
+html.light-mode .chapter-content a { color: #b45309; text-decoration-color: rgba(180, 83, 9, 0.35); }
+html.light-mode .chapter-content a:hover { text-decoration-color: #b45309; }
+html.light-mode .chapter-content code:not(pre code) {
+  background: #f1f5f9;
+  color: #b45309;
+}
+html.light-mode .chapter-content strong { color: #0f172a; }
+html.light-mode .chapter-content em { color: #1e293b; }
+
+/* Tables */
+html.light-mode .chapter-content table { background: #ffffff; }
+html.light-mode .chapter-content th {
+  background: #f8fafc;
+  color: #0f172a;
+  border-bottom-color: #e2e8f0;
+}
+html.light-mode .chapter-content td {
+  color: #475569;
+  border-bottom-color: #f1f5f9;
+}
+html.light-mode .chapter-content tr:hover td { background: #f8fafc; }
+
+/* Callouts — keep tinted but legible on white */
+html.light-mode .callout-tip {
+  background: rgba(16, 185, 129, 0.08);
+  border-left-color: #059669;
+  color: #065f46;
+}
+html.light-mode .callout-warning {
+  background: rgba(245, 158, 11, 0.1);
+  border-left-color: #d97706;
+  color: #92400e;
+}
+html.light-mode .callout-info {
+  background: rgba(59, 130, 246, 0.08);
+  border-left-color: #2563eb;
+  color: #1e40af;
+}
+html.light-mode .callout strong { color: inherit; filter: brightness(0.85); }
+
+/* Command reference cards */
+html.light-mode .cmd-ref {
+  background: #ffffff;
+  border-color: #e2e8f0;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+html.light-mode .cmd-ref-title { color: #b45309; }
+html.light-mode .cmd-ref-desc { color: #475569; }
+
+/* Chapter prev/next */
+html.light-mode .chapter-nav { border-top-color: #e2e8f0; }
+html.light-mode .chapter-nav a {
+  background: #ffffff;
+  border-color: #e2e8f0;
+}
+html.light-mode .chapter-nav a:hover {
+  border-color: #d97706;
+  background: #fffbeb;
+}
+html.light-mode .chapter-nav .nav-label { color: #94a3b8; }
+html.light-mode .chapter-nav .nav-title { color: #0f172a; }
+
+/* Mobile button */
+html.light-mode .mobile-sidebar-btn {
+  background: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  color: #475569 !important;
+}
+html.light-mode .mobile-sidebar-btn:hover { color: #0f172a !important; }
+
+/* Code blocks intentionally stay dark in light mode for readability */
+/* (no overrides for .cmd-block / pre) */

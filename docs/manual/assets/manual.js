@@ -24,6 +24,7 @@
     { id: "dashboard-settings",  file: "dashboard-settings.html",  num: "",   title: "Dashboard — Settings",     act: "II" },
     { id: "dashboard-forge-master", file: "dashboard-forge-master.html", num: "", title: "Dashboard — Forge-Master", act: "II" },
     { id: "dashboard-liveguard", file: "dashboard-liveguard.html", num: "",   title: "Dashboard — LiveGuard",    act: "II" },
+    { id: "forge-master",        file: "forge-master.html",        num: "",   title: "Forge-Master (Deep Dive)",  act: "II" },
     { id: "cli-reference",       file: "cli-reference.html",       num: "8",  title: "CLI Reference",            act: "II" },
     { id: "customization",       file: "customization.html",       num: "9",  title: "Customization",            act: "II" },
     { id: "instructions-agents", file: "instructions-agents.html", num: "10", title: "Instruction Files & Agents", act: "II" },
@@ -34,6 +35,10 @@
     { id: "extensions",           file: "extensions.html",              num: "12", title: "Extensions",                act: "II" },
     { id: "multi-agent",         file: "multi-agent.html",         num: "13", title: "Multi-Agent Setup",        act: "II" },
     { id: "advanced-execution",  file: "advanced-execution.html",  num: "14", title: "Advanced Execution",       act: "II" },
+    { id: "self-deterministic-loop", file: "self-deterministic-loop.html", num: "", title: "Self-Deterministic Loop (Deep Dive)", act: "II" },
+    { id: "inner-loop",          file: "inner-loop.html",          num: "",   title: "The Inner Loop (Deep Dive)",       act: "II" },
+    { id: "competitive-loop",    file: "competitive-loop.html",    num: "",   title: "The Competitive Loop (Deep Dive)", act: "II" },
+    { id: "audit-loop",          file: "audit-loop.html",          num: "",   title: "Audit Loop (Deep Dive)",            act: "II" },
     { id: "troubleshooting",     file: "troubleshooting.html",     num: "15", title: "Troubleshooting",          act: "II" },
     // ─── Act III — Guard (post-deploy defense) ───
     { id: "what-is-liveguard",   file: "what-is-liveguard.html",   num: "16", title: "What Is LiveGuard?",        act: "III" },
@@ -64,18 +69,47 @@
     { id: "lessons-learned",                  file: "lessons-learned.html",                  num: "",  title: "Lessons Learned",                   act: "Appendix" },
     { id: "project-history",                  file: "project-history.html",                  num: "",  title: "Project History",                   act: "Appendix" },
     { id: "about-author",         file: "about-author.html",        num: "",   title: "About the Author",          act: "Appendix" },
+    { id: "book-index",           file: "book-index.html",          num: "O",  title: "Book Index (A\u2013Z)",     act: "Appendix" },
   ];
 
   // Detect current page
   const currentFile = location.pathname.split("/").pop() || "index.html";
   const currentIdx = CHAPTERS.findIndex((c) => c.file === currentFile);
 
+  // ─── Theme (light / dark) ───
+  // Apply saved theme as early as possible so the sidebar renders the correct toggle label.
+  const THEME_KEY = "pforge-manual-theme";
+  function getTheme() {
+    try { return localStorage.getItem(THEME_KEY) || "dark"; } catch (e) { return "dark"; }
+  }
+  function setTheme(theme) {
+    document.documentElement.classList.toggle("light-mode", theme === "light");
+    try { localStorage.setItem(THEME_KEY, theme); } catch (e) {}
+  }
+  // Apply immediately (before DOMContentLoaded) so first paint matches saved preference.
+  if (getTheme() === "light") {
+    document.documentElement.classList.add("light-mode");
+  }
+
+  // ─── Sidebar collapse state ───
+  const NAV_STATE_KEY = "pforge-manual-nav-state";
+  function loadNavState() {
+    try { return JSON.parse(localStorage.getItem(NAV_STATE_KEY) || "{}"); } catch (e) { return {}; }
+  }
+  function saveNavState(state) {
+    try { localStorage.setItem(NAV_STATE_KEY, JSON.stringify(state)); } catch (e) {}
+  }
+  function actGroupId(act) {
+    return "nav-act-" + act.replace(/[^a-zA-Z0-9]/g, "-");
+  }
+
   // ─── Sidebar generation ───
   function buildSidebar() {
     const nav = document.getElementById("sidebar-nav");
     if (!nav) return;
 
-    let lastAct = "";
+    const navState = loadNavState();
+    const theme = getTheme();
     const frag = document.createDocumentFragment();
 
     // Logo / title link
@@ -84,6 +118,23 @@
     titleLink.className = "block px-5 py-4 text-sm font-bold text-slate-100 hover:text-amber-400 transition-colors border-b border-slate-800/50";
     titleLink.innerHTML = "⚒ Plan Forge Manual";
     frag.appendChild(titleLink);
+
+    // Sidebar controls (Collapse All / Expand All / Theme toggle)
+    const controls = document.createElement("div");
+    controls.className = "sidebar-controls";
+    controls.innerHTML =
+      '<button id="nav-collapse-all" class="sidebar-ctrl-btn" type="button" aria-label="Collapse all sections" title="Collapse all">' +
+        '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"/></svg>' +
+        ' Collapse' +
+      '</button>' +
+      '<button id="nav-expand-all" class="sidebar-ctrl-btn" type="button" aria-label="Expand all sections" title="Expand all">' +
+        '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>' +
+        ' Expand' +
+      '</button>' +
+      '<button id="nav-theme-toggle" class="sidebar-ctrl-btn" type="button" aria-label="Toggle light/dark theme" title="Toggle theme">' +
+        (theme === "light" ? '🌙 Dark' : '☀️ Light') +
+      '</button>';
+    frag.appendChild(controls);
 
     // Search
     const searchWrap = document.createElement("div");
@@ -94,27 +145,108 @@
       '<div class="search-results"></div>';
     frag.appendChild(searchWrap);
 
+    // Group chapters by act so we can render collapsible sections
+    const actLabels = { Quickstart: "⚡ Quickstart", I: "Act I — Smelt", II: "Act II — Forge", III: "Act III — Guard", IV: "Act IV — Learn", Appendix: "Appendices" };
+    const actOrder = [];
+    const actGroups = {};
     CHAPTERS.forEach((ch, i) => {
-      if (i === 0) return; // Skip index in sidebar nav
+      if (i === 0) return; // Skip index
+      if (!ch.act) return;
+      if (!actGroups[ch.act]) { actGroups[ch.act] = []; actOrder.push(ch.act); }
+      actGroups[ch.act].push({ ch, idx: i });
+    });
 
-      // Act header
-      if (ch.act && ch.act !== lastAct) {
-        lastAct = ch.act;
-        const actLabels = { Quickstart: "⚡ Quickstart", I: "Act I — Smelt", II: "Act II — Forge", III: "Act III — Guard", IV: "Act IV — Learn", Appendix: "Appendices" };
-        const actEl = document.createElement("div");
-        actEl.className = "sidebar-act";
-        actEl.textContent = actLabels[ch.act] || ch.act;
-        frag.appendChild(actEl);
-      }
+    actOrder.forEach((act) => {
+      const items = actGroups[act];
+      const groupId = actGroupId(act);
+      const containsActive = items.some((it) => it.idx === currentIdx);
+      // Default: expanded. If user explicitly collapsed it AND active page isn't inside, honor that.
+      const stored = navState[groupId];
+      const expanded = containsActive ? true : (stored === false ? false : true);
 
-      const a = document.createElement("a");
-      a.href = ch.file;
-      a.className = "sidebar-link" + (i === currentIdx ? " active" : "");
-      a.innerHTML = '<span class="chapter-num">' + ch.num + "</span> " + ch.title;
-      frag.appendChild(a);
+      const header = document.createElement("button");
+      header.type = "button";
+      header.className = "sidebar-act sidebar-act-toggle" + (expanded ? " expanded" : "");
+      header.setAttribute("data-group", groupId);
+      header.setAttribute("aria-expanded", String(expanded));
+      header.setAttribute("aria-controls", groupId);
+      header.innerHTML =
+        '<span>' + (actLabels[act] || act) + '</span>' +
+        '<svg class="sidebar-act-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>';
+      frag.appendChild(header);
+
+      const childBox = document.createElement("div");
+      childBox.id = groupId;
+      childBox.className = "sidebar-act-children" + (expanded ? " expanded" : "");
+      items.forEach(({ ch, idx }) => {
+        const a = document.createElement("a");
+        a.href = ch.file;
+        a.className = "sidebar-link" + (idx === currentIdx ? " active" : "");
+        a.innerHTML = '<span class="chapter-num">' + ch.num + "</span> " + ch.title;
+        childBox.appendChild(a);
+      });
+      frag.appendChild(childBox);
     });
 
     nav.appendChild(frag);
+
+    // ─── Wire controls ───
+    const collapseBtn = document.getElementById("nav-collapse-all");
+    const expandBtn = document.getElementById("nav-expand-all");
+    const themeBtn = document.getElementById("nav-theme-toggle");
+
+    function setGroup(groupEl, headerEl, expand) {
+      groupEl.classList.toggle("expanded", expand);
+      headerEl.classList.toggle("expanded", expand);
+      headerEl.setAttribute("aria-expanded", String(expand));
+    }
+
+    nav.querySelectorAll(".sidebar-act-toggle").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const groupId = btn.getAttribute("data-group");
+        const groupEl = document.getElementById(groupId);
+        if (!groupEl) return;
+        const willExpand = !groupEl.classList.contains("expanded");
+        setGroup(groupEl, btn, willExpand);
+        const state = loadNavState();
+        state[groupId] = willExpand;
+        saveNavState(state);
+      });
+    });
+
+    if (collapseBtn) {
+      collapseBtn.addEventListener("click", () => {
+        const state = {};
+        nav.querySelectorAll(".sidebar-act-toggle").forEach((btn) => {
+          const groupEl = document.getElementById(btn.getAttribute("data-group"));
+          if (groupEl) { setGroup(groupEl, btn, false); state[groupEl.id] = false; }
+        });
+        saveNavState(state);
+      });
+    }
+    if (expandBtn) {
+      expandBtn.addEventListener("click", () => {
+        const state = {};
+        nav.querySelectorAll(".sidebar-act-toggle").forEach((btn) => {
+          const groupEl = document.getElementById(btn.getAttribute("data-group"));
+          if (groupEl) { setGroup(groupEl, btn, true); state[groupEl.id] = true; }
+        });
+        saveNavState(state);
+      });
+    }
+    if (themeBtn) {
+      themeBtn.addEventListener("click", () => {
+        const next = getTheme() === "light" ? "dark" : "light";
+        setTheme(next);
+        themeBtn.innerHTML = next === "light" ? '🌙 Dark' : '☀️ Light';
+      });
+    }
+
+    // Scroll active link into view on first load
+    const activeEl = nav.querySelector(".sidebar-link.active");
+    if (activeEl && typeof activeEl.scrollIntoView === "function") {
+      activeEl.scrollIntoView({ block: "center", behavior: "instant" });
+    }
   }
 
   // ─── Prev / Next ───

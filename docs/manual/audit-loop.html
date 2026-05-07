@@ -33,6 +33,17 @@
         <h1>Audit Loop</h1>
         <p class="text-lg text-slate-400 mb-8">Closed-loop bug discovery: content-audit scan &rarr; triage &rarr; fix, iterating until convergence or max rounds. Added in v2.80.0.</p>
 
+        <div class="callout callout-info">
+          <strong>New here? Read this first.</strong> The audit loop is Plan Forge's way of <em>finding bugs in a running app and fixing them automatically</em>. Point it at your dev or staging server and it will:
+          <ol class="mt-2 mb-2">
+            <li><strong>Scan</strong> — visit every page/route and record what's broken (404s, blank pages, &ldquo;Coming soon&rdquo; placeholders, broken links).</li>
+            <li><strong>Triage</strong> — sort each finding into one of three lanes: <em>fix it now</em>, <em>ask a human</em>, or <em>I'm not sure</em>.</li>
+            <li><strong>Fix</strong> — for the &ldquo;fix it now&rdquo; lane, spawn a worker to apply the fix, then re-scan.</li>
+            <li><strong>Repeat</strong> — keep going until no new bugs appear (&ldquo;convergence&rdquo;) or the round limit hits.</li>
+          </ol>
+          Think of it as a tireless QA tester that not only files bugs but closes them. <strong>It's off by default</strong> — you have to opt in. Production is permanently off-limits.
+        </div>
+
         <img src="assets/diagrams/audit-loop-triage-lanes.svg" alt="Audit loop drain flow: content-audit scanner produces findings, forge_triage_route classifies each into one of three lanes (bug -> forge_bug_register, spec -> forge_crucible_submit, classifier -> .forge/audits/ artifact), then spawnWorker applies fixes and the loop iterates. Activation via .forge.json#audit.mode (default off). Production environments are hard-blocked." class="diagram-img diagram-img-md my-4" />
 
         <div class="callout callout-info">
@@ -195,6 +206,6 @@ pforge audit-loop --env=staging</code></pre>
     </main>
   </div>
 
-  <script src="assets/sidebar.js"></script>
+  <script src="assets/manual.js"></script>
 </body>
 </html>

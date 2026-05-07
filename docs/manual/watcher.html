@@ -33,6 +33,15 @@
         <h1>The Watcher</h1>
         <p class="text-lg text-slate-400 mb-8">A second pair of eyes on a running forge. Read-only by design.</p>
 
+        <div class="callout callout-info">
+          <strong>New here? Read this first.</strong> Imagine you kick off a long Plan Forge run — maybe an hour of work across 30 slices — and you want to <em>watch it happen</em> without distracting the AI that's doing the work. The Watcher is exactly that: open a second VS Code window, point it at the running project, and ask &ldquo;how's it going?&rdquo; The Watcher reads the live event stream and tells you. <strong>It cannot edit, commit, or change anything</strong> in the project being watched — that's a safety guarantee, not a feature gap.
+          <ul class="mt-2 mb-0">
+            <li><strong>Snapshot mode</strong> — instant point-in-time read. Free. &ldquo;Slice 12 of 30, no errors, $4 spent so far.&rdquo;</li>
+            <li><strong>Analyze mode</strong> — same data but with an AI summary. Costs a few cents. &ldquo;Run is healthy but Slice 8 retried twice on a flaky test — worth investigating.&rdquo;</li>
+            <li><strong>Live tail</strong> — short streaming window (default 60 seconds). Useful when you suspect something is hanging.</li>
+          </ul>
+        </div>
+
         <div class="callout callout-tip">
           <strong>Shipped in v2.34 (snapshot) · v2.35 (live tail).</strong> The Watcher runs in a <em>separate</em> VS Code Copilot session with Plan-Forge as the workspace and points at another project that's executing a plan. It cannot modify anything in the target — it only reads.
         </div>

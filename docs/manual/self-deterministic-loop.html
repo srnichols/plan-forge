@@ -38,6 +38,16 @@
         <p class="text-lg text-slate-400 mb-8">The canonical overview. How Plan Forge's deterministic slice executor, the Phase-25 reflective layer, and the Phase-26 competitive layer compose into a single self-deterministic agent loop.</p>
 
         <div class="callout callout-info">
+          <strong>New here? Plain-English version.</strong> &ldquo;Self-deterministic&rdquo; is a mouthful. Here's what it really means: <strong>Plan Forge runs the same way every time</strong> (same plan + same config = same outcome — no surprises), but <strong>it also learns from every run</strong> and uses that knowledge to make the next run smarter. The execution stays predictable; the context gets richer.
+          <ul class="mt-2 mb-2">
+            <li><strong>Deterministic part</strong> — the slice executor. No random model picking, no hidden retries that change the result. You can re-run a plan and get the same answer.</li>
+            <li><strong>Self-learning part</strong> — the &ldquo;inner loop&rdquo; (reflection on what worked) and &ldquo;competitive loop&rdquo; (multiple models racing) feed lessons back into the next slice or plan.</li>
+            <li><strong>Safety</strong> — every learning signal is opt-in or advisory. Nothing silently changes a run you've already started.</li>
+          </ul>
+          This chapter is the <em>master narrative</em> tying it all together. If you want the focused deep dives, jump to <a href="inner-loop.html">Inner Loop</a> (reflection) or <a href="competitive-loop.html">Competitive Loop</a> (racing).
+        </div>
+
+        <div class="callout callout-info">
           <strong>Canonical reference.</strong> Start here if you want the whole picture. The companion chapters — <a href="inner-loop.html">The Inner Loop</a> (Phase-25 reflective layer) and <a href="competitive-loop.html">The Competitive Loop</a> (Phase-26 worktree race, auto-fix, cost anomalies) — drill into the individual subsystems.
         </div>
 

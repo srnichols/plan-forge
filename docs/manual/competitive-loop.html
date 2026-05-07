@@ -38,6 +38,16 @@
         <p class="text-lg text-slate-400 mb-8">Opt-in worktree races, winner election, auto-fix proposals, and cost-anomaly detection — three new inner-loop subsystems added in v2.58.0.</p>
 
         <div class="callout callout-info">
+          <strong>New here? Decode the jargon first.</strong> This chapter introduces three new tricks; here's what they actually do:
+          <ul class="mt-2 mb-2">
+            <li><strong>Worktree race</strong> — a <em>worktree</em> is a sandbox copy of your repo. Instead of one model trying a slice, Plan Forge can spawn 2–3 sandboxes in parallel, let different models compete, and pick whichever produces the best result. (A &ldquo;winner election&rdquo; is just &ldquo;score them and choose one.&rdquo;)</li>
+            <li><strong>Auto-fix proposals</strong> — when a slice fails, the loop drafts a patch file in <code>.forge/proposed-fixes/</code> for you to review. It never applies the fix automatically.</li>
+            <li><strong>Cost-anomaly detection</strong> — watches token spend per slice. If today's run costs 3× yesterday's, you get a warning. Advisory only; doesn't stop the run.</li>
+          </ul>
+          All three are <strong>off by default</strong> and only kick in when you opt in. Nothing here changes existing behavior unless you ask for it.
+        </div>
+
+        <div class="callout callout-info">
           <strong>Added in v2.58.0.</strong> Every subsystem on this page is opt-in and ships in advisory posture. Competitive execution is <em>off</em> by default; auto-fix drafts patches but never auto-applies; cost-anomaly detection never halts a run. See also <a href="inner-loop.html">The Inner Loop</a> for the Phase-25 subsystems this chapter builds on.
         </div>
 

@@ -905,13 +905,15 @@ const TOOLS = [
   },
   {
     name: "forge_watch_live",
-    description: "WATCHER LIVE TAIL (v2.35) — stream events from another project's pforge run for a fixed duration. Connects to the target's WebSocket hub if running (`.forge/server-ports.json`); falls back to file polling otherwise. Read-only by design — only subscribes, never sends commands. Returns aggregate stats and the captured event stream.",
+    description: "WATCHER LIVE TAIL (v2.35) — stream events from another project's pforge run for a fixed duration. Connects to the target's WebSocket hub if running (`.forge/server-ports.json`); falls back to file polling otherwise. Read-only by design — only subscribes, never sends commands. Returns aggregate stats and the captured event stream. By default events are projected to a lite shape `{ ts, type, correlationId }` to keep payloads small; pass `verbose: true` for full event objects.",
     inputSchema: {
       type: "object",
       properties: {
         targetPath: { type: "string", description: "Absolute path to the project being watched" },
         durationMs: { type: "number", description: "How long to listen, in ms (1000-3600000, default: 60000)" },
         pollIntervalMs: { type: "number", description: "Polling interval if hub not running (default: 3000ms)" },
+        maxCapturedEvents: { type: "number", description: "Buffer size for captured events (1..10000, default: 500)" },
+        verbose: { type: "boolean", description: "If true, return full event objects (pre-ACI behaviour). Default false → lite projection { ts, type, correlationId }." },
       },
       required: ["targetPath"],
     },
@@ -1439,12 +1441,21 @@ const TOOLS = [
   },
   {
     name: "forge_home_snapshot",
-    description: "Read-only aggregated snapshot of the four shop-floor subsystems (Crucible, active runs, LiveGuard, Tempering) plus a trimmed activity feed. Use as a one-call health overview.",
+    description: "Read-only aggregated snapshot of the four shop-floor subsystems (Crucible, active runs, LiveGuard, Tempering) plus a trimmed activity feed. Use as a one-call health overview. Pass `drill` to fetch only one quadrant for a smaller payload, or `activityCursor` to paginate older activity entries.",
     inputSchema: {
       type: "object",
       properties: {
         targetPath: { type: "string", description: "Project directory (default: current)" },
         activityTail: { type: "number", description: "Recent hub events to include (default: 25, clamped 1..200)" },
+        drill: {
+          type: "string",
+          enum: ["crucible", "activeRuns", "liveguard", "tempering", "activity"],
+          description: "Return ONLY this quadrant for a smaller, focused payload. Omit for the full snapshot.",
+        },
+        activityCursor: {
+          type: "string",
+          description: "ISO timestamp from a prior call's `activityPagination.nextCursor`. Returns the next page of older activity entries.",
+        },
       },
       required: [],
     },
@@ -1828,8 +1839,28 @@ function executeTool(name, args) {
     }
     case "forge_validate":
       return runPforge("check", cwd);
-    case "forge_sweep":
-      return runPforge("sweep", cwd);
+    case "forge_sweep": {
+      // Phase ACI-HARDENING (Section 13 fix #4): friendly empty-result message
+      // so the agent doesn't confuse "no markers found" with "sweep failed silently".
+      const result = runPforge("sweep", cwd);
+      if (result.success) {
+        const out = (result.output || "").trim();
+        // pforge sweep emits "FOUND N marker(s)" on hits; otherwise empty/quiet
+        const hasMarkers = /FOUND \d+ deferred-work marker/i.test(out)
+          || /FOUND \d+ \w+ marker/i.test(out);
+        if (!hasMarkers) {
+          result.output = out
+            ? `${out}\n\n✓ No TODO/FIXME/HACK/stub/placeholder markers found in app code. Code is complete!`
+            : "✓ No TODO/FIXME/HACK/stub/placeholder markers found in app code. Code is complete!";
+          result.markersFound = 0;
+        } else {
+          // Extract the count for structured access
+          const m = out.match(/FOUND (\d+) deferred-work marker/i);
+          result.markersFound = m ? Number(m[1]) : null;
+        }
+      }
+      return result;
+    }
     case "forge_status":
       return runPforge("status", cwd);
     case "forge_diff":
@@ -2421,13 +2452,28 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
       const anomalyCaptureCount = uniqueAnomalies.length;
 
+      // Phase ACI-HARDENING (Section 13 fix #3): default to lite event
+      // projection ({ ts, type, correlationId }) so a high-velocity watcher
+      // doesn't blow agent context budgets. Pass `verbose: true` to opt back
+      // into full event objects (preserves pre-ACI behaviour for callers that
+      // need event payloads).
+      const verbose = args.verbose === true;
+      const projectedEvents = verbose
+        ? captured
+        : captured.map(ev => ({
+            ts: ev?.ts ?? ev?.timestamp ?? null,
+            type: ev?.type ?? null,
+            correlationId: ev?.correlationId ?? ev?.data?.correlationId ?? null,
+          }));
+
       const payload = JSON.stringify({
         ...result,
         capturedEvents: captured.length,
         droppedEvents,               // G1.4
         maxCapturedEvents,           // G1.4
         capturedAnomalies: anomalyCaptureCount,
-        events: captured,
+        eventProjection: verbose ? "verbose" : "lite",
+        events: projectedEvents,
       }, null, 2);
       const text = searchHints ? `${searchHints}\n${payload}` : payload;
       return { content: [{ type: "text", text }] };
@@ -4605,7 +4651,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const cwd = args.targetPath
       ? findProjectRoot(resolve(args.targetPath))
       : findProjectRoot(PROJECT_DIR);
-    const result = await readHomeSnapshot(cwd, { activityTail: args.activityTail });
+    const result = await readHomeSnapshot(cwd, {
+      activityTail: args.activityTail,
+      drill: args.drill,
+      activityCursor: args.activityCursor,
+    });
     emitToolTelemetry(
       "forge_home_snapshot", args, result, Date.now() - t0,
       result.ok ? "OK" : "ERROR", cwd

@@ -9756,34 +9756,64 @@ async function buildTemperingQuadrant(root) {
 /**
  * Build the activity feed from hub-events.jsonl.
  * Returns newest-first, primitives-only projection.
+ *
+ * Phase ACI-HARDENING (Section 13 fix #5): supports cursor pagination.
+ * - With no cursor: returns the most recent `tail` entries newest-first.
+ * - With cursor: returns the next `tail` entries strictly older than the cursor
+ *   (cursor is a timestamp matching the `timestamp` field of the previous page's
+ *   last entry). Always newest-first within the page.
+ *
  * @param {string} root - Project root
  * @param {number} tail - Max entries to return
- * @returns {Array<{type: string, timestamp: string, correlationId: string|null, summary: string|null}>}
+ * @param {string|null} [cursor] - ISO timestamp; return entries strictly older
+ * @returns {{ entries: Array<{type, timestamp, correlationId, summary}>, hasMore: boolean, nextCursor: string|null, totalLines: number }}
  */
-function buildActivityFeed(root, tail) {
+function buildActivityFeed(root, tail, cursor = null) {
   const hubPath = resolve(root, ".forge", "hub-events.jsonl");
-  if (!existsSync(hubPath)) return [];
+  if (!existsSync(hubPath)) {
+    return { entries: [], hasMore: false, nextCursor: null, totalLines: 0 };
+  }
 
   let lines;
   try {
     lines = readFileSync(hubPath, "utf-8").split("\n").filter(Boolean);
-  } catch { return []; }
+  } catch {
+    return { entries: [], hasMore: false, nextCursor: null, totalLines: 0 };
+  }
 
-  return lines
-    .slice(-tail)
-    .reverse()
-    .map(line => {
-      try {
-        const ev = JSON.parse(line);
-        return {
-          type: ev.type ?? null,
-          timestamp: ev.ts ?? ev.timestamp ?? null,
-          correlationId: ev.correlationId ?? ev.data?.correlationId ?? null,
-          summary: ev.summary ?? ev.data?.summary ?? null,
-        };
-      } catch { return null; }
-    })
-    .filter(Boolean);
+  // Parse all lines newest-first (file is append-only chronological order)
+  const all = [];
+  for (let i = lines.length - 1; i >= 0; i--) {
+    try {
+      const ev = JSON.parse(lines[i]);
+      all.push({
+        type: ev.type ?? null,
+        timestamp: ev.ts ?? ev.timestamp ?? null,
+        correlationId: ev.correlationId ?? ev.data?.correlationId ?? null,
+        summary: ev.summary ?? ev.data?.summary ?? null,
+      });
+    } catch { /* skip malformed */ }
+  }
+
+  // Apply cursor: drop entries newer than or equal to the cursor timestamp
+  let pool = all;
+  if (cursor) {
+    const cursorTs = new Date(cursor).getTime();
+    if (Number.isFinite(cursorTs)) {
+      pool = all.filter(e => {
+        const ts = new Date(e.timestamp).getTime();
+        return Number.isFinite(ts) && ts < cursorTs;
+      });
+    }
+  }
+
+  const entries = pool.slice(0, tail);
+  const hasMore = pool.length > tail;
+  const nextCursor = hasMore && entries.length > 0
+    ? entries[entries.length - 1].timestamp
+    : null;
+
+  return { entries, hasMore, nextCursor, totalLines: all.length };
 }
 
 /**
@@ -9793,14 +9823,68 @@ function buildActivityFeed(root, tail) {
  * Each quadrant reader is independently try/catch-guarded — one bad quadrant
  * must NOT fail the whole snapshot.
  *
+ * Phase ACI-HARDENING (Section 13 fixes #1 + #5):
+ * - `opts.drill` ∈ {"crucible","activeRuns","liveguard","tempering","activity"}
+ *   returns ONLY that quadrant (smaller payload). Default = full snapshot.
+ * - `opts.activityCursor` (ISO timestamp) — paginate older entries; pairs with
+ *   the `nextCursor` returned in `activityPagination`.
+ * - `activityFeed` array preserved for backwards compatibility.
+ *
  * @param {string} targetPath - Project root (absolute)
  * @param {object} [opts]
  * @param {number} [opts.activityTail=25] - Recent hub events to include (clamped 1..200)
- * @returns {Promise<object>} Snapshot with { ok, targetPath, generatedAt, quadrants, activityFeed }
+ * @param {string} [opts.drill] - If set, return only the named quadrant
+ * @param {string|null} [opts.activityCursor=null] - ISO timestamp; return entries strictly older
+ * @returns {Promise<object>} Snapshot
  */
 export async function readHomeSnapshot(targetPath, opts = {}) {
   const activityTail = clampActivityTail(opts.activityTail);
+  const drill = typeof opts.drill === "string" ? opts.drill : null;
+  const cursor = opts.activityCursor || null;
   try {
+    // Drill mode — only build the requested quadrant
+    if (drill) {
+      const result = {
+        ok: true,
+        targetPath,
+        generatedAt: new Date().toISOString(),
+        drill,
+      };
+      switch (drill) {
+        case "crucible":
+          result.quadrant = await buildCrucibleQuadrant(targetPath);
+          break;
+        case "activeRuns":
+          result.quadrant = await buildActiveRunsQuadrant(targetPath);
+          break;
+        case "liveguard":
+          result.quadrant = await buildLiveguardQuadrant(targetPath);
+          break;
+        case "tempering":
+          result.quadrant = await buildTemperingQuadrant(targetPath);
+          break;
+        case "activity": {
+          const feed = buildActivityFeed(targetPath, activityTail, cursor);
+          result.activityFeed = feed.entries;
+          result.activityPagination = {
+            hasMore: feed.hasMore,
+            nextCursor: feed.nextCursor,
+            totalLines: feed.totalLines,
+          };
+          break;
+        }
+        default:
+          return {
+            ok: false,
+            targetPath,
+            error: `Unknown drill target: '${drill}'. Valid: crucible, activeRuns, liveguard, tempering, activity.`,
+          };
+      }
+      return result;
+    }
+
+    // Default mode — full snapshot
+    const feed = buildActivityFeed(targetPath, activityTail, cursor);
     return {
       ok: true,
       targetPath,
@@ -9811,7 +9895,12 @@ export async function readHomeSnapshot(targetPath, opts = {}) {
         liveguard: await buildLiveguardQuadrant(targetPath),
         tempering: await buildTemperingQuadrant(targetPath),
       },
-      activityFeed: buildActivityFeed(targetPath, activityTail),
+      activityFeed: feed.entries,
+      activityPagination: {
+        hasMore: feed.hasMore,
+        nextCursor: feed.nextCursor,
+        totalLines: feed.totalLines,
+      },
     };
   } catch (err) {
     return { ok: false, error: err.message, targetPath };

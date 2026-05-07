@@ -6,7 +6,7 @@ priority: critical
 
 # Architecture-First Engineering Principles
 
-> **Priority**: CRITICAL — Read before ANY code changes  
+> **Priority**: CRITICAL — Read before ANY code changes
 > **Applies to**: ALL files
 
 ---
@@ -171,6 +171,20 @@ Common shortcuts agents take that still produce compiling code but erode archite
 | "Adding an interface for one implementation is over-engineering" | Interfaces enable testing, future swaps, and dependency injection. The cost is one file — the benefit is permanent testability. |
 | "I'll skip the repository and query directly from the service" | Services with data access can't be unit tested without a database. The repository boundary exists to make testing fast and reliable. |
 
+### Tool-surface (ACI) temper guards
+
+When designing or modifying any MCP tool surface (`forge_*` handlers, output payloads, schemas), watch for these shortcuts. Empirically validated against the SWE-agent ACI principle: the agent only performs as well as the surface lets it.
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "Return the full object to be safe" | Unbounded payloads (30KB+ snapshots, 10K-event captures) blow agent context budgets and cause the agent to skip later tool calls or hallucinate to fit. **Fix**: return summary counts/status by default; offer a `drill` / `verbose` opt-in for details. |
+| "Raw CLI output is good enough" | Silent success or empty stdout is ambiguous to the agent — it cannot tell "no findings" from "command failed quietly". **Fix**: post-process to inject an explicit positive message (`"No markers found. Code is complete!"`) or structured `{ ok: true, count: 0 }`. |
+| "Pagination is too hard; return all" | Tools like `forge_run_plan`, `forge_diagnose`, and `forge_home_snapshot` can return arbitrarily large activity logs. **Fix**: always paginate with `limit` + `cursor` + `hasMore`; pick a small default (10–25). |
+| "Empty response means nothing happened" | A bare `{ hits: [], total: 0 }` reads as failure to most agents. **Fix**: include a `message` field describing what was searched, what filters were active, and how to broaden the query. |
+| "I'll add the field, agent will figure it out" | Undocumented response fields force the agent to guess. **Fix**: every new payload field must appear in the tool's `description`, `inputSchema`, and the `TOOL_METADATA.example.output`. |
+
+**Reference standard**: `forge_search` is the gold standard ACI surface — bounded 80-char snippets, sparse fields (`{ source, recordRef, snippet, score, timestamp }`), `total` + `truncated` for pagination metadata, and a friendly `message` on the empty path. Pattern-match new tool refactors against it.
+
 ---
 
 ## Warning Signs
@@ -185,3 +199,5 @@ Observable patterns indicating these principles are being violated:
 - A class has more than 10 public methods or exceeds 300 lines (God object forming)
 - A method accepts more than 5 parameters (missing a model or configuration object)
 - Test files are absent for new service or repository classes (TDD skipped)
+- A new MCP tool returns more than ~10KB of JSON in its happy path with no opt-in flag (unbounded ACI surface — paginate or summarize)
+- A new MCP tool returns silent empty results (`{ hits: [] }` with no `message` field) when filters match nothing (ambiguous to agents)

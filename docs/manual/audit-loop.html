@@ -142,6 +142,43 @@ pforge audit-loop --env=staging</code></pre>
           <strong>Further reading.</strong> For a real-world walkthrough of the 4-pass sequence applied to a production Next.js site, see the blog post <a href="../../blog/the-loop-that-never-ends.html">The Loop That Never Ends</a>.
         </div>
 
+        <h2 id="three-lane-triage">Three-Lane Triage Funnel</h2>
+        <p>Every finding from the discovery harness gets sorted into one of three lanes by the wrapper before reaching Crucible. Lane assignment determines whether a human ever sees the finding, what shape the resulting plan slice takes, and how the loop closes. The funnel is the difference between an audit that produces 100 PRs nobody reads and an audit that produces 5 PRs that ship.</p>
+
+        <img src="assets/diagrams/triage-three-lane-funnel.svg" alt="Three-Lane Triage Funnel: discovery findings sorted into Bug Lane (auto-smelt to bug-registry), Spec Lane (escalate to human spec author), and Classifier Lane (refine the classifier itself when uncertain)" class="diagram-img diagram-img-md my-4" />
+
+        <h3 id="bug-lane">Bug Lane — Auto-smelt to Bug Registry</h3>
+        <p>Findings with high confidence and a clear remediation pattern (broken links, non-200 status codes, placeholder markers, hydration failures) drop into the bug lane. The wrapper packages them as Crucible smelts with severity attached, then the auto-smelt pass converts them into entries in the <a href="bug-registry.html">bug registry</a>. No human triage required — the loop closes automatically.</p>
+        <p>Representative example: a 4-pass run finds 8 broken anchor links across the docs. All 8 land in the bug lane as a single batch smelt with severity <code>medium</code>, generate one plan slice that fixes them together, and close themselves out via tempering re-audit.</p>
+
+        <h3 id="spec-lane">Spec Lane — Escalate to Human Spec Author</h3>
+        <p>Findings that imply missing or ambiguous spec content (placeholder headings like "Coming soon," pages with zero meaningful content, hydrated SPAs that crash without JS) drop into the spec lane. These can't be auto-fixed because the harness doesn't know what content <em>should</em> be there — only that something is missing. The wrapper escalates them as <a href="crucible.html">Crucible</a> smelts requiring human input before they can be hardened into plan slices.</p>
+        <p>Representative example: the harness finds a route titled "Pricing — Coming soon" with 12 words of body content. Spec lane escalates this to a human as a Crucible smelt requesting a draft of the actual pricing tier copy. The human responds in the Crucible interview funnel, the wrapper hardens the response into a plan slice, and the loop resumes.</p>
+
+        <h3 id="classifier-lane">Classifier Lane — Refine the Classifier</h3>
+        <p>Findings the classifier can't confidently sort (novel signals, contradictory evidence, low confidence scores) drop into the classifier lane. Rather than guess, the wrapper records the finding plus the classifier's confusion signal as a Crucible smelt targeting the classifier itself. Over time, classifier-lane volume should drop as the classifier learns from each handoff.</p>
+        <p>Representative example: the harness finds a 200 OK route with full content but the document title is just <code>"."</code> — the classifier hasn't seen this signal before. Classifier lane creates a smelt asking the maintainer "should pages with single-character titles be flagged as defective?" The answer becomes a new classifier rule for the next run.</p>
+
+        <h3>Finding-type to lane mapping</h3>
+        <table>
+          <thead><tr><th>Finding type</th><th>Default lane</th><th>Why</th></tr></thead>
+          <tbody>
+            <tr><td>Non-200 HTTP status</td><td>Bug</td><td>Unambiguous failure, fix is mechanical</td></tr>
+            <tr><td>Broken anchor / link</td><td>Bug</td><td>Target either exists or it doesn't; trivial to verify</td></tr>
+            <tr><td>Placeholder marker (TODO, Coming soon)</td><td>Spec</td><td>Implies missing content, not broken content</td></tr>
+            <tr><td>Zero meaningful content</td><td>Spec</td><td>Page exists but says nothing — needs human authoring</td></tr>
+            <tr><td>Hydration failure (SPA crashes without JS)</td><td>Bug</td><td>Build / config defect, not a content gap</td></tr>
+            <tr><td>Novel signal / low confidence</td><td>Classifier</td><td>Classifier can't sort; ask the maintainer</td></tr>
+            <tr><td>Mixed signals (multiple conflicting findings)</td><td>Classifier</td><td>Pre-empt a wrong auto-smelt by asking first</td></tr>
+          </tbody>
+        </table>
+
+        <div class="callout callout-info">
+          <strong>What gets auto-smelted.</strong> Only the bug lane runs autonomously. Spec and classifier lanes always require a human in the loop — by design. The point of the funnel is to keep humans focused on <em>what only humans can answer</em> (intent, scope, novel signals), not on triaging mechanical defects the harness already understands.
+        </div>
+
+        <p>For a worked example of how the bug lane closes a real defect end-to-end, including the multi-model quality patterns that catch issues a single model misses, see <a href="advanced-execution.html#quorum-quality-examples">Quorum Quality Examples</a> in Chapter 13.</p>
+
         <h2>Design Decisions</h2>
         <ul>
           <li><strong>Classifier proposals are local files</strong> (v2.80): Written to <code>.forge/audits/</code> as JSON artifacts. GitHub PR creation deferred to v2.81+.</li>

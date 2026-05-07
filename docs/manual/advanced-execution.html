@@ -355,6 +355,103 @@ score = clamp(1, 10, round(0.5425 × 9) + 1) = 6
 
       <p class="text-sm text-slate-400">📄 Cross-references: <a href="multi-agent.html">Chapter 12 — Multi-Agent</a> for the handoff model · <a href="remote-bridge.html#openclaw">Chapter 17 — Remote Bridge</a> for the OpenClaw snapshot path · <a href="forge-master.html#quorum-advisory">Forge-Master Quorum Advisory</a> for the per-prompt counterpart.</p>
 
+      <h3 id="quorum-quality-examples">Quorum Quality Examples — What 3 Models Catch That 1 Doesn't</h3>
+
+      <p>The argument for quorum mode is mostly abstract — "synthesis effect," "independent analyses," "reviewer picks the cleaner approach." A single side-by-side run of the same task makes the argument concrete. The numbers below come from a controlled A/B run on a real C# invoicing slice: same plan, same gates, same acceptance criteria; one execution with the default single-model worker, one with three-model quorum. <strong>Both passed all gates and the independent reviewer.</strong> The difference is in <em>how</em> they passed.</p>
+
+      <table>
+        <thead><tr><th>Metric</th><th>Single (control)</th><th>Quorum (3-model)</th></tr></thead>
+        <tbody>
+          <tr><td>Tests written</td><td>15</td><td><strong>18 (+20%)</strong></td></tr>
+          <tr><td>Helper extraction</td><td>Inline code, repeated 3×</td><td>Extracted helpers, single source</td></tr>
+          <tr><td>Test dates</td><td>Hardcoded literals</td><td>Relative offsets</td></tr>
+          <tr><td>.NET pattern</td><td>Generic <code>ValidationException</code></td><td><code>ArgumentException.ThrowIfNullOrWhiteSpace</code></td></tr>
+          <tr><td>Edge cases</td><td>Standard happy path</td><td>Voided invoice regen, sequence races</td></tr>
+          <tr><td>Total cost</td><td>$0.62</td><td>$0.84 (+35%)</td></tr>
+        </tbody>
+      </table>
+
+      <p>$0.22 of additional spend, both pass review, and the quorum run is measurably more maintainable. Four named patterns drive the difference.</p>
+
+      <h4>Pattern 1 — DRY helper extraction</h4>
+
+      <p>The single-model run inlined volume-discount math in three call sites with slight variations. The quorum run extracted reusable helpers because the synthesizer saw multiple proposals and picked the one that didn't repeat itself.</p>
+
+      <div class="callout callout-info">
+        <strong>Representative example.</strong> The quorum run produced <code>IsWeekend()</code>, <code>CalculateVolumeDiscount()</code>, and <code>ApplyBankersRounding()</code> as private static helpers, called from each invoicing entry point. The single-model run inlined the equivalent ternary expressions at every call site. Same behavior; different debuggability when the discount tier changes a year from now.</p>
+      </div>
+
+      <pre><code>// Single model — inlined at three call sites
+var discount = quantity &gt;= 100 ? 0.15m : quantity &gt;= 50 ? 0.10m : quantity &gt;= 10 ? 0.05m : 0m;
+
+// Quorum — extracted helper
+private static decimal CalculateVolumeDiscount(int quantity) =&gt; quantity switch
+{
+    &gt;= 100 =&gt; 0.15m,
+    &gt;= 50  =&gt; 0.10m,
+    &gt;= 10  =&gt; 0.05m,
+    _      =&gt; 0m,
+};</code></pre>
+
+      <h4>Pattern 2 — Robust test dates</h4>
+
+      <p>Single-model tests pinned dates to literal calendar days. Those tests will fail when those dates pass and the business logic correctly refuses future invoices. Quorum tests used relative offsets that stay green forever.</p>
+
+      <div class="callout callout-info">
+        <strong>Representative example.</strong> The control run wrote <code>new DateTime(2026, 3, 15)</code> in test fixtures. The quorum run wrote <code>DateTime.Now.AddDays(-7)</code>. Identical intent; only one survives March 16th.</p>
+      </div>
+
+      <pre><code>// Single model — breaks on April 16th
+var invoice = new Invoice { Date = new DateTime(2026, 3, 15) };
+
+// Quorum — stays green forever
+var invoice = new Invoice { Date = DateTime.Now.AddDays(-7) };</code></pre>
+
+      <h4>Pattern 3 — Modern .NET patterns</h4>
+
+      <p>Validation guard clauses are a tell. The control run used the generic exception path; the quorum run reached for the modern static-helper API that ships better error messages and is the current recommended pattern.</p>
+
+      <div class="callout callout-info">
+        <strong>Representative example.</strong> The control run used <code>throw new ValidationException("Customer name is required")</code>. The quorum run used <code>ArgumentException.ThrowIfNullOrWhiteSpace(customerName)</code>. The quorum reviewer chose the .NET 7+ helper because one of the three workers proposed it; the synthesizer recognized it as the modern equivalent.</p>
+      </div>
+
+      <pre><code>// Single model — generic, manual message
+if (string.IsNullOrWhiteSpace(customerName))
+    throw new ValidationException("Customer name is required");
+
+// Quorum — modern .NET 7+ helper, auto-generated message including parameter name
+ArgumentException.ThrowIfNullOrWhiteSpace(customerName);</code></pre>
+
+      <h4>Pattern 4 — Edge-case coverage the control missed entirely</h4>
+
+      <p>The +3 tests in the quorum run weren't padding. They were edge cases the single model never wrote because no one model considered both the happy path and the failure mode at the same time. With three independent analyses, edge cases that one model thinks of get surfaced into the synthesis.</p>
+
+      <div class="callout callout-info">
+        <strong>Representative example.</strong> The quorum run added a test for "regenerating an invoice after the original was voided" (<code>VoidedInvoice_Regenerate_AssignsNewSequenceNumber</code>) and a test for "concurrent invoice number assignment under two simultaneous requests" (<code>ConcurrentInvoiceCreation_DoesNotReuseSequenceNumbers</code>). Neither appeared in the control run. Both are exactly the kind of test that catches a production bug six weeks after launch.</p>
+      </div>
+
+      <h4>The synthesis mechanism</h4>
+
+      <p>The pattern across all four examples is the same: <strong>one model proposes one thing, another model proposes a cleaner version, the reviewer picks the cleaner one.</strong> Inline code vs extracted helper — extraction wins. Hardcoded date vs relative offset — relative offset wins. Generic exception vs modern helper — modern helper wins. Standard tests vs edge-case tests — edge-case tests win. The quorum doesn't make any individual model smarter; it makes the worst-case output of each model less likely to be what ships.</p>
+
+      <h4>When this pays off</h4>
+
+      <table>
+        <thead><tr><th>Slice type</th><th>Quorum worth it?</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr><td>Auth / billing / payments</td><td><strong class="text-emerald-400">Yes</strong></td><td>Edge cases here are production bugs that cost money; +35% cost is cheap insurance</td></tr>
+          <tr><td>Database migrations</td><td><strong class="text-emerald-400">Yes</strong></td><td>Wrong migration is irreversible; multi-model agreement is a meaningful signal</td></tr>
+          <tr><td>Architectural slices (new layer, new pattern)</td><td><strong class="text-emerald-400">Yes</strong></td><td>The synthesis effect produces noticeably cleaner abstractions</td></tr>
+          <tr><td>Bug fix with tight reproducer</td><td><span class="text-amber-400">Maybe</span></td><td>If the fix is one line and the test is obvious, single model is fine</td></tr>
+          <tr><td>CRUD endpoint, well-trodden pattern</td><td><span class="text-rose-400">Probably not</span></td><td>All three models will produce nearly identical code; +35% cost buys nothing new</td></tr>
+          <tr><td>Pure docs slice</td><td><span class="text-rose-400">No</span></td><td>Synthesis effect doesn't apply to prose; pick the cheapest model that writes well</td></tr>
+        </tbody>
+      </table>
+
+      <p><code>--quorum=auto</code> applies this judgment per slice using the <a href="#quorum-complexity">complexity scoring rubric</a>. Manual <code>--quorum=power</code> and <code>--quorum=speed</code> let you force the call when you already know which slices are which. The <a href="audit-loop.html#discovery-harness">discovery harness</a> uses single-model dispatch by default because audit findings are mechanical; the auto-smelt loop is the place to catch defects, not the discovery pass.</p>
+
+      <p class="text-sm text-slate-400">📄 Source: <a href="../../blog/quorum-mode-3-models.html">Quorum Mode — What 3 Models Catch That 1 Doesn't</a> on the Plan Forge blog (the controlled A/B run that produced this comparison).</p>
+
       <h2 id="host-routing">Host-Aware Routing <span class="text-amber-400 text-base font-normal">v2.82+</span></h2>
       <p>Plan Forge runs in different IDEs and CLI hosts (VS Code + Copilot, Claude Code, Cursor, Windsurf, Zed, the bare CLI). Each host has its own billing surface. The host-aware routing preference (added v2.82, fixes #104) ensures users on non-Copilot hosts <strong>don't silently double-pay</strong> against subscriptions they're already paying for.</p>
 

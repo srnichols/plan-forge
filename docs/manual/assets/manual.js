@@ -373,12 +373,16 @@
     { t: "Estimating Quorum Cost forge_estimate_quorum", u: "advanced-execution.html#quorum-estimate" },
     { t: "Quorum Complexity Scoring Rubric", u: "advanced-execution.html#quorum-complexity" },
     { t: "Multi-Agent Quorum Turns PFORGE_QUORUM_TURN", u: "advanced-execution.html#quorum-multi-agent" },
+    { t: "Quorum Quality Examples - 3 Models vs 1", u: "advanced-execution.html#quorum-quality-examples" },
     { t: "Host-Aware Routing", u: "advanced-execution.html#host-routing" },
     { t: "Cost Optimization", u: "advanced-execution.html#cost-optimization" },
     { t: "CI Integration GitHub Actions", u: "advanced-execution.html#ci-integration" },
     { t: "Parallel Execution DAG", u: "advanced-execution.html#parallel" },
     { t: "Resume and Retry", u: "advanced-execution.html#resume" },
     { t: "OpenBrain Memory", u: "advanced-execution.html#openbrain" },
+    // Audit Loop chapter
+    { t: "Discovery Harness Implementation", u: "audit-loop.html#discovery-harness" },
+    { t: "Three-Lane Triage Funnel", u: "audit-loop.html#three-lane-triage" },
     // Ch 14
     { t: "Diagnostic Tools", u: "troubleshooting.html#diagnostics" },
     { t: "Agent Not Following Guardrails", u: "troubleshooting.html#guardrails-not-loading" },

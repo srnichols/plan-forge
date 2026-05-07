@@ -158,9 +158,13 @@ describe("inspectGithubStack — shape", () => {
     expect(r.summary.total).toBe(r.checks.length);
   });
 
-  it("returns 8 checks by default, 10 with extra:true", () => {
-    expect(inspectGithubStack(GREEN).checks).toHaveLength(8);
-    expect(inspectGithubStack(GREEN, { extra: true }).checks).toHaveLength(10);
+  it("returns 9 checks by default, 11 with extra:true (Phase GITHUB-A scope)", () => {
+    // Default: copilot-instructions, agents-md, instructions-dir, prompts-dir,
+    //          vscode-mcp, actions-workflows, github-remote, gh-cli,
+    //          copilot-coding-agent-assignable.
+    // Extra adds: copilot-instructions-depth, instructions-applyto.
+    expect(inspectGithubStack(GREEN).checks).toHaveLength(9);
+    expect(inspectGithubStack(GREEN, { extra: true }).checks).toHaveLength(11);
   });
 
   it("every check row has id, label, status, detail", () => {

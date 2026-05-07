@@ -85,7 +85,7 @@
 
         <h3>Good: Tight Scope</h3>
         <div class="cmd-block">
-          <div class="cmd-block-header"><span>✅ Clear boundaries</span></div>
+          <div class="cmd-block-header"><span><span class="text-emerald-400 font-bold">✓</span> Clear boundaries</span></div>
           <pre><code>## Scope Contract
 **In Scope**: src/services/UserService.cs, src/repositories/UserRepository.cs,
               tests/services/UserServiceTests.cs, tests/repositories/UserRepositoryTests.cs
@@ -98,7 +98,7 @@
 
         <h3>Bad: Loose Scope</h3>
         <div class="cmd-block">
-          <div class="cmd-block-header"><span>❌ Too vague</span></div>
+          <div class="cmd-block-header"><span><span class="text-rose-400 font-bold">✗</span> Too vague</span></div>
           <pre><code>## Scope Contract
 **In Scope**: anything related to users
 **Out of Scope**: nothing specific
@@ -143,7 +143,7 @@ Slice 6 — Documentation + cleanup                [30 min]</code></pre>
 
         <h3>Good Gates</h3>
         <div class="cmd-block">
-          <div class="cmd-block-header"><span>✅ Executable and specific</span></div>
+          <div class="cmd-block-header"><span><span class="text-emerald-400 font-bold">✓</span> Executable and specific</span></div>
           <pre><code>**Gate**:
   dotnet build                              # zero errors
   dotnet test --filter "UserProfile"        # 6+ tests pass
@@ -152,7 +152,7 @@ Slice 6 — Documentation + cleanup                [30 min]</code></pre>
 
         <h3>Bad Gates</h3>
         <div class="cmd-block">
-          <div class="cmd-block-header"><span>❌ Vague or unenforceable</span></div>
+          <div class="cmd-block-header"><span><span class="text-rose-400 font-bold">✗</span> Vague or unenforceable</span></div>
           <pre><code>**Gate**: "tests pass"           ← Which tests? How many?
 **Gate**: "code looks clean"     ← Not executable
 **Gate**: "review the changes"   ← Human-dependent, blocks automation</code></pre>

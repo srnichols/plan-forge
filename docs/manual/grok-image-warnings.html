@@ -123,11 +123,11 @@ but the image appears to be a image/jpeg image</code></pre>
       <table>
         <thead><tr><th>Test</th><th>Result</th><th>Details</th></tr></thead>
         <tbody>
-          <tr><td><strong>JPG direct</strong> (<code>.jpg</code> output)</td><td>✅ PASS</td><td>Grok returns JPEG, saved as <code>.jpg</code> — no conversion. 41 KB.</td></tr>
-          <tr><td><strong>PNG conversion</strong> (<code>.png</code> output)</td><td>✅ PASS</td><td>Grok returns JPEG, <code>sharp</code> converts to PNG — 312 KB.</td></tr>
-          <tr><td><strong>MIME detection</strong></td><td>✅ PASS</td><td><code>detectImageFormat()</code> correctly identified JPEG bytes.</td></tr>
-          <tr><td><strong>MCP tool response</strong></td><td>✅ SAFE</td><td>Returns text-only JSON, never raw base64.</td></tr>
-          <tr><td><strong>Session recovery</strong></td><td>⚠️ MITIGATED</td><td>Crash only occurs if raw base64 with wrong MIME enters history. Current code prevents this.</td></tr>
+          <tr><td><strong>JPG direct</strong> (<code>.jpg</code> output)</td><td><span class="text-emerald-400 font-bold">✓</span> PASS</td><td>Grok returns JPEG, saved as <code>.jpg</code> — no conversion. 41 KB.</td></tr>
+          <tr><td><strong>PNG conversion</strong> (<code>.png</code> output)</td><td><span class="text-emerald-400 font-bold">✓</span> PASS</td><td>Grok returns JPEG, <code>sharp</code> converts to PNG — 312 KB.</td></tr>
+          <tr><td><strong>MIME detection</strong></td><td><span class="text-emerald-400 font-bold">✓</span> PASS</td><td><code>detectImageFormat()</code> correctly identified JPEG bytes.</td></tr>
+          <tr><td><strong>MCP tool response</strong></td><td><span class="text-emerald-400 font-bold">✓</span> SAFE</td><td>Returns text-only JSON, never raw base64.</td></tr>
+          <tr><td><strong>Session recovery</strong></td><td><span class="text-amber-400 font-bold">⚠</span> MITIGATED</td><td>Crash only occurs if raw base64 with wrong MIME enters history. Current code prevents this.</td></tr>
         </tbody>
       </table>
 

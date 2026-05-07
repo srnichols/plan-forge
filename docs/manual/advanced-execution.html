@@ -491,10 +491,10 @@ ArgumentException.ThrowIfNullOrWhiteSpace(customerName);</code></pre>
       <p>Before any model fires in quorum mode, the orchestrator emits a per-model billing surface table to stdout:</p>
 
       <pre><code>Quorum Pre-Run Summary (host: claude-code, preference: auto)
-  ✓ claude-opus-4.7   → anthropic-direct      ($0.0061/req)
-  ✓ gpt-5.3-codex     → openai-direct         ($0.0048/req)
-  ⚠ grok-4.20         → xai-direct            ($0.0033/req)  needs XAI_API_KEY
-  ✓ claude-sonnet-4.6 → anthropic-direct      ($0.0019/req)
+  <span class="text-emerald-400 font-bold">✓</span> claude-opus-4.7   → anthropic-direct      ($0.0061/req)
+  <span class="text-emerald-400 font-bold">✓</span> gpt-5.3-codex     → openai-direct         ($0.0048/req)
+  <span class="text-amber-400 font-bold">⚠</span> grok-4.20         → xai-direct            ($0.0033/req)  needs XAI_API_KEY
+  <span class="text-emerald-400 font-bold">✓</span> claude-sonnet-4.6 → anthropic-direct      ($0.0019/req)
 </code></pre>
 
       <p>Per-slice telemetry now records <code>host</code>, <code>billingSurface</code>, and <code>billingWarning</code> in <code>slice-N.json</code> so cost aggregation can distinguish subscription-covered vs pay-per-token spend in the Cost Report.</p>

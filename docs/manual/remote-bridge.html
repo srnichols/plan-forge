@@ -50,22 +50,22 @@
             <tr>
               <td><strong>Telegram</strong></td>
               <td>Solo devs — inline buttons on your phone</td>
-              <td>✅ Inline buttons (approve / reject)</td>
+              <td><span class="text-emerald-400 font-bold">✓</span> Inline buttons (approve / reject)</td>
             </tr>
             <tr>
               <td><strong>Slack</strong></td>
               <td>Team channels — rich attachments, threading</td>
-              <td>✅ Block Kit buttons</td>
+              <td><span class="text-emerald-400 font-bold">✓</span> Block Kit buttons</td>
             </tr>
             <tr>
               <td><strong>Discord</strong></td>
               <td>Community + OSS projects — embeds</td>
-              <td>⚠️ Message-based (no inline buttons)</td>
+              <td><span class="text-amber-400 font-bold">⚠</span> Message-based (no inline buttons)</td>
             </tr>
             <tr>
               <td><strong>OpenClaw</strong></td>
               <td>Agent-to-agent coordination (v2.41+)</td>
-              <td>✅ Handoff contract</td>
+              <td><span class="text-emerald-400 font-bold">✓</span> Handoff contract</td>
             </tr>
           </tbody>
         </table>
@@ -153,7 +153,7 @@
         <p>Once the plan is generated, the bridge sends a summary notification: <em>"Plan hardened. 5 slices. Approve?"</em> This is an <code>approval-requested</code> event with options <code>["approve","reject","revise"]</code>. The developer's inline reply flows back as an <code>approval-response</code> event. The run does not start until approval is received.</p>
 
         <h3>Slice-by-slice execution</h3>
-        <p>The bridge emits a completion ping after every slice: <em>"Slice 2 done. Tests pass. ✓"</em> Slice failures route immediately to the configured high-severity channel. The orchestrator pauses and waits for a human reply or for the auto-escalation chain to handle it.</p>
+        <p>The bridge emits a completion ping after every slice: <em>"Slice 2 done. Tests pass. <span class="text-emerald-400 font-bold not-italic">✓</span>"</em> Slice failures route immediately to the configured high-severity channel. The orchestrator pauses and waits for a human reply or for the auto-escalation chain to handle it.</p>
 
         <h3>Independent review</h3>
         <p>When the review session completes, the bridge delivers the verdict: <em>"Review complete. 0 drift violations. Ship it?"</em> The developer's reply triggers the <code>ship</code> or <code>pause</code> path — both of which are recorded in the hub event log with channel, platform, user, and timestamp.</p>

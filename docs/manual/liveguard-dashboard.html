@@ -113,7 +113,7 @@
         <h2 id="env-tab-heading">Env Tab</h2>
         <p>Key-by-key comparison of all <code class="text-forge-400">.env.*</code> files in the project root, powered by <code class="text-forge-400">forge_env_diff</code>.</p>
         <ul class="space-y-2 text-sm text-slate-300 list-disc list-inside mb-6">
-          <li><strong>Key matrix</strong> — rows are env keys, columns are files. Present keys show a green check; missing keys show a red ✗.</li>
+          <li><strong>Key matrix</strong> — rows are env keys, columns are files. Present keys show a <span class="text-emerald-400 font-bold">✓</span>; missing keys show a <span class="text-rose-400 font-bold">✗</span>.</li>
           <li><strong>Gap count</strong> — total missing keys, highlighted in the tab badge</li>
           <li><strong>Values are never displayed</strong> — the Env tab shows key names only</li>
           <li><strong>Run Diff</strong> button — triggers <code>POST /api/env/diff</code></li>

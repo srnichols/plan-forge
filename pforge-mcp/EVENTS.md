@@ -15,9 +15,19 @@ Every event includes:
 {
   "version": "1.0",
   "type": "event-type",
-  "timestamp": "2026-04-04T09:30:00.000Z"
+  "timestamp": "2026-04-04T09:30:00.000Z",
+  "source": "orchestrator",
+  "security_risk": "none"
 }
 ```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `version` | string | Schema version. Always `"1.0"`. |
+| `type` | string | Event type identifier (see sections below). |
+| `timestamp` | string | ISO-8601 UTC timestamp of emission. |
+| `source` | string | System that emitted the event. One of `orchestrator`, `worker`, `hub`, `bridge`, `liveguard`, `crucible`, `skill`, `watcher`, `audit`. |
+| `security_risk` | string | Security risk level assessed at emission time. One of `none`, `low`, `medium`, `high`, `critical`. Defaults to `none`. |
 
 ---
 

@@ -63,6 +63,34 @@ export { TEMPERING_SCAN_STALE_DAYS };
 /** Canonical list of all supported agent adapters. Update here — consumed by dashboard, setup, and docs. */
 export const SUPPORTED_AGENTS = ["copilot", "claude", "cursor", "codex", "gemini", "windsurf", "generic"];
 
+/**
+ * Canonical event source identifiers — matches the `source` field defined in EVENTS.md common fields.
+ * Use these when constructing event payloads to avoid magic strings.
+ */
+export const EVENT_SOURCE = Object.freeze({
+  ORCHESTRATOR: "orchestrator",
+  WORKER: "worker",
+  HUB: "hub",
+  BRIDGE: "bridge",
+  LIVEGUARD: "liveguard",
+  CRUCIBLE: "crucible",
+  SKILL: "skill",
+  WATCHER: "watcher",
+  AUDIT: "audit",
+});
+
+/**
+ * Canonical security risk levels — matches the `security_risk` field defined in EVENTS.md common fields.
+ * Use these when constructing event payloads to avoid magic strings.
+ */
+export const SECURITY_RISK = Object.freeze({
+  NONE: "none",
+  LOW: "low",
+  MEDIUM: "medium",
+  HIGH: "high",
+  CRITICAL: "critical",
+});
+
 /** Default gate timeout: 10 minutes (raised from 2 min in v2.62.1). Override with PFORGE_GATE_TIMEOUT_MS. */
 export const DEFAULT_GATE_TIMEOUT_MS = 600_000;
 

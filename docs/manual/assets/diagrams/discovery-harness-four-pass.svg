@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 280" fill="none" role="img" aria-labelledby="dhfp-title dhfp-desc">
+  <title id="dhfp-title">Discovery Harness — 4-pass build sequence</title>
+  <desc id="dhfp-desc">Four sequential passes: Pass 1 (Harness) crawls routes with Node + Playwright and emits structured JSON; Pass 2 (Wrapper) transforms that JSON into Crucible smelts; Pass 3 (Execute) runs slice-by-slice with test gates and Tempering; Pass 4 (Auto-smelt) converts Tempering failures into new smelts with no human triage required, closing the loop.</desc>
+  <style>
+    text { font-family: 'Inter', sans-serif; }
+    .node { rx: 8; ry: 8; stroke-width: 1.5; }
+    .arrow { stroke: #fbbf24; stroke-width: 1.5; fill: none; marker-end: url(#dhfp-ah); }
+    .arrow-loop { stroke: #fb7185; stroke-width: 1.5; fill: none; stroke-dasharray: 6 4; marker-end: url(#dhfp-ah-rose); }
+    .label { font-size: 10px; fill: #94a3b8; }
+    .micro { font-size: 9px; fill: #64748b; font-family: 'JetBrains Mono', monospace; }
+    .title-text { font-size: 12px; fill: #e2e8f0; font-weight: 600; }
+    .pass-num { font-size: 20px; font-weight: 800; font-family: 'Inter', sans-serif; }
+    .phase { font-size: 9px; fill: #f59e0b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .heading { font-size: 11px; fill: #64748b; font-weight: 600; letter-spacing: 0.1em; }
+  </style>
+  <defs>
+    <marker id="dhfp-ah" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#fbbf24" />
+    </marker>
+    <marker id="dhfp-ah-rose" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#fb7185" />
+    </marker>
+  </defs>
+
+  <!-- Heading -->
+  <text x="410" y="24" class="heading" text-anchor="middle">THE 4-PASS BUILD</text>
+
+  <!-- Pass 1: Harness -->
+  <circle cx="110" cy="105" r="38" fill="#451a03" fill-opacity="0.5" stroke="#b45309" stroke-width="2" />
+  <text x="110" y="112" class="pass-num" text-anchor="middle" fill="#fbbf24">1</text>
+  <text x="110" y="165" class="title-text" text-anchor="middle">Harness</text>
+  <text x="110" y="181" class="micro" text-anchor="middle">Node + Playwright</text>
+  <text x="110" y="197" class="micro" text-anchor="middle">route crawl + audit</text>
+
+  <!-- Pass 1 detail box -->
+  <rect x="20" y="218" width="180" height="50" class="node" fill="#0f172a" stroke="#475569" />
+  <text x="110" y="233" class="label" text-anchor="middle">Outputs .forge/audits/</text>
+  <text x="110" y="248" class="micro" text-anchor="middle">HTTP status · title · h1</text>
+  <text x="110" y="263" class="micro" text-anchor="middle">placeholders · broken links</text>
+
+  <!-- Arrow 1 → 2 -->
+  <line x1="155" y1="105" x2="295" y2="105" class="arrow" />
+  <text x="225" y="96" class="label" text-anchor="middle">findings[]</text>
+
+  <!-- Pass 2: Wrapper -->
+  <circle cx="330" cy="105" r="38" fill="#451a03" fill-opacity="0.5" stroke="#b45309" stroke-width="2" />
+  <text x="330" y="112" class="pass-num" text-anchor="middle" fill="#fbbf24">2</text>
+  <text x="330" y="165" class="title-text" text-anchor="middle">Wrapper</text>
+  <text x="330" y="181" class="micro" text-anchor="middle">JSON → Crucible</text>
+  <text x="330" y="197" class="micro" text-anchor="middle">forge_crucible_submit</text>
+
+  <!-- Pass 2 detail box -->
+  <rect x="240" y="218" width="180" height="50" class="node" fill="#0f172a" stroke="#475569" />
+  <text x="330" y="233" class="label" text-anchor="middle">Severity triage</text>
+  <text x="330" y="248" class="micro" text-anchor="middle">bug · spec · classifier lanes</text>
+  <text x="330" y="263" class="micro" text-anchor="middle">structured smelt input</text>
+
+  <!-- Arrow 2 → 3 -->
+  <line x1="375" y1="105" x2="515" y2="105" class="arrow" />
+  <text x="445" y="96" class="label" text-anchor="middle">smelts</text>
+
+  <!-- Pass 3: Execute -->
+  <circle cx="550" cy="105" r="38" fill="#022c22" fill-opacity="0.6" stroke="#047857" stroke-width="2" />
+  <text x="550" y="112" class="pass-num" text-anchor="middle" fill="#34d399">3</text>
+  <text x="550" y="165" class="title-text" text-anchor="middle">Execute</text>
+  <text x="550" y="181" class="micro" text-anchor="middle">slices + temper</text>
+  <text x="550" y="197" class="micro" text-anchor="middle">forge_run_plan</text>
+
+  <!-- Pass 3 detail box -->
+  <rect x="460" y="218" width="180" height="50" class="node" fill="#0f172a" stroke="#475569" />
+  <text x="550" y="233" class="label" text-anchor="middle">Slice-by-slice gates</text>
+  <text x="550" y="248" class="micro" text-anchor="middle">Tempering re-audit</text>
+  <text x="550" y="263" class="micro" text-anchor="middle">LiveGuard hooks</text>
+
+  <!-- Arrow 3 → 4 -->
+  <line x1="595" y1="105" x2="735" y2="105" class="arrow" />
+  <text x="665" y="96" class="label" text-anchor="middle">failures</text>
+
+  <!-- Pass 4: Auto-smelt -->
+  <circle cx="770" cy="105" r="38" fill="#4c0519" fill-opacity="0.6" stroke="#be123c" stroke-width="2" />
+  <text x="770" y="112" class="pass-num" text-anchor="middle" fill="#fb7185">4</text>
+  <text x="770" y="165" class="title-text" text-anchor="middle">Auto-smelt</text>
+  <text x="770" y="181" class="micro" text-anchor="middle">no human triage</text>
+  <text x="770" y="197" class="micro" text-anchor="middle">forge_tempering_drain</text>
+
+  <!-- Pass 4 detail box -->
+  <rect x="680" y="218" width="180" height="50" class="node" fill="#0f172a" stroke="#475569" />
+  <text x="770" y="233" class="label" text-anchor="middle">Bug registry</text>
+  <text x="770" y="248" class="micro" text-anchor="middle">re-enters Discovery</text>
+  <text x="770" y="263" class="micro" text-anchor="middle">next round ≤ maxRounds=5</text>
+
+  <!-- Loop arrow: Auto-smelt back to Harness -->
+  <path d="M770,143 Q770,50 110,50 Q72,50 72,67" class="arrow-loop" />
+  <text x="440" y="43" class="label" style="fill:#fb7185;" text-anchor="middle">closed loop (until convergence)</text>
+</svg>

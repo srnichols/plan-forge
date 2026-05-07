@@ -58,8 +58,13 @@ describe("parseDateArg", () => {
   it("parses Nd shorthand", () => {
     const result = parseDateArg("7d");
     expect(result).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    const diff = Math.round((Date.now() - new Date(result).getTime()) / 86400000);
-    expect(diff).toBeCloseTo(7, 0);
+    // Compare ISO calendar dates, not millisecond diffs — Math.round on
+    // (now - midnightUTC) flips between 7 and 8 days depending on the
+    // UTC time-of-day the test runs at, which made this assertion flaky.
+    const expected = new Date();
+    expected.setUTCDate(expected.getUTCDate() - 7);
+    const expectedIso = expected.toISOString().slice(0, 10);
+    expect(result).toBe(expectedIso);
   });
 
   it("passes ISO date through unchanged", () => {

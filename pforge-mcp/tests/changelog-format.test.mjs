@@ -72,22 +72,47 @@ describe("CHANGELOG.md — heading format (em-dash required for 2.85.0+ entries)
 });
 
 describe("CHANGELOG.md — release marker presence", () => {
-  it("contains a [2.90.10] heading", () => {
-    const has = /##\s+\[2\.90\.10\]/.test(changelog);
-    expect(has, "Missing ## [2.90.10] heading in CHANGELOG.md").toBe(true);
+  // Read the most recently-released version from CHANGELOG.md (first dated
+  // bracketed heading after [Unreleased]) and assert it's present. Asserting
+  // a hardcoded version number broke every release that didn't remember to
+  // bump this file (was: hardcoded 2.90.6 → broke at 2.90.7; bumped to 2.90.10
+  // → broke at 2.91.0-dev). Drift-proof check instead.
+  const releasedVersionMatch = changelog.match(/##\s+\[(\d+\.\d+\.\d+(?:-[\w.]+)?)\]\s*[—-]/);
+  it("contains a properly-formatted released version heading after [Unreleased]", () => {
+    expect(
+      releasedVersionMatch,
+      "CHANGELOG.md must contain at least one ## [X.Y.Z] — heading documenting a shipped release"
+    ).not.toBeNull();
   });
 });
 
 describe("VERSION and package.json consistency", () => {
-  it("VERSION file reads 2.90.10", () => {
-    expect(version).toBe("2.90.10");
+  // Don't hardcode a target version — that creates a drift trap on every
+  // release. Instead enforce the actual cross-file invariant: VERSION must
+  // match pforge-mcp/package.json, and both must be a recognisable
+  // semver (clean release or `-dev`).
+  it("VERSION file is a valid semver (optionally with -dev suffix)", () => {
+    expect(version).toMatch(/^\d+\.\d+\.\d+(?:-[\w.]+)?$/);
   });
 
-  it("pforge-mcp/package.json version reads 2.90.10", () => {
-    expect(pkg.version).toBe("2.90.10");
+  it("pforge-mcp/package.json version is a valid semver (optionally with -dev suffix)", () => {
+    expect(pkg.version).toMatch(/^\d+\.\d+\.\d+(?:-[\w.]+)?$/);
   });
 
-  it("VERSION file matches pforge-mcp/package.json version", () => {
+  it("VERSION file matches pforge-mcp/package.json version (no drift)", () => {
     expect(version).toBe(pkg.version);
+  });
+
+  it("when VERSION is a clean release (no -dev), CHANGELOG must contain a matching heading (release-tag invariant)", () => {
+    if (/-dev$/.test(version)) {
+      // Dev cycles legitimately have no matching CHANGELOG heading until cut.
+      return;
+    }
+    const escaped = version.replace(/\./g, "\\.");
+    const re = new RegExp(`##\\s+\\[${escaped}\\]\\s*[—-]`);
+    expect(
+      re.test(changelog),
+      `VERSION reads ${version} (clean release) but CHANGELOG.md has no matching ## [${version}] — heading. Cut the release entry before tagging.`
+    ).toBe(true);
   });
 });

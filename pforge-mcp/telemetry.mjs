@@ -281,6 +281,86 @@ export function pruneRunHistory(cwd, maxRunHistory = 50) {
   }
 }
 
+// ─── OTel Chat Span Emitter ────────────────────────────────────────────
+
+// Singleton tracer promise — resolved once per process lifetime.
+let _otelTracerPromise = null;
+
+/**
+ * Lazily initialize the OTel tracer when OTEL_EXPORTER_OTLP_ENDPOINT is set.
+ * All OTel packages are loaded via dynamic import (optional deps).
+ * Returns null if the endpoint is unset or if packages are unavailable.
+ * @returns {Promise<object|null>}
+ */
+async function _getOtelTracer() {
+  if (!process.env.OTEL_EXPORTER_OTLP_ENDPOINT) return null;
+  if (_otelTracerPromise !== null) return _otelTracerPromise;
+
+  _otelTracerPromise = (async () => {
+    try {
+      const { initOtel } = await import("./otel-init.mjs");
+      await initOtel();
+      const { trace } = await import("@opentelemetry/api");
+      return trace.getTracer("pforge-mcp", "2.4.0");
+    } catch {
+      // Optional packages not installed — graceful no-op.
+      return null;
+    }
+  })();
+
+  return _otelTracerPromise;
+}
+
+/**
+ * Infer the gen_ai.provider.name from a model identifier string.
+ * @param {string} model
+ * @returns {string}
+ */
+function _inferProvider(model) {
+  if (!model) return "unknown";
+  if (/^gpt-|^o[1-9]/.test(model)) return "openai";
+  if (/^claude/.test(model)) return "anthropic";
+  if (/^grok/.test(model)) return "xai";
+  if (/^gemini/.test(model)) return "google";
+  if (/^mistral/.test(model)) return "mistralai";
+  return "unknown";
+}
+
+/**
+ * Emit a `gen_ai.chat <model>` span to the OTLP endpoint.
+ * Fires and forgets — caller should not await (never throws).
+ *
+ * @param {object} data - Payload from the `chat-completed` orchestrator event.
+ *   Expected fields: model, requestModel, responseModel, provider,
+ *   tokens.tokens_in, tokens.tokens_out, cost_usd, sliceId, runId.
+ */
+async function _emitChatSpan(data) {
+  try {
+    const tracer = await _getOtelTracer();
+    if (!tracer) return;
+
+    const model = data?.model ?? "unknown";
+    const span = tracer.startSpan(`gen_ai.chat ${model}`, {
+      kind: 3, // SpanKind.CLIENT
+      attributes: {
+        "gen_ai.operation.name": "chat",
+        "gen_ai.provider.name": data?.provider ?? _inferProvider(model),
+        "gen_ai.request.model": data?.requestModel ?? model,
+        "gen_ai.response.model": data?.responseModel ?? model,
+        "gen_ai.usage.input_tokens": data?.tokens?.tokens_in ?? data?.tokensIn ?? 0,
+        "gen_ai.usage.output_tokens": data?.tokens?.tokens_out ?? data?.tokensOut ?? 0,
+        "pforge.cost.usd": data?.cost_usd ?? data?.costUsd ?? 0,
+        "pforge.slice.number": String(data?.sliceId ?? ""),
+        "pforge.run.id": data?.runId ?? "",
+      },
+    });
+
+    span.end();
+  } catch {
+    // Never surface OTel errors to the orchestrator.
+  }
+}
+
 // ─── Orchestrator Event Handler for Telemetry ─────────────────────────
 
 /**
@@ -412,6 +492,21 @@ export function createTelemetryHandler(trace, runDir) {
               modelCount: data?.modelCount,
             });
           }
+          break;
+        }
+        // ─── OTel chat span (Slice 2) ───
+        case "chat-completed": {
+          const parentSpan = trace._activeSpans.get(`slice-${data?.sliceId}`);
+          if (parentSpan) {
+            addEvent(parentSpan, "chat-completed", Severity.INFO, {
+              model: data?.model,
+              tokens_in: data?.tokens?.tokens_in ?? data?.tokensIn,
+              tokens_out: data?.tokens?.tokens_out ?? data?.tokensOut,
+              cost_usd: data?.cost_usd ?? data?.costUsd,
+            });
+          }
+          // Fire-and-forget OTel span emission — never blocks the event loop.
+          _emitChatSpan({ ...data, runId: trace.traceId }).catch(() => {});
           break;
         }
       }

@@ -361,6 +361,91 @@ async function _emitChatSpan(data) {
   }
 }
 
+// ─── OTel Agent (Slice) Span Emitter ──────────────────────────────────
+
+/**
+ * Emit an `invoke_agent slice-N` span to the OTLP endpoint.
+ * Fires and forgets — caller should not await (never throws).
+ *
+ * @param {object} data - Payload from the `slice-started` orchestrator event.
+ *   Expected fields: sliceId, title, planName, planCommitSha, runId.
+ */
+async function _emitAgentSpan(data) {
+  try {
+    const tracer = await _getOtelTracer();
+    if (!tracer) return;
+
+    const sliceId = data?.sliceId ?? "";
+    const span = tracer.startSpan(`invoke_agent slice-${sliceId}`, {
+      kind: 3, // SpanKind.CLIENT
+      attributes: {
+        "gen_ai.agent.name": `slice-${sliceId}`,
+        "gen_ai.agent.version": data?.planCommitSha ?? "",
+        "pforge.plan.name": data?.planName ?? data?.plan ?? "",
+        "pforge.slice.number": String(sliceId),
+        "pforge.run.id": data?.runId ?? "",
+      },
+    });
+
+    span.end();
+  } catch {
+    // Never surface OTel errors to the orchestrator.
+  }
+}
+
+/**
+ * Public fire-and-forget entry point for agent-span emission.
+ * Called by the telemetry handler on slice-started events.
+ *
+ * @param {{ sliceId: string|number, title?: string, planName?: string, planCommitSha?: string, runId?: string }} data
+ */
+export function emitAgentSpan(data) {
+  _emitAgentSpan(data).catch(() => {});
+}
+
+// ─── OTel Workflow (Plan) Span Emitter ────────────────────────────────
+
+/**
+ * Emit an `invoke_workflow <plan>` span to the OTLP endpoint.
+ * Fires and forgets — caller should not await (never throws).
+ *
+ * @param {object} data - Payload from the `run-started` orchestrator event.
+ *   Expected fields: plan, planCommitSha, mode, model, sliceCount, runId, quorumMode, quorumThreshold.
+ */
+async function _emitWorkflowSpan(data) {
+  try {
+    const tracer = await _getOtelTracer();
+    if (!tracer) return;
+
+    const plan = data?.plan ?? "unknown";
+    const span = tracer.startSpan(`invoke_workflow ${plan}`, {
+      kind: 3, // SpanKind.CLIENT
+      attributes: {
+        "gen_ai.workflow.name": plan,
+        "pforge.plan.path": plan,
+        "pforge.plan.commit_sha": data?.planCommitSha ?? "",
+        "pforge.quorum.mode": data?.quorumMode ?? data?.mode ?? "",
+        "pforge.quorum.threshold": data?.quorumThreshold ?? 0,
+        "pforge.run.id": data?.runId ?? "",
+      },
+    });
+
+    span.end();
+  } catch {
+    // Never surface OTel errors to the orchestrator.
+  }
+}
+
+/**
+ * Public fire-and-forget entry point for workflow-span emission.
+ * Called by the telemetry handler on run-started events.
+ *
+ * @param {{ plan: string, planCommitSha?: string, mode?: string, quorumMode?: string, quorumThreshold?: number, runId?: string }} data
+ */
+export function emitWorkflowSpan(data) {
+  _emitWorkflowSpan(data).catch(() => {});
+}
+
 // ─── OTel Tool Span Emitter ────────────────────────────────────────────
 
 /**
@@ -427,6 +512,8 @@ export function createTelemetryHandler(trace, runDir) {
             model: data?.model,
             sliceCount: data?.sliceCount,
           });
+          // Fire-and-forget OTel workflow (plan) span emission.
+          _emitWorkflowSpan({ ...data, runId: trace.traceId }).catch(() => {});
           break;
         }
         case "slice-started": {
@@ -436,6 +523,8 @@ export function createTelemetryHandler(trace, runDir) {
             title: data?.title,
             parallel: data?.parallel || false,
           });
+          // Fire-and-forget OTel agent (slice) span emission.
+          _emitAgentSpan({ ...data, runId: trace.traceId }).catch(() => {});
           break;
         }
         case "slice-completed": {

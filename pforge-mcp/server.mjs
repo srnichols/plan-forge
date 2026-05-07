@@ -82,7 +82,7 @@ import {
 import { createHub, readHubPort } from "./hub.mjs";
 import { createBridge } from "./bridge.mjs";
 import { buildCapabilitySurface, writeToolsJson, writeCliSchema } from "./capabilities.mjs";
-import { readRunIndex } from "./telemetry.mjs";
+import { readRunIndex, emitToolSpan } from "./telemetry.mjs";
 import { parseSkill, executeSkill } from "./skill-runner.mjs";
 import {
   handleSubmit as crucibleHandleSubmit,
@@ -1963,7 +1963,29 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: TOOLS,
 }));
 
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
+/**
+ * Wrap a CallToolRequestSchema handler to emit an OTel `execute_tool` span
+ * after every invocation. Fire-and-forget — never delays or throws.
+ */
+function _wrapWithToolSpan(handler) {
+  return async (request) => {
+    const { name } = request.params;
+    const t0 = Date.now();
+    let isError = false;
+    try {
+      const result = await handler(request);
+      isError = result?.isError ?? false;
+      return result;
+    } catch (err) {
+      isError = true;
+      throw err;
+    } finally {
+      emitToolSpan({ toolName: name, durationMs: Date.now() - t0, isError });
+    }
+  };
+}
+
+server.setRequestHandler(CallToolRequestSchema, _wrapWithToolSpan(async (request) => {
   const { name, arguments: args } = request.params;
 
   // ─── Async orchestrator tools ───
@@ -5582,7 +5604,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     ],
     isError: !result.success,
   };
-});
+}));
 
 // ─── Phase-28.4 — OpenBrain queue drain I/O wrapper ──────────────────────
 

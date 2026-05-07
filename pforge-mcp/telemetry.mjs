@@ -361,6 +361,51 @@ async function _emitChatSpan(data) {
   }
 }
 
+// ─── OTel Tool Span Emitter ────────────────────────────────────────────
+
+/**
+ * Emit an `execute_tool <tool_name>` span to the OTLP endpoint.
+ * Fires and forgets — caller should not await (never throws).
+ *
+ * @param {object} data - Payload from the tool dispatcher wrapper.
+ *   Expected fields: toolName, durationMs, isError, runId.
+ */
+async function _emitToolSpan(data) {
+  try {
+    const tracer = await _getOtelTracer();
+    if (!tracer) return;
+
+    const toolName = data?.toolName ?? "unknown";
+    const durationMs = data?.durationMs ?? 0;
+    const startTime = new Date(Date.now() - durationMs);
+
+    const span = tracer.startSpan(`execute_tool ${toolName}`, {
+      kind: 3, // SpanKind.CLIENT
+      startTime,
+      attributes: {
+        "pforge.tool.name": toolName,
+        "pforge.tool.duration_ms": durationMs,
+        "pforge.tool.error": data?.isError ?? false,
+        "pforge.run.id": data?.runId ?? "",
+      },
+    });
+
+    span.end();
+  } catch {
+    // Never surface OTel errors to the dispatcher.
+  }
+}
+
+/**
+ * Public fire-and-forget entry point for tool-span emission.
+ * Called by the server.mjs wrap layer after each MCP tool invocation.
+ *
+ * @param {{ toolName: string, durationMs: number, isError: boolean, runId?: string }} data
+ */
+export function emitToolSpan(data) {
+  _emitToolSpan(data).catch(() => {});
+}
+
 // ─── Orchestrator Event Handler for Telemetry ─────────────────────────
 
 /**

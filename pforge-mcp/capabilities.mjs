@@ -605,11 +605,11 @@ export const TOOL_METADATA = {
   forge_tempering_drain: {
     intent: ["tempering", "audit", "drain", "loop"],
     aliases: ["audit-loop", "drain-loop", "tempering-drain"],
-    cost: "medium",
+    cost: "high",
     maxConcurrent: 1,
     addedIn: "2.80.0",
     prerequisites: [".forge.json exists", "dev server running (for content-audit scanner)"],
-    produces: [".forge/audits/dev-*.json"],
+    produces: [".forge/audits/dev-*.json", ".forge/audits/dev-<ts>.json", ".forge/tempering/drain-history.jsonl"],
     consumes: [".forge.json#audit", ".forge/tempering/"],
     sideEffects: [
       "filesystem-write (audit artifacts)",
@@ -618,6 +618,8 @@ export const TOOL_METADATA = {
       "may submit Crucible smelts for spec-lane findings",
     ],
     errors: {
+      MISSING_PROJECTDIR: { message: "projectDir required", recovery: "Pass `path` or invoke from a project directory" },
+      MAX_ROUNDS_EXCEEDED: { message: "Drain loop hit maxRounds without converging", recovery: "Inspect .forge/tempering/drain-history.jsonl for the per-round delta; raise maxRounds (default 5) or fix the persistent finding causing non-convergence" },
       PRODUCTION_BLOCKED: { message: "Production environment is forbidden", recovery: "Use --env=dev or --env=staging" },
       NO_SCANNERS: { message: "No scanners matched the requested set", recovery: "Omit scanners param to run all available scanners" },
     },
@@ -637,7 +639,7 @@ export const TOOL_METADATA = {
     consumes: [],
     sideEffects: [],
     errors: {
-      INVALID_FINDING: { message: "Finding object is required with at least a title field", recovery: "Provide a finding object from a scanner result" },
+      MISSING_FINDING: { message: "Finding object is required with at least a title field", recovery: "Provide a finding object from a scanner result" },
     },
     example: {
       input: { finding: { title: "Missing h1 on /about", scanner: "content-audit", severity: "medium" } },

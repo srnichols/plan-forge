@@ -491,6 +491,51 @@ export function emitToolSpan(data) {
   _emitToolSpan(data).catch(() => {});
 }
 
+// ─── OTel Gate Span Emitter ───────────────────────────────────────────
+
+/**
+ * Emit a `run_gate slice-N` span to the OTLP endpoint.
+ * Fires and forgets — caller should not await (never throws).
+ *
+ * @param {object} data - Payload from the `gate-passed` orchestrator event.
+ *   Expected fields: sliceId, runId, failOpen, durationMs.
+ */
+async function _emitGateSpan(data) {
+  try {
+    const tracer = await _getOtelTracer();
+    if (!tracer) return;
+
+    const sliceId = data?.sliceId ?? "";
+    const durationMs = data?.durationMs ?? 0;
+    const startTime = durationMs ? new Date(Date.now() - durationMs) : new Date();
+
+    const span = tracer.startSpan(`run_gate slice-${sliceId}`, {
+      kind: 3, // SpanKind.CLIENT
+      startTime,
+      attributes: {
+        "pforge.gate.passed": !(data?.failed ?? false),
+        "pforge.gate.fail_open": data?.failOpen ?? false,
+        "pforge.slice.number": String(sliceId),
+        "pforge.run.id": data?.runId ?? "",
+      },
+    });
+
+    span.end();
+  } catch {
+    // Never surface OTel errors to the orchestrator.
+  }
+}
+
+/**
+ * Public fire-and-forget entry point for gate-span emission.
+ * Called by the telemetry handler on gate-passed events.
+ *
+ * @param {{ sliceId: string|number, runId?: string, failOpen?: boolean, durationMs?: number }} data
+ */
+export function emitGateSpan(data) {
+  _emitGateSpan(data).catch(() => {});
+}
+
 // ─── Orchestrator Event Handler for Telemetry ─────────────────────────
 
 /**
@@ -626,6 +671,18 @@ export function createTelemetryHandler(trace, runDir) {
               modelCount: data?.modelCount,
             });
           }
+          break;
+        }
+        // ─── OTel gate span (Slice 5) ───
+        case "gate-passed": {
+          const parentSpan = trace._activeSpans.get(`slice-${data?.sliceId}`);
+          if (parentSpan) {
+            addEvent(parentSpan, "gate-passed", Severity.INFO, {
+              failOpen: data?.failOpen ?? false,
+            });
+          }
+          // Fire-and-forget OTel gate span emission — never blocks the event loop.
+          _emitGateSpan({ ...data, runId: trace.traceId }).catch(() => {});
           break;
         }
         // ─── OTel chat span (Slice 2) ───

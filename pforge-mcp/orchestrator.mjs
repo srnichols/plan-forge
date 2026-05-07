@@ -312,17 +312,8 @@ class LogEventHandler {
   }
 
   handle(event) {
-    this.events.push(event);
-    const ts = new Date().toISOString();
-    const line = `[${ts}] ${event.type}: ${JSON.stringify(event.data)}\n`;
-    if (this.logDir) {
-      try {
-        const logFile = resolve(this.logDir, "events.log");
-        writeFileSync(logFile, line, { flag: "a" });
-      } catch {
-        // Log dir may not exist yet during early events
-      }
-    }
+    const data = appendEvent(event.type, event.data, this.logDir);
+    this.events.push({ type: event.type, data, timestamp: event.timestamp });
   }
 }
 
@@ -346,6 +337,43 @@ class OrchestratorEventBus extends EventEmitter {
       this.on(evt, (data) => this.handler.handle({ type: evt, data, timestamp: new Date().toISOString() }));
     }
   }
+}
+
+/**
+ * Stamp `source` and `security_risk` into event data and write the event
+ * to the run's events.log file. This is the canonical write path for all
+ * lifecycle events.
+ *
+ * Defaults:
+ *   source        → EVENT_SOURCE.ORCHESTRATOR ("orchestrator")
+ *   security_risk → SECURITY_RISK.NONE ("none")
+ *
+ * Callers that know the risk level (e.g. slice-started, bridge-edit-blocked)
+ * should pass the appropriate value in `data`; it overrides the default.
+ *
+ * Line format (byte-for-byte stable): [ISO-timestamp] type: {json}
+ *
+ * @param {string} type    - Event type identifier (e.g. "slice-started")
+ * @param {object} data    - Event payload; may include source / security_risk overrides
+ * @param {string|null} logDir - Directory where events.log lives; null = skip write
+ * @returns {object} stamped - The stamped data object (with source + security_risk)
+ */
+export function appendEvent(type, data, logDir) {
+  const stamped = {
+    source: EVENT_SOURCE.ORCHESTRATOR,
+    security_risk: SECURITY_RISK.NONE,
+    ...data,
+  };
+  if (logDir) {
+    try {
+      const ts = new Date().toISOString();
+      const line = `[${ts}] ${type}: ${JSON.stringify(stamped)}\n`;
+      writeFileSync(resolve(logDir, "events.log"), line, { flag: "a" });
+    } catch {
+      // Log dir may not exist yet during early events
+    }
+  }
+  return stamped;
 }
 
 // ─── Plan Parser ──────────────────────────────────────────────────────

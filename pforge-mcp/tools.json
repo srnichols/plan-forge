@@ -563,7 +563,7 @@
   },
   {
     "name": "forge_run_plan",
-    "description": "Execute a hardened plan — spawn CLI workers for each slice, validate at every boundary, track tokens. Supports Full Auto (gh copilot CLI) and Assisted (human + automated gates) modes. Use --estimate for cost prediction without executing. Crucible-bypass: pass manualImport:true (or --manual-import on the CLI) to run plans that don't carry a crucibleId frontmatter — e.g. hand-drafted hotfix plans (bug #126).",
+    "description": "Execute a hardened plan — spawn CLI workers for each slice, validate at every boundary, track tokens. Supports Full Auto (gh copilot CLI) and Assisted (human + automated gates) modes. Use --estimate for cost prediction without executing.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1201,7 +1201,7 @@
   },
   {
     "name": "forge_watch_live",
-    "description": "WATCHER LIVE TAIL (v2.35) — stream events from another project's pforge run for a fixed duration. Connects to the target's WebSocket hub if running (`.forge/server-ports.json`); falls back to file polling otherwise. Read-only by design — only subscribes, never sends commands. Returns aggregate stats and the captured event stream.",
+    "description": "WATCHER LIVE TAIL (v2.35) — stream events from another project's pforge run for a fixed duration. Connects to the target's WebSocket hub if running (`.forge/server-ports.json`); falls back to file polling otherwise. Read-only by design — only subscribes, never sends commands. Returns aggregate stats and the captured event stream. By default events are projected to a lite shape `{ ts, type, correlationId }` to keep payloads small; pass `verbose: true` for full event objects.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1216,6 +1216,14 @@
         "pollIntervalMs": {
           "type": "number",
           "description": "Polling interval if hub not running (default: 3000ms)"
+        },
+        "maxCapturedEvents": {
+          "type": "number",
+          "description": "Buffer size for captured events (1..10000, default: 500)"
+        },
+        "verbose": {
+          "type": "boolean",
+          "description": "If true, return full event objects (pre-ACI behaviour). Default false → lite projection { ts, type, correlationId }."
         }
       },
       "required": [
@@ -4184,7 +4192,7 @@
   },
   {
     "name": "forge_home_snapshot",
-    "description": "Read-only aggregated snapshot of the four shop-floor subsystems (Crucible, active runs, LiveGuard, Tempering) plus a trimmed activity feed. Use as a one-call health overview.",
+    "description": "Read-only aggregated snapshot of the four shop-floor subsystems (Crucible, active runs, LiveGuard, Tempering) plus a trimmed activity feed. Use as a one-call health overview. Pass `drill` to fetch only one quadrant for a smaller payload, or `activityCursor` to paginate older activity entries.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -4195,6 +4203,21 @@
         "activityTail": {
           "type": "number",
           "description": "Recent hub events to include (default: 25, clamped 1..200)"
+        },
+        "drill": {
+          "type": "string",
+          "enum": [
+            "crucible",
+            "activeRuns",
+            "liveguard",
+            "tempering",
+            "activity"
+          ],
+          "description": "Return ONLY this quadrant for a smaller, focused payload. Omit for the full snapshot."
+        },
+        "activityCursor": {
+          "type": "string",
+          "description": "ISO timestamp from a prior call's `activityPagination.nextCursor`. Returns the next page of older activity entries."
         }
       },
       "required": []

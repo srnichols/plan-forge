@@ -218,8 +218,12 @@ foreach ($p in $plans) {
     $sliceStart = Get-Date
 
     # Same manual-import bypass as the estimate phase.
+    # CRITICAL: --foreground is REQUIRED. Without it, `pforge run-plan` spawns the
+    # orchestrator as a background process and exits 0 immediately — every phase
+    # races in parallel against the same git working tree. See
+    # /memories/repo/pforge-run-plan-foreground.md.
     $reason = "enterprise-fleet-readiness.md §14 Priority C — research-derived plan ($($p.Name))"
-    & ./pforge.ps1 run-plan $p.Path --quorum=$Quorum `
+    & ./pforge.ps1 run-plan $p.Path --foreground --quorum=$Quorum `
         --manual-import --manual-import-source human --manual-import-reason $reason
     $exit = $LASTEXITCODE
     $duration = (New-TimeSpan -Start $sliceStart -End (Get-Date)).TotalMinutes

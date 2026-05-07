@@ -20,6 +20,7 @@
 import { WebSocket } from "ws";
 import { readFileSync, existsSync } from "node:fs";
 import { resolve, basename } from "node:path";
+import { appendEvent, SECURITY_RISK } from "./orchestrator.mjs";
 
 // ─── Constants ────────────────────────────────────────────────────────
 
@@ -639,12 +640,14 @@ class RateLimiter {
 export class BridgeManager {
   /**
    * @param {object} options
-   * @param {string} [options.cwd] - Project directory (for .forge.json + server-ports.json)
+   * @param {string} [options.cwd]    - Project directory (for .forge.json + server-ports.json)
    * @param {object} [options.config] - Bridge config override (skips .forge.json lookup)
+   * @param {string} [options.logDir] - Run log directory for bridge-edit-* event recording
    */
   constructor(options = {}) {
     this.cwd = options.cwd ?? process.cwd();
     this.config = options.config ?? loadBridgeConfig(this.cwd);
+    this._logDir = options.logDir ?? null;
     this._ws = null;
     this._rateLimiter = new RateLimiter();
     this._reconnectTimer = null;
@@ -684,7 +687,7 @@ export class BridgeManager {
       const channels = ApprovalGate.getApprovalChannels(this.config);
       const serverUrl = this.config?.serverUrl ?? "";
       const timeoutMinutes = this.config?.approvalTimeoutMinutes ?? 30;
-      this._approvalGate = new ApprovalGate({ channels, serverUrl, timeoutMinutes });
+      this._approvalGate = new ApprovalGate({ channels, serverUrl, timeoutMinutes, logDir: this._logDir });
     }
     return this._approvalGate.requestApproval(runId, event);
   }
@@ -939,6 +942,7 @@ export class ApprovalGate {
    * @param {Array}  [options.channels]                - Channels with approvalRequired: true
    * @param {string} [options.serverUrl]               - Base URL for callback links (e.g. "http://localhost:3100")
    * @param {number} [options.timeoutMinutes=30]       - Auto-reject after N minutes
+   * @param {string} [options.logDir]                  - Run log directory for bridge-edit-* event recording
    */
   constructor(options = {}) {
     /** @type {Map<string, { status: string, requestedAt: string, event: object, timer: any, _resolve: Function }>} */
@@ -946,6 +950,7 @@ export class ApprovalGate {
     this._timeoutMs = (options.timeoutMinutes ?? DEFAULT_APPROVAL_TIMEOUT_MINUTES) * 60_000;
     this._channels = options.channels ?? [];
     this._serverUrl = options.serverUrl ?? "";
+    this._logDir = options.logDir ?? null;
   }
 
   /**
@@ -981,6 +986,13 @@ export class ApprovalGate {
       if (this._pending.has(runId)) {
         this._pending.delete(runId);
         resolveApproval({ approved: false, timedOut: true });
+        // Call site 1: bridge-edit-blocked — approval timed out
+        appendEvent("bridge-edit-blocked", {
+          runId,
+          reason: "timeout",
+          source: "bridge",
+          security_risk: SECURITY_RISK.HIGH,
+        }, this._logDir);
       }
     }, this._timeoutMs);
 
@@ -1017,6 +1029,17 @@ export class ApprovalGate {
     clearTimeout(entry.timer);
     this._pending.delete(runId);
     entry._resolve({ approved, approver, timedOut: false });
+
+    // Call site 2: bridge-edit-approved or bridge-edit-blocked — explicit decision
+    const eventType = approved ? "bridge-edit-approved" : "bridge-edit-blocked";
+    appendEvent(eventType, {
+      runId,
+      approver,
+      source: "bridge",
+      security_risk: approved
+        ? (entry.event?.security_risk ?? SECURITY_RISK.NONE)
+        : SECURITY_RISK.HIGH,
+    }, this._logDir);
 
     return { ok: true, message: approved ? "Approved" : "Rejected" };
   }

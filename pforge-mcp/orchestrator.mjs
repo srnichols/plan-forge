@@ -91,6 +91,22 @@ export const SECURITY_RISK = Object.freeze({
   CRITICAL: "critical",
 });
 
+/**
+ * Per-event-type security_risk defaults for action-equivalent events.
+ * Applied by appendEvent when the caller omits security_risk in data.
+ * bridge-edit-blocked is enforced unconditionally (not just as default).
+ */
+export const SECURITY_RISK_FOR_TYPE = Object.freeze(new Map([
+  ["slice-started",        SECURITY_RISK.LOW],
+  ["slice-completed",      SECURITY_RISK.LOW],
+  ["slice-failed",         SECURITY_RISK.LOW],
+  ["skill-step-started",   SECURITY_RISK.LOW],
+  ["skill-step-completed", SECURITY_RISK.LOW],
+  ["tool-call",            SECURITY_RISK.NONE],
+  ["bridge-edit-blocked",  SECURITY_RISK.HIGH],
+  ["bridge-edit-approved", SECURITY_RISK.LOW],
+]));
+
 /** Default gate timeout: 10 minutes (raised from 2 min in v2.62.1). Override with PFORGE_GATE_TIMEOUT_MS. */
 export const DEFAULT_GATE_TIMEOUT_MS = 600_000;
 
@@ -332,6 +348,7 @@ class OrchestratorEventBus extends EventEmitter {
       "quorum-dispatch-started", "quorum-leg-completed", "quorum-review-completed",
       "skill-started", "skill-step-started", "skill-step-completed", "skill-completed",
       "slice-model-routed", "self-repair-missed",
+      "tool-call", "bridge-edit-blocked", "bridge-edit-approved",
     ];
     for (const evt of events) {
       this.on(evt, (data) => this.handler.handle({ type: evt, data, timestamp: new Date().toISOString() }));
@@ -361,9 +378,13 @@ class OrchestratorEventBus extends EventEmitter {
 export function appendEvent(type, data, logDir) {
   const stamped = {
     source: EVENT_SOURCE.ORCHESTRATOR,
-    security_risk: SECURITY_RISK.NONE,
+    security_risk: SECURITY_RISK_FOR_TYPE.get(type) ?? SECURITY_RISK.NONE,
     ...data,
   };
+  // bridge-edit-blocked is always HIGH — enforce unconditionally after spread
+  if (type === "bridge-edit-blocked") {
+    stamped.security_risk = SECURITY_RISK.HIGH;
+  }
   if (logDir) {
     try {
       const ts = new Date().toISOString();

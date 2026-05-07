@@ -55,12 +55,12 @@ Many large enterprises (data companies, infra companies, regulated industries) p
 
 For each tool above, we should capture (one paragraph each, no marketing fluff):
 
-- [ ] **Cursor Background Agents** — actual capability today, pricing model, GitHub-vs-platform-agnostic stance, fleet orchestration claims vs. delivery
-- [ ] **Sourcegraph Amp** — orchestration story specifics, enterprise tier features, on-prem story
-- [ ] **Devin** — what's actually shipping vs. demo'd, integration model, trajectory exposure
-- [ ] **GitHub Copilot Coding Agent** — current state, what it deliberately doesn't do (so we know which gaps Plan Forge fills *for* the GitHub stack rather than against it)
-- [ ] **OpenHands** — sandbox model, trajectory format, current adoption signals
-- [ ] **CrewAI / AutoGen / LangGraph** — which patterns are useful at the fleet level vs. which are just framework noise
+- [x] **Cursor Background Agents** — actual capability today, pricing model, GitHub-vs-platform-agnostic stance, fleet orchestration claims vs. delivery (resolved in §8.2 — renamed to Cloud Agents in Cursor 3, per-user fan-out not multi-team, no plan-as-contract, no air-gap)
+- [x] **Sourcegraph Amp** — orchestration story specifics, enterprise tier features, on-prem story (resolved in §8.3 — Sourcegraph 7.0 repositioned as "intelligence layer", Amp explicitly no self-host / no BYOK, subagents can't communicate)
+- [ ] **Devin** — what's actually shipping vs. demo'd, integration model, trajectory exposure (deferred — not part of the May 6 research dispatch; queued for follow-up if Devin shows up in a customer conversation)
+- [x] **GitHub Copilot Coding Agent** — current state, what it deliberately doesn't do (resolved in §8.4 — renamed to Cloud Agent April 2026, Copilot SDK preview is GitHub stating orchestration belongs to the ecosystem, single-repo / single-PR-per-task explicit limitation)
+- [x] **OpenHands** — sandbox model, trajectory format, current adoption signals (resolved in §8.5 — 72.7k stars, immutable Pydantic Events with explicit source/role separation, two-level cost model worth borrowing)
+- [ ] **CrewAI / AutoGen / LangGraph** — which patterns are useful at the fleet level vs. which are just framework noise (deferred — not part of May 6 dispatch; lower priority than the production-grade tools above)
 
 ---
 
@@ -200,12 +200,14 @@ The project documents itself by dispatching to Copilot Coding Agent against itse
 
 Highest ROI, lowest cost. A senior enterprise engineer reading the docs is asking "can this run in my environment, against my compliance, with my teams." Answer those questions explicitly.
 
-- [ ] **Reference architecture diagram** for a 5-team fleet deployment (`docs/manual/enterprise-reference-architecture.md`)
-- [ ] **Agent Factory recipe** page showing how to onboard 12 squad members on Day 1 (`docs/manual/agent-factory-recipe.md`)
-- [ ] **Day 1 / Week 4 / Week 12 operator playbook** (`docs/manual/fleet-operator-playbook.md`)
-- [ ] **Compliance / data-residency** page (what's logged, where, in what format, how to export, what crosses boundaries) (`docs/manual/compliance-and-data-residency.md`)
-- [ ] **Enterprise deployment** landing page that maps every concern to where it's answered (`docs/manual/enterprise-deployment.md`)
-- [ ] **GitHub stack alignment** — promote `plan-forge-on-the-github-stack.html` as a top-level navigation item
+- [x] **Reference architecture diagram** for a 5-team fleet deployment — shipped as Appendix K [`enterprise-reference-architecture.html`](../manual/enterprise-reference-architecture.html) with both generic and Microsoft Foundry composition variants (PR #158, commit `f72665c`)
+- [x] **Agent Factory recipe** page showing how to onboard 12 squad members on Day 1 — shipped as Appendix L [`agent-factory-recipe.html`](../manual/agent-factory-recipe.html) (PR #158)
+- [x] **Day 1 / Week 4 / Week 12 operator playbook** — shipped as Appendix M [`fleet-operator-playbook.html`](../manual/fleet-operator-playbook.html) (PR #158)
+- [x] **Compliance / data-residency** page — shipped as Appendix N [`compliance-and-data-residency.html`](../manual/compliance-and-data-residency.html) with collapsible Q&A and Azure Government coverage (PR #158)
+- [x] **Enterprise deployment** landing page — shipped as Appendix I [`enterprise-deployment.html`](../manual/enterprise-deployment.html) (PR #158)
+- [x] **GitHub stack alignment** — shipped as Appendix J [`github-stack-alignment.html`](../manual/github-stack-alignment.html) (companion to existing Appendix H, which is the deeper integration tour) (PR #158)
+- [x] **Bonus** — 7 hero images via Grok Aurora for all enterprise appendices (back-fills H + new I–N) (PR #158)
+- [x] **Bonus** — Phase-MANUAL-EVIDENCE Phase 1: A/B test evidence diagram, evolution timeline, lessons-learned chapter, project-history chapter (PR #160, commit `ee378e3`)
 
 ### Week 2 (May 13–19) — Telemetry and observability formalization
 
@@ -848,3 +850,10 @@ The original six docs, sharpened by Foundry findings:
 - **2026-05-06 (research synthesis)** — Sections 8–10 added from six parallel research agents (codebase audit, Cursor, Sourcegraph, GitHub CCA, OpenHands/SWE-agent, OTel gen_ai). Work plan revised with specifics. Positioning matrix added. Week 2 now has a concrete OTel emit spec ready to implement.
 - **2026-05-06 (Foundry + audits)** — Section 11 added (Microsoft Foundry composition — answers the strategic question of where Plan Forge sits relative to Foundry, with reference architecture). Section 12 added (cost-service token coverage defect — concrete bug with file:line evidence, 60–80% cost underestimate on cache+reasoning workloads). Section 13 added (ACI audit — top 5 quick wins, gold-standard reference, temper guards observed). Section 14 sequences engineering fixes ahead of Week 1 docs publication.
 - **2026-05-06 (Week 1 docs drafted)** — All six Week 1 enterprise documentation pages drafted in parallel: [enterprise-deployment.md](../manual/enterprise-deployment.md), [github-stack-alignment.md](../manual/github-stack-alignment.md), [enterprise-reference-architecture.md](../manual/enterprise-reference-architecture.md) (with Microsoft Foundry composition variant), [agent-factory-recipe.md](../manual/agent-factory-recipe.md), [fleet-operator-playbook.md](../manual/fleet-operator-playbook.md), [compliance-and-data-residency.md](../manual/compliance-and-data-residency.md). Each consumes specific findings from sections 8–13. Week 1 documentation work for the enterprise hardening track is complete and ready for review.
+- **2026-05-06 (Priority A + B shipped to master)** — Three PRs landed:
+  - **PR #154** (squash `af93b747`) — Phase-COST-TOKEN-COVERAGE: vendor-aware `priceSlice()` math + 14 model entries + stale base-rate refresh. Section 12 defect FIXED. 25 new tests, all passing.
+  - **PR #158** (squash `f72665c`) + cleanup (`da79672`) — 6 enterprise appendices converted from Markdown to HTML matching the manual chapter template (Appendices I–N), 2 new SVG diagrams, 7 hero images via Grok Aurora (back-fills Appendix H + new I–N), navigation registry updated, index.html cards added. Source `.md` files removed.
+  - **PR #160** (squash `ee378e3`) — Phase-MANUAL-EVIDENCE Phase 1: A/B test evidence diagram, evolution timeline, lessons-learned reference chapter, project-history reference chapter, expansions to what-is-plan-forge.html and how-it-works.html.
+
+  **Net result**: Priority A (cost fix + ACI hardening) and Priority B (Week 1 docs) from §14 are complete on master. ACI hardening pass (§13) is the only Priority A item still queued. Priority C (OTel exporter, audit log formalization, auth scaffolding, BYO Azure OpenAI) and Priority D (Foundry-informed backlog) are unstarted and remain the natural next chapter of work.
+- **2026-05-06 (Phase-MANUAL-DISCOVERY-LOOP and Phase-MANUAL-INTEGRATIONS plans drafted)** — Two follow-up plans authored in parallel sessions and now committed to master at [docs/plans/Phase-MANUAL-DISCOVERY-LOOP-PLAN.md](../plans/Phase-MANUAL-DISCOVERY-LOOP-PLAN.md) and [docs/plans/Phase-MANUAL-INTEGRATIONS-PLAN.md](../plans/Phase-MANUAL-INTEGRATIONS-PLAN.md). Neither has been executed yet. Both extend the manual coverage further.

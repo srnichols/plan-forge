@@ -143,7 +143,7 @@
 
 **Validation Gate**:
 ```bash
-bash -c "node -e \"import('./pforge-mcp/auth/index.mjs').then(m=>{if(typeof m.authenticate!=='function')process.exit(1);console.log('ok')})\""
+node -e "import('./pforge-mcp/auth/index.mjs').then(m=>{if(typeof m.authenticate!=='function')process.exit(1);console.log('ok')})"
 ```
 
 ---
@@ -160,7 +160,8 @@ bash -c "node -e \"import('./pforge-mcp/auth/index.mjs').then(m=>{if(typeof m.au
 
 **Validation Gate**:
 ```bash
-bash -c "node -e \"import('./pforge-mcp/auth/rbac.mjs').then(m=>{if(typeof m.resolveRoles!=='function'||typeof m.hasScope!=='function')process.exit(1);console.log('ok')})\" && test -f .forge/rbac.example.json && echo ok"
+node -e "import('./pforge-mcp/auth/rbac.mjs').then(m=>{if(typeof m.resolveRoles!=='function'||typeof m.hasScope!=='function')process.exit(1);console.log('ok')})"
+test -f .forge/rbac.example.json && echo ok
 ```
 
 ---
@@ -176,7 +177,7 @@ bash -c "node -e \"import('./pforge-mcp/auth/rbac.mjs').then(m=>{if(typeof m.res
 
 **Validation Gate**:
 ```bash
-bash -c "node -e \"import('./pforge-mcp/auth/middleware.mjs').then(m=>{if(typeof m.withAuth!=='function')process.exit(1);console.log('ok')})\""
+node -e "import('./pforge-mcp/auth/middleware.mjs').then(m=>{if(typeof m.withAuth!=='function')process.exit(1);console.log('ok')})"
 ```
 
 ---

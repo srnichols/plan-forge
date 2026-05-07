@@ -139,7 +139,7 @@
 
 **Validation Gate**:
 ```bash
-bash -c "node -e \"import('./pforge-mcp/otel-init.mjs').then(m=>{const r=m.initOtel();if(r!==null)process.exit(1);console.log('ok')})\""
+node -e "import('./pforge-mcp/otel-init.mjs').then(m=>{const r=m.initOtel();if(r!==null)process.exit(1);console.log('ok')})"
 ```
 
 ---
@@ -155,7 +155,7 @@ bash -c "node -e \"import('./pforge-mcp/otel-init.mjs').then(m=>{const r=m.initO
 
 **Validation Gate**:
 ```bash
-bash -c "cd pforge-mcp && OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 node -e \"const t=require('./telemetry.mjs');console.log('ok')\" 2>&1 | tail -1 | grep -q ok"
+node -e "process.env.OTEL_EXPORTER_OTLP_ENDPOINT='http://localhost:4318'; require('./pforge-mcp/telemetry.mjs'); console.log('ok')"
 ```
 
 ---
@@ -253,7 +253,7 @@ bash -c "grep -q 'pforge.actor.source' pforge-mcp/telemetry.mjs && grep -q 'pfor
 
 **Validation Gate**:
 ```bash
-bash -c "node -e \"import('./pforge-mcp/audit-export.mjs').then(m=>{if(typeof m.exportAudit!=='function')process.exit(1);console.log('ok')})\""
+node -e "import('./pforge-mcp/audit-export.mjs').then(m=>{if(typeof m.exportAudit!=='function')process.exit(1);console.log('ok')})"
 ```
 
 ---
@@ -269,7 +269,7 @@ bash -c "node -e \"import('./pforge-mcp/audit-export.mjs').then(m=>{if(typeof m.
 
 **Validation Gate**:
 ```bash
-bash -c "pwsh -Command \"& ./pforge.ps1 audit export --help\" 2>&1 | grep -q 'since' && echo ok"
+pwsh -NoProfile -File ./pforge.ps1 audit export --help | grep -q since
 ```
 
 ---
@@ -285,7 +285,7 @@ bash -c "pwsh -Command \"& ./pforge.ps1 audit export --help\" 2>&1 | grep -q 'si
 
 **Validation Gate**:
 ```bash
-bash -c "./pforge.sh audit export --help 2>&1 | grep -q 'since' && echo ok"
+bash ./pforge.sh audit export --help | grep -q since
 ```
 
 ---

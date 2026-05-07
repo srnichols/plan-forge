@@ -7,6 +7,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Phase-TRAJECTORY-SCHEMA-HARDENING — Explicit `source` and `security_risk` on events (2026-05-07)
+
+> **One-liner**: Purely additive schema hardening that stamps two new fields — `source` and `security_risk` — onto every event record written by `appendEvent()` in `orchestrator.mjs`. Backward-compatible: `parseEventLine()` returns `null` for both fields when reading legacy `events.log` lines that predate this change. Downstream consumers (`forge_search`, `forge_timeline`, hub replay) are untouched — they read `data` opaquely and surface the new fields automatically. See `docs/research/enterprise-fleet-readiness.md` §8.5 (OpenHands pattern) and `docs/plans/Phase-TRAJECTORY-SCHEMA-HARDENING-PLAN.md` for the executed plan.
+
+#### Added
+- `source` field on every `appendEvent()` write: enum `"orchestrator" | "worker" | "user" | "hook" | "environment"`. Defaults to `"orchestrator"` when the caller omits it. Caller may override by passing `source` explicitly in the `data` argument.
+- `security_risk` field on every `appendEvent()` write: enum `"none" | "low" | "medium" | "high" | "critical"`. Defaults to `"none"`. Action-equivalent event types carry non-default values: `slice-started` = `"low"` (baseline), `bridge-edit-blocked` = `"high"`, `bridge-edit-approved` = request-tagged value, `tool-call` = `"none"` baseline. Aligns with `forge_secret_scan` severity scale for downstream gating.
+- `parseEventLine()` (orchestrator.mjs parser region) now returns `source` and `security_risk` on the parsed object, defaulting to `null` when either field is absent on disk. `null` is intentionally distinct from `"orchestrator"` so readers can distinguish "old record" from "new record explicitly tagged as orchestrator".
+- `EVENT_SOURCE` and `SECURITY_RISK` const objects defined near the top of `orchestrator.mjs` alongside other module-level constants — single source of truth for all enum values.
+- `pforge-mcp/EVENTS.md` **Common Fields** subsection enumerating `source` and `security_risk` with enum values and defaults; four representative event examples (`slice-started`, `tool-call`, `bridge-edit-blocked`, `run-completed`) updated to show both fields.
+- New test file `pforge-mcp/tests/event-schema-hardening.test.mjs` with six targeted tests: write-side default stamping, caller override of `source`, legacy-line backward-compat parse (no throw, returns `null`), round-trip of new-line fields, `bridge-edit-blocked` always `security_risk: "high"`, and a snapshot of all five `source` enum values on `slice-completed`.
+
+#### Notes
+- All changes are **purely additive**: no existing field is renamed, removed, or type-changed. All pre-existing tests in `orchestrator.test.mjs`, `hub.test.mjs`, `search-smoke.test.mjs`, `timeline-smoke.test.mjs`, and `g2-files.test.mjs` pass without modification.
+- `bridge.mjs` call sites for `bridge-edit-blocked` and `bridge-edit-approved` now pass `security_risk` through to `appendEvent()`. No auth, gating, or policy logic was changed — this phase **records** the field only; enforcement is deferred to downstream phases.
+- Historical `events.log` files are not migrated. Old records remain byte-identical on disk; the reader's `null` default is the migration strategy.
+- `costForLeg()` and `priceSlice()` in `cost-service.mjs` are untouched.
+
 ---
 
 ## [2.90.11] — 2026-05-07 — Bug fixes

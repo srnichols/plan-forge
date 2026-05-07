@@ -29,6 +29,15 @@
       <h1>Multi-Agent Setup</h1>
       <p class="text-lg text-slate-400 mb-8">One setup, all agents. Configure Plan Forge for 7 AI tools.</p>
 
+      <div class="callout callout-info">
+        <strong>New here? What this chapter is about.</strong> Plan Forge isn't tied to one AI tool. Whatever you (or your team) already use — GitHub Copilot, Claude Code, Cursor, Codex, Gemini, Windsurf — the same plans, instructions, and reviewer agents work in all of them. This chapter shows how to install the right files for each tool. <strong>You don't need all of them</strong>; just pick the agent(s) your team uses.
+        <ul class="mt-2 mb-0">
+          <li><strong>What gets installed</strong> — native config files for each agent (e.g. <code>CLAUDE.md</code>, <code>.cursorrules</code>, <code>AGENTS.md</code>) so the agent reads Plan Forge's guardrails automatically.</li>
+          <li><strong>Why it matters</strong> — you get the same architecture rules, same reviewers, same skills, no matter which AI you're talking to. Switching tools doesn't mean re-teaching the rules.</li>
+          <li><strong>Default</strong> — GitHub Copilot files always install (Plan Forge's reference implementation). Add others with the <code>-Agent</code> flag.</li>
+        </ul>
+      </div>
+
       <h2 id="one-setup">One Setup, All Agents</h2>
       <div class="cmd-block">
         <div class="cmd-block-header"><span>Terminal</span><button class="cmd-copy-btn">Copy</button></div>

@@ -33,6 +33,15 @@
         <h1>The Testbed</h1>
         <p class="text-lg text-slate-400 mb-8">A separate repo. A library of scenarios. End-to-end proof that the shop still works.</p>
 
+        <div class="callout callout-info">
+          <strong>New here? Read this first.</strong> Unit tests check one function. Integration tests check one service. Neither tells you whether <em>Plan Forge itself</em> still works end-to-end on a real codebase — the way you'd actually use it. The Testbed solves that. It's a separate sandbox repo (a real .NET app called <strong>TimeTracker</strong>) that Plan Forge uses as a punching bag: replay a known scenario, see if the full pipeline produces a clean shippable outcome, record what broke.
+          <ul class="mt-2 mb-0">
+            <li><strong>Why a separate repo?</strong> So Plan Forge can break things, commit, revert, and try again — without ever touching your real project.</li>
+            <li><strong>Why a library of scenarios?</strong> Each scenario is a JSON file describing a known regression (e.g. &ldquo;agent dropped a test file last release— catch it&rdquo;). Run them all and you know the forge still holds.</li>
+            <li><strong>Who needs this?</strong> You don't, day-to-day. The Testbed is mainly for Plan Forge maintainers and platform teams who want regression coverage of the tool itself. Skip ahead unless that's you.</li>
+          </ul>
+        </div>
+
         <div class="callout callout-tip">
           <strong>Tool:</strong> <code>forge_testbed_run</code>. <strong>Scenarios:</strong> <code>docs/plans/testbed-scenarios/*.json</code>. <strong>Findings:</strong> <code>docs/plans/testbed-findings/*.json</code>. Requires <code>testbed.path</code> in <code>.forge.json</code>.
         </div>

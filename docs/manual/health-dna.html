@@ -35,6 +35,15 @@
         <h1>Health DNA</h1>
         <p class="text-lg text-slate-400 mb-8">A single fingerprint for "how healthy is this project today?" — persisted, trended, compared.</p>
 
+        <div class="callout callout-info">
+          <strong>New here? Plain-English version.</strong> A project can look fine on the surface and still be slowly rotting underneath. Tests are passing, but every plan run costs a little more. No incidents this week, but architectural drift is creeping up. Health DNA is a daily checkup that combines five different health signals into one score (0–100) so you can spot the slow decay before it becomes a crisis.
+          <ul class="mt-2 mb-0">
+            <li><strong>What it measures</strong> — drift, incidents, test pass rate, AI model success rate, and cost per slice. Five numbers, one composite score.</li>
+            <li><strong>Why one number?</strong> Any single metric can lie (100% green tests + drowning in drift). The composite catches the lie.</li>
+            <li><strong>What you do with it</strong> — the LiveGuard dashboard plots the score over time. A 7-day downward trend is the early warning to slow down and clean up before shipping more features.</li>
+          </ul>
+        </div>
+
         <div class="callout callout-tip">
           <strong>Tool:</strong> <code>forge_health_trend</code> (LiveGuard) — writes <code>.forge/health-dna.jsonl</code>. Intent: <code>health-dna</code>. Aliases: <code>health-analysis</code>, <code>system-health</code>, <code>health-report</code>.
         </div>

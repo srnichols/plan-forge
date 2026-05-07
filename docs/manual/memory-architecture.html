@@ -33,6 +33,16 @@
         <h1>Memory Architecture</h1>
         <p class="text-lg text-slate-400 mb-8">Three tiers, one capture path. How Plan Forge remembers what it learned — across slices, across sessions, across plans.</p>
 
+        <div class="callout callout-info">
+          <strong>New here? Start with this.</strong> When an AI agent ships a slice, it learns things — a tricky bug, a naming convention, a gotcha that took an hour to figure out. Most tools throw that away when the session ends. Plan Forge's memory system <em>writes it down</em> in three places at once so the next slice (or the next agent, or next month's session) starts from where the last one left off.
+          <ul class="mt-2 mb-0">
+            <li><strong>L1 (Hub)</strong> — fast, in-process, like RAM. Powers the live dashboard.</li>
+            <li><strong>L2 (Files)</strong> — local <code>.forge/*.jsonl</code> files in your repo. Your project's permanent notebook.</li>
+            <li><strong>L3 (OpenBrain)</strong> — a shared semantic database. Searchable across projects, agents, and machines.</li>
+          </ul>
+          The same <code>captureMemory()</code> call writes to all three. If any tier fails, the others still succeed — nothing blocks your code.
+        </div>
+
         <div class="callout callout-tip">
           <strong>New in v2.36.0</strong>: This chapter consolidates the three-tier memory work shipped across the <code>v2.35.1</code>–<code>v2.36.0</code> release window.
         </div>

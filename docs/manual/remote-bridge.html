@@ -139,6 +139,29 @@
         <h2 id="pairing">Pairing With the Watcher</h2>
         <p>A recommended pattern: the <a href="watcher.html">Watcher</a> (Chapter 19) runs on a long execution, emitting anomaly events into the hub. The Remote Bridge filters those events by severity and forwards the interesting ones to Telegram. Together they give you safe, phone-friendly observation of a forge running on another box.</p>
 
+        <h2 id="end-to-end-workflow">End-to-End Workflow</h2>
+        <p>The Remote Bridge is the notification and approval layer in Plan Forge's full AI-native development lifecycle. Understanding where it fits helps you configure it correctly. The diagram below shows the three pillars — Orchestration, Memory, and Execution — and how the bridge threads through all of them.</p>
+
+        <img src="assets/diagrams/unified-system-three-pillars.svg" alt="Plan Forge Unified System: Three Pillars — Orchestration (Plan Forge, Copilot, ACP, Lifecycle Hooks, LiveGuard, Quorum Dispatcher), Memory (OpenBrain, Session Store, Recall Index, Daily Digest, Embedding Cache, Forge Master), and Execution (OpenClaw, MCP Server, Audit Loop, Dashboard, Timeline, Hammer FM) connected by memory and snapshot arrows." class="diagram-img diagram-img-md my-4" />
+
+        <p>Here is how the Remote Bridge participates at each stage of the workflow. For the full narrative, see the <a href="../../blog/unified-system.html">unified-system blog post</a>.</p>
+
+        <h3>Request capture</h3>
+        <p>A developer sends a message via a phone channel (Telegram, WhatsApp via OpenClaw). The Remote Bridge's inbound path — powered by the <strong>ACP</strong> (Agent Communication Protocol) — delivers the message to the hub as a <code>request-received</code> event. The orchestrator wakes up and begins the planning stage.</p>
+
+        <h3>Plan hardening</h3>
+        <p>Once the plan is generated, the bridge sends a summary notification: <em>"Plan hardened. 5 slices. Approve?"</em> This is an <code>approval-requested</code> event with options <code>["approve","reject","revise"]</code>. The developer's inline reply flows back as an <code>approval-response</code> event. The run does not start until approval is received.</p>
+
+        <h3>Slice-by-slice execution</h3>
+        <p>The bridge emits a completion ping after every slice: <em>"Slice 2 done. Tests pass. ✓"</em> Slice failures route immediately to the configured high-severity channel. The orchestrator pauses and waits for a human reply or for the auto-escalation chain to handle it.</p>
+
+        <h3>Independent review</h3>
+        <p>When the review session completes, the bridge delivers the verdict: <em>"Review complete. 0 drift violations. Ship it?"</em> The developer's reply triggers the <code>ship</code> or <code>pause</code> path — both of which are recorded in the hub event log with channel, platform, user, and timestamp.</p>
+
+        <div class="callout callout-tip">
+          <strong>Full lifecycle walkthrough.</strong> The <a href="../../blog/unified-system.html">From WhatsApp to Shipped PR</a> blog post walks through every stage — request capture through independent review and ship — with the exact event payloads and ACP handoffs. Read it alongside this chapter for a complete picture.
+        </div>
+
         <div id="chapter-prev-next" class="chapter-nav"></div>
 
       </div>

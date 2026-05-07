@@ -58,21 +58,21 @@
 
       <pre><code>GitHub stack readiness — E:\GitHub\Plan-Forge
 ────────────────────────────────────────────────────────────────────────
-  ✓ .github/copilot-instructions.md
+  <span class="text-emerald-400 font-bold">✓</span> .github/copilot-instructions.md
       present
-  ⚠ AGENTS.md
+  <span class="text-amber-400 font-bold">⚠</span> AGENTS.md
       missing — open agent standard not adopted
-  ✓ .github/instructions/*.instructions.md
+  <span class="text-emerald-400 font-bold">✓</span> .github/instructions/*.instructions.md
       7 instruction files found
-  ✓ .github/prompts/*.prompt.md
+  <span class="text-emerald-400 font-bold">✓</span> .github/prompts/*.prompt.md
       8 prompt files found
-  ✓ .vscode/mcp.json
+  <span class="text-emerald-400 font-bold">✓</span> .vscode/mcp.json
       Plan-Forge MCP server registered
-  ✓ .github/workflows/
+  <span class="text-emerald-400 font-bold">✓</span> .github/workflows/
       4 workflow files found
-  ✓ git remote → github.com
+  <span class="text-emerald-400 font-bold">✓</span> git remote → github.com
       github.com remote configured
-  ✓ gh CLI on PATH
+  <span class="text-emerald-400 font-bold">✓</span> gh CLI on PATH
       gh CLI available
 ────────────────────────────────────────────────────────────────────────
   7 pass · 1 warn · 0 fail · 0 n/a  (8 checks)</code></pre>
@@ -482,7 +482,7 @@ jobs:
 
       <p>Tab group placement is controlled by the <code>group</code> field in <code>pforge-mcp/dashboard/tab-registry.mjs</code>. Tabs with <code>group: "github"</code> are hidden when the GitHub group is collapsed (the user preference persists in <code>localStorage</code>).</p>
 
-      <p><strong class="text-slate-200">Readiness widget (v2.90.8).</strong> The top of the <em>Metrics Leaderboard</em> tab now renders a compact readiness widget that mirrors the eight checks from <code>pforge github status</code> as coloured glyphs. When all eight checks pass the widget collapses to a single ✓ summary line to keep the leaderboard table in view. The widget is served by the new <code>GET /api/github/readiness</code> endpoint and refreshes automatically when the MCP server restarts or when <code>pforge github status</code> writes a new snapshot to <code>.forge/github-status.json</code>.</p>
+      <p><strong class="text-slate-200">Readiness widget (v2.90.8).</strong> The top of the <em>Metrics Leaderboard</em> tab now renders a compact readiness widget that mirrors the eight checks from <code>pforge github status</code> as coloured glyphs. When all eight checks pass the widget collapses to a single <span class="text-emerald-400 font-bold">✓</span> summary line to keep the leaderboard table in view. The widget is served by the new <code>GET /api/github/readiness</code> endpoint and refreshes automatically when the MCP server restarts or when <code>pforge github status</code> writes a new snapshot to <code>.forge/github-status.json</code>.</p>
 
       <h3 id="forge-github-metrics-mcp">The <code>forge_github_metrics</code> MCP tool</h3>
 
@@ -882,7 +882,7 @@ pforge setup --agent claude</code></pre>
         </tbody>
       </table>
 
-      <p class="mt-4 text-sm text-slate-400"><strong class="text-slate-200">Reading the table:</strong> <strong class="text-emerald-400">✓</strong> = works fully; <strong class="text-amber-400">⚠</strong> = works with one extra step or reduced depth; <strong class="text-rose-400">✗</strong> = not available on this platform. No row marked ✗ prevents <code>pforge run-plan</code> from executing end-to-end.</p>
+      <p class="mt-4 text-sm text-slate-400"><strong class="text-slate-200">Reading the table:</strong> <strong class="text-emerald-400">✓</strong> = works fully; <strong class="text-amber-400">⚠</strong> = works with one extra step or reduced depth; <strong class="text-rose-400">✗</strong> = not available on this platform. No row marked <strong class="text-rose-400">✗</strong> prevents <code>pforge run-plan</code> from executing end-to-end.</p>
 
       <div class="mt-8">
         <a href="multi-agent.html" class="group flex items-center gap-4 p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl hover:border-amber-400/40 transition-all">

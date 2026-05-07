@@ -323,10 +323,10 @@ FOUND 2 deferred-work marker(s). Resolve before Step 5 (Review Gate).</code></pr
             <div class="cmd-block-header"><span>Example output</span></div>
             <pre><code>Scope Drift Check — 4 changed file(s) vs plan:
 ──────────────────────────────────────────────────
-  ✅ IN SCOPE   src/Services/UserService.cs
-  ✅ IN SCOPE   src/Repositories/UserRepository.cs
-  🟡 UNPLANNED  src/Config/AppSettings.cs
-  🔴 FORBIDDEN  tests/Legacy/OldTests.cs
+  <span class="text-emerald-400 font-bold">✓</span> IN SCOPE   src/Services/UserService.cs
+  <span class="text-emerald-400 font-bold">✓</span> IN SCOPE   src/Repositories/UserRepository.cs
+  <span class="text-amber-400 font-bold">●</span> UNPLANNED  src/Config/AppSettings.cs
+  <span class="text-rose-400 font-bold">●</span> FORBIDDEN  tests/Legacy/OldTests.cs
 
 DRIFT DETECTED — 1 forbidden file(s) touched.</code></pre>
           </div>

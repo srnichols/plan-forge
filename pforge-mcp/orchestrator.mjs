@@ -8922,10 +8922,35 @@ export function findLatestRun(targetPath, runId = null) {
 }
 
 /**
+ * Parse a single events.log line into a structured entry.
+ * Format: "[ISO] eventType: {jsonData}"
+ *
+ * Surfaces `source` and `security_risk` at the top level of the returned
+ * object for convenient access. Both default to `null` when absent from
+ * the stored JSON (backward-compat with pre-Slice-2 events.log files).
+ *
+ * @param {string} line
+ * @returns {{ ts: string, type: string, data: object, source: string|null, security_risk: string|null } | null}
+ */
+export function parseEventLine(line) {
+  const m = line.match(/^\[([^\]]+)\]\s+([a-z-]+):\s*(.*)$/);
+  if (!m) return null;
+  let data = {};
+  try { data = JSON.parse(m[3] || "{}"); } catch { /* keep empty */ }
+  return {
+    ts: m[1],
+    type: m[2],
+    data,
+    source: data.source ?? null,
+    security_risk: data.security_risk ?? null,
+  };
+}
+
+/**
  * Parse events.log into structured entries.
  * Format per line: "[ISO] eventType: {jsonData}"
  * @param {string} runDir
- * @returns {Array<{ ts: string, type: string, data: object }>}
+ * @returns {Array<{ ts: string, type: string, data: object, source: string|null, security_risk: string|null }>}
  */
 export function parseEventsLog(runDir) {
   const logPath = resolve(runDir, "events.log");
@@ -8934,11 +8959,8 @@ export function parseEventsLog(runDir) {
   try {
     const raw = readFileSync(logPath, "utf-8");
     for (const line of raw.split("\n")) {
-      const m = line.match(/^\[([^\]]+)\]\s+([a-z-]+):\s*(.*)$/);
-      if (!m) continue;
-      let data = {};
-      try { data = JSON.parse(m[3] || "{}"); } catch { /* keep empty */ }
-      events.push({ ts: m[1], type: m[2], data });
+      const parsed = parseEventLine(line);
+      if (parsed) events.push(parsed);
     }
   } catch { /* ignore */ }
   return events;

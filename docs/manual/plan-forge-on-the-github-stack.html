@@ -4,9 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Appendix H: Plan Forge on the GitHub Stack — Plan Forge Manual</title>
-  <meta name="description" content="How Plan-Forge integrates with GitHub-native AI primitives: Copilot, AGENTS.md, .github/copilot-instructions.md, .github/instructions/, MCP, GHAS, Spaces, Metrics API. Optional, opt-in, deepest-on-GitHub." />
+  <meta name="description" content="How Plan Forge integrates with GitHub-native AI primitives: Copilot, AGENTS.md, .github/copilot-instructions.md, .github/instructions/, MCP, GHAS, Spaces, Metrics API. Optional, opt-in, deepest-on-GitHub." />
   <meta property="og:title" content="Plan Forge on the GitHub Stack" />
-  <meta property="og:description" content="The deep-dive on Plan-Forge's GitHub integration. Optional, opt-in, deepest-on-GitHub." />
+  <meta property="og:description" content="The deep-dive on Plan Forge's GitHub integration. Optional, opt-in, deepest-on-GitHub." />
   <meta property="og:type" content="article" />
   <link rel="canonical" href="https://planforge.software/manual/plan-forge-on-the-github-stack.html" />
   <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
@@ -27,21 +27,25 @@
 
       <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Appendix H</div>
       <h1>Plan Forge on the GitHub Stack</h1>
-      <p class="text-lg text-slate-400 mb-8">A tour of the GitHub-native primitives Plan-Forge integrates with, plus the readiness check for your repo.</p>
+      <p class="text-lg text-slate-400 mb-8">A tour of the GitHub-native primitives Plan Forge integrates with, plus the readiness check for your repo.</p>
 
-      <div class="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5 mb-10">
-        <p class="text-sm text-slate-400 mb-2"><strong class="text-slate-200">When to read this chapter:</strong> you are running (or considering) Plan-Forge against a repository hosted on GitHub, with GitHub Copilot, Copilot Coding Agent, GHAS, or Copilot Spaces in the picture.</p>
-        <p class="text-sm text-slate-400 mb-0"><strong class="text-slate-200">When to skip it:</strong> you are on Bitbucket, GitLab, Azure DevOps, or anywhere else. None of this is required by Plan-Forge — see <a href="stack-notes.html" class="text-amber-400 hover:underline">Appendix C: Stack-Specific Notes</a> for language-preset details, and <a href="extensions.html" class="text-amber-400 hover:underline">Chapter 12: Extensions</a> for the OSS extension surface.</p>
+      <div class="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5 mb-6">
+        <p class="text-sm text-slate-400 mb-2"><strong class="text-slate-200">When to read this chapter:</strong> you are running (or considering) Plan Forge against a repository hosted on GitHub, with GitHub Copilot, Copilot Coding Agent, GHAS, or Copilot Spaces in the picture.</p>
+        <p class="text-sm text-slate-400 mb-0"><strong class="text-slate-200">When to skip it:</strong> you are on Bitbucket, GitLab, Azure DevOps, or anywhere else. None of this is required by Plan Forge — see <a href="stack-notes.html" class="text-amber-400 hover:underline">Appendix C: Stack-Specific Notes</a> for language-preset details, and <a href="extensions.html" class="text-amber-400 hover:underline">Chapter 12: Extensions</a> for the OSS extension surface.</p>
       </div>
 
-      <p>Plan-Forge does not require GitHub. It runs against any repo, with any agent (Copilot, Claude Code, Cursor, Codex), and against any CI system. <strong class="text-slate-200">But when the repo is on GitHub, Plan-Forge has the deepest stack of integrations</strong> — eight first-class primitives it consumes today, plus several it dispatches to. This appendix is the single canonical reference for that integration surface.</p>
+      <div class="rounded-xl border-l-4 border-amber-500 bg-amber-950/20 px-5 py-4 mb-10">
+        <p class="text-sm text-slate-300 mb-0"><strong class="text-amber-300">Looking for the strategic framing instead?</strong> See <a href="github-stack-alignment.html" class="text-amber-400 hover:underline font-semibold">Appendix J — GitHub Stack Alignment</a> for the four-band AI SDLC stack diagram, the four harness pillars in plain English, the six outcome KPIs, and the consolidation thesis. <em>This appendix (H) is the surface-by-surface technical reference; J is the executive-level companion.</em></p>
+      </div>
+
+      <p>Plan Forge does not require GitHub. It runs against any repo, with any agent (Copilot, Claude Code, Cursor, Codex), and against any CI system. <strong class="text-slate-200">But when the repo is on GitHub, Plan Forge has the deepest stack of integrations</strong> — eight first-class primitives it consumes today, plus several it dispatches to. This appendix is the single canonical reference for that integration surface.</p>
 
       <p>Section 1 is the readiness check — a one-command snapshot of which GitHub primitives your repo currently has wired up. Section 2 is the surface-by-surface tour. Sections 3 (Copilot Coding Agent dispatch), 4 (GHAS remediation chains), 5 (Copilot Spaces sync), 6 (Metrics API leaderboard), 7 (BYOK and the multi-model picker), and 8 (other agent platforms: Claude Code, Cursor, Codex) are now live.</p>
 
       <!-- ─── Section 1 — Readiness Check ─── -->
       <h2 id="readiness-check">1. Is your repo set up? Run <code>pforge github status</code></h2>
 
-      <p>The fastest way to know which GitHub-native primitives Plan-Forge can use against your repo is the introspection command:</p>
+      <p>The fastest way to know which GitHub-native primitives Plan Forge can use against your repo is the introspection command:</p>
 
       <pre><code>pforge github status</code></pre>
 
@@ -50,13 +54,13 @@
       <ul>
         <li><strong class="text-emerald-400">✓ pass</strong> — primitive is wired up correctly</li>
         <li><strong class="text-amber-400">⚠ warn</strong> — primitive is partially wired or recommended-but-missing</li>
-        <li><strong class="text-rose-400">✗ fail</strong> — primitive is missing and Plan-Forge integration depends on it</li>
+        <li><strong class="text-rose-400">✗ fail</strong> — primitive is missing and Plan Forge integration depends on it</li>
         <li><strong class="text-slate-400">⊘ n/a</strong> — primitive does not apply to this repo (e.g. not a git clone)</li>
       </ul>
 
-      <p>Sample output, run against the Plan-Forge repository itself:</p>
+      <p>Sample output, run against the Plan Forge repository itself:</p>
 
-      <pre><code>GitHub stack readiness — E:\GitHub\Plan-Forge
+      <pre><code>GitHub stack readiness — E:\GitHub\Plan Forge
 ────────────────────────────────────────────────────────────────────────
   <span class="text-emerald-400 font-bold">✓</span> .github/copilot-instructions.md
       present
@@ -67,7 +71,7 @@
   <span class="text-emerald-400 font-bold">✓</span> .github/prompts/*.prompt.md
       8 prompt files found
   <span class="text-emerald-400 font-bold">✓</span> .vscode/mcp.json
-      Plan-Forge MCP server registered
+      Plan Forge MCP server registered
   <span class="text-emerald-400 font-bold">✓</span> .github/workflows/
       4 workflow files found
   <span class="text-emerald-400 font-bold">✓</span> git remote → github.com
@@ -77,10 +81,10 @@
 ────────────────────────────────────────────────────────────────────────
   7 pass · 1 warn · 0 fail · 0 n/a  (8 checks)</code></pre>
 
-      <p class="text-sm text-slate-500 mt-6">And against the Plan-Forge testbed (a sample repo set up via <code>setup.ps1</code>):</p>
+      <p class="text-sm text-slate-500 mt-6">And against the Plan Forge testbed (a sample repo set up via <code>setup.ps1</code>):</p>
       <figure class="my-6">
-        <img src="assets/screenshots/github-status-testbed.png" alt="Terminal output of pforge github status against the Plan-Forge testbed showing 7 pass, 1 warn, 0 fail, 0 n/a across 8 checks" class="w-full max-w-3xl rounded-xl border border-slate-700/50 shadow-2xl shadow-amber-500/5" loading="lazy" />
-        <figcaption class="text-xs text-slate-500 mt-2 text-center"><code>pforge github status</code> against the Plan-Forge testbed — generated by <code>scripts/capture-github-status-screenshot.mjs</code>.</figcaption>
+        <img src="assets/screenshots/github-status-testbed.png" alt="Terminal output of pforge github status against the Plan Forge testbed showing 7 pass, 1 warn, 0 fail, 0 n/a across 8 checks" class="w-full max-w-3xl rounded-xl border border-slate-700/50 shadow-2xl shadow-amber-500/5" loading="lazy" />
+        <figcaption class="text-xs text-slate-500 mt-2 text-center"><code>pforge github status</code> against the Plan Forge testbed — generated by <code>scripts/capture-github-status-screenshot.mjs</code>.</figcaption>
       </figure>
 
       <p>To get fix hints for every <strong class="text-amber-400">⚠</strong> and <strong class="text-rose-400">✗</strong> row, use the <code>doctor</code> subcommand:</p>
@@ -113,51 +117,51 @@
         <p class="text-slate-300">"Run <code>forge_github_status</code> on this repo and tell me which GitHub primitives I'm missing."</p>
       </blockquote>
 
-      <p>The agent receives the structured JSON and can answer with line-level precision — useful when you're evaluating Plan-Forge inside an existing repo and don't want to leave the IDE.</p>
+      <p>The agent receives the structured JSON and can answer with line-level precision — useful when you're evaluating Plan Forge inside an existing repo and don't want to leave the IDE.</p>
 
       <!-- ─── Section 2 — The Eight Primitives ─── -->
-      <h2 id="eight-primitives">2. The eight GitHub-native primitives Plan-Forge consumes</h2>
+      <h2 id="eight-primitives">2. The eight GitHub-native primitives Plan Forge consumes</h2>
 
-      <p>Each row below is one check from <code>pforge github status</code>. The "What Plan-Forge does with it" column is what makes this chapter different from the GitHub docs: it tells you exactly how Plan-Forge uses the primitive, and which Plan-Forge feature stops working if you remove it.</p>
+      <p>Each row below is one check from <code>pforge github status</code>. The "What Plan Forge does with it" column is what makes this chapter different from the GitHub docs: it tells you exactly how Plan Forge uses the primitive, and which Plan Forge feature stops working if you remove it.</p>
 
       <table>
         <thead>
           <tr>
             <th>Primitive</th>
             <th>What it is</th>
-            <th>What Plan-Forge does with it</th>
+            <th>What Plan Forge does with it</th>
           </tr>
         </thead>
         <tbody>
           <tr>
             <td><code>.github/copilot-instructions.md</code></td>
             <td>Repo-wide context Copilot Chat reads on every conversation.</td>
-            <td>Generated by <code>setup.ps1</code> / <code>setup.sh</code>. Plan-Forge writes the project overview, architecture summary, quick-command reference, and pipeline reference here. Re-generated by <code>pforge update</code> while preserving customizations.</td>
+            <td>Generated by <code>setup.ps1</code> / <code>setup.sh</code>. Plan Forge writes the project overview, architecture summary, quick-command reference, and pipeline reference here. Re-generated by <code>pforge update</code> while preserving customizations.</td>
           </tr>
           <tr>
             <td><code>AGENTS.md</code></td>
             <td>Open standard adopted by Cursor, Codex, OpenAI, Anthropic, and GitHub for cross-agent context.</td>
-            <td>Generated alongside <code>copilot-instructions.md</code>. Lets Plan-Forge support BYOK — the same context surface works whether the user picks Copilot, Cursor, Claude Code, or Codex.</td>
+            <td>Generated alongside <code>copilot-instructions.md</code>. Lets Plan Forge support BYOK — the same context surface works whether the user picks Copilot, Cursor, Claude Code, or Codex.</td>
           </tr>
           <tr>
             <td><code>.github/instructions/*.instructions.md</code></td>
             <td>Path-scoped Copilot instructions (each file's <code>applyTo:</code> frontmatter targets a glob).</td>
-            <td>Plan-Forge ships ~17 instruction files: <code>architecture-principles</code>, <code>git-workflow</code>, <code>testing</code>, <code>security</code>, <code>database</code>, etc. Each auto-loads when Copilot edits a matching file. The Step-2 Plan Hardener and Step-5 Reviewer reference these directly.</td>
+            <td>Plan Forge ships ~17 instruction files: <code>architecture-principles</code>, <code>git-workflow</code>, <code>testing</code>, <code>security</code>, <code>database</code>, etc. Each auto-loads when Copilot edits a matching file. The Step-2 Plan Hardener and Step-5 Reviewer reference these directly.</td>
           </tr>
           <tr>
             <td><code>.github/prompts/*.prompt.md</code></td>
             <td>Reusable prompt files Copilot Chat can invoke as slash commands.</td>
-            <td>Plan-Forge ships the pipeline prompts: <code>step0-specify-feature</code>, <code>step1-preflight-check</code>, <code>step2-harden-plan</code>, <code>step3-execute-slice</code>, <code>step4-completeness-sweep</code>, <code>step5-review-gate</code>. The full Plan-Forge pipeline runs through these in sequence.</td>
+            <td>Plan Forge ships the pipeline prompts: <code>step0-specify-feature</code>, <code>step1-preflight-check</code>, <code>step2-harden-plan</code>, <code>step3-execute-slice</code>, <code>step4-completeness-sweep</code>, <code>step5-review-gate</code>. The full Plan Forge pipeline runs through these in sequence.</td>
           </tr>
           <tr>
             <td><code>.vscode/mcp.json</code></td>
             <td>VS Code's MCP-server registry. Each entry exposes a server's tools to Copilot Chat.</td>
-            <td>Plan-Forge registers itself here as <code>plan-forge</code>, exposing 67 MCP tools (<code>forge_run_plan</code>, <code>forge_estimate_quorum</code>, <code>forge_cost_report</code>, <code>forge_github_status</code>, …). See <a href="mcp-server-quickstart.html" class="text-amber-400 hover:underline">MCP Server Quick Start</a>.</td>
+            <td>Plan Forge registers itself here as <code>plan-forge</code>, exposing 67 MCP tools (<code>forge_run_plan</code>, <code>forge_estimate_quorum</code>, <code>forge_cost_report</code>, <code>forge_github_status</code>, …). See <a href="mcp-server-quickstart.html" class="text-amber-400 hover:underline">MCP Server Quick Start</a>.</td>
           </tr>
           <tr>
             <td><code>.github/workflows/</code></td>
             <td>GitHub Actions — the CI surface.</td>
-            <td>Validation gates from Plan-Forge plans can run as GitHub Actions jobs. The <code>regression-guard</code> command is designed to be triggered from a workflow on every PR. A future release will add an Actions composite for one-step Plan-Forge dispatch.</td>
+            <td>Validation gates from Plan Forge plans can run as GitHub Actions jobs. The <code>regression-guard</code> command is designed to be triggered from a workflow on every PR. A future release will add an Actions composite for one-step Plan Forge dispatch.</td>
           </tr>
           <tr>
             <td>git remote → github.com</td>
@@ -167,24 +171,24 @@
           <tr>
             <td>GitHub CLI (<code>gh</code>)</td>
             <td>GitHub's official command-line tool for issues, PRs, releases, and GHAS.</td>
-            <td>Plan-Forge prefers <code>gh</code> for any GitHub API operation when it's installed (auth is already handled). Strict requirement for the SARIF ingestion command and for one-shot issue creation in <code>pforge run-plan --worker copilot-coding-agent</code>.</td>
+            <td>Plan Forge prefers <code>gh</code> for any GitHub API operation when it's installed (auth is already handled). Strict requirement for the SARIF ingestion command and for one-shot issue creation in <code>pforge run-plan --worker copilot-coding-agent</code>.</td>
           </tr>
         </tbody>
       </table>
 
       <p class="mt-6 text-sm text-slate-400">
-        <strong class="text-slate-200">A note on optionality:</strong> not having every row green does not break Plan-Forge. It limits which Plan-Forge features are available. The CLI still runs end-to-end against any repo with any agent — the GitHub primitives unlock the deepest, most automated path.
+        <strong class="text-slate-200">A note on optionality:</strong> not having every row green does not break Plan Forge. It limits which Plan Forge features are available. The CLI still runs end-to-end against any repo with any agent — the GitHub primitives unlock the deepest, most automated path.
       </p>
 
       <figure class="my-8">
-        <img src="assets/diagrams/github-stack-architecture.svg" alt="Five-layer architecture diagram showing how Plan-Forge sits on top of the eight GitHub-native primitives (Layer 3) and dispatches to multiple agent runtimes (Layer 2) backed by any model (Layer 1), producing plan files, trajectories, and live GitHub artifacts (Layer 5)." class="w-full max-w-4xl mx-auto rounded-xl border border-slate-700/50" loading="lazy" />
-        <figcaption class="text-xs text-slate-500 mt-2 text-center">The five-layer view. Plan-Forge's orchestration layer (amber) consumes the eight GitHub primitives below and produces working artifacts above. Every primitive is documented in this chapter — every Plan-Forge feature in the amber band has a section below.</figcaption>
+        <img src="assets/diagrams/github-stack-architecture.svg" alt="Five-layer architecture diagram showing how Plan Forge sits on top of the eight GitHub-native primitives (Layer 3) and dispatches to multiple agent runtimes (Layer 2) backed by any model (Layer 1), producing plan files, trajectories, and live GitHub artifacts (Layer 5)." class="w-full max-w-4xl mx-auto rounded-xl border border-slate-700/50" loading="lazy" />
+        <figcaption class="text-xs text-slate-500 mt-2 text-center">The five-layer view. Plan Forge's orchestration layer (amber) consumes the eight GitHub primitives below and produces working artifacts above. Every primitive is documented in this chapter — every Plan Forge feature in the amber band has a section below.</figcaption>
       </figure>
 
       <!-- ─── Section 3 — Copilot Coding Agent dispatch ─── -->
       <h2 id="coding-agent-dispatch">3. Dispatching to Copilot Coding Agent</h2>
 
-      <p>When your repo is hosted on GitHub and has Copilot Coding Agent enabled, Plan-Forge can hand each slice of a plan off to the Coding Agent automatically — creating a GitHub Issue per slice, assigning it to <code>@copilot</code>, polling the resulting PR, and capturing the run trajectory back into the Plan-Forge dashboard.</p>
+      <p>When your repo is hosted on GitHub and has Copilot Coding Agent enabled, Plan Forge can hand each slice of a plan off to the Coding Agent automatically — creating a GitHub Issue per slice, assigning it to <code>@copilot</code>, polling the resulting PR, and capturing the run trajectory back into the Plan Forge dashboard.</p>
 
       <pre><code>pforge run-plan --worker copilot-coding-agent docs/plans/my-feature-PLAN.md</code></pre>
 
@@ -207,7 +211,7 @@
 
       <h3 id="pr-detection">PR detection — linked-issue search, branch pattern, fallback order</h3>
 
-      <p>After creating the issue and assigning it to <code>@copilot</code>, Plan-Forge polls for the resulting PR. It uses a two-stage fallback:</p>
+      <p>After creating the issue and assigning it to <code>@copilot</code>, Plan Forge polls for the resulting PR. It uses a two-stage fallback:</p>
 
       <table>
         <thead><tr><th>Stage</th><th>Strategy</th><th>How it works</th></tr></thead>
@@ -225,15 +229,15 @@
         </tbody>
       </table>
 
-      <p>If neither stage finds a PR within the configured timeout (default: 30 minutes, configurable via <code>.forge.json#codingAgent.pollTimeoutMinutes</code>), the slice is marked <code>stalled</code> and Plan-Forge moves to the next slice or stops, depending on <code>--on-stall</code> (<code>skip</code> | <code>abort</code>, default <code>abort</code>).</p>
+      <p>If neither stage finds a PR within the configured timeout (default: 30 minutes, configurable via <code>.forge.json#codingAgent.pollTimeoutMinutes</code>), the slice is marked <code>stalled</code> and Plan Forge moves to the next slice or stops, depending on <code>--on-stall</code> (<code>skip</code> | <code>abort</code>, default <code>abort</code>).</p>
 
       <h3 id="trajectory-capture">Trajectory capture</h3>
 
-      <p>When a PR is merged, Plan-Forge fetches the Coding Agent's session log from the PR's <em>Copilot Activity</em> tab via the GitHub API and appends it to the plan's trajectory file at <code>.forge/trajectories/&lt;plan-slug&gt;.jsonl</code>. This makes the Coding Agent's reasoning searchable by <code>pforge timeline</code> and <code>forge_master_ask</code> just like any other execution session.</p>
+      <p>When a PR is merged, Plan Forge fetches the Coding Agent's session log from the PR's <em>Copilot Activity</em> tab via the GitHub API and appends it to the plan's trajectory file at <code>.forge/trajectories/&lt;plan-slug&gt;.jsonl</code>. This makes the Coding Agent's reasoning searchable by <code>pforge timeline</code> and <code>forge_master_ask</code> just like any other execution session.</p>
 
       <h3 id="preflight-checks">Pre-flight checks</h3>
 
-      <p>Before Plan-Forge creates any GitHub Issues for a <code>--worker copilot-coding-agent</code> run, it executes a pre-flight check that includes the <strong class="text-slate-200"><code>copilot-coding-agent-assignable</code></strong> probe. This probe calls the GitHub Assignees API to verify that <code>@copilot</code> is an assignable user on the repository. If it is not — typically because Copilot Coding Agent has not been enabled at the org or repo level — the orchestrator stops immediately with a fix-hint rather than creating issues that will never be picked up.</p>
+      <p>Before Plan Forge creates any GitHub Issues for a <code>--worker copilot-coding-agent</code> run, it executes a pre-flight check that includes the <strong class="text-slate-200"><code>copilot-coding-agent-assignable</code></strong> probe. This probe calls the GitHub Assignees API to verify that <code>@copilot</code> is an assignable user on the repository. If it is not — typically because Copilot Coding Agent has not been enabled at the org or repo level — the orchestrator stops immediately with a fix-hint rather than creating issues that will never be picked up.</p>
 
       <p>The probe has three return states:</p>
 
@@ -271,11 +275,11 @@
       <!-- ─── Section 4 — GHAS remediation ─── -->
       <h2 id="ghas-remediation">4. GHAS-driven remediation</h2>
 
-      <p>GitHub Advanced Security (GHAS) surfaces security findings — CodeQL alerts, secret scans, Dependabot advisories — as SARIF files or API responses. <code>pforge plan-from-sarif</code> turns a SARIF result into a runnable Plan-Forge plan with one slice per finding, severity-ordered so the highest-severity issues execute first.</p>
+      <p>GitHub Advanced Security (GHAS) surfaces security findings — CodeQL alerts, secret scans, Dependabot advisories — as SARIF files or API responses. <code>pforge plan-from-sarif</code> turns a SARIF result into a runnable Plan Forge plan with one slice per finding, severity-ordered so the highest-severity issues execute first.</p>
 
       <pre><code>pforge plan-from-sarif codeql-results.sarif --out docs/plans/ghas-remediation-PLAN.md</code></pre>
 
-      <p>The generated plan is a standard Plan-Forge plan. Run it with any worker (<code>pforge run-plan</code>, <code>--worker copilot-coding-agent</code>, etc.) and all the usual flags apply.</p>
+      <p>The generated plan is a standard Plan Forge plan. Run it with any worker (<code>pforge run-plan</code>, <code>--worker copilot-coding-agent</code>, etc.) and all the usual flags apply.</p>
 
       <h3 id="sarif-stdin">Reading SARIF from stdin</h3>
 
@@ -301,7 +305,7 @@ codeql database analyze my-db --format=sarifv2.1.0 --output=- | \
 
       <p>Use <code>--min-severity warning</code> to exclude <code>note</code>-level findings from the plan. Use <code>--rule-filter &lt;ruleId&gt;</code> to include only a specific rule. Both flags can be combined.</p>
 
-      <h3 id="ghas-integration-surface">Integration with the Plan-Forge security surface</h3>
+      <h3 id="ghas-integration-surface">Integration with the Plan Forge security surface</h3>
 
       <p><code>pforge plan-from-sarif</code> is the inbound half of the GHAS integration. The outbound half is the existing PreDeploy LiveGuard hook: before any deploy slice executes, <code>forge_secret_scan</code> + <code>forge_env_diff</code> run automatically and block on severity ≥ high. The <code>/security-audit</code> skill combines both: it invokes <code>pforge plan-from-sarif</code> against the latest SARIF, presents the generated plan for review, then hands off to <code>pforge run-plan</code>.</p>
 
@@ -314,7 +318,7 @@ codeql database analyze my-db --format=sarifv2.1.0 --output=- | \
       <!-- ─── Section 5 — Copilot Spaces sync ─── -->
       <h2 id="spaces-sync">5. Copilot Spaces sync</h2>
 
-      <p>Copilot Spaces is GitHub's team-scoped knowledge hub — a curated collection of files, instructions, and context that Copilot Chat draws from automatically when a Space is selected. Plan-Forge integrates with Spaces via <code>pforge sync-spaces</code>: a single command that pushes the active plan, instruction files, and Plan-Forge tool catalog into a designated Space, giving every chat session in the org instant access to the current plan state without manual copy-paste.</p>
+      <p>Copilot Spaces is GitHub's team-scoped knowledge hub — a curated collection of files, instructions, and context that Copilot Chat draws from automatically when a Space is selected. Plan Forge integrates with Spaces via <code>pforge sync-spaces</code>: a single command that pushes the active plan, instruction files, and Plan Forge tool catalog into a designated Space, giving every chat session in the org instant access to the current plan state without manual copy-paste.</p>
 
       <pre><code>pforge sync-spaces</code></pre>
 
@@ -371,7 +375,7 @@ codeql database analyze my-db --format=sarifv2.1.0 --output=- | \
 
       <p>A minimal GitHub Actions workflow to sync on every push to <code>main</code>:</p>
 
-      <pre><code>name: Plan-Forge Spaces Sync
+      <pre><code>name: Plan Forge Spaces Sync
 on:
   push:
     branches: [main]
@@ -410,7 +414,7 @@ jobs:
 
       <h3 id="spaces-roadmap">Roadmap</h3>
 
-      <p>The current release ships the core sync path: plan, instructions, tool catalog, and project profile. A future release will add bidirectional sync — pulling conversation summaries and noteworthy Q&amp;A threads from the Space back into the Plan-Forge timeline so decision rationale captured in chat is preserved alongside the plan execution history. The <code>pforge github status</code> readiness check will also gain a dedicated Spaces row at that point.</p>
+      <p>The current release ships the core sync path: plan, instructions, tool catalog, and project profile. A future release will add bidirectional sync — pulling conversation summaries and noteworthy Q&amp;A threads from the Space back into the Plan Forge timeline so decision rationale captured in chat is preserved alongside the plan execution history. The <code>pforge github status</code> readiness check will also gain a dedicated Spaces row at that point.</p>
 
       <div class="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5 mt-6">
         <p class="text-sm text-slate-400 mb-0"><strong class="text-slate-200">Prerequisite:</strong> <code>gh</code> CLI must be authenticated (<code>gh auth status</code>) and the target Copilot Space must exist before the first sync. Create a Space at <a href="https://github.com/copilot/spaces" class="text-amber-400 hover:underline">github.com/copilot/spaces</a> and note the <code>owner/name</code> slug. Run <code>pforge github status</code> to verify the rest of the GitHub stack readiness.</p>
@@ -420,16 +424,16 @@ jobs:
           <div class="flex-1 min-w-0">
             <div class="text-xs font-semibold text-amber-500 uppercase tracking-wider mb-1">Read next</div>
             <div class="text-sm font-bold text-slate-100 group-hover:text-amber-400 transition-colors">MCP Server &amp; Tools</div>
-            <p class="text-xs text-slate-500 mt-1 mb-0">The full surface of Plan-Forge tools exposed as MCP operations — the same tool catalog that <code>pforge sync-spaces</code> mirrors into your Copilot Space.</p>
+            <p class="text-xs text-slate-500 mt-1 mb-0">The full surface of Plan Forge tools exposed as MCP operations — the same tool catalog that <code>pforge sync-spaces</code> mirrors into your Copilot Space.</p>
           </div>
           <svg class="w-4 h-4 text-amber-500/60 group-hover:text-amber-400 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
         </a>
       </div>
 
       <!-- ─── Section 6 — Metrics API leaderboard ─── -->
-      <h2 id="metrics-leaderboard">6. Metrics API + Plan-Forge unified leaderboard</h2>
+      <h2 id="metrics-leaderboard">6. Metrics API + Plan Forge unified leaderboard</h2>
 
-      <p>The Copilot Metrics API (available at the org and enterprise level via <code>gh api /orgs/{org}/copilot/metrics</code>) surfaces AI-assisted PR rate, code-suggestion acceptance, and code-review usage across your teams. Plan-Forge pulls that data alongside its own plan-execution metrics — slices shipped, MTTR, drift rate — and presents them in a single leaderboard view on the dashboard.</p>
+      <p>The Copilot Metrics API (available at the org and enterprise level via <code>gh api /orgs/{org}/copilot/metrics</code>) surfaces AI-assisted PR rate, code-suggestion acceptance, and code-review usage across your teams. Plan Forge pulls that data alongside its own plan-execution metrics — slices shipped, MTTR, drift rate — and presents them in a single leaderboard view on the dashboard.</p>
 
       <h3 id="metrics-pull">Pulling Metrics API data</h3>
 
@@ -474,11 +478,11 @@ jobs:
       <p>The dashboard sidebar organises tabs into two groups:</p>
 
       <ul>
-        <li><strong class="text-slate-200">Forge group</strong> — tabs sourced entirely from Plan-Forge data: <em>Timeline</em>, <em>Cost</em>, <em>Forge Master</em>, <em>Digest</em>. These work offline and do not require a GitHub connection.</li>
-        <li><strong class="text-slate-200">GitHub group</strong> — tabs that join Plan-Forge data with GitHub API data: <em>Metrics Leaderboard</em> (this section) and, in a future release, <em>Spaces</em>. These tabs show a "Connect GitHub" prompt when <code>gh auth status</code> returns non-zero or no pull has been run yet.</li>
+        <li><strong class="text-slate-200">Forge group</strong> — tabs sourced entirely from Plan Forge data: <em>Timeline</em>, <em>Cost</em>, <em>Forge Master</em>, <em>Digest</em>. These work offline and do not require a GitHub connection.</li>
+        <li><strong class="text-slate-200">GitHub group</strong> — tabs that join Plan Forge data with GitHub API data: <em>Metrics Leaderboard</em> (this section) and, in a future release, <em>Spaces</em>. These tabs show a "Connect GitHub" prompt when <code>gh auth status</code> returns non-zero or no pull has been run yet.</li>
       </ul>
 
-      <p>The <em>Metrics Leaderboard</em> tab sits at the top of the GitHub group. It renders a table of teams ranked by a composite score — a weighted blend of AI-assisted PR rate (40 %), acceptance rate (40 %), and code-review usage (20 %) — next to their Plan-Forge plan-completion rate for the same window. Hovering a row reveals the raw daily time-series chart.</p>
+      <p>The <em>Metrics Leaderboard</em> tab sits at the top of the GitHub group. It renders a table of teams ranked by a composite score — a weighted blend of AI-assisted PR rate (40 %), acceptance rate (40 %), and code-review usage (20 %) — next to their Plan Forge plan-completion rate for the same window. Hovering a row reveals the raw daily time-series chart.</p>
 
       <p>Tab group placement is controlled by the <code>group</code> field in <code>pforge-mcp/dashboard/tab-registry.mjs</code>. Tabs with <code>group: "github"</code> are hidden when the GitHub group is collapsed (the user preference persists in <code>localStorage</code>).</p>
 
@@ -503,7 +507,7 @@ forge_github_metrics({ team: "platform", since: "2026-04-01" })</code></pre>
         </tbody>
       </table>
 
-      <p>The tool is registered in <code>pforge-mcp/server.mjs</code> alongside <code>forge_github_status</code> and is listed in <code>pforge-mcp/tools.json</code>. It is included in the Plan-Forge MCP server entry in <code>.vscode/mcp.json</code> without requiring a separate <code>setup</code> run — the tool registration is additive and picked up on the next MCP server restart.</p>
+      <p>The tool is registered in <code>pforge-mcp/server.mjs</code> alongside <code>forge_github_status</code> and is listed in <code>pforge-mcp/tools.json</code>. It is included in the Plan Forge MCP server entry in <code>.vscode/mcp.json</code> without requiring a separate <code>setup</code> run — the tool registration is additive and picked up on the next MCP server restart.</p>
 
       <h3 id="metrics-cache-ttl">Cache TTL for the dashboard endpoint</h3>
 
@@ -525,9 +529,9 @@ forge_github_metrics({ team: "platform", since: "2026-04-01" })</code></pre>
 
       <h3 id="per-team-join-key">Per-team join key precedence</h3>
 
-      <p>The leaderboard joins Metrics API rows (keyed by GitHub team slug) with Plan-Forge plan-completion rows (keyed by the <code>team</code> field in the plan frontmatter). In practice these two key spaces often diverge — a GitHub team might be <code>platform-eng</code> while the plan frontmatter uses <code>platform</code>.</p>
+      <p>The leaderboard joins Metrics API rows (keyed by GitHub team slug) with Plan Forge plan-completion rows (keyed by the <code>team</code> field in the plan frontmatter). In practice these two key spaces often diverge — a GitHub team might be <code>platform-eng</code> while the plan frontmatter uses <code>platform</code>.</p>
 
-      <p>Plan-Forge resolves the join using the following precedence order:</p>
+      <p>Plan Forge resolves the join using the following precedence order:</p>
 
       <ol>
         <li><strong class="text-slate-200">Explicit mapping in <code>.forge.json#metrics.teamMap</code></strong> — highest precedence. Map GitHub team slugs to plan team labels:
@@ -540,7 +544,7 @@ forge_github_metrics({ team: "platform", since: "2026-04-01" })</code></pre>
   }
 }</code></pre>
         </li>
-        <li><strong class="text-slate-200">Slug normalisation</strong> — if no explicit mapping exists, Plan-Forge applies a normaliser: lowercase, strip trailing <code>-eng</code> / <code>-team</code> / <code>-squad</code>, replace hyphens with underscores. If the normalised forms match, the rows are joined.</li>
+        <li><strong class="text-slate-200">Slug normalisation</strong> — if no explicit mapping exists, Plan Forge applies a normaliser: lowercase, strip trailing <code>-eng</code> / <code>-team</code> / <code>-squad</code>, replace hyphens with underscores. If the normalised forms match, the rows are joined.</li>
         <li><strong class="text-slate-200">Exact match</strong> — if normalisation still doesn't produce a match, the rows are left unjoined. Metrics API rows without a plan partner appear in the leaderboard with plan-side columns as <code>—</code>, and vice versa. No silent data loss; mismatches are surfaced explicitly.</li>
       </ol>
 
@@ -553,7 +557,7 @@ forge_github_metrics({ team: "platform", since: "2026-04-01" })</code></pre>
       <!-- ─── Section 7 — BYOK and the multi-model picker ─── -->
       <h2 id="byok-model-picker">7. BYOK and the multi-model picker</h2>
 
-      <p>GitHub Copilot ships a built-in multi-model picker that lets individual developers switch between supported models (GPT-4o, Claude Sonnet, Gemini, and others) inside their editor. Plan-Forge has its own orthogonal model-selection surface: the <code>--model</code> flag and the quorum system. This section explains how the two compose, when BYOK (bring-your-own-key) matters, and when the picker is enough.</p>
+      <p>GitHub Copilot ships a built-in multi-model picker that lets individual developers switch between supported models (GPT-4o, Claude Sonnet, Gemini, and others) inside their editor. Plan Forge has its own orthogonal model-selection surface: the <code>--model</code> flag and the quorum system. This section explains how the two compose, when BYOK (bring-your-own-key) matters, and when the picker is enough.</p>
 
       <h3 id="model-flag">The <code>--model</code> flag</h3>
 
@@ -565,15 +569,15 @@ pforge run-plan docs/plans/Phase-28-PLAN.md --model grok-3</code></pre>
 
       <p>The value is forwarded to the Forge-Master reasoning layer (<code>pforge-master/src/reasoning.mjs</code>), which resolves it against the configured provider table in <code>.forge.json#providers</code>. If no provider entry exists for the requested model, Forge-Master falls back to the default provider and logs a <code>warn</code> event to the timeline.</p>
 
-      <p>The flag is independent of the Copilot multi-model picker. A developer can have GPT-4o selected in their editor picker while Plan-Forge runs a plan with <code>--model claude-sonnet-4.5</code>. The two selections do not interfere — Copilot Chat and Plan-Forge use separate request paths.</p>
+      <p>The flag is independent of the Copilot multi-model picker. A developer can have GPT-4o selected in their editor picker while Plan Forge runs a plan with <code>--model claude-sonnet-4.5</code>. The two selections do not interfere — Copilot Chat and Plan Forge use separate request paths.</p>
 
       <h3 id="quorum-modes">Quorum modes: <code>auto</code>, <code>power</code>, <code>speed</code>, and <code>false</code></h3>
 
-      <p>For high-stakes slices — deploy steps, schema migrations, security patches — Plan-Forge can run the same slice prompt across multiple models and require a threshold of agreement before committing. This is the quorum system.</p>
+      <p>For high-stakes slices — deploy steps, schema migrations, security patches — Plan Forge can run the same slice prompt across multiple models and require a threshold of agreement before committing. This is the quorum system.</p>
 
       <pre><code>pforge run-plan docs/plans/Phase-28-PLAN.md --quorum=power   # flagship models, threshold 5
 pforge run-plan docs/plans/Phase-28-PLAN.md --quorum=speed   # fast models, threshold 7
-pforge run-plan docs/plans/Phase-28-PLAN.md --quorum=auto    # Plan-Forge picks mode per slice
+pforge run-plan docs/plans/Phase-28-PLAN.md --quorum=auto    # Plan Forge picks mode per slice
 pforge run-plan docs/plans/Phase-28-PLAN.md --quorum=false   # disable quorum entirely</code></pre>
 
       <table>
@@ -581,7 +585,7 @@ pforge run-plan docs/plans/Phase-28-PLAN.md --quorum=false   # disable quorum en
         <tbody>
           <tr><td><code>power</code></td><td>Up to 3 flagship models (GPT-5, Claude Opus, Grok-4)</td><td>5 / 7 points</td><td>Deploy slices, schema migrations</td></tr>
           <tr><td><code>speed</code></td><td>Up to 3 fast models (GPT-4.1, Claude Haiku, Grok-3-mini)</td><td>7 / 7 points</td><td>High-volume code generation, CI budget caps</td></tr>
-          <tr><td><code>auto</code></td><td>Plan-Forge selects per slice based on slice risk tags</td><td>Per-slice</td><td>Mixed plans; recommended default</td></tr>
+          <tr><td><code>auto</code></td><td>Plan Forge selects per slice based on slice risk tags</td><td>Per-slice</td><td>Mixed plans; recommended default</td></tr>
           <tr><td><code>false</code></td><td>Single model only</td><td>N/A</td><td>Local development, cost sensitivity</td></tr>
         </tbody>
       </table>
@@ -594,7 +598,7 @@ pforge run-plan docs/plans/Phase-28-PLAN.md --quorum=false   # disable quorum en
 
       <h3 id="byok-when-it-matters">When BYOK matters</h3>
 
-      <p>BYOK is the practice of supplying your own API key directly to a model provider rather than routing through GitHub Copilot's proxy. Plan-Forge supports BYOK for any provider that exposes an OpenAI-compatible endpoint. Set the key in <code>.forge/secrets.json</code> (gitignored) or via environment variable:</p>
+      <p>BYOK is the practice of supplying your own API key directly to a model provider rather than routing through GitHub Copilot's proxy. Plan Forge supports BYOK for any provider that exposes an OpenAI-compatible endpoint. Set the key in <code>.forge/secrets.json</code> (gitignored) or via environment variable:</p>
 
       <pre><code># .forge/secrets.json (gitignored)
 {
@@ -616,9 +620,9 @@ pforge run-plan docs/plans/Phase-28-PLAN.md --model grok-4</code></pre>
         <li><strong class="text-slate-200">Cost arbitrage</strong> — the Copilot Business per-seat fee is often cheaper per token for everyday chat, but a heavy automated quorum run on flagship models may be cheaper billed direct at volume pricing. Run <code>pforge run-plan --estimate</code> to compare.</li>
       </ul>
 
-      <h3 id="copilot-picker-vs-pforge">Copilot picker vs Plan-Forge model selection: the short answer</h3>
+      <h3 id="copilot-picker-vs-pforge">Copilot picker vs Plan Forge model selection: the short answer</h3>
 
-      <p>The Copilot multi-model picker is the right tool when a <em>human developer</em> is choosing a model interactively for chat or inline suggestions. Plan-Forge model selection (<code>--model</code>, quorum) is the right tool when an <em>automated plan execution run</em> needs reproducible, auditable model routing with cost tracking and agreement enforcement. The two are complementary:</p>
+      <p>The Copilot multi-model picker is the right tool when a <em>human developer</em> is choosing a model interactively for chat or inline suggestions. Plan Forge model selection (<code>--model</code>, quorum) is the right tool when an <em>automated plan execution run</em> needs reproducible, auditable model routing with cost tracking and agreement enforcement. The two are complementary:</p>
 
       <ul>
         <li>During development, let the picker follow the developer's preference.</li>
@@ -662,9 +666,9 @@ pforge run-plan docs/plans/Phase-28-PLAN.md --model grok-4</code></pre>
       <!-- ─── Section 8 — Other agent platforms (Claude Code, Cursor, Codex) ─── -->
       <h2 id="other-agent-platforms">8. Other agent platforms (Claude Code, Cursor, Codex)</h2>
 
-      <p>Plan-Forge runs against any agent — not just GitHub Copilot. This section covers the three most common alternatives: <strong class="text-slate-200">Claude Code</strong>, <strong class="text-slate-200">Cursor</strong>, and <strong class="text-slate-200">Codex</strong>. For each platform it describes what works out of the box, what requires one extra step, and what is GitHub-only and therefore not available outside GitHub Copilot.</p>
+      <p>Plan Forge runs against any agent — not just GitHub Copilot. This section covers the three most common alternatives: <strong class="text-slate-200">Claude Code</strong>, <strong class="text-slate-200">Cursor</strong>, and <strong class="text-slate-200">Codex</strong>. For each platform it describes what works out of the box, what requires one extra step, and what is GitHub-only and therefore not available outside GitHub Copilot.</p>
 
-      <p>The honest framing is a depth-of-integration spectrum. Plan-Forge has its deepest automated path on GitHub Copilot (Sections 1–7). The platforms below share the platform-independent subset of that surface, and each diverges in one or two specific areas. None of these gaps block Plan-Forge from running end-to-end.</p>
+      <p>The honest framing is a depth-of-integration spectrum. Plan Forge has its deepest automated path on GitHub Copilot (Sections 1–7). The platforms below share the platform-independent subset of that surface, and each diverges in one or two specific areas. None of these gaps block Plan Forge from running end-to-end.</p>
 
       <h3 id="cross-platform-baseline">Cross-platform baseline — what works everywhere</h3>
 
@@ -699,16 +703,16 @@ pforge run-plan docs/plans/Phase-28-PLAN.md --model grok-4</code></pre>
       <!-- ── Claude Code ── -->
       <h3 id="claude-code">Claude Code</h3>
 
-      <p><a href="https://claude.ai/code" class="text-amber-400 hover:underline">Claude Code</a> is Anthropic's terminal-native agentic coding environment. Of the three platforms covered in this section, it has the closest feature parity with GitHub Copilot for Plan-Forge purposes, for two reasons: it supports MCP natively, and it reads <code>AGENTS.md</code> on every session start.</p>
+      <p><a href="https://claude.ai/code" class="text-amber-400 hover:underline">Claude Code</a> is Anthropic's terminal-native agentic coding environment. Of the three platforms covered in this section, it has the closest feature parity with GitHub Copilot for Plan Forge purposes, for two reasons: it supports MCP natively, and it reads <code>AGENTS.md</code> on every session start.</p>
 
       <h4 class="text-base font-semibold text-slate-200 mt-6 mb-3">Setup for Claude Code</h4>
 
-      <p>After running <code>setup.sh</code> (or <code>setup.ps1</code>), Plan-Forge's MCP server is registered in <code>.vscode/mcp.json</code>. Claude Code reads MCP configuration from a separate file at <code>~/.claude/mcp.json</code> (global) or <code>.claude/mcp.json</code> (per-project). Copy the Plan-Forge entry across:</p>
+      <p>After running <code>setup.sh</code> (or <code>setup.ps1</code>), Plan Forge's MCP server is registered in <code>.vscode/mcp.json</code>. Claude Code reads MCP configuration from a separate file at <code>~/.claude/mcp.json</code> (global) or <code>.claude/mcp.json</code> (per-project). Copy the Plan Forge entry across:</p>
 
-      <pre><code># Extract the Plan-Forge MCP entry from VS Code's config and write it to Claude Code's config
+      <pre><code># Extract the Plan Forge MCP entry from VS Code's config and write it to Claude Code's config
 pforge setup --agent claude</code></pre>
 
-      <p>The <code>--agent claude</code> flag (available from <code>setup.sh</code> and <code>setup.ps1</code>) writes a Claude-compatible MCP config file at <code>.claude/mcp.json</code> alongside the standard VS Code config. Once the MCP server is registered, all 36 Plan-Forge tools are available from Claude Code's chat interface.</p>
+      <p>The <code>--agent claude</code> flag (available from <code>setup.sh</code> and <code>setup.ps1</code>) writes a Claude-compatible MCP config file at <code>.claude/mcp.json</code> alongside the standard VS Code config. Once the MCP server is registered, all 36 Plan Forge tools are available from Claude Code's chat interface.</p>
 
       <h4 class="text-base font-semibold text-slate-200 mt-6 mb-3">What works on Claude Code</h4>
 
@@ -726,9 +730,9 @@ pforge setup --agent claude</code></pre>
         </tbody>
       </table>
 
-      <h4 class="text-base font-semibold text-slate-200 mt-6 mb-3">Invoking Plan-Forge from Claude Code chat</h4>
+      <h4 class="text-base font-semibold text-slate-200 mt-6 mb-3">Invoking Plan Forge from Claude Code chat</h4>
 
-      <p>With the MCP server registered, the full Plan-Forge surface is available from Claude Code's chat:</p>
+      <p>With the MCP server registered, the full Plan Forge surface is available from Claude Code's chat:</p>
 
       <blockquote>
         <p class="text-slate-300">"Call <code>forge_run_plan</code> on <code>docs/plans/Phase-28-PLAN.md</code> with quorum=auto and tell me the projected cost first."</p>
@@ -739,15 +743,15 @@ pforge setup --agent claude</code></pre>
       <!-- ── Cursor ── -->
       <h3 id="cursor">Cursor</h3>
 
-      <p><a href="https://cursor.sh" class="text-amber-400 hover:underline">Cursor</a> is an AI-first code editor built on VS Code. It reads <code>AGENTS.md</code> as a cross-agent context document and supports MCP via the same <code>.vscode/mcp.json</code> that Plan-Forge already writes. In most cases, Cursor requires <em>no additional setup</em> after <code>setup.ps1</code> / <code>setup.sh</code> — the VS Code MCP config is the Cursor MCP config.</p>
+      <p><a href="https://cursor.sh" class="text-amber-400 hover:underline">Cursor</a> is an AI-first code editor built on VS Code. It reads <code>AGENTS.md</code> as a cross-agent context document and supports MCP via the same <code>.vscode/mcp.json</code> that Plan Forge already writes. In most cases, Cursor requires <em>no additional setup</em> after <code>setup.ps1</code> / <code>setup.sh</code> — the VS Code MCP config is the Cursor MCP config.</p>
 
       <h4 class="text-base font-semibold text-slate-200 mt-6 mb-3">Cursor-specific context files</h4>
 
-      <p>Cursor also reads its own rule files from <code>.cursor/rules/</code>. If your repo has a <code>.cursor/rules/</code> directory, you can mirror the most critical Plan-Forge instruction files there. Plan-Forge does not write to <code>.cursor/rules/</code> automatically, but the setup flag generates the directory with recommended stubs:</p>
+      <p>Cursor also reads its own rule files from <code>.cursor/rules/</code>. If your repo has a <code>.cursor/rules/</code> directory, you can mirror the most critical Plan Forge instruction files there. Plan Forge does not write to <code>.cursor/rules/</code> automatically, but the setup flag generates the directory with recommended stubs:</p>
 
       <pre><code>pforge setup --agent cursor</code></pre>
 
-      <p>This creates <code>.cursor/rules/plan-forge.mdc</code> with a condensed version of the architecture principles, pipeline reference, and quick-command list — the subset most useful for inline suggestions and Agent mode. The file is a stub you can extend; Plan-Forge does not overwrite it on subsequent <code>pforge update</code> runs.</p>
+      <p>This creates <code>.cursor/rules/plan-forge.mdc</code> with a condensed version of the architecture principles, pipeline reference, and quick-command list — the subset most useful for inline suggestions and Agent mode. The file is a stub you can extend; Plan Forge does not overwrite it on subsequent <code>pforge update</code> runs.</p>
 
       <h4 class="text-base font-semibold text-slate-200 mt-6 mb-3">What works on Cursor</h4>
 
@@ -758,7 +762,7 @@ pforge setup --agent claude</code></pre>
           <tr><td>MCP tools in Agent mode</td><td><strong class="text-emerald-400">✓ full</strong></td><td>Cursor reads <code>.vscode/mcp.json</code> — no extra config needed after <code>setup</code>.</td></tr>
           <tr><td><code>AGENTS.md</code> context</td><td><strong class="text-emerald-400">✓ full</strong></td><td>Cursor reads <code>AGENTS.md</code> for cross-agent context.</td></tr>
           <tr><td>Cursor rules (<code>.cursor/rules/</code>)</td><td><strong class="text-amber-400">⚠ optional</strong></td><td>Run <code>pforge setup --agent cursor</code> to generate stub rules. Not required but improves inline suggestion quality.</td></tr>
-          <tr><td>BYOK model selection</td><td><strong class="text-emerald-400">✓ full</strong></td><td>Cursor has its own model picker; Plan-Forge's <code>--model</code> flag is independent and applies to CLI/MCP invocations.</td></tr>
+          <tr><td>BYOK model selection</td><td><strong class="text-emerald-400">✓ full</strong></td><td>Cursor has its own model picker; Plan Forge's <code>--model</code> flag is independent and applies to CLI/MCP invocations.</td></tr>
           <tr><td>Copilot Coding Agent dispatch</td><td><strong class="text-rose-400">✗ GitHub-only</strong></td><td>Not applicable when using Cursor as the primary agent.</td></tr>
           <tr><td>GHAS / CodeQL integration</td><td><strong class="text-emerald-400">✓ full</strong></td><td>CLI-based; works from Cursor's terminal.</td></tr>
           <tr><td>Copilot Spaces sync</td><td><strong class="text-rose-400">✗ GitHub-only</strong></td><td>Copilot Spaces is a GitHub product.</td></tr>
@@ -766,7 +770,7 @@ pforge setup --agent claude</code></pre>
       </table>
 
       <div class="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5 mt-6">
-        <p class="text-sm text-slate-400 mb-0"><strong class="text-slate-200">Cursor + Copilot combination:</strong> Many teams use Cursor as their primary editor while keeping GitHub Copilot active for PR reviews and the Copilot Chat panel. In this setup, Plan-Forge serves both surfaces: Cursor gets MCP tools and <code>.cursor/rules/</code> context, while Copilot gets instruction files and prompt files via the <code>.github/</code> directory. Both share the same <code>AGENTS.md</code> and <code>.vscode/mcp.json</code>.</p>
+        <p class="text-sm text-slate-400 mb-0"><strong class="text-slate-200">Cursor + Copilot combination:</strong> Many teams use Cursor as their primary editor while keeping GitHub Copilot active for PR reviews and the Copilot Chat panel. In this setup, Plan Forge serves both surfaces: Cursor gets MCP tools and <code>.cursor/rules/</code> context, while Copilot gets instruction files and prompt files via the <code>.github/</code> directory. Both share the same <code>AGENTS.md</code> and <code>.vscode/mcp.json</code>.</p>
       </div>
 
       <!-- ── Codex ── -->
@@ -782,7 +786,7 @@ pforge setup --agent claude</code></pre>
 
       <h4 class="text-base font-semibold text-slate-200 mt-6 mb-3">Dispatching to Codex</h4>
 
-      <p>Codex does not support MCP, so it cannot call Plan-Forge tools from chat. Instead, Plan-Forge dispatches to Codex by writing the slice prompt into a task file and passing it through the Codex task interface. The equivalent of <code>--worker copilot-coding-agent</code> for Codex is:</p>
+      <p>Codex does not support MCP, so it cannot call Plan Forge tools from chat. Instead, Plan Forge dispatches to Codex by writing the slice prompt into a task file and passing it through the Codex task interface. The equivalent of <code>--worker copilot-coding-agent</code> for Codex is:</p>
 
       <pre><code>pforge run-plan --worker codex docs/plans/my-feature-PLAN.md</code></pre>
 
@@ -798,7 +802,7 @@ pforge setup --agent claude</code></pre>
           <tr><td><code>pforge run-plan</code> (CLI)</td><td><strong class="text-emerald-400">✓ full</strong></td><td>CLI runs independently; identical behaviour.</td></tr>
           <tr><td>Cloud dispatch (<code>--worker codex</code>)</td><td><strong class="text-emerald-400">✓ full</strong></td><td>Requires <code>OPENAI_API_KEY</code> and <code>pforge setup --agent codex</code>.</td></tr>
           <tr><td><code>AGENTS.md</code> context</td><td><strong class="text-emerald-400">✓ full</strong></td><td>Codex reads <code>AGENTS.md</code> as its primary context document. Keep this file up to date with <code>pforge update</code>.</td></tr>
-          <tr><td>MCP tools in chat</td><td><strong class="text-rose-400">✗ not supported</strong></td><td>Codex does not support MCP today. Plan-Forge tools are available only via <code>pforge run-plan</code> CLI and the Codex dispatch loop.</td></tr>
+          <tr><td>MCP tools in chat</td><td><strong class="text-rose-400">✗ not supported</strong></td><td>Codex does not support MCP today. Plan Forge tools are available only via <code>pforge run-plan</code> CLI and the Codex dispatch loop.</td></tr>
           <tr><td>BYOK model selection</td><td><strong class="text-emerald-400">✓ full</strong></td><td>Set <code>OPENAI_API_KEY</code>; use <code>--model gpt-5.4</code> etc.</td></tr>
           <tr><td>GHAS / CodeQL integration</td><td><strong class="text-emerald-400">✓ full</strong></td><td>CLI-based SARIF parsing works regardless of agent. GHAS API requires <code>gh</code> CLI and a GitHub-hosted repo.</td></tr>
           <tr><td>Copilot Spaces sync</td><td><strong class="text-rose-400">✗ GitHub-only</strong></td><td>Copilot Spaces is a GitHub product.</td></tr>
@@ -889,18 +893,18 @@ pforge setup --agent claude</code></pre>
           <div class="flex-1 min-w-0">
             <div class="text-xs font-semibold text-amber-500 uppercase tracking-wider mb-1">Read next</div>
             <div class="text-sm font-bold text-slate-100 group-hover:text-amber-400 transition-colors">Multi-Agent Setup</div>
-            <p class="text-xs text-slate-500 mt-1 mb-0">How to wire up multiple agents — including Copilot Coding Agent, Claude Code, and Codex workers — into a single Plan-Forge pipeline with quorum voting and handoff gates.</p>
+            <p class="text-xs text-slate-500 mt-1 mb-0">How to wire up multiple agents — including Copilot Coding Agent, Claude Code, and Codex workers — into a single Plan Forge pipeline with quorum voting and handoff gates.</p>
           </div>
           <svg class="w-4 h-4 text-amber-500/60 group-hover:text-amber-400 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
         </a>
       </div>
 
-      <!-- ─── Section 9 — Built with Plan-Forge ─── -->
+      <!-- ─── Section 9 — Built with Plan Forge ─── -->
       <!-- DOGFOOD-MARKER: captured 2026-05-05T16:04 -->
-      <h2 id="built-with-plan-forge">9. Built with Plan-Forge</h2>
+      <h2 id="built-with-plan-forge">9. Built with Plan Forge</h2>
 
       <div class="rounded-xl border border-amber-500/30 bg-amber-500/5 p-5 mb-6">
-        <p class="text-sm text-slate-300 mb-2"><strong class="text-amber-400">This chapter was written by Plan-Forge.</strong> Sections 1, 3, 4, 5, 6, 7, and 8 were drafted by <code>pforge run-plan</code> dispatching to GitHub Copilot via the <code>gh-copilot</code> worker. Each section is a captured slice trajectory you can audit.</p>
+        <p class="text-sm text-slate-300 mb-2"><strong class="text-amber-400">This chapter was written by Plan Forge.</strong> Sections 1, 3, 4, 5, 6, 7, and 8 were drafted by <code>pforge run-plan</code> dispatching to GitHub Copilot via the <code>gh-copilot</code> worker. Each section is a captured slice trajectory you can audit.</p>
         <p class="text-sm text-slate-300 mb-0">Section 9 itself — the artifact you're reading now — is the dogfood of the dogfood: a single live <code>--worker copilot-coding-agent</code> dispatch against this same repository, captured at runtime.</p>
       </div>
 
@@ -958,7 +962,7 @@ pforge setup --agent claude</code></pre>
       <p class="mt-6"><strong class="text-slate-200">Total spend to write this chapter: $0.17</strong> across the worker-executed slices listed above. The dispatch pipeline for <code>--worker copilot-coding-agent</code> is verified end-to-end against this repo; once Copilot Coding Agent is enabled at the repo level, re-running the dogfood plan should round-trip a full Issue → PR → merge cycle in a single command.</p>
 
       <div class="rounded-xl border border-green-500/20 bg-green-500/5 p-5 mt-8 mb-4">
-        <p class="text-sm text-slate-300 mb-1"><strong class="text-green-400">Using Spec Kit with this repo?</strong> Plan-Forge can auto-import your <code>spec.md</code>, <code>plan.md</code>, <code>tasks.md</code>, and <code>constitution.md</code> directly into a Crucible smelt — no re-specifying needed.</p>
+        <p class="text-sm text-slate-300 mb-1"><strong class="text-green-400">Using Spec Kit with this repo?</strong> Plan Forge can auto-import your <code>spec.md</code>, <code>plan.md</code>, <code>tasks.md</code>, and <code>constitution.md</code> directly into a Crucible smelt — no re-specifying needed.</p>
         <p class="text-sm text-slate-400 mb-0">See the <a href="spec-kit-interop.html" class="text-green-400 hover:underline font-semibold">Spec Kit Interop</a> chapter for the complete field-mapping reference, import procedure, and ecosystem extension details.</p>
       </div>
 

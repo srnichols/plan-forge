@@ -848,7 +848,7 @@ _**Status (2026-05-07): partially shipped via Phase-FOUNDRY-PROVIDER. The two `p
 - ~~**Foundry App Insights OTel sink** documentation~~ — ✅ `docs/observability/foundry-app-insights.md`
 - ~~**Deployment-name vs model-name UX**~~ — ✅ `priceSlice()` reads `.forge/foundry-deployments.json` (operator-editable mapping) with literal-fallback per Phase-FOUNDRY-PROVIDER Slice 4
 - ~~**`power-gov` quorum preset** for Azure Government model catalog~~ — ✅ Slice 6 of Phase-FOUNDRY-PROVIDER
-- **Foundry quota preflight** — read customer's TPM/PTU quota via Cognitive Services API; warn when slice estimates exceed available capacity. **STILL OPEN** — natural follow-up phase.
+- ~~**Foundry quota preflight**~~ — ✅ **Phase-FOUNDRY-QUOTA-PREFLIGHT** (5 slices, 35.6 min wall, `$0.05` declared / `$0.00` wall). Opt-in via `PFORGE_FOUNDRY_QUOTA_PREFLIGHT=1` env var. Reads AOAI deployment quota via Cognitive Services REST control-plane API; compares against slice token estimate; emits warning at slice-start when headroom < 30% (warning) or < 10% (critical). Fail-open: control-plane outages NEVER block plan execution. New module `pforge-mcp/foundry-quota.mjs` with 4 exports (`getDeploymentQuota`, `quotaCacheGet`/`Set`, `compareSliceEstimate`); 34 tests in `foundry-quota.test.mjs`; doc at `docs/integrations/foundry-quota-preflight.md`. `costForLeg()` byte-identical to v2.92.0. Closes §14 Priority D.
 
 ---
 
@@ -886,7 +886,7 @@ Execution order was determined by code-dependency analysis (search subagent, 202
 
 **Chain runner**: [scripts/run-priority-c-chain.ps1](../../scripts/run-priority-c-chain.ps1) — reusable for future chained-phase work. Supports `-StartFrom <N>` and `-ResumeFromSlice <N>` for incremental resume.
 
-**Remaining Priority D work**: Foundry quota preflight (read customer TPM/PTU via Cognitive Services API; warn when slice estimates exceed capacity). Natural follow-up phase, not blocking.
+**Remaining Priority D work**: ~~Foundry quota preflight~~ — ✅ shipped via Phase-FOUNDRY-QUOTA-PREFLIGHT on 2026-05-08 (see Priority D entry above and changelog below). **§14 Priority D is now fully complete.**
 
 ---
 
@@ -904,3 +904,4 @@ Execution order was determined by code-dependency analysis (search subagent, 202
   **Net result**: Priority A (cost fix + ACI hardening) and Priority B (Week 1 docs) from §14 are now both complete on master. Priority C (OTel exporter, audit log formalization, auth scaffolding, BYO Azure OpenAI) and Priority D (Foundry-informed backlog) are unstarted and remain the natural next chapter of work.
 - **2026-05-06 (Phase-MANUAL-DISCOVERY-LOOP and Phase-MANUAL-INTEGRATIONS plans drafted)** — Two follow-up plans authored in parallel sessions and now committed to master at [docs/plans/Phase-MANUAL-DISCOVERY-LOOP-PLAN.md](../plans/Phase-MANUAL-DISCOVERY-LOOP-PLAN.md) and [docs/plans/Phase-MANUAL-INTEGRATIONS-PLAN.md](../plans/Phase-MANUAL-INTEGRATIONS-PLAN.md). Neither has been executed yet. Both extend the manual coverage further.
 - **2026-05-07 (Priority C shipped)** — All four §14 Priority-C items plus the §9 Week-4 trajectory-schema item shipped via the Priority-C chain (4 phases, 34 slices, ~3 hours wall time, $0.32 declared / $0.00 wall on gh-copilot subscription). See §14.5 above for per-phase narrative, commits, and operational lessons. Net result: §14 Priority C is complete; §14 Priority D is partially complete (4 of 5 items landed via Phase-FOUNDRY-PROVIDER; only Foundry quota preflight remains open).
+- **2026-05-08 (Priority D fully complete)** — The last open Priority-D item shipped via Phase-FOUNDRY-QUOTA-PREFLIGHT (5 slices, 35.6 min, `$0.05` declared / `$0.00` wall). Adds opt-in AOAI quota preflight via `PFORGE_FOUNDRY_QUOTA_PREFLIGHT=1` env var; reads Cognitive Services control-plane API; compares against slice token estimate; emits warning at slice-start when headroom < 30%; fail-open invariant (control-plane outages never block execution). 34 tests, costForLeg byte-identical, priceSlice signature unchanged. Audit ran clean per the post-DOCS-UX-LIFT discipline (verified each MUST against actual artifacts, not just gate output). **Net result: every §14 line item across Priority A, B, C, and D is shipped.**

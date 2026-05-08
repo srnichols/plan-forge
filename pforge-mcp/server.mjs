@@ -7330,9 +7330,43 @@ export function createExpressApp() {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
+  // Phase-COST-BADGE-FIX — derive cost_usd for historical slice JSON files
+  // that pre-date the orchestrator stamping the field onto sliceResult.
+  // Pure read-side enrichment; never writes to disk. Returns the same object
+  // shape with `cost_usd` and `cost_breakdown` populated when missing AND a
+  // pricing inference is possible. Errors are swallowed (fail-open).
+  let _priceSliceFn = null;
+  async function _ensurePriceSliceLoaded() {
+    if (_priceSliceFn) return _priceSliceFn;
+    try {
+      const mod = await import("./cost-service.mjs");
+      _priceSliceFn = mod.priceSlice || null;
+    } catch { _priceSliceFn = null; }
+    return _priceSliceFn;
+  }
+  function backfillSliceCost(slice) {
+    if (!slice || typeof slice !== "object") return slice;
+    if (typeof slice.cost_usd === "number") return slice; // already present
+    if (!_priceSliceFn) return slice;                      // pricer unavailable
+    if (!slice.tokens || typeof slice.tokens !== "object") return slice;
+    try {
+      const priced = _priceSliceFn(slice.tokens, slice.worker);
+      if (priced && typeof priced.cost_usd === "number") {
+        slice.cost_usd = priced.cost_usd;
+        if (priced.cost_breakdown && !slice.cost_breakdown) {
+          slice.cost_breakdown = priced.cost_breakdown;
+        }
+      }
+    } catch { /* fail-open — missing badge is acceptable, broken endpoint is not */ }
+    return slice;
+  }
+
   // GET /api/runs/latest — most recent run summary + current slice status
   app.get("/api/runs/latest", (_req, res) => {
     try {
+      // Lazy-load the pricer once; fire-and-forget so the first request still
+      // succeeds without it (fields just won't be backfilled until the second).
+      if (!_priceSliceFn) _ensurePriceSliceLoaded().catch(() => {});
       const runsDir = resolve(PROJECT_DIR, ".forge", "runs");
       if (!existsSync(runsDir)) return res.status(404).json({ error: "No runs yet" });
       const dirs = readdirSync(runsDir, { withFileTypes: true })
@@ -7359,7 +7393,7 @@ export function createExpressApp() {
       if (sliceFiles.length > 0) {
         try {
           const latestSlice = JSON.parse(readFileSync(resolve(runDir, sliceFiles[0]), "utf-8"));
-          base.currentSlice = latestSlice;
+          base.currentSlice = backfillSliceCost(latestSlice);
         } catch { /* skip corrupt slice */ }
       }
       res.json(base);
@@ -7369,6 +7403,7 @@ export function createExpressApp() {
   // GET /api/runs/:runIdx — single run detail with slice data
   app.get("/api/runs/:runIdx", (req, res) => {
     try {
+      if (!_priceSliceFn) _ensurePriceSliceLoaded().catch(() => {});
       const runsDir = resolve(PROJECT_DIR, ".forge", "runs");
       if (!existsSync(runsDir)) return res.status(404).json({ error: "No runs" });
       const dirs = readdirSync(runsDir, { withFileTypes: true })
@@ -7386,7 +7421,10 @@ export function createExpressApp() {
         return na - nb;
       });
       for (const sf of sliceFiles) {
-        try { slices.push(JSON.parse(readFileSync(resolve(runDir, sf), "utf-8"))); } catch { /* skip */ }
+        try {
+          const parsed = JSON.parse(readFileSync(resolve(runDir, sf), "utf-8"));
+          slices.push(backfillSliceCost(parsed));
+        } catch { /* skip */ }
       }
       res.json({ summary, slices });
     } catch (err) { res.status(500).json({ error: err.message }); }

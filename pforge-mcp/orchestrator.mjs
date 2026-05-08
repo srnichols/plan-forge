@@ -8696,6 +8696,19 @@ async function executeSlice(slice, options) {
     }
   }
 
+  // Phase-COST-BADGE-FIX — stamp cost_usd onto sliceResult so it lands in
+  // slice-${n}.json AND is spread into the slice-completed SSE event
+  // (dashboard reads `data.cost_usd` to render the 💰 spend badge).
+  // calculateSliceCost is pure; safe to call here. Non-fatal on error.
+  let _sliceCostForRecord = null;
+  try {
+    _sliceCostForRecord = calculateSliceCost(sliceResult.tokens, sliceResult.worker);
+    sliceResult.cost_usd = _sliceCostForRecord.cost_usd;
+    sliceResult.cost_breakdown = _sliceCostForRecord.cost_breakdown;
+  } catch {
+    // Non-fatal — missing cost field just means the spend badge won't render
+  }
+
   writeFileSync(
     resolve(runDir, `slice-${slice.number}.json`),
     JSON.stringify(sliceResult, null, 2),
@@ -8788,7 +8801,11 @@ async function executeSlice(slice, options) {
 
   // Record model performance for this slice
   try {
-    const sliceCost = calculateSliceCost(sliceResult.tokens, sliceResult.worker);
+    // Reuse the cost computed pre-write (Phase-COST-BADGE-FIX) when available;
+    // fall back to a fresh compute so this block stays robust if the earlier
+    // try/catch swallowed an error.
+    const sliceCost = _sliceCostForRecord
+      || calculateSliceCost(sliceResult.tokens, sliceResult.worker);
     recordModelPerformance(cwd, {
       date: new Date().toISOString(),
       plan: planName,

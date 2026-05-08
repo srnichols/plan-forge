@@ -126,25 +126,33 @@ describe("spawnWorker — blocks API providers from code-writing role", () => {
   it("does NOT throw when model is grok-* and role is 'reviewer'", () => {
     // spawnWorker returns a promise for API-routed models; it should not
     // throw synchronously. The promise may reject due to network, but the
-    // role check itself passes.
-    expect(() => spawnWorker("review this", { model: "grok-4.20", role: "reviewer" }))
-      .not.toThrow();
+    // role check itself passes. Suppress rejection to avoid unhandled errors.
+    let result;
+    expect(() => { result = spawnWorker("review this", { model: "grok-4.20", role: "reviewer" }); }).not.toThrow();
+    if (result && typeof result.catch === "function") result.catch(() => {});
   });
 
   it("does NOT throw when model is grok-* and role is 'quorum-dry-run'", () => {
-    expect(() => spawnWorker("dry run", { model: "grok-4.20", role: "quorum-dry-run" }))
-      .not.toThrow();
+    let result;
+    expect(() => { result = spawnWorker("dry run", { model: "grok-4.20", role: "quorum-dry-run" }); }).not.toThrow();
+    if (result && typeof result.catch === "function") result.catch(() => {});
   });
 
   it("does NOT throw when model is grok-* and role is 'analysis'", () => {
-    expect(() => spawnWorker("analyze", { model: "grok-4.20", role: "analysis" }))
-      .not.toThrow();
+    let result;
+    expect(() => { result = spawnWorker("analyze", { model: "grok-4.20", role: "analysis" }); }).not.toThrow();
+    if (result && typeof result.catch === "function") result.catch(() => {});
   });
 
   it("does NOT throw for claude-sonnet-4.6 with null role (CLI worker path)", () => {
     // claude-sonnet-4.6 is not an API-provider-pattern model (no Anthropic
     // direct entry enabled), so it goes through the CLI worker path.
-    expect(() => spawnWorker("build feature", { model: "claude-sonnet-4.6", role: null }))
-      .not.toThrow();
+    // The returned Promise may reject if no CLI worker is installed in this
+    // environment — suppress that to prevent an unhandled rejection error.
+    let result;
+    expect(() => {
+      result = spawnWorker("build feature", { model: "claude-sonnet-4.6", role: null });
+    }).not.toThrow();
+    if (result && typeof result.catch === "function") result.catch(() => {});
   });
 });

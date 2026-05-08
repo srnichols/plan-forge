@@ -29,10 +29,325 @@
       <h1>GitHub Stack Alignment</h1>
       <p class="text-lg text-slate-400 mb-8">The thesis: GitHub ships the agent runtime + integration standards + customization primitives + engagement metrics. Everything <em>above</em> the runtime is the ecosystem's lane. Plan Forge is built for that lane.</p>
 
-      <div class="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5 mb-10">
-        <p class="text-sm text-slate-400 mb-2"><strong class="text-slate-200">Audience:</strong> Platform engineers and architects evaluating Plan Forge alongside an existing GitHub Enterprise + Copilot Enterprise investment.</p>
-        <p class="text-sm text-slate-400 mb-0"><strong class="text-slate-200">Companion to:</strong> <a href="plan-forge-on-the-github-stack.html" class="text-amber-400 hover:underline">Appendix H — Plan Forge on the GitHub Stack</a> (the deeper integration tour). This page is the strategic framing; Appendix H is the surface-by-surface technical reference.</p>
+      <div class="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5 mb-6">
+        <p class="text-sm text-slate-400 mb-2"><strong class="text-slate-200">Who this page is for:</strong> Engineering leaders, platform engineers, and architects evaluating a complete AI-SDLC stack — whether you've already standardized on GitHub Copilot or you're shopping the category fresh.</p>
+        <p class="text-sm text-slate-400 mb-0"><strong class="text-slate-200">Companion to:</strong> <a href="what-is-plan-forge.html" class="text-amber-400 hover:underline">What is Plan Forge?</a> · <a href="how-it-works.html" class="text-amber-400 hover:underline">How it works</a> · <a href="plan-forge-on-the-github-stack.html" class="text-amber-400 hover:underline">Appendix H — Plan Forge on the GitHub Stack</a> (the surface-by-surface technical reference).</p>
       </div>
+
+      <div class="rounded-xl border-l-4 border-amber-500 bg-amber-950/20 px-5 py-4 mb-6">
+        <div class="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-2">Why this combination is the only one in the category</div>
+        <p class="text-sm text-slate-300 mb-2">Plan Forge + GitHub Copilot ships <strong class="text-slate-100">four capabilities no other AI-SDLC platform on the market combines today</strong>:</p>
+        <ul class="text-sm text-slate-400 list-disc list-inside space-y-1 mb-0">
+          <li><strong class="text-slate-200">Three-tier memory</strong> so context quality compounds across teams instead of being a per-repo lottery</li>
+          <li><strong class="text-slate-200">Multi-model quorum eval</strong> — Claude + GPT + Gemini score the same slice independently, 0–100 LLM-as-judge consensus</li>
+          <li><strong class="text-slate-200">Audit Loop</strong> — scan-triage-fix loop for AI-generated drift, defaulting off, hard-blocked in production at the schema level</li>
+          <li><strong class="text-slate-200">Watcher</strong> — a second IDE session that tails any in-flight run, read-only by schema (literally cannot write to the target)</li>
+        </ul>
+      </div>
+
+      <div class="rounded-xl border border-slate-700/50 bg-slate-900/40 px-5 py-3 mb-10 text-sm text-slate-400">
+        <strong class="text-slate-200">In a hurry?</strong> Read the next three sections and stop:
+        <a href="#what-you-get" class="text-amber-400 hover:underline ml-1">What you get</a> ·
+        <a href="#the-picture" class="text-amber-400 hover:underline">The picture</a> ·
+        <a href="#the-four-pillars" class="text-amber-400 hover:underline">The four pillars</a>.
+        Then jump to <a href="#try-it" class="text-amber-400 hover:underline">Try it — on your own</a>. Architects: the lower half of the page is the supporting context.
+      </div>
+
+      <h2 id="what-you-get">What you get — the outcomes</h2>
+
+      <p>Six numbers every AI-SDLC programme is shopping for. Plan Forge surfaces all six on the <a href="dashboard.html" class="text-amber-400 hover:underline">live dashboard</a> out of the box — no warehouse project, no BI build, no glue code.</p>
+
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-3 my-6">
+        <div class="rounded-lg border border-emerald-700/40 bg-emerald-950/20 p-4 text-center">
+          <div class="text-2xl font-bold text-emerald-300">AI-PR %</div>
+          <div class="text-xs text-slate-400 mt-1">share of merged PRs touched by an agent</div>
+        </div>
+        <div class="rounded-lg border border-emerald-700/40 bg-emerald-950/20 p-4 text-center">
+          <div class="text-2xl font-bold text-emerald-300">% code by AI</div>
+          <div class="text-xs text-slate-400 mt-1">bytes-changed-by-agent vs human, per slice</div>
+        </div>
+        <div class="rounded-lg border border-emerald-700/40 bg-emerald-950/20 p-4 text-center">
+          <div class="text-2xl font-bold text-emerald-300">Pass-rate / phase</div>
+          <div class="text-xs text-slate-400 mt-1">first-pass success: design / code / review / test</div>
+        </div>
+        <div class="rounded-lg border border-emerald-700/40 bg-emerald-950/20 p-4 text-center">
+          <div class="text-2xl font-bold text-emerald-300">RCA MTTR</div>
+          <div class="text-xs text-slate-400 mt-1">incident-fired → fix-validated, hours</div>
+        </div>
+        <div class="rounded-lg border border-emerald-700/40 bg-emerald-950/20 p-4 text-center">
+          <div class="text-2xl font-bold text-emerald-300">Drift score</div>
+          <div class="text-xs text-slate-400 mt-1">codebase-vs-architecture, scored per commit</div>
+        </div>
+        <div class="rounded-lg border border-emerald-700/40 bg-emerald-950/20 p-4 text-center">
+          <div class="text-2xl font-bold text-emerald-300">$ / merged PR</div>
+          <div class="text-xs text-slate-400 mt-1">token spend reconciled against shipped value</div>
+        </div>
+      </div>
+
+      <p class="text-sm text-slate-400 italic">The leading-indicator metric leadership usually asks for last — <strong class="text-slate-300">human-intervention frequency</strong> — is also captured automatically. Every time a human took over from an agent is recorded; trend lines show whether the harness is getting better or worse. See <a href="health-dna.html" class="text-amber-400 hover:underline">Health DNA</a> for the full metric catalogue.</p>
+
+      <h2 id="the-picture">The picture — harness on substrate</h2>
+
+      <p>Read top-down: outcomes you get, the orchestration layer that produces them, the GitHub Copilot substrate it sits on, and the GitHub platform foundation everything inherits.</p>
+
+      <figure class="my-6 rounded-xl overflow-hidden border border-slate-700/50 bg-slate-950">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 660" class="w-full h-auto block" role="img" aria-label="The complete AI SDLC stack: outcomes on top, Plan Forge harness in the middle, GitHub Copilot substrate and GitHub platform foundation at the base.">
+        <style>
+          .gha-band{rx:14;ry:14;stroke-width:2}
+          .gha-pillar{rx:8;ry:8;stroke-width:1.5}
+          .gha-chip{rx:6;ry:6;stroke-width:1}
+          .gha-band-title{font-size:14px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;font-family:Inter,sans-serif}
+          .gha-band-sub{font-size:10.5px;font-family:Inter,sans-serif;fill:#cbd5e1}
+          .gha-pillar-title{font-size:11.5px;font-weight:700;font-family:Inter,sans-serif;fill:#fef3c7}
+          .gha-tile-name{font-size:10px;font-weight:600;font-family:Inter,sans-serif;fill:#e2e8f0}
+          .gha-tile-sub{font-size:8.5px;font-family:Inter,sans-serif;fill:#94a3b8}
+          .gha-chip-name{font-size:9.5px;font-weight:600;font-family:Inter,sans-serif;fill:#dbeafe}
+          .gha-chip-foundation{font-size:9.5px;font-weight:600;font-family:Inter,sans-serif;fill:#e2e8f0}
+          .gha-flow{stroke:#fbbf24;stroke-width:2;fill:none;opacity:0.85;marker-end:url(#ghaah)}
+        </style>
+        <defs>
+          <marker id="ghaah" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto"><path d="M0,0 L9,3.5 L0,7" fill="#fbbf24"/></marker>
+          <linearGradient id="ghaBgOutcomes" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#052e1f"/><stop offset="1" stop-color="#022c22"/></linearGradient>
+          <linearGradient id="ghaBgHarness" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#2a1a04"/><stop offset="1" stop-color="#1c1404"/></linearGradient>
+          <linearGradient id="ghaBgSubstrate" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#0a1428"/><stop offset="1" stop-color="#091128"/></linearGradient>
+          <linearGradient id="ghaBgFoundation" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#0f172a"/><stop offset="1" stop-color="#0b1220"/></linearGradient>
+        </defs>
+
+        <rect x="0" y="0" width="940" height="660" fill="#020617"/>
+
+        <rect x="20" y="20" width="900" height="110" class="gha-band" fill="url(#ghaBgOutcomes)" stroke="#34d399"/>
+        <text x="38" y="46" class="gha-band-title" fill="#34d399">Outcomes — what the platform delivers</text>
+        <text x="38" y="62" class="gha-band-sub">AI-PR % · % code by AI · pass-rate per phase · RCA MTTR · drift score · cost per merged PR</text>
+        <g transform="translate(38,78)">
+          <rect x="0"   y="0" width="166" height="40" class="gha-chip" fill="#022c22" stroke="#34d399"/>
+          <text x="83" y="17" class="gha-tile-name" fill="#a7f3d0" text-anchor="middle">Plan-aware delivery</text>
+          <text x="83" y="31" class="gha-tile-sub" fill="#6ee7b7" text-anchor="middle">scope contract · slice gates</text>
+          <rect x="172" y="0" width="166" height="40" class="gha-chip" fill="#022c22" stroke="#34d399"/>
+          <text x="255" y="17" class="gha-tile-name" fill="#a7f3d0" text-anchor="middle">AI-aware code review</text>
+          <text x="255" y="31" class="gha-tile-sub" fill="#6ee7b7" text-anchor="middle">20 specialised reviewers</text>
+          <rect x="344" y="0" width="166" height="40" class="gha-chip" fill="#022c22" stroke="#34d399"/>
+          <text x="427" y="17" class="gha-tile-name" fill="#a7f3d0" text-anchor="middle">Closed-loop RCA &amp; fix</text>
+          <text x="427" y="31" class="gha-tile-sub" fill="#6ee7b7" text-anchor="middle">register → diagnose → verify</text>
+          <rect x="516" y="0" width="166" height="40" class="gha-chip" fill="#022c22" stroke="#34d399"/>
+          <text x="599" y="17" class="gha-tile-name" fill="#a7f3d0" text-anchor="middle">Drift &amp; quality eval</text>
+          <text x="599" y="31" class="gha-tile-sub" fill="#6ee7b7" text-anchor="middle">LLM-as-judge · 0–100 score</text>
+          <rect x="688" y="0" width="166" height="40" class="gha-chip" fill="#022c22" stroke="#34d399"/>
+          <text x="771" y="17" class="gha-tile-name" fill="#a7f3d0" text-anchor="middle">Audit-grade governance</text>
+          <text x="771" y="31" class="gha-tile-sub" fill="#6ee7b7" text-anchor="middle">leaderboard + runbooks</text>
+        </g>
+
+        <path d="M150,165 L150,135" class="gha-flow"/>
+        <path d="M380,165 L380,135" class="gha-flow"/>
+        <path d="M560,165 L560,135" class="gha-flow"/>
+        <path d="M790,165 L790,135" class="gha-flow"/>
+
+        <rect x="20" y="170" width="900" height="240" class="gha-band" fill="url(#ghaBgHarness)" stroke="#fbbf24" stroke-width="2.5"/>
+        <text x="38" y="196" class="gha-band-title" fill="#fbbf24">Plan Forge — the harness</text>
+        <text x="38" y="212" class="gha-band-sub">Open-source · MIT · runs on the GitHub substrate below · the orchestration lane GitHub leaves to the ecosystem</text>
+
+        <g transform="translate(38,224)">
+          <rect x="0" y="0" width="210" height="172" class="gha-pillar" fill="#0c0a04" stroke="#fbbf24"/>
+          <text x="105" y="20" class="gha-pillar-title" text-anchor="middle">Orchestration</text>
+          <line x1="14" y1="28" x2="196" y2="28" stroke="#451a03" stroke-width="1"/>
+          <g font-family="Inter,sans-serif" font-size="9.5" fill="#fde68a">
+            <text x="14" y="46">▸ Crucible — interview funnel</text>
+            <text x="14" y="62">▸ Tempering — quality scorer</text>
+            <text x="14" y="78">▸ Inner Loop — competitive worktrees</text>
+            <text x="14" y="94">▸ Forge-Master — chat-first router</text>
+            <text x="14" y="110">▸ 20 Reviewer Agents · 14 Skills</text>
+            <text x="14" y="126">▸ Reflexion retry · Auto-skill library</text>
+            <text x="14" y="142">▸ Lifecycle hooks (pre/post slice)</text>
+          </g>
+          <text x="14" y="160" font-family="Inter,sans-serif" font-size="8.5" fill="#fcd34d" font-style="italic">→ Agent Factory · grows itself per slice</text>
+
+          <rect x="222" y="0" width="210" height="172" class="gha-pillar" fill="#0c0a04" stroke="#fbbf24"/>
+          <text x="327" y="20" class="gha-pillar-title" text-anchor="middle">Memory · L1 / L2 / L3</text>
+          <line x1="236" y1="28" x2="418" y2="28" stroke="#451a03" stroke-width="1"/>
+          <g font-family="Inter,sans-serif" font-size="9.5" fill="#fde68a">
+            <text x="236" y="46">▸ L1 Hub — live WebSocket</text>
+            <text x="236" y="62">▸ L2 Files — .forge/ append-only</text>
+            <text x="236" y="78">▸ L3 OpenBrain — pgvector semantic</text>
+            <text x="236" y="94">▸ Cross-team federation (read-only)</text>
+            <text x="236" y="110">▸ Bridge-and-flush durability</text>
+            <text x="236" y="126">▸ search_thoughts · brain_recall</text>
+            <text x="236" y="142">▸ Cross-project · cross-session</text>
+          </g>
+          <text x="236" y="160" font-family="Inter,sans-serif" font-size="8.5" fill="#fcd34d" font-style="italic">→ Context quality compounds across teams</text>
+
+          <rect x="444" y="0" width="210" height="172" class="gha-pillar" fill="#0c0a04" stroke="#fbbf24"/>
+          <text x="549" y="20" class="gha-pillar-title" text-anchor="middle">Eval &amp; Drift</text>
+          <line x1="458" y1="28" x2="640" y2="28" stroke="#451a03" stroke-width="1"/>
+          <g font-family="Inter,sans-serif" font-size="9.5" fill="#fde68a">
+            <text x="458" y="46">▸ Quorum — Claude · GPT · Gemini</text>
+            <text x="458" y="62">▸ 0–100 consensus · LLM-as-judge</text>
+            <text x="458" y="78">▸ forge_drift_report (per-commit)</text>
+            <text x="458" y="94">▸ forge_health_trend · trajectories</text>
+            <text x="458" y="110">▸ forge_estimate_quorum (cost preview)</text>
+            <text x="458" y="126">▸ forge_fix_proposal (RCA → PR)</text>
+            <text x="458" y="142">▸ % code by AI · MTTR · drift score</text>
+          </g>
+          <text x="458" y="160" font-family="Inter,sans-serif" font-size="8.5" fill="#fcd34d" font-style="italic">→ Quality, not just adoption</text>
+
+          <rect x="666" y="0" width="216" height="172" class="gha-pillar" fill="#0c0a04" stroke="#fbbf24"/>
+          <text x="774" y="20" class="gha-pillar-title" text-anchor="middle">Governance &amp; Self-Repair</text>
+          <line x1="680" y1="28" x2="876" y2="28" stroke="#451a03" stroke-width="1"/>
+          <g font-family="Inter,sans-serif" font-size="9.5" fill="#fde68a">
+            <text x="680" y="46">▸ LiveGuard hooks (preDeploy / postSlice)</text>
+            <text x="680" y="62">▸ Bug Registry · Incident Capture · MTTR</text>
+            <text x="680" y="78">▸ Audit Loop — Coverity-equivalent</text>
+            <text x="680" y="94">▸ forge_runbook · Deploy Journal</text>
+            <text x="680" y="110">▸ Remote Bridge (Slack / Teams / PD)</text>
+            <text x="680" y="126">▸ Watcher — read-only by schema</text>
+            <text x="680" y="142">▸ forge_meta_bug_file (self-repair)</text>
+          </g>
+          <text x="680" y="160" font-family="Inter,sans-serif" font-size="8.5" fill="#fcd34d" font-style="italic">→ Approve from your phone · audit-grade</text>
+        </g>
+
+        <path d="M120,455 L120,410" class="gha-flow"/>
+        <path d="M260,455 L260,410" class="gha-flow"/>
+        <path d="M400,455 L400,410" class="gha-flow"/>
+        <path d="M540,455 L540,410" class="gha-flow"/>
+        <path d="M680,455 L680,410" class="gha-flow"/>
+        <path d="M820,455 L820,410" class="gha-flow"/>
+
+        <rect x="20" y="460" width="900" height="100" class="gha-band" fill="url(#ghaBgSubstrate)" stroke="#60a5fa"/>
+        <text x="38" y="486" class="gha-band-title" fill="#60a5fa">GitHub Copilot — the substrate</text>
+        <text x="38" y="502" class="gha-band-sub">Multi-model · one IP boundary · one SCIM endpoint · one audit log · per-developer + per-IDE primitives</text>
+        <g transform="translate(38,512)">
+          <rect x="0"   y="0" width="100" height="36" class="gha-chip" fill="#0a1428" stroke="#60a5fa"/>
+          <text x="50" y="15" class="gha-chip-name" text-anchor="middle">Chat &amp; Edits</text>
+          <text x="50" y="28" class="gha-tile-sub" fill="#93c5fd" text-anchor="middle">in-IDE</text>
+          <rect x="106" y="0" width="100" height="36" class="gha-chip" fill="#0a1428" stroke="#60a5fa"/>
+          <text x="156" y="15" class="gha-chip-name" text-anchor="middle">Copilot CLI</text>
+          <text x="156" y="28" class="gha-tile-sub" fill="#93c5fd" text-anchor="middle">per-slice worker</text>
+          <rect x="212" y="0" width="118" height="36" class="gha-chip" fill="#0a1428" stroke="#60a5fa"/>
+          <text x="271" y="15" class="gha-chip-name" text-anchor="middle">Cloud Agent</text>
+          <text x="271" y="28" class="gha-tile-sub" fill="#93c5fd" text-anchor="middle">issue → PR · @copilot</text>
+          <rect x="336" y="0" width="100" height="36" class="gha-chip" fill="#0a1428" stroke="#60a5fa"/>
+          <text x="386" y="15" class="gha-chip-name" text-anchor="middle">Code Review</text>
+          <text x="386" y="28" class="gha-tile-sub" fill="#93c5fd" text-anchor="middle">PR-native</text>
+          <rect x="442" y="0" width="100" height="36" class="gha-chip" fill="#0a1428" stroke="#60a5fa"/>
+          <text x="492" y="15" class="gha-chip-name" text-anchor="middle">Spaces</text>
+          <text x="492" y="28" class="gha-tile-sub" fill="#93c5fd" text-anchor="middle">curated context</text>
+          <rect x="548" y="0" width="100" height="36" class="gha-chip" fill="#0a1428" stroke="#60a5fa"/>
+          <text x="598" y="15" class="gha-chip-name" text-anchor="middle">Multi-model</text>
+          <text x="598" y="28" class="gha-tile-sub" fill="#93c5fd" text-anchor="middle">Claude · GPT · Gemini</text>
+          <rect x="654" y="0" width="100" height="36" class="gha-chip" fill="#0a1428" stroke="#60a5fa"/>
+          <text x="704" y="15" class="gha-chip-name" text-anchor="middle">MCP + SDK</text>
+          <text x="704" y="28" class="gha-tile-sub" fill="#93c5fd" text-anchor="middle">tool surface</text>
+          <rect x="760" y="0" width="120" height="36" class="gha-chip" fill="#0a1428" stroke="#60a5fa"/>
+          <text x="820" y="15" class="gha-chip-name" text-anchor="middle">Metrics API</text>
+          <text x="820" y="28" class="gha-tile-sub" fill="#93c5fd" text-anchor="middle">adoption + flow</text>
+        </g>
+
+        <rect x="20" y="570" width="900" height="78" class="gha-band" fill="url(#ghaBgFoundation)" stroke="#94a3b8"/>
+        <text x="38" y="592" class="gha-band-title" fill="#cbd5e1">GitHub platform — the foundation</text>
+        <g transform="translate(38,602)">
+          <rect x="0"   y="0" width="160" height="38" class="gha-chip" fill="#020617" stroke="#64748b"/>
+          <text x="80" y="16" class="gha-chip-foundation" text-anchor="middle">GHAS</text>
+          <text x="80" y="30" class="gha-tile-sub" text-anchor="middle">CodeQL · Autofix · Dependabot</text>
+          <rect x="166" y="0" width="160" height="38" class="gha-chip" fill="#020617" stroke="#64748b"/>
+          <text x="246" y="16" class="gha-chip-foundation" text-anchor="middle">GitHub Actions</text>
+          <text x="246" y="30" class="gha-tile-sub" text-anchor="middle">PR gates · CI/CD</text>
+          <rect x="332" y="0" width="178" height="38" class="gha-chip" fill="#020617" stroke="#64748b"/>
+          <text x="421" y="16" class="gha-chip-foundation" text-anchor="middle">Issues · PRs · Projects</text>
+          <text x="421" y="30" class="gha-tile-sub" text-anchor="middle">system of record · data residency</text>
+          <rect x="516" y="0" width="160" height="38" class="gha-chip" fill="#020617" stroke="#64748b"/>
+          <text x="596" y="16" class="gha-chip-foundation" text-anchor="middle">SCIM · Audit Log</text>
+          <text x="596" y="30" class="gha-tile-sub" text-anchor="middle">single chain · SOC 2 / FedRAMP</text>
+          <rect x="682" y="0" width="200" height="38" class="gha-chip" fill="#020617" stroke="#64748b"/>
+          <text x="782" y="16" class="gha-chip-foundation" text-anchor="middle">IP Indemnification</text>
+          <text x="782" y="30" class="gha-tile-sub" text-anchor="middle">Microsoft Customer Copyright Commitment</text>
+        </g>
+      </svg>
+      <figcaption class="px-5 py-3 text-xs text-slate-400 border-t border-slate-700/50 bg-slate-900/40">Read top-down: the <span class="text-emerald-400">green band</span> is what you ship. The <span class="text-amber-400">amber band</span> is Plan Forge — the harness that produces those outcomes. The <span class="text-blue-400">blue band</span> is the GitHub Copilot substrate the harness sits on. The <span class="text-slate-400">slate band</span> is the GitHub platform foundation everything inherits.</figcaption>
+      </figure>
+
+      <h2 id="the-four-pillars">The four pillars — what the harness actually does</h2>
+
+      <p>Plan Forge organises into four pillars. Each card is plain English; click <em>What's inside</em> for the component-level detail and the manual chapter that goes deep.</p>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 my-6">
+
+        <div class="rounded-lg border border-amber-700/40 bg-slate-900/40 p-4">
+          <div class="text-amber-400 font-bold text-sm mb-2 uppercase tracking-wider">1 · Orchestration</div>
+          <p class="text-sm text-slate-200 mb-2 font-semibold">Plans become slices, slices become work, work becomes audited PRs.</p>
+          <p class="text-sm text-slate-400 mb-2">An idea is interviewed into a hardened plan. The plan is split into safe-sized slices. Each slice runs in its own worktree, gets reviewed by 20 specialised reviewer agents, and only ships if its validation gate passes. The platform learns from every run and builds new skills automatically.</p>
+          <details class="text-xs text-slate-500">
+            <summary class="cursor-pointer hover:text-slate-300 mb-1">What's inside &amp; where to read more</summary>
+            <p class="text-slate-400 mt-2">Crucible interview funnel · Tempering quality scorer · Inner Loop competitive worktrees · Forge-Master chat-first router · 20 read-only reviewer agents · 14 slash-command skills · Reflexion retry · auto-skill library · lifecycle hooks (pre/post slice).</p>
+            <p class="text-slate-400 mt-2">→ <a href="crucible.html" class="text-amber-400 hover:underline">Crucible</a> · <a href="inner-loop.html" class="text-amber-400 hover:underline">Inner Loop</a> · <a href="forge-master.html" class="text-amber-400 hover:underline">Forge-Master</a> · <a href="instructions-agents.html" class="text-amber-400 hover:underline">Instructions &amp; Agents</a> · <a href="agent-factory-recipe.html" class="text-amber-400 hover:underline">Agent Factory recipe</a> · <a href="multi-agent.html" class="text-amber-400 hover:underline">Multi-agent</a></p>
+          </details>
+        </div>
+
+        <div class="rounded-lg border border-amber-700/40 bg-slate-900/40 p-4">
+          <div class="text-amber-400 font-bold text-sm mb-2 uppercase tracking-wider">2 · Memory</div>
+          <p class="text-sm text-slate-200 mb-2 font-semibold">Context quality compounds across teams instead of being a per-repo lottery.</p>
+          <p class="text-sm text-slate-400 mb-2">Three tiers: a live event stream you can watch right now, a deterministic file trail every team can audit and grep, and an optional semantic store that lets one team's lessons surface automatically when another team hits a similar problem. Lessons learned in service A become defaults in service B without anyone filing a knowledge-base article.</p>
+          <details class="text-xs text-slate-500">
+            <summary class="cursor-pointer hover:text-slate-300 mb-1">What's inside &amp; where to read more</summary>
+            <p class="text-slate-400 mt-2">L1 Hub — live WebSocket events · L2 Files — <code>.forge/</code> append-only audit trail · L3 OpenBrain — pgvector semantic store · cross-team federation (read-only) · bridge-and-flush durability · <code>search_thoughts</code> · <code>brain_recall</code>.</p>
+            <p class="text-slate-400 mt-2">→ <a href="memory-architecture.html" class="text-amber-400 hover:underline">Memory architecture</a></p>
+          </details>
+        </div>
+
+        <div class="rounded-lg border border-amber-700/40 bg-slate-900/40 p-4">
+          <div class="text-amber-400 font-bold text-sm mb-2 uppercase tracking-wider">3 · Eval &amp; Drift</div>
+          <p class="text-sm text-slate-200 mb-2 font-semibold">Quality, not just adoption — the half the GitHub Metrics API doesn't cover.</p>
+          <p class="text-sm text-slate-400 mb-2">Three frontier models score the same change independently and a reviewer model produces a 0–100 consensus number. Drift from your architecture is measured per commit. RCA outputs become PR proposals, not tickets. Cost is previewed before the run, not after the bill.</p>
+          <details class="text-xs text-slate-500">
+            <summary class="cursor-pointer hover:text-slate-300 mb-1">What's inside &amp; where to read more</summary>
+            <p class="text-slate-400 mt-2">Quorum (Claude + GPT + Gemini) · 0–100 LLM-as-judge consensus · <code>forge_drift_report</code> per-commit · <code>forge_health_trend</code> with trajectories · <code>forge_estimate_quorum</code> (cancellable cost preview) · <code>forge_fix_proposal</code> (RCA → PR) · % code by AI · MTTR · drift score.</p>
+            <p class="text-slate-400 mt-2">→ <a href="health-dna.html" class="text-amber-400 hover:underline">Health DNA</a> · <a href="self-deterministic-loop.html" class="text-amber-400 hover:underline">Self-deterministic loop</a> · <a href="dashboard.html" class="text-amber-400 hover:underline">Dashboard</a></p>
+          </details>
+        </div>
+
+        <div class="rounded-lg border border-amber-700/40 bg-slate-900/40 p-4">
+          <div class="text-amber-400 font-bold text-sm mb-2 uppercase tracking-wider">4 · Governance &amp; Self-Repair</div>
+          <p class="text-sm text-slate-200 mb-2 font-semibold">Audit-grade by default. Approve from your phone. The platform reports its own bugs upstream.</p>
+          <p class="text-sm text-slate-400 mb-2">Hooks fire before every deploy and after every slice. Bugs deduplicate themselves. A separate read-only watcher tails any in-flight run. When the harness itself misbehaves, it files a structured bug report against its own upstream — you're never holding the bag alone on a platform issue.</p>
+          <details class="text-xs text-slate-500">
+            <summary class="cursor-pointer hover:text-slate-300 mb-1">What's inside &amp; where to read more</summary>
+            <p class="text-slate-400 mt-2">LiveGuard hooks (preDeploy / postSlice / preAgentHandoff) · Bug Registry with fingerprint dedupe · Incident Capture + MTTR · Audit Loop (scan → triage → spawn-worker fix) · <code>forge_runbook</code> + Deploy Journal · Remote Bridge (Slack / Teams / PagerDuty / Discord / Telegram) · Watcher (read-only by schema) · <code>forge_meta_bug_file</code> self-repair.</p>
+            <p class="text-slate-400 mt-2">→ <a href="what-is-liveguard.html" class="text-amber-400 hover:underline">What is LiveGuard</a> · <a href="liveguard-dashboard.html" class="text-amber-400 hover:underline">LiveGuard dashboard</a> · <a href="audit-loop.html" class="text-amber-400 hover:underline">Audit loop</a> · <a href="bug-registry.html" class="text-amber-400 hover:underline">Bug registry</a> · <a href="watcher.html" class="text-amber-400 hover:underline">Watcher</a> · <a href="remote-bridge.html" class="text-amber-400 hover:underline">Remote bridge</a></p>
+          </details>
+        </div>
+
+      </div>
+
+      <h2 id="what-we-dont-duplicate">What we deliberately don't try to do</h2>
+
+      <p>Discipline matters. A platform that tries to own everything ends up owning nothing well. Plan Forge does <em>not</em>:</p>
+
+      <ul>
+        <li>Replicate the Copilot Metrics API — we add quality metrics; we don't re-implement adoption metrics</li>
+        <li>Embed or fork the Copilot Cloud Agent runtime — we dispatch to it</li>
+        <li>Compete with <code>github/github-mcp-server</code> — we use it; we ship our own MCP server only for orchestration concerns</li>
+        <li>Reinvent AGENTS.md, Skills, or MCP — we adopt the open standards; we contribute back when we learn something</li>
+      </ul>
+
+      <p>If GitHub ships a feature that subsumes a Plan Forge capability, the right answer is to delete the Plan Forge code and use GitHub's. We're explicit about that in the project README.</p>
+
+      <h2 id="try-it">Try it — on your own, on your own time</h2>
+
+      <p>Plan Forge is MIT-licensed and open source. There's no sales call, no pilot agreement, no licence to procure. If you already have GitHub Copilot and GHAS, you have everything you need to evaluate the full stack against your own repos this afternoon.</p>
+
+      <div class="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5 my-6">
+        <ol class="list-decimal list-inside text-sm text-slate-300 space-y-3 mb-0">
+          <li><strong class="text-slate-200">Install in one repo</strong>. Clone <code>github.com/srnichols/plan-forge</code>, run <code>setup.ps1 -Agent claude</code> (or <code>--agent codex</code> / <code>--agent cursor</code> / <code>--agent copilot</code>). Generate Project Principles + initial instruction files via <code>forge_run_skill /onboarding</code>. Wire <code>action.yml</code> into GitHub Actions for PR-time gates. Walk-through: <a href="quickstart-install.html" class="text-amber-400 hover:underline">install</a> + <a href="quickstart-first-plan.html" class="text-amber-400 hover:underline">first plan</a>.</li>
+          <li><strong class="text-slate-200">Run a real task end-to-end</strong>. Take one in-flight ticket through the full pipeline: <a href="crucible.html" class="text-amber-400 hover:underline">Crucible</a> → <a href="writing-plans.html" class="text-amber-400 hover:underline">plan</a> → execution → reviewer agents → <a href="bug-registry.html" class="text-amber-400 hover:underline">Bug Registry</a> if you hit one. The trajectory is captured automatically; you can replay it from the <a href="dashboard.html" class="text-amber-400 hover:underline">dashboard</a>.</li>
+          <li><strong class="text-slate-200">Add a second repo, turn on what makes sense for you</strong>. Cloud Agent dispatch (<code>--worker copilot-coding-agent</code>) for async bulk work. <a href="what-is-liveguard.html" class="text-amber-400 hover:underline">LiveGuard</a> hooks if you have a deploy pipeline. The <a href="audit-loop.html" class="text-amber-400 hover:underline">Audit Loop</a> if you want a Coverity-style scan over an existing module. Everything is opt-in.</li>
+          <li><strong class="text-slate-200">Read the dashboard</strong>. The six KPIs from <a href="#what-you-get" class="text-amber-400 hover:underline">"What you get"</a> populate themselves as you run plans. Compare to your baseline. Decide whether to roll wider on your own schedule.</li>
+        </ol>
+      </div>
+
+      <p class="text-sm text-slate-400 italic"><strong class="text-slate-300">Cost to evaluate: zero beyond your existing Copilot + GHAS subscription.</strong> No new licences, no headcount, no infrastructure, no procurement cycle. Bring your own GHCP partner relationship if you have one — Plan Forge composes on top of whatever Copilot Enterprise tier and support arrangement you already use.</p>
+
+      <p class="text-sm text-slate-400">Stuck? File an issue at <a href="https://github.com/srnichols/plan-forge/issues" class="text-amber-400 hover:underline">github.com/srnichols/plan-forge/issues</a>, or open a discussion. Plan Forge ships <code>forge_meta_bug_file</code> precisely so problems with the platform get reported back automatically — you're not on your own.</p>
+
+      <hr class="my-12 border-slate-700/50" />
+
+      <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Architect appendix · supporting context for technical readers</p>
 
       <h2 id="the-signal-april-2026">The signal: GitHub said this out loud in April 2026</h2>
 
@@ -94,7 +409,12 @@
 
       <h2 id="how-plan-forge-composes">How Plan Forge composes with each GitHub primitive</h2>
 
-      <table>
+      <p class="text-sm text-slate-400">A 16-row reference for architects mapping each GitHub-native primitive to the Plan Forge surface that consumes it. Click to expand.</p>
+
+      <details class="my-4 rounded-lg border border-slate-700/50 bg-slate-900/30">
+        <summary class="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-200 hover:text-slate-100">Per-primitive composition table (16 rows)</summary>
+        <div class="px-4 pb-4">
+        <table>
         <thead><tr><th>GitHub primitive</th><th>How Plan Forge consumes it</th><th>Where in Plan Forge</th></tr></thead>
         <tbody>
           <tr><td><strong class="text-slate-200">Copilot Cloud Agent</strong></td><td>Plan Forge dispatches plan slices to CCA via <code>gh issue create --assignee @copilot</code>. Trajectories captured to <code>.forge/trajectories/&lt;plan-slug&gt;.jsonl</code></td><td><code>pforge-mcp/orchestrator.mjs</code> (<code>--worker copilot-coding-agent</code> mode)</td></tr>
@@ -115,36 +435,8 @@
           <tr><td><strong class="text-slate-200">Org runner controls</strong></td><td>Plan Forge dispatched plans inherit the org's runner policy. No conflict, no override needed</td><td>docs reference</td></tr>
         </tbody>
       </table>
-
-      <h2 id="composition-picture">The composition picture</h2>
-
-      <pre><code>┌─────────────────────────────────────────────────────────────────────────┐
-│                       PLAN FORGE (orchestration layer)                  │
-│   plans · slices · scope contracts · gates · cost · drift · memory      │
-└─────────────────────────────────────────────────────────────────────────┘
-                                    │
-                ┌───────────────────┼───────────────────┐
-                ▼                   ▼                   ▼
-┌─────────────────────┐  ┌─────────────────┐  ┌─────────────────────┐
-│ AGENTS.md / Skills  │  │  MCP servers    │  │  GitHub Actions     │
-│ .github/instructions│  │  (Plan Forge,   │  │  (Cloud Agent       │
-│ .github/agents      │  │   GitHub MCP,   │  │   runtime, plus     │
-│ .github/hooks       │  │   org tools)    │  │   user CI)          │
-└─────────────────────┘  └─────────────────┘  └─────────────────────┘
-        │                        │                       │
-        └────────────────────────┼───────────────────────┘
-                                 ▼
-        ┌─────────────────────────────────────────────────┐
-        │  GitHub Copilot Cloud Agent (the agent runtime)  │
-        │  + Copilot Enterprise + GHAS + Metrics API       │
-        └─────────────────────────────────────────────────┘
-                                 │
-                                 ▼
-                    ┌─────────────────────────┐
-                    │      Customer's repos    │
-                    └─────────────────────────┘</code></pre>
-
-      <p>Read top-to-bottom: Plan Forge orchestrates a plan, generates the GitHub-native customization files, dispatches slices to the agent runtime via the integration standards, and runs validation against the customer's own repos. <strong class="text-slate-200">Every box except the top one is GitHub-native.</strong></p>
+        </div>
+      </details>
 
       <h2 id="why-this-matters-consolidation-thesis">Why this matters for the consolidation thesis</h2>
 
@@ -170,18 +462,88 @@
 
       <p>See <a href="enterprise-reference-architecture.html#microsoft-foundry-variant" class="text-amber-400 hover:underline">Reference Architecture — Microsoft Foundry variant</a> for the full picture.</p>
 
-      <h2 id="what-plan-forge-does-not-duplicate">What Plan Forge does <em>not</em> duplicate</h2>
+      <h2 id="explore-deeper">Explore deeper</h2>
 
-      <p>Discipline matters. Plan Forge does not:</p>
+      <p>If the four pillars and the picture earned a closer look, jump straight to the chapters that go deep. Grouped for shoppers, builders, and operators.</p>
 
-      <ul>
-        <li>Replicate the Copilot Metrics API (we add quality metrics; we don't re-implement adoption metrics)</li>
-        <li>Embed or fork the Copilot Cloud Agent runtime (we dispatch to it)</li>
-        <li>Compete with <code>github/github-mcp-server</code> (we use it; we ship our own MCP server for orchestration concerns)</li>
-        <li>Reinvent AGENTS.md, Skills, or MCP (we adopt the open standards; we contribute back when we learn something)</li>
-      </ul>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 my-6">
 
-      <p>If GitHub ships a feature that subsumes a Plan Forge capability, the right answer is to delete the Plan Forge code and use GitHub's. We're explicit about that in the project README.</p>
+        <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
+          <div class="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-3">Get started</div>
+          <ul class="text-sm space-y-1.5 list-none pl-0 mb-0">
+            <li><a href="what-is-plan-forge.html" class="text-amber-400 hover:underline">What is Plan Forge?</a></li>
+            <li><a href="how-it-works.html" class="text-amber-400 hover:underline">How it works</a></li>
+            <li><a href="quickstart-install.html" class="text-amber-400 hover:underline">Quickstart — install</a></li>
+            <li><a href="quickstart-first-plan.html" class="text-amber-400 hover:underline">Quickstart — first plan</a></li>
+            <li><a href="quickstart-first-deploy.html" class="text-amber-400 hover:underline">Quickstart — first deploy</a></li>
+            <li><a href="cli-reference.html" class="text-amber-400 hover:underline">CLI reference</a></li>
+          </ul>
+        </div>
+
+        <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
+          <div class="text-xs font-bold text-amber-400 uppercase tracking-wider mb-3">Core concepts</div>
+          <ul class="text-sm space-y-1.5 list-none pl-0 mb-0">
+            <li><a href="crucible.html" class="text-amber-400 hover:underline">Crucible — interview funnel</a></li>
+            <li><a href="writing-plans.html" class="text-amber-400 hover:underline">Writing plans</a></li>
+            <li><a href="inner-loop.html" class="text-amber-400 hover:underline">Inner loop — competitive worktrees</a></li>
+            <li><a href="forge-master.html" class="text-amber-400 hover:underline">Forge-Master — chat router</a></li>
+            <li><a href="memory-architecture.html" class="text-amber-400 hover:underline">Memory architecture (L1/L2/L3)</a></li>
+            <li><a href="self-deterministic-loop.html" class="text-amber-400 hover:underline">Self-deterministic loop</a></li>
+            <li><a href="multi-agent.html" class="text-amber-400 hover:underline">Multi-agent setup</a></li>
+            <li><a href="instructions-agents.html" class="text-amber-400 hover:underline">Instructions &amp; agents</a></li>
+          </ul>
+        </div>
+
+        <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
+          <div class="text-xs font-bold text-blue-400 uppercase tracking-wider mb-3">Operate &amp; observe</div>
+          <ul class="text-sm space-y-1.5 list-none pl-0 mb-0">
+            <li><a href="dashboard.html" class="text-amber-400 hover:underline">Dashboard</a></li>
+            <li><a href="health-dna.html" class="text-amber-400 hover:underline">Health DNA</a></li>
+            <li><a href="what-is-liveguard.html" class="text-amber-400 hover:underline">What is LiveGuard</a></li>
+            <li><a href="liveguard-dashboard.html" class="text-amber-400 hover:underline">LiveGuard dashboard</a></li>
+            <li><a href="liveguard-runbooks.html" class="text-amber-400 hover:underline">LiveGuard runbooks</a></li>
+            <li><a href="watcher.html" class="text-amber-400 hover:underline">Watcher — read-only</a></li>
+            <li><a href="audit-loop.html" class="text-amber-400 hover:underline">Audit loop</a></li>
+            <li><a href="bug-registry.html" class="text-amber-400 hover:underline">Bug registry</a></li>
+            <li><a href="remote-bridge.html" class="text-amber-400 hover:underline">Remote bridge (Slack/Teams)</a></li>
+          </ul>
+        </div>
+
+        <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
+          <div class="text-xs font-bold text-purple-400 uppercase tracking-wider mb-3">Architecture &amp; deploy</div>
+          <ul class="text-sm space-y-1.5 list-none pl-0 mb-0">
+            <li><a href="enterprise-reference-architecture.html" class="text-amber-400 hover:underline">Enterprise reference architecture</a></li>
+            <li><a href="enterprise-deployment.html" class="text-amber-400 hover:underline">Enterprise deployment</a></li>
+            <li><a href="compliance-and-data-residency.html" class="text-amber-400 hover:underline">Compliance &amp; data residency</a></li>
+            <li><a href="customization.html" class="text-amber-400 hover:underline">Customization</a></li>
+            <li><a href="fleet-operator-playbook.html" class="text-amber-400 hover:underline">Fleet operator playbook</a></li>
+          </ul>
+        </div>
+
+        <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
+          <div class="text-xs font-bold text-cyan-400 uppercase tracking-wider mb-3">GitHub stack alignment</div>
+          <ul class="text-sm space-y-1.5 list-none pl-0 mb-0">
+            <li><a href="plan-forge-on-the-github-stack.html" class="text-amber-400 hover:underline">Plan Forge on the GitHub stack (Appendix H)</a></li>
+            <li><a href="agent-factory-recipe.html" class="text-amber-400 hover:underline">Agent factory recipe</a></li>
+            <li><a href="mcp-server-quickstart.html" class="text-amber-400 hover:underline">MCP server quickstart</a></li>
+            <li><a href="mcp-server-reference.html" class="text-amber-400 hover:underline">MCP server reference</a></li>
+            <li><a href="stack-notes.html" class="text-amber-400 hover:underline">Stack notes</a></li>
+          </ul>
+        </div>
+
+        <div class="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
+          <div class="text-xs font-bold text-rose-400 uppercase tracking-wider mb-3">Reference</div>
+          <ul class="text-sm space-y-1.5 list-none pl-0 mb-0">
+            <li><a href="glossary.html" class="text-amber-400 hover:underline">Glossary</a></li>
+            <li><a href="quick-reference.html" class="text-amber-400 hover:underline">Quick reference</a></li>
+            <li><a href="instructions-agents-reference.html" class="text-amber-400 hover:underline">Instructions &amp; agents reference</a></li>
+            <li><a href="liveguard-tools.html" class="text-amber-400 hover:underline">LiveGuard tools</a></li>
+            <li><a href="testbed.html" class="text-amber-400 hover:underline">Testbed</a></li>
+            <li><a href="lessons-learned.html" class="text-amber-400 hover:underline">Lessons learned</a></li>
+          </ul>
+        </div>
+
+      </div>
 
       <div id="chapter-prev-next"></div>
     </div></main>

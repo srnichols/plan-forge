@@ -21,6 +21,7 @@ import { WebSocket } from "ws";
 import { readFileSync, existsSync } from "node:fs";
 import { resolve, basename } from "node:path";
 import { appendEvent, SECURITY_RISK } from "./orchestrator.mjs";
+import { authenticate } from "./auth/index.mjs";
 
 // ─── Constants ────────────────────────────────────────────────────────
 
@@ -713,6 +714,34 @@ export class BridgeManager {
    */
   getPendingApprovals() {
     return this._approvalGate?.getPendingApprovals() ?? [];
+  }
+
+  /**
+   * Authenticate an incoming approval request against the configured
+   * `bridge.approvalSecret`. Returns `{ ok: true }` when no secret is
+   * configured (permissive / local mode).
+   *
+   * Accepts the token via:
+   *   - `Authorization: Bearer <secret>` header, OR
+   *   - `?token=<secret>` query parameter (browser-friendly Telegram links)
+   *
+   * @param {Object} req - Incoming request context with `headers` map and
+   *   optional `query` object (Express-style).
+   * @returns {{ ok: boolean, error?: string }}
+   */
+  authenticateApproval(req) {
+    const secret = this.config?.approvalSecret;
+    if (!secret) return { ok: true };
+
+    // Prefer header-based bearer auth via the shared auth module
+    const headerResult = authenticate(req, { provider: "bearer", token: secret });
+    if (headerResult.ok) return { ok: true };
+
+    // Fallback: query-parameter token for browser-friendly approval links
+    const queryToken = req?.query?.token ?? null;
+    if (queryToken && queryToken === secret) return { ok: true };
+
+    return { ok: false, error: "Unauthorized — invalid or missing approval secret" };
   }
 
   /**

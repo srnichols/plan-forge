@@ -611,3 +611,59 @@ html.light-mode .mobile-sidebar-btn:hover { color: #0f172a !important; }
 
 /* Code blocks intentionally stay dark in light mode for readability */
 /* (no overrides for .cmd-block / pre) */
+
+/* ─── Back-to-top button ─── */
+.back-to-top-btn {
+  position: fixed;
+  bottom: 1.25rem;
+  right: 1.25rem;
+  z-index: 99;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 9999px;
+  color: #f59e0b;
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(0.5rem);
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease, background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+.back-to-top-btn.visible {
+  opacity: 0.92;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+.back-to-top-btn:hover {
+  opacity: 1;
+  background: #f59e0b;
+  border-color: #f59e0b;
+  color: #0b1220;
+}
+.back-to-top-btn:focus-visible {
+  outline: 2px solid #f59e0b;
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .back-to-top-btn { transition: opacity 0.1s linear; transform: none !important; }
+}
+@media print {
+  .back-to-top-btn { display: none !important; }
+}
+html.light-mode .back-to-top-btn {
+  background: #ffffff;
+  border-color: #e2e8f0;
+  color: #d97706;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
+}
+html.light-mode .back-to-top-btn:hover {
+  background: #d97706;
+  border-color: #d97706;
+  color: #ffffff;
+}

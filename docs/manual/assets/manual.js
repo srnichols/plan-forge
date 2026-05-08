@@ -303,6 +303,33 @@
     });
   }
 
+  // ─── Back-to-top button (long-page rescue) ───
+  function initBackToTop() {
+    // Inject the button once (idempotent if called twice)
+    if (document.getElementById("back-to-top-btn")) return;
+    const btn = document.createElement("button");
+    btn.id = "back-to-top-btn";
+    btn.type = "button";
+    btn.className = "back-to-top-btn";
+    btn.setAttribute("aria-label", "Back to top of page");
+    btn.title = "Back to top";
+    btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"/></svg>';
+    document.body.appendChild(btn);
+
+    const SHOW_AFTER = 400; // px scrolled before the button appears
+    const onScroll = () => {
+      if (window.scrollY > SHOW_AFTER) btn.classList.add("visible");
+      else btn.classList.remove("visible");
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+
+    btn.addEventListener("click", () => {
+      const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      window.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
+    });
+  }
+
   // ─── Sidebar toggle (mobile slide-out + desktop collapse) ───
   function initMobileSidebar() {
     const btn = document.getElementById("mobile-sidebar-btn");
@@ -680,6 +707,7 @@
     buildPrevNext();
     initCopyButtons();
     initMobileSidebar();
+    initBackToTop();
     initSearch();
   });
 })();

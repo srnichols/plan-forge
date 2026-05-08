@@ -11,14 +11,14 @@
     { id: "quickstart-install",      file: "quickstart-install.html",      num: "Q1", title: "Install",                act: "Quickstart" },
     { id: "quickstart-first-plan",   file: "quickstart-first-plan.html",   num: "Q2", title: "Your First Plan",         act: "Quickstart" },
     { id: "quickstart-first-deploy", file: "quickstart-first-deploy.html", num: "Q3", title: "Review & Ship",           act: "Quickstart" },
-    // ─── Act I — Smelt (intake → scope contract) ───
+    // ─── Part I — Smelt (intake → scope contract) ───
     { id: "what-is-plan-forge",  file: "what-is-plan-forge.html",  num: "1",  title: "What Is Plan Forge?",      act: "I" },
     { id: "how-it-works",        file: "how-it-works.html",        num: "2",  title: "How It Works",             act: "I" },
     { id: "installation",        file: "installation.html",        num: "3",  title: "Installation",             act: "I" },
     { id: "writing-plans",       file: "writing-plans.html",       num: "4",  title: "Writing Plans That Work",  act: "I" },
     { id: "crucible",            file: "crucible.html",            num: "5",  title: "Crucible (Idea Smelting)", act: "I" },
     { id: "spec-kit-interop",    file: "spec-kit-interop.html",    num: "",   title: "Spec Kit Interop",         act: "I" },
-    // ─── Act II — Forge (execute → ship) ───
+    // ─── Part II — Forge (execute → ship) ───
     { id: "your-first-plan",     file: "your-first-plan.html",     num: "6",  title: "Your First Plan",          act: "II" },
     { id: "dashboard",           file: "dashboard.html",           num: "7",  title: "The Dashboard",            act: "II" },
     { id: "dashboard-settings",  file: "dashboard-settings.html",  num: "",   title: "Dashboard — Settings",     act: "II" },
@@ -40,13 +40,13 @@
     { id: "competitive-loop",    file: "competitive-loop.html",    num: "",   title: "The Competitive Loop (Deep Dive)", act: "II" },
     { id: "audit-loop",          file: "audit-loop.html",          num: "",   title: "Audit Loop (Deep Dive)",            act: "II" },
     { id: "troubleshooting",     file: "troubleshooting.html",     num: "15", title: "Troubleshooting",          act: "II" },
-    // ─── Act III — Guard (post-deploy defense) ───
+    // ─── Part III — Guard (post-deploy defense) ───
     { id: "what-is-liveguard",   file: "what-is-liveguard.html",   num: "16", title: "What Is LiveGuard?",        act: "III" },
     { id: "liveguard-tools",     file: "liveguard-tools.html",     num: "17", title: "LiveGuard Tools Reference", act: "III" },
     { id: "liveguard-dashboard", file: "liveguard-dashboard.html", num: "18", title: "The LiveGuard Dashboard",    act: "III" },
     { id: "watcher",             file: "watcher.html",             num: "19", title: "The Watcher",               act: "III" },
     { id: "remote-bridge",       file: "remote-bridge.html",       num: "20", title: "The Remote Bridge",         act: "III" },
-    // ─── Act IV — Learn (memory & retrospectives) ───
+    // ─── Part IV — Learn (memory & retrospectives) ───
     { id: "bug-registry",        file: "bug-registry.html",        num: "21", title: "The Bug Registry",           act: "IV" },
     { id: "testbed",             file: "testbed.html",             num: "22", title: "The Testbed",                act: "IV" },
     { id: "health-dna",          file: "health-dna.html",          num: "23", title: "Health DNA",                 act: "IV" },
@@ -71,6 +71,24 @@
     { id: "about-author",         file: "about-author.html",        num: "",   title: "About the Author",          act: "Appendix" },
     { id: "book-index",           file: "book-index.html",          num: "O",  title: "Book Index (A\u2013Z)",     act: "Appendix" },
   ];
+
+  // ─── Chapter status registry ───
+  // Maps chapter id → { label, version } for status pills in the sidebar and index page.
+  // Labels: "NEW" | "UPDATED" | "BETA"
+  const STATUS = {
+    "inner-loop":                    { label: "NEW",     version: "v2.57" },
+    "self-deterministic-loop":       { label: "NEW",     version: "v2.58" },
+    "competitive-loop":              { label: "NEW",     version: "v2.58" },
+    "forge-master":                  { label: "NEW",     version: "v2.78" },
+    "dashboard-forge-master":        { label: "NEW",     version: "v2.78" },
+    "audit-loop":                    { label: "NEW",     version: "v2.80" },
+    "spec-kit-interop":              { label: "NEW",     version: "v2.70" },
+    "plan-forge-on-the-github-stack":{ label: "UPDATED", version: "v2.75" },
+  };
+
+  // ─── Edition ───
+  // Single source of truth for the manual edition badge shown in the meta-bar.
+  const EDITION = "2.92.0-dev";
 
   // Detect current page
   const currentFile = location.pathname.split("/").pop() || "index.html";
@@ -157,7 +175,7 @@
     frag.appendChild(searchWrap);
 
     // Group chapters by act so we can render collapsible sections
-    const actLabels = { Quickstart: "⚡ Quickstart", I: "Act I — Smelt", II: "Act II — Forge", III: "Act III — Guard", IV: "Act IV — Learn", Appendix: "Appendices" };
+    const actLabels = { Quickstart: "⚡ Quickstart", I: "Part I — Smelt", II: "Part II — Forge", III: "Part III — Guard", IV: "Part IV — Learn", Appendix: "Appendices" };
     const actOrder = [];
     const actGroups = {};
     CHAPTERS.forEach((ch, i) => {
@@ -193,7 +211,9 @@
         const a = document.createElement("a");
         a.href = ch.file;
         a.className = "sidebar-link" + (idx === currentIdx ? " active" : "");
-        a.innerHTML = '<span class="chapter-num">' + ch.num + "</span> " + ch.title;
+        const st = STATUS[ch.id];
+        a.innerHTML = '<span class="chapter-num">' + ch.num + "</span> " + ch.title +
+          (st ? ' <span class="status-pill status-pill--' + st.label.toLowerCase() + '">' + st.label + ' ' + st.version + '</span>' : '');
         childBox.appendChild(a);
       });
       frag.appendChild(childBox);
@@ -610,7 +630,7 @@
     { t: "End-to-End Workflow: WhatsApp to Shipped PR", u: "remote-bridge.html#end-to-end-workflow" },
     // Ch 24 — Memory Architecture
     { t: "Unified Memory Across Agents", u: "memory-architecture.html#unified-memory-across-agents" },
-    // Spec Kit Interop (Act I integration)
+    // Spec Kit Interop (Part I integration)
     { t: "Spec Kit Import Flow", u: "spec-kit-interop.html#import-flow" },
     { t: "Spec Kit Import Procedure", u: "spec-kit-interop.html#import-procedure" },
     { t: "Spec Kit Ecosystem Extensions", u: "spec-kit-interop.html#ecosystem-extensions" },
@@ -701,9 +721,24 @@
     });
   }
 
+  // ─── Meta-bar (index page only) ───
+  // Renders a thin informational bar above the chapter grid showing the edition,
+  // content counts, and a What's New link.
+  function buildMetaBar() {
+    const el = document.getElementById("meta-bar");
+    if (!el) return;
+    el.innerHTML =
+      '<span class="meta-bar__edition">v' + EDITION + '</span>' +
+      '<span class="meta-bar__sep">·</span>' +
+      '<span>Quickstart · 24 chapters · 14 appendices · 4 parts</span>' +
+      '<span class="meta-bar__sep">·</span>' +
+      '<a href="https://github.com/srnichols/plan-forge/blob/main/CHANGELOG.md" class="meta-bar__link" target="_blank" rel="noopener">What\'s New ↗</a>';
+  }
+
   // ─── Init ───
   document.addEventListener("DOMContentLoaded", () => {
     buildSidebar();
+    buildMetaBar();
     buildPrevNext();
     initCopyButtons();
     initMobileSidebar();

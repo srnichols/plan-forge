@@ -12,7 +12,7 @@
   <meta property="og:image" content="https://planforge.software/assets/brand/og-card-v2.webp" />
   <meta name="twitter:card" content="summary" />
   <meta name="twitter:title" content="Plan Forge Manual — The Forge Guide" />
-  <meta name="twitter:description" content="The complete Plan Forge user manual. Quickstart + 24 chapters + 14 appendices across four Acts (Smelt, Forge, Guard, Learn). Learn to run the AI-Native SDLC Forge Shop end-to-end." />
+  <meta name="twitter:description" content="The complete Plan Forge user manual. Quickstart + 24 chapters + 14 appendices across four Parts (Smelt, Forge, Guard, Learn). Learn to run the AI-Native SDLC Forge Shop end-to-end." />
   <link rel="canonical" href="https://planforge.software/manual/" />
   <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
   <script src="https://cdn.tailwindcss.com"></script>
@@ -21,7 +21,52 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="../assets/shared-styles.css" />
   <link rel="stylesheet" href="assets/manual.css" />
+  <style>
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      font-size: 0.625rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      padding: 0 5px;
+      border-radius: 4px;
+      margin-left: 4px;
+      vertical-align: middle;
+      line-height: 1.5;
+    }
+    .status-pill--new     { background: rgba(245,158,11,.12); color: #f59e0b; border: 1px solid rgba(245,158,11,.25); }
+    .status-pill--updated { background: rgba(99,102,241,.12); color: #818cf8; border: 1px solid rgba(99,102,241,.25); }
+    .status-pill--beta    { background: rgba(16,185,129,.12); color: #34d399; border: 1px solid rgba(16,185,129,.25); }
+    /* ─── Meta-bar ─── */
+    .meta-bar {
+      background: rgba(245,158,11,.04);
+      border: 1px solid rgba(245,158,11,.12);
+      border-radius: .5rem;
+      padding: .6rem 1.25rem;
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: .35rem .55rem;
+      font-size: .75rem;
+      color: #94a3b8;
+      margin-bottom: 2.5rem;
+    }
+    .meta-bar__edition {
+      font-weight: 700;
+      color: #f59e0b;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .7rem;
+      background: rgba(245,158,11,.1);
+      border: 1px solid rgba(245,158,11,.2);
+      border-radius: .3rem;
+      padding: .1rem .45rem;
+    }
+    .meta-bar__sep { color: #475569; }
+    .meta-bar__link { color: #60a5fa; text-decoration: none; font-weight: 500; }
+    .meta-bar__link:hover { text-decoration: underline; }
+  </style>
 </head>
 <body class="bg-slate-950 text-slate-300 min-h-screen">
 
@@ -57,11 +102,13 @@
 
       <!-- Chapter grid -->
       <div class="max-w-5xl mx-auto px-6 py-16">
+        <!-- Meta-bar: edition badge + content counts + changelog link -->
+        <div id="meta-bar" class="meta-bar"></div>
 
         <!-- Quickstart -->
         <div class="mb-14">
           <h2 class="text-xs font-bold tracking-widest uppercase text-amber-400 mb-2">Quickstart · Zero to shipped in 30 minutes</h2>
-          <p class="text-sm text-slate-500 mb-6">New to Plan Forge? Start here. Three focused chapters get you from zero to a shipped feature before you read a single Act I page.</p>
+          <p class="text-sm text-slate-500 mb-6">New to Plan Forge? Start here. Three focused chapters get you from zero to a shipped feature before you read a single Part I page.</p>
           <div class="grid md:grid-cols-3 gap-4">
             <a href="quickstart-install.html" class="group block p-5 bg-amber-500/5 border border-amber-500/20 rounded-xl hover:border-amber-400/40 transition-all">
               <div class="text-xs font-semibold text-amber-600 mb-1">Step 1 · 10 min</div>
@@ -109,9 +156,9 @@
           </div>
         </div>
 
-        <!-- Act I — Smelt -->
+        <!-- Part I — Smelt -->
         <div class="mb-12">
-          <h2 class="text-xs font-bold tracking-widest uppercase text-amber-400 mb-6">Act I — Smelt · Raw idea → scope contract</h2>
+          <h2 class="text-xs font-bold tracking-widest uppercase text-amber-400 mb-6">Part I — Smelt · Raw idea → scope contract</h2>
           <div class="grid md:grid-cols-3 gap-4">
             <a href="what-is-plan-forge.html" class="group block p-5 bg-slate-900/50 border border-slate-800/60 rounded-xl hover:border-forge-400/30 transition-all">
               <div class="text-xs font-semibold text-slate-500 mb-1">Chapter 1</div>
@@ -141,9 +188,9 @@
           </div>
         </div>
 
-        <!-- Act II — Forge -->
+        <!-- Part II — Forge -->
         <div class="mb-12">
-          <h2 class="text-xs font-bold tracking-widest uppercase text-amber-400 mb-6">Act II — Forge · Scope contract → shipped code</h2>
+          <h2 class="text-xs font-bold tracking-widest uppercase text-amber-400 mb-6">Part II — Forge · Scope contract → shipped code</h2>
           <div class="grid md:grid-cols-3 gap-4">
             <a href="your-first-plan.html" class="group block p-5 bg-slate-900/50 border border-slate-800/60 rounded-xl hover:border-forge-400/30 transition-all">
               <div class="text-xs font-semibold text-slate-500 mb-1">Chapter 6</div>
@@ -227,35 +274,35 @@
             </a>
             <a href="self-deterministic-loop.html" class="group block p-5 bg-slate-900/50 border border-slate-800/60 rounded-xl hover:border-forge-400/30 transition-all">
               <div class="text-xs font-semibold text-slate-500 mb-1">Deep Dive</div>
-              <div class="text-sm font-bold text-slate-100 group-hover:text-forge-400 transition-colors">The Self-Deterministic Agent Loop <span class="text-[10px] text-amber-400 ml-1">NEW v2.58</span></div>
+              <div class="text-sm font-bold text-slate-100 group-hover:text-forge-400 transition-colors">The Self-Deterministic Agent Loop <span class="status-pill status-pill--new">NEW v2.58</span></div>
               <p class="text-xs text-slate-500 mt-2">Canonical overview — how the deterministic executor, Phase-25 reflective layer, and Phase-26 competitive layer compose.</p>
             </a>
             <a href="inner-loop.html" class="group block p-5 bg-slate-900/50 border border-slate-800/60 rounded-xl hover:border-forge-400/30 transition-all">
               <div class="text-xs font-semibold text-slate-500 mb-1">Deep Dive</div>
-              <div class="text-sm font-bold text-slate-100 group-hover:text-forge-400 transition-colors">The Inner Loop <span class="text-[10px] text-amber-400 ml-1">NEW v2.57</span></div>
+              <div class="text-sm font-bold text-slate-100 group-hover:text-forge-400 transition-colors">The Inner Loop <span class="status-pill status-pill--new">NEW v2.57</span></div>
               <p class="text-xs text-slate-500 mt-2">Reflexion, trajectories, auto-skills, reviewer.</p>
             </a>
             <a href="competitive-loop.html" class="group block p-5 bg-slate-900/50 border border-slate-800/60 rounded-xl hover:border-forge-400/30 transition-all">
               <div class="text-xs font-semibold text-slate-500 mb-1">Deep Dive</div>
-              <div class="text-sm font-bold text-slate-100 group-hover:text-forge-400 transition-colors">The Competitive Loop <span class="text-[10px] text-amber-400 ml-1">NEW v2.58</span></div>
+              <div class="text-sm font-bold text-slate-100 group-hover:text-forge-400 transition-colors">The Competitive Loop <span class="status-pill status-pill--new">NEW v2.58</span></div>
               <p class="text-xs text-slate-500 mt-2">Worktree races, winner election, auto-fix, cost anomalies.</p>
             </a>
             <a href="audit-loop.html" class="group block p-5 bg-slate-900/50 border border-slate-800/60 rounded-xl hover:border-forge-400/30 transition-all">
               <div class="text-xs font-semibold text-slate-500 mb-1">Deep Dive</div>
-              <div class="text-sm font-bold text-slate-100 group-hover:text-forge-400 transition-colors">Audit Loop <span class="text-[10px] text-amber-400 ml-1">NEW v2.80</span></div>
+              <div class="text-sm font-bold text-slate-100 group-hover:text-forge-400 transition-colors">Audit Loop <span class="status-pill status-pill--new">NEW v2.80</span></div>
               <p class="text-xs text-slate-500 mt-2">Closed-loop drain: content-audit scan → triage → fix. Off by default.</p>
             </a>
             <a href="forge-master.html" class="group block p-5 bg-slate-900/50 border border-purple-900/30 rounded-xl hover:border-purple-400/40 transition-all">
               <div class="text-xs font-semibold text-purple-500 mb-1">Deep Dive · Cross-cutting</div>
-              <div class="text-sm font-bold text-slate-100 group-hover:text-purple-300 transition-colors">Forge-Master <span class="text-[10px] text-amber-400 ml-1">NEW v2.78</span></div>
+              <div class="text-sm font-bold text-slate-100 group-hover:text-purple-300 transition-colors">Forge-Master <span class="status-pill status-pill--new">NEW v2.78</span></div>
               <p class="text-xs text-slate-500 mt-2">Read-only reasoning orchestrator. Intent classifier + embedding cache + quorum advisory.</p>
             </a>
           </div>
         </div>
 
-        <!-- Act III — Guard -->
+        <!-- Part III — Guard -->
         <div class="mb-12">
-          <h2 class="text-xs font-bold tracking-widest uppercase text-cyan-400 mb-6">Act III — Guard · Post-deploy defense (LiveGuard)</h2>
+          <h2 class="text-xs font-bold tracking-widest uppercase text-cyan-400 mb-6">Part III — Guard · Post-deploy defense (LiveGuard)</h2>
           <div class="grid md:grid-cols-3 gap-4">
             <a href="what-is-liveguard.html" class="group block p-5 bg-slate-900/50 border border-cyan-900/20 rounded-xl hover:border-cyan-500/30 transition-all">
               <div class="text-xs font-semibold text-cyan-600 mb-1">Chapter 16</div>
@@ -285,9 +332,9 @@
           </div>
         </div>
 
-        <!-- Act IV — Learn -->
+        <!-- Part IV — Learn -->
         <div class="mb-12">
-          <h2 class="text-xs font-bold tracking-widest uppercase text-amber-400 mb-6">Act IV — Learn · Memory &amp; retrospectives</h2>
+          <h2 class="text-xs font-bold tracking-widest uppercase text-amber-400 mb-6">Part IV — Learn · Memory &amp; retrospectives</h2>
           <div class="grid md:grid-cols-3 gap-4">
             <a href="bug-registry.html" class="group block p-5 bg-slate-900/50 border border-slate-800/60 rounded-xl hover:border-forge-400/30 transition-all">
               <div class="text-xs font-semibold text-slate-500 mb-1">Chapter 21</div>

@@ -84,7 +84,7 @@
         </div>
       </div>
 
-      <p class="text-sm text-slate-400 italic">The leading-indicator metric leadership usually asks for last — <strong class="text-slate-300">human-intervention frequency</strong> — is also captured automatically. Every time a human took over from an agent is recorded; trend lines show whether the harness is getting better or worse. See <a href="health-dna.html" class="text-amber-400 hover:underline">Health DNA</a> for the full metric catalogue.</p>
+      <p class="text-sm text-slate-400 italic">The leading-indicator metric leadership usually asks for last — <strong class="text-slate-300">human-intervention frequency</strong> — is also captured automatically. Every time a human took over from an agent is recorded; trend lines show whether the harness is getting better or worse. See <a href="health-dna.html" class="text-amber-400 hover:underline">Health DNA</a> for the full metric catalogue, or the <a href="quick-reference.html" class="text-amber-400 hover:underline">quick reference</a> for the complete dashboard surface.</p>
 
       <h2 id="the-picture">The picture — harness on substrate</h2>
 
@@ -277,6 +277,7 @@
             <summary class="cursor-pointer hover:text-slate-300 mb-1">What's inside &amp; where to read more</summary>
             <p class="text-slate-400 mt-2">Crucible interview funnel · Tempering quality scorer · Inner Loop competitive worktrees · Forge-Master chat-first router · 20 read-only reviewer agents · 14 slash-command skills · Reflexion retry · auto-skill library · lifecycle hooks (pre/post slice).</p>
             <p class="text-slate-400 mt-2">→ <a href="crucible.html" class="text-amber-400 hover:underline">Crucible</a> · <a href="inner-loop.html" class="text-amber-400 hover:underline">Inner Loop</a> · <a href="forge-master.html" class="text-amber-400 hover:underline">Forge-Master</a> · <a href="instructions-agents.html" class="text-amber-400 hover:underline">Instructions &amp; Agents</a> · <a href="agent-factory-recipe.html" class="text-amber-400 hover:underline">Agent Factory recipe</a> · <a href="multi-agent.html" class="text-amber-400 hover:underline">Multi-agent</a></p>
+            <p class="text-slate-500 italic mt-2">… and more. Full surface area in the <a href="quick-reference.html" class="text-amber-400 hover:underline">quick reference</a>.</p>
           </details>
         </div>
 
@@ -288,6 +289,7 @@
             <summary class="cursor-pointer hover:text-slate-300 mb-1">What's inside &amp; where to read more</summary>
             <p class="text-slate-400 mt-2">L1 Hub — live WebSocket events · L2 Files — <code>.forge/</code> append-only audit trail · L3 OpenBrain — pgvector semantic store · cross-team federation (read-only) · bridge-and-flush durability · <code>search_thoughts</code> · <code>brain_recall</code>.</p>
             <p class="text-slate-400 mt-2">→ <a href="memory-architecture.html" class="text-amber-400 hover:underline">Memory architecture</a></p>
+            <p class="text-slate-500 italic mt-2">… and more. Full surface area in the <a href="quick-reference.html" class="text-amber-400 hover:underline">quick reference</a>.</p>
           </details>
         </div>
 
@@ -299,6 +301,7 @@
             <summary class="cursor-pointer hover:text-slate-300 mb-1">What's inside &amp; where to read more</summary>
             <p class="text-slate-400 mt-2">Quorum (Claude + GPT + Gemini) · 0–100 LLM-as-judge consensus · <code>forge_drift_report</code> per-commit · <code>forge_health_trend</code> with trajectories · <code>forge_estimate_quorum</code> (cancellable cost preview) · <code>forge_fix_proposal</code> (RCA → PR) · % code by AI · MTTR · drift score.</p>
             <p class="text-slate-400 mt-2">→ <a href="health-dna.html" class="text-amber-400 hover:underline">Health DNA</a> · <a href="self-deterministic-loop.html" class="text-amber-400 hover:underline">Self-deterministic loop</a> · <a href="dashboard.html" class="text-amber-400 hover:underline">Dashboard</a></p>
+            <p class="text-slate-500 italic mt-2">… and more. Full surface area in the <a href="quick-reference.html" class="text-amber-400 hover:underline">quick reference</a>.</p>
           </details>
         </div>
 
@@ -310,6 +313,7 @@
             <summary class="cursor-pointer hover:text-slate-300 mb-1">What's inside &amp; where to read more</summary>
             <p class="text-slate-400 mt-2">LiveGuard hooks (preDeploy / postSlice / preAgentHandoff) · Bug Registry with fingerprint dedupe · Incident Capture + MTTR · Audit Loop (scan → triage → spawn-worker fix) · <code>forge_runbook</code> + Deploy Journal · Remote Bridge (Slack / Teams / PagerDuty / Discord / Telegram) · Watcher (read-only by schema) · <code>forge_meta_bug_file</code> self-repair.</p>
             <p class="text-slate-400 mt-2">→ <a href="what-is-liveguard.html" class="text-amber-400 hover:underline">What is LiveGuard</a> · <a href="liveguard-dashboard.html" class="text-amber-400 hover:underline">LiveGuard dashboard</a> · <a href="audit-loop.html" class="text-amber-400 hover:underline">Audit loop</a> · <a href="bug-registry.html" class="text-amber-400 hover:underline">Bug registry</a> · <a href="watcher.html" class="text-amber-400 hover:underline">Watcher</a> · <a href="remote-bridge.html" class="text-amber-400 hover:underline">Remote bridge</a></p>
+            <p class="text-slate-500 italic mt-2">… and more. Full surface area in the <a href="quick-reference.html" class="text-amber-400 hover:underline">quick reference</a>.</p>
           </details>
         </div>
 
@@ -409,6 +413,16 @@
           <tr><td><strong class="text-slate-200">Agent skills / instructions sync</strong> across N repos</td><td>Up to consumer (<code>.github-private</code> is the only template mechanism)</td></tr>
           <tr><td><strong class="text-slate-200">Multi-tenant cost budgets</strong> and prioritization</td><td>Not in product</td></tr>
           <tr><td><strong class="text-slate-200">A/B comparison</strong> of custom agents or models for the same task class</td><td>Not in product</td></tr>
+          <tr><td><strong class="text-slate-200">Cross-team / cross-project semantic memory</strong> so lessons compound across pilots</td><td>Copilot Spaces is chat-side and repo-scoped; no semantic recall across teams or sessions</td></tr>
+          <tr><td><strong class="text-slate-200">Closed-loop RCA → fix-proposal → validate-fix pipeline</strong></td><td><code>@copilot</code> on issues + GHAS Autofix are open-loop point features; no native bug registry, no multi-model RCA, no fix validation cycle</td></tr>
+          <tr><td><strong class="text-slate-200">Coverity-style scan → triage → spawn-worker → fix loop</strong> for AI-generated drift</td><td>GHAS scans + Autofix on findings only; nothing that spawns a worker per finding and iterates to convergence</td></tr>
+          <tr><td><strong class="text-slate-200">Deploy-aware lifecycle hooks</strong> (preDeploy / postSlice / preAgentHandoff) with severity gates</td><td>Existing hooks (preToolUse / postToolUse / sessionStart) are session-scoped; nothing fires before deploys with severity blocking</td></tr>
+          <tr><td><strong class="text-slate-200">Idea → hardened-plan interview funnel</strong> with lane-scoped Q&amp;A</td><td>Plan-mode is single-shot session output; no interview funnel, no lane classification, no progressive refinement</td></tr>
+          <tr><td><strong class="text-slate-200">Pre-flight plan-quality scorer</strong> (scope-contract clarity, slice sizing, gate strength, forbidden-actions)</td><td>Nothing in product scores plan quality before execution</td></tr>
+          <tr><td><strong class="text-slate-200">Specialized reviewer agent fleet</strong> (20+ read-only personas: arch / security / db / perf / a11y / multi-tenancy / CI-CD / compliance / dependency / observability)</td><td>Copilot Code Review is singular and chat-prompted; no first-party persona library</td></tr>
+          <tr><td><strong class="text-slate-200">Remote-bridge approval flows</strong> with resume-on-approve (Slack / Teams / PagerDuty / Telegram / Discord)</td><td>GitHub notifications fire one-way; no inline-approve → resume-paused-slice flow</td></tr>
+          <tr><td><strong class="text-slate-200">Deploy Journal + auto-generated runbook per plan</strong></td><td>No first-party concept of "audit record per deploy" or "runbook from this plan"</td></tr>
+          <tr class="bg-slate-900/30"><td colspan="2" class="text-center text-sm text-slate-400 italic py-3">… and more. The full capability index lives in the <a href="quick-reference.html" class="text-amber-400 hover:underline">quick reference</a> and the <a href="book-index.html" class="text-amber-400 hover:underline">manual book index</a>.</td></tr>
         </tbody>
       </table>
 
@@ -551,6 +565,8 @@
         </div>
 
       </div>
+
+      <p class="text-sm text-slate-500 italic text-center mt-4">… and more. Browse the full <a href="book-index.html" class="text-amber-400 hover:underline">manual book index</a> or the <a href="quick-reference.html" class="text-amber-400 hover:underline">quick reference</a> for everything.</p>
 
       <div id="chapter-prev-next"></div>
     </div></main>

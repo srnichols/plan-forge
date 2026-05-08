@@ -86,9 +86,9 @@
 
       <p class="text-sm text-slate-400 italic">The leading-indicator metric leadership usually asks for last — <strong class="text-slate-300">human-intervention frequency</strong> — is also captured automatically. Every time a human took over from an agent is recorded; trend lines show whether the harness is getting better or worse. See <a href="health-dna.html" class="text-amber-400 hover:underline">Health DNA</a> for the full metric catalogue, or the <a href="quick-reference.html" class="text-amber-400 hover:underline">quick reference</a> for the complete dashboard surface.</p>
 
-      <h2 id="the-picture">The picture — harness on substrate</h2>
+      <h2 id="the-picture">The picture — harness (orchestration) on substrate (primitives)</h2>
 
-      <p>Read top-down: outcomes you get, the orchestration layer that produces them, the GitHub Copilot substrate it sits on, and the GitHub platform foundation everything inherits.</p>
+      <p>Read top-down: outcomes you get, the <strong class="text-amber-300">harness</strong> (the orchestration layer Plan Forge provides), the <strong class="text-blue-300">substrate</strong> (GitHub Copilot's primitives) it sits on, and the GitHub platform foundation everything inherits.</p>
 
       <figure class="my-6 rounded-xl overflow-hidden border border-slate-700/50 bg-slate-950">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 660" class="w-full h-auto block" role="img" aria-label="The complete AI SDLC stack: outcomes on top, Plan Forge harness in the middle, GitHub Copilot substrate and GitHub platform foundation at the base.">
@@ -142,7 +142,7 @@
         <path d="M790,165 L790,135" class="gha-flow"/>
 
         <rect x="20" y="170" width="900" height="240" class="gha-band" fill="url(#ghaBgHarness)" stroke="#fbbf24" stroke-width="2.5"/>
-        <text x="38" y="196" class="gha-band-title" fill="#fbbf24">Plan Forge — the harness</text>
+        <text x="38" y="196" class="gha-band-title" fill="#fbbf24">Plan Forge — the harness (orchestration)</text>
         <text x="38" y="212" class="gha-band-sub">Open-source · MIT · runs on the GitHub substrate below · the orchestration lane GitHub leaves to the ecosystem</text>
 
         <g transform="translate(38,224)">
@@ -211,7 +211,7 @@
         <path d="M820,455 L820,410" class="gha-flow"/>
 
         <rect x="20" y="460" width="900" height="100" class="gha-band" fill="url(#ghaBgSubstrate)" stroke="#60a5fa"/>
-        <text x="38" y="486" class="gha-band-title" fill="#60a5fa">GitHub Copilot — the substrate</text>
+        <text x="38" y="486" class="gha-band-title" fill="#60a5fa">GitHub Copilot — the substrate (primitives)</text>
         <text x="38" y="502" class="gha-band-sub">Multi-model · one IP boundary · one SCIM endpoint · one audit log · per-developer + per-IDE primitives</text>
         <g transform="translate(38,512)">
           <rect x="0"   y="0" width="100" height="36" class="gha-chip" fill="#0a1428" stroke="#60a5fa"/>
@@ -260,7 +260,7 @@
           <text x="782" y="30" class="gha-tile-sub" text-anchor="middle">Microsoft Customer Copyright Commitment</text>
         </g>
       </svg>
-      <figcaption class="px-5 py-3 text-xs text-slate-400 border-t border-slate-700/50 bg-slate-900/40">Read top-down: the <span class="text-emerald-400">green band</span> is what you ship. The <span class="text-amber-400">amber band</span> is Plan Forge — the harness that produces those outcomes. The <span class="text-blue-400">blue band</span> is the GitHub Copilot substrate the harness sits on. The <span class="text-slate-400">slate band</span> is the GitHub platform foundation everything inherits.</figcaption>
+      <figcaption class="px-5 py-3 text-xs text-slate-400 border-t border-slate-700/50 bg-slate-900/40">Read top-down: the <span class="text-emerald-400">green band</span> is what you ship. The <span class="text-amber-400">amber band</span> is Plan Forge — the <strong class="text-amber-300">harness</strong> (orchestration) that produces those outcomes. The <span class="text-blue-400">blue band</span> is the GitHub Copilot <strong class="text-blue-300">substrate</strong> (primitives) the harness sits on. The <span class="text-slate-400">slate band</span> is the GitHub platform foundation everything inherits.</figcaption>
       </figure>
 
       <h2 id="the-four-pillars">The four pillars — what the harness actually does</h2>
@@ -368,7 +368,7 @@
 
       <p>This page documents how Plan Forge composes with the primitives GitHub explicitly leaves to the ecosystem.</p>
 
-      <h2 id="what-github-ships-the-substrate">What GitHub ships (the substrate)</h2>
+      <h2 id="what-github-ships-the-substrate">What GitHub ships (the substrate — primitives)</h2>
 
       <table>
         <thead><tr><th>Primitive</th><th>What it is</th><th>Status (May 2026)</th></tr></thead>

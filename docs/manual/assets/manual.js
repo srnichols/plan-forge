@@ -86,6 +86,10 @@
     "plan-forge-on-the-github-stack":{ label: "UPDATED", version: "v2.75" },
   };
 
+  // ─── Edition ───
+  // Single source of truth for the manual edition badge shown in the meta-bar.
+  const EDITION = "2.92.0-dev";
+
   // Detect current page
   const currentFile = location.pathname.split("/").pop() || "index.html";
   const currentIdx = CHAPTERS.findIndex((c) => c.file === currentFile);
@@ -717,9 +721,24 @@
     });
   }
 
+  // ─── Meta-bar (index page only) ───
+  // Renders a thin informational bar above the chapter grid showing the edition,
+  // content counts, and a What's New link.
+  function buildMetaBar() {
+    const el = document.getElementById("meta-bar");
+    if (!el) return;
+    el.innerHTML =
+      '<span class="meta-bar__edition">v' + EDITION + '</span>' +
+      '<span class="meta-bar__sep">·</span>' +
+      '<span>Quickstart · 24 chapters · 14 appendices · 4 parts</span>' +
+      '<span class="meta-bar__sep">·</span>' +
+      '<a href="https://github.com/srnichols/plan-forge/blob/main/CHANGELOG.md" class="meta-bar__link" target="_blank" rel="noopener">What\'s New ↗</a>';
+  }
+
   // ─── Init ───
   document.addEventListener("DOMContentLoaded", () => {
     buildSidebar();
+    buildMetaBar();
     buildPrevNext();
     initCopyButtons();
     initMobileSidebar();

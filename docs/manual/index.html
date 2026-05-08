@@ -38,6 +38,33 @@
     .status-pill--new     { background: rgba(245,158,11,.12); color: #f59e0b; border: 1px solid rgba(245,158,11,.25); }
     .status-pill--updated { background: rgba(99,102,241,.12); color: #818cf8; border: 1px solid rgba(99,102,241,.25); }
     .status-pill--beta    { background: rgba(16,185,129,.12); color: #34d399; border: 1px solid rgba(16,185,129,.25); }
+    /* ─── Meta-bar ─── */
+    .meta-bar {
+      background: rgba(245,158,11,.04);
+      border: 1px solid rgba(245,158,11,.12);
+      border-radius: .5rem;
+      padding: .6rem 1.25rem;
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: .35rem .55rem;
+      font-size: .75rem;
+      color: #94a3b8;
+      margin-bottom: 2.5rem;
+    }
+    .meta-bar__edition {
+      font-weight: 700;
+      color: #f59e0b;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .7rem;
+      background: rgba(245,158,11,.1);
+      border: 1px solid rgba(245,158,11,.2);
+      border-radius: .3rem;
+      padding: .1rem .45rem;
+    }
+    .meta-bar__sep { color: #475569; }
+    .meta-bar__link { color: #60a5fa; text-decoration: none; font-weight: 500; }
+    .meta-bar__link:hover { text-decoration: underline; }
   </style>
 </head>
 <body class="bg-slate-950 text-slate-300 min-h-screen">
@@ -74,6 +101,8 @@
 
       <!-- Chapter grid -->
       <div class="max-w-5xl mx-auto px-6 py-16">
+        <!-- Meta-bar: edition badge + content counts + changelog link -->
+        <div id="meta-bar" class="meta-bar"></div>
 
         <!-- Quickstart -->
         <div class="mb-14">

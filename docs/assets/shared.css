@@ -50,12 +50,20 @@ nav a.nav-active { color: #f59e0b !important; }
    state via the .nav-dropdown-open class. No CSS :hover rule: hover-to-open
    created race conditions with JS close logic that left menus feeling
    "stuck" on hover-capable devices. Click to open, click-outside/Escape/
-   link-click to close. */
-.nav-dropdown { display: none; }
-.nav-dropdown-trigger.nav-dropdown-open > .nav-dropdown {
-  display: block;
-}
-.nav-dropdown-trigger .nav-dropdown {
+   link-click to close.
+
+   Specificity note: the dropdown markup carries Tailwind utility classes
+   like `grid grid-cols-3` for layout. The Tailwind CDN injects `.grid {
+   display: grid }` AFTER this stylesheet at runtime, so a flat
+   `.nav-dropdown { display: none }` rule loses the cascade fight and the
+   menu renders open on page load. Scoping to the parent (`.nav-dropdown-
+   trigger > .nav-dropdown`) raises the selector specificity from (0,1,0)
+   to (0,2,0), beating any single-class Tailwind utility regardless of
+   load order. Do NOT flatten this back to `.nav-dropdown { ... }` or the
+   stuck-menu regression returns. */
+.nav-dropdown-trigger > .nav-dropdown { display: none; }
+.nav-dropdown-trigger.nav-dropdown-open > .nav-dropdown { display: block; }
+.nav-dropdown-trigger > .nav-dropdown {
   padding-top: 0.5rem;
   margin-top: 0;
 }

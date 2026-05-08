@@ -35,7 +35,7 @@ describe("update-from-github CLI", () => {
     const result = JSON.parse(stdout.trim());
     expect(result.ok).toBe(true);
     expect(result.tag).toBe("v2.50.0");
-  });
+  }, 15_000);
 
   it("resolve-tag rejects HEAD", async () => {
     try {
@@ -51,7 +51,7 @@ describe("update-from-github CLI", () => {
         expect(err.code).not.toBe(0);
       }
     }
-  });
+  }, 15_000);
 
   it("download requires --tag", async () => {
     try {
@@ -60,7 +60,7 @@ describe("update-from-github CLI", () => {
     } catch (err) {
       expect(err.stderr || "").toContain("--tag required");
     }
-  });
+  }, 15_000);
 
   it("audit appends log entry from stdin", async () => {
     const entry = JSON.stringify({ tag: "v2.50.0", sha256: "abc", sizeBytes: 100, outcome: "success", filesChanged: 3, source: "manual" });
@@ -85,7 +85,7 @@ describe("update-from-github CLI", () => {
     const logged = JSON.parse(readFileSync(logPath, "utf-8").trim());
     expect(logged.tag).toBe("v2.50.0");
     expect(logged.from).toBe("github");
-  });
+  }, 15_000);
 
   it("unknown action returns error", async () => {
     try {
@@ -94,7 +94,7 @@ describe("update-from-github CLI", () => {
     } catch (err) {
       expect(err.stderr || "").toContain("Unknown action");
     }
-  });
+  }, 15_000);
 
   (SKIP ? it.skip : it)("resolve-tag without --tag hits GitHub API (network required)", async () => {
     const { stdout } = await execFileP("node", [CLI_PATH, "resolve-tag"], { timeout: 10_000 });

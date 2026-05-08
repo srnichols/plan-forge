@@ -7,6 +7,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Phase-DOCS-UX-LIFT — BCDR UX patterns adopted for the docs site
+
+> **One-liner**: Adopts three reusable UX patterns from the BCDR-Digital-Twin sibling repo — a book-style manual spine, scroll-snap briefing decks, and an architecture hub — plus a shared design-token layer and site-wide navigation include. Documentation-only phase; no `pforge-mcp/` or `pforge-master/` code changes.
+
+#### Added
+- `docs/manual/index.html` — Roman-numeral "Parts" grouping over the existing chapter/appendix list, per-entry status pills (`Draft` / `Planned` / `Stable` / `Deprecated`) sourced from the `STATUS` registry in `docs/manual/assets/manual.js`, and a meta-bar showing total parts, chapters, and edition number.
+- `docs/manual/assets/manual.js` — `STATUS` registry mapping every chapter/appendix to a lifecycle status, Roman-numeral part definitions, and meta-bar rendering logic.
+- `docs/assets/briefing-deck.css` — Scroll-snap, slide-number badge, and dot-nav CSS rules adapted from the BCDR briefing-deck pattern.
+- `docs/assets/briefing-deck.js` — Dot-click → scroll, arrow-key → next/prev slide, and current-slide tracker JS for the briefing-deck format.
+- `docs/walkthroughs/quickstart-deck.html` — Quickstart walkthrough converted from long-scroll markdown to briefing-deck format (one slide per section).
+- `docs/walkthroughs/independent-dev-deck.html` — Independent-dev demo converted to briefing-deck format as a reference implementation.
+- `docs/architecture/index.html` — Architecture hub landing page with cards linking to `UNIFIED-SYSTEM-ARCHITECTURE.md`, `MEMORY-ARCHITECTURE.md`, and architecture appendices.
+- `docs/assets/shared-styles.css` — Shared design-token layer (`pf-*` custom properties) with `html.light` theme support, consumed by manual, blog, capabilities, and architecture pages.
+- `docs/assets/shared-theme.js` — Light/dark theme toggle script sourced from the shared layer.
+- `docs/_includes/site-nav.html` — Site-wide navigation include with Architecture dropdown, wired into all landing pages.
+- `docs/assets/site-nav.js` — JS for the site-nav dropdown and active-page highlighting.
+
+#### Notes
+- Source: manual review of `BCDR-Digital-Twin` sibling repo on 2026-05-07.
+- No `pforge-mcp/dashboard/` files were touched — the ops console is explicitly out of scope.
+- No release in this phase.
+
 ---
 
 ## [2.91.0] — 2026-05-07 — Priority-C Enterprise Readiness Chain

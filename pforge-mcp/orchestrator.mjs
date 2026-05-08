@@ -1108,6 +1108,31 @@ export function isApiOnlyModel(model) {
 }
 
 /**
+ * Resolve an Azure Entra (Managed Identity / Service Principal) Bearer token
+ * for Azure OpenAI. Activated when AZURE_AUTH_MODE is "entra" or "managed-identity".
+ *
+ * Requires the optional @azure/identity package. Falls back gracefully when
+ * the package is not installed — returns null rather than throwing.
+ *
+ * Scope used: https://cognitiveservices.azure.com/.default (Azure Cognitive Services,
+ * which covers Azure OpenAI Service endpoints).
+ *
+ * @returns {Promise<string|null>} Bearer token string, or null if unavailable.
+ */
+async function resolveAzureEntraToken() {
+  try {
+    const { DefaultAzureCredential } = await import("@azure/identity");
+    const credential = new DefaultAzureCredential();
+    const tokenResponse = await credential.getToken(
+      "https://cognitiveservices.azure.com/.default"
+    );
+    return tokenResponse?.token || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Compose the base URL for a Microsoft Azure AI Foundry provider.
  * Reads AZURE_OPENAI_ENDPOINT (env or .forge/secrets.json), strips the trailing
  * slash, and appends the stable /openai/v1 route per Azure AI Foundry §11.1.
@@ -1137,9 +1162,16 @@ function detectApiProvider(model) {
   if (!model) return null;
   for (const [name, provider] of Object.entries(API_PROVIDERS)) {
     if (provider.pattern.test(model)) {
+      // Entra (Managed Identity / Service Principal) auth: when AZURE_AUTH_MODE
+      // is "entra" or "managed-identity" the token is resolved at call time via
+      // @azure/identity — no static API key is required or used.
+      const azureAuthMode = process.env.AZURE_AUTH_MODE || "";
+      const entraAuth = name === "microsoft-foundry" &&
+        (azureAuthMode === "entra" || azureAuthMode === "managed-identity");
+
       // 1. Environment variable (preferred — never on disk)
       const apiKey = process.env[provider.envKey] || loadSecretFromForge(provider.envKey);
-      if (!apiKey) return null; // Model matches but no API key configured
+      if (!apiKey && !entraAuth) return null; // Model matches but no auth configured
       // Endpoint-based providers (e.g., microsoft-foundry) compose baseUrl at
       // detection time from a separate endpoint env var rather than a fixed URL.
       const baseUrl = provider.endpointKey
@@ -1151,6 +1183,7 @@ function detectApiProvider(model) {
         baseUrl,
         apiKey,
         label: provider.label,
+        entraAuth,
         ...(provider.apiKeyHeader && { apiKeyHeader: provider.apiKeyHeader }),
       };
     }
@@ -1243,11 +1276,37 @@ async function callApiWorker(prompt, model, provider, options = {}) {
   // Role-aware wrapping is opt-in per call site; null role = legacy behaviour.
   const messages = buildApiMessages(prompt, role);
 
-  // Azure AI Foundry uses "api-key" header; all other providers use "Authorization: Bearer".
+  // Resolve auth headers. Entra path (AZURE_AUTH_MODE=entra|managed-identity) acquires a
+  // Bearer token via @azure/identity; standard paths use the static api-key or Bearer key.
+  let authHeaders;
+  if (provider.entraAuth) {
+    const entraToken = await resolveAzureEntraToken();
+    if (!entraToken) {
+      clearTimeout(timer);
+      return {
+        output: "",
+        stderr:
+          "Azure Entra auth failed: unable to acquire token via @azure/identity. " +
+          "Ensure AZURE_AUTH_MODE=entra and managed identity or service principal " +
+          "credentials are configured in the environment.",
+        jsonlEvents: [],
+        exitCode: 1,
+        timedOut: false,
+        tokens: { tokens_in: 0, tokens_out: 0, model },
+        worker: `api-${provider.name}`,
+        model,
+      };
+    }
+    // Entra tokens are always Bearer; Azure OpenAI accepts them on the standard
+    // Authorization header even though the api-key path uses "api-key" instead.
+    authHeaders = { Authorization: `Bearer ${entraToken}`, "Content-Type": "application/json" };
+  } else {
+    // Azure AI Foundry uses "api-key" header; all other providers use "Authorization: Bearer".
+    authHeaders = provider.apiKeyHeader
+      ? { [provider.apiKeyHeader]: provider.apiKey, "Content-Type": "application/json" }
+      : { Authorization: `Bearer ${provider.apiKey}`, "Content-Type": "application/json" };
+  }
   // Strip the routing prefix (e.g., "azure/") to get the bare deployment name for the body.
-  const authHeaders = provider.apiKeyHeader
-    ? { [provider.apiKeyHeader]: provider.apiKey, "Content-Type": "application/json" }
-    : { Authorization: `Bearer ${provider.apiKey}`, "Content-Type": "application/json" };
   const resolvedModel = provider.name === "microsoft-foundry"
     ? model.replace(/^azure\//, "")
     : model;

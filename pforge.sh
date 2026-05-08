@@ -89,6 +89,12 @@ COMMANDS:
   graph stats                  Print node count by type from graph snapshot
   graph query [type]           Query the knowledge graph (phase, file, recent-changes, neighbors)
   patterns list [--since <iso>] List recurring patterns detected across plan runs
+  audit export      Export audit events from .forge/runs/ as JSONL or CSV
+    --since <ISO>   Only events on or after this timestamp
+    --until <ISO>   Only events on or before this timestamp
+    --type <name>   Filter by event type (repeatable)
+    --run <id>      Scope to a single run directory ID
+    --format <fmt>  Output format: json (default, JSONL) or csv
   audit-loop        Run audit drain loop — discover bugs from the running system
     --auto          Respect config mode (off/auto/always); without this, always runs one drain
     --max=N         Override maximum rounds (default: 5)
@@ -5114,6 +5120,93 @@ cmd_plan_from_sarif() {
     node "$script_path" "$@"
 }
 
+# ─── Command: audit export (Phase-OTEL-AUDIT-EXPORT Slice 10) ─────
+cmd_audit_export() {
+    local since=""
+    local until=""
+    local types=()
+    local run_id=""
+    local format="json"
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --help|-h)
+                cat <<'EOF'
+Usage: pforge audit export [options]
+
+Export audit events from .forge/runs/ as JSONL or CSV.
+Reads events.log files written by the orchestrator — streaming,
+never loads all events into memory.
+
+Options:
+  --since <ISO>     Only events on or after this timestamp (inclusive).
+  --until <ISO>     Only events on or before this timestamp (inclusive).
+  --type <name>     Filter by event type (repeatable, e.g. --type slice-start --type gate-pass).
+  --run <id>        Scope to a single run directory ID.
+  --format <fmt>    Output format: json (default, JSONL) or csv.
+  --help, -h        Show this help and exit.
+
+Examples:
+  pforge audit export                                  # All events as JSONL
+  pforge audit export --since 2026-05-01               # Events from May onwards
+  pforge audit export --format csv > audit.csv         # CSV to file
+  pforge audit export --type gate-pass --type gate-fail
+  pforge audit export --run 20260507T120000Z           # Single run
+
+See docs/CLI-GUIDE.md for the full audit export reference.
+EOF
+                return 0
+                ;;
+            --since=*) since="${1#--since=}"; shift ;;
+            --since)   since="$2"; shift 2 ;;
+            --until=*) until="${1#--until=}"; shift ;;
+            --until)   until="$2"; shift 2 ;;
+            --type=*)  types+=("${1#--type=}"); shift ;;
+            --type)    types+=("$2"); shift 2 ;;
+            --run=*)   run_id="${1#--run=}"; shift ;;
+            --run)     run_id="$2"; shift 2 ;;
+            --format=*) format="${1#--format=}"; shift ;;
+            --format)  format="$2"; shift 2 ;;
+            *) shift ;;
+        esac
+    done
+
+    if [ "$format" != "json" ] && [ "$format" != "csv" ]; then
+        echo "ERROR: --format must be 'json' or 'csv', got '$format'" >&2
+        exit 1
+    fi
+
+    # Build JS type array
+    local type_array_js="[]"
+    if [ ${#types[@]} -gt 0 ]; then
+        local escaped=""
+        for t in "${types[@]}"; do
+            [ -n "$escaped" ] && escaped="$escaped,"
+            escaped="$escaped\"$t\""
+        done
+        type_array_js="[$escaped]"
+    fi
+
+    local since_js="undefined"
+    [ -n "$since" ] && since_js="\"$since\""
+    local until_js="undefined"
+    [ -n "$until" ] && until_js="\"$until\""
+    local run_js="undefined"
+    [ -n "$run_id" ] && run_js="\"$run_id\""
+
+    node --input-type=module -e "
+import { exportAudit } from './pforge-mcp/audit-export.mjs';
+for await (const line of exportAudit({
+  cwd: process.cwd(),
+  since: $since_js,
+  until: $until_js,
+  type: $type_array_js,
+  run: $run_js,
+  format: \"$format\"
+})) { console.log(line); }
+"
+}
+
 # ─── Command: audit-loop (Phase-39 Slice 7) ───────────────────────
 cmd_audit_loop() {
     local auto_mode=false
@@ -5453,6 +5546,21 @@ case "$COMMAND" in
     forge-master) cmd_forge_master "$@" ;;
     hammer-fm)    cmd_hammer_fm "$@" ;;
     audit-loop)   cmd_audit_loop "$@" ;;
+    audit)
+        sub="${1:-}"
+        case "$sub" in
+            export) shift; cmd_audit_export "$@" ;;
+            *)
+                echo "Usage: pforge audit <subcommand>"
+                echo ""
+                echo "Subcommands:"
+                echo "  export    Export audit events from .forge/runs/ as JSONL or CSV"
+                echo ""
+                echo "See also: pforge audit-loop"
+                exit 1
+                ;;
+        esac
+        ;;
     fm-session)   cmd_fm_session "$@" ;;
     fm-recall)    cmd_fm_recall "$@" ;;
     timeline)     cmd_timeline "$@" ;;

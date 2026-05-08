@@ -1,0 +1,15 @@
+# Plan Forge — Chapter Status Registry
+# Mirrors the STATUS object in docs/manual/assets/manual.js.
+# Format: <chapter-id>  <label>  <since-version>
+#
+# Labels: NEW | UPDATED | BETA
+# A chapter is removed from this list once it is stable (typically after 2 major releases).
+
+inner-loop                     NEW      v2.57
+self-deterministic-loop        NEW      v2.58
+competitive-loop               NEW      v2.58
+forge-master                   NEW      v2.78
+dashboard-forge-master         NEW      v2.78
+audit-loop                     NEW      v2.80
+spec-kit-interop               NEW      v2.70
+plan-forge-on-the-github-stack UPDATED  v2.75

@@ -72,6 +72,20 @@
     { id: "book-index",           file: "book-index.html",          num: "O",  title: "Book Index (A\u2013Z)",     act: "Appendix" },
   ];
 
+  // ─── Chapter status registry ───
+  // Maps chapter id → { label, version } for status pills in the sidebar and index page.
+  // Labels: "NEW" | "UPDATED" | "BETA"
+  const STATUS = {
+    "inner-loop":                    { label: "NEW",     version: "v2.57" },
+    "self-deterministic-loop":       { label: "NEW",     version: "v2.58" },
+    "competitive-loop":              { label: "NEW",     version: "v2.58" },
+    "forge-master":                  { label: "NEW",     version: "v2.78" },
+    "dashboard-forge-master":        { label: "NEW",     version: "v2.78" },
+    "audit-loop":                    { label: "NEW",     version: "v2.80" },
+    "spec-kit-interop":              { label: "NEW",     version: "v2.70" },
+    "plan-forge-on-the-github-stack":{ label: "UPDATED", version: "v2.75" },
+  };
+
   // Detect current page
   const currentFile = location.pathname.split("/").pop() || "index.html";
   const currentIdx = CHAPTERS.findIndex((c) => c.file === currentFile);
@@ -193,7 +207,9 @@
         const a = document.createElement("a");
         a.href = ch.file;
         a.className = "sidebar-link" + (idx === currentIdx ? " active" : "");
-        a.innerHTML = '<span class="chapter-num">' + ch.num + "</span> " + ch.title;
+        const st = STATUS[ch.id];
+        a.innerHTML = '<span class="chapter-num">' + ch.num + "</span> " + ch.title +
+          (st ? ' <span class="status-pill status-pill--' + st.label.toLowerCase() + '">' + st.label + ' ' + st.version + '</span>' : '');
         childBox.appendChild(a);
       });
       frag.appendChild(childBox);

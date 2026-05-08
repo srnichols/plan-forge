@@ -17,6 +17,38 @@ import {
   isApiOnlyModel,
   QUORUM_PRESETS,
 } from "./orchestrator.mjs";
+import { quotaCacheGet, compareSliceEstimate } from "./foundry-quota.mjs";
+
+// ─── Foundry Quota Preflight Helper ──────────────────────────────────
+// When PFORGE_FOUNDRY_QUOTA_PREFLIGHT=1 and provider is microsoft-foundry,
+// attach a compareSliceEstimate result to estimation return shapes.
+// Uses cache-only lookup (synchronous) — the orchestrator pre-fetches at
+// slice-start via getDeploymentQuota (Slice 3). Returns null when the env
+// var is unset, provider is not foundry, or env vars are missing.
+function _computeFoundryQuota({ estimatedTokensIn, estimatedTokensOut, provider, env = process.env, cwd = null }) {
+  if (env.PFORGE_FOUNDRY_QUOTA_PREFLIGHT !== "1") return null;
+  if (provider !== "microsoft-foundry") return null;
+
+  const subscriptionId = env.AZURE_SUBSCRIPTION_ID;
+  const resourceGroup  = env.AZURE_RESOURCE_GROUP;
+  const accountName    = env.AZURE_OPENAI_ACCOUNT_NAME || env.AZURE_OPENAI_RESOURCE_NAME || "";
+  const deploymentName = env.AZURE_OPENAI_DEPLOYMENT || "default";
+
+  if (!subscriptionId || !resourceGroup) {
+    return compareSliceEstimate(
+      { ok: false, reason: "missing AZURE_SUBSCRIPTION_ID or AZURE_RESOURCE_GROUP" },
+      { tokens_in: estimatedTokensIn, tokens_out: estimatedTokensOut }
+    );
+  }
+
+  const cacheKey = `${subscriptionId}/${resourceGroup}/${accountName}/${deploymentName}`;
+  const cachedQuota = quotaCacheGet(cacheKey);
+
+  return compareSliceEstimate(
+    cachedQuota ?? { ok: false, reason: "quota not prefetched; orchestrator will fetch at slice-start" },
+    { tokens_in: estimatedTokensIn, tokens_out: estimatedTokensOut }
+  );
+}
 
 // ─── Pricing Table ────────────────────────────────────────────────────
 // Per-token costs in USD. Updated 2026-05-06 (Phase-COST-TOKEN-COVERAGE).
@@ -939,6 +971,15 @@ export function estimatePlan(plan, model, cwd, quorumConfig = null, resumeFrom =
     }),
     ...(quorumViability && { quorumViability }),
     confidence: avgTokensPerSlice ? "historical" : "heuristic",
+    ...(() => {
+      const _fq = _computeFoundryQuota({
+        estimatedTokensIn: totalInputTokens,
+        estimatedTokensOut: totalOutputTokens,
+        provider: costModel.provider,
+        cwd,
+      });
+      return _fq ? { foundryQuota: _fq } : {};
+    })(),
     slices: effectiveSlices.map((s) => {
       const sliceType = inferSliceType(s);
       const rec = cwd ? recommendModel(cwd, sliceType) : null;
@@ -1138,6 +1179,15 @@ export function estimateSlice({ plan, sliceNumber, mode = "auto", model = "claud
 
   const estimatedCostUSD = baseCostUSD + overheadUSD;
 
+  const _sliceProvider = detectCostModel({ env, forgeConfig, model }).provider;
+  const _sliceFq = _computeFoundryQuota({
+    estimatedTokensIn: tokensPerSlice.input,
+    estimatedTokensOut: tokensPerSlice.output,
+    provider: _sliceProvider,
+    env,
+    cwd: resolvedCwd,
+  });
+
   return {
     estimatedCostUSD: Math.round(estimatedCostUSD * 1_000_000) / 1_000_000,
     baseCostUSD: Math.round(baseCostUSD * 1_000_000) / 1_000_000,
@@ -1147,6 +1197,7 @@ export function estimateSlice({ plan, sliceNumber, mode = "auto", model = "claud
     quorumEligible,
     rationale,
     generatedAt: new Date().toISOString(),
+    ...(_sliceFq && { foundryQuota: _sliceFq }),
   };
 }
 
@@ -1252,5 +1303,14 @@ export function estimateQuorum({ plan, cwd, resumeFrom = null, defaultModel = "c
     recommended,
     ...(budgetCap !== null && { budgetCapUSD: budgetCap }),
     generatedAt: new Date().toISOString(),
+    ...(() => {
+      const _qFq = _computeFoundryQuota({
+        estimatedTokensIn: estAuto.tokens?.estimatedInput ?? 0,
+        estimatedTokensOut: estAuto.tokens?.estimatedOutput ?? 0,
+        provider: estAuto.provider ?? "unknown",
+        cwd: resolvedCwd,
+      });
+      return _qFq ? { foundryQuota: _qFq } : {};
+    })(),
   };
 }

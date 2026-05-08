@@ -28,6 +28,8 @@ export const KNOWN_SECRETS = [
   { key: "AZURE_OPENAI_API_VERSION", label: "Azure OpenAI (API Version)", placeholder: "2024-02-01" },
   { key: "AZURE_TENANT_ID", label: "Azure (Tenant ID)", placeholder: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" },
   { key: "AZURE_CLIENT_ID", label: "Azure (Client ID)", placeholder: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" },
+  { key: "AZURE_SUBSCRIPTION_ID", label: "Azure Subscription ID (Foundry quota preflight)", placeholder: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" },
+  { key: "AZURE_RESOURCE_GROUP", label: "Azure Resource Group (Foundry quota preflight)", placeholder: "my-resource-group" },
 ];
 
 /**
